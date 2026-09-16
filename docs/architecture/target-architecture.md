@@ -351,6 +351,18 @@ proposal as it was put to the maintainer; §9.1 records what was decided.
 | D-16 | `model-routing.yaml` per instance, schema in the kit, every entry resolved against `model-endpoints.yaml` (drift is BLOCK); the Anthropic-only stage 1 ships as the example; the shell profiles read the file. No vendor name in `WORKFLOW.md`. | no | file, schema, test |
 | D-17 | Apache-2.0, an onboarding page, and the denylist scan as a kit gate **from now on**, not at the switch; the template switch itself when Leerprobe ≥ 95 % in both instances, the first full run is measured, and Q13 has been passed once by someone who was not there. | no | licence, `docs/onboarding.md`, gate |
 
+### 9.3 Follow-up decisions, same day
+
+Four points that the seventeen decisions opened; decided in the same
+interview.
+
+| # | Question | Decided | Basis |
+|---|---|---|---|
+| O-1 | What the Definition of Done in `spec.md` carries | **Only what is specific to the change**: documents, models and ADRs that must move in the same PR; non-goals asserted untouched; which bead closes with which trailer; special runs. For the gates exactly one line — "`verify` green" — never a list. The validator checks presence and that one line. | a DoD that lists gates is a second gate list per spec (D-10) |
+| O-2 | lakeswitch's ADR-0007 ("Omnigent from setup step 5, additive") against D-7 | **ADR-0007 stays** and gains one sentence: lakeswitch enters the Omnigent topology with harness step M2, not with setup step 5. M0 runs in a throwaway repository, M1 on coding-harness; lakeswitch joins when Feature changes run there and its git-native gates stand. | the reactive layer must work alone first (toolchain P6); both documents stay true |
+| O-3 | What counts mechanically as an architecture change for the ADR/model gate | **The class is the duty, the path is the watchman.** `class: Architectural` without an ADR and a model diff in the PR is BLOCK; a module created, deleted or renamed under `src/` or `spec/` in a change of any other class is DRIFT with "check the class". | the one-way ratchet (§6.1) in gate form: stepping up is asked, staying silent is not allowed |
+| O-4 | Schema of the platform-neutral gate file | **lakeswitch's `gates.yaml` schema as the basis**, field names aligned with pre-commit where it costs nothing (`entry` for the command, next to the existing function resolution), enforcement as a closed vocabulary `advisory` / `report` / `block` (levels 3–4 of the ladder), `floor` kept as lakeswitch's non-negotiable set, plus `mutation_test` and `schedule`/`reason` for reporting gates (RB-G3/G4). No third format; a pre-commit file can be generated from the same list. | mainstream declarative check lists (pre-commit, Taskfile, Actions steps) share this shape; policy-as-code (Conftest, Sentinel) supplies the enforcement vocabulary; only `asserts` and the mutation-test link are ours |
+
 ### 9.2 The proposals as put to the maintainer
 
 | # | Goal | Recommendation | On "ok" |
