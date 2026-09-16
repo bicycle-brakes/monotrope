@@ -20,8 +20,10 @@ tags: [architecture, target, harness, workflow, kit, lakeswitch, portfolio, road
 # Target architecture: the coding harness and its workflows
 
 **Status: decided in interview, not yet an ADR.** The seventeen decisions in
-§9 were taken with the maintainer on 2026-09-16 (outcomes in §9.1); three
-went against the recommendation and are marked. The path in §12 reflects
+§9 were taken with the maintainer on 2026-09-16 (outcomes in §9.1); two
+went against the recommendation (D-1, D-7), one was amended (D-2), three
+recommendations were revised after a best-practice check (D-5, D-10,
+D-15) — all marked. The path in §12 reflects
 them, with the Omnigent migration plan as the main path. The first ADRs of
 this repository turn §9.1 into records. Written at coding-harness `5a950c2`,
 portfolio `4ce8240`, lakeswitch-ai `458a12c`.
