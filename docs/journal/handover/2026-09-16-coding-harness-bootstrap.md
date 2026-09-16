@@ -130,17 +130,26 @@ These live in the portfolio tracker and stay there until closed:
   already carried the 69il fix (PR #160) and the readability pages
   (PR #159). Deliberate deviations: no `ci.yml` yet (`coding-harness-bo0`),
   `.beads/issues.jsonl` stays this repository's own export.
-- **Measured baseline** (portfolio venv, 2026-09-16): **167 passed,
-  60 failed, 4 skipped.** Classes: 27 `test_ci` (bo0), 21 `test_regelwerk`,
-  11 `test_feedback_channel`, 1 `test_model_endpoints` (`.claude/agents`,
-  seam 1). Classified in the tracker; `test_kit`'s 19 collected, not yet
-  run here — the Leerprobe is the acceptance run for this migration.
-- **Phase 4a opened in portfolio:** PR #162 (branch
+- **Measured baseline** (portfolio venv, 2026-09-16): `pytest tests/ -q` =
+  **64 failed, 182 passed, 4 skipped**; with `tests/test_kit.py` excluded it
+  reads 167 passed, 60 failed. Classes of the 60: 27 `test_ci` (bo0), 21
+  `test_regelwerk`, 11 `test_feedback_channel`, 1 `test_model_endpoints`
+  (`.claude/agents`, seam 1). The four red kit tests:
+  `test_every_tracked_file_has_a_role`,
+  `test_the_kit_list_is_not_derivable_from_the_export_list`,
+  `test_the_two_manifests_really_disagree_somewhere`,
+  `test_the_role_check_goes_red_when_a_rule_is_removed`. The Leerprobe is
+  the acceptance run for this migration.
+- **Phase 4a/4b opened in portfolio:** PR #162 (branch
   `docs/sever-pointers-coding-harness`) carries ADR-032, the AGENTS.md
-  banner and the rendered adr index. Not merged; **Phase 4b** (removing the
-  mechanism copies there) follows the maintainer's per-gate decision.
+  banner, the rendered adr index **and the Phase-4b severance** (the
+  mechanism copies removed there; per-gate decisions applied:
+  plans/plans-drift/ramp-valves rebuild as portfolio-owned copies,
+  kit-probe dropped, pytest kept without the six mechanism test files,
+  ci_gates.py kept). Not merged; the maintainer's merge is the acceptance.
 - **Live reproduction of portfolio's wp-p0.1:** `bd create` produced
   short-prefix ids (`portfolio-vevj`, `portfolio-prrw`, `portfolio-lcb8`)
-  in a worktree and in the main checkout, with `issue-prefix` correctly set
-  and with `BD_ISSUE_PREFIX` — documented in PR #162's description. None of
-  them reached a pushed state.
+  in a worktree and in the main checkout — with `issue-prefix` correctly
+  set in `config.yaml`, and with `BD_ISSUE_PREFIX` set as well and **not
+  honored**. Documented in PR #162's description. The branch head's export
+  is clean: none of the three reaches master through PR #162.
