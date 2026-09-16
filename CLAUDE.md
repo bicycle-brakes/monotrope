@@ -1,5 +1,8 @@
 # Project Instructions for AI Agents
 
+**This repository's instructions live in [`AGENTS.md`](AGENTS.md) — read them
+first.** The Beads block below is managed by `bd init` and stays as generated.
+
 This file provides instructions and context for AI coding agents working on this project.
 
 <!-- BEGIN BEADS INTEGRATION v:1 profile:minimal hash:6cd5cc61 -->
