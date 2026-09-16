@@ -116,3 +116,40 @@ These live in the portfolio tracker and stay there until closed:
 2. Start Phase 2: intake the research corpus into `docs/research/`.
 3. Keep this handover's table honest: when a portfolio bead closes, strike
    the row here with its closing date.
+
+---
+
+## Migration state — appended 2026-09-16, evening session
+
+- **Phase 2 done** (commit `b15592a`): the three research documents carry
+  frontmatter; `docs/research/_INDEX.md` added; provenance classes are
+  `ai-drafted-reviewed` with review pending — the maintainer corrects a
+  class where the hand differed. `coding-harness-anw` closed.
+- **Phase 3 done** (commit `5efe809`): the 24 mechanism entries of
+  portfolio's kit manifest adopted from portfolio master `4ce8240` — which
+  already carried the 69il fix (PR #160) and the readability pages
+  (PR #159). Deliberate deviations: no `ci.yml` yet (`coding-harness-bo0`),
+  `.beads/issues.jsonl` stays this repository's own export.
+- **Measured baseline** (portfolio venv, 2026-09-16): `pytest tests/ -q` =
+  **64 failed, 182 passed, 4 skipped**; with `tests/test_kit.py` excluded it
+  reads 167 passed, 60 failed. Classes of the 60: 27 `test_ci` (bo0), 21
+  `test_regelwerk`, 11 `test_feedback_channel`, 1 `test_model_endpoints`
+  (`.claude/agents`, seam 1). The four red kit tests:
+  `test_every_tracked_file_has_a_role`,
+  `test_the_kit_list_is_not_derivable_from_the_export_list`,
+  `test_the_two_manifests_really_disagree_somewhere`,
+  `test_the_role_check_goes_red_when_a_rule_is_removed`. The Leerprobe is
+  the acceptance run for this migration.
+- **Phase 4a/4b opened in portfolio:** PR #162 (branch
+  `docs/sever-pointers-coding-harness`) carries ADR-032, the AGENTS.md
+  banner, the rendered adr index **and the Phase-4b severance** (the
+  mechanism copies removed there; per-gate decisions applied:
+  plans/plans-drift/ramp-valves rebuild as portfolio-owned copies,
+  kit-probe dropped, pytest kept without the six mechanism test files,
+  ci_gates.py kept). Not merged; the maintainer's merge is the acceptance.
+- **Live reproduction of portfolio's wp-p0.1:** `bd create` produced
+  short-prefix ids (`portfolio-vevj`, `portfolio-prrw`, `portfolio-lcb8`)
+  in a worktree and in the main checkout — with `issue-prefix` correctly
+  set in `config.yaml`, and with `BD_ISSUE_PREFIX` set as well and **not
+  honored**. Documented in PR #162's description. The branch head's export
+  is clean: none of the three reaches master through PR #162.
