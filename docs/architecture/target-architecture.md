@@ -19,10 +19,12 @@ tags: [architecture, target, harness, workflow, kit, lakeswitch, portfolio, road
 
 # Target architecture: the coding harness and its workflows
 
-**Status: proposed.** Nothing here is decided. Every decision this document
-depends on is listed in §9 in the form the workflow prescribes for questions to
-a human; the path in §12 starts only after they are taken. Written at
-coding-harness `5a950c2`, portfolio `4ce8240`, lakeswitch-ai `458a12c`.
+**Status: decided in interview, not yet an ADR.** The seventeen decisions in
+§9 were taken with the maintainer on 2026-09-16 (outcomes in §9.1); three
+went against the recommendation and are marked. The path in §12 reflects
+them, with the Omnigent migration plan as the main path. The first ADRs of
+this repository turn §9.1 into records. Written at coding-harness `5a950c2`,
+portfolio `4ce8240`, lakeswitch-ai `458a12c`.
 
 **Sources.** The three research documents under `docs/research/` and the
 review of them (`2026-09-16-review-corpus-vs-running-workflow.md`, cited as
@@ -114,7 +116,7 @@ Six decisions, from which the rest follows.
 | S2 | **Intent to the human, mechanics to the model, presence to the machine.** A phase gate checks that an artefact is there and complete; a human sees only open `[DECISION]` marks; the veto is one word. | approval gates G1–G3 as human steps | WORKFLOW §2; Bezos two-way doors; Stage-Gate "kill" option; PRINCE2 management by exception |
 | S3 | **Every rule enters through the ladder.** Rule sentence, enforcement level 1–5, the test or gate that holds it, or a ramp valve with a due date. Prose that cannot be levelled is a lesson, not a rule. | normative prose (the reference architecture's twenty MUSS rows and forty referenced rules, none naming its enforcer) | regelwerk §2–3; HashiCorp Sentinel's advisory / soft-mandatory / hard-mandatory as the nearest public analogue |
 | S4 | **Copy and measure, never depend.** Instances copy the kit; the Leerprobe reports what carries; divergence is allowed and counted. | a versioned dependency on the harness | kit manifest; clean-room principle (lakeswitch); hermetic-build thinking |
-| S5 | **Order: process, then model diversity, then orchestration.** Stage 2 only after a measured stage-1 signal; stage 3 evaluative and additive. | Omnigent as target runtime from day one (ADW C11) | WORKFLOW §6; toolchain ADR-0007; Anthropic's "start with the simplest agent shape" guidance |
+| S5 | **Host early, orchestrate late.** Omnigent as session host with policies, sandbox and cost caps starts now, additively (Migrationsplan M0–M1); Omnigent as orchestrator with cross-vendor review (M2) starts only when the stage-2 criteria of D-13 are met — the residency rule RB-A6 is a level-4 gate, not a preference. The server never holds state the repository and the tracker do not also hold. | "process, then diversity, then orchestration" (WORKFLOW §6) as a strict sequence | decided 2026-09-16 (D-7); Migrationsplan; toolchain ADR-0007 (additive); ADW IS-5 |
 | S6 | **The harness is small.** Everything an instance does with knowledge, publication, release or domain stays out. Architecture templates are the exception (S8). | the toolchain document's full stack in the kit | ADW C7 (short artefacts); regelwerk RB-S1 (instruction budget) |
 | S7 | **Phase requirements, not model names.** The doctrine says what a phase needs (much input and little reasoning; highest reasoning; a reliable worker; a reviewer from another lineage). A routing file in the instance says which model meets it today. | "Stage 1: only Claude Code, only Anthropic" as doctrine | decided 2026-09-16; ADW ADR-14 (role-based routing) |
 | S8 | **Architecture is a phase with an artefact.** Architectural changes pass a design phase, Feature changes by stated reason (`design.md`: alternatives, interfaces, data model, ADR draft); the kit ships arc42 and MADR templates and a placeholder for a C4 model as code; an architecture change without an ADR or model update is a finding. | architecture decided inside the plan, or not at all | decided 2026-09-16; ADW P2; OpenSpec `design.md`; arc42; MADR; C4 |
@@ -127,11 +129,11 @@ Six decisions, from which the rest follows.
 |---|---|---|---|---|
 | **H1 Doctrine** | `WORKFLOW.md`: phases, gates, question protocol, session handover, stages | Copied from portfolio; German; no task classes; five meanings of "Stufe" across the corpus | English; task classes with the one-way ratchet (§6.1); one stage vocabulary (review §6); session lifecycle as a section, not an afterthought | rewrite after §9 D-1, D-12 |
 | **H2 Rule set** | `regelwerk.md`: six families A agents / H hooks / G gates / M human gates / P provenance / S structure, each row with level, enforcer, scope | Copied; three M rows are domain rules (M-3 contract acceptance, M-4 reconciliation, M-5 boundary before close) whose enforcers stayed in portfolio; 21 of the 60 red tests are `test_regelwerk` | Harness families A, H, G, P, S, the harness part of M (M-1 gate record, M-2 signature, M-6 ruleset, M-7 code owners, M-8 roster) and a new family **W workflow** for the adopted corpus rules; the domain rules M-3/M-4/M-5 and HG-1–4 go to portfolio; every remaining row names a test in *this* repository or a valve | split (§9 D-9); intake of review §5.9 |
-| **H3 Prompts and templates** | `prompts/01–07`, `01a`, `02a`; `templates/` | Prompts present, no design prompt; `templates/` holds only `gate-record.yaml` and `handover.md` — `findings.md` and `plan-marking.md` are still in portfolio and `WORKFLOW.md` links to them into the void; there is no spec template in either repository, the spec contract lives in `prompts/02-spec.md` and already requires non-goals; no ROADMAP, arc42, MADR, C4 or verification-report template | Prompt `02b-design.md` and `design.md` template; a spec template carrying the prompt's contract plus *class, protected areas, failure mode, size*; `findings.md` and `plan-marking.md` moved here; `ROADMAP.md`, arc42 skeleton, MADR record, C4-as-code placeholder; machine-rendered verification report | templates PR after §9 D-2, D-12, D-14 |
-| **H4 Kit** | `scripts/kit/manifest.yaml` (roles `mechanismus` / `geruest` / `bestand`), `probe.py`, the scripts that travelled (`plans_registry`, `ramp_valves`, `handover_schema`, `gate_record`, `new_change`, `ci_gates`, `_verdict`) | 24 mechanism entries; Leerprobe 173 of 235 green (portfolio, 2026-09-16); coding-harness has no `ci.yml`; 60 red tests at `5efe809` (27 `test_ci`, 21 `test_regelwerk`, 11 `test_feedback_channel`, 1 `test_model_endpoints`; 64 with `test_kit` included); `validate_change_artefacts.py` — the presence gate of phases 2 and 3 — stayed in portfolio as `bestand` and is not in the kit | The kit's **properties** are normative, not its file names: "one gate list, runners derive from it" is satisfied by `ci.yml` in portfolio and by `decisions/gates.yaml` in lakeswitch; the Leerprobe checks the property (§9 D-10); the presence validator becomes a kit entry or the kit has no phase gate | `bo0`, `2ee`, `9qo`; one-list adapter; validator decision (§9 D-11) |
+| **H3 Prompts and templates** | `prompts/01–07`, `01a`, `02a`; `templates/` | Prompts present, no design prompt; `templates/` holds only `gate-record.yaml` and `handover.md` — `findings.md` and `plan-marking.md` are still in portfolio and `WORKFLOW.md` links to them into the void; there is no spec template in either repository, the spec contract lives in `prompts/02-spec.md` and already requires non-goals; no ROADMAP, arc42, MADR, C4 or verification-report template | Prompt `02b-design.md` and `design.md` template; a spec template carrying the prompt's contract plus *class, protected areas, failure mode, size* and a *Definition of Done* section (D-2); `findings.md` and `plan-marking.md` moved here; `ROADMAP.md`, arc42 skeleton, MADR record, the LikeC4 specification pinning the four C4 element kinds (D-15); machine-rendered verification report | templates PR (M1 prerequisite) |
+| **H4 Kit** | `scripts/kit/manifest.yaml` (roles `mechanismus` / `geruest` / `bestand`), `probe.py`, the scripts that travelled (`plans_registry`, `ramp_valves`, `handover_schema`, `gate_record`, `new_change`, `ci_gates`, `_verdict`) | 24 mechanism entries; Leerprobe 173 of 235 green (portfolio, 2026-09-16); coding-harness has no `ci.yml`; 60 red tests at `5efe809` (27 `test_ci`, 21 `test_regelwerk`, 11 `test_feedback_channel`, 1 `test_model_endpoints`; 64 with `test_kit` included); `validate_change_artefacts.py` — the presence gate of phases 2 and 3 — stayed in portfolio as `bestand` and is not in the kit | **Decided (D-10):** the canonical one list is a platform-neutral gate file plus one `verify` command (lakeswitch's `decisions/gates.yaml` pattern); `ci.yml` is derived from it and a check reports drift; portfolio migrates its 36 steps into the gate file, the two-reader adapter is a transition only; `validate_change_artefacts.py` becomes a mechanism entry (D-11) | `bo0`, `2ee`, `9qo`; gate-file schema; portfolio migration bead |
 | **H5 Routing and endpoints** | `model-endpoints.yaml`; per-phase routing; `cc-*.sh` profiles; `run_change.sh`; `make leakcheck` | Endpoints declared and tested (RB-A6); the routing table with vendor names sits inside `WORKFLOW.md`; profiles and runner are in portfolio, not yet here | The doctrine carries a **phase-requirement table** (§6.6); a `model-routing.yaml` per instance maps requirement → model → endpoint, validated against `model-endpoints.yaml` by one test; the shipped example is the Anthropic-only stage 1. Runner with stop conditions; stage-2 activation as numbers (§12 step 4) | S7; routing file + test; runner travels |
 | **H6 Harness adapters** | `.claude/` (agents, commands, hooks, settings), `.codex/`, `.agents/skills/` | `SessionStart → bd prime`; nothing else here yet | Thin by test: the Leerprobe must reach the same result with the adapter directory deleted; `CLAUDE.md` = `@AGENTS.md` + addendum ≤ 200 lines (today it does not import — review D10) | fix `CLAUDE.md`; adapter-independence test |
-| **H7 Tracker conventions** | `tools/bd` pin; prefix fixed at init; one bead per change; `Closes-Bead:` trailer; `discovered-from` for found work; export single writer | Pin and prefix done; `export.auto true`; no `discovered-from` rule; close-by-trailer gate not here | The four rules from C4 as rules with enforcers: `dangling-beads`, `merged-beads`, export identity, no `bd create` outside the main checkout | §9 D-3, D-4, D-5 |
+| **H7 Tracker conventions** | `tools/bd` pin; prefix fixed at init; one bead per change; `Closes-Bead:` trailer; `discovered-from` for found work; export single writer; worktrees in the repository via the tool's own mechanism | Pin and prefix done; `export.auto true`; no `discovered-from` rule; close-by-trailer gate not here; worktrees as sibling directories by hand | The rules from C4 with enforcers: `dangling-beads`, `merged-beads`, export identity, `export.auto` off (D-4); worktrees under `.claude/worktrees/` or `bd worktree create`, base `fresh` (D-5); no `bd` writes from a worktree until the two-writer test is green | D-3, D-4, D-5 decided |
 | **H8 Evidence** | provenance classes (`provenance.yaml`), generated facts blocks, handover schema, gate records for human gates, verification report for machine gates | Provenance and handover schema present; facts pipeline stayed in portfolio (`bestand`) | Machine-rendered `verification-report.md` per change; facts pipeline as a kit entry or an instance duty — decided, not assumed | §9 D-11 |
 | **H9 Entry and readability** | `README.md`, an onboarding page, `docs/_INDEX.md` routed by situation, generated indices (`plans/INDEX.md`, ADR index), licence | README and bootstrap handover; no onboarding page, no licence, no situation index | A stranger's path: README → onboarding (one afternoon to a first Bounded change) → situation index; decisions written as questions with consequences (P3) so a product owner or architect can answer them without a session; licence (Apache-2.0, as lakeswitch) at the template switch | §12 step 1 and the template switch |
 
@@ -263,9 +265,11 @@ should change.
 ruleset RB-M6; lakeswitch CODEOWNERS + `floor.yml`); harness policies, hooks
 and sandboxes reduce blast radius and are never the boundary (ADW IS-5).
 
-**No server component** until stage 3, and then only additively (toolchain
-ADR-0007). A stage-3 meta-harness that holds state the repository does not
-also hold is disqualified.
+**One server component, additive from M0** (D-7): the Omnigent server as
+session host and policy engine, pinned, telemetry off, OSS variant. It adds
+enforcement and observability; it never replaces the git-native gates
+(toolchain ADR-0007, P6), and a meta-harness that holds state the repository
+and the tracker do not also hold is disqualified.
 
 ### 7.2 Scaling — two axes, equal in the target, team first on the path
 
@@ -316,13 +320,36 @@ source and §13 challenges them.
 | P17 | **Architecture leaves a record and a picture** | Feature and Architectural changes carry `design.md`; an architecture change without an ADR or model-as-code update in the same PR is a finding | arc42; MADR; C4 (Structurizr DSL or LikeC4); OpenSpec `design.md` |
 | P18 | **Written for a stranger** | Every page, question and PR text carries its meaning without the session; a stranger reaches a first Bounded change from the README in one afternoon | Nielsen heuristics 2 and 6; C8 |
 
-## 9 · Decisions to take (proposed)
+## 9 · Decisions
 
-D-1 to D-8 are the review's; their recommendations are carried here as
-proposals. D-9 to D-17 are new; D-14 to D-17 follow from the goals decided
-on 2026-09-16 (model independence, architecture accessibility, two scaling
-axes, public template). Each: goal, options as consequences, recommendation
-with reason, what happens on "ok".
+D-1 to D-8 are the review's; D-9 to D-17 are new; D-14 to D-17 follow from
+the goals decided on 2026-09-16 (model independence, architecture
+accessibility, two scaling axes, public template). The table below is the
+proposal as it was put to the maintainer; §9.1 records what was decided.
+
+### 9.1 Outcomes of the interview, 2026-09-16
+
+| # | Decided | Against the recommendation? | Consequence |
+|---|---|---|---|
+| D-1 | **Rename everywhere, corpus included.** One vocabulary: Stage 1–3 (model routing), Setup step S0–S7, Team level T0–T2, Omnigent adoption M0–M4, enforcement level 1–5. | yes — the recommendation kept the corpus untouched | the corpus correction PR (D-8) carries the renames; the research index carries the table until then |
+| D-2 | **`spec.md` is the contract**, the bead holds status. The spec template gains `class`, protected areas, failure mode, size — and a **Definition of Done** section (which gates must be green, what "done" means beyond the acceptance criteria), presence-checked by the validator. | no (DoD added on the maintainer's request) | spec template written; validator rule; prompt 02 references the template |
+| D-3 | One bead per change; task beads under an epic only once stage 2 has two workers claiming, then with `discovered-from` edges. | no | WORKFLOW §2 sentence |
+| D-4 | One script writes the export, at session end, with an identity gate; `export.auto` off. | no | coding-harness config; gate into the one list (`bo0`) |
+| D-5 | **Worktrees in the repository via the tool's own mechanism** (`.claude/worktrees/` through Claude Code, `bd worktree create` elsewhere), base `fresh` from the remote default branch; sibling directories retired. **No `bd` writes from a worktree until the two-concurrent-writers test is green** in a throwaway repository, with the prefix case as a fifth check. | revised after the best-practice question: both tools converge on in-repo placement | house rule now; verification bead; then the write ban lifts |
+| D-6 | Instance gates stay in the instance; the kit keeps `ruff` and `pytest`. | no | lakeswitch adds `mypy`, `hypothesis` to its own list |
+| D-7 | **The full Migrationsplan is the main path**, M0–M4 in order, starting now. The maintainer wants the Omnigent stage as early as possible. One entry condition stays because it is an enforced rule, not a preference: M2 (cross-vendor review) starts only when the foreign reviewer's endpoint is declared with residency in `model-endpoints.yaml` and lakeswitch's disclosure decision is written (D-13). | yes — the recommendation was M0–M1 now, M2+ after stage 2 | §12 rebuilt around M0–M4; harness steps become prerequisites inside the M-steps |
+| D-8 | Mechanical corrections to the corpus as one PR (dates, images, ADR prefixes, language line, CVE attribution, renames per D-1); content findings stay beside the sources in the review. | no | one PR |
+| D-9 | Split the rule set: A, H, G, P, S, the harness rows of M, new family W here; M-3, M-4, M-5 and HG-1–4 to portfolio; the 21 red `test_regelwerk` cases resolved row by row. | no | `2ee` |
+| D-10 | **The canonical one list is a platform-neutral gate file plus one `verify` command** (lakeswitch's pattern); `ci.yml` is derived from it — one "verify" step, or generated per gate with a drift check. Portfolio migrates its 36 steps into the gate file; the two-reader adapter is a transition only. Omnigent gets a policy in M1 that requires that one command before a push. Basis: Omnigent has no gate concept and reads no CI file; "developers and CI run the same command" is the mainstream pattern. | revised after the best-practice question | kit ships the gate-file schema and the runner; portfolio migration bead; `ci_gates.py` becomes the derivation, not the source |
+| D-11 | `validate_change_artefacts.py` becomes a mechanism entry; the evidence pipeline stays an instance duty with the marker convention in the kit. | no | manifest |
+| D-12 | `class` as a frontmatter field with four values, validated. | no | template, validator, one test |
+| D-13 | Four measured criteria open stage 2 and thereby M2: ≥ 3 full seven-phase runs with metrics in coding-harness; lakeswitch's disclosure decision written; leak check green in every run; the foreign reviewer's endpoint declared with residency. Implement-phase cost is measured, not a switch. | no | WORKFLOW §6; `uqvm` successor |
+| D-14 | Design phase 2b mandatory for Architectural, optional for Feature with one sentence in `spec.md` why not; absent for Bounded and Spike. | no | prompt `02b-design.md`, `design.md` template, validator rule |
+| D-15 | **LikeC4 in the kit, with a kit-shipped specification that pins the four C4 element kinds** (system, container, component, code); `likec4 build` in CI; the gate "architecture change without ADR or model update in the same PR is a finding". Basis: LikeC4 has the tooling momentum (npm, VS Code, active releases), Structurizr DSL the strictness — the pinned specification keeps the strictness. | revised after the best-practice question | `templates/architecture/` with the specification; both instances share the vocabulary |
+| D-16 | `model-routing.yaml` per instance, schema in the kit, every entry resolved against `model-endpoints.yaml` (drift is BLOCK); the Anthropic-only stage 1 ships as the example; the shell profiles read the file. No vendor name in `WORKFLOW.md`. | no | file, schema, test |
+| D-17 | Apache-2.0, an onboarding page, and the denylist scan as a kit gate **from now on**, not at the switch; the template switch itself when Leerprobe ≥ 95 % in both instances, the first full run is measured, and Q13 has been passed once by someone who was not there. | no | licence, `docs/onboarding.md`, gate |
+
+### 9.2 The proposals as put to the maintainer
 
 | # | Goal | Recommendation | On "ok" |
 |---|---|---|---|
@@ -377,23 +404,36 @@ with reason, what happens on "ok".
 
 ## 12 · The path
 
-No durations; exit and abort criteria per step (the Migrationsplan's form,
-where it holds to it). Steps overlap only where stated.
+**Decided 2026-09-16 (D-7): the Omnigent migration plan is the main path**,
+M0–M4 in order, starting now. The harness work is not a separate sequence
+any more; it is the set of prerequisites inside each M-step. No durations;
+exit and abort criteria per step; the Migrationsplan's own criteria are kept
+where it has them (M0–M2) and added where it has none (M3, M4). Two
+event-driven steps sit beside the sequence: the template switch and the
+first collaborator.
 
-| Step | What | Exit criteria | Abort / hold criteria | Beads |
+Non-negotiable across every step, because each is an enforced rule or a
+decided constraint, not a preference: Omnigent version pinned with a
+deliberate upgrade step; telemetry opt-out as the first configuration step;
+every policy proven to fire on a known-bad case before it counts; the server
+holds no state that repository and tracker do not also hold; OSS variant,
+no employer account; no model call to an endpoint that `model-endpoints.yaml`
+does not declare (RB-A6, level 4).
+
+| Step | What | Harness prerequisites inside the step | Exit criteria | Abort / hold criteria |
 |---|---|---|---|---|
-| **0 Severance and gates** | Portfolio removes the 24 mechanism entries after its per-gate decision (portfolio PR #162 review); coding-harness gets `ci.yml` with the gates the mechanism needs; the 60 red tests are resolved by class: 27 `test_ci` by the new `ci.yml` (`bo0`), 21 `test_regelwerk` by D-9 (`2ee`), 11 `test_feedback_channel` and 1 `test_model_endpoints` classified and fixed or valved | portfolio `make verify` green after removal; coding-harness CI green on its own gates; Leerprobe number recorded here | a portfolio gate that cannot be rebuilt or dropped with a reason → stay on the status quo (copies remain, banner stays) | portfolio `zfyv`; here `bo0`, `2ee`, `9qo` |
-| **1 Doctrine intake** | D-1…D-17 decided as this repository's first ADRs; `WORKFLOW.md` rewritten (English, classes, design phase, phase-requirement table, vocabulary, session lifecycle); `model-routing.yaml` with schema and test; rule set split and family W added; templates gain the fields plus `design.md`, arc42, MADR, C4 placeholder, ROADMAP; `CLAUDE.md` fixed; onboarding page drafted | every adopted rule has a test here or a valve with a date; the test suite is green; `AGENTS.md` ≤ 200 lines; no vendor name in `WORKFLOW.md` | a decision that needs a second person (e.g. RB-M2) → valve, not block | new beads per ADR |
-| **2 First full run with metrics** | One real change through all seven phases *in this repository* (successor of portfolio `uqvm`); tokens and wall time per phase, gate outcomes, human minutes | a handover file with the numbers; the four numbers of D-13 exist | the run needs a rule that does not exist → stop, write the rule, restart the phase | successor of `uqvm` |
-| **3 Instance adoption** | lakeswitch adopts the `plans/` roots, prompts, WORKFLOW copy with addendum, `ROADMAP.md`, spec fields; portfolio consumes the tagged kit; Leerprobe in both CIs | both instances report a Leerprobe number; every red case classified; lakeswitch's `docs/workflow.md` §8 no longer lists unbuilt roots | Leerprobe below the harness's own number by more than the valve allows → the kit, not the instance, is fixed first | new beads in both instances |
-| **4 Stage 2** | Cross-vendor review with the leak-check barrier; runner with stop conditions; disclosure decision for lakeswitch recorded | D-13's numbers met; ≥ 1 finding by the foreign reviewer that the same-vendor review missed (ADW's effectiveness test); zero leak-check violations | a leak-check violation → stage 2 off until the cause is a rule; no foreign finding in N reviews → configuration checked before continuing | new |
-| **5 Stage 3, evaluative** | A meta-harness added on top; the Migrationsplan's M0–M2 as the plan, its M3–M4 not before a second person exists | every policy proven to fire on a known-bad case; repo + tracker sufficient to continue if the server dies | policy that does not fire, or state held only server-side → back to stage 2 | new |
-| **Template switch** | coding-harness becomes a public template repository: licence, onboarding page, public-readiness gate green, Copier scaffold prepared for I2 | Leerprobe ≥ 95 % in both instances **and** step 2 done **and** Q13 passed once by someone who was not there | a customer, employer or vendor reference found by the gate → not public until removed | new |
-| **T1 (people axis)** | The first collaborator on lakeswitch: valves RB-M2 and RB-M6 close, CODEOWNERS review on, roster with two handles | first PR with approver ≠ author passes the gate-record check | — | new |
+| **M0 POC** | Omnigent server on a dedicated machine, pinned, telemetry off; the approval boundaries as server policies with a known-bad test each; a Beads task loop (claim → implement → commit → close) inside a sandboxed session in a throwaway repository; observability of a blocked session from a second device; the tmux fallback rehearsed once | the severance in portfolio (PR #162's per-gate decision) and coding-harness's own gate file and `verify` command (D-10, `bo0`); the 60 red tests resolved by class (27 `test_ci`, 21 `test_regelwerk` via D-9 / `2ee`, 12 others classified); `CLAUDE.md` fixed; D-4 export writer and D-5 worktree rule in place | all basis policies fire on their known-bad case (protocol in the repository); one full task loop without manual intervention beyond approvals; telemetry opt-out shown by egress observation; the same loop repeated once in the fallback topology | sandbox not functional on the target machine; `bd` unreliable inside Omnigent terminals; alpha instability interrupting the POC more than once a day → stay on the fallback, keep the harness prerequisites |
+| **M1 Bounded class productive** | Bounded changes in exactly one repository (coding-harness itself) run in the Omnigent topology: human touch over the Omnigent channel, at least one approval from a phone; a policy that requires the one `verify` command before any push; a first hard spend cap per session | doctrine intake as this repository's first ADRs (§9.1) and the rewritten `WORKFLOW.md` (English, classes, 2b, requirement table, one vocabulary, session lifecycle); the spec template with DoD; `model-routing.yaml` with schema and test; rule set split; `design.md`, arc42, MADR, LikeC4 specification, ROADMAP templates; onboarding page drafted; denylist gate live (D-17) | ≥ 10 Bounded changes completed in the topology, ≥ 1 with mobile approval; ≤ 10 minutes human time per Bounded change including approvals; no sandbox escape or policy exception without a documented reason; every adopted rule has a test here or a valve with a date | human time per Bounded change repeatedly above 10 minutes after policy tuning; more than one unexplained policy non-fire → back to M0's state |
+| **M2 Feature path with cross-vendor review** | Full artefact path P1–P7 with 2b for Feature and Architectural over the Omnigent channel; G4 as cross-vendor review (implementer and reviewer from different model lineages); the machine-rendered verification report; one controlled night run with stop conditions and a hard spend cap; first drift audit after two weeks | **entry condition (D-13, enforced):** ≥ 3 full seven-phase runs with metrics in coding-harness (the successor of `uqvm`), lakeswitch's disclosure decision written, leak check green on every run, the foreign reviewer's endpoint declared with residency; plus the stage-2 runner with stop conditions and the instance adoption in lakeswitch (plans roots, prompts, WORKFLOW copy, ROADMAP, spec fields) so that Feature changes exist to run | ≥ 3 Feature changes through all gates in the topology; ≥ 1 finding by the foreign reviewer that the same-lineage review missed (otherwise the configuration is wrong: same vendor? same context?); the night run's checklist green including the spend cap; drift audit without blocking findings; Q2 passed once by a stranger; zero leak-check violations | cross-vendor review not operable (licence, setup) → G4 falls back to an in-house reviewer with stricter context separation, recorded as debt; a leak-check violation → M2 off until the cause is a rule; escalation storms at G4 → thresholds and input curation tightened before continuing |
+| **M3 Night mode and parallelism as routine** | Approved plans run overnight in cloud sandboxes with spend caps and mobile approvals; morning ritual: action log → G4 results → G5; parallel beads in parallel worktrees (D-5's in-repo placement, two-writer test green) with sequential merging; optional Polly pilot only if parallelisability is real and costed | task beads under an epic (D-3's second half) with `discovered-from` edges; the two-concurrent-writers verification green; Beads store mode decided (embedded vs server) from that measurement | ≥ 1 mergeable PR per week from night runs with zero unexplained policy exceptions; parallel execution without integration conflicts; morning G5 ritual ≤ 15 minutes per run | (added, the plan has none) two consecutive weeks without a mergeable night PR, or the morning ritual above 15 minutes twice → back to M2's day operation; Polly pilot: cost × benefit < 1 → manual dispatch |
+| **M4 Hardening** | Mutation-score gate in CI; evidence-bound status (attestation files, hash-chained); traceability matrix FR × test as a generated CI artefact with gaps blocking; the tmux fallback kept as the rehearsed disaster-recovery path | requirement IDs in `spec.md` and test names (from M1 on, level 2) so the matrix has something to compute; the kit tagged and, at the fourth instance, Copier (I2) | (added) each hardening gate has its mutation test and a non-empty subject set; the fallback rehearsed once after M4 | (added) a hardening gate that cannot be made to go red → not merged; fallback rehearsal fails → M4 paused until it passes |
+| **Template switch** (event) | coding-harness becomes a public template: Apache-2.0, onboarding page, denylist gate green, Copier scaffold prepared | — | Leerprobe ≥ 95 % in both instances **and** the M2 entry runs measured **and** Q13 passed once by someone who was not there | a customer, employer or vendor reference found by the gate → not public until removed |
+| **T1 first collaborator** (event) | On lakeswitch: valves RB-M2 and RB-M6 close, CODEOWNERS review on, roster with two handles; the `bd`-vs-`br` decision (toolchain ADR-0005) written before this | — | first PR with approver ≠ author passes the gate-record check | — |
 
-Step 0 is in flight. Steps 1 and 2 can overlap once D-1…D-5 are taken; step 3
-needs step 1's tag; steps 4 and 5 are strictly sequential. The template
-switch and T1 are event-driven and sit beside the sequence.
+M0's harness prerequisites are in flight (portfolio PR #162, beads `bo0`,
+`2ee`, `9qo`). M0 and M1's harness prerequisites can proceed in parallel;
+M2's entry condition is the one hard sequence point, because it is the first
+moment content leaves for a foreign endpoint.
 
 ## 13 · Challenge: is this best practice?
 
@@ -414,7 +454,7 @@ practice is better than what any of the three repositories does today.
 | **Machine presence gate instead of human spec approval** (S2) | Spec-driven development expects a human to approve the spec before code | One maintainer, minutes per day; the human reads only what is open | The risk is rubber-stamping by absence (§11). **Mitigated, not removed**: 2a for Feature and above, an ADR read for Architectural. For a team this becomes a real approval again. |
 | **Seven phases, routed by requirement** | Spec Kit: four commands; OpenSpec: propose / apply / archive; "use the best model everywhere" | Finer cut isolates the expensive error (the plan) and routes cost; the doctrine names requirements, the instance names models (S7) | Ceremony risk is real; task classes are the fix and must land with the phases, not after. Routing needs the `/status` check because there are reports of subagent model fields being ignored (WORKFLOW §3). |
 | **German prose** | English | History; decision to migrate is taken | Not a departure any more; a migration debt. Translate on touch, and only what is still true. |
-| **Meta-harness last** (S5) | The research corpus (and the market) pushes Omnigent-style runtimes now | Alpha maturity; every capability it adds is additive to gates that already work | Mainstream in 2026 is *not* settled here; keeping it evaluative is the conservative reading and the right one for a customer-facing framework. |
+| **Meta-harness early, as host** (S5, D-7) | Mainstream in 2026 is not settled; the corpus pushes Omnigent-style runtimes now, conservative practice keeps them evaluative | The maintainer decided for the early path; the conditions that make it defensible are the additive rule (git-native gates work alone), pinning, telemetry off, policy non-vacuity, no server-held state, and the residency gate before cross-vendor review | This is the one place where the recommendation was the conservative reading and the decision was not. Recorded as such; the abort criteria in §12 are what make it a bet rather than a leap. |
 
 ### 13.2 Where mainstream is better, and we should move
 
@@ -448,7 +488,8 @@ practice is better than what any of the three repositories does today.
 
 ## 14 · What this document does not do
 
-- It decides nothing; §9 is the list, the harness's first ADRs are the place.
+- It is not an ADR; §9.1 records the interview outcomes, the harness's first
+  ADRs are the place where they become records.
 - It does not size the steps in time; the exit criteria are the clock.
 - It does not verify the Omnigent claims or the CVE; both stay `unverified`.
 - It does not create beads; one writer per tracker, and a parallel session
