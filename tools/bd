@@ -1,0 +1,48 @@
+#!/usr/bin/env bash
+# The pinned entry point to bd. Use this, not the bare `bd` on your PATH.
+#
+# WHY A WRAPPER EXISTS AT ALL
+# The tracker database is shared through a Dolt remote (refs/dolt/data on
+# origin). That makes bd a piece of shared infrastructure rather than a local
+# tool: a version mismatch no longer breaks one machine, it refuses writes for
+# everyone at once.
+#
+# WHAT IT DOES
+#   1. refuses to run if your bd is not the pinned version (tools/beads/VERSION)
+#   2. refuses `init`, `migrate` and `upgrade` — the three verbs that can
+#      change the shared database's schema or its identity. The issue prefix
+#      (`coding-harness-`) was fixed at init and is not correctable afterwards.
+#
+# THE ESCAPE HATCH
+#   BD_PIN_BYPASS=1 lets a blocked verb through. It exists because a future
+#   schema upgrade has to run `bd migrate` once, on one machine. If you are
+#   reaching for it and you are not doing exactly that, stop and ask.
+set -euo pipefail
+
+REPO_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+PINNED="$(tr -d '[:space:]' < "$REPO_ROOT/tools/beads/VERSION")"
+
+die() { printf '%s\n' "$@" >&2; exit 1; }
+
+command -v bd >/dev/null 2>&1 || die \
+  "bd is not on your PATH." \
+  "Install the pinned version ($PINNED) first; then retry with tools/bd."
+
+# `bd version` prints e.g. "bd version 1.1.2 (20e493e56)"
+INSTALLED="$(bd version 2>/dev/null | head -1 | grep -oE '[0-9]+\.[0-9]+\.[0-9]+' | head -1 || true)"
+if [ "$INSTALLED" != "$PINNED" ]; then
+  die "bd version mismatch: you have ${INSTALLED:-unknown}, this repository is pinned to $PINNED." \
+      "" \
+      "A mismatched bd against the shared remote can refuse writes for the whole team, so this" \
+      "is not a warning. Install version $PINNED and retry."
+fi
+
+for verb in init migrate upgrade; do
+  if [ "${1:-}" = "$verb" ] && [ "${BD_PIN_BYPASS:-0}" != "1" ]; then
+    die "'bd $verb' is blocked by tools/bd." \
+        "The tracker prefix and schema are shared infrastructure; the prefix was fixed at init." \
+        "If this is a deliberate one-time migration, run: BD_PIN_BYPASS=1 tools/bd $verb ..."
+  fi
+done
+
+exec bd "$@"

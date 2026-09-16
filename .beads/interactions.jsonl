@@ -1,0 +1,1 @@
+{"id":"int-63f0a47e2de57e407657d2d88e923e7d","kind":"field_change","created_at":"2026-09-16T17:21:01.758257Z","actor":"Michael Peichl","issue_id":"coding-harness-tmr","extra":{"field":"status","new_value":"closed","old_value":"open","reason":"Done in the bootstrap session of 2026-09-16; see docs/journal/handover/2026-09-16-coding-harness-bootstrap.md"}}
