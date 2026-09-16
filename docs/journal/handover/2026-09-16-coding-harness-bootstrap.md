@@ -116,3 +116,31 @@ These live in the portfolio tracker and stay there until closed:
 2. Start Phase 2: intake the research corpus into `docs/research/`.
 3. Keep this handover's table honest: when a portfolio bead closes, strike
    the row here with its closing date.
+
+---
+
+## Migration state — appended 2026-09-16, evening session
+
+- **Phase 2 done** (commit `b15592a`): the three research documents carry
+  frontmatter; `docs/research/_INDEX.md` added; provenance classes are
+  `ai-drafted-reviewed` with review pending — the maintainer corrects a
+  class where the hand differed. `coding-harness-anw` closed.
+- **Phase 3 done** (commit `5efe809`): the 24 mechanism entries of
+  portfolio's kit manifest adopted from portfolio master `4ce8240` — which
+  already carried the 69il fix (PR #160) and the readability pages
+  (PR #159). Deliberate deviations: no `ci.yml` yet (`coding-harness-bo0`),
+  `.beads/issues.jsonl` stays this repository's own export.
+- **Measured baseline** (portfolio venv, 2026-09-16): **167 passed,
+  60 failed, 4 skipped.** Classes: 27 `test_ci` (bo0), 21 `test_regelwerk`,
+  11 `test_feedback_channel`, 1 `test_model_endpoints` (`.claude/agents`,
+  seam 1). Classified in the tracker; `test_kit`'s 19 collected, not yet
+  run here — the Leerprobe is the acceptance run for this migration.
+- **Phase 4a opened in portfolio:** PR #162 (branch
+  `docs/sever-pointers-coding-harness`) carries ADR-032, the AGENTS.md
+  banner and the rendered adr index. Not merged; **Phase 4b** (removing the
+  mechanism copies there) follows the maintainer's per-gate decision.
+- **Live reproduction of portfolio's wp-p0.1:** `bd create` produced
+  short-prefix ids (`portfolio-vevj`, `portfolio-prrw`, `portfolio-lcb8`)
+  in a worktree and in the main checkout, with `issue-prefix` correctly set
+  and with `BD_ISSUE_PREFIX` — documented in PR #162's description. None of
+  them reached a pushed state.
