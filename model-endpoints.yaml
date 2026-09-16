@@ -1,0 +1,168 @@
+# Welche Modell-Endpunkte zugelassen sind — mit Betreiber, Residenz und
+# Abrechnungsart.
+#
+# **Warum es diese Datei gibt.** `docs/WORKFLOW.md` regelt, WELCHES Modell in
+# welcher Phase laeuft. Wo es laeuft und was es sehen darf, stand bis zum
+# 2026-09-08 nirgends — weder im Regelwerk noch in einer Anleitung. Ein Agent
+# konnte ein Modell nennen, und niemand hielt den Namen gegen etwas.
+#
+# **Nicht gelistet ist BLOCK.** Dieselbe Regel wie in den beiden Manifesten
+# unter `scripts/`: ein Standard, der im Zweifel zulaesst, laesst genau die
+# Endpunkte zu, an die niemand gedacht hat.
+#
+# Geprueft von `tests/test_model_endpoints.py` (RB-A6).
+
+schema_version: 1
+
+# ---------------------------------------------------------------------------
+# Die Datenklassen — wonach sich entscheidet, was wohin darf
+# ---------------------------------------------------------------------------
+datenklassen:
+  framework:
+    was: "dieses Repository: Regeln, Vorlagen, Ablauf, Tests"
+    bemerkung: "oeffentlich vorgesehen (lakeswitch-ai); keine Residenzauflage"
+  kundencode:
+    was: "Quellcode und Schemata aus der Projekt-Instanz — PL/SQL, DDL, Contract-Instanzen"
+    bemerkung: >-
+      Traegt Struktur und Bezeichner des Kunden. Auflage: nur Endpunkte mit
+      residenz != 'nicht-erklaert'. Ein Modell, das Kundencode sieht, sieht das
+      Datenmodell des Kunden — auch ohne eine einzige Zeile Nutzdaten.
+  kundendaten:
+    was: "Zeilen aus Quell- oder Zielsystemen"
+    bemerkung: >-
+      Verlaesst die Umgebung des Kunden nicht. Kein hier gelisteter Endpunkt ist
+      dafuer zugelassen; die Reconciliation laeuft im Warehouse, nicht im Modell.
+
+# ---------------------------------------------------------------------------
+# Die zugelassenen Endpunkte
+# ---------------------------------------------------------------------------
+#
+# `abrechnung` ist nicht Buchhaltung, sondern eine Auflage: ein Abonnement-Plan
+# ist auf offiziell unterstuetzte Werkzeuge begrenzt. Wer sein Kontingent durch
+# eine eigene Integration fahren will, braucht einen token-basierten Zugang —
+# sonst ist die Nutzung nicht gedeckt, unabhaengig davon, ob sie technisch geht.
+endpunkte:
+  - name: anthropic-api
+    betreiber: Anthropic
+    residenz: anbieter-erklaert
+    abrechnung: token
+    darf_sehen: [framework, kundencode]
+    modelle:
+      - claude-opus-5
+      - claude-sonnet-5
+      - claude-haiku-4-5
+      - claude-fable-5-1
+    bemerkung: >-
+      Erstanbieter. `inference_geo` ist ein Parameter der Messages API und kann
+      die Region festlegen, wo der Anbieter es unterstuetzt.
+
+  - name: claude-code-plan
+    betreiber: Anthropic
+    residenz: anbieter-erklaert
+    abrechnung: abonnement
+    darf_sehen: [framework, kundencode]
+    modelle:
+      - claude-opus-5
+      - claude-sonnet-5
+      - claude-haiku-4-5
+      - claude-fable-5-1
+    bemerkung: >-
+      Der Harness, in dem hier gearbeitet wird. **Nur ueber offiziell
+      unterstuetzte Werkzeuge.** Das Kontingent durch eine eigene Integration
+      oder ein fremdes Werkzeug zu fahren, ist nicht gedeckt — wer eine eigene
+      Integration baut, nimmt `anthropic-api`.
+
+  - name: bedrock-claude
+    betreiber: "Amazon Web Services (Claude gehostet)"
+    residenz: region-waehlbar
+    abrechnung: token
+    darf_sehen: [framework, kundencode]
+    modelle:
+      - claude-opus-5
+      - claude-sonnet-5
+    bemerkung: >-
+      Vorgesehen, hier nicht in Benutzung. Steht in der Liste, damit die
+      Alternative bei einer Residenzauflage benannt ist und nicht im Moment der
+      Auflage erst gesucht wird.
+
+  # -------------------------------------------------------------------------
+  # Stufe 2 — Fremdanbieter fuer Umsetzung und Review (docs/WORKFLOW.md)
+  # -------------------------------------------------------------------------
+  #
+  # `darf_sehen: [framework]` ist hier die entscheidende Zeile, nicht die
+  # Residenz. Dieses Repository ist als oeffentlich vorgesehen; was es enthaelt,
+  # ist Regelwerk, Vorlage und Ablauf. Kundencode traegt Struktur und Bezeichner
+  # eines Kunden und geht an keinen dieser Endpunkte — auch nicht in einem Diff,
+  # auch nicht in einem Plan. Durchgesetzt wird das nicht durch diese Zeile,
+  # sondern durch `make leakcheck` vor jeder Sitzung an einem Fremdendpunkt.
+
+  - name: glm-coding-plan
+    betreiber: "Zhipu AI (Z.ai)"
+    residenz: anbieter-erklaert
+    abrechnung: abonnement
+    darf_sehen: [framework]
+    modelle:
+      - glm-5.3
+      - glm-5.3-flash
+    bemerkung: >-
+      Anthropic-kompatibler Endpunkt (`https://api.z.ai/api/anthropic`), betrieben
+      in China. Vorgesehen fuer Phase 4 (Umsetzung), segmentiert nach den
+      Markierungen im Plan: `glm-5.3-flash` fuer Routine, `glm-5.3` fuer Substanz.
+      **Nur ueber Claude Code**, das der Anbieter selbst als unterstuetztes
+      Werkzeug fuehrt — eine eigene Integration waere vom Abonnement nicht
+      gedeckt.
+
+  - name: kimi-code
+    betreiber: "Moonshot AI"
+    residenz: anbieter-erklaert
+    abrechnung: abonnement
+    darf_sehen: [framework]
+    modelle:
+      - k3
+      - kimi-for-coding
+    bemerkung: >-
+      Anthropic-kompatibler Coding-Endpunkt, betrieben in China. Vorgesehen fuer
+      Phase 6 (Review): `k3` fuer die erste Runde ueber den vollen Diff,
+      `kimi-for-coding` (K2.7 Code) fuer die begrenzten Folgerunden. Der Zweck
+      ist Anbietervielfalt — ein Modell bewertet die eigenen Erzeugnisse zu
+      positiv, und ein Reviewer aus einem anderen Haus weiss bauartbedingt nicht,
+      dass er sich selbst prueft.
+
+# ---------------------------------------------------------------------------
+# Nutzungszweck — die Auflage, die kein technisches Gate prueft
+# ---------------------------------------------------------------------------
+#
+# Beide Abonnements oben sind als **persoenliche** Nutzung ausgewiesen. Ob die
+# Arbeit an diesem Repository davon gedeckt ist, ist eine Vertragsfrage und
+# keine technische; sie wird deshalb hier mit Datum vermerkt und nicht in einem
+# Skript beantwortet.
+#
+# **Stand 2026-09-10:** vom Eigentuemer erklaert — dieses Projekt ist zum
+# jetzigen Zeitpunkt ein persoenliches, die Nutzung damit gedeckt.
+#
+# Die Erklaerung traegt ihr Datum, weil sie an einen Zustand gebunden ist. Sie
+# ist **neu einzuholen**, sobald eines von dreien eintritt: das Projekt wird
+# kommerziell betrieben, `lakeswitch-ai` geht oeffentlich, oder eine
+# Auftraggeberin bezahlt Arbeit, die durch diese Endpunkte laeuft. Ein Vermerk
+# ohne Verfallsbedingung liest sich beim naechsten Mal wie eine Dauerzusage.
+
+# ---------------------------------------------------------------------------
+# Ausdruecklich NICHT zugelassen
+# ---------------------------------------------------------------------------
+#
+# Eine Verbotsliste ersetzt die Zulassungsliste nicht — nicht gelistet ist
+# ohnehin BLOCK. Sie steht hier, weil ein benannter Ausschluss eine
+# Entscheidung dokumentiert, waehrend Schweigen wie ein Versehen aussieht.
+ausgeschlossen:
+  - was: "Endpunkte ohne erklaerte Datenresidenz"
+    klasse: kundencode
+    grund: >-
+      Kundencode traegt Struktur und Bezeichner des Kunden. Ohne erklaerte
+      Residenz ist nicht beantwortbar, wo diese Struktur liegt — und die Frage
+      wird erst gestellt, wenn die Antwort teuer ist.
+  - was: "jeder Endpunkt fuer die Klasse kundendaten"
+    klasse: kundendaten
+    grund: >-
+      Zeilen verlassen die Umgebung des Kunden nicht. Das ist keine Frage des
+      Anbieters, sondern der Architektur: die Maschine baut die Pipeline, sie
+      liest die Daten nicht.

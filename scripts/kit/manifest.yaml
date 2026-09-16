@@ -1,0 +1,229 @@
+# Was den Coding-Ablauf ausmacht — und was ihn nur in DIESEM Repo beschreibt.
+#
+# Die Regel, die diese Datei noetig macht, ist dieselbe wie beim Export-Manifest:
+# **eine nicht klassifizierte Datei ist ein BLOCK, kein "gehoert dazu by
+# default".** Ein Standard, der im Zweifel mitnimmt, uebergibt genau die Dateien,
+# an die niemand gedacht hat — und das sind erfahrungsgemaess die, die den
+# Bestand dieses Repos behaupten.
+#
+# Aufloesung: **laengster passender Praefix gewinnt** — wer eine Ausnahme
+# braucht, schreibt einen laengeren Praefix daneben.
+#
+# Diese Datei beantwortet eine ANDERE Frage als scripts/export/manifest.yaml.
+# Dort: "was geht nach lakeswitch-ai". Hier: "was macht den Ablauf aus". Eine
+# Datei darf in beiden vorkommen; welche Kombinationen sich widersprechen, haelt
+# tests/test_kit.py::test_the_two_manifests_do_not_contradict_each_other.
+#
+# `python3 scripts/kit/probe.py` faehrt die Menge in einem Wegwerf-Repo.
+
+schema_version: 1
+
+# Ordner, die im Zielrepo LEER existieren muessen. Getrennt von den
+# `geruest`-Regeln: ein Praefix `plans/changes/` haette jede Datei darunter mit
+# erfasst, und das sind die Artefakte DIESES Repos. Der Ordner reist, sein
+# Inhalt nicht.
+geruest_ordner:
+  - plans/changes
+  - plans/changes/archive
+  - plans/specs
+
+# ---------------------------------------------------------------------------
+# Die drei Rollen
+# ---------------------------------------------------------------------------
+#
+# Zwei haetten gereicht, wenn nicht eine Datei existieren muesste, deren INHALT
+# Bestand ist. `.beads/issues.jsonl` ist der Fall: ohne eine Exportdatei sammelt
+# pytest nicht einmal, mit DIESER Exportdatei behauptet das fremde Repo 570
+# fremde Vorgaenge. Gemessen am 2026-09-08; die Spec trug bis dahin zwei Rollen.
+rollen:
+  mechanismus:
+    was: "traegt den Ablauf und laeuft in einem fremden Repo unveraendert"
+    bedingung: "faellt in der Leerprobe gruen aus, oder steht mit Grund in probe.REIST_NICHT"
+  bestand:
+    was: "beschreibt die Inventur DIESES Repos und bleibt hier"
+    bedingung: "der Grund steht in der Regel, nicht im Kopf des Uebergebenden"
+  geruest:
+    was: "muss im Zielrepo existieren, aber mit dem dortigen Inhalt"
+    bedingung: "die Probe legt einen leeren Rumpf an — nie eine Kopie von hier"
+
+# ---------------------------------------------------------------------------
+# Die Regeln
+# ---------------------------------------------------------------------------
+rules:
+  # --- der Ablauf selbst -----------------------------------------------------
+  - prefix: prompts/
+    rolle: mechanismus
+    reason: "die sieben Phasen-Prompts. Null Domaenen-Nennungen (gemessen 2026-09-08)"
+  - prefix: docs/WORKFLOW.md
+    rolle: mechanismus
+    reason: "die sieben Phasen, ihre Artefakte, das Modell je Phase und die Sitzungsuebergabe. Nennt keine Domaene ausser im Verbot, eine zu nennen"
+
+  # --- der Mechanismus -------------------------------------------------------
+  - prefix: scripts/_verdict.py
+    rolle: mechanismus
+    reason: "das gemeinsame Exit-Vokabular. Haengt an nichts"
+  - prefix: scripts/gate_record.py
+    rolle: mechanismus
+    reason: "der Abnahme-Automat. 30 von 30 Faellen gruen in der Leerprobe"
+  - prefix: scripts/handover_schema.py
+    rolle: mechanismus
+    reason: "das Uebergabe-Schema. Das Schema reist, der Korpus nicht"
+  - prefix: scripts/ci_gates.py
+    rolle: mechanismus
+    reason: "die Ableitung der Gate-Liste aus ci.yml, plus die zwei Sperrklinken"
+  - prefix: scripts/plans_registry.py
+    rolle: mechanismus
+    reason: "Artefakt-Hygiene und die Kopplung Artefakt/Vorgang"
+  - prefix: scripts/ramp_valves.py
+    rolle: mechanismus
+    reason: "Uebergangs-Ventile: eine Regel ohne Erzwinger nennt ein Ventil mit Frist"
+  - prefix: scripts/new_change.py
+    rolle: mechanismus
+    reason: "der Einstieg. Gehoert wp-p1-verbesserung-wei1; hier nur klassifiziert, nicht kopiert bearbeitet"
+  - prefix: scripts/kit/
+    rolle: mechanismus
+    reason: "das Modul selbst — eine Uebergabe, die sich nicht mit uebergibt, ist eine Einbahnstrasse"
+
+  # --- die Tests, die den Mechanismus halten ---------------------------------
+  - prefix: tests/test_gate_record.py
+    rolle: mechanismus
+    reason: "prueft einen Automaten gegen eine Vorlage. Beides reist mit"
+  - prefix: tests/test_regelwerk.py
+    rolle: mechanismus
+    reason: "die Grammatik der Regeltabelle reist; die konkreten Regeln sind Bestand (siehe REIST_NICHT)"
+  - prefix: tests/test_ci.py
+    rolle: mechanismus
+    reason: "die Ableitung reist; die Scriptmenge dieses Repos ist Bestand (siehe REIST_NICHT)"
+  - prefix: tests/test_feedback_channel.py
+    rolle: mechanismus
+    reason: "das Schema reist; die Uebergaben dieses Repos sind Bestand (siehe REIST_NICHT)"
+  - prefix: tests/test_kit.py
+    rolle: mechanismus
+    reason: "haelt diese Datei und die Probe"
+  - prefix: tests/test_model_endpoints.py
+    rolle: mechanismus
+    reason: "RB-A6: jedes genannte Modell loest gegen einen deklarierten Endpunkt auf. Die Regel ist portabel, die Endpunkte sind es nicht"
+
+  # --- Regeln und Vorlagen ---------------------------------------------------
+  - prefix: docs/governance/regelwerk.md
+    rolle: mechanismus
+    reason: "die Regeltabelle mit ihrer Grammatik. Die Domaenen-Nennungen darin sind beim Uebergeben zu pruefen"
+  - prefix: docs/governance/quality-gates.md
+    rolle: mechanismus
+    reason: "was eine Unterschrift bedeutet, die vier Human Gates, die vier Bedingungen fuer ACCEPTED"
+  - prefix: templates/gate-record.yaml
+    rolle: mechanismus
+    reason: "die Vorlage, gegen die der Automat prueft"
+  - prefix: templates/handover.md
+    rolle: mechanismus
+    reason: "die Vorlage, gegen die das Uebergabe-Schema prueft"
+  - prefix: plans/_README.md
+    rolle: mechanismus
+    reason: "der Lebenszyklus der Artefakte — plans_registry.py liest ihn"
+
+  # --- Konfiguration ---------------------------------------------------------
+  - prefix: ruff.toml
+    rolle: mechanismus
+    reason: "ramp_valves.py liest die aktiven Regelgruppen daraus"
+  - prefix: provenance.yaml
+    rolle: mechanismus
+    reason: "die Provenienzklassen. Das Vokabular reist, die Pfadzuordnung ist zu pruefen"
+  - prefix: .github/workflows/ci.yml
+    rolle: mechanismus
+    reason: "die EINE Gate-Liste. ci_gates.py liest sie; ohne sie hat der Ablauf keinen Erzwinger"
+
+  # --- Geruest ---------------------------------------------------------------
+  - prefix: model-endpoints.yaml
+    rolle: geruest
+    reason: "RB-A6 verlangt die Datei; WELCHE Endpunkte zugelassen sind, entscheidet die Organisation des Zielrepos — nicht diese hier"
+  - prefix: .beads/issues.jsonl
+    rolle: geruest
+    reason: "muss existieren, damit die Kopplung Artefakt/Vorgang ueberhaupt pruefbar ist — der Inhalt ist die Inventur dieses Repos"
+
+  # --- Bestand ---------------------------------------------------------------
+  - prefix: docs/journal/
+    rolle: bestand
+    reason: "Verlauf dieses Repos. Altert per Bauart und wird nie ueberschrieben"
+  - prefix: docs/evidence/
+    rolle: bestand
+    reason: "erzeugte Bestandszahlen dieses Repos"
+  - prefix: docs/governance/fehler-katalog.md
+    rolle: bestand
+    reason: "hundert Befunde ueber DIESES Repo, mit Fundstelle"
+  - prefix: plans/
+    rolle: bestand
+    reason: "Arbeitsartefakte dieses Repos. Der Lebenszyklus reist (plans/_README.md), die Artefakte nicht"
+  - prefix: docs/
+    rolle: bestand
+    reason: "Auffangregel — Wissen ueber dieses Repo und seine Domaene. Was mitreist, steht oben mit laengerem Praefix"
+  - prefix: scripts/
+    rolle: bestand
+    reason: "Auffangregel — Validatoren mit Domaenenbezug (validate_contract, collect_inventory, sync_*). Was mitreist, steht oben"
+  - prefix: tests/
+    rolle: bestand
+    reason: "Auffangregel — Tests ueber den Bestand dieses Repos. Was mitreist, steht oben"
+  - prefix: templates/
+    rolle: bestand
+    reason: "Auffangregel — Entity-Contract, DABs, Run-Log: Domaene. Was mitreist, steht oben"
+  - prefix: examples/
+    rolle: bestand
+    reason: "Referenz-Konfigurationen der Domaene"
+  - prefix: .beads/
+    rolle: bestand
+    reason: "Auffangregel — Konfiguration und Hooks des Trackers dieses Repos. Der Export ist geruest (laengerer Praefix oben)"
+  - prefix: .obsidian/
+    rolle: bestand
+    reason: "Werkzeug-Einstellungen dieses Arbeitsplatzes"
+  - prefix: .github/
+    rolle: bestand
+    reason: "Auffangregel — Vorlagen und Aktionen dieses Repos. ci.yml traegt (laengerer Praefix oben)"
+
+  # --- .claude/: haengt an D3 -----------------------------------------------
+  #
+  # Agenten-Definitionen, Hooks und Commands SIND Mechanismus — aber
+  # harness-gebunden. Sie mitzunehmen macht den Kit von Claude Code abhaengig;
+  # sie wegzulassen liefert einen Ablauf ohne die Werkzeuge, die ihn hier
+  # durchsetzen. spec.md D3 ist nicht entschieden, und bis dahin gilt die
+  # vorsichtige Antwort: hierbleiben. Eine Rolle, die eine offene Entscheidung
+  # vorwegnimmt, ist eine still getroffene Entscheidung.
+  - prefix: .claude/
+    rolle: bestand
+    reason: "offen: spec.md D3. Bis zur Entscheidung bleibt es hier — nicht weil es Bestand waere, sondern weil die Rolle noch niemand vergeben hat"
+
+  # --- Wurzeldateien ---------------------------------------------------------
+  - prefix: AGENTS.md
+    rolle: bestand
+    reason: "offen: spec.md D4. Sieben Domaenen-Nennungen an drei Stellen (Strukturbaum, Instanz-Satz, Markentrennung) — solange die dort stehen, traegt die Datei den Bestand mit"
+  - prefix: CLAUDE.md
+    rolle: bestand
+    reason: "importiert AGENTS.md und ergaenzt Harness-Spezifisches — haengt an D3 und D4"
+  - prefix: Makefile
+    rolle: bestand
+    reason: "sechs Ziele ueber Scripts dieses Repos. Die EINE Gate-Liste steht in ci.yml, nicht hier"
+  - prefix: README.md
+    rolle: bestand
+    reason: "beschreibt dieses Repository"
+  - prefix: CHANGELOG.md
+    rolle: bestand
+    reason: "Verlauf dieses Repos"
+  - prefix: requirements-ci.txt
+    rolle: geruest
+    reason: "die Abhaengigkeiten muss das Zielrepo selbst deklarieren — eine Kopie von hier zieht Domaenen-Pakete mit"
+  - prefix: requirements.txt
+    rolle: bestand
+    reason: "Entwicklungs-Abhaengigkeiten dieses Repos"
+  - prefix: .markdownlint.jsonc
+    rolle: bestand
+    reason: "Lint-Einstellungen dieses Repos; kein Test liest sie"
+  - prefix: .mailmap
+    rolle: bestand
+    reason: "Namen der Mitwirkenden dieses Repos"
+  - prefix: .gitignore
+    rolle: bestand
+    reason: "Ignoriermuster dieses Repos"
+  - prefix: .gitattributes
+    rolle: bestand
+    reason: "Attribute dieses Repos"
+  - prefix: .editorconfig
+    rolle: bestand
+    reason: "Editor-Einstellungen; keine Regel haengt daran"

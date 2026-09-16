@@ -1,0 +1,260 @@
+# provenance.yaml — welche Hand hat was geschrieben, und was folgt daraus.
+#
+# Diese Datei ist die eine Karte von Pfad auf Provenienz-Klasse. Sie wird von
+# `scripts/validate_provenance.py` gelesen und von `tests/test_provenance.py`
+# geprueft. Der Dateiname ist derselbe wie im geplanten oeffentlichen Repo — die
+# Karte reist mit, wenn der Baum reist.
+#
+# Die Regel, die alles andere traegt: **Provenienz wird deklariert, nie versteckt.**
+# Bis zum 2026-08-14 stand in AGENTS.md das Gegenteil ("no AI attribution in
+# artefacts") und in zehn Agent-Dateien derselbe Satz auf Deutsch. Wer den
+# KI-Anteil verbirgt, nimmt jedem spaeteren Leser die Moeglichkeit, ihn anders zu
+# gewichten als menschliche Arbeit — und genau diese Gewichtung ist der Zweck der
+# Klasse.
+#
+# Laengster Praefix gewinnt. Eine Datei unter einem Pfad ohne Eintrag ist kein
+# Fehler der Datei, sondern eine Luecke dieser Karte (INFO "unmapped path").
+
+schema_version: 1
+
+# ---------------------------------------------------------------------------
+# Die fuenf Klassen. Geschlossenes Enum — ein sechster Wert ist ein Fehler,
+# keine Erweiterung.
+# ---------------------------------------------------------------------------
+classes:
+  human-decided:
+    bedeutung: "Ein Mensch hat entschieden. ADRs, Regelwerk, Gate-Records, Roster."
+    review_required: true
+  human-written:
+    bedeutung: "Ein Mensch hat den Text geschrieben. Prosa, Konzepte, Anleitungen."
+    review_required: false
+  ai-drafted-reviewed:
+    bedeutung: "Eine KI hat entworfen, ein Mensch hat abgenommen."
+    review_required: true
+  ai-generated:
+    bedeutung: "KI-Ausgabe ohne Abnahmeschritt. Wird nie zitiert, nur datiert gelesen."
+    review_required: false
+  machine-rendered:
+    bedeutung: "Ausgabe eines deterministischen Generators. Aenderung nur am Eingang."
+    review_required: false
+    generator_required: true
+
+# ---------------------------------------------------------------------------
+# Rollen. `owner:` in einem Frontmatter nennt eine Rolle von hier, nie eine
+# Person — eine Person wechselt das Projekt, eine Rolle nicht (RB-M8).
+#
+# `identities` sind die Git-Identitaeten hinter einem Handle. Sie machen die
+# Pruefung "wer abgenommen hat, ist nicht wer geschrieben hat" ueberhaupt
+# entscheidbar; ohne sie waere sie ein Textvergleich zwischen Handle und
+# Commit-Autor und damit immer gruen.
+# ---------------------------------------------------------------------------
+roles:
+  data-architect:
+    handle: "@MPAdesso"
+    identities:
+      - "Michael Peichl"
+      - "Michael"
+      - "194375162+MPAdesso@users.noreply.github.com"
+      - "194375162+MikyPikyKeilerei@users.noreply.github.com"
+  framework-architect:
+    handle: "@MPAdesso"
+    identities:
+      - "Michael Peichl"
+      - "Michael"
+      - "194375162+MPAdesso@users.noreply.github.com"
+      - "194375162+MikyPikyKeilerei@users.noreply.github.com"
+  data-product-owner:
+    handle: null
+    vacant_since: 2026-08-14
+    due: 2026-10-31
+  operations-owner:
+    handle: null
+    vacant_since: 2026-08-14
+    due: 2026-10-31
+
+# ---------------------------------------------------------------------------
+# Pfad auf Klasse.
+#
+# `frontmatter: required` heisst: eine Datei hier ohne Frontmatter ist ein
+# BLOCK. `optional` heisst: sie darf noch keines haben — die Klassifizierung
+# dieser Ebene ist als eigene Arbeit vorgemerkt (Phase 2), und bis dahin waere
+# ein BLOCK eine Behauptung ueber Arbeit, die niemand getan hat. `none` heisst:
+# hier gehoert keines hin.
+# ---------------------------------------------------------------------------
+paths:
+  # --- Phase 1: klassifiziert, ab sofort erzwungen ------------------------
+  - prefix: "docs/journal/handover/"
+    allowed: [ai-generated, ai-drafted-reviewed]
+    frontmatter: required
+  - prefix: "docs/journal/planning/"
+    allowed: [ai-generated, ai-drafted-reviewed]
+    frontmatter: required
+  - prefix: "docs/journal/"
+    allowed: [human-written, ai-generated, ai-drafted-reviewed]
+    frontmatter: optional
+  - prefix: "docs/lessons/_rohbefunde/"
+    allowed: [ai-generated]
+    frontmatter: required
+  - prefix: "docs/lessons/"
+    allowed: [human-written, ai-drafted-reviewed]
+    frontmatter: required
+  - prefix: "docs/catalog/"
+    allowed: [human-written, ai-drafted-reviewed]
+    frontmatter: required
+    generated_blocks: true
+  - prefix: ".claude/agents/"
+    allowed: [human-written, ai-drafted-reviewed]
+    frontmatter: required
+  - prefix: "docs/governance/quality-gates.md"
+    allowed: [human-decided]
+    frontmatter: required
+  - prefix: "docs/governance/regelwerk.md"
+    allowed: [human-decided]
+    frontmatter: required
+  - prefix: "docs/governance/fehler-katalog.md"
+    allowed: [ai-drafted-reviewed]
+    frontmatter: required
+
+  # --- Phase 2: kartiert, Klassifizierung folgt als eigene Arbeit ---------
+  - prefix: "docs/adr/"
+    allowed: [human-decided]
+    frontmatter: optional
+  - prefix: "docs/decisions/"
+    allowed: [human-decided, ai-drafted-reviewed]
+    frontmatter: optional
+  - prefix: "docs/governance/"
+    allowed: [human-written, human-decided, ai-drafted-reviewed]
+    frontmatter: optional
+  - prefix: "docs/evidence/"
+    allowed: [human-written, ai-drafted-reviewed, machine-rendered]
+    frontmatter: optional
+    generated_blocks: true
+  - prefix: "docs/knowledge-base/"
+    allowed: [human-written, ai-drafted-reviewed]
+    frontmatter: optional
+    generated_blocks: true
+  - prefix: "docs/glossar/"
+    allowed: [human-written, ai-drafted-reviewed]
+    frontmatter: optional
+  - prefix: "docs/how-to/"
+    allowed: [human-written, ai-drafted-reviewed]
+    frontmatter: optional
+  - prefix: "docs/konzept/adwaive/assets/"
+    allowed: [machine-rendered]
+    frontmatter: none
+  - prefix: "docs/konzept/"
+    allowed: [human-written, ai-drafted-reviewed]
+    frontmatter: optional
+  - prefix: "docs/migration/"
+    allowed: [human-written, ai-drafted-reviewed]
+    frontmatter: optional
+  - prefix: "docs/operations/"
+    allowed: [human-written, ai-drafted-reviewed]
+    frontmatter: optional
+  - prefix: "docs/scaling/"
+    allowed: [human-written, ai-drafted-reviewed]
+    frontmatter: optional
+  - prefix: "docs/enablement/"
+    allowed: [human-written, ai-drafted-reviewed]
+    frontmatter: optional
+  - prefix: "docs/onboarding/"
+    allowed: [human-written, ai-drafted-reviewed]
+    frontmatter: optional
+  - prefix: "docs/patterns/"
+    allowed: [human-written, ai-drafted-reviewed]
+    frontmatter: optional
+  - prefix: "docs/presentations/"
+    allowed: [human-written, ai-drafted-reviewed]
+    frontmatter: optional
+  - prefix: "docs/vertrieb/"
+    allowed: [human-written, ai-drafted-reviewed]
+    frontmatter: optional
+  - prefix: ".claude/rules/"
+    allowed: [human-decided]
+    frontmatter: none
+  - prefix: "docs/_INDEX.md"
+    allowed: [human-written]
+    frontmatter: optional
+  - prefix: "docs/_OBSIDIAN-HOME.md"
+    allowed: [human-written]
+    frontmatter: optional
+  # Der Arbeitsablauf liegt als dritte Datei direkt unter `docs/` und damit auf
+  # keiner der acht Wissensebenen aus ADR-026. Das ist eine offene Frage — er
+  # deklariert `category: governance` und koennte dorthin —, aber unkartiert
+  # bliebe er sichtbar nur als INFO. Erst die Zeile hier macht seine Klasse
+  # pruefbar; wohin die Datei gehoert, entscheidet ein Mensch.
+  - prefix: "docs/WORKFLOW.md"
+    allowed: [human-written, ai-drafted-reviewed]
+    frontmatter: required
+
+  # --- Die Artefakte des Arbeitsablaufs ----------------------------------
+  # `plans/` traegt, was eine Phase an die naechste uebergibt (docs/WORKFLOW.md).
+  # Ein Artefakt entsteht dort im Entwurf durch einen Agenten und wird an einem
+  # menschlichen Gate abgenommen — genau `ai-drafted-reviewed`; eine von Hand
+  # geschriebene Spec ist ebenso zulaessig. Ohne Eintrag hier faellt der ganze
+  # Baum in `unkartiert` und wird nur als INFO gemeldet: die Klasse in der Datei
+  # stuende dann da, ohne dass sie irgendetwas kostet.
+  - prefix: "plans/INDEX.md"
+    allowed: [machine-rendered]
+    frontmatter: none
+  - prefix: "plans/"
+    allowed: [human-written, ai-drafted-reviewed]
+    frontmatter: required
+  # Die sieben Phasen-Prompts sind harness-unabhaengige Anweisungstexte, die ein
+  # anderer Harness unveraendert liest. Ein Frontmatter waere dort Ballast und in
+  # keinem von ihnen ausgewertet; die Klasse steht deshalb hier.
+  - prefix: "prompts/"
+    allowed: [human-written]
+    frontmatter: none
+
+  # --- Motor und Vorlagen: handgeschrieben, aber ohne Kopf ---------------
+  # Ein Frontmatter in einer Vorlage waende in jeder Instanz mitkopiert; die
+  # Klasse dieser Baeume steht deshalb hier und nicht in den Dateien.
+  - prefix: "templates/"
+    allowed: [human-written]
+    frontmatter: none
+  - prefix: "examples/"
+    allowed: [human-written]
+    frontmatter: none
+  # Die Golden-Files sind die einzige Ausnahme im Testbaum: sie werden von
+  # `tests/codegen/regenerate.py` erzeugt und nie von Hand geschrieben. Wer
+  # sie editiert statt sie neu zu erzeugen, richtet die Pruefung auf den
+  # Fehler aus, den sie fangen soll (ADR-016 Punkt 6).
+  - prefix: "tests/codegen/golden/"
+    allowed: [machine-rendered]
+    frontmatter: none
+  - prefix: "tests/"
+    allowed: [human-written]
+    frontmatter: none
+  - prefix: ".github/"
+    allowed: [human-written]
+    frontmatter: none
+  - prefix: ".claude/commands/"
+    allowed: [human-written]
+    frontmatter: none
+  - prefix: ".beads/"
+    allowed: [human-written]
+    frontmatter: none
+
+  # --- Kein Frontmatter, aber eine Klasse -------------------------------
+  # GitHub rendert Frontmatter im Wurzel-README als Tabelle; deshalb steht die
+  # Klasse dieser Dateien hier und nicht in ihnen.
+  - prefix: "README.md"
+    allowed: [human-written]
+    frontmatter: none
+  - prefix: "AGENTS.md"
+    allowed: [human-written]
+    frontmatter: none
+  - prefix: "CLAUDE.md"
+    allowed: [human-written]
+    frontmatter: none
+  - prefix: "CHANGELOG.md"
+    allowed: [ai-generated]
+    frontmatter: none
+
+# ---------------------------------------------------------------------------
+# Ausserhalb jeder Pruefung: Archiv (haelt fest, was einmal galt) und die
+# Rohbefund-Ordner unter archive/.
+# ---------------------------------------------------------------------------
+excluded:
+  - "docs/archive/"

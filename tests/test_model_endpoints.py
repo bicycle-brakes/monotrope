@@ -1,0 +1,282 @@
+"""Jedes genannte Modell loest gegen einen deklarierten Endpunkt auf (RB-A6).
+
+**Die Luecke, die das schliesst.** `docs/WORKFLOW.md` regelt seit jeher, welches
+Modell in welcher Phase laeuft. Wo es laeuft und was es sehen darf, stand bis
+zum 2026-09-08 nirgends: `rg` ueber `docs/governance/` auf `residen|endpunkt|
+datenabfluss` lieferte keinen einzigen normativen Treffer. Ein Agent konnte ein
+Modell nennen, und niemand hielt den Namen gegen etwas.
+
+Die Auflage ist nicht theoretisch. Kundencode traegt Struktur und Bezeichner des
+Kunden — ein Modell, das ihn sieht, sieht das Datenmodell, auch ohne eine
+einzige Zeile Nutzdaten.
+"""
+
+from __future__ import annotations
+
+import re
+from pathlib import Path
+
+import pytest
+import yaml
+
+REPO_ROOT = Path(__file__).resolve().parent.parent
+ENDPUNKTE = REPO_ROOT / "model-endpoints.yaml"
+AGENTEN = REPO_ROOT / ".claude" / "agents"
+WORKFLOW = REPO_ROOT / "docs" / "WORKFLOW.md"
+PROMPTS = REPO_ROOT / "prompts"
+
+RESIDENZEN = ("anbieter-erklaert", "region-waehlbar", "nicht-erklaert")
+ABRECHNUNGEN = ("token", "abonnement")
+
+
+def _erklaerung() -> dict:
+    """Die Erklaerung, defensiv geladen.
+
+    Defensiv, weil `@pytest.mark.parametrize` beim **Sammeln** laeuft: eine
+    kaputte oder leere Datei liess pytest bis zum 2026-09-08 mit einem
+    `ValueError` beim Ermitteln der Test-ID abbrechen — und dann lief
+    `test_the_declaration_is_not_empty`, das genau davor warnen soll, gar nicht
+    erst. Ein Sammelfehler ist kein Befund, sondern ein blinder Fleck.
+    """
+    try:
+        geladen = yaml.safe_load(ENDPUNKTE.read_text(encoding="utf-8")) or {}
+    except (OSError, yaml.YAMLError):
+        geladen = {}
+    if not isinstance(geladen, dict):
+        geladen = {}
+    # `setdefault` ersetzt ein vorhandenes `None` NICHT: steht in der Datei der
+    # nackte Schluessel `endpunkte:` ohne Wert, liefert yaml `{"endpunkte": None}`,
+    # und `parametrize(argvalues=None)` stirbt wieder beim Sammeln. Der Schluessel
+    # ist da, der Wert fehlt — genau der Fall, den die Erstfassung uebersah.
+    geladen["endpunkte"] = geladen.get("endpunkte") or []
+    geladen["datenklassen"] = geladen.get("datenklassen") or {}
+    if not isinstance(geladen["endpunkte"], list):
+        geladen["endpunkte"] = []
+    if not isinstance(geladen["datenklassen"], dict):
+        geladen["datenklassen"] = {}
+    return geladen
+
+
+def prompt_modelle() -> list[tuple[Path, str]]:
+    """Jeder Phasen-Prompt mit dem Modell, das er nennt.
+
+    RB-A6 sagt "jedes Modell, das hier genannt wird". Bis zum 2026-09-08 las der
+    Erzwinger nur `.claude/agents/` und die Routing-Tabelle — die sieben Prompts
+    nannten sechs Modelle, die niemand gegen die Erklaerung hielt. Und
+    `prompts/` reist als `mechanismus` mit: die Luecke waere mitgereist.
+    """
+    gefunden: list[tuple[Path, str]] = []
+    if not PROMPTS.is_dir():
+        return gefunden
+    for p in sorted(PROMPTS.glob("*.md")):
+        try:
+            text = p.read_text(encoding="utf-8")
+        except (OSError, UnicodeDecodeError):
+            continue
+        # Der Punkt darf NICHT ausgeschlossen werden: "Fable 5.1" und
+        # "Haiku 4.5" tragen ihn in der Version. Ein Regex, der ihn verbietet,
+        # fand vier der sechs Prompts nicht — und haette gemeldet, alle
+        # gefundenen loesten auf.
+        #
+        # Zweisprachig, seit die Prompts englisch sind (2026-09-10). Der alte
+        # Regex kannte nur `**Modell:**`; nach der Uebersetzung haette er nichts
+        # mehr gefunden, `parametrize` haette eine leere Liste bekommen — und
+        # ein parametrisierter Test ueber einer leeren Liste ist GRUEN. Das Gate
+        # waere im selben Commit ausgefallen, ohne dass etwas rot wird. Dagegen
+        # steht zusaetzlich `test_prompts_are_found_at_all`.
+        m = re.search(r"^\*\*(?:Modell|Model):\*\*\s*([^\n—]+?)\s*(?:—|\.\s*$|$)", text, re.M)
+        if not m:
+            continue
+        wert = m.group(1).strip()
+        # Phase 5 ist deterministisch und nennt ausdruecklich "keines" — das ist
+        # eine Aussage, kein Modellname.
+        if wert.lower().startswith(("keines", "keins", "kein ", "none")):
+            continue
+        gefunden.append((p, wert))
+    return gefunden
+
+
+def _endpunkt_ids(e: object) -> str:
+    """Eine ID auch fuer einen kaputten Eintrag — sonst stirbt das Sammeln."""
+    return e.get("name", "(ohne-name)") if isinstance(e, dict) else "(kein-mapping)"
+
+
+def zugelassene_modelle() -> set[str]:
+    return {m for e in _erklaerung()["endpunkte"] if isinstance(e, dict) for m in (e.get("modelle") or [])}
+
+
+def agent_modelle() -> list[tuple[Path, str]]:
+    """Jede Agent-Definition mit dem Modell, das sie pinnt."""
+    gefunden: list[tuple[Path, str]] = []
+    if not AGENTEN.is_dir():
+        return gefunden
+    for p in sorted(AGENTEN.glob("*.md")):
+        # Auch diese Funktion laeuft zur Importzeit. Eine Datei, die nicht als
+        # UTF-8 dekodiert, riss das Sammeln ab — und dann lief
+        # `test_agents_are_found_at_all`, die Gegenprobe fuer genau diesen Fall,
+        # nicht. Die eine Haelfte war gehaertet, diese nicht.
+        try:
+            text = p.read_text(encoding="utf-8")
+        except (OSError, UnicodeDecodeError):
+            continue
+        m = re.search(r"^model:\s*(\S+)\s*$", text, re.M)
+        if m:
+            gefunden.append((p, m.group(1)))
+    return gefunden
+
+
+# ---------------------------------------------------------------------------
+# Die Menge ist nicht leer
+# ---------------------------------------------------------------------------
+
+
+def test_the_declaration_is_not_empty() -> None:
+    """Eine leere Zulassungsliste laesst alles durch und prueft nichts (RB-G7)."""
+    e = _erklaerung()
+    assert e["endpunkte"], "kein einziger Endpunkt deklariert"
+    assert e["datenklassen"], "keine einzige Datenklasse deklariert"
+    assert zugelassene_modelle(), "kein einziges Modell zugelassen"
+
+
+def test_prompts_are_found_at_all() -> None:
+    """Ohne gefundene Prompts prueft der Test unten nichts (RB-G7).
+
+    Die Luecke, die das schliesst: `prompt_modelle()` liest das Modell ueber
+    einen Regex. Aendert sich die Schreibweise in den Prompts — bei der
+    Uebersetzung ins Englische am 2026-09-10 tat sie das —, liefert die Funktion
+    eine leere Liste. `@pytest.mark.parametrize` ueber einer leeren Liste ist
+    gruen. Das Gate waere still ausgefallen, und zwar in genau dem Commit, der
+    es haette rot machen muessen.
+
+    Fuer die Agent-Definitionen gab es diese Gegenprobe seit jeher; fuer die
+    Prompts fehlte sie.
+    """
+    gefunden = prompt_modelle()
+    assert gefunden, (
+        "kein einziger Phasen-Prompt nennt ein Modell — liest der Regex in "
+        "`prompt_modelle()` noch die Schreibweise, die in prompts/ steht?"
+    )
+    # Sieben Phasen plus optionale Zwischenschritte; Phase 5 nennt ausdruecklich
+    # keines. Die Untergrenze haelt fest, dass es um die Menge geht, nicht um
+    # einen einzelnen Treffer.
+    assert len(gefunden) >= 5, f"nur {len(gefunden)} Prompt(s) mit Modell gefunden"
+
+
+def test_agents_are_found_at_all() -> None:
+    """Ohne Agent-Definitionen prueft der Test unten nichts (RB-G7)."""
+    assert agent_modelle(), "keine Agent-Definition mit `model:` gefunden — liest der Test das richtige Verzeichnis?"
+
+
+# ---------------------------------------------------------------------------
+# Die Erklaerung ist vollstaendig
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.parametrize("endpunkt", _erklaerung()["endpunkte"], ids=_endpunkt_ids)
+def test_every_endpoint_states_operator_residency_and_billing(endpunkt: object) -> None:
+    """Ein Endpunkt ohne Betreiber ist ein Name, keine Zusage."""
+    assert isinstance(endpunkt, dict), f"Eintrag ist kein Mapping: {endpunkt!r}"
+    for feld in ("name", "betreiber", "residenz", "abrechnung", "darf_sehen", "modelle"):
+        assert endpunkt.get(feld), f"{endpunkt.get('name')}: Feld '{feld}' fehlt oder ist leer"
+    assert endpunkt["residenz"] in RESIDENZEN, (
+        f"{endpunkt['name']}: residenz '{endpunkt['residenz']}' liegt ausserhalb von {RESIDENZEN}"
+    )
+    assert endpunkt["abrechnung"] in ABRECHNUNGEN, (
+        f"{endpunkt['name']}: abrechnung '{endpunkt['abrechnung']}' liegt ausserhalb von {ABRECHNUNGEN}"
+    )
+
+
+@pytest.mark.parametrize("endpunkt", _erklaerung()["endpunkte"], ids=_endpunkt_ids)
+def test_only_a_declared_data_class_may_be_seen(endpunkt: object) -> None:
+    """`darf_sehen` benennt Klassen aus dem Vokabular, keine erfundenen."""
+    assert isinstance(endpunkt, dict), f"Eintrag ist kein Mapping: {endpunkt!r}"
+    bekannt = set(_erklaerung()["datenklassen"])
+    fremd = set(endpunkt["darf_sehen"]) - bekannt
+    assert not fremd, f"{endpunkt['name']}: unbekannte Datenklasse(n) {sorted(fremd)}"
+
+
+def test_customer_code_never_reaches_an_endpoint_without_stated_residency() -> None:
+    """Die eigentliche Auflage — und der Grund, warum diese Datei existiert.
+
+    Kundencode traegt Struktur und Bezeichner des Kunden. Ein Endpunkt ohne
+    erklaerte Residenz kann die Frage 'wo liegt das' nicht beantworten, und sie
+    wird erst gestellt, wenn die Antwort teuer ist.
+    """
+    verletzer = [
+        e.get("name")
+        for e in _erklaerung()["endpunkte"]
+        if isinstance(e, dict) and "kundencode" in (e.get("darf_sehen") or []) and e.get("residenz") == "nicht-erklaert"
+    ]
+    assert not verletzer, f"Endpunkt(e) ohne erklaerte Residenz, die Kundencode sehen duerfen: {verletzer}"
+
+
+def test_no_endpoint_is_cleared_for_customer_rows() -> None:
+    """Zeilen verlassen die Umgebung des Kunden nicht — keine Ausnahme, kein Anbieter."""
+    verletzer = [
+        e.get("name")
+        for e in _erklaerung()["endpunkte"]
+        if isinstance(e, dict) and "kundendaten" in (e.get("darf_sehen") or [])
+    ]
+    assert not verletzer, (
+        f"Endpunkt(e) fuer Kundendaten freigegeben: {verletzer}. "
+        "Die Maschine baut die Pipeline, sie liest die Daten nicht."
+    )
+
+
+# ---------------------------------------------------------------------------
+# Jedes genannte Modell loest auf
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.parametrize("pfad,modell", agent_modelle(), ids=lambda v: getattr(v, "name", str(v)))
+def test_every_agent_model_resolves_to_a_declared_endpoint(pfad: Path, modell: str) -> None:
+    """Nicht gelistet ist BLOCK — dieselbe Regel wie in den beiden Manifesten."""
+    assert modell in zugelassene_modelle(), (
+        f"{pfad.name} pinnt '{modell}', das in keinem Endpunkt von model-endpoints.yaml steht.\n"
+        "Entweder den Endpunkt eintragen (mit Betreiber, Residenz und Abrechnungsart) "
+        "oder das Modell wechseln."
+    )
+
+
+def _kandidaten(anzeige: str) -> set[str]:
+    """Anzeigename ("Sonnet 5") auf moegliche IDs ("claude-sonnet-5")."""
+    kern = anzeige.lower().replace(" ", "-").replace(".", "-")
+    return {f"claude-{kern}", kern}
+
+
+def _loest_auf(anzeige: str, ids: set[str]) -> bool:
+    """Gleichheit, nicht Teilzeichenkette.
+
+    `any(kern in i for i in ids)` liess "**Sonnet**" ohne Generation durchgehen,
+    weil "sonnet" in "claude-sonnet-5" steckt — die Tabelle haette aufhoeren
+    koennen, eine Generation zu nennen, und die Pruefung waere gruen geblieben.
+    """
+    return bool(_kandidaten(anzeige) & ids)
+
+
+def test_every_model_in_the_routing_table_resolves() -> None:
+    """Auch die Doktrin nennt Modelle — und auch die muessen aufloesen.
+
+    Sonst gilt die Regel fuer Agent-Definitionen und nicht fuer die Tabelle, aus
+    der ein Mensch sein Modell waehlt.
+    """
+    text = WORKFLOW.read_text(encoding="utf-8")
+    tabelle = re.findall(r"^\| \d [A-Za-z]+ \| \*\*([^*]+)\*\* \|", text, re.M)
+    assert tabelle, "kein Modell im Routing von docs/WORKFLOW.md gefunden (RB-G7)"
+    # Die Tabelle nennt Anzeigenamen ("Haiku 4.5"), die Erklaerung IDs.
+    ids = zugelassene_modelle()
+    for anzeige in tabelle:
+        assert _loest_auf(anzeige, ids), (
+            f"docs/WORKFLOW.md routet auf '{anzeige}', das in keinem Endpunkt steht. "
+            f"Gesucht: {' oder '.join(sorted(_kandidaten(anzeige)))}"
+        )
+
+
+@pytest.mark.parametrize("pfad,anzeige", prompt_modelle(), ids=lambda v: getattr(v, "name", str(v)))
+def test_every_model_in_a_phase_prompt_resolves(pfad: Path, anzeige: str) -> None:
+    """Die sieben Prompts nennen Modelle — und `prompts/` reist als Mechanismus mit."""
+    ids = zugelassene_modelle()
+    assert _loest_auf(anzeige, ids), (
+        f"{pfad.name} nennt '{anzeige}', das in keinem Endpunkt von model-endpoints.yaml steht. "
+        f"Gesucht: {' oder '.join(sorted(_kandidaten(anzeige)))}"
+    )

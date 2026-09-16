@@ -1,0 +1,58 @@
+# Formatter- und Linter-Pin fuer dieses Repo.
+#
+# Warum das eine eigene Datei ist und nicht nur ein Kommando in der CI:
+# Ohne festgelegte Formatierung kann ein Cross-Repo-Vergleich nicht zwischen
+# einer inhaltlichen Aenderung und einer Formatierung unterscheiden. Genau daran
+# scheiterte der Vergleich von `docs/patterns/composer.py` gegen die vendorierte
+# Kopie in der Projekt-Instanz: Die Instanz formatiert mit line-length 120, das
+# Framework hatte gar keine Konfiguration — ein Byte-SHA-Pin ueber diese Grenze
+# hinweg meldet Unterschiede, die keine sind, und wird deshalb ignoriert.
+#
+# Der Wert 120 ist von der Projekt-Instanz uebernommen, damit beide Seiten
+# dieselbe Sprache sprechen. Das ist der einzige Grund fuer genau diese Zahl.
+line-length = 120
+target-version = "py311"
+
+# `exclude` allein gilt nur fuer die Dateisuche. Nennt jemand eine Datei
+# ausdruecklich auf der Kommandozeile — `ruff format docs/patterns/x.py` —
+# greift der Ausschluss nicht, und der Formatter schreibt trotzdem. Genau so
+# wurde die Vendoring-Oberflaeche hier schon einmal umformatiert: nicht durch
+# einen fehlenden Ausschluss, sondern durch einen, der beim direkten Aufruf
+# nicht galt. `force-exclude` schliesst diesen Weg.
+force-exclude = true
+
+# Was ruff NICHT ansieht — und warum. Ein Linter, der Dateien pruegelt, die gar
+# kein Python sein wollen, erzeugt Rot ohne Erkenntnis; das ist der schnellste
+# Weg, ihn wieder abzuschaffen.
+exclude = [
+    # Codegen-Vorlagen mit `{platzhalter}` im Bezeichner — syntaktisch kein Python.
+    "templates/dlt-patterns/",
+    # Beispiel-Instanz: illustriert eine Ablage, wird nie ausgefuehrt.
+    "examples/projekt-repo-mock/",
+    "docs/archive/",
+    # docs/patterns/ ist eine VENDORING-OBERFLAECHE: Die Projekt-Instanz haelt
+    # eine Kopie und pinnt deren SHA256. Diese Dateien umzuformatieren bricht den
+    # Pin — beim ersten Lauf dieses Formatters ist genau das passiert und wurde
+    # vom Drift-Gate gefangen. Ihre Bytes zu aendern ist eine bewusste Handlung
+    # mit Nachzug drueben, keine Nebenwirkung. Siehe ADR-026 (bewusste Ausnahme).
+    "docs/patterns/",
+]
+
+[lint]
+# Bewusst schmal. Ein Linter, der am Tag seiner Einfuehrung hundert Befunde
+# meldet, ist eine Migration und kein Gate — er wird gewaivt, und dann misst er
+# nichts. Erweitert wird nach dem Transitions-Ventil: eine Regel dazu, Bestand
+# raeumen, naechste Regel.
+# Die Gruppen hier haben null Befunde — teils von Anfang an, teils geraeumt: Eine Regel, die
+# nichts kostet, aber ausgeschaltet bleibt, ist ein verschenktes Gate — das
+# Uebergangs-Argument gilt nur fuer Regeln mit Bestand. Welche Gruppen noch
+# warten und woran, steht in scripts/ramp_valves.py; der Test dort schaltet
+# sie faellig, sobald ihr Bestand geraeumt ist.
+select = ["E4", "E7", "E9", "F", "I", "W", "ARG", "B", "UP", "SIM", "RET", "C4", "PTH"]
+
+[lint.per-file-ignores]
+# Die Rohbefunde und Fixtures sind Material, kein gepflegter Code.
+"tests/fixtures/**" = ["F"]
+
+[format]
+docstring-code-format = true

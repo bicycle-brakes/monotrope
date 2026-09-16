@@ -1,0 +1,75 @@
+# Vorlage — Gate-Record
+#
+# Ein Gate-Record ist eine DATEI, kein Feld (docs/governance/quality-gates.md §6).
+# Der Unterschied ist nicht formal: ein Feld kann man setzen, einen abgeleiteten
+# Zustand nicht. Im Fehler-Katalog stehen drei Befunde, die alle daher kommen,
+# dass eine Abnahme ein Feld war — F-A-52, F-A-53 und F-A-58, letzterer mit
+# Signifikanz "critical (data)": drei Contracts standen auf `accepted` gegen
+# eine zurueckgezogene Abnahme.
+#
+# `state: ACCEPTED` steht deshalb hier NICHT als Startwert. Wer ihn tippt, hat
+# nichts abgenommen — `scripts/gate_record.py::ist_abgenommen()` leitet ab, und
+# es prueft vier Bedingungen.
+#
+# Ablage: eine Datei je Gate und Gegenstand, neben dem Gegenstand.
+
+# Welches Tor. Aus der geschlossenen Menge in quality-gates.md:
+# HG-1 Contract-Abnahme · HG-2 Reconciliation · HG-3 Cutover · HG-4 Post-Cutover
+gate: HG-1
+
+# Worueber unterschrieben wird — und woran die Unterschrift haengt.
+subject:
+  kind: entity-contract        # entity-contract | recon-report | bundle | run-log
+  path: contracts/<entity>.yaml
+  # Der Hash des Gegenstands zum Zeitpunkt der Vorlage. Weicht er vom heutigen
+  # ab, ist der Record NICHT abgenommen — was nach der Signatur geaendert wird,
+  # ist wieder unsigniert (RB-M1). Das ist der Kern des ganzen Mechanismus.
+  sha256: "<sha256 des Gegenstands>"
+
+# DRAFT -> IN_REVIEW -> ACCEPTED -> WITHDRAWN.
+# Erlaubte Kanten stehen in scripts/gate_record.py; alles andere wird abgelehnt.
+# Eine zweite Abnahme desselben Records gibt es nicht: wer erneut abnehmen will,
+# geht ueber WITHDRAWN.
+state: DRAFT
+
+# Wer den Record angelegt hat und wer zuletzt gepusst hat. Beide duerfen nicht
+# unterschreiben — sonst ist die Abnahme eine Schleife.
+author: "<github-handle>"
+last_pusher: "<github-handle>"
+
+# Append-only. Jeder Uebergang mit Zeitpunkt, Rolle und Review-URL.
+# Ein Eintrag wird nie geaendert; eine Korrektur ist ein neuer Eintrag (RB-P5).
+history:
+  - to: DRAFT
+    at: "2026-01-01T00:00:00Z"
+    by: "<github-handle>"
+    role: data-architect
+    review_url: null
+
+# Die Pflicht-Rollen DIESES Gates. Welche das sind, steht maschinenlesbar in
+# `scripts/gate_record.py::PFLICHT_ROLLEN` und normativ in quality-gates.md §4 —
+# HG-1 verlangt Data Architect UND Fachseite, HG-2 Data Product Owner UND Data
+# Architect, HG-3 Produktverantwortlicher UND Data Architect, HG-4 nur Operations
+# Owner. Eine Rolle unterschreibt nicht, ein Mensch tut es: `handle` ist Pflicht,
+# nicht nur `role` — und zwei Rollen in derselben Hand sind eine Unterschrift.
+#
+# Diese Vorlage stand bis zum 2026-09-08 auf `gate: HG-1` mit `data-product-owner`
+# als zweitem Unterzeichner. HG-1 kennt die Rolle nicht; es war ein Beispiel, das
+# sein eigenes Tor nicht bestanden haette.
+#
+# `at` muss NACH dem letzten Uebergang nach IN_REVIEW liegen. Eine Zustimmung
+# von davor gilt einem anderen Text.
+signers:
+  - role: data-architect
+    handle: "<github-handle>"
+    at: "2026-01-01T00:00:00Z"
+    review_url: "https://github.com/<org>/<repo>/pull/<n>#pullrequestreview-<id>"
+  - role: fachseite
+    handle: "<anderer-github-handle>"
+    at: "2026-01-01T00:00:00Z"
+    review_url: "https://github.com/<org>/<repo>/pull/<n>#pullrequestreview-<id>"
+
+# Pruefen:
+#   python3 -c "import sys,yaml;sys.path.insert(0,'scripts');import gate_record as g;\
+#   r=yaml.safe_load(open('templates/gate-record.yaml'));print(g.ist_abgenommen(r,'x'))"
+# Erwartet: (False, [...]) — eine Vorlage ist nie abgenommen.
