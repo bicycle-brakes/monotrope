@@ -156,3 +156,65 @@ followed the recommendation; one (4) followed it in part.
    and the twelve deliberate duplicates.
 5. Before M1 starts, put the question of the ADRs and the WORKFLOW rewrite
    to the maintainer again (decision 4).
+
+## Addendum — state at session close, 2026-09-17 14:55
+
+A parallel agent session — Codex, working in this checkout since 14:09 — was
+still active when this session closed. What it changed bears on everything
+above. **Where this addendum and the sections above differ, the addendum
+holds.**
+
+**The tracker moved on.** That session created and closed one more item, an
+evidence-based target state for an Omnigent-first harness (`atx`), and pushed:
+the tracker holds 16 items, `refs/dolt/data` on origin is at `3c83da8`. The
+export committed in pull request #6 holds 15 and is one item behind. The
+export has to be rendered once more — by whichever session writes last, at
+its end — and committed to exactly one pull request, so that two pull
+requests do not conflict on `.beads/issues.jsonl`. Recommended: pull request
+#6, which carries the tracker changes.
+
+**Its work sits on the branch of pull request #6, uncommitted.** Three new
+architecture documents dated 2026-09-17 (a target state, a gap analysis
+against `eddfc0b`, a dependency-ordered implementation plan), its own
+handover of the same date, a pointer in `README.md`, a note in the target
+architecture that marks it superseded for sequencing, and the re-rendered
+export. Recommended: that work moves to its own branch from `main` before it
+is committed, so that pull request #6 stays a tracker change.
+
+**The direction changed.** In that session the maintainer confirmed that
+Omnigent coordinates parallel agents from the first proof of concept: two
+coding workers in separate worktrees, tracker writes kept with one
+coordinator until the five-check worktree verification proves more. §12 of
+the target architecture had put parallelism at step M3, and this session
+wrote the M0 item (`eev`) and its dependency on the worktree verification
+(`m34`) against that older sequence. Both items need reconciling once the
+decision record for the new sequence exists.
+
+**Two handovers of the same day, two first steps.** This handover says:
+start with the classification of the red tests (`2ee`, decision 7). The
+parallel one says: review its three documents, record the decision on the
+changed M0/M3 sequence, reconcile the M0 item, then start the gate manifest
+and the rule enforcers. Both agree that gates and truthful rule enforcers
+come before any pilot. Recommended order for the next session:
+
+1. Review the three Omnigent-first documents and record the decision on the
+   sequence — it can change items this session wrote.
+2. Reconcile the M0 item and the worktree verification with that decision
+   (`eev`, `m34`).
+3. Then the classification of the red tests (`2ee`). Decision 7 still holds
+   among the implementation items; steps 1 and 2 are decisions, not
+   implementation. The classification is unaffected by the new direction and
+   may run alongside them — as long as only one session writes the tracker.
+4. Merge pull request #6 with the export re-rendered, then pull request #7,
+   then the parallel session's pull request.
+
+**The measurements agree.** The parallel session measured the full suite at
+`eddfc0b`: 64 failed, 182 passed, 4 skipped. This session's 60 / 167 / 4
+excludes `tests/test_kit.py`; the difference is exactly its 4 known red and
+15 green tests — the same baseline.
+
+**Deliberately not done.** No tracker write after 14:38: the order of the
+next steps is not made mechanical — neither a higher priority for the
+classification nor a dependency of the gate file on it — because a second
+writer is active; the note on the classification item does not change what
+`bd ready` shows. None of the parallel session's files was touched.
