@@ -24,12 +24,23 @@ PINNED="$(tr -d '[:space:]' < "$REPO_ROOT/tools/beads/VERSION")"
 
 die() { printf '%s\n' "$@" >&2; exit 1; }
 
-command -v bd >/dev/null 2>&1 || die \
-  "bd is not on your PATH." \
-  "Install the pinned version ($PINNED) first; then retry with tools/bd."
+# Side by side: other repositories on the same machine may still need an older
+# global bd, and a newer bd migrates a store's schema on open — a one-way step.
+# So the pinned binary is looked up as a versioned file first
+# (~/.local/bin/bd-<pinned version>); only if that is missing does the bd on
+# PATH get its chance, and the version check below decides. A bd inside this
+# repository (the hook shim in tools/beads/bin) is never taken, to avoid a loop.
+BD_BIN="${HOME}/.local/bin/bd-${PINNED}"
+if [ ! -x "$BD_BIN" ]; then
+  BD_BIN="$(command -v bd 2>/dev/null || true)"
+  case "$BD_BIN" in "$REPO_ROOT"/*) BD_BIN="" ;; esac
+fi
+[ -n "$BD_BIN" ] && [ -x "$BD_BIN" ] || die \
+  "no bd binary found." \
+  "Install bd $PINNED as ~/.local/bin/bd-${PINNED} (or as the bd on your PATH)."
 
 # `bd version` prints e.g. "bd version 1.1.2 (20e493e56)"
-INSTALLED="$(bd version 2>/dev/null | head -1 | grep -oE '[0-9]+\.[0-9]+\.[0-9]+' | head -1 || true)"
+INSTALLED="$("$BD_BIN" version 2>/dev/null | head -1 | grep -oE '[0-9]+\.[0-9]+\.[0-9]+' | head -1 || true)"
 if [ "$INSTALLED" != "$PINNED" ]; then
   die "bd version mismatch: you have ${INSTALLED:-unknown}, this repository is pinned to $PINNED." \
       "" \
@@ -45,4 +56,4 @@ for verb in init migrate upgrade; do
   fi
 done
 
-exec bd "$@"
+exec "$BD_BIN" "$@"

@@ -44,8 +44,10 @@ then it lives at `portfolio-agentic-engineering/docs/WORKFLOW.md`.
    shared database for everyone. The prefix (`coding-harness-`) was fixed at
    init and cannot be corrected afterwards.
 4. **One writer per tracker.** While another session runs, none writes. Check
-   before `bd` writes; after every write let auto-export render
-   `.beads/issues.jsonl` and run `bd dolt push`.
+   before `bd` writes; after the writes run `tools/bd dolt push`. Auto-export
+   is off: the export is rendered once, at session end, with
+   `tools/bd export -o .beads/issues.jsonl` — until the export script with its
+   identity gate arrives with the gate file (`coding-harness-bo0`).
 5. **The handover is the file, not the chat.** Session end → a file under
    `docs/journal/handover/`. A number without its commit or date reads as a
    historical one — every count carries its cut-off.
