@@ -177,6 +177,9 @@ rules:
   - prefix: .github/
     rolle: bestand
     reason: "Auffangregel — Vorlagen und Aktionen dieses Repos. ci.yml traegt (laengerer Praefix oben)"
+  - prefix: tools/
+    rolle: bestand
+    reason: "catch-all — this repository's tracker pin: the bd wrapper, the pinned version and the PATH shim the git hooks use. Whether the pin travels with the kit belongs to the tracker conventions (target architecture, layer H7); until that is decided it stays, like .claude/ below"
 
   # --- .claude/: haengt an D3 -----------------------------------------------
   #

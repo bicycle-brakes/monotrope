@@ -1,0 +1,9 @@
+#!/usr/bin/env sh
+# PATH shim for callers that run a bare `bd` — the git hooks in .beads/hooks.
+# It routes them through the pinned wrapper (tools/bd), so a hook never runs
+# whatever global bd happens to be installed. It drops its own directory from
+# PATH first, so the wrapper's fallback lookup cannot find the shim again.
+here="$(cd "$(dirname "$0")" && pwd)"
+PATH="$(printf '%s' "$PATH" | tr ':' '\n' | grep -vxF "$here" | paste -sd: -)"
+export PATH
+exec "$here/../../bd" "$@"

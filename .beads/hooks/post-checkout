@@ -1,4 +1,7 @@
 #!/usr/bin/env sh
+# Route the bare `bd` below through the pinned wrapper (tools/bd). Kept outside
+# the managed section, so `bd hooks install` preserves it.
+PATH="$(git rev-parse --show-toplevel)/tools/beads/bin:$PATH"; export PATH
 # --- BEGIN BEADS INTEGRATION v1.1.2 ---
 # This section is managed by beads. Do not remove these markers.
 if command -v bd >/dev/null 2>&1; then
