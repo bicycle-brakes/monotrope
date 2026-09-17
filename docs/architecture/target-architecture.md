@@ -1,7 +1,8 @@
 ---
 title: "Target architecture: the coding harness and its workflows — what it should be, what it should not be, and the path there"
 category: architecture
-status: proposed
+status: superseded
+superseded_by: 2026-09-17-omnigent-first-target.md
 created: 2026-09-16
 last_reviewed: 2026-09-16
 owner: Data Architect
@@ -18,6 +19,14 @@ tags: [architecture, target, harness, workflow, kit, lakeswitch, portfolio, road
 ---
 
 # Target architecture: the coding harness and its workflows
+
+**Historical proposal, measured at `5a950c2`.** The maintainer's 2026-09-17
+direction puts parallel Omnigent coordination in the first proof of concept.
+The [current target](2026-09-17-omnigent-first-target.md),
+[gap analysis](2026-09-17-gap-analysis.md) and
+[implementation plan](2026-09-17-implementation-plan.md) supersede this
+document for sequencing and current-state claims. The decisions below remain
+a dated record until individual ADRs replace them.
 
 **Status: decided in interview, not yet an ADR.** The seventeen decisions in
 §9 were taken with the maintainer on 2026-09-16 (outcomes in §9.1); two

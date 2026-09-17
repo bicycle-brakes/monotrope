@@ -11,6 +11,10 @@ research corpus behind it.
   rendered export, not the source of truth
 - **Status:** bootstrapping — see
   [`docs/journal/handover/2026-09-16-coding-harness-bootstrap.md`](docs/journal/handover/2026-09-16-coding-harness-bootstrap.md)
+- **Current target (2026-09-17):**
+  [Omnigent-first target](docs/architecture/2026-09-17-omnigent-first-target.md),
+  [gap analysis](docs/architecture/2026-09-17-gap-analysis.md), and
+  [implementation plan](docs/architecture/2026-09-17-implementation-plan.md)
 
 ## The three-repo topology
 
