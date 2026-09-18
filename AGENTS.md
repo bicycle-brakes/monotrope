@@ -71,6 +71,22 @@ tools/bd prime              # full tracker context for a session
 tools/bd dolt push          # push tracker data to origin (refs/dolt/data)
 ```
 
+## Sessions across checkouts
+
+- **Another session in the same checkout:** say so before changing a file,
+  committing or switching the branch, and offer a worktree. House rule 4 holds
+  for the tracker meanwhile.
+- **What could not be read is "not read", never "none".** A file that would
+  not open and a query that returned nothing say different things.
+- **A standing rule belongs in the repository's `AGENTS.md`** — every harness
+  reads it; the chat, a memory and a harness's user file do not reach the next
+  one. Where an agent may not write that file (lakeswitch declares it
+  `human-decided`), propose the exact text instead.
+- **The maintainer's Claude Code display** — status line, entry at session
+  start, handover safety net, parallel-session warning, `/uebergabe` — lives in
+  `tools/claude-code/` (its README says what each line means). Change it there
+  and reinstall with `tools/claude-code/install.sh`, never only in `~/.claude`.
+
 ## Sibling repositories
 
 | Repo | Role |
