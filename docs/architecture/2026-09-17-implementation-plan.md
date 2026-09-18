@@ -3,8 +3,8 @@ title: "Implementation plan: reach the Omnigent-first target"
 category: architecture
 status: proposed
 created: 2026-09-17
-last_reviewed: 2026-09-17
-owner: maintainer
+last_reviewed: 2026-09-18
+owner: framework-architect
 provenance: ai-drafted-reviewed
 produced_by:
   kind: llm-session
@@ -19,156 +19,279 @@ tags: [plan, implementation, omnigent, workflow, gates]
 
 # Implementation plan: reach the Omnigent-first target
 
-This is a dependency and acceptance plan for the
-[target state](2026-09-17-omnigent-first-target.md), grounded in the
-[gap analysis](2026-09-17-gap-analysis.md) at `eddfc0b` on 2026-09-17.
-**This session writes documentation only.** Beads remains the durable task
-tracker; the IDs below point to existing work and are not a second backlog.
-The 2026-09-17 maintainer direction places **parallel Omnigent coordination
-in the first proof of concept**, changing the sequence recorded in the
-[older migration research](../research/Migrationsplan_Omnigent_Referenzarchitektur.md)
-and [2026-09-16 proposal](target-architecture.md). One ADR should make that
-change durable before implementation of the runtime begins.
+This plan implements the [target contracts](2026-09-17-omnigent-first-target.md)
+and addresses the [measured gaps](2026-09-17-gap-analysis.md) at `eddfc0b`.
+It proposes implementation work; this documentation PR changes no runtime
+permission. Beads remains the task tracker. Existing IDs identify coverage;
+the tables below define deliverables and acceptance, not task status.
+
+The target's [decision continuity table](2026-09-17-omnigent-first-target.md#decision-continuity)
+is the current mapping of every prior interview outcome. Preserve those
+outcomes when creating implementation specs. Record the early-parallelism,
+coordinator-permission and public-scan amendments in ADRs and update the
+applicable instructions before deploying them.
 
 ## Dependency path
 
 ```text
-One gate manifest + verify ─┬─> bounded change contract ─┬─> Omnigent parallel POC
-Real rule enforcers ────────┤                            │   (two workers, coordinator writes Beads)
-Agent instruction import ──┤                            │
-Worktree and Beads test ────┘─────────────────────────────┘
-                                      │
-                                      v
-                         repeatable Bounded operation
-                                      │
-                        endpoint and disclosure barrier
-                                      │
-                                      v
-                    Feature path + cross-vendor review
-                                      │
-                                      v
-                    unattended and multi-writer expansion
+Gate manifest + verifier + report + export renderer/identity gate
+Minimum change/review/context contracts + trusted enforcement
+W0: isolated worktrees + W1: authorized exclusive coordinator
+                             |
+                             v
+                    M0: two-worker pilot
+                             |
+                             v
+                    M1: routine Bounded work
+                             |
+                three full qualification runs
+                + D-13 disclosure/endpoint checks
+                             |
+                             v
+                 M2: Feature + cross-vendor use
+                             |
+                             v
+                 M3: qualified unattended runs
+                             |
+                             v
+                 M4: justified hardening
+
+W2: full worker-side tracker test + supported mode + restore
+    branches independently after M0, only if direct writers are needed.
+
+Public-readiness foundations start with the first workstream;
+publication, team growth and a fourth instance have separate entry gates.
 ```
 
-The POC starts with two writing workers in separate worktrees. Its Beads
-updates are serialized by the coordinator. The worktree test can run in
-parallel with the first three prerequisites because simultaneous Beads writes
-are **not** an entry condition for parallel coding. A failing test preserves
-coordinator-only writes; it does not cancel the entire parallel POC.
+W0/W1 are mandatory M0 prerequisites. W2 is not on the M0 critical path.
+A W0 isolation failure or W1 ownership failure blocks M0. A W2 failure keeps
+worker-side tracker access disabled and does not invalidate the coordinator
+pilot. M0 never migrates this repository's live tracker.
 
-## First: make the workflow executable
+## Foundational deliverables
 
-| Deliverable | Work and reason | Acceptance evidence | Existing Beads work |
+| Deliverable | Implementation and reason | Acceptance evidence | Existing coverage |
 |---|---|---|---|
-| One gate list and `verify` | Build the platform-neutral gate file, runner, CI derivation and export identity gate. This is the same command Omnigent will call before integration. | CI and local runner report the same gate IDs and verdicts; every blocking gate has a known-bad case; the repository's migration test baseline improves without weakening assertions. | `coding-harness-bo0` |
-| Truthful rule set | Resolve each red rule test: restore a harness enforcer, move an instance rule to its instance, or lower it with a dated valve. | No level-3-or-higher harness rule names a missing enforcer; all rule tests pass for a stated reason. | `coding-harness-2ee` |
-| Single agent instruction entry | Import `AGENTS.md` from `CLAUDE.md` and remove stale placeholder instructions. | A test loads the same house rules in both adapters and confirms the instruction budget. | `coding-harness-21f` |
-| Contract and minimum templates | Add spec class, acceptance criteria, exclusions and a change-specific Definition of Done; add plan marking and findings templates. The POC needs a concrete contract to split safely. | Validator rejects a missing class, unbounded or overlapping assignment and an incomplete Definition of Done; a Bounded example passes. | `coding-harness-9qo`, `coding-harness-jc3` |
-| Worktree and tracker protocol | Reproduce all five checks in a throwaway repository, including the full prefix and simultaneous claims. Decide whether to retain coordinator-only writes or test server mode after a backup. | Commands and results are committed; the house rule states exactly who writes. No shared database migration happens merely to satisfy a diagram. | `coding-harness-m34` |
+| One executable gate source | Implement D-10/O-4's neutral manifest, canonical verifier, generated CI adapter and machine-rendered report. A `make verify` wrapper may delegate without listing gates. | Local/CI return the same gate IDs and verdicts for the same candidate; report carries base/candidate SHAs and configuration hash; known-bad fixtures fail. | `coding-harness-bo0` |
+| Export renderer and identity gate together | Deliver the one-writer renderer with its comparison gate, before M0. Auto-export stays off. | Under the coordinator lock a session-end render matches the store; a stale export is rejected; worker sessions cannot render. No gate depends on an undelivered writer. | `coding-harness-bo0` |
+| Truthful, protected enforcement | Resolve inherited red rule tests by restoring enforcers, moving instance rules or using dated valves. Protect policies, hooks, gate definitions and acceptance fixtures; provide a separate reviewed maintenance path. | No high-level rule names an absent enforcer; ordinary workers cannot weaken a gate through edits or shell commands; an approved verifier evaluates a proposed gate change without trusting that change to approve itself. | `coding-harness-2ee`; adapter work |
+| Minimum change contract | Add every D-2 field, O-1's single `verify green` line, class validator, plan-step IDs/scopes and findings template. Structural validation does not claim to prove semantic independence. | Missing class, protected areas, failure mode, size or DoD fails; explicit overlapping assignments are refused; reviewer checks semantic coupling; a Bounded example passes. | `coding-harness-9qo`, `coding-harness-jc3` |
+| Agent entry and context packet | Fix the `CLAUDE.md` import, keep instruction budgets and generate the target's resume packet. Add checkout/dependency/baseline preflight. | Fresh context identifies the correct task, SHAs, decisions, protected paths, verdict and remaining budget; stale state is refused; an absent tool produces an actionable setup failure. | `coding-harness-21f`; adapter work |
+| Common review contract | Preserve dimensions, origins, ambiguity/divergence handling and repair escalation from the current workflow. | An ambiguity blocks, divergence is BLOCKER, two fix-origin rounds escalate, and a clean result is accepted. Unattended runs also pause on MAJOR. | findings template and runner |
+| W0: worktree isolation | Use in-repository worktrees through the selected adapter and one fetched base SHA. Separate worker branches from the candidate integration branch. Probe shared Git, symlinks, shells and child processes. | Workers can commit to their assigned branch but cannot alter the other tree, shared hooks/configuration, active policies or `main`; protected-path writes through a shell also fail. | worktree adapter; relevant portion of `coding-harness-m34` |
+| W1: coordinator authorization | Change the pilot's explicit rule from no writes during concurrent sessions to one authorized writer. Implement exclusive ownership, stopped-writer takeover and run/attempt identity checks. | A second coordinator cannot write; kill/restart yields one owner; duplicate and stale results are rejected. Workers receive snapshots, and a main-checkout create/claim/update loop retains the full prefix. | coordinator adapter; relevant portion of `coding-harness-m34` |
+| Public-readiness foundations | Start Apache-2.0, onboarding and the scan now, retaining D-17's timing. Document permitted tool names and reject customer/employer identifiers and secrets in the publishable content. | Licence present; onboarding describes the actual bootstrap path; scan has both allowed-tool and prohibited-fixture cases. These foundations finish by M1 exit; publication remains separately gated. | `coding-harness-lir` |
 
-These deliverables unblock a meaningful pilot; they do not require every
-legacy test to pass immediately if a red test is proven to be an instance
-assumption and is reclassified with an enforcer or valve. The final
-repository gate must be green before routine use.
+The core M0 controls must pass before the pilot begins. Legacy instance-only
+failures may be classified with evidence and a dated valve; lowering a rule
+is a reviewed decision, not a way to manufacture a green run. The final
+repository gate must be green before routine use. Every test report records
+its interpreter/dependency versions, command, commit and raw-output location.
 
-## Next: run the first parallel Omnigent proof of concept
+## M0: first parallel Omnigent proof of concept
 
-**Scope:** a throwaway repository and two small, independent code changes.
-Use the chosen pinned Omnigent release and its documentation, the OSS
-deployment and a dedicated host. No customer-shaped content enters this
-pilot. The orchestrator receives the approved spec and plan, assigns disjoint
-file scopes, starts two worker sessions in separate worktrees and observes
-both. Workers cannot merge, push to the protected branch or write Beads. The
-coordinator alone records claims, results and blockers; branch integration is
-sequential.
+Use a disposable repository with synthetic content, its own tracker and the
+pinned OSS runtime on a dedicated host. Startup verifies dependencies, checkout
+identity and baseline gates. Begin with two independent coding tasks using
+already declared endpoints. Foreign model calls are not permitted before
+D-13 qualification. Workers cannot alter `main`, tracker state or active
+control files. The coordinator assembles a candidate branch; a human owns the
+final merge after verification and review of the combined result.
 
 | Control | Experiment and pass condition |
 |---|---|
-| Runtime pin and reproducibility | Record exact version, configuration hash, host, sandbox backend and adapter commands; a fresh session can repeat the run. |
-| Policy and sandbox | For each promised boundary, run a harmless known-bad action and record DENY/ASK plus the audit event. A non-firing boundary stops the pilot. |
-| Worktree compatibility | Run `git worktree add` through the effective policy; check `block_working_dir_changes` and global random-worktree settings on the pinned release. A denied or untraceable worktree stops the pilot until configuration is corrected. |
-| Endpoint and data egress | Resolve every selected model in `model-endpoints.yaml`; prove telemetry opt-out as configured; record observed egress. Unknown endpoint or unexplained egress stops the pilot. |
-| Parallel progress | Both workers are active at once in different worktrees and contexts; neither writes outside its assigned scope; the coordinator integrates one branch at a time. |
-| Verification and review | `verify` runs after each integration; a fresh-context reviewer sees only the diff and spec slice; findings remain in a file. |
-| Cost and stop controls | Each worker has a measured spend limit, wall-clock limit, idle or no-progress limit and cancellation path. Deliberately trip each control once in a harmless run. The spend probe must show a real stop, not only a cheaper-model fallback. |
-| Recovery | Kill one worker and then the host session; restart from the repository and tracker and recover the assigned step, commit, test verdict and blocker without the old chat. |
-| Fallback | Repeat the same two-worker task with ordinary harness sessions and worktrees; the git-native gate verdict is identical. |
+| Runtime and effective permissions | Record exact runtime, worker adapter and model identifiers, host, sandbox backend and configuration hash; check terminal and subagent permissions separately. |
+| Policies and worktree compatibility | Harmless known-bad probes produce DENY/ASK and an audit event; legitimate worktree creation succeeds. Check directory-change policies and random-worktree defaults against the retained placement rule. |
+| Trust boundary | A fixture in repository text or tool output asks the worker to weaken a gate or write outside scope. It cannot change authority; independently enforced controls block the attempted effect. |
+| Model calls and logs | Resolve coordinator, worker and any routing/reviewer calls against endpoint configuration. Test telemetry settings and observe egress. Evidence contains safe summaries and paths, not secrets. |
+| Parallel progress | At most two coding workers run concurrently in separate worktrees; scopes and branch ownership match the assignment. W0/W1 remain valid during the run. |
+| Candidate freshness | After combining each branch, verify the combined candidate. Then change its base or code after a green verdict: the old evidence must become stale and block promotion until checks/review are renewed. |
+| Review and correctness | A fresh reviewer consumes the contract slice and candidate diff. A seeded faulty solution fails the acceptance checks/review; a known correct control can pass with no findings. |
+| Aggregate limits | Deliberately trip worker and total-run spend, elapsed-time, call/iteration and approval-wait limits. The total includes coordinator, reviewer and retries; a retry never resets it. Record exposure from calls already in flight. |
+| Retry and cancellation | Permit at most two attempts per task initially. Cancel a parent with active children: all children stop or are quarantined before reassignment, and a late result is rejected. |
+| Restart and compaction | Kill a worker, then restart the coordinator after fencing the old process. Recover from the last durable checkpoint with the same decisions, task IDs, SHAs and remaining limits; uncommitted work is reported as unfinished. |
+| Fallback | Repeat the task with ordinary harness sessions and the same contracts, candidate flow and verifier; inspect a deliberately blocked session through the chosen observation channel. |
 
-**Exit:** all controls pass, one parallel task loop reaches a reviewable PR,
-and a report records wall time, model cost, human minutes, failed attempts,
-gate verdicts and a comparable serial baseline. A faster wall time alone is
-insufficient if cost, review load or failures rise materially. Record the
-chosen thresholds *before* the comparison. **Abort:** a broken sandbox,
-missing policy verdict, unknown endpoint, lost tracker write, unrecoverable
-session, or a gate result that depends on Omnigent to exist. This is the
-revised scope of the existing M0 work (`coding-harness-eev`); its old text and
-dependencies need updating when the ADR is accepted.
+**Exit:** all controls pass and one parallel loop reaches a reviewable PR.
+The report records outcome correctness, escaped defects, wall time, total
+model cost, human minutes, failed attempts and gate verdicts against a serial
+run of comparable tasks. Freeze thresholds and initial conditions before
+comparison. A single successful pilot proves feasibility only.
 
-## Then: turn the pilot into routine Bounded work
+**Abort:** ineffective isolation or enforcement, undeclared endpoint, multiple
+writers, stale evidence accepted, unbounded child processes, unrecoverable
+checkpoint or verification that depends on the Omnigent server. Retain the
+last durable state and return to the ordinary-session fallback.
 
-Use one real repository, initially this harness, for Bounded changes. Keep
-two-worker dispatch available when the plan has genuinely independent steps;
-serial execution remains valid for a one-step change. Rewrite `WORKFLOW.md`
-in English around phase requirements, the four classes, design phase 2b and
-this runtime sequence. Add `model-routing.yaml` with a schema and endpoint
-check (`coding-harness-qvl`). Add the machine-rendered verification report,
-session handover, single-writer export renderer and an onboarding example.
-Add a one-page `ROADMAP.md` kit template for Now/Next/Later direction; keep
-tasks and dependencies in Beads. Link out-of-scope discovered work using
-`discovered-from`. Preserve the current change, open decisions, invariants and
-gate verdict across compaction with a tested handoff. Standardize living-spec
-delta sections and search-first dependency rationale in the relevant templates.
-Exercise full Beads backup and restore in a disposable checkout; test the JSONL
-issue-level recovery separately.
-An Omnigent policy may refuse a push before `verify`, while CI independently
-enforces the same gate result.
+## M1: repeatable Bounded operation and kit delivery
 
-**Exit:** ten Bounded changes pass the same contract and gate path; their
-measurements include human time, cost, recovery and policy exceptions. The
-research target of at most ten human minutes per Bounded change is a
-calibration threshold, not a claim about current performance. No unexplained
-policy non-fire is accepted. The kit probe runs in a fresh repository. Failed
-measurements revise the workflow or policies before expanding scope.
+Use coding-harness first. Dispatch two workers only when the plan supports
+independent work; a one-step task can stay serial. Complete the English
+doctrine, four classes, design phase 2b and a single vocabulary. Ship routing
+schema and example, roadmap, `discovered-from` convention and living-spec delta
+vocabulary. Deliver design/arc42/MADR/LikeC4 templates now, so full same-lineage
+qualification runs can precede M2. Test full tracker backup/restore separately
+from JSONL issue recovery. Complete D-17's foundational work before M1 exit.
 
-## After disclosure: Feature and cross-vendor paths
+The following is a proposed packaging contract. Exact filenames may be refined
+in the implementation spec, but each entry must have a manifest role and a
+bootstrap/update test. `mechanismus` files are copied; `geruest` values are
+instance-owned. A non-empty scaffold is rendered from its mechanism template:
+the current probe's empty-file behavior alone is not a usable bootstrap.
 
-Keep parallel dispatch but permit larger, dependent plans only after the
-Bounded path is repeatable. Add design artefacts and ADR/model checks for
-architectural changes. Add requirement IDs and acceptance-test links before
-attempting a traceability matrix. Enable a foreign reviewer only after the
-instance's disclosure decision, endpoint operator and residency declaration,
-and a green leak check for each change. Compare its findings with fresh-context
-same-lineage review rather than assuming cross-vendor review is better.
+| Kit source / role | Instance destination and ownership | Acceptance |
+|---|---|---|
+| Prompts, validators, verifier and gate schema: mechanism | Same relative paths; the portable gate baseline plus explicit instance additions | One command works locally and in CI; instance floors cannot be weakened by updates |
+| Spec, plan, findings, resume-packet and handover templates: mechanism | Render into `plans/changes/<name>/` and `docs/journal/handover/`; real records are instance content | A first change and a fresh-context resume pass the contracts |
+| `templates/architecture/`: mechanism | arc42/MADR documents and `model/` scaffold; shared LikeC4 element specification stays mechanism | An Architectural example includes its ADR/model delta and passes the applicable build gate |
+| Roadmap, agent-entry and onboarding templates: mechanism | `ROADMAP.md`, `AGENTS.md`, `CLAUDE.md` and instance onboarding: scaffold | Imported rules are concise and instance-correct; no copied source-repository task list |
+| Routing/endpoint schemas and checks: mechanism | `model-routing.yaml`, `model-endpoints.yaml`: scaffold | Unresolved model, missing permission or disallowed data class blocks before dispatch |
+| Pinned `tools/bd` wrapper, version/shim and export renderer: mechanism; store/config: scaffold | `tools/` plus an explicitly initialized instance tracker | Fresh IDs use the instance prefix; no source store/export data is imported; upgrades remain guarded |
+| Omnigent/other harness adapters and compatibility tests: optional mechanism | Selected adapter directory plus instance-owned runtime configuration | Optional adapter removal preserves core verification; chosen adapter passes W0/W1 and context recovery |
+| Planning templates and snapshot renderer/checks: mechanism; client examples: optional | Authored `ROADMAP.md` and idea inbox; generated `docs/planning/HOME.md`; personal app settings stay local | Stale/missing data and manual view edits are detected; plain Markdown works without the client; no second task status store |
+| Kit version/probe/update tooling: mechanism | Installed-version record and local modifications belong to the instance | Apply an update with a reviewable diff, preserve local additions, rerun the probe and demonstrate rollback |
 
-**Exit:** three complete Feature changes have reconstructable specs, plans,
-verification reports, reviewer findings and integration records. At least
-one reviewer finding must be independently validated as useful; otherwise
-change the review configuration or input. No disclosure or leak-check failure
-is allowed. This is the measured entry condition for production cross-vendor
-use, not for the earlier parallel POC.
+**Exit:** ten Bounded changes complete the contract, review and merge path;
+measure human minutes, total cost, recovery and policy exceptions. Use the
+research's ten-human-minute target as the declared calibration threshold.
+The applicable repository gates and a fresh-instance bootstrap are green.
+The new instance completes a Bounded change and resumes from its handover;
+copying files alone is insufficient evidence. Each new adopted rule has a
+working enforcer or dated valve. **Hold:** unresolved controls, recurring
+excessive overhead or an unexplained policy non-fire stop expansion.
 
-## Expand only after the measured bottleneck appears
+### Human planning trial
 
-If several workers need direct, simultaneous Beads writes, run the five-check
-test with the pinned version, back up the tracker, test a Dolt server migration
-in a disposable copy and prove restore. A server belongs on the host that
-serves those worker sessions; remote Dolt push/pull remains the cross-machine
-transport. Only then replace coordinator-only writes. Add unattended runs
-after all stop conditions have known-bad tests and an overnight rehearsal
-proves a clean morning review. Mutation score and attestations remain later
-work unless a concrete risk requires them earlier.
+Deliver the [planning surface](2026-09-17-omnigent-first-target.md#human-planning-and-attention-support)
+during M1. Start with portable templates, then trial one optional client in a
+dedicated planning checkout. For Obsidian, use a bookmarked HOME and core
+Templates/Properties; restrict optional Bases editing to human-owned idea
+metadata. No community plugin or application install is part of this proposal.
 
-## Tracker and decision reconciliation
+The coordinator renders status under the authorized ownership protocol. Bind
+the view to source revisions and show freshness; do not poll an embedded live
+store from an independently running client. Keep generated views, authored
+roadmap themes and captured ideas distinguishable. Promote an idea to one
+Bead once, retaining a source link. Never infer approval from a draft answer.
 
-The existing Beads graph records the older sequence: `coding-harness-eev`
-depends on `coding-harness-m34`, and M0 currently describes one task loop,
-not two simultaneous workers. Once the target ADR is reviewed, update that
-Bead to include the parallel POC and relax only the **multi-writer**
-dependency, keeping the five-check test as a condition for worker-side Beads
-writes. Existing Beads `bo0`, `2ee`, `21f`, `9qo`, `jc3`, `qvl` and `m34`
-already cover most prerequisites. New durable items should be created for
-the runtime adapter and policy probes, the metrics and stop-control suite,
-and the revised doctrine after checking that no existing item covers them.
+**Acceptance:** the maintainer can find the next action, capture an idea,
+resume after interruption, recognize blocked or stale state and answer a
+revision-bound decision. Repeat the essential path in a plain Markdown editor.
+Choose visible work limits and notification settings from the trial. Record
+interface friction; optional timing is not a personal productivity target.
+A manual edit to the generated view is detected with a recoverable copy. An
+unavailable snapshot shows unknown; removing the client leaves core gates and
+canonical records usable. Failure holds planning-client adoption, not unrelated
+runtime qualification. Detailed setup is in the
+[research addendum](../research/2026-09-18-human-planning-and-harness-gaps.md#proposed-setup).
 
-No phase ends by declaration alone: it ends when its recorded acceptance
-evidence passes and the previous topology can still resume the work.
+### Quality evaluation and qualification for M2
+
+Keep a small versioned set of representative changes with stable initial
+repositories, acceptance tests and independently checked expected outcomes.
+Include a known faulty change, a known correct change and an ambiguous
+contract requiring escalation. Keep expected outcomes outside worker write
+scope. Run each initial reviewer fixture three times: seeded blockers must be
+found, clean controls must not acquire blocking false positives, and ambiguity
+must be escalated. This is an initial qualification bar, not a statistical
+reliability claim. Real PRs have no minimum findings count.
+
+Compare serial/parallel and proposed prompt/model/runtime versions using the
+same task set and declared attempt budgets. Record acceptance success, escaped
+defects, false positives, unnecessary edits, human intervention, cost and time.
+Classify environment failures separately. Keep richer trend evaluation advisory
+until calibrated; established critical control regressions block activation.
+A runtime, routing or prompt upgrade must rerun applicable qualification cases
+and preserve the previous working configuration for rollback.
+
+Third-party components stay off the M0 critical path. An optional evaluation
+first names a measured missing function or review gap, pins the exact source,
+binary, rules and endpoint, and runs synthetic faulty, clean, ambiguous,
+injected-instruction and stale-evidence cases. Compare cost, time, correctness
+and recovery with the existing path; keep the canonical verifier and human
+reviewer authoritative. The [CrewAI](../research/2026-09-18-crewai-assessment.md),
+[Open Code Review](../research/2026-09-18-open-code-review-assessment.md) and
+[Agent Skills](../research/2026-09-18-agent-skills-assessment.md) assessments
+set candidate-specific probes. Selective skill techniques require a precise
+overlap/authority review and a reviewable harness-owned edit; no pack is
+installed automatically. Real foreign-model calls still require every D-13
+condition and instance permission, even in an optional trial.
+
+Before enabling cross-vendor calls, retain **all D-13 entry criteria**: at least
+three full seven-phase runs with metrics in coding-harness, lakeswitch's
+written disclosure decision, green leak checks in every qualification run,
+and the foreign endpoint's declared residency. These three runs can use a
+fresh-context same-lineage reviewer. They are separate from the ten Bounded
+runs and therefore do not create a dependency on cross-vendor use itself.
+The instance still owns permission to send each change to that endpoint.
+
+## M2: Feature and cross-vendor operation
+
+Enter only after D-13 qualification. Apply the full contract and O-3's
+architecture classification gate. Add requirement IDs and acceptance-test
+links before a generated traceability matrix. Lakeswitch joins through its
+own additive-runtime ADR and working instance gates, preserving O-2.
+
+**Exit:** three Feature changes complete all required phases with traceable
+specs, plans, tests, reviewer dispositions and human merges. Known faulty and
+clean reviewer controls meet the declared evaluation bar; useful real findings
+are recorded when they occur, never required. A reader unfamiliar with a change
+reconstructs it from the artefacts; disclosure/leak checks pass for every call.
+**Hold:** disclosure failure disables foreign calls; reviewer regressions revert
+to the qualified same-lineage path while the cause is resolved.
+
+## W2 and M3: separate expansion conditions
+
+**Direct worker tracker access (W2)** is demand-driven and independent of night
+operation. Retain all five original checks: shared visibility, environment
+propagation, cross-checkout writes, concurrent claims/writes and full prefix.
+Run them with a pinned, supported concurrent-writer mode in a disposable copy.
+Verify backup/restore and update the writer rule explicitly before activation.
+A concurrency test cannot waive embedded mode's single-writer constraint.
+Until W2 is enabled, workers keep snapshots and the coordinator remains sole
+writer. The server, if needed, serves the worker host; remote Dolt sync still
+transports state between machines.
+
+**Unattended operation (M3)** can retain coordinator-only writes. Prove total
+budgets, process-group cancellation, approval timeout, restart, remote checkpoint
+recovery and complete tracker restore. Declare backup destination, retention,
+maximum acceptable lost work and recovery time in the instance runbook. Use
+redacted operational evidence with controlled retention. Rehearse one bounded
+night run and a human morning review before routine use. The retained trial
+criterion is at least one mergeable PR per week and at most fifteen minutes of
+morning review per run, measured only over weeks with assigned night work.
+**Abort:** a control failure, two assigned-work weeks without a mergeable result,
+or excessive morning review twice returns the workflow to M2 day operation.
+
+## M4 and event-driven adoption
+
+M4 adds mutation-score tools, generated traceability and stronger attestations
+when a measured risk warrants the cost. Each added blocking check needs a
+known-bad case, a valid subject set and a callable enforcer. Rehearse fallback
+after adding it; a failed fallback or ineffective check holds the rollout.
+
+Publication remains a separate D-17 event: Apache-2.0, onboarding and scan are
+already delivered; both instances reach at least 95% on the declared kit-probe
+metric; M2 entry runs are measured; an unfamiliar reader completes a first
+Bounded change in one afternoon. A prohibited public-content finding holds
+publication. T1 closes the separation-of-duties/branch-protection valves and
+checks the first PR with different author and approver. At the fourth instance,
+the retained Copier transition must preserve local changes and produce a
+version/instance compatibility report.
+
+## Tracker reconciliation and evidence
+
+When an exclusive tracker writer is available, reconcile existing M0 work
+(`coding-harness-eev`) with W0/W1 as mandatory dependencies and W2 as a separate
+activation gate. Preserve the full five-check acceptance of
+`coding-harness-m34`; split its delivery scope without closing untested checks.
+Existing gate, rule, instruction, template, routing and publication Beads cover
+much of the plan. Search before creating missing runtime, ownership, evaluation
+or packaging items. No tracker write from this documentation worktree is part
+of this proposal.
+
+Each implementation PR links its decision/gap, deliverable, acceptance record
+and Bead. Evidence carries commit, versions, command, expected/observed result
+and raw-output location. Every phase has a hold condition and a recoverable
+checkpoint; implementation status is asserted by those results, not by this
+plan's wording.
