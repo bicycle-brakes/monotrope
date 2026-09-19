@@ -3,7 +3,7 @@ title: "Gap analysis: research corpus, running harness and Omnigent-first target
 category: architecture
 status: proposed
 created: 2026-09-17
-last_reviewed: 2026-09-18
+last_reviewed: 2026-09-19
 owner: framework-architect
 provenance: ai-drafted-reviewed
 produced_by:
@@ -19,6 +19,18 @@ tags: [assessment, research, workflow, omnigent, gaps]
 
 # Gap analysis: research versus the running harness
 
+> **Read this first.** This document measures the repository against the
+> [Omnigent-first target](2026-09-17-omnigent-first-target.md), at commit
+> `eddfc0b` on 2026-09-17.
+>
+> - **What already works:** file-based change flow, one Beads tracker,
+>   declared model endpoints, the kit manifest, the rule ladder.
+> - **What blocks the pilot (P0):** no one-command quality gate
+>   (`coding-harness-bo0`) and rules whose enforcers are missing here
+>   (`coding-harness-2ee`).
+> - **How to read it:** the tables carry the evidence; the diagrams and
+>   summaries are reading aids, not sources.
+
 **Snapshot:** repository commit `eddfc0b`, 2026-09-17. The assessment reads
 the four original sources and their index in [`docs/research/`](../research/_INDEX.md), the
 [2026-09-16 target proposal](target-architecture.md), the checked-in mechanism
@@ -31,7 +43,19 @@ not absent from a sibling repository. The research review was measured at
 as current measurements. The 2026-09-18 revision adds primary-source research
 and reconciles the target documents; it does not claim a new runtime test.
 The [decision continuity table](2026-09-17-omnigent-first-target.md#decision-continuity)
-records every retained or amended interview outcome.
+records every retained or amended interview outcome. A 2026-09-19
+readability revision restructured presentation only — diagrams and summaries
+were added; no finding changed.
+
+One map before the table: the research corpus feeds this assessment, this
+assessment feeds the target, the target drives the implementation plan.
+
+```mermaid
+flowchart LR
+    R["Research corpus + index"] --> G["This gap analysis at eddfc0b"]
+    G --> T["Omnigent-first target"]
+    T --> P["Implementation plan"]
+```
 
 | Research Markdown | Contribution to this assessment | Boundary or correction |
 |---|---|---|
@@ -49,6 +73,9 @@ adds primary-source checks for isolation, evaluations and attention support.
 Its proposed defaults require local usability validation.
 
 ## What already carries
+
+Five capabilities are real today — each with its evidence and the reason to
+keep it.
 
 | Capability | Evidence at this snapshot | Keep because |
 |---|---|---|
@@ -96,6 +123,9 @@ tracker pointer, not the explanation.
 | P1 | **Architecture decisions can disappear during rewrite.** The first new draft omitted LikeC4 and parts of the original interview. | Retain D-15's shared LikeC4 specification, arc42/MADR and applicable build gate; map every D/O decision explicitly. | A sequencing change must not silently reopen agreed architecture. |
 
 ## Research intake decisions
+
+One disposition per research proposal — adopt, adapt, or decline, each with a
+reason.
 
 | Research proposal | Disposition | Reason |
 |---|---|---|

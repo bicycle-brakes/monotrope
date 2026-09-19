@@ -3,7 +3,7 @@ title: "Target state: an Omnigent-first, evidence-driven coding harness"
 category: architecture
 status: proposed
 created: 2026-09-17
-last_reviewed: 2026-09-18
+last_reviewed: 2026-09-19
 owner: framework-architect
 provenance: ai-drafted-reviewed
 produced_by:
@@ -19,11 +19,35 @@ tags: [architecture, target, workflow, omnigent, parallelism]
 
 # Target state: an Omnigent-first coding harness
 
+> **Read this first.** One direction drives this document: Omnigent
+> coordinates parallel coding from the first proof of concept (M0).
+>
+> - **What it asks of you:** review these contracts. Before any runtime
+>   activation, three ADRs record the amendments — early parallelism
+>   (D-3/D-7), coordinator permission, public-scan naming (D-17).
+> - **What changes for daily work:** two bounded workers in isolated
+>   worktrees; one coordinator owns every tracker write; Git holds the
+>   change, Beads holds status, the human holds the merge.
+> - **Where next:** the [implementation plan](2026-09-17-implementation-plan.md)
+>   for sequencing, the [gap analysis](2026-09-17-gap-analysis.md) for what
+>   is missing today.
+
+```mermaid
+flowchart LR
+    A["Interview outcomes D-1 to D-17, O-1 to O-4"] --> B["This target: contracts"]
+    B --> C["3 ADRs for the amendments"]
+    C --> D["Gate manifest + rule enforcers"]
+    D --> E["M0: two-worker pilot"]
+    E --> F["M1 to M4: measured adoption"]
+```
+
 **Confirmed direction, 2026-09-17:** Omnigent coordinates parallel coding
 from the first proof of concept. This document proposes the contracts that
 make that direction operable. It does not activate runtime permissions. The
 [decision continuity table](#decision-continuity) preserves the earlier
-interview outcomes and identifies each proposed amendment explicitly.
+interview outcomes and identifies each proposed amendment explicitly. A
+2026-09-19 readability revision restructured presentation only — diagrams
+and summaries were added; no contract changed.
 
 The [gap analysis](2026-09-17-gap-analysis.md) measures the repository at
 `eddfc0b`; the [implementation plan](2026-09-17-implementation-plan.md) defines
@@ -34,27 +58,58 @@ Research supplies evidence; an untested product claim is not a control.
 
 ## Outcome and boundaries
 
-A developer can turn an agreed change into a reviewable pull request through
-bounded workers, reproducible checks and an independent review. A fresh
-session can resume from a durable checkpoint without the previous chat.
-Omnigent owns dispatch and observation; Git holds the change and its evidence;
-Beads holds work status. The human owns intent, exceptions and the final merge.
+- **The promise.** A developer turns an agreed change into a reviewable pull
+  request — through bounded workers, reproducible checks and an independent
+  review.
+- **Interruption is safe.** A fresh session resumes from a durable checkpoint,
+  without the previous chat.
+- **Who owns what.** Omnigent owns dispatch and observation. Git holds the
+  change and its evidence. Beads holds work status. The human owns intent,
+  exceptions and the final merge.
 
-The harness owns reusable process and its kit. Instances own domain rules,
-endpoint permissions, secrets and additional gates. Customer expressions never
-enter harness artefacts. Content, commit messages and PR bodies are English.
-The proposed public scan permits tool names such as Omnigent and LikeC4 while
-rejecting customer/employer identifiers and secrets; model selection stays in routing
-configuration. This naming amendment does not postpone public-readiness work.
+```mermaid
+flowchart LR
+    H["Human"] -- "intent, exceptions, final merge" --> C["Omnigent coordinator"]
+    C -- "dispatch, observation" --> W["2 coding workers, bounded sessions"]
+    W -- "commits" --> G["Git: change + evidence"]
+    C -- "accepted outcomes" --> T["Beads: work status"]
+    G -- "candidate branch" --> P["Reviewed PR to main"]
+```
+
+- **Harness vs instances.** The harness owns reusable process and its kit.
+  Instances own domain rules, endpoint permissions, secrets and additional
+  gates.
+- **Customer boundary.** Customer expressions never enter harness artefacts.
+- **Language.** Content, commit messages and PR bodies are English.
+- **Naming amendment (D-17).** The proposed public scan permits tool names
+  such as Omnigent and LikeC4; it rejects customer/employer identifiers and
+  secrets. Model selection stays in routing configuration. This amendment
+  does not postpone public-readiness work.
 
 ## Decision continuity
 
-The IDs below refer to the recorded interview outcomes in the historical
-architecture, not to its earlier recommendations. **Retain** carries a
-previous decision forward. **Amend** identifies a change in this proposal;
-it needs the corresponding ADR and rule update before runtime activation.
-The explicit instruction to start parallel orchestration early changes D-7;
-it does not silently repeal unrelated decisions.
+- The IDs below are the recorded interview outcomes of the historical
+  architecture — not its earlier recommendations.
+- **Retain** carries a decision forward unchanged. **Amend** changes it — and
+  every amendment needs its ADR and rule update **before runtime activation**.
+- Three outcomes are amended here: **D-3** (task-granularity timing), **D-7**
+  (parallelism starts at M0) and **D-17** (public-scan naming boundary). The
+  explicit instruction to start parallel orchestration early changes D-7; it
+  does not silently repeal unrelated decisions.
+
+```mermaid
+flowchart TD
+    A["Amended outcomes"] --> A1["D-3 task granularity"]
+    A --> A2["D-7 parallelism at M0"]
+    A --> A3["D-17 naming boundary"]
+    A1 --> B["one ADR each + rule update"]
+    A2 --> B
+    A3 --> B
+    B --> C["runtime activation allowed"]
+```
+
+The table below is the authoritative mapping. Read the **Disposition** column
+first: everything not marked **Amend** carries forward unchanged.
 
 | Decision | Disposition | Contract carried into this target |
 |---|---|---|
@@ -88,6 +143,9 @@ reopened by this consistency revision.
 
 ## Source of truth and execution topology
 
+One row per concern: **what is authoritative** and **who executes it**. If a
+tool disagrees with this table, the table wins.
+
 | Concern | Authority | Execution responsibility |
 |---|---|---|
 | Direction | One-page `ROADMAP.md`, Now/Next/Later with appetite | Human sets themes; changes link to a theme without duplicating tasks |
@@ -101,86 +159,141 @@ reopened by this consistency revision.
 
 ### Tracker ownership and activation
 
-The current house rule says that **no session writes while another session
-runs**. The proposed coordinator topology changes that rule; it is not an
-interpretation of the existing permission. Before any parallel pilot writes
-its tracker, its instructions and enforcer must explicitly permit exactly one
-coordinator to write while its tracker-read-only workers run. The harness's
-live store is not the pilot store.
+- **Today's rule.** No session writes while another session runs.
+- **The change.** The proposed coordinator topology replaces that rule — it is
+  not an interpretation of the existing permission. Before any parallel pilot
+  writes its tracker, its instructions and enforcer must explicitly permit
+  exactly one coordinator to write while its tracker-read-only workers run.
+- **Isolation.** The harness's live store is not the pilot store.
 
-All coordinator writes use `tools/bd` from the designated main checkout under
-one OS-held exclusive writer lock shared by coordinator processes. A second
-coordinator fails closed. A replacement must prove that the old writer has
-stopped and acquire the lock before reconciling state. An elapsed timeout
-alone does not authorize concurrent ownership. Run and attempt IDs reject
-late or duplicate results after reassignment. The coordinator writes accepted
-outcomes to Beads and pushes Dolt state; workers receive bounded snapshots.
+```mermaid
+sequenceDiagram
+    participant C as Coordinator
+    participant W as Workers (read-only)
+    participant B as Beads store
+    Note over C: exclusive writer lock held
+    C->>W: bounded task + snapshot
+    W-->>C: result for run/attempt ID
+    C->>C: reject late or duplicate results
+    C->>B: write accepted outcome via tools/bd
+    C->>B: push Dolt state
+```
 
-The single-coordinator policy remains after a successful worktree test until
-explicitly replaced. Direct concurrent writers require a supported storage
-mode, the full five-check protocol, backup/restore evidence and a reviewed
-rule change. Embedded mode is not promoted to multi-writer by a successful
-stress-test sample. [Beads mode documentation](https://github.com/gastownhall/beads/blob/main/docs/architecture/dolt.md)
-provides the design basis; pin-specific behavior still needs testing.
+- **How writes happen.** All coordinator writes use `tools/bd` from the
+  designated main checkout, under one OS-held exclusive writer lock shared by
+  coordinator processes.
+- **Second coordinator: fails closed.** A replacement must prove that the old
+  writer has stopped and acquire the lock before reconciling state. An elapsed
+  timeout alone does not authorize concurrent ownership.
+- **No late writes.** Run and attempt IDs reject late or duplicate results
+  after reassignment. The coordinator writes accepted outcomes to Beads and
+  pushes Dolt state; workers receive bounded snapshots.
+
+- **The policy stays until replaced.** The single-coordinator policy remains
+  after a successful worktree test until explicitly replaced.
+- **Lifting it needs all of this.** Direct concurrent writers require a
+  supported storage mode, the full five-check protocol, backup/restore
+  evidence and a reviewed rule change.
+- **No promotion by sample.** Embedded mode is not promoted to multi-writer by
+  a successful stress-test sample.
+  [Beads mode documentation](https://github.com/gastownhall/beads/blob/main/docs/architecture/dolt.md)
+  provides the design basis; pin-specific behavior still needs testing.
 
 ### Candidate integration and final merge
 
-The protected default branch is called `main` below; an instance may name it
-differently. The coordinator creates a temporary candidate branch and a
-separate integration worktree from the run's recorded base SHA. Each coding
-worker owns its own branch/worktree. The coordinator combines worker commits
-one at a time on the candidate branch. This local assembly is not a merge to
-`main`, a task closure, or permission to publish.
+- **Naming.** The protected default branch is called `main` below; an
+  instance may name it differently.
+- **Assembly.** The coordinator creates a temporary candidate branch and a
+  separate integration worktree from the run's recorded base SHA. Each coding
+  worker owns its own branch/worktree. The coordinator combines worker commits
+  one at a time on the candidate branch.
+- **Assembly is not release.** This local assembly is not a merge to `main`,
+  a task closure, or permission to publish.
 
-After each assembly, the verifier checks the combined candidate. Independent
-review evaluates the final candidate against its base and contract. A failed
-check blocks candidate promotion and further dependent work. A change to the
-candidate, target base, contract or enforcing configuration invalidates the
-relevant evidence and requires re-verification and review before merge. The
-human merges only the reviewed candidate with current CI evidence. Beads close
-only after the declaring PR reaches `main`, not after candidate assembly.
+```mermaid
+flowchart LR
+    W1["Worker branch 1"] --> CB["Candidate branch"]
+    W2["Worker branch 2"] --> CB
+    CB --> V{"Verifier"}
+    V -- "green" --> R{"Independent review"}
+    R -- "green" --> HM["Human merges to main"]
+    V -- "red" --> X["Blocks promotion and dependent work"]
+    R -- "findings" --> X
+```
+
+- **Check after every assembly.** The verifier checks the combined candidate.
+  Independent review evaluates the final candidate against its base and
+  contract.
+- **Red blocks.** A failed check blocks candidate promotion and further
+  dependent work.
+- **Stale evidence.** A change to the candidate, target base, contract or
+  enforcing configuration invalidates the relevant evidence and requires
+  re-verification and review before merge.
+- **The human merges.** Only the reviewed candidate with current CI evidence.
+  Beads close only after the declaring PR reaches `main`, not after candidate
+  assembly.
 
 ### Common review contract
 
-`findings.md` records dimension SPEC/MAINT, origin `base`/`fix-r<N>`, severity
-BLOCKER/MAJOR/MINOR, evidence, disposition and reviewed SHAs. Merge requires
-no open `[AMBIGUITY]` and no open BLOCKER; `[DIVERGENT]` is always BLOCKER.
-Ambiguous intent returns to the human decision protocol. Two consecutive
-rounds containing fix-origin findings trigger escalation rather than a third
-automatic repair round. An unattended run additionally pauses on open MAJOR
-findings. This preserves the current [review prompt](../../prompts/06-review.md)
-and [workflow](../WORKFLOW.md); their implementations consume one contract.
+One contract, four things to remember:
 
-A clean review is a valid result. Reviewer qualification uses known faulty
-and known correct fixtures, checks missed defects and false positives, and
-calibrates judgments against independently checked outcomes. A real PR is
-never required to contain a defect for the review process to pass.
+- **The record.** `findings.md` records dimension SPEC/MAINT, origin
+  `base`/`fix-r<N>`, severity BLOCKER/MAJOR/MINOR, evidence, disposition and
+  reviewed SHAs.
+- **The merge bar.** Merge requires no open `[AMBIGUITY]` and no open BLOCKER;
+  `[DIVERGENT]` is always BLOCKER.
+- **Escalation.** Ambiguous intent returns to the human decision protocol.
+  Two consecutive rounds containing fix-origin findings trigger escalation
+  rather than a third automatic repair round. An unattended run additionally
+  pauses on open MAJOR findings.
+- **One contract, many readers.** This preserves the current
+  [review prompt](../../prompts/06-review.md) and
+  [workflow](../WORKFLOW.md); their implementations consume one contract.
 
-An external review engine may propose findings, but the harness reviewer owns
-SPEC/MAINT, origin, severity and disposition. Empty engine output is not a
-clean verdict. Its adapter records the engine/version, approved rules digest,
-endpoint and reviewed SHAs; a changed candidate or rule invalidates its output.
-The [Open Code Review assessment](../research/2026-09-18-open-code-review-assessment.md)
-qualifies that engine as an advisory candidate, not a required gate.
+- **A clean review is a valid result.** Reviewer qualification uses known
+  faulty and known correct fixtures, checks missed defects and false
+  positives, and calibrates judgments against independently checked outcomes.
+  A real PR is never required to contain a defect for the review process to
+  pass.
+
+- **External engines propose; the harness reviewer decides.** An external
+  review engine may propose findings, but the harness reviewer owns
+  SPEC/MAINT, origin, severity and disposition. Empty engine output is not a
+  clean verdict.
+- **Traceable adapters.** Its adapter records the engine/version, approved
+  rules digest, endpoint and reviewed SHAs; a changed candidate or rule
+  invalidates its output. The
+  [Open Code Review assessment](../research/2026-09-18-open-code-review-assessment.md)
+  qualifies that engine as an advisory candidate, not a required gate.
 
 ## Run limits, context and recovery
 
-M0 permits at most **two coding workers** at once. A run-wide ledger counts
-coordinator, workers, reviewer calls and retries. Set finite total spend,
-wall time and tool-call limits before dispatch, alongside worker limits. The
-initial retry ceiling is two attempts per task, including the first attempt;
-retries consume the original run budget. Approval waits have a finite timeout.
-These are pilot settings recorded with the run, not inferred from model output.
+- **Two workers, no more.** M0 permits at most **two coding workers** at once.
+- **One ledger for everything.** A run-wide ledger counts coordinator, workers,
+  reviewer calls and retries.
+- **Limits before dispatch.** Set finite total spend, wall time and tool-call
+  limits before dispatch, alongside worker limits.
+- **Retries are not free.** The initial retry ceiling is two attempts per
+  task, including the first attempt; retries consume the original run budget.
+  Approval waits have a finite timeout.
+- **Recorded, not inferred.** These are pilot settings recorded with the run,
+  not inferred from model output.
 
-On cancellation, budget exhaustion, loss of writer ownership or a supervisor
-failure, new dispatch stops and all child processes are stopped or quarantined
-before reassignment. The supervisor must be able to terminate the full process
-group. A stale worker cannot publish a result for a newer attempt. Model
-downgrading is not a successful cost-stop test. If exact usage is unavailable,
-the adapter must reserve a conservative bound or stop dispatch, never report
-an unknown total as zero. In-flight cost exposure is recorded in the budget.
+- **Stop means stop everything.** On cancellation, budget exhaustion, loss of
+  writer ownership or a supervisor failure, new dispatch stops and all child
+  processes are stopped or quarantined before reassignment. The supervisor
+  must be able to terminate the full process group.
+- **No stale wins.** A stale worker cannot publish a result for a newer
+  attempt.
+- **A cost stop must actually stop.** Model downgrading is not a successful
+  cost-stop test. If exact usage is unavailable, the adapter must reserve a
+  conservative bound or stop dispatch, never report an unknown total as zero.
+  In-flight cost exposure is recorded in the budget.
 
 Every dispatch and resume loads a small context packet:
+
+Six fields, one purpose: a fresh session resumes without claiming uncommitted
+work survived.
 
 | Packet field | Purpose |
 |---|---|
@@ -191,66 +304,87 @@ Every dispatch and resume loads a small context packet:
 | Last durable checkpoint, unfinished work and next action | Resume without claiming uncommitted work survived |
 | Remaining run/worker budget and stop conditions | Prevent a fresh context from resetting limits |
 
-The packet is generated from existing artefacts and execution evidence, not
-maintained as another status store. Instruction imports retain the 200-line
-budget. Pin each adapter's packet-size budget and record measured or estimated
-occupancy distinctly; unavailable telemetry is UNKNOWN. A fresh-context resume
-test must recover the packet's protected information and reject stale SHAs.
-Compaction hooks are adapter-specific; an adapter without one must reload the
-same packet explicitly. Heavy logs remain in evidence storage with compact
-verdicts in context. Living-spec deltas use ADDED/MODIFIED/REMOVED/RENAMED;
-MODIFIED includes the complete replacement text.
+- **Not a status store.** The packet is generated from existing artefacts and
+  execution evidence, not maintained as another status store. Instruction
+  imports retain the 200-line budget.
+- **Bounded packets.** Pin each adapter's packet-size budget and record
+  measured or estimated occupancy distinctly; unavailable telemetry is
+  UNKNOWN.
+- **Resume must be proven.** A fresh-context resume test must recover the
+  packet's protected information and reject stale SHAs.
+- **Compaction.** Compaction hooks are adapter-specific; an adapter without
+  one must reload the same packet explicitly. Heavy logs remain in evidence
+  storage with compact verdicts in context.
+- **Living-spec deltas.** They use ADDED/MODIFIED/REMOVED/RENAMED; MODIFIED
+  includes the complete replacement text.
 
-A startup check verifies checkout identity, pinned dependencies, required
-tools and the baseline gate result before coding. Recovery distinguishes a
-process crash from loss of the host's disk: M0 proves process/session restart
-from durable local commits and tracker state. Host-loss recovery needs pushed
-checkpoints and full tracker backups, with a declared acceptable loss window,
-before unattended operation. JSONL recovery is issue-level; a full restore
-exercise checks additional store state. Do not claim uncommitted work survives.
+- **Startup check first.** A startup check verifies checkout identity, pinned
+  dependencies, required tools and the baseline gate result before coding.
+- **Two failure classes.** Recovery distinguishes a process crash from loss of
+  the host's disk: M0 proves process/session restart from durable local
+  commits and tracker state.
+- **Host loss comes later.** Host-loss recovery needs pushed checkpoints and
+  full tracker backups, with a declared acceptable loss window, before
+  unattended operation.
+- **Backup realism.** JSONL recovery is issue-level; a full restore exercise
+  checks additional store state. Do not claim uncommitted work survives.
 
 ## Trust and enforcement
 
-Each binding rule names an enforcer or an owner and dated ramp valve. Gates
-have known-bad cases and prove they examined the intended inputs; an empty
-findings list can pass when the reviewed subject is valid and non-empty.
-The gate manifest is the sole quality-gate list. Runtime policies enforce
-permissions around actions; they are not a second list of quality checks.
+- **Every rule has an enforcer.** Each binding rule names an enforcer or an
+  owner and dated ramp valve. Gates have known-bad cases and prove they
+  examined the intended inputs; an empty findings list can pass when the
+  reviewed subject is valid and non-empty.
+- **One gate list.** The gate manifest is the sole quality-gate list. Runtime
+  policies enforce permissions around actions; they are not a second list of
+  quality checks.
+- **Workers cannot self-authorize.** Ordinary coding workers cannot change
+  active policy, gate configuration, hooks, the tracker wrapper, protected
+  acceptance fixtures or their own acceptance report.
+- **Harness changes are their own class.** A dedicated harness-maintenance
+  change may propose those edits with declared scope and human review; checks
+  from an approved revision must still assess the transition. Branch-provided
+  gate changes cannot grant themselves authority.
+- **Bypass must be seen to fail.** The pilot proves that an attempted bypass
+  is rejected.
 
-Ordinary coding workers cannot change active policy, gate configuration,
-hooks, the tracker wrapper, protected acceptance fixtures or their own
-acceptance report. A dedicated harness-maintenance change may propose those
-edits with declared scope and human review; checks from an approved revision
-must still assess the transition. Branch-provided gate changes cannot grant
-themselves authority. The pilot proves that an attempted bypass is rejected.
+- **External tools are components, not authorities.** External tools and
+  skills are version-pinned, scoped components, not sources of workflow
+  authority. Their prompts, repositories and rule files cannot change
+  permissions, the Beads writer, the gate manifest, review dispositions or
+  human decisions.
+- **Control inputs stay protected.** Protect active review rules,
+  adapter/action definitions and skill instructions as control inputs;
+  evaluate proposed changes with an approved revision. Installation and
+  updates require a reviewed, recorded choice, never an automatic import from
+  repository text or a remote registry. The
+  [CrewAI](../research/2026-09-18-crewai-assessment.md) and
+  [Agent Skills](../research/2026-09-18-agent-skills-assessment.md)
+  assessments retain Omnigent as coordinator and propose only bounded
+  adapter/skill trials.
 
-External tools and skills are version-pinned, scoped components, not sources of
-workflow authority. Their prompts, repositories and rule files cannot change
-permissions, the Beads writer, the gate manifest, review dispositions or human
-decisions. Protect active review rules, adapter/action definitions and skill
-instructions as control inputs; evaluate proposed changes with an approved
-revision. Installation and updates require a reviewed, recorded choice, never
-an automatic import from repository text or a remote registry. The
-[CrewAI](../research/2026-09-18-crewai-assessment.md) and
-[Agent Skills](../research/2026-09-18-agent-skills-assessment.md) assessments
-retain Omnigent as coordinator and propose only bounded adapter/skill trials.
+- **Worktrees share Git.** Worktrees isolate files but share Git resources.
+  The adapter must constrain shells and descendant processes as well as editor
+  tools, including writes via symlinks and to shared Git configuration, hooks
+  and other workers' refs. Git operations are mediated so a worker can commit
+  only to its assigned branch.
+- **If isolation cannot be shown, stop.** If that cannot be demonstrated, pause
+  M0 and propose a stronger isolation layout rather than declaring worktrees a
+  security boundary.
+- **Text is not permission.** Repository text, logs and tool results cannot
+  grant permissions or override the assigned contract. A harmless
+  injected-instruction fixture tests this boundary.
 
-Worktrees isolate files but share Git resources. The adapter must constrain
-shells and descendant processes as well as editor tools, including writes via
-symlinks and to shared Git configuration, hooks and other workers' refs. Git
-operations are mediated so a worker can commit only to its assigned branch.
-If that cannot be demonstrated, pause M0 and propose a stronger isolation
-layout rather than declaring worktrees a security boundary. Repository text,
-logs and tool results cannot grant permissions or override the assigned
-contract. A harmless injected-instruction fixture tests this boundary.
-
-Endpoint checks cover every model call, including coordinator, routing and
-review. Foreign calls also require the disclosure decision and leak check.
-Runtime configuration is pinned, telemetry behavior tested, and required
-sandbox, secret-path, egress and write boundaries probed on safe fixtures.
-Terminal and subagent policies must be checked independently on the pinned
-release. The evidence record names effective configurations and their hashes.
-Logs sent to a model or stored with a PR are subject to the same data rules.
+- **Every model call is checked.** Endpoint checks cover every model call,
+  including coordinator, routing and review. Foreign calls also require the
+  disclosure decision and leak check.
+- **Probe the boundaries.** Runtime configuration is pinned, telemetry
+  behavior tested, and required sandbox, secret-path, egress and write
+  boundaries probed on safe fixtures. Terminal and subagent policies must be
+  checked independently on the pinned release.
+- **Record what ran.** The evidence record names effective configurations and
+  their hashes. Logs sent to a model or stored with a PR are subject to the
+  same data rules.
 
 ## Human planning and attention support
 
@@ -260,34 +394,42 @@ The [research addendum](../research/2026-09-18-human-planning-and-harness-gaps.m
 contains the client comparison, setup and evidence. No client is required for
 core verification, and no client becomes a second task tracker.
 
-`ROADMAP.md` owns direction, Beads owns executable work, and change artifacts
-own decisions and intent. The proposed `docs/planning/HOME.md` is a generated
-view of these sources: current focus, one next action, last durable checkpoint,
-pending human decisions and waiting reasons. Show the source Git revision and
-tracker snapshot time/revision; missing data is unknown, never an empty queue.
-The authorized coordinator supplies snapshots; the UI does not open Dolt or
-write task status. Generated-view edits are detected and preserved for recovery,
-not treated as tracker updates. Human-authored ideas use a separate inbox and
-become Beads work only after deliberate triage.
+- **The three authorities.** `ROADMAP.md` owns direction, Beads owns
+  executable work, and change artifacts own decisions and intent.
+- **A generated view, nothing more.** The proposed `docs/planning/HOME.md` is
+  a generated view of these sources: current focus, one next action, last
+  durable checkpoint, pending human decisions and waiting reasons. Show the
+  source Git revision and tracker snapshot time/revision; missing data is
+  unknown, never an empty queue.
+- **Read-only UI.** The authorized coordinator supplies snapshots; the UI does
+  not open Dolt or write task status. Generated-view edits are detected and
+  preserved for recovery, not treated as tracker updates. Human-authored
+  ideas use a separate inbox and become Beads work only after deliberate
+  triage.
 
-For users with ADHD, trial configurable defaults: one primary focus, at most
-three visible Now themes, Next/Later behind a link, low-friction idea capture,
-a persistent last-done/next-action breadcrumb and batched routine updates.
-Avoid mandatory timers, streaks and overdue-pressure displays. A focused view
-still exposes blockers and stale data. These are usability hypotheses to test
-with the maintainer; personal throughput is not a score or adoption gate.
+- **ADHD defaults to trial.** One primary focus, at most three visible Now
+  themes, Next/Later behind a link, low-friction idea capture, a persistent
+  last-done/next-action breadcrumb and batched routine updates.
+- **What to avoid.** Mandatory timers, streaks and overdue-pressure displays.
+  A focused view still exposes blockers and stale data.
+- **Hypotheses, not gates.** These are usability hypotheses to test with the
+  maintainer; personal throughput is not a score or adoption gate.
 
-Use a dedicated planning checkout/worktree so human edits do not collide with
-workers. Begin with core client features and normal Markdown links. Client
-filters are navigation aids, not access controls. Do not synchronize a live
-tracker or worker directory through file-sync tools. Optional mobile capture
-is separate; approvals require explicit identity and the exact revision being
-approved. An editable note or board movement does not grant merge permission.
+- **Separate checkout for planning.** Use a dedicated planning
+  checkout/worktree so human edits do not collide with workers.
+- **Boring technology first.** Begin with core client features and normal
+  Markdown links. Client filters are navigation aids, not access controls.
+- **No file-sync for live state.** Do not synchronize a live tracker or worker
+  directory through file-sync tools.
+- **Approvals stay explicit.** Optional mobile capture is separate; approvals
+  require explicit identity and the exact revision being approved. An
+  editable note or board movement does not grant merge permission.
 
 ## Acceptance scenarios
 
-The [implementation plan](2026-09-17-implementation-plan.md) assigns timing
-and evidence to these scenarios; none is satisfied by prose alone.
+Each scenario below needs **evidence, not prose**. The
+[implementation plan](2026-09-17-implementation-plan.md) assigns timing and
+evidence to them.
 
 | Scenario | Required outcome |
 |---|---|

@@ -3,7 +3,7 @@ title: "Implementation plan: reach the Omnigent-first target"
 category: architecture
 status: proposed
 created: 2026-09-17
-last_reviewed: 2026-09-18
+last_reviewed: 2026-09-19
 owner: framework-architect
 provenance: ai-drafted-reviewed
 produced_by:
@@ -19,11 +19,23 @@ tags: [plan, implementation, omnigent, workflow, gates]
 
 # Implementation plan: reach the Omnigent-first target
 
+> **Read this first.** This is the delivery sequence for the
+> [Omnigent-first target](2026-09-17-omnigent-first-target.md).
+>
+> - **The path in one line:** gates and enforcers → contracts → W0/W1 →
+>   M0 pilot → M1 → M2 → M3 → M4.
+> - **Nothing here activates a permission.** The three ADRs come first — see
+>   the target document, [Decision continuity](2026-09-17-omnigent-first-target.md#decision-continuity).
+> - **Status lives in Beads.** The tables below define deliverables and
+>   acceptance — not task status.
+
 This plan implements the [target contracts](2026-09-17-omnigent-first-target.md)
 and addresses the [measured gaps](2026-09-17-gap-analysis.md) at `eddfc0b`.
 It proposes implementation work; this documentation PR changes no runtime
 permission. Beads remains the task tracker. Existing IDs identify coverage;
-the tables below define deliverables and acceptance, not task status.
+the tables below define deliverables and acceptance, not task status. A
+2026-09-19 readability revision restructured presentation only — diagrams
+and summaries were added; no contract changed.
 
 The target's [decision continuity table](2026-09-17-omnigent-first-target.md#decision-continuity)
 is the current mapping of every prior interview outcome. Preserve those
@@ -33,34 +45,18 @@ applicable instructions before deploying them.
 
 ## Dependency path
 
-```text
-Gate manifest + verifier + report + export renderer/identity gate
-Minimum change/review/context contracts + trusted enforcement
-W0: isolated worktrees + W1: authorized exclusive coordinator
-                             |
-                             v
-                    M0: two-worker pilot
-                             |
-                             v
-                    M1: routine Bounded work
-                             |
-                three full qualification runs
-                + D-13 disclosure/endpoint checks
-                             |
-                             v
-                 M2: Feature + cross-vendor use
-                             |
-                             v
-                 M3: qualified unattended runs
-                             |
-                             v
-                 M4: justified hardening
-
-W2: full worker-side tracker test + supported mode + restore
-    branches independently after M0, only if direct writers are needed.
-
-Public-readiness foundations start with the first workstream;
-publication, team growth and a fourth instance have separate entry gates.
+```mermaid
+flowchart TD
+    A["Gate manifest + verifier + report + export renderer / identity gate"] --> B["Minimum change/review/context contracts + trusted enforcement"]
+    B --> C["W0: isolated worktrees + W1: authorized exclusive coordinator"]
+    C --> M0["M0: two-worker pilot"]
+    M0 --> M1["M1: routine Bounded work"]
+    M1 --> Q{"3 full qualification runs + D-13 disclosure/endpoint checks"}
+    Q --> M2["M2: Feature + cross-vendor use"]
+    M2 --> M3["M3: qualified unattended runs"]
+    M3 --> M4["M4: justified hardening"]
+    M0 -. "only if direct writers are needed" .-> W2["W2: worker-side tracker test + supported mode + restore"]
+    A -. "starts with the first workstream" .-> P["Public-readiness foundations"]
 ```
 
 W0/W1 are mandatory M0 prerequisites. W2 is not on the M0 critical path.
@@ -69,6 +65,9 @@ worker-side tracker access disabled and does not invalidate the coordinator
 pilot. M0 never migrates this repository's live tracker.
 
 ## Foundational deliverables
+
+Nine foundations unblock everything else. Each row: what to build, what
+proves it, and the Bead that covers it.
 
 | Deliverable | Implementation and reason | Acceptance evidence | Existing coverage |
 |---|---|---|---|
@@ -82,21 +81,32 @@ pilot. M0 never migrates this repository's live tracker.
 | W1: coordinator authorization | Change the pilot's explicit rule from no writes during concurrent sessions to one authorized writer. Implement exclusive ownership, stopped-writer takeover and run/attempt identity checks. | A second coordinator cannot write; kill/restart yields one owner; duplicate and stale results are rejected. Workers receive snapshots, and a main-checkout create/claim/update loop retains the full prefix. | coordinator adapter; relevant portion of `coding-harness-m34` |
 | Public-readiness foundations | Start Apache-2.0, onboarding and the scan now, retaining D-17's timing. Document permitted tool names and reject customer/employer identifiers and secrets in the publishable content. | Licence present; onboarding describes the actual bootstrap path; scan has both allowed-tool and prohibited-fixture cases. These foundations finish by M1 exit; publication remains separately gated. | `coding-harness-lir` |
 
-The core M0 controls must pass before the pilot begins. Legacy instance-only
-failures may be classified with evidence and a dated valve; lowering a rule
-is a reviewed decision, not a way to manufacture a green run. The final
-repository gate must be green before routine use. Every test report records
-its interpreter/dependency versions, command, commit and raw-output location.
+- **Controls before pilot.** The core M0 controls must pass before the pilot
+  begins.
+- **Classify red tests; never fake green.** Legacy instance-only failures may
+  be classified with evidence and a dated valve; lowering a rule is a
+  reviewed decision, not a way to manufacture a green run.
+- **Green before routine.** The final repository gate must be green before
+  routine use.
+- **Reports are reproducible.** Every test report records its
+  interpreter/dependency versions, command, commit and raw-output location.
 
 ## M0: first parallel Omnigent proof of concept
 
-Use a disposable repository with synthetic content, its own tracker and the
-pinned OSS runtime on a dedicated host. Startup verifies dependencies, checkout
-identity and baseline gates. Begin with two independent coding tasks using
-already declared endpoints. Foreign model calls are not permitted before
-D-13 qualification. Workers cannot alter `main`, tracker state or active
-control files. The coordinator assembles a candidate branch; a human owns the
-final merge after verification and review of the combined result.
+- **Throwaway, not live.** Use a disposable repository with synthetic content,
+  its own tracker and the pinned OSS runtime on a dedicated host.
+- **Preflight.** Startup verifies dependencies, checkout identity and baseline
+  gates.
+- **Declared endpoints only.** Begin with two independent coding tasks using
+  already declared endpoints. Foreign model calls are not permitted before
+  D-13 qualification.
+- **Workers stay fenced.** Workers cannot alter `main`, tracker state or
+  active control files.
+- **Human merge.** The coordinator assembles a candidate branch; a human owns
+  the final merge after verification and review of the combined result.
+
+Each control below names its experiment and its pass condition. All must pass
+before exit.
 
 | Control | Experiment and pass condition |
 |---|---|
@@ -125,19 +135,27 @@ last durable state and return to the ordinary-session fallback.
 
 ## M1: repeatable Bounded operation and kit delivery
 
-Use coding-harness first. Dispatch two workers only when the plan supports
-independent work; a one-step task can stay serial. Complete the English
-doctrine, four classes, design phase 2b and a single vocabulary. Ship routing
-schema and example, roadmap, `discovered-from` convention and living-spec delta
-vocabulary. Deliver design/arc42/MADR/LikeC4 templates now, so full same-lineage
-qualification runs can precede M2. Test full tracker backup/restore separately
-from JSONL issue recovery. Complete D-17's foundational work before M1 exit.
+- **Dogfood here first.** Use coding-harness before any instance. Dispatch two
+  workers only when the plan supports independent work; a one-step task can
+  stay serial.
+- **Doctrine and classes.** Complete the English doctrine, four classes,
+  design phase 2b and a single vocabulary.
+- **Routing and spec machinery.** Ship routing schema and example, roadmap,
+  `discovered-from` convention and living-spec delta vocabulary.
+- **Templates now, qualification next.** Deliver design/arc42/MADR/LikeC4
+  templates now, so full same-lineage qualification runs can precede M2.
+- **Backups are proven, not assumed.** Test full tracker backup/restore
+  separately from JSONL issue recovery.
+- **D-17 foundations.** Complete D-17's foundational work before M1 exit.
 
-The following is a proposed packaging contract. Exact filenames may be refined
-in the implementation spec, but each entry must have a manifest role and a
-bootstrap/update test. `mechanismus` files are copied; `geruest` values are
-instance-owned. A non-empty scaffold is rendered from its mechanism template:
-the current probe's empty-file behavior alone is not a usable bootstrap.
+**A proposed packaging contract.** Exact filenames may be refined in the
+implementation spec, but each entry must have a manifest role and a
+bootstrap/update test.
+
+- `mechanismus` files are copied.
+- `geruest` values are instance-owned.
+- A non-empty scaffold is rendered from its mechanism template: the current
+  probe's empty-file behavior alone is not a usable bootstrap.
 
 | Kit source / role | Instance destination and ownership | Acceptance |
 |---|---|---|
