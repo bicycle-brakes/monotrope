@@ -110,6 +110,9 @@ rules:
   - prefix: scripts/export/manifest.yaml
     rolle: mechanismus
     reason: "das Export-Manifest selbst — ohne es weiss eine Instanz nicht, was reist und was bleibt"
+  - prefix: .claude/agents/
+    rolle: mechanismus
+    reason: "die Agent-Definitionen — jede traegt die RB-A1-Klausel byte-gleich und ein modell: gegen model-endpoints.yaml; committed, damit das Loeschen durch eine parallele Session laut ist"
 
   # --- die Tests, die den Mechanismus halten ---------------------------------
   - prefix: tests/test_gate_record.py
