@@ -1,3 +1,24 @@
+---
+title: "Research — 2ee-Triage der 36 roten Tests"
+category: research
+created: 2026-09-19
+provenance: ai-drafted-reviewed
+produced_by:
+  kind: llm-session
+  name: claude-code
+  version: "2026-09-19"
+review:
+  status: pending
+  approved_by: null
+  approved_at: null
+status: proposed
+implementation_status: pending
+date: 2026-09-19
+last_reviewed: 2026-09-19
+bead: coding-harness-2ee
+tags: [research, 2ee, triage, tests]
+---
+
 # Research: 2ee-Triage der roten Tests
 
 * Change: 2ee-triage · Bead: coding-harness-2ee
