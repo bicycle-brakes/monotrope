@@ -96,7 +96,13 @@ REIST_NICHT: dict[str, str] = {
     "tests.test_kit::test_the_kit_list_is_not_derivable_from_the_export_list": "bestand-dieses-repos",
     "tests.test_kit::test_the_role_check_goes_red_when_a_rule_is_removed": "bestand-dieses-repos",
     "tests.test_kit::test_the_two_manifests_really_disagree_somewhere": "bestand-dieses-repos",
-    "tests.test_model_endpoints::test_agents_are_found_at_all": "bestand-dieses-repos",
+    "tests.test_model_endpoints::test_every_agent_model_resolves_to_a_declared_endpoint[consistency-auditor.md-claude-sonnet-5]": "geruest-ist-absichtlich-leer",
+    "tests.test_model_endpoints::test_every_agent_model_resolves_to_a_declared_endpoint[dlt-codegen-orchestrator.md-claude-sonnet-5]": "geruest-ist-absichtlich-leer",
+    "tests.test_model_endpoints::test_every_agent_model_resolves_to_a_declared_endpoint[dv2-entity-builder.md-claude-sonnet-5]": "geruest-ist-absichtlich-leer",
+    "tests.test_model_endpoints::test_every_agent_model_resolves_to_a_declared_endpoint[dv2-entity-deployer.md-claude-sonnet-5]": "geruest-ist-absichtlich-leer",
+    "tests.test_model_endpoints::test_every_agent_model_resolves_to_a_declared_endpoint[migration-supervisor.md-claude-sonnet-5]": "geruest-ist-absichtlich-leer",
+    "tests.test_model_endpoints::test_every_agent_model_resolves_to_a_declared_endpoint[preconditions-gate-runner.md-claude-sonnet-5]": "geruest-ist-absichtlich-leer",
+    "tests.test_model_endpoints::test_every_agent_model_resolves_to_a_declared_endpoint[reconciliation-orchestrator.md-claude-sonnet-5]": "geruest-ist-absichtlich-leer",
     "tests.test_model_endpoints::test_every_model_in_a_phase_prompt_resolves[01-explore.md-Haiku 4.5]": "bestand-dieses-repos",
     "tests.test_model_endpoints::test_every_model_in_a_phase_prompt_resolves[01a-interview.md-Fable 5.1]": "bestand-dieses-repos",
     "tests.test_model_endpoints::test_every_model_in_a_phase_prompt_resolves[02-spec.md-Fable 5.1]": "bestand-dieses-repos",
@@ -107,7 +113,6 @@ REIST_NICHT: dict[str, str] = {
     "tests.test_model_endpoints::test_every_model_in_a_phase_prompt_resolves[07-commit.md-Haiku 4.5]": "bestand-dieses-repos",
     "tests.test_model_endpoints::test_every_model_in_the_routing_table_resolves": "bestand-dieses-repos",
     "tests.test_model_endpoints::test_the_declaration_is_not_empty": "bestand-dieses-repos",
-    "tests.test_regelwerk::test_rb_a1_clause_is_present_verbatim": "braucht-ein-gate-das-hier-lebt",
     "tests.test_regelwerk::test_rules_at_level_three_or_higher_name_an_existing_enforcer[RB-G7]": "braucht-ein-gate-das-hier-lebt",
     "tests.test_regelwerk::test_rules_at_level_three_or_higher_name_an_existing_enforcer[RB-S1]": "braucht-ein-gate-das-hier-lebt",
 }
@@ -137,7 +142,7 @@ REIST_NICHT: dict[str, str] = {
 # die beiden Aufrufer- und Test-Sperrklinken-Tests direkt darueber, den der Kit
 # nicht mitreist (kein Eintrag in `manifest.yaml`, faellt unter die
 # `scripts/`-Auffangregel `bestand`). Gleiche Klasse, gleicher Grund.
-DECKEL = 25  # 2026-09-19 neu gesetzt beim bo0-Gate-Einbau: die Messung oben ist der Stand; die 2ee-Triage (regelwerk/feedback/kit/model_endpoints) schrumpft die Liste sichtbar
+DECKEL = 31  # 2026-09-20 angehoben (Cluster D, 2ee-Welle 3): die 7 neuen Faelle sind die Agent-Modelle gegen den geruest-Rumpf model-endpoints.yaml im Leerprobekopf — im Ziel loest die Instanz sie gegen ihre eigene Deklaration
 
 
 # ---------------------------------------------------------------------------
