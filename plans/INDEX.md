@@ -8,4 +8,4 @@ Dateien dazukommen.
 
 | Artefakt | status | implementation_status | zuletzt geprueft | Bead |
 |---|---|---|---|---|
-| _noch kein Artefakt_ | — | — | — | — |
+| [`changes/2ee-triage/research.md`](changes/2ee-triage/research.md) | — | — | — | — |
