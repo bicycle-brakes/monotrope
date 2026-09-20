@@ -107,6 +107,9 @@ rules:
   - prefix: scripts/kit/
     rolle: mechanismus
     reason: "das Modul selbst — eine Uebergabe, die sich nicht mit uebergibt, ist eine Einbahnstrasse"
+  - prefix: scripts/export/manifest.yaml
+    rolle: mechanismus
+    reason: "das Export-Manifest selbst — ohne es weiss eine Instanz nicht, was reist und was bleibt"
 
   # --- die Tests, die den Mechanismus halten ---------------------------------
   - prefix: tests/test_gate_record.py

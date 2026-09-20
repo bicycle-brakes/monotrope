@@ -1,21 +1,29 @@
-# Export-Manifest — Skeleton (Welle 3, BLOCKIERT)
+# Export-Manifest — was mit dem Kit reist (Präfix-Entscheidung des Maintainers, 2026-09-20)
 #
-# Die drei Kit-Tests (tests/test_kit.py) verlangen dieses Manifest als
-# Gegenstueck zu scripts/kit/manifest.yaml: je Top-Level-Praefix die
-# Entscheidung, ob er mit dem Kit reist oder im Ursprungs-Repo bleibt.
+# Entscheidung: der enge Kern reist — scripts/kit/, _verdict, die Validatoren,
+# templates/. Dazu, weil eine Instanz ohne sie nicht startet: AGENTS.md/CLAUDE.md
+# (Einstieg) und model-endpoints.yaml (als leerer Rumpf, geruest). Alles andere
+# bleibt: docs/, tests/, decisions/, .github/, plans/, .beads/.
 #
-# BLOCKER (2ee-Triage, Entscheidung offen): je Praefix eine
-# Transfer-Entscheidung. Solange sie nicht gefallen ist, bleibt diese
-# Datei ein Skelett und die Kit-Tests bleiben rot — sichtbar, nicht weg-
-# geskippt (RB-G7: eine leere Menge ist kein Ergebnis).
+# Der Widerspruch zu scripts/kit/manifest.yaml ist gewollt: das Kit manifestiert
+# ROLLEN (mechanismus/geruest/bestand), dieses Manifest die REISENTSCHEIDUNG je
+# Praefix. tests/test_ci.py ist mechanismus und bleibt trotzdem; AGENTS.md ist
+# bestand und reist trotzdem. Keine Liste ist aus der anderen ausrechenbar —
+# genau das prueft test_the_kit_list_is_not_derivable_from_the_export_list.
 #
-# Erwartetes Format (an scripts/kit/manifest.yaml angelehnt):
-#   praefixe:
-#     docs:      reist | bleibt   # warum
-#     scripts:   reist | bleibt   # warum
-#     tests:     reist | bleibt   # warum
-#     decisions: reist | bleibt   # warum
-#     templates: reist | bleibt   # warum
-#     .github:   reist | bleibt   # warum
+# verdicts: carry = reist · geruest = reist als leerer Rumpf · drop = bleibt
 
-praefixe: {}
+rules:
+  - {prefix: "scripts/kit/", verdict: carry}
+  - {prefix: "scripts/_verdict.py", verdict: carry}
+  - {prefix: "scripts/gate_record.py", verdict: carry}
+  - {prefix: "scripts/check_decision_continuity.py", verdict: carry}
+  - {prefix: "scripts/check_bead_export.py", verdict: carry}
+  - {prefix: "scripts/check_dangling_bead_ids.py", verdict: carry}
+  - {prefix: "scripts/check_docs.py", verdict: carry}
+  - {prefix: "templates/", verdict: carry}
+  - {prefix: "provenance.yaml", verdict: carry}
+  - {prefix: "model-endpoints.yaml", verdict: geruest}
+  - {prefix: "AGENTS.md", verdict: carry}
+  - {prefix: "CLAUDE.md", verdict: carry}
+  - {prefix: "", verdict: drop}
