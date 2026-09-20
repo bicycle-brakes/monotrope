@@ -1,0 +1,21 @@
+# Export-Manifest — Skeleton (Welle 3, BLOCKIERT)
+#
+# Die drei Kit-Tests (tests/test_kit.py) verlangen dieses Manifest als
+# Gegenstueck zu scripts/kit/manifest.yaml: je Top-Level-Praefix die
+# Entscheidung, ob er mit dem Kit reist oder im Ursprungs-Repo bleibt.
+#
+# BLOCKER (2ee-Triage, Entscheidung offen): je Praefix eine
+# Transfer-Entscheidung. Solange sie nicht gefallen ist, bleibt diese
+# Datei ein Skelett und die Kit-Tests bleiben rot — sichtbar, nicht weg-
+# geskippt (RB-G7: eine leere Menge ist kein Ergebnis).
+#
+# Erwartetes Format (an scripts/kit/manifest.yaml angelehnt):
+#   praefixe:
+#     docs:      reist | bleibt   # warum
+#     scripts:   reist | bleibt   # warum
+#     tests:     reist | bleibt   # warum
+#     decisions: reist | bleibt   # warum
+#     templates: reist | bleibt   # warum
+#     .github:   reist | bleibt   # warum
+
+praefixe: {}
