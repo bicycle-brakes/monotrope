@@ -62,6 +62,12 @@ jobs:
       - name: Every cited bead id resolves in the export
         id: dangling-beads
         run: python3 scripts/check_dangling_bead_ids.py
+      - name: Every interview decision stays mapped; every amendment has its ADR
+        id: decision-continuity
+        run: python3 scripts/check_decision_continuity.py
+      - name: The committed bead export is exactly the fresh render
+        id: export-identity
+        run: python3 scripts/render_beads_export.py --check
       - name: This gate file satisfies its own schema
         id: gate-schema
         run: python3 scripts/ci_gates.py --check-schema

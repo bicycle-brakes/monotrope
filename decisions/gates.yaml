@@ -90,6 +90,22 @@ gates:
     floor: true
     reason: A citation of an unknown bead silently severs the provenance chain.
 
+  - id: decision-continuity
+    title: Every interview decision stays mapped; every amendment has its ADR
+    command: python3 scripts/check_decision_continuity.py
+    job: verify
+    enforcement: block
+    floor: true
+    reason: Decisions vanish by silent rewrite (gap P1) — this gate turns vanishing into a finding (maintainer decision 5, 2026-09-19).
+
+  - id: export-identity
+    title: The committed bead export is exactly the fresh render
+    command: python3 scripts/render_beads_export.py --check
+    job: verify
+    enforcement: block
+    floor: true
+    reason: Auto-export is off; the writer renders at session end — a stale committed export fails here (D-4).
+
   - id: gate-schema
     title: This gate file satisfies its own schema
     command: python3 scripts/ci_gates.py --check-schema

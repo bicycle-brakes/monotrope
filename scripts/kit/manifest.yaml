@@ -83,6 +83,12 @@ rules:
   - prefix: scripts/check_dangling_bead_ids.py
     rolle: mechanismus
     reason: "zitierte Vorgangs-IDs muessen im Export aufgeloest werden (bead bo0)"
+  - prefix: scripts/check_decision_continuity.py
+    rolle: mechanismus
+    reason: "Continuity-Validator: jede D/O-ID bleibt gemappt, jedes Amendment hat seine ADR (Entscheidung 5 vom 2026-09-19)"
+  - prefix: scripts/render_beads_export.py
+    rolle: mechanismus
+    reason: "der Eine-Schreiber-Renderer des Exports mit Identitaetspruefung (D-4, bead bo0)"
   - prefix: decisions/
     rolle: mechanismus
     reason: "die eine Gate-Liste (decisions/gates.yaml, D-10). Sie ist der Ablauf selbst und reist mit — im Zielrepo gilt dieselbe Datei"

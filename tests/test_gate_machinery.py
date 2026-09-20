@@ -190,3 +190,78 @@ def test_the_real_dangling_bead_check_runs_green_here() -> None:
         text=True,
     )
     assert erg.returncode == 0, erg.stdout + erg.stderr
+
+
+# --------------------------------------------------------------------------
+# decision-continuity — eine Entscheidung verschwindet nur sichtbar (Frage 5)
+# --------------------------------------------------------------------------
+
+
+def test_decision_continuity_gate_goes_red_when_an_id_is_missing(tmp_path: Path) -> None:
+    import check_decision_continuity
+
+    ziel = tmp_path / "target.md"
+    ziel.write_text(
+        "# Target\n\n## Decision continuity\n\n| Decision | Disposition |\n|---|---|\n| D-1 — vocabulary | Retain |\n",
+        encoding="utf-8",
+    )
+    befunde = check_decision_continuity.run(ziel, tmp_path)
+    assert any("D-17 fehlt" in b for b in befunde), befunde
+    assert any("D-2 fehlt" in b for b in befunde), befunde
+    assert any("ADR fehlt" in b for b in befunde), befunde
+
+
+def test_the_real_decision_continuity_check_runs_green_here() -> None:
+    erg = subprocess.run(
+        [sys.executable, "scripts/check_decision_continuity.py"],
+        cwd=REPO_ROOT,
+        capture_output=True,
+        text=True,
+    )
+    assert erg.returncode == 0, erg.stdout + erg.stderr
+
+
+# --------------------------------------------------------------------------
+# export-identity — der committed Export ist das frische Render (D-4)
+# --------------------------------------------------------------------------
+
+
+def test_export_identity_gate_goes_red_when_the_committed_export_drifts(tmp_path: Path, monkeypatch) -> None:
+    # Der Gate: python3 scripts/render_beads_export.py --check
+    import render_beads_export as rbe
+
+    committed = tmp_path / "issues.jsonl"
+    committed.write_text('{"id": "a", "status": "open"}\n', encoding="utf-8")
+    frisch = tmp_path / "frisch.jsonl"
+    frisch.write_text('{"id": "a", "status": "open"}\n{"id": "b", "status": "closed"}\n', encoding="utf-8")
+    monkeypatch.setattr(rbe, "EXPORT", committed)
+    monkeypatch.setattr(rbe, "_render_nach", lambda p: p.write_bytes(frisch.read_bytes()))
+    assert rbe.main(["--check"]) == 1
+
+
+def test_export_identity_gate_accepts_the_identical_render(tmp_path: Path, monkeypatch) -> None:
+    import render_beads_export as rbe
+
+    identisch = '{"id": "a", "status": "open"}\n'
+    committed = tmp_path / "issues.jsonl"
+    committed.write_text(identisch, encoding="utf-8")
+    frisch = tmp_path / "frisch.jsonl"
+    frisch.write_text(identisch, encoding="utf-8")
+    monkeypatch.setattr(rbe, "EXPORT", committed)
+    monkeypatch.setattr(rbe, "_render_nach", lambda p: p.write_bytes(frisch.read_bytes()))
+    assert rbe.main(["--check"]) == 0
+
+
+def test_export_identity_gate_skips_visibly_where_the_tracker_does_not_live(
+    tmp_path: Path, monkeypatch, capsys
+) -> None:
+    import render_beads_export as rbe
+
+    monkeypatch.setattr(rbe, "EXPORT", tmp_path / "issues.jsonl")
+
+    def fehlt(_p: Path) -> None:
+        raise rbe.RendererFehlt("tools/bd fehlt in dieser Umgebung")
+
+    monkeypatch.setattr(rbe, "_render_nach", fehlt)
+    assert rbe.main(["--check"]) == 0
+    assert "SKIP" in capsys.readouterr().out

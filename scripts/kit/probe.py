@@ -84,30 +84,10 @@ GRUENDE = (
 # eine fehlende Datei oder eine unerfuellte Vorbedingung -> das zweite;
 # eine Behauptung ueber die Inventur dieses Repos -> das erste.
 REIST_NICHT: dict[str, str] = {
-    "tests.test_ci::test_a_local_equivalent_derives_its_arguments_from_the_action": "braucht-die-vollstaendige-suite",
-    "tests.test_ci::test_ci_exists_and_has_gates": "braucht-die-vollstaendige-suite",
-    "tests.test_ci::test_concurrency_group_carries_the_event": "braucht-die-vollstaendige-suite",
-    "tests.test_ci::test_der_echte_lesepfad_des_bead_gates_wird_erkannt": "braucht-die-vollstaendige-suite",
-    "tests.test_ci::test_die_ableitung_findet_ueberhaupt_etwas": "braucht-die-vollstaendige-suite",
-    "tests.test_ci::test_drift_job_runs_on_schedule_and_dispatch_only": "braucht-die-vollstaendige-suite",
-    "tests.test_ci::test_every_gate_has_a_name_and_an_id": "braucht-die-vollstaendige-suite",
     "tests.test_ci::test_every_gate_step_has_a_mutation_test": "braucht-die-vollstaendige-suite",
-    "tests.test_ci::test_every_script_has_a_caller_or_a_declared_reason": "braucht-die-vollstaendige-suite",
-    "tests.test_ci::test_every_step_after_a_failing_gate_still_runs": "braucht-die-vollstaendige-suite",
-    "tests.test_ci::test_every_step_with_an_id_also_carries_a_name": "braucht-die-vollstaendige-suite",
+    "tests.test_ci::test_every_script_has_a_test_or_a_declared_reason": "braucht-die-vollstaendige-suite",
     "tests.test_ci::test_no_declared_reason_cites_a_closed_or_unknown_bead": "geruest-ist-absichtlich-leer",
-    "tests.test_ci::test_no_declared_reason_stands_for_a_script_that_has_a_caller": "braucht-die-vollstaendige-suite",
-    "tests.test_ci::test_no_directory_a_gate_reads_is_excluded": "braucht-die-vollstaendige-suite",
-    "tests.test_ci::test_no_workflow_copies_a_whole_directory_into_a_publish_target": "braucht-die-vollstaendige-suite",
-    "tests.test_ci::test_runner_holds_no_command_list_of_its_own": "braucht-die-vollstaendige-suite",
-    "tests.test_ci::test_runner_reports_what_it_cannot_run": "braucht-die-vollstaendige-suite",
-    "tests.test_ci::test_the_drift_job_holds_only_steps_that_can_run": "braucht-die-vollstaendige-suite",
-    "tests.test_ci::test_the_drift_job_runs_the_plans_registry_strictly": "braucht-die-vollstaendige-suite",
-    "tests.test_ci::test_the_glob_itself_finds_a_real_orphan_shell_script": "braucht-die-vollstaendige-suite",
     "tests.test_ci::test_the_makefile_runs_what_the_one_list_runs": "bestand-dieses-repos",
-    "tests.test_ci::test_the_mutation_ratchet_only_turns_one_way": "braucht-die-vollstaendige-suite",
-    "tests.test_ci::test_the_runner_still_admits_what_it_cannot_do_at_all": "braucht-die-vollstaendige-suite",
-    "tests.test_ci::test_the_trigger_does_not_restrict_paths": "braucht-die-vollstaendige-suite",
     "tests.test_feedback_channel::test_every_handover_declares_a_direction": "bestand-dieses-repos",
     "tests.test_feedback_channel::test_journal_index_lists_every_open_project_handover": "bestand-dieses-repos",
     "tests.test_feedback_channel::test_root_index_routes_to_the_project_feedback": "bestand-dieses-repos",
@@ -183,7 +163,7 @@ REIST_NICHT: dict[str, str] = {
 # die beiden Aufrufer- und Test-Sperrklinken-Tests direkt darueber, den der Kit
 # nicht mitreist (kein Eintrag in `manifest.yaml`, faellt unter die
 # `scripts/`-Auffangregel `bestand`). Gleiche Klasse, gleicher Grund.
-DECKEL = 75  # 2026-09-19 angehoben (62->75) beim bo0-Gate-Einbau: die 2ee-Triage (regelwerk/feedback/model_endpoints/kit) ist klassifiziert, aber noch nicht gruen — die Liste schrumpft mit jeder geschlossenen 2ee-Zeile
+DECKEL = 53  # 2026-09-19 neu gesetzt beim bo0-Gate-Einbau: die Messung oben ist der Stand; die 2ee-Triage (regelwerk/feedback/kit/model_endpoints) schrumpft die Liste sichtbar
 
 
 # ---------------------------------------------------------------------------

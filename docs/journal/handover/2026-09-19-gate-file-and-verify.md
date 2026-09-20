@@ -107,3 +107,33 @@ the runner resolves an interpreter with PyYAML on its own.
 One concrete action: claim `coding-harness-2ee` and run the three-bucket
 triage over the 37 named failures — the pytest gate turns green as the
 buckets close, and that is the last M0 prerequisite after the three ADRs.
+
+## Addendum: continuity gate, export identity and PR split (2026-09-19, same session)
+
+- **PR split.** The gate machinery moved out of #8 onto its own branch —
+  **PR #11** (`feat/gate-file-and-verify`, based on main, cherry-picked).
+  #8 is docs-only again (head `a547826`).
+- **PR #12** — the three ADRs (early parallelism D-3/D-7, exclusive
+  coordinator writer, public-scan naming D-17), stacked on #8, bead
+  `coding-harness-nkr`.
+- **Continuity gate** (`decision-continuity`) + validator
+  `scripts/check_decision_continuity.py`: every D/O id must stay mapped,
+  every amendment ADR must exist. SKIPs visibly while the target document
+  lives in #8; sharpens after the merge. Goes-red proof in
+  `tests/test_gate_machinery.py`.
+- **D-4 delivered:** `scripts/render_beads_export.py` (one-writer renderer —
+  renders via `tools/bd` into a temp file, line-validates, then moves) plus
+  the `export-identity` gate (committed export must equal the fresh render;
+  SKIPs where the tracker does not live). AGENTS.md house rule 4 updated.
+  With this, `bo0`'s scope is complete — it closes when #11 reaches main.
+- **Leerprobe re-set:** `REIST_NICHT` re-measured (52 entries, DECKEL 53),
+  the two intentionally-empty-geruest cases carry their proper vocabulary;
+  probe exits 0.
+- **Parallel sessions observed:** a Codex session (read-only on this repo,
+  usage-limited) and a Cline session were active while this session ran;
+  tracker writes were coordinated around them. The shared terminal swallowed
+  two long commands — keep commands short when a TUI shares the pane.
+
+Remaining red is unchanged in ownership: the `pytest` gate (37 = `2ee`) and
+the `docs-links`/`markdownlint` reports (`bt8`).
+
