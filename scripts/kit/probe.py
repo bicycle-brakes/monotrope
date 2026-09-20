@@ -108,25 +108,7 @@ REIST_NICHT: dict[str, str] = {
     "tests.test_model_endpoints::test_every_model_in_the_routing_table_resolves": "bestand-dieses-repos",
     "tests.test_model_endpoints::test_the_declaration_is_not_empty": "bestand-dieses-repos",
     "tests.test_regelwerk::test_rb_a1_clause_is_present_verbatim": "braucht-ein-gate-das-hier-lebt",
-    "tests.test_regelwerk::test_rules_at_level_three_or_higher_name_an_existing_enforcer[RB-A1]": "braucht-ein-gate-das-hier-lebt",
-    "tests.test_regelwerk::test_rules_at_level_three_or_higher_name_an_existing_enforcer[RB-A2]": "braucht-ein-gate-das-hier-lebt",
-    "tests.test_regelwerk::test_rules_at_level_three_or_higher_name_an_existing_enforcer[RB-A3]": "braucht-ein-gate-das-hier-lebt",
-    "tests.test_regelwerk::test_rules_at_level_three_or_higher_name_an_existing_enforcer[RB-G2]": "braucht-ein-gate-das-hier-lebt",
-    "tests.test_regelwerk::test_rules_at_level_three_or_higher_name_an_existing_enforcer[RB-G5]": "braucht-ein-gate-das-hier-lebt",
-    "tests.test_regelwerk::test_rules_at_level_three_or_higher_name_an_existing_enforcer[RB-G6]": "braucht-ein-gate-das-hier-lebt",
     "tests.test_regelwerk::test_rules_at_level_three_or_higher_name_an_existing_enforcer[RB-G7]": "braucht-ein-gate-das-hier-lebt",
-    "tests.test_regelwerk::test_rules_at_level_three_or_higher_name_an_existing_enforcer[RB-H1]": "braucht-ein-gate-das-hier-lebt",
-    "tests.test_regelwerk::test_rules_at_level_three_or_higher_name_an_existing_enforcer[RB-H2]": "braucht-ein-gate-das-hier-lebt",
-    "tests.test_regelwerk::test_rules_at_level_three_or_higher_name_an_existing_enforcer[RB-H3]": "braucht-ein-gate-das-hier-lebt",
-    "tests.test_regelwerk::test_rules_at_level_three_or_higher_name_an_existing_enforcer[RB-H4]": "braucht-ein-gate-das-hier-lebt",
-    "tests.test_regelwerk::test_rules_at_level_three_or_higher_name_an_existing_enforcer[RB-M1]": "braucht-ein-gate-das-hier-lebt",
-    "tests.test_regelwerk::test_rules_at_level_three_or_higher_name_an_existing_enforcer[RB-M4]": "braucht-ein-gate-das-hier-lebt",
-    "tests.test_regelwerk::test_rules_at_level_three_or_higher_name_an_existing_enforcer[RB-M7]": "braucht-ein-gate-das-hier-lebt",
-    "tests.test_regelwerk::test_rules_at_level_three_or_higher_name_an_existing_enforcer[RB-M8]": "braucht-ein-gate-das-hier-lebt",
-    "tests.test_regelwerk::test_rules_at_level_three_or_higher_name_an_existing_enforcer[RB-P1]": "braucht-ein-gate-das-hier-lebt",
-    "tests.test_regelwerk::test_rules_at_level_three_or_higher_name_an_existing_enforcer[RB-P2]": "braucht-ein-gate-das-hier-lebt",
-    "tests.test_regelwerk::test_rules_at_level_three_or_higher_name_an_existing_enforcer[RB-P3]": "braucht-ein-gate-das-hier-lebt",
-    "tests.test_regelwerk::test_rules_at_level_three_or_higher_name_an_existing_enforcer[RB-P5]": "braucht-ein-gate-das-hier-lebt",
     "tests.test_regelwerk::test_rules_at_level_three_or_higher_name_an_existing_enforcer[RB-S1]": "braucht-ein-gate-das-hier-lebt",
 }
 
@@ -155,7 +137,7 @@ REIST_NICHT: dict[str, str] = {
 # die beiden Aufrufer- und Test-Sperrklinken-Tests direkt darueber, den der Kit
 # nicht mitreist (kein Eintrag in `manifest.yaml`, faellt unter die
 # `scripts/`-Auffangregel `bestand`). Gleiche Klasse, gleicher Grund.
-DECKEL = 44  # 2026-09-19 neu gesetzt beim bo0-Gate-Einbau: die Messung oben ist der Stand; die 2ee-Triage (regelwerk/feedback/kit/model_endpoints) schrumpft die Liste sichtbar
+DECKEL = 25  # 2026-09-19 neu gesetzt beim bo0-Gate-Einbau: die Messung oben ist der Stand; die 2ee-Triage (regelwerk/feedback/kit/model_endpoints) schrumpft die Liste sichtbar
 
 
 # ---------------------------------------------------------------------------

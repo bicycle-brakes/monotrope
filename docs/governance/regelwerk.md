@@ -3,9 +3,9 @@ title: "Regelwerk — die normativen Regeln für Agents, Hooks, Gates, Human Gat
 category: governance
 subcategory: regelwerk
 status: current
-version: 1.1.0
+version: 2.0.0
 created: 2026-08-14
-last_reviewed: 2026-08-14
+last_reviewed: 2026-09-19
 owner: Data Architect
 provenance: human-decided
 produced_by: {kind: llm-session, name: claude-code, version: "2026-08-14"}
@@ -108,9 +108,9 @@ neue Regel · PATCH = Wortlaut oder Testname.
 
 | ID | Regel | Stufe | Erzwingender Test/Gate | Gilt in |
 |---|---|---|---|---|
-| **RB-A1** | Ein Agent berichtet nur, was er in dieser Sitzung beobachtet hat; Nicht-Beobachtetes ist `UNKNOWN`, nie `NO`; jede Behauptung trägt `evidence:`; Proxys heißen Proxys; negative Antworten sind nicht symmetrisch; vor einem „liest nichts"-Urteil folgt er den Imports; er nimmt seine eigene Arbeit nie ab (§6) | 4 | `tests/test_agents.py`::test_every_agent_carries_the_evidence_contract · ::test_no_agent_may_pass_its_own_work · ::test_the_clause_is_identical_everywhere | P L I |
-| **RB-A2** | Read-only-Agents führen kein `Bash`, `Write` oder `Edit`; wer eine Shell hat, deklariert ihren Umfang; `permissions.deny` enthält mindestens Prod-Deploy, `bundle destroy`, Force-Push und `rm -rf` | 4 | `tests/test_agents.py`::test_read_only_agents_have_no_bash · ::test_executors_declare_a_bash_scope · `tests/test_hook_behaviour.py`::test_settings_deny_the_irreversible_commands | P L I |
-| **RB-A3** | Eine selbst erklärte Verifikation ist keine: ein Verdikt gilt erst, wenn ein zweiter unabhängiger Leser oder ein Script es aus den Findings nachgerechnet hat | 4 | `tests/test_skill_outputs.py`::test_a_self_asserted_verdict_is_recomputed · ::test_a_confirmed_claim_without_evidence_blocks | P L I |
+| **RB-A1** | Ein Agent berichtet nur, was er in dieser Sitzung beobachtet hat; Nicht-Beobachtetes ist `UNKNOWN`, nie `NO`; jede Behauptung trägt `evidence:`; Proxys heißen Proxys; negative Antworten sind nicht symmetrisch; vor einem „liest nichts"-Urteil folgt er den Imports; er nimmt seine eigene Arbeit nie ab (§6) | 2 | `Ramp:agents-evidence-contract` | P L I |
+| **RB-A2** | Read-only-Agents führen kein `Bash`, `Write` oder `Edit`; wer eine Shell hat, deklariert ihren Umfang; `permissions.deny` enthält mindestens Prod-Deploy, `bundle destroy`, Force-Push und `rm -rf` | 2 | `Ramp:agents-tool-scopes` | P L I |
+| **RB-A3** | Eine selbst erklärte Verifikation ist keine: ein Verdikt gilt erst, wenn ein zweiter unabhängiger Leser oder ein Script es aus den Findings nachgerechnet hat | 2 | `Ramp:skill-outputs-transfer` | P L I |
 | **RB-A4** | Ein schreibender Agent deklariert, wohin er schreiben darf — nie in den Entscheidungs-Baum, nie in seinen eigenen Abnahmebericht —, führt einen Abschnitt „was ein Mensch prüft" und liefert ein Ergebnis, in dem `UNKNOWN` vorkommen darf | 2 | `Ramp:agent-writes-allowlist` | P L I |
 | **RB-A5** | Wo ein Agent entscheidet, steht ein geschlossenes Vokabular, kein Freitext. Ein Freitextfeld lässt ihn das Ergebnis umdefinieren, statt es zu melden | 2 | `Ramp:closed-vocabulary` | P L I |
 | **RB-A6** | Jedes Modell, das hier genannt wird, löst gegen einen deklarierten Endpunkt auf — mit Betreiber, Datenresidenz und Abrechnungsart. Kundencode geht nur an einen Endpunkt mit erklärter Residenz; Kundendaten an keinen. Nicht gelistet ist BLOCK, nicht „vermutlich in Ordnung" | 4 | `tests/test_model_endpoints.py`::test_every_agent_model_resolves_to_a_declared_endpoint · ::test_customer_code_never_reaches_an_endpoint_without_stated_residency · ::test_no_endpoint_is_cleared_for_customer_rows | P L I |
@@ -119,45 +119,45 @@ neue Regel · PATCH = Wortlaut oder Testname.
 
 | ID | Regel | Stufe | Erzwingender Test/Gate | Gilt in |
 |---|---|---|---|---|
-| **RB-H1** | Auf einer Guard-Registrierung oder in ihrem Script steht weder `\|\| true` noch `2>/dev/null`; Report-Hooks werden nicht stummgeschaltet | 4 | `tests/test_hook_behaviour.py`::test_no_guard_is_registered_with_a_silencer | P L I |
-| **RB-H2** | Ein Guard fällt geschlossen aus: fehlender Interpreter oder unlesbare Eingabe → Exit 2 mit Begründung auf stderr | 4 | `tests/test_hook_behaviour.py`::test_secrets_guard_blocks_when_python_is_missing · ::test_secrets_guard_refuses_unparseable_input | P L I |
-| **RB-H3** | Der Matcher ist ein Tool-Name; Argumente filtert ein Parser, nie `grep` in der Shell | 4 | `tests/test_hook_behaviour.py`::test_hook_matchers_are_tool_names_and_arguments_are_parsed_in_python | P L I |
-| **RB-H4** | Jedes Hook-Script ist registriert und jede Registrierung zeigt auf ein lauffähiges Script — bidirektional, auch in Vorlage und Skelett | 4 | `tests/test_hooks_registered.py`::test_every_hook_script_here_is_registered · ::test_every_registration_here_points_at_a_runnable_script · ::test_the_skeleton_hooks_are_identical_to_the_templates | P L I |
+| **RB-H1** | Auf einer Guard-Registrierung oder in ihrem Script steht weder `\|\| true` noch `2>/dev/null`; Report-Hooks werden nicht stummgeschaltet | 2 | `Ramp:hook-behaviour-tests` | P L I |
+| **RB-H2** | Ein Guard fällt geschlossen aus: fehlender Interpreter oder unlesbare Eingabe → Exit 2 mit Begründung auf stderr | 2 | `Ramp:hook-behaviour-tests` | P L I |
+| **RB-H3** | Der Matcher ist ein Tool-Name; Argumente filtert ein Parser, nie `grep` in der Shell | 2 | `Ramp:hook-behaviour-tests` | P L I |
+| **RB-H4** | Jedes Hook-Script ist registriert und jede Registrierung zeigt auf ein lauffähiges Script — bidirektional, auch in Vorlage und Skelett | 2 | `Ramp:hooks-registered-tests` | P L I |
 
 ### G — Gates (Maschine)
 
 | ID | Regel | Stufe | Erzwingender Test/Gate | Gilt in |
 |---|---|---|---|---|
 | **RB-G1** | Es gibt genau eine Gate-Liste. Der lokale Runner hält keine eigene | 4 | `tests/test_ci.py`::test_runner_holds_no_command_list_of_its_own · ::test_no_second_verification_workflow | P L I |
-| **RB-G2** | Die Gate-Stufe folgt aus Signifikanz und Beweglichkeit: kritisch oder hoch und beide Seiten wandern per Commit → BLOCK; liegt die Gegenseite außerhalb → DRIFT mit Timer; mittel → DRIFT; niedrig → INFO | 4 | `tests/test_fehler_katalog.py`::test_every_gate_reference_matches_the_significance_level | P L I |
+| **RB-G2** | Die Gate-Stufe folgt aus Signifikanz und Beweglichkeit: kritisch oder hoch und beide Seiten wandern per Commit → BLOCK; liegt die Gegenseite außerhalb → DRIFT mit Timer; mittel → DRIFT; niedrig → INFO | 2 | `Ramp:fehler-katalog-transfer` | P L I |
 | **RB-G3** | Jeder DRIFT-Check hat einen Aufrufer am Timer **oder** einen deklarierten Grund. Ohne beides ist er ein Bericht, kein Gate | 4 | `tests/test_ci.py`::test_every_script_has_a_caller_or_a_declared_reason · ::test_drift_job_runs_on_schedule_and_dispatch_only · ::test_no_declared_reason_stands_for_a_script_that_has_a_caller | P L I |
 | **RB-G4** | Jedes Gate hat einen Mutationstest: einen Lauf, der rot wird, wenn man das kaputtmacht, wovor das Gate schützt — oder einen Grund in der Sperrklinke, die nur schrumpfen darf | 4 | `tests/test_ci.py`::test_every_gate_step_has_a_mutation_test · ::test_the_mutation_ratchet_only_turns_one_way | P L I |
-| **RB-G5** | Fehlender Input ist nicht „veraltet". Prüfer melden über das gemeinsame Vokabular, Schreiber über `check_verdict` — aktuell, veraltet, fehlend sind drei Zustände | 4 | `tests/test_export_schemas.py`::test_missing_schema_is_exit_2_and_stale_is_exit_1 · `tests/test_evidence_pipeline.py`::test_render_detects_tampering | P L I |
-| **RB-G6** | `--check` ist ein deklariertes Flag; ein unbekanntes Flag ist ein Fehler und kein Lauf; `--check` schreibt nie | 4 | `tests/test_export_schemas.py`::test_an_unknown_flag_is_an_error_not_a_write · `tests/test_provenance.py`::test_unknown_flag_is_an_error · `tests/test_entry_points.py`::test_an_unknown_flag_is_an_error | P L I |
-| **RB-G7** | Eine leere Menge ist kein Ergebnis: jedes Gate behauptet seine Schlüsselmenge als nicht leer. Geprüft wird der Merge-Stand, nicht der Branch-Kopf | 4 | `tests/test_ramp_valves.py`::test_the_valve_list_is_not_empty · `tests/test_skill_outputs.py`::test_an_empty_run_is_refused · `tests/test_skill_schema.py`::test_the_validator_refuses_an_empty_run · `tests/test_entry_points.py`::test_check_entry_path_refuses_an_empty_graph · `Ramp:merge-freshness` | P L I |
+| **RB-G5** | Fehlender Input ist nicht „veraltet". Prüfer melden über das gemeinsame Vokabular, Schreiber über `check_verdict` — aktuell, veraltet, fehlend sind drei Zustände | 2 | `Ramp:kit-transfer` | P L I |
+| **RB-G6** | `--check` ist ein deklariertes Flag; ein unbekanntes Flag ist ein Fehler und kein Lauf; `--check` schreibt nie | 2 | `Ramp:kit-transfer` | P L I |
+| **RB-G7** | Eine leere Menge ist kein Ergebnis: jedes Gate behauptet seine Schlüsselmenge als nicht leer. Geprüft wird der Merge-Stand, nicht der Branch-Kopf | 4 | `tests/test_ramp_valves.py`::test_the_valve_list_is_not_empty · `tests/test_regelwerk.py`::test_the_list_is_not_empty · `Ramp:merge-freshness` | P L I |
 
 ### M — Human Gates
 
 | ID | Regel | Stufe | Erzwingender Test/Gate | Gilt in |
 |---|---|---|---|---|
-| **RB-M1** | Ein Gate-Record durchläuft `DRAFT → IN_REVIEW → ACCEPTED → WITHDRAWN`, führt seine Geschichte mit und ist über den Hash seines Gegenstands gebunden: was nach der Signatur geändert wird, ist wieder unsigniert. Einen Zustand „abgenommen, aber ohne Unterschrift" gibt es nicht | 4 | `tests/test_validators.py`::test_gate_record_template_validates · `tests/test_gate_record.py`::test_accepted_is_derived_not_set · ::test_a_changed_subject_invalidates_the_signature · ::test_a_gate_with_a_missing_required_role_is_not_accepted · ::test_the_required_roles_match_the_governance_table | P L I |
+| **RB-M1** | Ein Gate-Record durchläuft `DRAFT → IN_REVIEW → ACCEPTED → WITHDRAWN`, führt seine Geschichte mit und ist über den Hash seines Gegenstands gebunden: was nach der Signatur geändert wird, ist wieder unsigniert. Einen Zustand „abgenommen, aber ohne Unterschrift" gibt es nicht | 4 | `tests/test_gate_record.py`::test_accepted_is_derived_not_set · ::test_a_changed_subject_invalidates_the_signature · ::test_a_gate_with_a_missing_required_role_is_not_accepted · ::test_the_required_roles_match_the_governance_table · `Ramp:gate-record-validators` | P L I |
 | **RB-M2** | Eine Signatur ist eine Zustimmung im Pull Request, transkribiert von einem Werkzeug, das nicht urteilen kann. Wer zustimmt, ist weder Autor noch letzter Pusher | 2 | `Ramp:signature-transcription` | P L I |
 | **RB-M3** | Ein abgenommener Contract setzt eine adversariale Quellverifikation voraus — jemand hat versucht, ihn zu widerlegen, und es nicht geschafft | 2 | `Ramp:adversarial-record` | P L I |
-| **RB-M4** | Das Reconciliation-Ergebnis hat einen benannten Unterzeichner, und jede Toleranz trägt ihre Begründung. Eine nackte Prozentzahl ist keine Schwelle, sondern eine Vermutung | 4 | `tests/test_human_gates.py`::test_gate_catalog_names_hg2_as_the_closure_of_family_twelve · `tests/test_human_gates.py`::test_a_recon_report_without_a_signer_is_unsigned · ::test_a_tolerance_without_a_reason_is_a_finding | P L I |
+| **RB-M4** | Das Reconciliation-Ergebnis hat einen benannten Unterzeichner, und jede Toleranz trägt ihre Begründung. Eine nackte Prozentzahl ist keine Schwelle, sondern eine Vermutung | 2 | `Ramp:human-gates-transfer` | P L I |
 | **RB-M5** | Alle Gates einer Liefereinheit schließen **vor** der Liefereinheit. Die Grenze ist keine Warteschlange. Die Reihenfolge selbst ist der Mechanismus: Protokoll vor Ergebnis, Duplikat-Befund vor Deduplizierung, Erwartung vor Verdikt, Generalprobe vor dem ersten Lauf | 2 | `Ramp:boundary-before-close` | P L I |
 | **RB-M6** | Die Branch-Regeln werden aus dem Repository heraus behauptet: geforderte Prüfungen gleich der Gate-Liste, Code-Owner-Review an, Zustimmung nicht vom letzten Pusher. Eine unerreichbare Verwaltungs-Schnittstelle ist BLOCK, nicht grün | 2 | `tests/test_repo_settings.py`::test_master_has_a_ruleset_with_required_checks · `Ramp:ruleset-assert` | P L I |
-| **RB-M7** | Die Eigentümer-Datei deckt jeden Entscheidungs-Pfad ab Tag eins — mit einer **eigenen** Zeile. Ein Auffangeintrag benennt niemanden für einen Pfad, sondern jemanden für alles | 4 | `tests/test_repo_settings.py`::test_codeowners_covers_every_human_decided_path · ::test_every_owner_resolves_to_a_roster_handle | P L I |
-| **RB-M8** | Rollen sind Rollen. Der Roster löst Rolle auf Handle auf, nie umgekehrt; eine unbesetzte Rolle ist ein sichtbarer Befund mit Fälligkeit, keine Leerstelle | 3 | `tests/test_provenance.py`::test_owner_is_a_role_not_a_person · `ci.yml#provenance` | P L I |
+| **RB-M7** | Die Eigentümer-Datei deckt jeden Entscheidungs-Pfad ab Tag eins — mit einer **eigenen** Zeile. Ein Auffangeintrag benennt niemanden für einen Pfad, sondern jemanden für alles | 2 | `Ramp:codeowners-here` | P L I |
+| **RB-M8** | Rollen sind Rollen. Der Roster löst Rolle auf Handle auf, nie umgekehrt; eine unbesetzte Rolle ist ein sichtbarer Befund mit Fälligkeit, keine Leerstelle | 2 | `Ramp:owner-roles-here` | P L I |
 
 ### P — Provenienz
 
 | ID | Regel | Stufe | Erzwingender Test/Gate | Gilt in |
 |---|---|---|---|---|
-| **RB-P1** | Jedes Artefakt nennt seine Klasse und die Hand, die es erzeugt hat; abgenommene Klassen nennen zusätzlich, wer abgenommen hat und wann; maschinell gerenderte nennen ihren Generator und die Prüfsumme ihrer Eingaben | 4 | `tests/test_provenance.py`::test_every_in_scope_file_declares_a_class · ::test_reviewed_classes_name_an_approver · ::test_rendered_files_carry_generator_and_hash · `ci.yml#provenance` | P L I |
-| **RB-P2** | Klasse und Verzeichnis entsprechen einander eins zu eins, und die Karte steht neben dem Prüfer, nicht in ihm. Jede aktive Ebene hat einen Eintrag | 4 | `tests/test_provenance.py`::test_class_matches_directory · ::test_provenance_map_covers_every_docs_directory | P L I |
-| **RB-P3** | Generierte Blöcke tragen ihre Marker samt Eingabe-Prüfsumme, die CI rendert neu und vergleicht; außerhalb steht keine handgetippte Bestandszahl. **Was gegen einen Fehler schützen soll, wird bei jedem Lauf erzeugt und geprüft — oder gar nicht geführt** | 4 | `tests/test_evidence_pipeline.py`::test_render_detects_tampering · ::test_no_hand_typed_inventory_counts_outside_facts_blocks · `ci.yml#facts-check` | P L I |
+| **RB-P1** | Jedes Artefakt nennt seine Klasse und die Hand, die es erzeugt hat; abgenommene Klassen nennen zusätzlich, wer abgenommen hat und wann; maschinell gerenderte nennen ihren Generator und die Prüfsumme ihrer Eingaben | 2 | `Ramp:provenance-validators` | P L I |
+| **RB-P2** | Klasse und Verzeichnis entsprechen einander eins zu eins, und die Karte steht neben dem Prüfer, nicht in ihm. Jede aktive Ebene hat einen Eintrag | 2 | `Ramp:provenance-validators` | P L I |
+| **RB-P3** | Generierte Blöcke tragen ihre Marker samt Eingabe-Prüfsumme, die CI rendert neu und vergleicht; außerhalb steht keine handgetippte Bestandszahl. **Was gegen einen Fehler schützen soll, wird bei jedem Lauf erzeugt und geprüft — oder gar nicht geführt** | 2 | `ci.yml#export-identity` · `Ramp:kit-transfer` | P L I |
 | **RB-P4** | Commits tragen eine echte Identität und, wo ein Assistent beigetragen hat, den entsprechenden Trailer. Auf Entscheidungs-Pfaden lehnt die CI Verstöße ab | 2 | `Ramp:commit-identity` | P L I |
-| **RB-P5** | Der Verlauf ist append-only und wird nie ohne sein Datum zitiert. Ein Befundblock ist unveränderlich; Widerspruch kommt darunter, nie hinein | 4 | `tests/test_feedback_channel.py`::test_handover_records_are_immutable · `tests/test_provenance.py`::test_journal_is_never_cited_without_a_date | P L I |
+| **RB-P5** | Der Verlauf ist append-only und wird nie ohne sein Datum zitiert. Ein Befundblock ist unveränderlich; Widerspruch kommt darunter, nie hinein | 4 | `tests/test_feedback_channel.py`::test_handover_records_are_immutable · `Ramp:journal-date-citation` | P L I |
 
 ### S — Struktur
 
@@ -192,6 +192,22 @@ Vier Teile, einzeln referenzierbar:
 ## 7 Änderungsverlauf
 
 Append-only. Jeder Eintrag trägt die vier Pflichtzeilen aus §4.
+
+### 2.0.0 — 2026-09-19
+
+Dieses Repository hat das Regelwerk aus dem Ursprungs-Korpus geerbt — samt
+Erzwinger-Verweisen auf Tests, die dort leben, nicht hier. Die 2ee-Triage hat
+je Regel gemessen: **existiert der benannte Erzwinger in diesem Repo?** Diese
+Fassung ist das Ergebnis des Mappings (Bead `coding-harness-2ee`, Welle 2):
+
+- **Geändert:** Stufen verschoben — RB-A1, RB-A2, RB-A3, RB-H1–H4, RB-G2, RB-G5, RB-G6, RB-M4, RB-M7, RB-M8, RB-P1, RB-P2, RB-P3 stehen jetzt auf 2, je mit datiertem Ventil, dessen Prädikat die Arbeit misst (*existiert der benannte Test?*). Erzwinger neu gezeigt — RB-G7 auf `tests/test_ramp_valves.py` und die Regel-Liste selbst, RB-M1 auf `tests/test_gate_record.py` plus Ventil, RB-P5 auf die Unveränderlichkeits-Prüfung plus Ventil, RB-P3 auf `ci.yml#export-identity` als Teil-Erzwinger plus Ventil. Keine ID geändert, keine entfernt, kein Regeltext geändert
+- **Tests:** neu `tests/test_ramp_valves.py` (RB-G7) und `tests/test_entry_points.py` (RB-S1, Bead `21f`); `scripts/ramp_valves.py` führt dreizehn neue Ventile mit Frist. Kein bestehender Test geändert
+- **Agents/Hooks/Templates:** nichts. RB-A1 §6 bleibt unverändert — sein Verbatim-Vergleich wartet auf die Agent-Definitionen (Cluster D der 2ee-Triage); die Regel steht deshalb solange auf 2
+- **lakeswitch-ai:** die Erzwinger, die im Ursprungs-Repo leben (Skill-Outputs, Human-Gates, Export-Schemas, Evidence-Pipeline, Repo-Settings), reisen mit dem Kit-Transfer; die Ventile `skill-outputs-transfer`, `human-gates-transfer`, `kit-transfer` und `fehler-katalog-transfer` nennen die Frist
+
+MAJOR, weil sich die Durchsetzungs-Zusage ändert: siebzehn Regeln, die hier
+behauptet hatten, eine Maschine halte sie, sagen jetzt ehrlich, dass ein Mensch
+hinsieht — bis der benannte Test existiert oder die Frist fällt.
 
 ### 1.1.0 — 2026-09-08
 
