@@ -6,8 +6,13 @@
 
 ## Context
 
-D-17 decided public readiness: Apache-2.0, an onboarding page and a denylist
-scan as a gate before the template switch. The scan's wording left a corner
+D-17 decided public readiness in the interview of 2026-09-16
+([§9.1](../architecture/target-architecture.md#91-outcomes-of-the-interview-2026-09-16)):
+Apache-2.0, an onboarding page, and the denylist scan as a kit gate **from
+now on, not at the switch** — the template switch itself happens only when
+the Leerprobe reaches 95 % in both instances, the first full run is
+measured, and Q13 has been passed once by someone who was not there. The
+scan's wording left a corner
 open — the harness legitimately names its own tooling (Omnigent, LikeC4), and
 a denylist that rejects every capitalized name would flag the harness
 itself. The
@@ -42,8 +47,8 @@ untouched.
 * Model selection stays in routing configuration (`model-endpoints.yaml`,
   instance routing files); doctrine never names a vendor beyond the tool
   allowlist.
-* This amendment does not postpone any public-readiness work: publication
-  remains the separate D-17 event with its own entry gates.
+* This amendment does not postpone any public-readiness work: the template
+  switch remains the separate D-17 event with its own criteria.
 
 ## Consequences
 
