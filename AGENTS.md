@@ -84,8 +84,9 @@ tools/bd dolt push          # push tracker data to origin (refs/dolt/data)
   `human-decided`), propose the exact text instead.
 - **The maintainer's Claude Code display** — status line, entry at session
   start, handover safety net, parallel-session warning, `/uebergabe` — lives in
-  `tools/claude-code/` (its README says what each line means). Change it there
-  and reinstall with `tools/claude-code/install.sh`, never only in `~/.claude`.
+  `tools/claude-code/`; each line of the display is documented beside the tool.
+  Change it there and reinstall with `tools/claude-code/install.sh`, never
+  only in `~/.claude`.
 
 ## Sibling repositories
 
