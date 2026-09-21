@@ -122,6 +122,14 @@ gates:
     floor: true
     reason: The workflow is derived, never hand-edited; this gate is the derivation's ratchet (D-10).
 
+  - id: ramp-valves
+    title: ramp valves — dated transitions turn loud on their date
+    command: python3 scripts/ramp_valves.py
+    job: verify
+    enforcement: block
+    floor: false
+    reason: Ein Ventil ist ein datiertes Versprechen — der Uebergang der Frist muss den Lauf rot machen, lokal wie in der CI; deshalb steht er in derselben Liste (D-10) und nicht als fest eincompilierter Schritt im Generator.
+
   - id: markdownlint
     title: Markdown passes the linter
     action: DavidAnson/markdownlint-cli2-action@v20

@@ -260,9 +260,6 @@ def generate_ci() -> str:
         zeilen.extend(_schritt(g))
     zeilen.extend(
         [
-            "      - name: ramp valves — dated transitions turn loud on their date",
-            "        id: ramp-valves",
-            "        run: python3 scripts/ramp_valves.py",
             "  drift:",
             "    if: github.event_name == 'schedule' || github.event_name == 'workflow_dispatch'",
             "    runs-on: ubuntu-latest",

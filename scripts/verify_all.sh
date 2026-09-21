@@ -37,7 +37,7 @@ LIST=0
 while [ $# -gt 0 ]; do
     case "$1" in
         --job)
-            [ $# -ge 3 ] || { echo "--job needs a value (verify|drift)" >&2; exit 2; }
+            [ $# -ge 2 ] || { echo "--job needs a value (verify|drift)" >&2; exit 2; }
             JOB="$2"; shift 2 ;;
         --ci) CI_MODE=1; shift ;;
         --list) LIST=1; shift ;;
@@ -55,6 +55,13 @@ fi
 # The report binds the verdict to a state of the world: which commit ran,
 # against which base, with which gate configuration.
 "$PYTHON" scripts/ci_gates.py --report || exit 2
+
+# Die Gate-Liste wird ZUERST geholt und ihr Fehlschlag ist fatal: ein Lauf
+# ueber null gemessene Gates darf nicht in einem gruenen Urteil enden
+# (Runner-Review 2026-09-21, PR #11).
+gate_tsv=$("$PYTHON" scripts/ci_gates.py --commands --job "$JOB" --tsv $([ "$CI_MODE" -eq 1 ] && echo "--skip-equivalents")) \
+    || { echo "die Gate-Liste liess sich nicht erzeugen — kein VERIFY ohne gemessene Gates" >&2; exit 2; }
+[ -n "$gate_tsv" ] || { echo "die Gate-Liste ist leer — ein Job ohne messbare Gates ist ein Konfigurationsfehler" >&2; exit 2; }
 
 echo ""
 echo "── gates: job=$JOB ──────────────────────────────────────────────"
@@ -80,7 +87,7 @@ while IFS="$(printf '\t')" read -r gid enf cmd; do
         echo "── [$gid] rot, aber nur $enf — er meldet, er blockiert nicht."
     fi
 done <<GATES
-$("$PYTHON" scripts/ci_gates.py --commands --job "$JOB" --tsv $([ "$CI_MODE" -eq 1 ] && echo "--skip-equivalents"))
+$gate_tsv
 GATES
 
 echo ""
