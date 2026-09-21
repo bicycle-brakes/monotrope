@@ -340,17 +340,35 @@ def test_the_render_refuses_a_line_it_cannot_reproduce(tmp_path: Path, monkeypat
 
 
 def test_the_omitted_keys_are_named_once() -> None:
-    """Die Liste steht im Renderer und nirgends sonst — sonst driften zwei Listen."""
+    """Die Liste steht im Renderer und nirgends sonst — sonst driften zwei Listen.
+
+    Gesucht wird der blosse Feldname, in jeder Schreibweise, in Scripts und
+    Entscheidungsdateien. `tests/` bleibt aussen vor: dort stehen die Felder
+    als Daten in den Stellvertreter-Zeilen, nicht als zweite Liste.
+    """
     import render_beads_export as rbe
 
     assert rbe.MASCHINENLOKAL, "eine leere Liste misst nichts"
-    quelle = REPO_ROOT / "scripts"
-    treffer = [
-        p.name
-        for p in sorted(quelle.rglob("*.py"))
-        if all(f'"{feld}"' in p.read_text(encoding="utf-8") for feld in rbe.MASCHINENLOKAL)
-    ]
-    assert treffer == ["render_beads_export.py"], f"die Felder stehen in mehr als einem Script: {treffer}"
+    kandidaten = sorted((REPO_ROOT / "scripts").rglob("*.py")) + sorted((REPO_ROOT / "decisions").rglob("*.y*ml"))
+    assert any(p.name == "render_beads_export.py" for p in kandidaten), "die Suche sieht den Renderer nicht"
+    treffer = sorted(
+        {
+            str(p.relative_to(REPO_ROOT))
+            for p in kandidaten
+            if any(feld in p.read_text(encoding="utf-8") for feld in rbe.MASCHINENLOKAL)
+        }
+    )
+    assert treffer == ["scripts/render_beads_export.py"], f"die Felder stehen in mehr als einer Datei: {treffer}"
+
+
+def test_a_record_with_a_raw_line_separator_stays_one_line() -> None:
+    """U+0085 und U+2028 stehen roh in Texten; nur `\\n` trennt Saetze (Review F-1)."""
+    import render_beads_export as rbe
+
+    roh = '{"id":"x-9","status":"open","title":"Zeile\u0085zwei\u2028drei"}\n' + _ZEILE_MIT_LEASE + "\n"
+    aus = rbe._ohne_maschinenlokales(roh)
+    assert aus.split("\n")[0] == roh.split("\n")[0], "ein Satz ohne Lease wurde zerschnitten oder umgeschrieben"
+    assert aus.count("\n") == 2
 
 
 def test_the_omission_is_wired_into_the_one_render_path(tmp_path: Path, monkeypatch) -> None:

@@ -32,7 +32,7 @@ bead: coding-harness-1jg.1
   that serialiser is trusted it must reproduce the unmodified input line byte
   for byte, otherwise the render is refused with exit 1 (criterion 2). The
   existing line check stays where it is (criterion 5).
-- `tests/test_gate_machinery.py` — changed. Five tests, below.
+- `tests/test_gate_machinery.py` — changed. Six tests, below.
 - `.beads/issues.jsonl` — re-rendered once by the script.
 
 ## Verification command
@@ -49,6 +49,7 @@ bash scripts/verify_all.sh
 | 1, 3 | `test_the_omission_is_wired_into_the_one_render_path` | the omission is removed from `_render_nach` (proved by mutation on 2026-09-21: 1 failed) |
 | 2 | `test_the_render_leaves_every_other_byte_alone` | lines without a lease key are re-serialised, or escaping differs |
 | 2 | `test_the_render_refuses_a_line_it_cannot_reproduce` | the self-check is removed and a foreign serialisation is rewritten |
+| 2 | `test_a_record_with_a_raw_line_separator_stays_one_line` | records are split with `str.splitlines()` again (review F-1) |
 | 4 | `test_the_omitted_keys_are_named_once` | a test or gate carries its own list instead of reading the constant |
 
 Criterion 5 is held by the existing

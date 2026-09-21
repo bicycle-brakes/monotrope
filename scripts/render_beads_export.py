@@ -70,7 +70,11 @@ def _ohne_maschinenlokales(roh: str) -> str:
     Umschreiben waere genau die Drift, gegen die diese Datei steht.
     """
     zeilen = []
-    for nr, zeile in enumerate(roh.splitlines(), 1):
+    # Nur `\n` trennt Saetze. `str.splitlines()` schneidet auch an U+0085,
+    # U+2028 und anderen Zeichen, die der Tracker roh in einen Text schreibt —
+    # und zerlegte damit einen Satz in zwei kaputte Zeilen (Review F-1).
+    ende = "\n" if roh.endswith("\n") else ""
+    for nr, zeile in enumerate((roh[:-1] if ende else roh).split("\n"), 1):
         try:
             satz = json.loads(zeile) if zeile.strip() else None
         except json.JSONDecodeError:
@@ -84,7 +88,7 @@ def _ohne_maschinenlokales(roh: str) -> str:
                 "byte-gleich wiedergeben — maschinenlokale Felder bleiben stehen, der Render wird verworfen"
             )
         zeilen.append(_wie_der_tracker({k: v for k, v in satz.items() if k not in MASCHINENLOKAL}))
-    return "\n".join(zeilen) + ("\n" if roh.endswith("\n") else "")
+    return "\n".join(zeilen) + ende
 
 
 class RendererFehlt(RuntimeError):
