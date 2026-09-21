@@ -109,6 +109,7 @@ REIST_NICHT: dict[str, str] = {
     "tests.test_model_endpoints::test_the_declaration_is_not_empty": "bestand-dieses-repos",
     "tests.test_regelwerk::test_rb_a1_clause_is_present_verbatim": "braucht-ein-gate-das-hier-lebt",
     "tests.test_regelwerk::test_rules_at_level_three_or_higher_name_an_existing_enforcer[RB-G7]": "braucht-ein-gate-das-hier-lebt",
+    "tests.test_regelwerk::test_rules_at_level_three_or_higher_name_an_existing_enforcer[RB-P5]": "braucht-ein-gate-das-hier-lebt",
     "tests.test_regelwerk::test_rules_at_level_three_or_higher_name_an_existing_enforcer[RB-S1]": "braucht-ein-gate-das-hier-lebt",
 }
 
