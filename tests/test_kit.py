@@ -198,7 +198,11 @@ def test_the_two_manifests_really_disagree_somewhere() -> None:
     Manifesten vorkaeme. Dann prueft er nichts (RB-G7).
     """
     beide = [p for p in probe.getrackte_dateien() if probe.rolle(p) and _export_verdict(p)]
-    assert len(beide) > 100, f"nur {len(beide)} Datei(en) stehen in beiden Manifesten"
+    assert len(beide) > 60, (
+        f"nur {len(beide)} Datei(en) stehen in beiden Manifesten. (Dieses Repo "
+        "traegt 85 klassifizierte Dateien — das Ursprungs-Repo ueber 200; die "
+        "Schwelle folgt dem Bestand, nicht der Sehnsucht.)"
+    )
     # Und mindestens eine Datei, die der Ablauf traegt, wirft der Export weg —
     # das ist der Befund aus research.md 2.2 und muss sichtbar bleiben.
     getragen_verworfen = [p for p in beide if probe.rolle(p)[0] == "mechanismus" and _export_verdict(p) == "drop"]
@@ -293,17 +297,20 @@ def _blockt(v: Verdict) -> bool:
 
 
 def test_the_role_check_goes_red_when_a_rule_is_removed(monkeypatch: pytest.MonkeyPatch) -> None:
-    """Nimmt die Auffangregel fuer `examples/` weg und erwartet unklassifizierte Dateien.
+    """Nimmt die Regel fuer das `Makefile` weg und erwartet unklassifizierte Dateien.
 
     Ohne diesen Nachweis waere `test_every_tracked_file_has_a_role` gruen, weil
-    es nichts findet — und nicht, weil es nichts zu finden gibt. Genau der
-    Unterschied, um den es in `scripts/kit/probe.py` geht.
+    es nichts findet — und nicht, weil es nichts zu finden gibt. (Im Ursprungs-
+    Repo zielte die Mutation auf die Auffangregel `examples/`; dieser Bestand
+    hat keinen examples-Ordner und auch kein `.editorconfig` — das Kit-Manifest
+    erbt Regeln fuer abwesende Dateien, also zielt sie auf eine Regel mit
+    echtem Fall.)
     """
-    ohne_examples = [r for r in probe.regeln() if r["prefix"] != "examples/"]
-    monkeypatch.setattr(probe, "regeln", lambda: ohne_examples)
+    ohne_makefile = [r for r in probe.regeln() if r["prefix"] != "Makefile"]
+    monkeypatch.setattr(probe, "regeln", lambda: ohne_makefile)
     offen = probe.nach_rolle()["(offen)"]
     assert offen, "eine Regel entfernt und trotzdem faellt keine Datei durch — die Pruefung misst nichts"
-    assert all(p.startswith("examples/") for p in offen), offen[:5]
+    assert all(p.startswith("Makefile") for p in offen), offen[:5]
     v = probe.pruefe(faelle=GRUENE_FAELLE)
     assert _blockt(v), "unklassifizierte Dateien blocken nicht"
     assert "unter keine Regel" in _blockgruende(v), _blockgruende(v)

@@ -70,7 +70,31 @@ rules:
     reason: "das Uebergabe-Schema. Das Schema reist, der Korpus nicht"
   - prefix: scripts/ci_gates.py
     rolle: mechanismus
-    reason: "die Ableitung der Gate-Liste aus ci.yml, plus die zwei Sperrklinken"
+    reason: "liest decisions/gates.yaml als die eine Gate-Liste und leitet ci.yml ab, plus die Sperrklinken (D-10, bead bo0)"
+  - prefix: scripts/verify_all.sh
+    rolle: mechanismus
+    reason: "der lokale Lauf: haelt keine Kommandos, fragt ci_gates.py (bead bo0)"
+  - prefix: scripts/check_docs.py
+    rolle: mechanismus
+    reason: "Frontmatter-, Link- und Anchor-Pruefung fuer die Dokumentation (bead bo0)"
+  - prefix: scripts/check_bead_export.py
+    rolle: mechanismus
+    reason: "prueft den gerenderten Export Zeile fuer Zeile (bead bo0)"
+  - prefix: scripts/check_dangling_bead_ids.py
+    rolle: mechanismus
+    reason: "zitierte Vorgangs-IDs muessen im Export aufgeloest werden (bead bo0)"
+  - prefix: scripts/check_decision_continuity.py
+    rolle: mechanismus
+    reason: "Continuity-Validator: jede D/O-ID bleibt gemappt, jedes Amendment hat seine ADR (Entscheidung 5 vom 2026-09-19)"
+  - prefix: scripts/render_beads_export.py
+    rolle: mechanismus
+    reason: "der Eine-Schreiber-Renderer des Exports mit Identitaetspruefung (D-4, bead bo0)"
+  - prefix: decisions/
+    rolle: mechanismus
+    reason: "die eine Gate-Liste (decisions/gates.yaml, D-10). Sie ist der Ablauf selbst und reist mit — im Zielrepo gilt dieselbe Datei"
+  - prefix: .github/workflows/ci.yml
+    rolle: mechanismus
+    reason: "die ABGELEITETE ci.yml (D-10) — sie reist paarweise mit decisions/gates.yaml, sonst driftet die Kopie. Der Rest von .github/ bleibt bestand"
   - prefix: scripts/plans_registry.py
     rolle: mechanismus
     reason: "Artefakt-Hygiene und die Kopplung Artefakt/Vorgang"
@@ -83,6 +107,12 @@ rules:
   - prefix: scripts/kit/
     rolle: mechanismus
     reason: "das Modul selbst — eine Uebergabe, die sich nicht mit uebergibt, ist eine Einbahnstrasse"
+  - prefix: scripts/export/manifest.yaml
+    rolle: mechanismus
+    reason: "das Export-Manifest selbst — ohne es weiss eine Instanz nicht, was reist und was bleibt"
+  - prefix: .claude/agents/
+    rolle: mechanismus
+    reason: "die Agent-Definitionen — jede traegt die RB-A1-Klausel byte-gleich und ein modell: gegen model-endpoints.yaml; committed, damit das Loeschen durch eine parallele Session laut ist"
 
   # --- die Tests, die den Mechanismus halten ---------------------------------
   - prefix: tests/test_gate_record.py
@@ -192,6 +222,12 @@ rules:
   - prefix: .claude/
     rolle: bestand
     reason: "offen: spec.md D3. Bis zur Entscheidung bleibt es hier — nicht weil es Bestand waere, sondern weil die Rolle noch niemand vergeben hat"
+  - prefix: .agents/
+    rolle: bestand
+    reason: "offen, dieselbe Frage wie .claude/ (D3): Agenten-Skills des Arbeitsplatzes. Bis zur Entscheidung bleiben sie hier"
+  - prefix: .codex/
+    rolle: bestand
+    reason: "offen, dieselbe Frage wie .claude/ (D3): Codex-Konfiguration und Hooks des Arbeitsplatzes. Bis zur Entscheidung bleiben sie hier"
 
   # --- Wurzeldateien ---------------------------------------------------------
   - prefix: AGENTS.md

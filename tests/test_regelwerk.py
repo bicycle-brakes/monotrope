@@ -312,8 +312,8 @@ def test_a_duplicate_id_is_caught(tmp_path: Path) -> None:
 
 
 def test_an_enforcer_that_does_not_exist_is_caught(tmp_path: Path) -> None:
-    kopie = _kopie(tmp_path, ("test_no_guard_is_registered_with_a_silencer", "test_nowhere_at_all"))
-    regel = next(r for r in _regeln(kopie) if r.id == "RB-H1")
+    kopie = _kopie(tmp_path, ("test_handover_records_are_immutable", "test_nowhere_at_all"))
+    regel = next(r for r in _regeln(kopie) if r.id == "RB-P5")
     assert not all(_enforcer_da(e) for e in regel.erzwinger)
 
 

@@ -1,0 +1,29 @@
+# Export-Manifest — was mit dem Kit reist (Präfix-Entscheidung des Maintainers, 2026-09-20)
+#
+# Entscheidung: der enge Kern reist — scripts/kit/, _verdict, die Validatoren,
+# templates/. Dazu, weil eine Instanz ohne sie nicht startet: AGENTS.md/CLAUDE.md
+# (Einstieg) und model-endpoints.yaml (als leerer Rumpf, geruest). Alles andere
+# bleibt: docs/, tests/, decisions/, .github/, plans/, .beads/.
+#
+# Der Widerspruch zu scripts/kit/manifest.yaml ist gewollt: das Kit manifestiert
+# ROLLEN (mechanismus/geruest/bestand), dieses Manifest die REISENTSCHEIDUNG je
+# Praefix. tests/test_ci.py ist mechanismus und bleibt trotzdem; AGENTS.md ist
+# bestand und reist trotzdem. Keine Liste ist aus der anderen ausrechenbar —
+# genau das prueft test_the_kit_list_is_not_derivable_from_the_export_list.
+#
+# verdicts: carry = reist · geruest = reist als leerer Rumpf · drop = bleibt
+
+rules:
+  - {prefix: "scripts/kit/", verdict: carry}
+  - {prefix: "scripts/_verdict.py", verdict: carry}
+  - {prefix: "scripts/gate_record.py", verdict: carry}
+  - {prefix: "scripts/check_decision_continuity.py", verdict: carry}
+  - {prefix: "scripts/check_bead_export.py", verdict: carry}
+  - {prefix: "scripts/check_dangling_bead_ids.py", verdict: carry}
+  - {prefix: "scripts/check_docs.py", verdict: carry}
+  - {prefix: "templates/", verdict: carry}
+  - {prefix: "provenance.yaml", verdict: carry}
+  - {prefix: "model-endpoints.yaml", verdict: geruest}
+  - {prefix: "AGENTS.md", verdict: carry}
+  - {prefix: "CLAUDE.md", verdict: carry}
+  - {prefix: "", verdict: drop}

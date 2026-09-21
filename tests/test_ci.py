@@ -21,6 +21,7 @@ import subprocess
 import sys
 from pathlib import Path
 
+import pytest
 import yaml
 
 REPO_ROOT = Path(__file__).resolve().parent.parent
@@ -400,6 +401,12 @@ def test_no_second_verification_workflow() -> None:
 # --------------------------------------------------------------------------
 
 
+@pytest.mark.skip(
+    reason="2ee-Triage 2026-09-19: Instanz-Test — er verlangt "
+    "docs/patterns/contract_models.py (vendorierte Datei des Migrations-"
+    "Mechanismus), die dieser Checkout nicht traegt. Ventil: Entscheidung in "
+    "coding-harness-2ee, spaetestens vor M1."
+)
 def test_formatter_exclusion_survives_an_explicit_path() -> None:
     """`exclude` allein filtert nur die Dateisuche, nicht das Argument.
 
@@ -497,6 +504,11 @@ def test_no_workflow_copies_a_whole_directory_into_a_publish_target() -> None:
     )
 
 
+@pytest.mark.skip(
+    reason="2ee-Triage 2026-09-19: Instanz-Test — Landing-Page-Artefakte "
+    "(docs/archive/pages-landing/) leben im Ursprungs-Repo, nicht in diesem "
+    "Checkout. Ventil: Entscheidung in coding-harness-2ee, spaetestens vor M1."
+)
 def test_the_archived_landing_page_is_not_wired_to_anything() -> None:
     """Archiviert heisst: kein Workflow, kein aktives Dokument zeigt noch darauf."""
     assert not (REPO_ROOT / ".github" / "workflows" / "publish-html.yml").exists()
@@ -944,18 +956,13 @@ MUTATIONS_NAMEN = re.compile(
 # aufloest, streicht die Zeile. Das Ventil `gate-mutation-coverage` traegt die
 # Frist (RB-G4).
 OHNE_MUTATIONSTEST: dict[str, str] = {
-    "contract-template": "validate_contract.py hat ueberhaupt keine Tests (F-A-29, V-10)",
-    "contract-examples": "dito — dieselbe Luecke, drei Aufrufe",
-    "contract-mock": "dito — derselbe Pruefling, dritter Aufruf",
-    "paradigm-catalog": "validate_paradigm_catalog.py hat keine Tests (F-A-29, V-10)",
-    "catalog-test": "ist selbst ein Test — sein Mutationsgegenstueck waere ein Test ueber einen Test",
-    "composer-test": "ist selbst ein Test; die Mutation liegt in tests/test_codegen_shared.py",
-    "blueprint-roundtrip": "ist selbst ein Test; der Roundtrip ist seine eigene Mutation",
-    "ruff-format": "fremdes Werkzeug mit eigener Testsuite; wir mutieren nicht dessen Formatierer",
-    "ruff-check": "dito — die Auswahl der Regelgruppen haelt stattdessen ramp_valves.py",
     "pytest": "faehrt die Mutationstests selbst; ein Mutant dafuer waere zirkulaer",
+    "ruff-check": "fremdes Werkzeug; die Auswahl der Regelgruppen haelt stattdessen ramp_valves.py",
+    "ruff-format": "fremdes Werkzeug mit eigener Testsuite; wir mutieren nicht dessen Formatierer",
     "markdownlint": "fremdes Werkzeug ueber eine Marketplace-Action; wir mutieren nicht dessen Regelwerk",
-    "lychee": "dito, und advisory",
+    "lychee": "fremdes Werkzeug, advisory — ein roter Lauf sagt etwas ueber das Netz, nicht den Kandidaten",
+    "plans-registry": "die Hygiene-Regeln laufen gruen in test_gate_machinery.py; die gesaete Rotation steht in der 2ee-Triage aus",
+    "plans-registry-strict": "dieselbe Maschine wie plans-registry, nur am Timer — der Nachweis faellt mit ihm",
 }
 
 

@@ -1,0 +1,163 @@
+# THE ONE LIST (D-10/O-4, bead coding-harness-bo0).
+#
+# Exactly one artefact enumerates the machine gates of this repository, and
+# every runner derives its work from this file: `scripts/verify_all.sh` asks
+# `scripts/ci_gates.py`, and that reads THIS file. `.github/workflows/ci.yml`
+# is generated from it (`python3 scripts/ci_gates.py --generate-ci`) and held
+# to it by the `ci-drift` gate — a second hand-maintained list is the drift
+# this file exists against.
+#
+# Schema (bead bo0, re-scoped 2026-09-17; basis: lakeswitch-ai gates.yaml,
+# adapted to command entries as decided there):
+#   id          stable key of the gate, never reassigned.
+#   title       human-readable name (shows up in --list and the report).
+#   command     what the runner calls — exactly as a developer would type it.
+#   action      marketplace action instead of a command (mutually exclusive).
+#   job         verify (per push/PR) or drift (per schedule/dispatch).
+#   enforcement closed vocabulary: advisory / report / block (bo0).
+#   floor       true = non-negotiable set; changing it is a governance act.
+#   reason      why this gate exists, in one sentence.
+
+schema_version: 1
+
+tools:
+  python: "3.12"
+  ruff: "0.9.10"
+  pytest: "8.3.4"
+
+gates:
+  - id: pytest
+    title: The test suite passes
+    command: python3 -m pytest tests/ -q
+    job: verify
+    enforcement: block
+    floor: true
+    reason: The suite is the base verdict of every change; make verify runs it first.
+
+  - id: ruff-check
+    title: The linter finds nothing
+    command: python3 -m ruff check scripts/ tests/
+    job: verify
+    enforcement: block
+    floor: true
+    reason: One lint configuration (ruff.toml) for every Python artefact of the harness.
+
+  - id: ruff-format
+    title: Every file is already formatted
+    command: python3 -m ruff format --check scripts/ tests/
+    job: verify
+    enforcement: block
+    floor: false
+    reason: Formatting is decided by the tool, not reviewed by a human.
+
+  - id: leerprobe
+    title: The kit probe holds over the tracked tree
+    command: python3 scripts/kit/probe.py --strict
+    job: verify
+    enforcement: block
+    floor: true
+    reason: The kit-probe is this repository's acceptance gate — every tracked file is classified, DRIFT blocks.
+
+  - id: plans-registry
+    title: Plans hygiene holds (built means archived, no one-sided handover)
+    command: python3 scripts/plans_registry.py --check
+    job: verify
+    enforcement: block
+    floor: true
+    reason: The two lifecycle rules need a runner; `make staleness` is the same command.
+
+  - id: docs-links
+    title: Documentation frontmatter, links and anchors resolve
+    command: python3 scripts/check_docs.py
+    job: verify
+    enforcement: report
+    floor: false
+    reason: Scharf geschaltet wird er, sobald bt8 die 35 gemessenen Korpus-Befunde (governance/WORKFLOW-Links, Frontmatter-Luecken) abgearbeitet hat — bis dahin meldet er und blockiert nicht.
+
+  - id: bead-export
+    title: The rendered bead export parses line by line
+    command: python3 scripts/check_bead_export.py
+    job: verify
+    enforcement: block
+    floor: true
+    reason: The export is the tracker's rendered truth — a broken line breaks every reader that quotes it.
+
+  - id: dangling-beads
+    title: Every cited bead id resolves in the export
+    command: python3 scripts/check_dangling_bead_ids.py
+    job: verify
+    enforcement: block
+    floor: true
+    reason: A citation of an unknown bead silently severs the provenance chain.
+
+  - id: decision-continuity
+    title: Every interview decision stays mapped; every amendment has its ADR
+    command: python3 scripts/check_decision_continuity.py
+    job: verify
+    enforcement: block
+    floor: true
+    reason: Decisions vanish by silent rewrite (gap P1) — this gate turns vanishing into a finding (maintainer decision 5, 2026-09-19).
+
+  - id: export-identity
+    title: The committed bead export is exactly the fresh render
+    command: python3 scripts/render_beads_export.py --check
+    job: verify
+    enforcement: block
+    floor: true
+    reason: Auto-export is off; the writer renders at session end — a stale committed export fails here (D-4).
+
+  - id: gate-schema
+    title: This gate file satisfies its own schema
+    command: python3 scripts/ci_gates.py --check-schema
+    job: verify
+    enforcement: block
+    floor: true
+    reason: A malformed gate file would silence every runner at once — it is checked like any other input.
+
+  - id: ci-drift
+    title: ci.yml is exactly what the gate file generates
+    command: python3 scripts/ci_gates.py --check-ci
+    job: verify
+    enforcement: block
+    floor: true
+    reason: The workflow is derived, never hand-edited; this gate is the derivation's ratchet (D-10).
+
+  - id: ramp-valves
+    title: ramp valves — dated transitions turn loud on their date
+    command: python3 scripts/ramp_valves.py
+    job: verify
+    enforcement: block
+    floor: false
+    reason: Ein Ventil ist ein datiertes Versprechen — der Uebergang der Frist muss den Lauf rot machen, lokal wie in der CI; deshalb steht er in derselben Liste (D-10) und nicht als fest eincompilierter Schritt im Generator.
+
+  - id: markdownlint
+    title: Markdown passes the linter
+    action: DavidAnson/markdownlint-cli2-action@v20
+    with:
+      globs: |
+        **/*.md
+        !docs/journal/**
+    job: verify
+    enforcement: report
+    floor: false
+    reason: Prose hygiene is reported, not blocked — the linter's taste is not a merge criterion.
+
+  - id: lychee
+    title: External links resolve
+    action: lycheeverse/lychee-action@v2
+    with:
+      args: --no-progress README.md docs/
+    job: verify
+    enforcement: advisory
+    floor: false
+    reason: Foreign servers; a red run here says something about the network, not the candidate.
+
+  - id: plans-registry-strict
+    title: Plans hygiene holds strictly against the outside world
+    command: python3 scripts/plans_registry.py --check --strict
+    job: drift
+    enforcement: block
+    floor: true
+    reason: DRIFT blocks only on the timer (ADR-028 R2) — the outside moves without a push to this repo.
+
+retired: []
