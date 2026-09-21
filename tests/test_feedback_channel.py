@@ -483,29 +483,21 @@ _SKIP_FRISTEN: dict[str, str] = {
 def test_every_skip_here_carries_a_future_expiry_date() -> None:
     """Ein abgelaufener Grund liest sich wie eine lebende Entscheidung (RB-P5)."""
     quelle = Path(__file__).read_text(encoding="utf-8")
-    bloecke = dict(
-        (name, block)
-        for block, name in re.findall(
-            r"@pytest\.mark\.skip\(\s*reason=(.*?)\)\s*\ndef (\w+)", quelle, re.DOTALL
-        )
-    )
+    bloecke = {
+        name: block
+        for block, name in re.findall(r"@pytest\.mark\.skip\(\s*reason=(.*?)\)\s*\ndef (\w+)", quelle, re.DOTALL)
+    }
     assert set(bloecke) == set(_SKIP_FRISTEN), (
         "Skip-Markierungen und Fristen-Liste weichen ab — Markierung ohne Eintrag: "
         f"{sorted(set(bloecke) - set(_SKIP_FRISTEN))}; Eintrag ohne Markierung: "
         f"{sorted(set(_SKIP_FRISTEN) - set(bloecke))}"
     )
-    ohne_datum = {
-        name for name, block in bloecke.items() if _SKIP_FRISTEN[name] not in block
-    }
+    ohne_datum = {name for name, block in bloecke.items() if _SKIP_FRISTEN[name] not in block}
     assert not ohne_datum, (
         f"Die Frist von {sorted(ohne_datum)} steht nur in der Liste, nicht im Grund — "
         "wer den Skip liest, muss das Datum sehen."
     )
-    abgelaufen = {
-        name: frist
-        for name, frist in _SKIP_FRISTEN.items()
-        if date.fromisoformat(frist) <= date.today()
-    }
+    abgelaufen = {name: frist for name, frist in _SKIP_FRISTEN.items() if date.fromisoformat(frist) <= date.today()}
     assert not abgelaufen, (
         "Diese Skips stehen ueber ihrer Frist — aufloesen (Test anspringen lassen) "
         f"oder die Frist in einem reviewten Change verschieben: {abgelaufen}"
