@@ -265,3 +265,19 @@ def test_export_identity_gate_skips_visibly_where_the_tracker_does_not_live(
     monkeypatch.setattr(rbe, "_render_nach", fehlt)
     assert rbe.main(["--check"]) == 0
     assert "SKIP" in capsys.readouterr().out
+
+
+def test_export_identity_gate_skips_when_the_wrapper_finds_no_binary(tmp_path: Path, monkeypatch, capsys) -> None:
+    """Der echte Weg der CI: tools/bd existiert, das gepinnte Binary nicht.
+
+    Der Test darueber reicht die Ausnahme von Hand herein; hier laeuft der
+    Wrapper wirklich, in einer Umgebung ohne bd. Ohne die Unterscheidung am
+    Exit-Code endete genau diese Lage in Exit 2 statt im sichtbaren SKIP.
+    """
+    import render_beads_export as rbe
+
+    monkeypatch.setenv("HOME", str(tmp_path))
+    monkeypatch.setenv("PATH", "/usr/bin:/bin")
+    monkeypatch.setattr(rbe, "EXPORT", tmp_path / "issues.jsonl")
+    assert rbe.main(["--check"]) == 0
+    assert "SKIP" in capsys.readouterr().out

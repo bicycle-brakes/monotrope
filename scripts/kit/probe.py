@@ -54,7 +54,9 @@ GRUENDE = (
     "braucht-die-vollstaendige-suite",  # prueft Dateien, die der Kit nicht traegt
     "braucht-ein-gate-das-hier-lebt",  # verlangt einen Erzwinger ausserhalb des Kits
     "geruest-ist-absichtlich-leer",  # liest eine geruest-Datei, die im Ziel ein leerer Rumpf ist
-    "gilt-erst-mit-bestand",  # portabel, aber die geprüfte Menge entsteht erst im Ziel
+    # "gilt-erst-mit-bestand" gestrichen am 2026-09-19 (2ee-Triage): kein Fall
+    # traegt ihn aktuell. Er kommt zurueck, wenn der Projekt-Kanal mit dem
+    # lakeswitch-Beitritt beginnt (O-2/M2) — dann mit Fall, nicht ohne.
 )
 
 # Der fuenfte Grund kam am 2026-09-08 dazu, aus demselben Anlass wie der vierte:
@@ -88,23 +90,19 @@ REIST_NICHT: dict[str, str] = {
     "tests.test_ci::test_every_script_has_a_test_or_a_declared_reason": "braucht-die-vollstaendige-suite",
     "tests.test_ci::test_no_declared_reason_cites_a_closed_or_unknown_bead": "geruest-ist-absichtlich-leer",
     "tests.test_ci::test_the_makefile_runs_what_the_one_list_runs": "bestand-dieses-repos",
-    "tests.test_feedback_channel::test_every_handover_declares_a_direction": "bestand-dieses-repos",
     "tests.test_feedback_channel::test_journal_index_lists_every_open_project_handover": "bestand-dieses-repos",
-    "tests.test_feedback_channel::test_root_index_routes_to_the_project_feedback": "bestand-dieses-repos",
-    "tests.test_feedback_channel::test_the_channel_is_not_empty": "gilt-erst-mit-bestand",
-    "tests.test_feedback_channel::test_the_checks_go_red_when_the_contract_is_broken[record-der Record wurde nach der Uebergabe geaendert]": "bestand-dieses-repos",
-    "tests.test_feedback_channel::test_the_checks_go_red_when_the_contract_is_broken[status-liegt ausserhalb]": "bestand-dieses-repos",
-    "tests.test_feedback_channel::test_the_checks_go_red_when_the_contract_is_broken[target_ref-kein kurzer Commit-Hash]": "bestand-dieses-repos",
-    "tests.test_feedback_channel::test_the_feedback_loop_documents_the_reverse_direction": "bestand-dieses-repos",
-    "tests.test_feedback_channel::test_the_feedback_loop_points_at_the_schema_instead_of_repeating_it": "bestand-dieses-repos",
     "tests.test_feedback_channel::test_the_field_checks_read_the_schema_instead_of_a_copy[GEMEINSAM-fehlende_gemeinsame]": "bestand-dieses-repos",
     "tests.test_feedback_channel::test_the_field_checks_read_the_schema_instead_of_a_copy[PROJEKT_PFLICHT-fehlende_kanalpflicht]": "bestand-dieses-repos",
-    "tests.test_feedback_channel::test_the_framework_does_not_claim_to_write_into_the_instance": "bestand-dieses-repos",
-    "tests.test_feedback_channel::test_the_route_check_goes_red_when_the_route_is_removed": "bestand-dieses-repos",
     "tests.test_kit::test_the_kit_list_is_not_derivable_from_the_export_list": "bestand-dieses-repos",
     "tests.test_kit::test_the_role_check_goes_red_when_a_rule_is_removed": "bestand-dieses-repos",
     "tests.test_kit::test_the_two_manifests_really_disagree_somewhere": "bestand-dieses-repos",
-    "tests.test_model_endpoints::test_agents_are_found_at_all": "bestand-dieses-repos",
+    "tests.test_model_endpoints::test_every_agent_model_resolves_to_a_declared_endpoint[consistency-auditor.md-claude-sonnet-5]": "geruest-ist-absichtlich-leer",
+    "tests.test_model_endpoints::test_every_agent_model_resolves_to_a_declared_endpoint[dlt-codegen-orchestrator.md-claude-sonnet-5]": "geruest-ist-absichtlich-leer",
+    "tests.test_model_endpoints::test_every_agent_model_resolves_to_a_declared_endpoint[dv2-entity-builder.md-claude-sonnet-5]": "geruest-ist-absichtlich-leer",
+    "tests.test_model_endpoints::test_every_agent_model_resolves_to_a_declared_endpoint[dv2-entity-deployer.md-claude-sonnet-5]": "geruest-ist-absichtlich-leer",
+    "tests.test_model_endpoints::test_every_agent_model_resolves_to_a_declared_endpoint[migration-supervisor.md-claude-sonnet-5]": "geruest-ist-absichtlich-leer",
+    "tests.test_model_endpoints::test_every_agent_model_resolves_to_a_declared_endpoint[preconditions-gate-runner.md-claude-sonnet-5]": "geruest-ist-absichtlich-leer",
+    "tests.test_model_endpoints::test_every_agent_model_resolves_to_a_declared_endpoint[reconciliation-orchestrator.md-claude-sonnet-5]": "geruest-ist-absichtlich-leer",
     "tests.test_model_endpoints::test_every_model_in_a_phase_prompt_resolves[01-explore.md-Haiku 4.5]": "bestand-dieses-repos",
     "tests.test_model_endpoints::test_every_model_in_a_phase_prompt_resolves[01a-interview.md-Fable 5.1]": "bestand-dieses-repos",
     "tests.test_model_endpoints::test_every_model_in_a_phase_prompt_resolves[02-spec.md-Fable 5.1]": "bestand-dieses-repos",
@@ -115,25 +113,7 @@ REIST_NICHT: dict[str, str] = {
     "tests.test_model_endpoints::test_every_model_in_a_phase_prompt_resolves[07-commit.md-Haiku 4.5]": "bestand-dieses-repos",
     "tests.test_model_endpoints::test_every_model_in_the_routing_table_resolves": "bestand-dieses-repos",
     "tests.test_model_endpoints::test_the_declaration_is_not_empty": "bestand-dieses-repos",
-    "tests.test_regelwerk::test_rb_a1_clause_is_present_verbatim": "braucht-ein-gate-das-hier-lebt",
-    "tests.test_regelwerk::test_rules_at_level_three_or_higher_name_an_existing_enforcer[RB-A1]": "braucht-ein-gate-das-hier-lebt",
-    "tests.test_regelwerk::test_rules_at_level_three_or_higher_name_an_existing_enforcer[RB-A2]": "braucht-ein-gate-das-hier-lebt",
-    "tests.test_regelwerk::test_rules_at_level_three_or_higher_name_an_existing_enforcer[RB-A3]": "braucht-ein-gate-das-hier-lebt",
-    "tests.test_regelwerk::test_rules_at_level_three_or_higher_name_an_existing_enforcer[RB-G2]": "braucht-ein-gate-das-hier-lebt",
-    "tests.test_regelwerk::test_rules_at_level_three_or_higher_name_an_existing_enforcer[RB-G5]": "braucht-ein-gate-das-hier-lebt",
-    "tests.test_regelwerk::test_rules_at_level_three_or_higher_name_an_existing_enforcer[RB-G6]": "braucht-ein-gate-das-hier-lebt",
     "tests.test_regelwerk::test_rules_at_level_three_or_higher_name_an_existing_enforcer[RB-G7]": "braucht-ein-gate-das-hier-lebt",
-    "tests.test_regelwerk::test_rules_at_level_three_or_higher_name_an_existing_enforcer[RB-H1]": "braucht-ein-gate-das-hier-lebt",
-    "tests.test_regelwerk::test_rules_at_level_three_or_higher_name_an_existing_enforcer[RB-H2]": "braucht-ein-gate-das-hier-lebt",
-    "tests.test_regelwerk::test_rules_at_level_three_or_higher_name_an_existing_enforcer[RB-H3]": "braucht-ein-gate-das-hier-lebt",
-    "tests.test_regelwerk::test_rules_at_level_three_or_higher_name_an_existing_enforcer[RB-H4]": "braucht-ein-gate-das-hier-lebt",
-    "tests.test_regelwerk::test_rules_at_level_three_or_higher_name_an_existing_enforcer[RB-M1]": "braucht-ein-gate-das-hier-lebt",
-    "tests.test_regelwerk::test_rules_at_level_three_or_higher_name_an_existing_enforcer[RB-M4]": "braucht-ein-gate-das-hier-lebt",
-    "tests.test_regelwerk::test_rules_at_level_three_or_higher_name_an_existing_enforcer[RB-M7]": "braucht-ein-gate-das-hier-lebt",
-    "tests.test_regelwerk::test_rules_at_level_three_or_higher_name_an_existing_enforcer[RB-M8]": "braucht-ein-gate-das-hier-lebt",
-    "tests.test_regelwerk::test_rules_at_level_three_or_higher_name_an_existing_enforcer[RB-P1]": "braucht-ein-gate-das-hier-lebt",
-    "tests.test_regelwerk::test_rules_at_level_three_or_higher_name_an_existing_enforcer[RB-P2]": "braucht-ein-gate-das-hier-lebt",
-    "tests.test_regelwerk::test_rules_at_level_three_or_higher_name_an_existing_enforcer[RB-P3]": "braucht-ein-gate-das-hier-lebt",
     "tests.test_regelwerk::test_rules_at_level_three_or_higher_name_an_existing_enforcer[RB-P5]": "braucht-ein-gate-das-hier-lebt",
     "tests.test_regelwerk::test_rules_at_level_three_or_higher_name_an_existing_enforcer[RB-S1]": "braucht-ein-gate-das-hier-lebt",
 }
@@ -163,7 +143,7 @@ REIST_NICHT: dict[str, str] = {
 # die beiden Aufrufer- und Test-Sperrklinken-Tests direkt darueber, den der Kit
 # nicht mitreist (kein Eintrag in `manifest.yaml`, faellt unter die
 # `scripts/`-Auffangregel `bestand`). Gleiche Klasse, gleicher Grund.
-DECKEL = 53  # 2026-09-19 neu gesetzt beim bo0-Gate-Einbau: die Messung oben ist der Stand; die 2ee-Triage (regelwerk/feedback/kit/model_endpoints) schrumpft die Liste sichtbar
+DECKEL = 31  # 2026-09-20 angehoben (Cluster D, 2ee-Welle 3): die 7 neuen Faelle sind die Agent-Modelle gegen den geruest-Rumpf model-endpoints.yaml im Leerprobekopf — im Ziel loest die Instanz sie gegen ihre eigene Deklaration
 
 
 # ---------------------------------------------------------------------------
