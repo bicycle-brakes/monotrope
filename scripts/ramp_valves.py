@@ -301,11 +301,6 @@ REGEL_VENTILE: dict[str, tuple[str, str, str]] = {
         "tests/test_provenance.py::test_every_in_scope_file_declares_a_class",
         "2026-11-30",
     ),
-    "journal-date-citation": (
-        "RB-P5: der Verlauf wird nie ohne sein Datum zitiert",
-        "tests/test_provenance.py::test_journal_is_never_cited_without_a_date",
-        "2026-11-30",
-    ),
     "gate-record-validators": (
         "RB-M1: das Record-Template wird von einem Validator geprueft",
         "tests/test_validators.py::test_gate_record_template_validates",

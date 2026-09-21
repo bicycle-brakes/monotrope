@@ -157,7 +157,7 @@ neue Regel · PATCH = Wortlaut oder Testname.
 | **RB-P2** | Klasse und Verzeichnis entsprechen einander eins zu eins, und die Karte steht neben dem Prüfer, nicht in ihm. Jede aktive Ebene hat einen Eintrag | 2 | `Ramp:provenance-validators` | P L I |
 | **RB-P3** | Generierte Blöcke tragen ihre Marker samt Eingabe-Prüfsumme, die CI rendert neu und vergleicht; außerhalb steht keine handgetippte Bestandszahl. **Was gegen einen Fehler schützen soll, wird bei jedem Lauf erzeugt und geprüft — oder gar nicht geführt** | 2 | `ci.yml#export-identity` · `Ramp:kit-transfer` | P L I |
 | **RB-P4** | Commits tragen eine echte Identität und, wo ein Assistent beigetragen hat, den entsprechenden Trailer. Auf Entscheidungs-Pfaden lehnt die CI Verstöße ab | 2 | `Ramp:commit-identity` | P L I |
-| **RB-P5** | Der Verlauf ist append-only und wird nie ohne sein Datum zitiert. Ein Befundblock ist unveränderlich; Widerspruch kommt darunter, nie hinein | 4 | `tests/test_feedback_channel.py`::test_handover_records_are_immutable · `Ramp:journal-date-citation` | P L I |
+| **RB-P5** | Der Verlauf ist append-only und wird nie ohne sein Datum zitiert. Ein Befundblock ist unveränderlich; Widerspruch kommt darunter, nie hinein | 4 | `tests/test_feedback_channel.py`::test_handover_records_are_immutable · `tests/test_provenance.py`::test_journal_is_never_cited_without_a_date | P L I |
 
 ### S — Struktur
 
