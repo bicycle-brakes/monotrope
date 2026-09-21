@@ -12,6 +12,7 @@ import subprocess
 import sys
 from pathlib import Path
 
+import pytest
 import yaml
 
 REPO_ROOT = Path(__file__).resolve().parent.parent
@@ -281,3 +282,109 @@ def test_export_identity_gate_skips_when_the_wrapper_finds_no_binary(tmp_path: P
     monkeypatch.setattr(rbe, "EXPORT", tmp_path / "issues.jsonl")
     assert rbe.main(["--check"]) == 0
     assert "SKIP" in capsys.readouterr().out
+
+
+# --- reproduzierbarer Export (coding-harness-1jg.1) -------------------------
+
+_ZEILE_OHNE_LEASE = '{"id":"x-1","status":"open","owner":"\\u003cjemand\\u003e","title":"a \\u0026 b"}'
+_ZEILE_MIT_LEASE = (
+    '{"id":"x-2","status":"in_progress","heartbeat_at":"2026-09-19T13:36:50Z",'
+    '"lease_expires_at":"2026-09-19T13:41:50Z","title":"\\u003cin Arbeit\\u003e"}'
+)
+
+
+def test_the_render_omits_machine_local_lease_fields() -> None:
+    """Zwei Maschinen rendern aus demselben Stand dieselben Bytes — ohne Lease-Felder."""
+    import json
+
+    import render_beads_export as rbe
+
+    aus = rbe._ohne_maschinenlokales(_ZEILE_OHNE_LEASE + "\n" + _ZEILE_MIT_LEASE + "\n")
+    saetze = [json.loads(z) for z in aus.splitlines()]
+    assert [s["id"] for s in saetze] == ["x-1", "x-2"], "Reihenfolge und Menge der Zeilen bleiben"
+    for feld in rbe.MASCHINENLOKAL:
+        assert all(feld not in s for s in saetze), f"{feld} steht noch im Render"
+    assert aus.endswith("\n")
+
+
+def test_the_render_leaves_every_other_byte_alone() -> None:
+    """Eine Zeile ohne Lease geht unberuehrt durch; eine mit Lease verliert nur die Felder."""
+    import render_beads_export as rbe
+
+    aus = rbe._ohne_maschinenlokales(_ZEILE_OHNE_LEASE + "\n" + _ZEILE_MIT_LEASE + "\n").splitlines()
+    assert aus[0] == _ZEILE_OHNE_LEASE, "eine Zeile ohne maschinenlokales Feld wurde umgeschrieben"
+    assert aus[1] == '{"id":"x-2","status":"in_progress","title":"\\u003cin Arbeit\\u003e"}', (
+        "die umgeschriebene Zeile traegt nicht die Schreibweise des Trackers"
+    )
+
+
+def test_the_render_refuses_a_line_it_cannot_reproduce(tmp_path: Path, monkeypatch, capsys) -> None:
+    """Aendert der Tracker seine Schreibweise, wird verworfen statt still umgeschrieben."""
+    import render_beads_export as rbe
+
+    fremd = '{"id": "x-3", "status": "in_progress", "heartbeat_at": "2026-09-19T13:36:50Z"}'
+    with pytest.raises(rbe.NichtReproduzierbar):
+        rbe._ohne_maschinenlokales(fremd + "\n")
+
+    committed = tmp_path / "issues.jsonl"
+    committed.write_text(_ZEILE_OHNE_LEASE + "\n", encoding="utf-8")
+    monkeypatch.setattr(rbe, "EXPORT", committed)
+
+    def wirft(_p: Path) -> None:
+        raise rbe.NichtReproduzierbar("Zeile 1 (x-3)")
+
+    monkeypatch.setattr(rbe, "_render_nach", wirft)
+    assert rbe.main([]) == 1
+    assert committed.read_text(encoding="utf-8") == _ZEILE_OHNE_LEASE + "\n", "ein verworfener Render hat geschrieben"
+    assert "verworfen" in capsys.readouterr().out
+
+
+def test_the_omitted_keys_are_named_once() -> None:
+    """Die Liste steht im Renderer und nirgends sonst — sonst driften zwei Listen.
+
+    Gesucht wird der blosse Feldname, in jeder Schreibweise, in Scripts und
+    Entscheidungsdateien. `tests/` bleibt aussen vor: dort stehen die Felder
+    als Daten in den Stellvertreter-Zeilen, nicht als zweite Liste.
+    """
+    import render_beads_export as rbe
+
+    assert rbe.MASCHINENLOKAL, "eine leere Liste misst nichts"
+    kandidaten = sorted((REPO_ROOT / "scripts").rglob("*.py")) + sorted((REPO_ROOT / "decisions").rglob("*.y*ml"))
+    assert any(p.name == "render_beads_export.py" for p in kandidaten), "die Suche sieht den Renderer nicht"
+    treffer = sorted(
+        {
+            str(p.relative_to(REPO_ROOT))
+            for p in kandidaten
+            if any(feld in p.read_text(encoding="utf-8") for feld in rbe.MASCHINENLOKAL)
+        }
+    )
+    assert treffer == ["scripts/render_beads_export.py"], f"die Felder stehen in mehr als einer Datei: {treffer}"
+
+
+def test_a_record_with_a_raw_line_separator_stays_one_line() -> None:
+    """U+0085 und U+2028 stehen roh in Texten; nur `\\n` trennt Saetze (Review F-1)."""
+    import render_beads_export as rbe
+
+    roh = '{"id":"x-9","status":"open","title":"Zeile\u0085zwei\u2028drei"}\n' + _ZEILE_MIT_LEASE + "\n"
+    aus = rbe._ohne_maschinenlokales(roh)
+    assert aus.split("\n")[0] == roh.split("\n")[0], "ein Satz ohne Lease wurde zerschnitten oder umgeschrieben"
+    assert aus.count("\n") == 2
+
+
+def test_the_omission_is_wired_into_the_one_render_path(tmp_path: Path, monkeypatch) -> None:
+    """Schreibweg und --check rendern beide ueber `_render_nach` — dort muss die Auslassung sitzen.
+
+    Ein Stellvertreter fuer `tools/bd` schreibt eine Zeile mit Lease; liefe die
+    Auslassung nur in der Hilfsfunktion und nicht im Renderweg, bliebe sie stehen.
+    """
+    import render_beads_export as rbe
+
+    stellvertreter = tmp_path / "bd"
+    stellvertreter.write_text(f"#!/bin/sh\nprintf '%s\\n' '{_ZEILE_MIT_LEASE}' > \"$3\"\n", encoding="utf-8")
+    stellvertreter.chmod(0o755)
+    monkeypatch.setattr(rbe, "BD", stellvertreter)
+    ziel = tmp_path / "render.jsonl"
+    rbe._render_nach(ziel)
+    text = ziel.read_text(encoding="utf-8")
+    assert all(feld not in text for feld in rbe.MASCHINENLOKAL), "der Renderweg laesst die Lease-Felder stehen"
+    assert '"id":"x-2"' in text

@@ -23,6 +23,7 @@ from __future__ import annotations
 
 import argparse
 import hashlib
+import json
 import subprocess
 import sys
 import tempfile
@@ -32,6 +33,62 @@ REPO_ROOT = Path(__file__).resolve().parent.parent
 EXPORT = REPO_ROOT / ".beads" / "issues.jsonl"
 BD = REPO_ROOT / "tools" / "bd"
 BD_FEHLT = 127  # tools/bd: "no bd binary found" — und nur das
+
+
+# Maschinenlokale Felder. Eine Lease gehoert der Maschine, die den Vorgang
+# gerade haelt: bd 1.3.0 schreibt `heartbeat_at` und `lease_expires_at` in den
+# Export des Schreibers, ein frischer Klon desselben Dolt-Stands rendert sie
+# nicht (gemessen 2026-09-21: identischer Inhalt, zwei abweichende Felder an
+# einem Vorgang in Arbeit). Mit ihnen ist der Export nur auf der Maschine
+# byte-gleich, die zuletzt gerendert hat — und die Identitaetspruefung haelt
+# nirgends sonst. Die Liste steht EINMAL, hier; Tests lesen sie von hier.
+MASCHINENLOKAL: tuple[str, ...] = ("heartbeat_at", "lease_expires_at")
+
+# So schreibt der Tracker JSON: kompakt, und `<`, `>`, `&` sowie U+2028/U+2029
+# als \uXXXX. Wer eine Zeile neu schreibt, muss genau das treffen.
+_TRACKER_ESCAPES = {"<": "\\u003c", ">": "\\u003e", "&": "\\u0026", "\u2028": "\\u2028", "\u2029": "\\u2029"}
+
+
+class NichtReproduzierbar(RuntimeError):
+    """Eine Exportzeile laesst sich nicht byte-gleich wiedergeben — also wird sie nicht umgeschrieben."""
+
+
+def _wie_der_tracker(satz: dict) -> str:
+    text = json.dumps(satz, ensure_ascii=False, separators=(",", ":"))
+    for zeichen, ersatz in _TRACKER_ESCAPES.items():
+        text = text.replace(zeichen, ersatz)
+    return text
+
+
+def _ohne_maschinenlokales(roh: str) -> str:
+    """Nimmt die maschinenlokalen Felder heraus und laesst jedes andere Byte stehen.
+
+    Eine Zeile ohne ein solches Feld geht unberuehrt durch. Eine Zeile mit
+    einem wird neu geschrieben — aber erst, nachdem dieselbe Schreibweise die
+    UNVERAENDERTE Zeile byte-gleich wiedergegeben hat. Gelingt das nicht, ist
+    die Schreibweise des Trackers eine andere geworden, und ein stilles
+    Umschreiben waere genau die Drift, gegen die diese Datei steht.
+    """
+    zeilen = []
+    # Nur `\n` trennt Saetze. `str.splitlines()` schneidet auch an U+0085,
+    # U+2028 und anderen Zeichen, die der Tracker roh in einen Text schreibt —
+    # und zerlegte damit einen Satz in zwei kaputte Zeilen (Review F-1).
+    ende = "\n" if roh.endswith("\n") else ""
+    for nr, zeile in enumerate((roh[:-1] if ende else roh).split("\n"), 1):
+        try:
+            satz = json.loads(zeile) if zeile.strip() else None
+        except json.JSONDecodeError:
+            satz = None  # die Zeilenpruefung danach benennt den Befund
+        if not isinstance(satz, dict) or not any(k in satz for k in MASCHINENLOKAL):
+            zeilen.append(zeile)
+            continue
+        if _wie_der_tracker(satz) != zeile:
+            raise NichtReproduzierbar(
+                f"Zeile {nr} ({satz.get('id', '?')}): die Schreibweise des Trackers laesst sich nicht "
+                "byte-gleich wiedergeben — maschinenlokale Felder bleiben stehen, der Render wird verworfen"
+            )
+        zeilen.append(_wie_der_tracker({k: v for k, v in satz.items() if k not in MASCHINENLOKAL}))
+    return "\n".join(zeilen) + ende
 
 
 class RendererFehlt(RuntimeError):
@@ -57,6 +114,7 @@ def _render_nach(tmp: Path) -> None:
     if erg.returncode != 0:
         sys.stderr.write(erg.stdout + erg.stderr)
         raise SystemExit(2)
+    tmp.write_text(_ohne_maschinenlokales(tmp.read_text(encoding="utf-8")), encoding="utf-8")
 
 
 def _sha(pfad: Path) -> str:
@@ -64,6 +122,14 @@ def _sha(pfad: Path) -> str:
 
 
 def main(argv: list[str] | None = None) -> int:
+    try:
+        return _main(argv)
+    except NichtReproduzierbar as exc:
+        print(f"Render verworfen: {exc}")
+        return 1
+
+
+def _main(argv: list[str] | None = None) -> int:
     ap = argparse.ArgumentParser(description=__doc__)
     ap.add_argument(
         "--check",
