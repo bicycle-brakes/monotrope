@@ -13,3 +13,8 @@
 __pycache__/
 *.pyc
 implementation_plan.md
+
+# The lychee action writes its report into the workspace (lychee/out.md).
+# It is CI output, never a tracked file — without this line the kit probe
+# reports it as an unclassified file and `--strict` turns the run red.
+lychee/
