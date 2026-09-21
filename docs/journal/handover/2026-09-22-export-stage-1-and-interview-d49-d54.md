@@ -155,3 +155,31 @@ Task status lives in Beads; this list only points.
 - Not run: anything under Python 3.11; the two hosted-runner prerequisites of
   stage 3. Not read: the full research document of pull request #37, the
   content of `plans/specs/`, the upstream beads documentation (unreachable).
+
+## Addendum — 2026-09-22, state after the session closed
+
+The sections above were written before their own pull request merged. What a
+session starting tomorrow finds:
+
+- **Checkout.** `main`, clean, level with the remote. The handover branch
+  named under "Working state" was merged through pull request #20
+  (`e96dee0`) and deleted; this addendum arrives through its own pull request
+  and carries nothing else. No temporary worktree of this session remains in
+  either repository.
+- **Tracker.** Pushed to the Dolt remote after the last write;
+  `render_beads_export.py --check` reported identity on `main` at `e96dee0`.
+  No tracker write is pending.
+- **lakeswitch-ai pull request #37.** Head `3cf4d22`. After this file was
+  written it gained forward pointers on the amended entries (D-24, D-27, D-29,
+  D-31, D-45), a note closing the open end of the foundation research, and a
+  journal handover of its own:
+  `journal/2026-09-22-decision-interview-d45-d54-and-ratification.md`. That
+  journal supersedes the next step of the Codex journal beside it — the
+  implementation plan comes after the maintainer's ratification, not before.
+- **Where to start tomorrow.** Work in this repository: the bead under "Next
+  step" above. Work in lakeswitch-ai: the journal named in the previous point;
+  its first step is to prepare the ratification file for cluster 7 as a
+  proposal.
+- **Unchanged and still waiting on the maintainer:** commit signing and the
+  provenance map in lakeswitch-ai, the first ratification, and the three ADRs
+  of pull request #12 here.
