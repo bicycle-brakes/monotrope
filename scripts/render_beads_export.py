@@ -31,6 +31,7 @@ from pathlib import Path
 REPO_ROOT = Path(__file__).resolve().parent.parent
 EXPORT = REPO_ROOT / ".beads" / "issues.jsonl"
 BD = REPO_ROOT / "tools" / "bd"
+BD_FEHLT = 127  # tools/bd: "no bd binary found" — und nur das
 
 
 class RendererFehlt(RuntimeError):
@@ -48,6 +49,11 @@ def _render_nach(tmp: Path) -> None:
         )
     except FileNotFoundError as exc:
         raise RendererFehlt(str(exc)) from exc
+    if erg.returncode == BD_FEHLT:
+        # Der Wrapper ist da, das gepinnte Binary nicht: dieselbe Lage wie ein
+        # fehlender Wrapper. Jeder andere Fehler (Versionskonflikt, kaputter
+        # Store) bleibt ein harter Fehler.
+        raise RendererFehlt((erg.stderr or erg.stdout).strip().splitlines()[0])
     if erg.returncode != 0:
         sys.stderr.write(erg.stdout + erg.stderr)
         raise SystemExit(2)

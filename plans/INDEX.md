@@ -8,4 +8,4 @@ Dateien dazukommen.
 
 | Artefakt | status | implementation_status | zuletzt geprueft | Bead |
 |---|---|---|---|---|
-| [`changes/2ee-triage/research.md`](changes/2ee-triage/research.md) | — | — | — | — |
+| [`changes/2ee-triage/research.md`](changes/2ee-triage/research.md) | draft | none | 2026-09-19 | coding-harness-2ee |

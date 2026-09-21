@@ -245,6 +245,67 @@ REGEL_VENTILE: dict[str, tuple[str, str, str]] = {
         "tests/test_validators.py::test_deprecated_pages_are_pointers_only",
         "2026-12-31",
     ),
+    # --- 2ee-Triage 2026-09-19: Demotions aus dem Mapping (Welle 2) --------
+    "agents-evidence-contract": (
+        "RB-A1: die Evidenz-Klausel steht byte-gleich in jeder Agent-Definition",
+        "tests/test_agents.py::test_every_agent_carries_the_evidence_contract",
+        "2026-11-30",
+    ),
+    "agents-tool-scopes": (
+        "RB-A2: Read-only-Agents fuehren keine Shell, Executoren deklarieren ihren Umfang",
+        "tests/test_agents.py::test_read_only_agents_have_no_bash",
+        "2026-11-30",
+    ),
+    "skill-outputs-transfer": (
+        "RB-A3: ein Selbst-Verdiktnis wird von einem zweiten Leser nachgerechnet",
+        "tests/test_skill_outputs.py::test_a_self_asserted_verdict_is_recomputed",
+        "2026-12-31",
+    ),
+    "hook-behaviour-tests": (
+        "RB-H1/H2/H3: Guards fallen geschlossen aus, Matcher sind Tool-Namen, keine Silencer",
+        "tests/test_hook_behaviour.py::test_no_guard_is_registered_with_a_silencer",
+        "2026-11-30",
+    ),
+    "hooks-registered-tests": (
+        "RB-H4: jedes Hook-Script ist registriert und jede Registrierung laeuft",
+        "tests/test_hooks_registered.py::test_every_hook_script_here_is_registered",
+        "2026-11-30",
+    ),
+    "fehler-katalog-transfer": (
+        "RB-G2: die Gate-Stufe folgt aus der Signifikanz im Fehler-Katalog",
+        "tests/test_fehler_katalog.py::test_every_gate_reference_matches_the_significance_level",
+        "2026-12-31",
+    ),
+    "kit-transfer": (
+        "RB-G5/G6/P3: Export-Schema- und Evidence-Pipeline-Pruefer reisen mit dem Kit-Transfer",
+        "tests/test_export_schemas.py::test_missing_schema_is_exit_2_and_stale_is_exit_1",
+        "2026-12-31",
+    ),
+    "human-gates-transfer": (
+        "RB-M4: Reconciliation-Bericht traegt Unterzeichner und begruendete Toleranzen",
+        "tests/test_human_gates.py::test_a_recon_report_without_a_signer_is_unsigned",
+        "2026-12-31",
+    ),
+    "codeowners-here": (
+        "RB-M7: CODEOWNERS deckt jeden Entscheidungs-Pfad mit eigener Zeile ab",
+        "tests/test_repo_settings.py::test_codeowners_covers_every_human_decided_path",
+        "2026-11-30",
+    ),
+    "owner-roles-here": (
+        "RB-M8: der Roster loest Rolle auf Handle auf, nie umgekehrt",
+        "tests/test_provenance.py::test_owner_is_a_role_not_a_person",
+        "2026-11-30",
+    ),
+    "provenance-validators": (
+        "RB-P1/P2: Artefaktklassen, Abnahmen und die Verzeichnis-Karte werden geprueft",
+        "tests/test_provenance.py::test_every_in_scope_file_declares_a_class",
+        "2026-11-30",
+    ),
+    "gate-record-validators": (
+        "RB-M1: das Record-Template wird von einem Validator geprueft",
+        "tests/test_validators.py::test_gate_record_template_validates",
+        "2026-11-30",
+    ),
 }
 
 
