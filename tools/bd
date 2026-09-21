@@ -35,9 +35,14 @@ if [ ! -x "$BD_BIN" ]; then
   BD_BIN="$(command -v bd 2>/dev/null || true)"
   case "$BD_BIN" in "$REPO_ROOT"/*) BD_BIN="" ;; esac
 fi
-[ -n "$BD_BIN" ] && [ -x "$BD_BIN" ] || die \
-  "no bd binary found." \
-  "Install bd $PINNED as ~/.local/bin/bd-${PINNED} (or as the bd on your PATH)."
+# Exit 127 — the shell's "command not found" — and only here: a caller such as
+# scripts/render_beads_export.py tells "the tracker does not live on this
+# machine" apart from every other failure by this code, not by the message.
+if [ -z "$BD_BIN" ] || [ ! -x "$BD_BIN" ]; then
+  printf '%s\n' "no bd binary found." \
+    "Install bd $PINNED as ~/.local/bin/bd-${PINNED} (or as the bd on your PATH)." >&2
+  exit 127
+fi
 
 # `bd version` prints e.g. "bd version 1.1.2 (20e493e56)"
 INSTALLED="$("$BD_BIN" version 2>/dev/null | head -1 | grep -oE '[0-9]+\.[0-9]+\.[0-9]+' | head -1 || true)"

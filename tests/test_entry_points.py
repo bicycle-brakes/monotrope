@@ -22,8 +22,7 @@ def test_claude_md_imports_agents_md_and_stays_short() -> None:
     zeilen = text.count("\n")
     assert zeilen <= BUDGET, f"CLAUDE.md hat {zeilen} Zeilen — das Budget liegt bei {BUDGET}"
     assert "AGENTS.md" in text, (
-        "CLAUDE.md verweist nicht auf AGENTS.md — der Einstieg wuergt die "
-        "Instruktion ab, statt sie zu importieren."
+        "CLAUDE.md verweist nicht auf AGENTS.md — der Einstieg wuergt die Instruktion ab, statt sie zu importieren."
     )
 
 
@@ -38,6 +37,5 @@ def test_readme_is_never_imported() -> None:
     """Das README ist Besuchertext, kein Instruktionsdokument — nie importieren."""
     for pfad in (CLAUDE_MD, AGENTS_MD):
         assert "README" not in pfad.read_text(encoding="utf-8"), (
-            f"{pfad.name} zieht das README als Instruktion herein — das README "
-            "ist fuer Besucher, nicht fuer Agents."
+            f"{pfad.name} zieht das README als Instruktion herein — das README ist fuer Besucher, nicht fuer Agents."
         )

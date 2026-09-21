@@ -137,3 +137,25 @@ buckets close, and that is the last M0 prerequisite after the three ADRs.
 Remaining red is unchanged in ownership: the `pytest` gate (37 = `2ee`) and
 the `docs-links`/`markdownlint` reports (`bt8`).
 
+
+## Anhang 3 — 2026-09-20: `2ee` geschlossen, VERIFY GREEN
+
+Die Welle 3 ist mit der Präfix-Entscheidung des Maintainers („enger Kern
+reist") umgesetzt und PR #15 ist bereit. Cluster D ist gefallen: die 7
+Agent-Definitionen aus AGENTS.md §3 sind **committed** (`.claude/agents/`,
+je `model: claude-sonnet-5` und die RB-A1-Klausel byte-gleich aus dem
+Regelwerk §6 — extrahiert mit der Logik des Tests selbst). Eine parallele
+Codex-Session kann sie nicht mehr still löschen; ein Löschen wäre jetzt
+ein sichtbarer Git-Delete.
+
+Stand: **264 passed, 0 failed, 15 skipped.** `make verify`: **VERIFY
+GREEN** — alle 11 Gates (pytest, ruff-check, ruff-format, leerprobe,
+plans-registry, bead-export, dangling-beads, decision-continuity,
+export-identity, gate-schema, ci-drift). Die Sperrklinke trägt 30
+Einträge (DECKEL 31): die 7 neuen Fälle sind die Agent-Modelle gegen den
+geruest-Rumpf `model-endpoints.yaml` im Leerprobekopf.
+
+Bead `coding-harness-2ee` ist geschlossen. Was bleibt, ist menschliche
+Abnahme: Reviews der Kette #8 → #12 → #11 → #13 → #14 → #15 und die
+ADR-Annahme in #12. Damit ist M0 mechanisch vollständig.
+
