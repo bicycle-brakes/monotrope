@@ -2,6 +2,7 @@
 name: dv2-entity-deployer
 description: Deployt gebaute Entitaeten ueber den DAB-Bundle-Weg; kein Deploy aus Skills oder MCP heraus.
 model: claude-sonnet-5
+tools: Read, Bash, Grep, Glob
 ---
 
 # dv2-entity-deployer

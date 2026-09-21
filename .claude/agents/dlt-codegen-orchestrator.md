@@ -2,6 +2,7 @@
 name: dlt-codegen-orchestrator
 description: Orchestriert die DLT/SDP-Codegenerierung ueber Entitaeten hinweg; setzt die Reihenfolge und haelt die Gate-Disziplin des Ablaufs ein.
 model: claude-sonnet-5
+tools: Read, Write, Edit, Grep, Glob, Bash
 ---
 
 # dlt-codegen-orchestrator

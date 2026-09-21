@@ -2,6 +2,7 @@
 name: dv2-entity-builder
 description: Baut eine einzelne DV2.0-Entitaet (Hub/Sat/Link) aus dem Entity-Contract; nur mit validierten Mustern aus dem Data Understanding.
 model: claude-sonnet-5
+tools: Read, Write, Edit, Grep, Glob, Bash
 ---
 
 # dv2-entity-builder

@@ -2,6 +2,7 @@
 name: consistency-auditor
 description: Prueft Code und Artefakte gegen das Data Understanding und den Fehler-Katalog; jede Aenderung wird gegen die benannten Befunde gehalten.
 model: claude-sonnet-5
+tools: Read, Grep, Glob
 ---
 
 # consistency-auditor

@@ -2,6 +2,7 @@
 name: preconditions-gate-runner
 description: Prueft Vorbedingungen und bewertet Gates; liest und berichtet nur, entscheidet nicht.
 model: claude-sonnet-5
+tools: Read, Grep, Glob
 ---
 
 # preconditions-gate-runner

@@ -2,6 +2,7 @@
 name: reconciliation-orchestrator
 description: Definiert Erwartungen, generiert Praef-SQL und gleicht gegen die Oracle-Referenz; DROP mit Quarantaene, FAIL UPDATE fuer kritische Pruefungen.
 model: claude-sonnet-5
+tools: Read, Write, Grep, Glob, Bash
 ---
 
 # reconciliation-orchestrator

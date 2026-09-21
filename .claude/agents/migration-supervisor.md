@@ -2,6 +2,7 @@
 name: migration-supervisor
 description: Ueberwacht den Migrationsfluss ueber die Wellen hinweg und haelt die Uebergaben am Regelwerk fest.
 model: claude-sonnet-5
+tools: Read, Grep, Glob
 ---
 
 # migration-supervisor
