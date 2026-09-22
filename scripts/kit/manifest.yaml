@@ -142,6 +142,9 @@ rules:
   - prefix: tests/test_handover_entry.py
     rolle: bestand
     reason: "misst die Vertrauensschwelle der Übergabe-Injektion (Bead hit, tools/claude-code) — skippt in der Leerprobe wie oben"
+  - prefix: tests/test_recap_lock.py
+    rolle: bestand
+    reason: "misst Recap-Lock-Besitz und das private Arbeitsverzeichnis des Kindes (Bead hit, tools/claude-code) — skippt in der Leerprobe wie oben"
   - prefix: tests/test_kit.py
     rolle: mechanismus
     reason: "haelt diese Datei und die Probe"

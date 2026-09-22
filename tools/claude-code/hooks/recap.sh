@@ -10,7 +10,10 @@
 #
 # Files: ~/.claude/recaps/<session_id>.{txt,now,base,entry}, removed after 7
 # days. The Haiku call runs with no user settings (so no hooks: no recursion),
-# no tools, no session persistence, from /tmp.
+# no tools, no session persistence, from a private scratch directory
+# (mktemp -d, mode 0700, removed afterwards): a world-writable /tmp would let
+# any local process plant project settings the child would happily load
+# (bead hit).
 
 [ -n "$CLAUDE_RECAP_CHILD" ] && exit 0          # never recurse from the child
 
@@ -21,6 +24,14 @@ sid=$(printf '%s' "$input" | jq -r '.session_id // empty' 2>/dev/null)
 dir="$HOME/.claude/recaps"
 ndir="$HOME/.claude/session-notes"
 mkdir -p "$dir"
+
+# BSD stat (macOS) vs GNU stat (Linux): nur eine Form gilt je Plattform, und
+# GNU liest -f %m als Dateisystem-Status (mehrzeilig, Exit 0) — als mtime
+# geisterte hier dieser Dump (bead hit). GNU zuerst, dann BSD; ohne lesbare
+# mtime gilt eine Datei als ewig alt.
+mtime() {
+  stat -c %Y "$1" 2>/dev/null || stat -f %m "$1" 2>/dev/null || echo 0
+}
 
 case "$mode" in
   prompt)
@@ -36,13 +47,24 @@ case "$mode" in
     [ -z "$last" ] && exit 0
     cwd=$(printf '%s' "$input" | jq -r '.cwd // empty')
 
-    # One update at a time per session; a lock older than five minutes is dead.
+    # One update at a time per session. A lock older than five minutes is dead
+    # (its holder is gone or stuck) and may be removed; a FRESH one is never
+    # stolen. The old loop fell through after 90 seconds and wrote anyway —
+    # worse, its EXIT trap removed the lock another run then held (bead hit).
+    # Without ownership this run drops out instead of writing in parallel.
+    # RECAP_LOCK_SEKUNDEN kuerzt die Wartezeit fuer Tests (Produktivwert 90).
     lock="$dir/$sid.lock"
-    [ -d "$lock" ] && [ $(( $(date +%s) - $(stat -f %m "$lock" 2>/dev/null || echo 0) )) -gt 300 ] && rmdir "$lock"
-    for _ in $(seq 1 90); do mkdir "$lock" 2>/dev/null && break; sleep 1; done
-    trap 'rmdir "$lock" 2>/dev/null' EXIT
+    besitz=""
+    for _ in $(seq 1 "${RECAP_LOCK_SEKUNDEN:-90}"); do
+      if mkdir "$lock" 2>/dev/null; then besitz=1; break; fi
+      [ $(( $(date +%s) - $(mtime "$lock") )) -gt 300 ] && rmdir "$lock" 2>/dev/null
+      sleep 1
+    done
+    [ -n "$besitz" ] || exit 0
+    arbeitsplatz=$(mktemp -d)
+    trap 'rm -rf "$arbeitsplatz"; rmdir "$lock" 2>/dev/null' EXIT
 
-    t0=$(stat -f %m "$dir/$sid.now" 2>/dev/null || echo 0)
+    t0=$(mtime "$dir/$sid.now")
     prev=$(cat "$dir/$sid.txt" 2>/dev/null)
     asked=$(cat "$dir/$sid.now" 2>/dev/null)
     # The note so far: this session's own, else the one it continues.
@@ -81,7 +103,9 @@ Regeln:
 - Zahlen nur mit Stichtag.
 - Behalte, was aus der bisherigen Notiz noch gilt; streiche, was erledigt ist."
 
-    out=$(cd /tmp && printf '%s' "$prompt" \
+    # The child runs from the private scratch directory with project settings
+    # as the only source — and there are none: the directory is empty and ours.
+    out=$(cd "$arbeitsplatz" && printf '%s' "$prompt" \
       | CLAUDE_RECAP_CHILD=1 claude -p --model haiku --no-session-persistence \
           --setting-sources project --tools "" 2>/dev/null | grep -v '^```')
 
