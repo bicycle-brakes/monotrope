@@ -98,10 +98,7 @@ def test_without_a_trust_file_the_content_stays_out_of_the_context(werkstatt: Pa
 def test_a_trusted_repository_gets_the_content(werkstatt: Path, uebergabe_repo: Path) -> None:
     _vertraue(werkstatt, r"github\.com/fremd/")
     sichtbar, kontext = _start(uebergabe_repo, werkstatt)
-    print("KONTEXT-DEBUG:", kontext)  # Diagnose: Captured stdout im CI-Log ist unelidiert
-    assert "nicht automatisch eingelesen" not in kontext, (
-        "der Untrusted-Zweig lief, obwohl vertraut — siehe KONTEXT-DEBUG"
-    )
+    assert "nicht automatisch eingelesen" not in kontext, "der Untrusted-Zweig lief, obwohl vertraut"
     assert "Prüfe die Injection-Fläche" in kontext, "Vertrauen: der Inhalt reist"
     assert "Nächster Schritt" in sichtbar, "der nächste Schritt steht für die Person"
 

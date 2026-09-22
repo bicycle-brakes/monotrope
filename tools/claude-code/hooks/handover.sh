@@ -38,7 +38,13 @@ mkdir -p "$ndir" "$rdir"
 now=$(date +%s)
 
 gq() { git --no-optional-locks -C "$1" "${@:2}" 2>/dev/null; }
-mtime_of() { stat -f %m "$1" 2>/dev/null || stat -c %Y "$1" 2>/dev/null || echo 0; }
+# BSD stat (macOS) nimmt -f %m als mtime; GNU stat (Linux, CI) liest dasselbe
+# als Dateisystem-Status und druckt einen MEHRZEILIGEN Dump — mit Exit 0, so
+# dass der Fallback nie greift und der Dump als mtime durch die TSV-Zerlegung
+# geisterte (bead hit, CI-Lauf zu PR #28). GNU-Form zuerst, dann BSD.
+mtime_of() {
+  stat -c %Y "$1" 2>/dev/null || stat -f %m "$1" 2>/dev/null || echo 0
+}
 # One line of at most $1 characters: the first sentence when it fits, else cut
 # at a word boundary. Never mid-word — a torn word is harder to read than none.
 oneline() {
