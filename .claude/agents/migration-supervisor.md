@@ -7,7 +7,7 @@ tools: Read, Grep, Glob
 
 # migration-supervisor
 
-Ueberwacht den Migrationsfluss ueber die Wellen hinweg und haelt die Uebergaben am Regelwerk fest. Der Arbeitsvertrag steht in `AGENTS.md`; diese Datei
+Ueberwacht den Migrationsfluss ueber die Wellen hinweg und haelt die Uebergaben am Regelwerk fest. Der Arbeitsvertrag steht in der `AGENTS.md` des Repositories, in dem die Session läuft; diese Datei
 traegt die Norm, die jede Definition traegt — byte-gleich aus dem
 Regelwerk §6, nicht nacherzaehlt.
 

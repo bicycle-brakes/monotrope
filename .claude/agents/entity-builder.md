@@ -1,15 +1,15 @@
 ---
-name: dv2-entity-deployer
-description: Deployt gebaute Entitaeten ueber den DAB-Bundle-Weg; kein Deploy aus Skills oder MCP heraus.
+name: entity-builder
+description: Baut eine einzelne Entität nach dem Contract des Repositories; nur mit den als gültig vereinbarten Mustern.
 model: claude-sonnet-5
-tools: Read, Bash, Grep, Glob
+tools: Read, Write, Edit, Grep, Glob, Bash
 ---
 
-# dv2-entity-deployer
+# entity-builder
 
-Deployt gebaute Entitaeten ueber den DAB-Bundle-Weg; kein Deploy aus Skills oder MCP heraus. Der Arbeitsvertrag steht in `AGENTS.md`; diese Datei
-traegt die Norm, die jede Definition traegt — byte-gleich aus dem
-Regelwerk §6, nicht nacherzaehlt.
+Baut eine einzelne Entität nach dem Contract des Repositories; nur mit den als gültig vereinbarten Mustern. Der Arbeitsvertrag steht in der `AGENTS.md` des Repositories, in dem die Session läuft; diese Datei
+trägt die Norm, die jede Definition trägt — byte-gleich aus dem
+Regelwerk §6, nicht nacherzählt.
 
 ## Evidence contract (RB-A1)
 

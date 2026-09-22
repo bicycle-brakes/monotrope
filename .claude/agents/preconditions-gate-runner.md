@@ -7,7 +7,7 @@ tools: Read, Grep, Glob
 
 # preconditions-gate-runner
 
-Prueft Vorbedingungen und bewertet Gates; liest und berichtet nur, entscheidet nicht. Der Arbeitsvertrag steht in `AGENTS.md`; diese Datei
+Prueft Vorbedingungen und bewertet Gates; liest und berichtet nur, entscheidet nicht. Der Arbeitsvertrag steht in der `AGENTS.md` des Repositories, in dem die Session läuft; diese Datei
 traegt die Norm, die jede Definition traegt — byte-gleich aus dem
 Regelwerk §6, nicht nacherzaehlt.
 

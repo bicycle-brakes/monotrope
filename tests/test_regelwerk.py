@@ -336,3 +336,22 @@ def test_a_ramp_without_a_deadline_is_caught() -> None:
     genannt = {e.split(":", 1)[1] for r in REGELN for e in r.erzwinger if e.startswith("Ramp:")}
     ohne_frist = sorted(n for n in genannt if VENTILE[n].deadline is None)
     assert not ohne_frist, ohne_frist
+
+
+# Hausregel 6 als Maschine (bead rqc): die Agent-Definitionen sind
+# Framework-Artefakte — vor rqc nannten vier von sieben Systeme der
+# Kundeninstanz (DV2, DLT/SDP, Oracle-Referenz). Die Liste ist der sichtbare
+# Riegel gegen das Zurueckrutschen: wer einen legitimen Framework-Gebrauch
+# eines Begriffs findet, traegt ihn hier nach — mit Begruendung, nicht still.
+INSTANZ_AUSDRUECKE = re.compile(r"\b(DV2|DLT|SDP|Oracle|ANSPRMENGE|exacs|wdp)\b|Hub/Sat/Link", re.IGNORECASE)
+
+
+def test_agent_definitions_carry_no_instance_terms() -> None:
+    agenten = sorted((REPO_ROOT / ".claude" / "agents").glob("*.md"))
+    assert agenten, "Vorbedingung: es gibt Agent-Definitionen."
+    befunde = []
+    for p in agenten:
+        m = INSTANZ_AUSDRUECKE.search(p.read_text(encoding="utf-8"))
+        if m:
+            befunde.append(f"{p.name}: {m.group(0)!r}")
+    assert not befunde, "Instanz-Ausdruecke in Agent-Definitionen (Hausregel 6, bead rqc):\n  " + "\n  ".join(befunde)
