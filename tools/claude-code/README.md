@@ -37,7 +37,7 @@ the maintainer reads them.
 | File | Hook event | Does |
 |---|---|---|
 | `statusline.sh` | status line | everything above |
-| `hooks/handover.sh start` | SessionStart | shows the entry (latest handover under `docs/journal/handover/` or `journal/`, its next step, the working tree measured now) and gives Claude the whole handover with the instruction to open with *where we are / next step / what is needed from you* |
+| `hooks/handover.sh start` | SessionStart | shows the entry (latest handover under `docs/journal/handover/` or `journal/`, its next step, the working tree measured now). The handover's content goes to Claude only for **trusted** repositories — `~/.claude/handover-trust`, one regex per line, matched against origin (bead `hit`: a cloned repo must not pipe its `journal/` into every session). Others get metadata and a hint to read the file |
 | `hooks/parallel-sessions.sh` | SessionStart, UserPromptSubmit | tells Claude when another session works in the same checkout, so it warns before changing files |
 | `hooks/recap.sh` | UserPromptSubmit, Stop | the rolling recap, and the automatic session note (`~/.claude/session-notes/`) |
 | `hooks/session-scan.sh` | — | the one session scan both of the above and the status line use |

@@ -139,6 +139,9 @@ rules:
   - prefix: tests/test_session_scan.py
     rolle: bestand
     reason: "misst tools/claude-code (Bestand, siehe Auffangregel oben) und skippt in der Leerprobe, weil ihr Objekt nicht reist (Bead hit)"
+  - prefix: tests/test_handover_entry.py
+    rolle: bestand
+    reason: "misst die Vertrauensschwelle der Übergabe-Injektion (Bead hit, tools/claude-code) — skippt in der Leerprobe wie oben"
   - prefix: tests/test_kit.py
     rolle: mechanismus
     reason: "haelt diese Datei und die Probe"
