@@ -181,3 +181,20 @@ Task status lives in Beads; this list only points.
   throwaway commits (`Good "git" signature`); the signing key is listed at
   GitHub.
 - Not run: anything in lakeswitch-ai; anything under Python 3.11.
+
+## Addendum — 2026-09-22, the next step above is done
+
+The cluster-7 ratification proposal is on lakeswitch-ai's pull request 37
+branch as `journal/2026-09-22-ratification-cluster-7-proposal.md` (commit
+`53f467b`, pushed without force from a throwaway worktree, worktree
+removed). It carries the five digests at `3cf4d22`, the digest rule with a
+recompute command, and the proposed record
+`decisions/ratifications/RC-007-foundation-and-tracker.md` with empty
+verdicts. `lakeswitch verify` was not run for that commit — the CLI is not
+installed on this machine's shell.
+
+**Next step, replacing the one above:** the maintainer writes the verdicts
+and signs (steps 1–5 in that journal note). A session's next work is either
+the worktree write verification here (`coding-harness-m34`) once the second
+session has ended, or the two provenance lines for the maintainer in
+lakeswitch-ai.
