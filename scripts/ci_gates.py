@@ -259,9 +259,9 @@ def _tracker_hydratation() -> list[str]:
         "        run: |",
         "          bash tools/beads/install.sh",
         "          git fetch origin refs/dolt/data:refs/dolt/data",
-        "          header=\"$(git config --local http.https://github.com/.extraheader || true)\"",
-        "          if [ -n \"$header\" ]; then",
-        "            git config --global http.https://github.com/.extraheader \"$header\"",
+        '          header="$(git config --local http.https://github.com/.extraheader || true)"',
+        '          if [ -n "$header" ]; then',
+        '            git config --global http.https://github.com/.extraheader "$header"',
         "          fi",
         "          bash tools/bd bootstrap --yes",
     ]
