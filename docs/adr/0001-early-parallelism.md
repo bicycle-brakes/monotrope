@@ -1,16 +1,19 @@
 # ADR 0001 — Early parallelism: Omnigent coordinates coding workers from M0
 
-* Status: proposed · amends D-3 and D-7 of the 2026-09-16 interview
-* Review: pending (maintainer) · Deciders: framework-architect, maintainer
-* Date: 2026-09-19
+* Status: accepted · amends D-3 and D-7 of the 2026-09-16 interview
+* Review: accepted by the maintainer, 2026-09-22, with the changes of that
+  review · Decider: maintainer · prepared by a framework-architect session
+* Date: 2026-09-19 · accepted 2026-09-22
 
 ## Context
 
-The interview outcomes D-3 (task granularity) and D-7 (Omnigent adoption)
-sequenced parallel coordination late: one Bead per change first, Omnigent
-parallelism at M3, and optional task Beads only where ownership demanded
-them. On 2026-09-17 the maintainer reversed the sequencing explicitly:
-Omnigent coordinates parallel coding from the first proof of concept. The
+D-7 already set the full adoption path M0–M4 "starting now"; what it left
+late was the *content* of M0: a single sandboxed session running one task
+loop, with parallel workers only at M3. D-3 (task granularity) tied task
+Beads to that: one Bead per change, task Beads under an epic only once
+stage 2 has two workers claiming. On 2026-09-17 the maintainer moved both
+forward: M0 itself runs two coordinated workers, and D-3's two-worker
+condition is met at M0, not at stage 2. The
 [decision continuity table](../architecture/2026-09-17-omnigent-first-target.md#decision-continuity)
 records both amendments; this ADR is the runtime record the table points to.
 
@@ -49,8 +52,11 @@ records both amendments; this ADR is the runtime record the table points to.
   reopening unrelated decisions.
 * The pilot must measure throughput, findings, human time and cost against a
   serial baseline before M1.
-* Every rule this amends needs its enforcer updated before runtime activation
-  (gate manifest, `coding-harness-bo0`).
+* Every rule this amends needs its enforcer in the gate file
+  (`decisions/gates.yaml`, in place since `coding-harness-bo0` closed) before
+  runtime activation. The enforcers for W0 (isolated worktrees) and W1
+  (exclusive coordinator writer) do not exist yet; they get their own Bead
+  when this ADR is accepted.
 
 ## Validation
 

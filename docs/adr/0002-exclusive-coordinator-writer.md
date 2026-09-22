@@ -1,9 +1,10 @@
 # ADR 0002 — One exclusive coordinator writes the tracker during parallel sessions
 
-* Status: proposed · amends the session-entry rule "no session writes while
+* Status: accepted · amends the session-entry rule "no session writes while
   another session runs" (AGENTS.md house rule 4)
-* Review: pending (maintainer) · Deciders: framework-architect, maintainer
-* Date: 2026-09-19
+* Review: accepted by the maintainer, 2026-09-22, with the changes of that
+  review · Decider: maintainer · prepared by a framework-architect session
+* Date: 2026-09-19 · accepted 2026-09-22
 
 ## Context
 
@@ -37,14 +38,18 @@ It is a runtime permission, not an interpretation of the existing rule.
 
 **(a)**, bounded exactly as the target document states:
 
-* Exactly **one** coordinator process holds an OS-level exclusive writer lock,
-  shared by coordinator processes, writing from the designated main checkout
-  via `tools/bd` — never bare `bd`.
+* One lock mechanism (an OS-level exclusive writer lock) is used by every
+  coordinator process, and exactly **one** of them holds it at a time. The
+  holder writes from the designated main checkout via `tools/bd` — never
+  bare `bd`.
 * A second coordinator **fails closed**: it may not write. A replacement must
   prove the old writer stopped and acquire the lock before reconciling state.
   An elapsed timeout alone does not authorize concurrent ownership.
 * Run and attempt IDs reject late or duplicate results after reassignment.
 * Workers receive bounded snapshots and stay tracker-read-only.
+* The tracker export (`scripts/render_beads_export.py`, held by the
+  `export-identity` gate) stays with the one writer: the lock holder renders
+  it, nobody else.
 * The harness's live store is never the pilot store: the pilot runs in a
   throwaway repository with its own tracker.
 * This permission activates **only** with enforced exclusive writer ownership
