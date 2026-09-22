@@ -246,9 +246,12 @@ def _tracker_hydratation() -> list[str]:
     Tracker-Stand ueber refs/dolt/data. Ohne ihn waere export-identity in der
     CI immer exit 3 — und floor: true haette jeden Lauf rot. Der Schritt ist
     eine Vorbedingung und traegt deshalb wie checkout und setup-deps kein
-    `if` (siehe _schritt). `bd bootstrap` beruehrt .beads/.gitignore und
-    .beads/config.yaml im Checkout — genau dafuer ist dieser Schritt die
-    Stelle, an der das passieren darf (staged toward coding-harness-1jg.3).
+    `if` (siehe _schritt). `bd bootstrap` klont via git+https in einem eigenen
+    Verzeichnis: der Credential-Header von actions/checkout gilt nur lokal im
+    Checkout, darum hebt der Schritt ihn nach --global. Beim Bootstrap
+    beruehrt bd ausserdem .beads/.gitignore und .beads/config.yaml im Checkout
+    — genau dafuer ist dieser Schritt die Stelle, an der das passieren darf
+    (staged toward coding-harness-1jg.3).
     """
     return [
         "      - name: Hydrate the tracker (pinned bd, checksum-verified)",
@@ -256,6 +259,10 @@ def _tracker_hydratation() -> list[str]:
         "        run: |",
         "          bash tools/beads/install.sh",
         "          git fetch origin refs/dolt/data:refs/dolt/data",
+        "          header=\"$(git config --local http.https://github.com/.extraheader || true)\"",
+        "          if [ -n \"$header\" ]; then",
+        "            git config --global http.https://github.com/.extraheader \"$header\"",
+        "          fi",
         "          bash tools/bd bootstrap --yes",
     ]
 
