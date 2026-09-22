@@ -28,7 +28,7 @@ def test_gate_schema_gate_goes_red_when_an_entry_has_no_command() -> None:
     import ci_gates
 
     schlecht = {
-        "schema_version": 1,
+        "schema_version": 2,
         "gates": [
             {
                 "id": "kaputt",
@@ -36,6 +36,7 @@ def test_gate_schema_gate_goes_red_when_an_entry_has_no_command() -> None:
                 "job": "verify",
                 "enforcement": "block",
                 "floor": True,
+                "placement": "both",
                 "reason": "ein Seed, der den Schemafehler demonstriert",
             }
         ],
@@ -57,7 +58,7 @@ def test_gate_schema_gate_rejects_a_non_boolean_needs_tracker() -> None:
     import ci_gates
 
     schlecht = {
-        "schema_version": 1,
+        "schema_version": 2,
         "gates": [
             {
                 "id": "kaputt",
@@ -66,6 +67,7 @@ def test_gate_schema_gate_rejects_a_non_boolean_needs_tracker() -> None:
                 "job": "verify",
                 "enforcement": "block",
                 "floor": True,
+                "placement": "both",
                 "needs_tracker": "yes",
                 "reason": "ein Seed, der den Schemafehler demonstriert",
             }
@@ -74,6 +76,138 @@ def test_gate_schema_gate_rejects_a_non_boolean_needs_tracker() -> None:
     befunde = ci_gates.validate_schema(schlecht)
     assert befunde, "needs_tracker muss ein Boolean sein"
     assert any("needs_tracker" in b for b in befunde)
+
+
+def test_gate_schema_gate_rejects_an_unknown_placement() -> None:
+    """Bead 1jg.2: placement ist geschlossen — ein viertes Wort ist ein Schemafehler."""
+    import ci_gates
+
+    schlecht = {
+        "schema_version": 2,
+        "gates": [
+            {
+                "id": "kaputt",
+                "title": "placement als Freitext",
+                "command": "python3 -c 'print(1)'",
+                "job": "verify",
+                "enforcement": "block",
+                "floor": True,
+                "placement": "manchmal",
+                "reason": "ein Seed, der den Schemafehler demonstriert",
+            }
+        ],
+    }
+    befunde = ci_gates.validate_schema(schlecht)
+    assert befunde, "placement muss dem geschlossenen Vokabular folgen"
+    assert any("placement" in b for b in befunde)
+
+
+def test_gate_schema_gate_requires_a_placement() -> None:
+    """Bead 1jg.2: ohne placement waere der Ort des Messens wieder Implizitwissen."""
+    import ci_gates
+
+    schlecht = {
+        "schema_version": 2,
+        "gates": [
+            {
+                "id": "kaputt",
+                "title": "ohne placement",
+                "command": "python3 -c 'print(1)'",
+                "job": "verify",
+                "enforcement": "block",
+                "floor": True,
+                "reason": "ein Seed, der den Schemafehler demonstriert",
+            }
+        ],
+    }
+    befunde = ci_gates.validate_schema(schlecht)
+    assert befunde, "placement ist Pflicht"
+    assert any("placement" in b for b in befunde)
+
+
+def test_the_generated_workflow_leaves_writer_only_gates_out(tmp_path: Path, monkeypatch) -> None:
+    """Bead 1jg.2: writer-only Gates misst nur die Schreibmaschine — die
+    abgeleitete ci.yml haelt sie deklariert raus, und ein writer-only Gate mit
+    needs_tracker loest dort auch keine Hydratation aus."""
+    import ci_gates
+
+    doc = {
+        "schema_version": 2,
+        "gates": [
+            {
+                "id": "lauf-ueberall",
+                "title": "misst ueberall",
+                "command": "python3 -c 'print(1)'",
+                "job": "verify",
+                "enforcement": "block",
+                "floor": True,
+                "placement": "both",
+                "reason": "Vergleichsmassstab des Seeds",
+            },
+            {
+                "id": "nur-schreiber",
+                "title": "misst nur an der Schreibmaschine",
+                "command": "python3 -c 'print(2)'",
+                "job": "verify",
+                "enforcement": "block",
+                "floor": True,
+                "placement": "writer",
+                "needs_tracker": True,
+                "reason": "Seed fuer die deklarierte Auslassung",
+            },
+        ],
+    }
+    gate_datei = tmp_path / "gates.yaml"
+    gate_datei.write_text(yaml.safe_dump(doc, sort_keys=False), encoding="utf-8")
+    monkeypatch.setattr(ci_gates, "GATE_FILE", gate_datei)
+
+    ableitung = ci_gates.generate_ci()
+    assert "nur-schreiber" not in ableitung, "writer-only Gates gehoeren nicht in die CI"
+    assert "lauf-ueberall" in ableitung
+    assert "Hydrate the tracker" not in ableitung, (
+        "ein nur-writer Gate mit needs_tracker darf die CI-Hydratation nicht anstossen"
+    )
+
+
+def test_the_local_command_list_skips_hosted_only_gates(tmp_path: Path, monkeypatch, capsys) -> None:
+    """Bead 1jg.2: hosted-only Gates kann der lokale Lauf nicht messen — er
+    laesst sie deklariert aus, statt sie unmoeglich rot laufen zu lassen."""
+    import ci_gates
+
+    doc = {
+        "schema_version": 2,
+        "gates": [
+            {
+                "id": "lauf-ueberall",
+                "title": "misst ueberall",
+                "command": "python3 -c 'print(1)'",
+                "job": "verify",
+                "enforcement": "block",
+                "floor": True,
+                "placement": "both",
+                "reason": "Vergleichsmassstab des Seeds",
+            },
+            {
+                "id": "nur-ci",
+                "title": "misst nur in der gehosteten CI",
+                "command": "python3 -c 'print(2)'",
+                "job": "verify",
+                "enforcement": "block",
+                "floor": True,
+                "placement": "hosted",
+                "reason": "Seed fuer die deklarierte Auslassung",
+            },
+        ],
+    }
+    gate_datei = tmp_path / "gates.yaml"
+    gate_datei.write_text(yaml.safe_dump(doc, sort_keys=False), encoding="utf-8")
+    monkeypatch.setattr(ci_gates, "GATE_FILE", gate_datei)
+    monkeypatch.setattr(sys, "argv", ["ci_gates.py", "--commands", "--job", "verify", "--placement", "lokal", "--tsv"])
+
+    assert ci_gates.main() == 0
+    ausgegeben = capsys.readouterr().out
+    assert "nur-ci" not in ausgegeben, "hosted-only Gates gehoeren nicht in den lokalen Lauf"
+    assert "lauf-ueberall" in ausgegeben
 
 
 # --------------------------------------------------------------------------

@@ -58,8 +58,10 @@ fi
 
 # Die Gate-Liste wird ZUERST geholt und ihr Fehlschlag ist fatal: ein Lauf
 # ueber null gemessene Gates darf nicht in einem gruenen Urteil enden
-# (Runner-Review 2026-09-21, PR #11).
-gate_tsv=$("$PYTHON" scripts/ci_gates.py --commands --job "$JOB" --tsv $([ "$CI_MODE" -eq 1 ] && echo "--skip-equivalents")) \
+# (Runner-Review 2026-09-21, PR #11). --placement lokal: hosted-only Gates
+# misst nur die CI — der lokale Lauf laesst sie deklariert aus (bead 1jg.2),
+# die Gate-Datei nennt das placement, nicht der Zufall.
+gate_tsv=$("$PYTHON" scripts/ci_gates.py --commands --job "$JOB" --placement lokal --tsv $([ "$CI_MODE" -eq 1 ] && echo "--skip-equivalents")) \
     || { echo "die Gate-Liste liess sich nicht erzeugen — kein VERIFY ohne gemessene Gates" >&2; exit 2; }
 [ -n "$gate_tsv" ] || { echo "die Gate-Liste ist leer — ein Job ohne messbare Gates ist ein Konfigurationsfehler" >&2; exit 2; }
 

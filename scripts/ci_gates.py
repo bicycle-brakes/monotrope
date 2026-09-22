@@ -39,6 +39,15 @@ CI_FILE = REPO_ROOT / ".github" / "workflows" / "ci.yml"
 ENFORCEMENT: tuple[str, ...] = ("advisory", "report", "block")
 JOBS: tuple[str, ...] = ("verify", "drift")
 
+# Wo ein Gate misst — geschlossen seit bead 1jg.2. both = lokaler Laeufer und
+# gehostete CI; writer = nur an einer Schreibmaschine (die abgeleitete ci.yml
+# haelt ihn deklariert raus); hosted = nur in der gehosteten CI (der lokale
+# Laeufer laesst ihn deklariert aus). Eine deklarierte Auslassung ist eine
+# Aussage, kein Schweigen. SCHEMA_VERSION gehoert zur Gate-Datei: ein
+# Schemawechsel ist sichtbar, kein stiller.
+PLACEMENT: tuple[str, ...] = ("hosted", "writer", "both")
+SCHEMA_VERSION = 2
+
 # Scripts ohne Aufrufer in der erzeugten ci.yml — mit dem Grund, warum das
 # richtig ist (RB-G3). Jedes Script unter `scripts/` steht entweder als Gate-
 # Schritt in ci.yml, wird vom Runner gefahren, oder steht hier mit Grund.
@@ -113,8 +122,8 @@ def validate_schema(doc: dict[str, Any] | None = None) -> list[str]:
     fehler: list[str] = []
     if not isinstance(doc, dict):
         return ["die Gate-Datei ist kein Mapping"]
-    if doc.get("schema_version") != 1:
-        fehler.append(f"schema_version muss 1 sein, ist {doc.get('schema_version')!r}")
+    if doc.get("schema_version") != SCHEMA_VERSION:
+        fehler.append(f"schema_version muss {SCHEMA_VERSION} sein, ist {doc.get('schema_version')!r}")
     gate_liste = doc.get("gates")
     if not isinstance(gate_liste, list) or not gate_liste:
         fehler.append("'gates' fehlt oder ist leer")
@@ -138,6 +147,8 @@ def validate_schema(doc: dict[str, Any] | None = None) -> list[str]:
             fehler.append(f"{gid}: enforcement muss eins von {ENFORCEMENT} sein")
         if not isinstance(g.get("floor"), bool):
             fehler.append(f"{gid}: floor fehlt oder ist kein Boolean")
+        if g.get("placement") not in PLACEMENT:
+            fehler.append(f"{gid}: placement muss eins von {PLACEMENT} sein, ist {g.get('placement')!r} (bead 1jg.2)")
         if "needs_tracker" in g and not isinstance(g.get("needs_tracker"), bool):
             fehler.append(f"{gid}: needs_tracker muss ein Boolean sein")
         if g.get("needs_tracker") and (bool(g.get("action")) or g.get("job") != "verify"):
@@ -170,6 +181,7 @@ def gates() -> list[dict[str, Any]]:
                 "with": g.get("with") or {},
                 "enforcement": g["enforcement"],
                 "floor": g["floor"],
+                "placement": g["placement"],
                 "needs_tracker": bool(g.get("needs_tracker")),
                 "reason": g.get("reason", ""),
                 "local_runnable": kommando is not None or ersatz is not None,
@@ -270,8 +282,12 @@ def _tracker_hydratation() -> list[str]:
 def generate_ci() -> str:
     """Die abgeleitete ci.yml — deterministisch, aus der einen Liste."""
     alle = gates()
-    pruefe = [g for g in alle if g["job"] == "verify"]
-    drift = [g for g in alle if g["job"] == "drift"]
+    # Bead 1jg.2: writer-only Gates misst nur die Schreibmaschine — die
+    # abgeleitete ci.yml haelt sie deklariert raus, statt sie dort unmoeglich
+    # laufen zu lassen. Ein writer-only Gate mit needs_tracker stoesst folglich
+    # auch keine Hydratation an.
+    pruefe = [g for g in alle if g["job"] == "verify" and g["placement"] != "writer"]
+    drift = [g for g in alle if g["job"] == "drift" and g["placement"] != "writer"]
     aktionen = [g for g in pruefe if g["action"]]
     kommandos = [g for g in pruefe if not g["action"]]
     zeilen: list[str] = [
@@ -363,6 +379,13 @@ def main() -> int:
         action="store_true",
         help="Action-Aequivalente auslassen (die CI faehrt die Actions selbst)",
     )
+    ap.add_argument(
+        "--placement",
+        choices=("lokal", "ci"),
+        default=None,
+        help="nur Gates, die in diesem Umfeld messen (bead 1jg.2): lokal "
+        "schliesst hosted-only aus, ci schliesst writer-only aus",
+    )
     ap.add_argument("--format", choices=["text", "json"], default="text")
     ap.add_argument("--report", action="store_true", help="Commit-SHAs und Konfigurations-Hash")
     ap.add_argument("--check-schema", action="store_true", help="Gate-Datei gegen ihr Schema pruefen")
@@ -383,7 +406,7 @@ def main() -> int:
             for f in fehler:
                 print(f"  - {f}")
             return 1
-        print(f"Gate-Datei ok: {len(alle)} Gates, Schema 1.")
+        print(f"Gate-Datei ok: {len(alle)} Gates, Schema {SCHEMA_VERSION}.")
         return 0
 
     if args.check_ci:
@@ -404,6 +427,10 @@ def main() -> int:
     if args.commands:
         for g in alle:
             if g["job"] != args.job or not g["local_runnable"]:
+                continue
+            if args.placement == "lokal" and g["placement"] == "hosted":
+                continue
+            if args.placement == "ci" and g["placement"] == "writer":
                 continue
             if args.skip_equivalents and g["via_local_equivalent"]:
                 continue

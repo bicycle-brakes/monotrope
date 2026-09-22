@@ -19,13 +19,19 @@
 #               Unreachable counts as failing: a gate that cannot measure
 #               exits 3, and the runner turns that red on a block gate
 #               (bead coding-harness-4t8).
+#   placement   closed vocabulary (bead 1jg.2): hosted / writer / both —
+#               where a gate measures. both = local runner and hosted CI;
+#               writer = only on a writer machine (the generated workflow
+#               leaves it out, declared); hosted = only in hosted CI (the
+#               local runner skips it, declared). A declared skip is a
+#               statement, not silence.
 #   needs_tracker  optional boolean, command gates only: the derived CI
 #               hydrates the tracker (checksum-verified pinned bd, then
 #               refs/dolt/data) before this gate runs. Where that cannot
 #               happen the gate exits 3 (see floor).
 #   reason      why this gate exists, in one sentence.
 
-schema_version: 1
+schema_version: 2
 
 tools:
   python: "3.12"
@@ -39,6 +45,7 @@ gates:
     job: verify
     enforcement: block
     floor: true
+    placement: both
     reason: The suite is the base verdict of every change; make verify runs it first.
 
   - id: ruff-check
@@ -47,6 +54,7 @@ gates:
     job: verify
     enforcement: block
     floor: true
+    placement: both
     reason: One lint configuration (ruff.toml) for every Python artefact of the harness.
 
   - id: ruff-format
@@ -55,6 +63,7 @@ gates:
     job: verify
     enforcement: block
     floor: false
+    placement: both
     reason: Formatting is decided by the tool, not reviewed by a human.
 
   - id: leerprobe
@@ -63,6 +72,7 @@ gates:
     job: verify
     enforcement: block
     floor: true
+    placement: both
     reason: The kit-probe is this repository's acceptance gate — every tracked file is classified, DRIFT blocks.
 
   - id: plans-registry
@@ -71,6 +81,7 @@ gates:
     job: verify
     enforcement: block
     floor: true
+    placement: both
     reason: The two lifecycle rules need a runner; `make staleness` is the same command.
 
   - id: docs-links
@@ -79,6 +90,7 @@ gates:
     job: verify
     enforcement: report
     floor: false
+    placement: both
     reason: Scharf geschaltet wird er, sobald bt8 die 35 gemessenen Korpus-Befunde (governance/WORKFLOW-Links, Frontmatter-Luecken) abgearbeitet hat — bis dahin meldet er und blockiert nicht.
 
   - id: bead-export
@@ -87,6 +99,7 @@ gates:
     job: verify
     enforcement: block
     floor: true
+    placement: both
     reason: The export is the tracker's rendered truth — a broken line breaks every reader that quotes it.
 
   - id: dangling-beads
@@ -95,6 +108,7 @@ gates:
     job: verify
     enforcement: block
     floor: true
+    placement: both
     reason: A citation of an unknown bead silently severs the provenance chain.
 
   - id: decision-continuity
@@ -103,6 +117,7 @@ gates:
     job: verify
     enforcement: block
     floor: true
+    placement: both
     reason: Decisions vanish by silent rewrite (gap P1) — this gate turns vanishing into a finding (maintainer decision 5, 2026-09-19).
 
   - id: export-identity
@@ -111,6 +126,7 @@ gates:
     job: verify
     enforcement: block
     floor: true
+    placement: both
     needs_tracker: true
     reason: Auto-export is off; the writer renders at session end, and CI hydrates the tracker to measure the same thing — an export that cannot be checked exits 3 and is red (D-4, bead 4t8, staged toward 1jg.3).
 
@@ -120,6 +136,7 @@ gates:
     job: verify
     enforcement: block
     floor: true
+    placement: both
     reason: A malformed gate file would silence every runner at once — it is checked like any other input.
 
   - id: ci-drift
@@ -128,6 +145,7 @@ gates:
     job: verify
     enforcement: block
     floor: true
+    placement: both
     reason: The workflow is derived, never hand-edited; this gate is the derivation's ratchet (D-10).
 
   - id: ramp-valves
@@ -136,6 +154,7 @@ gates:
     job: verify
     enforcement: block
     floor: false
+    placement: both
     reason: Ein Ventil ist ein datiertes Versprechen — der Uebergang der Frist muss den Lauf rot machen, lokal wie in der CI; deshalb steht er in derselben Liste (D-10) und nicht als fest eincompilierter Schritt im Generator.
 
   - id: markdownlint
@@ -148,6 +167,7 @@ gates:
     job: verify
     enforcement: report
     floor: false
+    placement: both
     reason: Prose hygiene is reported, not blocked — the linter's taste is not a merge criterion.
 
   - id: lychee
@@ -158,6 +178,7 @@ gates:
     job: verify
     enforcement: advisory
     floor: false
+    placement: both
     reason: Foreign servers; a red run here says something about the network, not the candidate.
 
   - id: plans-registry-strict
@@ -166,6 +187,7 @@ gates:
     job: drift
     enforcement: block
     floor: true
+    placement: both
     reason: DRIFT blocks only on the timer (ADR-028 R2) — the outside moves without a push to this repo.
 
 retired: []
