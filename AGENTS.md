@@ -11,6 +11,10 @@ kit scripts) migrates from `portfolio-agentic-engineering` in measured steps.
 The migration plan and current state live in the bootstrap handover:
 `docs/journal/handover/2026-09-16-coding-harness-bootstrap.md`.
 
+This is the only instruction file. There is no `CLAUDE.md` — Claude Code
+(≥ 2.1.277) reads `AGENTS.md` itself when none exists, and a `CLAUDE.md` beside
+it would silently replace it (`tests/test_entry_points.py`).
+
 ## The workflow in one screen
 
 | # | Phase | Artifact | Gate |

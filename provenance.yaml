@@ -245,9 +245,6 @@ paths:
   - prefix: "AGENTS.md"
     allowed: [human-written]
     frontmatter: none
-  - prefix: "CLAUDE.md"
-    allowed: [human-written]
-    frontmatter: none
   - prefix: "CHANGELOG.md"
     allowed: [ai-generated]
     frontmatter: none

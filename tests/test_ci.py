@@ -552,7 +552,7 @@ def test_the_archived_landing_page_is_not_wired_to_anything() -> None:
     )
     assert not (REPO_ROOT / "docs" / "index.html").exists()
 
-    aktiv = [REPO_ROOT / "README.md", REPO_ROOT / "AGENTS.md", REPO_ROOT / "CLAUDE.md"]
+    aktiv = [REPO_ROOT / "README.md", REPO_ROOT / "AGENTS.md"]
     for datei in aktiv:
         text = datei.read_text(encoding="utf-8")
         assert "publish-html" not in text, f"{datei.name} nennt den geloeschten Workflow"

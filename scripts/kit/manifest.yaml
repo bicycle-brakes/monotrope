@@ -233,9 +233,6 @@ rules:
   - prefix: AGENTS.md
     rolle: bestand
     reason: "offen: spec.md D4. Sieben Domaenen-Nennungen an drei Stellen (Strukturbaum, Instanz-Satz, Markentrennung) — solange die dort stehen, traegt die Datei den Bestand mit"
-  - prefix: CLAUDE.md
-    rolle: bestand
-    reason: "importiert AGENTS.md und ergaenzt Harness-Spezifisches — haengt an D3 und D4"
   - prefix: Makefile
     rolle: bestand
     reason: "sechs Ziele ueber Scripts dieses Repos. Die EINE Gate-Liste steht in ci.yml, nicht hier"

@@ -163,7 +163,7 @@ neue Regel · PATCH = Wortlaut oder Testname.
 
 | ID | Regel | Stufe | Erzwingender Test/Gate | Gilt in |
 |---|---|---|---|---|
-| **RB-S1** | Das Instruktionsbudget ist eine Grenze, keine Empfehlung: eine Instruktionsdatei, ein Import, eine Obergrenze. Das README wird nie importiert | 4 | `tests/test_entry_points.py`::test_claude_md_imports_agents_md_and_stays_short · ::test_instruction_files_are_under_200_lines · ::test_readme_is_never_imported | P L I |
+| **RB-S1** | Das Instruktionsbudget ist eine Grenze, keine Empfehlung: eine Instruktionsdatei (`AGENTS.md`, keine `CLAUDE.md` daneben), eine Obergrenze. Das README wird nie importiert | 4 | `tests/test_entry_points.py`::test_agents_md_is_the_only_instruction_file · ::test_instruction_file_is_under_200_lines · ::test_readme_is_never_imported | P L I |
 | **RB-S2** | Prozeduren leben in Skills, Erklärungen in der Dokumentation hinter einem generierten Index, bereichsgebundene Regeln in pfadgebundenen Regeldateien | 2 | `Ramp:procedures-in-skills` | P L I |
 | **RB-S3** | Eine Seite hat genau einen Aussagetyp; nur Referenz-Seiten werden aus Instruktionsdateien zitiert | 2 | `Ramp:doc-type` | P L I |
 | **RB-S4** | Jede Wissensseite nennt ihren Eigentümer und wann sie zuletzt geprüft wurde; eine abgekündigte Seite ist nur noch ein Zeiger; Ablösungen sind gegenseitig verlinkt | 2 | `Ramp:freshness-per-page` | P L I |
