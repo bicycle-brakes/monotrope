@@ -58,8 +58,13 @@ OHNE_AUFRUFER: dict[str, str] = {
     ),
     "new_change.py": (
         "Einstieg, kein Gate — legt plans/changes/<name>/ an und wird von "
-        "einem Menschen mit einer Vorgangs-ID gerufen; der Dry-Run wird von "
-        "tests/test_gate_machinery.py per Unterprozess gefahren"
+        "einem Menschen mit einer Vorgangs-ID gerufen; tests/test_workflow_entry.py "
+        "faehrt es (Bead cke)"
+    ),
+    "check_worktree_state.sh": (
+        "Vorbedingung — new_change.py ruft es vor dem Schreiben auf; ein "
+        "eigenes Gate haette keinen Gegenstand, denn die CI faehrt ohnehin "
+        "von einem sauberen Checkout aus"
     ),
     "verify_all.sh": (
         "Der lokale Lauf fuer Menschen — make verify ruft ihn. Die CI faehrt "
@@ -70,13 +75,10 @@ OHNE_AUFRUFER: dict[str, str] = {
 
 # Scripts ohne Test — mit dem Grund. Die Sperrklinke darf schrumpfen, nie
 # wachsen (tests/test_ci.py::test_the_test_exemption_list_only_shrinks).
-OHNE_TEST: dict[str, str] = {
-    "new_change.py": (
-        "Der Dry-Run blockt hier an der fehlenden Vorbedingung "
-        "(check_worktree_state.sh fehlt in diesem Checkout) — gehoert zur "
-        "2ee-Triage, nicht zu diesem Gate"
-    ),
-}
+# Leer seit cke (2026-09-22): der letzte Grund war der fehlende Waechter
+# ("check_worktree_state.sh fehlt in diesem Checkout") — der Waechter reist
+# jetzt mit, und tests/test_workflow_entry.py faehrt den Einstieg.
+OHNE_TEST: dict[str, str] = {}
 
 # Marketplace-Actions, deren Werkzeug es auch lokal gibt. Die Argumente werden
 # NICHT hier gepflegt — sie stammen aus dem `with`-Block der Gate-Datei.
