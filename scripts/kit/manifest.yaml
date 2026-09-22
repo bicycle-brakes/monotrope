@@ -104,6 +104,9 @@ rules:
   - prefix: scripts/new_change.py
     rolle: mechanismus
     reason: "der Einstieg. Gehoert wp-p1-verbesserung-wei1; hier nur klassifiziert, nicht kopiert bearbeitet"
+  - prefix: scripts/check_worktree_state.sh
+    rolle: mechanismus
+    reason: "der Waechter, den new_change.py als Vorbedingung aufruft (Bead cke) — ohne ihn blockt der Einstieg in Phase 1"
   - prefix: scripts/kit/
     rolle: mechanismus
     reason: "das Modul selbst — eine Uebergabe, die sich nicht mit uebergibt, ist eine Einbahnstrasse"
@@ -127,6 +130,12 @@ rules:
   - prefix: tests/test_feedback_channel.py
     rolle: mechanismus
     reason: "das Schema reist; die Uebergaben dieses Repos sind Bestand (siehe REIST_NICHT)"
+  - prefix: tests/test_worktree_state.py
+    rolle: mechanismus
+    reason: "die Gegenproben des Waechters — je Regel eine Rotation, in Wegwerf-Repos (RB-G7)"
+  - prefix: tests/test_workflow_entry.py
+    rolle: mechanismus
+    reason: "der Einstieg misst: Scaffold, geschlossener Vorgang, Waechter-Pflicht samt Gegenprobe (Bead cke)"
   - prefix: tests/test_kit.py
     rolle: mechanismus
     reason: "haelt diese Datei und die Probe"
