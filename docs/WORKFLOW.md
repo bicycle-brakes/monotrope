@@ -234,7 +234,7 @@ Status, fertig und nie archiviert, einseitige Ablösung.
 
 | Baustein | Wo | Was er tut |
 |---|---|---|
-| Instruktionen | `AGENTS.md` | die eine Quelle; `CLAUDE.md` importiert sie mit `@AGENTS.md` |
+| Instruktionen | `AGENTS.md` | die eine Quelle und die einzige Datei; Claude Code liest sie seit 2.1.277 selbst, keine `CLAUDE.md` daneben |
 | Artefakte | `plans/` | `specs/` · `changes/` · `changes/archive/` |
 | Phasen-Prompts | `prompts/` | harness-unabhängig |
 | Einstiegsbefehle | `Makefile` | `change` · `verify` · `gates` · `test` · `staleness` · `index` |
@@ -468,7 +468,7 @@ damit die Abweichung eine Entscheidung bleibt und nicht als Versehen gelesen wir
 | Vorlage | Hier | Grund |
 |---|---|---|
 | `Makefile` mit `lint`, `typecheck`, `test` | `make verify` ruft nur `verify_all.sh` | `ci.yml` ist die eine Gate-Liste (`AGENTS.md`). Eine ausgeschriebene Prüfreihenfolge im Makefile **wäre** die zweite Liste. |
-| `ln -s AGENTS.md CLAUDE.md` | `CLAUDE.md` = `@AGENTS.md` + deutsches Addendum | Das Addendum trägt die Konversationssprache und die Slash-Commands. In einem Symlink kann es nicht existieren. |
+| `ln -s AGENTS.md CLAUDE.md` | keine `CLAUDE.md` | Seit Claude Code 2.1.277 wird `AGENTS.md` direkt gelesen, sobald keine `CLAUDE.md` im Baum liegt (Maintainer-Entscheidung 2026-09-22). Konversationssprache und Slash-Commands liegen in der Nutzer-Konfiguration, nicht im Repo. Bekannte Grenze: das direkte Lesen ist ein Feature-Flag und fällt bei abgeschalteter Telemetrie, Bedrock/Vertex oder eigener `ANTHROPIC_BASE_URL` aus — dann liest Claude Code nichts; für das Omnigent-Ziel (Telemetrie aus) ist das vor M0 zu prüfen. |
 | `.pre-commit-config.yaml` | nicht angelegt | Es wäre eine zweite Lint-Liste neben `ci.yml`, mit demselben Drift-Risiko. Die Erzwingung liegt bei `ci.yml` und `.claude/hooks/`. |
 | `.mcp.json` | nicht angelegt | Dieses Repository nutzt heute keinen MCP-Server. Eine leere Konfiguration wäre eine Behauptung ohne Inhalt. |
 | `uv`, `mypy` | `python3`, `ruff`, `pytest` | Das ist die Werkzeugkette, die in `requirements-ci.txt` gepinnt ist und die die CI fährt. |

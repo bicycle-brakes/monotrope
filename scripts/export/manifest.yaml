@@ -1,8 +1,9 @@
 # Export-Manifest — was mit dem Kit reist (Präfix-Entscheidung des Maintainers, 2026-09-20)
 #
 # Entscheidung: der enge Kern reist — scripts/kit/, _verdict, die Validatoren,
-# templates/. Dazu, weil eine Instanz ohne sie nicht startet: AGENTS.md/CLAUDE.md
-# (Einstieg) und model-endpoints.yaml (als leerer Rumpf, geruest). Alles andere
+# templates/. Dazu, weil eine Instanz ohne sie nicht startet: AGENTS.md
+# (der eine Einstieg; CLAUDE.md gibt es seit 2026-09-22 nicht mehr) und
+# model-endpoints.yaml (als leerer Rumpf, geruest). Alles andere
 # bleibt: docs/, tests/, decisions/, .github/, plans/, .beads/.
 #
 # Der Widerspruch zu scripts/kit/manifest.yaml ist gewollt: das Kit manifestiert
@@ -25,5 +26,4 @@ rules:
   - {prefix: "provenance.yaml", verdict: carry}
   - {prefix: "model-endpoints.yaml", verdict: geruest}
   - {prefix: "AGENTS.md", verdict: carry}
-  - {prefix: "CLAUDE.md", verdict: carry}
   - {prefix: "", verdict: drop}
