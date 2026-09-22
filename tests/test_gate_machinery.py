@@ -52,6 +52,30 @@ def test_gate_schema_gate_accepts_the_real_gate_file() -> None:
     assert ci_gates.validate_schema(doc) == []
 
 
+def test_gate_schema_gate_rejects_a_non_boolean_needs_tracker() -> None:
+    """Bead 4t8: needs_tracker steuert einen CI-Schritt — ein Text dort waere Stille."""
+    import ci_gates
+
+    schlecht = {
+        "schema_version": 1,
+        "gates": [
+            {
+                "id": "kaputt",
+                "title": "needs_tracker als Text",
+                "command": "python3 -c 'print(1)'",
+                "job": "verify",
+                "enforcement": "block",
+                "floor": True,
+                "needs_tracker": "yes",
+                "reason": "ein Seed, der den Schemafehler demonstriert",
+            }
+        ],
+    }
+    befunde = ci_gates.validate_schema(schlecht)
+    assert befunde, "needs_tracker muss ein Boolean sein"
+    assert any("needs_tracker" in b for b in befunde)
+
+
 # --------------------------------------------------------------------------
 # ci-drift — die abgeleitete ci.yml gegen den Handgriff
 # --------------------------------------------------------------------------
@@ -132,6 +156,22 @@ def test_check_bead_export_gate_goes_red_when_a_line_is_broken(tmp_path: Path) -
     ok = tmp_path / "ok.jsonl"
     ok.write_text('{"id": "a", "status": "open"}\n', encoding="utf-8")
     assert check_bead_export.run(ok) == []
+
+
+def test_check_bead_export_gate_refuses_an_empty_export(tmp_path: Path) -> None:
+    """Bead 4t8: ein Export ueber null Zeilen misst nichts — das ist ein Befund.
+
+    Bis 2026-09-22 war der Gate hier gruen: jede Zeilenpruefung lief ueber null
+    Zeilen und meldete Vollstaendigkeit ueber einer leeren Menge. Genau die
+    Luecke, die das Interview "floor: true ist nicht leer" nennt.
+    """
+    import check_bead_export
+
+    leer = tmp_path / "leer.jsonl"
+    leer.write_text("\n\n", encoding="utf-8")
+    befunde = check_bead_export.run(leer)
+    assert befunde, "ein leerer Export muss einen Befund liefern"
+    assert "leer" in befunde[0]
 
 
 def test_the_real_bead_export_parses_line_by_line() -> None:
@@ -222,6 +262,28 @@ def test_the_real_decision_continuity_check_runs_green_here() -> None:
     assert erg.returncode == 0, erg.stdout + erg.stderr
 
 
+def test_decision_continuity_is_red_while_its_target_is_missing(tmp_path: Path) -> None:
+    """Bead 4t8: floor: true — ein fehlendes Ziel ist Exit 3, kein stilles gruen.
+
+    Bis zum #8-Merge meldete diese Lage "SKIP" (Exit 0) und nannte als Grund
+    einen Zustand, der seitdem Vergangenheit ist. Ein Gate, dessen Ziel fehlt,
+    kann nicht messen — und ein floor-Gate, das nicht misst, faellt.
+    """
+    erg = subprocess.run(
+        [
+            sys.executable,
+            "scripts/check_decision_continuity.py",
+            "--target",
+            str(tmp_path / "fehlt.md"),
+        ],
+        cwd=REPO_ROOT,
+        capture_output=True,
+        text=True,
+    )
+    assert erg.returncode == 3, erg.stdout + erg.stderr
+    assert "NICHT GEMESSEN" in erg.stdout
+
+
 # --------------------------------------------------------------------------
 # export-identity — der committed Export ist das frische Render (D-4)
 # --------------------------------------------------------------------------
@@ -253,9 +315,13 @@ def test_export_identity_gate_accepts_the_identical_render(tmp_path: Path, monke
     assert rbe.main(["--check"]) == 0
 
 
-def test_export_identity_gate_skips_visibly_where_the_tracker_does_not_live(
-    tmp_path: Path, monkeypatch, capsys
-) -> None:
+def test_export_identity_gate_is_red_where_the_tracker_does_not_live(tmp_path: Path, monkeypatch, capsys) -> None:
+    """Bead 4t8: der Gate steht auf floor: true — nicht messen ist rot, nicht gruen.
+
+    Bis 2026-09-22 meldete diese Lage "SKIP" und endete in Exit 0: die CI war
+    dauerhaft gruen, ohne je gemessen zu haben. Jetzt ist es Exit 3 — der
+    Runner macht daraus bei einem block-Gate rot.
+    """
     import render_beads_export as rbe
 
     monkeypatch.setattr(rbe, "EXPORT", tmp_path / "issues.jsonl")
@@ -264,24 +330,25 @@ def test_export_identity_gate_skips_visibly_where_the_tracker_does_not_live(
         raise rbe.RendererFehlt("tools/bd fehlt in dieser Umgebung")
 
     monkeypatch.setattr(rbe, "_render_nach", fehlt)
-    assert rbe.main(["--check"]) == 0
-    assert "SKIP" in capsys.readouterr().out
+    assert rbe.main(["--check"]) == 3
+    assert "NICHT GEMESSEN" in capsys.readouterr().out
 
 
-def test_export_identity_gate_skips_when_the_wrapper_finds_no_binary(tmp_path: Path, monkeypatch, capsys) -> None:
-    """Der echte Weg der CI: tools/bd existiert, das gepinnte Binary nicht.
+def test_export_identity_gate_is_red_when_the_wrapper_finds_no_binary(tmp_path: Path, monkeypatch, capsys) -> None:
+    """Der echte Weg der CI ohne Tracker-Hydratation: tools/bd da, Binary fehlt.
 
     Der Test darueber reicht die Ausnahme von Hand herein; hier laeuft der
     Wrapper wirklich, in einer Umgebung ohne bd. Ohne die Unterscheidung am
-    Exit-Code endete genau diese Lage in Exit 2 statt im sichtbaren SKIP.
+    Exit-Code endete genau diese Lage in Exit 2 statt im benennbaren Exit 3
+    (bead 4t8).
     """
     import render_beads_export as rbe
 
     monkeypatch.setenv("HOME", str(tmp_path))
     monkeypatch.setenv("PATH", "/usr/bin:/bin")
     monkeypatch.setattr(rbe, "EXPORT", tmp_path / "issues.jsonl")
-    assert rbe.main(["--check"]) == 0
-    assert "SKIP" in capsys.readouterr().out
+    assert rbe.main(["--check"]) == 3
+    assert "NICHT GEMESSEN" in capsys.readouterr().out
 
 
 # --- reproduzierbarer Export (coding-harness-1jg.1) -------------------------

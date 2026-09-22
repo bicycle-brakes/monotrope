@@ -16,6 +16,13 @@
 #   job         verify (per push/PR) or drift (per schedule/dispatch).
 #   enforcement closed vocabulary: advisory / report / block (bo0).
 #   floor       true = non-negotiable set; changing it is a governance act.
+#               Unreachable counts as failing: a gate that cannot measure
+#               exits 3, and the runner turns that red on a block gate
+#               (bead coding-harness-4t8).
+#   needs_tracker  optional boolean, command gates only: the derived CI
+#               hydrates the tracker (checksum-verified pinned bd, then
+#               refs/dolt/data) before this gate runs. Where that cannot
+#               happen the gate exits 3 (see floor).
 #   reason      why this gate exists, in one sentence.
 
 schema_version: 1
@@ -104,7 +111,8 @@ gates:
     job: verify
     enforcement: block
     floor: true
-    reason: Auto-export is off; the writer renders at session end — a stale committed export fails here (D-4).
+    needs_tracker: true
+    reason: Auto-export is off; the writer renders at session end, and CI hydrates the tracker to measure the same thing — an export that cannot be checked exits 3 and is red (D-4, bead 4t8, staged toward 1jg.3).
 
   - id: gate-schema
     title: This gate file satisfies its own schema

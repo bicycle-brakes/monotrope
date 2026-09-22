@@ -15,8 +15,10 @@ Sitzungsbericht an genau diesen Export.
 
 Usage:
     python3 scripts/render_beads_export.py [--check]
-Exit: 0 = gerendert (oder --check: identisch, oder SKIP ohne Tracker),
-      1 = Befund, 2 = Vorbedingung.
+Exit: 0 = gerendert (oder --check: identisch),
+      1 = Befund, 2 = Vorbedingung,
+      3 = --check ohne ausfuehrbaren Tracker: NICHT GEMESSEN — der Gate steht
+          auf floor: true, der Lauf faellt (bead coding-harness-4t8).
 """
 
 from __future__ import annotations
@@ -144,9 +146,15 @@ def _main(argv: list[str] | None = None) -> int:
             try:
                 _render_nach(frisch)
             except RendererFehlt as exc:
-                print(f"export-identity SKIP: {exc}")
-                print("Der Gate gilt dort, wo der Tracker lebt (Writer-Lock, ADR 0002).")
-                return 0
+                # Bead coding-harness-4t8: der Gate steht auf floor: true — und
+                # ein floor-Gate, das nicht misst, ist rot, nicht gruen. Der
+                # stille Exit 0 hier war genau das Loch, das 4t8 benennt; die
+                # CI hydratisiert den Tracker inzwischen (needs_tracker in
+                # decisions/gates.yaml), sodass dieser Zweig dort nur noch bei
+                # einem kaputten Setup greift — und dann den Lauf faellt.
+                print(f"export-identity NICHT GEMESSEN: {exc}")
+                print("floor: true — nicht messen ist fuer diesen Gate rot (D-4, bead 4t8).")
+                return 3
             soll = _sha(frisch)
         ist = _sha(EXPORT) if EXPORT.is_file() else None
         if ist == soll:

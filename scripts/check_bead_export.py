@@ -26,9 +26,11 @@ def run(pfad: Path) -> list[str]:
     if not pfad.is_file():
         return [f"Export fehlt: {pfad} — dann zitiert kein Test einen echten Stand"]
     befunde: list[str] = []
+    saetze = 0
     for nr, zeile in enumerate(pfad.read_text(encoding="utf-8").splitlines(), 1):
         if not zeile.strip():
             continue
+        saetze += 1
         try:
             satz = json.loads(zeile)
         except json.JSONDecodeError as exc:
@@ -41,6 +43,11 @@ def run(pfad: Path) -> list[str]:
             befunde.append(f"Zeile {nr}: ohne id")
         if not isinstance(satz.get("status"), str) or not satz["status"]:
             befunde.append(f"Zeile {nr}: ohne status")
+    if saetze == 0:
+        # Bead coding-harness-4t8: ein Export ueber null Zeilen ist kein gruenes
+        # Ergebnis — jeder Leser (Tests, dangling-beads, Handovers) zitiert eine
+        # leere Wahrheit und merkt es nicht. Nichts messen ist hier ein Befund.
+        befunde.append("der Export ist leer — ein Gate ueber null Zeilen misst nichts")
     return befunde
 
 
