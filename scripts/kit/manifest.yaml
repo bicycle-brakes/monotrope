@@ -136,6 +136,9 @@ rules:
   - prefix: tests/test_workflow_entry.py
     rolle: mechanismus
     reason: "der Einstieg misst: Scaffold, geschlossener Vorgang, Waechter-Pflicht samt Gegenprobe (Bead cke)"
+  - prefix: tests/test_session_scan.py
+    rolle: bestand
+    reason: "misst tools/claude-code (Bestand, siehe Auffangregel oben) und skippt in der Leerprobe, weil ihr Objekt nicht reist (Bead hit)"
   - prefix: tests/test_kit.py
     rolle: mechanismus
     reason: "haelt diese Datei und die Probe"
