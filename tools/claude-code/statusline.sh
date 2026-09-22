@@ -200,7 +200,16 @@ rdir="$HOME/.claude/recaps"
 scan="$HOME/.claude/hooks/session-scan.sh"
 if [ -x "$scan" ]; then
   n=0; entries=(); clash=""; sibling=""
-  while IFS=$'\t' read -r rel label st osid ocwd; do
+  # Zellen ohne Kollaps trennen (bead hit): `IFS=$'\t' read` schob alles hinter
+  # einem leeren Feld (Status "") auf die Nachbarn. Die Parameter-Expansion
+  # bricht an jedem Tab, auch hinter einem leeren Feld — und der Scan liefert
+  # tabfreie Zellen (Tabs im Namen kommen als \\t an).
+  while IFS= read -r zeile; do
+    [ -z "$zeile" ] && continue
+    rel=${zeile%%$'\t'*}; rest=${zeile#*$'\t'}
+    label=${rest%%$'\t'*}; rest=${rest#*$'\t'}
+    st=${rest%%$'\t'*}; rest=${rest#*$'\t'}
+    osid=${rest%%$'\t'*}; ocwd=${rest#*$'\t'}
     [ -z "$osid" ] && continue
     n=$((n + 1))
     case "$rel" in

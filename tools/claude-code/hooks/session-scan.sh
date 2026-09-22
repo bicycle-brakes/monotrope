@@ -29,8 +29,24 @@ fi
 
 for f in "$sdir"/*.json; do
   [ -e "$f" ] || continue
-  IFS=$'\t' read -r opid osid ocwd oname ostatus okind ostart < <(
-    jq -r '[.pid, .sessionId, .cwd, (.name // ""), (.status // ""), (.kind // ""), (.procStart // "")] | @tsv' "$f" 2>/dev/null)
+  # Feldtrennung ohne Kollaps (bead hit): `IFS=$'\t' read` liess leere Felder
+  # (Session ohne Namen oder Status) auf die Nachbarn rutschen — die Session
+  # galt dann als nicht-interaktiv und wurde nie als Clash gemeldet. NUL
+  # ueberlebt jedes Feld, und `read -d ''` (nicht mapfile: bash 3.2 auf macOS
+  # hat keins) bricht an jedem einzelnen. Alle Felder vorher leeren, damit
+  # ein kurzer Datensatz nicht vom Vorgaenger erbt.
+  opid=""; osid=""; ocwd=""; oname=""; ostatus=""; okind=""; ostart=""
+  i=0
+  while IFS= read -r -d '' feld; do
+    case $i in
+      0) opid=$feld ;;   1) osid=$feld ;;   2) ocwd=$feld ;;
+      3) oname=$feld ;;  4) ostatus=$feld ;; 5) okind=$feld ;;
+      6) ostart=$feld ;;
+    esac
+    i=$((i + 1))
+  done < <(
+    jq -j '[.pid, .sessionId, .cwd, (.name // ""), (.status // ""), (.kind // ""), (.procStart // "")]
+           | map(tostring) | join("\u0000")' "$f" 2>/dev/null)
   [ -z "$opid" ] || [ "$osid" = "$own_sid" ] || [ "$okind" != "interactive" ] && continue
   kill -0 "$opid" 2>/dev/null || continue
   if [ -n "$ostart" ]; then
@@ -39,7 +55,14 @@ for f in "$sdir"/*.json; do
     [ "$live" != "$(printf '%s' "$ostart" | tr -s ' ')" ] && continue
   fi
   label=${oname:-$(basename "$ocwd")}
+  # Das Zeilenformat ist tab-separiert: Tabs und Zeilenenden im Namen wuerden
+  # Zellen verschieben. Der alte @tsv-Pfad entkam ihnen, also entkommt der
+  # neue sie genauso — sichtbar als \\t, nicht als Formatbruch.
+  label=${label//$'\t'/\\t}
+  label=${label//$'\n'/ }
   case "$ostatus" in busy) st="arbeitet" ;; idle) st="wartet" ;; *) st=$ostatus ;; esac
+  st=${st//$'\t'/\\t}
+  st=${st//$'\n'/ }
   rel="other"
   if [ -n "$own_top" ]; then
     otop=$(gq "$ocwd" rev-parse --show-toplevel)
