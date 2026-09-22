@@ -36,7 +36,12 @@ sep=" ${dim}│${reset} "
 now=$(date +%s)
 cache_dir="${TMPDIR:-/tmp}/claude-statusline"
 mkdir -p "$cache_dir"
-mtime_of() { stat -f %m "$1" 2>/dev/null || stat -c %Y "$1" 2>/dev/null || echo 0; }
+# BSD stat (macOS) nimmt -f %m als mtime; GNU stat (Linux, CI) liest dasselbe
+# als Dateisystem-Status und druckt einen mehrzeiligen Dump mit Exit 0 — der
+# haette hier als Cache-Alter gegolten (bead hit). GNU-Form zuerst, dann BSD.
+mtime_of() {
+  stat -c %Y "$1" 2>/dev/null || stat -f %m "$1" 2>/dev/null || echo 0
+}
 
 g() { git --no-optional-locks -C "$cur" "$@" 2>/dev/null; }
 

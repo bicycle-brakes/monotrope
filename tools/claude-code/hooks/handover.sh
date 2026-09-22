@@ -21,6 +21,14 @@
 # is shown when the last session kept working after the newest handover, and it
 # is never presented as a handover. Git state and beads are measured at start:
 # a summary ages, the working tree does not.
+#
+# Since bead hit: the handover's CONTENT is injected into the session's context
+# only for trusted repositories. Whoever controls a clone controls journal/*.md
+# — a bare journal/ directory must never pipe its newest file into every
+# session starting there. ~/.claude/handover-trust lists one regex per line,
+# matched against the origin URL (override the path with $HANDOVER_TRUST).
+# Without a hit the session sees metadata only (path, title, age) and reads
+# the file itself when it needs it.
 
 [ -n "$CLAUDE_RECAP_CHILD" ] && exit 0
 
@@ -30,7 +38,13 @@ mkdir -p "$ndir" "$rdir"
 now=$(date +%s)
 
 gq() { git --no-optional-locks -C "$1" "${@:2}" 2>/dev/null; }
-mtime_of() { stat -f %m "$1" 2>/dev/null || stat -c %Y "$1" 2>/dev/null || echo 0; }
+# BSD stat (macOS) nimmt -f %m als mtime; GNU stat (Linux, CI) liest dasselbe
+# als Dateisystem-Status und druckt einen MEHRZEILIGEN Dump — mit Exit 0, so
+# dass der Fallback nie greift und der Dump als mtime durch die TSV-Zerlegung
+# geisterte (bead hit, CI-Lauf zu PR #28). GNU-Form zuerst, dann BSD.
+mtime_of() {
+  stat -c %Y "$1" 2>/dev/null || stat -f %m "$1" 2>/dev/null || echo 0
+}
 # One line of at most $1 characters: the first sentence when it fits, else cut
 # at a word boundary. Never mid-word — a torn word is harder to read than none.
 oneline() {
@@ -176,29 +190,49 @@ render() {
     visible="↪ Einstieg · ${cwd/#$HOME/~}"
   fi
 
-  # The handover.
+  # The handover. Its CONTENT flows into Claude's context — in a cloned
+  # repository that is an invitation (bead hit): whoever controls the clone
+  # controls journal/*.md. Content therefore flows only when the person has
+  # allowed the repository (see the trust note in the header). Without a hit:
+  # metadata only — the person still sees title and age, Claude reads the file
+  # itself when it needs it.
+  local trust="${HANDOVER_TRUST:-$HOME/.claude/handover-trust}"
+  local vertraut="" origin
+  if [ -n "$top" ] && [ -s "$trust" ]; then
+    origin=$(gq "$top" remote get-url origin 2>/dev/null)
+    [ -n "$origin" ] && printf '%s' "$origin" | grep -qE -f "$trust" 2>/dev/null && vertraut=1
+  fi
+
   local hctx="" rel next title addenda
   if [ -n "$hfile" ]; then
     rel=${hfile#"$top"/}
     title=$(doc_title "$hfile")
-    next=$(next_step "$hfile")
     addenda=$(grep -c -i -E '^#+ (addendum|nachtrag)' "$hfile")
     visible="$visible
 Übergabe: „$(printf '%s' "$title" | oneline 110)“ · $(ago $(( now - htime )))"
     [ "${addenda:-0}" -gt 0 ] && visible="$visible · mit Nachtrag"
-    [ -n "$next" ] && visible="$visible
-▶ Nächster Schritt: $(printf '%s' "$next" | oneline 170)"
-    entry="Übergabe $(ago $(( now - htime ))) · ▶ $(printf '%s' "${next:-$title}" | oneline 130)"
-    local body; body=$(cat "$hfile")
-    [ ${#body} -gt 6000 ] && body="${body:0:6000}
-[… gekürzt – die ganze Datei lesen: $rel]"
     local older
     older=$(list_handovers "$hdir" | sed -n '2,4p' | while read -r f; do printf -- '- %s – %s\n' "${f#"$top"/}" "$(doc_title "$f")"; done)
-    hctx="Jüngste Übergabe im Repository: $rel (geändert $(ago $(( now - htime ))))
+    if [ -n "$vertraut" ]; then
+      next=$(next_step "$hfile")
+      [ -n "$next" ] && visible="$visible
+▶ Nächster Schritt: $(printf '%s' "$next" | oneline 170)"
+      entry="Übergabe $(ago $(( now - htime ))) · ▶ $(printf '%s' "${next:-$title}" | oneline 130)"
+      local body; body=$(cat "$hfile")
+      [ ${#body} -gt 6000 ] && body="${body:0:6000}
+[… gekürzt – die ganze Datei lesen: $rel]"
+      hctx="Jüngste Übergabe im Repository: $rel (geändert $(ago $(( now - htime ))))
 $body${older:+
 
 Ältere Übergaben, neueste zuerst:
 $older}"
+    else
+      entry="Übergabe $(ago $(( now - htime ))) · „$title“"
+      hctx="Übergabe im Repository: $rel (geändert $(ago $(( now - htime )))). Der Inhalt wird nicht automatisch eingelesen: Das Repository steht nicht in der Vertrauensliste (${trust#"$HOME"/} — eine Regex je Zeile, gegen die origin-URL). Lies die Datei selbst, wenn du sie brauchst.${older:+
+
+Ältere Übergaben, neueste zuerst:
+$older}"
+    fi
   elif [ -n "$conv" ]; then
     visible="$visible
 Noch keine Übergabe in ${hdir#"$top"/}/ – /uebergabe legt die erste an."
