@@ -1,10 +1,11 @@
 ---
 title: "Target architecture: the coding harness and its workflows — what it should be, what it should not be, and the path there"
 category: architecture
-status: proposed
+status: superseded
+superseded_by: 2026-09-17-omnigent-first-target.md
 created: 2026-09-16
-last_reviewed: 2026-09-16
-owner: Data Architect
+last_reviewed: 2026-09-18
+owner: framework-architect
 provenance: ai-drafted-reviewed
 produced_by:
   kind: llm-session
@@ -18,6 +19,18 @@ tags: [architecture, target, harness, workflow, kit, lakeswitch, portfolio, road
 ---
 
 # Target architecture: the coding harness and its workflows
+
+**Historical proposal, measured at `5a950c2`.** The maintainer's 2026-09-17
+direction puts parallel Omnigent coordination in the first proof of concept.
+The [current target](2026-09-17-omnigent-first-target.md),
+[gap analysis](2026-09-17-gap-analysis.md) and
+[implementation plan](2026-09-17-implementation-plan.md) supersede this
+document for sequencing and current-state claims. The decisions below remain
+a dated record until individual ADRs replace them. The current target’s
+[decision continuity table](2026-09-17-omnigent-first-target.md#decision-continuity)
+maps every D-1–D-17 and O-1–O-4 outcome. Earlier recommendations below do not
+override those outcomes. Editorial corrections on 2026-09-18 clarify counts
+and internal references; they do not change the recorded interview.
 
 **Status: decided in interview, not yet an ADR.** The seventeen decisions in
 §9 were taken with the maintainer on 2026-09-16 (outcomes in §9.1); two
@@ -110,7 +123,9 @@ reconciliation, cutover) are born in the instances and stay there.
 
 ## 4 · Solution strategy
 
-Six decisions, from which the rest follows.
+Eight strategy choices, from which the historical proposal follows. S5’s
+late orchestration sequence was replaced by the 2026-09-17 direction; the
+current target permits early parallelism only after its explicit prerequisites.
 
 | # | Decision | Replaces | Source |
 |---|---|---|---|
@@ -121,11 +136,11 @@ Six decisions, from which the rest follows.
 | S5 | **Host early, orchestrate late.** Omnigent as session host with policies, sandbox and cost caps starts now, additively (Migrationsplan M0–M1); Omnigent as orchestrator with cross-vendor review (M2) starts only when the stage-2 criteria of D-13 are met — the residency rule RB-A6 is a level-4 gate, not a preference. The server never holds state the repository and the tracker do not also hold. | "process, then diversity, then orchestration" (WORKFLOW §6) as a strict sequence | decided 2026-09-16 (D-7); Migrationsplan; toolchain ADR-0007 (additive); ADW IS-5 |
 | S6 | **The harness is small.** Everything an instance does with knowledge, publication, release or domain stays out. Architecture templates are the exception (S8). | the toolchain document's full stack in the kit | ADW C7 (short artefacts); regelwerk RB-S1 (instruction budget) |
 | S7 | **Phase requirements, not model names.** The doctrine says what a phase needs (much input and little reasoning; highest reasoning; a reliable worker; a reviewer from another lineage). A routing file in the instance says which model meets it today. | "Stage 1: only Claude Code, only Anthropic" as doctrine | decided 2026-09-16; ADW ADR-14 (role-based routing) |
-| S8 | **Architecture is a phase with an artefact.** Architectural changes pass a design phase, Feature changes by stated reason (`design.md`: alternatives, interfaces, data model, ADR draft); the kit ships arc42 and MADR templates and a placeholder for a C4 model as code; an architecture change without an ADR or model update is a finding. | architecture decided inside the plan, or not at all | decided 2026-09-16; ADW P2; OpenSpec `design.md`; arc42; MADR; C4 |
+| S8 | **Architecture is a phase with an artefact.** Architectural changes pass a design phase, Feature changes by stated reason (`design.md`: alternatives, interfaces, data model, ADR draft); the kit ships arc42 and MADR templates and a LikeC4 specification and model template (D-15); an architecture change without an ADR or model update is a finding. | architecture decided inside the plan, or not at all | decided 2026-09-16; ADW P2; OpenSpec `design.md`; arc42; MADR; C4 |
 
 ## 5 · Building blocks
 
-### 5.1 The harness — eight layers
+### 5.1 The harness — nine layers
 
 | Layer | Holds | Today (coding-harness `5a950c2`) | Target | Gap |
 |---|---|---|---|---|
@@ -137,7 +152,7 @@ Six decisions, from which the rest follows.
 | **H6 Harness adapters** | `.claude/` (agents, commands, hooks, settings), `.codex/`, `.agents/skills/` | `SessionStart → bd prime`; nothing else here yet | Thin by test: the Leerprobe must reach the same result with the adapter directory deleted; `AGENTS.md` ≤ 200 lines is the only instruction file — no `CLAUDE.md` (maintainer decision 2026-09-22; Claude Code ≥ 2.1.277 reads `AGENTS.md` itself; supersedes the `@AGENTS.md` import of review D10) | prove before M0 that the direct read works with telemetry off; adapter-independence test |
 | **H7 Tracker conventions** | `tools/bd` pin; prefix fixed at init; one bead per change; `Closes-Bead:` trailer; `discovered-from` for found work; export single writer; worktrees in the repository via the tool's own mechanism | Pin and prefix done; `export.auto true`; no `discovered-from` rule; close-by-trailer gate not here; worktrees as sibling directories by hand | The rules from C4 with enforcers: `dangling-beads`, `merged-beads`, export identity, `export.auto` off (D-4); worktrees under `.claude/worktrees/` or `bd worktree create`, base `fresh` (D-5); no `bd` writes from a worktree until the two-writer test is green | D-3, D-4, D-5 decided |
 | **H8 Evidence** | provenance classes (`provenance.yaml`), generated facts blocks, handover schema, gate records for human gates, verification report for machine gates | Provenance and handover schema present; facts pipeline stayed in portfolio (`bestand`) | Machine-rendered `verification-report.md` per change; facts pipeline as a kit entry or an instance duty — decided, not assumed | §9 D-11 |
-| **H9 Entry and readability** | `README.md`, an onboarding page, `docs/_INDEX.md` routed by situation, generated indices (`plans/INDEX.md`, ADR index), licence | README and bootstrap handover; no onboarding page, no licence, no situation index | A stranger's path: README → onboarding (one afternoon to a first Bounded change) → situation index; decisions written as questions with consequences (P3) so a product owner or architect can answer them without a session; licence (Apache-2.0, as lakeswitch) at the template switch | §12 step 1 and the template switch |
+| **H9 Entry and readability** | `README.md`, an onboarding page, `docs/_INDEX.md` routed by situation, generated indices (`plans/INDEX.md`, ADR index), licence | README and bootstrap handover; no onboarding page, no licence, no situation index | A stranger's path: README → onboarding (one afternoon to a first Bounded change) → situation index; decisions written as questions with consequences (P3) so a product owner or architect can answer them without a session; licence (Apache-2.0, as lakeswitch) from foundational work, per D-17 | §12 step 1 and the template switch |
 
 ### 5.2 The instance layer — deliberately outside the harness
 
@@ -259,7 +274,7 @@ should change.
 
 | Repository | Holds | Travels out | Travels in |
 |---|---|---|---|
-| coding-harness | H1–H8; research corpus; its own ADR series (starting with §9) | the kit, by tag | lessons and findings from both instances as handover files |
+| coding-harness | H1–H9; research corpus; its own ADR series (starting with §9) | the kit, by tag | lessons and findings from both instances as handover files |
 | portfolio | governance, domain, evidence, lessons; a *copy* of the kit | — | kit tags |
 | lakeswitch-ai | product; floor; one list in YAML; a *copy* of the kit | — | kit tags |
 
@@ -319,7 +334,7 @@ source and §13 challenges them.
 | P14 | **Every number carries its cut-off** | A handover, a journal, a report names commit or date next to every count | RB-P5; WORKFLOW §2 |
 | P15 | **Short instructions, short artefacts** | `AGENTS.md` ≤ 200 lines; spec 1–3 pages; findings as rows | Anthropic guidance on `CLAUDE.md`; ADW C7, P1-8; RB-S1 |
 | P16 | **Phase requirements, not model names** | The doctrine says what a phase needs; the instance's routing file says which model; a vendor name in the doctrine is a finding | decided 2026-09-16; ADW ADR-14 |
-| P17 | **Architecture leaves a record and a picture** | Feature and Architectural changes carry `design.md`; an architecture change without an ADR or model-as-code update in the same PR is a finding | arc42; MADR; C4 (Structurizr DSL or LikeC4); OpenSpec `design.md` |
+| P17 | **Architecture leaves a record and a picture** | Architectural changes carry `design.md`; Feature changes may omit it with a stated reason (D-14); O-3 defines the ADR/model checks | arc42; MADR; C4 (Structurizr DSL or LikeC4); OpenSpec `design.md` |
 | P18 | **Written for a stranger** | Every page, question and PR text carries its meaning without the session; a stranger reaches a first Bounded change from the README in one afternoon | Nielsen heuristics 2 and 6; C8 |
 
 ## 9 · Decisions
@@ -364,6 +379,9 @@ interview.
 | O-4 | Schema of the platform-neutral gate file | **lakeswitch's `gates.yaml` schema as the basis**, field names aligned with pre-commit where it costs nothing (`entry` for the command, next to the existing function resolution), enforcement as a closed vocabulary `advisory` / `report` / `block` (levels 3–4 of the ladder), `floor` kept as lakeswitch's non-negotiable set, plus `mutation_test` and `schedule`/`reason` for reporting gates (RB-G3/G4). No third format; a pre-commit file can be generated from the same list. | mainstream declarative check lists (pre-commit, Taskfile, Actions steps) share this shape; policy-as-code (Conftest, Sentinel) supplies the enforcement vocabulary; only `asserts` and the mutation-test link are ours |
 
 ### 9.2 The proposals as put to the maintainer
+
+Historical recommendations only. Where they differ, the interview outcomes
+in §9.1 and §9.3 take precedence. The current sequence is in the linked plan.
 
 | # | Goal | Recommendation | On "ok" |
 |---|---|---|---|
@@ -461,7 +479,7 @@ practice is better than what any of the three repositories does today.
 |---|---|---|---|
 | **Kit by copy** (S4) | A versioned dependency: shared GitHub workflows via `uses:`, a pre-commit hooks repository, a package — or, for templates that must be updatable in place, **Copier** | Instances legitimately diverge (lakeswitch has a floor and a YAML one list); a dependency forbids that; the Leerprobe counts it instead | Defensible at two instances. **At the fourth, Copier** (§7.2): it is the mainstream answer to exactly this problem — a template that can be updated with a diff — and a copy without a version silently becomes a fork. The tag in §6.5 is the first half of that switch. |
 | **A design phase** (S8) | Spec Kit folds design into `/plan`; OpenSpec has an optional `design.md`; many teams skip it | Architecture decided inside a plan is invisible to a non-developer and to the next session | Mainstream-compatible (OpenSpec's `design.md` is the same object). The ceremony risk is handled by making it mandatory only for Architectural. |
-| **Model as code in the kit** (D-15) | C4 with Structurizr DSL is the C4 author's tool; LikeC4 is newer | A picture that a generator can check beats a picture in a wiki | Mainstream. Prescribing the tool would not be; hence the placeholder and the instance choice. |
+| **Model as code in the kit** (D-15) | C4 with Structurizr DSL is the C4 author's tool; LikeC4 is newer | A picture that a generator can check beats a picture in a wiki | The original recommendation left the tool to each instance. The interview selected LikeC4 plus a shared element specification (D-15); that recorded choice governs. |
 | **No pre-commit** | `.pre-commit-config.yaml` is near-universal in Python repositories | It would be a second gate list (WORKFLOW §8), and a second list is how local and CI come to disagree (WORKFLOW §3) | Sound, with one concession: a generated pre-commit file *derived from* the one list is not a second list. Offer it. |
 | **Beads over GitHub Issues** | Issues are the default; agents read them via `gh` | `bd ready` answers "what now" after every context reset; dependency graph; claims | Young tool, export broke three times, an open prefix defect. **Keep, but the fallback must be a written decision** — the toolchain document weighs `bd` against `br` in its ADR-0005 and leaves it open; that decision is due before T1. |
 | **Enforcement ladder and ramp valves** (S3, P5) | Policy engines with warn/enforce modes (Sentinel, OPA with `deny` vs `warn`), "error budgets" as the clock | We have no policy engine; the ladder is a table and the valve a script | Homegrown but not novel: Sentinel's three levels are the same idea. **Fine as long as the valve gate exists** — a ladder without the clock is the mainstream "TODO: enforce later". |
@@ -479,7 +497,7 @@ practice is better than what any of the three repositories does today.
 | **Test-first ordering** | TDD's red first | Our "test *with* the change" plus the counterpart test is stronger on non-vacuity and weaker on ordering. Add "failing test first" as a SOLL in prompt 04 | 1 |
 | **Secrets and dependency scanning** | gitleaks / detect-secrets, Dependabot or Renovate, SBOM | Portfolio has a secrets guard hook; lakeswitch pins exactly. Add secret scanning to both instance CIs; dependency updates as an instance duty | 3 |
 | **Mutation testing tools** | mutmut / Stryker over the whole suite | Our one-counterpart-per-test rule is cheaper and enforced. Keep it; run `mutmut` once per release in lakeswitch as a calibration, not a gate | 3 |
-| **Architecture as code** | C4 / LikeC4, arc42 | lakeswitch has `spec/_overview.md`; portfolio has ADR-026. A C4 model is an instance choice; the *harness* needs only this document kept current | — |
+| **Architecture as code** | C4 / LikeC4, arc42 | lakeswitch has `spec/_overview.md`; portfolio has ADR-026. D-15 selects a shared LikeC4 specification and templates; instances own their models, and O-3 defines the applicable ADR/model gate | — |
 | **Branch protection for one person** | Solo repositories usually have none | Portfolio has a ruleset gate (RB-M6); lakeswitch has CODEOWNERS and a floor workflow. Keep; the admin-bypass is the documented debt (toolchain 11.2) | — |
 | **Observability of agent runs** | Traces (OpenTelemetry), cost dashboards | Nothing today. The stage-2 runner writes a per-segment record (model, tokens, verdict) as a file; a dashboard is not needed before stage 3 | 4 |
 

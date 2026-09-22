@@ -63,6 +63,29 @@ then it lives at `portfolio-agentic-engineering/docs/WORKFLOW.md`.
    understand every sentence; bead ids and file names go in parentheses as a
    suffix, never as the carrier of a sentence.
 
+## Communication and session continuity
+
+- Speak German with the maintainer; keep repository artifacts English.
+- Use short, plainly worded messages with clear headings. Lead with the main
+  point and one concrete next action; show at most three immediate priorities.
+  Explain necessary technical terms and keep optional detail separate.
+- When describing changes, say what behavior changed and why it matters.
+  Distinguish proposed, implemented and tested work explicitly.
+- Ask one decision at a time when possible, with a recommendation and its
+  consequence. Do not ask again for settled decisions or existing permission.
+- At session start or after a break, read the latest relevant handover and its
+  addenda; check the working tree and current PR state before acting. Begin
+  with a short orientation: **Where we are / Next step / Needed from you**.
+  Say "nothing right now" when no answer is needed. Do not require the user
+  to reconstruct the previous chat or read the entire backlog.
+- Before ending or handing over a session, maintain a dated file under
+  `docs/journal/handover/`. Record the objective, completed work and evidence,
+  decisions and preferences, unfinished work/blockers, branch/commit/PR,
+  parallel-session ownership constraints, and one concrete resumption action.
+  Preserve prior records with a dated addendum; task status stays in Beads.
+- Link the handover in the closing message. The next session must be able to
+  resume from that file without asking the maintainer to repeat the context.
+
 ## Tracker quick reference
 
 ```bash
