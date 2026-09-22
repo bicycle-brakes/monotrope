@@ -269,6 +269,29 @@ def test_every_step_after_a_failing_gate_still_runs() -> None:
     )
 
 
+def test_a_gate_that_needs_the_tracker_gets_a_hydration_step() -> None:
+    """4t8: export-identity misst in der CI — der Schritt dafuer ist abgeleitet.
+
+    Der Hydratationsschritt (gepinnter bd, checksummverifiziert, refs/dolt/data)
+    sitzt vor dem Gate, das ihn braucht, und nur in Jobs, die einen solchen Gate
+    haben: im drift-Job waere er heute Dekoration — ein Schritt, der nichts
+    misst, aber behauptet, Vorbedingung zu sein.
+    """
+    import ci_gates
+
+    ci = ci_gates.generate_ci()
+    assert "tools/beads/install.sh" in ci, "die Checksummen-verifizierte bd-Installation fehlt"
+    assert "refs/dolt/data" in ci, "der Tracker-Transport fehlt in der Ableitung"
+    assert ci.index("id: setup-tracker") < ci.index("id: export-identity"), (
+        "die Hydratation muss VOR dem Gate stehen, das sie braucht"
+    )
+
+    drift_teil = ci[ci.index("\n  drift:") :]
+    assert "setup-tracker" not in drift_teil, (
+        "kein Gate des drift-Jobs braucht den Tracker — der Schritt waere Dekoration"
+    )
+
+
 def test_every_gate_step_runs_even_after_a_failing_gate() -> None:
     """bl2: ein roter Gate schaltet die spaeteren Gates nicht stumm.
 

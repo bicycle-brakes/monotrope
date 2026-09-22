@@ -48,7 +48,11 @@ then it lives at `portfolio-agentic-engineering/docs/WORKFLOW.md`.
    shared database for everyone. The prefix (`coding-harness-`) was fixed at
    init and cannot be corrected afterwards.
 4. **One writer per tracker.** While another session runs, none writes. Check
-   before `bd` writes; after the writes run `tools/bd dolt push`. Auto-export
+   before `bd` writes; after the writes run `tools/bd dolt push`. The push
+   order is tracker first, git second: CI renders the gate from
+   `refs/dolt/data`, so a git push that outruns the tracker push merges
+   against a stand the commits claim to include — and goes red on exactly
+   that gap (bead coding-harness-4t8). Auto-export
    is off: the export is rendered once, at session end, via
    `python3 scripts/render_beads_export.py`; the `export-identity` gate
    holds the committed file to that render (`coding-harness-bo0`).

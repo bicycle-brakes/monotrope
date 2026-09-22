@@ -7,11 +7,14 @@ Gate macht daraus eine Maschine: Die aktuelle Ziel-Datei muss JEDE entschiedene
 ID der Interviews (D-1..D-17, O-1..O-4) in ihrer Decision-Continuity-Tabelle
 fuehren, und jede AMENDMENT-Behauptung braucht ihre ADR-Datei, die sie nennt.
 
-Fehlt eine ID oder eine ADR, ist das ein Befund — kein Zustand.
+Fehlt eine ID oder eine ADR, ist das ein Befund — kein Zustand. Fehlt das
+Zieldokument selbst, ist der Gate NICHT GEMESSEN und faellt (Exit 3): er
+steht auf floor: true, und ein floor-Gate, das nicht misst, ist rot
+(bead coding-harness-4t8).
 
 Usage:
     python3 scripts/check_decision_continuity.py
-Exit: 0 = Kette ganz, 1 = Befunde.
+Exit: 0 = Kette ganz, 1 = Befunde, 3 = Zieldokument fehlt (nicht gemessen).
 """
 
 from __future__ import annotations
@@ -78,11 +81,16 @@ def main() -> int:
     ap.add_argument("--target", type=Path, default=TARGET, help="die aktuelle Ziel-Datei")
     args = ap.parse_args()
     if not args.target.is_file():
+        # Bead coding-harness-4t8: floor: true heisst — nicht messen ist rot.
+        # Der alte Text ("lebt noch im Docs-PR #8, wird nach dem Merge scharf")
+        # ist seit dem #8-Merge (2026-09-22) ueberholt; ein fehlendes Ziel ist
+        # ein Zustand, der den Lauf faellt, keiner, der ihn gruen laesst.
         print(
-            f"decision-continuity SKIP: {args.target.name} lebt noch im Docs-PR (#8) — "
-            "der Gate wird nach dem Merge scharf geschaltet."
+            f"decision-continuity NICHT GEMESSEN: {args.target.name} fehlt — die "
+            "Decision-Continuity-Tabelle ist nicht lesbar. floor: true: nicht "
+            "messen ist fuer diesen Gate rot (bead 4t8)."
         )
-        return 0
+        return 3
     befunde = run(args.target)
     if befunde:
         print(f"{len(befunde)} Befunde:")

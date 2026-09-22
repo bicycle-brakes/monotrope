@@ -138,6 +138,10 @@ def validate_schema(doc: dict[str, Any] | None = None) -> list[str]:
             fehler.append(f"{gid}: enforcement muss eins von {ENFORCEMENT} sein")
         if not isinstance(g.get("floor"), bool):
             fehler.append(f"{gid}: floor fehlt oder ist kein Boolean")
+        if "needs_tracker" in g and not isinstance(g.get("needs_tracker"), bool):
+            fehler.append(f"{gid}: needs_tracker muss ein Boolean sein")
+        if g.get("needs_tracker") and (bool(g.get("action")) or g.get("job") != "verify"):
+            fehler.append(f"{gid}: needs_tracker gilt nur fuer Kommando-Gates im verify-Job (bead 4t8)")
         if not g.get("reason"):
             fehler.append(f"{gid}: ohne reason — ein Gate ohne Warum wird nicht gepflegt")
         if g.get("action") and not isinstance(g.get("with"), dict | None):
@@ -166,6 +170,7 @@ def gates() -> list[dict[str, Any]]:
                 "with": g.get("with") or {},
                 "enforcement": g["enforcement"],
                 "floor": g["floor"],
+                "needs_tracker": bool(g.get("needs_tracker")),
                 "reason": g.get("reason", ""),
                 "local_runnable": kommando is not None or ersatz is not None,
                 "via_local_equivalent": ersatz is not None,
@@ -234,6 +239,34 @@ def _schritt(g: dict[str, Any]) -> list[str]:
     return zeilen
 
 
+def _tracker_hydratation() -> list[str]:
+    """Der Schritt, der export-identity in der CI messbar macht (bead 4t8).
+
+    Installiert den gepinnten bd checksummverifiziert und holt den
+    Tracker-Stand ueber refs/dolt/data. Ohne ihn waere export-identity in der
+    CI immer exit 3 — und floor: true haette jeden Lauf rot. Der Schritt ist
+    eine Vorbedingung und traegt deshalb wie checkout und setup-deps kein
+    `if` (siehe _schritt). `bd bootstrap` klont via git+https in einem eigenen
+    Verzeichnis: der Credential-Header von actions/checkout gilt nur lokal im
+    Checkout, darum hebt der Schritt ihn nach --global. Beim Bootstrap
+    beruehrt bd ausserdem .beads/.gitignore und .beads/config.yaml im Checkout
+    — genau dafuer ist dieser Schritt die Stelle, an der das passieren darf
+    (staged toward coding-harness-1jg.3).
+    """
+    return [
+        "      - name: Hydrate the tracker (pinned bd, checksum-verified)",
+        "        id: setup-tracker",
+        "        run: |",
+        "          bash tools/beads/install.sh",
+        "          git fetch origin refs/dolt/data:refs/dolt/data",
+        '          header="$(git config --local http.https://github.com/.extraheader || true)"',
+        '          if [ -n "$header" ]; then',
+        '            git config --global http.https://github.com/.extraheader "$header"',
+        "          fi",
+        "          bash tools/bd bootstrap --yes",
+    ]
+
+
 def generate_ci() -> str:
     """Die abgeleitete ci.yml — deterministisch, aus der einen Liste."""
     alle = gates()
@@ -268,6 +301,10 @@ def generate_ci() -> str:
         "        id: setup-deps",
         "        run: python3 -m pip install pytest==8.3.4 PyYAML ruff==0.9.10",
     ]
+    # Bead coding-harness-4t8: der Schritt gehoert nur in Jobs, die einen Gate
+    # mit needs_tracker haben — dort, wo niemand ihn braucht, waere er Dekoration.
+    if any(g["needs_tracker"] for g in pruefe):
+        zeilen.extend(_tracker_hydratation())
     for g in aktionen:
         zeilen.extend(_schritt(g))
     for g in kommandos:
@@ -284,6 +321,8 @@ def generate_ci() -> str:
             "        run: python3 -m pip install pytest==8.3.4 PyYAML ruff==0.9.10",
         ]
     )
+    if any(g["needs_tracker"] for g in drift):
+        zeilen.extend(_tracker_hydratation())
     for g in drift:
         zeilen.extend(_schritt(g))
     return "\n".join(zeilen) + "\n"
