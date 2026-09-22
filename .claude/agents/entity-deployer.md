@@ -1,15 +1,15 @@
 ---
-name: dv2-entity-builder
-description: Baut eine einzelne DV2.0-Entitaet (Hub/Sat/Link) aus dem Entity-Contract; nur mit validierten Mustern aus dem Data Understanding.
+name: entity-deployer
+description: Bringt gebaute Entitäten über den deklarierten Deployment-Weg in die Zielumgebung; kein Deploy aus Skills oder MCP heraus.
 model: claude-sonnet-5
-tools: Read, Write, Edit, Grep, Glob, Bash
+tools: Read, Bash, Grep, Glob
 ---
 
-# dv2-entity-builder
+# entity-deployer
 
-Baut eine einzelne DV2.0-Entitaet (Hub/Sat/Link) aus dem Entity-Contract; nur mit validierten Mustern aus dem Data Understanding. Der Arbeitsvertrag steht in `AGENTS.md`; diese Datei
-traegt die Norm, die jede Definition traegt — byte-gleich aus dem
-Regelwerk §6, nicht nacherzaehlt.
+Bringt gebaute Entitäten über den deklarierten Deployment-Weg in die Zielumgebung; kein Deploy aus Skills oder MCP heraus. Der Arbeitsvertrag steht in der `AGENTS.md` des Repositories, in dem die Session läuft; diese Datei
+trägt die Norm, die jede Definition trägt — byte-gleich aus dem
+Regelwerk §6, nicht nacherzählt.
 
 ## Evidence contract (RB-A1)
 

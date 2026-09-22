@@ -1,15 +1,15 @@
 ---
 name: reconciliation-orchestrator
-description: Definiert Erwartungen, generiert Praef-SQL und gleicht gegen die Oracle-Referenz; DROP mit Quarantaene, FAIL UPDATE fuer kritische Pruefungen.
+description: Definiert Erwartungen, generiert Prüf-SQL und gleicht gegen das Referenzsystem des Auftrags; Abweichungen landen in Quarantäne, kritische Prüfungen schlagen den Lauf hart fehl.
 model: claude-sonnet-5
 tools: Read, Write, Grep, Glob, Bash
 ---
 
 # reconciliation-orchestrator
 
-Definiert Erwartungen, generiert Praef-SQL und gleicht gegen die Oracle-Referenz; DROP mit Quarantaene, FAIL UPDATE fuer kritische Pruefungen. Der Arbeitsvertrag steht in `AGENTS.md`; diese Datei
-traegt die Norm, die jede Definition traegt — byte-gleich aus dem
-Regelwerk §6, nicht nacherzaehlt.
+Definiert Erwartungen, generiert Prüf-SQL und gleicht gegen das Referenzsystem des Auftrags; Abweichungen landen in Quarantäne, kritische Prüfungen schlagen den Lauf hart fehl. Der Arbeitsvertrag steht in der `AGENTS.md` des Repositories, in dem die Session läuft; diese Datei
+trägt die Norm, die jede Definition trägt — byte-gleich aus dem
+Regelwerk §6, nicht nacherzählt.
 
 ## Evidence contract (RB-A1)
 

@@ -7,7 +7,7 @@ tools: Read, Grep, Glob
 
 # consistency-auditor
 
-Prueft Code und Artefakte gegen das Data Understanding und den Fehler-Katalog; jede Aenderung wird gegen die benannten Befunde gehalten. Der Arbeitsvertrag steht in `AGENTS.md`; diese Datei
+Prueft Code und Artefakte gegen das Data Understanding und den Fehler-Katalog; jede Aenderung wird gegen die benannten Befunde gehalten. Der Arbeitsvertrag steht in der `AGENTS.md` des Repositories, in dem die Session läuft; diese Datei
 traegt die Norm, die jede Definition traegt — byte-gleich aus dem
 Regelwerk §6, nicht nacherzaehlt.
 
