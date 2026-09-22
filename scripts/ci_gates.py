@@ -195,8 +195,20 @@ def report(job: str) -> dict[str, Any]:
 
 
 def _schritt(g: dict[str, Any]) -> list[str]:
-    """Ein YAML-Schritt fuer einen Gate — id, name, run/uses, with, enforcement."""
-    zeilen = [f"      - name: {g['name']}", f"        id: {g['id']}"]
+    """Ein YAML-Schritt fuer einen Gate — id, name, run/uses, with, enforcement.
+
+    Jeder Gate-Schritt traegt `if: ${{ !cancelled() }}` (bead
+    coding-harness-bl2): wird ein frueherer Gate rot, setzt dieser Schritt
+    dadurch nicht stumm aus — die CI uebt jeden spaeteren Gate noch aus und
+    faellt am Ende insgesamt. So sagen CI und der lokale Lauf dasselbe.
+    checkout und setup-deps tragen das `if` bewusst nicht: ohne sie hat kein
+    Gate einen Gegenstand.
+    """
+    zeilen = [
+        f"      - name: {g['name']}",
+        f"        id: {g['id']}",
+        "        if: ${{ !cancelled() }}",
+    ]
     if g["action"]:
         zeilen.append(f"        uses: {g['action']}")
     else:

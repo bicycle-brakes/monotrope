@@ -25,6 +25,7 @@ jobs:
         run: python3 -m pip install pytest==8.3.4 PyYAML ruff==0.9.10
       - name: Markdown passes the linter
         id: markdownlint
+        if: ${{ !cancelled() }}
         uses: DavidAnson/markdownlint-cli2-action@v20
         with:
           globs: |
@@ -33,49 +34,63 @@ jobs:
         continue-on-error: true
       - name: External links resolve
         id: lychee
+        if: ${{ !cancelled() }}
         uses: lycheeverse/lychee-action@v2
         with:
           args: --no-progress README.md docs/
         continue-on-error: true
       - name: The test suite passes
         id: pytest
+        if: ${{ !cancelled() }}
         run: python3 -m pytest tests/ -q
       - name: The linter finds nothing
         id: ruff-check
+        if: ${{ !cancelled() }}
         run: python3 -m ruff check scripts/ tests/
       - name: Every file is already formatted
         id: ruff-format
+        if: ${{ !cancelled() }}
         run: python3 -m ruff format --check scripts/ tests/
       - name: The kit probe holds over the tracked tree
         id: leerprobe
+        if: ${{ !cancelled() }}
         run: python3 scripts/kit/probe.py --strict
       - name: Plans hygiene holds (built means archived, no one-sided handover)
         id: plans-registry
+        if: ${{ !cancelled() }}
         run: python3 scripts/plans_registry.py --check
       - name: Documentation frontmatter, links and anchors resolve
         id: docs-links
+        if: ${{ !cancelled() }}
         run: python3 scripts/check_docs.py
         continue-on-error: true
       - name: The rendered bead export parses line by line
         id: bead-export
+        if: ${{ !cancelled() }}
         run: python3 scripts/check_bead_export.py
       - name: Every cited bead id resolves in the export
         id: dangling-beads
+        if: ${{ !cancelled() }}
         run: python3 scripts/check_dangling_bead_ids.py
       - name: Every interview decision stays mapped; every amendment has its ADR
         id: decision-continuity
+        if: ${{ !cancelled() }}
         run: python3 scripts/check_decision_continuity.py
       - name: The committed bead export is exactly the fresh render
         id: export-identity
+        if: ${{ !cancelled() }}
         run: python3 scripts/render_beads_export.py --check
       - name: This gate file satisfies its own schema
         id: gate-schema
+        if: ${{ !cancelled() }}
         run: python3 scripts/ci_gates.py --check-schema
       - name: ci.yml is exactly what the gate file generates
         id: ci-drift
+        if: ${{ !cancelled() }}
         run: python3 scripts/ci_gates.py --check-ci
       - name: ramp valves — dated transitions turn loud on their date
         id: ramp-valves
+        if: ${{ !cancelled() }}
         run: python3 scripts/ramp_valves.py
   drift:
     if: github.event_name == 'schedule' || github.event_name == 'workflow_dispatch'
@@ -87,4 +102,5 @@ jobs:
         run: python3 -m pip install pytest==8.3.4 PyYAML ruff==0.9.10
       - name: Plans hygiene holds strictly against the outside world
         id: plans-registry-strict
+        if: ${{ !cancelled() }}
         run: python3 scripts/plans_registry.py --check --strict

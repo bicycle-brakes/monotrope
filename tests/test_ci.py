@@ -269,6 +269,41 @@ def test_every_step_after_a_failing_gate_still_runs() -> None:
     )
 
 
+def test_every_gate_step_runs_even_after_a_failing_gate() -> None:
+    """bl2: ein roter Gate schaltet die spaeteren Gates nicht stumm.
+
+    Der vorstehende Test bewacht das eine planmaessig rote Ventil
+    (`ramp_valves.py`). Dieselbe Aussetz-Form gilt fuer JEDE Gate-Stufe: ohne
+    `if: ${{ !cancelled() }}` ueberspringt GitHub Actions alle nachfolgenden
+    Schritte, sobald ein blockierender Gate rot — die CI faellt zwar immer
+    noch, aber ueber einer Menge, aus der die spaeteren Gates verschwunden
+    sind, und widerspricht dem lokalen Lauf. Zwei latente Bugs (lychee-Report
+    gegen den strengen Kit-Probe; export-identity mit Wrapper ohne Binary)
+    waren genau so verborgen geblieben, bis die Suite gruener wurde.
+
+    checkout und setup-deps tragen das `if` bewusst nicht: ohne sie hat kein
+    Gate einen Gegenstand.
+    """
+    doc = yaml.safe_load(CI_FILE.read_text(encoding="utf-8"))
+    gate_ids = {g["id"] for g in gates()}
+    fehlen: list[str] = []
+    geprueft = 0
+    for job_name, job in (doc.get("jobs") or {}).items():
+        im_job = [s for s in job.get("steps") or [] if s.get("id") in gate_ids]
+        assert im_job, f"{job_name}: kein Gate-Schritt — dieser Test lief ueber die leere Menge."
+        for schritt in im_job:
+            geprueft += 1
+            if schritt.get("if") != "${{ !cancelled() }}":
+                fehlen.append(f"{job_name}.{schritt.get('id')}")
+    assert geprueft == len(gate_ids), (
+        f"{geprueft} von {len(gate_ids)} Gates tauchen als Schritte auf — der Test haette Stille uebersprungen."
+    )
+    assert not fehlen, (
+        "Gate-Schritte ohne `if: ${{ !cancelled() }}` — sobald ein vorheriger "
+        f"Gate rot, setzen sie stumm aus und die CI sagt weniger als der lokale Lauf: {fehlen}"
+    )
+
+
 def test_every_step_with_an_id_also_carries_a_name() -> None:
     """W-7: die Namenshaelfte, die `test_every_gate_has_a_name_and_an_id` nicht pruefen kann.
 
