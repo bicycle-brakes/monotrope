@@ -198,3 +198,26 @@ and signs (steps 1–5 in that journal note). A session's next work is either
 the worktree write verification here (`coding-harness-m34`) once the second
 session has ended, or the two provenance lines for the maintainer in
 lakeswitch-ai.
+
+## Addendum — 2026-09-22 19:09, the second session works in the primary checkout
+
+Measured before this session ends:
+
+- `main` is at `0d02a61`: pull request #25 (the scaffold guard script
+  travels, `coding-harness-cke`) merged. Pull request #26 (floor gates
+  measure, `bd` in CI — option A of `coding-harness-4t8`) is open, its bead
+  is in progress, and its CI `verify` job is **red** on both runs of
+  `3a97c2b`; that is the second session's work, not read further here.
+- The second session works **in the primary checkout**
+  `~/coding-harness`, which stands on its branch
+  `fix/4t8-floor-gates-measure` with a clean tree. The session scan does not
+  show it (that is `coding-harness-hit`, next in its chain). This session
+  therefore did not switch branches there; this addendum was written from a
+  worktree on the handover branch, removed afterwards.
+- This session's tracker writes ended with the export commit `998dc3b`;
+  nothing pending. The one writer is the second session.
+- Pull request #24 (this handover) is open and mergeable independently of
+  #26.
+
+Unchanged and waiting on the maintainer: merge #24; in lakeswitch-ai the
+two provenance lines and the cluster-7 ratification; merge #26 once green.
