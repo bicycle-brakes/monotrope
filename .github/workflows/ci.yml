@@ -31,6 +31,7 @@ jobs:
           header="$(git config --local http.https://github.com/.extraheader || true)"
           if [ -n "$header" ]; then
             git config --global http.https://github.com/.extraheader "$header"
+            git config --local --unset-all http.https://github.com/.extraheader
           fi
           bash tools/bd bootstrap --yes
           mkdir -p .beads
@@ -117,6 +118,7 @@ jobs:
           header="$(git config --local http.https://github.com/.extraheader || true)"
           if [ -n "$header" ]; then
             git config --global http.https://github.com/.extraheader "$header"
+            git config --local --unset-all http.https://github.com/.extraheader
           fi
           bash tools/bd bootstrap --yes
           mkdir -p .beads

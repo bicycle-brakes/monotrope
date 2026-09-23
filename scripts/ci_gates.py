@@ -302,6 +302,11 @@ def _tracker_hydratation() -> list[str]:
         '          header="$(git config --local http.https://github.com/.extraheader || true)"',
         '          if [ -n "$header" ]; then',
         '            git config --global http.https://github.com/.extraheader "$header"',
+        # Lokal UND global gesetzt schickt git den Header doppelt ("Duplicate
+        # header: Authorization"), und bd bootstrap fiel still auf die
+        # committete Kopie zurueck — bis bead 1jg.3 las die CI den Tracker nie
+        # aus refs/dolt/data. Der lokale Eintrag geht, der globale bleibt.
+        "            git config --local --unset-all http.https://github.com/.extraheader",
         "          fi",
         "          bash tools/bd bootstrap --yes",
         "          mkdir -p .beads",

@@ -301,6 +301,10 @@ def test_a_gate_that_needs_the_tracker_gets_a_hydration_step() -> None:
     ci = ci_gates.generate_ci()
     assert "tools/beads/install.sh" in ci, "die Checksummen-verifizierte bd-Installation fehlt"
     assert "refs/dolt/data" in ci, "der Tracker-Transport fehlt in der Ableitung"
+    assert "git config --local --unset-all http.https://github.com/.extraheader" in ci, (
+        "der Checkout-Header steht lokal und global — git schickt ihn doppelt, und "
+        "bd bootstrap faellt still zurueck, statt refs/dolt/data zu lesen"
+    )
     assert 'echo "BEAD_RENDER=$PWD/.beads/issues.jsonl" >> "$GITHUB_ENV"' in ci, (
         "die Hydratation rendert nicht einmal vor — je Leser ein eigenes Render "
         "waere genau die Zweimessung, gegen die D-52 steht"
