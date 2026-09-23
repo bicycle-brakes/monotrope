@@ -237,3 +237,15 @@ The session `lakeswitch-ai-b3` owns the open drafts #38 to #40 there.
   command and the maintainer runs it, since it changes the machine. **Not
   yet set up and not tested.** Until it is, the three-step recipe above
   holds.
+
+## Addendum — 2026-09-23, later: `git confirm` works, lakeswitch #37's provenance lines merged
+
+- **`git confirm` is set up and proven.** The maintainer set the global alias
+  on 2026-09-23. A confirmation is now `git confirm -m "…"` or
+  `git confirm -F <file>`. It signs through Secretive with Touch ID and needs
+  no helper files; it was first used for lakeswitch-ai `a19126b` (GitHub:
+  verified). This supersedes the three-step helper recipe above.
+- **lakeswitch-ai: the two provenance lines are merged** (pull request #41,
+  `492bb07`, class `ai-drafted` and location `plans/`, CI green including the
+  signed-decision gate M-30). Pull request #37 still has to merge `main`; its
+  branch belongs to the session `lakeswitch-ai-b3`.
