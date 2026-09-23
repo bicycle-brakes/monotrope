@@ -141,3 +141,83 @@ Task status lives in Beads; this list only points.
   key in the pull request that carries this addendum.
 - Next step unchanged: the CI job summary of changed beads
   (`coding-harness-1jg.4`).
+
+## Addendum — 2026-09-23, session end: worktree writes verified, ADR 0005 accepted
+
+### Where we are
+
+As of 2026-09-23, `main` is at `de36d82`, no pull request is open, and no
+bead is in progress. Two prerequisites of the Omnigent M0 pilot are settled
+today.
+
+- **Tracker writes from worktrees are safe and allowed.** All five D-5
+  checks were green with bd 1.3.0 in a throwaway repository: same list,
+  variables and sandbox, visibility, four concurrent writers with nothing
+  lost, and the full prefix. `AGENTS.md` now allows tracker writes from an
+  in-repository worktree; who may write is still house rule 4. The protocol
+  is `docs/research/2026-09-23-worktree-tracker-writes.md`, merged as #38
+  (bead `coding-harness-m34`, closed).
+- **ADR 0005 is accepted.** Workers claim, create follow-up work and close
+  their own bead. Three layers hold this: bd's claim rules (measured), a
+  custom Omnigent session policy (documented, untested) and bd's events
+  journal (measured). It supersedes ADR 0002's exclusive writer and
+  read-only workers; ADR 0002's rules on stale results and the throwaway
+  pilot store stay. The maintainer signed the acceptance with the Touch-ID
+  key, merged as #39.
+- `.claude/worktrees/` is git-ignored now; before #39 the main checkout
+  listed in-repository worktrees as untracked.
+
+### Next step
+
+Start the Omnigent M0 pilot (`coding-harness-eev`). Its child bead
+`coding-harness-36z` carries ADR 0005's three layers, each with a known-bad
+case to prove in M0. The first question for the maintainer is where the
+Omnigent server runs (the target names a dedicated machine, pinned, with
+telemetry off).
+
+### Needed from the maintainer
+
+Decide the machine for the M0 Omnigent server. In lakeswitch-ai, pull
+request #37 still waits for the two lines in `decisions/provenance.yaml`.
+The session `lakeswitch-ai-b3` owns the open drafts #38 to #40 there.
+
+### Decisions and preferences
+
+- **Workers claim their own bead** (ADR 0005, maintainer, 2026-09-23). The
+  maintainer asked for a feasibility check of that option before choosing it.
+- **Bead `coding-harness-36z` was re-scoped twice today.** First the
+  maintainer chose "no self-built lock, Omnigent sandbox configuration
+  instead", then ADR 0005 replaced that scope. The notes on the bead record
+  both scopes.
+- **In-repository worktrees for session work.** This session used
+  `.claude/worktrees/` for its last three changes, as D-5 asks.
+
+### Working state
+
+- **Primary checkout `~/coding-harness`:** on `main` at `de36d82`, clean.
+  This addendum comes from `.claude/worktrees/handover-addendum`, which is
+  removed after the merge.
+- **The Touch-ID signing helper does not survive this session.** It
+  consisted of a public-key file and a wrapper in the session's scratch
+  directory. To sign the next confirmation:
+  1. Read the public key with
+     `SSH_AUTH_SOCK=~/Library/Containers/com.maxgoedjen.Secretive.SecretAgent/Data/socket.ssh ssh-add -L`.
+     The key is `lakeswitch-decisions`, ECDSA
+     `SHA256:LMqOFIm/waO3jemYoQjG8YWpM/iMQKEZW8D+S59QM7c`.
+  2. Write a wrapper that sets that `SSH_AUTH_SOCK` and calls `ssh-keygen`.
+  3. Commit with `git -c gpg.format=ssh -c user.signingkey=<pubkey file> -c gpg.ssh.program=<wrapper> commit -S`.
+
+  The maintainer runs the commit personally, and the permission layer
+  refuses it to a session. The recipe is also in lakeswitch-ai's journal
+  entry of today.
+- **Probe repositories** `~/m34-probe` and `~/m34-probe2` were removed.
+
+### Validation
+
+- 2026-09-23, #38: `make verify` VERIFY GREEN in the in-repository worktree.
+  The probe measurements are in the protocol file.
+- 2026-09-23, #39: `make verify` VERIFY GREEN before and after the
+  acceptance edit. CI `verify` was green, and GitHub verified `8fc92e4`
+  (`true`/`valid`).
+- Not tested: the Omnigent session policy and environment passthrough. Both
+  belong to M0.
