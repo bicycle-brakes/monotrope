@@ -1,10 +1,15 @@
 # ADR 0002 — One exclusive coordinator writes the tracker during parallel sessions
 
-* Status: accepted · amends the session-entry rule "no session writes while
+* Status: accepted, superseded in part by ADR 0005 (2026-09-23) · amends the session-entry rule "no session writes while
   another session runs" (AGENTS.md house rule 4)
 * Review: accepted by the maintainer, 2026-09-22, with the changes of that
   review · Decider: maintainer · prepared by a framework-architect session
 * Date: 2026-09-19 · accepted 2026-09-22
+* Note, 2026-09-23: [ADR 0005](0005-workers-claim-their-own-bead.md)
+  (accepted 2026-09-23) supersedes the exclusive writer and the read-only
+  workers; its first reason, a single-writer store, was measured false
+  that day (bead coding-harness-m34). The rules on stale or duplicate
+  results and on the pilot's throwaway store stay in force.
 
 ## Context
 

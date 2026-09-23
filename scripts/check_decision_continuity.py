@@ -41,7 +41,7 @@ AMENDMENT_ADRS: dict[str, tuple[str, ...]] = {
     "D-7": ("0001-early-parallelism.md",),
     "D-4": ("0004-tracker-render-is-the-contract.md",),
     "D-17": ("0003-public-scan-naming-boundary.md",),
-    "coordinator-permission": ("0002-exclusive-coordinator-writer.md",),
+    "coordinator-permission": ("0002-exclusive-coordinator-writer.md", "0005-workers-claim-their-own-bead.md"),
 }
 
 
