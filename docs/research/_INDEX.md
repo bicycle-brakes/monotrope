@@ -54,6 +54,7 @@ Vocabulary for older sources: **Stage 1–3** means model routing; **S0–S7** m
 | [Human planning and harness gaps](2026-09-18-human-planning-and-harness-gaps.md) | proposed · 2026-09-18 | Human planning entry, attention support, unresolved harness gaps |
 | [CrewAI assessment](2026-09-18-crewai-assessment.md) | proposed · 2026-09-18 | Runtime overlap with Omnigent; defer coordinator adoption pending a measured gap |
 | [Open Code Review assessment](2026-09-18-open-code-review-assessment.md) | proposed · 2026-09-18 | Review tool fit, limits and smallest gated pilot |
+| [Tracker writes from worktrees](2026-09-23-worktree-tracker-writes.md) | accepted · 2026-09-23 | D-5's five checks green with bd 1.3.0; the worktree write ban lifts, the one-writer rule stays |
 | [Agent Skills assessment](2026-09-18-agent-skills-assessment.md) | proposed · 2026-09-18 | Selective technique adaptation and evaluation without importing a competing workflow |
 
 Original four-source intake note: copied in by the maintainer on 2026-09-16 (Phase 2 of the
