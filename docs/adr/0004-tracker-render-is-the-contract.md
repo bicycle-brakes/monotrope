@@ -1,10 +1,13 @@
 # ADR 0004 — The tracker render is the portable contract (D-4 amended)
 
-* Status: proposed · amends D-4 of the 2026-09-16 interview
+* Status: accepted · amends D-4 of the 2026-09-16 interview
 * Review: direction confirmed by the maintainer, 2026-09-22 (option A of
-  three). Acceptance is the maintainer's own act and happens only when all
-  three conditions of D-52 are shown · Decider: maintainer
+  three); accepted by the maintainer, 2026-09-23, after all three
+  conditions of D-52 were shown (PR #34) and the record was corrected
+  (PR #36), in a commit signed with the maintainer's Touch-ID key ·
+  Decider: maintainer · prepared by a Claude Code session
 * Date: 2026-09-22 · corrected 2026-09-23 (see "Correction" under Context)
+  · accepted 2026-09-23
 
 ## Context
 
@@ -54,7 +57,7 @@ kept as written, so that the record shows what was believed and when.
 * (c) Status quo with the identity gate — rejected: render commits and
   branch collisions remain the price of every tracker change.
 
-## Decision (proposed)
+## Decision
 
 Auto-export stays off. The render is the portable contract. The committed
 copy remains **until** all three D-52 conditions are shown. (As of
@@ -97,4 +100,4 @@ conscious successor when it goes:
   repository; they are the maintainer's act there.
 * This ADR flips to accepted by the maintainer when `1jg.3` has shown
   the third condition — not before. As of 2026-09-23 (PR #34) that point
-  is reached; acceptance remains the maintainer's act.
+  was reached, and the maintainer accepted it the same day.
