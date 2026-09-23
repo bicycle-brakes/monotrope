@@ -159,6 +159,11 @@ tool disagrees with this table, the table wins.
 
 ### Tracker ownership and activation
 
+> **Proposed change, 2026-09-23.** [ADR 0005](../adr/0005-workers-claim-their-own-bead.md)
+> (proposed) lets workers claim and close their own bead, held by bd's claim
+> rules, an Omnigent session policy and bd's events journal, instead of one
+> exclusive coordinator writer. Until it is accepted, the section below stands.
+
 - **Today's rule.** No session writes while another session runs.
 - **The change.** The proposed coordinator topology replaces that rule — it is
   not an interpretation of the existing permission. Before any parallel pilot

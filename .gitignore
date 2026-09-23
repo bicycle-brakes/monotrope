@@ -6,6 +6,10 @@
 .beads/proxieddb/
 .beads.gate.lock
 
+# Worktrees live in the repository (D-5, lifted 2026-09-23 — bead coding-harness-m34):
+# Claude Code puts them here, and the main checkout must not list them as untracked.
+.claude/worktrees/
+
 # Das gerenderte Bild des Trackers reist nicht mehr im Git (bead 1jg.3, D-52):
 # die CI rendert einmal pro Lauf an genau diesen Pfad und setzt BEAD_RENDER.
 # Hier ignoreiert, damit kein `git add -A` die Kopie ins Repo zurueckholt.

@@ -5,6 +5,11 @@
 * Review: accepted by the maintainer, 2026-09-22, with the changes of that
   review · Decider: maintainer · prepared by a framework-architect session
 * Date: 2026-09-19 · accepted 2026-09-22
+* Note, 2026-09-23: [ADR 0005](0005-workers-claim-their-own-bead.md)
+  (proposed) would supersede the exclusive writer and the read-only
+  workers; its first reason, a single-writer store, was measured false
+  that day (bead coding-harness-m34). This ADR stands until 0005 is
+  accepted.
 
 ## Context
 
