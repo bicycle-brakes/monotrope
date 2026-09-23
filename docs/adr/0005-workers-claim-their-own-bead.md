@@ -1,11 +1,13 @@
 # ADR 0005 — Workers claim and close their own bead; the coordinator no longer writes alone
 
-* Status: proposed · supersedes, in part, ADR 0002 (the exclusive coordinator
+* Status: accepted · supersedes, in part, ADR 0002 (the exclusive coordinator
   writer and read-only workers)
 * Review: direction chosen by the maintainer, 2026-09-23 (option "workers
-  claim themselves" of three, after a check that it is feasible) ·
-  Decider: maintainer · prepared by a Claude Code session
-* Date: 2026-09-23
+  claim themselves" of three, after a check that it is feasible);
+  accepted by the maintainer, 2026-09-23, in a commit signed with the
+  maintainer's Touch-ID key · Decider: maintainer · prepared by a Claude
+  Code session
+* Date: 2026-09-23 · accepted 2026-09-23
 
 ## Context
 
