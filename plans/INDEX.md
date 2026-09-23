@@ -15,4 +15,4 @@ Dateien dazukommen.
 | [`changes/archive/2026-09-21-reproducible-bead-export/research.md`](changes/archive/2026-09-21-reproducible-bead-export/research.md) | accepted | done | 2026-09-21 | coding-harness-1jg.1 |
 | [`changes/archive/2026-09-21-reproducible-bead-export/spec.md`](changes/archive/2026-09-21-reproducible-bead-export/spec.md) | accepted | done | 2026-09-21 | coding-harness-1jg.1 |
 | [`changes/archive/2026-09-23-gate-placement/research.md`](changes/archive/2026-09-23-gate-placement/research.md) | accepted | done | 2026-09-23 | coding-harness-1jg.2 |
-| [`changes/tracker-access-point/research.md`](changes/tracker-access-point/research.md) | draft | none | 2026-09-23 | coding-harness-1jg.3 |
+| [`changes/archive/2026-09-23-tracker-access-point/research.md`](changes/archive/2026-09-23-tracker-access-point/research.md) | accepted | done | 2026-09-23 | coding-harness-1jg.3 |

@@ -67,9 +67,17 @@ def run(basis: Path, export: Path) -> list[str]:
 
 
 def main() -> int:
-    from bead_render import render_pfad  # noqa: E402 — der EINE Zugriffspunkt (bead 1jg.3)
+    from bead_render import (  # noqa: E402 — der EINE Zugriffspunkt (bead 1jg.3)
+        RendererNichtMoeglich,
+        nicht_gemessen,
+        render_pfad,
+    )
 
-    befunde = run(REPO_ROOT / "docs", render_pfad())
+    try:
+        render = render_pfad()
+    except (FileNotFoundError, RendererNichtMoeglich) as exc:
+        return nicht_gemessen("dangling-beads", exc)
+    befunde = run(REPO_ROOT / "docs", render)
     if befunde:
         print(f"{len(befunde)} haengende Vorgangs-Zitationen:")
         for b in befunde:

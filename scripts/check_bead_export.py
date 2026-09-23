@@ -54,9 +54,16 @@ def run(pfad: Path) -> list[str]:
 
 
 def main() -> int:
-    from bead_render import render_pfad  # noqa: E402 — der EINE Zugriffspunkt (bead 1jg.3)
+    from bead_render import (  # noqa: E402 — der EINE Zugriffspunkt (bead 1jg.3)
+        RendererNichtMoeglich,
+        nicht_gemessen,
+        render_pfad,
+    )
 
-    quelle = render_pfad()
+    try:
+        quelle = render_pfad()
+    except (FileNotFoundError, RendererNichtMoeglich) as exc:
+        return nicht_gemessen("bead-export", exc)
     befunde = run(quelle)
     if befunde:
         print(f"{len(befunde)} Befunde in {quelle}:")

@@ -4,7 +4,7 @@
 * Review: direction confirmed by the maintainer, 2026-09-22 (option A of
   three). Acceptance is the maintainer's own act and happens only when all
   three conditions of D-52 are shown · Decider: maintainer
-* Date: 2026-09-22
+* Date: 2026-09-22 · corrected 2026-09-23 (see "Correction" under Context)
 
 ## Context
 
@@ -24,6 +24,18 @@ token reads `refs/dolt/data` in the private repository (CI green on
 open, and it is the work of bead `1jg.3`. Stage 1 (`1jg.1`, machine-local
 fields omitted from the render) is what makes renders byte-equal across
 machines in the first place.
+
+**Correction, 2026-09-23.** The paragraph above overstates what PR #26
+showed. The pinned `bd` did run behind its checksum, but the token never
+read `refs/dolt/data`: the hydration step left the checkout's Authorization
+header set both locally and globally, git sent it twice, and `bd bootstrap`
+fell back to importing the committed JSONL ("Bootstrap plan: import from
+git-tracked JSONL"). The identity gate therefore compared the copy with
+itself, and CI stayed green. The second condition was first shown on
+2026-09-23 in PR #34, which removed the local header ("Bootstrap plan: clone
+from remote" in both the verify and the drift job). The same pull request
+showed the third condition in use and removed the copy. The paragraph is
+kept as written, so that the record shows what was believed and when.
 
 ## Decision Drivers
 
@@ -45,8 +57,9 @@ machines in the first place.
 ## Decision (proposed)
 
 Auto-export stays off. The render is the portable contract. The committed
-copy remains **until** all three D-52 conditions are shown; two are
-verified, the third is `1jg.3`'s work. When it falls:
+copy remains **until** all three D-52 conditions are shown. (As of
+2026-09-23 all three are shown and the copy is gone — PR #34; the second
+condition only then, see the correction above.) When it falls:
 
 * every reader takes the render of the one access point — hosted CI from
   the hydration of `refs/dolt/data`, locally from the writer's tracker;
@@ -64,10 +77,15 @@ conscious successor when it goes:
 * **Tracker changes visible in the pull request diff.** Successor: the
   tracker summary of the touched beads travels in the pull request body,
   so the reviewer still sees what the tracker now says — in the place
-  where review happens, not in a file diff.
-* **Readability for agents without `bd`.** Successor: the fresh render
-  itself. Hosted CI leaves it as a run artifact; agents without `bd` read
-  that render instead of an aging committed copy.
+  where review happens, not in a file diff. Decided by the maintainer on
+  2026-09-23: the body rule is AGENTS.md house rule 4 now, and a CI job
+  summary of the changed beads follows (bead `coding-harness-1jg.4`).
+* **Readability for agents without `bd`.** Successor, as decided on
+  2026-09-23: the access point `scripts/bead_render.py` refuses with both
+  ways out — `tools/beads/install.sh && tools/bd bootstrap --yes`, or
+  `BEAD_RENDER` pointing at a render — and a tracker-reading gate ends in
+  exit 3, "not measured". The run artifact first proposed here is not
+  built.
 
 ## Consequences
 
@@ -78,4 +96,5 @@ conscious successor when it goes:
 * The wording changes in lakeswitch (D-09/D-31) follow in that
   repository; they are the maintainer's act there.
 * This ADR flips to accepted by the maintainer when `1jg.3` has shown
-  the third condition — not before.
+  the third condition — not before. As of 2026-09-23 (PR #34) that point
+  is reached; acceptance remains the maintainer's act.
