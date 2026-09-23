@@ -1,7 +1,7 @@
 ---
 title: "Research — gate-placement"
-status: draft
-implementation_status: none
+status: accepted
+implementation_status: done
 date: 2026-09-23
 last_reviewed: 2026-09-23
 supersedes: null
@@ -14,8 +14,10 @@ tags: [research]
 
 # gate placement — Research
 
-Phase 1 nach [`prompts/01-explore.md`](../../../prompts/01-explore.md); diese
-Datei ist leer, bis sie gelaufen ist.
+Archiviert am 2026-09-23. Phase 1 lief für diesen Bead nie als eigenes
+Artefakt: die Arbeit ging direkt vom Bead (`coding-harness-1jg.2`) in Pull
+Request #32, gemergt als `f5c5968`. Dieser Rumpf bleibt als Beleg dafür, dass
+das Paket angelegt und nicht gefüllt wurde.
 
 > **Herkunft nachziehen.** Das Frontmatter sagt `provenance: human-written` —
 > das gilt für diesen Rumpf. Wer ihn mit einem Sprachmodell füllt, setzt

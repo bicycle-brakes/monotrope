@@ -38,9 +38,10 @@ def test_a_missing_env_render_is_an_error_not_a_silent_fallback(tmp_path: Path, 
         bead_render.render_pfad()
 
 
-def test_without_a_renderer_the_committed_copy_answers(monkeypatch) -> None:
-    """Uebergangsweise (D-52): die Leerprobe und frische Klone ohne bootstrap
-    koennen nicht frisch messen — die Kopie antwortet, bis sie faellt."""
+def test_without_renderer_or_preset_render_it_raises_and_names_both_ways_out(monkeypatch) -> None:
+    """Keine Kopie mehr, auf die man still fallen koennte (D-52 erfuellt): der
+    Zugriffspunkt wirft — und der Grund nennt bootstrap und BEAD_RENDER, damit
+    eine Maschine ohne Tracker weiss, was zu tun ist."""
     import bead_render
 
     def kaputt() -> None:
@@ -49,8 +50,11 @@ def test_without_a_renderer_the_committed_copy_answers(monkeypatch) -> None:
     monkeypatch.setattr(bead_render, "_frisches_render", kaputt)
     monkeypatch.delenv("BEAD_RENDER", raising=False)
 
-    assert bead_render.render_pfad() == REPO_ROOT / ".beads" / "issues.jsonl"
-    assert bead_render.quelle(bead_render.render_pfad()) == bead_render.QUELLE_COMMITTET
+    with pytest.raises(bead_render.RendererNichtMoeglich) as excinfo:
+        bead_render.render_pfad()
+    grund = str(excinfo.value)
+    assert "bootstrap" in grund
+    assert "BEAD_RENDER" in grund
 
 
 def test_render_twice_is_byte_equal() -> None:
@@ -71,16 +75,21 @@ def test_render_twice_is_byte_equal() -> None:
         )
 
 
-def test_the_access_point_cli_names_its_source(monkeypatch, capsys) -> None:
-    """Ein Leser, der wissen will, womit er gemessen hat, fragt die Quelle —
-    der CLI-Bericht nennt Pfad und Herkunft, damit kein Befund aus dem
-    falschen Bild zitiert."""
+def test_the_access_point_cli_names_its_source_or_its_way_out(monkeypatch, capsys) -> None:
+    """Der CLI-Bericht hat zwei ehrliche Ausgaenge: Pfad plus Herkunft (0),
+    oder — ohne Renderer und ohne vorgesetztes Render — Exit 2 mit dem Weg
+    zum Ziel auf stderr. Beide Antworten benennbar, keine schweigt."""
     import bead_render
 
     monkeypatch.delenv("BEAD_RENDER", raising=False)
 
-    assert bead_render.main() == 0
-    zeile = capsys.readouterr().out.strip()
-    pfad_text, quell_text = zeile.split("\t")
-    assert Path(pfad_text).is_file()
-    assert quell_text in (bead_render.QUELLE_GERENDERT, bead_render.QUELLE_COMMITTET)
+    code = bead_render.main()
+    gefangen = capsys.readouterr()
+    if code == 0:
+        pfad_text, quell_text = gefangen.out.strip().split("\t")
+        assert Path(pfad_text).is_file()
+        assert quell_text in (bead_render.QUELLE_VORGESETZT, bead_render.QUELLE_GERENDERT)
+    else:
+        assert code == 2
+        assert "bootstrap" in gefangen.err
+        assert "BEAD_RENDER" in gefangen.err

@@ -1,24 +1,23 @@
 #!/usr/bin/env python3
 """render_beads_export.py — der Eine-Schreiber-Renderer des Trackers (D-4).
 
-Auto-Export ist seit dem 2026-09-17 ausgeschaltet. Der Export wird EINMAL,
-am Sitzungsende, von dem einen Schreiber gerendert, der die Writer-Lock
-haelt (ADR 0002). Dieses Script ist dieser eine Aufruf:
+Der Render ist der tragende Vertrag (ADR 0004); eine committete Kopie gibt
+es seit bead coding-harness-1jg.3 nicht mehr. Wer das Render braucht, geht
+ueber `scripts/bead_render.py` — dieses Script ist der Eine-Schreiber
+HINTER dem Zugriffspunkt:
 
     python3 scripts/render_beads_export.py
 
 Es rendert über das gepinnte `tools/bd` in eine Temp-Datei, prueft das
-Ergebnis Zeile fuer Zeile (ueber check_bead_export.run) und uebertraegt es
-erst dann an `.beads/issues.jsonl` — kaputte Renders erreichen den committed
-Stand nie. Der SHA-256 des Ergebnisses geht auf stdout: er bindet den
-Sitzungsbericht an genau diesen Export.
+Ergebnis Zeile fuer Zeile (ueber check_bead_export.run) und schreibt es
+erst dann an seinen Zielort — kaputte Renders erreichen keinen Leser. Die
+ gehostete CI ruft es im Hydratationsschritt genau einmal auf und setzt
+`BEAD_RENDER` auf das Ergebnis; alle Leser des Laufs nehmen dieses Render
+(D-52, Bedingung 2).
 
 Usage:
-    python3 scripts/render_beads_export.py [--check]
-Exit: 0 = gerendert (oder --check: identisch),
-      1 = Befund, 2 = Vorbedingung,
-      3 = --check ohne ausfuehrbaren Tracker: NICHT GEMESSEN — der Gate steht
-          auf floor: true, der Lauf faellt (bead coding-harness-4t8).
+    python3 scripts/render_beads_export.py
+Exit: 0 = gerendert, 1 = Befund, 2 = Vorbedingung.
 """
 
 from __future__ import annotations
@@ -133,38 +132,7 @@ def main(argv: list[str] | None = None) -> int:
 
 def _main(argv: list[str] | None = None) -> int:
     ap = argparse.ArgumentParser(description=__doc__)
-    ap.add_argument(
-        "--check",
-        action="store_true",
-        help="nicht schreiben: den committed Export gegen ein frisches Render vergleichen",
-    )
-    args = ap.parse_args(argv)
-
-    if args.check:
-        with tempfile.TemporaryDirectory() as td:
-            frisch = Path(td) / "issues.jsonl"
-            try:
-                _render_nach(frisch)
-            except RendererFehlt as exc:
-                # Bead coding-harness-4t8: der Gate steht auf floor: true — und
-                # ein floor-Gate, das nicht misst, ist rot, nicht gruen. Der
-                # stille Exit 0 hier war genau das Loch, das 4t8 benennt; die
-                # CI hydratisiert den Tracker inzwischen (needs_tracker in
-                # decisions/gates.yaml), sodass dieser Zweig dort nur noch bei
-                # einem kaputten Setup greift — und dann den Lauf faellt.
-                print(f"export-identity NICHT GEMESSEN: {exc}")
-                print("floor: true — nicht messen ist fuer diesen Gate rot (D-4, bead 4t8).")
-                return 3
-            soll = _sha(frisch)
-        ist = _sha(EXPORT) if EXPORT.is_file() else None
-        if ist == soll:
-            print(f"Export-Identitaet ok (sha256 {soll[:12]}…).")
-            return 0
-        print("Export DRIFT: der committed Stand ist nicht das frische Render.")
-        print("Rendern:  python3 scripts/render_beads_export.py")
-        print(f"  committed sha256: {ist or '—'}")
-        print(f"  frisch   sha256: {soll}")
-        return 1
+    ap.parse_args(argv)
 
     with tempfile.TemporaryDirectory() as td:
         tmp = Path(td) / "issues.jsonl"
@@ -179,7 +147,7 @@ def _main(argv: list[str] | None = None) -> int:
             return 1
         EXPORT.write_bytes(tmp.read_bytes())
 
-    print(f"Export gerendert: {EXPORT.relative_to(REPO_ROOT)} (sha256 {_sha(EXPORT)[:12]}…)")
+    print(f"Render geschrieben: {EXPORT.relative_to(REPO_ROOT)} (sha256 {_sha(EXPORT)[:12]}…)")
     return 0
 
 

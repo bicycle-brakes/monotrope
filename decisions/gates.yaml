@@ -82,7 +82,8 @@ gates:
     enforcement: block
     floor: true
     placement: both
-    reason: The two lifecycle rules need a runner; `make staleness` is the same command.
+    needs_tracker: true
+    reason: The two lifecycle rules need a runner; `make staleness` is the same command. The bead coupling reads the tracker render (bead 1jg.3).
 
   - id: docs-links
     title: Documentation frontmatter, links and anchors resolve
@@ -100,7 +101,8 @@ gates:
     enforcement: block
     floor: true
     placement: both
-    reason: The export is the tracker's rendered truth — a broken line breaks every reader that quotes it.
+    needs_tracker: true
+    reason: The render is the tracker's truth — a broken line breaks every reader that quotes it. In CI the hydration renders once and presets BEAD_RENDER; locally the access point renders fresh or fails honestly — there is no committed copy to fall back on (bead 1jg.3, D-52).
 
   - id: dangling-beads
     title: Every cited bead id resolves in the export
@@ -109,7 +111,8 @@ gates:
     enforcement: block
     floor: true
     placement: both
-    reason: A citation of an unknown bead silently severs the provenance chain.
+    needs_tracker: true
+    reason: A citation of an unknown bead silently severs the provenance chain. The same tracker render as bead-export, via BEAD_RENDER in CI (bead 1jg.3).
 
   - id: decision-continuity
     title: Every interview decision stays mapped; every amendment has its ADR
@@ -119,16 +122,6 @@ gates:
     floor: true
     placement: both
     reason: Decisions vanish by silent rewrite (gap P1) — this gate turns vanishing into a finding (maintainer decision 5, 2026-09-19).
-
-  - id: export-identity
-    title: The committed bead export is exactly the fresh render
-    command: python3 scripts/render_beads_export.py --check
-    job: verify
-    enforcement: block
-    floor: true
-    placement: both
-    needs_tracker: true
-    reason: Auto-export is off; the writer renders at session end, and CI hydrates the tracker to measure the same thing — an export that cannot be checked exits 3 and is red (D-4, bead 4t8, staged toward 1jg.3).
 
   - id: gate-schema
     title: This gate file satisfies its own schema
@@ -188,6 +181,7 @@ gates:
     enforcement: block
     floor: true
     placement: both
-    reason: DRIFT blocks only on the timer (ADR-028 R2) — the outside moves without a push to this repo.
+    needs_tracker: true
+    reason: DRIFT blocks only on the timer (ADR-028 R2) — the outside moves without a push to this repo. It reads the tracker render, so the drift job hydrates too (bead 1jg.3).
 
 retired: []

@@ -71,8 +71,9 @@ Konvention — alle Artefakte trugen es, geprüft hat es niemand. Eine Regel,
 die jeder befolgt und kein Gate kennt, ist eine Gewohnheit.
 
 `bead:` ist mehr als ein Verweis: `plans_registry.py` hält `implementation_status`
-gegen den Zustand desselben Vorgangs im Tracker-Export
-(`.beads/issues.jsonl`, als Datei gelesen, nie über `bd`). Ist der Bead
+gegen den Zustand desselben Vorgangs im Tracker-Render — über den einen
+Zugriffspunkt `scripts/bead_render.py` (in der CI das vorgesetzte `BEAD_RENDER`,
+sonst ein frisches Render). Ist der Bead
 geschlossen, muss das Artefakt `done` sein **und** unter `changes/archive/`
 liegen; steht es auf `done`, muss der Bead geschlossen sein. Beide Richtungen
 melden DRIFT und werden erst im nächtlichen `--strict`-Lauf scharf, nicht am

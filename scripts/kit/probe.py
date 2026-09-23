@@ -53,7 +53,10 @@ GRUENDE = (
     "bestand-dieses-repos",  # prueft eine Inventur, die es dort nicht gibt
     "braucht-die-vollstaendige-suite",  # prueft Dateien, die der Kit nicht traegt
     "braucht-ein-gate-das-hier-lebt",  # verlangt einen Erzwinger ausserhalb des Kits
-    "geruest-ist-absichtlich-leer",  # liest eine geruest-Datei, die im Ziel ein leerer Rumpf ist
+    # "geruest-ist-absichtlich-leer" gestrichen am 2026-09-23 (bead coding-harness-1jg.3,
+    # Schritt zwei): die committete Kopie fiel, die gleichnamige Kit-Rolle loeste sich
+    # auf (AK-6, ein Mitglied), und die Rumpf-Dateien traegt der Kit nicht mehr —
+    # die Faelle messen jetzt "braucht-die-vollstaendige-suite".
     # "gilt-erst-mit-bestand" gestrichen am 2026-09-19 (2ee-Triage): kein Fall
     # traegt ihn aktuell. Er kommt zurueck, wenn der Projekt-Kanal mit dem
     # lakeswitch-Beitritt beginnt (O-2/M2) — dann mit Fall, nicht ohne.
@@ -88,7 +91,8 @@ GRUENDE = (
 REIST_NICHT: dict[str, str] = {
     "tests.test_ci::test_every_gate_step_has_a_mutation_test": "braucht-die-vollstaendige-suite",
     "tests.test_ci::test_every_script_has_a_test_or_a_declared_reason": "braucht-die-vollstaendige-suite",
-    "tests.test_ci::test_no_declared_reason_cites_a_closed_or_unknown_bead": "geruest-ist-absichtlich-leer",
+    "tests.test_ci::test_no_declared_reason_cites_a_closed_or_unknown_bead": "bestand-dieses-repos",
+    "tests.test_ci::test_der_echte_lesepfad_des_bead_gates_wird_erkannt": "bestand-dieses-repos",
     "tests.test_ci::test_the_makefile_runs_what_the_one_list_runs": "bestand-dieses-repos",
     "tests.test_feedback_channel::test_journal_index_lists_every_open_project_handover": "bestand-dieses-repos",
     "tests.test_feedback_channel::test_the_field_checks_read_the_schema_instead_of_a_copy[GEMEINSAM-fehlende_gemeinsame]": "bestand-dieses-repos",
@@ -96,13 +100,13 @@ REIST_NICHT: dict[str, str] = {
     "tests.test_kit::test_the_kit_list_is_not_derivable_from_the_export_list": "bestand-dieses-repos",
     "tests.test_kit::test_the_role_check_goes_red_when_a_rule_is_removed": "bestand-dieses-repos",
     "tests.test_kit::test_the_two_manifests_really_disagree_somewhere": "bestand-dieses-repos",
-    "tests.test_model_endpoints::test_every_agent_model_resolves_to_a_declared_endpoint[consistency-auditor.md-claude-sonnet-5]": "geruest-ist-absichtlich-leer",
-    "tests.test_model_endpoints::test_every_agent_model_resolves_to_a_declared_endpoint[code-generation-orchestrator.md-claude-sonnet-5]": "geruest-ist-absichtlich-leer",
-    "tests.test_model_endpoints::test_every_agent_model_resolves_to_a_declared_endpoint[entity-builder.md-claude-sonnet-5]": "geruest-ist-absichtlich-leer",
-    "tests.test_model_endpoints::test_every_agent_model_resolves_to_a_declared_endpoint[entity-deployer.md-claude-sonnet-5]": "geruest-ist-absichtlich-leer",
-    "tests.test_model_endpoints::test_every_agent_model_resolves_to_a_declared_endpoint[migration-supervisor.md-claude-sonnet-5]": "geruest-ist-absichtlich-leer",
-    "tests.test_model_endpoints::test_every_agent_model_resolves_to_a_declared_endpoint[preconditions-gate-runner.md-claude-sonnet-5]": "geruest-ist-absichtlich-leer",
-    "tests.test_model_endpoints::test_every_agent_model_resolves_to_a_declared_endpoint[reconciliation-orchestrator.md-claude-sonnet-5]": "geruest-ist-absichtlich-leer",
+    "tests.test_model_endpoints::test_every_agent_model_resolves_to_a_declared_endpoint[consistency-auditor.md-claude-sonnet-5]": "braucht-die-vollstaendige-suite",
+    "tests.test_model_endpoints::test_every_agent_model_resolves_to_a_declared_endpoint[code-generation-orchestrator.md-claude-sonnet-5]": "braucht-die-vollstaendige-suite",
+    "tests.test_model_endpoints::test_every_agent_model_resolves_to_a_declared_endpoint[entity-builder.md-claude-sonnet-5]": "braucht-die-vollstaendige-suite",
+    "tests.test_model_endpoints::test_every_agent_model_resolves_to_a_declared_endpoint[entity-deployer.md-claude-sonnet-5]": "braucht-die-vollstaendige-suite",
+    "tests.test_model_endpoints::test_every_agent_model_resolves_to_a_declared_endpoint[migration-supervisor.md-claude-sonnet-5]": "braucht-die-vollstaendige-suite",
+    "tests.test_model_endpoints::test_every_agent_model_resolves_to_a_declared_endpoint[preconditions-gate-runner.md-claude-sonnet-5]": "braucht-die-vollstaendige-suite",
+    "tests.test_model_endpoints::test_every_agent_model_resolves_to_a_declared_endpoint[reconciliation-orchestrator.md-claude-sonnet-5]": "braucht-die-vollstaendige-suite",
     "tests.test_model_endpoints::test_every_model_in_a_phase_prompt_resolves[01-explore.md-Haiku 4.5]": "bestand-dieses-repos",
     "tests.test_model_endpoints::test_every_model_in_a_phase_prompt_resolves[01a-interview.md-Fable 5.1]": "bestand-dieses-repos",
     "tests.test_model_endpoints::test_every_model_in_a_phase_prompt_resolves[02-spec.md-Fable 5.1]": "bestand-dieses-repos",
@@ -247,7 +251,7 @@ def unversionierte_dateien() -> list[str]:
 def nach_rolle() -> dict[str, list[str]]:
     """Jede getrackte Datei ihrer Rolle zugeordnet; `None` sammelt die Unklassifizierten."""
     rm = regeln()
-    aus: dict[str, list[str]] = {"mechanismus": [], "bestand": [], "geruest": [], "(offen)": []}
+    aus: dict[str, list[str]] = {"mechanismus": [], "bestand": [], "(offen)": []}
     for pfad in getrackte_dateien():
         gefunden = rolle(pfad, rm)
         aus[gefunden[0] if gefunden else "(offen)"].append(pfad)
@@ -260,7 +264,7 @@ def nach_rolle() -> dict[str, list[str]]:
 
 
 def _baue(ziel: Path) -> None:
-    """Kopiert den Mechanismus und legt fuer jede geruest-Regel einen Rumpf an."""
+    """Kopiert den Mechanismus und legt die Geruest-Ordner an."""
     verteilt = nach_rolle()
     for pfad in verteilt["mechanismus"]:
         quelle = REPO_ROOT / pfad
@@ -268,14 +272,6 @@ def _baue(ziel: Path) -> None:
             continue
         (ziel / pfad).parent.mkdir(parents=True, exist_ok=True)
         shutil.copy2(quelle, ziel / pfad)
-    # Geruest: existieren muss es, der Inhalt gehoert dem Zielrepo. Eine Kopie
-    # von hier waere die Inventur dieses Repos unter fremdem Namen.
-    for r in regeln():
-        if r["rolle"] != "geruest":
-            continue
-        p = ziel / r["prefix"]
-        p.parent.mkdir(parents=True, exist_ok=True)
-        p.write_text("", encoding="utf-8")
     for ordner in geruest_ordner():
         (ziel / ordner).mkdir(parents=True, exist_ok=True)
         (ziel / ordner / ".gitkeep").write_text("", encoding="utf-8")
@@ -407,8 +403,7 @@ def pruefe(faelle: dict[str, bool] | None = None) -> Verdict:
 
     v.info(
         f"{len(gruen)} von {len(faelle)} Faellen tragen in ein fremdes Repo ({100 * len(gruen) // len(faelle)} %)",
-        f"mechanismus {len(verteilt['mechanismus'])} · geruest {len(verteilt['geruest'])} "
-        f"· bestand {len(verteilt['bestand'])} Datei(en)",
+        f"mechanismus {len(verteilt['mechanismus'])} · bestand {len(verteilt['bestand'])} Datei(en)",
     )
     return v
 
@@ -422,9 +417,9 @@ def main() -> int:
 
     if args.list:
         verteilt = nach_rolle()
-        for r in ("mechanismus", "geruest", "bestand", "(offen)"):
+        for r in ("mechanismus", "bestand", "(offen)"):
             print(f"{r:<14} {len(verteilt[r]):>4}")
-            if r in ("mechanismus", "geruest", "(offen)"):
+            if r in ("mechanismus", "(offen)"):
                 for pfad in sorted(verteilt[r]):
                     print(f"    {pfad}")
         return 0

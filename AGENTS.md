@@ -41,8 +41,11 @@ then it lives at `portfolio-agentic-engineering/docs/WORKFLOW.md`.
 
 1. **Content artifacts are English** — commit messages and PR bodies included.
 2. **Beads only.** The tracker is the Dolt database under `.beads/`,
-   transported via `refs/dolt/data` on origin. `.beads/issues.jsonl` is a
-   rendered export, not the wire protocol.
+   transported via `refs/dolt/data` on origin. No rendered copy is committed:
+   the hosted CI hydrates, renders once and presets `BEAD_RENDER`; every
+   reader goes through `scripts/bead_render.py`. A fresh clone needs
+   `tools/beads/install.sh && tools/bd bootstrap --yes` before any
+   tracker-reading gate can measure.
 3. **Use `tools/bd`, never bare `bd`.** The wrapper pins the version and
    refuses `init`, `migrate`, `upgrade` — the three verbs that can change the
    shared database for everyone. The prefix (`coding-harness-`) was fixed at
@@ -53,9 +56,10 @@ then it lives at `portfolio-agentic-engineering/docs/WORKFLOW.md`.
    `refs/dolt/data`, so a git push that outruns the tracker push merges
    against a stand the commits claim to include — and goes red on exactly
    that gap (bead coding-harness-4t8). Auto-export
-   is off: the export is rendered once, at session end, via
-   `python3 scripts/render_beads_export.py`; the `export-identity` gate
-   holds the committed file to that render (`coding-harness-bo0`).
+   is off, and no rendered copy is committed (bead coding-harness-1jg.3):
+   a local reader renders fresh through `scripts/bead_render.py`. Because
+   the diff no longer shows tracker changes, a pull request names in its
+   body every bead it opens, changes or closes (maintainer, 2026-09-23).
 5. **The handover is the file, not the chat.** Session end → a file under
    `docs/journal/handover/`. A number without its commit or date reads as a
    historical one — every count carries its cut-off.
