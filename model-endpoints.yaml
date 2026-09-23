@@ -71,6 +71,16 @@ endpunkte:
       unterstuetzte Werkzeuge.** Das Kontingent durch eine eigene Integration
       oder ein fremdes Werkzeug zu fahren, ist nicht gedeckt — wer eine eigene
       Integration baut, nimmt `anthropic-api`.
+      Entscheidung des Maintainers vom 2026-09-23 (Omnigent M0, Bead
+      coding-harness-eev): Startet Omnigent das offizielle Claude-Code-Programm
+      (`omnigent claude`), das sich selbst mit dem Abo anmeldet, behandelt
+      dieses Repository das als offiziell unterstuetztes Werkzeug. Nicht gegen
+      Anthropics Nutzungsbedingungen geprueft — das ist eine Einordnung des
+      Maintainers, keine Feststellung. Nicht gedeckt bleiben das Agent SDK,
+      eigene API-Aufrufe mit den Abo-Zugangsdaten und jede Integration, die
+      Claude Code umgeht. Annahme, von M0 zu messen: Das Kostenlimit von
+      Omnigent zaehlt beim Abo nicht mit; die Grenze setzen das Abo-Kontingent
+      und das Limit fuer Werkzeugaufrufe pro Sitzung.
 
   - name: bedrock-claude
     betreiber: "Amazon Web Services (Claude gehostet)"
