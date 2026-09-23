@@ -153,6 +153,15 @@ def validate_schema(doc: dict[str, Any] | None = None) -> list[str]:
             fehler.append(f"{gid}: floor fehlt oder ist kein Boolean")
         if g.get("placement") not in PLACEMENT:
             fehler.append(f"{gid}: placement muss eins von {PLACEMENT} sein, ist {g.get('placement')!r} (bead 1jg.2)")
+        elif (
+            g.get("action")
+            and _lokales_kommando(g["action"], g.get("with") if isinstance(g.get("with"), dict) else None) is None
+            and g.get("placement") != "hosted"
+        ):
+            # Eine Action ohne lokale Entsprechung misst nur in der gehosteten
+            # CI. Stuende sie auf both, liesse der lokale Laeufer sie trotzdem
+            # aus — still, ueber local_runnable statt ueber die Deklaration.
+            fehler.append(f"{gid}: Action ohne lokale Entsprechung misst nur gehostet — placement muss hosted sein")
         if "needs_tracker" in g and not isinstance(g.get("needs_tracker"), bool):
             fehler.append(f"{gid}: needs_tracker muss ein Boolean sein")
         if g.get("needs_tracker") and (bool(g.get("action")) or g.get("job") != "verify"):
@@ -162,6 +171,18 @@ def validate_schema(doc: dict[str, Any] | None = None) -> list[str]:
         if g.get("action") and not isinstance(g.get("with"), dict | None):
             fehler.append(f"{gid}: 'with' muss ein Mapping sein")
     return fehler
+
+
+def misst_in(gate: dict[str, Any], umfeld: str) -> bool:
+    """Ob ein Gate in diesem Umfeld misst (bead 1jg.2) — die eine Stelle der Regel.
+
+    lokal: alles ausser hosted-only. ci: alles ausser writer-only.
+    """
+    if umfeld == "lokal":
+        return gate["placement"] != "hosted"
+    if umfeld == "ci":
+        return gate["placement"] != "writer"
+    raise ValueError(f"unbekanntes Umfeld {umfeld!r}")
 
 
 def gates() -> list[dict[str, Any]]:
@@ -290,8 +311,8 @@ def generate_ci() -> str:
     # abgeleitete ci.yml haelt sie deklariert raus, statt sie dort unmoeglich
     # laufen zu lassen. Ein writer-only Gate mit needs_tracker stoesst folglich
     # auch keine Hydratation an.
-    pruefe = [g for g in alle if g["job"] == "verify" and g["placement"] != "writer"]
-    drift = [g for g in alle if g["job"] == "drift" and g["placement"] != "writer"]
+    pruefe = [g for g in alle if g["job"] == "verify" and misst_in(g, "ci")]
+    drift = [g for g in alle if g["job"] == "drift" and misst_in(g, "ci")]
     aktionen = [g for g in pruefe if g["action"]]
     kommandos = [g for g in pruefe if not g["action"]]
     zeilen: list[str] = [
@@ -432,9 +453,7 @@ def main() -> int:
         for g in alle:
             if g["job"] != args.job or not g["local_runnable"]:
                 continue
-            if args.placement == "lokal" and g["placement"] == "hosted":
-                continue
-            if args.placement == "ci" and g["placement"] == "writer":
+            if args.placement and not misst_in(g, args.placement):
                 continue
             if args.skip_equivalents and g["via_local_equivalent"]:
                 continue

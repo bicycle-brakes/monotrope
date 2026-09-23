@@ -589,3 +589,42 @@ def test_the_omission_is_wired_into_the_one_render_path(tmp_path: Path, monkeypa
     text = ziel.read_text(encoding="utf-8")
     assert all(feld not in text for feld in rbe.MASCHINENLOKAL), "der Renderweg laesst die Lease-Felder stehen"
     assert '"id":"x-2"' in text
+
+
+def test_gate_schema_gate_holds_an_action_without_local_equivalent_to_hosted() -> None:
+    """Bead 1jg.2: eine Action ohne lokale Entsprechung misst nur gehostet — auf
+    both stuende sie falsch da, und der lokale Laeufer liesse sie still aus."""
+    import ci_gates
+
+    def doc(placement: str) -> dict:
+        return {
+            "schema_version": 2,
+            "gates": [
+                {
+                    "id": "nur-action",
+                    "title": "Marketplace-Action ohne lokale Entsprechung",
+                    "action": "example/no-local-equivalent@v1",
+                    "job": "verify",
+                    "enforcement": "advisory",
+                    "floor": False,
+                    "placement": placement,
+                    "reason": "ein Seed, der den Schemafehler demonstriert",
+                }
+            ],
+        }
+
+    assert any("hosted" in b for b in ci_gates.validate_schema(doc("both")))
+    assert any("hosted" in b for b in ci_gates.validate_schema(doc("writer")))
+    assert ci_gates.validate_schema(doc("hosted")) == []
+
+
+def test_placement_rule_lives_in_one_predicate() -> None:
+    """Bead 1jg.2: Ableitung und lokaler Laeufer fragen dieselbe Funktion."""
+    import ci_gates
+
+    assert ci_gates.misst_in({"placement": "both"}, "lokal")
+    assert ci_gates.misst_in({"placement": "both"}, "ci")
+    assert not ci_gates.misst_in({"placement": "hosted"}, "lokal")
+    assert ci_gates.misst_in({"placement": "hosted"}, "ci")
+    assert ci_gates.misst_in({"placement": "writer"}, "lokal")
+    assert not ci_gates.misst_in({"placement": "writer"}, "ci")

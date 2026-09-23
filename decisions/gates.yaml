@@ -178,7 +178,7 @@ gates:
     job: verify
     enforcement: advisory
     floor: false
-    placement: both
+    placement: hosted
     reason: Foreign servers; a red run here says something about the network, not the candidate.
 
   - id: plans-registry-strict
