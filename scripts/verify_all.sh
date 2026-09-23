@@ -9,7 +9,7 @@
 # Usage:
 #   bash scripts/verify_all.sh               # run the verify job's local gates
 #   bash scripts/verify_all.sh --job drift   # run the drift job's local gates
-#   bash scripts/verify_all.sh --ci          # skip action equivalents (CI runs the actions themselves)
+#   bash scripts/verify_all.sh --ci          # run the CI's gate set: same placement as the derived workflow, action equivalents reported
 #   bash scripts/verify_all.sh --list        # show every gate, runnable or not
 
 set -u
@@ -60,8 +60,15 @@ fi
 # ueber null gemessene Gates darf nicht in einem gruenen Urteil enden
 # (Runner-Review 2026-09-21, PR #11). --placement lokal: hosted-only Gates
 # misst nur die CI — der lokale Lauf laesst sie deklariert aus (bead 1jg.2),
-# die Gate-Datei nennt das placement, nicht der Zufall.
-gate_tsv=$("$PYTHON" scripts/ci_gates.py --commands --job "$JOB" --placement lokal --tsv $([ "$CI_MODE" -eq 1 ] && echo "--skip-equivalents")) \
+# die Gate-Datei nennt das placement, nicht der Zufall. --ci misst dagegen
+# denselben Satz wie die abgeleitete Workflow (--placement ci): wer den
+# Runner in der gehosteten CI aufruft, darf dort nicht ploetzlich ohne die
+# hosted-Gates dastehen (Befund 2 an bead coding-harness-1jg.3, Review von
+# PR #32). Die Action-Entsprechungen sind dabei REPORT, niemals stilles
+# Auslassen.
+platzierung=lokal
+[ "$CI_MODE" -eq 1 ] && platzierung=ci
+gate_tsv=$("$PYTHON" scripts/ci_gates.py --commands --job "$JOB" --placement "$platzierung" --tsv $([ "$CI_MODE" -eq 1 ] && echo "--skip-equivalents")) \
     || { echo "die Gate-Liste liess sich nicht erzeugen — kein VERIFY ohne gemessene Gates" >&2; exit 2; }
 [ -n "$gate_tsv" ] || { echo "die Gate-Liste ist leer — ein Job ohne messbare Gates ist ein Konfigurationsfehler" >&2; exit 2; }
 

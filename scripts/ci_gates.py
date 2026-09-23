@@ -164,8 +164,10 @@ def validate_schema(doc: dict[str, Any] | None = None) -> list[str]:
             fehler.append(f"{gid}: Action ohne lokale Entsprechung misst nur gehostet — placement muss hosted sein")
         if "needs_tracker" in g and not isinstance(g.get("needs_tracker"), bool):
             fehler.append(f"{gid}: needs_tracker muss ein Boolean sein")
-        if g.get("needs_tracker") and (bool(g.get("action")) or g.get("job") != "verify"):
-            fehler.append(f"{gid}: needs_tracker gilt nur fuer Kommando-Gates im verify-Job (bead 4t8)")
+        if g.get("needs_tracker") and bool(g.get("action")):
+            # Seit bead 1jg.3 liest auch der drift-Job den Tracker (plans-registry-strict):
+            # ohne committete Kopie braucht jeder Job mit einem Tracker-Leser die Hydratation.
+            fehler.append(f"{gid}: needs_tracker gilt nur fuer Kommando-Gates (bead 4t8)")
         if not g.get("reason"):
             fehler.append(f"{gid}: ohne reason — ein Gate ohne Warum wird nicht gepflegt")
         if g.get("action") and not isinstance(g.get("with"), dict | None):
@@ -277,18 +279,19 @@ def _schritt(g: dict[str, Any]) -> list[str]:
 
 
 def _tracker_hydratation() -> list[str]:
-    """Der Schritt, der export-identity in der CI messbar macht (bead 4t8).
+    """Der Schritt, der den Tracker-Stand in der CI messbar macht (4t8, 1jg.3).
 
-    Installiert den gepinnten bd checksummverifiziert und holt den
-    Tracker-Stand ueber refs/dolt/data. Ohne ihn waere export-identity in der
-    CI immer exit 3 — und floor: true haette jeden Lauf rot. Der Schritt ist
-    eine Vorbedingung und traegt deshalb wie checkout und setup-deps kein
-    `if` (siehe _schritt). `bd bootstrap` klont via git+https in einem eigenen
-    Verzeichnis: der Credential-Header von actions/checkout gilt nur lokal im
-    Checkout, darum hebt der Schritt ihn nach --global. Beim Bootstrap
-    beruehrt bd ausserdem .beads/.gitignore und .beads/config.yaml im Checkout
-    — genau dafuer ist dieser Schritt die Stelle, an der das passieren darf
-    (staged toward coding-harness-1jg.3).
+    Installiert den gepinnten bd checksummverifiziert, holt den Tracker-Stand
+    ueber refs/dolt/data — und rendert EINMAL, bevor der erste Gate laeuft.
+    `BEAD_RENDER` zeigt auf genau dieses Render: alle Leser des Laufs nehmen
+    denselben Stand statt je einer eigenen Messung (D-52, Bedingung 2). Der
+    Schritt ist eine Vorbedingung und traegt deshalb wie checkout und
+    setup-deps kein `if` (siehe _schritt). `bd bootstrap` klont via git+https
+    in einem eigenen Verzeichnis: der Credential-Header von actions/checkout
+    gilt nur lokal im Checkout, darum hebt der Schritt ihn nach --global.
+    Beim Bootstrap beruehrt bd ausserdem .beads/.gitignore und
+    .beads/config.yaml im Checkout — genau dafuer ist dieser Schritt die
+    Stelle, an der das passieren darf.
     """
     return [
         "      - name: Hydrate the tracker (pinned bd, checksum-verified)",
@@ -299,8 +302,16 @@ def _tracker_hydratation() -> list[str]:
         '          header="$(git config --local http.https://github.com/.extraheader || true)"',
         '          if [ -n "$header" ]; then',
         '            git config --global http.https://github.com/.extraheader "$header"',
+        # Lokal UND global gesetzt schickt git den Header doppelt ("Duplicate
+        # header: Authorization"), und bd bootstrap fiel still auf die
+        # committete Kopie zurueck — bis bead 1jg.3 las die CI den Tracker nie
+        # aus refs/dolt/data. Der lokale Eintrag geht, der globale bleibt.
+        "            git config --local --unset-all http.https://github.com/.extraheader",
         "          fi",
         "          bash tools/bd bootstrap --yes",
+        "          mkdir -p .beads",
+        "          python3 scripts/render_beads_export.py",
+        '          echo "BEAD_RENDER=$PWD/.beads/issues.jsonl" >> "$GITHUB_ENV"',
     ]
 
 

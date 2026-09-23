@@ -10,21 +10,22 @@ wenn sie steht, faellt die Kopie.
 
 Die Reihenfolge, in der dieser Zugriffspunkt aufloest:
 
-  1. `BEAD_RENDER` — die gehostete CI rendert EINMAL (nach der Hydratation)
-     und setzt diesen Pfad; alle Leser des Laufs nehmen genau dieses Render.
+  1. `BEAD_RENDER` — die gehostete CI hydratisiert den Tracker und rendert
+     EINMAL; alle Leser des Laufs nehmen genau dieses Render.
   2. ein frisches Render ueber `tools/bd` — einmal pro Prozess, dann
      gecached. `render_beads_export.py` bleibt der Eine-Schreiber-Renderer;
      dieser Zugriffspunkt ist kein zweiter Renderer, er importiert ihn.
-  3. die committete Kopie — UEBERGANGSWEISE (D-52), solange sie existiert:
-     die Leerprobe und Umgebungen ohne ausfuehrbaren Renderer koennen nicht
-     frisch messen; sie lesen den Stand, den der letzte Sitzungsschluss
-     hinterlassen hat. Ihr Wegfallen ist der zweite Schritt dieses Beads —
-     dann setzt die CI `BEAD_RENDER`, und nur Klone mit bootstrap bleiben
-     lesefaehig.
+
+Die committete Kopie ist seit dem zweiten Schritt dieses Beads entfernt
+(D-52 damit erfuellt): Wer keinen der beiden Wege hat, misst nicht — und
+der Lauf sagt das mit Grund, statt einen alten Stand zu lesen. Eine
+Maschine ohne Tracker baut ihn auf (`tools/beads/install.sh` +
+`tools/bd bootstrap --yes`); die Leerprobe misst absichtlich nichts und
+springt ueber diese Tests ehrlich ab.
 
 Usage:
     python3 scripts/bead_render.py     # Pfad + Quelle auf stdout
-Exit: 0 = Pfad geliefert, 2 = keiner (weder Render noch Kopie).
+Exit: 0 = Pfad geliefert, 2 = kein Stand messbar (Weg zum Ziel auf stderr).
 """
 
 from __future__ import annotations
@@ -40,7 +41,6 @@ sys.path.insert(0, str(Path(__file__).resolve().parent))
 UMGEBUNGS_RENDER = "BEAD_RENDER"
 QUELLE_VORGESETZT = "vorgesetzt"
 QUELLE_GERENDERT = "gerendert"
-QUELLE_COMMITTET = "committet"
 
 _HALTER: tempfile.TemporaryDirectory | None = None
 _GERENDERT: Path | None = None
@@ -73,7 +73,12 @@ def _frisches_render() -> Path:
 
 
 def render_pfad() -> Path:
-    """Der Pfad, den ALLE Leser dieses Laufs nehmen. Wirft, wenn nichts misst."""
+    """Der Pfad, den ALLE Leser dieses Laufs nehmen. Wirft, wenn nichts misst.
+
+    Ohne vorgesetztes Render und ohne Renderer ist das ein harter Fehler, der
+    beide Wege nennt — ein stiller Rueckfall auf einen alten Stand waere
+    genau die Luege, gegen die D-52 den Vertrag gesetzt hat.
+    """
     vorgesetzt = os.environ.get(UMGEBUNGS_RENDER, "").strip()
     if vorgesetzt:
         pfad = Path(vorgesetzt)
@@ -86,20 +91,20 @@ def render_pfad() -> Path:
         return pfad
     try:
         return _frisches_render()
-    except RendererNichtMoeglich:
-        kopie = REPO_ROOT / ".beads" / "issues.jsonl"
-        if kopie.is_file():
-            return kopie
-        raise
+    except RendererNichtMoeglich as exc:
+        raise RendererNichtMoeglich(
+            f"{exc} — kein Tracker-Stand messbar. Zwei Wege: "
+            "`tools/beads/install.sh && tools/bd bootstrap --yes` (diese "
+            f"Maschine misst frisch) oder {UMGEBUNGS_RENDER} auf ein Render "
+            "setzen (so macht es die CI)."
+        ) from None
 
 
 def quelle(pfad: Path) -> str:
     """Nur fuer den Bericht: woher der gelieferte Pfad stammt."""
     if os.environ.get(UMGEBUNGS_RENDER, "").strip() == str(pfad):
         return QUELLE_VORGESETZT
-    if _GERENDERT is not None and pfad == _GERENDERT:
-        return QUELLE_GERENDERT
-    return QUELLE_COMMITTET
+    return QUELLE_GERENDERT
 
 
 def main() -> int:

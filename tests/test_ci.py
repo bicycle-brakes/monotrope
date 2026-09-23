@@ -212,21 +212,29 @@ def test_der_echte_lesepfad_des_bead_gates_wird_erkannt() -> None:
     """Nicht ueber SKIP_PREFIXES, sondern ueber die Zeile, die wirklich liest.
 
     Der alte Test war gruen, weil `.beads/` zufaellig auch in der Liste der
-    ausgenommenen Praefixe steht. Diese Probe nimmt genau die Zeile, die den
-    Tracker-Stand oeffnet, und sonst nichts. Seit bead 1jg.3 steht diese Zeile
-    im EINEN Zugriffspunkt, `bead_render.py` — nicht mehr in jedem Leser.
+    ausgenommenen Praefixe stand. Seit bead 1jg.3 (Schritt zwei) oeffnet kein
+    Gate die Kopie mehr: der Stand reist als Render — BEAD_RENDER in der CI,
+    ein Temp-Render lokal. Uebrig bleibt genau eine Stelle mit dem Pfad-Literal,
+    der Kunst-Repo-Seam des plans-registry-Gates (Monkeypatch-Vertrag); die
+    Sperre lautet: mehr als diese eine darf es nie werden.
     """
-    quelle = REPO_ROOT / "scripts" / "bead_render.py"
-    zeilen = [z for z in quelle.read_text(encoding="utf-8").splitlines() if "issues.jsonl" in z]
-    assert zeilen, "Die Zeile, die den Tracker-Stand oeffnet, steht nicht mehr im Zugriffspunkt."
-    assert _verzeichnisse_aus_quelltext("\n".join(zeilen), _oberste_verzeichnisse()) == {".beads"}
+    gelesen = _verzeichnisse_die_die_gates_lesen()
+    assert gelesen.get(".beads") == {"scripts/plans_registry.py"}, (
+        "an der Kopie haengt mehr als der bekannte Test-Seam — ein zweiter Pfad "
+        "oeffnet .beads/ neben dem Kunst-Repo-Shim des plans-registry-Gates: "
+        f"{gelesen.get('.beads')}"
+    )
 
 
 def test_die_ableitung_findet_ueberhaupt_etwas() -> None:
-    """Faende sie nichts, waere der Test oben leer und damit immer gruen."""
+    """Faende sie nichts, waere der Test oben leer und damit immer gruen.
+
+    `.beads` ist seit bead 1jg.3 (Schritt zwei) bewusst NICHT mehr dabei —
+    der Test darueber richtet die Sperre dagegen.
+    """
     gelesen = _verzeichnisse_die_die_gates_lesen()
     assert len(gelesen) >= 5, f"Nur {len(gelesen)} Verzeichnisse abgeleitet: {sorted(gelesen)}"
-    assert ".beads" in gelesen
+    assert "docs" in gelesen
 
 
 def test_every_gate_has_a_name_and_an_id() -> None:
@@ -279,26 +287,38 @@ def test_every_step_after_a_failing_gate_still_runs() -> None:
 
 
 def test_a_gate_that_needs_the_tracker_gets_a_hydration_step() -> None:
-    """4t8: export-identity misst in der CI — der Schritt dafuer ist abgeleitet.
+    """4t8, 1jg.3: tracker-brauchende Gates messen in der CI gegen EIN Render.
 
     Der Hydratationsschritt (gepinnter bd, checksummverifiziert, refs/dolt/data)
-    sitzt vor dem Gate, das ihn braucht, und nur in Jobs, die einen solchen Gate
-    haben: im drift-Job waere er heute Dekoration — ein Schritt, der nichts
-    misst, aber behauptet, Vorbedingung zu sein.
+    sitzt vor dem ersten Gate, das ihn braucht, rendert einmal und setzt
+    BEAD_RENDER — alle Leser des Laufs nehmen denselben Stand (D-52, Bedingung
+    2). Und nur in Jobs, die einen solchen Gate haben — seit 1jg.3 auch der
+    drift-Job, weil plans-registry-strict den Tracker liest. Ein Job ohne
+    Tracker-Leser bekommt den Schritt nicht: dort waere er Dekoration.
     """
     import ci_gates
 
     ci = ci_gates.generate_ci()
     assert "tools/beads/install.sh" in ci, "die Checksummen-verifizierte bd-Installation fehlt"
     assert "refs/dolt/data" in ci, "der Tracker-Transport fehlt in der Ableitung"
-    assert ci.index("id: setup-tracker") < ci.index("id: export-identity"), (
-        "die Hydratation muss VOR dem Gate stehen, das sie braucht"
+    assert "git config --local --unset-all http.https://github.com/.extraheader" in ci, (
+        "der Checkout-Header steht lokal und global — git schickt ihn doppelt, und "
+        "bd bootstrap faellt still zurueck, statt refs/dolt/data zu lesen"
+    )
+    assert 'echo "BEAD_RENDER=$PWD/.beads/issues.jsonl" >> "$GITHUB_ENV"' in ci, (
+        "die Hydratation rendert nicht einmal vor — je Leser ein eigenes Render "
+        "waere genau die Zweimessung, gegen die D-52 steht"
+    )
+    assert ci.index("id: setup-tracker") < ci.index("id: bead-export"), (
+        "die Hydratation muss VOR dem ersten tracker-brauchenden Gate stehen"
     )
 
     drift_teil = ci[ci.index("\n  drift:") :]
-    assert "setup-tracker" not in drift_teil, (
-        "kein Gate des drift-Jobs braucht den Tracker — der Schritt waere Dekoration"
+    assert "setup-tracker" in drift_teil, (
+        "plans-registry-strict liest den Tracker — ohne committete Kopie (bead 1jg.3) "
+        "misst der drift-Job nur mit eigener Hydratation"
     )
+    assert drift_teil.index("id: setup-tracker") < drift_teil.index("id: plans-registry-strict")
 
 
 def test_every_gate_step_runs_even_after_a_failing_gate() -> None:
@@ -867,8 +887,6 @@ def test_no_declared_reason_stands_for_a_script_that_has_a_test() -> None:
 # Gruende, die einen Vorgang nennen
 # ---------------------------------------------------------------------------
 
-BEAD_EXPORT = REPO_ROOT / ".beads" / "issues.jsonl"  # uebergangsweise Kopie (D-52)
-
 # `wp-p3.7.1` oder `portfolio-agentic-engineering-wp-p3.7.1` — beide Formen
 # kommen in den Gruenden vor. Die Katalog-Nummer `V-10` ist KEINE Vorgangs-ID;
 # sie wird ueber den Titel-Praefix aufgeloest.
@@ -919,10 +937,6 @@ def test_no_declared_reason_cites_a_closed_or_unknown_bead() -> None:
     """
     from ci_gates import OHNE_AUFRUFER, OHNE_TEST
 
-    assert BEAD_EXPORT.is_file(), (
-        f"Bead-Export {BEAD_EXPORT.relative_to(REPO_ROOT)} fehlt — dann ist nicht ein "
-        "Grund veraltet, sondern diese Pruefung misst nichts (RB-G7)."
-    )
     status = _bead_status()
     assert status, "Bead-Export ist leer — die Pruefung misst nichts (RB-G7)."
 

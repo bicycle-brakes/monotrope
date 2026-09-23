@@ -193,7 +193,7 @@ def _abort(verdict: Verdict, message: str, detail: str = "") -> int:
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     parser.add_argument("name", help="Ordnername unter plans/changes/, z.B. mein-thema")
-    parser.add_argument("--bead", required=True, help="vorhandene Vorgangs-ID aus .beads/issues.jsonl")
+    parser.add_argument("--bead", required=True, help="vorhandene Vorgangs-ID aus dem Tracker (tools/bd ready)")
     parser.add_argument("--owner", default="Data Architect", help="Rolle aus provenance.yaml (Default: Data Architect)")
     parser.add_argument("--dry-run", action="store_true", help="nur anzeigen, nichts schreiben")
     args = parser.parse_args(argv)

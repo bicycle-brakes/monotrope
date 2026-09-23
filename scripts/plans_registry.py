@@ -98,7 +98,8 @@ def _bead_export_path() -> Path:
     entscheidet dort die (uebergangsweise) Kopie, nicht der echte Tracker —
     ein Test ohne Tracker darf nicht ploetzlich den echten Stand lesen.
     Im echten Repo liefert `bead_render.render_pfad()`: in der CI das
-    vorgesetzte Render, beim Schreiber ein frisches Render, sonst die Kopie.
+    vorgesetzte Render, sonst ein frisches Render — eine Kopie gibt es seit
+    bead 1jg.3 nicht mehr.
     """
     if Path(__file__).resolve().parent.parent != REPO:
         return REPO / ".beads" / "issues.jsonl"

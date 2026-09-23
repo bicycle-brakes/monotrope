@@ -7,8 +7,8 @@ research corpus behind it.
 - **Doctrine:** `docs/WORKFLOW.md` (migrating step by step from
   `portfolio-agentic-engineering`)
 - **Tracker:** beads with the `coding-harness-` prefix, pinned via `tools/bd`,
-  transported through `refs/dolt/data` on origin — `.beads/issues.jsonl` is a
-  rendered export, not the source of truth
+  transported through `refs/dolt/data` on origin; no rendered copy is
+  committed — readers render fresh through `scripts/bead_render.py`
 - **Status:** bootstrapping — see
   [`docs/journal/handover/2026-09-16-coding-harness-bootstrap.md`](docs/journal/handover/2026-09-16-coding-harness-bootstrap.md)
 - **Current target (2026-09-17):**

@@ -28,13 +28,18 @@ geruest_ordner:
   - plans/specs
 
 # ---------------------------------------------------------------------------
-# Die drei Rollen
+# Die zwei Rollen
 # ---------------------------------------------------------------------------
 #
 # Zwei haetten gereicht, wenn nicht eine Datei existieren muesste, deren INHALT
-# Bestand ist. `.beads/issues.jsonl` ist der Fall: ohne eine Exportdatei sammelt
-# pytest nicht einmal, mit DIESER Exportdatei behauptet das fremde Repo 570
-# fremde Vorgaenge. Gemessen am 2026-09-08; die Spec trug bis dahin zwei Rollen.
+# Bestand ist. `.beads/issues.jsonl` war der Fall: ohne eine Exportdatei sammelt
+# pytest nicht einmal, mit DIESER Exportdatei behauptete das fremde Repo 570
+# fremde Vorgaenge (gemessen am 2026-09-08). Seit bead 1jg.3 (Schritt zwei,
+# 2026-09-23) reist die Datei nicht mehr — der Render-Vertrag hat sie abgeloest
+# und die Rolle gleich mit: ihr letztes getracktes Mitglied fiel auf genau das
+# Export-Verdict zurueck, das der Export-Manifest ohnehin traegt (AK-6) — eine
+# Dublette, keine zweite Frage. Die Rumpf-Pflege fuer model-endpoints.yaml und
+# requirements-ci.txt wohnt weiterhin im Export-Manifest.
 rollen:
   mechanismus:
     was: "traegt den Ablauf und laeuft in einem fremden Repo unveraendert"
@@ -42,9 +47,6 @@ rollen:
   bestand:
     was: "beschreibt die Inventur DIESES Repos und bleibt hier"
     bedingung: "der Grund steht in der Regel, nicht im Kopf des Uebergebenden"
-  geruest:
-    was: "muss im Zielrepo existieren, aber mit dem dortigen Inhalt"
-    bedingung: "die Probe legt einen leeren Rumpf an — nie eine Kopie von hier"
 
 # ---------------------------------------------------------------------------
 # Die Regeln
@@ -183,13 +185,10 @@ rules:
     rolle: mechanismus
     reason: "die EINE Gate-Liste. ci_gates.py liest sie; ohne sie hat der Ablauf keinen Erzwinger"
 
-  # --- Geruest ---------------------------------------------------------------
+  # --- Bestand ---------------------------------------------------------------
   - prefix: model-endpoints.yaml
-    rolle: geruest
-    reason: "RB-A6 verlangt die Datei; WELCHE Endpunkte zugelassen sind, entscheidet die Organisation des Zielrepos — nicht diese hier"
-  - prefix: .beads/issues.jsonl
-    rolle: geruest
-    reason: "muss existieren, damit die Kopplung Artefakt/Vorgang ueberhaupt pruefbar ist — der Inhalt ist die Inventur dieses Repos"
+    rolle: bestand
+    reason: "RB-A6 verlangt sie im Ziel; der Export-Manifest traegt dort weiter den Rumpf — im Kit war sie das letzte getrackte Mitglied der aufgeloesten geruest-Rolle (bead 1jg.3, AK-6)"
 
   # --- Bestand ---------------------------------------------------------------
   - prefix: docs/journal/
@@ -264,8 +263,8 @@ rules:
     rolle: bestand
     reason: "Verlauf dieses Repos"
   - prefix: requirements-ci.txt
-    rolle: geruest
-    reason: "die Abhaengigkeiten muss das Zielrepo selbst deklarieren — eine Kopie von hier zieht Domaenen-Pakete mit"
+    rolle: bestand
+    reason: "die Abhaengigkeiten dieses Repos fuer den CI-Lauf; das Zielrepo deklariert seine eigenen — die geruest-Rolle dafuer ist mit der Kopie gefallen (bead 1jg.3, AK-6)"
   - prefix: requirements.txt
     rolle: bestand
     reason: "Entwicklungs-Abhaengigkeiten dieses Repos"

@@ -6,6 +6,11 @@
 .beads/proxieddb/
 .beads.gate.lock
 
+# Das gerenderte Bild des Trackers reist nicht mehr im Git (bead 1jg.3, D-52):
+# die CI rendert einmal pro Lauf an genau diesen Pfad und setzt BEAD_RENDER.
+# Hier ignoreiert, damit kein `git add -A` die Kopie ins Repo zurueckholt.
+.beads/issues.jsonl
+
 # macOS finder noise
 .DS_Store
 
