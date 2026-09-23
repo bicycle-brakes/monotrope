@@ -56,10 +56,17 @@ def _frisches_render() -> Path:
     if _GERENDERT is None:
         _HALTER = tempfile.TemporaryDirectory(prefix="bead-render-")
         ziel = Path(_HALTER.name) / "issues.jsonl"
-        from render_beads_export import _render_nach  # noqa: E402 — kein zweiter Renderer
+        from render_beads_export import RendererFehlt, _render_nach  # noqa: E402 — kein zweiter Renderer
 
         try:
             _render_nach(ziel)
+        except RendererFehlt as exc:
+            # Kein bd auf dieser Maschine (frischer Klon, ein Agent ohne bd) —
+            # genau der Fall, fuer den D-52 die Anleitung als Nachfolger
+            # der Kopie verlangt, nicht ein Traceback (Review 2026-09-23).
+            _HALTER.cleanup()
+            _HALTER, _GERENDERT = None, None
+            raise RendererNichtMoeglich(f"kein bd ausfuehrbar ({exc})") from None
         except SystemExit as exc:
             # _render_nach meldet Vorbedingungen jenseits des fehlenden Binary
             # als SystemExit(2) — derselbe Befund, nur eine andere Schelle.
@@ -98,6 +105,16 @@ def render_pfad() -> Path:
             f"Maschine misst frisch) oder {UMGEBUNGS_RENDER} auf ein Render "
             "setzen (so macht es die CI)."
         ) from None
+
+
+def nicht_gemessen(gate: str, exc: Exception) -> int:
+    """Exit 3 mit Grund: ein Gate, das den Tracker nicht erreicht, misst nicht.
+
+    Der Runner macht aus Exit 3 bei einem block-Gate rot (bead 4t8) — wie
+    decision-continuity ohne Zieldokument. Der Grund nennt beide Wege zum Ziel.
+    """
+    print(f"{gate} NICHT GEMESSEN: {exc}")
+    return 3
 
 
 def quelle(pfad: Path) -> str:

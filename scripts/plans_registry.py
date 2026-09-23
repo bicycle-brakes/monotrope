@@ -108,6 +108,14 @@ def _bead_export_path() -> Path:
     return render_pfad()
 
 
+def _anzeige(pfad: Path) -> str:
+    """Repo-relativ, wo es geht — ein frisches Render liegt ausserhalb des Repos."""
+    try:
+        return str(pfad.relative_to(REPO))
+    except ValueError:
+        return str(pfad)
+
+
 def _bead_statuses(export_path: Path) -> dict[str, str] | None:
     """`id -> status` aus dem Tracker-Stand (JSON Lines, eine Zeile ein Vorgang).
 
@@ -184,16 +192,26 @@ def _bestand_ramp(offen: set[str]) -> Ramp:
 def check() -> Verdict:
     verdict = Verdict()
     found = artefacts()
-    export_path = _bead_export_path()
-    bead_statuses = _bead_statuses(export_path)
-    if bead_statuses is None:
-        export_rel = export_path.relative_to(REPO)
+    try:
+        export_path = _bead_export_path()
+    except (FileNotFoundError, RuntimeError) as exc:
+        # RuntimeError deckt bead_render.RendererNichtMoeglich, ohne den
+        # Zugriffspunkt schon beim Import zu laden (der Kunst-Repo-Seam oben
+        # braucht ihn nicht). Kein Tracker-Stand: die Kopplung misst nichts.
+        bead_statuses = None
         verdict.block(
-            f"Bead-Export {export_rel} fehlt oder ist leer",
-            "Dann ist nicht die Kopplung Artefakt<->Vorgang verletzt, sondern die "
-            "Pruefung selbst misst nichts (RB-G7). Beheben: `bd export` bzw. den "
-            "Export-Hook laufen lassen.",
+            "Tracker-Stand nicht messbar",
+            f"Die Kopplung Artefakt<->Vorgang misst nichts (RB-G7): {exc}",
         )
+    else:
+        bead_statuses = _bead_statuses(export_path)
+        if bead_statuses is None:
+            verdict.block(
+                f"Tracker-Render {_anzeige(export_path)} fehlt oder ist leer",
+                "Dann ist nicht die Kopplung Artefakt<->Vorgang verletzt, sondern die "
+                "Pruefung selbst misst nichts (RB-G7). Beheben: "
+                "`python3 scripts/bead_render.py` zeigt, woher der Stand kommt.",
+            )
 
     if not found:
         # Kein BLOCK: ein frisch eingerichtetes Repo hat legitim null Artefakte.
@@ -345,7 +363,7 @@ def check() -> Verdict:
                     # nicht BLOCK, und scharf erst unter --strict wie der Rest
                     # dieser Kopplung.
                     verdict.drift(
-                        f"{rel}: Bead '{bead}' kommt im Export {export_path.relative_to(REPO)} nicht vor",
+                        f"{rel}: Bead '{bead}' kommt im Tracker-Render {_anzeige(export_path)} nicht vor",
                         "Ungeprueft, ob Artefakt- und Vorgangs-Zustand sich widersprechen.",
                     )
                 else:
