@@ -22,6 +22,7 @@ from __future__ import annotations
 import argparse
 import functools
 import json
+import os
 import shutil
 import subprocess
 import sys
@@ -288,11 +289,17 @@ def _baue(ziel: Path) -> None:
 def _faelle(ziel: Path) -> dict[str, bool]:
     """Jeder gesammelte Testfall auf gruen/rot. Sammelfehler zaehlen als rot."""
     bericht = ziel / "junit.xml"
+    # Das fremde Repo darf den Tracker DIESES Repos nicht sehen: die CI setzt
+    # BEAD_RENDER fuer ihre eigenen Gates, und ererbt liesse es einen Test im
+    # Wegwerf-Repo gegen unseren Stand gruen werden — die Quote stiege, ohne
+    # dass etwas reist (bead 1jg.3).
+    umgebung = {k: v for k, v in os.environ.items() if k != "BEAD_RENDER"}
     subprocess.run(
         [sys.executable, "-m", "pytest", "tests/", "-q", "--tb=no", "-p", "no:cacheprovider", f"--junit-xml={bericht}"],
         cwd=ziel,
         capture_output=True,
         text=True,
+        env=umgebung,
     )
     if not bericht.is_file():
         return {}
