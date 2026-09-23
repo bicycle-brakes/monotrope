@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """bead_render.py — der EINE Zugriffspunkt fuers Tracker-Render (bead 1jg.3).
 
-D-52 (lakeswitch-ai PR #37) hat den Vertrag gesetzt, ADR 0004 (proposed)
+D-52 (lakeswitch-ai PR #37) hat den Vertrag gesetzt, ADR 0004 (accepted 2026-09-23)
 bestaetigt die Richtung: Der Render ist der tragende Vertrag, die committete
 Kopie ist uebergangsweise. Wer den Tracker-Stand braucht, fragt HIER — nicht
 `.beads/issues.jsonl` direkt und nicht `bd` selbst. Das ist die dritte
