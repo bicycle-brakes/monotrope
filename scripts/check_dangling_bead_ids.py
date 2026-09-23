@@ -3,9 +3,10 @@
 
 Die Provenanz-Kette lebt von Zaehlen, die man nachschlagen kann: Eine
 Änderung nennt ihren Vorgang, ein Grund nennt seinen Besitzer. Zitiert ein
-Artefakt eine ID, die der Export nicht kennt, ist die Kette gekappt — und
-zwar still. Dieses Gate liest den Export und prueft jede Zitation im
-Dokumentations- und Planungsbaum darauf.
+Artefakt eine ID, die der Tracker-Stand nicht kennt, ist die Kette gekappt —
+und zwar still. Dieses Gate holt den Stand ueber den EINEN Zugriffspunkt
+(`bead_render.py`, bead 1jg.3) und prueft jede Zitation im Dokumentations-
+und Planungsbaum darauf.
 
 Usage:
     python3 scripts/check_dangling_bead_ids.py
@@ -20,7 +21,6 @@ import sys
 from pathlib import Path
 
 REPO_ROOT = Path(__file__).resolve().parent.parent
-EXPORT = REPO_ROOT / ".beads" / "issues.jsonl"
 
 # Der Praefix ist beim init fest vergeben und kann nicht korrigiert werden
 # (AGENTS.md, Hausregel 3). Nur Zitationen dieses Praefixs werden geprueft —
@@ -67,7 +67,9 @@ def run(basis: Path, export: Path) -> list[str]:
 
 
 def main() -> int:
-    befunde = run(REPO_ROOT / "docs", EXPORT)
+    from bead_render import render_pfad  # noqa: E402 — der EINE Zugriffspunkt (bead 1jg.3)
+
+    befunde = run(REPO_ROOT / "docs", render_pfad())
     if befunde:
         print(f"{len(befunde)} haengende Vorgangs-Zitationen:")
         for b in befunde:

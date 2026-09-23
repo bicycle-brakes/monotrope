@@ -55,6 +55,10 @@ SCHEMA_VERSION = 2
 # tests/test_ci.py haelt beide Seiten zusammen.
 OHNE_AUFRUFER: dict[str, str] = {
     "_verdict.py": ("Bibliothek — das gemeinsame Exit-Vokabular der Scripts, kein eigenstaendiges Werkzeug"),
+    "bead_render.py": (
+        "Bibliothek — der EINE Zugriffspunkt des Tracker-Stands (bead 1jg.3); "
+        "die Leser importieren ihn, ein eigener CI-Schritt haette keinen Gegenstand"
+    ),
     "gate_record.py": (
         "Bibliothek — der Zustandsautomat des Gate-Records. Er wird von "
         "tests/test_gate_record.py gefahren; ein eigener CI-Schritt haette "
