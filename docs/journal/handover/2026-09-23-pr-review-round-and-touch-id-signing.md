@@ -221,3 +221,19 @@ The session `lakeswitch-ai-b3` owns the open drafts #38 to #40 there.
   (`true`/`valid`).
 - Not tested: the Omnigent session policy and environment passthrough. Both
   belong to M0.
+
+## Addendum — 2026-09-23, after session end: two answers from the maintainer
+
+- **The M0 Omnigent server runs on this machine**, the maintainer's
+  MacBook, not on a dedicated machine as the target architecture's M0 row
+  says (maintainer, 2026-09-23). Do not ask again. It is noted on the M0
+  bead (`coding-harness-eev`) with its consequences: the sandbox is
+  seatbelt, interactive sessions share the machine, the pilot stays in a
+  throwaway repository, and telemetry must still be off. The next step
+  stands: start M0 on this machine.
+- **The Touch-ID signing helper can become permanent** as one global git
+  alias, `git confirm`, which signs through Secretive with no helper files.
+  The session proposed the exact `git config --global alias.confirm …`
+  command and the maintainer runs it, since it changes the machine. **Not
+  yet set up and not tested.** Until it is, the three-step recipe above
+  holds.
