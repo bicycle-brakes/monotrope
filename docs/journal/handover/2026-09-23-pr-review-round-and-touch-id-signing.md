@@ -127,3 +127,17 @@ Task status lives in Beads; this list only points.
 - 2026-09-23, #32 at `f4ac0fc`: `make verify` VERIFY GREEN, 329 passed, 15
   skipped. The generated `ci.yml` was unchanged against `main` at the time.
 - Not read: `e02c915` (see "Open work").
+
+## Addendum — 2026-09-23, after the handover was merged
+
+- **`e02c915` is reviewed.** Read line by line after #35. It had four crash
+  paths: no `bd` binary, readers without exit 3, and two `relative_to(REPO)`
+  on a render outside the repository. All four are fixed with five tests in
+  #36 (`5c28712`). The "not reviewed" item under "Open work" is done.
+- **The D-52 record is corrected.** ADR 0004 and the D-4 row of the target
+  architecture now say, in dated notes, that #26 did not show read access to
+  `refs/dolt/data` and #34 did. The parent bead carries the same note.
+- **ADR 0004 is accepted by the maintainer.** It is signed with the Touch-ID
+  key in the pull request that carries this addendum.
+- Next step unchanged: the CI job summary of changed beads
+  (`coding-harness-1jg.4`).
