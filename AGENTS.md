@@ -111,6 +111,11 @@ tools/bd dolt push          # push tracker data to origin (refs/dolt/data)
 - **Another session in the same checkout:** say so before changing a file,
   committing or switching the branch, and offer a worktree. House rule 4 holds
   for the tracker meanwhile.
+- **Tracker writes from a worktree are allowed** when the worktree lies in the
+  repository (`.claude/worktrees/` or `bd worktree create`): `tools/bd` finds
+  the main checkout's tracker there, and concurrent writers lose nothing
+  (`docs/research/2026-09-23-worktree-tracker-writes.md`, bead
+  coding-harness-m34). Who may write is still house rule 4.
 - **What could not be read is "not read", never "none".** A file that would
   not open and a query that returned nothing say different things.
 - **A standing rule belongs in the repository's `AGENTS.md`** — every harness
