@@ -92,19 +92,28 @@ def _age_days(value: object) -> int | None:
 
 
 def _bead_export_path() -> Path:
-    """Der Pfad wird aus `REPO` abgeleitet -- niemals als Modulkonstante gecacht,
-    damit ein Test, der `reg.REPO` monkeypatcht, auch den Exportpfad umlenkt."""
-    return REPO / ".beads" / "issues.jsonl"
+    """Der EINE Zugriffspunkt des Tracker-Stands (bead 1jg.3).
+
+    Die Monkeypatch-Konvention bleibt: zeigt REPO auf ein Kunst-Repo,
+    entscheidet dort die (uebergangsweise) Kopie, nicht der echte Tracker —
+    ein Test ohne Tracker darf nicht ploetzlich den echten Stand lesen.
+    Im echten Repo liefert `bead_render.render_pfad()`: in der CI das
+    vorgesetzte Render, beim Schreiber ein frisches Render, sonst die Kopie.
+    """
+    if Path(__file__).resolve().parent.parent != REPO:
+        return REPO / ".beads" / "issues.jsonl"
+    from bead_render import render_pfad  # noqa: E402 — kein zweiter Zugriffspfad
+
+    return render_pfad()
 
 
 def _bead_statuses(export_path: Path) -> dict[str, str] | None:
-    """`id -> status` aus `.beads/issues.jsonl`, als Datei gelesen.
+    """`id -> status` aus dem Tracker-Stand (JSON Lines, eine Zeile ein Vorgang).
 
-    Nie ueber das Kommando `bd`: es schreibt die Datei bei jedem Aufruf zurueck,
-    und die CI hat kein `bd` (AGENTS.md, spec.md RB "Kein `bd`-Schreibkommando").
-    Das Format ist JSON Lines, eine Zeile ein Vorgang.
+    Der Pfad kommt aus dem EINEN Zugriffspunkt (bead 1jg.3); dieses Parsen
+    bleibt Datei-Lesen — der Zugriffspunkt entscheidet, WELCHE Datei das ist.
 
-    Liefert None, wenn der Export fehlt, nicht lesbar ist oder keine einzige
+    Liefert None, wenn der Stand fehlt, nicht lesbar ist oder keine einzige
     brauchbare Zeile enthaelt -- das ist der Fall, in dem die Kopplungspruefung
     unten selbst nichts misst, und wird vom Aufrufer als eigener Befund (BLOCK,
     RB-G7) gemeldet statt als Schweigen.

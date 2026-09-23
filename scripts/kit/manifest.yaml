@@ -83,6 +83,9 @@ rules:
   - prefix: scripts/check_dangling_bead_ids.py
     rolle: mechanismus
     reason: "zitierte Vorgangs-IDs muessen im Export aufgeloest werden (bead bo0)"
+  - prefix: scripts/bead_render.py
+    rolle: mechanismus
+    reason: "der EINE Zugriffspunkt des Tracker-Stands (bead 1jg.3): vorgesetztes Render, frisches Render, uebergangsweise die Kopie — kein Leser nimmt einen zweiten Pfad"
   - prefix: scripts/check_decision_continuity.py
     rolle: mechanismus
     reason: "Continuity-Validator: jede D/O-ID bleibt gemappt, jedes Amendment hat seine ADR (Entscheidung 5 vom 2026-09-19)"

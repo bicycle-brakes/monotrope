@@ -130,9 +130,13 @@ def _verzeichnisse_die_die_gates_lesen() -> dict[str, set[str]]:
     Die Parametrisierung oben ist eine Handliste: sie prueft, dass ein bekanntes
     Verzeichnis im Filter steht, aber nicht, dass die Liste vollstaendig ist. Eine
     Handliste kann nur so gut sein wie ihr letzter Pfleger — und `.beads/` fehlte
-    ihr, obwohl `check_dangling_bead_ids.py` daraus liest.
+    ihr, obwohl `check_dangling_bead_ids.py` daraus liest. Seit bead 1jg.3 oeffnet
+    kein Leser `.beads/` selbst mehr — der EINE Zugriffspunkt tut es. Darum folgt
+    die Ableitung dem Import: ein Gate-Script, das `bead_render` laedt, liest,
+    was der Zugriffspunkt liest.
     """
     oberste = _oberste_verzeichnisse()
+    zugriffspunkt = REPO_ROOT / "scripts" / "bead_render.py"
     gelesen: dict[str, set[str]] = {}
     for gate in gates():
         for treffer in re.finditer(r"([A-Za-z0-9_./-]+\.py)\b", gate.get("command") or ""):
@@ -140,8 +144,12 @@ def _verzeichnisse_die_die_gates_lesen() -> dict[str, set[str]]:
             quelle = REPO_ROOT / rel
             if not quelle.is_file():
                 continue
-            for verzeichnis in _verzeichnisse_aus_quelltext(quelle.read_text(encoding="utf-8"), oberste):
-                gelesen.setdefault(verzeichnis, set()).add(rel)
+            quellen = [quelle.read_text(encoding="utf-8")]
+            if "bead_render" in quellen[0] and zugriffspunkt.is_file():
+                quellen.append(zugriffspunkt.read_text(encoding="utf-8"))
+            for text in quellen:
+                for verzeichnis in _verzeichnisse_aus_quelltext(text, oberste):
+                    gelesen.setdefault(verzeichnis, set()).add(rel)
     return gelesen
 
 
@@ -205,11 +213,12 @@ def test_der_echte_lesepfad_des_bead_gates_wird_erkannt() -> None:
 
     Der alte Test war gruen, weil `.beads/` zufaellig auch in der Liste der
     ausgenommenen Praefixe steht. Diese Probe nimmt genau die Zeile, die den
-    Export oeffnet, und sonst nichts.
+    Tracker-Stand oeffnet, und sonst nichts. Seit bead 1jg.3 steht diese Zeile
+    im EINEN Zugriffspunkt, `bead_render.py` — nicht mehr in jedem Leser.
     """
-    quelle = REPO_ROOT / "scripts" / "check_dangling_bead_ids.py"
-    zeilen = [z for z in quelle.read_text(encoding="utf-8").splitlines() if z.startswith("EXPORT")]
-    assert zeilen, "Die Zeile, die den Bead-Export oeffnet, heisst nicht mehr EXPORT."
+    quelle = REPO_ROOT / "scripts" / "bead_render.py"
+    zeilen = [z for z in quelle.read_text(encoding="utf-8").splitlines() if "issues.jsonl" in z]
+    assert zeilen, "Die Zeile, die den Tracker-Stand oeffnet, steht nicht mehr im Zugriffspunkt."
     assert _verzeichnisse_aus_quelltext("\n".join(zeilen), _oberste_verzeichnisse()) == {".beads"}
 
 
@@ -858,7 +867,7 @@ def test_no_declared_reason_stands_for_a_script_that_has_a_test() -> None:
 # Gruende, die einen Vorgang nennen
 # ---------------------------------------------------------------------------
 
-BEAD_EXPORT = REPO_ROOT / ".beads" / "issues.jsonl"
+BEAD_EXPORT = REPO_ROOT / ".beads" / "issues.jsonl"  # uebergangsweise Kopie (D-52)
 
 # `wp-p3.7.1` oder `portfolio-agentic-engineering-wp-p3.7.1` — beide Formen
 # kommen in den Gruenden vor. Die Katalog-Nummer `V-10` ist KEINE Vorgangs-ID;
@@ -868,12 +877,15 @@ _KATALOG = re.compile(r"\bV-(\d{2})\b")
 
 
 def _bead_status() -> dict[str, str]:
-    """`id -> status` aus dem Export, als Datei gelesen.
-
-    Nie ueber das Kommando `bd`: es schreibt die Datei bei jedem Aufruf zurueck,
-    und die CI hat kein `bd` — dieselbe Begruendung wie in `plans_registry.py`.
+    """`id -> status` aus dem Tracker-Stand, geholt ueber den EINEN
+    Zugriffspunkt (bead 1jg.3): in der CI das vorgesetzte Render, beim
+    Schreiber ein frisches Render, uebergangsweise die committete Kopie.
+    Das Parsen bleibt Datei-Lesen — der Zugriffspunkt entscheidet, WELCHE
+    Datei das ist.
     """
-    zeilen = BEAD_EXPORT.read_text(encoding="utf-8").splitlines()
+    from bead_render import render_pfad  # noqa: E402 — der EINE Zugriffspunkt
+
+    zeilen = render_pfad().read_text(encoding="utf-8").splitlines()
     status: dict[str, str] = {}
     titel: dict[str, str] = {}
     for zeile in zeilen:

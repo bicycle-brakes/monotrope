@@ -1,8 +1,11 @@
 #!/usr/bin/env python3
 """check_bead_export.py — der gerenderte Export, Zeile fuer Zeile (bead bo0).
 
-`.beads/issues.jsonl` ist das gerenderte Bild des Trackers — kein Mensch
-schreibt es, aber jeder liest es: Tests zitieren Vorgangs-Status daraus, und
+`check_bead_export.py` prueft das gerenderte Bild des Trackers Zeile fuer
+Zeile. Den Stand bezieht es ueber den EINEN Zugriffspunkt (`bead_render.py`,
+bead 1jg.3): in der CI das vorgesetzte Render, beim Schreiber ein frisches
+Render, uebergangsweise die committete Kopie. Kein Mensch schreibt den
+Export, aber jeder liest ihn: Tests zitieren Vorgangs-Status daraus, und
 ein kaputtes Bild liest sich als Wahrheit. Deshalb Zeilenpruefung statt
 Vertrauen: jede Zeile JSON, jedes Objekt mit id und status.
 
@@ -18,7 +21,6 @@ import sys
 from pathlib import Path
 
 REPO_ROOT = Path(__file__).resolve().parent.parent
-EXPORT = REPO_ROOT / ".beads" / "issues.jsonl"
 
 
 def run(pfad: Path) -> list[str]:
@@ -52,14 +54,17 @@ def run(pfad: Path) -> list[str]:
 
 
 def main() -> int:
-    befunde = run(EXPORT)
+    from bead_render import render_pfad  # noqa: E402 — der EINE Zugriffspunkt (bead 1jg.3)
+
+    quelle = render_pfad()
+    befunde = run(quelle)
     if befunde:
-        print(f"{len(befunde)} Befunde in {EXPORT.relative_to(REPO_ROOT)}:")
+        print(f"{len(befunde)} Befunde in {quelle}:")
         for b in befunde:
             print(f"  - {b}")
         return 1
-    zeilen = sum(1 for z in EXPORT.read_text(encoding="utf-8").splitlines() if z.strip())
-    print(f"Bead-Export ok: {zeilen} Zeilen, jede mit id und status.")
+    zeilen = sum(1 for z in quelle.read_text(encoding="utf-8").splitlines() if z.strip())
+    print(f"Bead-Render ok: {zeilen} Zeilen, jede mit id und status.")
     return 0
 
 
