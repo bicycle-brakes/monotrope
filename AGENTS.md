@@ -122,6 +122,10 @@ tools/bd dolt push          # push tracker data to origin (refs/dolt/data)
   reads it; the chat, a memory and a harness's user file do not reach the next
   one. Where an agent may not write that file (lakeswitch declares it
   `human-decided`), propose the exact text instead.
+- **Research about this repository lives in `docs/research/`.** A note in
+  the maintainer's vault, a chat or a rendered page is a view of it: it names
+  the source path and commit, and a finding is never first written there.
+  Personal reasons to care stay outside the repository.
 - **The maintainer's Claude Code display** — status line, entry at session
   start, handover safety net, parallel-session warning, `/uebergabe` — lives in
   `tools/claude-code/`; each line of the display is documented beside the tool.
