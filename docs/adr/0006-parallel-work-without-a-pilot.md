@@ -3,7 +3,8 @@
 * Status: proposed · supersedes ADR 0001 (early parallelism from M0) ·
   supersedes, in part, ADR 0005 (its Omnigent session policy, its M0
   validation, and a worker's creating and closing of beads) and ADR 0002
-  (its pilot store and its M0 validation) · amends D-3 and D-7 of the
+  (its pilot store, its W1 activation condition and its M0 validation) ·
+  amends D-3 and D-7 of the
   2026-09-16 interview a second time
 * Review: direction chosen by the maintainer, 2026-09-27 (option "parallel
   from now, within bounds" of two) · Decider: maintainer · prepared by a
