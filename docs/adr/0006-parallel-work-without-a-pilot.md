@@ -1,8 +1,10 @@
 # ADR 0006 — Parallel work without a pilot, one worktree per session
 
 * Status: proposed · supersedes ADR 0001 (early parallelism from M0) ·
-  supersedes, in part, ADR 0005 (its Omnigent session policy and its M0
-  validation) · amends D-3 and D-7 of the 2026-09-16 interview a second time
+  supersedes, in part, ADR 0005 (its Omnigent session policy, its M0
+  validation, and a worker's creating and closing of beads) and ADR 0002
+  (its pilot store and its M0 validation) · amends D-3 and D-7 of the
+  2026-09-16 interview a second time
 * Review: direction chosen by the maintainer, 2026-09-27 (option "parallel
   from now, within bounds" of two) · Decider: maintainer · prepared by a
   Claude Code session
@@ -64,16 +66,19 @@ single tracker writer.
   in a worktree of its own. At most `writing_sessions_per_repository`
   writing sessions run in one repository (D-59, D-60). This takes the place
   of ADR 0001's W0 and its limit of two coding workers.
-* **Tracker writes.** The first writing session writes the tracker. A worker
-  session claims the one bead it works on, records follow-up work as
-  `discovered-from` that bead, closes it after the merge and adds its
-  handover comment to it — ADR 0005's rule, the one exception D-60 keeps.
-  Every other tracker write comes from the first session. No exclusive
-  coordinator process (ADR 0001's W1) is required.
+* **Tracker writes, as D-60 has them.** The first writing session writes the
+  tracker: it hands out beads, runs `bd ready`, creates follow-up work as
+  `discovered-from` the bead it came from, closes beads, reprioritises and
+  links. A worker session claims the one bead it works on and adds its
+  handover comment to that bead, nothing more. That is the part of ADR
+  0005's rule D-60 keeps as its one exception. No exclusive coordinator
+  process (ADR 0001's W1) is required.
 * **The layers that hold it**, none of them an Omnigent setting:
   1. bd's own claim rules, as measured for ADR 0005 on 2026-09-23 (bead
      coding-harness-m34): a claimed bead cannot be closed by another actor
-     or reassigned without `--force`, and a contested claim has one winner;
+     or reassigned without `--force`, a contested claim has one winner, and
+     a write carrying `--if-assignee=<actor>` is refused on a bead held by
+     someone else;
   2. the write guard of D-60, which refuses writes from a second session in
      the same checkout and tracker writes other than a claim or a handover
      comment from a session that is not the first;
@@ -91,27 +96,44 @@ single tracker writer.
   one writing session.
 * **ADR 0005 is superseded in part.** Its layer 2 (the Omnigent session
   policy) and its validation "in M0" lapse; the write guard of D-60 takes
-  layer 2's place. Its decision — a worker claims, creates follow-up work
-  for and closes its own bead — stays in force.
-* **ADR 0002** stays as ADR 0005 left it; its rules on stale or duplicate
-  results still apply to parallel sessions. The note on the pilot's
-  throwaway store lapses with the pilot.
+  layer 2's place. Of its decision, a worker's claim of its own bead stays
+  in force, and a worker's creating follow-up work and closing its bead
+  pass to the first session, as D-60 has it.
+* **ADR 0002 is superseded in part** as well: its pilot store, its W1
+  activation condition and its M0 validation lapse with the pilot. Its
+  rules on stale or duplicate results stay and apply to coordinated runs,
+  when there are any.
+* **Until the maintainer rewrites house rule 4.** AGENTS.md house rule 4
+  says that while another session runs, none writes the tracker. With no
+  Omnigent workers, every session is interactive, so the rule binds them
+  all. Until the maintainer rewrites it (owed item "Coding Harness 7" of
+  the lakeswitch-ai decision record, the maintainer's own edit), parallel
+  sessions work in worktrees of their own but make no tracker writes while
+  another session runs; the worker claim above waits for that edit.
 * **Owed before this holds by tool rather than by rule.** The write guard
   of D-60 — the per-checkout lock, the session cap and the tracker-write
   refusal — does not exist yet in either repository. Until it does, the
-  bounds are stated and not enforced: the maintainer's display warns of a
-  second session in the same checkout (`tools/claude-code/`), and house
-  rule 4 ("one writer per tracker") holds for interactive sessions as
-  written. Building the guard is its own change.
+  bounds are stated and not enforced; the maintainer's display warns of a
+  second session in the same checkout (`tools/claude-code/`). Building the
+  guard is its own change.
+* **Bead coding-harness-36z** (workers claim their own bead, proven in M0)
+  loses its M0 proof. It is to be re-scoped to the D-60 guard and the
+  events-journal check; this ADR does not write the tracker.
+* **Worktrees are not a security boundary.** Without an Omnigent sandbox, a
+  worktree keeps sessions from colliding; it does not confine what an agent
+  can reach. The target document's trust contracts that assume a sandbox
+  are open, not settled by this ADR.
 * The target document (`docs/architecture/2026-09-17-omnigent-first-target.md`)
-  still describes the M0 design. It records this decision where it names M0
-  and keeps the earlier text as history, as it did for ADR 0005.
+  still describes the M0 design. A notice at its top, in its D-3 and D-7
+  rows and in its tracker section records this decision; the rest of its M0
+  text is kept as the record of the earlier design, as it was for ADR 0005.
 
 ## Validation
 
-* Two writing sessions in two worktrees of one repository each claim their
-  own bead, finish, and leave an events journal in which every write's actor
-  is the bead's assignee or the first session.
+* Once house rule 4 is rewritten: two writing sessions in two worktrees of
+  one repository each claim their own bead, finish, and leave an events
+  journal in which every write other than a claim or a handover comment
+  comes from the first session.
 * Once the D-60 guard exists, its Known-Red cases pass: a second writing
   session in one checkout is refused; a writing session beyond the cap is
   refused; a tracker write other than a claim or a handover comment from a
