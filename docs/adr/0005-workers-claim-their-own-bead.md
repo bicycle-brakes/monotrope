@@ -1,13 +1,20 @@
 # ADR 0005 — Workers claim and close their own bead; the coordinator no longer writes alone
 
-* Status: accepted · supersedes, in part, ADR 0002 (the exclusive coordinator
-  writer and read-only workers)
+* Status: accepted, superseded in part by ADR 0006 (2026-09-27) ·
+  supersedes, in part, ADR 0002 (the exclusive coordinator writer and
+  read-only workers)
 * Review: direction chosen by the maintainer, 2026-09-23 (option "workers
   claim themselves" of three, after a check that it is feasible);
   accepted by the maintainer, 2026-09-23, in a commit signed with the
   maintainer's Touch-ID key · Decider: maintainer · prepared by a Claude
   Code session
 * Date: 2026-09-23 · accepted 2026-09-23
+* Note, 2026-09-27: [ADR 0006](0006-parallel-work-without-a-pilot.md)
+  (accepted 2026-09-27) supersedes layer 2 below (the Omnigent session
+  policy) and the validation "in M0"; the write guard of lakeswitch-ai
+  D-60 takes layer 2's place. Of the decision, a worker's claim of its
+  own bead stays in force; creating follow-up work and closing the bead
+  pass to the first session, as D-60 has it.
 
 ## Context
 
