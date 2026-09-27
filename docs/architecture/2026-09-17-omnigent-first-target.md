@@ -19,6 +19,13 @@ tags: [architecture, target, workflow, omnigent, parallelism]
 
 # Target state: an Omnigent-first coding harness
 
+> **Changed, 2026-09-27.** [ADR 0006](../adr/0006-parallel-work-without-a-pilot.md)
+> (accepted) drops the M0 pilot: Omnigent runs with native configuration
+> and no Omnigent sandbox, the adoption path starts at M1, and parallel
+> sessions run from then on, each in a worktree of its own. Where this
+> document describes M0 — including "Read this first" below — it records
+> the earlier design.
+
 > **Read this first.** One direction drives this document: Omnigent
 > coordinates parallel coding from the first proof of concept (M0).
 >
@@ -115,11 +122,11 @@ first: everything not marked **Amend** carries forward unchanged.
 |---|---|---|
 | D-1 — vocabulary | Retain | Stage 1–3 names model routing; S0–S7 instance setup; T0–T2 team scale; M0–M4 Omnigent adoption; levels 1–5 rule enforcement. Correct the corpus vocabulary through the planned source-correction PR. |
 | D-2 — change contract | Retain | `spec.md` carries goal, acceptance criteria, non-goals, class, protected areas, failure mode, size/context budget and change-specific Definition of Done. Beads carries status. |
-| D-3 — task granularity | Amend timing for early parallelism | One Bead per change remains the default. M0 may use coordinator-claimed task Beads under the change epic when separate ownership is needed; plan steps retain stable IDs either way. Discovered work has a `discovered-from` edge. This does not grant worker-side tracker writes. |
+| D-3 — task granularity | Amend timing for early parallelism | One Bead per change remains the default. M0 may use coordinator-claimed task Beads under the change epic when separate ownership is needed; plan steps retain stable IDs either way. Discovered work has a `discovered-from` edge. This does not grant worker-side tracker writes. Amended again by ADR 0006 (2026-09-27): no M0; a task Bead is used when two sessions need separate ownership, and its worker claims it itself (ADR 0005). |
 | D-4 — export | Amend, direction confirmed | Auto-export stays off; the render is the portable contract (D-52, lakeswitch-ai PR #37, not yet ratified). The committed copy remains until all three D-52 conditions are shown — the pinned bd with verified checksum in the hosted runner was shown in #26; token read access to refs/dolt/data was recorded as shown there too, but was first shown on 2026-09-23 in #34 (correction in ADR 0004); every reader on one access point is Stage 3, bead 1jg.3. #34 removed the copy on 2026-09-23: export-identity is retired, and readers render fresh from Dolt. ADR 0004 (accepted 2026-09-23). |
 | D-5 — worktrees | Retain; clarify activation | In-repository worktrees are created through the selected tool adapter, from one freshly fetched default-branch SHA per run. Direct worker tracker writes require the five-check test and an explicit rule/mode change. A passing sample never grants embedded Dolt concurrent-writer capability. |
 | D-6 — instance gates | Retain | The portable kit retains its baseline `ruff`/`pytest` gates; domain and additional stack gates belong to the instance. |
-| D-7 — Omnigent adoption | Amend, direction confirmed | Parallel coordination starts in M0. M1 qualifies routine Bounded work; M2 adds the full cross-vendor path; M3 qualifies unattended operation; M4 adds justified hardening. Git-native verification remains independently usable. |
+| D-7 — Omnigent adoption | Amend, direction confirmed | Parallel coordination starts in M0. M1 qualifies routine Bounded work; M2 adds the full cross-vendor path; M3 qualifies unattended operation; M4 adds justified hardening. Git-native verification remains independently usable. Amended again by ADR 0006 (2026-09-27): there is no M0; the path starts at M1, and parallel sessions are available from M1, each in a worktree of its own. |
 | D-8 — corpus corrections | Retain | Correct dates, missing images, ADR prefixes, language and unverified attribution in a source-correction PR; preserve provenance and historical disagreements. |
 | D-9 — rule ownership | Retain | Harness rules and their enforcers live here; domain rules stay in their instances. Each retained rule has an enforcer or a dated ramp valve. |
 | D-10 — one gate source | Retain | A platform-neutral manifest defines gates; local execution, CI and Omnigent invoke the same verifier. Generated adapters cannot add a second gate list. |
@@ -158,6 +165,13 @@ tool disagrees with this table, the table wins.
 | Durable memory | Living specs, ADRs, dated handovers and Beads | Resume uses a checkpoint, not private server history |
 
 ### Tracker ownership and activation
+
+> **Changed, 2026-09-27.** [ADR 0006](../adr/0006-parallel-work-without-a-pilot.md)
+> (accepted) keeps ADR 0005's claim rule and replaces its Omnigent session
+> policy with the write guard of lakeswitch-ai D-60, which does not exist
+> yet. The first writing session writes the tracker; a worker claims its
+> own bead and adds its handover comment to it, nothing more — and only
+> once the maintainer has rewritten house rule 4 in AGENTS.md.
 
 > **Changed, 2026-09-23.** [ADR 0005](../adr/0005-workers-claim-their-own-bead.md)
 > (accepted) lets workers claim and close their own bead, held by bd's claim

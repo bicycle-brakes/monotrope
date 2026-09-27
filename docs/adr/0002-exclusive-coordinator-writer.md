@@ -1,6 +1,7 @@
 # ADR 0002 — One exclusive coordinator writes the tracker during parallel sessions
 
-* Status: accepted, superseded in part by ADR 0005 (2026-09-23) · amends the session-entry rule "no session writes while
+* Status: accepted, superseded in part by ADR 0005 (2026-09-23) and ADR
+  0006 (2026-09-27) · amends the session-entry rule "no session writes while
   another session runs" (AGENTS.md house rule 4)
 * Review: accepted by the maintainer, 2026-09-22, with the changes of that
   review · Decider: maintainer · prepared by a framework-architect session
@@ -10,6 +11,11 @@
   workers; its first reason, a single-writer store, was measured false
   that day (bead coding-harness-m34). The rules on stale or duplicate
   results and on the pilot's throwaway store stay in force.
+* Note, 2026-09-27: [ADR 0006](0006-parallel-work-without-a-pilot.md)
+  (accepted 2026-09-27) drops the M0 pilot, so the pilot's throwaway
+  store, the W1 activation condition and the M0 validation lapse. The
+  rules on stale or duplicate results stay and apply to coordinated runs,
+  when there are any.
 
 ## Context
 

@@ -1,9 +1,15 @@
 # ADR 0001 — Early parallelism: Omnigent coordinates coding workers from M0
 
-* Status: accepted · amends D-3 and D-7 of the 2026-09-16 interview
+* Status: accepted, superseded by ADR 0006 (2026-09-27) · amends D-3 and
+  D-7 of the 2026-09-16 interview
 * Review: accepted by the maintainer, 2026-09-22, with the changes of that
   review · Decider: maintainer · prepared by a framework-architect session
 * Date: 2026-09-19 · accepted 2026-09-22
+* Note, 2026-09-27: [ADR 0006](0006-parallel-work-without-a-pilot.md)
+  (accepted 2026-09-27) supersedes this decision. The maintainer dropped
+  the M0 pilot on 2026-09-23; parallel sessions now run from M1, each in a
+  worktree of its own, and W0 and W1 lapse. The text below is kept as the
+  record of the earlier design.
 
 ## Context
 

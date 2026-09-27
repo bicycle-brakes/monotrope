@@ -1,15 +1,16 @@
 # ADR 0006 — Parallel work without a pilot, one worktree per session
 
-* Status: proposed · supersedes ADR 0001 (early parallelism from M0) ·
+* Status: accepted · supersedes ADR 0001 (early parallelism from M0) ·
   supersedes, in part, ADR 0005 (its Omnigent session policy, its M0
   validation, and a worker's creating and closing of beads) and ADR 0002
   (its pilot store, its W1 activation condition and its M0 validation) ·
   amends D-3 and D-7 of the
   2026-09-16 interview a second time
 * Review: direction chosen by the maintainer, 2026-09-27 (option "parallel
-  from now, within bounds" of two) · Decider: maintainer · prepared by a
-  Claude Code session
-* Date: 2026-09-27
+  from now, within bounds" of two); accepted by the maintainer,
+  2026-09-27, in a commit signed with the maintainer's Touch-ID key ·
+  Decider: maintainer · prepared by a Claude Code session
+* Date: 2026-09-27 · accepted 2026-09-27
 
 ## Context
 
