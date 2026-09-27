@@ -50,16 +50,27 @@ then it lives at `portfolio-agentic-engineering/docs/WORKFLOW.md`.
    refuses `init`, `migrate`, `upgrade` — the three verbs that can change the
    shared database for everyone. The prefix (`coding-harness-`) was fixed at
    init and cannot be corrected afterwards.
-4. **One writer per tracker.** While another session runs, none writes. Check
-   before `bd` writes; after the writes run `tools/bd dolt push`. The push
-   order is tracker first, git second: CI renders the gate from
-   `refs/dolt/data`, so a git push that outruns the tracker push merges
-   against a stand the commits claim to include — and goes red on exactly
-   that gap (bead coding-harness-4t8). Auto-export
-   is off, and no rendered copy is committed (bead coding-harness-1jg.3):
-   a local reader renders fresh through `scripts/bead_render.py`. Because
-   the diff no longer shows tracker changes, a pull request names in its
-   body every bead it opens, changes or closes (maintainer, 2026-09-23).
+4. **One writer per tracker, and one exception.** While more than one
+   writing session runs in a repository, the session that started first
+   writes the tracker: it hands out beads, runs `tools/bd ready`, creates
+   follow-up work as `discovered-from`, closes, reprioritises and links.
+   Every other writing session works in a worktree of its own and writes
+   exactly two things: the claim of the one bead it works on
+   (`tools/bd update <id> --claim`) and its handover comment on that bead —
+   nothing more (ADR 0006, lakeswitch-ai D-60). At most
+   `writing_sessions_per_repository` writing sessions (default 2) run in one
+   repository. Until the D-60 write guard exists, this is stated, not
+   enforced: the start hook and the status line show a second session, and
+   a session that is not first checks before any tracker write. After the
+   writes run `tools/bd dolt push`. The push order is tracker first, git
+   second: CI renders the gate from `refs/dolt/data`, so a git push that
+   outruns the tracker push merges against a stand the commits claim to
+   include — and goes red on exactly that gap (bead coding-harness-4t8).
+   Auto-export is off, and no rendered copy is committed (bead
+   coding-harness-1jg.3): a local reader renders fresh through
+   `scripts/bead_render.py`. Because the diff no longer shows tracker
+   changes, a pull request names in its body every bead it opens, changes
+   or closes (maintainer, 2026-09-23).
 5. **The handover is the file, not the chat.** Session end → a file under
    `docs/journal/handover/`. A number without its commit or date reads as a
    historical one — every count carries its cut-off.
