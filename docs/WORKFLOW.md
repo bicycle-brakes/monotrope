@@ -280,7 +280,7 @@ none, because the registry keeps counting it as protection.
 | 1 Explore | **Haiku 4.5** | much input, little output, no deep reasoning |
 | 1a Interview | **Fable 5.1** | the questions are the work, and there are few of them |
 | 2 Spec | **Opus 5.5** | effort `xhigh`; the highest reasoning demand, little output |
-| 2a Spec review | **Opus 5** | another model with another error profile, and a fresh context that does not know the author's reasoning |
+| 2a Spec review | **Fable 5.1** | another model with another error profile, and a fresh context that does not know the author's reasoning |
 | 3 Plan | **Opus 5.5** | effort `xhigh`; an error here is the most expensive in the whole run |
 | 4 Implement | **Sonnet 5** | a solid worker given a clear plan |
 | 5 Verify | — | deterministic |
@@ -298,10 +298,14 @@ the whole repository; until then both ran on Fable 5.1). In a session:
 from its definition's frontmatter (`effort: xhigh`), not from the call that
 starts it, and a new definition is read only when a session starts.
 
-**Review on Fable 5.1** (maintainer, 2026-09-29, for the whole repository;
-until then Opus 5). The two reviews of that day ran on Fable and found what the
-spec had missed by reading the called code itself. For a review run as its own
-session: `claude --model claude-fable-5-1`.
+**Spec review and review on Fable 5.1** (maintainer, 2026-09-29, for the whole
+repository; until then both ran on Opus 5). The two reviews of that day ran on
+Fable and found what the spec had missed by reading the called code itself. The
+spec review still reads with another model than the spec's author (Opus 5.5).
+**One reviewer for both:** phase 6 resumes the session of phase 2a
+(`--session-id` there, `--resume` here; the id stands in `findings.md`), so the
+reviewer compares the spec it read with what was built. It still never saw the
+author's reasoning, and passing the spec in 2a is no argument in phase 6.
 
 **Cost logic.** The expensive models run only in the phases with little output.
 The token-heavy part runs on Sonnet.

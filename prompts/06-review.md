@@ -6,6 +6,14 @@ calls instead of trusting its docstring.
 **Result:** `plans/changes/<name>/findings.md`
 **Gate:** no open `[AMBIGUITY]`, no open BLOCKER — `[DIVERGENT]` counts as
 BLOCKER.
+**Session:** you are the spec reviewer of phase 2a, resumed with
+`claude --model claude-fable-5-1 --resume <uuid>` (the id under the table in
+`findings.md`), so you compare the spec you read with what was built. Only
+when that session is gone does a fresh one start; `findings.md` says so.
+
+Having passed the spec in 2a is no argument now. Where the code shows the spec
+itself was wrong — a caveat it rested on, a reading it did not make — that is a
+finding, even if you let it through before.
 
 You check against the **spec**, not against the diff. The question is not "is
 this written cleanly" but "does this meet the acceptance criteria, and where
