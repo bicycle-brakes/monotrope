@@ -1,10 +1,13 @@
 # Phase 2a · Spec review
 
-**Model:** Opus 5 — a different model with a different error profile, in a
+**Model:** Fable 5.1 — a different model with a different error profile, in a
 fresh context that never saw the author's reasoning.
 **Input:** `spec.md`, `research.md`, `decisions.md`. **Not** the author's reasoning.
 **Result:** rows for `plans/changes/<name>/findings.md`, dimension `SPEC`.
 **Gate:** no open `[AMBIGUITY]`.
+**Session:** the same reviewer later runs phase 6. Start it with a fixed id,
+`claude --model claude-fable-5-1 --session-id <uuid> -n review-<name>`, and
+write the id under the table in `findings.md` (`Reviewer session: <uuid>`).
 
 A validator checks that the sections are there. It cannot check that they say
 the right thing. A clean, complete spec describing the wrong thing passes every
