@@ -30,6 +30,7 @@ niemand abholt, erzeugt eine offene Zusage, die für immer offen bleibt.
 title: "Sitzungsübergabe — <Thema>, Stand <JJJJ-MM-TT>"
 category: handover
 created: 2026-01-01
+updated: 2026-01-01
 direction: framework->framework
 provenance: ai-drafted-reviewed
 produced_by:
