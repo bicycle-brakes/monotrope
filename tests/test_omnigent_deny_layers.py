@@ -212,6 +212,22 @@ def test_write_keeps_hooks_and_foreign_rules_and_is_idempotent(tmp_path: Path) -
     assert settings.read_text(encoding="utf-8") == once
 
 
+def test_write_keeps_an_edit_rule_it_does_not_own(tmp_path: Path) -> None:
+    """A hand-added `Edit(//**...)` rule for another path is the maintainer's; only the listed path is ours."""
+    settings = tmp_path / ".claude" / "settings.json"
+    settings.parent.mkdir(parents=True)
+    mine = ["Edit(//**/secrets/**)", "Edit(//**/.env)"]
+    stale_owned = [*op._path_rules(), "mcp__omnigent__stale_tool"]
+    settings.write_text(
+        json.dumps({"permissions": {"deny": [mine[0], *stale_owned, mine[1]]}}),
+        encoding="utf-8",
+    )
+    op.write(tmp_path)
+    deny = json.loads(settings.read_text(encoding="utf-8"))["permissions"]["deny"]
+    assert deny == mine + op.layer1_rules(), "a foreign Edit rule was dropped, or the owned ones were not restored"
+    assert deny.count(op._path_rules()[0]) == 1
+
+
 # ---------------------------------------------------------------------------
 # Criterion 4 - layer 2 is a file in this repository
 # ---------------------------------------------------------------------------

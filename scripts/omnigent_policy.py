@@ -136,13 +136,21 @@ class ConfigError(ValueError):
 # ---------------------------------------------------------------------------
 
 
+def _path_rules() -> list[str]:
+    return [f"Edit(//**{suffix})" for suffix in PROTECTED_PATHS]
+
+
 def _is_owned_rule(rule: str) -> bool:
-    return rule.startswith(PREFIX) or (rule.startswith("Edit(//**") and rule.endswith(")"))
+    """A rule `--write` may replace: an Omnigent tool rule, or exactly a protected-path rule the list renders.
+
+    An `Edit(//**...)` rule for any other path is the maintainer's; it is kept.
+    """
+    return rule.startswith(PREFIX) or rule in _path_rules()
 
 
 def layer1_rules() -> list[str]:
     """The deny rules layer 1 owns: one per denied tool, one per protected path."""
-    return [PREFIX + tool for tool in DENIED_TOOLS] + [f"Edit(//**{suffix})" for suffix in PROTECTED_PATHS]
+    return [PREFIX + tool for tool in DENIED_TOOLS] + _path_rules()
 
 
 # ---------------------------------------------------------------------------
