@@ -259,6 +259,25 @@ def test_an_uncommitted_edit_is_held_against_today(tmp_path: Path) -> None:
     assert _found(repo) == {}, "stamped today, they are current"
 
 
+def test_a_root_below_the_top_of_the_repository_sees_its_own_edits(tmp_path: Path) -> None:
+    """Criterion 3: pointed at a subdirectory, the check still finds its uncommitted files (git diff --relative)."""
+    repo = _repo(tmp_path)
+    sub = repo / "sub"
+    _write(repo, "sub/provenance.yaml", MAP)
+    _write(repo, "sub/docs/edited.md", _doc("2026-09-10"))
+    _write(repo, "sub/docs/clean.md", _doc("2026-09-10"))
+    _commit(repo, "2026-09-10T12:00:00+00:00")
+    assert _found(sub) == {}, "the subdirectory is measured as a repository of its own"
+
+    # Without `--relative`, git diff names `sub/docs/edited.md`, which is not a path below the root:
+    # the edit would be dated by its commit, and the stale stamp would pass.
+    _write(repo, "sub/docs/edited.md", _doc("2026-09-10", body="edited, not committed"))
+    found = _found(sub)
+    assert sorted(found) == ["docs/edited.md"]
+    assert found["docs/edited.md"][0] == cfc.STALE and "uncommitted" in found["docs/edited.md"][1]
+    assert cfc.run(sub, False, TODAY, UTC_TODAY) == 1
+
+
 def test_a_shallow_clone_is_not_a_pass(tmp_path: Path, capsys: pytest.CaptureFixture[str]) -> None:
     """Criterion 4: a --depth 1 clone measures nothing (exit 3) and says how to get the history."""
     src = _repo(tmp_path)
