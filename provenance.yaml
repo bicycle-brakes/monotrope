@@ -15,10 +15,12 @@
 # Laengster Praefix gewinnt. Eine Datei unter einem Pfad ohne Eintrag ist kein
 # Fehler der Datei, sondern eine Luecke dieser Karte (INFO "unmapped path").
 #
-# Reader in this repository (added 2026-09-29, bead coding-harness-qd7): the one
-# script that reads this map here is `scripts/check_frontmatter_current.py`. It
-# reads `paths:` (`prefix`, `frontmatter`) and `excluded:`. `allowed:` is
-# declared, not yet enforced; nothing here reads it.
+# Readers in this repository (added 2026-09-29, bead coding-harness-qd7; two
+# scripts, each reading a different part of the file):
+#   - `scripts/check_frontmatter_current.py` reads `paths:` (`prefix`,
+#     `frontmatter`) and `excluded:`.
+#   - `scripts/ramp_valves.py` reads `roles:` (the roster's handles).
+# `allowed:` is declared, not yet enforced; nothing here reads it.
 
 schema_version: 1
 
