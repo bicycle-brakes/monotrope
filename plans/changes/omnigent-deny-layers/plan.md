@@ -1,7 +1,7 @@
 ---
 title: "Plan — omnigent-deny-layers"
 status: draft
-implementation_status: none
+implementation_status: partial
 date: 2026-09-29
 last_reviewed: 2026-09-29
 supersedes: null
@@ -269,3 +269,165 @@ existing `pytest` gate); `scripts/kit/manifest.yaml` (the catch-alls
 `~/.omnigent/config.yaml` and `~/.claude/settings.json` (the maintainer's,
 through the installer); ADR 0006; the tracker; `lakeswitch-ai` and
 `portfolio-agentic-engineering`; Omnigent itself.
+
+## Implementation notes
+
+Written by the implementing session (phases 4 and 5), 2026-09-29. The plan above
+is unchanged; where the build differs from it, the difference is here.
+
+### Scope of this build
+
+The maintainer chose option 2 of the spec's [DECISION] (`decisions.md`, item 4):
+layer 2 (policy file, installer, tests) is built and **not installed**. Nothing
+in this session ran the installer against the real `~/.omnigent` (its
+`config.yaml` still carries its 2026-09-23 modification date and no
+`config.yaml.bak-*` exists there), started or stopped Omnigent, or called an
+Omnigent tool or endpoint. S9 steps 1, 2, 3 and 5 (installation, restart,
+layer-2 live probes) and criterion 8 part (b) wait for bead coding-harness-671;
+S9 step 4 (layer 1 live) and step 6 (the result file) run after the merge.
+`docs/research/<date>-omnigent-deny-layers-live-measurement.md` is therefore not
+created yet. `implementation_status: partial` in `spec.md` and `plan.md` (S7).
+
+### Where the plan quoted older wording (S6)
+
+PR 49 was already merged into the branch (`1a6aff8`), so S0 needed no rebase.
+
+- `docs/WORKFLOW.md`, note "Not all of it is here yet": the quoted phrase "any
+  `permissions.deny` in `.claude/settings.json`," is there, but wrapped across a
+  line break; replaced as planned.
+- §3 "Worktrees" item 5: the two sentences from "Omnigent's own tools —" to
+  "they are not used to write." are there as quoted; replaced as planned, with one
+  addition: "as of 2026-09-29 it is built but not installed" (option 2). That
+  sentence goes stale on installation and must be updated by the installing
+  session (bead coding-harness-671). "Not yet measured" kept.
+- "What isolation consists of here" item 3: the current item also said "the
+  path-bound rules apply only to `Write` and `Edit`. **A write through `Bash`
+  falls through them**"; the whole item is replaced by the plan's text, so that
+  claim is gone. The closing "brake against accidents, not a lock" sentence is
+  kept. The heading "three things, no fourth" is unchanged and still true.
+- `AGENTS.md`: the plan's "second sentence" of the Omnigent bullet is the one
+  beginning "Omnigent's own file and shell tools"; replaced. 167 lines, no word
+  README (`tests/test_entry_points.py` green).
+
+### Departures from the plan
+
+1. **The CEL list test is `in [...]`, not `.exists(t, ...)`.** Expected: the
+   plan's `[...].exists(t, name == t || name == "mcp__omnigent__" + t)`. Found
+   (measured offline with Omnigent's `celpy`): `celpy` evaluates both sides of
+   `&&`, and on an event with no tool name the `exists` macro's chain of errors
+   nests its own message at every element, so the evaluation grows about
+   twofold per list element; with the 27 tools a `{"type": "tool_call"}` event
+   was still running after two minutes at about 800 MB and was killed. Installed as a server default policy, that
+   would hang or exhaust the server on the first event without a tool name.
+   Relevant: the plan's own no-error test caught the class of fault, but only
+   because the evaluation was measured; the plan could not have named it. Done
+   instead: `event.data.name in [<27 bare names>, <27 prefixed names>]`, same
+   verdicts, and the evaluation takes 0.4 s for all test events. The
+   protected-path policy uses `endsWith(...)` joined with `||`, for the same
+   reason. The list is still rendered from the one list.
+2. **Guards.** The plan's four guards are kept and two added, found by the
+   no-error test: `has(event.data)` before `type(event.data) == map`, and
+   `type(event.type) == string` (an event whose `type` is a number made
+   `event.type == "tool_call"` raise). The `type(...) == ...` guards are
+   supported by `celpy`; none had to be dropped.
+3. **`ci_gates.OHNE_AUFRUFER` and `scripts/kit/probe.py` were touched**; the
+   plan's "Not touched" list did not foresee it.
+   `test_every_script_has_a_caller_or_a_declared_reason` (RB-G3) goes red for a
+   script that no CI step runs, and `omnigent_policy.py` is called by the
+   maintainer's installer only. So it is named in `ci_gates.OHNE_AUFRUFER` with
+   its reason. That list travels with the kit, the script does not (`scripts/`
+   catch-all is `bestand`), so in the probe's throwaway repo
+   `test_no_declared_reason_stands_for_a_script_that_has_a_caller` went red; it
+   is added to `REIST_NICHT` as `bestand-dieses-repos` and the cap `DECKEL` rises
+   from 31 to 32, with the reason beside it. A cleaner cure would be a CI step
+   for `omnigent_policy.py --check`, which the spec rules out (non-goal: no new
+   entry in `decisions/gates.yaml`). Left to the reviewer.
+4. **`--evaluate` reads the committed `tools/omnigent/policy.yaml`**, not a fresh
+   render, so that a hand edit of the file is measured (mutation 3 below).
+5. **Tests added beyond the plan's table:** planted-fault counterparts that call
+   `check()` and `write()` on a temporary tree;
+   `test_installer_check_needs_no_terminal_but_needs_omnigent`;
+   `test_installer_runs_end_to_end_in_a_temporary_home` (a pseudo-terminal on
+   stdin, `OMNIGENT_CONFIG_HOME` and `HOME` in `tmp_path`, Omnigent's
+   interpreter; it asserts the target lies under `tmp_path`);
+   `test_the_cli_merges_and_says_what_to_do_next`;
+   `test_omnigent_python_prefers_the_variable`.
+
+### Mutation proof (S5)
+
+Each fault planted, the suite run, the fault taken back (`--check` green again):
+
+| Fault planted | Red |
+|---|---|
+| drop the `mcp__omnigent__sys_os_write` rule from `.claude/settings.json` | `test_settings_deny_every_denied_tool`, `test_the_tree_is_what_the_list_renders` |
+| add `mcp__omnigent__sys_os_read` (an allowed tool) to the deny rules | `test_settings_deny_no_allowed_tool_and_no_blanket_rule`, `test_the_tree_is_what_the_list_renders` |
+| drop `sys_session_rename` from the CEL list in `policy.yaml` | `test_policy_denies_denied_tools_and_leaves_allowed_ones`, `test_the_tree_is_what_the_list_renders` |
+| protected suffix `config.yml` instead of `config.yaml` in `policy.yaml` | `test_policy_protects_omnigents_config_file`, `test_the_tree_is_what_the_list_renders` |
+| remove the `has(event.data.name)` / `type(...)` guards from the writing policy | `test_no_event_shape_raises_an_evaluation_error` (CELEvalError on `{"type": "tool_call", "data": {}}`), `test_the_tree_is_what_the_list_renders` |
+| remove only `has(event.data)` | only `test_the_tree_is_what_the_list_renders`: the later guards already absorb the error, so this guard is redundant defence, held by the render test |
+| (found, not planted) the plan's `.exists(...)` form | the no-error test hangs; the subprocess time limit turns that into a failure |
+
+### Evidence
+
+Layer 1 (no Omnigent needed): `python3 scripts/omnigent_policy.py --check`, then
+the settings tests:
+
+```
+the tree is what the list renders
+test_the_tree_is_what_the_list_renders PASSED
+test_a_hand_edit_or_a_stale_render_is_caught PASSED
+test_settings_deny_every_denied_tool PASSED
+test_settings_deny_no_allowed_tool_and_no_blanket_rule PASSED
+test_check_names_an_allowed_tool_or_a_blanket_rule_in_the_settings PASSED
+test_settings_keep_the_session_start_hook PASSED
+test_write_keeps_hooks_and_foreign_rules_and_is_idempotent PASSED
+7 passed
+```
+
+Layer 2, offline, with Omnigent 0.15.0's own code (its interpreter, found
+through the `omnigent` launcher), the whole file,
+`python3 -m pytest tests/test_omnigent_deny_layers.py -v -rs`:
+**28 passed, 0 skipped.** The Omnigent-dependent ones among them: the surface
+test (27 denied + 17 allowed = the 44 tools of Omnigent's native surface), the
+denied/allowed tool test, the protected-path test, the no-error test over 23
+event shapes, the validation test, the CLI merge test and the installer
+end-to-end test.
+
+The same file without Omnigent on the `PATH` (the CI situation):
+**21 passed, 7 skipped**, each with "Omnigent is not installed here (no
+OMNIGENT_PYTHON, no omnigent on PATH) - the policy was not evaluated with
+Omnigent's code": the surface, denied/allowed, protected-path, no-error,
+validation, CLI merge and installer end-to-end tests. That is expected and is
+not green evidence for criteria 2 and 5.
+
+`make -C <worktree> verify` (gate lines and the last line of the run; the two
+report-only reds are old findings in `docs/` and in the tracker's own markdown, none
+in files of this change):
+
+```
+── [pytest] gruen
+── [ruff-check] gruen
+── [ruff-format] gruen
+── [leerprobe] gruen
+── [plans-registry] gruen
+── [docs-links] rot, aber nur report — er meldet, er blockiert nicht.
+── [bead-export] gruen
+── [dangling-beads] gruen
+── [decision-continuity] gruen
+── [gate-schema] gruen
+── [ci-drift] gruen
+── [ramp-valves] gruen
+── [markdownlint] rot, aber nur report — er meldet, er blockiert nicht.
+
+VERIFY GREEN — every local gate of the 'verify' job passed.
+```
+
+The first run of `make verify` in this session was RED on two gates, both from
+departure 3 (`pytest`: the caller rule; `leerprobe`: the probe case); it is
+green after those two fixes.
+
+### Criteria at the end of phase 5
+
+1 to 7 met (7 held by review, as its own text says, plus
+`tests/test_entry_points.py`). 8 not met yet, by design: part (a) after the
+merge (S9 steps 4 and 6), part (b) is bead coding-harness-671.

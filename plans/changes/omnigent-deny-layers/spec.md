@@ -1,7 +1,7 @@
 ---
 title: "Spec — omnigent-deny-layers"
 status: draft
-implementation_status: none
+implementation_status: partial
 date: 2026-09-29
 last_reviewed: 2026-09-29
 supersedes: null
