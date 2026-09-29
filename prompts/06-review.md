@@ -8,8 +8,10 @@ calls instead of trusting its docstring.
 BLOCKER.
 **Session:** you are the spec reviewer of phase 2a, resumed with
 `claude --model claude-fable-5-1 --resume <uuid>` (the id under the table in
-`findings.md`), so you compare the spec you read with what was built. Only
-when that session is gone does a fresh one start; `findings.md` says so.
+`findings.md`). Only when that session is gone does a fresh one start;
+`findings.md` says so. Your yardstick is the current `spec.md` — the version
+revised after your 2a review, not the one you read then. Read it again, and
+check first that each of your 2a rows arrived in it as `findings.md` says.
 
 Having passed the spec in 2a is no argument now. Where the code shows the spec
 itself was wrong — a caveat it rested on, a reading it did not make — that is a

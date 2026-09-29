@@ -71,7 +71,7 @@ handover to the next phase — not the chat history.**
 | 1 | Explore | `plans/changes/<name>/research.md` | — | [`prompts/01-explore.md`](../prompts/01-explore.md) |
 | 1a | Interview | `plans/changes/<name>/decisions.md` | every `[DECISION]` answered — or its skip given a reason | [`01a-interview.md`](../prompts/01a-interview.md) |
 | 2 | Spec | `plans/changes/<name>/spec.md` | validator green, no open `[DECISION]` | [`02-spec.md`](../prompts/02-spec.md) |
-| 2a | Spec review | rows for `findings.md`, dimension `SPEC` | no open `[AMBIGUITY]` | [`02a-spec-review.md`](../prompts/02a-spec-review.md) |
+| 2a | Spec review | rows for `findings.md`, dimension `SPEC`; then the revised `spec.md` | every row worked into the spec or rejected with a reason; no open `[AMBIGUITY]` | [`02a-spec-review.md`](../prompts/02a-spec-review.md) |
 | 3 | Plan | `plans/changes/<name>/plan.md` | validator green | [`03-plan.md`](../prompts/03-plan.md) |
 | 4 | Implement | code + tests | `make verify` green | [`04-implement.md`](../prompts/04-implement.md) |
 | 5 | Verify | test output as evidence | the stop hook blocks on a red tree | [`05-verify.md`](../prompts/05-verify.md) |
@@ -302,10 +302,14 @@ starts it, and a new definition is read only when a session starts.
 repository; until then both ran on Opus 5). The two reviews of that day ran on
 Fable and found what the spec had missed by reading the called code itself. The
 spec review still reads with another model than the spec's author (Opus 5.5).
-**One reviewer for both:** phase 6 resumes the session of phase 2a
-(`--session-id` there, `--resume` here; the id stands in `findings.md`), so the
-reviewer compares the spec it read with what was built. It still never saw the
-author's reasoning, and passing the spec in 2a is no argument in phase 6.
+**The spec review improves the spec first.** The spec's author works each 2a
+row into `spec.md` (or rejects it with a reason) before phase 3; the revised
+spec is the one yardstick for plan, code and review (`prompts/02-spec.md`,
+"After the spec review"). **One reviewer for both:** phase 6 resumes the session
+of phase 2a (`--session-id` there, `--resume` here; the id stands in
+`findings.md`). It measures the code against the revised spec and first checks
+that its 2a rows arrived there. It still never saw the author's reasoning, and
+passing the spec in 2a is no argument in phase 6.
 
 **Cost logic.** The expensive models run only in the phases with little output.
 The token-heavy part runs on Sonnet.

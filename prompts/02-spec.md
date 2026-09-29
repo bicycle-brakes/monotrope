@@ -59,3 +59,13 @@ sentence. You ask only once all of the above stands.
 
 Frontmatter per `plans/_README.md`: `status`, `implementation_status`, `date`,
 `last_reviewed`, `bead`.
+
+## After the spec review
+
+Phase 2a returns its rows in `findings.md`. Before phase 3 starts, you work
+each of them into `spec.md` itself: a hole is closed, a criterion that cannot
+go red gets its refuting case. A row you do not take over gets its reason in
+`findings.md`. An `[AMBIGUITY]` goes to the person, and their answer goes into
+the spec. Each 2a row then says `in spec` or `rejected — <reason>`; none stays
+open. The revised `spec.md` is the one yardstick from here on: plan, code and
+the phase 6 review measure against it, not against the 2a rows.
