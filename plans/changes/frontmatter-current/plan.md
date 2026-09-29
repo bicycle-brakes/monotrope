@@ -4,6 +4,7 @@ status: draft
 implementation_status: none
 date: 2026-09-29
 last_reviewed: 2026-09-29
+updated: 2026-09-29
 supersedes: null
 superseded_by: null
 bead: coding-harness-qd7
@@ -221,3 +222,99 @@ test file, and five names match `MUTATIONS_NAMEN` (`goes_red`,
 - The content of `docs/WORKFLOW.md`: a parallel pull request translates it
   (`research.md`, correction 4). Whichever merges second stamps it again; the
   check names it.
+
+## Implementation notes
+
+Written by the implementing session on 2026-09-29, after the work. The text
+above is unchanged.
+
+**Re-measured after merging origin/main 1a6aff8 (Coding Harness PR 49).**
+
+- Held files: 49 now, all tracked. The current map, applied to the tree at
+  `9f14283`, gives 45; the four added are the files of this folder. None of
+  the 45 disappeared, and PR 49 added none: the count of 49 stands.
+- Baseline `check_docs.py`: 22 "Frontmatter ohne" findings before and after;
+  none under `docs/adr/` after the six headers. The four other `adr/` lines
+  it prints are dead links in `regelwerk.md`, as before.
+- Kit probe (`python3 scripts/kit/probe.py`): 267 cases after, 254 before, so
+  13 new ones travel; the red set is the same 31 cases, so `REIST_NICHT`
+  needed no entry.
+
+**Where the work differs from the plan text.**
+
+1. **Step 8, option 2.** The maintainer answered `[DECISION] 1` with option 2.
+   The six ADR headers are an ordinary commit, and the session does not stop
+   before the stamp. The plan was written for option 1, as its preamble says.
+2. **A test name.** `tests/test_ci.py::test_the_schema_refuses_a_non_boolean_needs_history`
+   is named `test_the_schema_rejects_a_non_boolean_needs_history`. `refuses`
+   is one of the words in `MUTATIONS_NAMEN`; `tests/test_ci.py` names
+   `plans_registry.py` in its text, so a mutation-named test in that file made
+   `test_the_mutation_ratchet_only_turns_one_way` count the two plans-registry
+   gates as covered, and it stood red on their `OHNE_MUTATIONSTEST` entries.
+   Renaming is smaller than touching that list, which the plan lists under
+   "Not touched". The test does what the criterion 6 row says.
+3. **Commits are not individually green.** The gate commit precedes the map
+   and the headers, so the gate is red between them; only the last commit is
+   held to `make verify`.
+4. **Two details of `reference_dates`** beyond the plan text: `git diff` runs
+   with `--no-renames --relative`, so a staged move shows as an added new
+   path and paths are relative to `--root`.
+5. **One added test.** `test_nothing_is_measured_where_the_question_cannot_be_asked`
+   (not a work tree, no commit, an unparsable map; all exit 3) is not in the
+   plan's table. `test_the_map_holds_documents_not_harness_configuration` is,
+   but it sits in the map commit rather than the script commit, because it
+   reads the changed map.
+
+**Planted faults.** Every fault below was written into the script, the test
+file was run, and the script was restored (byte-identical, checked with
+`cmp`). All 16 went red on the pytest run of `tests/test_frontmatter_current.py`:
+`--no-merges` dropped; author date instead of committer date; the shorter
+prefix winning; the future check off; the future bound at today instead of
+tomorrow; the shallow refusal off; untracked files not counted as dirty;
+the index not counted as dirty; the stamp inserting at the end of the block;
+the stamp rewriting an unchanged file; the stale check off; an unreadable
+value passing; the fix line missing; `optional` held; the exclusion ignored;
+a header written into a file without one. Three more on `ci_gates.py`: the
+full checkout for every job, `needs_history` not validated, `needs_history`
+not carried by `gates()`. Two on the writers: the scaffold without `updated:`
+and the handover schema without `updated` (red in
+`test_the_template_satisfies_the_schema_it_documents`). And one in this tree:
+`docs/how-to/signed-decisions.md` with `updated: 2026-09-01` under a change
+of 2026-09-29 (uncommitted, so measured against today) turned the check red;
+restored, it is green again.
+
+**Evidence, 2026-09-29, on the tree of commit `f7996d1` plus the stamp
+(uncommitted when run; the commit that follows holds exactly that state).**
+
+The stamp, first run: exit 0, 49 lines, each of the form `stamped <path>
+(missing) -> updated: 2026-09-29` (the first is `docs/WORKFLOW.md`). It added
+105 lines to 49 files and deleted none: 49 `updated:` lines plus this
+section, which was written before the stamp. The second run: exit 0, no
+output, and `git diff | shasum` identical before and after, so it changed
+nothing. Then the check:
+
+```text
+$ python3 scripts/check_frontmatter_current.py
+frontmatter-current: 49 held documents, every `updated:` is current.
+$ echo $?
+0
+```
+
+`make verify`, the relevant lines and the last line:
+
+```text
+── [pytest] gruen
+── [frontmatter-current] $ lauf_cmd
+frontmatter-current: 49 held documents, every `updated:` is current.
+── [frontmatter-current] gruen
+── [ci-drift] $ lauf_cmd
+ci.yml ist genau die Ableitung der Gate-Datei.
+── [ci-drift] gruen
+── [ramp-valves] gruen
+── [markdownlint] rot, aber nur report — er meldet, er blockiert nicht.
+
+VERIFY GREEN — every local gate of the 'verify' job passed.
+```
+
+Hosted CI on the pull request has not run: criterion 7's last sentence (the
+gate green on the pull request that introduces it) is open until it does.

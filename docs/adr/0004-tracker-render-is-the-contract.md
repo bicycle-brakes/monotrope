@@ -4,6 +4,7 @@ category: adr
 status: accepted
 created: 2026-09-22
 last_reviewed: 2026-09-23
+updated: 2026-09-29
 owner: framework-architect
 provenance: human-decided
 produced_by: {kind: llm-session, name: claude-code, version: "2026-09-22"}

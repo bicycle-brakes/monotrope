@@ -4,6 +4,7 @@ category: how-to
 status: proposed
 owner: framework-architect
 last_reviewed: 2026-09-23
+updated: 2026-09-29
 tags: [signing, decisions, touch-id, lakeswitch, how-to]
 created: 2026-09-23
 provenance: ai-drafted-reviewed

@@ -5,6 +5,7 @@ status: superseded
 superseded_by: 2026-09-17-omnigent-first-target.md
 created: 2026-09-16
 last_reviewed: 2026-09-18
+updated: 2026-09-29
 owner: framework-architect
 provenance: ai-drafted-reviewed
 produced_by:
