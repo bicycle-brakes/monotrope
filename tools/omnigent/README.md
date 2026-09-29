@@ -4,6 +4,11 @@ A second, per-machine layer behind the deny rules in `.claude/settings.json`
 (layer 1). Both refuse the Omnigent tools that write, run, spawn or change
 state (`sys_os_write`, `sys_os_shell`, terminals, sessions, scheduled tasks and
 so on), and Claude Code's file tools writing Omnigent's own config file.
+A third class is asked, not denied: `sys_advise_models` changes nothing but may
+send the task text to a configured routing judge, so the user is asked each
+time (`permissions.ask` in layer 1, the policy
+`coding_harness__omnigent_asked_tools` in layer 2). The list has 27 denied, 16
+allowed and 1 asked tool (Omnigent 0.15.0, 2026-09-29).
 
 **What it is not.** Nothing in this repository depends on it: layer 1 holds
 alone (ADR 0006). It is per machine, not per repository, so once installed it

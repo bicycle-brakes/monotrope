@@ -461,10 +461,10 @@ Origin `fix-r1`, on the seven MINOR findings of the phase-6 review
 - **F-7, comment at `DECKEL`** (`54e4c9c`) and **F-6, the WORKFLOW note**
   (`1962a4c`): the brakes on the irreversible leave the "not here yet" list
   and get a sentence saying they were left out by decision.
-- **Left open.** F-1 (`sys_advise_models`; the list is the maintainer's call,
-  unchanged) and F-5 (the live probe of the `Edit(//**/.omnigent/config.yaml)`
+- **Left open.** F-5 (the live probe of the `Edit(//**/.omnigent/config.yaml)`
   rule; belongs to the live measurement after the merge, bead
-  coding-harness-671).
+  coding-harness-671). F-1 (`sys_advise_models`) was open at this point and is
+  resolved in the addendum below.
 
 `python3 -m pytest tests/test_omnigent_deny_layers.py -q -rs`: 33 passed,
 0 skipped (Omnigent installed). `make verify` after the last code commit
@@ -475,3 +475,29 @@ Origin `fix-r1`, on the seven MINOR findings of the phase-6 review
 
 VERIFY GREEN — every local gate of the 'verify' job passed.
 ```
+
+## Addendum — F-1 resolved, a third class "asked" (2026-09-29)
+
+The maintainer answered F-1 (`decisions.md`, item 5): "Routing by Omnigent is
+not a foreign service for now, but its use should be asked." The counts above
+(27 denied and 17 allowed, two policies) are the first cut; they are now 27
+denied, 16 allowed, 1 asked, and three policies.
+
+- `scripts/omnigent_policy.py`: `ASKED_TOOLS` holds `sys_advise_models` with
+  its reason; it is gone from `ALLOWED_TOOLS`. `layer1_ask_rules()` renders the
+  exact name into `permissions.ask` (foreign `ask` rules are kept, as for
+  `deny`). `check()` fails when `ask` drifts from the list, and when an asked
+  tool is also denied or is covered by a deny or allow rule.
+- Layer 2: a third policy, `coding_harness__omnigent_asked_tools`, returns
+  `{"result": "ASK", ...}` for both spellings of an asked tool, with the same
+  guards and the `name in [...]` form as the writing policy (never
+  `.exists(...)`). Install, `--installed` and `--remove` handle it because they
+  work on every `coding_harness__*` policy in the file.
+- Tests (`tests/test_omnigent_deny_layers.py`): the three tables are disjoint;
+  settings `ask` equals the asked list; `check()` goes red when the ask rule is
+  missing or the tool is moved to deny or allow; under Omnigent's Python the
+  policy returns ASK for both spellings and the allowed tools still abstain;
+  the odd-event test covers the third policy. Each fault was planted in a
+  scratch copy and turned the named test red.
+- Not run here: Omnigent itself, its tools and `install.sh` against the real
+  `~/.omnigent/config.yaml` (still uninstalled, decision 4).

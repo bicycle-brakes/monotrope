@@ -138,7 +138,8 @@ tools/bd dolt push          # push tracker data to origin (refs/dolt/data)
 - **Omnigent starts inside the worktree** (`omnigent claude
   --use-native-config`, ADR 0006). Omnigent's own tools that write, run,
   spawn or change state are denied by name in `.claude/settings.json`;
-  read-only ones stay usable. The one list is `scripts/omnigent_policy.py`; the
+  read-only ones stay usable, and the one that may send task text to a routing
+  judge (`sys_advise_models`) is asked about each time. The one list is `scripts/omnigent_policy.py`; the
   Omnigent default policy from the same list (`tools/omnigent/`) is a second
   layer the maintainer installs, and nothing depends on it alone. Details and
   reasons: `docs/WORKFLOW.md` §3, "Worktrees".

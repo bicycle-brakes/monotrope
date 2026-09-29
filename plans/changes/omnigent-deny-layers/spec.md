@@ -62,7 +62,9 @@ that stops a call in this repository.
 **Rule.** An Omnigent tool stays allowed only if it reads and changes nothing
 — no file, process, terminal, session, scheduled job, background call,
 policy, Omnigent record or outside service. Every other tool Omnigent offers a
-native harness is denied. The surface is Omnigent's
+native harness is denied. One class sits between the two: a tool that changes
+nothing but may send the caller's text to an outside judge is **asked** — the
+user is asked each time it is used (decisions, item 5; findings, F-1). The surface is Omnigent's
 `_NATIVE_RELAY_BUILTIN_TOOLS` plus its four `sys_os_*` tools (addendum 10).
 
 The list as of 2026-09-29, Omnigent 0.15.0 (handler lines: the read-only
@@ -85,16 +87,20 @@ this table is the record of the first cut.
 | `browser_navigate`, `browser_click`, `browser_type` | load a URL, act on and type into a live page (`:4303-4360`) |
 | `hindsight_retain`, `hindsight_recall`, `hindsight_reflect` | send session content to an outside memory service (`tools/builtins/hindsight.py:47`) |
 
-| Allowed (17) | Why |
+| Allowed (16) | Why |
 |---|---|
 | `sys_os_read` | reads a file inside the working directory (`os_env.py:1001-1020`, `:1120-1191`) |
 | `sys_terminal_read`, `sys_terminal_list` | read a terminal's screen, list terminals |
 | `sys_session_list`, `sys_session_get_info`, `sys_session_get_history` | read sessions |
 | `sys_agent_list`, `sys_agent_get` | read agents |
 | `sys_scheduled_task_list`, `sys_policy_registry` | list jobs, list policy types |
-| `sys_list_models`, `sys_advise_models` | read the model catalogue (the second rests on its docstring; its body was not read) |
+| `sys_list_models` | reads the model catalogue |
 | `list_comments`, `load_skill`, `read_skill_file` | read comments and skills |
 | `browser_snapshot`, `browser_screenshot` | capture the current page |
+
+| Asked (1) | Why |
+|---|---|
+| `sys_advise_models` | changes no file, session or record, but when a routing backend is configured it sends the caller's task text to that routing judge (Omnigent 0.15.0, `server/routes/_sessions/helpers.py`, `_handle_advise_models_mcp`; findings, F-1). The first cut allowed it on its docstring; the maintainer moved it to "asked" on 2026-09-29. |
 
 **Protected path** (layer 2, part b, and its mirror in layer 1): any file
 ending in `/.omnigent/config.yaml` — in practice `~/.omnigent/config.yaml`,
@@ -102,16 +108,16 @@ which carries layer 2 itself.
 
 ## Acceptance criteria
 
-1. **One list.** The denied tools, the allowed tools and the protected paths
-   are each named once, in `scripts/omnigent_policy.py`, every entry with a
+1. **One list.** The denied tools, the asked tools, the allowed tools and the
+   protected paths are each named once, in `scripts/omnigent_policy.py`, every entry with a
    one-line reason. `.claude/settings.json`'s Omnigent rules,
    `tools/omnigent/policy.yaml` and the tests derive from it or compare
    against it.
    *Refuted by:* a tool list typed into a test, the installer or a policy
    file by hand; a name in both lists; an entry without a reason.
 2. **Complete against the installed Omnigent.** Every tool of the native
-   surface of the Omnigent that is installed is in exactly one of the two
-   lists, and no listed tool is missing from that surface.
+   surface of the Omnigent that is installed is in exactly one of the three
+   lists (denied, asked, allowed), and no listed tool is missing from that surface.
    *Refuted by:* the surface test red after an Omnigent upgrade adds or drops
    a tool. It runs where Omnigent is installed and skips with a stated reason
    where it is not (CI). A misclassified tool is refuted by review against the
@@ -120,14 +126,17 @@ which carries layer 2 itself.
    `mcp__omnigent__<tool>` for every denied tool and
    `Edit(//**/.omnigent/config.yaml)`; it has no rule that denies an allowed
    tool or all of Omnigent at once (`mcp__omnigent`, `mcp__omnigent__*`,
-   `mcp__*`, `*`); its SessionStart hook is unchanged.
+   `mcp__*`, `*`); its `permissions.ask` names `mcp__omnigent__<tool>` for
+   every asked tool, and no deny or allow rule covers an asked tool; its
+   SessionStart hook is unchanged.
    *Refuted by:* the settings test red when one denied tool's rule is
-   removed, an allowed tool's rule or a blanket rule is added, or the hook
-   changes.
+   removed, an allowed tool's rule or a blanket rule is added, an ask rule is
+   missing or an asked tool is moved to deny or allow, or the hook changes.
 4. **Layer 2 is a file in this repository.** `tools/omnigent/policy.yaml`
-   has one top-level key, `policies:`, with two `type: function` policies,
-   `coding_harness__omnigent_writing_tools` and
-   `coding_harness__protected_paths`, both on
+   has one top-level key, `policies:`, with three `type: function` policies,
+   `coding_harness__omnigent_writing_tools`,
+   `coding_harness__omnigent_asked_tools` and
+   `coding_harness__protected_paths`, all on
    `omnigent.policies.builtins.cel.cel_policy`, and its text is exactly what
    `scripts/omnigent_policy.py` renders from the one list.
    *Refuted by:* the CI-safe policy test red after the list changes without a
@@ -136,7 +145,8 @@ which carries layer 2 itself.
    with Omnigent's `parse_default_policies` and evaluated through
    `cel_policy`: a `tool_call` of every denied tool — bare or as
    `mcp__omnigent__<tool>`, with or without `arguments` — is DENY with a
-   reason that names the tool; every allowed tool abstains; Claude Code's
+   reason that names the tool; every asked tool, in both spellings, is ASK
+   with a reason that names it; every allowed tool abstains; Claude Code's
    `Write`, `Edit` or `MultiEdit` with a `file_path` ending in
    `/.omnigent/config.yaml` is DENY, and on any other path abstains; no event
    shape — no `data`, `data` as text or null, `name` missing or not text,

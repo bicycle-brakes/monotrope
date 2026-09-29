@@ -42,5 +42,14 @@ What the maintainer decided on 2026-09-29:
    then this repository is held by layer 1 alone, and part (b) of criterion 8
    moves to a follow-up bead.
 
+5. Answer to review finding F-1 (`sys_advise_models` may send the caller's
+   task text to a configured routing judge), 2026-09-29: "Routing by Omnigent
+   is not a foreign service for now, but its use should be asked." So the tool
+   is neither denied nor silently allowed: it moves out of the allowed list
+   into a third class, **asked** — the user is asked each time it is used.
+   Layer 1 renders it as an exact name in `permissions.ask`; layer 2 renders a
+   third policy, `coding_harness__omnigent_asked_tools`, that answers ASK.
+   The tables are now 27 denied, 16 allowed, 1 asked.
+
 Standing constraint: ADR 0006 — nothing may depend on an Omnigent policy
 alone. Layer 1 must hold on its own.

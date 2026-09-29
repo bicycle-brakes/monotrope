@@ -366,9 +366,12 @@ The same rule holds in `lakeswitch-ai`, with the differences its
    Code's path rules, the hooks on its file tools nor Omnigent's own Claude Code
    hook see what they do. Each one that writes, runs, spawns or changes state is
    therefore denied by name in `.claude/settings.json`; the read-only ones stay
-   usable. The one list, with a reason per tool, is `scripts/omnigent_policy.py`.
+   usable, except one that may send the task text to a routing judge
+   (`sys_advise_models`), which the user is asked about each time
+   (`permissions.ask`; decision of 2026-09-29). The one list, with a reason per
+   tool, is `scripts/omnigent_policy.py`.
    An Omnigent default policy rendered from the same list (`tools/omnigent/`)
-   refuses them server-side for every Omnigent session on the machine. The
+   refuses the denied ones and asks about the asked one server-side for every Omnigent session on the machine. The
    maintainer installs it, and nothing here depends on it alone (ADR 0006); as of
    2026-09-29 it is built but not installed. Omnigent's bridge runs its own
    `sys_os_*` tools without any policy while its relay does not advertise them,
