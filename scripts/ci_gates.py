@@ -164,6 +164,8 @@ def validate_schema(doc: dict[str, Any] | None = None) -> list[str]:
             fehler.append(f"{gid}: Action ohne lokale Entsprechung misst nur gehostet — placement muss hosted sein")
         if "needs_tracker" in g and not isinstance(g.get("needs_tracker"), bool):
             fehler.append(f"{gid}: needs_tracker muss ein Boolean sein")
+        if "needs_history" in g and not isinstance(g.get("needs_history"), bool):
+            fehler.append(f"{gid}: needs_history muss ein Boolean sein")
         if g.get("needs_tracker") and bool(g.get("action")):
             # Seit bead 1jg.3 liest auch der drift-Job den Tracker (plans-registry-strict):
             # ohne committete Kopie braucht jeder Job mit einem Tracker-Leser die Hydratation.
@@ -210,6 +212,7 @@ def gates() -> list[dict[str, Any]]:
                 "floor": g["floor"],
                 "placement": g["placement"],
                 "needs_tracker": bool(g.get("needs_tracker")),
+                "needs_history": bool(g.get("needs_history")),
                 "reason": g.get("reason", ""),
                 "local_runnable": kommando is not None or ersatz is not None,
                 "via_local_equivalent": ersatz is not None,
@@ -315,6 +318,19 @@ def _tracker_hydratation() -> list[str]:
     ]
 
 
+def _checkout(job_gates: list[dict[str, Any]]) -> list[str]:
+    """Der Checkout eines Jobs — mit voller Historie nur, wenn ein Gate sie braucht.
+
+    Der gehostete Checkout holt einen Commit. Ein Gate, das den letzten
+    Aenderungstag einer Datei fragt (`frontmatter-current`), bekaeme fuer jede
+    Datei den ausgecheckten Commit zurueck. Es deklariert deshalb `needs_history`,
+    und der Job dieses Gates holt alles; kein anderer Job (bead coding-harness-qd7).
+    """
+    if any(g["needs_history"] for g in job_gates):
+        return ["      - uses: actions/checkout@v4", "        with:", "          fetch-depth: 0"]
+    return ["      - uses: actions/checkout@v4"]
+
+
 def generate_ci() -> str:
     """Die abgeleitete ci.yml — deterministisch, aus der einen Liste."""
     alle = gates()
@@ -348,7 +364,7 @@ def generate_ci() -> str:
         "    if: github.event_name == 'push' || github.event_name == 'pull_request'",
         "    runs-on: ubuntu-latest",
         "    steps:",
-        "      - uses: actions/checkout@v4",
+        *_checkout(pruefe),
         "      - name: Install the pinned toolchain",
         "        id: setup-deps",
         "        run: python3 -m pip install pytest==8.3.4 PyYAML ruff==0.9.10",
@@ -367,7 +383,7 @@ def generate_ci() -> str:
             "    if: github.event_name == 'schedule' || github.event_name == 'workflow_dispatch'",
             "    runs-on: ubuntu-latest",
             "    steps:",
-            "      - uses: actions/checkout@v4",
+            *_checkout(drift),
             "      - name: Install the pinned toolchain",
             "        id: setup-deps",
             "        run: python3 -m pip install pytest==8.3.4 PyYAML ruff==0.9.10",

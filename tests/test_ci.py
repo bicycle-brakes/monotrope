@@ -321,6 +321,46 @@ def test_a_gate_that_needs_the_tracker_gets_a_hydration_step() -> None:
     assert drift_teil.index("id: setup-tracker") < drift_teil.index("id: plans-registry-strict")
 
 
+def test_a_gate_that_needs_history_gets_a_full_checkout_only_in_its_job(monkeypatch: pytest.MonkeyPatch) -> None:
+    """qd7: a hosted checkout holds one commit, so a gate that asks when a file last changed needs all of them.
+
+    `frontmatter-current` declares `needs_history`: the derived `verify` job checks out with
+    `fetch-depth: 0`, and the `drift` job, which has no such gate, does not. Without the flag
+    no job may carry it, or the full clone would be a default and not a declaration.
+    """
+    import ci_gates
+
+    ci = ci_gates.generate_ci()
+    verify_teil, drift_teil = ci.split("\n  drift:", 1)
+    assert "fetch-depth: 0" in verify_teil, "the verify job runs frontmatter-current on one commit of history"
+    assert "fetch-depth: 0" not in drift_teil, "a job without such a gate must not pay for the full history"
+    assert "        with:\n          fetch-depth: 0" in verify_teil.split("id: setup-deps")[0], (
+        "the flag belongs to the checkout step"
+    )
+
+    alle = ci_gates.gates()
+    monkeypatch.setattr(ci_gates, "gates", lambda: [{**g, "needs_history": False} for g in alle])
+    assert "fetch-depth" not in ci_gates.generate_ci(), "with no gate asking, no job gets the full history"
+
+    monkeypatch.setattr(ci_gates, "gates", lambda: [{**g, "needs_history": g["job"] == "drift"} for g in alle])
+    verify_teil, drift_teil = ci_gates.generate_ci().split("\n  drift:", 1)
+    assert "fetch-depth: 0" in drift_teil and "fetch-depth" not in verify_teil, "the flag follows its gate's job"
+
+
+def test_the_schema_rejects_a_non_boolean_needs_history() -> None:
+    """qd7: `needs_history: "yes"` is a schema error, and a boolean is not."""
+    import ci_gates
+
+    doc = yaml.safe_load(ci_gates.GATE_FILE.read_text(encoding="utf-8"))
+    assert ci_gates.validate_schema(doc) == []
+    ziel = next(g for g in doc["gates"] if g["id"] == "frontmatter-current")
+    assert ziel["needs_history"] is True
+
+    ziel["needs_history"] = "yes"
+    fehler = ci_gates.validate_schema(doc)
+    assert any("frontmatter-current" in f and "needs_history" in f for f in fehler), fehler
+
+
 def test_every_gate_step_runs_even_after_a_failing_gate() -> None:
     """bl2: ein roter Gate schaltet die spaeteren Gates nicht stumm.
 
