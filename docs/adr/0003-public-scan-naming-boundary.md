@@ -1,3 +1,16 @@
+---
+title: "ADR 0003 — The public scan names tools, never customers, employers or secrets"
+category: adr
+status: accepted
+created: 2026-09-19
+last_reviewed: 2026-09-22
+owner: framework-architect
+provenance: human-decided
+produced_by: {kind: llm-session, name: claude-code, version: "2026-09-19"}
+review: {status: pending, approved_by: null, approved_at: null}
+tags: [adr]
+---
+
 # ADR 0003 — The public scan names tools, never customers, employers or secrets
 
 * Status: accepted · amends D-17 (public readiness) at its naming boundary

@@ -1,3 +1,16 @@
+---
+title: "ADR 0006 — Parallel work without a pilot, one worktree per session"
+category: adr
+status: accepted
+created: 2026-09-27
+last_reviewed: 2026-09-27
+owner: framework-architect
+provenance: human-decided
+produced_by: {kind: llm-session, name: claude-code, version: "2026-09-27"}
+review: {status: pending, approved_by: null, approved_at: null}
+tags: [adr]
+---
+
 # ADR 0006 — Parallel work without a pilot, one worktree per session
 
 * Status: accepted · supersedes ADR 0001 (early parallelism from M0) ·
