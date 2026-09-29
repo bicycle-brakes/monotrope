@@ -79,6 +79,12 @@ OHNE_AUFRUFER: dict[str, str] = {
         "eigenes Gate haette keinen Gegenstand, denn die CI faehrt ohnehin "
         "von einem sauberen Checkout aus"
     ),
+    "omnigent_policy.py": (
+        "Library and maintainer tool - the one list of denied Omnigent tools and everything rendered "
+        "from it. tests/test_omnigent_deny_layers.py runs it (the render, the merge, and under "
+        "Omnigent's own Python the offline policy tests); tools/omnigent/install.sh calls it on the "
+        "maintainer's machine, which no CI step can do"
+    ),
     "verify_all.sh": (
         "Der lokale Lauf fuer Menschen — make verify ruft ihn. Die CI faehrt "
         "jedes Gate als eigenen Schritt; der Runner haelt selbst keine "
