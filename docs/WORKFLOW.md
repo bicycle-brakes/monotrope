@@ -35,12 +35,16 @@ tags: [workflow, model-routing, agentic-coding, phases, artefacts]
 > `.claude/agents/explorer.md` and `reviewer.md`, the stop hook
 > `.claude/hooks/session-stop/check-tests-green.sh`, `.claude/commands/`, the
 > targets `make change` and `make index` (the entry is `python3 scripts/new_change.py <name>
-> --bead <id>`), the brakes on the irreversible that §3 names for
-> `.claude/settings.json` (it holds only the Omnigent rules),
-> `tests/test_repo_settings.py`, `templates/findings.md`,
+> --bead <id>`), `tests/test_repo_settings.py`, `templates/findings.md`,
 > `templates/plan-marking.md`, `scripts/run_change.sh`, the `scripts/cc-*.sh`
 > profiles and `tests/test_model_profiles.py`. Where the text below says one of
 > them does something, it describes the target, not this tree.
+>
+> One thing is missing on purpose and is not on that list: the brakes on the
+> irreversible (force push, `rm -rf`, deploys) in `.claude/settings.json`, which
+> holds only the Omnigent rules. This repository deploys nothing, and a `Bash`
+> pattern for a force push is passed by the next spelling, so they were left out
+> by decision, not deferred; §3, item 3, gives the reason.
 
 ## 1 · Why
 
