@@ -318,3 +318,57 @@ VERIFY GREEN — every local gate of the 'verify' job passed.
 
 Hosted CI on the pull request has not run: criterion 7's last sentence (the
 gate green on the pull request that introduces it) is open until it does.
+
+### Repair round 1
+
+2026-09-29, after the phase-6 review (`findings.md`). Findings F-1 and F-3 to
+F-8 fixed; F-2 (hosted CI) is closed by the pull request.
+
+- **F-1, corrects the earlier `[DETAIL]`.** The six ADR headers restated the
+  ADR badly: `status: accepted` and `review: pending` contradicted the body's
+  Status and Review lines. The corrected `[DETAIL]` is in `spec.md` ("ADR header
+  values restate the ADR", the paragraph "Corrected in repair round 1"). The
+  header template above is the earlier text and is unchanged; the headers on
+  disk follow the corrected detail. One spelling for supersession: `status:
+  superseded` with `superseded_by: "0006"` for the whole (0001);
+  `status: accepted` with `superseded_in_part_by: ["0005", "0006"]` (0002) or
+  `["0006"]` (0005) for a part. `check_docs.py` requires keys only, never
+  values, and nothing else reads `review:` or these two fields under
+  `docs/adr/`, so no check changed. ADR 0001–0003 also carry `approved`: their
+  Review lines read "accepted by the maintainer, 2026-09-22", so `approved_at`
+  is that date. No ADR body line changed (`git diff` shows header lines only).
+- **F-3.** A map whose `required` prefixes match no file is exit 3 ("measures
+  nothing"), in check and stamp mode.
+- **F-4.** `_BLOCK` accepts a leading BOM and CRLF; the stamp keeps the
+  file's line ending and BOM. The stamp raises `CannotStamp` for invalid UTF-8,
+  and `run` names the file, leaves it unchanged and exits 1. `check_docs.py`
+  keeps its own CRLF/BOM blind spot (not touched; its non-goal here).
+- **F-5.** A failing `git rev-parse --is-shallow-repository` is exit 3.
+- **F-6.** `test_a_root_below_the_top_of_the_repository_sees_its_own_edits`;
+  with `--relative` removed it fails.
+- **F-7.** The `provenance.yaml` header comment lists both readers:
+  `scripts/check_frontmatter_current.py` (`paths:`, `excluded:`) and
+  `scripts/ramp_valves.py` (`roles:`).
+- **F-8.** A trailing YAML comment after whitespace is part of no value:
+  `updated: 2026-09-10  # note` is the date (criterion 2). The stamp replaces
+  the whole line, so it drops that comment when it rewrites a stale value.
+  `2026-09-10# glued` is a string in YAML and stays `unreadable`.
+- Six new tests in `tests/test_frontmatter_current.py`, each red on the
+  faulty script: five run against the previous script, the F-6 test with
+  `--relative` removed from the current one.
+
+Evidence, 2026-09-29, in the worktree after the repair commits (`findings.md`,
+this file and `plans/INDEX.md` uncommitted, so held against today). The stamp
+changed no file (every `updated:` was already 2026-09-29); the index gained the
+`findings.md` row. `python3 -m pytest -q tests`: 352 passed, 15 skipped. `make
+verify`, the relevant lines and the last line:
+
+```text
+── [frontmatter-current] $ lauf_cmd
+frontmatter-current: 50 held documents, every `updated:` is current.
+── [frontmatter-current] gruen
+── [ci-drift] gruen
+── [markdownlint] rot, aber nur report — er meldet, er blockiert nicht.
+
+VERIFY GREEN — every local gate of the 'verify' job passed.
+```
