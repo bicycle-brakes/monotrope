@@ -93,6 +93,7 @@ REIST_NICHT: dict[str, str] = {
     "tests.test_ci::test_every_gate_step_has_a_mutation_test": "braucht-die-vollstaendige-suite",
     "tests.test_ci::test_every_script_has_a_test_or_a_declared_reason": "braucht-die-vollstaendige-suite",
     "tests.test_ci::test_no_declared_reason_cites_a_closed_or_unknown_bead": "bestand-dieses-repos",
+    "tests.test_ci::test_no_declared_reason_stands_for_a_script_that_has_a_caller": "bestand-dieses-repos",
     "tests.test_ci::test_der_echte_lesepfad_des_bead_gates_wird_erkannt": "bestand-dieses-repos",
     "tests.test_ci::test_the_makefile_runs_what_the_one_list_runs": "bestand-dieses-repos",
     "tests.test_feedback_channel::test_journal_index_lists_every_open_project_handover": "bestand-dieses-repos",
@@ -148,7 +149,13 @@ REIST_NICHT: dict[str, str] = {
 # die beiden Aufrufer- und Test-Sperrklinken-Tests direkt darueber, den der Kit
 # nicht mitreist (kein Eintrag in `manifest.yaml`, faellt unter die
 # `scripts/`-Auffangregel `bestand`). Gleiche Klasse, gleicher Grund.
-DECKEL = 31  # 2026-09-20 angehoben (Cluster D, 2ee-Welle 3): die 7 neuen Faelle sind die Agent-Modelle gegen den geruest-Rumpf model-endpoints.yaml im Leerprobekopf — im Ziel loest die Instanz sie gegen ihre eigene Deklaration
+# 31 -> 32 on 2026-09-29: `tests.test_ci::test_no_declared_reason_stands_for_a_script_that_has_a_caller`
+# came along. `ci_gates.OHNE_AUFRUFER` now names `omnigent_policy.py`, a script with no CI caller
+# by nature (the installer runs on the maintainer's machine). The script is `bestand` (the
+# `scripts/` catch-all), the list travels with `ci_gates.py`, so in the throwaway repo the entry
+# points at a file that is not there. Same class, same reason as the other `bestand-dieses-repos`
+# cases: the claim is about this repository's script inventory.
+DECKEL = 32  # 2026-09-20 angehoben (Cluster D, 2ee-Welle 3): die 7 neuen Faelle sind die Agent-Modelle gegen den geruest-Rumpf model-endpoints.yaml im Leerprobekopf — im Ziel loest die Instanz sie gegen ihre eigene Deklaration
 
 
 # ---------------------------------------------------------------------------
