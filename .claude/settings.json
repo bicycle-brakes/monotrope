@@ -11,5 +11,40 @@
         "matcher": ""
       }
     ]
+  },
+  "permissions": {
+    "ask": [
+      "mcp__omnigent__sys_advise_models"
+    ],
+    "deny": [
+      "mcp__omnigent__sys_os_write",
+      "mcp__omnigent__sys_os_edit",
+      "mcp__omnigent__sys_os_shell",
+      "mcp__omnigent__sys_agent_download",
+      "mcp__omnigent__sys_terminal_launch",
+      "mcp__omnigent__sys_terminal_send",
+      "mcp__omnigent__sys_terminal_close",
+      "mcp__omnigent__sys_session_create",
+      "mcp__omnigent__sys_session_send",
+      "mcp__omnigent__sys_session_close",
+      "mcp__omnigent__sys_session_rename",
+      "mcp__omnigent__sys_session_share",
+      "mcp__omnigent__sys_scheduled_task_create",
+      "mcp__omnigent__sys_scheduled_task_update",
+      "mcp__omnigent__sys_scheduled_task_delete",
+      "mcp__omnigent__sys_call_async",
+      "mcp__omnigent__sys_cancel_async",
+      "mcp__omnigent__sys_cancel_task",
+      "mcp__omnigent__sys_read_inbox",
+      "mcp__omnigent__sys_add_policy",
+      "mcp__omnigent__update_comment",
+      "mcp__omnigent__browser_navigate",
+      "mcp__omnigent__browser_click",
+      "mcp__omnigent__browser_type",
+      "mcp__omnigent__hindsight_retain",
+      "mcp__omnigent__hindsight_recall",
+      "mcp__omnigent__hindsight_reflect",
+      "Edit(//**/.omnigent/config.yaml)"
+    ]
   }
 }
