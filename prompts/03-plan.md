@@ -1,6 +1,6 @@
 # Phase 3 · Plan
 
-**Model:** Fable 5.1 — a mistake here is the most expensive one.
+**Model:** Opus 5.5 — at effort `xhigh` (`claude --model claude-opus-5-5 --effort xhigh`); a mistake here is the most expensive one.
 **Result:** `plans/changes/<name>/plan.md`
 **Gate:** `python3 scripts/validate_change_artefacts.py --check` green.
 

@@ -52,6 +52,7 @@ endpunkte:
       - claude-sonnet-5
       - claude-haiku-4-5
       - claude-fable-5-1
+      - claude-opus-5-5
     bemerkung: >-
       Erstanbieter. `inference_geo` ist ein Parameter der Messages API und kann
       die Region festlegen, wo der Anbieter es unterstuetzt.
@@ -66,6 +67,7 @@ endpunkte:
       - claude-sonnet-5
       - claude-haiku-4-5
       - claude-fable-5-1
+      - claude-opus-5-5
     bemerkung: >-
       Der Harness, in dem hier gearbeitet wird. **Nur ueber offiziell
       unterstuetzte Werkzeuge.** Das Kontingent durch eine eigene Integration
