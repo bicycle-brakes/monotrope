@@ -26,6 +26,20 @@ tags: [workflow, model-routing, agentic-coding, phases, artefacts]
 > **Standing:** stage 1 is binding. Stages 2 and 3 are prepared, not active.
 > **Language:** this file was German until 2026-09-29 and is English since, like
 > every other artefact of this repository (`AGENTS.md`, house rule 1).
+>
+> **Not all of it is here yet.** This file came over from
+> `portfolio-agentic-engineering`, and the mechanism follows it in steps
+> (`AGENTS.md`, "Status: bootstrapping"). Checked on 2026-09-29 against the
+> tree at `9f14283`, these pieces it names are **not** in this repository:
+> `scripts/validate_change_artefacts.py`, the sub-agents
+> `.claude/agents/explorer.md` and `reviewer.md`, the stop hook
+> `.claude/hooks/session-stop/check-tests-green.sh`, `.claude/commands/`, the
+> targets `make change` and `make index` (the entry is `python3 scripts/new_change.py <name>
+> --bead <id>`), any `permissions.deny` in `.claude/settings.json`,
+> `tests/test_repo_settings.py`, `templates/findings.md`,
+> `templates/plan-marking.md`, `scripts/run_change.sh`, the `scripts/cc-*.sh`
+> profiles and `tests/test_model_profiles.py`. Where the text below says one of
+> them does something, it describes the target, not this tree.
 
 ## 1 · Why
 
@@ -237,20 +251,22 @@ done and never archived, one-sided supersession.
 | Hygiene | `scripts/plans_registry.py` | `--check` reports, `--index` writes `plans/INDEX.md` |
 | Sub-agents | `.claude/agents/explorer.md`, `reviewer.md` | read-only, model pinned |
 | Stop hook | `.claude/hooks/session-stop/check-tests-green.sh` | blocks the end of a turn on a red tree |
-| Enforcement | `.github/workflows/ci.yml` | **the one gate list** |
+| Enforcement | `decisions/gates.yaml` | **the one gate list** (D-10); `.github/workflows/ci.yml` is generated from it |
 
 ### Verification runs through git and CI, not through the harness
 
 ```bash
 make verify     # every locally runnable gate — the same the CI runs
-make gates      # what the CI runs, read from ci.yml
+make gates      # what the CI runs, read from decisions/gates.yaml
 make staleness  # hygiene of the plans/ artefacts
 make index      # regenerate plans/INDEX.md
 ```
 
 `make` holds **no list of its own**. It calls `scripts/verify_all.sh`, which asks
-`scripts/ci_gates.py`, which reads `.github/workflows/ci.yml`. A second list is
-the reason local runs and CI drift apart — not its symptom.
+`scripts/ci_gates.py`, which reads `decisions/gates.yaml` — the same file
+`ci.yml` is generated from, and a hand edit of `ci.yml` fails the `ci-drift`
+gate. A second list is the reason local runs and CI drift apart — not its
+symptom.
 
 The stop hook is the comfort layer, not the enforcement. It runs only when
 Python was touched since `HEAD`: a hook that costs a minute when nothing has
@@ -494,9 +510,9 @@ that the departure stays a decision and is not read as an oversight.
 
 | Template | Here | Why |
 |---|---|---|
-| `Makefile` with `lint`, `typecheck`, `test` | `make verify` calls only `verify_all.sh` | `ci.yml` is the one gate list (`AGENTS.md`). A check sequence spelled out in the Makefile **would be** the second list. |
+| `Makefile` with `lint`, `typecheck`, `test` | `make verify` calls only `verify_all.sh` | `decisions/gates.yaml` is the one gate list (D-10). A check sequence spelled out in the Makefile **would be** the second list. |
 | `ln -s AGENTS.md CLAUDE.md` | no `CLAUDE.md` | Since Claude Code 2.1.277, `AGENTS.md` is read directly as soon as no `CLAUDE.md` lies in the tree (maintainer decision, 2026-09-22). Conversation language and slash commands live in the user configuration, not in the repository. A known limit: the direct reading is a feature flag and fails with telemetry switched off, Bedrock/Vertex or an own `ANTHROPIC_BASE_URL` — then Claude Code reads nothing; for the Omnigent target (telemetry off) that has to be checked before M1. |
-| `.pre-commit-config.yaml` | not created | It would be a second lint list beside `ci.yml`, with the same risk of drift. Enforcement lies with `ci.yml` and `.claude/hooks/`. |
+| `.pre-commit-config.yaml` | not created | It would be a second lint list beside `decisions/gates.yaml`, with the same risk of drift. Enforcement lies with the gate list and the CI generated from it. |
 | `.mcp.json` | not created | This repository uses no MCP server today. An empty configuration would be a claim without content. |
 | `uv`, `mypy` | `python3`, `ruff`, `pytest` | That is the toolchain pinned in `requirements-ci.txt` and run by the CI. |
 | task tracking in the artefact | Beads (`bd`) | `AGENTS.md`: Beads only. The artefacts say **what** is built, the tracker says **where it stands**. |
