@@ -49,9 +49,12 @@ FUTURE = "future"
 # write into, or two lines and no way to tell which one is meant.
 STAMPABLE = (MISSING, UNREADABLE, STALE, FUTURE)
 
-_BLOCK = re.compile(r"^---\n(.*?)\n---\n", re.S)
+# A header may start with a UTF-8 byte-order mark and use CRLF line endings. With CRLF each
+# line of the captured block keeps its trailing `\r`; the stamp relies on that.
+_BLOCK = re.compile(r"^﻿?---\r?\n(.*?)\n---\r?\n", re.S)
 _UPDATED_LINE = re.compile(r"^updated:")
-_VALUE = re.compile(r"""^["']?(\d{4}-\d{2}-\d{2})["']?\s*$""")
+# YAML reads `2026-09-10  # stamped` as the date, so a comment after whitespace is not part of the value.
+_VALUE = re.compile(r"""^["']?(\d{4}-\d{2}-\d{2})["']?\s*(?:\s#.*)?$""")
 
 
 class CannotMeasure(Exception):  # noqa: N818 — a verdict, not an error class
@@ -85,6 +88,12 @@ def preflight(root: Path) -> None:
     if _git(root, "rev-parse", "--verify", "HEAD").returncode != 0:
         raise CannotMeasure(f"{root} has no commit yet — there is no last change to compare with")
     shallow = _git(root, "rev-parse", "--is-shallow-repository")
+    if shallow.returncode != 0:
+        # A git without the flag (before 2.15) cannot say. That is not "full history".
+        raise CannotMeasure(
+            f"cannot tell whether {root} is a shallow clone "
+            f"(git rev-parse --is-shallow-repository failed: {shallow.stderr.strip() or shallow.returncode})"
+        )
     if shallow.stdout.strip() == "true":
         raise CannotMeasure(
             "this is a shallow clone: git log would return the checked-out commit for every file. "
@@ -143,7 +152,7 @@ def read_updated(text: str) -> str | date:
     m = _BLOCK.match(text)
     if not m:
         return NO_FRONTMATTER
-    zeilen = [z for z in m.group(1).split("\n") if _UPDATED_LINE.match(z)]
+    zeilen = [z for z in m.group(1).split("\n") if _UPDATED_LINE.match(z)]  # CRLF: each keeps its `\r`
     if not zeilen:
         return MISSING
     if len(zeilen) > 1:
@@ -183,6 +192,12 @@ def reference_dates(root: Path, files: list[str], today: date) -> dict[str, tupl
 def findings(root: Path, today: date, utc_today: date) -> list[tuple[str, str, str]]:
     """(path, kind, detail) for every held file that is reported. Empty = green."""
     files = held_files(root)
+    if not files:
+        # A gate over an empty set cannot bite, and green here would say it did.
+        raise CannotMeasure(
+            "provenance.yaml holds no document: no `frontmatter: required` prefix matches a Markdown file, "
+            "so the check measures nothing"
+        )
     refs = reference_dates(root, files, today)
     grenze = utc_today + timedelta(days=1)
     befunde: list[tuple[str, str, str]] = []
@@ -204,9 +219,20 @@ def findings(root: Path, today: date, utc_today: date) -> list[tuple[str, str, s
 # ---------------------------------------------------------------------------
 
 
+class CannotStamp(Exception):  # noqa: N818 — a verdict, not an error class
+    """The file cannot be edited without guessing. Named by the caller, left unchanged."""
+
+
 def stamp(path: Path, today: date) -> bool:
-    """Set `updated:` to today by editing one line. True when the file changed."""
-    text = path.read_bytes().decode("utf-8")
+    """Set `updated:` to today by editing one line. True when the file changed.
+
+    Raises CannotStamp for a file that is not valid UTF-8: reading it with replacement
+    characters and writing it back would change bytes outside the line.
+    """
+    try:
+        text = path.read_bytes().decode("utf-8")
+    except UnicodeDecodeError as exc:
+        raise CannotStamp(f"not valid UTF-8 ({exc.reason} at byte {exc.start})") from exc
     m = _BLOCK.match(text)
     if not m:
         return False
@@ -216,10 +242,12 @@ def stamp(path: Path, today: date) -> bool:
     if len(vorhanden) > 1:
         return False
     if vorhanden:
-        zeilen[vorhanden[0]] = neu
+        # A CRLF line keeps its `\r`; the value and anything after it are replaced.
+        zeilen[vorhanden[0]] = neu + ("\r" if zeilen[vorhanden[0]].endswith("\r") else "")
     else:
         nach = [i for i, z in enumerate(zeilen) if z.startswith("last_reviewed:")]
-        zeilen.insert(nach[0] + 1 if nach else len(zeilen), neu)
+        stelle = nach[0] if nach else len(zeilen) - 1
+        zeilen.insert(stelle + 1, neu + ("\r" if zeilen[stelle].endswith("\r") else ""))
     ergebnis = text[: m.start(1)] + "\n".join(zeilen) + text[m.end(1) :]
     if ergebnis == text:
         return False
@@ -243,15 +271,21 @@ def run(root: Path, do_stamp: bool, today: date, utc_today: date) -> int:
 
     if do_stamp:
         rest: list[tuple[str, str, str]] = []
+        refused = 0
         for f, art, detail in befunde:
             if art in STAMPABLE:
-                stamp(root / f, today)
+                try:
+                    stamp(root / f, today)
+                except CannotStamp as exc:
+                    print(f"{f}: {art} — not stamped, {exc}; the file is left unchanged")
+                    refused += 1
+                    continue
                 print(f"stamped {f} ({art}) -> updated: {today}")
             else:
                 rest.append((f, art, detail))
         for f, art, _ in rest:
             print(f"{f}: {art} — a stamp cannot repair this; edit the header by hand")
-        return 1 if rest else 0
+        return 1 if rest or refused else 0
 
     if not befunde:
         print(f"frontmatter-current: {gezaehlt} held documents, every `updated:` is current.")

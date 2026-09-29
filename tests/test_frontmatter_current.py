@@ -293,6 +293,42 @@ def test_nothing_is_measured_where_the_question_cannot_be_asked(
     assert capsys.readouterr().err.count("NOT MEASURED") == 3
 
 
+def test_a_shallow_answer_that_fails_is_not_full_history(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+) -> None:
+    """Criterion 4: a git that cannot say whether the clone is shallow (before 2.15) is exit 3, not a pass."""
+    repo = _repo(tmp_path)
+    _write(repo, "docs/a.md", _doc("2026-09-10"))
+    _commit(repo, "2026-09-10T12:00:00+00:00")
+    assert cfc.run(repo, False, TODAY, UTC_TODAY) == 0
+    capsys.readouterr()
+
+    echt = cfc._git
+
+    def ohne_flag(root: Path, *args: str) -> subprocess.CompletedProcess[str]:
+        if "--is-shallow-repository" in args:
+            return subprocess.CompletedProcess(list(args), 129, "--is-shallow-repository\n", "usage: git rev-parse")
+        return echt(root, *args)
+
+    monkeypatch.setattr(cfc, "_git", ohne_flag)
+    assert cfc.run(repo, False, TODAY, UTC_TODAY) == 3
+    err = capsys.readouterr().err
+    assert "NOT MEASURED" in err and "shallow" in err
+
+
+def test_a_map_that_holds_no_file_is_not_a_pass(tmp_path: Path, capsys: pytest.CaptureFixture[str]) -> None:
+    """Criterion 4: a map whose `required` prefixes match no file measured nothing (exit 3), in both modes."""
+    repo = _repo(tmp_path, 'schema_version: 1\npaths:\n  - prefix: "nothing/"\n    frontmatter: required\n')
+    _write(repo, "docs/stale.md", _doc("2026-09-01"))
+    _commit(repo, "2026-09-10T12:00:00+00:00")
+
+    assert cfc.run(repo, False, TODAY, UTC_TODAY) == 3
+    assert cfc.run(repo, True, TODAY, UTC_TODAY) == 3
+    err = capsys.readouterr().err
+    assert err.count("NOT MEASURED") == 2 and "measures nothing" in err
+    assert b"updated: 2026-09-01" in (repo / "docs/stale.md").read_bytes(), "a run that measured nothing wrote"
+
+
 def test_the_failure_names_the_stamp_command(tmp_path: Path) -> None:
     """Criterion 4: exit 1 and the fix line, verbatim, when a header is stale (the real command line)."""
     repo = _repo(tmp_path)
@@ -375,6 +411,69 @@ def test_the_stamp_is_idempotent_and_never_writes_a_header(tmp_path: Path) -> No
     assert cfc.stamp(repo / "docs/headless.md", TODAY) is False
     assert cfc.stamp(repo / "docs/twice.md", TODAY) is False
     assert alle()["headless.md"] == b"# no header at all\n"
+
+
+def test_a_header_with_crlf_or_a_byte_order_mark_is_read_and_stamped_in_kind(tmp_path: Path) -> None:
+    """Criteria 2 and 5: CRLF and a BOM do not make a header "no frontmatter"; the stamp keeps both."""
+    repo = _repo(tmp_path)
+    crlf = _doc("2026-09-10").replace("\n", "\r\n")
+    bom = "﻿" + _doc("2026-09-10")
+    beides_alt = "﻿" + _doc("2026-09-01").replace("\n", "\r\n")
+    ohne_zeile = "﻿" + _doc(None).replace("\n", "\r\n")
+    _write(repo, "docs/crlf.md", crlf)
+    _write(repo, "docs/bom.md", bom)
+    _write(repo, "docs/both-stale.md", beides_alt)
+    _write(repo, "docs/both-missing.md", ohne_zeile)
+    _commit(repo, "2026-09-10T12:00:00+00:00")
+
+    assert {f: k for f, (k, _) in _found(repo).items()} == {
+        "docs/both-stale.md": cfc.STALE,
+        "docs/both-missing.md": cfc.MISSING,
+    }, "a header that is there was called absent, or a current one reported"
+
+    assert cfc.run(repo, True, TODAY, UTC_TODAY) == 0
+    assert (repo / "docs/both-stale.md").read_bytes() == beides_alt.replace(
+        "updated: 2026-09-01", "updated: 2026-09-20"
+    ).encode()
+    assert (repo / "docs/both-missing.md").read_bytes() == ohne_zeile.replace(
+        "last_reviewed: 2026-09-01\r\n", "last_reviewed: 2026-09-01\r\nupdated: 2026-09-20\r\n"
+    ).encode(), "the inserted line has the file's own line ending, and the BOM stays"
+    assert (repo / "docs/crlf.md").read_bytes() == crlf.encode(), "a current file was rewritten"
+    assert cfc.run(repo, False, TODAY, UTC_TODAY) == 0
+
+
+def test_the_stamp_never_crashes_on_a_file_that_is_not_utf8(tmp_path: Path, capsys: pytest.CaptureFixture[str]) -> None:
+    """Criterion 5: invalid UTF-8 is named and left unchanged, and the stamp exits 1; the check reports, it does not crash."""
+    repo = _repo(tmp_path)
+    kaputt = _doc("2026-09-01").encode() + b"caf\xe9 in latin-1\n"
+    (repo / "docs").mkdir()
+    (repo / "docs/latin1.md").write_bytes(kaputt)
+    _write(repo, "docs/fine.md", _doc("2026-09-01"))
+    _commit(repo, "2026-09-10T12:00:00+00:00")
+
+    assert _found(repo)["docs/latin1.md"][0] == cfc.STALE
+    assert cfc.run(repo, True, TODAY, UTC_TODAY) == 1
+    out = capsys.readouterr().out
+    assert "docs/latin1.md" in out and "not valid UTF-8" in out and "left unchanged" in out
+    assert (repo / "docs/latin1.md").read_bytes() == kaputt, "the stamp changed a file it could not read"
+    assert b"updated: 2026-09-20" in (repo / "docs/fine.md").read_bytes(), "one bad file stopped the others"
+    with pytest.raises(cfc.CannotStamp):
+        cfc.stamp(repo / "docs/latin1.md", TODAY)
+
+
+def test_a_trailing_yaml_comment_after_the_date_is_still_the_date(tmp_path: Path) -> None:
+    """Criterion 2: YAML reads `2026-09-10  # note` as the date, so it is read as one; `2026-09-10#x` is not."""
+    repo = _repo(tmp_path)
+    _write(repo, "docs/comment.md", _doc("2026-09-10  # stamped by hand"))
+    _write(repo, "docs/quoted-comment.md", _doc('"2026-09-10" # note'))
+    _write(repo, "docs/stale-comment.md", _doc("2026-09-01  # old"))
+    _write(repo, "docs/no-space.md", _doc("2026-09-10# glued"))  # a string in YAML, not a date
+    _commit(repo, "2026-09-10T12:00:00+00:00")
+
+    assert {f: k for f, (k, _) in _found(repo).items()} == {
+        "docs/stale-comment.md": cfc.STALE,
+        "docs/no-space.md": cfc.UNREADABLE,
+    }
 
 
 def test_the_map_holds_documents_not_harness_configuration() -> None:
