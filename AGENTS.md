@@ -34,12 +34,17 @@ Plus the session handover (the eighth movement — `docs/journal/handover/`,
 `[DECISION]` → human · `[GAP]` → explore, don't ask · `[DETAIL]` → agent
 decides, reason into the artifact.
 
-Full doctrine: `docs/WORKFLOW.md` — arriving with migration step 3.6; until
-then it lives at `portfolio-agentic-engineering/docs/WORKFLOW.md`.
+Full doctrine: `docs/WORKFLOW.md`, in English since 2026-09-29.
 
 ## House rules
 
-1. **Content artifacts are English** — commit messages and PR bodies included.
+1. **The repository is English** — documents, code, identifiers, comments,
+   messages, tests, commit messages and PR bodies. German is the language of
+   the conversation with the maintainer and of the texts the maintainer's
+   display shows at run time (`tools/claude-code/`), nothing else. German
+   that is still in the tree (2026-09-29: mainly `scripts/`, `tests/` and
+   `docs/governance/`) is translated in pull requests of its own, never in
+   passing inside an unrelated change (bead coding-harness-yim).
 2. **Beads only.** The tracker is the Dolt database under `.beads/`,
    transported via `refs/dolt/data` on origin. No rendered copy is committed:
    the hosted CI hydrates, renders once and presets `BEAD_RENDER`; every
@@ -122,11 +127,19 @@ tools/bd dolt push          # push tracker data to origin (refs/dolt/data)
 - **Another session in the same checkout:** say so before changing a file,
   committing or switching the branch, and offer a worktree. House rule 4 holds
   for the tracker meanwhile.
-- **Tracker writes from a worktree are allowed** when the worktree lies in the
-  repository (`.claude/worktrees/` or `bd worktree create`): `tools/bd` finds
-  the main checkout's tracker there, and concurrent writers lose nothing
-  (`docs/research/2026-09-23-worktree-tracker-writes.md`, bead
-  coding-harness-m34). Who may write is still house rule 4.
+- **Worktrees: one change, one bead, one branch, one worktree, one session.**
+  A worktree lives under `.claude/worktrees/<name>` (ignored already, and
+  Claude Code's own place), is branched from a freshly fetched `origin/main`,
+  and is removed after the merge. Sibling directories are retired (D-5).
+  `tools/bd` finds the main checkout's tracker from there without any
+  variable, and concurrent writers lose nothing
+  (`docs/research/2026-09-23-worktree-tracker-writes.md`); who may write is
+  still house rule 4, and a worker claims with `--actor <session>`.
+- **Omnigent starts inside the worktree** (`omnigent claude
+  --use-native-config`, ADR 0006). Omnigent's own file and shell tools
+  (`sys_os_*`, terminals, sessions, scheduled tasks) bypass Claude Code's
+  hooks and `permissions.deny`; they are not used to write until a deny rule
+  covers them. Details and reasons: `docs/WORKFLOW.md` §3, "Worktrees".
 - **What could not be read is "not read", never "none".** A file that would
   not open and a query that returned nothing say different things.
 - **A standing rule belongs in the repository's `AGENTS.md`** — every harness
