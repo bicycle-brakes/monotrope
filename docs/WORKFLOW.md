@@ -279,9 +279,9 @@ none, because the registry keeps counting it as protection.
 |---|---|---|
 | 1 Explore | **Haiku 4.5** | much input, little output, no deep reasoning |
 | 1a Interview | **Fable 5.1** | the questions are the work, and there are few of them |
-| 2 Spec | **Fable 5.1** | the highest reasoning demand, little output |
+| 2 Spec | **Opus 5.5** | effort `xhigh`; the highest reasoning demand, little output |
 | 2a Spec review | **Opus 5** | another model with another error profile, and a fresh context that does not know the author's reasoning |
-| 3 Plan | **Fable 5.1** | an error here is the most expensive in the whole run |
+| 3 Plan | **Opus 5.5** | effort `xhigh`; an error here is the most expensive in the whole run |
 | 4 Implement | **Sonnet 5** | a solid worker given a clear plan |
 | 5 Verify | — | deterministic |
 | 6 Review | **Opus 5** | finds what Sonnet misses |
@@ -291,8 +291,15 @@ Switch with `/model fable`, `/model sonnet`, `/model opus`, `/model haiku`. The
 alias `opusplan` runs Opus while planning and switches to Sonnet for execution —
 the cheaper variant to Fable.
 
-**Cost logic.** Fable runs only in the phases with little output. The
-token-heavy part runs on Sonnet.
+**Spec and plan on Opus 5.5 at effort `xhigh`** (maintainer, 2026-09-29, for
+the whole repository; until then both ran on Fable 5.1). In a session:
+`/model` and `/effort xhigh`; for a phase run as its own session:
+`claude --model claude-opus-5-5 --effort xhigh`. A sub-agent takes its effort
+from its definition's frontmatter (`effort: xhigh`), not from the call that
+starts it, and a new definition is read only when a session starts.
+
+**Cost logic.** The expensive models run only in the phases with little output.
+The token-heavy part runs on Sonnet.
 
 **Check after setup.** There are reports that the `model:` field in sub-agent
 definitions is ignored and sub-agents run on the parent model. Look once with

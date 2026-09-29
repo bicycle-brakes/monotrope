@@ -1,6 +1,6 @@
 # Phase 2 · Spec
 
-**Model:** Fable 5.1 — highest reasoning demand, little output.
+**Model:** Opus 5.5 — at effort `xhigh` (`claude --model claude-opus-5-5 --effort xhigh`); the highest reasoning demand, little output.
 **Result:** `plans/changes/<name>/spec.md`
 **Gate:** `python3 scripts/validate_change_artefacts.py --check` green, and no
 open `[DECISION]`.
