@@ -136,10 +136,12 @@ tools/bd dolt push          # push tracker data to origin (refs/dolt/data)
   (`docs/research/2026-09-23-worktree-tracker-writes.md`); who may write is
   still house rule 4, and a worker claims with `--actor <session>`.
 - **Omnigent starts inside the worktree** (`omnigent claude
-  --use-native-config`, ADR 0006). Omnigent's own file and shell tools
-  (`sys_os_*`, terminals, sessions, scheduled tasks) bypass Claude Code's
-  hooks and `permissions.deny`; they are not used to write until a deny rule
-  covers them. Details and reasons: `docs/WORKFLOW.md` §3, "Worktrees".
+  --use-native-config`, ADR 0006). Omnigent's own tools that write, run,
+  spawn or change state are denied by name in `.claude/settings.json`;
+  read-only ones stay usable. The one list is `scripts/omnigent_policy.py`; the
+  Omnigent default policy from the same list (`tools/omnigent/`) is a second
+  layer the maintainer installs, and nothing depends on it alone. Details and
+  reasons: `docs/WORKFLOW.md` §3, "Worktrees".
 - **What could not be read is "not read", never "none".** A file that would
   not open and a query that returned nothing say different things.
 - **A standing rule belongs in the repository's `AGENTS.md`** — every harness

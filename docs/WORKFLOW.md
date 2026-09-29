@@ -35,7 +35,8 @@ tags: [workflow, model-routing, agentic-coding, phases, artefacts]
 > `.claude/agents/explorer.md` and `reviewer.md`, the stop hook
 > `.claude/hooks/session-stop/check-tests-green.sh`, `.claude/commands/`, the
 > targets `make change` and `make index` (the entry is `python3 scripts/new_change.py <name>
-> --bead <id>`), any `permissions.deny` in `.claude/settings.json`,
+> --bead <id>`), the brakes on the irreversible that §3 names for
+> `.claude/settings.json` (it holds only the Omnigent rules),
 > `tests/test_repo_settings.py`, `templates/findings.md`,
 > `templates/plan-marking.md`, `scripts/run_change.sh`, the `scripts/cc-*.sh`
 > profiles and `tests/test_model_profiles.py`. Where the text below says one of
@@ -357,10 +358,17 @@ The same rule holds in `lakeswitch-ai`, with the differences its
    authors intend (`omnigent claude --use-native-config`, ADR 0006); the session
    is started from the worktree's directory, so its hooks, its
    `.claude/settings.json` and `tools/bd` all resolve there. Omnigent's own
-   tools — its file and shell tools (`sys_os_*`), terminals, sessions and
-   scheduled tasks — do not pass through Claude Code's hooks or its
-   `permissions.deny`. Until a deny rule for them is in `.claude/settings.json`,
-   they are not used to write. Not yet measured: whether `omnigent claude`
+   tools reach the session as `mcp__omnigent__<tool>`, and neither Claude
+   Code's path rules, the hooks on its file tools nor Omnigent's own Claude Code
+   hook see what they do. Each one that writes, runs, spawns or changes state is
+   therefore denied by name in `.claude/settings.json`; the read-only ones stay
+   usable. The one list, with a reason per tool, is `scripts/omnigent_policy.py`.
+   An Omnigent default policy rendered from the same list (`tools/omnigent/`)
+   refuses them server-side for every Omnigent session on the machine. The
+   maintainer installs it, and nothing here depends on it alone (ADR 0006); as of
+   2026-09-29 it is built but not installed. Omnigent's bridge runs its own
+   `sys_os_*` tools without any policy while its relay does not advertise them,
+   and there only the rule in `.claude/settings.json` holds. Not yet measured: whether `omnigent claude`
    started inside a worktree keeps that directory as the session's working
    directory in every case.
 6. **After the merge, the worktree goes.** `git worktree remove
@@ -380,14 +388,20 @@ is not a tool question but a division of work.
 2. **The harness's sandbox.** Separates execution. It is a property of the
    environment, not an artefact in this repository — there is nothing to
    install and nothing to configure.
-3. **`permissions.deny` in `.claude/settings.json`.** Brakes the irreversible:
-   a production deploy, `bundle destroy`, a force push, `rm -rf`, and the
-   decisions under `docs/decisions/`. Deny survives every permission mode — but
-   the path-bound rules apply only to `Write` and `Edit`. **A write through
-   `Bash` falls through them** (`echo … >> docs/decisions/x.md`), and so does a
-   write through a tool Claude Code does not own (Omnigent's `sys_os_write`).
-   That is a brake against accidents, not a lock against intent; whoever takes
-   it for a lock relies on something that does not exist.
+3. **`permissions.deny` in `.claude/settings.json`.** It holds two things:
+   Omnigent's writing tools (item 5 above) and
+   `Edit(//**/.omnigent/config.yaml)`, so no session rewrites the policy that
+   holds them. The template's brakes on the irreversible — production deploy,
+   `bundle destroy`, force push, `rm -rf`, writes under `docs/decisions/` — are
+   not in it: this repository deploys nothing, has no `docs/decisions/`, and a
+   `Bash` pattern for a force push is passed by the next spelling. Deny survives
+   every permission mode, `bypassPermissions` included. An `Edit(…)` rule reaches
+   Claude Code's file tools, the file commands it recognises in `Bash` (`sed`,
+   `tee`) and redirect targets (`>`, `>>`), not a program that opens files itself
+   (`python -c …`) and not a tool Claude Code does not own — which is why
+   Omnigent's tools are denied by name. That is a brake against accidents, not a
+   lock against intent; whoever takes it for a lock relies on something that does
+   not exist.
 
 **No container belongs to it.** Neither `container-use` nor Dagger nor a
 devcontainer is an operating resource of this repository; the concept document
