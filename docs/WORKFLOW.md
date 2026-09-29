@@ -1,491 +1,517 @@
 ---
-title: "Arbeitsablauf und Modell-Routing — Phasen und Stufen"
+title: "Workflow and model routing — phases and stages"
 category: governance
 status: current
 created: 2026-09-05
-last_reviewed: 2026-09-09
+last_reviewed: 2026-09-29
 owner: Data Architect
 provenance: ai-drafted-reviewed
 produced_by:
   kind: llm-session
   name: claude-code
-  version: "2026-09-06"
+  version: "2026-09-29"
 review:
   status: pending
   approved_by: null
   approved_at: null
-tags: [workflow, modell-routing, agentisches-coding, phasen, artefakte]
+tags: [workflow, model-routing, agentic-coding, phases, artefacts]
 ---
 
-# Arbeitsablauf und Modell-Routing
+# Workflow and model routing
 
-> **Einstieg in einer Sitzung:** `make change NAME=<name> BEAD=<id>` legt
-> `plans/changes/<name>/` an, verknüpft es mit einem Vorgang, der im Export
-> **schon steht**, und verweist auf Phase 1. In Claude Code: `/workflow-start`.
-> Danach: „Lies `docs/WORKFLOW.md` und arbeite nach Phase N."
-> **Stand:** Stufe 1 ist verbindlich. Stufe 2 und 3 sind vorbereitet, nicht aktiv.
+> **Starting a session:** `make change NAME=<name> BEAD=<id>` creates
+> `plans/changes/<name>/`, links it to a bead that **already exists**, and
+> points to phase 1. In Claude Code: `/workflow-start`.
+> Then: "Read `docs/WORKFLOW.md` and work at phase N."
+> **Standing:** stage 1 is binding. Stages 2 and 3 are prepared, not active.
+> **Language:** this file was German until 2026-09-29 and is English since, like
+> every other artefact of this repository (`AGENTS.md`, house rule 1).
 
-## 1 · Wozu
+## 1 · Why
 
-Wie in diesem Repository mit Agenten gearbeitet wird, und welches Modell welche
-Phase bekommt. Der Schnitt ist so gewählt, dass **Stufe 1 sofort produktiv ist**
-und die späteren Stufen ohne Umbau darauf aufsetzen.
+How work is done with agents in this repository, and which model gets which
+phase. The cut is made so that **stage 1 is productive at once** and the later
+stages sit on top of it without a rebuild.
 
-Zwei Entscheidungen liegen allem zugrunde.
+Two decisions underlie everything.
 
-**Harness-Portabilität.** Alles Wertvolle liegt in Repo-Dateien und
-Standard-Werkzeug: `AGENTS.md`, die Artefakte unter `plans/`, die Phasen-Prompts
-unter `prompts/`, `Makefile`, Git-Hooks, CI. Was harness-spezifisch ist —
-`.claude/agents/`, `.claude/commands/`, `.claude/hooks/` — ist ein dünner,
-wegwerfbarer Komfort-Layer. Beim Wechsel auf einen anderen Harness bleibt der
-Kern; neu zu bauen sind Subagent-Definitionen, Slash-Command-Wrapper und Hooks.
+**Harness portability.** Everything of value lives in repository files and
+standard tooling: `AGENTS.md`, the artefacts under `plans/`, the phase prompts
+under `prompts/`, `Makefile`, git hooks, CI. What is harness-specific —
+`.claude/agents/`, `.claude/commands/`, `.claude/hooks/` — is a thin comfort
+layer you throw away. Moving to another harness keeps the core; what has to be
+rebuilt is the sub-agent definitions, the slash-command wrappers and the hooks.
 
-**Determinismus außen, Modell in der Mitte.** Erkundung und Inventarisierung sind
-mechanisch. Das Modell sitzt in der Interpretations- und Entwurfsschicht.
-Generierung und Verifikation sind wieder deterministisch und beliebig oft
-wiederholbar. Zwischen den Schichten stehen Gates, über die nicht verhandelt wird.
+**Deterministic outside, model in the middle.** Discovery and inventory are
+mechanical. The model sits in the interpretation and design layer. Generation
+and verification are deterministic again and repeatable at will. Between the
+layers sit gates, and gates are not negotiated.
 
-## 2 · Die Phasen
+## 2 · The phases
 
-Jede erzeugt ein versioniertes Artefakt im Repo. **Das Artefakt ist die Übergabe
-an die nächste Phase — nicht der Chat-Verlauf.**
+Each produces one versioned artefact in the repository. **The artefact is the
+handover to the next phase — not the chat history.**
 
-| # | Phase | Artefakt | Gate | Prompt |
+| # | Phase | Artefact | Gate | Prompt |
 |---|---|---|---|---|
 | 1 | Explore | `plans/changes/<name>/research.md` | — | [`prompts/01-explore.md`](../prompts/01-explore.md) |
-| 1a | Interview | `plans/changes/<name>/decisions.md` | jede `[DECISION]` beantwortet — oder als übersprungen begründet | [`01a-interview.md`](../prompts/01a-interview.md) |
-| 2 | Spec | `plans/changes/<name>/spec.md` | Validator grün, keine offene `[DECISION]` | [`02-spec.md`](../prompts/02-spec.md) |
-| 2a | Spec-Review | Zeilen für `findings.md`, Dimension `SPEC` | keine offene `[AMBIGUITY]` | [`02a-spec-review.md`](../prompts/02a-spec-review.md) |
-| 3 | Plan | `plans/changes/<name>/plan.md` | Validator grün | [`03-plan.md`](../prompts/03-plan.md) |
-| 4 | Implement | Code + Tests | `make verify` grün | [`04-implement.md`](../prompts/04-implement.md) |
-| 5 | Verify | Testausgabe als Beleg | Stop-Hook blockt auf rotem Baum | [`05-verify.md`](../prompts/05-verify.md) |
-| 6 | Review | `plans/changes/<name>/findings.md` | keine offene `[AMBIGUITY]`, kein offener BLOCKER — `[DIVERGENT]` zählt als BLOCKER | [`06-review.md`](../prompts/06-review.md) |
-| 7 | Commit | Pull Request | CI grün | [`07-commit.md`](../prompts/07-commit.md) |
+| 1a | Interview | `plans/changes/<name>/decisions.md` | every `[DECISION]` answered — or its skip given a reason | [`01a-interview.md`](../prompts/01a-interview.md) |
+| 2 | Spec | `plans/changes/<name>/spec.md` | validator green, no open `[DECISION]` | [`02-spec.md`](../prompts/02-spec.md) |
+| 2a | Spec review | rows for `findings.md`, dimension `SPEC` | no open `[AMBIGUITY]` | [`02a-spec-review.md`](../prompts/02a-spec-review.md) |
+| 3 | Plan | `plans/changes/<name>/plan.md` | validator green | [`03-plan.md`](../prompts/03-plan.md) |
+| 4 | Implement | code + tests | `make verify` green | [`04-implement.md`](../prompts/04-implement.md) |
+| 5 | Verify | test output as evidence | the stop hook blocks on a red tree | [`05-verify.md`](../prompts/05-verify.md) |
+| 6 | Review | `plans/changes/<name>/findings.md` | no open `[AMBIGUITY]`, no open BLOCKER — `[DIVERGENT]` counts as a BLOCKER | [`06-review.md`](../prompts/06-review.md) |
+| 7 | Commit | pull request | CI green | [`07-commit.md`](../prompts/07-commit.md) |
 
-Phase 1a ist **optional und wird von einem Menschen gerufen**. Was in einem Satz
-beschreibbar ist, braucht kein Interview; das Überspringen wird in `decisions.md`
-mit einem Satz begründet, nicht verschwiegen.
+Phase 1a is **optional and called by a person**. What fits in one sentence needs
+no interview; skipping it is given a one-sentence reason in `decisions.md`, not
+left unsaid.
 
-Quer dazu steht die **Sitzungsübergabe** — sie gehört keiner Phase, sondern dem
-Sitzungsende; siehe unten.
+Across all of them runs the **session handover** — it belongs to no phase but to
+the end of a session; see below.
 
-### Wer entscheidet was
+### Who decides what
 
-Der Mensch ist **Absichts-Eigner**, kein technischer Prüfer. Ob etwas richtig
-gebaut ist, beantworten Verify, Review und CI — nicht er.
+The person is the **owner of the intent**, not the technical reviewer. Whether
+something is built right is answered by verify, review and CI — not by them.
 
-| Ebene | Beispiel | Entscheidet |
+| Level | Example | Decides |
 |---|---|---|
-| **Absicht** | Darf der Import alte Daten überschreiben? · Ist Ausfallzeit hinnehmbar? · externe Verträge, Risikoannahme | **Mensch** |
-| **Mechanik** | Bibliothek, Algorithmus, Datenstruktur — aus `research.md` und `spec.md` ableitbar | **Modell** |
-| **Detail** | Variablenname, Formatierung, Reihenfolge — beliebig revidierbar | **Agent**, begründet im Artefakt |
+| **Intent** | May the import overwrite old data? · Is downtime acceptable? · external contracts, accepting a risk | **the person** |
+| **Mechanics** | library, algorithm, data structure — derivable from `research.md` and `spec.md` | **the model** |
+| **Detail** | a variable name, formatting, an order — revisable at will | **the agent**, with the reason in the artefact |
 
-Daraus folgt die Trennung, die den Gates ihren Zuschnitt gibt: **ein Phasen-Gate
-prüft, ob das Artefakt da und vollständig ist — das kann eine Maschine, und seit
-`validate_change_artefacts.py` tut sie es.** Was ein Mensch bekommt, ist nur noch
-das, was tatsächlich offen ist. Das Gate wird dadurch mechanischer, nicht
-bürokratischer.
+From this follows the separation that shapes the gates: **a phase gate checks
+whether the artefact is there and complete — a machine can do that, and since
+`validate_change_artefacts.py` one does.** What reaches a person is only what is
+actually open. The gate becomes more mechanical, not more bureaucratic.
 
-### Der Befundprozess
+### The findings process
 
-Ein Review-Ergebnis ist eine Tabelle, kein Fließtext — Form und Vokabular,
-Schweregrade (`BLOCKER`/`MAJOR`/`MINOR`) eingeschlossen, stehen in
-[`templates/findings.md`](../templates/findings.md) und werden hier nicht
-zweimal geführt. Ohne feste Form ist eine Review-Runde nicht wiederaufnehmbar,
-und niemand sieht, ob ein Befund aus dem Bau stammt oder aus der Reparatur
-davor.
+A review result is a table, not prose — its form and vocabulary, severities
+(`BLOCKER`/`MAJOR`/`MINOR`) included, live in
+[`templates/findings.md`](../templates/findings.md) and are not kept twice here.
+Without a fixed form a review round cannot be resumed, and nobody sees whether a
+finding comes from the build or from the repair before it.
 
-Zwei Spalten tragen dabei mehr, als sie aussehen. **Dimension** trennt `SPEC`
-(gegen die Spec gemessen) von `MAINT` (der Blick eines Fremden auf
-Fehlerbehandlung, Kantenfälle und Außenverträge) — eine Spec sieht ihre eigenen
-Lücken nicht. **Origin** hält fest, ob ein Befund vorher bestand (`base`) oder
-von einer Reparaturrunde erzeugt wurde (`fix-r<N>`); zwei aufeinanderfolgende
-Runden mit `fix-r`-Ursprung sind eine Eskalation und keine dritte Runde. Das ist
-die mechanische Form dessen, was vier Reparaturrunden gezeigt haben: jeder
-Defekt der Runden zwei bis vier stammte aus einem Umbau, keiner aus einer
-kleinen Änderung.
+Two columns carry more than they seem to. **Dimension** separates `SPEC`
+(measured against the spec) from `MAINT` (a stranger's view of error handling,
+edge cases and external contracts) — a spec does not see its own gaps.
+**Origin** records whether a finding existed before (`base`) or was produced by a
+repair round (`fix-r<N>`); two consecutive rounds of `fix-r` origin are an
+escalation, not a third round. That is the mechanical form of what four repair
+rounds showed: every defect of rounds two to four came from a rebuild, none from
+a small change.
 
-**Meinungsverschiedenheiten werden protokolliert, nicht aufgelöst.** Dass ein
-Reviewer etwas markiert und ein anderer nicht, *ist* die Information; sie zu
-einem Urteil zu verrechnen wirft sie weg.
+**Disagreements are recorded, not resolved.** That one reviewer flags something
+and another does not *is* the information; netting it into one verdict throws it
+away.
 
-### Das Fragen-Protokoll
+### The question protocol
 
-Jede Unklarheit wird eingeordnet, **bevor** gefragt wird:
+Every open point is sorted **before** anything is asked:
 
 ```
-[DECISION] → Mensch   unumkehrbar · externer Vertrag · Risiko · oder zwei
-                      plausible Lesarten dessen, was verlangt wurde
-[GAP]      → Erkunden  im Repo beantwortbar → research.md ergänzen, nicht fragen
-[DETAIL]   → Agent    beliebig revidierbar → selbst entscheiden, Grund ins Artefakt
+[DECISION] → person   irreversible · an external contract · a risk · or two
+                      plausible readings of what was asked for
+[GAP]      → explore  answerable from the repository → add it to research.md; do not ask
+[DETAIL]   → agent    revisable at will → decide, and write the reason into the artefact
 ```
 
-Wer keine Empfehlung abgeben kann, hat eine Fachlücke, keine Entscheidung — und
-liest zuerst nach. Eine Mechanikfrage an den Absichts-Eigner ist ein Verstoß
-gegen das Protokoll, keine Gründlichkeit: genau daran ist eine frühere Sitzung
-gescheitert, als Fragen gestellt wurden, die technisch zu tief lagen, um
-beantwortbar zu sein.
+Whoever cannot give a recommendation has a gap in knowledge, not a decision, and
+reads first. A question about mechanics put to the owner of the intent breaks
+the protocol; it is not thoroughness. An earlier session failed exactly there,
+asking questions that lay too deep technically to be answerable.
 
-Die Form einer Menschenfrage steht in
-[`prompts/02-spec.md`](../prompts/02-spec.md): Ziel in einem Satz, Optionen als
-**Folgen** statt als Mechanismen, Empfehlung mit Grund, und was passiert, wenn
-die Antwort „ok" lautet. Das ist der Entscheidungs-Record (MADR) in Frageform.
+The form of a question to a person is set out in
+[`prompts/02-spec.md`](../prompts/02-spec.md): the goal in one sentence, the
+options as **consequences** rather than mechanisms, a recommendation with its
+reason, and what happens if the answer is "ok". That is the decision record
+(MADR) in the form of a question.
 
-**Eine Zweideutigkeit ist keine Mechanik.** „Der Plan ist der Vertrag" regelt
-Abweichungen von einem *eindeutigen* Vertrag. Lässt der Plan zwei Lesarten zu,
-wird nicht gewählt — der Vermerk lautet `[DECISION]`, der Rest wird fertig,
-dann Halt.
+**An ambiguity is not mechanics.** "The plan is the contract" governs departures
+from an *unambiguous* contract. Where the plan allows two readings, nothing is
+chosen: the note is `[DECISION]`, the rest is finished, then stop.
 
-### Die achte Bewegung: die Sitzungsübergabe
+### The eighth movement: the session handover
 
-Die sieben Phasen sind der Zyklus **einer Änderung**. Die Sitzungsübergabe läuft
-quer dazu: sie schließt **eine Sitzung** ab, und die endet selten dort, wo eine
-Änderung endet. Kontext voll in Phase 4, Feierabend zwischen Spec und Plan, ein
-Review, das über Nacht wartet — jedes Mal ist der nächste Leser eine Sitzung
-ohne Gedächtnis.
+The seven phases are the cycle of **one change**. The session handover runs
+across it: it closes **one session**, and a session seldom ends where a change
+ends. Context full in phase 4, the end of the day between spec and plan, a review
+waiting overnight — each time the next reader is a session without memory.
 
-| Wann | Artefakt | Gate |
+| When | Artefact | Gate |
 |---|---|---|
-| Sitzungsende, unabhängig von der Phase | `docs/journal/handover/<datum>-<name>.md` nach [`templates/handover.md`](../templates/handover.md) | Frontmatter gegen `scripts/handover_schema.py`; Richtung, Provenienz und Stand des Ziels sind Pflicht |
+| end of a session, whatever the phase | `docs/journal/handover/<date>-<name>.md` after [`templates/handover.md`](../templates/handover.md) | frontmatter against `scripts/handover_schema.py`; direction, provenance and the goal's standing are required |
 
-Es gelten dieselben zwei Regeln wie für die Phasen-Artefakte, aus demselben
-Grund:
+The same two rules hold as for the phase artefacts, for the same reason:
 
-**Die Übergabe ist die Datei, nicht der Chat.** Was nur im Verlauf steht, ist
-für die nächste Sitzung nicht passiert. Der Grund ist derselbe wie bei `/clear`
-zwischen Phase 3 und 4 — nur dass hier niemand die Wahl hat.
+**The handover is the file, not the chat.** What stands only in the history has
+not happened for the next session. The reason is the same as for `/clear`
+between phases 3 and 4 — except that here nobody has the choice.
 
-**Jede Zahl trägt ihren Stand.** Eine Übergabe altert bauartgemäß; sie wird
-angehängt, nie überschrieben. Eine Zahl ohne Commit oder Datum liest sich beim
-nächsten Lesen wie eine aktuelle Messung und ist eine historische — der
-häufigste Weg, auf dem ein Verlaufsdokument zur Falschaussage wird.
+**Every number carries its cut-off.** A handover ages by design; it is appended
+to, never overwritten. A number without a commit or a date reads, next time, as a
+current measurement and is a historical one — the most common way a history
+document turns into a false statement.
 
-### Die fünf Regeln, die den Unterschied machen
+### The five rules that make the difference
 
-**`/clear` zwischen Phase 3 und 4.** Der Plan ist eine Datei. Der Ausführende
-braucht den Planungskontext nicht, nur `plan.md` und `spec.md`. Frischer Kontext
-schlägt Kontinuität. Ab etwa 60 % Kontextauslastung ohnehin neue Sitzung.
+**`/clear` between phases 3 and 4.** The plan is a file. Whoever implements it
+does not need the planning context, only `plan.md` and `spec.md`. Fresh context
+beats continuity. From about 60 % context use, start a new session anyway.
 
-**Nie planen, was in einem Satz beschreibbar ist.** Tippfehler, Umbenennung,
-offensichtlicher Bugfix: direkt machen. Sonst frisst der Phasen-Overhead den
-Nutzen, und der Ablauf wird als Bürokratie erlebt statt als Werkzeug.
+**Never plan what one sentence describes.** A typo, a rename, an obvious fix: do
+it. Otherwise the phase overhead eats the benefit, and the workflow is
+experienced as bureaucracy instead of a tool.
 
-**Der Plan ist der Vertrag.** Weicht die Umsetzung ab, wird der Plan *revidiert*
-— nicht stillschweigend überschrieben. Der Agent hält an und meldet: erwartet /
-gefunden / warum relevant / wie weiter. Eine Abweichung, die nur im Code steht,
-ist beim nächsten Lesen keine Abweichung mehr, sondern der Plan.
+**The plan is the contract.** Where the implementation departs from it, the plan
+is *revised* — never silently overwritten. The agent stops and reports: expected
+/ found / why it matters / what now. A departure that lives only in the code is,
+at the next reading, no longer a departure but the plan.
 
-**Ein Gate ist sinnvoll, verhältnismäßig und mehr als ein Selbstzweck.** Die
-Checkliste dafür steht einmal, in
+**A gate is sensible, proportionate and more than an end in itself.** Its
+checklist stands once, in
 [`gate-catalog.md`](governance/gate-catalog.md#bevor-ein-gate-scharfgestellt-wird)
-— hier nicht zweimal geführt, mit einer Lücke, die diese Datei schon einmal
-gekostet hat. Nur die Gates von Phase 2 und Phase 3 sind reine
-Präsenz-Checklisten — *ist es da?* —, gefahren als eine Zeile, die mit dem
-nächsten Schritt endet, durch `validate_change_artefacts.py`. Phase 4 fragt
-`make verify` (rot ist rot), Phase 5 den Stop-Hook, Phase 6 den Abgleich gegen
-`spec.md`, Phase 7 die CI — vier Urteile, keine Präsenzprüfungen: ein roter
-Lauf ist kein „nicht da", sondern das Gate, das greift. Offene Entscheidungen
-sind etwas anderes: erst einordnen, dann fragen. Umkehrbares wird entschieden
-und mit Grund ins Artefakt
-geschrieben; das Veto ist ein Wort. Unumkehrbares wird gefragt — als Frage mit
-Entscheidungshilfe, in der Form aus [`02-spec.md`](../prompts/02-spec.md).
-Nichts davon ist hier erfunden: Stage-Gate (Cooper) gibt jedem Gate die Option
-*Kill*, PRINCE2 steuert nach Ausnahmen innerhalb vorher gesetzter Toleranzen,
-und die Unterscheidung umkehrbar/unumkehrbar ist Bezos' Zwei- gegen Einwegtür.
+— not kept twice here, with a gap that has cost this file once already. Only the
+gates of phase 2 and phase 3 are pure presence checklists — *is it there?* —, run
+as one line that ends with the next step, by `validate_change_artefacts.py`.
+Phase 4 asks `make verify` (red is red), phase 5 the stop hook, phase 6 the
+comparison against `spec.md`, phase 7 the CI — four verdicts, not presence
+checks: a red run is not "not there" but the gate taking hold. Open decisions
+are something else: sort first, then ask. What is reversible is decided and
+written into the artefact with its reason; the veto is one word. What is
+irreversible is asked — as a question with a decision aid, in the form from
+[`02-spec.md`](../prompts/02-spec.md). None of this is invented here: Stage-Gate
+(Cooper) gives every gate the option *kill*, PRINCE2 steers by exception within
+tolerances set in advance, and the reversible/irreversible distinction is Bezos's
+two-way against one-way door.
 
-**Texte für Menschen tragen ihren Sinn selbst.** Eine Frage, ein Befund, ein
-PR-Text, ein Commit-Rumpf wird von jemandem gelesen, der die Sitzung nicht
-gesehen hat und die Artefakte nicht daneben offen hat. Bead-Kennungen,
-Spec-Punkte, Invarianten-Nummern sind Kürzel des Schreibers — als Nachsatz in
-Klammern, nie als Träger des Satzes. Die Probe: ein Satz, der nur mit `plan.md`
-daneben Sinn ergibt, wird umgeschrieben. Das sind Nielsens zweite und sechste
-Heuristik — die Sprache des Nutzers, Wiedererkennen statt Erinnern — und die
-Form der Frage ist die des Entscheidungs-Records (ADR/MADR): Kontext, Optionen
-mit Folgen, Empfehlung.
+**Texts for people carry their own meaning.** A question, a finding, a pull
+request text, a commit body is read by someone who did not see the session and
+does not have the artefacts open beside it. Bead ids, spec items and invariant
+numbers are the writer's shorthand — a trailing aside in parentheses, never the
+carrier of the sentence. The test: a sentence that makes sense only with
+`plan.md` beside it is rewritten. That is Nielsen's second and sixth heuristic —
+the user's language, recognition rather than recall — and the form of the
+question is that of the decision record (ADR/MADR): context, options with
+consequences, a recommendation.
 
-### Artefakt-Lebenszyklus
+### Artefact lifecycle
 
 ```
-plans/specs/<capability>/spec.md          LEBEND      — was heute gelten soll
-plans/changes/<name>/                     AKTIV       — eine Änderung in Arbeit
-plans/changes/archive/YYYY-MM-DD-<name>/  HISTORISCH  — abgeschlossen
-docs/adr/NNNN-titel.md                    DAUERHAFT   — append-only
+plans/specs/<capability>/spec.md          LIVING      — what should hold today
+plans/changes/<name>/                     ACTIVE      — one change in flight
+plans/changes/archive/YYYY-MM-DD-<name>/  HISTORICAL  — closed
+docs/adr/NNNN-title.md                    PERMANENT   — append-only
 ```
 
-Zwei getrennte Statusfelder: `status` bewegt sich, wenn das Projekt entscheidet;
-`implementation_status`, wenn der Code sich bewegt. Ein Feld für beides kann
-nicht sagen, ob eine akzeptierte Spec noch ungebaut ist oder ob gebauter Code auf
-einer zurückgezogenen Spec steht — und genau das sind die interessanten Fälle.
+Two separate status fields: `status` moves when the project decides;
+`implementation_status` when the code moves. One field for both cannot say
+whether an accepted spec is still unbuilt or whether built code rests on a
+withdrawn spec — and those are exactly the interesting cases.
 
-Nach Abschluss: Delta in die lebende Capability-Spec, dauerhafte
-Architekturentscheidungen als ADR, Rest ins Archiv. **Eine implementierte
-Feature-Spec bleibt nicht als lebendes Dokument stehen** — Code und Git-Historie
-sind die Wahrheit. Details in [`plans/_README.md`](../plans/_README.md).
+On close: the delta into the living capability spec, permanent architectural
+decisions as an ADR, the rest into the archive. **An implemented feature spec
+does not stay as a living document** — the code and the git history are the
+truth. Details in [`plans/_README.md`](../plans/_README.md).
 
-Die **Regel gegen Mehrfacherzeugung** steht wörtlich in `AGENTS.md`, weil ein
-Agent `plans/_README.md` nicht zwangsläufig liest: vor dem Anlegen eines
-Artefakts erst per `rg` suchen; existiert eines, wird es aktualisiert.
-`make staleness` prüft die Folgen — fehlendes Frontmatter, widersprüchlicher
-Status, fertig und nie archiviert, einseitige Ablösung.
+The **rule against making a second one** stands verbatim in `AGENTS.md`, because
+an agent does not necessarily read `plans/_README.md`: before an artefact is
+created, search with `rg` first; where one exists, it is updated. `make
+staleness` checks the consequences — missing frontmatter, contradictory status,
+done and never archived, one-sided supersession.
 
-## 3 · Stufe 1 — nur Claude Code, nur Anthropic
+## 3 · Stage 1 — only Claude Code, only Anthropic
 
-### Was dafür im Repo steht
+### What stands in the repository for it
 
-| Baustein | Wo | Was er tut |
+| Piece | Where | What it does |
 |---|---|---|
-| Instruktionen | `AGENTS.md` | die eine Quelle und die einzige Datei; Claude Code liest sie seit 2.1.277 selbst, keine `CLAUDE.md` daneben |
-| Artefakte | `plans/` | `specs/` · `changes/` · `changes/archive/` |
-| Phasen-Prompts | `prompts/` | harness-unabhängig |
-| Einstiegsbefehle | `Makefile` | `change` · `verify` · `gates` · `test` · `staleness` · `index` |
-| Der Aufruf | `scripts/new_change.py` | legt den Änderungsordner an; verlangt einen vorhandenen Bead, legt keinen an |
-| Hygiene | `scripts/plans_registry.py` | `--check` meldet, `--index` erzeugt `plans/INDEX.md` |
-| Subagents | `.claude/agents/explorer.md`, `reviewer.md` | read-only, Modell gepinnt |
-| Stop-Hook | `.claude/hooks/session-stop/check-tests-green.sh` | blockt das Turn-Ende auf rotem Baum |
-| Erzwingung | `.github/workflows/ci.yml` | **die eine Gate-Liste** |
+| Instructions | `AGENTS.md` | the one source and the only file; Claude Code reads it itself since 2.1.277, no `CLAUDE.md` beside it |
+| Artefacts | `plans/` | `specs/` · `changes/` · `changes/archive/` |
+| Phase prompts | `prompts/` | independent of the harness |
+| Entry commands | `Makefile` | `change` · `verify` · `gates` · `test` · `staleness` · `index` |
+| The call | `scripts/new_change.py` | creates the change folder; requires an existing bead, creates none |
+| Hygiene | `scripts/plans_registry.py` | `--check` reports, `--index` writes `plans/INDEX.md` |
+| Sub-agents | `.claude/agents/explorer.md`, `reviewer.md` | read-only, model pinned |
+| Stop hook | `.claude/hooks/session-stop/check-tests-green.sh` | blocks the end of a turn on a red tree |
+| Enforcement | `.github/workflows/ci.yml` | **the one gate list** |
 
-### Verifikation läuft über Git und CI, nicht über den Harness
+### Verification runs through git and CI, not through the harness
 
 ```bash
-make verify     # alle lokal ausführbaren Gates — dieselben, die die CI fährt
-make gates      # was die CI fährt, aus ci.yml gelesen
-make staleness  # Hygiene der plans/-Artefakte
-make index      # plans/INDEX.md neu erzeugen
+make verify     # every locally runnable gate — the same the CI runs
+make gates      # what the CI runs, read from ci.yml
+make staleness  # hygiene of the plans/ artefacts
+make index      # regenerate plans/INDEX.md
 ```
 
-`make` hält **keine eigene Liste**. Es ruft `scripts/verify_all.sh`, das
-`scripts/ci_gates.py` fragt, das `.github/workflows/ci.yml` liest. Eine zweite
-Liste ist der Grund, warum lokal und CI auseinanderlaufen — nicht ihr Symptom.
+`make` holds **no list of its own**. It calls `scripts/verify_all.sh`, which asks
+`scripts/ci_gates.py`, which reads `.github/workflows/ci.yml`. A second list is
+the reason local runs and CI drift apart — not its symptom.
 
-Der Stop-Hook ist der Komfort-Layer, nicht die Erzwingung. Er läuft nur, wenn
-seit `HEAD` Python angefasst wurde: ein Hook, der eine Minute kostet, wenn
-nichts passiert ist, wird binnen einer Woche abgeschaltet — und ein
-abgeschalteter Hook ist schlechter als keiner, weil die Registry ihn weiter als
-Schutz zählt.
+The stop hook is the comfort layer, not the enforcement. It runs only when
+Python was touched since `HEAD`: a hook that costs a minute when nothing has
+happened is switched off within a week — and a switched-off hook is worse than
+none, because the registry keeps counting it as protection.
 
-### Modell-Routing
+### Model routing
 
-| Phase | Modell | Warum |
+| Phase | Model | Why |
 |---|---|---|
-| 1 Explore | **Haiku 4.5** | viel Input, wenig Output, kein tiefes Reasoning |
-| 1a Interview | **Fable 5.1** | die Fragen sind die Arbeit, und es sind wenige |
-| 2 Spec | **Fable 5.1** | höchster Reasoning-Bedarf, wenig Output |
-| 2a Spec-Review | **Opus 5** | ein anderes Modell mit anderem Fehlerprofil, und ein frischer Kontext, der den Denkweg des Autors nicht kennt |
-| 3 Plan | **Fable 5.1** | ein Fehler hier ist der teuerste im ganzen Ablauf |
-| 4 Implement | **Sonnet 5** | solider Arbeiter bei klarem Plan |
-| 5 Verify | — | deterministisch |
-| 6 Review | **Opus 5** | findet, was Sonnet übersieht |
-| 7 Commit | **Haiku 4.5** | billig und ausreichend |
+| 1 Explore | **Haiku 4.5** | much input, little output, no deep reasoning |
+| 1a Interview | **Fable 5.1** | the questions are the work, and there are few of them |
+| 2 Spec | **Fable 5.1** | the highest reasoning demand, little output |
+| 2a Spec review | **Opus 5** | another model with another error profile, and a fresh context that does not know the author's reasoning |
+| 3 Plan | **Fable 5.1** | an error here is the most expensive in the whole run |
+| 4 Implement | **Sonnet 5** | a solid worker given a clear plan |
+| 5 Verify | — | deterministic |
+| 6 Review | **Opus 5** | finds what Sonnet misses |
+| 7 Commit | **Haiku 4.5** | cheap and sufficient |
 
-Umschalten mit `/model fable`, `/model sonnet`, `/model opus`, `/model haiku`.
-Der Alias `opusplan` fährt Opus in der Planung und wechselt zur Ausführung auf
-Sonnet — die Sparvariante zu Fable.
+Switch with `/model fable`, `/model sonnet`, `/model opus`, `/model haiku`. The
+alias `opusplan` runs Opus while planning and switches to Sonnet for execution —
+the cheaper variant to Fable.
 
-**Kostenlogik.** Fable läuft nur in den Phasen mit wenig Output. Der
-token-intensive Teil läuft auf Sonnet.
+**Cost logic.** Fable runs only in the phases with little output. The
+token-heavy part runs on Sonnet.
 
-**Nach dem Setup prüfen.** Es gibt Berichte, nach denen das `model:`-Feld in
-Subagent-Definitionen ignoriert wird und Subagents auf dem Parent-Modell laufen.
-Einmal mit `/status` nachsehen — sonst zahlt man Opus-Preise für Exploration.
+**Check after setup.** There are reports that the `model:` field in sub-agent
+definitions is ignored and sub-agents run on the parent model. Look once with
+`/status` — otherwise exploration is billed at Opus prices.
 
-**Eskalation.** Nach zwei fehlgeschlagenen Review-Runden auf Fable hochstufen.
-Bei Umbauten über ~200k Token und bei Code mit Sicherheits- oder
-Nebenläufigkeitsbezug direkt Fable. Nach bestandenem Review zurück auf Sonnet.
+**Escalation.** After two failed review rounds, move up to Fable. For rebuilds
+over ~200k tokens and for code touching security or concurrency, start on Fable.
+After a passed review, back to Sonnet.
 
-### Was in Stufe 1 bewusst nicht passiert
+### What deliberately does not happen in stage 1
 
-Kein `ANTHROPIC_BASE_URL`, kein Router, kein Gateway. Kein Framework-Overlay —
-erst den nackten Prozess verstehen. Keine tiefe Subagent-Verschachtelung. Kein
-Embedding- oder Graph-Index: `rg` plus gutes Naming plus das erzeugte
-`plans/INDEX.md` reichen bis etwa 50.000 Zeilen.
+No `ANTHROPIC_BASE_URL`, no router, no gateway. No framework overlay —
+understand the bare process first. No deep sub-agent nesting. No embedding or
+graph index: `rg` plus good naming plus the generated `plans/INDEX.md` carry a
+repository up to about 50,000 lines.
 
-**Korrigiert am 06.09.:** Hier stand ein Verbot von Arbeitsbäumen und
-Parallelisierung. Beides war falsch. `bd worktree create` ist ein Kommando des
-Trackers, und seine eigene Hilfe nennt als Zweck ausdrücklich *„multiple agents
-or features"* bei geteilter Bead-Datenbank; am Hauptcheckout dieses Repos hängen
-mehrere Arbeitsbäume — die Zahl sagt `git worktree list`, sie gehört nicht in
-eine Doktrin. Eine Regel, die verbietet, was das Werkzeug anbietet und die
-Praxis täglich tut, wird nicht befolgt — sie wird überlesen, und mit ihr der
-Rest des Absatzes.
+**Corrected on 2026-09-06:** this paragraph used to forbid worktrees and
+parallel work. Both were wrong. `bd worktree create` is a command of the
+tracker, and its own help names *"multiple agents or features"* sharing one bead
+database as its purpose; several worktrees hang off this repository's main
+checkout — `git worktree list` gives the number, and it does not belong in a
+doctrine. A rule that forbids what the tool offers and the practice does daily
+is not followed — it is read past, and the rest of the paragraph with it.
 
-Was stattdessen gilt: **ein Arbeitsbaum je Änderung — unter einer Bedingung mit
-zwei Hälften.**
+### Worktrees — one per change
 
-1. **Jeder Arbeitsbaum sieht denselben Trackerstand.** Das trägt die Bauart des
-   Werkzeugs: der Store wird über das gemeinsame Git-Verzeichnis gefunden, nicht
-   kopiert. Zwei Bäume schreiben in dieselbe Datenbank.
-2. **Der getrackte Export bewegt sich nur um das, was eine Sitzung getan hat.**
-   Das trägt heute **nichts** — es ist dreimal in vier Tagen gebrochen worden,
-   zuletzt am 06.09. mit Konfliktmarkern in genau der Datei, die jedes Bead-Gate
-   als Quelle liest.
+Written 2026-09-29 from D-5 (worktrees in the repository, through the tool's own
+mechanism), ADR 0006 (parallel work, one worktree per session) and the
+measurement of 2026-09-23 (`docs/research/2026-09-23-worktree-tracker-writes.md`).
+The same rule holds in `lakeswitch-ai`, with the differences its
+`docs/workflow.md` §9 lists.
 
-Solange Hälfte 2 offen ist, ist die Erlaubnis eine Absichtserklärung und kein
-Zustand. Was hier wirklich nicht passiert, ist gleichzeitiges Schreiben *am
-selben Vorgang* — das ist keine Werkzeugfrage, sondern Arbeitsteilung.
+1. **One change, one bead, one branch, one worktree, one session.** Two sessions
+   never share a worktree, and nobody switches the branch of the main checkout
+   while another session runs.
+2. **In the repository, under `.claude/worktrees/<name>`.** That directory is in
+   `.gitignore` already, and it is where Claude Code puts its own worktrees
+   (`claude --worktree <name>`, and a sub-agent's `isolation: worktree`). By
+   hand: `git fetch origin && git worktree add -b <branch>
+   .claude/worktrees/<name> origin/main`. `bd worktree create` works as well but
+   writes the worktree's path into the tracked `.gitignore`, which is one more
+   change in the diff. Sibling directories beside the repository are retired
+   (D-5); worktrees that still sit there are finished and removed, not moved.
+3. **Always from a freshly fetched `origin/main`.** A worktree on a stale base
+   produces a pull request that is behind before it opens.
+4. **The tracker needs nothing.** `tools/bd` in a worktree finds the main
+   checkout's tracker through the shared git directory — no variable, no
+   redirect file, no copy. Concurrent writers lose nothing and a contested
+   claim has exactly one winner (measured 2026-09-23 with bd 1.3.0). Who may
+   write is house rule 4: the first writing session writes the tracker; every
+   other session claims its one bead with `tools/bd update <id> --claim
+   --actor <session>` and leaves its handover comment on that bead, nothing
+   more. After tracker writes: `tools/bd dolt push` first, `git push` second.
+5. **Omnigent starts inside the worktree.** Omnigent runs Claude Code as its
+   authors intend (`omnigent claude --use-native-config`, ADR 0006); the session
+   is started from the worktree's directory, so its hooks, its
+   `.claude/settings.json` and `tools/bd` all resolve there. Omnigent's own
+   tools — its file and shell tools (`sys_os_*`), terminals, sessions and
+   scheduled tasks — do not pass through Claude Code's hooks or its
+   `permissions.deny`. Until a deny rule for them is in `.claude/settings.json`,
+   they are not used to write. Not yet measured: whether `omnigent claude`
+   started inside a worktree keeps that directory as the session's working
+   directory in every case.
+6. **After the merge, the worktree goes.** `git worktree remove
+   .claude/worktrees/<name>` and the branch with it. A worktree nobody works in
+   is a place where a later session finds an old state and takes it for the
+   current one.
 
-**Und woraus Isolation hier besteht** — drei Dinge, kein viertes:
+Isolation between sessions is a working agreement, not a wall: worktrees share
+git's refs, hooks and configuration (`docs/architecture/2026-09-17-gap-analysis.md`).
+What really does not happen is simultaneous writing *to the same change* — that
+is not a tool question but a division of work.
 
-1. **Der Arbeitsbaum.** Trennt die Dateien. Ein `git worktree add` je Änderung;
-   was dort schiefgeht, betrifft den Hauptcheckout nicht.
-2. **Die Sandbox des Harness.** Trennt die Ausführung. Sie ist eine Eigenschaft
-   der Umgebung, kein Artefakt in diesem Repo — es gibt nichts zu installieren
-   und nichts zu konfigurieren.
-3. **`permissions.deny` in `.claude/settings.json`.** Bremst das Unumkehrbare:
-   Prod-Deploy, `bundle destroy`, Force-Push, `rm -rf`, und die Entscheidungen
-   unter `docs/decisions/`. Deny überlebt jeden Permission-Mode — aber die
-   pfadgebundenen Regeln greifen nur bei `Write` und `Edit`. **Ein Schreibzugriff
-   über `Bash` fällt durch sie hindurch** (`echo … >> docs/decisions/x.md`). Das
-   ist eine Bremse gegen Versehen, keine Sperre gegen Absicht; wer sie für eine
-   Sperre hält, verlässt sich auf etwas, das es nicht gibt.
+**What isolation consists of here** — three things, no fourth:
 
-**Kein Container gehört dazu.** Weder `container-use` noch Dagger noch ein
-Devcontainer ist Betriebsmittel dieses Repos; das Konzeptdokument zu Dagger
-beschreibt eine Technik, es benutzt sie nicht. `tests/test_repo_settings.py`
-hält den Zaun: ein getracktes `Dockerfile`, `devcontainer.json`, `dagger.json`
-oder `docker-compose*` lässt die Suite fallen.
+1. **The worktree.** Separates the files. One `git worktree add` per change;
+   what goes wrong there does not touch the main checkout.
+2. **The harness's sandbox.** Separates execution. It is a property of the
+   environment, not an artefact in this repository — there is nothing to
+   install and nothing to configure.
+3. **`permissions.deny` in `.claude/settings.json`.** Brakes the irreversible:
+   a production deploy, `bundle destroy`, a force push, `rm -rf`, and the
+   decisions under `docs/decisions/`. Deny survives every permission mode — but
+   the path-bound rules apply only to `Write` and `Edit`. **A write through
+   `Bash` falls through them** (`echo … >> docs/decisions/x.md`), and so does a
+   write through a tool Claude Code does not own (Omnigent's `sys_os_write`).
+   That is a brake against accidents, not a lock against intent; whoever takes
+   it for a lock relies on something that does not exist.
 
-## 4 · Stufe 2 — GLM und Kimi ergänzen (vorbereitet, nicht aktiv)
+**No container belongs to it.** Neither `container-use` nor Dagger nor a
+devcontainer is an operating resource of this repository; the concept document
+on Dagger describes a technique, it does not use one.
+`tests/test_repo_settings.py` holds the fence: a tracked `Dockerfile`,
+`devcontainer.json`, `dagger.json` or `docker-compose*` fails the suite.
 
-Es ändern sich genau zwei Zeilen der Routing-Tabelle: **Implement** von Sonnet 5
-auf GLM, **Review** von Opus 5 auf Kimi. Die Phasen 1–3 und 7 bleiben bei
-Anthropic.
+## 4 · Stage 2 — adding GLM and Kimi (prepared, not active)
 
-**Warum Review über Anbietergrenzen.** Unterschiedliche Trainings-Linien haben
-nicht überlappende blinde Flecken. Schon die Kontexttrennung findet messbar mehr
-Fehler; Anbietervielfalt legt drauf. Ein Modell bewertet eigene Erzeugnisse zu
-positiv — ein Reviewer aus einem anderen Haus weiß bauartbedingt nicht, dass er
-sich selbst prüft. **Meinungsverschiedenheiten werden protokolliert, nicht
-automatisch aufgelöst.** „Kimi hat es markiert, GLM nicht" ist die Information.
+Exactly two rows of the routing table change: **implement** moves from Sonnet 5
+to GLM, **review** from Opus 5 to Kimi. Phases 1–3 and 7 stay with Anthropic.
 
-### Mechanik
+**Why review across vendors.** Different training lineages have blind spots that
+do not overlap. Separating the context already finds measurably more errors;
+vendor diversity adds to it. A model rates its own output too kindly — a
+reviewer from another house does not know, by construction, that it is checking
+itself. **Disagreements are recorded, not resolved automatically.** "Kimi
+flagged it, GLM did not" is the information.
 
-`ANTHROPIC_BASE_URL` gilt sitzungsweit und lässt sich mitten in einer Sitzung
-nicht wechseln. Ein Profil ist deshalb ein Prozess, kein Schalter: sechs Skripte
-unter `scripts/cc-*.sh` über einer gemeinsamen Basis, jedes startet seine eigene
-Sitzung. Jede `ANTHROPIC_*`-Variable wird ausdrücklich gesetzt — ein Kind-Prozess
-erbt sonst die des Eltern-Profils und arbeitet weiter, nur gegen den falschen
-Anbieter. `tests/test_model_profiles.py` misst das mit einer Attrappe, statt es
-zu glauben.
+### Mechanics
 
-**Die Barriere, ohne die nichts läuft:** `make leakcheck NAME=<change>` scannt
-die Artefakte der Änderung und den Diff gegen die Basis, bevor irgendetwas an
-einen fremden Endpunkt geht. Jedes Fremdprofil ruft sie selbst und hält an, wenn
-`CC_CHANGE` fehlt — ohne benannte Änderung gibt es nichts zu scannen. Die
-Denylist liegt außerhalb des Repositoriums; fehlt sie, ist das BLOCK, denn
-ungeprüft ist nicht dasselbe wie sauber.
+`ANTHROPIC_BASE_URL` holds for a whole session and cannot be switched in the
+middle of one. A profile is therefore a process, not a switch: six scripts under
+`scripts/cc-*.sh` over one shared base, each starting its own session. Every
+`ANTHROPIC_*` variable is set explicitly — a child process would otherwise
+inherit the parent profile's and keep working, only against the wrong vendor.
+`tests/test_model_profiles.py` measures that with a stand-in instead of
+believing it.
 
-**Die Zuordnung steht im Plan.** Jeder Teilschritt trägt genau eine Markierung —
-`[FLASH]`, `[GLM5.3]` oder `[SONNET]`, Entscheidungsregeln in
-[`templates/plan-marking.md`](../templates/plan-marking.md). `scripts/run_change.sh`
-gruppiert aufeinanderfolgende gleiche Markierungen zu einem Segment und fährt
-jedes als eigene Sitzung mit Verify-Gate danach. Eine unmarkierte Zeile wird
-ignoriert und nicht geraten: der unvollständige Plan ist dann ein Befund am
-Plan-Gate, wo ein Mensch ihn annimmt, keine Überraschung zur Laufzeit.
+**The barrier without which nothing runs:** `make leakcheck NAME=<change>` scans
+the change's artefacts and the diff against the base before anything goes to a
+foreign endpoint. Every foreign profile calls it itself and stops when
+`CC_CHANGE` is missing — without a named change there is nothing to scan. The
+denylist lives outside the repository; if it is missing, that is BLOCK, because
+unchecked is not the same as clean.
 
-Der Orchestrator hält **kein zweites Regelwerk**. Arbeitsbaum-Vorbedingung,
-Leakcheck, `make verify` und das Artefakt-Gate leben außerhalb und werden
-gerufen. Eine offene `[AMBIGUITY]`, ein offener BLOCKER- oder MAJOR-Befund
-pausieren mit Exit 2, statt entschieden zu werden.
+**The assignment stands in the plan.** Every step carries exactly one marking —
+`[FLASH]`, `[GLM5.3]` or `[SONNET]`, decision rules in
+[`templates/plan-marking.md`](../templates/plan-marking.md).
+`scripts/run_change.sh` groups consecutive equal markings into one segment and
+runs each as a session of its own with a verify gate after it. An unmarked line
+is ignored, not guessed: the incomplete plan is then a finding at the plan gate,
+where a person accepts it, not a surprise at run time.
 
-### Die Sicht auf wartende Agenten
+The orchestrator holds **no second rule set**. The worktree precondition, the
+leak check, `make verify` and the artefact gate live outside it and are called.
+An open `[AMBIGUITY]`, an open BLOCKER or MAJOR finding pause with exit 2 instead
+of being decided.
 
-Weder ein Terminal-Multiplexer noch eine Agentenschicht isoliert etwas.
-Isolation kommt aus dem Arbeitsbaum, der Harness-Sandbox und `permissions.deny`
-(siehe oben). Was fehlt, ist etwas anderes: **Sichtbarkeit des Wartens** — der
-Moment, in dem ein Agent eine `[DECISION]` gestellt hat und stillsteht.
+### Seeing agents that wait
 
-`--mode herdr` nutzt dafür [herdr](https://github.com/herdrdev/herdr), das vier
-Agentenzustände kennt — `working`, `blocked`, `done`, `idle` — und sie bei Claude
-Code über Integrationshooks liest statt über Bildschirm-Parsing. `blocked` ist
-genau das, was das Fragen-Protokoll erzeugt; bei mehreren parallelen Läufen sieht
-man auf einen Blick, welcher auf einen Menschen wartet.
+Neither a terminal multiplexer nor an agent layer isolates anything. Isolation
+comes from the worktree, the harness sandbox and `permissions.deny` (see above).
+What is missing is something else: **visibility of waiting** — the moment an
+agent has asked a `[DECISION]` and stands still.
 
-**Es ist Werkzeug des Menschen, keine Abhängigkeit des Ablaufs.** Fehlt das
-Binary, läuft der Orchestrator headless weiter und sagt es. Ein junges Werkzeug
-darf den Betrieb nicht dadurch anhalten, dass es nicht installiert ist — und die
-Landschaft dieser Werkzeuge ist jung: von den 2026 verbreiteten Orchestratoren
-sind mehrere bereits eingestellt oder in Freiwilligenpflege übergegangen.
-Die Übergabe läuft über Dateien — die fremde Sitzung startet mit
-`@plans/changes/<name>/plan.md @plans/changes/<name>/spec.md` und braucht sonst
-nichts. Genau dafür ist der Plan eine Datei.
+`--mode herdr` uses [herdr](https://github.com/herdrdev/herdr) for that, which
+knows four agent states — `working`, `blocked`, `done`, `idle` — and reads them
+for Claude Code through integration hooks rather than by parsing the screen.
+`blocked` is exactly what the question protocol produces; with several parallel
+runs, one glance shows which one waits for a person.
 
-> **Zwei Vorbehalte, und der zweite gilt hier besonders.** Die Coding-Abos der
-> Anbieter sind vertraglich auf offiziell unterstützte Werkzeuge beschränkt; in
-> Claude Code ist das gedeckt, in einem selbstgebauten Harness nicht.
+**It is the person's tool, not a dependency of the workflow.** If the binary is
+missing, the orchestrator carries on headless and says so. A young tool must not
+stop operation by not being installed — and the landscape of these tools is
+young: of the orchestrators common in 2026, several are already discontinued or
+have passed into volunteer maintenance. The handover runs through files — the
+foreign session starts with `@plans/changes/<name>/plan.md
+@plans/changes/<name>/spec.md` and needs nothing else. That is what the plan
+being a file is for.
+
+> **Two caveats, and the second one holds here in particular.** The vendors'
+> coding subscriptions are contractually limited to officially supported tools;
+> in Claude Code that is covered, in a self-built harness it is not.
 >
-> **Und: dieses Repository enthält abstrahiertes Wissen aus einem produktiven
-> Kundenprojekt.** An Endpunkte außerhalb der eigenen Rechtsordnung gehen keine
-> Kundennamen, Schemas, Entity-Namen oder Kennzahlen — auch nicht in einem
-> Diff, auch nicht in einem Plan. Wer Stufe 2 anschaltet, prüft vorher, was in
-> `spec.md` und `plan.md` steht. Die Denylist aus dem Export-Werkzeug ist dafür
-> der richtige Maßstab.
+> **And: this repository contains abstracted knowledge from a productive
+> customer project.** No customer names, schemas, entity names or figures go to
+> endpoints outside one's own jurisdiction — not in a diff, not in a plan
+> either. Whoever switches stage 2 on checks beforehand what stands in
+> `spec.md` and `plan.md`. The denylist from the export tool is the right
+> measure for that.
 
-## 5 · Stufe 3 — Meta-Harness (evaluativ)
+## 5 · Stage 3 — a meta-harness (evaluative)
 
-Ersetzt nicht den Prozess, sondern das manuelle Sitzungs-Jonglieren aus Stufe 2:
-ein Agent wird eine kurze YAML-Datei, die `AGENTS.md` als `instructions:`
-referenziert, den Anbieter in einer `harness:`-Zeile umschaltet und die
-Phasen-Rollen aus `prompts/` eins zu eins übernimmt. Ein Orchestrator verteilt
-die Umsetzung auf parallele Worktrees und routet jeden Diff automatisch an einen
-Reviewer eines anderen Anbieters. Policies können `make verify` als hartes Gate
-und Kostenbudgets mitten in der Sitzung erzwingen.
+Replaces not the process but the manual session juggling of stage 2: an agent
+becomes a short YAML file that references `AGENTS.md` as `instructions:`,
+switches vendor in one `harness:` line and takes the phase roles from `prompts/`
+one to one. An orchestrator spreads the implementation across parallel worktrees
+and routes each diff automatically to a reviewer from another vendor. Policies
+can enforce `make verify` as a hard gate and cost budgets in the middle of a
+session.
 
-Nicht produktiv gesetzt.
+Not set to production.
 
-## 6 · Reihenfolge, und warum sie so ist
+## 6 · The order, and why it is that order
 
-**Prozess, dann Modellvielfalt, dann Orchestrierung.**
+**Process, then model diversity, then orchestration.**
 
-Wer mit der Orchestrierung anfängt, debuggt Infrastruktur statt Ablauf und weiß
-bei schlechten Ergebnissen nicht, ob Plan, Modell oder Harness schuld war. Wer
-mit Multi-Anbieter anfängt, bevor die Artefakt-Übergabe sitzt, verliert beim
-Wechsel Kontext und schiebt es auf das Modell.
+Start with orchestration and you debug infrastructure instead of the workflow,
+and with bad results you cannot tell whether plan, model or harness was at
+fault. Start with multiple vendors before the artefact handover works and you
+lose context at the switch and blame the model.
 
-Stufe 1 muss zwei bis drei Wochen im echten Betrieb gelaufen sein. **Signal für
-den Wechsel:** die Phasen-Gates greifen ohne Nachdenken, und die
-Sonnet-Umsetzung ist der spürbare Kostenblock.
+Stage 1 must have run for two to three weeks in real use. **The signal to move
+on:** the phase gates hold without anyone thinking about them, and the Sonnet
+implementation is the noticeable cost.
 
-## 7 · Was pro Stufe erhalten bleibt
+## 7 · What survives each stage
 
-| Baustein | Stufe 1 | Stufe 2 | Stufe 3 |
+| Piece | Stage 1 | Stage 2 | Stage 3 |
 |---|---|---|---|
-| `AGENTS.md` | ✅ | ✅ unverändert | ✅ als `instructions:` |
-| `plans/`-Artefakte | ✅ | ✅ unverändert | ✅ unverändert |
-| `prompts/` | ✅ | ✅ als Text | ✅ als YAML-Prompt |
-| `Makefile`, CI, Git-Hooks | ✅ | ✅ unverändert | ✅ als Policy-Gate |
-| `.claude/agents/` | ✅ | ❌ neu bauen | ❌ ersetzt durch YAML |
-| `.claude/commands/` | ✅ | ❌ neu bauen | ❌ ersetzt durch YAML |
-| Claude-Code-Hooks | ✅ | ❌ neu bauen | ❌ ersetzt durch Policies |
+| `AGENTS.md` | ✅ | ✅ unchanged | ✅ as `instructions:` |
+| `plans/` artefacts | ✅ | ✅ unchanged | ✅ unchanged |
+| `prompts/` | ✅ | ✅ as text | ✅ as YAML prompt |
+| `Makefile`, CI, git hooks | ✅ | ✅ unchanged | ✅ as a policy gate |
+| `.claude/agents/` | ✅ | ❌ rebuild | ❌ replaced by YAML |
+| `.claude/commands/` | ✅ | ❌ rebuild | ❌ replaced by YAML |
+| Claude Code hooks | ✅ | ❌ rebuild | ❌ replaced by policies |
 
-Die untere Hälfte ist bewusst dünn. Das ist der Preis, den man einmal zahlt, und
-der Grund, warum die obere Hälfte den Wechsel überlebt.
+The lower half is thin on purpose. That is the price paid once, and the reason
+the upper half survives the change.
 
-## 8 · Abweichungen von der Vorlage — und warum
+## 8 · Departures from the template — and why
 
-Sechs Punkte weichen bewusst von der ursprünglichen Übergabe ab. Sie stehen hier,
-damit die Abweichung eine Entscheidung bleibt und nicht als Versehen gelesen wird.
+These points depart deliberately from the original handover. They stand here so
+that the departure stays a decision and is not read as an oversight.
 
-| Vorlage | Hier | Grund |
+| Template | Here | Why |
 |---|---|---|
-| `Makefile` mit `lint`, `typecheck`, `test` | `make verify` ruft nur `verify_all.sh` | `ci.yml` ist die eine Gate-Liste (`AGENTS.md`). Eine ausgeschriebene Prüfreihenfolge im Makefile **wäre** die zweite Liste. |
-| `ln -s AGENTS.md CLAUDE.md` | keine `CLAUDE.md` | Seit Claude Code 2.1.277 wird `AGENTS.md` direkt gelesen, sobald keine `CLAUDE.md` im Baum liegt (Maintainer-Entscheidung 2026-09-22). Konversationssprache und Slash-Commands liegen in der Nutzer-Konfiguration, nicht im Repo. Bekannte Grenze: das direkte Lesen ist ein Feature-Flag und fällt bei abgeschalteter Telemetrie, Bedrock/Vertex oder eigener `ANTHROPIC_BASE_URL` aus — dann liest Claude Code nichts; für das Omnigent-Ziel (Telemetrie aus) ist das vor M0 zu prüfen. |
-| `.pre-commit-config.yaml` | nicht angelegt | Es wäre eine zweite Lint-Liste neben `ci.yml`, mit demselben Drift-Risiko. Die Erzwingung liegt bei `ci.yml` und `.claude/hooks/`. |
-| `.mcp.json` | nicht angelegt | Dieses Repository nutzt heute keinen MCP-Server. Eine leere Konfiguration wäre eine Behauptung ohne Inhalt. |
-| `uv`, `mypy` | `python3`, `ruff`, `pytest` | Das ist die Werkzeugkette, die in `requirements-ci.txt` gepinnt ist und die die CI fährt. |
-| Task-Verfolgung im Artefakt | Beads (`bd`) | `AGENTS.md`: Beads only. Die Artefakte sagen **was** gebaut wird, der Tracker sagt **wo es steht**. |
+| `Makefile` with `lint`, `typecheck`, `test` | `make verify` calls only `verify_all.sh` | `ci.yml` is the one gate list (`AGENTS.md`). A check sequence spelled out in the Makefile **would be** the second list. |
+| `ln -s AGENTS.md CLAUDE.md` | no `CLAUDE.md` | Since Claude Code 2.1.277, `AGENTS.md` is read directly as soon as no `CLAUDE.md` lies in the tree (maintainer decision, 2026-09-22). Conversation language and slash commands live in the user configuration, not in the repository. A known limit: the direct reading is a feature flag and fails with telemetry switched off, Bedrock/Vertex or an own `ANTHROPIC_BASE_URL` — then Claude Code reads nothing; for the Omnigent target (telemetry off) that has to be checked before M1. |
+| `.pre-commit-config.yaml` | not created | It would be a second lint list beside `ci.yml`, with the same risk of drift. Enforcement lies with `ci.yml` and `.claude/hooks/`. |
+| `.mcp.json` | not created | This repository uses no MCP server today. An empty configuration would be a claim without content. |
+| `uv`, `mypy` | `python3`, `ruff`, `pytest` | That is the toolchain pinned in `requirements-ci.txt` and run by the CI. |
+| task tracking in the artefact | Beads (`bd`) | `AGENTS.md`: Beads only. The artefacts say **what** is built, the tracker says **where it stands**. |
 
-## 9 · Stand und nächste Schwellen
+## 9 · Standing and next thresholds
 
-Stufe 1 ist eingerichtet. Was noch aussteht, gehört einem Menschen:
+Stage 1 is set up. What is still outstanding belongs to a person:
 
-- Einmal `/context` und `/status` prüfen: lädt `AGENTS.md`, greift die
-  Modellzuweisung der Subagents?
-- Den ersten echten Task durch alle sieben Phasen schicken und Spec und Plan als
-  Dateien erzwingen — nicht als Chat.
-- Nach zwei Wochen `plans/` auditieren: gibt es widersprüchliche oder verwaiste
-  Artefakte? `make staleness` beantwortet den mechanischen Teil davon.
+- Check `/context` and `/status` once: does `AGENTS.md` load, does the
+  sub-agents' model assignment take hold?
+- Send the first real task through all seven phases and force spec and plan as
+  files — not as chat.
+- After two weeks, audit `plans/`: are there contradictory or orphaned
+  artefacts? `make staleness` answers the mechanical part of that.
 
-**Schwellen, die den Kurs ändern.** Über etwa 30 Artefakte die Archivierung
-verschärfen. Findet das Modell trotz gutem Naming wiederholt Dateien nicht,
-einen LSP-MCP ergänzen — und erst wenn das nicht reicht, über einen semantischen
-Index nachdenken.
+**Thresholds that change course.** Above about 30 artefacts, tighten archiving.
+If the model repeatedly fails to find files despite good naming, add an LSP MCP
+server — and only when that is not enough, think about a semantic index.
