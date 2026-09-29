@@ -35,5 +35,12 @@ What the maintainer decided on 2026-09-29:
 3. "Implement as the workflow intends" — the seven phases, with the model
    routing of `docs/WORKFLOW.md` §3.
 
+4. Answer to the spec's open `[DECISION]` (layer 2 reaches every Omnigent
+   session on this machine), 2026-09-29: **option 2** — build it, do not
+   install yet. The maintainer travels from 2026-09-30; installing and
+   restarting Omnigent is their step at the laptop after the return. Until
+   then this repository is held by layer 1 alone, and part (b) of criterion 8
+   moves to a follow-up bead.
+
 Standing constraint: ADR 0006 — nothing may depend on an Omnigent policy
 alone. Layer 1 must hold on its own.

@@ -218,6 +218,10 @@ which carries layer 2 itself.
 
 **[DECISION] Layer 2 reaches every Omnigent session on this machine.**
 
+**Answered 2026-09-29 by the maintainer: option 2** — build it, do not install
+yet (`decisions.md`, item 4). Criterion 8 shrinks to part (a); part (b) is bead
+coding-harness-671, after the maintainer's return.
+
 ```
 Goal in one sentence:  Omnigent keeps one policy set per machine and, as
                        read, the policy cannot tell which repository or which
