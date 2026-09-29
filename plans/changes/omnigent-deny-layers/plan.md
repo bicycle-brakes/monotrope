@@ -431,3 +431,47 @@ green after those two fixes.
 1 to 7 met (7 held by review, as its own text says, plus
 `tests/test_entry_points.py`). 8 not met yet, by design: part (a) after the
 merge (S9 steps 4 and 6), part (b) is bead coding-harness-671.
+
+### Repair round 1
+
+Origin `fix-r1`, on the seven MINOR findings of the phase-6 review
+(`findings.md`). Five fixed, two left open with their reason in the Status.
+
+- **F-2, `--write` and foreign `Edit(//**…)` rules** (`2652fd5`). Owned is
+  now exactly the Omnigent tool rules and the path rules the list renders;
+  every other entry stays. One test plants two foreign `Edit` rules and a
+  stale owned rule. With the old predicate that test fails (checked).
+  Consequence: a protected path removed from the list leaves its old
+  `Edit(//**…)` rule behind, since it cannot be told from a hand-added one.
+- **F-4, `--remove` past a broken foreign policy** (`3f60919`). Decided:
+  removal validates nothing. It deletes only what this module owns and cannot
+  make a foreign policy worse; refusing with a message would leave the
+  maintainer to edit the file by hand at the moment they want the policies
+  gone. Install still validates the whole result. Tests: with a raising stub
+  for the validation, and through the CLI under Omnigent's Python with a
+  policy of an unknown type.
+- **F-3, one resolution of Omnigent's interpreter** (`9fcf3c2`).
+  `install.sh` no longer parses the launcher; it runs
+  `omnigent_policy.py --print-python` under any `python3` (PyYAML is now
+  imported lazily, so the module loads on the standard library). The resolver
+  reads `#!/path`, `#!/usr/bin/env python3` and the `#!/bin/sh` +
+  `'''exec' "<path>"` form. Tests: the forms and the failures, and the
+  installer against a launcher naming `env python3` (red with the old script,
+  checked). New precondition: a `python3` on the PATH.
+- **F-7, comment at `DECKEL`** (`54e4c9c`) and **F-6, the WORKFLOW note**
+  (`1962a4c`): the brakes on the irreversible leave the "not here yet" list
+  and get a sentence saying they were left out by decision.
+- **Left open.** F-1 (`sys_advise_models`; the list is the maintainer's call,
+  unchanged) and F-5 (the live probe of the `Edit(//**/.omnigent/config.yaml)`
+  rule; belongs to the live measurement after the merge, bead
+  coding-harness-671).
+
+`python3 -m pytest tests/test_omnigent_deny_layers.py -q -rs`: 33 passed,
+0 skipped (Omnigent installed). `make verify` after the last code commit
+(`865d063`, 2026-09-29), last lines:
+
+```text
+── [markdownlint] rot, aber nur report — er meldet, er blockiert nicht.
+
+VERIFY GREEN — every local gate of the 'verify' job passed.
+```
