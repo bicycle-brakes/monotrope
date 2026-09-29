@@ -284,7 +284,7 @@ none, because the registry keeps counting it as protection.
 | 3 Plan | **Opus 5.5** | effort `xhigh`; an error here is the most expensive in the whole run |
 | 4 Implement | **Sonnet 5** | a solid worker given a clear plan |
 | 5 Verify | — | deterministic |
-| 6 Review | **Opus 5** | finds what Sonnet misses |
+| 6 Review | **Fable 5.1** | finds what Sonnet misses, and reads the code a change calls instead of trusting its docstring |
 | 7 Commit | **Haiku 4.5** | cheap and sufficient |
 
 Switch with `/model fable`, `/model sonnet`, `/model opus`, `/model haiku`. The
@@ -297,6 +297,11 @@ the whole repository; until then both ran on Fable 5.1). In a session:
 `claude --model claude-opus-5-5 --effort xhigh`. A sub-agent takes its effort
 from its definition's frontmatter (`effort: xhigh`), not from the call that
 starts it, and a new definition is read only when a session starts.
+
+**Review on Fable 5.1** (maintainer, 2026-09-29, for the whole repository;
+until then Opus 5). The two reviews of that day ran on Fable and found what the
+spec had missed by reading the called code itself. For a review run as its own
+session: `claude --model claude-fable-5-1`.
 
 **Cost logic.** The expensive models run only in the phases with little output.
 The token-heavy part runs on Sonnet.
@@ -398,7 +403,7 @@ on Dagger describes a technique, it does not use one.
 ## 4 · Stage 2 — adding GLM and Kimi (prepared, not active)
 
 Exactly two rows of the routing table change: **implement** moves from Sonnet 5
-to GLM, **review** from Opus 5 to Kimi. Phases 1–3 and 7 stay with Anthropic.
+to GLM, **review** from Fable 5.1 to Kimi. Phases 1–3 and 7 stay with Anthropic.
 
 **Why review across vendors.** Different training lineages have blind spots that
 do not overlap. Separating the context already finds measurably more errors;

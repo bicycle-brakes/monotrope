@@ -114,7 +114,7 @@ REIST_NICHT: dict[str, str] = {
     "tests.test_model_endpoints::test_every_model_in_a_phase_prompt_resolves[02a-spec-review.md-Opus 5]": "bestand-dieses-repos",
     "tests.test_model_endpoints::test_every_model_in_a_phase_prompt_resolves[03-plan.md-Opus 5.5]": "bestand-dieses-repos",
     "tests.test_model_endpoints::test_every_model_in_a_phase_prompt_resolves[04-implement.md-Sonnet 5]": "bestand-dieses-repos",
-    "tests.test_model_endpoints::test_every_model_in_a_phase_prompt_resolves[06-review.md-Opus 5]": "bestand-dieses-repos",
+    "tests.test_model_endpoints::test_every_model_in_a_phase_prompt_resolves[06-review.md-Fable 5.1]": "bestand-dieses-repos",
     "tests.test_model_endpoints::test_every_model_in_a_phase_prompt_resolves[07-commit.md-Haiku 4.5]": "bestand-dieses-repos",
     "tests.test_model_endpoints::test_every_model_in_the_routing_table_resolves": "bestand-dieses-repos",
     "tests.test_model_endpoints::test_the_declaration_is_not_empty": "bestand-dieses-repos",

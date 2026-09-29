@@ -1,6 +1,7 @@
 # Phase 6 · Review
 
-**Model:** Opus 5 — finds what Sonnet misses.
+**Model:** Fable 5.1 — finds what Sonnet misses, and reads the code a change
+calls instead of trusting its docstring.
 **Input:** the diff and `spec.md`. **Not** the author's reasoning.
 **Result:** `plans/changes/<name>/findings.md`
 **Gate:** no open `[AMBIGUITY]`, no open BLOCKER — `[DIVERGENT]` counts as
