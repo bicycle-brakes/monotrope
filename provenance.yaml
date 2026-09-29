@@ -14,6 +14,11 @@
 #
 # Laengster Praefix gewinnt. Eine Datei unter einem Pfad ohne Eintrag ist kein
 # Fehler der Datei, sondern eine Luecke dieser Karte (INFO "unmapped path").
+#
+# Reader in this repository (added 2026-09-29, bead coding-harness-qd7): the one
+# script that reads this map here is `scripts/check_frontmatter_current.py`. It
+# reads `paths:` (`prefix`, `frontmatter`) and `excluded:`. `allowed:` is
+# declared, not yet enforced; nothing here reads it.
 
 schema_version: 1
 
@@ -80,6 +85,15 @@ roles:
 # dieser Ebene ist als eigene Arbeit vorgemerkt (Phase 2), und bis dahin waere
 # ein BLOCK eine Behauptung ueber Arbeit, die niemand getan hat. `none` heisst:
 # hier gehoert keines hin.
+#
+# The three values, as `scripts/check_frontmatter_current.py` reads them (added
+# 2026-09-29, bead coding-harness-qd7):
+#   required  a document header, held present and with a current `updated:`
+#             date. Markdown files only.
+#   optional  not yet classified, not held: a file here is never reported,
+#             whether or not it carries frontmatter.
+#   none      no document header. A frontmatter that a tool reads as
+#             configuration may stand there; no document check reads it.
 # ---------------------------------------------------------------------------
 paths:
   # --- Phase 1: klassifiziert, ab sofort erzwungen ------------------------
@@ -102,9 +116,12 @@ paths:
     allowed: [human-written, ai-drafted-reviewed]
     frontmatter: required
     generated_blocks: true
+  # The agent definitions carry a frontmatter that Claude Code reads as
+  # configuration (name, model, tools). It is not a document header, so none is
+  # held here (bead coding-harness-qd7, decisions item 3).
   - prefix: ".claude/agents/"
     allowed: [human-written, ai-drafted-reviewed]
-    frontmatter: required
+    frontmatter: none
   - prefix: "docs/governance/quality-gates.md"
     allowed: [human-decided]
     frontmatter: required
@@ -118,13 +135,19 @@ paths:
   # --- Phase 2: kartiert, Klassifizierung folgt als eigene Arbeit ---------
   - prefix: "docs/adr/"
     allowed: [human-decided]
-    frontmatter: optional
+    frontmatter: required
+  - prefix: "docs/architecture/"
+    allowed: [human-written, ai-drafted-reviewed]
+    frontmatter: required
+  - prefix: "docs/research/"
+    allowed: [human-written, ai-drafted-reviewed]
+    frontmatter: required
   - prefix: "docs/decisions/"
     allowed: [human-decided, ai-drafted-reviewed]
     frontmatter: optional
   - prefix: "docs/governance/"
     allowed: [human-written, human-decided, ai-drafted-reviewed]
-    frontmatter: optional
+    frontmatter: required
   - prefix: "docs/evidence/"
     allowed: [human-written, ai-drafted-reviewed, machine-rendered]
     frontmatter: optional
@@ -138,7 +161,7 @@ paths:
     frontmatter: optional
   - prefix: "docs/how-to/"
     allowed: [human-written, ai-drafted-reviewed]
-    frontmatter: optional
+    frontmatter: required
   - prefix: "docs/konzept/adwaive/assets/"
     allowed: [machine-rendered]
     frontmatter: none

@@ -375,3 +375,34 @@ def test_the_stamp_is_idempotent_and_never_writes_a_header(tmp_path: Path) -> No
     assert cfc.stamp(repo / "docs/headless.md", TODAY) is False
     assert cfc.stamp(repo / "docs/twice.md", TODAY) is False
     assert alle()["headless.md"] == b"# no header at all\n"
+
+
+def test_the_map_holds_documents_not_harness_configuration() -> None:
+    """Criteria 1 and 7: the real map holds the documents a person reads, and no functional frontmatter."""
+    paths, excluded = cfc.load_map(REPO_ROOT)
+
+    def held(rel: str) -> bool:
+        return cfc.is_held(rel, paths, excluded)
+
+    for rel in (
+        "docs/adr/0001-early-parallelism.md",
+        "docs/architecture/x.md",
+        "docs/research/x.md",
+        "docs/how-to/x.md",
+        "docs/governance/x.md",
+        "docs/WORKFLOW.md",
+        "plans/changes/x/plan.md",
+        "docs/journal/handover/x.md",
+    ):
+        assert held(rel), f"{rel} is a document a person reads and must be held"
+    for rel in (
+        ".claude/agents/x.md",  # its frontmatter is configuration
+        ".agents/skills/x/SKILL.md",
+        "prompts/04-implement.md",
+        "templates/handover.md",
+        "plans/INDEX.md",
+        "README.md",
+        "AGENTS.md",
+        "docs/archive/x.md",
+    ):
+        assert not held(rel), f"{rel} carries no document header and must not be held"
