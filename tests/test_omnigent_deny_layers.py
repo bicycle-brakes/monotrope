@@ -418,6 +418,21 @@ def test_remove_takes_out_only_owned_policies(tmp_path: Path) -> None:
     assert path.read_bytes() == before and _backups(path) == backups
 
 
+def test_remove_works_on_a_config_with_a_broken_foreign_policy(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    """Removal deletes only owned policies and validates nothing: a foreign policy Omnigent rejects must not block it."""
+
+    def reject(_policies: dict) -> None:
+        raise ValueError("Omnigent would reject a foreign policy")
+
+    path = _config(tmp_path, FOREIGN + "  admin__broken:\n    type: no-such-type\n")
+    op.merge_config(path, validate=False)
+    monkeypatch.setattr(op, "_validate", reject)
+    with pytest.raises(ValueError):  # the install path still validates, so a broken config is not written to
+        op.merge_config(path, {**op.owned_policies(), op.OWNED_PREFIX + "x": {}}, validate=True)
+    assert op.merge_config(path, remove=True) == "removed"
+    assert list(yaml.safe_load(path.read_text(encoding="utf-8"))["policies"]) == ["admin__audit", "admin__broken"]
+
+
 def test_remove_drops_an_emptied_policies_key(tmp_path: Path) -> None:
     path = _config(tmp_path, "host: x\n")
     op.merge_config(path, validate=False)
@@ -500,6 +515,15 @@ def test_the_cli_merges_and_says_what_to_do_next(omnigent_py: str, tmp_path: Pat
     assert (
         removed.returncode == 0 and removed.stdout.startswith("removed:") and "omnigent server stop" in removed.stdout
     )
+
+
+def test_the_cli_removes_from_a_config_omnigent_would_reject(omnigent_py: str, tmp_path: Path) -> None:
+    path = _config(tmp_path, FOREIGN + "  admin__broken:\n    type: no-such-type\n")
+    op.merge_config(path, validate=False)
+    kept = {k: v for k, v in yaml.safe_load(path.read_text(encoding="utf-8"))["policies"].items() if k.startswith("admin__")}
+    removed = _run(omnigent_py, ["--merge-config", str(path), "--remove"], tmp_path)
+    assert removed.returncode == 0 and removed.stdout.startswith("removed:"), removed.stderr
+    assert yaml.safe_load(path.read_text(encoding="utf-8"))["policies"] == kept
 
 
 def test_installer_refuses_without_a_terminal(tmp_path: Path) -> None:

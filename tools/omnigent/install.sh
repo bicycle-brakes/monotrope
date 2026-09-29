@@ -13,6 +13,8 @@
 # coding_harness__* policies are replaced as a set, and the old file is kept as
 # config.yaml.bak-<timestamp> before any change. The result is validated with
 # Omnigent's own parser and CEL compiler first; on failure nothing is written.
+# --remove validates nothing: it deletes only our own policies, and a foreign
+# policy Omnigent rejects must not keep them in.
 #
 # It never starts or stops Omnigent. Omnigent reads `policies:` only when its
 # server starts - a run that changed the file says what to do about that.

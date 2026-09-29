@@ -370,7 +370,9 @@ def merge_config(
 
     Returns "created", "merged", "removed" or "unchanged". Keeps every key and every policy not
     named ``coding_harness__*``; replaces the owned ones as a set. Validates before anything is
-    written and keeps `<name>.bak-<timestamp>` before a change.
+    written and keeps `<name>.bak-<timestamp>` before a change. `remove=True` does not validate what
+    remains: it deletes only owned policies, so it cannot make a foreign one worse, and a foreign
+    policy Omnigent rejects must not block the moment the owned ones are to go.
     """
     path = Path(path)
     existed = path.exists()
@@ -388,7 +390,7 @@ def merge_config(
 
     if new_config == config and (existed or remove):
         return "unchanged"
-    if validate and merged:
+    if validate and merged and not remove:
         _validate(merged)
 
     if existed:
