@@ -79,6 +79,9 @@ rules:
   - prefix: scripts/check_docs.py
     rolle: mechanismus
     reason: "Frontmatter-, Link- und Anchor-Pruefung fuer die Dokumentation (bead bo0)"
+  - prefix: scripts/check_frontmatter_current.py
+    rolle: mechanismus
+    reason: "the check behind the gate frontmatter-current — the gate file travels, so its script does (bead coding-harness-qd7)"
   - prefix: scripts/check_bead_export.py
     rolle: mechanismus
     reason: "prueft den gerenderten Export Zeile fuer Zeile (bead bo0)"
@@ -126,6 +129,9 @@ rules:
   - prefix: tests/test_gate_record.py
     rolle: mechanismus
     reason: "prueft einen Automaten gegen eine Vorlage. Beides reist mit"
+  - prefix: tests/test_frontmatter_current.py
+    rolle: mechanismus
+    reason: "builds its own repositories and never reads this one's dates; holds in the probe copy (bead coding-harness-qd7)"
   - prefix: tests/test_regelwerk.py
     rolle: mechanismus
     reason: "die Grammatik der Regeltabelle reist; die konkreten Regeln sind Bestand (siehe REIST_NICHT)"
