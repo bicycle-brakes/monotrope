@@ -70,6 +70,21 @@ policies:
         ]
         ? {"result": "DENY", "reason": "coding-harness: Omnigent's " + event.data.name + " writes, runs, spawns or changes state outside Claude Code's permission rules - use the harness's own tools (list: scripts/omnigent_policy.py)"}
         : null
+  coding_harness__omnigent_asked_tools:
+    type: function
+    handler: omnigent.policies.builtins.cel.cel_policy
+    factory_params:
+      reason: "coding-harness: this Omnigent tool may send the task text to an outside routing judge."
+      expression: |-
+        has(event.type) && type(event.type) == string && event.type == "tool_call"
+        && has(event.data) && type(event.data) == map
+        && has(event.data.name) && type(event.data.name) == string
+        && event.data.name in [
+          "sys_advise_models",
+          "mcp__omnigent__sys_advise_models"
+        ]
+        ? {"result": "ASK", "reason": "coding-harness: Omnigent's " + event.data.name + " changes nothing, but sends the task text to the routing judge when one is configured - approve each use (list: scripts/omnigent_policy.py)"}
+        : null
   coding_harness__protected_paths:
     type: function
     handler: omnigent.policies.builtins.cel.cel_policy

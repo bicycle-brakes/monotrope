@@ -33,6 +33,7 @@ INSTALLER = REPO / "tools" / "omnigent" / "install.sh"
 SETTINGS = REPO / ".claude" / "settings.json"
 SESSION_START_HOOK = '"$CLAUDE_PROJECT_DIR"/tools/bd prime --hook-json'
 PROTECTED = next(iter(op.PROTECTED_PATHS))  # "/.omnigent/config.yaml"
+POLICIES = (op.WRITING_POLICY, op.ASKED_POLICY, op.PATHS_POLICY)  # the three policies the list renders
 
 
 # ---------------------------------------------------------------------------
@@ -109,12 +110,16 @@ def _verdict(entry: dict, policy: str) -> dict | None:
 
 
 def test_every_name_is_listed_once_with_a_reason() -> None:
-    both = set(op.DENIED_TOOLS) & set(op.ALLOWED_TOOLS)
-    assert not both, f"in both lists: {sorted(both)}"
-    for table in (op.DENIED_TOOLS, op.ALLOWED_TOOLS, op.PROTECTED_PATHS):
+    tables = {"denied": op.DENIED_TOOLS, "asked": op.ASKED_TOOLS, "allowed": op.ALLOWED_TOOLS}
+    for left, right in (("denied", "asked"), ("denied", "allowed"), ("asked", "allowed")):
+        both = set(tables[left]) & set(tables[right])
+        assert not both, f"in both the {left} and the {right} list: {sorted(both)}"
+    for table in (*tables.values(), op.PROTECTED_PATHS):
         for name, reason in table.items():
             assert isinstance(reason, str) and reason.strip(), f"{name!r} has no reason"
-    assert op.DENIED_TOOLS and op.ALLOWED_TOOLS and op.PROTECTED_PATHS, "an empty list denies nothing"
+    assert op.DENIED_TOOLS and op.ASKED_TOOLS and op.ALLOWED_TOOLS and op.PROTECTED_PATHS, (
+        "an empty list guards nothing"
+    )
 
 
 def test_the_tree_is_what_the_list_renders() -> None:
@@ -146,7 +151,7 @@ def test_the_list_matches_omnigents_native_surface(omnigent_py: str, tmp_path: P
     done = _run(omnigent_py, ["--surface"], tmp_path)
     assert done.returncode == 0, done.stderr
     surface = set(json.loads(done.stdout))
-    listed = set(op.DENIED_TOOLS) | set(op.ALLOWED_TOOLS)
+    listed = set(op.DENIED_TOOLS) | set(op.ASKED_TOOLS) | set(op.ALLOWED_TOOLS)
     assert surface - listed == set(), f"Omnigent offers tools this list does not classify: {sorted(surface - listed)}"
     assert listed - surface == set(), f"listed tools Omnigent does not offer: {sorted(listed - surface)}"
 
@@ -186,6 +191,71 @@ def test_check_names_an_allowed_tool_or_a_blanket_rule_in_the_settings(tmp_path:
         planted["permissions"]["deny"].append(bad)
         settings.write_text(json.dumps(planted), encoding="utf-8")
         assert any(bad in p for p in op.check(tmp_path)), f"{bad!r} was not caught"
+
+
+def _permissions() -> dict:
+    return json.loads(SETTINGS.read_text(encoding="utf-8"))["permissions"]
+
+
+def test_settings_ask_exactly_the_asked_tools() -> None:
+    ask = _permissions()["ask"]
+    assert sorted(ask) == sorted(op.PREFIX + tool for tool in op.ASKED_TOOLS)
+    assert op.PREFIX + "sys_advise_models" in ask
+    for kind in ("deny", "allow"):
+        for rule in _permissions().get(kind, []):
+            for tool in op.ASKED_TOOLS:
+                assert not fnmatch.fnmatchcase(op.PREFIX + tool, rule), f"{kind} rule {rule!r} covers the asked {tool}"
+
+
+def test_check_names_a_missing_ask_rule_and_an_asked_tool_moved_to_deny_or_allow(tmp_path: Path) -> None:
+    op.write(tmp_path)
+    settings = tmp_path / ".claude" / "settings.json"
+    base = json.loads(settings.read_text(encoding="utf-8"))
+    asked = op.PREFIX + next(iter(op.ASKED_TOOLS))
+
+    missing = json.loads(json.dumps(base))
+    missing["permissions"]["ask"].remove(asked)
+    settings.write_text(json.dumps(missing), encoding="utf-8")
+    assert any("lacks the ask rule" in p and asked in p for p in op.check(tmp_path)), "a missing ask rule passed"
+
+    extra = json.loads(json.dumps(base))
+    extra["permissions"]["ask"].append(op.PREFIX + "sys_os_read")
+    settings.write_text(json.dumps(extra), encoding="utf-8")
+    assert any("sys_os_read" in p for p in op.check(tmp_path)), "an ask rule outside the list passed"
+
+    for kind in ("deny", "allow"):
+        for rule in (asked, "mcp__omnigent__*", "mcp__omnigent"):
+            moved = json.loads(json.dumps(base))
+            moved["permissions"].setdefault(kind, []).append(rule)
+            settings.write_text(json.dumps(moved), encoding="utf-8")
+            assert any(kind in p and rule in p for p in op.check(tmp_path)), f"{kind} {rule!r} was not caught"
+
+    settings.write_text(json.dumps(base), encoding="utf-8")
+    assert op.check(tmp_path) == []
+
+
+def test_a_tool_moved_between_lists_is_caught(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    """The list says deny, the rendered tree still says ask: the tree is stale, and check() says so."""
+    op.write(tmp_path)
+    tool = next(iter(op.ASKED_TOOLS))
+    monkeypatch.setattr(op, "DENIED_TOOLS", {**op.DENIED_TOOLS, tool: op.ASKED_TOOLS[tool]})
+    monkeypatch.setattr(op, "ASKED_TOOLS", {})
+    problems = op.check(tmp_path)
+    assert any("policy.yaml differs" in p for p in problems)
+    assert any(f"lacks the deny rule {op.PREFIX}{tool}" in p for p in problems)
+    assert any(f"asks about {op.PREFIX}{tool}" in p for p in problems)
+
+
+def test_write_keeps_foreign_ask_rules_and_replaces_owned_ones(tmp_path: Path) -> None:
+    settings = tmp_path / ".claude" / "settings.json"
+    settings.parent.mkdir(parents=True)
+    settings.write_text(
+        json.dumps({"permissions": {"ask": ["Bash(git push:*)", "mcp__omnigent__stale_tool"]}}), encoding="utf-8"
+    )
+    op.write(tmp_path)
+    ask = json.loads(settings.read_text(encoding="utf-8"))["permissions"]["ask"]
+    assert ask == ["Bash(git push:*)", *op.layer1_ask_rules()]
+    assert op.check(tmp_path) == []
 
 
 def test_settings_keep_the_session_start_hook() -> None:
@@ -233,10 +303,10 @@ def test_write_keeps_an_edit_rule_it_does_not_own(tmp_path: Path) -> None:
 # ---------------------------------------------------------------------------
 
 
-def test_policy_file_has_only_the_two_owned_policies() -> None:
+def test_policy_file_has_only_the_three_owned_policies() -> None:
     data = yaml.safe_load(op.POLICY_FILE.read_text(encoding="utf-8"))
     assert list(data) == ["policies"]
-    assert sorted(data["policies"]) == sorted([op.WRITING_POLICY, op.PATHS_POLICY])
+    assert sorted(data["policies"]) == sorted(POLICIES)
     for name, spec in data["policies"].items():
         assert spec["type"] == "function", name
         assert spec["handler"] == op.CEL_HANDLER, name
@@ -267,6 +337,23 @@ def test_policy_denies_denied_tools_and_leaves_allowed_ones(omnigent_py: str, tm
             assert name in verdict["reason"], f"the refusal of {name} does not name it: {verdict['reason']}"
         else:
             assert verdict is None, f"{name} is allowed but was refused"
+        assert _verdict(entry, op.PATHS_POLICY) is None, f"{name} touched the protected-path policy"
+        assert _verdict(entry, op.ASKED_POLICY) is None, f"{name} touched the asked-tools policy"
+
+
+def test_policy_asks_about_asked_tools_and_nothing_else(omnigent_py: str, tmp_path: Path) -> None:
+    events, expect = [], []
+    for tool in op.ASKED_TOOLS:
+        for name in (tool, op.PREFIX + tool):
+            for arguments in (None, {}, {"task": "write the release notes"}):
+                events.append(_tool_call(name, arguments))
+                expect.append(name)
+
+    for entry, name in zip(_evaluate(omnigent_py, tmp_path, events), expect, strict=True):
+        verdict = _verdict(entry, op.ASKED_POLICY)
+        assert verdict and verdict["result"] == "ASK", f"{name} was not asked about"
+        assert name in verdict["reason"], f"the question about {name} does not name it: {verdict['reason']}"
+        assert _verdict(entry, op.WRITING_POLICY) is None, f"{name} is asked about, and was also denied"
         assert _verdict(entry, op.PATHS_POLICY) is None, f"{name} touched the protected-path policy"
 
 
@@ -326,7 +413,7 @@ def test_no_event_shape_raises_an_evaluation_error(omnigent_py: str, tmp_path: P
     results = _evaluate(omnigent_py, tmp_path, _odd_events())
     assert len(results) == len(_odd_events())
     for event, entry in zip(_odd_events(), results, strict=True):
-        for policy in (op.WRITING_POLICY, op.PATHS_POLICY):
+        for policy in POLICIES:
             assert entry[policy]["error"] is None, f"{policy} raised on {event}: {entry[policy]['error']}"
             assert entry[policy]["result"] is None, f"{policy} refused {event}"
 
@@ -365,13 +452,13 @@ def test_merge_keeps_foreign_keys_and_policies(tmp_path: Path) -> None:
     data = yaml.safe_load(path.read_text(encoding="utf-8"))
     assert data["host"] == "127.0.0.1" and data["telemetry"] == {"enabled": False}
     assert data["policies"]["admin__audit"] == {"type": "function", "function": "myorg.policies.audit"}
-    assert {k for k in data["policies"] if k.startswith(op.OWNED_PREFIX)} == {op.WRITING_POLICY, op.PATHS_POLICY}
+    assert {k for k in data["policies"] if k.startswith(op.OWNED_PREFIX)} == set(POLICIES)
 
 
 def test_merge_creates_a_missing_config_without_a_backup(tmp_path: Path) -> None:
     path = tmp_path / "not-yet" / "config.yaml"
     assert op.merge_config(path, validate=False) == "created"
-    assert set(yaml.safe_load(path.read_text(encoding="utf-8"))["policies"]) == {op.WRITING_POLICY, op.PATHS_POLICY}
+    assert set(yaml.safe_load(path.read_text(encoding="utf-8"))["policies"]) == set(POLICIES)
     assert _backups(path) == []
 
 

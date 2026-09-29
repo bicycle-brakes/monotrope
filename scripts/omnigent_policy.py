@@ -1,17 +1,22 @@
 #!/usr/bin/env python3
-"""The one list of Omnigent tools this repository denies, and what is derived from it.
+"""The one list of Omnigent tools this repository denies, asks about or allows, and what is derived from it.
 
 Omnigent's own tools reach a Claude Code session as ``mcp__omnigent__<tool>``.
 A path rule or a hook on Claude Code's file tools does not see them, so each
-tool that writes, runs, spawns or changes state is denied by name. This module
-is the single place that names them (plans/changes/omnigent-deny-layers):
+tool that writes, runs, spawns or changes state is denied by name. A tool that
+changes nothing but may send the caller's text to an outside judge is asked
+about each time it is used. This module is the single place that names them
+(plans/changes/omnigent-deny-layers):
 
-* layer 1 - ``permissions.deny`` in ``.claude/settings.json`` (holds alone);
+* layer 1 - ``permissions.deny`` and ``permissions.ask`` in ``.claude/settings.json``
+  (holds alone);
 * layer 2 - ``tools/omnigent/policy.yaml``, an Omnigent default policy that the
-  maintainer installs per machine with ``tools/omnigent/install.sh``.
+  maintainer installs per machine with ``tools/omnigent/install.sh``: one policy
+  that denies, one that asks, one that protects Omnigent's config file.
 
-Both are rendered from ``DENIED_TOOLS`` / ``PROTECTED_PATHS`` below. Nothing
-else in the repository types the list.
+The three classes are ``DENIED_TOOLS``, ``ASKED_TOOLS`` and ``ALLOWED_TOOLS``
+(disjoint; together Omnigent's native surface); ``PROTECTED_PATHS`` names the
+protected files. Nothing else in the repository types the list.
 
     python3 scripts/omnigent_policy.py --check            # is the tree what the list renders? (default)
     python3 scripts/omnigent_policy.py --write            # re-render policy.yaml and the settings rules
@@ -92,12 +97,17 @@ ALLOWED_TOOLS: dict[str, str] = {
     "sys_scheduled_task_list": "lists scheduled jobs",
     "sys_policy_registry": "lists policy types",
     "sys_list_models": "reads the model catalogue",
-    "sys_advise_models": "reads the model catalogue (rests on its docstring; the body was not read)",
     "list_comments": "reads review comments",
     "load_skill": "reads a skill",
     "read_skill_file": "reads a file of a skill",
     "browser_snapshot": "captures the current page",
     "browser_screenshot": "captures the current page",
+}
+
+# Changes nothing, but may send the caller's text to an outside service: the user is asked each time.
+# Neither denied nor silently allowed (decision 5 of plans/changes/omnigent-deny-layers/decisions.md).
+ASKED_TOOLS: dict[str, str] = {
+    "sys_advise_models": "changes nothing, but sends the task text to the routing judge when one is configured",
 }
 
 # Suffix of a file path -> why it is protected.
@@ -111,6 +121,7 @@ HARNESS_FILE_TOOLS: tuple[str, ...] = ("Write", "Edit", "MultiEdit")
 PREFIX = "mcp__omnigent__"  # how Claude Code names an Omnigent tool
 OWNED_PREFIX = "coding_harness__"  # what the installer may add, replace and remove
 WRITING_POLICY = OWNED_PREFIX + "omnigent_writing_tools"
+ASKED_POLICY = OWNED_PREFIX + "omnigent_asked_tools"
 PATHS_POLICY = OWNED_PREFIX + "protected_paths"
 CEL_HANDLER = "omnigent.policies.builtins.cel.cel_policy"
 
@@ -155,6 +166,11 @@ def layer1_rules() -> list[str]:
     return [PREFIX + tool for tool in DENIED_TOOLS] + _path_rules()
 
 
+def layer1_ask_rules() -> list[str]:
+    """The ask rules layer 1 owns: one per asked tool, by exact name."""
+    return [PREFIX + tool for tool in ASKED_TOOLS]
+
+
 # ---------------------------------------------------------------------------
 # Layer 2 - the Omnigent default policy
 # ---------------------------------------------------------------------------
@@ -196,6 +212,21 @@ def _writing_tools_expression() -> str:
     )
 
 
+def _asked_tools_expression() -> str:
+    reason = (
+        '"coding-harness: Omnigent\'s " + event.data.name + " changes nothing, but sends the task text to the '
+        'routing judge when one is configured - approve each use (list: scripts/omnigent_policy.py)"'
+    )
+    # Same `in` form as the writing tools, for the same reason (never `.exists(...)`).
+    spellings = list(ASKED_TOOLS) + [PREFIX + tool for tool in ASKED_TOOLS]
+    return (
+        f"{_guards_data()}\n"
+        f"&& event.data.name in {_cel_list(spellings)}\n"
+        f'? {{"result": "ASK", "reason": {reason}}}\n'
+        ": null"
+    )
+
+
 def _protected_paths_expression() -> str:
     reason = (
         '"coding-harness: " + event.data.arguments.file_path + " carries Omnigent\'s policy; '
@@ -214,7 +245,7 @@ def _protected_paths_expression() -> str:
 
 
 def owned_policies() -> dict[str, dict]:
-    """The two policies, as the mapping that goes under `policies:`."""
+    """The three policies, as the mapping that goes under `policies:`."""
 
     def policy(reason: str, expression: str) -> dict:
         return {
@@ -227,6 +258,10 @@ def owned_policies() -> dict[str, dict]:
         WRITING_POLICY: policy(
             "coding-harness: this Omnigent tool writes, runs, spawns or changes state.",
             _writing_tools_expression(),
+        ),
+        ASKED_POLICY: policy(
+            "coding-harness: this Omnigent tool may send the task text to an outside routing judge.",
+            _asked_tools_expression(),
         ),
         PATHS_POLICY: policy(
             "coding-harness: this file carries Omnigent's policy.",
@@ -289,6 +324,22 @@ def check(root: Path = ROOT) -> list[str]:
             continue
         if rule.startswith(PREFIX) or any(fnmatch.fnmatchcase(name, rule) for name in allowed_names):
             problems.append(f".claude/settings.json denies {rule}, which is not on the list of denied tools")
+
+    permissions = settings.get("permissions", {})
+    ask = permissions.get("ask", [])
+    wanted_ask = layer1_ask_rules()
+    problems += [f".claude/settings.json lacks the ask rule {rule}" for rule in wanted_ask if rule not in ask]
+    problems += [
+        f".claude/settings.json asks about {rule}, which is not on the list of asked tools"
+        for rule in ask
+        if rule.startswith(PREFIX) and rule not in wanted_ask
+    ]
+    # An asked tool must stay asked: a deny rule would refuse it outright, an allow rule would let it through.
+    covered = [*wanted_ask, PREFIX.rstrip("_")]
+    for kind in ("deny", "allow"):
+        for rule in permissions.get(kind, []):
+            if "(" not in rule and any(fnmatch.fnmatchcase(name, rule) for name in covered):
+                problems.append(f".claude/settings.json has the {kind} rule {rule}, which covers an asked tool")
     return problems
 
 
@@ -303,6 +354,8 @@ def write(root: Path = ROOT) -> None:
     permissions = settings.setdefault("permissions", {})
     kept = [rule for rule in permissions.get("deny", []) if not _is_owned_rule(rule)]
     permissions["deny"] = kept + layer1_rules()
+    kept_ask = [rule for rule in permissions.get("ask", []) if not rule.startswith(PREFIX)]
+    permissions["ask"] = kept_ask + layer1_ask_rules()
     settings_file.parent.mkdir(parents=True, exist_ok=True)
     settings_file.write_text(json.dumps(settings, indent=2, sort_keys=True) + "\n", encoding="utf-8")
 

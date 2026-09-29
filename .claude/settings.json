@@ -13,6 +13,9 @@
     ]
   },
   "permissions": {
+    "ask": [
+      "mcp__omnigent__sys_advise_models"
+    ],
     "deny": [
       "mcp__omnigent__sys_os_write",
       "mcp__omnigent__sys_os_edit",
