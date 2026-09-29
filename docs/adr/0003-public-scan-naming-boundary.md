@@ -8,7 +8,7 @@ updated: 2026-09-29
 owner: framework-architect
 provenance: human-decided
 produced_by: {kind: llm-session, name: claude-code, version: "2026-09-19"}
-review: {status: pending, approved_by: null, approved_at: null}
+review: {status: approved, approved_by: maintainer, approved_at: 2026-09-22}
 tags: [adr]
 ---
 

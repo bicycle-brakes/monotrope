@@ -5,10 +5,11 @@ status: accepted
 created: 2026-09-23
 last_reviewed: 2026-09-23
 updated: 2026-09-29
+superseded_in_part_by: ["0006"]
 owner: framework-architect
 provenance: human-decided
 produced_by: {kind: llm-session, name: claude-code, version: "2026-09-23"}
-review: {status: pending, approved_by: null, approved_at: null}
+review: {status: approved, approved_by: maintainer, approved_at: 2026-09-23}
 tags: [adr]
 ---
 

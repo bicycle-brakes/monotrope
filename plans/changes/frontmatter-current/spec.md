@@ -268,6 +268,18 @@ Each of these is reversible and binds nothing beyond this change.
   in `docs/governance/regelwerk.md` — an approval name written by an agent
   would be the signature rule RB-M2 exists against; the body's Review line
   stays the record of acceptance.
+  **Corrected in repair round 1 (finding F-1), 2026-09-29:** the values above
+  made the header contradict the body. Each header now restates what its own
+  body says, nothing more. `status:` is `superseded` with `superseded_by:
+  "0006"` where the Status line says superseded as a whole (0001), and stays
+  `accepted` with `superseded_in_part_by: ["0005", "0006"]` (0002) or
+  `["0006"]` (0005) where it says superseded in part; `review:` is `{status:
+  approved, approved_by: maintainer, approved_at: <date>}` with the date of
+  the acceptance the body's Review line gives (0001–0003: 2026-09-22, 0004
+  and 0005: 2026-09-23, 0006: 2026-09-27). This replaces the earlier `[DETAIL]`
+  ("`status: accepted`", "`review: pending`") for the six headers; the
+  plan's header template is unchanged text, written for that earlier detail.
+  Copying an approval the body already records is not writing one.
 - **The three writers write `updated:`,** so a new held file is not born
   reported: the entry script, the handover template and the handover skill.
   The skill takes effect after `tools/claude-code/install.sh`.
