@@ -155,7 +155,7 @@ REIST_NICHT: dict[str, str] = {
 # `scripts/` catch-all), the list travels with `ci_gates.py`, so in the throwaway repo the entry
 # points at a file that is not there. Same class, same reason as the other `bestand-dieses-repos`
 # cases: the claim is about this repository's script inventory.
-DECKEL = 32  # 2026-09-20 angehoben (Cluster D, 2ee-Welle 3): die 7 neuen Faelle sind die Agent-Modelle gegen den geruest-Rumpf model-endpoints.yaml im Leerprobekopf — im Ziel loest die Instanz sie gegen ihre eigene Deklaration
+DECKEL = 32  # zuletzt angehoben am 2026-09-29 (31 -> 32); der Grund jeder Anhebung steht im Blockkommentar darueber
 
 
 # ---------------------------------------------------------------------------
