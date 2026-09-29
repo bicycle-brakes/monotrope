@@ -103,6 +103,7 @@ status: draft
 implementation_status: none
 date: {heute}
 last_reviewed: {heute}
+updated: {heute}
 supersedes: null
 superseded_by: null
 bead: {bead}

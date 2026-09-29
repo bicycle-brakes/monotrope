@@ -5,6 +5,7 @@ subcategory: quality-gates
 status: current
 created: 2026-04-17
 last_reviewed: 2026-08-14
+updated: 2026-09-29
 owner: Data Architect
 provenance: human-decided
 review:

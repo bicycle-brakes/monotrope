@@ -1,3 +1,18 @@
+---
+title: "ADR 0001 — Early parallelism: Omnigent coordinates coding workers from M0"
+category: adr
+status: superseded
+created: 2026-09-19
+last_reviewed: 2026-09-22
+updated: 2026-09-29
+superseded_by: "0006"
+owner: framework-architect
+provenance: human-decided
+produced_by: {kind: llm-session, name: claude-code, version: "2026-09-19"}
+review: {status: approved, approved_by: maintainer, approved_at: 2026-09-22}
+tags: [adr]
+---
+
 # ADR 0001 — Early parallelism: Omnigent coordinates coding workers from M0
 
 * Status: accepted, superseded by ADR 0006 (2026-09-27) · amends D-3 and

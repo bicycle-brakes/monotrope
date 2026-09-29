@@ -1,3 +1,17 @@
+---
+title: "ADR 0004 — The tracker render is the portable contract (D-4 amended)"
+category: adr
+status: accepted
+created: 2026-09-22
+last_reviewed: 2026-09-23
+updated: 2026-09-29
+owner: framework-architect
+provenance: human-decided
+produced_by: {kind: llm-session, name: claude-code, version: "2026-09-22"}
+review: {status: approved, approved_by: maintainer, approved_at: 2026-09-23}
+tags: [adr]
+---
+
 # ADR 0004 — The tracker render is the portable contract (D-4 amended)
 
 * Status: accepted · amends D-4 of the 2026-09-16 interview

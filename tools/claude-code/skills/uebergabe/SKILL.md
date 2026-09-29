@@ -78,6 +78,7 @@ vorhanden, sonst in Variante A von `templates/handover.md`:
 title: "Session handover — <topic>, <JJJJ-MM-TT>"
 category: handover
 created: <JJJJ-MM-TT>
+updated: <JJJJ-MM-TT>
 direction: framework->framework
 provenance: ai-drafted-reviewed
 produced_by:

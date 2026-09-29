@@ -19,6 +19,7 @@ from __future__ import annotations
 import json
 import subprocess
 import sys
+from datetime import date
 from pathlib import Path
 
 import pytest
@@ -84,6 +85,9 @@ def test_new_change_creates_the_folder_and_a_current_index(workflow) -> None:
     assert exit_code == 0
     assert (workflow / "changes" / "probe" / "research.md").is_file()
     assert reg.INDEX.is_file(), "der Index wurde nicht mitgerendert"
+    # qd7: a new document is born current, or the check behind `frontmatter-current` would report it.
+    scaffold = (workflow / "changes" / "probe" / "research.md").read_text(encoding="utf-8")
+    assert f"\nupdated: {date.today().isoformat()}\n" in scaffold.split("\n---\n", 1)[0] + "\n"
 
 
 def test_new_change_refuses_a_closed_bead(workflow) -> None:

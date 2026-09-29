@@ -6,6 +6,7 @@ status: current
 version: 2.0.0
 created: 2026-08-14
 last_reviewed: 2026-09-19
+updated: 2026-09-29
 owner: Data Architect
 provenance: human-decided
 produced_by: {kind: llm-session, name: claude-code, version: "2026-08-14"}

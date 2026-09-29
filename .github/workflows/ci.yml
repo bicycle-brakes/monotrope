@@ -20,6 +20,8 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
       - name: Install the pinned toolchain
         id: setup-deps
         run: python3 -m pip install pytest==8.3.4 PyYAML ruff==0.9.10
@@ -78,6 +80,10 @@ jobs:
         if: ${{ !cancelled() }}
         run: python3 scripts/check_docs.py
         continue-on-error: true
+      - name: Every held document's updated date is current
+        id: frontmatter-current
+        if: ${{ !cancelled() }}
+        run: python3 scripts/check_frontmatter_current.py
       - name: The rendered bead export parses line by line
         id: bead-export
         if: ${{ !cancelled() }}

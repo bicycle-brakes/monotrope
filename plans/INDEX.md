@@ -16,6 +16,11 @@ Dateien dazukommen.
 | [`changes/archive/2026-09-21-reproducible-bead-export/spec.md`](changes/archive/2026-09-21-reproducible-bead-export/spec.md) | accepted | done | 2026-09-21 | coding-harness-1jg.1 |
 | [`changes/archive/2026-09-23-gate-placement/research.md`](changes/archive/2026-09-23-gate-placement/research.md) | accepted | done | 2026-09-23 | coding-harness-1jg.2 |
 | [`changes/archive/2026-09-23-tracker-access-point/research.md`](changes/archive/2026-09-23-tracker-access-point/research.md) | accepted | done | 2026-09-23 | coding-harness-1jg.3 |
+| [`changes/frontmatter-current/decisions.md`](changes/frontmatter-current/decisions.md) | accepted | none | 2026-09-29 | coding-harness-qd7 |
+| [`changes/frontmatter-current/findings.md`](changes/frontmatter-current/findings.md) | draft | none | 2026-09-29 | coding-harness-qd7 |
+| [`changes/frontmatter-current/plan.md`](changes/frontmatter-current/plan.md) | draft | none | 2026-09-29 | coding-harness-qd7 |
+| [`changes/frontmatter-current/research.md`](changes/frontmatter-current/research.md) | draft | none | 2026-09-29 | coding-harness-qd7 |
+| [`changes/frontmatter-current/spec.md`](changes/frontmatter-current/spec.md) | draft | none | 2026-09-29 | coding-harness-qd7 |
 | [`changes/omnigent-deny-layers/decisions.md`](changes/omnigent-deny-layers/decisions.md) | accepted | none | 2026-09-29 | coding-harness-rex |
 | [`changes/omnigent-deny-layers/findings.md`](changes/omnigent-deny-layers/findings.md) | draft | partial | 2026-09-29 | coding-harness-rex |
 | [`changes/omnigent-deny-layers/plan.md`](changes/omnigent-deny-layers/plan.md) | draft | partial | 2026-09-29 | coding-harness-rex |

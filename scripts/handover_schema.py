@@ -71,6 +71,10 @@ PROJEKT_PFLICHT: frozenset[str] = frozenset({"target_repo", "target_ref", "statu
 OPTIONAL: frozenset[str] = frozenset(
     {
         "last_reviewed",
+        # The date of the last change. Optional here because a handover outside a
+        # `required` prefix does not need one; under the prefixes that are held,
+        # `scripts/check_frontmatter_current.py` requires it (bead coding-harness-qd7).
+        "updated",
         "related",
         "source",
         "source_workflow",

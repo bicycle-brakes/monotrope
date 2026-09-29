@@ -29,6 +29,11 @@
 #               hydrates the tracker (checksum-verified pinned bd, then
 #               refs/dolt/data) before this gate runs. Where that cannot
 #               happen the gate exits 3 (see floor).
+#   needs_history  optional boolean: the derived CI checks out the full history
+#               (`fetch-depth: 0`) in the job that runs this gate; no other job
+#               gets it. A gate that asks when a file last changed cannot
+#               answer from the one commit a hosted checkout holds, and says
+#               so with exit 3 instead of guessing (bead coding-harness-qd7).
 #   reason      why this gate exists, in one sentence.
 
 schema_version: 2
@@ -93,6 +98,16 @@ gates:
     floor: false
     placement: both
     reason: Scharf geschaltet wird er, sobald bt8 die 35 gemessenen Korpus-Befunde (governance/WORKFLOW-Links, Frontmatter-Luecken) abgearbeitet hat — bis dahin meldet er und blockiert nicht.
+
+  - id: frontmatter-current
+    title: Every held document's updated date is current
+    command: python3 scripts/check_frontmatter_current.py
+    job: verify
+    enforcement: block
+    floor: false
+    placement: both
+    needs_history: true
+    reason: A header older than its document's last change misleads every reader, and the maintainer asked that a stale one cannot be merged (bead coding-harness-qd7).
 
   - id: bead-export
     title: The rendered bead export parses line by line

@@ -1,3 +1,18 @@
+---
+title: "ADR 0005 — Workers claim and close their own bead; the coordinator no longer writes alone"
+category: adr
+status: accepted
+created: 2026-09-23
+last_reviewed: 2026-09-23
+updated: 2026-09-29
+superseded_in_part_by: ["0006"]
+owner: framework-architect
+provenance: human-decided
+produced_by: {kind: llm-session, name: claude-code, version: "2026-09-23"}
+review: {status: approved, approved_by: maintainer, approved_at: 2026-09-23}
+tags: [adr]
+---
+
 # ADR 0005 — Workers claim and close their own bead; the coordinator no longer writes alone
 
 * Status: accepted, superseded in part by ADR 0006 (2026-09-27) ·
