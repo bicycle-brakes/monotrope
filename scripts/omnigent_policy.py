@@ -22,6 +22,10 @@ else in the repository types the list.
 Two modes run only under Omnigent's own interpreter (they import Omnigent):
 ``--surface`` prints the tool names of Omnigent's native surface, ``--evaluate``
 runs events read from stdin through the rendered policies.
+
+``--print-python`` names that interpreter (``$OMNIGENT_PYTHON``, else the ``omnigent`` launcher's).
+It needs nothing but the standard library, so any ``python3`` can ask; ``install.sh`` does, and
+so the installer and the tests resolve Omnigent's interpreter in one place.
 """
 
 from __future__ import annotations
@@ -37,8 +41,6 @@ import sys
 import tempfile
 from datetime import datetime
 from pathlib import Path
-
-import yaml
 
 ROOT = Path(__file__).resolve().parent.parent
 POLICY_FILE = ROOT / "tools" / "omnigent" / "policy.yaml"
@@ -313,6 +315,8 @@ def write(root: Path = ROOT) -> None:
 def _load_config(path: Path) -> dict:
     if not path.exists():
         return {}
+    import yaml  # not at module level: --print-python must run under any python3
+
     data = yaml.safe_load(path.read_text(encoding="utf-8"))
     if data is None:
         return {}
@@ -326,6 +330,8 @@ def _load_config(path: Path) -> dict:
 
 def _file_policies() -> dict[str, dict]:
     """The policies of the committed tools/omnigent/policy.yaml."""
+    import yaml
+
     data = yaml.safe_load(POLICY_FILE.read_text(encoding="utf-8"))
     return dict(data["policies"])
 
@@ -348,6 +354,8 @@ def _validate(policies: dict[str, dict]) -> None:
 
 
 def _dump(data: dict) -> str:
+    import yaml
+
     class _Dumper(yaml.SafeDumper):
         pass
 
@@ -446,16 +454,31 @@ def omnigent_python() -> str | None:
         return None
     try:
         with Path(launcher).resolve().open(encoding="utf-8", errors="replace") as handle:
-            first = handle.readline().strip()
+            head = [handle.readline().strip(), handle.readline().strip()]
     except OSError:
         return None
+    return _launcher_interpreter(*head)
+
+
+def _launcher_interpreter(first: str, second: str = "") -> str | None:
+    """The interpreter a launcher's first two lines name; None when it is not an executable file.
+
+    Three forms: `#!/path/to/python`, `#!/usr/bin/env python3` (looked up on the PATH), and the
+    `#!/bin/sh` + `'''exec' "/path with spaces/python" "$0" "$@"` form installers use for a path a
+    shebang cannot carry. install.sh asks this function (`--print-python`) rather than parse the line itself.
+    """
     if not first.startswith("#!"):
         return None
-    parts = shlex.split(first[2:])
-    if parts and Path(parts[0]).name == "env" and len(parts) > 1:
+    try:
+        parts = shlex.split(first[2:])
+        if Path(parts[0]).name in ("sh", "bash") and second.startswith("'''exec'"):
+            parts = shlex.split(second[len("'''exec'") :])
+    except (ValueError, IndexError):
+        return None
+    if Path(parts[0]).name == "env" and len(parts) > 1:
         found = shutil.which(parts[1])
         return found if found and os.access(found, os.X_OK) else None
-    return parts[0] if parts and os.access(parts[0], os.X_OK) else None
+    return parts[0] if os.access(parts[0], os.X_OK) else None
 
 
 def _surface() -> list[str]:
@@ -509,6 +532,7 @@ def main(argv: list[str] | None = None) -> int:
     mode.add_argument("--write", action="store_true", help="re-render policy.yaml and the settings rules")
     mode.add_argument("--merge-config", metavar="PATH", help="merge the policies into the Omnigent config at PATH")
     mode.add_argument("--installed", metavar="PATH", help="do the policies at PATH equal the repository's?")
+    mode.add_argument("--print-python", action="store_true", help="print Omnigent's interpreter; exit 1 if none")
     mode.add_argument("--surface", action="store_true", help="(Omnigent's Python) print the native tool surface")
     mode.add_argument("--evaluate", action="store_true", help="(Omnigent's Python) evaluate events from stdin")
     parser.add_argument("--remove", action="store_true", help="with --merge-config: take the owned policies out")
@@ -520,6 +544,13 @@ def main(argv: list[str] | None = None) -> int:
     if args.write:
         write()
         print("rewrote tools/omnigent/policy.yaml and the Omnigent rules of .claude/settings.json")
+        return 0
+
+    if args.print_python:
+        found = omnigent_python()
+        if not found:
+            return 1
+        print(found)
         return 0
 
     if args.surface:

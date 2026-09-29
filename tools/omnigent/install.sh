@@ -20,8 +20,8 @@
 # server starts - a run that changed the file says what to do about that.
 #
 # The merge itself is scripts/omnigent_policy.py, run with Omnigent's own
-# Python ($OMNIGENT_PYTHON, else the interpreter named in the first line of the
-# `omnigent` launcher), because it needs Omnigent to validate.
+# Python ($OMNIGENT_PYTHON, else the interpreter the `omnigent` launcher names;
+# `omnigent_policy.py --print-python` decides), because it needs Omnigent to validate.
 
 set -euo pipefail
 
@@ -40,17 +40,15 @@ if [ "$mode" != check ] && [ ! -t 0 ]; then
   exit 2
 fi
 
-py="${OMNIGENT_PYTHON:-}"
-if [ -z "$py" ]; then
-  launcher=$(command -v omnigent || true)
-  if [ -n "$launcher" ]; then
-    shebang=$(head -n 1 "$launcher")
-    case "$shebang" in
-      '#!'*) py=${shebang#'#!'} ;;
-    esac
-  fi
+# One resolution, in the module: any python3 can ask it (it needs only the
+# standard library); the tests use the same function.
+boot=$(command -v python3 || true)
+if [ -z "$boot" ]; then
+  echo "python3 not found on the PATH - it is needed to locate Omnigent's Python" >&2
+  exit 2
 fi
-if [ -z "$py" ] || [ ! -x "$py" ]; then
+py=$("$boot" "$tool" --print-python) || py=""
+if [ -z "$py" ]; then
   echo "Omnigent not found: no \$OMNIGENT_PYTHON and no usable 'omnigent' launcher on the PATH" >&2
   exit 2
 fi

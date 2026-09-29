@@ -520,7 +520,9 @@ def test_the_cli_merges_and_says_what_to_do_next(omnigent_py: str, tmp_path: Pat
 def test_the_cli_removes_from_a_config_omnigent_would_reject(omnigent_py: str, tmp_path: Path) -> None:
     path = _config(tmp_path, FOREIGN + "  admin__broken:\n    type: no-such-type\n")
     op.merge_config(path, validate=False)
-    kept = {k: v for k, v in yaml.safe_load(path.read_text(encoding="utf-8"))["policies"].items() if k.startswith("admin__")}
+    kept = {
+        k: v for k, v in yaml.safe_load(path.read_text(encoding="utf-8"))["policies"].items() if k.startswith("admin__")
+    }
     removed = _run(omnigent_py, ["--merge-config", str(path), "--remove"], tmp_path)
     assert removed.returncode == 0 and removed.stdout.startswith("removed:"), removed.stderr
     assert yaml.safe_load(path.read_text(encoding="utf-8"))["policies"] == kept
@@ -604,6 +606,59 @@ def test_installer_runs_end_to_end_in_a_temporary_home(omnigent_py: str, tmp_pat
     assert run(terminal=True) == 0 and _backups(target) == [], "a rerun changed or backed up the config"
     assert run("--remove", terminal=True) == 0
     assert run("--check", terminal=False) == 1
+
+
+def _fake_python(directory: Path, name: str = "python3") -> Path:
+    """An executable that runs this test's interpreter (so PyYAML is there), under a name and directory of choice."""
+    directory.mkdir(parents=True, exist_ok=True)
+    path = directory / name
+    path.write_text(f'#!/bin/sh\nexec "{sys.executable}" "$@"\n', encoding="utf-8")
+    path.chmod(0o755)
+    return path
+
+
+def test_launcher_forms_resolve_to_the_interpreter(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    direct = _fake_python(tmp_path / "plain", "python")
+    spaced = _fake_python(tmp_path / "a dir with spaces", "python")
+    bin_dir = tmp_path / "bin"
+    on_path = _fake_python(bin_dir)
+    monkeypatch.setenv("PATH", f"{bin_dir}:/usr/bin:/bin")
+    resolve = op._launcher_interpreter
+    assert resolve(f"#!{direct}") == str(direct)
+    assert resolve("#!/usr/bin/env python3") == str(on_path)
+    assert resolve("#!/usr/bin/env no-such-interpreter-anywhere") is None
+    assert resolve("#!/bin/sh", f'\'\'\'exec\' "{spaced}" "$0" "$@"') == str(spaced)
+    assert resolve(f"#!{tmp_path}/not/there") is None
+    assert resolve("echo not a launcher") is None
+    assert resolve("#!") is None
+
+
+def test_installer_and_module_resolve_omnigent_alike(tmp_path: Path) -> None:
+    """The launcher names its interpreter as `env python3` - a form the installer once rejected."""
+    bin_dir = tmp_path / "bin"
+    _fake_python(bin_dir)
+    launcher = bin_dir / "omnigent"
+    launcher.write_text("#!/usr/bin/env python3\nprint('not run')\n", encoding="utf-8")
+    launcher.chmod(0o755)
+    env = _env(tmp_path)
+    env["PATH"] = f"{bin_dir}:/usr/bin:/bin"
+    env.pop("OMNIGENT_PYTHON", None)
+
+    named = subprocess.run(
+        [str(bin_dir / "python3"), str(SCRIPT), "--print-python"], capture_output=True, text=True, env=env, check=False
+    )
+    assert named.returncode == 0 and named.stdout.strip() == str(bin_dir / "python3"), named.stderr
+    done = subprocess.run(
+        ["/bin/bash", str(INSTALLER), "--check"],
+        stdin=subprocess.DEVNULL,
+        capture_output=True,
+        text=True,
+        env=env,
+        timeout=60,
+        check=False,
+    )
+    assert "Omnigent not found" not in done.stderr, "the installer did not resolve what the module resolves"
+    assert done.returncode == 1 and "does not exist" in done.stdout, (done.stdout, done.stderr)
 
 
 def test_omnigent_python_prefers_the_variable(monkeypatch: pytest.MonkeyPatch) -> None:
