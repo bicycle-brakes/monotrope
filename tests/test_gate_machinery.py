@@ -1,9 +1,9 @@
-"""Mutationsnachweise und Abdeckung der Gate-Maschinerie (RB-G4, bead bo0).
+"""Mutation proofs and coverage of the gate machinery (RB-G4, bead bo0).
 
-Ein Test, der nur assertiert, dass es heute gruen ist, prueft die Welt und
-nicht das Gate. Diese Datei haelt fuer jeden selbstgebauten Gate den Lauf,
-der ihn rot macht — und fuer die uebrigen Scripts die Ausfuehrung, die die
-Sperrklinken (OHNE_AUFRUFER / OHNE_TEST in ci_gates.py) verlangen.
+A test that only asserts that it is green today checks the world and not the
+gate. For every self-built gate this file holds the run that turns it red — and
+for the remaining scripts the execution that the ratchets (OHNE_AUFRUFER /
+OHNE_TEST in ci_gates.py) demand.
 """
 
 from __future__ import annotations
@@ -20,7 +20,7 @@ sys.path.insert(0, str(REPO_ROOT / "scripts"))
 
 
 # --------------------------------------------------------------------------
-# gate-schema — das Gate, das die Gate-Datei selbst liest
+# gate-schema — the gate that reads the gate file itself
 # --------------------------------------------------------------------------
 
 
@@ -37,12 +37,12 @@ def test_gate_schema_gate_goes_red_when_an_entry_has_no_command() -> None:
                 "enforcement": "block",
                 "floor": True,
                 "placement": "both",
-                "reason": "ein Seed, der den Schemafehler demonstriert",
+                "reason": "a seed that demonstrates the schema error",
             }
         ],
     }
     befunde = ci_gates.validate_schema(schlecht)
-    assert befunde, "ein Gate ohne command und ohne action muss ins Schema fallen"
+    assert befunde, "a gate without command and without action must fail the schema"
     assert any("kaputt" in b for b in befunde)
 
 
@@ -54,7 +54,7 @@ def test_gate_schema_gate_accepts_the_real_gate_file() -> None:
 
 
 def test_gate_schema_gate_rejects_a_non_boolean_needs_tracker() -> None:
-    """Bead 4t8: needs_tracker steuert einen CI-Schritt — ein Text dort waere Stille."""
+    """Bead 4t8: needs_tracker controls a CI step — a text there would be silence."""
     import ci_gates
 
     schlecht = {
@@ -69,17 +69,17 @@ def test_gate_schema_gate_rejects_a_non_boolean_needs_tracker() -> None:
                 "floor": True,
                 "placement": "both",
                 "needs_tracker": "yes",
-                "reason": "ein Seed, der den Schemafehler demonstriert",
+                "reason": "a seed that demonstrates the schema error",
             }
         ],
     }
     befunde = ci_gates.validate_schema(schlecht)
-    assert befunde, "needs_tracker muss ein Boolean sein"
+    assert befunde, "needs_tracker must be a boolean"
     assert any("needs_tracker" in b for b in befunde)
 
 
 def test_gate_schema_gate_rejects_an_unknown_placement() -> None:
-    """Bead 1jg.2: placement ist geschlossen — ein viertes Wort ist ein Schemafehler."""
+    """Bead 1jg.2: placement is closed — a fourth word is a schema error."""
     import ci_gates
 
     schlecht = {
@@ -93,17 +93,17 @@ def test_gate_schema_gate_rejects_an_unknown_placement() -> None:
                 "enforcement": "block",
                 "floor": True,
                 "placement": "manchmal",
-                "reason": "ein Seed, der den Schemafehler demonstriert",
+                "reason": "a seed that demonstrates the schema error",
             }
         ],
     }
     befunde = ci_gates.validate_schema(schlecht)
-    assert befunde, "placement muss dem geschlossenen Vokabular folgen"
+    assert befunde, "placement must follow the closed vocabulary"
     assert any("placement" in b for b in befunde)
 
 
 def test_gate_schema_gate_requires_a_placement() -> None:
-    """Bead 1jg.2: ohne placement waere der Ort des Messens wieder Implizitwissen."""
+    """Bead 1jg.2: without placement the place of measuring would be implicit knowledge again."""
     import ci_gates
 
     schlecht = {
@@ -116,19 +116,19 @@ def test_gate_schema_gate_requires_a_placement() -> None:
                 "job": "verify",
                 "enforcement": "block",
                 "floor": True,
-                "reason": "ein Seed, der den Schemafehler demonstriert",
+                "reason": "a seed that demonstrates the schema error",
             }
         ],
     }
     befunde = ci_gates.validate_schema(schlecht)
-    assert befunde, "placement ist Pflicht"
+    assert befunde, "placement is mandatory"
     assert any("placement" in b for b in befunde)
 
 
 def test_the_generated_workflow_leaves_writer_only_gates_out(tmp_path: Path, monkeypatch) -> None:
-    """Bead 1jg.2: writer-only Gates misst nur die Schreibmaschine — die
-    abgeleitete ci.yml haelt sie deklariert raus, und ein writer-only Gate mit
-    needs_tracker loest dort auch keine Hydratation aus."""
+    """Bead 1jg.2: writer-only gates are measured only by the writing machine —
+    the derived ci.yml keeps them out by declaration, and a writer-only gate with
+    needs_tracker triggers no hydration there either."""
     import ci_gates
 
     doc = {
@@ -142,7 +142,7 @@ def test_the_generated_workflow_leaves_writer_only_gates_out(tmp_path: Path, mon
                 "enforcement": "block",
                 "floor": True,
                 "placement": "both",
-                "reason": "Vergleichsmassstab des Seeds",
+                "reason": "benchmark of the seed",
             },
             {
                 "id": "nur-schreiber",
@@ -153,7 +153,7 @@ def test_the_generated_workflow_leaves_writer_only_gates_out(tmp_path: Path, mon
                 "floor": True,
                 "placement": "writer",
                 "needs_tracker": True,
-                "reason": "Seed fuer die deklarierte Auslassung",
+                "reason": "seed for the declared omission",
             },
         ],
     }
@@ -162,16 +162,16 @@ def test_the_generated_workflow_leaves_writer_only_gates_out(tmp_path: Path, mon
     monkeypatch.setattr(ci_gates, "GATE_FILE", gate_datei)
 
     ableitung = ci_gates.generate_ci()
-    assert "nur-schreiber" not in ableitung, "writer-only Gates gehoeren nicht in die CI"
+    assert "nur-schreiber" not in ableitung, "writer-only gates do not belong in CI"
     assert "lauf-ueberall" in ableitung
     assert "Hydrate the tracker" not in ableitung, (
-        "ein nur-writer Gate mit needs_tracker darf die CI-Hydratation nicht anstossen"
+        "a writer-only gate with needs_tracker must not trigger the CI hydration"
     )
 
 
 def test_the_local_command_list_skips_hosted_only_gates(tmp_path: Path, monkeypatch, capsys) -> None:
-    """Bead 1jg.2: hosted-only Gates kann der lokale Lauf nicht messen — er
-    laesst sie deklariert aus, statt sie unmoeglich rot laufen zu lassen."""
+    """Bead 1jg.2: hosted-only gates cannot be measured by the local run — it
+    leaves them out by declaration instead of letting them run impossibly red."""
     import ci_gates
 
     doc = {
@@ -185,7 +185,7 @@ def test_the_local_command_list_skips_hosted_only_gates(tmp_path: Path, monkeypa
                 "enforcement": "block",
                 "floor": True,
                 "placement": "both",
-                "reason": "Vergleichsmassstab des Seeds",
+                "reason": "benchmark of the seed",
             },
             {
                 "id": "nur-ci",
@@ -195,7 +195,7 @@ def test_the_local_command_list_skips_hosted_only_gates(tmp_path: Path, monkeypa
                 "enforcement": "block",
                 "floor": True,
                 "placement": "hosted",
-                "reason": "Seed fuer die deklarierte Auslassung",
+                "reason": "seed for the declared omission",
             },
         ],
     }
@@ -206,12 +206,12 @@ def test_the_local_command_list_skips_hosted_only_gates(tmp_path: Path, monkeypa
 
     assert ci_gates.main() == 0
     ausgegeben = capsys.readouterr().out
-    assert "nur-ci" not in ausgegeben, "hosted-only Gates gehoeren nicht in den lokalen Lauf"
+    assert "nur-ci" not in ausgegeben, "hosted-only gates do not belong in the local run"
     assert "lauf-ueberall" in ausgegeben
 
 
 # --------------------------------------------------------------------------
-# ci-drift — die abgeleitete ci.yml gegen den Handgriff
+# ci-drift — the derived ci.yml against the hand edit
 # --------------------------------------------------------------------------
 
 
@@ -223,11 +223,11 @@ def test_ci_drift_gate_goes_red_when_the_workflow_is_hand_edited(tmp_path: Path,
 
     monkeypatch.setattr(ci_gates, "CI_FILE", ziel)
     ziel.write_text(soll, encoding="utf-8")
-    assert ci_gates.check_ci() == 0, "die exakte Ableitung muss als gruen durchgehen"
+    assert ci_gates.check_ci() == 0, "the exact derivation must pass as green"
 
     hand = soll.replace("cron:", "cron-handgriff:")
     ziel.write_text(hand, encoding="utf-8")
-    assert ci_gates.check_ci() == 1, "ein Handgriff in der abgeleiteten Datei muss rot machen"
+    assert ci_gates.check_ci() == 1, "a hand edit in the derived file must turn it red"
 
 
 def test_the_pinned_ci_gates_cli_runs_green_against_the_real_gate_file() -> None:
@@ -241,7 +241,7 @@ def test_the_pinned_ci_gates_cli_runs_green_against_the_real_gate_file() -> None
 
 
 # --------------------------------------------------------------------------
-# docs-links — Frontmatter, Links, Anker
+# docs-links — frontmatter, links, anchors
 # --------------------------------------------------------------------------
 
 
@@ -271,11 +271,11 @@ def test_the_check_docs_cli_runs_over_the_documentation() -> None:
         capture_output=True,
         text=True,
     )
-    assert erg.returncode in (0, 1), erg.stdout + erg.stderr  # gruen oder Befunde, nie Absturz
+    assert erg.returncode in (0, 1), erg.stdout + erg.stderr  # green or findings, never a crash
 
 
 # --------------------------------------------------------------------------
-# bead-export — der gerenderte Tracker
+# bead-export — the rendered tracker
 # --------------------------------------------------------------------------
 
 
@@ -285,7 +285,7 @@ def test_check_bead_export_gate_goes_red_when_a_line_is_broken(tmp_path: Path) -
     kaputt = tmp_path / "issues.jsonl"
     kaputt.write_text('{"id": "a", "status": "open"}\n{kaputt\n', encoding="utf-8")
     befunde = check_bead_export.run(kaputt)
-    assert befunde, "eine kaputte Zeile muss einen Befund liefern"
+    assert befunde, "a broken line must yield a finding"
 
     ok = tmp_path / "ok.jsonl"
     ok.write_text('{"id": "a", "status": "open"}\n', encoding="utf-8")
@@ -293,18 +293,18 @@ def test_check_bead_export_gate_goes_red_when_a_line_is_broken(tmp_path: Path) -
 
 
 def test_check_bead_export_gate_refuses_an_empty_export(tmp_path: Path) -> None:
-    """Bead 4t8: ein Export ueber null Zeilen misst nichts — das ist ein Befund.
+    """Bead 4t8: an export over zero lines measures nothing — that is a finding.
 
-    Bis 2026-09-22 war der Gate hier gruen: jede Zeilenpruefung lief ueber null
-    Zeilen und meldete Vollstaendigkeit ueber einer leeren Menge. Genau die
-    Luecke, die das Interview "floor: true ist nicht leer" nennt.
+    Until 2026-09-22 the gate was green here: every line check ran over zero
+    lines and reported completeness over an empty set. Exactly the gap that the
+    interview calls "floor: true is not empty".
     """
     import check_bead_export
 
     leer = tmp_path / "leer.jsonl"
     leer.write_text("\n\n", encoding="utf-8")
     befunde = check_bead_export.run(leer)
-    assert befunde, "ein leerer Export muss einen Befund liefern"
+    assert befunde, "an empty export must yield a finding"
     assert "leer" in befunde[0]
 
 
@@ -319,7 +319,7 @@ def test_the_real_bead_export_parses_line_by_line() -> None:
 
 
 # --------------------------------------------------------------------------
-# Die uebrigen Scripts — die Ausfuehrung, die die Sperrklinken verlangen
+# The remaining scripts — the execution that the ratchets demand
 # --------------------------------------------------------------------------
 
 
@@ -340,7 +340,7 @@ def test_the_ramp_valve_check_runs_green_here() -> None:
 
 
 # --------------------------------------------------------------------------
-# dangling-beads — zitierte Vorgangs-IDs loesen im Export auf
+# dangling-beads — cited ticket IDs resolve in the export
 # --------------------------------------------------------------------------
 
 
@@ -368,7 +368,7 @@ def test_the_real_dangling_bead_check_runs_green_here() -> None:
 
 
 # --------------------------------------------------------------------------
-# decision-continuity — eine Entscheidung verschwindet nur sichtbar (Frage 5)
+# decision-continuity — a decision disappears only visibly (question 5)
 # --------------------------------------------------------------------------
 
 
@@ -397,11 +397,11 @@ def test_the_real_decision_continuity_check_runs_green_here() -> None:
 
 
 def test_decision_continuity_is_red_while_its_target_is_missing(tmp_path: Path) -> None:
-    """Bead 4t8: floor: true — ein fehlendes Ziel ist Exit 3, kein stilles gruen.
+    """Bead 4t8: floor: true — a missing target is exit 3, not a silent green.
 
-    Bis zum #8-Merge meldete diese Lage "SKIP" (Exit 0) und nannte als Grund
-    einen Zustand, der seitdem Vergangenheit ist. Ein Gate, dessen Ziel fehlt,
-    kann nicht messen — und ein floor-Gate, das nicht misst, faellt.
+    Until the #8 merge this situation reported "SKIP" (exit 0) and named as the
+    reason a state that has since become the past. A gate whose target is
+    missing cannot measure — and a floor gate that does not measure fails.
     """
     erg = subprocess.run(
         [
@@ -418,7 +418,7 @@ def test_decision_continuity_is_red_while_its_target_is_missing(tmp_path: Path) 
     assert "NICHT GEMESSEN" in erg.stdout
 
 
-# --- reproduzierbarer Export (coding-harness-1jg.1) -------------------------
+# --- reproducible export (coding-harness-1jg.1) -----------------------------
 
 _ZEILE_OHNE_LEASE = '{"id":"x-1","status":"open","owner":"\\u003cjemand\\u003e","title":"a \\u0026 b"}'
 _ZEILE_MIT_LEASE = (
@@ -428,32 +428,32 @@ _ZEILE_MIT_LEASE = (
 
 
 def test_the_render_omits_machine_local_lease_fields() -> None:
-    """Zwei Maschinen rendern aus demselben Stand dieselben Bytes — ohne Lease-Felder."""
+    """Two machines render the same bytes from the same state — without lease fields."""
     import json
 
     import render_beads_export as rbe
 
     aus = rbe._ohne_maschinenlokales(_ZEILE_OHNE_LEASE + "\n" + _ZEILE_MIT_LEASE + "\n")
     saetze = [json.loads(z) for z in aus.splitlines()]
-    assert [s["id"] for s in saetze] == ["x-1", "x-2"], "Reihenfolge und Menge der Zeilen bleiben"
+    assert [s["id"] for s in saetze] == ["x-1", "x-2"], "order and number of the lines stay"
     for feld in rbe.MASCHINENLOKAL:
-        assert all(feld not in s for s in saetze), f"{feld} steht noch im Render"
+        assert all(feld not in s for s in saetze), f"{feld} is still in the render"
     assert aus.endswith("\n")
 
 
 def test_the_render_leaves_every_other_byte_alone() -> None:
-    """Eine Zeile ohne Lease geht unberuehrt durch; eine mit Lease verliert nur die Felder."""
+    """A line without a lease passes through untouched; one with a lease loses only the fields."""
     import render_beads_export as rbe
 
     aus = rbe._ohne_maschinenlokales(_ZEILE_OHNE_LEASE + "\n" + _ZEILE_MIT_LEASE + "\n").splitlines()
-    assert aus[0] == _ZEILE_OHNE_LEASE, "eine Zeile ohne maschinenlokales Feld wurde umgeschrieben"
+    assert aus[0] == _ZEILE_OHNE_LEASE, "a line without a machine-local field was rewritten"
     assert aus[1] == '{"id":"x-2","status":"in_progress","title":"\\u003cin Arbeit\\u003e"}', (
-        "die umgeschriebene Zeile traegt nicht die Schreibweise des Trackers"
+        "the rewritten line does not carry the tracker's spelling"
     )
 
 
 def test_the_render_refuses_a_line_it_cannot_reproduce(tmp_path: Path, monkeypatch, capsys) -> None:
-    """Aendert der Tracker seine Schreibweise, wird verworfen statt still umgeschrieben."""
+    """If the tracker changes its spelling, the render is discarded instead of silently rewritten."""
     import render_beads_export as rbe
 
     fremd = '{"id": "x-3", "status": "in_progress", "heartbeat_at": "2026-09-19T13:36:50Z"}'
@@ -469,22 +469,22 @@ def test_the_render_refuses_a_line_it_cannot_reproduce(tmp_path: Path, monkeypat
 
     monkeypatch.setattr(rbe, "_render_nach", wirft)
     assert rbe.main([]) == 1
-    assert committed.read_text(encoding="utf-8") == _ZEILE_OHNE_LEASE + "\n", "ein verworfener Render hat geschrieben"
+    assert committed.read_text(encoding="utf-8") == _ZEILE_OHNE_LEASE + "\n", "a discarded render has written"
     assert "verworfen" in capsys.readouterr().out
 
 
 def test_the_omitted_keys_are_named_once() -> None:
-    """Die Liste steht im Renderer und nirgends sonst — sonst driften zwei Listen.
+    """The list stands in the renderer and nowhere else — otherwise two lists drift.
 
-    Gesucht wird der blosse Feldname, in jeder Schreibweise, in Scripts und
-    Entscheidungsdateien. `tests/` bleibt aussen vor: dort stehen die Felder
-    als Daten in den Stellvertreter-Zeilen, nicht als zweite Liste.
+    The bare field name is searched, in every spelling, in scripts and decision
+    files. `tests/` is left out: there the fields stand as data in the stand-in
+    lines, not as a second list.
     """
     import render_beads_export as rbe
 
-    assert rbe.MASCHINENLOKAL, "eine leere Liste misst nichts"
+    assert rbe.MASCHINENLOKAL, "an empty list measures nothing"
     kandidaten = sorted((REPO_ROOT / "scripts").rglob("*.py")) + sorted((REPO_ROOT / "decisions").rglob("*.y*ml"))
-    assert any(p.name == "render_beads_export.py" for p in kandidaten), "die Suche sieht den Renderer nicht"
+    assert any(p.name == "render_beads_export.py" for p in kandidaten), "the search does not see the renderer"
     treffer = sorted(
         {
             str(p.relative_to(REPO_ROOT))
@@ -492,24 +492,24 @@ def test_the_omitted_keys_are_named_once() -> None:
             if any(feld in p.read_text(encoding="utf-8") for feld in rbe.MASCHINENLOKAL)
         }
     )
-    assert treffer == ["scripts/render_beads_export.py"], f"die Felder stehen in mehr als einer Datei: {treffer}"
+    assert treffer == ["scripts/render_beads_export.py"], f"the fields stand in more than one file: {treffer}"
 
 
 def test_a_record_with_a_raw_line_separator_stays_one_line() -> None:
-    """U+0085 und U+2028 stehen roh in Texten; nur `\\n` trennt Saetze (Review F-1)."""
+    """U+0085 and U+2028 stand raw in texts; only `\\n` separates records (review F-1)."""
     import render_beads_export as rbe
 
     roh = '{"id":"x-9","status":"open","title":"Zeile\u0085zwei\u2028drei"}\n' + _ZEILE_MIT_LEASE + "\n"
     aus = rbe._ohne_maschinenlokales(roh)
-    assert aus.split("\n")[0] == roh.split("\n")[0], "ein Satz ohne Lease wurde zerschnitten oder umgeschrieben"
+    assert aus.split("\n")[0] == roh.split("\n")[0], "a record without a lease was cut up or rewritten"
     assert aus.count("\n") == 2
 
 
 def test_the_omission_is_wired_into_the_one_render_path(tmp_path: Path, monkeypatch) -> None:
-    """Schreibweg und --check rendern beide ueber `_render_nach` — dort muss die Auslassung sitzen.
+    """The write path and --check both render through `_render_nach` — the omission must sit there.
 
-    Ein Stellvertreter fuer `tools/bd` schreibt eine Zeile mit Lease; liefe die
-    Auslassung nur in der Hilfsfunktion und nicht im Renderweg, bliebe sie stehen.
+    A stand-in for `tools/bd` writes a line with a lease; if the omission ran
+    only in the helper function and not in the render path, the lease would stay.
     """
     import render_beads_export as rbe
 
@@ -520,13 +520,13 @@ def test_the_omission_is_wired_into_the_one_render_path(tmp_path: Path, monkeypa
     ziel = tmp_path / "render.jsonl"
     rbe._render_nach(ziel)
     text = ziel.read_text(encoding="utf-8")
-    assert all(feld not in text for feld in rbe.MASCHINENLOKAL), "der Renderweg laesst die Lease-Felder stehen"
+    assert all(feld not in text for feld in rbe.MASCHINENLOKAL), "the render path leaves the lease fields in place"
     assert '"id":"x-2"' in text
 
 
 def test_gate_schema_gate_holds_an_action_without_local_equivalent_to_hosted() -> None:
-    """Bead 1jg.2: eine Action ohne lokale Entsprechung misst nur gehostet — auf
-    both stuende sie falsch da, und der lokale Laeufer liesse sie still aus."""
+    """Bead 1jg.2: an action without a local equivalent measures only hosted — on
+    both it would stand wrongly, and the local runner would silently leave it out."""
     import ci_gates
 
     def doc(placement: str) -> dict:
@@ -541,7 +541,7 @@ def test_gate_schema_gate_holds_an_action_without_local_equivalent_to_hosted() -
                     "enforcement": "advisory",
                     "floor": False,
                     "placement": placement,
-                    "reason": "ein Seed, der den Schemafehler demonstriert",
+                    "reason": "a seed that demonstrates the schema error",
                 }
             ],
         }
@@ -552,7 +552,7 @@ def test_gate_schema_gate_holds_an_action_without_local_equivalent_to_hosted() -
 
 
 def test_placement_rule_lives_in_one_predicate() -> None:
-    """Bead 1jg.2: Ableitung und lokaler Laeufer fragen dieselbe Funktion."""
+    """Bead 1jg.2: the derivation and the local runner ask the same function."""
     import ci_gates
 
     assert ci_gates.misst_in({"placement": "both"}, "lokal")
