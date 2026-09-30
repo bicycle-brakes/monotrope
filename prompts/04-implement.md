@@ -22,14 +22,14 @@ only in the code is no longer a deviation on the next reading — it is the plan
 
 **The appetite is a stop.** The plan's card names one (`Appetite:`). *Time used*
 is the sum of the spans of the sessions that worked under this prompt on this
-change. Read `date` when a session starts, between steps, before each commit and
-when it ends (at its stop, resumption line or "done:" line); never estimate it
-or recall it. A break inside a session counts, and the record says so; the time
-between two sessions does not. A stop ends the span; work that resumes starts a
-new one, even in the same chat. A session appends `<date> <start>–<end>,
-<span>[, break counted]` under `## Time used` in `plan.md` when a span ends — a
-chat does not survive `/clear`. When a reading shows the time used has reached
-the appetite, stop once, in the labels above and in this order:
+change. Read `date` when a session starts or work resumes, between steps, before
+each commit and when it ends (at its stop, resumption line or "done:" line);
+never estimate it or recall it. A break inside a session counts, and the record
+says so; the time between two sessions does not. A stop ends the span; work that
+resumes starts a new one, even in the same chat. A session appends `<date>
+<start>–<end>, <span>[, break counted]` under `## Time used` in `plan.md` when a
+span ends — a chat does not survive `/clear`. When a reading shows the time used
+has reached the appetite, stop once, in the labels above and in this order:
 
 ```text
 expected:   the appetite and the done-criterion of the card

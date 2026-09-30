@@ -4,7 +4,7 @@ status: draft
 implementation_status: partial
 date: 2026-09-30
 last_reviewed: 2026-09-30
-updated: 2026-09-30
+updated: 2026-10-01
 supersedes: null
 superseded_by: null
 bead: coding-harness-q24
@@ -132,16 +132,22 @@ names, as this change leaves it.
 
 9. The prompt defines time used as the sum of the spans of the sessions that
    worked under the phase-4 prompt on this change, each span read with
-   `date` at the session's start and at its end (its stop, resumption line or
-   "done:" line), *(added in repair round 1, F-1 and F-2 of the phase-6
-   review: and, while work goes on, at each step boundary and before each
-   commit; a stop ends a span, and work that resumes starts a new one, in the
-   same conversation too)* with breaks inside a session counted and said to be
-   counted.
+   `date` at ~~the session's start~~ *(changed in repair round 2, F-8 of the
+   round-2 review: its start, which is a session's start or the point where
+   work resumes)* and at its end (its stop, resumption line or "done:" line)
+   ~~*(added in repair round 1, F-1 and F-2 of the phase-6 review: and, while
+   work goes on, at each step boundary and before each commit; a stop ends a
+   span, and work that resumes starts a new one, in the same conversation
+   too)* with breaks inside a session counted and said to be counted~~
+   *(split off in repair round 2, F-9 of the round-2 review, so that this
+   criterion holds one condition: the readings during work are criterion 42,
+   the stop and the resumed span 43, the breaks 44)*.
    *Refuted by:* prompt text allowing an estimated or remembered time, not
-   naming `date`, or counting the time between two sessions; *(added in
+   naming `date`, or counting the time between two sessions; ~~*(added in
    repair round 1)* prompt text that names no reading of `date` between a
-   session's start and its end.
+   session's start and its end~~ *(changed in repair round 2: prompt text
+   that names no reading of `date` at a span's start, whether a session's
+   start or where work resumes, or none at its end)*.
 
 10. When ~~the time used reaches the card's appetite~~ *(changed in repair
     round 1, F-1 of the phase-6 review: a reading of `date` during work shows
@@ -231,15 +237,18 @@ names, as this change leaves it.
     acceptance card — what changes for you, how it was checked, what could
     break, and the "done:" line — and says that both templates carry it and
     every pull request body keeps it, the multi-decision form included
-    *(added in repair round 1, F-5 of the phase-6 review: and the two new
+    ~~*(added in repair round 1, F-5 of the phase-6 review: and the two new
     lines, "What could break" and the "done:" line, stand in the
     multi-decision form that file already prints, directly below its
-    `**Your move:**` line)*.
-    *Refuted by:* more than one added sentence, ~~a second copy of the
-    template's lines (a list or a code block)~~ *(changed in repair round 1:
-    a copy of the template's lines outside the multi-decision form)*, or no
-    pointer to the templates; *(added in repair round 1)* a multi-decision
-    form without either line.
+    `**Your move:**` line)*~~ *(split off in repair round 2, F-9 of the
+    round-2 review, so that this criterion holds one condition: the two lines
+    in the form are criterion 46)*.
+    *Refuted by:* more than one added sentence, a second copy of the
+    template's lines (a list or a code block) *(except the two lines of
+    criterion 46, as repair round 1 allowed)*, or no pointer to the
+    templates; ~~*(added in repair round 1)* a multi-decision form without
+    either line~~ *(moved to criterion 46, which refutes a form that lacks
+    either one)*.
 
 ### The handover skill — `tools/claude-code/` and `AGENTS.md`
 
@@ -297,8 +306,11 @@ names, as this change leaves it.
     failing.
 
 32. `AGENTS.md` names `/handover` where its display bullet named
-    `/uebergabe`, and no other line of `AGENTS.md` changes.
-    *Refuted by:* `git diff origin/main -- AGENTS.md` showing another line.
+    `/uebergabe`, and no other line of `AGENTS.md` changes *(changed in repair
+    round 2, F-4 of the round-2 review: except the one bullet of criterion
+    47)*.
+    *Refuted by:* `git diff origin/main -- AGENTS.md` showing another line
+    *(than that bullet)*.
 
 33. While this change is implemented, no agent runs
     `tools/claude-code/install.sh` other than with `--check`.
@@ -359,6 +371,48 @@ names, as this change leaves it.
 41. `make verify` is green at the head of the pull request.
     *Refuted by:* any gate red.
 
+### Added in repair round 2
+
+Criteria 42 to 47 are appended and nothing above is renumbered. 42 to 44 and
+46 split criteria 9 and 23 (F-9 of the round-2 review); 45 holds the rule added
+for F-3 of the phase-6 review; 47 holds the rule added for F-4.
+
+42. While work goes on, the prompt requires a reading of `date` between steps
+    and another before each commit.
+    *Refuted by:* prompt text that names only one of the two moments, or
+    neither.
+
+43. The prompt splits a span at a stop: the stop ends it, and work that
+    resumes, in the same conversation too, starts a new one.
+    *Refuted by:* prompt text that lets a span run on across a stop, or that
+    names no new span for work resumed in the same conversation.
+
+44. The prompt counts a break inside a session as work and says the record
+    notes it.
+    *Refuted by:* prompt text that leaves a break out of the time used, or
+    that does not say the record notes it.
+
+45. When the appetite stop is answered, the prompt requires the answer — a
+    new appetite or a narrowed done-criterion, which replaces the card's
+    line, or park or drop — to be written under `## Time used` in `plan.md`.
+    *Refuted by:* prompt text that leaves the answer in the chat only, that
+    names no place for it in `plan.md`, or that leaves a new appetite or a
+    narrowed done-criterion beside the card's old line without saying which
+    one holds.
+
+46. The multi-decision form that `prompts/07-commit.md` prints carries both
+    lines of the acceptance card, `**What could break:**` and the `done:`
+    line, each as its own paragraph directly below its `**Your move:**` line
+    and above its first `##` heading.
+    *Refuted by:* a form that lacks either line, or that puts either one
+    below a `##` heading or above `**Your move:**`.
+
+47. The rule that an orchestrating session shows a sub-agent's plan card to
+    the maintainer unchanged, the veto staying the maintainer's, stands in
+    `prompts/03-plan.md` and in `AGENTS.md`.
+    *Refuted by:* either file without the rule, or a rule that leaves the
+    veto to anyone but the maintainer.
+
 ## Non-goals
 
 In this change, not now:
@@ -366,7 +420,8 @@ In this change, not now:
 - **The other phase prompts** (01, 01a, 02, 02a, 05, 06) and
   `docs/WORKFLOW.md`: they go with package 1c, and pull request 60 rewrites
   `docs/WORKFLOW.md`.
-- **Any other `AGENTS.md` text.** The pull-request rule for handovers is not
+- **Any other `AGENTS.md` text** *(except the one bullet of criterion 47,
+  added in repair round 2)*. The pull-request rule for handovers is not
   added to "Communication and session continuity" here; it stands in the
   skill and the hook. The rest of bead coding-harness-9ca — owed item 7 of
   the LakeSwitch decision record (session start through `harness home`, a

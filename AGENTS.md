@@ -108,6 +108,8 @@ Full doctrine: `docs/WORKFLOW.md`, in English since 2026-09-29.
   Distinguish proposed, implemented and tested work explicitly.
 - Ask one decision at a time when possible, with a recommendation and its
   consequence. Do not ask again for settled decisions or existing permission.
+- An orchestrating session shows a sub-agent's plan card to the maintainer
+  unchanged; the veto stays the maintainer's (`prompts/03-plan.md`).
 - At session start or after a break, read the latest relevant handover and its
   addenda; check the working tree and current PR state before acting. Begin
   with a short orientation: **Where we are / Next step / Needed from you**.
