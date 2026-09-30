@@ -133,13 +133,20 @@ names, as this change leaves it.
 9. The prompt defines time used as the sum of the spans of the sessions that
    worked under the phase-4 prompt on this change, each span read with
    `date` at the session's start and at its end (its stop, resumption line or
-   "done:" line), with breaks inside a session counted and said to be
+   "done:" line), *(added in repair round 1, F-1 and F-2 of the phase-6
+   review: and, while work goes on, at each step boundary and before each
+   commit; a stop ends a span, and work that resumes starts a new one, in the
+   same conversation too)* with breaks inside a session counted and said to be
    counted.
    *Refuted by:* prompt text allowing an estimated or remembered time, not
-   naming `date`, or counting the time between two sessions.
+   naming `date`, or counting the time between two sessions; *(added in
+   repair round 1)* prompt text that names no reading of `date` between a
+   session's start and its end.
 
-10. When the time used reaches the card's appetite, the prompt requires the
-    agent to stop once and report in the labels of the existing four-line
+10. When ~~the time used reaches the card's appetite~~ *(changed in repair
+    round 1, F-1 of the phase-6 review: a reading of `date` during work shows
+    that the time used has reached the card's appetite)*, the prompt requires
+    the agent to stop once and report in the labels of the existing four-line
     stop, in its order: `expected:` (the appetite and the done-criterion),
     `found:` (the time used by the clock, what holds and what is open),
     `relevant:` (what the open part needs), `proposal:`.
@@ -173,7 +180,9 @@ names, as this change leaves it.
 
 15. The prompt raises the appetite stop once per appetite: after continue,
     the next appetite stop comes when the new appetite is reached, and no
-    reminder, countdown or check-in comes before it.
+    reminder, countdown or check-in comes before it *(clarified in repair
+    round 1, F-1: these are timers and messages to the maintainer; the agent's
+    own readings of `date` during work are none of them)*.
     *Refuted by:* prompt text asking for interim check-ins, reminders or a
     countdown.
 
