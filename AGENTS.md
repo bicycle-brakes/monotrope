@@ -86,11 +86,12 @@ Full doctrine: `docs/WORKFLOW.md`, in English since 2026-09-29.
 7. **Texts carry their own meaning.** A reader without this session must
    understand every sentence; bead ids and file names go in parentheses as a
    suffix, never as the carrier of a sentence.
-8. **A decision takes effect when the maintainer merges its pull request.** A
-   pull request touching a file `provenance.yaml` reserves for `human-decided`
-   is a decision PR: title `decide(<scope>): …`, label `decision`, body from
-   the decision template (`.github/PULL_REQUEST_TEMPLATE/decision.md`). Record
-   an ADR answer only as the maintainer stated it (`python3 scripts/harness.py
+8. **A decision takes effect when the maintainer merges its pull request**
+   (ADR 0008). A pull request touching a file `provenance.yaml` reserves for
+   `human-decided` is a decision PR: title `decide(<scope>): …`, label
+   `decision`, body from the decision template
+   (`.github/PULL_REQUEST_TEMPLATE/decision.md`). Record an ADR answer only as
+   the maintainer stated it (`python3 scripts/harness.py
    decide adr … --stated-in …`), never one of your own. Merge only when the
    maintainer asks in the conversation, after restating the decision block
    (`prompts/07-commit.md`, "The merge"); `.claude/settings.json` asks before
