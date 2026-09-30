@@ -23,8 +23,8 @@ The maintainer decided on 2026-09-30 that Coding Harness introduces no commit
 signing, now or later: signing needs the laptop, and much of the work happens
 from a phone. A decision in Coding Harness takes effect when the maintainer
 merges the pull request that carries it, or asks an agent to
-(`prompts/07-commit.md`, "The merge"). This guide stays the description of
-LakeSwitch's practice.
+(`prompts/07-commit.md`, "The merge"; ADR 0008). This guide stays the
+description of LakeSwitch's practice.
 
 ## The rule
 

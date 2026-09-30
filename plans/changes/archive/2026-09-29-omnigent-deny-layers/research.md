@@ -1,10 +1,10 @@
 ---
 title: "Research — omnigent-deny-layers"
-status: draft
-implementation_status: none
+status: accepted
+implementation_status: done
 date: 2026-09-29
 last_reviewed: 2026-09-29
-updated: 2026-09-29
+updated: 2026-09-30
 supersedes: null
 superseded_by: null
 bead: coding-harness-rex
