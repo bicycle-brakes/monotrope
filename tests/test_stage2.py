@@ -7,8 +7,10 @@ environment and input, print canned output and contact nothing. No test starts
 a real Codex, a real Claude Code against a model endpoint, or reads the
 maintainer's real denylist, secrets or loop record.
 
-Each test comes with its fault: the mutation list of the plan's slice 2 was
-planted one by one and each one turned a test here red.
+Each test comes with its fault: the mutation list of the plan's slices 2 and 3
+was planted one by one and each one turned a test here red. The doctrine tests
+at the end read the repository's own documents and prompts; each one checks
+its fault on a planted copy of the text in the same test.
 """
 
 from __future__ import annotations
@@ -30,6 +32,7 @@ import yaml
 REPO_ROOT = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(REPO_ROOT / "scripts"))
 
+import check_decision_continuity  # noqa: E402
 import leakcheck  # noqa: E402
 import omnigent_policy  # noqa: E402
 import plans_registry  # noqa: E402
@@ -857,3 +860,302 @@ def test_the_omnigent_render_keeps_the_codex_rule(tmp_path: Path) -> None:
     assert stage2.CODEX_ASK_RULE[0] in rendered["permissions"]["ask"]
     assert stage2.codex_rule_problems(rendered) == []
     assert omnigent_policy.check(tmp_path) == []
+
+
+# ---------------------------------------------------------------------------
+# The doctrine and the prompts (criteria 42-60, 66-68)
+# ---------------------------------------------------------------------------
+
+WORKFLOW = REPO_ROOT / "docs" / "WORKFLOW.md"
+PROMPTS = REPO_ROOT / "prompts"
+TARGET = REPO_ROOT / "docs" / "architecture" / "2026-09-17-omnigent-first-target.md"
+PLAN_DOC = REPO_ROOT / "docs" / "architecture" / "2026-09-17-implementation-plan.md"
+ADR_0007 = "0007-stage-2-reviews-by-codex-and-glm.md"
+
+
+def flat(text: str) -> str:
+    """One line: a sentence broken across lines in the source, or across quoted lines, reads as one."""
+    return re.sub(r"\s+", " ", re.sub(r"\n[> ]*", " ", text))
+
+
+def section(text: str, title: str) -> str:
+    """The lines from the heading that starts with `title` to the next heading of its level or a higher one."""
+    lines = text.splitlines()
+    starts = [i for i, line in enumerate(lines) if line.startswith(title)]
+    if not starts:
+        return ""
+    level = len(title) - len(title.lstrip("#"))
+    follow = re.compile(rf"^#{{1,{level}}} ")
+    end = next((i for i in range(starts[0] + 1, len(lines)) if follow.match(lines[i])), len(lines))
+    return "\n".join(lines[starts[0] : end])
+
+
+def routing_rows(text: str) -> dict[str, tuple[str, str]]:
+    """Phase cell -> (model, why) for every routing row `| 2a Spec review | **model** | why |`."""
+    pattern = r"^\| (\d[a-z]? [A-Za-z][A-Za-z ]*?) \| \*\*([^*]+)\*\* \| (.*) \|$"
+    return {m[1]: (m[2], m[3]) for m in re.finditer(pattern, text, re.M)}
+
+
+def routing_problems(workflow: str) -> list[str]:
+    """What the routing rows of the doctrine get wrong: section 4's three rows and section 3's three."""
+    found = []
+    stage2_rows = routing_rows(section(workflow, "## 4 · "))
+    for phase, model in {
+        "2a Spec review": "gpt-6.1-sol",
+        "4b Review loop": "GLM 5.3",
+        "6 Review": "gpt-6.1-sol",
+    }.items():
+        row = stage2_rows.get(phase)
+        if row is None:
+            found.append(f"section 4 has no routing row {phase}")
+        elif row[0] != model:
+            found.append(f"section 4 routes {phase} to {row[0]}, not {model}")
+        elif "effort `max`" not in row[1]:
+            found.append(f"section 4 gives {phase} no effort `max`")
+    default = routing_rows(section(workflow, "## 3 · "))
+    implement = default.get("4 Implement")
+    if implement is None or implement[0] != "Sonnet 5.5" or "effort `medium`" not in implement[1]:
+        found.append("section 3 does not route 4 Implement to Sonnet 5.5 at effort `medium`")
+    for phase in ("2a Spec review", "6 Review"):
+        row = default.get(phase)
+        if row is None or row[0] != "Fable 5.1":
+            found.append(f"section 3 does not route {phase} to Fable 5.1")
+    return found
+
+
+def test_the_routing_rows_name_the_decided_models() -> None:
+    text = WORKFLOW.read_text(encoding="utf-8")
+    assert routing_problems(text) == []
+    for old, new in (
+        ("**gpt-6.1-sol** | effort `max`, through", "**k3** | effort `max`, through"),
+        ("**GLM 5.3** | effort `max`", "**GLM 5.3** | effort `high`"),
+        ("**Sonnet 5.5** | effort `medium`", "**Sonnet 5** | effort `medium`"),
+        ("**Sonnet 5.5** | effort `medium`", "**Sonnet 5.5** | effort `high`"),
+        ("| 2a Spec review | **Fable 5.1**", "| 2a Spec review | **Opus 5.5**"),
+    ):
+        assert old in text, old
+        assert routing_problems(text.replace(old, new, 1)), (old, new)
+
+
+def phase_table_problems(workflow: str) -> list[str]:
+    """The `4b` row of the phase table: between 4 and 5, with artefact, gate and prompt."""
+    lines = section(workflow, "## 2 · ").splitlines()
+    rows = [i for i, line in enumerate(lines) if line.startswith("| 4b |")]
+    if len(rows) != 1:
+        return ["the phase table has no 4b row"]
+    at = rows[0]
+    if not (lines[at - 1].startswith("| 4 |") and lines[at + 1].startswith("| 5 |")):
+        return ["the 4b row does not stand between rows 4 and 5"]
+    cells = [cell.strip() for cell in lines[at].strip().strip("|").split("|")]
+    found = []
+    if len(cells) != 5:
+        return [f"the 4b row has {len(cells)} cells, not 5"]
+    if "findings.md" not in cells[2] or "release-loop" not in cells[2]:
+        found.append("the 4b artefact is not the loop rows in findings.md after release-loop")
+    if "at most two rounds" not in cells[3] or "make verify" not in cells[3]:
+        found.append("the 4b gate is not at most two rounds with make verify after each repair")
+    if "04b-review-loop.md" not in cells[4] or not (PROMPTS / "04b-review-loop.md").is_file():
+        found.append("the 4b row does not link an existing prompt")
+    return found
+
+
+def test_the_phase_table_has_the_review_loop() -> None:
+    text = WORKFLOW.read_text(encoding="utf-8")
+    assert phase_table_problems(text) == []
+    row = next(line for line in text.splitlines() if line.startswith("| 4b |"))
+    assert phase_table_problems(text.replace(row + "\n", "")), "the row removed"
+    assert phase_table_problems(text.replace("at most two rounds", "rounds", 1))
+    assert phase_table_problems(text.replace("(`release-loop`)", "", 1))
+    assert phase_table_problems(text.replace("04b-review-loop.md", "04c-review-loop.md"))
+
+
+EVIDENCE_TEXTS = {
+    "docs/WORKFLOW.md": ("docs", "WORKFLOW.md"),
+    "prompts/04-implement.md": ("prompts", "04-implement.md"),
+    "prompts/04b-review-loop.md": ("prompts", "04b-review-loop.md"),
+}
+
+
+def evidence_problems(texts: dict[str, str]) -> list[str]:
+    """Where the evidence rule is missing, in the words that carry it."""
+    found = []
+    for name, text in texts.items():
+        one = flat(text)
+        for phrase in (
+            "only when a test demonstrates it or the spec supports it",
+            "as a disagreement",
+            "every repair round",
+        ):
+            if phrase not in one:
+                found.append(f"{name} lacks '{phrase}'")
+        if not re.search(r"needs a test,? or (?:it )?is rejected", one):
+            found.append(f"{name} lacks the consequence: a finding the spec does not cover needs a test or is rejected")
+    return found
+
+
+def test_the_evidence_rule_stands_where_findings_are_taken() -> None:
+    texts = {name: REPO_ROOT.joinpath(*parts).read_text(encoding="utf-8") for name, parts in EVIDENCE_TEXTS.items()}
+    assert evidence_problems(texts) == []
+    for name, text in texts.items():
+        for old in ("only when a test demonstrates it or the spec supports it", "as a disagreement"):
+            assert old in flat(text), (name, old)
+        planted = {
+            **texts,
+            name: flat(text).replace("only when a test demonstrates it or the spec supports it", "whenever"),
+        }
+        assert evidence_problems(planted), name
+        planted = {**texts, name: re.sub(r"needs a test,? or (it )?is rejected", "is fine", flat(text))}
+        assert evidence_problems(planted), name
+    # The rule sits in the findings process of section 2, not only somewhere in the file.
+    assert "only when a test demonstrates it" in flat(section(texts["docs/WORKFLOW.md"], "### The findings process"))
+
+
+def standing_problems(workflow: str) -> list[str]:
+    found = []
+    if "prepared, not active" in workflow:
+        found.append("the file still says stage 2 is prepared, not active")
+    header = flat(workflow[: workflow.index("## 1 ")])
+    if "stage 2 is active for framework content, by change class, since ADR 0007" not in header:
+        found.append("the header note does not say stage 2 is active since ADR 0007")
+    closing = flat(section(workflow, "## 6 · "))
+    if "ADR 0007" not in closing or "first three stage-2 runs" not in closing:
+        found.append("section 6 does not say that ADR 0007 opened stage 2 with three measured runs in its place")
+    if "Stage 1 must have run for two to three weeks" in closing:
+        found.append("section 6 still presents two to three weeks of stage 1 as the condition to be met")
+    return found
+
+
+def test_the_standing_note_says_stage_2_is_active() -> None:
+    text = WORKFLOW.read_text(encoding="utf-8")
+    assert standing_problems(text) == []
+    assert standing_problems(
+        text.replace("stage 2 is active for framework content", "Stages 2 and 3 are prepared, not active")
+    )
+    assert standing_problems(re.sub(r"first three\s+stage-2 runs", "first runs", text))
+    assert standing_problems(re.sub(r"ADR\s+0007 \(2026-09-30\) opened", "a decision opened", text))
+    assert standing_problems(
+        text.replace("Stage 1 was to run for two to three weeks", "Stage 1 must have run for two to three weeks")
+    )
+
+
+def review_prompt_problems(spec_review: str, review: str) -> list[str]:
+    found = []
+    for name, text in (("02a-spec-review.md", spec_review), ("06-review.md", review)):
+        one = flat(text)
+        for needle in ("gpt-6.1-sol", "Fable 5.1", "scripts/stage2.py"):
+            if needle not in one:
+                found.append(f"{name} lacks {needle}")
+    if "stage2.py spec-review <change>" not in flat(spec_review):
+        found.append("02a-spec-review.md does not name the verb spec-review")
+    one = flat(review)
+    if "stage2.py review <change>" not in one:
+        found.append("06-review.md does not name the verb review")
+    if "Phase 6 verdict:" not in one or "release-loop" not in one:
+        found.append("06-review.md lacks the verdict line or release-loop")
+    elif one.index("Phase 6 verdict:") > one.index("release-loop") or "before you read any loop row" not in one:
+        found.append("06-review.md does not put the verdict before the loop rows")
+    return found
+
+
+def test_the_review_prompts_give_both_paths() -> None:
+    spec_review = (PROMPTS / "02a-spec-review.md").read_text(encoding="utf-8")
+    review = (PROMPTS / "06-review.md").read_text(encoding="utf-8")
+    assert review_prompt_problems(spec_review, review) == []
+    assert review_prompt_problems(spec_review.replace("gpt-6.1-sol", "gpt"), review)
+    assert review_prompt_problems(spec_review.replace("Fable 5.1", "Opus 5.5"), review)
+    assert review_prompt_problems(spec_review, review.replace("Phase 6 verdict:", "Verdict:"))
+    assert review_prompt_problems(spec_review, review.replace("release-loop", "release"))
+    assert review_prompt_problems(spec_review, review.replace("before you read any loop\nrow", "sometime"))
+    assert review_prompt_problems(spec_review, review.replace("scripts/stage2.py", "stage2"))
+
+
+def model_line(prompt: str) -> str:
+    """The text of the `**Model:**` paragraph, up to the next bold label."""
+    match = re.search(r"^\*\*Model:\*\*(.*?)(?=^\*\*[A-Z])", prompt, re.M | re.S)
+    return flat(match[1]).strip() if match else ""
+
+
+def test_the_implement_prompt_names_sonnet_5_5_at_medium() -> None:
+    line = model_line((PROMPTS / "04-implement.md").read_text(encoding="utf-8"))
+    assert line.startswith("Sonnet 5.5 —") and "effort `medium`" in line and "claude-sonnet-5-5" in line
+    for planted in ("Sonnet 5 — at effort `medium`", "Sonnet 5.5 — at effort `high`"):
+        bad = model_line(f"**Model:** {planted}\n**Input:** x\n")
+        assert not (bad.startswith("Sonnet 5.5 —") and "effort `medium`" in bad), planted
+
+
+def test_the_plan_prompt_asks_for_no_markings() -> None:
+    text = (PROMPTS / "03-plan.md").read_text(encoding="utf-8")
+    markings = ("[FLASH]", "[GLM5.3]", "[SONNET]", "plan-marking", "Model markings")
+    assert [m for m in markings if m in text] == []
+    assert [m for m in markings if m in text + "\n`[FLASH]`\n"] == ["[FLASH]"]
+
+
+def test_the_spec_prompt_asks_one_condition_and_a_refutation() -> None:
+    text = flat((PROMPTS / "02-spec.md").read_text(encoding="utf-8"))
+    sentence = (
+        "one condition each; where a trigger, a state or a failure applies, the sentence begins with When, While or If"
+    )
+    assert sentence in text and "comes with what would *refute* it" in text
+    assert sentence not in text.replace("one condition each", "as many as fit")
+    assert "comes with what would *refute* it" not in text.replace("*refute*", "")
+
+
+def agents_md_problems(text: str) -> list[str]:
+    found = []
+    if not re.search(r"^\| 4b \| Review loop \*\(stage 2\)\* \|.*two rounds.*\|$", text, re.M):
+        found.append("AGENTS.md has no 4b row with its gate")
+    one = flat(text)
+    if (
+        "is started only through `python3 scripts/stage2.py`" not in one
+        or "runs the leak check before every call" not in one
+    ):
+        found.append("AGENTS.md lacks the sentence that a foreign reviewer is started only through the runner")
+    return found
+
+
+def test_agents_md_names_the_loop_and_the_runner() -> None:
+    text = (REPO_ROOT / "AGENTS.md").read_text(encoding="utf-8")
+    assert agents_md_problems(text) == []
+    assert text.count("\n") <= 200
+    row = next(line for line in text.splitlines() if line.startswith("| 4b |"))
+    assert agents_md_problems(text.replace(row + "\n", ""))
+    assert agents_md_problems(text.replace("only through", "also through"))
+
+
+def continuity_problems(amendments: dict, target: str, adr_dir: Path) -> list[str]:
+    """D-13 is mapped to ADR 0007, which names it, and its row in the target document reads Amend."""
+    found = []
+    if amendments.get("D-13") != (ADR_0007,):
+        found.append("the amendment map does not send D-13 to ADR 0007")
+    adr = adr_dir / ADR_0007
+    if not adr.is_file():
+        found.append("ADR 0007 does not exist")
+    elif not re.search(r"\bD-13\b", adr.read_text(encoding="utf-8")):
+        found.append("ADR 0007 does not name D-13")
+    row = next((line for line in target.splitlines() if line.startswith("| D-13 ")), "")
+    if not row.startswith("| D-13 — cross-vendor entry | Amend |") or "ADR 0007" not in row:
+        found.append("the D-13 row of the target document does not read Amend with ADR 0007")
+    return found
+
+
+def test_d13_is_amended_by_adr_0007(tmp_path: Path) -> None:
+    adr_dir = REPO_ROOT / "docs" / "adr"
+    target = TARGET.read_text(encoding="utf-8")
+    amendments = check_decision_continuity.AMENDMENT_ADRS
+    assert continuity_problems(amendments, target, adr_dir) == []
+    assert continuity_problems({k: v for k, v in amendments.items() if k != "D-13"}, target, adr_dir)
+    assert continuity_problems(
+        amendments, target.replace("cross-vendor entry | Amend |", "cross-vendor entry | Retain |"), adr_dir
+    )
+    assert continuity_problems(amendments, target, tmp_path)
+    (tmp_path / ADR_0007).write_text("an ADR that names nothing\n", encoding="utf-8")
+    assert continuity_problems(amendments, target, tmp_path)
+    # The gate itself accepts the tree, and the ADR says what the plan says it says.
+    assert check_decision_continuity.run(TARGET) == []
+    adr = flat((adr_dir / ADR_0007).read_text(encoding="utf-8"))
+    for needle in ("Kimi is dropped", "does not enter M2", "a request, not a lock", "neither endpoint"):
+        assert needle in adr, needle
+    # Both architecture documents that set D-13's criteria carry the dated note.
+    for doc in (TARGET, PLAN_DOC):
+        note = flat(doc.read_text(encoding="utf-8"))
+        assert "Changed, 2026-09-30" in note and "ADR 0007" in note, doc.name
