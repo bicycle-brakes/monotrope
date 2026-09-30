@@ -110,3 +110,16 @@ Consequences:
 - Bead `coding-harness-in1` (key-list weakness of the signature check) now
   concerns only LakeSwitch's gate M-30. Whether LakeSwitch keeps signing is
   LakeSwitch's own question, for its parallel session.
+
+## Addendum 2026-09-30: the decision-PR proposal is adopted
+
+The maintainer answered "yes" to open point 1 of the research note
+`docs/research/2026-09-30-decision-pull-requests.md`: its proposals (a) to
+(f) are adopted as written there — the label `decision`, the title form
+`decide(<scope>): <decision>`, the decision template and the ordinary
+template, one decision per pull request (at most three coupled ones), and
+the merge-on-request protocol with its ask rules. The optional hook and the
+optional check of (g) stay follow-ups. The note's open points 2 to 4 go to
+phase 3: point 2 as text changes in this change (the RB-M2 wording only as a
+proposal to the maintainer), points 3 and 4 as `[GAP]` or `[DETAIL]` for the
+plan.
