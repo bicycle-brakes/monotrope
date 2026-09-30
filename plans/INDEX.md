@@ -9,6 +9,7 @@ Dateien dazukommen.
 | Artefakt | status | implementation_status | zuletzt geprueft | Bead |
 |---|---|---|---|---|
 | [`changes/adhd-frame/decisions.md`](changes/adhd-frame/decisions.md) | draft | none | 2026-09-30 | coding-harness-q24 |
+| [`changes/adhd-frame/plan.md`](changes/adhd-frame/plan.md) | draft | none | 2026-09-30 | coding-harness-q24 |
 | [`changes/adhd-frame/research.md`](changes/adhd-frame/research.md) | draft | none | 2026-09-30 | coding-harness-q24 |
 | [`changes/adhd-frame/spec.md`](changes/adhd-frame/spec.md) | draft | none | 2026-09-30 | coding-harness-q24 |
 | [`changes/archive/2026-09-20-2ee-triage/research.md`](changes/archive/2026-09-20-2ee-triage/research.md) | accepted | done | 2026-09-19 | coding-harness-2ee |
