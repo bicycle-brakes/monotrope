@@ -221,3 +221,149 @@ before them would be revised. *(Superseded on 2026-09-30 by answers 10 and
 11: no measurement runs, so none can end in a stop.)* `plans/INDEX.md` was regenerated with
 `python3 scripts/plans_registry.py --index` for this file. No pull request
 was opened and nothing was written to the tracker.
+
+## Phase 6 — review, round 1
+
+Phase 6, round 1, on commit `317763b` (branch `feat/stage-2-codex-glm`, 18
+commits over `origin/main` at `1e4cccf`, 15 of them not merges), 2026-09-30.
+The reviewer ran on Opus 5.5 — the interim routing of pull request #58, which
+the maintainer's answer 12 applies to this change's own review — as a
+sub-agent of the coordinating session, in a fresh context that never saw the
+author's reasoning. The phase-2a session (a Fable 5.1 sub-agent without a
+fixed id) could not be resumed, so a fresh session reviewed. It wrote nothing
+but this section and the regenerated `plans/INDEX.md`, started no program of
+Codex or GLM and no `claude -p`, sent no repository content anywhere, opened
+no pull request and wrote nothing to the tracker.
+
+Yardstick: the current `spec.md` (criteria 1–72 as changed by answers 10–12)
+and `decisions.md` (answers 1–14; answer 13 void by answer 14). The plan was
+read for its `[DETAIL]`s, not as the yardstick. First check: each 2a row S-1
+to S-11 stands in the spec as the table above says, S-5 to S-7 superseded by
+answers 10 and 11 as recorded. The plan names "implementation notes" for the
+mutation results and the real leak-check counts; `plan.md` has no such
+section — they stand in the messages of `c7c99fc` and `317763b` and in the
+docstring of `tests/test_stage2.py`. The mutations were not re-run here;
+every other claim below was read in the code or measured against stand-ins
+and temporary repositories built for this review.
+
+**Verdict: one BLOCKER (`[DIVERGENT]`), one MAJOR, seven MINOR; no
+`[AMBIGUITY]`.** Phase 7 does not start while F-1 is open. F-1 is a
+`[DETAIL]` on both sides, so the agent settles it — no question for the
+maintainer. F-2 loses loop rows for good on plausible input; it bites only
+once stage 2 runs, which is after the merge. `make verify` is green at
+`317763b` (2026-09-30: `VERIFY GREEN`; markdownlint reports and does not
+block).
+
+| ID | Severity | Dimension | Origin | Where | Finding | Status |
+|---|---|---|---|---|---|---|
+| F-1 | BLOCKER | SPEC | base | `spec.md`, criterion 36 and the `[DETAIL]` "A round has run when its rows stand in the loop record"; `plan.md`, "Decided in phase 3", `[DETAIL]` "a round is counted by its block"; `scripts/stage2.py`, `review_loop` lines 716–727 and `rounds_run` lines 594–597; `tests/test_stage2.py::test_a_round_without_a_finding_still_counts` | `[DIVERGENT]` Two artefacts answer "does a GLM call that ends successfully with no finding use up one of the two rounds?" in opposite ways. The spec: "A round has run when its rows stand in the loop record. A call that ends without rows is a failed call, not a round", so that a call without rows cannot use up one of the maintainer's two rounds. The plan, the code and a test: a successful answer writes its round block even with no row ("GLM reported no finding."), and that block counts. The case: round 1 answers "Nothing to report.", round 2 reports two rows; a third call is refused ("2 rounds have run"), where the spec's text allows it because round 1 had no rows. What a round is was ruled mechanics in phase 2a (row S-3), so this is settled by making spec and plan say the same thing, with the code and the test following the one that stays. [criterion 36] | open |
+| F-2 | MAJOR | SPEC | base | `scripts/stage2.py`, `record_rows` lines 574–580, `kept_prose` lines 600–606, `release` lines 609–634 (`shutil.rmtree` at 632) | `release-loop` — and `review`, which calls the same function — carries only the table lines of the loop record that split into exactly nine cells with an `L<n>-<k>` id, drops every other table line, then deletes the record, the only copy. Two plausible inputs lose loop rows for good (measured against the stand-ins, 2026-09-30). (a) GLM writes a finding whose text holds an unescaped `\|` — a shell pipe, a regex alternation, a table cell: the row splits into seven cells, is kept in the record only inside the verbatim answer, and at release `kept_prose` drops it as a table line; `findings.md` then shows "The answer below was not only rows; it is kept as it came." with nothing below it. (b) The implementer writes a reason with a `\|` into the Status cell (`rejected — the spec says a\|b`): the row has ten cells, `record_rows` no longer sees it, so the undecided-row guard does not hold the release either; `release-loop` exits 0 with "0 loop rows appended", an empty table and "No loop row was reported.", and the record is gone. The rows are what the measurement of the first three stage-2 runs counts, so a lost `Broke a test: yes` hides the stop rule's trigger. What should hold: a table line of the record that is not a well-formed loop row refuses the release, as an undecided row does, or is carried as it stands; nothing is deleted that did not arrive in `findings.md`. [criterion 39; the `[DETAIL]` "an answer that is not table rows is appended as it came … and never dropped"; answer 5] | open |
+| F-3 | MINOR | MAINT | base | `scripts/stage2.py`, `answer_block` lines 273–282 and `parse_rows` lines 240–255; `prompts/06-review.md` line 44 ("Your answer **is** the table …") and "Verdict first" | A Codex answer whose rows do not have exactly six cells is written under the sentence "Codex reported no finding.", followed by the answer as it came: a false statement at the head of the block, and no row with reviewer `Codex` for anyone who counts them. The phase-6 prompt the runner sends in full makes such an answer likely: it asks for "the table from `templates/findings.md` — columns exactly as they stand there" (a file this repository does not have; the `findings.md` Codex can read has nine or ten columns after its own phase 2a) and says a stage-2 change carries `Reviewer` and `Broke a test`, while the runner's closing paragraph asks for exactly six cells. `prompts/02a-spec-review.md` states the six cells for the Codex path; `06-review.md` does not. What should hold: an answer whose table lines are not six-cell rows is not headed "reported no finding" (F-2 is the GLM side of the same parser). [criterion 26; the `[DETAIL]` "every reviewer answers six cells"] | open |
+| F-4 | MINOR | MAINT | base | `scripts/stage2.py`, `VERDICT_LINE` line 110 and `release` lines 613–614; `prompts/06-review.md`, "Verdict first"; `docs/WORKFLOW.md` §4, "The review loop" | On the Fable path the reviewer writes `Phase 6 verdict: <reviewer> <session>, <date>` by hand, and the runner accepts exactly one word before the session, one word for it, and nothing after the date. A reviewer that names itself as the doctrine does everywhere (`Phase 6 verdict: Fable 5.1 <uuid>, 2026-10-01`), has no session id to write (`Phase 6 verdict: fable, 2026-10-01`), or ends the line with a space or a full stop is refused by `release-loop` with "findings.md has no phase-6 verdict line" while a verdict line stands in the file (each form measured against the pattern, 2026-09-30). It fails closed, and the loop rows wait until someone reads the regular expression. What should hold: the prompt shows the form the runner accepts, or the refusal names the line it found and why it does not count. [criterion 38] | open |
+| F-5 | MINOR | SPEC | base | `scripts/leakcheck.py`, `check`, lines 220–222 (the `is_file()` filter) | A path git lists that is a symbolic link to a directory is neither scanned nor refused, and not counted. Measured 2026-09-30 in a temporary repository: an untracked link `customer` pointing at a directory outside the repository that holds a planted match is listed by `git ls-files --others --exclude-standard`, and the check reports "leak check clean: 6 files" with exit 0 and does not name it. A reviewer reads through the link inside the worktree — the one place the prompts' request allows — so the check is green over content it never read. The same filter skips a submodule's directory. What should hold: a listed path that exists and is not a regular file is a refusal that names it ("unchecked is not clean", the check's own rule). [criterion 12] | open |
+| F-6 | MINOR | MAINT | base | `scripts/leakcheck.py`, the scanned set (b) and (c), and its advice "remove or replace the value, run the check again" | Two places a reviewer reaches through git lie outside the scanned set, and the second is where the check's own advice leads. (a) The index: a value staged and then removed from the working file stays readable with `git show :<path>`; the check reads the disk and reports clean. (b) The reflog: for a match in a commit's patch the repair is rewriting that commit (amend or rebase); the check then reports clean, and `git log -g -p` still shows the value for the reflog's lifetime. Both measured in a temporary repository, 2026-09-30. The spec's non-goal names two Dolt refs as readable through git and unscanned; these two are not named, and (b) turns a found match green without removing it. What should hold: both are scanned, or the report's advice and `docs/WORKFLOW.md` §4 name them beside the Dolt refs. [the non-goal "Scanning what the repository does not present"] | open |
+| F-7 | MINOR | MAINT | base | `scripts/stage2.py`, `begin_call` lines 383–399 and `append` lines 264–270; the gate `frontmatter-current` | The runner appends to `findings.md` and never touches its `updated:` line. On any day after the header's date, the first call leaves the file stale and `make verify` red: measured 2026-09-30 with a header dated 2026-09-29 and one appended call line — "plans/changes/demo/findings.md: stale", exit 1 (the gate blocks). The loop's gate is "`make verify` green after each repair", so the implementer meets a red tree the runner made; the stamp the gate names repairs it. What should hold: a file the runner writes passes the gates the repository holds it to, as criterion 21 already requires of a file the runner creates. [criterion 21] | open |
+| F-8 | MINOR | MAINT | base | `docs/WORKFLOW.md` §4, "The runner is the only way", lines 594–597 | §4 states as facts that Codex "runs in the read-only sandbox with its session kept and its hooks and memories switched off" and that GLM runs with "the project's settings and hooks skipped". The maintainer's answer 10 dropped the proofs: the runner passes these settings, and nobody measured that they take effect — on `codex exec resume` in particular, whose help lists no sandbox option (research §6). The spec says "passed, not measured" in its `[DETAIL]`s and its non-goals; §4, the text a maintainer reads, presents a flag as its effect. It matters because the tracked `.codex/hooks.json` injects tracker text the leak check does not scan: if the flag does not take effect, that text reaches Codex unchecked while §4 says it cannot. What should hold: §4 says "passed, not measured" here, as it says "a request, not a lock" of the reads. [criteria 24 and 33 as changed by answer 10] | open |
+| F-9 | MINOR | SPEC | base | `docs/WORKFLOW.md`, header note "Not all of it is here yet", lines 32–47 | The list, re-dated "Checked on 2026-09-30 against the tree at `3c54652`", is not exact: the file names two more pieces the tree lacks — `docs/governance/gate-catalog.md` (linked in "The five rules that make the difference") and `requirements-ci.txt` (§8) — and the sentence under the list says `.claude/settings.json` "holds only the Omnigent rules", while it holds the eight ask rules of the merge guard and now `Bash(codex *)`. All three were so on `origin/main` before this change; the change re-stamped the check without catching them. [criterion 53] | open |
+
+Reviewer session: none — an Opus 5.5 sub-agent of the coordinating session
+(`session_018qxAGMFNS3mM37eUEm5DuQ`) in a fresh context; the phase-2a
+session could not be resumed, so a fresh session reviewed (answer 12).
+
+### Checked without a finding (phase 6)
+
+- **The leak check immediately before every call.** Both `launch` sites are
+  reached only through `begin_call` in the same invocation: `spec-review`,
+  the verdict call of `review`, the mark call of `review` (its own check,
+  after the release) and `review-loop`. A leak planted by the verdict call's
+  stand-in keeps the mark call from starting
+  (`test_each_call_runs_its_own_leak_check`). A refusal exits 2 before any
+  start and before `findings.md` is created (criteria 15–17).
+- **The environment.** Twelve allowed names, then the call's own. Codex gets
+  no credential variable and no `ANTHROPIC_*`; GLM gets the key only in
+  `ANTHROPIC_AUTH_TOKEN` and `ANTHROPIC_API_KEY`, `glm-5.3` in all six model
+  variables and the Z.ai base address. The key is scrubbed from the answer,
+  the stderr tail and a start failure; the leak-check report and the call
+  line carry only counts (criteria 18, 20).
+- **Standard input** is `DEVNULL` for both programs, tested with a pipe that
+  holds bytes (criterion 19).
+- **Codex's pins.** `-m gpt-6.1-sol`, `-c model_reasoning_effort="max"`, `-c
+  sandbox_mode="read-only"`, `--disable hooks`, `--disable memories`, `-o`
+  to a temporary directory outside the worktree, no `--ephemeral` —
+  identical on `exec` and on `exec resume <id>`; the resumed id is the last
+  `Reviewer session: codex` line, and a different thread id or no recorded
+  session writes the fresh-session line (criteria 23–29).
+- **GLM's call.** `claude -p` with `--tools Read,Grep,Glob`, `--restricted`,
+  `--strict-mcp-config`, `--permission-mode dontAsk`,
+  `--no-session-persistence`, a fresh empty `CLAUDE_CONFIG_DIR` in a
+  temporary directory outside the worktree, the prompt as a file holding
+  `prompts/04b-review-loop.md` in full and the diff with uncommitted and
+  untracked files (criteria 32–35).
+- **The order "verdict first".** The loop record lies under
+  `${XDG_STATE_HOME:-~/.local/state}`; the verdict prompt holds no loop row;
+  `review` refuses while a row is undecided; the mark call fills only the
+  `Phase 6` cells after the last release heading, and the verdict block is
+  byte-equal before and after it (criteria 30, 31, 37, 38). No loop record
+  exists on this machine (`~/.local/state/coding-harness/stage2/` absent,
+  2026-09-30).
+- **At most two rounds**, counted in the record and in every `Rounds run:`
+  line a release leaves, so a release does not reset the count (criterion
+  36, apart from F-1).
+- **The leak check's scope and refusals.** Change folder, every tracked or
+  untracked and not ignored file on disk whatever its suffix, a symbolic
+  link to a file as its target's text, every commit's message and patch on
+  local and remote-tracking branches with `--cc`, the prompt texts; refusal
+  with the reason for a missing, empty, unreadable or invalid denylist, no
+  or an invalid name, a missing or empty folder, a mode-000 file, a tree
+  that cannot be listed and a history that cannot be read; the report names
+  place, rule name and length, never the match or the pattern, and an
+  invalid pattern by its line number only (criteria 11–14, apart from F-5
+  and F-6).
+- **The ask rule.** `Bash(codex *)` stands in `permissions.ask`;
+  `codex_rule_problems` catches its removal and a deny or allow rule that
+  covers a bare `codex`; `omnigent_policy.py --write` keeps it (it replaces
+  only rules with the Omnigent prefix) and `--check` stays silent; the
+  merge guard's tests still hold its eight rules in their order. The rule
+  is named once, beside the runner, as the merge rules are beside the merge
+  guard (criterion 61).
+- **The doctrine.** §2: the 4b row and the evidence rule (46, 47). §3:
+  2a and 6 on Fable 5.1 with the Codex exception, 4 on Sonnet 5.5 at
+  `medium`; the interim Opus 5.5 rows of pull request #58 are gone from §3
+  and from the model lines of `02a-spec-review.md` and `06-review.md`, and
+  the kit keys follow (43, 44). §4: the class table and its caveat, the
+  routing rows, the runner sentence, the two columns, the stop rule, reads
+  as a request and not a lock (22, 40–42, 45, 49–51). §6 and the header's
+  standing line (52, 54). The prompts (55–59), `AGENTS.md` (60, 184 lines).
+  ADR 0007: the four parts of the amendment, the flow limited to framework
+  content with its definition, Kimi, M2 (62–65); the continuity map, the
+  "Amend" row and both dated notes (66–68). No added text claims that Codex
+  or GLM already ran.
+- **`decisions.md` against spec and code.** Answers 1–12 and 14 are carried
+  as given; answer 12's fallback of a review Codex does not do to Fable 5.1
+  stands in §3 and both review prompts; answer 14's routing on `main` while
+  the pull request is open stands in ADR 0007's consequences. No
+  contradiction with an answer; F-1 lies between spec and plan.
+- **English and the probe.** Every added line is English, apart from the
+  maintainer's quoted words in `decisions.md` and the German vocabulary of
+  `model-endpoints.yaml` (`nicht-erklaert`); German remarks were rewritten
+  only where their meaning changed (GLM's remark, the stage-2 heading). The
+  probe's `REIST_NICHT` follows the renamed parametrised ids (02a and 06
+  back to Fable 5.1, 04 to Sonnet 5.5) and adds one for the new 04b prompt;
+  the cap rises by exactly that one (32 entries, cap 32), with its reason in
+  English; `probe.py --list` names `scripts/leakcheck.py` and its test
+  (71, 72).
+
+### Not checked (phase 6)
+
+- Criterion 1's Codex half: `~/.codex/sessions` was not read (phase 7's
+  first step). Criterion 8's source: the maintainer's statement that the
+  ChatGPT setting is off was not read — the repository's only trace is the
+  declaration itself and the message of `e791991`. Criteria 69 and 70
+  belong to phase 7.
+- Any behaviour of Codex CLI or Claude Code: that the flags exist on `codex
+  exec resume`, that `--disable hooks|memories`, the read-only sandbox,
+  `--restricted` and `dontAsk` take effect, and that `Read`, `Grep` and
+  `Glob` work under `dontAsk` with no settings loaded. No program was
+  started (answer 10).
+- `~/.codex/config.toml` beyond what `research.md` reports, for example
+  servers it may start for a reviewer.
