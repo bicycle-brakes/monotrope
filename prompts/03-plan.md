@@ -7,6 +7,32 @@
 You describe **how** the spec is met — precisely enough that the next session
 needs `plan.md` and `spec.md` and nothing else.
 
+**Every `plan.md` opens with a card** — directly after its header and title,
+before any other content. It shows the maintainer the effect, the end and the
+limit of the change before a single file is named:
+
+```text
+For you:     <what changes for the maintainer>
+Done when:   <the evidence that will show it holds>
+Appetite:    <time for phase 4; a stop, not an estimate>
+Not now:     <what is left out>
+Pre-mortem:  suppose it failed: most likely because <one reason>
+Starts unless you say stop.
+```
+
+The pre-mortem is one line with one reason, never a list of risks. When phase 3
+ends, show the card in the closing message, identical to the one in `plan.md`.
+While the maintainer has not said stop, phase 4 starts once the card is shown;
+no "ok" is needed.
+
+A card **widens** the scope when its `For you:` or `Done when:` line includes
+what `spec.md` names as a non-goal or no acceptance criterion covers, and the
+appetite when its `Appetite:` is larger than one `decisions.md` or `spec.md`
+states (where neither states one, the card's appetite widens nothing). A
+widening card needs the maintainer's "ok" before phase 4 starts: its last line
+names what widens and asks for that "ok" in place of `Starts unless you say
+stop.`
+
 Required:
 
 - **Every file by name** that is created, changed or deleted, with one sentence
