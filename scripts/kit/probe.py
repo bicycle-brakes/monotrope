@@ -158,7 +158,7 @@ REIST_NICHT: dict[str, str] = {
 # carries now. It asks for more than 60 files in both manifests, and the throwaway repo reached
 # that when the ADR gate, its command and their two tests joined the mechanism
 # (plans/changes/harness-decide-adr). A lowered cap needs no reason; this one says why the entry went.
-DECKEL = 31  # zuletzt angehoben am 2026-09-29 (31 -> 32), gesenkt am 2026-09-30 (32 -> 31)
+DECKEL = 31  # last raised on 2026-09-29 (31 -> 32), lowered on 2026-09-30 (32 -> 31)
 
 
 # ---------------------------------------------------------------------------
