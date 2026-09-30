@@ -25,6 +25,12 @@ Research: `research.md` — its sections "Corrections after verification" and
 Decisions: `decisions.md` (interview of 2026-09-30). Every answer there is
 taken as given; none is reopened here.
 
+Revised after phase 2a on 2026-09-30 (`findings.md`, rows S-1 to S-12): two
+holes closed in the Terms and criterion 21, three refutations sharpened
+(criteria 7, 13, 26), one refutation widened (22), two `[DETAIL]`s added and
+the stop rule of `[GAP]` 3 extended to `[GAP]` 2. The numbering of the
+criteria is unchanged.
+
 Written against `origin/main` at `ba940fb`, the merge of pull request #54,
 which brought the change classes, decision pull requests and the rule that a
 decision takes effect when the maintainer merges it.
@@ -108,7 +114,10 @@ after them):
   the runner itself puts into a call's prompt.
 - **Loop record** — the file that holds the rows of the GLM loop and the
   implementer's decision on each, one per change, outside the worktree and
-  outside the repository's git directory.
+  outside the repository's git directory. The implementer writes its decision
+  beside each row there — the Status with its reason, and for a taken row the
+  `Broke a test` mark — before the next round starts or the rows are
+  released; `release-loop` carries each row with these marks as they stand.
 - **Loop rows** — the rows of the GLM loop: in the loop record until they
   are released, in `findings.md` after.
 - **Phase-6 verdict line** — the line `Phase 6 verdict: <reviewer>
@@ -168,8 +177,8 @@ applies, it begins with When, While or If. Each names what would refute it.
 
 7. The remark of `glm-coding-plan` names the review loop before phase 6 as
    its use.
-   *Refuted by:* a remark that names implementation, phase 4 or plan
-   markings.
+   *Refuted by:* a remark that names implementation, the implement phase or
+   plan markings as its use.
 
 8. The section on the purpose of use declares the ChatGPT subscription
    behind Codex as personal use — dated 2026-09-30, to be obtained again
@@ -214,7 +223,7 @@ applies, it begins with When, While or If. Each names what would refute it.
     line, or commit and line of its patch), the rule's name and the match's
     length, and nothing of the matched text.
     *Refuted by:* a report that lacks one of the four; a planted value of 32
-    random letters, four consecutive of which appear in its standard output
+    random letters, eight consecutive of which appear in its standard output
     or standard error.
 
 14. When nothing matches, the leak check exits 0 and states how many files,
@@ -259,16 +268,22 @@ applies, it begins with When, While or If. Each names what would refute it.
 
 21. When a call starts, `findings.md` of the change gains one line naming the
     date, the runner's verb, the endpoint, the model and the leak check's
-    three numbers.
-    *Refuted by:* a stand-in start without its line.
+    three numbers; if the file does not exist yet, the runner creates it with
+    a header that passes the gate `plans-registry` (`status`,
+    `implementation_status`, `date`, `last_reviewed`, and `bead` taken from
+    `spec.md`).
+    *Refuted by:* a stand-in start without its line; a `findings.md` the
+    runner created that `python3 scripts/plans_registry.py --check` blocks.
 
 22. While a foreign reviewer runs, its file access is confined to reading
     the worktree, the repository's git directory and the paths its own
     program needs.
     *Refuted by:* a local measurement, which starts no model call, in which
     the reviewer's sandbox or permission configuration lets a read of a
-    planted file in a sibling directory of the repository succeed, or lets
-    any write succeed.
+    planted file succeed in a sibling directory of the repository or in the
+    main checkout outside its `.git/` directory (the worktree sits inside the
+    main checkout, and the tracker's database sits there under `.beads/`), or
+    lets any write succeed.
 
 ### Codex in phases 2a and 6
 
@@ -295,7 +310,9 @@ applies, it begins with When, While or If. Each names what would refute it.
     as rows with reviewer `Codex`, and under the table `Reviewer session:
     codex <thread id>` with the id from the call's `thread.started` event.
     *Refuted by:* a stand-in that emits thread id X and a `findings.md`
-    without X, or with another id.
+    without X, or with another id; a stand-in whose canned answer is three
+    table rows of which fewer than three stand in `findings.md` with reviewer
+    `Codex`.
 
 27. If a Codex call ends without a `thread.started` event, or with a
     non-zero exit, the runner writes no session line and exits non-zero.
@@ -348,8 +365,9 @@ applies, it begins with When, While or If. Each names what would refute it.
     *Refuted by:* a stand-in's prompt without the prompt text, or without an
     uncommitted edit made before the call.
 
-36. If two rounds of the loop have run for a change, `review-loop` refuses a
-    third and starts no call.
+36. If two rounds of the loop have run for a change — a round has run when
+    its rows stand in the loop record — `review-loop` refuses a third and
+    starts no call.
     *Refuted by:* a stand-in that records a third round's start, also after
     the first two rounds' rows were released.
 
@@ -365,7 +383,8 @@ applies, it begins with When, While or If. Each names what would refute it.
 39. When `release-loop` runs after the verdict line, every loop row enters
     `findings.md` with reviewer `GLM`.
     *Refuted by:* a loop row missing from `findings.md`, or entered without
-    its reviewer.
+    its reviewer; a released row whose Status, reason or `Broke a test` mark
+    differs from the loop record's.
 
 ### Doctrine and prompts
 
@@ -403,9 +422,13 @@ applies, it begins with When, While or If. Each names what would refute it.
     described that bypasses the runner.
 
 46. The phase table of `docs/WORKFLOW.md` §2 has a row `4b Review loop` with
-    its artefact, its gate (at most two rounds, `make verify` green after each
+    its artefact (the loop rows, in `findings.md` after `release-loop`, held
+    outside the repository until the phase-6 verdict — so §2's first
+    sentence, one versioned artefact in the repository per phase, stays
+    true), its gate (at most two rounds, `make verify` green after each
     repair) and its prompt.
-    *Refuted by:* the row missing, or one of the three.
+    *Refuted by:* the row missing, or one of the three; an artefact cell that
+    names the loop record as the artefact.
 
 47. The findings process in `docs/WORKFLOW.md` §2 states the evidence rule: a
     Codex or GLM finding is taken only when a test demonstrates it or the
@@ -498,8 +521,11 @@ applies, it begins with When, While or If. Each names what would refute it.
 
 63. ADR 0007 records where framework content may flow: to the two declared
     endpoints, through their official tools, and nothing but framework
-    content.
-    *Refuted by:* another endpoint or tool named; the content limit missing.
+    content — this repository's tree, as the class `framework` of
+    `model-endpoints.yaml` defines it; lakeswitch-ai's own trees are not
+    sent, and their disclosure decision (D-13, criterion 2) stays theirs.
+    *Refuted by:* another endpoint or tool named; the content limit or its
+    definition missing.
 
 64. ADR 0007 records that Kimi is dropped.
     *Refuted by:* the removal missing.
@@ -573,10 +599,15 @@ applies, it begins with When, While or If. Each names what would refute it.
 - **Translating the existing German** of `model-endpoints.yaml` and
   `tests/test_model_endpoints.py` (bead coding-harness-yim).
 - **Omnigent.** M2 is not entered; the runners are not wired into Omnigent.
-- **Scanning what the repository does not present** — files git ignores, the
-  tracker's database (`refs/dolt/data`), anything else on the disk. Read
-  confinement (criterion 22) covers the disk; hooks are off, so no tracker
-  text is injected (criteria 24 and 33).
+- **Scanning what the repository does not present** — files git ignores (in
+  this worktree on 2026-09-30: `.pytest_cache/`, `.ruff_cache/` and
+  `__pycache__/` only), the tracker's database (`refs/dolt/data`; locally
+  `refs/dolt/data-check` and `refs/remotes/origin/__dolt_remote_info__`,
+  which a reviewer can show through git inside the confinement of criterion
+  22 — the rendered tracker held no rule hit on 2026-09-30, research section
+  5), anything else on the disk. Read confinement (criterion 22) covers the
+  disk, the main checkout's working tree included; hooks are off, so no
+  tracker text is injected (criteria 24 and 33).
 - **Confining the implementer.** Sonnet and Fable are Anthropic models,
   declared for customer code as well.
 - **The domain agent definitions in `.claude/agents/`**, which pin
@@ -595,7 +626,11 @@ None open. Every `[DECISION]` of `research.md` is answered in `decisions.md`.
 
 ### `[GAP]` — carried to the plan, answerable by measuring locally
 
-None of these needs a call with repository content.
+None of these needs a call with repository content. Every local measurement
+with a real CLI runs from a scratch directory outside this worktree, without
+repository content and under a temporary `CODEX_HOME` or
+`CLAUDE_CONFIG_DIR`, so that criterion 1's refutation stays clean and the
+maintainer's own sessions and memories stay untouched.
 
 1. **Codex on resume.** Which of model, effort and sandbox take effect when
    passed to `codex exec resume` (the help lists no `--sandbox` there; `-c`
@@ -604,7 +639,9 @@ None of these needs a call with repository content.
 2. **Codex hooks and memories off.** Which configuration switches off the
    tracked `.codex/hooks.json`, the user's hooks and the memories feature
    (`--ignore-user-config`, `-c` feature keys), and a local proof that they
-   are off.
+   are off. **If it cannot be shown, the implementing session stops and
+   reports**, as for item 3: what a hook injects reaches Codex outside the
+   scanned set, and unchecked is not the same as clean.
 3. **Read confinement for both reviewers (criterion 22).** For Codex:
    whether the permission profiles of the current documentation work in CLI
    0.159.2 on macOS, measured with the CLI's local sandbox command against a
@@ -688,6 +725,13 @@ veto is one word.
   if the rows are elsewhere. `release-loop` removes the record once its rows
   are in `findings.md`, which stays the one record; `review-loop` counts
   rounds in both places, so a release does not reset the count.
+- **A round has run when its rows stand in the loop record.** A call that
+  ends without rows is a failed call, not a round; its line in `findings.md`
+  (criterion 21) shows that it happened. Counting starts instead would let a
+  crashed call use up one of the maintainer's two rounds.
+- **An answer that is not table rows is appended as it came**, under a line
+  that says so, and never dropped: the call was made, and the step that works
+  the rows into the spec is a person's in any case.
 - **The order also holds for Fable in phase 6 of a `bounded` change.** The
   independence of the last review does not depend on the vendor; the prompt
   and `release-loop` hold it.
@@ -695,7 +739,10 @@ veto is one word.
   "Disagreements are recorded, not resolved" (`docs/WORKFLOW.md` §2).
 - **One line per call in `findings.md` (criterion 21).** It is the evidence
   that criterion 3 of D-13 held on every call — generated, not typed, as bead
-  kw0 asked of its metrics.
+  kw0 asked of its metrics. The runner creates the file when phase 2a is its
+  first writer, with the header the gate `plans-registry` holds every
+  `plans/**/*.md` to; the `bead` comes from `spec.md`, the only place a
+  change's bead is written down.
 - **The two columns live in the doctrine**, not in a template the
   repository does not have yet.
 - **"Broke a test" means:** a test green before a taken finding's repair and
