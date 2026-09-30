@@ -151,3 +151,15 @@ unchanged.
     This overrides, for Codex as a worker, the spec's rule that no foreign
     call runs before the merge; the criteria that state it are marked
     "changed by answer 13" in the next edit of `spec.md`.
+
+## Addendum 2026-09-30: Claude only, the pull request stays open (answer 14)
+
+14. **This change is finished, and its pull request stays open.** The
+    maintainer's Claude budget was restored the same evening, and the
+    maintainer decided: finish the change with Claude agents, open the
+    decision PR, leave it unmerged, and keep working exclusively with Claude
+    until the maintainer decides otherwise. Answer 13 (Codex as the worker
+    before the merge) is void: no Codex or GLM call was made under it,
+    because Claude Code's auto-mode classifier blocked the start twice.
+    While the pull request is open, the routing on `main` stays: spec review
+    and review on Opus 5.5, implement on Sonnet.
