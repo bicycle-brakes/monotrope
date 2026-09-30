@@ -156,6 +156,9 @@ rules:
   - prefix: tests/test_feedback_channel.py
     rolle: mechanismus
     reason: "das Schema reist; die Uebergaben dieses Repos sind Bestand (siehe REIST_NICHT)"
+  - prefix: tests/test_templates.py
+    rolle: mechanismus
+    reason: "holds the three templates against the gate modules; skips a case whose file does not travel"
   - prefix: tests/test_worktree_state.py
     rolle: mechanismus
     reason: "die Gegenproben des Waechters — je Regel eine Rotation, in Wegwerf-Repos (RB-G7)"
@@ -191,6 +194,15 @@ rules:
   - prefix: templates/handover.md
     rolle: mechanismus
     reason: "die Vorlage, gegen die das Uebergabe-Schema prueft"
+  - prefix: templates/spec.md
+    rolle: mechanismus
+    reason: "the form of a spec; prompts/02-spec.md names it, so it travels with the prompts"
+  - prefix: templates/findings.md
+    rolle: mechanismus
+    reason: "the form of a findings file and its table; docs/WORKFLOW.md and a phase prompt name it"
+  - prefix: templates/adr.md
+    rolle: mechanismus
+    reason: "the form of a decision record in MADR 4.0.0; tests/test_templates.py holds it"
   - prefix: .github/PULL_REQUEST_TEMPLATE/
     rolle: mechanismus
     reason: "the decision pull request's template — a decision takes effect by its merge"

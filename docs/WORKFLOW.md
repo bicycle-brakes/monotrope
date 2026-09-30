@@ -36,10 +36,9 @@ tags: [workflow, model-routing, agentic-coding, phases, artefacts]
 > `.claude/agents/explorer.md` and `reviewer.md`, the stop hook
 > `.claude/hooks/session-stop/check-tests-green.sh`, `.claude/commands/`, the
 > targets `make change` and `make index` (the entry is `python3 scripts/new_change.py <name>
-> --bead <id>`), `tests/test_repo_settings.py`, `templates/findings.md`,
-> `templates/plan-marking.md`, `scripts/run_change.sh`, the `scripts/cc-*.sh`
-> profiles and `tests/test_model_profiles.py`. Where the text below says one of
-> them does something, it describes the target, not this tree.
+> --bead <id>`), `tests/test_repo_settings.py`, `scripts/run_change.sh`, the
+> `scripts/cc-*.sh` profiles and `tests/test_model_profiles.py`. Where the text
+> below says one of them does something, it describes the target, not this tree.
 >
 > One thing is missing on purpose and is not on that list: the brakes on the
 > irreversible (force push, `rm -rf`, deploys) in `.claude/settings.json`, which
@@ -532,14 +531,6 @@ foreign endpoint. Every foreign profile calls it itself and stops when
 `CC_CHANGE` is missing — without a named change there is nothing to scan. The
 denylist lives outside the repository; if it is missing, that is BLOCK, because
 unchecked is not the same as clean.
-
-**The assignment stands in the plan.** Every step carries exactly one marking —
-`[FLASH]`, `[GLM5.3]` or `[SONNET]`, decision rules in
-[`templates/plan-marking.md`](../templates/plan-marking.md).
-`scripts/run_change.sh` groups consecutive equal markings into one segment and
-runs each as a session of its own with a verify gate after it. An unmarked line
-is ignored, not guessed: the incomplete plan is then a finding at the plan gate,
-where a person accepts it, not a surprise at run time.
 
 The orchestrator holds **no second rule set**. The worktree precondition, the
 leak check, `make verify` and the artefact gate live outside it and are called.

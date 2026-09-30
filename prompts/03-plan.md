@@ -19,14 +19,6 @@ Required:
   describes is a finding, not diligence. What fits in one sentence stays one
   sentence.
 
-## Model markings (stage 2 only)
-
-Where stage 2 is active, every subtask carries exactly one marking — `[FLASH]`,
-`[GLM5.3]` or `[SONNET]`. Format and decision rules: `templates/plan-marking.md`.
-The orchestrator groups consecutive same-marking lines into one segment; an
-unmarked line is ignored, which makes it a gap in the plan rather than a
-surprise at runtime. Under stage 1 the markings are ignored.
-
 ## Questions
 
 Classify before you ask (`docs/WORKFLOW.md`):
