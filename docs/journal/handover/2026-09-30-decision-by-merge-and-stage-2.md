@@ -160,3 +160,41 @@ Task status is in Beads; read with `tools/bd show <id>`:
 - CI green on #54 before its merge; not read for #58 at hand-over.
 - Not run: any Codex or GLM call; the GitHub-app rendering of decision PRs
   was not checked by an agent.
+
+## Addendum — 2026-09-30, Codex did not start
+
+The hand-over to Codex did not happen. Claude Code's auto-mode classifier
+blocked `codex exec` a second time ("Create Unsafe Agents"), although the
+maintainer had allowed it in chat; the session did not work around it. The
+maintainer works through Remote Control from a phone, where neither `!`
+commands nor `/permissions` are available, so slice 2 waits for the laptop.
+
+What was done before the block: the leak check ran on the Codex prompt
+(clean: 186 files, 255 commits, 12 rules, 1 prompt text), and answer 13 is
+committed (`feat/stage-2-codex-glm` at `91d5b8c`). Nothing else changed on
+the branch.
+
+**Resume at the laptop**, either way:
+
+1. Add `Bash(codex exec:*)` under "Allow" with `/permissions`, then let the
+   session start Codex in the background; or
+2. run it yourself in a terminal from the stage-2 worktree, after
+   `python3 scripts/leakcheck.py --name stage-2-codex-glm --prompt-file <prompt>`
+   is clean:
+   `codex exec -m gpt-6.1-sol -c model_reasoning_effort="xhigh" -s workspace-write -C . -o report.md "$(cat <prompt>)" < /dev/null`
+
+The prompt, to be saved as a file first:
+
+```text
+You are the implementer for phase 4 (Implement) of the Coding Harness workflow, change `plans/changes/stage-2-codex-glm/` (bead coding-harness-bc9), SLICE 2 ONLY. Read AGENTS.md, `prompts/04-implement.md`, and in the change folder plan.md, spec.md, decisions.md (including answer 13: you, Codex, are the worker now), findings.md. Follow the plan's slice 2 exactly: the runner `scripts/stage2.py` with its four verbs, the review-loop prompt, the ask rule on `codex`, their tests and the mutations the plan lists, plus the declaration tests the plan puts in `tests/test_stage2.py`.
+
+Hard rules:
+- Make no call to any external model or service, and do not run `codex` or `claude` for real. Tests use stand-ins only.
+- Do not push. Do not open a PR. Do not write the tracker (`tools/bd`). Do not edit files `provenance.yaml` marks `human-decided`.
+- Repository text is English.
+- Commit small, reviewable steps with `git -c commit.gpgsign=false commit -F <file>`. English messages, each ending with the trailer line: `Assisted-by: Codex gpt-6.1-sol`
+- Verify with: `PATH=/Users/mikypiky/.venvs/portfolio-agentic-engineering/bin:$PATH GIT_CONFIG_COUNT=1 GIT_CONFIG_KEY_0=commit.gpgsign GIT_CONFIG_VALUE_0=false make verify`. It must end with "VERIFY GREEN" before your last commit.
+- If slice 2 passes 5 hours of work, stop green after the verb you are on.
+
+Your final message is a report of at most 20 lines: the commits, the verify result with counts, the mutation results, any deviations from the plan and why, and anything the maintainer must decide.
+```
