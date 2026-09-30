@@ -300,8 +300,12 @@ What this does not do:
 - Agents act under the maintainer's GitHub account, so nobody can tell from
   GitHub who pressed merge. The merge rule is a rule, not proof.
 - The ask rules in `.claude/settings.json` are a brake against an accidental
-  merge, not a lock: they match a command's text, and another spelling — `curl`
-  against the API, the web page — passes them.
+  merge, not a lock: they match a command's text, and another spelling passes
+  them — `curl` against the API, the web page, `gh` run through `sh -c '…'`,
+  by an absolute path or from a script file, a flag of the merge moved before
+  `merge` (`gh pr --squash 54 merge`), a GraphQL merge mutation read from a
+  file (`gh api graphql --input <file>` or `-F query=@<file>`), and an alias
+  set by `gh alias import` or by editing gh's own config file.
 - Nothing checks that the class is right, that a "yes" is followed by an ADR,
   or that a decision pull request carries its label and block. The review
   before the merge holds them.

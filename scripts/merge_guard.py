@@ -6,7 +6,7 @@ criterion 11). So every way an agent here can merge is an ask rule in
 `.claude/settings.json`: Claude Code prompts before the call in every permission
 mode, and where nobody can answer the prompt the call is refused. It is a brake
 against accidents, not a lock - it matches the command's text, and another
-spelling passes it.
+spelling passes it (docs/WORKFLOW.md, "What this does not do", names them).
 
 `MERGE_ASK_RULES` maps each rule to its one-line reason and a sample call the
 rule must match. `tests/test_merge_guard.py` compares `.claude/settings.json`
@@ -55,16 +55,19 @@ MERGE_ASK_RULES: dict[str, tuple[str, str]] = {
         "Bash(gh pr -R o/r merge 54)",
     ),
     "Bash(gh api *merge*)": (
-        'the REST merge endpoint and the GraphQL mergePullRequest mutation; a read containing "merge" also prompts',
+        "the REST merge endpoint and the GraphQL mergePullRequest mutation written in the command (one read from a "
+        'file passes); a read containing "merge" also prompts',
         "Bash(gh api -X PUT repos/o/r/pulls/54/merge)",
     ),
     "Bash(gh api *Merge*)": (
-        "the GraphQL enablePullRequestAutoMerge mutation; whether matching ignores case is not documented",
+        "the GraphQL enablePullRequestAutoMerge mutation written in the command; whether matching ignores case is "
+        "not documented",
         "Bash(gh api graphql -f query='mutation { enablePullRequestAutoMerge("
         'input: {pullRequestId: "x"}) { clientMutationId } }\')',
     ),
     "Bash(gh alias set *)": (
-        "an alias would rename pr merge past the first rule",
+        "gh alias set can give pr merge a name the other rules do not match; gh alias import and an edit of gh's "
+        "config file can too, and pass (docs/WORKFLOW.md names the limit)",
         "Bash(gh alias set pm 'pr merge')",
     ),
     "Bash(git push *main*)": (
