@@ -23,7 +23,8 @@ Starts unless you say stop.
 The pre-mortem is one line with one reason, never a list of risks. When phase 3
 ends, show the card in the closing message, identical to the one in `plan.md`.
 While the maintainer has not said stop, phase 4 starts once the card is shown;
-no "ok" is needed.
+no "ok" is needed. When phase 3 runs as a subagent, the orchestrating session
+shows the card to the maintainer unchanged; the veto stays the maintainer's.
 
 A card **widens** the scope when its `For you:` or `Done when:` line includes
 what `spec.md` names as a non-goal or no acceptance criterion covers, and the

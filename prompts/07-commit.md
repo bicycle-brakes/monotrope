@@ -38,6 +38,10 @@
 
   **Your move:** merge = accept all three · comment "change 2: …" · close = reject all.
 
+  **What could break:** <what could fail after the merge, and where it would show>
+
+  done: <verification command>: <result> at <short sha> · <time used> of <appetite>
+
   ## 1 · <short name of decision 1>
   - **Confirms:** <what becomes binding>
   - **Options:** **<A> (recommended):** <consequence> · <B>: <consequence>

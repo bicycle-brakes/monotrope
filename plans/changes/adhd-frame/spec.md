@@ -230,10 +230,16 @@ names, as this change leaves it.
 23. `prompts/07-commit.md` gains exactly one sentence, which names the
     acceptance card — what changes for you, how it was checked, what could
     break, and the "done:" line — and says that both templates carry it and
-    every pull request body keeps it, the multi-decision form included.
-    *Refuted by:* more than one added sentence, a second copy of the
-    template's lines (a list or a code block), or no pointer to the
-    templates.
+    every pull request body keeps it, the multi-decision form included
+    *(added in repair round 1, F-5 of the phase-6 review: and the two new
+    lines, "What could break" and the "done:" line, stand in the
+    multi-decision form that file already prints, directly below its
+    `**Your move:**` line)*.
+    *Refuted by:* more than one added sentence, ~~a second copy of the
+    template's lines (a list or a code block)~~ *(changed in repair round 1:
+    a copy of the template's lines outside the multi-decision form)*, or no
+    pointer to the templates; *(added in repair round 1)* a multi-decision
+    form without either line.
 
 ### The handover skill — `tools/claude-code/` and `AGENTS.md`
 
