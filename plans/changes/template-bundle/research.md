@@ -502,3 +502,96 @@ duties as a non-goal of that change, not as rejected.
 9. **The class of this change** is proposed in its spec; it changes what a
    spec must carry, so likely `feature`, with an ADR proposal "no": it writes
    down decisions already taken (D-2, O-1).
+
+## 8 · Corrections after verification, and gaps closed in phase 2
+
+Added in phase 2 on 2026-09-30, on this branch at `eee26ae`. Where this
+section disagrees with the text above it, this section holds.
+
+**Corrections.**
+
+1. **Pull request #60 moved on.** Its head is `bd39160` (two repair commits
+   after `8622437`). The parts section 1.4 cites are unchanged there:
+   `scripts/stage2.py` has `ROW_COLUMNS` = ID, Severity, Dimension, Origin,
+   Where, Finding, Reviewer, Status, Broke a test and `RELEASED_COLUMNS` =
+   those plus Phase 6; its `VERDICT_LINE` and `SESSION_LINE` are as quoted.
+   Two tests on that branch hold text this change edits next to:
+   `tests/test_stage2.py::test_the_plan_prompt_asks_for_no_markings` requires
+   that `prompts/03-plan.md` contains none of `[FLASH]`, `[GLM5.3]`,
+   `[SONNET]`, `plan-marking`, `Model markings`; and
+   `test_the_spec_prompt_asks_one_condition_and_a_refutation` requires the
+   one-condition sentence and "comes with what would *refute* it" in
+   `prompts/02-spec.md`. `docs/WORKFLOW.md` on #60 still lists
+   `templates/findings.md` as "not in this repository".
+2. **The phase-2 gate named in the prompt does not exist.** Prompt 02 names
+   `python3 scripts/validate_change_artefacts.py --check`; the script is not
+   in this tree (`docs/WORKFLOW.md`, "Not all of it is here yet"). The
+   presence gate that runs is `python3 scripts/plans_registry.py --check`,
+   as `plans/changes/harness-decide-adr/spec.md` records.
+3. **The Leerprobe baseline holds.** Measured again on 2026-09-30 at
+   `eee26ae` (with the header dates of `decisions.md` corrected), `make
+   verify` with `commit.gpgsign=false`: Leerprobe **356 of 387 cases (91 %)**,
+   green. Verify was red on exactly one cause, which that date correction
+   made: `plans/INDEX.md` still showed the old date of `decisions.md` (the
+   gate `plans-registry` and the pytest case that runs it); regenerating the
+   index closes it.
+
+**Gaps closed** (section 7, `[GAP]` list):
+
+1. **MADR 4.0.0's own text**, read from the tag `4.0.0` of
+   `github.com/adr/madr` (tag object `61cc589`), files
+   `template/adr-template.md` and `template/adr-template-minimal.md`; licence
+   "MIT OR CC0-1.0". The minimal template has a title and three sections:
+   *Context and Problem Statement*, *Considered Options*, *Decision Outcome*
+   (with an optional `###` *Consequences*). The full template adds an optional
+   metadata header (`status`, `date`, `decision-makers`, `consulted`,
+   `informed`) and the optional elements *Decision Drivers* (between context
+   and options), `###` *Consequences* and `###` *Confirmation* under the
+   outcome ("how the implementation of/compliance with the ADR can/will be
+   confirmed"), *Pros and Cons of the Options* and *More Information*. The
+   outcome reads `Chosen option: "<title>", because <justification>`.
+   Against the house form of `docs/adr/`: *Context* is MADR's context and
+   problem statement, *Decision* its decision outcome, *Validation* what
+   MADR 4.0.0 calls *Confirmation*; the house writes *Consequences* and
+   *Validation* as `##` sections, not under the outcome; ADR 0004 adds a
+   section of its own, and ADR 0007 on #60 puts the options after the
+   decision under the name *Options considered*.
+2. **The Leerprobe after the change** is measured in phases 4 and 5; the
+   baseline is correction 3.
+3. **Provenance of templates written by an agent.** `provenance.yaml` says
+   in its own header: "`allowed:` is declared, not yet enforced; nothing here
+   reads it." The class `human-written` under `templates/` and `prompts/` is
+   therefore a declaration that no gate checks; a new template breaks no
+   gate, and the reviewer of the pull request holds the class. The two
+   existing templates came over in `5efe809` ("adopt the mechanism from
+   portfolio"); how portfolio classed them was not read.
+4. **LakeSwitch's plan of 2026-09-28.** On lakeswitch-ai `origin/main` at
+   `471df3f` the one later journal entry
+   (`journal/2026-09-30-beads-tracker-bootstrap.md`) does not mention package
+   1c, the shared Definition of Done or the "do not add" list; an approval
+   was not found. The "do not add … template files of their own" line stands
+   in that plan's section on the Definition of Done and Definition of Ready,
+   and concerns LakeSwitch's own files; its shared Definition of Done begins
+   with "`verify` and CI green, written as one line, never as a gate list",
+   after O-1.
+
+**Also read for the spec.**
+
+- **The parallel change `adhd-frame`** (branch `origin/docs/adhd-frame` at
+  `5bb3d58`, bead coding-harness-q24; research and provisional decisions
+  only): its plan card, appetite stop and `done: <evidence> · <time used> of
+  <appetite>` line use the word **appetite**; its answer Q3 speaks of "the
+  appetite that the interview or spec set", and its research decides "no
+  default appetite number in the prompts". It places its text in prompts 03
+  and 04 so that no hunk is shared with #60.
+- **The four practised findings files** write their Status as `open`,
+  `open — <note>`, `fixed in <commit>`, `fixed in <commit> — <note>`,
+  `resolved <date> by <source>` and, for phase-2a questions answered in
+  phase 6, `answered`; prompt 02 prescribes `in spec` or `rejected —
+  <reason>` for each 2a row. Portfolio's closed set (`fix`, `accepted`,
+  `bead` …) is used by none of them.
+- **Status of an ADR under the merge rule.** ADR 0008 (and ADR 0007 on #60)
+  carry `status: accepted`, `provenance: human-decided`, an empty `review`
+  block, and a first bullet "Status: accepted by the merge of the pull request
+  that carries this file. Until that merge, the pull request's state is the
+  decision's state: open is proposed, closed is rejected."
