@@ -730,3 +730,70 @@ reads "read 4 change anchors; held 3 features to their answer files".
    map is not this command's finding.
 8. **Pushed once, at step 10**, not after step 7: the coordinating session
    asked for a push only when `make verify` is green.
+
+### Repair round 1
+
+Origin `fix-r1`, on the six findings of the phase-6 review (`findings.md`),
+2026-09-30. Three fixed, two closed as named limits, one left for phase 7.
+The rule table of slice 1 is the first cut: the list now holds eight rules,
+and the reason of `Bash(gh alias set *)` and of both `gh api` rules changed.
+The decisions below are the coordinating session's `[DETAIL]`s under the
+maintainer's decision to ask before every merge command: closing another
+spelling of that command is within it, and naming a spelling that passes is
+too.
+
+- **F-1, the repository flag before a subcommand** (`ba8bfb1`). Measured on
+  2026-09-30 with `pr view`, never with a merge (gh 2.101.0): gh takes
+  `-R o/r`, `-Ro/r`, `-R=o/r`, `--repo o/r` and `--repo=o/r` before `pr` and
+  between `pr` and `merge` — the flag belongs to `gh pr`, and
+  `gh pr merge --help` lists it as inherited. With the flag and no pull
+  request argument, gh refuses to run ("argument required when using the
+  --repo flag", measured with `view`; the same check is in gh's
+  `pkg/cmd/pr/merge/merge.go`, read the same day). Two rules, the smallest
+  set that covers the ten spellings:
+
+  | Rule | Reason | Sample |
+  |---|---|---|
+  | `Bash(gh -* pr merge*)` | `gh pr merge` with a flag before `pr`: gh takes its repository flag there | `gh -R o/r pr merge 54` |
+  | `Bash(gh pr -* merge *)` | `gh pr merge` with the repository flag between `pr` and `merge`; the flag needs an argument, so the rule wants one after `merge` | `gh pr -R o/r merge 54` |
+
+  The second rule's trailing ` merge *` keeps `gh pr -R o/r view 53 --json
+  mergeable` from prompting; a `merge*` there would not. The three rules the
+  review proposed would have missed `--repo=`, `-Ro/r`, `-R=` and
+  `pr --repo`. The eight spellings that are not a rule's sample are in
+  `EXTRA_SAMPLES`, so no deny or allow rule may cover them either.
+  `tests/test_merge_guard.py::test_the_repository_flag_before_a_subcommand_still_asks`
+  types eleven merges and eight reads itself; dropping either rule, or
+  widening to `Bash(gh *pr *merge*)`, turns it red (checked).
+  `.claude/settings.json`: two lines added after `Bash(gh pr merge *)`, then
+  `omnigent_policy.py --write`; `--check` says "the tree is what the list
+  renders". Left out, and named in `docs/WORKFLOW.md`: a flag of the merge
+  moved before `merge` together with its value. gh reads
+  `gh pr --comments 53 view` as `gh pr view --comments 53` (measured), so
+  `gh pr --squash 54 merge` is a merge no rule matches. One more rule would
+  close it; it stays out because nobody writes it by accident, and the rules
+  are a brake against accidents.
+- **F-2 and F-3, named limits** (`a5c77d8`). No rule added. The two `gh api`
+  reasons say a mutation is asked only when its name stands in the command;
+  the `gh alias set` reason no longer claims the alias detour closed.
+  `docs/WORKFLOW.md`, "What this does not do", names what passes:
+  `sh -c '…'`, an absolute path, a script file, the moved merge flag, a
+  GraphQL mutation read from a file (`--input <file>`, `-F query=@<file>`),
+  `gh alias import` and an edit of gh's config file.
+- **F-4, the short texts** (`551fa49`). `AGENTS.md` house rule 8 and
+  `prompts/07-commit.md`, "The merge", say "every merge command it
+  recognises" and "a brake, not a lock", and point to `docs/WORKFLOW.md`.
+- **F-5, the `DECKEL` comment** (`e99eee9`). The trailing comment on
+  `DECKEL = 31` is English. The German block comment above it is older than
+  this change and stays (house rule 1: no translation in passing).
+- **Left open.** F-6 closes in phase 7. The label `decision` exists on GitHub
+  since 2026-09-30 (created by the coordinating session on the maintainer's
+  yes; `gh label list --search decision`, 2026-09-30).
+
+`make verify` on `551fa49` (2026-09-30, `commit.gpgsign` off): 514 passed,
+15 skipped; `docs-links` and `markdownlint` red but report-only, none of
+their lines in the passages this round touched. Last line:
+
+```text
+VERIFY GREEN — every local gate of the 'verify' job passed.
+```
