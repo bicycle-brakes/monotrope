@@ -33,7 +33,13 @@ request, not a lock: the reviewers can read the rest of the disk.
 **The loop record** lives outside the worktree
 (`${XDG_STATE_HOME:-~/.local/state}/coding-harness/stage2/<change>/loop.md`):
 GLM's rows and the implementer's decision on each, until the phase-6 verdict is
-written and `release-loop` carries them into `findings.md`.
+written and `release-loop` carries them into `findings.md`. The release is the
+only thing that deletes the record, and it deletes nothing that has not arrived:
+every loop row, and every other line of the record as it stands, is in
+`findings.md` first; a line that carries a loop id and cannot be read as a row
+refuses the release instead. A call counts as a round when it succeeded and
+answered - with rows or with "no finding"; a failed call or an empty answer
+is no round.
 
 Exit: 0 done, 1 a call failed, 2 refused before any call.
 """
@@ -56,6 +62,7 @@ import yaml
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 
+import check_frontmatter_current  # noqa: E402
 import leakcheck  # noqa: E402
 import merge_guard  # noqa: E402
 
@@ -74,8 +81,8 @@ CODEX_ASK_RULE = (
 READ_REQUEST = "Read nothing outside this worktree and the repository's git directory."
 ANSWER_FORMAT = (
     "Answer with table rows only: one row per finding, exactly six cells, no header and no other text -\n"
-    "`| ID | Severity | Dimension | Origin | Where | Finding |`. The runner adds the reviewer, the status\n"
-    "and the test mark. When there is no finding, answer in one sentence."
+    "`| ID | Severity | Dimension | Origin | Where | Finding |`. Write a `|` inside a cell as `\\|`.\n"
+    "The runner adds the reviewer, the status and the test mark. When there is no finding, answer in one sentence."
 )
 MARK_FORMAT = "For each loop row answer one line and nothing else: `<ID>: agree` or `<ID>: disagree — <reason>`."
 
@@ -107,14 +114,19 @@ MAX_ROUNDS = 2
 ROW_COLUMNS = ["ID", "Severity", "Dimension", "Origin", "Where", "Finding", "Reviewer", "Status", "Broke a test"]
 RELEASED_COLUMNS = [*ROW_COLUMNS, "Phase 6"]
 
-VERDICT_LINE = re.compile(r"^Phase 6 verdict: \S+ \S+, \d{4}-\d{2}-\d{2}$", re.M)
+SEVERITIES = {"BLOCKER", "MAJOR", "MINOR"}
+
+# `Phase 6 verdict: <reviewer> <session>, <date>` - the reviewer may be several words, the session may be
+# missing, and a space or a full stop after the date does not matter (repair round 1, F-4).
+VERDICT_LINE = re.compile(r"^Phase 6 verdict:[ \t]+\S[^\n]*?,[ \t]*\d{4}-\d{2}-\d{2}[ \t]*\.?[ \t]*$", re.M)
+VERDICT_START = re.compile(r"^phase 6 verdict\b[^\n]*$", re.M | re.I)
 SESSION_LINE = re.compile(r"^Reviewer session: codex (\S+)", re.M)
 ROUNDS_LINE = re.compile(r"^Rounds run: (\d+)\s*$", re.M)
 ROUND_HEADING = re.compile(r"^## Round \d+ — GLM,", re.M)
 RELEASE_HEADING = "## Phase 4b — GLM loop rows, released"
 NO_LOOP_LINE = "Loop rows: none — the GLM loop did not run for this change."
 LOOP_ID = re.compile(r"L\d+-\d+")
-NOT_ROWS_NOTE = "The answer below was not only rows; it is kept as it came."
+NOT_ROWS_NOTE = "The answer was not only six-cell rows; what is not one is kept below as it came."
 
 RECORD_INTRO = (
     "Write `Status` (`taken — <test or criterion>` or `rejected — <reason>`) for every row below.\n"
@@ -238,7 +250,12 @@ def _furniture(cells: list[str]) -> bool:
 
 
 def parse_rows(answer: str) -> tuple[list[list[str]], str]:
-    """The six-cell rows of an answer and the text that is not a row."""
+    """The six-cell rows of an answer and the text that is not a row.
+
+    Six cells are known. A line of more cells that starts like a row (its second cell is a severity) holds a
+    `|` inside its last cell - a shell pipe, a regular expression - and that cell takes the rest, each
+    pipe escaped. Anything else that is a table line but no row stays in the text, as it came.
+    """
     rows: list[list[str]] = []
     rest: list[str] = []
     for line in answer.splitlines():
@@ -250,6 +267,8 @@ def parse_rows(answer: str) -> tuple[list[list[str]], str]:
             continue
         elif len(cells) == 6:
             rows.append(cells)
+        elif len(cells) > 6 and cells[1].upper() in SEVERITIES:
+            rows.append([*cells[:5], " \\| ".join(cells[5:])])
         else:
             rest.append(line)
     return rows, "\n".join(rest)
@@ -268,18 +287,40 @@ def append(path: Path, text: str) -> None:
         existing += "\n"
     joined = f"{existing}\n{text.rstrip()}\n" if existing else f"{text.rstrip()}\n"
     path.write_text(joined, encoding="utf-8")
+    stamp_updated(path)
+
+
+def stamp_updated(path: Path) -> None:
+    """A file with a header is one the runner has just changed: its `updated:` says today (gate `frontmatter-current`).
+
+    The stamp edits that one line. A file without a header, like the loop record, is left as it is.
+    """
+    check_frontmatter_current.stamp(path, dt.date.today())
+
+
+def answer_parts(rows: list[list[str]], answer: str, reviewer: str, table: str) -> list[str]:
+    """What follows a heading: the table, or a true statement about why there is none, then what is not a row.
+
+    "No finding" is said only of an answer that has no table line at all. A table the parser cannot read as
+    six-cell rows is a finding somebody has to read, so it is passed through and said to be one.
+    """
+    rest = parse_rows(answer)[1]
+    if rows:
+        parts = [table]
+    elif any(split_row(line) is not None for line in rest.splitlines()):
+        parts = [f"{reviewer} answered in table lines that are not six-cell rows; they are kept as they came."]
+    else:
+        parts = [f"{reviewer} reported no finding."]
+    kept = rest if rows else answer
+    if kept.strip():
+        parts.append(f"{NOT_ROWS_NOTE}\n\n{kept.strip()}")
+    return parts
 
 
 def answer_block(rows: list[list[str]], answer: str, reviewer: str) -> str:
-    """What follows a heading: the table, or the statement that there was none, and the answer when it was not only rows."""
-    parts = []
-    if rows:
-        parts.append(render_table(ROW_COLUMNS, [[*row, reviewer, "open", "—"] for row in rows]))
-    else:
-        parts.append(f"{reviewer} reported no finding.")
-    if answer.strip() and (not rows or parse_rows(answer)[1].strip()):
-        parts.append(f"{NOT_ROWS_NOTE}\n\n{answer.strip()}")
-    return "\n\n".join(parts)
+    """The block of a Codex answer: its rows with the reviewer, `open` and no test mark."""
+    table = render_table(ROW_COLUMNS, [[*row, reviewer, "open", "—"] for row in rows])
+    return "\n\n".join(answer_parts(rows, answer, reviewer, table))
 
 
 # ---------------------------------------------------------------------------
@@ -549,6 +590,7 @@ def fill_marks(findings: Path, ids: list[str], marks: dict[str, str]) -> None:
             line = "| " + " | ".join(cells) + " |"
         lines.append(line)
     findings.write_text(head + "\n".join(lines), encoding="utf-8")
+    stamp_updated(findings)
 
 
 # ---------------------------------------------------------------------------
@@ -572,11 +614,24 @@ def read_record(change: str) -> str | None:
 
 
 def record_rows(record: str) -> list[list[str]]:
+    """The loop rows of the record: every table line whose first cell is a loop id.
+
+    Nine cells are known. A `|` the implementer typed into `Status` makes a tenth; the cells between the
+    reviewer and the last one are that reason, each pipe escaped. A line with a loop id and fewer cells
+    than a row has is not skipped, which would let the release delete it with the record: it is refused,
+    by its id.
+    """
     rows = []
     for line in record.splitlines():
         cells = split_row(line)
-        if cells and len(cells) == len(ROW_COLUMNS) and LOOP_ID.fullmatch(cells[0]):
-            rows.append(cells)
+        if not cells or not LOOP_ID.fullmatch(cells[0]):
+            continue
+        if len(cells) < len(ROW_COLUMNS):
+            raise Refused(
+                f"the loop record has a line for {cells[0]} that is not a loop row "
+                f"({len(cells)} cells; {len(ROW_COLUMNS)} are needed); mend it, nothing has been deleted."
+            )
+        rows.append([*cells[:7], " \\| ".join(cells[7:-1]), cells[-1]])
     return rows
 
 
@@ -597,13 +652,24 @@ def rounds_run(record: str | None, findings_text: str) -> int:
     return in_record + sum(int(n) for n in ROUNDS_LINE.findall(findings_text))
 
 
-def kept_prose(record: str) -> str:
-    """What the record holds beside its intro, headings and tables."""
+def kept_lines(record: str) -> str:
+    """Everything the record holds that the release does not carry as a row, exactly as it stands.
+
+    Not carried as such: the intro, the headings, the tables' own header and separator, and the loop rows
+    (`record_rows` has them). What is left - prose, and a table line that is no loop row - goes to
+    `findings.md` with them, because the record is deleted afterwards and is the only copy.
+    """
+    furniture = set(render_table(ROW_COLUMNS, []).splitlines())
     body = record.replace(RECORD_INTRO, "")
-    lines = [
-        line for line in body.splitlines() if line.strip() and not line.startswith("#") and split_row(line) is None
-    ]
-    return "\n".join(lines)
+    kept = []
+    for line in body.splitlines():
+        cells = split_row(line)
+        if not line.strip() or line.startswith("#") or line.strip() in furniture:
+            continue
+        if cells and LOOP_ID.fullmatch(cells[0]):
+            continue
+        kept.append(line)
+    return "\n".join(kept)
 
 
 def release(root: Path, change: str) -> list[list[str]]:
@@ -611,6 +677,13 @@ def release(root: Path, change: str) -> list[list[str]]:
     findings = folder_of(root, change) / "findings.md"
     text = findings.read_text(encoding="utf-8") if findings.exists() else ""
     if not VERDICT_LINE.search(text):
+        near = VERDICT_START.search(text)
+        if near:
+            raise Refused(
+                f"findings.md has a line that starts like the phase-6 verdict but does not have the form "
+                f"`Phase 6 verdict: <reviewer> <session>, <date>` (<date> as YYYY-MM-DD, last on the line): "
+                f"`{near.group(0).strip()}`; nothing is released."
+            )
         raise Refused("findings.md has no phase-6 verdict line; nothing is released.")
     record = read_record(change)
     if record is None:
@@ -625,9 +698,9 @@ def release(root: Path, change: str) -> list[list[str]]:
     if not rows:
         block.append("No loop row was reported.")
     block.append(f"Rounds run: {len(ROUND_HEADING.findall(record))}")
-    prose = kept_prose(record)
-    if prose:
-        block.append(f"Kept from the loop record:\n\n{prose}")
+    kept = kept_lines(record)
+    if kept:
+        block.append(f"Kept from the loop record:\n\n{kept}")
     append(findings, "\n\n".join(block))
     shutil.rmtree(record_dir(change))
     print(f"release-loop: {len(rows)} loop rows appended to {findings.relative_to(root)}")
@@ -713,12 +786,13 @@ def review_loop(root: Path, change: str) -> None:
         if done.returncode != 0:
             raise fail("claude", done, f"exit {done.returncode}", key)
         answer = scrub(done.stdout or "", key)
+    if not answer.strip():
+        # "No finding" is an answer; nothing at all is a call that failed, and a failed call is no round.
+        raise fail("claude", done, "the answer is empty", key)
     rows, _ = parse_rows(answer)
     numbered = [[f"L{round_number}-{k}", *row[1:], "GLM", "", ""] for k, row in enumerate(rows, 1)]
     parts = [f"## Round {round_number} — GLM, {today()}"]
-    parts.append(render_table(ROW_COLUMNS, numbered) if numbered else "GLM reported no finding.")
-    if answer.strip() and (not rows or parse_rows(answer)[1].strip()):
-        parts.append(f"{NOT_ROWS_NOTE}\n\n{answer.strip()}")
+    parts += answer_parts(rows, answer, "GLM", render_table(ROW_COLUMNS, numbered))
     directory = record_dir(change)
     directory.mkdir(parents=True, exist_ok=True)
     path = directory / "loop.md"

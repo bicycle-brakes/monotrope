@@ -17,6 +17,7 @@ from __future__ import annotations
 
 import ast
 import copy
+import datetime as dt
 import json
 import os
 import re
@@ -33,6 +34,7 @@ REPO_ROOT = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(REPO_ROOT / "scripts"))
 
 import check_decision_continuity  # noqa: E402
+import check_frontmatter_current  # noqa: E402
 import leakcheck  # noqa: E402
 import omnigent_policy  # noqa: E402
 import plans_registry  # noqa: E402
@@ -186,6 +188,22 @@ class World:
 
     def write_findings(self, *lines: str) -> None:
         self.findings.write_text("# Findings — demo\n\n" + "\n\n".join(lines) + "\n", encoding="utf-8")
+
+
+def decide_record(w: World, status: str = "taken — test_a", broke: str = "no") -> None:
+    """Decide every row of the loop record the way the implementer would: by editing the file."""
+    text = w.record().read_text(encoding="utf-8")
+    text = re.sub(r"^(\| L\d+-\d+ \|.*\| GLM \|)  \|  \|$", rf"\1 {status} | {broke} |", text, flags=re.M)
+    w.record().write_text(text, encoding="utf-8")
+
+
+def old_header(updated: str = "2026-09-29") -> str:
+    """A findings.md header of a day long gone, as `plans-registry` holds it."""
+    return (
+        "---\ntitle: Findings\ncategory: findings\nstatus: draft\nimplementation_status: none\n"
+        f"date: {updated}\ncreated: {updated}\nlast_reviewed: {updated}\nupdated: {updated}\n"
+        "bead: demo-1\n---\n\n# Findings — demo\n"
+    )
 
 
 @pytest.fixture
@@ -375,6 +393,51 @@ def test_parse_marks_reads_agreement_and_disagreement() -> None:
     assert marks == {"L1-1": "agree", "L1-2": "disagree — no test \\| shows it", "L1-3": "disagree"}
 
 
+def test_parse_rows_folds_a_pipe_inside_the_finding_into_it() -> None:
+    """Repair round 1, F-2: six cells are known; a seventh after a valid severity is part of the last one."""
+    found, rest = stage2.parse_rows(
+        "| X1 | MAJOR | SPEC | a | b.py:1 | a | b \\| c | d |\n| X2 | MAJOR | SPEC | a | b | ok |"
+    )
+    assert [row[0] for row in found] == ["X1", "X2"] and rest == ""
+    assert found[0][5] == "a \\| b \\| c \\| d" and found[1][5] == "ok"
+    # a line of seven cells that does not start like a row is not guessed at
+    found, rest = stage2.parse_rows("| one | two | three | four | five | six | seven |")
+    assert found == [] and "seven" in rest
+
+
+@pytest.mark.parametrize(
+    "answer",
+    [
+        "| only | three | cells |",
+        "| X1 | MAJOR | SPEC | a | b |",
+        "| ID | Severity | Dimension |\n|---|---|---|\n| X1 | MAJOR | SPEC |",
+    ],
+    ids=["three-cells", "five-cells", "short-table"],
+)
+def test_table_lines_that_are_not_rows_are_never_reported_as_no_finding(world: World, answer: str) -> None:
+    """Repair round 1, F-3: a table the parser cannot read is passed through, under a head that is true."""
+    world.script(codex=[codex_ok("T1", answer)], claude=[{"stdout": answer}])
+    assert world.run("spec-review") == 0
+    assert world.run("review-loop") == 0
+    kept = world.record().read_text(encoding="utf-8")
+    for text in (world.text(), kept):
+        assert "reported no finding" not in text
+        assert "not six-cell rows" in text and stage2.NOT_ROWS_NOTE in text
+    assert answer.splitlines()[-1] in world.text() and answer.splitlines()[-1] in kept
+
+
+def test_the_review_prompt_and_the_runner_ask_for_the_same_cells() -> None:
+    """Repair round 1, F-3: what the runner asks for last, the phase prompt must not contradict."""
+    header = "| ID | Severity | Dimension | Origin | Where | Finding |"
+    assert header in stage2.ANSWER_FORMAT and "six cells" in stage2.ANSWER_FORMAT
+    assert "\\|" in stage2.ANSWER_FORMAT, "a pipe inside a cell is asked to be escaped"
+    for name in ("02a-spec-review.md", "06-review.md", "04b-review-loop.md"):
+        text = flat((PROMPTS / name).read_text(encoding="utf-8"))
+        assert header in text and "six cells" in text, name
+    review = flat((PROMPTS / "06-review.md").read_text(encoding="utf-8"))
+    assert "columns exactly as they stand there" not in review, "the nine-column form would outvote the runner"
+
+
 # ---------------------------------------------------------------------------
 # Every call goes through the runner's preconditions (criteria 15-21)
 # ---------------------------------------------------------------------------
@@ -492,6 +555,40 @@ def test_a_findings_file_the_runner_creates_has_a_registry_header(world: World) 
     assert header["status"] in plans_registry.STATUS
     assert header["implementation_status"] in plans_registry.IMPLEMENTATION
     assert header["bead"] == "demo-1" and header["category"] == "findings"
+
+
+def updated_of(path: Path) -> object:
+    return check_frontmatter_current.read_updated(path.read_text(encoding="utf-8"))
+
+
+def test_every_write_to_findings_keeps_its_updated_stamp_current(world: World) -> None:
+    """Repair round 1, F-7: a findings.md older than today stays one the gate `frontmatter-current` accepts."""
+    today = dt.date.today()
+    world.findings.write_text(old_header(), encoding="utf-8")
+    assert updated_of(world.findings) == dt.date(2026, 9, 29)
+    world.script(
+        codex=[codex_ok("T1", rows(1)), codex_ok("T1", rows(1)), codex_ok("T1", "L1-1: agree")],
+        claude=[{"stdout": rows(1)}],
+    )
+    assert world.run("spec-review") == 0
+    assert updated_of(world.findings) == today, "the call line left the header stale"
+
+    world.findings.write_text(world.text().replace(f"updated: {today}", "updated: 2026-09-29", 1), encoding="utf-8")
+    assert world.run("review-loop") == 0
+    assert updated_of(world.findings) == today
+    decide_record(world)
+
+    world.findings.write_text(world.text().replace(f"updated: {today}", "updated: 2026-09-29", 1), encoding="utf-8")
+    assert world.run("review") == 0
+    assert updated_of(world.findings) == today, "the verdict, the release or the marks left the header stale"
+    assert world.text().count("\nupdated:") == 1 and "date: 2026-09-29" in world.text()
+
+
+def test_a_findings_file_without_a_header_is_left_without_one(world: World) -> None:
+    """The stamp edits a header and invents none: the loop record has no header and gets none."""
+    world.script(claude=[{"stdout": rows(1)}])
+    assert world.run("review-loop") == 0
+    assert "updated:" not in world.record().read_text(encoding="utf-8")
 
 
 def test_a_spec_without_a_bead_refuses(world: World) -> None:
@@ -731,6 +828,38 @@ def test_a_round_without_a_finding_still_counts(world: World) -> None:
     assert len(world.calls("claude")) == 2
 
 
+def test_a_no_finding_answer_is_a_round_and_a_failed_call_is_not(
+    world: World, capsys: pytest.CaptureFixture[str]
+) -> None:
+    """Repair round 1, F-1. Round 1 answers "no finding", round 2 reports rows: a third call is refused."""
+    world.script(claude=[{"stdout": "Nothing to report."}, {"stdout": rows(2)}, {"stdout": rows(1)}])
+    assert world.run("review-loop") == 0
+    assert "GLM reported no finding." in world.record().read_text(encoding="utf-8")
+    assert world.run("review-loop") == 0
+    decide_record(world)
+    capsys.readouterr()
+    assert world.run("review-loop") == 2
+    assert "2 rounds have run" in capsys.readouterr().err
+    assert len(world.calls("claude")) == 2
+
+
+@pytest.mark.parametrize(
+    "step",
+    [{"stdout": "partial", "stderr": "boom", "exit": 1}, {"stdout": "  \n", "exit": 0}],
+    ids=["non-zero-exit", "empty-answer"],
+)
+def test_a_call_without_an_answer_is_not_a_round(world: World, step: dict) -> None:
+    """Repair round 1, F-1: a failed call, or one with no answer at all, leaves both rounds for the maintainer."""
+    world.script(claude=[step, step, {"stdout": "Nothing."}, {"stdout": "Nothing."}, {"stdout": "x"}])
+    assert world.run("review-loop") == 1
+    assert world.run("review-loop") == 1
+    assert not world.record().exists()
+    assert world.run("review-loop") == 0
+    assert world.run("review-loop") == 0
+    assert world.run("review-loop") == 2
+    assert len(world.calls("claude")) == 4
+
+
 def test_the_loop_refuses_without_the_key(world: World) -> None:
     Path(os.environ["CC_SECRETS"]).write_text("OTHER=1\n", encoding="utf-8")
     assert world.run("review-loop") == 2
@@ -793,6 +922,45 @@ def test_release_carries_every_row_with_its_marks(world: World) -> None:
     assert not world.record().exists()
 
 
+@pytest.mark.parametrize(
+    "line",
+    [
+        "Phase 6 verdict: codex T1, 2026-09-30",
+        "Phase 6 verdict: Fable 5.1 3f1c2a9e-0000-4000-8000-000000000001, 2026-10-01",
+        "Phase 6 verdict: fable, 2026-10-01",
+        "Phase 6 verdict: codex T1, 2026-09-30 ",
+        "Phase 6 verdict: codex T1, 2026-09-30.",
+        "Phase 6 verdict: Fable 5.1, 2026-10-01 .",
+    ],
+    ids=["as-written", "named-reviewer", "no-session", "trailing-space", "full-stop", "space-and-full-stop"],
+)
+def test_release_accepts_the_verdict_forms_the_prompts_can_produce(world: World, line: str) -> None:
+    """Repair round 1, F-4: a reviewer that names itself, has no session id or ends its line loosely is not refused."""
+    world.write_findings(line)
+    assert world.run("release-loop") == 0
+    assert stage2.NO_LOOP_LINE in world.text()
+
+
+@pytest.mark.parametrize(
+    "line",
+    [
+        "Phase 6 verdict: pending",
+        "Phase 6 verdict: codex T1, yesterday",
+        "Phase 6 verdict, 2026-10-01",
+        "phase 6 verdict: x, 2026-10-01",
+    ],
+    ids=["no-date", "word-for-date", "no-colon", "lower-case"],
+)
+def test_a_refused_verdict_line_is_named(world: World, line: str, capsys: pytest.CaptureFixture[str]) -> None:
+    """Repair round 1, F-4: a line that starts like a verdict and does not count is shown, with the form it lacks."""
+    world.write_findings("## Phase 6 — Codex, 2026-10-01", line)
+    before = world.findings.read_bytes()
+    assert world.run("release-loop") == 2
+    error = capsys.readouterr().err
+    assert world.findings.read_bytes() == before
+    assert f"`{line}`" in error and "does not have the form" in error
+
+
 def test_release_without_a_record_says_so_once(world: World) -> None:
     world.write_findings(VERDICT)
     assert world.run("release-loop") == 0
@@ -818,6 +986,81 @@ def test_an_undecided_loop_row_holds_the_next_round_and_the_release(world: World
     assert world.findings.read_bytes() == before
     world.script(claude=[{"stdout": rows(1)}])
     assert world.run("review-loop") == 2
+    assert world.calls() == []
+
+
+def released_rows(text: str) -> list[list[str]]:
+    """The cells of every row of the released block, whatever the row."""
+    block = text[text.rfind(stage2.RELEASE_HEADING) :]
+    return [c for c in (stage2.split_row(line) for line in block.splitlines()) if c and c[0].startswith("L")]
+
+
+def test_a_pipe_inside_a_glm_finding_reaches_findings(world: World) -> None:
+    """Repair round 1, F-2 (a): a shell pipe in a finding is part of the finding, not a seventh cell."""
+    said = "| X1 | MAJOR | SPEC | a | src/app.py:1 | the filter `cat x | sort` drops the last row |"
+    world.script(claude=[{"stdout": said}])
+    assert world.run("review-loop") == 0
+    record = world.record().read_text(encoding="utf-8")
+    assert [row[0] for row in stage2.record_rows(record)] == ["L1-1"]
+    decide_record(world)
+    world.write_findings(VERDICT)
+    assert world.run("release-loop") == 0
+    text = world.text()
+    assert "No loop row was reported." not in text
+    (row,) = released_rows(text)
+    assert row[0] == "L1-1" and "cat x" in row[5] and "sort` drops the last row" in row[5]
+    assert row[6:9] == ["GLM", "taken — test_a", "no"]
+
+
+def test_a_line_that_is_not_a_loop_row_is_carried_to_findings(world: World) -> None:
+    """Repair round 1, F-2 (a): what the release cannot read as a row arrives as it stands, and the record goes last."""
+    answer = rows(1) + "\n| half | a row |\nA remark.\n"
+    world.script(claude=[{"stdout": answer}])
+    assert world.run("review-loop") == 0
+    decide_record(world)
+    world.write_findings(VERDICT)
+    assert world.run("release-loop") == 0
+    text = world.text()
+    assert "| half | a row |" in text and "A remark." in text
+    assert not world.record().exists()
+
+
+@pytest.mark.parametrize(
+    "reason", ["rejected — the spec says a | b", "rejected — the spec says a\\|b"], ids=["raw", "escaped"]
+)
+def test_a_pipe_in_a_status_reason_keeps_the_row_decided(world: World, reason: str) -> None:
+    """Repair round 1, F-2 (b): the implementer's reason may hold a pipe; the row stays a row, with its reason."""
+    world.write_record([("L1-1", reason, ""), ("L1-2", "taken — test_a", "no")])
+    world.write_findings(VERDICT)
+    assert world.run("release-loop") == 0
+    text = world.text()
+    assert "No loop row was reported." not in text
+    released = {row[0]: row for row in released_rows(text)}
+    assert sorted(released) == ["L1-1", "L1-2"]
+    assert "the spec says a" in released["L1-1"][7] and released["L1-1"][7].endswith("b")
+    assert released["L1-1"][8] == "" and released["L1-2"][8] == "no"
+
+
+def test_a_pipe_in_a_status_reason_does_not_hide_an_undecided_row(world: World) -> None:
+    """Repair round 1, F-2 (b): a row whose reason holds a pipe is still held to the decision rule."""
+    world.write_record([("L1-1", "taken — a | b", "")])
+    world.write_findings(VERDICT)
+    before = world.findings.read_bytes()
+    assert world.run("release-loop") == 2
+    assert world.findings.read_bytes() == before and world.record().exists()
+
+
+def test_a_damaged_loop_row_refuses_instead_of_vanishing(world: World, capsys: pytest.CaptureFixture[str]) -> None:
+    """Repair round 1, F-2: a line that carries a loop id and cannot be read is named, and nothing is deleted."""
+    world.write_record([("L1-1", "taken — test_a", "no")])
+    with world.record().open("a", encoding="utf-8") as handle:
+        handle.write("| L1-2 | MAJOR | broken |\n")
+    world.write_findings(VERDICT)
+    before = world.findings.read_bytes()
+    for verb in ("release-loop", "review-loop"):
+        assert world.run(verb) == 2
+        assert "L1-2" in capsys.readouterr().err
+    assert world.findings.read_bytes() == before and world.record().exists()
     assert world.calls() == []
 
 

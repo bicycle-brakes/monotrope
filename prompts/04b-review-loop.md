@@ -25,8 +25,8 @@ outward, security). Use the dimensions `SPEC` and `MAINT`, and the severities
 `BLOCKER`, `MAJOR` and `MINOR`.
 
 Answer with table rows only: `| ID | Severity | Dimension | Origin | Where |
-Finding |` — six cells, one row per finding, no header. When you find nothing,
-answer in one sentence.
+Finding |` — six cells, one row per finding, no header; write a `|` inside a
+cell as `\|`. When you find nothing, answer in one sentence.
 
 ## For the implementer
 

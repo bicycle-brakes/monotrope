@@ -15,7 +15,8 @@ session: <uuid>`). On the Codex path the runner starts the session and writes
 
 Through the runner you answer in table rows of six cells — `| ID | Severity |
 Dimension | Origin | Where | Finding |` — and the runner adds the reviewer, the
-status and the session line (`docs/WORKFLOW.md` §4).
+status and the session line (`docs/WORKFLOW.md` §4). Write a `|` inside a cell
+as `\|`.
 
 A validator checks that the sections are there. It cannot check that they say
 the right thing. A clean, complete spec describing the wrong thing passes every

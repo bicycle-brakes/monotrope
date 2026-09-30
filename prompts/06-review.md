@@ -25,7 +25,8 @@ come in. On the Fable path you run `python3 scripts/stage2.py release-loop
 <change>` and mark the `Phase 6` cell of each loop row `agree` or `disagree —
 <reason>`; on the Codex path the runner does both. A change that ran stage 2
 has the columns `Reviewer` and `Broke a test` in `findings.md`
-(`docs/WORKFLOW.md` §4).
+(`docs/WORKFLOW.md` §4). The verdict line is one line: `<date>` as `YYYY-MM-DD`
+comes last on it, and `<session>` is left out when you have no id.
 
 Having passed the spec in 2a is no argument now. Where the code shows the spec
 itself was wrong — a caveat it rested on, a reading it did not make — that is a
@@ -41,12 +42,15 @@ Two dimensions, because a spec cannot see its own gaps:
 - **`MAINT`** — the eye of a maintainer who was not there: error handling, edge
   cases, contracts facing outward, security. Finds what the spec is silent about.
 
-Your answer **is** the table from `templates/findings.md` — columns exactly as
-they stand there, one row per finding, `SPEC` and `MAINT` in the dimension
-column. Two markers override everything: a finding that reveals two plausible
-readings of spec or plan is `[AMBIGUITY]` and is never decided locally; two
-places answering the same question in opposite ways are `[DIVERGENT]` and a
-`BLOCKER`, however harmless each line looks alone.
+Your answer **is** a table: one row per finding, `SPEC` and `MAINT` in the
+dimension column. Through the runner you answer in rows of six cells — `| ID |
+Severity | Dimension | Origin | Where | Finding |` — and the runner adds the
+reviewer, the status and the verdict line; write a `|` inside a cell as `\|`.
+On the Fable path you write the table of the change's `findings.md` yourself,
+in the columns that file has. Two markers override everything: a finding that
+reveals two plausible readings of spec or plan is `[AMBIGUITY]` and is never
+decided locally; two places answering the same question in opposite ways are
+`[DIVERGENT]` and a `BLOCKER`, however harmless each line looks alone.
 
 A finding already rejected in an earlier round may only reappear **with new
 evidence attached**. Repetition without new evidence is not a finding.

@@ -387,11 +387,17 @@ applies, it begins with When, While or If. Each names what would refute it.
     *Refuted by:* a stand-in's prompt without the prompt text, or without an
     uncommitted edit made before the call.
 
-36. If two rounds of the loop have run for a change — a round has run when
-    its rows stand in the loop record — `review-loop` refuses a third and
-    starts no call.
+36. If two rounds of the loop have run for a change — ~~a round has run when
+    its rows stand in the loop record~~ *(changed in repair round 1, F-1 of
+    the phase-6 review: a round has run when its call succeeded and its
+    answer stands in the loop record, whether the answer holds rows or says
+    that there is no finding; a call that failed or answered nothing is no
+    round)* — `review-loop` refuses a third and starts no call.
     *Refuted by:* a stand-in that records a third round's start, also after
-    the first two rounds' rows were released.
+    the first two rounds' rows were released; *(added in repair round 1)* a
+    stand-in whose first round answers "no finding" and whose second reports
+    rows, followed by a third start; a call that exits non-zero, or answers
+    nothing, and leaves a round behind in the loop record.
 
 37. When a round finishes, its rows go into the loop record, each marked
     with the round's number and reviewer `GLM`.
@@ -763,10 +769,20 @@ veto is one word.
   if the rows are elsewhere. `release-loop` removes the record once its rows
   are in `findings.md`, which stays the one record; `review-loop` counts
   rounds in both places, so a release does not reset the count.
-- **A round has run when its rows stand in the loop record.** A call that
+- ~~**A round has run when its rows stand in the loop record.** A call that
   ends without rows is a failed call, not a round; its line in `findings.md`
   (criterion 21) shows that it happened. Counting starts instead would let a
-  crashed call use up one of the maintainer's two rounds.
+  crashed call use up one of the maintainer's two rounds.~~
+  **Changed in repair round 1 (F-1 of the phase-6 review; the coordinating
+  session's `[DETAIL]`): a round has run when its call succeeded and its
+  answer stands in the loop record.** A reviewer's clean result is a result:
+  a call that exits 0 and answers "no finding" is a round, because not
+  counting it would let the loop call GLM again on a tree that has not
+  changed. A call that fails (a non-zero exit, or no answer at all) is no
+  round; its line in `findings.md` (criterion 21) shows that it happened, and
+  counting starts instead would let a crashed call use up one of the
+  maintainer's two rounds. The plan, the code and the test already read this
+  way; the earlier wording was the one that diverged.
 - **An answer that is not table rows is appended as it came**, under a line
   that says so, and never dropped: the call was made, and the step that works
   the rows into the spec is a person's in any case.
