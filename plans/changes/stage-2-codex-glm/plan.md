@@ -896,3 +896,97 @@ by review.
   objects are not scanned, and the runner's settings are not measured.
 - Phase 7 is untouched: no pull request, no tracker write, no `decide(`
   label.
+
+## Repair round 2
+
+Origin `fix-r2`, 2026-09-30, on the two rows the re-review of round 1 opened,
+F-10 and F-11 (`findings.md`, "Phase 6 — review, round 1"; this round starts at
+`8622437`). Both are fixed in `022930e`, together with the three notes the
+re-review left in the Status cells of F-4, F-6 and F-7. Pull request #60 stays
+unmerged and is not touched. The evidence rule of this change held again: each
+row was taken because a test demonstrates it, and each new test that can be red
+was run red before the fix.
+
+**Evidence, tests red before and green after.** Thirteen test cases were
+written first: 11 in `tests/test_stage2.py` (seven new tests, and two new cases
+of the existing test of the refused verdict line) and 2 in
+`tests/test_leakcheck.py` (one new test, two cases); the two files held 136
+tests before the round and hold 149 after. Run against the unrepaired tree
+(`git archive 8622437` with the new test files copied in), 8 of the 149 were red:
+F-10 three, F-11 three (one test, one case per verb), F-4 two (two new cases).
+After the fix all 149 pass, and
+`make verify` on `022930e` (2026-09-30, `commit.gpgsign` off) gives 667 passed, 15
+skipped, last line `VERIFY GREEN — every local gate of the 'verify' job
+passed.` (`markdownlint` reports and does not block). The other five cases are
+guards for behaviour that must stay and were green before: the stamp in
+`fill_marks`, `git diff --cached` against plain `git diff` (two cases), a
+damaged row of the record's own tables beside GLM's text, and round 2's rows
+after round 1's words. Each guard was checked by planting its fault in a copy of
+the tree, and the planted fault turned it red: no stamp in `fill_marks`; plain
+`git diff` in the leak check; the refusal of a damaged row switched off; the
+round heading no longer ending GLM's words. The three fixes were planted back the
+same way: GLM's `#` lines skipped again (two F-10 tests red), GLM's lines read as
+rows (the three F-11 cases red), `pending` accepted (the two F-4 cases red).
+
+### F-10 and F-11, who wrote a line of the record
+
+Both findings come from one fact the record did not keep apart: a line of it is
+either the record's own (heading, intro, round table, the runner's statement and
+note, the implementer's decisions) or GLM's words, kept "as they came" below the
+note. The repair keeps them apart by position, which is exactly how the runner
+writes a round: the lines after the note `NOT_ROWS_NOTE`, up to the next round
+heading, are GLM's (`_record_lines`).
+
+- **F-10, carried as they came.** `kept_lines` leaves out only the record's own
+  furniture: its heading (the first line), the two intro sentences, the round
+  headings, the tables' header and separator, and the blank lines between the
+  runner's own lines. A line of GLM's is carried whatever it starts with — a
+  heading (`## Why this matters`), a code comment (`# run: grep foo \| wc -l`), a
+  table line that is no row, a blank line inside the text — and stands apart from
+  the runner's lines by one blank line. A sentence of the intro that GLM quoted
+  is carried too: the old code removed the intro with `str.replace` over the whole
+  record, which took GLM's copy with it. The module docstring now lists what is
+  left out, and the Status of F-2, which said "every line … as it stands", says
+  the same.
+- **F-11, rows are the record's own.** `record_rows` reads only the record's own
+  lines. The undecided-row guard and the refusal of a damaged row therefore meet
+  the nine-cell rows of the round tables the runner wrote and the implementer
+  decided, and a table line GLM wrote, `| L1-1 | still open |` included, is text to
+  carry. Criterion 39 is intact: a damaged row of the round tables (a cell deleted
+  by hand) still refuses by its id in `release-loop`, `review-loop` and `review`,
+  and a test has that row stand beside GLM's text.
+- **Decided, not asked (`[DETAIL]`):** position over content. The alternative,
+  telling GLM's line from a row by its shape, fails for the same reason F-11 did:
+  GLM's table line has a loop id too. Position is what the runner controls.
+- **Limit, stated not fixed.** A line of GLM's in the form of the record's own
+  round heading (`## Round <n> — GLM, `) cannot be told from one; it ends GLM's
+  words and is left out, and `rounds_run` counts it as a round, as it did before.
+  The answer format asks for table rows only, and the runner cannot write a
+  marker GLM could not also write. The limit is in the docstring of
+  `_record_lines`.
+
+### The three notes of the re-review
+
+- **F-4, `pending` is no reviewer.** The verdict pattern refuses a reviewer whose
+  first word is `pending`, in any case, with or without a session; such a line
+  reaches the existing refusal that names the line, which now also says `pending`
+  is no reviewer, and `prompts/06-review.md` says so. No other placeholder word is
+  refused: the re-review named this one, and a list of placeholders is a guess.
+- **F-6, `--cached` against plain `git diff`.** Measured in a temporary
+  repository: after a staged value, the file put back and the entry marked
+  `skip-worktree` or `assume-unchanged`, `git diff` is empty and `git diff
+  --cached` shows the value. The test builds exactly that, for both flags.
+- **F-7, the stamp in `fill_marks`.** The test calls `fill_marks` on a file whose
+  header says 2026-09-29, so the stamp is checked on its own and not through the
+  `append` before it.
+
+### Left open
+
+- No reviewer has read this round. Findings it produces carry origin `fix-r2`; it
+  is the second round in a row with `fix-r` findings (`fix-r1`, `fix-r2`), so a
+  review finding here is an escalation to the maintainer under `docs/WORKFLOW.md`
+  §2, not a third repair round.
+- The named limits of round 1 stay (reflog, stash, tags and unreachable objects
+  are not scanned; the runner's settings are not measured), and the one above.
+- Phase 7 is untouched: no pull request opened or changed, no tracker write, no
+  `decide(` label.
