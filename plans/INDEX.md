@@ -22,6 +22,7 @@ Dateien dazukommen.
 | [`changes/frontmatter-current/research.md`](changes/frontmatter-current/research.md) | draft | none | 2026-09-29 | coding-harness-qd7 |
 | [`changes/frontmatter-current/spec.md`](changes/frontmatter-current/spec.md) | draft | none | 2026-09-29 | coding-harness-qd7 |
 | [`changes/harness-decide-adr/decisions.md`](changes/harness-decide-adr/decisions.md) | accepted | none | 2026-09-30 | coding-harness-3ar |
+| [`changes/harness-decide-adr/plan.md`](changes/harness-decide-adr/plan.md) | draft | none | 2026-09-30 | coding-harness-3ar |
 | [`changes/harness-decide-adr/research.md`](changes/harness-decide-adr/research.md) | draft | none | 2026-09-30 | coding-harness-3ar |
 | [`changes/harness-decide-adr/spec.md`](changes/harness-decide-adr/spec.md) | draft | none | 2026-09-30 | coding-harness-3ar |
 | [`changes/omnigent-deny-layers/decisions.md`](changes/omnigent-deny-layers/decisions.md) | accepted | none | 2026-09-29 | coding-harness-rex |
