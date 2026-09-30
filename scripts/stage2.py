@@ -1,0 +1,780 @@
+#!/usr/bin/env python3
+"""stage2.py - the one way this repository starts a foreign reviewer.
+
+**What this is.** Stage 2 lets a reviewer from another vendor read framework
+content: Codex (model `gpt-6.1-sol`, through the official Codex CLI) for the
+spec review (phase 2a) and the review (phase 6), GLM (model `glm-5.3`, through
+Claude Code against Z.ai's Anthropic-compatible endpoint) for the review loop
+before phase 6 (phase 4b). A declaration in `model-endpoints.yaml` stops
+nothing; this runner stands between the rule and the call.
+
+    python3 scripts/stage2.py spec-review  <change>   # Codex, phase 2a, a fresh session
+    python3 scripts/stage2.py review-loop  <change>   # GLM, one round of phase 4b
+    python3 scripts/stage2.py release-loop <change>   # loop rows into findings.md
+    python3 scripts/stage2.py review       <change>   # Codex, phase 6, the 2a session resumed
+
+**What every call carries** (before it starts, in this order):
+
+1. the change named, and `plans/changes/<change>/` a directory; `spec.md` with
+   a `bead` in its header (else `findings.md` could not get its header);
+2. an endpoint the declaration clears: present, the model listed, `framework`
+   among what it may see, a residency other than `nicht-erklaert`;
+3. the leak check (`scripts/leakcheck.py`), in this process, immediately before
+   this call, over the change, the tree, the history and the call's own prompt;
+4. one line in `findings.md` naming the date, the verb, the endpoint, the model
+   and the leak check's three numbers (the file is created when missing);
+5. an empty standard input, and an environment the runner built from an
+   allow-list - never the caller's.
+
+**Reads are asked, not confined.** Every prompt ends with the request to read
+nothing outside the worktree and the repository's git directory. It is a
+request, not a lock: the reviewers can read the rest of the disk.
+
+**The loop record** lives outside the worktree
+(`${XDG_STATE_HOME:-~/.local/state}/coding-harness/stage2/<change>/loop.md`):
+GLM's rows and the implementer's decision on each, until the phase-6 verdict is
+written and `release-loop` carries them into `findings.md`.
+
+Exit: 0 done, 1 a call failed, 2 refused before any call.
+"""
+
+from __future__ import annotations
+
+import argparse
+import datetime as dt
+import json
+import os
+import re
+import shutil
+import subprocess
+import sys
+import tempfile
+from dataclasses import dataclass
+from pathlib import Path
+
+import yaml
+
+sys.path.insert(0, str(Path(__file__).resolve().parent))
+
+import leakcheck  # noqa: E402
+import merge_guard  # noqa: E402
+
+REPO_ROOT = Path(__file__).resolve().parent.parent
+
+# (endpoint, model, effort) - what the declaration must clear and the call pins.
+CODEX = ("openai-codex", "gpt-6.1-sol", "max")
+GLM = ("glm-coding-plan", "glm-5.3", "max")
+GLM_BASE_URL = "https://api.z.ai/api/anthropic"
+
+CODEX_ASK_RULE = (
+    "Bash(codex *)",
+    "codex typed directly skips the leak check and the declaration; the runner is the way in",
+)
+
+READ_REQUEST = "Read nothing outside this worktree and the repository's git directory."
+ANSWER_FORMAT = (
+    "Answer with table rows only: one row per finding, exactly six cells, no header and no other text -\n"
+    "`| ID | Severity | Dimension | Origin | Where | Finding |`. The runner adds the reviewer, the status\n"
+    "and the test mark. When there is no finding, answer in one sentence."
+)
+MARK_FORMAT = "For each loop row answer one line and nothing else: `<ID>: agree` or `<ID>: disagree — <reason>`."
+
+# The environment a foreign program gets: these, when set, then the call's own.
+ENV_ALLOW = (
+    "PATH",
+    "HOME",
+    "USER",
+    "LOGNAME",
+    "SHELL",
+    "TMPDIR",
+    "LANG",
+    "LC_ALL",
+    "LC_CTYPE",
+    "TERM",
+    "TZ",
+    "CODEX_HOME",
+)
+GLM_MODEL_VARIABLES = (
+    "ANTHROPIC_MODEL",
+    "ANTHROPIC_DEFAULT_OPUS_MODEL",
+    "ANTHROPIC_DEFAULT_SONNET_MODEL",
+    "ANTHROPIC_DEFAULT_HAIKU_MODEL",
+    "ANTHROPIC_SMALL_FAST_MODEL",
+    "CLAUDE_CODE_SUBAGENT_MODEL",
+)
+
+MAX_ROUNDS = 2
+ROW_COLUMNS = ["ID", "Severity", "Dimension", "Origin", "Where", "Finding", "Reviewer", "Status", "Broke a test"]
+RELEASED_COLUMNS = [*ROW_COLUMNS, "Phase 6"]
+
+VERDICT_LINE = re.compile(r"^Phase 6 verdict: \S+ \S+, \d{4}-\d{2}-\d{2}$", re.M)
+SESSION_LINE = re.compile(r"^Reviewer session: codex (\S+)", re.M)
+ROUNDS_LINE = re.compile(r"^Rounds run: (\d+)\s*$", re.M)
+ROUND_HEADING = re.compile(r"^## Round \d+ — GLM,", re.M)
+RELEASE_HEADING = "## Phase 4b — GLM loop rows, released"
+NO_LOOP_LINE = "Loop rows: none — the GLM loop did not run for this change."
+LOOP_ID = re.compile(r"L\d+-\d+")
+NOT_ROWS_NOTE = "The answer below was not only rows; it is kept as it came."
+
+RECORD_INTRO = (
+    "Write `Status` (`taken — <test or criterion>` or `rejected — <reason>`) for every row below.\n"
+    "For a taken row also write `Broke a test` (`yes` or `no`) — before the next round or the release."
+)
+
+_PIPE = re.compile(r"(?<!\\)\|")
+
+
+class Refused(Exception):
+    """The runner refuses before any call: exit 2."""
+
+
+class CallFailed(Exception):
+    """A call ended without a usable answer: exit 1."""
+
+
+def today() -> str:
+    return dt.date.today().isoformat()
+
+
+# ---------------------------------------------------------------------------
+# Secrets, environment, the foreign call
+# ---------------------------------------------------------------------------
+
+
+def secrets_path() -> Path:
+    """The secrets file. Read at call time, never at import."""
+    named = os.environ.get("CC_SECRETS")
+    return Path(named) if named else Path.home() / ".config" / "cc-routing" / "secrets.env"
+
+
+def read_secret(name: str) -> str | None:
+    """`KEY=value` or `export KEY=value`, quotes stripped, nothing evaluated."""
+    try:
+        text = secrets_path().read_text(encoding="utf-8")
+    except (OSError, UnicodeDecodeError):
+        return None
+    for raw in text.splitlines():
+        line = raw.strip()
+        if not line or line.startswith("#"):
+            continue
+        if line.startswith("export "):
+            line = line[len("export ") :].lstrip()
+        key, sep, value = line.partition("=")
+        if sep and key.strip() == name:
+            value = value.strip()
+            if len(value) >= 2 and value[0] == value[-1] and value[0] in "\"'":
+                value = value[1:-1]
+            return value or None
+    return None
+
+
+def scrub(text: str, secret: str | None) -> str:
+    """Replace the credential in everything the runner prints or writes."""
+    return text.replace(secret, "[credential]") if secret else text
+
+
+def foreign_env(own: dict[str, str]) -> dict[str, str]:
+    """The allow-list from the caller's environment, then the call's own variables."""
+    env = {name: os.environ[name] for name in ENV_ALLOW if name in os.environ}
+    env.update(own)
+    return env
+
+
+def glm_env(key: str, config_dir: Path) -> dict[str, str]:
+    own = {
+        "ANTHROPIC_BASE_URL": GLM_BASE_URL,
+        "ANTHROPIC_AUTH_TOKEN": key,
+        "ANTHROPIC_API_KEY": key,
+        "CLAUDE_CONFIG_DIR": str(config_dir),
+        "CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC": "1",
+    }
+    own.update({name: GLM[1] for name in GLM_MODEL_VARIABLES})
+    return foreign_env(own)
+
+
+def launch(
+    command: list[str], root: Path, env: dict[str, str], secret: str | None = None
+) -> subprocess.CompletedProcess:
+    """Start a foreign program: empty standard input, the worktree as its directory."""
+    try:
+        return subprocess.run(
+            command,
+            cwd=root,
+            env=env,
+            stdin=subprocess.DEVNULL,
+            capture_output=True,
+            text=True,
+            errors="replace",
+            check=False,
+        )
+    except OSError as error:
+        raise CallFailed(f"{command[0]} could not be started: {scrub(str(error), secret)}") from error
+
+
+def fail(program: str, done: subprocess.CompletedProcess, reason: str, secret: str | None = None) -> CallFailed:
+    """Print the last lines of the program's standard error, scrubbed; return the exception to raise."""
+    tail = "\n".join((done.stderr or "").splitlines()[-40:])
+    if tail:
+        print(scrub(tail, secret), file=sys.stderr)
+    return CallFailed(f"{program} call failed: {reason}")
+
+
+# ---------------------------------------------------------------------------
+# Tables and findings.md
+# ---------------------------------------------------------------------------
+
+
+def split_row(line: str) -> list[str] | None:
+    """The cells of a table line, or None when the line is not one."""
+    stripped = line.strip()
+    if len(stripped) < 2 or not (stripped.startswith("|") and stripped.endswith("|")):
+        return None
+    return [cell.strip() for cell in _PIPE.split(stripped[1:-1])]
+
+
+def _furniture(cells: list[str]) -> bool:
+    """The header or the separator of a table."""
+    return cells[0].lower() == "id" or all(re.fullmatch(r":?-+:?", cell) for cell in cells)
+
+
+def parse_rows(answer: str) -> tuple[list[list[str]], str]:
+    """The six-cell rows of an answer and the text that is not a row."""
+    rows: list[list[str]] = []
+    rest: list[str] = []
+    for line in answer.splitlines():
+        cells = split_row(line)
+        if cells is None:
+            if line.strip():
+                rest.append(line)
+        elif _furniture(cells):
+            continue
+        elif len(cells) == 6:
+            rows.append(cells)
+        else:
+            rest.append(line)
+    return rows, "\n".join(rest)
+
+
+def render_table(columns: list[str], rows: list[list[str]]) -> str:
+    lines = ["| " + " | ".join(columns) + " |", "|" + "|".join("---" for _ in columns) + "|"]
+    lines += ["| " + " | ".join(row) + " |" for row in rows]
+    return "\n".join(lines)
+
+
+def append(path: Path, text: str) -> None:
+    """Add a block at the end, separated by one blank line."""
+    existing = path.read_text(encoding="utf-8") if path.exists() else ""
+    if existing and not existing.endswith("\n"):
+        existing += "\n"
+    joined = f"{existing}\n{text.rstrip()}\n" if existing else f"{text.rstrip()}\n"
+    path.write_text(joined, encoding="utf-8")
+
+
+def answer_block(rows: list[list[str]], answer: str, reviewer: str) -> str:
+    """What follows a heading: the table, or the statement that there was none, and the answer when it was not only rows."""
+    parts = []
+    if rows:
+        parts.append(render_table(ROW_COLUMNS, [[*row, reviewer, "open", "—"] for row in rows]))
+    else:
+        parts.append(f"{reviewer} reported no finding.")
+    if answer.strip() and (not rows or parse_rows(answer)[1].strip()):
+        parts.append(f"{NOT_ROWS_NOTE}\n\n{answer.strip()}")
+    return "\n\n".join(parts)
+
+
+# ---------------------------------------------------------------------------
+# Preconditions every call meets
+# ---------------------------------------------------------------------------
+
+
+@dataclass
+class Context:
+    root: Path
+    change: str
+    folder: Path
+    bead: str
+
+    @property
+    def findings(self) -> Path:
+        return self.folder / "findings.md"
+
+
+def declaration_problem(root: Path, endpoint: str, model: str) -> str | None:
+    """Why the declaration does not clear this endpoint and model for framework content, or None."""
+    try:
+        data = yaml.safe_load((root / "model-endpoints.yaml").read_text(encoding="utf-8")) or {}
+    except (OSError, UnicodeDecodeError, yaml.YAMLError):
+        return "model-endpoints.yaml cannot be read"
+    found = next((e for e in data.get("endpunkte") or [] if isinstance(e, dict) and e.get("name") == endpoint), None)
+    if found is None:
+        return f"model-endpoints.yaml declares no endpoint {endpoint}"
+    if model not in (found.get("modelle") or []):
+        return f"the endpoint {endpoint} does not list the model {model}"
+    if "framework" not in (found.get("darf_sehen") or []):
+        return f"the endpoint {endpoint} may not see framework content"
+    if found.get("residenz") in (None, "nicht-erklaert"):
+        return f"the endpoint {endpoint} states no data residency"
+    return None
+
+
+def _spec_bead(spec: Path) -> str | None:
+    """The `bead` of spec.md's header."""
+    try:
+        text = spec.read_text(encoding="utf-8")
+    except (OSError, UnicodeDecodeError):
+        return None
+    match = re.match(r"---\n(.*?)\n---", text, re.S)
+    if not match:
+        return None
+    try:
+        header = yaml.safe_load(match.group(1))
+    except yaml.YAMLError:
+        return None
+    bead = header.get("bead") if isinstance(header, dict) else None
+    return str(bead) if bead else None
+
+
+def folder_of(root: Path, change: str) -> Path:
+    if not change or "/" in change or change in {".", ".."}:
+        raise Refused("Name the change: a single folder name under plans/changes/.")
+    folder = root / "plans" / "changes" / change
+    if not folder.is_dir():
+        raise Refused(f"plans/changes/{change}/ does not exist.")
+    return folder
+
+
+def preflight(root: Path, change: str, endpoint: tuple[str, str, str]) -> Context:
+    """The refusals that precede everything else: the change, its bead, the declaration."""
+    folder = folder_of(root, change)
+    bead = _spec_bead(folder / "spec.md")
+    if bead is None:
+        raise Refused(f"plans/changes/{change}/spec.md has no bead in its header; findings.md could not get its own.")
+    problem = declaration_problem(root, endpoint[0], endpoint[1])
+    if problem:
+        raise Refused(problem)
+    return Context(root, change, folder, bead)
+
+
+def findings_header(ctx: Context, producer: str) -> str:
+    day = today()
+    return (
+        "---\n"
+        f'title: "Findings — {ctx.change}"\n'
+        "category: findings\n"
+        "status: draft\n"
+        "implementation_status: none\n"
+        f"date: {day}\n"
+        f"created: {day}\n"
+        f"last_reviewed: {day}\n"
+        f"updated: {day}\n"
+        "supersedes: null\n"
+        "superseded_by: null\n"
+        f"bead: {ctx.bead}\n"
+        "owner: Data Architect\n"
+        "provenance: ai-drafted-reviewed\n"
+        f'produced_by: {{kind: llm-session, name: {producer}, version: "{day}"}}\n'
+        "review: {status: pending, approved_by: null, approved_at: null}\n"
+        "tags: [findings, stage-2]\n"
+        "---\n\n"
+        f"# Findings — {ctx.change}\n"
+    )
+
+
+def begin_call(ctx: Context, verb: str, endpoint: tuple[str, str, str], prompt: str) -> None:
+    """The declaration, the leak check and the call line - for this one call, immediately before it."""
+    problem = declaration_problem(ctx.root, endpoint[0], endpoint[1])
+    if problem:
+        raise Refused(problem)
+    result = leakcheck.check(ctx.change, leakcheck.default_denylist(), ctx.root, [("prompt", prompt)])
+    print(result.verdict.render())
+    if result.verdict.exit_code() != 0:
+        raise Refused("the leak check is not clean; the call does not start.")
+    if not ctx.findings.exists():
+        producer = "codex" if endpoint == CODEX else "claude-code"
+        ctx.findings.write_text(findings_header(ctx, producer), encoding="utf-8")
+    append(
+        ctx.findings,
+        f"Stage-2 call, {today()}: {verb} · endpoint {endpoint[0]} · model {endpoint[1]} · "
+        f"leak check clean over {result.files} files, {result.commits} commits, {result.rules} rules.",
+    )
+
+
+def phase_prompt(root: Path, prompt_file: str, change: str, extra: str = "") -> str:
+    """The phase prompt in full, the change's name, the answer format, and the read request last."""
+    body = (root / "prompts" / prompt_file).read_text(encoding="utf-8")
+    parts = [body.rstrip(), f"---\n\nChange under review: {change} (plans/changes/{change}/)."]
+    if extra:
+        parts.append(extra)
+    parts += [ANSWER_FORMAT, READ_REQUEST]
+    return "\n\n".join(parts)
+
+
+# ---------------------------------------------------------------------------
+# Codex
+# ---------------------------------------------------------------------------
+
+
+def thread_id(stdout: str) -> str | None:
+    """The `thread_id` of the first JSON line of type `thread.started`."""
+    for line in stdout.splitlines():
+        try:
+            event = json.loads(line)
+        except ValueError:
+            continue
+        if isinstance(event, dict) and event.get("type") == "thread.started" and event.get("thread_id"):
+            return str(event["thread_id"])
+    return None
+
+
+def run_codex(ctx: Context, prompt: str, resume: str | None = None) -> tuple[str, str]:
+    """One Codex call, first or resumed, pinned the same way. Returns (answer, thread id)."""
+    _, model, effort = CODEX
+    with tempfile.TemporaryDirectory(prefix="stage2-") as tmp:
+        answer_file = Path(tmp) / "answer.md"
+        command = ["codex", "exec"]
+        if resume:
+            command += ["resume", resume]
+        command += [
+            "--json",
+            "-m",
+            model,
+            "-c",
+            f'model_reasoning_effort="{effort}"',
+            "-c",
+            'sandbox_mode="read-only"',
+            "--disable",
+            "hooks",
+            "--disable",
+            "memories",
+            "-o",
+            str(answer_file),
+            prompt,
+        ]
+        done = launch(command, ctx.root, foreign_env({}))
+        thread = thread_id(done.stdout or "")
+        if done.returncode != 0:
+            raise fail("codex", done, f"exit {done.returncode}")
+        if thread is None:
+            raise fail("codex", done, "no thread.started event")
+        try:
+            answer = answer_file.read_text(encoding="utf-8")
+        except (OSError, UnicodeDecodeError) as error:
+            raise fail("codex", done, "no answer file") from error
+    return answer, thread
+
+
+def spec_review(root: Path, change: str) -> None:
+    """Phase 2a: a fresh Codex session reads the spec."""
+    ctx = preflight(root, change, CODEX)
+    prompt = phase_prompt(root, "02a-spec-review.md", change)
+    begin_call(ctx, "spec-review", CODEX, prompt)
+    answer, thread = run_codex(ctx, prompt)
+    rows, _ = parse_rows(answer)
+    append(
+        ctx.findings,
+        f"## Phase 2a — Codex, {today()}\n\n{answer_block(rows, answer, 'Codex')}\n\nReviewer session: codex {thread}",
+    )
+    print(f"spec-review: {len(rows)} rows appended to {ctx.findings.relative_to(root)}; session codex {thread}")
+
+
+def review(root: Path, change: str) -> None:
+    """Phase 6: the 2a session resumed, the verdict written, the loop rows released and marked."""
+    ctx = preflight(root, change, CODEX)
+    record = read_record(change)
+    if record is not None:
+        waiting = undecided(record_rows(record))
+        if waiting:
+            raise Refused(f"the loop record has undecided rows ({', '.join(waiting)}); decide them first.")
+    text = ctx.findings.read_text(encoding="utf-8") if ctx.findings.exists() else ""
+    sessions = SESSION_LINE.findall(text)
+    recorded = sessions[-1] if sessions else None
+    prompt = phase_prompt(root, "06-review.md", change, "Write only your verdict now.")
+    begin_call(ctx, "review", CODEX, prompt)
+    answer, thread = run_codex(ctx, prompt, resume=recorded)
+    rows, _ = parse_rows(answer)
+    block = "\n\n".join(
+        [
+            f"## Phase 6 — Codex, {today()}",
+            answer_block(rows, answer, "Codex"),
+            f"Phase 6 verdict: codex {thread}, {today()}",
+        ]
+    )
+    if recorded is None:
+        block += f"\nReviewer session: codex {thread} — a fresh session reviewed: no phase-2a session was recorded"
+    elif thread != recorded:
+        block += (
+            f"\nReviewer session: codex {thread} — a fresh session reviewed: "
+            f"the resume of {recorded} started a new thread"
+        )
+    append(ctx.findings, block)
+    print(f"review: verdict appended to {ctx.findings.relative_to(root)}; session codex {thread}")
+
+    released = release(root, change)
+    if not released:
+        return
+    listing = "\n".join(f"- {r[0]} [{r[1]}, {r[2]}] {r[4]}: {r[5]}" for r in released)
+    marks_prompt = "\n\n".join(
+        [MARK_FORMAT, "Your verdict stands and is not changed.", f"The loop rows:\n{listing}", READ_REQUEST]
+    )
+    begin_call(ctx, "review (loop marks)", CODEX, marks_prompt)
+    answer, _ = run_codex(ctx, marks_prompt, resume=thread)
+    marks = parse_marks(answer)
+    fill_marks(ctx.findings, [r[0] for r in released], marks)
+    print(f"review: {len(marks)} of {len(released)} loop rows marked")
+
+
+def parse_marks(answer: str) -> dict[str, str]:
+    """`<ID>: agree` or `<ID>: disagree — <reason>`, one line per loop row."""
+    marks: dict[str, str] = {}
+    pattern = re.compile(r"^\W*(L\d+-\d+)\W*:\s*(agree|disagree)\b[\s—–:-]*(.*?)\s*$", re.I)
+    for line in answer.splitlines():
+        match = pattern.match(line.strip())
+        if not match or match.group(1) in marks:
+            continue
+        verdict, reason = match.group(2).lower(), match.group(3).replace("|", "\\|")
+        marks[match.group(1)] = f"disagree — {reason}" if verdict == "disagree" and reason else verdict
+    return marks
+
+
+def fill_marks(findings: Path, ids: list[str], marks: dict[str, str]) -> None:
+    """Fill the `Phase 6` cell of each released row, in the block `release` wrote and nowhere else."""
+    text = findings.read_text(encoding="utf-8")
+    start = text.rfind(RELEASE_HEADING)
+    head, tail = text[:start], text[start:]
+    lines = []
+    for line in tail.split("\n"):
+        cells = split_row(line)
+        if cells and len(cells) == len(RELEASED_COLUMNS) and cells[0] in ids:
+            cells[-1] = marks.get(cells[0], "no answer")
+            line = "| " + " | ".join(cells) + " |"
+        lines.append(line)
+    findings.write_text(head + "\n".join(lines), encoding="utf-8")
+
+
+# ---------------------------------------------------------------------------
+# The loop record, release, and the GLM round
+# ---------------------------------------------------------------------------
+
+
+def record_dir(change: str) -> Path:
+    """Outside the worktree and outside the git directory. Read at call time."""
+    state = os.environ.get("XDG_STATE_HOME")
+    base = Path(state) if state else Path.home() / ".local" / "state"
+    return base / "coding-harness" / "stage2" / change
+
+
+def read_record(change: str) -> str | None:
+    path = record_dir(change) / "loop.md"
+    try:
+        return path.read_text(encoding="utf-8") if path.exists() else None
+    except (OSError, UnicodeDecodeError) as error:
+        raise Refused(f"the loop record {path} cannot be read.") from error
+
+
+def record_rows(record: str) -> list[list[str]]:
+    rows = []
+    for line in record.splitlines():
+        cells = split_row(line)
+        if cells and len(cells) == len(ROW_COLUMNS) and LOOP_ID.fullmatch(cells[0]):
+            rows.append(cells)
+    return rows
+
+
+def undecided(rows: list[list[str]]) -> list[str]:
+    """Rows whose Status does not begin `taken` or `rejected`, or a taken row without `yes` or `no`."""
+    waiting = []
+    for row in rows:
+        status, broke = row[7].lower(), row[8].lower()
+        decided = status.startswith("rejected") or (status.startswith("taken") and broke in {"yes", "no"})
+        if not decided:
+            waiting.append(row[0])
+    return waiting
+
+
+def rounds_run(record: str | None, findings_text: str) -> int:
+    """A round is counted by its block in the record, and by every count left behind by a release."""
+    in_record = len(ROUND_HEADING.findall(record)) if record else 0
+    return in_record + sum(int(n) for n in ROUNDS_LINE.findall(findings_text))
+
+
+def kept_prose(record: str) -> str:
+    """What the record holds beside its intro, headings and tables."""
+    body = record.replace(RECORD_INTRO, "")
+    lines = [
+        line for line in body.splitlines() if line.strip() and not line.startswith("#") and split_row(line) is None
+    ]
+    return "\n".join(lines)
+
+
+def release(root: Path, change: str) -> list[list[str]]:
+    """The loop rows into findings.md, after the phase-6 verdict. Returns the rows released."""
+    findings = folder_of(root, change) / "findings.md"
+    text = findings.read_text(encoding="utf-8") if findings.exists() else ""
+    if not VERDICT_LINE.search(text):
+        raise Refused("findings.md has no phase-6 verdict line; nothing is released.")
+    record = read_record(change)
+    if record is None:
+        if NO_LOOP_LINE not in text and RELEASE_HEADING not in text:
+            append(findings, NO_LOOP_LINE)
+        return []
+    rows = record_rows(record)
+    waiting = undecided(rows)
+    if waiting:
+        raise Refused(f"the loop record has undecided rows ({', '.join(waiting)}); nothing is released.")
+    block = [f"{RELEASE_HEADING} {today()}", render_table(RELEASED_COLUMNS, [[*row, "—"] for row in rows])]
+    if not rows:
+        block.append("No loop row was reported.")
+    block.append(f"Rounds run: {len(ROUND_HEADING.findall(record))}")
+    prose = kept_prose(record)
+    if prose:
+        block.append(f"Kept from the loop record:\n\n{prose}")
+    append(findings, "\n\n".join(block))
+    shutil.rmtree(record_dir(change))
+    print(f"release-loop: {len(rows)} loop rows appended to {findings.relative_to(root)}")
+    return rows
+
+
+def release_loop(root: Path, change: str) -> None:
+    release(root, change)
+
+
+def _git_output(root: Path, *args: str, allow: tuple[int, ...] = (0,)) -> str:
+    done = subprocess.run(
+        ["git", "-C", str(root), *args], capture_output=True, text=True, errors="replace", check=False
+    )
+    if done.returncode not in allow:
+        raise Refused(f"git {args[0]} failed: {done.stderr.strip()[:200]}")
+    return done.stdout
+
+
+def change_diff(root: Path) -> str:
+    """The diff against the merge base with origin/main, uncommitted and untracked files included."""
+    done = subprocess.run(
+        ["git", "-C", str(root), "merge-base", "HEAD", "origin/main"], capture_output=True, text=True, check=False
+    )
+    base = done.stdout.strip()
+    if done.returncode != 0 or not base:
+        raise Refused("there is no merge base with origin/main; the diff cannot be built.")
+    flags = ["--no-color", "--no-ext-diff", "--no-textconv"]
+    parts = [_git_output(root, "diff", *flags, base)]
+    untracked = _git_output(root, "ls-files", "-z", "--others", "--exclude-standard").split("\0")
+    for path in filter(None, untracked):
+        parts.append(_git_output(root, "diff", *flags, "--no-index", "--", "/dev/null", path, allow=(0, 1)))
+    return "".join(parts)
+
+
+def review_loop(root: Path, change: str) -> None:
+    """One round of phase 4b: GLM, through Claude Code against Z.ai, reads the diff."""
+    ctx = preflight(root, change, GLM)
+    record = read_record(change)
+    findings_text = ctx.findings.read_text(encoding="utf-8") if ctx.findings.exists() else ""
+    done_rounds = rounds_run(record, findings_text)
+    if done_rounds >= MAX_ROUNDS:
+        raise Refused(f"{done_rounds} rounds have run; the loop stops at {MAX_ROUNDS}.")
+    if record is not None:
+        waiting = undecided(record_rows(record))
+        if waiting:
+            raise Refused(f"the loop record has undecided rows ({', '.join(waiting)}); decide them first.")
+    key = read_secret("GLM_KEY")
+    if key is None:
+        raise Refused(f"GLM_KEY is not in the secrets file {secrets_path()}.")
+    diff = change_diff(root)
+    round_number = done_rounds + 1
+    body = (root / "prompts" / "04b-review-loop.md").read_text(encoding="utf-8")
+    # The request comes before the diff and again after it: a long diff would bury it.
+    prompt = "\n\n".join([body.rstrip(), ANSWER_FORMAT, READ_REQUEST, f"## The diff\n\n{diff}", READ_REQUEST])
+    begin_call(ctx, "review-loop", GLM, prompt)
+    with tempfile.TemporaryDirectory(prefix="stage2-") as tmp:
+        prompt_file = Path(tmp) / "glm-prompt.md"
+        prompt_file.write_text(prompt, encoding="utf-8")
+        config_dir = Path(tmp) / "claude-config"
+        config_dir.mkdir()
+        command = [
+            "claude",
+            "-p",
+            f"Review the change {change} as the appended instructions say.",
+            "--append-system-prompt-file",
+            str(prompt_file),
+            "--model",
+            GLM[1],
+            "--effort",
+            GLM[2],
+            "--tools",
+            "Read,Grep,Glob",
+            "--restricted",
+            "--strict-mcp-config",
+            "--permission-mode",
+            "dontAsk",
+            "--no-session-persistence",
+            "--output-format",
+            "text",
+        ]
+        done = launch(command, root, glm_env(key, config_dir), key)
+        if done.returncode != 0:
+            raise fail("claude", done, f"exit {done.returncode}", key)
+        answer = scrub(done.stdout or "", key)
+    rows, _ = parse_rows(answer)
+    numbered = [[f"L{round_number}-{k}", *row[1:], "GLM", "", ""] for k, row in enumerate(rows, 1)]
+    parts = [f"## Round {round_number} — GLM, {today()}"]
+    parts.append(render_table(ROW_COLUMNS, numbered) if numbered else "GLM reported no finding.")
+    if answer.strip() and (not rows or parse_rows(answer)[1].strip()):
+        parts.append(f"{NOT_ROWS_NOTE}\n\n{answer.strip()}")
+    directory = record_dir(change)
+    directory.mkdir(parents=True, exist_ok=True)
+    path = directory / "loop.md"
+    if record is None:
+        path.write_text(f"# Loop record — {change}\n\n{RECORD_INTRO}\n", encoding="utf-8")
+    append(path, "\n\n".join(parts))
+    print(f"review-loop: round {round_number} written to {path}: {len(numbered)} rows")
+
+
+# ---------------------------------------------------------------------------
+# The ask rule on `codex`, and the entry point
+# ---------------------------------------------------------------------------
+
+
+def codex_rule_problems(settings: dict) -> list[str]:
+    """What keeps Claude Code from asking before a bare `codex`; empty when it asks."""
+    permissions = settings.get("permissions") or {}
+    rule, reason = CODEX_ASK_RULE
+    found = []
+    if rule not in (permissions.get("ask") or []):
+        found.append(f".claude/settings.json lacks the ask rule {rule} - {reason}")
+    for kind in ("deny", "allow"):
+        for other in permissions.get(kind) or []:
+            if merge_guard.covers(other, "Bash(codex exec x)"):
+                found.append(f".claude/settings.json has the {kind} rule {other}, which covers a bare codex call")
+    return found
+
+
+VERBS = {
+    "spec-review": spec_review,
+    "review-loop": review_loop,
+    "release-loop": release_loop,
+    "review": review,
+}
+
+
+def main(argv: list[str] | None = None) -> int:
+    parser = argparse.ArgumentParser(
+        description=__doc__,
+        formatter_class=argparse.RawDescriptionHelpFormatter,
+        allow_abbrev=False,
+    )
+    parser.add_argument("verb", choices=sorted(VERBS))
+    parser.add_argument("change", nargs="?", default="", help="folder name under plans/changes/")
+    parser.add_argument("--root", default=str(REPO_ROOT), help=argparse.SUPPRESS)
+    args = parser.parse_args(argv)
+    try:
+        VERBS[args.verb](Path(args.root), args.change)
+    except Refused as error:
+        print(f"refused: {error}", file=sys.stderr)
+        return 2
+    except CallFailed as error:
+        print(f"failed: {error}", file=sys.stderr)
+        return 1
+    return 0
+
+
+if __name__ == "__main__":
+    raise SystemExit(main())
