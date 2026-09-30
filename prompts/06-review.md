@@ -26,7 +26,8 @@ come in. On the Fable path you run `python3 scripts/stage2.py release-loop
 <reason>`; on the Codex path the runner does both. A change that ran stage 2
 has the columns `Reviewer` and `Broke a test` in `findings.md`
 (`docs/WORKFLOW.md` §4). The verdict line is one line: `<date>` as `YYYY-MM-DD`
-comes last on it, and `<session>` is left out when you have no id.
+comes last on it, `<session>` is left out when you have no id, and `<reviewer>` names
+who reviewed — never `pending`.
 
 Having passed the spec in 2a is no argument now. Where the code shows the spec
 itself was wrong — a caveat it rested on, a reading it did not make — that is a

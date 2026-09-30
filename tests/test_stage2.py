@@ -584,6 +584,19 @@ def test_every_write_to_findings_keeps_its_updated_stamp_current(world: World) -
     assert world.text().count("\nupdated:") == 1 and "date: 2026-09-29" in world.text()
 
 
+def test_filling_the_marks_keeps_the_updated_stamp_current(world: World) -> None:
+    """Repair round 2 (F-7 note): `fill_marks` stamps the file by itself, not only through the append before it."""
+    released = f"{stage2.RELEASE_HEADING} 2026-09-29\n\n" + stage2.render_table(
+        stage2.RELEASED_COLUMNS,
+        [["L1-1", "MAJOR", "MAINT", "impl", "src/app.py:1", "f", "GLM", "taken — t", "no", "—"]],
+    )
+    world.findings.write_text(old_header() + "\n" + released + "\n", encoding="utf-8")
+    assert updated_of(world.findings) == dt.date(2026, 9, 29)
+    stage2.fill_marks(world.findings, ["L1-1"], {"L1-1": "agree"})
+    assert updated_of(world.findings) == dt.date.today(), "filling the marks left the header stale"
+    assert "| taken — t | no | agree |" in world.text()
+
+
 def test_a_findings_file_without_a_header_is_left_without_one(world: World) -> None:
     """The stamp edits a header and invents none: the loop record has no header and gets none."""
     world.script(claude=[{"stdout": rows(1)}])
@@ -948,8 +961,10 @@ def test_release_accepts_the_verdict_forms_the_prompts_can_produce(world: World,
         "Phase 6 verdict: codex T1, yesterday",
         "Phase 6 verdict, 2026-10-01",
         "phase 6 verdict: x, 2026-10-01",
+        "Phase 6 verdict: pending, 2026-10-01",
+        "Phase 6 verdict: Pending T1, 2026-10-01",
     ],
-    ids=["no-date", "word-for-date", "no-colon", "lower-case"],
+    ids=["no-date", "word-for-date", "no-colon", "lower-case", "pending-with-a-date", "pending-with-a-session"],
 )
 def test_a_refused_verdict_line_is_named(world: World, line: str, capsys: pytest.CaptureFixture[str]) -> None:
     """Repair round 1, F-4: a line that starts like a verdict and does not count is shown, with the form it lacks."""
@@ -1062,6 +1077,105 @@ def test_a_damaged_loop_row_refuses_instead_of_vanishing(world: World, capsys: p
         assert "L1-2" in capsys.readouterr().err
     assert world.findings.read_bytes() == before and world.record().exists()
     assert world.calls() == []
+
+
+GLM_PROSE = ["## Why this matters", "A remark.", "```sh", "# run: grep foo \\| wc -l", "ls", "```"]
+
+
+def test_every_line_of_glms_answer_reaches_findings_even_one_that_starts_with_a_hash(world: World) -> None:
+    """Repair round 2, F-10: a heading or a code comment of GLM is not one of the record's own headings."""
+    world.script(claude=[{"stdout": rows(1) + "\n" + "\n".join(GLM_PROSE) + "\n"}])
+    assert world.run("review-loop") == 0
+    decide_record(world)
+    world.write_findings(VERDICT)
+    assert world.run("release-loop") == 0
+    text = world.text()
+    lines = text.splitlines()
+    for line in GLM_PROSE:
+        assert line in lines, line
+    assert "# Loop record" not in text and "## Round 1 — GLM" not in text, "the record's own headings were carried"
+    assert not world.record().exists()
+
+
+def test_an_answer_without_rows_reaches_findings_as_it_came(world: World) -> None:
+    """Repair round 2, F-10: the blank lines and the `#` lines of an answer with no row are kept as they stand."""
+    answer = "## Notes\n\nFirst paragraph.\n\n# a comment line\n\nLast."
+    world.script(claude=[{"stdout": answer}])
+    assert world.run("review-loop") == 0
+    world.write_findings(VERDICT)
+    assert world.run("release-loop") == 0
+    assert answer in world.text()
+    assert "# Loop record" not in world.text() and "## Round 1 — GLM" not in world.text()
+
+
+def test_glm_lines_that_look_like_the_records_own_text_are_carried(world: World) -> None:
+    """Repair round 2, F-10: the intro sentences are the runner's only where the runner wrote them."""
+    world.script(claude=[{"stdout": stage2.RECORD_INTRO}])
+    assert world.run("review-loop") == 0
+    world.write_findings(VERDICT)
+    assert world.run("release-loop") == 0
+    lines = world.text().splitlines()
+    for line in stage2.RECORD_INTRO.splitlines():
+        assert line in lines, line
+
+
+def test_glms_words_of_one_round_do_not_swallow_the_rows_of_the_next(world: World) -> None:
+    """Repair round 2: GLM's words end at the next round heading; round 2's rows are read, round 1's words carried."""
+    world.script(
+        claude=[{"stdout": rows(1) + "\nA remark of round 1."}, {"stdout": rows(1) + "\nA remark of round 2."}]
+    )
+    assert world.run("review-loop") == 0
+    decide_record(world)
+    assert world.run("review-loop") == 0
+    decide_record(world)
+    world.write_findings(VERDICT)
+    assert world.run("release-loop") == 0
+    text = world.text()
+    assert [r[0] for r in released_rows(text) if len(r) == 10] == ["L1-1", "L2-1"]
+    assert "A remark of round 1." in text and "A remark of round 2." in text
+    assert re.search(r"^Rounds run: 2$", text, re.M)
+
+
+@pytest.mark.parametrize("verb", ["release-loop", "review-loop", "review"])
+def test_a_table_line_glm_wrote_with_a_loop_id_is_carried_not_refused(
+    world: World, verb: str, capsys: pytest.CaptureFixture[str]
+) -> None:
+    """Repair round 2, F-11: the refusal is for the rows the implementer must decide, not for GLM's own words."""
+    said = rows(1) + "\n| L1-1 | still open from the last round |\n"
+    world.script(
+        claude=[{"stdout": said}, {"stdout": "Nothing to report."}],
+        codex=[codex_ok("T1", "Nothing to report."), codex_ok("T1", "L1-1: agree")],
+    )
+    assert world.run("review-loop") == 0
+    decide_record(world)
+    if verb == "release-loop":
+        world.write_findings(VERDICT)
+    capsys.readouterr()
+    assert world.run(verb) == 0, capsys.readouterr().err
+    if verb == "review-loop":
+        assert "## Round 2 — GLM, " in world.record().read_text(encoding="utf-8")
+        return
+    text = world.text()
+    assert "| L1-1 | still open from the last round |" in text.splitlines()
+    assert [r[0] for r in released_rows(text) if len(r) == 10] == ["L1-1"]
+    assert not world.record().exists()
+
+
+def test_a_damaged_row_of_the_record_still_refuses_beside_glm_text(
+    world: World, capsys: pytest.CaptureFixture[str]
+) -> None:
+    """Repair round 2, F-11: criterion 39 holds for the record's own rows even when GLM's text stands below them."""
+    world.script(claude=[{"stdout": rows(2) + "\n| L1-1 | still open |\n"}])
+    assert world.run("review-loop") == 0
+    record = world.record().read_text(encoding="utf-8")
+    world.record().write_text(re.sub(r"^\| L1-2 \|.*$", "| L1-2 | MAJOR |", record, flags=re.M), encoding="utf-8")
+    world.write_findings(VERDICT)
+    before = world.findings.read_bytes()
+    capsys.readouterr()
+    for verb in ("release-loop", "review-loop"):
+        assert world.run(verb) == 2
+        assert "L1-2" in capsys.readouterr().err
+    assert world.findings.read_bytes() == before and world.record().exists()
 
 
 # ---------------------------------------------------------------------------

@@ -258,6 +258,24 @@ def test_a_value_staged_and_then_taken_out_of_the_file_is_still_found(repo: Path
     assert run_check(repo, denylist).verdict.exit_code() == CLEAN, "the staged value left the index with the file"
 
 
+@pytest.mark.parametrize("flag", ["skip-worktree", "assume-unchanged"])
+def test_the_staged_changes_are_read_against_the_last_commit_not_the_working_file(
+    repo: Path, denylist: Path, flag: str
+) -> None:
+    """Repair round 2 (F-6 note): plain `git diff` compares the index with the working file and is blind to an
+    entry git was told to assume unchanged; `git diff --cached` compares it with `HEAD` and is not."""
+    write(repo, "src/code.txt", f"{SECRET}\n")
+    git(repo, "add", "src/code.txt")
+    write(repo, "src/code.txt", "harmless = 1\n")
+    git(repo, "update-index", f"--{flag}", "src/code.txt")
+    assert git(repo, "diff", "--", "src/code.txt") == "", "the fixture no longer hides the entry from `git diff`"
+    result = run_check(repo, denylist)
+    assert result.verdict.exit_code() == BLOCKED and "staged changes" in rendered(result)
+    git(repo, "update-index", f"--no-{flag}", "src/code.txt")
+    git(repo, "reset", "--quiet", "--", "src/code.txt")
+    assert run_check(repo, denylist).verdict.exit_code() == CLEAN
+
+
 def test_the_advice_does_not_claim_a_rewritten_commit_is_clean(repo: Path, denylist: Path) -> None:
     """Repair round 1, F-6: a match in a commit is not gone when the commit is rewritten; the reflog still holds it."""
     place = _in_an_earlier_commits_patch(repo)

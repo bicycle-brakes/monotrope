@@ -36,10 +36,14 @@ GLM's rows and the implementer's decision on each, until the phase-6 verdict is
 written and `release-loop` carries them into `findings.md`. The release is the
 only thing that deletes the record, and it deletes nothing that has not arrived:
 every loop row, and every other line of the record as it stands, is in
-`findings.md` first; a line that carries a loop id and cannot be read as a row
-refuses the release instead. A call counts as a round when it succeeded and
-answered - with rows or with "no finding"; a failed call or an empty answer
-is no round.
+`findings.md` first. Not carried are only the record's own furniture: its
+heading, its intro, the round headings, the tables' header and separator, and
+the blank lines outside GLM's words. GLM's words are carried exactly as they
+came - a heading, a code comment or a table line with a loop id included; only
+a line of the round tables the runner wrote that carries a loop id and cannot
+be read as a row refuses the release, because the implementer has to decide
+that row. A call counts as a round when it succeeded and answered - with rows
+or with "no finding"; a failed call or an empty answer is no round.
 
 Exit: 0 done, 1 a call failed, 2 refused before any call.
 """
@@ -117,8 +121,11 @@ RELEASED_COLUMNS = [*ROW_COLUMNS, "Phase 6"]
 SEVERITIES = {"BLOCKER", "MAJOR", "MINOR"}
 
 # `Phase 6 verdict: <reviewer> <session>, <date>` - the reviewer may be several words, the session may be
-# missing, and a space or a full stop after the date does not matter (repair round 1, F-4).
-VERDICT_LINE = re.compile(r"^Phase 6 verdict:[ \t]+\S[^\n]*?,[ \t]*\d{4}-\d{2}-\d{2}[ \t]*\.?[ \t]*$", re.M)
+# missing, and a space or a full stop after the date does not matter (repair round 1, F-4). `pending` names
+# nobody who reviewed, so a line that starts with it is no verdict (repair round 2).
+VERDICT_LINE = re.compile(
+    r"^Phase 6 verdict:[ \t]+(?!(?i:pending)\b)\S[^\n]*?,[ \t]*\d{4}-\d{2}-\d{2}[ \t]*\.?[ \t]*$", re.M
+)
 VERDICT_START = re.compile(r"^phase 6 verdict\b[^\n]*$", re.M | re.I)
 SESSION_LINE = re.compile(r"^Reviewer session: codex (\S+)", re.M)
 ROUNDS_LINE = re.compile(r"^Rounds run: (\d+)\s*$", re.M)
@@ -128,6 +135,7 @@ NO_LOOP_LINE = "Loop rows: none — the GLM loop did not run for this change."
 LOOP_ID = re.compile(r"L\d+-\d+")
 NOT_ROWS_NOTE = "The answer was not only six-cell rows; what is not one is kept below as it came."
 
+RECORD_HEADING = "# Loop record — "
 RECORD_INTRO = (
     "Write `Status` (`taken — <test or criterion>` or `rejected — <reason>`) for every row below.\n"
     "For a taken row also write `Broke a test` (`yes` or `no`) — before the next round or the release."
@@ -613,8 +621,32 @@ def read_record(change: str) -> str | None:
         raise Refused(f"the loop record {path} cannot be read.") from error
 
 
+def _record_lines(record: str) -> list[tuple[str, bool]]:
+    """Each line of the record, and whether it is GLM's words - not the runner's or the implementer's.
+
+    The runner writes a round as its heading, then a table or one statement and, when the answer was not
+    only six-cell rows, the note `NOT_ROWS_NOTE` and the rest of the answer as it came. The lines after the
+    note, up to the next round heading, are GLM's; every other line is the record's own. A line of GLM's
+    that has the form of a round heading cannot be told from one.
+    """
+    lines = []
+    glm = False
+    for line in record.splitlines():
+        if ROUND_HEADING.match(line):
+            glm = False
+        elif not glm and line.strip() == NOT_ROWS_NOTE:
+            lines.append((line, False))
+            glm = True
+            continue
+        lines.append((line, glm))
+    return lines
+
+
 def record_rows(record: str) -> list[list[str]]:
-    """The loop rows of the record: every table line whose first cell is a loop id.
+    """The loop rows of the record: every table line of its own whose first cell is a loop id.
+
+    Only the record's own lines are read, never GLM's words, which are carried as they came: a table line
+    GLM wrote is not a row the implementer has to decide, whatever its first cell says.
 
     Nine cells are known. A `|` the implementer typed into `Status` makes a tenth; the cells between the
     reviewer and the last one are that reason, each pipe escaped. A line with a loop id and fewer cells
@@ -622,8 +654,8 @@ def record_rows(record: str) -> list[list[str]]:
     by its id.
     """
     rows = []
-    for line in record.splitlines():
-        cells = split_row(line)
+    for line, glm in _record_lines(record):
+        cells = None if glm else split_row(line)
         if not cells or not LOOP_ID.fullmatch(cells[0]):
             continue
         if len(cells) < len(ROW_COLUMNS):
@@ -655,21 +687,39 @@ def rounds_run(record: str | None, findings_text: str) -> int:
 def kept_lines(record: str) -> str:
     """Everything the record holds that the release does not carry as a row, exactly as it stands.
 
-    Not carried as such: the intro, the headings, the tables' own header and separator, and the loop rows
-    (`record_rows` has them). What is left - prose, and a table line that is no loop row - goes to
-    `findings.md` with them, because the record is deleted afterwards and is the only copy.
+    Left out: the record's own furniture - its heading, its intro, the round headings, the tables' header and
+    separator - and the loop rows (`record_rows` has them). What is left goes to `findings.md`, because the
+    record is deleted afterwards and is the only copy: the runner's own statements, and GLM's words line by
+    line as they came, blank lines between them included (a heading or a comment that starts with `#`, a table
+    line that is no row). GLM's words stand apart from the runner's lines by a blank line.
     """
+    intro = set(RECORD_INTRO.splitlines())
     furniture = set(render_table(ROW_COLUMNS, []).splitlines())
-    body = record.replace(RECORD_INTRO, "")
+    segments: list[tuple[bool, list[str]]] = []
+    for number, (line, glm) in enumerate(_record_lines(record)):
+        if not glm:
+            cells = split_row(line)
+            if (
+                not line.strip()
+                or line in intro
+                or line.strip() in furniture
+                or ROUND_HEADING.match(line)
+                or (number == 0 and line.startswith(RECORD_HEADING))
+                or (cells and LOOP_ID.fullmatch(cells[0]))
+            ):
+                continue
+        if not segments or segments[-1][0] != glm:
+            segments.append((glm, []))
+        segments[-1][1].append(line)
     kept = []
-    for line in body.splitlines():
-        cells = split_row(line)
-        if not line.strip() or line.startswith("#") or line.strip() in furniture:
-            continue
-        if cells and LOOP_ID.fullmatch(cells[0]):
-            continue
-        kept.append(line)
-    return "\n".join(kept)
+    for glm, lines in segments:
+        while glm and lines and not lines[0].strip():
+            lines.pop(0)
+        while glm and lines and not lines[-1].strip():
+            lines.pop()
+        if lines:
+            kept.append("\n".join(lines))
+    return "\n\n".join(kept)
 
 
 def release(root: Path, change: str) -> list[list[str]]:
@@ -681,7 +731,7 @@ def release(root: Path, change: str) -> list[list[str]]:
         if near:
             raise Refused(
                 f"findings.md has a line that starts like the phase-6 verdict but does not have the form "
-                f"`Phase 6 verdict: <reviewer> <session>, <date>` (<date> as YYYY-MM-DD, last on the line): "
+                f"`Phase 6 verdict: <reviewer> <session>, <date>` (<date> as YYYY-MM-DD, last on the line; `pending` is no reviewer): "
                 f"`{near.group(0).strip()}`; nothing is released."
             )
         raise Refused("findings.md has no phase-6 verdict line; nothing is released.")
@@ -797,7 +847,7 @@ def review_loop(root: Path, change: str) -> None:
     directory.mkdir(parents=True, exist_ok=True)
     path = directory / "loop.md"
     if record is None:
-        path.write_text(f"# Loop record — {change}\n\n{RECORD_INTRO}\n", encoding="utf-8")
+        path.write_text(f"{RECORD_HEADING}{change}\n\n{RECORD_INTRO}\n", encoding="utf-8")
     append(path, "\n\n".join(parts))
     print(f"review-loop: round {round_number} written to {path}: {len(numbered)} rows")
 
