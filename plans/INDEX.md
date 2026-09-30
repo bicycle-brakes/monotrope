@@ -10,6 +10,7 @@ Dateien dazukommen.
 |---|---|---|---|---|
 | [`changes/adhd-frame/decisions.md`](changes/adhd-frame/decisions.md) | draft | none | 2026-09-30 | coding-harness-q24 |
 | [`changes/adhd-frame/research.md`](changes/adhd-frame/research.md) | draft | none | 2026-09-30 | coding-harness-q24 |
+| [`changes/adhd-frame/spec.md`](changes/adhd-frame/spec.md) | draft | none | 2026-09-30 | coding-harness-q24 |
 | [`changes/archive/2026-09-20-2ee-triage/research.md`](changes/archive/2026-09-20-2ee-triage/research.md) | accepted | done | 2026-09-19 | coding-harness-2ee |
 | [`changes/archive/2026-09-21-reproducible-bead-export/decisions.md`](changes/archive/2026-09-21-reproducible-bead-export/decisions.md) | accepted | done | 2026-09-21 | coding-harness-1jg.1 |
 | [`changes/archive/2026-09-21-reproducible-bead-export/findings.md`](changes/archive/2026-09-21-reproducible-bead-export/findings.md) | accepted | done | 2026-09-21 | coding-harness-1jg.1 |
