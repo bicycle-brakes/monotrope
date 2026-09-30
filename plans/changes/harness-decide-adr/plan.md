@@ -1,7 +1,7 @@
 ---
 title: "Plan — harness-decide-adr"
 status: draft
-implementation_status: none
+implementation_status: partial
 date: 2026-09-30
 last_reviewed: 2026-09-30
 updated: 2026-09-30
@@ -608,3 +608,46 @@ Proposed text, level (2) and enforcer (`Ramp:signature-transcription`, due
 Applying it is the maintainer's own decision PR, outside this change; the
 rule set is German until its own translation, so the row is written in the
 file's language when applied.
+
+## Implementation notes
+
+Written by the implementing session on 2026-09-30, after slice 1. The text
+above is unchanged.
+
+**S0.** `origin/main` at `1c708f7` was not an ancestor of the branch; merged
+(merge commit `72f0015`, the handover of 2026-09-30 only). Neither sibling
+folder had moved to `plans/changes/archive/`.
+
+**Slice 1 mutations** — each planted in the working tree, its test seen red,
+then restored with `git checkout`:
+
+- `Bash(gh api *Merge*)` dropped from `.claude/settings.json` →
+  `test_settings_ask_before_every_merge` red (and four more tests of
+  `tests/test_merge_guard.py`).
+- `Bash(gh *)` added to `allow` → `test_no_deny_or_allow_rule_covers_a_merge`
+  red (and three more).
+- `## Options` removed from the decision template →
+  `test_the_decision_template_has_every_part` and
+  `test_a_template_missing_a_part_is_caught` red.
+- Beyond the list, for the criterion 12 rows: the Omnigent ask rule removed,
+  and a foreign Omnigent ask rule added → the narrowed
+  `test_settings_ask_exactly_the_asked_tools` red; `omnigent_policy.write`
+  keeping no foreign ask rule → `test_the_omnigent_render_keeps_the_merge_rules`
+  red.
+
+**Where the work adds to the plan text.**
+
+1. **How a sample call is written.** `covers(rule, call)` must know which
+   tool a call is for, so a Bash sample is stored as `Bash(<command>)` — the
+   table's command inside the tool's name — and an MCP sample as the bare
+   tool name. The commands are the table's, unchanged.
+2. **Two added tests** in `tests/test_merge_guard.py`:
+   `test_a_rule_beside_the_merges_is_not_reported` (the counterpart — a
+   matcher that took every rule for a merge rule would flag harmless
+   settings) and `test_the_matcher_follows_the_documented_forms` (bare
+   command, `:*`, word boundary, server name, other tools).
+3. **One sentence of the note's (f) lead-in** (lines 542–543) opens the
+   steps in `prompts/07-commit.md`, "The merge": the protocol holds for every
+   pull request, and for an ordinary one the restatement is its one-line
+   summary. Without it, step 3's "It decides" reads as if an ordinary pull
+   request had no protocol.
