@@ -651,3 +651,82 @@ then restored with `git checkout`:
    pull request, and for an ordinary one the restatement is its one-line
    summary. Without it, step 3's "It decides" reads as if an ordinary pull
    request had no protocol.
+
+### Slice 2
+
+Written by the implementing session on 2026-09-30, after slice 2. The text
+above is unchanged.
+
+**Slice 2 mutations** — each planted in the working tree, its test seen red,
+then restored with `git checkout` (run with the bytecode cache cleared and
+`PYTHONDONTWRITEBYTECODE=1`; see item 6 below):
+
+- archived anchors skipped → `test_an_archived_feature_without_an_answer_goes_red`;
+- a bare `no` accepted → the `bare no` cases of
+  `test_a_feature_header_that_breaks_the_shape_goes_red` and
+  `test_every_single_deviation_of_an_answer_goes_red` (3 red);
+- the folder comparison dropped → `test_a_feature_header_that_breaks_the_shape_goes_red`;
+- `schema_version: true` accepted → `test_every_single_deviation_of_an_answer_goes_red`
+  (`true` and `1.0`, 2 red);
+- "OK" printed on an empty tree → `test_an_empty_tree_examined_nothing_and_is_not_a_pass`;
+- exit 0 on a finding → `test_an_active_feature_without_an_answer_goes_red`,
+  `test_the_command_line_exits_1_on_a_finding_and_0_when_green`;
+- the terminal guard removed → `test_without_a_terminal_the_dialogue_refuses_and_never_writes`;
+- writing before the explain-back prompts → `test_an_interrupt_at_any_prompt_never_writes`
+  (6 of 10 cases red: every interrupt after the questions);
+- `yes` accepted as an answer → `test_only_y_or_n_is_taken_as_an_answer`;
+- an existing answer overwritten → the `an answered change` case of
+  `test_a_stated_answer_that_breaks_a_rule_is_refused_and_never_writes`;
+- the role hard-coded → `test_answered_by_is_the_role_the_map_names`.
+
+**The answers** (step 9) were stated by the maintainer in Claude Code session
+https://claude.ai/code/session_018qxAGMFNS3mM37eUEm5DuQ on 2026-09-30, relayed
+by the coordinating session, and recorded with the command's `--stated-in`
+path, one commit each: harness-decide-adr `yes`, frontmatter-current `no`,
+omnigent-deny-layers `no`, each reason verbatim as relayed. Afterwards the gate
+reads "read 4 change anchors; held 3 features to their answer files".
+
+**Where the work departs from or adds to the plan text.**
+
+1. **A kit exemption expired** (the plan says `scripts/kit/probe.py` is not
+   touched).
+
+   ```
+   expected:   probe.py untouched — no REIST_NICHT entry needed
+   found:      the leerprobe went red: test_the_two_manifests_really_disagree_somewhere
+               passes in the throwaway repository now (it asks for more than 60
+               files in both manifests; the four new mechanism files reached that)
+   relevant:   the probe blocks a green case that still carries an exemption
+   proposal:   strike the entry, as the probe's own message says, and lower
+               DECKEL 32 -> 31 with a comment; no design choice is involved
+   ```
+
+   Done that way; the rest of the plan does not change.
+2. **Names are matched with `fullmatch`**, not `^…$`: Python's `$` also
+   matches before a trailing newline, so `"x\n"` would pass `^[a-z0-9][a-z0-9-]*$`.
+3. **Abbreviated options are refused.** `harness.py` and the gate build their
+   parsers with `allow_abbrev=False`, so `--chang` is an unknown option (exit
+   2), not a guess at `--change`; `test_an_unknown_verb_or_option_is_exit_2_and_never_writes`
+   holds it.
+4. **The header-finding line says what is unknown.** A feature whose header
+   breaks criterion 2 owes an answer; what cannot be told is whether it has
+   one. Its line ends "whether it has the answer it owes is unknown until the
+   header reads"; a class finding keeps "whether this change owes an ADR
+   answer is unknown".
+5. **Three tests beyond the table:**
+   `test_a_class_line_whose_value_runs_into_a_hash_is_not_misread`
+   (`class: feature#x` is one YAML scalar),
+   `test_the_command_line_exits_1_on_a_finding_and_0_when_green` (the gate
+   through its command line) and `test_a_refusal_names_why_the_change_owes_no_answer`
+   (the three reasons of criterion 9, and another anchor's finding not
+   blocking a recording).
+6. **A stale bytecode cache can fake a result.** A mutation that keeps the
+   file's size, restored within the same second, leaves the mutated `.pyc`
+   valid, and the next run tests the mutant. The first mutation run left the
+   suite red for exactly that reason; the mutations were run again with the
+   cache cleared before and after each one and no bytecode written.
+7. **The command reads `provenance.yaml` with `yaml.safe_load`**, like its
+   other readers, not with the strict loader: a duplicate key elsewhere in the
+   map is not this command's finding.
+8. **Pushed once, at step 10**, not after step 7: the coordinating session
+   asked for a push only when `make verify` is green.
