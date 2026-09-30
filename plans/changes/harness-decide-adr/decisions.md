@@ -72,3 +72,41 @@ signature change and do not apply here.
 
 - A bead for the signature change (port of LakeSwitch gate M-30 with the
   `coding-harness-in1` fix, and Q4), to be created by the tracker's writer.
+  *Voided by the addendum below: no such bead is created.*
+
+## Addendum 2026-09-30: no signing in Coding Harness, the merge confirms
+
+Decided by the maintainer later the same day, after the interview. The
+answers above stay as given; this addendum changes what follows from Q2.
+
+1. **Coding Harness introduces no commit signing**, neither in this change
+   nor as a later one. The maintainer found it impractical: signing needs the
+   laptop, and the maintainer often works from a phone. The follow-up
+   "signature change" of Q2 and its bead are void; Q4 (key loss) no longer
+   arises in Coding Harness.
+2. **The maintainer's merge confirms a decision** (option A of three offered;
+   the others were a separate bot identity for agents, and documentation
+   only). An answer or other decision file takes effect when the pull request
+   carrying it is merged by the maintainer, or on the maintainer's explicit
+   request. An agent may write the file, recording what the maintainer stated
+   in the conversation.
+3. **Agents merge only on the maintainer's explicit request, with context.**
+   The maintainer first asked for a ban on agent merges, then refined it the
+   same day: an agent merges only when asked, and restates what the pull
+   request decides before it does. Merging is guarded by an ask rule, not a
+   deny rule.
+4. **Pull requests that carry a decision are marked as such**, with a label
+   and a decision block at the top of the body. The body is English and
+   written for a reader with ADHD: result first, implications and context
+   stated, next steps named, and where the change sits in the workflow. The
+   wording follows a best-practice research note.
+
+Consequences:
+
+- The accepted limit of Q2 changes form: agents act under the maintainer's
+  GitHub account, so neither the gate nor GitHub can tell who merged. The ask
+  rule is a brake, not proof. A bot identity is the upgrade path, on the
+  not-now list.
+- Bead `coding-harness-in1` (key-list weakness of the signature check) now
+  concerns only LakeSwitch's gate M-30. Whether LakeSwitch keeps signing is
+  LakeSwitch's own question, for its parallel session.
