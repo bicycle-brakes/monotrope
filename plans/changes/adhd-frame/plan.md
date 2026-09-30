@@ -4,7 +4,7 @@ status: draft
 implementation_status: partial
 date: 2026-09-30
 last_reviewed: 2026-09-30
-updated: 2026-09-30
+updated: 2026-10-01
 supersedes: null
 superseded_by: null
 bead: coding-harness-q24
@@ -112,6 +112,9 @@ the text is held against it. 8 and 39: the spec's two pipelines print nothing.
 ```bash
 grep -oE 'For you:|Done when:|Appetite:|Not now:|Pre-mortem:' prompts/03-plan.md | head -5 | paste -sd' ' -  # 1–7, read: the five labels in order
 for s in '`date`' 'done: <evidence> · <time used> of <appetite>' 'Resume: when I start, I will <one action>' 'of no appetite set'; do grep -qF -- "$s" prompts/04-implement.md || echo "missing: $s"; done  # 9–19, read: nothing
+for s in 'when a session starts or work resumes, between steps, before each commit' 'A stop ends the span; work that resumes starts a new one' 'A break inside a session counts, and the record says so' 'Write the answer under `## Time used`'; do tr -s '[:space:]' ' ' < prompts/04-implement.md | grep -qF -- "$s" || echo "missing: $s"; done  # 9, 42–45, read: nothing
+grep -c "the veto stays the maintainer's" AGENTS.md prompts/03-plan.md  # 47: 1 and 1
+sed -n '/\*\*Your move:\*\* merge = accept all three/,/## 1 ·/p' prompts/07-commit.md  # 46, read: Your move, What could break, done:, then ## 1
 git diff -U0 origin/main -- prompts/03-plan.md prompts/04-implement.md | grep -E '^(@@|-)' | grep -v '^--- '  # 38: two @@ lines at old 8–9,0 and 21–22,0; no "-" line
 git diff --numstat origin/main -- prompts/03-plan.md prompts/04-implement.md  # budget: ≤ 30 and ≤ 45 added, 0 removed
 for f in .github/pull_request_template.md .github/PULL_REQUEST_TEMPLATE/decision.md; do sed -n '1,/^## /p' "$f"; done  # 20–21: Your move, What could break, done:, then ##
@@ -120,7 +123,7 @@ git diff origin/main -- prompts/07-commit.md  # 23: one sentence added; since re
 git diff -M --name-status origin/main...HEAD | grep '^R'; test ! -e tools/claude-code/skills/uebergabe  # 24: an R line, exit 0
 grep -c 'Nicht committen, es sei denn' tools/claude-code/skills/handover/SKILL.md  # 25–27, read frontmatter, §4, §5: 0
 grep -c '^updated: <JJJJ-MM-TT>$' tools/claude-code/skills/handover/SKILL.md  # 28: 1
-git diff --numstat origin/main -- tools/claude-code/install.sh tools/claude-code/README.md tools/claude-code/hooks/handover.sh AGENTS.md  # 29–32: 1 1, 1 1, 4 4, 1 1
+git diff --numstat origin/main -- tools/claude-code/install.sh tools/claude-code/README.md tools/claude-code/hooks/handover.sh AGENTS.md  # 29–32: 1 1, 1 1, 4 4, and 3 1 for AGENTS.md (criterion 32 and, since repair round 2, the bullet of 47)
 bash -n tools/claude-code/install.sh && bash -n tools/claude-code/hooks/handover.sh && python3 -m pytest tests/test_handover_entry.py -q  # 29, 31: passed
 grep -rn uebergabe tools/claude-code AGENTS.md  # 29–32: nothing
 shasum -a 256 ~/.claude/skills/handover/SKILL.md ~/.claude/hooks/handover.sh; find ~/.claude -name '*.bak-2026????-??????'  # 33: 24c1e0a34cda875a…, cc52269aaf14e17a…; no backup
@@ -136,7 +139,8 @@ paragraph (pull request 60's hunks); 07's multi-decision block; the README's
 `docs/WORKFLOW.md`, the other prompts, `templates/`, `scripts/`, `tests/`,
 `decisions/`; `~/.claude` — no `install.sh` without `--check`. (Touched on purpose in
 repair round 1: 07's multi-decision block, F-5, and `spec.md`, criteria 9, 10, 15
-and 23.)
+and 23; in repair round 2: one bullet of `AGENTS.md`, F-4, and `spec.md`, criteria
+9, 23 and 32, the non-goal "Any other `AGENTS.md` text" and the new 42 to 47.)
 
 ## Phase 7
 
@@ -194,6 +198,54 @@ added line of 03 or 04 (criterion 8), no marking word in 03 (criterion 39).
 exits 0, and so does the trial merge with `origin/main`. `make verify`: 515
 passed, 15 skipped, last line `VERIFY GREEN — every local gate of the 'verify' job
 passed.` (`docs-links` and `markdownlint` report and do not block).
+
+## Repair round 2
+
+Origin `fix-r2`, 2026-10-01, on the open rows of the second phase-6 review
+(`findings.md`, reviewed at `78eacc4`; this round starts at `4d5d2eb`): F-4
+(reopened), F-8 and F-9. This is the last repair round, so the changes are the
+smallest that close each row. The decisions are the orchestrating session's
+`[DETAIL]`s, given to this round; the maintainer confirms them with the rest at
+the merge. F-7 stays open until phase 7. Two more places of "Not touched" were
+touched on purpose: one bullet of `AGENTS.md` (F-4) and `spec.md`, which gains
+criteria 42 to 47 at its end and amends 9, 23 and 32 in place, each marked,
+nothing renumbered. The card is unchanged; its "checks 1–41" stay as it was
+shown, and the new criteria have their checks in the block above. The fixes are
+prose, so no test was added (spec, `[DETAIL]`).
+
+- **F-4, the duty sits where orchestrating sessions read it.** `AGENTS.md`,
+  which every session reads, gains one bullet in "Communication and session
+  continuity": an orchestrating session shows a sub-agent's plan card to the
+  maintainer unchanged, the veto staying the maintainer's. 03's sentence from
+  round 1 already says the same in the same words, so it stays and 03 does not
+  grow. Criterion 47 holds the rule, and criterion 32 and the non-goal
+  "Any other `AGENTS.md` text" name it as the one exception.
+- **F-8, a resumed span has a first reading.** 04 reads "when a session starts
+  or work resumes", three words in the list of readings, inside the same ten
+  lines; criterion 9 says a span starts at a session's start or where work
+  resumes. F-3's wording note ("replaces the card's line" can be read as editing
+  the card) stays as it is: every clearer verb ("overrides", "supersedes")
+  pushed the paragraph to one line more, and 04 has none to give, while both
+  readings give the next session the current appetite.
+- **F-9, one condition each.** Criterion 9 keeps the sum of spans and the
+  readings at a span's start and end; the readings during work are 42 (both
+  moments, so "before each commit" alone is refuted), the split at a stop is 43
+  (a span running on across a stop is refuted), the breaks are 44. Criterion 23
+  keeps the one sentence; the two lines in the multi-decision form are 46, whose
+  refutation reads "lacks either line", so a form with one of the two is
+  refuted. The rule added for F-3 (the answer written under `## Time used`,
+  replacing the card's line, a new appetite being a total) is 45. The struck
+  wording stays in 9 and 23 with a pointer to where it went.
+
+**Measured on `69babf3` (2026-10-01).** Added lines over `origin/main`, none
+removed: 03 has 27 of 30 (unchanged), 04 has 44 of 45 (unchanged); `AGENTS.md`
+is 181 of its 200 lines. The two `@@` lines of check 38 are the same two. No
+figure with an hour or minute unit in an added line of 03 or 04 (criterion 8), no
+marking word in 03 (39). `git merge-tree --write-tree HEAD` with
+`origin/feat/stage-2-codex-glm` (at `ef7407c`), `origin/docs/template-bundle` (at
+`e3f997e`) and `origin/main`: exit 0, 0 and 0. `make verify`: 515 passed, 15
+skipped, last line `VERIFY GREEN — every local gate of the 'verify' job passed.`
+(`docs-links` and `markdownlint` report and do not block).
 
 ## Time used
 
