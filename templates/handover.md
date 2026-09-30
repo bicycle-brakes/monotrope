@@ -1,33 +1,33 @@
-# Vorlage — Übergabe
+# Template — Handover
 
-Kopiervorlage für eine Datei unter `docs/journal/handover/`. Sie trägt **kein
-eigenes Frontmatter**: `provenance.yaml` setzt für `templates/`
-`frontmatter: none`, weil ein Frontmatter in einer Vorlage in jede Instanz
-mitkopiert würde und dort eine Provenienz-Behauptung aufstellte, die niemand
-geprüft hat. Das Schema steht deshalb in Codeblöcken.
+Template to copy for a file under `docs/journal/handover/`. It carries **no
+frontmatter of its own**: `provenance.yaml` sets `frontmatter: none` for
+`templates/`, because frontmatter in a template would be copied into every
+instance and there make a provenance claim that nobody has checked. The schema
+is therefore shown in code blocks.
 
-**Die geltende Feldliste steht in `scripts/handover_schema.py`**, nicht hier und
-nicht in der Prosa des Feedback-Loops. Diese Datei zeigt sie, sie definiert sie
-nicht — `tests/test_feedback_channel.py` prüft beides gegeneinander.
+**The valid field list lives in `scripts/handover_schema.py`**, not here and not
+in the prose of the feedback loop. This file shows it, it does not define it —
+`tests/test_feedback_channel.py` checks the two against each other.
 
-## Erst entscheiden: welche Richtung?
+## Decide first: which direction?
 
-`direction` ist Pflichtfeld **jeder** Übergabe. Ohne das Feld fällt die Datei
-aus jeder Prüfung des Kanals heraus — genau das war am 2026-09-08 bei 14 von 24
-Dateien der Fall.
+`direction` is a required field of **every** handover. Without it the file
+falls out of every check of the channel — which is exactly what happened to 14
+of 24 files on 2026-09-08.
 
-| Wert | Wann | Was der Empfänger tut |
+| Value | When | What the recipient does |
 |---|---|---|
-| `framework->framework` | Sitzungsübergabe in diesem Repo. Ein Stand zum Stichtag, für die nächste Sitzung | nichts — niemand wartet auf eine Quittung |
-| `framework->project` | Der Rückkanal in eine Projekt-Instanz. Das Framework darf dort nicht schreiben (ADR-011/015), also legt es ab und wartet | quittiert per Pull Request in dieses Repo |
+| `framework->framework` | Session handover within this repo. A state as of a cut-off date, for the next session | nothing — nobody waits for an acknowledgement |
+| `framework->project` | The return channel into a project instance. The framework may not write there (ADR-011/015), so it files the handover and waits | acknowledges by pull request into this repo |
 
-Im Zweifel `framework->framework`. Eine Übergabe zum Kanal zu erklären, die
-niemand abholt, erzeugt eine offene Zusage, die für immer offen bleibt.
+When in doubt, `framework->framework`. Declaring a handover that nobody
+collects to be a channel item creates an open commitment that stays open forever.
 
-## Variante A — Sitzungsübergabe
+## Variant A — session handover
 
 ```yaml
-title: "Sitzungsübergabe — <Thema>, Stand <JJJJ-MM-TT>"
+title: "Session handover — <topic>, as of <YYYY-MM-DD>"
 category: handover
 created: 2026-01-01
 updated: 2026-01-01
@@ -37,16 +37,16 @@ produced_by:
   kind: llm-session
   name: claude-code
   version: "2026-01-01"
-tags: [handover, sitzung]
-# Ab hier optional, in beiden Richtungen zulässig:
-# Die Kennzahlen des Ablaufs — wo eine Sitzung Phasen gefahren hat, gehören sie
-# hierher. Sie sind die einzige Grundlage, auf der sich die Doktrin korrigieren
-# kann; ohne sie bleibt jede Aussage über Gate-Wirkung eine Erwartung.
+tags: [handover, session]
+# From here on optional, allowed in both directions:
+# The process metrics — where a session ran phases, they belong here. They are
+# the only basis on which the doctrine can correct itself; without them every
+# statement about a gate's effect remains an expectation.
 review_rounds: 2
 fix_regen_rounds: 0
 late_findings: 0
-questions: "3 ([E]1 [F]1 [D]1)"   # nach Klasse: Entscheidung · Fachlücke · Detail
-target_ref: a1b2c3d4        # der Commit, über den berichtet wird
+questions: "3 ([E]1 [F]1 [D]1)"   # by class: [E] decision · [F] domain gap · [D] detail
+target_ref: a1b2c3d4        # the commit being reported on
 bead: portfolio-agentic-engineering-<id>
 status: pending
 review:
@@ -55,69 +55,69 @@ review:
   approved_at: null
 ```
 
-Danach der Text. Was hineingehört, sagt nicht diese Vorlage, sondern die
-Erfahrung: **was gemacht wurde, was gemessen ist, was offen ist, und was beim
-nächsten Mal zuerst zu tun ist.** Zahlen immer mit ihrem Stichtag — ein
-Verlaufs-Dokument altert planmäßig (RB-P5).
+Then the text. What belongs in it is told not by this template but by
+experience: **what was done, what is measured, what is open, and what to do
+first next time.** Numbers always with their cut-off date — a history
+document ages by design (RB-P5).
 
-## Variante B — Rückkanal in eine Projekt-Instanz
+## Variant B — return channel into a project instance
 
-Zusätzlich zu Variante A, und hier ist jedes Feld Pflicht:
+In addition to Variant A, and here every field is required:
 
 ```yaml
 direction: framework->project
 target_repo: <repo-name>
-target_ref: a1b2c3d4         # kurzer Commit-Hash, gegen den erhoben wurde
+target_ref: a1b2c3d4         # short commit hash the findings were taken against
 status: pending              # pending -> acknowledged -> closed
 bead: portfolio-agentic-engineering-<id>
 record_sha256: "sha256:<hash>"
-acknowledged_by: null        # setzt NUR das Projektteam
-acknowledged_at: null        # setzt NUR das Projektteam
-closed_at: null              # setzt NUR das Projektteam
+acknowledged_by: null        # set ONLY by the project team
+acknowledged_at: null        # set ONLY by the project team
+closed_at: null              # set ONLY by the project team
 ```
 
-`acknowledged_by`, `acknowledged_at` und `closed_at` gehören dem Projektteam.
-Das Framework setzt `pending` und rührt die drei nie an — wer sein eigenes
-Ergebnis quittiert, quittiert nichts.
+`acknowledged_by`, `acknowledged_at` and `closed_at` belong to the project team.
+The framework sets `pending` and never touches the other three — whoever
+acknowledges their own result acknowledges nothing.
 
-### Der Befundblock ist unveränderlich
+### The findings block is immutable
 
-Der Teil der Übergabe, auf den sich jemand verlässt, steht zwischen zwei
-Markern. `record_sha256` ist der SHA-256 über **genau** den Text dazwischen —
-ohne die Marker selbst.
+The part of the handover that someone relies on sits between two markers.
+`record_sha256` is the SHA-256 over **exactly** the text between them — without
+the markers themselves.
 
 ```markdown
 <!-- record:begin -->
 
-| # | Befund | Fundstelle | Signifikanz |
+| # | Finding | Location | Significance |
 |---|---|---|---|
-| 1 | … | … | hoch |
+| 1 | … | … | high |
 
 <!-- record:end -->
 ```
 
-Widerspruch kommt **unter** den Block, nie hinein (RB-P5). Eine Unterschrift
-unter einem Text, der sich danach ändert, ist keine.
+Objections go **below** the block, never into it (RB-P5). A signature under a
+text that changes afterwards is none.
 
-Den Hash erzeugen:
+Generating the hash:
 
 ```bash
 python3 - <<'PY'
 import hashlib, pathlib, sys
-t = pathlib.Path(sys.argv[1] if len(sys.argv) > 1 else "docs/journal/handover/<datei>.md").read_text(encoding="utf-8")
+t = pathlib.Path(sys.argv[1] if len(sys.argv) > 1 else "docs/journal/handover/<file>.md").read_text(encoding="utf-8")
 block = t.split("<!-- record:begin -->\n", 1)[1].split("<!-- record:end -->", 1)[0]
 print("sha256:" + hashlib.sha256(block.encode()).hexdigest())
 PY
 ```
 
-### Und dann in den Index
+### And then into the index
 
-Eine Übergabe mit `direction: framework->project` **muss** in der Tabelle in
-`docs/journal/_INDEX.md` stehen, solange ihr Status nicht `closed` ist. Eine
-Übergabe, die der Index nicht kennt, holt niemand ab — sie ist dann keine
-Übergabe, sondern eine Datei, die jemand geschrieben hat.
+A handover with `direction: framework->project` **must** be listed in the table
+in `docs/journal/_INDEX.md` for as long as its status is not `closed`. A handover
+that the index does not know is collected by nobody — it is then not a handover
+but a file that somebody wrote.
 
-## Prüfen, bevor es ein Pull Request wird
+## Check before it becomes a pull request
 
 ```bash
 python3 -m pytest tests/test_feedback_channel.py -q
