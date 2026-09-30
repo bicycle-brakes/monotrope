@@ -4,7 +4,7 @@ category: how-to
 status: proposed
 owner: framework-architect
 last_reviewed: 2026-09-23
-updated: 2026-09-29
+updated: 2026-09-30
 tags: [signing, decisions, touch-id, lakeswitch, how-to]
 created: 2026-09-23
 provenance: ai-drafted-reviewed
@@ -16,6 +16,15 @@ This guide hands the Touch-ID signing of decisions to every repository that is
 to adopt it. It describes what holds, how it is set up on this machine, what
 lakeswitch-ai already enforces and what a further repository has to do. As of
 2026-09-23.
+
+## Coding Harness (2026-09-30)
+
+The maintainer decided on 2026-09-30 that Coding Harness introduces no commit
+signing, now or later: signing needs the laptop, and much of the work happens
+from a phone. A decision in Coding Harness takes effect when the maintainer
+merges the pull request that carries it, or asks an agent to
+(`prompts/07-commit.md`, "The merge"). This guide stays the description of
+LakeSwitch's practice.
 
 ## The rule
 
@@ -125,10 +134,9 @@ every commit that changes `decisions/` against the declared keys:
    role, key and fingerprint, following `decisions/signers.yaml` in
    lakeswitch-ai. The anchor is the first commit the maintainer signs in that
    repository with `git confirm`.
-3. **Build in the check.** Take over the code of `lakeswitch.signatures` or —
-   once it exists — obtain it from the coding-harness kit (D-45: a pinned
-   copy, no dependency). Tests follow
-   `tests/signatures/test_the_signatures.py` in lakeswitch-ai.
+3. **Build in the check.** Take over the code of `lakeswitch.signatures`; the
+   coding-harness kit carries no signature check (maintainer, 2026-09-30).
+   Tests follow `tests/signatures/test_the_signatures.py` in lakeswitch-ai.
 4. **Check CI.** `fetch-depth: 0` in the checkout and `ssh-keygen` available
    (shown on `ubuntu-latest` in lakeswitch-ai: M-30 ran green there).
 5. **Fix the merge method.** Merge commits only — no squash or rebase merges
@@ -137,23 +145,18 @@ every commit that changes `decisions/` against the declared keys:
    branches not yet merged turn the gate red after the merge. In
    lakeswitch-ai this concerns `feat/agent-definitions` (two commits).
 
-## State per repository (2026-09-23)
+## State per repository (2026-09-23; coding-harness row 2026-09-30)
 
 | Repository | State |
 | --- | --- |
 | lakeswitch-ai | enforced: gate M-30, anchor `c02f11d` |
-| coding-harness | signed, not checked (details below) |
+| coding-harness | no signing; the maintainer's merge confirms a decision |
 | further repositories | not read |
 
 In coding-harness the acceptances of ADR 0004 (`d4b1d47`) and ADR 0005
-(`8fc92e4`) are Touch-ID-signed. Whether the rule holds here is open; there
-is neither a gate nor a signers file.
+(`8fc92e4`) were Touch-ID-signed before the decision of 2026-09-30 and stay as
+they are. No gate and no signers file is planned.
 
 ## Open
 
 - Ratify D-55 (cluster 4 of the lakeswitch decision interview).
-- Decide whether coding-harness adopts the rule for its own decision files,
-  and then add to RB-M2 in the rule set the sentence that it governs the
-  approval of gates, not the confirmation of decisions.
-- Take the check into the coding-harness kit as a mechanism, so instances do
-  not copy it one by one.

@@ -96,6 +96,10 @@ jobs:
         id: decision-continuity
         if: ${{ !cancelled() }}
         run: python3 scripts/check_decision_continuity.py
+      - name: Every feature has the maintainer's answer to the ADR question
+        id: adr-answers
+        if: ${{ !cancelled() }}
+        run: python3 scripts/check_adr_answers.py
       - name: This gate file satisfies its own schema
         id: gate-schema
         if: ${{ !cancelled() }}

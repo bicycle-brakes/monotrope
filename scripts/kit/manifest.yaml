@@ -82,6 +82,12 @@ rules:
   - prefix: scripts/check_frontmatter_current.py
     rolle: mechanismus
     reason: "the check behind the gate frontmatter-current — the gate file travels, so its script does (bead coding-harness-qd7)"
+  - prefix: scripts/check_adr_answers.py
+    rolle: mechanismus
+    reason: "the check behind the gate adr-answers — the gate file travels, so its script does"
+  - prefix: scripts/harness.py
+    rolle: mechanismus
+    reason: "the command the gate's finding names"
   - prefix: scripts/check_bead_export.py
     rolle: mechanismus
     reason: "prueft den gerenderten Export Zeile fuer Zeile (bead bo0)"
@@ -132,6 +138,15 @@ rules:
   - prefix: tests/test_frontmatter_current.py
     rolle: mechanismus
     reason: "builds its own repositories and never reads this one's dates; holds in the probe copy (bead coding-harness-qd7)"
+  - prefix: tests/test_pr_templates.py
+    rolle: mechanismus
+    reason: "reads only the two templates, which travel"
+  - prefix: tests/test_check_adr_answers.py
+    rolle: mechanismus
+    reason: "builds its own trees; holds in the probe copy"
+  - prefix: tests/test_harness_decide_adr.py
+    rolle: mechanismus
+    reason: "builds its own trees; holds in the probe copy"
   - prefix: tests/test_regelwerk.py
     rolle: mechanismus
     reason: "die Grammatik der Regeltabelle reist; die konkreten Regeln sind Bestand (siehe REIST_NICHT)"
@@ -176,6 +191,12 @@ rules:
   - prefix: templates/handover.md
     rolle: mechanismus
     reason: "die Vorlage, gegen die das Uebergabe-Schema prueft"
+  - prefix: .github/PULL_REQUEST_TEMPLATE/
+    rolle: mechanismus
+    reason: "the decision pull request's template — a decision takes effect by its merge"
+  - prefix: .github/pull_request_template.md
+    rolle: mechanismus
+    reason: "the ordinary template; its first lines say nothing is decided"
   - prefix: plans/_README.md
     rolle: mechanismus
     reason: "der Lebenszyklus der Artefakte — plans_registry.py liest ihn"
@@ -197,6 +218,9 @@ rules:
     reason: "RB-A6 verlangt sie im Ziel; der Export-Manifest traegt dort weiter den Rumpf — im Kit war sie das letzte getrackte Mitglied der aufgeloesten geruest-Rolle (bead 1jg.3, AK-6)"
 
   # --- Bestand ---------------------------------------------------------------
+  - prefix: decisions/answers/
+    rolle: bestand
+    reason: "this repository's ADR answers; another repository's answers are its own"
   - prefix: docs/journal/
     rolle: bestand
     reason: "Verlauf dieses Repos. Altert per Bauart und wird nie ueberschrieben"

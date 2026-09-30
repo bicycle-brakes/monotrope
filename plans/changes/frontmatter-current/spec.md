@@ -4,7 +4,7 @@ status: draft
 implementation_status: none
 date: 2026-09-29
 last_reviewed: 2026-09-29
-updated: 2026-09-29
+updated: 2026-09-30
 supersedes: null
 superseded_by: null
 bead: coding-harness-qd7
@@ -13,6 +13,9 @@ provenance: ai-drafted-reviewed
 produced_by: {kind: llm-session, name: claude-code, version: "2026-09-29"}
 review: {status: pending, approved_by: null, approved_at: null}
 tags: [spec]
+class: feature
+change: frontmatter-current
+adr_question: {proposed: "no", reason: "one more check over existing document headers and one optional key in the gate list; no subsystem, dependency, interface or trust boundary changes, and removing it is one revert"}
 ---
 
 # Spec — frontmatter-current

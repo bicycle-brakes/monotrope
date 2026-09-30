@@ -58,7 +58,13 @@ because …**. That is the decision record (MADR) in question form. Shorthand
 sentence. You ask only once all of the above stands.
 
 Frontmatter per `plans/_README.md`: `status`, `implementation_status`, `date`,
-`last_reviewed`, `bead`.
+`last_reviewed`, `bead`. Also `class:` — one of `spike`, `bounded`, `feature`,
+`architectural` (`docs/WORKFLOW.md`, "Change classes, the ADR question and
+decision pull requests"). For a `feature`, also `change: <folder name>` and
+`adr_question: {proposed: "yes"|"no", reason: "<one sentence>"}` — quote
+`"yes"` and `"no"`: bare, YAML reads them as booleans, and the gate
+`adr-answers` refuses the header. The proposal only proposes; the maintainer
+answers, with `python3 scripts/harness.py decide adr`.
 
 ## After the spec review
 

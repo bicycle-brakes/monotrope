@@ -198,8 +198,12 @@ def _permissions() -> dict:
 
 
 def test_settings_ask_exactly_the_asked_tools() -> None:
+    """Omnigent's own ask rules are exactly the asked tools.
+
+    The merge rules beside them in `permissions.ask` are held by `tests/test_merge_guard.py`.
+    """
     ask = _permissions()["ask"]
-    assert sorted(ask) == sorted(op.PREFIX + tool for tool in op.ASKED_TOOLS)
+    assert sorted(r for r in ask if r.startswith(op.PREFIX)) == sorted(op.PREFIX + tool for tool in op.ASKED_TOOLS)
     assert op.PREFIX + "sys_advise_models" in ask
     for kind in ("deny", "allow"):
         for rule in _permissions().get(kind, []):

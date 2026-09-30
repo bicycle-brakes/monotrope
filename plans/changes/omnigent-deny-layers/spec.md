@@ -4,7 +4,7 @@ status: draft
 implementation_status: partial
 date: 2026-09-29
 last_reviewed: 2026-09-29
-updated: 2026-09-29
+updated: 2026-09-30
 supersedes: null
 superseded_by: null
 bead: coding-harness-rex
@@ -13,6 +13,9 @@ provenance: ai-drafted-reviewed
 produced_by: {kind: llm-session, name: claude-code, version: "2026-09-29"}
 review: {status: pending, approved_by: null, approved_at: null}
 tags: [spec, omnigent, permissions, policy]
+class: feature
+change: omnigent-deny-layers
+adr_question: {proposed: "no", reason: "it applies ADR 0006's rule that nothing depends on an Omnigent policy alone; the deny list is configuration one file holds, and removing it is one revert plus uninstalling the policy"}
 ---
 
 # Spec — omnigent-deny-layers
