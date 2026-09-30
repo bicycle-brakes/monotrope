@@ -137,3 +137,17 @@ session. Recorded as relayed; the text above is unchanged.
 Consequences: `spec.md` criteria 22, 24 and 33 are changed and marked so;
 the `[GAP]`s 1–4 of the spec are dropped; the numbering of the criteria is
 unchanged.
+
+## Addendum 2026-09-30: Codex as the worker before the merge (answer 13)
+
+13. **Codex works on Coding Harness tasks from now on, before ADR 0007 is
+    merged.** The maintainer asked on 2026-09-30 to use Codex for all new
+    tasks because the Claude budget is nearly used up. Claude Code's
+    auto-mode classifier blocked the session's first attempt to hand work to
+    Codex; the session offered three options, and the maintainer answered
+    "Ich erlaube es dir ausdrücklich" (option 3, explicit permission). The
+    leak check of slice 1 exists by then and runs before every Codex call.
+    Coding Harness content only; never lakeswitch-ai or customer content.
+    This overrides, for Codex as a worker, the spec's rule that no foreign
+    call runs before the merge; the criteria that state it are marked
+    "changed by answer 13" in the next edit of `spec.md`.
