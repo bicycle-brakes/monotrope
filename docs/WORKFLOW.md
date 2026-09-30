@@ -4,7 +4,7 @@ category: governance
 status: current
 created: 2026-09-05
 last_reviewed: 2026-09-29
-updated: 2026-09-29
+updated: 2026-09-30
 owner: Data Architect
 provenance: ai-drafted-reviewed
 produced_by:
@@ -243,6 +243,72 @@ created, search with `rg` first; where one exists, it is updated. `make
 staleness` checks the consequences — missing frontmatter, contradictory status,
 done and never archived, one-sided supersession.
 
+### Change classes, the ADR question and decision pull requests
+
+Every change says in its spec header what kind of change it is — `class:`,
+one of four:
+
+- `spike` — answers a question; its output is a recommendation.
+- `bounded` — changes an existing, readable flow without deciding anything new.
+- `feature` — a self-contained deliverable that changes what the system must
+  do or how it is checked.
+- `architectural` — a new subsystem or a break of an interface; it carries its
+  ADR already, so it is not asked.
+
+**Only a `feature` owes an answer to the ADR question:** is this change an
+architecture decision that needs an ADR? The spec author proposes, in the same
+header: `change: <folder name>` and `adr_question: {proposed: "yes"|"no",
+reason: "<one sentence>"}` (`prompts/02-spec.md`). The proposal only proposes.
+The maintainer answers, and the answer lives in
+`decisions/answers/<change>/adr.yaml`, in the format of the LakeSwitch pilot
+(`schema_version: 1`), so LakeSwitch reads it unchanged.
+
+There are two ways to answer, both through `python3 scripts/harness.py decide
+adr`:
+
+1. **Typed in a terminal** by the maintainer: the command shows each open
+   question with its title, anchor and proposal, takes `y` or `n` and a
+   one-sentence reason, and asks for three explain-back lines at the end.
+2. **Stated in the conversation**, and recorded by the agent exactly as stated,
+   one change per run: `--change <name> --answer yes|no --reason "<English
+   sentence>" --stated-in "<where the maintainer said it>"`. The source goes
+   into the commit message, not into the answer file.
+
+Either way the command writes the answer files and a commit message, and
+stages, commits and merges nothing. The gate `adr-answers`
+(`scripts/check_adr_answers.py`, in `decisions/gates.yaml`) holds every
+feature, active or archived, to an answer file that exists, has the format and
+names its own change.
+
+**A decision takes effect when the maintainer merges its pull request**, or
+asks an agent in the conversation to merge it. There is no commit signing in
+Coding Harness (maintainer, 2026-09-30). A pull request that adds, changes or
+removes a file `provenance.yaml` reserves for `human-decided` — an ADR, an ADR
+answer, the rule set — is a **decision pull request**: its title is
+`decide(<scope>): <the decision as a statement>`, it carries the label
+`decision`, and its body begins with the block from
+`.github/PULL_REQUEST_TEMPLATE/decision.md` — what is decided, that the merge
+is the confirmation, what it confirms, the options and what follows. Every
+other pull request takes `.github/pull_request_template.md`, whose first lines
+say that nothing is decided. How an agent merges on request is in
+`prompts/07-commit.md`, "The merge".
+
+What this does not do:
+
+- The gate holds existence and format only. It cannot see who wrote an answer
+  or who merged it.
+- Agents act under the maintainer's GitHub account, so nobody can tell from
+  GitHub who pressed merge. The merge rule is a rule, not proof.
+- The ask rules in `.claude/settings.json` are a brake against an accidental
+  merge, not a lock: they match a command's text, and another spelling — `curl`
+  against the API, the web page — passes them.
+- Nothing checks that the class is right, that a "yes" is followed by an ADR,
+  or that a decision pull request carries its label and block. The review
+  before the merge holds them.
+- The upgrade, if an agent is ever found deciding on the maintainer's behalf:
+  agents under a bot identity of their own, and branch protection that asks for
+  an approval by someone other than the pusher.
+
 ## 3 · Stage 1 — only Claude Code, only Anthropic
 
 ### What stands in the repository for it
@@ -258,6 +324,7 @@ done and never archived, one-sided supersession.
 | Sub-agents | `.claude/agents/explorer.md`, `reviewer.md` | read-only, model pinned |
 | Stop hook | `.claude/hooks/session-stop/check-tests-green.sh` | blocks the end of a turn on a red tree |
 | Enforcement | `decisions/gates.yaml` | **the one gate list** (D-10); `.github/workflows/ci.yml` is generated from it |
+| Decisions | `scripts/check_adr_answers.py`, `scripts/harness.py`, `.github/PULL_REQUEST_TEMPLATE/decision.md` | the gate `adr-answers`; `decide adr` records the maintainer's ADR answers; the decision pull request's block |
 
 ### Verification runs through git and CI, not through the harness
 
