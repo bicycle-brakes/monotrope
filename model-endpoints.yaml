@@ -53,6 +53,7 @@ endpunkte:
       - claude-haiku-4-5
       - claude-fable-5-1
       - claude-opus-5-5
+      - claude-sonnet-5-5
     bemerkung: >-
       Erstanbieter. `inference_geo` ist ein Parameter der Messages API und kann
       die Region festlegen, wo der Anbieter es unterstuetzt.
@@ -68,6 +69,7 @@ endpunkte:
       - claude-haiku-4-5
       - claude-fable-5-1
       - claude-opus-5-5
+      - claude-sonnet-5-5
     bemerkung: >-
       Der Harness, in dem hier gearbeitet wird. **Nur ueber offiziell
       unterstuetzte Werkzeuge.** Das Kontingent durch eine eigene Integration
@@ -98,7 +100,7 @@ endpunkte:
       Auflage erst gesucht wird.
 
   # -------------------------------------------------------------------------
-  # Stufe 2 — Fremdanbieter fuer Umsetzung und Review (docs/WORKFLOW.md)
+  # Stage 2 — other vendors review (docs/WORKFLOW.md §4, ADR 0007)
   # -------------------------------------------------------------------------
   #
   # `darf_sehen: [framework]` ist hier die entscheidende Zeile, nicht die
@@ -117,28 +119,28 @@ endpunkte:
       - glm-5.3
       - glm-5.3-flash
     bemerkung: >-
-      Anthropic-kompatibler Endpunkt (`https://api.z.ai/api/anthropic`), betrieben
-      in China. Vorgesehen fuer Phase 4 (Umsetzung), segmentiert nach den
-      Markierungen im Plan: `glm-5.3-flash` fuer Routine, `glm-5.3` fuer Substanz.
-      **Nur ueber Claude Code**, das der Anbieter selbst als unterstuetztes
-      Werkzeug fuehrt — eine eigene Integration waere vom Abonnement nicht
-      gedeckt.
+      Anthropic-compatible endpoint (`https://api.z.ai/api/anthropic`), operated
+      in China. Used for the review loop before phase 6 (phase 4b), through
+      `python3 scripts/stage2.py review-loop`. **Only through Claude Code**,
+      which the vendor lists as a supported tool — an own integration would not
+      be covered by the subscription.
 
-  - name: kimi-code
-    betreiber: "Moonshot AI"
+  - name: openai-codex
+    betreiber: OpenAI
     residenz: anbieter-erklaert
     abrechnung: abonnement
     darf_sehen: [framework]
     modelle:
-      - k3
-      - kimi-for-coding
+      - gpt-6.1-sol
     bemerkung: >-
-      Anthropic-kompatibler Coding-Endpunkt, betrieben in China. Vorgesehen fuer
-      Phase 6 (Review): `k3` fuer die erste Runde ueber den vollen Diff,
-      `kimi-for-coding` (K2.7 Code) fuer die begrenzten Folgerunden. Der Zweck
-      ist Anbietervielfalt — ein Modell bewertet die eigenen Erzeugnisse zu
-      positiv, und ein Reviewer aus einem anderen Haus weiss bauartbedingt nicht,
-      dass er sich selbst prueft.
+      Codex through the official Codex CLI only, signed in with the
+      maintainer's ChatGPT subscription — any other way in is not covered.
+      Used for the spec review (phase 2a) and the review (phase 6) of
+      `feature` and `architectural` changes, through `python3
+      scripts/stage2.py`. OpenAI states that it processes and stores
+      personal-plan data in the United States and wherever its affiliates and
+      service providers are, and personal plans get no region choice (search
+      summaries of OpenAI's pages, 2026-09-30).
 
 # ---------------------------------------------------------------------------
 # Nutzungszweck — die Auflage, die kein technisches Gate prueft
@@ -157,6 +159,14 @@ endpunkte:
 # kommerziell betrieben, `lakeswitch-ai` geht oeffentlich, oder eine
 # Auftraggeberin bezahlt Arbeit, die durch diese Endpunkte laeuft. Ein Vermerk
 # ohne Verfallsbedingung liest sich beim naechsten Mal wie eine Dauerzusage.
+#
+# **2026-09-30, the ChatGPT subscription behind `openai-codex`:** declared
+# personal use by the owner on the same terms as above. To be obtained again
+# under the same three conditions — the project is run commercially,
+# `lakeswitch-ai` goes public, or a client pays for work that runs through this
+# endpoint. The account's setting "Improve the model for everyone" is off: the
+# maintainer switched it off on 2026-09-30 and said so in the conversation that
+# day (an agent did not read it in the account).
 
 # ---------------------------------------------------------------------------
 # Ausdruecklich NICHT zugelassen
@@ -178,3 +188,8 @@ ausgeschlossen:
       Zeilen verlassen die Umgebung des Kunden nicht. Das ist keine Frage des
       Anbieters, sondern der Architektur: die Maschine baut die Pipeline, sie
       liest die Daten nicht.
+  - was: "Kimi (Moonshot AI; models k3 and kimi-for-coding)"
+    klasse: framework
+    grund: >-
+      Dropped by the maintainer on 2026-09-30 — stage 2 reviews with Codex and
+      GLM (ADR 0007).
