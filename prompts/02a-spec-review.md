@@ -1,6 +1,6 @@
 # Phase 2a · Spec review
 
-**Model:** Fable 5.1 — a different model with a different error profile, in a
+**Model:** Opus 5.5 — until stage 2 is live (maintainer, 2026-09-30); in a
 fresh context that never saw the author's reasoning.
 **Input:** `spec.md`, `research.md`, `decisions.md`. **Not** the author's reasoning.
 **Result:** rows for `plans/changes/<name>/findings.md`, dimension `SPEC`.
