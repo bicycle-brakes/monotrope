@@ -1,6 +1,6 @@
 ---
-name: uebergabe
-description: Schreibt die Sitzungsübergabe als Datei im Repository nach dessen Konvention (coding-harness und portfolio - docs/journal/handover/ mit Schema; lakeswitch - journal/) und verlinkt sie. Verwenden, wenn die Person die Session beenden oder neu starten will, „Übergabe“, „Schluss für heute“, „ich mache Feierabend“ oder „handover“ sagt, oder bevor der Kontext knapp wird.
+name: handover
+description: Schreibt die Sitzungsübergabe als Datei im Repository nach dessen Konvention (coding-harness und portfolio - docs/journal/handover/ mit Schema; lakeswitch - journal/), öffnet dafür immer einen Pull Request und verlinkt beides. Verwenden, wenn die Person die Session beenden oder neu starten will, „Übergabe“, „Schluss für heute“, „ich mache Feierabend“ oder „handover“ sagt, oder bevor der Kontext knapp wird.
 ---
 
 # Übergabe schreiben
@@ -71,7 +71,7 @@ der nächsten Session, und der Start-Hook liest den Abschnitt „Next step“.
 ### 3a. Frontmatter (harness)
 
 Die Feldliste steht in `scripts/handover_schema.py` des Repositorys, falls
-vorhanden, sonst in Variante A von `templates/handover.md`:
+vorhanden, sonst in Variante A (Variant A) von `templates/handover.md`:
 
 ```yaml
 ---
@@ -107,7 +107,20 @@ Dateien anlegen oder am Ende anhängen.
 - Keine Zahl ohne Stichtag. Nichts behaupten, was nicht gelesen wurde.
 - Keine Schreibvorgänge im Tracker, solange eine andere Session im selben
   Repository läuft (one-writer rule).
-- Nicht committen, es sei denn, die Person bittet darum.
+- **Die Übergabe kommt immer als Pull Request**, ohne Rückfrage (Regel der
+  Person vom 27.09.2026). Sie entsteht in einem eigenen Worktree auf einem
+  eigenen Branch vom aktuellen `main` (coding-harness: `.claude/worktrees/<name>`,
+  Branch `docs/handover-<datum>-<thema>`; lakeswitch: `~/lakeswitch-wt/<name>`,
+  Branch `docs/journal-<datum>-<thema>`; in einem Repository, das keinen Ort
+  nennt: `.claude/worktrees/<name>`), nie im Haupt-Checkout. Committen,
+  pushen und den Pull Request öffnen gehören zur Übergabe. **Mergen tut nur
+  die Person.**
+- Commit-Nachricht und PR-Text sind Englisch, mit der Attribution, die das
+  Repository verlangt. Nachricht über eine Datei (`git commit -F`), nie mit
+  Heredoc oder `-m`, wenn sie einen geschützten Namen nennt.
+- Ausnahme: Hat das Repository keinen Remote oder läuft eine andere Session im
+  selben Checkout, wird die Datei geschrieben, aber nicht committet, und die
+  Schlussnachricht sagt, warum.
 
 ## 5. Prüfen und abschließen
 
@@ -116,6 +129,8 @@ Dateien anlegen oder am Ende anhängen.
    lakeswitch `lakeswitch verify`.
 2. Vorschau des Einstiegs, den die nächste Session sieht:
    `~/.claude/hooks/handover.sh show`
-3. Schlussnachricht an die Person, ADHS-gerecht: zuerst das Ergebnis, dann der
-   **Link zur Übergabe-Datei**, der nächste Schritt und ob die Datei committet
-   ist.
+3. Committen, pushen, Pull Request öffnen (Abschnitt 4). Der PR-Text sagt, was
+   die Übergabe festhält und dass `verify` gelaufen ist.
+4. Schlussnachricht an die Person, ADHS-gerecht: zuerst das Ergebnis, dann der
+   **Link zur Übergabe-Datei und zum Pull Request**, der nächste Schritt und
+   der Hinweis, dass der Merge bei ihr liegt.
