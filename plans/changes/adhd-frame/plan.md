@@ -116,7 +116,7 @@ git diff -U0 origin/main -- prompts/03-plan.md prompts/04-implement.md | grep -E
 git diff --numstat origin/main -- prompts/03-plan.md prompts/04-implement.md  # budget: ≤ 30 and ≤ 45 added, 0 removed
 for f in .github/pull_request_template.md .github/PULL_REQUEST_TEMPLATE/decision.md; do sed -n '1,/^## /p' "$f"; done  # 20–21: Your move, What could break, done:, then ##
 python3 -m pytest tests/test_pr_templates.py -q && git diff --quiet origin/main -- tests/  # 22: passed, exit 0
-git diff origin/main -- prompts/07-commit.md  # 23: one sentence added, no list item or fence
+git diff origin/main -- prompts/07-commit.md  # 23: one sentence added; since repair round 1 also the two lines in the multi-decision form; no other list item or fence
 git diff -M --name-status origin/main...HEAD | grep '^R'; test ! -e tools/claude-code/skills/uebergabe  # 24: an R line, exit 0
 grep -c 'Nicht committen, es sei denn' tools/claude-code/skills/handover/SKILL.md  # 25–27, read frontmatter, §4, §5: 0
 grep -c '^updated: <JJJJ-MM-TT>$' tools/claude-code/skills/handover/SKILL.md  # 28: 1
@@ -134,7 +134,9 @@ git fetch origin && git merge-tree --write-tree HEAD origin/feat/stage-2-codex-g
 paragraph (pull request 60's hunks); 07's multi-decision block; the README's
 "six files"; the skill's German and every line step 4 does not name;
 `docs/WORKFLOW.md`, the other prompts, `templates/`, `scripts/`, `tests/`,
-`decisions/`; `~/.claude` — no `install.sh` without `--check`.
+`decisions/`; `~/.claude` — no `install.sh` without `--check`. (Touched on purpose in
+repair round 1: 07's multi-decision block, F-5, and `spec.md`, criteria 9, 10, 15
+and 23.)
 
 ## Phase 7
 
@@ -144,6 +146,54 @@ exists. The body lists the four answers and `class: bounded` for confirmation
 (34) and the reinstall step (35); the frame's bead closes (coding-harness-q24,
 `Closes-Bead:` on the last commit), the rename's stays open with the rest the
 spec's non-goals name (coding-harness-9ca) (36).
+
+## Repair round 1
+
+Origin `fix-r1`, 2026-09-30, on the seven rows of the phase-6 review
+(`findings.md`, reviewed at `306b5ac`; this round starts at `1fc0038`). F-1 to
+F-6 are fixed, in `dcd072c` (F-1 to F-3, prompt 04), `1026094` (F-4 in 03, F-5 in
+07) and `3de8b5c` (F-6); F-7 stays open until phase 7. The decisions are the
+orchestrating session's `[DETAIL]`s, given to this round; the maintainer confirms
+them with the rest at the merge. Two places of "Not touched" were touched on
+purpose: the multi-decision block of 07 (F-5) and `spec.md`, in criteria 9, 10,
+15 and 23, each amendment marked in place, nothing renumbered. The fixes are
+prose, so no test was added (spec, `[DETAIL]`); each is checked by reading and
+by the commands of "Checks per criterion".
+
+- **F-1 (MAJOR), the clock now has a trigger.** 04 says to read `date` between
+  steps and before each commit as well as when a session starts and ends, and to
+  stop when such a reading shows the time used has reached the appetite. The
+  sentence "no reminder, countdown or check-in before it" stays; it means no
+  timer and no message to the maintainer, and 04 and criterion 15 now say the
+  agent's own readings are none of them. Criteria 9 and 10 name the readings.
+  This round followed the rule it adds: `date` was read at each step boundary.
+- **F-2, a stop ends the span.** A new span starts when work resumes, in the
+  same conversation too (04, criterion 9), so the night behind a stop is not
+  work and the next reading does not fire a spurious stop.
+- **F-3, the answer has a home.** The new appetite, the narrowed `Done when:`,
+  or park or drop is written under `## Time used`, where it replaces the card's
+  line; the card itself stays as it was shown. The finding's second half is
+  answered with three words: a new appetite is a total, because time used is one.
+- **F-4, who shows the card.** One sentence in 03: when phase 3 runs as a
+  subagent, the orchestrating session shows the card to the maintainer
+  unchanged, and the veto stays the maintainer's.
+- **F-5, the form carries the lines.** The multi-decision form in 07 now prints
+  "What could break" and the `done:` line below `**Your move:**`, as the two
+  templates do; criterion 23 allows exactly that and still refutes a copy of the
+  template's lines anywhere else.
+- **F-6, `partial` everywhere.** `implementation_status` is `partial` in all five
+  artefacts. `plans_registry.py` reports `done` on a change that is not archived
+  as drift, and the stage-2 change and the decide-ADR change both stand on
+  `partial` until their archive; `done` comes with the archive in phase 7.
+
+**Measured on `3de8b5c` (2026-09-30).** Line budgets, added lines over
+`origin/main` with none removed: 03 has 27 of 30, 04 has 44 of 45; the two `@@`
+lines of check 38 are the same two. No number with an hour or minute unit in an
+added line of 03 or 04 (criterion 8), no marking word in 03 (criterion 39).
+`git merge-tree --write-tree HEAD origin/feat/stage-2-codex-glm` (at `ef7407c`)
+exits 0, and so does the trial merge with `origin/main`. `make verify`: 515
+passed, 15 skipped, last line `VERIFY GREEN — every local gate of the 'verify' job
+passed.` (`docs-links` and `markdownlint` report and do not block).
 
 ## Time used
 
