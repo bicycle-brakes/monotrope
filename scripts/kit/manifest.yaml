@@ -132,6 +132,9 @@ rules:
   - prefix: tests/test_frontmatter_current.py
     rolle: mechanismus
     reason: "builds its own repositories and never reads this one's dates; holds in the probe copy (bead coding-harness-qd7)"
+  - prefix: tests/test_pr_templates.py
+    rolle: mechanismus
+    reason: "reads only the two templates, which travel"
   - prefix: tests/test_regelwerk.py
     rolle: mechanismus
     reason: "die Grammatik der Regeltabelle reist; die konkreten Regeln sind Bestand (siehe REIST_NICHT)"
@@ -176,6 +179,12 @@ rules:
   - prefix: templates/handover.md
     rolle: mechanismus
     reason: "die Vorlage, gegen die das Uebergabe-Schema prueft"
+  - prefix: .github/PULL_REQUEST_TEMPLATE/
+    rolle: mechanismus
+    reason: "the decision pull request's template — a decision takes effect by its merge"
+  - prefix: .github/pull_request_template.md
+    rolle: mechanismus
+    reason: "the ordinary template; its first lines say nothing is decided"
   - prefix: plans/_README.md
     rolle: mechanismus
     reason: "der Lebenszyklus der Artefakte — plans_registry.py liest ihn"
