@@ -174,3 +174,24 @@ asked yet.
   - bead `coding-harness-4me` (findings as checked data, queued behind 3ar);
   - bead `coding-harness-yim` (the remaining German, starting with
     `prompts/07-commit.md`).
+
+## Addendum 2026-09-30: the pilot date is signed
+
+The maintainer took Q1 (b) ahead of the interview, for the date only. They
+signed a later pilot date in lakeswitch-ai: commit `d4cd913` on branch
+`chore/pilot-later-date`, PR #68. It moves `expires` in
+`decisions/answers/pilot.yaml` from 2026-10-15 to 2026-12-15. The reason is
+that the switch needs the pin (`harness.lock.yaml`, D-21), which is not built
+yet.
+
+- `lakeswitch verify` on that branch is green, and so is CI (jobs `floor` and
+  `verify`).
+- Gate M-30 examined 12 commits that change a signed-decision path, and found
+  nothing.
+- Gate M-31 is ok.
+
+Once the maintainer merges #68, LakeSwitch pull requests no longer turn red on
+2026-10-15. The deadline for package 2 becomes 2026-12-15. Q1 still belongs in
+the interview: the date is settled, but whether LakeSwitch switches inside
+this change is not. Remove the worktree `~/lakeswitch-wt/pilot-later-date`
+after the merge.
