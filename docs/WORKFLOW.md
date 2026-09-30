@@ -357,11 +357,11 @@ none, because the registry keeps counting it as protection.
 | 1 Explore | **Haiku 4.5** | much input, little output, no deep reasoning |
 | 1a Interview | **Fable 5.1** | the questions are the work, and there are few of them |
 | 2 Spec | **Opus 5.5** | effort `xhigh`; the highest reasoning demand, little output |
-| 2a Spec review | **Fable 5.1** | another model with another error profile, and a fresh context that does not know the author's reasoning |
+| 2a Spec review | **Opus 5.5** (until stage 2 is live) | a fresh context that does not know the author's reasoning; see below |
 | 3 Plan | **Opus 5.5** | effort `xhigh`; an error here is the most expensive in the whole run |
 | 4 Implement | **Sonnet 5** | a solid worker given a clear plan |
 | 5 Verify | — | deterministic |
-| 6 Review | **Fable 5.1** | finds what Sonnet misses, and reads the code a change calls instead of trusting its docstring |
+| 6 Review | **Opus 5.5** (until stage 2 is live) | finds what Sonnet misses, and reads the code a change calls instead of trusting its docstring; see below |
 | 7 Commit | **Haiku 4.5** | cheap and sufficient |
 
 Switch with `/model fable`, `/model sonnet`, `/model opus`, `/model haiku`. The
@@ -375,10 +375,13 @@ the whole repository; until then both ran on Fable 5.1). In a session:
 from its definition's frontmatter (`effort: xhigh`), not from the call that
 starts it, and a new definition is read only when a session starts.
 
-**Spec review and review on Fable 5.1** (maintainer, 2026-09-29, for the whole
-repository; until then both ran on Opus 5). The two reviews of that day ran on
-Fable and found what the spec had missed by reading the called code itself. The
-spec review still reads with another model than the spec's author (Opus 5.5).
+**Spec review and review on Opus 5.5, until stage 2 is live** (maintainer,
+2026-09-30, for the whole repository). From 2026-09-29 both ran on Fable 5.1,
+and before that on Opus 5. Once stage 2 is implemented and merged (bead
+coding-harness-bc9), the stage-2 routing replaces this row. The cost is
+known: the spec review now reads with the same model as the spec's author
+(Opus 5.5), so what stays independent is the fresh context, not the error
+profile.
 **The spec review improves the spec first.** The spec's author works each 2a
 row into `spec.md` (or rejects it with a reason) before phase 3; the revised
 spec is the one yardstick for plan, code and review (`prompts/02-spec.md`,
