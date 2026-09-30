@@ -11,15 +11,26 @@ foreign call.
 
     a. every file under `plans/changes/<name>/`;
     b. every file of the worktree that git tracks or lists as untracked and not
-       ignored, as it stands on disk, whatever its suffix - a symbolic link as
-       its target's text;
+       ignored, as it stands on disk, whatever its suffix - a symbolic link to a
+       file as its target's text, a link with nothing behind it as its own text;
     c. the message and the patch of every commit reachable from a local or a
        remote-tracking branch (merges with `--cc`: what a merge adds beyond its
        parents);
-    d. every text the caller says it puts into a prompt (`--prompt-file`).
+    d. the staged changes (`git diff --cached`): a value staged and then taken
+       out of the working file stays readable with `git show :<path>`;
+    e. every text the caller says it puts into a prompt (`--prompt-file`).
 
 A foreign reviewer's tools read the tree and the history, so the check looks at
 the tree and the history, not only at the change.
+
+**What is NOT scanned, stated so that a clean report is not read as more.** The
+reflog: rewriting a commit that held a value (amend, rebase) makes the check
+clean, and `git log -g -p` still shows the value until git expires the reflog.
+The stash (`refs/stash`), refs outside `refs/heads` and `refs/remotes` (tags,
+`refs/dolt/`) and objects no ref reaches. After a rewrite, `git reflog expire
+--expire=now --all` and `git gc --prune=now` are what remove those copies; the
+check cannot say that they were run (measured in a temporary repository,
+2026-09-30).
 
 **What is NOT printed: the match.** A gate whose output has to be handled like
 a secret is the second disclosure. The report names the place (file and line,
@@ -29,8 +40,11 @@ rule's pattern.
 
 **If it cannot measure, it refuses.** A denylist that is missing, unreadable,
 empty or invalid, no change name, a change folder that is missing or empty, a
-tree that cannot be listed, a file that cannot be read, a history that cannot
-be read: each one is a BLOCK that names why. Unchecked is not clean.
+tree that cannot be listed, a file that cannot be read, a listed path that is
+not a regular file (a link to a directory, a submodule, a repository nested in
+the tree, a special file: a reviewer reads through it and this check does not),
+an index or a history that cannot be read: each one is a BLOCK that names why.
+Unchecked is not clean.
 
 The denylist lives **outside the repository**: it names what is searched for,
 and that is itself a statement about the customer. Default:
@@ -124,7 +138,21 @@ def read_denylist(path: Path) -> tuple[list[Rule], str | None]:
     return rules, None
 
 
-def _scan(text: str, prefix: str, rules: list[Rule], verdict: Verdict) -> int:
+ADVICE = {
+    "file": "The matched text is not shown. Open the place, remove or replace the value, run the check again.",
+    "staged": (
+        "The matched text is not shown. The value is in the index: take it out of the file, stage the file "
+        "again, run the check again."
+    ),
+    "commit": (
+        "The matched text is not shown. Rewriting the commit does not make the value gone: the reflog and the "
+        "stash still hold it until git expires them (`git reflog expire --expire=now --all`, then `git gc "
+        "--prune=now`), and this check does not look there. Run the check again after."
+    ),
+}
+
+
+def _scan(text: str, prefix: str, rules: list[Rule], verdict: Verdict, kind: str = "file") -> int:
     """Report each match as a place, a rule name and a length. Returns the count."""
     hits = 0
     for number, line in enumerate(text.split("\n"), 1):
@@ -134,7 +162,7 @@ def _scan(text: str, prefix: str, rules: list[Rule], verdict: Verdict) -> int:
                 hits += 1
                 verdict.block(
                     f"{prefix}:{number} - rule '{rule.name}' matches (length {len(found.group(0))})",
-                    "The matched text is not shown. Open the place, remove or replace the value, run the check again.",
+                    ADVICE[kind],
                 )
     return hits
 
@@ -217,16 +245,32 @@ def check(
             "the tree cannot be listed",
             f"{why}. What cannot be listed is not checked, and it would go into the call all the same.",
         )
-    tree_files = [
-        root / part for part in listed.decode("utf-8", errors="replace").split("\0") if part and (root / part).is_file()
-    ]
+    result = Result(Verdict(), rules=len(rules))
+    tree_files: list[Path] = []
+    link_texts: dict[str, str] = {}
+    unreadable = False
+    for part in listed.decode("utf-8", errors="replace").split("\0"):
+        if not part:
+            continue
+        path, name = root / part, part.rstrip("/")
+        if path.is_file():
+            tree_files.append(path)
+        elif path.is_symlink() and not path.exists():
+            # Nothing stands behind the link, but the link's own text is what git shows of it.
+            link_texts[name] = str(path.readlink())
+        elif path.exists():
+            unreadable = True
+            result.verdict.block(
+                f"{name} is listed by git but is not a regular file",
+                "A link to a directory, a submodule, a repository nested in the tree or a special file: a "
+                "reviewer reads through it and this check did not. What cannot be scanned is not checked.",
+            )
+        # else: listed and gone from the disk - nothing to read there; a staged deletion shows in the index scan.
 
     scanned: dict[str, Path] = {}
     for path in (*change_files, *tree_files):
         scanned.setdefault(path.relative_to(root).as_posix(), path)
 
-    result = Result(Verdict(), rules=len(rules))
-    unreadable = False
     hits = 0
     for relative, path in scanned.items():
         try:
@@ -239,9 +283,23 @@ def check(
             )
             continue
         hits += _scan(text, relative, rules, result.verdict)
+    for relative, text in link_texts.items():
+        hits += _scan(text, relative, rules, result.verdict)
     if unreadable:
         return result
-    result.files = len(scanned)
+    result.files = len(scanned) + len(link_texts)
+
+    staged, why = _git(
+        root, "diff", "--cached", "--text", "--no-color", "--no-ext-diff", "--no-textconv", "--no-renames"
+    )
+    if staged is None:
+        return _refuse(
+            "the index cannot be read",
+            f"{why}. The index is what `git show :<path>` reads; skipping it would leave a staged value unchecked.",
+        )
+    hits += _scan(
+        staged.decode("utf-8", errors="replace"), "staged changes (git diff --cached)", rules, result.verdict, "staged"
+    )
 
     history, why = _git(
         root,
@@ -264,7 +322,7 @@ def check(
         )
     for sha, text in _history_units(history.decode("utf-8", errors="replace")):
         result.commits += 1
-        hits += _scan(text, f"commit {sha}", rules, result.verdict)
+        hits += _scan(text, f"commit {sha}", rules, result.verdict, "commit")
 
     labelled = list(prompt_texts)
     for label, text in labelled:

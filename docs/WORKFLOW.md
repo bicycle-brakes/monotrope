@@ -32,20 +32,22 @@ tags: [workflow, model-routing, agentic-coding, phases, artefacts]
 > **Not all of it is here yet.** This file came over from
 > `portfolio-agentic-engineering`, and the mechanism follows it in steps
 > (`AGENTS.md`, "Status: bootstrapping"). Checked on 2026-09-30 against the
-> tree at `3c54652`, these pieces it names are **not** in this repository:
+> tree at `41abf42`, these pieces it names are **not** in this repository:
 > `scripts/validate_change_artefacts.py`, the sub-agents
 > `.claude/agents/explorer.md` and `reviewer.md`, the stop hook
 > `.claude/hooks/session-stop/check-tests-green.sh`, `.claude/commands/`, the
 > targets `make change` and `make index` (the entry is `python3 scripts/new_change.py <name>
-> --bead <id>`), `tests/test_repo_settings.py` and `templates/findings.md`.
+> --bead <id>`), `tests/test_repo_settings.py`, `templates/findings.md`,
+> `docs/governance/gate-catalog.md` and `requirements-ci.txt`.
 > Where the text below says one of them does something, it describes the
 > target, not this tree.
 >
 > One thing is missing on purpose and is not on that list: the brakes on the
 > irreversible (force push, `rm -rf`, deploys) in `.claude/settings.json`, which
-> holds only the Omnigent rules. This repository deploys nothing, and a `Bash`
-> pattern for a force push is passed by the next spelling, so they were left out
-> by decision, not deferred; §3, item 3, gives the reason.
+> holds the Omnigent rules, the ask rules of the merge guard (§2) and the ask
+> rule on `codex` (§4), and no such brake. This repository deploys nothing, and
+> a `Bash` pattern for a force push is passed by the next spelling, so they were
+> left out by decision, not deferred; §3, item 3, gives the reason.
 
 ## 1 · Why
 
@@ -582,20 +584,33 @@ the model listed, `framework` among what it may see, a residency stated); and
 **the leak check** (`python3 scripts/leakcheck.py`, by hand `make leakcheck
 NAME=<change>`) passes in the same run, immediately before this call. The leak
 check scans the change's folder, every file the tree tracks or lists as
-untracked, the message and patch of every commit reachable from a local or a
-remote-tracking branch, and the call's own prompt, against a denylist each
-machine keeps outside the repository. It reports the place, the rule's name and
-the length of a match, never the match. If it cannot measure — the denylist
-missing, a file unreadable — that is BLOCK, because unchecked is not clean.
+untracked, the staged changes, the message and patch of every commit reachable
+from a local or a remote-tracking branch, and the call's own prompt, against a
+denylist each machine keeps outside the repository. It reports the place, the
+rule's name and the length of a match, never the match. If it cannot measure —
+the denylist missing, a file unreadable, a listed path that is a link to a
+directory or a submodule — that is BLOCK, because unchecked is not clean.
+
+**A clean report has limits.** The check does not read the reflog, the stash,
+refs outside the branches (tags, `refs/dolt/`) or objects no ref reaches. A
+value taken out by rewriting a commit therefore reads clean while `git log -g
+-p` still shows it, until git expires the reflog (`git reflog expire
+--expire=now --all`, then `git gc --prune=now`); the check cannot tell whether
+that was done, and its advice for a match in a commit says so.
 
 What every call then carries: one line in `findings.md` (date, verb, endpoint,
 model, the leak check's three numbers); an empty standard input; an
 environment built from an allow-list, not the caller's; the model and effort
-`max` pinned. Codex also runs in the read-only sandbox with its session kept
-and its hooks and memories switched off. GLM runs as Claude Code against Z.ai's
-Anthropic-compatible endpoint, with a fresh empty configuration directory, the
-project's settings and hooks skipped, tools limited to `Read`, `Grep` and
-`Glob`, and the diff in its prompt; its credential (`GLM_KEY` in
+`max` pinned. The runner starts Codex with the read-only sandbox, its session
+kept and its hooks and memories switched off. It starts GLM as Claude Code
+against Z.ai's Anthropic-compatible endpoint, with a fresh empty configuration
+directory, the project's settings and hooks skipped, tools limited to `Read`,
+`Grep` and `Glob`, and the diff in its prompt. **Those settings are configured
+on every call, not measured** (the maintainer's decision of 2026-09-30, ADR
+0007): no test has run either program to see them take effect, on `codex exec
+resume` in particular, whose help lists no sandbox option. If Codex's hooks are
+not in fact off, the tracked `.codex/hooks.json` injects tracker text into the
+call that the leak check does not scan. GLM's credential (`GLM_KEY` in
 `~/.config/cc-routing/secrets.env`) stays in the runner's environment for that
 call and is scrubbed from everything the runner prints or writes.
 

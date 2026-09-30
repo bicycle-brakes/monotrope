@@ -203,6 +203,83 @@ def test_a_symbolic_link_is_read_as_its_targets_text(repo: Path, denylist: Path,
     assert "link.txt:1" in rendered(result)
 
 
+def test_a_link_to_a_directory_is_refused_not_skipped(repo: Path, denylist: Path, tmp_path: Path) -> None:
+    """Repair round 1, F-5: a reviewer reads through the link; a check that skips it is green over unread content."""
+    outside = tmp_path / "outside"
+    write(outside, "note.txt", f"{SECRET}\n")
+    (repo / "customer").symlink_to(outside, target_is_directory=True)
+    result = run_check(repo, denylist)
+    assert result.verdict.exit_code() == BLOCKED
+    assert "customer" in rendered(result) and "not a regular file" in rendered(result)
+    assert SECRET not in rendered(result)
+
+
+@pytest.mark.parametrize("added", [True, False], ids=["submodule-entry", "nested-repository"])
+def test_a_nested_repository_is_refused_not_skipped(repo: Path, denylist: Path, added: bool) -> None:
+    """Repair round 1, F-5: a submodule's directory, or a repository nested in the tree, holds files the check did not read."""
+    nested = repo / "vendor"
+    nested.mkdir()
+    git(nested, "init", "--quiet", "--initial-branch=main")
+    write(nested, "inside.txt", f"{SECRET}\n")
+    git(nested, "add", "-A")
+    git(nested, "commit", "--quiet", "-m", "inside")
+    if added:
+        git(repo, "add", "vendor")
+    result = run_check(repo, denylist)
+    assert result.verdict.exit_code() == BLOCKED
+    assert "vendor" in rendered(result) and "not a regular file" in rendered(result)
+
+
+def test_a_dangling_link_is_read_as_its_own_text(repo: Path, denylist: Path) -> None:
+    """Repair round 1, F-5: nothing stands behind the link, but its target text is what git shows of it."""
+    (repo / "dangling").symlink_to(SECRET)
+    assert run_check(repo, denylist).verdict.exit_code() == BLOCKED
+    (repo / "dangling").unlink()
+    (repo / "dangling").symlink_to("harmless-target")
+    result = run_check(repo, denylist)
+    assert result.verdict.exit_code() == CLEAN and (result.files, result.commits) == (7, 2)
+
+
+def test_a_tracked_file_that_is_gone_from_the_disk_is_not_a_refusal(repo: Path, denylist: Path) -> None:
+    """Nothing is on the disk to read; the staged deletion is what the index scan sees."""
+    (repo / "src" / "code.txt").unlink()
+    assert run_check(repo, denylist).verdict.exit_code() == CLEAN
+
+
+def test_a_value_staged_and_then_taken_out_of_the_file_is_still_found(repo: Path, denylist: Path) -> None:
+    """Repair round 1, F-6: `git show :<path>` reads the index, whatever the working file says now."""
+    write(repo, "src/staged.txt", f"{SECRET}\n")
+    git(repo, "add", "src/staged.txt")
+    write(repo, "src/staged.txt", "clean again\n")
+    result = run_check(repo, denylist)
+    assert result.verdict.exit_code() == BLOCKED
+    assert "staged changes" in rendered(result)
+    git(repo, "rm", "--quiet", "--force", "src/staged.txt")
+    assert run_check(repo, denylist).verdict.exit_code() == CLEAN, "the staged value left the index with the file"
+
+
+def test_the_advice_does_not_claim_a_rewritten_commit_is_clean(repo: Path, denylist: Path) -> None:
+    """Repair round 1, F-6: a match in a commit is not gone when the commit is rewritten; the reflog still holds it."""
+    place = _in_an_earlier_commits_patch(repo)
+    text = rendered(run_check(repo, denylist))
+    assert place in text and "reflog" in text
+
+
+def test_the_advice_for_a_file_does_not_talk_about_the_reflog(repo: Path, denylist: Path) -> None:
+    """The limit is named where it applies: a file on the disk is cleaned by editing it."""
+    _in_an_untracked_file(repo)
+    text = rendered(run_check(repo, denylist))
+    assert "src/new.txt:1" in text and "reflog" not in text
+
+
+def test_the_limits_of_the_scanned_set_are_stated() -> None:
+    """Repair round 1, F-6: what the check does not read stands in its own text and in the doctrine."""
+    doc = " ".join((leakcheck.__doc__ or "").split())
+    workflow = " ".join((REPO_ROOT / "docs" / "WORKFLOW.md").read_text(encoding="utf-8").split())
+    for text in (doc, workflow):
+        assert "reflog" in text and "stash" in text and "staged" in text
+
+
 def test_a_file_is_read_whatever_its_suffix(repo: Path, denylist: Path) -> None:
     (repo / "picture.png").write_bytes(b"\x89PNG\r\n\x00\xff" + SECRET.encode() + b"\n")
     result = run_check(repo, denylist)

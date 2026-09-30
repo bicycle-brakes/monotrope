@@ -1281,6 +1281,29 @@ def test_the_standing_note_says_stage_2_is_active() -> None:
     )
 
 
+def configured_not_measured_problems(workflow: str) -> list[str]:
+    """Section 4 must present the foreign programs' settings as passed, not as proven (repair round 1, F-8)."""
+    four = flat(section(workflow, "## 4 · "))
+    found = []
+    if "configured on every call, not measured" not in four:
+        found.append("section 4 does not say the settings are configured on every call, not measured")
+    for fact in ("Codex also runs in the read-only sandbox", "GLM runs as Claude Code"):
+        if fact in four:
+            found.append(f"section 4 states as a fact: {fact}")
+    if "tracked `.codex/hooks.json`" not in four:
+        found.append("section 4 does not name what an ineffective hooks switch would let through")
+    return found
+
+
+def test_section_4_says_the_foreign_settings_are_passed_not_measured() -> None:
+    text = WORKFLOW.read_text(encoding="utf-8")
+    assert configured_not_measured_problems(text) == []
+    flatter = text.replace("configured\non every call, not measured", "in force")
+    assert flatter != text and configured_not_measured_problems(flatter)
+    assert configured_not_measured_problems(text.replace("The runner starts Codex with", "Codex also runs in"))
+    assert configured_not_measured_problems(text.replace("tracked `.codex/hooks.json`", "a hooks file"))
+
+
 def review_prompt_problems(spec_review: str, review: str) -> list[str]:
     found = []
     for name, text in (("02a-spec-review.md", spec_review), ("06-review.md", review)):
