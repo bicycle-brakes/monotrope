@@ -241,4 +241,10 @@ When / While / If as a recommendation only.
 
 ## Time used
 
-None yet.
+Phase 4 only, read with `date` (CEST); appetite 4 h.
+
+- 2026-09-30 23:34–23:38, 4 min — steps 1–3, the three templates (reading the inputs included).
+- 2026-09-30 23:38–23:40, 2 min — step 4, `tests/test_templates.py`.
+- 2026-09-30 23:40–23:41, 1 min — step 5, the texts.
+- 2026-09-30 23:41–23:44, 3 min — step 6, the checks and the verification, run twice (`VERIFY GREEN`: 568 passed, 15 skipped; Leerprobe 407 of 438).
+- Total 2026-09-30 23:34:44–23:43:31, 9 min of 4 h (the commit and push follow within the minute); no repair round.
