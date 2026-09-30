@@ -3,10 +3,10 @@ title: "Regelwerk — die normativen Regeln für Agents, Hooks, Gates, Human Gat
 category: governance
 subcategory: regelwerk
 status: current
-version: 2.0.0
+version: 3.0.0
 created: 2026-08-14
 last_reviewed: 2026-09-19
-updated: 2026-09-29
+updated: 2026-09-30
 owner: Data Architect
 provenance: human-decided
 produced_by: {kind: llm-session, name: claude-code, version: "2026-08-14"}
@@ -142,7 +142,7 @@ neue Regel · PATCH = Wortlaut oder Testname.
 | ID | Regel | Stufe | Erzwingender Test/Gate | Gilt in |
 |---|---|---|---|---|
 | **RB-M1** | Ein Gate-Record durchläuft `DRAFT → IN_REVIEW → ACCEPTED → WITHDRAWN`, führt seine Geschichte mit und ist über den Hash seines Gegenstands gebunden: was nach der Signatur geändert wird, ist wieder unsigniert. Einen Zustand „abgenommen, aber ohne Unterschrift" gibt es nicht | 4 | `tests/test_gate_record.py`::test_accepted_is_derived_not_set · ::test_a_changed_subject_invalidates_the_signature · ::test_a_gate_with_a_missing_required_role_is_not_accepted · ::test_the_required_roles_match_the_governance_table · `Ramp:gate-record-validators` | P L I |
-| **RB-M2** | Eine Signatur ist eine Zustimmung im Pull Request, transkribiert von einem Werkzeug, das nicht urteilen kann. Wer zustimmt, ist weder Autor noch letzter Pusher | 2 | `Ramp:signature-transcription` | P L I |
+| **RB-M2** | Eine Signatur ist eine Zustimmung im Pull Request, transkribiert von einem Werkzeug, das nicht urteilen kann. Wer zustimmt, ist weder Autor noch letzter Pusher. Hält eine Person unter einem GitHub-Konto alle Rollen, ist die Zustimmung ihr Merge — durch sie selbst oder durch einen Agenten auf ihre ausdrückliche Bitte, nachdem er wiederholt hat, was der Pull Request entscheidet. Diese Ausnahme ist eine Regel, kein Beweis, und endet, sobald Agenten unter eigener Identität arbeiten | 2 | `Ramp:signature-transcription` | P L I |
 | **RB-M3** | Ein abgenommener Contract setzt eine adversariale Quellverifikation voraus — jemand hat versucht, ihn zu widerlegen, und es nicht geschafft | 2 | `Ramp:adversarial-record` | P L I |
 | **RB-M4** | Das Reconciliation-Ergebnis hat einen benannten Unterzeichner, und jede Toleranz trägt ihre Begründung. Eine nackte Prozentzahl ist keine Schwelle, sondern eine Vermutung | 2 | `Ramp:human-gates-transfer` | P L I |
 | **RB-M5** | Alle Gates einer Liefereinheit schließen **vor** der Liefereinheit. Die Grenze ist keine Warteschlange. Die Reihenfolge selbst ist der Mechanismus: Protokoll vor Ergebnis, Duplikat-Befund vor Deduplizierung, Erwartung vor Verdikt, Generalprobe vor dem ersten Lauf | 2 | `Ramp:boundary-before-close` | P L I |
@@ -193,6 +193,26 @@ Vier Teile, einzeln referenzierbar:
 ## 7 Änderungsverlauf
 
 Append-only. Jeder Eintrag trägt die vier Pflichtzeilen aus §4.
+
+### 3.0.0 — 2026-09-30
+
+**RB-M2** bekommt eine Ausnahme für den Fall, der hier der einzige ist: eine
+Person hält unter einem GitHub-Konto alle Rollen. Sie ist Autorin und letzte
+Pusherin jedes Pull Requests, und GitHub lässt niemanden den eigenen Pull
+Request freigeben — die Regel war so nie erfüllbar. Die Zustimmung ist dann
+ihr Merge, selbst ausgeführt oder auf ihre ausdrückliche Bitte von einem
+Agenten, der vorher wiederholt, was der Pull Request entscheidet. Entschieden
+am 2026-09-30 zusammen mit „kein Signieren in Coding Harness, der Merge
+bestätigt" (Änderung `harness-decide-adr`, Pull Request #54; `AGENTS.md`
+Hausregel 8).
+
+MAJOR, weil §4 es so vorschreibt: die Ausnahme ändert, was die Regel
+bedeutet, auch wenn ihr erster Satz stehen bleibt.
+
+- **Geändert:** RB-M2 — Ausnahme für eine Person unter einem Konto angefügt. Stufe (2), Erzwinger (`Ramp:signature-transcription`) und Geltung unverändert; keine ID geändert, keine entfernt
+- **Tests:** keine neuen, keine umbenannten, keine entfallenen. Die Merge-Bremse, auf die die Ausnahme sich stützt, halten `tests/test_merge_guard.py` und die Nachfrage-Regeln in `.claude/settings.json` (Pull Request #54)
+- **Agents/Hooks/Templates:** nichts nachzuziehen — `AGENTS.md` Hausregel 8, `prompts/07-commit.md` und die Pull-Request-Vorlagen unter `.github/` sagen es bereits seit #54
+- **lakeswitch-ai:** nichts, solange LakeSwitch mit signierten Commits entscheidet (Gate M-30); die Ausnahme gilt dort erst, wenn LakeSwitch auf den Merge als Bestätigung umstellt
 
 ### 2.0.0 — 2026-09-19
 
