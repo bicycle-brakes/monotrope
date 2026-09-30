@@ -31,4 +31,5 @@ Dateien dazukommen.
 | [`changes/harness-decide-adr/plan.md`](changes/harness-decide-adr/plan.md) | draft | partial | 2026-09-30 | coding-harness-3ar |
 | [`changes/harness-decide-adr/research.md`](changes/harness-decide-adr/research.md) | draft | none | 2026-09-30 | coding-harness-3ar |
 | [`changes/harness-decide-adr/spec.md`](changes/harness-decide-adr/spec.md) | draft | partial | 2026-09-30 | coding-harness-3ar |
+| [`changes/template-bundle/decisions.md`](changes/template-bundle/decisions.md) | draft | none | 2026-10-01 | coding-harness-9qo |
 | [`changes/template-bundle/research.md`](changes/template-bundle/research.md) | draft | none | 2026-09-30 | coding-harness-9qo |
