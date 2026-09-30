@@ -47,10 +47,50 @@ def test_each_rule_matches_its_own_sample() -> None:
 
 
 def test_every_rule_has_a_reason_and_a_sample() -> None:
-    assert len(mg.MERGE_ASK_RULES) == 6
+    assert len(mg.MERGE_ASK_RULES) == 8
     for rule, (reason, sample) in mg.MERGE_ASK_RULES.items():
         assert len(reason.strip()) >= 10, f"{rule!r} has no reason"
         assert sample.strip(), f"{rule!r} has no sample"
+
+
+# Every spelling of the repository flag before a subcommand that gh 2.101.0 accepted on 2026-09-30 (measured
+# with `pr view`), and the same spelling of `pr merge`. Typed here, not read from the module, so that a
+# spelling dropped from `EXTRA_SAMPLES` still has to ask.
+REPOSITORY_FLAG_MERGES = (
+    "gh -R o/r pr merge 54",
+    "gh -Ro/r pr merge 54",
+    "gh -R=o/r pr merge 54",
+    "gh --repo o/r pr merge 54",
+    "gh --repo=o/r pr merge 54",
+    "gh pr -R o/r merge 54",
+    "gh pr -Ro/r merge 54",
+    "gh pr -R=o/r merge 54",
+    "gh pr --repo o/r merge 54 --squash",
+    "gh pr --repo=o/r merge --auto 54",
+    "gh -R o/r pr merge",
+)
+
+# Reads with the repository flag in the same places; none of them may prompt.
+REPOSITORY_FLAG_READS = (
+    "gh -R o/r pr view 53",
+    "gh --repo o/r pr view 53 --json mergeable,mergeStateStatus",
+    "gh pr -R o/r view 53 --json mergeable,mergeStateStatus",
+    "gh pr --repo=o/r checks 54",
+    "gh pr -R o/r list --state merged",
+    "gh -R o/r pr list --search is:merged",
+    "gh pr -R o/r checkout merge-fix",
+    "gh pr view 53 -R o/r --json mergedAt",
+)
+
+
+def test_the_repository_flag_before_a_subcommand_still_asks() -> None:
+    for command in REPOSITORY_FLAG_MERGES:
+        call = f"Bash({command})"
+        assert any(mg.covers(rule, call) for rule in mg.MERGE_ASK_RULES), f"no merge rule asks before {call!r}"
+    for command in REPOSITORY_FLAG_READS:
+        call = f"Bash({command})"
+        hit = [rule for rule in mg.MERGE_ASK_RULES if mg.covers(rule, call)]
+        assert not hit, f"the read {call!r} would prompt through {hit}"
 
 
 def test_a_missing_or_covered_merge_rule_is_caught() -> None:

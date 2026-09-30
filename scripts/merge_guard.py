@@ -43,6 +43,17 @@ MERGE_ASK_RULES: dict[str, tuple[str, str]] = {
         "every gh pr merge, any flag (--auto, --admin, --squash), and the bare command",
         "Bash(gh pr merge 54 --merge --match-head-commit abc1234)",
     ),
+    "Bash(gh -* pr merge*)": (
+        "gh pr merge with a flag before pr: gh takes its repository flag there (-R o/r, -Ro/r, -R=o/r, --repo o/r, "
+        "--repo=o/r)",
+        "Bash(gh -R o/r pr merge 54)",
+    ),
+    "Bash(gh pr -* merge *)": (
+        "gh pr merge with the repository flag between pr and merge; gh refuses that flag without a pull request "
+        'argument, so the rule wants one after merge and leaves --json mergeable alone; "merge" in a later '
+        "argument also prompts",
+        "Bash(gh pr -R o/r merge 54)",
+    ),
     "Bash(gh api *merge*)": (
         'the REST merge endpoint and the GraphQL mergePullRequest mutation; a read containing "merge" also prompts',
         "Bash(gh api -X PUT repos/o/r/pulls/54/merge)",
@@ -67,8 +78,21 @@ MERGE_ASK_RULES: dict[str, tuple[str, str]] = {
     ),
 }
 
-# Further calls no deny or allow rule may cover: the GitHub MCP merge tool under this machine's server name.
-EXTRA_SAMPLES: tuple[str, ...] = ("mcp__plugin_engineering_github__merge_pull_request",)
+# Further calls a merge rule must match and no deny or allow rule may cover: the GitHub MCP merge tool under
+# this machine's server name, and the spellings of the repository flag before a subcommand that gh 2.101.0
+# accepts (measured on 2026-09-30 with `pr view`, never with a merge; `-R/--repo` is a flag of `gh pr` that
+# `pr merge` inherits, as `gh pr merge --help` lists it).
+EXTRA_SAMPLES: tuple[str, ...] = (
+    "mcp__plugin_engineering_github__merge_pull_request",
+    "Bash(gh --repo o/r pr merge 54)",
+    "Bash(gh --repo=o/r pr merge 54)",
+    "Bash(gh -Ro/r pr merge 54)",
+    "Bash(gh -R=o/r pr merge 54)",
+    "Bash(gh pr --repo o/r merge 54)",
+    "Bash(gh pr --repo=o/r merge 54)",
+    "Bash(gh pr -Ro/r merge 54)",
+    "Bash(gh pr -R=o/r merge 54)",
+)
 
 _CALL = re.compile(r"([A-Za-z_][\w-]*)\((.*)\)", re.S)
 
