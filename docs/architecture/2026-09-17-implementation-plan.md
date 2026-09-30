@@ -4,7 +4,7 @@ category: architecture
 status: proposed
 created: 2026-09-17
 last_reviewed: 2026-09-19
-updated: 2026-09-29
+updated: 2026-09-30
 owner: framework-architect
 provenance: ai-drafted-reviewed
 produced_by:
@@ -19,6 +19,15 @@ tags: [plan, implementation, omnigent, workflow, gates]
 ---
 
 # Implementation plan: reach the Omnigent-first target
+
+> **Changed, 2026-09-30.** [ADR 0007](../adr/0007-stage-2-reviews-by-codex-and-glm.md)
+> (accepted by the merge of its pull request) amends D-13 for framework
+> content: a green leak check and a declared endpoint hold on every foreign
+> call, lakeswitch-ai's disclosure decision governs lakeswitch-ai's own
+> content, and the first three stage-2 runs, measured, replace the three
+> qualification runs before the first call. M2 is not entered. Where this
+> document names D-13's four criteria as the entry condition for foreign calls,
+> it records the earlier design.
 
 > **Read this first.** This is the delivery sequence for the
 > [Omnigent-first target](2026-09-17-omnigent-first-target.md).

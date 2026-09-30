@@ -4,7 +4,7 @@ category: architecture
 status: proposed
 created: 2026-09-17
 last_reviewed: 2026-09-19
-updated: 2026-09-29
+updated: 2026-09-30
 owner: framework-architect
 provenance: ai-drafted-reviewed
 produced_by:
@@ -26,6 +26,15 @@ tags: [architecture, target, workflow, omnigent, parallelism]
 > sessions run from then on, each in a worktree of its own. Where this
 > document describes M0 — including "Read this first" below — it records
 > the earlier design.
+
+> **Changed, 2026-09-30.** [ADR 0007](../adr/0007-stage-2-reviews-by-codex-and-glm.md)
+> (accepted by the merge of its pull request) amends D-13 for framework
+> content: a green leak check and a declared endpoint hold on every foreign
+> call, lakeswitch-ai's disclosure decision governs lakeswitch-ai's own
+> content, and the first three stage-2 runs, measured, replace the three
+> qualification runs before the first call. M2 is not entered. Where this
+> document names D-13's four criteria as the entry condition for foreign calls,
+> it records the earlier design.
 
 > **Read this first.** One direction drives this document: Omnigent
 > coordinates parallel coding from the first proof of concept (M0).
@@ -133,7 +142,7 @@ first: everything not marked **Amend** carries forward unchanged.
 | D-10 — one gate source | Retain | A platform-neutral manifest defines gates; local execution, CI and Omnigent invoke the same verifier. Generated adapters cannot add a second gate list. |
 | D-11 — kit boundaries | Retain | The change-artifact validator travels as mechanism; the evidence pipeline remains instance-owned, with its marker convention and checks in the kit. |
 | D-12 — classes | Retain | `class` is a validated frontmatter field: Spike, Bounded, Feature or Architectural; escalation is upward with a recorded reason. |
-| D-13 — cross-vendor entry | Retain | Before M2: at least three full seven-phase runs with metrics in coding-harness, the lakeswitch disclosure decision, a green leak check in every qualification run, and the foreign endpoint's declared residency. Implementation cost is measured, not an activation switch. |
+| D-13 — cross-vendor entry | Amend | Before M2: at least three full seven-phase runs with metrics in coding-harness, the lakeswitch disclosure decision, a green leak check in every qualification run, and the foreign endpoint's declared residency. Implementation cost is measured, not an activation switch. Amended by ADR 0007 (2026-09-30): for framework content, the leak check and the declared endpoint hold on every call; criterion 2 governs lakeswitch-ai's content; three measured stage-2 runs replace the three qualification runs; M2 is not entered. |
 | D-14 — design | Retain | Phase 2b is mandatory for Architectural, optional for Feature with a stated omission reason, absent for Bounded and Spike. |
 | D-15 — model as code | Retain | The kit ships LikeC4 with a specification defining system/container/component/code, arc42 and MADR templates, and a `likec4 build` gate for applicable architecture changes. |
 | D-16 — routing | Retain | Instance `model-routing.yaml` resolves phase requirements to declared endpoints through a kit schema/test; the retained initial example is Anthropic-only. No fixed model names in doctrine. |
