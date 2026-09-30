@@ -282,7 +282,7 @@ names its own change.
 
 **A decision takes effect when the maintainer merges its pull request**, or
 asks an agent in the conversation to merge it. There is no commit signing in
-Coding Harness (maintainer, 2026-09-30). A pull request that adds, changes or
+Coding Harness (ADR 0008, 2026-09-30). A pull request that adds, changes or
 removes a file `provenance.yaml` reserves for `human-decided` — an ADR, an ADR
 answer, the rule set — is a **decision pull request**: its title is
 `decide(<scope>): <the decision as a statement>`, it carries the label
