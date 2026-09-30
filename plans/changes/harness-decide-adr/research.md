@@ -525,7 +525,9 @@ at `34e23d5`. Where these disagree with the text above, these hold.
    direction of 2026-09-30, relayed to phase 2: Coding Harness introduces no
    commit signing. Section 3 and the points on signing in sections 6–8 no
    longer describe work for this repository; bead coding-harness-in1 concerns
-   LakeSwitch's gate M-30 only.
+   LakeSwitch's gate M-30 only. The same day the maintainer decided what
+   confirms a decision instead: its pull request, merged by the maintainer or
+   on their explicit request (`spec.md`, criterion 11).
 
 ## Addendum — gaps closed in phase 2
 
@@ -567,3 +569,31 @@ at `34e23d5`. Where these disagree with the text above, these hold.
 9. The gaps on `ssh-keygen -O verify-time`, the CI runner's OpenSSH version
    and the reproduction of bead coding-harness-in1 are moot for this
    repository (correction 8).
+10. **What a Claude Code `ask` rule does** (for the merge guard the
+    maintainer decided on 2026-09-30). Read on 2026-09-30 by a documentation
+    sub-agent of the phase 2 session, which quoted the pages; this session did
+    not re-read them. Sources: <https://code.claude.com/docs/en/permissions>,
+    <https://code.claude.com/docs/en/permission-modes>,
+    <https://code.claude.com/docs/en/headless>,
+    <https://code.claude.com/docs/en/settings>.
+    - An explicit ask rule prompts in every mode, `bypassPermissions` and
+      auto mode included ("Actions no mode auto-approves").
+    - Where nobody can answer — `dontAsk`, or a `-p` run without a
+      permission-prompt host — the matching call is denied.
+    - Rules are evaluated deny, then ask, then allow, lists from all scopes
+      are combined, and an allow rule from a user file does not outrank a
+      project ask rule.
+    - `Bash(gh pr merge:*)` is a prefix rule; `*` may stand anywhere; ask
+      rules match any subcommand of a compound command and past leading
+      variable assignments. They match the command's text and "aren't a
+      security boundary" — an absolute path, `sh -c` or another program
+      passes them.
+    - Ask rules accept tool-name globs (`mcp__*`), so an MCP server's merge
+      tool can be named by a glob; the exact tool name of a GitHub MCP server
+      was not read.
+11. **One existing test pins the ask list.**
+    `tests/test_omnigent_deny_layers.py::test_settings_ask_exactly_the_asked_tools`
+    asserts that `permissions.ask` in `.claude/settings.json` equals the
+    Omnigent asked tools; a merge rule beside them turns it red.
+    `scripts/omnigent_policy.py --write` already keeps ask rules it does not
+    own (the same file's test with `Bash(git push:*)`).
