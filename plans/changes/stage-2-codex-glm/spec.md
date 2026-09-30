@@ -31,6 +31,14 @@ holes closed in the Terms and criterion 21, three refutations sharpened
 the stop rule of `[GAP]` 3 extended to `[GAP]` 2. The numbering of the
 criteria is unchanged.
 
+Changed again on 2026-09-30 by the maintainer's answers 10 and 11
+(`decisions.md`, addendum "after the spec review"): the local proofs are
+dropped and the customer checkout on the same disk is an accepted residual
+risk. Criteria 22, 24 and 33 are rewritten and marked, the `[GAP]`s 1–4 are
+dropped, and the Non-goals and two `[DETAIL]`s follow. Answer 12 moves this
+change's own review (6) to Opus 5.5 ("Order of work"). The numbering is
+unchanged.
+
 Written against `origin/main` at `ba940fb`, the merge of pull request #54,
 which brought the change classes, decision pull requests and the rule that a
 decision takes effect when the maintainer merges it.
@@ -46,6 +54,8 @@ decision takes effect when the maintainer merges it.
 - **This change is reviewed under stage 1.** Its spec review (2a) and its
   review (6) run on Fable 5.1 as today, because the runners it builds and the
   ADR that permits them take effect only with its merge (criterion 1).
+  *(Changed by the maintainer's answer 12 of 2026-09-30: its review (6) runs
+  on Opus 5.5, the interim routing until stage 2 is merged.)*
   Phase 4 runs on Sonnet 5.5 at effort `medium` (`decisions.md`, answer 8,
   which needs no ADR).
 - **Needed from the maintainer during phase 4:** the ChatGPT account's
@@ -74,6 +84,8 @@ after them):
   read tools reach beyond the worktree too, unless they are configured not
   to. The leak check as written in
   `portfolio-agentic-engineering` scans only the change folder and the diff.
+  The maintainer accepted the reads beyond the worktree as a residual risk
+  on 2026-09-30 (`decisions.md`, answer 11).
 - **The endpoint declaration does not match the decision.** No OpenAI
   endpoint is declared ("not listed is BLOCK"), Kimi is declared, GLM is
   declared for implementation, Sonnet 5.5 is not declared, and the
@@ -275,15 +287,19 @@ applies, it begins with When, While or If. Each names what would refute it.
     *Refuted by:* a stand-in start without its line; a `findings.md` the
     runner created that `python3 scripts/plans_registry.py --check` blocks.
 
-22. While a foreign reviewer runs, its file access is confined to reading
+22. *(Changed by the maintainer's answer 11 of 2026-09-30: no confinement
+    and no local proof; the reviewers can read the whole disk, the customer
+    checkout included, as an accepted residual risk.)* When the runner starts
+    or resumes a call, the call's prompt asks the reviewer to read nothing
+    outside the worktree and the repository's git directory; `docs/WORKFLOW.md`
+    §4 and ADR 0007 say that this is a request, not a lock, and that the
+    reviewers can read the rest of the disk.
+    *Refuted by:* a stand-in's prompt without the request; §4 or ADR 0007
+    presenting the request as a confinement, or not naming the residual risk.
+    ~~While a foreign reviewer runs, its file access is confined to reading
     the worktree, the repository's git directory and the paths its own
-    program needs.
-    *Refuted by:* a local measurement, which starts no model call, in which
-    the reviewer's sandbox or permission configuration lets a read of a
-    planted file succeed in a sibling directory of the repository or in the
-    main checkout outside its `.git/` directory (the worktree sits inside the
-    main checkout, and the tracker's database sits there under `.beads/`), or
-    lets any write succeed.
+    program needs. Refuted by: a local measurement in which a read of a
+    planted file outside succeeds, or any write.~~
 
 ### Codex in phases 2a and 6
 
@@ -294,11 +310,13 @@ applies, it begins with When, While or If. Each names what would refute it.
     user configuration names another model and effort, that lacks the model,
     the effort or the read-only sandbox, or carries `--ephemeral`.
 
-24. When the runner starts or resumes a Codex call, nothing reaches Codex but
-    its prompt and what it reads itself: no hook of the project or the user
-    runs, and Codex memories are off.
-    *Refuted by:* a recorded call without the configuration that switches
-    hooks or memories off; a local measurement in which a planted hook runs.
+24. *(Changed by the maintainer's answer 10 of 2026-09-30: the local proof
+    is dropped; that the configuration takes effect is not measured.)* When
+    the runner starts or resumes a Codex call, the call carries the
+    configuration that switches Codex's hooks and memories off.
+    *Refuted by:* a recorded call without that configuration.
+    ~~Nothing reaches Codex but its prompt and what it reads itself. Refuted
+    also by: a local measurement in which a planted hook runs.~~
 
 25. When the runner starts or resumes a Codex call for phase 2a or 6, its
     prompt contains that phase's prompt file in full and names the change.
@@ -348,12 +366,16 @@ applies, it begins with When, While or If. Each names what would refute it.
     *Refuted by:* a stand-in that records another base address, model or
     effort.
 
-33. When a GLM call starts, nothing of the maintainer's or the project's
-    Claude Code configuration reaches it.
+33. *(Changed by the maintainer's answer 10 of 2026-09-30: the local proof
+    is dropped; that the configuration takes effect is not measured.)* When a
+    GLM call starts, it carries a fresh, empty Claude Code configuration
+    directory and the configuration that skips the project's settings and
+    hooks.
     *Refuted by:* a stand-in that sees `CLAUDE_CONFIG_DIR` unset, pointing to
     the user's own directory, or pointing to a directory with files in it; a
-    recorded call without the configuration that skips the project's hooks;
-    a local measurement in which the project's session-start hook runs.
+    recorded call without the configuration that skips the project's hooks.
+    ~~Refuted also by: a local measurement in which the project's
+    session-start hook runs.~~
 
 34. When a GLM call starts, its tools can only read and search files.
     *Refuted by:* a recorded configuration that permits editing, writing, a
@@ -605,9 +627,17 @@ applies, it begins with When, While or If. Each names what would refute it.
   `refs/dolt/data-check` and `refs/remotes/origin/__dolt_remote_info__`,
   which a reviewer can show through git inside the confinement of criterion
   22 — the rendered tracker held no rule hit on 2026-09-30, research section
-  5), anything else on the disk. Read confinement (criterion 22) covers the
-  disk, the main checkout's working tree included; hooks are off, so no
-  tracker text is injected (criteria 24 and 33).
+  5), anything else on the disk. *(Changed by answers 10 and 11.)* The
+  reviewers' reads are not confined: what the scanned set leaves out stays
+  readable to them, the main checkout's working tree and the customer
+  checkout included, and the prompt's request (criterion 22) is all that
+  stands against it. The configuration that switches hooks off (criteria 24
+  and 33) keeps the tracker text out as far as it takes effect, which is not
+  measured.
+- **Local proofs with the real programs** (answers 10 and 11): read
+  confinement for Codex and for Claude Code, hooks and memories being off,
+  and which settings take effect on `codex exec resume`. No real CLI is
+  started with a stand-in model endpoint either.
 - **Confining the implementer.** Sonnet and Fable are Anthropic models,
   declared for customer code as well.
 - **The domain agent definitions in `.claude/agents/`**, which pin
@@ -625,6 +655,13 @@ applies, it begins with When, While or If. Each names what would refute it.
 None open. Every `[DECISION]` of `research.md` is answered in `decisions.md`.
 
 ### `[GAP]` — carried to the plan, answerable by measuring locally
+
+**Dropped by the maintainer's answers 10 and 11 of 2026-09-30**, except item
+5: items 1–3 are not measured, and the runner passes its configuration
+without a proof (criteria 22, 24, 33 as changed); item 4 is read from the
+call's own output when a real call runs, and a call without `thread.started`
+writes no session line (criterion 27). The text below is the text before
+that decision.
 
 None of these needs a call with repository content. Every local measurement
 with a real CLI runs from a scratch directory outside this worktree, without
@@ -707,14 +744,15 @@ veto is one word.
   never `--ephemeral`, because an ephemeral session cannot be resumed and a
   resume of one silently starts afresh (research, gaps closed, item 4); empty
   standard input, because `codex exec` waits for it in a background shell;
-  hooks and memories off, so only the prompt and the files it reads reach it.
+  hooks and memories off, so only the prompt and the files it reads reach it
+  — passed, not measured (answer 10).
 - **The session id comes from `thread.started`, and a resume is checked
   against it.** Codex cannot be given an id up front, and a silently fresh
   thread would review without its phase-2a context.
 - **GLM's settings on every call:** a fresh empty configuration directory so
   the maintainer's global instructions and hooks stay home; the project's
-  hooks skipped so `tools/bd prime` injects no tracker text; read and search
-  tools only; the diff in the prompt because the reviewer cannot run `git`;
+  hooks skipped so `tools/bd prime` injects no tracker text (both passed, not
+  measured — answer 10); read and search tools only; the diff in the prompt because the reviewer cannot run `git`;
   the house rules it needs in `prompts/04b-review-loop.md`, because a session
   with its own base address may not read `AGENTS.md`. Credential from
   `~/.config/cc-routing/secrets.env` (`GLM_KEY`, overridden by `CC_SECRETS`),

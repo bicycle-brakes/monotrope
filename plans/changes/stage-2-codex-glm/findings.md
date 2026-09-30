@@ -197,11 +197,27 @@ by this map, and the spec's author may apply it before phase 3:
 Result: about forty criteria, the same substance, the same hours of
 building, fewer plan lines and review checks.
 
+**Answered by the maintainer on 2026-09-30** (`decisions.md`, answers 10 and
+11, relayed by the coordinating session): the appetite stays at 9–11 hours.
+The local proofs are dropped — read confinement for both programs, hooks and
+memories off as a measured proof, the settings that survive `codex exec
+resume` — because data protection matters for LakeSwitch's content, not for
+Coding Harness's own. The customer checkout on the same disk is an accepted
+residual risk; the reviewers' prompts ask them to read nothing outside the
+worktree, a request and not a lock. What costs nothing stays: model, effort
+and sandbox pinned, empty standard input, the session id from
+`thread.started`, and the leak check before every call. The spec's criteria
+22, 24 and 33 are changed accordingly and its `[GAP]`s 1–4 dropped; rows
+S-5, S-6 and S-7 above concerned what was dropped, and the spec's changed
+text supersedes what they put in. The merge map above is not applied: the
+numbering stays for the plan's references.
+
 ## For phase 3
 
 The plan starts from the revised `spec.md`, not from these rows. The `[GAP]`
 measurements come first, because two of them (read confinement, hooks off)
 can end in a stop and a `[DECISION]` for the maintainer, and a plan written
-before them would be revised. `plans/INDEX.md` was regenerated with
+before them would be revised. *(Superseded on 2026-09-30 by answers 10 and
+11: no measurement runs, so none can end in a stop.)* `plans/INDEX.md` was regenerated with
 `python3 scripts/plans_registry.py --index` for this file. No pull request
 was opened and nothing was written to the tracker.

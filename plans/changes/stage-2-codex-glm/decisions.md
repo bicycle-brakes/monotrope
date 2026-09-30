@@ -101,3 +101,39 @@ to the Coding Harness session.
 - This change's implementation starts after pull request #54 is merged and
   `origin/main` is merged into `feat/stage-2-codex-glm` (answers 3 and 9).
 - Spec and plan may be written before that, against #54's branch.
+
+## Addendum — after the spec review (2026-09-30)
+
+Stated by the maintainer on 2026-09-30 in the coordinating Claude Code
+session (<https://claude.ai/code/session_018qxAGMFNS3mM37eUEm5DuQ>), after the
+phase 2a review, and relayed to the planning session by the coordinating
+session. Recorded as relayed; the text above is unchanged.
+
+10. **The appetite stays at 9–11 hours; the local proofs are dropped.** The
+    maintainer's reason: data protection matters for LakeSwitch's content,
+    not for Coding Harness's own, and stage 2 sends only Coding Harness
+    content. Dropped: the local proofs of read confinement for both
+    programs, of hooks and memories being off, and of which settings survive
+    `codex exec resume`. Kept, because they cost nothing: model, effort and
+    sandbox pinned on every call, standard input from `/dev/null`, and the
+    session id read from the call's own `thread.started` event when the call
+    runs. The leak check before every call stays: it is a hard criterion of
+    D-13 (answer 1). This answers the phase 2a reviewer's estimate of 12–15
+    hours (`findings.md`, "Scope against the appetite").
+
+11. **The customer instance's checkout on the same disk is an accepted
+    residual risk.** There is no confinement and no proof: the foreign
+    reviewers can read the whole disk. Their prompts ask them to read
+    nothing outside the worktree and the repository's git directory — a
+    request, not a lock, and the doctrine and ADR 0007 say so in those
+    words. The maintainer chose this over a proof of about one hour.
+
+12. **Until stage 2 is implemented and merged, spec review (2a) and review
+    (6) run on Opus 5.5 for the whole repository** (pull request #58, not
+    merged on 2026-09-30), this change's own phase 6 included; when this
+    change merges, its routing replaces those interim rows, and a review
+    Codex does not do falls back to Fable 5.1, as answer 3 decided.
+
+Consequences: `spec.md` criteria 22, 24 and 33 are changed and marked so;
+the `[GAP]`s 1–4 of the spec are dropped; the numbering of the criteria is
+unchanged.
