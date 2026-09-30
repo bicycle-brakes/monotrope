@@ -33,6 +33,6 @@ Dateien dazukommen.
 | [`changes/harness-decide-adr/spec.md`](changes/harness-decide-adr/spec.md) | draft | partial | 2026-09-30 | coding-harness-3ar |
 | [`changes/stage-2-codex-glm/decisions.md`](changes/stage-2-codex-glm/decisions.md) | accepted | none | 2026-09-30 | coding-harness-bc9 |
 | [`changes/stage-2-codex-glm/findings.md`](changes/stage-2-codex-glm/findings.md) | draft | none | 2026-09-30 | coding-harness-bc9 |
-| [`changes/stage-2-codex-glm/plan.md`](changes/stage-2-codex-glm/plan.md) | draft | none | 2026-09-30 | coding-harness-bc9 |
+| [`changes/stage-2-codex-glm/plan.md`](changes/stage-2-codex-glm/plan.md) | draft | partial | 2026-09-30 | coding-harness-bc9 |
 | [`changes/stage-2-codex-glm/research.md`](changes/stage-2-codex-glm/research.md) | draft | none | 2026-09-30 | coding-harness-bc9 |
-| [`changes/stage-2-codex-glm/spec.md`](changes/stage-2-codex-glm/spec.md) | draft | none | 2026-09-30 | coding-harness-bc9 |
+| [`changes/stage-2-codex-glm/spec.md`](changes/stage-2-codex-glm/spec.md) | draft | partial | 2026-09-30 | coding-harness-bc9 |

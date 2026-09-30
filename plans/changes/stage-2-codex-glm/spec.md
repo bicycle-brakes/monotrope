@@ -1,7 +1,7 @@
 ---
 title: "Spec — stage-2-codex-glm"
 status: draft
-implementation_status: none
+implementation_status: partial
 date: 2026-09-30
 last_reviewed: 2026-09-30
 updated: 2026-09-30

@@ -2,7 +2,7 @@
 title: "Plan — stage-2-codex-glm"
 category: plan
 status: draft
-implementation_status: none
+implementation_status: partial
 date: 2026-09-30
 created: 2026-09-30
 last_reviewed: 2026-09-30
