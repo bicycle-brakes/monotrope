@@ -69,6 +69,10 @@ OHNE_AUFRUFER: dict[str, str] = {
         "tests/test_feedback_channel.py importiert; ein eigener CI-Schritt "
         "prueft nichts, was der Test nicht schon prueft"
     ),
+    "harness.py": (
+        "Entry point, not a gate — a person, or an agent on the maintainer's word, records an ADR "
+        "answer with it; tests/test_harness_decide_adr.py runs it"
+    ),
     "merge_guard.py": (
         "Library — the one list of ask rules that stop an agent before it merges; "
         "tests/test_merge_guard.py compares .claude/settings.json against it, which "

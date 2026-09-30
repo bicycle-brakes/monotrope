@@ -101,7 +101,6 @@ REIST_NICHT: dict[str, str] = {
     "tests.test_feedback_channel::test_the_field_checks_read_the_schema_instead_of_a_copy[PROJEKT_PFLICHT-fehlende_kanalpflicht]": "bestand-dieses-repos",
     "tests.test_kit::test_the_kit_list_is_not_derivable_from_the_export_list": "bestand-dieses-repos",
     "tests.test_kit::test_the_role_check_goes_red_when_a_rule_is_removed": "bestand-dieses-repos",
-    "tests.test_kit::test_the_two_manifests_really_disagree_somewhere": "bestand-dieses-repos",
     "tests.test_model_endpoints::test_every_agent_model_resolves_to_a_declared_endpoint[consistency-auditor.md-claude-sonnet-5]": "braucht-die-vollstaendige-suite",
     "tests.test_model_endpoints::test_every_agent_model_resolves_to_a_declared_endpoint[code-generation-orchestrator.md-claude-sonnet-5]": "braucht-die-vollstaendige-suite",
     "tests.test_model_endpoints::test_every_agent_model_resolves_to_a_declared_endpoint[entity-builder.md-claude-sonnet-5]": "braucht-die-vollstaendige-suite",
@@ -155,7 +154,11 @@ REIST_NICHT: dict[str, str] = {
 # `scripts/` catch-all), the list travels with `ci_gates.py`, so in the throwaway repo the entry
 # points at a file that is not there. Same class, same reason as the other `bestand-dieses-repos`
 # cases: the claim is about this repository's script inventory.
-DECKEL = 32  # zuletzt angehoben am 2026-09-29 (31 -> 32); der Grund jeder Anhebung steht im Blockkommentar darueber
+# 32 -> 31 on 2026-09-30: `tests.test_kit::test_the_two_manifests_really_disagree_somewhere`
+# carries now. It asks for more than 60 files in both manifests, and the throwaway repo reached
+# that when the ADR gate, its command and their two tests joined the mechanism
+# (plans/changes/harness-decide-adr). A lowered cap needs no reason; this one says why the entry went.
+DECKEL = 31  # zuletzt angehoben am 2026-09-29 (31 -> 32), gesenkt am 2026-09-30 (32 -> 31)
 
 
 # ---------------------------------------------------------------------------
