@@ -485,3 +485,85 @@ Not now: Coding Harness adopting signed decisions for its own history (Q2 c);
 bead `xv3`'s remaining parts (guided flow, reminder); a check that a "yes"
 is followed by an ADR under `docs/adr/` (a non-goal of the pilot too); further
 question kinds; the declared-document foundation.
+
+## Corrections after verification
+
+Added in phase 2 (spec), 2026-09-30, after reading the pilot again at
+lakeswitch-ai `09c9d62` (the merge of its pull request 68) and this worktree
+at `34e23d5`. Where these disagree with the text above, these hold.
+
+1. **The anchor's `adr_question` has three keys, not two:** `proposed`,
+   `answered_by` (null in all five LakeSwitch anchors) and `reason`
+   (`declared/change_anchor.py`, `AdrQuestion`). Sections 1.1 and 1.5 name
+   two.
+2. **The pilot's feature anchor declaration requires more than 1.1 lists:**
+   `title`, `artifact: change-spec`, `change`, `status`, `created`,
+   `provenance`, `review`, `class`, `class_history`, `appetite`,
+   `adr_question` and `intent` with `schema`, `scope`, `outcome`, `in_scope`,
+   `non_goals`, `acceptance` (and optional `constraints`). The base model
+   forbids unknown keys, refuses coercions (a boolean or float for an integer,
+   a string for a date) and refuses duplicate keys (`declared/base.py`).
+3. **The answer's `change` is compared with the anchor's `change:` field,
+   not with a folder.** The pilot builds the answer path from the anchor's
+   field and never compares either with the folder name. Section 1.2 says
+   "must equal the folder". All five LakeSwitch anchors' `change` equals
+   their folder name.
+4. **"Examined nothing" is red in LakeSwitch**, not merely "not a pass":
+   `verdict.Result.outcome` returns BLOCK for an empty key set (section 1.3).
+5. **Coding Harness does know the four classes — in prose.** The reference
+   architecture `docs/research/arc42_Referenzarchitektur_Agentischer_Delivery-Workflow.md`
+   §8.2 defines Spike, Bounded, Feature and Architectural with a recognition
+   rule each, LakeSwitch's decision D-24 names them "Coding Harness's four
+   change classes", and the archived spec
+   `2026-09-21-reproducible-bead-export` states "Class: Bounded." in its body.
+   What does not exist is a header field and a check (section 2.2).
+6. **There is no spec scaffold.** `scripts/new_change.py` writes
+   `research.md` only (section 5, "if the spec scaffold gains …").
+7. **The pilot's date moved.** lakeswitch-ai pull request 68 set
+   `expires: 2026-12-15` (section 4.1 names 2026-10-15).
+8. **Commit signing is out for Coding Harness altogether.** The maintainer's
+   direction of 2026-09-30, relayed to phase 2: Coding Harness introduces no
+   commit signing. Section 3 and the points on signing in sections 6–8 no
+   longer describe work for this repository; bead coding-harness-in1 concerns
+   LakeSwitch's gate M-30 only.
+
+## Addendum — gaps closed in phase 2
+
+1. **No commit-message language check exists here** (section 6, third gap).
+   No script, test, workflow or tool under `scripts/`, `tests/`, `.github/`
+   or `tools/` checks commit messages for German; the only tracked commit hook
+   is the tracker's `.beads/hooks/prepare-commit-msg`.
+2. **The phase gate validator is absent.**
+   `scripts/validate_change_artefacts.py`, named by `prompts/02-spec.md` and
+   `prompts/03-plan.md`, does not exist; `python3 scripts/plans_registry.py
+   --check` is the validator that runs (the same finding as
+   `plans/changes/frontmatter-current/research.md`, item 14).
+3. **The pilot's rollout.** The maintainer's answers for the pilot itself and
+   four earlier features landed inside the pilot's pull request, before its
+   merge: commit `9d34f91` (2026-09-28) is an ancestor of the merge `9b9d5c8`
+   of pull request 62, and the same commit added the gate entry.
+4. **Existing anchors in Coding Harness:** three, none with a `class:` line —
+   `plans/changes/frontmatter-current/spec.md`,
+   `plans/changes/omnigent-deny-layers/spec.md` and
+   `plans/changes/archive/2026-09-21-reproducible-bead-export/spec.md`.
+   Archived headers have been edited before: commit `e553bc8` stamped
+   `updated:` into them.
+5. **`provenance.yaml` path entries have no key validation.**
+   `tests/test_provenance.py` holds two tests about journal dates;
+   `scripts/validate_provenance.py`, named in the file's header, does not
+   exist. `scripts/check_frontmatter_current.py` reads `prefix` and
+   `frontmatter`, `scripts/ramp_valves.py` reads `roles:`. LakeSwitch keeps
+   the answering role as `owner_role` per path in `decisions/provenance.yaml`.
+6. **What a new gate and a new script must meet** (`tests/test_ci.py`): a
+   test named like a mutation test (`MUTATIONS_NAMEN`; the exemption list
+   may only shrink), a test that imports or runs every script, and a CI
+   caller or a reason in `ci_gates.OHNE_AUFRUFER`.
+7. **The CI installs `pytest`, `PyYAML` and `ruff` only**
+   (`.github/workflows/ci.yml`); no pydantic.
+8. **The kit probe runs `pytest` in a throwaway copy** of every
+   `mechanismus` file (`scripts/kit/probe.py`), not the gates; the kit
+   manifest classifies `decisions/` as `mechanismus`, so without a longer
+   prefix every answer file would travel.
+9. The gaps on `ssh-keygen -O verify-time`, the CI runner's OpenSSH version
+   and the reproduction of bead coding-harness-in1 are moot for this
+   repository (correction 8).
