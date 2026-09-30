@@ -14,6 +14,12 @@
   },
   "permissions": {
     "ask": [
+      "Bash(gh pr merge *)",
+      "Bash(gh api *merge*)",
+      "Bash(gh api *Merge*)",
+      "Bash(gh alias set *)",
+      "Bash(git push *main*)",
+      "mcp__*__merge_pull_request",
       "mcp__omnigent__sys_advise_models"
     ],
     "deny": [

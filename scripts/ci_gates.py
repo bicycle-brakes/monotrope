@@ -69,6 +69,11 @@ OHNE_AUFRUFER: dict[str, str] = {
         "tests/test_feedback_channel.py importiert; ein eigener CI-Schritt "
         "prueft nichts, was der Test nicht schon prueft"
     ),
+    "merge_guard.py": (
+        "Library — the one list of ask rules that stop an agent before it merges; "
+        "tests/test_merge_guard.py compares .claude/settings.json against it, which "
+        "is all a CI step could do"
+    ),
     "new_change.py": (
         "Einstieg, kein Gate — legt plans/changes/<name>/ an und wird von "
         "einem Menschen mit einer Vorgangs-ID gerufen; tests/test_workflow_entry.py "
