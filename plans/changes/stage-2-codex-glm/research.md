@@ -650,3 +650,101 @@ they rest on are above. Scope-changing decisions first.
   entries; the `03-plan.md` markings section marked retired or rewritten.
 - The change's class (`architectural` carries its ADR; `feature` answers
   the ADR question) follows decision 4.
+
+## Corrections after verification
+
+Phase 2, 2026-09-30, against `origin/main` at `ba940fb` unless a line names
+another commit. Where these lines disagree with the text above, they hold.
+
+1. **Pull request #54 is merged.** Section 9 read `feat/harness-decide-adr`
+   at `1c161d0` when no pull request was listed. The branch was then opened
+   as pull request #54 and merged on 2026-09-30 at 14:55 UTC (merge commit
+   `ba940fb`); the merged tree equals the branch tip `76c8239` (`git diff
+   origin/feat/harness-decide-adr origin/main` is empty). This branch still
+   stands on `1c708f7` and does not contain it.
+2. **The kit probe's exception list is full.** Section 10 gives `DECKEL =
+   32`. On `origin/main` the cap is 31 (lowered on 2026-09-30) and
+   `REIST_NICHT` in `scripts/kit/probe.py` holds exactly 31 entries. Eight of
+   them are parametrised ids of `tests/test_model_endpoints.py` that carry a
+   prompt's file name and model display name (for example
+   `[04-implement.md-Sonnet 5]`); a changed model line changes its id, and a
+   new prompt with a model line adds one entry.
+3. **The model lists differ per endpoint.** Section 3 groups them. In
+   `model-endpoints.yaml`, `bedrock-claude` lists only `claude-opus-5` and
+   `claude-sonnet-5`; `claude-opus-5-5` and `claude-fable-5-1` stand in
+   `anthropic-api` and `claude-code-plan` only.
+4. **Files a change would touch.** `prompts/02-spec.md` is touched
+   (decisions.md, answer 9). `decisions/answers/stage-2-codex-glm/adr.yaml`
+   is not needed: the change carries its ADR, so its class is
+   `architectural`, which the gate `adr-answers` does not hold to an answer.
+5. **The routing-table check needs the model name alone in bold.** Its
+   pattern reads the whole bold text of the second cell as the display name;
+   a cell such as `**Codex gpt-6.1-sol**` would be read as one name and not
+   resolve.
+
+## Gaps closed in phase 2
+
+Read on 2026-09-30. Nothing was sent to Codex or GLM; neither was started.
+
+1. **Sonnet 5.5's model id is `claude-sonnet-5-5`.** Source: the Claude API
+   reference bundled with Claude Code 2.1.285 (its model table, cached
+   2026-09-25): "Claude Sonnet 5.5 | `claude-sonnet-5-5`", effort levels
+   `low` to `max`, default `high`. The same table confirms `claude-opus-5-5`
+   and `claude-fable-5-1`.
+2. **Codex under a personal ChatGPT plan: residency is declared by the
+   provider, not selectable.** OpenAI's own pages (help.openai.com,
+   openai.com) answered a direct fetch with HTTP 403, so the pages were not
+   read; what follows rests on search-result summaries of them. Data
+   residency is offered to eligible ChatGPT Enterprise, Edu, Healthcare and
+   API customers, not to personal plans. The Europe privacy policy names
+   OpenAI Ireland Limited as the controller for the EEA and states that
+   personal data is processed and stored in the United States and where
+   OpenAI's affiliates and service providers are, under Standard Contractual
+   Clauses. On a personal plan the setting "Improve the model for everyone"
+   also applies to Codex tasks. The value that fits the file's vocabulary is
+   `residenz: anbieter-erklaert`, as for GLM.
+3. **Codex non-interactive mode** (learn.chatgpt.com/docs/non-interactive-mode,
+   the page `developers.openai.com/codex/noninteractive` redirects to, read
+   directly): `--json` turns stdout into JSON Lines; the event
+   `thread.started` carries `thread_id`; `codex exec resume <SESSION_ID>`
+   continues a run, and the page does not say which settings carry over;
+   `codex exec` runs in a read-only sandbox by default; `--ephemeral` does not
+   persist session files; `-o <path>` writes the final message to a file;
+   `--ignore-user-config` skips `$CODEX_HOME/config.toml`.
+4. **A resume can silently start a new thread.** openai/codex issue 15538
+   (closed, no fix named): resuming a session started with `--ephemeral`
+   produced a different `thread_id` and no prior context, without an error.
+   A runner that compares the resumed `thread_id` with the recorded one sees
+   this; one that does not, cannot.
+5. **Codex's read-only sandbox reads the whole disk.** Search results (openai/codex
+   issue 7657 and a write-up of the sandbox) say the sandbox limits writes
+   and network, not reads. The current documentation
+   (learn.chatgpt.com/docs/permissions, read directly) describes permission
+   profiles with `deny` rules for reads (`default_permissions`,
+   `[permissions.<name>.filesystem]`). Whether Codex CLI 0.159.2 supports
+   them on macOS was not measured.
+6. **The customer instance is on this disk.** Its checkout sits beside the
+   other repositories in the maintainer's home directory (existence checked
+   with `ls`; nothing in it was read). A reviewer that can read the whole
+   disk can reach it.
+7. **lakeswitch-ai's disclosure decision is not written.** At lakeswitch-ai
+   `09c9d62`, `docs/workflow.md` §4 says that sending specification prose, a
+   plan derived from it or a diff over `src/` to a third-party endpoint is a
+   disclosure, and that before stage 2 is switched on somebody decides, as a
+   recorded decision, which trees may leave. `git grep -i disclosure` finds
+   no such record. It concerns lakeswitch-ai's own trees, as answer 1 of
+   `decisions.md` reads criterion 2.
+8. **The implementation plan already names the stop rule's direction.**
+   `docs/architecture/2026-09-17-implementation-plan.md`, M2: "reviewer
+   regressions revert to the qualified same-lineage path while the cause is
+   resolved" — the same direction as answer 5 (fall back to Fable).
+9. **D-16 and model names.** The target's continuity row for D-16 retains
+   "No fixed model names in doctrine"; `docs/WORKFLOW.md` §3 has named models
+   since before this change. A fact for the reader, not a gap this change
+   closes.
+
+Still open, carried to the plan: whether Z.ai honours effort `max`; which
+settings carry over on `codex exec resume`; how Codex hooks and memories are
+switched off and shown to be off; whether the reviewers' reads can be
+confined to the worktree. The study behind the addendum's point 2 stays not
+read; answer 5 of `decisions.md` does not rest on its figures.

@@ -28,3 +28,4 @@ Dateien dazukommen.
 | [`changes/omnigent-deny-layers/spec.md`](changes/omnigent-deny-layers/spec.md) | draft | partial | 2026-09-29 | coding-harness-rex |
 | [`changes/stage-2-codex-glm/decisions.md`](changes/stage-2-codex-glm/decisions.md) | accepted | none | 2026-09-30 | coding-harness-bc9 |
 | [`changes/stage-2-codex-glm/research.md`](changes/stage-2-codex-glm/research.md) | draft | none | 2026-09-30 | coding-harness-bc9 |
+| [`changes/stage-2-codex-glm/spec.md`](changes/stage-2-codex-glm/spec.md) | draft | none | 2026-09-30 | coding-harness-bc9 |
