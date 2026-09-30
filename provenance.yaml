@@ -20,6 +20,8 @@
 #   - `scripts/check_frontmatter_current.py` reads `paths:` (`prefix`,
 #     `frontmatter`) and `excluded:`.
 #   - `scripts/ramp_valves.py` reads `roles:` (the roster's handles).
+#   - `scripts/harness.py` reads the `owner_role` of the `decisions/answers/`
+#     entry and checks it under `roles:` (added 2026-09-30).
 # `allowed:` is declared, not yet enforced; nothing here reads it.
 
 schema_version: 1
@@ -133,6 +135,12 @@ paths:
   - prefix: "docs/governance/fehler-katalog.md"
     allowed: [ai-drafted-reviewed]
     frontmatter: required
+  # The maintainer's answers to the ADR question, one per feature. Only a person
+  # decides them; `scripts/harness.py` records them as `owner_role`.
+  - prefix: "decisions/answers/"
+    allowed: [human-decided]
+    frontmatter: none
+    owner_role: framework-architect
 
   # --- Phase 2: kartiert, Klassifizierung folgt als eigene Arbeit ---------
   - prefix: "docs/adr/"

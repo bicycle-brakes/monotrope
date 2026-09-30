@@ -1,0 +1,14 @@
+schema_version: 1
+change: harness-decide-adr
+question: adr
+answer: 'yes'
+reason: It decides, among weighed alternatives, that the maintainer's merge of a pull
+  request confirms a decision in Coding Harness instead of a signed commit, and it
+  fixes an answer format that other repositories will read unchanged.
+shown:
+  proposed: 'yes'
+  proposal_reason: it decides, among weighed alternatives, that the maintainer's merge
+    of a pull request confirms a decision in Coding Harness instead of a signed commit,
+    and it fixes an answer format that other repositories will read unchanged
+answered_by: framework-architect
+answered_at: 2026-09-30

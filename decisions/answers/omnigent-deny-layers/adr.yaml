@@ -1,0 +1,14 @@
+schema_version: 1
+change: omnigent-deny-layers
+question: adr
+answer: 'no'
+reason: It applies ADR 0006's rule that nothing depends on an Omnigent policy alone;
+  the deny list is configuration one file holds, and removing it is one revert plus
+  uninstalling the policy.
+shown:
+  proposed: 'no'
+  proposal_reason: it applies ADR 0006's rule that nothing depends on an Omnigent
+    policy alone; the deny list is configuration one file holds, and removing it is
+    one revert plus uninstalling the policy
+answered_by: framework-architect
+answered_at: 2026-09-30
