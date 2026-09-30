@@ -91,6 +91,7 @@ restatement is its one-line summary.
    ("what changes after the signature is unsigned again") applied to the
    merge.
 
-`.claude/settings.json` asks before every merge command, so the permission
-prompt appears right below the restatement; where no prompt can be answered,
-the maintainer merges in the GitHub app.
+`.claude/settings.json` asks before every merge command it recognises, so the
+permission prompt appears right below the restatement; where no prompt can be
+answered, the maintainer merges in the GitHub app. It is a brake, not a lock:
+another spelling passes it (`docs/WORKFLOW.md`, "What this does not do").

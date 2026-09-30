@@ -94,7 +94,8 @@ Full doctrine: `docs/WORKFLOW.md`, in English since 2026-09-29.
    decide adr … --stated-in …`), never one of your own. Merge only when the
    maintainer asks in the conversation, after restating the decision block
    (`prompts/07-commit.md`, "The merge"); `.claude/settings.json` asks before
-   every merge command.
+   every merge command it recognises — a brake, not a lock: another spelling
+   passes (`docs/WORKFLOW.md`).
 
 ## Communication and session continuity
 
