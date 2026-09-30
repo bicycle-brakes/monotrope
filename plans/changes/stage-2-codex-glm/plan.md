@@ -741,3 +741,158 @@ map entry removed; the 4b row removed; Sonnet 5 back in `04-implement.md`.
   `docs/architecture/target-architecture.md` — measurements and history.
 - `research.md`, `decisions.md`, `findings.md`, `spec.md` beyond
   `implementation_status`; the tracker; lakeswitch-ai.
+
+## Repair round 1
+
+Origin `fix-r1`, 2026-09-30, on the nine findings F-1 to F-9 of the phase-6
+review (`findings.md`, "Phase 6 — review, round 1", reviewed at `317763b`;
+this round starts at `41abf42`). All nine are fixed, in `6b6e6f6` (the runner
+and its prompts, F-1 to F-4 and F-7) and `7a89f3c` (the leak check and
+`docs/WORKFLOW.md`, F-5, F-6, F-8, F-9). The decisions below are the
+coordinating session's `[DETAIL]`s. Two items of "Not touched" were touched
+on purpose: `spec.md`, in criterion 36 and one `[DETAIL]` (F-1), and
+`findings.md`, in the Status column and one paragraph. The evidence rule of
+this change held: each row was taken because a test demonstrates it or the
+spec supports it, and every new test was run red before the fix.
+
+**Evidence, tests red before and green after.** The 36 new tests were
+written first: 27 in `tests/test_stage2.py` (26 of the runner and its
+prompts, one doctrine test for §4) and 9 in `tests/test_leakcheck.py`; the two
+files held 100 tests before the round and hold 136 after. Run against the
+unrepaired tree (`git archive 41abf42` with the new test files copied in), 29
+of the 136 were red, 22 in `tests/test_stage2.py` and 7 in
+`tests/test_leakcheck.py`; after the fixes all 136 pass. The seven new tests
+that were green on the unrepaired tree are guards for behaviour that must
+stay: a no-finding answer is a round, a non-zero exit is no round, the verdict
+line as the runner writes it, an escaped pipe in a `Status` reason, a
+header-less loop record, a tracked file that is gone from the disk, and the
+advice for a file match, which names no reflog. `make verify` on `7a89f3c`
+(2026-09-30, `commit.gpgsign` off): 654 passed, 15 skipped, last line `VERIFY
+GREEN — every local gate of the 'verify' job passed.` (`markdownlint` reports
+and does not block).
+
+### F-1, what a round is (`[DIVERGENT]`, BLOCKER)
+
+The spec said a call without rows "is a failed call, not a round"; the plan,
+the code and `test_a_round_without_a_finding_still_counts` said a successful
+"no finding" answer counts. The code side stays, and the spec follows it:
+
+- A call that exits 0 and answers — with rows or with "no finding" — is a
+  round. The reviewer's clean result is a result; not counting it would let
+  the loop call GLM again on a tree that has not changed.
+- A call that fails is no round: a non-zero exit, and now also an empty
+  answer, which the code counted as a round before (the test
+  `test_a_call_without_an_answer_is_not_a_round[empty-answer]` was red). The
+  maintainer's two rounds are not used up by a crash.
+- `spec.md` criterion 36 and its `[DETAIL]` carry the new wording, marked as
+  changed in repair round 1, the old wording struck, nothing renumbered; the
+  refutation gained the two cases above. Two tests cover both sides:
+  `test_a_no_finding_answer_is_a_round_and_a_failed_call_is_not` (round 1
+  "no finding", round 2 two rows, a third call refused with "2 rounds have
+  run") and `test_a_call_without_an_answer_is_not_a_round`.
+
+### F-2, the release must not lose content
+
+Measured against the stand-ins before the fix, with one correction to the
+finding: the escaped form of a pipe (`a\|b`) in a `Status` reason already
+parsed into nine cells, so (b) reproduces only for an unescaped pipe.
+
+- **The parser knows six cells.** A table line of more than six cells whose
+  second cell is a severity holds a pipe inside its last cell (a shell pipe, a
+  regular expression); the last cell takes the rest, each pipe escaped. A
+  line that does not start like a row stays text. The reviewers are also asked
+  to write a pipe inside a cell as `\|` (the runner's closing paragraph and
+  the three prompts), which the parser always honoured.
+- **The record knows nine cells.** A pipe the implementer types into `Status`
+  makes a tenth; the cells between the reviewer and the last one are the
+  reason, each pipe escaped. The undecided-row guard therefore sees the row,
+  and a decided row keeps its reason.
+- **Carry, not refuse.** `release-loop` (and `review`, which calls it) appends
+  every line of the record that is not its intro, a heading, the table's own
+  header and separator, or a loop row — prose and unreadable table lines alike
+  — as it stands, under "Kept from the loop record", before it deletes the
+  record. Criterion 39 asks that every loop row arrive and the `[DETAIL]` says
+  an answer that is not rows is "never dropped"; a refusal on such a line
+  would make the implementer repair the record by hand, which is itself a
+  silent rewrite. To keep that from copying every raw row twice, the record
+  and `findings.md` now hold only the text of an answer that is not a row when
+  rows were parsed (the whole answer when there are none), and the note says
+  so ("what is not [a six-cell row] is kept below as it came").
+- **One refusal remains**, for a line whose first cell is a loop id and that
+  has fewer cells than a row: it cannot be read as a row, so the decision
+  guard cannot hold it, and it would otherwise be deleted with the record. The
+  refusal names the id, changes nothing, and `review-loop` and `review` meet
+  it too.
+
+### F-3, Codex's answer and the phase-6 prompt
+
+The prompt and the runner now ask for the same six cells. `prompts/06-review.md`
+no longer sends Codex to `templates/findings.md` (a file this repository does
+not have) with "columns exactly as they stand there"; it names the six cells
+for the runner path and the `findings.md` columns for the Fable path. An
+answer that is nevertheless a table the parser cannot read as rows is never
+headed "reported no finding": the head says it answered in table lines that
+are not six-cell rows, and the lines follow as they came. Codex and GLM share
+the one function (`answer_parts`), so the GLM record says the same.
+
+### F-4, the verdict line
+
+The pattern accepts the forms the prompts can produce: a reviewer of several
+words (`Fable 5.1 <uuid>`), no session (`fable, 2026-10-01`), trailing spaces
+and a full stop. It still wants the comma and the `YYYY-MM-DD` date last. A
+line that starts like a verdict (case-insensitively) and has not the form is
+named in the refusal, with the form. `prompts/06-review.md` states the form.
+
+### F-5 and F-6, the leak check
+
+- A listed path that exists and is neither a regular file nor a link to one
+  is a BLOCK that names it: the link to a directory and the submodule entry
+  of the finding, and, by the same rule, a repository nested in the tree and
+  a special file. Refusing, not scanning, because a directory behind a link
+  can lie anywhere on the disk. A link with nothing behind it is scanned as
+  its own text; a tracked file gone from the disk is no refusal, since there
+  is nothing to read and the index scan shows its deletion.
+- The staged changes are scanned with `git diff --cached` (additions and
+  deletions against `HEAD`, binary as text, no external diff or text
+  conversion). That reads what `git show :<path>` can show beyond the disk; a
+  staged file equal to `HEAD` is in the history scan already. A failure to read
+  the index refuses, like a failure to read the history. The three counts of
+  the report do not change.
+- The reflog is not scanned. The limit is written into the docstring and into
+  `docs/WORKFLOW.md` §4 together with the stash, refs outside `refs/heads` and
+  `refs/remotes` (tags, `refs/dolt/`) and unreachable objects, and the advice
+  for a match in a commit says that rewriting the commit does not remove the
+  value. Measured in a temporary repository on 2026-09-30: after an amend,
+  `git log --branches --remotes -p` no longer shows the value and `git log -g
+  -p` does; a staged-and-stashed value is shown by `git stash show -p` and not
+  by the branch scan; after `git reflog expire --expire=now --all` and `git gc
+  --prune=now` `git log -g -p` shows neither.
+
+### F-7, the `updated:` stamp
+
+Every write the runner makes to a file with a header — the call line, the
+blocks, the release, the marks — ends with `check_frontmatter_current.stamp`,
+the stamp the gate `frontmatter-current` itself offers as its repair. The
+loop record has no header and gets none.
+
+### F-8 and F-9, the doctrine text
+
+§4 now says the read-only sandbox, the session, the hooks and memories and the
+skipped project settings are configured on every call and not measured (the
+maintainer's decision of 2026-09-30, ADR 0007), and what an ineffective hooks
+switch would let through. F-9 was trivial (two names on the "not here yet" list
+and one exact sentence about `.claude/settings.json`, the list re-dated to
+`41abf42`), so it is fixed here; it has no test, because criterion 53 is held
+by review.
+
+### Left open
+
+- No reviewer has read this round. A re-review of the nine rows (and of the new
+  code around them: the folding rule, the carrying release, the index scan)
+  comes before phase 7. Findings this round produces carry origin `fix-r1`;
+  two consecutive rounds of `fix-r` origin are an escalation, not a third
+  round (`docs/WORKFLOW.md` §2).
+- The named limits stay limits: the reflog, the stash, tags and unreachable
+  objects are not scanned, and the runner's settings are not measured.
+- Phase 7 is untouched: no pull request, no tracker write, no `decide(`
+  label.
