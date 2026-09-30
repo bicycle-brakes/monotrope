@@ -1,6 +1,7 @@
 # Phase 4 · Implement
 
-**Model:** Sonnet 5 — a solid worker given a clear plan.
+**Model:** Sonnet 5.5 — at effort `medium` (`claude --model claude-sonnet-5-5
+--effort medium`); a solid worker given a clear plan.
 **Input:** `@plans/changes/<name>/plan.md @plans/changes/<name>/spec.md`
 **Gate:** `make verify` green.
 
@@ -29,3 +30,11 @@ choosing what it means, only following what it plainly says.
 
 You write the test **with** the change, not after it — and for every test its
 counterpart, which plants the fault and goes red.
+
+**A foreign finding is taken on evidence.** Where a change ran stage 2, Codex
+and GLM report findings (`docs/WORKFLOW.md` §4). A finding of either is taken
+only when a test demonstrates it or the spec supports it; otherwise it is
+rejected with its reason and stays in `findings.md` as a disagreement. This
+holds in every repair round, so a finding about something the spec does not
+cover needs a test, or it is rejected. `04b-review-loop.md` says how the loop
+rows are decided and recorded.

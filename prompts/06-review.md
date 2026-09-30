@@ -1,18 +1,31 @@
 # Phase 6 · Review
 
-**Model:** Opus 5.5 — until stage 2 is live (maintainer, 2026-09-30); finds
-what Sonnet misses, and reads the code a change calls instead of trusting its
-docstring.
+**Model:** Fable 5.1 — finds what Sonnet misses, and reads the code a change
+calls instead of trusting its docstring; for a feature or architectural change
+gpt-6.1-sol at effort `max`, resumed by `python3 scripts/stage2.py review
+<change>`.
 **Input:** the diff and `spec.md`. **Not** the author's reasoning.
 **Result:** `plans/changes/<name>/findings.md`
 **Gate:** no open `[AMBIGUITY]`, no open BLOCKER — `[DIVERGENT]` counts as
 BLOCKER.
-**Session:** you are the spec reviewer of phase 2a, resumed with
+**Session:** you are the spec reviewer of phase 2a, resumed. On the Fable path:
 `claude --model claude-fable-5-1 --resume <uuid>` (the id under the table in
-`findings.md`). Only when that session is gone does a fresh one start;
+`findings.md`). On the Codex path the runner resumes the recorded session with
+`codex exec resume`. Only when that session is gone does a fresh one start;
 `findings.md` says so. Your yardstick is the current `spec.md` — the version
 revised after your 2a review, not the one you read then. Read it again, and
 check first that each of your 2a rows arrived in it as `findings.md` says.
+
+**Verdict first.** Write your verdict — the table and, under it, the line
+`Phase 6 verdict: <reviewer> <session>, <date>` — before you read any loop
+row. The loop rows are the findings of GLM, the reviewer of the loop before
+this phase (`docs/WORKFLOW.md` §4); they are held outside the repository until
+your verdict stands, so that they cannot shape it. Only then do the loop rows
+come in. On the Fable path you run `python3 scripts/stage2.py release-loop
+<change>` and mark the `Phase 6` cell of each loop row `agree` or `disagree —
+<reason>`; on the Codex path the runner does both. A change that ran stage 2
+has the columns `Reviewer` and `Broke a test` in `findings.md`
+(`docs/WORKFLOW.md` §4).
 
 Having passed the spec in 2a is no argument now. Where the code shows the spec
 itself was wrong — a caveat it rested on, a reading it did not make — that is a

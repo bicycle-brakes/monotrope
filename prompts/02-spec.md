@@ -15,8 +15,10 @@ a `[DECISION]` — see below — not a question to slip into the prose.
 Required sections:
 
 - **Problem.** What does not work today, with evidence from `research.md`.
-- **Acceptance criteria.** Checkable sentences. Each one comes with what would
-  *refute* it. A criterion that cannot go red is not one.
+- **Acceptance criteria.** Checkable sentences, one condition each; where a
+  trigger, a state or a failure applies, the sentence begins with When, While or
+  If. Each one comes with what would *refute* it. A criterion that cannot go red
+  is not one.
 - **Non-goals.** What explicitly does not belong. Without this section the scope
   grows during implementation and nobody can say from when.
 - **Open decisions.** Classify first, then ask.

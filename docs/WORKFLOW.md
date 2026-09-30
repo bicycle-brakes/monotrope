@@ -24,22 +24,22 @@ tags: [workflow, model-routing, agentic-coding, phases, artefacts]
 > `plans/changes/<name>/`, links it to a bead that **already exists**, and
 > points to phase 1. In Claude Code: `/workflow-start`.
 > Then: "Read `docs/WORKFLOW.md` and work at phase N."
-> **Standing:** stage 1 is binding. Stages 2 and 3 are prepared, not active.
+> **Standing:** stage 1 is binding; stage 2 is active for framework content,
+> by change class, since ADR 0007 (§4); stage 3 is not.
 > **Language:** this file was German until 2026-09-29 and is English since, like
 > every other artefact of this repository (`AGENTS.md`, house rule 1).
 >
 > **Not all of it is here yet.** This file came over from
 > `portfolio-agentic-engineering`, and the mechanism follows it in steps
-> (`AGENTS.md`, "Status: bootstrapping"). Checked on 2026-09-29 against the
-> tree at `9f14283`, these pieces it names are **not** in this repository:
+> (`AGENTS.md`, "Status: bootstrapping"). Checked on 2026-09-30 against the
+> tree at `3c54652`, these pieces it names are **not** in this repository:
 > `scripts/validate_change_artefacts.py`, the sub-agents
 > `.claude/agents/explorer.md` and `reviewer.md`, the stop hook
 > `.claude/hooks/session-stop/check-tests-green.sh`, `.claude/commands/`, the
 > targets `make change` and `make index` (the entry is `python3 scripts/new_change.py <name>
-> --bead <id>`), `tests/test_repo_settings.py`, `templates/findings.md`,
-> `templates/plan-marking.md`, `scripts/run_change.sh`, the `scripts/cc-*.sh`
-> profiles and `tests/test_model_profiles.py`. Where the text below says one of
-> them does something, it describes the target, not this tree.
+> --bead <id>`), `tests/test_repo_settings.py` and `templates/findings.md`.
+> Where the text below says one of them does something, it describes the
+> target, not this tree.
 >
 > One thing is missing on purpose and is not on that list: the brakes on the
 > irreversible (force push, `rm -rf`, deploys) in `.claude/settings.json`, which
@@ -80,6 +80,7 @@ handover to the next phase — not the chat history.**
 | 2a | Spec review | rows for `findings.md`, dimension `SPEC`; then the revised `spec.md` | every row worked into the spec or rejected with a reason; no open `[AMBIGUITY]` | [`02a-spec-review.md`](../prompts/02a-spec-review.md) |
 | 3 | Plan | `plans/changes/<name>/plan.md` | validator green | [`03-plan.md`](../prompts/03-plan.md) |
 | 4 | Implement | code + tests | `make verify` green | [`04-implement.md`](../prompts/04-implement.md) |
+| 4b | Review loop *(stage 2)* | the loop rows — outside the repository until the phase-6 verdict, then in `findings.md` (`release-loop`) | at most two rounds; `make verify` green after each repair | [`04b-review-loop.md`](../prompts/04b-review-loop.md) |
 | 5 | Verify | test output as evidence | the stop hook blocks on a red tree | [`05-verify.md`](../prompts/05-verify.md) |
 | 6 | Review | `plans/changes/<name>/findings.md` | no open `[AMBIGUITY]`, no open BLOCKER — `[DIVERGENT]` counts as a BLOCKER | [`06-review.md`](../prompts/06-review.md) |
 | 7 | Commit | pull request | CI green | [`07-commit.md`](../prompts/07-commit.md) |
@@ -127,6 +128,14 @@ a small change.
 **Disagreements are recorded, not resolved.** That one reviewer flags something
 and another does not *is* the information; netting it into one verdict throws it
 away.
+
+**The evidence rule.** A Codex or GLM finding is taken only when a test
+demonstrates it or the spec supports it; otherwise it is rejected with its
+reason and stays in `findings.md` as a disagreement. This holds in every repair
+round, so a finding about something the spec does not cover needs a test, or it
+is rejected. A foreign reviewer's confidence is not evidence: an implementer who
+takes a finding on the reviewer's word alone repairs what nobody has shown to be
+broken (stage 2, §4).
 
 ### The question protocol
 
@@ -357,11 +366,11 @@ none, because the registry keeps counting it as protection.
 | 1 Explore | **Haiku 4.5** | much input, little output, no deep reasoning |
 | 1a Interview | **Fable 5.1** | the questions are the work, and there are few of them |
 | 2 Spec | **Opus 5.5** | effort `xhigh`; the highest reasoning demand, little output |
-| 2a Spec review | **Opus 5.5** (until stage 2 is live) | a fresh context that does not know the author's reasoning; see below |
+| 2a Spec review | **Fable 5.1** | another model with another error profile, and a fresh context that does not know the author's reasoning; a `feature` or `architectural` change goes to Codex (§4) |
 | 3 Plan | **Opus 5.5** | effort `xhigh`; an error here is the most expensive in the whole run |
-| 4 Implement | **Sonnet 5** | a solid worker given a clear plan |
+| 4 Implement | **Sonnet 5.5** | effort `medium`; a solid worker given a clear plan |
 | 5 Verify | — | deterministic |
-| 6 Review | **Opus 5.5** (until stage 2 is live) | finds what Sonnet misses, and reads the code a change calls instead of trusting its docstring; see below |
+| 6 Review | **Fable 5.1** | finds what Sonnet misses, and reads the code a change calls instead of trusting its docstring; a `feature` or `architectural` change goes to Codex (§4) |
 | 7 Commit | **Haiku 4.5** | cheap and sufficient |
 
 Switch with `/model fable`, `/model sonnet`, `/model opus`, `/model haiku`. The
@@ -375,19 +384,25 @@ the whole repository; until then both ran on Fable 5.1). In a session:
 from its definition's frontmatter (`effort: xhigh`), not from the call that
 starts it, and a new definition is read only when a session starts.
 
-**Spec review and review on Opus 5.5, until stage 2 is live** (maintainer,
-2026-09-30, for the whole repository). From 2026-09-29 both ran on Fable 5.1,
-and before that on Opus 5. Once stage 2 is implemented and merged (bead
-coding-harness-bc9), the stage-2 routing replaces this row. The cost is
-known: the spec review now reads with the same model as the spec's author
-(Opus 5.5), so what stays independent is the fresh context, not the error
-profile.
+**Spec review and review on Fable 5.1, except the `feature` and
+`architectural` changes that §4 routes to Codex** (maintainer, 2026-09-29, for
+the whole repository; until then both ran on Opus 5). An interim routing put
+both on Opus 5.5 from 2026-09-30 until stage 2 was live; the merge of ADR 0007
+ended it. The two reviews of 2026-09-29 ran on Fable and found what the spec
+had missed by reading the called code itself. The spec review still reads with
+another model than the spec's author (Opus 5.5).
+**Implement on Sonnet 5.5 at effort `medium`, for every change** (maintainer,
+2026-09-30; until then Sonnet 5). In a session: `/model sonnet` and `/effort
+medium`; for a phase run as its own session: `claude --model claude-sonnet-5-5
+--effort medium`.
 **The spec review improves the spec first.** The spec's author works each 2a
 row into `spec.md` (or rejects it with a reason) before phase 3; the revised
 spec is the one yardstick for plan, code and review (`prompts/02-spec.md`,
 "After the spec review"). **One reviewer for both:** phase 6 resumes the session
 of phase 2a (`--session-id` there, `--resume` here; the id stands in
-`findings.md`). It measures the code against the revised spec and first checks
+`findings.md`). For Codex the runner resumes with `codex exec resume`, reading
+the id from the first call's `thread.started` event and writing it as
+`Reviewer session: codex <id>`. It measures the code against the revised spec and first checks
 that its 2a rows arrived there. It still never saw the author's reasoning, and
 passing the spec in 2a is no argument in phase 6.
 
@@ -504,80 +519,156 @@ on Dagger describes a technique, it does not use one.
 `tests/test_repo_settings.py` holds the fence: a tracked `Dockerfile`,
 `devcontainer.json`, `dagger.json` or `docker-compose*` fails the suite.
 
-## 4 · Stage 2 — adding GLM and Kimi (prepared, not active)
+## 4 · Stage 2 — Codex and GLM review (active for framework content)
 
-Exactly two rows of the routing table change: **implement** moves from Sonnet 5
-to GLM, **review** from Fable 5.1 to Kimi. Phases 1–3 and 7 stay with Anthropic.
+Since ADR 0007 (2026-09-30), reviewers from two other vendors read a change
+before it merges — for **framework content only**: this repository's own tree,
+the class `framework` of `model-endpoints.yaml`. Codex (`gpt-6.1-sol`, OpenAI)
+reviews the spec and the code; GLM (`glm-5.3`, Z.ai) reviews in a short loop
+between implementation and the code review. Phases 1, 1a, 2, 3 and 7 stay with
+Anthropic, and implementation stays with Sonnet 5.5. ADR 0007 also amends
+decision D-13 of the 2026-09-16 interview, which had set four criteria before
+any foreign call: a green leak check and a declared endpoint stay and are
+enforced on every call, lakeswitch-ai's own disclosure decision governs
+lakeswitch-ai's content (which is never sent), and three measured runs before
+the first call are replaced by the measurement at the end of this section.
 
-**Why review across vendors.** Different training lineages have blind spots that
-do not overlap. Separating the context already finds measurably more errors;
-vendor diversity adds to it. A model rates its own output too kindly — a
-reviewer from another house does not know, by construction, that it is checking
-itself. **Disagreements are recorded, not resolved automatically.** "Kimi
-flagged it, GLM did not" is the information.
+**Why review across vendors.** Different training lineages have blind spots
+that do not overlap. Separating the context already finds measurably more
+errors; vendor diversity adds to it. A model rates its own output too kindly —
+a reviewer from another house does not know, by construction, that it is
+checking itself. **Disagreements are recorded, not resolved automatically.**
+"Codex flagged it, GLM did not" is the information. Kimi was considered and
+dropped (ADR 0007).
 
-### Mechanics
+### Which change gets what
 
-`ANTHROPIC_BASE_URL` holds for a whole session and cannot be switched in the
-middle of one. A profile is therefore a process, not a switch: six scripts under
-`scripts/cc-*.sh` over one shared base, each starting its own session. Every
-`ANTHROPIC_*` variable is set explicitly — a child process would otherwise
-inherit the parent profile's and keep working, only against the wrong vendor.
-`tests/test_model_profiles.py` measures that with a stand-in instead of
-believing it.
+| Change | Spec review (2a) | Review loop (4b) | Review (6) |
+|---|---|---|---|
+| a one-sentence change, a `spike` | no stage 2 | no stage 2 | no stage 2 |
+| `bounded` | Fable 5.1, where one is held | GLM | Fable 5.1 |
+| `feature`, `architectural` | Codex | GLM | the same Codex agent, resumed |
 
-**The barrier without which nothing runs:** `make leakcheck NAME=<change>` scans
-the change's artefacts and the diff against the base before anything goes to a
-foreign endpoint. Every foreign profile calls it itself and stops when
-`CC_CHANGE` is missing — without a named change there is nothing to scan. The
-denylist lives outside the repository; if it is missing, that is BLOCK, because
-unchecked is not the same as clean.
+**Nothing checks a change's class.** A `feature` stated as `bounded` skips
+Codex, and only the review before the merge catches it. The runner below does
+not read the class either: whoever runs the change runs the verbs its row
+allows.
 
-**The assignment stands in the plan.** Every step carries exactly one marking —
-`[FLASH]`, `[GLM5.3]` or `[SONNET]`, decision rules in
-[`templates/plan-marking.md`](../templates/plan-marking.md).
-`scripts/run_change.sh` groups consecutive equal markings into one segment and
-runs each as a session of its own with a verify gate after it. An unmarked line
-is ignored, not guessed: the incomplete plan is then a finding at the plan gate,
-where a person accepts it, not a surprise at run time.
+### The routing
 
-The orchestrator holds **no second rule set**. The worktree precondition, the
-leak check, `make verify` and the artefact gate live outside it and are called.
-An open `[AMBIGUITY]`, an open BLOCKER or MAJOR finding pause with exit 2 instead
-of being decided.
+The rows are in the form of §3's table:
 
-### Seeing agents that wait
+| Phase | Model | Why |
+|---|---|---|
+| 2a Spec review | **gpt-6.1-sol** | effort `max`, through the Codex CLI and the runner |
+| 4b Review loop | **GLM 5.3** | effort `max`, through Claude Code against Z.ai and the runner |
+| 6 Review | **gpt-6.1-sol** | effort `max`; the same Codex session as 2a, resumed |
 
-Neither a terminal multiplexer nor an agent layer isolates anything. Isolation
-comes from the worktree, the harness sandbox and `permissions.deny` (see above).
-What is missing is something else: **visibility of waiting** — the moment an
-agent has asked a `[DECISION]` and stands still.
+### The runner is the only way
 
-`--mode herdr` uses [herdr](https://github.com/herdrdev/herdr) for that, which
-knows four agent states — `working`, `blocked`, `done`, `idle` — and reads them
-for Claude Code through integration hooks rather than by parsing the screen.
-`blocked` is exactly what the question protocol produces; with several parallel
-runs, one glance shows which one waits for a person.
+A foreign reviewer is started only through `python3 scripts/stage2.py <verb>
+<change>`, never by typing `codex`, or `claude` against another endpoint, into
+a shell. Four verbs:
 
-**It is the person's tool, not a dependency of the workflow.** If the binary is
-missing, the orchestrator carries on headless and says so. A young tool must not
-stop operation by not being installed — and the landscape of these tools is
-young: of the orchestrators common in 2026, several are already discontinued or
-have passed into volunteer maintenance. The handover runs through files — the
-foreign session starts with `@plans/changes/<name>/plan.md
-@plans/changes/<name>/spec.md` and needs nothing else. That is what the plan
-being a file is for.
+- `spec-review` — Codex, phase 2a, a fresh session.
+- `review-loop` — GLM, one round of phase 4b.
+- `release-loop` — the loop rows into `findings.md`, after the phase-6 verdict.
+- `review` — Codex, phase 6, the phase-2a session resumed with `codex exec
+  resume`; it then releases the loop rows and has Codex mark each one.
+
+**Before every call**, the runner checks, in this order: the change is named
+and its folder exists; `model-endpoints.yaml` clears the endpoint (declared,
+the model listed, `framework` among what it may see, a residency stated); and
+**the leak check** (`python3 scripts/leakcheck.py`, by hand `make leakcheck
+NAME=<change>`) passes in the same run, immediately before this call. The leak
+check scans the change's folder, every file the tree tracks or lists as
+untracked, the message and patch of every commit reachable from a local or a
+remote-tracking branch, and the call's own prompt, against a denylist each
+machine keeps outside the repository. It reports the place, the rule's name and
+the length of a match, never the match. If it cannot measure — the denylist
+missing, a file unreadable — that is BLOCK, because unchecked is not clean.
+
+What every call then carries: one line in `findings.md` (date, verb, endpoint,
+model, the leak check's three numbers); an empty standard input; an
+environment built from an allow-list, not the caller's; the model and effort
+`max` pinned. Codex also runs in the read-only sandbox with its session kept
+and its hooks and memories switched off. GLM runs as Claude Code against Z.ai's
+Anthropic-compatible endpoint, with a fresh empty configuration directory, the
+project's settings and hooks skipped, tools limited to `Read`, `Grep` and
+`Glob`, and the diff in its prompt; its credential (`GLM_KEY` in
+`~/.config/cc-routing/secrets.env`) stays in the runner's environment for that
+call and is scrubbed from everything the runner prints or writes.
+
+`.claude/settings.json` asks before a `codex` typed directly in a Claude Code
+session (`Bash(codex *)`). That is a brake, not a lock: `sh -c`, an absolute
+path or a script file passes it, as it does for the merge rules in §2.
+
+**Reads are asked, not confined.** Every prompt asks the reviewer to read
+nothing outside the worktree and the repository's git directory. **That is a
+request, not a lock.** Nothing here confines the reviewers' reads or proves
+that they stay inside: they can read the rest of the disk, the customer
+instance's checkout included. The maintainer accepted that as a residual risk
+on 2026-09-30 (ADR 0007). The leak check scans what this repository presents,
+not what else the disk holds.
+
+### The review loop (phase 4b)
+
+After implementation and before phase 6, `review-loop` runs one round: GLM
+reads the change's diff against its merge base with `origin/main`, uncommitted
+changes included, and answers in table rows. **At most two rounds.** The rows
+go into a **loop record** outside the worktree and outside the git directory
+(`${XDG_STATE_HOME:-~/.local/state}/coding-harness/stage2/<change>/loop.md`),
+not into the repository: Codex can read the whole worktree, and it writes its
+verdict before it sees them.
+
+The implementer writes beside each row its `Status` — `taken — <test or
+criterion>` or `rejected — <reason>` — and, for a taken row, `Broke a test`. It
+repairs the taken rows and runs `make verify`, which must be green before the
+next round starts. **The evidence rule of §2 holds here:** a finding is taken
+only when a test demonstrates it or the spec supports it. A row left
+undecided holds the next round and the release.
+
+The phase-6 reviewer writes its verdict first: the table, and under it the line
+`Phase 6 verdict: <reviewer> <session>, <date>` (the runner writes it for
+Codex; a Fable reviewer writes its own). Only then does `release-loop` carry
+every loop row into `findings.md` with reviewer `GLM`, and the reviewer marks
+each row in its `Phase 6` column, `agree` or `disagree — <reason>`. Nothing is
+netted: the reviewer's view of GLM's rows is the information.
+
+### Two columns for every stage-2 change
+
+Beyond the vocabulary of §2, a stage-2 change's `findings.md` carries two
+columns, defined here because the findings template is not in this repository
+yet:
+
+- **`Reviewer`** — Codex, GLM or Fable: who raised the finding.
+- **`Broke a test`** — for each taken row, `yes` when its repair turned a test
+  red that was green before it, `no` when it did not. The finding's own new
+  test does not count: the evidence rule expects it to be red first.
+
+### Measuring the first three stage-2 runs
+
+A **stage-2 run** is a change whose review made at least one call; runs are
+counted in the order their pull requests merge. Every finding records its
+reviewer, whether it was taken or rejected and, if taken, whether it broke a
+test. **After the third run, a short evaluation is written under
+`docs/research/`. If at least one taken Codex or GLM finding broke a test,
+stage 2 falls back to Fable 5.1 until the maintainer decides again.** The rule
+is written, not counted by a script: a person reads the evaluation, and its
+pull request applies the fallback. This replaces the three measured runs that
+D-13 asked for before the first foreign call; what the replacement gives up is
+the measured stage-1 baseline (ADR 0007).
 
 > **Two caveats, and the second one holds here in particular.** The vendors'
 > coding subscriptions are contractually limited to officially supported tools;
-> in Claude Code that is covered, in a self-built harness it is not.
+> through the Codex CLI and through Claude Code that is covered, in a
+> self-built harness it is not. The runner starts those programs, it does not
+> replace them.
 >
 > **And: this repository contains abstracted knowledge from a productive
 > customer project.** No customer names, schemas, entity names or figures go to
 > endpoints outside one's own jurisdiction — not in a diff, not in a plan
-> either. Whoever switches stage 2 on checks beforehand what stands in
-> `spec.md` and `plan.md`. The denylist from the export tool is the right
-> measure for that.
+> either. The leak check runs before every call.
 
 ## 5 · Stage 3 — a meta-harness (evaluative)
 
@@ -600,9 +691,13 @@ and with bad results you cannot tell whether plan, model or harness was at
 fault. Start with multiple vendors before the artefact handover works and you
 lose context at the switch and blame the model.
 
-Stage 1 must have run for two to three weeks in real use. **The signal to move
-on:** the phase gates hold without anyone thinking about them, and the Sonnet
-implementation is the noticeable cost.
+Stage 1 was to run for two to three weeks in real use first. **The original
+signal to move on:** the phase gates hold without anyone thinking about them, and
+the Sonnet implementation is the noticeable cost. **It was not waited for.** ADR
+0007 (2026-09-30) opened stage 2 for framework content, with the first three
+stage-2 runs measured in its place (§4) — model diversity came before the
+two-to-three-week signal, knowingly, and the measurement is what can send it
+back.
 
 ## 7 · What survives each stage
 
@@ -612,9 +707,9 @@ implementation is the noticeable cost.
 | `plans/` artefacts | ✅ | ✅ unchanged | ✅ unchanged |
 | `prompts/` | ✅ | ✅ as text | ✅ as YAML prompt |
 | `Makefile`, CI, git hooks | ✅ | ✅ unchanged | ✅ as a policy gate |
-| `.claude/agents/` | ✅ | ❌ rebuild | ❌ replaced by YAML |
-| `.claude/commands/` | ✅ | ❌ rebuild | ❌ replaced by YAML |
-| Claude Code hooks | ✅ | ❌ rebuild | ❌ replaced by policies |
+| `.claude/agents/` | ✅ | ✅ unchanged | ❌ replaced by YAML |
+| `.claude/commands/` | ✅ | ✅ unchanged | ❌ replaced by YAML |
+| Claude Code hooks | ✅ | ✅ unchanged | ❌ replaced by policies |
 
 The lower half is thin on purpose. That is the price paid once, and the reason
 the upper half survives the change.
