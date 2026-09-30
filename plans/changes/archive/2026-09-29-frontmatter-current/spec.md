@@ -1,7 +1,7 @@
 ---
 title: "Spec — frontmatter-current"
-status: draft
-implementation_status: none
+status: accepted
+implementation_status: done
 date: 2026-09-29
 last_reviewed: 2026-09-29
 updated: 2026-09-30
