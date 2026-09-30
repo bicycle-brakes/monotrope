@@ -24,7 +24,7 @@ files=(
   hooks/handover.sh
   hooks/parallel-sessions.sh
   hooks/session-scan.sh
-  skills/uebergabe/SKILL.md
+  skills/handover/SKILL.md
 )
 
 for tool in jq git perl; do

@@ -165,7 +165,7 @@ tools/bd dolt push          # push tracker data to origin (refs/dolt/data)
   the source path and commit, and a finding is never first written there.
   Personal reasons to care stay outside the repository.
 - **The maintainer's Claude Code display** — status line, entry at session
-  start, handover safety net, parallel-session warning, `/uebergabe` — lives in
+  start, handover safety net, parallel-session warning, `/handover` — lives in
   `tools/claude-code/`; each line of the display is documented beside the tool.
   Change it there and reinstall with `tools/claude-code/install.sh`, never
   only in `~/.claude`.
