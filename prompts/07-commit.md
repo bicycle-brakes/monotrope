@@ -16,6 +16,9 @@
   this pull request. Spec, plan and verification evidence are named as
   references at the end; shorthand from the artefacts (D1, A-5, G-3, work-item
   ids) carries no sentence. The same goes for the commit body.
+  The acceptance card — what changes for you, how it was checked, what could
+  break, and the `done:` line — is carried by both templates, and every pull
+  request body keeps it, the multi-decision form included.
 - **Say whether the pull request decides.** A pull request that adds, changes
   or removes a file `provenance.yaml` reserves for `human-decided` (an ADR, an
   ADR answer under `decisions/answers/`, the rule set) is a decision PR. Its
