@@ -36,7 +36,9 @@ spec form, and no workflow text points to a template that does not exist
 > table, with the stage-2 columns named as coming with pull request #60;
 > (3) the failure mode carried by each criterion's refutation, and a
 > protected-areas list; (4) decision D-15 (LikeC4) stays as decided. This
-> spec adds one provisional answer of its own: the class (Open decisions).
+> spec adds two provisional answers of its own, both under Open decisions:
+> the class, which the spec review of phase 2a holds to be `feature`
+> (`findings.md`, row 2a-1), and the scope of the appetite (row 2a-2).
 > Nothing here takes effect before the maintainer merges the pull request
 > (`AGENTS.md`, house rule 8); an answer the maintainer changes is reworked
 > before the merge.
@@ -94,13 +96,19 @@ What does not work today (`research.md` sections 1–2 and 8; read on
   Origin | Where | Finding | Status`, in this order.
 - **Stage-2 columns and lines** — `Reviewer`, `Broke a test`, `Phase 6`, and
   the lines `Reviewer session: codex <id>`, `Phase 6 verdict: <reviewer>
-  <session>, <date>` and `Stage-2 call, …`, as pull request #60 defines them
-  (its runner `scripts/stage2.py` at `bd39160`: `ROW_COLUMNS`,
-  `RELEASED_COLUMNS`, `SESSION_LINE`, `VERDICT_LINE`).
+  <session>, <date>` and `Stage-2 call, …`, and the section of released loop
+  rows criterion 17 names, as pull request #60 defines them (its runner
+  `scripts/stage2.py` at `bd39160`, unchanged at `ef7407c`: `ROW_COLUMNS`,
+  `RELEASED_COLUMNS`, `SESSION_LINE`, `VERDICT_LINE`, `RELEASE_HEADING`,
+  `ROUNDS_LINE`, `NO_LOOP_LINE`).
 - **MADR 4.0.0** — the Markdown Architectural Decision Records template at
   tag `4.0.0` of `github.com/adr/madr` (`research.md` section 8, gap 1).
 - **Workflow texts** — `AGENTS.md`, `docs/WORKFLOW.md` and every
   `prompts/*.md`.
+- **Appetite** — the hours the maintainer is willing to spend on phase 4 of
+  a change, repair rounds included; a stop, not an estimate. The meaning the
+  parallel change `adhd-frame` gives the word; provisional (Open decisions,
+  "The scope of the appetite").
 
 ## Acceptance criteria
 
@@ -128,24 +136,29 @@ result looks like. Where a test is named, the plan names the file.
    most keys. Filled in and written as `plans/changes/<change>/spec.md` in a
    temporary tree, it has every field `plans_registry.REQUIRED` names, none
    of them empty; its `status` and `implementation_status` are in
-   `plans_registry.STATUS` and `plans_registry.IMPLEMENTATION`; and
+   `plans_registry.STATUS` and `plans_registry.IMPLEMENTATION`;
+   `check_frontmatter_current.read_updated` reads a date from it (the gate
+   `frontmatter-current` holds every header under `plans/`); and
    `scripts/check_adr_answers.py` raises no finding about the header — only
    the one about the answer file the temporary tree lacks.
-   *Refuted by:* a test that takes those names from the two modules at run
+   *Refuted by:* a test that takes those names from the three modules at run
    time, not from a copy, and reports a missing or empty field, a refused
-   value or a header finding; the same test staying green when a field the
-   template lacks is added to `REQUIRED`.
+   value, no date from `read_updated` or a header finding; the same test
+   staying green when a field the template lacks is added to `REQUIRED`.
 
 4. **The template offers exactly the four classes.** The template's `class:`
    line names each entry of `check_adr_answers.CLASSES` and no other value.
    *Refuted by:* a test that finds a value in that line outside `CLASSES`, or
    an entry of `CLASSES` missing from it.
 
-5. **The size is the appetite.** The example header carries `appetite:`, a
-   positive number: the session hours the outcome is worth — a budget, not
-   an estimate — for a change of any class.
-   *Refuted by:* an example header without `appetite`, or with a value YAML
-   does not read as a number greater than zero (test).
+5. **When the example header is filled in, its size is the appetite.** The
+   template's own `appetite:` value is a placeholder, not a number (no
+   default appetite); filled in, it is a number greater than zero — the
+   appetite as Terms defines it, for a change of any class — and the
+   template's note on the key says "phase 4".
+   *Refuted by:* a number as the template's own `appetite:` value; a
+   filled-in header without `appetite`, or with a value YAML does not read
+   as a number greater than zero; the note without "phase 4" (test).
 
 6. **The failure mode is carried only by the refutations.** Decision D-2's
    failure mode is each criterion's *Refuted by:* line — what a wrong result
@@ -167,13 +180,14 @@ result looks like. Where a test is named, the plan names the file.
    with When / While / If as a recommendation, saying that it becomes the
    rule with pull request #60.
    *Refuted by:* a sentence in the template that makes the When / While / If
-   form mandatory (review).
+   form mandatory (review); the template without the path
+   `prompts/02-spec.md`, or without "#60" beside the recommendation (test).
 
 9. **Protected areas are what the change must not touch.** The Protected
    areas section asks for the paths or areas the change must not touch, each
    with its reason, or the single line "None beyond the non-goals."
-   *Refuted by:* the section's instruction without "must not touch" or
-   without that single line (test).
+   *Refuted by:* the section's instruction without "must not touch",
+   without "reason", or without that single line (test).
 
 10. **The Definition of Done names the gates only in one line.** The
     Definition of Done section of the template has exactly one line about
@@ -233,23 +247,30 @@ result looks like. Where a test is named, the plan names the file.
     template names what a change that runs stage 2 adds once pull request
     #60 (ADR 0007) is merged: the header `ID | Severity | Dimension | Origin
     | Where | Finding | Reviewer | Status | Broke a test`, with `Phase 6`
-    appended for the released loop rows, and the lines `Reviewer session:
-    codex <id>`, `Phase 6 verdict: <reviewer> <session>, <date>` and one
-    `Stage-2 call, …` line per call. It says, with its date, that
-    `docs/WORKFLOW.md` §4 defines them once that pull request is merged and
-    that until then no change carries them.
-    *Refuted by:* a column name or order, or a line form, that differs from
-    `ROW_COLUMNS`, `RELEASED_COLUMNS`, `SESSION_LINE` or `VERDICT_LINE` in
-    `scripts/stage2.py` at pull request #60's head `bd39160` (review — the
-    runner is not in this tree); a sentence saying stage 2 is active or that
-    the columns are required today.
+    appended for the released loop rows; the Status value `taken — <test or
+    criterion>` of a loop row; the lines `Reviewer session: codex <id>`,
+    `Phase 6 verdict: <reviewer> <session>, <date>` and one `Stage-2 call,
+    <date>: <verb> · endpoint … · model … · leak check clean over …` line
+    per call; and the section `## Phase 4b — GLM loop rows, released <date>`
+    with the line `Rounds run: <n>`, or in its place the line `Loop rows:
+    none — the GLM loop did not run for this change.` It says, with its
+    date, that `docs/WORKFLOW.md` §4 defines them once that pull request is
+    merged and that until then no change carries them.
+    *Refuted by:* a column name or order, a line form or a heading that
+    differs from `ROW_COLUMNS`, `RELEASED_COLUMNS`, `SESSION_LINE`,
+    `VERDICT_LINE`, `RELEASE_HEADING`, `ROUNDS_LINE`, `NO_LOOP_LINE` or the
+    `Stage-2 call` line in `scripts/stage2.py` at pull request #60's head
+    (`ef7407c` on 2026-09-30; `stage2.py` unchanged since `bd39160`) (review
+    — the runner is not in this tree); a sentence saying stage 2 is active
+    or that the columns are required today.
 
 18. **When the findings template's example header is filled in, it has what
     a file under `plans/` needs.** It has every field `plans_registry.REQUIRED`
     names, none of them empty, with `status` and `implementation_status` in
-    the accepted sets.
+    the accepted sets, and `check_frontmatter_current.read_updated` reads a
+    date from it.
     *Refuted by:* the test of criterion 3 run over this header reporting a
-    missing, empty or refused field.
+    missing, empty or refused field, or no date.
 
 ### The decision-record template
 
@@ -317,7 +338,10 @@ result looks like. Where a test is named, the plan names the file.
     are retired, not moved. The section "Model markings (stage 2 only)" of
     `prompts/03-plan.md` goes exactly as pull request #60 removes it.
     *Refuted by:* one of the five strings in a workflow text, or the file
-    present (test).
+    present (test); `git diff origin/main -- prompts/03-plan.md` showing
+    anything but the eight lines pull request #60 removes there — the
+    heading, its five-line paragraph and the blank line after each
+    (command).
 
 28. **The note "Not all of it is here yet" no longer names the two
     templates.** The opening note of `docs/WORKFLOW.md` names neither
@@ -332,16 +356,25 @@ result looks like. Where a test is named, the plan names the file.
     *Refuted by:* `python3 scripts/kit/probe.py --list` without one of them;
     `tests/test_kit.py` red.
 
-30. **When `make verify` runs on the pull request's last commit, it is
+30. **When `make verify` runs on the commit the maintainer merges, it is
     green**, run with `commit.gpgsign=false` as this repository's
-    measurements are.
-    *Refuted by:* `VERIFY RED` on that commit.
+    measurements are. Between the commit that sets `class: feature` and the
+    maintainer's answer to the ADR question, the one expected red is the
+    line of the gate `adr-answers` naming this change's missing answer (Open
+    decisions, the class).
+    *Refuted by:* `VERIFY RED` on the merged commit; before the answer, any
+    red besides that one line.
 
 31. **The Leerprobe does not lose a case.** On the pull request's last commit
-    the Leerprobe carries at least 356 cases (the baseline at `eee26ae`,
-    2026-09-30: 356 of 387), and the new test is among the cases that carry.
-    *Refuted by:* a count below 356, or a case of the new test among the red
-    ones, in the probe's report.
+    the Leerprobe carries at least as many cases as on its merge base with
+    `origin/main`, measured the same way (356 of 387 at `eee26ae`,
+    2026-09-30), and the new test is among the cases that carry. A case of
+    the new test that reads a file the kit does not carry — `AGENTS.md`,
+    which criteria 25 and 27 read, is `bestand` in
+    `scripts/kit/manifest.yaml` — skips where that file is absent; the probe
+    counts a skipped case neither way.
+    *Refuted by:* a count below the merge base's, or a case of the new test
+    among the red ones, in the probe's report.
 
 32. **The new texts are English.** The three templates and every line this
     change writes into the workflow texts are English (`AGENTS.md`, house
@@ -419,7 +452,10 @@ This change must not touch:
   request #60" names.
 - **Every path `provenance.yaml` reserves for `human-decided`** — `docs/adr/`,
   `decisions/answers/`, the rule set — so that this pull request is no
-  decision pull request.
+  decision pull request. One exception, only once the maintainer answers
+  the ADR question of this change as a `feature`: its own answer file
+  `decisions/answers/template-bundle/adr.yaml`, which makes the pull request
+  a decision pull request (Open decisions, the class).
 - **`docs/architecture/`** — the target, its decision-continuity table, the
   gap analysis and the implementation plan.
 - **`templates/handover.md` and `templates/gate-record.yaml`.**
@@ -447,15 +483,17 @@ This change must not touch:
   request body says so.
 - Special runs, with their commit in the pull request body:
   `python3 scripts/check_docs.py` without a dead link into `templates/`, and
-  the Leerprobe's count against 356 of 387.
+  the Leerprobe's count against its merge base's (356 of 387 at `eee26ae`).
 - The pull request body lists every provisional answer — `decisions.md`
-  answers 1–4 and this spec's class — for the maintainer's confirmation,
+  answers 1–4, this spec's class with the spec review's verdict `feature`,
+  and the scope of the appetite — for the maintainer's confirmation,
   and names the overlaps with pull request #60 and how the later merge
   resolves each (the `[DETAIL]` "Overlaps with pull request #60" below).
 
 ## Open decisions
 
-None open. One provisional answer awaits the maintainer.
+None open. Two provisional answers await the maintainer: the class, and
+the scope of the appetite.
 
 ### [DECISION] — The class of this change (provisional answer: `bounded`)
 
@@ -477,8 +515,9 @@ Options:
      `make verify` stays green, so phases 3 to 7 can run while the
      maintainer is away; the maintainer can still reclassify at the merge.
   2. feature — "a self-contained deliverable that changes what the system
-     must do": three new templates, and every later spec carries three more
-     sections. Consequence: the header adds `change: template-bundle` and
+     must do or how it is checked": three new templates, and every later
+     spec carries three more sections, a Definition of Done among them.
+     Consequence: the header adds `change: template-bundle` and
      `adr_question`; the gate `adr-answers` is red on this branch until the
      maintainer answers, so no phase 4 or 5 gate can go green before
      2026-10-04.
@@ -507,6 +546,75 @@ What is lost:          the ADR question is not put to the maintainer; its
 phase under the orchestrator's instruction that no open `[DECISION]` may
 remain while the maintainer is away. It awaits the maintainer's
 confirmation at the merge, with the answers of `decisions.md`.
+
+**Spec review (phase 2a), 2026-09-30: the class is `feature`** (`findings.md`,
+row 2a-1). The definition on `main` reads in full "changes what the system
+must do or how it is checked"; the template sets how every later change is
+checked — a Definition of Done, Protected areas, the appetite — and prompt
+02 makes it the form of every spec. The change also decides, provisionally,
+the four answers of `decisions.md`, the readings of D-2's failure mode and
+protected areas, and the retirement of plan markings on `main`. That it
+decides no architecture argues for the ADR answer "no", a feature's answer,
+not for a lower class; a class chosen because it keeps a gate green is the
+misclassification the one-way ratchet stands against. Once pull request #60
+merges, the class also picks the reviewer of phases 2a and 6. The maintainer
+decides at the merge.
+
+**How the pull request proceeds without the maintainer** — the spec
+review's path, which needs the maintainer only at the end:
+
+1. Phases 3 to 6 run under the provisional `class: bounded`, so `make
+   verify` measures every gate green and the build's evidence stays clean.
+2. The commit that opens the pull request (phase 7) sets `class: feature`,
+   `change: template-bundle` and the `adr_question` of option 2 with
+   `answered_by: null`. From then on the gate `adr-answers` reports exactly
+   one line, this change's missing answer, and the pull request is red on
+   that gate alone — as the spec of pull request #54 prescribed for its own
+   missing answers (`plans/changes/harness-decide-adr/spec.md`, "The pull
+   request waits for the maintainer's answers; no ramp").
+3. The maintainer answers after 2026-10-04 with `python3 scripts/harness.py
+   decide adr` on this branch — typed, or stated and recorded with
+   `--stated-in`. The answer file `decisions/answers/template-bundle/adr.yaml`
+   lands in this pull request, which then becomes a decision pull request
+   (title `decide(<scope>): …`, label `decision`, the block of
+   `.github/PULL_REQUEST_TEMPLATE/decision.md`), as pull request #54 was;
+   `make verify` goes green (criterion 30).
+4. If the maintainer confirms `bounded` instead, one commit removes the
+   three keys, and the gate is green without an answer.
+
+### [DECISION] — The scope of the appetite (provisional answer: phase 4)
+
+Raised by the spec review as `[AMBIGUITY]` (`findings.md`, row 2a-2): this
+spec and the parallel change `adhd-frame` (its `spec.md` at `ac30a69`,
+Terms) gave the one word two scopes.
+
+```text
+Goal in one sentence:  Say what the number on a spec's `appetite:` line
+                       covers, so the plan card and the stop of the
+                       parallel change read it as the spec meant it.
+Options:
+  1. The whole change — "the session hours the outcome is worth", as
+     LakeSwitch's D-24 words it. Consequence: `adhd-frame` changes its
+     term, or its plan card compares a phase-4 figure with a whole-change
+     one, and a card that gives phase 4 the whole appetite widens nothing.
+  2. Phase 4 — "the time the maintainer is willing to spend on phase 4 of
+     a change; a stop, not an estimate", as `adhd-frame` defines it.
+     Consequence: only this spec changes; the key keeps LakeSwitch's name
+     and unit but not its scope, and a template carried to LakeSwitch says
+     phase 4.
+Recommendation:        2 — because the stop of `adhd-frame` is the one text
+                       that acts on the number, and `decisions.md` chose the
+                       word so that the two name one concept.
+If you say "ok":       the template's note on `appetite:` says phase 4,
+                       repair rounds included; criterion 5 holds it.
+What is lost:          one number for the budget of the whole change;
+                       nothing records it.
+```
+
+**Provisional answer, 2026-09-30:** option 2, taken by phase 2a so that no
+`[AMBIGUITY]` stays open while the maintainer is away; the maintainer
+settles it at the merge. This change's own `appetite: 4` stands: research's
+3.5–4.5 hours size the building of the contract core.
 
 ### [GAP] — closed by reading
 
@@ -542,13 +650,15 @@ Each of these is reversible and binds nothing beyond this change.
   `adr_question` (with `proposed` quoted, as `prompts/02-spec.md` asks), and
   the class meanings are pointed to in `docs/WORKFLOW.md`, not restated —
   a second list would drift from the first.
-- **`appetite:` in the header, a number of session hours, for every class.**
-  LakeSwitch's key and unit (its D-24), and the word the parallel change
-  `adhd-frame` uses; in the header so that a later validator (bead
+- **`appetite:` in the header, a number of hours, for every class.**
+  LakeSwitch's key and unit (its D-24), with the scope the parallel change
+  `adhd-frame` gives the word, phase 4 (Open decisions, "The scope of the
+  appetite"); in the header so that a later validator (bead
   coding-harness-jc3) and the plan card read one place. No default number
-  (as `adhd-frame` decides for its prompts). **This change's appetite is 4
-  session hours:** research gave the chosen option 3.5–4.5 hours, and
-  `decisions.md` answer 1 took that option with that consequence.
+  (as `adhd-frame` decides for its prompts): the template shows a
+  placeholder. **This change's appetite is 4 hours:** research gave the
+  chosen option 3.5–4.5 hours of building, and `decisions.md` answer 1 took
+  that option with that consequence.
 - **The criterion form is recommended, not required** (`decisions.md`,
   "Details the orchestrator adds"): When / While / If arrives with pull
   request #60, and the template must not state a rule `main` does not have.
@@ -557,9 +667,13 @@ Each of these is reversible and binds nothing beyond this change.
   person's approval, is what `provenance.yaml`'s `human-decided` paths
   already hold.
 - **The Status values** the findings template lists: `open`, `fixed in
-  <commit>`, `in spec`, `rejected — <reason>`, each optionally followed by a
-  dash and a note. They are what the four findings files and prompt 02 use;
-  portfolio's `fix`, `accepted` and `bead` are used by none of them.
+  <commit>`, `resolved <date> by <source>`, `answered` (a phase-2a question
+  answered in phase 6), `in spec` and `rejected — <reason>`, each optionally
+  followed by a dash and a note — the values the four findings files and
+  prompt 02 use (`research.md` section 8), named as the values in use, not
+  as a closed set; a checked set is bead coding-harness-4me's. Portfolio's
+  `fix`, `accepted` and `bead` are used by none of them. Stage 2's `taken —
+  <test or criterion>` stands with the stage-2 columns (criterion 17).
 - **The house's ADR section names, mapped to MADR 4.0.0.** Six of the
   seven ADRs on `main` carry all six, the seventh five of them; a template
   that differs from every record it serves makes the next ADR the odd one,
