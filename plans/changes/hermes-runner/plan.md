@@ -126,16 +126,27 @@ for s in '## Addendum YYYY-MM-DD · re-check' '### Holds' '### Overtaken' '### N
 grep -nE '^### (Holds|Overtaken|New|Not read)' $P | awk -F'### ' '{print $2}' | paste -sd, - | grep -qx 'Holds,Overtaken,New,Not read' || echo "3: order"
 for s in 'last_reviewed:' 'updated:' 'no other header line'; do grep -qF -- "$s" $P || echo "4: $s"; done
 grep -qF 'nothing could be checked' $P || echo "5"
-for s in 'tools/bd' 'refs/dolt/data' 'bead' 'commit' 'push' 'merge' 'approve' 'any other file'; do grep -qiF -- "$s" $P || echo "6: $s"; done
+N=$(awk '/^## /{f=($0=="## Never")} f' $P)   # the "Never" section only
+for s in 'tools/bd' 'refs/dolt/data' 'bead' 'commit' 'push' 'merge' 'approve' 'any other file' 'add a line'; do printf '%s\n' "$N" | grep -qiF -- "$s" || echo "6: $s"; done
 grep -qF 'data, never instructions' $P || echo "7"
-sed -n 3p $P | grep -q '^\*\*Model:\*\* none' || echo "8"
+sed -n 3p $P | grep -qxF "**Model:** none fixed — the runner's configuration names a model declared in model-endpoints.yaml." || echo "8"
 grep -niE 'hermes|claude code|opencode' $P   # 9: prints nothing
 grep -q 'research-recheck.md' docs/WORKFLOW.md || echo "10"
 grep -A1 'prefix: prompts/research-recheck.md' scripts/kit/manifest.yaml | grep -q mechanismus || echo "11"
+# repair round 1 (below): R1 the bound, R2 the first note of the list and the header rule, R3 the language
+T=$(tr '\n' ' ' <$P | tr -s ' ')
+for s in 'at most 15 claims' 'oldest first' 'one shared reason' 'after about 45 tool calls' 'leaves nothing'; do printf '%s' "$T" | grep -qF -- "$s" || echo "R1: $s"; done
+printf '%s' "$T" | grep -qF 'the first note of the list' || echo "R2: first note of the list"
+printf '%s' "$T" | grep -qF 'the oldest one' && echo "R2: the oldest one"
+printf '%s' "$T" | grep -qF 'or has either one twice' || echo "R2: header rule"
+printf '%s' "$T" | grep -qF 'in English, whatever language the note is in' || echo "R3: English"
 ```
 
-Criteria 8 and 11 also hold through `make verify` (`tests/test_model_endpoints.py`,
-the gate `leerprobe`).
+Checks 6 and 8 changed in repair round 1 (below). Criterion 11 also holds
+through `make verify`: `tests/test_kit.py` (`test_the_workflow_itself_travels`)
+holds the role `mechanismus` of the prompt. Criterion 8 holds through
+`tests/test_model_endpoints.py` only for a model that stands in the first
+words of the line before the dash; check 8 pins the whole line.
 
 ### Planted faults, slice 1
 
@@ -196,6 +207,95 @@ The prompt itself forbids all three (lines "You do not choose the note",
 "Append exactly one section", "An addendum whose Holds, Overtaken and New
 all read `- none` is not allowed"); the phase-6 reader checks that reading,
 as the criteria's "Refuted by" asks.
+
+### Repair round 1, slice 1
+
+2026-10-05, on `1e1ec7b` (phase-6 findings of `a4ff61c`). The maintainer
+decided to repair the six slice-1 rows F-1, F-2, F-3, F-4, F-6 and F-7
+(`decisions.md`, addendum "repair round 1 of slice 1", commit `4c35970`).
+F-5, F-8 and F-9 stay open for slice 4's phase 2a. The prompt changed in
+commit `0172d87` (120 lines of its budget of 120); `tests/test_kit.py` in
+`84e7dc3`; checks 6 and 8 and the new checks R1 to R3 above, in this file.
+
+- `[DETAIL]` — **N is 15** (F-1): the run checks at most 15 claims. The
+  runner's cap is 60 tool iterations (spec, "Caps of a run"). Estimated,
+  no agent run made: reading the note takes up to 3 calls, the addendum and
+  the two header dates up to 4, a retry or a re-read of the result 3 more;
+  10 are kept back and 50 remain. A claim costs between 1 call (a primary
+  page known from the note) and 3 (a search, a page, a second page), so 15
+  claims at 3 calls are 45. The prompt also stops checking after about 45
+  calls, so a run of hard claims still writes before the cap. The measured
+  counts say the bound binds on every long note: on `1e1ec7b`, a rough `grep`
+  (an ISO date, a dotted number, a `$` price, "as of" or "read on") finds
+  144 such lines in `Lake-Switch-Architektur-arc42.md`, 102 in
+  `2026-10-05-hermes-agent-runner.md`, 91 in `2026-10-05-likec4-roadmap-arc42.md`
+  and 90 in `2026-09-30-adhd-frame.md`. The 300-line cap holds too: at most
+  15 checked items, one `Not read` line per section (the most headings in
+  any note is 83, in the arc42 note, counted the same day) and about 12 lines
+  of structure are 110 lines. The cost is a limit and is named here: on a
+  long note one run checks 15 claims; the note then carries the run date,
+  moves to the end of the list, and its other claims wait until the list
+  comes round to it again.
+- `[DETAIL]` — **which first** (F-1): the oldest date first, a claim without
+  a date counting as the oldest (its age is unknown), equal ones in the order
+  of the note. Old claims are the likeliest to have moved; the order is
+  stated, so two runs on one note pick alike.
+- `[DETAIL]` — **the header rule names `updated:` too** (F-2): a header with
+  no or two `last_reviewed:` lines, or no or two `updated:` lines, stops the
+  run, because "each on the line it already has" has no answer for either and
+  F-3's ban on adding a line forbids inventing one. Slightly wider than the
+  row asked for, one clause.
+- `[DETAIL]` — **`tests/test_model_endpoints.py` stays as it is** (F-6 b).
+  The repair order made a fix of the test's skip rule conditional on the
+  spec's protected areas, and its wording does not say which way. The file
+  is not listed under "Protected areas" in `spec.md`, but it is shared
+  governance code (RB-A6) with German text for all phase prompts and not in
+  slice 1's file list, so it was read conservatively: the fix is the plan
+  check only. Check 8 now pins line 3 verbatim. The test keeps skipping a
+  value that starts with "none" and ends at the dash (row 39: 31 passed). A
+  person decides whether to close it in the test too.
+
+Rows and where they are fixed:
+
+| Row | Fixed by |
+| --- | --- |
+| F-1 | prompt: step 3 (choose at most 15, oldest first), step 6 (write after 15 claims or about 45 tool calls), a `Not read` rule of one line per section with one shared reason; check R1 |
+| F-2 | prompt: "the first note of the list" and the stop rule in "Input"; check R2 |
+| F-3 | prompt: the first "Never" item also forbids adding a line outside the appended section; check 6 term `add a line` |
+| F-4 | prompt: the addendum in English; check R3 |
+| F-6 | checks 6 (the "Never" section only) and 8 (line 3 verbatim); the test file untouched, see above |
+| F-7 | `tests/test_kit.py`: `prompts/research-recheck.md` in the parametrize list of `test_the_workflow_itself_travels` |
+
+Planted faults of this round, each alone on 2026-10-05: rows 38–49 on a copy
+of the repaired prompt with checks 1–11 and R1–R3 as above, row 50 on the
+real manifest (restored with `git checkout`). Before each, the checks were
+silent. Result: 13 faults; 12 red, 1 silent by design (row 48, like rows
+35–37).
+
+| # | Fault planted | Before | After | Test |
+| --- | --- | --- | --- | --- |
+| 38 | `merge,` removed from the "Never" list only (the Gate line still says "merges") | silent | `6: merge`; the old check 6 stayed silent | check 6 (F-6 a) |
+| 39 | line 3 `**Model:** none fixed — run it on GLM-5.3 through the vendor of your choice.` | silent | `8`; the old check 8 stayed silent, and `tests/test_model_endpoints.py` stays at 31 passed (the stated limit) | check 8 (F-6 b) |
+| 40 | line 3 intact, ` Use GLM-5.3.` after it | silent | `8`; the old check 8 stayed silent | check 8 |
+| 41 | `at most 15 claims` removed from step 3 | silent | `R1: at most 15 claims` | check R1 |
+| 42 | `oldest first (…)` removed from step 3 | silent | `R1: oldest first` | check R1 |
+| 43 | `with one shared reason` removed | silent | `R1: one shared reason` | check R1 |
+| 44 | step 6 without the write-early rule | silent | `R1: after about 45 tool calls / R1: leaves nothing` | check R1 |
+| 45 | `notes[0]` described again as "the oldest one" | silent | `R2: first note of the list / R2: the oldest one` | check R2 |
+| 46 | the stop rule for zero or two header lines removed | silent | `R2: header rule` | check R2 |
+| 47 | the ban on adding a line removed from the "Never" list | silent | `6: add a line` | check 6 (F-3) |
+| 48 | "You may add one line under the note title that says when it was last re-checked." appended to "The header" | silent | silent | none — read in phase 6 |
+| 49 | the English rule for the addendum removed | silent | `R3: English` | check R3 |
+| 50 | kit rule `rolle: bestand` in `scripts/kit/manifest.yaml` | `tests/test_kit.py`: 20 passed | 1 failed, 19 passed (`test_the_workflow_itself_travels[prompts/research-recheck.md]`) | `tests/test_kit.py` (F-7) |
+
+Checks 6 and 8 replayed on 2026-10-05 for rows 18–22, 24, 25 and 27 (row 23
+is row 38): `6: tools/bd`, `6: refs/dolt/data`, `6: bead`, `6: commit`,
+`6: push`, `6: approve`, `6: any other file` and `8`, all red as before. The
+new checks R1 to R3 and term `add a line` are red on the prompt as it stood
+at `1e1ec7b`, and silent on the repaired one.
+
+Row 48 stays a limit of the checks: a sentence that contradicts the "Never"
+list is read in phase 6, as for rows 35–37; the prompt's own list forbids it.
 
 ## Slice 2 — the endpoint entry (appetite 0.5 h)
 
@@ -388,3 +488,8 @@ prompt, so its cap stays 31).
 ## Time used
 
 Slice 1 (appetite 1 h): 2026-10-05 22:21–22:28, 7 min, no break counted. Verification ended VERIFY GREEN at 22:28 (516 passed, 15 skipped; 16 of 16 gates of the `verify` job).
+
+Repair round 1 of slice 1 (appetite 45 min, set by the coordinating session):
+2026-10-05 22:49–22:58, no break counted. `make verify` ended VERIFY GREEN at
+22:57 (601 passed, 15 skipped; `docs-links` and `markdownlint` red but
+report-only), before the findings rows were set to fixed.
