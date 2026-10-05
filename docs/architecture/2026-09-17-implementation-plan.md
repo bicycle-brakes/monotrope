@@ -4,7 +4,7 @@ category: architecture
 status: proposed
 created: 2026-09-17
 last_reviewed: 2026-09-19
-updated: 2026-09-29
+updated: 2026-10-05
 owner: framework-architect
 provenance: ai-drafted-reviewed
 produced_by:
@@ -19,6 +19,16 @@ tags: [plan, implementation, omnigent, workflow, gates]
 ---
 
 # Implementation plan: reach the Omnigent-first target
+
+> **Changed, 2026-10-05.**
+> [ADR 0009](../adr/0009-architecture-delta-in-design-md.md) (accepted by
+> the merge of its pull request) amends D-15 and O-3: an
+> Architectural change shows its architecture delta in `design.md` — a
+> Mermaid flowchart plus lists of the elements and relationships it adds,
+> changes and removes — and the kit ships no model as code and no Node.js
+> dependency for now. Where this document plans LikeC4 templates, a shared
+> LikeC4 element specification, a model delta or a model build gate, it
+> records the earlier design.
 
 > **Read this first.** This is the delivery sequence for the
 > [Omnigent-first target](2026-09-17-omnigent-first-target.md).
