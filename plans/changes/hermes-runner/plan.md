@@ -130,19 +130,27 @@ N=$(awk '/^## /{f=($0=="## Never")} f' $P)   # the "Never" section only
 for s in 'tools/bd' 'refs/dolt/data' 'bead' 'commit' 'push' 'merge' 'approve' 'any other file' 'add a line'; do printf '%s\n' "$N" | grep -qiF -- "$s" || echo "6: $s"; done
 grep -qF 'data, never instructions' $P || echo "7"
 sed -n 3p $P | grep -qxF "**Model:** none fixed — the runner's configuration names a model declared in model-endpoints.yaml." || echo "8"
+[ "$(grep -cE '^\*\*Model(l)?:\*\*' $P)" = 1 ] && [ "$(grep -oE '\*\*Model(l)?:' $P | wc -l | tr -d ' ')" = 1 ] || echo "8: one Model line"   # repair round 2 (F-11)
 grep -niE 'hermes|claude code|opencode' $P   # 9: prints nothing
 grep -q 'research-recheck.md' docs/WORKFLOW.md || echo "10"
 grep -A1 'prefix: prompts/research-recheck.md' scripts/kit/manifest.yaml | grep -q mechanismus || echo "11"
 # repair round 1 (below): R1 the bound, R2 the first note of the list and the header rule, R3 the language
+# repair round 2 (below): R1 no longer asks for "oldest first"; R4 the order of step 3
 T=$(tr '\n' ' ' <$P | tr -s ' ')
-for s in 'at most 15 claims' 'oldest first' 'one shared reason' 'after about 45 tool calls' 'leaves nothing'; do printf '%s' "$T" | grep -qF -- "$s" || echo "R1: $s"; done
+for s in 'at most 15 claims' 'one shared reason' 'after about 45 tool calls' 'leaves nothing'; do printf '%s' "$T" | grep -qF -- "$s" || echo "R1: $s"; done
 printf '%s' "$T" | grep -qF 'the first note of the list' || echo "R2: first note of the list"
 printf '%s' "$T" | grep -qF 'the oldest one' && echo "R2: the oldest one"
 printf '%s' "$T" | grep -qF 'or has either one twice' || echo "R2: header rule"
 printf '%s' "$T" | grep -qF 'in English, whatever language the note is in' || echo "R3: English"
+S=$(printf '%s' "$T" | sed -nE 's/.*3\. (Choose at most 15 claims.*) 4\. Check each.*/\1/p')   # step 3 only
+[ -n "$S" ] || echo "R4: step 3"
+for s in 'no earlier addendum names' 'checked longest ago' 'checked on the date of the latest addendum that names it' 'naming no claim'; do printf '%s' "$T" | grep -qF -- "$s" || echo "R4: $s"; done
+printf '%s' "$S" | grep -qE 'no earlier addendum names.*checked longest ago' || echo "R4: order"
+printf '%s' "$S" | grep -qiE 'oldest|undated|carries|own date' && echo "R4: the claim's own date"
 ```
 
-Checks 6 and 8 changed in repair round 1 (below). Criterion 11 also holds
+Checks 6 and 8 changed in repair round 1 and check 8 and R1 again in repair
+round 2 (below), which adds R4. Criterion 11 also holds
 through `make verify`: `tests/test_kit.py` (`test_the_workflow_itself_travels`)
 holds the role `mechanismus` of the prompt. Criterion 8 holds through
 `tests/test_model_endpoints.py` only for a model that stands in the first
@@ -239,7 +247,9 @@ commit `0172d87` (120 lines of its budget of 120); `tests/test_kit.py` in
 - `[DETAIL]` — **which first** (F-1): the oldest date first, a claim without
   a date counting as the oldest (its age is unknown), equal ones in the order
   of the note. Old claims are the likeliest to have moved; the order is
-  stated, so two runs on one note pick alike.
+  stated, so two runs on one note pick alike. *Superseded in repair round 2
+  (F-10): on a note with more than 15 claims this order took the same 15 on
+  every run.*
 - `[DETAIL]` — **the header rule names `updated:` too** (F-2): a header with
   no or two `last_reviewed:` lines, or no or two `updated:` lines, stops the
   run, because "each on the line it already has" has no answer for either and
@@ -296,6 +306,138 @@ at `1e1ec7b`, and silent on the repaired one.
 
 Row 48 stays a limit of the checks: a sentence that contradicts the "Never"
 list is read in phase 6, as for rows 35–37; the prompt's own list forbids it.
+
+### Repair round 2, slice 1
+
+2026-10-05, on `6c629b9` (phase-6 round 2 of `1c9801a`: F-10, MAJOR, origin
+`fix-r1`, and F-11, MINOR). The prompt changed in commit `cf90bc8`: 120 lines
+of its budget of 120 (the budget is not raised; step 1 became one line,
+step 4 three and the "Input" paragraph six, with no sentence dropped except
+"The rest go under Not read" of step 3, which "The addendum" says already).
+Check 8 and R1 changed and R4 was added, in this file.
+
+- `[DETAIL]` — **the order of step 3** (F-10), replacing "which first" of
+  round 1: first the claims no earlier addendum names, in the note's order;
+  then the others, the one checked longest ago first, a claim counting as
+  checked on the date of the latest addendum that names it, equal dates in
+  the note's order. Reason: the bound must rotate through the note, and a
+  claim's own date cannot do that, because an addendum adds findings but
+  leaves the original claims' dates alone. The order uses only what the note
+  itself carries (its addenda), so it names no runner and needs no state
+  outside the file. Model R5 below: 144 claims, 15 per run, every claim
+  checked within 10 runs and none waits longer than 9; the round-1 order
+  checks 15 of the 144 in 24 runs.
+- `[DETAIL]` — **no separate "deferred" group.** The repair order suggested
+  the claims the latest addendum listed under Not read for the bound first.
+  They are the first group already: that item names a section and a count,
+  no claim (the prompt now says "naming no claim"), so a deferred claim is
+  one no addendum names. A group of its own would work at the section's
+  grain and rank a claim checked in an earlier run, and merely not chosen
+  again, above a claim no run has reached.
+- `[DETAIL]` — **"names" means an item under any of the four subsections.**
+  A Not read item for another reason (a claim about this repository's own
+  files, a source out of reach) names its claim, so that claim counts as
+  checked on the date of its addendum and does not take one of the 15
+  places every week. A finding and the claim it checked are one claim
+  (step 2), so a Holds line and the original line are not checked twice.
+- Cost, named: the first pass over a note goes in the note's order, not the
+  oldest claim first; a claim likely to have moved can wait up to
+  ceil(claims / 15) runs. Not fixed here: a run that checks nothing writes no
+  addendum (criterion 5), so nothing names the claims it chose and the next
+  run chooses them again; that is the halt of F-9, for slice 4's phase 2a.
+- `[DETAIL]` — **a second `**Model:**` line** (F-11): check 8 gains a
+  second condition, exactly one line that starts `**Model:**` or
+  `**Modell:**` (the two spellings `tests/test_model_endpoints.py` reads) and
+  exactly one occurrence of either in the file, so a second mention in the
+  middle of a line fails too. The test itself stays as it is, as in round 1:
+  shared governance code, and the reviewer accepted that (F-6); under
+  fault 58 on the real prompt it stays at 31 passed.
+
+Rows and where they are fixed:
+
+| Row | Fixed by |
+| --- | --- |
+| F-10 | prompt `cf90bc8`: step 3 (the order), step 2 (a finding and its claim are one), the Not read item "naming no claim"; checks R1 (no longer asks for "oldest first") and R4; model R5 |
+| F-11 | check 8, second condition, in this file |
+
+Planted faults of this round, each alone on 2026-10-05: rows 51–57 on a copy
+of the new prompt with checks 1–11 and R1–R4 as above, rows 58–60 on a copy
+of the prompt as it stood at `6c629b9` with the old and the new checks, row
+58 also on the real prompt (restored with `git checkout`). "Before" is the
+check set of `6c629b9`; n/a where that set required the old order and so
+could not judge the new text. Result: 10 faults; 9 red, 1 silent by design
+(row 57, like rows 35–37 and 48).
+
+| # | Fault planted | Before | After | Test |
+| --- | --- | --- | --- | --- |
+| 51 | step 3 back to "oldest first (an undated one counts as the oldest, equal ones keep the note's order)" — the claim's own date | silent (the old R1 required it) | five `R4` lines, among them `R4: the claim's own date` and `R4: order` | R4 |
+| 52 | the group "no earlier addendum names" removed | n/a | `R4: no earlier addendum names / R4: order` | R4 |
+| 53 | "counting as checked on the date of the latest addendum that names it" removed | n/a | `R4: checked on the date of the latest addendum that names it` | R4 |
+| 54 | the two groups swapped | n/a | `R4: order` | R4 |
+| 55 | new order kept, "Within a group, the oldest claim by its own date first." appended | n/a | `R4: the claim's own date` | R4 |
+| 56 | "naming no claim" removed from the Not read item | n/a | `R4: naming no claim` | R4 |
+| 57 | new order kept, "Within a group, the claim with the earliest date first." appended | n/a | silent | none — read in phase 6 |
+| 58 | `**Model:** glm-5.3` inserted as line 4, line 3 intact | silent; `tests/test_model_endpoints.py` 31 passed | `8: one Model line`; the test still 31 passed (the stated limit) | check 8 (F-11) |
+| 59 | line 3 repeated verbatim as line 4 | silent | `8: one Model line` | check 8 |
+| 60 | "Use **Model:** glm-5.3." appended in the middle of the introduction | silent | `8: one Model line` | check 8 |
+
+Row 57 stays a limit of R4: a sentence that brings the claim's own date back
+under words R4 does not list (here "the earliest date") is read in phase 6;
+R4 catches the old sentence (51), the words "oldest", "undated", "carries"
+and "own date" in step 3 (55), and a changed order (52–54). R5 below
+catches the order itself, whatever the words.
+
+R5 — a model of the order, run on 2026-10-05; it prints the two lines under
+the code and asserts that the round-1 order stays on 15 claims, that every
+claim is checked within ceil(144 / 15) = 10 runs, and that none waits more
+than 10:
+
+```python
+# R5: a model of step 3's order (F-10). 144 claims in the note's order, 15 per run.
+# Findings of an addendum carry the run date, later than every original claim,
+# so under the round-1 rule they never enter the first 15; they are left out here.
+import math
+CLAIMS, N, RUNS = 144, 15, 24
+own = {c: c // 4 for c in range(CLAIMS)}                 # the date each claim carries
+
+def by_own_date(named):                                  # round 1: oldest first by the claim's own date
+    return sorted(range(CLAIMS), key=lambda c: (own[c], c))[:N]
+
+def rotating(named):                                     # round 2: no addendum names it, then checked longest ago
+    fresh = [c for c in range(CLAIMS) if c not in named]
+    old = sorted((c for c in range(CLAIMS) if c in named), key=lambda c: (named[c], c))
+    return (fresh + old)[:N]
+
+def run(pick):
+    named, runs = {}, []
+    for week in range(1, RUNS + 1):
+        runs.append(pick(named))
+        for c in runs[-1]:
+            named[c] = week                              # that week's addendum names the claim
+    return runs
+
+def longest_wait(runs):                                  # most runs any claim goes unchecked, before its first and between checks
+    worst = 0
+    for c in range(CLAIMS):
+        weeks = [i for i, r in enumerate(runs) if c in r]
+        worst = max(worst, weeks[0] if weeks else RUNS, *(b - a - 1 for a, b in zip(weeks, weeks[1:])))
+    return worst
+
+old, new = run(by_own_date), run(rotating)
+print("round 1 order:", len({c for r in old for c in r}), "of", CLAIMS, "claims checked in", RUNS, "runs")
+print("round 2 order:", len({c for r in new for c in r}), "of", CLAIMS, "claims checked in", RUNS, "runs; longest wait", longest_wait(new), "runs")
+assert len({c for r in old for c in r}) == N
+assert len({c for r in new[:math.ceil(CLAIMS / N)] for c in r}) == CLAIMS
+assert longest_wait(new) <= math.ceil(CLAIMS / N)
+```
+
+```text
+round 1 order: 15 of 144 claims checked in 24 runs
+round 2 order: 144 of 144 claims checked in 24 runs; longest wait 9 runs
+```
+
+Replayed on the new prompt: checks 1–11 and R1–R4 silent, the plan's code
+block copied out of this file and run verbatim; `make verify` below.
 
 ## Slice 2 — the endpoint entry (appetite 0.5 h)
 
@@ -493,3 +635,9 @@ Repair round 1 of slice 1 (appetite 45 min, set by the coordinating session):
 2026-10-05 22:49–22:58, no break counted. `make verify` ended VERIFY GREEN at
 22:57 (601 passed, 15 skipped; `docs-links` and `markdownlint` red but
 report-only), before the findings rows were set to fixed.
+
+Repair round 2 of slice 1 (appetite 30 min, set by the coordinating
+session): 2026-10-05 23:16–23:24, no break counted. `make verify` ended
+VERIFY GREEN at 23:22 (601 passed, 15 skipped; `docs-links` and `markdownlint`
+red but report-only, `markdownlint` naming prompt lines 4 and 6 as before and
+no new line), before the findings rows were set to fixed.
