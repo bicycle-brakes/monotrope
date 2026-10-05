@@ -4,7 +4,7 @@ category: architecture
 status: proposed
 created: 2026-09-17
 last_reviewed: 2026-09-19
-updated: 2026-10-05
+updated: 2026-10-06
 owner: framework-architect
 provenance: ai-drafted-reviewed
 produced_by:
@@ -138,7 +138,7 @@ first: everything not marked **Amend** carries forward unchanged.
 | D-4 — export | Amend, direction confirmed | Auto-export stays off; the render is the portable contract (D-52, lakeswitch-ai PR #37, not yet ratified). The committed copy remains until all three D-52 conditions are shown — the pinned bd with verified checksum in the hosted runner was shown in #26; token read access to refs/dolt/data was recorded as shown there too, but was first shown on 2026-09-23 in #34 (correction in ADR 0004); every reader on one access point is Stage 3, bead 1jg.3. #34 removed the copy on 2026-09-23: export-identity is retired, and readers render fresh from Dolt. ADR 0004 (accepted 2026-09-23). |
 | D-5 — worktrees | Retain; clarify activation | In-repository worktrees are created through the selected tool adapter, from one freshly fetched default-branch SHA per run. Direct worker tracker writes require the five-check test and an explicit rule/mode change. A passing sample never grants embedded Dolt concurrent-writer capability. |
 | D-6 — instance gates | Retain | The portable kit retains its baseline `ruff`/`pytest` gates; domain and additional stack gates belong to the instance. |
-| D-7 — Omnigent adoption | Amend, direction confirmed | Parallel coordination starts in M0. M1 qualifies routine Bounded work; M2 adds the full cross-vendor path; M3 qualifies unattended operation; M4 adds justified hardening. Git-native verification remains independently usable. Amended again by ADR 0006 (2026-09-27): there is no M0; the path starts at M1, and parallel sessions are available from M1, each in a worktree of its own. |
+| D-7 — Omnigent adoption | Amend, direction confirmed | Parallel coordination starts in M0. M1 qualifies routine Bounded work; M2 adds the full cross-vendor path; M3 qualifies unattended operation; M4 adds justified hardening. Git-native verification remains independently usable. Amended again by ADR 0006 (2026-09-27): there is no M0; the path starts at M1, and parallel sessions are available from M1, each in a worktree of its own. Amended again by ADR 0010 (2026-10-06): M3 qualifies unattended runs of the seven-phase workflow; a recurring job outside the phases is admitted by an ADR of its own. |
 | D-8 — corpus corrections | Retain | Correct dates, missing images, ADR prefixes, language and unverified attribution in a source-correction PR; preserve provenance and historical disagreements. |
 | D-9 — rule ownership | Retain | Harness rules and their enforcers live here; domain rules stay in their instances. Each retained rule has an enforcer or a dated ramp valve. |
 | D-10 — one gate source | Retain | A platform-neutral manifest defines gates; local execution, CI and Omnigent invoke the same verifier. Generated adapters cannot add a second gate list. |

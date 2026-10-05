@@ -38,7 +38,11 @@ EXPECTED_O = tuple(f"O-{i}" for i in range(1, 5))
 # wer sie aendert, aendert eine Verantwortung.
 AMENDMENT_ADRS: dict[str, tuple[str, ...]] = {
     "D-3": ("0001-early-parallelism.md", "0006-parallel-work-without-a-pilot.md"),
-    "D-7": ("0001-early-parallelism.md", "0006-parallel-work-without-a-pilot.md"),
+    "D-7": (
+        "0001-early-parallelism.md",
+        "0006-parallel-work-without-a-pilot.md",
+        "0010-hermes-first-unattended-writing-agent.md",
+    ),
     "D-4": ("0004-tracker-render-is-the-contract.md",),
     "D-17": ("0003-public-scan-naming-boundary.md",),
     "D-15": ("0009-architecture-delta-in-design-md.md",),
