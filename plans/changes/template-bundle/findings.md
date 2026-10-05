@@ -88,6 +88,24 @@ every row before it is `base`. A second repair round that again produces rows
 (`fix-r2`) is the escalation `docs/WORKFLOW.md` §2 names, not a third round —
 as `adhd-frame` counted it (its `findings.md` on `main` at `3851f9c`).
 
+Phase 6, slice 2 — the design phase 2b and the arc42 skeleton, on commit
+`7ac9fc5` (range `b02b1be..7ac9fc5`, which holds a merge of `origin/main`
+`87daf91` at `4b0b6f3`; main's own content was not reviewed), 2026-10-05, by
+a reviewer on Opus 5.5 in a fresh context that never saw the builder's
+reasoning and wrote nothing but this file. Measured against criteria 33–65
+of `spec.md` (criterion 64 as amended in `7ac9fc5`), answers 1–9 of
+`decisions.md`, ADR 0009 as merged on `origin/main` (`a847516`) and
+`plan.md`'s slice 2 with its 74 recorded faults, of which nine were replayed
+and six variants planted that a weak test could pass. arc42's English
+sources (version 9.0-EN, July 2025) were read with `gh api` into the scratch
+directory, not committed; pull request #60 was merged with this head in
+trial (`ef7407c`, unchanged). Rows 6-9 to 6-15, origin `base` (built in
+slice 2, no repair since; the vocabulary has no `build`).
+**Verdict (slice 2): one BLOCKER, one MAJOR, five MINOR; no `[AMBIGUITY]`, no
+`[DIVERGENT]`.** The BLOCKER (6-9) is one sentence of ADR 0009 that the
+delta section does not ask for (criterion 47); the MAJOR (6-10) is that no
+later phase's prompt reads `design.md`.
+
 | ID | Severity | Dimension | Origin | Where | Finding | Status |
 |---|---|---|---|---|---|---|
 | 2a-1 | MAJOR | SPEC | base | `spec.md`, header `class: bounded`; "Open decisions", `[DECISION]` "The class of this change" | The class is `feature`, measured against `docs/WORKFLOW.md` §2 on `main`, "Change classes". (1) Option 2 quotes `feature` as "changes what the system must do" and drops the rest of the definition, "or how it is checked". This change sets how every later change is checked: prompt 02 will name the template as the form of every spec (criterion 12), and the template adds a Definition of Done, Protected areas and `appetite`, which no spec carries today (`research.md` §1.3). (2) `bounded` is "without deciding anything new", and the change decides, provisionally: the four answers of `decisions.md`, D-2's failure mode read as the refutations, protected areas read as "must not touch" rather than the ticket schema's "needs a person's approval", an `appetite` for every class, and the retirement of plan markings on `main`. That all of it writes down decisions of 2026-09-16 and practice argues for the ADR answer "no" — a feature's answer, as `frontmatter-current` and `omnigent-deny-layers` got — not for a lower class. (3) The recommendation rests partly on the gate: with `bounded`, "`make verify` stays green, so phases 3 to 7 can run while the maintainer is away". A class chosen by what it costs is the misclassification the one-way ratchet exists against (`docs/research/arc42_Referenzarchitektur_Agentischer_Delivery-Workflow.md` §8.2 and ADR-06, "too simple to need approval"), and classing down settles the ADR answer without the maintainer (`plans/changes/harness-decide-adr/spec.md`, "classes upward where the text is silent"). (4) The goal line says the class decides the ADR question only; on pull request #60 it also picks the reviewer of phases 2a and 6 (Fable 5.1 for `bounded`, Codex for `feature`). Verdict: `feature`, with `adr_question.proposed: "no"`. The maintainer decides at the merge. | in spec — the `[DECISION]` quotes the definition in full and records this verdict and a path that needs the maintainer only at the end: phases 3 to 6 run under the provisional `bounded`; the commit that opens the pull request sets `class: feature`, `change` and `adr_question`, and the pull request is then red on exactly one line of `adr-answers` until the maintainer answers, as the spec of pull request #54 prescribed; the answer file then lands in this pull request, which becomes a decision pull request (the one exception to the protected area `decisions/answers/`); criterion 30 and the Definition of Done measure `verify` on the commit the maintainer merges |
@@ -106,6 +124,13 @@ as `adhd-frame` counted it (its `findings.md` on `main` at `3851f9c`).
 | 6-6 | MINOR | SPEC | base | `plan.md`, "Phase 7" (lines 228–240) | The commit that sets `class: feature` changes the header of `spec.md` on 2026-10-05 or later, while its `updated:` says 2026-09-30. The gate `frontmatter-current` compares `updated:` with the committer date of the file's newest commit (`scripts/check_frontmatter_current.py`, module docstring) and reports the file stale — a second red line beside the expected `adr-answers` line. The plan names `python3 scripts/check_frontmatter_current.py --stamp` only for phase 4 (step 6). What should hold: before the maintainer's answer, `make verify` is red on the one `adr-answers` line and nothing else. (criterion 30) | open — not repaired in this round, on purpose: the class commit is phase 7's. `plan.md`, "Phase 7", now says that the class commit also stamps `updated:` in `spec.md` and that the pull request becomes a decision pull request (title `decide(template-bundle): …`, label `decision`, the block of `.github/PULL_REQUEST_TEMPLATE/decision.md`) once the answer file lands. Round 2: unchanged and still owed to the class commit |
 | 6-7 | MINOR | SPEC | fix-r1 | `spec.md`, "Protected areas", third bullet, and "Definition of Done", third item; `docs/WORKFLOW.md`, lines 535–536 | The spec still forbids what the repair of 6-5 did, and the departure is recorded only in `plan.md` and this file. The spec says the change must not touch `docs/WORKFLOW.md` "beyond the opening note and the plan-marking paragraph of §4", and lists its exceptions in that same bullet; repair round 1 rewrote the first sentence of the next paragraph and recorded it as a `[DETAIL]` in `plan.md` ("Not touched", "Repair round 1") without adding it there. Case: in phase 7 the pull request body reports the Definition of Done item "The protected areas untouched … shown by the pull request's file list"; against the spec as written that item is false, and the file list cannot show it either way, because `docs/WORKFLOW.md` is in it for the allowed edits. In substance the departure is harmless, measured: the trial merge with #60 conflicts in the same two hunks of `docs/WORKFLOW.md` as before the round (the opening note; §4, where this side's part grows from four lines to five), and the spec's `[DETAIL]` "Overlaps with pull request #60" (keep #60's §4) resolves both unchanged. Not `[DIVERGENT]`: `plan.md` records a departure from the rule, not a competing rule. What should hold: the spec's bullet names this sentence as an exception, as it names its others, or the pull request body names the departure where it reports the Definition of Done. (Protected areas; Definition of Done, item 3) | open |
 | 6-8 | MINOR | MAINT | base | `spec.md`, `plan.md`, `research.md`, `decisions.md`, `findings.md`, header line `implementation_status: none` each; `plans/INDEX.md` | All five artefacts of the change say `implementation_status: none`, and the regenerated index lists the change as unbuilt, while the branch has carried the built templates, their test and the edited prompts since phase 4 (`e3f997e`). `plans/_README.md` says the field moves when the code moves; `harness-decide-adr` moved its spec and plan to `partial` after its phase 4 (`1964244`), and `adhd-frame`'s review held it to the same (its F-6, on `main`). Case: a reader of `plans/INDEX.md` on this branch, or after the merge, sees nothing of this change built. The row existed before repair round 1; the first phase-6 review missed it. What should hold: at least `spec.md` and `plan.md` say `partial`. (no criterion; the plans convention) | open |
+| 6-9 | BLOCKER | SPEC | base | `templates/design.md`, lines 76–105 ("Architecture delta"); ADR 0009 on `origin/main` (`a847516`), lines 124–127 | The delta section lacks one thing ADR 0009 decides for it. The decision's second contract says: "Elements are named as the existing diagrams and ADRs name them, as in LakeSwitch's D-58" (lines 126–127). It is what the ADR puts in place of the single definition per element that a model as code would have given; its revisit trigger 2 (the same element in three or more pictures, renamed or split by hand, lines 145–146) and its agreement with D-58 ("names the touched elements as the existing diagrams and ADRs name them", lines 69–70) rest on it. Neither the section nor `prompts/02b-design.md` nor section 5 of `templates/arc42.md` asks for it (`grep -n "named as\|existing diagram"` over the three: nothing). Phase 4's review counterpart of criterion 47 (`plan.md`, "Verification (slice 2)") counted "three contracts" and did not see this one. Case: the first `architectural` change draws a box "Gate runner" for what the existing diagrams call the verify job; the template asked for nothing else, and the phase-6 reviewer has no line of the form to hold it against. The other reading — the sentence belongs to the contract "No model as code in the kit now" and binds no section — is rejected here: its subject is the elements, and the delta's lists are lists of elements and relationships. What should hold: the section asks that elements and relationships be named as the existing diagrams and ADRs name them; one sentence, which a test can hold by its words. (criterion 47, "an element ADR 0009 requires of the delta that the section lacks") | open |
+| 6-10 | MAJOR | MAINT | base | `prompts/02b-design.md`, lines 40–44; `prompts/03-plan.md`, lines 7–8; `prompts/06-review.md`, line 6; ADR 0009, lines 165–168 | No prompt of a later phase reads `design.md`. The handover to the plan is stated only in the design prompt ("Phase 3 plans from `spec.md` and `design.md` …"), which a phase-3 session does not read: prompt 03 says the next session needs `plan.md` and `spec.md` and names no input. Prompt 06's input is "the diff and `spec.md`", while ADR 0009 leaves the truth of the delta "the reviewer's question in phase 6". Case: the first `architectural` change runs 2b; a fresh phase-3 session started with prompt 03 plans from `spec.md`; phase 6 reviews the diff against `spec.md`; the chosen alternative and the delta are read by nobody after 2b, and no gate notices. The spec chose the route for phase 3 (criterion 38 and its `[DETAIL]` "The plan takes the design in by the design prompt") and is silent on phase 6; both prompts are protected here, and pull request #60 rewrites 06. Not a violation of the spec; a person decides — for example one input line each in prompts 03 and 06 once #60 has merged, as a bead of its own. (criterion 38; ADR 0009, Consequences) | open |
+| 6-11 | MINOR | SPEC | base | `spec.md`, criterion 64 and its amendment (`7ac9fc5`); `plan.md`, "Stop — criterion 64 does not hold as written", the slice-2 check block (line 443) and "Verification (slice 2)" | The amendment is sound and, in substance, no goal-post move. Measured at `7ac9fc5` against #60 at `ef7407c`: `git merge-tree --write-tree --name-only` reports five files for this head and two for `origin/main` `87daf91` (the two architecture documents of 2026-09-17, which ADR 0009 and #60 both edit); the difference is exactly the three predicted files. The conflict hunks are those the criterion names (the opening note, the routing table of §3 and §4 of `docs/WORKFLOW.md`; the prompt entries and the cap of `scripts/kit/probe.py`; `plans/INDEX.md`), and the tree resolved as the spec's `[DETAIL]`s say passes 144 of 144 cases of `tests/test_templates.py`, `tests/test_kit.py` and `tests/test_model_endpoints.py`. Two loose ends: (1) the refutation went from "a conflict in another file or hunk" to "another file in that difference" — the hunk half was not part of the contradiction with criterion 65 and fell without a reason; (2) `plan.md` still records the stop as open ("Slice 2 stays open at this one criterion"; "criterion 64 is the stop above"), and its check line for 64 (`git merge-tree --write-tree --name-only HEAD origin/feat/stage-2-codex-glm  # 64: … only`) now prints five files. What should hold: the refutation keeps "or hunk"; `plan.md` records the amendment and the check as it now runs. (criterion 64) | open |
+| 6-12 | MINOR | SPEC | base | `tests/test_templates.py`: `test_delta_asks_for_the_c4_level_of_each_box`, `test_arc42_asks_only_what_a_reader_needs`, `test_workflow_states_d14_by_class` | Planted on `7ac9fc5`, one at a time, each file restored: four faults keep all 88 cases of the file green. (a) A box without a level, `app["what changes"]`, and (b) a third box `store[("the store")]` without one: the test reads only labels of the form `["Word:`, so a box without that shape is not seen — the half of criterion 47 that phase 4 put under a test. (c) The skeleton's opening loses its whole first paragraph (fill only what a named reader needs; one line where a section has nothing): green, because "reader" survives in the second paragraph's "a later reader". Recorded fault A15 is red only when all four "reader" go; with three of four removed it stays green. Criterion 58's refutation ("one of the three missing") is met, and the test does not see it. (d) The D-14 paragraph of `docs/WORKFLOW.md` says an `architectural` change "never" runs 2b: green, because the test holds the class names, not the rule; the prompt's lines are held word by word (`d14_problems`), the doctrine's are not. (d) stays within criterion 52's refutation as written; (a) to (c) do not. What should hold: every node of the mermaid block carries one of the four levels; the opening's first item is held by its own words; the doctrine's D-14 words held as the prompt's are. (criteria 47, 52, 58) | open |
+| 6-13 | MINOR | MAINT | base | `prompts/02b-design.md`, line 34; `templates/design.md`, lines 70–72 | "a `feature` whose ADR answer is 'yes'" names something that is usually missing at 2b. The answer is the maintainer's (`docs/WORKFLOW.md`, "Change classes …": "The proposal only proposes. The maintainer answers"), recorded in `decisions/answers/<change>/adr.yaml` and in practice given at the merge — this change carries a provisional class until then, as `harness-decide-adr` did. Case: a `feature` proposes `adr_question.proposed: "yes"`; at 2b no answer exists, so its design writes `None — …` under ADR draft; the maintainer answers "yes" at the merge, and the ADR is then written without the design that should have drafted it. What should hold: the draft is owed when the ADR question is proposed or answered "yes". (no criterion; criterion 42 asks only for `architectural`) | open |
+| 6-14 | MINOR | MAINT | base | `templates/arc42.md`, lines 106–114; arc42 `EN/adoc/about-arc42.adoc` (9.0-EN) | The credit leaves out the copyright notice and the "and contributors" that arc42 supplies with its template: "Created, maintained and (C) by Dr. Peter Hruschka, Dr. Gernot Starke and contributors." (`about-arc42.adoc`, read with `gh api` on 2026-10-05). CC BY-SA 4.0, section 3(a)(1)(A)(i) and (ii), asks a reuser to retain the creators' identification and a copyright notice where the licensor supplies them. Everything else is there: the creators, version and date, both links, what was changed, the non-endorsement and the licence of the adaptation; and the sentence that a copy's content stays its author's matches the licensors' own `LICENSE.txt` ("Publishing an architecture document in arc42 structure does not place your own content under CC BY-SA"). That `LICENSE.txt` asks only for credit, a licence link and the changes "in any reasonable manner", which the credit gives — so a suspicion, not a defect; an assessment, not legal advice. What should hold: the credit carries "© Peter Hruschka, Gernot Starke and contributors". (criterion 56 does not ask for it) | open |
+| 6-15 | MINOR | MAINT | base | `docs/WORKFLOW.md`, line 258; `templates/spec.md`, line 74; `prompts/02b-design.md`, line 22; `templates/design.md`, lines 47–48 and 92–100; `tests/test_templates.py`, lines 3 and 41 | Form. (1) Two inserted paragraphs stand as single lines in prose wrapped at 80 columns: the D-14 paragraph of `docs/WORKFLOW.md` (350 characters) and the Non-goals sentence of `templates/spec.md` (128); the report-only markdownlint run of `make verify` flags both (MD013). The plan's insertion block showed them unwrapped, and they were copied so. (2) A bead id carries a sentence, twice (`AGENTS.md`, house rule 7): "until the validator of bead coding-harness-jc3 lands" in the prompt and in `docs/WORKFLOW.md`; a reader without the session does not learn which validator. "Until the change-artefact validator lands (bead coding-harness-jc3)" keeps the string criteria 36 and 52 test. (3) `templates/design.md` mixes `*` bullets (Alternatives) with `-` bullets (the three lists; MD004). (4) The comment "The regex of `tests/test_model_endpoints.py::prompt_modelle`, copied" stands above `ARC42_SECTIONS`, not above `MODEL_LINE`; the module docstring says "Criteria 1-65", while 47, 55 and 63–65 are held by review or command. Not counted: the design prompt's model line (124 characters) and its fence without a language, which follow prompts 02 and 03. (house rules 1 and 7; no criterion) | open |
 
 Reviewer session: none — phase 2a ran as a sub-agent (Opus 5.5,
 `claude-opus-5-5`) of the orchestrating session, without an id a later
@@ -113,6 +138,8 @@ session can resume; phase 6 starts a fresh session and says so here.
 Phase 6 did so: a fresh sub-agent (Opus 5.5, `claude-opus-5-5`) of the
 orchestrating session, again without an id a later round could resume.
 Phase 6, round 2: the same, a fresh sub-agent (Opus 5.5, `claude-opus-5-5`)
+without an id.
+Phase 6, slice 2: the same, a fresh sub-agent (Opus 5.5, `claude-opus-5-5`)
 without an id.
 
 ## Checked without a finding
@@ -266,6 +293,81 @@ Phase 6, round 2, on `4c1bf24`, 2026-10-05:
   yet" replaced by a pointer; the index regenerated): 55 of 55 cases of
   `tests/test_templates.py` pass.
 
+Phase 6, slice 2, on `7ac9fc5`, 2026-10-05:
+
+- **The head.** `make verify` with `commit.gpgsign=false`: `VERIFY GREEN`,
+  605 passed, 15 skipped; the Leerprobe carries 441 of 473 cases.
+- **D-14 per class.** The prompt's four lines (`prompts/02b-design.md`, lines
+  17–20), the paragraph of `docs/WORKFLOW.md` (line 258) and the Non-goals
+  sentence of `templates/spec.md` agree with D-14 as recorded
+  (`docs/architecture/target-architecture.md`, line 365: mandatory for
+  `architectural`, optional for a `feature` with one sentence in `spec.md`,
+  absent for `bounded` and `spike`) and with the rule text of bead
+  coding-harness-jc3 (read with `tools/bd show`, nothing written). Both places
+  say that nothing checks the rule until that validator lands and that the
+  review holds it; no sentence claims a gate. Their form is 6-15.
+- **The delta against ADR 0009**, apart from 6-9: a fenced `mermaid`
+  `flowchart` of the part the change touches, as it is after the change,
+  each box labelled with its C4 level (person, system, container, component),
+  the example labelled so; below it the three lists Added, Changed and
+  Removed; one sentence in their place when nothing architectural moves; ADR
+  0009 named; no LikeC4, `.c4` or model asked for (ADR 0009's own validation
+  `grep` finds nothing in `templates/`, `scripts/kit/` and
+  `decisions/gates.yaml`). Nothing is asked that the ADR does not decide.
+- **The arc42 copy check (criterion 55).** The 14 files of `EN/adoc/` of
+  `github.com/arc42/arc42-template` (`version.properties`: 9.0-EN, July
+  2025), fetched with `gh api` into the scratch directory and not committed,
+  against the skeleton's 458 words outside its header block, headings and
+  credit: no shared run of eight words, nor of five or four; the whole
+  skeleton, credit included, shares none of eight. The script sees a copy:
+  one sentence of `02_architecture_constraints.adoc` appended gives 13 runs.
+  The twelve titles are the `==` titles of the twelve section files, in
+  order. arc42's text is in the skeleton as titles and as names in the
+  credit, nothing more.
+- **The licence statement** stands in the body after section 12, outside the
+  leading comment, so GitHub shows it and a copy keeps it: an adaptation of
+  arc42 under CC BY-SA 4.0 with the licence's URL, creators, version, date,
+  `https://arc42.org`, what was changed, the non-endorsement, and that a
+  copy's content stays its author's — as answer 9 and option 1 say.
+  Attribution: 6-14.
+- **2b beside #60's 4b** (trial merge, resolved in a scratch worktree, then
+  removed): the 2b and 4b rows stand together in §2 of `docs/WORKFLOW.md`
+  and in `AGENTS.md`, with the same columns and the same italic qualifier
+  (*(by class)*, *(stage 2)*); §3's routing table takes the 2b row after
+  #60's 2a row (Fable 5.1); #60's stage-2 routing table in §4 routes
+  reviewers and needs no 2b row.
+- **The model line and the gate.** 02b follows prompts 02 and 03 (Opus 5.5
+  at effort `xhigh`, the same command line) rather than 02a and 06 (Opus 5.5
+  until stage 2, a fresh context), which fits a phase that writes rather than
+  reviews; its gate names `scripts/plans_registry.py --check`, the gate that
+  exists (the spec's `[DETAIL]`), and its question block is prompt 03's, with
+  "design" for "plan". `tests/test_model_endpoints.py` has the case
+  `[02b-design.md-Opus 5.5]`.
+- **Filled copies under the gates.** A filled `design.md` placed as
+  `plans/changes/template-bundle/design.md` and a filled skeleton placed as
+  `docs/architecture/coding-harness.md`, committed in a scratch worktree
+  (removed afterwards): `make verify` `VERIFY GREEN` once `plans/INDEX.md` is
+  regenerated, which any new artefact needs.
+- **The kit and the file list.** `probe.py --list` carries
+  `prompts/02b-design.md`, `templates/design.md` and `templates/arc42.md`;
+  the diff of `scripts/kit/probe.py` is one `REIST_NICHT` entry and the cap
+  with its comment. Against `origin/main` the branch does not touch prompts
+  04, 06 or 07, `README.md`, `model-endpoints.yaml`, `docs/adr/`,
+  `docs/architecture/` or `.github/`; prompt 03 loses only its markings
+  section (slice 1). Criterion 65: `a847516` is an ancestor of the head. No
+  German word among the added lines.
+- **The replayed faults** (one at a time in the worktree, each restored,
+  `git status` clean afterwards): D22, D18, A15, A11, W8, P10, T1 and P4 are
+  red in the tests the record names; K2 leaves `tests/test_kit.py` green (19
+  passed) and turns `probe.py --strict` to exit 2, naming the 02b case, as
+  recorded. Of six variants, four are 6-12; the other two — the delta's list
+  items removed under their labels, and the D-14 paragraph claiming a gate
+  checks the rule — stay green within criteria 44 and 36/52, which hold
+  labels by test and the claim by review.
+- **Rows 6-6 to 6-8** stand as round 2 left them. 6-7's "what should hold"
+  is met since `d68dd26`: the spec's Protected areas name the first sentence
+  of the paragraph after §4's plan-marking paragraph as an exception.
+
 ## Not checked
 
 - MADR 4.0.0's own text: `research.md` §8, gap 1, is taken as read.
@@ -283,8 +385,33 @@ Phase 6, round 2, on `4c1bf24`, 2026-10-05:
 - Round 2: `make verify` and `tests/test_kit.py` on the #60 trial merge (an
   archive without git), and a three-way merge of this branch, `main` and #60.
 - Round 2: the remaining ten of the seventeen recorded faults — not replayed.
+- Slice 2: the remaining 65 of the 74 recorded faults — not replayed.
+- Slice 2: GitHub's rendering of the Mermaid example — Mermaid renders in
+  the browser, and no pull request exists to look at.
+- Slice 2: `probe.py --strict` and `make verify` on the trial merge with #60
+  (phase 4 recorded 473 of 506 for the probe there).
+- Slice 2: LakeSwitch's D-58 itself — cited from ADR 0009.
+- Slice 2: the hosted CI — no pull request exists yet.
 
 ## For phase 7
+
+Slice 2, on `7ac9fc5`, 2026-10-05:
+
+- **Verdict: not yet.** 6-9 is a BLOCKER until the Architecture delta
+  section asks that elements be named as the existing diagrams and ADRs name
+  them — one sentence, and one assertion if a test is to hold it. 6-10, the
+  MAJOR, is for the maintainer: whether prompts 03 and 06 name `design.md` as
+  input, in a change of their own after #60. The MINORs do not stop the pull
+  request; 6-11 and 6-15 are text-only and fit the same repair commit.
+- **A repair of 6-9 is repair round 2 of this change.** Round 1 produced a
+  row of origin `fix-r1` (6-7); a row that round 2 produces would be
+  `fix-r2`, and two consecutive rounds of `fix-r` origin are the escalation
+  to the maintainer that `docs/WORKFLOW.md` §2 names, not a third round.
+- **Owed by phase 7 as before:** 6-6 (the stamp with the class commit), 6-7
+  (its Status — the spec carries the exception since `d68dd26`), 6-8
+  (`implementation_status`), and the pull request body's items of the
+  Definition of Done, now with the arc42 licence exception for bead
+  coding-harness-lir and criterion 64 as amended.
 
 Round 2, on `4c1bf24`, 2026-10-05:
 
