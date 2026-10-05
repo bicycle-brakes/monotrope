@@ -841,3 +841,13 @@ Phase 4 and its repair rounds, read with `date` (CEST); appetite 4 h.
 - 14:39–14:40, 1 min — the seventeen planted faults, after and before.
 - 14:40–14:46, 6 min — phase 7 text, the section above, the rows' Status, the stamp, `make verify` three times (14:43, 14:45, 14:46: the same counts each time), the trial merges, the 55 and 53 cases on the merged trees.
 - Total 2026-10-05 14:34:40–14:47, 12 min of 4 h for the round (the commit and push follow within the minute); with the 9 min of the build, 21 min of 4 h.
+
+Slice 2, read with `date` (CEST); appetite 3 h 39 min.
+
+- 2026-10-05 18:06:35–18:07:41, 1 min — the inputs, ADR 0009 on its branch, `origin/main` (`87daf91`, unchanged since the fetch, then moved); the licence answer in the spec (`b29dfb9`).
+- 18:07:41–18:09:30, 2 min — step 8–10: the design prompt, the design template, the five insertions (`7a8386b`).
+- 18:09:30–18:11:13, 2 min — the merge of `origin/main` that the coordinating session asked for (`4b0b6f3`, 18:10:50) and step 11 (`0553d04`).
+- 18:11:13–18:14:41, 3 min — steps 12 and 13 (`555601f` 18:13:05, `3ede444` 18:14:41) and the copy check of criterion 55.
+- 18:14:41–18:22:46, 8 min — the 74 planted faults, the Leerprobe at the merge base, the trial merge with #60, `make verify` (18:22, green), the record (`ed923cc`).
+- 18:22:46–18:23:44, 1 min — this section and the last `make verify` (`VERIFY GREEN`, 605 passed, 15 skipped, Leerprobe 441 of 473); the commit and push follow within the minute.
+- Total 2026-10-05 18:06:35–18:23:44, 17 min of 3 h 39 min for this slice; with slice 1's 21 min, 38 min of 4 h. No repair round. The slice ended at the four-line stop on criterion 64 (above), not at the appetite.
