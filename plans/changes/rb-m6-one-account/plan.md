@@ -232,7 +232,21 @@ rule 8), so `make verify` stays red on the gate `adr-answers` only.
 
 ### Time used
 
-2026-10-05 23:27:56–TIME_END_PLACEHOLDER, SPAN_PLACEHOLDER (appetite 2 h).
+2026-10-05 23:27:56–23:44:02, 16 min 6 s (appetite 2 h); no break, no appetite stop reached.
+
+### Verify
+
+`make verify` at `22657eb` (2026-10-05, network and the maintainer's `gh`
+login present): `pytest` 638 passed, 16 skipped (600 and 15 at `979c8bd`);
+gate `ruleset` green; every other block gate green except `adr-answers`, which
+is red on exactly the missing ADR answer for `rb-m6-one-account` (the same
+single red as at `979c8bd`). `markdownlint` and `docs-links` are report-only
+and red as before. The plan's other commands: `ramp_valves.py --format=json |
+grep ruleset-assert` prints nothing, 26 valves open and none due (27 before);
+`ci_gates.py --check-ci` green and `.github/workflows/ci.yml` identical to
+`979c8bd`. The rule set differs from `979c8bd` only in the RB-M6 row, the two
+header keys and the 4.0.0 entry. The only edit after that run is this section
+and the time line.
 
 ### Deviations
 
