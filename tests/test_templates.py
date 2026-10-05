@@ -1,12 +1,13 @@
-"""The three templates: a spec, a findings file, an architecture decision record.
+"""The templates and the design phase: a spec, a findings file, a decision record, a design.
 
-Criteria 1-29 of plans/changes/template-bundle/spec.md. A template is a form to
+Criteria 1-65 of plans/changes/template-bundle/spec.md. A template is a form to
 copy, so the tests hold it against what reads its copies: the gate modules
 (`plans_registry`, `check_frontmatter_current`, `check_adr_answers`, read by
 attribute at call time, so a constant changed in a test reaches the check),
-`decisions/gates.yaml`, and the workflow texts that name a template. Three
-counter-probes plant the fault a check must catch. A case that reads a file the
-kit does not carry (`AGENTS.md`) skips where that file is absent.
+`decisions/gates.yaml`, and the workflow texts that name a template or the
+design phase. Counter-probes plant the fault a check must catch. A case that
+reads a file the kit does not carry (`AGENTS.md`) skips where that file is
+absent.
 """
 
 from __future__ import annotations
@@ -27,7 +28,8 @@ import check_adr_answers as adr_answers  # noqa: E402
 import check_frontmatter_current as frontmatter_current  # noqa: E402
 import plans_registry  # noqa: E402
 
-NAMES = ("spec.md", "findings.md", "adr.md")
+NAMES = ("spec.md", "findings.md", "adr.md", "design.md")
+DESIGN_PROMPT = "prompts/02b-design.md"
 WORKFLOW_TEXTS = [
     "AGENTS.md",
     "docs/WORKFLOW.md",
@@ -36,6 +38,15 @@ WORKFLOW_TEXTS = [
 MARKINGS = ("[FLASH]", "[GLM5.3]", "[SONNET]", "plan-marking", "Model markings")
 VERIFY_LINE = "- `verify` green."
 CHANGE = "filled-change"
+# The regex of `tests/test_model_endpoints.py::prompt_modelle`, copied: importing that module runs its reads.
+MODEL_LINE = re.compile(r"^\*\*(?:Modell|Model):\*\*\s*([^\n—]+?)\s*(?:—|\.\s*$|$)", re.M)
+# What decision D-14 asks of a class, as words the prompt's line for that class must hold.
+D14_WORDS = {
+    "architectural": ("always",),
+    "feature": ("spec.md", "one sentence"),
+    "bounded": ("never",),
+    "spike": ("never",),
+}
 
 
 # --- reading a template -------------------------------------------------------
@@ -102,6 +113,58 @@ def flat(text: str) -> str:
     return " ".join(text.split())
 
 
+def raw_section(name: str, title: str) -> str:
+    """One section's text with its fenced blocks, after the template's leading comment."""
+    lines = re.sub(r"<!--.*?-->", "", read(name), count=1, flags=re.S).splitlines()
+    start = lines.index(f"## {title}") + 1
+    end = next((i for i in range(start, len(lines)) if lines[i].startswith("## ")), len(lines))
+    return "\n".join(lines[start:end])
+
+
+def lead(name: str) -> str:
+    """The text before a template's first `## `, outside its leading comment and its fences."""
+    lines = prose(name)
+    return "\n".join(lines[: next((i for i, line in enumerate(lines) if line.startswith("## ")), len(lines))])
+
+
+def markdown_section(text: str, heading: str) -> str:
+    """The text under the heading that begins with `heading`, up to the next heading of its level or a higher one."""
+    lines = text.splitlines()
+    start = next(i for i, line in enumerate(lines) if re.match(r"#+ ", line) and line.lstrip("# ").startswith(heading))
+    level = len(lines[start]) - len(lines[start].lstrip("#"))
+    end = next((i for i in range(start + 1, len(lines)) if re.match(rf"#{{1,{level}}} ", lines[i])), len(lines))
+    return "\n".join(lines[start + 1 : end])
+
+
+def first_table(text: str) -> list[list[str]]:
+    """The rows of the first table in the text, each as its cells; the header and the rule row are left out."""
+    rows: list[list[str]] = []
+    for line in text.splitlines():
+        if line.startswith("|"):
+            rows.append([cell.strip() for cell in line.strip().strip("|").split("|")])
+        elif rows:
+            break
+    return rows[2:]
+
+
+def prompt_model(text: str) -> str:
+    found = MODEL_LINE.search(text)
+    assert found, "the prompt has no **Model:** line"
+    return found.group(1).strip()
+
+
+def d14_problems(text: str) -> list[str]:
+    """For each class of `CLASSES`, read at call time: the one list line that begins with it, and its words."""
+    problems = []
+    for name in adr_answers.CLASSES:
+        lines = [flat(line) for line in text.splitlines() if line.startswith(f"- `{name}`")]
+        if not lines:
+            problems.append(f"no line for {name}")
+            continue
+        problems += [f"{name}: {word!r} is missing" for word in D14_WORDS.get(name, ()) if word not in lines[0]]
+    return problems
+
+
 def example_header(name: str) -> str:
     return next(body for info, body in split_fences(read(name))[1] if info == "yaml")
 
@@ -118,10 +181,10 @@ def fill(header: str, change: str = CHANGE) -> str:
     return re.sub(r"<[^<>\n]+>", "Filled", header)
 
 
-def header_problems(name: str, root: Path, *, answers: bool) -> list[str]:
+def header_problems(name: str, root: Path, *, answers: bool, placed_as: str = "findings.md") -> list[str]:
     """What the gates say about the filled-in example header, placed as a file under `plans/changes/`."""
     text = f"---\n{fill(example_header(name))}\n---\n\n# Body\n"
-    path = root / "plans" / "changes" / CHANGE / ("spec.md" if answers else "findings.md")
+    path = root / "plans" / "changes" / CHANGE / ("spec.md" if answers else placed_as)
     path.parent.mkdir(parents=True)
     path.write_text(text, encoding="utf-8")
     meta = plans_registry._frontmatter(path)
@@ -404,3 +467,137 @@ def test_workflow_note_names_neither_template() -> None:
     text = workflow_text("docs/WORKFLOW.md")
     note = text.split("Not all of it is here yet", 1)[1].split("One thing is missing", 1)[0]
     assert "templates/findings.md" not in note and "templates/plan-marking.md" not in note
+
+
+# --- the design phase (criteria 33-38) ---------------------------------------------
+
+
+def test_design_prompt_names_the_template() -> None:
+    assert "templates/design.md" in workflow_text(DESIGN_PROMPT)
+
+
+def test_design_prompt_states_d14_for_each_class() -> None:
+    assert d14_problems(workflow_text(DESIGN_PROMPT)) == []
+
+
+def test_d14_check_sees_a_new_class(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setattr(adr_answers, "CLASSES", (*adr_answers.CLASSES, "planted"))
+    assert "no line for planted" in d14_problems(workflow_text(DESIGN_PROMPT))
+
+
+def test_design_prompt_says_nothing_checks_the_rule_yet() -> None:
+    assert "coding-harness-jc3" in workflow_text(DESIGN_PROMPT)
+
+
+def test_design_prompt_says_where_the_adr_draft_goes() -> None:
+    text = flat(workflow_text(DESIGN_PROMPT))
+    assert "docs/adr/" in text and "decision pull request" in text
+
+
+def test_design_prompt_hands_the_design_to_the_plan() -> None:
+    paragraphs = [flat(p) for p in workflow_text(DESIGN_PROMPT).split("\n\n")]
+    assert any(all(word in p for word in ("Phase 3", "design.md", "plan.md", "phase 4")) for p in paragraphs)
+
+
+# --- the design template (criteria 39-48) -------------------------------------------
+
+
+def test_design_sections_in_order() -> None:
+    assert headings("design.md") == ["Alternatives", "Interfaces", "Data model", "ADR draft", "Architecture delta"]
+
+
+def test_alternatives_ask_for_two_with_consequences_and_a_choice() -> None:
+    text = flat(section("design.md", "Alternatives"))
+    assert "at least two" in text.lower() and "consequence" in text.lower() and "Chosen" in text
+
+
+@pytest.mark.parametrize("title", ["Interfaces", "Data model", "ADR draft"])
+def test_empty_parts_say_why(title: str) -> None:
+    assert any(line.startswith("None — ") for line in section("design.md", title).splitlines())
+
+
+def test_adr_draft_takes_the_record_form() -> None:
+    text = flat(section("design.md", "ADR draft"))
+    assert "templates/adr.md" in text and "architectural" in text
+
+
+def test_delta_is_a_mermaid_flowchart_after_the_change() -> None:
+    outside, blocks = split_fences(raw_section("design.md", "Architecture delta"))
+    diagrams = [body for info, body in blocks if info == "mermaid"]
+    assert diagrams, "no mermaid block in the Architecture delta section"
+    assert diagrams[0].split()[0] == "flowchart"
+    assert "after the change" in flat("\n".join(outside))
+
+
+@pytest.mark.parametrize("path", ["templates/design.md", DESIGN_PROMPT])
+def test_no_likec4_model_is_asked(path: str) -> None:
+    text = workflow_text(path).lower()
+    assert "likec4" not in text and ".c4" not in text
+
+
+def test_delta_lists_below_the_diagram() -> None:
+    after = raw_section("design.md", "Architecture delta").split("```mermaid", 1)[1].split("```", 1)[1]
+    places = [after.find(f"**{label}**") for label in ("Added", "Changed", "Removed")]
+    assert -1 not in places and places == sorted(places)
+
+
+def test_delta_says_why_when_nothing_moves() -> None:
+    assert "nothing architectural moves" in flat(section("design.md", "Architecture delta")).lower()
+
+
+def test_delta_names_adr_0009() -> None:
+    assert "ADR 0009" in flat(section("design.md", "Architecture delta"))
+
+
+def test_delta_asks_for_the_c4_level_of_each_box() -> None:
+    """ADR 0009: each box of the diagram is labelled with its C4 level."""
+    levels = ("person", "system", "container", "component")
+    raw = raw_section("design.md", "Architecture delta")
+    outside, blocks = split_fences(raw)
+    text = flat("\n".join(outside)).lower()
+    assert "c4 level" in text and all(level in text for level in levels)
+    labels = re.findall(r'\["(\w+):', next(body for info, body in blocks if info == "mermaid"))
+    assert labels and {label.lower() for label in labels} <= set(levels)
+
+
+def test_filled_design_header_passes_the_plans_gates(tmp_path: Path) -> None:
+    assert header_problems("design.md", tmp_path, answers=False, placed_as="design.md") == []
+
+
+# --- the design phase in the doctrine (criteria 49-53) ---------------------------------
+
+
+def test_phase_table_has_2b_between_2a_and_3() -> None:
+    rows = first_table(markdown_section(workflow_text("docs/WORKFLOW.md"), "2 · The phases"))
+    firsts = [row[0] for row in rows]
+    assert any(firsts[i : i + 3] == ["2a", "2b", "3"] for i in range(len(firsts))), firsts
+    row = rows[firsts.index("2b")]
+    assert "design.md" in row[2] and "prompts/02b-design.md" in row[-1]
+
+
+def test_routing_gives_2b_the_prompt_model() -> None:
+    rows = first_table(markdown_section(workflow_text("docs/WORKFLOW.md"), "Model routing"))
+    firsts = [row[0].split()[0] for row in rows]
+    assert any(firsts[i : i + 3] == ["2a", "2b", "3"] for i in range(len(firsts))), firsts
+    bold = re.search(r"\*\*(.+?)\*\*", rows[firsts.index("2b")][1])
+    assert bold and bold.group(1) == prompt_model(workflow_text(DESIGN_PROMPT))
+
+
+def test_agents_table_has_2b_between_2a_and_3() -> None:
+    rows = first_table(markdown_section(workflow_text("AGENTS.md"), "The workflow in one screen"))
+    firsts = [row[0] for row in rows]
+    assert any(firsts[i : i + 3] == ["2a", "2b", "3"] for i in range(len(firsts))), firsts
+    assert "design.md" in rows[firsts.index("2b")][2]
+
+
+def test_workflow_states_d14_by_class() -> None:
+    text = markdown_section(
+        workflow_text("docs/WORKFLOW.md"), "Change classes, the ADR question and decision pull requests"
+    )
+    wanted = ("02b-design.md", "coding-harness-jc3", *(f"`{name}`" for name in adr_answers.CLASSES))
+    assert any(all(word in flat(p) for word in wanted) for p in text.split("\n\n"))
+
+
+def test_spec_template_says_where_a_feature_skips_design() -> None:
+    text = flat(section("spec.md", "Non-goals"))
+    assert "design.md" in text and "feature" in text and "one sentence" in text
