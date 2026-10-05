@@ -4,7 +4,7 @@ category: governance
 status: current
 created: 2026-09-05
 last_reviewed: 2026-09-29
-updated: 2026-09-30
+updated: 2026-10-05
 owner: Data Architect
 provenance: ai-drafted-reviewed
 produced_by:
@@ -39,7 +39,9 @@ tags: [workflow, model-routing, agentic-coding, phases, artefacts]
 > --bead <id>`), `tests/test_repo_settings.py`, `templates/findings.md`,
 > `templates/plan-marking.md`, `scripts/run_change.sh`, the `scripts/cc-*.sh`
 > profiles and `tests/test_model_profiles.py`. Where the text below says one of
-> them does something, it describes the target, not this tree.
+> them does something, it describes the target, not this tree. Since 2026-10-05,
+> `tests/test_repo_settings.py` exists: it asserts the branch ruleset (rule
+> RB-M6); the container fence §3 describes is not in it yet.
 >
 > One thing is missing on purpose and is not on that list: the brakes on the
 > irreversible (force push, `rm -rf`, deploys) in `.claude/settings.json`, which
