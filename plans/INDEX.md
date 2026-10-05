@@ -7,6 +7,11 @@ typed: a hand-kept list of files ages exactly as fast as files are added.
 
 | Artefact | status | implementation_status | last reviewed | Bead |
 |---|---|---|---|---|
+| [`changes/adhd-frame/decisions.md`](changes/adhd-frame/decisions.md) | accepted | partial | 2026-10-05 | coding-harness-q24 |
+| [`changes/adhd-frame/findings.md`](changes/adhd-frame/findings.md) | draft | partial | 2026-09-30 | coding-harness-q24 |
+| [`changes/adhd-frame/plan.md`](changes/adhd-frame/plan.md) | draft | partial | 2026-09-30 | coding-harness-q24 |
+| [`changes/adhd-frame/research.md`](changes/adhd-frame/research.md) | draft | partial | 2026-09-30 | coding-harness-q24 |
+| [`changes/adhd-frame/spec.md`](changes/adhd-frame/spec.md) | draft | partial | 2026-09-30 | coding-harness-q24 |
 | [`changes/archive/2026-09-20-2ee-triage/research.md`](changes/archive/2026-09-20-2ee-triage/research.md) | accepted | done | 2026-09-19 | coding-harness-2ee |
 | [`changes/archive/2026-09-21-reproducible-bead-export/decisions.md`](changes/archive/2026-09-21-reproducible-bead-export/decisions.md) | accepted | done | 2026-09-21 | coding-harness-1jg.1 |
 | [`changes/archive/2026-09-21-reproducible-bead-export/findings.md`](changes/archive/2026-09-21-reproducible-bead-export/findings.md) | accepted | done | 2026-09-21 | coding-harness-1jg.1 |
