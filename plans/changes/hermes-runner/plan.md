@@ -637,7 +637,7 @@ Repair round 1 of slice 1 (appetite 45 min, set by the coordinating session):
 report-only), before the findings rows were set to fixed.
 
 Repair round 2 of slice 1 (appetite 30 min, set by the coordinating
-session): 2026-10-05 23:16–23:24, no break counted. `make verify` ended
+session): 2026-10-05 23:16–23:25, no break counted. `make verify` ended
 VERIFY GREEN at 23:22 (601 passed, 15 skipped; `docs-links` and `markdownlint`
 red but report-only, `markdownlint` naming prompt lines 4 and 6 as before and
 no new line), before the findings rows were set to fixed.
