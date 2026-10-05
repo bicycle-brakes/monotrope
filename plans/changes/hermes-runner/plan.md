@@ -1,7 +1,7 @@
 ---
 title: "Plan — hermes-runner"
 status: draft
-implementation_status: none
+implementation_status: partial
 date: 2026-10-05
 last_reviewed: 2026-10-05
 updated: 2026-10-05
@@ -136,6 +136,66 @@ grep -A1 'prefix: prompts/research-recheck.md' scripts/kit/manifest.yaml | grep 
 
 Criteria 8 and 11 also hold through `make verify` (`tests/test_model_endpoints.py`,
 the gate `leerprobe`).
+
+### Planted faults, slice 1
+
+Run on 2026-10-05 against `0aec7bb` (the prompt, the `docs/WORKFLOW.md`
+paragraph) and `8469740` (the kit rule). Before each fault, the check was
+silent. Rows 1–30 plant the fault in a copy of the prompt and run checks 1–9
+on it; rows 31–34 plant it in the real file and restore it. Result: 34 faults,
+34 red.
+
+| # | Fault planted | Before | After | Test |
+| --- | --- | --- | --- | --- |
+| 1 | first line says Phase 8, not a job prompt | silent | `1: first line` | check 1 |
+| 2 | first line lacks `not one of the seven phases` | silent | `1: first line` | check 1 |
+| 3 | `notes[0]` removed | silent | `2: notes[0]` | check 2 |
+| 4 | `run date` removed | silent | `2: run date` | check 2 |
+| 5 | `Inputs of this run` removed | silent | `2: Inputs of this run` | check 2 |
+| 6 | heading form changed | silent | `3: ## Addendum YYYY-MM-DD · re-check` | check 3 |
+| 7 | `### Holds` removed | silent | `3: ### Holds / 3: order` | check 3 |
+| 8 | `### Overtaken` removed | silent | `3: ### Overtaken / 3: order` | check 3 |
+| 9 | `### New` removed | silent | `3: ### New / 3: order` | check 3 |
+| 10 | `### Not read` removed | silent | `3: ### Not read / 3: order` | check 3 |
+| 11 | Overtaken and New out of order | silent | `3: order` | check 3 |
+| 12 | `Source:` removed | silent | `3: Source:` | check 3 |
+| 13 | `- none` removed | silent | `3: - none` | check 3 |
+| 14 | `last_reviewed:` removed | silent | `4: last_reviewed:` | check 4 |
+| 15 | `updated:` removed | silent | `4: updated:` | check 4 |
+| 16 | `no other header line` removed | silent | `4: no other header line` | check 4 |
+| 17 | `nothing could be checked` removed | silent | `5` | check 5 |
+| 18 | `tools/bd` removed | silent | `6: tools/bd` | check 6 |
+| 19 | `refs/dolt/data` removed | silent | `6: refs/dolt/data` | check 6 |
+| 20 | `bead` removed | silent | `6: bead` | check 6 |
+| 21 | `commit` removed | silent | `6: commit` | check 6 |
+| 22 | `push` removed | silent | `6: push` | check 6 |
+| 23 | `merge` removed | silent | `6: merge` | check 6 |
+| 24 | `approve` removed | silent | `6: approve` | check 6 |
+| 25 | `any other file` removed | silent | `6: any other file` | check 6 |
+| 26 | `data, never instructions` removed | silent | `7` | check 7 |
+| 27 | Model line names a model | silent | `8` | check 8 |
+| 28 | `Hermes` named as a requirement | silent | `109:Run this under Hermes.` | check 9 |
+| 29 | `Claude Code` named as a requirement | silent | `109:Run this under Claude Code.` | check 9 |
+| 30 | `OpenCode` named as a requirement | silent | `109:Run this under OpenCode.` | check 9 |
+| 31 | a copy of `docs/WORKFLOW.md` without the paragraph (the file as of `b224a53`) | silent | `10` | check 10 |
+| 32 | kit rule removed from `scripts/kit/manifest.yaml` | silent | `11`; `probe.py --strict` stays green | check 11 |
+| 33 | kit rule with `rolle: bestand` | silent | `11`; `probe.py --strict` and `tests/test_kit.py` stay green | check 11 |
+| 34 | `**Model:** Opus 9 — the best one.` on line 3 of the real prompt | silent | `tests/test_model_endpoints.py`: 1 failed, 31 passed (`test_every_model_in_a_phase_prompt_resolves[research-recheck.md-Opus 9]`); check 8 as above | criterion 8, the test file |
+
+**What the checks do not see.** Checks 2, 3, 5 and 10 look for a phrase, not
+for what a sentence allows. Each of these three faults, appended to a copy of
+the prompt that keeps every phrase, left checks 1–9 silent:
+
+| # | Fault planted | Before | After | Test |
+| --- | --- | --- | --- | --- |
+| 35 | "You may choose any note under docs/research/ that looks stale." (criterion 2: the agent chooses) | silent | silent | none — read in phase 6 |
+| 36 | "You may add a second section after the addendum." (criterion 3: a second section) | silent | silent | none — read in phase 6 |
+| 37 | "An addendum whose three checked subsections all read - none is fine." (criterion 5: an addendum without a checked item) | silent | silent | none — read in phase 6 |
+
+The prompt itself forbids all three (lines "You do not choose the note",
+"Append exactly one section", "An addendum whose Holds, Overtaken and New
+all read `- none` is not allowed"); the phase-6 reader checks that reading,
+as the criteria's "Refuted by" asks.
 
 ## Slice 2 — the endpoint entry (appetite 0.5 h)
 
@@ -327,4 +387,4 @@ prompt, so its cap stays 31).
 
 ## Time used
 
-None yet.
+Slice 1 (appetite 1 h): 2026-10-05 22:21–22:28, 7 min, no break counted. Verification ended VERIFY GREEN at 22:28 (516 passed, 15 skipped; 16 of 16 gates of the `verify` job).

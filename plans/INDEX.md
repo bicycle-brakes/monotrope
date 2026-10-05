@@ -37,6 +37,6 @@ typed: a hand-kept list of files ages exactly as fast as files are added.
 | [`changes/harness-decide-adr/spec.md`](changes/harness-decide-adr/spec.md) | draft | partial | 2026-09-30 | coding-harness-3ar |
 | [`changes/hermes-runner/decisions.md`](changes/hermes-runner/decisions.md) | accepted | none | 2026-10-05 | coding-harness-i3y |
 | [`changes/hermes-runner/design.md`](changes/hermes-runner/design.md) | draft | none | 2026-10-05 | coding-harness-i3y |
-| [`changes/hermes-runner/plan.md`](changes/hermes-runner/plan.md) | draft | none | 2026-10-05 | coding-harness-i3y |
+| [`changes/hermes-runner/plan.md`](changes/hermes-runner/plan.md) | draft | partial | 2026-10-05 | coding-harness-i3y |
 | [`changes/hermes-runner/research.md`](changes/hermes-runner/research.md) | draft | none | 2026-10-05 | coding-harness-i3y |
 | [`changes/hermes-runner/spec.md`](changes/hermes-runner/spec.md) | draft | none | 2026-10-05 | coding-harness-i3y |
