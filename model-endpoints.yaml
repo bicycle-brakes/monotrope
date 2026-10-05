@@ -98,6 +98,48 @@ endpunkte:
       Auflage erst gesucht wird.
 
   # -------------------------------------------------------------------------
+  # A recurring job, not a phase (plans/changes/hermes-runner/)
+  # -------------------------------------------------------------------------
+  #
+  # No phase of docs/WORKFLOW.md routes to this endpoint; it is declared for the
+  # one unattended job of Coding Harness's Hermes runner. It is listed before
+  # the stage-2 block because it belongs to neither stage.
+
+  - name: opencode-go
+    betreiber: "Anomaly Innovations, Inc. (OpenCode Go, USA)"
+    residenz: anbieter-erklaert
+    abrechnung: abonnement
+    darf_sehen: [framework]
+    modelle:
+      - glm-5.3
+    bemerkung: >-
+      Used only by Coding Harness's Hermes runner (the weekly research
+      re-check), through the egress proxy it shares with adhd-relief, with the
+      service user's own key. Whether one subscription allows a second key:
+      not read. The vendor serves GLM at
+      `https://opencode.ai/zen/go/v1/chat/completions`.
+      **No leak check runs before its calls.** The maintainer chose this on
+      2026-10-05, against the recommendation to wait for pull request #60; house
+      rule 6 is checked when the note's pull request is reviewed, after the text
+      has left. This departs from the rule stated for the stage-2 endpoints
+      below.
+      **Hosting:** the vendor's statements contradict each other ("Go models are
+      hosted in the US" in one place, "US, EU, and Singapore" in another), so
+      `anbieter-erklaert` records that the vendor made statements, not that they
+      agree. Retention for GLM is stated as "Not used / 0 days"; not checked
+      against the vendor's own pages.
+      **Terms:** they forbid software that runs "while you are not logged into
+      the Services"; whether a scheduled, unattended job falls under that is
+      open; the maintainer waived the written inquiry (adhd-relief, ADR-0025,
+      addendum of 2026-09-24). A block could stop both agents, which share the
+      proxy and possibly the subscription.
+      **Fall-back** (ADR-0025): if the vendor blocks or throttles the account,
+      switch to OpenCode Zen, paid by use, with the same models.
+      Sources: adhd-relief's ADR-0025 and its research note of 2026-09-24, as
+      quoted in `plans/changes/hermes-runner/research.md` section 4.3; the
+      vendor's own pages were not read for this entry.
+
+  # -------------------------------------------------------------------------
   # Stufe 2 — Fremdanbieter fuer Umsetzung und Review (docs/WORKFLOW.md)
   # -------------------------------------------------------------------------
   #
