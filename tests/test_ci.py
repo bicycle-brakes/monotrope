@@ -600,6 +600,51 @@ def test_the_runner_still_admits_what_it_cannot_do_at_all() -> None:
         assert g["id"] in ergebnis.stdout, f"The runner conceals '{g['id']}'."
 
 
+def _list_entries(capsys: pytest.CaptureFixture[str], monkeypatch: pytest.MonkeyPatch) -> dict[str, str]:
+    """`ci_gates.py --list`, in process: the line that follows each gate's `[id]` line."""
+    import ci_gates
+
+    monkeypatch.setattr(sys, "argv", ["ci_gates.py", "--list"])
+    assert ci_gates.main() == 0
+    zeilen = capsys.readouterr().out.splitlines()
+    return {
+        zeile.split("[", 1)[1].split("]", 1)[0]: zeilen[i + 1]
+        for i, zeile in enumerate(zeilen)
+        if "[" in zeile and "]" in zeile and not zeile.startswith("      ")
+    }
+
+
+def test_the_list_marks_a_writer_gate_as_local_only(
+    capsys: pytest.CaptureFixture[str], monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """The list says where a gate does not run — as it does for a hosted-only one (RB-M6, F-1).
+
+    `make verify` is annotated "the CI runs the same"; a `placement: writer` gate
+    runs there only, and a list that shows it like any other gate reads like
+    the CI running it too. Gates that run in both places carry no such mark.
+    """
+    import ci_gates
+
+    alle = gates()
+    writer = [g for g in alle if g["placement"] == "writer"]
+    assert writer, "Precondition: the gate list has a writer gate (`ruleset`)."
+    eintraege = _list_entries(capsys, monkeypatch)
+    for g in alle:
+        marked = "nicht in der CI" in eintraege[g["id"]]
+        assert marked == (g["placement"] == "writer"), (
+            f"`ci_gates.py --list` and the placement of '{g['id']}' ({g['placement']}) disagree about local-only."
+        )
+
+    # Not a one-gate accident: a gate that moves to `writer` gets the mark, one that leaves loses it.
+    tauschen = {g["id"]: ("both" if g["placement"] == "writer" else g["placement"]) for g in alle}
+    erstes_both = next(g["id"] for g in alle if g["placement"] == "both" and g["local_runnable"])
+    tauschen[erstes_both] = "writer"
+    monkeypatch.setattr(ci_gates, "gates", lambda: [{**g, "placement": tauschen[g["id"]]} for g in alle])
+    danach = _list_entries(capsys, monkeypatch)
+    assert "nicht in der CI" in danach[erstes_both]
+    assert all("nicht in der CI" not in danach[g["id"]] for g in writer)
+
+
 def test_no_workflow_copies_a_whole_directory_into_a_publish_target() -> None:
     """A `cp -r` into a publish directory is a publication without selection.
 

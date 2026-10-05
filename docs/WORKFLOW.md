@@ -335,8 +335,8 @@ What this does not do:
 ### Verification runs through git and CI, not through the harness
 
 ```bash
-make verify     # every locally runnable gate — the same the CI runs
-make gates      # what the CI runs, read from decisions/gates.yaml
+make verify     # every locally runnable gate — the CI runs the same, minus a `writer` gate (here only)
+make gates      # what the CI runs, read from decisions/gates.yaml; a `writer` gate is marked
 make staleness  # hygiene of the plans/ artefacts
 make index      # regenerate plans/INDEX.md
 ```
