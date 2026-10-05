@@ -55,8 +55,9 @@ F-9 are for slice 4's phase 2a; the rest are one or two sentences each.
 | F-7 | MINOR | SPEC | base | `scripts/kit/manifest.yaml`, the rule `prompts/research-recheck.md`; `tests/test_kit.py`, `test_the_workflow_itself_travels` | Of the two ways to lose the kit rule, only one matters, and `make verify` sees neither. Removing the rule is harmless: the longest matching prefix is then `prompts/`, and `probe.rolle` still answers `mechanismus` (measured); only the English reason is lost, which a grep is enough to catch. Setting the rule to `bestand` takes the job prompt out of the kit — `probe.rolle` answers `('bestand', 'prompts/research-recheck.md')` — against the spec's decision that it travels; replayed (the plan's row 33): `probe.py --strict` exit 0, `tests/test_kit.py` 19 passed. `test_the_workflow_itself_travels` already holds the role `mechanismus` for `prompts/01-explore.md` and `docs/WORKFLOW.md` through a parametrize list; the job prompt is not in it. The plan's "Criteria 8 and 11 also hold through `make verify`" is true for the probe being green, not for the rule. [criterion 11; spec `[DETAIL]` "The job prompt travels with the kit"] | fixed in `84e7dc3` — reviewed at `1c9801a`, closed: `prompts/research-recheck.md` is the third case of `test_the_workflow_itself_travels`. Replayed on the real manifest: fault 50 (`rolle: bestand`) 1 failed, 19 passed, the failing case the plan names. An own variant removing the rule leaves the test green (20 passed), since the role falls back to `prompts/` and stays `mechanismus`, harmless as the row says; check 11, which holds "a rule of its own", turns red |
 | F-8 | MAJOR | MAINT | base | `prompts/research-recheck.md`, line 18; `design.md`, Interfaces 1; `plan.md`, `[DETAIL]` "the orchestrator uses the standard library only" and slice 4's stand-in list | The command the prompt and the design name for `notes[0]` does not run under the laptop's system Pythons. Measured on 2026-10-05: `/usr/bin/python3` (3.9.6) and `/opt/homebrew/bin/python3` (3.12.4) both lack PyYAML, which `scripts/check_research_currency.py` imports — the script stops with `ModuleNotFoundError: No module named 'yaml'`, exit 1, nothing on stdout; under 3.9.6 its module-level `reprlib.Repr(maxlevel=3, …)` raises `TypeError` as well (measured on the call alone). The plan builds the orchestrator on the standard library, "PyYAML stays a test and CI dependency", yet the list it calls needs PyYAML and Python 3.12; and slice 4's tests replace the list with a stand-in that prints a fixture, so they stay green while a real run without `--note` fails at the list. The list's other answer that is not JSON — exit 3 with a plain "research-currency: not measured" line, measured on an empty corpus — has no outcome among criteria 18–21 either, which name a `problem` and a schema version only. Does not stop slice 1; for slice 4's phase 2a. [criteria 18, 21; design Interfaces 1] | open — slice 4 phase 2a |
 | F-9 | MINOR | SPEC | base | `spec.md`, `[DETAIL]`s "`notes[0]`, due or not" and "A note with a header problem is skipped as failed"; criteria 5, 20, 29 | A note the job cannot finish halts the weekly queue instead of being skipped. Every run takes `notes[0]`. A note with an unusable header sorts first (measured, F-2) and ends each run `failed` unchanged (criterion 20); a note in which nothing could be checked stays unchanged by the prompt's own rule and ends `failed` (criteria 5, 29). Either way the next week takes the same note again, and no other note is reached until a person repairs the header or re-dates the note. The likely case is a note about this repository itself, whose claims the prompt sends to Not read: today's `notes[0]`, `2026-09-16-review-corpus-vs-running-workflow.md`, is a review of this repository and its siblings and carries no URL (measured, 0); it does name a few outside version claims, so whether a run on it checks anything was not measured. The spec's "skipped" describes a progression no criterion builds; the failure notification makes the halt visible, not silent. For slice 4's phase 2a. [criteria 5, 20, 29] | open — slice 4 phase 2a |
-| F-10 | MAJOR | MAINT | fix-r1 | `prompts/research-recheck.md`, "What you do" step 3 and the Not read rule of "The addendum"; `plan.md`, `[DETAIL]`s "N is 15" and "which first" (lines 220–242) | On a note with more than 15 claims, every run after the first re-checks the same 15 claims, and the others are never checked. Step 3 orders the claims by the date each carries — an undated one counts as the oldest, equal ones keep the note's order — and nothing in that order asks whether an earlier addendum already checked a claim. Case: a run on `Lake-Switch-Architektur-arc42.md` (144 claim-like lines by the plan's rough `grep`, counted again on `1c9801a`) chooses claims 1–15 and appends an addendum dated d. The next run on that note lists the same original claims, whose lines and dates are unchanged, plus that addendum's findings, which carry d and so sort after every original claim dated before d; oldest first gives claims 1–15 again. The plan's `[DETAIL]` "N is 15" names the cost as "its other claims wait until the list comes round to it again"; under this order they never come round, and each addendum's line "further dated claims — over the limit of 15 per run" tells the reviewer of the pull request that they wait. An agent may instead date a claim by the last addendum that checked it, and the claims would then rotate, but the prompt does not say so, and the plan's "two runs on one note pick alike" points the other way. A note whose first 15 claims in this order cannot be checked on the web ends "nothing could be checked" on every run although later claims could be (the halt of F-9); not measured. Derived from the text; no agent run was made. What should hold instead: claims no earlier addendum has checked come before claims one has, or a checked claim counts as of that addendum's date. The prompt is at 120 of its 120 lines, so a fix replaces words or the plan's budget changes. [spec, Problem, "Research ages without anyone noticing"; plan `[DETAIL]`s "N is 15" and "which first"] | fixed in cf90bc8, not reviewed |
-| F-11 | MINOR | SPEC | base | `plan.md`, slice 1, check 8; `tests/test_model_endpoints.py`, `prompt_modelle` | A second `**Model:**` line naming a model leaves check 8, check 9 and the endpoint test green. Planted on 2026-10-05: `**Model:** glm-5.3` inserted as line 4 with line 3 unchanged — on a copy, checks 1–11 and R1–R3 silent; on the real prompt, restored with `git checkout`, `tests/test_model_endpoints.py` 31 passed, because `prompt_modelle` reads only the first `**Model:**` line (`re.search`). A runner or a person reading the header then finds a model in a `**Model:**` line. F-6's repair pins line 3 and does not count such lines. The prompt itself has one `**Model:**` line (read). One more condition in check 8 — exactly one line starting `**Model:**` — closes it. [criterion 8, "a model name in that line"] | fixed in a55add5, not reviewed |
+| F-10 | MAJOR | MAINT | fix-r1 | `prompts/research-recheck.md`, "What you do" step 3 and the Not read rule of "The addendum"; `plan.md`, `[DETAIL]`s "N is 15" and "which first" (lines 220–242) | On a note with more than 15 claims, every run after the first re-checks the same 15 claims, and the others are never checked. Step 3 orders the claims by the date each carries — an undated one counts as the oldest, equal ones keep the note's order — and nothing in that order asks whether an earlier addendum already checked a claim. Case: a run on `Lake-Switch-Architektur-arc42.md` (144 claim-like lines by the plan's rough `grep`, counted again on `1c9801a`) chooses claims 1–15 and appends an addendum dated d. The next run on that note lists the same original claims, whose lines and dates are unchanged, plus that addendum's findings, which carry d and so sort after every original claim dated before d; oldest first gives claims 1–15 again. The plan's `[DETAIL]` "N is 15" names the cost as "its other claims wait until the list comes round to it again"; under this order they never come round, and each addendum's line "further dated claims — over the limit of 15 per run" tells the reviewer of the pull request that they wait. An agent may instead date a claim by the last addendum that checked it, and the claims would then rotate, but the prompt does not say so, and the plan's "two runs on one note pick alike" points the other way. A note whose first 15 claims in this order cannot be checked on the web ends "nothing could be checked" on every run although later claims could be (the halt of F-9); not measured. Derived from the text; no agent run was made. What should hold instead: claims no earlier addendum has checked come before claims one has, or a checked claim counts as of that addendum's date. The prompt is at 120 of its 120 lines, so a fix replaces words or the plan's budget changes. [spec, Problem, "Research ages without anyone noticing"; plan `[DETAIL]`s "N is 15" and "which first"] | fixed in `cf90bc8` — reviewed at `61a32f8`, closed for the rotation; the halt of a run that checks nothing stays with F-9 (slice 4 phase 2a), as recorded in "Repair round 2" below and in `plan.md`. Step 3 takes first the claims no earlier addendum names, in the note's order, then those checked longest ago, a claim dated by the latest addendum naming it; the bound's Not read item names "no claim", and every other item names its claim through the item pattern, so each chosen claim is named and each claim not chosen is not. Read as an agent: "names" has one sense throughout the prompt (an item names a claim), the order needs nothing outside the note, check 9 is silent, and the prompt has 120 lines. Counted with own code, not R5: 144 claims, 15 per run, no New items — all checked by run 10, the longest wait 9 runs, as R5 says; with 3 or 10 New items per run the first pass still ends at run 10 and the claims keep rotating, the longest wait over 40 runs growing to 14 and 20. A rough `grep` on `61a32f8` still finds 144 claim-like lines in `Lake-Switch-Architektur-arc42.md`. Replayed: faults 51–56 red as the plan records, 57 silent; own variants in "Phase 6, round 3" |
+| F-11 | MINOR | SPEC | base | `plan.md`, slice 1, check 8; `tests/test_model_endpoints.py`, `prompt_modelle` | A second `**Model:**` line naming a model leaves check 8, check 9 and the endpoint test green. Planted on 2026-10-05: `**Model:** glm-5.3` inserted as line 4 with line 3 unchanged — on a copy, checks 1–11 and R1–R3 silent; on the real prompt, restored with `git checkout`, `tests/test_model_endpoints.py` 31 passed, because `prompt_modelle` reads only the first `**Model:**` line (`re.search`). A runner or a person reading the header then finds a model in a `**Model:**` line. F-6's repair pins line 3 and does not count such lines. The prompt itself has one `**Model:**` line (read). One more condition in check 8 — exactly one line starting `**Model:**` — closes it. [criterion 8, "a model name in that line"] | fixed in `a55add5` — reviewed at `61a32f8`, closed: check 8's second condition asks for exactly one line starting `**Model:**` or `**Modell:**` and exactly one such mark anywhere in the file. Replayed: faults 58–60 red (`8: one Model line`), each silent under the check set of `6c629b9`; under 58 on the real prompt `tests/test_model_endpoints.py` 31 passed, the limit the plan names. An own variant, `**Model**: glm-5.3` (the colon outside the bold) as line 4, is silent under check 8 and leaves the test at 31 passed: the limit of a check bound to a spelling, the class of rows 35–37, 48 and 57. The prompt names "Model" on line 3 only (read) |
+| F-12 | MINOR | SPEC | fix-r2 | `plan.md`, "Repair round 2, slice 1": the paragraph after the table of faults 51–60, and its opening paragraph | The round's record says a check holds what only phase 6 reads. "R5 below catches the order itself, whatever the words" closes the paragraph that begins "Row 57 stays a limit of R4" and reads as a second check behind R4. R5 is a model with its own fixed order and reads no file (its 36 lines read), so its output does not depend on the prompt: it catches none of faults 51–57, and row 57's own entry, "none — read in phase 6", is the right one. Two own variants of that class, silent under R4 and beyond R5: "under Holds or Overtaken" after "no earlier addendum names" (a claim named only under Not read would then take one of the 15 places on every run, which the plan's `[DETAIL]` on "names" rules out), and "List each such claim after the count." after the bound rule (every claim not chosen would be named, and F-10 returns in full). Smaller: the opening paragraph says step 4 became three lines; it has four, before and after (counted on `6c629b9` and `61a32f8`). The prompt itself is right on both counts (read). What should hold: R5 named as a model of the designed order that reads no prompt, and the wording of step 3 held by R4 and by phase-6 reading. [plan, "Repair round 2, slice 1", row 57] | open — origin `fix-r2` after F-10's `fix-r1`: escalates to the maintainer, no third round |
 
 Reviewer session: none — phase 2a has not run; `plan.md` places it once over
 the whole spec before slice 4's phase 4. This review ran in a fresh session.
@@ -277,3 +278,88 @@ nothing names the claims it chose and the next run chooses them again (the
 halt of F-9, for slice 4's phase 2a; not measured). Also open, as before:
 F-5, F-8 and F-9. The verdict above is the review's, on `1c9801a`, and is not
 rewritten.
+
+## Phase 6, round 3 (2026-10-05)
+
+The second repair read on commit `61a32f8`, 2026-10-05, by a reviewer on
+Opus 5.5 in a fresh context that made no external model call, opened no pull
+request and wrote nothing to the tracker. It read the repair diff
+`6c629b9..61a32f8` — the prompt, "Repair round 2, slice 1" of `plan.md`
+with check 8, R1 and R4, and this file — against F-10 and F-11, and the
+prompt again as an agent would run it on a note that already carries
+addenda. Above this section only the Status column of F-10 and F-11 changed,
+and row F-12 was added.
+
+**Verdict: F-10 and F-11 are closed. One new row: F-12, MINOR, of origin
+`fix-r2` — the round's record says the model R5 catches what only phase 6
+reads. No BLOCKER, no `[AMBIGUITY]`, no `[DIVERGENT]`: nothing here stops
+phase 7 of slice 1.** F-12 follows F-10, of origin `fix-r1`, so two
+consecutive rounds produced rows: by `docs/WORKFLOW.md` this is an
+escalation to the maintainer, not a third repair round.
+
+- **Replays.** All ten planted faults of the round, each alone, on
+  2026-10-05, with checks 1–11 and R1–R4 copied from `plan.md` and the
+  check set of `6c629b9` as "before": rows 51–57 on a copy of the prompt at
+  `61a32f8`, rows 58–60 on copies of the prompts at `6c629b9` and
+  `61a32f8`, row 58 also on the real prompt, restored with `git checkout`.
+  Every result matches the plan: 51 the five R4 lines, silent before; 52
+  `R4: no earlier addendum names` and `R4: order`; 53 and 56 the one R4 line
+  the plan names; 54 `R4: order`; 55 `R4: the claim's own date`; 57 silent;
+  58–60 `8: one Model line`, each silent before; under 58 the endpoint test
+  31 passed. R5, copied out and run, prints its two lines and passes its
+  asserts.
+- **Regressions.** Round-1 faults 38, 40, 41, 43, 44 (the "leaves nothing"
+  clause only), 45, 46, 47 and 49 planted again on the new prompt: each red
+  with the line the plan names; 41 also prints `R4: step 3` and `R4: order`.
+  Row 42 no longer applies, since R1 dropped "oldest first" on purpose.
+  Lines 1–3 and the sections "The header", "Never" and "If nothing could be
+  checked" are unchanged against `6c629b9` (diff read), so F-2, F-3, F-4 and
+  F-6 stand as reviewed; `tests/test_kit.py` and the manifest are untouched
+  (F-7). F-1's bound holds: at most 15, the shared Not read reason, the
+  write after 15 claims or about 45 tool calls.
+- **Own variants.** "the first addendum that names it" for "the latest":
+  `R4: checked on the date of the latest addendum that names it`. "under
+  Holds or Overtaken" after "no earlier addendum names", and "List each such
+  claim after the count." after the bound rule: both silent (F-12). Step 2
+  without "a finding and its claim are one": silent; a finding and its
+  claim would then take two places in a later pass, a waste and no halt.
+  `**Model**: glm-5.3` as line 4: silent (F-11).
+- **The order, read as an agent.** On a note whose earlier addenda named 15
+  claims, the agent lists the original claims and the addenda's findings as
+  one claim each, takes the claims no item of an earlier addendum names, in
+  the note's order, and then those named longest ago; a New item counts as
+  named by the addendum that adds it, and the bound's item, which names "no
+  claim", leaves the claims it counts in the first group. The words "names"
+  and "naming" mean the same thing in step 3 and in "The addendum", so the
+  rule is unambiguous; it names no runner and needs no state outside the
+  note. Matching an English item to a claim in a German note is by meaning,
+  not by words; not measured.
+- **Read, no row.** Step 4's "Prefer the primary source" became "from the
+  primary source where there is one". The spec sets no rule on sources, and
+  either reading yields a valid addendum; but an agent that reads it
+  strictly puts a claim whose primary page will not load under Not read
+  instead of checking it elsewhere — one more path toward a run that checks
+  nothing (F-9; not measured).
+- **The suite.** `make verify` on `61a32f8` with commit signing off: VERIFY
+  GREEN, 601 passed and 15 skipped; `docs-links` and `markdownlint` red but
+  report-only, `markdownlint` naming prompt lines 4 and 6, as before, and no
+  new line.
+
+The residual link between F-10 and F-9 — a run that checks nothing writes no
+addendum, so the next run chooses the same claims — is recorded for slice 4's
+phase 2a, in "Repair round 2" above and in `plan.md` ("Cost, named"), and is
+not re-opened here. Own model: if the first 15 claims in the note's order
+cannot be checked, 40 of 40 runs check nothing; one checkable claim among
+them keeps the rotation going.
+
+Not checked: any agent run of the prompt, under any runner — the rotation
+is read from the text and modelled, not observed; how many New items an
+agent writes per run.
+
+For phase 7: no row stops slice 1's pull request. F-12 is one sentence and
+one line count in `plan.md`; the maintainer decides whether it is corrected
+in the pull request or accepted as named. F-5, F-8 and F-9 stay for slice
+4's phase 2a. The pull request names bead coding-harness-i3y in its body
+(house rule 4) and is not a decision pull request. `plans/INDEX.md` stays as
+it is: `scripts/plans_registry.py --index` left it unchanged after this
+edit.
