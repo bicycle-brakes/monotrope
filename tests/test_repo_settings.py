@@ -41,6 +41,7 @@ import copy
 import json
 import os
 import subprocess
+import sys
 import urllib.parse
 from collections.abc import Callable
 from pathlib import Path
@@ -334,7 +335,12 @@ def test_the_ruleset_check_goes_red_when_a_bypass_is_added() -> None:
     assert findings == [f"ruleset {RULESET_ID} lets RepositoryRole 5 bypass it"]
 
 
-@pytest.mark.parametrize("rule_type", sorted(RULE_TYPES))
+# Listed here and not taken from RULE_TYPES: a requirement that fell out of that
+# table would otherwise fall out of this test with it (planted fault F03).
+THE_FOUR_RULE_TYPES = ("pull_request", "required_status_checks", "non_fast_forward", "deletion")
+
+
+@pytest.mark.parametrize("rule_type", THE_FOUR_RULE_TYPES)
 def test_the_ruleset_check_goes_red_when_a_rule_is_removed(rule_type: str) -> None:
     rules = _without(_todays_rules(), rule_type)
     findings = ruleset_findings(rules, {RULESET_ID: _todays_ruleset()})
@@ -385,6 +391,16 @@ def _no_gh_on_path(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> Api:
     return gh_api
 
 
+def _slow_gh_on_path(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> Api:
+    """The real `gh_api`, a `gh` that never answers, and a limit of one second."""
+    gh = tmp_path / "gh"
+    gh.write_text("#!/bin/sh\nexec sleep 5\n", encoding="utf-8")
+    gh.chmod(0o755)
+    monkeypatch.setenv("PATH", str(tmp_path))
+    monkeypatch.setitem(globals(), "GH_TIMEOUT_SECONDS", 1)
+    return gh_api
+
+
 def _failing(path: str, code: int, text: str) -> Api:
     answers = _todays_answers()
     answers[path] = (code, text)
@@ -395,11 +411,17 @@ def _failing(path: str, code: int, text: str) -> Api:
     ("case", "step"),
     [
         pytest.param("no-gh", REPO_PATH, id="no-gh"),
+        pytest.param("no-answer", REPO_PATH, id="no-answer"),
         pytest.param("exit-1", REPO_PATH, id="exit-1"),
         pytest.param("not-json", REPO_PATH, id="not-json"),
         pytest.param("empty-list-for-the-repository", REPO_PATH, id="empty-list-for-the-repository"),
         pytest.param("no-default-branch", REPO_PATH, id="no-default-branch"),
         pytest.param("rules-exit-1", f"{REPO_PATH}/rules/branches/main", id="rules-exit-1"),
+        pytest.param(
+            "rules-exit-1-with-a-valid-answer",
+            f"{REPO_PATH}/rules/branches/main",
+            id="rules-exit-1-with-a-valid-answer",
+        ),
         pytest.param("rules-not-a-list", f"{REPO_PATH}/rules/branches/main", id="rules-not-a-list"),
         pytest.param("rules-with-a-string", f"{REPO_PATH}/rules/branches/main", id="rules-with-a-string"),
         pytest.param("ruleset-exit-1", f"{REPO_PATH}/rulesets/{RULESET_ID}", id="ruleset-exit-1"),
@@ -415,11 +437,13 @@ def test_an_unreachable_api_is_not_a_pass(
     ruleset_path = f"{REPO_PATH}/rulesets/{RULESET_ID}"
     apis: dict[str, Callable[[], Api]] = {
         "no-gh": lambda: _no_gh_on_path(monkeypatch, tmp_path),
+        "no-answer": lambda: _slow_gh_on_path(monkeypatch, tmp_path),
         "exit-1": lambda: _failing(REPO_PATH, 1, "gh: To get started with GitHub CLI, run: gh auth login"),
         "not-json": lambda: _failing(REPO_PATH, 0, "<html>offline portal</html>"),
         "empty-list-for-the-repository": lambda: _failing(REPO_PATH, 0, "[]"),
         "no-default-branch": lambda: _failing(REPO_PATH, 0, json.dumps({"default_branch": ""})),
         "rules-exit-1": lambda: _failing(rules_path, 1, "HTTP 403"),
+        "rules-exit-1-with-a-valid-answer": lambda: _failing(rules_path, 1, json.dumps(_todays_rules())),
         "rules-not-a-list": lambda: _failing(rules_path, 0, "{}"),
         "rules-with-a-string": lambda: _failing(rules_path, 0, '["deletion"]'),
         "ruleset-exit-1": lambda: _failing(ruleset_path, 1, "HTTP 404"),
@@ -454,6 +478,52 @@ def test_master_has_a_ruleset_with_required_checks() -> None:
     """
     findings = measure()
     assert not findings, "\n".join(findings)
+
+
+def _run_the_live_test(*, variable: bool, path: str) -> subprocess.CompletedProcess[str]:
+    """Run only the live test in a pytest of its own, with `path` as `PATH`."""
+    env = {k: v for k, v in os.environ.items() if k != LIVE_ENV}
+    env["PATH"] = path
+    if variable:
+        env[LIVE_ENV] = "1"
+    return subprocess.run(
+        [
+            sys.executable,
+            "-m",
+            "pytest",
+            "tests/test_repo_settings.py::test_master_has_a_ruleset_with_required_checks",
+            "-q",
+            "-rs",
+            "-p",
+            "no:cacheprovider",
+        ],
+        cwd=REPO_ROOT,
+        env=env,
+        capture_output=True,
+        text=True,
+        timeout=120,
+    )
+
+
+def test_the_live_check_goes_red_without_gh_when_the_gate_turns_it_on(tmp_path: Path) -> None:
+    """With the variable set and no `gh`, the live check fails — it neither skips nor passes."""
+    done = _run_the_live_test(variable=True, path=str(tmp_path))
+    assert done.returncode == 1, done.stdout + done.stderr
+    assert "not measured:" in done.stdout
+    assert "skipped" not in done.stdout
+
+
+def test_the_live_check_calls_nothing_without_the_variable(tmp_path: Path) -> None:
+    """Without the variable the live check is skipped, names the gate, and never calls `gh`."""
+    log = tmp_path / "calls.log"
+    gh = tmp_path / "gh"
+    gh.write_text(f'#!/bin/sh\necho "$@" >> "{log}"\nexit 1\n', encoding="utf-8")
+    gh.chmod(0o755)
+    done = _run_the_live_test(variable=False, path=str(tmp_path))
+    assert done.returncode == 0, done.stdout + done.stderr
+    assert "1 skipped" in done.stdout
+    assert "gate ruleset" in done.stdout
+    assert not log.exists(), "gh was called without the variable"
 
 
 def _the_ruleset_gate() -> dict[str, Any]:
