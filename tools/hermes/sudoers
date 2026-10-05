@@ -1,0 +1,5 @@
+# /etc/sudoers.d/coding-harness-hermes - the one command the maintainer may run as the service user.
+# @MAINTAINER@ stands for the maintainer's account name; the runbook (README, "Install") substitutes
+# it, checks the result with `visudo -cf` and installs it root-owned, mode 440. One rule, one command,
+# one target user, no password: the installed wrapper and nothing else.
+@MAINTAINER@ ALL=(_chhermes) NOPASSWD: /usr/local/libexec/coding-harness/recheck-agent

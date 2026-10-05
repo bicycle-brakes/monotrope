@@ -1,0 +1,101 @@
+# Coding Harness's Hermes profile: the configuration of the weekly research re-check.
+# Hermes v2026.9.21 = 0.21.4 (commit d337b73). Installed to $HERMES_HOME/config.yaml, where it
+# belongs to the maintainer and is read-only for the service user (README, "Install").
+# No secret belongs in this file: keys live in $HERMES_HOME/.env (env.example).
+#
+# Where each key comes from is held by tests/test_hermes_profile.py (KEY_SOURCES): the guard
+# baseline of adhd-relief's spike kit (infra/macbook/spike-hermes/config.yaml at bdce8dc), or
+# Hermes's own documentation at the pinned tag. A key whose only source is the baseline and which
+# the documentation pages read do not list is marked "not read at the tag" and stays in the
+# runbook's list of facts to confirm at the laptop.
+
+model:
+  provider: opencode-go                      # not "custom": that route lacks the header x-opencode-session
+  default: "glm-5.3"                         # declared in model-endpoints.yaml, endpoint opencode-go
+  base_url: "http://127.0.0.1:8787/go/v1"    # the shared egress proxy -> OpenCode Go; OPENCODE_GO_BASE_URL in .env
+
+fallback_providers: []                       # no second provider: nothing else is declared for this job
+
+auxiliary:
+  free_only: false                           # not read at the tag (baseline only)
+  openrouter_model: ""                       # not read at the tag (baseline only)
+  compression:
+    provider: main                           # the main model; "main" is valid inside auxiliary only (configuration.md)
+    model: "glm-5.3"                         # named, so no side task can pick an undeclared model (RB-A6)
+  title_generation:
+    enabled: false                           # a title is a model call of its own
+  background_review:
+    enabled: false                           # no post-turn review, so nothing learns
+
+# Everything but web, file and search: every core toolset of Hermes's toolsets reference at the
+# pinned tag. The wrapper asks for `--toolsets web,file` as well; this is the second lock.
+agent:
+  disabled_toolsets:
+    - browser
+    - clarify
+    - code_execution
+    - computer_use
+    - connections
+    - context_engine
+    - cronjob
+    - delegation
+    - desktop_ui
+    - discord
+    - discord_admin
+    - feishu_doc
+    - feishu_drive
+    - homeassistant
+    - image_gen
+    - kanban
+    - memory
+    - project
+    - session_search
+    - skills
+    - spotify
+    - terminal
+    - todo
+    - tts
+    - video
+    - video_gen
+    - vision
+    - x_search
+    - yuanbao
+
+# Learning off: nothing the agent reads or writes in one run reaches the next one.
+memory:
+  memory_enabled: false
+  user_profile_enabled: false
+
+curator:
+  enabled: false
+
+# The agent has no shell, so these guard only against a toolset switched on by mistake: a string
+# policy, not a sandbox (security.md, "Threat model"). The operating system is the boundary.
+# "manual" asks nothing of a model; a single-query run denies instead of asking (single_query_mode).
+approvals:
+  mode: manual
+  cron_mode: deny
+  single_query_mode: deny
+  unattended_mode: deny
+  deny:                                      # fnmatch globs, matched case-insensitively, before any approval mode
+    - "git"
+    - "git *"
+    - "gh"
+    - "gh *"
+    - "bd"
+    - "bd *"
+    - "*tools/bd*"
+    - "*refs/dolt*"
+
+web:
+  backend: firecrawl                         # FIRECRAWL_API_KEY and FIRECRAWL_API_URL in .env (the shared proxy)
+  keyless_fallback: false                    # else a fall-back to Exa, Parallel, Firecrawl, Keenable directly (also ends the keyless rescue)
+
+cron:
+  allow_agent_scheduling: false
+
+security:
+  tirith_enabled: false                      # it would download its scanner on first use
+
+updates:
+  check: false                               # not read at the tag (baseline only)

@@ -1,0 +1,42 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!-- The maintainer's weekly job: one research re-check, Sunday 03:00. A LaunchAgent of the maintainer
+     (~/Library/LaunchAgents), not a daemon: it runs the orchestrator, which stages the note, starts the
+     agent through the sudo rule, checks the diff and publishes. No KeepAlive, no RunAtLoad: it runs once
+     a week and ends. launchd starts a missed run when the Mac wakes (man launchd.plist), so a sleeping
+     laptop delays the run, it does not skip it.
+     @HOME@ and @PYTHON3@ are substituted at install (README): the maintainer's home and an absolute
+     python3 of version 3.11 or newer. Load it only when every entry of "Spike results" is green. -->
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+  <key>Label</key>
+  <string>ai.coding-harness.research-recheck</string>
+  <key>ProgramArguments</key>
+  <array>
+    <string>@PYTHON3@</string>
+    <string>@HOME@/Library/Application Support/coding-harness-recheck/clone/scripts/research_recheck.py</string>
+    <string>run</string>
+    <string>--notify</string>
+  </array>
+  <key>WorkingDirectory</key>
+  <string>@HOME@/Library/Application Support/coding-harness-recheck/clone</string>
+  <key>EnvironmentVariables</key>
+  <dict>
+    <key>PATH</key>
+    <string>/opt/homebrew/bin:/usr/local/bin:/usr/bin:/bin:/usr/sbin:/sbin</string>
+  </dict>
+  <key>StartCalendarInterval</key>
+  <dict>
+    <key>Weekday</key>
+    <integer>0</integer>
+    <key>Hour</key>
+    <integer>3</integer>
+    <key>Minute</key>
+    <integer>0</integer>
+  </dict>
+  <key>StandardOutPath</key>
+  <string>@HOME@/Library/Logs/coding-harness/research-recheck/launchd.out.log</string>
+  <key>StandardErrorPath</key>
+  <string>@HOME@/Library/Logs/coding-harness/research-recheck/launchd.err.log</string>
+</dict>
+</plist>
