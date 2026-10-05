@@ -239,7 +239,8 @@ UNUSABLE: list[tuple[str, str | bytes, str]] = [
     ("header-is-a-scalar", "---\njust words\n---\n\nBody\n", NOT_A_MAPPING),
     ("header-does-not-parse", "---\nkey: [unclosed\n---\n\nBody\n", NOT_A_MAPPING),
     ("impossible-date-by-tag", header("last_reviewed: !!timestamp 2026-02-30"), NOT_A_MAPPING),
-    ("no-key", header("title: A note", f"updated: {ago(1)}"), "no last_reviewed"),
+    # `created:` stands in the header so that a reader that falls back to it is caught.
+    ("no-key", header("title: A note", f"updated: {ago(1)}", f"created: {ago(1)}"), "no last_reviewed"),
     ("empty-value", header("last_reviewed:"), "last_reviewed is empty"),
     ("empty-string", header("last_reviewed: ''"), "last_reviewed is empty"),
     ("null-value", header("last_reviewed: null"), "last_reviewed is empty"),
@@ -331,6 +332,9 @@ def test_a_reason_is_one_short_line(tmp_path: Path) -> None:
 def _order_tree(root: Path) -> list[str]:
     """A tree whose files are created, and aged by mtime, in the reverse of the expected order."""
     expected = [
+        # By path this one comes first, by its reason ("no last_reviewed") after `a-empty.md`
+        # ("last_reviewed is empty"): the unusable notes are ordered by path, not by reason.
+        put_note(root, "1-nokey.md", header("title: no review date")),
         put_note(root, "a-empty.md", header("last_reviewed:")),
         put_note(root, "z-nokey.md", header("title: no review date")),
         put_note(root, "a-2.md", reviewed(date(2026, 9, 1))),
