@@ -452,6 +452,9 @@ def generate_ci() -> str:
     """Die abgeleitete ci.yml — deterministisch, aus der einen Liste."""
     alle = gates()
     versionen = interpreters()
+    # Quoted: an unquoted `3.10` is the number 3.1 to YAML. Built outside the f-string
+    # below, which may not reuse its own quotes before Python 3.12.
+    matrix = ", ".join(f'"{v}"' for v in versionen)
     # Bead 1jg.2: writer-only Gates misst nur die Schreibmaschine — die
     # abgeleitete ci.yml haelt sie deklariert raus, statt sie dort unmoeglich
     # laufen zu lassen. Ein writer-only Gate mit needs_tracker stoesst folglich
@@ -485,7 +488,7 @@ def generate_ci() -> str:
         "    strategy:",
         "      fail-fast: false",
         "      matrix:",
-        f"        python: [{', '.join(f'"{v}"' for v in versionen)}]",
+        f"        python: [{matrix}]",
         "    runs-on: ubuntu-latest",
         "    steps:",
         *_checkout(pruefe),
@@ -509,7 +512,7 @@ def generate_ci() -> str:
             "    runs-on: ubuntu-latest",
             "    steps:",
             *_checkout(drift),
-            *_toolchain(f'"{versionen[-1]}"'),
+            *_toolchain('"' + versionen[-1] + '"'),
         ]
     )
     if any(g["needs_tracker"] for g in drift):
