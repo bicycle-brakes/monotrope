@@ -124,7 +124,7 @@ def test_the_precondition_is_actually_reached(capsys) -> None:
     ganz anderen Grund blockt.
     """
     assert new_change.main(["probe", "--bead", OPEN_BEAD]) == 0
-    assert "Arbeitsbaum ist nicht" not in capsys.readouterr().out
+    assert "Worktree is not" not in capsys.readouterr().out
 
 
 def test_a_missing_guard_blocks_the_entry(workflow, monkeypatch, capsys) -> None:
@@ -140,5 +140,5 @@ def test_a_missing_guard_blocks_the_entry(workflow, monkeypatch, capsys) -> None
     exit_code = new_change.main(["probe", "--bead", OPEN_BEAD])
     assert exit_code == 2
     ausgabe = capsys.readouterr().out
-    assert "check_worktree_state.sh fehlt" in ausgabe, "der BLOCK muss die fehlende Datei beim Namen nennen"
+    assert "check_worktree_state.sh missing" in ausgabe, "der BLOCK muss die fehlende Datei beim Namen nennen"
     assert not (workflow / "changes" / "probe").exists(), "trotz fehlendem Guard geschrieben"
