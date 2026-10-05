@@ -1,7 +1,7 @@
 ---
 title: "Plan — project-lock"
 status: draft
-implementation_status: none
+implementation_status: partial
 date: 2026-10-05
 last_reviewed: 2026-10-05
 updated: 2026-10-05
@@ -272,7 +272,181 @@ the `requirements-ci.txt` kit rule, `scripts/new_change.py` (its mention of
   — was not taken: it fixes two callers, not the class. Reversible by
   deleting the block.
 
+## Planted faults
+
+Every test has its counterpart: a fault planted on its own, the named test run,
+the file restored (`git status` empty after each). Controls: before the faults
+`python3 -m pytest tests/test_lock.py tests/test_ci.py tests/test_gate_machinery.py -q`
+was green. Result: **47 faults, 47 red, none green.** Planted on `14c8a05`, the
+head after the tests were written; the script is a scratch file
+(`project-lock-plant.py`, the scratchpad of the session), not part of the change.
+
+"Red" is the number of failing tests of the run named in the last column (for
+faults run under Python 3.11.9, a collection error). Faults 1 to 42 were planted
+by that script; 43 to 47 by hand (the lock, the `make venv` target, two reads).
+Criteria 22 and 23 carry no planted fault (the plan's table has "—": a `grep`).
+
+Two faults of the plan's table behave differently than it says:
+
+- **Criterion 16, `--require-hashes` dropped (fault 44):** evidence 4 alone does
+  **not** go red — pip checks hashes by itself as soon as the file carries one,
+  so the same environment results. The plan's refutation ("`pytest
+  tests/test_lock.py` failing right after `make venv`") cannot see the flag.
+  `test_make_venv_installs_the_lock_in_hash_checking_mode` (added in phase 4,
+  reads the recipe) is what goes red; fault 45 is the one evidence 4 catches.
+- **Criterion 8:** the live check (evidence 2) shows the count of check runs
+  named `verify`; the planted faults (15, 16) are held by the summary-check
+  test, which reads the generated `ci.yml`.
+
+| # | Crit. | File | Fault | Red | Tests that went red |
+| --- | --- | --- | --- | --- | --- |
+| 1 | 2 | test_lock | pin_problems: the exact-== check removed | 1 | `test_a_range_or_a_stale_pin_goes_red` |
+| 2 | 2 | test_lock | pin_problems: the version comparison removed | 1 | `test_a_range_or_a_stale_pin_goes_red` |
+| 3 | 4 | ci_gates | the matrix written as a literal in the generator | 1 | `test_every_declared_interpreter_gets_a_leg` |
+| 4 | 5 | ci_gates | a package named in INSTALL (generator, ci.yml regenerated) | 1 | `test_the_toolchain_comes_only_from_the_lock` |
+| 5 | 5 | ci_gates | --require-hashes dropped from INSTALL (generator, ci.yml regenerated) | 1 | `test_the_toolchain_comes_only_from_the_lock` |
+| 6 | 5 | ci.yml | --require-hashes dropped by hand from one install line of ci.yml | 1 | `test_the_toolchain_comes_only_from_the_lock` |
+| 7 | 6 | ci_gates | setup-python after setup-deps in the matrix job | 1 | `test_every_job_sets_a_declared_interpreter_before_installing` |
+| 8 | 6 | ci_gates | setup-python missing in the drift job | 1 | `test_every_job_sets_a_declared_interpreter_before_installing` |
+| 9 | 6 | ci_gates | setup-python with a version outside tools.python (drift: 3.13) | 1 | `test_every_job_sets_a_declared_interpreter_before_installing` |
+| 10 | 7 | ci_gates | always() dropped from the summary job's if | 1 | `test_the_summary_check_passes_only_when_every_leg_passed` |
+| 11 | 7 | ci_gates | the summary step passes on `!= failure` instead of `= success` | 1 | `test_the_summary_check_passes_only_when_every_leg_passed` |
+| 12 | 7 | ci_gates | fail-fast on in the matrix job | 2 | `test_the_summary_check_passes_only_when_every_leg_passed`, `test_every_declared_interpreter_gets_a_leg` |
+| 13 | 7 | ci_gates | the summary job does not need the matrix job | 1 | `test_the_summary_check_passes_only_when_every_leg_passed` |
+| 14 | 7 | ci_gates | the summary job's if names no event (always() alone) | 1 | `test_the_summary_check_passes_only_when_every_leg_passed` |
+| 15 | 8 | ci_gates | a second job named verify (the matrix job gets `name: verify`) | 1 | `test_the_summary_check_passes_only_when_every_leg_passed` |
+| 16 | 8 | ci_gates | no job named verify (SUMMARY_JOB renamed) | 1 | `test_the_summary_check_passes_only_when_every_leg_passed` |
+| 17 | 9 | ci_gates | a matrix in the drift job | 1 | `test_the_drift_job_runs_once_on_the_last_interpreter` |
+| 18 | 9 | ci_gates | the drift job on the first interpreter | 1 | `test_the_drift_job_runs_once_on_the_last_interpreter` |
+| 19 | 10 | ci_gates | validate_schema: the duplicate check removed | 1 | `test_the_schema_rejects_a_malformed_interpreter_list` |
+| 20 | 10 | ci_gates | validate_schema: the key check (only python) removed | 1 | `test_the_schema_rejects_a_malformed_interpreter_list` |
+| 21 | 10 | ci_gates | validate_schema: the 3.<n> form check removed | 1 | `test_the_schema_rejects_a_malformed_interpreter_list` |
+| 22 | 10 | ci_gates | validate_schema: the non-empty list check removed | 1 | `test_the_schema_rejects_a_malformed_interpreter_list` |
+| 23 | 10 | ci_gates | validate_schema: the tools block not checked at all | 1 | `test_the_schema_rejects_a_malformed_interpreter_list` |
+| 24 | 11 | verify_all | the old candidate list back ($HOME/.venvs/*) | 1 | `test_the_runner_never_searches_other_environments` |
+| 25 | 11 | verify_all | python3 on PATH before .venv/bin/python3 | 1 | `test_the_runner_prefers_the_checkouts_own_environment` |
+| 26 | 12 | verify_all | another exit code (1) when no interpreter is found | 1 | `test_the_runner_never_searches_other_environments` |
+| 27 | 12 | verify_all | the message without make venv | 1 | `test_the_runner_never_searches_other_environments` |
+| 28 | 12 | verify_all | the message without $PYTHON | 1 | `test_the_runner_never_searches_other_environments` |
+| 29 | 13 | verify_all | export PYTHON removed | 1 | `test_the_runner_hands_its_interpreter_to_every_gate` |
+| 30 | 13+ | verify_all | the PATH block of the runner removed (my addition, step 5) | 1 | `test_the_runner_puts_the_chosen_environments_tools_on_the_path` |
+| 31 | 14 | test_lock | a version compared by prefix | 1 | `test_a_version_is_compared_whole_not_by_prefix` |
+| 32 | 14 | test_lock | a missing package skipped | 1 | `test_a_drifted_package_goes_red` |
+| 33 | 14 | test_lock | the make venv hint dropped from the messages | 2 | `test_a_drifted_package_goes_red`, `test_an_undeclared_interpreter_goes_red` |
+| 34 | 15 | test_lock | the interpreter check removed | 1 | `test_an_undeclared_interpreter_goes_red` |
+| 35 | 16 | Makefile | --require-hashes dropped from the venv target | 1 | `test_make_venv_installs_the_lock_in_hash_checking_mode` |
+| 36 | 17 | pyproject | pythonpath removed from pyproject.toml | 1 | `test_the_repository_root_is_on_pytests_path` |
+| 37 | 18 | currency | the reprlib keywords back (run under Python 3.11) | collection error | `tests/test_research_currency.py` under 3.11.9 |
+| 38 | 18 | ci_gates | a 3.12-only f-string in ci_gates.py (the nested quotes of the first push; run under 3.11) | collection error | `tests/test_ci.py` under 3.11.9 (SyntaxError) |
+| 39 | 19 | kit manifest | a mechanismus rule for pyproject.toml in the kit manifest | 1 | `test_the_lock_and_the_project_file_stay_home[pyproject.toml]` |
+| 40 | 19 | export manifest | an export rule that carries requirements-ci.txt | 1 | `test_the_lock_and_the_project_file_stay_home[requirements-ci.txt]` |
+| 41 | 20 | .gitignore | .gitignore line .venv/ removed (git check-ignore) | exit 1 | `git check-ignore -q .venv/bin/python3` |
+| 42 | 20 | .gitignore | .gitignore line .venv/ removed (probe --strict) | exit ≠ 0 | `python3 scripts/kit/probe.py --strict` |
+| 43 | 3 | `requirements-ci.txt` | `pluggy==1.6.0` edited to `1.6.1` and staged (a hand edit), then evidence 3 run | `git diff --exit-code` exit 1 | evidence 3 |
+| 44 | 16 | `Makefile` | `--require-hashes` dropped from `venv`, then evidence 4 (`rm -rf .venv && make venv && pytest tests/test_lock.py`) | 1 of 13 | `test_make_venv_installs_the_lock_in_hash_checking_mode` — the environment tests stay green: pip checks hashes by itself when the file carries them |
+| 45 | 16 | `Makefile` | `venv` installs `pytest==8.3.4 PyYAML ruff==0.9.10 jinja2 pydantic` instead of the lock, then evidence 4 | 2 of 13 | `test_the_environment_matches_the_lock`, `test_make_venv_installs_the_lock_in_hash_checking_mode` |
+| 46 | 1 | `pyproject.toml` (a copy) | `pydantic==2.13.5` → `2.13.4`, read once with `tomllib` against the six pins | read RED | the one-off read |
+| 47 | 21 | `provenance.yaml` (a copy) | the `requirements-ci.txt` entry removed, longest-prefix read | read RED (no class) | the one-off read |
+
+## Evidence
+
+How GitHub names a leg (research 4 had not read it): `gates (3.11)` and
+`gates (3.12)` — the matrix job's id and the version in parentheses.
+
+**1. The push of step 4** (`c926bad`, run 37375079831; no pull request exists,
+so one event only). Attempt 1 got no runner for the 3.11 leg in 15 minutes
+(GitHub Actions degraded, an incident open that evening) and GitHub cancelled
+it at 21:33:51 UTC: leg 3.11 `cancelled` (job 111981572725), leg 3.12 `failure`
+(job 111981572478, one failed step: `adr-answers`), `verify` `failure` (job
+111987336085). Attempt 2 is a rerun of that one job (`gh run rerun 37375079831
+--job 111981572725`), same commit; it ran:
+
+```text
+$ gh api repos/MPAdesso/coding-harness/commits/c926bad6aa62c255da2bdabfb354409319ed09ac/check-runs --jq '.check_runs[] | [.name, .conclusion] | @tsv'
+verify	failure
+drift	skipped
+gates (3.12)	failure
+gates (3.11)	failure
+```
+
+The 3.11 leg (job 111987543865) failed in `The test suite passes` with three
+collection errors — `tests/test_research_currency.py` (`TypeError:
+Repr.__init__() got an unexpected keyword argument 'maxlevel'`, the known case)
+and, **new**, `tests/test_ci.py` and `tests/test_lock.py` (`SyntaxError: f-string:
+unterminated string`: the matrix line of `generate_ci` in `c926bad` reused its
+own quotes inside an f-string, which Python 3.12 accepts and 3.11 does not) —
+and in the kit probe, `gate-schema` and `ci-drift` on the same `SyntaxError`,
+and in `adr-answers`. The 3.12 leg failed in `adr-answers` alone. `verify`
+(job 111987814719) failed. The `SyntaxError` was found by the 3.11 check on the
+laptop minutes before this run was read, and fixed in `5fb58a2` together with
+`_GLIMPSE`.
+
+**2. The push of step 6** (`14c8a05`, run 37376858363, both legs ran in about
+a minute each):
+
+```text
+$ gh api repos/MPAdesso/coding-harness/commits/14c8a05b03901cfe4a18148fa58218e98e2f7598/check-runs --jq '.check_runs[] | [.name, .conclusion] | @tsv'
+verify	failure
+drift	skipped
+gates (3.12)	failure
+gates (3.11)	failure
+$ gh api … --jq '[.check_runs[] | select(.name == "verify") | .check_suite.id] | group_by(.) | map(length)'
+[1]
+```
+
+In both legs (jobs 111988040029 for 3.11, 111988040324 for 3.12) the step
+`The test suite passes` is `success` and the only failed step is
+`Every feature has the maintainer's answer to the ADR question`
+(`adr-answers`: `[DECISION] 1` is open, the answer is not recorded — house
+rule 8). `verify` is `failure` because the legs are; one check run named
+`verify`. What is **not** shown live: a push whose 3.11 leg alone is red while
+3.12 is green — `adr-answers` makes both red until the answer is recorded; the
+summary check's reaction to `failure`, `cancelled` and `skipped` is held by
+`test_the_summary_check_passes_only_when_every_leg_passed`, and attempt 1 of
+evidence 1 showed it red on a `cancelled` leg.
+
+**3. The lock reproduces itself** (at `14c8a05`):
+
+```text
+$ eval "$(sed -n '2s/^#    //p' requirements-ci.txt)" && git diff --exit-code requirements-ci.txt
+Resolved 14 packages in 172ms
+exit 0
+```
+
+**4. A fresh `.venv`** (at `14c8a05`):
+
+```text
+$ rm -rf .venv && make venv && .venv/bin/python3 -m pytest tests/test_lock.py -q
+Successfully installed annotated-types-0.8.0 iniconfig-2.3.0 jinja2-3.1.6 markupsafe-3.0.4 packaging-26.3 pluggy-1.6.0 pydantic-2.13.5 pydantic-core-2.46.5 pytest-8.3.4 pyyaml-6.0.2 ruff-0.9.10 typing-extensions-4.16.0 typing-inspection-0.4.4
+13 passed
+```
+
+**The local gate, 2026-10-05 at 23:37 on `14c8a05` plus this file's edits.**
+`GIT_CONFIG_COUNT=1 GIT_CONFIG_KEY_0=commit.gpgsign GIT_CONFIG_VALUE_0=false
+make verify` from a shell with no `PYTHON` and no virtual environment on
+`PATH`: the runner took the checkout's own `.venv`; **623 passed, 15 skipped**;
+`ruff-check`, `ruff-format`, `leerprobe`, `plans-registry`, `frontmatter-current`,
+`bead-export`, `dangling-beads`, `decision-continuity`, `gate-schema`,
+`ci-drift` and `ramp-valves` green. **Red: `adr-answers` (block) alone** —
+`project-lock: no answer — … decisions/answers/project-lock/adr.yaml does not
+exist` — until the maintainer answers `[DECISION] 1`; recorded by the
+orchestrating session, not here. `docs-links` (51 findings, the same count as
+the evidence of `research-currency` the same day; none in a line this change
+wrote) and `markdownlint` are report-only and red. The same run under Python
+3.11.9 (`PYTHON=<venv built from the lock> bash scripts/verify_all.sh`):
+623 passed, 15 skipped, the same single blocking red.
+
+Criteria 1 (read once with `tomllib`), 21 (longest `provenance.yaml` prefix)
+and 22, 23 (`grep`) read on 2026-10-05 and hold. `scripts/kit/probe.py`,
+`scripts/export/manifest.yaml`, `OHNE_AUFRUFER`, `OHNE_TEST`,
+`OHNE_MUTATIONSTEST`, `ruff.toml`, `README.md`, `tools/` and
+`scripts/new_change.py` are untouched (`git diff d5813ec..HEAD` names none of
+them).
+
 ## Time used
 
-2026-10-05 23:08 — span 1 started (read from `date`); the closing line of the
-span is appended when it ends.
+Appetite: 5 h of phase 4, one repair round included. Read from `date`; the
+repair round was not used (the 3.11 repair is step 6).
+
+- 2026-10-05 23:08–23:39, 31 min, break counted (the waits for GitHub's
+  runners are inside it)
