@@ -35,6 +35,7 @@ typed: a hand-kept list of files ages exactly as fast as files are added.
 | [`changes/harness-decide-adr/plan.md`](changes/harness-decide-adr/plan.md) | draft | partial | 2026-09-30 | coding-harness-3ar |
 | [`changes/harness-decide-adr/research.md`](changes/harness-decide-adr/research.md) | draft | none | 2026-09-30 | coding-harness-3ar |
 | [`changes/harness-decide-adr/spec.md`](changes/harness-decide-adr/spec.md) | draft | partial | 2026-09-30 | coding-harness-3ar |
+| [`changes/project-lock/research.md`](changes/project-lock/research.md) | draft | none | 2026-10-05 | coding-harness-ei0 |
 | [`changes/research-currency/decisions.md`](changes/research-currency/decisions.md) | draft | partial | 2026-10-05 | coding-harness-pu9 |
 | [`changes/research-currency/findings.md`](changes/research-currency/findings.md) | draft | partial | 2026-10-05 | coding-harness-pu9 |
 | [`changes/research-currency/plan.md`](changes/research-currency/plan.md) | draft | partial | 2026-10-05 | coding-harness-pu9 |
