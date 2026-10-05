@@ -71,6 +71,8 @@ What explicitly does not belong to this change, so that the scope does not grow
 during implementation. A part postponed rather than refused says what brings
 it back.
 
+A `feature` without a `design.md` says here, in one sentence, why it does without the design phase 2b (`prompts/02b-design.md`).
+
 ## Protected areas
 
 The paths or areas this change must not touch, each with its reason. If there

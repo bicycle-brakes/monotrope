@@ -77,6 +77,7 @@ handover to the next phase — not the chat history.**
 | 1a | Interview | `plans/changes/<name>/decisions.md` | every `[DECISION]` answered — or its skip given a reason | [`01a-interview.md`](../prompts/01a-interview.md) |
 | 2 | Spec | `plans/changes/<name>/spec.md` | validator green, no open `[DECISION]` | [`02-spec.md`](../prompts/02-spec.md) |
 | 2a | Spec review | rows for `findings.md`, dimension `SPEC`; then the revised `spec.md` | every row worked into the spec or rejected with a reason; no open `[AMBIGUITY]` | [`02a-spec-review.md`](../prompts/02a-spec-review.md) |
+| 2b | Design *(by class)* | `plans/changes/<name>/design.md` | validator green; for an `architectural` change, an ADR draft in it | [`02b-design.md`](../prompts/02b-design.md) |
 | 3 | Plan | `plans/changes/<name>/plan.md` | validator green | [`03-plan.md`](../prompts/03-plan.md) |
 | 4 | Implement | code + tests | `make verify` green | [`04-implement.md`](../prompts/04-implement.md) |
 | 5 | Verify | test output as evidence | the stop hook blocks on a red tree | [`05-verify.md`](../prompts/05-verify.md) |
@@ -254,6 +255,8 @@ one of four:
 - `architectural` — a new subsystem or a break of an interface; it carries its
   ADR already, so it is not asked.
 
+**The design phase 2b goes by class** (decision D-14, `prompts/02b-design.md`): an `architectural` change always runs it; a `feature` runs it or says in one sentence of its `spec.md` why not; a `bounded` change and a `spike` never run it. Nothing checks this until the validator of bead coding-harness-jc3 lands; the review before the merge holds it.
+
 **Only a `feature` owes an answer to the ADR question:** is this change an
 architecture decision that needs an ADR? The spec author proposes, in the same
 header: `change: <folder name>` and `adr_question: {proposed: "yes"|"no",
@@ -357,6 +360,7 @@ none, because the registry keeps counting it as protection.
 | 1a Interview | **Fable 5.1** | the questions are the work, and there are few of them |
 | 2 Spec | **Opus 5.5** | effort `xhigh`; the highest reasoning demand, little output |
 | 2a Spec review | **Opus 5.5** (until stage 2 is live) | a fresh context that does not know the author's reasoning; see below |
+| 2b Design | **Opus 5.5** | effort `xhigh`; the same demand as spec and plan |
 | 3 Plan | **Opus 5.5** | effort `xhigh`; an error here is the most expensive in the whole run |
 | 4 Implement | **Sonnet 5** | a solid worker given a clear plan |
 | 5 Verify | — | deterministic |
