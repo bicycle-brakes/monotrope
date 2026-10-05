@@ -18,6 +18,7 @@ import ast
 import copy
 import json
 import re
+import shutil
 import subprocess
 import sys
 from pathlib import Path
@@ -671,6 +672,136 @@ def test_runner_reports_what_it_cannot_run() -> None:
     assert ergebnis.returncode == 0, ergebnis.stderr
     for g in nicht_lokal:
         assert g["id"] in ergebnis.stdout, f"The runner conceals the gate '{g['id']}', which it cannot run."
+
+
+# The runner tests below build a tree of their own — copies of the runner and of
+# `ci_gates.py`, plus a one-gate file — and start the runner there with `HOME`
+# set, `PYTHON` removed and a `PATH` of their own. Under `make verify` the outer
+# runner exports `PYTHON`, and the developer's `.venv` must not decide the result
+# (bead coding-harness-ei0).
+
+
+def _runner_tree(base: Path, gate_command: str) -> Path:
+    tree = base / "tree"
+    (tree / "scripts").mkdir(parents=True)
+    (tree / "decisions").mkdir()
+    shutil.copy(RUNNER, tree / "scripts" / "verify_all.sh")
+    shutil.copy(REPO_ROOT / "scripts" / "ci_gates.py", tree / "scripts" / "ci_gates.py")
+    gate_file = {
+        "schema_version": 2,
+        "tools": {"python": ["3.11", "3.12"]},
+        "gates": [
+            {
+                "id": "probe",
+                "title": "The one gate of the runner tree",
+                "command": gate_command,
+                "job": "verify",
+                "enforcement": "block",
+                "floor": True,
+                "placement": "both",
+                "reason": "a seed for the runner tests",
+            }
+        ],
+    }
+    (tree / "decisions" / "gates.yaml").write_text(yaml.safe_dump(gate_file, sort_keys=False), encoding="utf-8")
+    return tree
+
+
+def _interpreter_wrapper(path: Path, label: str, log: Path, *, with_pyyaml: bool = True) -> None:
+    """An executable at `path` that logs its label, then is the real interpreter — or fails the import."""
+    path.parent.mkdir(parents=True, exist_ok=True)
+    if with_pyyaml:
+        body = f'#!/bin/sh\necho {label} >> "{log}"\nexec "{sys.executable}" "$@"\n'
+    else:
+        body = f'#!/bin/sh\necho {label} >> "{log}"\nexit 1\n'
+    path.write_text(body, encoding="utf-8")
+    path.chmod(0o755)
+
+
+def _run_runner(tree: Path, home: Path, path_dirs: list[Path], *args: str) -> subprocess.CompletedProcess:
+    # `PYTHON` is left out on purpose, and so is everything else the outer run set.
+    env = {"HOME": str(home), "PATH": ":".join([*map(str, path_dirs), "/usr/bin", "/bin"])}
+    bash = shutil.which("bash") or "/bin/bash"
+    return subprocess.run(
+        [bash, str(tree / "scripts" / "verify_all.sh"), *args], cwd=tree, env=env, capture_output=True, text=True
+    )
+
+
+def test_the_runner_never_searches_other_environments(tmp_path: Path) -> None:
+    """A virtual environment of another repository is not a candidate.
+
+    The tree has no `.venv`, a `python3` on PATH without PyYAML, and an
+    interpreter with PyYAML under `$HOME/.venvs/` — where the old runner looked
+    and found one that was not the lock's. The new one exits 2 before any gate and
+    says how to build the environment (criteria 11 and 12).
+    """
+    marker = tmp_path / "gate-ran"
+    log = tmp_path / "log"
+    tree = _runner_tree(tmp_path, f"touch {marker}")
+    home = tmp_path / "home"
+    _interpreter_wrapper(home / ".venvs" / "other" / "bin" / "python3", "home", log)
+    _interpreter_wrapper(tmp_path / "bin" / "python3", "path", log, with_pyyaml=False)
+
+    done = _run_runner(tree, home, [tmp_path / "bin"])
+    assert done.returncode == 2, f"exit {done.returncode}\n{done.stdout}\n{done.stderr}"
+    assert "make venv" in done.stderr and "PYTHON" in done.stderr, done.stderr
+    assert not marker.exists(), "a gate started although no interpreter with PyYAML was found"
+    assert "home" not in log.read_text(encoding="utf-8").split(), "the runner looked into $HOME/.venvs"
+
+
+def test_the_runner_prefers_the_checkouts_own_environment(tmp_path: Path) -> None:
+    """`.venv/bin/python3` of the checkout comes before the `python3` on PATH."""
+    log = tmp_path / "log"
+    tree = _runner_tree(tmp_path, "true")
+    _interpreter_wrapper(tree / ".venv" / "bin" / "python3", "venv", log)
+    _interpreter_wrapper(tmp_path / "bin" / "python3", "path", log)
+
+    done = _run_runner(tree, tmp_path / "home", [tmp_path / "bin"])
+    assert done.returncode == 0, f"exit {done.returncode}\n{done.stdout}\n{done.stderr}"
+    ran = set(log.read_text(encoding="utf-8").split())
+    assert ran == {"venv"}, f"the interpreters that ran: {sorted(ran)}"
+
+    # And from another directory the same checkout's environment is the one used:
+    # the runner changes into the root before it chooses.
+    log.unlink()
+    elsewhere = tmp_path / "elsewhere"
+    elsewhere.mkdir()
+    env = {"HOME": str(tmp_path / "home"), "PATH": f"{tmp_path / 'bin'}:/usr/bin:/bin"}
+    bash = shutil.which("bash") or "/bin/bash"
+    again = subprocess.run(
+        [bash, str(tree / "scripts" / "verify_all.sh")], cwd=elsewhere, env=env, capture_output=True, text=True
+    )
+    assert again.returncode == 0, f"exit {again.returncode}\n{again.stdout}\n{again.stderr}"
+    assert set(log.read_text(encoding="utf-8").split()) == {"venv"}
+
+
+def test_the_runner_hands_its_interpreter_to_every_gate(tmp_path: Path) -> None:
+    """The gate's own environment carries the chosen interpreter as `PYTHON` (criterion 13)."""
+    log = tmp_path / "log"
+    tree = _runner_tree(tmp_path, 'test -n "$PYTHON" && test -x "$PYTHON"')
+    _interpreter_wrapper(tree / ".venv" / "bin" / "python3", "venv", log)
+
+    done = _run_runner(tree, tmp_path / "home", [tmp_path / "bin"])
+    assert done.returncode == 0, f"exit {done.returncode}\n{done.stdout}\n{done.stderr}"
+    assert "[probe] gruen" in done.stdout, done.stdout
+
+
+def test_the_runner_puts_the_chosen_environments_tools_on_the_path(tmp_path: Path) -> None:
+    """A gate that calls a tool by its bare name finds the locked environment's own.
+
+    `scripts/ramp_valves.py` runs `ruff` without a path. A `.venv` that is not
+    activated is not on PATH, so without this the same checkout would be green
+    after `source .venv/bin/activate` and red without it.
+    """
+    tree = _runner_tree(tmp_path, 'test "$(locked-tool)" = from-the-venv')
+    _interpreter_wrapper(tree / ".venv" / "bin" / "python3", "venv", tmp_path / "log")
+    tool = tree / ".venv" / "bin" / "locked-tool"
+    tool.write_text("#!/bin/sh\necho from-the-venv\n", encoding="utf-8")
+    tool.chmod(0o755)
+
+    done = _run_runner(tree, tmp_path / "home", [])
+    assert done.returncode == 0, f"exit {done.returncode}\n{done.stdout}\n{done.stderr}"
+    assert "[probe] gruen" in done.stdout, done.stdout
 
 
 def test_no_second_verification_workflow() -> None:

@@ -256,6 +256,21 @@ the `requirements-ci.txt` kit rule, `scripts/new_change.py` (its mention of
   first by `make lock`, so its message reads "regenerate the lock with make
   lock, then build the locked environment: make venv (…)" — it still ends
   with the hint.
+- **2026-10-05, phase 4 — the runner also puts the chosen interpreter's
+  directory on `PATH`** (step 5; `[DETAIL]`, added, reasoned here). Assumption
+  that did not carry: "`make venv`, then `make verify` is green". A `.venv`
+  that is not activated is not on `PATH`, and two callers use a bare `ruff`
+  (`scripts/ramp_valves.py`, one test of `tests/test_ci.py`): from a plain
+  shell the gates `pytest` (`test_the_ramp_valve_check_runs_green_here`) and
+  `ramp-valves` went red with `FileNotFoundError: 'ruff'`, while the same
+  checkout was green with the venv's `bin` on `PATH` — the laptop of the
+  plan's author had the portfolio venv's `bin` there, which hid it. The
+  runner now prepends the directory of a chosen interpreter that is not on
+  `PATH` already (so `source .venv/bin/activate` is not needed), and the new
+  test `test_the_runner_puts_the_chosen_environments_tools_on_the_path` holds
+  it. The alternative — `[sys.executable, "-m", "ruff"]` in those two callers
+  — was not taken: it fixes two callers, not the class. Reversible by
+  deleting the block.
 
 ## Time used
 
