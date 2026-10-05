@@ -443,7 +443,11 @@ def check_launchd(p: Path) -> None:  # 51
 # LaunchAgents folder at login (man launchd), so the runbook keeps the job's plist elsewhere until section 9 enables it.
 LAUNCHD_FOLDERS = re.compile(r"Library/Launch(Agents|Daemons)")
 LAUNCHCTL_LOADS = re.compile(r"launchctl\s+(bootstrap|load|enable|kickstart)")
-ENABLE_STEP = re.compile(r"^spike_green && cp .*Library/LaunchAgents.* && launchctl bootstrap ", re.M)
+ENABLE_STEP = re.compile(
+    r'^spike_green && cp "\$STAGED" ~/Library/LaunchAgents/"\$JOB"\.plist'
+    r' && launchctl bootstrap "gui/\$\(id -u\)" ~/Library/LaunchAgents/"\$JOB"\.plist$',
+    re.M,
+)
 SPIKE_HEAD = "| Test | Source | Date | Result |\n| --- | --- | --- | --- |\n"
 GATE_ROWS = 15  # criterion 58: S-2 to S-6, section 7, S-7, CH-1 to CH-8
 
@@ -459,7 +463,8 @@ def check_job_staged_until_green(p: Path) -> None:  # 59
             )
             assert not LAUNCHCTL_LOADS.search(line), f"{head.strip()} loads the job: {line.strip()}"
     enable = section(text, r"first run by hand")
-    assert ENABLE_STEP.search(enable), "section 9 has no enable step that starts with spike_green"
+    assert ENABLE_STEP.search(enable), "section 9 has no enable step: spike_green, the staged plist, the user's domain"
+    assert f"holds {GATE_ROWS} rows" in enable, "section 9 does not state the gate's row count"
     for line in enable.split("\n"):
         if LAUNCHD_FOLDERS.search(line) or LAUNCHCTL_LOADS.search(line):
             assert line.startswith("spike_green && "), f"section 9 loads the job without the gate: {line.strip()}"
@@ -908,6 +913,24 @@ FAULTS = [
         "59 a second, ungated load",
         README,
         sub("launchctl print", 'launchctl bootstrap "gui/$(id -u)" "$STAGED"; launchctl print'),
+        check_job_staged_until_green,
+    ),
+    Fault(
+        "59 the enable step copies the raw plist",
+        README,
+        sub('spike_green && cp "$STAGED"', 'spike_green && cp "$RB/$JOB.plist"'),
+        check_job_staged_until_green,
+    ),
+    Fault(
+        "59 the job is bootstrapped into the system domain",
+        README,
+        sub('launchctl bootstrap "gui/$(id -u)" ~', "launchctl bootstrap system ~"),
+        check_job_staged_until_green,
+    ),
+    Fault(
+        "59 the prose names another row count",
+        README,
+        sub("holds 15 rows", "holds 12 rows"),
         check_job_staged_until_green,
     ),
     Fault("59 the gate lets an open row pass", README, sub('r != "green"', 'r == "red"'), check_spike_gate),
