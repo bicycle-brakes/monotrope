@@ -109,3 +109,10 @@ PR #69), one question at a time:
 
 Scope of this change from now on: the three templates, the design phase 2b
 (prompt and `design.md` template) and an arc42 skeleton.
+9. **arc42 licence: the skeleton carries CC BY-SA 4.0** (maintainer,
+   2026-10-05, option 1 of the spec's open question). arc42's licence covers
+   its structure and headings, so an own-words skeleton is still an
+   adaptation. `templates/arc42.md` states CC BY-SA 4.0 visibly and credits
+   arc42; it is the one exception in a kit meant to be Apache-2.0 (bead
+   coding-harness-lir). This is an assessment, not legal advice; both
+   repositories are private, so nothing is shared today.
