@@ -3,6 +3,10 @@
 
 **Your move:** merge (or ask an agent to) = accept · comment = change · close = reject.
 
+**What could break:** <what could fail after the merge, and where it would show>
+
+done: <verification command>: <result> at <short sha> · <time used> of <appetite>
+
 ## What your merge confirms
 - <what becomes binding, and in which file>
 - <what agents will do next because of it>

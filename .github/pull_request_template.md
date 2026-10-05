@@ -2,6 +2,10 @@
 
 **Your move:** nothing to decide. Merge (or ask an agent to) when CI is green.
 
+**What could break:** <what could fail after the merge, and where it would show>
+
+done: <verification command>: <result> at <short sha> · <time used> of <appetite>
+
 ## What changes
 - <behaviour that changed, and why it matters>
 - <second change, if any>

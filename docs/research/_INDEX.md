@@ -4,7 +4,7 @@ category: research
 status: proposed
 created: 2026-09-16
 last_reviewed: 2026-09-18
-updated: 2026-09-29
+updated: 2026-09-30
 owner: framework-architect
 provenance: ai-drafted-reviewed
 produced_by:
@@ -60,6 +60,7 @@ Vocabulary for older sources: **Stage 1–3** means model routing; **S0–S7** m
 | [Tracker writes from worktrees](2026-09-23-worktree-tracker-writes.md) | accepted · 2026-09-23 | D-5's five checks green with bd 1.3.0; the worktree write ban lifts, the one-writer rule stays |
 | [Agent Skills assessment](2026-09-18-agent-skills-assessment.md) | proposed · 2026-09-18 | Selective technique adaptation and evaluation without importing a competing workflow |
 | [Agent SDK and formal models](2026-09-26-agent-sdk-and-formal-models.md) | proposed · 2026-09-26 | TLA+ for four protocol seams alongside M0 (three models run, one new finding in the recap lock, reproduced), property tests before Lean for pure logic (Lean run and checked against the code; four alternatives measured on the same targets), the Agent SDK as one adapter of a runner-neutral qualification runner |
+| [Work framing for ADHD](2026-09-30-adhd-frame.md) | proposed · 2026-09-30 | Evidence for the plan card with a pre-mortem line, the appetite stop, the clock in "done:", the resumption line and the acceptance card; each source dated, with its strength, and what was not read |
 
 Original four-source intake note: copied in by the maintainer on 2026-09-16 (Phase 2 of the
 separation, bead `coding-harness-anw`). Provenance is set to
