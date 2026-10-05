@@ -903,6 +903,116 @@ documentation states it, not Hermes's code.
   dry run 15 min; the weekly job is loaded only when every row of "Spike
   results" is green (criterion 59).
 
+### Repair round 1, slices 2 and 5
+
+2026-10-06, on `1b25c9a` (phase-6 findings of slices 2 and 5), set by the
+coordinating session: repair the two MAJOR rows F-13 and F-14 of
+`tools/hermes/` and nothing else. F-15 goes to slice 4's phase 2a; F-16 to
+F-24 stay open as the maintainer's choice. Commits: `f56b8ac` (F-13),
+`4f3091c` (F-14), `1b4872d` (the test of F-13 tightened). Nothing installed
+or run: no sudo, no `launchctl`, no Hermes, no model call.
+
+- `[DETAIL]` — **F-13: the plist is staged, not hidden.** The install writes
+  it to `$STAGED` (`~/Library/Application Support/coding-harness-recheck/
+  staged.plist`, next to the clone), a place launchd does not load at login.
+  Section 9 puts it in `~/Library/LaunchAgents/` and bootstraps it in one
+  line behind `spike_green`, a function that reads the table "Spike results"
+  in the clone's copy of the runbook and refuses unless it holds 15 rows
+  (criterion 58: S-2 to S-6, §7, S-7, CH-1 to CH-8) and every one is
+  `green`. The clone, not the working checkout, so that a table the
+  maintainer has not merged and pulled does not count. A `Disabled` key in
+  the plist was not used: `man launchd.plist` calls it a hint to `launchctl`,
+  and an enabling override of `launchctl` beats it (read, not tried), so a
+  location is the lock that does not depend on it. Limits: the gate stops the
+  runbook, not a hand that copies the file in; and `man launchd` is read for
+  the folders, that launchd loads them at login is Apple's documented
+  behaviour, not tried on this laptop.
+- `[DETAIL]` — **F-14: the OS-level barrier is not in these slices' files; the
+  guard of Hermes is pinned and measured.** The sudo rule runs the wrapper
+  *as* `_chhermes` (criterion 52), so a file the wrapper reads is a file the
+  service user reads: "the wrapper loads the keys from a file the file tool
+  cannot read" has no operating-system form here, and a custom file name would
+  be worse than `.env`, which Hermes protects by name. Read on 2026-10-06 with
+  `gh api` at tag `v2026.9.21` (the same source as slice 5; scratch copies, not
+  committed): `security.md`, "File Write Safety", lists "Hermes secret
+  stores: `.env` … under HERMES_HOME" among the always-protected paths and says
+  project-local `.env` files are "read-denied anywhere on disk (the file tools
+  refuse to read them)"; `configuration.md`, "Security", says
+  `security.redact_secrets` (on by default) masks key-shaped assignments when
+  `read_file` or `search_files` reads an `.env`-style file;
+  `environment-variables.md` says Hermes reads the process environment and
+  `~/.hermes/.env`. So: `security.redact_secrets: true` is pinned in
+  `config.yaml` (source in `KEY_SOURCES`), `.env` stays the one file
+  Hermes protects by name (the test holds the install line), the runbook
+  names the risk in section 4, and CH-4 asks the agent to read the keys and
+  counts their values in the event stream (green: 0). **Not read:** that the
+  file tools refuse `read_file` of `$HERMES_HOME/.env` in practice (the
+  documentation states read-denial outright for project-local `.env` and for
+  control files, and only by the table's wording for the secret stores), that
+  `search_files` and a path with `..` or a link pass the same guard, and that
+  the mask holds for every key shape; CH-4 measures the first two and a red
+  there is the stop. **What the design needs for a barrier of the operating
+  system** (not built, the maintainer's choice): the orchestrator reads the
+  two keys from a file in the maintainer's home and writes them to the
+  wrapper's standard input through `sudo`; the wrapper reads them and passes
+  them in its `env -i` line; `$HH/.env` keeps the two URLs only. That changes
+  the wrapper's call (design Interfaces 2 and 5), criteria 50 and 54, slice
+  4's code and the runbook's section 5 step 3. `spec.md`, "Risks accepted",
+  and the ADR draft's Consequences still do not name the risk: they are outside
+  these slices' files, one bullet each for their owners.
+- `[DETAIL]` — **the runbook's budget is 320 lines, not 300.** Both fixes
+  add text the maintainer needs at the laptop (a gate and a measure, a risk
+  paragraph); the file is 314 lines. The 300 was a `[DETAIL]` of phase 3, not
+  a criterion; `RUNBOOK_BUDGET` carries the reason and the fault "over its
+  line budget" now appends 30 lines.
+- **Spike part:** CH-4 grows one command pair and a green condition (its title
+  names the keys); the count of CH tests stays eight (criterion 56).
+
+Planted faults, repair round 1 (rows 101 to 122), printed one by one on
+`4f3091c` plus `1b4872d`, each planted alone in a copy of `tools/hermes/` and
+silent before. The test file now runs 134 tests (15 of the profile, 119
+counterparts, 22 of them new) in 7.5 s; `make verify` ended VERIFY GREEN
+(737 passed, 15 skipped).
+
+| # | Criterion | Fault planted | After | Check |
+| --- | --- | --- | --- | --- |
+| 101 | 59 (F-13) | the plist is written into LaunchAgents at install | `## 5 · Install writes where launchd loads at login: sed -e "s#@HOME@#$HOME#g" -e "s#@PYTHON3@#$PY#g" "$RB/$...` | `check_job_staged_until_green` |
+| 102 | 59 (F-13) | the install loads the job | `## 5 · Install loads the job: sed -e "s#@HOME@#$HOME#g" -e "s#@PYTHON3@#$PY#g" "$RB/$JOB.plist" > "$STAGED"...` | `check_job_staged_until_green` |
+| 103 | 59 (F-13) | the enable step has no gate | `section 9 has no enable step: spike_green, the staged plist, the user's domain` | `check_job_staged_until_green` |
+| 104 | 59 (F-13) | a second, ungated load | `section 9 loads the job without the gate: launchctl bootstrap "gui/$(id -u)" "$STAGED"; launchctl print "gu...` | `check_job_staged_until_green` |
+| 105 | 59 (F-13) | the enable step copies the raw plist | `section 9 has no enable step: spike_green, the staged plist, the user's domain` | `check_job_staged_until_green` |
+| 106 | 59 (F-13) | the job is bootstrapped into the system domain | `section 9 has no enable step: spike_green, the staged plist, the user's domain` | `check_job_staged_until_green` |
+| 107 | 59 (F-13) | the prose names another row count | `section 9 does not state the gate's row count` | `check_job_staged_until_green` |
+| 108 | 59 (F-13) | the gate lets an open row pass | `the gate opens with a row that is 'open'` | `check_spike_gate` |
+| 109 | 59 (F-13) | the gate lets a red row pass | `the gate opens with a row that is 'red'` | `check_spike_gate` |
+| 110 | 59 (F-13) | the gate opens on an empty table | `the gate opens on an empty table` | `check_spike_gate` |
+| 111 | 59 (F-13) | the gate opens on one row | `the gate opens with fewer than 15 rows` | `check_spike_gate` |
+| 112 | 59 (F-13) | the gate reads no table | `the gate refuses a table of 15 green rows` | `check_spike_gate` |
+| 113 | 59 (F-13) | the gate counts the header | `the gate refuses a table of 15 green rows` | `check_spike_gate` |
+| 114 | 56 (F-14) | redact_secrets off | `security.redact_secrets is not true` | `check_agent_keys` |
+| 115 | 56 (F-14) | redact_secrets absent | `security.redact_secrets is not true` | `check_agent_keys` |
+| 116 | 56 (F-14) | the keys in a file Hermes does not protect | `the keys are not installed as $HERMES_HOME/.env, the one file Hermes protects by name` | `check_agent_keys` |
+| 117 | 56 (F-14) | the risk is not named | `the runbook's risk on the agent's keys lacks 'Risk, accepted'` | `check_agent_keys` |
+| 118 | 56 (F-14) | the risk forgets the way out | `the runbook's risk on the agent's keys lacks 'web_extract'` | `check_agent_keys` |
+| 119 | 56 (F-14) | the risk forgets the remedy | `the runbook's risk on the agent's keys lacks 'revoke both keys'` | `check_agent_keys` |
+| 120 | 56 (F-14) | CH-4 does not count the keys | `CH-4 does not count the key values in the stream` | `check_agent_keys` |
+| 121 | 56 (F-14) | CH-4 has no green condition on the keys | `CH-4 has no green condition on the key values` | `check_agent_keys` |
+| 122 | 56 (F-14) | CH-4 forgets the key read | `CH-4 lacks 'ch4-key'` | `check_spike_part` |
+
+**What the checks do not see.** Planted and left silent by every check of the
+profile; the phase-6 reader reads them. Rows 105 to 107 were silent on the
+first try (the enable step was matched loosely) and were closed in `1b4872d`.
+
+| # | Fault planted | Before | After | Test |
+| --- | --- | --- | --- | --- |
+| 123 | CH-4's sentence "A count above 0 is red" says "green" | silent | silent | none — read in phase 6 |
+| 124 | the risk paragraph says "A repository write follows." (it says none follows) | silent | silent | none — read in phase 6 |
+| 125 | the risk paragraph says the guard is "proven" where it says "not measured: CH-4" | silent | silent | none — read in phase 6 |
+
+Also not run: the gate on CI's `awk` (this laptop's was used; the function
+uses `-F'|'`, `gsub` and `exit`, which POSIX awk, `gawk` and `mawk` share), and
+`launchctl`, `plutil` and `visudo` on the new lines.
+
 ## Slice 6 — the ruleset (the maintainer, 15 min)
 
 In GitHub: Settings → Rules → Rulesets → New branch ruleset; target the
@@ -957,3 +1067,12 @@ counted. `make verify` ended VERIFY GREEN at 01:07 (713 passed, 15 skipped;
 line-length reports for `tools/hermes/README.md`), with the profile in
 `1498994`, `7cd557f` and `984ede5`; the card, the planted faults and this
 record follow in a docs-only commit. The appetite was not reached.
+
+Repair round 1 of slices 2 and 5 (appetite 45 min, set by the coordinating
+session): 2026-10-06 01:36–01:52, 16 min, no break counted. `make verify`
+ended VERIFY GREEN at 01:44 (F-13), 01:47 (F-14), 01:49 (the test tightened)
+and 01:51 (this record; 737 passed, 15 skipped; `docs-links` and `markdownlint`
+red but report-only, `markdownlint` adding line-length reports for
+`tools/hermes/README.md`); its first run at 01:42 was red on `ruff format` of
+the new test code, which the next run fixed. The findings rows were set to
+fixed after the green at 01:49. The appetite was not reached.
