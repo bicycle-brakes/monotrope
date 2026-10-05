@@ -251,3 +251,18 @@ answer is recorded as the option the maintainer chose.
    `ROADMAP.md`; the translation moves to Next.
 
 All six questions are answered; phase 1a is closed.
+
+## Addendum 2026-10-05: repair round 1 of slice 1
+
+After the phase-6 review of slice 1 (`findings.md`, on `a4ff61c`) the
+maintainer decided on 2026-10-05 to repair six of its rows in one round. The
+answer is recorded as he gave it, in German: "Alle sechs reparieren".
+
+1. **Slice-1 rows.** F-1 (the unbounded re-check),
+   F-2 (`notes[0]` is not "the oldest" and a header with zero or two
+   `last_reviewed:` lines has no rule), F-3 (the "Never" list does not forbid
+   adding a line), F-4 (the language of the addendum), F-6 (checks 6 and 8
+   stay silent while their criteria are broken) and F-7 (the kit rule is not
+   held by a test) are repaired in one round, on the branch of slice 1.
+2. **Rows that stay open.** F-5, F-8 and F-9 concern the orchestrator's
+   contract; they stay open and are for slice 4's phase 2a.
