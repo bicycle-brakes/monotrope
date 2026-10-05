@@ -1,11 +1,13 @@
 <?xml version="1.0" encoding="UTF-8"?>
-<!-- The maintainer's weekly job: one research re-check, Sunday 03:00. A LaunchAgent of the maintainer
-     (~/Library/LaunchAgents), not a daemon: it runs the orchestrator, which stages the note, starts the
-     agent through the sudo rule, checks the diff and publishes. No KeepAlive, no RunAtLoad: it runs once
-     a week and ends. launchd starts a missed run when the Mac wakes (man launchd.plist), so a sleeping
-     laptop delays the run, it does not skip it.
+<!-- The maintainer's weekly job: one research re-check, Sunday 03:00. A LaunchAgent of the maintainer,
+     not a daemon: it runs the orchestrator, which stages the note, starts the agent through the sudo
+     rule, checks the diff and publishes. No KeepAlive, no RunAtLoad: it runs once a week and ends. launchd
+     starts a missed run when the Mac wakes (man launchd.plist), so a sleeping laptop delays the run, it
+     does not skip it.
      @HOME@ and @PYTHON3@ are substituted at install (README): the maintainer's home and an absolute
-     python3 of version 3.11 or newer. Load it only when every entry of "Spike results" is green. -->
+     python3 of version 3.11 or newer. The install stages the result outside the folders launchd loads at
+     login; README section 9 copies it into ~/Library/LaunchAgents only when every entry of "Spike
+     results" is green (criterion 59). -->
 <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
 <plist version="1.0">
 <dict>

@@ -41,6 +41,7 @@ export ME="$(id -un)" HH=/Users/_chhermes/.hermes SHARE=/Users/Shared/coding-har
 export RB="$PWD/tools/hermes"          # run from the repository root
 export HB=/opt/hermes/venv/bin/hermes  # the shared install; during the spike: /opt/hermes-spike/venv/bin/hermes
 export CLONE="$HOME/Library/Application Support/coding-harness-recheck/clone" LOGS="$HOME/Library/Logs/coding-harness/research-recheck"
+export JOB=ai.coding-harness.research-recheck STAGED="$HOME/Library/Application Support/coding-harness-recheck/staged.plist"
 id _chhermes 2>/dev/null && echo "exists - see Removal first"
 dscl . -list /Users UniqueID | awk '$2==482'; dscl . -list /Groups PrimaryGroupID | awk '$2==482'   # both empty, else another free number below 500
 sudo dscl . -create /Groups/_chhermes PrimaryGroupID 482
@@ -102,15 +103,14 @@ section 3), this agent's own OpenCode Go and Firecrawl keys, `jq`, `gh`.
    sudo -u _chhermes env HOME=/Users/_chhermes HERMES_HOME="$HH" "$HB" doctor     # read it, record deviations
    ```
 
-4. **Clone** for the orchestrator (its own, never a working checkout; once, with your login) and the **LaunchAgent**
-   file, which you **do not load** here (section 9 does):
+4. **Clone** for the orchestrator (its own, never a working checkout; once, with your login) and the weekly
+   **LaunchAgent**'s plist, staged outside the folders launchd loads at login (a restart would start the job before
+   the spike is green); section 9 moves it in:
 
    ```bash
    mkdir -p "$(dirname "$CLONE")" "$LOGS" && gh repo clone MPAdesso/coding-harness "$CLONE"
    PY="$(command -v python3)"; "$PY" -c 'import sys; assert sys.version_info >= (3, 11)'
-   sed -e "s#@HOME@#$HOME#g" -e "s#@PYTHON3@#$PY#g" "$RB/ai.coding-harness.research-recheck.plist" \
-     > ~/Library/LaunchAgents/ai.coding-harness.research-recheck.plist
-   plutil -lint ~/Library/LaunchAgents/ai.coding-harness.research-recheck.plist
+   sed -e "s#@HOME@#$HOME#g" -e "s#@PYTHON3@#$PY#g" "$RB/$JOB.plist" > "$STAGED" && plutil -lint "$STAGED"
    ```
 
 ## 6 · The publish token
@@ -265,13 +265,15 @@ python3 scripts/research_recheck.py run --dry-run --note docs/research/<a short 
 cat "$LOGS/last-run.json"
 ```
 
-Read the record, the event stream beside it and the run directory. Only when every row of "Spike results" is green,
-`check-ruleset` exits 0 and pull request #73 (the age list) is merged, load the weekly job. A sleeping laptop delays
-the Sunday run to the next wake, it does not skip it. After three published runs read their records and keep or change the caps.
+Read the record, the event stream beside it and the run directory. Only when `check-ruleset` exits 0 and the age list
+(pull request #73) is merged, enable the weekly job: `spike_green` reads the table in the clone and refuses unless it
+holds 15 rows (S-2 to S-6, §7, S-7, CH-1 to CH-8) and every one is `green`. Nothing earlier puts the job where launchd
+loads it. A sleeping laptop delays the Sunday run to the next wake. After three published runs read their records.
 
 ```bash
-launchctl bootstrap "gui/$(id -u)" ~/Library/LaunchAgents/ai.coding-harness.research-recheck.plist
-launchctl print "gui/$(id -u)/ai.coding-harness.research-recheck" | grep -E 'state|pid'
+spike_green() { sed -n '/^## Spike results/,$p' "$CLONE/tools/hermes/README.md" | awk -F'|' '/^\|/ && !/^\| (Test|---)/ {n++; r=$(NF-1); gsub(/ /,"",r); if (r != "green") bad++} END {exit !(n >= 15 && !bad)}'; }
+spike_green && cp "$STAGED" ~/Library/LaunchAgents/"$JOB".plist && launchctl bootstrap "gui/$(id -u)" ~/Library/LaunchAgents/"$JOB".plist
+launchctl print "gui/$(id -u)/$JOB" | grep -E 'state|pid'
 ```
 
 ## 10 · After a tag change
@@ -284,7 +286,7 @@ update`: check the tag out with git (adhd-relief's S-3, step 3).
 ## 11 · Removal
 
 ```bash
-launchctl bootout "gui/$(id -u)/ai.coding-harness.research-recheck"; rm -f ~/Library/LaunchAgents/ai.coding-harness.research-recheck.plist
+launchctl bootout "gui/$(id -u)/ai.coding-harness.research-recheck"; rm -f ~/Library/LaunchAgents/ai.coding-harness.research-recheck.plist "$STAGED"
 sudo rm -f /etc/sudoers.d/coding-harness-hermes; sudo rm -rf /usr/local/libexec/coding-harness
 sudo dscl . -delete /Users/_chhermes; sudo dscl . -delete /Groups/_chhermes
 sudo rm -rf /Users/_chhermes "$SHARE" /tmp/ch1-*.txt ~/ch; rm -rf ~/.config/coding-harness
