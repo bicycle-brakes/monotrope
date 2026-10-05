@@ -56,6 +56,9 @@ rules:
   - prefix: prompts/
     rolle: mechanismus
     reason: "die sieben Phasen-Prompts. Null Domaenen-Nennungen (gemessen 2026-09-08)"
+  - prefix: prompts/research-recheck.md
+    rolle: mechanismus
+    reason: "the job prompt of the weekly research re-check: a job, not a phase. It names no model and no runner, so it travels with the process; the empty-repository probe reads it green"
   - prefix: docs/WORKFLOW.md
     rolle: mechanismus
     reason: "die sieben Phasen, ihre Artefakte, das Modell je Phase und die Sitzungsuebergabe. Nennt keine Domaene ausser im Verbot, eine zu nennen"
