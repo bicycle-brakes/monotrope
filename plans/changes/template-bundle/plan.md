@@ -431,7 +431,7 @@ ending `VERIFY GREEN`.
 | 61 | check below; `tests/test_kit.py` | fewer than two; a kit test red |
 | 62 | the verification (`probe.py --strict`); `tests/test_kit.py`; check below | the Leerprobe red; the cap not the list's length; more than one new entry |
 | 63 | review; check below | German in the new lines |
-| 64 | check below | a conflict in another file or hunk; a red template case on the resolved tree |
+| 64 | check below | another file in the difference of the two trial merges, or a conflict hunk beyond the named ones in its three files; a red template case on the resolved tree |
 | 65 | check below | ADR 0009's merge commit not an ancestor of `HEAD` |
 
 ```bash
@@ -440,7 +440,10 @@ python3 scripts/kit/probe.py --list | grep -cE 'templates/(design|arc42)\.md'  #
 git diff origin/main...HEAD -- scripts/kit/probe.py | grep -c '^+    "tests\.'  # 62: 1
 git ls-tree --name-only origin/main docs/adr/ | grep '/0009-'  # 47: the record, read against 43-46
 git merge-base --is-ancestor "$(git log origin/main --first-parent --format=%H -1 -- 'docs/adr/0009-*')" HEAD && echo ancestor  # 65: ancestor
-git merge-tree --write-tree --name-only HEAD origin/feat/stage-2-codex-glm  # 64: conflicts in docs/WORKFLOW.md, plans/INDEX.md, scripts/kit/probe.py only
+conf() { git merge-tree --write-tree --name-only "$1" origin/feat/stage-2-codex-glm | sed '1d;/^$/,$d' | sort; }
+comm -23 <(conf HEAD) <(conf origin/main)  # 64: the difference, only docs/WORKFLOW.md, plans/INDEX.md, scripts/kit/probe.py
+tree=$(git merge-tree --write-tree HEAD origin/feat/stage-2-codex-glm | head -1)
+for f in docs/WORKFLOW.md scripts/kit/probe.py plans/INDEX.md; do echo "$f $(git cat-file -p "$tree:$f" | grep -c '^<<<<<<<')"; done  # 64: 3, 2 and 1 hunks
 grep -nE '[äöüßÄÖÜ]' prompts/02b-design.md templates/design.md templates/arc42.md  # 63: nothing
 git diff --name-only origin/main...HEAD  # the Definition of Done's files and this change folder, nothing else
 ```
@@ -719,6 +722,15 @@ proposal:   amend criterion 64 to "this branch adds no conflict beyond those
             re-runs that check. Slice 2 stays open at this one criterion.
 ```
 
+**Resolved on 2026-10-05, 18:26, by the amendment `7ac9fc5`** (the
+orchestrating session's `[DETAIL]`): criterion 64 now counts only the
+conflicts this branch adds beyond `origin/main`'s own with #60, which is the
+proposal above. The check runs as the block of "Tests and checks per
+criterion (slice 2)" has it since repair round 2 and prints the difference,
+not the five files: at `8822677` it prints `docs/WORKFLOW.md`,
+`plans/INDEX.md` and `scripts/kit/probe.py`, with 3, 2 and 1 conflict hunks.
+The refutation keeps "or hunk" (`findings.md` row 6-11).
+
 ### Planted faults (slice 2)
 
 One fault at a time into the committed file, then `python3 -m pytest -q
@@ -820,7 +832,8 @@ GIT_CONFIG_VALUE_0=false make verify`, on the tree of `3ede444` with this
 section added (18:22): `VERIFY GREEN`, 605 passed, 15 skipped, 43 s; the
 Leerprobe carries 441 of 473 cases, against 356 of 387 at the merge base
 `87daf91` (criterion 31). Not run in a hosted CI. Criteria 33–63 and 65 hold by
-the checks above; criterion 64 is the stop above. Criterion 47's review
+the checks above; criterion 64 was the stop above and is resolved by the
+amendment of 2026-10-05 (`7ac9fc5`). Criterion 47's review
 counterpart: ADR 0009 read in full, its three contracts (flowchart of the
 state after the change with C4-labelled boxes, three lists, one sentence when
 nothing moves) are all in the section, and the section asks for nothing it

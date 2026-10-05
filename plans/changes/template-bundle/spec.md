@@ -650,15 +650,21 @@ their wording and their numbers.
     `scripts/kit/probe.py` (the prompt entries, the cap) and
     `plans/INDEX.md`; resolved as `plan.md` says, `tests/test_templates.py`
     passes on the merged tree.
-    *Refuted by:* another file in that difference (command); a red case of
-    `tests/test_templates.py` on the resolved tree.
+    *Refuted by:* another file in that difference, or in one of those three
+    files a conflict hunk beyond the ones named (command: the conflict
+    markers per file in the tree `git merge-tree --write-tree` prints); a red
+    case of `tests/test_templates.py` on the resolved tree.
     *Amended 2026-10-05 ([DETAIL], orchestrating session):* the first
     wording counted every conflict with #60. Once ADR 0009 merged (criterion
     65), `origin/main` itself conflicts with #60 in the two architecture
     documents of 2026-09-17, so criteria 64 and 65 could not both hold as
     written. The intent, that this change adds no unforeseen conflict, is
     kept; measured on 2026-10-05 at `4e99ec5`, the difference is exactly
-    the three predicted files.
+    the three predicted files. Amended again 2026-10-05 (repair round 2,
+    `findings.md` row 6-11): the refutation keeps "hunk", which the first
+    amendment dropped without a reason; at `8822677` the merged tree has 3
+    hunks in `docs/WORKFLOW.md`, 2 in `scripts/kit/probe.py` and 1 in
+    `plans/INDEX.md`, the ones named above.
 
 65. **ADR 0009 merges before this change.** When this pull request is
     merged, the merge commit of ADR 0009's pull request is an ancestor of
