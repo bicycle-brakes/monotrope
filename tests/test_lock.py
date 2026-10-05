@@ -150,11 +150,14 @@ def test_a_range_or_a_stale_pin_goes_red() -> None:
     locked = _locked()
     assert pin_problems(["pydantic==2.13.5"], locked) == [], "the control: the right pin passes"
 
-    range_problems = pin_problems(["pydantic>=2.13"], locked)
-    assert len(range_problems) == 1 and "pydantic" in range_problems[0], range_problems
-
-    wildcard_problems = pin_problems(["pydantic==2.13.*"], locked)
-    assert len(wildcard_problems) == 1 and "pydantic" in wildcard_problems[0], wildcard_problems
+    # A range is refused as a range — also when its bound is the very version the
+    # lock holds, where a version comparison alone would find nothing to say.
+    for spec in ("pydantic>=2.13", "pydantic>=2.13.5", "pydantic~=2.13.5", "pydantic==2.13.*", "pydantic"):
+        range_problems = pin_problems([spec], locked)
+        assert len(range_problems) == 1 and "pydantic" in range_problems[0] and "exact" in range_problems[0], (
+            spec,
+            range_problems,
+        )
 
     stale_problems = pin_problems(["pydantic==2.13.4"], locked)
     assert len(stale_problems) == 1 and "pydantic" in stale_problems[0] and "2.13.4" in stale_problems[0], (
@@ -228,6 +231,23 @@ def test_the_repository_root_is_on_pytests_path(pytestconfig: pytest.Config) -> 
     """`harness/` at the root is importable by the suite without a `sys.path` line per test."""
     roots = [Path(p).resolve() for p in pytestconfig.getini("pythonpath")]
     assert REPO_ROOT in roots, f"pytest's pythonpath is {roots}; the project file must carry pythonpath = ['.']"
+
+
+def test_make_venv_installs_the_lock_in_hash_checking_mode() -> None:
+    """`make venv` builds `.venv` in the checkout and installs only the lock, with `--require-hashes`.
+
+    The environment check above cannot see the flag: pip also checks hashes when a
+    file carries them, so the same venv comes out without it. The flag is what
+    makes a lock without hashes an error, so the recipe is read here.
+    """
+    makefile = (REPO_ROOT / "Makefile").read_text(encoding="utf-8")
+    found = re.search(r"^venv:\n((?:\t.*\n)+)", makefile, re.M)
+    assert found, "the Makefile has no target `venv`"
+    recipe = [line.strip() for line in found.group(1).splitlines()]
+    assert recipe == [
+        "python3 -m venv .venv",
+        ".venv/bin/python3 -m pip install --require-hashes -r requirements-ci.txt",
+    ], recipe
 
 
 def _export_verdicts(path: str) -> list[tuple[str, str]]:
