@@ -38,7 +38,7 @@ and what stays open is mechanics plus one class question (below).
    `docs/research-hermes`). This change may write the runner-neutral contract
    part 2 will need from part 1.
 
-## [DECISION] 1 — the class of this change (provisionally answered: `bounded`)
+## [DECISION] 1 — the class of this change (answered: `bounded`, 2026-10-05)
 
 The spec author states the class and the maintainer's review of the pull
 request holds it (`docs/WORKFLOW.md`, "Change classes, the ADR question and
@@ -85,3 +85,12 @@ check blocks a merge; this list blocks nothing. The bead's type covers part
 
 No second `[DECISION]` is open. The `[DETAIL]`s phase 2 decided stand with
 their reasons in `spec.md`, "Open decisions".
+
+## Addendum 2026-10-05: the maintainer answers [DECISION] 1
+
+The maintainer answered in the Claude Code session on 2026-10-05: class
+`bounded`, the recommended option — "small addition to the nightly job:
+turns nothing red, decides nothing; the ADR question belongs to part 2". The
+class is no longer provisional, `class: bounded` stays in `spec.md`, and no
+ADR question is asked for this change. The text above stays as it was
+written; this addendum changes only its status.

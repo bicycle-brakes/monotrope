@@ -20,8 +20,8 @@ class: bounded
 
 Part 1 of bead coding-harness-pu9: a nightly list of the research notes whose
 last review is too old. Inputs: [`research.md`](research.md) (read at
-`87daf91`) and [`decisions.md`](decisions.md). The class is provisional
-(`decisions.md`, `[DECISION] 1`).
+`87daf91`) and [`decisions.md`](decisions.md). The class is `bounded`, as
+the maintainer answered on 2026-10-05 (`decisions.md`, `[DECISION] 1`).
 
 ## Problem
 
@@ -218,12 +218,12 @@ In this change, not now:
 
 ### `[DECISION]`
 
-- **1 — the class**, provisionally `bounded` (`decisions.md`). If the
-  maintainer answers "option 2", the header becomes `class: feature` with
-  `change: research-currency` and
-  `adr_question: {proposed: "no", reason: "one report over existing document
-  headers and one gate entry in the drift job; it turns no verdict, and
-  removing it is one revert"}`.
+None open. `[DECISION] 1` — the class — is answered: the maintainer chose
+`bounded` on 2026-10-05 ("small addition to the nightly job: turns nothing
+red, decides nothing; the ADR question belongs to part 2";
+`decisions.md`, addendum 2026-10-05). Had the answer been "option 2", the
+header would have become `class: feature` with `change: research-currency`
+and an ADR proposal; it was not.
 
 ### `[GAP]`s — closed by reading
 

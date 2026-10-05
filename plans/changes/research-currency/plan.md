@@ -26,13 +26,13 @@ Pre-mortem:  suppose it failed: most likely because nobody opens a green nightly
 Starts unless you say stop.
 ```
 
-Implements `spec.md` (criteria 1–16); the class is provisional
-(`decisions.md`, `[DECISION] 1`), and nothing below depends on it. Stage 1:
-no model markings. Facts read at `87daf91`.
+Implements `spec.md` (criteria 1–16); the class is `bounded`, answered by
+the maintainer on 2026-10-05 (`decisions.md`, `[DECISION] 1`), and nothing
+below depends on it. Stage 1: no model markings. Facts read at `87daf91`.
 
 ## Decided in phase 3
 
-No `[DECISION]` is open beyond the provisional class.
+No `[DECISION]` is open; the class is answered (`bounded`, 2026-10-05).
 
 - `[DETAIL]` — **appetite 2 h**: about 1 h 50 min of steps below; the rest is
   one repair round.
