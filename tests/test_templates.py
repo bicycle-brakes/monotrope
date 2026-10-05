@@ -70,7 +70,11 @@ C4_LEVELS = ("person", "system", "container", "component")
 NODE = re.compile(
     r'\b(?P<id>[A-Za-z_]\w*)\s*(?:\[\[|\[\(|\(\(|\{\{|\[|\(|\{|>)\s*(?:"(?P<quoted>[^"]*)"|(?P<bare>[^\]\)\}"]*))'
 )
-MERMAID_KEYWORDS = ("%%", "subgraph", "end", "classDef", "class ", "style", "linkStyle", "click", "direction")
+# A line of the diagram that names no box: a comment, a subgraph, a style, a click or a direction. A keyword counts
+# as a whole word (`style` then a space, `end` alone), so a box such as `endUser` or `styleguide` is still read.
+MERMAID_KEYWORDS = re.compile(
+    r"%%|(?:subgraph|classDef|class|style|linkStyle|click|direction)(?:\s|$)|end\s*(?:%%.*)?$"
+)
 
 
 # --- reading a template -------------------------------------------------------
@@ -206,7 +210,7 @@ def c4_problems(diagram: str) -> list[str]:
     defined: dict[str, str] = {}
     named: set[str] = set()
     for line in diagram.splitlines()[1:]:
-        if not line.strip() or line.strip().startswith(MERMAID_KEYWORDS):
+        if not line.strip() or MERMAID_KEYWORDS.match(line.strip()):
             continue
         for node in NODE.finditer(line):
             label = node["quoted"] if node["quoted"] is not None else node["bare"]
@@ -665,6 +669,45 @@ def test_delta_asks_for_the_c4_level_of_each_box() -> None:
 )
 def test_c4_check_sees_a_box_without_a_level(diagram: str) -> None:
     assert c4_problems(diagram) != []
+
+
+@pytest.mark.parametrize(
+    "box",
+    [
+        'endUser["User: who calls it"]',
+        'endpoint["the API endpoint"]',
+        'styleguide["the style guide"]',
+        'clickstream["the click stream"]',
+        'directionality["Actor: which way"]',
+        'classify["a class of its own"]',
+        'subgraphs["a box, not a subgraph"]',
+    ],
+)
+def test_c4_check_reads_a_box_whose_id_begins_with_a_keyword(box: str) -> None:
+    """Row 6-16: a Mermaid keyword is recognised as a whole word, so a box id that merely begins with one is read."""
+    diagram = f'flowchart LR\n    person["Person: who"] --> app["Container: what"]\n    {box} --> app'
+    assert c4_problems(diagram) != []
+    labelled = f'flowchart LR\n    person["Person: who"] --> app["Container: what"]\n    {box.split("[")[0]}["System: ok"] --> app'
+    assert c4_problems(labelled) == []
+
+
+def test_c4_check_skips_the_lines_that_name_no_box() -> None:
+    diagram = "\n".join(
+        [
+            "flowchart LR",
+            "    %% a comment",
+            '    subgraph one["a title"]',
+            '        a["Person: who"] --> b["Container: what"]',
+            "    end",
+            "    style a fill:#fff",
+            "    classDef warm fill:#f96",
+            "    class a warm",
+            "    linkStyle 0 stroke:red",
+            "    click a callback",
+            "    direction TB",
+        ]
+    )
+    assert c4_problems(diagram) == []
 
 
 @pytest.mark.parametrize(
