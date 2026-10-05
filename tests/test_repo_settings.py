@@ -485,7 +485,13 @@ def test_master_has_a_ruleset_with_required_checks() -> None:
     whatever the API calls the default.
     """
     findings = measure()
-    assert not findings, "\n".join(findings)
+    message = "\n".join(findings)
+    if any(f.startswith("not measured:") for f in findings):
+        message += (
+            "\nThe gate `ruleset` needs network and a `gh` login on this machine; "
+            "not measured is red, never green (RB-M6)."
+        )
+    assert not findings, message
 
 
 def _run_the_live_test(*, variable: bool, path: str) -> subprocess.CompletedProcess[str]:
@@ -518,6 +524,7 @@ def test_the_live_check_goes_red_without_gh_when_the_gate_turns_it_on(tmp_path: 
     done = _run_the_live_test(variable=True, path=str(tmp_path))
     assert done.returncode == 1, done.stdout + done.stderr
     assert "not measured:" in done.stdout
+    assert "needs network and a `gh` login" in done.stdout
     assert "skipped" not in done.stdout
 
 
