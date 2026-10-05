@@ -44,7 +44,7 @@ as unquoted `YYYY-MM-DD` values, which PyYAML reads as dates (measured with
 `yaml.safe_load` on each header; no CRLF line endings, no byte-order mark).
 
 | File | `last_reviewed` | `updated` | Age of the review on 2026-10-05 |
-|---|---|---|---|
+| --- | --- | --- | --- |
 | `2026-09-16-review-corpus-vs-running-workflow.md` | 2026-09-16 | 2026-09-29 | 19 days |
 | `arc42_Referenzarchitektur_Agentischer_Delivery-Workflow.md` | 2026-09-16 | 2026-09-29 | 19 days |
 | `Lake-Switch-Architektur-arc42.md` | 2026-09-16 | 2026-09-29 | 19 days |
