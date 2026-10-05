@@ -4,7 +4,7 @@ category: research
 status: proposed
 created: 2026-09-16
 last_reviewed: 2026-09-18
-updated: 2026-10-05
+updated: 2026-10-06
 owner: framework-architect
 provenance: ai-drafted-reviewed
 produced_by:
@@ -68,6 +68,7 @@ Vocabulary for older sources: **Stage 1–3** means model routing; **S0–S7** m
 | [Work framing for ADHD](2026-09-30-adhd-frame.md) | proposed · 2026-09-30 | Evidence for the plan card with a pre-mortem line, the appetite stop, the clock in "done:", the resumption line and the acceptance card; each source dated, with its strength, and what was not read |
 | [LikeC4, a ROADMAP.md and an arc42 skeleton](2026-10-05-likec4-roadmap-arc42.md) | proposed · 2026-10-05 | Three kit questions: LikeC4 not now, amend D-15 and O-3 toward a Mermaid architecture delta in `design.md` (LikeC4 measured: no C4 hierarchy check, Node ≥ 22); a trial `ROADMAP.md` before any template; the arc42 skeleton stays on the not-now list |
 | [Hermes Agent as a job runner](2026-10-05-hermes-agent-runner.md) | proposed · 2026-10-05 | Not Hermes now: the weekly research re-check runs by hand first, then as a scheduled GitHub Actions job whose agent holds no write token; Hermes, a Claude Code routine, Actions, the Kubernetes gate runner and "by hand" compared on first run, weekly cost, burden, exposure and reversal; the runner-neutral prompt and what any runner must guarantee |
+| [Ponytail, the least-code skill](2026-10-06-ponytail-skill.md) | proposed · 2026-10-06 | Take the ladder, not the plugin: fold it into prompts 03 and 04 and a "built and not promised" finding into 06, never thinner on tests and planted faults; the ladder run by hand over five changes finds about 5 % to cut, mostly grown in the review loop; deleting 29 of 30 tests of one script leaves `make verify` green, so only prompts and the reviewer hold per-criterion tests |
 
 Original four-source intake note: copied in by the maintainer on 2026-09-16 (Phase 2 of the
 separation, bead `coding-harness-anw`). Provenance is set to
