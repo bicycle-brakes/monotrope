@@ -4,7 +4,7 @@ status: draft
 implementation_status: partial
 date: 2026-10-05
 last_reviewed: 2026-10-05
-updated: 2026-10-05
+updated: 2026-10-06
 supersedes: null
 superseded_by: null
 bead: coding-harness-bma
@@ -357,3 +357,35 @@ rules, ruleset).
 Totals: 28 file-level + 13 end-to-end = 41 faults planted; 41 red. Five of the
 file-level ones were green first (F03, F06, F11, F12, F13) and closed by D3 and
 D4; one more (F27, single rename) is an equivalent mutant by design.
+
+## Repair round 1
+
+Only row F-1 of `findings.md` (BLOCKER, `[DIVERGENT]`), at the dispatching
+session's word of 2026-10-06; F-2 is the maintainer's decision, F-3 to F-7 are
+the maintainer's choice, and no ADR answer is recorded. The fix is one commit,
+`8524800`, on `decide/rb-m6-one-account`. Not reviewed.
+
+| Row | Commit | What changed |
+| --- | --- | --- |
+| F-1 | `8524800` | `docs/WORKFLOW.md` and `prompts/05-verify.md` annotate `make verify` as what the CI runs, minus a `placement: writer` gate, which runs there only, and `make gates` as marking such a gate. `scripts/ci_gates.py --list` appends " — laeuft nur lokal (make verify), nicht in der CI" to the command line of a `writer` gate, as it says "laeuft nur in der CI" for a hosted-only one. `tests/test_ci.py::test_the_list_marks_a_writer_gate_as_local_only` holds the marker both ways, on the real list and on a list where a `both` gate moves to `writer` and the real one leaves it. |
+
+Planted faults for the new test, each in the committed tree, the test run,
+the file restored with `git checkout`; all red:
+
+| # | Fault planted | Result |
+|---|---|---|
+| R1-1 | the marker is never printed (`if False:`) | red: `test_the_list_marks_a_writer_gate_as_local_only` |
+| R1-2 | the marker is printed on every locally runnable gate (`if True:`) | red: same |
+| R1-3 | the marker keyed on `placement == "hosted"` instead of `"writer"` | red: same |
+| R1-4 | the marker hard-wired to the gate id `ruleset` | red: same (the synthetic `writer` gate has no mark) |
+| R1-5 | the marker text loses its "nicht in der CI" wording | red: same |
+
+## Time used
+
+Phase 4 and its repair rounds before this one: see "Time used" in the Phase 4
+record above.
+
+Repair round 1 (F-1 only; appetite 20 min, set by the dispatching session;
+read from `date`):
+
+- 2026-10-06 01:08–01:11, no break, appetite not reached; two `make verify` runs, the first red on `adr-answers` and `frontmatter-current` (`docs/WORKFLOW.md` stamped after it)
