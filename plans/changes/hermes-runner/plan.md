@@ -636,7 +636,17 @@ Test per criterion — the fault each must meet to go red is the criterion's
 
 ## Slice 5 — the profile (appetite 3 h)
 
-Branch `feat/hermes-profile`, after slices 2 and 4. Files under
+```text
+For you:     the Coding Harness Hermes profile under tools/hermes/ (config, env template, wrapper, sudo rule, LaunchAgent, runbook with the spike part CH-1 to CH-8) and a test that holds it, offline
+Done when:   `python3 -m pytest tests/test_hermes_profile.py -q` passes (criteria 45–56, each also red on its planted fault) and `make verify` ends VERIFY GREEN; nothing installed or run
+Appetite:    3 h of phase 4, repair rounds included
+Not now:     installing anything, the spike afternoon (slice 7), the orchestrator (slice 4), the ruleset (slice 6), the pull request and the tracker
+Pre-mortem:  suppose it failed: most likely because a Hermes key was written that no source read supports, or because the runbook outgrew its 300 lines and the test that holds it
+Starts unless you say stop.
+```
+
+Branch `feat/hermes-profile`, after slices 2 and 4. (Run on
+`feat/hermes-runner-2`, see "Notes, slice 5".) Files under
 `tools/hermes/`:
 
 - `config.yaml` — the guard baseline of adhd-relief's spike (`bdce8dc`)
@@ -686,6 +696,213 @@ runbook (60 min); test (40 min); verification, push (15 min).
 Each goes red on its criterion's "Refuted by"; 45 and 53 hold their
 lists as constants with the source named in a comment.
 
+### Planted faults, slice 5
+
+Run on 2026-10-06 against `1498994` (the profile and its test) and `7cd557f`
+(the test's failure message for a missing key). The faults are permanent tests:
+`FAULTS` in `tests/test_hermes_profile.py`, each planted alone in a copy of
+`tools/hermes/` by `test_a_planted_fault_goes_red`, which first runs the check
+on the untouched copy (so "before" is silent for every row) and then expects the
+same check to raise. Rows 1–97 were also printed one by one with the failure's
+first line, below. Result: 97 faults, 97 red; the file runs 110 tests (13 of the
+profile, 97 counterparts) in 6.6 s.
+
+| # | Criterion | Fault planted | After | Check |
+| --- | --- | --- | --- | --- |
+| 1 | 45 | terminal is not disabled | `core toolsets not disabled: ['terminal']` | `check_toolsets` |
+| 2 | 45 | the last core toolset is not disabled | `core toolsets not disabled: ['yuanbao']` | `check_toolsets` |
+| 3 | 45 | web is disabled | `a kept toolset is disabled: ['web']` | `check_toolsets` |
+| 4 | 45 | search is disabled | `a kept toolset is disabled: ['search']` | `check_toolsets` |
+| 5 | 45 | a name that is no toolset | `names that are no core toolset: ['terminl']` | `check_toolsets` |
+| 6 | 46 | memory on | `memory.memory_enabled is True, not false` | `check_learning_off` |
+| 7 | 46 | user profile on | `memory.user_profile_enabled is True, not false` | `check_learning_off` |
+| 8 | 46 | background review on | `auxiliary.background_review.enabled is True, not false` | `check_learning_off` |
+| 9 | 46 | title generation absent | `auxiliary.title_generation.enabled is <missing>, not false` | `check_learning_off` |
+| 10 | 46 | curator on | `curator.enabled is True, not false` | `check_learning_off` |
+| 11 | 47 | approvals off | `approvals.mode is 'off'` | `check_approvals` |
+| 12 | 47 | cron mode approve | `approvals.cron_mode is not deny` | `check_approvals` |
+| 13 | 47 | single query mode approve | `approvals.single_query_mode is not deny` | `check_approvals` |
+| 14 | 47 | unattended mode absent | `approvals.unattended_mode is not deny` | `check_approvals` |
+| 15 | 47 | no gh pattern | `no approvals.deny pattern matches 'gh'` | `check_approvals` |
+| 16 | 47 | git arguments not denied | `no approvals.deny pattern matches 'git status'` | `check_approvals` |
+| 17 | 47 | no bd pattern | `no approvals.deny pattern matches 'bd'` | `check_approvals` |
+| 18 | 47 | tools/bd by path not denied | `no approvals.deny pattern matches 'bd list'` | `check_approvals` |
+| 19 | 48 | provider custom | `model.provider is not opencode-go` | `check_model_route` |
+| 20 | 48 | another model | `model.default is not glm-5.3` | `check_model_route` |
+| 21 | 48 | base url off the proxy | `model.base_url is not on 127.0.0.1` | `check_model_route` |
+| 22 | 48 | a fallback provider | `fallback_providers is not empty` | `check_model_route` |
+| 23 | 48 | compression on an undeclared model | `glm-5 is not declared for opencode-go in model-endpoints.yaml` | `check_model_route` |
+| 24 | 48 | an undeclared delegation model | `kimi-k2.5 is not declared for opencode-go in model-endpoints.yaml` | `check_model_route` |
+| 25 | 48 | compression on another provider | `a provider other than opencode-go: openrouter` | `check_model_route` |
+| 26 | 48 | an auxiliary base url off the proxy | `a base_url off the proxy: https://example.org/v1` | `check_model_route` |
+| 27 | 49 | web backend exa | `web.backend is not firecrawl` | `check_web` |
+| 28 | 49 | keyless fallback on | `web.keyless_fallback is True, not false` | `check_web` |
+| 29 | 49 | agent scheduling on | `cron.allow_agent_scheduling is True, not false` | `check_web` |
+| 30 | 49 | update check on | `updates.check is True, not false` | `check_web` |
+| 31 | 49 | update check absent | `updates.check is <missing>, not false` | `check_web` |
+| 32 | key sources | a key with no source | `keys with no named source (not read, so not written): ['memory.nudge_interval']` | `check_key_sources` |
+| 33 | key sources | a baseline-only key not marked | `updates.check is not marked 'not read at the tag'` | `check_key_sources` |
+| 34 | key sources | the runbook does not list a key | `updates.check is not in the runbook's list of what was not read` | `check_key_sources` |
+| 35 | 50 | no --ignore-rules | `wrapper lacks '--ignore-rules'` | `check_wrapper_text` |
+| 36 | 50 | a third toolset | `the toolsets are not exactly web and file` | `check_wrapper_text` |
+| 37 | 50 | --yolo | `wrapper names --yolo` | `check_wrapper_text` |
+| 38 | 50 | --worktree | `wrapper names --worktree` | `check_wrapper_text` |
+| 39 | 50 | no --max-turns | `wrapper lacks '--max-turns'` | `check_wrapper_text` |
+| 40 | 50 | no stream-json | `wrapper lacks '--format stream-json'` | `check_wrapper_text` |
+| 41 | 50 | no --query-file | `wrapper lacks '--query-file'` | `check_wrapper_text` |
+| 42 | 50 | no --oneshot | `wrapper lacks 'chat --oneshot'` | `check_wrapper_text` |
+| 43 | 50 | another HERMES_HOME | `HERMES_HOME is not the service user's` | `check_wrapper_text` |
+| 44 | 50 | no write root | `HERMES_WRITE_SAFE_ROOT is not the run's work directory` | `check_wrapper_text` |
+| 45 | 50 | no alarm | `wrapper lacks "perl -e 'alarm shift; exec @ARGV'"` | `check_wrapper_text` |
+| 46 | 50 | alarm of two hours | `the wrapper's alarm is missing or longer than 45 minutes` | `check_wrapper_text` |
+| 47 | 50 | HERMES_BIN set twice | `HERMES_BIN is not set exactly once` | `check_wrapper_text` |
+| 48 | 50 | environment not scrubbed | `GH_TOKEN reached Hermes` | `check_wrapper_environment` |
+| 49 | 50 | no umask | `umask is not 002: the maintainer could not read the agent's note` | `check_wrapper_environment` |
+| 50 | 50 | not in the work directory | `Hermes does not start in the work directory` | `check_wrapper_environment` |
+| 51 | 50 | no write root (run) | `HERMES_WRITE_SAFE_ROOT is not the work directory` | `check_wrapper_environment` |
+| 52 | 50 | alarm never fires | `Hermes was not ended by the alarm (exit 0)` | `check_wrapper_alarm` |
+| 53 | 50 | any run directory accepted | `['/tmp/x']: refused for another reason than 'outside': recheck-agent: no /tmp/x/in/qu...` | `check_wrapper_refusals` |
+| 54 | 50 | '..' accepted | `['/Users/Shared/coding-harness-hermes/runs/../x']: refused for another reason than "'...` | `check_wrapper_refusals` |
+| 55 | 51 | KeepAlive | `KeepAlive is set` | `check_launchd` |
+| 56 | 51 | daily, no weekday | `the schedule is not weekly` | `check_launchd` |
+| 57 | 51 | Monday | `not Sunday` | `check_launchd` |
+| 58 | 51 | monthly | `the schedule is not weekly` | `check_launchd` |
+| 59 | 51 | run at load | `RunAtLoad is set` | `check_launchd` |
+| 60 | 51 | every hour | `StartInterval is set` | `check_launchd` |
+| 61 | 51 | a gateway | `['@PYTHON3@', '@HOME@/Library/Application Support/coding-harness-recheck/clone/script...` | `check_launchd` |
+| 62 | 51 | no --notify | `['@PYTHON3@', '@HOME@/Library/Application Support/coding-harness-recheck/clone/script...` | `check_launchd` |
+| 63 | 51 | another working directory | `the job does not run from the clone` | `check_launchd` |
+| 64 | 51 | a gateway in the wrapper | `recheck-agent.sh names a gateway` | `check_launchd` |
+| 65 | 52 | a second command | `@MAINTAINER@ ALL=(_chhermes) NOPASSWD: /usr/local/libexec/coding-harness/recheck-agen...` | `check_sudoers` |
+| 66 | 52 | ALL as the command | `@MAINTAINER@ ALL=(_chhermes) NOPASSWD: ALL` | `check_sudoers` |
+| 67 | 52 | target root | `@MAINTAINER@ ALL=(root) NOPASSWD: /usr/local/libexec/coding-harness/recheck-agent` | `check_sudoers` |
+| 68 | 52 | target ALL | `@MAINTAINER@ ALL=(ALL) NOPASSWD: /usr/local/libexec/coding-harness/recheck-agent` | `check_sudoers` |
+| 69 | 52 | a password is asked | `@MAINTAINER@ ALL=(_chhermes) /usr/local/libexec/coding-harness/recheck-agent` | `check_sudoers` |
+| 70 | 52 | a second rule | `2 rules` | `check_sudoers` |
+| 71 | 53 | adhd-relief's user in the config | `config.yaml names _hspike` | `check_no_adhd_identity` |
+| 72 | 53 | adhd-relief's home in the wrapper | `recheck-agent.sh names _hspike` | `check_no_adhd_identity` |
+| 73 | 53 | adhd-relief's write root in the plist | `ai.coding-harness.research-recheck.plist names spike-vault` | `check_no_adhd_identity` |
+| 74 | 53 | adhd-relief's user in the sudo rule | `sudoers names _hspike` | `check_no_adhd_identity` |
+| 75 | 53 | adhd-relief's home in the env template | `env.example names _hspike` | `check_no_adhd_identity` |
+| 76 | 54 | a value | `OPENCODE_GO_API_KEY has a value` | `check_env_example` |
+| 77 | 54 | a missing name | `names: ['FIRECRAWL_API_KEY', 'OPENCODE_GO_API_KEY', 'OPENCODE_GO_BASE_URL']` | `check_env_example` |
+| 78 | 54 | GH_TOKEN | `names: ['FIRECRAWL_API_KEY', 'FIRECRAWL_API_URL', 'GH_TOKEN', 'OPENCODE_GO_API_KEY', ...` | `check_env_example` |
+| 79 | 54 | GITHUB_TOKEN in a comment | `env.example names GITHUB_TOKEN` | `check_env_example` |
+| 80 | 54 | a fifth variable | `names: ['FIRECRAWL_API_KEY', 'FIRECRAWL_API_URL', 'OPENCODE_GO_API_KEY', 'OPENCODE_GO...` | `check_env_example` |
+| 81 | 55 | no staff | `the section on 'service user' lacks 'staff'` | `check_runbook` |
+| 82 | 55 | no modes | `the section on 'Directories, owners and modes' lacks '2770'` | `check_runbook` |
+| 83 | 55 | no expiry | `the section on 'publish token' lacks '366'` | `check_runbook` |
+| 84 | 55 | no token mode | `the section on 'publish token' lacks '600'` | `check_runbook` |
+| 85 | 55 | no ruleset rule | `the section on 'ruleset' lacks 'block force pushes'` | `check_runbook` |
+| 86 | 55 | no visudo | `the section on 'Install' lacks 'visudo -cf'` | `check_runbook` |
+| 87 | 55 | no dry run | `the section on 'first run by hand' lacks '--dry-run'` | `check_runbook` |
+| 88 | 55 | no shared section | `0 sections match 'What is shared'` | `check_runbook` |
+| 89 | 55 | no removal | `0 sections match 'Removal'` | `check_runbook` |
+| 90 | 55 | over its line budget | `the runbook is over its line budget` | `check_runbook` |
+| 91 | 56 | no CH-5 | `CH tests found: ['1', '2', '3', '4', '6', '7', '8']` | `check_spike_part` |
+| 92 | 56 | a ninth | `CH tests found: ['1', '2', '3', '4', '5', '6', '7', '8', '9']` | `check_spike_part` |
+| 93 | 56 | CH-3 has no green condition | `CH-3 has no green condition` | `check_spike_part` |
+| 94 | 56 | CH-2 forgets the boundary | `CH-2 lacks 'outside'` | `check_spike_part` |
+| 95 | 56 | CH-6 forgets the route | `CH-6 lacks 'route: web'` | `check_spike_part` |
+| 96 | 56 | a result of maybe | `\| CH-1 \| x \| 2026-10-06 \| maybe \|` | `check_spike_part` |
+| 97 | 56 | the table lost a column | `['\| Test \| Source \| Date \|']` | `check_spike_part` |
+
+**What the checks do not see.** Each of these faults, planted in a copy of
+`tools/hermes/`, left every check silent; the phase-6 reader reads them:
+
+| # | Fault planted | Before | After | Test |
+| --- | --- | --- | --- | --- |
+| 98 | CH-4's green condition says "all seven exit codes are 0" (the criterion: refused) | silent | silent | none — read in phase 6 |
+| 99 | CH-1's green condition says "some name printed is `web_search`" instead of "every name" | silent | silent | none — read in phase 6 |
+| 100 | `env.example` says the model key may be adhd-relief's | silent | silent | none — read in phase 6 |
+
+Rows 98–100 are runbook and comment sentences: the test holds that each CH test
+exists and carries a green condition and its subject words, not what the
+condition says. Two limits of the other kind, found while writing: the key
+sources (`KEY_SOURCES`) are held against the config, not against Hermes (a key
+that a later tag drops stays silent until the laptop shows it, CH-1 and CH-4
+being the proof); and the deny-glob check emulates Hermes's matching as its
+documentation states it, not Hermes's code.
+
+### Notes, slice 5
+
+- `[DETAIL]` — **Hermes keys come from two places, and are checked for it.**
+  Every key of `config.yaml` is in `KEY_SOURCES` (the test) with its source:
+  adhd-relief's baseline (`bdce8dc`) or Hermes's documentation at tag
+  `v2026.9.21` (`d337b73`), read on 2026-10-06 through `gh api` (CLI reference,
+  toolsets reference, configuration, security, memory, curator, cron, web
+  search, providers, environment variables; scratch copies, not committed). A
+  key with no source fails the test, so none is invented. The core toolsets
+  are the 32 of the toolsets reference's "Core Toolsets" table; 29 are
+  disabled, `web`, `file` and `search` are kept.
+- **Marked "not read" in the runbook (section 2) and the config:**
+  `auxiliary.free_only`, `auxiliary.openrouter_model` and `updates.check` — in
+  the baseline only; none of the 13 documentation pages read lists them (the
+  pages list other `updates.*` keys). Also named "not read" in the runbook, and
+  not config keys: the file mode of a note after Hermes's atomic write; whether
+  compression takes `provider: main` with a named model; whether one OpenCode
+  Go subscription allows a second key (research.md Q2); the orchestrator's
+  flags (slice 4 is not merged, so they are the plan's list). Not used, because
+  not found in the CLI reference at the tag: `hermes tools --summary` and
+  `hermes config check` of adhd-relief's runbook (`hermes doctor` is).
+- `[DETAIL]` — **`approvals.mode: manual`, not `smart`.** `smart` calls an
+  auxiliary model to assess a command (`security.md`); `manual` asks nothing of
+  one, and `single_query_mode: deny` answers for the run, so no model is
+  called for an approval. The criterion only asks for "not `off`".
+- `[DETAIL]` — **compression and the other side tasks.** The tag's docs say an
+  auxiliary task on `auto` uses the main model; adhd-relief's runbook (S-5)
+  says Hermes takes `glm-5` for side tasks on `opencode-go`, which `model-
+  endpoints.yaml` does not declare. The two disagree, so `auxiliary.compression`
+  is pinned (`provider: main`, `model: glm-5.3`) and title generation and
+  background review are off; the test also holds every `provider` to
+  `opencode-go` or `main` and every named model to the endpoint's list.
+- `[DETAIL]` — **blocks of the baseline left out:** `delegation` (the toolset
+  is disabled), `terminal.cwd` (the terminal is off; the wrapper changes into
+  `work/`, and the CLI always uses the launch directory, `configuration.md`),
+  `platforms` and `stt` (no messaging, no speech), and the Telegram variables.
+- `[DETAIL]` — **placeholders in two files.** `sudoers` carries
+  `@MAINTAINER@`, the plist `@HOME@` and `@PYTHON3@`; the runbook substitutes
+  them and checks the results with `visudo -cf` and `plutil -lint`. A repository
+  file should not hold an account name or a home, and a LaunchAgent needs
+  absolute paths.
+- `[DETAIL]` — **the wrapper refuses before it starts anything:** no or two
+  arguments, a run directory with `..` in it or outside
+  `/Users/Shared/coding-harness-hermes/runs`, no `in/query.md`, no `work/`, no
+  Hermes binary — each exit 2. It runs Hermes through `env -i`, so nothing of
+  the caller's environment (a token, say) reaches it, and with `umask 002`
+  (see the next note). `HERMES_BIN` defaults to `/opt/hermes/venv/bin/hermes`
+  (ADR-0022's install of record); the runbook edits that one line in the
+  installed copy while only the spike's `/opt/hermes-spike` exists.
+- **Finding for slice 7 (a gap in `design.md`'s data model, not decided
+  here):** `runs/<id>/work/` is mode 2770 and the agent's file tools write
+  atomically (adhd-relief's runbook, R-2, reads `_atomic_write`). An atomic
+  write that goes through a temporary file can leave the note mode 0600 and
+  owned by `_chhermes`, which the maintainer's orchestrator could not read
+  back, group membership or not. Not read at the tag. CH-2 measures it (the
+  positive control) and names the fallback (an inherited ACL on `work/`, as
+  R-2 does); the wrapper's `umask 002` only helps a write that is not
+  temporary-file based.
+- **Deviation:** the plan names branch `feat/hermes-profile`, after slices 2
+  and 4. This slice ran on `feat/hermes-runner-2` (the coordinating session's
+  call, as for slice 2), before slice 4: `scripts/research_recheck.py` is not
+  on this branch, so section 9 and CH-8 name its flags from the plan's list
+  and are marked "not read" in the runbook.
+- **Deviation, named:** the test holds one criterion-level test more than the
+  plan's table (`test_every_config_key_has_a_named_source_and_the_unread_ones_
+  are_marked`, 13 tests in place of 12) and runs the wrapper with a stub in
+  place of Hermes (flags, environment, the alarm) in addition to reading it.
+  The runbook is exactly its 300 lines (`RUNBOOK_BUDGET`, held by
+  `check_runbook`); `markdownlint` adds line-length
+  reports for it (the gate is report-only and red for many files already).
+- **Not done, by order:** nothing installed or run — no sudo, no `launchctl`, no
+  Hermes; no pull request; no tracker write; no model call. Hermes's
+  documentation was read, not run.
+- **What the maintainer does at the laptop** is the runbook's sections 3 to 9,
+  by estimate (not measured): service user 5 min, directories 5 min, install
+  25 min, token 10 min, ruleset 10 min (slice 6), CH-1 to CH-8 90 min, first
+  dry run 15 min; the weekly job is loaded only when every row of "Spike
+  results" is green (criterion 59).
+
 ## Slice 6 — the ruleset (the maintainer, 15 min)
 
 In GitHub: Settings → Rules → Rulesets → New branch ruleset; target the
@@ -733,3 +950,10 @@ counted. `make verify` ended VERIFY GREEN at 00:41 (603 passed, 15 skipped;
 `docs-links` and `markdownlint` red but report-only), with the entry committed
 in `835b71e`; this record and the planted faults follow it in a docs-only
 commit.
+
+Slice 5 (appetite 3 h, plan 3 h): 2026-10-06 00:41–01:07, 25 min, no break
+counted. `make verify` ended VERIFY GREEN at 01:07 (713 passed, 15 skipped;
+`docs-links` and `markdownlint` red but report-only, `markdownlint` adding
+line-length reports for `tools/hermes/README.md`), with the profile in
+`1498994`, `7cd557f` and `984ede5`; the card, the planted faults and this
+record follow in a docs-only commit. The appetite was not reached.
