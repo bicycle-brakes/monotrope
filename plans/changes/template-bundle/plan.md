@@ -12,7 +12,7 @@ owner: Data Architect
 provenance: ai-drafted-reviewed
 produced_by: {kind: llm-session, name: claude-code, version: "2026-09-30"}
 review: {status: pending, approved_by: null, approved_at: null}
-tags: [plan, templates, findings, adr]
+tags: [plan, templates, findings, adr, design-phase, arc42]
 ---
 
 # Plan — template-bundle
@@ -32,6 +32,8 @@ and the appetite covers phase 4 only. No model markings: this change retires
 them. Phase 2a ran; phase 6 appends its rows to the same `findings.md`. Facts
 read on 2026-09-30: `origin/main` `f985698`, pull request #60 at `ef7407c`,
 #62 `b8667ed`, #63 `abe5508`, #64 `9048837`, `adhd-frame` `306b5ac`.
+Slice 2 — the design phase and the arc42 skeleton, criteria 33–65, added on
+2026-10-05 — stands below, before "Phase 7", with its own card.
 
 ## Decided in phase 3
 
@@ -226,6 +228,262 @@ in `REIST_NICHT`: every new case carries or skips.
 After #60 merges, the test's workflow-text cases include
 `prompts/04b-review-loop.md` by the glob; it holds neither.
 
+## Slice 2 — the design phase and the arc42 skeleton
+
+```text
+For you:     a design phase 2b — its prompt, its form with the Mermaid delta of ADR 0009, its rows in the workflow tables — and an arc42 skeleton in our own words
+Done when:   the checks below hold criteria 33–65, `make verify` green, the Leerprobe not below 356 cases (merge base 3851f9c)
+Appetite:    3 h 39 min of phase 4 for this slice — the change's 4 h less the 21 min slice 1 used; repair rounds included, a stop
+Not now:     ROADMAP (its own change), LikeC4 (ADR 0009's upgrade path), a check that 2b ran (bead coding-harness-jc3), the kit's licence file
+Pre-mortem:  suppose it failed: most likely because ADR 0009 merges with a delta form the design template did not foresee
+Starts unless you say stop.
+```
+
+Implements criteria 33–65 of `spec.md` (amended 2026-10-05); criteria 30 and
+31 hold over the whole pull request. Phase 4's spans go under "Time used" at
+the end, after slice 1's. Facts read on 2026-10-05: this branch at `9945697`
+(the merge of `origin/main` `3851f9c`), pull request #60 at `ef7407c`, ADR
+0009's branch at `3851f9c` with no record yet, the research note of pull
+request #69 at `3ed4c3b`.
+
+### Decided in phase 3
+
+No `[DECISION]` beyond the spec's open one, the arc42 skeleton's licence.
+
+- `[DETAIL]` — **the skeleton comes last** (step 13), written for the
+  recommendation of that `[DECISION]`. If no answer stands in `spec.md` when
+  phase 4 reaches step 13, phase 4 stops there with its resumption line
+  (prompt 04); everything else is built first.
+- `[DETAIL]` — **the design prompt reads like prompt 02a**: the title, the
+  bold lines Model, Input, Result and Gate, then four short parts — when the
+  phase runs, what `design.md` holds (pointing to the template, not
+  restating it), the ADR draft, from design to plan — and prompt 03's
+  classify block. About 45 lines.
+- `[DETAIL]` — **one list line per class, beginning with the class in
+  backticks** (`` - `architectural` — always …``), so that the test of
+  criterion 35 reads one line per class.
+- `[DETAIL]` — **the Mermaid example has plain words in its labels**, no
+  `<…>`: Mermaid labels take HTML, so an angle-bracket placeholder would
+  vanish where GitHub renders it (finding 6-4). `flowchart LR` with
+  `person["Person: who uses it"] --> app["Container: what changes"]`.
+- `[DETAIL]` — **Added, Changed and Removed are bold labels** below the
+  `mermaid` block, each with one `- ` item, like the findings template's
+  reference lists.
+- `[DETAIL]` — **the skeleton's header is a `docs/architecture/` file's**:
+  the eleven keys of `docs/architecture/target-architecture.md` (`title`,
+  `category: architecture`, `status`, `created`, `last_reviewed`, `updated`,
+  `owner`, `provenance: ai-drafted-reviewed`, `produced_by`, `review`,
+  `tags`); the copy goes where the instance keeps its architecture
+  description, for example `docs/architecture/<system>.md`.
+- `[DETAIL]` — **the credit's URLs stand bare**, not in angle brackets:
+  GitHub links them, and an angle bracket in a template body reads as a
+  placeholder (6-4).
+- `[DETAIL]` — **the kit files stay below five phase words**: no
+  "explore", "implement" or "review" in a new reason of
+  `scripts/kit/manifest.yaml`, no "explore", "implement" or "verify" in the
+  cap's comment in `scripts/kit/probe.py` (`research.md` §9, item 2).
+- `[DETAIL]` — **the test reads a prompt's model with the regex of
+  `tests/test_model_endpoints.py::prompt_modelle`**, copied rather than
+  imported: importing a test module runs its collection-time reads.
+
+### Steps
+
+7. **Start** (5 min) — `git fetch origin`; if `origin/main` moved,
+   `git merge origin/main` (no rebase; on a conflict in `plans/INDEX.md`,
+   `python3 scripts/plans_registry.py --index`). If `docs/adr/0009-*.md` is
+   on `origin/main`, read it: its words for the delta go into step 9, and
+   where they contradict criteria 43–46, stop with prompt 04's four lines.
+8. **`prompts/02b-design.md`** (20 min) — `# Phase 2b · Design`; Model:
+   "Opus 5.5 — at effort `xhigh` (`claude --model claude-opus-5-5 --effort
+   xhigh`); the same demand as spec and plan."; Input: `spec.md` as revised
+   after 2a, `research.md`, `decisions.md`; Result:
+   `plans/changes/<name>/design.md`; Gate: `python3
+   scripts/plans_registry.py --check` green, and for an `architectural`
+   change an ADR draft in `design.md`. Then a paragraph on what the phase
+   decides (how the system is shaped, between what the spec says and how the
+   plan builds it); "When this phase runs" — the D-14 lines of criterion 35
+   and the sentence of 36; "Write `design.md` in the form of
+   `templates/design.md`: copy it into the change folder and fill it in."
+   (34); the ADR draft — the form of `templates/adr.md`, always for
+   `architectural`, for a `feature` whose ADR answer is "yes"; it becomes
+   `docs/adr/<NNNN>-<slug>.md` in the change's own pull request, which makes
+   that pull request a decision pull request (37); the chosen alternative is
+   a proposal, and the merge decides it (ADR 0008); "Phase 3 plans from
+   `spec.md` and `design.md` and writes into `plan.md` what phase 4 needs
+   from the design: phase 4 still reads `plan.md` and `spec.md` and nothing
+   else." (38); prompt 03's classify block, a `[DECISION]` going back to
+   `decisions.md`.
+9. **`templates/design.md`** (25 min) — the leading comment (copy to
+   `plans/changes/<change>/design.md`; the block becomes the header;
+   placeholders in backticks, replaced with them; when a design is written:
+   `prompts/02b-design.md`); the block — the keys of `templates/findings.md`'s
+   block, with `title: "Design — <change>"` and `tags: [design, <topic>]`;
+   `# Design — <change>` (the placeholder in backticks); a goal paragraph
+   naming `spec.md`, `research.md` and `decisions.md`; the five sections of
+   criterion 39. Alternatives: "at least two", each with its consequences
+   for users, operations or risk, then "Chosen: …, because …" (40).
+   Interfaces and Data model: what crosses a boundary or is stored, or the
+   line `None — <one sentence why>` (41). ADR draft: the form of
+   `templates/adr.md`, always for an `architectural` change, for a `feature`
+   whose ADR answer is "yes", otherwise the None line (41, 42). Architecture
+   delta: "the part of the system this change touches, as it is after the
+   change", the `mermaid` block, the three labels, "If nothing architectural
+   moves: one sentence why, in place of the diagram and the lists.", and
+   "The form is ADR 0009's." (43–46), in ADR 0009's words where step 7 found
+   it merged.
+10. **The doctrine** (15 min) — the five insertions below, then the stamp of
+    `docs/WORKFLOW.md`. Commit steps 8–10.
+11. **The kit** (10 min) — `scripts/kit/manifest.yaml`, after the rule for
+    `templates/adr.md`: `templates/design.md` ("the form of a design;
+    prompts/02b-design.md names it") and `templates/arc42.md` ("a skeleton
+    in arc42's sections, in this repository's words, with arc42's credit
+    and licence"), both `mechanismus`; the reason of `tests/test_templates.py`
+    becomes "holds the templates and the design phase's texts against the
+    gate modules; skips a case whose file does not travel".
+    `scripts/kit/probe.py`: after the `02a-spec-review.md` entry, the entry
+    `[02b-design.md-Opus 5.5]` as `bestand-dieses-repos`; above `DECKEL` the
+    comment "31 -> 32 on <date>: `prompts/02b-design.md` came along
+    (plans/changes/template-bundle). A prompt with a model line is one case
+    more, red in the throwaway repo for the reason the other prompt cases
+    are: `model-endpoints.yaml` stays home."; `DECKEL = 32`, its trailing
+    comment naming the earlier moves. Commit.
+12. **Tests** (60 min) — in `tests/test_templates.py`: `NAMES` gains
+    `design.md` and `arc42.md`; `header_problems` takes the file name the
+    header is placed as (a keyword, `findings.md` by default), so that 48
+    places it as `design.md`; helpers for a prompt's model, a table's first
+    cells under a heading, and the text before a template's first `## `. The
+    cases are the table below; the module docstring names criteria 1–65.
+    Commit.
+13. **`templates/arc42.md`** (30 min, after the licence answer) — the
+    leading comment (where the copy goes; the block becomes the header;
+    placeholders in backticks; the closing credit stays in every copy); the
+    block of the `[DETAIL]` above; `# Architecture — <system>` (in
+    backticks); the opening of criterion 58 — fill only what a named reader
+    needs and say so in one line where a section has nothing, every number
+    with its commit or date, what is not known marked open; the twelve
+    sections of criterion 54 as `## 1. Introduction and Goals` to `## 12.
+    Glossary`, each one to three sentences in this repository's words on
+    what goes there and, where this repository has a place for it, a
+    pointer: 5 to the form of ADR 0009's delta, 9 to `docs/adr/` (59); last,
+    a paragraph "**Credit.**" with criterion 56's items and criterion 57's
+    statement. Then the copy check of 55 below. Commit.
+14. **Checks and close** (25 min) — the block below; `python3
+    scripts/check_frontmatter_current.py --stamp`; `python3 -m ruff format
+    scripts/ tests/`; `python3 scripts/plans_registry.py --index`; the
+    verification; the trial merges; push. The last line is the `done:` line.
+
+The five insertions of step 10, each a line or paragraph of its own:
+
+```text
+docs/WORKFLOW.md §2, after the 2a row:
+| 2b | Design *(by class)* | `plans/changes/<name>/design.md` | validator green; for an `architectural` change, an ADR draft in it | [`02b-design.md`](../prompts/02b-design.md) |
+
+docs/WORKFLOW.md §3, after the 2a row:
+| 2b Design | **Opus 5.5** | effort `xhigh`; the same demand as spec and plan |
+
+docs/WORKFLOW.md, "Change classes …", after the list of four classes:
+**The design phase 2b goes by class** (decision D-14, `prompts/02b-design.md`): an `architectural` change always runs it; a `feature` runs it or says in one sentence of its `spec.md` why not; a `bounded` change and a `spike` never run it. Nothing checks this until the validator of bead coding-harness-jc3 lands; the review before the merge holds it.
+
+AGENTS.md, "The workflow in one screen", after the 2a row:
+| 2b | Design *(by class)* | `design.md` | validator green; an ADR draft when `architectural` |
+
+templates/spec.md, appended to the Non-goals paragraph:
+A `feature` without a `design.md` says here, in one sentence, why it does without the design phase 2b (`prompts/02b-design.md`).
+```
+
+Verification as in slice 1, verbatim:
+`GIT_CONFIG_COUNT=1 GIT_CONFIG_KEY_0=commit.gpgsign GIT_CONFIG_VALUE_0=false make verify`,
+ending `VERIFY GREEN`.
+
+### Tests and checks per criterion (slice 2)
+
+| # | Held by (`tests/test_templates.py` unless named) | Red when |
+|---|---|---|
+| — | `test_templates_carry_no_real_header[design.md]`, `[arc42.md]` | either starts with `---` |
+| 33 | `tests/test_model_endpoints.py::test_every_model_in_a_phase_prompt_resolves[02b-design.md-Opus 5.5]`, by its glob | the model is not declared; no such case |
+| 34 | `test_design_prompt_names_the_template` | `templates/design.md` absent from the prompt |
+| 35 | `test_design_prompt_states_d14_for_each_class`; counter `test_d14_check_sees_a_new_class` | a class of `CLASSES` (read at call time) without its line, a line without its words; the counter: a planted class not reported |
+| 36 | `test_design_prompt_says_nothing_checks_the_rule_yet`; review | no `coding-harness-jc3`; review: a gate named as checking it |
+| 37 | `test_design_prompt_says_where_the_adr_draft_goes` | no `docs/adr/` or "decision pull request" |
+| 38 | `test_design_prompt_hands_the_design_to_the_plan`; the file list | no paragraph with "Phase 3", `design.md`, `plan.md` and "phase 4"; prompt 03 or 04 changed for it |
+| 39 | `test_design_sections_in_order` | a heading missing, renamed, added or moved |
+| 40 | `test_alternatives_ask_for_two_with_consequences_and_a_choice` | "at least two", "consequence" or "Chosen" missing |
+| 41 | `test_empty_parts_say_why[Interfaces]`, `[Data model]`, `[ADR draft]` | the section without a line beginning `None — ` |
+| 42 | `test_adr_draft_takes_the_record_form` | `templates/adr.md` or `architectural` missing |
+| 43 | `test_delta_is_a_mermaid_flowchart_after_the_change`; `test_no_likec4_model_is_asked` | no `mermaid` fence in the section, its first line not `flowchart …`, no "after the change"; "likec4" or ".c4" in the template or the prompt |
+| 44 | `test_delta_lists_below_the_diagram` | **Added**, **Changed** or **Removed** missing after the fence |
+| 45 | `test_delta_says_why_when_nothing_moves` | "nothing architectural moves" missing |
+| 46 | `test_delta_names_adr_0009` | "ADR 0009" missing in the section |
+| 47 | review; check below | the merged ADR asks for an element the section lacks, or the reverse |
+| 48 | `test_filled_design_header_passes_the_plans_gates` | as 18, placed as `design.md` |
+| 49 | `test_phase_table_has_2b_between_2a_and_3` | the first cells not …, 2a, 2b, 3, …; the row without `design.md` or `02b-design.md` |
+| 50 | `test_routing_gives_2b_the_prompt_model` | no 2b row between 2a and 3; its bold model not the prompt's |
+| 51 | `test_agents_table_has_2b_between_2a_and_3` | as 49 in `AGENTS.md`; skips without the file |
+| 52 | `test_workflow_states_d14_by_class` | no paragraph of the section with `02b-design.md`, the four classes and `coding-harness-jc3` |
+| 53 | `test_spec_template_says_where_a_feature_skips_design`; `test_spec_sections_in_order` | Non-goals without `design.md`, `feature` or "one sentence"; a new heading |
+| 54 | `test_arc42_has_the_twelve_sections_in_order` | a title missing, renamed, added or moved, or a number not its position |
+| 55 | check below; review | a run of eight words shared with arc42 outside the titles and the credit |
+| 56 | `test_arc42_credits_arc42_in_the_copied_part` | "arc42", "9.0", "July 2025", "Gernot Starke", "Peter Hruschka", `https://arc42.org`, the licence URL or "changed" missing outside the leading comment |
+| 57 | `test_arc42_states_its_licence` | "CC BY-SA 4.0" for the skeleton, or the sentence that a copy's content stays its author's, missing |
+| 58 | `test_arc42_asks_only_what_a_reader_needs` | "reader", "commit or date" or "open" missing before the first `## ` |
+| 59 | `test_arc42_decisions_point_to_the_records` | `docs/adr/` missing in section 9 |
+| 60 | `test_filled_arc42_header_gives_a_date` | `read_updated` reads no date |
+| 61 | check below; `tests/test_kit.py` | fewer than two; a kit test red |
+| 62 | the verification (`probe.py --strict`); `tests/test_kit.py`; check below | the Leerprobe red; the cap not the list's length; more than one new entry |
+| 63 | review; check below | German in the new lines |
+| 64 | check below | a conflict in another file or hunk; a red template case on the resolved tree |
+| 65 | check below | ADR 0009's merge commit not an ancestor of `HEAD` |
+
+```bash
+python3 -m pytest tests/test_templates.py tests/test_kit.py tests/test_model_endpoints.py -q  # 33–46, 48–54, 56–62: passed
+python3 scripts/kit/probe.py --list | grep -cE 'templates/(design|arc42)\.md'  # 61: 2
+git diff origin/main...HEAD -- scripts/kit/probe.py | grep -c '^+    "tests\.'  # 62: 1
+git ls-tree --name-only origin/main docs/adr/ | grep '/0009-'  # 47: the record, read against 43-46
+git merge-base --is-ancestor "$(git log origin/main --first-parent --format=%H -1 -- 'docs/adr/0009-*')" HEAD && echo ancestor  # 65: ancestor
+git merge-tree --write-tree --name-only HEAD origin/feat/stage-2-codex-glm  # 64: conflicts in docs/WORKFLOW.md, plans/INDEX.md, scripts/kit/probe.py only
+grep -nE '[äöüßÄÖÜ]' prompts/02b-design.md templates/design.md templates/arc42.md  # 63: nothing
+git diff --name-only origin/main...HEAD  # the Definition of Done's files and this change folder, nothing else
+```
+
+For 55, a throwaway script, not kept: fetch the twelve section files of
+arc42 9.0 with `gh api repos/arc42/arc42-template/contents/EN/adoc/<file>`
+into the scratch directory, and compare every run of eight words of the
+skeleton outside its headings and its credit with them; expected: none
+shared. For 64, resolve the merged tree in a scratch copy as the overlap
+table says and run `python3 -m pytest tests/test_templates.py` there. If the
+head of #60 has moved from `ef7407c`, measure again and update the table
+below before phase 6.
+
+### Overlaps with open work (slice 2)
+
+Measured with `git merge-file` on 2026-10-05 against #60's head `ef7407c`,
+merge base `1e4cccf` (`research.md` §9, item 4).
+
+| File | Also changed by | When the second one merges |
+|---|---|---|
+| `docs/WORKFLOW.md`, §3 routing table | #60 (rows 2a, 4, 6) | conflict: keep #60's rows, add the 2b row after its 2a row |
+| `docs/WORKFLOW.md`, §2 table, "Change classes …" | #60 (the 4b row) | no conflict |
+| `AGENTS.md` | #60 (the 4b row, a paragraph after the table) | no conflict |
+| `scripts/kit/probe.py` | #60 (prompt entries renamed, 04b added, the cap) | two conflicts: keep #60's entries and add the 02b one; `DECKEL = 33`, with both comments |
+| `scripts/kit/manifest.yaml` | #60 (two rules elsewhere) | no conflict |
+| `plans/INDEX.md` | #60; ADR 0009 if it adds a change folder | regenerate on the merged tree |
+| ADR 0009's branch | expected: `docs/adr/0009-*.md`, the continuity rows of D-15 and O-3, `AMENDMENT_ADRS`, the target's wording | no file of this change (expected, not measured: nothing was written on 2026-10-05); it merges first, and step 7 or 14 merges `origin/main` here; should it touch a file of this change, keep both sides and the ADR's words for the delta |
+
+After #60 merges, its `prompts/04b-review-loop.md` joins the workflow-text
+cases by the glob, its entries are the base of this change's one, and §3
+routes 2a to Fable 5.1 while 2b stays on Opus 5.5.
+
+### Not touched (slice 2)
+
+Beyond slice 1's list: `README.md` (its one-line cycle; #60 did not add 4b
+there either), `model-endpoints.yaml` (Opus 5.5 is declared), prompts 02
+beyond slice 1's sentence, 03, 04 and 07 (criterion 38), `docs/architecture/`
+and `docs/adr/` (ADR 0009's own pull request), `.claude/agents/` (no design
+sub-agent), `scripts/export/manifest.yaml` (it carries `templates/`, so the
+two new templates reach LakeSwitch — private, among the maintainer's own
+repositories). Slice 1 left `scripts/kit/probe.py` alone; slice 2 adds the
+one entry and the cap (criterion 62).
+
 ## Phase 7
 
 The commit that opens the pull request sets `class: feature`, `change:
@@ -250,6 +508,21 @@ yet: `Closes-Bead: coding-harness-9qo` follows only after the tracker writer
 cuts the bead and opens the one for the not-now parts. If `adhd-frame` has
 merged, "What could break": a spec copied before #60 merges shows
 When / While / If as a recommendation only.
+
+**Amended 2026-10-05 for the widened scope.** The class commit writes the
+`adr_question` reason of the spec's amendment under "The class of this
+change", not the earlier one. The same commit, under the one stamp, takes
+finding 6-7 (the spec's protected-areas bullet names the sentence since the
+amendment, so its Status moves to `fixed in <commit>`) and 6-8
+(`implementation_status: partial` in `spec.md` and `plan.md`). Before the
+pull request opens, ADR 0009 is merged and `origin/main` merged here
+(criterion 65), and the trial merge with #60 is measured again (64). The
+body gives the maintainer's answers of 2026-10-05 as answers, no longer as
+provisional ones; the answer on the arc42 skeleton's licence and, under its
+option 1, the exception for the kit's licence work (bead
+coding-harness-lir); and the special runs of criteria 55, 64 and 65. The
+closing trailer waits until the tracker writer has cut the bead to this
+scope.
 
 ## Repair round 1
 

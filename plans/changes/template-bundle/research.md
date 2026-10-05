@@ -4,7 +4,7 @@ status: draft
 implementation_status: none
 date: 2026-09-30
 last_reviewed: 2026-09-30
-updated: 2026-09-30
+updated: 2026-10-05
 supersedes: null
 superseded_by: null
 bead: coding-harness-9qo
@@ -12,7 +12,7 @@ owner: Data Architect
 provenance: ai-drafted-reviewed
 produced_by: {kind: llm-session, name: claude-code, version: "2026-09-30"}
 review: {status: pending, approved_by: null, approved_at: null}
-tags: [research, templates, spec, design-phase]
+tags: [research, templates, spec, design-phase, arc42, licence]
 ---
 
 # template bundle — Research
@@ -595,3 +595,112 @@ section disagrees with the text above it, this section holds.
   block, and a first bullet "Status: accepted by the merge of the pull request
   that carries this file. Until that merge, the pull request's state is the
   decision's state: open is proposed, closed is rejected."
+
+## 9 · Gaps closed in the phase-2 amendment of 2026-10-05
+
+Added on 2026-10-05, when the maintainer widened the scope to the design
+phase 2b and an arc42 skeleton (`decisions.md`, both addenda of that day), on
+this branch after merging `origin/main` at `3851f9c` (merge commit
+`9945697`). Where this section disagrees with the text above it, this section
+holds. Also read: `docs/research/2026-10-05-likec4-roadmap-arc42.md` on
+`origin/docs/research-likec4` (`3ed4c3b`, pull request #69) and pull
+request #60 at `ef7407c`.
+
+1. **The arc42 licence, read and not assumed.** Read on 2026-10-05:
+   `https://arc42.org/license`; the arc42 FAQ, question A-2
+   (`https://faq.arc42.org/questions/A-2/`); `LICENSE.txt` of
+   `github.com/arc42/arc42-template` (release `2026.10.2` of 2026-10-02; the
+   English template is version 9.0 of July 2025, `EN/version.properties`);
+   the legal code of CC BY-SA 4.0
+   (`https://creativecommons.org/licenses/by-sa/4.0/legalcode.en`); and
+   Creative Commons' list of licences compatible with BY-SA
+   (`https://creativecommons.org/compatible-licenses/`). They say:
+   - The arc42 template is licensed CC BY-SA 4.0; the licensors are Gernot
+     Starke and Peter Hruschka.
+   - arc42's licence page: "The license applies to the arc42 template itself,
+     meaning its structure, its headings and its explanatory text." What an
+     author writes into it stays the author's: "Publishing an architecture
+     document in arc42 structure does not place your content under CC
+     BY-SA."
+   - "You may adapt it inside your organization without publishing your
+     changes." The share-alike condition applies when an adapted template is
+     made available outside the organization — "on your website, in a public
+     repository or as part of a product you ship" — and "then that adapted
+     template carries CC BY-SA 4.0 as well".
+   - Whoever passes the template or an adaptation on credits Gernot Starke
+     and Peter Hruschka, links the licence and says that something was
+     changed, without suggesting their endorsement.
+   - The legal code reaches only what needs permission under copyright:
+     "Adapted Material" is material modified "in a manner requiring
+     permission"; "where Exceptions and Limitations apply to Your use, this
+     Public License does not apply"; to "Share" is to provide material to the
+     public. Whether twelve headings in an order need that permission is a
+     legal question this file does not answer; the licensors say they do.
+     Not legal advice.
+   - Contributions to an adaptation of BY-SA 4.0 material may be licensed
+     only under BY-SA 4.0 or later, the Free Art License 1.3, or (one way)
+     GPLv3. Apache-2.0 is not among them.
+
+   **What follows for answer 8.** Writing the skeleton in this repository's
+   own words keeps arc42's explanatory text out of it. In the licensors'
+   reading it does not keep the skeleton out of the licence, because
+   arc42's structure and headings, which make it a skeleton, are what they
+   count as the template. **The kit's side:** decision D-17 gives the kit
+   Apache-2.0, but no licence file exists yet (bead coding-harness-lir), and
+   both `MPAdesso/coding-harness` and `MPAdesso/lakeswitch-ai` are private
+   (`gh repo view`, 2026-10-05); publication is the later, gated "template
+   switch". Nothing is shared outside the maintainer's own repositories
+   today; the open point is what the file says before the kit goes public.
+   The spec asks it as a `[DECISION]`.
+2. **A new prompt is one more exemption in the Leerprobe.**
+   `tests/test_model_endpoints.py::test_every_model_in_a_phase_prompt_resolves`
+   has one case per prompt with a `**Model:**` line. In the probe's
+   throwaway repository `model-endpoints.yaml` is an empty skeleton, so each
+   such case is red there and stands in `REIST_NICHT` of
+   `scripts/kit/probe.py` as `bestand-dieses-repos`; `prompts/01a-interview.md`
+   and `02a-spec-review.md` each raised the cap `DECKEL` by one (its comments,
+   59 → 60 and 60 → 61), and `tests/test_kit.py` requires the cap to equal
+   the list's length. `prompts/02b-design.md` therefore needs one entry and
+   the cap 31 → 32. Two kit files hold four of the seven phase words each
+   (`scripts/kit/manifest.yaml`: spec, plan, verify, commit;
+   `scripts/kit/probe.py`: spec, plan, review, commit), and
+   `test_the_kit_does_not_describe_the_phases` goes red at five.
+3. **The Leerprobe at the new merge base.** `origin/main` at `3851f9c`,
+   measured on 2026-10-05 in a scratch copy (`git archive`, a fresh `git
+   init`), `python3 scripts/kit/probe.py --strict` with
+   `commit.gpgsign=false`: **356 of 387 cases (91 %)**, the same as at
+   `f985698`. Without the override: 341 of 387 and blocked on 15 red cases,
+   as correction 3 of section 8 records.
+4. **Where the design phase's rows meet pull request #60, measured.** The
+   planned rows were written into copies of this branch's files and merged
+   with `git merge-file` against #60's head (`ef7407c`) over their merge
+   base `1e4cccf`. `AGENTS.md` (a 2b row after 2a; #60 adds 4b after 4 and a
+   paragraph after the table) merges cleanly. In `docs/WORKFLOW.md` the 2b
+   row of §2's table and a paragraph in "Change classes, the ADR question
+   and decision pull requests" merge cleanly; the 2b row of §3's routing
+   table conflicts with #60's rewritten 2a row (one hunk); slice 1's two
+   conflicts, the opening note and §4, stay. `scripts/kit/manifest.yaml`
+   (two rules after `templates/adr.md`) merges cleanly. `scripts/kit/probe.py`
+   conflicts in two hunks: the prompt entries (#60 renames 02a, 04 and 06
+   and adds 04b) and the cap.
+5. **ADR 0009 is not written yet.** Its branch
+   `decide/adr-0009-mermaid-delta` stood at `3851f9c`, with no record under
+   `docs/adr/` after 0008, when read on 2026-10-05. What it decides is taken
+   from `decisions.md` answer 6 and from row (c) of section A6 of the
+   research note; its wording is not read.
+6. **What reads a `design.md` and an arc42 copy.** `scripts/plans_registry.py`
+   reads every `.md` under `plans/` (`artefacts()`), so a change's
+   `design.md` needs the five required fields; `scripts/check_adr_answers.py`
+   reads only `plans/changes/*/spec.md`, so a `design.md` carries no `class`
+   or `adr_question`; `check_frontmatter_current.read_updated` holds its
+   `updated:`. A copy of an architecture description under
+   `docs/architecture/` needs a header (`provenance.yaml`: `frontmatter:
+   required`), whose `updated:` the same gate holds.
+7. **Where the model of 2b is checked.** The routing-table check of
+   `tests/test_model_endpoints.py` reads rows matching `^\| \d [A-Za-z]+ \|`,
+   which a row "2b" does not match (nor "1a" or "2a"); a prompt's model is
+   checked by its own case (item 2). The target's requirement table groups
+   "1a Interview · 2 Spec · 2b Design · 3 Plan": "the highest reasoning
+   available, little output" (`target-architecture.md` §6.6).
+8. **The README's one line** lists the phases without 1a's optionality, and
+   pull request #60 does not add its 4b there.
