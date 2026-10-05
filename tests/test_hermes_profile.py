@@ -28,7 +28,14 @@ import yaml
 
 REPO = Path(__file__).resolve().parent.parent
 PROFILE = REPO / "tools" / "hermes"
-MISSING = object()
+
+
+class _Missing:
+    def __repr__(self) -> str:
+        return "<missing>"
+
+
+MISSING = _Missing()
 
 # ---------------------------------------------------------------------------
 # What the checks hold the files to, and where it comes from
