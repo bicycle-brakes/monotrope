@@ -83,3 +83,29 @@ Claude Code session on 2026-10-05:
 
 Still to answer before phase 7: Q4, the class (`feature`, as the spec
 review found) and the ADR question for this change.
+
+## Addendum 2026-10-05 (later): LikeC4, ROADMAP and arc42 after the research
+
+The maintainer asked for a check of LikeC4, ROADMAP and arc42 and answered
+after reading its result (`docs/research/2026-10-05-likec4-roadmap-arc42.md`,
+PR #69), one question at a time:
+
+6. **Q4 — LikeC4: amend D-15 and O-3 by an ADR toward Mermaid.** In its own
+   decision PR (ADR 0009): an architecture delta lives in `design.md` as a
+   Mermaid diagram plus lists of what is added, changed or removed; LikeC4
+   stays the upgrade path with the research's revisit triggers. This
+   change's `design.md` template uses that form and names ADR 0009; the
+   ADR merges first.
+7. **ROADMAP: try the file first.** A `ROADMAP.md` in Coding Harness with at
+   most three "Now" themes, checked at every hand-over; a kit template only
+   after it stays true through two hand-overs. That is its own change, not
+   part of this one.
+8. **arc42: a skeleton now, in this change.** The research recommended "not
+   now"; the maintainer chose the skeleton. arc42 is licensed CC BY-SA 4.0
+   and the kit Apache-2.0, so the skeleton is written in this repository's
+   own words with arc42's section structure, attributes arc42 and links its
+   template instead of copying its text; the licence point is checked and
+   recorded, not assumed.
+
+Scope of this change from now on: the three templates, the design phase 2b
+(prompt and `design.md` template) and an arc42 skeleton.
