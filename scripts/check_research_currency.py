@@ -62,6 +62,7 @@ _REASON_WIDTH = 80
 
 _NOT_A_MAPPING = "frontmatter is not a YAML mapping"
 _TWICE = "last_reviewed appears more than once (no way to tell which one is meant)"
+_TAGGED = "last_reviewed is a !!timestamp-tagged value, not a plain YYYY-MM-DD date"
 
 
 class CannotMeasure(Exception):  # noqa: N818 — a verdict, not an error class
@@ -134,6 +135,11 @@ def review_date(text: str, today: date) -> tuple[date | None, str | None]:
     value = header["last_reviewed"]
     if value is None or value == "":
         return None, "last_reviewed is empty"
+    if isinstance(value, date):  # the loader builds a date only for an explicit `!!timestamp` tag
+        return None, _TAGGED
+    if isinstance(value, str) and value != value.strip() and _ISO.fullmatch(value.strip()):
+        # A quoted ` 2026-09-16 ` is a well-formed date with spaces round it; `_shown` would hide them.
+        return None, f"last_reviewed '{value.strip()}' has whitespace around the date"
     not_a_date = f"last_reviewed '{_shown(value)}' is not a YYYY-MM-DD date"
     if not isinstance(value, str) or not _ISO.fullmatch(value):
         return None, not_a_date

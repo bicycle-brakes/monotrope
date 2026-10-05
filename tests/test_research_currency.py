@@ -229,6 +229,7 @@ NOT_A_MAPPING = "frontmatter is not a YAML mapping"
 
 
 TWICE = "last_reviewed appears more than once (no way to tell which one is meant)"
+TAGGED = "last_reviewed is a !!timestamp-tagged value, not a plain YYYY-MM-DD date"
 
 
 def _not_a_date(shown: str) -> str:
@@ -263,6 +264,26 @@ UNUSABLE: list[tuple[str, str | bytes, str]] = [
     ("a-word", header("last_reviewed: soon"), _not_a_date("soon")),
     ("impossible-date", header("last_reviewed: 2026-02-30"), _not_a_date("2026-02-30")),
     ("month-13", header("last_reviewed: 2026-13-01"), _not_a_date("2026-13-01")),
+    # A well-formed date that is unusable for a reason the reason must name, not hide
+    # (a reason that said "is not a YYYY-MM-DD date" would send the reader to the wrong place).
+    (
+        "padded-date",
+        header("last_reviewed: ' 2026-12-01 '"),
+        "last_reviewed '2026-12-01' has whitespace around the date",
+    ),
+    (
+        "padded-leading",
+        header("last_reviewed: ' 2026-12-01'"),
+        "last_reviewed '2026-12-01' has whitespace around the date",
+    ),
+    (
+        "padded-newline",
+        header('last_reviewed: "2026-12-01\\n"'),
+        "last_reviewed '2026-12-01' has whitespace around the date",
+    ),
+    ("padded-word", header("last_reviewed: ' soon '"), _not_a_date("soon")),  # spaces round a non-date: not that reason
+    ("tagged-date", header("last_reviewed: !!timestamp 2026-12-01"), TAGGED),
+    ("tagged-datetime", header("last_reviewed: !!timestamp 2026-12-01 10:00:00"), TAGGED),
     ("compact-date", header("last_reviewed: 20261201"), _not_a_date("20261201")),
     ("compact-date-quoted", header("last_reviewed: '20261201'"), _not_a_date("20261201")),
     ("short-month", header("last_reviewed: 2026-9-6"), _not_a_date("2026-9-6")),
