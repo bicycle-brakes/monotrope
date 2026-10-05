@@ -53,7 +53,7 @@ SCHEMA_VERSION = 1
 
 # A header may start with a UTF-8 byte-order mark and use CRLF line endings (the form
 # of `check_frontmatter_current.py`).
-_BLOCK = re.compile(r"^﻿?---\r?\n(.*?)\n---\r?\n", re.S)
+_BLOCK = re.compile(r"^\ufeff?---\r?\n(.*?)\n---\r?\n", re.S)
 # `date.fromisoformat` also takes `20260916`; the date of a header is `YYYY-MM-DD`.
 _ISO = re.compile(r"\d{4}-\d{2}-\d{2}")
 _TIMESTAMP_TAG = "tag:yaml.org,2002:timestamp"

@@ -181,7 +181,7 @@ def test_the_review_date_is_last_reviewed_and_nothing_else(tmp_path: Path) -> No
 
 
 def test_a_header_with_a_byte_order_mark_and_crlf_line_endings_is_read(tmp_path: Path) -> None:
-    text = f"﻿---\r\ntitle: A note\r\nlast_reviewed: {ago(40)}\r\n---\r\nBody\r\n"
+    text = f"\ufeff---\r\ntitle: A note\r\nlast_reviewed: {ago(40)}\r\n---\r\nBody\r\n"
     put_note(tmp_path, "windows.md", text.encode("utf-8"))
 
     (note,) = cr.measure(tmp_path, TODAY)
