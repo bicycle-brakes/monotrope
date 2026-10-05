@@ -105,10 +105,10 @@ the words of the domain and the technical ones, each defined once.
 
 **Credit.** The structure and the headings of this file are an adaptation of
 arc42 under CC BY-SA 4.0 (https://creativecommons.org/licenses/by-sa/4.0/).
-arc42 is the template for architecture communication and documentation by
-Gernot Starke and Peter Hruschka, here in its English version 9.0 of July 2025
-(https://arc42.org). The licensors do not endorse this file. What was changed:
-the explanatory text is written anew in this repository's words, the opening
-rules were added, and sections 5 and 9 point to this repository's records.
-What is written into a copy of this file stays its author's: the licence covers
-the skeleton, not the description made with it.
+arc42 is the template for architecture communication and documentation,
+© Dr. Peter Hruschka, Dr. Gernot Starke and contributors, here in its English
+version 9.0 of July 2025 (https://arc42.org). The licensors do not endorse this
+file. What was changed: the explanatory text is written anew in this
+repository's words, the opening rules were added, and sections 5 and 9 point to
+this repository's records. What is written into a copy of this file stays its
+author's: the licence covers the skeleton, not the description made with it.

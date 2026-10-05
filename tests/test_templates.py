@@ -742,6 +742,7 @@ def test_arc42_credits_arc42_in_the_copied_part() -> None:
         "July 2025",
         "Gernot Starke",
         "Peter Hruschka",
+        "© Dr. Peter Hruschka, Dr. Gernot Starke and contributors",
         "https://arc42.org",
         "https://creativecommons.org/licenses/by-sa/4.0/",
         "changed",
