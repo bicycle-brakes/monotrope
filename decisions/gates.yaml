@@ -208,4 +208,13 @@ gates:
     needs_tracker: true
     reason: DRIFT blocks only on the timer (ADR-028 R2) — the outside moves without a push to this repo. It reads the tracker render, so the drift job hydrates too (bead 1jg.3).
 
+  - id: research-currency
+    title: Research notes not reviewed for more than 90 days are listed
+    command: python3 scripts/check_research_currency.py
+    job: drift
+    enforcement: report
+    floor: false
+    placement: both
+    reason: Research about outside tools ages without a commit here, so the nightly drift run lists the notes not reviewed for more than 90 days; report is the level the maintainer chose on 2026-10-05, not a step towards block.
+
 retired: []
