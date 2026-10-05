@@ -81,6 +81,23 @@ def section(name: str, title: str) -> str:
     return "\n".join(lines[start:end])
 
 
+def reference_lists(name: str) -> dict[str, dict[str, str]]:
+    """The reference part below the template's `---` line: bold label -> {term in code ticks -> its definition}."""
+    lines = prose(name)
+    groups: dict[str, dict[str, str]] = {}
+    label = term = None
+    for line in lines[lines.index("---") + 1 :]:
+        if bold := re.match(r"\*\*(.+?)\*\*", line):
+            label, term = bold.group(1), None
+            groups[label] = {}
+        elif label and (entry := re.match(r"- `(.+?)` — (.*)", line)):
+            term = entry.group(1)
+            groups[label][term] = entry.group(2)
+        elif label and term and line.startswith("  "):
+            groups[label][term] += " " + line.strip()
+    return groups
+
+
 def flat(text: str) -> str:
     return " ".join(text.split())
 
@@ -226,6 +243,10 @@ def test_criterion_form_is_a_recommendation() -> None:
     paragraphs = [flat(p) for p in section("spec.md", "Acceptance criteria").split("\n\n")]
     paragraph = next(p for p in paragraphs if "When, While or If" in p)
     assert "`prompts/02-spec.md`" in paragraph and "#60" in paragraph
+    # `main`'s prompt 02 has no rule of one condition per criterion: it appears only inside the recommendation
+    whole = " ".join(paragraphs)
+    for mention in re.finditer("one condition", whole, re.I):
+        assert re.match(r"[^.]*recommended", whole[mention.start() :]), "one condition per criterion is a bare rule"
 
 
 def test_protected_areas_ask_what_must_not_be_touched() -> None:
@@ -269,27 +290,27 @@ def test_findings_table_has_the_practised_columns() -> None:
 
 
 def test_findings_vocabulary_is_here() -> None:
-    text = flat(read("findings.md"))
-    for term in (
-        "BLOCKER",
-        "MAJOR",
-        "MINOR",
-        "SPEC",
-        "MAINT",
-        "base",
-        "fix-r<N>",
-        "escalation",
-        "[AMBIGUITY]",
-        "[DIVERGENT]",
+    """Each term is defined by its own entry in its own list of the reference part, not named somewhere in the file."""
+    lists = reference_lists("findings.md")
+    for label, terms in (
+        ("Severity", ("BLOCKER", "MAJOR", "MINOR")),
+        ("Dimension", ("SPEC", "MAINT")),
+        ("Origin", ("base", "fix-r<N>")),
+        ("Markers that override everything", ("[AMBIGUITY]", "[DIVERGENT]")),
     ):
-        assert term in text, term
-    assert "new evidence" in text
-    assert any("[DIVERGENT]" in line and "BLOCKER" in line for line in read("findings.md").splitlines())
+        for term in terms:
+            assert lists.get(label, {}).get(term, "").strip(), f"{label}: no definition of {term}"
+    assert "escalation" in lists["Origin"]["fix-r<N>"]
+    assert "BLOCKER" in lists["Markers that override everything"]["[DIVERGENT]"]
+    lines = prose("findings.md")
+    assert "new evidence" in flat("\n".join(lines[lines.index("---") :]))
 
 
 def test_status_values_include_the_spec_review_ones() -> None:
-    text = read("findings.md")
-    assert "`in spec`" in text and "`rejected — <reason>`" in text
+    """The two values prompt 02 prescribes stand in the Status list, not merely somewhere in the template."""
+    status = reference_lists("findings.md").get("Status", {})
+    for value in ("in spec", "rejected — <reason>"):
+        assert status.get(value, "").strip(), f"the Status list has no entry for {value}"
 
 
 def test_lines_under_the_table() -> None:
