@@ -638,6 +638,194 @@ the merged tree passes 55 of 55 cases of `tests/test_templates.py`. With
 `origin/docs/adhd-frame` (`b4bb2cb`): no conflict, 53 of 53 pass. The tests of
 `tests/test_kit.py` were not run on those trees (an archive has no git).
 
+## Slice 2 — what phase 4 did and found
+
+Phase 4 of slice 2, 2026-10-05, from 18:06 on `docs/template-bundle`. Commits
+in order: `b29dfb9` (the spec's licence question answered), `7a8386b` (steps
+8–10), `4b0b6f3` (the merge of `origin/main` `87daf91`, step 7 and the
+coordinating session's order), `0553d04` (the kit, step 11), `555601f` (the
+tests of the design phase, step 12), `3ede444` (the skeleton and its six
+cases, step 13); the records, the stamp and the verification follow in the
+commit that carries this section.
+
+### Decided or found in phase 4
+
+- **The licence is answered, so the skeleton was built.** The spec's open
+  `[DECISION]` on the arc42 skeleton's licence is marked answered
+  (2026-10-05, option 1, `decisions.md` answer 9) in `b29dfb9`: its heading, the
+  note of the amendment block, criterion 57's lead-in and the "Open decisions"
+  introduction. Nothing about what criteria 54 and 57 ask changed.
+- **ADR 0009 is on `origin/main`** (`a847516`, pull request #70), merged into
+  this branch by `4b0b6f3`: criterion 65 holds (`git merge-base --is-ancestor
+  a847516 HEAD`). Read first on its branch, then on `main` (the same text). It
+  decides what criteria 43–46 say, and one thing more: each box of the diagram
+  is labelled with its C4 level (person, system, container, component).
+  `[DETAIL]`: the delta section asks for it, its example shows it, and
+  `test_delta_asks_for_the_c4_level_of_each_box` holds it, so that criterion 47
+  is checked in part by a test and not by review alone (faults D21, D22). ADR
+  0009's own validation line holds: `grep -ri likec4 templates/ scripts/kit/
+  decisions/gates.yaml` finds nothing.
+- `[DETAIL]` — **the arc42 cases are committed with the skeleton** (step 13,
+  `3ede444`), not with step 12: a case for a file that does not exist is a red
+  commit. `header_problems` takes `placed_as` as the plan says; the design
+  header's `category` is `design` and the skeleton's `status` is `proposed`,
+  the value three of the four files under `docs/architecture/` use. A helper
+  `raw_section` (a section with its fences) and `markdown_section` (a section
+  of `docs/WORKFLOW.md` or `AGENTS.md`) joined the three helpers of step 12.
+- **Criterion 55, run** (the throwaway script of the scratch directory, not
+  kept): the 14 `EN/adoc/*.adoc` files of arc42 (`gh api`, 2026-10-05, version
+  9.0-EN, July 2025) against the 458 words of the skeleton outside its titles,
+  its header block and its credit: **no run of eight words shared**. The
+  script sees a copy: with 20 words of `02_architecture_constraints.adoc`
+  appended it finds 13 runs.
+- **Leerprobe at the new merge base.** `origin/main` is `87daf91` now (the
+  card says `3851f9c`); `git archive`, a fresh `git init`, `probe.py --strict`
+  with `commit.gpgsign=false`: **356 of 387**, the same as at `3851f9c`. This
+  branch: 441 of 473 (slice 1 had 407 of 438), and the one case that does not
+  carry is the exempt 02b model case. Without the signing override the probe
+  blocks on 15 red cases of `tests/test_workflow_entry.py` and
+  `tests/test_worktree_state.py`, as research section 8 records.
+- **Checks of the block, run** (18:18): `pytest tests/test_templates.py
+  tests/test_kit.py tests/test_model_endpoints.py` 139 passed; `probe.py --list`
+  gives 2 (61); the diff of `probe.py` adds 1 line `+    "tests.` (62); ADR
+  0009 on `origin/main` (47); ancestor (65); no German letter in the three
+  files (63); `check_docs.py` names no link into `templates/` (26).
+
+### Stop — criterion 64 does not hold as written
+
+```text
+expected:   criterion 64 and the check of step 14: the trial merge with #60
+            conflicts only in docs/WORKFLOW.md, scripts/kit/probe.py and
+            plans/INDEX.md
+found:      five files conflict (this branch with origin/main 87daf91 merged
+            in, against #60 at ef7407c): those three, and
+            docs/architecture/2026-09-17-implementation-plan.md and
+            docs/architecture/2026-09-17-omnigent-first-target.md. The last two
+            conflict between origin/main and #60 without this branch too
+            (merge-tree of the two: those two files only): ADR 0009, merged,
+            and #60 both edit them. Resolved in a scratch worktree as the overlap
+            table says (the two architecture files from main's side), the merged
+            tree passes tests/test_templates.py, test_kit.py and
+            test_model_endpoints.py (144 passed) and probe.py --strict (473 of
+            506); the scratch worktree is removed.
+relevant:   nothing to build differently. Criterion 64 cannot hold literally
+            once criterion 65 puts ADR 0009 under this branch: the two
+            contradict, and the extra conflicts are #60's with main, not this
+            change's. A reading that settles it is not mine to pick.
+proposal:   amend criterion 64 to "this branch adds no conflict beyond those
+            origin/main already has with #60 (today the two docs/architecture
+            files)", and its check to the difference of two merge-tree runs;
+            the maintainer or the orchestrating session decides, then phase 4
+            re-runs that check. Slice 2 stays open at this one criterion.
+```
+
+### Planted faults (slice 2)
+
+One fault at a time into the committed file, then `python3 -m pytest -q
+tests/test_templates.py` (plus `tests/test_model_endpoints.py` for the model
+line), then the file restored (a throwaway script in the scratch directory, not
+kept; `git status` was clean afterwards). Run on the tree of `3ede444` at 18:15
+and again, with the full test names, at 18:20. The prefixes: P the design
+prompt, D the design template, S the spec template, W `docs/WORKFLOW.md`, G
+`AGENTS.md`, A the skeleton, T the test file itself (the counter of criterion
+35), K the kit files, run at 18:16–18:18 with `tests/test_kit.py` and
+`probe.py --strict`. The clean tree passes all of them.
+
+| # | Crit. | Fault planted | Red |
+|---|---|---|---|
+| P1 | 34 | prompt: `templates/design.md` replaced by 'the design template' | `test_design_prompt_names_the_template` |
+| P2 | 35 | prompt: the `architectural` line says 'sometimes' for 'always' | `test_design_prompt_states_d14_for_each_class` |
+| P3 | 35 | prompt: the `spike` line deleted | `test_design_prompt_states_d14_for_each_class` |
+| P4 | 35 | prompt: the `feature` line loses 'one sentence in `spec.md`' | `test_design_prompt_states_d14_for_each_class` |
+| P5 | 35 | prompt: the `bounded` line says 'sometimes' for 'never' | `test_design_prompt_states_d14_for_each_class` |
+| P6 | 36 | prompt: `coding-harness-jc3` removed | `test_design_prompt_says_nothing_checks_the_rule_yet` |
+| P7 | 37 | prompt: `docs/adr/` removed | `test_design_prompt_says_where_the_adr_draft_goes` |
+| P8 | 37 | prompt: 'decision pull request' loses 'decision' in the ADR paragraph | `test_design_prompt_says_where_the_adr_draft_goes` |
+| P9 | 38 | prompt: the hand-over paragraph says 'Planning' for 'Phase 3' | `test_design_prompt_hands_the_design_to_the_plan` |
+| P10 | 33 | prompt: the model line names 'Opus 9' | `test_routing_gives_2b_the_prompt_model`; `test_every_model_in_a_phase_prompt_resolves[02b-design.md-Opus 9]` |
+| P11 | 43 | prompt: asks for a LikeC4 model | `test_no_likec4_model_is_asked[prompts/02b-design.md]` |
+| D1 | — | design template starts with `---` | `test_templates_carry_no_real_header[design.md]` |
+| D2 | 39 | design: heading 'Interfaces' renamed 'Interface' | `test_design_sections_in_order`; `test_empty_parts_say_why[Interfaces]` |
+| D3 | 39 | design: 'Interfaces' and 'Data model' swapped | `test_design_sections_in_order` |
+| D4 | 39 | design: a sixth heading added | `test_design_sections_in_order` |
+| D5 | 40 | design: 'At least two' replaced by 'Some' | `test_alternatives_ask_for_two_with_consequences_and_a_choice` |
+| D6 | 40 | design: 'Chosen:' replaced by 'Pick:' | `test_alternatives_ask_for_two_with_consequences_and_a_choice` |
+| D7 | 40 | design: 'consequences' taken out of the Alternatives section | `test_alternatives_ask_for_two_with_consequences_and_a_choice` |
+| D8 | 41 | design: Interfaces loses its `None — ` line | `test_empty_parts_say_why[Interfaces]` |
+| D9 | 41 | design: Data model loses its `None — ` line | `test_empty_parts_say_why[Data model]` |
+| D10 | 41 | design: ADR draft loses its `None — ` line | `test_empty_parts_say_why[ADR draft]` |
+| D11 | 42 | design: ADR draft without `templates/adr.md` | `test_adr_draft_takes_the_record_form` |
+| D12 | 42 | design: ADR draft without 'architectural' | `test_adr_draft_takes_the_record_form` |
+| D13 | 43 | design: the diagram fence is `text`, not `mermaid` | `test_delta_is_a_mermaid_flowchart_after_the_change`; `test_delta_lists_below_the_diagram`; `test_delta_asks_for_the_c4_level_of_each_box` |
+| D14 | 43 | design: 'flowchart LR' replaced by 'graph LR' | `test_delta_is_a_mermaid_flowchart_after_the_change` |
+| D15 | 43 | design: 'as it is after the change' loses 'after the change' | `test_delta_is_a_mermaid_flowchart_after_the_change` |
+| D16 | 43 | design: the template asks for a LikeC4 model | `test_no_likec4_model_is_asked[templates/design.md]` |
+| D17 | 44 | design: the **Removed** label deleted | `test_delta_lists_below_the_diagram` |
+| D18 | 44 | design: the **Added** and **Changed** labels swapped | `test_delta_lists_below_the_diagram` |
+| D19 | 45 | design: 'nothing architectural moves' replaced | `test_delta_says_why_when_nothing_moves` |
+| D20 | 46 | design: 'ADR 0009' replaced by 'the ADR' | `test_delta_names_adr_0009` |
+| D21 | 47 | design: the diagram's C4 levels no longer asked for | `test_delta_asks_for_the_c4_level_of_each_box` |
+| D22 | 47 | design: a box of the example diagram without a C4 level | `test_delta_asks_for_the_c4_level_of_each_box` |
+| D23 | 48 | design header: `bead:` line deleted | `test_filled_design_header_passes_the_plans_gates` |
+| D24 | 48 | design header: `updated:` line deleted | `test_filled_design_header_passes_the_plans_gates` |
+| D25 | 48 | design header: `status: draft` replaced by `status: final` | `test_filled_design_header_passes_the_plans_gates` |
+| S1 | 53 | spec: the Non-goals sentence on `design.md` deleted | `test_spec_template_says_where_a_feature_skips_design` |
+| S2 | 53 | spec: a new heading '## Design' added | `test_spec_sections_in_order` |
+| W1 | 49 | workflow §2: the 2b row deleted | `test_phase_table_has_2b_between_2a_and_3` |
+| W2 | 49 | workflow §2: the 2b row moved after the 3 row | `test_phase_table_has_2b_between_2a_and_3` |
+| W3 | 49 | workflow §2: the 2b row without its prompt link | `test_phase_table_has_2b_between_2a_and_3` |
+| W4 | 50 | workflow §3: the 2b row deleted | `test_routing_gives_2b_the_prompt_model` |
+| W5 | 50 | workflow §3: the 2b row names Sonnet 5 | `test_routing_gives_2b_the_prompt_model` |
+| W6 | 50 | workflow §3: the 2b row moved after the 3 row | `test_routing_gives_2b_the_prompt_model` |
+| W7 | 52 | workflow: the D-14 paragraph without `coding-harness-jc3` | `test_workflow_states_d14_by_class` |
+| W8 | 52 | workflow: the D-14 paragraph without `spike` | `test_workflow_states_d14_by_class` |
+| W9 | 52 | workflow: the D-14 paragraph without `02b-design.md` | `test_workflow_states_d14_by_class` |
+| G1 | 51 | AGENTS: the 2b row deleted | `test_agents_table_has_2b_between_2a_and_3` |
+| G2 | 51 | AGENTS: the 2b row without `design.md` | `test_agents_table_has_2b_between_2a_and_3` |
+| A1 | — | arc42 template starts with `---` | `test_templates_carry_no_real_header[arc42.md]` |
+| A2 | 54 | arc42: titles of 5 and 6 swapped, numbers kept | `test_arc42_has_the_twelve_sections_in_order` |
+| A3 | 54 | arc42: 'Glossary' renamed 'Terms' | `test_arc42_has_the_twelve_sections_in_order` |
+| A4 | 54 | arc42: the number 10 changed to 11 | `test_arc42_has_the_twelve_sections_in_order` |
+| A5 | 54 | arc42: a thirteenth section added | `test_arc42_has_the_twelve_sections_in_order` |
+| A6 | 56 | arc42: 'Peter Hruschka' removed from the credit | `test_arc42_credits_arc42_in_the_copied_part` |
+| A7 | 56 | arc42: 'July 2025' removed from the credit | `test_arc42_credits_arc42_in_the_copied_part` |
+| A8 | 56 | arc42: `https://arc42.org` removed from the credit | `test_arc42_credits_arc42_in_the_copied_part` |
+| A9 | 56 | arc42: the licence URL removed from the credit | `test_arc42_credits_arc42_in_the_copied_part` |
+| A10 | 56 | arc42: 'changed' removed from the credit | `test_arc42_credits_arc42_in_the_copied_part` |
+| A11 | 56 | arc42: the credit moved into the leading comment | `test_arc42_credits_arc42_in_the_copied_part`; `test_arc42_states_its_licence` |
+| A12 | 57 | arc42: 'CC BY-SA 4.0' replaced by 'CC BY 4.0' in the statement | `test_arc42_states_its_licence` |
+| A13 | 57 | arc42: the sentence that a copy's content stays its author's deleted | `test_arc42_states_its_licence` |
+| A14 | 58 | arc42: the opening loses 'commit or date' | `test_arc42_asks_only_what_a_reader_needs` |
+| A15 | 58 | arc42: the opening loses 'reader' | `test_arc42_asks_only_what_a_reader_needs` |
+| A16 | 58 | arc42: the opening loses 'open' | `test_arc42_asks_only_what_a_reader_needs` |
+| A17 | 59 | arc42: section 9 loses `docs/adr/` | `test_arc42_decisions_point_to_the_records` |
+| A18 | 60 | arc42 header: `updated:` line deleted | `test_filled_arc42_header_gives_a_date` |
+| T1 | 35 | TEST: the D-14 check reads a copy of the class names, not `CLASSES` | `test_d14_check_sees_a_new_class` |
+| T2 | 35 | TEST: the D-14 check skips a class with no entry in its word list | `test_d14_check_sees_a_new_class` |
+| K1 | 62 | `DECKEL` 32 → 31 in `scripts/kit/probe.py` | `tests/test_kit.py::test_the_exemption_list_only_shrinks`; `probe.py --strict` exit 2 (BLOCK: 32 entries, cap 31) |
+| K2 | 62 | the 02b entry deleted from `REIST_NICHT` | `probe.py --strict` exit 2 (BLOCK: the 02b model case red without a declared reason); `tests/test_kit.py` stays green (19 passed) |
+| K3 | 33 | the prompt's `**Model:**` line renamed | `test_routing_gives_2b_the_prompt_model`; `probe.py --strict` exit 2 (BLOCK: an entry of `REIST_NICHT` has no case any more) |
+| K4 | 61 | the manifest rule for `templates/arc42.md` deleted | the check: `probe.py --list \| grep -cE …` prints 1, not 2; `tests/test_kit.py` stays green (19 passed) |
+| K5 | 61 | the manifest rule for `templates/design.md` deleted | the same check prints 1; `tests/test_kit.py` stays green (19 passed) |
+
+74 faults, all 74 red. Three of the rows say what the kit's own checks do
+and do not see: a deleted manifest rule (K4, K5) and a deleted exemption (K2)
+leave `tests/test_kit.py` green and are caught by the check `probe.py --list` and by
+`probe.py --strict` only.
+
+### Verification (slice 2)
+
+2026-10-05, `GIT_CONFIG_COUNT=1 GIT_CONFIG_KEY_0=commit.gpgsign
+GIT_CONFIG_VALUE_0=false make verify`, on the tree of `3ede444` with this
+section added (18:22): `VERIFY GREEN`, 605 passed, 15 skipped, 43 s; the
+Leerprobe carries 441 of 473 cases, against 356 of 387 at the merge base
+`87daf91` (criterion 31). Not run in a hosted CI. Criteria 33–63 and 65 hold by
+the checks above; criterion 64 is the stop above. Criterion 47's review
+counterpart: ADR 0009 read in full, its three contracts (flowchart of the
+state after the change with C4-labelled boxes, three lists, one sentence when
+nothing moves) are all in the section, and the section asks for nothing it
+does not.
+
 ## Time used
 
 Phase 4 and its repair rounds, read with `date` (CEST); appetite 4 h.
