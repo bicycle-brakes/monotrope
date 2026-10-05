@@ -29,7 +29,7 @@ CI_FILE = REPO_ROOT / ".github" / "workflows" / "ci.yml"
 RUNNER = REPO_ROOT / "scripts" / "verify_all.sh"
 
 sys.path.insert(0, str(REPO_ROOT / "scripts"))
-from ci_gates import gates  # noqa: E402
+from ci_gates import gates, misst_in  # noqa: E402
 
 
 def _einschraenkungen() -> dict[str, list[str]]:
@@ -372,9 +372,13 @@ def test_every_gate_step_runs_even_after_a_failing_gate() -> None:
 
     checkout and setup-deps deliberately do not carry the `if`: without them no
     gate has a subject.
+
+    A gate with `placement: writer` is left out of the workflow by declaration
+    (`misst_in`), so it is not counted here; the count is of the gates the
+    hosted run measures (rb-m6-one-account: the gate `ruleset`).
     """
     doc = yaml.safe_load(CI_FILE.read_text(encoding="utf-8"))
-    gate_ids = {g["id"] for g in gates()}
+    gate_ids = {g["id"] for g in gates() if misst_in(g, "ci")}
     fehlen: list[str] = []
     geprueft = 0
     for job_name, job in (doc.get("jobs") or {}).items():
