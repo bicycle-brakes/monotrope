@@ -20,8 +20,9 @@ tags: [plan, implementation, omnigent, workflow, gates]
 
 # Implementation plan: reach the Omnigent-first target
 
-> **Changed, 2026-10-05.** [ADR 0009](../adr/0009-architecture-delta-in-design-md.md)
-> (accepted by the merge of its pull request) amends D-15 and O-3: an
+> **Changed, 2026-10-05.**
+> [ADR 0009](../adr/0009-architecture-delta-in-design-md.md) (accepted by
+> the merge of its pull request) amends D-15 and O-3: an
 > Architectural change shows its architecture delta in `design.md` — a
 > Mermaid flowchart plus lists of the elements and relationships it adds,
 > changes and removes — and the kit ships no model as code and no Node.js
