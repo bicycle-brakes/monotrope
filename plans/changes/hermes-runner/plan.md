@@ -4,7 +4,7 @@ status: draft
 implementation_status: partial
 date: 2026-10-05
 last_reviewed: 2026-10-05
-updated: 2026-10-05
+updated: 2026-10-06
 supersedes: null
 superseded_by: null
 bead: coding-harness-i3y
@@ -441,6 +441,15 @@ block copied out of this file and run verbatim; `make verify` below.
 
 ## Slice 2 — the endpoint entry (appetite 0.5 h)
 
+```text
+For you:     one declared endpoint, `opencode-go`, so the job's model GLM-5.3 resolves under RB-A6, with its open risks written into the entry
+Done when:   checks 12 and 13 below are silent and `make verify` ends VERIFY GREEN
+Appetite:    30 min of phase 4, repair rounds included
+Not now:     the ADR, the orchestrator, the profile, the leak check (PR #60), asking OpenCode in writing, translating the file's German
+Pre-mortem:  suppose it failed: most likely because the remark states more about the vendor than the sources say, and an invented fact survives into a declaration
+Starts unless you say stop.
+```
+
 Branch `feat/hermes-endpoint`. File: `model-endpoints.yaml` — the entry of
 `design.md` "Data model" with an English remark carrying criterion 13's
 five statements, placed as decided above.
@@ -454,6 +463,83 @@ python3 -c "import yaml; b={x['name']:x for x in yaml.safe_load(open('model-endp
 ```
 
 Criterion 14: `make verify`.
+
+### Planted faults, slice 2
+
+Run on 2026-10-06 against the entry as written on `feat/hermes-runner-2`
+(parent `7beed6b`). Before each fault, checks 12 and 13 were silent and
+`tests/test_model_endpoints.py` read 33 passed. Rows 1–13 plant the fault in
+a copy of `model-endpoints.yaml` and run checks 12 and 13 on it; rows 14–20
+plant it in the real file, run the test file, and restore the file (its hash
+was compared after). Result: 20 faults, 20 red. Check 12 is red when it exits
+non-zero; check 13 is red when it prints a line.
+
+| # | Fault planted | Before | After | Test |
+| --- | --- | --- | --- | --- |
+| 1 | entry renamed `opencode-gx` | silent | `KeyError: 'opencode-go'` | check 12 |
+| 2 | `darf_sehen: [framework, kundencode]` | silent | `AssertionError` | check 12 |
+| 3 | second model `glm-5.3-flash` added | silent | `AssertionError` | check 12 |
+| 4 | model `glm-5.2` instead of `glm-5.3` | silent | `AssertionError` | check 12 |
+| 5 | `abrechnung: token` | silent | `AssertionError` | check 12 |
+| 6 | `betreiber` without "Anomaly" | silent | `AssertionError` | check 12 |
+| 7 | `hermes` removed from the remark | silent | `13: hermes` | check 13 |
+| 8 | `proxy` removed | silent | `13: proxy` | check 13 |
+| 9 | `own key` removed | silent | `13: own key` | check 13 |
+| 10 | `no leak check` removed | silent | `13: no leak check` | check 13 |
+| 11 | `contradict` removed | silent | `13: contradict` | check 13 |
+| 12 | `not logged in` removed | silent | `13: not logged in` | check 13 |
+| 13 | `zen` removed | silent | `13: zen` | check 13 |
+| 14 | `kundencode` seen, `residenz: nicht-erklaert` | 33 passed | `test_customer_code_never_reaches_an_endpoint_without_stated_residency` | criterion 14 |
+| 15 | `kundendaten` in `darf_sehen` | 33 passed | `test_no_endpoint_is_cleared_for_customer_rows` | criterion 14 |
+| 16 | unknown data class `geheim` | 33 passed | `test_only_a_declared_data_class_may_be_seen[opencode-go]` | criterion 14 |
+| 17 | `residenz: europa` | 33 passed | `test_every_endpoint_states_operator_residency_and_billing[opencode-go]` | criterion 14 |
+| 18 | `betreiber: ""` | 33 passed | same test | criterion 14 |
+| 19 | `abrechnung: pauschale` | 33 passed | same test | criterion 14 |
+| 20 | `modelle: []` | 33 passed | same test | criterion 14 |
+
+**What the checks do not see.** Check 13 looks for seven words, not for what
+a sentence says. Each of these two faults, planted in a copy of the remark
+that keeps every word, left check 13 silent:
+
+| # | Fault planted | Before | After | Test |
+| --- | --- | --- | --- | --- |
+| 21 | "statements do not contradict each other" (criterion 13: the sources contradict each other) | silent | silent | none — read in phase 6 |
+| 22 | "A leak check runs before its calls, and no leak check is skipped." (criterion 13: no leak check runs) | silent | silent | none — read in phase 6 |
+
+The remark itself says the opposite in both places; the phase-6 reader
+checks that reading, as criterion 13's "Refuted by" asks.
+
+### Notes, slice 2
+
+- `[DETAIL]` — **no `provenance.yaml` prefix maps `model-endpoints.yaml`**
+  (read: the map is `provenance.yaml` at the repository root and lists no
+  entry for a root file of this name), so the file is not `human-decided`
+  and the change is no decision pull request, as the spec's table says.
+- `[DETAIL]` — **no gate needed more than the plan says.** RB-A6's test,
+  `tests/test_model_endpoints.py`, passes unchanged (33 passed): the entry
+  has all six required fields, a declared data class, a closed-vocabulary
+  `residenz` and `abrechnung`, and its one model resolves.
+- `[DETAIL]` — **`residenz: anbieter-erklaert`, as `design.md` says, although
+  the vendor's statements contradict each other.** The vocabulary has three
+  values and none for "stated, contradictory"; `nicht-erklaert` would claim
+  the vendor said nothing. The remark says in words what the value does and
+  does not record.
+- `[DETAIL]` — **a comment block of its own** heads the entry (between
+  `bedrock-claude` and the stage-2 block) and says why it sits outside both
+  stages: no phase routes to it.
+- **Deviation:** the plan names branch `feat/hermes-endpoint`, branched from
+  a freshly fetched `origin/main`. This slice ran on `feat/hermes-runner-2`
+  from `feat/hermes-runner` at `7beed6b`, because the change folder this
+  slice works from reaches `main` only with slice 1's pull request (#76).
+  The branch name and the parent were the coordinating session's call; the
+  merge order is slice 1 first.
+- **Facts marked "not read" in the remark:** whether one OpenCode Go
+  subscription allows a second key (research.md Q2 states it was not read);
+  the vendor's own pages (the remark's retention and hosting quotes come
+  from adhd-relief's ADR-0025 and its research note as quoted in
+  research.md 4.3, not from the vendor); the real retention of GLM, which
+  is the vendor's statement ("Not used / 0 days"), not checked. The proxy
+  address is not named in the remark: it is the profile's (slice 5).
 
 ## Slice 3 — ADR 0010 (appetite 1 h)
 
@@ -641,3 +727,9 @@ session): 2026-10-05 23:16–23:25, no break counted. `make verify` ended
 VERIFY GREEN at 23:22 (601 passed, 15 skipped; `docs-links` and `markdownlint`
 red but report-only, `markdownlint` naming prompt lines 4 and 6 as before and
 no new line), before the findings rows were set to fixed.
+
+Slice 2 (appetite 30 min, plan 0.5 h): 2026-10-06 00:36–00:41, 5 min, no break
+counted. `make verify` ended VERIFY GREEN at 00:41 (603 passed, 15 skipped;
+`docs-links` and `markdownlint` red but report-only), with the entry committed
+in `835b71e`; this record and the planted faults follow it in a docs-only
+commit.
