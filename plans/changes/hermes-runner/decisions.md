@@ -1,6 +1,6 @@
 ---
 title: "Decisions — hermes-runner"
-status: draft
+status: accepted
 implementation_status: none
 date: 2026-10-05
 last_reviewed: 2026-10-05
@@ -221,3 +221,33 @@ uses that file's existing German keys.
   one-shot; the web backend; the write root's content; token lifetime;
   delivery beyond the pull request; whether the job prompt travels with the
   kit.
+
+## Addendum 2026-10-05: the maintainer's answers
+
+The maintainer answered the six questions one at a time in the Claude Code
+session on 2026-10-05. The questions were asked in German, shortened; the
+answer is recorded as the option the maintainer chose.
+
+1. **Q1 — (a) yes, plus a Coding Harness part.** adhd-relief's spike is the
+   shared proof for both repositories; the same afternoon at the laptop adds
+   a short Coding Harness part (its own user, the write boundary, web through
+   the proxy). No real job runs before it.
+2. **Q2 — GLM-5.3 through OpenCode Go**, through the shared proxy, with its
+   own entry in `model-endpoints.yaml` and its own key.
+3. **Q3 — two service users**, sharing only the pinned install and the
+   proxy; separate Hermes home, write root and keys.
+4. **Q4 — pull request required plus a green CI** on `main`: no direct push,
+   no force-push, no deletion, merge only through a pull request with a
+   green `verify`, no bypass. The maintainer sets it up in GitHub (if the
+   plan offers rulesets for a private repository; not verified).
+5. **Q5 — (c) run before PR #60, without a leak check.** Asked as "May the
+   scheduled job run before PR #60? Yes, before: faster, but repository text
+   would go to GLM unchecked; low residual risk because house rule 6 keeps
+   customer data out of Coding Harness, but unchecked." The maintainer chose
+   this against the recommendation (a). Consequence: the scheduled run does
+   not wait for PR #60; house rule 6 is checked when the note's pull request
+   is reviewed and merged, not before the text leaves.
+6. **Q6 — Hermes replaces "The repository in English" as a Now theme** in
+   `ROADMAP.md`; the translation moves to Next.
+
+All six questions are answered; phase 1a is closed.
