@@ -1,7 +1,7 @@
 ---
 title: "Spec — template-bundle"
 status: draft
-implementation_status: none
+implementation_status: partial
 date: 2026-09-30
 last_reviewed: 2026-09-30
 updated: 2026-10-05
@@ -13,7 +13,9 @@ provenance: ai-drafted-reviewed
 produced_by: {kind: llm-session, name: claude-code, version: "2026-09-30"}
 review: {status: pending, approved_by: null, approved_at: null}
 tags: [spec, templates, findings, adr, definition-of-done, design-phase, arc42]
-class: bounded
+class: feature
+change: template-bundle
+adr_question: {proposed: "no", answered_by: null, reason: "it writes down the forms of a spec, a findings file, a decision record, a design and an architecture description, and the design phase that decision D-14 set, and decides no architecture"}
 appetite: 4
 ---
 
@@ -43,6 +45,12 @@ above them. Decisions: `decisions.md`.
 > option 1, CC BY-SA 4.0 (Open decisions, `decisions.md` answer 9). Nothing
 > here takes effect before the maintainer merges the pull request
 > (`AGENTS.md`, house rule 8).
+>
+> **Amended again 2026-10-05, evening** (`decisions.md`, answers 10–12): the
+> class is `feature` and the answer to the ADR question is "no"; prompts
+> `03-plan.md` and `06-review.md` name `design.md` as an input (finding
+> 6-10), which departs from the protected areas below as they say; the box
+> check of the design template's test reads every line of the diagram (6-16).
 
 ## Problem
 
@@ -383,6 +391,9 @@ result looks like. Where a test is named, the plan names the file.
     anything but the eight lines pull request #60 removes there — the
     heading, its five-line paragraph and the blank line after each
     (command).
+    *Amended 2026-10-05 (repair round 3, finding 6-10):* that diff also
+    shows the one sentence that names `design.md` as an input, in the
+    opening paragraph; nothing else.
 
 28. **The note "Not all of it is here yet" no longer names the two
     templates.** The opening note of `docs/WORKFLOW.md` names neither
@@ -466,9 +477,17 @@ their wording and their numbers.
     phase 4 needs from the design, so that phase 4 still reads `plan.md` and
     `spec.md` only.
     *Refuted by:* no paragraph of the prompt naming phase 3, `design.md`,
-    `plan.md` and phase 4 together (test); `prompts/03-plan.md` or
-    `prompts/04-implement.md` edited for the design (the pull request's
-    file list).
+    `plan.md` and phase 4 together (test); `prompts/04-implement.md`
+    edited for the design, or `prompts/03-plan.md` edited for it beyond the
+    one sentence below (the pull request's file list).
+    *Amended 2026-10-05 (repair round 3, finding 6-10; the maintainer,
+    `decisions.md` answer 11):* a phase-3 session does not read the design
+    prompt, so `prompts/03-plan.md` also says, in one sentence, that the plan
+    is made from `design.md` as well when the change has one, and that what
+    phase 4 needs from it goes into `plan.md`; and `prompts/06-review.md`
+    names `design.md` on its Input line, with the question ADR 0009 leaves to
+    the phase-6 reviewer (tests `test_plan_prompt_names_the_design_as_an_input`
+    and `test_review_prompt_names_the_design_as_an_input`).
 
 ### The design template
 
@@ -647,7 +666,8 @@ their wording and their numbers.
     --name-only` reports as conflicting for this pull request's head and
     #60's head, less those it reports for `origin/main` and #60's head, are
     only `docs/WORKFLOW.md` (the opening note, the routing table of §3, §4),
-    `scripts/kit/probe.py` (the prompt entries, the cap) and
+    `scripts/kit/probe.py` (the prompt entries, the cap),
+    `prompts/06-review.md` (the Input line, one hunk; repair round 3) and
     `plans/INDEX.md`; resolved as `plan.md` says, `tests/test_templates.py`
     passes on the merged tree.
     *Refuted by:* another file in that difference, or in one of those three
@@ -664,7 +684,11 @@ their wording and their numbers.
     `findings.md` row 6-11): the refutation keeps "hunk", which the first
     amendment dropped without a reason; at `8822677` the merged tree has 3
     hunks in `docs/WORKFLOW.md`, 2 in `scripts/kit/probe.py` and 1 in
-    `plans/INDEX.md`, the ones named above.
+    `plans/INDEX.md`, the ones named above. Amended a third time 2026-10-05
+    (repair round 3, finding 6-10): `prompts/06-review.md` is the fourth
+    file, with one hunk, where #60's Model lines meet this change's Input
+    line; and `plans/INDEX.md` now conflicts for `origin/main` as well, so it
+    is no longer in the difference (`plan.md`, "Repair round 3").
 
 65. **ADR 0009 merges before this change.** When this pull request is
     merged, the merge commit of ADR 0009's pull request is an ancestor of
@@ -750,9 +774,13 @@ This change must not touch:
 - **The "Required sections" list of `prompts/02-spec.md`.** Pull request #60
   rewrites its acceptance-criteria bullet, and a test on that branch holds
   the new text; the reference to the template goes elsewhere in the prompt.
-- **`prompts/06-review.md`.** Pull request #60 rewrites the paragraph that
-  names the findings template; on this branch the name becomes true without
-  an edit.
+- **`prompts/06-review.md` beyond its Input line.** Pull request #60
+  rewrites the paragraph that names the findings template; on this branch the
+  name becomes true without an edit. One departure, repair round 3 (finding
+  6-10, the maintainer, `decisions.md` answer 11): the Input line names
+  `design.md` as an input when the change has one, because ADR 0009 makes the
+  delta's truth the phase-6 reviewer's question. #60 rewrites the lines
+  above it, so the trial merge shows one hunk there (criterion 64).
 - **`docs/WORKFLOW.md` beyond** the opening note, the plan-marking
   paragraph of §4 and the first sentence of the paragraph after it (repair
   round 1, finding 6-7), the 2b row of §2's phase table, the 2b row of §3's
@@ -773,8 +801,9 @@ This change must not touch:
 - **`templates/handover.md` and `templates/gate-record.yaml`.**
 - **Every other change folder** under `plans/changes/`, active or archived.
 - **`.github/`, `prompts/04-implement.md` and `prompts/07-commit.md`** — the
-  parallel change `adhd-frame` edits them; `prompts/03-plan.md` loses only
-  its markings section.
+  parallel change `adhd-frame` edits them; `prompts/03-plan.md` loses its
+  markings section and gains one sentence that names `design.md` as an input
+  (repair round 3, finding 6-10).
 - **The gate scripts, `decisions/gates.yaml` and
   `scripts/export/manifest.yaml`** — no gate is added or changed, and the
   export manifest already carries `templates/`; and **`scripts/kit/probe.py`
@@ -788,13 +817,18 @@ This change must not touch:
 - Moved in the same pull request: the five templates (`templates/spec.md`
   with the Non-goals sentence of criterion 53) and their test;
   `prompts/02b-design.md`; `prompts/02-spec.md` (the reference);
-  `prompts/03-plan.md` (the markings section removed); `docs/WORKFLOW.md`
+  `prompts/03-plan.md` (the markings section removed, one sentence naming
+  `design.md` added); `prompts/06-review.md` (the Input line);
+  `docs/WORKFLOW.md`
   (the opening note, the plan-marking paragraph of §4, the 2b rows, the
   D-14 paragraph); `AGENTS.md` (the 2b row); `scripts/kit/manifest.yaml`;
   `scripts/kit/probe.py` (one entry, the cap); `plans/INDEX.md` regenerated.
   No ADR and no model moves: ADR 0009 is its own pull request.
-- The protected areas above untouched and nothing of the not-now list built,
-  shown by the pull request's file list.
+- The protected areas above untouched, apart from the departures they name
+  themselves (the first sentence after the plan-marking paragraph of §4,
+  finding 6-7; the Input line of prompt 06 and one sentence of prompt 03,
+  finding 6-10), and nothing of the not-now list built, shown by the pull
+  request's file list and its body.
 - Bead: the last commit carries `Closes-Bead: coding-harness-9qo` only once
   the tracker writer has cut the bead to this scope; until then no closing
   trailer, and the pull request body says so.
@@ -805,8 +839,8 @@ This change must not touch:
   pull request #60 (criterion 64); ADR 0009's merge commit as an ancestor
   (criterion 65).
 - The pull request body lists the maintainer's answers of `decisions.md`
-  and what is still provisional — the class with the spec review's verdict
-  `feature`, and the scope of the appetite — together with the answer on the
+  (the class `feature` and the ADR answer "no" included) and what is still
+  provisional — the scope of the appetite — together with the answer on the
   arc42 skeleton's licence, naming the skeleton's licence for the kit's
   licence work (bead coding-harness-lir); and it names the overlaps with
   pull request #60 and how the later merge resolves each (the `[DETAIL]`s
@@ -815,11 +849,11 @@ This change must not touch:
 ## Open decisions
 
 None open: the one question of the amendment of 2026-10-05, the licence of
-the arc42 skeleton, was answered by the maintainer the same day. Two
-provisional answers await the maintainer at the merge: the class, and the
-scope of the appetite.
+the arc42 skeleton, was answered by the maintainer the same day, and so was
+the class (`feature`, with the ADR answer "no"). One provisional answer
+awaits the maintainer at the merge: the scope of the appetite.
 
-### [DECISION] — The class of this change (provisional answer: `bounded`)
+### [DECISION] — The class of this change (answered 2026-10-05: `feature`)
 
 The class decides whether the maintainer is asked the ADR question for this
 change. Research recommended `feature` as "likely" (`research.md` section 7,
@@ -905,6 +939,15 @@ review's path, which needs the maintainer only at the end:
    `make verify` goes green (criterion 30).
 4. If the maintainer confirms `bounded` instead, one commit removes the
    three keys, and the gate is green without an answer.
+
+**Answer, 2026-10-05 (evening):** the maintainer settled it as `feature`,
+and answered the ADR question for this change "no" because the decisions
+behind it are already made — D-14, ADR 0009 and his answers of 2026-10-05 —
+and this change implements them (`decisions.md`, answer 12). The header
+carries `class: feature`, `change: template-bundle` and the proposal below;
+the answer file is `decisions/answers/template-bundle/adr.yaml`, recorded
+with `python3 scripts/harness.py decide adr … --stated-in …`. The pull
+request is a decision pull request (step 3 above).
 
 **Amendment, 2026-10-05.** The widened scope leaves the reading as it was:
 the design phase and the skeleton set how later changes are designed and
@@ -1099,8 +1142,9 @@ Each of these is reversible and binds nothing beyond this change.
   which has no plan-marking paragraph, and replace its words "because the
   findings template is not in this repository yet" with a pointer to
   `templates/findings.md` (the one §4 edit this change then makes);
-  `prompts/06-review.md` — #60's text; `scripts/kit/manifest.yaml` — keep
-  both sets of lines.
+  `prompts/06-review.md` — #60's Model lines with this change's Input line
+  (one hunk; repair round 3 below); `scripts/kit/manifest.yaml` — keep both
+  sets of lines.
 
 ### `[DETAIL]` — decided in the amendment of 2026-10-05, with the reason
 
@@ -1137,7 +1181,9 @@ Each of these is reversible and binds nothing beyond this change.
   (`research.md` section 8, correction 2).
 - **The plan takes the design in by the design prompt** (criterion 38), so
   prompts 03, 04 and 07 stay as they are: 04 and 07 are protected, and 03
-  changes only by the markings section.
+  changes only by the markings section. *Amended 2026-10-05 (repair round 3,
+  finding 6-10):* the design prompt is not read by a phase-3 session, so
+  prompt 03 and prompt 06 each carry one sentence of their own.
 - **One test file.** The new cases join `tests/test_templates.py`, which the
   kit carries already.
 - **arc42's titles in English, numbered 1 to 12**, as arc42 9.0 numbers
