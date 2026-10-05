@@ -12,8 +12,9 @@ of plans/changes/research-currency/spec.md).
     start with `_` (the index is a reading map, not a source review);
   * the review date is the top-level `last_reviewed:` and nothing else — `updated:`,
     `created:`, the provenance block and the git history are never consulted;
-  * a note whose review date cannot be used (no header, no key, empty, not a date,
-    later than tomorrow, not UTF-8) is due, first in the order, with the reason;
+  * a note whose review date cannot be used (no header, no key, a key that stands twice,
+    empty, not a date, later than tomorrow, not UTF-8) is due, first in the order, with
+    the reason;
   * the order is: unusable dates first, then oldest first, ties by path — the same
     tree and the same day of the run give the same bytes;
   * the run only reads. It needs no git, no network and no tracker; its one write is
@@ -59,6 +60,9 @@ _ISO = re.compile(r"\d{4}-\d{2}-\d{2}")
 _TIMESTAMP_TAG = "tag:yaml.org,2002:timestamp"
 _REASON_WIDTH = 80
 
+_NOT_A_MAPPING = "frontmatter is not a YAML mapping"
+_TWICE = "last_reviewed appears more than once (no way to tell which one is meant)"
+
 
 class CannotMeasure(Exception):  # noqa: N818 — a verdict, not an error class
     """Nothing was measured: an empty list here would claim a measurement of nothing."""
@@ -94,17 +98,37 @@ def _shown(value: object) -> str:
     return text if len(text) <= _REASON_WIDTH else text[: _REASON_WIDTH - 1] + "…"
 
 
+def _read_header(source: str) -> tuple[object, int]:
+    """The header as PyYAML builds it, and how often `last_reviewed` stands at its top level.
+
+    The count comes from the node tree, before the mapping is built: a mapping keeps the
+    last of two equal keys without a word, and only a key at the top level is the review date.
+    """
+    loader = _Loader(source)  # a SafeLoader subclass, as `yaml.load` would use it
+    try:
+        node = loader.get_single_node()
+        if node is None:
+            return None, 0
+        keys = [key for key, _ in node.value] if isinstance(node, yaml.MappingNode) else []
+        times = sum(isinstance(key, yaml.ScalarNode) and key.value == "last_reviewed" for key in keys)
+        return loader.construct_document(node), times
+    finally:
+        loader.dispose()
+
+
 def review_date(text: str, today: date) -> tuple[date | None, str | None]:
     """`(the review date, None)` or `(None, why there is none)` for one note's text."""
     block = _BLOCK.match(text)
     if not block:
         return None, "no frontmatter"
     try:
-        header = yaml.load(block.group(1), Loader=_Loader)  # noqa: S506 — a SafeLoader subclass
+        header, times = _read_header(block.group(1))
     except (yaml.YAMLError, ValueError):
-        return None, "frontmatter is not a YAML mapping"
+        return None, _NOT_A_MAPPING
     if not isinstance(header, dict):
-        return None, "frontmatter is not a YAML mapping"
+        return None, _NOT_A_MAPPING
+    if times > 1:
+        return None, _TWICE
     if "last_reviewed" not in header:
         return None, "no last_reviewed"
     value = header["last_reviewed"]

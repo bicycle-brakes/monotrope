@@ -228,6 +228,9 @@ def test_the_threshold_is_one_named_constant(tmp_path: Path, monkeypatch: pytest
 NOT_A_MAPPING = "frontmatter is not a YAML mapping"
 
 
+TWICE = "last_reviewed appears more than once (no way to tell which one is meant)"
+
+
 def _not_a_date(shown: str) -> str:
     return f"last_reviewed '{shown}' is not a YYYY-MM-DD date"
 
@@ -241,6 +244,18 @@ UNUSABLE: list[tuple[str, str | bytes, str]] = [
     ("impossible-date-by-tag", header("last_reviewed: !!timestamp 2026-02-30"), NOT_A_MAPPING),
     # `created:` stands in the header so that a reader that falls back to it is caught.
     ("no-key", header("title: A note", f"updated: {ago(1)}", f"created: {ago(1)}"), "no last_reviewed"),
+    # Two top-level `last_reviewed:` keys: PyYAML would keep the last without a word, so the
+    # position in the file would decide which date counts (`check_frontmatter_current.py` refuses
+    # a doubled `updated:` the same way).
+    ("doubled-key", header("last_reviewed: 2026-12-01", "last_reviewed: 2026-01-01"), TWICE),
+    ("doubled-key-reversed", header("last_reviewed: 2026-01-01", "last_reviewed: 2026-12-01"), TWICE),
+    ("doubled-key-same-date", header("last_reviewed: 2026-12-01", "title: A note", "last_reviewed: 2026-12-01"), TWICE),
+    ("doubled-key-one-quoted", header("last_reviewed: 2026-12-01", '"last_reviewed": 2026-01-01'), TWICE),
+    (
+        "doubled-key-in-a-flow-mapping",
+        "---\n{last_reviewed: 2026-12-01, last_reviewed: 2026-01-01}\n---\n\nBody\n",
+        TWICE,
+    ),
     ("empty-value", header("last_reviewed:"), "last_reviewed is empty"),
     ("empty-string", header("last_reviewed: ''"), "last_reviewed is empty"),
     ("null-value", header("last_reviewed: null"), "last_reviewed is empty"),

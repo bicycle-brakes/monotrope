@@ -83,6 +83,16 @@ means a tree the test builds in a temporary directory.
    *Refuted by:* any of these fixture notes not due, due without its reason,
    or ending the run; a note dated the day after being due.
 
+   *Amendment 2026-10-05 (repair round 1, finding F-3; appended, nothing
+   renumbered):* a header with two top-level `last_reviewed:` keys is one more
+   case of the list: the note is due, with a reason saying the key stands twice
+   — whichever the dates, whichever the order, since which of the two is meant
+   cannot be told (`scripts/check_frontmatter_current.py` refuses a doubled
+   `updated:` for the same reason). Only a key at the top level counts: a
+   `last_reviewed:` inside the `review:` block is not the review date.
+   *Also refuted by:* a fixture note with two top-level `last_reviewed:` keys
+   that is not due, or whose date is the first or the last of the two.
+
 5. **The order.** Notes with an unusable review date come first, then the
    others by review date, oldest first; ties, and the unusable ones among
    themselves, by path. The same tree and the same day of the run give
