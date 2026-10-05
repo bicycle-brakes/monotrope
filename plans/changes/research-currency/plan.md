@@ -290,6 +290,106 @@ tests named are the first three that failed.
 | 55 | 14 | manifest | kit rule of the script: `rolle: mechanismus` → `bestand` | 1 | `test_the_kit_carries_the_script_and_its_test` |
 | 56 | 14 | manifest | kit rule of the test: `rolle: mechanismus` → `bestand` | 1 | `test_the_kit_carries_the_script_and_its_test` |
 
+## Repair round 1
+
+The maintainer decided on 2026-10-05 to fix all five rows of `findings.md`
+in this round (`decisions.md`, addendum of the same day). Each row is fixed
+in a commit of its own, on `feat/research-currency`; no criterion changed
+except one amendment (F-3, below). The files touched are the script, its
+test file and this folder; `scripts/ci_gates.py`, `tests/test_ci.py`,
+`scripts/kit/probe.py`, `decisions/gates.yaml`, the kit manifest and every
+note stay as "Not touched" says.
+
+| Row | Commit | What changed |
+| --- | --- | --- |
+| F-1 | `7813046` | `_order_tree` gains `1-nokey.md`, an unusable note whose path sorts before `a-empty.md` and whose reason ("no last_reviewed") sorts after that note's ("last_reviewed is empty"). No code change. |
+| F-2 | `7813046` | The `no-key` case carries `created:` beside `updated:`. No code change. |
+| F-3 | `4c39587` | `_read_header` counts the top-level `last_reviewed` keys in the YAML node tree before the mapping is built; more than one gives the reason below. `spec.md` criterion 4 gains the case as a dated amendment, appended, nothing renumbered. |
+| F-4 | `27840f0` | Two reasons now say what is wrong (below). |
+| F-5 | `c8c58b6` | `RecursionError` and `MemoryError` while reading a header give that note a reason; `_shown` looks at a non-text value through `reprlib` (3 levels, 6 items) instead of `str()`. |
+
+The reasons this round adds, in these words (the plan's list above is the
+state of phase 4):
+
+- `last_reviewed appears more than once (no way to tell which one is meant)` —
+  two top-level keys, whichever the dates and the order, also in a flow
+  mapping and with one key quoted; a key inside the `review:` block is not
+  top-level and does not count.
+- `last_reviewed '2026-09-16' has whitespace around the date` — a quoted
+  value that is a `YYYY-MM-DD` date once stripped. Spaces round anything
+  else keep `... is not a YYYY-MM-DD date`.
+- `last_reviewed is a !!timestamp-tagged value, not a plain YYYY-MM-DD date`
+  — the loader builds a `date` only for an explicit `!!timestamp` tag.
+  The tag-forced impossible date (`!!timestamp 2026-02-30`) keeps
+  `frontmatter is not a YAML mapping` (fault 11 above).
+- `frontmatter is nested too deeply to read` (`RecursionError`) and
+  `frontmatter is too large to read` (`MemoryError`).
+
+`[DETAIL]`s this round decided, each reversible and covered by a test:
+
+- **F-5 caps the rendered size; it does not reject aliases or anchors.** An
+  anchor in an unrelated field of a header stays harmless and the note stays
+  usable; criterion 4 does not ask for refusing them. The alias is not
+  expanded either: PyYAML builds a shared object once, so only `str()` of the
+  value was the cost.
+- **No net around the whole note for any other exception.** `RecursionError`
+  and `MemoryError` are the two a header's *content* can cause. An
+  unexpected exception elsewhere is a bug, and the run should show it.
+- **The tests stay small.** 1,200 nested `[` is 1.2 KB; the alias bomb of the
+  test is five levels of ten (100,000 items once expanded, a source under
+  400 bytes, about 6 MB for `str()` of it, under 30 KB measured now). The
+  finding's seven levels (626 MB for `str()`) are not in CI; run by hand once
+  on `c8c58b6` through the command line with a deep note beside it: exit 0,
+  0.4 s, 22 MB peak.
+
+### Planted faults of the round
+
+Each fault planted on its own on the commit that fixes its row, the suite run,
+the file restored with `git checkout`. **Before** is the suite as it was
+before that row's commit (68 tests for F-1 and F-2, 73 before F-4, 79 before
+F-5, with the fault planted in the code of that row's commit); **after** is
+the suite of that row's commit — 68, 73, 79 and 84 tests, 84 at the head. The
+replay is the one above, `git show <parent>:tests/test_research_currency.py`
+for the "before" column.
+
+| # | Row | Fault | Before (red) | After (red) | Tests that went red |
+| --- | --- | --- | --- | --- | --- |
+| 57 | F-1 | sort key in `measure` gains the reason before the path: `(n.problem is None, n.last_reviewed or date.min, n.problem or '', n.path)` — the reviewer's fault | 0 of 68 | 1 | `test_unusable_first_then_oldest_then_path` |
+| 58 | F-2 | `review_date` falls back to `created:` when `last_reviewed:` is missing (`header.get("last_reviewed", header.get("created"))`, "no last_reviewed" only when both are missing) — the reviewer's fault | 0 of 68 | 1 | `test_an_unusable_review_date_is_due_with_its_reason[no-key]` |
+| 59 | F-3 | no check for a doubled key: `if times > 1: return None, _TWICE` removed, the last key wins (the code as it was) | 0 of 68 | 5 | the five `doubled-key*` cases of `test_an_unusable_review_date_is_due_with_its_reason` |
+| 60 | F-3 | `times > 1` → `times > 2` | 0 of 68 | 5 | the same five |
+| 61 | F-3 | the keys are counted as `source.count("last_reviewed:")`: a nested `review:` key counts | 1 of 68 | 2 | `test_the_review_date_is_last_reviewed_and_nothing_else`, `…[doubled-key-one-quoted]` |
+| 62 | F-3 | the keys are counted as column-0 lines `^last_reviewed:`: a flow mapping and a quoted key are missed | 0 of 68 | 2 | `…[doubled-key-one-quoted]`, `…[doubled-key-in-a-flow-mapping]` |
+| 63 | F-4 | the whitespace branch removed: `' 2026-09-16 '` reads "is not a YYYY-MM-DD date" (the code as it was) | 0 of 73 | 3 | `…[padded-date]`, `…[padded-leading]`, `…[padded-newline]` |
+| 64 | F-4 | `value != value.strip()` → `value != value.lstrip()`: only leading spaces noticed | 0 of 73 | 1 | `…[padded-newline]` |
+| 65 | F-4 | `value != value.strip()` → `value != value.rstrip()`: only trailing spaces noticed | 0 of 73 | 1 | `…[padded-leading]` |
+| 66 | F-4 | the whitespace branch without the `_ISO.fullmatch` test: `' soon '` gets "has whitespace around the date" | 0 of 73 | 1 | `…[padded-word]` |
+| 67 | F-4 | the tag branch removed: `!!timestamp 2026-09-16` reads "is not a YYYY-MM-DD date" (the code as it was) | 0 of 73 | 2 | `…[tagged-date]`, `…[tagged-datetime]` |
+| 68 | F-4 | `isinstance(value, date)` → `type(value) is date`: a tagged value with a time is missed | 0 of 73 | 1 | `…[tagged-datetime]` |
+| 69 | F-4 | the tag branch for every non-text value: a number, a boolean, a list read as "timestamp-tagged" | 4 of 73 | 4 | `…[compact-date]`, `…[a-number]`, `…[a-boolean]` (+1); already held before the round |
+| 70 | F-5 | the `RecursionError` branch removed: 1,200 nested `[` end the run with a traceback (the code as it was) | 0 of 79 | 3 | `…[nested-too-deeply]`, `…[nested-too-deeply-closed]`, `test_a_pathological_header_does_not_end_the_run` |
+| 71 | F-5 | `except RecursionError` → `except KeyError` | 0 of 79 | 3 | the same three |
+| 72 | F-5 | a `RecursionError` gets the reason "frontmatter is not a YAML mapping" | 0 of 79 | 3 | the same three |
+| 73 | F-5 | the `MemoryError` branch removed | 0 of 79 | 1 | `test_a_header_too_large_to_read_is_due_with_its_reason` |
+| 74 | F-5 | `_shown` returns `str(value)`: an alias bomb is expanded to describe it (the code as it was) | 0 of 79 | 1 | `test_an_alias_bomb_is_not_expanded_to_describe_it` |
+| 75 | F-5 | `maxlevel=3` → `maxlevel=100` in `_GLIMPSE`: the depth of the look is no longer bounded | 0 of 79 | 1 | `test_an_alias_bomb_is_not_expanded_to_describe_it` |
+
+**19 faults, 19 red on the round's suite; 17 of them were green on the suite
+before the round** (rows 61 and 69 were red already). One variant survived and
+is no fault: `maxlist=6` → `maxlist=10**9` alone stays green, because
+`maxlevel=3` bounds the look on its own (at most 1,000 items for a bomb of
+fan-out ten); fault 75 is the one that unbounds it.
+
+### Evidence of the round
+
+On `c8c58b6`, 2026-10-05: `GIT_CONFIG_COUNT=1 GIT_CONFIG_KEY_0=commit.gpgsign
+GIT_CONFIG_VALUE_0=false make verify` ended `VERIFY GREEN — every local gate
+of the 'verify' job passed`; the suite is 600 passed, 15 skipped (84 of them
+in `tests/test_research_currency.py`, 68 before the round). `docs-links` and
+`markdownlint` are report-only gates and red, as before. Criterion 15 re-run:
+exit 0, 15 notes, 0 due, the oldest
+`docs/research/2026-09-16-review-corpus-vs-running-workflow.md`.
+
 ## Evidence
 
 Criterion 15, run on 2026-10-05 at 19:22 on `c1884d4` plus the edits of the
@@ -326,3 +426,7 @@ unchanged: `git diff origin/main` shows no change in `scripts/ci_gates.py`,
 Appetite: 2 h of phase 4, one repair round included. Read from `date`.
 
 - 2026-10-05 19:08–19:23, 15 min
+
+Repair round 1 (appetite 45 min, set by the dispatching session; not reached):
+
+- 2026-10-05 20:17–20:31, 14 min, no break
