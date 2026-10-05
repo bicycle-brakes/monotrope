@@ -394,7 +394,7 @@ def _no_gh_on_path(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> Api:
 def _slow_gh_on_path(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> Api:
     """The real `gh_api`, a `gh` that never answers, and a limit of one second."""
     gh = tmp_path / "gh"
-    gh.write_text("#!/bin/sh\nexec sleep 5\n", encoding="utf-8")
+    gh.write_text("#!/bin/sh\nexec /bin/sleep 5\n", encoding="utf-8")
     gh.chmod(0o755)
     monkeypatch.setenv("PATH", str(tmp_path))
     monkeypatch.setitem(globals(), "GH_TIMEOUT_SECONDS", 1)
@@ -408,31 +408,38 @@ def _failing(path: str, code: int, text: str) -> Api:
 
 
 @pytest.mark.parametrize(
-    ("case", "step"),
+    ("case", "step", "cause"),
     [
-        pytest.param("no-gh", REPO_PATH, id="no-gh"),
-        pytest.param("no-answer", REPO_PATH, id="no-answer"),
-        pytest.param("exit-1", REPO_PATH, id="exit-1"),
-        pytest.param("not-json", REPO_PATH, id="not-json"),
-        pytest.param("empty-list-for-the-repository", REPO_PATH, id="empty-list-for-the-repository"),
-        pytest.param("no-default-branch", REPO_PATH, id="no-default-branch"),
-        pytest.param("rules-exit-1", f"{REPO_PATH}/rules/branches/main", id="rules-exit-1"),
+        pytest.param("no-gh", REPO_PATH, "gh is not installed", id="no-gh"),
+        pytest.param("no-answer", REPO_PATH, "did not answer", id="no-answer"),
+        pytest.param("exit-1", REPO_PATH, "gh auth login", id="exit-1"),
+        pytest.param("not-json", REPO_PATH, "not JSON", id="not-json"),
+        pytest.param(
+            "empty-list-for-the-repository", REPO_PATH, "no default_branch", id="empty-list-for-the-repository"
+        ),
+        pytest.param("no-default-branch", REPO_PATH, "no default_branch", id="no-default-branch"),
+        pytest.param("rules-exit-1", f"{REPO_PATH}/rules/branches/main", "HTTP 403", id="rules-exit-1"),
         pytest.param(
             "rules-exit-1-with-a-valid-answer",
             f"{REPO_PATH}/rules/branches/main",
+            "exit 1",
             id="rules-exit-1-with-a-valid-answer",
         ),
-        pytest.param("rules-not-a-list", f"{REPO_PATH}/rules/branches/main", id="rules-not-a-list"),
-        pytest.param("rules-with-a-string", f"{REPO_PATH}/rules/branches/main", id="rules-with-a-string"),
-        pytest.param("ruleset-exit-1", f"{REPO_PATH}/rulesets/{RULESET_ID}", id="ruleset-exit-1"),
-        pytest.param("ruleset-not-json", f"{REPO_PATH}/rulesets/{RULESET_ID}", id="ruleset-not-json"),
-        pytest.param("ruleset-a-list", f"{REPO_PATH}/rulesets/{RULESET_ID}", id="ruleset-a-list"),
+        pytest.param(
+            "rules-not-a-list", f"{REPO_PATH}/rules/branches/main", "not a list of rules", id="rules-not-a-list"
+        ),
+        pytest.param(
+            "rules-with-a-string", f"{REPO_PATH}/rules/branches/main", "not a list of rules", id="rules-with-a-string"
+        ),
+        pytest.param("ruleset-exit-1", f"{REPO_PATH}/rulesets/{RULESET_ID}", "HTTP 404", id="ruleset-exit-1"),
+        pytest.param("ruleset-not-json", f"{REPO_PATH}/rulesets/{RULESET_ID}", "not JSON", id="ruleset-not-json"),
+        pytest.param("ruleset-a-list", f"{REPO_PATH}/rulesets/{RULESET_ID}", "not a ruleset", id="ruleset-a-list"),
     ],
 )
 def test_an_unreachable_api_is_not_a_pass(
-    case: str, step: str, monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+    case: str, step: str, cause: str, monkeypatch: pytest.MonkeyPatch, tmp_path: Path
 ) -> None:
-    """Every way the look can fail is one finding that names the step."""
+    """Every way the look can fail is one finding that names the step and the cause."""
     rules_path = f"{REPO_PATH}/rules/branches/main"
     ruleset_path = f"{REPO_PATH}/rulesets/{RULESET_ID}"
     apis: dict[str, Callable[[], Api]] = {
@@ -454,6 +461,7 @@ def test_an_unreachable_api_is_not_a_pass(
     assert len(findings) == 1
     assert findings[0].startswith("not measured:")
     assert step in findings[0]
+    assert cause in findings[0]
 
 
 def test_a_missing_gh_says_so(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
