@@ -4,7 +4,7 @@ category: architecture
 status: proposed
 created: 2026-09-17
 last_reviewed: 2026-09-19
-updated: 2026-09-29
+updated: 2026-10-05
 owner: framework-architect
 provenance: ai-drafted-reviewed
 produced_by:
@@ -26,6 +26,17 @@ tags: [architecture, target, workflow, omnigent, parallelism]
 > sessions run from then on, each in a worktree of its own. Where this
 > document describes M0 — including "Read this first" below — it records
 > the earlier design.
+
+> **Changed, 2026-10-05.**
+> [ADR 0009](../adr/0009-architecture-delta-in-design-md.md) (accepted by
+> the merge of its pull request) amends D-15 and O-3: an
+> Architectural change shows its architecture delta in `design.md` — a
+> Mermaid flowchart plus lists of the elements and relationships it adds,
+> changes and removes — and the kit ships no model as code and no Node.js
+> dependency for now. O-3's ADR duty stays. LikeC4 remains the upgrade
+> path, reopened by a revisit trigger. Where this document names a LikeC4
+> specification, a `likec4 build` gate or a model diff, it records the
+> earlier design.
 
 > **Read this first.** One direction drives this document: Omnigent
 > coordinates parallel coding from the first proof of concept (M0).
@@ -135,12 +146,12 @@ first: everything not marked **Amend** carries forward unchanged.
 | D-12 — classes | Retain | `class` is a validated frontmatter field: Spike, Bounded, Feature or Architectural; escalation is upward with a recorded reason. |
 | D-13 — cross-vendor entry | Retain | Before M2: at least three full seven-phase runs with metrics in coding-harness, the lakeswitch disclosure decision, a green leak check in every qualification run, and the foreign endpoint's declared residency. Implementation cost is measured, not an activation switch. |
 | D-14 — design | Retain | Phase 2b is mandatory for Architectural, optional for Feature with a stated omission reason, absent for Bounded and Spike. |
-| D-15 — model as code | Retain | The kit ships LikeC4 with a specification defining system/container/component/code, arc42 and MADR templates, and a `likec4 build` gate for applicable architecture changes. |
+| D-15 — model as code | Amend | The kit ships LikeC4 with a specification defining system/container/component/code, arc42 and MADR templates, and a `likec4 build` gate for applicable architecture changes. Amended by ADR 0009 (2026-10-05): no model as code, no LikeC4 specification, no build gate and no Node.js dependency now; an Architectural change shows its architecture delta in `design.md` — a Mermaid flowchart plus lists of the elements and relationships added, changed or removed. LikeC4 stays the upgrade path, reopened by any of the three revisit triggers in ADR 0009. The arc42 and MADR templates are not amended. |
 | D-16 — routing | Retain | Instance `model-routing.yaml` resolves phase requirements to declared endpoints through a kit schema/test; the retained initial example is Anthropic-only. No fixed model names in doctrine. |
 | D-17 — public readiness | Retain timing; amend naming boundary | Apache-2.0, onboarding and the public scan begin with foundational work. The scan permits documented tool names. Publication still requires at least 95% kit-probe success in both instances, measured M2 entry runs, and a first Bounded change completed by an unfamiliar reader. |
 | O-1 — Definition of Done | Retain | List change-specific documents, models, ADRs, protected non-goals, closure trailer and special runs; the only gate instruction is `verify green`, never a copied gate list. |
 | O-2 — lakeswitch entry | Retain | The instance joins the Omnigent topology at M2 after its own gates and disclosure condition hold; its additive-runtime ADR remains. |
-| O-3 — architecture detection | Retain | Architectural changes require an ADR and model diff; module creation/deletion/rename under `src/` or `spec/` in another class produces DRIFT requiring a class check. |
+| O-3 — architecture detection | Amend | Architectural changes require an ADR and model diff; module creation/deletion/rename under `src/` or `spec/` in another class produces DRIFT requiring a class check. Amended by ADR 0009 (2026-10-05): the ADR duty stays; the model diff becomes a filled "Architecture delta" section in the change's `design.md`; the DRIFT rule is unchanged. |
 | O-4 — gate schema | Retain | Start from lakeswitch's schema: aligned `entry`, advisory/report/block vocabulary, instance floor, `mutation_test`, and reporting schedule/reason. Do not invent a competing format. |
 
 The two scaling axes also remain: a second collaborator activates the relevant

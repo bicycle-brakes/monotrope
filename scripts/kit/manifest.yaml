@@ -304,6 +304,9 @@ rules:
   - prefix: CHANGELOG.md
     rolle: bestand
     reason: "Verlauf dieses Repos"
+  - prefix: ROADMAP.md
+    rolle: bestand
+    reason: "the roadmap of this repository (trial, 2026-10-05); a kit template only after it stays true through two handovers"
   - prefix: requirements-ci.txt
     rolle: bestand
     reason: "die Abhaengigkeiten dieses Repos fuer den CI-Lauf; das Zielrepo deklariert seine eigenen — die geruest-Rolle dafuer ist mit der Kopie gefallen (bead 1jg.3, AK-6)"
