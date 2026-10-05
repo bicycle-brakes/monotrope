@@ -1,0 +1,201 @@
+---
+title: "Findings — project-lock"
+category: findings
+created: 2026-10-06
+updated: 2026-10-06
+status: draft
+implementation_status: partial
+date: 2026-10-06
+last_reviewed: 2026-10-06
+supersedes: null
+superseded_by: null
+bead: coding-harness-ei0
+owner: Data Architect
+provenance: ai-drafted-reviewed
+produced_by: {kind: llm-session, name: claude-code, version: "2026-10-06"}
+review: {status: pending, approved_by: null, approved_at: null}
+tags: [findings, dependencies, lock, ci, python]
+---
+
+# Findings — project-lock
+
+Phase 6, round 1, on commit `a33e341` (branch `feat/project-lock`, eleven
+commits over `origin/main` at `d5813ec`), 2026-10-06. The reviewer ran on
+Opus 5.5 in a fresh context, wrote nothing but this file and the regenerated
+`plans/INDEX.md`, opened no pull request, wrote nothing to the tracker and
+recorded no ADR answer. Measured against `spec.md` (criteria 1–23, the
+non-goals and "What other work may rely on") and `decisions.md`; `plan.md`
+was read for its deviations, its planted faults and its evidence, not as the
+yardstick. `[DECISION] 1` (the class and its ADR answer) is open, so the
+gate `adr-answers` is red by design and is no row here. Phase 2a did not run
+for this change, so its three questions are answered below as rows of
+dimension `SPEC`. `templates/findings.md` does not exist on this branch; the
+columns are those of the earlier `findings.md` files.
+
+**Verdict: no BLOCKER, no MAJOR, no `[AMBIGUITY]`, no `[DIVERGENT]`.** Six
+MINOR, all open; none stops the pull request. The code does what the spec
+asks, live and locally: the check `verify` was red on every run of this
+branch, the lock installs and reproduces, and the suite passes under 3.11
+and 3.12. Four rows are holes in tests — two of them in the test that guards
+the plan's own pre-mortem, the summary check — where a planted fault leaves
+every test green. One row is a demand the travelling CI now makes on a kit
+instance, and one is a sentence in `docs/WORKFLOW.md` that names the wrong
+installer.
+
+| ID | Severity | Dimension | Origin | Where | Finding | Status |
+|---|---|---|---|---|---|---|
+| F-1 | MINOR | SPEC | base | `tests/test_ci.py`, `test_the_summary_check_passes_only_when_every_leg_passed` | The summary check's test feeds the step four results — `success`, `failure`, `cancelled`, `skipped` — so a step that refuses exactly the three bad ones passes it. Planted on `a33e341`: the step's `test … = success` becomes a loop that exits 1 only for `failure`, `cancelled` or `skipped`, `ci.yml` regenerated — no test goes red. GitHub hands out more than these four values. Measured in run 37375079831, attempt 1: the summary job's log (job 111987336085) reads `gates: abandoned` — the 3.11 leg got no runner and was cancelled at 21:33:51 UTC, the 3.12 leg had failed. Under the fault that run's `verify` would have been green. The code is right: `= success` made it red. The plan's evidence calls this "red on a `cancelled` leg"; the job saw `abandoned`, and the 3.12 leg was red as well, so that run does not show a cancelled leg on its own. One value outside the four (`abandoned`) in the test's list closes the hole. [criterion 7] | open |
+| F-2 | MINOR | SPEC | base | `tests/test_ci.py`, the same test; `scripts/ci_gates.py`, `_summary_job` and the matrix job's header | Nothing holds that the summary job's step, or the matrix job, carries no `continue-on-error`. Planted on `a33e341`, each alone, `ci.yml` regenerated: `continue-on-error: true` on the step "Every leg of the gates passed" — no test goes red; `continue-on-error: true` on the job `gates` — no test goes red. Under the first, the step fails on a red leg and the job `verify` still concludes `success` (GitHub's step-level `continue-on-error` keeps the job from failing): `main` loses its one guard, which is the failure `plan.md` names in its pre-mortem. What the second does to `needs.gates.result` was not measured live. `ci-drift` stops a hand edit of `ci.yml`; an edit of the generator is held by nothing. An assertion that neither the summary job nor its step nor the matrix job carries `continue-on-error` closes it. [criterion 7] | open |
+| F-3 | MINOR | MAINT | base | `tests/test_research_currency.py`, `test_the_gate_reports_in_the_drift_job_only`, its last line | The check that the research-currency gate is not a step of the verify job now reads the summary job. `jobs["verify"]` is the new job `verify`, whose only step has no `id`, so `GATE_ID not in {None}` holds whatever the generator does. Planted on `a33e341`: the generator also writes every drift gate into the matrix job, `ci.yml` regenerated — this test stays green (the fault is caught elsewhere, by `test_every_gate_step_runs_even_after_a_failing_gate`). Phase 4 moved two readers of `jobs.verify` in `tests/test_ci.py` to `ci_gates.MATRIX_JOB` (`plan.md`, deviations) and missed this third one in another file. Reading `ci_gates.MATRIX_JOB` there closes it. [a check over an empty set; no criterion of this spec] | open |
+| F-4 | MINOR | SPEC | base | `tests/test_ci.py`, `test_every_declared_interpreter_gets_a_leg`, `test_every_job_sets_a_declared_interpreter_before_installing`, `test_the_drift_job_runs_once_on_the_last_interpreter` | The matrix tests take their yardstick from `ci_gates.interpreters()`, the function under test, and read only the key `matrix.python`. Planted on `a33e341`, each alone, `ci.yml` regenerated: `interpreters()` returns the list reversed — no test goes red, although the drift job then runs under 3.11, the first declared interpreter, not the last, and the legs run newest first; the matrix gains `include: [{python: "3.13"}]` — no test goes red, although that adds a third leg under an interpreter `tools.python` does not declare. Both need an edit of the generator; `ci-drift` stops hand edits. Reading `tools.python` from the gate file in the tests, and refusing any matrix key besides `python`, closes both. [criteria 4, 6, 9] | open |
+| F-5 | MINOR | MAINT | base | `.github/workflows/ci.yml`, `scripts/ci_gates.py` (`INSTALL`), `scripts/verify_all.sh` — kit role `mechanismus`; `requirements-ci.txt`, `pyproject.toml`, `Makefile` — kit role `bestand` | The mechanism that travels with the kit now makes a demand on files that stay home. Every CI job installs `requirements-ci.txt` with `--require-hashes`, so a repository built from the kit needs its own lock with a hash on every package, transitive ones included; and the runner's message sends a session to `make venv`, a target of the `Makefile`, which does not travel. Before this change `ci.yml` installed three packages inline and asked nothing of an instance. Measured: LakeSwitch's own `requirements-ci.txt` (lakeswitch-ai `c02f11d`, 2026-09-23: six exact pins, no hashes) is refused by that install line in an empty Python 3.12 venv — "Hashes are required in --require-hashes mode, but they are missing", exit 1. Nothing breaks today: LakeSwitch builds clean-room and takes none of these files, and no repository takes the kit yet. The spec's sentence "LakeSwitch: nothing of this change travels" holds for the two new files and not for the install line and the hint. Recorded for the release builder (bead coding-harness-dj9), which will ship these files to an instance. ["What other work may rely on"] | open |
+| F-6 | MINOR | SPEC | base | `docs/WORKFLOW.md` §8, the `uv`, `mypy` row | The row now says "CI and the local runner install it with pip and never call uv". The local runner (`scripts/verify_all.sh`) installs nothing: it chooses an interpreter and exits 2 when none imports PyYAML. `make venv` installs the lock. The sentence follows the wording of criterion 23, so the spec carried the slip. A reader who takes it at its word expects `make verify` to build the environment. Naming `make venv` where the row names the runner closes it. [criterion 23] | open |
+| 2a-1 | — | SPEC | base | `spec.md`, criteria 7, 11 and 23 | *Where does the spec admit two plausible readings?* Three candidates, none a real fork. Criterion 7 lists three bad results, and GitHub produced a fourth live (`abandoned`, F-1); the refutation's own words — "whose step passes on a result other than `success`" — settle it: anything but `success` is red, and that is what was built. Criterion 11 says the runner "looks nowhere else", and phase 4 added a `PATH` prepend; the prepend comes after the choice and adds no candidate, so the criterion keeps its one reading. Criterion 23 says "the runner" installs the lock; only `make venv` installs anything, so only one reading builds — the slip is F-6. No `[AMBIGUITY]`. | answered |
+| 2a-2 | — | SPEC | base | `spec.md`, the `[DETAIL]`s; `plan.md`, deviations | *What is missing that would have to be decided while building?* Five places; phase 4 met three and recorded each as a deviation with its reason: the `PATH` for tools called by a bare name (`ruff` in `scripts/ramp_valves.py`), the `tools` block that hand-built gate files in `tests/test_gate_machinery.py` now need, and test names that keep the mutation ratchet honest. Two were not recorded: the third reader of the old job name (F-3) and the demand the travelling CI makes on a kit instance (F-5). The spec is also silent on `make venv` when the `python3` on `PATH` is not a declared interpreter; measured below, it fails loudly, so no row. | answered |
+| 2a-3 | — | SPEC | base | `spec.md`, criteria 1, 8, 16, 21–23 | *Which acceptance criterion cannot go red?* Criterion 16's refutation (the environment test after `make venv`) cannot see `--require-hashes`: pip checks hashes whenever the file carries one. Phase 4 found this (planted fault 44) and added `test_make_venv_installs_the_lock_in_hash_checking_mode`, which reads the recipe. Criterion 8 is held live only; measured here with one check run `verify` per suite on `14c8a05` and `a33e341`, both push suites — a pull-request suite does not exist yet. Criteria 1, 21, 22 and 23 are one-off reads; read again here, all hold. Criterion 7's test has the holes F-1 and F-2; criteria 4, 6 and 9 have F-4. | answered |
+
+Reviewer session: none — phase 2a did not run for this change (no 2a row in
+any of its artefacts); this review ran in a fresh session.
+
+## Checked without a finding
+
+- **The summary check `verify` (criteria 7, 8).** The job needs `gates`,
+  runs under `always() && (push || pull_request)`, has no `name:`, and its
+  one step runs `test "${{ needs.gates.result }}" = success`; `fail-fast` is
+  off. A skipped, cancelled, failed or `abandoned` aggregate makes it red,
+  and on a schedule or dispatch run it is skipped, as the old `verify` job
+  was. Live, read with `gh run view` and the jobs API on 2026-10-06: run
+  37375079831 attempt 1 (`c926bad`) — 3.11 leg `cancelled` without a runner,
+  3.12 leg `failure`, `verify` `failure` on `gates: abandoned`; attempt 2 —
+  3.11 leg `failure` (three collection errors and the `SyntaxError` the
+  plan's evidence names), `verify` `failure`; runs 37376858363 (`14c8a05`)
+  and 37377369829 (`a33e341`) — both legs fail in `adr-answers` alone, the
+  step "The test suite passes" succeeds in both, `verify` `failure` on
+  `gates: failure`. The ruleset `main` requires exactly the context `verify`
+  from GitHub Actions (integration 15368), read with `gh api` read-only.
+- **The generated workflow.** `python3 scripts/ci_gates.py --check-ci`:
+  "ci.yml ist genau die Ableitung der Gate-Datei.", exit 0; `--generate-ci`
+  diffed against `ci.yml`: identical; `--check-schema` exit 0. Every job that
+  installs runs `actions/setup-python@v5` first and then exactly
+  `python3 -m pip install --require-hashes -r requirements-ci.txt`; the
+  tracker hydration and the two marketplace actions install nothing with
+  pip. The drift job has no matrix and no `needs`, sets `"3.12"`, and keeps
+  its `schedule || workflow_dispatch` condition, so the nightly run does not
+  depend on the matrix job.
+- **The lock installs (criteria 5, 16).** In throwaway venvs under the
+  scratchpad, with `--require-hashes --no-cache-dir`: Python 3.11.9 (pip
+  24.1.2) and 3.12.4 (pip 24.0) each install the same 13 packages, exit 0;
+  `colorama` is skipped by its `win32` marker. The Linux wheels installed in
+  every leg of the three runs. `make venv` in a scratch clone builds `.venv`
+  and `tests/test_lock.py` passes 13 of 13; `git status` stays empty.
+- **The lock reproduces (criterion 3).** The command on line 2 of the lock,
+  re-run with uv 0.12.5 on a copy of `pyproject.toml` and `UV_NO_CACHE=1`,
+  writes the committed file byte for byte (sha256 `5e786a7e…aa24` both).
+  The header does not record uv's version; whether another uv writes the
+  same bytes was not measured.
+- **The runner (criteria 11–13) and the `PATH` prepend.** The runner
+  changes into the root, then takes `$PYTHON`, else `.venv/bin/python3`, else
+  `command -v python3`, each only if it imports `yaml`; none → exit 2 with
+  `make venv` and `$PYTHON` in the message. The prepend puts the chosen
+  interpreter's directory first only if it is not on `PATH` yet, so in CI
+  (setup-python's directory is on `PATH`) it does nothing. It does not hide
+  a missing tool: in a scratch `.venv` without `ruff`, with another
+  `ruff 0.9.10` first on `PATH`, `test_the_environment_matches_the_lock`
+  fails with "ruff 0.9.10 is locked but not installed; build the locked
+  environment: make venv …". It applies to any interpreter path, not only a
+  venv: `PYTHON=/opt/homebrew/bin/python3.11` from a shell without
+  `/opt/homebrew/bin` on `PATH` would put every Homebrew tool first (read,
+  not measured) — the maintainer's veto on the block stands as `plan.md`
+  asks; no row, because the spec does not forbid it and no gate misreads
+  through it. Because the runner replaces only the first `python3` of each
+  gate command, the prepend is also what makes a bare `python3` inside a
+  gate resolve to the chosen interpreter.
+- **The local gate.** `GIT_CONFIG_COUNT=1 … make verify` on `a33e341` with
+  the portfolio venv (pydantic 2.10.6) first on `PATH`: the runner took the
+  worktree's `.venv`; 623 passed, 15 skipped; every blocking gate green but
+  `adr-answers` ("project-lock: no answer …"), as expected while
+  `[DECISION] 1` is open; `docs-links` and `markdownlint` red, report-only;
+  no `.venv` path in any gate's output.
+- **Python 3.11 (criterion 18).** In a scratch clone, the whole suite under
+  3.11.9 and under 3.12.4: 609 passed, 25 skipped, and the same four
+  failures under both, all from the clone's unhydrated tracker.
+  `_GLIMPSE` set by attributes is accepted by both.
+- **The deviations.** (1) The renames: `tests/test_ci.py` names
+  `plans_registry.py` and, before this change, held no test whose name
+  matches `MUTATIONS_NAMEN`; a `goes_red` or `refuses` name there would have
+  made `test_the_mutation_ratchet_only_turns_one_way` demand that
+  `plans-registry` and `plans-registry-strict` leave the ratchet without a
+  seeded red run. `tests/test_lock.py` names no gate script, so its three
+  `goes_red` names move nothing. (2) The `tools` line in three hand-built
+  gate files follows from criterion 10. (3) `pin_problems` ends with the
+  `make venv` hint after a `make lock` step. (4) The `PATH` block: above.
+- **Kit, export, ignore list, provenance (criteria 19–21).** `probe.rolle`
+  gives `bestand` for `pyproject.toml`, `requirements-ci.txt` and
+  `tests/test_lock.py` (via `tests/`); only the export catch-all matches the
+  two files (test). `git check-ignore -q .venv/bin/python3` exit 0; the gate
+  `leerprobe` green with `.venv` present. The longest `provenance.yaml`
+  prefix is the new entry for each file — `machine-rendered` for the lock,
+  `human-written` or `ai-drafted-reviewed` for the project file, both
+  `frontmatter: none`. No touched path is reserved for `human-decided`, so
+  the pull request is not a decision pull request.
+- **Pins and readers (criteria 1, 17, 22, 23).** `tomllib` on
+  `pyproject.toml`: the four dependencies and the two `dev` pins of
+  criterion 1, `requires-python = ">=3.11"`, no `[build-system]`;
+  `pythonpath = ["."]`. `AGENTS.md` line 151 tells a new checkout to run
+  `make venv` before `make verify`; the §8 row carries the uv sentence (F-6
+  for its last clause).
+- **`make venv` with an undeclared `python3`.** With only `/usr/bin` on
+  `PATH` (`python3` 3.9.6), `make venv` exits 2 at the install
+  ("No matching distribution found for annotated-types==0.8.0") and leaves a
+  package-less `.venv`, which the runner then passes over because it cannot
+  import `yaml`. Loud, not silent.
+- **Cost.** Runs 37376858363 and 37377369829: each leg about one minute
+  (55–64 s), the summary job 3–4 s — about four billed minutes per run
+  instead of one or two, inside the spec's estimate of three to five. Noted,
+  as the spec asks.
+- **Planted faults.** Twelve of the plan's 47 replayed on a scratch clone
+  of `a33e341`, each alone, the four test files run, the clone restored with
+  `git checkout` (empty `git status` after each); counts are beyond the
+  clone's four tracker failures. Every count and test name matched
+  `plan.md`: 5 (`--require-hashes` dropped from `INSTALL`) 1 red; 10
+  (`always()` dropped) 1; 11 (`!= failure`) 1; 12 (`fail-fast` on) 2; 13
+  (no `needs`) 1; 18 (drift on the first interpreter) 1; 21 (the `3.<n>`
+  check removed) 1; 25 (`python3` before `.venv`) 1; 30 (the `PATH` block
+  removed) 1; 31 (version by prefix) 1; 37 (the `reprlib` keywords back) a
+  collection error under 3.11.9, 84 passed under 3.12.4; 39 (a
+  `mechanismus` rule for `pyproject.toml`) 1. Own variants: a deny-list in
+  the summary step — green (F-1); `continue-on-error` on the summary step,
+  and on the matrix job — green (F-2); the drift gates also in the matrix
+  job — red in `test_every_gate_step_runs_even_after_a_failing_gate`, green
+  in the research-currency test (F-3); `interpreters()` reversed, and a
+  matrix `include` with 3.13 — green (F-4); a `.venv` without `ruff` — red,
+  naming `ruff` and `make venv`.
+
+## Not checked
+
+- A pull-request suite: no pull request exists, so criterion 8 is measured
+  on push suites only.
+- A hosted `drift` run of this branch (schedule or dispatch).
+- What job-level `continue-on-error` does to `needs.gates.result` (F-2,
+  second half).
+- Whether a `workflow_dispatch` run on a branch head — whose `verify` is
+  skipped, as the old job's was — can satisfy the ruleset after a red push
+  suite. The behaviour is older than this change, which keeps the old
+  condition.
+- `make venv` with a `python3` of 3.13: no such interpreter here. By
+  reading, the suite would name "Python 3.13 is not a declared interpreter"
+  and send the session to `make venv`, which would rebuild the same.
+- A re-lock with another uv version; the plan's other 35 planted faults.
+
+## For phase 7
+
+`plans/INDEX.md` was regenerated with `python3 scripts/plans_registry.py
+--index` for this file. No row stops the pull request. Phase 7 waits for the
+maintainer's answer to `[DECISION] 1`: until it is recorded by the
+orchestrating session, `adr-answers` keeps both legs, the check `verify` and
+the local `make verify` red. F-1 to F-4 are a few test lines each and fit
+one repair round; F-5 is a sentence for the spec or for bead
+coding-harness-dj9; F-6 is one clause in `docs/WORKFLOW.md`. Which to fix
+and which to close is the maintainer's choice. The pull request names bead
+coding-harness-ei0 in its body (house rule 4) and is not a decision pull
+request.
