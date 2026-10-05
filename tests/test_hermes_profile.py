@@ -495,7 +495,7 @@ SPIKE_ITEMS = {
     "2": ("HERMES_WRITE_SAFE_ROOT", "outside", "note.md"),
     "3": ("$HOME", "_hspike", "spike-vault", "Permission denied"),
     "4": ("config.yaml", ".env", "mv", "rm"),
-    "5": ("glm-5.3", "llm", "proxy", "netz.log"),
+    "5": ("glm-5.3", "llm", "proxy", "net.log"),
     "6": ("web_search", "web_extract", "route: web"),
     "7": ("MEMORY.md", "USER.md", "skills"),
     "8": ("dry-run", "ls-remote"),
