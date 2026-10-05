@@ -409,23 +409,23 @@ ending `VERIFY GREEN`.
 | 39 | `test_design_sections_in_order` | a heading missing, renamed, added or moved |
 | 40 | `test_alternatives_ask_for_two_with_consequences_and_a_choice` | "at least two", "consequence" or "Chosen" missing |
 | 41 | `test_empty_parts_say_why[Interfaces]`, `[Data model]`, `[ADR draft]` | the section without a line beginning `None — ` |
-| 42 | `test_adr_draft_takes_the_record_form` | `templates/adr.md` or `architectural` missing |
+| 42 | `test_adr_draft_takes_the_record_form`; `test_adr_draft_is_owed_when_proposed_or_answered_yes` (row 6-13, beyond the criterion) | `templates/adr.md` or `architectural` missing; the template or the prompt without "proposes "yes"" and the answer |
 | 43 | `test_delta_is_a_mermaid_flowchart_after_the_change`; `test_no_likec4_model_is_asked` | no `mermaid` fence in the section, its first line not `flowchart …`, no "after the change"; "likec4" or ".c4" in the template or the prompt |
 | 44 | `test_delta_lists_below_the_diagram` | **Added**, **Changed** or **Removed** missing after the fence |
 | 45 | `test_delta_says_why_when_nothing_moves` | "nothing architectural moves" missing |
 | 46 | `test_delta_names_adr_0009` | "ADR 0009" missing in the section |
-| 47 | review; check below | the merged ADR asks for an element the section lacks, or the reverse |
+| 47 | review; check below; in part `test_delta_asks_for_the_c4_level_of_each_box` (every box of the diagram, by `c4_problems`) and `test_delta_names_elements_as_the_existing_diagrams_do` | the merged ADR asks for an element the section lacks, or the reverse; a box without a C4 level; the naming sentence missing |
 | 48 | `test_filled_design_header_passes_the_plans_gates` | as 18, placed as `design.md` |
 | 49 | `test_phase_table_has_2b_between_2a_and_3` | the first cells not …, 2a, 2b, 3, …; the row without `design.md` or `02b-design.md` |
 | 50 | `test_routing_gives_2b_the_prompt_model` | no 2b row between 2a and 3; its bold model not the prompt's |
 | 51 | `test_agents_table_has_2b_between_2a_and_3` | as 49 in `AGENTS.md`; skips without the file |
-| 52 | `test_workflow_states_d14_by_class` | no paragraph of the section with `02b-design.md`, the four classes and `coding-harness-jc3` |
+| 52 | `test_workflow_states_d14_by_class` | no paragraph of the section with `02b-design.md`, the four classes and `coding-harness-jc3`; a class's clause without its word (`always`, `never`, `spec.md` with "one sentence") or with its opposite |
 | 53 | `test_spec_template_says_where_a_feature_skips_design`; `test_spec_sections_in_order` | Non-goals without `design.md`, `feature` or "one sentence"; a new heading |
 | 54 | `test_arc42_has_the_twelve_sections_in_order` | a title missing, renamed, added or moved, or a number not its position |
 | 55 | check below; review | a run of eight words shared with arc42 outside the titles and the credit |
-| 56 | `test_arc42_credits_arc42_in_the_copied_part` | "arc42", "9.0", "July 2025", "Gernot Starke", "Peter Hruschka", `https://arc42.org`, the licence URL or "changed" missing outside the leading comment |
+| 56 | `test_arc42_credits_arc42_in_the_copied_part` | "arc42", "9.0", "July 2025", "Gernot Starke", "Peter Hruschka", the notice "© Dr. Peter Hruschka, Dr. Gernot Starke and contributors" (row 6-14, beyond the criterion), `https://arc42.org`, the licence URL or "changed" missing outside the leading comment |
 | 57 | `test_arc42_states_its_licence` | "CC BY-SA 4.0" for the skeleton, or the sentence that a copy's content stays its author's, missing |
-| 58 | `test_arc42_asks_only_what_a_reader_needs` | "reader", "commit or date" or "open" missing before the first `## ` |
+| 58 | `test_arc42_asks_only_what_a_reader_needs` | one of the three items — "named reader" with "one line" and "nothing"; "every number" with "commit or date"; "not known" with "marked open" — not found together in one paragraph before the first `## ` |
 | 59 | `test_arc42_decisions_point_to_the_records` | `docs/adr/` missing in section 9 |
 | 60 | `test_filled_arc42_header_gives_a_date` | `read_updated` reads no date |
 | 61 | check below; `tests/test_kit.py` | fewer than two; a kit test red |
@@ -839,6 +839,146 @@ state after the change with C4-labelled boxes, three lists, one sentence when
 nothing moves) are all in the section, and the section asks for nothing it
 does not.
 
+## Repair round 2
+
+Origin `fix-r2`, 2026-10-05, 18:53 on, on the rows 6-9 to 6-15 of the phase-6
+review of slice 2 (`findings.md`, read at `33a8442`; heads fetched at the start
+and unchanged: pull request #60 at `ef7407c`, `origin/main` at `87daf91`).
+Six rows are fixed and implemented, in `c551836` (6-9), `631ce30` (6-12),
+`4e5ee14` (6-13), `397b188` (6-14), `8822677` (6-15) and `14ca394` (6-11).
+Row 6-10 is left open on purpose, as the coordinating session ordered: no
+later phase reads `design.md`, which a person decides ("awaiting the
+maintainer"). Rows 6-6, 6-7 and 6-8 are not part of this round. The decisions
+below are `[DETAIL]`s of the implementing session; no reviewer has read this
+round, and every fixed row says "not reviewed".
+
+- **6-9, the BLOCKER.** The Architecture delta section of `templates/design.md`
+  now says: "Elements and relationships are named as the existing diagrams and
+  ADRs name them, in the diagram and in the lists." It stands between the
+  diagram and the three lists. `[DETAIL]`: the sentence takes the part of
+  ADR 0009's wording that binds every repository ("the existing diagrams and
+  ADRs") and leaves out "as in LakeSwitch's D-58", a decision of another
+  repository that a copy of the kit's template cannot look up.
+  `test_delta_names_elements_as_the_existing_diagrams_do` holds the words "as
+  the existing diagrams and ADRs name them" in the section. Phase 4's review
+  counterpart of criterion 47 counted three contracts of ADR 0009 for the
+  delta; there are four, and this one was the fourth.
+- **6-11.** The refutation of criterion 64 keeps "or hunk" (`spec.md`, with a
+  second amendment note): the half could be kept, because a hunk can be
+  counted, as conflict markers per file in the tree that `git merge-tree
+  --write-tree` prints. At `8822677` that tree has 3 hunks in
+  `docs/WORKFLOW.md` (the opening note, §3's routing table, §4), 2 in
+  `scripts/kit/probe.py` (the prompt entries, the cap) and 1 in
+  `plans/INDEX.md`: the ones the criterion names. The stop above is marked
+  resolved by the amendment of 2026-10-05 (`7ac9fc5`), and the check of
+  criterion 64 now prints the difference of the two trial merges (three files)
+  and the hunks per file. The second clause of the criterion, run again
+  because this round changed the tests: a scratch worktree on `14ca394` with
+  #60's head merged, resolved as the overlap table says (the opening note from
+  #60 without `templates/findings.md`; §3 from #60 with the 2b row after its 2a
+  row; §4 from #60; the two entries and `DECKEL = 33` in `probe.py`; the two
+  architecture documents from the side of `origin/main`; `plans/INDEX.md`
+  regenerated): `tests/test_templates.py`, `tests/test_kit.py` and
+  `tests/test_model_endpoints.py` pass, 156 cases; the worktree is removed.
+- **6-12.** Four faults had kept the file green; the tests now are:
+  `c4_problems` reads every box of the diagram, in any shape and also a box
+  that only an edge names, and asks for a label that begins with one of the
+  four levels (`test_delta_asks_for_the_c4_level_of_each_box`; counter-probes
+  `test_c4_check_sees_a_box_without_a_level` and `test_c4_check_lets_a_labelled_diagram_pass`
+  hold the check itself); `test_arc42_asks_only_what_a_reader_needs` holds each
+  of the three items of criterion 58 in one paragraph of its own words, so the
+  word "reader" in a later sentence no longer carries it; and the D-14
+  paragraph of `docs/WORKFLOW.md` is held clause by clause as the prompt's list
+  lines are (`d14_problems` with `clauses`), where a class's clause also fails
+  if it holds the opposite word (`always` where `never` is due) —
+  `test_d14_check_sees_a_contradiction` and the extended
+  `test_d14_check_sees_a_new_class` hold that. The row names four faults, (a)
+  to (d), and describes a fifth, the variant of the recorded fault A15 with
+  three of four "reader" removed; the coordinating session's brief listed the
+  two boxes (a) and (b) together and a "fourth named in the row", which this
+  round reads as that variant. All five are planted (faults 1–5 below).
+- **6-13, `[DETAIL]`.** "A `feature` whose ADR answer is "yes"" asked for
+  something phase 2b usually cannot know: the answer is the maintainer's and
+  comes at the merge (`docs/WORKFLOW.md`, "The proposal only proposes. The
+  maintainer answers"), while the spec header already carries
+  `adr_question.proposed`. The template and the prompt now say that the draft
+  is owed when the spec proposes "yes" or the maintainer has answered "yes".
+  Rejected: the draft only after an answer (the ADR is then written without
+  the design that should have drafted it, the reviewer's case), and the draft
+  for every `feature` (criterion 42 asks it only for `architectural`).
+  `test_adr_draft_is_owed_when_proposed_or_answered_yes` holds it in both
+  files. Stated, not measured: a `feature` that proposed "no" and is answered
+  "yes" at the merge gets its draft in the pull request, not from phase 2b.
+- **6-14.** Read on 2026-10-05 with `gh api repos/arc42/arc42-template/contents/…`:
+  `EN/adoc/about-arc42.adoc` ("Created, maintained and (C) by Dr. Peter
+  Hruschka, Dr. Gernot Starke and contributors.") and `LICENSE.txt` (asks for
+  credit, the licence link and the changes). The credit of `templates/arc42.md`
+  now reads "© Dr. Peter Hruschka, Dr. Gernot Starke and contributors", in the
+  notice's own names. Criterion 56 does not ask for it and is not amended;
+  `test_arc42_credits_arc42_in_the_copied_part` holds the notice. Only the
+  credit changed in the skeleton, which criterion 55's copy check exempts, so
+  that check was not run again. An assessment, not legal advice.
+- **6-15.** (1) The D-14 paragraph of `docs/WORKFLOW.md` and the Non-goals
+  sentence of `templates/spec.md` are wrapped at 80 columns, and so is the
+  design template's leading comment (one line of 81). (2) Both texts that said
+  "until the validator of bead coding-harness-jc3 lands" now say "until the
+  change-artefact validator lands (bead coding-harness-jc3)"; the string the
+  tests of criteria 36 and 52 hold is unchanged. (3) The design template uses
+  `-` bullets throughout, with the placeholder "for users, operations, risk"
+  shortened so that the two bullets fit 80 columns. (4) The comment about the
+  copied regex stands above `MODEL_LINE`, and the docstring of the test file
+  says that criteria 55 and 63–65 are held by review or by a command, and 47
+  in part. Measured with `markdownlint-cli2` v0.23.2 on the five touched files
+  at `33a8442` and at `8822677`: MD004 3 → 0, MD013 33 → 31; the two lines the
+  reviewer named are gone, and the design prompt's model line (not counted)
+  remains.
+
+**Planted faults.** One fault at a time into the committed file of
+`8822677`, then both test files, then the file restored (a throwaway script in
+the scratch directory, not kept; `git status` clean afterwards, 2026-10-05
+18:59). "Before" is `tests/test_templates.py` of `33a8442` (88 cases), "after"
+the file of `8822677` (100 cases); the clean tree passes both. Faults 1–5 are
+the row's (a), (b), (c), the variant of (c) and (d); the rest are more of the
+same kind.
+
+| # | Row | Fault planted | Before | After: test that went red |
+|---|---|---|---|---|
+| 1 | 6-12 (a) | the example diagram's box `app` loses its C4 level: `app["what changes"]` | green | `test_delta_asks_for_the_c4_level_of_each_box` |
+| 2 | 6-12 (b) | a third box `store[("the store")]` without a level is added | green | `test_delta_asks_for_the_c4_level_of_each_box` |
+| 3 | 6-12 (c) | the arc42 opening loses its whole first paragraph | green | `test_arc42_asks_only_what_a_reader_needs` |
+| 4 | 6-12 (c, variant) | three of the four "reader" of the opening go, "a later reader" stays | green | `test_arc42_asks_only_what_a_reader_needs` |
+| 5 | 6-12 (d) | the D-14 paragraph says an `architectural` change "never" runs 2b | green | `test_workflow_states_d14_by_class` |
+| 6 | 6-12 | the D-14 paragraph says `bounded` and `spike` "always" run 2b | green | `test_workflow_states_d14_by_class` |
+| 7 | 6-12 | the `feature` clause of the D-14 paragraph loses "one sentence" | green | `test_workflow_states_d14_by_class` |
+| 8 | 6-12 | the arc42 opening loses "commit or date" | red | `test_arc42_asks_only_what_a_reader_needs` |
+| 9 | 6-12 | the arc42 opening loses "marked open" | red | `test_arc42_asks_only_what_a_reader_needs` |
+| 10 | 6-12 | an edge names a box `other` that no line defines | green | `test_delta_asks_for_the_c4_level_of_each_box` |
+| 11 | 6-9 | the naming sentence is deleted from the Architecture delta | green | `test_delta_names_elements_as_the_existing_diagrams_do` |
+| 12 | 6-9 | the naming sentence names another rule ("as the team likes") | green | `test_delta_names_elements_as_the_existing_diagrams_do` |
+| 13 | 6-13 | the design template's ADR draft back to "the answer to the ADR question for it is yes" | green | `test_adr_draft_is_owed_when_proposed_or_answered_yes[templates/design.md]` |
+| 14 | 6-13 | the design prompt's ADR draft back to "whose ADR answer is yes" | green | `test_adr_draft_is_owed_when_proposed_or_answered_yes[prompts/02b-design.md]` |
+| 15 | 6-14 | the credit loses the sign "©" | green | `test_arc42_credits_arc42_in_the_copied_part` |
+| 16 | 6-14 | the credit loses "and contributors" | green | `test_arc42_credits_arc42_in_the_copied_part` |
+
+Sixteen faults: fourteen were green before, all sixteen are red after, each in
+the test that is meant for it and in no other (rows 8 and 9 were red before
+too, so they are controls). Counter-probes inside the test file hold the two
+new checks themselves: six diagrams that `c4_problems` must reject, two it must
+pass, and a D-14 sentence with a contradiction.
+
+**Verification** (2026-10-05, `GIT_CONFIG_COUNT=1 GIT_CONFIG_KEY_0=commit.gpgsign
+GIT_CONFIG_VALUE_0=false make verify`, on the tree of `14ca394` with the
+records of this section added, 19:03 and again 19:04): `VERIFY GREEN`, 617
+passed, 15 skipped, 26 s of pytest; the Leerprobe carries 453 of 485 cases,
+against 356 of 387 at the merge base `87daf91` (slice 2's 441 of 473 plus the
+twelve cases this round adds: 88 → 100 in `tests/test_templates.py`). The
+report-only markdownlint run is red as before, with the counts under 6-15. The
+trial merge with #60 (`ef7407c`) at `8822677`: the difference of the two merge
+runs is `docs/WORKFLOW.md`, `plans/INDEX.md` and `scripts/kit/probe.py`, with 3,
+2 and 1 hunks, and the resolved tree passes (6-11 above). Not run in a hosted
+CI. Nothing is committed by a reviewer: rows 6-9 and 6-11 to 6-15 say "fixed
+in …, not reviewed".
+
 ## Time used
 
 Phase 4 and its repair rounds, read with `date` (CEST); appetite 4 h.
@@ -864,3 +1004,13 @@ Slice 2, read with `date` (CEST); appetite 3 h 39 min.
 - 18:14:41–18:22:46, 8 min — the 74 planted faults, the Leerprobe at the merge base, the trial merge with #60, `make verify` (18:22, green), the record (`ed923cc`).
 - 18:22:46–18:23:44, 1 min — this section and the last `make verify` (`VERIFY GREEN`, 605 passed, 15 skipped, Leerprobe 441 of 473); the commit and push follow within the minute.
 - Total 2026-10-05 18:06:35–18:23:44, 17 min of 3 h 39 min for this slice; with slice 1's 21 min, 38 min of 4 h. No repair round. The slice ended at the four-line stop on criterion 64 (above), not at the appetite.
+
+Repair round 2 of slice 2, read with `date` (CEST); appetite 45 minutes.
+
+- 2026-10-05 18:53:04–18:54:47, 2 min — the instruction, `findings.md` rows 6-9 to 6-15, `plan.md`, `spec.md`; the worktree is at `33a8442`.
+- 18:54:47–18:58:41, 4 min — reading ADR 0009, the design template, the prompt and the tests; the naming sentence, the 6-13 and 6-15 text, the arc42 notice (`gh api`), the new tests; commit `c551836` (18:58:41).
+- 18:58:41–18:59:23, 1 min — the commits `631ce30` (18:58:59), `4e5ee14` (18:59:06), `397b188` (18:59:13) and `8822677` (18:59:23), each on a rebuilt tree with its tests green.
+- 18:59:23–19:00:50, 1 min — the sixteen planted faults, old tests and new, and the trial merge measured; `14ca394` (19:00:50).
+- 19:00:50–19:03:01, 2 min — the resolved tree with #60 in a scratch worktree (156 cases green), the records of this section, the Status of the rows.
+- 19:03:01–19:04:33, 2 min — `make verify` twice, both `VERIFY GREEN`.
+- Total 2026-10-05 18:53:04–19:04:33, 11 min of the 45-minute appetite (the commit of the records and the push follow within the minute); no stop at the appetite.
