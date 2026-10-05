@@ -6,7 +6,9 @@ copied either.
 
 1. The yaml block below is the header of the copy: put its lines between two
    `---` lines at the top and replace every `<...>`. It carries no header of
-   its own here (`provenance.yaml`, prefix `templates/`).
+   its own here (`provenance.yaml`, prefix `templates/`). In the body a
+   placeholder stands in backticks, so that GitHub shows it: replace it,
+   backticks included.
 2. One row per finding. The table is the answer of a review: its columns stand
    exactly as shown (`prompts/06-review.md`, `prompts/02a-spec-review.md`).
    Rows of the spec review (phase 2a) and of the review (phase 6) go into the
@@ -32,10 +34,10 @@ review: {status: pending, approved_by: null, approved_at: null}
 tags: [findings, <topic>]
 ```
 
-# Findings — <change>
+# Findings — `<change>`
 
-Phase <phase>, on commit `<commit>`, <YYYY-MM-DD>, read by <who read it and in
-what context>. One sentence on what the rows were measured against, and the
+Phase `<phase>`, on commit `<commit>`, `<YYYY-MM-DD>`, read by `<who read it and
+in what context>`. One sentence on what the rows were measured against, and the
 verdict: how many rows of which severity, and whether any `[AMBIGUITY]` or
 `[DIVERGENT]` stands.
 
@@ -43,7 +45,7 @@ verdict: how many rows of which severity, and whether any `[AMBIGUITY]` or
 |---|---|---|---|---|---|---|
 | F-1 | MINOR | SPEC | base | `spec.md`, criterion 3 | What is wrong, and the case that shows it. | open |
 
-Reviewer session: <id>
+Reviewer session: `<id>`
 
 ## Checked without a finding
 
@@ -119,10 +121,16 @@ Stage-2 call, <date>: <verb> · endpoint <endpoint> · model <model> · leak che
 ```
 
 The released loop rows stand in a section of their own, and the section holds
-one of two lines:
+the line `Rounds run: <n>`:
 
 ```text
 ## Phase 4b — GLM loop rows, released <date>
 Rounds run: <n>
+```
+
+When the loop did not run there is no section and no heading. The runner puts
+one line in its place, at the end of the file:
+
+```text
 Loop rows: none — the GLM loop did not run for this change.
 ```

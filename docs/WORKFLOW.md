@@ -532,9 +532,10 @@ foreign endpoint. Every foreign profile calls it itself and stops when
 denylist lives outside the repository; if it is missing, that is BLOCK, because
 unchecked is not the same as clean.
 
-The orchestrator holds **no second rule set**. The worktree precondition, the
-leak check, `make verify` and the artefact gate live outside it and are called.
-An open `[AMBIGUITY]`, an open BLOCKER or MAJOR finding pause with exit 2 instead
+The orchestrator — `scripts/run_change.sh`, not in this tree yet (see the note
+at the top) — holds **no second rule set**. The worktree precondition, the leak
+check, `make verify` and the artefact gate live outside it and are called. An
+open `[AMBIGUITY]`, an open BLOCKER or MAJOR finding pause with exit 2 instead
 of being decided.
 
 ### Seeing agents that wait

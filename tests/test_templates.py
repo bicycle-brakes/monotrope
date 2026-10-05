@@ -294,7 +294,7 @@ def test_status_values_include_the_spec_review_ones() -> None:
 
 def test_lines_under_the_table() -> None:
     text = read("findings.md")
-    assert text.index("Reviewer session: <id>") > text.index("| ID |")
+    assert text.index("Reviewer session: `<id>`") > text.index("| ID |")
     assert {"Checked without a finding", "Not checked"} <= set(headings("findings.md"))
 
 

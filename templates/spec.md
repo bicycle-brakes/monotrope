@@ -4,7 +4,9 @@ This comment is not copied.
 
 1. The yaml block below is the header of the copy: put its lines between two
    `---` lines at the top of the file and replace every `<...>`. It carries no
-   header of its own here (`provenance.yaml`, prefix `templates/`).
+   header of its own here (`provenance.yaml`, prefix `templates/`). In the body
+   a placeholder stands in backticks, so that GitHub shows it: replace it,
+   backticks included.
 2. The header is a feature's, the form with the most keys. `change` and
    `adr_question` belong to a `feature` only: delete both for any other class.
    What the four classes mean: `docs/WORKFLOW.md`, "Change classes, the ADR
@@ -35,7 +37,7 @@ change: <change>  # a feature only
 adr_question: {proposed: "<yes|no>", reason: "<one sentence>"}  # a feature only, the quotes kept
 ```
 
-# Spec — <change>
+# Spec — `<change>`
 
 The goal in one sentence: what holds after this change that does not hold
 today (bead `<bead id>`). Research: `research.md`. Decisions: `decisions.md`.
@@ -56,12 +58,12 @@ Each criterion is one checkable sentence with its *Refuted by:* line. The
 failure mode is that line: what a wrong result looks like. There is no section
 for it. A criterion that cannot go red is not one.
 
-One condition per criterion. Beginning the sentence with When, While or If is
+One condition per criterion, beginning the sentence with When, While or If, is
 recommended, not required: it becomes the rule once pull request #60 merges,
 and until then the rule is `prompts/02-spec.md`.
 
-1. When <trigger>, <what holds>.
-   *Refuted by:* <the result that shows it does not hold>.
+1. When `<trigger>`, `<what holds>`.
+   *Refuted by:* `<the result that shows it does not hold>`.
 
 ## Non-goals
 
