@@ -19,8 +19,8 @@ Decision D-14 sets it by the change's class (`class:` in the spec header):
 - `bounded` — never.
 - `spike` — never.
 
-Nothing checks this rule until the validator of bead coding-harness-jc3 lands;
-the review before the merge holds it.
+Nothing checks this rule until the change-artefact validator lands (bead
+coding-harness-jc3); the review before the merge holds it.
 
 ## What `design.md` holds
 

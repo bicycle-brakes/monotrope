@@ -255,7 +255,12 @@ one of four:
 - `architectural` — a new subsystem or a break of an interface; it carries its
   ADR already, so it is not asked.
 
-**The design phase 2b goes by class** (decision D-14, `prompts/02b-design.md`): an `architectural` change always runs it; a `feature` runs it or says in one sentence of its `spec.md` why not; a `bounded` change and a `spike` never run it. Nothing checks this until the validator of bead coding-harness-jc3 lands; the review before the merge holds it.
+**The design phase 2b goes by class** (decision D-14,
+`prompts/02b-design.md`): an `architectural` change always runs it; a `feature`
+runs it or says in one sentence of its `spec.md` why not; a `bounded` change
+and a `spike` never run it. Nothing checks this until the change-artefact
+validator lands (bead coding-harness-jc3); the review before the merge holds
+it.
 
 **Only a `feature` owes an answer to the ADR question:** is this change an
 architecture decision that needs an ADR? The spec author proposes, in the same
