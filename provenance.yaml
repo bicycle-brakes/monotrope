@@ -285,6 +285,16 @@ paths:
     allowed: [ai-generated]
     frontmatter: none
 
+  # The project file and its lock (bead coding-harness-ei0): the file is
+  # written by hand, the lock is rendered from it by `make lock` and never
+  # edited. Neither carries frontmatter.
+  - prefix: "pyproject.toml"
+    allowed: [human-written, ai-drafted-reviewed]
+    frontmatter: none
+  - prefix: "requirements-ci.txt"
+    allowed: [machine-rendered]
+    frontmatter: none
+
 # ---------------------------------------------------------------------------
 # Ausserhalb jeder Pruefung: Archiv (haelt fest, was einmal galt) und die
 # Rohbefund-Ordner unter archive/.
