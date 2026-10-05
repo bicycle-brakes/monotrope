@@ -1,10 +1,10 @@
 ---
 title: "Decisions — adhd-frame"
-status: draft
+status: accepted
 implementation_status: partial
 date: 2026-09-30
-last_reviewed: 2026-09-30
-updated: 2026-09-30
+last_reviewed: 2026-10-05
+updated: 2026-10-05
 supersedes: null
 superseded_by: null
 bead: coding-harness-q24
@@ -52,3 +52,12 @@ Open PR #60 edits `prompts/03-plan.md` and `prompts/04-implement.md` and
 stays unmerged by the maintainer's decision. This change places its text so
 that no hunk is shared with #60 (research section on the overlap); the
 merge itself was not tried.
+
+## Addendum 2026-10-05: the maintainer confirms all four answers
+
+The maintainer went through the four provisional answers one at a time in
+the Claude Code session on 2026-10-05 and confirmed each as written above:
+the skill rename travels in this pull request (1), the acceptance card lives
+in the pull request templates (2), the plan card starts phase 4 unless the
+maintainer says stop (3), and only the maintainer may answer "continue" at
+an appetite stop (4). They are no longer provisional.
