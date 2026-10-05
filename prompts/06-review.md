@@ -3,7 +3,9 @@
 **Model:** Opus 5.5 — until stage 2 is live (maintainer, 2026-09-30); finds
 what Sonnet misses, and reads the code a change calls instead of trusting its
 docstring.
-**Input:** the diff and `spec.md`. **Not** the author's reasoning.
+**Input:** the diff, `spec.md` and, when the change has one, `design.md` —
+whether the diff makes its architecture delta true is your question (ADR 0009).
+**Not** the author's reasoning.
 **Result:** `plans/changes/<name>/findings.md`
 **Gate:** no open `[AMBIGUITY]`, no open BLOCKER — `[DIVERGENT]` counts as
 BLOCKER.

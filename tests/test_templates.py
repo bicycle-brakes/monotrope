@@ -584,6 +584,18 @@ def test_design_prompt_hands_the_design_to_the_plan() -> None:
     assert any(all(word in p for word in ("Phase 3", "design.md", "plan.md", "phase 4")) for p in paragraphs)
 
 
+def test_plan_prompt_names_the_design_as_an_input() -> None:
+    """Row 6-10: a phase-3 session that never reads the design prompt is told to plan from `design.md`."""
+    paragraphs = [flat(p) for p in workflow_text("prompts/03-plan.md").split("\n\n")]
+    assert any(all(word in p for word in ("nothing else", "`design.md`", "phase 4")) for p in paragraphs)
+
+
+def test_review_prompt_names_the_design_as_an_input() -> None:
+    """Row 6-10: ADR 0009 leaves the truth of the architecture delta to the phase-6 reviewer."""
+    field = flat(workflow_text("prompts/06-review.md")).split("**Input:**", 1)[1].split("**Result:**", 1)[0]
+    assert "`design.md`" in field and "architecture delta" in field
+
+
 # --- the design template (criteria 39-48) -------------------------------------------
 
 
