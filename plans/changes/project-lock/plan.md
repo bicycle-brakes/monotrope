@@ -218,6 +218,21 @@ the `requirements-ci.txt` kit rule, `scripts/new_change.py` (its mention of
 `requirements-ci.txt` becomes true), `lakeswitch-ai`, and the files of
 `feat/hermes-runner`.
 
+## Deviations
+
+- **2026-10-05, orchestrating session — `[DECISION] 1` is still open.** The
+  class (`feature` with ADR "no", or `bounded`; `decisions.md`) is not answered
+  yet. The build is the same under either answer, so phase 4 starts and
+  phase 7 waits for the answer. No ADR answer is recorded in phase 4 (house
+  rule 8). `make verify` stays red on the gate `adr-answers` alone until the
+  maintainer answers; every other gate must be green.
+- **2026-10-05, orchestrating session — Actions may be degraded.** GitHub
+  Actions had degraded performance on 2026-10-05 (runs queued without a
+  runner). If the live proof of step 4 cannot get a runner, evidence 1 reads
+  "not run — Actions degraded" with the run id, and the work continues; it is
+  not faked. The live ruleset is not touched.
+
 ## Time used
 
-Nothing yet: phase 4 has not started.
+2026-10-05 23:08 — span 1 started (read from `date`); the closing line of the
+span is appended when it ends.
