@@ -1,7 +1,8 @@
 <!--
 Template for a change's design (phase 2b). Copy it to
 `plans/changes/<change>/design.md` and fill it in. This comment is not copied.
-When a design is written, and for which class of change: `prompts/02b-design.md`.
+When a design is written, and for which class of change:
+`prompts/02b-design.md`.
 
 1. The yaml block below is the header of the copy: put its lines between two
    `---` lines at the top and replace every `<...>`. It carries no header of
@@ -44,8 +45,10 @@ At least two ways to meet the spec, each with its consequences for users,
 operations or risk: what it makes easier, what harder, what is owed and by
 whom.
 
-* `<Alternative a — what it is.>` Consequences: `<for users, operations or risk.>`
-* `<Alternative b — what it is.>` Consequences: `<for users, operations or risk.>`
+- `<Alternative a — what it is.>` Consequences: `<for users, operations,
+  risk.>`
+- `<Alternative b — what it is.>` Consequences: `<for users, operations,
+  risk.>`
 
 Chosen: `<the alternative>`, because `<the reason>`. The choice is a proposal;
 the merge of the pull request decides it.
@@ -83,6 +86,9 @@ container, component):
 flowchart LR
     person["Person: who uses it"] --> app["Container: what changes"]
 ```
+
+Elements and relationships are named as the existing diagrams and ADRs name
+them, in the diagram and in the lists.
 
 Below the diagram, the elements and relationships the change adds, changes and
 removes, in three lists:

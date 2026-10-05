@@ -563,6 +563,11 @@ def test_delta_names_adr_0009() -> None:
     assert "ADR 0009" in flat(section("design.md", "Architecture delta"))
 
 
+def test_delta_names_elements_as_the_existing_diagrams_do() -> None:
+    """ADR 0009's second contract: elements are named as the existing diagrams and ADRs name them."""
+    assert "as the existing diagrams and ADRs name them" in flat(section("design.md", "Architecture delta"))
+
+
 def test_delta_asks_for_the_c4_level_of_each_box() -> None:
     """ADR 0009: each box of the diagram is labelled with its C4 level."""
     levels = ("person", "system", "container", "component")
