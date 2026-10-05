@@ -25,6 +25,11 @@ frontmatter (category: research); provenance classes follow the five-class
 enum in `provenance.yaml` — the maintainer corrects a class by editing the
 frontmatter, never by deleting the claim.
 
+A note's `last_reviewed:` is the day its content was last checked against its
+sources. An edit moves `updated:`, not this date; whoever re-checks a note sets
+it. The nightly `drift` job lists the notes whose review is more than 90 days
+old (`scripts/check_research_currency.py`, report-only).
+
 The [current Omnigent-first target](../architecture/2026-09-17-omnigent-first-target.md),
 [gap analysis](../architecture/2026-09-17-gap-analysis.md), and
 [implementation plan](../architecture/2026-09-17-implementation-plan.md)
