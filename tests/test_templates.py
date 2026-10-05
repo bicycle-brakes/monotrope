@@ -1,7 +1,9 @@
 """The templates and the design phase: a spec, a findings file, a decision record, a design.
 
-Criteria 1-65 of plans/changes/template-bundle/spec.md. A template is a form to
-copy, so the tests hold it against what reads its copies: the gate modules
+Criteria 1-62 of plans/changes/template-bundle/spec.md, criterion 47 in part;
+criteria 55 and 63-65 are held by review or by a command, not here (`plan.md`,
+"Tests and checks per criterion"). A template is a form to copy, so the tests
+hold it against what reads its copies: the gate modules
 (`plans_registry`, `check_frontmatter_current`, `check_adr_answers`, read by
 attribute at call time, so a constant changed in a test reaches the check),
 `decisions/gates.yaml`, and the workflow texts that name a template or the
@@ -38,7 +40,6 @@ WORKFLOW_TEXTS = [
 MARKINGS = ("[FLASH]", "[GLM5.3]", "[SONNET]", "plan-marking", "Model markings")
 VERIFY_LINE = "- `verify` green."
 CHANGE = "filled-change"
-# The regex of `tests/test_model_endpoints.py::prompt_modelle`, copied: importing that module runs its reads.
 ARC42_SECTIONS = (
     "Introduction and Goals",
     "Architecture Constraints",
@@ -53,6 +54,7 @@ ARC42_SECTIONS = (
     "Risks and Technical Debts",
     "Glossary",
 )
+# The regex of `tests/test_model_endpoints.py::prompt_modelle`, copied: importing that module runs its reads.
 MODEL_LINE = re.compile(r"^\*\*(?:Modell|Model):\*\*\s*([^\n—]+?)\s*(?:—|\.\s*$|$)", re.M)
 # What decision D-14 asks of a class, as words the prompt's line for that class must hold.
 D14_WORDS = {
@@ -61,6 +63,14 @@ D14_WORDS = {
     "bounded": ("never",),
     "spike": ("never",),
 }
+# ... and the words that contradict it.
+D14_NOT = {"architectural": ("never",), "bounded": ("always",), "spike": ("always",)}
+C4_LEVELS = ("person", "system", "container", "component")
+# A box of a Mermaid flowchart: its id, then the shape's opening and the label, quoted or bare.
+NODE = re.compile(
+    r'\b(?P<id>[A-Za-z_]\w*)\s*(?:\[\[|\[\(|\(\(|\{\{|\[|\(|\{|>)\s*(?:"(?P<quoted>[^"]*)"|(?P<bare>[^\]\)\}"]*))'
+)
+MERMAID_KEYWORDS = ("%%", "subgraph", "end", "classDef", "class ", "style", "linkStyle", "click", "direction")
 
 
 # --- reading a template -------------------------------------------------------
@@ -167,15 +177,52 @@ def prompt_model(text: str) -> str:
     return found.group(1).strip()
 
 
-def d14_problems(text: str) -> list[str]:
-    """For each class of `CLASSES`, read at call time: the one list line that begins with it, and its words."""
+def d14_problems(text: str, *, clauses: bool = False) -> list[str]:
+    """For each class of `CLASSES`, read at call time: what the text says of it, and whether its words hold.
+
+    The prompt says it in one list line that begins with the class; the doctrine says it in one sentence, so with
+    `clauses` the unit is the part of that sentence, between `;` and the end of a sentence, that names the class.
+    """
     problems = []
     for name in adr_answers.CLASSES:
-        lines = [flat(line) for line in text.splitlines() if line.startswith(f"- `{name}`")]
-        if not lines:
+        if clauses:
+            units = [flat(c) for c in re.split(r";|\.(?=\s|$)", flat(text)) if f"`{name}`" in c]
+        else:
+            units = [flat(line) for line in text.splitlines() if line.startswith(f"- `{name}`")]
+        if not units:
             problems.append(f"no line for {name}")
             continue
-        problems += [f"{name}: {word!r} is missing" for word in D14_WORDS.get(name, ()) if word not in lines[0]]
+        problems += [f"{name}: {word!r} is missing" for word in D14_WORDS.get(name, ()) if word not in units[0]]
+        problems += [f"{name}: {word!r} contradicts it" for word in D14_NOT.get(name, ()) if word in units[0]]
+    return problems
+
+
+def c4_problems(diagram: str) -> list[str]:
+    """Every box of a Mermaid flowchart: it is defined with a label that begins `<C4 level>:`.
+
+    A box counts where it is defined (`id["Level: text"]`, any shape) or only named in an edge (`a --> b`); the
+    header line, comments and the lines of subgraphs and styles are not read. Edge labels stand between `|`.
+    """
+    defined: dict[str, str] = {}
+    named: set[str] = set()
+    for line in diagram.splitlines()[1:]:
+        if not line.strip() or line.strip().startswith(MERMAID_KEYWORDS):
+            continue
+        for node in NODE.finditer(line):
+            label = node["quoted"] if node["quoted"] is not None else node["bare"]
+            defined.setdefault(node["id"], label.strip())
+        rest = re.sub(r"\|[^|]*\|", " ", NODE.sub(lambda m: m["id"], line))
+        named |= set(re.findall(r"[A-Za-z_]\w*", re.sub(r"[-=.]{2,}[>ox]?", " ", rest)))
+    if not defined:
+        return ["no box with a label"]
+    problems = []
+    for box in sorted(named | set(defined)):
+        label = defined.get(box)
+        level = re.match(r"(\w+):", label or "")
+        if label is None:
+            problems.append(f"{box}: no label, so no C4 level")
+        elif not level or level.group(1).lower() not in C4_LEVELS:
+            problems.append(f"{box}: {label!r} does not begin with one of {C4_LEVELS}")
     return problems
 
 
@@ -245,6 +292,15 @@ def workflow_text(path: str) -> str:
     if not (REPO_ROOT / path).is_file():
         pytest.skip(f"{path} does not travel with the kit")
     return (REPO_ROOT / path).read_text(encoding="utf-8")
+
+
+def d14_doctrine_paragraph() -> str:
+    """The paragraph of the class section of `docs/WORKFLOW.md` that states D-14, or an empty string."""
+    text = markdown_section(
+        workflow_text("docs/WORKFLOW.md"), "Change classes, the ADR question and decision pull requests"
+    )
+    wanted = ("02b-design.md", "coding-harness-jc3", *(f"`{name}`" for name in adr_answers.CLASSES))
+    return next((p for p in text.split("\n\n") if all(word in flat(p) for word in wanted)), "")
 
 
 # --- all three -----------------------------------------------------------------
@@ -497,6 +553,17 @@ def test_design_prompt_states_d14_for_each_class() -> None:
 def test_d14_check_sees_a_new_class(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setattr(adr_answers, "CLASSES", (*adr_answers.CLASSES, "planted"))
     assert "no line for planted" in d14_problems(workflow_text(DESIGN_PROMPT))
+    assert "no line for planted" in d14_problems(d14_doctrine_paragraph(), clauses=True)
+
+
+def test_d14_check_sees_a_contradiction() -> None:
+    sentence = (
+        "an `architectural` change never runs it; a `feature` runs it or says in one sentence of `spec.md` why not"
+    )
+    problems = d14_problems(sentence, clauses=True)
+    assert "architectural: 'always' is missing" in problems
+    assert "architectural: 'never' contradicts it" in problems
+    assert not [problem for problem in problems if problem.startswith("feature")]
 
 
 def test_design_prompt_says_nothing_checks_the_rule_yet() -> None:
@@ -575,8 +642,33 @@ def test_delta_asks_for_the_c4_level_of_each_box() -> None:
     outside, blocks = split_fences(raw)
     text = flat("\n".join(outside)).lower()
     assert "c4 level" in text and all(level in text for level in levels)
-    labels = re.findall(r'\["(\w+):', next(body for info, body in blocks if info == "mermaid"))
-    assert labels and {label.lower() for label in labels} <= set(levels)
+    assert c4_problems(next(body for info, body in blocks if info == "mermaid")) == []
+
+
+@pytest.mark.parametrize(
+    "diagram",
+    [
+        'flowchart LR\n    app["what changes"]',
+        'flowchart LR\n    person["Person: who"] --> app["Container: what"]\n    app --> store[("the store")]',
+        'flowchart LR\n    person["Person: who"] --> app',
+        'flowchart LR\n    person["Actor: who"]',
+        "flowchart LR\n    person[Person who]",
+        "flowchart LR",
+    ],
+)
+def test_c4_check_sees_a_box_without_a_level(diagram: str) -> None:
+    assert c4_problems(diagram) != []
+
+
+@pytest.mark.parametrize(
+    "diagram",
+    [
+        'flowchart LR\n    a["Person: who"] -->|calls| b["Container: what (Python)"]',
+        'flowchart TB\n    a("System: other") -.-> b[("Component: the store")]\n    b --- c{{"Container: x"}}',
+    ],
+)
+def test_c4_check_lets_a_labelled_diagram_pass(diagram: str) -> None:
+    assert c4_problems(diagram) == []
 
 
 def test_filled_design_header_passes_the_plans_gates(tmp_path: Path) -> None:
@@ -610,11 +702,9 @@ def test_agents_table_has_2b_between_2a_and_3() -> None:
 
 
 def test_workflow_states_d14_by_class() -> None:
-    text = markdown_section(
-        workflow_text("docs/WORKFLOW.md"), "Change classes, the ADR question and decision pull requests"
-    )
-    wanted = ("02b-design.md", "coding-harness-jc3", *(f"`{name}`" for name in adr_answers.CLASSES))
-    assert any(all(word in flat(p) for word in wanted) for p in text.split("\n\n"))
+    paragraph = d14_doctrine_paragraph()
+    assert paragraph, "no paragraph names 02b-design.md, coding-harness-jc3 and the four classes"
+    assert d14_problems(paragraph, clauses=True) == []
 
 
 def test_spec_template_says_where_a_feature_skips_design() -> None:
@@ -659,8 +749,15 @@ def test_arc42_states_its_licence() -> None:
 
 
 def test_arc42_asks_only_what_a_reader_needs() -> None:
-    opening = flat(lead("arc42.md")).lower()
-    assert "reader" in opening and "commit or date" in opening and re.search(r"\bopen\b", opening)
+    """The three things the opening asks, each in a paragraph of its own words (a word elsewhere does not count)."""
+    paragraphs = [flat(p).lower() for p in lead("arc42.md").split("\n\n")]
+    items = (
+        ("named reader", "one line", "nothing"),
+        ("every number", "commit or date"),
+        ("not known", "marked open"),
+    )
+    for words in items:
+        assert any(all(word in p for word in words) for p in paragraphs), words
 
 
 def test_arc42_decisions_point_to_the_records() -> None:
