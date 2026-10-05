@@ -470,6 +470,8 @@ merge base `1e4cccf` (`research.md` §9, item 4).
 | `scripts/kit/probe.py` | #60 (prompt entries renamed, 04b added, the cap) | two conflicts: keep #60's entries and add the 02b one; `DECKEL = 33`, with both comments |
 | `scripts/kit/manifest.yaml` | #60 (two rules elsewhere) | no conflict |
 | `plans/INDEX.md` | #60; ADR 0009 if it adds a change folder | regenerate on the merged tree |
+| `prompts/06-review.md`, the Input line (repair round 3) | #60 (the Model lines above it, the Session lines below) | one conflict hunk, 4 lines: keep #60's Model lines and this change's Input line (`**Input:** the diff, `spec.md` and, when the change has one, `design.md` — whether the diff makes its architecture delta true is your question (ADR 0009).`); measured with `git merge-tree` on 2026-10-05 |
+| `prompts/03-plan.md`, the opening paragraph (repair round 3) | #60 (the markings section, further down), `adhd-frame` (the card, on `main`) | no conflict: measured with `git merge-tree` on 2026-10-05 |
 | ADR 0009's branch | expected: `docs/adr/0009-*.md`, the continuity rows of D-15 and O-3, `AMENDMENT_ADRS`, the target's wording | no file of this change (expected, not measured: nothing was written on 2026-10-05); it merges first, and step 7 or 14 merges `origin/main` here; should it touch a file of this change, keep both sides and the ADR's words for the delta |
 
 After #60 merges, its `prompts/04b-review-loop.md` joins the workflow-text
@@ -480,7 +482,7 @@ routes 2a to Fable 5.1 while 2b stays on Opus 5.5.
 
 Beyond slice 1's list: `README.md` (its one-line cycle; #60 did not add 4b
 there either), `model-endpoints.yaml` (Opus 5.5 is declared), prompts 02
-beyond slice 1's sentence, 03, 04 and 07 (criterion 38), `docs/architecture/`
+beyond slice 1's sentence, 03 and 06 beyond the one sentence each that repair round 3 adds (finding 6-10; criterion 38 as amended), 04 and 07, `docs/architecture/`
 and `docs/adr/` (ADR 0009's own pull request), `.claude/agents/` (no design
 sub-agent), `scripts/export/manifest.yaml` (it carries `templates/`, so the
 two new templates reach LakeSwitch — private, among the maintainer's own
@@ -526,6 +528,19 @@ option 1, the exception for the kit's licence work (bead
 coding-harness-lir); and the special runs of criteria 55, 64 and 65. The
 closing trailer waits until the tracker writer has cut the bead to this
 scope.
+
+**Done on 2026-10-05, evening (repair round 3).** The class commit is `6da39ee`
+(`class: feature`, `change`, `adr_question` in `spec.md`; `implementation_status:
+partial` in the five artefacts; the spec's departures stated; `updated:` was
+current already, the stamp changed nothing), and the maintainer's answer "no"
+is `95b1cf9` (`decisions/answers/template-bundle/adr.yaml`, recorded with
+`harness.py decide adr … --stated-in …`); `make verify` is green with both.
+Criterion 65 holds: ADR 0009's merge commit `a847516` (#70) is an ancestor of
+the head (`git merge-base --is-ancestor`, 2026-10-05). What remains for phase 7:
+the body as a decision pull request (title `decide(template-bundle): …`,
+label `decision`, the block of `.github/PULL_REQUEST_TEMPLATE/decision.md`),
+which names the departures of the Definition of Done's third item, the
+conflict in `prompts/06-review.md` below, and no closing trailer yet.
 
 ## Repair round 1
 
@@ -979,6 +994,116 @@ runs is `docs/WORKFLOW.md`, `plans/INDEX.md` and `scripts/kit/probe.py`, with 3,
 CI. Nothing is committed by a reviewer: rows 6-9 and 6-11 to 6-15 say "fixed
 in …, not reviewed".
 
+## Repair round 3
+
+Origin: the maintainer's decision of 2026-10-05 (evening), after two repair
+rounds, as the findings process makes it (`docs/WORKFLOW.md` §2: a second row
+of `fix-r` origin in a row is an escalation, not a third round). Three
+answers, recorded first in `decisions.md` (answers 10–12, `db57d69`):
+repair 6-16, fix 6-10 now, and the ADR question for this change is "no". Then
+the phase-7 preparation the review owed (6-6, 6-7, 6-8). `origin/main` at
+`d5813ec` (#69–#73) was merged first (`7afa516`; one conflict, `plans/INDEX.md`,
+regenerated). Every fixed row says "fixed in …, not reviewed"; no reviewer has
+read this round.
+
+Commits: `7afa516` (the merge), `db57d69` (the answers), `ba46f58` (6-16),
+`59ff6fe` (6-10, prompts and tests), `95b1cf9` (the ADR answer), `6da39ee`
+(the class commit and the spec's amendments: 6-6, 6-7, 6-8, and the spec's side
+of 6-10).
+
+- **6-16.** `MERMAID_KEYWORDS` is a compiled pattern now: `%%`, then one of
+  `subgraph classDef class style linkStyle click direction` followed by white
+  space or the end of the line, or `end` alone on its line (Mermaid reserves
+  the lowercase word). `c4_problems` matches the stripped line against it, so
+  `endUser`, `endpoint`, `styleguide`, `clickstream`, `directionality`,
+  `classify` and `subgraphs` are boxes again. `[DETAIL]`: rejected, dropping
+  the skip altogether, because a `style a fill:#fff` line then reads as three
+  unlabelled boxes. Two tests: `test_c4_check_reads_a_box_whose_id_begins_with_a_keyword`
+  (seven ids, each red unlabelled and green with a level) and
+  `test_c4_check_skips_the_lines_that_name_no_box` (a diagram with every
+  keyword line and all boxes labelled passes).
+- **6-10.** One sentence in each prompt. `prompts/03-plan.md`, opening
+  paragraph: "When the change has a `design.md` (phase 2b), plan from it as well
+  and write into `plan.md` what phase 4 needs from it." `prompts/06-review.md`,
+  Input line: "the diff, `spec.md` and, when the change has one, `design.md` —
+  whether the diff makes its architecture delta true is your question (ADR
+  0009)." Two tests hold them (`test_plan_prompt_names_the_design_as_an_input`,
+  `test_review_prompt_names_the_design_as_an_input`). `[DETAIL]`: the Input
+  line, not a paragraph further down, because a reader looks there for the
+  inputs; a paragraph beyond #60's hunks would have merged without a conflict
+  but left the Input line saying "the diff and `spec.md`". Prompt 03's
+  sentence stands away from #60's deletion and from `adhd-frame`'s card and
+  merges cleanly.
+  **The conflict with #60, recorded** (`git merge-tree --write-tree --name-only`,
+  2026-10-05, head `6da39ee` against `origin/feat/stage-2-codex-glm` at
+  `ef7407c`; `origin/main` at `d5813ec`): the difference to the conflicts of
+  `origin/main` with #60 is `docs/WORKFLOW.md` (3 hunks), `scripts/kit/probe.py`
+  (2) and `prompts/06-review.md` (1: #60's Model lines against this Input
+  line, resolution in the overlap table above). `prompts/03-plan.md` merges
+  without a conflict. `plans/INDEX.md` conflicts with #60 for `origin/main`
+  as well (1 hunk each), so it left the difference; so do two architecture
+  documents that conflict for `origin/main` alone. The resolved tree and its
+  156 cases were not run again this round: the changes are one line of prompt
+  06 and tests that read only prompts 03 and 06; stated, not measured.
+  Criteria 27, 38 and 64 are amended in the spec for this.
+- **6-6, 6-7, 6-8, the class.** `spec.md` carries `class: feature`, `change:
+  template-bundle` and `adr_question: {proposed: "no", answered_by: null,
+  reason: …}` with the reason of the spec's amendment of 2026-10-05; the
+  answer file is `decisions/answers/template-bundle/adr.yaml`, written by
+  `python3 scripts/harness.py decide adr --change template-bundle --answer no
+  --reason "The decisions behind this change are already made (D-14, ADR 0009
+  and the maintainer's answers of 2026-10-05); this change implements them."
+  --stated-in "Claude Code session 2026-10-05, maintainer's answer to: Does this
+  change need an ADR? — Nein"` and committed with the message the command
+  prepared. The `--stamp` found nothing to do: `updated:` read 2026-10-05
+  already (6-6). The spec's Definition of Done now lists the departures from
+  the protected areas (6-7); all five artefacts say `partial` (6-8).
+  `check_adr_answers.py`: four features held to their answer files, exit 0;
+  `check_frontmatter_current.py`: 84 documents current, exit 0.
+
+**Planted faults.** One at a time on the committed tree of `6da39ee`, the test
+file run, the tree restored (a throwaway script in the scratch directory, not
+kept; `git status` clean afterwards, 2026-10-05 23:12). "Before" is the test
+file of `855eeb6` (100 cases), "after" the file of `59ff6fe` (110 cases);
+"n/a" where the checked part is new.
+
+| # | Row | Fault planted | Before | After: test that went red |
+|---|---|---|---|---|
+| 1 | 6-16 | the template's diagram gains `endUser["User: who calls it"] --> app` | green | `test_delta_asks_for_the_c4_level_of_each_box` |
+| 2 | 6-16 | … gains `endpoint["the API endpoint"] --> app` | green | `test_delta_asks_for_the_c4_level_of_each_box` |
+| 3 | 6-16 | … gains `styleguide["the style guide"] --> app` | green | `test_delta_asks_for_the_c4_level_of_each_box` |
+| 4 | 6-16 | … gains `clickstream["the click stream"] --> app` | green | `test_delta_asks_for_the_c4_level_of_each_box` |
+| 5 | 6-16 | … gains `directionality["which way"] --> app` | green | `test_delta_asks_for_the_c4_level_of_each_box` |
+| 6 | 6-16 | the keyword pattern matches by prefix again (no word end) | n/a | `test_c4_check_reads_a_box_whose_id_begins_with_a_keyword` |
+| 7 | 6-16 | `end` matches as a prefix | n/a | the same test |
+| 8 | 6-16 | `style` matches as a prefix | n/a | the same test |
+| 9 | 6-16 | `click` matches as a prefix | n/a | the same test |
+| 10 | 6-16 | `end` is no keyword | n/a | `test_c4_check_skips_the_lines_that_name_no_box` |
+| 11 | 6-16 | `click` is no keyword | n/a | the same test |
+| 12 | 6-16 | `%%` is no keyword | n/a | the same test |
+| 13 | 6-16 | `subgraph` is no keyword | n/a | the same test |
+| 14 | 6-10 | prompt 03's sentence deleted | green | `test_plan_prompt_names_the_design_as_an_input` |
+| 15 | 6-10 | prompt 03's sentence moved to the card paragraph | green | the same test |
+| 16 | 6-10 | prompt 03 says `design` where it said `design.md` | green | the same test |
+| 17 | 6-10 | prompt 06's Input line back to "the diff and `spec.md`" | green | `test_review_prompt_names_the_design_as_an_input` |
+| 18 | 6-10 | prompt 06's sentence moved from the Input line into the body | green | the same test |
+| 19 | 6-10 | prompt 06's Input line loses the question about the delta | green | the same test |
+| 20 | 6-10 | prompt 06's Input line names "the file" where it named `design.md` | green | the same test |
+
+Twenty faults, all red after, each in the test meant for it and in no other.
+Of the twelve that the old file could be asked about, all twelve were green
+before (faults 1–5 and 14–20); the eight of the keyword pattern (6–13) test a
+check that is new. The first run of fault 18 (a line between the Input and the
+Result field) stayed green, because the test reads that whole field; the fault
+was replaced by the one in the table, a move into the body.
+
+**Verification** (2026-10-05, `GIT_CONFIG_COUNT=1 GIT_CONFIG_KEY_0=commit.gpgsign
+GIT_CONFIG_VALUE_0=false make verify`, tree of `6da39ee` with these records,
+23:13): `VERIFY GREEN`, 711 passed, 15 skipped, 30 s of pytest; ruff clean; the
+Leerprobe carries 547 of 579 cases (not compared with a merge base this round).
+The report-only markdownlint run is red as before. Not run in a hosted CI.
+Rows 6-6, 6-7, 6-8, 6-10 and 6-16 say "fixed in …, not reviewed".
+
 ## Time used
 
 Phase 4 and its repair rounds, read with `date` (CEST); appetite 4 h.
@@ -1014,3 +1139,13 @@ Repair round 2 of slice 2, read with `date` (CEST); appetite 45 minutes.
 - 19:00:50–19:03:01, 2 min — the resolved tree with #60 in a scratch worktree (156 cases green), the records of this section, the Status of the rows.
 - 19:03:01–19:04:33, 2 min — `make verify` twice, both `VERIFY GREEN`.
 - Total 2026-10-05 18:53:04–19:04:33, 11 min of the 45-minute appetite (the commit of the records and the push follow within the minute); no stop at the appetite.
+
+Repair round 3, read with `date` (CEST); appetite 45 minutes.
+
+- 2026-10-05 23:03:59–23:04:26, 1 min — the instruction, `findings.md` rows 6-5 to 6-16, `decisions.md`, `plan.md`; the merge of `origin/main` (`d5813ec`), `plans/INDEX.md` regenerated, `7afa516` (23:04:26).
+- 23:04:26–23:05:17, 1 min — the decisions addendum (`db57d69`, 23:05:17).
+- 23:05:17–23:07:24, 2 min — 6-16: the keyword pattern, two tests, the thirteen faults, `make verify` (green), `ba46f58` (23:07:24).
+- 23:07:24–23:08:49, 1 min — 6-10: the two sentences, two tests, the seven faults against the old and the new file, `59ff6fe` (23:08:49).
+- 23:08:49–23:11:31, 3 min — the trial merge with #60 (first measure), the spec's amendments, `implementation_status`, the ADR answer (`95b1cf9`, 23:11:30), `make verify` (green), `6da39ee` (23:11:31).
+- 23:11:31–23:15:26, 4 min — the faults against the old file, the findings rows, this section; the final trial merge; `make verify` twice (23:13 and 23:15, both green, 711 passed).
+- Total 2026-10-05 23:03:59–23:15:26, 12 min of the 45-minute appetite (the commit of the records and the push follow within the minute); no stop at the appetite.
