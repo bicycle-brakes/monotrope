@@ -94,3 +94,14 @@ turns nothing red, decides nothing; the ADR question belongs to part 2". The
 class is no longer provisional, `class: bounded` stays in `spec.md`, and no
 ADR question is asked for this change. The text above stays as it was
 written; this addendum changes only its status.
+
+## Addendum 2026-10-05: the maintainer fixes all five findings in repair round 1
+
+After phase 6 (`findings.md`, round 1, five MINOR rows, none blocking) the
+maintainer decided in the Claude Code session on 2026-10-05 to fix all five
+in repair round 1: F-1 and F-2 (two holes in the tests) and also F-3 to F-5
+(three edge cases of the header reader: a doubled `last_reviewed:`, two
+misleading reasons, one pathological header ending the run) — "repair them
+along", not close them as named limits. The scope of the round is exactly
+those five rows; what each repair does is recorded in `plan.md`, "Repair
+round 1". Nothing above changes.
