@@ -112,6 +112,7 @@ REIST_NICHT: dict[str, str] = {
     "tests.test_model_endpoints::test_every_model_in_a_phase_prompt_resolves[01a-interview.md-Fable 5.1]": "bestand-dieses-repos",
     "tests.test_model_endpoints::test_every_model_in_a_phase_prompt_resolves[02-spec.md-Opus 5.5]": "bestand-dieses-repos",
     "tests.test_model_endpoints::test_every_model_in_a_phase_prompt_resolves[02a-spec-review.md-Opus 5.5]": "bestand-dieses-repos",
+    "tests.test_model_endpoints::test_every_model_in_a_phase_prompt_resolves[02b-design.md-Opus 5.5]": "bestand-dieses-repos",
     "tests.test_model_endpoints::test_every_model_in_a_phase_prompt_resolves[03-plan.md-Opus 5.5]": "bestand-dieses-repos",
     "tests.test_model_endpoints::test_every_model_in_a_phase_prompt_resolves[04-implement.md-Sonnet 5]": "bestand-dieses-repos",
     "tests.test_model_endpoints::test_every_model_in_a_phase_prompt_resolves[06-review.md-Opus 5.5]": "bestand-dieses-repos",
@@ -158,7 +159,10 @@ REIST_NICHT: dict[str, str] = {
 # carries now. It asks for more than 60 files in both manifests, and the throwaway repo reached
 # that when the ADR gate, its command and their two tests joined the mechanism
 # (plans/changes/harness-decide-adr). A lowered cap needs no reason; this one says why the entry went.
-DECKEL = 31  # last raised on 2026-09-29 (31 -> 32), lowered on 2026-09-30 (32 -> 31)
+# 31 -> 32 on 2026-10-05: `prompts/02b-design.md` came along (plans/changes/template-bundle).
+# A prompt with a model line is one case more, red in the throwaway repo for the reason the
+# other prompt cases are: `model-endpoints.yaml` stays home.
+DECKEL = 32  # raised on 2026-09-29 (31 -> 32), lowered on 2026-09-30 (32 -> 31), raised on 2026-10-05 (31 -> 32)
 
 
 # ---------------------------------------------------------------------------

@@ -158,7 +158,7 @@ rules:
     reason: "das Schema reist; die Uebergaben dieses Repos sind Bestand (siehe REIST_NICHT)"
   - prefix: tests/test_templates.py
     rolle: mechanismus
-    reason: "holds the three templates against the gate modules; skips a case whose file does not travel"
+    reason: "holds the templates and the design phase's texts against the gate modules; skips a case whose file does not travel"
   - prefix: tests/test_worktree_state.py
     rolle: mechanismus
     reason: "die Gegenproben des Waechters — je Regel eine Rotation, in Wegwerf-Repos (RB-G7)"
@@ -203,6 +203,12 @@ rules:
   - prefix: templates/adr.md
     rolle: mechanismus
     reason: "the form of a decision record in MADR 4.0.0; tests/test_templates.py holds it"
+  - prefix: templates/design.md
+    rolle: mechanismus
+    reason: "the form of a design; prompts/02b-design.md names it"
+  - prefix: templates/arc42.md
+    rolle: mechanismus
+    reason: "a skeleton in arc42's sections, in this repository's words, with arc42's credit and licence"
   - prefix: .github/PULL_REQUEST_TEMPLATE/
     rolle: mechanismus
     reason: "the decision pull request's template — a decision takes effect by its merge"
