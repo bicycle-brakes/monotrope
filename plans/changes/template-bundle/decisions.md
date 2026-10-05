@@ -116,3 +116,37 @@ Scope of this change from now on: the three templates, the design phase 2b
    arc42; it is the one exception in a kit meant to be Apache-2.0 (bead
    coding-harness-lir). This is an assessment, not legal advice; both
    repositories are private, so nothing is shared today.
+
+## Addendum 2026-10-05 (evening): three answers after two repair rounds
+
+The maintainer answered three questions in the Claude Code session of
+2026-10-05, after two repair rounds of the phase-6 review. Row 6-16 is the
+second repair round in a row that produced a row of its own origin
+(`fix-r2`, after 6-7 of `fix-r1`), which `docs/WORKFLOW.md` §2 makes an
+escalation, not a third round. Row 6-10 had waited for a person since the
+review of slice 2.
+
+10. **Row 6-16 — repair it.** `MERMAID_KEYWORDS` in `tests/test_templates.py`
+    compares by prefix, so a box id such as `endUser` hides its line from the
+    C4 level check. The keywords are compared as whole words, and a
+    counter-test with a box `endUser` is added.
+11. **Row 6-10 — fix it now.** `prompts/03-plan.md` and `prompts/06-review.md`
+    name `design.md` as an input when the change has one, one sentence each.
+    ADR 0009 leaves the truth of the architecture delta to the phase-6
+    reviewer, so the reviewer has to be told to read it. Both prompts were
+    protected areas of the spec; the departure is stated there. Pull request
+    #60 rewrites prompt 06, so the sentence there is kept small, and the
+    conflict it is expected to cause is recorded in `plan.md` (Repair
+    round 3).
+12. **The ADR question for this change — "no".** The class becomes `feature`
+    (the review's reading, `findings.md` row 2a-1), and the answer to "Does
+    this change need an ADR?" is no, because the decisions behind it are
+    already made: D-14, ADR 0009 and the maintainer's answers of 2026-10-05.
+    This change implements them. The answer is recorded as the maintainer
+    stated it (`decisions/answers/template-bundle/adr.yaml`, with `--stated-in`
+    naming this session).
+
+With answers 10 to 12, the open points of the earlier addenda are closed: the
+class, the ADR question and, by `decisions.md` answer 5 (Q5), the design
+phase's duty. The scope of the appetite (spec, row 2a-2) was kept at phase 4
+by the spec's amendment; it stays the maintainer's to confirm at the merge.
