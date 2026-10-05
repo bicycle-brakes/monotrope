@@ -49,7 +49,8 @@ with the recommendation of `[DECISION] 1`.
   3.11 and 3.12 (D-54, s6i's note).
 - **One check guards `main`.** The ruleset requires exactly the status
   check `verify` (research 4). A second interpreter turns one job into two
-  legs; a leg is not named `verify`, and a skipped job counts as passed.
+  legs while the ruleset knows one check name, and a skipped job counts as
+  passed.
 
 ## Terms
 
@@ -108,9 +109,11 @@ test passes the check a constructed input instead of the repository's.
    than `success`; and, in phase 5, a branch push whose 3.11 leg fails while
    `verify` reports success.
 8. While the ruleset on `main` requires the check `verify`, every push and
-   pull request run reports exactly one check run named `verify`.
-   *Refuted by:* the check runs of this change's head commit (GET) holding no
-   `verify` or two.
+   pull request run of the workflow reports exactly one check run named
+   `verify`.
+   *Refuted by:* a check suite of this change's head commit (GET, grouped by
+   suite — a pull request's head carries one run per event) holding no check
+   run `verify` or two.
 9. When the drift job runs, it runs once, under the last declared
    interpreter.
    *Refuted by:* a generated drift job with a matrix or another version.
