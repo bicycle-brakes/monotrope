@@ -39,7 +39,8 @@ above them. Decisions: `decisions.md`.
 > Criteria 33–65 build the widened scope. Still provisional, for the
 > maintainer at the merge: the class, which the spec review holds to be
 > `feature` (`findings.md`, row 2a-1), and the scope of the appetite (row
-> 2a-2). Open: the licence of the arc42 skeleton (Open decisions). Nothing
+> 2a-2). Answered later the same day: the licence of the arc42 skeleton is
+> option 1, CC BY-SA 4.0 (Open decisions, `decisions.md` answer 9). Nothing
 > here takes effect before the maintainer merges the pull request
 > (`AGENTS.md`, house rule 8).
 
@@ -595,14 +596,13 @@ their wording and their numbers.
     what the skeleton changed.
     *Refuted by:* one of these missing outside the leading comment (test).
 
-57. **The skeleton states its licence as the maintainer answers.** Written
-    for the recommendation of the open `[DECISION]` "The licence of the
-    arc42 skeleton": outside its leading comment it says that its structure
-    and headings are an adaptation of arc42 under CC BY-SA 4.0 and that what
-    is written into a copy stays its author's.
+57. **The skeleton states its licence as the maintainer answered.** Written
+    for option 1 of the `[DECISION]` "The licence of the arc42 skeleton",
+    which the maintainer chose on 2026-10-05: outside its leading comment it
+    says that its structure and headings are an adaptation of arc42 under
+    CC BY-SA 4.0 and that what is written into a copy stays its author's.
     *Refuted by:* either statement missing outside the leading comment
-    (test). If the maintainer answers otherwise, this criterion changes as
-    that `[DECISION]` says, before phase 4 builds the skeleton.
+    (test).
 
 58. **The skeleton asks for no more than a reader needs.** Its opening asks
     to fill only what a named reader needs and to say so in one line where a
@@ -800,9 +800,10 @@ This change must not touch:
 
 ## Open decisions
 
-One open since the amendment of 2026-10-05: the licence of the arc42
-skeleton. Two provisional answers await the maintainer at the merge: the
-class, and the scope of the appetite.
+None open: the one question of the amendment of 2026-10-05, the licence of
+the arc42 skeleton, was answered by the maintainer the same day. Two
+provisional answers await the maintainer at the merge: the class, and the
+scope of the appetite.
 
 ### [DECISION] — The class of this change (provisional answer: `bounded`)
 
@@ -939,7 +940,7 @@ settles it at the merge. This change's own `appetite: 4` stands: research's
 of the whole change; the reason is the `[DETAIL]` "The appetite stays at 4
 hours" below.
 
-### [DECISION] — The licence of the arc42 skeleton (open)
+### [DECISION] — The licence of the arc42 skeleton (answered 2026-10-05: option 1)
 
 The maintainer asked that the licence point be checked, not assumed
 (`decisions.md`, answer 8). The check (`research.md` section 9, item 1)
@@ -984,10 +985,13 @@ What is lost:          a kit under a single licence; an instance that
                        skeleton, not its content, under CC BY-SA 4.0.
 ```
 
-If the answer is option 2, criterion 57 is withdrawn and keeps its number;
-if it is option 3, criterion 57 is withdrawn and criterion 54 becomes "the
-skeleton's sections are its own, and it links arc42's twelve". Not
-answered yet; phase 4 builds the skeleton last, and only after the answer.
+**Answer, 2026-10-05:** option 1, by the maintainer in the Claude Code
+session (`decisions.md`, answer 9). The skeleton carries CC BY-SA 4.0, stated
+visibly and with arc42's credit; it is the one exception in a kit meant to be
+Apache-2.0 (bead coding-harness-lir). It is an assessment, not legal advice,
+and both repositories are private, so nothing is shared today. Options 2 and
+3 are not taken: criteria 54 and 57 stand as written, and phase 4 builds the
+skeleton last, as the plan says.
 
 ### [GAP] — closed by reading in the amendment of 2026-10-05
 
