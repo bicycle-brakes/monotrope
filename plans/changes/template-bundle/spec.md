@@ -642,15 +642,23 @@ their wording and their numbers.
     write into other files are English (`AGENTS.md`, house rule 1).
     *Refuted by:* a German sentence among them (review).
 
-64. **When the branch is merged in trial with pull request #60, conflicts
-    stand only where predicted.** `git merge-tree --write-tree` of this
-    pull request's head and #60's head reports conflicts only in
-    `docs/WORKFLOW.md` (the opening note, the routing table of §3, §4),
+64. **When the branch is merged in trial with pull request #60, it adds
+    conflicts only where predicted.** The files `git merge-tree --write-tree
+    --name-only` reports as conflicting for this pull request's head and
+    #60's head, less those it reports for `origin/main` and #60's head, are
+    only `docs/WORKFLOW.md` (the opening note, the routing table of §3, §4),
     `scripts/kit/probe.py` (the prompt entries, the cap) and
     `plans/INDEX.md`; resolved as `plan.md` says, `tests/test_templates.py`
     passes on the merged tree.
-    *Refuted by:* a conflict in another file or hunk (command); a red case
-    of `tests/test_templates.py` on the resolved tree.
+    *Refuted by:* another file in that difference (command); a red case of
+    `tests/test_templates.py` on the resolved tree.
+    *Amended 2026-10-05 ([DETAIL], orchestrating session):* the first
+    wording counted every conflict with #60. Once ADR 0009 merged (criterion
+    65), `origin/main` itself conflicts with #60 in the two architecture
+    documents of 2026-09-17, so criteria 64 and 65 could not both hold as
+    written. The intent, that this change adds no unforeseen conflict, is
+    kept; measured on 2026-10-05 at `4e99ec5`, the difference is exactly
+    the three predicted files.
 
 65. **ADR 0009 merges before this change.** When this pull request is
     merged, the merge commit of ADR 0009's pull request is an ancestor of
