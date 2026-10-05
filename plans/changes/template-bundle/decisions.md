@@ -3,8 +3,8 @@ title: "Decisions — template-bundle"
 status: draft
 implementation_status: none
 date: 2026-09-30
-last_reviewed: 2026-09-30
-updated: 2026-09-30
+last_reviewed: 2026-10-05
+updated: 2026-10-05
 supersedes: null
 superseded_by: null
 bead: coding-harness-9qo
@@ -58,3 +58,28 @@ the merge.
 - The spec template follows the criterion form that open PR #60 adds to
   `prompts/02-spec.md` (one condition per criterion, When / While / If)
   only as a recommendation, because #60 is not merged.
+
+## Addendum 2026-10-05: the maintainer's answers
+
+The maintainer went through the provisional answers one at a time in the
+Claude Code session on 2026-10-05:
+
+1. **Q1 — scope: changed to (c), the contract core plus the design phase
+   2b.** The three templates stay; the design phase (a prompt
+   `prompts/02b-design.md` and a `design.md` template) is added to this
+   change. ROADMAP and arc42 stay on the not-now list.
+2. **Q2 — findings table: (b) confirmed**, the practised table.
+3. **Q3 — protected areas and failure mode: (b) confirmed**, mapped onto
+   existing spec parts.
+4. **Q4 — LikeC4 and D-15: open.** The maintainer asked for a check whether
+   LikeC4 makes sense before deciding; a research note is being written
+   (`docs/research/2026-10-05-likec4.md`, branch `docs/research-likec4`).
+   The design template's "model-as-code delta" section follows that answer.
+5. **Q5 — design-phase duty: (a), D-14 as decided.** Mandatory for
+   `architectural`, a one-sentence reason in `spec.md` when a `feature`
+   skips it, absent for `bounded` and `spike`; stated in the workflow and
+   not checked until the validator (bead coding-harness-jc3) lands. D-14 is
+   unchanged, so no ADR is needed for it.
+
+Still to answer before phase 7: Q4, the class (`feature`, as the spec
+review found) and the ADR question for this change.
