@@ -4,7 +4,7 @@ status: draft
 implementation_status: none
 date: 2026-09-30
 last_reviewed: 2026-09-30
-updated: 2026-09-30
+updated: 2026-10-05
 supersedes: null
 superseded_by: null
 bead: coding-harness-9qo
@@ -157,15 +157,15 @@ ending `VERIFY GREEN`.
 | 5 | `test_appetite_is_a_placeholder_for_phase_4_hours` | the raw value is a number; the filled one is no number above 0; the line lacks "phase 4" |
 | 6 | `test_failure_mode_lives_in_the_refutations` | a heading holds "failure mode"; Acceptance criteria lacks it beside "Refuted by" |
 | 7 | `test_example_criterion_has_condition_and_refutation` | item `1.` begins otherwise than When/While/If, or its next line not `*Refuted by:*` |
-| 8 | `test_criterion_form_is_a_recommendation`; review | no `prompts/02-spec.md`, no "#60" in the paragraph naming When/While/If; review: a sentence making it mandatory |
+| 8 | `test_criterion_form_is_a_recommendation`; review | no `prompts/02-spec.md`, no "#60" in the paragraph naming When/While/If; "one condition" outside a sentence that says "recommended" (repair round 1); review: a sentence making When/While/If mandatory |
 | 9 | `test_protected_areas_ask_what_must_not_be_touched` | "must not touch", "reason" or "None beyond the non-goals." missing |
 | 10 | `test_done_names_the_gates_in_one_line`; counter `test_done_check_catches_a_planted_gate` | "`verify` green" not exactly once; an id from `decisions/gates.yaml` on another line; the planted "- `pytest` green." not reported |
 | 11 | `test_done_asks_the_change_specific_items`; review | "same pull request", "protected areas", "non-goals", "Closes-Bead" or "special runs" missing; review: an every-change item |
 | 12 | `test_spec_prompt_names_the_template` | the path absent from `prompts/02-spec.md` |
 | 13 | `test_findings_table_has_the_practised_columns` | the first table's header row differs cell by cell |
-| 14 | `test_findings_vocabulary_is_here` | one of the terms of criterion 14 missing, or no line with both `[DIVERGENT]` and `BLOCKER` |
-| 15 | `test_status_values_include_the_spec_review_ones` | `in spec` or `rejected — <reason>` missing |
-| 16 | `test_lines_under_the_table` | `Reviewer session: <id>`, either heading missing |
+| 14 | `test_findings_vocabulary_is_here` | a term of criterion 14 without its own entry in its own list of the reference part; no "escalation" in the `fix-r<N>` entry, no `BLOCKER` in the `[DIVERGENT]` entry, no "new evidence" below the `---` line (repair round 1) |
+| 15 | `test_status_values_include_the_spec_review_ones` | `in spec` or `rejected — <reason>` without an entry in the Status list (repair round 1) |
+| 16 | `test_lines_under_the_table` | the line `Reviewer session: ` with `<id>` in backticks, or either heading, missing (repair round 1) |
 | 17 | check below; review against `stage2.py` | a string of the check missing; a sentence saying stage 2 is active |
 | 18 | `test_filled_findings_header_passes_the_plans_gates` | as 3, without `examine()` |
 | 19 | `test_adr_sections_in_order` | the six headings differ |
@@ -201,7 +201,8 @@ not skip, of 387 plus all of its cases (the two `AGENTS.md` cases skip).
 
 The spec's protected areas: prompt 02's "Required sections", prompt 06 (its
 reference becomes true), `docs/WORKFLOW.md` beyond the opening note and the
-§4 paragraph (§2's link becomes true), `AGENTS.md`, `docs/adr/`,
+§4 paragraph (§2's link becomes true; repair round 1 touched one sentence of the
+paragraph after it, row 6-5), `AGENTS.md`, `docs/adr/`,
 `decisions/`, `docs/architecture/`, `templates/handover.md` and
 `gate-record.yaml`, other change folders, `.github/`, prompts 04 and 07, the
 gate scripts and the export manifest. Also `scripts/kit/probe.py` — no entry
@@ -230,8 +231,19 @@ After #60 merges, the test's workflow-text cases include
 The commit that opens the pull request sets `class: feature`, `change:
 template-bundle` and `adr_question: {proposed: "no", reason: "<the spec's
 option 2 reason>", answered_by: null}` in `spec.md` (spec, Open decisions,
-step 2); from then `make verify` is red on exactly the one `adr-answers`
-line (30). The body lists the provisional answers — `decisions.md` 1–4, the
+step 2). The same commit stamps `updated:` in `spec.md`
+(`python3 scripts/check_frontmatter_current.py --stamp`): it changes the header
+on a day after 2026-09-30, and `frontmatter-current` compares `updated:` with
+the committer date of the file's newest commit, so without the stamp a second
+line is red beside `adr-answers` (finding 6-6). From then `make verify` is red
+on exactly the one `adr-answers` line (30) and on no other; that is checked
+before the push. The maintainer is back
+and answers the ADR question in this phase; once the answer file
+`decisions/answers/template-bundle/adr.yaml` lands in the pull request, the
+pull request becomes a decision pull request (spec, Open decisions, step 3):
+title `decide(template-bundle): …` instead of the title it opened with, label
+`decision`, and the body from `.github/PULL_REQUEST_TEMPLATE/decision.md`.
+The body lists the provisional answers — `decisions.md` 1–4, the
 class with the 2a verdict `feature`, the appetite's scope — the overlaps
 above, the special runs (26, 31) with their commit, and says no bead closes
 yet: `Closes-Bead: coding-harness-9qo` follows only after the tracker writer
@@ -239,12 +251,132 @@ cuts the bead and opens the one for the not-now parts. If `adhd-frame` has
 merged, "What could break": a spec copied before #60 merges shows
 When / While / If as a recommendation only.
 
+## Repair round 1
+
+Origin `fix-r1`, 2026-10-05, on the six rows 6-1 to 6-6 of the phase-6 review
+(`findings.md`, read at `e3f997e`; this round starts at `7e11f82`, with the
+head of pull request #60 at `ef7407c`, of `adhd-frame` at `b4bb2cb` and of
+`origin/main` at `f985698`, all fetched at the start). Five rows are fixed, in
+`a3ede4a` (the wording of 6-1, 6-2, 6-4, 6-5) and `23eeff8` (the tests of
+6-3 and a guard for 6-1). Row 6-6 is not repaired here, on purpose: its repair
+is part of the class commit of phase 7, which this round must not make (the
+class stays `bounded` until then); phase 7 above now carries it. The
+decisions below are the coordinating session's `[DETAIL]`s. No reviewer has
+read this round, and no row is marked reviewed.
+
+- **6-1, the BLOCKER.** Line 59 of `templates/spec.md` reads "One condition
+  per criterion, beginning the sentence with When, While or If, is
+  recommended, not required: it becomes the rule once pull request #60 merges,
+  and until then the rule is `prompts/02-spec.md`." — the reviewer's planted
+  wording, which kept all 53 cases green, so the old test was no guard. The
+  round adds one: `test_criterion_form_is_a_recommendation` also refuses
+  "one condition" anywhere in the Acceptance criteria section unless the same
+  sentence says "recommended" (the first fault of the table below planted the
+  old wording back and turns it red). Criterion 8's refutation still marks the
+  rest of the mandatory-form check as review.
+- **6-2.** The stage-2 part of `templates/findings.md` shows the heading and
+  `Rounds run: <n>` as the section of released rows, and the line `Loop rows:
+  none — …` apart from it, "in place of the section, at the end of the file,
+  without a heading", as the runner's `release` writes it (lines 740–750 of
+  `scripts/stage2.py` at `ef7407c`, re-read). All strings the check of
+  criterion 17 greps for are still in the file.
+- **6-4.** Every placeholder of the body that stood bare in angle brackets
+  now stands in backticks: 22 of them over the three templates (the headings,
+  the example criterion, the findings opening, the ADR Status bullet, Review
+  and Date lines, Decision Drivers, Considered Options, the Decision opening,
+  Consequences, Validation). That includes `Reviewer session: ` with `<id>` in
+  backticks, so the line of criterion 16 differs from the spec's wording by the
+  backticks only (the test follows). Each copy instruction (item 1 of the
+  leading comment) says to replace a placeholder, backticks included.
+  Measured: `gh api markdown` (GFM) over the three files at `a3ede4a` shows
+  every one of them; `markdownlint-cli2` v0.23.2 reports MD033 17 times on
+  the three files at `7e11f82` and none at `a3ede4a`. Not changed: the leading
+  comment, which GitHub does not show at all — it is an HTML comment on
+  purpose, so that the copy instructions stay out of the copy; whoever copies
+  the file opens the raw text — and the placeholders in the yaml blocks and
+  `text` fences, which render as they stand.
+- **6-5.** The paragraph after the removed one reads "The orchestrator —
+  `scripts/run_change.sh`, not in this tree yet (see the note at the top) —
+  holds **no second rule set**." A departure from the spec's protected areas,
+  which allowed the §4 paragraph only: one sentence of the next paragraph, the
+  only way to give the referent back (the departure is the coordinating
+  session's `[DETAIL]`). Pull request #60 rewrites §4 anyway; the conflict of
+  the trial merge stays where it was predicted. A header of its own was owed:
+  `docs/WORKFLOW.md` is held by `frontmatter-current`, so `a3ede4a` alone leaves
+  its `updated:` at 2026-09-30 and that one gate red on that commit (measured
+  with `check_frontmatter_current.py`, which named the file); the commit with
+  these records stamps it, and the tip is green.
+- **6-3, tests that read the places.** `reference_lists` in
+  `tests/test_templates.py` reads the reference part below the `---` line into
+  its bold-labelled lists. `test_findings_vocabulary_is_here` needs each
+  severity, dimension, origin and marker as an entry of its own list, the word
+  "escalation" in the `fix-r<N>` entry, `BLOCKER` in the `[DIVERGENT]` entry
+  and "new evidence" below the line;
+  `test_status_values_include_the_spec_review_ones` needs `in spec` and
+  `rejected — <reason>` as entries of the Status list. The case count is the
+  same (53).
+
+**Planted faults.** One fault at a time into the committed template, then
+`python3 -m pytest tests/test_templates.py`, then the file restored (a
+throwaway script, not kept; `git status` was clean afterwards). "Before" is
+the test file of `a3ede4a` (the assertions of `e3f997e`), "after" the one of
+`23eeff8`, both over the templates of `23eeff8`; every row of the table was
+run, 2026-10-05 14:39–14:40. The clean tree passes 53 of 53 both times. The
+first four are the reviewer's four survivors; the other rows are more of the
+same kind, planted so that the tests are not only as tight as the four.
+
+| # | Fault planted | Before | After: test that went red |
+|---|---|---|---|
+| 1 | delete the `MINOR` line of the Severity list | green | `test_findings_vocabulary_is_here` |
+| 2 | delete the `SPEC` line of the Dimension list | green | `test_findings_vocabulary_is_here` |
+| 3 | delete the `base` line of the Origin list | green | `test_findings_vocabulary_is_here` |
+| 4 | delete `rejected — <reason>` from the Status list | green | `test_status_values_include_the_spec_review_ones` |
+| 5 | delete `in spec` from the Status list | red | `test_status_values_include_the_spec_review_ones` |
+| 6 | delete the `MAJOR` entry | red | `test_findings_vocabulary_is_here` |
+| 7 | delete the `MAINT` entry | red | `test_findings_vocabulary_is_here` |
+| 8 | delete the `BLOCKER` entry | green | `test_findings_vocabulary_is_here` |
+| 9 | delete the `fix-r<N>` entry | red | `test_findings_vocabulary_is_here` |
+| 10 | delete the `[AMBIGUITY]` entry | green | `test_findings_vocabulary_is_here` |
+| 11 | delete the `[DIVERGENT]` entry | red | `test_findings_vocabulary_is_here` |
+| 12 | take "escalation" out of the `fix-r<N>` entry | red | `test_findings_vocabulary_is_here` |
+| 13 | take `BLOCKER` out of the `[DIVERGENT]` entry | red | `test_findings_vocabulary_is_here` |
+| 14 | delete the "new evidence" paragraph | red | `test_findings_vocabulary_is_here` |
+| 15 | move the `MINOR` line from Severity into Origin | green | `test_findings_vocabulary_is_here` |
+| 16 | move `rejected — <reason>` from Status into Origin | green | `test_status_values_include_the_spec_review_ones` |
+| 17 | spec form line 59 back to "One condition per criterion. Beginning the sentence …" (6-1) | green | `test_criterion_form_is_a_recommendation` |
+
+Seventeen faults: nine were green before, all seventeen are red after, each
+in the test that is meant for it and in no other. The earlier build's "31 of
+31" is still not recorded anywhere; this table is the first record.
+
+**Verification** (2026-10-05, `GIT_CONFIG_COUNT=1 GIT_CONFIG_KEY_0=commit.gpgsign
+GIT_CONFIG_VALUE_0=false make verify`, on the tree of the commit that carries
+this section, `a3ede4a` and `23eeff8` under it): `VERIFY GREEN`, 568 passed,
+15 skipped, 42 s; the Leerprobe carries 407 of 438 cases, the same as before
+the round, because the round adds no case (53 in `tests/test_templates.py`,
+the two `AGENTS.md` cases skip there). On `a3ede4a` alone the one gate
+`frontmatter-current` was red (see 6-5 above), not measured with `make
+verify`. `git merge-tree --write-tree`, run on `23eeff8`: with
+`origin/feat/stage-2-codex-glm` (`ef7407c`) conflicts only in `docs/WORKFLOW.md`
+and `plans/INDEX.md`, as before (`prompts/02-spec.md` and
+`scripts/kit/manifest.yaml` merge automatically); resolved as the overlap table
+says (#60's two files, `templates/findings.md` struck from its opening note),
+the merged tree passes 55 of 55 cases of `tests/test_templates.py`. With
+`origin/docs/adhd-frame` (`b4bb2cb`): no conflict, 53 of 53 pass. The tests of
+`tests/test_kit.py` were not run on those trees (an archive has no git).
+
 ## Time used
 
-Phase 4 only, read with `date` (CEST); appetite 4 h.
+Phase 4 and its repair rounds, read with `date` (CEST); appetite 4 h.
 
 - 2026-09-30 23:34–23:38, 4 min — steps 1–3, the three templates (reading the inputs included).
 - 2026-09-30 23:38–23:40, 2 min — step 4, `tests/test_templates.py`.
 - 2026-09-30 23:40–23:41, 1 min — step 5, the texts.
 - 2026-09-30 23:41–23:44, 3 min — step 6, the checks and the verification, run twice (`VERIFY GREEN`: 568 passed, 15 skipped; Leerprobe 407 of 438).
 - Total 2026-09-30 23:34:44–23:43:31, 9 min of 4 h (the commit and push follow within the minute); no repair round.
+- Repair round 1, 2026-10-05 14:34–14:35, 1 min — reading `findings.md`, `plan.md` and how earlier rounds are recorded; fetching the heads (unchanged).
+- 14:35–14:38, 3 min — the reviewer's survivors reproduced on `7e11f82`'s tests, 6-1 and 6-4 in the templates, `gh api markdown`.
+- 14:38–14:39, 1 min — 6-2 and 6-5, the tests of 6-3, commits `a3ede4a` (14:39:11) and `23eeff8` (14:39:19).
+- 14:39–14:40, 1 min — the seventeen planted faults, after and before.
+- 14:40–14:46, 6 min — phase 7 text, the section above, the rows' Status, the stamp, `make verify` three times (14:43, 14:45, 14:46: the same counts each time), the trial merges, the 55 and 53 cases on the merged trees.
+- Total 2026-10-05 14:34:40–14:47, 12 min of 4 h for the round (the commit and push follow within the minute); with the 9 min of the build, 21 min of 4 h.
