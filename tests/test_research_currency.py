@@ -18,6 +18,7 @@ import json
 import os
 import subprocess
 import sys
+import tracemalloc
 from datetime import UTC, date, datetime, timedelta
 from pathlib import Path
 
@@ -230,6 +231,8 @@ NOT_A_MAPPING = "frontmatter is not a YAML mapping"
 
 TWICE = "last_reviewed appears more than once (no way to tell which one is meant)"
 TAGGED = "last_reviewed is a !!timestamp-tagged value, not a plain YYYY-MM-DD date"
+TOO_DEEP = "frontmatter is nested too deeply to read"
+TOO_LARGE = "frontmatter is too large to read"
 
 
 def _not_a_date(shown: str) -> str:
@@ -257,6 +260,9 @@ UNUSABLE: list[tuple[str, str | bytes, str]] = [
         "---\n{last_reviewed: 2026-12-01, last_reviewed: 2026-01-01}\n---\n\nBody\n",
         TWICE,
     ),
+    # PyYAML composes a flow sequence recursively: this is a few kilobytes, and ends in RecursionError.
+    ("nested-too-deeply", header("last_reviewed: " + "[" * 1200), TOO_DEEP),
+    ("nested-too-deeply-closed", header("last_reviewed: " + "[" * 1200 + "]" * 1200), TOO_DEEP),
     ("empty-value", header("last_reviewed:"), "last_reviewed is empty"),
     ("empty-string", header("last_reviewed: ''"), "last_reviewed is empty"),
     ("null-value", header("last_reviewed: null"), "last_reviewed is empty"),
@@ -358,6 +364,73 @@ def test_a_reason_is_one_short_line(tmp_path: Path) -> None:
     assert "…" in long_reason
     assert len(long_reason) < 150
     assert "\n" not in long_reason
+
+
+def test_a_pathological_header_does_not_end_the_run(tmp_path: Path) -> None:
+    """One header that PyYAML cannot read makes its own note due; every other note is still listed."""
+    put_note(tmp_path, "a-deep.md", header("last_reviewed: " + "[" * 1200))
+    put_note(tmp_path, "b-good.md", reviewed(ago(95)))
+
+    proc = run(tmp_path)
+
+    assert proc.returncode == 0, proc.stdout + proc.stderr
+    assert "Traceback" not in proc.stderr
+    assert proc.stdout == (
+        f"research-currency: 2 notes under docs/research/, 2 due (review more than 90 days before 2026-12-20)\n"
+        f"  due  no date  {NOTES}/a-deep.md — {TOO_DEEP}\n"
+        f"  due  {ago(95)}  95 days  {NOTES}/b-good.md\n"
+        f"oldest: {NOTES}/a-deep.md, no usable review date ({TOO_DEEP})\n"
+    )
+
+
+def test_a_header_too_large_to_read_is_due_with_its_reason(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    big = put_note(tmp_path, "big.md", header("title: big"))
+    good = put_note(tmp_path, "good.md", reviewed(ago(1)))
+    real = cr._read_header
+
+    def read(source: str) -> tuple[object, int]:
+        if "title: big" in source:
+            raise MemoryError
+        return real(source)
+
+    monkeypatch.setattr(cr, "_read_header", read)
+
+    notes = by_path(cr.measure(tmp_path, TODAY))
+
+    assert (notes[big].due, notes[big].problem) == (True, TOO_LARGE)
+    assert notes[good].problem is None
+
+
+def _alias_bomb(levels: int, fan_out: int = 10) -> str:
+    """A header whose `last_reviewed:` is an alias of a list of `fan_out` aliases of ..., `levels` deep.
+
+    A few hundred bytes of source, `fan_out ** levels` items once expanded: seven levels are ten million
+    items, a second of work and 600 MB; five are enough to tell a reason that expands the value from one
+    that does not.
+    """
+    lines = ["a0: &a0 [" + ", ".join(["x"] * fan_out) + "]"]
+    for level in range(1, levels):
+        lines.append(f"a{level}: &a{level} [" + ", ".join([f"*a{level - 1}"] * fan_out) + "]")
+    lines.append(f"last_reviewed: *a{levels - 1}")
+    return header(*lines)
+
+
+def test_an_alias_bomb_is_not_expanded_to_describe_it() -> None:
+    text = _alias_bomb(5)  # 100,000 items once expanded; `str()` of it alone peaks at about 6 MB
+    assert len(text) < 400
+
+    tracemalloc.start()
+    try:
+        reviewed_on, problem = cr.review_date(text, TODAY)
+        _, peak = tracemalloc.get_traced_memory()
+    finally:
+        tracemalloc.stop()
+
+    assert reviewed_on is None
+    assert (problem or "").startswith("last_reviewed '[[[")
+    assert (problem or "").endswith("is not a YYYY-MM-DD date")
+    assert len(problem or "") < 150
+    assert peak < 400_000, f"building the reason took {peak} bytes"
 
 
 # ---------------------------------------------------------------------------

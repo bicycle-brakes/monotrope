@@ -13,8 +13,8 @@ of plans/changes/research-currency/spec.md).
   * the review date is the top-level `last_reviewed:` and nothing else — `updated:`,
     `created:`, the provenance block and the git history are never consulted;
   * a note whose review date cannot be used (no header, no key, a key that stands twice,
-    empty, not a date, later than tomorrow, not UTF-8) is due, first in the order, with
-    the reason;
+    empty, not a date, later than tomorrow, not UTF-8, a header too deep to read) is due,
+    first in the order, with the reason — one such note never ends the run;
   * the order is: unusable dates first, then oldest first, ties by path — the same
     tree and the same day of the run give the same bytes;
   * the run only reads. It needs no git, no network and no tracker; its one write is
@@ -36,6 +36,7 @@ import argparse
 import json
 import os
 import re
+import reprlib
 import sys
 from dataclasses import dataclass
 from datetime import date, timedelta
@@ -59,8 +60,14 @@ _BLOCK = re.compile(r"^\ufeff?---\r?\n(.*?)\n---\r?\n", re.S)
 _ISO = re.compile(r"\d{4}-\d{2}-\d{2}")
 _TIMESTAMP_TAG = "tag:yaml.org,2002:timestamp"
 _REASON_WIDTH = 80
+# A value in a reason is looked at through this, never through `str()`: a header may build a
+# value from aliases (a list of ten aliases of a list of ten ..., seven deep, stands for ten
+# million items), and `str()` would expand it. `reprlib` reads a few items of a few levels.
+_GLIMPSE = reprlib.Repr(maxlevel=3, maxlist=6, maxdict=4, maxtuple=6, maxset=6, maxstring=_REASON_WIDTH)
 
 _NOT_A_MAPPING = "frontmatter is not a YAML mapping"
+_TOO_DEEP = "frontmatter is nested too deeply to read"
+_TOO_LARGE = "frontmatter is too large to read"
 _TWICE = "last_reviewed appears more than once (no way to tell which one is meant)"
 _TAGGED = "last_reviewed is a !!timestamp-tagged value, not a plain YYYY-MM-DD date"
 
@@ -94,8 +101,8 @@ class Note:
 
 
 def _shown(value: object) -> str:
-    """A header value as one short line for a reason."""
-    text = " ".join(str(value).split())
+    """A header value as one short line for a reason, without building its whole text."""
+    text = " ".join((value if isinstance(value, str) else _GLIMPSE.repr(value)).split())
     return text if len(text) <= _REASON_WIDTH else text[: _REASON_WIDTH - 1] + "…"
 
 
@@ -124,6 +131,10 @@ def review_date(text: str, today: date) -> tuple[date | None, str | None]:
         return None, "no frontmatter"
     try:
         header, times = _read_header(block.group(1))
+    except RecursionError:  # 1,200 nested `[`: one note's header, not the end of the run
+        return None, _TOO_DEEP
+    except MemoryError:
+        return None, _TOO_LARGE
     except (yaml.YAMLError, ValueError):
         return None, _NOT_A_MAPPING
     if not isinstance(header, dict):
