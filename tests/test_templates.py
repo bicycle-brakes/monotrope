@@ -28,7 +28,7 @@ import check_adr_answers as adr_answers  # noqa: E402
 import check_frontmatter_current as frontmatter_current  # noqa: E402
 import plans_registry  # noqa: E402
 
-NAMES = ("spec.md", "findings.md", "adr.md", "design.md")
+NAMES = ("spec.md", "findings.md", "adr.md", "design.md", "arc42.md")
 DESIGN_PROMPT = "prompts/02b-design.md"
 WORKFLOW_TEXTS = [
     "AGENTS.md",
@@ -39,6 +39,20 @@ MARKINGS = ("[FLASH]", "[GLM5.3]", "[SONNET]", "plan-marking", "Model markings")
 VERIFY_LINE = "- `verify` green."
 CHANGE = "filled-change"
 # The regex of `tests/test_model_endpoints.py::prompt_modelle`, copied: importing that module runs its reads.
+ARC42_SECTIONS = (
+    "Introduction and Goals",
+    "Architecture Constraints",
+    "Context and Scope",
+    "Solution Strategy",
+    "Building Block View",
+    "Runtime View",
+    "Deployment View",
+    "Cross-cutting Concepts",
+    "Architecture Decisions",
+    "Quality Requirements",
+    "Risks and Technical Debts",
+    "Glossary",
+)
 MODEL_LINE = re.compile(r"^\*\*(?:Modell|Model):\*\*\s*([^\n—]+?)\s*(?:—|\.\s*$|$)", re.M)
 # What decision D-14 asks of a class, as words the prompt's line for that class must hold.
 D14_WORDS = {
@@ -601,3 +615,53 @@ def test_workflow_states_d14_by_class() -> None:
 def test_spec_template_says_where_a_feature_skips_design() -> None:
     text = flat(section("spec.md", "Non-goals"))
     assert "design.md" in text and "feature" in text and "one sentence" in text
+
+
+# --- the arc42 skeleton (criteria 54-60) ------------------------------------------------
+
+
+def credit_part(name: str) -> str:
+    """What a copy keeps: the template without its leading comment and without its example header."""
+    return flat(re.sub(r"<!--.*?-->", "", read(name), count=1, flags=re.S))
+
+
+def test_arc42_has_the_twelve_sections_in_order() -> None:
+    found = [re.fullmatch(r"(\d+)\. (.+)", title) for title in headings("arc42.md")]
+    assert all(found), headings("arc42.md")
+    assert [m.group(2) for m in found if m] == list(ARC42_SECTIONS)
+    assert [int(m.group(1)) for m in found if m] == list(range(1, len(ARC42_SECTIONS) + 1))
+
+
+def test_arc42_credits_arc42_in_the_copied_part() -> None:
+    text = credit_part("arc42.md")
+    for needed in (
+        "arc42",
+        "9.0",
+        "July 2025",
+        "Gernot Starke",
+        "Peter Hruschka",
+        "https://arc42.org",
+        "https://creativecommons.org/licenses/by-sa/4.0/",
+        "changed",
+    ):
+        assert needed in text, needed
+
+
+def test_arc42_states_its_licence() -> None:
+    text = credit_part("arc42.md")
+    assert "adaptation of arc42 under CC BY-SA 4.0" in text
+    assert re.search(r"written into a copy[^.]*stays its author's", text)
+
+
+def test_arc42_asks_only_what_a_reader_needs() -> None:
+    opening = flat(lead("arc42.md")).lower()
+    assert "reader" in opening and "commit or date" in opening and re.search(r"\bopen\b", opening)
+
+
+def test_arc42_decisions_point_to_the_records() -> None:
+    assert "docs/adr/" in section("arc42.md", "9. Architecture Decisions")
+
+
+def test_filled_arc42_header_gives_a_date() -> None:
+    text = f"---\n{fill(example_header('arc42.md'))}\n---\n\n# Body\n"
+    assert isinstance(frontmatter_current.read_updated(text), date)
