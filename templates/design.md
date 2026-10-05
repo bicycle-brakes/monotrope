@@ -71,8 +71,9 @@ None — `<one sentence why>`
 ## ADR draft
 
 The form is `templates/adr.md`. An `architectural` change always has one; a
-`feature` has one when the answer to the ADR question for it is "yes".
-Otherwise write the single line:
+`feature` has one when its spec proposes "yes" to the ADR question or the
+maintainer has answered "yes" (the answer often comes only at the merge, so the
+proposal is what this phase can know). Otherwise write the single line:
 
 None — `<one sentence why>`
 

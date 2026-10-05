@@ -31,11 +31,14 @@ one sentence.
 
 ## The ADR draft
 
-For an `architectural` change, and for a `feature` whose ADR answer is "yes", the
-draft takes the form of `templates/adr.md`. It becomes `docs/adr/<NNNN>-<slug>.md`
-in the change's own pull request, which makes that pull request a decision pull
-request (`docs/WORKFLOW.md`, "Change classes, the ADR question and decision pull
-requests"). The chosen alternative is a proposal: the merge decides it (ADR 0008).
+For an `architectural` change, and for a `feature` whose spec proposes "yes" to
+the ADR question or whose answer is "yes" (the answer often comes only at the
+merge, so the proposal is what this phase can know), the draft takes the form of
+`templates/adr.md`. It becomes `docs/adr/<NNNN>-<slug>.md` in the change's own
+pull request, which makes that pull request a decision pull request
+(`docs/WORKFLOW.md`, "Change classes, the ADR question and decision pull
+requests"). The chosen alternative is a proposal: the merge decides it (ADR
+0008).
 
 ## From design to plan
 

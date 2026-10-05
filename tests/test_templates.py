@@ -602,6 +602,13 @@ def test_adr_draft_takes_the_record_form() -> None:
     assert "templates/adr.md" in text and "architectural" in text
 
 
+@pytest.mark.parametrize("path", ["templates/design.md", DESIGN_PROMPT])
+def test_adr_draft_is_owed_when_proposed_or_answered_yes(path: str) -> None:
+    """At phase 2b the maintainer has often not answered yet, so the spec's proposal counts as well."""
+    pattern = r'proposes "yes" to the ADR question or (?:the maintainer has answered|whose answer is) "yes"'
+    assert re.search(pattern, flat(workflow_text(path)))
+
+
 def test_delta_is_a_mermaid_flowchart_after_the_change() -> None:
     outside, blocks = split_fences(raw_section("design.md", "Architecture delta"))
     diagrams = [body for info, body in blocks if info == "mermaid"]
