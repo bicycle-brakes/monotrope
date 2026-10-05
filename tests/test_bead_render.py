@@ -148,7 +148,7 @@ def test_plans_registry_blocks_instead_of_crashing_without_tracker(monkeypatch) 
 
     monkeypatch.setattr(plans_registry, "_bead_export_path", kaputt)
     verdict = plans_registry.check()
-    assert any("nicht messbar" in f.message for f in verdict.findings if f.level.name == "BLOCK")
+    assert any("not measurable" in f.message for f in verdict.findings if f.level.name == "BLOCK")
 
 
 def test_plans_registry_names_a_render_outside_the_repo(tmp_path: Path, monkeypatch) -> None:

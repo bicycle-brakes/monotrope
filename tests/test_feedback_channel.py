@@ -1,14 +1,14 @@
-"""Der Rueckkanal zur Projekt-Instanz haelt seine eigenen Zusagen.
+"""The feedback channel to the project instance keeps its own promises.
 
-Eine Uebergabe ist keine Datei, sondern ein Versprechen mit drei Teilen: der
-Befund steht fest, der Weg dorthin ist gefunden, und irgendwann sagt jemand, was
-daraus geworden ist. Faellt eines der drei weg, bleibt eine Notiz uebrig — und
-genau so haben in derselben Konvention drei Learnings 77 bis 92 Tage gestanden.
+A handover is not a file but a promise in three parts: the finding is settled,
+the way to it has been found, and at some point someone says what became of it.
+If one of the three drops out, a note is left over — and that is exactly how
+three learnings in the same convention stood for 77 to 92 days.
 
-Der schaerfste Test ist `test_handover_records_are_immutable`. Er rechnet den
-Hash ueber den Befundblock nach, und er ist der Grund, warum die Frage *was stand
-da eigentlich, als wir zugestimmt haben?* spaeter noch beantwortbar ist. Eine
-Unterschrift unter einem Text, der sich danach aendert, ist keine.
+The sharpest test is `test_handover_records_are_immutable`. It recomputes the
+hash over the finding block, and it is the reason the question *what did it
+actually say when we agreed?* can still be answered later. A signature under a
+text that changes afterwards is none.
 """
 
 from __future__ import annotations
@@ -34,30 +34,30 @@ import handover_schema as schema  # noqa: E402
 BEGIN = schema.RECORD_BEGIN
 END = schema.RECORD_END
 
-# Das Statusvokabular des Kanals — jetzt aus dem Schema, nicht daneben getippt.
-# Bis zum 2026-09-08 stand es hier ein zweites Mal, mit der Begruendung, ein
-# neuer Wert solle nicht unbemerkt einwandern. Zwei Listen verhindern das aber
-# nicht, sie verdoppeln nur die Stelle, an der jemand vergisst nachzuziehen.
+# The channel's status vocabulary — now taken from the schema, not typed next
+# to it. Until 2026-09-08 it stood here a second time, on the grounds that a
+# new value should not slip in unnoticed. Two lists do not prevent that; they
+# only double the place where someone forgets to follow up.
 STATUS = schema.STATUS
 
-# Derselbe Leser fuer Test und Vorlage. Die lokale Kopie ist am 2026-09-08 nach
-# `scripts/handover_schema.py` gezogen — die Vorlage braucht sie auch.
+# The same reader for test and template. The local copy was moved to
+# `scripts/handover_schema.py` on 2026-09-08 — the template needs it too.
 frontmatter = schema.frontmatter
 
 
 def record_of(text: str) -> str:
-    """Der Block zwischen den Markern — das, was der Hash abdeckt."""
+    """The block between the markers — what the hash covers."""
     return text.split(BEGIN, 1)[1].split(END, 1)[0]
 
 
 def alle_uebergaben(directory: Path = HANDOVER_DIR) -> list[tuple[Path, dict[str, str], str]]:
-    """Jede Datei im Verzeichnis — ohne Filter.
+    """Every file in the directory — without a filter.
 
-    Der Unterschied zu `project_handovers()` ist der ganze Punkt dieser
-    Aenderung: `project_handovers()` filtert auf `direction`, und am 2026-09-08
-    trugen **14 von 24** Dateien dieses Feld gar nicht. Sie fielen damit aus
-    jeder Pruefung heraus, und die Suite war gruen ueber einer Menge, die die
-    ungeprueften Dateien nicht enthielt.
+    The difference from `project_handovers()` is the whole point of this
+    change: `project_handovers()` filters on `direction`, and on 2026-09-08
+    **14 of 24** files did not carry that field at all. They therefore fell out
+    of every check, and the suite was green over a set that did not contain the
+    unchecked files.
     """
     gefunden = []
     for pfad in sorted(directory.glob("*.md")):
@@ -71,36 +71,35 @@ def project_handovers(directory: Path = HANDOVER_DIR) -> list[tuple[Path, dict[s
 
 
 def fehlende_kanalpflicht(text: str) -> list[str]:
-    """Welche Pflichtfelder des Kanals die Uebergabe nicht traegt.
+    """Which mandatory channel fields the handover does not carry.
 
-    Liest `schema.PROJEKT_PFLICHT` **bei jedem Aufruf**. Das ist keine Marotte,
-    sondern die Bedingung, unter der die Gegenprobe unten ueberhaupt etwas
-    beweisen kann: eine abgeschriebene Liste laesst sich nicht von aussen
-    erweitern, und genau daran wuerde man nicht merken, dass sie abgeschrieben
-    ist. Bis zum 2026-09-08 stand hier ein hartkodiertes Tupel, waehrend die
-    Konstante im Schema von niemandem gelesen wurde.
+    Reads `schema.PROJEKT_PFLICHT` **on every call**. That is not a quirk but
+    the condition under which the counter-check below can prove anything at
+    all: a copied-out list cannot be extended from outside, and that is exactly
+    why one would not notice that it is a copy. Until 2026-09-08 a hard-coded
+    tuple stood here, while nobody read the constant in the schema.
     """
     return sorted(schema.PROJEKT_PFLICHT - schema.belegte_felder(text))
 
 
 def fehlende_gemeinsame(text: str) -> list[str]:
-    """Welche der Felder fehlen, die laut Schema **jede** Uebergabe traegt."""
+    """Which of the fields are missing that, according to the schema, **every** handover carries."""
     return sorted(schema.GEMEINSAM - schema.belegte_felder(text))
 
 
 @pytest.mark.skip(
-    reason="2ee-Triage 2026-09-19: gilt-erst-mit-bestand — der Projekt-Kanal "
-    "(framework->project) beginnt mit dem lakeswitch-Beitritt (O-2, M2-Gate). Frist 2026-12-31."
+    reason="2ee triage 2026-09-19: gilt-erst-mit-bestand — the project channel "
+    "(framework->project) begins with lakeswitch joining (O-2, M2 gate). Deadline 2026-12-31."
 )
 def test_the_channel_is_not_empty() -> None:
-    """Eine leere Menge ist kein Ergebnis (RB-G7).
+    """An empty set is not a result (RB-G7).
 
-    Ohne diesen Test wuerde jeder folgende gruen ueber null Dateien laufen, und
-    ein geloeschter Ordner saehe aus wie ein erfuellter Vertrag.
+    Without this test every following one would run green over zero files, and
+    a deleted folder would look like a fulfilled contract.
     """
     assert project_handovers(), (
-        "Keine einzige Datei mit direction: framework->project gefunden. "
-        "Entweder ist der Kanal weg oder das Frontmatter-Feld heisst anders."
+        "Not a single file with direction: framework->project found. "
+        "Either the channel is gone or the frontmatter field is named differently."
     )
 
 
@@ -108,15 +107,18 @@ def test_the_channel_is_not_empty() -> None:
 def test_every_project_handover_declares_direction_target_and_status(
     path: Path, fields: dict[str, str], _text: str
 ) -> None:
-    """Gegen welchen Stand, mit welchem Ergebnis, unter wessen Verantwortung."""
+    """Against which state, with what result, under whose responsibility."""
     fehlend = fehlende_kanalpflicht(_text)
     assert not fehlend, (
-        f"{path.name}: Pflichtfeld(er) des Kanals fehlen oder sind leer: {', '.join(fehlend)}. "
-        f"Verlangt wird, was in schema.PROJEKT_PFLICHT steht — dort nachtragen, nicht hier."
+        f"{path.name}: mandatory channel field(s) missing or empty: {', '.join(fehlend)}. "
+        f"What is required is what stands in schema.PROJEKT_PFLICHT — add them there, not here."
     )
+    # The next and the last assertion message stay German on purpose: the skipped mutation test
+    # `test_the_checks_go_red_when_the_contract_is_broken` matches them by text ("liegt ausserhalb",
+    # "kein kurzer Commit-Hash"). Translate message and pattern together.
     assert fields["status"] in STATUS, f"{path.name}: status '{fields['status']}' liegt ausserhalb von {STATUS}"
     assert fields["provenance"] == "ai-drafted-reviewed", (
-        f"{path.name}: eine vom Framework erhobene Uebergabe ist ai-drafted-reviewed, nicht '{fields['provenance']}'"
+        f"{path.name}: a handover raised by the framework is ai-drafted-reviewed, not '{fields['provenance']}'"
     )
     assert re.fullmatch(r"[0-9a-f]{8}", fields["target_ref"]), (
         f"{path.name}: target_ref '{fields['target_ref']}' ist kein kurzer Commit-Hash — "
@@ -126,25 +128,26 @@ def test_every_project_handover_declares_direction_target_and_status(
 
 @pytest.mark.parametrize("path,_fields,text", alle_uebergaben(), ids=lambda v: getattr(v, "name", ""))
 def test_every_handover_carries_the_common_fields(path: Path, _fields: dict[str, str], text: str) -> None:
-    """`GEMEINSAM` sagt "traegt jede Uebergabe" — bis heute prueft das niemand.
+    """`GEMEINSAM` says "every handover carries" — until today nobody checks that.
 
-    Die obere Schranke gab es (`test_no_handover_carries_an_unknown_field`
-    verbietet, was nicht in `ERLAUBT` steht), die untere nicht. Gemessen am
-    2026-09-08 kostete das drei Dateien: `2026-04-29-adwaive-onepager.md` ohne
-    `tags`, die beiden `2026-06-01-*` ohne `created`. Eine Menge, die man nur
-    nach oben begrenzt, ist keine Zusage, sondern eine Obergrenze.
+    The upper bound existed (`test_no_handover_carries_an_unknown_field`
+    forbids what is not in `ERLAUBT`), the lower one did not. Measured on
+    2026-09-08 that cost three files: `2026-04-29-adwaive-onepager.md` without
+    `tags`, the two `2026-06-01-*` without `created`. A set that is only bounded
+    from above is not a promise but a ceiling.
     """
     fehlend = fehlende_gemeinsame(text)
     assert not fehlend, (
-        f"{path.name}: Feld(er) fehlen, die laut schema.GEMEINSAM jede Uebergabe traegt: {', '.join(fehlend)}"
+        f"{path.name}: field(s) missing that, according to schema.GEMEINSAM, every handover carries: {', '.join(fehlend)}"
     )
 
 
 @pytest.mark.parametrize("path,fields,text", project_handovers(), ids=lambda v: getattr(v, "name", ""))
 def test_handover_records_are_immutable(path: Path, fields: dict[str, str], text: str) -> None:
-    """Der Befundblock deckt sich mit dem Hash, den das Frontmatter behauptet."""
-    assert BEGIN in text and END in text, f"{path.name}: Record-Marker fehlen"
+    """The finding block matches the hash the frontmatter claims."""
+    assert BEGIN in text and END in text, f"{path.name}: record markers missing"
     digest = "sha256:" + hashlib.sha256(record_of(text).encode()).hexdigest()
+    # German on purpose: the skipped mutation test matches "der Record wurde nach der Uebergabe geaendert".
     assert fields["record_sha256"] == digest, (
         f"{path.name}: der Record wurde nach der Uebergabe geaendert.\n"
         f"  Frontmatter: {fields['record_sha256']}\n"
@@ -155,76 +158,79 @@ def test_handover_records_are_immutable(path: Path, fields: dict[str, str], text
 
 @pytest.mark.parametrize("path,fields,_text", project_handovers(), ids=lambda v: getattr(v, "name", ""))
 def test_acknowledged_handover_names_who_and_when(path: Path, fields: dict[str, str], _text: str) -> None:
-    """Quittiert heisst: ein Mensch mit Namen, zu einem Zeitpunkt — und nicht derselbe,
-    der die Uebergabe abgenommen hat. Wer sein eigenes Ergebnis quittiert, quittiert nichts."""
+    """Acknowledged means: a human with a name, at a point in time — and not the
+    same one who approved the handover. Whoever acknowledges their own result
+    acknowledges nothing."""
     if fields["status"] == "pending":
         for key in ("acknowledged_by", "acknowledged_at", "closed_at"):
-            assert fields.get(key) == "null", f"{path.name}: status ist pending, aber {key} ist gesetzt"
+            assert fields.get(key) == "null", f"{path.name}: status is pending, but {key} is set"
         return
     for key in ("acknowledged_by", "acknowledged_at"):
         assert fields.get(key) not in (None, "", "null"), (
-            f"{path.name}: status ist {fields['status']}, aber {key} fehlt"
+            f"{path.name}: status is {fields['status']}, but {key} is missing"
         )
     assert fields["acknowledged_by"] != fields.get("review.approved_by"), (
-        f"{path.name}: {fields['acknowledged_by']} hat die Uebergabe abgenommen und "
-        "quittiert sie selbst — das ist keine Rueckmeldung, das ist eine Schleife"
+        f"{path.name}: {fields['acknowledged_by']} approved the handover and "
+        "acknowledges it themselves — that is not feedback, that is a loop"
     )
     if fields["status"] == "closed":
         assert fields.get("closed_at") not in (None, "", "null"), (
-            f"{path.name}: status ist closed, aber closed_at fehlt"
+            f"{path.name}: status is closed, but closed_at is missing"
         )
 
 
 def test_journal_index_lists_every_open_project_handover() -> None:
-    """Eine Uebergabe, die der Index nicht kennt, wird niemand abholen."""
+    """A handover that the index does not know will be picked up by nobody."""
     index = JOURNAL_INDEX.read_text(encoding="utf-8")
     for path, fields, _ in project_handovers():
         if fields["status"] == "closed":
             continue
-        assert path.name in index, f"{path.name} ist offen, steht aber nicht in docs/journal/_INDEX.md"
+        assert path.name in index, f"{path.name} is open but does not appear in docs/journal/_INDEX.md"
 
 
 @pytest.mark.skip(
-    reason="2ee-Triage 2026-09-19: gilt-erst-mit-bestand — die Bedingung ist eingetreten "
-    "(drei Uebergaben seit 2026-09-16), aber docs/_INDEX.md, der Einstieg, fehlt noch. Frist 2026-11-30."
+    reason="2ee triage 2026-09-19: gilt-erst-mit-bestand — the condition has occurred "
+    "(three handovers since 2026-09-16), but docs/_INDEX.md, the entry point, is still missing. Deadline 2026-11-30."
 )
 def test_root_index_routes_to_the_project_feedback() -> None:
-    """Der Einstieg kennt den Weg — sonst findet ihn nur, wer ihn schon kennt."""
+    """The entry point knows the way — otherwise only those who already know it find it."""
     index = ROOT_INDEX.read_text(encoding="utf-8")
     linked = [p.name for p, _, _ in project_handovers() if p.name in index]
     assert linked, (
-        "docs/_INDEX.md verlinkt keine einzige Uebergabe. Die Situationstabelle ist "
-        "der einzige Ort, an dem jemand ohne Vorwissen sie findet."
+        "docs/_INDEX.md links not a single handover. The situation table is "
+        "the only place where someone without prior knowledge finds them."
     )
 
 
 @pytest.mark.skip(
-    reason="2ee-Triage 2026-09-19: bestand-dieses-repos — framework-witt-feedback-loop.md "
-    "lebt im Ursprungs-Repo; Ventil bis Portierung oder Transfer. Frist 2026-11-30."
+    reason="2ee triage 2026-09-19: bestand-dieses-repos — framework-witt-feedback-loop.md "
+    "lives in the origin repository; valve until port or transfer. Deadline 2026-11-30."
 )
 def test_the_feedback_loop_documents_the_reverse_direction() -> None:
-    """Die Konvention steht dort, wo die Gegenrichtung schon steht — nicht daneben."""
+    """The convention stands where the reverse direction already stands — not next to it."""
     text = FEEDBACK_LOOP.read_text(encoding="utf-8")
-    assert "## 7. Gegenrichtung" in text, "framework-witt-feedback-loop.md beschreibt nur den Weg Instanz -> Framework"
+    assert "## 7. Gegenrichtung" in text, (
+        "framework-witt-feedback-loop.md describes only the path instance -> framework"
+    )
     for token in ("direction: framework->project", "record_sha256", "acknowledged"):
-        assert token in text, f"§7 nennt '{token}' nicht"
+        assert token in text, f"§7 does not name '{token}'"
 
 
 @pytest.mark.skip(
-    reason="2ee-Triage 2026-09-19: bestand-dieses-repos — framework-witt-feedback-loop.md "
-    "lebt im Ursprungs-Repo; Ventil bis Portierung oder Transfer. Frist 2026-11-30."
+    reason="2ee triage 2026-09-19: bestand-dieses-repos — framework-witt-feedback-loop.md "
+    "lives in the origin repository; valve until port or transfer. Deadline 2026-11-30."
 )
 def test_the_framework_does_not_claim_to_write_into_the_instance() -> None:
-    """Die Asymmetrie ist der Kern des Kanals und muss ausgesprochen sein."""
+    """The asymmetry is the core of the channel and must be stated explicitly."""
     text = FEEDBACK_LOOP.read_text(encoding="utf-8")
     section = text.split("## 7. Gegenrichtung", 1)[1]
     assert "nichts in die Instanz" in section, (
-        "§7 sagt nicht, dass das Framework in der Instanz nicht schreibt — "
-        "genau das ist die Bedingung, unter der dieser Kanal ueberhaupt existiert"
+        "§7 does not say that the framework does not write into the instance — "
+        "that is exactly the condition under which this channel exists at all"
     )
 
 
-# --- Mutationen: die Tests oben muessen rot werden, wenn jemand den Vertrag bricht ---
+# --- Mutations: the tests above must go red when someone breaks the contract ---
 
 
 @pytest.mark.parametrize(
@@ -236,15 +242,15 @@ def test_the_framework_does_not_claim_to_write_into_the_instance() -> None:
     ],
 )
 @pytest.mark.skip(
-    reason="2ee-Triage 2026-09-19: bestand-dieses-repos — die Fixtures sind "
-    "portfolio-Handovers (2026-08-14-osi-plan-register); Ventil bis eigene "
-    "Fixtures oder Kit-Transfer. Frist 2026-11-30."
+    reason="2ee triage 2026-09-19: bestand-dieses-repos — the fixtures are "
+    "portfolio handovers (2026-08-14-osi-plan-register); valve until own "
+    "fixtures or kit transfer. Deadline 2026-11-30."
 )
 def test_the_checks_go_red_when_the_contract_is_broken(tmp_path: Path, mutation: str, expected: str) -> None:
-    """Manipuliert eine Kopie und behauptet, dass die Pruefung sie faengt.
+    """Tampers with a copy and asserts that the check catches it.
 
-    Die Kopie ist der Punkt: ein Test, der den Arbeitsbaum mutiert, ist selbst ein
-    Eintrag im Fehler-Katalog (F-A-28).
+    The copy is the point: a test that mutates the working tree is itself an
+    entry in the error catalogue (F-A-28).
     """
     source = HANDOVER_DIR / "2026-08-14-osi-plan-register.md"
     text = source.read_text(encoding="utf-8")
@@ -267,17 +273,17 @@ def test_the_checks_go_red_when_the_contract_is_broken(tmp_path: Path, mutation:
 
 
 @pytest.mark.skip(
-    reason="2ee-Triage 2026-09-19: bestand-dieses-repos — framework-witt-feedback-loop.md "
-    "lebt im Ursprungs-Repo; Ventil bis Portierung oder Transfer. Frist 2026-11-30."
+    reason="2ee triage 2026-09-19: bestand-dieses-repos — framework-witt-feedback-loop.md "
+    "lives in the origin repository; valve until port or transfer. Deadline 2026-11-30."
 )
 def test_the_route_check_goes_red_when_the_route_is_removed() -> None:
-    """Nimmt die Route aus einer Kopie des Index und erwartet Rot."""
+    """Removes the route from a copy of the index and expects red."""
     stripped = "\n".join(
         line for line in ROOT_INDEX.read_text(encoding="utf-8").splitlines() if "2026-08-14-osi-" not in line
     )
     assert not [p.name for p, _, _ in project_handovers() if p.name in stripped], (
-        "Der Index ohne die Route verlinkt immer noch eine Uebergabe — dann prueft "
-        "test_root_index_routes_to_the_project_feedback nicht, was es zu pruefen vorgibt"
+        "The index without the route still links a handover — then "
+        "test_root_index_routes_to_the_project_feedback does not check what it claims to check"
     )
 
 
@@ -288,93 +294,91 @@ def test_the_route_check_goes_red_when_the_route_is_removed() -> None:
 def test_the_field_checks_read_the_schema_instead_of_a_copy(
     monkeypatch: pytest.MonkeyPatch, konstante: str, leser: object
 ) -> None:
-    """Gesaete Gegenprobe gegen die zweite Feldliste — der Befund vom 2026-09-08.
+    """Seeded counter-check against the second field list — the finding of 2026-09-08.
 
-    `PROJEKT_PFLICHT` stand im Schema und wurde von **niemandem** gelesen: die
-    Pruefung trug ihr eigenes hartkodiertes Tupel. Beide Listen konnten
-    auseinanderlaufen, ohne dass etwas rot wurde — wer die Konstante geaendert
-    haette, haette am gepruefte Verhalten nichts geaendert. Das ist genau die
-    zweite Liste, die AK-6 verbietet, nur mit vertauschten Rollen: nicht die
-    alte war veraltet, die neue war tot.
+    `PROJEKT_PFLICHT` stood in the schema and was read by **nobody**: the check
+    carried its own hard-coded tuple. Both lists could drift apart without
+    anything turning red — whoever had changed the constant would have changed
+    nothing about the checked behaviour. That is exactly the second list that
+    AK-6 forbids, only with the roles swapped: it was not the old one that was
+    stale, the new one was dead.
 
-    Die Probe haengt ein Feld an die Konstante, das keine Uebergabe traegt.
-    Bleibt der Leser stumm, liest er die Konstante nicht, sondern eine Kopie.
+    The probe appends a field to the constant that no handover carries. If the
+    reader stays silent, it does not read the constant but a copy.
     """
     erfunden = "erfundenes_pflichtfeld"
     monkeypatch.setattr(schema, konstante, getattr(schema, konstante) | {erfunden})
     _, _, text = alle_uebergaben()[0]
     assert erfunden in leser(text), (
-        f"schema.{konstante} um '{erfunden}' erweitert und die Pruefung bleibt stumm — "
-        "sie liest eine abgeschriebene Liste, nicht das Schema"
+        f"schema.{konstante} extended by '{erfunden}' and the check stays silent — "
+        "it reads a copied-out list, not the schema"
     )
 
 
 # ---------------------------------------------------------------------------
-# Was fuer JEDE Uebergabe gilt
+# What holds for EVERY handover
 #
-# Die sechs Pruefungen oben sehen nur `framework->project`. Am 2026-09-08 waren
-# das 7 von 24 Dateien — die anderen 17 pruefte niemand, weil sie das Feld, auf
-# das gefiltert wird, gar nicht trugen.
+# The six checks above see only `framework->project`. On 2026-09-08 that was 7
+# of 24 files — nobody checked the other 17, because they did not carry the
+# field that is filtered on at all.
 # ---------------------------------------------------------------------------
 
 
 @pytest.mark.skip(
-    reason="2ee-Triage 2026-09-19: bestand-dieses-repos — die ≥20-Behauptung misst den "
-    "Bestand des Ursprungs-Repos. Das Ventil „2ee-Abschluss“ ist am 2026-09-20 "
-    "eingetreten; das Korpus hier (drei Handover) traegt die Mengen-Behauptung noch "
-    "nicht. Frist 2026-12-31 — massgeblich ist der Korpus, nicht der Kalender."
+    reason="2ee triage 2026-09-19: bestand-dieses-repos — the ≥20 claim measures the "
+    "stock of the origin repository. The 2ee-Abschluss valve occurred on 2026-09-20; "
+    "the corpus here (three handovers) does not yet carry the quantity claim. "
+    "Deadline 2026-12-31 — the corpus is what counts, not the calendar."
 )
 def test_every_handover_declares_a_direction() -> None:
-    """Ohne `direction` faellt eine Uebergabe stillschweigend aus jeder Pruefung.
+    """Without `direction` a handover silently drops out of every check.
 
-    Die Mengen-Behauptung steht zuerst und ist kein Beiwerk (RB-G7): zeigte das
-    Verzeichnis auf null Dateien, waeren alle folgenden Aussagen gruen und
-    trotzdem wertlos. Genau diese Form von Gruen ist der Anlass der Aenderung.
+    The quantity claim comes first and is not an extra (RB-G7): if the directory
+    pointed to zero files, all following statements would be green and
+    worthless anyway. Exactly this form of green is the reason for the change.
     """
     alle = alle_uebergaben()
-    assert len(alle) >= 20, f"nur {len(alle)} Uebergaben gefunden — liest der Test das richtige Verzeichnis?"
+    assert len(alle) >= 20, f"only {len(alle)} handovers found — does the test read the right directory?"
 
     ohne = [p.name for p, f, _ in alle if not f.get("direction")]
     assert not ohne, (
-        "Uebergabe ohne `direction`:\n  "
+        "Handover without `direction`:\n  "
         + "\n  ".join(ohne)
-        + "\n\nOhne das Feld filtert `project_handovers()` sie heraus, und keine "
-        "Pruefung des Kanals sieht sie je."
+        + "\n\nWithout the field `project_handovers()` filters it out, and no "
+        "check of the channel ever sees it."
     )
 
 
 def test_direction_comes_from_the_closed_set() -> None:
-    """Ein dritter Wert waere eine neue Sorte Dokument — das ist eine Entscheidung."""
+    """A third value would be a new kind of document — that is a decision."""
     falsch = [
         f"{p.name}: {f['direction']}" for p, f, _ in alle_uebergaben() if f.get("direction") not in schema.RICHTUNGEN
     ]
-    assert not falsch, f"Richtung ausserhalb von {schema.RICHTUNGEN}: {falsch}"
+    assert not falsch, f"direction outside of {schema.RICHTUNGEN}: {falsch}"
 
 
 def test_no_handover_carries_an_unknown_field() -> None:
-    """Ein Feldname, den niemand gegen eine Liste haelt, ist stumm.
+    """A field name that nobody holds against a list is silent.
 
-    Gemessen am 2026-09-08 standen im Bestand `date:` statt `created:` und
-    `beads:` statt `bead:` — je einmal, je unbemerkt. Beide sind absichtlich
-    nicht in `ERLAUBT`.
+    Measured on 2026-09-08 the stock contained `date:` instead of `created:`
+    and `beads:` instead of `bead:` — once each, each unnoticed. Both are
+    deliberately not in `ERLAUBT`.
     """
     unbekannt: list[str] = []
     for pfad, _, text in alle_uebergaben():
         for feld in sorted(schema.oberste_felder(text) - schema.ERLAUBT):
             unbekannt.append(f"{pfad.name}: {feld}")
     assert not unbekannt, (
-        "Unbekanntes Frontmatter-Feld:\n  "
-        + "\n  ".join(unbekannt)
-        + "\n\nEntweder ein Tippfehler, oder das Feld gehoert nach "
-        "`scripts/handover_schema.py` — beides ist eine Entscheidung."
+        "Unknown frontmatter field:\n  " + "\n  ".join(unbekannt) + "\n\nEither a typo, or the field belongs in "
+        "`scripts/handover_schema.py` — both are a decision."
     )
 
 
 def test_only_a_project_handover_carries_the_channel_contract() -> None:
-    """Der strenge Vertrag gehoert dem Kanal.
+    """The strict contract belongs to the channel.
 
-    Ein `record_sha256` an einer Sitzungsuebergabe behauptet eine Zusage, auf die
-    niemand wartet — und verschleiert, welche Dokumente wirklich im Kanal sind.
+    A `record_sha256` on a session handover claims a promise that nobody is
+    waiting for — and obscures which documents are really in the channel.
     """
     daneben: list[str] = []
     for pfad, felder, text in alle_uebergaben():
@@ -382,28 +386,28 @@ def test_only_a_project_handover_carries_the_channel_contract() -> None:
             continue
         for feld in sorted(schema.oberste_felder(text) & schema.KANAL_EXKLUSIV):
             daneben.append(f"{pfad.name}: {feld}")
-    assert not daneben, f"Kanal-Feld an einer Uebergabe ausserhalb des Kanals: {daneben}"
+    assert not daneben, f"channel field on a handover outside the channel: {daneben}"
 
 
 # ---------------------------------------------------------------------------
-# Die Vorlage
+# The template
 # ---------------------------------------------------------------------------
 
 
 def test_the_template_exists_and_names_both_directions() -> None:
-    assert TEMPLATE.is_file(), "templates/handover.md fehlt — der Vertrag ist wieder nur Erinnerung"
+    assert TEMPLATE.is_file(), "templates/handover.md is missing — the contract is only memory again"
     text = TEMPLATE.read_text(encoding="utf-8")
     for richtung in schema.RICHTUNGEN:
-        assert richtung in text, f"die Vorlage erklaert `{richtung}` nicht"
+        assert richtung in text, f"the template does not explain `{richtung}`"
 
 
 def _vorlagen_bloecke() -> list[str]:
-    """Die YAML-Bloecke der Vorlage.
+    """The YAML blocks of the template.
 
-    Die Vorlage traegt ihr Schema in Codebloecken und **nicht** als echtes
-    Frontmatter — `provenance.yaml:213` setzt fuer `templates/` `frontmatter:
-    none`, weil ein Frontmatter in einer Vorlage in jede Instanz mitkopiert
-    wuerde. Zum Pruefen wird der Block gelesen, als waere er eines.
+    The template carries its schema in code blocks and **not** as real
+    frontmatter — `provenance.yaml:213` sets `frontmatter: none` for
+    `templates/`, because a frontmatter in a template would be copied into every
+    instance. For checking, each block is read as if it were one.
     """
     text = TEMPLATE.read_text(encoding="utf-8")
     bloecke = re.findall(r"```yaml\n(.*?)```", text, re.S)
@@ -411,61 +415,59 @@ def _vorlagen_bloecke() -> list[str]:
 
 
 def test_the_template_satisfies_the_schema_it_documents() -> None:
-    """Eine Vorlage, die ihr eigenes Schema verletzt, lehrt den Fehler.
+    """A template that violates its own schema teaches the error.
 
-    Der erste Block ist der gemeinsame Kopf: er traegt jedes Pflichtfeld. Kein
-    Block darf ein Feld nennen, das `ERLAUBT` nicht kennt.
+    The first block is the common head: it carries every mandatory field. No
+    block may name a field that `ERLAUBT` does not know.
     """
     bloecke = _vorlagen_bloecke()
-    assert bloecke, "die Vorlage enthaelt keinen ```yaml-Block — dann zeigt sie kein Schema"
+    assert bloecke, "the template contains no ```yaml block — then it shows no schema"
 
     felder_gesamt: set[str] = set()
     for block in bloecke:
         felder_gesamt |= schema.oberste_felder(block)
 
     fehlend = sorted(schema.GEMEINSAM - felder_gesamt)
-    assert not fehlend, f"die Vorlage laesst Pflichtfelder aus: {fehlend}"
+    assert not fehlend, f"the template leaves out mandatory fields: {fehlend}"
     unbekannt = sorted(felder_gesamt - schema.ERLAUBT)
-    assert not unbekannt, f"die Vorlage nennt Felder, die das Schema nicht kennt: {unbekannt}"
+    assert not unbekannt, f"the template names fields that the schema does not know: {unbekannt}"
 
 
 def test_the_template_carries_no_real_frontmatter() -> None:
-    """`provenance.yaml` verlangt fuer `templates/` `frontmatter: none`.
+    """`provenance.yaml` requires `frontmatter: none` for `templates/`.
 
-    Eine Vorlage mit echtem Frontmatter wird in jeder Instanz mitkopiert und
-    traegt dort eine Provenienz-Behauptung, die niemand geprueft hat.
+    A template with real frontmatter is copied into every instance and carries
+    a provenance claim there that nobody has checked.
     """
     text = TEMPLATE.read_text(encoding="utf-8")
-    assert not text.startswith("---\n"), (
-        "die Vorlage beginnt mit echtem Frontmatter — es gehoert in einen ```yaml-Block"
-    )
+    assert not text.startswith("---\n"), "the template starts with real frontmatter — it belongs in a ```yaml block"
 
 
 def test_the_template_explains_what_the_hash_covers() -> None:
-    """Der einzige Teil, den man falsch machen kann, ohne dass es auffaellt."""
+    """The only part that can be done wrong without anyone noticing."""
     text = TEMPLATE.read_text(encoding="utf-8")
     assert schema.RECORD_BEGIN.strip() in text and schema.RECORD_END in text, (
-        "die Vorlage zeigt die record-Marker nicht"
+        "the template does not show the record markers"
     )
     assert "record_sha256" in text
 
 
 @pytest.mark.skip(
-    reason="2ee-Triage 2026-09-19: bestand-dieses-repos — framework-witt-feedback-loop.md "
-    "lebt im Ursprungs-Repo; Ventil bis Portierung oder Transfer. Frist 2026-11-30."
+    reason="2ee triage 2026-09-19: bestand-dieses-repos — framework-witt-feedback-loop.md "
+    "lives in the origin repository; valve until port or transfer. Deadline 2026-11-30."
 )
 def test_the_feedback_loop_points_at_the_schema_instead_of_repeating_it() -> None:
-    """Zwei Feldlisten sind eine zu viel — die zweite ist immer die veraltete."""
+    """Two field lists are one too many — the second is always the stale one."""
     text = FEEDBACK_LOOP.read_text(encoding="utf-8")
     assert "scripts/handover_schema.py" in text, (
-        "§7 nennt die geltende Feldliste nicht; dann ist die Prosa die Liste, und sie altert"
+        "§7 does not name the valid field list; then the prose is the list, and it ages"
     )
 
 
 # ---------------------------------------------------------------------------
-# Verfall (Review #13, 2026-09-21): ein Skip ohne Frist ist eine Ausnahme ohne
-# Verfall. Jede Markierung oben traegt eine Frist — der Sentinel rechnet nach,
-# dass sie steht, im Grund lesbar ist und noch nicht ueberschritten ist.
+# Decay (review #13, 2026-09-21): a skip without a deadline is an exception
+# without decay. Every marker above carries a deadline — the sentinel recomputes
+# that it is there, readable in the reason, and not yet exceeded.
 # ---------------------------------------------------------------------------
 
 _SKIP_FRISTEN: dict[str, str] = {
@@ -481,24 +483,24 @@ _SKIP_FRISTEN: dict[str, str] = {
 
 
 def test_every_skip_here_carries_a_future_expiry_date() -> None:
-    """Ein abgelaufener Grund liest sich wie eine lebende Entscheidung (RB-P5)."""
+    """An expired reason reads like a living decision (RB-P5)."""
     quelle = Path(__file__).read_text(encoding="utf-8")
     bloecke = {
         name: block
         for block, name in re.findall(r"@pytest\.mark\.skip\(\s*reason=(.*?)\)\s*\ndef (\w+)", quelle, re.DOTALL)
     }
     assert set(bloecke) == set(_SKIP_FRISTEN), (
-        "Skip-Markierungen und Fristen-Liste weichen ab — Markierung ohne Eintrag: "
-        f"{sorted(set(bloecke) - set(_SKIP_FRISTEN))}; Eintrag ohne Markierung: "
+        "Skip markers and deadline list differ — marker without entry: "
+        f"{sorted(set(bloecke) - set(_SKIP_FRISTEN))}; entry without marker: "
         f"{sorted(set(_SKIP_FRISTEN) - set(bloecke))}"
     )
     ohne_datum = {name for name, block in bloecke.items() if _SKIP_FRISTEN[name] not in block}
     assert not ohne_datum, (
-        f"Die Frist von {sorted(ohne_datum)} steht nur in der Liste, nicht im Grund — "
-        "wer den Skip liest, muss das Datum sehen."
+        f"The deadline of {sorted(ohne_datum)} stands only in the list, not in the reason — "
+        "whoever reads the skip must see the date."
     )
     abgelaufen = {name: frist for name, frist in _SKIP_FRISTEN.items() if date.fromisoformat(frist) <= date.today()}
     assert not abgelaufen, (
-        "Diese Skips stehen ueber ihrer Frist — aufloesen (Test anspringen lassen) "
-        f"oder die Frist in einem reviewten Change verschieben: {abgelaufen}"
+        "These skips are past their deadline — resolve them (let the test run) "
+        f"or move the deadline in a reviewed change: {abgelaufen}"
     )
