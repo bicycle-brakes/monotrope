@@ -1,7 +1,7 @@
 ---
 title: "Plan — rb-m6-one-account"
 status: draft
-implementation_status: none
+implementation_status: partial
 date: 2026-10-05
 last_reviewed: 2026-10-05
 updated: 2026-10-05
@@ -220,3 +220,126 @@ title `decide(governance): RB-M6 asks for what one account can hold`, label
 RB-M6 amended, rule set 4.0.0; (2) no ADR for this change. "What could
 break": `make verify` red offline or without a `gh` login. "After the merge":
 nothing to run; the valve `merge-freshness` still falls due on 2026-10-31.
+
+## Phase 4 record
+
+Written by the phase-4 session, 2026-10-05. Branch `decide/rb-m6-one-account`,
+started at `979c8bd`. Commits: `ba7d17f` (guard test), `5a94114` (live test,
+gate, kit role), `e3e5f4c` (rule set 4.0.0, valve, workflow note), `8570917`
+and `a880547` (holes the planted faults found). Not recorded and not done on
+purpose: step 0, the ADR answer — it is the maintainer's to state (house
+rule 8), so `make verify` stays red on the gate `adr-answers` only.
+
+### Time used
+
+2026-10-05 23:27:56–TIME_END_PLACEHOLDER, SPAN_PLACEHOLDER (appetite 2 h).
+
+### Deviations
+
+Each in the four labels of `prompts/04-implement.md`; D1 is the one that
+changes a file the plan did not name, and it stands in its own commit
+(`ba7d17f`) so it can be reverted alone.
+
+- **D1 — the step-count guard did not know a `writer` gate.**
+  - expected: "a `writer` gate needs no generator change" (Not touched), and
+    `tests/test_ci.py` green after step 2.
+  - found: `tests/test_ci.py::test_every_gate_step_runs_even_after_a_failing_gate`
+    counts every gate of `decisions/gates.yaml` against the steps of `ci.yml`
+    (18 of 19) — no gate had used `writer` before, so the test never met one.
+  - relevant: the floor gate `pytest` goes red in CI and locally the moment the
+    gate `ruleset` exists; without a fix the change cannot be green.
+  - proposal (applied): count only `ci_gates.misst_in(g, "ci")` gates, the one
+    place that rule lives; a hosted gate dropping out of `ci.yml` is still red
+    (planted fault F28). `[DETAIL]`, mechanical, one line plus a docstring note.
+- **D2 — `gh_api` has a 60 s limit.** The plan's `gh_api` has none; a `gh` that
+  hangs on a dropped network would hang `make verify`. A timeout is
+  `(124, "gh did not answer within 60 s")`, red as `not measured`.
+- **D3 — tests beyond the plan's list**, each added because a planted fault
+  stayed green without it (F03, F06, F11, F12, F13 below):
+  `test_the_measurement_asks_for_the_branch_the_repository_names`,
+  `test_a_missing_gh_says_so`,
+  `test_the_live_check_goes_red_without_gh_when_the_gate_turns_it_on`,
+  `test_the_live_check_calls_nothing_without_the_variable`,
+  `test_the_ruleset_gate_check_goes_red_when_the_gate_drifts` (with the helper
+  `_gate_findings`), and more cases in `test_an_unreachable_api_is_not_a_pass`
+  (no answer, a failed call that still prints a valid answer, and the cause
+  each case plants).
+- **D4 — `..._when_a_rule_is_removed` is parametrized over a literal list of
+  the four types,** not over `RULE_TYPES`: a requirement that fell out of the
+  table fell out of the test with it (F03 was green).
+- **D5 — step 7 says "five files"; the folder has four** (`decisions.md`,
+  `research.md`, `spec.md`, `plan.md`). All four carry
+  `implementation_status: partial`.
+- **D6 — the live test's failure message says what to do.** When any finding
+  begins `not measured:`, the assertion message adds: "The gate `ruleset` needs
+  network and a `gh` login on this machine; not measured is red, never green
+  (RB-M6)." An agent that runs `make verify` offline reads the cause and the
+  way out in the failure itself. The plan's `assert not findings, "\n".join(findings)`
+  is otherwise kept.
+- **The plan's behaviour does not block this verify** (network and a `gh` login
+  are here); offline it is red on the one gate `ruleset`, see "Gate offline".
+
+### Gate offline
+
+Measured with a `gh` shim that exits 1 with a DNS error (`make verify`,
+2026-10-05, before D6): the gate `ruleset` red (block), every other gate as
+without the shim (`adr-answers` red, `markdownlint` and `docs-links` report
+only, the rest green). The failure line reads `not measured:
+repos/{owner}/{repo}: exit 1: error connecting to api.github.com: dial tcp:
+lookup api.github.com: no such host`; after D6 the hint line follows it.
+Nothing is skipped quietly offline; the cost is the plan's own: `make verify`
+needs network and a `gh` login on the writer machine.
+
+### Planted faults
+
+Each fault was planted in the committed tree, the named test selection run,
+the file restored with `git checkout`. All red unless marked. File level
+(runner script in the session's scratchpad, not committed):
+
+| # | Fault planted | Result |
+|---|---|---|
+| F01 | a missing `bypass_actors` key read as "no bypass" | red: `test_a_hidden_bypass_list_is_not_a_pass` |
+| F02 | a non-empty bypass list ignored | red: `..._goes_red_when_a_bypass_is_added` |
+| F03 | `RULE_TYPES` loses `deletion` | **green first** (hole), red after D4: `KeyError` |
+| F04 | any check counts as `verify` | red: `..._goes_red_when_verify_is_not_required` |
+| F05 | missing `gh` swallowed as success | red: `test_an_unreachable_api_is_not_a_pass[no-gh]` |
+| F06 | a timeout swallowed as success | **green first** (hole), red after D3 (`[no-answer]` asserts the cause) |
+| F07 | shape check of the rules answer removed | red: `[rules-not-a-list]` |
+| F08 | supplying rulesets never read | red: `test_the_measurement_holds_on_todays_answers` |
+| F09 | branch name not URL-escaped | red: `test_the_measurement_asks_for_the_branch_the_repository_names` |
+| F10 | empty rule list not special-cased | red: `..._goes_red_on_an_empty_rule_list` |
+| F11 | exit code of a failed call ignored | **green first** (hole), red after D3 (`[rules-exit-1-with-a-valid-answer]`) |
+| F12 | live test skipped even with the variable | **green first** (hole), red after D3: `..._goes_red_without_gh_when_the_gate_turns_it_on` |
+| F13 | live test not skipped without the variable | **green first** (hole), red after D3: `..._calls_nothing_without_the_variable` |
+| F14 | gate sets `RULESET_CHECK=1` | red: `test_the_ruleset_gate_turns_the_live_check_on` |
+| F15 | gate without the variable | red: same |
+| F16 | gate `placement: both` | red: same, and `test_ci.py` |
+| F17 | gate `enforcement: report` | red: same |
+| F18 | gate `floor: true` | red: same |
+| F19 | gate `ruleset` absent | red: same |
+| F20 | valve `ruleset-assert` back in `ramp_valves.py` | red: `test_regelwerk.py` (valve without a rule) |
+| F21 | `Ramp:ruleset-assert` left in the RB-M6 row | red: `test_regelwerk.py` (named, not present) |
+| F22 | wrong enforcer name in the RB-M6 row | red: `test_regelwerk.py` (enforcer does not exist) |
+| F23 | `version: 3.0.0` over the 4.0.0 entry | red: `test_regelwerk.py` (head vs top entry) |
+| F24 | 4.0.0 history entry missing | red: `test_regelwerk.py` |
+| F25 | rule set `updated:` stale | red: gate `frontmatter-current` |
+| F26 | kit role of the new test changed to `bestand` | red: gate `leerprobe` (kit probe, BLOCK) |
+| F27 | every mutation-test name renamed away | red: `test_ci.py::test_every_gate_step_has_a_mutation_test` (renaming only `goes_red` stays green by design: the pattern has other names) |
+| F28 | D1 reverted (guard counts the writer gate) | red: `test_ci.py::test_every_gate_step_runs_even_after_a_failing_gate` |
+
+End to end, a `gh` shim in the session's scratchpad proxied the real,
+read-only API and distorted the answer; nothing at GitHub was written and the
+live ruleset was not touched. The live test went red, with the finding named,
+for each of: a bypass actor added (E01); the bypass key hidden (E02); the pull
+request, force-push, deletion or required-check rule removed (E03–E06); `verify`
+replaced by another check (E07); an empty rule list (E08); the rules answer not
+a list (E09); `gh` exit 1 (E10); an answer that is not JSON (E11); `gh` not on
+`PATH` (E12); a `gh` that never answers, limit set to 1 s (E13). With the
+shim passing everything through, the live test passed. Without
+`RULESET_ASSERT`, the live test was skipped (reason names the gate `ruleset`)
+and `gh` was called zero times; with it, three times (repository, branch
+rules, ruleset).
+
+Totals: 28 file-level + 13 end-to-end = 41 faults planted; 41 red. Five of the
+file-level ones were green first (F03, F06, F11, F12, F13) and closed by D3 and
+D4; one more (F27, single rename) is an equivalent mutant by design.
