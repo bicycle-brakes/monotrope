@@ -695,3 +695,93 @@ Each item is a `[GAP]` for the spec or design phase unless marked.
 
 **Not touched:** `.claude/settings.json` (it binds Claude Code, not Hermes);
 adhd-relief (its spike and PR #2 are its own); lakeswitch-ai.
+
+## 13 · Read in phases 2 and 3 (addendum, 2026-10-05)
+
+The spec and design phases closed these `[GAP]`s by reading. Nothing above
+is contradicted; sections 11 and 12 are narrowed as stated.
+
+- **Q6 travels in its own pull request.** PR #74 ("docs: Hermes takes the
+  third Now place in the roadmap", branch `docs/roadmap-hermes` at
+  `b76cce8`, open) makes Hermes the third Now theme and moves "The
+  repository in English" to Next, with the appetite "4 sessions plus one
+  afternoon at the laptop for the shared spike". `ROADMAP.md` leaves the
+  list of files in section 12.
+- **A fine-grained token can read the rules on `main`.**
+  `GET /repos/{owner}/{repo}/rules/branches/{branch}` needs only
+  `metadata: read` (GitHub's permission data,
+  `src/github-apps/data/fpt-2022-11-28/fine-grained-pat-permissions.json`,
+  `github/docs` at `096aa77`). The publish step can therefore check the
+  ruleset with its own token before it pushes.
+- **Token lifetime** (`managing-your-personal-access-tokens.md`, same
+  commit): "Infinite lifetimes are allowed but may be blocked by a maximum
+  lifetime policy set by your organization"; the creation URL takes
+  `expires_in` from 1 to 366 days or `none`; GitHub "automatically removes
+  personal access tokens that haven't been used in a year".
+- **Hermes one-shot runs** (`reference/cli-commands.md` at tag
+  `v2026.9.21`, commit `d337b73`): `hermes chat --oneshot --query-file PATH`
+  answers and exits; `--toolsets web,file` enables only those toolsets;
+  `--ignore-rules` skips `AGENTS.md`, `SOUL.md`, persistent memory and
+  preloaded skills; `--max-turns N` bounds the tool-calling iterations of
+  the turn; `--format stream-json` writes one JSON event per line
+  (`system`, `text`, `tool_use` with `name`, `tool_result`, and a final
+  `result` with `exit_code` and `tokens`). Exit codes: 0 completed, 1
+  failed, partial, out of iterations or never ran, 130 interrupted. No
+  total wall-clock limit for a one-shot run was found in
+  `user-guide/configuration.md` (only provider and compression timeouts):
+  the caller has to bound the wall time.
+- **Toolsets** (`reference/toolsets-reference.md`, same tag): `file` is
+  `patch`, `read_file`, `search_files`, `write_file`; `web` is
+  `web_extract`, `web_search`; `search` is `web_search` alone. The core
+  toolsets listed there are `browser`, `clarify`, `code_execution`,
+  `connections`, `cronjob`, `delegation`, `discord`, `discord_admin`,
+  `feishu_doc`, `feishu_drive`, `file`, `homeassistant`, `computer_use`,
+  `context_engine`, `image_gen`, `video_gen`, `kanban`, `memory`,
+  `desktop_ui`, `project`, `search`, `session_search`, `skills`, `spotify`,
+  `terminal`, `todo`, `tts`, `vision`, `video`, `web`, `x_search`,
+  `yuanbao` (`safe`, `coding` and `debugging` are composites).
+- **Learning off, confirmed at the tag** (`features/memory.md`,
+  `features/curator.md`): `memory.memory_enabled: false` together with
+  `memory.user_profile_enabled: false` hides the memory tool;
+  `auxiliary.background_review.enabled: false` skips the post-turn review;
+  `curator.enabled` exists with default `true`. Title generation is a model
+  call of its own unless `auxiliary.title_generation.enabled: false`
+  (`user-guide/configuration.md`).
+- **Approvals** (`user-guide/security.md`, same tag): `cron_mode`,
+  `single_query_mode` and `unattended_mode` each take `deny`;
+  `approvals.deny` blocks matching terminal commands before `--yolo` and
+  `approvals.mode: off` are consulted. `HERMES_WRITE_SAFE_ROOT` restricts
+  writes only: what the agent can read is bounded by the operating system.
+- **Auxiliary model on OpenCode Go.** adhd-relief's runbook (S-5, at
+  `bdce8dc`): "Hermes nimmt für Hilfsaufgaben bei `opencode-go` von sich
+  aus `glm-5`" — an auxiliary task uses `glm-5` unless configured. A model
+  that is not declared would then be called (rule RB-A6).
+- **The home directory on this laptop** (`ls -ld`, 2026-10-05): the
+  maintainer's home is `drwxr-x---+`, group `staff`; `~/coding-harness`,
+  `~/oracle-source-inventory` and `~/.config` are `drwxr-xr-x`. A service
+  user that is a member of `staff` could read the customer instance; one
+  outside `staff` cannot enter the home at all (derived from the modes, not
+  tried as another user).
+- **Branch protection is the boundary** in the target
+  (`docs/architecture/target-architecture.md`, section 7): "Branch
+  protection is the security boundary in all three …; harness policies,
+  hooks and sandboxes reduce blast radius and are never the boundary".
+- **Rule RB-M6 and its valve.** `docs/governance/regelwerk.md`, RB-M6
+  (level 2): branch rules asserted from within the repository, "geforderte
+  Prüfungen gleich der Gate-Liste, Code-Owner-Review an, Zustimmung nicht
+  vom letzten Pusher". Its valve `ruleset-assert` in
+  `scripts/ramp_valves.py` is due on 2026-10-31 and waits for
+  `tests/test_repo_settings.py::test_the_ruleset_assertion_runs_in_ci`. The
+  code-owner review and an approval by someone other than the pusher cannot
+  be met with one account (decisions Q4 (d)).
+- **What the endpoint test reads in a prompt.** `tests/test_model_endpoints.py`
+  reads the `**Model:**` line of every `prompts/*.md`; a value starting with
+  "none" is skipped. The kit probe holds the prompts' model names as cases
+  that go red in the throwaway repository (`REIST_NICHT`, cap 31): a new
+  model name in a prompt would need a raised cap.
+- **CI runs on every push and every pull request**, without path filters;
+  the job and its check are named `verify` (`.github/workflows/ci.yml`).
+- **A precedent for a maintainer-side tool.** `tools/omnigent/` holds an
+  installer and a generated policy, and `scripts/omnigent_policy.py` stands
+  in `ci_gates.OHNE_AUFRUFER` with the reason that it runs on the
+  maintainer's machine, which no CI step can do.
