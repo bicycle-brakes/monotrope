@@ -1,44 +1,42 @@
-"""Drei Stufen fuer Drift-Werkzeuge — damit ein Exit-Code ueberall dasselbe heisst.
+"""Three levels for drift tools — so that an exit code means the same everywhere.
 
-Ohne gemeinsames Vokabular bedeutet „Exit 1" in jedem Script etwas anderes, und
-die Folge ist immer dieselbe: Entweder das Gate blockt an einem Tag, an dem
-niemand etwas falsch gemacht hat — dann wird es abgeschaltet — oder es meldet
-gruen ueber echter Abweichung, dann misst es nichts.
+Without a shared vocabulary "exit 1" means something different in every script,
+and the consequence is always the same: either the gate blocks on a day when
+nobody did anything wrong — then it gets switched off — or it reports green over
+a real deviation, and then it measures nothing.
 
-Die drei Stufen unterscheiden **wer den Befund verursacht hat**:
+The three levels distinguish **who caused the finding**:
 
-| Stufe   | Bedeutung                                              | Exit | Wer blockt        |
+| Level   | Meaning                                                | Exit | Who blocks        |
 |---------|--------------------------------------------------------|:----:|-------------------|
-| `INFO`  | Bemerkenswert, aber niemand hat etwas falsch gemacht   |  0   | niemand, gezaehlt |
-| `DRIFT` | Die Projekt-Instanz hat sich vom Stand hier entfernt   |  1   | nur `--strict`    |
-| `BLOCK` | Artefakte **dieses** Repos widersprechen einander      |  2   | immer             |
+| `INFO`  | Notable, but nobody did anything wrong                 |  0   | nobody, counted   |
+| `DRIFT` | The project instance has drifted from the state here   |  1   | only `--strict`   |
+| `BLOCK` | Artifacts of **this** repo contradict one another      |  2   | always            |
 
-Der wichtigste Fall ist `INFO`. Ein Promotions-Kandidat — die Instanz hat ein
-Muster, das das Framework noch nicht hat — ist **kein Fehler**. Die Instanz ist
-der Ort, an dem neue Muster entstehen; das Framework *darf* dahinter liegen.
-Zaehlte man das als Drift, waere das Gate ab dem Tag seiner Verdrahtung dauerhaft
-rot, ohne dass ein Pull Request die Ursache waere.
+The most important case is `INFO`. A promotion candidate — the instance has a
+pattern the framework does not have yet — is **not an error**. The instance is
+where new patterns arise; the framework *may* lag behind. Counting that as drift
+would leave the gate permanently red from the day it is wired in, without any
+pull request being the cause.
 
-Der Unterschied zwischen `DRIFT` und `BLOCK` ist die **Beweglichkeit der beiden
-Seiten**: Bei `BLOCK` wandern beide Seiten per Commit in diesem Repo — ein
-Widerspruch ist also immer die Schuld des Commits, der ihn erzeugt hat, und
-gehoert an den Pull Request. Bei `DRIFT` bewegt sich die andere Seite ohne jeden
-Commit hier; das gehoert in einen zeitgesteuerten Lauf, nicht an einen fremden
-Pull Request.
+The difference between `DRIFT` and `BLOCK` is the **mobility of the two sides**:
+with `BLOCK` both sides move by commit in this repo — a contradiction is
+therefore always the fault of the commit that created it, and belongs at the
+pull request. With `DRIFT` the other side moves without any commit here; that
+belongs in a scheduled run, not at somebody else's pull request.
 
-## Das Transitions-Ventil
+## The transition valve
 
-Ein neuer Check, der am Tag seiner Einfuehrung den halben Bestand rot faerbt,
-wird gewaivt — und ein gewaivtes Gate misst nichts. Ein `Ramp` erlaubt deshalb,
-einen Befund **vorlaeufig** eine Stufe tiefer zu melden. Er trägt zwei Dinge,
-die ihn von einer stillen Ausnahme unterscheiden:
+A new check that turns half the existing stock red on the day it lands gets
+waived — and a waived gate measures nothing. A `Ramp` therefore allows
+reporting a finding **for now** one level lower. It carries two things that set
+it apart from a silent exception:
 
-- eine **Bedingung in Worten**, unter der hochgeschaltet wird, und
-- ein **Praedikat**, das misst, ob sie erfuellt ist.
+- a **condition in words** under which it switches up, and
+- a **predicate** that measures whether it is met.
 
-Ist die Bedingung erfuellt, meldet `Ramp.due` das — und ein Test schlaegt fehl,
-solange nicht hochgeschaltet wurde. Damit haengt das Hochschalten an einer
-Pruefung und nicht am Gedaechtnis.
+Once the condition is met, `Ramp.due` reports it — and a test fails until the
+switch-up has happened. So the switch-up hangs on a check and not on memory.
 """
 
 from __future__ import annotations
@@ -51,7 +49,7 @@ from enum import IntEnum
 
 
 class Level(IntEnum):
-    """Exit-Code und Schwere in einem — `max()` ueber alle Befunde ist der Exit-Code."""
+    """Exit code and severity in one — `max()` over all findings is the exit code."""
 
     INFO = 0
     DRIFT = 1
@@ -67,19 +65,19 @@ LEVEL_LABEL = {
 
 @dataclass(frozen=True)
 class Ramp:
-    """Ein Befund wird vorlaeufig tiefer gemeldet, bis eine benannte Bedingung haelt.
+    """A finding is reported lower for now, until a named condition holds.
 
-    `condition` steht im Report und sagt dem Menschen, worauf gewartet wird.
-    `predicate` sagt dem Test, ob weiter gewartet werden darf.
-    `deadline` ist die zweite, unabhaengige Faelligkeit: ein Datum, ab dem das
-    Ventil auch dann hochschaltet, wenn die Bedingung nie eingetreten ist.
+    `condition` appears in the report and tells the human what is being waited for.
+    `predicate` tells the test whether waiting may go on.
+    `deadline` is the second, independent due date: a date from which the valve
+    switches up even if the condition never occurred.
 
-    Warum beides: Ein Praedikat misst, ob der Bestand geraeumt wurde. Es misst
-    nicht, ob jemand daran gearbeitet hat. Ein Ventil, dessen Bedingung nie
-    eintritt, weil niemand sie angeht, bleibt ohne Datum fuer immer offen — und
-    ist damit genau die Ausnahme mit besserem Namen, gegen die diese Datei
-    geschrieben ist. Das Datum ist kein Kalendereintrag: es macht den Test rot,
-    und ein roter Test ist eine Entscheidung, kein Erinnerungszettel.
+    Why both: a predicate measures whether the existing stock was cleared. It
+    does not measure whether anybody worked on it. A valve whose condition never
+    occurs because nobody tackles it stays open forever without a date — and is
+    then exactly the exception under a better name that this file is written
+    against. The date is not a calendar entry: it turns the test red, and a red
+    test is a decision, not a reminder slip.
     """
 
     name: str
@@ -91,7 +89,7 @@ class Ramp:
 
     @property
     def due(self) -> bool:
-        """Ist die Bedingung erfuellt oder die Frist abgelaufen?"""
+        """Is the condition met or the deadline passed?"""
         if self.deadline is not None and date.today() >= self.deadline:
             return True
         return self.predicate()
@@ -108,7 +106,7 @@ class Finding:
     ramp: Ramp | None = None
 
     def effective_level(self) -> Level:
-        """Die Stufe, mit der dieser Befund heute zaehlt (Ventil beruecksichtigt)."""
+        """The level at which this finding counts today (valve taken into account)."""
         if self.ramp is None:
             return self.level
         return self.level if self.ramp.due else self.ramp.until_then
@@ -116,7 +114,7 @@ class Finding:
 
 @dataclass
 class Verdict:
-    """Sammelt Befunde und rechnet daraus einen Exit-Code aus."""
+    """Collects findings and computes an exit code from them."""
 
     findings: list[Finding] = field(default_factory=list)
 
@@ -142,11 +140,11 @@ class Verdict:
         return [f for f in self.findings if f.effective_level() == level]
 
     def exit_code(self, strict: bool = False) -> int:
-        """Hoechste erreichte Stufe. Ohne `--strict` blockt DRIFT nicht.
+        """Highest level reached. Without `--strict` DRIFT does not block.
 
-        Der Grund steht oben: die Gegenseite eines DRIFT-Befundes bewegt sich
-        ohne Commit in diesem Repo. An einem fremden Pull Request waere das
-        Rauschen; in einem zeitgesteuerten Lauf (`--strict`) ist es das Signal.
+        The reason is stated above: the other side of a DRIFT finding moves
+        without a commit in this repo. At somebody else's pull request that would
+        be noise; in a scheduled run (`--strict`) it is the signal.
         """
         if not self.findings:
             return 0
@@ -156,9 +154,9 @@ class Verdict:
         return int(worst)
 
     def render(self) -> str:
-        """Report in Lesereihenfolge: erst was blockt, dann was nur auffaellt."""
+        """Report in reading order: first what blocks, then what merely stands out."""
         if not self.findings:
-            return "OK — keine Abweichung."
+            return "OK — no deviation."
         out: list[str] = []
         for level in (Level.BLOCK, Level.DRIFT, Level.INFO):
             group = self.at(level)
@@ -171,42 +169,40 @@ class Verdict:
                     out.extend(f"      {line}" for line in f.detail.splitlines())
                 if f.ramp is not None and not f.ramp.due:
                     out.append(
-                        f"      [Ventil {f.ramp.name}] gemeldet als "
-                        f"{LEVEL_LABEL[f.ramp.until_then].strip()} statt "
-                        f"{LEVEL_LABEL[f.ramp.target].strip()}, bis: {f.ramp.condition}"
+                        f"      [valve {f.ramp.name}] reported as "
+                        f"{LEVEL_LABEL[f.ramp.until_then].strip()} instead of "
+                        f"{LEVEL_LABEL[f.ramp.target].strip()}, until: {f.ramp.condition}"
                     )
             out.append("")
         return "\n".join(out).rstrip()
 
 
 # ---------------------------------------------------------------------------
-# Das Vokabular der Schreiber
+# The vocabulary of the writers
 # ---------------------------------------------------------------------------
 
 
 def check_verdict(stale: list[str], missing: list[str], regenerate: str) -> int:
-    """Exit-Code fuer ein `--check` eines Schreib-Subkommandos.
+    """Exit code for a `--check` of a writing subcommand.
 
-        0  aktuell
-        1  veraltet — das Kommando zum Neuerzeugen steht in der Meldung
-        2  fehlt oder ist nicht lesbar
+        0  current
+        1  stale — the command to regenerate is in the message
+        2  missing or not readable
 
-    Warum getrennt von INFO/DRIFT/BLOCK: `Verdict.exit_code()` liefert ohne
-    `--strict` bei DRIFT eine Null, weil sich die Gegenseite eines DRIFT-Befundes
-    ohne Commit in diesem Repo bewegt. Bei einem Schreiber ist das nicht so —
-    beide Seiten liegen hier, und ein veraltetes Schema muss am Pull Request rot
-    sein (RB-G2).
+    Why separate from INFO/DRIFT/BLOCK: without `--strict`, `Verdict.exit_code()`
+    returns a zero for DRIFT, because the other side of a DRIFT finding moves
+    without a commit in this repo. With a writer that is not so — both sides lie
+    here, and a stale schema must be red at the pull request (RB-G2).
 
-    Und warum 1 und 2 verschieden sind: „fehlt" und „veraltet" haben
-    verschiedene Ursachen und verschiedene Reparaturen. Ein Werkzeug, das beide
-    gleich meldet, hat in einer Projekt-Instanz wochenlang eine fehlende Eingabe
-    als Staleness gemeldet — und jeder hat den Regenerier-Lauf gestartet, der
-    nichts finden konnte (F-A-11).
+    And why 1 and 2 differ: "missing" and "stale" have different causes and
+    different repairs. A tool that reports both the same way reported a missing
+    input as staleness for weeks in a project instance — and everybody started
+    the regeneration run, which could find nothing (F-A-11).
     """
     if missing:
-        print(f"FEHLT: {', '.join(missing)} — nie erzeugt oder nicht lesbar.", file=sys.stderr)
+        print(f"MISSING: {', '.join(missing)} — never generated or not readable.", file=sys.stderr)
         return 2
     if stale:
-        print(f"VERALTET: {', '.join(stale)} — neu erzeugen mit: {regenerate}", file=sys.stderr)
+        print(f"STALE: {', '.join(stale)} — regenerate with: {regenerate}", file=sys.stderr)
         return 1
     return 0

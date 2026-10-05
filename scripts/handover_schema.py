@@ -1,34 +1,34 @@
-"""Das Schema der Uebergaben — die eine Feldliste, aus der Test und Vorlage lesen.
+"""The schema of the handovers — the one field list that test and template read from.
 
-Der Rueckkanal ist der einzige Weg, auf dem Wissen zwischen den Repositorien
-fliesst: das Framework darf in eine Projekt-Instanz nicht schreiben
-(ADR-011/015), also legt es eine Uebergabe ab und wartet auf die Quittung.
+The feedback channel is the only way knowledge flows between the repositories:
+the framework must not write into a project instance (ADR-011/015), so it files
+a handover and waits for the acknowledgement.
 
-Bis zum 2026-09-08 wurde dieser Vertrag **gelebt, aber nirgends aufgeschrieben**.
-Die Folge war messbar: 14 von 24 Uebergaben trugen kein `direction`-Feld, und
-`project_handovers()` filtert genau darauf — sie fielen damit aus jeder Pruefung
-des Kanals heraus. Die Testsuite war gruen ueber einer Menge, die die
-ungeprueften Dateien nicht enthielt.
+Until 2026-09-08 this contract was **lived but written down nowhere**. The
+consequence was measurable: 14 of 24 handovers carried no `direction` field, and
+`project_handovers()` filters on exactly that — so they dropped out of every
+check of the channel. The test suite was green over a set that did not contain
+the unchecked files.
 
-**Warum das hier steht und nicht im Test.** Weil auch die Vorlage
-(`templates/handover.md`) dieselbe Liste braucht. Stuende sie im Test, gaebe es
-sie zweimal — und die zweite Liste ist immer die, die veraltet.
+**Why this lives here and not in the test.** Because the template
+(`templates/handover.md`) needs the same list too. Were it in the test, it would
+exist twice — and the second list is always the one that goes stale.
 """
 
 from __future__ import annotations
 
-# Wer eine Uebergabe empfaengt. Geschlossen: ein dritter Wert waere eine neue
-# Sorte Dokument und braucht eine Entscheidung, keinen stillen Eintrag.
+# Who receives a handover. Closed: a third value would be a new kind of
+# document and needs a decision, not a silent entry.
 #
-#   framework->framework  Sitzungsuebergabe in diesem Repo. Niemand wartet auf
-#                         eine Quittung; der leichte Vertrag genuegt.
-#   framework->project    Der Kanal. Traegt Ziel, Stand, unveraenderlichen
-#                         Befundblock und Quittungsfelder. Nur das Projektteam
-#                         setzt `acknowledged` und `closed` — per Pull Request
-#                         in dieses Repo.
+#   framework->framework  Session handover in this repo. Nobody waits for an
+#                         acknowledgement; the light contract suffices.
+#   framework->project    The channel. Carries target, state, an immutable
+#                         findings block and acknowledgement fields. Only the
+#                         project team sets `acknowledged` and `closed` — by
+#                         pull request into this repo.
 RICHTUNGEN: tuple[str, ...] = ("framework->framework", "framework->project")
 
-# Felder, die JEDE Uebergabe traegt.
+# Fields EVERY handover carries.
 GEMEINSAM: frozenset[str] = frozenset(
     {
         "title",
@@ -41,33 +41,33 @@ GEMEINSAM: frozenset[str] = frozenset(
     }
 )
 
-# Der Kanal-Vertrag. Nur bei `direction: framework->project` zulaessig.
+# The channel contract. Allowed only with `direction: framework->project`.
 #
-# **Gemessen am 2026-09-08, und die erste Fassung dieser Menge war falsch.** Sie
-# fuehrte auch `target_repo`, `target_ref`, `status`, `bead`, `review` und
-# `disclosure` als kanal-exklusiv — der Test schlug daraufhin an sieben
-# Sitzungsuebergaben an, die diese Felder voellig zu Recht tragen: auch eine
-# Sitzungsuebergabe beschreibt einen Stand (`target_ref`), haengt an einem
-# Vorgang (`bead`) und hat einen Zustand (`status`).
+# **Measured on 2026-09-08, and the first version of this set was wrong.** It
+# also listed `target_repo`, `target_ref`, `status`, `bead`, `review` and
+# `disclosure` as channel-exclusive — the test then fired on seven session
+# handovers that carry these fields quite rightly: a session handover too
+# describes a state (`target_ref`), hangs on a work item (`bead`) and has a
+# status (`status`).
 #
-# Exklusiv ist nur, was die Zusage traegt: der Hash ueber den unveraenderlichen
-# Befundblock und die drei Quittungsfelder. Sie an einer Sitzungsuebergabe zu
-# fuehren behauptet ein Versprechen, auf das niemand wartet.
+# Exclusive is only what carries the commitment: the hash over the immutable
+# findings block and the three acknowledgement fields. Keeping them on a session
+# handover claims a promise nobody is waiting for.
 KANAL_EXKLUSIV: frozenset[str] = frozenset(
     {
         "record_sha256",
-        # Setzt das Projektteam, nicht das Framework.
+        # Set by the project team, not by the framework.
         "acknowledged_by",
         "acknowledged_at",
         "closed_at",
     }
 )
 
-# Was eine Uebergabe im Kanal zusaetzlich VERLANGT (nicht nur darf).
+# What a handover in the channel additionally REQUIRES (not merely may carry).
 PROJEKT_PFLICHT: frozenset[str] = frozenset({"target_repo", "target_ref", "status", "bead", "record_sha256"})
 
-# Zulaessig in beiden Richtungen, nirgends verlangt. Alles hier ist im Bestand
-# belegt — die Menge ist gemessen, nicht ausgedacht.
+# Allowed in both directions, required nowhere. Everything here is attested in
+# the existing handovers — the set is measured, not made up.
 OPTIONAL: frozenset[str] = frozenset(
     {
         "last_reviewed",
@@ -82,46 +82,46 @@ OPTIONAL: frozenset[str] = frozenset(
         "maturity",
         "audience",
         "reading_time_min",
-        # Auch eine Sitzungsuebergabe beschreibt einen Stand, haengt an einem
-        # Vorgang und hat einen Zustand. Siehe den Kommentar ueber KANAL_EXKLUSIV.
+        # A session handover too describes a state, hangs on a work item and has
+        # a status. See the comment above KANAL_EXKLUSIV.
         "target_repo",
         "target_ref",
         "status",
         "bead",
         "review",
         "disclosure",
-        # Die Kennzahlen des Ablaufs (2026-09-10). Sie sind optional, weil eine
-        # Uebergabe ohne Phasenlauf keine hat — aber wo sie stehen, sind sie die
-        # einzige Grundlage, auf der die Doktrin sich korrigieren kann. Ohne sie
-        # bleibt jede Aussage ueber Gate-Wirkung eine Erwartung.
-        "review_rounds",  # Runden bis sauber
-        "fix_regen_rounds",  # davon Befunde mit Origin `fix-r<N>` — die Schleife gegen sich selbst
-        "late_findings",  # nach dem Commit gefunden; konstante Klassen aendern Gates, nicht das Bauchgefuehl
-        "questions",  # gestellte Menschenfragen, nach Klasse
+        # The metrics of the process (2026-09-10). They are optional because a
+        # handover without a phase run has none — but where they stand, they are
+        # the only basis on which the doctrine can correct itself. Without them
+        # every statement about a gate's effect remains an expectation.
+        "review_rounds",  # rounds until clean
+        "fix_regen_rounds",  # of these, findings with origin `fix-r<N>` — the loop against itself
+        "late_findings",  # found after the commit; constant classes change gates, not gut feeling
+        "questions",  # questions put to humans, by class
     }
 )
 
-# Ausdruecklich NICHT aufgenommen, obwohl im Bestand gefunden: `date` (einmal,
-# gemeint war `created`) und `beads` (einmal, gemeint war `bead`). Beide waren
-# stumm, weil niemand die Namen gegen eine Liste hielt — sie sollen auffallen.
-# Am 2026-09-08 in `2026-04-29-adwaive-onepager.md` berichtigt.
+# Expressly NOT included although found in the existing handovers: `date` (once,
+# `created` was meant) and `beads` (once, `bead` was meant). Both were silent
+# because nobody held the names against a list — they should stand out.
+# Corrected on 2026-09-08 in `2026-04-29-adwaive-onepager.md`.
 ERLAUBT: frozenset[str] = GEMEINSAM | KANAL_EXKLUSIV | OPTIONAL
 
-# Das Statusvokabular des Kanals.
+# The status vocabulary of the channel.
 STATUS: tuple[str, ...] = ("pending", "acknowledged", "closed")
 
-# Die Marker, ueber die `record_sha256` rechnet. Der Befundblock dazwischen ist
-# unveraenderlich (RB-P5); Widerspruch kommt darunter, nie hinein.
+# The markers `record_sha256` is computed over. The findings block between them
+# is immutable (RB-P5); an objection goes below it, never into it.
 RECORD_BEGIN = "<!-- record:begin -->\n"
 RECORD_END = "<!-- record:end -->"
 
 
 def frontmatter(text: str) -> dict[str, str]:
-    """Liest die flachen Schluessel des Frontmatters.
+    """Reads the flat keys of the frontmatter.
 
-    Verschachtelte Bloecke (`review:`, `produced_by:`) werden mit ihrem Praefix
-    aufgenommen — `review.status` statt `status`. Ohne diese Trennung wuerde der
-    Review-Status den Uebergabe-Status ueberschreiben, und beide heissen `status`.
+    Nested blocks (`review:`, `produced_by:`) are taken with their prefix —
+    `review.status` instead of `status`. Without this separation the review
+    status would overwrite the handover status, and both are called `status`.
     """
     if not text.startswith("---\n"):
         return {}
@@ -143,27 +143,26 @@ def frontmatter(text: str) -> dict[str, str]:
 
 
 def oberste_felder(text: str) -> set[str]:
-    """Nur die Schluessel der obersten Ebene — die, gegen die `ERLAUBT` prueft.
+    """Only the top-level keys — the ones `ERLAUBT` checks against.
 
-    Ein verschachtelter Schluessel wie `review.status` gehoert seinem Elternfeld
-    und wird nicht einzeln zugelassen oder verboten.
+    A nested key such as `review.status` belongs to its parent field and is
+    neither allowed nor forbidden on its own.
     """
     return {k for k in frontmatter(text) if "." not in k}
 
 
 def belegte_felder(text: str) -> set[str]:
-    """Welche Felder eine Uebergabe wirklich traegt — auf oberster Ebene.
+    """Which fields a handover really carries — at the top level.
 
-    Ein Block zaehlt als belegt, sobald eines seiner Kinder einen Wert hat:
-    `produced_by` ist in **allen 24** Uebergaben ein Block und nie ein Skalar
-    (gemessen 2026-09-08). Eine Pruefung, die nur `felder["produced_by"]`
-    ansieht, findet dort den leeren String und haelt das Feld fuer fehlend —
-    sie waere an jeder einzelnen Uebergabe rot geworden, obwohl keine es
-    auslaesst.
+    A block counts as present as soon as one of its children has a value:
+    `produced_by` is a block in **all 24** handovers and never a scalar
+    (measured 2026-09-08). A check that looks only at `felder["produced_by"]`
+    finds the empty string there and takes the field for missing — it would
+    have gone red on every single handover, although none omits it.
 
-    `null` gilt als unbelegt. Der Kanal traegt `acknowledged_by: null`,
-    `acknowledged_at: null` und `closed_at: null`, solange die Quittung
-    aussteht — ein Platzhalter fuer eine Zusage ist keine Zusage.
+    `null` counts as absent. The channel carries `acknowledged_by: null`,
+    `acknowledged_at: null` and `closed_at: null` while the acknowledgement is
+    outstanding — a placeholder for a commitment is not a commitment.
     """
     belegt: set[str] = set()
     for schluessel, wert in frontmatter(text).items():
@@ -173,7 +172,7 @@ def belegte_felder(text: str) -> set[str]:
 
 
 def record_block(text: str) -> str | None:
-    """Der Block zwischen den Markern — das, was der Hash abdeckt."""
+    """The block between the markers — what the hash covers."""
     if RECORD_BEGIN not in text or RECORD_END not in text:
         return None
     return text.split(RECORD_BEGIN, 1)[1].split(RECORD_END, 1)[0]
