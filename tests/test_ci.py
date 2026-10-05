@@ -15,6 +15,7 @@ Two failure shapes are meant to snag here, both measured:
 from __future__ import annotations
 
 import ast
+import copy
 import json
 import re
 import subprocess
@@ -29,6 +30,7 @@ CI_FILE = REPO_ROOT / ".github" / "workflows" / "ci.yml"
 RUNNER = REPO_ROOT / "scripts" / "verify_all.sh"
 
 sys.path.insert(0, str(REPO_ROOT / "scripts"))
+import ci_gates  # noqa: E402
 from ci_gates import gates  # noqa: E402
 
 
@@ -379,6 +381,11 @@ def test_every_gate_step_runs_even_after_a_failing_gate() -> None:
     geprueft = 0
     for job_name, job in (doc.get("jobs") or {}).items():
         im_job = [s for s in job.get("steps") or [] if s.get("id") in gate_ids]
+        if job_name == ci_gates.SUMMARY_JOB:
+            # The summary job sums up the legs of the matrix job and measures
+            # nothing itself — a gate step here would be a second measurement.
+            assert not im_job, f"{job_name}: the summary job holds gate steps: {[s['id'] for s in im_job]}"
+            continue
         assert im_job, f"{job_name}: no gate step — this test ran over the empty set."
         for schritt in im_job:
             geprueft += 1
@@ -461,6 +468,175 @@ def test_concurrency_group_carries_the_event() -> None:
     doc = yaml.safe_load(CI_FILE.read_text(encoding="utf-8"))
     gruppe = doc["concurrency"]["group"]
     assert "event_name" in gruppe, f"Concurrency group without an event: {gruppe}"
+
+
+# --------------------------------------------------------------------------
+# 1b · One leg per declared interpreter, and one check that sums them up
+#      (bead coding-harness-ei0)
+# --------------------------------------------------------------------------
+
+# Criterion 5 states the install command literally, and so does this test: if
+# the generator's own constant drifted, comparing against it alone would stay
+# green on the very fault it is meant to catch.
+LOCK_INSTALL = "python3 -m pip install --require-hashes -r requirements-ci.txt"
+_PIP_INSTALL = re.compile(r"\bpip3?\s+install\b")
+
+
+def _ci_doc(text: str | None = None) -> dict:
+    return yaml.safe_load(CI_FILE.read_text(encoding="utf-8") if text is None else text)
+
+
+def _matrix(job: dict) -> list[str]:
+    return list(job["strategy"]["matrix"]["python"])
+
+
+def _install_runs(job: dict) -> list[str]:
+    return [s["run"] for s in job.get("steps") or [] if _PIP_INSTALL.search(str(s.get("run", "")))]
+
+
+def _setup_python_index(job: dict) -> int | None:
+    for i, s in enumerate(job.get("steps") or []):
+        if str(s.get("uses", "")).startswith("actions/setup-python@"):
+            return i
+    return None
+
+
+def _install_index(job: dict) -> int | None:
+    for i, s in enumerate(job.get("steps") or []):
+        if _PIP_INSTALL.search(str(s.get("run", ""))):
+            return i
+    return None
+
+
+def test_every_declared_interpreter_gets_a_leg(monkeypatch: pytest.MonkeyPatch) -> None:
+    """The matrix is `tools.python`, not a copy of it — and every verify gate runs in it.
+
+    The second half is read off a generated file after the declaration changed:
+    a matrix written as a literal in the generator would pass the first half and
+    fail here.
+    """
+    declared = ci_gates.interpreters()
+    assert len(declared) >= 2, f"tools.python declares {declared} — a matrix of one is not the second interpreter"
+    job = _ci_doc()["jobs"][ci_gates.MATRIX_JOB]
+    assert _matrix(job) == declared, f"matrix {_matrix(job)} differs from tools.python {declared}"
+    assert job["strategy"].get("fail-fast") is False, "a red leg must not cancel the other"
+
+    in_ci = [g["id"] for g in gates() if g["job"] == "verify" and ci_gates.misst_in(g, "ci")]
+    assert in_ci, "no verify gate measures in CI — this test ran over the empty set"
+    steps = {s.get("id") for s in job["steps"]}
+    assert not [i for i in in_ci if i not in steps], f"verify gates missing from the matrix job: {set(in_ci) - steps}"
+
+    monkeypatch.setattr(ci_gates, "interpreters", lambda: ["3.11", "3.12", "3.13"])
+    generated = _ci_doc(ci_gates.generate_ci())
+    assert _matrix(generated["jobs"][ci_gates.MATRIX_JOB]) == ["3.11", "3.12", "3.13"]
+
+
+def test_the_toolchain_comes_only_from_the_lock() -> None:
+    """Every install in the workflow is the one hash-checked install of the lock."""
+    assert ci_gates.INSTALL == LOCK_INSTALL, f"the generator installs {ci_gates.INSTALL!r}"
+    installing = {name: _install_runs(job) for name, job in _ci_doc()["jobs"].items() if _install_runs(job)}
+    assert set(installing) >= {ci_gates.MATRIX_JOB, "drift"}, f"jobs that install: {sorted(installing)}"
+    for name, runs in installing.items():
+        assert runs == [LOCK_INSTALL], f"{name}: installs {runs}, not exactly once the lock"
+
+
+def test_every_job_sets_a_declared_interpreter_before_installing() -> None:
+    declared = ci_gates.interpreters()
+    checked = 0
+    for name, job in _ci_doc()["jobs"].items():
+        install = _install_index(job)
+        if install is None:
+            continue
+        checked += 1
+        setup = _setup_python_index(job)
+        assert setup is not None, f"{name}: installs without actions/setup-python"
+        assert setup < install, f"{name}: setup-python (step {setup}) comes after the install (step {install})"
+        version = job["steps"][setup]["with"]["python-version"]
+        if name == ci_gates.MATRIX_JOB:
+            assert version == "${{ matrix.python }}", f"{name}: python-version is {version!r}"
+            assert set(_matrix(job)) <= set(declared)
+        else:
+            assert version in declared, f"{name}: python-version {version!r} is not declared ({declared})"
+    assert checked >= 2, f"only {checked} job(s) install — this test ran over too few jobs"
+
+
+def test_the_summary_check_passes_only_when_every_leg_passed() -> None:
+    """The ruleset requires `verify`, and GitHub counts a skipped job as passed.
+
+    So the check must need the matrix job, survive its failure (`always()`), and
+    pass only on `success` — run here with each of the four results a job can
+    have, through the shell GitHub would use.
+    """
+    doc = _ci_doc()
+    assert ci_gates.SUMMARY_JOB == "verify", "the ruleset on main requires the check `verify`"
+    job = doc["jobs"][ci_gates.SUMMARY_JOB]
+    needs = job.get("needs")
+    assert (needs if isinstance(needs, list) else [needs]) == [ci_gates.MATRIX_JOB], f"needs: {needs!r}"
+    condition = job["if"]
+    assert "always()" in condition, (
+        f"without always() a red leg skips this job, and a skipped job reports success: {condition}"
+    )
+    assert "push" in condition and "pull_request" in condition, condition
+    assert "schedule" not in condition, condition
+    assert "name" not in job, "the id of the job is the check's context; a `name:` would rename the check"
+    names = [j for j, d in doc["jobs"].items() if d.get("name", j) == "verify"]
+    assert names == ["verify"], f"exactly one job may report the check `verify`, found {names}"
+    assert doc["jobs"][ci_gates.MATRIX_JOB]["strategy"]["fail-fast"] is False
+
+    assert len(job["steps"]) == 1, "the summary job holds one step"
+    run = job["steps"][0]["run"]
+    placeholder = "${{ needs." + ci_gates.MATRIX_JOB + ".result }}"
+    assert placeholder in run, f"the step does not read the matrix job's result: {run!r}"
+    for result, expected in (("success", 0), ("failure", 1), ("cancelled", 1), ("skipped", 1)):
+        done = subprocess.run(["sh", "-c", run.replace(placeholder, result)], capture_output=True, text=True)
+        assert done.returncode == expected, (
+            f"result {result!r}: exit {done.returncode}, expected {expected}\n{done.stdout}"
+        )
+
+
+def test_the_drift_job_runs_once_on_the_last_interpreter(monkeypatch: pytest.MonkeyPatch) -> None:
+    def drift_version(doc: dict) -> str:
+        drift = doc["jobs"]["drift"]
+        assert "strategy" not in drift, "the drift job reads the outside world, not the interpreter: one run"
+        return drift["steps"][_setup_python_index(drift)]["with"]["python-version"]
+
+    declared = ci_gates.interpreters()
+    assert drift_version(_ci_doc()) == declared[-1]
+    monkeypatch.setattr(ci_gates, "interpreters", lambda: ["3.11", "3.12", "3.13"])
+    assert drift_version(_ci_doc(ci_gates.generate_ci())) == "3.13"
+
+
+def test_the_schema_rejects_a_malformed_interpreter_list(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys
+) -> None:
+    """`tools` holds `python`, a non-empty list of distinct quoted `3.<n>` — and nothing else."""
+    doc = yaml.safe_load(ci_gates.GATE_FILE.read_text(encoding="utf-8"))
+    assert ci_gates.validate_schema(doc) == [], "the control: the real gate file passes"
+
+    def with_python(value) -> dict:
+        d = copy.deepcopy(doc)
+        d["tools"]["python"] = value
+        return d
+
+    for bad in ("3.12", [], ["3.x"], ["3.12", "3.12"], [3.12], ["3.12", 3.11], ["python3.12"], None):
+        fehler = ci_gates.validate_schema(with_python(bad))
+        assert any("tools.python" in f for f in fehler), (bad, fehler)
+
+    extra = copy.deepcopy(doc)
+    extra["tools"]["ruff"] = "0.9.10"
+    assert any("tools.ruff" in f for f in ci_gates.validate_schema(extra))
+    missing = copy.deepcopy(doc)
+    del missing["tools"]
+    assert ci_gates.validate_schema(missing), "a gate file without `tools` declares no interpreter"
+
+    # And the command line says so too, not only the function.
+    bad_file = tmp_path / "gates.yaml"
+    bad_file.write_text(yaml.safe_dump(with_python(["3.x"]), sort_keys=False), encoding="utf-8")
+    monkeypatch.setattr(ci_gates, "GATE_FILE", bad_file)
+    monkeypatch.setattr(sys, "argv", ["ci_gates.py", "--check-schema"])
+    assert ci_gates.main() != 0
+    seen = capsys.readouterr()
+    assert "tools.python" in seen.err + seen.out
 
 
 # --------------------------------------------------------------------------
@@ -565,7 +741,7 @@ def test_a_local_equivalent_derives_its_arguments_from_the_action() -> None:
     someone changes the globs in `ci.yml`, the local run moves with them.
     """
     doc = yaml.safe_load(CI_FILE.read_text(encoding="utf-8"))
-    schritte = {s.get("id"): s for s in doc["jobs"]["verify"]["steps"] if s.get("id")}
+    schritte = {s.get("id"): s for s in doc["jobs"][ci_gates.MATRIX_JOB]["steps"] if s.get("id")}
     ersatz = [g for g in gates() if g.get("via_local_equivalent")]
     assert ersatz, "No gate with a local equivalent — then this test checks nothing."
 
@@ -1007,7 +1183,7 @@ def test_drift_job_runs_on_schedule_and_dispatch_only() -> None:
         "measurement of an outside world that it did not change."
     )
 
-    verify = doc["jobs"]["verify"]
+    verify = doc["jobs"][ci_gates.MATRIX_JOB]
     assert "push" in verify["if"] and "pull_request" in verify["if"], (
         "The verification job would otherwise have to run on the timer too, and there it would say nothing."
     )

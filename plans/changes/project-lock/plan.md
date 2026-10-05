@@ -163,10 +163,10 @@ Read `date` at each step boundary (`prompts/04-implement.md`).
 | 4 | `test_every_declared_interpreter_gets_a_leg` — the matrix equals `interpreters()`, also with it monkeypatched to three versions; every verify gate is a step of `gates` | the matrix written as a literal |
 | 5 | `test_the_toolchain_comes_only_from_the_lock` — every `run` with `pip install` in `ci.yml` equals `INSTALL`, once per job that installs | a package named, `--require-hashes` dropped |
 | 6 | `test_every_job_sets_a_declared_interpreter_before_installing` | `setup-python` after `setup-deps`, or missing in `drift` |
-| 7 | `test_the_summary_check_goes_red_unless_every_leg_passed` — `needs`, `always()` and the events in its `if`; its step run by `sh` with the result `success`, `failure`, `cancelled`, `skipped`: exit 0 only for `success`; `fail-fast` off — and evidence 1 | `always()` dropped, `!= failure` instead of `= success`, `fail-fast` on |
+| 7 | `test_the_summary_check_passes_only_when_every_leg_passed` — `needs`, `always()` and the events in its `if`; its step run by `sh` with the result `success`, `failure`, `cancelled`, `skipped`: exit 0 only for `success`; `fail-fast` off — and evidence 1 | `always()` dropped, `!= failure` instead of `= success`, `fail-fast` on |
 | 8 | evidence 2 | a second job named `verify`, or none |
 | 9 | `test_the_drift_job_runs_once_on_the_last_interpreter` | a matrix in `drift`, the first interpreter |
-| 10 | `test_the_schema_refuses_a_malformed_interpreter_list` — `"3.12"`, `[]`, `["3.x"]`, a duplicate, a key `ruff` | one check removed from `validate_schema` |
+| 10 | `test_the_schema_rejects_a_malformed_interpreter_list` — `"3.12"`, `[]`, `["3.x"]`, a duplicate, a key `ruff` | one check removed from `validate_schema` |
 | 11 | `test_the_runner_never_searches_other_environments` (exit 2 with PyYAML only under `$HOME/.venvs/`); `test_the_runner_prefers_the_checkouts_own_environment` (wrappers log which ran) | the old candidate list back; `python3` before `.venv` |
 | 12 | the first test of 11 also reads stderr for `make venv` and `PYTHON` | another exit code or message |
 | 13 | `test_the_runner_hands_its_interpreter_to_every_gate` — a one-gate file whose command exits 1 without `PYTHON` | `export PYTHON` removed |
@@ -231,6 +231,31 @@ the `requirements-ci.txt` kit rule, `scripts/new_change.py` (its mention of
   runner). If the live proof of step 4 cannot get a runner, evidence 1 reads
   "not run — Actions degraded" with the run id, and the work continues; it is
   not faked. The live ruleset is not touched.
+- **2026-10-05, phase 4 — three tests outside the plan's list had to move
+  with the schema** (assumption "only `tests/test_ci.py` reads the CI job
+  names and the gate file's shape" did not carry; `[DETAIL]`, no change to the
+  solution). The new `tools` check makes `validate_schema` refuse a gate file
+  without `tools`, so three hand-made gate files in `tests/test_gate_machinery.py`
+  (writer-only, hosted-only, action without a local equivalent) gain a
+  `tools: {python: ["3.11", "3.12"]}` line; and two existing tests of
+  `tests/test_ci.py` that read `jobs.verify` now read `ci_gates.MATRIX_JOB`
+  (`test_a_local_equivalent_derives_its_arguments_from_the_action`,
+  `test_drift_job_runs_on_schedule_and_dispatch_only`).
+- **2026-10-05, phase 4 — two planned test names renamed** (`[DETAIL]`).
+  `test_the_mutation_ratchet_only_turns_one_way` counts a test whose name
+  contains `goes_red` or `refuses` as mutation evidence for every gate script
+  its file mentions; `tests/test_ci.py` mentions `plans_registry.py`, so the
+  two planned names would have struck `plans-registry` and
+  `plans-registry-strict` off the ratchet without a seeded red run (a false
+  "long since covered"). The names became
+  `test_the_summary_check_passes_only_when_every_leg_passed` and
+  `test_the_schema_rejects_a_malformed_interpreter_list`; the table below
+  carries them.
+- **2026-10-05, phase 4 — the hint of `pin_problems`** (`[DETAIL]`). The plan
+  says every message ends with the `make venv` hint; a pin problem is mended
+  first by `make lock`, so its message reads "regenerate the lock with make
+  lock, then build the locked environment: make venv (…)" — it still ends
+  with the hint.
 
 ## Time used
 
