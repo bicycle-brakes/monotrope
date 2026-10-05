@@ -138,3 +138,8 @@ jobs:
         id: plans-registry-strict
         if: ${{ !cancelled() }}
         run: python3 scripts/plans_registry.py --check --strict
+      - name: Research notes not reviewed for more than 90 days are listed
+        id: research-currency
+        if: ${{ !cancelled() }}
+        run: python3 scripts/check_research_currency.py
+        continue-on-error: true
