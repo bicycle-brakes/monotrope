@@ -96,6 +96,7 @@ cron:
 
 security:
   tirith_enabled: false                      # it would download its scanner on first use
+  redact_secrets: true                       # masks key-shaped text a tool returns, also from .env; the default, pinned (README 4)
 
 updates:
   check: false                               # not read at the tag (baseline only)

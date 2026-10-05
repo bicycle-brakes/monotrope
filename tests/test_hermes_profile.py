@@ -110,6 +110,7 @@ KEY_SOURCES = {
     "web.keyless_fallback": "baseline; docs:user-guide/features/web-search.md",
     "cron.allow_agent_scheduling": "baseline; docs:user-guide/features/cron.md",
     "security.tirith_enabled": "baseline; docs:user-guide/configuration.md",
+    "security.redact_secrets": "docs:user-guide/configuration.md (Security)",
     "updates.check": "baseline-only",
 }
 NOT_READ_AT_TAG = frozenset({"auxiliary.free_only", "auxiliary.openrouter_model", "updates.check"})
@@ -505,6 +506,33 @@ def check_no_adhd_identity(p: Path) -> None:  # 53
             assert needle not in text, f"{name} names {needle}"
 
 
+def check_agent_keys(
+    p: Path,
+) -> None:  # 56, finding F-14: the agent holds two keys, so the way out is guarded and named
+    assert get(config_of(p), "security.redact_secrets") is True, "security.redact_secrets is not true"
+    text = (p / "README.md").read_text()
+    install = section(text, r"Install")
+    assert 'install -o "$ME" -g _chhermes -m 640 "$RB/env.example" "$HH/.env"' in install, (
+        "the keys are not installed as $HERMES_HOME/.env, the one file Hermes protects by name"
+    )
+    risk = section(text, r"Directories, owners and modes")
+    for needle in (
+        "Risk, accepted",
+        "OpenCode Go",
+        "Firecrawl",
+        "web_extract",
+        "redact_secrets",
+        "revoke both keys",
+        "CH-4",
+    ):
+        assert needle in risk, f"the runbook's risk on the agent's keys lacks {needle!r}"
+    ch4 = re.split(r"^### CH-4 · ", text, flags=re.M)[1].split("\n### CH-5")[0]
+    assert re.search(r"grep -cF -- \"\$v\" ~/ch/ch4-key\.jsonl", ch4), (
+        "CH-4 does not count the key values in the stream"
+    )
+    assert "both key lines print 0" in ch4, "CH-4 has no green condition on the key values"
+
+
 def check_env_example(p: Path) -> None:  # 54
     text = (p / "env.example").read_text()
     seen = {}
@@ -544,7 +572,7 @@ SPIKE_ITEMS = {
     "1": ("execute_code", "Delegate", "memory", "skill", "web_search", "patch"),
     "2": ("HERMES_WRITE_SAFE_ROOT", "outside", "note.md"),
     "3": ("$HOME", "_hspike", "spike-vault", "Permission denied"),
-    "4": ("config.yaml", ".env", "mv", "rm"),
+    "4": ("config.yaml", ".env", "mv", "rm", "ch4-key", "API_KEY"),
     "5": ("glm-5.3", "llm", "proxy", "net.log"),
     "6": ("web_search", "web_extract", "route: web"),
     "7": ("MEMORY.md", "USER.md", "skills"),
@@ -619,6 +647,10 @@ def test_sudo_rule_allows_one_command():
 
 def test_no_adhd_relief_identity_in_the_profile_files():
     check_no_adhd_identity(PROFILE)
+
+
+def test_the_agents_keys_are_guarded_and_the_risk_is_named():
+    check_agent_keys(PROFILE)
 
 
 def test_env_example_names_only():
@@ -938,6 +970,26 @@ FAULTS = [
     Fault("54 GH_TOKEN", ENV, lambda t: t + "GH_TOKEN=\n", check_env_example),
     Fault("54 GITHUB_TOKEN in a comment", ENV, lambda t: t + "# GITHUB_TOKEN\n", check_env_example),
     Fault("54 a fifth variable", ENV, lambda t: t + "OPENROUTER_API_KEY=\n", check_env_example),
+    # 56, the agent's keys (F-14)
+    Fault("56 redact_secrets off", CFG, cfg(set_key("security.redact_secrets", False)), check_agent_keys),
+    Fault("56 redact_secrets absent", CFG, cfg(set_key("security.redact_secrets", MISSING)), check_agent_keys),
+    Fault(
+        "56 the keys in a file Hermes does not protect",
+        README,
+        sub('"$RB/env.example" "$HH/.env"', '"$RB/env.example" "$HH/keys.txt"'),
+        check_agent_keys,
+    ),
+    Fault("56 the risk is not named", README, sub("**Risk, accepted", "**Note"), check_agent_keys),
+    Fault("56 the risk forgets the way out", README, sub("through `web_extract`", "somewhere"), check_agent_keys),
+    Fault("56 the risk forgets the remedy", README, sub("revoke both keys.", "carry on."), check_agent_keys),
+    Fault("56 CH-4 does not count the keys", README, sub("grep -cF -- ", "grep -c -- "), check_agent_keys),
+    Fault(
+        "56 CH-4 has no green condition on the keys",
+        README,
+        sub("both key lines print 0", "all is well"),
+        check_agent_keys,
+    ),
+    Fault("56 CH-4 forgets the key read", README, lambda t: t.replace("ch4-key", "ch4-x"), check_spike_part),
     # 55
     Fault("55 no staff", README, lambda t: t.replace("staff", "wheel"), check_runbook),
     Fault("55 no modes", README, lambda t: t.replace("2770", "x"), check_runbook),
