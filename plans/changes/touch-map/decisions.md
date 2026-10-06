@@ -69,3 +69,18 @@ Asked one at a time in the Claude Code session on 2026-10-06:
    recommended option); from 15 boxes the section says "consider
    splitting", above 30 boxes only the list is printed. Not chosen: a map
    only from three changed code files on.
+
+## Addendum 2026-10-06 (repair round 1): the maintainer's answer to the `[AMBIGUITY]` F-3
+
+Raised by the phase-6 review (`findings.md`, F-3) and answered by the
+maintainer in the Claude Code session of 2026-10-06.
+
+- **Question:** does a runner or shell script that names another runner make a
+  link? Read as plain English, `reads` ("names any other file") covers a
+  runner, so `Makefile` naming `decisions/gates.yaml` would read it; read as
+  the defined term "other" (a file that is no code file, test or runner), it
+  does not.
+- **Answer, as stated: "Kein Pfeil"** (no arrow) — the recommended reading,
+  as built in phase 4. A runner or shell script that names a runner makes no
+  link. No code changes; `spec.md` gains the clause as a dated amendment
+  (terms, "Link", and "Amendments" at the end).

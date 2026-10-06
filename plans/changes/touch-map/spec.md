@@ -75,6 +75,8 @@ touch:
   other file; `imports` — a Python code file imports it. A Python code file
   makes no link by naming a path, and a **registry** — a source other than a
   runner that names 15 or more tracked files by full path — makes none.
+  *Amended 2026-10-06:* a runner names no runner — a runner or shell script
+  that names another runner makes no link (Amendments, 1).
 - **Box.** A node of the map. A **fold box** stands for the unchanged tests
   that link to one changed file. The box count includes fold boxes.
 
@@ -347,3 +349,16 @@ Each is reversible and binds nothing beyond this change.
   "What it touches" (research 4.4).
 - **Phase 2a not run:** it is optional; eighteen criteria each carry their
   refutation, and phase 6 reads the result against them.
+
+## Amendments
+
+Dated, appended, nothing above renumbered. The criteria and terms above keep
+their wording; each amendment says what it adds.
+
+1. **2026-10-06, a runner names no runner (terms, "Link").** The phase-6
+   review (`findings.md`, F-3) found the reading of `reads` ambiguous: "any
+   other file" in plain English includes a runner, while "other" is a defined
+   term that excludes it. The maintainer answered "Kein Pfeil" in the Claude
+   Code session of 2026-10-06 (`decisions.md`, addendum): a runner or shell
+   script that names another runner makes no link. The code already did
+   this; only the clause is new.
