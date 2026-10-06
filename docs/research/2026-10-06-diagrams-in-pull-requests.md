@@ -614,6 +614,32 @@ this session. All read 2026-10-06 unless stated.
   pylint 4.1.2, code2flow 2.5.1, mermaid-cli 12.0.0, Python 3.12.4)
 - **Repository and API reads:** section 1 — measured 2026-10-06
 
+## 8 · A second practice: LakeSwitch's module diagram (2026-10-06)
+
+The same day, the LakeSwitch session answered the same request from the
+maintainer with a different script and ran it by hand on eight LakeSwitch
+pull requests (#72 to #75, #77 to #80); only the pull request bodies changed,
+nothing was committed. Handed over as a proposal on 2026-10-06; the script
+is in the second appendix, unchanged.
+
+- **What it draws:** one module (a package under `src/lakeswitch/`) at the
+  pull request's head — files as boxes, imports as arrows, the CLI as a
+  container, outside parts dashed, a C4 level on every box (ADR 0009), the
+  status from `git diff --name-status`, and the three lists Added, Changed,
+  Removed with the imports added and dropped.
+- **Kept readable:** no re-export edges from `__init__.py`, a transitive
+  reduction, a hub rule (a file imported by most of the module is drawn
+  without arrows), and a caption naming head and merge base.
+- **Checked:** every block parsed with Mermaid 11 under jsdom before upload;
+  a broken block was refused. Its own measure: 8 diagrams, 10 to 20 boxes,
+  7 to 31 arrows (LakeSwitch session, 2026-10-06; not re-measured here).
+- **What it means here:** LakeSwitch is an import-shaped package; Coding
+  Harness is not (pydeps found no edges, section 2). The two scripts
+  complement each other: the import edges and ADR 0009's form from
+  LakeSwitch, the path links (runs, tests) and the size thresholds from this
+  note. Both recommend a pull-request convention in `prompts/07-commit.md`,
+  not an amendment of ADR 0009. Bead coding-harness-5p0 carries the change.
+
 ## Appendix · The prototype
 
 Research only: it lives outside the repository and is not a gate. Run as
@@ -823,4 +849,262 @@ def main() -> int:
 if __name__ == "__main__":
     raise SystemExit(main())
 ```
+</details>
+
+
+## Appendix · LakeSwitch's modgraph.py
+
+Received from the LakeSwitch session on 2026-10-06, unchanged; it reads a
+LakeSwitch worktree and is not run in this repository.
+
+<details><summary>modgraph.py (245 lines, standard library)</summary>
+
+```python
+"""Draw one module's code as a Mermaid flowchart, from its import statements.
+
+Usage: modgraph.py <worktree> <package> <title>
+  package: the folder under src/lakeswitch, e.g. "recon".
+
+Reads the tree at HEAD and at the merge base with origin/main, never the
+working copy, so the picture is the pull request's head. Nothing is drawn by
+hand: boxes are files, arrows are imports, and the status of a file comes
+from `git diff --name-status`.
+"""
+
+from __future__ import annotations
+
+import ast
+import re
+import subprocess
+import sys
+
+WT, PKG, TITLE = sys.argv[1], sys.argv[2], sys.argv[3]
+ROOT = "src/lakeswitch"
+
+
+def git(*args: str) -> str:
+    return subprocess.run(["git", "-C", WT, *args], capture_output=True, text=True, check=True).stdout
+
+
+HEAD = git("rev-parse", "--short", "HEAD").strip()
+BASE = git("merge-base", "origin/main", "HEAD").strip()[:7]
+
+
+def files(rev: str) -> list[str]:
+    out = git("ls-tree", "-r", "--name-only", rev, f"{ROOT}/{PKG}")
+    return sorted(p for p in out.split() if p.endswith(".py"))
+
+
+def source(rev: str, path: str) -> str:
+    return git("show", f"{rev}:{path}")
+
+
+def modname(path: str) -> str:
+    """src/lakeswitch/recon/run.py -> lakeswitch.recon.run"""
+    name = path[len("src/"):-len(".py")].replace("/", ".")
+    return name[: -len(".__init__")] if name.endswith(".__init__") else name
+
+
+def imports(path: str, text: str) -> set[str]:
+    """Every lakeswitch module this file imports, as dotted names."""
+    here = modname(path)
+    pkg = here if path.endswith("__init__.py") else here.rsplit(".", 1)[0]
+    found: set[str] = set()
+    for node in ast.walk(ast.parse(text)):
+        if isinstance(node, ast.Import):
+            found |= {a.name for a in node.names if a.name.startswith("lakeswitch")}
+        elif isinstance(node, ast.ImportFrom):
+            if node.level:
+                parts = pkg.split(".")
+                base = ".".join(parts[: len(parts) - (node.level - 1)])
+                target = f"{base}.{node.module}" if node.module else base
+            else:
+                target = node.module or ""
+            if not target.startswith("lakeswitch"):
+                continue
+            found.add(target)
+            # `from . import x` / `from .pkg import sub` may name submodules
+            for alias in node.names:
+                found.add(f"{target}.{alias.name}")
+    return found
+
+
+def graph(rev: str) -> tuple[dict[str, str], set[tuple[str, str]]]:
+    """Nodes (module name -> path) inside the package, and edges between
+    inside files and outside lakeswitch modules (collapsed to top level)."""
+    paths = files(rev)
+    inside = {modname(p): p for p in paths}
+    edges: set[tuple[str, str]] = set()
+    for mod, path in inside.items():
+        for target in imports(path, source(rev, path)):
+            if target in inside:
+                if target != mod:
+                    edges.add((mod, target))
+            elif target.startswith(f"lakeswitch.{PKG}."):
+                continue  # a name imported from a module, not a module
+            elif target.startswith(f"lakeswitch.{PKG}"):
+                continue
+            else:
+                top = ".".join(target.split(".")[:2])
+                if top != "lakeswitch":
+                    edges.add((mod, "EXT:" + top))
+    # the command line: which inside modules does cli.py import?
+    try:
+        cli = source(rev, f"{ROOT}/cli.py")
+        for target in imports(f"{ROOT}/cli.py", cli):
+            if target in inside:
+                edges.add(("CLI", target))
+    except subprocess.CalledProcessError:
+        pass
+    return inside, edges
+
+
+def status() -> dict[str, str]:
+    out = git("diff", "--name-status", f"{BASE}", "HEAD", "--", ROOT)
+    found = {}
+    for line in out.splitlines():
+        parts = line.split("\t")
+        code = parts[0][0]
+        found[parts[-1]] = {"A": "added", "M": "changed", "D": "removed", "R": "added"}.get(code, "changed")
+    return found
+
+
+def nid(mod: str) -> str:
+    return re.sub(r"[^A-Za-z0-9_]", "_", mod)
+
+
+def label_of(mod: str) -> str:
+    if mod == "CLI":
+        return "lakeswitch CLI · cli.py"
+    if mod.startswith("EXT:"):
+        return mod[4:].replace("lakeswitch.", "") + " · outside the module"
+    short = mod[len(f"lakeswitch.{PKG}") :].lstrip(".") or "__init__"
+    return short.replace(".", "/") + ".py"
+
+
+def reduce(nodes: dict[str, str], edges: set[tuple[str, str]]) -> tuple[set[tuple[str, str]], list[str], set[str]]:
+    """Keep the picture readable: drop the package's re-export edges, hub
+    edges, and every inside edge implied by a path of other inside edges.
+    Returns the kept inside edges, the hubs, and the outside parts."""
+    init = f"lakeswitch.{PKG}"
+    inside = {(a, b) for a, b in edges if a in nodes and b in nodes and a != init}
+    outside = {b for a, b in edges if b.startswith("EXT:")}
+    indeg: dict[str, int] = {}
+    for _, b in inside:
+        indeg[b] = indeg.get(b, 0) + 1
+    others = max(len(nodes) - 1, 1)
+    hubs = sorted(b for b, n in indeg.items() if n >= max(4, others // 2))
+    inside = {(a, b) for a, b in inside if b not in hubs}
+    succ: dict[str, set[str]] = {}
+    for a, b in inside:
+        succ.setdefault(a, set()).add(b)
+
+    def reachable(start: str, skip: tuple[str, str]) -> set[str]:
+        seen, todo = set(), [start]
+        while todo:
+            cur = todo.pop()
+            for nxt in succ.get(cur, ()):
+                if (cur, nxt) == skip or nxt in seen:
+                    continue
+                seen.add(nxt)
+                todo.append(nxt)
+        return seen
+
+    kept = {(a, b) for a, b in inside if b not in reachable(a, (a, b))}
+    return kept, hubs, outside
+
+
+def main() -> None:
+    nodes, all_edges = graph("HEAD")
+    _, base_edges = graph(BASE)
+    edges, hubs, outside = reduce(nodes, all_edges)
+    st = status()
+    lines_of = {}
+    for mod, path in nodes.items():
+        lines_of[mod] = source("HEAD", path).count("\n")
+    cli_status = st.get(f"{ROOT}/cli.py")
+
+    out = ["```mermaid", "flowchart LR"]
+    out.append("  classDef added fill:#d9f2d9,stroke:#2e7d32,stroke-width:2px,color:#000")
+    out.append("  classDef changed fill:#fff2cc,stroke:#b58900,stroke-width:2px,color:#000")
+    out.append("  classDef same fill:#f2f2f2,stroke:#999,color:#000")
+    out.append("  classDef outside fill:#ffffff,stroke:#999,stroke-dasharray:4 3,color:#333")
+    cli_mark = " (changed)" if cli_status else ""
+    out.append(f'  CLI["container: lakeswitch CLI<br/>cli.py{cli_mark}"]')
+    out.append(f'  subgraph M["component: {TITLE}"]')
+    for mod in sorted(nodes):
+        s = st.get(nodes[mod], "same")
+        mark = {"added": " (new)", "changed": " (changed)"}.get(s, "")
+        out.append(f'    {nid(mod)}["code: {label_of(mod)}{mark}<br/>{lines_of[mod]} lines"]:::{s}')
+    out.append("  end")
+    out.append("  CLI --> M")
+
+    def ext_status(ext: str) -> str | None:
+        stem = f"{ROOT}/{ext[4:].split('.', 1)[1]}"
+        for path, s in st.items():
+            if path == f"{stem}.py" or path.startswith(f"{stem}/"):
+                return s
+        return None
+
+    # files outside the module that this change touches, besides cli.py
+    touched = {
+        "EXT:lakeswitch." + p[len(ROOT) + 1 : -len(".py")].split("/")[0]
+        for p, s in st.items()
+        if p.startswith(f"{ROOT}/") and not p.startswith(f"{ROOT}/{PKG}/") and p != f"{ROOT}/cli.py"
+        and p.endswith(".py")
+    }
+    for ext in sorted(outside | touched):
+        s = ext_status(ext)
+        mark = {"added": " (new)", "changed": " (changed)"}.get(s or "", "")
+        cls = s if s in ("added", "changed") else "outside"
+        out.append(f'  {nid(ext)}["component: {label_of(ext)}{mark}"]:::{cls}')
+        out.append(f"  {'M' if ext in outside else 'CLI'} --> {nid(ext)}")
+    for a, b in sorted(edges):
+        out.append(f"  {nid(a)} --> {nid(b)}")
+    if cli_status:
+        out.append("  class CLI changed")
+    else:
+        out.append("  class CLI same")
+    out.append("```")
+
+    def name(m: str) -> str:
+        return label_of(m)
+
+    added = [p for p, s in st.items() if s == "added" and p.startswith(f"{ROOT}/")]
+    changed = [p for p, s in st.items() if s == "changed" and p.startswith(f"{ROOT}/")]
+    removed = [p for p, s in st.items() if s == "removed" and p.startswith(f"{ROOT}/")]
+    new_edges = sorted(e for e in all_edges - base_edges if e[0] != "CLI")
+    gone_edges = sorted(e for e in base_edges - all_edges if e[0] != "CLI")
+
+    def fmt(paths: list[str]) -> str:
+        return ", ".join(f"`{p[len(ROOT) + 1:]}`" for p in sorted(paths)) or "none"
+
+    def fmt_edges(es: list[tuple[str, str]]) -> str:
+        return "; ".join(f"`{name(a)}` → `{name(b)}`" for a, b in es) or "none"
+
+    out.append("")
+    out.append(f"- **Added:** {fmt(added)}. New imports: {fmt_edges(new_edges)}.")
+    out.append(f"- **Changed:** {fmt(changed)}.")
+    out.append(f"- **Removed:** {fmt(removed)}. Imports dropped: {fmt_edges(gone_edges)}.")
+    out.append("")
+    hub_note = (
+        " Imported by most files, so drawn without arrows: " + ", ".join(f"`{label_of(h)}`" for h in hubs) + "."
+        if hubs
+        else ""
+    )
+    out.append(
+        f"<sub>Generated from the import statements at `{HEAD}`, compared with the merge base `{BASE}`; "
+        "nothing drawn by hand. A box is a file under "
+        f"`src/lakeswitch/{PKG}/`, an arrow an import, a dashed box a part outside the module. "
+        "Left out for readability: the package's re-exports in `__init__.py`, and an import already implied "
+        f"by a path of other arrows.{hub_note} The lists above name every import added or dropped. "
+        "Green and (new): added; yellow and (changed): changed; grey: unchanged. "
+        "C4 levels as in Coding Harness ADR 0009.</sub>"
+    )
+    print("\n".join(out))
+
+
+main()
+```
+
 </details>
