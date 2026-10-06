@@ -380,6 +380,80 @@ the file restored with `git checkout`; all red:
 | R1-4 | the marker hard-wired to the gate id `ruleset` | red: same (the synthetic `writer` gate has no mark) |
 | R1-5 | the marker text loses its "nicht in der CI" wording | red: same |
 
+## Repair round 2
+
+Rows F-3 to F-7 of `findings.md` (all MINOR), under the maintainer's standing
+rule of 2026-10-06: a MINOR row on tests, security or a false statement is
+repaired without asking. F-2 is untouched (decided and fixed in `a9f55a8`,
+awaiting review). Every row is set to "fixed in <commit>, not reviewed"; the
+rule-set text, the live ruleset, `ci.yml` and `gates.yaml` are unchanged, and
+nothing was written to GitHub (only `gh api` GETs, through the real `gh` or
+the read-only shim of the session's scratchpad).
+
+| Row | Commit | What changed |
+| --- | --- | --- |
+| F-3 | `8f9b11e` | `tests/test_repo_settings.py`: a `verify` entry counts only when its `integration_id` is 15368 (GitHub Actions). An unpinned or other-app entry is the finding "required check verify is not pinned to GitHub Actions"; one pinned entry still holds beside an unpinned one in another ruleset. |
+| F-4 | `fba000d` | `measure` compares `full_name` of the repository answer with the checkout's `origin` (`local_repository`, case-insensitive); a mismatch, a missing name or an unreadable origin is `not measured:` and stops before the rules of another repository are read. |
+| F-5 | `8078d0e`, `21251a2` | The tie parses the gate command (leading `NAME=value`, then `python3 -m pytest …`, no chain, redirect or substitution) and starts a pytest with its arguments and variables that reports which tests it would run: the live test must be among them and the run must not be only a collection. `21251a2` names the chain case itself. |
+| F-6 | `f010de1`, `bd1904d` | `tests/test_ci.py`: `MAY_BE_WRITER_ONLY` names the gates that may be writer-only (today `ruleset`) with a reason; a floor gate never may be, an unnamed one may not, and an entry whose gate is gone, no longer writer-only or a floor gate must go. |
+| F-7 | `d2f27f8` | The hint test reads the `E` lines of the failure (`_assertion_message`), not the whole output. |
+
+### Deviations
+
+- **D7 — the check is stricter than spec term (b).**
+  - expected: spec term (b) asks for an entry with `context: verify` only.
+  - found: the maintainer's words were "exactly today's ruleset", the amended row promises "der Job, der die Gate-Liste fährt", and an unpinned entry lets a commit status posted with any token satisfy the rule without the job (F-3).
+  - relevant: code and spec now differ by the pin; the rule-set row is true as written.
+  - proposal (applied for the code; `spec.md` left as it is): the next review decides whether term (b) is amended to name `integration_id`. `[DETAIL]`.
+- **D8 — the F-6 tests avoid the names `*_goes_red_*`.** `test_the_mutation_ratchet_only_turns_one_way` counts a mutation-test name in a file that merely mentions a script as evidence for that script; one such name in `tests/test_ci.py` made `plans-registry` look covered and turned that ratchet red (measured, then renamed to `…_flags_…`).
+- **D9 — F-4 reads `origin` only.** A repository renamed at GitHub (the API answers with the new name) or a checkout whose `origin` is not the repository `gh` defaults to is red with the cause named; the way out is `git remote set-url origin …`. A fork whose `gh` default is its upstream is red on purpose.
+- **D10 — F-5 costs about two seconds of suite time:** one pytest start per distinct gate command in the tests (cached within a run).
+
+### Planted faults
+
+Each fault was planted in the committed tree, the named test selection run
+(first failing test shown), the file restored with `git checkout`.
+
+| # | Fault planted | Result |
+|---|---|---|
+| R2-1 | the pin ignored (`and True`) | red: `…verify_is_not_pinned_to_github_actions[no-integration-id]` |
+| R2-2 | any non-null `integration_id` counts | red: `…[another-app]` |
+| R2-3 | the app id is 15369 | red: `test_todays_ruleset_holds` |
+| R2-4 | the unpinned finding never built (`if False and any(`) | red: `…[no-integration-id]` |
+| R2-5 | an unpinned `verify` reports nothing | red: `…goes_red_when_a_rule_is_removed[required_status_checks]` |
+| R2-6 | the repository comparison switched off | red: `…goes_red_when_it_measured_another_repository` |
+| R2-7 | the comparison is case-sensitive | red: `…does_not_mind_the_case_of_the_repository_name` |
+| R2-8 | an unknown local repository passes | red: `…cannot_name_its_repository_is_not_measured` |
+| R2-9 | owner read from the wrong URL segment | red: `…names_its_repository_by_its_origin[https-git]` |
+| R2-10 | `.git` kept in the name | red: same |
+| R2-11 | `RULESET_ASSERT=1` no longer required | red: `…gate_check_goes_red_when_the_gate_drifts[variable]` |
+| R2-12 | "does the live test run" not asked | red: `…[k-suffix]` |
+| R2-13 | a collect-only run counts as running | red: `…[collect-only]` |
+| R2-14 | chain, redirect and substitution allowed | **green first** (the probe pytest read `\|\|` as a file and failed for the wrong reason), red after `21251a2`: `…goes_red_when_it_chains_or_redirects[\|\| true]` |
+| R2-15 | the command's own variables not handed to the probe | red: `…[addopts-in-front]` |
+| R2-16 | the tie hard-wired to "starts like the gate" again | red: `…[k-suffix]` |
+| R2-17 | `python3 -m pytest` not required | red: `…[another-interpreter]` |
+| R2-18 | floor gate `pytest` set to `placement: writer` in `decisions/gates.yaml`, `ci.yml` regenerated | red: `test_only_the_named_gates_are_writer_only` alone; `test_ci.py`, `test_gate_machinery.py`, `--check-schema` and `--check-ci` green |
+| R2-19 | non-floor `ruff-format` set to `writer` the same way | red: same single test |
+| R2-20 | an unnamed writer-only gate allowed | **green first** (the case used the floor gate `ruff-check`), red after `bd1904d` (case now `ruff-format`) |
+| R2-21 | the floor check removed | **green first** (a floor gate was still flagged as "unnamed"), red after `bd1904d` (the case asserts the message) |
+| R2-22 | an entry for a gate that left `writer` not flagged | red: `…flags_a_gate_that_moves[named-gate-comes-back]` |
+| R2-23 | the named gate misspelt in the list | red: `test_only_the_named_gates_are_writer_only` |
+| R2-24 | the hint never appended (the reviewer's plant, `if False and any(`) | red: `…goes_red_without_gh_when_the_gate_turns_it_on` |
+| R2-25 | the hint text changed | red: same |
+| R2-26 | the test reads the whole output again | green — the old test with the hint present; equivalent by design (R2-24 is the fault it must catch) |
+
+End to end, read-only: `GH_REPO=MPAdesso/lakeswitch-ai` with
+`RULESET_ASSERT=1` makes the live test red ("it answers for
+'MPAdesso/lakeswitch-ai', but this checkout is of 'MPAdesso/coding-harness'")
+where it was green before (E2-1); a `gh` shim that passes `gh api <path>` to
+the real `gh` and removes `integration_id` from the rules answer makes it red
+("not pinned to GitHub Actions"), and passes without the distortion (E2-2);
+the gate command with a ` -k "not master"` suffix makes
+`test_the_ruleset_gate_turns_the_live_check_on` red and nothing else (E2-3).
+Totals: 26 file-level faults, 3 end to end; 28 red, one equivalent (R2-26), and
+three that were green first (R2-14, R2-20, R2-21) and are closed.
+
 ## Time used
 
 Phase 4 and its repair rounds before this one: see "Time used" in the Phase 4
@@ -389,3 +463,8 @@ Repair round 1 (F-1 only; appetite 20 min, set by the dispatching session;
 read from `date`):
 
 - 2026-10-06 01:08–01:11, no break, appetite not reached; two `make verify` runs, the first red on `adr-answers` and `frontmatter-current` (`docs/WORKFLOW.md` stamped after it)
+
+Repair round 2 (F-3 to F-7; appetite 45 min, set by the dispatching session;
+read from `date` at the start, between steps and before each commit):
+
+- 2026-10-06 14:57:55–15:15:26, no break, appetite not reached; seven `make verify` runs, all green (one per step, two on the records); the gate `ruleset` read the real ruleset (green) in each
