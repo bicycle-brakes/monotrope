@@ -29,7 +29,7 @@ anything at GitHub.
 
 **Not measured is red, never green.** `gh` missing, a network or login failure,
 an answer that is not JSON or has the wrong shape, a ruleset that shows no
-bypass list: each is a finding that begins `not measured:` and says which step
+bypass list, a repository other than the one this checkout is of: each is a finding that begins `not measured:` and says which step
 failed. An empty list of findings means the five requirements were seen to hold
 — nothing else does.
 
@@ -81,6 +81,8 @@ RULE_TYPES: dict[str, str] = {
 }
 
 Api = Callable[[str], tuple[int, str]]
+# The repository this checkout is of: `("owner/name", "")`, or `(None, reason)`.
+Local = Callable[[], tuple[str | None, str]]
 
 
 # --------------------------------------------------------------------------
@@ -91,8 +93,10 @@ Api = Callable[[str], tuple[int, str]]
 def gh_api(path: str) -> tuple[int, str]:
     """GET one API path through the `gh` login; `(exit code, stdout or stderr)`.
 
-    `gh` fills `{owner}` and `{repo}` from the remote of the repository it runs
-    in. Only GET is ever sent: no `--method`, no field.
+    `gh` fills `{owner}` and `{repo}` from `GH_REPO`, else from the default set
+    with `gh repo set-default`, else from the remote — which need not be the
+    repository this checkout is of, so `measure` compares (F-4). Only GET is
+    ever sent: no `--method`, no field.
     """
     try:
         done = subprocess.run(
@@ -107,6 +111,32 @@ def gh_api(path: str) -> tuple[int, str]:
     except subprocess.TimeoutExpired:
         return 124, f"gh did not answer within {GH_TIMEOUT_SECONDS} s"
     return done.returncode, done.stdout if done.returncode == 0 else done.stderr
+
+
+def local_repository(root: Path = REPO_ROOT) -> tuple[str | None, str]:
+    """The repository this checkout is of, from its `origin` URL: `("owner/name", "")`.
+
+    The URL forms git takes — `https://host/owner/name(.git)`,
+    `git@host:owner/name(.git)`, `ssh://git@host/owner/name` — all end in
+    `owner/name`. Anything else, or no `origin`, is `(None, reason)`.
+    """
+    try:
+        done = subprocess.run(
+            ["git", "remote", "get-url", "origin"],
+            cwd=root,
+            capture_output=True,
+            text=True,
+            timeout=GH_TIMEOUT_SECONDS,
+        )
+    except (FileNotFoundError, subprocess.TimeoutExpired) as error:
+        return None, f"git remote get-url origin: {type(error).__name__}"
+    url = done.stdout.strip()
+    if done.returncode != 0 or not url:
+        return None, "git remote get-url origin: " + (" ".join(done.stderr.split()) or "no origin")
+    owner_and_name = [part for part in url.removesuffix("/").replace(":", "/").split("/") if part]
+    if len(owner_and_name) < 3:
+        return None, f"origin `{url}` does not read as owner/name"
+    return f"{owner_and_name[-2]}/{owner_and_name[-1].removesuffix('.git')}", ""
 
 
 def _lists_required_check(rule: dict[str, Any], *, pinned: bool = True) -> bool:
@@ -208,13 +238,16 @@ def _read(api: Api, path: str) -> tuple[Any, str | None]:
         return None, f"not measured: {path}: the answer is not JSON"
 
 
-def measure(api: Api = gh_api) -> list[str]:
+def measure(api: Api = gh_api, local: Local = local_repository) -> list[str]:
     """Read the default branch, its active rules and each supplying ruleset.
 
     Returns the findings of `ruleset_findings`, or at once the one finding
     `not measured: <path>: <reason>` for the first call that fails or answers
     in a shape the check does not know. Every step goes through `api`, so a
-    test can drive the whole measurement with invented answers.
+    test can drive the whole measurement with invented answers; `local` names
+    the repository this checkout is of, and an answer about another one — a
+    `GH_REPO` or a `gh` default that points elsewhere — is not measured
+    either (F-4).
     """
     repo_path = "repos/{owner}/{repo}"
     repo, failed = _read(api, repo_path)
@@ -223,6 +256,16 @@ def measure(api: Api = gh_api) -> list[str]:
     branch = repo.get("default_branch") if isinstance(repo, dict) else None
     if not isinstance(branch, str) or not branch:
         return [f"not measured: {repo_path}: no default_branch in the answer"]
+
+    here, why_not = local()
+    if here is None:
+        return [f"not measured: {repo_path}: cannot tell which repository this checkout is of ({why_not})"]
+    measured = repo.get("full_name")
+    if not isinstance(measured, str) or measured.lower() != here.lower():
+        return [
+            f"not measured: {repo_path}: it answers for {measured!r}, but this checkout is of {here!r} "
+            "(origin) — `GH_REPO` or the `gh repo set-default` points elsewhere"
+        ]
 
     rules_path = repo_path + "/rules/branches/" + urllib.parse.quote(branch, safe="")
     rules, failed = _read(api, rules_path)
@@ -251,6 +294,16 @@ def measure(api: Api = gh_api) -> list[str]:
 
 RULESET_ID = 24528176
 REPO_PATH = "repos/{owner}/{repo}"
+HERE = "example/instance"  # the repository the stubs answer for, and the checkout is of
+
+
+def _here() -> tuple[str | None, str]:
+    return HERE, ""
+
+
+def _measure(api: Api) -> list[str]:
+    """`measure` for a checkout of `HERE`."""
+    return measure(api, _here)
 
 
 def _todays_rules() -> list[dict[str, Any]]:
@@ -281,7 +334,7 @@ def _todays_ruleset() -> dict[str, Any]:
 def _todays_answers() -> dict[str, tuple[int, str]]:
     """The answers of the three endpoints, by path."""
     return {
-        REPO_PATH: (0, json.dumps({"default_branch": "main"})),
+        REPO_PATH: (0, json.dumps({"default_branch": "main", "full_name": HERE})),
         f"{REPO_PATH}/rules/branches/main": (0, json.dumps(_todays_rules())),
         f"{REPO_PATH}/rulesets/{RULESET_ID}": (0, json.dumps(_todays_ruleset())),
     }
@@ -332,7 +385,7 @@ def test_a_stricter_ruleset_still_holds() -> None:
 
 def test_the_measurement_holds_on_todays_answers() -> None:
     calls: list[str] = []
-    assert measure(_stub_api(_todays_answers(), calls)) == []
+    assert _measure(_stub_api(_todays_answers(), calls)) == []
     assert calls == [
         REPO_PATH,
         f"{REPO_PATH}/rules/branches/main",
@@ -343,9 +396,9 @@ def test_the_measurement_holds_on_todays_answers() -> None:
 def test_the_measurement_asks_for_the_branch_the_repository_names() -> None:
     """The default branch comes from the API, and a slash in it is escaped."""
     answers = _todays_answers()
-    answers[REPO_PATH] = (0, json.dumps({"default_branch": "release/1"}))
+    answers[REPO_PATH] = (0, json.dumps({"default_branch": "release/1", "full_name": HERE}))
     answers[f"{REPO_PATH}/rules/branches/release%2F1"] = answers.pop(f"{REPO_PATH}/rules/branches/main")
-    assert measure(_stub_api(answers)) == []
+    assert _measure(_stub_api(answers)) == []
 
 
 # --------------------------------------------------------------------------
@@ -516,11 +569,77 @@ def test_an_unreachable_api_is_not_a_pass(
         "ruleset-not-json": lambda: _failing(ruleset_path, 0, "not json"),
         "ruleset-a-list": lambda: _failing(ruleset_path, 0, "[]"),
     }
-    findings = measure(apis[case]())
+    findings = _measure(apis[case]())
     assert len(findings) == 1
     assert findings[0].startswith("not measured:")
     assert step in findings[0]
     assert cause in findings[0]
+
+
+def test_the_measurement_goes_red_when_it_measured_another_repository() -> None:
+    """`gh` fills `{owner}/{repo}` from `GH_REPO` or its default; another repository is not measured (F-4)."""
+    calls: list[str] = []
+    answers = _todays_answers()
+    answers[REPO_PATH] = (0, json.dumps({"default_branch": "main", "full_name": "someone/else"}))
+    findings = _measure(_stub_api(answers, calls))
+    assert len(findings) == 1
+    assert findings[0].startswith("not measured:")
+    assert "someone/else" in findings[0]
+    assert HERE in findings[0]
+    assert calls == [REPO_PATH], "the rules of another repository must not be read"
+
+
+def test_the_measurement_does_not_mind_the_case_of_the_repository_name() -> None:
+    answers = _todays_answers()
+    answers[REPO_PATH] = (0, json.dumps({"default_branch": "main", "full_name": HERE.upper()}))
+    assert _measure(_stub_api(answers)) == []
+
+
+@pytest.mark.parametrize("answer", [{"default_branch": "main"}, {"default_branch": "main", "full_name": ""}])
+def test_an_answer_without_a_repository_name_is_not_measured(answer: dict[str, Any]) -> None:
+    answers = _todays_answers()
+    answers[REPO_PATH] = (0, json.dumps(answer))
+    findings = _measure(_stub_api(answers))
+    assert len(findings) == 1
+    assert findings[0].startswith("not measured:")
+
+
+def test_a_checkout_that_cannot_name_its_repository_is_not_measured() -> None:
+    calls: list[str] = []
+    findings = measure(_stub_api(_todays_answers(), calls), lambda: (None, "no origin"))
+    assert len(findings) == 1
+    assert findings[0].startswith("not measured:")
+    assert "no origin" in findings[0]
+    assert calls == [REPO_PATH]
+
+
+@pytest.mark.parametrize(
+    ("url", "name"),
+    [
+        pytest.param("https://github.com/Owner/Name.git", "Owner/Name", id="https-git"),
+        pytest.param("https://github.com/Owner/Name", "Owner/Name", id="https"),
+        pytest.param("https://github.com/Owner/Name/", "Owner/Name", id="https-slash"),
+        pytest.param("https://user:token@github.com/Owner/Name.git", "Owner/Name", id="https-userinfo"),
+        pytest.param("git@github.com:Owner/Name.git", "Owner/Name", id="scp-like"),
+        pytest.param("ssh://git@github.com/Owner/Name.git", "Owner/Name", id="ssh"),
+        pytest.param("ssh://git@github.com:22/Owner/Name.git", "Owner/Name", id="ssh-port"),
+        pytest.param("https://git.example.org/group/Owner/Name.git", "Owner/Name", id="nested-path"),
+    ],
+)
+def test_the_checkout_names_its_repository_by_its_origin(url: str, name: str, tmp_path: Path) -> None:
+    subprocess.run(["git", "init", "-q", str(tmp_path)], check=True)
+    subprocess.run(["git", "-C", str(tmp_path), "remote", "add", "origin", url], check=True)
+    assert local_repository(tmp_path) == (name, "")
+
+
+@pytest.mark.parametrize("url", [None, "name-only"])
+def test_a_checkout_without_a_readable_origin_names_no_repository(url: str | None, tmp_path: Path) -> None:
+    subprocess.run(["git", "init", "-q", str(tmp_path)], check=True)
+    if url:
+        subprocess.run(["git", "-C", str(tmp_path), "remote", "add", "origin", url], check=True)
+    name, reason = local_repository(tmp_path)
+    assert name is None
+    assert reason
 
 
 def test_a_missing_gh_says_so(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
