@@ -2,7 +2,7 @@
 title: "Session handover — night of 2026-10-05/06: seven pull requests to merge, Hermes groundwork, three answers owed, 2026-10-06"
 category: handover
 created: 2026-10-06
-updated: 2026-10-06
+updated: 2026-10-07
 direction: framework->framework
 provenance: ai-drafted-reviewed
 produced_by:
@@ -151,3 +151,40 @@ Task status is in Beads; the pieces in flight (2026-10-06):
   runs without a runner were cancelled and re-run.
 - Not run: any Hermes, Codex or GLM call; any install; the re-reviews of
   rb-m6 F-1 and Hermes F-13/F-14.
+
+## Addendum — 2026-10-07, end of the day session (usage limit reached)
+
+**Where we are.** Since the entry above: #87 (no Fable) merged as `ed180ae`.
+New pull requests: #82 (`AGENTS.md`: sub-agents survive a budget pause,
+findings as text, MINOR rule), #83 (research: diagrams in pull requests),
+#84 (decide: RB-M6, due before 2026-10-31), #85 (decide: project lock), #86
+(decide: touch-map, the generated "What it touches" section). #75 and #76
+were merged with `main` after #87. #77 (ADR 0010) is ready to merge at
+`c5a5c15`; its key-barrier spec lives on `feat/hermes-runner-2` (`faffe99`, no
+pull request yet; F-43 open, carried into slice 4).
+
+**Next step.** Amend PR #60 with the maintainer's routing decisions (bead
+coding-harness-bib): no Fable; `bounded` stage-2 reviews to Codex; explore
+and implement on `glm-5.3-flash` once stage 2 is live; fallback and
+escalation on Opus 5.5. Then the change `stage2-mimo` (bead
+coding-harness-ymx): MiMo-V2.6 as an additional 4b reviewer — explore on
+Haiku 4.5, interview, spec, plan; implementation after #60.
+
+**Needed from the maintainer.** Merge the green pull requests (#74–#86 except
+#60); #84 and #85 touch the same gate machinery, so the second needs `main`
+merged in first (agent). At the laptop: #60, `make venv` after #85.
+
+**Decisions of 2026-10-06/07** (recorded in the change folders and beads):
+LakeSwitch moves to Python 3.12; ADR answers "no" for project-lock,
+rb-m6-one-account, touch-map; RB-M6 level 4 with the ladder amended and the
+GitHub Actions pin; map in every code pull request; no Fable; explore and
+implement on GLM 5.3 Flash in stage 2; MiMo planned as a 4b reviewer; the
+leak check stays; Hermes key barrier; F-10 of touch-map a named limit (bead
+coding-harness-cff); F-43 of Hermes into slice 4.
+
+**Queue after that** (one at a time): RB-G7 merge-freshness valve
+(coding-harness-34z, due 2026-10-31); the test-holding gap
+(coding-harness-909); Hermes slices 2/5 minor rows, then slice 4.
+
+**Working state.** The session's agent ledger (scratchpad
+`agents-ledger.md`) lists no running agent at this point.
