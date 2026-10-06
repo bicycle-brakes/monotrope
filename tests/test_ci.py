@@ -689,20 +689,23 @@ def test_only_the_named_gates_are_writer_only() -> None:
 
 
 @pytest.mark.parametrize(
-    ("gate", "change"),
+    ("gate", "change", "floor_before", "says"),
     [
-        pytest.param("pytest", {"placement": "writer"}, id="floor-gate-moves-to-writer"),
-        pytest.param("ruff-check", {"placement": "writer"}, id="unnamed-gate-moves-to-writer"),
-        pytest.param("ruleset", {"floor": True}, id="named-gate-becomes-a-floor-gate"),
-        pytest.param("ruleset", {"placement": "both"}, id="named-gate-comes-back-to-hosted"),
+        pytest.param("pytest", {"placement": "writer"}, True, "is a floor gate", id="floor-gate-moves-to-writer"),
+        pytest.param(
+            "ruff-format", {"placement": "writer"}, False, "not in MAY_BE_WRITER_ONLY", id="unnamed-gate-moves"
+        ),
+        pytest.param("ruleset", {"floor": True}, False, "is a floor gate", id="named-gate-becomes-a-floor-gate"),
+        pytest.param("ruleset", {"placement": "both"}, False, "is not writer-only", id="named-gate-comes-back"),
     ],
 )
-def test_the_writer_only_list_flags_a_gate_that_moves(gate: str, change: dict) -> None:
+def test_the_writer_only_list_flags_a_gate_that_moves(gate: str, change: dict, floor_before: bool, says: str) -> None:
     alle = gates()
-    assert gate in {g["id"] for g in alle}, f"Precondition: there is a gate '{gate}'."
-    assert any(g["floor"] for g in alle if g["id"] == "pytest"), "Precondition: `pytest` is a floor gate."
+    before = next((g for g in alle if g["id"] == gate), None)
+    assert before is not None, f"Precondition: there is a gate '{gate}'."
+    assert before["floor"] == floor_before, f"Precondition: '{gate}' is{'' if floor_before else ' not'} a floor gate."
     moved = [{**g, **change} if g["id"] == gate else g for g in alle]
-    assert _writer_findings(moved)
+    assert any(says in f for f in _writer_findings(moved)), _writer_findings(moved)
 
 
 def test_the_writer_only_list_flags_a_named_gate_that_is_gone() -> None:
