@@ -6,7 +6,7 @@ implementation_status: partial
 date: 2026-09-30
 created: 2026-09-30
 last_reviewed: 2026-09-30
-updated: 2026-09-30
+updated: 2026-10-07
 supersedes: null
 superseded_by: null
 bead: coding-harness-bc9
@@ -1037,3 +1037,77 @@ examples and the routing assertions of `tests/test_stage2.py`, and the
 fallback sentence of ADR 0007 (Fable 5.1 to Opus 5.5).
 
 Time log: started 2026-10-07 00:52 (CEST); step A resolved at 00:59.
+
+### Step B — decisions 1 to 3 in the doctrine, the prompts and the tests
+
+What changed (proposed and implemented; tested by `make verify`, no real call):
+
+- `docs/WORKFLOW.md` §3: the rows of 2a and 6 name Opus 5.5 and send a
+  `bounded`, `feature` or `architectural` change to Codex; the rows of 1 and 4
+  stay Haiku 4.5 and Sonnet 5.5 and say that GLM 5.3 Flash replaces them where
+  the runner starts the phase; the "No Fable" paragraph says which rows leave
+  the table; escalation and cost lines follow.
+- `docs/WORKFLOW.md` §4: the title and opening paragraph (Flash explores and
+  implements; no Fable, no Kimi); the class table (`bounded` goes to Codex for
+  2a where held and for 6, GLM keeps the loop); two new routing rows (1 Explore
+  and 4 Implement on GLM 5.3 Flash, for every change); the paragraph "The two
+  Flash rows are decided and not built"; "A foreign model" in place of "A
+  foreign reviewer" in the runner section; a paragraph on what explore and
+  implement send and what the leak check covers; the fallback reads Opus 5.5
+  for the reviews and §3's rows for phases 1 and 4.
+- Prompts: `01-explore.md` and `04-implement.md` lead with GLM 5.3 Flash and
+  name the Claude model that runs until the runner starts the phase;
+  `02a-spec-review.md` and `06-review.md` send a bounded change to Codex.
+  `AGENTS.md`, the probe keys in `scripts/kit/probe.py` and the remark of the
+  `glm-coding-plan` endpoint in `model-endpoints.yaml` follow.
+- Tests (`tests/test_stage2.py`): the routing rows hold five section-4 rows and
+  two section-3 rows; the implement and explore prompts; the class table; no
+  Fable in a routing row or a prompt; the Flash rows say "decided and not
+  built". Each has its mutation, which must go red.
+
+Choices I made as `[DETAIL]` (the maintainer can narrow any of them):
+
+1. **Explore and implement on Flash are not routed by class.** The class is
+   stated in the spec, after phase 1, so explore cannot wait for it; and the
+   decision names the two phases, not a class. They run on Flash for every
+   change, a `spike` included. The class table routes the reviews only.
+2. **§3 keeps Haiku 4.5 and Sonnet 5.5 as what runs where the runner does not
+   start the phase.** That is true of every phase until the runner has verbs for
+   these two, and it is what the fallback returns to.
+3. **The fallback of the stop rule is Opus 5.5 for the reviews**, and phases 1
+   and 4 return to §3's rows. The decision names the fallback of the review
+   stage; what builds when stage 2 falls back is the corollary.
+4. **A `bounded` change's phase 6 starts a fresh Codex session where no
+   phase-2a session was held.** `review` in `scripts/stage2.py` already does
+   that and writes the line "a fresh session reviewed: no phase-2a session was
+   recorded"; no code change was needed.
+5. **No effort is set for GLM 5.3 Flash.** The decision gives none, and a
+   guess in a routing row would read as a decision.
+
+### Open items from Amendment 1
+
+- **O-1 — the runner's verbs `explore` and `implement` are not built.** How the
+  older design did it, as far as this tree and its history show: plan steps
+  carried a marking (`[FLASH]`, `[GLM5.3]`, `[SONNET]`, rules in
+  `templates/plan-marking.md`), `scripts/run_change.sh` grouped equal markings
+  into segments and ran each as a session with a verify gate after it, and six
+  `scripts/cc-*.sh` profiles started one Claude Code session each against its
+  endpoint with every `ANTHROPIC_*` variable set. **None of those files is in
+  this repository** (`git ls-tree` of `origin/main` at `d5813ec` finds no such
+  file; main's opening note of `docs/WORKFLOW.md` lists them as missing at
+  `9f14283`, and its section 4 still describes them as the mechanics), and this
+  change retired the marking text from section 4 and from `prompts/03-plan.md`. So nothing exists to reuse, and a verb is a slice of its
+  own: a runner call with write tools for implement (the reviewers' calls are
+  limited to `Read`, `Grep`, `Glob`), a decision on how a plan assigns steps to
+  Flash or keeps one on Claude, the effort for Flash, tests with stand-ins like
+  the existing verbs, and the leak check around each call (the existing one
+  already scans the tree and the prompt). It is more than a small step, so it
+  is written here and not built. It needs a bead of its own; none was created
+  (no tracker write in this amendment).
+- **O-2 — until O-1 is built, §3 runs the two phases**: Haiku 4.5 explores and
+  Sonnet 5.5 implements, and `docs/WORKFLOW.md` §4 says so in one paragraph, held
+  by a test.
+- **O-3 — the roadmap line "Stage 2 live"** (`ROADMAP.md`) still speaks of
+  reviews only; it was not changed here.
+
+Time log: step B committed at 01:09 (CEST), started 00:52.

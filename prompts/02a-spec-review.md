@@ -1,9 +1,8 @@
 # Phase 2a · Spec review
 
-**Model:** Opus 5.5 — for a spike or bounded change, in a fresh context that
-never saw the author's reasoning; for a feature or architectural change
-gpt-6.1-sol at effort `max`, started by `python3 scripts/stage2.py spec-review
-<change>`.
+**Model:** Opus 5.5 — for a spike, in a fresh context that never saw the
+author's reasoning; for a bounded, feature or architectural change gpt-6.1-sol
+at effort `max`, started by `python3 scripts/stage2.py spec-review <change>`.
 **Input:** `spec.md`, `research.md`, `decisions.md`. **Not** the author's reasoning.
 **Result:** rows for `plans/changes/<name>/findings.md`, dimension `SPEC`.
 **Gate:** no open `[AMBIGUITY]`.

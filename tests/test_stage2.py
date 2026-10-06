@@ -367,10 +367,13 @@ def test_kimi_is_excluded_not_declared() -> None:
     assert "2026-09-30" in kimi[0]["grund"] and "maintainer" in kimi[0]["grund"]
 
 
-def test_the_glm_remark_names_the_review_loop() -> None:
-    remark = endpoints()["glm-coding-plan"]["bemerkung"].lower()
+def test_the_glm_remark_names_the_review_loop_and_the_decided_flash_phases() -> None:
+    remark = " ".join(endpoints()["glm-coding-plan"]["bemerkung"].lower().split())
     assert "review loop" in remark and "phase 4b" in remark
-    for word in ("implement", "umsetzung", "marking"):
+    # 2026-10-06: glm-5.3-flash is decided for phases 1 and 4, through verbs the runner does not have yet.
+    assert "glm-5.3-flash` is decided for explore (phase 1) and implement (phase 4)" in remark
+    assert "does not have yet" in remark
+    for word in ("umsetzung", "marking"):
         assert word not in remark
 
 
@@ -1253,21 +1256,26 @@ def routing_rows(text: str) -> dict[str, tuple[str, str]]:
     return {m[1]: (m[2], m[3]) for m in re.finditer(pattern, text, re.M)}
 
 
+STAGE2_ROUTING = {
+    "1 Explore": "GLM 5.3 Flash",
+    "2a Spec review": "gpt-6.1-sol",
+    "4 Implement": "GLM 5.3 Flash",
+    "4b Review loop": "GLM 5.3",
+    "6 Review": "gpt-6.1-sol",
+}
+
+
 def routing_problems(workflow: str) -> list[str]:
-    """What the routing rows of the doctrine get wrong: section 4's three rows and section 3's three."""
+    """What the routing rows of the doctrine get wrong: section 4's five rows and section 3's two."""
     found = []
     stage2_rows = routing_rows(section(workflow, "## 4 · "))
-    for phase, model in {
-        "2a Spec review": "gpt-6.1-sol",
-        "4b Review loop": "GLM 5.3",
-        "6 Review": "gpt-6.1-sol",
-    }.items():
+    for phase, model in STAGE2_ROUTING.items():
         row = stage2_rows.get(phase)
         if row is None:
             found.append(f"section 4 has no routing row {phase}")
         elif row[0] != model:
             found.append(f"section 4 routes {phase} to {row[0]}, not {model}")
-        elif "effort `max`" not in row[1]:
+        elif not model.endswith("Flash") and "effort `max`" not in row[1]:
             found.append(f"section 4 gives {phase} no effort `max`")
     default = routing_rows(section(workflow, "## 3 · "))
     implement = default.get("4 Implement")
@@ -1289,6 +1297,8 @@ def test_the_routing_rows_name_the_decided_models() -> None:
         ("**Sonnet 5.5** | effort `medium`", "**Sonnet 5** | effort `medium`"),
         ("**Sonnet 5.5** | effort `medium`", "**Sonnet 5.5** | effort `high`"),
         ("| 2a Spec review | **Opus 5.5**", "| 2a Spec review | **Haiku 4.5**"),
+        ("| 1 Explore | **GLM 5.3 Flash**", "| 1 Explore | **Haiku 4.5**"),
+        ("| 4 Implement | **GLM 5.3 Flash**", "| 4 Implement | **Sonnet 5.5**"),
     ):
         assert old in text, old
         assert routing_problems(text.replace(old, new, 1)), (old, new)
@@ -1455,12 +1465,80 @@ def model_line(prompt: str) -> str:
     return flat(match[1]).strip() if match else ""
 
 
-def test_the_implement_prompt_names_sonnet_5_5_at_medium() -> None:
+def implement_line_problems(line: str) -> list[str]:
+    """GLM 5.3 Flash first, and Sonnet 5.5 at effort `medium` as what runs until the runner starts the phase."""
+    found = []
+    if not line.startswith("GLM 5.3 Flash —"):
+        found.append("the implement prompt does not lead with GLM 5.3 Flash")
+    if "Sonnet 5.5 at effort `medium`" not in line or "claude-sonnet-5-5" not in line:
+        found.append("the implement prompt does not keep Sonnet 5.5 at effort `medium` for the time before the runner")
+    return found
+
+
+def test_the_implement_prompt_names_flash_and_keeps_sonnet_5_5_at_medium() -> None:
     line = model_line((PROMPTS / "04-implement.md").read_text(encoding="utf-8"))
-    assert line.startswith("Sonnet 5.5 —") and "effort `medium`" in line and "claude-sonnet-5-5" in line
-    for planted in ("Sonnet 5 — at effort `medium`", "Sonnet 5.5 — at effort `high`"):
+    assert implement_line_problems(line) == []
+    for planted in (
+        "Sonnet 5.5 — at effort `medium` (`claude-sonnet-5-5`)",
+        "GLM 5.3 Flash — Sonnet 5 at effort `medium` (`claude-sonnet-5`)",
+        "GLM 5.3 Flash — Sonnet 5.5 at effort `high` (`claude-sonnet-5-5`)",
+    ):
+        assert implement_line_problems(model_line(f"**Model:** {planted}\n**Input:** x\n")), planted
+
+
+def test_the_explore_prompt_names_flash_and_keeps_haiku_for_the_time_before_the_runner() -> None:
+    line = model_line((PROMPTS / "01-explore.md").read_text(encoding="utf-8").replace("**Result:**", "**Input:**", 1))
+    assert line.startswith("GLM 5.3 Flash —") and "Haiku 4.5 explores" in line
+    for planted in ("Haiku 4.5 — much input", "GLM 5.3 Flash — much input; nothing else"):
         bad = model_line(f"**Model:** {planted}\n**Input:** x\n")
-        assert not (bad.startswith("Sonnet 5.5 —") and "effort `medium`" in bad), planted
+        assert not (bad.startswith("GLM 5.3 Flash —") and "Haiku 4.5 explores" in bad), planted
+
+
+def class_table_problems(workflow: str) -> list[str]:
+    """The class table: a `bounded` change's stage-2 reviews go to Codex, and nothing in it names Fable."""
+    found = []
+    rows = {
+        line.split("|")[1].strip(): [cell.strip() for cell in line.split("|")[2:-1]]
+        for line in section(workflow, "### Which change gets what").splitlines()
+        if line.startswith("| ") and not line.startswith("| Change") and not line.startswith("|---")
+    }
+    bounded = rows.get("`bounded`")
+    if bounded is None or len(bounded) != 3:
+        return ["the class table has no `bounded` row of three cells"]
+    if not bounded[0].startswith("Codex") or not bounded[2].startswith("Codex"):
+        found.append("the class table does not send a `bounded` change's 2a and 6 to Codex")
+    if bounded[1] != "GLM":
+        found.append("the class table does not keep GLM in the loop of a `bounded` change")
+    if "Fable" in "".join("".join(cells) for cells in rows.values()):
+        found.append("the class table names Fable")
+    return found
+
+
+def test_a_bounded_changes_reviews_go_to_codex() -> None:
+    text = WORKFLOW.read_text(encoding="utf-8")
+    assert class_table_problems(text) == []
+    for old, new in (
+        ("| `bounded` | Codex, where one is held |", "| `bounded` | Opus 5.5, where one is held |"),
+        ("| GLM | Codex — the 2a session", "| GLM | Opus 5.5 — the 2a session"),
+        ("| `bounded` | Codex, where one is held |", "| `bounded` | Fable 5.1, where one is held |"),
+    ):
+        assert old in text, old
+        assert class_table_problems(text.replace(old, new, 1)), (old, new)
+
+
+def test_no_fable_in_the_routing_rows_or_the_prompts() -> None:
+    text = WORKFLOW.read_text(encoding="utf-8")
+    rows = routing_rows(section(text, "## 3 · ")) | routing_rows(section(text, "## 4 · "))
+    assert rows and not [phase for phase, (model, why) in rows.items() if "fable" in (model + why).lower()]
+    assert [p.name for p in PROMPTS.glob("*.md") if "fable" in p.read_text(encoding="utf-8").lower()] == []
+    planted = text.replace("| 2a Spec review | **Opus 5.5**", "| 2a Spec review | **Fable 5.1**", 1)
+    assert "Fable 5.1" in routing_rows(section(planted, "## 3 · "))["2a Spec review"][0]
+
+
+def test_the_flash_rows_say_they_are_decided_and_not_built() -> None:
+    one = flat(section(WORKFLOW.read_text(encoding="utf-8"), "## 4 · "))
+    assert "The two Flash rows are decided and not built." in one
+    assert "Until that is built" in one and "Haiku 4.5 explores and Sonnet 5.5 implements" in one
 
 
 def test_the_plan_prompt_asks_for_no_markings() -> None:

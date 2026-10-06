@@ -4,7 +4,7 @@ category: governance
 status: current
 created: 2026-09-05
 last_reviewed: 2026-09-29
-updated: 2026-10-06
+updated: 2026-10-07
 owner: Data Architect
 provenance: ai-drafted-reviewed
 produced_by:
@@ -365,18 +365,23 @@ none, because the registry keeps counting it as protection.
 
 | Phase | Model | Why |
 |---|---|---|
-| 1 Explore | **Haiku 4.5** | much input, little output, no deep reasoning |
+| 1 Explore | **Haiku 4.5** | much input, little output, no deep reasoning; where the runner starts the phase (§4), GLM 5.3 Flash explores instead |
 | 1a Interview | **Opus 5.5** | the questions are the work, and there are few of them |
 | 2 Spec | **Opus 5.5** | effort `xhigh`; the highest reasoning demand, little output |
-| 2a Spec review | **Opus 5.5** | a fresh context that does not know the author's reasoning; a `feature` or `architectural` change goes to Codex (§4) |
+| 2a Spec review | **Opus 5.5** | a fresh context that does not know the author's reasoning; a `bounded`, `feature` or `architectural` change goes to Codex (§4) |
 | 3 Plan | **Opus 5.5** | effort `xhigh`; an error here is the most expensive in the whole run |
-| 4 Implement | **Sonnet 5.5** | effort `medium`; a solid worker given a clear plan |
+| 4 Implement | **Sonnet 5.5** | effort `medium`; a solid worker given a clear plan; where the runner starts the phase (§4), GLM 5.3 Flash builds instead |
 | 5 Verify | — | deterministic |
-| 6 Review | **Opus 5.5** | finds what Sonnet misses, and reads the code a change calls instead of trusting its docstring; a `feature` or `architectural` change goes to Codex (§4) |
+| 6 Review | **Opus 5.5** | finds what Sonnet misses, and reads the code a change calls instead of trusting its docstring; a `bounded`, `feature` or `architectural` change goes to Codex (§4) |
 | 7 Commit | **Haiku 4.5** | cheap and sufficient |
 
 **No Fable** (maintainer, 2026-10-06): no phase runs on Fable 5.1; Opus 5.5
-takes its places — the interview and the escalation below.
+takes its places — the interview, the escalation below and the fallback of
+stage 2 (§4). **Where stage 2 applies (§4), four rows leave this table:** the
+reviews of a `bounded`, `feature` or `architectural` change go to Codex, and
+explore and implement go to GLM 5.3 Flash. The rows above stay what runs
+wherever the runner does not start a phase — a `spike`'s reviews, and every
+phase until the runner starts it.
 
 Switch with `/model sonnet`, `/model opus`, `/model haiku`. The alias
 `opusplan` runs Opus while planning and switches to Sonnet for execution.
@@ -388,7 +393,7 @@ the whole repository; until then both ran on Fable 5.1). In a session:
 from its definition's frontmatter (`effort: xhigh`), not from the call that
 starts it, and a new definition is read only when a session starts.
 
-**Spec review and review on Opus 5.5, except the `feature` and
+**Spec review and review on Opus 5.5, except the `bounded`, `feature` and
 `architectural` changes that §4 routes to Codex** (maintainer, 2026-09-30 and
 2026-10-06, for the whole repository). From 2026-09-29 both ran on Fable 5.1,
 and before that on Opus 5. An interim routing put both on Opus 5.5 from
@@ -397,10 +402,12 @@ changes §4 routes to Codex. The cost is known: the spec review reads with the
 same model as the spec's author (Opus 5.5), so what stays independent is the
 fresh context, not the error profile.
 
-**Implement on Sonnet 5.5 at effort `medium`, for every change** (maintainer,
-2026-09-30; until then Sonnet 5). In a session: `/model sonnet` and `/effort
+**Implement on Sonnet 5.5 at effort `medium`, wherever the runner does not start
+the phase** (maintainer, 2026-09-30; until then Sonnet 5; §4 moves the phase to
+GLM 5.3 Flash, 2026-10-06). In a session: `/model sonnet` and `/effort
 medium`; for a phase run as its own session: `claude --model claude-sonnet-5-5
 --effort medium`.
+
 **The spec review improves the spec first.** The spec's author works each 2a
 row into `spec.md` (or rejects it with a reason) before phase 3; the revised
 spec is the one yardstick for plan, code and review (`prompts/02-spec.md`,
@@ -413,7 +420,8 @@ that its 2a rows arrived there. It still never saw the author's reasoning, and
 passing the spec in 2a is no argument in phase 6.
 
 **Cost logic.** The expensive models run only in the phases with little output.
-The token-heavy part runs on Sonnet.
+The token-heavy part runs on Sonnet — and, where the runner starts them (§4), on
+GLM 5.3 Flash.
 
 **Check after setup.** There are reports that the `model:` field in sub-agent
 definitions is ignored and sub-agents run on the parent model. Look once with
@@ -422,7 +430,7 @@ definitions is ignored and sub-agents run on the parent model. Look once with
 **Escalation.** After two failed review rounds, move up to Opus 5.5. For
 rebuilds over ~200k tokens and for code touching security or concurrency, start
 on Opus 5.5.
-After a passed review, back to Sonnet.
+After a passed review, back to the model §3 or §4 names for phase 4.
 
 ### What deliberately does not happen in stage 1
 
@@ -526,14 +534,19 @@ on Dagger describes a technique, it does not use one.
 `tests/test_repo_settings.py` holds the fence: a tracked `Dockerfile`,
 `devcontainer.json`, `dagger.json` or `docker-compose*` fails the suite.
 
-## 4 · Stage 2 — Codex and GLM review (active for framework content)
+## 4 · Stage 2 — Codex and GLM (active for framework content)
 
 Since ADR 0007 (2026-09-30), reviewers from two other vendors read a change
 before it merges — for **framework content only**: this repository's own tree,
 the class `framework` of `model-endpoints.yaml`. Codex (`gpt-6.1-sol`, OpenAI)
 reviews the spec and the code; GLM (`glm-5.3`, Z.ai) reviews in a short loop
-between implementation and the code review. Phases 1, 1a, 2, 3 and 7 stay with
-Anthropic, and implementation stays with Sonnet 5.5. ADR 0007 also amends
+between implementation and the code review. **Since 2026-10-06** (maintainer,
+ADR 0007 as amended) GLM 5.3 Flash (`glm-5.3-flash`, the same Z.ai endpoint)
+also explores (phase 1) and implements (phase 4) — the two phases that read
+the repository broadly and write its code. Phases 1a, 2, 3 and 7 stay with
+Anthropic (1a, 2 and 3 on Opus 5.5). **No Fable and no Kimi:** Fable 5.1 left
+the routing on 2026-10-06 and Opus 5.5 takes its places, the fallback below
+included. ADR 0007 also amends
 decision D-13 of the 2026-09-16 interview, which had set four criteria before
 any foreign call: a green leak check and a declared endpoint stay and are
 enforced on every call, lakeswitch-ai's own disclosure decision governs
@@ -553,13 +566,19 @@ dropped (ADR 0007).
 | Change | Spec review (2a) | Review loop (4b) | Review (6) |
 |---|---|---|---|
 | a one-sentence change, a `spike` | no stage 2 | no stage 2 | no stage 2 |
-| `bounded` | Opus 5.5, where one is held | GLM | Opus 5.5 |
+| `bounded` | Codex, where one is held | GLM | Codex — the 2a session resumed where one was held, else a fresh one |
 | `feature`, `architectural` | Codex | GLM | the same Codex agent, resumed |
 
-**Nothing checks a change's class.** A `feature` stated as `bounded` skips
-Codex, and only the review before the merge catches it. The runner below does
-not read the class either: whoever runs the change runs the verbs its row
-allows.
+This table routes the reviews. A `spike` or a one-sentence change gets no stage-2
+review and is reviewed by Opus 5.5 where §3 asks for a review. Explore and
+implement are not routed by class — the class is stated in the spec, after
+phase 1 — and are set by the table below.
+
+**Nothing checks a change's class.** A `feature` stated as a `spike` skips every
+stage-2 review, and one stated as `bounded` may skip the spec review, which is
+optional there; only the review before the merge catches either. The runner
+below does not read the class either: whoever runs the change runs the verbs
+its row allows.
 
 ### The routing
 
@@ -567,15 +586,26 @@ The rows are in the form of §3's table:
 
 | Phase | Model | Why |
 |---|---|---|
+| 1 Explore | **GLM 5.3 Flash** | much input, little output, no deep reasoning; through Claude Code against Z.ai and the runner, for every change |
 | 2a Spec review | **gpt-6.1-sol** | effort `max`, through the Codex CLI and the runner |
+| 4 Implement | **GLM 5.3 Flash** | a worker given a clear plan; through Claude Code against Z.ai and the runner, for every change |
 | 4b Review loop | **GLM 5.3** | effort `max`, through Claude Code against Z.ai and the runner |
-| 6 Review | **gpt-6.1-sol** | effort `max`; the same Codex session as 2a, resumed |
+| 6 Review | **gpt-6.1-sol** | effort `max`; the same Codex session as 2a, resumed where one was held |
+
+**The two Flash rows are decided and not built.** The runner has no verb that
+starts phase 1 or phase 4 on GLM 5.3 Flash, no plan marking assigns a step to
+it (`[FLASH]` was the older design, with `scripts/run_change.sh` and the
+`scripts/cc-*.sh` profiles; none of them is in this tree), and no effort is set
+for it. Until that is built (an open item of the change that wrote this
+section, `plans/changes/stage-2-codex-glm/plan.md`, "Amendment 1"), §3's rows
+run both phases: Haiku 4.5 explores and Sonnet 5.5 implements.
 
 ### The runner is the only way
 
-A foreign reviewer is started only through `python3 scripts/stage2.py <verb>
+A foreign model is started only through `python3 scripts/stage2.py <verb>
 <change>`, never by typing `codex`, or `claude` against another endpoint, into
-a shell. Four verbs:
+a shell. Four verbs exist; the two for GLM 5.3 Flash (`explore` for phase 1,
+`implement` for phase 4) do not yet, see the open item above:
 
 - `spec-review` — Codex, phase 2a, a fresh session.
 - `review-loop` — GLM, one round of phase 4b.
@@ -603,6 +633,17 @@ value taken out by rewriting a commit therefore reads clean while `git log -g
 --expire=now --all`, then `git gc --prune=now`); the check cannot tell whether
 that was done, and its advice for a match in a commit says so.
 
+**Explore and implement send more than a review does.** A reviewer reads one
+diff and one spec; explore reads the repository broadly and implement reads
+the tree and writes code into the worktree, so far more of this repository
+goes to Z.ai than before 2026-10-06. The leak check covers what these two runs
+send — the same scan, immediately before each call, over the tree, the staged
+changes, the commits reachable from the branches and the call's own prompt — and
+what stays out stays out: LakeSwitch and customer content never go, to any
+endpoint, and the check is what blocks it (the maintainer asked about it on
+2026-10-06 and kept it). How the runner confines the tools and writes of
+these two runs is part of the open item above.
+
 What every call then carries: one line in `findings.md` (date, verb, endpoint,
 model, the leak check's three numbers); an empty standard input; an
 environment built from an allow-list, not the caller's; the model and effort
@@ -623,7 +664,7 @@ call and is scrubbed from everything the runner prints or writes.
 session (`Bash(codex *)`). That is a brake, not a lock: `sh -c`, an absolute
 path or a script file passes it, as it does for the merge rules in §2.
 
-**Reads are asked, not confined.** Every prompt asks the reviewer to read
+**Reads are asked, not confined.** Every prompt asks the foreign model to read
 nothing outside the worktree and the repository's git directory. **That is a
 request, not a lock.** Nothing here confines the reviewers' reads or proves
 that they stay inside: they can read the rest of the disk, the customer
@@ -673,9 +714,10 @@ counted in the order their pull requests merge. Every finding records its
 reviewer, whether it was taken or rejected and, if taken, whether it broke a
 test. **After the third run, a short evaluation is written under
 `docs/research/`. If at least one taken Codex or GLM finding broke a test,
-stage 2 falls back to Opus 5.5 until the maintainer decides again.** The rule
-is written, not counted by a script: a person reads the evaluation, and its
-pull request applies the fallback. This replaces the three measured runs that
+stage 2 falls back to Opus 5.5 until the maintainer decides again** — Opus 5.5
+reviews every change, and phases 1 and 4 return to §3's Haiku 4.5 and Sonnet
+5.5. The rule is written, not counted by a script: a person reads the
+evaluation, and its pull request applies the fallback. This replaces the three measured runs that
 D-13 asked for before the first foreign call; what the replacement gives up is
 the measured stage-1 baseline (ADR 0007).
 

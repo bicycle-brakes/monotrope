@@ -118,10 +118,13 @@ endpunkte:
       - glm-5.3-flash
     bemerkung: >-
       Anthropic-compatible endpoint (`https://api.z.ai/api/anthropic`), operated
-      in China. Used for the review loop before phase 6 (phase 4b), through
-      `python3 scripts/stage2.py review-loop`. **Only through Claude Code**,
-      which the vendor lists as a supported tool — an own integration would not
-      be covered by the subscription.
+      in China. `glm-5.3` is used for the review loop before phase 6 (phase
+      4b), through `python3 scripts/stage2.py review-loop`; `glm-5.3-flash` is
+      decided for explore (phase 1) and implement (phase 4), through verbs the
+      runner does not have yet (maintainer, 2026-10-06; bead
+      coding-harness-bib). **Only through Claude Code**, which the vendor lists
+      as a supported tool — an own integration would not be covered by the
+      subscription.
 
   - name: openai-codex
     betreiber: OpenAI
@@ -134,7 +137,7 @@ endpunkte:
       Codex through the official Codex CLI only, signed in with the
       maintainer's ChatGPT subscription — any other way in is not covered.
       Used for the spec review (phase 2a) and the review (phase 6) of
-      `feature` and `architectural` changes, through `python3
+      `bounded`, `feature` and `architectural` changes, through `python3
       scripts/stage2.py`. OpenAI states that it processes and stores
       personal-plan data in the United States and wherever its affiliates and
       service providers are, and personal plans get no region choice (search

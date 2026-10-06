@@ -1,9 +1,10 @@
 # Phase 6 · Review
 
 **Model:** Opus 5.5 — finds what Sonnet misses, and reads the code a change
-calls instead of trusting its docstring; for a feature or architectural change
-gpt-6.1-sol at effort `max`, resumed by `python3 scripts/stage2.py review
-<change>`.
+calls instead of trusting its docstring, for a spike; for a bounded, feature or
+architectural change gpt-6.1-sol at effort `max`, resumed by `python3
+scripts/stage2.py review <change>` (a fresh session where no phase-2a session
+was held).
 **Input:** the diff and `spec.md`. **Not** the author's reasoning.
 **Result:** `plans/changes/<name>/findings.md`
 **Gate:** no open `[AMBIGUITY]`, no open BLOCKER — `[DIVERGENT]` counts as

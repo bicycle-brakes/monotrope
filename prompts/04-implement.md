@@ -1,7 +1,9 @@
 # Phase 4 · Implement
 
-**Model:** Sonnet 5.5 — at effort `medium` (`claude --model claude-sonnet-5-5
---effort medium`); a solid worker given a clear plan.
+**Model:** GLM 5.3 Flash — a solid worker given a clear plan; through the
+runner and the leak check (`docs/WORKFLOW.md` §4). Until the runner starts this
+phase, Sonnet 5.5 at effort `medium` (`claude --model claude-sonnet-5-5
+--effort medium`) builds (`docs/WORKFLOW.md` §3).
 **Input:** `@plans/changes/<name>/plan.md @plans/changes/<name>/spec.md`
 **Gate:** `make verify` green.
 
