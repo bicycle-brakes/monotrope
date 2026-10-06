@@ -137,9 +137,9 @@ holds nothing that can write the repository.
     puts them only into Hermes's process environment, never into an
     argument or a file, and closes standard input before Hermes starts.
     `$HERMES_HOME/.env` keeps the two URLs only. This is what the
-    maintainer decided; he did not accept the risk of leaving the keys in
-    `.env` behind Hermes's own guard. The design adds, beside the barrier
-    and not as part of his answer, a scan and a duty (spec criterion 62):
+    maintainer decided; the risk of leaving the keys in
+    `.env` behind Hermes's own guard was not accepted. The design adds,
+    beside the barrier and not as part of the maintainer's answer, a scan and a duty (spec criterion 62):
     a key value written out plainly in the event stream or the note fails
     the run, and the maintainer revokes that key. A key sent encoded,
     reversed or split over two calls is not found.
