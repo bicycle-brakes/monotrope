@@ -75,8 +75,8 @@ boundary (`prompts/04-implement.md`).
    - `kind(path)`, `is_prose(path)`, `read_code(path, body)` (the
      prototype's `code_only`, built as `read_code`, which returns the code
      text with its Python tree; for other sources it drops what follows a
-     `#` that starts a comment (`_strip_comment`, since repair round 1; in
-     phase 4 whole-line comments only). A wrapper `code_text`, which nothing
+     `#` that starts a comment (`_strip_comments`, since repair round 1, in
+     round 2 across lines; in phase 4 whole-line comments only). A wrapper `code_text`, which nothing
      called, stood beside it in phase 4; repair round 1 removed it).
    - `names(snap, src)` — full path, unique basename, and for Python the
      `/` joins walked on the AST (trailing string constants of a chain of
@@ -221,7 +221,7 @@ flowchart LR
 | 1 | `test_the_working_tree_does_not_count`, `test_two_runs_give_the_same_bytes`, `test_only_the_standard_library` | sources read from disk; a set iterated unsorted; `import yaml` |
 | 2 | `test_the_merge_base_is_the_start`, `test_a_rename_is_removed_and_new` | the diff taken from base, not the merge base; rename detection on |
 | 3 | `test_which_changed_files_are_boxes` | a code file without links dropped; a script's path naming kept as a link |
-| 4 | `test_each_kind_of_link` (import, runner, shell, test path, basename, join, `reads`); `test_what_makes_no_link` (comment, docstring, `#` line, script naming, 8-character basename, basename twice, join ending two paths, registry of 15) | `read_code` returns the raw body (the one function the links are read through; `_strip_comment` holds the `#` rule of the other sources); `> 8` becomes `>= 8`; a join takes the first of two paths; the registry threshold off by one |
+| 4 | `test_each_kind_of_link` (import, runner, shell, test path, basename, join, `reads`); `test_what_makes_no_link` (comment, docstring, `#` line, script naming, 8-character basename, basename twice, join ending two paths, registry of 15) | `read_code` returns the raw body (the one function the links are read through; `_strip_comments` holds the `#` rule of the other sources); `> 8` becomes `>= 8`; a join takes the first of two paths; the registry threshold off by one |
 | 5 | `test_a_tests_only_change_shows_the_code_it_tests`, `test_unchanged_tests_fold`, `test_a_fixture_path_is_not_a_box`, `test_one_hop_only`, `test_no_link_between_two_unchanged_boxes` | links only into changed code (the prototype's rule); one fold per test; an unchanged Markdown target drawn; a second hop; an unchanged pair linked |
 | 6 | `test_a_removed_script_still_named` | a removed file's links read at head; no `still named by` |
 | 7 | `test_prose_only_is_one_line` | an empty `flowchart LR` printed |
@@ -507,11 +507,14 @@ and no single or double quote is open at that point; a backslash outside
 single quotes escapes the next character. So `echo hi  # x`, `steps: [] # x`
 and a recipe line `echo build # x` lose what follows the `#`, and `$#`,
 `${#a}`, `a#b`, a URL fragment (`/#top`), `"a # b"` and `'a # b'` stay code.
-Quotes are tracked per line. Two limits, both on the side of a link kept
-(never of a link lost): a quote that runs over several lines is not
-followed, and an apostrophe in plain text (`don't # x`) opens a quote that
-hides the `#` after it. A `.py` file that does not parse is read by this
-rule too.
+Quotes were tracked per line in round 1. This paragraph said of its two
+limits (a quote over several lines is not followed; an apostrophe in plain
+text hides the `#` after it) that both lie on the side of a link kept and
+never of a link lost. That was false for the first: an inner line of a
+quote, a heredoc body line and a `#` after an escaped blank are code the
+shell reads, and the rule cut names from all three (F-7, measured at
+`4a16cae`). Round 2 repaired the rule and states its limits under "Repair
+round 2" below. A `.py` file that does not parse is read by this rule too.
 
 `[DETAIL]`s this round decided, each reversible and covered by a test:
 
@@ -563,6 +566,103 @@ table under "Evidence", and #68 and #72 still print the one line. On
 `2ab9faf..ca597ab` (the ADR answer alone) the output is now the header and
 `- Not linked: decisions/answers/touch-map/adr.yaml`.
 
+## Repair round 2
+
+The second repair round, for the three MINOR rows the review of round 1
+raised (F-7, F-8, F-9, all `fix-r1`), under the maintainer's standing rule of
+2026-10-06 (MINOR rows on tests, security or false statements are repaired
+without asking). One commit per row on `feat/touch-map`; `scripts/touch_map.py`,
+its test file, this plan and `findings.md` are the only files touched.
+
+| Row | Commit | What changed |
+| --- | --- | --- |
+| F-8 | `29ecf4c` | `test_links_may_be_false_wherever_they_are_printed` gains the case of 31 unlinked files: the map is left out, no link is printed, no caveat line follows (Amendment 2). Test only. |
+| F-9 | `e5261af` | `test_a_runner_names_no_runner`: a `Makefile` and a shell script name two runners and make no link, beside a control that reads a data file (the maintainer's decision for F-3). Test only. |
+| F-7 | `36d1e4a` | `_strip_comment` (one line) becomes `_strip_comments` (the whole text), with `_scan` for one line. A quote is followed across lines; a heredoc body is code up to its end line; a blank that a backslash escapes is no blank before a `#`. Two tests: `test_a_name_the_shell_reads_is_not_cut` (the reviewer's three cases and the controls) and `test_where_a_comment_starts_across_lines`. The sentence above ("never of a link lost") is corrected. |
+
+**The comment rule as it stands after round 2.** In a source that is not
+Python, a `#` starts a comment when it is the first character of a line or
+follows a blank that no backslash escapes, and no single or double quote is
+open at that point. A quote stays open across lines until its mate. A
+heredoc (`<<WORD`, `<<-WORD`, `<<'WORD'`, `<<"WORD"`, `<<\WORD`, several on
+one line) turns the lines after it into code, whatever they hold, up to the
+first line that is the delimiter once its blanks are taken off (YAML takes
+the indent of a block scalar off before the shell reads it). `<<<` and
+`<< 3` open none. The rule does not parse the shell, and it states which way
+each of its limits errs:
+
+- **A link kept that may be false** (the side the rule takes when in doubt):
+  an apostrophe in plain text (`don't`) opens a quote, and every `#` after
+  it is code until the next apostrophe (at the heads of the three
+  repositories, 7 of 154 `.sh`, `.yml`, `.yaml` and `Makefile` files end
+  with a quote still open); `$(( a << end ))` opens a heredoc that never
+  ends; an end line that is not the delimiter alone keeps the rest.
+- **A link lost** (a name the shell reads, cut): a construct the rule does
+  not know. Known cases: a heredoc whose delimiter is built by expansion
+  (`<<$end`), an ANSI-C string with an escaped quote (`$'a\'b'`), and the
+  text of a YAML block scalar of prose, where a ` #` is text for YAML and a
+  comment for this rule. None of these three is in the measured trees.
+
+[DETAIL] decided this round, reversible and covered by a test: **an end line
+may be indented** (`line.strip()`, not `line`), because the one heredoc
+in a YAML file of the three checkouts (`templates/pre-flight-pipeline.yaml` of
+portfolio-agentic-engineering) ends on an indented `EOF`, and a strict match
+would keep the rest of every such file as code; the cost is a heredoc that
+ends early when its body holds an indented line equal to the delimiter.
+**`_strip_comment` is renamed `_strip_comments`**, since it takes the whole
+text, and no one-line wrapper stays beside it (a wrapper called by a test
+alone is what F-6 removed).
+
+### Planted faults of the round
+
+Replay as under "Planted faults" above, each fault alone on the tree of `36d1e4a`
+(the script of `scripts/touch_map.py` there), the file `tests/test_touch_map.py`
+run, the file restored. The suite has 35 tests at `36d1e4a` (32 at `0e0c78a`;
+F-8 adds a case to an existing test, F-9 one test, F-7 two). Fault 68 is
+fault 54's guard: fault 54 as recorded (the caveat in every output) was red
+and stays so, and the guard it did not reach (`if has_links:` in the
+left-out branch) is held now.
+
+| # | Row | Crit. | File | Fault | Red | Tests that went red |
+| --- | --- | --- | --- | --- | --- | --- |
+| 68 | F-8 | 9 | script | the caveat line printed whenever the map is left out (`if has_links:` becomes `if True:`) | 1 | `test_links_may_be_false_wherever_they_are_printed` |
+| 69 | F-9 | 4 | script | a runner or shell script that names a runner makes a `reads` link (`target in ("other", "runner")`) | 1 | `test_a_runner_names_no_runner` |
+| 70 | F-9 | 4 | script | the same naming makes a `runs` link (`target in ("code", "test", "runner")`) | 1 | `test_a_runner_names_no_runner` |
+| 71 | F-7 | 4 | script | the open quote is not carried to the next line | 2 | `test_a_name_the_shell_reads_is_not_cut`, `test_where_a_comment_starts_across_lines` |
+| 72 | F-7 | 4 | script | no heredoc is ever opened | 2 | `test_a_name_the_shell_reads_is_not_cut`, `test_where_a_comment_starts_across_lines` |
+| 73 | F-7 | 4 | script | a heredoc never ends | 2 | `test_a_name_the_shell_reads_is_not_cut`, `test_where_a_comment_starts_across_lines` |
+| 74 | F-7 | 4 | script | the end line must be the delimiter without blanks (`line.strip()` becomes `line`) | 1 | `test_a_name_the_shell_reads_is_not_cut` |
+| 75 | F-7 | 4 | script | a blank that a backslash escapes still counts as a blank | 2 | `test_a_name_the_shell_reads_is_not_cut`, `test_where_a_comment_starts_across_lines` |
+| 76 | F-7 | 4 | script | a `<<` that is no marker advances one character, so `<<< "x"` opens a heredoc on `"x"` | 1 | `test_a_name_the_shell_reads_is_not_cut` |
+| 77 | F-7 | 4 | script | only the first of two heredocs on a line is read | 1 | `test_where_a_comment_starts_across_lines` |
+
+**10 faults planted in this round, 10 red, none green.** Over the change: 77
+planted, 77 red. As it was: on the fixture of F-7 the script of `4a16cae` draws no
+link at all, so the five names the shell reads (the reviewer's three, a `<<-`
+body, a block scalar's heredoc body) are lost, and the script of `043023a`
+draws 11, the six names in real comments among them (measured);
+`test_a_name_the_shell_reads_is_not_cut` goes red on `4a16cae` (the second new
+test calls `_strip_comments`, which that script does not have, so it says
+nothing there). A run of the suite on `36d1e4a`: 35 passed;
+`GIT_CONFIG_COUNT=1 GIT_CONFIG_KEY_0=commit.gpgsign GIT_CONFIG_VALUE_0=false make
+verify` before each of the three commits: VERIFY GREEN (636 passed, 15 skipped at
+`36d1e4a`; `docs-links` and `markdownlint` report-only and red, as before).
+
+### The eight merges again (criterion 17)
+
+The eight merges of the table under "Evidence", `python3 scripts/touch_map.py
+<merge>^1 <merge>^2` with the script of `4a16cae` and of `36d1e4a`: **all eight
+outputs are byte for byte the same.** Nothing changed beyond F-7's cases, and
+F-7's cases do not occur in them. The same comparison over the last 40 merges
+of each of coding-harness, portfolio-agentic-engineering and lakeswitch-ai
+(120 outputs, each at its repository's head on 2026-10-06): none differs. On
+the `.sh`, `.yml`, `.yaml` and `Makefile` files of the three heads
+(`e5261af`, `20a279c`, `09c9d62`) the new rule keeps 79 lines as code that the
+rule of round 1 cut (6, 41 and 32), every one a whole line starting with `#`
+inside a quote, a heredoc or a stretch after a stray apostrophe; it cuts no
+line that round 1 kept, and the lines it cuts in mid-line are the same in
+number (17, 312, 1). None of the 79 lines makes a link in the 120 merges.
+
 ## Time used
 
 Appetite: 4 h of phase 4, one repair round included. Read from `date`.
@@ -584,3 +684,12 @@ Readings of `date` at the step boundaries: 21:39 start, state read (head
 `043023a`) · 21:42 F-3 committed (`29ff487`) · 21:44 F-1 (`01ab55d`) · 21:47
 F-2 (`a696b03`) · 21:49 F-6 (`7262704`) · 21:51 F-5 (`fd9dab2`) · 21:53 F-4
 (`b7e532f`) · 21:56 this record, statuses and the plans index committed.
+
+Repair round 2 (appetite 45 min, set by the dispatching session; not reached):
+
+- 2026-10-06 22:13–22:32, 19 min, no break
+
+Readings of `date` at the step boundaries: 22:13 start, state read (head
+`0e0c78a`) · 22:17 F-8 committed (`29ecf4c`) · 22:18 F-9 (`e5261af`) · 22:29
+F-7 (`36d1e4a`) · 22:32 this record, the plan's corrections and the statuses of
+F-7 to F-9 committed.
