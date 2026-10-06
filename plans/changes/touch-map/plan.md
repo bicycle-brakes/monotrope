@@ -253,3 +253,45 @@ script, as for the sibling checks), `provenance.yaml`,
 `docs/adr/0009-architecture-delta-in-design-md.md`, `docs/WORKFLOW.md`,
 `AGENTS.md`, the templates' `Where it fits` line and `DECISION_PARTS` in
 `tests/test_pr_templates.py`, and anything in LakeSwitch.
+
+## Planted faults
+
+Every test has its counterpart: a fault planted on its own, the suite run, the
+file restored with `git checkout`. Before every fault of slice S1: `python3 -m
+pytest tests/test_touch_map.py -q` — **19 passed** at `a21717a`. After: **24
+faults, 24 red, none green.** Planted on `a21717a`.
+
+Replay: make the edit in the file of the column `File` — `script` is
+`scripts/touch_map.py`, `manifest` is `scripts/kit/manifest.yaml`,
+`ci_gates.py` is `scripts/ci_gates.py` — run `python3 -m pytest
+tests/test_touch_map.py -q --tb=no` (`tests/test_ci.py` for fault 24), and
+restore with `git checkout -- <file>`. "Red" is the number of failing tests;
+the tests named are up to three of them, in alphabetical order.
+
+| # | Crit. | File | Fault | Red | Tests that went red |
+| --- | --- | --- | --- | --- | --- |
+| 1 | 1 | script | sources read from disk, not from the commit | 4 | `test_a_removed_script_still_named`, `test_a_rename_is_removed_and_new`, `test_the_merge_base_is_the_start` |
+| 2 | 1 | script | a set iterated unsorted (boxes in set order) | 2 | `test_two_runs_give_the_same_bytes`, `test_which_changed_files_are_boxes` |
+| 3 | 1 | script | import yaml | 1 | `test_only_the_standard_library` |
+| 4 | 2 | script | diff taken from the base tip, not the merge base | 2 | `test_not_measured`, `test_the_merge_base_is_the_start` |
+| 5 | 2 | script | rename detection on | 1 | `test_a_rename_is_removed_and_new` |
+| 6 | 3 | script | a code file without links dropped | 5 | `test_a_rename_is_removed_and_new`, `test_the_merge_base_is_the_start`, `test_the_working_tree_does_not_count` |
+| 7 | 3 | script | a Python code file's path naming kept as a link | 4 | `test_each_kind_of_link`, `test_no_link_between_two_unchanged_boxes`, `test_one_hop_only` |
+| 8 | 4 | script | code text is the raw body (comments and docstrings stay) | 1 | `test_what_makes_no_link` |
+| 9 | 4 | script | basename rule `> 8` becomes `>= 8` | 1 | `test_what_makes_no_link` |
+| 10 | 4 | script | a join takes the first of two paths | 1 | `test_what_makes_no_link` |
+| 11 | 4 | script | registry threshold off by one | 1 | `test_what_makes_no_link` |
+| 12 | 5 | script | links only into changed code (the prototype's rule) | 2 | `test_a_fixture_path_is_not_a_box`, `test_a_tests_only_change_shows_the_code_it_tests` |
+| 13 | 5 | script | an unchanged test drawn as its own box | 3 | `test_the_working_tree_does_not_count`, `test_unchanged_tests_fold`, `test_what_makes_no_link` |
+| 14 | 5 | script | an unchanged Markdown target of a changed test drawn | 1 | `test_a_fixture_path_is_not_a_box` |
+| 15 | 5 | script | a second hop | 2 | `test_a_tests_only_change_shows_the_code_it_tests`, `test_one_hop_only` |
+| 16 | 5 | script | a link between two unchanged boxes drawn | 1 | `test_no_link_between_two_unchanged_boxes` |
+| 17 | 6 | script | a removed file's links read at head, not the merge base | 1 | `test_a_removed_script_still_named` |
+| 18 | 6 | script | no `still named by` | 1 | `test_a_removed_script_still_named` |
+| 19 | 7 | script | no prose-only line: the full list is printed with an empty header | 1 | `test_prose_only_is_one_line` |
+| 20 | 13 | script | an exception escapes (exit 1) | 1 | `test_not_measured` |
+| 21 | 13 | script | the not-measured line on standard output | 1 | `test_not_measured` |
+| 22 | 13 | script | usage error exits 1 | 1 | `test_a_usage_error_is_2` |
+| 23 | 16 | manifest | kit role of the script is `bestand` | 1 | `test_the_kit_carries_the_script_and_its_test` |
+| 24 | 16 | ci_gates.py | the OHNE_AUFRUFER entry missing | 1 | `test_every_script_has_a_caller_or_a_declared_reason` |
+
