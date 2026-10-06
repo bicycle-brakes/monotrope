@@ -4,7 +4,7 @@ category: adr
 status: accepted
 created: 2026-10-06
 last_reviewed: 2026-10-06
-updated: 2026-10-06
+updated: 2026-10-07
 owner: framework-architect
 provenance: human-decided
 produced_by: {kind: llm-session, name: claude-code, version: "2026-10-06"}
@@ -24,7 +24,9 @@ tags: [adr, hermes, runner, unattended]
   `plans/changes/hermes-runner/decisions.md`; the key barrier chosen by
   the maintainer on 2026-10-06 (the addendum of that day in the same
   file); research, spec and design of the change sit beside it (pull
-  request #76) · the acceptance is the merge commit and is written nowhere
+  request #76 for slice 1; the key-barrier addendum and spec criteria
+  60–70 on branch `feat/hermes-runner-2`, in no pull request yet) · the
+  acceptance is the merge commit and is written nowhere
   else, so the header's `review` stays empty (ADR 0008) · Decider:
   maintainer · prepared by a Claude Code session
 * Date: 2026-10-06 · takes effect on merge
