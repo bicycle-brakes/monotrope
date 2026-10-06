@@ -245,10 +245,11 @@ def _strip_comments(body: str) -> str:
     fragment of a URL (`/#top`) are code, `"a # b"` is a string, and `echo hi  # x` keeps
     `echo hi`. A backslash outside single quotes escapes the next character. A quote is followed
     across lines, so an inner line of a quote that runs over several lines is code, and so is a
-    heredoc body, up to its end line. In doubt the rule keeps the text, which can make a false
-    link but loses none: an apostrophe in plain text opens a quote that hides every `#` after it,
-    and `$(( a << b ))` opens a heredoc that never ends. It does not parse the shell, though, so
-    a construct it does not know (`<<$end`, `$'a\\'b'`) can still make it cut a name the shell reads.
+    heredoc body, up to its end line. It does not parse the shell. Because a quote is followed
+    across lines, one quote it misreads (an apostrophe in plain text, a quote nested in a command
+    substitution, `<<$end`, `$'a\\'b'`) flips the rest of the file, and the error runs both ways:
+    a comment read as code can make a false link, and code read as a comment can lose one
+    (finding F-10 of touch-map, a named limit).
     """
     kept = []
     quote = ""

@@ -591,17 +591,21 @@ the indent of a block scalar off before the shell reads it). `<<<` and
 `<< 3` open none. The rule does not parse the shell, and it states which way
 each of its limits errs:
 
-- **A link kept that may be false** (the side the rule takes when in doubt):
-  an apostrophe in plain text (`don't`) opens a quote, and every `#` after
-  it is code until the next apostrophe (at the heads of the three
-  repositories, 7 of 154 `.sh`, `.yml`, `.yaml` and `Makefile` files end
-  with a quote still open); `$(( a << end ))` opens a heredoc that never
-  ends; an end line that is not the delimiter alone keeps the rest.
-- **A link lost** (a name the shell reads, cut): a construct the rule does
-  not know. Known cases: a heredoc whose delimiter is built by expansion
-  (`<<$end`), an ANSI-C string with an escaped quote (`$'a\'b'`), and the
-  text of a YAML block scalar of prose, where a ` #` is text for YAML and a
-  comment for this rule. None of these three is in the measured trees.
+- **Which way a limit errs — corrected 2026-10-06 (finding F-10).** The two
+  bullets that stood here said a plain-text apostrophe errs only toward a
+  link kept and an unknown construct only toward a link lost. Both were
+  wrong: since a quote is followed across lines, one misread quote flips the
+  rest of the file, and either kind of misreading can then keep a comment
+  as code (a false link) or cut code as a comment (a lost link). Known
+  triggers: an apostrophe in plain text (`don't`), a quote nested in a
+  command substitution, a heredoc whose delimiter is built by expansion
+  (`<<$end`), an ANSI-C string with an escaped quote (`$'a\'b'`), the text
+  of a YAML block scalar of prose; `$(( a << end ))` opens a heredoc that
+  never ends. Measured (review round 3): no effect on this repository's 164
+  head links or the eight merges; three false `reads` links at the head of
+  portfolio-agentic-engineering (`20a279c`, the copies of `format-code.sh`).
+  The maintainer chose on 2026-10-06 to name this as a limit and to carry a
+  sturdier rule in a bead of its own.
 
 [DETAIL] decided this round, reversible and covered by a test: **an end line
 may be indented** (`line.strip()`, not `line`), because the one heredoc

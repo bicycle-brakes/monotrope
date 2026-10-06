@@ -84,3 +84,13 @@ maintainer in the Claude Code session of 2026-10-06.
   as built in phase 4. A runner or shell script that names a runner makes no
   link. No code changes; `spec.md` gains the clause as a dated amendment
   (terms, "Link", and "Amendments" at the end).
+
+## Addendum 2026-10-06 (later): finding F-10
+
+Finding F-10 came from the second repair round in a row and went to the
+maintainer. The maintainer chose the recommended option on 2026-10-06
+(Claude Code session): correct the wrong sentences in the docstring of
+`_strip_comments` and in plan.md (which way the comment rule's limits err),
+name the behaviour as a limit in the pull request, and carry a sturdier rule
+in a bead of its own (coding-harness-cff). No behaviour changes in this
+change. Not chosen: naming it only; a third repair round.
