@@ -169,6 +169,7 @@ def test_two_runs_give_the_same_bytes(tmp_path: Path) -> None:
     base = {f"scripts/mod_{i}.py": "V = 1\n" for i in range(8)}
     base.update({f"tests/test_mod_{i}.py": f"import mod_{i}\n" for i in range(8)})
     base["Makefile"] = "all:\n" + "".join(f"\tpython3 scripts/mod_{i}.py\n" for i in range(8))
+    base.update({f"scripts/imp_{i}.py": f"import mod_{i}\n" for i in range(8)})
     feat = {f"scripts/mod_{i}.py": "V = 2\n" for i in range(8)}
     feat.update({f"tests/test_mod_{i}.py": f"import mod_{i}\nX = 2\n" for i in range(4)})
     repo = _fixture(tmp_path, base, feat)
@@ -508,3 +509,321 @@ def test_the_kit_carries_the_script_and_its_test() -> None:
         found = probe.rolle(path)
         assert found is not None, f"{path} has no role in scripts/kit/manifest.yaml"
         assert found[0] == "mechanismus", path
+
+
+# ---------------------------------------------------------------------------
+# the map: helpers (slice S2)
+# ---------------------------------------------------------------------------
+
+_ID = r"[A-Za-z0-9_]+"
+_BOX_LINE = re.compile(rf'^  ({_ID})(?:\["([^"`]*)"\]|\(\["([^"`]*)"\]\)):::({_ID})$')
+_LINK_LINE = re.compile(rf"^  ({_ID}) (-->|-\.->)\|([a-z]+)\| ({_ID})$")
+_CLASS_LINE = re.compile(rf"^  classDef ({_ID}) \S.*$")
+
+
+def _map_block(out: str) -> str:
+    match = re.search(r"```mermaid\n(.*?)\n```", out, re.S)
+    assert match, out
+    return match.group(1)
+
+
+def _mermaid_problems(block: str) -> list[str]:
+    """The structure check of the spec's criterion 11, standard library only.
+
+    Every line is `flowchart LR`, a box, a link or a class definition; box ids are unique,
+    match `[A-Za-z0-9_]+` and none is `end`; every label is in double quotes without a `"` or
+    a backtick (the regular expression admits none); both ends of every link are declared
+    boxes. Whether GitHub renders the block stays the maintainer's look on the phone.
+    """
+    lines = block.split("\n")
+    problems = []
+    if lines[0] != "flowchart LR":
+        problems.append(f"the first line is {lines[0]!r}, not 'flowchart LR'")
+    ids: list[str] = []
+    ends: list[tuple[str, str]] = []
+    used: set[str] = set()
+    defined: set[str] = set()
+    for line in lines[1:]:
+        if match := _BOX_LINE.match(line):
+            ids.append(match.group(1))
+            used.add(match.group(4))
+        elif match := _LINK_LINE.match(line):
+            ends.append((match.group(1), match.group(4)))
+        elif match := _CLASS_LINE.match(line):
+            defined.add(match.group(1))
+        else:
+            problems.append(f"not a box, a link or a class definition: {line!r}")
+    problems += [f"duplicate id {i}" for i in sorted({i for i in ids if ids.count(i) > 1})]
+    if "end" in ids:
+        problems.append("a box is called end")
+    for end in (e for pair in ends for e in pair):
+        if end not in ids:
+            problems.append(f"undeclared link end {end}")
+    problems += [f"undefined class {c}" for c in sorted(used - defined)]
+    return problems
+
+
+def _map_links(block: str) -> set[tuple[str, str, str]]:
+    """The links of a map as (source label, target label, kind)."""
+    labels = {}
+    for line in block.split("\n"):
+        if match := _BOX_LINE.match(line):
+            text = (match.group(2) or match.group(3)).removeprefix("code: ")
+            labels[match.group(1)] = re.sub(r" \((new|changed|removed)\)$", "", text)
+    out = set()
+    for line in block.split("\n"):
+        if match := _LINK_LINE.match(line):
+            out.add((labels[match.group(1)], labels[match.group(4)], match.group(3)))
+    return out
+
+
+def _list_links(out: str) -> set[tuple[str, str, str]]:
+    """The links the list lines name, as (source label, target label, kind)."""
+    inbound = {"run by": "runs", "read by": "reads", "imported by": "imports", "tested by": "tests"}
+    found = set()
+    for path, groups in _boxes(out).items():
+        me = tm.short(path)
+        for group, names in groups.items():
+            for name in names:
+                other = f"{name} tests" if name.startswith("+") else name
+                if group in inbound:
+                    found.add((other, me, inbound[group]))
+                elif group not in ("status", "still named by"):
+                    found.add((me, other, group))
+    return found
+
+
+def _rich(tmp_path: Path) -> Path:
+    """A pull request with every kind of box: new, changed, removed, unchanged, folded, linked outward."""
+    base = {
+        "scripts/target_one.py": "V = 0\n",
+        "scripts/gone.py": "G = 1\n",
+        "data/config.yaml": "a: 0\n",
+        "scripts/importer.py": "import target_one\n",
+        "scripts/launch.sh": "#!/bin/sh\npython3 scripts/target_one.py\n",
+        "Makefile": "all:\n\tpython3 scripts/target_one.py\n\tcat data/config.yaml\n\tpython3 scripts/gone.py\n",
+        "tests/test_unch_a.py": "import target_one\n",
+        "tests/test_unch_b.py": "import target_one\n",
+        "other/dup.py": "D = 1\n",
+    }
+    feat = {
+        "scripts/target_one.py": "V = 1\n",
+        "scripts/gone.py": None,
+        "data/config.yaml": "a: 1\n",
+        "scripts/new_tool.py": "N = 1\n",
+        "scripts/importer_new.py": "import new_tool\nimport target_one\n",
+        "tests/test_path.py": 'P = "scripts/target_one.py"\nQ = "scripts/launch.sh"\n',
+        "data/unnamed.yaml": "a: 1\n",
+        "docs/n.md": "text\n",
+    }
+    return _fixture(tmp_path, base, feat)
+
+
+# ---------------------------------------------------------------------------
+# criterion 8: the list, and the map holds the same links
+# ---------------------------------------------------------------------------
+
+
+def test_the_list_and_the_map_hold_the_same_links(tmp_path: Path) -> None:
+    """Criterion 8: every link of the map is in the list and the other way round; every changed file is in a line."""
+    out = _run(_rich(tmp_path))
+    listed, drawn = _list_links(out), _map_links(_map_block(out))
+    assert listed == drawn
+    assert len(drawn) >= 9, "the fixture draws too little to prove anything"
+    assert ("+2 unchanged tests", "scripts/target_one.py", "tests") in drawn
+    assert ("Makefile", "scripts/gone.py", "runs") in drawn, "a removed file keeps the link it had at the merge base"
+    lines = out.splitlines()
+    boxes = _paths(out)
+    changed = {
+        "scripts/target_one.py",
+        "scripts/gone.py",
+        "data/config.yaml",
+        "scripts/new_tool.py",
+        "scripts/importer_new.py",
+        "tests/test_path.py",
+    }
+    assert set(boxes) == changed
+    assert "- Not linked: `data/unnamed.yaml`" in lines
+    assert "- Prose, not drawn: 1 file" in lines
+
+
+def test_no_table_or_checkbox(tmp_path: Path) -> None:
+    """Criterion 8: no line of the output starts with `|`, and none is a checkbox."""
+    out = _run(_rich(tmp_path))
+    assert "<details>" in out and "- Prose, not drawn" in out, "the fixture must print every kind of line"
+    for line in out.splitlines():
+        assert not line.lstrip().startswith("|"), line
+        assert not re.match(r"^\s*[-*] \[[ xX]\]", line), line
+
+
+# ---------------------------------------------------------------------------
+# criterion 9: when the map is drawn
+# ---------------------------------------------------------------------------
+
+
+def _star(tmp_path: Path, importers: int) -> str:
+    """One changed module and `importers` unchanged importers: `importers + 1` boxes."""
+    where = tmp_path / f"star{importers}"
+    where.mkdir()
+    base = {"scripts/core.py": "V = 1\n", **{f"scripts/user_{i:02d}.py": "import core\n" for i in range(importers)}}
+    return _run(_fixture(where, base, {"scripts/core.py": "V = 2\n"}))
+
+
+def test_the_size_lines(tmp_path: Path) -> None:
+    """Criterion 9: the map from one link on and up to 30 boxes; the hint from 15; the list only above 30."""
+    split = "Large change: consider splitting it."
+    one = _star(tmp_path, 0)
+    assert "<details>" not in one and split not in one, "one box and no link: no map"
+    for boxes, hint, left_out in ((14, False, False), (15, True, False), (30, True, False), (31, True, True)):
+        out = _star(tmp_path, boxes - 1)
+        assert (split in out) is hint, f"{boxes} boxes: the hint"
+        assert ("<details>" in out) is (not left_out), f"{boxes} boxes: the map"
+        assert (f"Map left out: {boxes} boxes, more than 30." in out) is left_out, f"{boxes} boxes: the left-out line"
+        assert ("- **Added:**" in out) is (not left_out), f"{boxes} boxes: the three lists go with the map"
+    # A fold box counts: 14 changed files and one fold box are 15 boxes.
+    where = tmp_path / "folded"
+    where.mkdir()
+    mods = {f"scripts/m_{i:02d}.py": "V = 1\n" for i in range(14)}
+    out = _run(_fixture(where, {**mods, "tests/test_m.py": "import m_00\n"}, {m: "V = 2\n" for m in mods}))
+    assert "+1 unchanged tests" in out and split in out
+
+
+# ---------------------------------------------------------------------------
+# criterion 10: the map's form
+# ---------------------------------------------------------------------------
+
+
+def test_boxes_carry_level_and_status_in_words(tmp_path: Path) -> None:
+    """Criterion 10: `code:` on every box, the status in words as well as colour, the kind on every link, inside `<details>`."""
+    out = _run(_rich(tmp_path))
+    head = _git(tmp_path / "repo", "rev-parse", "--short", "feat")
+    lines = out.splitlines()
+    assert lines.count(f"<details><summary>Map at {head}</summary>") == 1 and lines.count("</details>") == 1
+    assert out.index("<details>") < out.index("```mermaid") < out.index("```\n\n- **Added:**") < out.index("</details>")
+    block = _map_block(out).split("\n")
+    assert block[0] == "flowchart LR"
+    expected = {
+        "scripts/target_one.py": ("changed", "changed"),
+        "scripts/new_tool.py": ("new", "added"),
+        "scripts/gone.py": ("removed", "removed"),
+    }
+    seen = set()
+    for line in block:
+        if match := _BOX_LINE.match(line):
+            label = match.group(2) or match.group(3)
+            assert label.startswith("code: "), line
+            text = label.removeprefix("code: ")
+            word = re.search(r" \((new|changed|removed)\)$", text)
+            colour = match.group(4)
+            if word:  # a changed box: the word and the colour agree
+                assert colour == {"new": "added", "changed": "changed", "removed": "removed"}[word.group(1)], line
+                seen.add((text.removesuffix(word.group(0)), word.group(1), colour))
+            else:  # an unchanged box or a fold box: neither word nor changed colour
+                assert colour == "same", line
+        elif match := _LINK_LINE.match(line):
+            assert match.group(3) in {"runs", "reads", "imports", "tests"}, line
+    assert {(tm.short(p), w, c) for p, (w, c) in expected.items()} <= seen
+    assert any(re.match(r'^  n\d+\(\["code: \+2 unchanged tests"\]\):::same$', line) for line in block)
+
+
+# ---------------------------------------------------------------------------
+# criterion 11: the block holds by structure
+# ---------------------------------------------------------------------------
+
+
+def test_the_block_holds_by_structure(tmp_path: Path) -> None:
+    """Criterion 11: odd file names break no rule: a `"`, a backtick, a newline, `end.sh`, `a-b.py` beside `a_b.py`."""
+    odd = ['scripts/a"b.py', "scripts/back`tick.py", "scripts/end.sh", "scripts/a-b.py", "scripts/a_b.py"]
+    base = {"Makefile": "all:\n" + "".join(f"\tpython3 {p}\n" for p in odd)}
+    feat = {p: "V = 1\n" for p in [*odd, "scripts/new\nline.py"]}
+    out = _run(_fixture(tmp_path, base, feat))
+    block = _map_block(out)
+    assert _mermaid_problems(block) == [], block
+    ids = [m.group(1) for line in block.split("\n") if (m := _BOX_LINE.match(line))]
+    assert len(ids) == len(set(ids)) >= 7
+    assert block.count("-->") >= 5, "the odd files must be linked, or the check proves nothing"
+    assert "a'b.py" in block and "back'tick.py" in block, "the labels are cleaned, not dropped"
+    assert out.count("\n```") == 2, "a backtick in a name must not break the fenced block"
+
+
+def test_the_structure_check_can_go_red() -> None:
+    """Criterion 11: the structure check itself fails on each rule it states."""
+    good = 'flowchart LR\n  n1["code: a.py (new)"]:::added\n  n2["code: b.py"]:::same\n  n2 -->|runs| n1\n  classDef added fill:#fff\n  classDef same fill:#eee'
+    assert _mermaid_problems(good) == []
+    bad = {
+        "an undeclared link end": good.replace("n2 -->|runs| n1", "n2 -->|runs| n9"),
+        "a duplicate id": good.replace('n2["code: b.py"]', 'n1["code: b.py"]'),
+        "an id called end": good.replace("n2", "end"),
+        "an unquoted label": good.replace('n2["code: b.py"]', "n2[code: b.py]"),
+        "a quote inside a label": good.replace('"code: b.py"', '"code: b".py"'),
+        "a backtick inside a label": good.replace('"code: b.py"', '"code: b`.py"'),
+        "a stray line": good + "\n  subgraph x",
+        "a wrong header": good.replace("flowchart LR", "flowchart TD"),
+        "an undefined class": good.replace(":::same", ":::nowhere"),
+        "an id with a dash": good.replace("n2", "n-2"),
+    }
+    for what, block in bad.items():
+        assert _mermaid_problems(block), f"the check passes {what}"
+
+
+# ---------------------------------------------------------------------------
+# criterion 12: the three lists and the caption
+# ---------------------------------------------------------------------------
+
+
+def test_imports_added_and_dropped(tmp_path: Path) -> None:
+    """Criterion 12: imports of changed code files gained and dropped since the merge base."""
+    base = {
+        "scripts/mod_a.py": "import dep_one\nimport dep_two\n",
+        "scripts/mod_gone.py": "import dep_two\n",
+        "scripts/dep_one.py": "V = 1\n",
+        "scripts/dep_two.py": "V = 1\n",
+        "scripts/dep_three.py": "V = 1\n",
+        "Makefile": "all:\n\tpython3 scripts/mod_a.py\n",
+    }
+    feat = {
+        "scripts/mod_a.py": "import dep_one\nimport dep_three\n",
+        "scripts/mod_gone.py": None,
+        "scripts/mod_new.py": "import dep_one\n",
+    }
+    out = _run(_fixture(tmp_path, base, feat))
+    lines = out.splitlines()
+    assert (
+        "- **Added:** `scripts/mod_new.py`. New imports: `scripts/mod_a.py` → `scripts/dep_three.py`, `scripts/mod_new.py` → `scripts/dep_one.py`."
+        in lines
+    )
+    assert "- **Changed:** `scripts/mod_a.py`." in lines
+    assert (
+        "- **Removed:** `scripts/mod_gone.py`. Imports dropped: `scripts/mod_a.py` → `scripts/dep_two.py`, "
+        "`scripts/mod_gone.py` → `scripts/dep_two.py`." in lines
+    )
+    # Nothing gained, nothing dropped: both say none.
+    other = tmp_path / "quiet"
+    other.mkdir()
+    quiet = _run(
+        _fixture(
+            other, {"scripts/x_mod.py": "V = 1\n", "Makefile": "scripts/x_mod.py\n"}, {"scripts/x_mod.py": "V = 2\n"}
+        )
+    )
+    assert "- **Added:** none. New imports: none." in quiet.splitlines()
+    assert "- **Removed:** none. Imports dropped: none." in quiet.splitlines()
+
+
+def test_the_caption_names_both_commits(tmp_path: Path) -> None:
+    """Criterion 12: the line under the lists names head and merge base, says nothing is drawn by hand and links may be missing."""
+    repo = _repo(tmp_path)
+    _commit(repo, {"scripts/core.py": "V = 1\n", "Makefile": "all:\n\tpython3 scripts/core.py\n"})
+    _branch(repo)
+    _commit(repo, {"scripts/core.py": "V = 2\n"})
+    _git(repo, "checkout", "-q", "main")
+    _commit(repo, {"README.md": "later on main\n"})
+    out = _run(repo)
+    head = _git(repo, "rev-parse", "--short", "feat")
+    fork = _git(repo, "rev-parse", "--short", _git(repo, "merge-base", "main", "feat"))
+    assert head != fork != _git(repo, "rev-parse", "--short", "main")
+    caption = [line for line in out.splitlines() if line.startswith("<sub>")]
+    assert len(caption) == 1
+    assert f"from the commit {head} and the merge base {fork}" in caption[0]
+    assert "scripts/touch_map.py" in caption[0] and "nothing drawn by hand" in caption[0]
+    assert "some may be missing" in caption[0] and caption[0].endswith("</sub>")
+    assert out.splitlines()[0] == f"Touched at `{head}`, against the merge base `{fork}`:"
