@@ -29,10 +29,13 @@ an agent draws.**
    writes it from the diff: which code files changed, what runs them, what
    tests them. It is plain Markdown, so it reads in the GitHub Mobile app.
 2. **A Mermaid map of the same graph is extra, for a big change only** (three
-   or more changed code files), collapsed at the end of the body. The GitHub
-   Mobile app shows Mermaid as raw code (community reports from 2022 to
-   September 2026; no official statement found). In a phone-width column, a
-   13-box map shrinks to 5.6-pixel text (measured, section 5).
+   or more changed code files), collapsed at the end of the body. **On the
+   maintainer's phone the GitHub app rendered the sample map of pull request
+   #83 as a picture, and the collapsed block stayed closed until tapped**
+   (looked at by the maintainer on 2026-10-06; app version not read) —
+   against every community report found (2022 to September 2026). In a
+   phone-width column, a 13-box map shrinks to 5.6-pixel text (measured,
+   section 5), so the map still needs zooming.
 3. **Architectural and Feature changes link their `design.md` architecture
    delta** (ADR 0009) instead of copying it. The touch list is a cross-check
    against that delta: the delta shows the intended end state, the list shows
@@ -57,8 +60,8 @@ code; on a second branch the script missed at least four test links.
 
 **First slice:** `scripts/touch_map.py` with tests, the template section of
 6.2, and one line in `prompts/07-commit.md`. The gate follows in a second
-slice. **Before that, one five-minute test on your phone** settles whether
-the collapsed map belongs in the body at all (6.4).
+slice. The phone test of 6.4 is done (2026-10-06): the map renders in the
+app and stays collapsed, so it goes into the body as in 6.2.
 
 ## 1 · Question and scope
 
@@ -176,8 +179,11 @@ is what the prototype in section 5 draws.
   mobile app does not render mermaid" (2026-09-17) and the app shows "the
   flowchart as a code block (screenshot from the mobile app prompted this)"
   (2026-09-22). All community, no official statement. This answers the open
-  point of the LikeC4 note with "most likely not"; one look on the
-  maintainer's phone confirms it.
+  point of the LikeC4 note with "most likely not" — **and the maintainer's
+  phone said otherwise:** on 2026-10-06 the GitHub app rendered the map in
+  pull request #83's body as a picture (app version not read). The reports
+  may predate a change in the app, or concern another platform; which phone
+  platform was used was not read.
 - **In a phone browser:** github.com renders the diagram, but how it fits a
   narrow column (scaled to fit, or panned) was not verified on a phone. The
   widths in section 5 assume it is scaled to fit.
@@ -276,7 +282,7 @@ Hours are estimates, not measurements.
 - **Cost:** 5–10 min of agent time per pull request; nothing to build.
 - **Accuracy:** unknown and uncheckable. The bots in 2.1 show the failure
   modes; an agent that wrote the code also draws what it believes it did.
-- **Phone:** raw code in the app; small text in the browser.
+- **Phone:** a picture in the app (the maintainer's look, 2026-10-06), small text.
 - **Gate:** presence only. Truth cannot be checked, and even a syntax check
   needs Mermaid's own parser, which runs on Node.js, the runtime ADR 0009
   kept out of the kit.
@@ -496,12 +502,18 @@ closed, the map goes in as in 6.2. If it opens, the map stays out of the
 body and the list alone is the standard. The same look settles the open
 points of the LikeC4 note and of the decision pull request note §2.5.
 
+**Result (2026-10-06):** the maintainer opened pull request #83 in the
+GitHub app: the map showed as a picture, and `<details>` stayed closed until
+tapped. The map goes into the body as in 6.2. The same look settles the open
+point of the LikeC4 note (Mermaid in the app: yes).
+
 ## 7 · Not read or not verified
 
-- **Mermaid in the GitHub Mobile app:** no official statement found; all
-  reports are community ones. Not tested on the maintainer's phone.
-- **`<details>` in the app:** one weak report (2024) that it works, taken
-  from the decision pull request note.
+- **Mermaid in the GitHub Mobile app:** no official statement found. On
+  2026-10-06 the maintainer saw pull request #83's map rendered as a picture
+  in the app; app version and platform not read.
+- **`<details>` in the app:** stayed closed until tapped on the maintainer's
+  phone (2026-10-06).
 - **How github.com fits a diagram into a phone column** (scaling, pan and
   zoom controls) was not verified; the widths in 5.2 come from local
   renders, and GitHub's Mermaid version was not read.
