@@ -21,11 +21,12 @@ tags: [adr, hermes, runner, unattended]
 * Review: direction chosen by the maintainer on 2026-10-05 ("Ich würde
   gerne Hermes forcieren, lege die Grundlage dafür" — "I want to push
   Hermes; lay the groundwork"), with the six answers of the same day in
-  `plans/changes/hermes-runner/decisions.md`; research, spec and design
-  of the change sit beside it (pull request #76) · the acceptance is the
-  merge commit and is written nowhere else, so the header's `review` stays
-  empty (ADR 0008) · Decider: maintainer · prepared by a Claude Code
-  session
+  `plans/changes/hermes-runner/decisions.md`; the key barrier chosen by
+  the maintainer on 2026-10-06 (the addendum of that day in the same
+  file); research, spec and design of the change sit beside it (pull
+  request #76) · the acceptance is the merge commit and is written nowhere
+  else, so the header's `review` stays empty (ADR 0008) · Decider:
+  maintainer · prepared by a Claude Code session
 * Date: 2026-10-06 · takes effect on merge
 
 ## Context
@@ -74,11 +75,19 @@ tags: [adr, hermes, runner, unattended]
   which reads the open web. Under one operating-system user each could
   read the other's keys and files (derived from Hermes's documentation,
   not tried). The maintainer chose two service users (decisions Q3).
+* **The agent could read its own keys.** As the profile was first built,
+  `$HERMES_HOME/.env` held the OpenCode Go and Firecrawl keys, readable by
+  the service user so that Hermes can load them; only Hermes's own file
+  guard, which Hermes itself calls "not a security boundary", stood
+  between a fetched page and those keys (the change's findings F-14 and
+  F-26). On 2026-10-06 the maintainer chose a barrier of the operating
+  system instead of accepting that.
 
 ## Decision Drivers
 
 * The agent that reads the open web holds no shell and no credential that
   can write the repository.
+* No file the agent can read holds its own keys.
 * The job never writes the tracker, never merges, approves or
   force-pushes, and never pushes `main`.
 * GitHub, not the harness, is the boundary around `main`.
@@ -118,17 +127,26 @@ holds nothing that can write the repository.
     — no shell, no code execution, no delegation; memory, background
     review, curator and title generation are off and no rules file is
     loaded. It writes only its run's work directory, holds the model key
-    and the search key and never a GitHub credential, and stops after 60
-    tool iterations or 45 minutes (50 minutes at the orchestrator's side).
+    and the search key only in its process environment, for one run, and
+    never a GitHub credential, and stops after 60 tool iterations or 45
+    minutes (50 minutes at the orchestrator's side).
+  * *The key barrier* (the maintainer, 2026-10-06). The two keys live in a
+    key file in the maintainer's home, mode 600, which the service user —
+    and so the agent's file tools — cannot read. The orchestrator hands
+    them to the wrapper on its standard input, once per run; the wrapper
+    puts them only into Hermes's process environment, never into an
+    argument or a file, and closes standard input before Hermes starts.
+    `$HERMES_HOME/.env` keeps the two URLs only. A key value found in the
+    event stream or the note fails the run, and that key is revoked.
   * *The orchestrator* `scripts/research_recheck.py` is fixed code the
     maintainer runs. It stages the note, checks the agent's tool calls and
     the diff (only the one note; only the two header dates and one
     appended addendum), and holds the publish token — a fine-grained token
     for this repository only, `contents: write` and `pull_requests:
-    write`, in a file the service user cannot read. It pushes one branch
-    and opens one pull request. It never merges, approves, force-pushes,
-    pushes `main`, touches `refs/dolt/data` or calls the tracker; its
-    tests hold that.
+    write` — and the agent's two keys, each in a file the service user
+    cannot read. It pushes one branch and opens one pull request. It never
+    merges, approves, force-pushes, pushes `main`, touches `refs/dolt/data`
+    or calls the tracker; its tests hold that.
   * *The maintainer* owns the token, the configuration and the install,
     reviews the addendum — the only check of its content — and merges, or
     asks an agent to (ADR 0008).
@@ -162,6 +180,18 @@ holds nothing that can write the repository.
   a foreign endpoint (`model-endpoints.yaml`, stage-2 section;
   `docs/WORKFLOW.md` section 4). The maintainer chose this on 2026-10-05
   against the recommendation to wait for pull request #60 (decisions Q5).
+* **Residual risk of the keys.** Until the orchestrator lands (slice 4 of
+  the change), the profile keeps both keys in `$HERMES_HOME/.env`, and only
+  Hermes's own guard stands between a fetched page and them. No job runs
+  before the spike and the install (slice 7) anyway, and the weekly job is
+  loaded only after every agent slice is merged (Activation, below); until
+  then the exposure is limited to runs by hand at the laptop. After slice
+  4, the keys still sit in the environment of the agent's process for the
+  length of a run: the agent has no tool that starts a process, a Hermes
+  defect that copies its environment into a tool result is not ruled out,
+  and the orchestrator's scan finds a key in the stream or the note only
+  after the run — after it may have left. The remedy in both states is to
+  revoke the key.
 * **M3.** The re-check is not an M3 run, and it starts before M3 with
   stand-ins for M3's proofs at its size: *budgets* — one run a week, 60
   tool iterations, 45 minutes, no second start after the model was
@@ -177,10 +207,10 @@ holds nothing that can write the repository.
   ADR 0010 admits the research re-check". Unattended change runs still
   wait for M3.
 * **Activation.** The weekly job is loaded only when the change's agent
-  slices are merged, every entry of "Spike results" in
-  `tools/hermes/README.md` is green — adhd-relief's spike S-2 to S-6, §7
-  and S-7, and the Coding Harness part — and `python3
-  scripts/research_recheck.py check-ruleset` exits 0.
+  slices are merged (the orchestrator with the key barrier among them),
+  every entry of "Spike results" in `tools/hermes/README.md` is green —
+  adhd-relief's spike S-2 to S-6, §7 and S-7, and the Coding Harness
+  part — and `python3 scripts/research_recheck.py check-ruleset` exits 0.
 * **Scope.** This ADR admits one job. A second recurring job needs an ADR
   of its own.
 * **Revisit.** The decision is looked at again when any one of these
@@ -190,7 +220,9 @@ holds nothing that can write the repository.
   3. the vendor blocks or throttles the account for automated use;
   4. M3 is reached, so the stand-ins can be replaced by M3's proofs;
   5. pull request #60 merges — then the departure from the leak check is
-     put to the maintainer again.
+     put to the maintainer again;
+  6. a key value appears in a run's event stream or note — the barrier
+     failed.
 
 ## Architecture delta
 
@@ -211,6 +243,7 @@ flowchart LR
     subgraph laptop["The maintainer's MacBook"]
         orch["Container: orchestrator scripts/research_recheck.py, weekly LaunchAgent"]
         token["Component: publish token file, mode 600"]
+        keys["Component: key file of the agent's two keys, mode 600"]
         clone["Container: the orchestrator's own clone of coding-harness"]
         prompt["Component: prompts/research-recheck.md"]
         list["Component: scripts/check_research_currency.py"]
@@ -224,11 +257,12 @@ flowchart LR
     maint -- "reviews and merges" --> gh
     gh -- "runs on each pull request" --> ci
     orch -- "reads" --> token
+    orch -- "reads" --> keys
     orch -- "base, list, commit" --> clone
     clone --- prompt
     clone --- list
     orch -- "stages job, query and note, reads the note back" --> rundir
-    orch -- "sudo -u _chhermes" --> wrapper
+    orch -- "sudo -u _chhermes, the two keys on standard input" --> wrapper
     wrapper -- "starts, returns the event stream" --> agent
     agent -- "appends the addendum in work/" --> rundir
     agent -- "runs from" --> install
@@ -244,6 +278,8 @@ flowchart LR
 
 * Container: the orchestrator `scripts/research_recheck.py`, run weekly by
   the maintainer's LaunchAgent, with its own clone and the publish token.
+* Component: the key file of the agent's two keys in the maintainer's
+  home, handed to the wrapper on its standard input once per run.
 * Container: Coding Harness's Hermes agent as service user `_chhermes`,
   one-shot, configured by `tools/hermes/`.
 * Component: the wrapper `recheck-agent` and the sudo rule that lets the
@@ -273,9 +309,15 @@ flowchart LR
 ## Consequences
 
 * **The maintainer owes** one afternoon at the laptop for the spike and
-  the install, a token renewal every 366 days, and a re-run of S-2, S-4
-  and the Coding Harness part after every change of the shared Hermes
-  tag. The ruleset is already set (2026-10-05).
+  the install, the key file with the agent's two keys, a token renewal
+  every 366 days, and a re-run of S-2, S-4 and the Coding Harness part
+  after every change of the shared Hermes tag. The ruleset is already set
+  (2026-10-05).
+* **The agent's keys are out of its reach, not out of its process.** A
+  fetched page can no longer steer the agent's file tools to its keys; the
+  keys still sit in the agent's process environment for one run, and a
+  leak found afterwards costs a revocation. The orchestrator carries one
+  more file and one more check, and the wrapper reads its standard input.
 * **Every merge into `main` waits for a green `verify`,** for agents and
   the maintainer alike. A red or hanging CI blocks every merge until it
   is fixed or the owner switches the ruleset off.
@@ -310,8 +352,15 @@ flowchart LR
   `tests/test_research_recheck.py` and `tests/test_hermes_profile.py` pass
   in `make verify`, holding their contracts
   (`plans/changes/hermes-runner/spec.md`).
+* The orchestrator's and the profile's tests hold the key barrier: the
+  keys reach the agent only on the wrapper's standard input, and no
+  argument, no file the service user can read and no file of the run
+  holds a key value (`plans/changes/hermes-runner/spec.md`, criteria
+  60–70).
 * Before the weekly job is loaded: every entry in "Spike results" is
-  green, and `check-ruleset` exits 0.
+  green — among them CH-4, which shows that the service user cannot read
+  the key file and that `$HERMES_HOME/.env` names no key — and
+  `check-ruleset` exits 0.
 * After the first three published runs, the maintainer reads their records
   (checked items, tokens, wall time) and keeps or changes the caps and the
   schedule.
