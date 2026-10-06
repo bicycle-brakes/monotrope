@@ -94,6 +94,10 @@ OHNE_AUFRUFER: dict[str, str] = {
         "Omnigent's own Python the offline policy tests); tools/omnigent/install.sh calls it on the "
         "maintainer's machine, which no CI step can do"
     ),
+    "touch_map.py": (
+        "Entry point, not a gate — an agent runs it before a pull request and pastes its output "
+        "(prompts/07-commit.md); tests/test_touch_map.py runs it"
+    ),
     "verify_all.sh": (
         "Der lokale Lauf fuer Menschen — make verify ruft ihn. Die CI faehrt "
         "jedes Gate als eigenen Schritt; der Runner haelt selbst keine "

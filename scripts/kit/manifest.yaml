@@ -85,6 +85,9 @@ rules:
   - prefix: scripts/check_research_currency.py
     rolle: mechanismus
     reason: "the list behind the gate research-currency — the gate file travels, so its script does; without docs/research/ it says not measured (bead coding-harness-pu9)"
+  - prefix: scripts/touch_map.py
+    rolle: mechanismus
+    reason: "the pull request templates name it, and they travel (bead coding-harness-5p0)"
   - prefix: scripts/check_adr_answers.py
     rolle: mechanismus
     reason: "the check behind the gate adr-answers — the gate file travels, so its script does"
@@ -144,6 +147,9 @@ rules:
   - prefix: tests/test_research_currency.py
     rolle: mechanismus
     reason: "builds its own trees and reads no note of this repository; holds in the probe copy (bead coding-harness-pu9)"
+  - prefix: tests/test_touch_map.py
+    rolle: mechanismus
+    reason: "builds its own repositories; holds in the probe copy (bead coding-harness-5p0)"
   - prefix: tests/test_pr_templates.py
     rolle: mechanismus
     reason: "reads only the two templates, which travel"
