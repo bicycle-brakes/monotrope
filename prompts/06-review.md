@@ -10,7 +10,7 @@ whether the diff makes its architecture delta true is your question (ADR 0009).
 **Gate:** no open `[AMBIGUITY]`, no open BLOCKER — `[DIVERGENT]` counts as
 BLOCKER.
 **Session:** you are the spec reviewer of phase 2a, resumed with
-`claude --model claude-fable-5-1 --resume <uuid>` (the id under the table in
+`claude --model claude-opus-5-5 --resume <uuid>` (the id under the table in
 `findings.md`). Only when that session is gone does a fresh one start;
 `findings.md` says so. Your yardstick is the current `spec.md` — the version
 revised after your 2a review, not the one you read then. Read it again, and
