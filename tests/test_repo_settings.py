@@ -40,8 +40,11 @@ asks for the second approval again and this file asks for it with the rule.
 from __future__ import annotations
 
 import copy
+import functools
 import json
 import os
+import re
+import shlex
 import subprocess
 import sys
 import urllib.parse
@@ -726,12 +729,89 @@ def _the_ruleset_gate() -> dict[str, Any]:
     return found[0]
 
 
+LIVE_TEST = "tests/test_repo_settings.py::test_master_has_a_ruleset_with_required_checks"
+
+# Run in a pytest of its own with the gate's arguments: which tests would run,
+# after every `-k`, `-m`, `--deselect` and `--ignore` of the command, and
+# whether the run is only a collection. Written as a plugin so the answer does
+# not depend on how verbose the arguments make pytest's own listing.
+_WHAT_WOULD_RUN = """
+import json, sys
+import pytest
+
+class Plugin:
+    ids, dry = [], False
+    def pytest_runtestloop(self, session):
+        option = session.config.option
+        self.ids = [item.nodeid for item in session.items]
+        self.dry = bool(option.collectonly or option.setuponly or option.setupplan)
+        return True
+
+plugin = Plugin()
+pytest.main(sys.argv[1:], plugins=[plugin])
+print("WOULD-RUN " + json.dumps({"ids": plugin.ids, "dry": plugin.dry}))
+"""
+
+
+@functools.cache
+def _what_would_run(arguments: tuple[str, ...], env: tuple[tuple[str, str], ...]) -> dict[str, Any] | str:
+    """The tests a pytest with these arguments and variables would run, or why it would not start."""
+    done = subprocess.run(
+        [sys.executable, "-c", _WHAT_WOULD_RUN, "-q", "-p", "no:cacheprovider", *arguments],
+        cwd=REPO_ROOT,
+        env={**os.environ, **dict(env)},
+        capture_output=True,
+        text=True,
+        timeout=120,
+    )
+    lines = [line for line in done.stdout.splitlines() if line.startswith("WOULD-RUN ")]
+    if not lines:
+        return " ".join((done.stdout + done.stderr).split())[-300:] or "no output"
+    return json.loads(lines[-1].removeprefix("WOULD-RUN "))
+
+
+def _command_findings(command: str) -> list[str]:
+    """Does this gate command actually run the live test?
+
+    Not "does it start with the right words": a suffix such as `-k "not master"`,
+    a `--deselect`, a `--collect-only`, another file or a swallowed exit code
+    switches the live check off with every other test green (F-5). The command
+    must be `NAME=value … python3 -m pytest …` with nothing around it, set
+    `RULESET_ASSERT=1`, and a pytest started with its arguments and variables
+    must select the live test and run it.
+    """
+    lexer = shlex.shlex(command, posix=True, punctuation_chars=True)
+    lexer.whitespace_split = True
+    try:
+        tokens = list(lexer)
+    except ValueError as error:
+        return [f"command cannot be read: {error}"]
+    env: dict[str, str] = {}
+    while tokens and re.fullmatch(r"[A-Za-z_][A-Za-z0-9_]*=.*", tokens[0]):
+        name, _, value = tokens.pop(0).partition("=")
+        env[name] = value
+    findings: list[str] = []
+    if env.get(LIVE_ENV) != "1":
+        findings.append(f"command must set {LIVE_ENV}=1 in front of pytest")
+    if tokens[:3] != ["python3", "-m", "pytest"]:
+        findings.append("command must run `python3 -m pytest …` and nothing else")
+    if any(set(t) <= set("();<>|&") or "`" in t or t.startswith("$(") for t in tokens):
+        findings.append("command must not chain, redirect or substitute: an exit code could be swallowed")
+    if findings:
+        return findings
+    would = _what_would_run(tuple(tokens[3:]), tuple(sorted(env.items())))
+    if isinstance(would, str):
+        return [f"pytest does not start with the command's arguments: {would}"]
+    if would["dry"]:
+        findings.append("command only collects or sets up; it runs no test")
+    if LIVE_TEST not in would["ids"]:
+        findings.append(f"command does not run `{LIVE_TEST}`")
+    return findings
+
+
 def _gate_findings(gate: dict[str, Any]) -> list[str]:
     """What is wrong with how a gate turns the live check on."""
-    findings: list[str] = []
-    prefix = f"{LIVE_ENV}=1 python3 -m pytest tests/test_repo_settings.py"
-    if not str(gate.get("command", "")).startswith(prefix):
-        findings.append(f"command must start with `{prefix}`")
+    findings = _command_findings(str(gate.get("command", "")))
     for key, want in (("job", "verify"), ("enforcement", "block"), ("placement", "writer"), ("floor", False)):
         if gate.get(key) != want:
             findings.append(f"{key} must be {want!r}, is {gate.get(key)!r}")
@@ -748,6 +828,51 @@ def test_the_ruleset_gate_turns_the_live_check_on() -> None:
     [
         pytest.param("command", "RULESET_CHECK=1 python3 -m pytest tests/test_repo_settings.py -q", id="variable"),
         pytest.param("command", "python3 -m pytest tests/test_repo_settings.py -q", id="no-variable"),
+        pytest.param(
+            "command", f"{LIVE_ENV}=0 python3 -m pytest tests/test_repo_settings.py -q -rs", id="variable-off"
+        ),
+        pytest.param(
+            "command",
+            f'{LIVE_ENV}=1 python3 -m pytest tests/test_repo_settings.py -q -rs -k "not master"',
+            id="k-suffix",
+        ),
+        pytest.param(
+            "command",
+            f"{LIVE_ENV}=1 python3 -m pytest tests/test_repo_settings.py -q -rs --deselect {LIVE_TEST}",
+            id="deselect",
+        ),
+        pytest.param(
+            "command",
+            f"{LIVE_ENV}=1 python3 -m pytest tests/test_repo_settings.py -q -rs --deselect tests/test_repo_settings.py",
+            id="deselect-the-file",
+        ),
+        pytest.param(
+            "command",
+            f'{LIVE_ENV}=1 python3 -m pytest tests/test_repo_settings.py -q -rs -m "no_such_marker"',
+            id="marker",
+        ),
+        pytest.param(
+            "command",
+            f"{LIVE_ENV}=1 python3 -m pytest tests/test_repo_settings.py -q -rs --collect-only",
+            id="collect-only",
+        ),
+        pytest.param("command", f"{LIVE_ENV}=1 python3 -m pytest tests/test_ci.py -q -rs", id="another-file"),
+        pytest.param(
+            "command",
+            f"{LIVE_ENV}=1 python3 -m pytest tests/test_repo_settings.py::test_todays_ruleset_holds -q -rs",
+            id="another-test",
+        ),
+        pytest.param(
+            "command", f"{LIVE_ENV}=1 python3 -m pytest tests/test_repo_settings.py -q -rs || true", id="swallowed-exit"
+        ),
+        pytest.param(
+            "command",
+            f"""PYTEST_ADDOPTS='-k "not master"' {LIVE_ENV}=1 python3 -m pytest tests/test_repo_settings.py -q -rs""",
+            id="addopts-in-front",
+        ),
+        pytest.param(
+            "command", f"{LIVE_ENV}=1 python -m pytest tests/test_repo_settings.py -q -rs", id="another-interpreter"
+        ),
         pytest.param("placement", "both", id="placement"),
         pytest.param("enforcement", "report", id="enforcement"),
         pytest.param("job", "drift", id="job"),
@@ -758,3 +883,17 @@ def test_the_ruleset_gate_check_goes_red_when_the_gate_drifts(key: str, value: A
     gate = copy.deepcopy(_the_ruleset_gate())
     gate[key] = value
     assert _gate_findings(gate)
+
+
+@pytest.mark.parametrize(
+    "command",
+    [
+        pytest.param(f"{LIVE_ENV}=1 python3 -m pytest tests/test_repo_settings.py -q -rs", id="the-gate-as-it-is"),
+        pytest.param(f"{LIVE_ENV}=1 python3 -m pytest {LIVE_TEST} -q", id="the-live-test-alone"),
+        pytest.param(f"{LIVE_ENV}=1 python3 -m pytest tests/test_repo_settings.py -q -k master", id="selected-by-name"),
+        pytest.param(f"{LIVE_ENV}=1 python3 -m pytest tests -q -x", id="the-whole-suite"),
+    ],
+)
+def test_the_gate_command_may_run_the_live_test_in_other_ways(command: str) -> None:
+    """The tie asks whether the live test runs, not whether the words are the usual ones."""
+    assert _command_findings(command) == []
