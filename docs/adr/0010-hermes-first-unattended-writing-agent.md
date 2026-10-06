@@ -136,8 +136,13 @@ holds nothing that can write the repository.
     them to the wrapper on its standard input, once per run; the wrapper
     puts them only into Hermes's process environment, never into an
     argument or a file, and closes standard input before Hermes starts.
-    `$HERMES_HOME/.env` keeps the two URLs only. A key value found in the
-    event stream or the note fails the run, and that key is revoked.
+    `$HERMES_HOME/.env` keeps the two URLs only. This is what the
+    maintainer decided; he did not accept the risk of leaving the keys in
+    `.env` behind Hermes's own guard. The design adds, beside the barrier
+    and not as part of his answer, a scan and a duty (spec criterion 62):
+    a key value written out plainly in the event stream or the note fails
+    the run, and the maintainer revokes that key. A key sent encoded,
+    reversed or split over two calls is not found.
   * *The orchestrator* `scripts/research_recheck.py` is fixed code the
     maintainer runs. It stages the note, checks the agent's tool calls and
     the diff (only the one note; only the two header dates and one
@@ -182,16 +187,18 @@ holds nothing that can write the repository.
   against the recommendation to wait for pull request #60 (decisions Q5).
 * **Residual risk of the keys.** Until the orchestrator lands (slice 4 of
   the change), the profile keeps both keys in `$HERMES_HOME/.env`, and only
-  Hermes's own guard stands between a fetched page and them. No job runs
-  before the spike and the install (slice 7) anyway, and the weekly job is
-  loaded only after every agent slice is merged (Activation, below); until
-  then the exposure is limited to runs by hand at the laptop. After slice
-  4, the keys still sit in the environment of the agent's process for the
-  length of a run: the agent has no tool that starts a process, a Hermes
-  defect that copies its environment into a tool result is not ruled out,
-  and the orchestrator's scan finds a key in the stream or the note only
-  after the run — after it may have left. The remedy in both states is to
-  revoke the key.
+  Hermes's own guard stands between a fetched page and them. The spike and
+  the install (slice 7) wait for slice 4, so the plan installs no profile
+  that keeps its keys in `.env`, and the weekly job is loaded only after
+  every agent slice is merged (Activation, below); until slice 4 lands,
+  what remains is an install made by hand against the runbook's warning.
+  After slice 4, the keys still sit in the environment of the agent's
+  process for the length of a run: the agent has no tool that starts a
+  process, a Hermes defect that copies its environment into a tool result
+  is not ruled out, and the orchestrator's scan finds a key written out
+  plainly in the stream or the note, and only after the run — after it may
+  have left; a key sent encoded, reversed or split over two calls passes
+  it. The remedy in both states, for a key that is found, is to revoke it.
 * **M3.** The re-check is not an M3 run, and it starts before M3 with
   stand-ins for M3's proofs at its size: *budgets* — one run a week, 60
   tool iterations, 45 minutes, no second start after the model was
@@ -211,6 +218,8 @@ holds nothing that can write the repository.
   every entry of "Spike results" in `tools/hermes/README.md` is green —
   adhd-relief's spike S-2 to S-6, §7 and S-7, and the Coding Harness
   part — and `python3 scripts/research_recheck.py check-ruleset` exits 0.
+  The spike and the install begin only after the orchestrator with the key
+  barrier is merged.
 * **Scope.** This ADR admits one job. A second recurring job needs an ADR
   of its own.
 * **Revisit.** The decision is looked at again when any one of these
@@ -221,8 +230,8 @@ holds nothing that can write the repository.
   4. M3 is reached, so the stand-ins can be replaced by M3's proofs;
   5. pull request #60 merges — then the departure from the leak check is
      put to the maintainer again;
-  6. a key value appears in a run's event stream or note — the barrier
-     failed.
+  6. the scan finds a key value in a run's event stream or note — the
+     barrier failed, and that key is revoked.
 
 ## Architecture delta
 
@@ -315,9 +324,10 @@ flowchart LR
   (2026-10-05).
 * **The agent's keys are out of its reach, not out of its process.** A
   fetched page can no longer steer the agent's file tools to its keys; the
-  keys still sit in the agent's process environment for one run, and a
-  leak found afterwards costs a revocation. The orchestrator carries one
-  more file and one more check, and the wrapper reads its standard input.
+  keys still sit in the agent's process environment for one run. A key the
+  scan finds written out plainly costs a revocation; one sent encoded or
+  split over two calls is not found. The orchestrator carries one more file
+  and one more check, and the wrapper reads its standard input.
 * **Every merge into `main` waits for a green `verify`,** for agents and
   the maintainer alike. A red or hanging CI blocks every merge until it
   is fixed or the owner switches the ruleset off.
@@ -353,14 +363,18 @@ flowchart LR
   in `make verify`, holding their contracts
   (`plans/changes/hermes-runner/spec.md`).
 * The orchestrator's and the profile's tests hold the key barrier: the
-  keys reach the agent only on the wrapper's standard input, and no
-  argument, no file the service user can read and no file of the run
-  holds a key value (`plans/changes/hermes-runner/spec.md`, criteria
-  60–70).
+  keys reach the agent only on the wrapper's standard input, `.env` names
+  no key, and no argument and no file the orchestrator or the install
+  writes holds a key value (`plans/changes/hermes-runner/spec.md`,
+  criteria 60–69). The files Hermes itself writes at run time — logs,
+  session files, its state database — are held by no repository test:
+  the sweep in CH-4 measures them at the laptop, and criterion 70 holds
+  that the runbook carries the sweep.
 * Before the weekly job is loaded: every entry in "Spike results" is
   green — among them CH-4, which shows that the service user cannot read
-  the key file and that `$HERMES_HOME/.env` names no key — and
-  `check-ruleset` exits 0.
+  the key file, that `$HERMES_HOME/.env` names no key, and that no file
+  under `$HERMES_HOME` holds a key value after a run asked to find and
+  send them — and `check-ruleset` exits 0.
 * After the first three published runs, the maintainer reads their records
   (checked items, tokens, wall time) and keeps or changes the caps and the
   schedule.
