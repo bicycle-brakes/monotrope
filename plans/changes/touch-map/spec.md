@@ -378,3 +378,18 @@ their wording; each amendment says what it adds.
    reported as still naming the removed path. In `still named by`, an import
    of the removed file's stem counts only when that stem resolves to no
    tracked `.py` file at head; a path held in text still counts as before.
+4. **2026-10-06, "Prose only" is said only of prose (criterion 7).** The
+   phase-6 review (`findings.md`, F-4) measured that criterion 7, "when no
+   changed file is a box, the output is exactly the one line", printed
+   `Prose only: no code, runner or test changed.` for a change of
+   `pyproject.toml` and `.gitignore`, or of a single `decisions/answers/…/adr.yaml`,
+   and named none of them — a false statement of the kind the maintainer's
+   rule of 2026-10-06 has repaired without asking (minor rows on tests,
+   security or false statements). Criterion 7 now reads: when no changed file
+   is a box **and every changed file is prose** (criterion 8: Markdown, or
+   under `docs/` or `plans/`), the output is exactly the one line. When no
+   changed file is a box and a changed file is neither prose nor a box, the
+   output is the line naming the head and the merge base, then the line
+   naming the files that are neither boxes nor prose and, if any prose
+   changed, the prose line (criterion 8); no size line and no map. A change
+   with no changed file at all prints the one line, as before.

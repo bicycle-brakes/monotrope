@@ -36,8 +36,9 @@ The rules, in short:
     changed test links to); the unchanged tests of a changed box fold into one box.
     A link is drawn only between two boxes when at least one of them is changed.
   * A removed file's links are read at the merge base.
-  * Without a changed box the output is one line. With SPLIT_FROM boxes it advises a
-    split, above MAP_MAX boxes it draws no map, and without a link it draws none.
+  * Without a changed box the output is one line when every changed file is prose, and the
+    files that are neither boxes nor prose, named, when some are not. With SPLIT_FROM boxes
+    it advises a split, above MAP_MAX boxes it draws no map, and without a link it draws none.
 
 The constants below are the one place an instance changes these rules.
 
@@ -587,8 +588,12 @@ def render_lists(touch: Touch) -> list[str]:
 
 
 def render(touch: Touch) -> str:
-    """The whole section, ending in a newline."""
-    if not touch.boxes:
+    """The whole section, ending in a newline.
+
+    Without a box the section is one line when every changed file is prose; a changed file
+    that is neither prose nor a box is named, so "Prose only" is never said of it.
+    """
+    if not touch.boxes and not touch.not_linked:
         return PROSE_ONLY + "\n"
     lines = [f"Touched at `{touch.head}`, against the merge base `{touch.base}`:", ""]
     lines += render_list(touch)

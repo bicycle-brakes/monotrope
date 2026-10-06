@@ -523,7 +523,7 @@ def test_a_moved_module_is_not_still_named(tmp_path: Path) -> None:
 def test_prose_only_is_one_line(tmp_path: Path) -> None:
     """Criterion 7: no changed box means exactly one line, and a tested Markdown file is a box."""
     base = {"data/x.json": "{}\n"}
-    prose = {"docs/a.md": "a\n", "plans/b.md": "b\n", "README.md": "c\n", "data/x.json": "[]\n", "docs/new.txt": "d\n"}
+    prose = {"docs/a.md": "a\n", "plans/b.md": "b\n", "README.md": "c\n", "docs/new.txt": "d\n"}
     assert _run(_fixture(tmp_path, base, prose)) == "Prose only: no code, runner or test changed.\n"
     other = tmp_path / "second"
     other.mkdir()
@@ -532,6 +532,24 @@ def test_prose_only_is_one_line(tmp_path: Path) -> None:
     third.mkdir()
     out = _run(_fixture(third, {"tests/test_n.py": 'N = "docs/a.md"\n'}, {"docs/a.md": "a\n"}))
     assert _paths(out) == ["docs/a.md"]
+
+
+def test_prose_only_is_said_only_of_prose(tmp_path: Path) -> None:
+    """Criteria 7 (amended), 8: a changed file that is neither prose nor a box is named, and the one line is not printed."""
+    base = {"data/x.json": "{}\n"}
+    feat = {"pyproject.toml": "a = 1\n", ".gitignore": "x\n", "docs/a.md": "a\n", "data/x.json": "[]\n"}
+    out = _run(_fixture(tmp_path, base, feat))
+    lines = out.splitlines()
+    assert lines[0].startswith("Touched at `") and lines[0].endswith(":")
+    assert "- Not linked: `.gitignore`, `data/x.json`, `pyproject.toml`" in lines
+    assert "- Prose, not drawn: 1 file" in lines
+    assert "Prose only" not in out and "<details>" not in out and not _boxes(out)
+    # An ADR answer alone, the case of the row: a data file, no box, named.
+    other = tmp_path / "adr"
+    other.mkdir()
+    out = _run(_fixture(other, {"README.md": "x\n"}, {"decisions/answers/c/adr.yaml": "answer: no\n"}))
+    assert "- Not linked: `decisions/answers/c/adr.yaml`" in out.splitlines() and "Prose only" not in out
+    assert "Prose, not drawn" not in out, "no prose changed, so no prose line"
 
 
 # ---------------------------------------------------------------------------
