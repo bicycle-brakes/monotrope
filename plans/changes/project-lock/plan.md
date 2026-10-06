@@ -452,7 +452,7 @@ covers F-1, F-2, F-3, F-4 and F-6. F-5 (the demand the travelling CI makes on a
 kit instance) is not repaired: its status reads "accepted limit — follow-up
 bead coding-harness-dj9", the release builder. Each row is set to "fixed in
 `<commit>`, not reviewed"; the reviewer closes them. No code of the change
-moved: four test files and one sentence changed, the generator, `ci.yml` and
+moved: two test files and one sentence changed, the generator, `ci.yml` and
 the lock are as they were.
 
 | Row | Commit | What changed |
@@ -508,6 +508,26 @@ Measured on `50cc050` (2026-10-06): `make verify` green, with
 2 skipped. Tested under Python 3.12 (the worktree's `.venv`); the 3.11 run
 is the push suite's leg, not read here.
 
+## Repair round 2
+
+Rows F-7 (MINOR, origin `base`) and F-8 (MINOR, origin `fix-r1`) from review
+round 2, repaired by the orchestrating session under the maintainer's rule of
+2026-10-06 (MINOR rows on tests and false statements are repaired without
+asking).
+
+- **F-7:** `tests/test_ci.py::test_no_blocking_gate_step_carries_continue_on_error`
+  checks every step whose id is a `block` gate, in every job, and fails on an
+  empty match.
+- **F-8:** "four test files" in "Repair round 1" now reads "two test files"
+  (`git diff --name-only 1cb043f..1dfdb99 -- tests/`).
+
+Planted faults, each on the repaired tree and reverted:
+
+| # | Fault | Before the repair | After |
+|---|---|---|---|
+| 61 | `continue-on-error: true` added by hand to the `pytest` step in `ci.yml` | green (review round 2) | RED, the new test |
+| 62 | `_schritt` writes the key for every gate, `ci.yml` regenerated (`--generate-ci`) | the suite green (review round 2) | RED, the new test alone (1 failed, 48 passed) |
+
 ## Time used
 
 Appetite: 5 h of phase 4, one repair round included. Read from `date`; the
@@ -519,3 +539,4 @@ repair round was not used (the 3.11 repair is step 6).
   by the orchestrating session), no break. `date` read at the start (16:28), at
   each step boundary (16:29, 16:32, 16:33, 16:35, 16:36, 16:38) and before each
   commit; the stop was not reached.
+- Repair round 2, 2026-10-06, about 10 min, by the orchestrating session; no appetite set beyond the round's two rows.

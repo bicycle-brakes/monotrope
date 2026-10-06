@@ -641,6 +641,26 @@ def test_the_summary_check_passes_only_when_every_leg_passed() -> None:
         )
 
 
+def test_no_blocking_gate_step_carries_continue_on_error() -> None:
+    """A blocking gate's step must turn its leg red when it fails.
+
+    `continue-on-error` belongs to `advisory` and `report` gates only; on a
+    `block` gate's step it would let the leg, and so the check `verify`, pass
+    over a failing gate. Every `block` gate that runs in CI is checked, so an
+    empty match is a failure, not a pass (finding F-7 of project-lock).
+    """
+    blocking = {g["id"] for g in gates() if g["enforcement"] == "block"}
+    checked = []
+    for job_id, job in _ci_doc()["jobs"].items():
+        for step in job.get("steps", []):
+            if step.get("id") in blocking:
+                checked.append(step["id"])
+                assert "continue-on-error" not in step, (
+                    f"{job_id}: the blocking gate {step['id']} carries continue-on-error"
+                )
+    assert checked, "no blocking gate step found in ci.yml: the check would pass on nothing"
+
+
 def test_the_drift_job_runs_once_on_the_last_interpreter(monkeypatch: pytest.MonkeyPatch) -> None:
     def drift_version(doc: dict) -> str:
         drift = doc["jobs"]["drift"]
