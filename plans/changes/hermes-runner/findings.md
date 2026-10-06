@@ -2,7 +2,7 @@
 title: "Findings — hermes-runner"
 category: findings
 created: 2026-10-05
-updated: 2026-10-06
+updated: 2026-10-07
 status: draft
 implementation_status: partial
 date: 2026-10-05
@@ -84,10 +84,11 @@ F-9 are for slice 4's phase 2a; the rest are one or two sentences each.
 | F-36 | MINOR | MAINT | fix-r1 | ADR 0010 on branch `decide/adr-0010-hermes` at `6503874`, "The key barrier" (lines 133–140) and Revisit 6 (lines 224–225); PR #77 body, "What your merge confirms", bullet "Key barrier (your answer of 2026-10-06)"; `decisions.md`, addendum of 2026-10-06 (lines 274–291) | Two sentences are attributed to the maintainer's answer, but the answer as recorded does not contain them. The recorded decision: the keys reach the wrapper on its standard input from a key file `_chhermes` cannot read, `.env` keeps the URLs only, and the risk is not accepted (`decisions.md`, items 1 and 3). The ADR's paragraph headed "(the maintainer, 2026-10-06)" ends "A key value found in the event stream or the note fails the run, and that key is revoked". The PR body's bullet "your answer of 2026-10-06" ends "A key found in a run's output fails the run, and you revoke that key". The scan is spec criterion 62, a detection layer the amendment added (spec `[DETAIL]`, "behind the barrier, not instead of it", line 698). The revocation is a duty for the maintainer, which merging #77 makes binding. Both are sound, and the maintainer sees both before the merge; only the attribution is wrong. Smaller: `decisions.md` says the answer "is recorded as the maintainer gave it" but quotes neither the maintainer's words nor the chosen option. The earlier addenda do one or the other (lines 228–229 and 259). A later reader therefore cannot tell whether item 2 (amend before the merge of #77) was the maintainer's words or the agent's plan; the session was not read. What should hold: the ADR and the PR body name the scan and the revocation as the design's addition beside the barrier, not inside "(the maintainer)", and `decisions.md` records the chosen option or the maintainer's words. [ADR 0010, Decision; house rule 8] | fixed in `5fee323` (ADR 0010, "The key barrier" and Revisit 6; the body of pull request #77, updated on 2026-10-06) and `2d255fa` (`decisions.md`) — reviewed at `98c51cf` and `cfa0659`, closed: `decisions.md` names the chosen option, "Echte Sperre in Abschnitt 4 (Empfohlen)", and maps items 1–3 to it; ADR 0010 and the #77 body name the scan and the revocation as the design's addition, outside the maintainer's answer, and agree with `decisions.md`. A nit, not a row: the ADR's paragraph headed "(the maintainer, 2026-10-06)" also carries design detail the quoted option does not name (mode 600, never an argument, standard input closed); it implements the barrier and adds no duty |
 | F-37 | MINOR | MAINT | fix-r1 | ADR 0010 on branch `decide/adr-0010-hermes`, Consequences (lines 316–320) and "Residual risk of the keys" (lines 183–194); PR #77 body, "Residual risk of the keys"; `spec.md`, "Risks accepted" (line 566) and criterion 62 | The residual-risk texts say that a leak is found after the run, but the scan finds only a key written out plainly. Criterion 62 looks for the two values. A key sent base64-encoded, reversed or split over two `web_extract` calls passes it, and no revocation is prompted. The ADR's "a leak found afterwards costs a revocation" and the PR body's "a leak is found after the run, not prevented" read as if every leak is found. F-27 names the same limit for CH-4's count. After slice 4 the agent has no known way to reach its keys, so this is the backstop's limit, not a new hole. What should hold: the residual-risk lines say the scan finds a key written plainly in the stream or the note. [criterion 62; ADR 0010, Consequences] | fixed in `3583d00` (spec "Risks accepted", the design's ADR draft) and `5fee323` (ADR 0010, Consequences and "Residual risk of the keys"; the body of pull request #77) — reviewed at `98c51cf` and `cfa0659`, closed: the spec, the design's ADR draft, ADR 0010 (the key barrier, residual risk, Consequences, Revisit 6) and the #77 body say that the scan finds a key written out plainly. Its sibling about CH-4's sweep, in the ADR's Validation: F-42 |
 | F-38 | MINOR | MAINT | fix-r1 | `findings.md`, F-26's Status; `tools/hermes/README.md`, section 4 (line 71) | F-26 is marked resolved while its runbook half waits for slice 4, and this branch merges first. F-26 asked the runbook to stop calling the risk "accepted" until a decision document carries it. The maintainer then chose not to accept the risk (`decisions.md`, item 3). The runbook on this branch still heads its paragraph "**Risk, accepted: the agent holds its own two keys.**", and the plan moves the change to slice 4, which follows this branch's merge (spec, "Slices"). Between the two merges, `main` carries a runbook that states an acceptance the maintainer declined, and that is the runbook read at the laptop if the spike comes first (F-31). F-26's status does say that the word goes with slice 4. What should hold: the heading says the risk stands until slice 4 (one line, within the 320-line budget), or F-26 stays open for its runbook half. [F-26; decisions, addendum of 2026-10-06] | fixed in `3583d00` — reviewed at `98c51cf`, closed: the heading reads "Risk, not accepted, stands until slice 4", the runbook has 316 lines of its 320, and the planted fault "56 the risk is not named" goes red. The runbook's paragraph is headed "Risk, not accepted, stands until slice 4" and says the install waits for slice 4; its test needle and planted fault follow |
-| F-39 | MINOR | SPEC | fix-r2 | `tools/hermes/README.md`, CH-4, the count loop (lines 220–221); `plan.md`, "Amendment 2026-10-06: the key barrier", the runbook bullet (CH-4's count and sweep); `spec.md`, criterion 70 | CH-4's key tests go green when they measured nothing. Both now read their patterns from `$P`, and an empty pattern file meets every green condition: macOS's `/usr/bin/grep` (BSD 2.6.0-FreeBSD) prints 0 for `grep -cF -f <empty file>` and exits 1 for `grep -rlF -f <empty file>` over a tree (measured 2026-10-06 on scratch files). The file is empty when `sed -n "s/^$k=//p"` matches no line of `.env` (a key line written `export K=…` or `K = …`), or, in slice 4's planned text, when `cut` cannot read the key file. The shape before the repair failed closed: `grep -cF -- ""` counts every line (measured, 2 of 2), so a missing value was red. The sweep's green condition, exit status 1, is also what `sudo` returns when it cannot authenticate (`man sudo`, "EXIT VALUE"), for example when a pasted line is taken as the password. Criterion 70's "Refuted by" names neither. Each case needs a slip at the laptop, and in slice 4 the run itself needs the key file, so the window is narrow; but a key test that is green on no input is the one place where that slip goes unseen. What should hold: before any `grep -f "$P"`, CH-4 checks that `$P` holds the expected non-empty lines (one per key in the count, two for the sweep) and is red otherwise; the sweep's green condition requires `sudo` to have run grep (for example `sudo -v` first, or exit 1 with nothing on standard error); and criterion 70 is refuted by "a count or sweep that is green on an empty pattern file". [criterion 70; F-30, F-32] | fixed in `fe4495b`, not reviewed (the runbook's CH-4 count runs in a subshell and is RED on a pattern file that is not exactly one non-empty line, on an empty or missing stream and on a `grep` status of 2 or more; criterion 70 and the plan's text of slice 4's sweep carry the same rules — two non-empty lines first, `grep`'s status kept apart from `sudo`'s by a shift of 10, green only on `grep`'s exit 1; the sweep's own code is built with slice 4) |
-| F-40 | MINOR | MAINT | fix-r2 | `tests/test_hermes_profile.py`, `check_agent_keys` (the CH-4 needles); F-32's Status; `spec.md`, criterion 70's "Refuted by" | The profile test holds less of F-32's fix than F-32's status says. `check_agent_keys` asks for `grep -cF -f "$P"` and refuses `grep … "$v` and `grep … "$(`; it reads neither `mktemp` nor `rm -f "$P"`. Replayed on copies at `98c51cf`, each alone: `P=$(mktemp)` replaced by `P=/tmp/ch4-patterns`, a file of mode 644 under macOS's default umask in a directory every user can enter, so the keys become readable by `_chhermes` — silent; `; rm -f "$P"` removed — silent; `grep -c -- $v` (unquoted) and `grep -c -- "${v}"` added — silent. Criterion 70 states the mode and the removal, but its "Refuted by" names only a key value on a command line, so slice 4's check need not hold them either. The runbook on this branch is right (read); only its guard is narrower than recorded. What should hold: the check asks for `P=$(mktemp)` and a closing `rm -f "$P"` in CH-4 and refuses a key variable in any command's arguments (`$v` or `${v}`, quoted or not); criterion 70's "Refuted by" names a pattern file not made by `mktemp` or not removed; F-32's status says what the check holds. [criterion 70; F-32] | fixed in `fe4495b`, not reviewed (`check_ch4_key_test` holds the `mktemp`, the removal on every exit path with the interrupt trap, the only variables and substitutions CH-4's key test may expand, the arguments `grep` may take and the guards; 13 planted faults, plan rows 105–117; criterion 70's "Refuted by" names them; F-32's status stands as written, the test now holds it) |
-| F-41 | MINOR | MAINT | fix-r1 | PR #77 body, "Evidence at cfa0659", the items "Key barrier" and "Sources"; ADR 0010 on branch `decide/adr-0010-hermes` at `cfa0659`, "Review" (lines 26–27) | The #77 body places spec criteria 60–70, the design and the key decision "at eacbcb5 (#76)", but pull request #76 does not contain them. `eacbcb5` is on `origin/feat/hermes-runner-2` only (`git branch -r --contains`); #76's commits end at `7beed6b` and the merge `f4d282c`, GitHub records no force push on it, and its `spec.md` has no criterion 60 to 70 (0 matches on `origin/feat/hermes-runner`). `feat/hermes-runner-2`, which carries slices 2 and 5 and every amendment, has no pull request. The pointer stood in the body from 08:39 UTC on 2026-10-06 (GitHub's edit history of the body), so it came with the amendment, not with this repair, and the phase-6 review of the amendments did not catch it. ADR 0010's "Review" line, "research, spec and design of the change sit beside it (pull request #76)", was true when written and no longer covers the criteria its Validation cites. Why it matters: the maintainer's answer (`decisions.md`, item 2) wants spec, design and ADR amended before #77 merges, and the body reads as if merging #76 brought the amendments to `main`; it does not. What should hold: the body names `feat/hermes-runner-2` (or its pull request, once opened) as the place of criteria 60–70, and the ADR's "Review" line names both branches. [house rule 8; decisions, addendum of 2026-10-06, item 2] | fixed 2026-10-06 in the body of pull request #77 (the sources line names `feat/hermes-runner-2` at `2060c37`, no pull request yet), not reviewed |
-| F-42 | MINOR | MAINT | fix-r2 | ADR 0010 on branch `decide/adr-0010-hermes` at `cfa0659`, Validation (lines 373–377); `plan.md`, the amendment's "Not read" (the sweep "only for a key written plainly") | The ADR's Validation says that CH-4 shows "that no file under `$HERMES_HOME` holds a key value after a run asked to find and send them". The sweep is `grep -rlF` for the two plain values; a value in a compressed log or base64-encoded in a session file is not found. The plan's "Not read" says "only for a key written plainly"; the ADR does not. It is the class F-37 repaired for the stream scan, brought back by the F-30 repair in the Validation. What should hold: "… holds a key value written out plainly …". [criterion 70; F-37] | fixed in `87358a5` on branch `decide/adr-0010-hermes` (ADR 0010, Validation: a key value written out plainly, and what the sweep does not show), not reviewed |
+| F-39 | MINOR | SPEC | fix-r2 | `tools/hermes/README.md`, CH-4, the count loop (lines 220–221); `plan.md`, "Amendment 2026-10-06: the key barrier", the runbook bullet (CH-4's count and sweep); `spec.md`, criterion 70 | CH-4's key tests go green when they measured nothing. Both now read their patterns from `$P`, and an empty pattern file meets every green condition: macOS's `/usr/bin/grep` (BSD 2.6.0-FreeBSD) prints 0 for `grep -cF -f <empty file>` and exits 1 for `grep -rlF -f <empty file>` over a tree (measured 2026-10-06 on scratch files). The file is empty when `sed -n "s/^$k=//p"` matches no line of `.env` (a key line written `export K=…` or `K = …`), or, in slice 4's planned text, when `cut` cannot read the key file. The shape before the repair failed closed: `grep -cF -- ""` counts every line (measured, 2 of 2), so a missing value was red. The sweep's green condition, exit status 1, is also what `sudo` returns when it cannot authenticate (`man sudo`, "EXIT VALUE"), for example when a pasted line is taken as the password. Criterion 70's "Refuted by" names neither. Each case needs a slip at the laptop, and in slice 4 the run itself needs the key file, so the window is narrow; but a key test that is green on no input is the one place where that slip goes unseen. What should hold: before any `grep -f "$P"`, CH-4 checks that `$P` holds the expected non-empty lines (one per key in the count, two for the sweep) and is red otherwise; the sweep's green condition requires `sudo` to have run grep (for example `sudo -v` first, or exit 1 with nothing on standard error); and criterion 70 is refuted by "a count or sweep that is green on an empty pattern file". [criterion 70; F-30, F-32] | fixed in `fe4495b` (the runbook's CH-4 count runs in a subshell and is RED on a pattern file that is not exactly one non-empty line, on an empty or missing stream and on a `grep` status of 2 or more; criterion 70 and the plan's text of slice 4's sweep carry the same rules — two non-empty lines first, `grep`'s status kept apart from `sudo`'s by a shift of 10, green only on `grep`'s exit 1; the sweep's own code is built with slice 4) — reviewed at `26de4ba` on 2026-10-07, closed: measured on scratch files with dummy values in zsh, bash and `/bin/sh`, the count is RED on an `export` or spaced key line, an empty value, a key line given twice, a missing `.env`, a missing, empty or unreadable stream, and prints 0 or 1 on one plain value; the pattern file has mode `-rw-------` and is removed after a normal end, an interrupt of the process group, a TERM and a HUP. The plan's sweep, with stand-ins for `sudo`, gives 11 only when `grep` ran and found nothing: a match 10, an unreadable file or a missing `$HH` 12, a failed `sudo` 1. An empty pattern file still gives 11, so the two-line guard the plan puts before the sweep is what makes it fail closed; slice 4 builds both. A pattern that is one non-empty line but not the key (quoted, an inline comment, a CRLF line end) still prints 0: that is F-27, open |
+| F-40 | MINOR | MAINT | fix-r2 | `tests/test_hermes_profile.py`, `check_agent_keys` (the CH-4 needles); F-32's Status; `spec.md`, criterion 70's "Refuted by" | The profile test holds less of F-32's fix than F-32's status says. `check_agent_keys` asks for `grep -cF -f "$P"` and refuses `grep … "$v` and `grep … "$(`; it reads neither `mktemp` nor `rm -f "$P"`. Replayed on copies at `98c51cf`, each alone: `P=$(mktemp)` replaced by `P=/tmp/ch4-patterns`, a file of mode 644 under macOS's default umask in a directory every user can enter, so the keys become readable by `_chhermes` — silent; `; rm -f "$P"` removed — silent; `grep -c -- $v` (unquoted) and `grep -c -- "${v}"` added — silent. Criterion 70 states the mode and the removal, but its "Refuted by" names only a key value on a command line, so slice 4's check need not hold them either. The runbook on this branch is right (read); only its guard is narrower than recorded. What should hold: the check asks for `P=$(mktemp)` and a closing `rm -f "$P"` in CH-4 and refuses a key variable in any command's arguments (`$v` or `${v}`, quoted or not); criterion 70's "Refuted by" names a pattern file not made by `mktemp` or not removed; F-32's status says what the check holds. [criterion 70; F-32] | fixed in `fe4495b` (`check_ch4_key_test` holds the `mktemp`, the removal on every exit path with the interrupt trap, the only variables and substitutions CH-4's key test may expand, the arguments `grep` may take and the guards; 13 planted faults, plan rows 105–117; criterion 70's "Refuted by" names them; F-32's status stands as written, the test now holds it) — reviewed at `26de4ba` on 2026-10-07, closed: the 13 faults of plan rows 105–117 go red, each alone on a copy, 12 of them with the plan's message; the four variants this row named (`P=/tmp/ch4-patterns`, no removal, `$v`, `${v}`) are among them, and criterion 70's "Refuted by" names the pattern file's `mktemp` and removal. Where the check holds less than the plan's table says (row 110, and the part of CH-4 before `R ch4-key`): F-43 |
+| F-41 | MINOR | MAINT | fix-r1 | PR #77 body, "Evidence at cfa0659", the items "Key barrier" and "Sources"; ADR 0010 on branch `decide/adr-0010-hermes` at `cfa0659`, "Review" (lines 26–27) | The #77 body places spec criteria 60–70, the design and the key decision "at eacbcb5 (#76)", but pull request #76 does not contain them. `eacbcb5` is on `origin/feat/hermes-runner-2` only (`git branch -r --contains`); #76's commits end at `7beed6b` and the merge `f4d282c`, GitHub records no force push on it, and its `spec.md` has no criterion 60 to 70 (0 matches on `origin/feat/hermes-runner`). `feat/hermes-runner-2`, which carries slices 2 and 5 and every amendment, has no pull request. The pointer stood in the body from 08:39 UTC on 2026-10-06 (GitHub's edit history of the body), so it came with the amendment, not with this repair, and the phase-6 review of the amendments did not catch it. ADR 0010's "Review" line, "research, spec and design of the change sit beside it (pull request #76)", was true when written and no longer covers the criteria its Validation cites. Why it matters: the maintainer's answer (`decisions.md`, item 2) wants spec, design and ADR amended before #77 merges, and the body reads as if merging #76 brought the amendments to `main`; it does not. What should hold: the body names `feat/hermes-runner-2` (or its pull request, once opened) as the place of criteria 60–70, and the ADR's "Review" line names both branches. [house rule 8; decisions, addendum of 2026-10-06, item 2] | fixed 2026-10-06 in the body of pull request #77 (the sources line names `feat/hermes-runner-2` at `2060c37`, no pull request yet) — reviewed at `87358a5` on 2026-10-07: the body half is closed (its sources and evidence name `feat/hermes-runner-2` at `26de4ba`, that branch's head when read, for criteria 60–70 and the key decision, and #76 only for what #76 holds). The ADR half is open: ADR 0010's "Review" line (lines 21–29) still says that research, spec and design "sit beside it (pull request #76)" and places the addendum of 2026-10-06 "in the same file", and #76 holds neither that addendum nor criteria 60–70. `decisions.md`'s addendum of 2026-10-06 on the second round calls F-41 "already corrected in the body", which is true of the body alone. Open — for the maintainer |
+| F-42 | MINOR | MAINT | fix-r2 | ADR 0010 on branch `decide/adr-0010-hermes` at `cfa0659`, Validation (lines 373–377); `plan.md`, the amendment's "Not read" (the sweep "only for a key written plainly") | The ADR's Validation says that CH-4 shows "that no file under `$HERMES_HOME` holds a key value after a run asked to find and send them". The sweep is `grep -rlF` for the two plain values; a value in a compressed log or base64-encoded in a session file is not found. The plan's "Not read" says "only for a key written plainly"; the ADR does not. It is the class F-37 repaired for the stream scan, brought back by the F-30 repair in the Validation. What should hold: "… holds a key value written out plainly …". [criterion 70; F-37] | fixed in `87358a5` on branch `decide/adr-0010-hermes` (ADR 0010, Validation: a key value written out plainly, and what the sweep does not show) — reviewed at `87358a5` on 2026-10-07, closed: the Validation claims that no file under `$HERMES_HOME` holds a key value written out plainly after the adversarial run, and says that an encoded, compressed or split key passes the sweep and that a file outside `$HERMES_HOME` is not swept. That is what `grep -rlF` as root can show: a plain value inside a file with NUL bytes was found (measured on a scratch file); "fails closed" matches criterion 70 and the plan |
+| F-43 | MINOR | MAINT | fix-r3 | `tests/test_hermes_profile.py`, `check_ch4_key_test` (line 552, the code it reads; lines 579–584, the count of `grep`s and their arguments); `plan.md`, the table of faults 105–117, row 110 (line 882) | The new check holds less than the plan's table records, the shape F-40 was about. (a) No planted fault reaches the check of `grep`'s arguments. Row 110 says that adding `grep -c -- "$k" …` goes red with "CH-4 gives grep '"$k"' as an argument"; replayed on 2026-10-07 on a copy at `26de4ba`, it goes red with "CH-4's key test does not run exactly the guard's grep and the count's grep", because every added `grep` trips the count of `grep`s first. The argument check works when a `grep` is changed in place (`"$k"` appended to the count's `grep`: red with the argument message, replayed), but no fault in `FAULTS` does that, so removing the argument loop leaves every planted fault red. (b) The check reads CH-4 only after the line `R ch4-key`. F-32's needle, which it replaced, read the whole CH-4 block: `grep -c -- "$v" ~/ch/ch4-key.jsonl` placed before `R ch4-key` was red at `42677bd` ("CH-4 puts a key value on a command line") and is silent at `26de4ba` (both replayed). Slice 4 adds its key-file tests to CH-4 and may place them before that line. What should hold: row 110's fault changes a `grep` in place, or the table records the message it gets and one more fault reaches the argument check; the rule on key variables (at least F-32's needle) covers the whole CH-4 block. [criterion 70; F-32, F-40] | open — for the maintainer (fix-r3; no further repair round) |
 
 Reviewer session: none — phase 2a has not run; `plan.md` places it once over
 the whole spec before slice 4's phase 4. This review ran in a fresh session.
@@ -916,3 +917,129 @@ directory): the sweep does not reach them, the row asked only for `$HH`,
 and this is not a row. The session in which the maintainer answered: the
 wording in `decisions.md` is taken as recorded. `make verify` was run on
 this branch after this section was added (see the commit).
+
+## Phase 6, F-39/F-40/F-42 check (2026-10-06)
+
+This check read the maintainer-decided repair of rows F-39, F-40 and F-42
+(`decisions.md`, the addendum of 2026-10-06 on the second round, option
+"Jetzt reparieren (Empfohlen)"). It ran past midnight, so its measurements
+carry 2026-10-07. Reviewer on Opus 5.5 in a fresh context, as a security
+reviewer. No external model call; nothing of the profile installed or run
+(no `sudo` but `sudo -V` for the version, no Hermes, no keys: dummy values
+on scratch files); no pull request; nothing written to the tracker. Read:
+
+- Branch `feat/hermes-runner-2`, `42677bd..26de4ba`: `fe4495b` (runbook
+  CH-4, `check_ch4_key_test`, criterion 70, plan), `26de4ba` (statuses,
+  addendum, time).
+- Branch `decide/adr-0010-hermes`, `cfa0659..87358a5` (ADR 0010,
+  Validation), and the body of pull request #77 at head `87358a5`
+  (`gh pr view 77`, read only; its checks: `verify` passed).
+- `man sudo` ("EXIT VALUE"; sudo 1.9.17p2), macOS's `/usr/bin/grep`,
+  zsh 5.9, bash 3.2 and `/bin/sh` (bash) on scratch files.
+
+Above this section, the Status column of F-39 to F-42 changed, and row
+F-43 was added.
+
+**Verdict: F-39, F-40 and F-42 are closed. One new MINOR row, F-43, of
+origin `fix-r3`; it goes to the maintainer as it stands, with no further
+repair round. F-41 is half open (its ADR half). No BLOCKER, no MAJOR, no
+`[AMBIGUITY]`, no `[DIVERGENT]`.**
+
+- **F-43:** the new check has no planted fault that reaches its rule on
+  `grep`'s arguments (plan row 110 records a message the fault does not
+  get), and it no longer reads the part of CH-4 before `R ch4-key`, which
+  F-32's needle did.
+
+What the repair met:
+
+- **F-39, the count.** Fails closed in every case asked for: an empty,
+  missing or two-line pattern file, a missing or empty stream, and a
+  `grep` exit of 2 (measured; see the row's status). Not closed by it, and
+  not caused by it: a pattern that is one non-empty line but not the key
+  value. Besides F-27's quoted value and trailing blank, measured here: a
+  value followed by an inline comment, and a CRLF line end — each prints 0
+  with the plain value in the stream. F-27 stays open; slice 4's wrapper
+  refuses blanks and quotes (criterion 68), and the spec has the key
+  file written bare; neither names the carriage return.
+- **F-39, the shift of 10.** Sound in sh, bash and zsh on macOS. By
+  `man sudo`, `sudo` exits 1 on an authentication failure, a policy
+  problem or a command it cannot run, and re-raises a signal that ended
+  the command (the shell then sees 128 or more). `$(($?+10))` sits in
+  single quotes, so the inner `sh` expands it, not the maintainer's zsh.
+  `grep`'s 0, 1 and 2 become 10, 11 and 12; a `grep` that is not found
+  would give 137 (derived from `sh`'s 127, not measured). Only 11 is
+  green, and by its manual `sudo` never returns 11 itself.
+  Measured with stand-ins (a function that runs the command, one that
+  returns 1): 11, 10, 12, 12 and 1 as expected; zsh and bash agree. One
+  condition carries the result: the two-line guard before the sweep, since
+  an empty pattern file gives 11. The plan and criterion 70 both state it.
+- **F-40.** The 13 faults go red (table below). Harmless rewrites: a
+  reworded comment or RED text, the guards reordered, the loop's `do` on
+  its own line and a blank line inside the subshell stay silent. Five
+  rewrites a reader may call harmless go red, each with a message that
+  names the expected form: `if … then … else` for the status test,
+  `mktemp -t ch4`, the two traps swapped, `grep -c -F -f` split, the count
+  renamed `c`. One message misleads: `2>/dev/null` on the count is
+  reported as "gives grep '2' as an argument". That is the needle style of
+  this test file, and slice 4 rewrites the block and its check; not a row.
+  Own variants the check does not hold, not rows: a value handed to a
+  command by `xargs`, by backticks in a command other than `grep`, or
+  printed by `cat "$P"`; the test reads the runbook's text and cannot
+  enumerate every shell form, and none of them is a plausible slip.
+- **F-42.** As its status says. "So none the service user can read
+  there" adds nothing the sentence before it does not imply, and is true.
+- **The runbook's budget.** 320 lines of 320 at `26de4ba`. Slice 7's
+  recording pull request adds at least 15 rows to "Spike results"
+  (criterion 58), so `check_runbook` and `verify` go red and the ruleset
+  blocks the merge — F-28, still open. The gate fails closed: the job
+  stays off. What should happen: slice 4, which the plan already has
+  raising the budget for its own lines, counts the runbook up to "Spike
+  results" (F-28's first option) instead of raising the number again.
+  Until then, any line added to the runbook on this branch turns `verify`
+  red, a repair of F-27 included.
+- **Pronouns.** No `he`, `his`, `him`, `she`, `her`, `himself` or
+  `herself` in the lines this round added, in `tools/hermes/`, in
+  `spec.md`, `plan.md` and `decisions.md`, in ADR 0010 or in the #77 body
+  (searched as whole words, ignoring case).
+- **Pull request #77.** The body names the current heads (`87358a5` for
+  #77, `26de4ba` for `feat/hermes-runner-2`) and states its evidence at
+  `87358a5`; `6503874..87358a5` changes the ADR file only, as the body
+  says. One wrong pointer remains, in the ADR, not the body: F-41's ADR
+  half. It does not change what ADR 0010 decides. The ADR is the record
+  the merge freezes, so it is best corrected before the merge.
+
+Smaller, not rows: `plan.md` uses the fault numbers 101–117 twice (the
+round of F-30 to F-38 and this one, beside the F-13/F-14 table of slice
+5), so "fault 110" names two rows; this round's faults carry "56" in
+their names in `FAULTS` while the plan's table gives criterion 70.
+
+**Replays**, on 2026-10-07, each fault alone on a copy of `tools/hermes/`
+at `26de4ba`, silent before:
+
+| Plan row | Fault | Result |
+|---|---|---|
+| 105 | pattern file named, not made by `mktemp` | red, as the plan says |
+| 106 | the EXIT trap removed | red, as the plan says |
+| 107 | the interrupt trap removed | red, as the plan says |
+| 108 | `grep -c -- $v` added | red: expands `['v']` |
+| 109 | `grep -c -- "${v}"` added | red: expands `['v']` |
+| 110 | `grep -c -- "$k"` added | red, but with "does not run exactly the guard's grep and the count's grep": F-43 |
+| 111 | `grep -c -- "$(sed …)"` added | red: substitutes `['sed']` |
+| 112 | the one-non-empty-line guard removed | red, as the plan says |
+| 113 | the exactly-one-line guard removed | red, as the plan says |
+| 114 | the stream guard removed | red, as the plan says |
+| 115 | `continue; }` replaced by `: ; }` | red, as the plan says |
+| 116 | `grep`'s status unread | red, as the plan says |
+| 117 | the green condition forgets RED | red, as the plan says |
+
+Own variants: `"$k"` appended to the count's `grep` in place — red with
+the argument message; `grep -c -- "$v"` before `R ch4-key` — silent at
+`26de4ba`, red at `42677bd` (F-43); `-le 1` relaxed to `-le 2`, `[ -s ]`
+replaced by `[ -e ]`, `|| exit 1` dropped after `mktemp`, the EXIT trap
+moved to INT — red.
+
+Not checked: Hermes's code, so whether its `.env` loader strips quotes,
+comments or a carriage return (F-27), and what files it leaves under
+`$HH`. The session in which the maintainer chose the option: the wording
+in `decisions.md` is taken as recorded. `make verify` was run on this
+branch after this section was added (see the commit).
