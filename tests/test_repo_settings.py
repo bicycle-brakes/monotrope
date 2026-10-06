@@ -700,12 +700,30 @@ def _run_the_live_test(*, variable: bool, path: str) -> subprocess.CompletedProc
     )
 
 
+def _assertion_message(output: str) -> str:
+    """The failure message of the run: pytest's `E` lines, not the source it prints.
+
+    The traceback shows the line that appends the hint as source, so a search of
+    the whole output finds the hint's words even when the hint is never appended
+    (F-7). Only the lines that begin `E` carry what the assertion said.
+    """
+    return "\n".join(line for line in output.splitlines() if line.startswith("E"))
+
+
+def test_the_assertion_message_is_read_from_the_e_lines_only() -> None:
+    output = (
+        "    message += 'a hint, as source'\n>   assert not findings, message\nE   AssertionError: said this\nE   more"
+    )
+    assert _assertion_message(output) == "E   AssertionError: said this\nE   more"
+
+
 def test_the_live_check_goes_red_without_gh_when_the_gate_turns_it_on(tmp_path: Path) -> None:
     """With the variable set and no `gh`, the live check fails — it neither skips nor passes."""
     done = _run_the_live_test(variable=True, path=str(tmp_path))
     assert done.returncode == 1, done.stdout + done.stderr
-    assert "not measured:" in done.stdout
-    assert "needs network and a `gh` login" in done.stdout
+    message = _assertion_message(done.stdout)
+    assert "not measured:" in message
+    assert "needs network and a `gh` login" in message
     assert "skipped" not in done.stdout
 
 
