@@ -480,6 +480,89 @@ the code and recorded here so that the next reading of the plan holds it.
 - **A removed file's `still named by` reads every source at head**, registries
   included: a stale name in a registry is exactly what the line is for.
 
+## Repair round 1
+
+The maintainer's answers and rules of 2026-10-06 (Claude Code session): F-3,
+the one `[AMBIGUITY]`, is decided ("Kein Pfeil": a runner or shell script that
+names a runner makes no link; no code change, `decisions.md` addendum and
+`spec.md`, "Amendments" 1); the standing rule "MAJOR rows are repaired; MINOR
+rows on tests, security or false statements are repaired without asking"
+covers the other five. Each row is fixed in a commit of its own on
+`feat/touch-map`; `scripts/touch_map.py`, its test file, `spec.md` and this
+folder are the only files touched. The ratchets, the kit manifest, the
+templates and the prompt stay as "Not touched" says.
+
+| Row | Commit | What changed |
+| --- | --- | --- |
+| F-3 | `29ff487` | No code. `decisions.md` addendum (the question and the answer as stated); `spec.md`, terms, "Link": "a runner names no runner", and a new section "Amendments" at the end, nothing renumbered. |
+| F-1 | `01ab55d` | The caption says links may be missing **and** a shown one can be false (a name in text, not a dependency). When the map is left out (above 30 boxes) and the list still prints links, a line of its own below the size lines says the same (`LINKS_CAVEAT`); with no link printed there is no caveat. `spec.md`, Amendments 2. |
+| F-2 | `a696b03` | `_strip_comment` cuts a line of a shell script, `Makefile` or YAML runner at a `#` that is first on the line or follows a blank, outside single or double quotes (rule below); `read_code` uses it for every source that is not Python. |
+| F-6 | `7262704` | `code_text` removed (nothing called it). The test table above names `read_code` (and `_strip_comment`) as the comment rule, and step 1 says how it was built. |
+| F-5 | `fd9dab2` | `still_named` counts an import of a removed file's stem only when no tracked `.py` file at head has that stem (`Snapshot.py_stems`, shared stems included); a path in text counts as before. `spec.md`, Amendments 3. |
+| F-4 | `b7e532f` | `render` prints the one line only when no changed file is a box **and** none is neither prose nor a box; otherwise the header line and the `Not linked` (and prose) lines, no size line, no map. `spec.md`, Amendments 4, which says it is a false statement repaired under the maintainer's rule. |
+
+**The comment rule of F-2.** In a source that is not Python, a `#` starts a
+comment when it is the first character of its line or follows a space or tab,
+and no single or double quote is open at that point; a backslash outside
+single quotes escapes the next character. So `echo hi  # x`, `steps: [] # x`
+and a recipe line `echo build # x` lose what follows the `#`, and `$#`,
+`${#a}`, `a#b`, a URL fragment (`/#top`), `"a # b"` and `'a # b'` stay code.
+Quotes are tracked per line. Two limits, both on the side of a link kept
+(never of a link lost): a quote that runs over several lines is not
+followed, and an apostrophe in plain text (`don't # x`) opens a quote that
+hides the `#` after it. A `.py` file that does not parse is read by this
+rule too.
+
+`[DETAIL]`s this round decided, each reversible and covered by a test:
+
+- **The caveat is one clause, the same words in both places** (the caption
+  and the line below the size lines): "Links are found by reading the code,
+  so some may be missing and a shown one can be false (a name in text, not a
+  dependency)." The existing assertion on "some may be missing" still holds.
+- **A change with no box and a file that is neither prose nor a box** prints
+  the header line, then `- Not linked: …` and, when prose changed, `- Prose,
+  not drawn: n files`. Nothing else: no "no code changed" sentence.
+- **Spec amendments 2 and 3 were added beyond the two the dispatch named**
+  (F-4's and F-3's), so that the spec stays the yardstick for what the
+  output says (criteria 9, 12) and for `still named by` (criterion 6). Each
+  only adds; none changes a number.
+
+### Planted faults of the round
+
+Each fault planted on its own on the tree of the commit that fixes its row
+(not yet committed at the time), the file `tests/test_touch_map.py` run, the
+file restored. The suite had 28 tests at F-1, 30 at F-2 and F-6, 31 at F-5 and
+32 at F-4 and the head. "As it was" marks the fault that is the code before
+the repair: it is red only because of the new test. Replay as under "Planted
+faults" above; `script` is `scripts/touch_map.py`.
+
+| # | Row | Crit. | File | Fault | Red | Tests that went red |
+| --- | --- | --- | --- | --- | --- | --- |
+| 52 | F-1 | 12 | script | the caption drops the caveat clause (as it was) | 1 | `test_links_may_be_false_wherever_they_are_printed` |
+| 53 | F-1 | 9 | script | no caveat line when the map is left out | 1 | `test_links_may_be_false_wherever_they_are_printed` |
+| 54 | F-1 | 12 | script | the caveat line printed whether or not a link is printed | 1 | `test_links_may_be_false_wherever_they_are_printed` |
+| 55 | F-2 | 4 | script | only whole-line comments dropped (as it was) | 1 | `test_a_trailing_comment_makes_no_link` |
+| 56 | F-2 | 4 | script | any `#` starts a comment, a blank before it not needed | 2 | `test_a_trailing_comment_makes_no_link`, `test_where_a_comment_starts` |
+| 57 | F-2 | 4 | script | quotes ignored | 2 | `test_a_trailing_comment_makes_no_link`, `test_where_a_comment_starts` |
+| 58 | F-2 | 4 | script | the backslash escape ignored | 1 | `test_where_a_comment_starts` |
+| 59 | F-2 | 4 | script | only double quotes tracked | 2 | `test_a_trailing_comment_makes_no_link`, `test_where_a_comment_starts` |
+| 60 | F-6 | 4 | script | `read_code` returns the raw body of a Python source (comments and docstrings stay) | 1 | `test_what_makes_no_link` |
+| 61 | F-6 | 4 | script | `read_code` returns the raw body of any other source | 2 | `test_a_trailing_comment_makes_no_link`, `test_what_makes_no_link` |
+| 62 | F-5 | 6 | script | the stem is not checked against head (as it was) | 1 | `test_a_moved_module_is_not_still_named` |
+| 63 | F-5 | 6 | script | only unique stems count as resolving | 1 | `test_a_moved_module_is_not_still_named` |
+| 64 | F-5 | 6 | script | an import never counts as naming the removed file | 1 | `test_a_removed_script_still_named` |
+| 65 | F-4 | 7 | script | the one line whenever no box exists (as it was) | 1 | `test_prose_only_is_said_only_of_prose` |
+| 66 | F-4 | 8 | script | the `Not linked` line only when a box exists | 1 | `test_prose_only_is_said_only_of_prose` |
+| 67 | F-4 | 7 | script | the one line only when nothing at all changed | 1 | `test_prose_only_is_one_line` |
+
+**16 faults planted in this round, 16 red, none green.** Over the change: 67
+planted, 67 red. The eight merges of criterion 17, run again on `b7e532f` against
+the script of `043023a`, differ in the caveat clause alone (the caption on five, a
+line below the size lines on #54); boxes and links are the counts of the
+table under "Evidence", and #68 and #72 still print the one line. On
+`2ab9faf..ca597ab` (the ADR answer alone) the output is now the header and
+`- Not linked: decisions/answers/touch-map/adr.yaml`.
+
 ## Time used
 
 Appetite: 4 h of phase 4, one repair round included. Read from `date`.
@@ -492,3 +575,12 @@ verify` green · 18:23 S1 committed (`a21717a`) · 18:27 S1 faults recorded
 (`4c47794`) · 18:31 S2 committed (`badb919`) · 18:37 S2 faults recorded
 (`254e1fb`) · 18:39 S3 step 5 committed (`34b412d`) · 18:44 step 6 (evidence,
 `implementation_status: partial`, plans index) committed (`04367eb`).
+
+Repair round 1 (appetite 60 min, set by the dispatching session; not reached):
+
+- 2026-10-06 21:39–21:56, 17 min, no break
+
+Readings of `date` at the step boundaries: 21:39 start, state read (head
+`043023a`) · 21:42 F-3 committed (`29ff487`) · 21:44 F-1 (`01ab55d`) · 21:47
+F-2 (`a696b03`) · 21:49 F-6 (`7262704`) · 21:51 F-5 (`fd9dab2`) · 21:53 F-4
+(`b7e532f`) · 21:56 this record, statuses and the plans index committed.
