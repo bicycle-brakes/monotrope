@@ -532,3 +532,50 @@ What is lost:          Option 2 would keep small pull request bodies one
 
 `feature` (4.7), pending the maintainer's answer. Appetite for slice 1 as
 scoped here: about 2–3 h (the note's estimate, §4 (b); not measured).
+
+## 5 · Addendum 2026-10-06 (phase 2): measured for the spec
+
+Read and measured at `a887b82` by phase 2, with the prototype's own helpers
+(`code_only`, `imports`) in a scratch script that is not committed. The
+"sources" are the files whose text can make a link: code, tests and
+runners — 56 of 200 tracked files.
+
+1. **Registries among sources.** Only `.github/workflows/ci.yml` names 15
+   or more tracked paths by full path (15), and the prototype exempts
+   runners. No test and no script is a registry today.
+2. **Module stems.** No two tracked `.py` files share a stem, so a stem
+   match is unambiguous today.
+3. **How far a changed test reaches.** Every tracked file a test names
+   (full path, unique basename over eight characters, `/` join) or
+   imports: 1 to 12 per test — `test_ci.py` 12, `test_gate_machinery.py`
+   10, `test_frontmatter_current.py` 10, of which 9 are neither code nor a
+   runner.
+4. **Fixture paths read as links.** `test_frontmatter_current.py` names
+   `AGENTS.md`, `README.md`, `provenance.yaml`, `plans/INDEX.md`,
+   `templates/handover.md` and others as files it writes into a temporary
+   tree, not the repository's own; `test_research_currency.py` names
+   `docs/research/_INDEX.md` the same way (line 119). The name rules cannot
+   tell such a path from the repository's file. Outward links from a
+   changed test to every unchanged file it names would draw them as boxes.
+5. **#71 is not prose-only under the extended rules.** It changes
+   `provenance.yaml` (named by `tests/test_provenance.py`) and
+   `scripts/kit/manifest.yaml` (named by `tests/test_kit.py`); the rule
+   "a changed file a test reads is drawn" (4.1) draws both. Merges that
+   stay prose-only: #68 (`6c5d51a`, one handover) and #72 (`3715528`, a
+   research note and `docs/research/_INDEX.md`). At #72's head no test or
+   runner holds that path, and `_INDEX.md` is not a unique basename
+   (`docs/journal/_INDEX.md` exists too).
+6. **Merges are read as `<merge>^1 <merge>^2`.** The six merges of 1.4
+   are two-parent merges of `main`; their first parent is `main` before,
+   the second the branch head.
+7. **No `design.md` is owed today.** Neither `docs/WORKFLOW.md` nor any
+   prompt names `design.md` on `main`; ADR 0009's section lives there only
+   once bead coding-harness-9qo brings the template.
+8. **Exit codes.** The checks here use 3 for "could not measure"
+   (`scripts/check_adr_answers.py`, `scripts/check_research_currency.py`).
+9. **The phase gate.** `scripts/validate_change_artefacts.py` named in
+   `prompts/02-spec.md` and `prompts/03-plan.md` does not exist;
+   `python3 scripts/plans_registry.py --check` stands in, as for the
+   changes before this one.
+10. **Baseline.** `make verify` green at `a887b82` (2026-10-06), with
+    `markdownlint` red but report-only, as before.
