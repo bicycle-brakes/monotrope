@@ -4,7 +4,7 @@ status: draft
 implementation_status: partial
 date: 2026-10-05
 last_reviewed: 2026-10-05
-updated: 2026-10-05
+updated: 2026-10-06
 supersedes: null
 superseded_by: null
 bead: coding-harness-bma
@@ -54,3 +54,18 @@ an open `[DECISION]` of this spec; the maintainer's one-sentence answer is
 recorded with `python3 scripts/harness.py decide adr --change
 rb-m6-one-account --answer … --reason "…" --stated-in "…"`, exactly as
 stated. Until then the gate `adr-answers` keeps `make verify` red.
+
+## Addendum 2026-10-06: the maintainer's answers in the interview
+
+Asked one at a time in the Claude Code session on 2026-10-06:
+
+1. **ADR question: no** (recorded with `scripts/harness.py decide adr`, the
+   recommended option: the change applies ADR 0008 and the decision of
+   2026-10-05; the RB-M2 exception of PR #55 set the precedent without an
+   ADR).
+2. **Finding F-2 (level 4 against §3): keep level 4 and amend the ladder.**
+   The maintainer chose the recommended option: §3 gains a sentence that a
+   gate with `placement: writer` blocks only the run on the maintainer's
+   machine, so a merge on GitHub without that run is not stopped, and the
+   RB-M6 row says so in its own words. Not chosen: back to level 2; a real
+   CI block later through a second identity.
