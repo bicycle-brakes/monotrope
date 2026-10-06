@@ -21,9 +21,10 @@ The rules, in short:
     are the sources, the files whose text is read for links; the rest is "other".
   * The code text of a source is its text without comments and, for Python, without
     docstrings. In a shell script, `Makefile` or YAML file a comment runs from a `#` that
-    is first on its line or follows a blank, outside quotes (`_strip_comment`). A source names a tracked file by its full path, by its basename (when
-    that is unique and longer than BASENAME_LONGER_THAN), or - in a test - by a chain
-    of `/` joins whose trailing string segments end exactly one tracked path.
+    is first on its line or follows a blank, outside quotes; quotes are followed across lines and
+    a heredoc body is code (`_strip_comments`). A source names a tracked file by its full path,
+    by its basename (when that is unique and longer than BASENAME_LONGER_THAN), or - in a test -
+    by a chain of `/` joins whose trailing string segments end exactly one tracked path.
   * Links, each with a kind: `tests` (a test names or imports a file), `runs` (a runner
     or shell script names a code file or test), `reads` (a runner or shell script names
     an "other" file), `imports` (a Python code file imports a tracked `.py` file by its
@@ -202,31 +203,65 @@ def _is_docstring(node: ast.stmt) -> bool:
     return isinstance(node, ast.Expr) and isinstance(node.value, ast.Constant) and isinstance(node.value.value, str)
 
 
-def _strip_comment(line: str) -> str:
-    """A line of a shell script, `Makefile` or YAML file up to the `#` that starts its comment.
+# A heredoc marker: `<<`, an optional `-`, a delimiter bare, quoted or escaped. `<<<` and `<< 3` are not one.
+_HEREDOC = re.compile(r"<<-?[ \t]*(?:'([^']+)'|\"([^\"]+)\"|\\?([A-Za-z_][A-Za-z_0-9]*))")
 
-    The rule is deliberately simple: a `#` starts a comment when it is the first character of
-    the line or follows a blank, and stands outside single or double quotes. So `$#`, `${#a}`,
-    `a#b` and the fragment of a URL (`/#top`) are code, `"a # b"` is a string, and `echo hi  # x`
-    keeps `echo hi`. A backslash outside single quotes escapes the next character. Quotes are
-    tracked per line: a quote that runs over several lines is not followed.
-    """
-    quote = ""
+
+def _scan(line: str, quote: str) -> tuple[str, str, list[str]]:
+    """One line up to its comment, the quote still open at its end, the delimiters of the heredocs it starts."""
+    heredocs: list[str] = []
+    blank = True  # the first character of a line counts as following a blank
     i = 0
     while i < len(line):
         char = line[i]
         if char == "\\" and quote != "'":
-            i += 2
+            i += 2  # the escaped character is neither a quote, a `#` nor a blank
+            blank = False
             continue
         if quote:
             if char == quote:
                 quote = ""
         elif char in "\"'":
             quote = char
-        elif char == "#" and (i == 0 or line[i - 1] in " \t"):
-            return line[:i]
+        elif char == "#" and blank:
+            return line[:i], quote, heredocs
+        elif char == "<" and line.startswith("<<", i):
+            found = _HEREDOC.match(line, i)  # `<<<` (a here-string) and `<< 3` are no marker
+            if found:
+                heredocs.append(found.group(1) or found.group(2) or found.group(3))
+            i = found.end() if found else i + 2
+            blank = False
+            continue
+        blank = char in " \t"
         i += 1
-    return line
+    return line, quote, heredocs
+
+
+def _strip_comments(body: str) -> str:
+    """The text of a shell script, `Makefile` or YAML file without its comments.
+
+    A `#` starts a comment when it is the first character of a line or follows a blank that is
+    not escaped, and stands outside single or double quotes. So `$#`, `${#a}`, `a#b` and the
+    fragment of a URL (`/#top`) are code, `"a # b"` is a string, and `echo hi  # x` keeps
+    `echo hi`. A backslash outside single quotes escapes the next character. A quote is followed
+    across lines, so an inner line of a quote that runs over several lines is code, and so is a
+    heredoc body, up to its end line. In doubt the rule keeps the text, which can make a false
+    link but loses none: an apostrophe in plain text opens a quote that hides every `#` after it,
+    and `$(( a << b ))` opens a heredoc that never ends. It does not parse the shell, though, so
+    a construct it does not know (`<<$end`, `$'a\\'b'`) can still make it cut a name the shell reads.
+    """
+    kept = []
+    quote = ""
+    waiting: list[str] = []  # the delimiters of the heredocs opened above, whose bodies are still to be read
+    for line in body.splitlines():
+        if waiting:
+            if line.strip() == waiting[0]:  # an indented end line counts: YAML takes the indent off first
+                waiting.pop(0)
+            kept.append(line)
+            continue
+        text, quote, waiting = _scan(line, quote)
+        kept.append(text)
+    return "\n".join(kept)
 
 
 def read_code(path: str, body: str) -> Source:
@@ -244,7 +279,7 @@ def read_code(path: str, body: str) -> Source:
             return Source(ast.unparse(tree), tree)  # unparse drops the comments
         except (SyntaxError, ValueError, RecursionError):
             pass  # a file that does not parse is read like a shell script
-    return Source("\n".join(_strip_comment(line) for line in body.splitlines()), None)
+    return Source(_strip_comments(body), None)
 
 
 class Snapshot:

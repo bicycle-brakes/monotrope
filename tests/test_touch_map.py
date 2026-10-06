@@ -427,7 +427,65 @@ def test_where_a_comment_starts() -> None:
         "no hash": "no hash",
     }
     for line, kept in cases.items():
-        assert tm._strip_comment(line) == kept, line
+        assert tm._strip_comments(line) == kept, line
+
+
+def test_a_name_the_shell_reads_is_not_cut(tmp_path: Path) -> None:
+    """Criterion 4 (F-7): a quote's inner line, a heredoc body and a `#` after an escaped blank are code, not comments."""
+    base = {
+        "scripts/run_all.sh": "#!/bin/sh\n"
+        'MSG="usage:\n'
+        '  run_all.sh # then scripts/quote_tool.py"\n'  # the inner line of a quote that runs over two lines
+        "echo done # scripts/after_quote_tool.py\n"  # the quote is closed: a comment again
+        "cat <<EOF\n"
+        "step # scripts/heredoc_tool.py\n"  # a heredoc body line
+        "EOF\n"
+        "echo done # scripts/after_heredoc_tool.py\n"
+        "cat <<-'END' > out.txt\n"
+        "\tbody # scripts/dash_tool.py\n"
+        "\tEND\n"  # `<<-`: the end line may be indented
+        "echo done # scripts/after_dash_tool.py\n"
+        'cat <<< "x"\n'  # a here-string opens no heredoc
+        "echo done # scripts/after_herestring_tool.py\n"
+        "echo $(( 1 << 3 )) # scripts/shift_tool.py\n"  # a shift opens none either
+        "sed -e s/\\ #.*// scripts/escaped_tool.py\n",  # an escaped blank is no blank before the `#`
+        ".github/workflows/ci.yml": "steps:\n"
+        "  - run: |\n"
+        "      cat << 'EOF' > report.md\n"
+        "      # see scripts/yaml_tool.py\n"  # a heredoc body in a block scalar
+        "      EOF\n"  # its end line is indented by the block
+        "      echo done # scripts/after_yaml_tool.py\n",
+    }
+    kept = ["quote", "heredoc", "dash", "escaped"]
+    cut = ["after_quote", "after_heredoc", "after_dash", "after_herestring", "shift", "after_yaml"]
+    boxes = _boxes(_run(_fixture(tmp_path, base, {f"scripts/{n}_tool.py": "V = 1\n" for n in [*kept, *cut, "yaml"]})))
+    for name in kept:
+        assert boxes[f"scripts/{name}_tool.py"]["run by"] == ["scripts/run_all.sh"], (
+            f"a name the shell reads is cut: {name}"
+        )
+    assert boxes["scripts/yaml_tool.py"]["run by"] == ["workflows/ci.yml"], (
+        "a name in a heredoc body of a block scalar is cut"
+    )
+    for name in cut:
+        assert "run by" not in boxes[f"scripts/{name}_tool.py"], f"a name in a comment makes a link: {name}"
+
+
+def test_where_a_comment_starts_across_lines() -> None:
+    """Criterion 4 (F-7): the rule keeps the text when in doubt - an unclosed quote and an unended heredoc hide the rest."""
+    cases = {
+        'a="x\ny # z"\nb # c': 'a="x\ny # z"\nb ',  # a quote over two lines
+        "a='x\ny # z'\nb # c": "a='x\ny # z'\nb ",
+        "cat <<EOF\n# x\nEOF\nb # c": "cat <<EOF\n# x\nEOF\nb ",
+        "cat <<A <<'B'\n# x\nA\n# y\nB\nb # c": "cat <<A <<'B'\n# x\nA\n# y\nB\nb ",  # two on a line, read in order
+        "cat <<EOF # c\n# x\nEOF": "cat <<EOF \n# x\nEOF",  # the comment after the marker is one
+        'echo "cat <<EOF" # c\n# x': 'echo "cat <<EOF" \n',  # a marker inside a quote opens nothing
+        "echo don't # a\n# b\nit's # c": "echo don't # a\n# b\nit's ",  # an apostrophe in plain text: the rest is kept
+        "echo $(( a << end )) # a\n# b\nb # c": "echo $(( a << end )) \n# b\nb # c",  # a shift of a name: no end line
+        "cat <<EOF\n# x": "cat <<EOF\n# x",  # no end line: the body runs to the end
+        "echo a \\ # c\n# d": "echo a \\ # c\n",  # an escaped blank hides the first `#` and not the second line's
+    }
+    for body, kept in cases.items():
+        assert tm._strip_comments(body) == kept, body
 
 
 # ---------------------------------------------------------------------------
