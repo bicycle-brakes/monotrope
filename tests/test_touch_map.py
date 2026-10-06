@@ -750,24 +750,24 @@ def test_the_structure_check_can_go_red() -> None:
     """Criterion 11: the structure check itself fails on each rule it states."""
     good = 'flowchart LR\n  n1["code: a.py (new)"]:::added\n  n2["code: b.py"]:::same\n  n2 -->|runs| n1\n  classDef added fill:#fff\n  classDef same fill:#eee'
     assert _mermaid_problems(good) == []
+    # Each bad block breaks one rule and the problem it raises must name that rule.
     bad = {
-        "an undeclared link end": good.replace("n2 -->|runs| n1", "n2 -->|runs| n9"),
-        "a duplicate id": good.replace('n2["code: b.py"]', 'n1["code: b.py"]'),
-        "an id called end": good.replace("n2", "end"),
-        "an unquoted label": good.replace('n2["code: b.py"]', "n2[code: b.py]"),
-        "a quote inside a label": good.replace('"code: b.py"', '"code: b".py"'),
-        "a backtick inside a label": good.replace('"code: b.py"', '"code: b`.py"'),
-        "a stray line": good + "\n  subgraph x",
-        "a wrong header": good.replace("flowchart LR", "flowchart TD"),
-        "an undefined class": good.replace(":::same", ":::nowhere"),
-        "an id with a dash": good.replace("n2", "n-2"),
+        "an undeclared link end": (good.replace("n2 -->|runs| n1", "n2 -->|runs| n9"), "undeclared link end n9"),
+        "a duplicate id": (good.replace("n2", "n1"), "duplicate id n1"),
+        "an id called end": (good.replace("n2", "end"), "a box is called end"),
+        "an unquoted label": (good.replace('n2["code: b.py"]', "n2[code: b.py]"), "not a box"),
+        "a quote inside a label": (good.replace('"code: b.py"', '"code: b".py"'), "not a box"),
+        "a backtick inside a label": (good.replace('"code: b.py"', '"code: b`.py"'), "not a box"),
+        "a stray line": (good + "\n  subgraph x", "not a box"),
+        "a wrong header": (good.replace("flowchart LR", "flowchart TD"), "not 'flowchart LR'"),
+        "an undefined class": (good.replace(":::same", ":::nowhere"), "undefined class nowhere"),
+        "an id with a dash": (good.replace("n2", "n-2"), "not a box"),
     }
-    for what, block in bad.items():
-        assert _mermaid_problems(block), f"the check passes {what}"
+    for what, (block, expected) in bad.items():
+        problems = _mermaid_problems(block)
+        assert any(expected in p for p in problems), f"the check passes {what}: {problems}"
 
 
-# ---------------------------------------------------------------------------
-# criterion 12: the three lists and the caption
 # ---------------------------------------------------------------------------
 
 
