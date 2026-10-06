@@ -33,13 +33,13 @@ recommendation in [`research.md`](research.md), section 4.
 2. **The request itself:** "a diagram of the module's code in every PR,
    following best practice, as a standard for PR reviews".
 
-## [DECISION] 1 — the class of this change (open)
+## [DECISION] 1 — the class of this change (answered 2026-10-06: feature, ADR "no")
 
 `feature` or `bounded`. Recommendation: `feature`, with the ADR proposal
 "no"; decision 1 above is that answer in substance, if the maintainer says
 so in one sentence. Full question: `research.md`, section 4.7.
 
-## [DECISION] 2 — the lower bound for the map (open)
+## [DECISION] 2 — the lower bound for the map (answered 2026-10-06: every code pull request)
 
 A map in every code pull request that has at least one link, or only from
 three changed code files on (the research note's rule). Recommendation:
@@ -57,3 +57,15 @@ section 4.8.
 - One section "What it touches" right after "What changes", map collapsed
   inside it; the same section in the decision template (4.4).
 - Script and test travel with the kit (`mechanismus`) (4.5).
+
+## Addendum 2026-10-06: the maintainer's answers to [DECISION] 1 and 2
+
+Asked one at a time in the Claude Code session on 2026-10-06:
+
+1. **Class `feature`, ADR question: no** (the recommended option: a
+   pull-request convention, not an architecture decision; ADR 0009 stays
+   unchanged). Recorded with `scripts/harness.py decide adr`.
+2. **The map in every code pull request** that has at least one link (the
+   recommended option); from 15 boxes the section says "consider
+   splitting", above 30 boxes only the list is printed. Not chosen: a map
+   only from three changed code files on.
