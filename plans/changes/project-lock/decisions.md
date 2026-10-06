@@ -86,3 +86,14 @@ What is lost:          Option 2 keeps `make verify` green without waiting for
 ```
 
 Answers: **ok** · **option 2** · **no, because …**.
+
+## Addendum 2026-10-06: LakeSwitch moves to Python 3.12
+
+The maintainer decided on 2026-10-06, after a measurement in a scratch copy
+of lakeswitch-ai at `09c9d62` (1,334 tests pass under 3.11 and 3.12; `lakeswitch
+verify` byte-identical; no recorded reason for 3.11): LakeSwitch moves to
+Python 3.12. That change belongs to the LakeSwitch session (a signed pin in
+its `decisions/gates.yaml`, its workflows, and an amendment of its D-46, D-47
+and D-54). Until it lands, this change keeps both legs, 3.11 and 3.12, on
+every pull request; afterwards a follow-up change reduces Coding Harness's CI
+to 3.12 alone.
