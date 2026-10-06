@@ -484,7 +484,7 @@ In `prompts/07-commit.md`, beside the template instructions:
    on `pull_request` including `edited`, red when the section is missing or
    differs from a fresh run.
 5. **Stop rule:** after five pull requests with a list, the maintainer is
-   asked once whether it changed what he looked at. If not, it goes.
+   asked once whether it changed what they looked at. If not, it goes.
 
 ### 6.4 One test on the phone first
 
