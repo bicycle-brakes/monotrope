@@ -109,7 +109,7 @@ REIST_NICHT: dict[str, str] = {
     "tests.test_model_endpoints::test_every_agent_model_resolves_to_a_declared_endpoint[preconditions-gate-runner.md-claude-sonnet-5]": "braucht-die-vollstaendige-suite",
     "tests.test_model_endpoints::test_every_agent_model_resolves_to_a_declared_endpoint[reconciliation-orchestrator.md-claude-sonnet-5]": "braucht-die-vollstaendige-suite",
     "tests.test_model_endpoints::test_every_model_in_a_phase_prompt_resolves[01-explore.md-Haiku 4.5]": "bestand-dieses-repos",
-    "tests.test_model_endpoints::test_every_model_in_a_phase_prompt_resolves[01a-interview.md-Fable 5.1]": "bestand-dieses-repos",
+    "tests.test_model_endpoints::test_every_model_in_a_phase_prompt_resolves[01a-interview.md-Opus 5.5]": "bestand-dieses-repos",
     "tests.test_model_endpoints::test_every_model_in_a_phase_prompt_resolves[02-spec.md-Opus 5.5]": "bestand-dieses-repos",
     "tests.test_model_endpoints::test_every_model_in_a_phase_prompt_resolves[02a-spec-review.md-Opus 5.5]": "bestand-dieses-repos",
     "tests.test_model_endpoints::test_every_model_in_a_phase_prompt_resolves[03-plan.md-Opus 5.5]": "bestand-dieses-repos",

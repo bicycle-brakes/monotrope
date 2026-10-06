@@ -4,7 +4,7 @@ category: governance
 status: current
 created: 2026-09-05
 last_reviewed: 2026-09-29
-updated: 2026-09-30
+updated: 2026-10-06
 owner: Data Architect
 provenance: ai-drafted-reviewed
 produced_by:
@@ -355,7 +355,7 @@ none, because the registry keeps counting it as protection.
 | Phase | Model | Why |
 |---|---|---|
 | 1 Explore | **Haiku 4.5** | much input, little output, no deep reasoning |
-| 1a Interview | **Fable 5.1** | the questions are the work, and there are few of them |
+| 1a Interview | **Opus 5.5** | the questions are the work, and there are few of them |
 | 2 Spec | **Opus 5.5** | effort `xhigh`; the highest reasoning demand, little output |
 | 2a Spec review | **Opus 5.5** (until stage 2 is live) | a fresh context that does not know the author's reasoning; see below |
 | 3 Plan | **Opus 5.5** | effort `xhigh`; an error here is the most expensive in the whole run |
@@ -364,9 +364,11 @@ none, because the registry keeps counting it as protection.
 | 6 Review | **Opus 5.5** (until stage 2 is live) | finds what Sonnet misses, and reads the code a change calls instead of trusting its docstring; see below |
 | 7 Commit | **Haiku 4.5** | cheap and sufficient |
 
-Switch with `/model fable`, `/model sonnet`, `/model opus`, `/model haiku`. The
-alias `opusplan` runs Opus while planning and switches to Sonnet for execution —
-the cheaper variant to Fable.
+**No Fable** (maintainer, 2026-10-06): no phase runs on Fable 5.1; Opus 5.5
+takes its places — the interview and the escalation below.
+
+Switch with `/model sonnet`, `/model opus`, `/model haiku`. The alias
+`opusplan` runs Opus while planning and switches to Sonnet for execution.
 
 **Spec and plan on Opus 5.5 at effort `xhigh`** (maintainer, 2026-09-29, for
 the whole repository; until then both ran on Fable 5.1). In a session:
@@ -398,8 +400,9 @@ The token-heavy part runs on Sonnet.
 definitions is ignored and sub-agents run on the parent model. Look once with
 `/status` — otherwise exploration is billed at Opus prices.
 
-**Escalation.** After two failed review rounds, move up to Fable. For rebuilds
-over ~200k tokens and for code touching security or concurrency, start on Fable.
+**Escalation.** After two failed review rounds, move up to Opus 5.5. For
+rebuilds over ~200k tokens and for code touching security or concurrency, start
+on Opus 5.5.
 After a passed review, back to Sonnet.
 
 ### What deliberately does not happen in stage 1
@@ -507,7 +510,7 @@ on Dagger describes a technique, it does not use one.
 ## 4 · Stage 2 — adding GLM and Kimi (prepared, not active)
 
 Exactly two rows of the routing table change: **implement** moves from Sonnet 5
-to GLM, **review** from Fable 5.1 to Kimi. Phases 1–3 and 7 stay with Anthropic.
+to GLM, **review** from Opus 5.5 to Kimi. Phases 1–3 and 7 stay with Anthropic.
 
 **Why review across vendors.** Different training lineages have blind spots that
 do not overlap. Separating the context already finds measurably more errors;
