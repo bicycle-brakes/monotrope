@@ -566,7 +566,7 @@ one merge.
   service user reads; only Hermes's own file guard — "not a security
   boundary", in Hermes's words — and the spike check CH-4 stand between a
   fetched page and the keys (findings F-14, F-26). The maintainer did not
-  accept this as the lasting state: on 2026-10-06 he chose the barrier of
+  accept this as the lasting state: on 2026-10-06 the maintainer chose the barrier of
   criteria 60–70 (`decisions.md`, addendum of that day). Slice 7, the spike
   and the install, needs slice 4 first (F-31), so the plan installs no
   profile that keeps its keys in `.env`; what remains until slice 4 lands is

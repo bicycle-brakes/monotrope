@@ -256,7 +256,7 @@ All six questions are answered; phase 1a is closed.
 
 After the phase-6 review of slice 1 (`findings.md`, on `a4ff61c`) the
 maintainer decided on 2026-10-05 to repair six of its rows in one round. The
-answer is recorded as he gave it, in German: "Alle sechs reparieren".
+answer is recorded as the maintainer gave it, in German: "Alle sechs reparieren".
 
 1. **Slice-1 rows.** F-1 (the unbounded re-check),
    F-2 (`notes[0]` is not "the oldest" and a header with zero or two
@@ -274,11 +274,16 @@ own OpenCode Go and Firecrawl keys in `$HERMES_HOME/.env`, and that only
 Hermes's own file guard stands between a fetched page and those keys
 (`findings.md`, F-14 and F-26). The maintainer was asked in the Claude Code
 session on 2026-10-06, in German, shortened: "Hermes F-14: what holds the
-agent's own API keys?" His own words are not quoted here. Item 1 is the option
-he chose and item 3 the option not chosen; this file does not record whether
-item 2 was his instruction or the session's plan, and the scan of the agent's
-output for the keys and the duty to revoke a key it names are not part of his
-answer (spec criterion 62, design Interfaces 2; F-36):
+agent's own API keys?" The maintainer chose the option "Echte Sperre in
+Abschnitt 4 (Empfohlen)", whose description read, in German: the publish
+script hands the keys to Hermes only at start over standard input; the key
+file lies in the maintainer's home and the Hermes user cannot read it; spec,
+design and ADR 0010 (#77) are amended before #77 is merged. Item 1 is that
+option, item 2 the last part of its description, item 3 the option not chosen
+("Risiko akzeptieren"). The scan of the agent's output for the keys and the
+duty to revoke a key it names are not part of the answer (spec criterion 62,
+design Interfaces 2; F-36); the wording was read from the session on
+2026-10-06 by the orchestrating session:
 
 1. **A real barrier in slice 4.** The publish/orchestrator script passes the
    OpenCode Go and Firecrawl keys to Hermes only at start, on the wrapper's
