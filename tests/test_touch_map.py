@@ -357,6 +357,58 @@ def test_what_makes_no_link(tmp_path: Path) -> None:
     assert "tests" not in boxes["tests/test_two.py"], "a join that ends two files names neither"
 
 
+def test_a_trailing_comment_makes_no_link(tmp_path: Path) -> None:
+    """Criterion 4: a name after a `#` that starts a comment in a shell script, a Makefile or YAML makes no link."""
+    base = {
+        "scripts/run_all.sh": "#!/bin/sh\n"
+        "echo hi  # see scripts/subject_tool.py\n"  # a trailing comment: no link
+        'echo "a # scripts/quoted_tool.py"\n'  # inside double quotes: code
+        "echo 'b # scripts/single_tool.py'\n"  # inside single quotes: code
+        "echo $# scripts/count_tool.py\n"  # `$#` is the argument count, not a comment
+        "echo a#scripts/glued_tool.py\n"  # no blank before the `#`
+        "curl https://example.org/#scripts/frag_tool.py\n"  # the fragment of a URL
+        "echo \\# scripts/escaped_tool.py\n"  # an escaped `#`
+        "echo $# # scripts/hidden_tool.py\n",  # `$#`, then a comment
+        "Makefile": "all:\n\techo build # scripts/other_tool.py\n",
+        "decisions/gates.yaml": 'steps: [] # data/config.yaml\nname: "x # data/quoted.yaml"\n',
+    }
+    names = ["subject", "other", "hidden", "quoted", "single", "count", "glued", "frag", "escaped"]
+    feat = {f"scripts/{n}_tool.py": "V = 1\n" for n in names}
+    feat.update({"data/config.yaml": "a: 1\n", "data/quoted.yaml": "a: 1\n"})
+    out = _run(_fixture(tmp_path, base, feat))
+    boxes = _boxes(out)
+    for gone in ("subject", "other", "hidden"):
+        assert "run by" not in boxes[f"scripts/{gone}_tool.py"], f"a name in a trailing comment makes a link: {gone}"
+    for kept in ("quoted", "single", "count", "glued", "frag", "escaped"):
+        assert boxes[f"scripts/{kept}_tool.py"]["run by"] == ["scripts/run_all.sh"], f"a name in code is lost: {kept}"
+    assert "data/config.yaml" not in boxes and "- Not linked: `data/config.yaml`" in out
+    assert boxes["data/quoted.yaml"]["read by"] == ["decisions/gates.yaml"]
+    assert "run by" not in boxes["scripts/other_tool.py"]
+
+
+def test_where_a_comment_starts() -> None:
+    """Criterion 4: the rule of `_strip_comment` on its edges: first or after a blank, outside quotes, one line at a time."""
+    cases = {
+        "# whole line": "",
+        "   # indented": "   ",
+        "echo hi  # x": "echo hi  ",
+        "echo hi\t# x": "echo hi\t",
+        "echo $# args": "echo $# args",
+        "echo ${#list[@]} # x": "echo ${#list[@]} ",
+        "a#b": "a#b",
+        "curl https://h/#top": "curl https://h/#top",
+        'echo "a # b" # c': 'echo "a # b" ',
+        "echo 'a # b' # c": "echo 'a # b' ",
+        'echo "it\'s" # c': 'echo "it\'s" ',  # a quote inside the other kind of quote
+        'echo \\" # c': 'echo \\" ',  # an escaped quote opens nothing
+        "echo \\# x": "echo \\# x",  # an escaped `#` is code
+        "echo 'a # b": "echo 'a # b",  # an unclosed quote hides the rest of its line
+        "no hash": "no hash",
+    }
+    for line, kept in cases.items():
+        assert tm._strip_comment(line) == kept, line
+
+
 # ---------------------------------------------------------------------------
 # criterion 5: one hop from the change
 # ---------------------------------------------------------------------------

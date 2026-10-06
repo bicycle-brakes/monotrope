@@ -20,7 +20,8 @@ The rules, in short:
     `tests/`; a runner is one of RUNNERS or a file under RUNNER_DIRS. These three kinds
     are the sources, the files whose text is read for links; the rest is "other".
   * The code text of a source is its text without comments and, for Python, without
-    docstrings. A source names a tracked file by its full path, by its basename (when
+    docstrings. In a shell script, `Makefile` or YAML file a comment runs from a `#` that
+    is first on its line or follows a blank, outside quotes (`_strip_comment`). A source names a tracked file by its full path, by its basename (when
     that is unique and longer than BASENAME_LONGER_THAN), or - in a test - by a chain
     of `/` joins whose trailing string segments end exactly one tracked path.
   * Links, each with a kind: `tests` (a test names or imports a file), `runs` (a runner
@@ -200,6 +201,33 @@ def _is_docstring(node: ast.stmt) -> bool:
     return isinstance(node, ast.Expr) and isinstance(node.value, ast.Constant) and isinstance(node.value.value, str)
 
 
+def _strip_comment(line: str) -> str:
+    """A line of a shell script, `Makefile` or YAML file up to the `#` that starts its comment.
+
+    The rule is deliberately simple: a `#` starts a comment when it is the first character of
+    the line or follows a blank, and stands outside single or double quotes. So `$#`, `${#a}`,
+    `a#b` and the fragment of a URL (`/#top`) are code, `"a # b"` is a string, and `echo hi  # x`
+    keeps `echo hi`. A backslash outside single quotes escapes the next character. Quotes are
+    tracked per line: a quote that runs over several lines is not followed.
+    """
+    quote = ""
+    i = 0
+    while i < len(line):
+        char = line[i]
+        if char == "\\" and quote != "'":
+            i += 2
+            continue
+        if quote:
+            if char == quote:
+                quote = ""
+        elif char in "\"'":
+            quote = char
+        elif char == "#" and (i == 0 or line[i - 1] in " \t"):
+            return line[:i]
+        i += 1
+    return line
+
+
 def read_code(path: str, body: str) -> Source:
     """The text a file executes: comments removed, and for Python docstrings too."""
     if path.endswith(".py"):
@@ -215,8 +243,7 @@ def read_code(path: str, body: str) -> Source:
             return Source(ast.unparse(tree), tree)  # unparse drops the comments
         except (SyntaxError, ValueError, RecursionError):
             pass  # a file that does not parse is read like a shell script
-    lines = [line for line in body.splitlines() if not line.lstrip().startswith("#")]
-    return Source("\n".join(lines), None)
+    return Source("\n".join(_strip_comment(line) for line in body.splitlines()), None)
 
 
 def code_text(path: str, body: str) -> str:
