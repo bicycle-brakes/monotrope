@@ -4,7 +4,7 @@ status: accepted
 implementation_status: none
 date: 2026-10-05
 last_reviewed: 2026-10-05
-updated: 2026-10-05
+updated: 2026-10-06
 supersedes: null
 superseded_by: null
 bead: coding-harness-i3y
@@ -266,3 +266,26 @@ answer is recorded as he gave it, in German: "Alle sechs reparieren".
    held by a test) are repaired in one round, on the branch of slice 1.
 2. **Rows that stay open.** F-5, F-8 and F-9 concern the orchestrator's
    contract; they stay open and are for slice 4's phase 2a.
+
+## Addendum 2026-10-06: what holds the agent's own keys (F-14)
+
+The phase-6 review of slices 2 and 5 found that the service user can read its
+own OpenCode Go and Firecrawl keys in `$HERMES_HOME/.env`, and that only
+Hermes's own file guard stands between a fetched page and those keys
+(`findings.md`, F-14 and F-26). The maintainer was asked in the Claude Code
+session on 2026-10-06, in German, shortened: "Hermes F-14: what holds the
+agent's own API keys?" The answer is recorded as the maintainer gave it:
+
+1. **A real barrier in slice 4.** The publish/orchestrator script passes the
+   OpenCode Go and Firecrawl keys to Hermes only at start, on the wrapper's
+   standard input, from a key file in the maintainer's home that the Hermes
+   service user (`_chhermes`) cannot read. `.env` under `$HERMES_HOME` keeps
+   only non-secret settings (the URLs).
+2. **Before the merge of ADR 0010.** Spec, design and ADR 0010 are amended
+   before the maintainer merges ADR 0010 (pull request #77).
+3. **Not chosen:** accepting the risk with Hermes's own guard — which Hermes
+   itself calls "not a security boundary" — plus the spike check CH-4.
+
+Consequence: slice 4 builds the key handover together with the profile's side
+of it (wrapper, `env.example`, runbook, test); `spec.md` gains criteria 60–70,
+and F-14 stays open until slice 4 is built.

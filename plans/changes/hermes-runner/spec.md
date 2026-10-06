@@ -4,7 +4,7 @@ status: draft
 implementation_status: none
 date: 2026-10-05
 last_reviewed: 2026-10-05
-updated: 2026-10-05
+updated: 2026-10-06
 supersedes: null
 superseded_by: null
 bead: coding-harness-i3y
@@ -14,7 +14,7 @@ produced_by: {kind: llm-session, name: claude-code, version: "2026-10-05"}
 review: {status: pending, approved_by: null, approved_at: null}
 tags: [spec, hermes, runner, research-recheck, ruleset]
 class: architectural
-appetite: 9.5  # hours of phase 4 over the five agent slices, repair rounds included
+appetite: 11  # hours of phase 4 over the five agent slices, repair rounds included; 9.5 before the key barrier of 2026-10-06
 ---
 
 # Spec — hermes-runner
@@ -27,7 +27,8 @@ agent's diff and opens one pull request, a Hermes profile of its own, an ADR
 for the first unattended writing agent, and a ruleset on `main` as the
 backstop (epic bead coding-harness-i3y; the job is bead coding-harness-pu9,
 part 2). Research: `research.md`, with its section 13 read in this phase.
-Decisions: `decisions.md` (the six answers of 2026-10-05). Design:
+Decisions: `decisions.md` (the six answers of 2026-10-05, and the key
+barrier of 2026-10-06 in its addendum of that day). Design:
 `design.md` (phase 2b, mandatory for `architectural`).
 
 ## Problem
@@ -56,6 +57,12 @@ Read on 2026-10-05 at `87daf91` unless a line says otherwise.
   `research.md` 2.2).
 - **No ADR covers an unattended writing agent,** and the milestone for
   unattended runs (M3) has not been reached (`research.md` 2.4).
+- **The agent can read its own keys.** The profile as built in slice 5
+  installs the OpenCode Go and Firecrawl keys in `$HERMES_HOME/.env`, which
+  the service user reads so that Hermes can load it; only Hermes's own file
+  guard, which Hermes calls "not a security boundary", stands between a
+  fetched page and those keys (`findings.md`, F-14 and F-26; read on
+  2026-10-06 at `f5494b6`).
 
 ## Terms
 
@@ -83,6 +90,15 @@ Read on 2026-10-05 at `87daf91` unless a line says otherwise.
 - **The publish token** — a fine-grained personal access token for this one
   repository with `contents: write` and `pull_requests: write`, in a file
   only the maintainer can read.
+- **The two keys** — the service user's own OpenCode Go key and Firecrawl
+  key, in the variables Hermes reads, `OPENCODE_GO_API_KEY` and
+  `FIRECRAWL_API_KEY`.
+- **The key file** — `~/.config/coding-harness/hermes-keys` in the
+  maintainer's home, mode 600 in a directory of mode 700, holding exactly
+  the two lines `OPENCODE_GO_API_KEY=<value>` and `FIRECRAWL_API_KEY=<value>`;
+  the service user cannot read it.
+- **The key handover** — the key file's two lines on the wrapper's standard
+  input, once per agent step (decisions, addendum of 2026-10-06).
 - **The ruleset** — the rules on `main` of decisions Q4: pull request
   required (no approval), required status check `verify`, force pushes
   blocked, deletion restricted, no bypass.
@@ -101,7 +117,7 @@ the maintainer. "Laptop" means the maintainer at this MacBook.
 | 1 | The job prompt `prompts/research-recheck.md`, its paragraph in `docs/WORKFLOW.md`, its kit rule; this change folder | agent | no | no | 1 h | — |
 | 2 | The `opencode-go` entry in `model-endpoints.yaml` | agent | no | no — no `provenance.yaml` prefix maps the file | 0.5 h | 1 |
 | 3 | ADR 0010, and the D-7 row it amends | agent drafts, maintainer merges | no | **yes** | 1 h | 1 |
-| 4 | The orchestrator `scripts/research_recheck.py` and its tests, the ruleset check included | agent | no | no | 4 h | 1 |
+| 4 | The orchestrator `scripts/research_recheck.py` and its tests, the ruleset check included; the key handover with the profile's side of it (criteria 60–70) | agent | no | no | 5.5 h | 1, 5 |
 | 5 | The profile `tools/hermes/`: config, wrapper, launchd and sudo files, runbook with the Coding Harness spike part, and its test | agent | no | no | 3 h | 2, 4 |
 | 6 | The ruleset on `main` | maintainer, in GitHub's settings | no — any browser | no | 15 min | — |
 | 7 | The spike, the Coding Harness part and the install, results recorded | maintainer, an agent alongside | **yes** | no | one afternoon and a restart | 5 |
@@ -109,7 +125,9 @@ the maintainer. "Laptop" means the maintainer at this MacBook.
 "Needs first" counts slice 1 because it brings this change folder to
 `main`, which every later session reads. The first scheduled run needs all
 seven slices and pull request #73 merged. Slice 6 can be done today, in any
-order.
+order. Slice 5 was built before slice 4 (`plan.md`, "Notes, slice 5"); since
+2026-10-06 slice 4 also changes slice 5's files for the key handover, so it
+follows slice 5's merge.
 
 ## Acceptance criteria
 
@@ -315,6 +333,34 @@ order.
     in `OHNE_AUFRUFER` with its reason, and `tests/test_ci.py` passes.
     *Refuted by:* a red `tests/test_ci.py`.
 
+#### Added 2026-10-06 — the key handover
+
+From the maintainer's decision of 2026-10-06 (`decisions.md`, addendum of
+that day). Numbered after criterion 59, so no earlier number moves.
+
+60. If the key file is missing, empty, or readable by group or others, the
+    orchestrator stops before the agent step and before any network call,
+    and ends `failed`.
+    *Refuted by:* a fake agent started, or a stub `gh` or git remote call
+    recorded, after such a key file.
+61. When the orchestrator starts the agent step, the key file's two lines
+    reach the agent command on its standard input and by no other way — no
+    argument and no variable of the command's environment carries a key
+    value.
+    *Refuted by:* a fake agent that finds other text on its standard input,
+    or a key value in its arguments or environment.
+62. If the agent's event stream or the staged note holds the value of
+    either key, the run publishes nothing and ends `failed`, naming the key,
+    never its value.
+    *Refuted by:* a fixture with a key value in the stream or in the note
+    after which a ref appears on the remote, a pull request is opened, or
+    the record's reason holds the value.
+63. When a run ends, no file the orchestrator wrote — under the run
+    directory or the log directory, the saved event stream included — and
+    no argument of a command it ran holds a key value.
+    *Refuted by:* a key value found in such a file, or in an argument that a
+    stub `gh`, a stub `git` remote or the fake agent recorded.
+
 ### Slice 5 — the profile
 
 45. When `tests/test_hermes_profile.py` reads `tools/hermes/config.yaml`,
@@ -369,6 +415,9 @@ order.
     are named, and no GitHub token variable is.
     *Refuted by:* a value, a missing name, or `GH_TOKEN` or `GITHUB_TOKEN`
     present.
+    *Superseded by criterion 64 when slice 4 lands* (decision of
+    2026-10-06): the two key names leave `env.example`; until then the test
+    holds criterion 54 as written.
 55. When `tools/hermes/README.md` is read, it describes creating the
     service user outside the group `staff`; the run directories with their
     owners and modes; the publish token (permissions, one repository, an
@@ -386,6 +435,50 @@ order.
     proxy; no memory, profile or skill file changed after a run; and one
     dry run end to end.
     *Refuted by:* one of the eight missing.
+
+#### Added 2026-10-06 — the key barrier in the profile, built with slice 4
+
+The profile's side of the key handover. It changes slice 5's files and lands
+in slice 4's pull request, so that the wrapper and the orchestrator agree in
+one merge.
+
+64. When the test reads `tools/hermes/env.example`, it names
+    `OPENCODE_GO_BASE_URL` and `FIRECRAWL_API_URL` with empty values and
+    assigns no variable whose name ends in `_KEY`, `_TOKEN` or `_SECRET`.
+    *Refuted by:* an assignment of `OPENCODE_GO_API_KEY`,
+    `FIRECRAWL_API_KEY` or another such name, empty or not, or a URL name
+    missing.
+65. When the test runs the wrapper with a stub in place of Hermes and the
+    key file's two lines on its standard input, the stub's environment
+    holds both keys with their values.
+    *Refuted by:* a key missing from the stub's environment or holding
+    another value.
+66. When the wrapper starts Hermes, no key value appears in an argument of a
+    process it starts or in its own output.
+    *Refuted by:* a key value in the stub's arguments or in the wrapper's
+    standard output or error, or a line of the wrapper that expands a key
+    into a command's arguments.
+67. When Hermes starts, its standard input is empty, so no path such as
+    `/dev/stdin` or `/dev/fd/0` reaches the key handover.
+    *Refuted by:* a stub that reads anything but end-of-file from its
+    standard input.
+68. If the wrapper's standard input does not hold exactly one non-empty line
+    each for `OPENCODE_GO_API_KEY` and `FIRECRAWL_API_KEY` and nothing else,
+    the wrapper exits 2 and starts no Hermes.
+    *Refuted by:* a stub started after a missing, empty, doubled or unknown
+    line.
+69. When `tools/hermes/README.md` is read, its install writes the two keys
+    only into the key file, mode 600 in a directory of mode 700, and
+    `$HERMES_HOME/.env` receives the two URLs only.
+    *Refuted by:* an install step that writes a key name under
+    `/Users/_chhermes` or `/Users/Shared/coding-harness-hermes`, or a key
+    file of another mode.
+70. When the runbook's CH-4 is read, it has one test each, with its green
+    condition, for: the key file unreadable for the service user;
+    `$HERMES_HOME/.env` naming no key; and a run that is handed both keys
+    and asked to find and send them, whose event stream holds neither key
+    value.
+    *Refuted by:* one of the three missing.
 
 ### Slice 6 — the ruleset
 
@@ -460,6 +553,25 @@ order.
   refuses a direct push to `main` and a merge with a red `verify` for
   everyone, but cannot tell the token from the maintainer and does not
   reach `refs/dolt/data`.
+- **Until slice 4 lands, the agent can read its own two keys.** The profile
+  as built in slice 5 puts both keys in `$HERMES_HOME/.env`, which the
+  service user reads; only Hermes's own file guard — "not a security
+  boundary", in Hermes's words — and the spike check CH-4 stand between a
+  fetched page and the keys (findings F-14, F-26). The maintainer did not
+  accept this as the lasting state: on 2026-10-06 he chose the barrier of
+  criteria 60–70 (`decisions.md`, addendum of that day). What remains until
+  slice 4 lands is limited to runs by hand at the laptop: no scheduled run
+  exists before slice 7, and the weekly job is loaded only after every agent
+  slice is merged (ADR 0010, "Activation"). If a key leaks, both are revoked.
+- **After slice 4, the keys live in the service user's process for one
+  run.** No file the service user can read holds them, and Hermes's
+  standard input is closed to them (criterion 67); but they sit in the
+  environment of Hermes's process, which another process of the same user
+  may be able to read (`ps -E`; not tried), and a Hermes defect that copies
+  its environment into a tool result is not ruled out (not read). The agent has no tool that starts a process — terminal and code
+  execution are off at both locks — and criterion 62 finds a key in the
+  stream or the note only after the run, when a `web_extract` call may
+  already have sent it; the remedy is then to revoke the named key.
 - **The diff check checks shape, not truth.** An addendum steered by a
   hostile page passes it if it is well formed; the maintainer's review is
   the only content check.
@@ -485,7 +597,10 @@ Per slice:
 - Moved in the same pull request: slice 1 — `docs/WORKFLOW.md`,
   `scripts/kit/manifest.yaml`, `plans/INDEX.md`; slice 2 — none; slice 3 —
   `docs/architecture/2026-09-17-omnigent-first-target.md` (the D-7 row) and
-  `scripts/check_decision_continuity.py`; slice 4 — `scripts/ci_gates.py`;
+  `scripts/check_decision_continuity.py`; slice 4 — `scripts/ci_gates.py`,
+  and the profile's side of the key handover: `tools/hermes/recheck-agent.sh`,
+  `tools/hermes/env.example`, `tools/hermes/README.md`,
+  `tests/test_hermes_profile.py`;
   slice 5 — none; slice 6 — none; slice 7 — `tools/hermes/README.md`
   (its "Spike results").
 - The protected areas untouched and the non-goals unbuilt, shown by each
@@ -500,7 +615,10 @@ Per slice:
 
 None open. No `[DECISION]` arose: Q1 to Q6 settle what the slices build,
 the M3 question is proposed in the ADR and decided by its merge
-(`decisions.md`, "Not asked here"), and the rest is freely revisable.
+(`decisions.md`, "Not asked here"), and the rest is freely revisable. The
+question the phase-6 review of slices 2 and 5 raised — what holds the
+agent's own keys (F-14, F-26) — the maintainer answered on 2026-10-06
+(`decisions.md`, addendum of that day); criteria 60–70 follow from it.
 
 `[GAP]`s closed by reading (`research.md` section 13): where Q6 lands, the
 token lifetime, which permission reads the rules on `main`, Hermes's
@@ -558,3 +676,25 @@ the home directory's modes.
   `/Users/Shared/coding-harness-hermes/`, branch
   `research-recheck/<note stem>-<run date>` — short, Coding Harness's own,
   and none of adhd-relief's.
+- **The key file sits beside the publish token** in
+  `~/.config/coding-harness/`, the directory of mode 700 the runbook already
+  makes; the service user is outside `staff` and cannot enter the
+  maintainer's home. Its lines are written bare, without quotes or blanks:
+  a quoted value hid from CH-4's count (F-27). The variable names are
+  Hermes's own (`hermes_cli/auth.py` for `opencode-go`,
+  `plugins/web/firecrawl/provider.py`, at tag `v2026.9.21`, read on
+  2026-10-06), so the wrapper sets exactly what Hermes reads.
+- **`.env` names no key, not even empty** (criterion 64). Hermes loads
+  `$HERMES_HOME/.env` at every start with `override=True`, over the process
+  environment (`hermes_cli/main.py` calls `load_hermes_dotenv`;
+  `hermes_cli/env_loader.py`), and an assignment `KEY=` counts as a value,
+  so an empty key line would replace the handed-over key with nothing. Read
+  in code at the tag, not run.
+- **The wrapper's `perl` reads the keys** — after it sets the alarm, before
+  it starts Hermes — into its own environment, which `exec` hands on, and
+  reopens standard input on `/dev/null` (criteria 65–67). No shell variable
+  carries a key into an argument: `ps` shows other users' arguments on this
+  laptop (measured on 2026-10-06, macOS 27.0.1).
+- **The orchestrator scans for the key values** (criterion 62) behind the
+  barrier, not instead of it: the note is published, and a key in it or in
+  the stream means the barrier failed.

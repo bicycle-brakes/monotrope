@@ -2,7 +2,7 @@
 title: "Design — hermes-runner"
 category: design
 created: 2026-10-05
-updated: 2026-10-05
+updated: 2026-10-06
 status: draft
 implementation_status: none
 date: 2026-10-05
@@ -80,22 +80,39 @@ choice is a proposal; the merge of the ADR's pull request decides it.
    may rely on".
 2. **The orchestrator → the agent step.** The command
    `sudo -n -u _chhermes /usr/local/libexec/coding-harness/recheck-agent
-   <run dir>` (overridable with `--agent-command` for tests). The wrapper
-   refuses a run directory outside
+   <run dir>` (overridable with `--agent-command` for tests), with the key
+   file, opened by the orchestrator, as its standard input — the key
+   handover, and the only way the two keys reach the agent (the maintainer,
+   2026-10-06). No key stands in an argument: `ps` shows other users'
+   arguments on this laptop (measured 2026-10-06). `sudo` passes standard
+   input on to the command and closes the other descriptors (sudo 1.9.17p2
+   here, its documented behaviour; not tried with its `use_pty` — CH-4 shows
+   it). The wrapper refuses a run directory outside
    `/Users/Shared/coding-harness-hermes/runs/`, sets `HOME`,
    `HERMES_HOME=/Users/_chhermes/.hermes`,
    `HERMES_WRITE_SAFE_ROOT=<run dir>/work` and a fixed `PATH`, changes into
-   `work/`, and runs `hermes chat --oneshot --query-file
-   <run dir>/in/query.md --toolsets web,file --ignore-rules --format
-   stream-json --max-turns 60 --source tool`. Its standard output is the
-   event stream
+   `work/`, and starts `perl`, which sets the alarm, reads exactly one line
+   each for `OPENCODE_GO_API_KEY` and `FIRECRAWL_API_KEY` from standard
+   input (anything else: exit 2, no Hermes), puts them into its own
+   environment, reopens standard input on `/dev/null` and `exec`s
+   `hermes chat --oneshot --query-file <run dir>/in/query.md --toolsets
+   web,file --ignore-rules --format stream-json --max-turns 60 --source
+   tool`. Hermes takes both keys from its process environment because
+   `$HERMES_HOME/.env` does not name them: for `opencode-go`,
+   `hermes_cli/auth.py` (`_resolve_api_key_provider_secret`) reads `.env`
+   first and then the process environment through
+   `agent/secret_scope.get_secret`, which outside a multiplexed gateway
+   reads `os.environ`; Firecrawl (`plugins/web/firecrawl/provider.py`)
+   reads the process environment first (tag `v2026.9.21`, read in code on
+   2026-10-06, not run). Hermes's standard output is the event stream
    (`system`, `text`, `tool_use`, `tool_result`, `result`); its exit code is
-   Hermes's (0, 1, 130). Two caps bound the wall time: the wrapper runs
-   Hermes under an alarm of its own (`perl -e 'alarm shift; exec @ARGV'
-   2700 …`, 45 minutes), because the maintainer's process may not signal a
-   process of the service user; the orchestrator, after 50 minutes,
-   terminates the process group it started — `sudo`, which relays the
-   signal. The orchestrator never starts the agent a second time in a run.
+   Hermes's (0, 1, 130). Two caps bound the wall time, because the
+   maintainer's process may not signal a process of the service user: the
+   wrapper's `perl` sets an alarm of its own (2700 s, 45 minutes) before it
+   reads the keys, so a handover that never comes ends there too; the
+   orchestrator, after 50 minutes, terminates the process group it started
+   — `sudo`, which relays the signal. The orchestrator never starts the
+   agent a second time in a run.
 3. **The job prompt's contract** (runner-neutral). In: one note path and the
    run date, given by the runner in a closing block `## Inputs of this run`
    of the query. Out: the addendum appended to the note and the two header
@@ -116,12 +133,21 @@ choice is a proposal; the merge of the ADR's pull request decides it.
    stream under `~/Library/Logs/coding-harness/research-recheck/<run id>/`,
    a copy of the record as `last-run.json` beside them, and — with
    `--notify`, which the LaunchAgent passes — one macOS notification when a
-   run ends `failed`. The pull request is the success signal.
+   run ends `failed`. The pull request is the success signal. No key value
+   reaches the record, `last-run.json`, the saved event stream or the
+   notification: a key value found in the stream or the note fails the run
+   (spec, criterion 62), the orchestrator saves the stream with the key's
+   name in place of its value, and the reason — and so the notification —
+   names the key to revoke.
 6. **Hermes → the shared egress proxy → the vendors.** `model.base_url`
    `http://127.0.0.1:8787/go/v1` → OpenCode Go; `FIRECRAWL_API_URL`
-   `http://127.0.0.1:8787/fc` → the search vendor. Keys in the service
-   user's `.env`. The proxy is adhd-relief's (today its stub, which logs
-   and forwards and checks nothing).
+   `http://127.0.0.1:8787/fc` → the search vendor. The two keys come only
+   from the key handover (Interfaces 2); `$HERMES_HOME/.env` holds the two
+   URLs (`OPENCODE_GO_BASE_URL`, `FIRECRAWL_API_URL`) and names no key, not
+   even empty, because Hermes loads it with `override=True` over the process
+   environment at every start (`hermes_cli/env_loader.py`, read in code).
+   The proxy is adhd-relief's (today its stub, which logs and forwards and
+   checks nothing).
 7. **The re-check pull request → CI and the maintainer.** An ordinary pull
    request: `verify` runs on it like on any other, and the ruleset makes it
    a required check before any merge.
@@ -137,7 +163,8 @@ choice is a proposal; the merge of the ADR's pull request decides it.
 | Run record `record.json` | the log directory | orchestrator | `schema_version` (1), `run_id`, `run_date`, `outcome`, `step` (`prepare`, `agent`, `check`, `publish`, `done`), `reason`, `note`, `base`, `branch`, `pr_url`, `agent_exit_code`, `tokens` (`input`, `output`, `total`), `tools` (count by name), `duration_s`, `dry_run` |
 | The addendum | the note, in the pull request | the agent | spec, "Terms" |
 | Endpoint `opencode-go` | `model-endpoints.yaml` | slice 2 | `name`, `betreiber`, `residenz: anbieter-erklaert`, `abrechnung: abonnement`, `darf_sehen: [framework]`, `modelle: [glm-5.3]`, `bemerkung` |
-| The profile | `tools/hermes/` | slice 5 | `config.yaml`, `env.example`, `recheck-agent.sh`, `sudoers`, `ai.coding-harness.research-recheck.plist`, `README.md` |
+| The profile | `tools/hermes/` | slice 5; the key side changed by slice 4 | `config.yaml`, `env.example` (the two URLs only, once slice 4 lands), `recheck-agent.sh`, `sudoers`, `ai.coding-harness.research-recheck.plist`, `README.md` |
+| Key file `hermes-keys` | `~/.config/coding-harness/` | the maintainer, by hand | exactly `OPENCODE_GO_API_KEY=<value>` and `FIRECRAWL_API_KEY=<value>`, bare, one per line; mode 600 in a directory of mode 700 |
 
 Ownership and modes on the laptop (the runbook's, slice 5): the service user
 `_chhermes` has its own primary group `_chhermes` and is not in `staff`, so
@@ -146,9 +173,11 @@ added to `_chhermes`. `runs/<run id>/in/` is the maintainer's, mode 2750;
 `runs/<run id>/work/` is the maintainer's, group-writable, mode 2770 — the
 only place the agent's file tools may write. The installed `config.yaml`
 and `.env` belong to the maintainer, readable by the group, writable by no
-one else (adhd-relief's S-4). The token file is
-`~/.config/coding-harness/publish-token`, mode 600, in a directory of mode
-700. The orchestrator works in a clone of its own,
+one else (adhd-relief's S-4); `.env` holds the two URLs and no key. The
+token file is `~/.config/coding-harness/publish-token`, mode 600, in a
+directory of mode 700; the key file `hermes-keys` lies beside it with the
+same mode. The service user cannot enter the maintainer's home, so neither
+file is within its reach or its file tools'. The orchestrator works in a clone of its own,
 `~/Library/Application Support/coding-harness-recheck/clone`, never in a
 checkout where people or sessions work.
 
@@ -327,8 +356,19 @@ holds nothing that can write the repository.
 #### Consequences
 
 * **The maintainer owes** the ruleset, one afternoon for the spike and the
-  install, a token renewal every 366 days, and a re-run of S-2, S-4 and
-  the Coding Harness part after every change of the shared Hermes tag.
+  install, a token renewal every 366 days, the key file with the agent's
+  two keys, and a re-run of S-2, S-4 and the Coding Harness part after
+  every change of the shared Hermes tag.
+* **The agent's keys are out of its reach, not out of its process.** The
+  orchestrator hands the two keys over on the wrapper's standard input from
+  a file in the maintainer's home that the service user cannot read;
+  `$HERMES_HOME/.env` keeps the URLs only (the maintainer, 2026-10-06). A
+  fetched page can no longer steer the agent's file tools to the keys. They
+  still sit in the environment of the agent's process for one run; a key
+  found in the event stream or the note fails the run and is revoked. Until
+  the orchestrator lands, the profile keeps the keys in `.env` behind
+  Hermes's own guard, which Hermes calls "not a security boundary"; no
+  scheduled run exists before then.
 * **Every merge into `main` waits for a green `verify`,** for agents and
   the maintainer alike. A red or hanging CI blocks every merge until it is
   fixed or the owner switches the ruleset off.
@@ -377,6 +417,7 @@ flowchart LR
     subgraph laptop["The maintainer's MacBook"]
         orch["Container: orchestrator scripts/research_recheck.py, weekly LaunchAgent"]
         token["Component: publish token file, mode 600"]
+        keys["Component: key file of the agent's two keys, mode 600"]
         clone["Container: the orchestrator's own clone of coding-harness"]
         prompt["Component: prompts/research-recheck.md"]
         list["Component: scripts/check_research_currency.py"]
@@ -390,11 +431,12 @@ flowchart LR
     maint -- "reviews and merges" --> gh
     gh -- "runs on each pull request" --> ci
     orch -- "reads" --> token
+    orch -- "reads" --> keys
     orch -- "base, list, commit" --> clone
     clone --- prompt
     clone --- list
     orch -- "stages job, query and note, reads the note back" --> rundir
-    orch -- "sudo -u _chhermes" --> wrapper
+    orch -- "sudo -u _chhermes, the two keys on standard input" --> wrapper
     wrapper -- "starts, returns the event stream" --> agent
     agent -- "appends the addendum in work/" --> rundir
     agent -- "runs from" --> install
@@ -410,6 +452,8 @@ flowchart LR
 
 - Container: the orchestrator `scripts/research_recheck.py`, run weekly by
   the maintainer's LaunchAgent, with its own clone and the publish token.
+- Component: the key file of the agent's two keys in the maintainer's home,
+  handed to the wrapper on its standard input once per run.
 - Container: Coding Harness's Hermes agent as service user `_chhermes`,
   one-shot, configured by `tools/hermes/config.yaml`.
 - Component: the wrapper `recheck-agent` and the sudo rule that lets the

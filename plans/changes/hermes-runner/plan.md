@@ -571,14 +571,18 @@ grep 'D-7 — Omnigent adoption' docs/architecture/2026-09-17-omnigent-first-tar
 gh pr view --json title,labels --jq '.title, [.labels[].name]'   # 15: decide(adr): … and ["decision"]
 ```
 
-## Slice 4 — the orchestrator (appetite 4 h)
+## Slice 4 — the orchestrator (appetite 5.5 h)
 
-Branch `feat/research-recheck-orchestrator`, after phase 2a. Files:
+Branch `feat/research-recheck-orchestrator`, after phase 2a and after this
+change's slice-5 branch (`feat/hermes-runner-2`) merges, because the key
+handover changes slice 5's files (criteria 60–70, the maintainer's decision
+of 2026-10-06; 4 h before it). Files:
 
 - `scripts/research_recheck.py` — new, standard library only. `run`
   (flags `--repo`, `--remote-url`, `--clone`, `--runs-root`, `--log-dir`,
-  `--token-file`, `--agent-command`, `--note`, `--dry-run`, `--notify`,
-  `--cap-minutes`, defaults per `design.md`) and `check-ruleset` (`--repo`,
+  `--token-file`, `--key-file`, `--agent-command`, `--note`, `--dry-run`,
+  `--notify`, `--cap-minutes`, defaults per `design.md`; `--key-file`
+  defaults to `~/.config/coding-harness/hermes-keys`) and `check-ruleset` (`--repo`,
   optional `--token-file`; without one it uses `gh`'s own login, GET
   only). The clock is one module function, so a test can move it.
 - `tests/test_research_recheck.py` — new. Each test builds in `tmp_path`: a
@@ -586,8 +590,14 @@ Branch `feat/research-recheck-orchestrator`, after phase 2a. Files:
   and a stand-in `scripts/check_research_currency.py` that prints a fixture
   list; a fake agent (a Python script whose behaviour a fixture selects);
   a stub `gh` and a stub `bd` first on `PATH`, both logging argv and
-  environment; a token file of mode 600; `GIT_ALLOW_PROTOCOL=file`, so any
-  network attempt fails the test (criterion 43).
+  environment; a token file and a key file of mode 600, the key file with
+  two fixture keys that occur nowhere else; `GIT_ALLOW_PROTOCOL=file`, so
+  any network attempt fails the test (criterion 43). The fake agent also
+  logs its argv, its environment and what it reads on standard input.
+- The profile's side of the key handover — `tools/hermes/recheck-agent.sh`,
+  `tools/hermes/env.example`, `tools/hermes/README.md`,
+  `tests/test_hermes_profile.py` — as "Amendment 2026-10-06: the key
+  barrier" under slice 5 describes (criteria 64–70).
 - `scripts/ci_gates.py` — `OHNE_AUFRUFER["research_recheck.py"]`: "Maintainer
   tool — the weekly re-check runs from the maintainer's LaunchAgent on the
   laptop, which no CI step can do; tests/test_research_recheck.py runs it
@@ -596,18 +606,29 @@ Branch `feat/research-recheck-orchestrator`, after phase 2a. Files:
 Steps, tests written with each:
 
 1. CLI, record, exit codes, token file checks, token only in the
-   environment (40 min) — criteria 38–40.
+   environment; the key file's checks, the same shape as the token file's
+   (50 min) — criteria 38–40, 60.
 2. Prepare: fetch, base, list or `--note`, problem, schema, the remote's
    branch list, the run directory (50 min) — criteria 18–23.
 3. Agent step: new session, the cap, events, allowlist, exit code, extra
-   files (35 min) — criteria 24–27.
-4. Diff check (45 min) — criteria 28–31.
+   files; the key file as the agent command's standard input and nothing
+   else (55 min) — criteria 24–27, 61.
+4. Diff check; the scan of the stream and the note for the two key values,
+   the stream saved with the name in place of a value (60 min) — criteria
+   28–31, 62.
 5. Publish: the rules on `main`, the date at commit, commit, one refspec,
    `pr create`, `--dry-run`, `check-ruleset` (35 min) — criteria 32–37, 41,
    42.
-6. `OHNE_AUFRUFER`, ruff, verification, one `--dry-run` against a scratch
-   clone with a fake agent, its record in the pull request body, push (15
-   min).
+6. The profile's side of the key handover: the wrapper's `perl` reader,
+   `env.example`, the test's checks and planted faults, the runbook's
+   sections 4, 5, 8 and CH-4 (45 min) — criteria 64–70.
+7. A sweep for key values in every file and recorded argument of the
+   tests (criterion 63), `OHNE_AUFRUFER`, ruff, verification, one
+   `--dry-run` against a scratch clone with a fake agent, its record in the
+   pull request body, push (20 min).
+
+Added on 2026-10-06 against the plan of 4 h: 10 min in step 1, 20 in step
+3, 15 in step 4, 45 for step 6 and 5 in step 7 — 95 min, so 5.5 h.
 
 Test per criterion — the fault each must meet to go red is the criterion's
 "Refuted by":
@@ -633,6 +654,11 @@ Test per criterion — the fault each must meet to go red is the criterion's
 | 42 | `test_commit_message_names_five_and_no_bead` |
 | 43 | the fixture's `GIT_ALLOW_PROTOCOL=file` and stubbed `gh` |
 | 44 | `tests/test_ci.py` in `make verify` |
+| 60 | `test_bad_key_file_stops_before_the_agent` (missing, empty, 0644, 0640) |
+| 61 | `test_keys_reach_the_agent_on_stdin_only` (the fake agent's argv, environment and standard input) |
+| 62 | `test_a_key_in_the_stream_or_the_note_fails_unpublished` (two fixtures each, one per key) |
+| 63 | `test_no_key_value_in_any_file_or_argument` (every file under the run and log directories, every recorded argv) |
+| 64–70 | `tests/test_hermes_profile.py`, under slice 5, "Amendment 2026-10-06: the key barrier" |
 
 ## Slice 5 — the profile (appetite 3 h)
 
@@ -959,7 +985,9 @@ or run: no sudo, no `launchctl`, no Hermes, no model call.
   the wrapper's call (design Interfaces 2 and 5), criteria 50 and 54, slice
   4's code and the runbook's section 5 step 3. `spec.md`, "Risks accepted",
   and the ADR draft's Consequences still do not name the risk: they are outside
-  these slices' files, one bullet each for their owners.
+  these slices' files, one bullet each for their owners. *(2026-10-06: the
+  maintainer chose this barrier; see "Amendment 2026-10-06: the key barrier"
+  below.)*
 - `[DETAIL]` — **the runbook's budget is 320 lines, not 300.** Both fixes
   add text the maintainer needs at the laptop (a gate and a measure, a risk
   paragraph); the file is 314 lines. The 300 was a `[DETAIL]` of phase 3, not
@@ -1012,6 +1040,98 @@ first try (the enable step was matched loosely) and were closed in `1b4872d`.
 Also not run: the gate on CI's `awk` (this laptop's was used; the function
 uses `-F'|'`, `gsub` and `exit`, which POSIX awk, `gawk` and `mawk` share), and
 `launchctl`, `plutil` and `visudo` on the new lines.
+
+### Amendment 2026-10-06: the key barrier (built with slice 4)
+
+The maintainer decided on 2026-10-06 that the agent's two keys leave
+`$HERMES_HOME/.env`: the orchestrator hands them to the wrapper on its
+standard input, from a key file in the maintainer's home that `_chhermes`
+cannot read, and `.env` keeps the URLs only (`decisions.md`, addendum of that
+day; spec criteria 60–70; design Interfaces 2, 5 and 6). The profile's side is
+built in slice 4's branch, so that the wrapper and the orchestrator change in
+one pull request; **nothing of it is built on this branch.** Its share of slice
+4's estimate is step 6, 45 minutes.
+
+- `env.example` — the two URL lines only, `OPENCODE_GO_BASE_URL=` and
+  `FIRECRAWL_API_URL=`; its header says that the keys are handed over at
+  start and never belong in this file, not even empty (criterion 64).
+- `recheck-agent.sh` — the `exec env -i …` line keeps its variables and
+  starts `perl` with a short program in place of `alarm shift; exec @ARGV`:
+  set the alarm; read standard input to its end; accept exactly one line
+  `OPENCODE_GO_API_KEY=<value>` and one `FIRECRAWL_API_KEY=<value>`, each
+  value non-empty, without blanks or quotes, else `exit 2` before Hermes
+  (criterion 68); put both into `%ENV`; reopen `STDIN` on `/dev/null`;
+  `exec` Hermes with its arguments, unchanged (criteria 65–67). Nothing is
+  printed, and no key passes through a shell variable. The header comment
+  names the handover.
+- `README.md` (the runbook) — section 4's risk paragraph says what holds the
+  keys now and what remains (their place in Hermes's process environment for
+  one run; Hermes's `.env` guard stays as a second layer), and drops
+  "accepted" (F-26). Section 5 step 3 installs `.env` with the two URLs; the
+  key file is made in section 6's directory with `umask 077`, `chmod 600`
+  and `stat` (criterion 69). Section 8's `R()` hands the key file to the
+  wrapper (`… recheck-agent "$d" < ~/.config/coding-harness/hermes-keys`).
+  CH-4's key test reads the values from the key file, not `.env`, and gains
+  two tests: `sudo -u _chhermes cat ~/.config/coding-harness/hermes-keys`
+  refused, and `grep -cE '_(KEY|TOKEN|SECRET)=' "$HH/.env"` printing 0; the
+  run asked to find and send its keys is green when neither value is in its
+  stream nor, by `grep -rF`, anywhere under `$HH` (criterion 70). CH-5's
+  grep for other model keys widens to every key name. About eight lines
+  more; the runbook's budget already has no room for slice 7's results
+  (F-28), so this step raises `RUNBOOK_BUDGET` with its reason.
+- `tests/test_hermes_profile.py` — `check_env_example` holds criterion 64
+  (an empty key line is now a fault; 54's faults for a value and a missing
+  URL name stay); `check_wrapper_environment` runs the wrapper with two key
+  lines on standard input, and the stub records its environment, its
+  arguments and what it reads on standard input (criteria 65–67); a new
+  `check_wrapper_key_input` runs it with a missing, an empty, a doubled and
+  an unknown line (criterion 68); `check_agent_keys` is rewritten — the
+  install writes no key name under `$HH`, the key file has mode 600, and the
+  risk paragraph names the barrier, `web_extract` and the revocation
+  (criterion 69); `check_spike_part` holds CH-4's three tests (criterion
+  70). Each check with planted faults, as before.
+
+Read at tag `v2026.9.21` on 2026-10-06 through `gh api`, read only, in
+Hermes's code (scratch copies, not committed); none of it was run:
+
+- `hermes_cli/main.py` calls `load_hermes_dotenv` when it is imported, so
+  every `hermes` command loads `$HERMES_HOME/.env` first.
+- `hermes_cli/env_loader.py`: `load_hermes_dotenv` loads `$HERMES_HOME/.env`
+  with `override=True` ("`~/.hermes/.env` overrides stale shell exports");
+  `_load_dotenv_with_fallback` skips only a name without a value (`None`),
+  so `KEY=` publishes an empty string over the process environment. The
+  scrub of inherited variables that `.env` does not name
+  (`_PROFILE_MANAGED_ENV_KEYS`) lists six routing variables and leaves
+  credentials alone: "shell exports are a documented way to supply them".
+- `hermes_cli/auth.py`: `opencode-go` reads `OPENCODE_GO_API_KEY`, its base
+  URL `OPENCODE_GO_BASE_URL`; `_resolve_api_key_provider_secret` takes
+  `get_env_value_prefer_dotenv` (`hermes_cli/config.py`) — the value in
+  `.env`, or, when that is empty or absent, the process environment through
+  `agent/secret_scope.get_secret`, which without multiplexing reads
+  `os.environ` ("single-profile deployments inject credentials via the
+  process env").
+- `plugins/web/firecrawl/provider.py`: `FIRECRAWL_API_KEY` and
+  `FIRECRAWL_API_URL` through `get_env_value` — the process environment
+  first, then `.env`.
+- `agent/credential_pool.py` and `agent/credential_persistence.py`: a key
+  the pool takes from the environment is a borrowed source, written to
+  `auth.json` without its value, as a fingerprint.
+
+Not read, each for the laptop or a later reader:
+
+- whether `hermes chat --oneshot --query-file` reads standard input at all;
+  the wrapper gives it `/dev/null` either way;
+- whether macOS's sudo 1.9.17p2 passes the handover through unchanged with
+  `use_pty` — its documented behaviour; CH-4's run shows it, and a run that
+  cannot authenticate is red;
+- whether a log or session file Hermes writes under `$HERMES_HOME` carries a
+  key value from the environment (`security.redact_secrets` is on); CH-4's
+  `grep -rF` under `$HH` measures it;
+- whether a tool of the toolsets `web` and `file` can return Hermes's
+  process environment; their code was not searched for it;
+- whether another process of `_chhermes` could read Hermes's environment
+  (`ps -E`; not tried); none runs during a run, and the agent has no tool
+  that starts one.
 
 ## Slice 6 — the ruleset (the maintainer, 15 min)
 
