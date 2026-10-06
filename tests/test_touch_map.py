@@ -688,6 +688,25 @@ def test_the_size_lines(tmp_path: Path) -> None:
     assert "+1 unchanged tests" in out and split in out
 
 
+def test_links_may_be_false_wherever_they_are_printed(tmp_path: Path) -> None:
+    """Criteria 9, 12 (amended): the caption and, without a map, the list say a link can be false as well as missing."""
+    false = "a shown one can be false (a name in text, not a dependency)"
+    missing = "some may be missing"
+    # A map: the caption says both, and no other line repeats it.
+    out = _star(tmp_path, 3)
+    caption = [line for line in out.splitlines() if line.startswith("<sub>")]
+    assert len(caption) == 1 and false in caption[0] and missing in caption[0] and caption[0].endswith("</sub>")
+    assert [line for line in out.splitlines() if "can be false" in line] == caption
+    # The map left out: the list prints links and no caption follows, so a line of its own says both.
+    out = _star(tmp_path, 30)
+    assert "<details>" not in out and "Map left out: 31 boxes, more than 30." in out
+    said = [line for line in out.splitlines() if "can be false" in line]
+    assert len(said) == 1 and false in said[0] and missing in said[0]
+    assert not said[0].startswith("<sub>") and out.index("Map left out") < out.index(said[0])
+    # No link, nothing printed that could be false: no caveat.
+    assert "can be false" not in _star(tmp_path, 0)
+
+
 # ---------------------------------------------------------------------------
 # criterion 10: the map's form
 # ---------------------------------------------------------------------------

@@ -362,3 +362,13 @@ their wording; each amendment says what it adds.
    Code session of 2026-10-06 (`decisions.md`, addendum): a runner or shell
    script that names another runner makes no link. The code already did
    this; only the clause is new.
+2. **2026-10-06, a drawn link can be false (criteria 9 and 12).** The
+   phase-6 review (`findings.md`, F-1, MAJOR) measured links that are names in
+   text, not dependencies (a fixture path, a message, a home-directory copy of
+   a repository file). The caption of criterion 12 says, besides that some
+   links may be missing, that a shown one can be false (a name in text, not a
+   dependency). When the map is left out (criterion 9) and the list still
+   prints links, a line below the size lines says the same, so the caveat
+   stands wherever links are printed; where no link is printed there is none.
+   The non-goal "telling a fixture path from the repository's file" stands:
+   the rules still cannot tell them apart, and the reader is now told so.
