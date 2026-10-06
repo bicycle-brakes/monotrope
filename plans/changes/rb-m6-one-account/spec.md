@@ -4,7 +4,7 @@ status: draft
 implementation_status: partial
 date: 2026-10-05
 last_reviewed: 2026-10-05
-updated: 2026-10-05
+updated: 2026-10-06
 supersedes: null
 superseded_by: null
 bead: coding-harness-bma
@@ -53,7 +53,10 @@ that against the live ruleset. Inputs: [`research.md`](research.md) (read at
   `ruleset_id`).
 - **The five requirements** — (a) *pull request required*: an active rule of
   type `pull_request`; (b) *required check `verify`*: an active rule of type
-  `required_status_checks` whose list holds an entry with `context: verify`;
+  `required_status_checks` whose list holds an entry with `context: verify`
+  and `integration_id: 15368` (GitHub Actions, so a commit status posted by
+  hand with the maintainer's token cannot stand in for the job — amended
+  2026-10-06, finding F-8);
   (c) *no force push*: type `non_fast_forward`; (d) *no deletion*: type
   `deletion`; (e) *no bypass*: every ruleset supplying (a)–(d) shows a
   `bypass_actors` key whose value is an empty list.
@@ -88,10 +91,13 @@ invents; no test changes anything at GitHub.
    mandatory lines; it names the decision of 2026-10-05, why MAJOR, the
    closed valve, that the ruleset is measured on the writer machine and not
    in hosted CI, and LakeSwitch's state. No other row and no older entry
-   changes.
+   changes, except §3's level-4 row, which the maintainer's answer to F-2 of
+   2026-10-06 amends (a `writer` gate blocks only the run on the maintainer's
+   machine); the entry's heading carries the same day as `updated:`.
    *Refuted by:* `tests/test_regelwerk.py` or the gate `frontmatter-current`
-   red, a missing item, or a diff of the rule set outside the RB-M6 row, the
-   two header keys and the new entry.
+   red, a missing item, a heading date other than `updated:`, or a diff of
+   the rule set outside the RB-M6 row, §3's level-4 row, the two header keys
+   and the new entry. *Amended 2026-10-06 (finding F-9).*
 
 4. **Today's ruleset holds, and so does a stricter one.** A pure function
    takes the active rules and the supplying rulesets' details and returns
@@ -104,8 +110,11 @@ invents; no test changes anything at GitHub.
 5. **Each requirement that goes is a finding.** The function returns at
    least one finding, naming what is missing, when: a bypass actor is added
    to a supplying ruleset; any one of the four rule types is removed;
-   `verify` is not among the required checks; there is no active rule at all.
-   *Refuted by:* any of these stubs returning no finding.
+   `verify` is not among the required checks; `verify` is required but not
+   pinned to GitHub Actions (`integration_id` 15368); there is no active rule
+   at all.
+   *Refuted by:* any of these stubs returning no finding. *Amended
+   2026-10-06 (finding F-8): the pin.*
 
 6. **Not measured is not "no".** Each of these returns at least one finding
    that begins `not measured:` and names the step, never an empty list: `gh`

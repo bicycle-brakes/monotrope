@@ -69,3 +69,13 @@ Asked one at a time in the Claude Code session on 2026-10-06:
    machine, so a merge on GitHub without that run is not stopped, and the
    RB-M6 row says so in its own words. Not chosen: back to level 2; a real
    CI block later through a second identity.
+
+## Addendum 2026-10-06 (later): the GitHub Actions pin
+
+3. **Finding F-8: keep the pin** (maintainer, Claude Code session
+   2026-10-06, the recommended option). RB-M6's `verify` must come from
+   GitHub Actions (`integration_id` 15368); spec term (b), criterion 5 and the
+   RB-M6 row say so, and the 4.0.0 entry says LakeSwitch's ruleset lacks the
+   pin, which the maintainer adds there in GitHub. Finding F-9 (the §3 edit
+   and the heading date against criterion 3) follows from the F-2 answer and
+   is fixed with it, without a question of its own.
