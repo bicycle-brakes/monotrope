@@ -44,7 +44,7 @@ lakeswitch-ai PR #37; research 1):
    "LakeSwitch reads Coding Harness" (`ROADMAP.md`); it unblocks
    coding-harness-s6i and, through it, coding-harness-dj9.
 
-## [DECISION] 1 — the class of this change and its ADR answer (open)
+## [DECISION] 1 — the class of this change and its ADR answer (answered 2026-10-06: option 1)
 
 The spec author states the class; for a `feature` the maintainer answers the
 ADR question (`docs/WORKFLOW.md`, "Change classes, the ADR question and
@@ -106,3 +106,13 @@ Code session): add the missing sentence to the note on bead
 coding-harness-dj9 (the release builder) — `--require-hashes` needs a hash on
 every package, transitive ones included, and a lock without hashes is refused.
 Done the same day; no code changed.
+
+## Addendum 2026-10-06 (later): [DECISION] 1 answered
+
+The maintainer answered the ADR question for this change on 2026-10-06 in
+the Claude Code session ("Does project-lock need its own ADR?" — "Nein", the
+recommended option), recorded in `decisions/answers/project-lock/adr.yaml`
+(commit 57ab07f). The ADR question exists only for a `feature`, so the answer
+takes option 1: `class: feature` stays in spec.md with the ADR answer "no".
+The decision pull request restates the class, and the maintainer's merge
+confirms it (ADR 0008).
