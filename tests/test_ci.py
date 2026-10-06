@@ -487,8 +487,29 @@ def _ci_doc(text: str | None = None) -> dict:
     return yaml.safe_load(CI_FILE.read_text(encoding="utf-8") if text is None else text)
 
 
+GATE_FILE_PATH = REPO_ROOT / "decisions" / "gates.yaml"
+
+
+def _declared() -> list[str]:
+    """`tools.python`, read from the gate file here and not through `ci_gates.interpreters()`.
+
+    The generator reads the same key; a yardstick taken from the function under
+    test moves with it, so a generator that reordered or invented interpreters
+    would be measured against its own output (project-lock findings F-4).
+    """
+    return list(yaml.safe_load(GATE_FILE_PATH.read_text(encoding="utf-8"))["tools"]["python"])
+
+
 def _matrix(job: dict) -> list[str]:
-    return list(job["strategy"]["matrix"]["python"])
+    """The interpreters of a job's matrix — and nothing else may be in it.
+
+    A key besides `python` (`include`, `exclude`, a second axis) adds or removes
+    legs that `tools.python` does not declare, and reading only `python` would
+    never show it.
+    """
+    matrix = job["strategy"]["matrix"]
+    assert set(matrix) == {"python"}, f"the matrix holds keys besides python: {sorted(matrix)}"
+    return list(matrix["python"])
 
 
 def _install_runs(job: dict) -> list[str]:
@@ -516,7 +537,8 @@ def test_every_declared_interpreter_gets_a_leg(monkeypatch: pytest.MonkeyPatch) 
     a matrix written as a literal in the generator would pass the first half and
     fail here.
     """
-    declared = ci_gates.interpreters()
+    declared = _declared()
+    assert ci_gates.interpreters() == declared, "the generator reads another list than tools.python"
     assert len(declared) >= 2, f"tools.python declares {declared} — a matrix of one is not the second interpreter"
     job = _ci_doc()["jobs"][ci_gates.MATRIX_JOB]
     assert _matrix(job) == declared, f"matrix {_matrix(job)} differs from tools.python {declared}"
@@ -542,7 +564,7 @@ def test_the_toolchain_comes_only_from_the_lock() -> None:
 
 
 def test_every_job_sets_a_declared_interpreter_before_installing() -> None:
-    declared = ci_gates.interpreters()
+    declared = _declared()
     checked = 0
     for name, job in _ci_doc()["jobs"].items():
         install = _install_index(job)
@@ -625,7 +647,7 @@ def test_the_drift_job_runs_once_on_the_last_interpreter(monkeypatch: pytest.Mon
         assert "strategy" not in drift, "the drift job reads the outside world, not the interpreter: one run"
         return drift["steps"][_setup_python_index(drift)]["with"]["python-version"]
 
-    declared = ci_gates.interpreters()
+    declared = _declared()
     assert drift_version(_ci_doc()) == declared[-1]
     monkeypatch.setattr(ci_gates, "interpreters", lambda: ["3.11", "3.12", "3.13"])
     assert drift_version(_ci_doc(ci_gates.generate_ci())) == "3.13"
