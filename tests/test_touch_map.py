@@ -357,6 +357,27 @@ def test_what_makes_no_link(tmp_path: Path) -> None:
     assert "tests" not in boxes["tests/test_two.py"], "a join that ends two files names neither"
 
 
+def test_a_runner_names_no_runner(tmp_path: Path) -> None:
+    """Criterion 4 (the maintainer's decision, Amendment 1): a runner or shell script that names a runner makes no link."""
+    base = {
+        "Makefile": "all:\n\tcat decisions/gates.yaml\n\tcat .github/workflows/ci.yml\n\tcat data/config.yaml\n",
+        "scripts/launch.sh": "#!/bin/sh\ncat .github/workflows/ci.yml\ncat decisions/gates.yaml\n",
+        ".github/workflows/ci.yml": "steps: []\n",
+        "decisions/gates.yaml": "steps: []\n",
+    }
+    feat = {
+        ".github/workflows/ci.yml": "steps: [a]\n",
+        "decisions/gates.yaml": "steps: [a]\n",
+        "data/config.yaml": "a: 1\n",  # the control: the same Makefile names an "other" file, and that is a link
+    }
+    out = _run(_fixture(tmp_path, base, feat))
+    boxes = _boxes(out)
+    assert boxes["data/config.yaml"]["read by"] == ["Makefile"], "the control: a runner reads an other file"
+    for runner in (".github/workflows/ci.yml", "decisions/gates.yaml"):
+        assert set(boxes[runner]) == {"status"}, f"a runner or shell script names {runner}, and that is no link"
+    assert "scripts/launch.sh" not in boxes, "a shell script that names only runners is no neighbour"
+
+
 def test_a_trailing_comment_makes_no_link(tmp_path: Path) -> None:
     """Criterion 4: a name after a `#` that starts a comment in a shell script, a Makefile or YAML makes no link."""
     base = {
