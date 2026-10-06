@@ -72,9 +72,12 @@ boundary (`prompts/04-implement.md`).
      --no-renames --name-status`: `A` new, `D` removed, else changed.
    - `Snapshot(repo, rev)`: tracked paths, source texts (read lazily with
      `cat-file`), unique long basenames, unique `.py` stems.
-   - `kind(path)`, `is_prose(path)`, `code_text(path, body)` (the
-     prototype's `code_only`; for non-Python sources drop lines whose first
-     non-blank character is `#`).
+   - `kind(path)`, `is_prose(path)`, `read_code(path, body)` (the
+     prototype's `code_only`, built as `read_code`, which returns the code
+     text with its Python tree; for other sources it drops what follows a
+     `#` that starts a comment (`_strip_comment`, since repair round 1; in
+     phase 4 whole-line comments only). A wrapper `code_text`, which nothing
+     called, stood beside it in phase 4; repair round 1 removed it).
    - `names(snap, src)` — full path, unique basename, and for Python the
      `/` joins walked on the AST (trailing string constants of a chain of
      `ast.Div`, joined, matching exactly one tracked path or its end after a
@@ -218,7 +221,7 @@ flowchart LR
 | 1 | `test_the_working_tree_does_not_count`, `test_two_runs_give_the_same_bytes`, `test_only_the_standard_library` | sources read from disk; a set iterated unsorted; `import yaml` |
 | 2 | `test_the_merge_base_is_the_start`, `test_a_rename_is_removed_and_new` | the diff taken from base, not the merge base; rename detection on |
 | 3 | `test_which_changed_files_are_boxes` | a code file without links dropped; a script's path naming kept as a link |
-| 4 | `test_each_kind_of_link` (import, runner, shell, test path, basename, join, `reads`); `test_what_makes_no_link` (comment, docstring, `#` line, script naming, 8-character basename, basename twice, join ending two paths, registry of 15) | `code_text` returns the raw body; `> 8` becomes `>= 8`; a join takes the first of two paths; the registry threshold off by one |
+| 4 | `test_each_kind_of_link` (import, runner, shell, test path, basename, join, `reads`); `test_what_makes_no_link` (comment, docstring, `#` line, script naming, 8-character basename, basename twice, join ending two paths, registry of 15) | `read_code` returns the raw body (the one function the links are read through; `_strip_comment` holds the `#` rule of the other sources); `> 8` becomes `>= 8`; a join takes the first of two paths; the registry threshold off by one |
 | 5 | `test_a_tests_only_change_shows_the_code_it_tests`, `test_unchanged_tests_fold`, `test_a_fixture_path_is_not_a_box`, `test_one_hop_only`, `test_no_link_between_two_unchanged_boxes` | links only into changed code (the prototype's rule); one fold per test; an unchanged Markdown target drawn; a second hop; an unchanged pair linked |
 | 6 | `test_a_removed_script_still_named` | a removed file's links read at head; no `still named by` |
 | 7 | `test_prose_only_is_one_line` | an empty `flowchart LR` printed |

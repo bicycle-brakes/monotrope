@@ -246,10 +246,6 @@ def read_code(path: str, body: str) -> Source:
     return Source("\n".join(_strip_comment(line) for line in body.splitlines()), None)
 
 
-def code_text(path: str, body: str) -> str:
-    return read_code(path, body).text
-
-
 class Snapshot:
     """The tracked files of one revision; source texts are read from git objects on first use."""
 
