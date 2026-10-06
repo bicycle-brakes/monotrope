@@ -795,6 +795,13 @@ def test_links_may_be_false_wherever_they_are_printed(tmp_path: Path) -> None:
     assert not said[0].startswith("<sub>") and out.index("Map left out") < out.index(said[0])
     # No link, nothing printed that could be false: no caveat.
     assert "can be false" not in _star(tmp_path, 0)
+    # More than 30 boxes and no link: the map is left out, the list prints no link, and no caveat follows (Amendment 2).
+    where = tmp_path / "unlinked"
+    where.mkdir()
+    out = _run(_fixture(where, {}, {f"scripts/m_{i:02d}.py": "V = 1\n" for i in range(31)}))
+    assert "Map left out: 31 boxes, more than 30." in out and "<details>" not in out
+    assert not any(" · " in line for line in out.splitlines()), "the fixture draws no link"
+    assert "can be false" not in out and "some may be missing" not in out
 
 
 # ---------------------------------------------------------------------------
