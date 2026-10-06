@@ -645,6 +645,70 @@ def test_the_list_marks_a_writer_gate_as_local_only(
     assert all("nicht in der CI" not in danach[g["id"]] for g in writer)
 
 
+# A `placement: writer` gate runs in `make verify` on the maintainer's machine and
+# nowhere else; hosted CI never sees it. So moving a gate there is a decision of
+# its own, and each one is named with its reason. `test_every_gate_step_runs_even_
+# after_a_failing_gate` counts only the hosted gates and cannot notice a gate that
+# left: with the floor gate `pytest` moved to `writer`, every other test here stays
+# green and the pull request is no longer measured by the suite (rb-m6-one-account,
+# F-6). Like OHNE_MUTATIONSTEST, the list must shrink with the gates it names.
+# The tests below are not named `*_goes_red_*` on purpose: this file mentions every
+# script, and a mutation-test name here would count as evidence for each of them
+# (`test_the_mutation_ratchet_only_turns_one_way`).
+MAY_BE_WRITER_ONLY: dict[str, str] = {
+    "ruleset": "reads the branch ruleset at GitHub; the bypass list is shown only to whoever may edit it (RB-M6)",
+}
+
+
+def _writer_findings(alle: list[dict]) -> list[str]:
+    """Which gates are writer-only without being named, are floor gates, or are named without being writer-only."""
+    findings: list[str] = []
+    bekannt = {g["id"]: g for g in alle}
+    for g in alle:
+        if g.get("placement") != "writer":
+            continue
+        if g.get("floor"):
+            findings.append(f"'{g['id']}' is a floor gate and may never be writer-only: the hosted run would drop it")
+        elif g["id"] not in MAY_BE_WRITER_ONLY:
+            findings.append(f"'{g['id']}' is writer-only and not in MAY_BE_WRITER_ONLY — name it there with its reason")
+    for gid in MAY_BE_WRITER_ONLY:
+        g = bekannt.get(gid)
+        if g is None:
+            findings.append(f"'{gid}' is named in MAY_BE_WRITER_ONLY but is no gate any more — delete the entry")
+        elif g.get("placement") != "writer":
+            findings.append(f"'{gid}' is named in MAY_BE_WRITER_ONLY but is not writer-only — delete the entry")
+        elif g.get("floor"):
+            findings.append(f"'{gid}' is named in MAY_BE_WRITER_ONLY but is a floor gate — it may never be")
+    return findings
+
+
+def test_only_the_named_gates_are_writer_only() -> None:
+    """No floor gate and no unnamed gate leaves the hosted run (F-6)."""
+    assert MAY_BE_WRITER_ONLY, "Precondition: the list names at least the gate `ruleset`."
+    assert _writer_findings(gates()) == []
+
+
+@pytest.mark.parametrize(
+    ("gate", "change"),
+    [
+        pytest.param("pytest", {"placement": "writer"}, id="floor-gate-moves-to-writer"),
+        pytest.param("ruff-check", {"placement": "writer"}, id="unnamed-gate-moves-to-writer"),
+        pytest.param("ruleset", {"floor": True}, id="named-gate-becomes-a-floor-gate"),
+        pytest.param("ruleset", {"placement": "both"}, id="named-gate-comes-back-to-hosted"),
+    ],
+)
+def test_the_writer_only_list_flags_a_gate_that_moves(gate: str, change: dict) -> None:
+    alle = gates()
+    assert gate in {g["id"] for g in alle}, f"Precondition: there is a gate '{gate}'."
+    assert any(g["floor"] for g in alle if g["id"] == "pytest"), "Precondition: `pytest` is a floor gate."
+    moved = [{**g, **change} if g["id"] == gate else g for g in alle]
+    assert _writer_findings(moved)
+
+
+def test_the_writer_only_list_flags_a_named_gate_that_is_gone() -> None:
+    assert _writer_findings([g for g in gates() if g["id"] != "ruleset"])
+
+
 def test_no_workflow_copies_a_whole_directory_into_a_publish_target() -> None:
     """A `cp -r` into a publish directory is a publication without selection.
 
