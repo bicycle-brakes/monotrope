@@ -1109,6 +1109,25 @@ Choices I made as `[DETAIL]` (the maintainer can narrow any of them):
   by a test.
 - **O-3 — the roadmap line "Stage 2 live"** (`ROADMAP.md`) still speaks of
   reviews only; it was not changed here.
+- **O-4 — the real leak check does not reproduce its earlier "clean".** Run on
+  2026-10-07 at `c951e96` with the maintainer's real denylist
+  (`make leakcheck NAME=stage-2-codex-glm`; no model call): **BLOCK, four
+  places** — `tests/test_stage2.py` line 45 (the planted fake key `KEY` of the
+  runner's tests, rule `openai-style-key`, length 34), and the patches of three
+  commits: `6a1532c` (the commit that added that key), `79d2f5c` (the merge of
+  step A, whose combined diff shows the same line) and `fba000d` (a test of
+  `main` with a URL fixture that carries a user and a password, rule
+  `connection-string-with-credentials`, length 19). All four read as planted test
+  fixtures, not as real values (not opened beyond the line numbers, the check
+  does not print a match). The check scans every file the tree tracks and the
+  patch of every commit reachable from a branch, so a planted fixture is a
+  permanent BLOCK until the fixture is built at run time and the commits that
+  carry it are rewritten, or the denylist's rule is narrowed — the first two are
+  history rewrites, the third is the maintainer's own file. Nothing was changed
+  here; the old line "Real leak check against the real denylist: clean
+  (2026-09-30)" of the pull request body is replaced by this measurement. It
+  decides whether the first real call of stage 2 can run at all, so it is the
+  maintainer's to settle.
 
 Time log: step B committed at 01:09 (CEST), started 00:52.
 
@@ -1144,3 +1163,20 @@ it):
   a Fable fallback stands in it.
 
 Time log: step C committed at 01:12 (CEST), started 00:52.
+
+### Step D — the body of pull request #60
+
+Not a commit: the body is rewritten from `gh pr view 60 --json body` in the
+decision template's form and applied with `gh pr edit 60 --body-file`. What it
+states: decision 2's line and "Confirms" carry the new routing (GLM 5.3 Flash
+explores and implements, Codex reviews `feature`, `architectural` and `bounded`
+changes, the GLM loop stays in 4b, Opus 5.5 is the fallback, no Fable, no Kimi),
+"What changes for you" says that more of the repository goes to Z.ai behind the
+leak check, the head shas are the head of this branch, and bead
+coding-harness-bib is in the evidence. It also says that explore and implement
+are decided and not built (O-1), and states the leak-check measurement (O-4)
+instead of the earlier "clean". The pull request's title was not changed; it
+still reads "Codex and GLM review Coding Harness changes".
+
+Time log: step D written at 01:17 (CEST); started 00:52. No Codex, GLM or MiMo
+call, no tracker write, nothing installed, no merge and no new pull request.
