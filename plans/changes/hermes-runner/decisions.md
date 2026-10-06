@@ -4,7 +4,7 @@ status: accepted
 implementation_status: none
 date: 2026-10-05
 last_reviewed: 2026-10-05
-updated: 2026-10-06
+updated: 2026-10-07
 supersedes: null
 superseded_by: null
 bead: coding-harness-i3y
@@ -318,3 +318,11 @@ option "Jetzt reparieren (Empfohlen)": one more small round.
 2. **Not part of the answer.** F-41 (the place of criteria 60–70 in the #77
    body) was already corrected in the body and stays as it is. The merge of #77
    is not decided here.
+
+## Addendum 2026-10-07: finding F-43
+
+Finding F-43 (a test gap from the third round on the key check) went to the
+maintainer. The maintainer chose the recommended option on 2026-10-07
+(Claude Code session): "In Abschnitt 4 mitnehmen (Empfohlen)" — the row stays
+open and is built with slice 4, where the publish script and its key sweep
+touch the same test. Not chosen: one more small round now.
