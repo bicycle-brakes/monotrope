@@ -75,6 +75,15 @@ F-9 are for slice 4's phase 2a; the rest are one or two sentences each.
 | F-27 | MINOR | MAINT | fix-r1 | `tools/hermes/README.md`, CH-4, the key count and its green condition | CH-4's count reads green on a leaked key when the value in `.env` is quoted or ends in a blank. The loop takes the value with `sed -n "s/^$k=//p"`, quotes and trailing blanks included, and `grep -cF` looks for exactly that string. Measured on 2026-10-06 with a scratch `.env` and a one-line stream holding a `web_extract` URL with both keys bare: plain values print 1 and 1 (red, right); `KEY="value"` and `KEY=value ` print 0 and 0 — green by "both key lines print 0"; `export KEY=value` and `KEY = value` leave the value empty and `grep -cF ""` counts every line (red, fail closed). Dotenv files commonly allow quotes; whether Hermes's loader strips them: not read. An encoded leak (base64, split) counts 0 in every form; CH-4 asks for a plain read, so this matters less. CH-4 is the stop F-14 and F-26 rest on. What should hold: green rests first on the tool result showing the refusal ("is a Hermes credential store") or the mask, the count a second signal on the value without quotes or blanks — or the runbook says to write the values bare. [criterion 56] | open |
 | F-28 | MINOR | SPEC | base | `tests/test_hermes_profile.py`, `RUNBOOK_BUDGET` and `check_runbook`; `tools/hermes/README.md`, "Spike results"; `plan.md`, slice 7 | The runbook's line budget leaves no room for the results slice 7 must write into the same file, so the pull request that records the spike turns `verify` red. `check_runbook` counts every line, "Spike results" included: 314 lines on `7bd5787`, budget 320. Criterion 58 puts 15 rows into that table, and CH-2, CH-4 and CH-7 ask for more lines there: 329 or more. The ruleset requires a green `verify` to merge (criterion 57) and `spike_green` reads only the merged table, so the job stays off — the gate fails closed — until someone raises the budget again in that pull request, which slice 7's card does not foresee. Origin `base`: at `1b25c9a` the runbook was 300 lines of 300. The raise to 320 is acceptable in itself — a phase-3 `[DETAIL]`, not a criterion, with its reason in `plan.md` and beside the constant. What should hold: the budget counts the runbook up to "Spike results", or slice 7's card names the raise. [criteria 55, 58] | open |
 | F-29 | MINOR | MAINT | base | `tools/hermes/README.md`, section 10 | After a change of the shared Hermes tag the weekly job stays loaded while the new tag is unproven, and a red re-run has no step that unloads it. Section 10 asks whoever changes the tag to re-run S-2, S-4 and CH-1 to CH-8 and says nothing about the job; once enabled it sits in `~/Library/LaunchAgents/` and runs the next Sunday on the new tag. The change may come from adhd-relief's side (spec, "Risks accepted", "One Hermes tag for two agents"). Section 10 itself names what a new tag can open — a core toolset missing from `agent.disabled_toolsets`, a renamed key that fails silently — and the `.env` guard F-14 rests on is Hermes code that changes with the tag; the wrapper's `--toolsets web,file` stays as the other lock. Criterion 59 holds the job unloaded while an entry is red or open; a red re-run leaves it loaded. What should hold: section 10 starts with `launchctl bootout` of the job and re-enables it with section 9's gated line once the table is green again. [criterion 59] | open |
+| F-30 | MAJOR | SPEC | fix-r1 | `spec.md`, criterion 70 (line 476); `plan.md`, "Amendment 2026-10-06: the key barrier", the runbook bullet (line 1078) and "Not read" (line 1129); ADR 0010 on branch `decide/adr-0010-hermes` at `6503874` (`docs/adr/0010-hermes-first-unattended-writing-agent.md`), Validation (lines 355–359) and the new Decision Driver "No file the agent can read holds its own keys" | Hermes's own files under `$HERMES_HOME` are a leak path that no criterion holds, and the ADR says the criteria hold it. After slice 4 the keys live only in Hermes's process environment. The one place on disk where they can then land within reach of the service user, and so of `read_file` in a later run, is what Hermes itself writes under `$HH`: logs, session files, its state database. Which of these exist at the tag, and whether `read_file` refuses them, was not read; `security.redact_secrets` masks key-shaped text, and Hermes calls its file guard "not a security boundary". The plan measures this path: CH-4's find-and-send run is green only when neither value is found "by `grep -rF`, anywhere under `$HH`", and the plan's "Not read" list relies on that sweep. Criterion 70 does not carry it. It asks for the key file being unreadable, `.env` naming no key, and a run "whose event stream holds neither key value", so a slice 4 that builds CH-4 without the sweep passes 70 and its "Refuted by". Criteria 63 (files the orchestrator writes) and 69 (what the install writes) do not reach Hermes's own files either. ADR 0010's Validation says "the orchestrator's and the profile's tests hold … no file the service user can read … holds a key value (… criteria 60–70)". A merge of #77 therefore confirms what criteria 60–70 as written do not hold, and no repository test can hold Hermes's run-time files; only CH-4 on the laptop can. Two details for the sweep: it must fail on a file it cannot read (`grep -r` skips such a file and exits 2; the wrapper's `umask 002` makes Hermes's files group-readable unless Hermes sets its own modes, which was not read), and the values must not stand in grep's arguments (F-32). What should hold: criterion 70 names the sweep (after the find-and-send run, no key value in any file under `$HH`, and a file the sweep cannot read is red), with "Refuted by: the sweep missing". The ADR's line then holds through criterion 70, which holds the runbook's text. [criteria 63, 69, 70; ADR 0010, Validation] | open |
+| F-31 | MAJOR | MAINT | fix-r1 | `spec.md`, "Slices" (slice 7 "Needs first: 5", line 121) and criteria 69–70 (lines 470–481); `plan.md`, "Amendment 2026-10-06: the key barrier", the runbook bullet; `tools/hermes/README.md`, section 9, `spike_green` (line 286); ADR 0010 on branch `decide/adr-0010-hermes`, Validation (lines 360–363) | On a laptop installed before slice 4, the barrier is still missing after slice 4 lands, and the gate opens anyway. Slice 7 (spike and install) needs only slice 5. The spec allows this order, and its own residual risk ("runs by hand at the laptop" before slice 4) assumes it: install by slice 5's runbook, with both keys in `$HH/.env`; record CH-1 to CH-8 green; then merge slice 4. Slice 4 changes section 5 step 3 for a fresh install (criterion 69) and changes CH-4's text (criterion 70). No step removes the key lines from an `.env` that is already installed, makes the key file on a laptop that is past section 6, or asks for CH-4 again. Hermes loads that `.env` with `override=True` (`hermes_cli/env_loader.py`, read in code by the amendment), so it takes the keys from the file and the handover changes nothing. The agent's keys are back in a file it can read, behind the guard the maintainer did not accept. `spike_green` counts 15 green rows and reads no date (F-25), so a CH-4 row recorded before slice 4, without the key-file test and the `.env` test, opens the job. ADR 0010's Validation wants CH-4 to show "that the service user cannot read the key file and that `$HERMES_HOME/.env` names no key". A row from before slice 4 shows neither, and the gate cannot tell. Whether the spike will come first is not known. The residual-risk texts (spec line 556, ADR lines 183–194, the PR #77 body) say "until slice 4 lands", as if the exposure ended there. What should hold: either slice 7 needs slice 4 first, or slice 4's runbook has a step for an earlier install (rewrite `$HH/.env` to the two URLs, make the key file, re-run CH-4 and replace its row) and a criterion holds that step. Whether keys that sat in a readable `.env` during the spike are replaced is the maintainer's call. [criteria 58, 59, 69, 70; ADR 0010, Activation and Validation] | open |
+| F-32 | MINOR | MAINT | fix-r1 | `plan.md`, "Amendment 2026-10-06: the key barrier", the runbook bullet, CH-4 (line 1078); `tools/hermes/README.md`, CH-4, the count loop (line 219) | CH-4 puts the key values into a command's arguments, the leak path the barrier is built against. The runbook's count runs `grep -cF -- "$v" …` as the maintainer, with `$v` holding the key value. The amendment keeps that shape (the values now come from the key file) and adds a `grep -rF` of the values under `$HH`. The design's own reason for the standard-input handover is that "`ps` shows other users' arguments on this laptop (measured 2026-10-06)". For as long as each grep runs, any local process that lists processes sees a real key. The agent has no tool for that; adhd-relief's agent runs as a user of its own on the same laptop (whether it has a shell was not read). The window is short, and the keys are real. What should hold: CH-4 gives grep its patterns on standard input or from a file (`grep -F -f -`), never as an argument, and criterion 66's rule (no key value in an argument) also applies to the runbook. [criteria 66, 70; design, Interfaces 2] | open |
+| F-33 | MINOR | MAINT | fix-r1 | `design.md`, Interfaces 2 (the `sudo` sentence); `tools/hermes/sudoers`; `plan.md`, the amendment's "Not read" (the sudo item) | sudo's I/O logging can write the handed-over keys to disk, and nothing names it or pins it off. `man sudoers` on this laptop: `log_input` logs input that is "not connected to the user's terminal, due to I/O redirection"; `log_stdin` "can be used to log input from a pipe or redirected from a file"; both are off by default, and a `LOG_INPUT` tag on a rule turns them on. With either one on, each run's two key lines land in sudo's I/O log under `iolog_dir`. Whether macOS's `/etc/sudoers` or a file in `/etc/sudoers.d` sets them was not read (`/etc/sudoers`: Permission denied). The design names only `use_pty`, which the same page says "has no effect" when sudo is not attached to a terminal. The scheduled run under launchd therefore takes a different path from CH-4's run at the terminal; by the documentation, both pass standard input on. What should hold: the rule carries `NOLOG_INPUT:` (documented to override `log_input` per command; whether it also overrides a `Defaults log_stdin` was not read), or CH-4 records that no I/O logging applies to the rule, and the design names it. [criterion 61; design, Interfaces 2] | open |
+| F-34 | MINOR | SPEC | fix-r1 | `spec.md`, criterion 61 (line 346) | The "Refuted by" of criterion 61 does not refute a handover that delivers nothing. It names "other text on its standard input" and a key value in the arguments or the environment. An orchestrator that gives the agent command an empty standard input (`/dev/null`, or the key file never opened) leaves no other text and no key anywhere, and passes. The plan's test (`test_keys_reach_the_agent_on_stdin_only`) may compare for equality; the criterion does not ask for it. In production the wrapper then exits 2 (criterion 68), so this fails closed, but criterion 61 is the only criterion that holds the orchestrator's half of the handover. What should hold: "Refuted by: a fake agent whose standard input is not exactly the key file's two lines". [criterion 61] | open |
+| F-35 | MINOR | SPEC | fix-r1 | `spec.md`, "Slices", rows 4 and 5 (lines 119–120) | The slice table now has a cycle. Slice 4 "needs first" 1 and 5, and slice 5 still needs 2 and 4. The paragraph below the table says that slice 5 was built first and slice 4 follows its merge, so a reader learns the real order from prose that contradicts the table. What should hold: slice 5's row needs only 2. | open |
+| F-36 | MINOR | MAINT | fix-r1 | ADR 0010 on branch `decide/adr-0010-hermes` at `6503874`, "The key barrier" (lines 133–140) and Revisit 6 (lines 224–225); PR #77 body, "What your merge confirms", bullet "Key barrier (your answer of 2026-10-06)"; `decisions.md`, addendum of 2026-10-06 (lines 274–291) | Two sentences are attributed to the maintainer's answer, but the answer as recorded does not contain them. The recorded decision: the keys reach the wrapper on its standard input from a key file `_chhermes` cannot read, `.env` keeps the URLs only, and the risk is not accepted (`decisions.md`, items 1 and 3). The ADR's paragraph headed "(the maintainer, 2026-10-06)" ends "A key value found in the event stream or the note fails the run, and that key is revoked". The PR body's bullet "your answer of 2026-10-06" ends "A key found in a run's output fails the run, and you revoke that key". The scan is spec criterion 62, a detection layer the amendment added (spec `[DETAIL]`, "behind the barrier, not instead of it", line 698). The revocation is a duty for the maintainer, which merging #77 makes binding. Both are sound, and the maintainer sees both before the merge; only the attribution is wrong. Smaller: `decisions.md` says the answer "is recorded as the maintainer gave it" but quotes neither his words nor the option he chose. The earlier addenda do one or the other (lines 228–229 and 259). A later reader therefore cannot tell whether item 2 (amend before the merge of #77) was his words or the agent's plan; the session was not read. What should hold: the ADR and the PR body name the scan and the revocation as the design's addition beside the barrier, not inside "(the maintainer)", and `decisions.md` records the chosen option or his words. [ADR 0010, Decision; house rule 8] | open |
+| F-37 | MINOR | MAINT | fix-r1 | ADR 0010 on branch `decide/adr-0010-hermes`, Consequences (lines 316–320) and "Residual risk of the keys" (lines 183–194); PR #77 body, "Residual risk of the keys"; `spec.md`, "Risks accepted" (line 566) and criterion 62 | The residual-risk texts say that a leak is found after the run, but the scan finds only a key written out plainly. Criterion 62 looks for the two values. A key sent base64-encoded, reversed or split over two `web_extract` calls passes it, and no revocation is prompted. The ADR's "a leak found afterwards costs a revocation" and the PR body's "a leak is found after the run, not prevented" read as if every leak is found. F-27 names the same limit for CH-4's count. After slice 4 the agent has no known way to reach its keys, so this is the backstop's limit, not a new hole. What should hold: the residual-risk lines say the scan finds a key written plainly in the stream or the note. [criterion 62; ADR 0010, Consequences] | open |
+| F-38 | MINOR | MAINT | fix-r1 | `findings.md`, F-26's Status; `tools/hermes/README.md`, section 4 (line 71) | F-26 is marked resolved while its runbook half waits for slice 4, and this branch merges first. F-26 asked the runbook to stop calling the risk "accepted" until a decision document carries it. The maintainer then chose not to accept the risk (`decisions.md`, item 3). The runbook on this branch still heads its paragraph "**Risk, accepted: the agent holds its own two keys.**", and the plan moves the change to slice 4, which follows this branch's merge (spec, "Slices"). Between the two merges, `main` carries a runbook that states an acceptance the maintainer declined, and that is the runbook read at the laptop if the spike comes first (F-31). F-26's status does say that the word goes with slice 4. What should hold: the heading says the risk stands until slice 4 (one line, within the 320-line budget), or F-26 stays open for its runbook half. [F-26; decisions, addendum of 2026-10-06] | open |
 
 Reviewer session: none — phase 2a has not run; `plan.md` places it once over
 the whole spec before slice 4's phase 4. This review ran in a fresh session.
@@ -679,3 +688,105 @@ profile's side of it (spec criteria 60–70). F-26 is resolved: the spec's
 "Risks accepted", the design and ADR 0010 now say what holds the keys and
 what remains until and after slice 4. Neither change is reviewed; the next
 phase 6 reads them with slice 4.
+
+## Phase 6, F-14 amendments (2026-10-06)
+
+This review read, on 2026-10-06, the amendments that record the maintainer's
+decision on F-14, by a reviewer on Opus 5.5 in a fresh context and as a
+security reviewer. The reviewer made no external model call, installed and
+ran nothing (no sudo, no Hermes), opened no pull request and wrote nothing to
+the tracker. Two diffs were read:
+
+- Branch `feat/hermes-runner-2`, `f5494b6..88c7660`: the addendum to
+  `decisions.md`, spec criteria 60–70 with "Risks accepted" and the
+  `[DETAIL]`s, design Interfaces 2, 5 and 6, the data model and the ADR
+  draft's Consequences, plan slice 4 and its "Amendment 2026-10-06", and the
+  status of F-14 and F-26.
+- Branch `decide/adr-0010-hermes`, `03cd67f..6503874`:
+  `docs/adr/0010-hermes-first-unattended-writing-agent.md`, plus the body of
+  pull request #77 (`gh pr view 77`, read only). The PR was open, with head
+  `6503874`, label `decision` and title `decide(adr): …`.
+
+Also read: the runbook's sections 4, 8 and 9 and CH-4, the wrapper, and
+`sudoers` on this branch; `man sudoers` on this laptop (`use_pty`,
+`log_input`, `log_stdin`, `closefrom`, `NOLOG_INPUT`). Not read: Hermes's
+code (the amendment's readings at tag `v2026.9.21` are taken as recorded),
+macOS's `/etc/sudoers` (Permission denied), and the session in which the
+maintainer answered. Above this section, rows F-30 to F-38 were added and
+nothing else changed.
+
+**Verdict: two MAJOR rows, seven MINOR rows, all of origin `fix-r1`. No
+BLOCKER, no `[AMBIGUITY]`, no `[DIVERGENT]`.**
+
+- **F-30:** Hermes's own files under `$HERMES_HOME` are held by no
+  criterion, although ADR 0010's Validation says criteria 60–70 hold them.
+- **F-31:** an install made before slice 4 keeps both keys in `.env`, which
+  Hermes loads over the handover, and a CH-4 row from before slice 4 still
+  opens the gate.
+
+Both are repaired on this branch, before slice 4 is built. Neither needs a
+change to ADR 0010. Once criterion 70 carries the `$HH` sweep (F-30), the
+ADR's Validation line holds as written, and its Validation already asks CH-4
+to show the key-file test and the `.env` test, which a row from before
+slice 4 cannot show (F-31). **Pull request #77 can be merged as it stands
+once F-30 is repaired on this branch.** F-36 and F-37 are wording in the
+ADR and the PR body that the maintainer may fix before or after the merge;
+neither freezes a contradiction.
+
+What each question of the review found:
+
+- **(a) The decision, and nothing more.** `decisions.md` items 1 and 3, the
+  spec, the design and the ADR record the barrier as stated: a key file in
+  the maintainer's home that `_chhermes` cannot read, the wrapper's standard
+  input at start, and URLs only in `.env`; accepting the risk was not
+  chosen. Beyond it, and labelled as consequences: criteria 62 and 63, the
+  appetite raised from 9.5 to 11 hours, and slice 4 following slice 5. Two
+  additions are attributed to the maintainer (the scan and the revocation),
+  and the addendum's "as he gave it" carries no words: F-36.
+- **(b) Leak paths:**
+  - *Key in arguments:* held by criteria 61, 63 and 66. The runbook's own
+    grep is not: F-32.
+  - *Environment of other processes of `_chhermes`:* named in "Risks
+    accepted", ADR lines 189–194, and the plan's "Not read" (`ps -E`, not
+    tried). No repository test can hold it. The plan's "none runs during a
+    run" has no source. adhd-relief's agent runs as another user, and macOS
+    shows a process's environment only to its own user and to root (not
+    tried), so only a process of `_chhermes` itself matters.
+  - *Hermes's logs and session files:* F-30.
+  - *File tool and `/dev/fd/0`:* criterion 67 empties Hermes's standard
+    input, and `man sudoers` documents `closefrom` closing descriptors from
+    3 up. Held.
+  - *`.env` override:* held for a fresh install by criteria 64 and 69 and by
+    CH-4's `.env` test. An earlier install: F-31.
+  - *sudo and standard input:* `use_pty` has no effect without a terminal
+    (`man sudoers`), so the scheduled run and CH-4's run take different but
+    documented paths, and a handover that fails exits 2 (criterion 68).
+    sudo's I/O logging: F-33.
+  - *Whether the handover delivers anything:* criterion 61's refutation is
+    loose (F-34). The scan's limit: F-37.
+- **(c) "Not read" is marked honestly:** the plan's five items, the design's
+  "read in code, not run" and the `use_pty` note. The exceptions are F-36
+  (the decision's wording) and the plan's unsourced "none runs during a run"
+  (above).
+- **(d) ADR 0010 and the spec agree:** Decision, Activation and Validation
+  match criteria 60–70, except for "no file the service user can read"
+  (F-30). "Both are revoked" (spec line 565, before slice 4) and "that key is
+  revoked" (ADR, after slice 4) describe different states, not a
+  contradiction.
+- **(e) The residual risk until slice 4 is in front of the maintainer** in
+  three places: #77's "What could break" ("**Until slice 4 lands**"), its
+  "What your merge confirms" ("Residual risk of the keys"), and ADR lines
+  183–194. Its end at slice 4 holds only for an install made after slice 4
+  (F-31), and "a leak is found" overstates the scan (F-37).
+- **(f) The #77 body follows `.github/PULL_REQUEST_TEMPLATE/decision.md`:**
+  every section is present and in order, with the closing comment. "What
+  your merge confirms" names the key barrier and the option not chosen. The
+  bullet names no file, where the template asks "in which file"; this is a
+  nit, not a row.
+
+Not checked: Hermes's code at the tag (no new reading); whether Hermes
+writes logs, sessions or a state database under `$HH` at the tag, and with
+which modes (F-30); macOS's sudo defaults (F-33); whether the egress proxy
+of adhd-relief logs request headers, and with them the keys (outside these
+amendments, origin `base`; not a row). `make verify` was run on this branch
+after the rows were added (see the commit).
