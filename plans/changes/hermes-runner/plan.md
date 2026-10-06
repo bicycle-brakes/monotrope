@@ -1240,3 +1240,12 @@ red but report-only, `markdownlint` adding line-length reports for
 `tools/hermes/README.md`); its first run at 01:42 was red on `ruff format` of
 the new test code, which the next run fixed. The findings rows were set to
 fixed after the green at 01:49. The appetite was not reached.
+
+Repair round 1 of the F-14 amendments (rows F-30 to F-38; appetite 45 min, set
+by the coordinating session; two worktrees in turn): 2026-10-06 23:03–23:19, 16
+min, no break counted. Branch `feat/hermes-runner-2`: `make verify` ended VERIFY
+GREEN at 23:10 (741 passed, 15 skipped; `docs-links` and `markdownlint` red but
+report-only) before `3583d00`, at about 23:16 before `2d255fa` and at 23:17
+(this record) before the findings rows were set to fixed. Branch
+`decide/adr-0010-hermes`: VERIFY GREEN at 23:12 (600 passed, 15 skipped;
+`decision-continuity` green) before `5fee323`. The appetite was not reached.
