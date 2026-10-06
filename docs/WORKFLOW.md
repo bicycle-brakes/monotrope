@@ -4,7 +4,7 @@ category: governance
 status: current
 created: 2026-09-05
 last_reviewed: 2026-09-29
-updated: 2026-10-05
+updated: 2026-10-06
 owner: Data Architect
 provenance: ai-drafted-reviewed
 produced_by:
@@ -630,7 +630,7 @@ that the departure stays a decision and is not read as an oversight.
 | `ln -s AGENTS.md CLAUDE.md` | no `CLAUDE.md` | Since Claude Code 2.1.277, `AGENTS.md` is read directly as soon as no `CLAUDE.md` lies in the tree (maintainer decision, 2026-09-22). Conversation language and slash commands live in the user configuration, not in the repository. A known limit: the direct reading is a feature flag and fails with telemetry switched off, Bedrock/Vertex or an own `ANTHROPIC_BASE_URL` — then Claude Code reads nothing; for the Omnigent target (telemetry off) that has to be checked before M1. |
 | `.pre-commit-config.yaml` | not created | It would be a second lint list beside `decisions/gates.yaml`, with the same risk of drift. Enforcement lies with the gate list and the CI generated from it. |
 | `.mcp.json` | not created | This repository uses no MCP server today. An empty configuration would be a claim without content. |
-| `uv`, `mypy` | `python3`, `ruff`, `pytest` | That is the toolchain pinned in `requirements-ci.txt` and run by the CI. `uv` only compiles that lock from `pyproject.toml` (`make lock`); CI and the local runner install it with pip and never call uv. |
+| `uv`, `mypy` | `python3`, `ruff`, `pytest` | That is the toolchain pinned in `requirements-ci.txt` and run by the CI. `uv` only compiles that lock from `pyproject.toml` (`make lock`); CI and `make venv` install it with pip, and nothing calls uv to install. The local runner (`scripts/verify_all.sh`) installs nothing: it takes `$PYTHON` if that is set, otherwise the first of the checkout's `.venv/bin/python3` and the `python3` on `PATH` that imports PyYAML, and exits 2 when none does. |
 | task tracking in the artefact | Beads (`bd`) | `AGENTS.md`: Beads only. The artefacts say **what** is built, the tracker says **where it stands**. |
 
 ## 9 · Standing and next thresholds

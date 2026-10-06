@@ -4,7 +4,7 @@ status: draft
 implementation_status: partial
 date: 2026-10-05
 last_reviewed: 2026-10-05
-updated: 2026-10-05
+updated: 2026-10-06
 supersedes: null
 superseded_by: null
 bead: coding-harness-ei0
@@ -182,6 +182,13 @@ test passes the check a constructed input instead of the repository's.
 23. `docs/WORKFLOW.md` §8 says that uv only compiles the lock and that CI and
     the runner install it with pip.
     *Refuted by:* the row unchanged.
+    *Amendment 2026-10-06 (repair round 1, finding F-6; appended, nothing
+    renumbered):* the runner installs nothing — it chooses an interpreter and
+    exits 2 when none imports PyYAML — and `make venv` is what installs the
+    lock, with pip. The row says so; "the runner" above reads "CI and `make
+    venv`".
+    *Also refuted by:* a row that says the local runner installs anything, or
+    that names no installer for the local environment.
 
 ## What other work may rely on
 
