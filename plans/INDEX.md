@@ -41,6 +41,7 @@ typed: a hand-kept list of files ages exactly as fast as files are added.
 | [`changes/research-currency/research.md`](changes/research-currency/research.md) | draft | partial | 2026-10-05 | coding-harness-pu9 |
 | [`changes/research-currency/spec.md`](changes/research-currency/spec.md) | draft | partial | 2026-10-05 | coding-harness-pu9 |
 | [`changes/touch-map/decisions.md`](changes/touch-map/decisions.md) | draft | partial | 2026-10-06 | coding-harness-5p0 |
+| [`changes/touch-map/findings.md`](changes/touch-map/findings.md) | draft | partial | 2026-10-06 | coding-harness-5p0 |
 | [`changes/touch-map/plan.md`](changes/touch-map/plan.md) | draft | partial | 2026-10-06 | coding-harness-5p0 |
 | [`changes/touch-map/research.md`](changes/touch-map/research.md) | draft | partial | 2026-10-06 | coding-harness-5p0 |
 | [`changes/touch-map/spec.md`](changes/touch-map/spec.md) | draft | partial | 2026-10-06 | coding-harness-5p0 |
