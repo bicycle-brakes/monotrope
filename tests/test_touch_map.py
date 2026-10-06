@@ -495,6 +495,26 @@ def test_a_removed_script_still_named(tmp_path: Path) -> None:
     assert "still named by" not in line
 
 
+def test_a_moved_module_is_not_still_named(tmp_path: Path) -> None:
+    """Criterion 6: an import whose stem now resolves to a moved file does not name the removed one; a path in text still does."""
+    base = {
+        "scripts/helper_mod.py": "V = 1\n",
+        "scripts/user_mod.py": "import helper_mod\n",
+        "Makefile": "all:\n\tpython3 scripts/helper_mod.py\n",
+    }
+    repo = _fixture(tmp_path, base, {"scripts/helper_mod.py": None, "lib/helper_mod.py": "V = 1\n"})
+    boxes = _boxes(_run(repo))
+    assert boxes["scripts/helper_mod.py"]["status"] == ["removed"]
+    assert boxes["scripts/helper_mod.py"]["still named by"] == ["Makefile"], "the old path in text, not the import"
+    assert boxes["lib/helper_mod.py"]["imported by"] == ["scripts/user_mod.py"], "the import reaches the moved file"
+    # Two files of one stem at head: the import is not unique, but it does not dangle either.
+    other = tmp_path / "shared"
+    other.mkdir()
+    shared = {"scripts/helper_mod.py": None, "lib/helper_mod.py": "V = 1\n", "extra/helper_mod.py": "V = 2\n"}
+    boxes = _boxes(_run(_fixture(other, base, shared)))
+    assert boxes["scripts/helper_mod.py"]["still named by"] == ["Makefile"]
+
+
 # ---------------------------------------------------------------------------
 # criterion 7: prose only
 # ---------------------------------------------------------------------------

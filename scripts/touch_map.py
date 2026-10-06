@@ -277,6 +277,8 @@ class Snapshot:
             for p in self.paths
             if p.endswith(".py") and stems[p.rsplit("/", 1)[-1][:-3]] == 1
         }
+        # Every `.py` stem, shared or not: an import of one of them is not dangling.
+        self.py_stems = set(stems)
         # Every tail of a path after a `/` (and the whole path) -> the paths that end so.
         self.suffixes: dict[str, list[str]] = {}
         for p in self.paths:
@@ -396,12 +398,17 @@ def links(snap: Snapshot) -> set[Link]:
 
 
 def still_named(snap: Snapshot, path: str) -> list[str]:
-    """The sources at this revision that still hold a removed file's path or import its stem."""
+    """The sources at this revision that still hold a removed file's path or import its stem.
+
+    An import counts only while its stem resolves to no tracked `.py` file: when the module
+    moved to another folder, the import now reaches the moved file and dangles nowhere.
+    """
     stem = path.rsplit("/", 1)[-1][:-3] if path.endswith(".py") else None
+    dangling = stem is not None and stem not in snap.py_stems
     out = []
     for src in snap.sources:
         source = snap.source(src)
-        if path in source.text or (stem and source.tree is not None and stem in _import_roots(source.tree)):
+        if path in source.text or (dangling and source.tree is not None and stem in _import_roots(source.tree)):
             out.append(src)
     return out
 

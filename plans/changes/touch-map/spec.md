@@ -372,3 +372,9 @@ their wording; each amendment says what it adds.
    stands wherever links are printed; where no link is printed there is none.
    The non-goal "telling a fixture path from the repository's file" stands:
    the rules still cannot tell them apart, and the reader is now told so.
+3. **2026-10-06, an import names a removed file only while it dangles
+   (criterion 6).** The phase-6 review (`findings.md`, F-5) measured a false
+   alarm: a module moved to another folder, and an unchanged importer was
+   reported as still naming the removed path. In `still named by`, an import
+   of the removed file's stem counts only when that stem resolves to no
+   tracked `.py` file at head; a path held in text still counts as before.
