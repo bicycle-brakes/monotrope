@@ -47,7 +47,7 @@ asserts (F-7). The ADR answer is still missing, so `make verify` is red on
 
 | ID | Severity | Dimension | Origin | Where | Finding | Status |
 |---|---|---|---|---|---|---|
-| F-1 | BLOCKER | SPEC | base | `docs/WORKFLOW.md` lines 338–339; `prompts/05-verify.md` lines 9–10; `scripts/ci_gates.py --list` (`make gates`) | `[DIVERGENT]` Three places say that hosted CI runs what `make verify` runs, and this change makes that false for the first time. `docs/WORKFLOW.md` and `prompts/05-verify.md` both annotate `make verify` as "every locally runnable gate — the same the CI runs" and `make gates` as "what the CI runs"; `make gates` (measured on `b5f8631`) lists `[ruleset]` as an ordinary gate, while it marks the hosted-only `lychee` with "laeuft nur in der CI". Against that, `decisions/gates.yaml` gives `ruleset` `placement: writer`, `ci.yml` has no such step (byte-identical to `origin/main`, measured), and the 4.0.0 entry of the rule set says "misst `make verify` auf der Maschine des Maintainers, nicht die gehostete CI". The case it breaks: a reader who sees `ruleset` red in a local run — offline, say — is told CI runs the same and expects the pull request's check to go red too, or trusts hosted CI to notice a weakened ruleset when the maintainer works from another machine; neither happens. Before this change no gate was `writer`, so the local set was a subset of the hosted one and the sentences held loosely. What should hold: the two annotations and the list say that a `writer` gate runs in `make verify` only. The plan's "Not touched: `scripts/ci_gates.py` … a `writer` gate needs no generator change" missed the list, as it missed `tests/test_ci.py` (D1). [criterion 11, "the workflow text stays true"] | fixed in `8524800`, not reviewed |
+| F-1 | BLOCKER | SPEC | base | `docs/WORKFLOW.md` lines 338–339; `prompts/05-verify.md` lines 9–10; `scripts/ci_gates.py --list` (`make gates`) | `[DIVERGENT]` Three places say that hosted CI runs what `make verify` runs, and this change makes that false for the first time. `docs/WORKFLOW.md` and `prompts/05-verify.md` both annotate `make verify` as "every locally runnable gate — the same the CI runs" and `make gates` as "what the CI runs"; `make gates` (measured on `b5f8631`) lists `[ruleset]` as an ordinary gate, while it marks the hosted-only `lychee` with "laeuft nur in der CI". Against that, `decisions/gates.yaml` gives `ruleset` `placement: writer`, `ci.yml` has no such step (byte-identical to `origin/main`, measured), and the 4.0.0 entry of the rule set says "misst `make verify` auf der Maschine des Maintainers, nicht die gehostete CI". The case it breaks: a reader who sees `ruleset` red in a local run — offline, say — is told CI runs the same and expects the pull request's check to go red too, or trusts hosted CI to notice a weakened ruleset when the maintainer works from another machine; neither happens. Before this change no gate was `writer`, so the local set was a subset of the hosted one and the sentences held loosely. What should hold: the two annotations and the list say that a `writer` gate runs in `make verify` only. The plan's "Not touched: `scripts/ci_gates.py` … a `writer` gate needs no generator change" missed the list, as it missed `tests/test_ci.py` (D1). [criterion 11, "the workflow text stays true"] | fixed in `8524800` — reviewed at `b9ee999`, closed: both annotations now say the CI runs what `make verify` runs "minus a `writer` gate (here only)" and that `make gates` marks such a gate; `make gates` on `b9ee999` prints "— laeuft nur lokal (make verify), nicht in der CI" on `[ruleset]` and on no other gate, in agreement with the gate's `reason` and the 4.0.0 entry. `tests/test_ci.py::test_the_list_marks_a_writer_gate_as_local_only` holds the mark; replayed, R1-1 to R1-5 each turn it red. See "Phase 6, round 2" |
 | F-2 | BLOCKER | SPEC | base | `docs/governance/regelwerk.md`, §3 "Die Leiter" row 4, the RB-M6 row (Stufe 4) and the 4.0.0 entry, line `Tests:` | `[DIVERGENT]` The rule set answers "does a broken RB-M6 fail the CI run?" both ways. §3 defines level 4 as "CI blockierend — der Lauf schlägt fehl (BLOCK); ohne Fix kein Merge", and RB-M6 now stands at 4; the same document's 4.0.0 entry says the ruleset is measured by `make verify` on the maintainer's machine, "nicht die gehostete CI". The case: the maintainer removes the `deletion` rule in the web interface on a Monday; on Tuesday an agent's pull request passes the hosted `verify` check (the `ruleset` gate is not in it) and is merged on GitHub without a local `make verify` in between — nothing blocks, although level 4 promises "ohne Fix kein Merge". The spec chose level 4 as a `[DETAIL]` ("the gate blocks the run that phase 4 requires to be green"), reading "der Lauf" as the local run; §3's heading says CI, and no rung of the ladder describes a gate that blocks only on a writer machine. Before this change no level-4 rule rested on a writer-only gate. The rule set is `human-decided`, so which answer stands — level 4 with §3 amended to cover a blocking writer-machine gate, another level, or the divergence rejected with a reason — is the maintainer's, in this decision pull request. [criteria 2 and 3] | open — the maintainer's decision |
 | F-3 | MINOR | MAINT | base | `tests/test_repo_settings.py`, `_lists_required_check`; the RB-M6 row, "(der Job, der die Gate-Liste fährt)" | The check accepts a `verify` check from any source, so a ruleset that unpins it stays green. Today's ruleset (read 2026-10-06, `gh api repos/MPAdesso/coding-harness/rulesets/24528176`) requires `{"context": "verify", "integration_id": 15368}` — the check must come from GitHub Actions, the job that runs the gate list, as the amended row says in its parenthesis. Replayed end to end through the shim on `b5f8631`: the same answer with `integration_id` removed — the live test passes. Under one account that is the weakening that matters: unpinned, a commit status `verify: success` posted with the maintainer's token — which every agent holds — satisfies the rule without the job ever running (GitHub's documented meaning of `integration_id`; not measured, it would write). The spec's definition (b) asks for the context only, so the code meets the spec; the maintainer's words were "exactly today's ruleset", and the row promises the job. What should hold: an unpinned `verify` entry is a finding, or the row drops the parenthesis. [criterion 5, spec term (b)] | open |
 | F-4 | MINOR | MAINT | base | `tests/test_repo_settings.py`, `measure` and `gh_api` (`repos/{owner}/{repo}`) | The check never asserts which repository it measured. `gh` fills `{owner}/{repo}` from `GH_REPO` when that variable is set, else from the repository's default (`gh repo set-default`), else from the remote. Measured on 2026-10-06 on `b5f8631`: `GH_REPO=MPAdesso/lakeswitch-ai` with the variable `RULESET_ASSERT=1` makes the live test pass against lakeswitch-ai's ruleset 22305982, which happens to hold the five; `gh api 'repos/{owner}/{repo}' --jq .full_name` answers `MPAdesso/lakeswitch-ai` there and `MPAdesso/coding-harness` without it. The case: a shell or an agent harness that exports `GH_REPO` for other work, or an instance cloned as a fork whose default points to its upstream (reasoned, not measured), gets a green gate for a repository other than the one it guards. What should hold: the measured `full_name` is compared with the repository the gate runs in, and a mismatch is `not measured`. [criterion 7, "reads the default branch, its active rules and each supplying ruleset"] | open |
@@ -182,3 +182,78 @@ maintainer's choice. The pull request is a decision pull request
 in its body (house rule 4), says in its decision block that the five are a
 floor (2a-1), and says under "after the merge" that the valve
 `merge-freshness` still falls due on 2026-10-31.
+
+## Phase 6, round 2 (2026-10-06)
+
+Repair round 1 read, on commit `b9ee999`, 2026-10-06, by a reviewer on
+Opus 5.5 in a fresh context that wrote nothing but this file, opened no pull
+request, wrote nothing to the tracker, called no external model and changed
+nothing at GitHub. It read the repair diff `48f69e9..b9ee999` — the two
+annotations, the list mark in `scripts/ci_gates.py`, the new test, the
+`updated:` stamps and "Repair round 1" of `plan.md`, where the repair and its
+planted faults are recorded — against row F-1 only. F-2 stays the
+maintainer's decision; F-3 to F-7 were not re-read. Above this section only
+the Status column of F-1 changed.
+
+**Verdict: F-1 is closed; no new row, so nothing of origin `fix-r1`.** What
+still stops phase 7 is F-2 and the missing ADR answer.
+
+- **The three places are true now.** `make verify` runs the verify job's
+  gates with `--placement lokal`, everything but `hosted`
+  (`scripts/verify_all.sh`); the derived `ci.yml` holds everything but
+  `writer` (`misst_in`, `generate_ci`). "The CI runs the same, minus a
+  `writer` gate (here only)" names exactly that difference, and `make gates`
+  now marks `[ruleset]`, the one `writer` gate, and no other line. The words
+  agree with the gate's `reason` ("measures it on the writer machine") and
+  the 4.0.0 entry ("misst `make verify` auf der Maschine des Maintainers,
+  nicht die gehostete CI"). Searched on `b9ee999`: no other sentence in the
+  tree says the CI and `make verify` run the same set. The nearest, the
+  `verify_all.sh` entry of `OHNE_AUFRUFER` ("Die CI faehrt jedes Gate als
+  eigenen Schritt"), says how the CI runs gates — one step each, not through
+  the runner — not which.
+- **Minimal.** Two comment lines in each of `docs/WORKFLOW.md` and
+  `prompts/05-verify.md`, two lines in the `--list` branch of `main`, one test
+  with its helper, the `updated:` stamps and the plan record. No generator,
+  schema or runner change; `ci.yml` is untouched and `--check-ci` green.
+- **Replays.** All five planted faults, R1-1 to R1-5, each alone on a clean
+  export of `b9ee999` (`git archive`), `tests/test_ci.py` run, the file
+  restored: each turns `test_the_list_marks_a_writer_gate_as_local_only`
+  red, R1-4 at the synthetic `writer` gate as `plan.md` says. The export has
+  no `.git` and no tracker, so four other tests of the file are red there
+  with and without a fault (measured); they are not counted. Own variants:
+  the mark keyed on `misst_in(g, "lokal")` (red); the mark moved from the
+  command line to the gate's title line (red); `not misst_in(g, "ci")`
+  (green, an equivalent rewrite, as it should be); `placement != "both"` and
+  `placement == "writer" and not via_local_equivalent` (green — see below).
+- **The suite.** `make verify` on `b9ee999`, 2026-10-06, commit signing
+  off: `pytest` 639 passed and 16 skipped (one more than round 1, the new
+  test); `ruleset` green ("39 passed"); every block gate green except
+  `adr-answers` ("rb-m6-one-account: no answer"); `docs-links` and
+  `markdownlint` red but report-only, as in round 1.
+
+Seen, and no row:
+
+- The two green variants differ from the code only on gates the file does
+  not hold: a `hosted` gate with a command, and a `writer` gate run through
+  an action's local equivalent. For the first, the list prints no mark at
+  all — measured on `b9ee999` by moving `ruff-check` to `hosted` in a
+  scratch copy; at `48f69e9` the list had no placement branch (read) —
+  although `make verify` skips such a gate. That is F-1's shape for a gate
+  that does not exist, older than this round.
+- The longer annotations add three `MD013` line-length hits
+  (`docs/WORKFLOW.md` lines 338 and 339, `prompts/05-verify.md` line 9: 103,
+  93 and 102 characters, up from 68, 66 and 72). `markdownlint` is
+  report-only by its reason.
+- The new mark is German, like its neighbour "laeuft nur in der CI" and the
+  rest of the `--list` output; house rule 1 translates that output in a pull
+  request of its own (bead coding-harness-yim), not in passing.
+- `prompts/05-verify.md` still says `make gates` reads "from ci.yml"; it
+  reads `decisions/gates.yaml`, as `docs/WORKFLOW.md` says. The words were
+  the same at `48f69e9`; the repair kept them.
+
+Not checked: a hosted run (still no pull request); a planted revert of the
+two annotations, since no test holds prose — criterion 11 is read.
+
+For phase 7: F-1 no longer stops the pull request. Two things still do —
+F-2, the maintainer's decision on level 4 and §3, and the ADR answer,
+recorded as the maintainer states it.
