@@ -295,3 +295,38 @@ the tests named are up to three of them, in alphabetical order.
 | 23 | 16 | manifest | kit role of the script is `bestand` | 1 | `test_the_kit_carries_the_script_and_its_test` |
 | 24 | 16 | ci_gates.py | the OHNE_AUFRUFER entry missing | 1 | `test_every_script_has_a_caller_or_a_declared_reason` |
 
+
+Slice S2 (the map), planted on `badb919`. Before every fault: `python3 -m pytest
+tests/test_touch_map.py -q` — **27 passed**. After: **21 faults, 21 red, none
+green** — after one repair: fault 41 (the structure check passes a duplicate
+id) stayed **green** on the first run, because its bad block also broke the
+link-end rule and so still raised a problem. The test was sharpened (each bad
+block breaks one rule and the test asserts the problem that names it, commit
+`test(touch-map): each bad block …`), the fault was planted again and went red.
+`test file` in the column `File` is `tests/test_touch_map.py` itself: the fault
+is planted in the structure check, and the test that must go red is the one that
+feeds it bad blocks.
+
+| # | Crit. | File | Fault | Red | Tests that went red |
+| --- | --- | --- | --- | --- | --- |
+| 25 | 8 | script | a link left out of the list (the last drawn link) | 8 | `test_a_fixture_path_is_not_a_box`, `test_a_removed_script_still_named`, `test_a_tests_only_change_shows_the_code_it_tests` |
+| 26 | 8 | script | a list line starting with `\|` (the prose line) | 3 | `test_no_table_or_checkbox`, `test_the_list_and_the_map_hold_the_same_links`, `test_which_changed_files_are_boxes` |
+| 27 | 8 | script | the fold links left out of the map | 1 | `test_the_list_and_the_map_hold_the_same_links` |
+| 28 | 9 | script | `>= 15` becomes `> 15` | 1 | `test_the_size_lines` |
+| 29 | 9 | script | `<= 30` becomes `< 30` | 1 | `test_the_size_lines` |
+| 30 | 9 | script | fold boxes not counted | 1 | `test_the_size_lines` |
+| 31 | 9 | script | `> 30` becomes `>= 30` in the left-out line | 1 | `test_the_size_lines` |
+| 32 | 9 | script | a map printed for boxes without a link | 1 | `test_the_size_lines` |
+| 33 | 10 | script | the status word dropped from a label | 1 | `test_boxes_carry_level_and_status_in_words` |
+| 34 | 10 | script | the level `code:` dropped from a label | 1 | `test_boxes_carry_level_and_status_in_words` |
+| 35 | 10 | script | the map outside `<details>` | 3 | `test_boxes_carry_level_and_status_in_words`, `test_no_table_or_checkbox`, `test_the_size_lines` |
+| 36 | 10 | script | a link without its kind | 2 | `test_the_block_holds_by_structure`, `test_the_list_and_the_map_hold_the_same_links` |
+| 37 | 11 | script | labels not cleaned of `"` and backtick | 1 | `test_the_block_holds_by_structure` |
+| 38 | 11 | script | ids made from the file names | 1 | `test_the_block_holds_by_structure` |
+| 39 | 11 | script | control characters not flattened (a newline in a name) | 1 | `test_the_block_holds_by_structure` |
+| 40 | 11 | test file | the structure check passes an undeclared link end | 1 | `test_the_structure_check_can_go_red` |
+| 41 | 11 | test file | the structure check passes a duplicate id | 1 | `test_the_structure_check_can_go_red` |
+| 42 | 12 | script | the import delta taken from head alone | 1 | `test_imports_added_and_dropped` |
+| 43 | 12 | script | imports dropped not reported | 1 | `test_imports_added_and_dropped` |
+| 44 | 12 | script | the merge base's hash missing from the caption | 1 | `test_the_caption_names_both_commits` |
+| 45 | 1 | script | unchanged boxes in set order (numbers differ by hash seed) | 3 | `test_a_tests_only_change_shows_the_code_it_tests`, `test_no_link_between_two_unchanged_boxes`, `test_two_runs_give_the_same_bytes` |
