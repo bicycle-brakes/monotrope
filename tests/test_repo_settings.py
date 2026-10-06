@@ -4,7 +4,9 @@
 within the repository, and they ask for what one GitHub account can hold:
 
 1. a pull request is required,
-2. the check `verify` is required (the job that runs the gate list),
+2. the check `verify` is required, and it is pinned to GitHub Actions
+   (`integration_id` 15368) — the job that runs the gate list, not a commit
+   status that any token can post (RB-M6, F-3),
 3. no force push,
 4. no deletion,
 5. no bypass — every ruleset that supplies (1) to (4) shows an empty bypass
@@ -62,6 +64,11 @@ LIVE_ENV = "RULESET_ASSERT"
 # runs every verify gate.
 REQUIRED_CHECK = "verify"
 
+# The GitHub App id of GitHub Actions. A required check without it accepts a
+# commit status of that name from anyone with a token — every agent here —
+# without the job ever running.
+GITHUB_ACTIONS_APP_ID = 15368
+
 # A call that hangs must not hang `make verify`: an unreachable API is red.
 GH_TIMEOUT_SECONDS = 60
 
@@ -102,13 +109,22 @@ def gh_api(path: str) -> tuple[int, str]:
     return done.returncode, done.stdout if done.returncode == 0 else done.stderr
 
 
-def _lists_required_check(rule: dict[str, Any]) -> bool:
-    """Does this `required_status_checks` rule list the check `verify`?"""
+def _lists_required_check(rule: dict[str, Any], *, pinned: bool = True) -> bool:
+    """Does this `required_status_checks` rule list the check `verify`?
+
+    With `pinned` the entry must also come from GitHub Actions
+    (`integration_id`); a missing or other id is an unpinned check.
+    """
     parameters = rule.get("parameters")
     checks = parameters.get("required_status_checks") if isinstance(parameters, dict) else None
     if not isinstance(checks, list):
         return False
-    return any(isinstance(c, dict) and c.get("context") == REQUIRED_CHECK for c in checks)
+    return any(
+        isinstance(c, dict)
+        and c.get("context") == REQUIRED_CHECK
+        and (not pinned or c.get("integration_id") == GITHUB_ACTIONS_APP_ID)
+        for c in checks
+    )
 
 
 def _supplying_rules(rules: list[dict[str, Any]]) -> dict[str, list[dict[str, Any]]]:
@@ -151,7 +167,16 @@ def ruleset_findings(rules: list[dict[str, Any]], rulesets: dict[Any, Any]) -> l
 
     findings: list[str] = []
     for rule_type, matching in _supplying_rules(rules).items():
-        if not matching:
+        if matching:
+            continue
+        if rule_type == "required_status_checks" and any(
+            r.get("type") == rule_type and _lists_required_check(r, pinned=False) for r in rules
+        ):
+            findings.append(
+                f"required check {REQUIRED_CHECK} is not pinned to GitHub Actions "
+                f"(integration_id {GITHUB_ACTIONS_APP_ID}) — a commit status posted under any token could satisfy it"
+            )
+        else:
             findings.append(f"{RULE_TYPES[rule_type]} is not asked for")
 
     for ruleset_id in _suppliers(rules):
@@ -354,6 +379,40 @@ def test_the_ruleset_check_goes_red_when_verify_is_not_required() -> None:
             rule["parameters"]["required_status_checks"] = [{"context": "lint"}]
     findings = ruleset_findings(rules, {RULESET_ID: _todays_ruleset()})
     assert findings == [f"required check {REQUIRED_CHECK} is not asked for"]
+
+
+@pytest.mark.parametrize(
+    "entry",
+    [
+        pytest.param({"context": "verify"}, id="no-integration-id"),
+        pytest.param({"context": "verify", "integration_id": None}, id="null-integration-id"),
+        pytest.param({"context": "verify", "integration_id": 99999}, id="another-app"),
+        pytest.param({"context": "verify", "integration_id": str(GITHUB_ACTIONS_APP_ID)}, id="id-as-a-string"),
+    ],
+)
+def test_the_ruleset_check_goes_red_when_verify_is_not_pinned_to_github_actions(entry: dict[str, Any]) -> None:
+    """An unpinned `verify` accepts a commit status posted by hand; it is a finding, not a pass (F-3)."""
+    rules = _todays_rules()
+    for rule in rules:
+        if rule["type"] == "required_status_checks":
+            rule["parameters"]["required_status_checks"] = [entry]
+    findings = ruleset_findings(rules, {RULESET_ID: _todays_ruleset()})
+    assert len(findings) == 1
+    assert "not pinned to GitHub Actions" in findings[0]
+    assert str(GITHUB_ACTIONS_APP_ID) in findings[0]
+
+
+def test_one_pinned_verify_among_unpinned_ones_holds() -> None:
+    """Rules add up: a second ruleset that lists an unpinned `verify` does not undo the pinned one."""
+    rules = _todays_rules()
+    rules.append(
+        {
+            "type": "required_status_checks",
+            "parameters": {"required_status_checks": [{"context": "verify"}]},
+            "ruleset_id": 7,
+        }
+    )
+    assert ruleset_findings(rules, {RULESET_ID: _todays_ruleset(), 7: {"id": 7, "bypass_actors": []}}) == []
 
 
 def test_the_ruleset_check_goes_red_on_an_empty_rule_list() -> None:
