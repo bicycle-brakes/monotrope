@@ -897,3 +897,12 @@ def test_the_ruleset_gate_check_goes_red_when_the_gate_drifts(key: str, value: A
 def test_the_gate_command_may_run_the_live_test_in_other_ways(command: str) -> None:
     """The tie asks whether the live test runs, not whether the words are the usual ones."""
     assert _command_findings(command) == []
+
+
+@pytest.mark.parametrize(
+    "tail", ["|| true", "; true", "&& true", "| tee /dev/null", "> /dev/null", "$(true)", "`true`"]
+)
+def test_the_gate_command_goes_red_when_it_chains_or_redirects(tail: str) -> None:
+    """The live test would run, but a trailing `|| true` swallows its exit code: that is named, not a side effect."""
+    findings = _command_findings(f"{LIVE_ENV}=1 python3 -m pytest tests/test_repo_settings.py -q -rs {tail}")
+    assert any("must not chain" in f for f in findings), findings
