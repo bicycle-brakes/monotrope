@@ -97,3 +97,12 @@ its `decisions/gates.yaml`, its workflows, and an amendment of its D-46, D-47
 and D-54). Until it lands, this change keeps both legs, 3.11 and 3.12, on
 every pull request; afterwards a follow-up change reduces Coding Harness's CI
 to 3.12 alone.
+
+## Addendum 2026-10-06 (later): finding F-9
+
+Finding F-9 came from the second repair round in a row and went to the
+maintainer. The maintainer chose the recommended option on 2026-10-06 (Claude
+Code session): add the missing sentence to the note on bead
+coding-harness-dj9 (the release builder) — `--require-hashes` needs a hash on
+every package, transitive ones included, and a lock without hashes is refused.
+Done the same day; no code changed.
