@@ -1111,3 +1111,36 @@ Choices I made as `[DETAIL]` (the maintainer can narrow any of them):
   reviews only; it was not changed here.
 
 Time log: step B committed at 01:09 (CEST), started 00:52.
+
+### Step C — ADR 0007
+
+`docs/adr/0007-stage-2-reviews-by-codex-and-glm.md` (unmerged, so amended in
+place; the file name stays, because the continuity map and the D-13 row name
+it):
+
+- Title and header: "Codex and GLM work on framework content"; the review
+  line names the decisions of 2026-10-06 (bead coding-harness-bib); the date
+  line says "widened on 2026-10-06 before the merge".
+- Context: a paragraph "Widened on 2026-10-06" with the four decisions, and the
+  sentence that this ADR no longer keeps phases 1 and 4 with Anthropic.
+- Decision 1: the criteria hold on a call of explore or implement as on a call
+  of a review; the fallback reads Opus 5.5 for the reviews and Haiku 4.5 and
+  Sonnet 5.5 for phases 1 and 4. Decision 2: the scope names exploration and
+  implementation, says that far more of the repository goes to Z.ai, and that
+  LakeSwitch and customer content never go. Decision 3: Kimi is dropped, and so
+  is Fable. Decision 4: the reads of the foreign models are not confined; the
+  earlier acceptance named the reviewers, and the maintainer confirms the wider
+  reach by merging. New decision 5: explore and implement on GLM 5.3 Flash,
+  decided, not built.
+- Options: "Reviews only, as this ADR first stood" is listed as set aside by the
+  maintainer. Consequences: the interim routing on `main`, the class remark
+  (`spike` and `bounded`), "More leaves than reviews", and the other changes
+  that follow from answers. Validation names the tests that hold the routing.
+- The two "Changed, 2026-09-30" notes of the architecture documents carry one
+  added sentence about the widening.
+- `check_decision_continuity.py` is green with D-13 mapped to this file; the
+  test `test_d13_is_amended_by_adr_0007` holds eight needles of the ADR,
+  four of them new, and that neither "phases 1 and 4 stay with Anthropic" nor
+  a Fable fallback stands in it.
+
+Time log: step C committed at 01:12 (CEST), started 00:52.

@@ -1611,8 +1611,19 @@ def test_d13_is_amended_by_adr_0007(tmp_path: Path) -> None:
     # The gate itself accepts the tree, and the ADR says what the plan says it says.
     assert check_decision_continuity.run(TARGET) == []
     adr = flat((adr_dir / ADR_0007).read_text(encoding="utf-8"))
-    for needle in ("Kimi is dropped", "does not enter M2", "a request, not a lock", "neither endpoint"):
+    for needle in (
+        "Kimi is dropped",
+        "does not enter M2",
+        "a request, not a lock",
+        "neither endpoint",
+        # the amendment of 2026-10-06
+        "and so is Fable",
+        "Explore and implement run on GLM 5.3 Flash — decided, not built.",
+        "LakeSwitch and customer content never go",
+        "falls back to Opus 5.5",
+    ):
         assert needle in adr, needle
+    assert "phases 1 and 4 stay with Anthropic" not in adr and "Fable 5.1 until" not in adr
     # Both architecture documents that set D-13's criteria carry the dated note.
     for doc in (TARGET, PLAN_DOC):
         note = flat(doc.read_text(encoding="utf-8"))

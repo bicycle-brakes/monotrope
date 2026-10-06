@@ -4,7 +4,7 @@ category: architecture
 status: proposed
 created: 2026-09-17
 last_reviewed: 2026-09-19
-updated: 2026-10-05
+updated: 2026-10-07
 owner: framework-architect
 provenance: ai-drafted-reviewed
 produced_by:
@@ -25,7 +25,9 @@ tags: [plan, implementation, omnigent, workflow, gates]
 > content: a green leak check and a declared endpoint hold on every foreign
 > call, lakeswitch-ai's disclosure decision governs lakeswitch-ai's own
 > content, and the first three stage-2 runs, measured, replace the three
-> qualification runs before the first call. M2 is not entered. Where this
+> qualification runs before the first call. M2 is not entered. Before its
+> merge the amendment was widened (2026-10-06): GLM 5.3 Flash explores and
+> implements, as well as the reviews that Codex and GLM make. Where this
 > document names D-13's four criteria as the entry condition for foreign calls,
 > it records the earlier design.
 
