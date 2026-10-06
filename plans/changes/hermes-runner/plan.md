@@ -67,7 +67,8 @@ No `[DECISION]` is open.
   brings `check-ruleset`, `gh api repos/MPAdesso/coding-harness/rules/branches/main`
   shows the rules.
 - Waits for the laptop: slice 7 (the spike, the Coding Harness part, the
-  install), and with it the first live run.
+  install), and with it the first live run. Slice 7 also waits for slice 4's
+  merge (F-31, below).
 
 ## Verification
 
@@ -655,7 +656,7 @@ Test per criterion — the fault each must meet to go red is the criterion's
 | 43 | the fixture's `GIT_ALLOW_PROTOCOL=file` and stubbed `gh` |
 | 44 | `tests/test_ci.py` in `make verify` |
 | 60 | `test_bad_key_file_stops_before_the_agent` (missing, empty, 0644, 0640) |
-| 61 | `test_keys_reach_the_agent_on_stdin_only` (the fake agent's argv, environment and standard input) |
+| 61 | `test_keys_reach_the_agent_on_stdin_only` (the fake agent's argv and environment; its standard input compared byte for byte with the key file, so an empty one fails: F-34) |
 | 62 | `test_a_key_in_the_stream_or_the_note_fails_unpublished` (two fixtures each, one per key) |
 | 63 | `test_no_key_value_in_any_file_or_argument` (every file under the run and log directories, every recorded argv) |
 | 64–70 | `tests/test_hermes_profile.py`, under slice 5, "Amendment 2026-10-06: the key barrier" |
@@ -849,6 +850,20 @@ sources (`KEY_SOURCES`) are held against the config, not against Hermes (a key
 that a later tag drops stays silent until the laptop shows it, CH-1 and CH-4
 being the proof); and the deny-glob check emulates Hermes's matching as its
 documentation states it, not Hermes's code.
+
+Added on 2026-10-06 in the repair round of the F-14 amendments (rows 1–100 keep
+their numbers; each fault is in `FAULTS`, planted alone, silent before):
+
+| # | Criterion | Fault planted | After | Check |
+| --- | --- | --- | --- | --- |
+| 101 | 52 | the pin names `!log_input` only | `sudo's input logging is not pinned off for the wrapper alone: ['Defaults!/usr/local/libexec/coding-harness/recheck-agent !log_input']` | `check_sudoers` (F-33) |
+| 102 | 52 | `log_input` pinned on | `… ['Defaults!/usr/local/libexec/coding-harness/recheck-agent log_input, !log_stdin']` | `check_sudoers` |
+| 103 | 52 | the pin names another command | `… ['Defaults!/usr/bin/id !log_input, !log_stdin']` | `check_sudoers` |
+| 104 | 56 | CH-4 runs `grep -c -- "$v"` besides its pattern file | `CH-4 puts a key value on a command line` | `check_agent_keys` (F-32) |
+
+Two older faults of criterion 56 changed their text with F-32 and F-38: "the
+risk is not named" now looks for the new heading, "CH-4 does not count the keys"
+for `grep -cF -f`.
 
 ### Notes, slice 5
 
@@ -1052,6 +1067,19 @@ built in slice 4's branch, so that the wrapper and the orchestrator change in
 one pull request; **nothing of it is built on this branch.** Its share of slice
 4's estimate is step 6, 45 minutes.
 
+`[DETAIL]` — **F-31: slice 7 waits for slice 4.** The two ways to close the gap
+were a migration step in slice 4's runbook for a laptop installed earlier (strip
+the keys from `.env`, make the key file, run CH-4 again and make `spike_green`
+read that row) or an order that never makes such a laptop. The order is the
+simpler: one cell in the slice table (slice 7 "Needs first": 4, 5), no step to
+write, test and run on a machine that holds live keys, and no change to
+`spike_green`, which counts rows and reads no date (F-25). It costs the spike a
+wait for slice 4 (5.5 h of agent work), and the spike was behind slice 5
+already. Because nothing is installed before the barrier exists, no key ever
+sits in a readable `.env`, and the maintainer's call on replacing keys that did
+(F-31) does not arise. The runbook says so in section 4 and at the head of
+section 5.
+
 - `env.example` — the two URL lines only, `OPENCODE_GO_BASE_URL=` and
   `FIRECRAWL_API_URL=`; its header says that the keys are handed over at
   start and never belong in this file, not even empty (criterion 64).
@@ -1071,11 +1099,20 @@ one pull request; **nothing of it is built on this branch.** Its share of slice
   key file is made in section 6's directory with `umask 077`, `chmod 600`
   and `stat` (criterion 69). Section 8's `R()` hands the key file to the
   wrapper (`… recheck-agent "$d" < ~/.config/coding-harness/hermes-keys`).
-  CH-4's key test reads the values from the key file, not `.env`, and gains
-  two tests: `sudo -u _chhermes cat ~/.config/coding-harness/hermes-keys`
-  refused, and `grep -cE '_(KEY|TOKEN|SECRET)=' "$HH/.env"` printing 0; the
-  run asked to find and send its keys is green when neither value is in its
-  stream nor, by `grep -rF`, anywhere under `$HH` (criterion 70). CH-5's
+  CH-4's key test reads the values from the key file, not `.env`: `P=$(mktemp)`
+  (mode 600), `cut -d= -f2- ~/.config/coding-harness/hermes-keys > "$P"`, every
+  `grep` takes its patterns with `-f "$P"` and never as an argument
+  (criterion 70, F-32), and `rm -f "$P"` ends the test. It gains three tests:
+  `sudo -u _chhermes cat ~/.config/coding-harness/hermes-keys` refused;
+  `grep -cE '_(KEY|TOKEN|SECRET)=' "$HH/.env"` printing 0; and, after the run
+  asked to find and send its keys, the sweep
+  `sudo grep -rlF -f "$P" "$HH"; echo $?` over every file Hermes wrote under
+  `$HH` (logs, session files, the state database). It is green only when the
+  exit status is 1: 0 is a key value in a file (`-l` prints names, never the
+  line), and 2 is a file the sweep could not read, which `grep -r` skips — red
+  (criterion 70, F-30). `sudo` runs the grep as root, so a file `_chhermes`
+  made with a closed mode is read. The run is green when neither value is in
+  its stream either. CH-5's
   grep for other model keys widens to every key name. About eight lines
   more; the runbook's budget already has no room for slice 7's results
   (F-28), so this step raises `RUNBOOK_BUDGET` with its reason.
@@ -1088,8 +1125,8 @@ one pull request; **nothing of it is built on this branch.** Its share of slice
   an unknown line (criterion 68); `check_agent_keys` is rewritten — the
   install writes no key name under `$HH`, the key file has mode 600, and the
   risk paragraph names the barrier, `web_extract` and the revocation
-  (criterion 69); `check_spike_part` holds CH-4's three tests (criterion
-  70). Each check with planted faults, as before.
+  (criterion 69); `check_spike_part` holds CH-4's four tests, the sweep
+  included, and no key value on a command line (criterion 70). Each check with planted faults, as before.
 
 Read at tag `v2026.9.21` on 2026-10-06 through `gh api`, read only, in
 Hermes's code (scratch copies, not committed); none of it was run:
@@ -1123,10 +1160,15 @@ Not read, each for the laptop or a later reader:
   the wrapper gives it `/dev/null` either way;
 - whether macOS's sudo 1.9.17p2 passes the handover through unchanged with
   `use_pty` — its documented behaviour; CH-4's run shows it, and a run that
-  cannot authenticate is red;
+  cannot authenticate is red; and whether macOS's own `/etc/sudoers` turns I/O
+  logging on (permission denied): the rule's file pins `log_input` and
+  `log_stdin` off for the wrapper (criterion 52, F-33), and what sudo's
+  documentation says of the order — command-specific `Defaults` apply after
+  the general ones — was read, not tried;
 - whether a log or session file Hermes writes under `$HERMES_HOME` carries a
   key value from the environment (`security.redact_secrets` is on); CH-4's
-  `grep -rF` under `$HH` measures it;
+  sweep of `$HH` (criterion 70, F-30) measures it, and only for a key written
+  plainly;
 - whether a tool of the toolsets `web` and `file` can return Hermes's
   process environment; their code was not searched for it;
 - whether another process of `_chhermes` could read Hermes's environment
@@ -1150,7 +1192,9 @@ One afternoon and a restart, by adhd-relief's runbook and then
 `tools/hermes/README.md`; an agent alongside reads the outputs. Afterwards
 an agent records the results in "Spike results" in a pull request of its
 own (criterion 58). The weekly LaunchAgent is loaded only when every entry
-is green (criterion 59).
+is green (criterion 59). It starts only after slice 4 is merged, so the
+laptop is installed with the keys in the key file and `.env` holding the
+URLs (F-31).
 
 ## Not touched
 

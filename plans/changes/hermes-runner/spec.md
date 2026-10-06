@@ -118,16 +118,17 @@ the maintainer. "Laptop" means the maintainer at this MacBook.
 | 2 | The `opencode-go` entry in `model-endpoints.yaml` | agent | no | no — no `provenance.yaml` prefix maps the file | 0.5 h | 1 |
 | 3 | ADR 0010, and the D-7 row it amends | agent drafts, maintainer merges | no | **yes** | 1 h | 1 |
 | 4 | The orchestrator `scripts/research_recheck.py` and its tests, the ruleset check included; the key handover with the profile's side of it (criteria 60–70) | agent | no | no | 5.5 h | 1, 5 |
-| 5 | The profile `tools/hermes/`: config, wrapper, launchd and sudo files, runbook with the Coding Harness spike part, and its test | agent | no | no | 3 h | 2, 4 |
+| 5 | The profile `tools/hermes/`: config, wrapper, launchd and sudo files, runbook with the Coding Harness spike part, and its test | agent | no | no | 3 h | 2 |
 | 6 | The ruleset on `main` | maintainer, in GitHub's settings | no — any browser | no | 15 min | — |
-| 7 | The spike, the Coding Harness part and the install, results recorded | maintainer, an agent alongside | **yes** | no | one afternoon and a restart | 5 |
+| 7 | The spike, the Coding Harness part and the install, results recorded | maintainer, an agent alongside | **yes** | no | one afternoon and a restart | 4, 5 |
 
 "Needs first" counts slice 1 because it brings this change folder to
 `main`, which every later session reads. The first scheduled run needs all
 seven slices and pull request #73 merged. Slice 6 can be done today, in any
 order. Slice 5 was built before slice 4 (`plan.md`, "Notes, slice 5"); since
 2026-10-06 slice 4 also changes slice 5's files for the key handover, so it
-follows slice 5's merge.
+follows slice 5's merge, and slice 7 follows slice 4's: no laptop is
+installed while the keys would still sit in `.env` (F-31).
 
 ## Acceptance criteria
 
@@ -347,8 +348,8 @@ that day). Numbered after criterion 59, so no earlier number moves.
     reach the agent command on its standard input and by no other way — no
     argument and no variable of the command's environment carries a key
     value.
-    *Refuted by:* a fake agent that finds other text on its standard input,
-    or a key value in its arguments or environment.
+    *Refuted by:* a fake agent whose standard input is not exactly the key
+    file's two lines, or a key value in its arguments or environment.
 62. If the agent's event stream or the staged note holds the value of
     either key, the run publishes nothing and ends `failed`, naming the key,
     never its value.
@@ -401,9 +402,10 @@ that day). Numbered after criterion 59, so no earlier number moves.
     in a launchd file.
 52. When the test reads the sudo rule, it lets the maintainer run exactly
     the installed wrapper as the service user, without a password, and
-    nothing else.
-    *Refuted by:* a second command, `ALL` as the command, or another target
-    user.
+    nothing else; the same file pins sudo's input logging off for that
+    wrapper, so the keys on its standard input reach no I/O log (F-33).
+    *Refuted by:* a second command, `ALL` as the command, another target
+    user, or the file without `!log_input` and `!log_stdin` for the wrapper.
 53. When the test reads the profile's config, wrapper, launchd, sudo and env
     files, none names adhd-relief's service user, Hermes home or write root
     (`_hspike`, `/Users/_hspike`, `spike-vault`); the shared install and
@@ -477,8 +479,14 @@ one merge.
     condition, for: the key file unreadable for the service user;
     `$HERMES_HOME/.env` naming no key; and a run that is handed both keys
     and asked to find and send them, whose event stream holds neither key
-    value.
-    *Refuted by:* one of the three missing.
+    value. A fourth test sweeps every file under `$HERMES_HOME` — logs,
+    session files, the state database — after that run for both key values,
+    and is green only when the sweep finds none and reads every file; a file
+    it cannot read is red. No CH-4 command carries a key value in its
+    arguments: the values reach `grep` from a pattern file of mode 600,
+    removed afterwards (F-30, F-32).
+    *Refuted by:* one of the four missing, the sweep passing on a file it
+    could not read, or a key value on a CH-4 command line.
 
 ### Slice 6 — the ruleset
 
@@ -559,19 +567,25 @@ one merge.
   boundary", in Hermes's words — and the spike check CH-4 stand between a
   fetched page and the keys (findings F-14, F-26). The maintainer did not
   accept this as the lasting state: on 2026-10-06 he chose the barrier of
-  criteria 60–70 (`decisions.md`, addendum of that day). What remains until
-  slice 4 lands is limited to runs by hand at the laptop: no scheduled run
-  exists before slice 7, and the weekly job is loaded only after every agent
+  criteria 60–70 (`decisions.md`, addendum of that day). Slice 7, the spike
+  and the install, needs slice 4 first (F-31), so the plan installs no
+  profile that keeps its keys in `.env`; what remains until slice 4 lands is
+  an install made by hand against the runbook's warning, and no scheduled run
+  exists before slice 7. The weekly job is loaded only after every agent
   slice is merged (ADR 0010, "Activation"). If a key leaks, both are revoked.
 - **After slice 4, the keys live in the service user's process for one
-  run.** No file the service user can read holds them, and Hermes's
-  standard input is closed to them (criterion 67); but they sit in the
-  environment of Hermes's process, which another process of the same user
-  may be able to read (`ps -E`; not tried), and a Hermes defect that copies
-  its environment into a tool result is not ruled out (not read). The agent has no tool that starts a process — terminal and code
-  execution are off at both locks — and criterion 62 finds a key in the
-  stream or the note only after the run, when a `web_extract` call may
-  already have sent it; the remedy is then to revoke the named key.
+  run.** No file the service user can read holds them (the files Hermes
+  itself writes are swept in CH-4, criterion 70), and Hermes's standard
+  input is closed to them (criterion 67); but they sit in the environment
+  of Hermes's process, which another process of the same user may be able
+  to read (`ps -E`; not tried), and a Hermes defect that copies its
+  environment into a tool result is not ruled out (not read). The agent has
+  no tool that starts a process — terminal and code execution are off at
+  both locks — and criterion 62 finds a key written out plainly in the
+  stream or the note, and only after the run, when a `web_extract` call may
+  already have sent it; a key sent encoded, reversed or split over two calls
+  passes the scan and prompts no revocation. The remedy for a key it finds
+  is to revoke the named key.
 - **The diff check checks shape, not truth.** An addendum steered by a
   hostile page passes it if it is well formed; the maintainer's review is
   the only content check.

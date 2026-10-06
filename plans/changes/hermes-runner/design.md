@@ -87,7 +87,12 @@ choice is a proposal; the merge of the ADR's pull request decides it.
    arguments on this laptop (measured 2026-10-06). `sudo` passes standard
    input on to the command and closes the other descriptors (sudo 1.9.17p2
    here, its documented behaviour; not tried with its `use_pty` — CH-4 shows
-   it). The wrapper refuses a run directory outside
+   it). sudo's I/O logging (`log_input`, `log_stdin`; off by default, on by
+   a `LOG_INPUT` tag or a `Defaults` line elsewhere) would write both key
+   lines to disk, so the rule's file pins both off for the wrapper
+   (`Defaults!<wrapper> !log_input, !log_stdin`, criterion 52); what
+   macOS's own `/etc/sudoers` sets was not read (permission denied). The
+   wrapper refuses a run directory outside
    `/Users/Shared/coding-harness-hermes/runs/`, sets `HOME`,
    `HERMES_HOME=/Users/_chhermes/.hermes`,
    `HERMES_WRITE_SAFE_ROOT=<run dir>/work` and a fixed `PATH`, changes into
@@ -364,8 +369,10 @@ holds nothing that can write the repository.
   a file in the maintainer's home that the service user cannot read;
   `$HERMES_HOME/.env` keeps the URLs only (the maintainer, 2026-10-06). A
   fetched page can no longer steer the agent's file tools to the keys. They
-  still sit in the environment of the agent's process for one run; a key
-  found in the event stream or the note fails the run and is revoked. Until
+  still sit in the environment of the agent's process for one run. The
+  design adds a scan behind the barrier: a key written out plainly in the
+  event stream or the note fails the run, and that key is revoked; a key
+  sent encoded, reversed or split over two calls is not found. Until
   the orchestrator lands, the profile keeps the keys in `.env` behind
   Hermes's own guard, which Hermes calls "not a security boundary"; no
   scheduled run exists before then.

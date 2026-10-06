@@ -495,7 +495,12 @@ def check_spike_gate(p: Path) -> None:  # 59, the gate is run on tables of every
 
 
 def check_sudoers(p: Path) -> None:  # 52
-    rules = [x for x in (p / "sudoers").read_text().split("\n") if x.strip() and not x.lstrip().startswith("#")]
+    lines = [x for x in (p / "sudoers").read_text().split("\n") if x.strip() and not x.lstrip().startswith("#")]
+    pins = [x for x in lines if x.startswith("Defaults")]
+    rules = [x for x in lines if not x.startswith("Defaults")]
+    assert pins == [f"Defaults!{WRAPPER_PATH} !log_input, !log_stdin"], (
+        f"sudo's input logging is not pinned off for the wrapper alone: {pins}"
+    )
     assert len(rules) == 1, f"{len(rules)} rules"
     assert re.fullmatch(rf"@MAINTAINER@ ALL=\(_chhermes\) NOPASSWD: {re.escape(WRAPPER_PATH)}", rules[0]), rules[0]
     assert WRAPPER_PATH in (p / "README.md").read_text(), (
@@ -522,7 +527,7 @@ def check_agent_keys(
     )
     risk = section(text, r"Directories, owners and modes")
     for needle in (
-        "Risk, accepted",
+        "Risk, not accepted, stands until slice 4",
         "OpenCode Go",
         "Firecrawl",
         "web_extract",
@@ -532,9 +537,10 @@ def check_agent_keys(
     ):
         assert needle in risk, f"the runbook's risk on the agent's keys lacks {needle!r}"
     ch4 = re.split(r"^### CH-4 · ", text, flags=re.M)[1].split("\n### CH-5")[0]
-    assert re.search(r"grep -cF -- \"\$v\" ~/ch/ch4-key\.jsonl", ch4), (
-        "CH-4 does not count the key values in the stream"
+    assert re.search(r"grep -cF -f \"\$P\" ~/ch/ch4-key\.jsonl", ch4), (
+        "CH-4 does not count the key values in the stream from a pattern file"
     )
+    assert not re.search(r"grep [^\n|]*\"\$(v|\()", ch4), "CH-4 puts a key value on a command line"
     assert "both key lines print 0" in ch4, "CH-4 has no green condition on the key values"
 
 
@@ -956,6 +962,11 @@ FAULTS = [
     Fault("52 target ALL", SUDO, sub("(_chhermes)", "(ALL)"), check_sudoers),
     Fault("52 a password is asked", SUDO, sub("NOPASSWD: ", ""), check_sudoers),
     Fault("52 a second rule", SUDO, lambda t: t + "@MAINTAINER@ ALL=(ALL) ALL\n", check_sudoers),
+    Fault("52 no pin on input logging", SUDO, sub("!log_input, !log_stdin", "!log_input"), check_sudoers),  # F-33
+    Fault("52 input logging pinned on", SUDO, sub("!log_input, !log_stdin", "log_input, !log_stdin"), check_sudoers),
+    Fault(
+        "52 the pin names another command", SUDO, sub(f"Defaults!{WRAPPER_PATH}", "Defaults!/usr/bin/id"), check_sudoers
+    ),
     # 53
     Fault(
         "53 adhd-relief's user in the config",
@@ -1002,10 +1013,16 @@ FAULTS = [
         sub('"$RB/env.example" "$HH/.env"', '"$RB/env.example" "$HH/keys.txt"'),
         check_agent_keys,
     ),
-    Fault("56 the risk is not named", README, sub("**Risk, accepted", "**Note"), check_agent_keys),
+    Fault("56 the risk is not named", README, sub("**Risk, not accepted", "**Note"), check_agent_keys),
     Fault("56 the risk forgets the way out", README, sub("through `web_extract`", "somewhere"), check_agent_keys),
     Fault("56 the risk forgets the remedy", README, sub("revoke both keys.", "carry on."), check_agent_keys),
-    Fault("56 CH-4 does not count the keys", README, sub("grep -cF -- ", "grep -c -- "), check_agent_keys),
+    Fault("56 CH-4 does not count the keys", README, sub("grep -cF -f ", "grep -c -f "), check_agent_keys),
+    Fault(  # F-32
+        "56 CH-4 puts a key value on a command line",
+        README,
+        sub('rm -f "$P"', 'rm -f "$P"; grep -c -- "$v" ~/ch/ch4-key.jsonl'),
+        check_agent_keys,
+    ),
     Fault(
         "56 CH-4 has no green condition on the keys",
         README,
