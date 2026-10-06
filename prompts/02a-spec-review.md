@@ -6,7 +6,7 @@ fresh context that never saw the author's reasoning.
 **Result:** rows for `plans/changes/<name>/findings.md`, dimension `SPEC`.
 **Gate:** no open `[AMBIGUITY]`.
 **Session:** the same reviewer later runs phase 6. Start it with a fixed id,
-`claude --model claude-fable-5-1 --session-id <uuid> -n review-<name>`, and
+`claude --model claude-opus-5-5 --session-id <uuid> -n review-<name>`, and
 write the id under the table in `findings.md` (`Reviewer session: <uuid>`).
 
 A validator checks that the sections are there. It cannot check that they say
