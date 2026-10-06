@@ -369,12 +369,16 @@ flowchart LR
   criteria 60–69). The files Hermes itself writes at run time — logs,
   session files, its state database — are held by no repository test:
   the sweep in CH-4 measures them at the laptop, and criterion 70 holds
-  that the runbook carries the sweep.
+  that the runbook carries the sweep and that the sweep fails closed.
 * Before the weekly job is loaded: every entry in "Spike results" is
   green — among them CH-4, which shows that the service user cannot read
   the key file, that `$HERMES_HOME/.env` names no key, and that no file
-  under `$HERMES_HOME` holds a key value after a run asked to find and
-  send them — and `check-ruleset` exits 0.
+  under `$HERMES_HOME` — so none the service user can read there — holds
+  a key value written out plainly after a run asked to find and send
+  them — and `check-ruleset` exits 0. The sweep shows no more than that:
+  a key that is encoded, compressed or split over two writes passes it,
+  as it passes the scan of the stream, and a file outside
+  `$HERMES_HOME` is not swept.
 * After the first three published runs, the maintainer reads their records
   (checked items, tokens, wall time) and keeps or changes the caps and the
   schedule.
