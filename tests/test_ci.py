@@ -565,8 +565,13 @@ def test_the_summary_check_passes_only_when_every_leg_passed() -> None:
     """The ruleset requires `verify`, and GitHub counts a skipped job as passed.
 
     So the check must need the matrix job, survive its failure (`always()`), and
-    pass only on `success` — run here with each of the four results a job can
-    have, through the shell GitHub would use.
+    pass only on `success` — run here, through the shell GitHub would use, with
+    the one good result, the three bad ones the ruleset's wording names and two
+    more GitHub produces live (`abandoned`, an empty result). A step that
+    refuses a list of bad results passes the last two; a step that refuses too
+    much fails the first. Neither the step nor the job it sits in, nor the
+    matrix job, may carry `continue-on-error`: it would keep a red leg from
+    turning the check red.
     """
     doc = _ci_doc()
     assert ci_gates.SUMMARY_JOB == "verify", "the ruleset on main requires the check `verify`"
@@ -585,10 +590,29 @@ def test_the_summary_check_passes_only_when_every_leg_passed() -> None:
     assert doc["jobs"][ci_gates.MATRIX_JOB]["strategy"]["fail-fast"] is False
 
     assert len(job["steps"]) == 1, "the summary job holds one step"
-    run = job["steps"][0]["run"]
+    step = job["steps"][0]
+    for where, holder in (
+        ("the summary step", step),
+        ("the summary job", job),
+        ("the matrix job", doc["jobs"][ci_gates.MATRIX_JOB]),
+    ):
+        assert "continue-on-error" not in holder, (
+            f"{where} carries continue-on-error: a red leg would no longer turn the check `verify` red"
+        )
+    run = step["run"]
     placeholder = "${{ needs." + ci_gates.MATRIX_JOB + ".result }}"
     assert placeholder in run, f"the step does not read the matrix job's result: {run!r}"
-    for result, expected in (("success", 0), ("failure", 1), ("cancelled", 1), ("skipped", 1)):
+    # Exactly one result passes. A list of the bad ones cannot keep up: `abandoned`
+    # was seen live in run 37375079831, and an empty result is what a missing
+    # `needs` entry would hand over.
+    for result, expected in (
+        ("success", 0),
+        ("failure", 1),
+        ("cancelled", 1),
+        ("skipped", 1),
+        ("abandoned", 1),
+        ("", 1),
+    ):
         done = subprocess.run(["sh", "-c", run.replace(placeholder, result)], capture_output=True, text=True)
         assert done.returncode == expected, (
             f"result {result!r}: exit {done.returncode}, expected {expected}\n{done.stdout}"
