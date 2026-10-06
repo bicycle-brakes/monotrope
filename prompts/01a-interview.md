@@ -1,6 +1,6 @@
 # Phase 1a · Interview
 
-**Model:** Fable 5.1 — the questions are the work, and there are few of them.
+**Model:** Opus 5.5 — the questions are the work, and there are few of them.
 **Result:** `plans/changes/<name>/decisions.md`
 **Gate:** every `[DECISION]` answered, or the phase recorded as skipped with a
 reason.

@@ -61,7 +61,7 @@ content only. Without an amendment that routing would run against D-13.
    Criterion 1 is replaced by measuring the first three stage-2 runs, each
    finding recording its reviewer, whether it was taken and whether it broke a
    test, with a stop rule: after the third run, if at least one taken Codex or
-   GLM finding broke a test, stage 2 falls back to Fable 5.1 until the
+   GLM finding broke a test, stage 2 falls back to Opus 5.5 until the
    maintainer decides again (`docs/WORKFLOW.md` §4). **The accepted loss is the
    measured stage-1 baseline** before the first foreign call.
 2. **Where framework content may flow.** This repository's tree — the class

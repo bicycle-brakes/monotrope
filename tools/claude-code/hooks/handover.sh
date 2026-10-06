@@ -14,7 +14,7 @@
 #                            schema of scripts/handover_schema.py
 #   journal/                 lakeswitch: append-only session notes
 # The newest file there is what a session starts from. Writing one is the
-# /uebergabe skill's job, not this script's.
+# /handover skill's job, not this script's.
 #
 # The automatic note (~/.claude/session-notes/<sid>.md, Haiku, after every
 # answer) is only a safety net for a session that ended without a handover. It
@@ -235,11 +235,11 @@ $older}"
     fi
   elif [ -n "$conv" ]; then
     visible="$visible
-Noch keine Übergabe in ${hdir#"$top"/}/ – /uebergabe legt die erste an."
+Noch keine Übergabe in ${hdir#"$top"/}/ – /handover legt die erste an."
     hctx="Übergabe: keine – ${hdir#"$top"/}/ ist leer."
   elif [ -n "$top" ]; then
     visible="$visible
-Dieses Repo hat keinen Übergabe-Ordner – /uebergabe fragt, wohin."
+Dieses Repo hat keinen Übergabe-Ordner – /handover fragt, wohin."
     hctx="Übergabe: Das Repository hat keinen Übergabe-Ordner (weder docs/journal/handover/ noch journal/)."
   fi
 
@@ -324,7 +324,7 @@ So gehst du damit um:
 - Beginne deine erste Antwort mit einer kurzen Orientierung: **Wo wir stehen** / **Nächster Schritt** / **Was ich von dir brauche** („gerade nichts“, wenn nichts nötig ist). Ist die erste Nachricht eine konkrete Aufgabe, halte die Orientierung bei drei Zeilen und arbeite dann daran.
 - Verlange nicht, dass die Person den letzten Chat rekonstruiert oder den ganzen Backlog liest.
 - Die Übergabe hat einen Stichtag: prüfe Arbeitsbaum und PR-Stand, bevor du dich auf sie stützt. Aussagen der automatischen Notiz erst recht.
-- Endet die Session oder bittet die Person darum: Übergabe mit /uebergabe als Datei im Repository schreiben und in der Schlussnachricht verlinken."
+- Endet die Session oder bittet die Person darum: Übergabe mit /handover als Datei im Repository schreiben, als Pull Request öffnen (Merge macht die Person) und beides in der Schlussnachricht verlinken."
   return 0
 }
 

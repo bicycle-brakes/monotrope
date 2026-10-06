@@ -160,3 +160,34 @@ Task status is in Beads; read with `tools/bd show <id>`:
 - CI green on #54 before its merge; not read for #58 at hand-over.
 - Not run: any Codex or GLM call; the GitHub-app rendering of decision PRs
   was not checked by an agent.
+
+## Addendum — 2026-09-30, stage 2 built with Claude, PR #60 stays open
+
+This supersedes the "Next step" and the Codex addendum above.
+
+- The maintainer's Claude budget came back the same evening. They decided
+  to finish stage 2 with Claude agents only, open its decision PR and leave
+  it unmerged (answer 14 in `plans/changes/stage-2-codex-glm/decisions.md`;
+  answer 13, Codex as the worker, is void — no Codex or GLM call was made).
+- Slices 2 and 3 were built on Sonnet, reviewed on Opus 5.5 (1 blocker, 1
+  major, 7 minor), repaired in one round, and re-reviewed: all nine fixed,
+  two new minor findings open (F-10: lines starting with `#` in GLM's answer
+  are dropped at release; F-11: a short table line with a loop id written by
+  GLM blocks the release). `make verify` green at `22ba651`: 654 passed, 15
+  skipped (2026-09-30).
+- **Decision PR #60** (branch `feat/stage-2-codex-glm`, head `8622437`) is
+  open and stays open until the maintainer decides otherwise. Until it
+  merges, `main` keeps spec review and review on Opus 5.5 and implement on
+  Sonnet.
+
+**Next step:** nothing on stage 2 until the maintainer says so. Before a
+merge of #60: fix F-10 and F-11 (a second repair round; a finding from it
+escalates per `docs/WORKFLOW.md` §2), then the maintainer adds
+`Bash(codex exec:*)` with `/permissions` at the laptop. Otherwise take the
+next ready bead with `tools/bd ready`.
+
+**Needed from the maintainer:** nothing right now.
+
+Working state: worktree `.claude/worktrees/stage-2-codex-glm` stays for #60;
+bead coding-harness-bc9 in progress with a comment naming #60 (tracker
+pushed 2026-09-30).

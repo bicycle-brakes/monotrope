@@ -4,7 +4,7 @@ category: research
 status: proposed
 created: 2026-09-16
 last_reviewed: 2026-09-18
-updated: 2026-09-29
+updated: 2026-10-05
 owner: framework-architect
 provenance: ai-drafted-reviewed
 produced_by:
@@ -24,6 +24,11 @@ The research corpus behind the coding workflow. Every document carries
 frontmatter (category: research); provenance classes follow the five-class
 enum in `provenance.yaml` — the maintainer corrects a class by editing the
 frontmatter, never by deleting the claim.
+
+A note's `last_reviewed:` is the day its content was last checked against its
+sources. An edit moves `updated:`, not this date; whoever re-checks a note sets
+it. The nightly `drift` job lists the notes whose review is more than 90 days
+old (`scripts/check_research_currency.py`, report-only).
 
 The [current Omnigent-first target](../architecture/2026-09-17-omnigent-first-target.md),
 [gap analysis](../architecture/2026-09-17-gap-analysis.md), and
@@ -60,6 +65,9 @@ Vocabulary for older sources: **Stage 1–3** means model routing; **S0–S7** m
 | [Tracker writes from worktrees](2026-09-23-worktree-tracker-writes.md) | accepted · 2026-09-23 | D-5's five checks green with bd 1.3.0; the worktree write ban lifts, the one-writer rule stays |
 | [Agent Skills assessment](2026-09-18-agent-skills-assessment.md) | proposed · 2026-09-18 | Selective technique adaptation and evaluation without importing a competing workflow |
 | [Agent SDK and formal models](2026-09-26-agent-sdk-and-formal-models.md) | proposed · 2026-09-26 | TLA+ for four protocol seams alongside M0 (three models run, one new finding in the recap lock, reproduced), property tests before Lean for pure logic (Lean run and checked against the code; four alternatives measured on the same targets), the Agent SDK as one adapter of a runner-neutral qualification runner |
+| [Work framing for ADHD](2026-09-30-adhd-frame.md) | proposed · 2026-09-30 | Evidence for the plan card with a pre-mortem line, the appetite stop, the clock in "done:", the resumption line and the acceptance card; each source dated, with its strength, and what was not read |
+| [LikeC4, a ROADMAP.md and an arc42 skeleton](2026-10-05-likec4-roadmap-arc42.md) | proposed · 2026-10-05 | Three kit questions: LikeC4 not now, amend D-15 and O-3 toward a Mermaid architecture delta in `design.md` (LikeC4 measured: no C4 hierarchy check, Node ≥ 22); a trial `ROADMAP.md` before any template; the arc42 skeleton stays on the not-now list |
+| [Hermes Agent as a job runner](2026-10-05-hermes-agent-runner.md) | proposed · 2026-10-05 | Not Hermes now: the weekly research re-check runs by hand first, then as a scheduled GitHub Actions job whose agent holds no write token; Hermes, a Claude Code routine, Actions, the Kubernetes gate runner and "by hand" compared on first run, weekly cost, burden, exposure and reversal; the runner-neutral prompt and what any runner must guarantee |
 
 Original four-source intake note: copied in by the maintainer on 2026-09-16 (Phase 2 of the
 separation, bead `coding-harness-anw`). Provenance is set to

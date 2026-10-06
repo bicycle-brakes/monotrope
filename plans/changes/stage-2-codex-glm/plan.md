@@ -990,3 +990,50 @@ heading, are GLM's (`_record_lines`).
   are not scanned; the runner's settings are not measured), and the one above.
 - Phase 7 is untouched: no pull request opened or changed, no tracker write, no
   `decide(` label.
+
+## Amendment 1 — the routing decisions of 2026-10-06 (bead coding-harness-bib)
+
+The maintainer decided on 2026-10-06, in the Claude Code session, four things
+(bead coding-harness-bib, "Model routing: no Fable; explore and implement on
+GLM 5.3 Flash once stage 2 is live"):
+
+1. No Fable. Opus 5.5 takes its places: the interview (1a), the escalation and
+   the fallback when stage 2 fails. A `bounded` change's stage-2 reviews — 2a
+   where one is held, and 6 — go to Codex. Main carries the part outside stage 2
+   since pull request #87 (merge `ed180ae`).
+2. Phase 4 Implement runs on `glm-5.3-flash` (the Z.ai endpoint declared in
+   `model-endpoints.yaml`) once stage 2 is live.
+3. Phase 1 Explore runs on `glm-5.3-flash` once stage 2 is live (instead of
+   Haiku 4.5).
+4. The leak check stays: asked and kept.
+
+Until this pull request is merged and live, Claude models keep doing what
+main's routing says. The amendment is made in three steps, one commit each:
+A the merge of `origin/main`, B the routing in doctrine, prompts and tests, C
+ADR 0007 and its continuity, and then D the pull request body (not a commit).
+
+### Step A — merging `origin/main` (65 commits since the merge base `1e4cccf`)
+
+Written against `origin/main` at `d5813ec`. Six files conflicted; each choice:
+
+| File | Choice |
+|---|---|
+| `docs/WORKFLOW.md` (§4 opening) | The branch's text. Main's still read "adding GLM and Kimi (prepared, not active)" — the placeholder this change replaces. |
+| `docs/architecture/2026-09-17-implementation-plan.md`, `...-omnigent-first-target.md` | Both "Changed" notes stay, the older (ADR 0007, 2026-09-30) first and ADR 0009 (2026-10-05) after it; `updated:` takes the later date. |
+| `plans/INDEX.md` | Both sides' rows, then regenerated with `python3 scripts/plans_registry.py --index`. |
+| `prompts/02a-spec-review.md`, `prompts/06-review.md` (Session lines) | Main's Claude path with `claude-opus-5-5` replaces the Fable command; the branch's Codex path stays beside it. |
+
+Two places git merged without a conflict and still contradicted main, because
+the branch had written them for the time after stage 2 and main had not
+touched those lines: the Model lines and the "Fable path" sentences of the two
+prompts, and the routing rows and the paragraph "Spec review and review on
+Fable 5.1" of `docs/WORKFLOW.md` §3. `claude-fable-5-1` is no longer a
+declared model (main took it out of `model-endpoints.yaml`), so
+`tests/test_model_endpoints.py` was red on both. Choice: where main removed
+Fable, it stays removed; the branch's post-stage-2 routing for `spike` and
+`bounded` becomes Opus 5.5 for now (step B moves `bounded` on to Codex). The
+same swap in the probe keys of `scripts/kit/probe.py`, the verdict-line
+examples and the routing assertions of `tests/test_stage2.py`, and the
+fallback sentence of ADR 0007 (Fable 5.1 to Opus 5.5).
+
+Time log: started 2026-10-07 00:52 (CEST); step A resolved at 00:59.

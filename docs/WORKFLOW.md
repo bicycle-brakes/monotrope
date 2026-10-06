@@ -4,7 +4,7 @@ category: governance
 status: current
 created: 2026-09-05
 last_reviewed: 2026-09-29
-updated: 2026-09-30
+updated: 2026-10-06
 owner: Data Architect
 provenance: ai-drafted-reviewed
 produced_by:
@@ -366,18 +366,20 @@ none, because the registry keeps counting it as protection.
 | Phase | Model | Why |
 |---|---|---|
 | 1 Explore | **Haiku 4.5** | much input, little output, no deep reasoning |
-| 1a Interview | **Fable 5.1** | the questions are the work, and there are few of them |
+| 1a Interview | **Opus 5.5** | the questions are the work, and there are few of them |
 | 2 Spec | **Opus 5.5** | effort `xhigh`; the highest reasoning demand, little output |
-| 2a Spec review | **Fable 5.1** | another model with another error profile, and a fresh context that does not know the author's reasoning; a `feature` or `architectural` change goes to Codex (§4) |
+| 2a Spec review | **Opus 5.5** | a fresh context that does not know the author's reasoning; a `feature` or `architectural` change goes to Codex (§4) |
 | 3 Plan | **Opus 5.5** | effort `xhigh`; an error here is the most expensive in the whole run |
 | 4 Implement | **Sonnet 5.5** | effort `medium`; a solid worker given a clear plan |
 | 5 Verify | — | deterministic |
-| 6 Review | **Fable 5.1** | finds what Sonnet misses, and reads the code a change calls instead of trusting its docstring; a `feature` or `architectural` change goes to Codex (§4) |
+| 6 Review | **Opus 5.5** | finds what Sonnet misses, and reads the code a change calls instead of trusting its docstring; a `feature` or `architectural` change goes to Codex (§4) |
 | 7 Commit | **Haiku 4.5** | cheap and sufficient |
 
-Switch with `/model fable`, `/model sonnet`, `/model opus`, `/model haiku`. The
-alias `opusplan` runs Opus while planning and switches to Sonnet for execution —
-the cheaper variant to Fable.
+**No Fable** (maintainer, 2026-10-06): no phase runs on Fable 5.1; Opus 5.5
+takes its places — the interview and the escalation below.
+
+Switch with `/model sonnet`, `/model opus`, `/model haiku`. The alias
+`opusplan` runs Opus while planning and switches to Sonnet for execution.
 
 **Spec and plan on Opus 5.5 at effort `xhigh`** (maintainer, 2026-09-29, for
 the whole repository; until then both ran on Fable 5.1). In a session:
@@ -386,13 +388,15 @@ the whole repository; until then both ran on Fable 5.1). In a session:
 from its definition's frontmatter (`effort: xhigh`), not from the call that
 starts it, and a new definition is read only when a session starts.
 
-**Spec review and review on Fable 5.1, except the `feature` and
-`architectural` changes that §4 routes to Codex** (maintainer, 2026-09-29, for
-the whole repository; until then both ran on Opus 5). An interim routing put
-both on Opus 5.5 from 2026-09-30 until stage 2 was live; the merge of ADR 0007
-ended it. The two reviews of 2026-09-29 ran on Fable and found what the spec
-had missed by reading the called code itself. The spec review still reads with
-another model than the spec's author (Opus 5.5).
+**Spec review and review on Opus 5.5, except the `feature` and
+`architectural` changes that §4 routes to Codex** (maintainer, 2026-09-30 and
+2026-10-06, for the whole repository). From 2026-09-29 both ran on Fable 5.1,
+and before that on Opus 5. An interim routing put both on Opus 5.5 from
+2026-09-30 until stage 2 was live; the merge of ADR 0007 ends it for the
+changes §4 routes to Codex. The cost is known: the spec review reads with the
+same model as the spec's author (Opus 5.5), so what stays independent is the
+fresh context, not the error profile.
+
 **Implement on Sonnet 5.5 at effort `medium`, for every change** (maintainer,
 2026-09-30; until then Sonnet 5). In a session: `/model sonnet` and `/effort
 medium`; for a phase run as its own session: `claude --model claude-sonnet-5-5
@@ -415,8 +419,9 @@ The token-heavy part runs on Sonnet.
 definitions is ignored and sub-agents run on the parent model. Look once with
 `/status` — otherwise exploration is billed at Opus prices.
 
-**Escalation.** After two failed review rounds, move up to Fable. For rebuilds
-over ~200k tokens and for code touching security or concurrency, start on Fable.
+**Escalation.** After two failed review rounds, move up to Opus 5.5. For
+rebuilds over ~200k tokens and for code touching security or concurrency, start
+on Opus 5.5.
 After a passed review, back to Sonnet.
 
 ### What deliberately does not happen in stage 1
@@ -548,7 +553,7 @@ dropped (ADR 0007).
 | Change | Spec review (2a) | Review loop (4b) | Review (6) |
 |---|---|---|---|
 | a one-sentence change, a `spike` | no stage 2 | no stage 2 | no stage 2 |
-| `bounded` | Fable 5.1, where one is held | GLM | Fable 5.1 |
+| `bounded` | Opus 5.5, where one is held | GLM | Opus 5.5 |
 | `feature`, `architectural` | Codex | GLM | the same Codex agent, resumed |
 
 **Nothing checks a change's class.** A `feature` stated as `bounded` skips
@@ -645,7 +650,7 @@ undecided holds the next round and the release.
 
 The phase-6 reviewer writes its verdict first: the table, and under it the line
 `Phase 6 verdict: <reviewer> <session>, <date>` (the runner writes it for
-Codex; a Fable reviewer writes its own). Only then does `release-loop` carry
+Codex; an Opus reviewer writes its own). Only then does `release-loop` carry
 every loop row into `findings.md` with reviewer `GLM`, and the reviewer marks
 each row in its `Phase 6` column, `agree` or `disagree — <reason>`. Nothing is
 netted: the reviewer's view of GLM's rows is the information.
@@ -656,7 +661,7 @@ Beyond the vocabulary of §2, a stage-2 change's `findings.md` carries two
 columns, defined here because the findings template is not in this repository
 yet:
 
-- **`Reviewer`** — Codex, GLM or Fable: who raised the finding.
+- **`Reviewer`** — Codex, GLM or Opus: who raised the finding.
 - **`Broke a test`** — for each taken row, `yes` when its repair turned a test
   red that was green before it, `no` when it did not. The finding's own new
   test does not count: the evidence rule expects it to be red first.
@@ -668,7 +673,7 @@ counted in the order their pull requests merge. Every finding records its
 reviewer, whether it was taken or rejected and, if taken, whether it broke a
 test. **After the third run, a short evaluation is written under
 `docs/research/`. If at least one taken Codex or GLM finding broke a test,
-stage 2 falls back to Fable 5.1 until the maintainer decides again.** The rule
+stage 2 falls back to Opus 5.5 until the maintainer decides again.** The rule
 is written, not counted by a script: a person reads the evaluation, and its
 pull request applies the fallback. This replaces the three measured runs that
 D-13 asked for before the first foreign call; what the replacement gives up is

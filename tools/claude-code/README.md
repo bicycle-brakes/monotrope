@@ -41,7 +41,7 @@ the maintainer reads them.
 | `hooks/parallel-sessions.sh` | SessionStart, UserPromptSubmit | tells Claude when another session works in the same checkout, so it warns before changing files |
 | `hooks/recap.sh` | UserPromptSubmit, Stop | the rolling recap, and the automatic session note (`~/.claude/session-notes/`) |
 | `hooks/session-scan.sh` | — | the one session scan both of the above and the status line use |
-| `skills/uebergabe/SKILL.md` | `/uebergabe` | writes the handover as a file in the repository, by that repository's convention |
+| `skills/handover/SKILL.md` | `/handover` | writes the handover as a file in the repository, by that repository's convention, and always opens a pull request for it |
 
 The handover is the file in the repository, never the chat (`AGENTS.md`). The
 automatic note is only a safety net for a session that ended without one: the

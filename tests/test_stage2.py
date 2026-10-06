@@ -939,11 +939,11 @@ def test_release_carries_every_row_with_its_marks(world: World) -> None:
     "line",
     [
         "Phase 6 verdict: codex T1, 2026-09-30",
-        "Phase 6 verdict: Fable 5.1 3f1c2a9e-0000-4000-8000-000000000001, 2026-10-01",
-        "Phase 6 verdict: fable, 2026-10-01",
+        "Phase 6 verdict: Opus 5.5 3f1c2a9e-0000-4000-8000-000000000001, 2026-10-01",
+        "Phase 6 verdict: opus, 2026-10-01",
         "Phase 6 verdict: codex T1, 2026-09-30 ",
         "Phase 6 verdict: codex T1, 2026-09-30.",
-        "Phase 6 verdict: Fable 5.1, 2026-10-01 .",
+        "Phase 6 verdict: Opus 5.5, 2026-10-01 .",
     ],
     ids=["as-written", "named-reviewer", "no-session", "trailing-space", "full-stop", "space-and-full-stop"],
 )
@@ -1275,8 +1275,8 @@ def routing_problems(workflow: str) -> list[str]:
         found.append("section 3 does not route 4 Implement to Sonnet 5.5 at effort `medium`")
     for phase in ("2a Spec review", "6 Review"):
         row = default.get(phase)
-        if row is None or row[0] != "Fable 5.1":
-            found.append(f"section 3 does not route {phase} to Fable 5.1")
+        if row is None or row[0] != "Opus 5.5":
+            found.append(f"section 3 does not route {phase} to Opus 5.5")
     return found
 
 
@@ -1288,7 +1288,7 @@ def test_the_routing_rows_name_the_decided_models() -> None:
         ("**GLM 5.3** | effort `max`", "**GLM 5.3** | effort `high`"),
         ("**Sonnet 5.5** | effort `medium`", "**Sonnet 5** | effort `medium`"),
         ("**Sonnet 5.5** | effort `medium`", "**Sonnet 5.5** | effort `high`"),
-        ("| 2a Spec review | **Fable 5.1**", "| 2a Spec review | **Opus 5.5**"),
+        ("| 2a Spec review | **Opus 5.5**", "| 2a Spec review | **Haiku 4.5**"),
     ):
         assert old in text, old
         assert routing_problems(text.replace(old, new, 1)), (old, new)
@@ -1422,7 +1422,7 @@ def review_prompt_problems(spec_review: str, review: str) -> list[str]:
     found = []
     for name, text in (("02a-spec-review.md", spec_review), ("06-review.md", review)):
         one = flat(text)
-        for needle in ("gpt-6.1-sol", "Fable 5.1", "scripts/stage2.py"):
+        for needle in ("gpt-6.1-sol", "Opus 5.5", "scripts/stage2.py"):
             if needle not in one:
                 found.append(f"{name} lacks {needle}")
     if "stage2.py spec-review <change>" not in flat(spec_review):
@@ -1442,7 +1442,7 @@ def test_the_review_prompts_give_both_paths() -> None:
     review = (PROMPTS / "06-review.md").read_text(encoding="utf-8")
     assert review_prompt_problems(spec_review, review) == []
     assert review_prompt_problems(spec_review.replace("gpt-6.1-sol", "gpt"), review)
-    assert review_prompt_problems(spec_review.replace("Fable 5.1", "Opus 5.5"), review)
+    assert review_prompt_problems(spec_review.replace("Opus 5.5", "Haiku 4.5"), review)
     assert review_prompt_problems(spec_review, review.replace("Phase 6 verdict:", "Verdict:"))
     assert review_prompt_problems(spec_review, review.replace("release-loop", "release"))
     assert review_prompt_problems(spec_review, review.replace("before you read any loop\nrow", "sometime"))

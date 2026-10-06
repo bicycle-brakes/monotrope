@@ -42,6 +42,8 @@ AMENDMENT_ADRS: dict[str, tuple[str, ...]] = {
     "D-4": ("0004-tracker-render-is-the-contract.md",),
     "D-13": ("0007-stage-2-reviews-by-codex-and-glm.md",),
     "D-17": ("0003-public-scan-naming-boundary.md",),
+    "D-15": ("0009-architecture-delta-in-design-md.md",),
+    "O-3": ("0009-architecture-delta-in-design-md.md",),
     "coordinator-permission": (
         "0002-exclusive-coordinator-writer.md",
         "0005-workers-claim-their-own-bead.md",

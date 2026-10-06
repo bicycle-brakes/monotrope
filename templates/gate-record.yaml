@@ -1,44 +1,44 @@
-# Vorlage — Gate-Record
+# Template — gate record
 #
-# Ein Gate-Record ist eine DATEI, kein Feld (docs/governance/quality-gates.md §6).
-# Der Unterschied ist nicht formal: ein Feld kann man setzen, einen abgeleiteten
-# Zustand nicht. Im Fehler-Katalog stehen drei Befunde, die alle daher kommen,
-# dass eine Abnahme ein Feld war — F-A-52, F-A-53 und F-A-58, letzterer mit
-# Signifikanz "critical (data)": drei Contracts standen auf `accepted` gegen
-# eine zurueckgezogene Abnahme.
+# A gate record is a FILE, not a field (docs/governance/quality-gates.md §6).
+# The difference is not formal: a field can be set, a derived state cannot. The
+# error catalogue holds three findings that all stem from an acceptance having
+# been a field — F-A-52, F-A-53 and F-A-58, the last with significance
+# "critical (data)": three contracts stood at `accepted` against a withdrawn
+# acceptance.
 #
-# `state: ACCEPTED` steht deshalb hier NICHT als Startwert. Wer ihn tippt, hat
-# nichts abgenommen — `scripts/gate_record.py::ist_abgenommen()` leitet ab, und
-# es prueft vier Bedingungen.
+# `state: ACCEPTED` is therefore NOT the initial value here. Whoever types it
+# has accepted nothing — `scripts/gate_record.py::ist_abgenommen()` derives it,
+# and it checks four conditions.
 #
-# Ablage: eine Datei je Gate und Gegenstand, neben dem Gegenstand.
+# Placement: one file per gate and subject, next to the subject.
 
-# Welches Tor. Aus der geschlossenen Menge in quality-gates.md:
-# HG-1 Contract-Abnahme · HG-2 Reconciliation · HG-3 Cutover · HG-4 Post-Cutover
+# Which gate. From the closed set in quality-gates.md:
+# HG-1 contract acceptance · HG-2 reconciliation · HG-3 cutover · HG-4 post-cutover
 gate: HG-1
 
-# Worueber unterschrieben wird — und woran die Unterschrift haengt.
+# What is being signed — and what the signature hangs on.
 subject:
   kind: entity-contract        # entity-contract | recon-report | bundle | run-log
   path: contracts/<entity>.yaml
-  # Der Hash des Gegenstands zum Zeitpunkt der Vorlage. Weicht er vom heutigen
-  # ab, ist der Record NICHT abgenommen — was nach der Signatur geaendert wird,
-  # ist wieder unsigniert (RB-M1). Das ist der Kern des ganzen Mechanismus.
-  sha256: "<sha256 des Gegenstands>"
+  # The hash of the subject at the time of submission. If it differs from
+  # today's, the record is NOT accepted — what is changed after the signature is
+  # unsigned again (RB-M1). This is the core of the whole mechanism.
+  sha256: "<sha256 of the subject>"
 
 # DRAFT -> IN_REVIEW -> ACCEPTED -> WITHDRAWN.
-# Erlaubte Kanten stehen in scripts/gate_record.py; alles andere wird abgelehnt.
-# Eine zweite Abnahme desselben Records gibt es nicht: wer erneut abnehmen will,
-# geht ueber WITHDRAWN.
+# Allowed edges are in scripts/gate_record.py; anything else is rejected.
+# There is no second acceptance of the same record: whoever wants to accept
+# again goes through WITHDRAWN.
 state: DRAFT
 
-# Wer den Record angelegt hat und wer zuletzt gepusst hat. Beide duerfen nicht
-# unterschreiben — sonst ist die Abnahme eine Schleife.
+# Who created the record and who pushed last. Neither may sign — otherwise the
+# acceptance is a loop.
 author: "<github-handle>"
 last_pusher: "<github-handle>"
 
-# Append-only. Jeder Uebergang mit Zeitpunkt, Rolle und Review-URL.
-# Ein Eintrag wird nie geaendert; eine Korrektur ist ein neuer Eintrag (RB-P5).
+# Append-only. Every transition with time, role and review URL.
+# An entry is never changed; a correction is a new entry (RB-P5).
 history:
   - to: DRAFT
     at: "2026-01-01T00:00:00Z"
@@ -46,30 +46,31 @@ history:
     role: data-architect
     review_url: null
 
-# Die Pflicht-Rollen DIESES Gates. Welche das sind, steht maschinenlesbar in
-# `scripts/gate_record.py::PFLICHT_ROLLEN` und normativ in quality-gates.md §4 —
-# HG-1 verlangt Data Architect UND Fachseite, HG-2 Data Product Owner UND Data
-# Architect, HG-3 Produktverantwortlicher UND Data Architect, HG-4 nur Operations
-# Owner. Eine Rolle unterschreibt nicht, ein Mensch tut es: `handle` ist Pflicht,
-# nicht nur `role` — und zwei Rollen in derselben Hand sind eine Unterschrift.
+# The required roles of THIS gate. Which they are is stated machine-readably in
+# `scripts/gate_record.py::PFLICHT_ROLLEN` and normatively in quality-gates.md §4 —
+# HG-1 requires data architect AND business side (`fachseite`), HG-2 data product
+# owner AND data architect, HG-3 product lead (`produktverantwortlicher`) AND
+# data architect, HG-4 only operations owner. A role does not sign, a human does:
+# `handle` is required, not just `role` — and two roles in the same hand are one
+# signature.
 #
-# Diese Vorlage stand bis zum 2026-09-08 auf `gate: HG-1` mit `data-product-owner`
-# als zweitem Unterzeichner. HG-1 kennt die Rolle nicht; es war ein Beispiel, das
-# sein eigenes Tor nicht bestanden haette.
+# Until 2026-09-08 this template stood on `gate: HG-1` with `data-product-owner`
+# as the second signer. HG-1 does not know that role; it was an example that
+# would not have passed its own gate.
 #
-# `at` muss NACH dem letzten Uebergang nach IN_REVIEW liegen. Eine Zustimmung
-# von davor gilt einem anderen Text.
+# `at` must lie AFTER the last transition to IN_REVIEW. An approval from before
+# applies to a different text.
 signers:
   - role: data-architect
     handle: "<github-handle>"
     at: "2026-01-01T00:00:00Z"
     review_url: "https://github.com/<org>/<repo>/pull/<n>#pullrequestreview-<id>"
   - role: fachseite
-    handle: "<anderer-github-handle>"
+    handle: "<other-github-handle>"
     at: "2026-01-01T00:00:00Z"
     review_url: "https://github.com/<org>/<repo>/pull/<n>#pullrequestreview-<id>"
 
-# Pruefen:
+# Check:
 #   python3 -c "import sys,yaml;sys.path.insert(0,'scripts');import gate_record as g;\
 #   r=yaml.safe_load(open('templates/gate-record.yaml'));print(g.ist_abgenommen(r,'x'))"
-# Erwartet: (False, [...]) — eine Vorlage ist nie abgenommen.
+# Expected: (False, [...]) — a template is never accepted.

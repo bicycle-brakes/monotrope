@@ -1,38 +1,37 @@
 #!/usr/bin/env python3
-"""Der Aufruf, der eine Aenderung anlegt — AK-1 aus spec.md.
+"""The call that creates a change — AK-1 (acceptance criterion 1) from spec.md.
 
-`docs/WORKFLOW.md` beschreibt sieben Phasen, aber bis heute gab es keinen
-Befehl, der Phase 1 einrichtet: `plans/changes/<name>/` mit einem gueltigen
-Artefakt, verknuepft mit einem Vorgang im Tracker. Wer eine Aenderung begann,
-tippte den Ordner und das Frontmatter von Hand — und verpasste dabei leicht
-ein Pflichtfeld, das `plans_registry.py --check` erst beim naechsten Lauf
-gefunden haette.
+`docs/WORKFLOW.md` describes seven phases, but until today there was no command
+that sets up phase 1: `plans/changes/<name>/` with a valid artefact, linked to
+a bead in the tracker. Whoever began a change typed the folder and the
+frontmatter by hand — and easily missed a required field that
+`plans_registry.py --check` would only have found on the next run.
 
-Dieses Script schliesst die Luecke, ohne eine zweite zu oeffnen:
+This script closes the gap without opening a second one:
 
-  - Es **importiert** `plans_registry` und liest dessen `REQUIRED`,
-    `_bead_statuses`, `_bead_export_path`, `render_index` und `check` zur
-    Laufzeit — nie beim Import kopiert, damit ein Test, der `reg.REPO`,
-    `reg.PLANS` und `reg.INDEX` per `monkeypatch` umlenkt, auch dieses Script
-    umlenkt (dasselbe Muster wie die Fixture `plans` in
+  - It **imports** `plans_registry` and reads its `REQUIRED`,
+    `_bead_statuses`, `_bead_export_path`, `render_index` and `check` at run
+    time — never copied at import time, so that a test that redirects
+    `reg.REPO`, `reg.PLANS` and `reg.INDEX` with `monkeypatch` redirects this
+    script too (the same pattern as the `plans` fixture in
     `tests/test_plans_registry.py`).
-  - Es **verlangt** einen vorhandenen Bead, statt einen anzulegen: `bd` zu
-    rufen hiesse schreiben (AGENTS.md), die CI hat kein `bd`
-    (`requirements-ci.txt` nennt es nicht), und ein Artefakt mit erfundenem
-    Bead wuerde vom Gate `dangling-beads` sofort geblockt — das Script erzeugte,
-    was das naechste Gate verwirft. Verlangen und pruefen ist die einzige
-    Form, die in jeder Umgebung dasselbe tut.
-  - Es **laesst nichts stehen, was das naechste Gate verwirft**: einmal vor
-    und einmal nach dem Schreiben laeuft `plans_registry.check()`, und nur ein
-    BLOCK, den es **dazugebracht** hat, macht das Script rueckgaengig. Die
-    Basislinie ist keine Feinheit: ohne sie loeste jeder fremde BLOCK unter
-    `plans/` die Ruecknahme aus und die Meldung schob ihn dem gerade
-    erzeugten, einwandfreien Artefakt zu — der Einstieg waere unbenutzbar,
-    solange irgendwo sonst etwas blockt.
+  - It **requires** an existing bead instead of creating one: calling `bd`
+    would mean writing (AGENTS.md), CI has no `bd` (`requirements-ci.txt` does
+    not name it), and an artefact with an invented bead would be blocked at
+    once by the `dangling-beads` gate — the script would produce what the next
+    gate rejects. Requiring and checking is the only form that does the same
+    in every environment.
+  - It **leaves nothing standing that the next gate rejects**: once before and
+    once after writing, `plans_registry.check()` runs, and only a BLOCK that
+    the call **added** makes the script roll back. The baseline is no
+    subtlety: without it every foreign BLOCK under `plans/` would trigger the
+    rollback and the message would pin it on the freshly created, sound
+    artefact — the entry would be unusable as long as anything else blocks
+    anywhere.
 
 Usage:
-    python3 scripts/new_change.py <name> --bead <id> [--owner <rolle>] [--dry-run]
-Exit-Codes (ueber `_verdict.Verdict`): 0 = angelegt (INFO), 2 = BLOCK.
+    python3 scripts/new_change.py <name> --bead <id> [--owner <role>] [--dry-run]
+Exit codes (via `_verdict.Verdict`): 0 = created (INFO), 2 = BLOCK.
 """
 
 from __future__ import annotations
@@ -51,51 +50,47 @@ from _verdict import Level, Verdict  # noqa: E402
 
 NAME_PATTERN = re.compile(r"^[a-z0-9]+(-[a-z0-9]+)*$")
 
-# Kuerzere Tokens melden fast jeden Namen als "verwandt" zu fast jedem anderen.
+# Shorter tokens report almost every name as "related" to almost every other.
 MIN_TOKEN_LEN = 4
 
-# Die Archivform ist `YYYY-MM-DD-<name>` (plans/_README.md). Exakt, nicht als
-# Suffix-Glob `*-<name>`: der traf jeden archivierten Ordner, dessen Basename
-# zufaellig auf `-<name>` endet — `isolation` kollidierte mit
-# `2026-09-05-workflow-einstieg-und-isolation`, und der Aufruf brach mit einer
-# Kollision ab, die es nicht gab.
+# The archive form is `YYYY-MM-DD-<name>` (plans/_README.md). Exact, not as a
+# suffix glob `*-<name>`: that hit every archived folder whose basename happens
+# to end in `-<name>` — `isolation` collided with
+# `2026-09-05-workflow-einstieg-und-isolation`, and the call aborted on a
+# collision that did not exist.
 ARCHIV_PRAEFIX = "[0-9][0-9][0-9][0-9]-[0-9][0-9]-[0-9][0-9]-"
 
-# Diese Ueberschriften-Zeile markiert das Erzeugte als Skelett, nicht als
-# Ergebnis von Phase 1 — die Gliederung aus `prompts/01-explore.md` wird
-# absichtlich NICHT hier abgeschrieben (AK-2 gilt auch fuer diesen Rumpf: kein
-# zweiter Ort, der beschreibt, was Phase 1 tut).
+# This heading line marks what is generated as a skeleton, not as the result of
+# phase 1 — the outline from `prompts/01-explore.md` is deliberately NOT copied
+# here (AK-2 holds for this body too: no second place that describes what
+# phase 1 does).
 BODY_TEMPLATE = """# {titel} — Research
 
-Phase 1 nach [`prompts/01-explore.md`](../../../prompts/01-explore.md); diese
-Datei ist leer, bis sie gelaufen ist.
+Phase 1 per [`prompts/01-explore.md`](../../../prompts/01-explore.md); this
+file is empty until it has run.
 
-> **Herkunft nachziehen.** Das Frontmatter sagt `provenance: human-written` —
-> das gilt für diesen Rumpf. Wer ihn mit einem Sprachmodell füllt, setzt
-> `ai-drafted-reviewed` und ergänzt `produced_by:` und `review:`
-> (`provenance.yaml`, Klasse `ai-drafted-reviewed`, `review_required: true`).
+> **Bring the provenance up to date.** The frontmatter says
+> `provenance: human-written` — that holds for this skeleton. Whoever fills it
+> with a language model sets `ai-drafted-reviewed` and adds `produced_by:` and
+> `review:` (`provenance.yaml`, class `ai-drafted-reviewed`,
+> `review_required: true`).
 """
-
-# Echte Umlaute in BODY_TEMPLATE, obwohl die Kommentare dieser Datei
-# transliteriert sind: die Vorlage ist kein Python-Kommentar, sie **ist** der
-# Inhalt einer Markdown-Datei. `AGENTS.md` verlangt dort Diakritika, und ein
-# Aufruf, der ASCII-Ersatz erzeugt, saet den Verstoss bei jedem Gebrauch neu.
 
 
 def _frontmatter_template(name: str, bead: str, owner: str, heute: str) -> str:
-    """Frontmatter mit jedem Feld aus `plans_registry.REQUIRED` gefuellt.
+    """Frontmatter with every field from `plans_registry.REQUIRED` filled in.
 
-    Reihenfolge und Zusatzfelder folgen `plans/_README.md` — `supersedes` und
-    `superseded_by` sind die einzigen zwei Felder, die `null` sein duerfen.
+    Order and extra fields follow `plans/_README.md` — `supersedes` and
+    `superseded_by` are the only two fields that may be `null`.
 
-    `provenance: human-written` und **kein** `produced_by`-Block: geschrieben
-    hat diese Datei ein deterministischer Aufruf, den ein Mensch abgesetzt hat.
-    Frueher stand hier `ai-drafted-reviewed` mit
-    `produced_by: {kind: llm-session, name: unbekannt}` — eine Herkunft, die
-    zum Zeitpunkt des Schreibens niemand hatte, und die das Provenienz-Gate
-    nicht widerlegen kann, weil `plans/` genau die zwei Klassen
-    `human-written` und `ai-drafted-reviewed` zulaesst. Wer den Rumpf mit
-    einem Sprachmodell fuellt, zieht beides nach; der erzeugte Text sagt das.
+    `provenance: human-written` and **no** `produced_by` block: this file was
+    written by a deterministic call that a human issued. It used to say
+    `ai-drafted-reviewed` with
+    `produced_by: {kind: llm-session, name: unknown}` — a provenance that
+    nobody had at the time of writing, and that the provenance gate cannot
+    refute, because `plans/` permits exactly the two classes `human-written`
+    and `ai-drafted-reviewed`. Whoever fills the body with a language model
+    brings both up to date; the generated text says so.
     """
     return f"""---
 title: "Research — {name}"
@@ -116,11 +111,11 @@ tags: [research]
 
 
 def _known_field_values(bead: str, heute: str) -> dict[str, str]:
-    """Was dieses Script fuer jedes Pflichtfeld aus `REQUIRED` einsetzen kann.
+    """What this script can put in for each required field from `REQUIRED`.
 
-    Waechst `plans_registry.REQUIRED` um ein Feld, fuer das es hier keinen
-    Wert gibt, blockt Schritt 4 — statt ein Artefakt zu schreiben, das
-    `--check` gleich darauf verwirft.
+    If `plans_registry.REQUIRED` grows by a field for which there is no value
+    here, step 4 blocks — instead of writing an artefact that `--check`
+    rejects right afterwards.
     """
     return {
         "status": "draft",
@@ -132,12 +127,12 @@ def _known_field_values(bead: str, heute: str) -> dict[str, str]:
 
 
 def _related_candidates(name: str, plans_root: Path) -> list[str]:
-    """Grobe Vorschau der Regel aus AGENTS.md: erst suchen, dann anlegen.
+    """Rough preview of the rule from AGENTS.md: search first, then create.
 
-    Kein Abbruch — ob es dasselbe Thema ist, entscheidet der Mensch. Ein
-    Token unter vier Zeichen wird ignoriert, sonst meldet fast jeder Name
-    "verwandt" zu fast jedem anderen. Die Schwelle steht als Konstante, damit
-    Text und Code sie nicht getrennt tragen.
+    No abort — whether it is the same topic is for the human to decide. A
+    token under four characters is ignored, otherwise almost every name
+    reports "related" to almost every other. The threshold is a constant so
+    that text and code do not carry it separately.
     """
     tokens = [t for t in name.split("-") if len(t) >= MIN_TOKEN_LEN]
     if not tokens:
@@ -159,29 +154,28 @@ WAECHTER = Path(__file__).resolve().parent / "check_worktree_state.sh"
 
 
 def _worktree_is_sane() -> str | None:
-    """Steht der Baum, in dem gleich geschrieben wird, auf einem Zweig?
+    """Is the tree that is about to be written to on a branch?
 
-    **Warum hier.** `make change` schreibt einen Ordner und rendert den Index.
-    Geschieht das an einem losgeloesten HEAD, haengt beides an einem Commit, den
-    kein Zweig haelt — sichtbar wird das erst, wenn jemand den Ordner sucht. Am
-    Hauptcheckout dieses Repos hingen zeitweise fuenf Arbeitsbaeume in genau
-    diesem Zustand.
+    **Why here.** `make change` writes a folder and renders the index. If that
+    happens on a detached HEAD, both hang on a commit that no branch holds — it
+    only shows when someone looks for the folder. At times five worktrees of
+    this repo's main checkout were in exactly this state.
 
-    Geprueft wird mit `-`: der Zweig darf jeder sein, aber es muss einer sein.
-    Ein laufender Rebase haelt ebenfalls an. Die Pruefung ist **eine** — das
-    Shell-Script ist die Implementierung, hier steht kein zweites Regelwerk.
+    Checked with `-`: the branch may be any, but it must be one. A running
+    rebase halts it as well. The check is **one** — the shell script is the
+    implementation, no second rule set stands here.
 
-    Rueckgabe: die Fehlermeldung, oder None wenn der Baum benutzbar ist.
+    Returns: the error message, or None if the tree is usable.
     """
     if not WAECHTER.is_file():
-        return f"{WAECHTER.name} fehlt — die Vorbedingung ist nicht pruefbar"
+        return f"{WAECHTER.name} missing — the precondition cannot be checked"
     lauf = subprocess.run(
         ["bash", str(WAECHTER), str(reg.REPO), "-"],
         capture_output=True,
         text=True,
     )
     if lauf.returncode != 0:
-        return (lauf.stderr or lauf.stdout).strip() or "Waechter meldet einen unbenutzbaren Arbeitsbaum"
+        return (lauf.stderr or lauf.stdout).strip() or "Guard reports an unusable worktree"
     return None
 
 
@@ -193,79 +187,78 @@ def _abort(verdict: Verdict, message: str, detail: str = "") -> int:
 
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
-    parser.add_argument("name", help="Ordnername unter plans/changes/, z.B. mein-thema")
-    parser.add_argument("--bead", required=True, help="vorhandene Vorgangs-ID aus dem Tracker (tools/bd ready)")
-    parser.add_argument("--owner", default="Data Architect", help="Rolle aus provenance.yaml (Default: Data Architect)")
-    parser.add_argument("--dry-run", action="store_true", help="nur anzeigen, nichts schreiben")
+    parser.add_argument("name", help="folder name under plans/changes/, e.g. my-topic")
+    parser.add_argument("--bead", required=True, help="existing bead id from the tracker (tools/bd ready)")
+    parser.add_argument("--owner", default="Data Architect", help="role from provenance.yaml (default: Data Architect)")
+    parser.add_argument("--dry-run", action="store_true", help="only show, write nothing")
     args = parser.parse_args(argv)
 
     verdict = Verdict()
 
-    # Schritt 1 · Name
+    # Step 1 · Name
     if not NAME_PATTERN.match(args.name):
         return _abort(
             verdict,
-            f"Name '{args.name}' passt nicht auf {NAME_PATTERN.pattern}",
-            "Erlaubt: Kleinbuchstaben, Ziffern, Bindestrich als Trenner — kein fuehrender/abschliessender Bindestrich.",
+            f"Name '{args.name}' does not match {NAME_PATTERN.pattern}",
+            "Allowed: lowercase letters, digits, hyphen as separator — no leading/trailing hyphen.",
         )
 
-    # Schritt 2 · Bead
+    # Step 2 · Bead
     export_path = reg._bead_export_path()
     bead_statuses = reg._bead_statuses(export_path)
     if bead_statuses is None:
         return _abort(
             verdict,
-            f"Bead-Export {export_path} fehlt oder ist leer",
-            "Ohne Export ist nicht pruefbar, ob der Vorgang existiert. Beheben: `bd export` bzw. den Export-Hook laufen lassen.",
+            f"Bead export {export_path} missing or empty",
+            "Without the export it cannot be checked whether the bead exists. Fix: `bd export` or let the export hook run.",
         )
     status = bead_statuses.get(args.bead)
     if status is None:
         return _abort(
             verdict,
-            f"Bead '{args.bead}' steht nicht im Export {export_path}",
-            "Der Vorgang muss zuerst angelegt und exportiert werden — dieses Script legt keinen an.",
+            f"Bead '{args.bead}' is not in the export {export_path}",
+            "The bead must be created and exported first — this script creates none.",
         )
     if status == "closed":
         return _abort(
             verdict,
-            f"Bead '{args.bead}' ist im Export 'closed'",
-            "Ein neuer Ordner an einem geschlossenen Vorgang waere sofort DRIFT "
-            "(Bead geschlossen, Artefakt nicht 'done' und archiviert).",
+            f"Bead '{args.bead}' is 'closed' in the export",
+            "A new folder on a closed bead would be DRIFT at once (bead closed, artefact not 'done' and archived).",
         )
 
-    # Schritt 2a · Arbeitsbaum
+    # Step 2a · Worktree
     fehler = _worktree_is_sane()
     if fehler is not None:
         return _abort(
             verdict,
-            "Arbeitsbaum ist nicht in einem Zustand, in dem geschrieben wird",
+            "Worktree is not in a state in which writing is allowed",
             fehler,
         )
 
-    # Schritt 3 · Mehrfacherzeugung
+    # Step 3 · Repeated creation
     ziel = reg.PLANS / "changes" / args.name
     if ziel.exists():
-        return _abort(verdict, f"{ziel.relative_to(reg.REPO)} existiert schon")
+        return _abort(verdict, f"{ziel.relative_to(reg.REPO)} exists already")
     archiv = reg.PLANS / "changes" / "archive"
     if archiv.exists() and any(archiv.glob(f"{ARCHIV_PRAEFIX}{args.name}")):
-        return _abort(verdict, f"plans/changes/archive/ traegt schon einen Ordner fuer '{args.name}'")
+        return _abort(verdict, f"plans/changes/archive/ already holds a folder for '{args.name}'")
 
     verwandt = _related_candidates(args.name, reg.PLANS)
     for pfad in verwandt:
         verdict.info(
-            f"moeglicherweise verwandt: plans/{pfad}",
-            "Vor dem Anlegen erst pruefen, ob es dasselbe Thema ist (AGENTS.md).",
+            f"possibly related: plans/{pfad}",
+            "Before creating, check whether it is the same topic (AGENTS.md).",
         )
 
-    # Schritt 4 · REQUIRED vollstaendig?
+    # Step 4 · REQUIRED complete?
     heute = dt.date.today().isoformat()
     bekannt = _known_field_values(args.bead, heute)
     unbekannt = [f for f in reg.REQUIRED if f not in bekannt]
     if unbekannt:
         return _abort(
             verdict,
-            f"Pflichtfeld(er) {unbekannt} — das Script kennt keinen Wert dafuer",
-            "plans_registry.REQUIRED ist gewachsen, ohne dass dieses Script mitgezogen wurde.",
+            f"Required field(s) {unbekannt} — the script knows no value for them",
+            "plans_registry.REQUIRED has grown without this script following.",
         )
 
     frontmatter = _frontmatter_template(args.name, args.bead, args.owner, heute)
@@ -274,29 +267,29 @@ def main(argv: list[str] | None = None) -> int:
     research_path = ziel / "research.md"
 
     if args.dry_run:
-        verdict.info(f"[--dry-run] wuerde anlegen: {research_path.relative_to(reg.REPO)}")
-        verdict.info(f"[--dry-run] Bead: {args.bead} (Status im Export: {status})")
-        verdict.info("[--dry-run] Verweis: prompts/01-explore.md")
+        verdict.info(f"[--dry-run] would create: {research_path.relative_to(reg.REPO)}")
+        verdict.info(f"[--dry-run] Bead: {args.bead} (status in the export: {status})")
+        verdict.info("[--dry-run] Reference: prompts/01-explore.md")
         print(verdict.render())
-        print("\n--- Vorschau research.md ---\n")
+        print("\n--- Preview research.md ---\n")
         print(inhalt)
         return verdict.exit_code()
 
-    # Schritt 5 · Basislinie, dann schreiben
+    # Step 5 · Baseline, then write
     #
-    # Die Basislinie ist der Unterschied zwischen "dieser Aufruf hat etwas
-    # kaputtgemacht" und "hier war schon etwas kaputt". Ohne sie loeste jeder
-    # fremde BLOCK unter plans/ die Ruecknahme aus, und die Meldung schob ihn
-    # dem gerade erzeugten, einwandfreien Artefakt zu: der dokumentierte
-    # Einstieg waere unbenutzbar, solange irgendein anderes Artefakt blockt —
-    # und zwar mit einer Fehlermeldung, die auf die falsche Datei zeigt.
+    # The baseline is the difference between "this call broke something" and
+    # "something was already broken here". Without it every foreign BLOCK under
+    # plans/ would trigger the rollback, and the message would pin it on the
+    # freshly created, sound artefact: the documented entry would be unusable
+    # as long as any other artefact blocks — and with an error message that
+    # points at the wrong file.
     vorher = {f.message for f in reg.check().at(Level.BLOCK)}
 
     alter_index = reg.INDEX.read_text(encoding="utf-8") if reg.INDEX.exists() else None
     ziel.mkdir(parents=True)
     research_path.write_text(inhalt, encoding="utf-8")
 
-    # Schritt 6 · Index neu rendern, dann pruefen, was *dazugekommen* ist.
+    # Step 6 · Re-render the index, then check what was *added*.
     reg.INDEX.write_text(reg.render_index(), encoding="utf-8")
     nachher = reg.check().at(Level.BLOCK)
     neue_block_befunde = [f for f in nachher if f.message not in vorher]
@@ -307,29 +300,29 @@ def main(argv: list[str] | None = None) -> int:
         else:
             reg.INDEX.write_text(alter_index, encoding="utf-8")
         verdict.block(
-            "Das erzeugte Artefakt wurde vom Registry-Check verworfen — nichts bleibt stehen.",
+            "The generated artefact was rejected by the registry check — nothing stays.",
             "\n".join(f.message for f in neue_block_befunde),
         )
         print(verdict.render())
         return verdict.exit_code()
 
-    # Vorbestehende BLOCK-Befunde, die **immer noch** stehen. Sie sind nicht die
-    # Schuld dieses Aufrufs und halten ihn nicht auf — verschweigen wuerde aber
-    # heissen, dass der naechste `make verify` ueberrascht. Gemeldet wird der
-    # Schnitt aus vorher und nachher, nicht `vorher` allein: der fehlende Index
-    # blockt vor dem Schreiben und ist danach behoben, und "vorbestehender
-    # BLOCK: plans/INDEX.md fehlt" waere dann eine Meldung ueber einen Zustand,
-    # den dieser Aufruf gerade beseitigt hat.
+    # Pre-existing BLOCK findings that **still** stand. They are not this call's
+    # fault and do not stop it — but keeping quiet would mean the next
+    # `make verify` comes as a surprise. What is reported is the intersection of
+    # before and after, not `vorher` alone: the missing index blocks before
+    # writing and is fixed afterwards, and "pre-existing BLOCK: plans/INDEX.md
+    # missing" would then be a message about a state this call has just
+    # removed.
     for message in sorted(vorher & {f.message for f in nachher}):
         verdict.info(
-            f"vorbestehender BLOCK, nicht von diesem Aufruf: {message}",
-            "Er stand schon vorher im Baum und blockt `make verify`, bis ihn jemand behebt.",
+            f"pre-existing BLOCK, not from this call: {message}",
+            "It stood in the tree before and blocks `make verify` until someone fixes it.",
         )
 
-    # Schritt 7 · Ausgabe
-    verdict.info(f"angelegt: {ziel.relative_to(reg.REPO)}")
-    verdict.info(f"Bead: {args.bead} (Status im Export: {status})")
-    verdict.info("naechster Schritt: prompts/01-explore.md")
+    # Step 7 · Output
+    verdict.info(f"created: {ziel.relative_to(reg.REPO)}")
+    verdict.info(f"Bead: {args.bead} (status in the export: {status})")
+    verdict.info("next step: prompts/01-explore.md")
     print(verdict.render())
     return verdict.exit_code()
 

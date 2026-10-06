@@ -1,6 +1,6 @@
 # Phase 6 · Review
 
-**Model:** Fable 5.1 — finds what Sonnet misses, and reads the code a change
+**Model:** Opus 5.5 — finds what Sonnet misses, and reads the code a change
 calls instead of trusting its docstring; for a feature or architectural change
 gpt-6.1-sol at effort `max`, resumed by `python3 scripts/stage2.py review
 <change>`.
@@ -8,10 +8,11 @@ gpt-6.1-sol at effort `max`, resumed by `python3 scripts/stage2.py review
 **Result:** `plans/changes/<name>/findings.md`
 **Gate:** no open `[AMBIGUITY]`, no open BLOCKER — `[DIVERGENT]` counts as
 BLOCKER.
-**Session:** you are the spec reviewer of phase 2a, resumed. On the Fable path:
-`claude --model claude-fable-5-1 --resume <uuid>` (the id under the table in
-`findings.md`). On the Codex path the runner resumes the recorded session with
-`codex exec resume`. Only when that session is gone does a fresh one start;
+**Session:** you are the spec reviewer of phase 2a, resumed. On the Claude path
+(Opus 5.5): `claude --model claude-opus-5-5 --resume <uuid>` (the id under the
+table in `findings.md`). On the Codex path the runner resumes the recorded
+session with `codex exec resume`. Only when that session is gone does a fresh
+one start;
 `findings.md` says so. Your yardstick is the current `spec.md` — the version
 revised after your 2a review, not the one you read then. Read it again, and
 check first that each of your 2a rows arrived in it as `findings.md` says.
@@ -21,7 +22,7 @@ check first that each of your 2a rows arrived in it as `findings.md` says.
 row. The loop rows are the findings of GLM, the reviewer of the loop before
 this phase (`docs/WORKFLOW.md` §4); they are held outside the repository until
 your verdict stands, so that they cannot shape it. Only then do the loop rows
-come in. On the Fable path you run `python3 scripts/stage2.py release-loop
+come in. On the Claude path you run `python3 scripts/stage2.py release-loop
 <change>` and mark the `Phase 6` cell of each loop row `agree` or `disagree —
 <reason>`; on the Codex path the runner does both. A change that ran stage 2
 has the columns `Reviewer` and `Broke a test` in `findings.md`
@@ -47,7 +48,7 @@ Your answer **is** a table: one row per finding, `SPEC` and `MAINT` in the
 dimension column. Through the runner you answer in rows of six cells — `| ID |
 Severity | Dimension | Origin | Where | Finding |` — and the runner adds the
 reviewer, the status and the verdict line; write a `|` inside a cell as `\|`.
-On the Fable path you write the table of the change's `findings.md` yourself,
+On the Claude path you write the table of the change's `findings.md` yourself,
 in the columns that file has. Two markers override everything: a finding that
 reveals two plausible readings of spec or plan is `[AMBIGUITY]` and is never
 decided locally; two places answering the same question in opposite ways are

@@ -1,24 +1,24 @@
-"""Der Gate-Record — ein Zustandsautomat, aus dem `accepted` ABGELEITET wird.
+"""The gate record — a state machine from which `accepted` is DERIVED.
 
-`docs/governance/quality-gates.md` §6 sagt es in einem Satz: *ein Gate-Record ist
-eine Datei, kein Feld.* Diese Datei macht daraus Code.
+`docs/governance/quality-gates.md` §6 says it in one sentence: *a gate record is
+a file, not a field.* This file turns that into code.
 
-**Warum das wichtig ist, in Zahlen.** Im Fehler-Katalog stehen drei Befunde, die
-alle dieselbe Ursache haben — eine Abnahme, die als *Feld* gefuehrt wurde:
+**Why this matters, in numbers.** The error catalogue holds three findings that
+share one cause — an acceptance kept as a *field*:
 
-  F-A-52  Eine Signatur wurde zurueckgezogen, weil sich die Schlussfolgerung
-          aenderte — der Name stand gegen Text, den die Person nie las.
-  F-A-53  `accepted_unsigned` kollabiert zwei Zustaende; der Normalfall hat
-          keinen Namen.
-  F-A-58  Drei Contracts stehen auf `accepted` gegen eine zurueckgezogene
-          Abnahme. Signifikanz: **critical (data)**.
+  F-A-52  A signature was withdrawn because the conclusion changed — the name
+          stood against text the person never read.
+  F-A-53  `accepted_unsigned` collapses two states; the normal case has no
+          name.
+  F-A-58  Three contracts stand at `accepted` against a withdrawn acceptance.
+          Significance: **critical (data)**.
 
-Ein Feld kann man setzen. Ein abgeleiteter Zustand nicht — er ist wahr oder er
-ist es nicht, und die Begruendung faellt beim Rechnen mit ab.
+A field can be set. A derived state cannot — it is true or it is not, and the
+reasons fall out of the computation.
 
-**Deshalb gibt es hier keinen Setter fuer `ACCEPTED`.** `ist_abgenommen()`
-liefert ein Paar aus Urteil und Begruendungen; wer nur das Urteil nimmt,
-verliert nichts als die Erklaerung.
+**That is why there is no setter for `ACCEPTED` here.** `ist_abgenommen()`
+returns a pair of verdict and reasons; whoever takes only the verdict loses
+nothing but the explanation.
 """
 
 from __future__ import annotations
@@ -26,14 +26,14 @@ from __future__ import annotations
 import datetime as dt
 from typing import Any
 
-# Die vier Zustaende aus quality-gates.md §6.
+# The four states from quality-gates.md §6.
 ZUSTAENDE: tuple[str, ...] = ("DRAFT", "IN_REVIEW", "ACCEPTED", "WITHDRAWN")
 
-# Erlaubte Kanten. Was hier fehlt, ist verboten — nicht "ungewoehnlich".
+# Allowed edges. What is missing here is forbidden — not "unusual".
 #
-# `ACCEPTED -> ACCEPTED` fehlt mit Absicht: eine zweite Abnahme desselben
-# Records ist keine Bestaetigung, sondern verdeckt, dass sich der Gegenstand
-# geaendert hat. Wer erneut abnehmen will, geht ueber WITHDRAWN.
+# `ACCEPTED -> ACCEPTED` is missing on purpose: a second acceptance of the same
+# record is not a confirmation but hides that the subject has changed. Whoever
+# wants to accept again goes through WITHDRAWN.
 UEBERGAENGE: dict[str, tuple[str, ...]] = {
     "DRAFT": ("IN_REVIEW",),
     "IN_REVIEW": ("DRAFT", "ACCEPTED", "WITHDRAWN"),
@@ -42,19 +42,18 @@ UEBERGAENGE: dict[str, tuple[str, ...]] = {
 }
 
 
-# Welche Rollen ein Gate VERLANGT. Aus der Tabelle in `quality-gates.md` §4,
-# Spalte "Wer unterschreibt" — dort normativ, hier maschinenlesbar. Der Prosa-Name
-# steht mit dabei, damit `test_the_required_roles_match_the_governance_table` beide
-# Seiten gegeneinander halten kann: eine Rolle, die nur an einer der beiden Stellen
-# steht, ist ein Befund, keine Kleinigkeit.
+# Which roles a gate REQUIRES. From the table in `quality-gates.md` §4, column
+# "Wer unterschreibt" — normative there, machine-readable here. The prose name
+# comes along so that `test_the_required_roles_match_the_governance_table` can
+# hold both sides against each other: a role that stands in only one of the two
+# places is a finding, not a detail.
 #
-# **Warum es diese Menge ueberhaupt gibt.** Bis zum 2026-09-08 prueft
-# `ist_abgenommen()` nur, dass *vorhandene* Eintraege vollstaendig ausgefuellt
-# sind — nicht, dass die verlangte Rollenmenge erreicht ist. Ein HG-1-Record mit
-# einer einzigen Unterschrift kam damit als abgenommen durch, und zwei Eintraege
-# unter frei erfundenen Rollen-Strings ebenso. Genau das ist der Fehler, den
-# F-A-58 ("critical (data)") beschreibt: drei Contracts standen auf `accepted`
-# gegen eine Abnahme, die keine war.
+# **Why this set exists at all.** Until 2026-09-08 `ist_abgenommen()` only checked
+# that the entries that are *present* are filled in completely — not that the
+# required set of roles is reached. An HG-1 record with a single signature got
+# through as accepted, and so did two entries under freely invented role
+# strings. That is exactly the error F-A-58 ("critical (data)") describes: three
+# contracts stood at `accepted` against an acceptance that was none.
 PFLICHT_ROLLEN: dict[str, dict[str, str]] = {
     "HG-1": {"data-architect": "Data Architect", "fachseite": "Fachseite"},
     "HG-2": {"data-product-owner": "Data Product Owner (Consumer)", "data-architect": "Data Architect"},
@@ -64,18 +63,18 @@ PFLICHT_ROLLEN: dict[str, dict[str, str]] = {
 
 
 class UngueltigerUebergang(ValueError):
-    """Ein Uebergang, den der Automat nicht kennt."""
+    """A transition the machine does not know."""
 
 
 def pruefe_uebergang(von: str, nach: str) -> None:
-    """Wirft, wenn die Kante nicht existiert. Kein stilles Durchlassen."""
+    """Raises if the edge does not exist. No silent pass-through."""
     if von not in ZUSTAENDE:
-        raise UngueltigerUebergang(f"unbekannter Ausgangszustand: {von!r}")
+        raise UngueltigerUebergang(f"unknown source state: {von!r}")
     if nach not in ZUSTAENDE:
-        raise UngueltigerUebergang(f"unbekannter Zielzustand: {nach!r}")
+        raise UngueltigerUebergang(f"unknown target state: {nach!r}")
     if nach not in UEBERGAENGE[von]:
         raise UngueltigerUebergang(
-            f"{von} -> {nach} ist kein erlaubter Uebergang. Erlaubt ab {von}: {UEBERGAENGE[von]}"
+            f"{von} -> {nach} is not an allowed transition. Allowed from {von}: {UEBERGAENGE[von]}"
         )
 
 
@@ -91,10 +90,10 @@ def _zeit(wert: Any) -> dt.datetime | None:
 
 
 def _in_review_seit(record: dict) -> dt.datetime | None:
-    """Wann ging der Record zuletzt nach IN_REVIEW?
+    """When did the record last go to IN_REVIEW?
 
-    Der **letzte** Uebergang zaehlt, nicht der erste: nach einer Rueckgabe nach
-    DRAFT und erneuter Vorlage darf eine alte Zustimmung nicht weitergelten.
+    The **last** transition counts, not the first: after a return to DRAFT and a
+    renewed submission an old approval must not carry over.
     """
     zeiten = [
         _zeit(e.get("at")) for e in record.get("history", []) if isinstance(e, dict) and e.get("to") == "IN_REVIEW"
@@ -104,46 +103,45 @@ def _in_review_seit(record: dict) -> dt.datetime | None:
 
 
 def ist_abgenommen(record: dict, heutiger_hash: str | None = None) -> tuple[bool, list[str]]:
-    """Leitet ab, ob dieser Record abgenommen ist — mit Begruendung je Bedingung.
+    """Derives whether this record is accepted — with a reason per condition.
 
-    Die vier Bedingungen stehen in `quality-gates.md` §6. Jede liefert bei
-    Verletzung ihren eigenen Satz; eine Liste von Gruenden ist brauchbar, ein
-    nacktes `False` nicht.
+    The four conditions are in `quality-gates.md` §6. Each yields its own
+    sentence when violated; a list of reasons is usable, a bare `False` is not.
 
-    `heutiger_hash` ist der Hash des Gegenstands **jetzt**. Fehlt er, wird die
-    vierte Bedingung nicht geprueft und das ausdruecklich gemeldet — Schweigen
-    waere hier die gefaehrlichste Antwort (RB-G7).
+    `heutiger_hash` is the hash of the subject **now**. If it is missing, the
+    fourth condition is not checked and that is reported explicitly — silence
+    would be the most dangerous answer here (RB-G7).
     """
     gruende: list[str] = []
 
     if record.get("state") != "ACCEPTED":
-        gruende.append(f"state ist {record.get('state')!r}, nicht ACCEPTED")
+        gruende.append(f"state is {record.get('state')!r}, not ACCEPTED")
 
-    # 1 · alle Pflicht-Rollen liegen vor, jede mit Review-URL
+    # 1 · all required roles are present, each with a review URL
     signers = record.get("signers") or []
     pflicht = [s for s in signers if isinstance(s, dict)]
     if not pflicht:
         gruende.append("kein Unterzeichner eingetragen")
 
-    # Die Rollenmenge des Gates — nicht nur "irgendjemand hat unterschrieben".
+    # The gate's set of roles — not just "somebody signed".
     gate = record.get("gate")
     verlangt = PFLICHT_ROLLEN.get(gate)
     if verlangt is None:
         gruende.append(
-            f"gate {gate!r} kennt PFLICHT_ROLLEN nicht — ohne Sollmenge ist jede Unterschrift genug, "
-            f"und das ist keine Abnahme. Bekannt: {', '.join(sorted(PFLICHT_ROLLEN))}"
+            f"gate {gate!r} is unknown to PFLICHT_ROLLEN — without a target set any signature is enough, "
+            f"and that is no acceptance. Known: {', '.join(sorted(PFLICHT_ROLLEN))}"
         )
     else:
         unterschrieben = {s.get("role") for s in pflicht if s.get("role")}
         fehlend = sorted(set(verlangt) - unterschrieben)
         if fehlend:
-            gruende.append(f"{gate} verlangt {', '.join(sorted(verlangt))} — es fehlt: {', '.join(fehlend)}")
+            gruende.append(f"{gate} requires {', '.join(sorted(verlangt))} — missing: {', '.join(fehlend)}")
         fremd = sorted(unterschrieben - set(verlangt))
         if fremd:
             gruende.append(
                 f"{gate} kennt die Rolle(n) {', '.join(fremd)} nicht — eine erfundene Rolle ersetzt keine verlangte"
             )
-        # Zwei Rollen in einer Hand sind eine Unterschrift, nicht zwei.
+        # Two roles in one hand are one signature, not two.
         handles = [s.get("handle") for s in pflicht if s.get("handle")]
         doppelt = sorted({h for h in handles if handles.count(h) > 1})
         if doppelt:
@@ -154,13 +152,13 @@ def ist_abgenommen(record: dict, heutiger_hash: str | None = None) -> tuple[bool
 
     for s in pflicht:
         if not s.get("role"):
-            gruende.append(f"Unterzeichner ohne Rolle: {s}")
+            gruende.append(f"signer without a role: {s}")
         if not s.get("handle"):
             gruende.append(f"Rolle {s.get('role')!r} ohne Handle — eine Rolle unterschreibt nicht, ein Mensch tut es")
         if not s.get("review_url"):
             gruende.append(f"{s.get('handle')!r} ohne Review-URL — dann ist die Zustimmung nicht nachlesbar")
 
-    # 2 · die Zustimmung ist NACH dem Uebergang nach IN_REVIEW datiert
+    # 2 · the approval is dated AFTER the transition to IN_REVIEW
     seit = _in_review_seit(record)
     if seit is None:
         gruende.append("kein Uebergang nach IN_REVIEW in der history — der Record wurde nie vorgelegt")
@@ -168,14 +166,14 @@ def ist_abgenommen(record: dict, heutiger_hash: str | None = None) -> tuple[bool
         for s in pflicht:
             wann = _zeit(s.get("at"))
             if wann is None:
-                gruende.append(f"{s.get('handle')!r} ohne lesbaren Zeitpunkt")
+                gruende.append(f"{s.get('handle')!r} has no readable timestamp")
             elif wann < seit:
                 gruende.append(
                     f"{s.get('handle')!r} hat vor der Vorlage zugestimmt "
                     f"({wann.isoformat()} < {seit.isoformat()}) — das ist eine Zustimmung zu einem anderen Text"
                 )
 
-    # 3 · der Zustimmende ist weder Autor noch letzter Pusher
+    # 3 · the approver is neither author nor last pusher
     autor = record.get("author")
     pusher = record.get("last_pusher")
     for s in pflicht:
@@ -185,7 +183,7 @@ def ist_abgenommen(record: dict, heutiger_hash: str | None = None) -> tuple[bool
         if handle and handle == pusher:
             gruende.append(f"{handle!r} hat zuletzt gepusht und unterschreibt — dieselbe Schleife")
 
-    # 4 · subject.sha256 entspricht dem heutigen Hash
+    # 4 · subject.sha256 equals today's hash
     subject = record.get("subject") or {}
     signiert = subject.get("sha256")
     if not signiert:
@@ -202,5 +200,5 @@ def ist_abgenommen(record: dict, heutiger_hash: str | None = None) -> tuple[bool
 
 
 def pflichtfelder() -> frozenset[str]:
-    """Was ein Record traegt — die Liste, gegen die die Vorlage geprueft wird."""
+    """What a record carries — the list the template is checked against."""
     return frozenset({"gate", "subject", "state", "history", "signers"})
