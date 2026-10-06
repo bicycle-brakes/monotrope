@@ -481,11 +481,11 @@ the code and recorded here so that the next reading of the plan holds it.
 
 Appetite: 4 h of phase 4, one repair round included. Read from `date`.
 
-- 2026-10-06 18:10–18:45, 35 min, no break (appetite 4 h not reached; no
+- 2026-10-06 18:10–18:44, 33 min, no break (appetite 4 h not reached; no
   repair round used beyond the one test sharpening of fault 41, inside S2)
 
 Readings of `date` at the step boundaries: 18:10 start and baseline `make
 verify` green · 18:23 S1 committed (`a21717a`) · 18:27 S1 faults recorded
 (`4c47794`) · 18:31 S2 committed (`badb919`) · 18:37 S2 faults recorded
-(`254e1fb`) · 18:39 S3 step 5 committed (`34b412d`) · 18:45 step 6 (evidence,
-`implementation_status: partial`, plans index) committed.
+(`254e1fb`) · 18:39 S3 step 5 committed (`34b412d`) · 18:44 step 6 (evidence,
+`implementation_status: partial`, plans index) committed (`04367eb`).
