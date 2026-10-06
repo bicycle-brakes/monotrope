@@ -483,10 +483,20 @@ one merge.
     session files, the state database — after that run for both key values,
     and is green only when the sweep finds none and reads every file; a file
     it cannot read is red. No CH-4 command carries a key value in its
-    arguments: the values reach `grep` from a pattern file of mode 600,
-    removed afterwards (F-30, F-32).
+    arguments: the values reach `grep` from a pattern file made by `mktemp`
+    (mode 600) and removed on every exit path, an interrupt included (F-30,
+    F-32). The count and the sweep fail closed: before any `grep -f`, CH-4
+    checks that the pattern file holds the expected non-empty lines (one per
+    key in the count, two for the sweep) and is red otherwise; `grep`'s
+    status is read apart from `sudo`'s, so that the sweep is green only when
+    `grep` ran over that list and found nothing (its exit status 1), and any
+    other status, or a `sudo` that failed before `grep` ran, is red (F-39,
+    F-40).
     *Refuted by:* one of the four missing, the sweep passing on a file it
-    could not read, or a key value on a CH-4 command line.
+    could not read, a key value on a CH-4 command line or in a variable that
+    reaches one, a pattern file not made by `mktemp` or not removed on every
+    exit path, or a count or sweep that is green on an empty pattern file, on
+    an empty stream, or when `sudo` or `grep` failed.
 
 ### Slice 6 — the ruleset
 

@@ -537,11 +537,51 @@ def check_agent_keys(
     ):
         assert needle in risk, f"the runbook's risk on the agent's keys lacks {needle!r}"
     ch4 = re.split(r"^### CH-4 · ", text, flags=re.M)[1].split("\n### CH-5")[0]
-    assert re.search(r"grep -cF -f \"\$P\" ~/ch/ch4-key\.jsonl", ch4), (
-        "CH-4 does not count the key values in the stream from a pattern file"
-    )
-    assert not re.search(r"grep [^\n|]*\"\$(v|\()", ch4), "CH-4 puts a key value on a command line"
     assert "both key lines print 0" in ch4, "CH-4 has no green condition on the key values"
+    assert "A line that says RED" in ch4, "CH-4's green condition does not name the RED lines"
+    check_ch4_key_test(ch4)
+
+
+CH4_NAMES = {"P", "k", "n", "s", "HH"}  # the only variables the key test expands; none of them holds a key value
+CH4_SUBSTITUTIONS = {"mktemp", "grep", "wc"}
+CH4_GREP_ARGS = {".", '"$P"', "~/ch/ch4-key.jsonl"}  # besides options
+
+
+def check_ch4_key_test(ch4: str) -> None:  # 56, 70, findings F-32, F-39, F-40
+    """The count of the keys in the stream: its pattern file, and that it fails closed."""
+    code = ch4.split("R ch4-key ", 1)[1].split("```", 1)[0].split("\n", 1)[1]  # after the run that asks for the keys
+    code = re.sub(r"\s#[^\n]*", "", code)  # comments
+    # F-40: the pattern file is made by mktemp (mode 600) and removed on every exit path, interrupts included
+    assert re.findall(r"\bP=", code) == ["P="], "CH-4 assigns its pattern file more than once, or not at all"
+    assert code.lstrip().startswith("( P=$(mktemp) || exit 1; trap 'rm -f \"$P\"' EXIT; trap 'exit 1' INT TERM HUP"), (
+        "CH-4's pattern file is not made by mktemp inside a subshell that removes it on every exit path"
+    )
+    # F-39: the count fails closed: one non-empty value per key, a stream that holds something, grep's own status
+    counting = 'grep -cF -f "$P" ~/ch/ch4-key.jsonl'
+    assert counting in code, "CH-4 does not count the key values in the stream from a pattern file"
+    count = code.index(counting)
+    for guard, why in (
+        ('[ "$(grep -c . "$P")" = 1 ]', "that the pattern file holds one non-empty line"),
+        ('[ "$(wc -l < "$P")" -eq 1 ]', "that the pattern file holds exactly one line"),
+        ("[ -s ~/ch/ch4-key.jsonl ]", "that the stream holds something"),
+    ):
+        assert guard in code and code.index(guard) < count, f"CH-4 does not check, before the count, {why}"
+    assert '|| { echo "$k: RED' in code and "continue; }" in code, "CH-4's guard does not stop the count and say RED"
+    assert "s=$?" in code and '[ "$s" -le 1 ]' in code and '|| echo "$k: RED, exit $s"' in code, (
+        "CH-4 does not treat a grep status of 2 or more as RED"
+    )
+    # F-32, F-40: no key value rides in a variable, an expansion or a grep argument, quoted or not
+    names = set(re.findall(r"\$\{?([A-Za-z_]\w*)", code))
+    assert names <= CH4_NAMES, f"CH-4's key test expands {sorted(names - CH4_NAMES)}: a key value must not ride in one"
+    subs = set(re.findall(r"\$\(\(?\s*(\w+)", code))
+    assert subs <= CH4_SUBSTITUTIONS, f"CH-4's key test substitutes {sorted(subs - CH4_SUBSTITUTIONS)}"
+    greps = re.findall(r"\bgrep\b([^)\n;|&<>]*)", code)
+    assert len(greps) == 2, "CH-4's key test does not run exactly the guard's grep and the count's grep"
+    for args in greps:
+        for token in re.findall(r"\"[^\"]*\"|\S+", args):
+            assert (token.startswith("-") and "$" not in token) or token in CH4_GREP_ARGS, (
+                f"CH-4 gives grep {token!r} as an argument: a key value must come from the pattern file"
+            )
 
 
 def check_env_example(p: Path) -> None:  # 54
@@ -1020,9 +1060,69 @@ FAULTS = [
     Fault(  # F-32
         "56 CH-4 puts a key value on a command line",
         README,
-        sub('rm -f "$P"', 'rm -f "$P"; grep -c -- "$v" ~/ch/ch4-key.jsonl'),
+        sub("  done )", '    grep -c -- "$v" ~/ch/ch4-key.jsonl\n  done )'),
         check_agent_keys,
     ),
+    # F-40: what the check holds of the pattern file and of the variables
+    Fault(
+        "56 CH-4's pattern file is named, not made by mktemp",
+        README,
+        sub("P=$(mktemp) ||", "P=/tmp/ch4-patterns ||"),
+        check_agent_keys,
+    ),
+    Fault("56 CH-4 does not remove its pattern file", README, sub("trap 'rm -f \"$P\"' EXIT; ", ""), check_agent_keys),
+    Fault(
+        "56 CH-4 leaves the pattern file after an interrupt",
+        README,
+        sub("; trap 'exit 1' INT TERM HUP", ""),
+        check_agent_keys,
+    ),
+    Fault(
+        "56 CH-4 gives grep a key variable, unquoted",
+        README,
+        sub("  done )", "    grep -c -- $v ~/ch/ch4-key.jsonl\n  done )"),
+        check_agent_keys,
+    ),
+    Fault(
+        "56 CH-4 gives grep a key variable, in braces",
+        README,
+        sub("  done )", '    grep -c -- "${v}" ~/ch/ch4-key.jsonl\n  done )'),
+        check_agent_keys,
+    ),
+    Fault(
+        "56 CH-4 gives grep another argument",
+        README,
+        sub("  done )", '    grep -c -- "$k" ~/ch/ch4-key.jsonl\n  done )'),
+        check_agent_keys,
+    ),
+    Fault(
+        "56 CH-4 takes the key from a command substitution",
+        README,
+        sub("  done )", '    grep -c -- "$(sed -n "s/^$k=//p" "$HH/.env")" ~/ch/ch4-key.jsonl\n  done )'),
+        check_agent_keys,
+    ),
+    # F-39: the count fails closed
+    Fault(
+        "56 CH-4 counts on an empty pattern file",
+        README,
+        sub('[ "$(grep -c . "$P")" = 1 ] && ', ""),
+        check_agent_keys,
+    ),
+    Fault(
+        "56 CH-4 counts on a pattern file of several lines",
+        README,
+        sub('[ "$(wc -l < "$P")" -eq 1 ] && ', ""),
+        check_agent_keys,
+    ),
+    Fault("56 CH-4 counts in an empty stream", README, sub(" && [ -s ~/ch/ch4-key.jsonl ]", ""), check_agent_keys),
+    Fault("56 CH-4's guard does not stop the count", README, sub("continue; }", ": ; }"), check_agent_keys),
+    Fault(
+        "56 CH-4 reads a grep error as green",
+        README,
+        sub('[ "$s" -le 1 ] && echo "$k: $n" || echo "$k: RED, exit $s"', 'echo "$k: $n"'),
+        check_agent_keys,
+    ),
+    Fault("56 CH-4's green condition forgets RED", README, sub("A line that says RED", "A line"), check_agent_keys),
     Fault(
         "56 CH-4 has no green condition on the keys",
         README,

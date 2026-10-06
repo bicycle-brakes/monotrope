@@ -859,11 +859,42 @@ their numbers; each fault is in `FAULTS`, planted alone, silent before):
 | 101 | 52 | the pin names `!log_input` only | `sudo's input logging is not pinned off for the wrapper alone: ['Defaults!/usr/local/libexec/coding-harness/recheck-agent !log_input']` | `check_sudoers` (F-33) |
 | 102 | 52 | `log_input` pinned on | `… ['Defaults!/usr/local/libexec/coding-harness/recheck-agent log_input, !log_stdin']` | `check_sudoers` |
 | 103 | 52 | the pin names another command | `… ['Defaults!/usr/bin/id !log_input, !log_stdin']` | `check_sudoers` |
-| 104 | 56 | CH-4 runs `grep -c -- "$v"` besides its pattern file | `CH-4 puts a key value on a command line` | `check_agent_keys` (F-32) |
+| 104 | 56 | CH-4 runs `grep -c -- "$v"` in its loop besides its pattern file | `CH-4's key test expands ['v']: a key value must not ride in one` | `check_agent_keys` (F-32; the text changed with F-40) |
 
 Two older faults of criterion 56 changed their text with F-32 and F-38: "the
 risk is not named" now looks for the new heading, "CH-4 does not count the keys"
 for `grep -cF -f`.
+
+Added on 2026-10-06 in the second repair round of the F-14 amendments (rows F-39
+and F-40; the maintainer's decision of that day, `decisions.md`). `check_agent_keys`
+now calls `check_ch4_key_test`, which reads the code of CH-4's key test: the
+pattern file's `mktemp` and its removal on every exit path, the only variables
+and substitutions it may expand, the arguments `grep` may take, and the guards
+of the count. Each fault is in `FAULTS`, planted alone, silent before:
+
+| # | Criterion | Fault planted | After | Check |
+| --- | --- | --- | --- | --- |
+| 105 | 70 | `P=$(mktemp)` replaced by `P=/tmp/ch4-patterns` (mode 644 under the default umask) | `CH-4's pattern file is not made by mktemp inside a subshell that removes it on every exit path` | `check_ch4_key_test` (F-40) |
+| 106 | 70 | `trap 'rm -f "$P"' EXIT` removed | the same message | `check_ch4_key_test` (F-40) |
+| 107 | 70 | `trap 'exit 1' INT TERM HUP` removed (an interrupt leaves the file) | the same message | `check_ch4_key_test` (F-40) |
+| 108 | 70 | `grep -c -- $v …` added, unquoted | `CH-4's key test expands ['v']: …` | `check_ch4_key_test` (F-40) |
+| 109 | 70 | `grep -c -- "${v}" …` added | `CH-4's key test expands ['v']: …` | `check_ch4_key_test` (F-40) |
+| 110 | 70 | `grep -c -- "$k" …` added (a variable the test may expand, as an argument) | `CH-4 gives grep '"$k"' as an argument: a key value must come from the pattern file` | `check_ch4_key_test` (F-40) |
+| 111 | 70 | `grep -c -- "$(sed …)" …` added | `CH-4's key test substitutes ['sed']` | `check_ch4_key_test` (F-40) |
+| 112 | 70 | the guard that `$P` holds one non-empty line removed | `CH-4 does not check, before the count, that the pattern file holds one non-empty line` | `check_ch4_key_test` (F-39) |
+| 113 | 70 | the guard that `$P` holds exactly one line removed | `… holds exactly one line` | `check_ch4_key_test` (F-39) |
+| 114 | 70 | the guard that the stream holds something removed | `… that the stream holds something` | `check_ch4_key_test` (F-39) |
+| 115 | 70 | `continue; }` replaced by `: ; }` (the guard says RED and counts anyway) | `CH-4's guard does not stop the count and say RED` | `check_ch4_key_test` (F-39) |
+| 116 | 70 | `grep`'s status unread (`echo "$k: $n"` alone) | `CH-4 does not treat a grep status of 2 or more as RED` | `check_ch4_key_test` (F-39) |
+| 117 | 70 | the green condition forgets the RED lines | `CH-4's green condition does not name the RED lines` | `check_agent_keys` (F-39) |
+
+The check holds the runbook's text, not its run: whether `mktemp` gives mode 600
+and whether the guards go red on an empty file were measured on scratch files
+on 2026-10-06 (bash and zsh; the pattern file's mode `-rw-------`, removed after
+a normal end, an `exit` and an interrupt of the process group), not by a test.
+The sweep's text above is for slice 4's test, which holds it as it holds the
+count; its `sudo` branch (status below 10) was tried with `false` in place of
+`sudo`, and the sweep itself on scratch files without `sudo`.
 
 ### Notes, slice 5
 
@@ -1099,20 +1130,31 @@ section 5.
   key file is made in section 6's directory with `umask 077`, `chmod 600`
   and `stat` (criterion 69). Section 8's `R()` hands the key file to the
   wrapper (`… recheck-agent "$d" < ~/.config/coding-harness/hermes-keys`).
-  CH-4's key test reads the values from the key file, not `.env`: `P=$(mktemp)`
-  (mode 600), `cut -d= -f2- ~/.config/coding-harness/hermes-keys > "$P"`, every
-  `grep` takes its patterns with `-f "$P"` and never as an argument
-  (criterion 70, F-32), and `rm -f "$P"` ends the test. It gains three tests:
+  CH-4's key test reads the values from the key file, not `.env`: inside a
+  subshell that begins `( P=$(mktemp) || exit 1; trap 'rm -f "$P"' EXIT; trap
+  'exit 1' INT TERM HUP` (mode 600, removed on every exit path, F-40),
+  `cut -d= -f2- ~/.config/coding-harness/hermes-keys > "$P"`; every `grep`
+  takes its patterns with `-f "$P"` and never as an argument (criterion 70,
+  F-32). It fails closed (F-39): before the count and before the sweep it
+  checks that `$P` holds the expected non-empty lines (`[ "$(grep -c . "$P")"
+  = N ] && [ "$(wc -l < "$P")" -eq N ]`, N = 1 per key in the count as in the
+  runbook of slice 5, N = 2 for the sweep) and is red otherwise. It gains
+  three tests:
   `sudo -u _chhermes cat ~/.config/coding-harness/hermes-keys` refused;
   `grep -cE '_(KEY|TOKEN|SECRET)=' "$HH/.env"` printing 0; and, after the run
-  asked to find and send its keys, the sweep
-  `sudo grep -rlF -f "$P" "$HH"; echo $?` over every file Hermes wrote under
-  `$HH` (logs, session files, the state database). It is green only when the
-  exit status is 1: 0 is a key value in a file (`-l` prints names, never the
-  line), and 2 is a file the sweep could not read, which `grep -r` skips — red
-  (criterion 70, F-30). `sudo` runs the grep as root, so a file `_chhermes`
-  made with a closed mode is read. The run is green when neither value is in
-  its stream either. CH-5's
+  asked to find and send its keys, the sweep over every file Hermes wrote
+  under `$HH` (logs, session files, the state database):
+  `sudo sh -c 'grep -rlF -f "$1" "$2"; exit $(($?+10))' sh "$P" "$HH"; s=$?`.
+  The shift by 10 keeps `grep`'s status apart from `sudo`'s: `sudo` itself
+  returns 1 when it cannot authenticate (a pasted line taken as the
+  password) or run the command, which is also `grep`'s "no match". The sweep
+  is green only when `s` is 11 (`grep` ran, nothing found); 10 is a key
+  value in a file (`-l` prints names, never the line); 12 is a file it could
+  not read, which `grep -r` skips; anything below 10 is `sudo` failing
+  before `grep` ran: red (criterion 70, F-30, F-39). `sudo` runs the grep as
+  root, so a file `_chhermes` made with a closed mode is read. The paths in
+  `sh`'s arguments are not key values. The run is green when neither value
+  is in its stream either. CH-5's
   grep for other model keys widens to every key name. About eight lines
   more; the runbook's budget already has no room for slice 7's results
   (F-28), so this step raises `RUNBOOK_BUDGET` with its reason.
