@@ -298,3 +298,23 @@ design Interfaces 2; F-36); the wording was read from the session on
 Consequence: slice 4 builds the key handover together with the profile's side
 of it (wrapper, `env.example`, runbook, test); `spec.md` gains criteria 60–70,
 and F-14 stays open until slice 4 is built.
+
+## Addendum 2026-10-06: a second repair round for the F-14 amendments
+
+The phase-6 check of the repair of F-30 to F-38 left three rows of origin
+`fix-r2`: F-39 (CH-4's count and sweep are green on an empty pattern file or a
+failed `sudo`), F-40 (the profile test does not hold the pattern file's
+`mktemp`, its removal or the absence of a key variable in an argument) and F-42
+(ADR 0010's Validation says the sweep shows more than a plain-text search can).
+`findings.md` had set them down "for the maintainer, no further repair round".
+The maintainer was asked in the Claude Code session on 2026-10-06, in German,
+shortened, what to do with the three escalated `fix-r2` rows, and chose the
+option "Jetzt reparieren (Empfohlen)": one more small round.
+
+1. **Repair now.** F-39 and F-40 are repaired on `feat/hermes-runner-2` and F-42
+   in ADR 0010 on `decide/adr-0010-hermes` (pull request #77), in one
+   small round of its own (appetite 30 minutes, set by the coordinating
+   session).
+2. **Not part of the answer.** F-41 (the place of criteria 60–70 in the #77
+   body) was already corrected in the body and stays as it is. The merge of #77
+   is not decided here.

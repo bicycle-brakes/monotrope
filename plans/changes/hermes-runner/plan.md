@@ -1291,3 +1291,14 @@ report-only) before `3583d00`, at about 23:16 before `2d255fa` and at 23:17
 (this record) before the findings rows were set to fixed. Branch
 `decide/adr-0010-hermes`: VERIFY GREEN at 23:12 (600 passed, 15 skipped;
 `decision-continuity` green) before `5fee323`. The appetite was not reached.
+
+Repair round 2 of the F-14 amendments (rows F-39, F-40 and F-42; the
+maintainer's decision of 2026-10-06, `decisions.md`; appetite 30 min, set by
+the coordinating session; two worktrees in turn): 2026-10-06 23:44–23:56, 12
+min, no break counted. Branch `feat/hermes-runner-2`: `make verify` ended
+VERIFY GREEN at 23:51 (754 passed, 15 skipped; `docs-links` and `markdownlint`
+red but report-only) before `fe4495b`, and at 23:54 (this record) before the
+findings rows were set to fixed. Branch `decide/adr-0010-hermes`: VERIFY GREEN
+at 23:53 (600 passed, 15 skipped; `decision-continuity` green) before
+`87358a5`. The runbook stands at 320 lines of its budget of 320. The appetite
+was not reached.
