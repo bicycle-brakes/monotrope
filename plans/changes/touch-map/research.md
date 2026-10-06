@@ -1,7 +1,7 @@
 ---
 title: "Research — touch-map"
 status: draft
-implementation_status: none
+implementation_status: partial
 date: 2026-10-06
 last_reviewed: 2026-10-06
 updated: 2026-10-06

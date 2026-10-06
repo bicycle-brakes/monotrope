@@ -1,7 +1,7 @@
 ---
 title: "Plan — touch-map"
 status: draft
-implementation_status: none
+implementation_status: partial
 date: 2026-10-06
 last_reviewed: 2026-10-06
 updated: 2026-10-06
@@ -330,3 +330,162 @@ feeds it bad blocks.
 | 43 | 12 | script | imports dropped not reported | 1 | `test_imports_added_and_dropped` |
 | 44 | 12 | script | the merge base's hash missing from the caption | 1 | `test_the_caption_names_both_commits` |
 | 45 | 1 | script | unchanged boxes in set order (numbers differ by hash seed) | 3 | `test_a_tests_only_change_shows_the_code_it_tests`, `test_no_link_between_two_unchanged_boxes`, `test_two_runs_give_the_same_bytes` |
+
+Slice S3 (the templates), planted on `34b412d`. Before every fault:
+`python3 -m pytest tests/test_pr_templates.py -q` — **7 passed**. After: **6
+faults, 6 red, none green.** The prompt bullet (criterion 15) has no test: it is
+read in phase 6.
+
+| # | Crit. | File | Fault | Red | Tests that went red |
+| --- | --- | --- | --- | --- | --- |
+| 46 | 14 | ordinary template | the section below `## Where it fits` | 1 | `test_both_templates_carry_what_it_touches` |
+| 47 | 14 | decision template | the section below `## Where it fits` | 1 | `test_both_templates_carry_what_it_touches` |
+| 48 | 14 | ordinary template | the section stands twice | 1 | `test_both_templates_carry_what_it_touches` |
+| 49 | 14 | decision template | a third line in the section | 1 | `test_both_templates_carry_what_it_touches` |
+| 50 | 14 | ordinary template | another command named (`touch_map.py HEAD`) | 1 | `test_both_templates_carry_what_it_touches` |
+| 51 | 14 | script | `git mv scripts/touch_map.py scripts/touch_map_renamed.py`, put back with `git mv` | 1 | `test_both_templates_carry_what_it_touches` |
+
+Totals over the change: **51 faults planted, 51 red** (one of them only after the
+test repair named above).
+
+## Evidence
+
+Run on 2026-10-06 at 18:39 on `34b412d` (the head of this branch; the later
+commits change only this file and the `implementation_status` of the four
+artefacts). `GIT_CONFIG_COUNT=1 GIT_CONFIG_KEY_0=commit.gpgsign
+GIT_CONFIG_VALUE_0=false make verify` ended `VERIFY GREEN — every local gate of
+the 'verify' job passed`: 628 passed, 15 skipped (27 of the passed in
+`tests/test_touch_map.py`, 1 new in `tests/test_pr_templates.py`); `ruff-check`,
+`ruff-format`, `leerprobe`, `plans-registry`, `frontmatter-current`,
+`adr-answers`, `gate-schema`, `ci-drift` and `ramp-valves` green. `docs-links`
+(51 findings, none in a file of this change) and `markdownlint` are report-only
+gates and red, as they were before the first commit.
+
+`OHNE_TEST`, `OHNE_MUTATIONSTEST` and `REIST_NICHT` are unchanged: `git diff
+origin/main` shows no change in `tests/test_ci.py` or `scripts/kit/probe.py`, and
+`scripts/ci_gates.py` gained one `OHNE_AUFRUFER` entry (criterion 16).
+
+### The eight merges (criterion 17)
+
+`python3 scripts/touch_map.py <merge>^1 <merge>^2`, each exit 0 and under one
+second. "Links" counts the drawn links plus one fold link per folded box.
+
+| Merge | Pull request | Boxes (changed / unchanged / fold) | Links | Size line | Map |
+| --- | --- | --- | --- | --- | --- |
+| `6c5d51a` | #68 handover | prose only | — | the one line | no |
+| `3715528` | #72 research hermes | prose only | — | the one line | no |
+| `d5813ec` | #73 research-currency | 13 (7 / 2 / 4) | 15 (11 + 4) | none | yes |
+| `a847516` | #70 ADR 0009 (a decision PR) | 4 (1 / 2 / 1) | 3 (2 + 1) | none | yes |
+| `00d7c31` | #66 translate scripts | 17 (5 / 7 / 5) | 14 (9 + 5) | Large change | yes |
+| `ba940fb` | #54 harness decide adr | 36 (20 / 7 / 9) | 39 (30 + 9) | Large change, Map left out: 36 boxes | no |
+| `017ec56` | #65 translate tests | 21 (5 / 15 / 1) | 18 (17 + 1) | Large change | yes |
+| `87daf91` | #71 roadmap trial | 4 (2 / 0 / 2) | 2 (0 + 2) | none | yes |
+
+Against the prototype's counts in `research.md` 1.4: #73 4 boxes and 3 links
+there, 13 and 15 here; #65 and #71, which drew nothing or an empty block, draw 21
+and 4 boxes; #54 17 boxes there, 36 here (over the line, so no map); #66 17 boxes
+and 14 links in both. #68 and #72 print the prose-only line, as criterion 17
+asks; #71 is not prose-only, as research 5.5 predicted. Each of the five tests
+of #65 has at least one link to the code it tests (`test_feedback_channel.py`,
+`test_gate_machinery.py`, `test_gate_record.py`, `test_kit.py`,
+`test_regelwerk.py`). Checked by hand: every link below has a line in its
+source's code, and none comes from a comment, a docstring or a registry. The
+mark says what the line is: **dependency** — the test imports the file, runs it
+or reads the repository's own copy; **fixture path** — the path is text, a file
+written into a temporary tree, a rule prefix or a reason string, and no read of
+the repository's file. A fixture path is a false link the rules cannot tell
+apart (spec, non-goals); the section does not claim to be free of them.
+
+**#73** (`d5813ec`, head `4dd821e`) — 11 drawn links and the 8 unchanged tests
+behind its 4 fold links:
+
+| Link | Line that makes it | Mark |
+| --- | --- | --- |
+| `ci.yml` runs `check_research_currency.py` | `.github/workflows/ci.yml:144` | dependency |
+| `ci.yml` runs `ci_gates.py` | `.github/workflows/ci.yml:106` | dependency |
+| `ci.yml` runs `kit/probe.py` | `.github/workflows/ci.yml:73` | dependency |
+| `gates.yaml` runs `check_research_currency.py` | `decisions/gates.yaml:213` | dependency |
+| `gates.yaml` runs `ci_gates.py` | `decisions/gates.yaml:152` | dependency |
+| `gates.yaml` runs `kit/probe.py` | `decisions/gates.yaml:76` | dependency |
+| `test_research_currency.py` tests `_INDEX.md` | `tests/test_research_currency.py:119` | fixture path |
+| `test_research_currency.py` tests `check_research_currency.py` | `tests/test_research_currency.py:33` (import; also `:29`) | dependency |
+| `test_research_currency.py` tests `ci_gates.py` | `tests/test_research_currency.py:34` | dependency |
+| `test_research_currency.py` tests `kit/manifest.yaml` | `tests/test_research_currency.py:807` (the assertion message; the test reads the manifest through `probe.rolle`, line 806) | dependency |
+| `test_research_currency.py` tests `kit/probe.py` | `tests/test_research_currency.py:35` | dependency |
+| fold: `test_ci.py` tests `ci.yml` | `tests/test_ci.py:28` | dependency |
+| fold: `test_gate_machinery.py` tests `ci.yml` | `tests/test_gate_machinery.py:222` (`tmp_path / "ci.yml"`) | fixture path |
+| fold: `test_regelwerk.py` tests `ci.yml` | `tests/test_regelwerk.py:34` | dependency |
+| fold: `test_check_adr_answers.py` tests `gates.yaml` | `tests/test_check_adr_answers.py:466` | dependency |
+| fold: `test_gate_machinery.py` tests `gates.yaml` | `tests/test_gate_machinery.py:52` | dependency |
+| fold: `test_frontmatter_current.py` tests `plans/INDEX.md` | `tests/test_frontmatter_current.py:521` | fixture path |
+| fold: `test_workflow_entry.py` tests `plans/INDEX.md` | `tests/test_workflow_entry.py:77` (`root / "INDEX.md"`, a temporary root) | fixture path |
+| fold: `test_kit.py` tests `kit/manifest.yaml` | `tests/test_kit.py:59` (the assertion message; the test reads the manifest through `probe`) | dependency |
+
+**#65** (`017ec56`, head `88c37bd`) — 17 drawn links and the 1 unchanged test
+behind its fold link:
+
+| Link | Line that makes it | Mark |
+| --- | --- | --- |
+| `test_feedback_channel.py` tests `handover_schema.py` | `tests/test_feedback_channel.py:32` | dependency |
+| `test_gate_machinery.py` tests `ci.yml` | `tests/test_gate_machinery.py:222` (`tmp_path / "ci.yml"`) | fixture path |
+| `test_gate_machinery.py` tests `gates.yaml` | `tests/test_gate_machinery.py:52` | dependency |
+| `test_gate_machinery.py` tests `check_bead_export.py` | `tests/test_gate_machinery.py:283` | dependency |
+| `test_gate_machinery.py` tests `check_dangling_bead_ids.py` | `tests/test_gate_machinery.py:348` | dependency |
+| `test_gate_machinery.py` tests `check_decision_continuity.py` | `tests/test_gate_machinery.py:376` | dependency |
+| `test_gate_machinery.py` tests `check_docs.py` | `tests/test_gate_machinery.py:249` | dependency |
+| `test_gate_machinery.py` tests `ci_gates.py` | `tests/test_gate_machinery.py:28` | dependency |
+| `test_gate_machinery.py` tests `plans_registry.py` | `tests/test_gate_machinery.py:327` | dependency |
+| `test_gate_machinery.py` tests `ramp_valves.py` | `tests/test_gate_machinery.py:334` | dependency |
+| `test_gate_machinery.py` tests `render_beads_export.py` | `tests/test_gate_machinery.py:434` | dependency |
+| `test_gate_record.py` tests `gate_record.py` | `tests/test_gate_record.py:24` | dependency |
+| `test_kit.py` tests `Makefile` | `tests/test_kit.py:303` (`r["prefix"] != "Makefile"`, a rule prefix; also `:307`) | fixture path |
+| `test_kit.py` tests `_verdict.py` | `tests/test_kit.py:32` | dependency |
+| `test_kit.py` tests `kit/probe.py` | `tests/test_kit.py:29` | dependency |
+| `test_regelwerk.py` tests `ci.yml` | `tests/test_regelwerk.py:34` | dependency |
+| `test_regelwerk.py` tests `ramp_valves.py` | `tests/test_regelwerk.py:30` | dependency |
+| fold: `test_ci.py` tests `test_gate_machinery.py` | `tests/test_ci.py:1088` (a reason string that names the file) | fixture path |
+
+Of the 37 rows (the link of `test_gate_machinery.py` to `ci.yml` stands in
+both tables), 7 are marked fixture path, one of them a reason string: the false
+links the rules cannot tell from dependencies. Every row has its line. The phone check (criterion 11, `spec.md`) is still the
+maintainer's: the Mermaid block has been checked by structure only.
+
+## Deviations of phase 4
+
+None changes a criterion; each is a `[DETAIL]` the plan left open, decided in
+the code and recorded here so that the next reading of the plan holds it.
+
+- **A runner or shell script that names another runner makes no link.** The
+  spec's `reads` is "any other file", and "other" is its defined term (not
+  code, test or runner). No such naming exists at `34b412d` (counted), so the
+  eight runs do not depend on it. If the maintainer reads "other" more widely,
+  the change is one branch in `links`.
+- **The test rows are split by slice:** criteria 1–7, 13 and 16 in S1 (the
+  list), criteria 8–12 in S2 (the map); the plan's table does not say which.
+- **A control character in a file name becomes `?`** in the list and the map
+  (the spec names only `"` and backtick): a newline in a name would otherwise
+  cut a list line and a Mermaid line in two. In the list a backtick in a name is
+  carried by a longer code-span fence; the real path stays.
+- **Two tests beyond the table:** `test_standard_output_is_utf8_whatever_the_locale`
+  (the plan's `[DETAIL]` on UTF-8 had no row) and, after fault 41 stayed green,
+  the sharper `test_the_structure_check_can_go_red`.
+- **`main` returns argparse's exit code** (2) for a usage error instead of
+  letting `SystemExit` escape, so a caller of `main(argv)` always gets an int.
+- **The registry count leaves out the source's own path** (self links are
+  skipped everywhere), and `ls-tree` runs with `--full-tree` so `--repo` may
+  point into a subdirectory of a repository.
+- **A removed file's `still named by` reads every source at head**, registries
+  included: a stale name in a registry is exactly what the line is for.
+
+## Time used
+
+Appetite: 4 h of phase 4, one repair round included. Read from `date`.
+
+- 2026-10-06 18:10–18:45, 35 min, no break (appetite 4 h not reached; no
+  repair round used beyond the one test sharpening of fault 41, inside S2)
+
+Readings of `date` at the step boundaries: 18:10 start and baseline `make
+verify` green · 18:23 S1 committed (`a21717a`) · 18:27 S1 faults recorded
+(`4c47794`) · 18:31 S2 committed (`badb919`) · 18:37 S2 faults recorded
+(`254e1fb`) · 18:39 S3 step 5 committed (`34b412d`) · 18:45 step 6 (evidence,
+`implementation_status: partial`, plans index) committed.
