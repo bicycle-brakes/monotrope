@@ -4,7 +4,7 @@ status: draft
 implementation_status: partial
 date: 2026-10-05
 last_reviewed: 2026-10-05
-updated: 2026-10-05
+updated: 2026-10-06
 supersedes: null
 superseded_by: null
 bead: coding-harness-ei0
@@ -443,6 +443,71 @@ and 22, 23 (`grep`) read on 2026-10-05 and hold. `scripts/kit/probe.py`,
 `scripts/new_change.py` are untouched (`git diff d5813ec..HEAD` names none of
 them).
 
+## Repair round 1
+
+Origin: the phase-6 review in `findings.md` (reviewed at `a33e341`); this round
+starts at `1cb043f`, 2026-10-06. The maintainer's standing rule of that day —
+MINOR rows on tests, security or false statements are repaired without asking —
+covers F-1, F-2, F-3, F-4 and F-6. F-5 (the demand the travelling CI makes on a
+kit instance) is not repaired: its status reads "accepted limit — follow-up
+bead coding-harness-dj9", the release builder. Each row is set to "fixed in
+`<commit>`, not reviewed"; the reviewer closes them. No code of the change
+moved: four test files and one sentence changed, the generator, `ci.yml` and
+the lock are as they were.
+
+| Row | Commit | What changed |
+| --- | --- | --- |
+| F-1 | `1a4c314` | The summary step is run with six results, not four: `success` (exit 0) and `failure`, `cancelled`, `skipped`, `abandoned` and an empty result (exit 1). `abandoned` is the value run 37375079831 produced live; a step that refuses a list of bad results passes the last two. |
+| F-2 | `1a4c314` | The same test holds that `continue-on-error` is absent from the summary step, the summary job and the matrix job (the job, not the steps: the matrix job's steps carry it on purpose for the report and advisory gates). |
+| F-3 | `8e4378b` | `test_the_gate_reports_in_the_drift_job_only` reads `ci_gates.MATRIX_JOB`, the job where the gates run, and fails on an empty set of step ids. |
+| F-4 | `c9405d4` | The three matrix tests take `tools.python` from `decisions/gates.yaml` read in the test (`_declared()`), and `ci_gates.interpreters()` must return the same list. `_matrix()` refuses any matrix key besides `python`. |
+| F-6 | `50cc050` | `docs/WORKFLOW.md` §8, the `uv`/`mypy` row: CI and `make venv` install the lock with pip, nothing calls uv to install, and the local runner installs nothing — it takes `$PYTHON`, else the first of `.venv/bin/python3` and `python3` on `PATH` that imports PyYAML, and exits 2 when none does. |
+
+Deviation: `spec.md` criterion 23 carried the same slip ("CI and the runner
+install it with pip"). It gets a dated amendment, appended, nothing renumbered,
+in the form earlier changes used; its refutation is extended by one line. The
+wording of the row is mine, from `scripts/verify_all.sh`: where the review's
+row says the runner takes `$PYTHON` only if it imports PyYAML, the script takes
+a set `$PYTHON` as it is and tests the other two candidates.
+
+### Planted faults of the round
+
+Each fault planted on its own, `ci.yml` regenerated where the generator was
+changed, the test file run, the tree restored with `git checkout` (`git status`
+empty after each). **Before** is the suite of the parent of the row's commit
+(`tests/test_ci.py`: 48 passed, 2 skipped, so 0 red of 50); **after** is the
+suite of the row's commit. 48 to 55 are the reviewer's own variants and mine;
+57 and 58 replay faults 3 and 18 of the table above, to show the stricter tests
+still hold what they held. The script is a scratch file (`plant_r1.py` in the
+scratchpad of the session), not part of the change.
+
+| # | Row | Fault | Before (red) | After (red) | Tests that went red |
+| --- | --- | --- | --- | --- | --- |
+| 48 | F-1 | the summary step refuses `failure`, `cancelled` and `skipped` in a loop, nothing else (the reviewer's fault) | 0 of 50 | 1 | `test_the_summary_check_passes_only_when_every_leg_passed` |
+| 49 | F-1 | the step passes on `success` and on `abandoned` (`case … in success\|abandoned`) | 0 of 50 | 1 | the same |
+| 50 | F-1 | the step passes on `success` and on an empty result (`… = success \|\| test -z …`) | 0 of 50 | 1 | the same |
+| 51 | F-2 | `continue-on-error: true` on the step "Every leg of the gates passed" | 0 of 50 | 1 | the same |
+| 52 | F-2 | `continue-on-error: true` on the job `verify` | 0 of 50 | 1 | the same |
+| 53 | F-2 | `continue-on-error: true` on the job `gates` | 0 of 50 | 1 | the same |
+| 54 | F-4 | `interpreters()` returns the list reversed | 0 of 50 | 2 | `test_every_declared_interpreter_gets_a_leg`, `test_the_drift_job_runs_once_on_the_last_interpreter` |
+| 55 | F-4 | the matrix gains `include: [{python: "3.13"}]` | 0 of 50 | 2 | `test_every_declared_interpreter_gets_a_leg`, `test_every_job_sets_a_declared_interpreter_before_installing` |
+| 56 | F-4 | the matrix gains a second axis `os: [ubuntu-latest]` | 0 of 50 | 2 | the same two |
+| 57 | F-4 | replay of 3: the matrix written as a literal in the generator | 1 | 1 | `test_every_declared_interpreter_gets_a_leg` |
+| 58 | F-4 | replay of 18: the drift job on the first interpreter | 1 | 1 | `test_the_drift_job_runs_once_on_the_last_interpreter` |
+| 59 | F-3 | the generator also writes every drift gate into the matrix job (the reviewer's fault) | 0 of 1 (the one test) | 1 | `test_the_gate_reports_in_the_drift_job_only` |
+| 60 | F-6 | the old row back (`docs/WORKFLOW.md` of `1cb043f`), read with `grep`: the sentence "installs nothing" with `make venv` in the row, and no "local runner install it with pip" | read RED | read GREEN on `50cc050` | the read |
+
+The fault of F-3 is also caught by `test_every_gate_step_runs_even_after_a_failing_gate`
+(the reviewer's note); that test was green before and after and is not counted
+here. Every "before" is the suite as it stood without the fix, so 48 to 56 and
+59 show the hole, 57 and 58 show nothing lost.
+
+Measured on `50cc050` (2026-10-06): `make verify` green, with
+`GIT_CONFIG_COUNT=1 GIT_CONFIG_KEY_0=commit.gpgsign GIT_CONFIG_VALUE_0=false`;
+`tests/test_ci.py` and `tests/test_research_currency.py` together 132 passed,
+2 skipped. Tested under Python 3.12 (the worktree's `.venv`); the 3.11 run
+is the push suite's leg, not read here.
+
 ## Time used
 
 Appetite: 5 h of phase 4, one repair round included. Read from `date`; the
@@ -450,3 +515,7 @@ repair round was not used (the 3.11 repair is step 6).
 
 - 2026-10-05 23:08–23:39, 31 min, break counted (the waits for GitHub's
   runners are inside it)
+- Repair round 1, 2026-10-06 16:28–16:40, 12 min of an appetite of 40 min (given
+  by the orchestrating session), no break. `date` read at the start (16:28), at
+  each step boundary (16:29, 16:32, 16:33, 16:35, 16:36, 16:38) and before each
+  commit; the stop was not reached.
