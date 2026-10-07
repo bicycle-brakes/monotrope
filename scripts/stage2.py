@@ -900,7 +900,11 @@ def insert_before_time(path: Path, block: str) -> None:
     text = path.read_text(encoding="utf-8")
     match = TIME_HEADING.search(text)
     if match is None:
-        raise Refused(f"{path} has no `## Time used` heading.")
+        # An earlier attempt deleted the heading; the route block must still land, and the
+        # restored empty heading keeps the measured-line check meaningful for this attempt.
+        path.write_text(f"{text.rstrip()}\n\n{block.rstrip()}\n\n## Time used\n", encoding="utf-8")
+        stamp_updated(path)
+        return
     before = text[: match.start()].rstrip()
     after = text[match.start() :].lstrip("\n")
     path.write_text(f"{before}\n\n{block.rstrip()}\n\n{after}", encoding="utf-8")

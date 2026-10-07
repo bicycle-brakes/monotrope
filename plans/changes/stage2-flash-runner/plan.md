@@ -206,3 +206,9 @@ checkpoint commits; both boundaries read with `date`.
 - The endpoint note joins step 5 after GLM finding L1-6: its models and access
   declaration were already correct, but its prose still said the two verbs did
   not exist. This revises the first `Not touched` wording, not the scope.
+- GLM finding L2-1: `insert_before_time` no longer refuses when a failed Flash
+  attempt deleted the `## Time used` heading. It appends the route block and
+  restores an empty heading, so the Sonnet attempt of criterion 11 starts and
+  receives both diagnostics. The block is still written after that attempt's
+  clean leak check (L1-5); the audit line order is unchanged because the
+  restore cannot fail. The test deletes the heading in both Flash attempts.

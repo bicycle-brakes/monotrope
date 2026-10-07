@@ -814,6 +814,32 @@ def test_a_time_heading_deleted_mid_run_becomes_a_repair_diagnostic(world: World
     assert "has no `## Time used` heading" in world.calls("claude")[1]["prompt_file"]
 
 
+def test_sonnet_fallback_starts_with_both_diagnostics_when_both_flash_attempts_deleted_the_heading(
+    world: World,
+) -> None:
+    gone = "# no time heading\n"
+    world.script(
+        claude=[
+            {"stdout": "first", "plant": {"plans/changes/demo/plan.md": gone}},
+            {"stdout": "second", "plant": {"plans/changes/demo/plan.md": gone}},
+            {
+                "stdout": "fallback",
+                "append": {"plans/changes/demo/plan.md": "2026-10-07 10:00–10:09, 9 min\n"},
+            },
+        ],
+        make=[{"stdout": "green\n"}, {"stdout": "green\n"}, {"stdout": "green\n"}],
+    )
+    assert world.run("implement") == 0
+    calls = world.calls("claude")
+    assert len(calls) == 3
+    prompt = calls[2]["prompt_file"]
+    assert "Attempt 1 (flash)" in prompt and "Attempt 2 (flash-repair)" in prompt
+    assert prompt.count("has no `## Time used` heading") == 2
+    plan = world.plan.read_text(encoding="utf-8")
+    assert plan.index("## Runner route") < plan.index("## Time used")
+    assert "attempt 3 · route stage-1" in world.text()
+
+
 def test_stage2_off_implements_with_one_sonnet_attempt_and_records_reason(
     world: World, monkeypatch: pytest.MonkeyPatch
 ) -> None:
