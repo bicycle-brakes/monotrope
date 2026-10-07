@@ -101,3 +101,11 @@ The session is not supervised for program-start acknowledgment or model success.
   denied initially to avoid bypassing the checked primary agent.
 - [DETAIL] Initial prompts are capped at 32 KiB UTF-8, complete shell dispatch
   commands at 64 KiB: refuse oversized arguments before GUI dispatch.
+
+## Implementation route after the unanswered attempt
+
+Maintainer, 2026-10-07: "kannst du mit glm implementieren?" following the
+offer of direct Codex implementation or another GLM attempt. Continue with
+the existing GLM Flash runner route, not a direct Codex implementation.
+This requests another attempt; it is not evidence that the endpoint works.
+Keep declaration/leak checks, post-run gates, review phases and no-merge rule.

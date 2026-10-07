@@ -1,5 +1,5 @@
 ---
-title: "Session handover — session plan ready, implementation route pending"
+title: "Session handover — session plan ready, GLM retry requested"
 category: handover
 created: 2026-10-07
 updated: 2026-10-07
@@ -164,3 +164,29 @@ parity bead stays open. Tracker writes remain limited to own claim/handover.
 
 Resume: record the maintainer's model-route answer in decisions.md before
 starting the next implementation attempt.
+
+## Addendum — GLM route clarified and retry requested, 2026-10-07
+
+The maintainer asked "kannst du mit glm implementieren?", then asked why the
+prior attempt did not work and explicitly requested distinguishing Claude
+Code with Anthropic from Claude Code with GLM. Continue with the GLM runner
+route, not direct Codex; the answer is recorded in decisions.md.
+
+Repository evidence: model-endpoints.yaml separates claude-code-plan
+(Anthropic subscription, Claude models) from glm-coding-plan (Z.ai
+subscription, GLM models). stage2.py's glm_env pins the Z.ai URL, GLM key,
+GLM model variables and a fresh temporary CLAUDE_CONFIG_DIR. Thus the prior
+process named claude was the GLM route, not an Anthropic inference call.
+The spent Anthropic budget is relevant to Sonnet fallback, not evidence of
+a GLM quota or authentication failure. No such failure was observed.
+
+The runner's launch captures output until process exit and sets no subprocess
+timeout; this limits diagnosis during a silent call. The catalog warning
+does not prove the cause. The official Z.ai Claude Code guide read on
+2026-10-07 lists GLM-5.3-Flash and the same Anthropic-compatible base URL
+(https://docs.z.ai/devpack/tool/claude). No CLI/global config update or direct
+API call was made. A second GLM attempt is requested but has not started at
+this addendum's writing. Ownership/no-merge/broader-bead limits are unchanged.
+
+Resume: run .venv/bin/python3 scripts/stage2.py implement stage2-session
+from the dedicated worktree after the documentation checkpoint is green.
