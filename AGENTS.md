@@ -23,6 +23,7 @@ it would silently replace it (`tests/test_entry_points.py`).
 | 1a | Interview *(optional, human-called)* | `decisions.md` | every `[DECISION]` answered — or skipped with a reason |
 | 2 | Spec | `spec.md` | validator green, no open `[DECISION]` |
 | 2a | Spec-Review *(optional)* | lines for `findings.md`, dimension SPEC | no open `[AMBIGUITY]` |
+| 2b | Design *(by class)* | `design.md` | validator green; an ADR draft when `architectural` |
 | 3 | Plan | `plan.md` | validator green |
 | 4 | Implement | code + tests | `make verify` green |
 | 4b | Review loop *(stage 2)* | loop rows, into `findings.md` after the phase-6 verdict | at most two rounds, `make verify` green after each repair |

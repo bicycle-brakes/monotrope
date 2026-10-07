@@ -37,7 +37,7 @@ tags: [workflow, model-routing, agentic-coding, phases, artefacts]
 > `.claude/agents/explorer.md` and `reviewer.md`, the stop hook
 > `.claude/hooks/session-stop/check-tests-green.sh`, `.claude/commands/`, the
 > targets `make change` and `make index` (the entry is `python3 scripts/new_change.py <name>
-> --bead <id>`), `tests/test_repo_settings.py`, `templates/findings.md`,
+> --bead <id>`), `tests/test_repo_settings.py`,
 > `docs/governance/gate-catalog.md` and `requirements-ci.txt`.
 > Where the text below says one of them does something, it describes the
 > target, not this tree.
@@ -80,6 +80,7 @@ handover to the next phase — not the chat history.**
 | 1a | Interview | `plans/changes/<name>/decisions.md` | every `[DECISION]` answered — or its skip given a reason | [`01a-interview.md`](../prompts/01a-interview.md) |
 | 2 | Spec | `plans/changes/<name>/spec.md` | validator green, no open `[DECISION]` | [`02-spec.md`](../prompts/02-spec.md) |
 | 2a | Spec review | rows for `findings.md`, dimension `SPEC`; then the revised `spec.md` | every row worked into the spec or rejected with a reason; no open `[AMBIGUITY]` | [`02a-spec-review.md`](../prompts/02a-spec-review.md) |
+| 2b | Design *(by class)* | `plans/changes/<name>/design.md` | validator green; for an `architectural` change, an ADR draft in it | [`02b-design.md`](../prompts/02b-design.md) |
 | 3 | Plan | `plans/changes/<name>/plan.md` | validator green | [`03-plan.md`](../prompts/03-plan.md) |
 | 4 | Implement | code + tests | `make verify` green | [`04-implement.md`](../prompts/04-implement.md) |
 | 4b | Review loop *(stage 2)* | the loop rows — outside the repository until the phase-6 verdict, then in `findings.md` (`release-loop`) | at most two rounds; `make verify` green after each repair | [`04b-review-loop.md`](../prompts/04b-review-loop.md) |
@@ -266,6 +267,13 @@ one of four:
 - `architectural` — a new subsystem or a break of an interface; it carries its
   ADR already, so it is not asked.
 
+**The design phase 2b goes by class** (decision D-14,
+`prompts/02b-design.md`): an `architectural` change always runs it; a `feature`
+runs it or says in one sentence of its `spec.md` why not; a `bounded` change
+and a `spike` never run it. Nothing checks this until the change-artefact
+validator lands (bead coding-harness-jc3); the review before the merge holds
+it.
+
 **Only a `feature` owes an answer to the ADR question:** is this change an
 architecture decision that needs an ADR? The spec author proposes, in the same
 header: `change: <folder name>` and `adr_question: {proposed: "yes"|"no",
@@ -369,6 +377,7 @@ none, because the registry keeps counting it as protection.
 | 1a Interview | **Opus 5.5** | the questions are the work, and there are few of them |
 | 2 Spec | **Opus 5.5** | effort `xhigh`; the highest reasoning demand, little output |
 | 2a Spec review | **Opus 5.5** | a fresh context that does not know the author's reasoning; a `bounded`, `feature` or `architectural` change goes to Codex (§4) |
+| 2b Design | **Opus 5.5** | effort `xhigh`; the same demand as spec and plan |
 | 3 Plan | **Opus 5.5** | effort `xhigh`; an error here is the most expensive in the whole run |
 | 4 Implement | **Sonnet 5.5** | effort `medium`; a solid worker given a clear plan; where the runner starts the phase (§4), GLM 5.3 Flash builds instead |
 | 5 Verify | — | deterministic |
@@ -594,7 +603,7 @@ The rows are in the form of §3's table:
 
 **The two Flash rows are decided and not built.** The runner has no verb that
 starts phase 1 or phase 4 on GLM 5.3 Flash, no plan marking assigns a step to
-it (`[FLASH]` was the older design, with `scripts/run_change.sh` and the
+it (a per-step marking was the older design, with `scripts/run_change.sh` and the
 `scripts/cc-*.sh` profiles; none of them is in this tree), and no effort is set
 for it. Until that is built (an open item of the change that wrote this
 section, `plans/changes/stage-2-codex-glm/plan.md`, "Amendment 1"), §3's rows
