@@ -1,0 +1,13 @@
+schema_version: 1
+change: template-bundle
+question: adr
+answer: 'no'
+reason: The decisions behind this change are already made (D-14, ADR 0009 and the
+  maintainer's answers of 2026-10-05); this change implements them.
+shown:
+  proposed: 'no'
+  proposal_reason: it writes down the forms of a spec, a findings file, a decision
+    record, a design and an architecture description, and the design phase that decision
+    D-14 set, and decides no architecture
+answered_by: framework-architect
+answered_at: 2026-10-05

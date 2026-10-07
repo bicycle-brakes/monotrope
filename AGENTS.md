@@ -23,6 +23,7 @@ it would silently replace it (`tests/test_entry_points.py`).
 | 1a | Interview *(optional, human-called)* | `decisions.md` | every `[DECISION]` answered — or skipped with a reason |
 | 2 | Spec | `spec.md` | validator green, no open `[DECISION]` |
 | 2a | Spec-Review *(optional)* | lines for `findings.md`, dimension SPEC | no open `[AMBIGUITY]` |
+| 2b | Design *(by class)* | `design.md` | validator green; an ADR draft when `architectural` |
 | 3 | Plan | `plan.md` | validator green |
 | 4 | Implement | code + tests | `make verify` green |
 | 4b | Review loop *(stage 2)* | loop rows, into `findings.md` after the phase-6 verdict | at most two rounds, `make verify` green after each repair |
@@ -180,6 +181,15 @@ tools/bd dolt push          # push tracker data to origin (refs/dolt/data)
   `tools/claude-code/`; each line of the display is documented beside the tool.
   Change it there and reinstall with `tools/claude-code/install.sh`, never
   only in `~/.claude`.
+- **Sub-agents survive a budget pause** (maintainer, 2026-10-06). Each commits
+  and pushes after every green step and ends its report with a `Resume:` line;
+  the orchestrator keeps a list (agent id, branch, last pushed commit, next
+  step) and, after the pause, resumes the agent or starts a fresh one there.
+  Work one change at a time, with few agents and a visible queue.
+- **Findings returned as text** (when the harness refuses a reviewer's write)
+  are committed unchanged by the orchestrator, which says so in the commit.
+  MINOR rows on tests, security or false statements are repaired without
+  asking; style rows are named in the pull request as accepted limits.
 
 ## Sibling repositories
 

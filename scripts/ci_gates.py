@@ -632,6 +632,8 @@ def main() -> int:
         print(f"{marke}{takt} [{g['id']}] {g['name']}")
         if g["local_runnable"]:
             zusatz = "  (lokales Aequivalent der Action)" if g["via_local_equivalent"] else ""
+            if g["placement"] == "writer":
+                zusatz += " — laeuft nur lokal (make verify), nicht in der CI"
             print(f"      {g['command']}{zusatz}")
         else:
             print(f"      (Marketplace-Action: {g['action']}) — laeuft nur in der CI")

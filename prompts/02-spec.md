@@ -7,6 +7,8 @@ open `[DECISION]`.
 
 You describe **what** shall hold — not how it is built.
 
+Write `spec.md` in the form of `templates/spec.md`: copy it into the change folder and fill it in.
+
 **You do not interview here.** Phase 1a did that, and its answers are in
 `decisions.md`. This phase synthesises what `research.md` and `decisions.md`
 already say. If you find yourself needing an answer that is in neither, that is
