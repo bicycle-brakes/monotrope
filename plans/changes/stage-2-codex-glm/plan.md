@@ -1128,6 +1128,13 @@ Choices I made as `[DETAIL]` (the maintainer can narrow any of them):
   (2026-09-30)" of the pull request body is replaced by this measurement. It
   decides whether the first real call of stage 2 can run at all, so it is the
   maintainer's to settle.
+  **Status, 2026-10-07: decided and implemented, not yet effective on this
+  machine.** The maintainer chose to exempt `tests/` from the secret rules
+  (`decisions.md`, answer 15; accepted consequence: a real key in a test file is
+  not found). Commit `8c9ae95` builds it into `scripts/leakcheck.py` (tested by
+  `make verify`, with planted faults for each side of the split). What is left
+  is the maintainer's own file: the denylist's secret rules need the name prefix
+  `secret:`; until then `make leakcheck` still reports the four places above.
 
 Time log: step B committed at 01:09 (CEST), started 00:52.
 
@@ -1180,3 +1187,39 @@ still reads "Codex and GLM review Coding Harness changes".
 
 Time log: step D written at 01:17 (CEST); started 00:52. No Codex, GLM or MiMo
 call, no tracker write, nothing installed, no merge and no new pull request.
+
+### Follow-up — O-4 decided (2026-10-07, `tests/` exempt from the secret rules)
+
+The secret patterns are not built into `scripts/leakcheck.py`; they come from
+the denylist (`name = regex`). So the exemption is a per-rule marker: a rule
+whose name starts with `secret:` is not applied under the top-level `tests/` —
+the working file, and the hunks of a commit patch and of the staged diff that
+name such a file. Unmarked rules scan everything. Details that follow from
+holding the line:
+
+- A link under `tests/`, a commit message and a prompt text are never exempt;
+  nor are `tests_extra/`, `docs/tests/` and a change's own `tests/`.
+- A diff header that cannot be read with certainty (a quoted name) scans the
+  hunks in full. The log runs with `--no-renames` (the staged scan already did),
+  so a header names one path, and a marker line in the log format separates a
+  commit's message from its patch, so that a message cannot forge a header.
+- The clean report says how many secret rules it did not apply under `tests/`.
+
+Tests (`tests/test_leakcheck.py`, 64 cases after this step, was 28): a
+secret-shaped fixture under `tests/` passes, the same text under `src/`,
+`tests_extra/`, `docs/tests/`, a change's `tests/` and two look-alikes blocks; a
+customer-rule match under `tests/` blocks; commit patches (also a `--cc` merge
+resolution) and the staged diff follow the same split; a file name with a
+space or a non-ASCII letter is read with certainty, a quoted one is scanned in
+full; a forged header in a commit message changes nothing. Two mutations (a
+substring test instead of a prefix test, no link exception) turn tests red.
+
+Measured on 2026-10-07 against the real denylist, no model call: unchanged
+denylist, **BLOCK, the same four places** as before this step; with the two
+rules named there marked `secret:` in memory (the denylist file was not
+touched, nothing copied): **clean, 209 files, 536 commits, 12 rules.**
+
+Time log: started 08:43 (CEST), code, tests and the doctrine paragraph
+committed 08:52 (`8c9ae95`, `make verify` green), this record written 08:53.
+No Codex, GLM or MiMo call, no tracker write, nothing installed, no merge, no
+new pull request, no history rewrite.

@@ -4,7 +4,7 @@ status: accepted
 implementation_status: none
 date: 2026-09-30
 last_reviewed: 2026-09-30
-updated: 2026-09-30
+updated: 2026-10-07
 supersedes: null
 superseded_by: null
 bead: coding-harness-bc9
@@ -163,3 +163,30 @@ unchanged.
     because Claude Code's auto-mode classifier blocked the start twice.
     While the pull request is open, the routing on `main` stays: spec review
     and review on Opus 5.5, implement on Sonnet.
+
+## Addendum 2026-10-07: tests are exempt from the secret rules (answer 15, open item O-4)
+
+15. **Exempt tests from the secret rules (the recommended option).** Open
+    item O-4 of `plan.md` found that the real leak check blocks, in four
+    places, on invented keys and passwords that the runner's tests plant as
+    fixtures (a file of the tree and the patches of three commits). The
+    maintainer decided on 2026-10-07: under `tests/`, invented keys and
+    passwords may stand. The rules for secrets skip those paths; the rules for
+    customer names apply everywhere, tests included. **Accepted consequence:**
+    a real key committed in a test file is not found by the leak check.
+
+    Not chosen, as `plan.md` O-4 named them: building the fixture at run time
+    and rewriting the commits that carry it (a history rewrite), or narrowing
+    the rule in the denylist (the maintainer's own file).
+
+    Implemented in `scripts/leakcheck.py`: the secret patterns are not built
+    in, they come from the denylist each machine keeps outside the repository,
+    so the marker is a rule name that starts with `secret:`. Such a rule is not
+    applied to the working file under the top-level `tests/`, nor to the hunks
+    of a commit patch or of the staged diff that name such a file; unmarked
+    rules scan everything. `tests_extra/`, `docs/tests/` and a change's own
+    `tests/` folder are not exempt. `docs/WORKFLOW.md` and the script's
+    docstring state the rule and its consequence. The decision takes effect
+    when the maintainer merges pull request #60 (ADR 0008); until the
+    maintainer prefixes the secret rules in their own denylist, the real check
+    still blocks, because an unmarked rule is applied everywhere.
