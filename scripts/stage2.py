@@ -991,28 +991,35 @@ def verify_attempt(root: Path, plan: Path, baseline_time: str) -> list[str]:
     if done.returncode != 0:
         tail = "\n".join(((done.stdout or "") + (done.stderr or "")).splitlines()[-80:])
         problems.append(f"`make verify` exited {done.returncode}\n{tail}".rstrip())
-    current_time = time_log(plan)
-    if not current_time.strip() or current_time == baseline_time:
-        problems.append("`plan.md` did not add a measured line below `## Time used`")
+    try:
+        current_time = time_log(plan)
+    except Refused as error:
+        problems.append(str(error))
+    else:
+        if not current_time.strip() or current_time == baseline_time:
+            problems.append("`plan.md` did not add a measured line below `## Time used`")
     return problems
 
 
 def checkpoint(root: Path, change: str, baseline: str) -> None:
     """Commit a passing implementation and prove the one clean descendant commit."""
-    _git_output(root, "add", "-A")
-    _git_output(
-        root,
-        "-c",
-        "commit.gpgsign=false",
-        "-c",
-        "user.name=stage2-runner",
-        "-c",
-        "user.email=stage2-runner@invalid",
-        "commit",
-        "-m",
-        f"feat({change}): implement accepted plan",
-    )
-    count = _git_output(root, "rev-list", "--count", f"{baseline}..HEAD").strip()
+    try:
+        _git_output(root, "add", "-A")
+        _git_output(
+            root,
+            "-c",
+            "commit.gpgsign=false",
+            "-c",
+            "user.name=stage2-runner",
+            "-c",
+            "user.email=stage2-runner@invalid",
+            "commit",
+            "-m",
+            f"feat({change}): implement accepted plan",
+        )
+        count = _git_output(root, "rev-list", "--count", f"{baseline}..HEAD").strip()
+    except Refused as error:
+        raise CallFailed(f"the runner checkpoint failed: {error}") from error
     ancestor = subprocess.run(
         ["git", "-C", str(root), "merge-base", "--is-ancestor", baseline, "HEAD"],
         capture_output=True,
@@ -1087,13 +1094,13 @@ def implement(root: Path, change: str, stage2_off: str | None = None) -> None:
         routes = [(SONNET, None, "stage-1", stage2_off)]
     diagnostics: list[str] = []
     for attempt, (endpoint, credential, route, reason) in enumerate(routes, 1):
+        prompt = implementation_prompt(ctx, baseline, diagnostics)
+        begin_work_call(ctx, "implement", endpoint, prompt, attempt, route, ctx.findings, reason)
         if route == "stage-1":
             insert_before_time(
                 ctx.plan,
                 f"## Runner route — {today()}\n\nStage-1 route: implement · model {endpoint[1]} · reason: {reason}.",
             )
-        prompt = implementation_prompt(ctx, baseline, diagnostics)
-        begin_work_call(ctx, "implement", endpoint, prompt, attempt, route, ctx.findings, reason)
         run_work_model(ctx, prompt, endpoint, writable=True, key=credential)
         if credential is not None:
             exposed = remove_changed_credential(root, credential)

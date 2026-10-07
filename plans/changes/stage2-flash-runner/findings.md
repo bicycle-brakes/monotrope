@@ -30,3 +30,5 @@ Stage-2 call, 2026-10-07: spec-review · endpoint openai-codex · model gpt-6.1-
 | S3 | BLOCKER | SPEC | spec-review | plans/changes/stage2-flash-runner/spec.md:182 | [AMBIGUITY] “Written artefacts” can mean runner-written outputs or also files written by the implementation model. If a stand-in commits a source file containing a credential fragment while returning a clean answer and satisfying all post-run checks, the first reading permits success after output scrubbing; the second requires that source file to be scrubbed as well, including on failure. The redaction boundary is unspecified. | Codex | taken — criterion 15 defines runner output, removes model shell access and adds exact-key removal plus refusal for a changed file | no |
 
 Reviewer session: codex 01a11588-e851-7302-9fdc-2e30e7726fab
+
+Stage-2 call, 2026-10-07: review-loop · endpoint glm-coding-plan · model glm-5.3 · leak check clean over 253 files, 567 commits, 12 rules.

@@ -387,12 +387,12 @@ def test_kimi_is_excluded_not_declared() -> None:
     assert "2026-09-30" in kimi[0]["grund"] and "maintainer" in kimi[0]["grund"]
 
 
-def test_the_glm_remark_names_the_review_loop_and_the_decided_flash_phases() -> None:
+def test_the_glm_remark_names_all_three_live_verbs() -> None:
     remark = " ".join(endpoints()["glm-coding-plan"]["bemerkung"].lower().split())
     assert "review loop" in remark and "phase 4b" in remark
-    # 2026-10-06: glm-5.3-flash is decided for phases 1 and 4, through verbs the runner does not have yet.
-    assert "glm-5.3-flash` is decided for explore (phase 1) and implement (phase 4)" in remark
-    assert "does not have yet" in remark
+    assert "stage2.py review-loop" in remark
+    assert "stage2.py explore" in remark and "stage2.py implement" in remark
+    assert "does not have yet" not in remark
     for word in ("umsetzung", "marking"):
         assert word not in remark
 
@@ -681,6 +681,13 @@ def test_explore_scrubs_the_flash_credential_from_its_answer(world: World) -> No
     assert not any(KEY[i : i + 8] in text for i in range(len(KEY) - 7))
 
 
+def test_an_empty_explore_answer_fails_without_an_answer_block(world: World) -> None:
+    world.script(claude=[{"stdout": ""}, {"stdout": "must not run"}])
+    assert world.run("explore") == 1
+    assert len(world.calls("claude")) == 1
+    assert "## Runner exploration" not in world.research.read_text(encoding="utf-8")
+
+
 def test_implement_flash_has_file_tools_and_the_complete_contract(world: World) -> None:
     successful_implementation(world)
     assert world.run("implement") == 0
@@ -791,6 +798,22 @@ def test_verify_failure_is_bounded_in_the_repair_prompt(world: World) -> None:
     assert "line-0" not in prompt and "line-19" not in prompt and "line-20" in prompt
 
 
+def test_a_time_heading_deleted_mid_run_becomes_a_repair_diagnostic(world: World) -> None:
+    valid = "---\ntitle: Plan\nupdated: 2026-10-07\nbead: demo-1\n---\n\n# Plan\n\n## Time used\n"
+    world.script(
+        claude=[
+            {"stdout": "first", "plant": {"plans/changes/demo/plan.md": "# no time heading\n"}},
+            {
+                "stdout": "repaired",
+                "plant": {"plans/changes/demo/plan.md": valid + "2026-10-07 10:00–10:04, 4 min\n"},
+            },
+        ],
+        make=[{"stdout": "green\n"}, {"stdout": "green\n"}],
+    )
+    assert world.run("implement") == 0
+    assert "has no `## Time used` heading" in world.calls("claude")[1]["prompt_file"]
+
+
 def test_stage2_off_implements_with_one_sonnet_attempt_and_records_reason(
     world: World, monkeypatch: pytest.MonkeyPatch
 ) -> None:
@@ -820,6 +843,15 @@ def test_a_leak_between_work_attempts_stops_before_fallback(world: World) -> Non
     assert len(world.calls("claude")) == 1
 
 
+def test_a_stage1_route_line_is_written_only_after_a_clean_leak_check(world: World) -> None:
+    (world.root / "src/leak.txt").write_text(LEAK, encoding="utf-8")
+    git(world.root, "add", "-A")
+    git(world.root, "commit", "--quiet", "-m", "planted leak")
+    before = world.plan.read_bytes()
+    assert world.run("implement", "demo", "--stage2-off", "Z.ai unavailable") == 2
+    assert world.calls() == [] and world.plan.read_bytes() == before
+
+
 def test_a_changed_file_with_the_glm_key_is_cleaned_and_refused(world: World) -> None:
     world.script(
         claude=[
@@ -844,6 +876,29 @@ def test_findings_only_dirt_is_allowed_and_committed(world: World) -> None:
     assert world.run("implement") == 0
     assert git(world.root, "status", "--porcelain") == ""
     assert "Earlier failed attempt." in world.text()
+
+
+@pytest.mark.parametrize("fault", ["command", "non-descendant", "dirty"])
+def test_checkpoint_failures_are_call_failures(monkeypatch: pytest.MonkeyPatch, tmp_path: Path, fault: str) -> None:
+    def fake_git(root: Path, *args: str, allow: tuple[int, ...] = (0,)) -> str:
+        del root, allow
+        if fault == "command" and args[0] == "add":
+            raise stage2.Refused("git add failed")
+        if args[0] == "rev-list":
+            return "2\n" if fault == "non-descendant" else "1\n"
+        if args[0] == "status":
+            return " M src/app.py\n" if fault == "dirty" else ""
+        return ""
+
+    ancestor = 1 if fault == "non-descendant" else 0
+    monkeypatch.setattr(stage2, "_git_output", fake_git)
+    monkeypatch.setattr(
+        stage2.subprocess,
+        "run",
+        lambda *args, **_kwargs: subprocess.CompletedProcess(args[0], ancestor, b"", b""),
+    )
+    with pytest.raises(stage2.CallFailed):
+        stage2.checkpoint(tmp_path, "demo", "base")
 
 
 @pytest.mark.parametrize("verb", ["spec-review", "review-loop", "release-loop", "review"])

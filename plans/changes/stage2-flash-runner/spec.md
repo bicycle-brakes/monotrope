@@ -157,11 +157,13 @@ a model endpoint.
     `make verify` being trusted only because the model said it ran it.
 
 11. **One Flash repair, then Sonnet.** If the first Flash process succeeds but
-    a post-run check fails, the runner gives the failure evidence to one fresh
-    Flash attempt. If the checks still fail, one Sonnet 5.5 attempt at effort
-    `medium` receives the same job plus both diagnostics. The verb succeeds
-    only if a later attempt satisfies criterion 10; there is never a third
-    Flash attempt or a second Sonnet fallback.
+    `make verify` or the time-log check fails, the runner gives the failure
+    evidence to one fresh Flash attempt. If either still fails, one Sonnet 5.5
+    attempt at effort `medium` receives the same job plus both diagnostics.
+    The verb succeeds only if a later attempt satisfies criterion 10; there is
+    never a third Flash attempt or a second Sonnet fallback. A runner-owned git
+    command or checkpoint invariant that fails after those checks exits 1: a
+    model retry cannot repair the runner's git operation.
     *Refuted by:* no repair, more attempts, a repair without the diagnostic,
     or fallback success bypassing a post-run check.
 
@@ -234,18 +236,19 @@ a model endpoint.
     phase gate named by the prompts, `scripts/validate_change_artefacts.py`,
     is not in this repository; its present stand-in
     `python3 scripts/plans_registry.py --check`, the Stage-2 unit tests and
-    `make verify` pass. After implementation, one real Codex phase-6
-    review and at least one real GLM review-loop attempt run through this
-    runner; their audit lines and scrubbed outcomes are evidence in
-    `findings.md`.
+    `make verify` pass. After implementation, one real GLM 5.3 Flash Explore,
+    one real GLM 5.3 review-loop attempt and the real Codex phase-6 review run
+    through this runner; their audit lines and scrubbed outcomes are evidence
+    in the change artefacts.
     *Refuted by:* a red command, either reviewer not called through the runner,
     or a credential in the evidence.
 
 ## Non-goals
 
 - No unattended change orchestrator, spend cap or general retry framework.
-- No change to the endpoint declaration, ADR 0007, the leak rules, the Codex
-  session-resume protocol or the phase-4b loop record.
+- No change to endpoint eligibility, models or data classes, ADR 0007, the
+  leak rules, the Codex session-resume protocol or the phase-4b loop record;
+  the endpoint's stale explanatory note is made current.
 - No implementation on GLM 5.3 (non-Flash), no review on Flash, and no use of
   a direct model API outside Claude Code.
 - No fallback from a leak refusal and no inference of “Stage 2 off” from an

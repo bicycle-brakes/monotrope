@@ -98,10 +98,12 @@ Read `date` at every step boundary (`prompts/04-implement.md`).
      the time section. On failure, call Flash once more with the bounded
      diagnostic; after a second post-check failure, call Sonnet once with both
      diagnostics. `--stage2-off` starts with that one Sonnet attempt.
+     Write a Stage-1 route block only after that attempt's leak check is clean.
    - On a passing attempt run `git add -A`, create
      `feat(<change>): implement accepted plan` with fixed local identity and
      signing off, then require one descendant commit and clean status. Any
-     missing postcondition after the final route exits 1.
+     missing postcondition after the final route exits 1. A runner-owned git
+     failure is also exit 1, not a pre-call refusal and not a model repair.
    Commit.
 
 4. **Executable evidence — `tests/test_stage2.py`** (65 min).
@@ -118,7 +120,7 @@ Read `date` at every step boundary (`prompts/04-implement.md`).
 
 5. **The live instructions — `docs/WORKFLOW.md`, `AGENTS.md`,
    `prompts/01-explore.md`, `prompts/03-plan.md`,
-   `prompts/04-implement.md`** (25 min).
+   `prompts/04-implement.md`, `model-endpoints.yaml`** (25 min).
    - Replace “decided and not built” and “four verbs” with the two live
      commands, route/fallback/leak behaviour and implementation post-checks.
    - Make the Explore and Implement prompts name their runner commands. The
@@ -127,7 +129,8 @@ Read `date` at every step boundary (`prompts/04-implement.md`).
      updates the time log while the runner verifies and commits.
    - Make the one-screen AGENTS description say the Flash verbs are live and
      give the explicit fallback form. Update the existing doctrine tests with
-     planted counterexamples. Stamp current frontmatter where applicable.
+     planted counterexamples. Replace the endpoint note that says the verbs do
+     not exist. Stamp current frontmatter where applicable.
    Commit.
 
 6. **Review and close — change artefacts and `plans/INDEX.md`** (30 min plus
@@ -141,6 +144,9 @@ Read `date` at every step boundary (`prompts/04-implement.md`).
      release/mark the loop rows as the runner prescribes. No direct model CLI.
    - Re-run the verification, commit, push the feature branch and open the
      pull request. The bead closes only after the PR is merged.
+   - Before the second review-loop round, run real `explore` on this change.
+     Its read-only Flash call proves that the new Claude Code flags are
+     accepted; commit its append-only research evidence.
 
 ## Tests
 
@@ -151,10 +157,10 @@ Read `date` at every step boundary (`prompts/04-implement.md`).
 | 3, 4 | `test_flash_uses_the_declared_model_and_model_environment`; plant each endpoint fault and change only `glm-5.3-flash` or review-loop's `glm-5.3`. |
 | 5 | `test_every_work_attempt_runs_a_fresh_leak_check`; the first stand-in plants the deny marker and no repair/fallback call occurs. |
 | 6 | `test_explore_is_read_only_and_gets_the_explore_prompt`; add `ANSWER_FORMAT` or a write/shell tool to make it red. |
-| 7 | `test_explore_appends_and_scrubs_its_answer`; seed unique research, return the key, then fail/empty in separate cases. |
+| 7 | `test_explore_appends_and_scrubs_its_answer` and `test_an_empty_explore_answer_fails_without_an_answer_block`; seed unique research, return the key, then fail/empty in separate cases. |
 | 8 | `test_implement_gets_rules_spec_plan_baseline_and_diagnostic`; omit each source or feed an unbounded verification log. |
 | 9 | `test_implement_has_file_tools_but_no_command_tool`; add Bash, WebFetch, MCP, bypass, project settings, or remove Edit. A host-command spy accepts only `make verify` and the named git sequence. |
-| 10 | Parametrised `test_implement_requires_each_postcondition`: verify red, unchanged/missing time section, checkpoint failure, non-descendant head and dirty status each keep exit non-zero; the all-green case asserts the exact commit. |
+| 10 | The successful implementation test plus `test_a_time_heading_deleted_mid_run_becomes_a_repair_diagnostic` and parametrised `test_checkpoint_failures_are_call_failures`: verify red, unchanged/deleted time section, checkpoint command, non-descendant head and dirty status each stay non-zero; the all-green case asserts the exact commit. |
 | 11 | `test_two_postcheck_failures_route_one_repair_then_sonnet`; inspect three prompts/models and prove no fourth call. A success on attempt one or two shortens the route. |
 | 12 | `test_a_failed_or_empty_work_process_stops_immediately`; both cases leave exactly one model call and exit 1. |
 | 13, 14 | `test_stage2_off_uses_declared_stage1_routes_and_records_the_reason`; remove `GLM_KEY`, assert Haiku/Sonnet and no Z.ai variables, and assert the research/plan route line. Older verbs with the flag refuse. |
@@ -178,12 +184,25 @@ contact the declared endpoints and therefore are evidence, not unit tests.
 
 ## Not touched
 
-`model-endpoints.yaml` (all three model ids and both endpoints are already
-declared), `docs/adr/0007-stage-2-reviews-by-codex-and-glm.md` (the decision is
-unchanged), `scripts/leakcheck.py` and its denylist, `decisions/gates.yaml`,
+The endpoint models, eligibility and data classes (only the stale explanatory
+note changes), `docs/adr/0007-stage-2-reviews-by-codex-and-glm.md` (the
+decision is unchanged), `scripts/leakcheck.py` and its denylist, `decisions/gates.yaml`,
 `.github/workflows/ci.yml`, `.claude/settings.json`, the loop record format and
 its external state, `scripts/kit/manifest.yaml` (both changed executable files
 already have their roles), Omnigent, Hermes, MiMo and sibling repositories.
 
 ## Time used
 
+2026-10-07 10:56–11:08, 12 min — implementation through the two green
+checkpoint commits; both boundaries read with `date`.
+
+## Revisions in phase 4
+
+- Steps 1–4 became one code-and-tests checkpoint (`e9738c5`), not the three
+  commits the first plan wording implied: the shared helpers and their fault
+  tests were one green unit and were not independently shippable. Step 5 is
+  the separate doctrine checkpoint (`6951fd9`). GLM finding L1-3 exposed the
+  missing explanation; no acceptance condition changed.
+- The endpoint note joins step 5 after GLM finding L1-6: its models and access
+  declaration were already correct, but its prose still said the two verbs did
+  not exist. This revises the first `Not touched` wording, not the scope.
