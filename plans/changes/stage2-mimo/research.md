@@ -342,3 +342,209 @@ under the PRC terms. Which one the maintainer has: not read.
   free number on 2026-10-07 is 0011, because 0010 is held by an open decision
   branch (`origin/decide/adr-0010-hermes`).
 
+## Addendum 2026-10-07 (evening): OpenCode Go is the vehicle
+
+The maintainer decided the same evening (bead coding-harness-ymx, notes): every
+review — phase 2a, phase 4b and phase 6 — runs through OpenCode Go, in rounds;
+the models must be changeable by a one-line edit to `model-endpoints.yaml`;
+Codex leaves the reviewer roles; the loop limit rises from two rounds to three.
+That decision replaces §2 (Xiaomi's platform), §7's two `[DECISION]`s and §8's
+file list as written there. Nothing below reopens an answer; it adds facts for
+phase 2.
+
+**Read on 2026-10-07.** <https://opencode.ai/docs/go/> (the page ends with
+"Last updated: Oct 6, 2026"), <https://opencode.ai/docs/zen/>, and
+`GET https://opencode.ai/zen/go/v1/models` without a key (HTTP 200). The
+legal pages at <https://opencode.ai/legal/terms-of-service> and
+<https://opencode.ai/legal/privacy-policy> were read only through search
+summaries that day — the contract party is Anomaly Innovations, Inc.
+("OpenCode"), which is what the summary says; the full text was not read.
+
+### E · The three models and their ids
+
+| Round | Name on the Go page | Model id | In `GET /zen/go/v1/models` |
+|---|---|---|---|
+| 1 | DeepSeek V4.1 Flash | `deepseek-v4.1-flash` | yes |
+| 2 | MiMo-V2.6-Flash | `mimo-v2.6-flash` | yes |
+| 3 | MiMo-V2.6-Pro | `mimo-v2.6-pro` | yes |
+
+The model list that endpoint returned held 44 ids on 2026-10-07, among them
+all three above and `glm-5.3`, `glm-5.3-flash`. The Go page states the config
+format `opencode-go/<model-id>` — the id in `model-endpoints.yaml` is the part
+after the slash, as `glm-5.3` is today.
+
+There is no `mimo v2.6 pro flash` on the page, and no id that could be it.
+What the maintainer wrote for round 2 reads as MiMo-V2.6-Flash
+(`mimo-v2.6-flash`); the reading is put to the maintainer as the first
+`[DECISION]` of `decisions.md`.
+
+### F · The endpoints, and what the page does not say about ours
+
+The Go page carries an endpoint table with one row per model: the id, an
+endpoint URL and the AI SDK package. All three of ours are listed there as
+`https://opencode.ai/zen/go/v1/chat/completions` with
+`@ai-sdk/openai-compatible`. `https://opencode.ai/zen/go/v1/messages` — the
+Anthropic-compatible address the maintainer's decision names — is listed on
+that page for MiniMax M3 and M2.7, Qwen3.8 Max and Flash, and Qwen3.7 Plus,
+not for the three above. The Zen page shows the same split on its own
+addresses (`/zen/v1/messages` for the Anthropic models, `/zen/v1/chat/completions`
+for the OpenAI-compatible ones).
+
+**Not read:** whether the Anthropic-compatible address accepts the three model
+ids. The table shows the address OpenCode recommends per model, and a
+recommendation is not a refusal; nothing readable says whether
+`POST https://opencode.ai/zen/go/v1/messages` with `model:
+deepseek-v4.1-flash` is answered. It cannot be answered without a key, and
+this session does not read the secrets file. This is the one fact phase 4 has
+to measure before the runner depends on it (see the tagged question at the
+end of this section).
+
+Also read on the same page: `GET https://opencode.ai/zen/go/v1/models` needs
+no key and lists the ids, so the ids can be checked without a call that costs
+anything.
+
+### G · Terms, limits and privacy of OpenCode Go
+
+- **Client conditions.** The page is explicit: a client should "send typical
+  coding agent traffic", identify itself with its own user agent rather than a
+  generic SDK name, and send a stable session id in `x-opencode-session`. Two
+  of the clients it lists as validated are the two this repository already
+  runs: **Claude Code** ("Go recognizes its native session header. No
+  custom-header wrapper is needed.") and **Codex** ("Go recognizes its native
+  session header."). Hermes and Pi are listed as well, with a per-version note
+  each.
+- **Plans.** Go USD 10 a month, Go Plus USD 40 a month; token prices are the
+  same on both. Each model's monthly limit is cut into 5-hour (20%), weekly
+  (50%) and monthly (100%) allowances.
+- **Prices of the three (per million tokens, Go plan).** DeepSeek V4.1 Flash
+  USD 0.15 input / 0.60 output off-peak and 0.30 / 1.20 in peak hours (peak is
+  01:00–04:00 and 06:00–10:00 UTC, Monday to Friday), monthly limit USD 60.
+  MiMo-V2.6-Flash 0.14 / 0.28, monthly limit USD 60. MiMo-V2.6-Pro 0.435 /
+  0.87, monthly limit USD 15. A 5-hour allowance is a fifth of those.
+- **Privacy table.** All three: model training "Not used", data retention
+  "0 days". The DeepSeek rows carry `0 days*` and the footnote: "ZDR
+  agreement is renewed monthly. The current agreement is valid through
+  October 31, 2026." — so DeepSeek's zero retention is a dated contract, not a
+  standing property, and it has to be read again after that date.
+- **Where the models are hosted: not on the Go page.** The Go page's privacy
+  section is the training and retention table and nothing else. The Zen page
+  states "All our models are hosted in the US and EU." — a statement about
+  Zen, on Zen's page. Whether it covers the Go plan was not read.
+- **Who is Anomaly Innovations, Inc.** The terms of service are that company's
+  (search summary, 2026-10-07); the full text was not read.
+
+### H · How the runner starts a reviewer today
+
+`python3 scripts/stage2.py review-loop <change>` is the closest model for
+OpenCode Go: the same Anthropic-compatible shape, so that only the address,
+the key and the model ids change.
+
+1. `preflight` — the change folder exists, its `spec.md` carries a `bead` in
+   its header, and `declaration_problem` clears the endpoint for `framework`
+   content: the entry present, the model listed, `framework` among what it may
+   see, a residency that is neither absent nor `nicht-erklaert`.
+2. `review_loop` — the round limit, then any undecided rows (each holds the
+   next round), then `GLM_KEY` read from the secrets file; a refusal there
+   stops the run before anything is written.
+3. `change_diff` — the diff against the merge base with `origin/main`,
+   uncommitted and untracked files included.
+4. One prompt: the body of `prompts/04b-review-loop.md`, the answer format,
+   the read request, the diff, the read request again.
+5. `begin_call` — the declaration again, then the leak check, then the line in
+   `findings.md`.
+6. `launch` — the program, started with an empty standard input, in the
+   worktree, with an environment built from an allow-list and then the call's
+   own variables. `glm_env` sets `ANTHROPIC_BASE_URL`,
+   `ANTHROPIC_AUTH_TOKEN`, `ANTHROPIC_API_KEY`, a fresh empty
+   `CLAUDE_CONFIG_DIR` and the model name in all six model variables; the
+   arguments pin `--model`, `--effort`, `--tools Read,Grep,Glob`,
+   `--restricted`, `--strict-mcp-config`, `--permission-mode dontAsk`,
+   `--no-session-persistence` and `--output-format text`.
+7. The answer is scrubbed of the key, parsed into rows, numbered
+   `L<round>-<k>`, and appended to the loop record outside the worktree.
+
+`CODEX` and `GLM` are the two endpoint tuples the runner pins
+(`(endpoint, model, effort)`), and `GLM_BASE_URL` is the one address
+constant. The verbs `spec-review` and `review` go through the Codex CLI and
+`codex exec resume`; the decision of 2026-10-07 takes both out of the reviewer
+roles.
+
+### I · What the leak check needs per call
+
+`begin_call(ctx, verb, endpoint, prompt)` runs, for this one call, in this
+order and immediately before it:
+
+1. `declaration_problem(root, endpoint, model)` again — a declaration that
+   was cleared at preflight and has since changed is caught here.
+2. `leakcheck.check(ctx.change, leakcheck.default_denylist(), ctx.root,
+   [("prompt", prompt)])` — the change's folder, every file the tree tracks or
+   lists as untracked and not ignored (a symbolic link as its target's text),
+   the staged changes, the message and patch of every commit reachable from a
+   local or a remote-tracking branch, and the call's own prompt, against the
+   denylist the machine keeps outside the repository.
+3. The verdict is printed; a non-zero exit raises `Refused` and no call starts.
+4. The line is appended to `findings.md`: date, verb, endpoint, model, and the
+   three numbers (files, commits, rules).
+
+So one check per call, not one per run: a second reviewer of a round is a
+second call and gets its own check, with its own prompt in the list. A rule
+whose name starts with `secret:` is not applied under the top-level `tests/`
+folder; every other rule is. What cannot be measured is BLOCK, never clean.
+
+### J · What the endpoint declaration looks like
+
+Every entry carries `name`, `betreiber`, `residenz`, `abrechnung`,
+`darf_sehen`, `modelle` and `bemerkung` — `tests/test_model_endpoints.py`
+fails an endpoint without one of them. The vocabularies are fixed there:
+`residenz` one of `anbieter-erklaert`, `region-waehlbar`, `nicht-erklaert`;
+`abrechnung` one of `token`, `abonnement`. `declaration_problem` in
+`scripts/stage2.py` refuses an entry whose `residenz` is absent or
+`nicht-erklaert`, so an entry the runner may call must state one of the other
+two. `modelle` is a YAML list; today only membership is read, order carries no
+meaning — the decision of 2026-10-07 asks for order to mean the round.
+
+The GLM entry stands beside the `openai-codex` entry, under the comment block
+that says `darf_sehen: [framework]` is the line that matters here, not the
+residency, and that the leak check — not this file — is what keeps customer
+content out. The German keys and comments of the file are translated in a pull
+request of their own (house rule 1).
+
+### K · What a change touches
+
+- `model-endpoints.yaml` — the entry `opencode-go`, its ordered `modelle`, and
+  the comment block behind it.
+- `scripts/stage2.py` — the endpoint tuple(s), the address constant, the
+  reading of the ordered list, the round limit, and the verbs `spec-review`
+  and `review` moving off the Codex CLI.
+- `docs/adr/0007-stage-2-reviews-by-codex-and-glm.md` — amended by a decision
+  pull request; `docs/adr/` is `human-decided`, so the amendment text is
+  drafted in this folder and never edited in place.
+- `docs/WORKFLOW.md` §4, `prompts/01-explore.md` is untouched (explore and
+  implement stay on GLM 5.3 Flash), `prompts/02-spec.md`, `prompts/04b-review-loop.md`,
+  `prompts/06-review.md`, `AGENTS.md` — who reviews what.
+- `tests/test_stage2.py`, `tests/test_model_endpoints.py` — the declaration,
+  the ordered list and the verbs.
+
+### Tagged questions
+
+**[GAP]** Does `POST https://opencode.ai/zen/go/v1/messages` accept the model
+ids `deepseek-v4.1-flash`, `mimo-v2.6-flash` and `mimo-v2.6-pro`, or only the
+ids the page lists under that address? Not answerable by reading (§F) and not
+without the key. Measured in phase 4, before any step builds on it: one call
+per model id through the runner, the leak check in front of it. If the address
+refuses a model id, the run stops and is reported — no second design is
+invented in this change.
+
+**[GAP]** Where OpenCode hosts the Go models. The Go page states no region
+(§G); Zen states "US and EU" for Zen's models. Not closed by reading here.
+
+**[DETAIL]** OpenCode's terms of service and privacy policy in full — read by
+search summary only on 2026-10-07. The part that matters for the declaration
+(the client conditions and the retention table) is on the Go page and was read
+there; the contract text is named in the entry's `bemerkung` with the date it
+was looked at, and is read in full before phase 7 writes the pull request.
+
+**[DETAIL]** What DeepSeek's ZDR agreement looks like after 2026-10-31. The
+Go page dates it (§G); the check is a calendar entry for the maintainer, not a
+code path.
+

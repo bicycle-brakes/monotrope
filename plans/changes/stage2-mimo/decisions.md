@@ -40,6 +40,9 @@ The maintainer did not specify:
   maintainer widened that scope on 2026-10-06, but may limit this change to 4b
   only).
 
+> **Superseded** by the addendum "the reviewer decision, verbatim" below
+> (2026-10-07, late evening). The class stands as `feature`.
+
 ## [DECISION] 1 — the class of this change (not answered yet)
 
 The spec author must state the class. Two readings are plausible:
@@ -90,6 +93,9 @@ What is lost:         If this is option 1 (phase 4b only), the change is
 The recommendation is Option 1: class `feature`, but scoped to phase 4b only.
 (Note: "feature" is the class; "phase 4b only" is the implementation scope.)
 
+> **Superseded** by the addendum "the reviewer decision, verbatim" below
+> (2026-10-07, late evening): the endpoint is OpenCode Go.
+
 ## [DECISION] 2 — the endpoint: Xiaomi API, OpenRouter, or Z.ai?
 
 Three vendors could serve MiMo-V2.6:
@@ -118,6 +124,9 @@ to manage a third endpoint.
 Consequence: endpoint declaration, runner's environment variables, and the
 launch logic differ by vendor. The spec will propose one; the maintainer will
 decide.
+
+> **Superseded** by the addendum "the reviewer decision, verbatim" below
+> (2026-10-07, late evening): one reviewer per round, three rounds.
 
 ## [DECISION] 3 — scheduling: same round as GLM, or round 2?
 
@@ -232,3 +241,128 @@ Facts read on 2026-10-07 from <https://opencode.ai/docs/go/>, for phase 2:
 - Not read: whether the maintainer already holds a Go subscription (Hermes
   is planned on OpenCode Go); the secrets file holds no OpenCode key name
   on 2026-10-07.
+
+## Addendum 2026-10-07 (late evening): the reviewer decision, verbatim
+
+**Superseded** by the decision below: the three `[DECISION]` sections above
+and their answers — "Xiaomi direct", "Token Plan", "Beide unabhängig, gleicher
+Diff", "MiMo-V2.6-Pro is the reviewer". **Stands**: "yes — widen ADR 0007",
+with the ADR's text naming OpenCode Go instead of Xiaomi, and the class
+`feature`.
+
+Recorded in bead coding-harness-ymx (NOTES) on 2026-10-07, verbatim:
+
+> Maintainer, 2026-10-07 (Claude Code session, German): every review — 2a, 4b
+> and 6 — runs through OpenCode Go in rounds: round 1 DeepSeek V4.1 Flash,
+> round 2 MiMo-V2.6-Flash (the maintainer wrote 'mimo v2.6 pro flash';
+> OpenCode Go lists no such model, read as MiMo-V2.6-Flash — to confirm in the
+> interview), round 3 only when needed MiMo-V2.6-Pro. The models must be easy
+> to change as OpenCode Go's models perform or new ones arrive: an ordered
+> list in model-endpoints.yaml, a one-line pull request, no code change.
+> Consequences: Codex leaves the reviewer roles; the loop limit rises from two
+> to three rounds; ADR 0007 needs amending (docs/adr is human-decided, so a
+> decision PR). Needs an OpenCode Go key in the secrets file (maintainer adds
+> it). Starts after the Flash runner (coding-harness-qcp) merges.
+
+### Settled by it — no question
+
+- **Every review phase calls OpenCode Go.** `spec-review` (phase 2a) and
+  `review` (phase 6) leave Codex; `review-loop` (phase 4b) leaves GLM 5.3 on
+  `glm-coding-plan`. Read from the rounds, which name DeepSeek and MiMo only
+  and no fourth reviewer: GLM leaves the loop. GLM 5.3 Flash keeps explore
+  and implement (bead coding-harness-bib), which this change does not touch.
+  If a fourth reviewer was meant, that is the sentence to correct.
+- **The rungs are one ordered list** in `model-endpoints.yaml`: the entry's
+  `modelle:` is already a list, its position is the rung, and
+  `declaration_problem()` (scripts/stage2.py:351) takes the model from it.
+  Moving a rung is a one-line pull request, no code change.
+- **`MAX_ROUNDS` rises from 2 to 3** (scripts/stage2.py:117), and every call
+  is still launched by the runner, with the leak check and the declaration
+  before it.
+- **The key** enters the secrets file by the maintainer's hand; the runner
+  reads it, no agent does. Name: `OPENCODE_GO_KEY` ([DETAIL] 4).
+- **Nothing starts before** bead coding-harness-qcp (the Flash runner) is
+  merged.
+- **ADR 0007** is amended as a decision PR by the maintainer: OpenCode Go,
+  the three rungs, Codex and GLM out of the reviewer roles.
+
+### [DECISION] 1 — round 2's model id
+
+The bead records your round 2 as written "mimo v2.6 pro flash" and reads it
+as MiMo-V2.6-Flash, marked in the bead itself "to confirm in the interview".
+`GET https://opencode.ai/zen/go/v1/models` on 2026-10-07 holds
+`deepseek-v4.1-flash`, `mimo-v2.6-flash` and `mimo-v2.6-pro`; no id combines
+both words.
+
+Question: **MiMo-V2.6-Flash** in round 2 (the bead's reading), or
+**MiMo-V2.6-Pro** (the word you wrote)?
+
+Recommendation: Flash. Consequence: Flash is the cheaper and the weaker of
+the two (USD 0.14 / 0.28 per million tokens against 0.435 / 0.87; DeepSWE
+v1.1 67.9 against 71.9, vendor-reported), so the choice sets both what a
+second opinion costs and what it sees. Pro in round 2 and again in round 3
+would give the third round nothing new over the second.
+
+### [DECISION] 2 — the residency the OpenCode Go entry declares
+
+`model-endpoints.yaml` accepts three values. `nicht-erklaert` makes
+`declaration_problem()` refuse the call before it is made
+(scripts/stage2.py:364), so it would mean no reviewer runs at all; the
+`ausgeschlossen` list forbids that value only for `kundencode`, a class this
+change never sends.
+
+Exploration on 2026-10-07 for this gap: the Go docs page states no region
+(it carries region notes for Meta and Qwen models only); `opencode.ai/privacy`
+answers 404; the Zen docs state "All our models are hosted in the US and EU."
+— a sentence about Zen, a different product from Go.
+
+Question: declare **`anbieter-erklaert`**, resting on that sentence of
+OpenCode's, or **`region-waehlbar`**?
+
+Recommendation: `anbieter-erklaert`. Consequence: `region-waehlbar` would
+declare a region the maintainer can choose, and Go offers none — a statement
+of record that is false on its face. `anbieter-erklaert` quotes OpenCode's
+own words with their page and date in the entry's `bemerkung`, and is
+corrected the day OpenCode says where Go runs. `nicht-erklaert` is the honest
+value of today, and it stops every call.
+
+### [GAP] — open, explored, not asked
+
+1. Does `POST https://opencode.ai/zen/go/v1/messages` accept the three ids?
+   The Go docs list them under `/v1/chat/completions`
+   (`@ai-sdk/openai-compatible`) and name the Anthropic address only in
+   passing. Measured in phase 4 with the maintainer's key; the fallback is
+   the OpenAI address ([DETAIL] 5).
+2. Whether OpenCode publishes a residency statement for Go later. Re-read
+   before the entry is written; correct `residenz` then.
+
+### [DETAIL] — decided here, reason recorded
+
+1. **Which rung phase 2a and phase 6 take.** Both are one call each today
+   (`spec_review`, `review` — no rounds). Taken: **rung 1**,
+   `deepseek-v4.1-flash`. Reason: the decision gives the three rungs as
+   rounds and names a limit of three for the loop, so the escalation belongs
+   to phase 4b; a single call has no round to climb. Risk recorded: rung 1
+   is the cheapest of the three, so the phase-6 verdict would come from the
+   weakest model of the ladder — a stronger rung for phase 6 takes one
+   sentence from the maintainer.
+2. **When round 2 and round 3 of the loop run.** "round 3 only when needed"
+   names no trigger. Taken: round *N+1* runs only when round *N* produced at
+   least one taken row; the ceiling is three. Reason: the round file already
+   records which rows were taken, so the trigger is readable and testable,
+   and a round whose rows were all rejected gives the next model nothing to
+   check.
+3. **The rounds are a ladder over repaired code.** Round 2 sees round 1's
+   repair, as `review_loop` does today, and each round has one reviewer. The
+   answer "Beide unabhängig, gleicher Diff" goes with the superseded
+   sections, and with it the `Also raised` column of the old spec.
+4. **The entry's other fields**: `name: opencode-go`, `betreiber: "OpenCode
+   (Operator Anomaly Innovations, Inc.)"`, `abrechnung: abonnement`,
+   `darf_sehen: [framework]` — as `glm-coding-plan` and `openai-codex` stand
+   today; key `OPENCODE_GO_KEY`.
+5. **The request shape**: the Anthropic address first, with OpenCode's own
+   user agent and a stable `x-opencode-session`, which its terms describe as
+   the way a coding agent identifies itself; if it refuses a rung, the OpenAI
+   address. Measured in phase 4, not asked.
+6. **The class stays `feature`**, and the spec's `adr_question` is rewritten
+   from Xiaomi and OpenRouter to OpenCode Go.
