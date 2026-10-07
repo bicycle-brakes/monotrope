@@ -963,6 +963,16 @@ def test_checkpoint_failures_are_call_failures(monkeypatch: pytest.MonkeyPatch, 
         stage2.checkpoint(tmp_path, "demo", "base")
 
 
+@pytest.mark.parametrize("verb", ["explore", "implement"])
+def test_a_change_name_after_the_stage2_off_flag_is_named_as_eaten(
+    world: World, verb: str, capsys: pytest.CaptureFixture[str]
+) -> None:
+    assert world.run(verb, None, "--stage2-off", "demo") == 2
+    error = capsys.readouterr().err
+    assert "`demo` was taken as the --stage2-off reason" in error and "--stage2-off=REASON" in error
+    assert world.calls() == []
+
+
 @pytest.mark.parametrize("verb", ["spec-review", "review-loop", "release-loop", "review"])
 def test_stage2_off_is_only_for_work_verbs(world: World, verb: str) -> None:
     assert world.run(verb, "demo", "--stage2-off") == 2

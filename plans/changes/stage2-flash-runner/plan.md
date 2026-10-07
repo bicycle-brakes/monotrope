@@ -220,3 +220,8 @@ checkpoint commits; both boundaries read with `date`.
   attempt, the Sonnet fallback included. Criterion 15 of the spec now says
   "including by the gate run" and the output scrub. Two tests: a gate that
   writes the key into a changed file, and a gate that prints it.
+- GLM finding L2-6: `--stage2-off` takes an optional reason before the
+  positional change, so `explore --stage2-off <change>` read the change name as
+  the reason. The runner now refuses with a message naming that cause when the
+  change is empty and the reason is an existing folder under `plans/changes/`;
+  `--stage2-off=REASON` and the change-first order work as before. One test.

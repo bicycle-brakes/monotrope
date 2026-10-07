@@ -1247,6 +1247,15 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--root", default=str(REPO_ROOT), help=argparse.SUPPRESS)
     args = parser.parse_args(argv)
     try:
+        if (
+            args.stage2_off is not None
+            and not args.change
+            and (Path(args.root) / "plans" / "changes" / args.stage2_off).is_dir()
+        ):
+            raise Refused(
+                f"the change name `{args.stage2_off}` was taken as the --stage2-off reason; "
+                "put the change before the flag or write --stage2-off=REASON."
+            )
         if args.stage2_off is not None and args.verb not in {"explore", "implement"}:
             raise Refused("--stage2-off applies only to explore and implement.")
         if args.verb in {"explore", "implement"}:
