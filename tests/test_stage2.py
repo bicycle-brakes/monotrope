@@ -887,6 +887,81 @@ def test_verify_failure_is_bounded_in_the_repair_prompt(world: World) -> None:
     assert "line-0" not in prompt and "line-19" not in prompt and "line-20" in prompt
 
 
+def _gate(name: str, body: list[str], verdict: str) -> list[str]:
+    """One gate as `verify_all.sh` frames it."""
+    end = {
+        "green": f"── [{name}] gruen",
+        "red": f"── [{name}] RED (block) — der Lauf ist rot.",
+        "report": f"── [{name}] rot, aber nur report — er meldet, er blockiert nicht.",
+    }[verdict]
+    return [f"── [{name}] $ run {name}", *body, end, ""]
+
+
+def _red_run(world: World, output: str) -> str:
+    """Run implement with one red verify carrying `output`, then green; return the repair prompt."""
+    world.script(
+        claude=[
+            {
+                "stdout": "first",
+                "plant": {"src/app.py": "value = 2\n"},
+                "append": {"plans/changes/demo/plan.md": "2026-10-08 10:00–10:02, 2 min\n"},
+            },
+            {"stdout": "fixed"},
+        ],
+        make=[{"stdout": output, "exit": 1}, {"stdout": "green\n"}],
+    )
+    assert world.run("implement") == 0
+    return world.calls("claude")[1]["prompt_file"]
+
+
+def test_the_repair_prompt_names_the_gate_that_blocked_not_the_report_tail(world: World) -> None:
+    # runner-red-gate criterion 1. Planted fault: the tail instead of the red sections.
+    output = "\n".join(
+        _gate("pytest", ["FAILED tests/test_app.py::test_value - assert 2 == 1", "1 failed, 9 passed"], "red")
+        + _gate("ruff-check", ["All checks passed!"], "green")
+        + _gate("markdownlint", [f"README.md:{n} error MD013" for n in range(500)], "report")
+        + ["VERIFY RED — at least one gate failed; the report above names it."]
+    )
+    prompt = _red_run(world, output)
+    assert "FAILED tests/test_app.py::test_value" in prompt and "── [pytest] RED (block)" in prompt
+    assert "MD013" not in prompt and "[ruff-check]" not in prompt, "only blocking sections travel"
+
+
+def test_red_sections_are_bounded_and_say_what_they_left_out() -> None:
+    # runner-red-gate criterion 2. Planted fault: no per-section or no total bound.
+    long = _gate("pytest", [f"trace-{n}" for n in range(1000)], "red")
+    found = stage2.red_sections("\n".join(long))
+    lines = found.splitlines()
+    assert len(lines) == stage2.RED_SECTION_LINES + 1 and "trace-999" in found and "trace-0\n" not in found
+    assert "lines of this gate left out" in lines[1] and lines[0].startswith("── [pytest] $")
+    many = []
+    for number in range(6):
+        many += _gate(f"gate-{number}", [f"g{number}-{n}" for n in range(100)], "red")
+    found = stage2.red_sections("\n".join(many))
+    assert len(found.splitlines()) <= stage2.RED_TOTAL_LINES + 1
+    assert "more red gate sections left out" in found.splitlines()[-1]
+
+
+def test_the_frames_red_sections_reads_are_the_ones_verify_all_prints() -> None:
+    # runner-red-gate pre-mortem: verify_all.sh renames its frame lines and the parser finds nothing.
+    script = (REPO_ROOT / "scripts" / "verify_all.sh").read_text(encoding="utf-8")
+    assert 'echo "── [$gid] $ ' in script and 'echo "── [$gid] RED (block)' in script
+    assert stage2.GATE_START.match("── [pytest] $ make test") and stage2.GATE_RED.match("── [pytest] RED (block) — x")
+
+
+def test_without_a_red_frame_the_repair_prompt_keeps_the_tail(world: World) -> None:
+    # runner-red-gate criterion 3. Planted fault: empty diagnostics when nothing is framed.
+    prompt = _red_run(world, "\n".join(f"make-{n}" for n in range(100)))
+    assert "make-99" in prompt and "make-20" in prompt and "make-19" not in prompt
+
+
+def test_a_red_section_is_scrubbed_of_the_glm_key(world: World) -> None:
+    # runner-red-gate criterion 4. Planted fault: the red section passed unscrubbed.
+    output = "\n".join(_gate("pytest", [f"E   AssertionError: token {KEY}"], "red"))
+    prompt = _red_run(world, output)
+    assert "── [pytest] RED (block)" in prompt and KEY not in prompt
+
+
 def test_a_time_heading_deleted_mid_run_becomes_a_repair_diagnostic(world: World) -> None:
     valid = "---\ntitle: Plan\nupdated: 2026-10-07\nbead: demo-1\n---\n\n# Plan\n\n## Time used\n"
     world.script(

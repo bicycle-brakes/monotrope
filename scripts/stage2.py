@@ -1077,6 +1077,46 @@ def credential_message(exposed: list[Path]) -> str:
     return f"the GLM credential occurred in changed files and was removed ({listing}); no fallback starts."
 
 
+RED_SECTION_LINES = 60
+RED_TOTAL_LINES = 200
+TAIL_LINES = 80
+GATE_START = re.compile(r"^── \[(?P<gate>[^\]]+)\] \$ ")
+GATE_RED = re.compile(r"^── \[(?P<gate>[^\]]+)\] RED \(block\)")
+
+
+def red_sections(output: str) -> str | None:
+    """The sections of the gates `verify_all.sh` framed `RED (block)`, bounded, in run order - or None.
+
+    A repair attempt needs the gate that blocked. The log's tail is the report-only gates (docs-links,
+    markdownlint), thousands of lines after a pytest failure (bead coding-harness-zci). Each red section keeps
+    its frame line and its last lines; a cut says how much it left out, and so does the total bound.
+    """
+    lines = output.splitlines()
+    starts: dict[str, int] = {}
+    sections: list[list[str]] = []
+    for index, line in enumerate(lines):
+        start = GATE_START.match(line)
+        if start:
+            starts[start["gate"]] = index
+            continue
+        red = GATE_RED.match(line)
+        if red and red["gate"] in starts:
+            body = lines[starts.pop(red["gate"]) : index + 1]
+            if len(body) > RED_SECTION_LINES:
+                left_out = len(body) - RED_SECTION_LINES
+                body = [body[0], f"[… {left_out} lines of this gate left out …]", *body[-(RED_SECTION_LINES - 1) :]]
+            sections.append(body)
+    if not sections:
+        return None
+    kept: list[str] = []
+    for number, body in enumerate(sections):
+        if len(kept) + len(body) > RED_TOTAL_LINES:
+            kept.append(f"[… {len(sections) - number} more red gate sections left out …]")
+            break
+        kept.extend(body)
+    return "\n".join(kept)
+
+
 def verify_attempt(root: Path, plan: Path, baseline_time: str, key: str | None = None) -> list[str]:
     """Run the one gate and return bounded diagnostics for failed postconditions."""
     env = foreign_env(
@@ -1089,8 +1129,13 @@ def verify_attempt(root: Path, plan: Path, baseline_time: str, key: str | None =
     done = launch(["make", "verify"], root, env)
     problems = []
     if done.returncode != 0:
-        tail = scrub("\n".join(((done.stdout or "") + (done.stderr or "")).splitlines()[-80:]), key)
-        problems.append(f"`make verify` exited {done.returncode}\n{tail}".rstrip())
+        output = (done.stdout or "") + (done.stderr or "")
+        red = red_sections(output)
+        if red is None:
+            evidence = "\n".join(output.splitlines()[-TAIL_LINES:])
+        else:
+            evidence = "The gates that blocked, each with its last lines:\n" + red
+        problems.append(f"`make verify` exited {done.returncode}\n{scrub(evidence, key)}".rstrip())
     try:
         current_time = time_log(plan)
     except Refused as error:
