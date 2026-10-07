@@ -308,7 +308,7 @@ round 2 is MiMo-V2.6-Flash, as the bead reads it, and the bead's "to confirm
 in the interview" is closed. The ladder is therefore, in order:
 `deepseek-v4.1-flash`, `mimo-v2.6-flash`, `mimo-v2.6-pro`.
 
-### [DECISION] 2 — the residency the OpenCode Go entry declares
+### [DECISION] 2 — the residency the OpenCode Go entry declares — answered 2026-10-07
 
 `model-endpoints.yaml` accepts three values. `nicht-erklaert` makes
 `declaration_problem()` refuse the call before it is made
@@ -330,6 +330,12 @@ of record that is false on its face. `anbieter-erklaert` quotes OpenCode's
 own words with their page and date in the entry's `bemerkung`, and is
 corrected the day OpenCode says where Go runs. `nicht-erklaert` is the honest
 value of today, and it stops every call.
+
+**Answer: "anbieter erklärt"** (maintainer, Claude Code session, 2026-10-07)
+— the entry declares `residenz: anbieter-erklaert`, resting on OpenCode's own
+sentence about its models, with that page and its date in the entry's
+`bemerkung`. Every `[DECISION]` in this file is now answered; what stays open
+are the two `[GAP]`s, which phase 4 measures instead of asking.
 
 ### [GAP] — open, explored, not asked
 
