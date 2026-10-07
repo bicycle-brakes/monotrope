@@ -150,3 +150,20 @@ Additional OpenCode permission evidence:
 [Agents](https://opencode.ai/docs/agents/), read 2026-10-07, documents primary
 agents, per-agent permission overrides and user-driven agent switches. A
 global denial alone does not establish the chosen agent's permissions.
+
+## Addendum — effective policy and settled boundary, 2026-10-07
+
+The maintainer's "mach weiter" accepted Terminal acceptance after executable
+checks, not CLI-start acknowledgment (F-2).
+
+Version-pinned OpenCode source was read without user configuration:
+[agent resolution](https://github.com/anomalyco/opencode/blob/v1.18.35/packages/opencode/src/agent/agent.ts)
+appends a truncation-directory allowance after a catch-all denial unless
+that exact directory has an explicit denial. Inspect effective ordered rules,
+insert specific denials and recheck; supplied config alone is insufficient.
+[Permission evaluation](https://github.com/anomalyco/opencode/blob/v1.18.35/packages/opencode/src/permission/index.ts)
+uses last matching wildcard rules.
+[Agent diagnostics](https://github.com/anomalyco/opencode/blob/v1.18.35/packages/opencode/src/cli/cmd/debug/agent.handler.ts)
+return resolved agent/tools without a tool option. Never request diagnostic
+tool execution or print the captured configuration. This is source evidence,
+not a measured interactive session.

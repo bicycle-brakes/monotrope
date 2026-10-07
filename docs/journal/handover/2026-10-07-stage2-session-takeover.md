@@ -122,3 +122,17 @@ writer ruleset 82 passed. The artifact gate returned no BLOCK, with existing
 unrelated DRIFT still reported. Documentation-link and markdownlint checks
 remain report-only findings. No endpoint call beyond the actual Codex spec
 review, and no interactive GUI dispatch, implementation or final review ran.
+
+## Addendum — decision settled, design and plan ready, 2026-10-07
+
+The maintainer replied "mach weiter" to the immediately preceding F-2
+recommendation. Recorded answer: check executables, then Terminal acceptance
+is launch success; later CLI/login/model errors remain in the new window.
+No open intent decision remains. Design, proposed ADR amendment and plan are
+written; the unchanged plan card was shown before phase 4. The branch is
+still feat/stage2-session, dedicated worktree only, never merge. OpenCode Go
+activation remains a separate declaration dependency, not approval here.
+
+Next: verify and checkpoint these artifacts, then run the GLM Flash
+implementation through stage2.py. Actual implementation, review and GUI smoke
+are not yet measured. Retain this historical statement in later addenda.

@@ -57,10 +57,12 @@ does not turn the unmerged ADR amendment into accepted repository policy.
 None of these details authorizes a model call, merge or credential-file read
 outside the takeover instructions.
 
-## Spec-review decision — start-success boundary (pending)
+## Spec-review decision — start-success boundary (answered)
 
 Source: phase-2a finding F-2, 2026-10-07. Asked once through the user-input
-question; no answer yet.
+question. The maintainer subsequently replied "mach weiter" directly after
+the recommendation and confirmation question (2026-10-07). This is recorded
+as assent to option 1, not a new decision made by the agent.
 
 Goal in one sentence: make the returned launch status tell the maintainer
 exactly what has been confirmed.
@@ -83,4 +85,19 @@ dispatch and accepted dispatch in help, audit and tests.
 What is lost: immediate confirmation that the selected CLI actually started
 after Terminal accepted the command.
 
-[DECISION] The answer is pending. F-2 stays open until it arrives.
+Answer: "mach weiter" (maintainer, 2026-10-07), accepting the immediately
+preceding recommendation: Terminal acceptance after CLI prerequisite checks.
+The session is not supervised for program-start acknowledgment or model success.
+
+## Further reversible details for the plan
+
+- [DETAIL] A helper module holds interactive launch mechanics; the sole public
+  model entry stays `scripts/stage2.py`, avoiding reviewer-migration overlap.
+- [DETAIL] Runtime policy files live in a fresh private directory under
+  `.stage2-sessions/` in the worktree. Failed preparation removes only that
+  directory; accepted dispatch retains it for the new CLI to load. No keys.
+- [DETAIL] OpenCode uses a dedicated primary agent and no external plugins.
+  Effective permission diagnostics are checked before dispatch. Subagents are
+  denied initially to avoid bypassing the checked primary agent.
+- [DETAIL] Initial prompts are capped at 32 KiB UTF-8, complete shell dispatch
+  commands at 64 KiB: refuse oversized arguments before GUI dispatch.

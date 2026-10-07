@@ -35,7 +35,9 @@ nor verifies such a session policy (`research.md`, "Where it lives").
 ## Terms
 
 - **Dispatch:** Terminal accepted the launch command; not evidence that the
-  model authenticated, answered, finished the workflow or passed verification.
+  CLI started, model authenticated, answered, finished the workflow or passed
+  verification. Executables must exist at preflight; later startup failures
+  appear in the new window.
 - **Launch snapshot:** the state scanned before dispatch, not later edits,
   later prompts or later UI model switches.
 
@@ -71,6 +73,8 @@ that canonical worktree root, not a subdirectory, another worktree or main.
    otherwise the change-local `handover.md` is used.
    *Refuted by:* an empty/missing/unreadable/nonregular file being accepted,
    only a pathname being sent, or an unrelated handover silently selected.
+   Prompts over 32 KiB UTF-8 or containing NUL refuse before dispatch; the
+   complete dispatch command is bounded to 64 KiB to fit the launch transport.
 4. If a handover path resolves outside the validated worktree, it is refused.
    *Refuted by:* traversal or a symlink sending outside-file text to a model.
 5. When dispatch is attempted, the runner checks the change, visible tree,
@@ -87,8 +91,11 @@ that canonical worktree root, not a subdirectory, another worktree or main.
    or an audit indistinguishable from a completed review verdict.
 8. If dispatch fails after clean preflight, the command returns failure and
    records a failed dispatch rather than claiming an interactive model ran.
-   *Refuted by:* missing executable, denied automation or terminal failure
+   *Refuted by:* denied automation or terminal dispatch failure
    returning success or leaving a success-only audit.
+   A missing CLI/terminal executable is a prerequisite refusal (exit 2).
+   Successful Terminal acceptance is exit 0, not a CLI-start acknowledgment;
+   a subsequent CLI/login/model failure is reported in the new window.
 9. When a supported model is launched, the terminal runs the official CLI
    interactively with that model and the checked worktree as its directory.
    *Refuted by:* `opencode run`/`codex exec`, wrong cwd, automatic fallback,
@@ -155,9 +162,7 @@ still needs valid CLI authentication; the runner does not provision it.
 
 ## Open decisions
 
-The spec reviewer identified two readings of the start-success boundary
-(F-2). The maintainer has been asked whether success means Terminal accepting
-the dispatch after prerequisite checks, or a separately acknowledged program
-start. The answer is pending; design and implementation do not choose it.
-Other instructions and details are recorded in `decisions.md`. Policy becomes
-binding only by the decision PR merge.
+None open. The maintainer's "mach weiter" accepted the immediately preceding
+recommendation: Terminal acceptance after prerequisite checks, not a program-
+start acknowledgment (F-2; `decisions.md`). Policy becomes binding only by the
+decision PR merge.
