@@ -382,6 +382,16 @@ are the two `[GAP]`s, which phase 4 measures instead of asking.
    withdrawn. Measured in phase 4, not asked.
 6. **The class stays `feature`**, and the spec's `adr_question` is rewritten
    from Xiaomi and OpenRouter to OpenCode Go.
+7. **The ADR amends ADR 0007, not decision D-13** (`design.md`,
+   Consequences): D-13's criteria — three measured stage-2 runs,
+   lakeswitch-ai's disclosure decision, a green leak check in every run, a
+   declared endpoint with its residency — change nowhere in this work, while
+   the list of endpoints is ADR 0007's own text. So
+   `scripts/check_decision_continuity.py` and the D-13 row of the target
+   document stay as they are: a chain entry is added only when a record
+   changes the decision it points at. Reversible — a reviewer who reads the
+   widening as a change to D-13 gets the map entry and the dated note in the
+   same pull request.
 
 ## Addendum 2026-10-07 (after the phase-2a review): when the probe runs
 

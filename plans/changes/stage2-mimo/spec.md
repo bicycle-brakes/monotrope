@@ -48,11 +48,18 @@ named below is meant as it stands there.
   because the code that routes them is the code this change replaces. The
   first OpenCode Go call of any kind happens after this pull request is
   merged: the entry it needs is added by this change.
-- **Merge order.** The ADR amendment travels as its own decision pull
-  request (`decide(stage2): …`, label `decision`), and it merges before this
-  change's pull request does; until then the entry is declared here and
-  nothing calls it (house rule 8). This change's pull request names that
-  decision pull request in its body.
+- **One pull request decides and carries.** The ADR draft of phase 2b becomes
+  `docs/adr/0011-stage-2-reviews-through-opencode-go.md` in this change's own
+  pull request, and the pull request re-records
+  `decisions/answers/stage2-mimo/adr.yaml` from the maintainer's own words.
+  Both files are reserved for `human-decided` (`provenance.yaml`), so that
+  pull request is a decision pull request: title `decide(stage2): …`, label
+  `decision`, body from `.github/PULL_REQUEST_TEMPLATE/decision.md` (house
+  rule 8). The merge makes the amendment effective and lands the code at the
+  same moment — no window exists in which the entry is declared against an
+  unamended ADR 0007, and a rejected decision merges nothing. The number
+  `0011` is the first free one on 2026-10-07; phase 7 renumbers it if a lower
+  number has been taken meanwhile.
 - **The compatibility probe comes first in phase 4** (the maintainer's answer
   to row S1 of the phase-2a review): three calls through the runner, one per
   rung, each with the declaration and the leak check in front of it, before
@@ -307,14 +314,14 @@ recording program the tests put on `PATH` in the callee's place.
     that the unconfined reads ADR 0007 accepted for its reviewers extend to
     the rungs; and the options weighed — keeping Codex and GLM, an OpenCode
     product other than Go, OpenCode's own CLI as the launcher, and the model
-    of round 2. **It travels as a decision pull request and merges before
-    this change's pull request**: house rule 8 — a decision takes effect when
-    its pull request is merged — so the entry this change declares is never
-    in force against an unamended ADR 0007, and this change's pull request
-    names the decision pull request in its body.
+    of round 2. **It becomes a file of this change's own pull request, which
+    is therefore a decision pull request** (title `decide(stage2): …`, label
+    `decision`, decision body): the merge confirms it and lands the code
+    together with it, so no state exists in which `opencode-go` is declared
+    while ADR 0007 still limits framework content to Codex and GLM.
     *Refuted by:* ADR 0007's "Nothing else goes, and nowhere else" standing
     unamended while `opencode-go` is declared; one of these points missing;
-    this change's pull request merged while the amendment was not.
+    the pull request merged without its decision title, label or body.
 
 26. **Green.** `make verify` is green on the last commit.
     *Refuted by:* a gate red.
@@ -377,7 +384,9 @@ Beyond the non-goals: none.
   `scripts/stage2.py`; `tests/test_stage2.py`; `tests/test_model_endpoints.py`;
   `docs/WORKFLOW.md` §4; `prompts/02a-spec-review.md`;
   `prompts/04b-review-loop.md`; `prompts/06-review.md`; `AGENTS.md`; the ADR
-  amendment drafted in this folder; `decisions/answers/stage2-mimo/adr.yaml`
+  amendment drafted in this folder and carried into the pull request as
+  `docs/adr/0011-stage-2-reviews-through-opencode-go.md`;
+  `decisions/answers/stage2-mimo/adr.yaml`
   re-recorded from the maintainer's own words of 2026-10-07, whose present
   reason names the superseded Xiaomi wording.
 - The protected areas untouched and the non-goals unbuilt, shown by the pull

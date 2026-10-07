@@ -67,6 +67,7 @@ typed: a hand-kept list of files ages exactly as fast as files are added.
 | [`changes/stage2-flash-runner/research.md`](changes/stage2-flash-runner/research.md) | draft | partial | 2026-10-07 | coding-harness-qcp |
 | [`changes/stage2-flash-runner/spec.md`](changes/stage2-flash-runner/spec.md) | draft | partial | 2026-10-07 | coding-harness-qcp |
 | [`changes/stage2-mimo/decisions.md`](changes/stage2-mimo/decisions.md) | draft | none | 2026-10-07 | coding-harness-ymx |
+| [`changes/stage2-mimo/design.md`](changes/stage2-mimo/design.md) | draft | none | 2026-10-07 | coding-harness-ymx |
 | [`changes/stage2-mimo/findings.md`](changes/stage2-mimo/findings.md) | draft | none | 2026-10-07 | coding-harness-ymx |
 | [`changes/stage2-mimo/plan.md`](changes/stage2-mimo/plan.md) | draft | none | 2026-10-07 | coding-harness-ymx |
 | [`changes/stage2-mimo/research.md`](changes/stage2-mimo/research.md) | draft | none | 2026-10-07 | coding-harness-ymx |
