@@ -47,6 +47,10 @@ Required:
 - **No longer than the change.** A plan with more lines than the diff it
   describes is a finding, not diligence. What fits in one sentence stays one
   sentence.
+- **Carry an Explore fallback forward.** When `research.md` records a
+  Stage-1 route because Stage 2 was off or Z.ai unavailable, copy that route,
+  model and reason into `plan.md`; phase 1 cannot write it here before this
+  file exists.
 
 ## Questions
 

@@ -119,10 +119,10 @@ endpunkte:
     bemerkung: >-
       Anthropic-compatible endpoint (`https://api.z.ai/api/anthropic`), operated
       in China. `glm-5.3` is used for the review loop before phase 6 (phase
-      4b), through `python3 scripts/stage2.py review-loop`; `glm-5.3-flash` is
-      decided for explore (phase 1) and implement (phase 4), through verbs the
-      runner does not have yet (maintainer, 2026-10-06; bead
-      coding-harness-bib). **Only through Claude Code**, which the vendor lists
+      4b), through `python3 scripts/stage2.py review-loop`; `glm-5.3-flash`
+      explores (phase 1) through `stage2.py explore` and implements (phase 4)
+      through `stage2.py implement` (maintainer, 2026-10-06; bead
+      coding-harness-qcp). **Only through Claude Code**, which the vendor lists
       as a supported tool — an own integration would not be covered by the
       subscription.
 

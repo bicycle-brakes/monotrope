@@ -1,34 +1,47 @@
 #!/usr/bin/env python3
-"""stage2.py - the one way this repository starts a foreign reviewer.
+"""stage2.py - the one way this repository starts a foreign model.
 
 **What this is.** Stage 2 lets a reviewer from another vendor read framework
-content: Codex (model `gpt-6.1-sol`, through the official Codex CLI) for the
-spec review (phase 2a) and the review (phase 6), GLM (model `glm-5.3`, through
-Claude Code against Z.ai's Anthropic-compatible endpoint) for the review loop
-before phase 6 (phase 4b). A declaration in `model-endpoints.yaml` stops
-nothing; this runner stands between the rule and the call.
+content: GLM 5.3 Flash explores (phase 1) and implements (phase 4), Codex
+reviews the spec and code (phases 2a and 6), and GLM 5.3 runs the review loop
+(phase 4b). A declaration in `model-endpoints.yaml` stops nothing; this runner
+stands between the rule and the call.
 
+    python3 scripts/stage2.py explore      <change>   # GLM Flash, phase 1
     python3 scripts/stage2.py spec-review  <change>   # Codex, phase 2a, a fresh session
+    python3 scripts/stage2.py implement    <change>   # GLM Flash, phase 4
     python3 scripts/stage2.py review-loop  <change>   # GLM, one round of phase 4b
     python3 scripts/stage2.py release-loop <change>   # loop rows into findings.md
     python3 scripts/stage2.py review       <change>   # Codex, phase 6, the 2a session resumed
 
+`explore` and `implement` accept `--stage2-off [REASON]`: the declared
+Stage-1 route uses Haiku 4.5 or Sonnet 5.5. A leak refusal never falls back.
+Implement lets the model edit but not run commands; the runner runs
+`make verify`, checks the time log and makes the one checkpoint commit.
+
 **What every call carries** (before it starts, in this order):
 
-1. the change named, and `plans/changes/<change>/` a directory; `spec.md` with
-   a `bead` in its header (else `findings.md` could not get its header);
+1. the change named, and `plans/changes/<change>/` a directory; its phase
+   artefact with a `bead` in its header;
 2. an endpoint the declaration clears: present, the model listed, `framework`
    among what it may see, a residency other than `nicht-erklaert`;
 3. the leak check (`scripts/leakcheck.py`), in this process, immediately before
    this call, over the change, the tree, the history and the call's own prompt;
-4. one line in `findings.md` naming the date, the verb, the endpoint, the model
-   and the leak check's three numbers (the file is created when missing);
+4. one line in the phase's durable artefact naming the date, the verb, the
+   endpoint, the model and the leak check's three numbers;
 5. an empty standard input, and an environment the runner built from an
    allow-list - never the caller's.
 
-**Reads are asked, not confined.** Every prompt ends with the request to read
-nothing outside the worktree and the repository's git directory. It is a
-request, not a lock: the reviewers can read the rest of the disk.
+**Reads: confined for the Claude Code calls, asked for Codex.** Every Claude
+Code call (explore, implement, the Flash and Sonnet fallback attempts, the GLM
+review loop) starts in the worktree with `--restricted` and no `--add-dir`;
+`claude --help` says `--restricted` "confines the file tools to the working
+directories", so `~/.config/cc-routing/secrets.env` is outside what those file
+tools reach. That is the CLI's documented behaviour, not measured here: no test
+has run the real program against a path outside the worktree. The Codex calls
+(`spec-review`, `review`) have no such flag: every prompt ends with the request
+to read nothing outside the worktree and the repository's git directory, which
+is a request, not a lock - Codex can read the rest of the disk.
 
 **The loop record** lives outside the worktree
 (`${XDG_STATE_HOME:-~/.local/state}/coding-harness/stage2/<change>/loop.md`):
@@ -45,13 +58,14 @@ be read as a row refuses the release, because the implementer has to decide
 that row. A call counts as a round when it succeeded and answered - with rows
 or with "no finding"; a failed call or an empty answer is no round.
 
-Exit: 0 done, 1 a call failed, 2 refused before any call.
+Exit: 0 done, 1 a call or implementation post-check failed, 2 refused.
 """
 
 from __future__ import annotations
 
 import argparse
 import datetime as dt
+import functools
 import json
 import os
 import re
@@ -75,6 +89,9 @@ REPO_ROOT = Path(__file__).resolve().parent.parent
 # (endpoint, model, effort) - what the declaration must clear and the call pins.
 CODEX = ("openai-codex", "gpt-6.1-sol", "max")
 GLM = ("glm-coding-plan", "glm-5.3", "max")
+GLM_FLASH = ("glm-coding-plan", "glm-5.3-flash", "max")
+HAIKU = ("claude-code-plan", "claude-haiku-4-5", None)
+SONNET = ("claude-code-plan", "claude-sonnet-5-5", "medium")
 GLM_BASE_URL = "https://api.z.ai/api/anthropic"
 
 CODEX_ASK_RULE = (
@@ -188,9 +205,48 @@ def read_secret(name: str) -> str | None:
     return None
 
 
+FRAGMENT = 8
+
+
+@functools.lru_cache(maxsize=8)
+def _fragment_pattern(secret: str, binary: bool) -> re.Pattern:
+    """Every window of FRAGMENT characters of the secret (the whole secret if it is shorter), as one regex.
+
+    The windows sit in a lookahead so that overlapping hits are all reported; the scanner then
+    merges them, which expands a match to the whole run of the secret that the text carries.
+    """
+    windows = {secret[i : i + FRAGMENT] for i in range(max(len(secret) - FRAGMENT, 0) + 1)}
+    alternatives = "|".join(re.escape(w) for w in sorted(windows, key=len, reverse=True))
+    return re.compile((b"(?=(%b))" % alternatives.encode()) if binary else f"(?=({alternatives}))")
+
+
+def credential_spans(data: str | bytes, secret: str) -> list[tuple[int, int]]:
+    """The merged (start, end) runs of `data` that are the secret or any 8-character fragment of it."""
+    pattern = _fragment_pattern(secret, isinstance(data, bytes))
+    spans: list[tuple[int, int]] = []
+    for match in pattern.finditer(data):
+        start, end = match.start(1), match.end(1)
+        if spans and start <= spans[-1][1]:
+            spans[-1] = (spans[-1][0], max(end, spans[-1][1]))
+        else:
+            spans.append((start, end))
+    return spans
+
+
+def replace_credential(data: str | bytes, secret: str) -> str | bytes:
+    """`data` with every run of the secret or of an 8-character fragment of it replaced by [credential]."""
+    mark: str | bytes = b"[credential]" if isinstance(data, bytes) else "[credential]"
+    out, last = [], 0
+    for start, end in credential_spans(data, secret):
+        out += [data[last:start], mark]
+        last = end
+    out.append(data[last:])
+    return (b"" if isinstance(data, bytes) else "").join(out)
+
+
 def scrub(text: str, secret: str | None) -> str:
-    """Replace the credential in everything the runner prints or writes."""
-    return text.replace(secret, "[credential]") if secret else text
+    """Replace the credential, whole or in any fragment of 8 or more characters, in everything printed or written."""
+    return replace_credential(text, secret) if secret else text
 
 
 def foreign_env(own: dict[str, str]) -> dict[str, str]:
@@ -200,7 +256,7 @@ def foreign_env(own: dict[str, str]) -> dict[str, str]:
     return env
 
 
-def glm_env(key: str, config_dir: Path) -> dict[str, str]:
+def glm_env(key: str, config_dir: Path, model: str = GLM[1]) -> dict[str, str]:
     own = {
         "ANTHROPIC_BASE_URL": GLM_BASE_URL,
         "ANTHROPIC_AUTH_TOKEN": key,
@@ -208,7 +264,7 @@ def glm_env(key: str, config_dir: Path) -> dict[str, str]:
         "CLAUDE_CONFIG_DIR": str(config_dir),
         "CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC": "1",
     }
-    own.update({name: GLM[1] for name in GLM_MODEL_VARIABLES})
+    own.update({name: model for name in GLM_MODEL_VARIABLES})
     return foreign_env(own)
 
 
@@ -347,6 +403,14 @@ class Context:
     def findings(self) -> Path:
         return self.folder / "findings.md"
 
+    @property
+    def research(self) -> Path:
+        return self.folder / "research.md"
+
+    @property
+    def plan(self) -> Path:
+        return self.folder / "plan.md"
+
 
 def declaration_problem(root: Path, endpoint: str, model: str) -> str | None:
     """Why the declaration does not clear this endpoint and model for framework content, or None."""
@@ -366,10 +430,10 @@ def declaration_problem(root: Path, endpoint: str, model: str) -> str | None:
     return None
 
 
-def _spec_bead(spec: Path) -> str | None:
-    """The `bead` of spec.md's header."""
+def _artefact_bead(path: Path) -> str | None:
+    """The `bead` of one change artefact's header."""
     try:
-        text = spec.read_text(encoding="utf-8")
+        text = path.read_text(encoding="utf-8")
     except (OSError, UnicodeDecodeError):
         return None
     match = re.match(r"---\n(.*?)\n---", text, re.S)
@@ -383,6 +447,11 @@ def _spec_bead(spec: Path) -> str | None:
     return str(bead) if bead else None
 
 
+def _spec_bead(spec: Path) -> str | None:
+    """Compatibility name for the spec header reader used by older tests."""
+    return _artefact_bead(spec)
+
+
 def folder_of(root: Path, change: str) -> Path:
     if not change or "/" in change or change in {".", ".."}:
         raise Refused("Name the change: a single folder name under plans/changes/.")
@@ -392,12 +461,24 @@ def folder_of(root: Path, change: str) -> Path:
     return folder
 
 
-def preflight(root: Path, change: str, endpoint: tuple[str, str, str]) -> Context:
-    """The refusals that precede everything else: the change, its bead, the declaration."""
+def preflight(
+    root: Path,
+    change: str,
+    endpoint: tuple[str, str, str | None],
+    bead_file: str = "spec.md",
+    required: tuple[str, ...] = (),
+) -> Context:
+    """The refusals that precede everything else: change, artefacts and declaration."""
     folder = folder_of(root, change)
-    bead = _spec_bead(folder / "spec.md")
+    bead = _artefact_bead(folder / bead_file)
     if bead is None:
-        raise Refused(f"plans/changes/{change}/spec.md has no bead in its header; findings.md could not get its own.")
+        raise Refused(f"plans/changes/{change}/{bead_file} has no bead in its header; the runner cannot name the work.")
+    for name in required:
+        path = folder / name
+        try:
+            path.read_text(encoding="utf-8")
+        except (OSError, UnicodeDecodeError) as error:
+            raise Refused(f"plans/changes/{change}/{name} cannot be read.") from error
     problem = declaration_problem(root, endpoint[0], endpoint[1])
     if problem:
         raise Refused(problem)
@@ -429,8 +510,8 @@ def findings_header(ctx: Context, producer: str) -> str:
     )
 
 
-def begin_call(ctx: Context, verb: str, endpoint: tuple[str, str, str], prompt: str) -> None:
-    """The declaration, the leak check and the call line - for this one call, immediately before it."""
+def checked_prompt(ctx: Context, endpoint: tuple[str, str, str | None], prompt: str):
+    """Check the declaration and exact prompt immediately before one call."""
     problem = declaration_problem(ctx.root, endpoint[0], endpoint[1])
     if problem:
         raise Refused(problem)
@@ -438,6 +519,12 @@ def begin_call(ctx: Context, verb: str, endpoint: tuple[str, str, str], prompt: 
     print(result.verdict.render())
     if result.verdict.exit_code() != 0:
         raise Refused("the leak check is not clean; the call does not start.")
+    return result
+
+
+def begin_call(ctx: Context, verb: str, endpoint: tuple[str, str, str | None], prompt: str) -> None:
+    """The declaration, the leak check and the call line - for this one call, immediately before it."""
+    result = checked_prompt(ctx, endpoint, prompt)
     if not ctx.findings.exists():
         producer = "codex" if endpoint == CODEX else "claude-code"
         ctx.findings.write_text(findings_header(ctx, producer), encoding="utf-8")
@@ -448,6 +535,29 @@ def begin_call(ctx: Context, verb: str, endpoint: tuple[str, str, str], prompt: 
     )
 
 
+def begin_work_call(
+    ctx: Context,
+    verb: str,
+    endpoint: tuple[str, str, str | None],
+    prompt: str,
+    attempt: int,
+    route: str,
+    destination: Path,
+    reason: str | None = None,
+) -> None:
+    """Check and record one explore/implement attempt in its phase artefact."""
+    result = checked_prompt(ctx, endpoint, prompt)
+    if destination == ctx.findings and not destination.exists():
+        destination.write_text(findings_header(ctx, "claude-code"), encoding="utf-8")
+    why = f" · reason {reason}" if reason else ""
+    append(
+        destination,
+        f"Stage-2 call, {today()}: {verb} · attempt {attempt} · route {route} · "
+        f"endpoint {endpoint[0]} · model {endpoint[1]}{why} · leak check clean over "
+        f"{result.files} files, {result.commits} commits, {result.rules} rules.",
+    )
+
+
 def phase_prompt(root: Path, prompt_file: str, change: str, extra: str = "") -> str:
     """The phase prompt in full, the change's name, the answer format, and the read request last."""
     body = (root / "prompts" / prompt_file).read_text(encoding="utf-8")
@@ -455,6 +565,21 @@ def phase_prompt(root: Path, prompt_file: str, change: str, extra: str = "") -> 
     if extra:
         parts.append(extra)
     parts += [ANSWER_FORMAT, READ_REQUEST]
+    return "\n\n".join(parts)
+
+
+def work_prompt(root: Path, prompt_file: str, change: str, extra: str = "") -> str:
+    """A work phase, the repository rules and its inputs, without review row instructions."""
+    body = (root / "prompts" / prompt_file).read_text(encoding="utf-8")
+    rules = (root / "AGENTS.md").read_text(encoding="utf-8")
+    parts = [
+        body.rstrip(),
+        f"---\n\nChange: {change} (`plans/changes/{change}/`).",
+        f"## Repository agent rules\n\n{rules.rstrip()}",
+    ]
+    if extra:
+        parts.append(extra)
+    parts.append(READ_REQUEST)
     return "\n\n".join(parts)
 
 
@@ -786,6 +911,333 @@ def change_diff(root: Path) -> str:
     return "".join(parts)
 
 
+# ---------------------------------------------------------------------------
+# GLM Flash work phases
+# ---------------------------------------------------------------------------
+
+
+TIME_HEADING = re.compile(r"^## Time used[ \t]*$", re.M)
+WORK_READ_TOOLS = "Read,Grep,Glob"
+WORK_WRITE_TOOLS = "Read,Grep,Glob,Edit,Write"
+
+
+def changed_paths(root: Path) -> set[Path]:
+    """Tracked changes against HEAD and untracked files, as repository-relative paths."""
+    tracked = _git_output(root, "diff", "--name-only", "-z", "HEAD").split("\0")
+    untracked = _git_output(root, "ls-files", "-z", "--others", "--exclude-standard").split("\0")
+    return {Path(name) for name in [*tracked, *untracked] if name}
+
+
+def ignored_snapshot(root: Path) -> dict[Path, tuple[int, int]]:
+    """Gitignored files with their mtime and size, so a later scan can tell which the run touched.
+
+    `.venv/` is included: the gate runs repository code that can write into it. Only entries whose
+    (mtime, size) differ from this snapshot are scanned, so installed third-party files are
+    stat-ed, never read or rewritten. Measured 2026-10-07: about 1,700 ignored files, 0.06 s.
+    """
+    listing = _git_output(root, "ls-files", "-z", "--others", "--ignored", "--exclude-standard", "--", ".").split("\0")
+    snapshot = {}
+    for name in filter(None, listing):
+        try:
+            info = (root / name).lstat()
+        except OSError:
+            continue
+        snapshot[Path(name)] = (info.st_mtime_ns, info.st_size)
+    return snapshot
+
+
+def restore_baseline(root: Path, baseline: str, keep: set[Path]) -> str:
+    """After a failed model call, put every path but `keep` back at the baseline; say what was undone.
+
+    The runner refused pre-existing changes outside `keep` before the first call, so what differs
+    from the baseline outside it is the run's own - including a half-finished edit of a dead process.
+    """
+    touched = sorted(path.as_posix() for path in changed_paths(root) - keep)
+    if not touched:
+        return "the worktree needed no restore."
+    spec = [f":(exclude){path.as_posix()}" for path in sorted(keep, key=lambda path: path.as_posix())]
+    try:
+        _git_output(root, "restore", f"--source={baseline}", "--staged", "--worktree", "--", ".", *spec)
+        _git_output(root, "clean", "-fdq", "--", ".", *spec)
+    except Refused as error:
+        return f"restoring the worktree to {baseline[:12]} failed ({error}); discard {', '.join(touched)} by hand."
+    return f"the runner restored the worktree to {baseline[:12]} (undone: {', '.join(touched)}); rerun the verb or add --stage2-off."
+
+
+def time_log(path: Path) -> str:
+    """The bytes below `## Time used` and before the next level-two heading."""
+    try:
+        text = path.read_text(encoding="utf-8")
+    except (OSError, UnicodeDecodeError) as error:
+        raise Refused(f"{path} cannot be read.") from error
+    match = TIME_HEADING.search(text)
+    if match is None:
+        raise Refused(f"{path} has no `## Time used` heading.")
+    following = re.search(r"^## [^#]", text[match.end() :], re.M)
+    end = match.end() + following.start() if following else len(text)
+    return text[match.end() : end]
+
+
+def insert_before_time(path: Path, block: str) -> None:
+    """Put runner routing evidence before the time section, so it cannot satisfy the time check."""
+    text = path.read_text(encoding="utf-8")
+    match = TIME_HEADING.search(text)
+    if match is None:
+        # An earlier attempt deleted the heading; the route block must still land, and the
+        # restored empty heading keeps the measured-line check meaningful for this attempt.
+        path.write_text(f"{text.rstrip()}\n\n{block.rstrip()}\n\n## Time used\n", encoding="utf-8")
+        stamp_updated(path)
+        return
+    before = text[: match.start()].rstrip()
+    after = text[match.start() :].lstrip("\n")
+    path.write_text(f"{before}\n\n{block.rstrip()}\n\n{after}", encoding="utf-8")
+    stamp_updated(path)
+
+
+def run_work_model(
+    ctx: Context,
+    prompt: str,
+    endpoint: tuple[str, str, str | None],
+    writable: bool,
+    key: str | None = None,
+) -> str:
+    """One non-interactive Claude Code work call with file tools only."""
+    with tempfile.TemporaryDirectory(prefix="stage2-") as tmp:
+        prompt_file = Path(tmp) / "work-prompt.md"
+        prompt_file.write_text(prompt, encoding="utf-8")
+        command = [
+            "claude",
+            "-p",
+            f"Run the phase for {ctx.change} exactly as the appended instructions say.",
+            "--append-system-prompt-file",
+            str(prompt_file),
+            "--model",
+            endpoint[1],
+        ]
+        if endpoint[2]:
+            command += ["--effort", endpoint[2]]
+        command += [
+            "--tools",
+            WORK_WRITE_TOOLS if writable else WORK_READ_TOOLS,
+            "--restricted",
+            "--safe-mode",
+            "--strict-mcp-config",
+            "--permission-mode",
+            "acceptEdits" if writable else "dontAsk",
+            "--permission-prompts",
+            "none",
+            "--no-session-persistence",
+            "--output-format",
+            "text",
+        ]
+        if key is None:
+            env = foreign_env({})
+        else:
+            config_dir = Path(tmp) / "claude-config"
+            config_dir.mkdir()
+            env = glm_env(key, config_dir, endpoint[1])
+        done = launch(command, ctx.root, env, key)
+    if done.returncode != 0:
+        raise fail("claude", done, f"exit {done.returncode}", key)
+    answer = scrub(done.stdout or "", key)
+    if not answer.strip():
+        raise fail("claude", done, "the answer is empty", key)
+    return answer
+
+
+def remove_changed_credential(
+    root: Path, key: str, ignored_before: dict[Path, tuple[int, int]] | None = None
+) -> list[Path]:
+    """Remove an exact GLM credential from changed regular files and name those files.
+
+    "Changed" is tracked changes, untracked files, and - when the run's earlier snapshot of the
+    gitignored files is given - every ignored file created or touched since that snapshot.
+    """
+    paths = changed_paths(root)
+    if ignored_before is not None:
+        paths |= {p for p, stat in ignored_snapshot(root).items() if ignored_before.get(p) != stat}
+    found = []
+    for relative in sorted(paths, key=lambda path: path.as_posix()):
+        path = root / relative
+        if path.is_symlink() or not path.is_file():
+            continue
+        try:
+            content = path.read_bytes()
+        except OSError:
+            continue
+        if not credential_spans(content, key):
+            continue
+        path.write_bytes(replace_credential(content, key))
+        found.append(relative)
+    return found
+
+
+def credential_message(exposed: list[Path]) -> str:
+    listing = ", ".join(path.as_posix() for path in exposed)
+    return f"the GLM credential occurred in changed files and was removed ({listing}); no fallback starts."
+
+
+def verify_attempt(root: Path, plan: Path, baseline_time: str, key: str | None = None) -> list[str]:
+    """Run the one gate and return bounded diagnostics for failed postconditions."""
+    env = foreign_env(
+        {
+            "GIT_CONFIG_COUNT": "1",
+            "GIT_CONFIG_KEY_0": "commit.gpgsign",
+            "GIT_CONFIG_VALUE_0": "false",
+        }
+    )
+    done = launch(["make", "verify"], root, env)
+    problems = []
+    if done.returncode != 0:
+        tail = scrub("\n".join(((done.stdout or "") + (done.stderr or "")).splitlines()[-80:]), key)
+        problems.append(f"`make verify` exited {done.returncode}\n{tail}".rstrip())
+    try:
+        current_time = time_log(plan)
+    except Refused as error:
+        problems.append(str(error))
+    else:
+        if not current_time.strip() or current_time == baseline_time:
+            problems.append("`plan.md` did not add a measured line below `## Time used`")
+    return problems
+
+
+def checkpoint(
+    root: Path,
+    change: str,
+    baseline: str,
+    key: str | None = None,
+    ignored_before: dict[Path, tuple[int, int]] | None = None,
+) -> None:
+    """Commit a passing implementation and prove the one clean descendant commit."""
+    if key is not None:
+        exposed = remove_changed_credential(root, key, ignored_before)
+        if exposed:
+            raise Refused(credential_message(exposed))
+    try:
+        _git_output(root, "add", "-A")
+        _git_output(
+            root,
+            "-c",
+            "commit.gpgsign=false",
+            "-c",
+            "user.name=stage2-runner",
+            "-c",
+            "user.email=stage2-runner@invalid",
+            "commit",
+            "-m",
+            f"feat({change}): implement accepted plan",
+        )
+        count = _git_output(root, "rev-list", "--count", f"{baseline}..HEAD").strip()
+    except Refused as error:
+        raise CallFailed(f"the runner checkpoint failed: {error}") from error
+    ancestor = subprocess.run(
+        ["git", "-C", str(root), "merge-base", "--is-ancestor", baseline, "HEAD"],
+        capture_output=True,
+        check=False,
+    )
+    if ancestor.returncode != 0 or count != "1":
+        raise CallFailed("the runner checkpoint is not exactly one descendant commit")
+    try:
+        dirty = _git_output(root, "status", "--porcelain=v1", "--untracked-files=all").strip()
+    except Refused as error:
+        raise CallFailed(f"the runner checkpoint failed: {error}") from error
+    if dirty:
+        raise CallFailed("the runner checkpoint left a dirty worktree")
+
+
+def explore(root: Path, change: str, stage2_off: str | None = None) -> None:
+    """Phase 1: GLM Flash, or explicit Haiku fallback, appends repository facts."""
+    endpoint = HAIKU if stage2_off is not None else GLM_FLASH
+    ctx = preflight(root, change, endpoint, bead_file="research.md")
+    key = None
+    route = "stage-1" if stage2_off is not None else "flash"
+    if stage2_off is None:
+        key = read_secret("GLM_KEY")
+        if key is None:
+            raise Refused(f"GLM_KEY is not in the secrets file {secrets_path()}.")
+    extra = (
+        "Report repository facts with source paths as prose ready to append to `research.md`. "
+        "Do not design, recommend, edit a file or use review-table formatting."
+    )
+    prompt = work_prompt(root, "01-explore.md", change, extra)
+    begin_work_call(ctx, "explore", endpoint, prompt, 1, route, ctx.research, stage2_off)
+    answer = run_work_model(ctx, prompt, endpoint, writable=False, key=key)
+    append(ctx.research, f"## Runner exploration — {today()}\n\n{answer.strip()}")
+    print(f"explore: answer appended to {ctx.research.relative_to(root)} · route {route}")
+
+
+def implementation_prompt(ctx: Context, baseline: str, diagnostics: list[str]) -> str:
+    """The current accepted inputs and the bounded evidence from earlier attempts."""
+    spec = (ctx.folder / "spec.md").read_text(encoding="utf-8")
+    plan = ctx.plan.read_text(encoding="utf-8")
+    extra = [
+        "Implement only the accepted plan with the available file tools. You cannot run commands. "
+        "Update the measured span below `## Time used` in plan.md before returning; the runner runs "
+        "`make verify`, stages the result and creates the checkpoint commit.",
+        f"Implementation baseline: {baseline}",
+        f"## Accepted spec\n\n{spec}",
+        f"## Accepted plan\n\n{plan}",
+    ]
+    if diagnostics:
+        extra.append("## Earlier post-run diagnostics\n\n" + "\n\n".join(diagnostics))
+    return work_prompt(ctx.root, "04-implement.md", ctx.change, "\n\n".join(extra))
+
+
+def implement(root: Path, change: str, stage2_off: str | None = None) -> None:
+    """Phase 4: Flash, one Flash repair and Sonnet fallback, checked and committed by the runner."""
+    first = SONNET if stage2_off is not None else GLM_FLASH
+    ctx = preflight(root, change, first, required=("plan.md",))
+    allowed = {ctx.findings.relative_to(root)}
+    outside = changed_paths(root) - allowed
+    if outside:
+        listing = ", ".join(sorted(path.as_posix() for path in outside))
+        raise Refused(f"the worktree has pre-existing changes outside this change's findings.md: {listing}")
+    baseline = _git_output(root, "rev-parse", "HEAD").strip()
+    baseline_time = time_log(ctx.plan)
+    ignored_before = ignored_snapshot(root)
+    key = None
+    if stage2_off is None:
+        key = read_secret("GLM_KEY")
+        if key is None:
+            raise Refused(f"GLM_KEY is not in the secrets file {secrets_path()}.")
+        routes = [
+            (GLM_FLASH, key, "flash", None),
+            (GLM_FLASH, key, "flash-repair", "first Flash post-run check failed"),
+            (SONNET, None, "stage-1", "two Flash post-run checks failed"),
+        ]
+    else:
+        routes = [(SONNET, None, "stage-1", stage2_off)]
+    diagnostics: list[str] = []
+    for attempt, (endpoint, credential, route, reason) in enumerate(routes, 1):
+        prompt = implementation_prompt(ctx, baseline, diagnostics)
+        begin_work_call(ctx, "implement", endpoint, prompt, attempt, route, ctx.findings, reason)
+        if route == "stage-1":
+            insert_before_time(
+                ctx.plan,
+                f"## Runner route — {today()}\n\nStage-1 route: implement · model {endpoint[1]} · reason: {reason}.",
+            )
+        try:
+            run_work_model(ctx, prompt, endpoint, writable=True, key=credential)
+        except CallFailed as error:
+            raise CallFailed(f"{error}; {restore_baseline(root, baseline, allowed)}") from error
+        if credential is not None:
+            exposed = remove_changed_credential(root, credential, ignored_before)
+            if exposed:
+                raise Refused(credential_message(exposed))
+        problems = verify_attempt(root, ctx.plan, baseline_time, key)
+        if key is not None:
+            # The gate runs repository code the model just edited: scan again after it.
+            exposed = remove_changed_credential(root, key, ignored_before)
+            if exposed:
+                raise Refused(credential_message(exposed))
+        if not problems:
+            checkpoint(root, change, baseline, key, ignored_before)
+            print(f"implement: verified and committed · route {route} · attempt {attempt}")
+            return
+        diagnostics.append(f"Attempt {attempt} ({route}):\n" + "\n".join(f"- {p}" for p in problems))
+    raise CallFailed("implementation post-run checks failed after the allowed attempts")
+
+
 def review_loop(root: Path, change: str) -> None:
     """One round of phase 4b: GLM, through Claude Code against Z.ai, reads the diff."""
     ctx = preflight(root, change, GLM)
@@ -832,7 +1284,7 @@ def review_loop(root: Path, change: str) -> None:
             "--output-format",
             "text",
         ]
-        done = launch(command, root, glm_env(key, config_dir), key)
+        done = launch(command, root, glm_env(key, config_dir, GLM[1]), key)
         if done.returncode != 0:
             raise fail("claude", done, f"exit {done.returncode}", key)
         answer = scrub(done.stdout or "", key)
@@ -872,6 +1324,8 @@ def codex_rule_problems(settings: dict) -> list[str]:
 
 
 VERBS = {
+    "explore": explore,
+    "implement": implement,
     "spec-review": spec_review,
     "review-loop": review_loop,
     "release-loop": release_loop,
@@ -887,10 +1341,32 @@ def main(argv: list[str] | None = None) -> int:
     )
     parser.add_argument("verb", choices=sorted(VERBS))
     parser.add_argument("change", nargs="?", default="", help="folder name under plans/changes/")
+    parser.add_argument(
+        "--stage2-off",
+        nargs="?",
+        const="stage 2 disabled by caller",
+        default=None,
+        metavar="REASON",
+        help="use the Stage-1 route for explore or implement and record the optional reason",
+    )
     parser.add_argument("--root", default=str(REPO_ROOT), help=argparse.SUPPRESS)
     args = parser.parse_args(argv)
     try:
-        VERBS[args.verb](Path(args.root), args.change)
+        if (
+            args.stage2_off is not None
+            and not args.change
+            and (Path(args.root) / "plans" / "changes" / args.stage2_off).is_dir()
+        ):
+            raise Refused(
+                f"the change name `{args.stage2_off}` was taken as the --stage2-off reason; "
+                "put the change before the flag or write --stage2-off=REASON."
+            )
+        if args.stage2_off is not None and args.verb not in {"explore", "implement"}:
+            raise Refused("--stage2-off applies only to explore and implement.")
+        if args.verb in {"explore", "implement"}:
+            VERBS[args.verb](Path(args.root), args.change, args.stage2_off)
+        else:
+            VERBS[args.verb](Path(args.root), args.change)
     except Refused as error:
         print(f"refused: {error}", file=sys.stderr)
         return 2
