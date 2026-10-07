@@ -443,9 +443,12 @@ def declaration_problem(root: Path, endpoint: str, model: str) -> str | None:
         return f"model-endpoints.yaml declares no endpoint {endpoint}"
     if model not in (found.get("modelle") or []):
         return f"the endpoint {endpoint} does not list the model {model}"
-    if "framework" not in (found.get("darf_sehen") or []):
+    allowed = found.get("darf_sehen")
+    # A list, not a string: `"framework" in "not-framework"` would be true (phase 6 of stage2-session, F-4).
+    if not isinstance(allowed, list) or "framework" not in allowed:
         return f"the endpoint {endpoint} may not see framework content"
-    if found.get("residenz") in (None, "nicht-erklaert"):
+    residency = found.get("residenz")
+    if not isinstance(residency, str) or not residency.strip() or residency == "nicht-erklaert":
         return f"the endpoint {endpoint} states no data residency"
     return None
 

@@ -107,11 +107,21 @@ def canonical_worktree(root: Path, change: str, runner) -> None:
     common = Path(done.stdout.strip())
     if not common.is_absolute():
         common = root / common
-    canonical = common.resolve().parent / ".claude" / "worktrees" / change
+    main_checkout = common.resolve().parent
+    canonical = main_checkout / ".claude" / "worktrees" / change
     if os.path.realpath(root) != os.path.realpath(canonical):
         raise runner.Refused(
             f"session runs in the change's dedicated worktree {canonical}, not in {root}; start it there."
         )
+    # A symlink at the canonical path could alias the main checkout or any other tree: refuse the alias, and
+    # refuse a root git itself names as the main working tree, whatever path led there (phase 6, F-5).
+    if canonical.is_symlink() or os.path.realpath(root) == os.path.realpath(main_checkout):
+        raise runner.Refused(
+            f"{canonical} is a link, not a worktree of its own; the dedicated worktree is a real directory."
+        )
+    own = _git(root, "rev-parse", "--absolute-git-dir")
+    if own.returncode != 0 or os.path.realpath(own.stdout.strip()) == os.path.realpath(common):
+        raise runner.Refused("session runs in a linked worktree, never in the main checkout.")
     attached = _git(root, "symbolic-ref", "--quiet", "HEAD")
     if attached.returncode != 0:
         raise runner.Refused("session needs an attached branch; this worktree is in a detached HEAD.")
@@ -540,14 +550,20 @@ def finalize(ctx, runner, attempt: str, status: str) -> None:
             f"the audit for attempt {attempt} cannot be read: {error}; the pending line stands."
         ) from error
     lines = text.splitlines()
-    hits = [i for i, line in enumerate(lines) if f"attempt {attempt} ·" in line and "dispatch pending." in line]
+    pending = " · dispatch pending."
+    # Only the line's own ending is the status: a handover path may contain the same words (phase 6, F-7).
+    hits = [i for i, line in enumerate(lines) if f"attempt {attempt} ·" in line and line.endswith(pending)]
     if len(hits) != 1:
         state = "missing" if not hits else "not unique"
         raise runner.CallFailed(f"the pending audit line for attempt {attempt} is {state}; the status stays open.")
-    lines[hits[0]] = lines[hits[0]].replace("dispatch pending.", f"dispatch {status}.", 1)
+    lines[hits[0]] = lines[hits[0]][: -len(pending)] + f" · dispatch {status}."
+    # Written beside the file and moved over it: a failed write leaves the old record whole (phase 6, F-6).
+    staged = ctx.findings.with_name(f".{ctx.findings.name}.{attempt}.tmp")
     try:
-        ctx.findings.write_text("\n".join(lines) + ("\n" if text.endswith("\n") else ""), encoding="utf-8")
+        staged.write_text("\n".join(lines) + ("\n" if text.endswith("\n") else ""), encoding="utf-8")
+        staged.replace(ctx.findings)
     except OSError as error:
+        staged.unlink(missing_ok=True)
         raise runner.CallFailed(
             f"the audit for attempt {attempt} could not be updated: {error}; the pending line stands."
         ) from error

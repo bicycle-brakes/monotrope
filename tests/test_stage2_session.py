@@ -367,6 +367,18 @@ def test_a_session_outside_its_boundaries_refuses_before_anything_starts(
     assert not world.findings.exists() or "Stage-2 session" not in world.text()
 
 
+def test_a_link_that_aliases_the_main_checkout_refuses(world: World, capsys: pytest.CaptureFixture[str]) -> None:
+    # Phase 6, F-5: `.claude/worktrees/<change>` as a symlink to the main checkout is no dedicated worktree.
+    (world.root / "plans" / "changes" / "alias").mkdir()
+    (world.root / "plans" / "changes" / "alias" / "spec.md").write_text("---\nbead: demo-1\n---\n", encoding="utf-8")
+    (world.root / "plans" / "changes" / "alias" / "handover.md").write_text(HANDOVER, encoding="utf-8")
+    alias = world.root / ".claude" / "worktrees" / "alias"
+    alias.symlink_to(world.root)
+    assert world.run(change="alias", root=alias, cwd=alias) == 2
+    assert "link" in capsys.readouterr().err
+    assert world.calls() == []
+
+
 def test_the_refusal_reason_reaches_the_caller(world: World, capsys: pytest.CaptureFixture[str]) -> None:
     assert world.run(root=world.root, cwd=world.root) == 2
     assert "dedicated worktree" in capsys.readouterr().err
@@ -389,6 +401,19 @@ def test_a_declared_go_model_selects_the_opencode_transport(world: World) -> Non
     assert world.run(model=GO_MODEL) == 0
     assert "endpoint opencode-go" in world.text()
     assert f"--model {GO_MODEL}" in world.command()
+
+
+@pytest.mark.parametrize(
+    "changes",
+    [{"darf_sehen": "not-framework"}, {"darf_sehen": "framework"}, {"residenz": ""}, {"residenz": "  "}],
+    ids=["seen-as-substring", "seen-as-string", "empty-residency", "blank-residency"],
+)
+def test_a_malformed_permission_or_residency_refuses(world: World, changes: dict) -> None:
+    # Phase 6, F-4: a string is no list of what an endpoint may see, and an empty residency states none.
+    world.declare_go(**changes)
+    world.script(opencode=[{"stdout": effective(GO_MODEL)}], osascript=[{}])
+    assert world.run(model=GO_MODEL) == 2
+    assert world.calls() == [] and not world.findings.exists()
 
 
 @pytest.mark.parametrize(
@@ -668,6 +693,35 @@ def test_a_failed_audit_update_leaves_the_pending_line(
     assert "could not be updated" in capsys.readouterr().err
     assert "dispatch pending" in world.text() and "dispatch accepted" not in world.text()
     assert len(world.calls("osascript")) == 1
+
+
+def test_an_update_that_fails_mid_write_keeps_the_record_whole(
+    world: World, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+) -> None:
+    # Phase 6, F-6: the failure strikes after the target is truncated, as a full disk would.
+    world.findings.write_text("# Findings — demo\n\nEarlier rows stand.\n", encoding="utf-8")
+    real_write = Path.write_text
+
+    def truncating(self: Path, data: str, *args: object, **kwargs: object) -> int:
+        if "dispatch accepted" in data:
+            with self.open("w", encoding="utf-8"):
+                pass
+            raise OSError("no space left on device")
+        return real_write(self, data, *args, **kwargs)  # type: ignore[arg-type]
+
+    monkeypatch.setattr(Path, "write_text", truncating)
+    assert world.run() == 1
+    assert "could not be updated" in capsys.readouterr().err
+    assert "Earlier rows stand." in world.text() and "dispatch pending." in world.text()
+    assert [p.name for p in world.findings.parent.iterdir() if p.name.endswith(".tmp")] == []
+
+
+def test_a_handover_named_like_the_status_keeps_its_source(world: World) -> None:
+    # Phase 6, F-7: only the line's own ending is the dispatch status.
+    (world.tree / "dispatch pending.md").write_text(HANDOVER, encoding="utf-8")
+    assert world.run("--handover", "dispatch pending.md") == 0
+    (line,) = [entry for entry in world.text().splitlines() if entry.startswith("Stage-2 session")]
+    assert "handover dispatch pending.md ·" in line and line.endswith(" · dispatch accepted.")
 
 
 def test_a_stamp_failure_after_the_update_is_reported(
