@@ -206,3 +206,29 @@ Asked one at a time in the Claude Code session on 2026-10-07:
    reads through Claude Code as for GLM). Not chosen: a new ADR 0011 that
    amends ADR 0007 (the recommendation); no ADR. The orchestrating session
    records the answer with `scripts/harness.py decide adr`.
+
+## Addendum 2026-10-07 (evening): MiMo through OpenCode Go
+
+The maintainer, in the Claude Code session on 2026-10-07: "ich möchte mimo
+über opencode go anbinden" — MiMo is reached through the OpenCode Go
+subscription. This replaces the answer "Xiaomi direct" and [DECISION] 1
+"Token Plan" above; the ADR answer "yes — widen ADR 0007" stands, and the
+ADR's text names OpenCode Go instead of Xiaomi.
+
+Facts read on 2026-10-07 from <https://opencode.ai/docs/go/>, for phase 2:
+
+- Model `opencode-go/mimo-v2.6-pro` (a Flash variant also exists); the
+  `[DETAIL]` choice of Pro above is unchanged.
+- Endpoints: Anthropic-compatible `https://opencode.ai/zen/go/v1/messages`,
+  OpenAI-compatible `https://opencode.ai/zen/go/v1/chat/completions`.
+- Data: retention "0 days", not used for training, for both MiMo-V2.6
+  variants. The page does not name the provider that hosts the models.
+- Cost: subscription Go $10 a month (first month $5); MiMo-V2.6-Pro capped
+  at $15 a month on Go, $60 on Go Plus.
+- Terms: "designed for OpenCode and other coding agents"; outside use sends
+  "typical coding agent traffic", identifies itself with its own user agent
+  and sends a stable session id in `x-opencode-session`. The Token Plan's
+  "automated scripts" risk falls away; this condition replaces it.
+- Not read: whether the maintainer already holds a Go subscription (Hermes
+  is planned on OpenCode Go); the secrets file holds no OpenCode key name
+  on 2026-10-07.
