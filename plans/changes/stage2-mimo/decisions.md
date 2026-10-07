@@ -158,3 +158,36 @@ All details (model name, API shape, auth method, data residency) depend on
 reading the endpoint's documentation, which is blocked on [DECISION] 2. Once
 the endpoint is chosen, those details are looked up and recorded in the spec.
 
+
+## Addendum 2026-10-07: the maintainer's answers, and gaps closed by reading
+
+Gaps closed by the orchestrating session on 2026-10-07 (OpenRouter public API
+`/api/v1/models/xiaomi/mimo-v2.6-{flash,pro}/endpoints` and
+`/api/v1/providers`, read that day): MiMo-V2.6 is **not** served by Z.ai (the
+research note's guess is withdrawn). It is served by Xiaomi's own MiMo API
+Platform (headquarters CN, datacenters SG and NL per OpenRouter; privacy
+policy https://platform.xiaomimimo.com/#/docs/terms/privacy-policy, not read)
+and through OpenRouter by GMICloud (US, bf16), DeepInfra (US), Venice (US),
+Novita, io.net, Darkbloom and Xiaomi. Pro: USD 0.435 / 0.87 per million
+tokens (input/output); Flash: USD 0.14 / 0.28 (Darkbloom 0.10). OpenRouter's
+API is OpenAI-compatible.
+
+Asked one at a time in the Claude Code session on 2026-10-07:
+
+1. **Endpoint: "Xiaomi direkt"** — Xiaomi's own MiMo API Platform, with an
+   account and key of the maintainer's. Not chosen: OpenRouter pinned to a US
+   provider (the recommendation), OpenRouter with free provider choice.
+   Consequence for phase 2: the endpoint entry declares Xiaomi as operator
+   (residency per its terms: SG/NL datacenters, CN headquarters — to be read
+   from Xiaomi's own documentation), and the maintainer's personal-use
+   declaration covers Xiaomi's data policy, which phase 2 must read and quote.
+2. **Scheduling: "Beide unabhängig, gleicher Diff"** (recommended) — GLM and
+   MiMo review the same state in phase 4b without seeing each other's
+   findings; disagreements are recorded ("MiMo flagged it, GLM did not"); one
+   repair follows for both lists. Not chosen: GLM first, MiMo after GLM's
+   repair.
+
+Not asked, recorded as `[DETAIL]` for phase 2: the class is `feature` (a new
+foreign endpoint and an amendment of ADR 0007); MiMo-V2.6-Pro is the
+reviewer (71.9 vs Flash 67.9 on DeepSWE v1.1, vendor-reported; the cost
+difference per review is a fraction of a cent).
