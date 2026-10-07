@@ -241,16 +241,20 @@ a model endpoint.
     changing outside shared model-parameterisation, or a test call log naming
     a real executable.
 
-19. **The repository is green and the live review route is exercised.** The
+19. **The repository is green and the live route is exercised.** The
     phase gate named by the prompts, `scripts/validate_change_artefacts.py`,
     is not in this repository; its present stand-in
     `python3 scripts/plans_registry.py --check`, the Stage-2 unit tests and
-    `make verify` pass. After implementation, one real GLM 5.3 Flash Explore,
-    one real GLM 5.3 review-loop attempt and the real Codex phase-6 review run
-    through this runner; their audit lines and scrubbed outcomes are evidence
-    in the change artefacts.
-    *Refuted by:* a red command, either reviewer not called through the runner,
-    or a credential in the evidence.
+    `make verify` pass. The live evidence is the real runs that exist, all
+    through this runner: one real GLM 5.3 Flash `explore` (its audit line and
+    answer appended to `research.md`) and the two real GLM 5.3 `review-loop`
+    calls (their audit lines in `findings.md`). Phase 6 ran on Opus 5.5, the
+    declared Stage-1 fallback, because Codex had no credit; a real Codex
+    phase-6 run is no longer required, because the maintainer decided on
+    2026-10-07 that every review moves to OpenCode Go (bead
+    `coding-harness-ymx`). Amended by the maintainer, 2026-10-07 (F6-3).
+    *Refuted by:* a red command, a Flash explore or a GLM loop call that did
+    not go through the runner, or a credential in the evidence.
 
 ## Non-goals
 

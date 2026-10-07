@@ -199,6 +199,9 @@ checkpoint commits; both boundaries read with `date`.
 2026-10-07 14:59–15:13, 14 min — round-2 repairs L2-1 to L2-4 and L2-6;
 both boundaries read with `date`.
 
+2026-10-07 15:22–15:46, 24 min — phase-6 repairs F6-1 to F6-7;
+both boundaries read with `date`.
+
 ## Revisions in phase 4
 
 - Steps 1–4 became one code-and-tests checkpoint (`e9738c5`), not the three
@@ -322,3 +325,5 @@ both boundaries read with `date`.
   `test_scrub_replaces_every_fragment_of_eight_or_more_characters`,
   `test_a_key_fragment_never_survives_the_relayed_streams`,
   `test_a_key_fragment_in_a_changed_file_is_removed_and_refused`.
+- Phase-6 finding F6-3 (decided by the maintainer, 2026-10-07): spec criterion
+  19 is amended in text only, no code; decisions.md records the answer.
