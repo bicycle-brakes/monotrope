@@ -1,7 +1,7 @@
 ---
 title: "Draft ADR 0007 amendment — interactive sessions use the checked runner"
 status: draft
-implementation_status: none
+implementation_status: partial
 date: 2026-10-07
 created: 2026-10-07
 last_reviewed: 2026-10-07

@@ -2,7 +2,7 @@
 title: "Findings — stage2-session"
 category: findings
 status: draft
-implementation_status: none
+implementation_status: partial
 date: 2026-10-07
 created: 2026-10-07
 last_reviewed: 2026-10-07
@@ -69,3 +69,16 @@ registry check, the review loop and the final review belong to the runner
 steps that follow. The GUI/model smoke test is unrun.
 
 Stage-2 call, 2026-10-07: implement · attempt 3 · route stage-1 · endpoint claude-code-plan · model claude-sonnet-5-5 · reason two Flash post-run checks failed · leak check clean over 276 files, 615 commits, 12 rules.
+
+Implementation attempt outcome, 2026-10-07: the Sonnet 5.5 fallback (Claude
+Code with Anthropic) ran, and the runner's post-run checks stayed red; it
+ended with exit 1 and "implementation post-run checks failed after the
+allowed attempts". No checkpoint commit was made; the code stayed in the
+worktree. The orchestrator (Claude Code with Anthropic, Opus 5.5) then
+repaired it by hand: the Terminal command (absolute `/usr/bin/env`, the CLI
+named once) and the effective-policy check rebuilt on OpenCode 1.18.35's
+source, with tests and fixtures to match. `make verify` went green (1,199
+passed, 16 skipped) and the checkpoint is `fb01133` on
+`feat/stage2-session`. Details: the handover addendum of the same date.
+
+Stage-2 call, 2026-10-07: review-loop · endpoint glm-coding-plan · model glm-5.3 · leak check clean over 276 files, 619 commits, 12 rules.

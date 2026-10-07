@@ -524,6 +524,16 @@ def test_a_handover_that_cannot_be_sent_refuses(
     assert world.calls() == [] and not world.findings.exists()
 
 
+@pytest.mark.parametrize("value", ["", "  "], ids=["empty", "blank"])
+def test_an_empty_handover_value_refuses_instead_of_taking_the_default(
+    world: World, value: str, capsys: pytest.CaptureFixture[str]
+) -> None:
+    # Loop row L1-3: an unset shell variable must not silently start the default handover.
+    assert world.run("--handover", value) == 2
+    assert "names no file" in capsys.readouterr().err
+    assert world.calls() == [] and not world.findings.exists()
+
+
 def test_a_handover_that_resolves_outside_the_worktree_refuses(
     world: World, capsys: pytest.CaptureFixture[str]
 ) -> None:

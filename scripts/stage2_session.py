@@ -186,7 +186,9 @@ def resolve_endpoint(root: Path, model: str, runner) -> tuple[tuple[str, str, No
 def handover_prompt(ctx, handover: str | None, runner) -> tuple[str, str]:
     """The prompt and the handover's source: its actual text first, then the rules and the launch limits."""
     root = Path(os.path.realpath(ctx.root))
-    if handover:
+    if handover is not None and not handover.strip():
+        raise runner.Refused("--handover names no file; an empty value is refused, not read as the default handover.")
+    if handover is not None:
         given = Path(handover).expanduser()
         path = given if given.is_absolute() else ctx.root / given
         resolved = Path(os.path.realpath(path))
