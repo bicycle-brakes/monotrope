@@ -1031,6 +1031,55 @@ def test_a_key_in_a_gitignored_file_written_by_the_run_is_removed_and_refused(wo
     assert KEY in old.read_text(encoding="utf-8")
 
 
+def test_scrub_replaces_every_fragment_of_eight_or_more_characters() -> None:
+    half = len(KEY) // 2
+    printed = f"a {KEY[:half]} and {KEY[half:]} b"
+    cleaned = stage2.scrub(printed, KEY)
+    assert cleaned == "a [credential] and [credential] b"
+    assert stage2.scrub(f"prefix {KEY[:8]} only", KEY) == "prefix [credential] only"
+    assert stage2.scrub(f"mid {KEY[5:21]} run", KEY) == "mid [credential] run"
+    assert stage2.scrub(f"short {KEY[:7]} stays", KEY) == f"short {KEY[:7]} stays"
+    assert stage2.scrub(f"whole {KEY}!", KEY) == "whole [credential]!"
+    assert stage2.scrub(KEY, None) == KEY
+    assert stage2.replace_credential(f"x{KEY[3:15]}y".encode(), KEY) == b"x[credential]y"
+
+
+def test_a_key_fragment_never_survives_the_relayed_streams(world: World, capsys: pytest.CaptureFixture[str]) -> None:
+    world.script(
+        claude=[
+            {"stdout": "the model saw @KEY@\n" + KEY[:8] + " tail", "stderr": KEY[10:20], "exit": 1},
+            {"stdout": f"fact {KEY[:8]} and {KEY[16:]}"},
+        ]
+    )
+    assert world.run("explore") == 1
+    seen = capsys.readouterr()
+    assert KEY[10:18] not in seen.err and "[credential]" in seen.err
+    assert world.run("explore") == 0
+    text = world.research.read_text(encoding="utf-8")
+    assert not any(KEY[i : i + 8] in text for i in range(len(KEY) - 7))
+    assert "fact [credential] and [credential]" in text
+
+
+def test_a_key_fragment_in_a_changed_file_is_removed_and_refused(world: World) -> None:
+    world.script(
+        claude=[
+            {
+                "stdout": "implemented",
+                "plant": {"src/app.py": f"credential = '{KEY[4:16]}'\n"},
+                "append": {"plans/changes/demo/plan.md": "2026-10-07 10:00–10:05, 5 min\n"},
+            },
+            {"stdout": "must not run"},
+        ],
+        make=[{"stdout": "green\n"}],
+    )
+    before = git(world.root, "rev-parse", "HEAD")
+    assert world.run("implement") == 2
+    assert len(world.calls("claude")) == 1
+    assert git(world.root, "rev-parse", "HEAD") == before
+    source = (world.root / "src/app.py").read_text(encoding="utf-8")
+    assert source == "credential = '[credential]'\n"
+
+
 def test_a_key_in_the_gate_output_never_reaches_the_next_attempt(world: World) -> None:
     world.script(
         claude=[

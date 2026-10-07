@@ -312,3 +312,13 @@ both boundaries read with `date`.
   faults on both routes of both verbs),
   `test_a_leak_before_the_first_work_call_starts_no_model` (and no fallback
   after it) and `test_a_missing_glm_key_refuses_the_flash_route`.
+- Phase-6 finding F6-2 (decided by the maintainer, 2026-10-07: fragments are
+  scrubbed): `scrub` and the changed-file scan now treat every 8-character
+  window of the key as the credential. One regex of all windows in a lookahead
+  finds every overlapping hit in C-speed linear passes; adjacent or
+  overlapping hits merge, so a longer run of the key becomes one
+  `[credential]`. A file with any fragment is exposed (same refusal as the
+  whole key). A key shorter than 8 characters is matched whole. Tests:
+  `test_scrub_replaces_every_fragment_of_eight_or_more_characters`,
+  `test_a_key_fragment_never_survives_the_relayed_streams`,
+  `test_a_key_fragment_in_a_changed_file_is_removed_and_refused`.

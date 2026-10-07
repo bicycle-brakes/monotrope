@@ -137,3 +137,11 @@ replace the research's recommendations for [DECISION] 1 and 3:
    at least one new commit, the time log in plan.md. If anything is missing
    the verb exits red; GLM Flash gets one more try, then Sonnet 5.5 takes
    over. Not chosen: rules in the prompt only.
+
+## Phase-6 answers (2026-10-07)
+
+- F6-2 [AMBIGUITY] answered by the maintainer 2026-10-07: fragments of 8+
+  characters are scrubbed too (criterion 15 as written).
+- F6-3 answered by the maintainer 2026-10-07: criterion 19 amended — evidence
+  is the real Flash explore and the two GLM loop calls; phase 6 on Opus 5.5 as
+  fallback; reviews move to OpenCode Go (coding-harness-ymx).

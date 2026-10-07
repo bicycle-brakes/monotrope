@@ -65,6 +65,7 @@ from __future__ import annotations
 
 import argparse
 import datetime as dt
+import functools
 import json
 import os
 import re
@@ -204,9 +205,48 @@ def read_secret(name: str) -> str | None:
     return None
 
 
+FRAGMENT = 8
+
+
+@functools.lru_cache(maxsize=8)
+def _fragment_pattern(secret: str, binary: bool) -> "re.Pattern":
+    """Every window of FRAGMENT characters of the secret (the whole secret if it is shorter), as one regex.
+
+    The windows sit in a lookahead so that overlapping hits are all reported; the scanner then
+    merges them, which expands a match to the whole run of the secret that the text carries.
+    """
+    windows = {secret[i : i + FRAGMENT] for i in range(max(len(secret) - FRAGMENT, 0) + 1)}
+    alternatives = "|".join(re.escape(w) for w in sorted(windows, key=len, reverse=True))
+    return re.compile((b"(?=(%b))" % alternatives.encode()) if binary else f"(?=({alternatives}))")
+
+
+def credential_spans(data: str | bytes, secret: str) -> list[tuple[int, int]]:
+    """The merged (start, end) runs of `data` that are the secret or any 8-character fragment of it."""
+    pattern = _fragment_pattern(secret, isinstance(data, bytes))
+    spans: list[tuple[int, int]] = []
+    for match in pattern.finditer(data):
+        start, end = match.start(1), match.end(1)
+        if spans and start <= spans[-1][1]:
+            spans[-1] = (spans[-1][0], max(end, spans[-1][1]))
+        else:
+            spans.append((start, end))
+    return spans
+
+
+def replace_credential(data: str | bytes, secret: str) -> str | bytes:
+    """`data` with every run of the secret or of an 8-character fragment of it replaced by [credential]."""
+    mark: str | bytes = b"[credential]" if isinstance(data, bytes) else "[credential]"
+    out, last = [], 0
+    for start, end in credential_spans(data, secret):
+        out += [data[last:start], mark]
+        last = end
+    out.append(data[last:])
+    return (b"" if isinstance(data, bytes) else "").join(out)
+
+
 def scrub(text: str, secret: str | None) -> str:
-    """Replace the credential in everything the runner prints or writes."""
-    return text.replace(secret, "[credential]") if secret else text
+    """Replace the credential, whole or in any fragment of 8 or more characters, in everything printed or written."""
+    return replace_credential(text, secret) if secret else text
 
 
 def foreign_env(own: dict[str, str]) -> dict[str, str]:
@@ -1014,7 +1054,6 @@ def remove_changed_credential(
     "Changed" is tracked changes, untracked files, and - when the run's earlier snapshot of the
     gitignored files is given - every ignored file created or touched since that snapshot.
     """
-    secret = key.encode()
     paths = changed_paths(root)
     if ignored_before is not None:
         paths |= {p for p, stat in ignored_snapshot(root).items() if ignored_before.get(p) != stat}
@@ -1027,9 +1066,9 @@ def remove_changed_credential(
             content = path.read_bytes()
         except OSError:
             continue
-        if secret not in content:
+        if not credential_spans(content, key):
             continue
-        path.write_bytes(content.replace(secret, b"[credential]"))
+        path.write_bytes(replace_credential(content, key))
         found.append(relative)
     return found
 
