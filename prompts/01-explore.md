@@ -1,6 +1,8 @@
 # Phase 1 · Explore
 
-**Model:** Haiku 4.5 — much input, little output, no deep reasoning needed.
+**Model:** GLM 5.3 Flash — much input, little output, no deep reasoning needed;
+through the runner and the leak check (`docs/WORKFLOW.md` §4). Until the runner
+starts this phase, Haiku 4.5 explores (`docs/WORKFLOW.md` §3).
 **Result:** `plans/changes/<name>/research.md`
 **Gate:** none.
 
