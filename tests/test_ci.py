@@ -15,8 +15,10 @@ Two failure shapes are meant to snag here, both measured:
 from __future__ import annotations
 
 import ast
+import copy
 import json
 import re
+import shutil
 import subprocess
 import sys
 from pathlib import Path
@@ -29,7 +31,8 @@ CI_FILE = REPO_ROOT / ".github" / "workflows" / "ci.yml"
 RUNNER = REPO_ROOT / "scripts" / "verify_all.sh"
 
 sys.path.insert(0, str(REPO_ROOT / "scripts"))
-from ci_gates import gates  # noqa: E402
+import ci_gates  # noqa: E402
+from ci_gates import gates, misst_in  # noqa: E402
 
 
 def _einschraenkungen() -> dict[str, list[str]]:
@@ -372,13 +375,22 @@ def test_every_gate_step_runs_even_after_a_failing_gate() -> None:
 
     checkout and setup-deps deliberately do not carry the `if`: without them no
     gate has a subject.
+
+    A gate with `placement: writer` is left out of the workflow by declaration
+    (`misst_in`), so it is not counted here; the count is of the gates the
+    hosted run measures (rb-m6-one-account: the gate `ruleset`).
     """
     doc = yaml.safe_load(CI_FILE.read_text(encoding="utf-8"))
-    gate_ids = {g["id"] for g in gates()}
+    gate_ids = {g["id"] for g in gates() if misst_in(g, "ci")}
     fehlen: list[str] = []
     geprueft = 0
     for job_name, job in (doc.get("jobs") or {}).items():
         im_job = [s for s in job.get("steps") or [] if s.get("id") in gate_ids]
+        if job_name == ci_gates.SUMMARY_JOB:
+            # The summary job sums up the legs of the matrix job and measures
+            # nothing itself — a gate step here would be a second measurement.
+            assert not im_job, f"{job_name}: the summary job holds gate steps: {[s['id'] for s in im_job]}"
+            continue
         assert im_job, f"{job_name}: no gate step — this test ran over the empty set."
         for schritt in im_job:
             geprueft += 1
@@ -464,6 +476,241 @@ def test_concurrency_group_carries_the_event() -> None:
 
 
 # --------------------------------------------------------------------------
+# 1b · One leg per declared interpreter, and one check that sums them up
+#      (bead coding-harness-ei0)
+# --------------------------------------------------------------------------
+
+# Criterion 5 states the install command literally, and so does this test: if
+# the generator's own constant drifted, comparing against it alone would stay
+# green on the very fault it is meant to catch.
+LOCK_INSTALL = "python3 -m pip install --require-hashes -r requirements-ci.txt"
+_PIP_INSTALL = re.compile(r"\bpip3?\s+install\b")
+
+
+def _ci_doc(text: str | None = None) -> dict:
+    return yaml.safe_load(CI_FILE.read_text(encoding="utf-8") if text is None else text)
+
+
+GATE_FILE_PATH = REPO_ROOT / "decisions" / "gates.yaml"
+
+
+def _declared() -> list[str]:
+    """`tools.python`, read from the gate file here and not through `ci_gates.interpreters()`.
+
+    The generator reads the same key; a yardstick taken from the function under
+    test moves with it, so a generator that reordered or invented interpreters
+    would be measured against its own output (project-lock findings F-4).
+    """
+    return list(yaml.safe_load(GATE_FILE_PATH.read_text(encoding="utf-8"))["tools"]["python"])
+
+
+def _matrix(job: dict) -> list[str]:
+    """The interpreters of a job's matrix — and nothing else may be in it.
+
+    A key besides `python` (`include`, `exclude`, a second axis) adds or removes
+    legs that `tools.python` does not declare, and reading only `python` would
+    never show it.
+    """
+    matrix = job["strategy"]["matrix"]
+    assert set(matrix) == {"python"}, f"the matrix holds keys besides python: {sorted(matrix)}"
+    return list(matrix["python"])
+
+
+def _install_runs(job: dict) -> list[str]:
+    return [s["run"] for s in job.get("steps") or [] if _PIP_INSTALL.search(str(s.get("run", "")))]
+
+
+def _setup_python_index(job: dict) -> int | None:
+    for i, s in enumerate(job.get("steps") or []):
+        if str(s.get("uses", "")).startswith("actions/setup-python@"):
+            return i
+    return None
+
+
+def _install_index(job: dict) -> int | None:
+    for i, s in enumerate(job.get("steps") or []):
+        if _PIP_INSTALL.search(str(s.get("run", ""))):
+            return i
+    return None
+
+
+def test_every_declared_interpreter_gets_a_leg(monkeypatch: pytest.MonkeyPatch) -> None:
+    """The matrix is `tools.python`, not a copy of it — and every verify gate runs in it.
+
+    The second half is read off a generated file after the declaration changed:
+    a matrix written as a literal in the generator would pass the first half and
+    fail here.
+    """
+    declared = _declared()
+    assert ci_gates.interpreters() == declared, "the generator reads another list than tools.python"
+    assert len(declared) >= 2, f"tools.python declares {declared} — a matrix of one is not the second interpreter"
+    job = _ci_doc()["jobs"][ci_gates.MATRIX_JOB]
+    assert _matrix(job) == declared, f"matrix {_matrix(job)} differs from tools.python {declared}"
+    assert job["strategy"].get("fail-fast") is False, "a red leg must not cancel the other"
+
+    in_ci = [g["id"] for g in gates() if g["job"] == "verify" and ci_gates.misst_in(g, "ci")]
+    assert in_ci, "no verify gate measures in CI — this test ran over the empty set"
+    steps = {s.get("id") for s in job["steps"]}
+    assert not [i for i in in_ci if i not in steps], f"verify gates missing from the matrix job: {set(in_ci) - steps}"
+
+    monkeypatch.setattr(ci_gates, "interpreters", lambda: ["3.11", "3.12", "3.13"])
+    generated = _ci_doc(ci_gates.generate_ci())
+    assert _matrix(generated["jobs"][ci_gates.MATRIX_JOB]) == ["3.11", "3.12", "3.13"]
+
+
+def test_the_toolchain_comes_only_from_the_lock() -> None:
+    """Every install in the workflow is the one hash-checked install of the lock."""
+    assert ci_gates.INSTALL == LOCK_INSTALL, f"the generator installs {ci_gates.INSTALL!r}"
+    installing = {name: _install_runs(job) for name, job in _ci_doc()["jobs"].items() if _install_runs(job)}
+    assert set(installing) >= {ci_gates.MATRIX_JOB, "drift"}, f"jobs that install: {sorted(installing)}"
+    for name, runs in installing.items():
+        assert runs == [LOCK_INSTALL], f"{name}: installs {runs}, not exactly once the lock"
+
+
+def test_every_job_sets_a_declared_interpreter_before_installing() -> None:
+    declared = _declared()
+    checked = 0
+    for name, job in _ci_doc()["jobs"].items():
+        install = _install_index(job)
+        if install is None:
+            continue
+        checked += 1
+        setup = _setup_python_index(job)
+        assert setup is not None, f"{name}: installs without actions/setup-python"
+        assert setup < install, f"{name}: setup-python (step {setup}) comes after the install (step {install})"
+        version = job["steps"][setup]["with"]["python-version"]
+        if name == ci_gates.MATRIX_JOB:
+            assert version == "${{ matrix.python }}", f"{name}: python-version is {version!r}"
+            assert set(_matrix(job)) <= set(declared)
+        else:
+            assert version in declared, f"{name}: python-version {version!r} is not declared ({declared})"
+    assert checked >= 2, f"only {checked} job(s) install — this test ran over too few jobs"
+
+
+def test_the_summary_check_passes_only_when_every_leg_passed() -> None:
+    """The ruleset requires `verify`, and GitHub counts a skipped job as passed.
+
+    So the check must need the matrix job, survive its failure (`always()`), and
+    pass only on `success` — run here, through the shell GitHub would use, with
+    the one good result, the three bad ones the ruleset's wording names and two
+    more GitHub produces live (`abandoned`, an empty result). A step that
+    refuses a list of bad results passes the last two; a step that refuses too
+    much fails the first. Neither the step nor the job it sits in, nor the
+    matrix job, may carry `continue-on-error`: it would keep a red leg from
+    turning the check red.
+    """
+    doc = _ci_doc()
+    assert ci_gates.SUMMARY_JOB == "verify", "the ruleset on main requires the check `verify`"
+    job = doc["jobs"][ci_gates.SUMMARY_JOB]
+    needs = job.get("needs")
+    assert (needs if isinstance(needs, list) else [needs]) == [ci_gates.MATRIX_JOB], f"needs: {needs!r}"
+    condition = job["if"]
+    assert "always()" in condition, (
+        f"without always() a red leg skips this job, and a skipped job reports success: {condition}"
+    )
+    assert "push" in condition and "pull_request" in condition, condition
+    assert "schedule" not in condition, condition
+    assert "name" not in job, "the id of the job is the check's context; a `name:` would rename the check"
+    names = [j for j, d in doc["jobs"].items() if d.get("name", j) == "verify"]
+    assert names == ["verify"], f"exactly one job may report the check `verify`, found {names}"
+    assert doc["jobs"][ci_gates.MATRIX_JOB]["strategy"]["fail-fast"] is False
+
+    assert len(job["steps"]) == 1, "the summary job holds one step"
+    step = job["steps"][0]
+    for where, holder in (
+        ("the summary step", step),
+        ("the summary job", job),
+        ("the matrix job", doc["jobs"][ci_gates.MATRIX_JOB]),
+    ):
+        assert "continue-on-error" not in holder, (
+            f"{where} carries continue-on-error: a red leg would no longer turn the check `verify` red"
+        )
+    run = step["run"]
+    placeholder = "${{ needs." + ci_gates.MATRIX_JOB + ".result }}"
+    assert placeholder in run, f"the step does not read the matrix job's result: {run!r}"
+    # Exactly one result passes. A list of the bad ones cannot keep up: `abandoned`
+    # was seen live in run 37375079831, and an empty result is what a missing
+    # `needs` entry would hand over.
+    for result, expected in (
+        ("success", 0),
+        ("failure", 1),
+        ("cancelled", 1),
+        ("skipped", 1),
+        ("abandoned", 1),
+        ("", 1),
+    ):
+        done = subprocess.run(["sh", "-c", run.replace(placeholder, result)], capture_output=True, text=True)
+        assert done.returncode == expected, (
+            f"result {result!r}: exit {done.returncode}, expected {expected}\n{done.stdout}"
+        )
+
+
+def test_no_blocking_gate_step_carries_continue_on_error() -> None:
+    """A blocking gate's step must turn its leg red when it fails.
+
+    `continue-on-error` belongs to `advisory` and `report` gates only; on a
+    `block` gate's step it would let the leg, and so the check `verify`, pass
+    over a failing gate. Every `block` gate that runs in CI is checked, so an
+    empty match is a failure, not a pass (finding F-7 of project-lock).
+    """
+    blocking = {g["id"] for g in gates() if g["enforcement"] == "block"}
+    checked = []
+    for job_id, job in _ci_doc()["jobs"].items():
+        for step in job.get("steps", []):
+            if step.get("id") in blocking:
+                checked.append(step["id"])
+                assert "continue-on-error" not in step, (
+                    f"{job_id}: the blocking gate {step['id']} carries continue-on-error"
+                )
+    assert checked, "no blocking gate step found in ci.yml: the check would pass on nothing"
+
+
+def test_the_drift_job_runs_once_on_the_last_interpreter(monkeypatch: pytest.MonkeyPatch) -> None:
+    def drift_version(doc: dict) -> str:
+        drift = doc["jobs"]["drift"]
+        assert "strategy" not in drift, "the drift job reads the outside world, not the interpreter: one run"
+        return drift["steps"][_setup_python_index(drift)]["with"]["python-version"]
+
+    declared = _declared()
+    assert drift_version(_ci_doc()) == declared[-1]
+    monkeypatch.setattr(ci_gates, "interpreters", lambda: ["3.11", "3.12", "3.13"])
+    assert drift_version(_ci_doc(ci_gates.generate_ci())) == "3.13"
+
+
+def test_the_schema_rejects_a_malformed_interpreter_list(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys
+) -> None:
+    """`tools` holds `python`, a non-empty list of distinct quoted `3.<n>` — and nothing else."""
+    doc = yaml.safe_load(ci_gates.GATE_FILE.read_text(encoding="utf-8"))
+    assert ci_gates.validate_schema(doc) == [], "the control: the real gate file passes"
+
+    def with_python(value) -> dict:
+        d = copy.deepcopy(doc)
+        d["tools"]["python"] = value
+        return d
+
+    for bad in ("3.12", [], ["3.x"], ["3.12", "3.12"], [3.12], ["3.12", 3.11], ["python3.12"], None):
+        fehler = ci_gates.validate_schema(with_python(bad))
+        assert any("tools.python" in f for f in fehler), (bad, fehler)
+
+    extra = copy.deepcopy(doc)
+    extra["tools"]["ruff"] = "0.9.10"
+    assert any("tools.ruff" in f for f in ci_gates.validate_schema(extra))
+    missing = copy.deepcopy(doc)
+    del missing["tools"]
+    assert ci_gates.validate_schema(missing), "a gate file without `tools` declares no interpreter"
+
+    # And the command line says so too, not only the function.
+    bad_file = tmp_path / "gates.yaml"
+    bad_file.write_text(yaml.safe_dump(with_python(["3.x"]), sort_keys=False), encoding="utf-8")
+    monkeypatch.setattr(ci_gates, "GATE_FILE", bad_file)
+    monkeypatch.setattr(sys, "argv", ["ci_gates.py", "--check-schema"])
+    assert ci_gates.main() != 0
+    seen = capsys.readouterr()
+    assert "tools.python" in seen.err + seen.out
+
+
+# --------------------------------------------------------------------------
 # 2 · The local runner holds no list of its own
 # --------------------------------------------------------------------------
 
@@ -495,6 +742,136 @@ def test_runner_reports_what_it_cannot_run() -> None:
     assert ergebnis.returncode == 0, ergebnis.stderr
     for g in nicht_lokal:
         assert g["id"] in ergebnis.stdout, f"The runner conceals the gate '{g['id']}', which it cannot run."
+
+
+# The runner tests below build a tree of their own — copies of the runner and of
+# `ci_gates.py`, plus a one-gate file — and start the runner there with `HOME`
+# set, `PYTHON` removed and a `PATH` of their own. Under `make verify` the outer
+# runner exports `PYTHON`, and the developer's `.venv` must not decide the result
+# (bead coding-harness-ei0).
+
+
+def _runner_tree(base: Path, gate_command: str) -> Path:
+    tree = base / "tree"
+    (tree / "scripts").mkdir(parents=True)
+    (tree / "decisions").mkdir()
+    shutil.copy(RUNNER, tree / "scripts" / "verify_all.sh")
+    shutil.copy(REPO_ROOT / "scripts" / "ci_gates.py", tree / "scripts" / "ci_gates.py")
+    gate_file = {
+        "schema_version": 2,
+        "tools": {"python": ["3.11", "3.12"]},
+        "gates": [
+            {
+                "id": "probe",
+                "title": "The one gate of the runner tree",
+                "command": gate_command,
+                "job": "verify",
+                "enforcement": "block",
+                "floor": True,
+                "placement": "both",
+                "reason": "a seed for the runner tests",
+            }
+        ],
+    }
+    (tree / "decisions" / "gates.yaml").write_text(yaml.safe_dump(gate_file, sort_keys=False), encoding="utf-8")
+    return tree
+
+
+def _interpreter_wrapper(path: Path, label: str, log: Path, *, with_pyyaml: bool = True) -> None:
+    """An executable at `path` that logs its label, then is the real interpreter — or fails the import."""
+    path.parent.mkdir(parents=True, exist_ok=True)
+    if with_pyyaml:
+        body = f'#!/bin/sh\necho {label} >> "{log}"\nexec "{sys.executable}" "$@"\n'
+    else:
+        body = f'#!/bin/sh\necho {label} >> "{log}"\nexit 1\n'
+    path.write_text(body, encoding="utf-8")
+    path.chmod(0o755)
+
+
+def _run_runner(tree: Path, home: Path, path_dirs: list[Path], *args: str) -> subprocess.CompletedProcess:
+    # `PYTHON` is left out on purpose, and so is everything else the outer run set.
+    env = {"HOME": str(home), "PATH": ":".join([*map(str, path_dirs), "/usr/bin", "/bin"])}
+    bash = shutil.which("bash") or "/bin/bash"
+    return subprocess.run(
+        [bash, str(tree / "scripts" / "verify_all.sh"), *args], cwd=tree, env=env, capture_output=True, text=True
+    )
+
+
+def test_the_runner_never_searches_other_environments(tmp_path: Path) -> None:
+    """A virtual environment of another repository is not a candidate.
+
+    The tree has no `.venv`, a `python3` on PATH without PyYAML, and an
+    interpreter with PyYAML under `$HOME/.venvs/` — where the old runner looked
+    and found one that was not the lock's. The new one exits 2 before any gate and
+    says how to build the environment (criteria 11 and 12).
+    """
+    marker = tmp_path / "gate-ran"
+    log = tmp_path / "log"
+    tree = _runner_tree(tmp_path, f"touch {marker}")
+    home = tmp_path / "home"
+    _interpreter_wrapper(home / ".venvs" / "other" / "bin" / "python3", "home", log)
+    _interpreter_wrapper(tmp_path / "bin" / "python3", "path", log, with_pyyaml=False)
+
+    done = _run_runner(tree, home, [tmp_path / "bin"])
+    assert done.returncode == 2, f"exit {done.returncode}\n{done.stdout}\n{done.stderr}"
+    assert "make venv" in done.stderr and "PYTHON" in done.stderr, done.stderr
+    assert not marker.exists(), "a gate started although no interpreter with PyYAML was found"
+    assert "home" not in log.read_text(encoding="utf-8").split(), "the runner looked into $HOME/.venvs"
+
+
+def test_the_runner_prefers_the_checkouts_own_environment(tmp_path: Path) -> None:
+    """`.venv/bin/python3` of the checkout comes before the `python3` on PATH."""
+    log = tmp_path / "log"
+    tree = _runner_tree(tmp_path, "true")
+    _interpreter_wrapper(tree / ".venv" / "bin" / "python3", "venv", log)
+    _interpreter_wrapper(tmp_path / "bin" / "python3", "path", log)
+
+    done = _run_runner(tree, tmp_path / "home", [tmp_path / "bin"])
+    assert done.returncode == 0, f"exit {done.returncode}\n{done.stdout}\n{done.stderr}"
+    ran = set(log.read_text(encoding="utf-8").split())
+    assert ran == {"venv"}, f"the interpreters that ran: {sorted(ran)}"
+
+    # And from another directory the same checkout's environment is the one used:
+    # the runner changes into the root before it chooses.
+    log.unlink()
+    elsewhere = tmp_path / "elsewhere"
+    elsewhere.mkdir()
+    env = {"HOME": str(tmp_path / "home"), "PATH": f"{tmp_path / 'bin'}:/usr/bin:/bin"}
+    bash = shutil.which("bash") or "/bin/bash"
+    again = subprocess.run(
+        [bash, str(tree / "scripts" / "verify_all.sh")], cwd=elsewhere, env=env, capture_output=True, text=True
+    )
+    assert again.returncode == 0, f"exit {again.returncode}\n{again.stdout}\n{again.stderr}"
+    assert set(log.read_text(encoding="utf-8").split()) == {"venv"}
+
+
+def test_the_runner_hands_its_interpreter_to_every_gate(tmp_path: Path) -> None:
+    """The gate's own environment carries the chosen interpreter as `PYTHON` (criterion 13)."""
+    log = tmp_path / "log"
+    tree = _runner_tree(tmp_path, 'test -n "$PYTHON" && test -x "$PYTHON"')
+    _interpreter_wrapper(tree / ".venv" / "bin" / "python3", "venv", log)
+
+    done = _run_runner(tree, tmp_path / "home", [tmp_path / "bin"])
+    assert done.returncode == 0, f"exit {done.returncode}\n{done.stdout}\n{done.stderr}"
+    assert "[probe] gruen" in done.stdout, done.stdout
+
+
+def test_the_runner_puts_the_chosen_environments_tools_on_the_path(tmp_path: Path) -> None:
+    """A gate that calls a tool by its bare name finds the locked environment's own.
+
+    `scripts/ramp_valves.py` runs `ruff` without a path. A `.venv` that is not
+    activated is not on PATH, so without this the same checkout would be green
+    after `source .venv/bin/activate` and red without it.
+    """
+    tree = _runner_tree(tmp_path, 'test "$(locked-tool)" = from-the-venv')
+    _interpreter_wrapper(tree / ".venv" / "bin" / "python3", "venv", tmp_path / "log")
+    tool = tree / ".venv" / "bin" / "locked-tool"
+    tool.write_text("#!/bin/sh\necho from-the-venv\n", encoding="utf-8")
+    tool.chmod(0o755)
+
+    done = _run_runner(tree, tmp_path / "home", [])
+    assert done.returncode == 0, f"exit {done.returncode}\n{done.stdout}\n{done.stderr}"
+    assert "[probe] gruen" in done.stdout, done.stdout
 
 
 def test_no_second_verification_workflow() -> None:
@@ -565,7 +942,7 @@ def test_a_local_equivalent_derives_its_arguments_from_the_action() -> None:
     someone changes the globs in `ci.yml`, the local run moves with them.
     """
     doc = yaml.safe_load(CI_FILE.read_text(encoding="utf-8"))
-    schritte = {s.get("id"): s for s in doc["jobs"]["verify"]["steps"] if s.get("id")}
+    schritte = {s.get("id"): s for s in doc["jobs"][ci_gates.MATRIX_JOB]["steps"] if s.get("id")}
     ersatz = [g for g in gates() if g.get("via_local_equivalent")]
     assert ersatz, "No gate with a local equivalent — then this test checks nothing."
 
@@ -594,6 +971,118 @@ def test_the_runner_still_admits_what_it_cannot_do_at_all() -> None:
     assert ergebnis.returncode == 0, ergebnis.stderr
     for g in gar_nicht:
         assert g["id"] in ergebnis.stdout, f"The runner conceals '{g['id']}'."
+
+
+def _list_entries(capsys: pytest.CaptureFixture[str], monkeypatch: pytest.MonkeyPatch) -> dict[str, str]:
+    """`ci_gates.py --list`, in process: the line that follows each gate's `[id]` line."""
+    import ci_gates
+
+    monkeypatch.setattr(sys, "argv", ["ci_gates.py", "--list"])
+    assert ci_gates.main() == 0
+    zeilen = capsys.readouterr().out.splitlines()
+    return {
+        zeile.split("[", 1)[1].split("]", 1)[0]: zeilen[i + 1]
+        for i, zeile in enumerate(zeilen)
+        if "[" in zeile and "]" in zeile and not zeile.startswith("      ")
+    }
+
+
+def test_the_list_marks_a_writer_gate_as_local_only(
+    capsys: pytest.CaptureFixture[str], monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """The list says where a gate does not run — as it does for a hosted-only one (RB-M6, F-1).
+
+    `make verify` is annotated "the CI runs the same"; a `placement: writer` gate
+    runs there only, and a list that shows it like any other gate reads like
+    the CI running it too. Gates that run in both places carry no such mark.
+    """
+    import ci_gates
+
+    alle = gates()
+    writer = [g for g in alle if g["placement"] == "writer"]
+    assert writer, "Precondition: the gate list has a writer gate (`ruleset`)."
+    eintraege = _list_entries(capsys, monkeypatch)
+    for g in alle:
+        marked = "nicht in der CI" in eintraege[g["id"]]
+        assert marked == (g["placement"] == "writer"), (
+            f"`ci_gates.py --list` and the placement of '{g['id']}' ({g['placement']}) disagree about local-only."
+        )
+
+    # Not a one-gate accident: a gate that moves to `writer` gets the mark, one that leaves loses it.
+    tauschen = {g["id"]: ("both" if g["placement"] == "writer" else g["placement"]) for g in alle}
+    erstes_both = next(g["id"] for g in alle if g["placement"] == "both" and g["local_runnable"])
+    tauschen[erstes_both] = "writer"
+    monkeypatch.setattr(ci_gates, "gates", lambda: [{**g, "placement": tauschen[g["id"]]} for g in alle])
+    danach = _list_entries(capsys, monkeypatch)
+    assert "nicht in der CI" in danach[erstes_both]
+    assert all("nicht in der CI" not in danach[g["id"]] for g in writer)
+
+
+# A `placement: writer` gate runs in `make verify` on the maintainer's machine and
+# nowhere else; hosted CI never sees it. So moving a gate there is a decision of
+# its own, and each one is named with its reason. `test_every_gate_step_runs_even_
+# after_a_failing_gate` counts only the hosted gates and cannot notice a gate that
+# left: with the floor gate `pytest` moved to `writer`, every other test here stays
+# green and the pull request is no longer measured by the suite (rb-m6-one-account,
+# F-6). Like OHNE_MUTATIONSTEST, the list must shrink with the gates it names.
+# The tests below are not named `*_goes_red_*` on purpose: this file mentions every
+# script, and a mutation-test name here would count as evidence for each of them
+# (`test_the_mutation_ratchet_only_turns_one_way`).
+MAY_BE_WRITER_ONLY: dict[str, str] = {
+    "ruleset": "reads the branch ruleset at GitHub; the bypass list is shown only to whoever may edit it (RB-M6)",
+}
+
+
+def _writer_findings(alle: list[dict]) -> list[str]:
+    """Which gates are writer-only without being named, are floor gates, or are named without being writer-only."""
+    findings: list[str] = []
+    bekannt = {g["id"]: g for g in alle}
+    for g in alle:
+        if g.get("placement") != "writer":
+            continue
+        if g.get("floor"):
+            findings.append(f"'{g['id']}' is a floor gate and may never be writer-only: the hosted run would drop it")
+        elif g["id"] not in MAY_BE_WRITER_ONLY:
+            findings.append(f"'{g['id']}' is writer-only and not in MAY_BE_WRITER_ONLY — name it there with its reason")
+    for gid in MAY_BE_WRITER_ONLY:
+        g = bekannt.get(gid)
+        if g is None:
+            findings.append(f"'{gid}' is named in MAY_BE_WRITER_ONLY but is no gate any more — delete the entry")
+        elif g.get("placement") != "writer":
+            findings.append(f"'{gid}' is named in MAY_BE_WRITER_ONLY but is not writer-only — delete the entry")
+        elif g.get("floor"):
+            findings.append(f"'{gid}' is named in MAY_BE_WRITER_ONLY but is a floor gate — it may never be")
+    return findings
+
+
+def test_only_the_named_gates_are_writer_only() -> None:
+    """No floor gate and no unnamed gate leaves the hosted run (F-6)."""
+    assert MAY_BE_WRITER_ONLY, "Precondition: the list names at least the gate `ruleset`."
+    assert _writer_findings(gates()) == []
+
+
+@pytest.mark.parametrize(
+    ("gate", "change", "floor_before", "says"),
+    [
+        pytest.param("pytest", {"placement": "writer"}, True, "is a floor gate", id="floor-gate-moves-to-writer"),
+        pytest.param(
+            "ruff-format", {"placement": "writer"}, False, "not in MAY_BE_WRITER_ONLY", id="unnamed-gate-moves"
+        ),
+        pytest.param("ruleset", {"floor": True}, False, "is a floor gate", id="named-gate-becomes-a-floor-gate"),
+        pytest.param("ruleset", {"placement": "both"}, False, "is not writer-only", id="named-gate-comes-back"),
+    ],
+)
+def test_the_writer_only_list_flags_a_gate_that_moves(gate: str, change: dict, floor_before: bool, says: str) -> None:
+    alle = gates()
+    before = next((g for g in alle if g["id"] == gate), None)
+    assert before is not None, f"Precondition: there is a gate '{gate}'."
+    assert before["floor"] == floor_before, f"Precondition: '{gate}' is{'' if floor_before else ' not'} a floor gate."
+    moved = [{**g, **change} if g["id"] == gate else g for g in alle]
+    assert any(says in f for f in _writer_findings(moved)), _writer_findings(moved)
+
+
+def test_the_writer_only_list_flags_a_named_gate_that_is_gone() -> None:
+    assert _writer_findings([g for g in gates() if g["id"] != "ruleset"])
 
 
 def test_no_workflow_copies_a_whole_directory_into_a_publish_target() -> None:
@@ -1007,7 +1496,7 @@ def test_drift_job_runs_on_schedule_and_dispatch_only() -> None:
         "measurement of an outside world that it did not change."
     )
 
-    verify = doc["jobs"]["verify"]
+    verify = doc["jobs"][ci_gates.MATRIX_JOB]
     assert "push" in verify["if"] and "pull_request" in verify["if"], (
         "The verification job would otherwise have to run on the timer too, and there it would say nothing."
     )

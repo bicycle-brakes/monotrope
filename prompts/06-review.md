@@ -5,7 +5,9 @@ calls instead of trusting its docstring, for a spike; for a bounded, feature or
 architectural change gpt-6.1-sol at effort `max`, resumed by `python3
 scripts/stage2.py review <change>` (a fresh session where no phase-2a session
 was held).
-**Input:** the diff and `spec.md`. **Not** the author's reasoning.
+**Input:** the diff, `spec.md` and, when the change has one, `design.md` —
+whether the diff makes its architecture delta true is your question (ADR 0009).
+**Not** the author's reasoning.
 **Result:** `plans/changes/<name>/findings.md`
 **Gate:** no open `[AMBIGUITY]`, no open BLOCKER — `[DIVERGENT]` counts as
 BLOCKER.

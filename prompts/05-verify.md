@@ -6,8 +6,8 @@
 anything is red.
 
 ```bash
-make verify        # every locally runnable gate — the same ones CI runs
-make gates         # what CI runs, read from ci.yml
+make verify        # every locally runnable gate — CI runs the same, minus a `writer` gate (here only)
+make gates         # what CI runs, read from ci.yml; a `writer` gate is marked
 make staleness     # hygiene of the plans/ artefacts
 ```
 
