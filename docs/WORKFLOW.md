@@ -626,6 +626,18 @@ rule's name and the length of a match, never the match. If it cannot measure —
 the denylist missing, a file unreadable, a listed path that is a link to a
 directory or a submodule — that is BLOCK, because unchecked is not clean.
 
+**The secret rules skip `tests/`.** A rule of the denylist whose name starts
+with `secret:` is not applied to a file under the repository's top-level
+`tests/` folder — the file on disk, and the hunks of a commit's patch or of the
+staged changes that name such a file — so that an invented key or password may
+stand there as a test fixture. Every other rule, the ones for a customer's
+names above all, scans `tests/` like the rest, and a secret rule scans
+everything outside it (`tests_extra/`, `docs/tests/` and a change's own folder
+are not `tests/`; neither is a link under `tests/`, a commit message or a
+prompt text). **The accepted consequence** (maintainer, 2026-10-07): a real key
+committed in a test file is not found by this check. Each machine marks its
+secret rules in its own denylist; a rule without the prefix scans everything.
+
 **A clean report has limits.** The check does not read the reflog, the stash,
 refs outside the branches (tags, `refs/dolt/`) or objects no ref reaches. A
 value taken out by rewriting a commit therefore reads clean while `git log -g

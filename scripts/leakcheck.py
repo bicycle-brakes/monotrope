@@ -23,6 +23,23 @@ foreign call.
 A foreign reviewer's tools read the tree and the history, so the check looks at
 the tree and the history, not only at the change.
 
+**What is exempt: the secret rules under `tests/`** (maintainer's decision,
+2026-10-07, open item O-4 of the stage-2 change). A test file may hold an
+invented key or password as a fixture, and a rule that looks for the shape of a
+key would block that fixture for ever - in the file, in the commit that added
+it, in the merge that shows it again. So a rule whose name starts with
+`secret:` is not applied to a place that belongs to a file under the
+repository's own top-level `tests/` folder: the working file on disk, the
+hunks of a commit's patch and of the staged diff that name such a file. Every
+other rule - the ones for a customer's names above all - is applied to
+`tests/` as it is everywhere else, and so is every secret rule outside it.
+`tests_extra/`, `docs/tests/` and `plans/changes/<name>/tests/` are not
+`tests/`; a link under `tests/` is not exempt (it can lead out of the folder),
+nor is a commit message or a prompt text. **The accepted consequence:** a real
+key that is committed in a test file is not found by this check. Where a path in
+a diff header cannot be read with certainty (a quoted name), the hunks are
+scanned with every rule: when in doubt, the check blocks.
+
 **What is NOT scanned, stated so that a clean report is not read as more.** The
 reflog: rewriting a commit that held a value (amend, rebase) makes the check
 clean, and `git log -g -p` still shows the value until git expires the reflog.
@@ -51,7 +68,10 @@ and that is itself a statement about the customer. Default:
 `~/.config/cc-routing/denylist.txt`, overridden by `--denylist` or by the
 variable `LEAKCHECK_DENYLIST`. Format: one rule per line, `name = regex`; a
 line from `#` on is a comment; a line without `name =` is the whole pattern and
-its name is `line-<n>`.
+its name is `line-<n>`. A rule is a **secret rule** when its name starts with
+`secret:` (exactly so, in lower case; `secret:openai-style-key = ...`): that is
+the whole marker, and a line without a name is never one. The name is reported
+as written, prefix included. A rule without the prefix scans everything.
 
 Call:
     python3 scripts/leakcheck.py --name <change> [--denylist PATH]
@@ -81,10 +101,21 @@ REPO_ROOT = Path(__file__).resolve().parent.parent
 COMMIT_MARK = "commit\x00"
 
 
+# A rule whose name starts with this is a secret rule: it is not applied under TESTS_PREFIX.
+SECRET_PREFIX = "secret:"
+# The repository's own top-level tests folder. `tests_extra/` and `docs/tests/` do not start with it.
+TESTS_PREFIX = "tests/"
+# The marker between a commit's message and its patch in the history text (a NUL cannot occur in either part).
+PATCH_MARK = "\x00patch"
+# What opens the part of a patch that belongs to one file.
+DIFF_HEADERS = ("diff --git ", "diff --cc ", "diff --combined ")
+
+
 @dataclass(frozen=True)
 class Rule:
     name: str
     pattern: re.Pattern[str]
+    secret: bool = False
 
 
 @dataclass
@@ -95,6 +126,7 @@ class Result:
     files: int = 0
     commits: int = 0
     rules: int = 0
+    secret_rules: int = 0
 
 
 def default_denylist() -> Path:
@@ -129,7 +161,7 @@ def read_denylist(path: Path) -> tuple[list[Rule], str | None]:
         else:
             name, pattern = f"line-{number}", line
         try:
-            rules.append(Rule(name, re.compile(pattern)))
+            rules.append(Rule(name, re.compile(pattern), name.startswith(SECRET_PREFIX)))
         except re.error:
             return [], f"the denylist {path}, line {number}, holds a pattern that is not valid"
 
@@ -152,11 +184,53 @@ ADVICE = {
 }
 
 
-def _scan(text: str, prefix: str, rules: list[Rule], verdict: Verdict, kind: str = "file") -> int:
-    """Report each match as a place, a rule name and a length. Returns the count."""
+def _header_in_tests(line: str) -> bool:
+    """Whether a diff header names a file under `tests/` - and only when that is certain.
+
+    With rename detection off, a `diff --git` header reads `a/<path> b/<path>`: the path is the one the
+    equal halves leave, which holds for a name with spaces too. A quoted name, or a header that does not
+    split in two equal halves, is not certain, and "not certain" is "not under tests/".
+    """
+    if line.startswith(("diff --cc ", "diff --combined ")):
+        path = line.split(" ", 2)[2]
+    else:
+        rest = line[len("diff --git ") :]
+        size = (len(rest) - 5) // 2
+        path = rest[2 : 2 + size]
+        if rest != f"a/{path} b/{path}":
+            return False
+    return path.startswith(TESTS_PREFIX)
+
+
+def _under_tests(relative: str, path: Path) -> bool:
+    """A file of the working tree that the secret rules skip: under `tests/`, and not a link out of it."""
+    return relative.startswith(TESTS_PREFIX) and not path.is_symlink()
+
+
+def _scan(
+    text: str,
+    prefix: str,
+    rules: list[Rule],
+    verdict: Verdict,
+    kind: str = "file",
+    *,
+    exempt: bool = False,
+    patch: bool = False,
+    first: int = 1,
+) -> int:
+    """Report each match as a place, a rule name and a length. Returns the count.
+
+    `exempt`: the whole text belongs to a file under `tests/`, so the secret rules skip it. `patch`: the
+    text is a patch, and each file's part of it is exempt on the same terms, by its diff header. A line
+    before the first header (a message) is never exempt.
+    """
+    plain = [rule for rule in rules if not rule.secret]
+    in_tests = exempt
     hits = 0
-    for number, line in enumerate(text.split("\n"), 1):
-        for rule in rules:
+    for number, line in enumerate(text.split("\n"), first):
+        if patch and line.startswith(DIFF_HEADERS):
+            in_tests = _header_in_tests(line)
+        for rule in plain if in_tests else rules:
             found = rule.pattern.search(line)
             if found:
                 hits += 1
@@ -171,7 +245,7 @@ def _git(root: Path, *args: str) -> tuple[bytes | None, str]:
     """Run git in `root`. Returns the output, or None and a short reason."""
     try:
         run = subprocess.run(
-            ["git", "-C", str(root), *args],
+            ["git", "-C", str(root), "-c", "core.quotepath=false", *args],
             capture_output=True,
             check=False,
         )
@@ -188,22 +262,30 @@ def _refuse(reason: str, detail: str) -> Result:
     return result
 
 
-def _history_units(text: str) -> Iterable[tuple[str, str]]:
-    """Split the history text into (sha12, text) per commit."""
+def _history_units(text: str) -> Iterable[tuple[str, str, str]]:
+    """Split the history text into (sha12, message, patch) per commit.
+
+    The split between message and patch is the marker line the log format writes, not anything in the
+    text: a message that spells out a diff header does not turn the lines after it into a patch.
+    """
     sha = ""
-    lines: list[str] = []
-    started = False
+    message: list[str] = []
+    patch: list[str] = []
+    target: list[str] | None = None
     for line in text.split("\n"):
         if line.startswith(COMMIT_MARK):
-            if started:
-                yield sha, "\n".join(lines)
-            started = True
+            if target is not None:
+                yield sha, "\n".join(message), "\n".join(patch)
             sha = line[len(COMMIT_MARK) :].strip()[:12]
-            lines = []
-        elif started:
-            lines.append(line)
-    if started:
-        yield sha, "\n".join(lines)
+            message, patch = [], []
+            target = message
+        elif target is not None:
+            if target is message and line.startswith(PATCH_MARK):
+                target = patch
+            else:
+                target.append(line)
+    if target is not None:
+        yield sha, "\n".join(message), "\n".join(patch)
 
 
 def check(
@@ -245,7 +327,7 @@ def check(
             "the tree cannot be listed",
             f"{why}. What cannot be listed is not checked, and it would go into the call all the same.",
         )
-    result = Result(Verdict(), rules=len(rules))
+    result = Result(Verdict(), rules=len(rules), secret_rules=sum(rule.secret for rule in rules))
     tree_files: list[Path] = []
     link_texts: dict[str, str] = {}
     unreadable = False
@@ -282,7 +364,7 @@ def check(
                 "What cannot be read is not checked, and it goes into the call all the same.",
             )
             continue
-        hits += _scan(text, relative, rules, result.verdict)
+        hits += _scan(text, relative, rules, result.verdict, exempt=_under_tests(relative, path))
     for relative, text in link_texts.items():
         hits += _scan(text, relative, rules, result.verdict)
     if unreadable:
@@ -298,7 +380,12 @@ def check(
             f"{why}. The index is what `git show :<path>` reads; skipping it would leave a staged value unchecked.",
         )
     hits += _scan(
-        staged.decode("utf-8", errors="replace"), "staged changes (git diff --cached)", rules, result.verdict, "staged"
+        staged.decode("utf-8", errors="replace"),
+        "staged changes (git diff --cached)",
+        rules,
+        result.verdict,
+        "staged",
+        patch=True,
     )
 
     history, why = _git(
@@ -308,21 +395,24 @@ def check(
         "--remotes",
         "--cc",
         "-p",
+        "--no-renames",
         "--text",
         "--no-color",
         "--no-ext-diff",
         "--no-textconv",
         "--no-show-signature",
-        "--format=commit%x00%H%n%B",
+        "--format=commit%x00%H%n%B%n%x00patch",
     )
     if history is None:
         return _refuse(
             "the history cannot be read",
             f"{why}. The history is what a reviewer's tools can read; skipping it would leave half of it unchecked.",
         )
-    for sha, text in _history_units(history.decode("utf-8", errors="replace")):
+    for sha, message, patch in _history_units(history.decode("utf-8", errors="replace")):
         result.commits += 1
-        hits += _scan(text, f"commit {sha}", rules, result.verdict, "commit")
+        place = f"commit {sha}"
+        hits += _scan(message, place, rules, result.verdict, "commit")
+        hits += _scan(patch, place, rules, result.verdict, "commit", patch=True, first=message.count("\n") + 2)
 
     labelled = list(prompt_texts)
     for label, text in labelled:
@@ -330,6 +420,9 @@ def check(
 
     if hits == 0:
         report = f"leak check clean: {result.files} files, {result.commits} commits, {result.rules} rules"
+        if result.secret_rules:
+            plural = "" if result.secret_rules == 1 else "s"
+            report += f" ({result.secret_rules} secret rule{plural} not applied under {TESTS_PREFIX})"
         if labelled:
             report += f", {len(labelled)} prompt texts"
         result.verdict.info(report)

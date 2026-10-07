@@ -431,6 +431,291 @@ def test_the_cli_returns_the_exit_code_and_reads_a_prompt_file(
 
 
 # ---------------------------------------------------------------------------
+# The secret rules skip `tests/`; the others do not (maintainer, 2026-10-07, O-4)
+# ---------------------------------------------------------------------------
+
+CUSTOMER = "acme-" + SECRET[:8]
+SECRET_RULE = "secret:planted = [a-z]{32}"
+CUSTOMER_RULE = "customer = acme-[a-z]{8}"
+
+# Folders whose files the secret rules skip, and folders that merely look like it.
+EXEMPT_DIRS = ["tests", "tests/fixtures/deep"]
+SCANNED_DIRS = ["src", "tests_extra", "docs/tests", "plans/changes/demo/tests", "mytests", "tests-old"]
+
+
+@pytest.fixture
+def split(tmp_path: Path) -> Path:
+    """A denylist of one secret rule (marked) and one customer rule (unmarked)."""
+    path = tmp_path / "split.txt"
+    path.write_text(f"{SECRET_RULE}\n{CUSTOMER_RULE}\n", encoding="utf-8")
+    return path
+
+
+def commit_file(root: Path, relative: str, text: str) -> str:
+    write(root, relative, text)
+    git(root, "add", "--", relative)
+    git(root, "commit", "--quiet", "-m", f"adds {relative}")
+    return git(root, "rev-parse", "HEAD")[:12]
+
+
+def commit_and_remove(root: Path, relative: str, text: str) -> str:
+    """Only the patches of two commits hold the text afterwards: the tree and the index are clean again."""
+    sha = commit_file(root, relative, text)
+    git(root, "rm", "--quiet", "--", relative)
+    git(root, "commit", "--quiet", "-m", f"removes {relative}")
+    return sha
+
+
+def test_a_rule_is_a_secret_rule_by_the_prefix_of_its_name(tmp_path: Path) -> None:
+    path = tmp_path / "marked.txt"
+    path.write_text(
+        "secret:one = a\ntwo = b\nSecret:three = c\nsecret:four\n secret:five = e\nsecret: six = f\n",
+        encoding="utf-8",
+    )
+    rules, why = leakcheck.read_denylist(path)
+    assert why is None
+    assert [(rule.name, rule.secret) for rule in rules] == [
+        ("secret:one", True),  # the name is kept as written, prefix included
+        ("two", False),
+        ("Secret:three", False),  # exactly `secret:`, in lower case
+        ("line-4", False),  # a line without `name =` is never marked
+        ("secret:five", True),  # the line is stripped first
+        ("secret: six", True),
+    ]
+
+
+@pytest.mark.parametrize("folder", EXEMPT_DIRS)
+def test_a_secret_shaped_fixture_under_tests_passes(folder: str, repo: Path, split: Path) -> None:
+    write(repo, f"{folder}/test_fixture.py", f'KEY = "{SECRET}"\n')
+    result = run_check(repo, split)
+    assert result.verdict.exit_code() == CLEAN, rendered(result)
+
+
+@pytest.mark.parametrize("folder", SCANNED_DIRS)
+def test_the_same_fixture_outside_tests_blocks(folder: str, repo: Path, split: Path) -> None:
+    """`tests_extra/`, `docs/tests/`, a change's own `tests/` and a look-alike are not `tests/`."""
+    write(repo, f"{folder}/test_fixture.py", f'KEY = "{SECRET}"\n')
+    result = run_check(repo, split)
+    assert result.verdict.exit_code() == BLOCKED
+    assert f"{folder}/test_fixture.py:1 - rule 'secret:planted'" in rendered(result)
+
+
+@pytest.mark.parametrize("folder", EXEMPT_DIRS)
+def test_a_customer_rule_still_scans_tests(folder: str, repo: Path, split: Path) -> None:
+    write(repo, f"{folder}/test_fixture.py", f'NAME = "{CUSTOMER}"\nKEY = "{SECRET}"\n')
+    result = run_check(repo, split)
+    assert result.verdict.exit_code() == BLOCKED
+    text = rendered(result)
+    assert f"{folder}/test_fixture.py:1 - rule 'customer'" in text
+    assert "secret:planted" not in text, "the secret rule skipped the file, the customer rule did not"
+
+
+def test_the_accepted_consequence_is_real_a_key_in_a_test_file_is_not_found(repo: Path, split: Path) -> None:
+    """The maintainer's decision names it: under `tests/` the check cannot tell a real key from an invented one."""
+    write(repo, "tests/test_real_looking.py", f'KEY = "{SECRET}"\n')
+    assert run_check(repo, split).verdict.exit_code() == CLEAN
+
+
+def test_the_report_of_a_clean_run_names_the_exemption(repo: Path, split: Path, denylist: Path) -> None:
+    assert "2 rules (1 secret rule not applied under tests/)" in rendered(run_check(repo, split))
+    assert "secret rule" not in rendered(run_check(repo, denylist)), "no marked rule, no remark"
+
+
+def test_a_symbolic_link_under_tests_is_not_exempt(repo: Path, split: Path, tmp_path: Path) -> None:
+    """A link can lead out of the folder, and a reviewer reads through it."""
+    outside = write(tmp_path, "outside.txt", f"{SECRET}\n")
+    (repo / "tests").mkdir()
+    (repo / "tests" / "link.txt").symlink_to(outside)
+    result = run_check(repo, split)
+    assert result.verdict.exit_code() == BLOCKED
+    assert "tests/link.txt:1 - rule 'secret:planted'" in rendered(result)
+
+
+def test_a_dangling_link_under_tests_is_not_exempt(repo: Path, split: Path) -> None:
+    (repo / "tests").mkdir()
+    (repo / "tests" / "dangling").symlink_to(SECRET)
+    result = run_check(repo, split)
+    assert result.verdict.exit_code() == BLOCKED
+    assert "tests/dangling:1" in rendered(result)
+
+
+def test_a_prompt_text_is_never_exempt(repo: Path, split: Path) -> None:
+    result = run_check(repo, split, prompts=(("tests/prompt.md", f"{SECRET}\n"),))
+    assert result.verdict.exit_code() == BLOCKED
+    assert "prompt text tests/prompt.md:1 - rule 'secret:planted'" in rendered(result)
+
+
+@pytest.mark.parametrize("folder", EXEMPT_DIRS)
+def test_a_commit_patch_that_touches_tests_follows_the_same_split(folder: str, repo: Path, split: Path) -> None:
+    commit_and_remove(repo, f"{folder}/test_fixture.py", f'KEY = "{SECRET}"\n')
+    result = run_check(repo, split)
+    assert result.verdict.exit_code() == CLEAN, rendered(result)
+    assert result.commits == 4
+
+    sha = commit_and_remove(repo, f"{folder}/test_name.py", f'NAME = "{CUSTOMER}"\n')
+    blocked = run_check(repo, split)
+    assert blocked.verdict.exit_code() == BLOCKED
+    assert f"commit {sha}:" in rendered(blocked) and "rule 'customer'" in rendered(blocked)
+    assert "secret:planted" not in rendered(blocked)
+
+
+@pytest.mark.parametrize("folder", SCANNED_DIRS)
+def test_a_commit_patch_outside_tests_blocks_on_the_secret_rule(folder: str, repo: Path, split: Path) -> None:
+    sha = commit_and_remove(repo, f"{folder}/test_fixture.py", f'KEY = "{SECRET}"\n')
+    result = run_check(repo, split)
+    assert result.verdict.exit_code() == BLOCKED
+    assert f"commit {sha}:" in rendered(result) and "rule 'secret:planted'" in rendered(result)
+
+
+def test_only_the_hunk_of_the_other_file_blocks_when_a_commit_touches_both(repo: Path, split: Path) -> None:
+    """One commit, two files with the same text: the one under `tests/` is skipped, the other is found once."""
+    write(repo, "tests/test_a.py", f'KEY = "{SECRET}"\n')
+    write(repo, "src/b.py", f'KEY = "{SECRET}"\n')
+    git(repo, "add", "tests/test_a.py", "src/b.py")
+    git(repo, "commit", "--quiet", "-m", "both")
+    sha = git(repo, "rev-parse", "HEAD")[:12]
+    git(repo, "rm", "--quiet", "tests/test_a.py", "src/b.py")
+    git(repo, "commit", "--quiet", "-m", "removes both")
+    result = run_check(repo, split)
+    text = rendered(result)
+    assert result.verdict.exit_code() == BLOCKED
+    assert text.count(f"commit {sha}:") == 1, "one hit for the hunk outside tests/"
+    assert text.count("rule 'secret:planted'") == 2, "the same file's removal in the next commit is the second"
+
+
+def test_the_exemption_follows_a_hunk_back_out_of_tests(repo: Path, split: Path) -> None:
+    """The file order of a patch is alphabetical: `src/` comes before `tests/`, and the state must not leak."""
+    write(repo, "src/early.py", "harmless\n")
+    write(repo, "tests/test_late.py", f'KEY = "{SECRET}"\n')
+    write(repo, "zzz/after.py", f'KEY = "{SECRET}"\n')
+    git(repo, "add", "src/early.py", "tests/test_late.py", "zzz/after.py")
+    git(repo, "commit", "--quiet", "-m", "three files")
+    sha = git(repo, "rev-parse", "HEAD")[:12]
+    result = run_check(repo, split)
+    assert result.verdict.exit_code() == BLOCKED
+    assert f"commit {sha}:" in rendered(result)
+    assert "zzz/after.py:1 - rule 'secret:planted'" in rendered(result)
+    assert "tests/test_late.py:1" not in rendered(result)
+
+
+@pytest.mark.parametrize(
+    "name",
+    ["a b.py", "ä.py", 'q"uote.py'],
+    ids=["a-space", "non-ascii", "a-quote"],
+)
+def test_a_name_that_is_hard_to_read_in_a_header_is_exempt_or_scanned_never_mixed_up(
+    name: str, repo: Path, split: Path
+) -> None:
+    """A space and a non-ASCII letter are read with certainty; a quoted name is not, and then the check blocks."""
+    commit_and_remove(repo, f"tests/{name}", f'KEY = "{SECRET}"\n')
+    result = run_check(repo, split)
+    if '"' in name:
+        assert result.verdict.exit_code() == BLOCKED, "a header that cannot be read with certainty is scanned in full"
+    else:
+        assert result.verdict.exit_code() == CLEAN, rendered(result)
+
+
+def _resolve_a_conflict(root: Path, folder: str, resolved: str) -> str:
+    """A merge whose combined diff (`--cc`) shows the line the resolution adds beyond both parents."""
+    relative = f"{folder}/shared.py"
+    commit_file(root, relative, "VALUE = 0\n")
+    git(root, "checkout", "--quiet", "-b", "side")
+    commit_file(root, relative, "VALUE = 1\n")
+    git(root, "checkout", "--quiet", "main")
+    commit_file(root, relative, "VALUE = 2\n")
+    run = subprocess.run(
+        ["git", "-c", "user.name=t", "-c", "user.email=t@example.invalid", "-c", "commit.gpgsign=false",
+         "merge", "--no-commit", "side"],
+        cwd=root, capture_output=True, text=True, check=False,
+    )  # fmt: skip
+    assert run.returncode == 1, "the fixture must conflict"
+    write(root, relative, resolved)
+    git(root, "add", "--", relative)
+    git(root, "commit", "--quiet", "-m", "merge side")
+    sha = git(root, "rev-parse", "HEAD")[:12]
+    git(root, "branch", "--quiet", "-D", "side")
+    # The resolved value is taken out again in a commit of its own, so that only history holds it.
+    git(root, "rm", "--quiet", "--", relative)
+    git(root, "commit", "--quiet", "-m", "removes")
+    return sha
+
+
+def test_a_merge_resolution_under_tests_follows_the_same_split(repo: Path, split: Path) -> None:
+    _resolve_a_conflict(repo, "tests", f'VALUE = "{SECRET}"\n')
+    assert run_check(repo, split).verdict.exit_code() == CLEAN
+    # The same resolution outside `tests/` is found, so the fixture really shows a combined diff.
+    other = repo.parent / "second"
+    other.mkdir()
+    git(other, "init", "--quiet", "--initial-branch=main")
+    write(other, "plans/changes/demo/spec.md", "# Spec\n")
+    git(other, "add", "-A")
+    git(other, "commit", "--quiet", "-m", "first")
+    sha = _resolve_a_conflict(other, "src", f'VALUE = "{SECRET}"\n')
+    result = run_check(other, split)
+    assert result.verdict.exit_code() == BLOCKED
+    assert f"commit {sha}:" in rendered(result)
+
+
+@pytest.mark.parametrize("folder", EXEMPT_DIRS)
+def test_the_staged_diff_follows_the_same_split(folder: str, repo: Path, split: Path) -> None:
+    relative = f"{folder}/staged.py"
+    write(repo, relative, f'KEY = "{SECRET}"\n')
+    git(repo, "add", "--", relative)
+    write(repo, relative, "clean again\n")
+    result = run_check(repo, split)
+    assert result.verdict.exit_code() == CLEAN, rendered(result)
+
+    git(repo, "reset", "--quiet", "--", relative)
+    write(repo, "src/staged.py", f'KEY = "{SECRET}"\n')
+    git(repo, "add", "--", "src/staged.py")
+    write(repo, "src/staged.py", "clean again\n")
+    blocked = run_check(repo, split)
+    assert blocked.verdict.exit_code() == BLOCKED
+    assert "staged changes" in rendered(blocked)
+
+
+def test_a_commit_message_is_never_exempt_not_even_one_that_forges_a_header(repo: Path, split: Path) -> None:
+    """The message is not a file under `tests/`. A line in it that looks like a diff header changes nothing."""
+    forged = f"subject\n\ndiff --git a/tests/x.py b/tests/x.py\nKEY = {SECRET}\n"
+    git(repo, "commit", "--quiet", "--allow-empty", "-m", forged)
+    sha = git(repo, "rev-parse", "HEAD")[:12]
+    result = run_check(repo, split)
+    assert result.verdict.exit_code() == BLOCKED
+    assert f"commit {sha}:" in rendered(result) and "rule 'secret:planted'" in rendered(result)
+
+
+def test_a_message_with_a_secret_blocks_though_the_patch_is_under_tests(repo: Path, split: Path) -> None:
+    write(repo, "tests/test_a.py", f'KEY = "{SECRET}"\n')
+    git(repo, "add", "tests/test_a.py")
+    git(repo, "commit", "--quiet", "-m", f"subject\n\nthe key is {SECRET}")
+    sha = git(repo, "rev-parse", "HEAD")[:12]
+    result = run_check(repo, split)
+    text = rendered(result)
+    assert result.verdict.exit_code() == BLOCKED
+    assert text.count(f"commit {sha}:") == 1, "the message, and not the hunk under tests/"
+
+
+def test_the_report_of_an_exempt_run_still_never_carries_the_match(repo: Path, split: Path) -> None:
+    write(repo, "src/leak.txt", f"value = {SECRET}\n")
+    write(repo, "tests/fixture.txt", f"value = {SECRET}\nname = {CUSTOMER}\n")
+    text = rendered(run_check(repo, split))
+    assert "src/leak.txt:1" in text and "tests/fixture.txt:2 - rule 'customer'" in text
+    for start in range(len(SECRET) - 7):
+        assert SECRET[start : start + 8] not in text.replace(CUSTOMER, ""), "a part of the match is in the report"
+    assert CUSTOMER not in text
+
+
+def test_the_exemption_and_its_consequence_are_stated() -> None:
+    """The docstring and the doctrine say what is skipped, by which marker, and what that costs."""
+    doc = " ".join((leakcheck.__doc__ or "").split())
+    workflow = " ".join((REPO_ROOT / "docs" / "WORKFLOW.md").read_text(encoding="utf-8").split())
+    for text in (doc, workflow):
+        assert "`secret:`" in text and "tests/" in text, "the marker and the folder"
+        assert "real key" in text and "not found" in text, "the accepted consequence"
+        assert "customer" in text, "the rules for a customer's names still apply"
+
+
+# ---------------------------------------------------------------------------
 # The suite never reaches the real denylist
 # ---------------------------------------------------------------------------
 
