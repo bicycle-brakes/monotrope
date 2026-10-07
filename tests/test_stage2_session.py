@@ -707,6 +707,7 @@ def test_codex_is_dispatched_interactively_with_its_exact_safety_flags(world: Wo
         "workspace-write",
         "--ask-for-approval",
         "on-request",
+        "--",
         expected_prompt(world, HANDOVER),
     ], argv
     assert world.calls("codex")[0]["cwd"] == str(world.tree)
@@ -741,10 +742,27 @@ def test_opencode_is_dispatched_interactively_with_the_checked_agent(world: Worl
         GO_MODEL,
         "--agent",
         stage2_session.AGENT,
-        "--prompt",
-        expected_prompt(world, HANDOVER),
+        f"--prompt={expected_prompt(world, HANDOVER)}",
     ]
     assert interactive["env"]["OPENCODE_CONFIG"].startswith(str(world.tree / stage2_session.SESSION_ROOT))
+
+
+@pytest.mark.parametrize("transport", ["codex", "opencode"])
+def test_a_handover_that_starts_like_an_option_stays_the_prompt(world: World, transport: str) -> None:
+    # Loop row L2-1: a journal handover starts with `---`; no CLI may read it as an option.
+    text = "---\ntitle: a journal handover\n---\n\nResume here.\n"
+    world.handover.write_text(text, encoding="utf-8")
+    if transport == "codex":
+        world.script(osascript=[{"exec_command": True}])
+        assert world.run() == 0
+        argv = world.cli_argv()
+        assert argv[-2:] == ["--", expected_prompt(world, text)], "options end before the prompt"
+    else:
+        world.declare_go()
+        world.script(opencode=[{"stdout": effective(GO_MODEL)}, {}], osascript=[{"exec_command": True}])
+        assert world.run(model=GO_MODEL) == 0
+        launched = [call for call in world.calls("opencode") if call["argv"][:2] == ["--pure", str(world.tree)]]
+        assert launched[0]["argv"][-1] == f"--prompt={expected_prompt(world, text)}", "the prompt is bound to its flag"
 
 
 def test_hostile_prompt_text_stays_data(world: World) -> None:
@@ -796,6 +814,7 @@ def test_the_policy_repairs_the_truncation_allowance_once(world: World) -> None:
         (effective(GO_MODEL, after=(rule("external*", "/etc/*", "allow"),)), "after its catch-all"),
         (effective(GO_MODEL, after=(rule("bash", "rm *", "allow"),)), "after its catch-all"),
         (effective(GO_MODEL, mode="all"), "not as the primary agent"),
+        (effective(GO_MODEL, after=(rule("webfetch", "*", "allow"),)), "webfetch ends on the catch-all allow"),
     ],
     ids=[
         "persistent-allowance",
@@ -807,6 +826,7 @@ def test_the_policy_repairs_the_truncation_allowance_once(world: World) -> None:
         "wildcard-name-specific",
         "bash-specific-allow",
         "not-primary",
+        "webfetch-allow",
     ],
 )
 def test_an_override_the_runner_did_not_write_refuses(

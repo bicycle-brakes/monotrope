@@ -2,7 +2,7 @@
 title: "Design — stage2-session"
 category: design
 created: 2026-10-07
-updated: 2026-10-07
+updated: 2026-10-08
 status: draft
 implementation_status: partial
 date: 2026-10-07
@@ -57,7 +57,7 @@ the maintainer accepted that boundary in F-2. A helper handles mechanics while
   `cd`, `env -i` variables and CLI arguments are separately shell-quoted.
   No caller tokens/model overrides. Codex uses workspace-write, on-request
   approval and `--no-daemon`; OpenCode uses the checked primary agent and
-  full handover text as `--prompt`. Bound prompt/command arguments.
+  full handover text as `--prompt=<text>`; Codex takes it after `--`. Bound prompt/command arguments.
 
 ## Data model
 
@@ -71,8 +71,10 @@ an already accepted terminal command.
 Only a fresh private policy subdirectory under gitignored `.stage2-sessions/`
 is created. Refuse a symlink/outside runtime root; failure cleans only the
 created private directory. Accepted dispatch retains policy for the new CLI
-to load; it contains no prompt or credentials. Remove it after that session
-exits. No project/global config is replaced.
+to load; it contains no prompt or credentials. The runner cannot observe the
+session's end, so it never removes an accepted directory; the maintainer may
+delete `.stage2-sessions/` once no session runs. No project/global config is
+replaced.
 
 ## ADR draft
 

@@ -61,9 +61,14 @@ OSASCRIPT_TIMEOUT = 30.0
 TRANSPORTS = {"openai-codex": "codex", "opencode-go": "opencode"}
 
 # The guarded OpenCode permissions and the actions the effective policy may end
-# on: outside directories and subagents denied, bash asked for or denied - an
+# on: outside directories, subagents and web fetches denied, bash asked for or denied - an
 # allow anywhere is not the runner's policy.
-GUARDED = {"external_directory": ("deny",), "task": ("deny",), "bash": ("ask", "deny")}
+GUARDED = {
+    "external_directory": ("deny",),
+    "task": ("deny",),
+    "webfetch": ("deny",),
+    "bash": ("ask", "deny"),
+}
 
 # The fixed AppleScript source. The shell command arrives as argv data and is
 # never spliced into this text, so prompt content cannot become AppleScript.
@@ -443,7 +448,12 @@ def prepare(root: Path, transport: str, selection: str, cli: str, runner) -> Pat
 
 
 def cli_argv(transport: str, root: Path, cli: str, model: str, prompt: str) -> list[str]:
-    """The one interactive form per transport: no headless verb, no fallback, no extra writable directory."""
+    """The one interactive form per transport: no headless verb, no fallback, no extra writable directory.
+
+    The prompt can begin with `---` (a handover's frontmatter) or with a word that is a subcommand. Codex
+    gets it after `--`, the end of its options; OpenCode as `--prompt=<text>`, since its parser would not
+    take a separate value that starts with a dash.
+    """
     if transport == "codex":
         return [
             cli,
@@ -456,9 +466,10 @@ def cli_argv(transport: str, root: Path, cli: str, model: str, prompt: str) -> l
             "workspace-write",
             "--ask-for-approval",
             "on-request",
+            "--",
             prompt,
         ]
-    return [cli, "--pure", str(root), "--model", model, "--agent", AGENT, "--prompt", prompt]
+    return [cli, "--pure", str(root), "--model", model, "--agent", AGENT, f"--prompt={prompt}"]
 
 
 def terminal_command(root: Path, env: dict[str, str], argv: list[str]) -> str:

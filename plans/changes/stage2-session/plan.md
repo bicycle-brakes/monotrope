@@ -4,7 +4,7 @@ status: draft
 implementation_status: partial
 date: 2026-10-07
 last_reviewed: 2026-10-07
-updated: 2026-10-07
+updated: 2026-10-08
 supersedes: null
 superseded_by: null
 bead: coding-harness-amp
@@ -75,9 +75,9 @@ The accepted spec and design are the contract; F-2 is answered.
    never allow. Insert explicit denials for specific automatic allowances and
    recheck once; unresolved/managed overrides refuse. No global-file reads.
 4. Codex argv: resolved CLI --no-daemon --model ID --cd ROOT --sandbox
-   workspace-write --ask-for-approval on-request, positional full prompt.
+   workspace-write --ask-for-approval on-request --, positional full prompt.
    OpenCode argv: resolved CLI --pure ROOT --model FULL-ID --agent
-   harness-session --prompt PROMPT. Use foreign_env allow-list, no caller API
+   harness-session --prompt=PROMPT. Use foreign_env allow-list, no caller API
    tokens/model overrides. Separately shell-quote cd, env -i variables and
    argv; fixed AppleScript takes shell command as argv data. Do not wait for
    interactive exit, use headless verbs or add writable directories.
