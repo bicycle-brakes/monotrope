@@ -304,12 +304,12 @@ both boundaries read with `date`.
   (path, mtime, size; `git ls-files --others --ignored --exclude-standard`)
   after the baseline, and every scan adds the ignored files whose entry
   differs; an ignored file that was already there and is untouched is never
-  rewritten. `.venv/` is excluded: it is third-party code `make venv`
-  installs, tens of thousands of files the runner does not create, and the
-  gate's bytecode caches inside it are not model output - scanning it three
-  times per attempt is impractical, and the limit is named in the
-  `ignored_snapshot` docstring. Held by
-  `test_a_key_in_a_gitignored_file_written_by_the_run_is_removed_and_refused`.
+  rewritten. `.venv/` is included (recheck of phase 6): the gate runs
+  repository code that can write there. Only entries whose (mtime, size)
+  changed are read, so installed files are stat-ed, never rewritten; measured
+  2026-10-07, about 1,700 ignored files, 0.06 s per snapshot, so no mtime
+  fallback is needed. Held by
+  `test_a_key_the_gate_writes_under_venv_is_removed_and_refused` and `test_a_key_in_a_gitignored_file_written_by_the_run_is_removed_and_refused`.
 - Phase-6 finding F6-5: tests for the refusals of the new verbs that had none:
   `test_a_broken_declaration_stops_the_work_verbs_before_any_model` (four
   faults on both routes of both verbs),

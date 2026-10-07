@@ -1080,6 +1080,33 @@ def test_a_key_fragment_in_a_changed_file_is_removed_and_refused(world: World) -
     assert source == "credential = '[credential]'\n"
 
 
+def test_a_key_the_gate_writes_under_venv_is_removed_and_refused(world: World) -> None:
+    (world.root / ".gitignore").write_text(".venv/\n", encoding="utf-8")
+    (world.root / ".venv").mkdir()
+    old = world.root / ".venv" / "old.txt"
+    old.write_text(f"mine = {KEY}\n", encoding="utf-8")
+    git(world.root, "add", "-A")
+    git(world.root, "commit", "--quiet", "-m", "ignore .venv")
+    world.script(
+        claude=[
+            {
+                "stdout": "implemented",
+                "plant": {"src/app.py": "value = 2\n"},
+                "append": {"plans/changes/demo/plan.md": "2026-10-07 10:00–10:05, 5 min\n"},
+            },
+            {"stdout": "must not run"},
+        ],
+        make=[{"stdout": "green\n", "plant": {".venv/gate.txt": f"token = {KEY}\n"}}],
+    )
+    before = git(world.root, "rev-parse", "HEAD")
+    assert world.run("implement") == 2
+    assert len(world.calls("claude")) == 1
+    assert git(world.root, "rev-parse", "HEAD") == before
+    written = (world.root / ".venv" / "gate.txt").read_text(encoding="utf-8")
+    assert "[credential]" in written and KEY not in written
+    assert KEY in old.read_text(encoding="utf-8")
+
+
 def test_a_key_in_the_gate_output_never_reaches_the_next_attempt(world: World) -> None:
     world.script(
         claude=[

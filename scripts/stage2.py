@@ -931,12 +931,11 @@ def changed_paths(root: Path) -> set[Path]:
 def ignored_snapshot(root: Path) -> dict[Path, tuple[int, int]]:
     """Gitignored files with their mtime and size, so a later scan can tell which the run touched.
 
-    `.venv/` is left out: it is third-party code `make venv` installs, thousands of files this
-    runner does not create, and the gate's bytecode caches inside it are not model output.
+    `.venv/` is included: the gate runs repository code that can write into it. Only entries whose
+    (mtime, size) differ from this snapshot are scanned, so installed third-party files are
+    stat-ed, never read or rewritten. Measured 2026-10-07: about 1,700 ignored files, 0.06 s.
     """
-    listing = _git_output(
-        root, "ls-files", "-z", "--others", "--ignored", "--exclude-standard", "--", ".", ":(exclude).venv"
-    ).split("\0")
+    listing = _git_output(root, "ls-files", "-z", "--others", "--ignored", "--exclude-standard", "--", ".").split("\0")
     snapshot = {}
     for name in filter(None, listing):
         try:
