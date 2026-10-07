@@ -25,9 +25,15 @@ it would silently replace it (`tests/test_entry_points.py`).
 | 2a | Spec-Review *(optional)* | lines for `findings.md`, dimension SPEC | no open `[AMBIGUITY]` |
 | 3 | Plan | `plan.md` | validator green |
 | 4 | Implement | code + tests | `make verify` green |
+| 4b | Review loop *(stage 2)* | loop rows, into `findings.md` after the phase-6 verdict | at most two rounds, `make verify` green after each repair |
 | 5 | Verify | test output as evidence | stop-hook blocks on a red tree |
 | 6 | Review | `findings.md` | no open BLOCKER — `[DIVERGENT]` counts as BLOCKER |
 | 7 | Commit | pull request | CI green |
+
+**Stage 2** (framework content, ADR 0007): a foreign model — a reviewer, Codex
+or GLM, and GLM 5.3 Flash for explore and implement once the runner starts them
+— is started only through `python3 scripts/stage2.py`, which runs the leak check
+before every call. Reviews go by change class; explore and implement do not.
 
 Plus the session handover (the eighth movement — `docs/journal/handover/`,
 `direction: framework->framework`) and the question protocol:
