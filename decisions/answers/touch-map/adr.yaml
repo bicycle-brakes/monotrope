@@ -1,0 +1,13 @@
+schema_version: 1
+change: touch-map
+question: adr
+answer: 'no'
+reason: It is a pull-request convention, not an architecture decision; ADR 0009 stays
+  unchanged.
+shown:
+  proposed: 'no'
+  proposal_reason: It adds a pull request convention and the script that fills it,
+    decides nothing about the architecture, and leaves ADR 0009 unchanged, as the
+    maintainer chose on 2026-10-06.
+answered_by: framework-architect
+answered_at: 2026-10-06

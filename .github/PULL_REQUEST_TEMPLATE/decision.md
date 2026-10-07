@@ -21,6 +21,10 @@ done: <verification command>: <result> at <short sha> · <time used> of <appetit
 - <effect on your work, or "nothing you will notice">
 - <effect on other repositories, or "none">
 
+## What it touches
+<the output of `python3 scripts/touch_map.py origin/main HEAD`, pasted unchanged after the last push>
+<for a change with a design.md: "Architecture delta: `plans/changes/<name>/design.md`">
+
 ## Where it fits
 Phase <n, name> of seven · stage <1> of three · touches: <component, path>
 
