@@ -46,7 +46,7 @@ nor verifies such a session policy (`research.md`, "Where it lives").
 The currently usable positive path is `--model gpt-6.1-sol`, through the
 declared `openai-codex` endpoint and official Codex CLI. The OpenCode path
 accepts `opencode-go/<model>` only when the separate OpenCode Go change has
-declared that exact provider/model selection for framework content in
+declared `opencode-go` with that model for framework content in
 `model-endpoints.yaml` (coding-harness-ymx). On today's main it refuses every
 OpenCode Go model: this change does not grant endpoint approval. Fixture-only
 positive tests supply an explicitly declared endpoint, not a production

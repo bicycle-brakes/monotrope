@@ -102,6 +102,22 @@ The session is not supervised for program-start acknowledgment or model success.
 - [DETAIL] Initial prompts are capped at 32 KiB UTF-8, complete shell dispatch
   commands at 64 KiB: refuse oversized arguments before GUI dispatch.
 
+- [DETAIL] (2026-10-07, repair session) The `opencode-go` entry lists bare
+  model ids, as the reviewer change (coding-harness-ymx, spec criterion 1 on
+  `feat/stage2-mimo` at `8310a2c`) declares them for its Claude Code calls.
+  `--model opencode-go/<model>` therefore resolves against the bare `<model>`
+  and hands the full id to OpenCode's CLI; a plain id stays Codex's. Requiring
+  the full id in `modelle` would have refused every OpenCode Go session once
+  both changes merge. The maintainer was told and did not object.
+- [DETAIL] (2026-10-07, repair session) The effective-policy check follows
+  OpenCode 1.18.35 as read from its source (`agent/agent.ts`,
+  `permission/index.ts`, `cli/cmd/debug/agent.handler.ts`): `model` is
+  `{providerID, modelID}`, `permission` one ordered rule list, the last rule
+  whose wildcard permission name and pattern match wins, and the truncation
+  directory allowance is appended unless that exact pattern is denied. The
+  check requires each guarded permission's last catch-all rule to be the
+  runner's action and refuses every later rule except that one allowance.
+
 ## Implementation route after the unanswered attempt
 
 Maintainer, 2026-10-07: "kannst du mit glm implementieren?" following the

@@ -39,3 +39,33 @@ CLI exit 143, runner exit 1; the worktree needed no restore. This is not a
 completed implementation or review. Claude Code also reported that its local
 catalog did not describe glm-5.3-flash; that warning alone does not establish
 the cause of the missing response. No credentials were read by the orchestrator.
+
+Stage-2 call, 2026-10-07: implement · attempt 1 · route flash · endpoint glm-coding-plan · model glm-5.3-flash · leak check clean over 274 files, 614 commits, 12 rules.
+
+Implementation attempt outcome, 2026-10-07: the second GLM Flash attempt ran
+as a file-tool worker and wrote the session verb: `scripts/stage2_session.py`
+(the dispatch helper), `scripts/stage2.py` (session wiring, the required
+`--model` and optional `--handover`, and the refusals for other verbs),
+`tests/test_stage2_session.py` (refusal and dispatch tests over temporary
+linked worktrees with fake CLI, effective-policy and Terminal stand-ins), the
+`.stage2-sessions/` ignore entry, the workflow section "The interactive
+session (`session`)", and this record. No command ran in the worker session:
+`make verify`, the registry check and any repair belong to the runner step
+that follows. The GUI/model smoke test is unrun. Review loop and final review
+have not started.
+
+Stage-2 call, 2026-10-07: implement · attempt 2 · route flash-repair · endpoint glm-coding-plan · model glm-5.3-flash · reason first Flash post-run check failed · leak check clean over 276 files, 614 commits, 12 rules.
+
+Implementation attempt outcome, 2026-10-07: the repair attempt reviewed the
+attempt-2 code against the block gates and repaired three defects, all in
+`tests/test_stage2_session.py`: the denylist refusal is now asserted against
+the rendered verdict on standard output instead of standard error, and the two
+OpenCode dispatch tests now script the `osascript` stand-in step that runs the
+launch command, so the recorded interactive `opencode` call exists and is
+asserted exactly once. `scripts/stage2_session.py`, the session wiring in
+`scripts/stage2.py`, the workflow section and the ignore entry stood the
+review unchanged. No command ran in the worker session: `make verify`, the
+registry check, the review loop and the final review belong to the runner
+steps that follow. The GUI/model smoke test is unrun.
+
+Stage-2 call, 2026-10-07: implement · attempt 3 · route stage-1 · endpoint claude-code-plan · model claude-sonnet-5-5 · reason two Flash post-run checks failed · leak check clean over 276 files, 615 commits, 12 rules.

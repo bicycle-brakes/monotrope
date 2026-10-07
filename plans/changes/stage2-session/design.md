@@ -40,8 +40,9 @@ the maintainer accepted that boundary in F-2. A helper handles mechanics while
   No stage-2-off bypass. Canonical worktree/cwd checked against git's common
   directory; attached branch required. Unsupported platforms refuse.
 - Declaration: `openai-codex` uses its exact listed model via Codex;
-  `opencode-go/<model>` requires endpoint `opencode-go` to list that full ID
-  in `modelle`. No aliases, suffix guessing or reviewer ordering. Go remains
+  `opencode-go/<model>` requires endpoint `opencode-go` to list the bare
+  `<model>` in `modelle` (as the reviewer change declares it); the CLI gets
+  the full ID. No aliases, suffix guessing or reviewer ordering. Go remains
   disabled in production until its separate declaration lands.
 - Shared preflight: the helper receives the invoking runner module explicitly
   and uses its `preflight`, `checked_prompt`, `foreign_env`, findings helpers

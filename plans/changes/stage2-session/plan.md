@@ -60,7 +60,7 @@ The accepted spec and design are the contract; F-2 is answered.
    directory parent's `.claude/worktrees/<change>`. Use shared preflight.
    Defensively validate declaration structure, uniqueness, framework permission
    and residency. Exact plain IDs on openai-codex or full opencode-go/<model>
-   IDs on opencode-go only; no aliases, guessing, approval or fallback.
+   IDs whose bare model opencode-go lists; no aliases, guessing, approval or fallback.
 2. Resolve default change-local handover.md or explicit source inside worktree
    before reading; require regular readable nonempty UTF-8. Full text is first
    prompt, with AGENTS/read and launch-limit instructions. Refuse NUL, prompt
@@ -120,6 +120,10 @@ Decision-template PR with label, touch map and open-bead milestone; no merge.
 Name GUI/model smoke as unrun unless measured through runner. Handover and
 hosted green checks complete delivery.
 
+## Runner route — 2026-10-07
+
+Stage-1 route: implement · model claude-sonnet-5-5 · reason: two Flash post-run checks failed.
+
 ## Time used
 
 Implementation has not started. The orchestrator measures implementation and
@@ -130,3 +134,30 @@ limitation honestly; never invent a measured duration.
 implementation attempt produced no answer or code before operator termination.
 Runner returned exit 1 after the CLI exited 143; no restore was needed.
 No implementation checkpoint or passing implementation verification exists.
+
+2026-10-07, second implementation attempt (file-tool worker): this worker has
+no clock and claims no span; it read the date 2026-10-07 at start and end. It
+wrote the helper, the runner wiring, the tests, the workflow section and the
+ignore entry as the plan lists them, then stopped for the runner's verify.
+The orchestrator's clock measures the real span; no duration is invented here.
+
+2026-10-07, repair attempt on the attempt-2 code (file-tool worker): this
+worker has no clock and claims no span; it read the date 2026-10-07 at start
+and end. It reviewed the attempt-2 code against the block gates and repaired
+three defects, all in `tests/test_stage2_session.py`: the denylist refusal is
+now asserted against the rendered verdict on standard output, and the two
+OpenCode dispatch tests now script the `osascript` stand-in step that executes
+the launch command, so the asserted interactive `opencode` call is actually
+recorded. The helper, the runner wiring, the docs and the gates stood the
+review otherwise unchanged. The orchestrator's clock measures the real span;
+no duration is invented here.
+
+2026-10-07, second repair attempt (file-tool worker): this worker has no clock
+and claims no span; it read the date 2026-10-07 at start and end. The reported
+`make verify` output was markdownlint noise from a report-only gate, so it
+named no blocking gate. By reading the code against `ruff.toml` (line length
+120) it found one blocking defect, `ruff format --check`: the `opencode-go
+takes the full id` refusal in `scripts/stage2_session.py` fits on one line at
+exactly 120 characters and is now written as one. No command ran, so nothing is
+verified; the runner's `make verify` decides. The orchestrator's clock measures
+the real span; no duration is invented here.

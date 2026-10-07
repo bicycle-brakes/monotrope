@@ -190,3 +190,204 @@ this addendum's writing. Ownership/no-merge/broader-bead limits are unchanged.
 
 Resume: run .venv/bin/python3 scripts/stage2.py implement stage2-session
 from the dedicated worktree after the documentation checkpoint is green.
+
+## Addendum — second Flash attempt wrote the session verb, verification pending, 2026-10-07
+
+The retry ran the GLM Flash implement prompt as a file-tool worker: file tools
+only, no command execution, no clock. Written in the dedicated worktree on
+feat/stage2-session: scripts/stage2_session.py (canonical worktree, declaration
+resolution, handover prompt, double leak scan, OpenCode policy verification,
+Terminal dispatch, findings audit), the session wiring and --model/--handover
+switches in scripts/stage2.py, tests/test_stage2_session.py (temporary linked
+worktrees, fake CLI, effective-policy and Terminal stand-ins; no real model or
+GUI call), the .stage2-sessions/ ignore entry and the workflow section "The
+interactive session (session)". The change artifacts carry the honest outcome
+records, and plans/INDEX.md needed no regeneration (no registry-relevant
+frontmatter change, no new file under plans/).
+
+Not done and not claimed: make verify has not run in the worker session — the
+runner runs it and makes the checkpoint commit; the review loop, the final
+review and the decision PR are open; the GUI/model smoke test is unrun.
+Ownership is unchanged: own worktree only, no merge, docs/adr/ and
+provenance.yaml untouched, wider parity bead open, tracker writes limited to
+the own claim.
+
+Resume: with the runner green, start the GLM review loop over the diff; with
+it red, repair the named failures first.
+
+## Addendum — handover back to Claude, 2026-10-07
+
+This addendum supersedes the earlier resumption instructions. Snapshot taken
+after 20:48 UTC on 2026-10-07. The maintainer requested a handover to Claude;
+no implementation repair was made by Codex during this handover.
+
+### Location and preserved state
+
+- Main checkout: `/Users/mikypiky/coding-harness` (branch `main`).
+- Work only in `/Users/mikypiky/coding-harness/.claude/worktrees/stage2-session`.
+- Branch: `feat/stage2-session`; base: `b32f488`.
+- Last pushed checkpoint: `34e9936`, documentation and route clarification.
+- Bead: `coding-harness-amp`, IN_PROGRESS, assigned to `codex`; the lease
+  is expired. Recheck session ownership before claiming as the new actor.
+- No decision PR has been opened. The implementation is preserved locally,
+  uncommitted and unpushed. Do not reset, clean or recreate this worktree.
+
+Modified tracked files: `.gitignore`, `docs/WORKFLOW.md`, this handover,
+`plans/changes/stage2-session/findings.md`,
+`plans/changes/stage2-session/plan.md`, and `scripts/stage2.py`.
+Untracked implementation files: `scripts/stage2_session.py` and
+`tests/test_stage2_session.py`; both are required, not disposable debris.
+
+### Actual runner outcome and model distinction
+
+The second invocation of `stage2.py implement stage2-session` started at
+17:06:57 UTC. Its exact completion time was not captured. It is now stopped,
+with exit 1 and the message:
+`failed: implementation post-run checks failed after the allowed attempts`.
+The outer execution session was 89632; it has completed, not a resumable live
+model session. The code listed above remains present after the failure.
+
+The audit records this order:
+
+1. `glm-coding-plan`, `glm-5.3-flash`, route `flash`: implementation written,
+   post-run checks failed.
+2. The same GLM model, route `flash-repair`: repairs written, checks still
+   failed. The worker record names three test fixes, not a successful gate.
+3. `claude-code-plan`, `claude-sonnet-5-5`, route `stage-1`: fallback was
+   invoked after two failed Flash checks. The final runner result remained red.
+
+Both backend routes use the executable named `claude`. GLM uses Z.ai through
+the runner's isolated `glm_env`; Sonnet uses Anthropic. Do not describe the
+GLM calls as Anthropic calls. No GLM authentication/quota error was established,
+and the final failure message does not establish a Sonnet budget error either.
+The runner captures output until the CLI exits, so silence alone does not prove
+an endpoint outage. All three audited pre-call leak checks were clean.
+
+### Current reproducible test evidence
+
+The handover check ran the command below on the preserved implementation,
+using fake CLI and Terminal processes only (no model or real GUI launch):
+
+```bash
+GIT_CONFIG_COUNT=1 GIT_CONFIG_KEY_0=commit.gpgsign GIT_CONFIG_VALUE_0=false \
+  .venv/bin/python3 -m pytest tests/test_stage2_session.py -q --tb=short
+```
+
+Result on 2026-10-07 after 20:48 UTC: **10 failed, 55 passed in 15.15s**.
+The earlier 11-failed/54-passed observation was an intermediate repair
+snapshot, not the current result. Full `make verify` has not passed on this
+implementation; the 1,126-passed GREEN results above are documentation-only
+checkpoints, not evidence that the new code works.
+
+### Concrete defects and checks to repair
+
+- `terminal_command()` uses bare `env`; the fake test PATH does not contain
+  it, so the shell never reaches Codex. Use the intended absolute
+  `/usr/bin/env`. `cli_argv()` already includes the executable, but
+  `terminal_command()` prepends it again. Remove the duplicate and assert the
+  real argument shape rather than adapting tests to the broken command.
+- Six failing tests see no Codex call: default prompt, explicit prompt,
+  inside symlink, Codex safety flags, hostile prompt text, and no-token
+  environment. Diagnose the shared launch defect first.
+- FIFO test: unlink the fixture's existing handover file before `os.mkfifo`.
+- OpenCode dispatch test: the stand-in records `sys.argv[1:]`, but the debug
+  expectation incorrectly includes the executable. Correct the expectation.
+- Truncation-policy repair test: two diagnostics occur but no interactive
+  launch is recorded; check the `osascript` stand-in's execution scenario.
+- Workflow wording test: its literal expected sentence is split across lines
+  in Markdown. Test the semantic text with normalized whitespace.
+- Additional implementation concern, not covered faithfully by the current
+  stand-ins: `effective_policy()` assumes a model string and a permission map.
+  OpenCode 1.18.35's real Agent.Info uses a model object with `providerID` and
+  `modelID`, and an ordered list of permission rules. Recheck the pinned
+  upstream source, then correct parser and fixtures together. Permission
+  evaluation is last-matching-rule, including wildcard permission names;
+  require an effective catch-all denial, not just a few specific deny rows.
+  Preserve the bounded recheck for the automatic truncation-directory allow.
+
+Relevant primary source paths under the OpenCode v1.18.35 tag:
+`packages/opencode/src/agent/agent.ts`,
+`packages/opencode/src/permission/index.ts`, and
+`packages/opencode/src/cli/cmd/debug/agent.handler.ts`
+in `https://github.com/anomalyco/opencode`.
+
+### Settled decisions, scope and remaining workflow
+
+Read `research.md`, `decisions.md`, `spec.md`, `design.md`, `plan.md` and
+`adr-0007-session-amendment.md` in `plans/changes/stage2-session/`.
+Spec review F-1/F-3 were incorporated. F-2 was answered by the maintainer:
+after executable prerequisite checks, Terminal acceptance is launch success;
+later CLI/login/model failures are shown in that window. Do not reopen it.
+
+The maintainer requested GLM implementation, not an unannounced direct Codex
+replacement. Foreign calls must go through `scripts/stage2.py`; do not call
+the provider directly, modify global routing or read credential files yourself.
+Check the runner's clean-tree/checkpoint contract before rerunning `implement`:
+the preserved dirty draft must not be lost. A repair on a red tree is not a
+green checkpoint. Record any explicit model-route deviation honestly.
+
+After repairs: full `make verify`; green checkpoint; stage-2 review loop
+(at most two rounds); Verify and final Review; decision PR and CI green.
+The actual architectural spec-review session is
+`01a116cd-d624-7ee0-9e14-3db0027c8eff` (Codex `gpt-6.1-sol`, effort `max`).
+Review loop, final review and real GUI/model smoke remain unrun.
+Name an unrun smoke test explicitly rather than implying it passed.
+
+Never merge. Never touch `feat/stage2-flash-runner` or the MiMo worktree.
+PRs #89/#90 were merged by the maintainer, not this session. Do not change
+`docs/adr/` or `provenance.yaml`; keep the ADR proposal in the change folder
+and end in a `decide(stage2): ...` PR with the decision template and label.
+OpenCode Go endpoint approval remains dependent on the separate MiMo work;
+test fixtures are not production endpoint approval. Do not close the wider
+parity bead merely because the session verb is repaired. Tracker ownership
+still follows AGENTS.md: a secondary writer changes only its own claim and
+handover comment, and any tracker push precedes the Git push.
+
+Resume: enter the existing worktree, read AGENTS.md and this addendum, rerun
+the targeted tests, then repair the shared Terminal command and truthful
+OpenCode policy fixtures before attempting the remaining workflow gates.
+
+## Addendum — repaired by Claude, verify green, 2026-10-07
+
+Claude Code with Anthropic (Opus 5.5) took over from the handover above and
+repaired the preserved draft by hand in this worktree; no foreign model ran.
+
+- Terminal command: absolute `/usr/bin/env -i`, the CLI named once
+  (`argv` already carries it); the test now parses the shell line.
+- OpenCode check rebuilt on OpenCode 1.18.35's source (`agent/agent.ts`,
+  `permission/index.ts`, `cli/cmd/debug/agent.handler.ts`): `model` as
+  `{providerID, modelID}`, `permission` as an ordered rule list, last match
+  wins, wildcard permission names. Each guarded permission's last catch-all
+  rule must carry the runner's action; after it only the truncation-directory
+  allowance is tolerated, denied explicitly at both policy levels and
+  rechecked once. Fixtures now mirror that shape and order.
+- Model ids: `opencode-go` lists bare ids, as the reviewer change declares
+  them (`feat/stage2-mimo`, `8310a2c`); `--model opencode-go/<model>` resolves
+  against the bare id and hands the full id to OpenCode (decisions.md DETAIL).
+- Test fixes: FIFO fixture, argv expectations without the executable,
+  whitespace-tolerant workflow wording test; `stage2_session.py` declared in
+  `ci_gates.OHNE_AUFRUFER`.
+
+Evidence on 2026-10-07, before the checkpoint commit: targeted suite 73
+passed; four planted faults (bare `env`, exact-name rule matching, ignored
+catch-all action, ignored model) each turned it red. Full `make verify`:
+VERIFY GREEN, 1,199 passed, 16 skipped, writer ruleset 82 passed (fixture
+commits ran with `commit.gpgsign=false` in the process environment only).
+Docs-links and markdownlint remain report-only, as before.
+
+Not done: review loop (4b), final review (6), decision PR, and the real
+GUI/model smoke test, which remains unrun. Tracker untouched: the OpenCode
+session on the reviewer change runs in parallel, so this session writes no
+bead. Never merge; the Flash-runner and MiMo worktrees stay untouched.
+
+Correction to the explanation given in chat: the GLM repair attempt was not
+blind. `verify_attempt` hands the last 80 lines of a red `make verify` to the
+next attempt (`scripts/stage2.py`, `implementation_prompt`). Measured on this
+session's red run (5,649 lines), those 80 lines were report-only markdownlint
+output and the final RED line; the pytest failure stood thousands of lines
+earlier. The GLM runs' own output was not read. Proposed bead, not created
+(a parallel session runs, so this session writes no tracker): "Runner:
+implement repairs get the failing gate, not the last 80 lines".
+
+Resume: `python3 scripts/stage2.py review-loop stage2-session` from this
+worktree, then decide its rows.
