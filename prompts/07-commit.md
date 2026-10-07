@@ -19,6 +19,12 @@
   The acceptance card — what changes for you, how it was checked, what could
   break, and the `done:` line — is carried by both templates, and every pull
   request body keeps it, the multi-decision form included.
+- **What it touches is generated, never drawn.** After the last push, run
+  `python3 scripts/touch_map.py origin/main HEAD` and paste its output under
+  "What it touches" unchanged, in either template. Never edit it, and never
+  draw a map by hand or have a model draw one. When the branch moves, run it
+  again and replace the whole section. A change with a `design.md` adds one
+  line below it: `Architecture delta: plans/changes/<name>/design.md`.
 - **Say whether the pull request decides.** A pull request that adds, changes
   or removes a file `provenance.yaml` reserves for `human-decided` (an ADR, an
   ADR answer under `decisions/answers/`, the rule set) is a decision PR. Its
@@ -54,10 +60,10 @@
   <one sentence: what breaks if only some are accepted>
   ```
 
-  "What changes for you", "Where it fits", "After the merge", context and
-  evidence then appear once, as in the template. Every other pull request
-  takes `.github/pull_request_template.md`. Commits inside keep their own
-  types; only the title carries `decide`.
+  "What changes for you", "What it touches", "Where it fits", "After the
+  merge", context and evidence then appear once, as in the template. Every
+  other pull request takes `.github/pull_request_template.md`. Commits inside
+  keep their own types; only the title carries `decide`.
 - **If this commit finishes the work item, say so:** a `Closes-Bead: <id>`
   trailer, like GitHub's `Closes #123`. The scope names only *what was worked
   on* — a work item usually has several commits, and the last is rarely the
