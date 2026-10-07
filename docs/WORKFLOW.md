@@ -188,6 +188,18 @@ to, never overwritten. A number without a commit or a date reads, next time, as 
 current measurement and is a historical one — the most common way a history
 document turns into a false statement.
 
+### Recurring jobs
+
+A **job prompt** is a file in `prompts/` that is not a phase. It runs outside
+the seven phases, for no change: a schedule or a person starts it, and it does
+one bounded piece of work again and again. It names no model (its `**Model:**`
+line says "none fixed"; the runner's configuration names one that
+`model-endpoints.yaml` declares) and no runner, so the same text runs by hand
+in any session. It writes no tracker and takes no git action of its own; what
+it leaves behind goes into a pull request that a person reviews and merges. The
+first one is [`prompts/research-recheck.md`](../prompts/research-recheck.md):
+it re-checks one research note on the web and appends a dated addendum to it.
+
 ### The five rules that make the difference
 
 **`/clear` between phases 3 and 4.** The plan is a file. Whoever implements it
