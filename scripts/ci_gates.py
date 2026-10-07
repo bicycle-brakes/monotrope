@@ -23,6 +23,7 @@ from __future__ import annotations
 import argparse
 import hashlib
 import json
+import re
 import subprocess
 import sys
 from pathlib import Path
@@ -38,6 +39,21 @@ CI_FILE = REPO_ROOT / ".github" / "workflows" / "ci.yml"
 # sondern ein Schemafehler.
 ENFORCEMENT: tuple[str, ...] = ("advisory", "report", "block")
 JOBS: tuple[str, ...] = ("verify", "drift")
+
+# The generated workflow's names (bead coding-harness-ei0). The verify gates run
+# in the matrix job, one leg per declared interpreter; a summary job named
+# SUMMARY_JOB sums the legs up. Its id is the check's context, so it keeps the
+# name the ruleset on `main` requires — `verify` — and has no `name:` of its own.
+MATRIX_JOB = "gates"
+SUMMARY_JOB = "verify"
+
+# The one line that installs the toolchain in every CI job: the hash-checked
+# lock and nothing else. The package versions live in `pyproject.toml` and, with
+# their hashes, in `requirements-ci.txt` — never in this file.
+INSTALL = "python3 -m pip install --require-hashes -r requirements-ci.txt"
+
+# A declared interpreter is a minor version of Python 3: "3.11", never "3.x".
+_INTERPRETER = re.compile(r"3\.(?:0|[1-9][0-9]*)")
 
 # Wo ein Gate misst — geschlossen seit bead 1jg.2. both = lokaler Laeufer und
 # gehostete CI; writer = nur an einer Schreibmaschine (die abgeleitete ci.yml
@@ -144,6 +160,33 @@ def _lokales_kommando(action: str, with_block: dict[str, Any] | None) -> str | N
     return " ".join(f'"{t}"' if " " in t or "*" in t else t for t in teile)
 
 
+def _tools_fehler(tools: Any) -> list[str]:
+    """The `tools` block: only `python`, a non-empty list of distinct `3.<n>` texts.
+
+    Package versions are not a gate-file fact — `pyproject.toml` and the lock hold
+    them — so a key besides `python` is refused, not ignored (bead
+    coding-harness-ei0).
+    """
+    if not isinstance(tools, dict):
+        return ["tools: missing or not a mapping — it must hold `python`, a list of interpreter versions"]
+    fehler = [
+        f"tools.{key}: only `python` belongs here; package versions live in pyproject.toml and requirements-ci.txt"
+        for key in tools
+        if key != "python"
+    ]
+    versionen = tools.get("python")
+    if not isinstance(versionen, list) or not versionen:
+        fehler.append('tools.python: must be a non-empty list of versions, e.g. ["3.11", "3.12"]')
+        return fehler
+    for v in versionen:
+        if not isinstance(v, str) or not _INTERPRETER.fullmatch(v):
+            fehler.append(f'tools.python: {v!r} is not a quoted version of the form "3.<n>"')
+    texte = [v for v in versionen if isinstance(v, str)]
+    if len(set(texte)) != len(texte):
+        fehler.append(f"tools.python: a version appears twice in {versionen!r}")
+    return fehler
+
+
 def validate_schema(doc: dict[str, Any] | None = None) -> list[str]:
     """Prueft die Gate-Datei gegen ihr Schema. Liefert Fehler, leer = ok."""
     if doc is None:
@@ -155,6 +198,7 @@ def validate_schema(doc: dict[str, Any] | None = None) -> list[str]:
         return ["die Gate-Datei ist kein Mapping"]
     if doc.get("schema_version") != SCHEMA_VERSION:
         fehler.append(f"schema_version muss {SCHEMA_VERSION} sein, ist {doc.get('schema_version')!r}")
+    fehler.extend(_tools_fehler(doc.get("tools")))
     gate_liste = doc.get("gates")
     if not isinstance(gate_liste, list) or not gate_liste:
         fehler.append("'gates' fehlt oder ist leer")
@@ -246,6 +290,20 @@ def gates() -> list[dict[str, Any]]:
             }
         )
     return out
+
+
+def interpreters() -> list[str]:
+    """The declared interpreters, oldest first — `tools.python` of the gate file.
+
+    The generated workflow runs the verify gates once per entry, and the drift job
+    once on the last (bead coding-harness-ei0). The schema is checked first, like
+    `gates()` does, so a malformed list never reaches the generator.
+    """
+    fehler = validate_schema()
+    if fehler:
+        raise ValueError("Gate-Datei verletzt das Schema: " + "; ".join(fehler))
+    doc = yaml.safe_load(GATE_FILE.read_text(encoding="utf-8"))
+    return list(doc["tools"]["python"])
 
 
 def _git(*args: str) -> str | None:
@@ -358,9 +416,57 @@ def _checkout(job_gates: list[dict[str, Any]]) -> list[str]:
     return ["      - uses: actions/checkout@v4"]
 
 
+def _toolchain(python_version: str) -> list[str]:
+    """The two steps that give a job its interpreter and its packages — in this order.
+
+    `actions/setup-python` first: `python3` after it is the declared interpreter,
+    and `INSTALL` then installs the hash-checked lock into exactly that one
+    (bead coding-harness-ei0). Like checkout, neither step carries the `if` of a
+    gate: without them no gate has a subject.
+    """
+    return [
+        "      - name: Set up the declared interpreter",
+        "        id: setup-python",
+        "        uses: actions/setup-python@v5",
+        "        with:",
+        f"          python-version: {python_version}",
+        "      - name: Install the pinned toolchain",
+        "        id: setup-deps",
+        f"        run: {INSTALL}",
+    ]
+
+
+def _summary_job() -> list[str]:
+    """The check `verify`: red unless every leg of the matrix job passed.
+
+    The ruleset on `main` requires one check, `verify`, and it counts a skipped job
+    as passed. So the job needs the matrix job, runs under `always()` (without it a
+    failed or skipped `needs` skips this job too, and a skipped job reports
+    success), and fails unless the legs' aggregate result is exactly `success` —
+    not merely "not failure": `cancelled` and `skipped` are red too (bead
+    coding-harness-ei0). The event condition keeps it off the schedule runs, where
+    the matrix job is skipped on purpose.
+    """
+    return [
+        f"  {SUMMARY_JOB}:",
+        f"    needs: {MATRIX_JOB}",
+        "    if: always() && (github.event_name == 'push' || github.event_name == 'pull_request')",
+        "    runs-on: ubuntu-latest",
+        "    steps:",
+        "      - name: Every leg of the gates passed",
+        "        run: |",
+        f'          echo "{MATRIX_JOB}: ${{{{ needs.{MATRIX_JOB}.result }}}}"',
+        f'          test "${{{{ needs.{MATRIX_JOB}.result }}}}" = success',
+    ]
+
+
 def generate_ci() -> str:
     """Die abgeleitete ci.yml — deterministisch, aus der einen Liste."""
     alle = gates()
+    versionen = interpreters()
+    # Quoted: an unquoted `3.10` is the number 3.1 to YAML. Built outside the f-string
+    # below, which may not reuse its own quotes before Python 3.12.
+    matrix = ", ".join(f'"{v}"' for v in versionen)
     # Bead 1jg.2: writer-only Gates misst nur die Schreibmaschine — die
     # abgeleitete ci.yml haelt sie deklariert raus, statt sie dort unmoeglich
     # laufen zu lassen. Ein writer-only Gate mit needs_tracker stoesst folglich
@@ -387,14 +493,18 @@ def generate_ci() -> str:
         "  cancel-in-progress: false",
         "",
         "jobs:",
-        "  verify:",
+        f"  {MATRIX_JOB}:",
         "    if: github.event_name == 'push' || github.event_name == 'pull_request'",
+        # One leg per declared interpreter, and no fail-fast: a red leg must not
+        # cancel the other, for the reason bead coding-harness-bl2 gave for steps.
+        "    strategy:",
+        "      fail-fast: false",
+        "      matrix:",
+        f"        python: [{matrix}]",
         "    runs-on: ubuntu-latest",
         "    steps:",
         *_checkout(pruefe),
-        "      - name: Install the pinned toolchain",
-        "        id: setup-deps",
-        "        run: python3 -m pip install pytest==8.3.4 PyYAML ruff==0.9.10",
+        *_toolchain("${{ matrix.python }}"),
     ]
     # Bead coding-harness-4t8: der Schritt gehoert nur in Jobs, die einen Gate
     # mit needs_tracker haben — dort, wo niemand ihn braucht, waere er Dekoration.
@@ -404,6 +514,9 @@ def generate_ci() -> str:
         zeilen.extend(_schritt(g))
     for g in kommandos:
         zeilen.extend(_schritt(g))
+    zeilen.extend(_summary_job())
+    # The drift gates read the outside world, not the interpreter: one run, under
+    # the last declared interpreter.
     zeilen.extend(
         [
             "  drift:",
@@ -411,9 +524,7 @@ def generate_ci() -> str:
             "    runs-on: ubuntu-latest",
             "    steps:",
             *_checkout(drift),
-            "      - name: Install the pinned toolchain",
-            "        id: setup-deps",
-            "        run: python3 -m pip install pytest==8.3.4 PyYAML ruff==0.9.10",
+            *_toolchain('"' + versionen[-1] + '"'),
         ]
     )
     if any(g["needs_tracker"] for g in drift):
@@ -525,6 +636,8 @@ def main() -> int:
         print(f"{marke}{takt} [{g['id']}] {g['name']}")
         if g["local_runnable"]:
             zusatz = "  (lokales Aequivalent der Action)" if g["via_local_equivalent"] else ""
+            if g["placement"] == "writer":
+                zusatz += " — laeuft nur lokal (make verify), nicht in der CI"
             print(f"      {g['command']}{zusatz}")
         else:
             print(f"      (Marketplace-Action: {g['action']}) — laeuft nur in der CI")

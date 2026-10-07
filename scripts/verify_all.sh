@@ -14,22 +14,45 @@
 
 set -u
 
-# Der Interpreter braucht PyYAML (die Gate-Datei ist YAML). Zuerst die Umgebung,
-# dann die venvs des Rechners — gepinnt wird die VERSION in decisions/gates.yaml,
-# nicht der Pfad. Wer einen anderen Ort braucht, setzt $PYTHON.
+# Back to the repository root before anything is chosen, wherever the caller
+# stood: `.venv/bin/python3` below is this checkout's own (bead
+# coding-harness-ei0).
+cd "$(dirname "$0")/.." || exit 2
+
+# The interpreter needs PyYAML (the gate file is YAML). `$PYTHON` if it is set;
+# otherwise the first of the checkout's own `.venv/bin/python3` (built by
+# `make venv` from the lock) and the `python3` on PATH that imports PyYAML — and
+# nowhere else: another repository's environment decides the result by accident,
+# and the suite then measures packages the lock does not name. Whoever needs
+# another place sets $PYTHON.
 PYTHON="${PYTHON:-}"
 if [ -z "$PYTHON" ]; then
-    for kandidat in python3 "$HOME"/.venvs/*/bin/python3 /usr/bin/python3 /opt/homebrew/bin/python3; do
-        if [ -x "$kandidat" ] && "$kandidat" -c "import yaml" >/dev/null 2>&1; then
-            PYTHON="$kandidat"
+    for candidate in "$PWD/.venv/bin/python3" "$(command -v python3 || true)"; do
+        if [ -n "$candidate" ] && [ -x "$candidate" ] && "$candidate" -c "import yaml" >/dev/null 2>&1; then
+            PYTHON="$candidate"
             break
         fi
     done
 fi
 if [ -z "$PYTHON" ]; then
-    echo "kein python3 mit PyYAML gefunden — requirements-ci.txt installieren oder \$PYTHON setzen" >&2
+    echo "no python3 with PyYAML — build the locked environment with make venv, or set \$PYTHON" >&2
     exit 2
 fi
+# Every gate runs under the interpreter chosen here; the gates' own children
+# (a test that starts a script) find it in the environment.
+export PYTHON
+
+# A tool a gate calls by its bare name (`ruff`, in the ramp-valve gate) must
+# be the locked environment's own — as it is after `source .venv/bin/activate`.
+# So the directory of a chosen interpreter that is not on PATH yet goes first.
+case "$PYTHON" in
+    */*)
+        interpreter_dir="${PYTHON%/*}"
+        case ":$PATH:" in
+            *":$interpreter_dir:"*) ;;
+            *) PATH="$interpreter_dir:$PATH"; export PATH ;;
+        esac ;;
+esac
 
 JOB="verify"
 CI_MODE=0
@@ -44,9 +67,6 @@ while [ $# -gt 0 ]; do
         *) echo "unknown argument: $1" >&2; exit 2 ;;
     esac
 done
-
-# Back to the repository root, wherever the caller stood.
-cd "$(dirname "$0")/.." || exit 2
 
 if [ "$LIST" -eq 1 ]; then
     exec "$PYTHON" scripts/ci_gates.py --list
