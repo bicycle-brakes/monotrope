@@ -614,22 +614,27 @@ The rows are in the form of §3's table:
 | 4b Review loop | **GLM 5.3** | effort `max`, through Claude Code against Z.ai and the runner |
 | 6 Review | **gpt-6.1-sol** | effort `max`; the same Codex session as 2a, resumed where one was held |
 
-**The two Flash rows are decided and not built.** The runner has no verb that
-starts phase 1 or phase 4 on GLM 5.3 Flash, no plan marking assigns a step to
-it (a per-step marking was the older design, with `scripts/run_change.sh` and the
-`scripts/cc-*.sh` profiles; none of them is in this tree), and no effort is set
-for it. Until that is built (an open item of the change that wrote this
-section, `plans/changes/stage-2-codex-glm/plan.md`, "Amendment 1"), §3's rows
-run both phases: Haiku 4.5 explores and Sonnet 5.5 implements.
+**The two Flash rows are live through the runner.** `explore` starts phase 1
+on GLM 5.3 Flash with read/search tools; `implement` starts phase 4 with file
+read/search/edit/write tools but no shell. The runner, not the implementation
+model, runs `make verify`, checks for a measured line below `## Time used` and
+makes the local checkpoint commit. An explicit `--stage2-off [REASON]` uses
+§3's Haiku 4.5 or Sonnet 5.5 route and records why. A leak refusal always stops
+the call; it never selects the fallback.
+If the model process itself fails, the runner restores the worktree to the
+baseline commit (every path except the change's `findings.md`), says what it
+undid and exits 1; the next step is `implement <change> --stage2-off`.
 
 ### The runner is the only way
 
 A foreign model is started only through `python3 scripts/stage2.py <verb>
 <change>`, never by typing `codex`, or `claude` against another endpoint, into
-a shell. Four verbs exist; the two for GLM 5.3 Flash (`explore` for phase 1,
-`implement` for phase 4) do not yet, see the open item above:
+a shell. Six verbs exist:
 
+- `explore` — GLM 5.3 Flash, phase 1; `--stage2-off [REASON]` uses Haiku 4.5.
 - `spec-review` — Codex, phase 2a, a fresh session.
+- `implement` — GLM 5.3 Flash, phase 4; `--stage2-off [REASON]` uses Sonnet
+  5.5 at effort `medium`.
 - `review-loop` — GLM, one round of phase 4b.
 - `release-loop` — the loop rows into `findings.md`, after the phase-6 verdict.
 - `review` — Codex, phase 6, the phase-2a session resumed with `codex exec
@@ -676,35 +681,49 @@ changes, the commits reachable from the branches and the call's own prompt — a
 what stays out stays out: LakeSwitch and customer content never go, to any
 endpoint, and the check is what blocks it (the maintainer asked about it on
 2026-10-06 and kept it). How the runner confines the tools and writes of
-these two runs is part of the open item above.
+these two runs is stated below.
 
-What every call then carries: one line in `findings.md` (date, verb, endpoint,
-model, the leak check's three numbers); an empty standard input; an
-environment built from an allow-list, not the caller's; the model and effort
-`max` pinned. The runner starts Codex with the read-only sandbox, its session
-kept and its hooks and memories switched off. It starts GLM as Claude Code
-against Z.ai's Anthropic-compatible endpoint, with a fresh empty configuration
-directory, the project's settings and hooks skipped, tools limited to `Read`,
-`Grep` and `Glob`, and the diff in its prompt. **Those settings are configured
-on every call, not measured** (the maintainer's decision of 2026-09-30, ADR
-0007): no test has run either program to see them take effect, on `codex exec
-resume` in particular, whose help lists no sandbox option. If Codex's hooks are
-not in fact off, the tracked `.codex/hooks.json` injects tracker text into the
-call that the leak check does not scan. GLM's credential (`GLM_KEY` in
-`~/.config/cc-routing/secrets.env`) stays in the runner's environment for that
-call and is scrubbed from everything the runner prints or writes.
+What every call then carries: one audit line (in `research.md` for Explore,
+otherwise `findings.md`), an empty standard input and an environment built
+from an allow-list, not the caller's. The runner starts Codex with the
+read-only sandbox, its session kept and its hooks and memories switched off.
+It starts GLM as Claude Code against Z.ai's Anthropic-compatible endpoint,
+with a fresh empty configuration directory and the project's settings, hooks
+and MCP servers skipped. Explore and the review loop get only `Read`, `Grep`
+and `Glob`; Implement also gets `Edit` and `Write`, never Bash or another
+command tool. On a successful implementation answer the runner runs exactly
+`make verify`; a failed post-check gets one fresh Flash repair, then one
+Sonnet 5.5 fallback, and every attempt repeats the leak check. A failed model
+process stops instead of silently changing route. **Those settings are
+configured on every call, not measured** (the maintainer's decision of
+2026-09-30, ADR 0007): no test has run either program to see them take effect,
+on `codex exec resume` in particular, whose help lists no sandbox option. If
+Codex's hooks are not in fact off, the tracked `.codex/hooks.json` injects
+tracker text into the call that the leak check does not scan. GLM's credential
+(`GLM_KEY` in `~/.config/cc-routing/secrets.env`) stays in the runner's
+environment for that call, is outside the reach of the Claude Code file tools (`--restricted`, see
+"Reads" below; not measured) and is scrubbed from everything the runner prints or writes. The
+Stage-1 fallback uses normal Claude Code authentication and never reads that
+key.
 
 `.claude/settings.json` asks before a `codex` typed directly in a Claude Code
 session (`Bash(codex *)`). That is a brake, not a lock: `sh -c`, an absolute
 path or a script file passes it, as it does for the merge rules in §2.
 
-**Reads are asked, not confined.** Every prompt asks the foreign model to read
-nothing outside the worktree and the repository's git directory. **That is a
-request, not a lock.** Nothing here confines the reviewers' reads or proves
-that they stay inside: they can read the rest of the disk, the customer
-instance's checkout included. The maintainer accepted that as a residual risk
-on 2026-09-30 (ADR 0007). The leak check scans what this repository presents,
-not what else the disk holds.
+**Reads: confined for the Claude Code calls, asked for Codex.** Every Claude
+Code call (explore, implement, the Sonnet 5.5 fallback attempts and the GLM
+review loop) starts in the worktree with `--restricted` and no `--add-dir`.
+`claude --help` says `--restricted` "confines the file tools to the working
+directories", so the credential file `~/.config/cc-routing/secrets.env`, which
+lies outside the worktree, is outside what the model's file tools reach. **That
+is the program's documented behaviour, not measured here:** no test has run it
+against a path outside the worktree. The Codex calls (`spec-review`, `review`)
+have no such flag. Their prompts ask the model to read nothing outside the
+worktree and the repository's git directory, and **that is a request, not a
+lock:** Codex can read the rest of the disk, the customer instance's checkout
+included. The maintainer accepted that as a residual risk on 2026-09-30
+(ADR 0007). The leak check scans what this repository presents, not what else
+the disk holds.
 
 ### The review loop (phase 4b)
 
