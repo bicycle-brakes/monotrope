@@ -382,3 +382,21 @@ are the two `[GAP]`s, which phase 4 measures instead of asking.
    withdrawn. Measured in phase 4, not asked.
 6. **The class stays `feature`**, and the spec's `adr_question` is rewritten
    from Xiaomi and OpenRouter to OpenCode Go.
+
+## Addendum 2026-10-07 (after the phase-2a review): when the probe runs
+
+The spec review returned four rows (session `codex 01a116db-602e-73e2-bbee-
+d11f961debe4`); three were worked into the spec without asking, and row S1
+asked about intent.
+
+**Question:** `spec.md` says the compatibility of
+`https://opencode.ai/zen/go/v1/messages` with the three rungs is measured in
+phase 4, while the Definition of Done forbids a live call before the merge.
+
+**Answer: "1"** (maintainer, Claude Code session, 2026-10-07) — the probe
+runs **in phase 4, before the merge**: three calls through the runner, one
+per rung, declaration and leak check in front of each, as one special run
+whose commits are named in the pull request body. The Definition of Done now
+says so instead of "none", and no step of phase 4 builds on the address
+before the probe has run. If an address refuses a rung, criterion 17 stops
+the run and reports it — that part was never in question.

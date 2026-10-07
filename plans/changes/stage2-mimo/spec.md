@@ -53,6 +53,12 @@ named below is meant as it stands there.
   change's pull request does; until then the entry is declared here and
   nothing calls it (house rule 8). This change's pull request names that
   decision pull request in its body.
+- **The compatibility probe comes first in phase 4** (the maintainer's answer
+  to row S1 of the phase-2a review): three calls through the runner, one per
+  rung, each with the declaration and the leak check in front of it, before
+  any step of phase 4 builds on the Anthropic address. It is one special run
+  and its commits are named in the pull request body. If an address refuses
+  a rung, that is criterion 17: the run stops and is reported.
 - The key is already in the secrets file (`OPENCODE_GO_KEY`, name checked
   2026-10-07, value never read by an agent). Nothing in this change reads,
   writes or names its value.
@@ -380,7 +386,9 @@ Beyond the non-goals: none.
 - Bead: the pull request closes `coding-harness-ymx`, and its last commit
   carries the trailer `Closes-Bead: coding-harness-ymx`
   (`prompts/07-commit.md`).
-- Special runs: none — no live call before the merge.
+- Special runs: one — the compatibility probe of phase 4 (three calls
+  through the runner, one per rung, declaration and leak check in front of
+  each), each with its commit in the pull request body.
 
 ## Open decisions
 
@@ -392,9 +400,10 @@ residency) were answered by the maintainer on 2026-10-07 and are recorded in
 
 - **Does the Anthropic address accept the three ids?** The Go page lists
   them under `https://opencode.ai/zen/go/v1/chat/completions` only
-  (research §F). Measured in phase 4, one call per id through the runner with
-  the leak check in front of it; if it is refused the run stops and is
-  reported (criterion 17).
+  (research §F). Measured in phase 4 as the declared special run of the
+  Definition of Done — one call per id through the runner, the leak check in
+  front of it, before any step builds on the address; if an id is refused
+  the run stops and is reported (criterion 17).
 - **Where OpenCode hosts the Go models.** The Go page states no region; only
   Zen states "US and EU" (research §G). Re-read before phase 7; a statement
   found there corrects the entry's `residenz` in the same pull request.
