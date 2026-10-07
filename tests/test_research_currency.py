@@ -798,7 +798,11 @@ def test_the_gate_reports_in_the_drift_job_only() -> None:
     drift_steps = {s.get("id"): s for s in jobs["drift"]["steps"]}
     assert drift_steps[GATE_ID]["run"] == gate["command"]
     assert drift_steps[GATE_ID]["continue-on-error"] is True
-    assert GATE_ID not in {s.get("id") for s in jobs["verify"]["steps"]}
+    # The job where the gates run is the matrix job; `verify` is only the summary
+    # check, whose one step has no id, so reading it would hold for any generator.
+    matrix_ids = {s.get("id") for s in jobs[ci_gates.MATRIX_JOB]["steps"]} - {None}
+    assert matrix_ids, "the matrix job has no step with an id — this check ran over the empty set"
+    assert GATE_ID not in matrix_ids
 
 
 def test_the_kit_carries_the_script_and_its_test() -> None:

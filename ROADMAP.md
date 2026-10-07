@@ -9,7 +9,7 @@ checks whether Now is still true. This file becomes a kit template only
 after it stays true through two handovers; if a handover finds it stale
 twice, it is removed.
 
-Last checked: 2026-10-05, `main` at `3851f9c`. Appetites are first proposals,
+Last checked: 2026-10-05, `main` at `87daf91`. Appetites are first proposals,
 set by the agent that drafted this file; the maintainer's merge confirms or
 changes them.
 
@@ -29,13 +29,21 @@ changes them.
    slice (coding-harness-s6i), project file and locked dependencies
    (coding-harness-ei0), release builder and pin (coding-harness-dj9), the
    ADR-answer principle (coding-harness-3ar).
-3. **The repository in English.** House rule 1 holds everywhere: the
-   matched messages with their tests, the rule set, German identifiers.
-   Why: agents and readers meet two languages for one concept. Appetite:
-   2 sessions. Bead: translate the remaining German (coding-harness-yim).
+3. **Hermes runs Coding Harness's recurring jobs.** Hermes Agent, already
+   prepared in adhd-relief, becomes the runner for unattended jobs here,
+   first the weekly re-check of research notes; it writes files only, and a
+   script the maintainer owns opens the pull request. Why: research ages
+   unnoticed, and the maintainer chose Hermes over the assessment's "not
+   now" (2026-10-05). Appetite: 4 sessions plus one afternoon at the laptop
+   for the shared spike. Beads: the Hermes runner (coding-harness-i3y),
+   research currency (coding-harness-pu9).
 
 ## Next
 
+- **The repository in English.** House rule 1 holds everywhere: the
+  matched messages with their tests, the rule set, German identifiers.
+  Moved from Now on 2026-10-05 to make room for Hermes. Bead: translate the
+  remaining German (coding-harness-yim).
 - **Stage 2 live.** Codex and GLM review Coding Harness changes before the
   merge; the first three runs are measured. Waits for the maintainer at the
   laptop (permission for `codex exec`, finding F-12, merging PR #60). Beads:

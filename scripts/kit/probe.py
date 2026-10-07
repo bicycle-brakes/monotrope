@@ -112,6 +112,7 @@ REIST_NICHT: dict[str, str] = {
     "tests.test_model_endpoints::test_every_model_in_a_phase_prompt_resolves[01a-interview.md-Opus 5.5]": "bestand-dieses-repos",
     "tests.test_model_endpoints::test_every_model_in_a_phase_prompt_resolves[02-spec.md-Opus 5.5]": "bestand-dieses-repos",
     "tests.test_model_endpoints::test_every_model_in_a_phase_prompt_resolves[02a-spec-review.md-Opus 5.5]": "bestand-dieses-repos",
+    "tests.test_model_endpoints::test_every_model_in_a_phase_prompt_resolves[02b-design.md-Opus 5.5]": "bestand-dieses-repos",
     "tests.test_model_endpoints::test_every_model_in_a_phase_prompt_resolves[03-plan.md-Opus 5.5]": "bestand-dieses-repos",
     "tests.test_model_endpoints::test_every_model_in_a_phase_prompt_resolves[04-implement.md-GLM 5.3 Flash]": "bestand-dieses-repos",
     "tests.test_model_endpoints::test_every_model_in_a_phase_prompt_resolves[04b-review-loop.md-GLM 5.3]": "bestand-dieses-repos",
@@ -162,9 +163,9 @@ REIST_NICHT: dict[str, str] = {
 # 31 -> 32 on 2026-09-30: the loop prompt `prompts/04b-review-loop.md` came along
 # (plans/changes/stage-2-codex-glm). A prompt with a model line is one case more, red in the
 # throwaway repo for the reason the other prompt cases are: `model-endpoints.yaml` stays home.
-DECKEL = (
-    32  # raised again on 2026-09-30 (31 -> 32); earlier: raised 2026-09-29 (31 -> 32), lowered 2026-09-30 (32 -> 31)
-)
+# 32 -> 33 on 2026-10-07: `prompts/02b-design.md` came along (plans/changes/template-bundle),
+# one more prompt with a model line, red in the throwaway repo for the same reason.
+DECKEL = 33  # raised on 2026-10-07 (32 -> 33); earlier: raised 2026-10-05 (31 -> 32), 2026-09-30 (31 -> 32), lowered 2026-09-30 (32 -> 31), raised 2026-09-29 (31 -> 32)
 
 
 # ---------------------------------------------------------------------------

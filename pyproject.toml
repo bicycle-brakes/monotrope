@@ -1,0 +1,32 @@
+# The project file of this repository (bead coding-harness-ei0).
+#
+# It declares the Python dependencies in one place. The lock,
+# `requirements-ci.txt`, is made from it by `make lock` and installed by
+# `make venv` and by CI, always with `pip install --require-hashes`.
+# Nothing installs the project itself: there is no build system, and the
+# package `harness/` (when it exists) is imported from the repository root.
+#
+# Neither this file nor the lock travels with the kit
+# (`scripts/kit/manifest.yaml`): an instance declares its own.
+
+[project]
+name = "coding-harness"
+version = "0.0.0"
+# A lower bound only: the interpreters that are tested are `tools.python`
+# in `decisions/gates.yaml`.
+requires-python = ">=3.11"
+dependencies = [
+    "PyYAML==6.0.2",
+    "Jinja2==3.1.6",
+    "pydantic==2.13.5",
+    "pydantic-core==2.46.5",
+]
+
+[dependency-groups]
+dev = [
+    "pytest==8.3.4",
+    "ruff==0.9.10",
+]
+
+[tool.pytest.ini_options]
+pythonpath = ["."]
