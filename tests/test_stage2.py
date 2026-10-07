@@ -952,6 +952,46 @@ def test_a_blocking_gates_standard_error_reaches_the_repair_prompt(world: World)
     assert "── [shellcheck] RED (block)" in prompt and "shellcheck: command not found" in prompt
 
 
+def test_a_long_standard_error_is_cut_with_a_marker(world: World) -> None:
+    # Loop row L2-3 and criterion 5: the standard-error window is bounded and says what it left out.
+    world.script(
+        claude=[
+            {
+                "stdout": "first",
+                "plant": {"src/app.py": "value = 2\n"},
+                "append": {"plans/changes/demo/plan.md": "2026-10-08 10:00–10:02, 2 min\n"},
+            },
+            {"stdout": "fixed"},
+        ],
+        make=[
+            {
+                "stdout": "\n".join(_gate("pytest", ["FAILED x"], "red")),
+                "stderr": "\n".join(f"err-{n}" for n in range(100)),
+                "exit": 1,
+            },
+            {"stdout": "green\n"},
+        ],
+    )
+    assert world.run("implement") == 0
+    prompt = world.calls("claude")[1]["prompt_file"]
+    assert "err-99" in prompt and "err-60" in prompt and "err-59\n" not in prompt
+    assert "[… 60 earlier lines left out …]" in prompt
+
+
+def test_a_gate_closes_on_any_verdict_spelling() -> None:
+    # Loop row L2-1: a renamed green verdict must not swallow the following red gate.
+    output = [
+        "── [ruff] $ ruff",
+        "ok",
+        "── [ruff] green",
+        "── [pytest] $ pytest",
+        "FAILED y",
+        "── [pytest] RED (block) — x",
+    ]
+    found = stage2.red_sections("\n".join(output))
+    assert found is not None and "FAILED y" in found and "ok" not in found
+
+
 def test_a_frame_quoted_inside_a_gate_opens_no_section() -> None:
     # Loop row L1-2: another gate's frames printed inside the open gate are data. Accepted limit: a quoted end
     # line of the open gate itself is indistinguishable from the real one and closes the section there.

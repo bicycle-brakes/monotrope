@@ -1081,7 +1081,8 @@ RED_SECTION_LINES = 60
 RED_TOTAL_LINES = 200
 TAIL_LINES = 80
 GATE_START = re.compile(r"^── \[(?P<gate>[^\]]+)\] \$ ")
-GATE_END = re.compile(r"^── \[(?P<gate>[^\]]+)\] (?P<verdict>gruen|RED \(block\)|rot, aber nur)")
+# Any frame line of the open gate that is not a start ends it, whatever its verdict is spelled (loop row L2-1).
+GATE_END = re.compile(r"^── \[(?P<gate>[^\]]+)\] (?!\$ )(?P<verdict>.+)")
 STDERR_LINES = 40
 
 
@@ -1107,7 +1108,7 @@ def red_sections(output: str) -> str | None:
         if not end or end["gate"] != open_gate[0]:
             continue
         begin, open_gate = open_gate[1], None
-        if end["verdict"] == "RED (block)":
+        if end["verdict"].startswith("RED (block)"):
             body = lines[begin : index + 1]
             if len(body) > RED_SECTION_LINES:
                 left_out = len(body) - RED_SECTION_LINES
@@ -1143,9 +1144,12 @@ def verify_attempt(root: Path, plan: Path, baseline_time: str, key: str | None =
             evidence = "\n".join(output.splitlines()[-TAIL_LINES:])
         else:
             evidence = "The gates that blocked, each with its last lines:\n" + red
-            errors = (done.stderr or "").splitlines()[-STDERR_LINES:]
+            errors = (done.stderr or "").splitlines()
             if errors:
-                evidence += "\n\nStandard error, last lines:\n" + "\n".join(errors)
+                # Unframed: the last lines of the whole run's standard error, not of the blocking gate alone.
+                cut = len(errors) - STDERR_LINES
+                kept = ([f"[… {cut} earlier lines left out …]"] if cut > 0 else []) + errors[-STDERR_LINES:]
+                evidence += "\n\nStandard error of the whole run, last lines:\n" + "\n".join(kept)
         problems.append(f"`make verify` exited {done.returncode}\n{scrub(evidence, key)}".rstrip())
     try:
         current_time = time_log(plan)

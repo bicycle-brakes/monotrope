@@ -30,8 +30,8 @@ log. Inputs: [`research.md`](research.md).
    line — in run order, and no report-only section.
    *Refuted by:* a planted pytest failure followed by 500 report-only lines
    whose failing test name does not reach the next prompt.
-2. Each red section is bounded to its last 60 lines and the whole to 200
-   lines; a cut section says how many lines were left out.
+2. Each red section is bounded to its last 60 lines and all red sections
+   together to 200 lines; a cut section says how many lines were left out.
    *Refuted by:* a 1,000-line red section passed through whole, or a cut
    without a marker.
 3. When the output carries no `RED (block)` frame, the diagnostics keep
@@ -39,6 +39,13 @@ log. Inputs: [`research.md`](research.md).
    *Refuted by:* a failure of make itself producing empty diagnostics.
 4. The GLM key is scrubbed from the diagnostics as today.
    *Refuted by:* the key reaching the prompt from a red section.
+
+5. With red sections found, the last 40 lines of the run's standard error
+   follow them, with a marker when earlier lines were cut; standard error is
+   not framed by gate, so it is the whole run's, not the blocking gate's
+   alone (loop rows L1-1, L2-2, L2-3).
+   *Refuted by:* a blocking gate's error on standard error missing from the
+   prompt, or a cut without a marker.
 
 ## Not in this change
 

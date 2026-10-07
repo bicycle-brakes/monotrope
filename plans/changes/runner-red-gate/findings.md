@@ -20,3 +20,5 @@ tags: [findings, stage-2]
 # Findings — runner-red-gate
 
 Stage-2 call, 2026-10-08: review-loop · endpoint glm-coding-plan · model glm-5.3 · leak check clean over 269 files, 626 commits, 12 rules.
+
+Stage-2 call, 2026-10-08: review-loop · endpoint glm-coding-plan · model glm-5.3 · leak check clean over 270 files, 627 commits, 12 rules.
