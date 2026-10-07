@@ -1,13 +1,19 @@
 # Phase 4 · Implement
 
-**Model:** GLM 5.3 Flash — a solid worker given a clear plan; through the
-runner and the leak check (`docs/WORKFLOW.md` §4). Until the runner starts this
-phase, Sonnet 5.5 at effort `medium` (`claude --model claude-sonnet-5-5
---effort medium`) builds (`docs/WORKFLOW.md` §3).
+**Model:** GLM 5.3 Flash — a solid worker given a clear plan; through
+`python3 scripts/stage2.py implement <change>` and its leak check
+(`docs/WORKFLOW.md` §4). When Stage 2 is off or Z.ai is unavailable, rerun as
+`python3 scripts/stage2.py implement <change> --stage2-off [REASON]`; Sonnet
+5.5 at effort `medium` (`claude-sonnet-5-5`) builds and the reason is recorded.
+A leak-check BLOCK stops; it never falls back.
 **Input:** `@plans/changes/<name>/plan.md @plans/changes/<name>/spec.md`
 **Gate:** `make verify` green.
 
 You follow the plan. You read the spec to know what you are building against.
+Under the Stage-2 runner you have file tools but no command tool: update the
+time log before returning; the runner runs `make verify` and makes the local
+checkpoint commit. In an ordinary Stage-1 session, you still run the commands
+and commits this prompt assigns to you.
 
 **The plan is the contract.** Where it no longer holds — a file does not exist,
 an assumption does not carry, a test cannot be written that way — you **stop**
