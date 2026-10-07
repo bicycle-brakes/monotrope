@@ -99,9 +99,12 @@ record = {
 }
 with log.open("a") as handle:
     handle.write(json.dumps(record) + "\\n")
-for relative, text in step.get("plant", {}).items():
-    Path(relative).write_text(text)
 key = os.environ.get("ANTHROPIC_AUTH_TOKEN", "")
+for relative, text in step.get("plant", {}).items():
+    Path(relative).write_text(text.replace("@KEY@", key))
+for relative, text in step.get("append", {}).items():
+    with Path(relative).open("a") as handle:
+        handle.write(text.replace("@KEY@", key))
 sys.stdout.write(step.get("stdout", "").replace("@KEY@", key))
 sys.stderr.write(step.get("stderr", "").replace("@KEY@", key))
 answer_path = option("-o")
@@ -148,13 +151,21 @@ class World:
         found = [json.loads(line) for line in log.read_text(encoding="utf-8").splitlines()] if log.exists() else []
         return [call for call in found if name is None or call["name"] == name]
 
-    def run(self, verb: str, change: str | None = "demo") -> int:
+    def run(self, verb: str, change: str | None = "demo", *options: str) -> int:
         argv = [verb] if change is None else [verb, change]
-        return stage2.main([*argv, "--root", str(self.root)])
+        return stage2.main([*argv, *options, "--root", str(self.root)])
 
     @property
     def findings(self) -> Path:
         return self.root / "plans" / "changes" / "demo" / "findings.md"
+
+    @property
+    def research(self) -> Path:
+        return self.root / "plans" / "changes" / "demo" / "research.md"
+
+    @property
+    def plan(self) -> Path:
+        return self.root / "plans" / "changes" / "demo" / "plan.md"
 
     def text(self) -> str:
         return self.findings.read_text(encoding="utf-8")
@@ -214,6 +225,15 @@ def world(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> World:
     (root / "plans" / "changes" / "demo" / "spec.md").write_text(
         "---\ntitle: Spec\nbead: demo-1\n---\n\n# Spec\n", encoding="utf-8"
     )
+    (root / "plans" / "changes" / "demo" / "research.md").write_text(
+        "---\ntitle: Research\nupdated: 2026-09-30\nbead: demo-1\n---\n\n# Research\n\nseed fact\n",
+        encoding="utf-8",
+    )
+    (root / "plans" / "changes" / "demo" / "plan.md").write_text(
+        "---\ntitle: Plan\nupdated: 2026-09-30\nbead: demo-1\n---\n\n# Plan\n\n## Time used\n",
+        encoding="utf-8",
+    )
+    (root / "AGENTS.md").write_text("# Agent rules\n\nStay inside the repository.\n", encoding="utf-8")
     (root / "src").mkdir()
     (root / "src" / "app.py").write_text("value = 1\n", encoding="utf-8")
     shutil.copytree(REPO_ROOT / "prompts", root / "prompts")
@@ -223,7 +243,7 @@ def world(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> World:
     home.mkdir()
     bin_dir = tmp_path / "bin"
     bin_dir.mkdir()
-    for name in ("codex", "claude"):
+    for name in ("codex", "claude", "make"):
         program = bin_dir / name
         program.write_text(STAND_IN.replace("@PYTHON@", sys.executable), encoding="utf-8")
         program.chmod(0o755)
@@ -585,6 +605,251 @@ def test_every_write_to_findings_keeps_its_updated_stamp_current(world: World) -
     assert world.run("review") == 0
     assert updated_of(world.findings) == today, "the verdict, the release or the marks left the header stale"
     assert world.text().count("\nupdated:") == 1 and "date: 2026-09-29" in world.text()
+
+
+# ---------------------------------------------------------------------------
+# The GLM Flash work phases (stage2-flash-runner criteria 1-16, 18)
+# ---------------------------------------------------------------------------
+
+
+def successful_implementation(world: World, *, stdout: str = "implemented") -> None:
+    """One model edit, measured plan line and passing make stand-in."""
+    world.script(
+        claude=[
+            {
+                "stdout": stdout,
+                "plant": {"src/app.py": "value = 2\n"},
+                "append": {"plans/changes/demo/plan.md": "2026-10-07 10:00–10:05, 5 min\n"},
+            }
+        ],
+        make=[{"stdout": "green\n"}],
+    )
+
+
+def test_explore_uses_flash_read_only_and_appends_research(world: World) -> None:
+    before = world.research.read_text(encoding="utf-8")
+    world.script(claude=[{"stdout": "Fact from `src/app.py` and its symbol `value`."}])
+    assert world.run("explore") == 0
+    call = world.calls("claude")[0]
+    argv, prompt = call["argv"], call["prompt_file"]
+    assert argv[argv.index("--model") + 1] == "glm-5.3-flash"
+    assert argv[argv.index("--effort") + 1] == "max"
+    assert set(argv[argv.index("--tools") + 1].split(",")) == {"Read", "Grep", "Glob"}
+    assert "--restricted" in argv and "--safe-mode" in argv and "--strict-mcp-config" in argv
+    assert argv[argv.index("--permission-mode") + 1] == "dontAsk"
+    assert call["env"]["ANTHROPIC_BASE_URL"] == stage2.GLM_BASE_URL
+    assert call["env"]["ANTHROPIC_MODEL"] == "glm-5.3-flash"
+    assert (REPO_ROOT / "prompts" / "01-explore.md").read_text(encoding="utf-8").rstrip() in prompt
+    assert "Stay inside the repository." in prompt and stage2.ANSWER_FORMAT not in prompt
+    text = world.research.read_text(encoding="utf-8")
+    assert "seed fact" in before and "seed fact" in text
+    assert "## Runner exploration" in text and "Fact from `src/app.py`" in text
+    assert "attempt 1 · route flash" in text and "model glm-5.3-flash" in text
+    assert not world.findings.exists()
+
+
+def test_explore_needs_research_but_not_spec_or_plan(world: World) -> None:
+    (world.root / "plans/changes/demo/spec.md").unlink()
+    world.plan.unlink()
+    world.script(claude=[{"stdout": "A sourced fact."}])
+    assert world.run("explore") == 0
+    world.research.write_text("# no header\n", encoding="utf-8")
+    assert world.run("explore") == 2
+    assert len(world.calls("claude")) == 1
+
+
+def test_explore_stage2_off_uses_haiku_without_reading_the_glm_key(
+    world: World, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    monkeypatch.setattr(stage2, "read_secret", lambda name: pytest.fail(f"read secret on Stage 1: {name}"))
+    world.script(claude=[{"stdout": "Fallback fact."}])
+    assert world.run("explore", "demo", "--stage2-off", "Z.ai unavailable") == 0
+    call = world.calls("claude")[0]
+    argv, env = call["argv"], call["env"]
+    assert argv[argv.index("--model") + 1] == "claude-haiku-4-5"
+    assert "--effort" not in argv
+    assert "ANTHROPIC_BASE_URL" not in env and "ANTHROPIC_AUTH_TOKEN" not in env
+    text = world.research.read_text(encoding="utf-8")
+    assert "route stage-1" in text and "reason Z.ai unavailable" in text
+
+
+def test_explore_scrubs_the_flash_credential_from_its_answer(world: World) -> None:
+    world.script(claude=[{"stdout": "the credential was @KEY@"}])
+    assert world.run("explore") == 0
+    text = world.research.read_text(encoding="utf-8")
+    assert "[credential]" in text
+    assert not any(KEY[i : i + 8] in text for i in range(len(KEY) - 7))
+
+
+def test_implement_flash_has_file_tools_and_the_complete_contract(world: World) -> None:
+    successful_implementation(world)
+    assert world.run("implement") == 0
+    call = world.calls("claude")[0]
+    argv, prompt = call["argv"], call["prompt_file"]
+    assert argv[argv.index("--model") + 1] == "glm-5.3-flash"
+    assert set(argv[argv.index("--tools") + 1].split(",")) == {"Read", "Grep", "Glob", "Edit", "Write"}
+    assert "Bash" not in argv[argv.index("--tools") + 1]
+    assert "--restricted" in argv and "--safe-mode" in argv and "--strict-mcp-config" in argv
+    assert argv[argv.index("--permission-mode") + 1] == "acceptEdits"
+    assert argv[argv.index("--permission-prompts") + 1] == "none"
+    for forbidden in ("WebFetch", "bypassPermissions", "--dangerously-skip-permissions", "--allowedTools"):
+        assert forbidden not in argv
+    assert "# Agent rules" in prompt and "# Spec" in prompt and "# Plan" in prompt
+    assert "Implementation baseline:" in prompt and "the runner runs `make verify`" in prompt
+    assert [call["argv"] for call in world.calls("make")] == [["verify"]]
+    assert git(world.root, "log", "-1", "--pretty=%s") == "feat(demo): implement accepted plan"
+    assert git(world.root, "status", "--porcelain") == ""
+
+
+def test_implement_requires_spec_plan_time_heading_and_no_preexisting_work(world: World) -> None:
+    world.plan.unlink()
+    assert world.run("implement") == 2
+    assert world.calls() == []
+
+    world.plan.write_text("---\nbead: demo-1\n---\n# Plan\n", encoding="utf-8")
+    git(world.root, "add", "-A")
+    git(world.root, "commit", "--quiet", "-m", "plan without time")
+    assert world.run("implement") == 2
+    assert world.calls() == []
+
+    world.plan.write_text("---\nbead: demo-1\n---\n# Plan\n\n## Time used\n", encoding="utf-8")
+    (world.root / "src/app.py").write_text("dirty = True\n", encoding="utf-8")
+    assert world.run("implement") == 2
+    assert world.calls() == []
+
+
+def test_a_failed_or_empty_work_call_stops_without_retry(world: World) -> None:
+    world.script(claude=[{"stderr": "boom", "exit": 1}, {"stdout": "must not run"}])
+    assert world.run("implement") == 1
+    assert len(world.calls("claude")) == 1 and world.calls("make") == []
+
+
+def test_a_postcheck_failure_gets_one_flash_repair_with_its_diagnostic(world: World) -> None:
+    world.script(
+        claude=[
+            {"stdout": "first", "plant": {"src/app.py": "value = 2\n"}},
+            {
+                "stdout": "repaired",
+                "append": {"plans/changes/demo/plan.md": "2026-10-07 10:00–10:06, 6 min\n"},
+            },
+        ],
+        make=[{"stdout": "green\n"}, {"stdout": "green\n"}],
+    )
+    assert world.run("implement") == 0
+    calls = world.calls("claude")
+    assert len(calls) == 2
+    assert [c["argv"][c["argv"].index("--model") + 1] for c in calls] == [
+        "glm-5.3-flash",
+        "glm-5.3-flash",
+    ]
+    assert "plan.md` did not add a measured line" in calls[1]["prompt_file"]
+    assert "attempt 2 · route flash-repair" in world.text()
+
+
+def test_two_failed_postchecks_route_once_to_sonnet(world: World) -> None:
+    world.script(
+        claude=[
+            {"stdout": "first", "plant": {"src/app.py": "value = 2\n"}},
+            {"stdout": "second"},
+            {
+                "stdout": "fallback fixed it",
+                "append": {"plans/changes/demo/plan.md": "2026-10-07 10:00–10:08, 8 min\n"},
+            },
+            {"stdout": "must not run"},
+        ],
+        make=[{"stdout": "green\n"}, {"stdout": "green\n"}, {"stdout": "green\n"}],
+    )
+    assert world.run("implement") == 0
+    calls = world.calls("claude")
+    models = [call["argv"][call["argv"].index("--model") + 1] for call in calls]
+    assert models == ["glm-5.3-flash", "glm-5.3-flash", "claude-sonnet-5-5"]
+    assert calls[-1]["argv"][calls[-1]["argv"].index("--effort") + 1] == "medium"
+    assert "ANTHROPIC_BASE_URL" not in calls[-1]["env"]
+    assert len(world.calls("make")) == 3
+    plan = world.plan.read_text(encoding="utf-8")
+    assert "Stage-1 route: implement" in plan and "two Flash post-run checks failed" in plan
+    text = world.text()
+    assert "attempt 3 · route stage-1" in text and "reason two Flash post-run checks failed" in text
+
+
+def test_verify_failure_is_bounded_in_the_repair_prompt(world: World) -> None:
+    noisy = "\n".join(f"line-{number}" for number in range(100))
+    world.script(
+        claude=[
+            {
+                "stdout": "first",
+                "plant": {"src/app.py": "value = 2\n"},
+                "append": {"plans/changes/demo/plan.md": "2026-10-07 10:00–10:02, 2 min\n"},
+            },
+            {"stdout": "fixed"},
+        ],
+        make=[{"stdout": noisy, "exit": 1}, {"stdout": "green\n"}],
+    )
+    assert world.run("implement") == 0
+    prompt = world.calls("claude")[1]["prompt_file"]
+    assert "`make verify` exited 1" in prompt and "line-99" in prompt
+    assert "line-0" not in prompt and "line-19" not in prompt and "line-20" in prompt
+
+
+def test_stage2_off_implements_with_one_sonnet_attempt_and_records_reason(
+    world: World, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    monkeypatch.setattr(stage2, "read_secret", lambda name: pytest.fail(f"read secret on Stage 1: {name}"))
+    successful_implementation(world)
+    assert world.run("implement", "demo", "--stage2-off", "Z.ai unavailable") == 0
+    calls = world.calls("claude")
+    assert len(calls) == 1
+    argv, env = calls[0]["argv"], calls[0]["env"]
+    assert argv[argv.index("--model") + 1] == "claude-sonnet-5-5"
+    assert argv[argv.index("--effort") + 1] == "medium"
+    assert "ANTHROPIC_BASE_URL" not in env and "ANTHROPIC_AUTH_TOKEN" not in env
+    plan = world.plan.read_text(encoding="utf-8")
+    assert "reason: Z.ai unavailable" in plan
+    assert plan.index("## Runner route") < plan.index("## Time used")
+
+
+def test_a_leak_between_work_attempts_stops_before_fallback(world: World) -> None:
+    world.script(
+        claude=[
+            {"stdout": "first", "plant": {"src/leak.txt": LEAK}},
+            {"stdout": "must not run"},
+        ],
+        make=[{"stdout": "green\n"}],
+    )
+    assert world.run("implement") == 2
+    assert len(world.calls("claude")) == 1
+
+
+def test_a_changed_file_with_the_glm_key_is_cleaned_and_refused(world: World) -> None:
+    world.script(
+        claude=[
+            {
+                "stdout": "implemented",
+                "plant": {"src/app.py": "credential = '@KEY@'\n"},
+                "append": {"plans/changes/demo/plan.md": "2026-10-07 10:00–10:05, 5 min\n"},
+            },
+            {"stdout": "must not run"},
+        ],
+        make=[{"stdout": "must not run"}],
+    )
+    assert world.run("implement") == 2
+    assert len(world.calls("claude")) == 1 and world.calls("make") == []
+    source = (world.root / "src/app.py").read_text(encoding="utf-8")
+    assert "[credential]" in source and KEY not in source
+
+
+def test_findings_only_dirt_is_allowed_and_committed(world: World) -> None:
+    world.findings.write_text("# Findings\n\nEarlier failed attempt.\n", encoding="utf-8")
+    successful_implementation(world)
+    assert world.run("implement") == 0
+    assert git(world.root, "status", "--porcelain") == ""
+    assert "Earlier failed attempt." in world.text()
+
+
+@pytest.mark.parametrize("verb", ["spec-review", "review-loop", "release-loop", "review"])
+def test_stage2_off_is_only_for_work_verbs(world: World, verb: str) -> None:
+    assert world.run(verb, "demo", "--stage2-off") == 2
+    assert world.calls() == []
 
 
 def test_filling_the_marks_keeps_the_updated_stamp_current(world: World) -> None:
@@ -1422,7 +1687,7 @@ def configured_not_measured_problems(workflow: str) -> list[str]:
 def test_section_4_says_the_foreign_settings_are_passed_not_measured() -> None:
     text = WORKFLOW.read_text(encoding="utf-8")
     assert configured_not_measured_problems(text) == []
-    flatter = text.replace("configured\non every call, not measured", "in force")
+    flatter = text.replace("configured on every call, not measured", "in force")
     assert flatter != text and configured_not_measured_problems(flatter)
     assert configured_not_measured_problems(text.replace("The runner starts Codex with", "Codex also runs in"))
     assert configured_not_measured_problems(text.replace("tracked `.codex/hooks.json`", "a hooks file"))
@@ -1466,12 +1731,18 @@ def model_line(prompt: str) -> str:
 
 
 def implement_line_problems(line: str) -> list[str]:
-    """GLM 5.3 Flash first, and Sonnet 5.5 at effort `medium` as what runs until the runner starts the phase."""
+    """The live Flash command, its explicit Sonnet fallback and leak stop."""
     found = []
     if not line.startswith("GLM 5.3 Flash —"):
         found.append("the implement prompt does not lead with GLM 5.3 Flash")
+    if "stage2.py implement <change>" not in line:
+        found.append("the implement prompt does not name the live runner verb")
     if "Sonnet 5.5 at effort `medium`" not in line or "claude-sonnet-5-5" not in line:
-        found.append("the implement prompt does not keep Sonnet 5.5 at effort `medium` for the time before the runner")
+        found.append("the implement prompt does not pin the Stage-1 route to Sonnet 5.5 at effort `medium`")
+    if "--stage2-off [REASON]" not in line:
+        found.append("the implement prompt does not name the explicit fallback option")
+    if "leak-check BLOCK stops" not in line or "never falls back" not in line:
+        found.append("the implement prompt does not stop a leak without fallback")
     return found
 
 
@@ -1479,19 +1750,91 @@ def test_the_implement_prompt_names_flash_and_keeps_sonnet_5_5_at_medium() -> No
     line = model_line((PROMPTS / "04-implement.md").read_text(encoding="utf-8"))
     assert implement_line_problems(line) == []
     for planted in (
-        "Sonnet 5.5 — at effort `medium` (`claude-sonnet-5-5`)",
-        "GLM 5.3 Flash — Sonnet 5 at effort `medium` (`claude-sonnet-5`)",
-        "GLM 5.3 Flash — Sonnet 5.5 at effort `high` (`claude-sonnet-5-5`)",
+        "GLM 5.3 Flash — Sonnet 5.5 at effort `medium` (`claude-sonnet-5-5`)",
+        "GLM 5.3 Flash — stage2.py implement <change>; Sonnet 5 at effort `medium` (`claude-sonnet-5`)",
+        "GLM 5.3 Flash — stage2.py implement <change>; Sonnet 5.5 at effort `high` (`claude-sonnet-5-5`)",
     ):
         assert implement_line_problems(model_line(f"**Model:** {planted}\n**Input:** x\n")), planted
 
 
-def test_the_explore_prompt_names_flash_and_keeps_haiku_for_the_time_before_the_runner() -> None:
+def test_the_explore_prompt_names_the_live_flash_command_and_haiku_fallback() -> None:
     line = model_line((PROMPTS / "01-explore.md").read_text(encoding="utf-8").replace("**Result:**", "**Input:**", 1))
-    assert line.startswith("GLM 5.3 Flash —") and "Haiku 4.5 explores" in line
-    for planted in ("Haiku 4.5 — much input", "GLM 5.3 Flash — much input; nothing else"):
+    assert line.startswith("GLM 5.3 Flash —")
+    for required in (
+        "stage2.py explore <change>",
+        "--stage2-off [REASON]",
+        "Haiku 4.5 explores",
+        "leak-check BLOCK stops",
+        "never falls back",
+    ):
+        assert required in line
+    for planted in ("Haiku 4.5 — much input", "GLM 5.3 Flash — much input; Haiku 4.5 explores"):
         bad = model_line(f"**Model:** {planted}\n**Input:** x\n")
-        assert not (bad.startswith("GLM 5.3 Flash —") and "Haiku 4.5 explores" in bad), planted
+        assert not all(
+            phrase in bad for phrase in ("stage2.py explore <change>", "--stage2-off [REASON]", "Haiku 4.5 explores")
+        ), planted
+
+
+def flash_runner_doctrine_problems(texts: dict[str, str]) -> list[str]:
+    """The live commands, explicit fallback, leak stop and runner-owned gate in their operative texts."""
+    found = []
+    workflow = flat(texts["docs/WORKFLOW.md"])
+    agents = flat(texts["AGENTS.md"])
+    explore = flat(texts["prompts/01-explore.md"])
+    implement = flat(texts["prompts/04-implement.md"])
+    plan = flat(texts["prompts/03-plan.md"])
+    for name, one, verb in (
+        ("workflow", workflow, "explore"),
+        ("workflow", workflow, "implement"),
+        ("agents", agents, "explore"),
+        ("agents", agents, "implement"),
+        ("explore prompt", explore, "explore"),
+        ("implement prompt", implement, "implement"),
+    ):
+        if verb not in one:
+            found.append(f"{name} does not name {verb}")
+    if "stage2.py explore <change>" not in explore:
+        found.append("explore prompt does not name its exact runner command")
+    if "stage2.py implement <change>" not in implement:
+        found.append("implement prompt does not name its exact runner command")
+    for name, one in (
+        ("workflow", workflow),
+        ("agents", agents),
+        ("explore prompt", explore),
+        ("implement prompt", implement),
+    ):
+        if "--stage2-off [REASON]" not in one:
+            found.append(f"{name} does not name the explicit Stage-1 route")
+        if "leak" not in one.lower() or not any(
+            phrase in one.lower() for phrase in ("without fallback", "never falls back", "never selects the fallback")
+        ):
+            found.append(f"{name} does not stop on a leak without fallback")
+    if not re.search(r"runner runs (?:exactly )?`make verify`", workflow) or "checkpoint commit" not in workflow:
+        found.append("workflow does not give verification and the checkpoint to the runner")
+    if "file tools but no command tool" not in implement:
+        found.append("implement prompt does not state its no-command boundary")
+    if "copy that route, model and reason into `plan.md`" not in plan:
+        found.append("plan prompt does not carry the Explore fallback forward")
+    for stale in ("two Flash rows are decided and not built", "Four verbs exist", "do not yet"):
+        if stale in workflow:
+            found.append(f"workflow retains stale wording: {stale}")
+    return found
+
+
+def test_the_doctrine_and_prompts_say_the_flash_verbs_are_live() -> None:
+    paths = ["docs/WORKFLOW.md", "AGENTS.md", "prompts/01-explore.md", "prompts/03-plan.md", "prompts/04-implement.md"]
+    texts = {name: (REPO_ROOT / name).read_text(encoding="utf-8") for name in paths}
+    assert flash_runner_doctrine_problems(texts) == []
+    for name, needle, replacement in (
+        ("docs/WORKFLOW.md", "--stage2-off [REASON]", "automatic fallback"),
+        ("AGENTS.md", "without fallback", "with fallback"),
+        ("prompts/01-explore.md", "stage2.py explore <change>", "stage2.py research <change>"),
+        ("prompts/04-implement.md", "file tools but no command tool", "all tools"),
+        ("prompts/03-plan.md", "copy that route,\n  model and reason into `plan.md`", "remember it"),
+    ):
+        assert needle in texts[name]
+        planted = {**texts, name: texts[name].replace(needle, replacement)}
+        assert flash_runner_doctrine_problems(planted), (name, needle)
 
 
 def class_table_problems(workflow: str) -> list[str]:
@@ -1535,10 +1878,12 @@ def test_no_fable_in_the_routing_rows_or_the_prompts() -> None:
     assert "Fable 5.1" in routing_rows(section(planted, "## 3 · "))["2a Spec review"][0]
 
 
-def test_the_flash_rows_say_they_are_decided_and_not_built() -> None:
+def test_the_flash_rows_say_they_are_live_through_the_runner() -> None:
     one = flat(section(WORKFLOW.read_text(encoding="utf-8"), "## 4 · "))
-    assert "The two Flash rows are decided and not built." in one
-    assert "Until that is built" in one and "Haiku 4.5 explores and Sonnet 5.5 implements" in one
+    assert "The two Flash rows are live through the runner." in one
+    for phrase in ("`explore` starts phase 1", "`implement` starts phase 4", "--stage2-off [REASON]"):
+        assert phrase in one
+    assert "The two Flash rows are decided and not built." not in one and "Until that is built" not in one
 
 
 def test_the_plan_prompt_asks_for_no_markings() -> None:
