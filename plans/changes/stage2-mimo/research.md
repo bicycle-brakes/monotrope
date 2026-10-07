@@ -222,3 +222,123 @@ The current decision continuity map (`docs/architecture/` and `scripts/check_dec
 4. (Blocked on [DECISION]s above) Measure cost and latency of a typical phase-4b call with the chosen endpoint.
 5. Propose the endpoint declaration and runner changes (phase 2, Spec).
 
+## Gaps closed in phase 2 (2026-10-07)
+
+Read on 2026-10-07 by the phase-2 session; this section holds where it
+disagrees with the text above. The maintainer's answers (`decisions.md`,
+addendum 2026-10-07) stand: Xiaomi's own platform, GLM and MiMo independent
+on the same diff.
+
+**How it was read.** The platform (<https://platform.xiaomimimo.com>) links its
+documentation at <https://mimo.mi.com/docs/>. Both sites render in the browser
+only, so the page text was read from the documentation site's published
+JavaScript (its search index, which carries every English page, and the
+compiled "Claude Code Configuration" page). The two privacy policies were read
+as HTML at privacy.mi.com. **Not read:** the console behind the login — the
+API keys page, the Token Plan page, and so the base URL Xiaomi shows for the
+maintainer's own account.
+
+### A · API shape, address, model, authentication
+
+- **Both protocols.** "Xiaomi MiMo API Open Platform is compatible with OpenAI
+  API and Anthropic API formats." (page "First API Call").
+- **Pay-per-use addresses** (given as examples): OpenAI-compatible
+  `https://api.xiaomimimo.com/v1`, Anthropic-compatible
+  `https://api.xiaomimimo.com/anthropic`; request address
+  `https://api.xiaomimimo.com/anthropic/v1/messages`; key format `sk-…`.
+- **Token Plan addresses:** `https://token-plan-cn.xiaomimimo.com/anthropic`
+  ("China Cluster"), `…token-plan-sgp…` ("Singapore Cluster"),
+  `…token-plan-ams…` ("European Cluster"); keys `tp-…` (individual), `ttp-…`
+  (team).
+- **The address depends on the account:** "Return different Base URLs + Keys
+  based on the region where the account is located, which are not
+  interoperable." (FAQ "Account and Authentication"). The address of the
+  maintainer's account: not read.
+- **Authentication:** "api-key: $MIMO_API_KEY or Authorization: Bearer
+  $MIMO_API_KEY" (FAQ "API Integration"); for Claude Code the key goes into
+  `ANTHROPIC_AUTH_TOKEN`.
+- **Claude Code is documented:** "Pay-as-you-go MiMo API and Token Plan both
+  support Claude Code." The page sets `ANTHROPIC_BASE_URL`,
+  `ANTHROPIC_AUTH_TOKEN`, and `ANTHROPIC_MODEL` and the three
+  `ANTHROPIC_DEFAULT_*_MODEL` variables to `mimo-v2.6-pro`.
+- **Model:** `mimo-v2.6-pro` — context 1M tokens, output up to 128K, 100
+  requests and 10M tokens per minute per account (page "Models").
+  `mimo-v2.5-pro` and `mimo-v2.5` are withdrawn on 2026-10-21.
+- **Parameters of the Anthropic-compatible API:** `thinking` is `enabled` by
+  default for `mimo-v2.6-pro`; `tool_choice` other than `auto` is removed by
+  the backend; an `effort` parameter is not documented.
+
+### B · Price and terms of use
+
+- **Pay-per-use, outside China, `mimo-v2.6-pro`:** USD 0.435 per million
+  input tokens (cache miss), 0.0036 (cache hit), 0.87 per million output tokens
+  (page "Pay-As-You-Go API"); the same as OpenRouter's figure in
+  `decisions.md`. Estimate, not measured: a round of 200 000 to 500 000 input
+  and 10 000 output tokens costs USD 0.10 to 0.23.
+- **Token Plan (individual):** from USD 6 a month (Lite, 4.1 billion credits;
+  `mimo-v2.6-pro` costs 300 credits per input and 600 per output token);
+  "non-refundable and non-cancellable upon purchase" (service agreement 3.13).
+  "The quota of the Token Plan package is only available for use in
+  programming tools (such as OpenClaw, OpenCode, etc.), and it is prohibited to
+  use it in the form of API calls for request behaviors in obvious non-coding
+  scenarios such as automated scripts and custom application backends." (page
+  "Individual Subscription").
+- **Accounts:** "Currently, the platform only provides personal account
+  login." (page "First API Call"); "Your account is limited to your own use"
+  (service agreement 2.3). No clause limiting the pay-per-use API to personal
+  or non-commercial use was found in the English service agreement and the FAQ
+  pages read.
+- **Tools:** the service agreement forbids using the service "through any
+  third-party software, plug-ins, cheats or systems not developed or authorized
+  by Xiaomi" (3.2.9); Xiaomi's own pages list Claude Code among the supported
+  tools.
+
+### C · Operator, data use, residency, retention
+
+Xiaomi publishes two privacy policies, and the documentation site links one
+for international users and one for users in China:
+
+- **Outside the PRC** (<https://privacy.mi.com/XiaomiMiMoPlatformos/en_GB/>,
+  "updated on June 25, 2026"): the service is provided "by Xiaomi Technology
+  Netherlands B.V., Xiaomi Technologies Singapore Pte. Ltd. and its
+  affiliates"; "Xiaomi will not use the content you provide for model training
+  or any other purposes."; "Xiaomi uses regional data hosting infrastructure
+  located in the Netherlands and Singapore." For the EEA, UK and Switzerland
+  the controller is Xiaomi Technology Netherlands B.V., data "will be stored in
+  data centres located in the Netherlands. We may transfer your personal
+  information to Singapore"; Xiaomi "also transfers personal information to
+  affiliated companies, third-party service providers and business partners
+  located outside the region in which the information is hosted". Retention:
+  "for the period necessary for the purposes described in this Privacy Policy,
+  or as required by applicable law" — no period is stated.
+- **Inside the PRC** (<https://privacy.mi.com/XiaomiMiMoPlatform/en_GB/>,
+  version v20260806): operated by Beijing Xiaomi Mobile Software Co., Ltd.;
+  "This agreement applies to your use of Xiaomi MiMo services within the
+  territory of the People's Republic of China. Accordingly, your personal
+  information will be stored within the territory of the People's Republic of
+  China."; "Without your prior consent, Xiaomi will not use the text content
+  provided by you for model training or any other purposes."
+- **Service agreement outside the PRC** ("updated on July 7, 2026"): "Xiaomi
+  MiMo is operated by Xiaomi Technologies Singapore Pte. Ltd." (1.1), a storage
+  region can be requested and "may incur additional service fees" (1.1);
+  "Xiaomi acts as a Processor … you are the Data Controller" (4.1); "When
+  providing services outside the Chinese Mainland, Xiaomi will store the
+  relevant data on servers located in Europe and Singapore." (4.4); the laws of
+  Singapore govern (8.1).
+
+So the residency depends on where the account is registered: an account
+outside China is under the Netherlands–Singapore terms, an account in China
+under the PRC terms. Which one the maintainer has: not read.
+
+### D · Corrections to the text above
+
+- §2.1–§2.4 and the `[DETAIL]`s of §7 are answered by A–C: Xiaomi serves
+  MiMo itself, Anthropic- and OpenAI-compatible, key in a header, the model id
+  is `mimo-v2.6-pro`.
+- §3.1 cites lines 293–335 and 347–358 of `model-endpoints.yaml`; the file has
+  196 lines. The GLM entry stands at lines 111–127, the Codex entry at 129–144.
+- §6 assumes ADR 0007 would be amended in place and the D-13 row edited. The
+  spec proposes a new ADR instead (its section "The ADR question"); the next
+  free number on 2026-10-07 is 0011, because 0010 is held by an open decision
+  branch (`origin/decide/adr-0010-hermes`).
+

@@ -46,4 +46,6 @@ typed: a hand-kept list of files ages exactly as fast as files are added.
 | [`changes/stage-2-codex-glm/research.md`](changes/stage-2-codex-glm/research.md) | draft | none | 2026-09-30 | coding-harness-bc9 |
 | [`changes/stage-2-codex-glm/spec.md`](changes/stage-2-codex-glm/spec.md) | draft | partial | 2026-09-30 | coding-harness-bc9 |
 | [`changes/stage2-mimo/decisions.md`](changes/stage2-mimo/decisions.md) | draft | none | 2026-10-07 | coding-harness-ymx |
+| [`changes/stage2-mimo/plan.md`](changes/stage2-mimo/plan.md) | draft | none | 2026-10-07 | coding-harness-ymx |
 | [`changes/stage2-mimo/research.md`](changes/stage2-mimo/research.md) | draft | none | 2026-10-07 | coding-harness-ymx |
+| [`changes/stage2-mimo/spec.md`](changes/stage2-mimo/spec.md) | draft | none | 2026-10-07 | coding-harness-ymx |
