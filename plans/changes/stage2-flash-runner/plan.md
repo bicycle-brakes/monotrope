@@ -225,3 +225,46 @@ checkpoint commits; both boundaries read with `date`.
   the reason. The runner now refuses with a message naming that cause when the
   change is empty and the reason is an existing folder under `plans/changes/`;
   `--stage2-off=REASON` and the change-first order work as before. One test.
+- GLM finding L2-3: the `## Tests` table names tests that were written under
+  other names. No test was renamed; this is the mapping (planned name, then
+  the test in `tests/test_stage2.py` that holds it):
+  - `test_each_work_verb_requires_its_phase_artefacts` →
+    `test_explore_needs_research_but_not_spec_or_plan`,
+    `test_implement_requires_spec_plan_time_heading_and_no_preexisting_work`.
+  - `test_flash_uses_the_declared_model_and_model_environment` →
+    `test_explore_uses_flash_read_only_and_appends_research`,
+    `test_implement_flash_has_file_tools_and_the_complete_contract`,
+    `test_an_endpoint_the_declaration_does_not_clear_refuses`.
+  - `test_every_work_attempt_runs_a_fresh_leak_check` →
+    `test_each_call_runs_its_own_leak_check`,
+    `test_a_leak_between_work_attempts_stops_before_fallback`,
+    `test_a_stage1_route_line_is_written_only_after_a_clean_leak_check`.
+  - `test_explore_is_read_only_and_gets_the_explore_prompt` →
+    `test_explore_uses_flash_read_only_and_appends_research`.
+  - `test_explore_appends_and_scrubs_its_answer` →
+    `test_explore_scrubs_the_flash_credential_from_its_answer`
+    (the empty-answer half keeps its name).
+  - `test_implement_gets_rules_spec_plan_baseline_and_diagnostic` →
+    `test_implement_flash_has_file_tools_and_the_complete_contract`,
+    `test_a_postcheck_failure_gets_one_flash_repair_with_its_diagnostic`,
+    `test_verify_failure_is_bounded_in_the_repair_prompt`.
+  - `test_implement_has_file_tools_but_no_command_tool` →
+    `test_implement_flash_has_file_tools_and_the_complete_contract`.
+  - `test_two_postcheck_failures_route_one_repair_then_sonnet` →
+    `test_two_failed_postchecks_route_once_to_sonnet`.
+  - `test_a_failed_or_empty_work_process_stops_immediately` →
+    `test_a_failed_or_empty_work_call_stops_without_retry`.
+  - `test_stage2_off_uses_declared_stage1_routes_and_records_the_reason` →
+    `test_explore_stage2_off_uses_haiku_without_reading_the_glm_key`,
+    `test_stage2_off_implements_with_one_sonnet_attempt_and_records_reason`,
+    `test_stage2_off_is_only_for_work_verbs`.
+  - Criterion 15 ("extend the environment/credential test") →
+    `test_the_glm_credential_never_leaves_the_runner`,
+    `test_a_changed_file_with_the_glm_key_is_cleaned_and_refused`, and the two
+    gate-run tests of L2-2.
+  - `test_every_work_attempt_has_a_numbered_audit_line` →
+    `test_every_call_leaves_its_line_in_findings`,
+    `test_two_failed_postchecks_route_once_to_sonnet` (three audit lines).
+  - Names that exist as planned: `test_an_empty_explore_answer_fails_without_an_answer_block`,
+    `test_a_time_heading_deleted_mid_run_becomes_a_repair_diagnostic`,
+    `test_checkpoint_failures_are_call_failures`.
