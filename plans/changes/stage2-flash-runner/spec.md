@@ -198,8 +198,10 @@ a model endpoint.
     On the Flash route, the full key and therefore every eight-character
     fragment of it are absent from stdout, stderr and runner-written audit or
     answer artefacts on success and failure. If the exact key nevertheless
-    occurs in a regular file changed by the attempt, the runner replaces it
-    with `[credential]`, refuses with exit 2 and starts no repair or fallback.
+    occurs in a regular file changed by the attempt, including by the gate
+    run, the runner replaces it with `[credential]`, refuses with exit 2 and
+    starts no repair or fallback. The gate's own output is scrubbed of the
+    exact key before it can enter a later attempt's diagnostics.
     Implementation files otherwise are not output-scrubbing targets; the
     model's no-shell tool boundary keeps the credential unavailable to them.
     *Refuted by:* an unrelated planted environment variable reaching a

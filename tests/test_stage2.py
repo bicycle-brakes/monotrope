@@ -896,6 +896,42 @@ def test_a_changed_file_with_the_glm_key_is_cleaned_and_refused(world: World) ->
     assert "[credential]" in source and KEY not in source
 
 
+def test_a_key_written_by_the_gate_into_a_changed_file_is_removed_and_refused(world: World) -> None:
+    world.script(
+        claude=[
+            {
+                "stdout": "implemented",
+                "plant": {"src/app.py": "value = 2\n"},
+                "append": {"plans/changes/demo/plan.md": "2026-10-07 10:00–10:05, 5 min\n"},
+            },
+            {"stdout": "must not run"},
+        ],
+        make=[{"stdout": "green\n", "plant": {"src/app.py": f"credential = '{KEY}'\n"}}],
+    )
+    before = git(world.root, "rev-parse", "HEAD")
+    assert world.run("implement") == 2
+    assert len(world.calls("claude")) == 1
+    assert git(world.root, "rev-parse", "HEAD") == before
+    source = (world.root / "src/app.py").read_text(encoding="utf-8")
+    assert "[credential]" in source and KEY not in source
+
+
+def test_a_key_in_the_gate_output_never_reaches_the_next_attempt(world: World) -> None:
+    world.script(
+        claude=[
+            {"stdout": "first", "plant": {"src/app.py": "value = 2\n"}},
+            {
+                "stdout": "repaired",
+                "append": {"plans/changes/demo/plan.md": "2026-10-07 10:00–10:06, 6 min\n"},
+            },
+        ],
+        make=[{"stdout": f"token {KEY} leaked\n", "exit": 1}, {"stdout": "green\n"}],
+    )
+    assert world.run("implement") == 0
+    prompt = world.calls("claude")[1]["prompt_file"]
+    assert KEY not in prompt and "token [credential] leaked" in prompt
+
+
 def test_findings_only_dirt_is_allowed_and_committed(world: World) -> None:
     world.findings.write_text("# Findings\n\nEarlier failed attempt.\n", encoding="utf-8")
     successful_implementation(world)

@@ -981,7 +981,12 @@ def remove_changed_credential(root: Path, key: str) -> list[Path]:
     return found
 
 
-def verify_attempt(root: Path, plan: Path, baseline_time: str) -> list[str]:
+def credential_message(exposed: list[Path]) -> str:
+    listing = ", ".join(path.as_posix() for path in exposed)
+    return f"the GLM credential occurred in changed files and was removed ({listing}); no fallback starts."
+
+
+def verify_attempt(root: Path, plan: Path, baseline_time: str, key: str | None = None) -> list[str]:
     """Run the one gate and return bounded diagnostics for failed postconditions."""
     env = foreign_env(
         {
@@ -993,7 +998,7 @@ def verify_attempt(root: Path, plan: Path, baseline_time: str) -> list[str]:
     done = launch(["make", "verify"], root, env)
     problems = []
     if done.returncode != 0:
-        tail = "\n".join(((done.stdout or "") + (done.stderr or "")).splitlines()[-80:])
+        tail = scrub("\n".join(((done.stdout or "") + (done.stderr or "")).splitlines()[-80:]), key)
         problems.append(f"`make verify` exited {done.returncode}\n{tail}".rstrip())
     try:
         current_time = time_log(plan)
@@ -1005,8 +1010,12 @@ def verify_attempt(root: Path, plan: Path, baseline_time: str) -> list[str]:
     return problems
 
 
-def checkpoint(root: Path, change: str, baseline: str) -> None:
+def checkpoint(root: Path, change: str, baseline: str, key: str | None = None) -> None:
     """Commit a passing implementation and prove the one clean descendant commit."""
+    if key is not None:
+        exposed = remove_changed_credential(root, key)
+        if exposed:
+            raise Refused(credential_message(exposed))
     try:
         _git_output(root, "add", "-A")
         _git_output(
@@ -1109,13 +1118,15 @@ def implement(root: Path, change: str, stage2_off: str | None = None) -> None:
         if credential is not None:
             exposed = remove_changed_credential(root, credential)
             if exposed:
-                listing = ", ".join(path.as_posix() for path in exposed)
-                raise Refused(
-                    f"the GLM credential occurred in changed files and was removed ({listing}); no fallback starts."
-                )
-        problems = verify_attempt(root, ctx.plan, baseline_time)
+                raise Refused(credential_message(exposed))
+        problems = verify_attempt(root, ctx.plan, baseline_time, key)
+        if key is not None:
+            # The gate runs repository code the model just edited: scan again after it.
+            exposed = remove_changed_credential(root, key)
+            if exposed:
+                raise Refused(credential_message(exposed))
         if not problems:
-            checkpoint(root, change, baseline)
+            checkpoint(root, change, baseline, key)
             print(f"implement: verified and committed · route {route} · attempt {attempt}")
             return
         diagnostics.append(f"Attempt {attempt} ({route}):\n" + "\n".join(f"- {p}" for p in problems))

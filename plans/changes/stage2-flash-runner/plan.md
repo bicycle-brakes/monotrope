@@ -212,3 +212,11 @@ checkpoint commits; both boundaries read with `date`.
   receives both diagnostics. The block is still written after that attempt's
   clean leak check (L1-5); the audit line order is unchanged because the
   restore cannot fail. The test deletes the heading in both Flash attempts.
+- GLM finding L2-2: the exact-key barrier now also covers the gate run.
+  `implement` rescans changed files after `make verify` (a hit is refused like
+  the pre-gate hit: no repair, no fallback), `verify_attempt` replaces the exact
+  key in the gate's output tail with `[credential]`, and `checkpoint` rescans
+  immediately before `git add -A`. The key is the run's Flash key on every
+  attempt, the Sonnet fallback included. Criterion 15 of the spec now says
+  "including by the gate run" and the output scrub. Two tests: a gate that
+  writes the key into a changed file, and a gate that prints it.
