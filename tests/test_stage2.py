@@ -954,6 +954,32 @@ def test_a_key_written_by_the_gate_into_a_changed_file_is_removed_and_refused(wo
     assert "[credential]" in source and KEY not in source
 
 
+def test_a_key_in_a_gitignored_file_written_by_the_run_is_removed_and_refused(world: World) -> None:
+    (world.root / ".gitignore").write_text("*.local\n", encoding="utf-8")
+    git(world.root, "add", "-A")
+    git(world.root, "commit", "--quiet", "-m", "ignore *.local")
+    old = world.root / "old.local"
+    old.write_text(f"mine = {KEY}\n", encoding="utf-8")  # there before the run: not the run's
+    world.script(
+        claude=[
+            {
+                "stdout": "implemented",
+                "plant": {"new.local": f"token = {KEY}\n"},
+                "append": {"plans/changes/demo/plan.md": "2026-10-07 10:00–10:05, 5 min\n"},
+            },
+            {"stdout": "must not run"},
+        ],
+        make=[{"stdout": "green\n"}],
+    )
+    before = git(world.root, "rev-parse", "HEAD")
+    assert world.run("implement") == 2
+    assert len(world.calls("claude")) == 1
+    assert git(world.root, "rev-parse", "HEAD") == before
+    planted = (world.root / "new.local").read_text(encoding="utf-8")
+    assert "[credential]" in planted and KEY not in planted
+    assert KEY in old.read_text(encoding="utf-8")
+
+
 def test_a_key_in_the_gate_output_never_reaches_the_next_attempt(world: World) -> None:
     world.script(
         claude=[

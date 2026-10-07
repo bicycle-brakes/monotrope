@@ -888,6 +888,25 @@ def changed_paths(root: Path) -> set[Path]:
     return {Path(name) for name in [*tracked, *untracked] if name}
 
 
+def ignored_snapshot(root: Path) -> dict[Path, tuple[int, int]]:
+    """Gitignored files with their mtime and size, so a later scan can tell which the run touched.
+
+    `.venv/` is left out: it is third-party code `make venv` installs, thousands of files this
+    runner does not create, and the gate's bytecode caches inside it are not model output.
+    """
+    listing = _git_output(
+        root, "ls-files", "-z", "--others", "--ignored", "--exclude-standard", "--", ".", ":(exclude).venv"
+    ).split("\0")
+    snapshot = {}
+    for name in filter(None, listing):
+        try:
+            info = (root / name).lstat()
+        except OSError:
+            continue
+        snapshot[Path(name)] = (info.st_mtime_ns, info.st_size)
+    return snapshot
+
+
 def restore_baseline(root: Path, baseline: str, keep: set[Path]) -> str:
     """After a failed model call, put every path but `keep` back at the baseline; say what was undone.
 
@@ -987,11 +1006,20 @@ def run_work_model(
     return answer
 
 
-def remove_changed_credential(root: Path, key: str) -> list[Path]:
-    """Remove an exact GLM credential from changed regular files and name those files."""
+def remove_changed_credential(
+    root: Path, key: str, ignored_before: dict[Path, tuple[int, int]] | None = None
+) -> list[Path]:
+    """Remove an exact GLM credential from changed regular files and name those files.
+
+    "Changed" is tracked changes, untracked files, and - when the run's earlier snapshot of the
+    gitignored files is given - every ignored file created or touched since that snapshot.
+    """
     secret = key.encode()
+    paths = changed_paths(root)
+    if ignored_before is not None:
+        paths |= {p for p, stat in ignored_snapshot(root).items() if ignored_before.get(p) != stat}
     found = []
-    for relative in sorted(changed_paths(root), key=lambda path: path.as_posix()):
+    for relative in sorted(paths, key=lambda path: path.as_posix()):
         path = root / relative
         if path.is_symlink() or not path.is_file():
             continue
@@ -1035,10 +1063,16 @@ def verify_attempt(root: Path, plan: Path, baseline_time: str, key: str | None =
     return problems
 
 
-def checkpoint(root: Path, change: str, baseline: str, key: str | None = None) -> None:
+def checkpoint(
+    root: Path,
+    change: str,
+    baseline: str,
+    key: str | None = None,
+    ignored_before: dict[Path, tuple[int, int]] | None = None,
+) -> None:
     """Commit a passing implementation and prove the one clean descendant commit."""
     if key is not None:
-        exposed = remove_changed_credential(root, key)
+        exposed = remove_changed_credential(root, key, ignored_before)
         if exposed:
             raise Refused(credential_message(exposed))
     try:
@@ -1122,6 +1156,7 @@ def implement(root: Path, change: str, stage2_off: str | None = None) -> None:
         raise Refused(f"the worktree has pre-existing changes outside this change's findings.md: {listing}")
     baseline = _git_output(root, "rev-parse", "HEAD").strip()
     baseline_time = time_log(ctx.plan)
+    ignored_before = ignored_snapshot(root)
     key = None
     if stage2_off is None:
         key = read_secret("GLM_KEY")
@@ -1148,17 +1183,17 @@ def implement(root: Path, change: str, stage2_off: str | None = None) -> None:
         except CallFailed as error:
             raise CallFailed(f"{error}; {restore_baseline(root, baseline, allowed)}") from error
         if credential is not None:
-            exposed = remove_changed_credential(root, credential)
+            exposed = remove_changed_credential(root, credential, ignored_before)
             if exposed:
                 raise Refused(credential_message(exposed))
         problems = verify_attempt(root, ctx.plan, baseline_time, key)
         if key is not None:
             # The gate runs repository code the model just edited: scan again after it.
-            exposed = remove_changed_credential(root, key)
+            exposed = remove_changed_credential(root, key, ignored_before)
             if exposed:
                 raise Refused(credential_message(exposed))
         if not problems:
-            checkpoint(root, change, baseline, key)
+            checkpoint(root, change, baseline, key, ignored_before)
             print(f"implement: verified and committed · route {route} · attempt {attempt}")
             return
         diagnostics.append(f"Attempt {attempt} ({route}):\n" + "\n".join(f"- {p}" for p in problems))

@@ -296,3 +296,14 @@ both boundaries read with `date`.
   the other runner-owned git calls, so its failure is `CallFailed` (exit 1).
   Held by the new `status-fails` case of
   `test_checkpoint_failures_are_call_failures`.
+- Phase-6 finding F6-6: the exact-key scan now also covers gitignored files
+  created or touched by the run. `implement` snapshots the ignored files
+  (path, mtime, size; `git ls-files --others --ignored --exclude-standard`)
+  after the baseline, and every scan adds the ignored files whose entry
+  differs; an ignored file that was already there and is untouched is never
+  rewritten. `.venv/` is excluded: it is third-party code `make venv`
+  installs, tens of thousands of files the runner does not create, and the
+  gate's bytecode caches inside it are not model output - scanning it three
+  times per attempt is impractical, and the limit is named in the
+  `ignored_snapshot` docstring. Held by
+  `test_a_key_in_a_gitignored_file_written_by_the_run_is_removed_and_refused`.
