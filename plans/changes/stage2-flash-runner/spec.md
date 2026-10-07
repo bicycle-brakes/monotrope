@@ -203,7 +203,9 @@ a model endpoint.
     starts no repair or fallback. The gate's own output is scrubbed of the
     exact key before it can enter a later attempt's diagnostics.
     Implementation files otherwise are not output-scrubbing targets; the
-    model's no-shell tool boundary keeps the credential unavailable to them.
+    model has no shell, and `--restricted` with no `--add-dir` confines its file
+    tools to the worktree, which does not hold the credential file (the
+    program's documented behaviour; not measured against a real path).
     *Refuted by:* an unrelated planted environment variable reaching a
     stand-in, configuration files loaded, a Flash stream or runner artefact
     retaining a key fragment, a changed file retaining the exact key, or a

@@ -636,6 +636,7 @@ def test_explore_uses_flash_read_only_and_appends_research(world: World) -> None
     assert argv[argv.index("--effort") + 1] == "max"
     assert set(argv[argv.index("--tools") + 1].split(",")) == {"Read", "Grep", "Glob"}
     assert "--restricted" in argv and "--safe-mode" in argv and "--strict-mcp-config" in argv
+    assert "--add-dir" not in argv and call["cwd"] == str(world.root)
     assert argv[argv.index("--permission-mode") + 1] == "dontAsk"
     assert call["env"]["ANTHROPIC_BASE_URL"] == stage2.GLM_BASE_URL
     assert call["env"]["ANTHROPIC_MODEL"] == "glm-5.3-flash"
@@ -697,6 +698,7 @@ def test_implement_flash_has_file_tools_and_the_complete_contract(world: World) 
     assert set(argv[argv.index("--tools") + 1].split(",")) == {"Read", "Grep", "Glob", "Edit", "Write"}
     assert "Bash" not in argv[argv.index("--tools") + 1]
     assert "--restricted" in argv and "--safe-mode" in argv and "--strict-mcp-config" in argv
+    assert "--add-dir" not in argv and call["cwd"] == str(world.root)
     assert argv[argv.index("--permission-mode") + 1] == "acceptEdits"
     assert argv[argv.index("--permission-prompts") + 1] == "none"
     for forbidden in ("WebFetch", "bypassPermissions", "--dangerously-skip-permissions", "--allowedTools"):

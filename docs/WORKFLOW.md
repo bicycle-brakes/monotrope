@@ -698,8 +698,8 @@ on `codex exec resume` in particular, whose help lists no sandbox option. If
 Codex's hooks are not in fact off, the tracked `.codex/hooks.json` injects
 tracker text into the call that the leak check does not scan. GLM's credential
 (`GLM_KEY` in `~/.config/cc-routing/secrets.env`) stays in the runner's
-environment for that call, is unavailable to the implementation model's file
-tools and is scrubbed from everything the runner prints or writes. The
+environment for that call, is outside the reach of the Claude Code file tools (`--restricted`, see
+"Reads" below; not measured) and is scrubbed from everything the runner prints or writes. The
 Stage-1 fallback uses normal Claude Code authentication and never reads that
 key.
 
@@ -707,13 +707,20 @@ key.
 session (`Bash(codex *)`). That is a brake, not a lock: `sh -c`, an absolute
 path or a script file passes it, as it does for the merge rules in §2.
 
-**Reads are asked, not confined.** Every prompt asks the foreign model to read
-nothing outside the worktree and the repository's git directory. **That is a
-request, not a lock.** Nothing here confines the reviewers' reads or proves
-that they stay inside: they can read the rest of the disk, the customer
-instance's checkout included. The maintainer accepted that as a residual risk
-on 2026-09-30 (ADR 0007). The leak check scans what this repository presents,
-not what else the disk holds.
+**Reads: confined for the Claude Code calls, asked for Codex.** Every Claude
+Code call (explore, implement, the Sonnet 5.5 fallback attempts and the GLM
+review loop) starts in the worktree with `--restricted` and no `--add-dir`.
+`claude --help` says `--restricted` "confines the file tools to the working
+directories", so the credential file `~/.config/cc-routing/secrets.env`, which
+lies outside the worktree, is outside what the model's file tools reach. **That
+is the program's documented behaviour, not measured here:** no test has run it
+against a path outside the worktree. The Codex calls (`spec-review`, `review`)
+have no such flag. Their prompts ask the model to read nothing outside the
+worktree and the repository's git directory, and **that is a request, not a
+lock:** Codex can read the rest of the disk, the customer instance's checkout
+included. The maintainer accepted that as a residual risk on 2026-09-30
+(ADR 0007). The leak check scans what this repository presents, not what else
+the disk holds.
 
 ### The review loop (phase 4b)
 

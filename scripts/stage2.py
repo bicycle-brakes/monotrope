@@ -32,9 +32,16 @@ Implement lets the model edit but not run commands; the runner runs
 5. an empty standard input, and an environment the runner built from an
    allow-list - never the caller's.
 
-**Reads are asked, not confined.** Every prompt ends with the request to read
-nothing outside the worktree and the repository's git directory. It is a
-request, not a lock: the reviewers can read the rest of the disk.
+**Reads: confined for the Claude Code calls, asked for Codex.** Every Claude
+Code call (explore, implement, the Flash and Sonnet fallback attempts, the GLM
+review loop) starts in the worktree with `--restricted` and no `--add-dir`;
+`claude --help` says `--restricted` "confines the file tools to the working
+directories", so `~/.config/cc-routing/secrets.env` is outside what those file
+tools reach. That is the CLI's documented behaviour, not measured here: no test
+has run the real program against a path outside the worktree. The Codex calls
+(`spec-review`, `review`) have no such flag: every prompt ends with the request
+to read nothing outside the worktree and the repository's git directory, which
+is a request, not a lock - Codex can read the rest of the disk.
 
 **The loop record** lives outside the worktree
 (`${XDG_STATE_HOME:-~/.local/state}/coding-harness/stage2/<change>/loop.md`):

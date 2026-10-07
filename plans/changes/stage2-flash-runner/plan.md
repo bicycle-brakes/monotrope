@@ -274,3 +274,12 @@ both boundaries read with `date`.
 - GLM finding L2-4: the five artefacts' `implementation_status` is now
   `partial` and `plans/INDEX.md` is regenerated; the status step of plan step 6
   had run late, after round 1.
+- Phase-6 finding F6-1: the two texts were reconciled by reading the code. Every
+  Claude Code call (explore, implement, Sonnet fallback, GLM review loop) passes
+  `--restricted`, no `--add-dir`, and runs in the worktree; `claude --help`
+  says `--restricted` "confines the file tools to the working directories".
+  Only the Codex calls are "asked, not confined". WORKFLOW.md §4, the
+  `stage2.py` docstring and criterion 15 now say exactly that, and name that
+  the confinement is the program's documented behaviour, not measured. The
+  explore and implement argv tests assert `--restricted`, no `--add-dir` and
+  the worktree as working directory.
