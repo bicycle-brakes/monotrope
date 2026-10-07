@@ -292,3 +292,7 @@ both boundaries read with `date`.
   `test_a_failed_flash_process_restores_the_baseline_so_stage2_off_can_proceed`,
   `test_a_failed_model_call_names_what_was_restored`. WORKFLOW.md §4 and spec
   criterion 12 name the next step.
+- Phase-6 finding F6-7: the final `git status` of `checkpoint` is wrapped like
+  the other runner-owned git calls, so its failure is `CallFailed` (exit 1).
+  Held by the new `status-fails` case of
+  `test_checkpoint_failures_are_call_failures`.

@@ -978,7 +978,7 @@ def test_findings_only_dirt_is_allowed_and_committed(world: World) -> None:
     assert "Earlier failed attempt." in world.text()
 
 
-@pytest.mark.parametrize("fault", ["command", "non-descendant", "dirty"])
+@pytest.mark.parametrize("fault", ["command", "non-descendant", "dirty", "status-fails"])
 def test_checkpoint_failures_are_call_failures(monkeypatch: pytest.MonkeyPatch, tmp_path: Path, fault: str) -> None:
     def fake_git(root: Path, *args: str, allow: tuple[int, ...] = (0,)) -> str:
         del root, allow
@@ -987,6 +987,8 @@ def test_checkpoint_failures_are_call_failures(monkeypatch: pytest.MonkeyPatch, 
         if args[0] == "rev-list":
             return "2\n" if fault == "non-descendant" else "1\n"
         if args[0] == "status":
+            if fault == "status-fails":
+                raise stage2.Refused("git status failed")
             return " M src/app.py\n" if fault == "dirty" else ""
         return ""
 

@@ -1065,7 +1065,11 @@ def checkpoint(root: Path, change: str, baseline: str, key: str | None = None) -
     )
     if ancestor.returncode != 0 or count != "1":
         raise CallFailed("the runner checkpoint is not exactly one descendant commit")
-    if _git_output(root, "status", "--porcelain=v1", "--untracked-files=all").strip():
+    try:
+        dirty = _git_output(root, "status", "--porcelain=v1", "--untracked-files=all").strip()
+    except Refused as error:
+        raise CallFailed(f"the runner checkpoint failed: {error}") from error
+    if dirty:
         raise CallFailed("the runner checkpoint left a dirty worktree")
 
 
