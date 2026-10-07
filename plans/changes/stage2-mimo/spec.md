@@ -304,7 +304,7 @@ recording program the tests put on `PATH` in the callee's place.
 24. **The stop rule counts the new reviewers.** Where §4 measures the first
     stage-2 runs, a taken finding of a rung counts like a Codex or GLM
     finding counts today.
-    *Refuted by:*     the measurement naming only the two former reviewers.
+    *Refuted by:* the measurement naming only the two former reviewers.
 
 25. **The ADR.** The ADR the maintainer's answer names records that framework
     content may go to `opencode-go` through Claude Code for phases 2a, 4b and

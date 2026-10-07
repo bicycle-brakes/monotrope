@@ -392,6 +392,14 @@ are the two `[GAP]`s, which phase 4 measures instead of asking.
    changes the decision it points at. Reversible — a reviewer who reads the
    widening as a change to D-13 gets the map entry and the dated note in the
    same pull request.
+8. **How the compatibility probe runs** (`plan.md`, step 7): a `probe` verb
+   of `scripts/stage2.py`. The Definition of Done demands three calls
+   *through the runner* with declaration and leak check in front of each, and
+   no verb of it does a measurement — the review verbs would write review
+   blocks into a real change's record, which is not what a probe is. Reason:
+   one call per rung, no record written, output that the pull request body
+   quotes. Reversible: the same three calls could be made by hand if the
+   maintainer prefers no new verb.
 
 ## Addendum 2026-10-07 (after the phase-2a review): when the probe runs
 
