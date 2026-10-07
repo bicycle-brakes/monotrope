@@ -510,6 +510,57 @@ def test_an_endpoint_the_declaration_does_not_clear_refuses(world: World, verb: 
     assert world.calls() == []
 
 
+@pytest.mark.parametrize(
+    ("verb", "options", "endpoint"),
+    [
+        ("explore", (), "glm-coding-plan"),
+        ("implement", (), "glm-coding-plan"),
+        ("explore", ("--stage2-off", "r"), "claude-code-plan"),
+        ("implement", ("--stage2-off", "r"), "claude-code-plan"),
+    ],
+    ids=["explore-flash", "implement-flash", "explore-stage1", "implement-stage1"],
+)
+@pytest.mark.parametrize("fault", ["missing", "no-model", "no-framework", "no-residency"])
+def test_a_broken_declaration_stops_the_work_verbs_before_any_model(
+    world: World, verb: str, options: tuple[str, ...], endpoint: str, fault: str
+) -> None:
+    path = world.root / "model-endpoints.yaml"
+    data = yaml.safe_load(path.read_text(encoding="utf-8"))
+    entry = next(e for e in data["endpunkte"] if e["name"] == endpoint)
+    if fault == "missing":
+        data["endpunkte"].remove(entry)
+    elif fault == "no-model":
+        entry["modelle"] = ["another-model"]
+    elif fault == "no-framework":
+        entry["darf_sehen"] = []
+    else:
+        entry["residenz"] = "nicht-erklaert"
+    path.write_text(yaml.safe_dump(data, allow_unicode=True), encoding="utf-8")
+    assert world.run(verb, "demo", *options) == 2
+    assert world.calls() == []
+
+
+@pytest.mark.parametrize("verb", ["explore", "implement"])
+def test_a_leak_before_the_first_work_call_starts_no_model(world: World, verb: str) -> None:
+    (world.root / "src" / "leak.txt").write_text(LEAK, encoding="utf-8")
+    if verb == "implement":
+        git(world.root, "add", "-A")
+        git(world.root, "commit", "--quiet", "-m", "planted leak")
+    world.script(claude=[{"stdout": "must not run"}])
+    assert world.run(verb) == 2
+    assert world.calls() == []
+    assert world.run(verb, "demo", "--stage2-off", "r") == 2, "a leak never falls back"
+    assert world.calls() == []
+
+
+@pytest.mark.parametrize("verb", ["explore", "implement"])
+def test_a_missing_glm_key_refuses_the_flash_route(world: World, verb: str) -> None:
+    Path(os.environ["CC_SECRETS"]).write_text("OTHER=1\n", encoding="utf-8")
+    world.script(claude=[{"stdout": "must not run"}])
+    assert world.run(verb) == 2
+    assert world.calls() == []
+
+
 def test_the_foreign_environment_is_the_runners(world: World) -> None:
     world.script(codex=[codex_ok("T1", rows(1))], claude=[{"stdout": rows(1)}])
     assert world.run("spec-review") == 0

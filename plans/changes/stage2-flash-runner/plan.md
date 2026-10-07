@@ -307,3 +307,8 @@ both boundaries read with `date`.
   times per attempt is impractical, and the limit is named in the
   `ignored_snapshot` docstring. Held by
   `test_a_key_in_a_gitignored_file_written_by_the_run_is_removed_and_refused`.
+- Phase-6 finding F6-5: tests for the refusals of the new verbs that had none:
+  `test_a_broken_declaration_stops_the_work_verbs_before_any_model` (four
+  faults on both routes of both verbs),
+  `test_a_leak_before_the_first_work_call_starts_no_model` (and no fallback
+  after it) and `test_a_missing_glm_key_refuses_the_flash_route`.
