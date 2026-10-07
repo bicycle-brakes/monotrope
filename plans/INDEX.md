@@ -61,11 +61,11 @@ typed: a hand-kept list of files ages exactly as fast as files are added.
 | [`changes/stage-2-codex-glm/plan.md`](changes/stage-2-codex-glm/plan.md) | draft | partial | 2026-09-30 | coding-harness-bc9 |
 | [`changes/stage-2-codex-glm/research.md`](changes/stage-2-codex-glm/research.md) | draft | none | 2026-09-30 | coding-harness-bc9 |
 | [`changes/stage-2-codex-glm/spec.md`](changes/stage-2-codex-glm/spec.md) | draft | partial | 2026-09-30 | coding-harness-bc9 |
-| [`changes/stage2-flash-runner/decisions.md`](changes/stage2-flash-runner/decisions.md) | draft | none | 2026-10-07 | coding-harness-qcp |
-| [`changes/stage2-flash-runner/findings.md`](changes/stage2-flash-runner/findings.md) | draft | none | 2026-10-07 | coding-harness-qcp |
-| [`changes/stage2-flash-runner/plan.md`](changes/stage2-flash-runner/plan.md) | draft | none | 2026-10-07 | coding-harness-qcp |
-| [`changes/stage2-flash-runner/research.md`](changes/stage2-flash-runner/research.md) | draft | none | 2026-10-07 | coding-harness-qcp |
-| [`changes/stage2-flash-runner/spec.md`](changes/stage2-flash-runner/spec.md) | draft | none | 2026-10-07 | coding-harness-qcp |
+| [`changes/stage2-flash-runner/decisions.md`](changes/stage2-flash-runner/decisions.md) | draft | partial | 2026-10-07 | coding-harness-qcp |
+| [`changes/stage2-flash-runner/findings.md`](changes/stage2-flash-runner/findings.md) | draft | partial | 2026-10-07 | coding-harness-qcp |
+| [`changes/stage2-flash-runner/plan.md`](changes/stage2-flash-runner/plan.md) | draft | partial | 2026-10-07 | coding-harness-qcp |
+| [`changes/stage2-flash-runner/research.md`](changes/stage2-flash-runner/research.md) | draft | partial | 2026-10-07 | coding-harness-qcp |
+| [`changes/stage2-flash-runner/spec.md`](changes/stage2-flash-runner/spec.md) | draft | partial | 2026-10-07 | coding-harness-qcp |
 | [`changes/template-bundle/decisions.md`](changes/template-bundle/decisions.md) | draft | partial | 2026-10-05 | coding-harness-9qo |
 | [`changes/template-bundle/findings.md`](changes/template-bundle/findings.md) | draft | partial | 2026-10-05 | coding-harness-9qo |
 | [`changes/template-bundle/plan.md`](changes/template-bundle/plan.md) | draft | partial | 2026-09-30 | coding-harness-9qo |

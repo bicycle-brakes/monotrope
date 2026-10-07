@@ -2,7 +2,7 @@
 title: "Findings — stage2-flash-runner"
 category: findings
 status: draft
-implementation_status: none
+implementation_status: partial
 date: 2026-10-07
 created: 2026-10-07
 last_reviewed: 2026-10-07

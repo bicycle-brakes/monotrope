@@ -1,7 +1,7 @@
 ---
 title: "Plan — stage2-flash-runner"
 status: draft
-implementation_status: none
+implementation_status: partial
 date: 2026-10-07
 last_reviewed: 2026-10-07
 updated: 2026-10-07
@@ -196,6 +196,9 @@ already have their roles), Omnigent, Hermes, MiMo and sibling repositories.
 2026-10-07 10:56–11:08, 12 min — implementation through the two green
 checkpoint commits; both boundaries read with `date`.
 
+2026-10-07 14:59–15:13, 14 min — round-2 repairs L2-1 to L2-4 and L2-6;
+both boundaries read with `date`.
+
 ## Revisions in phase 4
 
 - Steps 1–4 became one code-and-tests checkpoint (`e9738c5`), not the three
@@ -268,3 +271,6 @@ checkpoint commits; both boundaries read with `date`.
   - Names that exist as planned: `test_an_empty_explore_answer_fails_without_an_answer_block`,
     `test_a_time_heading_deleted_mid_run_becomes_a_repair_diagnostic`,
     `test_checkpoint_failures_are_call_failures`.
+- GLM finding L2-4: the five artefacts' `implementation_status` is now
+  `partial` and `plans/INDEX.md` is regenerated; the status step of plan step 6
+  had run late, after round 1.
