@@ -191,3 +191,18 @@ Not asked, recorded as `[DETAIL]` for phase 2: the class is `feature` (a new
 foreign endpoint and an amendment of ADR 0007); MiMo-V2.6-Pro is the
 reviewer (71.9 vs Flash 67.9 on DeepSWE v1.1, vendor-reported; the cost
 difference per review is a fraction of a cent).
+
+## Addendum 2026-10-07 (later): [DECISION] 1 and the ADR question
+
+Asked one at a time in the Claude Code session on 2026-10-07:
+
+1. **Payment: "Token Plan"** — Xiaomi's subscription for programming tools.
+   Not chosen: pay per use (the recommendation). The question named the
+   consequence: the Token Plan's terms forbid "automated scripts", and the
+   stage-2 runner is one, so the choice carries a terms risk the maintainer
+   accepts; the ADR states it.
+2. **ADR question: "yes — widen ADR 0007"** — Xiaomi is added to ADR 0007's
+   own text (endpoint, data classes, the Token Plan terms risk, unconfined
+   reads through Claude Code as for GLM). Not chosen: a new ADR 0011 that
+   amends ADR 0007 (the recommendation); no ADR. The orchestrating session
+   records the answer with `scripts/harness.py decide adr`.
