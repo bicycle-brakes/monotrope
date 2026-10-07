@@ -1,18 +1,35 @@
 # Phase 6 · Review
 
-**Model:** Opus 5.5 — until stage 2 is live (maintainer, 2026-09-30); finds
-what Sonnet misses, and reads the code a change calls instead of trusting its
-docstring.
+**Model:** Opus 5.5 — finds what Sonnet misses, and reads the code a change
+calls instead of trusting its docstring, for a spike; for a bounded, feature or
+architectural change gpt-6.1-sol at effort `max`, resumed by `python3
+scripts/stage2.py review <change>` (a fresh session where no phase-2a session
+was held).
 **Input:** the diff and `spec.md`. **Not** the author's reasoning.
 **Result:** `plans/changes/<name>/findings.md`
 **Gate:** no open `[AMBIGUITY]`, no open BLOCKER — `[DIVERGENT]` counts as
 BLOCKER.
-**Session:** you are the spec reviewer of phase 2a, resumed with
-`claude --model claude-fable-5-1 --resume <uuid>` (the id under the table in
-`findings.md`). Only when that session is gone does a fresh one start;
+**Session:** you are the spec reviewer of phase 2a, resumed. On the Claude path
+(Opus 5.5): `claude --model claude-opus-5-5 --resume <uuid>` (the id under the
+table in `findings.md`). On the Codex path the runner resumes the recorded
+session with `codex exec resume`. Only when that session is gone does a fresh
+one start;
 `findings.md` says so. Your yardstick is the current `spec.md` — the version
 revised after your 2a review, not the one you read then. Read it again, and
 check first that each of your 2a rows arrived in it as `findings.md` says.
+
+**Verdict first.** Write your verdict — the table and, under it, the line
+`Phase 6 verdict: <reviewer> <session>, <date>` — before you read any loop
+row. The loop rows are the findings of GLM, the reviewer of the loop before
+this phase (`docs/WORKFLOW.md` §4); they are held outside the repository until
+your verdict stands, so that they cannot shape it. Only then do the loop rows
+come in. On the Claude path you run `python3 scripts/stage2.py release-loop
+<change>` and mark the `Phase 6` cell of each loop row `agree` or `disagree —
+<reason>`; on the Codex path the runner does both. A change that ran stage 2
+has the columns `Reviewer` and `Broke a test` in `findings.md`
+(`docs/WORKFLOW.md` §4). The verdict line is one line: `<date>` as `YYYY-MM-DD`
+comes last on it, `<session>` is left out when you have no id, and `<reviewer>` names
+who reviewed — never `pending`.
 
 Having passed the spec in 2a is no argument now. Where the code shows the spec
 itself was wrong — a caveat it rested on, a reading it did not make — that is a
@@ -28,12 +45,15 @@ Two dimensions, because a spec cannot see its own gaps:
 - **`MAINT`** — the eye of a maintainer who was not there: error handling, edge
   cases, contracts facing outward, security. Finds what the spec is silent about.
 
-Your answer **is** the table from `templates/findings.md` — columns exactly as
-they stand there, one row per finding, `SPEC` and `MAINT` in the dimension
-column. Two markers override everything: a finding that reveals two plausible
-readings of spec or plan is `[AMBIGUITY]` and is never decided locally; two
-places answering the same question in opposite ways are `[DIVERGENT]` and a
-`BLOCKER`, however harmless each line looks alone.
+Your answer **is** a table: one row per finding, `SPEC` and `MAINT` in the
+dimension column. Through the runner you answer in rows of six cells — `| ID |
+Severity | Dimension | Origin | Where | Finding |` — and the runner adds the
+reviewer, the status and the verdict line; write a `|` inside a cell as `\|`.
+On the Claude path you write the table of the change's `findings.md` yourself,
+in the columns that file has. Two markers override everything: a finding that
+reveals two plausible readings of spec or plan is `[AMBIGUITY]` and is never
+decided locally; two places answering the same question in opposite ways are
+`[DIVERGENT]` and a `BLOCKER`, however harmless each line looks alone.
 
 A finding already rejected in an earlier round may only reappear **with new
 evidence attached**. Repetition without new evidence is not a finding.
