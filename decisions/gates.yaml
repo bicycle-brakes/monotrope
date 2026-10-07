@@ -38,10 +38,12 @@
 
 schema_version: 2
 
+# The interpreters this repository is checked under, oldest first (bead
+# coding-harness-ei0). The verify job runs once per entry, as one leg each; the
+# drift job runs once, on the last. Package versions are not listed here: they
+# live in `pyproject.toml` and, with their hashes, in `requirements-ci.txt`.
 tools:
-  python: "3.12"
-  ruff: "0.9.10"
-  pytest: "8.3.4"
+  python: ["3.11", "3.12"]
 
 gates:
   - id: pytest

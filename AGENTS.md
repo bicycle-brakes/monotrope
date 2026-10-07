@@ -155,6 +155,9 @@ tools/bd dolt push          # push tracker data to origin (refs/dolt/data)
   variable, and concurrent writers lose nothing
   (`docs/research/2026-09-23-worktree-tracker-writes.md`); who may write is
   still house rule 4, and a worker claims with `--actor <session>`.
+  Each new checkout or worktree runs `make venv` once before `make verify`;
+  the suite fails under an interpreter that does not match
+  `requirements-ci.txt` (bead coding-harness-ei0).
 - **Omnigent starts inside the worktree** (`omnigent claude
   --use-native-config`, ADR 0006). Omnigent's own tools that write, run,
   spawn or change state are denied by name in `.claude/settings.json`;

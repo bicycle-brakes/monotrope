@@ -21,6 +21,7 @@
 # Python
 __pycache__/
 *.pyc
+.venv/
 implementation_plan.md
 
 # The lychee action writes its report into the workspace (lychee/out.md).

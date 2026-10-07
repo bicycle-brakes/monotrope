@@ -133,6 +133,7 @@ def test_the_generated_workflow_leaves_writer_only_gates_out(tmp_path: Path, mon
 
     doc = {
         "schema_version": 2,
+        "tools": {"python": ["3.11", "3.12"]},
         "gates": [
             {
                 "id": "lauf-ueberall",
@@ -176,6 +177,7 @@ def test_the_local_command_list_skips_hosted_only_gates(tmp_path: Path, monkeypa
 
     doc = {
         "schema_version": 2,
+        "tools": {"python": ["3.11", "3.12"]},
         "gates": [
             {
                 "id": "lauf-ueberall",
@@ -532,6 +534,7 @@ def test_gate_schema_gate_holds_an_action_without_local_equivalent_to_hosted() -
     def doc(placement: str) -> dict:
         return {
             "schema_version": 2,
+            "tools": {"python": ["3.11", "3.12"]},
             "gates": [
                 {
                     "id": "nur-action",

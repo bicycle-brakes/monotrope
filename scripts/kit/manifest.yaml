@@ -337,6 +337,9 @@ rules:
   - prefix: requirements.txt
     rolle: bestand
     reason: "Entwicklungs-Abhaengigkeiten dieses Repos"
+  - prefix: pyproject.toml
+    rolle: bestand
+    reason: "this repository's project file — its pins and its pytest settings; an instance declares its own, as LakeSwitch does (bead coding-harness-ei0)"
   - prefix: .markdownlint.jsonc
     rolle: bestand
     reason: "Lint-Einstellungen dieses Repos; kein Test liest sie"

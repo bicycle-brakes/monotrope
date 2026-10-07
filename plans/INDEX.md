@@ -41,6 +41,11 @@ typed: a hand-kept list of files ages exactly as fast as files are added.
 | [`changes/hermes-runner/plan.md`](changes/hermes-runner/plan.md) | draft | partial | 2026-10-05 | coding-harness-i3y |
 | [`changes/hermes-runner/research.md`](changes/hermes-runner/research.md) | draft | none | 2026-10-05 | coding-harness-i3y |
 | [`changes/hermes-runner/spec.md`](changes/hermes-runner/spec.md) | draft | none | 2026-10-05 | coding-harness-i3y |
+| [`changes/project-lock/decisions.md`](changes/project-lock/decisions.md) | draft | partial | 2026-10-05 | coding-harness-ei0 |
+| [`changes/project-lock/findings.md`](changes/project-lock/findings.md) | draft | partial | 2026-10-06 | coding-harness-ei0 |
+| [`changes/project-lock/plan.md`](changes/project-lock/plan.md) | draft | partial | 2026-10-05 | coding-harness-ei0 |
+| [`changes/project-lock/research.md`](changes/project-lock/research.md) | draft | partial | 2026-10-05 | coding-harness-ei0 |
+| [`changes/project-lock/spec.md`](changes/project-lock/spec.md) | draft | partial | 2026-10-05 | coding-harness-ei0 |
 | [`changes/rb-m6-one-account/decisions.md`](changes/rb-m6-one-account/decisions.md) | draft | partial | 2026-10-05 | coding-harness-bma |
 | [`changes/rb-m6-one-account/findings.md`](changes/rb-m6-one-account/findings.md) | draft | partial | 2026-10-06 | coding-harness-bma |
 | [`changes/rb-m6-one-account/plan.md`](changes/rb-m6-one-account/plan.md) | draft | partial | 2026-10-05 | coding-harness-bma |
