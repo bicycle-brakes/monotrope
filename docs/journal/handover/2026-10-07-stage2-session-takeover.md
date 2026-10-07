@@ -94,3 +94,31 @@ and markdownlint findings remain, without broad cleanup here.
 Next: commit/push the green preparation, rebase this own branch onto the
 merged main, then the runner's spec review. The implementation prerequisite
 is now fulfilled; no maintainer action is needed to unblock it.
+
+## Addendum — actual spec review and one intent question, 2026-10-07
+
+The green preparation is pushed on `feat/stage2-session` at `2bc0264`, based
+on `b32f488` after the rebase. The runner's actual Codex spec review
+(`gpt-6.1-sol`, effort `max`, session `01a116cd-d624-7ee0-9e14-3db0027c8eff`)
+returned three findings. The audit records 270 files, 607 commits, 12 rules.
+
+F-1 and F-3 are incorporated in the spec: OpenCode Go activation depends on
+the separate approved endpoint declaration, while Codex is already usable;
+the canonical worktree path is main-checkout/.claude/worktrees/change, not
+any checkout containing the change folder. F-2 is an intent ambiguity and
+remains open. The maintainer has been asked whether launch success means
+Terminal acceptance after prerequisite checks (recommended) or an additional
+program-start acknowledgment. Never infer that answer from this recommendation.
+
+One concrete resumption action: read the maintainer's answer to F-2 and write
+it into `decisions.md` and the spec's start-success criteria; only then write
+the architectural design/ADR amendment draft and plan. If no answer has
+arrived, remain at that decision boundary. No implementation or decision PR
+has been completed. Neither the Flash-runner nor the MiMo branch was modified.
+
+Validation of this revised documentation tree over `2bc0264`, 2026-10-07:
+full `make verify` ended `VERIFY GREEN`; 1,126 tests passed, 16 skipped;
+writer ruleset 82 passed. The artifact gate returned no BLOCK, with existing
+unrelated DRIFT still reported. Documentation-link and markdownlint checks
+remain report-only findings. No endpoint call beyond the actual Codex spec
+review, and no interactive GUI dispatch, implementation or final review ran.

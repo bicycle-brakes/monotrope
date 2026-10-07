@@ -56,3 +56,31 @@ does not turn the unmerged ADR amendment into accepted repository policy.
 
 None of these details authorizes a model call, merge or credential-file read
 outside the takeover instructions.
+
+## Spec-review decision — start-success boundary (pending)
+
+Source: phase-2a finding F-2, 2026-10-07. Asked once through the user-input
+question; no answer yet.
+
+Goal in one sentence: make the returned launch status tell the maintainer
+exactly what has been confirmed.
+
+Options:
+1. Terminal accepted the start request after the runner checked the CLI
+   prerequisite. Later login/model/start errors appear in the new window.
+   The runner returns promptly and does not supervise the interactive session.
+2. Require a separate program-start acknowledgment before returning success.
+   The runner must supervise that acknowledgment and fail on a bounded timeout;
+   it still cannot prove login or a successful model answer.
+
+Recommendation: option 1, because the maintainer asked for an independent
+interactive window, and success can explicitly mean dispatch rather than a
+completed model call.
+
+If accepted: distinguish missing-program preflight refusal, failed Terminal
+dispatch and accepted dispatch in help, audit and tests.
+
+What is lost: immediate confirmation that the selected CLI actually started
+after Terminal accepted the command.
+
+[DECISION] The answer is pending. F-2 stays open until it arrives.

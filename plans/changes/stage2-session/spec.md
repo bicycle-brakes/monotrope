@@ -39,6 +39,24 @@ nor verifies such a session policy (`research.md`, "Where it lives").
 - **Launch snapshot:** the state scanned before dispatch, not later edits,
   later prompts or later UI model switches.
 
+## Supported models and prerequisites
+
+The currently usable positive path is `--model gpt-6.1-sol`, through the
+declared `openai-codex` endpoint and official Codex CLI. The OpenCode path
+accepts `opencode-go/<model>` only when the separate OpenCode Go change has
+declared that exact provider/model selection for framework content in
+`model-endpoints.yaml` (coding-harness-ymx). On today's main it refuses every
+OpenCode Go model: this change does not grant endpoint approval. Fixture-only
+positive tests supply an explicitly declared endpoint, not a production
+allow-list. The runner does not invent a review ordering.
+
+The dedicated worktree of change `<change>` is the canonical path
+`<main checkout>/.claude/worktrees/<change>`, where the main checkout is the
+parent of git's shared `.git` directory. A change folder copied into another
+worktree does not confer ownership; only this path with an attached branch
+qualifies. The invocation's working directory and runner root must both be
+that canonical worktree root, not a subdirectory, another worktree or main.
+
 ## Acceptance criteria
 
 1. When `python3 scripts/stage2.py session <change> --model <id>` runs in the
@@ -137,6 +155,9 @@ still needs valid CLI authentication; the runner does not provision it.
 
 ## Open decisions
 
-None open for this scoped verb. Maintainer instructions are recorded in
-`decisions.md`; defaults, platform and the four-hour appetite are reversible
-details recorded there. Policy becomes binding only by the decision PR merge.
+The spec reviewer identified two readings of the start-success boundary
+(F-2). The maintainer has been asked whether success means Terminal accepting
+the dispatch after prerequisite checks, or a separately acknowledged program
+start. The answer is pending; design and implementation do not choose it.
+Other instructions and details are recorded in `decisions.md`. Policy becomes
+binding only by the decision PR merge.

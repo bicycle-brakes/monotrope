@@ -118,3 +118,35 @@ draft in this change folder and this change's artifacts/index. Launch policy
 must be shared code, not an edit to a maintainer's global OpenCode config.
 `docs/adr/` and the Flash-runner branch stay untouched. Runtime files may be
 created only after preflight and may contain no credential values.
+
+## Addendum — merged base and spec-review gaps, 2026-10-07
+
+The OPEN PR state above is a historical snapshot. PR #89 and #90 are now
+merged; this branch was rebased onto `origin/main` at `b32f488`. The merged
+runner's `checked_prompt` provides the shared declaration/prompt-scan result
+without claiming a completed call. `begin_work_call` uses it for audit lines.
+
+The actual spec review through the runner (`gpt-6.1-sol`, effort `max`)
+returned three rows in `findings.md`. Its scan measured 270 files, 607 commits
+and 12 rules. Reviewer session: `01a116cd-d624-7ee0-9e14-3db0027c8eff`.
+
+- F-1: main still has no OpenCode Go declaration. PR #90's takeover handover
+  names the three provider/model IDs and assigns their declaration to the
+  reviewer change. That is an activation dependency, not permission for this
+  change to fabricate approval. The Codex positive path already exists.
+  [OpenCode Go documentation](https://opencode.ai/docs/go/), read 2026-10-07,
+  lists DeepSeek V4.1 Flash and MiMo V2.6 Flash/Pro and describes Go as a
+  provider usable in OpenCode. This establishes availability in documentation,
+  not repository approval, account access or a measured call.
+- F-3: `AGENTS.md`, "Sessions across checkouts", establishes worktrees under
+  `.claude/worktrees/<name>`; the takeover request explicitly aligns worktree
+  `stage2-session` with change `stage2-session`. The revised spec fixes that
+  association rather than accepting any checkout that contains the folder.
+- F-2 is intent ambiguity, not another local implementation choice. Its
+  success-boundary question has been sent to the maintainer; no answer has
+  been inferred.
+
+Additional OpenCode permission evidence:
+[Agents](https://opencode.ai/docs/agents/), read 2026-10-07, documents primary
+agents, per-agent permission overrides and user-driven agent switches. A
+global denial alone does not establish the chosen agent's permissions.
