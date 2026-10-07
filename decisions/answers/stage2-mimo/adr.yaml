@@ -1,0 +1,13 @@
+schema_version: 1
+change: stage2-mimo
+question: adr
+answer: 'yes'
+reason: Xiaomi becomes a further foreign endpoint for Coding Harness content; ADR
+  0007 is widened in its own text to cover it, including the Token Plan's terms risk.
+shown:
+  proposed: 'yes'
+  proposal_reason: it widens where framework content may flow, which ADR 0007 limits
+    to Codex and GLM and nowhere else, to a third vendor, Xiaomi, chosen over OpenRouter,
+    and extends to that vendor the unconfined reads ADR 0007 accepted for its reviewers
+answered_by: framework-architect
+answered_at: 2026-10-07
