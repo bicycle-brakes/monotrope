@@ -66,6 +66,9 @@ typed: a hand-kept list of files ages exactly as fast as files are added.
 | [`changes/stage2-flash-runner/plan.md`](changes/stage2-flash-runner/plan.md) | draft | partial | 2026-10-07 | coding-harness-qcp |
 | [`changes/stage2-flash-runner/research.md`](changes/stage2-flash-runner/research.md) | draft | partial | 2026-10-07 | coding-harness-qcp |
 | [`changes/stage2-flash-runner/spec.md`](changes/stage2-flash-runner/spec.md) | draft | partial | 2026-10-07 | coding-harness-qcp |
+| [`changes/stage2-session/decisions.md`](changes/stage2-session/decisions.md) | draft | none | 2026-10-07 | coding-harness-amp |
+| [`changes/stage2-session/research.md`](changes/stage2-session/research.md) | draft | none | 2026-10-07 | coding-harness-amp |
+| [`changes/stage2-session/spec.md`](changes/stage2-session/spec.md) | draft | none | 2026-10-07 | coding-harness-amp |
 | [`changes/template-bundle/decisions.md`](changes/template-bundle/decisions.md) | draft | partial | 2026-10-05 | coding-harness-9qo |
 | [`changes/template-bundle/findings.md`](changes/template-bundle/findings.md) | draft | partial | 2026-10-05 | coding-harness-9qo |
 | [`changes/template-bundle/plan.md`](changes/template-bundle/plan.md) | draft | partial | 2026-09-30 | coding-harness-9qo |
