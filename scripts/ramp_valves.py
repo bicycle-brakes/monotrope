@@ -215,11 +215,8 @@ REGEL_VENTILE: dict[str, tuple[str, str, str]] = {
         "tests/test_human_gates.py::test_a_unit_cannot_close_while_a_gate_is_open",
         "2026-11-30",
     ),
-    "ruleset-assert": (
-        "RB-M6: the branch ruleset is asserted from within the repo",
-        "tests/test_repo_settings.py::test_the_ruleset_assertion_runs_in_ci",
-        "2026-10-31",
-    ),
+    # "ruleset-assert" (RB-M6) closed on 2026-10-05: the gate `ruleset` asserts the
+    # branch ruleset (tests/test_repo_settings.py); rule set 4.0.0 records it.
     "commit-identity": (
         "RB-P4: real identity and trailers on commits that touch decisions",
         "tests/test_repo_settings.py::test_recent_commits_carry_a_real_identity_and_trailers",

@@ -63,7 +63,15 @@ _REASON_WIDTH = 80
 # A value in a reason is looked at through this, never through `str()`: a header may build a
 # value from aliases (a list of ten aliases of a list of ten ..., seven deep, stands for ten
 # million items), and `str()` would expand it. `reprlib` reads a few items of a few levels.
-_GLIMPSE = reprlib.Repr(maxlevel=3, maxlist=6, maxdict=4, maxtuple=6, maxset=6, maxstring=_REASON_WIDTH)
+# `reprlib.Repr` takes keyword arguments from Python 3.12 only; the limits are attributes in
+# every version, and the repository is checked under 3.11 too (bead coding-harness-ei0).
+_GLIMPSE = reprlib.Repr()
+_GLIMPSE.maxlevel = 3
+_GLIMPSE.maxlist = 6
+_GLIMPSE.maxdict = 4
+_GLIMPSE.maxtuple = 6
+_GLIMPSE.maxset = 6
+_GLIMPSE.maxstring = _REASON_WIDTH
 
 _NOT_A_MAPPING = "frontmatter is not a YAML mapping"
 _TOO_DEEP = "frontmatter is nested too deeply to read"

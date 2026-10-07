@@ -239,9 +239,15 @@ def test_every_agent_model_resolves_to_a_declared_endpoint(pfad: Path, modell: s
 
 
 def _kandidaten(anzeige: str) -> set[str]:
-    """Anzeigename ("Sonnet 5") auf moegliche IDs ("claude-sonnet-5")."""
+    """Anzeigename ("Sonnet 5") auf moegliche IDs ("claude-sonnet-5").
+
+    Two spellings of a version: dots turned into dashes (`claude-sonnet-5-5`,
+    the id Anthropic gives) and dots kept (`glm-5.3`, `gpt-6.1-sol`, the ids
+    other vendors give).
+    """
     kern = anzeige.lower().replace(" ", "-").replace(".", "-")
-    return {f"claude-{kern}", kern}
+    with_dots = anzeige.lower().replace(" ", "-")
+    return {f"claude-{kern}", kern, with_dots, f"claude-{with_dots}"}
 
 
 def _loest_auf(anzeige: str, ids: set[str]) -> bool:
@@ -254,6 +260,17 @@ def _loest_auf(anzeige: str, ids: set[str]) -> bool:
     return bool(_kandidaten(anzeige) & ids)
 
 
+def routing_models(text: str) -> list[str]:
+    """The model names of the routing rows in `text`.
+
+    A routing row starts with a phase number and an optional letter (`2a`,
+    `4b`), then a phase name of one or more words, then the model in bold. The
+    pattern used to read one digit and one word, and skipped the rows a stage 2
+    adds.
+    """
+    return re.findall(r"^\| \d[a-z]? [A-Za-z][A-Za-z ]*? \| \*\*([^*]+)\*\* \|", text, re.M)
+
+
 def test_every_model_in_the_routing_table_resolves() -> None:
     """Auch die Doktrin nennt Modelle — und auch die muessen aufloesen.
 
@@ -261,7 +278,7 @@ def test_every_model_in_the_routing_table_resolves() -> None:
     der ein Mensch sein Modell waehlt.
     """
     text = WORKFLOW.read_text(encoding="utf-8")
-    tabelle = re.findall(r"^\| \d [A-Za-z]+ \| \*\*([^*]+)\*\* \|", text, re.M)
+    tabelle = routing_models(text)
     assert tabelle, "kein Modell im Routing von docs/WORKFLOW.md gefunden (RB-G7)"
     # Die Tabelle nennt Anzeigenamen ("Haiku 4.5"), die Erklaerung IDs.
     ids = zugelassene_modelle()
@@ -280,3 +297,18 @@ def test_every_model_in_a_phase_prompt_resolves(pfad: Path, anzeige: str) -> Non
         f"{pfad.name} nennt '{anzeige}', das in keinem Endpunkt von model-endpoints.yaml steht. "
         f"Gesucht: {' oder '.join(sorted(_kandidaten(anzeige)))}"
     )
+
+
+def test_a_dotted_id_resolves_and_a_prefix_does_not() -> None:
+    """A display name with a dot resolves to the id that keeps it; a prefix does not."""
+    assert _loest_auf("GLM 5.3", {"glm-5.3"})
+    assert _loest_auf("gpt-6.1-sol", {"gpt-6.1-sol"})
+    assert _loest_auf("Sonnet 5.5", {"claude-sonnet-5-5"})
+    assert not _loest_auf("GLM 5", {"glm-5.3"}), "a prefix must not resolve by substring"
+
+
+def test_the_routing_check_reads_lettered_and_multi_word_rows() -> None:
+    """A row with a lettered phase or a phase name of several words is read."""
+    text = "| 2a Spec review | **k3** | x |\n| 4b Review loop | **k3** | x |\n"
+    assert routing_models(text) == ["k3", "k3"]
+    assert routing_models("| 1 | Explore | x |\n") == []
