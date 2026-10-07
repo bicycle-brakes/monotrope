@@ -286,7 +286,7 @@ Recorded in bead coding-harness-ymx (NOTES) on 2026-10-07, verbatim:
 - **ADR 0007** is amended as a decision PR by the maintainer: OpenCode Go,
   the three rungs, Codex and GLM out of the reviewer roles.
 
-### [DECISION] 1 — round 2's model id
+### [DECISION] 1 — round 2's model id — answered 2026-10-07
 
 The bead records your round 2 as written "mimo v2.6 pro flash" and reads it
 as MiMo-V2.6-Flash, marked in the bead itself "to confirm in the interview".
@@ -302,6 +302,11 @@ the two (USD 0.14 / 0.28 per million tokens against 0.435 / 0.87; DeepSWE
 v1.1 67.9 against 71.9, vendor-reported), so the choice sets both what a
 second opinion costs and what it sees. Pro in round 2 and again in round 3
 would give the third round nothing new over the second.
+
+**Answer: "runde 2 flash"** (maintainer, Claude Code session, 2026-10-07) —
+round 2 is MiMo-V2.6-Flash, as the bead reads it, and the bead's "to confirm
+in the interview" is closed. The ladder is therefore, in order:
+`deepseek-v4.1-flash`, `mimo-v2.6-flash`, `mimo-v2.6-pro`.
 
 ### [DECISION] 2 — the residency the OpenCode Go entry declares
 
