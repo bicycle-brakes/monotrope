@@ -373,9 +373,12 @@ are the two `[GAP]`s, which phase 4 measures instead of asking.
    (Operator Anomaly Innovations, Inc.)"`, `abrechnung: abonnement`,
    `darf_sehen: [framework]` — as `glm-coding-plan` and `openai-codex` stand
    today; key `OPENCODE_GO_KEY`.
-5. **The request shape**: the Anthropic address first, with OpenCode's own
-   user agent and a stable `x-opencode-session`, which its terms describe as
-   the way a coding agent identifies itself; if it refuses a rung, the OpenAI
-   address. Measured in phase 4, not asked.
+5. **The request shape**: the Anthropic address, launched through Claude Code
+   with its own user agent and its native session header — the Go page says
+   for Claude Code that no custom-header wrapper is needed. The OpenAI address
+   is named in the entry's remark and measured, never used as a fallback: a
+   rung the Anthropic address refuses stops the run (spec, criterion 17), so
+   the earlier wording of this `[DETAIL]` that named it a fallback is
+   withdrawn. Measured in phase 4, not asked.
 6. **The class stays `feature`**, and the spec's `adr_question` is rewritten
    from Xiaomi and OpenRouter to OpenCode Go.

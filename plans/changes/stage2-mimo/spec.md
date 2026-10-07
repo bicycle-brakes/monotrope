@@ -48,6 +48,11 @@ named below is meant as it stands there.
   because the code that routes them is the code this change replaces. The
   first OpenCode Go call of any kind happens after this pull request is
   merged: the entry it needs is added by this change.
+- **Merge order.** The ADR amendment travels as its own decision pull
+  request (`decide(stage2): …`, label `decision`), and it merges before this
+  change's pull request does; until then the entry is declared here and
+  nothing calls it (house rule 8). This change's pull request names that
+  decision pull request in its body.
 - The key is already in the secrets file (`OPENCODE_GO_KEY`, name checked
   2026-10-07, value never read by an agent). Nothing in this change reads,
   writes or names its value.
@@ -150,8 +155,8 @@ recording program the tests put on `PATH` in the callee's place.
 6. **Three rounds.** The loop runs at most three; a fourth is refused with
    the refusal's present form (`<n> rounds have run; the loop stops at <n>.`)
    and exits as a refusal does today.
-   *Refuted by:* a fourth round starting, or a third refused while two have
-   run.
+   *Refuted by:* a fourth round starting, or the loop still stopping at two
+   rounds after three have run.
 
 7. **Round 3 only when needed.** Rounds 1 and 2 both run, each still held by
    an undecided row as today; round 3 starts only when round 2 wrote at least
@@ -228,7 +233,7 @@ recording program the tests put on `PATH` in the callee's place.
 17. **A refused address stops the run; it is not worked around.** If the
     Anthropic address refuses a rung's id — the open question of research §F
     — the run stops and reports it. No second address, no second design and
-    no model substitution is built in this change.
+    substituted is built in this change.
     *Refuted by:* an automatic fallback to the OpenAI address, to another
     rung, or to another endpoint.
 
@@ -286,7 +291,7 @@ recording program the tests put on `PATH` in the callee's place.
 24. **The stop rule counts the new reviewers.** Where §4 measures the first
     stage-2 runs, a taken finding of a rung counts like a Codex or GLM
     finding counts today.
-    *Refuted by:* the measurement naming only the two former reviewers.
+    *Refuted by:*     the measurement naming only the two former reviewers.
 
 25. **The ADR.** The ADR the maintainer's answer names records that framework
     content may go to `opencode-go` through Claude Code for phases 2a, 4b and
@@ -296,9 +301,14 @@ recording program the tests put on `PATH` in the callee's place.
     that the unconfined reads ADR 0007 accepted for its reviewers extend to
     the rungs; and the options weighed — keeping Codex and GLM, an OpenCode
     product other than Go, OpenCode's own CLI as the launcher, and the model
-    of round 2.
+    of round 2. **It travels as a decision pull request and merges before
+    this change's pull request**: house rule 8 — a decision takes effect when
+    its pull request is merged — so the entry this change declares is never
+    in force against an unamended ADR 0007, and this change's pull request
+    names the decision pull request in its body.
     *Refuted by:* ADR 0007's "Nothing else goes, and nowhere else" standing
-    unamended while `opencode-go` is declared; one of these points missing.
+    unamended while `opencode-go` is declared; one of these points missing;
+    this change's pull request merged while the amendment was not.
 
 26. **Green.** `make verify` is green on the last commit.
     *Refuted by:* a gate red.
