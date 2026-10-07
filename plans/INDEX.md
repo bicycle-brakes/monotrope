@@ -35,6 +35,12 @@ typed: a hand-kept list of files ages exactly as fast as files are added.
 | [`changes/harness-decide-adr/plan.md`](changes/harness-decide-adr/plan.md) | draft | partial | 2026-09-30 | coding-harness-3ar |
 | [`changes/harness-decide-adr/research.md`](changes/harness-decide-adr/research.md) | draft | none | 2026-09-30 | coding-harness-3ar |
 | [`changes/harness-decide-adr/spec.md`](changes/harness-decide-adr/spec.md) | draft | partial | 2026-09-30 | coding-harness-3ar |
+| [`changes/hermes-runner/decisions.md`](changes/hermes-runner/decisions.md) | accepted | none | 2026-10-05 | coding-harness-i3y |
+| [`changes/hermes-runner/design.md`](changes/hermes-runner/design.md) | draft | none | 2026-10-05 | coding-harness-i3y |
+| [`changes/hermes-runner/findings.md`](changes/hermes-runner/findings.md) | draft | partial | 2026-10-05 | coding-harness-i3y |
+| [`changes/hermes-runner/plan.md`](changes/hermes-runner/plan.md) | draft | partial | 2026-10-05 | coding-harness-i3y |
+| [`changes/hermes-runner/research.md`](changes/hermes-runner/research.md) | draft | none | 2026-10-05 | coding-harness-i3y |
+| [`changes/hermes-runner/spec.md`](changes/hermes-runner/spec.md) | draft | none | 2026-10-05 | coding-harness-i3y |
 | [`changes/rb-m6-one-account/decisions.md`](changes/rb-m6-one-account/decisions.md) | draft | partial | 2026-10-05 | coding-harness-bma |
 | [`changes/rb-m6-one-account/findings.md`](changes/rb-m6-one-account/findings.md) | draft | partial | 2026-10-06 | coding-harness-bma |
 | [`changes/rb-m6-one-account/plan.md`](changes/rb-m6-one-account/plan.md) | draft | partial | 2026-10-05 | coding-harness-bma |
@@ -50,3 +56,8 @@ typed: a hand-kept list of files ages exactly as fast as files are added.
 | [`changes/stage-2-codex-glm/plan.md`](changes/stage-2-codex-glm/plan.md) | draft | partial | 2026-09-30 | coding-harness-bc9 |
 | [`changes/stage-2-codex-glm/research.md`](changes/stage-2-codex-glm/research.md) | draft | none | 2026-09-30 | coding-harness-bc9 |
 | [`changes/stage-2-codex-glm/spec.md`](changes/stage-2-codex-glm/spec.md) | draft | partial | 2026-09-30 | coding-harness-bc9 |
+| [`changes/template-bundle/decisions.md`](changes/template-bundle/decisions.md) | draft | partial | 2026-10-05 | coding-harness-9qo |
+| [`changes/template-bundle/findings.md`](changes/template-bundle/findings.md) | draft | partial | 2026-10-05 | coding-harness-9qo |
+| [`changes/template-bundle/plan.md`](changes/template-bundle/plan.md) | draft | partial | 2026-09-30 | coding-harness-9qo |
+| [`changes/template-bundle/research.md`](changes/template-bundle/research.md) | draft | partial | 2026-09-30 | coding-harness-9qo |
+| [`changes/template-bundle/spec.md`](changes/template-bundle/spec.md) | draft | partial | 2026-09-30 | coding-harness-9qo |
