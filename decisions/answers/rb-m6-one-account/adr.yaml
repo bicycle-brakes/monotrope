@@ -1,0 +1,14 @@
+schema_version: 1
+change: rb-m6-one-account
+question: adr
+answer: 'no'
+reason: 'It applies ADR 0008 and the maintainer''s decision of 2026-10-05; the one-account
+  exception of RB-M2 (PR #55) set the precedent without an ADR.'
+shown:
+  proposed: 'no'
+  proposal_reason: 'it applies ADR 0008 (agents act under the maintainer''s account,
+    a second identity is the upgrade path) to rule RB-M6; the rule set''s own history
+    entry records the amendment, as it did for RB-M2 in pull request #55, and a later
+    rule-set version reverses it'
+answered_by: framework-architect
+answered_at: 2026-10-06

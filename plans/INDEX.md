@@ -41,6 +41,11 @@ typed: a hand-kept list of files ages exactly as fast as files are added.
 | [`changes/hermes-runner/plan.md`](changes/hermes-runner/plan.md) | draft | partial | 2026-10-05 | coding-harness-i3y |
 | [`changes/hermes-runner/research.md`](changes/hermes-runner/research.md) | draft | none | 2026-10-05 | coding-harness-i3y |
 | [`changes/hermes-runner/spec.md`](changes/hermes-runner/spec.md) | draft | none | 2026-10-05 | coding-harness-i3y |
+| [`changes/rb-m6-one-account/decisions.md`](changes/rb-m6-one-account/decisions.md) | draft | partial | 2026-10-05 | coding-harness-bma |
+| [`changes/rb-m6-one-account/findings.md`](changes/rb-m6-one-account/findings.md) | draft | partial | 2026-10-06 | coding-harness-bma |
+| [`changes/rb-m6-one-account/plan.md`](changes/rb-m6-one-account/plan.md) | draft | partial | 2026-10-05 | coding-harness-bma |
+| [`changes/rb-m6-one-account/research.md`](changes/rb-m6-one-account/research.md) | draft | partial | 2026-10-05 | coding-harness-bma |
+| [`changes/rb-m6-one-account/spec.md`](changes/rb-m6-one-account/spec.md) | draft | partial | 2026-10-05 | coding-harness-bma |
 | [`changes/research-currency/decisions.md`](changes/research-currency/decisions.md) | draft | partial | 2026-10-05 | coding-harness-pu9 |
 | [`changes/research-currency/findings.md`](changes/research-currency/findings.md) | draft | partial | 2026-10-05 | coding-harness-pu9 |
 | [`changes/research-currency/plan.md`](changes/research-currency/plan.md) | draft | partial | 2026-10-05 | coding-harness-pu9 |

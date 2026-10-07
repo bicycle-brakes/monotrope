@@ -40,7 +40,9 @@ tags: [workflow, model-routing, agentic-coding, phases, artefacts]
 > --bead <id>`), `tests/test_repo_settings.py`,
 > `docs/governance/gate-catalog.md` and `requirements-ci.txt`.
 > Where the text below says one of them does something, it describes the
-> target, not this tree.
+> target, not this tree. Since 2026-10-05, `tests/test_repo_settings.py`
+> exists: it asserts the branch ruleset (rule RB-M6); the container fence §3
+> describes is not in it yet.
 >
 > One thing is missing on purpose and is not on that list: the brakes on the
 > irreversible (force push, `rm -rf`, deploys) in `.claude/settings.json`, which
@@ -364,8 +366,8 @@ What this does not do:
 ### Verification runs through git and CI, not through the harness
 
 ```bash
-make verify     # every locally runnable gate — the same the CI runs
-make gates      # what the CI runs, read from decisions/gates.yaml
+make verify     # every locally runnable gate — the CI runs the same, minus a `writer` gate (here only)
+make gates      # what the CI runs, read from decisions/gates.yaml; a `writer` gate is marked
 make staleness  # hygiene of the plans/ artefacts
 make index      # regenerate plans/INDEX.md
 ```

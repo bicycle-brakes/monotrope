@@ -195,6 +195,9 @@ rules:
   - prefix: tests/test_model_endpoints.py
     rolle: mechanismus
     reason: "RB-A6: jedes genannte Modell loest gegen einen deklarierten Endpunkt auf. Die Regel ist portabel, die Endpunkte sind es nicht"
+  - prefix: tests/test_repo_settings.py
+    rolle: mechanismus
+    reason: "RB-M6: asserts the ruleset of whichever repository it runs in; the live part runs only in the gate `ruleset`, the rest checks invented API answers, so it holds in the probe copy (bead coding-harness-bma)"
 
   # --- Regeln und Vorlagen ---------------------------------------------------
   - prefix: docs/governance/regelwerk.md

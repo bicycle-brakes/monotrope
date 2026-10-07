@@ -174,6 +174,15 @@ gates:
     placement: both
     reason: Ein Ventil ist ein datiertes Versprechen — der Uebergang der Frist muss den Lauf rot machen, lokal wie in der CI; deshalb steht er in derselben Liste (D-10) und nicht als fest eincompilierter Schritt im Generator.
 
+  - id: ruleset
+    title: The branch ruleset asks for what rule RB-M6 asks
+    command: RULESET_ASSERT=1 python3 -m pytest tests/test_repo_settings.py -q -rs
+    job: verify
+    enforcement: block
+    floor: false
+    placement: writer
+    reason: The ruleset lives at GitHub and changes without a commit; GitHub shows its bypass list only to whoever may edit it, so the maintainer's own gh login measures it on the writer machine, and an unreachable API is red (RB-M6).
+
   - id: markdownlint
     title: Markdown passes the linter
     action: DavidAnson/markdownlint-cli2-action@v20
