@@ -85,6 +85,14 @@ OHNE_AUFRUFER: dict[str, str] = {
         "tests/test_feedback_channel.py importiert; ein eigener CI-Schritt "
         "prueft nichts, was der Test nicht schon prueft"
     ),
+    "leakcheck.py": (
+        "Run before every foreign call by scripts/stage2.py and by hand as make leakcheck; it needs "
+        "the denylist each machine keeps outside the repository, which no CI step holds"
+    ),
+    "stage2.py": (
+        "Entry point, not a gate — starts the stage-2 reviewers on the maintainer's machine, with a "
+        "subscription and a credential no CI step holds; tests/test_stage2.py runs it against stand-ins"
+    ),
     "harness.py": (
         "Entry point, not a gate — a person, or an agent on the maintainer's word, records an ADR "
         "answer with it; tests/test_harness_decide_adr.py runs it"

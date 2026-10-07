@@ -27,9 +27,10 @@ staleness:
 gates:
 	python3 scripts/ci_gates.py --list
 
+# Runs before a foreign call (scripts/stage2.py runs it itself) and never in CI:
+# it needs the denylist each machine keeps outside the repository.
 leakcheck:
-	@echo "leakcheck needs the denylist outside this repository and runs before a session on a foreign endpoint, not in CI — see AGENTS.md."
-	@exit 1
+	python3 scripts/leakcheck.py --name "$(NAME)"
 
 venv:
 	python3 -m venv .venv
