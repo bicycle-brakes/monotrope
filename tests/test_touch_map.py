@@ -488,6 +488,34 @@ def test_where_a_comment_starts_across_lines() -> None:
         assert tm._strip_comments(body) == kept, body
 
 
+def test_a_substitution_nests_its_own_quotes() -> None:
+    """Bead cff: quotes inside `$( … )` and `$'…'` no longer flip the rest of the file."""
+    # verbatim: portfolio-agentic-engineering 20a279c, templates/hooks/post-tool/format-code.sh, line 31
+    line31 = r'''FILE_PATH="$(echo "$INPUT" | grep -oE '"file_path"[[:space:]]*:[[:space:]]*"[^"]*"' | head -1 | sed 's/.*: *"\(.*\)"$/\1/')"'''
+    cases = {
+        # the measured case of F-10: portfolio-agentic-engineering's format-code.sh, lines 31 and 40
+        line31 + "\n# reads ruff.toml": line31 + "\n",
+        'echo "$(cat "x")" # c': 'echo "$(cat "x")" ',
+        "echo $'a\\'b' # c\n# d": "echo $'a\\'b' \n",
+        'echo "$(( 1 << 3 ))" # c\n# d': 'echo "$(( 1 << 3 ))" \n',
+        "x=$(f (a) ) # c\n# d": "x=$(f (a) ) \n",
+    }
+    for body, kept in cases.items():
+        assert tm._strip_comments(body) == kept, body
+    # the shell itself reads an apostrophe in plain text as a quote: there the limit stays
+    assert tm._strip_comments("echo don't # a\n# b") == "echo don't # a\n# b"
+
+
+def test_an_apostrophe_inside_a_yaml_word_is_a_letter(tmp_path: Path) -> None:
+    """Bead cff: F-10's own fixture - `Don't` in a YAML name no longer cuts a name inside a later real quote."""
+    body = "steps:\n  - name: Don't skip the check\n    run: |\n      grep -q 'x # y' scripts/quoted_tool.py # z\n"
+    assert "scripts/quoted_tool.py" in tm._strip_comments(body, yaml=True)
+    assert "# z" not in tm._strip_comments(body, yaml=True)
+    base = {".github/workflows/ci.yml": body}
+    boxes = _boxes(_run(_fixture(tmp_path, base, {"scripts/quoted_tool.py": "V = 1\n"})))
+    assert boxes["scripts/quoted_tool.py"]["run by"] == ["workflows/ci.yml"]
+
+
 # ---------------------------------------------------------------------------
 # criterion 5: one hop from the change
 # ---------------------------------------------------------------------------
