@@ -2,7 +2,7 @@
 title: "Session handover — session plan ready, GLM retry requested"
 category: handover
 created: 2026-10-07
-updated: 2026-10-07
+updated: 2026-10-08
 direction: framework->framework
 provenance: ai-drafted-reviewed
 produced_by: {kind: llm-session, name: codex, version: "2026-10-07"}
@@ -391,3 +391,36 @@ implement repairs get the failing gate, not the last 80 lines".
 
 Resume: `python3 scripts/stage2.py review-loop stage2-session` from this
 worktree, then decide its rows.
+
+## Addendum — night run: loop, final review, decision PR, 2026-10-08
+
+Claude Code with Anthropic (Opus 5.5) orchestrated; the foreign models ran
+only through `scripts/stage2.py`: GLM 5.3 through Claude Code with Z.ai for
+the loop, Codex `gpt-6.1-sol` (session `01a116cd-…`) for phase 6.
+
+- Loop round 1 (4 rows): L1-1, L1-2, L1-3 taken, L1-4 rejected (`e5d2cdf`).
+- Loop round 2 (3 rows): L2-1 (prompt starting with `---` read as an
+  option; Codex now after `--`, OpenCode `--prompt=`), L2-2, L2-3 taken
+  (`725dade`).
+- Phase 6: four BLOCKERs F-4 to F-7, each reproduced by Codex; all repaired
+  with a test that a planted regression turns red (`c73d259`). Codex agreed
+  with six of seven loop decisions and disagreed with the rejection of L1-4
+  (duplicate declaration parsing), which it called no correctness fault.
+- `make verify` green after the last repair: 1,211 passed, 16 skipped,
+  writer ruleset 82 (2026-10-08, before the handover commit).
+- GLM implement smoke (throwaway branch `test/glm-smoke` at `0d9d5e5`, never
+  pushed, worktree `.claude/worktrees/glm-smoke`): Flash wrote a correct test
+  on attempt 1, the runner's gate stayed red, Sonnet's attempt 3 went green
+  without a content change. Findings in beads coding-harness-zci (repairs see
+  the output's tail, not the failing gate) and coding-harness-mfv (a
+  file-tool worker cannot regenerate `plans/INDEX.md` or stamp frontmatter).
+- Tracker: the maintainer forbade the OpenCode session tracker writes, so
+  this session wrote: zci and mfv created, a comment on amp (its claim is
+  still codex's, the lease expired), pushed before every git push since.
+
+Unrun: the real GUI/model smoke of `stage2.py session`. Never merged.
+
+Resume: the maintainer reads the decision PR; then, in the main checkout's
+own Terminal, `cd .claude/worktrees/stage2-session && python3
+scripts/stage2.py session stage2-session --model gpt-6.1-sol` once (needs a
+`plans/changes/stage2-session/handover.md` or `--handover <file>`).
