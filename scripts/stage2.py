@@ -209,7 +209,7 @@ FRAGMENT = 8
 
 
 @functools.lru_cache(maxsize=8)
-def _fragment_pattern(secret: str, binary: bool) -> "re.Pattern":
+def _fragment_pattern(secret: str, binary: bool) -> re.Pattern:
     """Every window of FRAGMENT characters of the secret (the whole secret if it is shorter), as one regex.
 
     The windows sit in a lookahead so that overlapping hits are all reported; the scanner then
