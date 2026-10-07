@@ -603,7 +603,7 @@ The rows are in the form of §3's table:
 
 **The two Flash rows are decided and not built.** The runner has no verb that
 starts phase 1 or phase 4 on GLM 5.3 Flash, no plan marking assigns a step to
-it (`[FLASH]` was the older design, with `scripts/run_change.sh` and the
+it (a per-step marking was the older design, with `scripts/run_change.sh` and the
 `scripts/cc-*.sh` profiles; none of them is in this tree), and no effort is set
 for it. Until that is built (an open item of the change that wrote this
 section, `plans/changes/stage-2-codex-glm/plan.md`, "Amendment 1"), §3's rows

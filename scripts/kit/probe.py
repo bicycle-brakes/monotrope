@@ -165,9 +165,7 @@ REIST_NICHT: dict[str, str] = {
 # throwaway repo for the reason the other prompt cases are: `model-endpoints.yaml` stays home.
 # 32 -> 33 on 2026-10-07: `prompts/02b-design.md` came along (plans/changes/template-bundle),
 # one more prompt with a model line, red in the throwaway repo for the same reason.
-DECKEL = (
-    33  # raised on 2026-10-07 (32 -> 33); earlier: raised 2026-10-05 (31 -> 32), 2026-09-30 (31 -> 32), lowered 2026-09-30 (32 -> 31), raised 2026-09-29 (31 -> 32)
-)
+DECKEL = 33  # raised on 2026-10-07 (32 -> 33); earlier: raised 2026-10-05 (31 -> 32), 2026-09-30 (31 -> 32), lowered 2026-09-30 (32 -> 31), raised 2026-09-29 (31 -> 32)
 
 
 # ---------------------------------------------------------------------------
