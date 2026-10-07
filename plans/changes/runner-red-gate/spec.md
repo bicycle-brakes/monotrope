@@ -30,10 +30,13 @@ log. Inputs: [`research.md`](research.md).
    line — in run order, and no report-only section.
    *Refuted by:* a planted pytest failure followed by 500 report-only lines
    whose failing test name does not reach the next prompt.
-2. Each red section is bounded to its last 60 lines and all red sections
-   together to 200 lines; a cut section says how many lines were left out.
-   *Refuted by:* a 1,000-line red section passed through whole, or a cut
-   without a marker.
+2. Each red section is at most 60 lines and all red sections together at
+   most 200, markers included. The red gates share the budget: every one
+   keeps its start frame, its last lines and its RED line; a cut says how
+   many lines it left out. A frame printed onto a gate's last output line
+   (no trailing newline) is still a frame (phase 6, F-1 to F-3).
+   *Refuted by:* a 1,000-line red section passed through whole, a cut
+   without a marker, a fourth red gate missing, or 201 lines.
 3. When the output carries no `RED (block)` frame, the diagnostics keep
    today's form: the last 80 lines.
    *Refuted by:* a failure of make itself producing empty diagnostics.

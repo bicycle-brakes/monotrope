@@ -1086,14 +1086,38 @@ GATE_END = re.compile(r"^── \[(?P<gate>[^\]]+)\] (?!\$ )(?P<verdict>.+)")
 STDERR_LINES = 40
 
 
+def _frame_lines(output: str) -> list[str]:
+    """The output's lines, with a frame split off a line it was printed onto (phase 6, F-3).
+
+    `verify_all.sh` echoes a gate's closing frame right after the gate's output; when that output ends without
+    a newline, the frame lands on the same line.
+    """
+    found: list[str] = []
+    for line in output.splitlines():
+        cut = line.rfind("── [")
+        if cut > 0 and (GATE_START.match(line[cut:]) or GATE_END.match(line[cut:])):
+            found += [line[:cut], line[cut:]]
+        else:
+            found.append(line)
+    return found
+
+
+def _shrink(body: list[str], limit: int) -> list[str]:
+    """A section of at most `limit` lines, marker included: its start frame, the marker, its last lines."""
+    if len(body) <= limit:
+        return body
+    return [body[0], f"[… {len(body) - limit + 1} lines of this gate left out …]", *body[-(limit - 2) :]]
+
+
 def red_sections(output: str) -> str | None:
     """The sections of the gates `verify_all.sh` framed `RED (block)`, bounded, in run order - or None.
 
     A repair attempt needs the gate that blocked. The log's tail is the report-only gates (docs-links,
-    markdownlint), thousands of lines after a pytest failure (bead coding-harness-zci). Each red section keeps
-    its frame line and its last lines; a cut says how much it left out, and so does the total bound.
+    markdownlint), thousands of lines after a pytest failure (bead coding-harness-zci). The red gates share
+    the budget: each keeps its start frame, its last lines and its RED line, markers count against the bounds
+    (phase 6, F-1 and F-2).
     """
-    lines = output.splitlines()
+    lines = _frame_lines(output)
     # The gates run one after another: a frame line counts only as the open gate's end or, with none open, as
     # the next gate's start - a frame quoted inside a gate's own output opens or closes nothing.
     open_gate: tuple[str, int] | None = None
@@ -1109,19 +1133,21 @@ def red_sections(output: str) -> str | None:
             continue
         begin, open_gate = open_gate[1], None
         if end["verdict"].startswith("RED (block)"):
-            body = lines[begin : index + 1]
-            if len(body) > RED_SECTION_LINES:
-                left_out = len(body) - RED_SECTION_LINES
-                body = [body[0], f"[… {left_out} lines of this gate left out …]", *body[-(RED_SECTION_LINES - 1) :]]
-            sections.append(body)
+            sections.append(lines[begin : index + 1])
     if not sections:
         return None
-    kept: list[str] = []
-    for number, body in enumerate(sections):
-        if len(kept) + len(body) > RED_TOTAL_LINES:
-            kept.append(f"[… {len(sections) - number} more red gate sections left out …]")
-            break
-        kept.extend(body)
+    room = RED_TOTAL_LINES
+    if len(sections) * 3 > room:
+        # More red gates than three lines each can hold: the first ones, and one line saying how many follow.
+        shown = (room - 1) // 3
+        dropped = len(sections) - shown
+        sections, room = sections[:shown], room - 1
+    else:
+        dropped = 0
+    share = min(RED_SECTION_LINES, room // len(sections))
+    kept = [line for body in sections for line in _shrink(body, share)]
+    if dropped:
+        kept.append(f"[… {dropped} more red gate sections left out …]")
     return "\n".join(kept)
 
 

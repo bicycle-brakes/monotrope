@@ -1002,18 +1002,36 @@ def test_a_frame_quoted_inside_a_gate_opens_no_section() -> None:
 
 
 def test_red_sections_are_bounded_and_say_what_they_left_out() -> None:
-    # runner-red-gate criterion 2. Planted fault: no per-section or no total bound.
+    # runner-red-gate criterion 2, phase 6 F-2: markers count against both bounds.
     long = _gate("pytest", [f"trace-{n}" for n in range(1000)], "red")
     found = stage2.red_sections("\n".join(long))
     lines = found.splitlines()
-    assert len(lines) == stage2.RED_SECTION_LINES + 1 and "trace-999" in found and "trace-0\n" not in found
+    assert len(lines) == stage2.RED_SECTION_LINES and "trace-999" in found and "trace-0\n" not in found
     assert "lines of this gate left out" in lines[1] and lines[0].startswith("── [pytest] $")
+    assert lines[-1].startswith("── [pytest] RED (block)")
+    for count in (2, 3, 4, 6, 7, 70):
+        many = []
+        for number in range(count):
+            many += _gate(f"gate-{number}", [f"g{number}-{n}" for n in range(100)], "red")
+        assert len(stage2.red_sections("\n".join(many)).splitlines()) <= stage2.RED_TOTAL_LINES, count
+
+
+def test_every_blocking_gate_keeps_its_frame_and_last_line() -> None:
+    # Phase 6, F-1: the budget is shared, so the fourth of four red gates is not left out.
     many = []
-    for number in range(6):
+    for number in range(4):
         many += _gate(f"gate-{number}", [f"g{number}-{n}" for n in range(100)], "red")
     found = stage2.red_sections("\n".join(many))
-    assert len(found.splitlines()) <= stage2.RED_TOTAL_LINES + 1
-    assert "more red gate sections left out" in found.splitlines()[-1]
+    for number in range(4):
+        assert f"── [gate-{number}] RED (block)" in found and f"g{number}-99" in found, number
+
+
+def test_a_frame_printed_onto_a_gates_last_line_is_still_a_frame() -> None:
+    # Phase 6, F-3: a gate whose output ends without a newline must not swallow the gates after it.
+    output = ["── [ruff] $ ruff", "no newline at the end── [ruff] gruen", *_gate("pytest", ["FAILED z"], "red")]
+    output += [f"README.md:{n} error MD013" for n in range(500)]
+    found = stage2.red_sections("\n".join(output))
+    assert found is not None and "FAILED z" in found and "no newline" not in found
 
 
 def test_the_frames_red_sections_reads_are_the_ones_verify_all_prints() -> None:
