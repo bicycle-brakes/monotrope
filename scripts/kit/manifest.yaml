@@ -91,6 +91,9 @@ rules:
   - prefix: scripts/harness.py
     rolle: mechanismus
     reason: "the command the gate's finding names"
+  - prefix: scripts/leakcheck.py
+    rolle: mechanismus
+    reason: "the barrier before a foreign endpoint: scans the change, the tree and the history against a denylist each machine keeps outside the repository"
   - prefix: scripts/check_bead_export.py
     rolle: mechanismus
     reason: "prueft den gerenderten Export Zeile fuer Zeile (bead bo0)"
@@ -153,6 +156,9 @@ rules:
   - prefix: tests/test_harness_decide_adr.py
     rolle: mechanismus
     reason: "builds its own trees; holds in the probe copy"
+  - prefix: tests/test_leakcheck.py
+    rolle: mechanismus
+    reason: "builds its own repositories and denylists; holds in the probe copy"
   - prefix: tests/test_regelwerk.py
     rolle: mechanismus
     reason: "die Grammatik der Regeltabelle reist; die konkreten Regeln sind Bestand (siehe REIST_NICHT)"
