@@ -283,3 +283,12 @@ both boundaries read with `date`.
   the confinement is the program's documented behaviour, not measured. The
   explore and implement argv tests assert `--restricted`, no `--add-dir` and
   the worktree as working directory.
+- Phase-6 finding F6-4: a failed model call in `implement` now ends with
+  `restore_baseline`: `git restore --source=<baseline> --staged --worktree` and
+  `git clean -fd`, both limited to the worktree and excluding this change's
+  `findings.md` (its audit lines stay). Everything else differing from the
+  baseline is the run's own, because pre-existing changes were refused before
+  the first call. A leak refusal starts no model and restores nothing. Tests:
+  `test_a_failed_flash_process_restores_the_baseline_so_stage2_off_can_proceed`,
+  `test_a_failed_model_call_names_what_was_restored`. WORKFLOW.md §4 and spec
+  criterion 12 name the next step.

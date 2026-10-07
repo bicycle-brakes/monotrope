@@ -171,8 +171,13 @@ a model endpoint.
     exits the verb with 1 and its scrubbed error; it does not silently become a
     repair or fallback in the same invocation. The orchestrating session may
     diagnose Z.ai as unavailable and invoke the explicit Stage-1 route.
+    A failed model call (not a leak refusal, which precedes any model) leaves
+    no partial work: the runner restores every path except this change's
+    `findings.md` to the baseline and names what it undid, so that
+    `implement <change> --stage2-off` is accepted next.
     *Refuted by:* a stand-in process failing and another model starting, or the
-    verb returning 0.
+    verb returning 0, or partial edits left behind that make the next
+    `--stage2-off` run refuse.
 
 13. **Stage 2 can be turned off explicitly.** `--stage2-off` on either new
     verb selects Haiku 4.5 for explore or Sonnet 5.5 at effort `medium` for

@@ -888,6 +888,24 @@ def changed_paths(root: Path) -> set[Path]:
     return {Path(name) for name in [*tracked, *untracked] if name}
 
 
+def restore_baseline(root: Path, baseline: str, keep: set[Path]) -> str:
+    """After a failed model call, put every path but `keep` back at the baseline; say what was undone.
+
+    The runner refused pre-existing changes outside `keep` before the first call, so what differs
+    from the baseline outside it is the run's own - including a half-finished edit of a dead process.
+    """
+    touched = sorted(path.as_posix() for path in changed_paths(root) - keep)
+    if not touched:
+        return "the worktree needed no restore."
+    spec = [f":(exclude){path.as_posix()}" for path in sorted(keep, key=lambda path: path.as_posix())]
+    try:
+        _git_output(root, "restore", f"--source={baseline}", "--staged", "--worktree", "--", ".", *spec)
+        _git_output(root, "clean", "-fdq", "--", ".", *spec)
+    except Refused as error:
+        return f"restoring the worktree to {baseline[:12]} failed ({error}); discard {', '.join(touched)} by hand."
+    return f"the runner restored the worktree to {baseline[:12]} (undone: {', '.join(touched)}); rerun the verb or add --stage2-off."
+
+
 def time_log(path: Path) -> str:
     """The bytes below `## Time used` and before the next level-two heading."""
     try:
@@ -1121,7 +1139,10 @@ def implement(root: Path, change: str, stage2_off: str | None = None) -> None:
                 ctx.plan,
                 f"## Runner route — {today()}\n\nStage-1 route: implement · model {endpoint[1]} · reason: {reason}.",
             )
-        run_work_model(ctx, prompt, endpoint, writable=True, key=credential)
+        try:
+            run_work_model(ctx, prompt, endpoint, writable=True, key=credential)
+        except CallFailed as error:
+            raise CallFailed(f"{error}; {restore_baseline(root, baseline, allowed)}") from error
         if credential is not None:
             exposed = remove_changed_credential(root, credential)
             if exposed:

@@ -733,6 +733,42 @@ def test_a_failed_or_empty_work_call_stops_without_retry(world: World) -> None:
     assert len(world.calls("claude")) == 1 and world.calls("make") == []
 
 
+def test_a_failed_flash_process_restores_the_baseline_so_stage2_off_can_proceed(world: World) -> None:
+    head = git(world.root, "rev-parse", "HEAD")
+    plan_before = world.plan.read_text(encoding="utf-8")
+    world.script(
+        claude=[
+            {
+                "stderr": "Z.ai outage",
+                "exit": 1,
+                "plant": {"src/half.py": "x = 1\n"},
+                "append": {"plans/changes/demo/plan.md": "2026-10-07 10:00–10:05, 5 min\n", "src/app.py": "# edit\n"},
+            },
+            {
+                "stdout": "built",
+                "plant": {"src/app.py": "value = 3\n"},
+                "append": {"plans/changes/demo/plan.md": "2026-10-07 11:00–11:05, 5 min\n"},
+            },
+        ],
+        make=[{"stdout": "green\n"}],
+    )
+    assert world.run("implement") == 1
+    assert git(world.root, "rev-parse", "HEAD") == head
+    assert not (world.root / "src/half.py").exists()
+    assert world.plan.read_text(encoding="utf-8") == plan_before
+    assert git(world.root, "status", "--porcelain", "--", ".", ":(exclude)plans/changes/demo/findings.md") == ""
+    assert "Stage-2 call" in world.text()  # the audit line stays in findings.md
+    assert world.run("implement", "demo", "--stage2-off", "Z.ai outage") == 0
+    assert git(world.root, "rev-list", "--count", f"{head}..HEAD") == "1"
+
+
+def test_a_failed_model_call_names_what_was_restored(world: World, capsys: pytest.CaptureFixture[str]) -> None:
+    world.script(claude=[{"stderr": "boom", "exit": 1, "plant": {"src/half.py": "x = 1\n"}}])
+    assert world.run("implement") == 1
+    err = capsys.readouterr().err
+    assert "restored the worktree" in err and "src/half.py" in err
+
+
 def test_a_postcheck_failure_gets_one_flash_repair_with_its_diagnostic(world: World) -> None:
     world.script(
         claude=[

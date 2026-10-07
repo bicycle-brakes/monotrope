@@ -621,6 +621,9 @@ model, runs `make verify`, checks for a measured line below `## Time used` and
 makes the local checkpoint commit. An explicit `--stage2-off [REASON]` uses
 §3's Haiku 4.5 or Sonnet 5.5 route and records why. A leak refusal always stops
 the call; it never selects the fallback.
+If the model process itself fails, the runner restores the worktree to the
+baseline commit (every path except the change's `findings.md`), says what it
+undid and exits 1; the next step is `implement <change> --stage2-off`.
 
 ### The runner is the only way
 
