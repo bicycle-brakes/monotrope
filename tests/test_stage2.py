@@ -927,6 +927,40 @@ def test_the_repair_prompt_names_the_gate_that_blocked_not_the_report_tail(world
     assert "MD013" not in prompt and "[ruff-check]" not in prompt, "only blocking sections travel"
 
 
+def test_a_blocking_gates_standard_error_reaches_the_repair_prompt(world: World) -> None:
+    # Loop row L1-1: a gate's error on standard error arrives after every frame and must still travel.
+    world.script(
+        claude=[
+            {
+                "stdout": "first",
+                "plant": {"src/app.py": "value = 2\n"},
+                "append": {"plans/changes/demo/plan.md": "2026-10-08 10:00–10:02, 2 min\n"},
+            },
+            {"stdout": "fixed"},
+        ],
+        make=[
+            {
+                "stdout": "\n".join(_gate("shellcheck", [], "red")),
+                "stderr": "sh: shellcheck: command not found\n",
+                "exit": 1,
+            },
+            {"stdout": "green\n"},
+        ],
+    )
+    assert world.run("implement") == 0
+    prompt = world.calls("claude")[1]["prompt_file"]
+    assert "── [shellcheck] RED (block)" in prompt and "shellcheck: command not found" in prompt
+
+
+def test_a_frame_quoted_inside_a_gate_opens_no_section() -> None:
+    # Loop row L1-2: another gate's frames printed inside the open gate are data. Accepted limit: a quoted end
+    # line of the open gate itself is indistinguishable from the real one and closes the section there.
+    body = ["── [ghost] $ quoted", "── [ghost] RED (block) — quoted", "real-failure"]
+    found = stage2.red_sections("\n".join(_gate("pytest", body, "red") + _gate("ruff", ["ok"], "green")))
+    assert found.count("── [pytest] $") == 1 and "real-failure" in found
+    assert found.splitlines()[-1].startswith("── [pytest] RED (block) — der Lauf ist rot.")
+
+
 def test_red_sections_are_bounded_and_say_what_they_left_out() -> None:
     # runner-red-gate criterion 2. Planted fault: no per-section or no total bound.
     long = _gate("pytest", [f"trace-{n}" for n in range(1000)], "red")
@@ -944,9 +978,10 @@ def test_red_sections_are_bounded_and_say_what_they_left_out() -> None:
 
 def test_the_frames_red_sections_reads_are_the_ones_verify_all_prints() -> None:
     # runner-red-gate pre-mortem: verify_all.sh renames its frame lines and the parser finds nothing.
+    # The printed format, not the shell spelling (loop row L1-3): `── [<gate>] $ ` and `── [<gate>] RED (block)`.
     script = (REPO_ROOT / "scripts" / "verify_all.sh").read_text(encoding="utf-8")
-    assert 'echo "── [$gid] $ ' in script and 'echo "── [$gid] RED (block)' in script
-    assert stage2.GATE_START.match("── [pytest] $ make test") and stage2.GATE_RED.match("── [pytest] RED (block) — x")
+    assert re.search(r"── \[\$\{?\w+\}?\] \$ ", script) and re.search(r"── \[\$\{?\w+\}?\] RED \(block\)", script)
+    assert stage2.GATE_START.match("── [pytest] $ make test") and stage2.GATE_END.match("── [pytest] RED (block) — x")
 
 
 def test_without_a_red_frame_the_repair_prompt_keeps_the_tail(world: World) -> None:

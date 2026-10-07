@@ -1081,7 +1081,8 @@ RED_SECTION_LINES = 60
 RED_TOTAL_LINES = 200
 TAIL_LINES = 80
 GATE_START = re.compile(r"^── \[(?P<gate>[^\]]+)\] \$ ")
-GATE_RED = re.compile(r"^── \[(?P<gate>[^\]]+)\] RED \(block\)")
+GATE_END = re.compile(r"^── \[(?P<gate>[^\]]+)\] (?P<verdict>gruen|RED \(block\)|rot, aber nur)")
+STDERR_LINES = 40
 
 
 def red_sections(output: str) -> str | None:
@@ -1092,16 +1093,22 @@ def red_sections(output: str) -> str | None:
     its frame line and its last lines; a cut says how much it left out, and so does the total bound.
     """
     lines = output.splitlines()
-    starts: dict[str, int] = {}
+    # The gates run one after another: a frame line counts only as the open gate's end or, with none open, as
+    # the next gate's start - a frame quoted inside a gate's own output opens or closes nothing.
+    open_gate: tuple[str, int] | None = None
     sections: list[list[str]] = []
     for index, line in enumerate(lines):
-        start = GATE_START.match(line)
-        if start:
-            starts[start["gate"]] = index
+        if open_gate is None:
+            start = GATE_START.match(line)
+            if start:
+                open_gate = (start["gate"], index)
             continue
-        red = GATE_RED.match(line)
-        if red and red["gate"] in starts:
-            body = lines[starts.pop(red["gate"]) : index + 1]
+        end = GATE_END.match(line)
+        if not end or end["gate"] != open_gate[0]:
+            continue
+        begin, open_gate = open_gate[1], None
+        if end["verdict"] == "RED (block)":
+            body = lines[begin : index + 1]
             if len(body) > RED_SECTION_LINES:
                 left_out = len(body) - RED_SECTION_LINES
                 body = [body[0], f"[… {left_out} lines of this gate left out …]", *body[-(RED_SECTION_LINES - 1) :]]
@@ -1118,7 +1125,7 @@ def red_sections(output: str) -> str | None:
 
 
 def verify_attempt(root: Path, plan: Path, baseline_time: str, key: str | None = None) -> list[str]:
-    """Run the one gate and return bounded diagnostics for failed postconditions."""
+    """Run `make verify` and return bounded diagnostics for failed postconditions: the gates that blocked."""
     env = foreign_env(
         {
             "GIT_CONFIG_COUNT": "1",
@@ -1130,11 +1137,15 @@ def verify_attempt(root: Path, plan: Path, baseline_time: str, key: str | None =
     problems = []
     if done.returncode != 0:
         output = (done.stdout or "") + (done.stderr or "")
-        red = red_sections(output)
+        # verify_all.sh frames gates on standard output; a gate's standard error arrives unframed after them.
+        red = red_sections(done.stdout or "")
         if red is None:
             evidence = "\n".join(output.splitlines()[-TAIL_LINES:])
         else:
             evidence = "The gates that blocked, each with its last lines:\n" + red
+            errors = (done.stderr or "").splitlines()[-STDERR_LINES:]
+            if errors:
+                evidence += "\n\nStandard error, last lines:\n" + "\n".join(errors)
         problems.append(f"`make verify` exited {done.returncode}\n{scrub(evidence, key)}".rstrip())
     try:
         current_time = time_log(plan)
