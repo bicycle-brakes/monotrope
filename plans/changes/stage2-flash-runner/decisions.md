@@ -119,3 +119,21 @@ Where should explore record its output? Options:
 **Recommendation:** Option 2, `research.md` directly. Phase output is
 `research.md`. Record call line in `research.md` as metadata, not
 `findings.md`. Metadata with research, not separate review artifact.
+
+## Addendum 2026-10-07: the maintainer's answers
+
+Asked one at a time in the Claude Code session on 2026-10-07; both answers
+replace the research's recommendations for [DECISION] 1 and 3:
+
+1. **Fallback: "Z.ai weg → Sonnet, Leak → Stopp (Empfohlen)".** When Z.ai is
+   unreachable or stage 2 is off, the orchestrating session explores with
+   Haiku 4.5 and implements with Sonnet 5.5 and records that in plan.md. A
+   leak-check BLOCK stops the run and is reported to the maintainer; no
+   silent fallback. Not chosen: no fallback.
+2. **[DECISION] 2** (a failed GLM call fails the verb) is a `[DETAIL]`,
+   consistent with `review-loop`; not asked.
+3. **Discipline: "Runner prüft danach (Empfohlen)".** The runner passes the
+   agent rules in the prompt and checks after the run: `make verify` green,
+   at least one new commit, the time log in plan.md. If anything is missing
+   the verb exits red; GLM Flash gets one more try, then Sonnet 5.5 takes
+   over. Not chosen: rules in the prompt only.

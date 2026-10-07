@@ -45,3 +45,5 @@ typed: a hand-kept list of files ages exactly as fast as files are added.
 | [`changes/stage-2-codex-glm/plan.md`](changes/stage-2-codex-glm/plan.md) | draft | partial | 2026-09-30 | coding-harness-bc9 |
 | [`changes/stage-2-codex-glm/research.md`](changes/stage-2-codex-glm/research.md) | draft | none | 2026-09-30 | coding-harness-bc9 |
 | [`changes/stage-2-codex-glm/spec.md`](changes/stage-2-codex-glm/spec.md) | draft | partial | 2026-09-30 | coding-harness-bc9 |
+| [`changes/stage2-flash-runner/decisions.md`](changes/stage2-flash-runner/decisions.md) | draft | none | 2026-10-07 | coding-harness-qcp |
+| [`changes/stage2-flash-runner/research.md`](changes/stage2-flash-runner/research.md) | draft | none | 2026-10-07 | coding-harness-qcp |
