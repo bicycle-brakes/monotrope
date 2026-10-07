@@ -76,6 +76,7 @@ typed: a hand-kept list of files ages exactly as fast as files are added.
 | [`changes/touch-map/plan.md`](changes/touch-map/plan.md) | draft | partial | 2026-10-06 | coding-harness-5p0 |
 | [`changes/touch-map/research.md`](changes/touch-map/research.md) | draft | partial | 2026-10-06 | coding-harness-5p0 |
 | [`changes/touch-map/spec.md`](changes/touch-map/spec.md) | draft | partial | 2026-10-06 | coding-harness-5p0 |
+| [`changes/touch-map-comments/findings.md`](changes/touch-map-comments/findings.md) | draft | none | 2026-10-08 | coding-harness-cff |
 | [`changes/touch-map-comments/plan.md`](changes/touch-map-comments/plan.md) | draft | partial | 2026-10-08 | coding-harness-cff |
 | [`changes/touch-map-comments/research.md`](changes/touch-map-comments/research.md) | draft | partial | 2026-10-08 | coding-harness-cff |
 | [`changes/touch-map-comments/spec.md`](changes/touch-map-comments/spec.md) | draft | partial | 2026-10-08 | coding-harness-cff |

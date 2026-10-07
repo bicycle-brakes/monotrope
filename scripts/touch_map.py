@@ -248,7 +248,8 @@ def _scan(line: str, state: State, yaml: bool = False) -> tuple[str, State, list
         elif char == "'":
             letters = 0 < i < len(line) - 1 and line[i - 1].isalpha() and line[i + 1].isalpha()
             if not (yaml and letters):
-                stack[-1][0] = "$'" if line.startswith("$'", i - 1) and i > 0 else "'"
+                ansi = i > 0 and line[i - 1] == "$" and (i < 2 or line[i - 2] != "\\")  # `\$'` is a plain quote
+                stack[-1][0] = "$'" if ansi else "'"
         elif char == "(":
             stack[-1][1] += 1
         elif char == ")":
@@ -281,7 +282,8 @@ def _strip_comments(body: str, yaml: bool = False) -> str:
     heredoc body, up to its end line. Command substitutions nest their own quotes, `$'…'` takes
     escaped quotes, and in YAML an apostrophe inside a word is a letter (bead coding-harness-cff).
     It does not parse the shell: a quote it still misreads - an apostrophe in a shell script's
-    plain text, a quote in backticks, `<<$end` - flips the rest of the file, and the error runs
+    plain text, an apostrophe in YAML that does not stand between two letters (`users'`), a quote
+    in backticks, `<<$end` - flips the rest of the file, and the error runs
     both ways: a comment read as code can make a false link, and code read as a comment can lose
     one (finding F-10 of touch-map, a named limit).
     """
