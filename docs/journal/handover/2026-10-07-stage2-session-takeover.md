@@ -1,5 +1,5 @@
 ---
-title: "Session handover — interactive session spec ready, waiting for Flash runner"
+title: "Session handover — session plan ready, implementation route pending"
 category: handover
 created: 2026-10-07
 updated: 2026-10-07
@@ -7,7 +7,7 @@ direction: framework->framework
 provenance: ai-drafted-reviewed
 produced_by: {kind: llm-session, name: codex, version: "2026-10-07"}
 tags: [handover, stage-2, session, codex]
-target_ref: "1c79860"
+target_ref: "02ad7ed"
 bead: coding-harness-amp
 status: pending
 review: {status: pending, approved_by: null, approved_at: null}
@@ -136,3 +136,31 @@ activation remains a separate declaration dependency, not approval here.
 Next: verify and checkpoint these artifacts, then run the GLM Flash
 implementation through stage2.py. Actual implementation, review and GUI smoke
 are not yet measured. Retain this historical statement in later addenda.
+
+## Addendum — plan green, GLM did not return, 2026-10-07
+
+Design, plan and accepted F-2 are pushed at `02ad7ed` on feat/stage2-session.
+Full make verify: VERIFY GREEN, 1,126 passed, 16 skipped; writer ruleset 82
+passed. An initial run without the process-local signing override failed
+fixture commits; the successful rerun used commit.gpgsign=false in its
+environment only, not a global config edit. GitHub rejected two pushes with
+Internal Server Error; the later retry succeeded. No PR exists yet.
+
+Actual GLM Flash implementation through stage2.py started at 15:14:02 UTC.
+Preflight was clean: 274 files, 612 commits, 12 rules. After over 15 minutes
+without an answer or code edits, the orchestrator terminated only its known
+CLI process. CLI exit 143, runner exit 1; no restore was needed. The span
+through the 15:29:58 UTC reading is 15m 56s, including waiting. The CLI warned
+that its local model catalog did not describe glm-5.3-flash; no causal claim
+about endpoint failure follows. Code, implementation tests, review loop,
+final review and decision PR remain undone; the GUI smoke remains unrun.
+
+One question has been sent: may Codex implement directly, with the model-route
+deviation documented, or should GLM be retried? Direct Codex is recommended
+because the Claude budget is spent and this GLM attempt supplied no result.
+Do not silently substitute another model or reread credential/global config.
+Own worktree only; stage2-mimo and Flash branch remain untouched. The wider
+parity bead stays open. Tracker writes remain limited to own claim/handover.
+
+Resume: record the maintainer's model-route answer in decisions.md before
+starting the next implementation attempt.

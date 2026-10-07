@@ -125,3 +125,8 @@ hosted green checks complete delivery.
 Implementation has not started. The orchestrator measures implementation and
 repairs with its clock. A file-tool worker without a clock records that
 limitation honestly; never invent a measured duration.
+
+2026-10-07 15:14:02–15:29:58 UTC, 15m 56s, waiting counted: GLM Flash
+implementation attempt produced no answer or code before operator termination.
+Runner returned exit 1 after the CLI exited 143; no restore was needed.
+No implementation checkpoint or passing implementation verification exists.
