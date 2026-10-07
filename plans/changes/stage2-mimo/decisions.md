@@ -3,7 +3,7 @@ title: "Decisions — stage2-mimo"
 status: draft
 implementation_status: none
 date: 2026-10-07
-last_reviewed: null
+last_reviewed: 2026-10-07
 updated: 2026-10-07
 supersedes: null
 superseded_by: null
