@@ -357,12 +357,14 @@ are the two `[GAP]`s, which phase 4 measures instead of asking.
    is the cheapest of the three, so the phase-6 verdict would come from the
    weakest model of the ladder — a stronger rung for phase 6 takes one
    sentence from the maintainer.
-2. **When round 2 and round 3 of the loop run.** "round 3 only when needed"
-   names no trigger. Taken: round *N+1* runs only when round *N* produced at
-   least one taken row; the ceiling is three. Reason: the round file already
-   records which rows were taken, so the trigger is readable and testable,
-   and a round whose rows were all rejected gives the next model nothing to
-   check.
+2. **When round 3 of the loop runs.** "round 3 only when needed" names no
+   trigger. Taken: rounds 1 and 2 always run, as the loop runs them today
+   (undecided rows still hold the next round); **round 3 runs only when round
+   2 produced at least one taken row**, and the ceiling is three. Reason: a
+   repair after round 2 is new code a third lineage should see, while a round
+   that produced nothing new gives the next model the same diff again — and
+   the two unconditional rounds keep today's behaviour unchanged, so the
+   decision adds exactly one conditional rung.
 3. **The rounds are a ladder over repaired code.** Round 2 sees round 1's
    repair, as `review_loop` does today, and each round has one reviewer. The
    answer "Beide unabhängig, gleicher Diff" goes with the superseded
