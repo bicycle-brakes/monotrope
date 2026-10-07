@@ -161,3 +161,5 @@ The obvious reading of the files above would reach further. It does not:
   its own (house rule 1).
 - The loop record's place, the evidence rule and verdict-first-release-after;
   `openai-codex` itself, which stays declared for what still routes to it.
+
+## Time used
