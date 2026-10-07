@@ -1,0 +1,15 @@
+schema_version: 1
+change: project-lock
+question: adr
+answer: 'no'
+reason: It carries out LakeSwitch decisions D-46 and D-47, which the maintainer confirmed
+  on 2026-09-21 and 2026-09-22; no subsystem, interface or trust boundary changes,
+  and one revert removes it.
+shown:
+  proposed: 'no'
+  proposal_reason: it carries out LakeSwitch decisions D-46 and D-47, which the maintainer
+    confirmed on 2026-09-21 and 2026-09-22, with a project file, a hash-checked lock
+    and a second CI interpreter; no subsystem, interface or trust boundary changes,
+    and one revert removes it
+answered_by: framework-architect
+answered_at: 2026-10-06

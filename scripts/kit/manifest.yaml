@@ -56,6 +56,9 @@ rules:
   - prefix: prompts/
     rolle: mechanismus
     reason: "die sieben Phasen-Prompts. Null Domaenen-Nennungen (gemessen 2026-09-08)"
+  - prefix: prompts/research-recheck.md
+    rolle: mechanismus
+    reason: "the job prompt of the weekly research re-check: a job, not a phase. It names no model and no runner, so it travels with the process; the empty-repository probe reads it green"
   - prefix: docs/WORKFLOW.md
     rolle: mechanismus
     reason: "die sieben Phasen, ihre Artefakte, das Modell je Phase und die Sitzungsuebergabe. Nennt keine Domaene ausser im Verbot, eine zu nennen"
@@ -91,6 +94,9 @@ rules:
   - prefix: scripts/harness.py
     rolle: mechanismus
     reason: "the command the gate's finding names"
+  - prefix: scripts/leakcheck.py
+    rolle: mechanismus
+    reason: "the barrier before a foreign endpoint: scans the change, the tree and the history against a denylist each machine keeps outside the repository"
   - prefix: scripts/check_bead_export.py
     rolle: mechanismus
     reason: "prueft den gerenderten Export Zeile fuer Zeile (bead bo0)"
@@ -153,6 +159,9 @@ rules:
   - prefix: tests/test_harness_decide_adr.py
     rolle: mechanismus
     reason: "builds its own trees; holds in the probe copy"
+  - prefix: tests/test_leakcheck.py
+    rolle: mechanismus
+    reason: "builds its own repositories and denylists; holds in the probe copy"
   - prefix: tests/test_regelwerk.py
     rolle: mechanismus
     reason: "die Grammatik der Regeltabelle reist; die konkreten Regeln sind Bestand (siehe REIST_NICHT)"
@@ -162,6 +171,9 @@ rules:
   - prefix: tests/test_feedback_channel.py
     rolle: mechanismus
     reason: "das Schema reist; die Uebergaben dieses Repos sind Bestand (siehe REIST_NICHT)"
+  - prefix: tests/test_templates.py
+    rolle: mechanismus
+    reason: "holds the templates and the design phase's texts against the gate modules; skips a case whose file does not travel"
   - prefix: tests/test_worktree_state.py
     rolle: mechanismus
     reason: "die Gegenproben des Waechters — je Regel eine Rotation, in Wegwerf-Repos (RB-G7)"
@@ -183,6 +195,9 @@ rules:
   - prefix: tests/test_model_endpoints.py
     rolle: mechanismus
     reason: "RB-A6: jedes genannte Modell loest gegen einen deklarierten Endpunkt auf. Die Regel ist portabel, die Endpunkte sind es nicht"
+  - prefix: tests/test_repo_settings.py
+    rolle: mechanismus
+    reason: "RB-M6: asserts the ruleset of whichever repository it runs in; the live part runs only in the gate `ruleset`, the rest checks invented API answers, so it holds in the probe copy (bead coding-harness-bma)"
 
   # --- Regeln und Vorlagen ---------------------------------------------------
   - prefix: docs/governance/regelwerk.md
@@ -197,6 +212,21 @@ rules:
   - prefix: templates/handover.md
     rolle: mechanismus
     reason: "die Vorlage, gegen die das Uebergabe-Schema prueft"
+  - prefix: templates/spec.md
+    rolle: mechanismus
+    reason: "the form of a spec; prompts/02-spec.md names it, so it travels with the prompts"
+  - prefix: templates/findings.md
+    rolle: mechanismus
+    reason: "the form of a findings file and its table; docs/WORKFLOW.md and a phase prompt name it"
+  - prefix: templates/adr.md
+    rolle: mechanismus
+    reason: "the form of a decision record in MADR 4.0.0; tests/test_templates.py holds it"
+  - prefix: templates/design.md
+    rolle: mechanismus
+    reason: "the form of a design; prompts/02b-design.md names it"
+  - prefix: templates/arc42.md
+    rolle: mechanismus
+    reason: "a skeleton in arc42's sections, in this repository's words, with arc42's credit and licence"
   - prefix: .github/PULL_REQUEST_TEMPLATE/
     rolle: mechanismus
     reason: "the decision pull request's template — a decision takes effect by its merge"
@@ -307,6 +337,9 @@ rules:
   - prefix: requirements.txt
     rolle: bestand
     reason: "Entwicklungs-Abhaengigkeiten dieses Repos"
+  - prefix: pyproject.toml
+    rolle: bestand
+    reason: "this repository's project file — its pins and its pytest settings; an instance declares its own, as LakeSwitch does (bead coding-harness-ei0)"
   - prefix: .markdownlint.jsonc
     rolle: bestand
     reason: "Lint-Einstellungen dieses Repos; kein Test liest sie"

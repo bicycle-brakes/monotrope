@@ -3,10 +3,10 @@ title: "Regelwerk — die normativen Regeln für Agents, Hooks, Gates, Human Gat
 category: governance
 subcategory: regelwerk
 status: current
-version: 3.0.0
+version: 4.0.0
 created: 2026-08-14
 last_reviewed: 2026-09-19
-updated: 2026-09-30
+updated: 2026-10-06
 owner: Data Architect
 provenance: human-decided
 produced_by: {kind: llm-session, name: claude-code, version: "2026-08-14"}
@@ -68,7 +68,7 @@ wirklich".
 | **1 Konvention** | nichts. Sie steht geschrieben, und jemand merkt es vielleicht |
 | **2 Review** | ein Mensch sieht es im Pull Request — wenn er hinsieht |
 | **3 CI berichtend** | der Lauf meldet es sichtbar und läuft weiter (DRIFT) |
-| **4 CI blockierend** | der Lauf schlägt fehl (BLOCK); ohne Fix kein Merge |
+| **4 CI blockierend** | der Lauf schlägt fehl (BLOCK); ohne Fix kein Merge. Ein Gate mit `placement: writer` blockiert nur den Lauf auf der Maschine des Maintainers (`make verify`): ein Merge über GitHub ohne diesen Lauf wird davon nicht aufgehalten — die Regelzeile sagt das |
 | **5 Sperre** | der Vorgang kommt gar nicht erst zustande (Exit 2, überlebt jeden Permission-Mode) |
 
 Die Stufe ist **keine** Wichtigkeit. RB-A1 ist die folgenreichste Regel dieser
@@ -146,7 +146,7 @@ neue Regel · PATCH = Wortlaut oder Testname.
 | **RB-M3** | Ein abgenommener Contract setzt eine adversariale Quellverifikation voraus — jemand hat versucht, ihn zu widerlegen, und es nicht geschafft | 2 | `Ramp:adversarial-record` | P L I |
 | **RB-M4** | Das Reconciliation-Ergebnis hat einen benannten Unterzeichner, und jede Toleranz trägt ihre Begründung. Eine nackte Prozentzahl ist keine Schwelle, sondern eine Vermutung | 2 | `Ramp:human-gates-transfer` | P L I |
 | **RB-M5** | Alle Gates einer Liefereinheit schließen **vor** der Liefereinheit. Die Grenze ist keine Warteschlange. Die Reihenfolge selbst ist der Mechanismus: Protokoll vor Ergebnis, Duplikat-Befund vor Deduplizierung, Erwartung vor Verdikt, Generalprobe vor dem ersten Lauf | 2 | `Ramp:boundary-before-close` | P L I |
-| **RB-M6** | Die Branch-Regeln werden aus dem Repository heraus behauptet: geforderte Prüfungen gleich der Gate-Liste, Code-Owner-Review an, Zustimmung nicht vom letzten Pusher. Eine unerreichbare Verwaltungs-Schnittstelle ist BLOCK, nicht grün | 2 | `tests/test_repo_settings.py`::test_master_has_a_ruleset_with_required_checks · `Ramp:ruleset-assert` | P L I |
+| **RB-M6** | Die Branch-Regeln werden aus dem Repository heraus behauptet und fordern, was ein Konto halten kann: Pull Request erforderlich, geforderte Prüfung `verify` (der Job, der die Gate-Liste fährt, gebunden an GitHub Actions), kein Force-Push, kein Löschen, kein Bypass. Die zweite Zustimmung — Code-Owner-Review und Zustimmung nicht vom letzten Pusher — kehrt zurück, sobald eine zweite Identität existiert, etwa eine GitHub App. Eine unerreichbare Verwaltungs-Schnittstelle ist BLOCK, nicht grün. Gemessen nur auf der Maschine des Maintainers (Gate `ruleset`, `placement: writer`): ein Merge über GitHub ohne lokalen `make verify` wird davon nicht blockiert | 4 | `tests/test_repo_settings.py`::test_master_has_a_ruleset_with_required_checks · ::test_an_unreachable_api_is_not_a_pass | P L I |
 | **RB-M7** | Die Eigentümer-Datei deckt jeden Entscheidungs-Pfad ab Tag eins — mit einer **eigenen** Zeile. Ein Auffangeintrag benennt niemanden für einen Pfad, sondern jemanden für alles | 2 | `Ramp:codeowners-here` | P L I |
 | **RB-M8** | Rollen sind Rollen. Der Roster löst Rolle auf Handle auf, nie umgekehrt; eine unbesetzte Rolle ist ein sichtbarer Befund mit Fälligkeit, keine Leerstelle | 2 | `Ramp:owner-roles-here` | P L I |
 
@@ -193,6 +193,25 @@ Vier Teile, einzeln referenzierbar:
 ## 7 Änderungsverlauf
 
 Append-only. Jeder Eintrag trägt die vier Pflichtzeilen aus §4.
+
+### 4.0.0 — 2026-10-06
+
+**RB-M6** fordert, was ein Konto halten kann. Maintainer, Agenten und jedes
+Token handeln hier unter demselben GitHub-Konto, und GitHub lässt niemanden
+den eigenen Pull Request freigeben — Code-Owner-Review und „Zustimmung nicht
+vom letzten Pusher" waren so nie erfüllbar. Seit dem 2026-10-05 trägt `main`
+ein Ruleset mit genau dem, was ein Konto halten kann; die Regel fordert jetzt
+genau das und behauptet es gegen das echte Ruleset. Die zweite Zustimmung
+kehrt zurück, sobald eine zweite Identität existiert — der Upgrade-Pfad aus
+ADR 0008. Entschieden vom Maintainer am 2026-10-05 (Änderung
+`rb-m6-one-account`, Bead `coding-harness-bma`).
+
+MAJOR, weil §4 es so vorschreibt: die Regel fordert anderes als vorher.
+
+- **Geändert:** §3, Stufe 4 — ein `writer`-Gate blockiert nur den Lauf auf der Maschine des Maintainers, und die Regelzeile sagt das (Maintainer, 2026-10-06, zum Befund F-2 der Änderung). RB-M6 — Wortlaut neu, Stufe 2 → 4, Erzwinger um `::test_an_unreachable_api_is_not_a_pass` ergänzt, `Ramp:ruleset-assert` entfällt; Geltung unverändert. Keine ID geändert, keine entfernt
+- **Tests:** neu `tests/test_repo_settings.py`. Das echte Ruleset liest das Gate `ruleset` (`decisions/gates.yaml`, `placement: writer`): GitHub zeigt die Bypass-Liste nur dem, der das Ruleset ändern darf, also misst `make verify` auf der Maschine des Maintainers, nicht die gehostete CI. Das Ventil `ruleset-assert` ist geschlossen, nicht still gestrichen: die Behauptung, auf die es wartete, läuft jetzt
+- **Agents/Hooks/Templates:** nichts. `docs/WORKFLOW.md` sagt, dass `tests/test_repo_settings.py` jetzt existiert, sein Container-Zaun noch nicht
+- **lakeswitch-ai:** das Ruleset dort („lakeswitch floor", gelesen am 2026-10-06) fordert Pull Request, `verify`, kein Force-Push, kein Löschen und keinen Bypass, bindet `verify` aber nicht an GitHub Actions; diese Bindung setzt der Maintainer dort in GitHub nach
 
 ### 3.0.0 — 2026-09-30
 
