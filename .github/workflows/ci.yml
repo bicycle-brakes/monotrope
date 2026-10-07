@@ -15,16 +15,25 @@ concurrency:
   cancel-in-progress: false
 
 jobs:
-  verify:
+  gates:
     if: github.event_name == 'push' || github.event_name == 'pull_request'
+    strategy:
+      fail-fast: false
+      matrix:
+        python: ["3.11", "3.12"]
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
         with:
           fetch-depth: 0
+      - name: Set up the declared interpreter
+        id: setup-python
+        uses: actions/setup-python@v5
+        with:
+          python-version: ${{ matrix.python }}
       - name: Install the pinned toolchain
         id: setup-deps
-        run: python3 -m pip install pytest==8.3.4 PyYAML ruff==0.9.10
+        run: python3 -m pip install --require-hashes -r requirements-ci.txt
       - name: Hydrate the tracker (pinned bd, checksum-verified)
         id: setup-tracker
         run: |
@@ -112,14 +121,28 @@ jobs:
         id: ramp-valves
         if: ${{ !cancelled() }}
         run: python3 scripts/ramp_valves.py
+  verify:
+    needs: gates
+    if: always() && (github.event_name == 'push' || github.event_name == 'pull_request')
+    runs-on: ubuntu-latest
+    steps:
+      - name: Every leg of the gates passed
+        run: |
+          echo "gates: ${{ needs.gates.result }}"
+          test "${{ needs.gates.result }}" = success
   drift:
     if: github.event_name == 'schedule' || github.event_name == 'workflow_dispatch'
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
+      - name: Set up the declared interpreter
+        id: setup-python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
       - name: Install the pinned toolchain
         id: setup-deps
-        run: python3 -m pip install pytest==8.3.4 PyYAML ruff==0.9.10
+        run: python3 -m pip install --require-hashes -r requirements-ci.txt
       - name: Hydrate the tracker (pinned bd, checksum-verified)
         id: setup-tracker
         run: |

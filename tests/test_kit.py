@@ -244,7 +244,7 @@ def test_the_kit_does_not_describe_the_phases() -> None:
         )
 
 
-@pytest.mark.parametrize("pfad", ["prompts/01-explore.md", "docs/WORKFLOW.md"])
+@pytest.mark.parametrize("pfad", ["prompts/01-explore.md", "docs/WORKFLOW.md", "prompts/research-recheck.md"])
 def test_the_workflow_itself_travels(pfad: str) -> None:
     """The workflow is in the module, not just its tools.
 
