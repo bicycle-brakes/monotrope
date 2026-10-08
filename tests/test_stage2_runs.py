@@ -264,8 +264,31 @@ def test_criterion_4_counts_only_cleared_routes_and_no_cost_figure_is_printed(tm
     assert code == 0
     assert "1 of 3 foreign routes cleared by model-endpoints.yaml (openai-codex gpt-6.1-sol)." in out
     assert "not cleared: glm-coding-plan glm-5.3 — the endpoint glm-coding-plan states no data residency" in out
-    assert "- Criterion 1 (measured stage-2 runs, ADR 0007): 1 runs measured; taken rows that broke a test: 0." in out
+    assert (
+        "- Criterion 1 (measured stage-2 runs, ADR 0007): 1 runs measured; rows marked Broke a test `yes` (any status): 0."
+        in out
+    )
     assert "- Criterion 3 (leak check green in every run): 1 of 1 recorded calls clean;" in out
     assert "Criterion 2 (lakeswitch-ai's disclosure decision): not measured here" in out
     cost = [line for line in out.splitlines() if "oken" in line or "cost" in line]
     assert cost == ["- Tokens and cost per vendor: not recorded by the runner."]
+
+
+def test_rev_decodes_git_output_as_utf_8_whatever_the_locale(tmp_path: Path, monkeypatch) -> None:
+    """Fault: `git show` decoded with the locale's encoding, which garbles non-ASCII text (loop row L1-5)."""
+    findings = SIMPLE.replace("# Findings", "# Findings — Prüfung")
+    make_repo(tmp_path, {"plans/changes/run": {"findings.md": findings}})
+    _git(tmp_path, "init", "-q")
+    _git(tmp_path, "add", "-A")
+    _git(tmp_path, "commit", "-q", "-m", "one")
+    seen: list[str | None] = []
+    real = subprocess.run
+
+    def recording(*args, **kwargs):
+        seen.append(kwargs.get("encoding"))
+        return real(*args, **kwargs)
+
+    monkeypatch.setattr(stage2_runs.subprocess, "run", recording)
+    source = stage2_runs.Source(tmp_path, "HEAD")
+    assert "Prüfung" in source.read("plans/changes/run/findings.md")
+    assert seen and set(seen) == {"utf-8"}

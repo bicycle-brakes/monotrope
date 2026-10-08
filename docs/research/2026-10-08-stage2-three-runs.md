@@ -90,7 +90,7 @@ count comes from `scripts/stage2_runs.py`, which reads each change's
 python3 scripts/stage2_runs.py stage2-session runner-red-gate touch-map-comments runner-derived-files --rev cc020f5
 ```
 
-| Change | Measured at | Loop rows: taken / rejected / undecided | Taken that broke a test | Phase-6 rounds | Phase-2a rows | Phase-6 rows | Phase-6 disagree marks | Stage-2 calls: clean / total |
+| Change | Measured at | Loop rows: taken / rejected / undecided | Rows marked Broke a test: yes | Phase-6 rounds | Phase-2a rows | Phase-6 rows | Phase-6 disagree marks | Stage-2 calls: clean / total |
 |---|---|---|---|---|---|---|---|---|
 | `stage2-session` (`plans/changes/stage2-session`) | `cc020f5` | 6 / 1 / 0 | 0 | 1 | 3 MAJOR | 4 BLOCKER | 1 of 7 | 9 / 9 |
 | `runner-red-gate` (`plans/changes/runner-red-gate`) | `cc020f5` | 7 / 0 / 0 | 0 | 1 | none | 3 BLOCKER | 1 of 7 | 4 / 4 |
@@ -106,7 +106,7 @@ Stage-2 calls by verb:
 
 D-13's criteria at this cut-off:
 
-- Criterion 1 (measured stage-2 runs, ADR 0007): 4 runs measured; taken rows that broke a test: 0.
+- Criterion 1 (measured stage-2 runs, ADR 0007): 4 runs measured; rows marked Broke a test `yes` (any status): 0.
 - Criterion 2 (lakeswitch-ai's disclosure decision): not measured here; it governs content this repository never sends (ADR 0007).
 - Criterion 3 (leak check green in every run): 24 of 24 recorded calls clean; a call the leak check refuses writes no line, so refusals are not in this count.
 - Criterion 4 (foreign endpoint declared with residency): 3 of 3 foreign routes cleared by model-endpoints.yaml (openai-codex gpt-6.1-sol, glm-coding-plan glm-5.3, glm-coding-plan glm-5.3-flash).

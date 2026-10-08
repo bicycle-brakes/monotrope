@@ -57,7 +57,7 @@ COLUMNS = [
     "Change",
     "Measured at",
     "Loop rows: taken / rejected / undecided",
-    "Taken that broke a test",
+    "Rows marked Broke a test: yes",
     "Phase-6 rounds",
     "Phase-2a rows",
     "Phase-6 rows",
@@ -148,7 +148,9 @@ class Source:
         self.rev = rev
 
     def _git(self, *args: str) -> subprocess.CompletedProcess:
-        return subprocess.run(["git", "-C", str(self.root), *args], capture_output=True, text=True, check=False)
+        return subprocess.run(
+            ["git", "-C", str(self.root), *args], capture_output=True, text=True, encoding="utf-8", check=False
+        )
 
     def label(self) -> str:
         done = self._git("rev-parse", "--short", self.rev or "HEAD")
@@ -242,7 +244,7 @@ def criteria_lines(measured: list[Counts], routes: list) -> list[str]:
     cleared = [route for route, problem in routes if problem is None]
     lines = [
         f"- Criterion 1 (measured stage-2 runs, ADR 0007): {len(measured)} runs measured; "
-        f"taken rows that broke a test: {broke}.",
+        f"rows marked Broke a test `yes` (any status): {broke}.",
         "- Criterion 2 (lakeswitch-ai's disclosure decision): not measured here; it governs content "
         "this repository never sends (ADR 0007).",
         f"- Criterion 3 (leak check green in every run): {sum(calls)} of {len(calls)} recorded calls clean; "

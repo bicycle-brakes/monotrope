@@ -19,7 +19,7 @@ tags: [plan, stage-2, measurement]
 
 ```text
 For you:     One command repeats the stage-2 run counts at any commit; the note and WORKFLOW §4 carry its output.
-Done when:   Each criterion has a test with a planted fault, make verify is green, Codex reviewed it, a PR is open.
+Done when:   Criteria 1–9 have tests with planted faults, 10 a git diff, make verify is green, Codex reviewed it, a PR is open.
 Appetite:    2 hours; a stop, not an estimate.
 Not now:     Tokens and cost per vendor, a runner change, closing the bead.
 Pre-mortem:  suppose it failed: most likely because a findings file uses a shape the rows of the four runs do not show.

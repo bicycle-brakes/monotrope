@@ -38,8 +38,8 @@ Markdown table, one row per named change, then a few summary lines.
 
 1. When a change is named, its `findings.md` is read from
    `plans/changes/<change>/`, or else from the one archived folder
-   `plans/changes/archive/YYYY-MM-DD-<change>/`; the row's second cell says
-   where (`plans/changes/…` path).
+   `plans/changes/archive/YYYY-MM-DD-<change>/`; the row's first cell names
+   the folder read beside the change (loop row L1-1).
    *Refuted by:* an archived change reported as not found, or a folder
    `…-other-<change>` taken for it.
 2. If a named change has no `findings.md` (or two archived folders match),
@@ -50,7 +50,8 @@ Markdown table, one row per named change, then a few summary lines.
    any loop row that is neither is shown as undecided, not dropped.
    *Refuted by:* a `rejected` row counted as taken, or an undecided row
    missing from every count.
-4. "Taken that broke a test" counts every row of every table in the file —
+4. "Rows marked Broke a test: yes" counts every row of every table in the
+   file, whatever its status (the workflow asks for the mark on a taken row only) —
    phase 2a, phase 6 and loop — whose `Broke a test` cell is `yes`.
    *Refuted by:* a phase-6 row marked `yes` not counted.
 5. Phase-6 rounds are the number of `Phase 6 verdict:` lines
@@ -73,7 +74,7 @@ Markdown table, one row per named change, then a few summary lines.
    *Refuted by:* `--rev` reporting a row that exists only in the working
    tree.
 9. Under the table, generated lines give D-13's criteria as numbers where
-   one exists: criterion 1 — runs measured and taken rows that broke a
+   one exists: criterion 1 — runs measured and rows marked as having broken a
    test; criterion 3 — clean calls of recorded calls, with the note that a
    refused leak check writes no line; criterion 4 — foreign routes
    (`CODEX`, `GLM`, `GLM_FLASH`) that `declaration_problem` clears, of

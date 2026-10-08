@@ -837,7 +837,7 @@ rule. At `cc020f5` (2026-10-08), over the first three runs:
 
 | D-13 criterion | Number at `cc020f5` |
 |---|---|
-| 1 — replaced by the first three stage-2 runs | 3 runs measured; 0 taken rows broke a test |
+| 1 — replaced by the first three stage-2 runs | 3 runs measured; 0 rows marked as having broken a test |
 | 2 — lakeswitch-ai's disclosure decision | no number: it governs content this repository never sends, and stays lakeswitch-ai's (ADR 0007) |
 | 3 — leak check green in every run | 18 of 18 recorded calls clean; a refused call writes no line, so a refusal is not in the count |
 | 4 — foreign endpoint declared with residency | 3 of 3 foreign routes cleared by `model-endpoints.yaml` |

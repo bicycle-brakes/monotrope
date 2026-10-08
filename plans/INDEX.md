@@ -80,6 +80,7 @@ typed: a hand-kept list of files ages exactly as fast as files are added.
 | [`changes/stage2-flash-runner/plan.md`](changes/stage2-flash-runner/plan.md) | draft | partial | 2026-10-07 | coding-harness-qcp |
 | [`changes/stage2-flash-runner/research.md`](changes/stage2-flash-runner/research.md) | draft | partial | 2026-10-07 | coding-harness-qcp |
 | [`changes/stage2-flash-runner/spec.md`](changes/stage2-flash-runner/spec.md) | draft | partial | 2026-10-07 | coding-harness-qcp |
+| [`changes/stage2-runs-count/findings.md`](changes/stage2-runs-count/findings.md) | draft | none | 2026-10-08 | coding-harness-kw0 |
 | [`changes/stage2-runs-count/plan.md`](changes/stage2-runs-count/plan.md) | draft | partial | 2026-10-08 | coding-harness-kw0 |
 | [`changes/stage2-runs-count/research.md`](changes/stage2-runs-count/research.md) | draft | partial | 2026-10-08 | coding-harness-kw0 |
 | [`changes/stage2-runs-count/spec.md`](changes/stage2-runs-count/spec.md) | draft | partial | 2026-10-08 | coding-harness-kw0 |
