@@ -436,3 +436,24 @@ over the three rungs, because they are the loop's rungs.
 **Reason** (maintainer's, 2026-10-08): on 2026-10-08 Codex's phase 6 found
 two real BLOCKERs in `rb-g7-merge-freshness` after the GLM loop had passed
 it, as on every change of the night run.
+
+## Addendum 2026-10-08 (afternoon): Pi as the launcher, the chat-completions address
+
+The launcher answer of the same morning ("für opencode go nutze ich den
+opencode cli harness") is superseded; the entries above stand unchanged as
+the record of what was decided then.
+
+**Launcher** (maintainer, 2026-10-08): "ich möchte pi nutzen" — the loop's
+rounds start through Pi (`@earendil-works/pi-coding-agent`, pinned 1.1.0,
+installed by the maintainer the same day). Reason: the installed OpenCode
+2.0.24 did not load the runner-supplied policy file that 1.18.35 loads
+(measured 2026-10-08), so a read-only reviewer could not be shown; Pi
+restricts the tool set at launch (`research.md`, addendum of 2026-10-08
+afternoon).
+
+**Address** (maintainer, 2026-10-08, answer "ja" to the question whether the
+loop may use OpenCode Go's OpenAI-compatible address instead of the
+Anthropic one): the rounds go to `https://opencode.ai/zen/go/v1/chat/completions`,
+the address Pi's built-in `opencode-go` provider uses for all three rungs and
+the one OpenCode's Go page lists for them; the three refused calls at
+`https://opencode.ai/zen/go/v1/messages` of the same day are the reason.
