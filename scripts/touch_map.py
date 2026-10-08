@@ -207,24 +207,107 @@ def _is_docstring(node: ast.stmt) -> bool:
 _HEREDOC = re.compile(r"<<-?[ \t]*(?:'([^']+)'|\"([^\"]+)\"|\\?([A-Za-z_][A-Za-z_0-9]*))")
 
 
-def _scan(line: str, quote: str) -> tuple[str, str, list[str]]:
-    """One line up to its comment, the quote still open at its end, the delimiters of the heredocs it starts."""
+# The scan state across lines: one entry per open command substitution `$( … )`, the outermost first. Each
+# holds the quote open in that context ("" none, `'`, `"`, or `$'` for an ANSI-C string), its count of
+# unquoted `(` still to close, its count of `case` still waiting for `esac`, and its kind: `(` for a
+# command substitution, `{` for a parameter expansion `${ … }`, "" for the file itself.
+State = tuple[tuple[str, int, int, str], ...]
+OUTSIDE: State = (("", 0, 0, ""),)
+
+
+def _live_dollar(line: str, i: int) -> bool:
+    """Whether the `$` at `i` starts an expansion: `$$` is the process id, and `\\$` is a plain dollar.
+
+    The dollars of a run pair off from its start, after an escaped first one: so the `$` of `x$'`, `$$$(` and
+    `\\$$(` starts one, the second `$` of `$$'` and `$$(` does not (phase 6 of touch-map-comments, F-1, F-2).
+    """
+    start = i
+    while start > 0 and line[start - 1] == "$":
+        start -= 1
+    slashes = start
+    while slashes > 0 and line[slashes - 1] == "\\":
+        slashes -= 1
+    escaped = (start - slashes) % 2 == 1  # `\\$` escapes the dollar, `\\\\$` only the backslash (F-5)
+    position = i - start + 1 - (1 if escaped else 0)
+    return position % 2 == 1
+
+
+def _word(line: str, i: int, word: str) -> bool:
+    """Whether `word` stands at `i` as a shell word of its own."""
+    before = i == 0 or line[i - 1] in " \t(;|&"
+    end = i + len(word)
+    return before and line.startswith(word, i) and (end == len(line) or line[end] in " \t;)")
+
+
+def _scan(line: str, state: State, yaml: bool = False) -> tuple[str, State, list[str]]:
+    """One line up to its comment, the state still open at its end, the delimiters of the heredocs it starts.
+
+    A `$(` opens a context of its own, so the quotes of `"$(echo "$x" | sed 's/"//')"` nest as the shell
+    nests them, and `$'…'` lets a backslash escape its quote (bead coding-harness-cff). In a YAML file an
+    apostrophe between two letters (`Don't`) is a letter, not a quote.
+    """
+    stack = [list(context) for context in state]
     heredocs: list[str] = []
     blank = True  # the first character of a line counts as following a blank
+    command = True  # a reserved word counts only where a command starts (F-4)
     i = 0
     while i < len(line):
         char = line[i]
+        quote = stack[-1][0]
         if char == "\\" and quote != "'":
             i += 2  # the escaped character is neither a quote, a `#` nor a blank
             blank = False
             continue
-        if quote:
-            if char == quote:
-                quote = ""
-        elif char in "\"'":
-            quote = char
+        if quote in ("'", "$'"):
+            if char == "'":
+                stack[-1][0] = ""
+        elif line.startswith("${", i) and _live_dollar(line, i):
+            stack.append(["", 0, 0, "{"])  # a `)` or `#` inside `${v%)}` belongs to the expansion (F-6)
+            i += 2
+            blank = False
+            continue
+        elif stack[-1][3] == "{" and quote == "" and char == "}":
+            stack.pop()
+            i += 1
+            blank = command = False
+            continue
+        elif line.startswith("$(", i) and _live_dollar(line, i):
+            stack.append(["", 0, 0, "("])  # inside double quotes too: a substitution starts its own quoting
+            i += 2
+            blank = False
+            command = True
+            continue
+        elif quote == '"':
+            if char == '"':
+                stack[-1][0] = ""
+        elif char == '"':
+            stack[-1][0] = char
+        elif char == "'":
+            letters = 0 < i < len(line) - 1 and line[i - 1].isalpha() and line[i + 1].isalpha()
+            if not (yaml and letters):
+                ansi = i > 0 and line[i - 1] == "$" and _live_dollar(line, i - 1)
+                stack[-1][0] = "$'" if ansi else "'"
+        elif stack[-1][3] == "{":
+            pass  # inside an expansion only quotes, nested expansions and its `}` count
+        elif command and stack[-1][3] == "(" and _word(line, i, "case"):
+            stack[-1][2] += 1  # a case pattern's `)` inside a substitution closes nothing (F-3)
+            i += 4
+            blank = command = False
+            continue
+        elif command and stack[-1][3] == "(" and stack[-1][2] and _word(line, i, "esac"):
+            stack[-1][2] -= 1
+            i += 4
+            blank = command = False
+            continue
+        elif char == "(":
+            stack[-1][1] += 1
+        elif char == ")":
+            if stack[-1][1]:
+                stack[-1][1] -= 1
+            elif stack[-1][3] == "(" and not stack[-1][2]:
+                stack.pop()
         elif char == "#" and blank:
-            return line[:i], quote, heredocs
+            return line[:i], tuple(tuple(context) for context in stack), heredocs
         elif char == "<" and line.startswith("<<", i):
             found = _HEREDOC.match(line, i)  # `<<<` (a here-string) and `<< 3` are no marker
             if found:
@@ -233,26 +316,33 @@ def _scan(line: str, quote: str) -> tuple[str, str, list[str]]:
             blank = False
             continue
         blank = char in " \t"
+        if char in ";|&(":
+            command = True
+        elif not blank:
+            command = False
         i += 1
-    return line, quote, heredocs
+    return line, tuple(tuple(context) for context in stack), heredocs
 
 
-def _strip_comments(body: str) -> str:
+def _strip_comments(body: str, yaml: bool = False) -> str:
     """The text of a shell script, `Makefile` or YAML file without its comments.
 
     A `#` starts a comment when it is the first character of a line or follows a blank that is
-    not escaped, and stands outside single or double quotes. So `$#`, `${#a}`, `a#b` and the
+    not escaped, and stands outside quotes. So `$#`, `${#a}`, `a#b` and the
     fragment of a URL (`/#top`) are code, `"a # b"` is a string, and `echo hi  # x` keeps
     `echo hi`. A backslash outside single quotes escapes the next character. A quote is followed
     across lines, so an inner line of a quote that runs over several lines is code, and so is a
-    heredoc body, up to its end line. It does not parse the shell. Because a quote is followed
-    across lines, one quote it misreads (an apostrophe in plain text, a quote nested in a command
-    substitution, `<<$end`, `$'a\\'b'`) flips the rest of the file, and the error runs both ways:
-    a comment read as code can make a false link, and code read as a comment can lose one
-    (finding F-10 of touch-map, a named limit).
+    heredoc body, up to its end line. Command substitutions nest their own quotes and `case`
+    patterns, `${…}` holds its own `)` and `#`, `$'…'` takes escaped quotes, `$$` and an escaped
+    dollar open nothing, and in YAML an apostrophe inside a word is a letter (bead coding-harness-cff).
+    It does not parse the shell: a quote it still misreads - an apostrophe in a shell script's
+    plain text, an apostrophe in YAML that does not stand between two letters (`users'`), a quote
+    in backticks, `<<$end` - flips the rest of the file, and the error runs
+    both ways: a comment read as code can make a false link, and code read as a comment can lose
+    one (finding F-10 of touch-map, a named limit).
     """
     kept = []
-    quote = ""
+    state = OUTSIDE
     waiting: list[str] = []  # the delimiters of the heredocs opened above, whose bodies are still to be read
     for line in body.splitlines():
         if waiting:
@@ -260,7 +350,7 @@ def _strip_comments(body: str) -> str:
                 waiting.pop(0)
             kept.append(line)
             continue
-        text, quote, waiting = _scan(line, quote)
+        text, state, waiting = _scan(line, state, yaml)
         kept.append(text)
     return "\n".join(kept)
 
@@ -280,7 +370,7 @@ def read_code(path: str, body: str) -> Source:
             return Source(ast.unparse(tree), tree)  # unparse drops the comments
         except (SyntaxError, ValueError, RecursionError):
             pass  # a file that does not parse is read like a shell script
-    return Source(_strip_comments(body), None)
+    return Source(_strip_comments(body, path.endswith((".yml", ".yaml"))), None)
 
 
 class Snapshot:

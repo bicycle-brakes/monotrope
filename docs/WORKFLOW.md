@@ -635,8 +635,8 @@ undid and exits 1; the next step is `implement <change> --stage2-off`.
 ### The runner is the only way
 
 A foreign model is started only through `python3 scripts/stage2.py <verb>
-<change>`, never by typing `claude` against another endpoint into a shell.
-Seven verbs exist:
+<change>`, never by typing `codex`, or `claude` against another endpoint, into
+a shell. Eight verbs exist:
 
 - `explore` — GLM 5.3 Flash, phase 1; `--stage2-off [REASON]` uses Haiku 4.5.
 - `spec-review` — the ladder's rung 1 (`deepseek-v4.1-flash`), phase 2a, a
@@ -651,6 +651,9 @@ Seven verbs exist:
 - `probe` — one call per rung of the ladder, the declaration and the leak
   check in front of each; measures the address, writes no record (a change's
   declared special run).
+- `session` — one interactive OpenCode or Codex session in a new Terminal
+  window; OpenCode waits on the separate Go declaration ("The interactive
+  session" below).
 
 **Before every call**, the runner checks, in this order: the change is named
 and its folder exists; `model-endpoints.yaml` clears the endpoint (declared,
@@ -741,6 +744,55 @@ accepted that as a residual risk for ADR 0007's reviewers on 2026-09-30, and
 ADR 0011 accepts it again for the rungs: the unconfined reads ADR 0007
 accepted for its reviewers extend to them. The leak check scans what this
 repository presents, not what else the disk holds.
+
+### The interactive session (`session`)
+
+`python3 scripts/stage2.py session <change> --model <id>` starts one interactive
+model session for the change in a new macOS Terminal window, from the same
+checked runner as every other call. The `--model <id>` is required and taken
+literally: a plain id selects what `openai-codex` lists and dispatches the
+official Codex CLI; a full `opencode-go/<model>` id selects `opencode-go` when
+that entry lists the bare `<model>`, as the reviewer declaration writes it, and
+dispatches OpenCode with the full id. No alias, no prefix guessing, and the
+session approves no endpoint: a model the declaration does not list for a session
+transport is refused before anything starts, and the OpenCode path stays closed
+until `opencode-go` and that model are declared for framework content in
+`model-endpoints.yaml` (coding-harness-ymx). `--handover <path>` names another
+handover inside the worktree; without it the change's own `handover.md` under
+`plans/changes/<change>/` is the first prompt. The file must be a readable,
+nonempty UTF-8 regular file inside the dedicated worktree; the prompt is bounded
+at 32 KiB and the whole command at 64 KiB.
+
+A session runs only in the change's own dedicated worktree
+(`<main checkout>/.claude/worktrees/<change>`, attached branch, that directory
+as the working one) and only on macOS. Before anything opens, the runner checks
+the declaration, reads the handover, and runs the leak check over the tree, the
+index, the history and the exact outgoing prompt — the check runs twice in the
+same invocation: once after the handover is read, and a second time immediately
+before Terminal is told to start. It covers this launch only: nothing later is
+scanned — not later prompts, not edits, not a model switched in the session's
+own user interface — so another model goes through the runner again. The tool
+permissions handed to the CLI (OpenCode gets a runner-supplied policy whose
+effective agent the runner reads back and verifies; Codex gets
+`workspace-write` with approval on request) are a configuration, not
+a confinement at the operating-system level: shell commands approved in the
+window can read what the user can read.
+
+One audit line goes into the change's `findings.md` per attempt, first with
+`dispatch pending.`, then — and only that line changes — `dispatch accepted.`
+or `dispatch failed (<why>).` Accepted means Terminal took the command, nothing
+more: whether the CLI started, authenticated or answered shows in the new
+window, and a missing CLI or `osascript` is refused beforehand as a
+prerequisite. The runner's launch files live in a fresh private directory under
+the gitignored `.stage2-sessions/` in the worktree; they carry the policy and
+the launch script, no prompt and no credential. A refused or failed attempt
+removes its directory, an accepted one keeps it for the session to load, and
+nothing user-owned there is ever written or deleted. The session reads no
+credential file, copies no caller token, and starts no headless verb — no
+`codex exec`, no `opencode run`. The verb neither runs the review loop nor
+changes which reviewer sees what: the review order is not this verb's business.
+Its ADR 0007 amendment travels as a draft in the change folder until the
+decision PR is merged.
 
 ### The review loop (phase 4b)
 
