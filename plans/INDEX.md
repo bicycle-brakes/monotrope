@@ -60,6 +60,10 @@ typed: a hand-kept list of files ages exactly as fast as files are added.
 | [`changes/research-currency/plan.md`](changes/research-currency/plan.md) | draft | partial | 2026-10-05 | coding-harness-pu9 |
 | [`changes/research-currency/research.md`](changes/research-currency/research.md) | draft | partial | 2026-10-05 | coding-harness-pu9 |
 | [`changes/research-currency/spec.md`](changes/research-currency/spec.md) | draft | partial | 2026-10-05 | coding-harness-pu9 |
+| [`changes/runner-red-gate/findings.md`](changes/runner-red-gate/findings.md) | draft | none | 2026-10-08 | coding-harness-zci |
+| [`changes/runner-red-gate/plan.md`](changes/runner-red-gate/plan.md) | draft | partial | 2026-10-08 | coding-harness-zci |
+| [`changes/runner-red-gate/research.md`](changes/runner-red-gate/research.md) | draft | partial | 2026-10-08 | coding-harness-zci |
+| [`changes/runner-red-gate/spec.md`](changes/runner-red-gate/spec.md) | draft | partial | 2026-10-08 | coding-harness-zci |
 | [`changes/stage-2-codex-glm/decisions.md`](changes/stage-2-codex-glm/decisions.md) | accepted | none | 2026-09-30 | coding-harness-bc9 |
 | [`changes/stage-2-codex-glm/findings.md`](changes/stage-2-codex-glm/findings.md) | draft | none | 2026-09-30 | coding-harness-bc9 |
 | [`changes/stage-2-codex-glm/plan.md`](changes/stage-2-codex-glm/plan.md) | draft | partial | 2026-09-30 | coding-harness-bc9 |
@@ -70,6 +74,13 @@ typed: a hand-kept list of files ages exactly as fast as files are added.
 | [`changes/stage2-flash-runner/plan.md`](changes/stage2-flash-runner/plan.md) | draft | partial | 2026-10-07 | coding-harness-qcp |
 | [`changes/stage2-flash-runner/research.md`](changes/stage2-flash-runner/research.md) | draft | partial | 2026-10-07 | coding-harness-qcp |
 | [`changes/stage2-flash-runner/spec.md`](changes/stage2-flash-runner/spec.md) | draft | partial | 2026-10-07 | coding-harness-qcp |
+| [`changes/stage2-session/adr-0007-session-amendment.md`](changes/stage2-session/adr-0007-session-amendment.md) | draft | partial | 2026-10-07 | coding-harness-amp |
+| [`changes/stage2-session/decisions.md`](changes/stage2-session/decisions.md) | draft | partial | 2026-10-07 | coding-harness-amp |
+| [`changes/stage2-session/design.md`](changes/stage2-session/design.md) | draft | partial | 2026-10-07 | coding-harness-amp |
+| [`changes/stage2-session/findings.md`](changes/stage2-session/findings.md) | draft | partial | 2026-10-07 | coding-harness-amp |
+| [`changes/stage2-session/plan.md`](changes/stage2-session/plan.md) | draft | partial | 2026-10-07 | coding-harness-amp |
+| [`changes/stage2-session/research.md`](changes/stage2-session/research.md) | draft | partial | 2026-10-07 | coding-harness-amp |
+| [`changes/stage2-session/spec.md`](changes/stage2-session/spec.md) | draft | partial | 2026-10-07 | coding-harness-amp |
 | [`changes/template-bundle/decisions.md`](changes/template-bundle/decisions.md) | draft | partial | 2026-10-05 | coding-harness-9qo |
 | [`changes/template-bundle/findings.md`](changes/template-bundle/findings.md) | draft | partial | 2026-10-05 | coding-harness-9qo |
 | [`changes/template-bundle/plan.md`](changes/template-bundle/plan.md) | draft | partial | 2026-09-30 | coding-harness-9qo |
@@ -80,3 +91,7 @@ typed: a hand-kept list of files ages exactly as fast as files are added.
 | [`changes/touch-map/plan.md`](changes/touch-map/plan.md) | draft | partial | 2026-10-06 | coding-harness-5p0 |
 | [`changes/touch-map/research.md`](changes/touch-map/research.md) | draft | partial | 2026-10-06 | coding-harness-5p0 |
 | [`changes/touch-map/spec.md`](changes/touch-map/spec.md) | draft | partial | 2026-10-06 | coding-harness-5p0 |
+| [`changes/touch-map-comments/findings.md`](changes/touch-map-comments/findings.md) | draft | none | 2026-10-08 | coding-harness-cff |
+| [`changes/touch-map-comments/plan.md`](changes/touch-map-comments/plan.md) | draft | partial | 2026-10-08 | coding-harness-cff |
+| [`changes/touch-map-comments/research.md`](changes/touch-map-comments/research.md) | draft | partial | 2026-10-08 | coding-harness-cff |
+| [`changes/touch-map-comments/spec.md`](changes/touch-map-comments/spec.md) | draft | partial | 2026-10-08 | coding-harness-cff |

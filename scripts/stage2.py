@@ -13,11 +13,31 @@ stands between the rule and the call.
     python3 scripts/stage2.py review-loop  <change>   # GLM, one round of phase 4b
     python3 scripts/stage2.py release-loop <change>   # loop rows into findings.md
     python3 scripts/stage2.py review       <change>   # Codex, phase 6, the 2a session resumed
+    python3 scripts/stage2.py session      <change>   # interactive Codex/OpenCode, a Terminal window
 
 `explore` and `implement` accept `--stage2-off [REASON]`: the declared
 Stage-1 route uses Haiku 4.5 or Sonnet 5.5. A leak refusal never falls back.
 Implement lets the model edit but not run commands; the runner runs
 `make verify`, checks the time log and makes the one checkpoint commit.
+
+`session` starts one interactive OpenCode or Codex session in a new macOS
+Terminal window, inside the change's dedicated worktree
+(`<main checkout>/.claude/worktrees/<change>`, attached branch, that directory
+as the working one). It takes `--model <id>` - exactly as
+`model-endpoints.yaml` lists it: a plain id on `openai-codex` runs the
+official Codex CLI, a full `opencode-go/<model>` id runs OpenCode with a
+runner-supplied policy when `opencode-go` lists the bare `<model>` - and `--handover <path>` for a file inside the
+worktree (default: the change's `handover.md`); its full text is the first
+prompt. The declaration and the leak check run as for every call, the second
+time immediately before the window opens, and one audit line goes into
+`findings.md` as `dispatch pending.`, replaced afterwards by `accepted` or
+`failed`. **Accepted means Terminal took the command**, not that the CLI
+started, signed in or the model answered: what follows shows in the window.
+The leak check covered this launch only - later edits, later prompts and a
+model switched in the UI are not scanned, and the terminal permissions
+confine nothing at the operating-system level; another model starts again
+through this runner. `--model` and `--handover` belong to the session verb
+alone, and `--stage2-off` to explore and implement.
 
 **What every call carries** (before it starts, in this order):
 
@@ -423,9 +443,12 @@ def declaration_problem(root: Path, endpoint: str, model: str) -> str | None:
         return f"model-endpoints.yaml declares no endpoint {endpoint}"
     if model not in (found.get("modelle") or []):
         return f"the endpoint {endpoint} does not list the model {model}"
-    if "framework" not in (found.get("darf_sehen") or []):
+    allowed = found.get("darf_sehen")
+    # A list, not a string: `"framework" in "not-framework"` would be true (phase 6 of stage2-session, F-4).
+    if not isinstance(allowed, list) or "framework" not in allowed:
         return f"the endpoint {endpoint} may not see framework content"
-    if found.get("residenz") in (None, "nicht-erklaert"):
+    residency = found.get("residenz")
+    if not isinstance(residency, str) or not residency.strip() or residency == "nicht-erklaert":
         return f"the endpoint {endpoint} states no data residency"
     return None
 
@@ -1077,8 +1100,82 @@ def credential_message(exposed: list[Path]) -> str:
     return f"the GLM credential occurred in changed files and was removed ({listing}); no fallback starts."
 
 
+RED_SECTION_LINES = 60
+RED_TOTAL_LINES = 200
+TAIL_LINES = 80
+GATE_START = re.compile(r"^── \[(?P<gate>[^\]]+)\] \$ ")
+# Any frame line of the open gate that is not a start ends it, whatever its verdict is spelled (loop row L2-1).
+GATE_END = re.compile(r"^── \[(?P<gate>[^\]]+)\] (?!\$ )(?P<verdict>.+)")
+STDERR_LINES = 40
+
+
+def _frame_lines(output: str) -> list[str]:
+    """The output's lines, with a frame split off a line it was printed onto (phase 6, F-3).
+
+    `verify_all.sh` echoes a gate's closing frame right after the gate's output; when that output ends without
+    a newline, the frame lands on the same line.
+    """
+    found: list[str] = []
+    for line in output.splitlines():
+        cut = line.rfind("── [")
+        if cut > 0 and (GATE_START.match(line[cut:]) or GATE_END.match(line[cut:])):
+            found += [line[:cut], line[cut:]]
+        else:
+            found.append(line)
+    return found
+
+
+def _shrink(body: list[str], limit: int) -> list[str]:
+    """A section of at most `limit` lines, marker included: its start frame, the marker, its last lines."""
+    if len(body) <= limit:
+        return body
+    return [body[0], f"[… {len(body) - limit + 1} lines of this gate left out …]", *body[-(limit - 2) :]]
+
+
+def red_sections(output: str) -> str | None:
+    """The sections of the gates `verify_all.sh` framed `RED (block)`, bounded, in run order - or None.
+
+    A repair attempt needs the gate that blocked. The log's tail is the report-only gates (docs-links,
+    markdownlint), thousands of lines after a pytest failure (bead coding-harness-zci). The red gates share
+    the budget: each keeps its start frame, its last lines and its RED line, markers count against the bounds
+    (phase 6, F-1 and F-2).
+    """
+    lines = _frame_lines(output)
+    # The gates run one after another: a frame line counts only as the open gate's end or, with none open, as
+    # the next gate's start - a frame quoted inside a gate's own output opens or closes nothing.
+    open_gate: tuple[str, int] | None = None
+    sections: list[list[str]] = []
+    for index, line in enumerate(lines):
+        if open_gate is None:
+            start = GATE_START.match(line)
+            if start:
+                open_gate = (start["gate"], index)
+            continue
+        end = GATE_END.match(line)
+        if not end or end["gate"] != open_gate[0]:
+            continue
+        begin, open_gate = open_gate[1], None
+        if end["verdict"].startswith("RED (block)"):
+            sections.append(lines[begin : index + 1])
+    if not sections:
+        return None
+    room = RED_TOTAL_LINES
+    if len(sections) * 3 > room:
+        # More red gates than three lines each can hold: the first ones, and one line saying how many follow.
+        shown = (room - 1) // 3
+        dropped = len(sections) - shown
+        sections, room = sections[:shown], room - 1
+    else:
+        dropped = 0
+    share = min(RED_SECTION_LINES, room // len(sections))
+    kept = [line for body in sections for line in _shrink(body, share)]
+    if dropped:
+        kept.append(f"[… {dropped} more red gate sections left out …]")
+    return "\n".join(kept)
+
+
 def verify_attempt(root: Path, plan: Path, baseline_time: str, key: str | None = None) -> list[str]:
-    """Run the one gate and return bounded diagnostics for failed postconditions."""
+    """Run `make verify` and return bounded diagnostics for failed postconditions: the gates that blocked."""
     env = foreign_env(
         {
             "GIT_CONFIG_COUNT": "1",
@@ -1089,8 +1186,20 @@ def verify_attempt(root: Path, plan: Path, baseline_time: str, key: str | None =
     done = launch(["make", "verify"], root, env)
     problems = []
     if done.returncode != 0:
-        tail = scrub("\n".join(((done.stdout or "") + (done.stderr or "")).splitlines()[-80:]), key)
-        problems.append(f"`make verify` exited {done.returncode}\n{tail}".rstrip())
+        output = (done.stdout or "") + (done.stderr or "")
+        # verify_all.sh frames gates on standard output; a gate's standard error arrives unframed after them.
+        red = red_sections(done.stdout or "")
+        if red is None:
+            evidence = "\n".join(output.splitlines()[-TAIL_LINES:])
+        else:
+            evidence = "The gates that blocked, each with its last lines:\n" + red
+            errors = (done.stderr or "").splitlines()
+            if errors:
+                # Unframed: the last lines of the whole run's standard error, not of the blocking gate alone.
+                cut = len(errors) - STDERR_LINES
+                kept = ([f"[… {cut} earlier lines left out …]"] if cut > 0 else []) + errors[-STDERR_LINES:]
+                evidence += "\n\nStandard error of the whole run, last lines:\n" + "\n".join(kept)
+        problems.append(f"`make verify` exited {done.returncode}\n{scrub(evidence, key)}".rstrip())
     try:
         current_time = time_log(plan)
     except Refused as error:
@@ -1323,6 +1432,13 @@ def codex_rule_problems(settings: dict) -> list[str]:
     return found
 
 
+def session(root: Path, change: str, model: str | None, handover: str | None) -> None:
+    """One checked interactive session in the change's own Terminal window."""
+    import stage2_session
+
+    stage2_session.run(root, change, model or "", handover, sys.modules[__name__])
+
+
 VERBS = {
     "explore": explore,
     "implement": implement,
@@ -1339,7 +1455,7 @@ def main(argv: list[str] | None = None) -> int:
         formatter_class=argparse.RawDescriptionHelpFormatter,
         allow_abbrev=False,
     )
-    parser.add_argument("verb", choices=sorted(VERBS))
+    parser.add_argument("verb", choices=sorted([*VERBS, "session"]))
     parser.add_argument("change", nargs="?", default="", help="folder name under plans/changes/")
     parser.add_argument(
         "--stage2-off",
@@ -1348,6 +1464,16 @@ def main(argv: list[str] | None = None) -> int:
         default=None,
         metavar="REASON",
         help="use the Stage-1 route for explore or implement and record the optional reason",
+    )
+    parser.add_argument(
+        "--model",
+        default=None,
+        help="session only: the model id, exactly as model-endpoints.yaml lists it",
+    )
+    parser.add_argument(
+        "--handover",
+        default=None,
+        help="session only: a handover file inside the worktree (default: the change's handover.md)",
     )
     parser.add_argument("--root", default=str(REPO_ROOT), help=argparse.SUPPRESS)
     args = parser.parse_args(argv)
@@ -1363,8 +1489,15 @@ def main(argv: list[str] | None = None) -> int:
             )
         if args.stage2_off is not None and args.verb not in {"explore", "implement"}:
             raise Refused("--stage2-off applies only to explore and implement.")
+        if args.verb == "session":
+            if not args.model:
+                raise Refused("session needs --model <id>: name the model exactly as model-endpoints.yaml lists it.")
+        elif args.model is not None or args.handover is not None:
+            raise Refused("--model and --handover belong to the session verb alone.")
         if args.verb in {"explore", "implement"}:
             VERBS[args.verb](Path(args.root), args.change, args.stage2_off)
+        elif args.verb == "session":
+            session(Path(args.root), args.change, args.model, args.handover)
         else:
             VERBS[args.verb](Path(args.root), args.change)
     except Refused as error:

@@ -18,6 +18,12 @@
 # macOS finder noise
 .DS_Store
 
+# Runtime policies of `stage2.py session` (bead coding-harness-amp): fresh
+# private directories a failed attempt cleans and an accepted one keeps for
+# the session to load. They hold no prompt and no credential, and they are
+# the machine's business, never tracked.
+.stage2-sessions/
+
 # Python
 __pycache__/
 *.pyc
