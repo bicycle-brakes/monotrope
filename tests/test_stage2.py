@@ -1505,6 +1505,7 @@ def test_a_round_without_a_finding_still_counts(world: World, capsys: pytest.Cap
     record = world.record().read_text(encoding="utf-8")
     assert "deepseek-v4.1-flash reported no finding." in record
     assert world.run("review-loop") == 0
+    record = world.record().read_text(encoding="utf-8")
     assert "mimo-v2.6-flash reported no finding." in record
     capsys.readouterr()
     assert world.run("review-loop") == 2
@@ -1575,7 +1576,7 @@ def test_round_three_starts_only_after_a_taken_row(world: World, capsys: pytest.
     text = world.record().read_text(encoding="utf-8")
     world.record().write_text(
         re.sub(
-            r"^(\| L2-1 \|.*\|) rejected — no evidence \|  \|$",
+            r"^(\| L2-1 \|.*\|) rejected — no evidence \| no \|$",
             r"\1 taken — test_b | yes |",
             text,
             flags=re.M,
@@ -2434,9 +2435,7 @@ def test_the_stop_rule_counts_every_rung() -> None:
 
 def test_the_adr_draft_states_every_point() -> None:
     """Criterion 25: the draft in design.md carries the six points and the weighed options, ready to copy out."""
-    draft = section(
-        (REPO_ROOT / "plans/changes/stage2-mimo/design.md").read_text(encoding="utf-8"), "### ADR 0011"
-    )
+    draft = section((REPO_ROOT / "plans/changes/stage2-mimo/design.md").read_text(encoding="utf-8"), "### ADR 0011")
     assert draft, "the draft is not in design.md"
     one = flat(draft)
     for needle in (

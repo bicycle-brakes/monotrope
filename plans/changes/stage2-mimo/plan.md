@@ -166,6 +166,30 @@ The obvious reading of the files above would reach further. It does not:
 
 Stage-1 route: implement · model claude-sonnet-5-5 · reason: two Flash post-run checks failed.
 
+## Detail decision — 2026-10-08
+
+`[DETAIL]` — which side of the two red review-loop tests was wrong: the
+tests, not the code. The spec lets every round read its model from the ladder
+and writes each round as its own reviewer (criteria 4 and 18), so a round
+without a finding still stamps its rung into the record — the runner does
+that (`answer_parts`, `scripts/stage2.py`). The first test asserted the loop
+record from a read taken before the second round had run, so it could never
+see that round's line; it now re-reads after the run. The spec lets round 3
+start only on a taken row of round 2 (criterion 7), which the runner checks
+before launching anything; the second test meant to rewrite one row of round
+2 into a taken one, but its pattern expected an empty test-broke cell where
+the test's own decision helper had written `no`, so the substitution matched
+nothing and round 2 stayed without a taken row. Both repairs change
+`tests/test_stage2.py` only; the runner code is untouched.
+
+`[DETAIL]` 2026-10-08 — the reasons behind the empty-repo probe's travel
+list: its three new entries all read the endpoint inventory
+(`model-endpoints.yaml`), which the kit leaves at home exactly as it did for
+the prompt cases, so they carry the standing reason `bestand-dieses-repos`;
+the fourth change is a rename, since the loop prompt's model line names the
+ladder's first rung (`deepseek-v4.1-flash`) where it named GLM 5.3 before
+(`scripts/kit/probe.py`, `REIST_NICHT` and its cap).
+
 ## Time used
 
 2026-10-08, phase-4 session under the Stage-2 runner — start and end clock

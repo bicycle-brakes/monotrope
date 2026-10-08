@@ -626,9 +626,7 @@ def ladder(root: Path) -> list[str]:
         data = yaml.safe_load((root / "model-endpoints.yaml").read_text(encoding="utf-8")) or {}
     except (OSError, UnicodeDecodeError, yaml.YAMLError):
         raise Refused("model-endpoints.yaml cannot be read") from None
-    entry = next(
-        (e for e in data.get("endpunkte") or [] if isinstance(e, dict) and e.get("name") == OPENCODE), None
-    )
+    entry = next((e for e in data.get("endpunkte") or [] if isinstance(e, dict) and e.get("name") == OPENCODE), None)
     if entry is None:
         raise Refused(f"model-endpoints.yaml declares no endpoint {OPENCODE}")
     models = [str(model) for model in entry.get("modelle") or []]
@@ -714,9 +712,7 @@ def run_reviewer(
             command += ["--resume", resume]
         if not session:
             command += ["--no-session-persistence"]
-        done = launch(
-            command, ctx.root, opencode_env(key, config_dir, model), key, timeout=REVIEWER_MINUTES * 60
-        )
+        done = launch(command, ctx.root, opencode_env(key, config_dir, model), key, timeout=REVIEWER_MINUTES * 60)
         if done.returncode != 0:
             raise fail("claude", done, f"exit {done.returncode}", key)
         stdout = scrub(done.stdout or "", key)
