@@ -9,8 +9,8 @@ within the repository, and they ask for what one GitHub account can hold:
    status that any token can post (RB-M6, F-3),
 3. no force push,
 4. no deletion,
-5. no bypass — every ruleset that supplies (1) to (4) shows an empty bypass
-   list.
+5. no bypass — every ruleset that supplies (1) to (4), or (6) below, shows
+   an empty bypass list.
 
 The second approval (code-owner review, approval not by the last pusher) is not
 asked for. It returns when a second identity exists, for example a GitHub App:

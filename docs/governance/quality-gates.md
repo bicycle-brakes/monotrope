@@ -74,8 +74,9 @@ MG-2 prüft **`refs/pull/N/merge`**, nicht den Branch-Kopf. Lokal grün und in d
 CI rot ist deshalb kein Widerspruch, sondern der Normalfall: die CI baut, was
 nach dem Merge entsteht. Dass dieser Merge-Ref auch der gemergte ist, sichert das Ruleset: es
 verlangt, dass der Branch vor dem Merge auf dem Stand seines Ziels ist
-(RB-G7). Bewegt sich `main`, wird der Pull Request aktualisiert und neu
-geprüft.
+(RB-G7). Bewegt sich `main`, verweigert GitHub den Merge, bis jemand den
+Branch aktualisiert hat und die CI erneut grün ist; das tut niemand
+automatisch (`prompts/07-commit.md`, Merge-Schritt 7).
 
 ### Human Gates
 
