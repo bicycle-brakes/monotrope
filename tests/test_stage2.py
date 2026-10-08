@@ -257,6 +257,12 @@ def world(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> World:
     (root / "src" / "app.py").write_text("value = 1\n", encoding="utf-8")
     shutil.copytree(REPO_ROOT / "prompts", root / "prompts")
     shutil.copy(REPO_ROOT / "model-endpoints.yaml", root / "model-endpoints.yaml")
+    (root / "provenance.yaml").write_text(
+        "paths:\n  - {prefix: 'plans/', frontmatter: required}\nexcluded: []\n", encoding="utf-8"
+    )
+    (root / "scripts").mkdir()
+    for script in (Path(plans_registry.__file__).name, "_verdict.py"):
+        shutil.copy(REPO_ROOT / "scripts" / script, root / "scripts" / script)
 
     home = tmp_path / "home"
     home.mkdir()
@@ -831,6 +837,250 @@ def test_implement_flash_has_file_tools_and_the_complete_contract(world: World) 
     assert [call["argv"] for call in world.calls("make")] == [["verify"]]
     assert git(world.root, "log", "-1", "--pretty=%s") == "feat(demo): implement accepted plan"
     assert git(world.root, "status", "--porcelain") == ""
+
+
+def checking_derived_make(world: World) -> None:
+    """A verifier stand-in that refuses stale generated inputs before recording its call."""
+    checks = """
+if name == "make":
+    import datetime
+    index = Path("plans/INDEX.md").read_text()
+    assert "changes/demo/findings.md" in index, "audit artefact missing from index"
+    assert "updated: " + datetime.date.today().isoformat() in Path("plans/changes/demo/plan.md").read_text()
+"""
+    (world.bin / "make").write_text(
+        STAND_IN.replace("@PYTHON@", sys.executable).replace("record = {", checks + "\nrecord = {"),
+        encoding="utf-8",
+    )
+
+
+def test_first_implement_refreshes_derived_files_without_a_model_repair(world: World) -> None:
+    successful_implementation(world)
+    checking_derived_make(world)
+    assert world.run("implement") == 0
+    assert len(world.calls("claude")) == 1
+    assert len(world.calls("make")) == 1
+    assert "changes/demo/findings.md" in (world.root / "plans/INDEX.md").read_text()
+    assert git(world.root, "status", "--porcelain") == ""
+
+
+def test_preparation_stamps_only_changed_held_documents(world: World) -> None:
+    clean = world.research.read_bytes()
+    unheld = world.root / "src/note.md"
+    unheld.write_text(old_header(), encoding="utf-8")
+    held = world.root / "plans/changes/demo/new.md"
+    held.write_text(old_header() + "\nBody stays verbatim.\n", encoding="utf-8")
+    before = held.read_text()
+    deleted = world.root / "plans/changes/demo/deleted.md"
+    deleted.write_text(old_header(), encoding="utf-8")
+    git(world.root, "add", str(deleted))
+    git(world.root, "commit", "-m", "document to delete")
+    deleted.unlink()
+    duplicate = world.root / "plans/changes/demo/duplicate.md"
+    duplicate.write_text(old_header().replace("updated:", "updated: 2026-09-29\nupdated:", 1))
+    no_header = world.root / "plans/changes/demo/no-header.md"
+    no_header.write_text("# No header\n")
+    before_duplicate = duplicate.read_bytes()
+    world.script(make=[{"stdout": "green"}])
+    stage2.verify_attempt(world.root, world.plan, "")
+    assert held.read_text() == before.replace("updated: 2026-09-29", f"updated: {dt.date.today()}")
+    assert world.research.read_bytes() == clean
+    assert unheld.read_text() == old_header()
+    assert duplicate.read_bytes() == before_duplicate
+    assert no_header.read_text() == "# No header\n"
+    assert not deleted.exists()
+
+
+def test_each_retry_prepares_before_verify_and_keeps_real_failure_diagnostics(world: World) -> None:
+    checking_derived_make(world)
+    world.script(
+        claude=[
+            {"stdout": "first", "append": {"plans/changes/demo/plan.md": "measured first attempt\n"}},
+            {"stdout": "repair", "append": {"plans/changes/demo/plan.md": "measured repair\n"}},
+        ],
+        make=[
+            {"stdout": "actual test failed", "exit": 1, "plant": {"plans/INDEX.md": "stale again\n"}},
+            {"stdout": "green"},
+        ],
+    )
+    assert world.run("implement") == 0
+    assert len(world.calls("make")) == 2
+    assert len(world.calls("claude")) == 2
+    assert "actual test failed" in world.calls("claude")[1]["prompt_file"]
+
+
+def test_renderer_failure_is_bounded_scrubbed_and_prevents_verify(world: World) -> None:
+    # This is a runner failure case, not mutation evidence for the registry's own gate.
+    # Use the imported module's filename: test_ci's source-text heuristic otherwise
+    # counts this file's existing refusal tests as registry mutation coverage.
+    script = world.root / "scripts" / Path(plans_registry.__file__).name
+    script.write_text("import sys\nprint(('" + KEY + "\\n') * 100)\nsys.exit(7)\n")
+    problems = stage2.verify_attempt(world.root, world.plan, "", KEY)
+    assert len(problems) == 1 and "index renderer exited 7" in problems[0]
+    assert KEY not in problems[0] and "[credential]" in problems[0]
+    assert len(problems[0].splitlines()) <= stage2.TAIL_LINES + 1
+    assert world.calls("make") == []
+
+
+@pytest.mark.parametrize("repair_on", [1, 2, None], ids=["flash-repair", "sonnet-fallback", "exhausted"])
+def test_broken_renderer_uses_existing_repair_limits_and_checkpoints_only_after_green(
+    world: World, repair_on: int | None
+) -> None:
+    script = Path("scripts") / Path(plans_registry.__file__).name
+    original = (world.root / script).read_text()
+    baseline = git(world.root, "rev-parse", "HEAD")
+    steps = []
+    for attempt in range(3):
+        step = {
+            "stdout": "implemented",
+            "append": {"plans/changes/demo/plan.md": f"measured attempt {attempt + 1}\n"},
+        }
+        if attempt == 0:
+            step["plant"] = {str(script): "print('renderer broken')\nraise SystemExit(7)\n"}
+        elif attempt == repair_on:
+            step["plant"] = {str(script): original}
+        steps.append(step)
+    world.script(claude=[*steps, {"stdout": "must not run"}], make=[{"stdout": "green"}])
+    checking_derived_make(world)
+    assert world.run("implement") == (1 if repair_on is None else 0)
+    calls = world.calls("claude")
+    assert len(calls) == (3 if repair_on is None else repair_on + 1)
+    assert "index renderer exited 7" in calls[1]["prompt_file"]
+    models = [call["argv"][call["argv"].index("--model") + 1] for call in calls]
+    assert models == ["glm-5.3-flash", "glm-5.3-flash", "claude-sonnet-5-5"][: len(calls)]
+    assert len(world.calls("make")) == (0 if repair_on is None else 1)
+    assert git(world.root, "rev-list", "--count", f"{baseline}..HEAD") == ("0" if repair_on is None else "1")
+
+
+def test_invalid_utf8_preparation_cannot_reach_verify(world: World) -> None:
+    bad = world.root / "plans/changes/demo/bad.md"
+    bad.write_bytes(b"---\nupdated: yesterday\n---\n\xff")
+    before = bad.read_bytes()
+    problems = stage2.verify_attempt(world.root, world.plan, "")
+    assert "not valid UTF-8" in problems[0]
+    assert bad.read_bytes() == before and world.calls("make") == []
+
+
+def test_preparation_collects_all_document_refusals_in_one_bounded_diagnostic(world: World) -> None:
+    outside = world.root.parent / "outside.md"
+    outside.write_text(old_header())
+    directory = world.root / "plans/changes/demo"
+    (directory / "a-link.md").symlink_to(outside)
+    (directory / "b-utf8.md").write_bytes(b"---\nupdated: old\n---\n\xff")
+    (directory / "c-cycle.md").symlink_to(directory / "c-cycle.md")
+    problems = stage2.verify_attempt(world.root, world.plan, "")
+    assert len(problems) == 1
+    for name in ("a-link.md", "b-utf8.md", "c-cycle.md"):
+        assert name in problems[0]
+    assert len(problems[0].splitlines()) <= stage2.TAIL_LINES
+    assert outside.read_text() == old_header() and world.calls("make") == []
+
+
+def test_preparation_refuses_a_document_outside_the_worktree(world: World) -> None:
+    outside = world.root.parent / "outside.md"
+    outside.write_text(old_header())
+    (world.root / "plans/changes/demo/link.md").symlink_to(outside)
+    problems = stage2.verify_attempt(world.root, world.plan, "")
+    assert "outside the worktree" in problems[0]
+    assert outside.read_text() == old_header() and world.calls("make") == []
+
+
+@pytest.mark.parametrize("relative", ["plans/changes/demo/link.md", "plans/INDEX.md"])
+def test_preparation_keeps_clean_targets_of_internal_document_and_index_links_unchanged(
+    world: World, relative: str
+) -> None:
+    target = world.root / "src/untouched.md"
+    target.write_text(old_header())
+    provenance = world.root / "provenance.yaml"
+    provenance.write_text(provenance.read_text().replace("excluded: []", "excluded: ['plans/INDEX.md']"))
+    git(world.root, "add", "-A")
+    git(world.root, "commit", "-m", "clean link target")
+    (world.root / relative).symlink_to(target)
+    problems = stage2.verify_attempt(world.root, world.plan, "")
+    assert any("aliased" in problem for problem in problems)
+    assert target.read_text() == old_header()
+    assert world.calls("make") == []
+
+
+@pytest.mark.parametrize("relative", ["plans/changes/demo/linked.md", "plans/INDEX.md"])
+def test_preparation_refuses_hardlinked_document_and_index(world: World, relative: str) -> None:
+    target = world.root / "src/untouched.md"
+    target.write_text(old_header())
+    linked = world.root / relative
+    if linked.exists():
+        linked.unlink()
+    os.link(target, linked)
+    git(world.root, "add", "-A")
+    git(world.root, "commit", "-m", "clean hardlink targets")
+    world.findings.write_text("# New findings\n")
+    if relative != "plans/INDEX.md":
+        linked.write_text(old_header() + "\nAttempt edit\n")
+    before = target.read_bytes()
+    problems = stage2.verify_attempt(world.root, world.plan, "")
+    assert any("hard-linked" in problem for problem in problems)
+    assert target.read_bytes() == before and world.calls("make") == []
+
+
+@pytest.mark.parametrize("content", ["paths: [null]\n", "paths: [{}]\n", "paths: [3]\n"])
+def test_malformed_provenance_returns_preparation_diagnostics(world: World, content: str) -> None:
+    (world.root / "provenance.yaml").write_text(content)
+    (world.root / "plans/changes/demo/new.md").write_text(old_header())
+    problems = stage2.verify_attempt(world.root, world.plan, "")
+    assert len(problems) == 1 and "Derived-file preparation failed" in problems[0]
+    assert "provenance" in problems[0] and world.calls("make") == []
+
+
+def test_preparation_git_commands_receive_no_caller_credentials(world: World, monkeypatch: pytest.MonkeyPatch) -> None:
+    original_run = stage2.subprocess.run
+    commands = []
+
+    def record(command, *args, **kwargs):
+        if command[0] == "git":
+            commands.append((command, kwargs.get("env")))
+        return original_run(command, *args, **kwargs)
+
+    monkeypatch.setattr(stage2.subprocess, "run", record)
+    assert stage2.prepare_derived(world.root, stage2.foreign_env({})) == []
+    assert len(commands) == 2
+    for command, env in commands:
+        assert env is not None, command
+        for name in ("OPENAI_API_KEY", "GH_TOKEN", "X_SECRET", "ANTHROPIC_AUTH_TOKEN"):
+            assert name not in env
+
+
+def test_preparation_commands_receive_no_model_or_caller_credentials(
+    world: World, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    original_launch = stage2.launch
+    commands = []
+
+    def record(command, root, env, secret=None):
+        commands.append((command, dict(env)))
+        return original_launch(command, root, env, secret)
+
+    monkeypatch.setattr(stage2, "launch", record)
+    successful_implementation(world)
+    assert world.run("implement") == 0
+    renderer_envs = [env for command, env in commands if "--index" in command]
+    assert len(renderer_envs) == 1
+    env = renderer_envs[0]
+    assert KEY not in env.values()
+    for name in ("GLM_KEY", "ANTHROPIC_AUTH_TOKEN", "OPENAI_API_KEY", "GH_TOKEN", "X_SECRET"):
+        assert name not in env
+
+
+def test_git_failure_in_preparation_is_a_bounded_scrubbed_diagnostic(
+    world: World, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    def broken_git(_root, **_kwargs):
+        raise stage2.Refused((KEY + " git failure\n") * 100)
+
+    monkeypatch.setattr(stage2, "changed_paths", broken_git)
+    problems = stage2.verify_attempt(world.root, world.plan, "", KEY)
+    assert len(problems) == 1 and "git failure" in problems[0]
+    assert KEY not in problems[0] and "[credential]" in problems[0]
+    assert len(problems[0].splitlines()) <= stage2.TAIL_LINES
+    assert world.calls("make") == []
 
 
 def test_implement_requires_spec_plan_time_heading_and_no_preexisting_work(world: World) -> None:
