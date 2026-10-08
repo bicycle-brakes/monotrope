@@ -239,3 +239,38 @@ No real commit uses the process-local test signing override.
 Resume: read PR #104 at its current exact head and its hosted checks.
 If green, await the maintainer's explicit merge request; after an authorized
 merge, the tracker owner archives the change and closes the interview bead.
+
+
+### Night checkpoint — 2026-10-08, verification and publication complete
+
+Fresh local `make verify` exited 0 with `VERIFY GREEN`: 1311 passed,
+16 skipped, and the live ruleset gate passed its 90 tests. Only the temporary
+Git fixtures used the process-local signing override; the real commit used
+the repository's configured signing. Local evidence is retained in
+`/tmp/codex_night_interview_verify.log`.
+
+The five-path repair checkpoint was committed and pushed as
+`88102d7a044b57bbdc8a3ff1b637685ecfa0a8d9` on
+`feat/interview-minimums`, PR #104. Both hosted workflows passed their
+Python 3.11 and 3.12 gates and their final `verify` jobs on that exact head;
+the non-applicable drift jobs were skipped. Durable hosted evidence:
+
+- [Push workflow](https://github.com/MPAdesso/coding-harness/actions/runs/37849937311).
+- [Pull-request workflow](https://github.com/MPAdesso/coding-harness/actions/runs/37849943904).
+
+The PR description now explains the repairs and uses the generated touch
+map. The three maintainer-review rows were committed unchanged. This dated
+checkpoint is a documentation-only successor to the verified repair;
+its own hosted CI must also be green before any merge.
+
+No tracker write or merge occurred. The interview bead remains in progress
+under its existing assignee, and the parallel session retains the measurement
+item. No new worktree or agent was started. At the repair checkpoint the
+worktree was clean; this successor records the final evidence in the file.
+
+Resume: inspect the latest head and checks of
+[PR #104](https://github.com/MPAdesso/coding-harness/pull/104), then await the
+maintainer's explicit merge request. After that authorized merge, coordinate
+archival and closure with the existing tracker owner and push tracker data
+before any resulting Git publication. The bounded follow-up measurement
+remains with the other session; do not take it over from this handover.
