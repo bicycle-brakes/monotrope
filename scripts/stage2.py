@@ -909,9 +909,9 @@ def release_loop(root: Path, change: str) -> None:
     release(root, change)
 
 
-def _git_output(root: Path, *args: str, allow: tuple[int, ...] = (0,)) -> str:
+def _git_output(root: Path, *args: str, allow: tuple[int, ...] = (0,), env: dict[str, str] | None = None) -> str:
     done = subprocess.run(
-        ["git", "-C", str(root), *args], capture_output=True, text=True, errors="replace", check=False
+        ["git", "-C", str(root), *args], capture_output=True, text=True, errors="replace", check=False, env=env
     )
     if done.returncode not in allow:
         raise Refused(f"git {args[0]} failed: {done.stderr.strip()[:200]}")
@@ -944,10 +944,10 @@ WORK_READ_TOOLS = "Read,Grep,Glob"
 WORK_WRITE_TOOLS = "Read,Grep,Glob,Edit,Write"
 
 
-def changed_paths(root: Path) -> set[Path]:
+def changed_paths(root: Path, env: dict[str, str] | None = None) -> set[Path]:
     """Tracked changes against HEAD and untracked files, as repository-relative paths."""
-    tracked = _git_output(root, "diff", "--name-only", "-z", "HEAD").split("\0")
-    untracked = _git_output(root, "ls-files", "-z", "--others", "--exclude-standard").split("\0")
+    tracked = _git_output(root, "diff", "--name-only", "-z", "HEAD", env=env).split("\0")
+    untracked = _git_output(root, "ls-files", "-z", "--others", "--exclude-standard", env=env).split("\0")
     return {Path(name) for name in [*tracked, *untracked] if name}
 
 
@@ -1174,8 +1174,66 @@ def red_sections(output: str) -> str | None:
     return "\n".join(kept)
 
 
+def prepare_derived(root: Path, env: dict[str, str], key: str | None = None) -> list[str]:
+    """Stamp only changed, held documents, then render the index before verification.
+
+    Clean documents are not an implementation's repair surface. The existing stamp leaves
+    duplicate or absent headers alone, so the verifier still reports those structural errors.
+    """
+    try:
+        paths, excluded = check_frontmatter_current.load_map(root)
+        if any(not isinstance(entry, dict) or not isinstance(entry.get("prefix"), str) for entry in paths):
+            raise check_frontmatter_current.CannotMeasure("provenance paths must be mappings with string prefixes")
+        errors = []
+        for relative in sorted(changed_paths(root, env=env)):
+            if not check_frontmatter_current.is_held(relative.as_posix(), paths, excluded):
+                continue
+            path = root / relative
+            try:
+                if not path.resolve().is_relative_to(root.resolve()):
+                    raise OSError("refusing a document outside the worktree")
+                if path.resolve() != root.resolve() / relative:
+                    raise OSError("refusing an aliased document path")
+                if path.is_file():
+                    if path.stat().st_nlink > 1:
+                        raise OSError("refusing a hard-linked document path")
+                    check_frontmatter_current.stamp(path, dt.date.today())
+            except (check_frontmatter_current.CannotStamp, OSError, RuntimeError) as error:
+                errors.append(f"{relative}: {error}")
+        if errors:
+            evidence = "\n".join(_shrink("\n".join(errors).splitlines(), TAIL_LINES))
+            return [f"Derived-file preparation failed: {scrub(evidence, key)}"]
+        index = root / "plans" / "INDEX.md"
+        if not index.resolve().is_relative_to(root.resolve()):
+            raise OSError("refusing an index outside the worktree: plans/INDEX.md")
+        if index.resolve() != root.resolve() / "plans" / "INDEX.md":
+            raise OSError("refusing an aliased index path: plans/INDEX.md")
+        if index.exists() and index.stat().st_nlink > 1:
+            raise OSError("refusing a hard-linked index path: plans/INDEX.md")
+        done = launch([sys.executable, "scripts/plans_registry.py", "--index"], root, env, key)
+    except (
+        check_frontmatter_current.CannotMeasure,
+        check_frontmatter_current.CannotStamp,
+        OSError,
+        CallFailed,
+        Refused,
+        RuntimeError,
+        UnicodeError,
+    ) as error:
+        evidence = "\n".join(str(error).splitlines()[-TAIL_LINES:])
+        return [f"Derived-file preparation failed: {scrub(evidence, key)}"]
+    if done.returncode:
+        evidence = "\n".join(((done.stdout or "") + (done.stderr or "")).splitlines()[-TAIL_LINES:])
+        return [f"Derived-file preparation failed: index renderer exited {done.returncode}\n{scrub(evidence, key)}"]
+    return []
+
+
 def verify_attempt(root: Path, plan: Path, baseline_time: str, key: str | None = None) -> list[str]:
-    """Run `make verify` and return bounded diagnostics for failed postconditions: the gates that blocked."""
+    """Stamp changed held documents, render the index, then run `make verify`.
+
+    Preparation writes to the tree and executes its registry renderer. Return bounded
+    diagnostics for failed preparation or postconditions, naming the gates that blocked.
+    """
     env = foreign_env(
         {
             "GIT_CONFIG_COUNT": "1",
@@ -1183,6 +1241,9 @@ def verify_attempt(root: Path, plan: Path, baseline_time: str, key: str | None =
             "GIT_CONFIG_VALUE_0": "false",
         }
     )
+    preparation = prepare_derived(root, env, key)
+    if preparation:
+        return preparation
     done = launch(["make", "verify"], root, env)
     problems = []
     if done.returncode != 0:
