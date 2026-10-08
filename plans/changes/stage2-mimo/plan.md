@@ -206,6 +206,17 @@ declares that entry, so the case now names a rung no entry lists
 asserted. The test fixture copies the production declaration, so a case may
 not depend on what production happens to omit.
 
+`[DETAIL]` 2026-10-08 — the rung ids are no ids of Claude Code's model
+catalog, and its window enforcement refuses such a model before the request
+leaves (the probe's first rung: `[claude-code:unrecognized_model]`, exit 1,
+measured 2026-10-08; `GET /zen/go/v1/models` lists all three ids, so the
+endpoint knows them). The vendor's own message names the variable that
+restores waiting for the API, so the runner sets
+`CLAUDE_CODE_DISABLE_UNKNOWN_MODEL_WINDOW_ENFORCEMENT=1` in every Claude Code
+call's environment; the ids stay exactly as `model-endpoints.yaml` lists
+them, and no settings file is touched (criterion 5). The probe measures the
+address again after this line.
+
 ## Time used
 
 2026-10-08, phase-4 session under the Stage-2 runner — start and end clock

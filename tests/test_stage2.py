@@ -1447,6 +1447,7 @@ def test_the_review_loop_launches_claude_on_the_anthropic_address(world: World) 
     assert "--restricted" in argv and "--strict-mcp-config" in argv
     assert argv[argv.index("--permission-mode") + 1] == "dontAsk"
     assert call["env"]["ANTHROPIC_BASE_URL"] == stage2.OPENCODE_BASE_URL
+    assert call["env"]["CLAUDE_CODE_DISABLE_UNKNOWN_MODEL_WINDOW_ENFORCEMENT"] == "1"
     assert argv[argv.index("--output-format") + 1] == "text"
     assert "--no-session-persistence" in argv
 

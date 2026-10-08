@@ -295,6 +295,12 @@ def claude_env(base_url: str, key: str, config_dir: Path, model: str) -> dict[st
         "ANTHROPIC_API_KEY": key,
         "CLAUDE_CONFIG_DIR": str(config_dir),
         "CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC": "1",
+        # The three rungs are no ids of this Claude Code's model catalog. Without
+        # this the window enforcement refuses such a model before the request is
+        # sent (probe 2026-10-08: `[claude-code:unrecognized_model]`, exit 1); the
+        # vendor's own message names the variable that restores waiting for the
+        # API, which is what the probe measures (spec, criterion 8 and 17).
+        "CLAUDE_CODE_DISABLE_UNKNOWN_MODEL_WINDOW_ENFORCEMENT": "1",
     }
     own.update({name: model for name in MODEL_VARIABLES})
     return foreign_env(own)
