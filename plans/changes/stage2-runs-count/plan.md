@@ -4,7 +4,7 @@ status: draft
 implementation_status: partial
 date: 2026-10-08
 last_reviewed: 2026-10-08
-updated: 2026-10-08
+updated: 2026-10-09
 supersedes: null
 superseded_by: null
 bead: coding-harness-kw0
@@ -64,3 +64,11 @@ fixed at one, any mark counted, `research.md` not read, a blocked call
 counted clean, `--rev` reading the tree, a route without residency counted
 cleared) each turned its test red. Criterion 10 is held by `git diff` of
 the note, not by a test.
+
+2026-10-08 21:42–22:05 UTC, 23 min, orchestrator clock, the GLM loop's
+two rounds included (their wait is not separated). Repairs in that time: loop
+round 1 took L1-1, L1-2, L1-4 and L1-5 (one new test,
+`test_rev_decodes_git_output_as_utf_8_whatever_the_locale`); round 2 took
+L2-1, L2-2 and L2-3 (two new tests, `test_rev_lists_an_archived_folder_name_whole`
+and `test_a_findings_file_that_is_not_utf_8_exits_2_without_a_traceback`),
+twelve tests in all. Each new test went red under its planted fault.

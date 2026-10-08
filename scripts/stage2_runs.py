@@ -162,18 +162,22 @@ class Source:
         return f"tree at `{sha}`" if sha else "tree"
 
     def read(self, path: str) -> str | None:
-        if self.rev is None:
-            target = self.root / path
-            return target.read_text(encoding="utf-8") if target.is_file() else None
-        done = self._git("show", f"{self.rev}:{path}")
+        """The file's text, None when it is not there; a file that is not UTF-8 is refused (loop row L2-2)."""
+        try:
+            if self.rev is None:
+                target = self.root / path
+                return target.read_text(encoding="utf-8") if target.is_file() else None
+            done = self._git("show", f"{self.rev}:{path}")
+        except UnicodeDecodeError as error:
+            raise NotFound(f"{path} is not UTF-8 text; nothing is counted.") from error
         return done.stdout if done.returncode == 0 else None
 
     def children(self, path: str) -> list[str]:
         if self.rev is None:
             target = self.root / path
             return sorted(p.name for p in target.iterdir() if p.is_dir()) if target.is_dir() else []
-        done = self._git("ls-tree", "-d", "--name-only", f"{self.rev}:{path}")
-        return sorted(done.stdout.split()) if done.returncode == 0 else []
+        done = self._git("ls-tree", "-d", "-z", "--name-only", f"{self.rev}:{path}")
+        return sorted(name for name in done.stdout.split("\0") if name) if done.returncode == 0 else []
 
 
 def locate(source: Source, change: str) -> str:

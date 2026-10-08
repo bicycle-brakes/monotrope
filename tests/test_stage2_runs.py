@@ -292,3 +292,34 @@ def test_rev_decodes_git_output_as_utf_8_whatever_the_locale(tmp_path: Path, mon
     source = stage2_runs.Source(tmp_path, "HEAD")
     assert "Prüfung" in source.read("plans/changes/run/findings.md")
     assert seen and set(seen) == {"utf-8"}
+
+
+def test_rev_lists_an_archived_folder_name_whole(tmp_path: Path, capsys) -> None:
+    """Fault: `git ls-tree` output split on blanks, so `old 2026-10-02-run` yields a second match (loop row L2-1)."""
+    make_repo(
+        tmp_path,
+        {
+            "plans/changes/archive/2026-10-01-run": {"findings.md": SIMPLE},
+            "plans/changes/archive/old 2026-10-02-run": {"findings.md": SIMPLE},
+        },
+    )
+    _git(tmp_path, "init", "-q")
+    _git(tmp_path, "add", "-A")
+    _git(tmp_path, "commit", "-q", "-m", "one")
+    for rev in ((), ("--rev", "HEAD")):
+        code, out, err = run(tmp_path, "run", *rev, capsys=capsys)
+        assert code == 0, (rev, err)
+        assert "(`plans/changes/archive/2026-10-01-run`)" in table_row(out, "run")[0]
+
+
+def test_a_findings_file_that_is_not_utf_8_exits_2_without_a_traceback(tmp_path: Path, capsys) -> None:
+    """Fault: an invalid byte raising UnicodeDecodeError out of main, in either mode (loop row L2-2)."""
+    make_repo(tmp_path, {"plans/changes/run": {"findings.md": SIMPLE}})
+    (tmp_path / "plans/changes/run/findings.md").write_bytes(b"# Findings \xff\n")
+    _git(tmp_path, "init", "-q")
+    _git(tmp_path, "add", "-A")
+    _git(tmp_path, "commit", "-q", "-m", "one")
+    for rev in ((), ("--rev", "HEAD")):
+        code, out, err = run(tmp_path, "run", *rev, capsys=capsys)
+        assert (code, out) == (2, ""), rev
+        assert "is not UTF-8 text" in err, rev
