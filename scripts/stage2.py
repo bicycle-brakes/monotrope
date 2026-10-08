@@ -1595,7 +1595,16 @@ def review_loop(root: Path, change: str) -> None:
     diff = change_diff(root)
     body = (root / "prompts" / "04b-review-loop.md").read_text(encoding="utf-8")
     # The request comes before the diff and again after it: a long diff would bury it.
-    prompt = "\n\n".join([body.rstrip(), ANSWER_FORMAT, READ_REQUEST, f"## The diff\n\n{diff}", READ_REQUEST])
+    prompt = "\n\n".join(
+        [
+            body.rstrip(),
+            f"This is round {round_number}; you are `{model}`.",
+            ANSWER_FORMAT,
+            READ_REQUEST,
+            f"## The diff\n\n{diff}",
+            READ_REQUEST,
+        ]
+    )
     begin_call(ctx, "review-loop", (OPENCODE, model, "max"), prompt)
     answer = run_reviewer(ctx, model, prompt, key)
     rows, _ = parse_rows(answer)

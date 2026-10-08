@@ -1,13 +1,11 @@
 # Phase 4b · Review loop
 
-**Model:** deepseek-v4.1-flash — in round 1 only; round 2 is `mimo-v2.6-flash`,
-round 3 `mimo-v2.6-pro`, each the ladder's rung of its round, at effort `max`,
+**Model:** none of its own — the ladder's rung of the round, at effort `max`,
 through Pi against OpenCode Go; started only by
 `python3 scripts/stage2.py review-loop <change>`. The ladder is the ordered
-`modelle` list of the `opencode-go` entry in `model-endpoints.yaml`: round 1
-calls `deepseek-v4.1-flash`, round 2 `mimo-v2.6-flash`, round 3
-`mimo-v2.6-pro` — round *n* calls the *n*-th id, and reordering the list is a
-one-line pull request.
+`modelle` list of the `opencode-go` entry in `model-endpoints.yaml`: round *n*
+calls the *n*-th id, and the runner names that id in the prompt it sends.
+Reordering the list is a one-line pull request; this text names no model.
 **Input:** the change's diff against its merge base with `origin/main`,
 uncommitted changes included, and this text — the runner puts both in the prompt.
 **Result:** rows for the loop record, outside the repository until the phase-6

@@ -103,7 +103,8 @@ tags: [adr, stage-2, opencode-go, pi, reviews]
    phase-2a session. Codex and GLM remain declared endpoints for what still
    routes to them — explore and implement stay on GLM 5.3 Flash.
 3. **The ladder is data, not code.** Round *n* of the loop calls
-   `modelle[n-1]` of the `opencode-go` entry: round 1
+   `modelle[n-1]` of the `opencode-go` entry (the order at this decision;
+   the yaml is the truth and no doctrine text repeats it): round 1
    `deepseek-v4.1-flash`, round 2 `mimo-v2.6-flash`, round 3
    `mimo-v2.6-pro`. Rounds 1 and 2 both run, each still held by an undecided
    row; round 3 starts only when round 2 wrote at least one row whose status

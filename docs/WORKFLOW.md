@@ -621,7 +621,7 @@ list is a one-line pull request that touches nothing else.
 | 1 Explore | **GLM 5.3 Flash** | much input, little output, no deep reasoning; through Claude Code against Z.ai and the runner, for every change |
 | 2a Spec review | **gpt-6.1-sol** | effort `max`, through the Codex CLI and the runner |
 | 4 Implement | **GLM 5.3 Flash** | a worker given a clear plan; through Claude Code against Z.ai and the runner, for every change |
-| 4b Review loop | **deepseek-v4.1-flash** | the ladder: round 1 `deepseek-v4.1-flash`, round 2 `mimo-v2.6-flash`, round 3 `mimo-v2.6-pro` (`modelle[n-1]`), through Pi, effort `max` (Pi clamps it to `high` for both MiMo rungs), round 3 only when round 2 wrote a taken row |
+| 4b Review loop | **the ladder** | the ordered `modelle` list of the `opencode-go` entry in `model-endpoints.yaml`: round *n* calls its *n*-th id (`modelle[n-1]`), through Pi, effort `max` (Pi clamps it to `high` for a rung that takes no `max`), round 3 only when round 2 wrote a taken row |
 | 6 Review | **gpt-6.1-sol** | effort `max`; the same Codex session as 2a, resumed where one was held |
 
 **The two Flash rows are live through the runner.** `explore` starts phase 1
@@ -845,8 +845,7 @@ Beyond the vocabulary of §2, a stage-2 change's `findings.md` carries two
 columns, defined here because the findings template is not in this repository
 yet:
 
-- **`Reviewer`** — the rung that raised the finding (`deepseek-v4.1-flash`,
-  `mimo-v2.6-flash`, `mimo-v2.6-pro`), Codex, or Opus: who raised it.
+- **`Reviewer`** — the rung that raised the finding (an id of the ladder), Codex, or Opus: who raised it.
 - **`Broke a test`** — for each taken row, `yes` when its repair turned a test
   red that was green before it, `no` when it did not. The finding's own new
   test does not count: the evidence rule expects it to be red first.

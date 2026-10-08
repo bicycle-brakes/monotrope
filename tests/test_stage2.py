@@ -2009,6 +2009,7 @@ def test_the_reviewer_prompt_carries_the_loop_prompt_and_the_uncommitted_diff(wo
     assert (REPO_ROOT / "prompts" / "04b-review-loop.md").read_text(encoding="utf-8").rstrip() in prompt
     assert "+value = 2" in prompt and "-value = 1" in prompt
     assert "src/new.py" in prompt and "untracked-content" in prompt
+    assert "This is round 1; you are `deepseek-v4.1-flash`." in prompt
 
 
 def test_a_round_is_written_as_its_rung(world: World) -> None:
@@ -2412,6 +2413,7 @@ def test_a_table_line_a_reviewer_wrote_with_a_loop_id_is_carried_not_refused(
     assert world.run(verb) == 0, capsys.readouterr().err
     if verb == "review-loop":
         assert "## Round 2 — mimo-v2.6-flash, " in world.record().read_text(encoding="utf-8")
+        assert "This is round 2; you are `mimo-v2.6-flash`." in world.calls("pi")[-1]["prompt_file"]
         return
     text = world.text()
     assert "| L1-1 | still open from the last round |" in text.splitlines()
@@ -2515,7 +2517,7 @@ STAGE2_ROUTING = {
     "1 Explore": "GLM 5.3 Flash",
     "2a Spec review": "gpt-6.1-sol",
     "4 Implement": "GLM 5.3 Flash",
-    "4b Review loop": "deepseek-v4.1-flash",
+    "4b Review loop": "the ladder",
     "6 Review": "gpt-6.1-sol",
 }
 
@@ -2549,19 +2551,13 @@ def test_workflow_section_4_routes_the_three_reviews() -> None:
     assert routing_problems(text) == []
     assert class_table_problems(text) == []
     four = routing_rows(section(text, "## 4 · "))
-    for needle in (
-        "round 1 `deepseek-v4.1-flash`",
-        "round 2 `mimo-v2.6-flash`",
-        "round 3 `mimo-v2.6-pro`",
-        "modelle[n-1]",
-        "round 3 only when round 2 wrote a taken row",
-    ):
+    for needle in ("model-endpoints.yaml", "modelle[n-1]", "round 3 only when round 2 wrote a taken row"):
         assert needle in four["4b Review loop"][1], needle
     for phase in ("2a Spec review", "6 Review"):
         assert four[phase][0] == "gpt-6.1-sol", phase
     for old, new in (
         ("| 2a Spec review | **gpt-6.1-sol** |", "| 2a Spec review | **Opus 5.5** |"),
-        ("| 4b Review loop | **deepseek-v4.1-flash** |", "| 4b Review loop | **GLM 5.3** |"),
+        ("| 4b Review loop | **the ladder** |", "| 4b Review loop | **GLM 5.3** |"),
         ("| 6 Review | **gpt-6.1-sol** |", "| 6 Review | **Opus 5.5** |"),
         ("| 1 Explore | **GLM 5.3 Flash** |", "| 1 Explore | **Haiku 4.5** |"),
         ("| 4 Implement | **GLM 5.3 Flash** |", "| 4 Implement | **Sonnet 5.5** |"),
@@ -3033,6 +3029,17 @@ def test_section_4_caveat_names_each_client() -> None:
     assert caveat_problems(
         one.replace("each runs through its own client:", "through Claude Code, the program the vendors list,")
     )
+
+
+def test_no_doctrine_text_repeats_the_ladder_order() -> None:
+    """The ladder is data: a reorder of the list in model-endpoints.yaml leaves every doctrine text true."""
+    ladder = yaml.safe_load((REPO_ROOT / "model-endpoints.yaml").read_text(encoding="utf-8"))["endpunkte"]
+    ids = next(e for e in ladder if e["name"] == "opencode-go")["modelle"]
+    assert len(ids) == 3
+    for path in ("AGENTS.md", "docs/WORKFLOW.md", "prompts/04b-review-loop.md"):
+        text = (REPO_ROOT / path).read_text(encoding="utf-8")
+        for model in ids:
+            assert model not in text, f"{path} names {model}; the ladder lives in model-endpoints.yaml only"
 
 
 def test_the_stop_rule_counts_every_rung() -> None:
