@@ -44,11 +44,16 @@ import stage2  # noqa: E402
 GIT = shutil.which("git")  # resolved before any test narrows the PATH
 
 KEY = "sk-zq7Hk2mVw9Xr4Tn8Lb3Pd6Jc1Fy5Ga0"
-OKEY = "ok-7Rt2Wm9xQb4Nv6Lc"
 LEAK = "LEAKMARK-123456"
 DENYLIST = "planted = LEAKMARK-[0-9]{6}\n"
 SETTINGS = REPO_ROOT / ".claude" / "settings.json"
 VERDICT = "Phase 6 verdict: codex T1, 2026-09-30"
+
+# The planted OpenCode key keeps its distance from the planted GLM key above: an
+# inserted line beside that one pulls it into every diff's context, the loop's
+# prompt carries the diff, and the leak check rightly refuses key-shaped text
+# there (measured 2026-10-08, prompt line 3647).
+OKEY = "ok-7Rt2Wm9xQb4Nv6Lc"
 
 # A stand-in: one template for both programs, the standard library only.
 STAND_IN = """#!@PYTHON@
