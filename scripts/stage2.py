@@ -1100,8 +1100,82 @@ def credential_message(exposed: list[Path]) -> str:
     return f"the GLM credential occurred in changed files and was removed ({listing}); no fallback starts."
 
 
+RED_SECTION_LINES = 60
+RED_TOTAL_LINES = 200
+TAIL_LINES = 80
+GATE_START = re.compile(r"^── \[(?P<gate>[^\]]+)\] \$ ")
+# Any frame line of the open gate that is not a start ends it, whatever its verdict is spelled (loop row L2-1).
+GATE_END = re.compile(r"^── \[(?P<gate>[^\]]+)\] (?!\$ )(?P<verdict>.+)")
+STDERR_LINES = 40
+
+
+def _frame_lines(output: str) -> list[str]:
+    """The output's lines, with a frame split off a line it was printed onto (phase 6, F-3).
+
+    `verify_all.sh` echoes a gate's closing frame right after the gate's output; when that output ends without
+    a newline, the frame lands on the same line.
+    """
+    found: list[str] = []
+    for line in output.splitlines():
+        cut = line.rfind("── [")
+        if cut > 0 and (GATE_START.match(line[cut:]) or GATE_END.match(line[cut:])):
+            found += [line[:cut], line[cut:]]
+        else:
+            found.append(line)
+    return found
+
+
+def _shrink(body: list[str], limit: int) -> list[str]:
+    """A section of at most `limit` lines, marker included: its start frame, the marker, its last lines."""
+    if len(body) <= limit:
+        return body
+    return [body[0], f"[… {len(body) - limit + 1} lines of this gate left out …]", *body[-(limit - 2) :]]
+
+
+def red_sections(output: str) -> str | None:
+    """The sections of the gates `verify_all.sh` framed `RED (block)`, bounded, in run order - or None.
+
+    A repair attempt needs the gate that blocked. The log's tail is the report-only gates (docs-links,
+    markdownlint), thousands of lines after a pytest failure (bead coding-harness-zci). The red gates share
+    the budget: each keeps its start frame, its last lines and its RED line, markers count against the bounds
+    (phase 6, F-1 and F-2).
+    """
+    lines = _frame_lines(output)
+    # The gates run one after another: a frame line counts only as the open gate's end or, with none open, as
+    # the next gate's start - a frame quoted inside a gate's own output opens or closes nothing.
+    open_gate: tuple[str, int] | None = None
+    sections: list[list[str]] = []
+    for index, line in enumerate(lines):
+        if open_gate is None:
+            start = GATE_START.match(line)
+            if start:
+                open_gate = (start["gate"], index)
+            continue
+        end = GATE_END.match(line)
+        if not end or end["gate"] != open_gate[0]:
+            continue
+        begin, open_gate = open_gate[1], None
+        if end["verdict"].startswith("RED (block)"):
+            sections.append(lines[begin : index + 1])
+    if not sections:
+        return None
+    room = RED_TOTAL_LINES
+    if len(sections) * 3 > room:
+        # More red gates than three lines each can hold: the first ones, and one line saying how many follow.
+        shown = (room - 1) // 3
+        dropped = len(sections) - shown
+        sections, room = sections[:shown], room - 1
+    else:
+        dropped = 0
+    share = min(RED_SECTION_LINES, room // len(sections))
+    kept = [line for body in sections for line in _shrink(body, share)]
+    if dropped:
+        kept.append(f"[… {dropped} more red gate sections left out …]")
+    return "\n".join(kept)
+
+
 def verify_attempt(root: Path, plan: Path, baseline_time: str, key: str | None = None) -> list[str]:
-    """Run the one gate and return bounded diagnostics for failed postconditions."""
+    """Run `make verify` and return bounded diagnostics for failed postconditions: the gates that blocked."""
     env = foreign_env(
         {
             "GIT_CONFIG_COUNT": "1",
@@ -1112,8 +1186,20 @@ def verify_attempt(root: Path, plan: Path, baseline_time: str, key: str | None =
     done = launch(["make", "verify"], root, env)
     problems = []
     if done.returncode != 0:
-        tail = scrub("\n".join(((done.stdout or "") + (done.stderr or "")).splitlines()[-80:]), key)
-        problems.append(f"`make verify` exited {done.returncode}\n{tail}".rstrip())
+        output = (done.stdout or "") + (done.stderr or "")
+        # verify_all.sh frames gates on standard output; a gate's standard error arrives unframed after them.
+        red = red_sections(done.stdout or "")
+        if red is None:
+            evidence = "\n".join(output.splitlines()[-TAIL_LINES:])
+        else:
+            evidence = "The gates that blocked, each with its last lines:\n" + red
+            errors = (done.stderr or "").splitlines()
+            if errors:
+                # Unframed: the last lines of the whole run's standard error, not of the blocking gate alone.
+                cut = len(errors) - STDERR_LINES
+                kept = ([f"[… {cut} earlier lines left out …]"] if cut > 0 else []) + errors[-STDERR_LINES:]
+                evidence += "\n\nStandard error of the whole run, last lines:\n" + "\n".join(kept)
+        problems.append(f"`make verify` exited {done.returncode}\n{scrub(evidence, key)}".rstrip())
     try:
         current_time = time_log(plan)
     except Refused as error:
