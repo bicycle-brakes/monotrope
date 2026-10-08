@@ -42,7 +42,7 @@ Pre-mortem:  suppose it failed: most likely because verify_all.sh renames its fr
 
 ## Time used
 
-2026-10-08 22:36–22:41 UTC, 5 min, orchestrator clock (Claude Code with
+2026-10-07 22:36–22:41 UTC, 5 min, orchestrator clock (Claude Code with
 Anthropic, Opus 5.5): `red_sections`, the criterion tests, five planted
 faults each turned its test red, `make verify` green. The research, spec and
 plan before 22:36 were not clocked.
