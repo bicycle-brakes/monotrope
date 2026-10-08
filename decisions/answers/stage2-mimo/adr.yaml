@@ -17,7 +17,11 @@ reason: The OpenCode Go ladder (DeepSeek V4.1 Flash -> MiMo-V2.6-Flash -> MiMo-V
   opencode go nutze ich den opencode cli harness", Claude Code session of
   2026-10-08), after three calls through Claude Code at OpenCode Go's
   Anthropic address were refused, so the loop's rounds start through
-  `opencode run`, not through Claude Code.
+  `opencode run`, not through Claude Code. Later on 2026-10-08 the maintainer
+  replaced that launcher with Pi ("ich möchte pi nutzen", Claude Code session
+  of 2026-10-08, pinned @earendil-works/pi-coding-agent 1.1.0), after the
+  installed OpenCode 2.0.24 was measured not to load the runner-supplied
+  policy file that 1.18.35 loads, so the loop's rounds start through `pi`.
 shown:
   proposed: 'yes'
   proposal_reason: it widens where framework content may flow, which ADR 0007 limits
