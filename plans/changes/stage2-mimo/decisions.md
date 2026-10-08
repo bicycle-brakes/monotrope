@@ -457,3 +457,12 @@ Anthropic one): the rounds go to `https://opencode.ai/zen/go/v1/chat/completions
 the address Pi's built-in `opencode-go` provider uses for all three rungs and
 the one OpenCode's Go page lists for them; the three refused calls at
 `https://opencode.ai/zen/go/v1/messages` of the same day are the reason.
+
+**Terms risk** (maintainer, 2026-10-08, answer "annehmen"): the residual risk
+of OpenCode's terms is accepted. Read the same day: the Go page ("Last
+updated: Oct 8, 2026") lists Pi among the validated clients; the terms of
+service (effective Aug 15, 2026) do not mention third-party clients and forbid
+processes that "automatically or programmatically extracts data or Output"
+and that run "while you are not logged into the Services". The reading and
+its date go into the `bemerkung` of the `opencode-go` entry in
+`model-endpoints.yaml`, so a later change of the terms can be held against it.
