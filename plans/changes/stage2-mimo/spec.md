@@ -62,8 +62,8 @@ as it stands there.
   address and were refused; the probe is run again through Pi. If OpenCode
   Go refuses a rung, that is criterion 17: the run stops and is reported.
 - **This change's own spec review (2a) and review (6) run on Codex.** Where
-  its own review loop (4b) runs before the merge is the open `[DECISION]`
-  below; no step before the loop depends on it.
+  its own review loop (4b) runs before the merge was answered "1" on 2026-10-08
+  (the ladder through Pi, after the probe; see below).
 - The key is already in the secrets file (`OPENCODE_GO_KEY`, name checked
   2026-10-07, value never read by an agent). Nothing in this change reads,
   writes or names its value.
@@ -489,51 +489,16 @@ Beyond the non-goals: none.
 - Special runs: the compatibility probe through Pi (three calls through the
   runner, one per rung, declaration and leak check in front of each), its
   commit and three lines in the pull request body — and this change's own
-  loop only as the open `[DECISION]` below decides.
+  loop, at most three rounds (answered "1", 2026-10-08).
 
 ## Open decisions
 
-### `[DECISION]` — where this change's own review loop runs before the merge
+### Answered: where this change's own review loop runs before the merge
 
-The spec said "GLM for 4b" until `3af0c9c`, which changed it to "the
-ladder"; your answer "1" of 2026-10-07 and ADR 0011 say the probe is the only
-content that leaves for OpenCode Go before the merge; one review-loop call
-already went there on 2026-10-08 (research §S). No answer of yours covers
-it.
-
-```text
-Goal in one sentence:  Before you merge this change, may its own review loop
-                       send its diff to OpenCode Go, or only the probe?
-Options:
-  1. The ladder, through Pi, after the probe.
-                       Up to three more calls carry this change's diff to
-                       OpenCode Go before your merge makes ADR 0011
-                       effective — beyond the probe you allowed; in return
-                       the new loop is shown working end to end before you
-                       decide on it.
-  2. GLM, as main routes the loop today.
-                       Only the probe goes to OpenCode Go before the merge,
-                       as recorded; the diff goes to Z.ai, which ADR 0007
-                       already allows; the round is started with main's
-                       runner against this worktree; the new loop first runs
-                       on the next change.
-  3. No foreign loop for this change.
-                       Nothing leaves but the probe; Opus 5.5 reviews in 4b
-                       and Codex in phase 6; no lineage of the ladder sees
-                       this change before the merge.
-Recommendation:        Option 1 — the probe already sends to the same
-                       endpoint under the same declaration and leak check,
-                       and a loop shown working is the evidence the decision
-                       pull request otherwise lacks.
-If you say "ok":       the order of work and ADR 0011 (decision 7, the first
-                       consequence) say "the probe and this change's own
-                       loop, at most three rounds", and phase 4 runs
-                       `review-loop stage2-mimo` from this branch after the
-                       probe.
-What is lost:          Option 2 keeps your rule of 2026-10-07 that only the
-                       probe leaves before the merge, at the price of a GLM
-                       round that shows nothing about the new launcher.
-```
+The maintainer answered "1" on 2026-10-08 (`decisions.md`, addendum of the
+afternoon): the ladder, through Pi, after the probe. Up to three rounds carry
+this change's diff to OpenCode Go before the merge; ADR 0011 decision 7 says
+so. No `[DECISION]` is open.
 
 ### `[GAP]`s
 

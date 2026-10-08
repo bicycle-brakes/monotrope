@@ -259,9 +259,11 @@ tags: [adr, stage-2, opencode-go, pi, reviews]
 7. **The address is measured before anything builds on it.** Three calls,
    one per rung, run through the runner and Pi in phase 4 of the change that
    carries this record — declaration and leak check in front of each, as one
-   special run whose commits are named in the pull request body. That is the
-   only content leaving before the merge, and the maintainer accepted it on
-   2026-10-07. If OpenCode Go refuses an id, the run stops and reports it:
+   special run whose commits are named in the pull request body. After the
+   probe, the change's own review loop runs on the ladder, at most three
+   rounds. The probe and that loop are the only content leaving before the
+   merge: the maintainer accepted the probe on 2026-10-07 and the loop on
+   2026-10-08. If OpenCode Go refuses an id, the run stops and reports it:
    no second address, no second launcher, no substituted model.
 8. **The terms risk is accepted.** The Go page invites "other coding agents"
    and lists Pi as validated; the terms of service do not address

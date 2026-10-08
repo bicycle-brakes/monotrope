@@ -466,3 +466,9 @@ processes that "automatically or programmatically extracts data or Output"
 and that run "while you are not logged into the Services". The reading and
 its date go into the `bemerkung` of the `opencode-go` entry in
 `model-endpoints.yaml`, so a later change of the terms can be held against it.
+
+**This change's own loop before the merge** (maintainer, 2026-10-08, answer
+"1" to the spec's open question): after the probe, this change's own review
+loop runs on the ladder through Pi, at most three rounds. With the probe it is
+the only content leaving for OpenCode Go before the merge; ADR 0011 decision 7
+says so. The answer of 2026-10-07 (probe only) is widened by this one.

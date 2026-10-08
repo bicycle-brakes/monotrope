@@ -34,8 +34,8 @@ file stand as built at `3af0c9c`; what changes is the launcher, the address
 and what follows from them. Stage 1: the one route on record is the
 implement fallback below ("Runner route"); nothing to carry from phase 1.
 
-**Before step 8:** the open `[DECISION]` of `spec.md` (where this change's
-own loop runs before the merge). Steps 1–7 do not depend on it.
+**Before step 8:** answered — this change's own loop runs on the ladder
+through Pi after the probe (maintainer, "1", 2026-10-08).
 
 ## Steps
 
@@ -101,12 +101,11 @@ own loop runs before the merge). Steps 1–7 do not depend on it.
    last green commit of steps 1–6. The three output lines and that commit go
    into the pull request body. A refusal stops phase 4 and is reported
    (criterion 17); no step after this one runs on a refused rung.
-8. **The loop (4b)**, as the open `[DECISION]` answers: option 1 —
+8. **The loop (4b)**, as the maintainer answered on 2026-10-08 (option 1) —
    `python3 scripts/stage2.py review-loop stage2-mimo` round by round,
    every row decided in the loop record, each taken row repaired, `make
    verify` green before the next round, round 3 only after a taken row of
-   round 2; option 2 — the same verb from the main checkout's runner with
-   `--root` on this worktree; option 3 — Opus 5.5 reviews the diff.
+   round 2.
 9. **Phases 5 and 6.** `make verify` green; then `python3
    scripts/stage2.py review stage2-mimo` (Codex resumes session
    `01a116db-602e-73e2-bbee-d11f961debe4`), which writes the verdict,
