@@ -395,14 +395,26 @@ def test_the_opencode_go_remark_names_every_source() -> None:
     assert "Claude Code" not in remark and "native session header" not in remark
 
 
+def _remark_problems(codex: str, glm: str) -> list[str]:
+    """What criterion 3 requires of the two old reviewer remarks, as the problems found."""
+    problems = []
+    if "Used for the spec review (phase 2a) and the review (phase 6)" not in codex:
+        problems.append("codex: the phases still routed to it")
+    if "the review loop (phase 4b) moved to `opencode-go`" not in codex:
+        problems.append("codex: the loop's move")
+    if "No review phase routes to it" not in glm:
+        problems.append("glm: no review phase")
+    if "the review loop (phase 4b) moved to `opencode-go`" not in glm:
+        problems.append("glm: the loop's move")
+    if not ("stage2.py explore" in glm and "stage2.py implement" in glm):
+        problems.append("glm: the work verbs")
+    return problems
+
+
 def test_no_old_reviewer_remark_claims_a_review_phase() -> None:
     """Criterion 3: each old entry says which phases, if any, still route to it."""
     codex = " ".join(_endpunkt("openai-codex")["bemerkung"].split())
     glm = " ".join(_endpunkt("glm-coding-plan")["bemerkung"].split())
-    assert "Used for the spec review (phase 2a) and the review (phase 6)" in codex
-    assert "the review loop (phase 4b) moved to `opencode-go`" in codex
-    assert "No review phase routes to it" in glm
-    assert "the review loop (phase 4b) moved to `opencode-go`" in glm
-    assert "stage2.py explore" in glm and "stage2.py implement" in glm
+    assert _remark_problems(codex, glm) == []
     planted = codex.replace("the review loop (phase 4b) moved to `opencode-go`", "runs every review as before")
-    assert "moved to `opencode-go`" not in planted
+    assert _remark_problems(planted, glm) == ["codex: the loop's move"]

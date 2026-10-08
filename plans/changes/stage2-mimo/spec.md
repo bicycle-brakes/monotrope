@@ -363,8 +363,8 @@ recording program the tests put on `PATH` in the callee's place (`pi`,
 
 ### Added with the launcher (2026-10-08)
 
-27. **The pinned Pi or none.** Before the leak check of a `review-loop` or
-    `probe` call, the runner runs `pi --version`; if it cannot start, ends
+27. **The pinned Pi or none.** Once per `review-loop` or `probe` run, before
+    its first leak check, the runner runs `pi --version`; if it cannot start, ends
     non-zero, takes longer than 30 seconds or prints anything but the pinned
     version (`1.1.0`, one named constant), the runner refuses with exit 2:
     no leak check, no call line, no call.

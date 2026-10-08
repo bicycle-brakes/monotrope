@@ -185,10 +185,11 @@ tags: [adr, stage-2, opencode-go, pi, reviews]
 
 ## Consequences
 
-* **Nothing leaves before the merge except the probe.** The three probe calls
-  of phase 4 are the only foreign calls to OpenCode Go before the merge, and
-  the maintainer accepted them explicitly on 2026-10-07; every other call is
-  a stage-2 run after the merge. Until then `main` routes as ADR 0007 says:
+* **Nothing leaves before the merge except the probe and this change's own
+  loop.** The three probe calls of phase 4 and this change's own review loop
+  (at most three rounds) are the only foreign calls to OpenCode Go before the
+  merge; the maintainer accepted the probe on 2026-10-07 and the loop on
+  2026-10-08. Every other call is a stage-2 run after the merge. Until then `main` routes as ADR 0007 says:
   spec review and review on Codex, the loop on GLM, exploration and
   implementation on GLM 5.3 Flash.
 * **A rule, not proof, at three places.** The address accepting the three

@@ -133,7 +133,8 @@ a small change.
 and another does not *is* the information; netting it into one verdict throws it
 away.
 
-**The evidence rule.** A Codex or GLM finding is taken only when a test
+**The evidence rule.** A finding of Codex or of a rung of the review loop is
+taken only when a test
 demonstrates it or the spec supports it; otherwise it is rejected with its
 reason and stays in `findings.md` as a disagreement. This holds in every repair
 round, so a finding about something the spec does not cover needs a test, or it

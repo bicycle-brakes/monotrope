@@ -132,9 +132,10 @@ raise SystemExit(step.get("exit", 0))
 """
 
 
-def claude_ok(session: str, answer: str, **more: object) -> dict:
-    """A reviewer step that succeeds: the JSON result carries the session id and the answer."""
-    return {"stdout": json.dumps({"type": "result", "session_id": session, "result": answer}), **more}
+def codex_ok(thread: str, answer: str, **more: object) -> dict:
+    """A Codex step that succeeds: a `thread.started` event and the answer file."""
+    started = json.dumps({"type": "thread.started", "thread_id": thread})
+    return {"stdout": started + '\n{"type": "turn.completed"}\n', "answer": answer, **more}
 
 
 def rows(count: int, prefix: str = "X") -> str:
@@ -1799,20 +1800,6 @@ def test_an_answer_that_is_not_rows_is_kept(world: World) -> None:
     assert "An opening remark." in world.text() and stage2.NOT_ROWS_NOTE in world.text()
     assert world.run("spec-review") == 0
     assert "No finding at all." in world.text() and "Codex reported no finding." in world.text()
-
-
-@pytest.mark.parametrize(
-    "step",
-    [
-        {"stdout": '{"type": "turn.completed"}\n', "answer": rows(1)},
-        {"stdout": json.dumps({"type": "thread.started", "thread_id": "T9"}) + "\n", "answer": rows(1), "exit": 1},
-    ],
-    ids=["no-thread-event", "non-zero-exit"],
-)
-def codex_ok(thread: str, answer: str, **more: object) -> dict:
-    """A Codex step that succeeds: a `thread.started` event and the answer file."""
-    started = json.dumps({"type": "thread.started", "thread_id": thread})
-    return {"stdout": started + '\n{"type": "turn.completed"}\n', "answer": answer, **more}
 
 
 def test_the_spec_review_answer_lands_as_codex_rows_with_its_session(world: World) -> None:

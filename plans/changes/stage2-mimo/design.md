@@ -74,8 +74,8 @@ Five boundaries carry something across in this change.
   answer and 1 on a provider's error status, nothing written to the
   worktree. Promised by the runner: a call that has not ended in 30 minutes
   is stopped (criterion 15).
-- **Runner → `pi --version`.** Before the leak check of each `review-loop`
-  or `probe` call. Passed: no key, a scratch home and configuration
+- **Runner → `pi --version`.** Once per `review-loop` or `probe` run,
+  before its first leak check. Passed: no key, a scratch home and configuration
   directory. Promised: the pinned version on standard output within 30
   seconds, or the runner refuses (criterion 27).
 - **Runner → `model-endpoints.yaml`.** Unchanged: `declaration_problem`
@@ -307,10 +307,11 @@ tags: [adr, stage-2, opencode-go, pi, reviews]
 
 #### Consequences
 
-* **Nothing leaves before the merge except the probe.** The three probe calls
-  of phase 4 are the only foreign calls to OpenCode Go before the merge, and
-  the maintainer accepted them explicitly on 2026-10-07; every other call is
-  a stage-2 run after the merge. Until then `main` routes as ADR 0007 says:
+* **Nothing leaves before the merge except the probe and this change's own
+  loop.** The three probe calls of phase 4 and this change's own review loop
+  (at most three rounds) are the only foreign calls to OpenCode Go before the
+  merge; the maintainer accepted the probe on 2026-10-07 and the loop on
+  2026-10-08. Every other call is a stage-2 run after the merge. Until then `main` routes as ADR 0007 says:
   spec review and review on Codex, the loop on GLM, exploration and
   implementation on GLM 5.3 Flash.
 * **A rule, not proof, at three places.** The address accepting the three
