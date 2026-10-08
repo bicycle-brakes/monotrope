@@ -2,7 +2,7 @@
 title: "Design — stage2-mimo"
 category: design
 created: 2026-10-07
-updated: 2026-10-07
+updated: 2026-10-08
 status: draft
 implementation_status: none
 date: 2026-10-07
@@ -241,10 +241,19 @@ tags: [adr, stage-2, opencode-go, reviews]
   paths would stay, the ladder could not be one list, and the maintainer's
   decision would not be met; criterion 8's "no verb of the runner starts the
   Codex CLI" refutes it outright.
+* **An OpenCode product other than Go.** Zen serves other models over its
+  own addresses, and Go Plus is the second Go plan with higher monthly
+  caps; either keeps the launcher and changes only the billing. Chosen
+  against: the maintainer named Go, and the entry's billing and limits are
+  the Go plan's — another product needs its own entry and its own terms.
 * **OpenCode's own CLI as the launcher.** Symmetric with today's Codex CLI —
   a binary, an ask rule, a resumable thread — but the vendor documents
   Claude Code, and an own integration reopens the subscription-coverage
   question `model-endpoints.yaml` records for Z.ai.
+* **The model of round 2.** `mimo-v2.6-pro` in round 2 and again in round 3
+  would give the third round nothing new over the second; the maintainer
+  answered "runde 2 flash" on 2026-10-07 (`decisions.md`, `[DECISION] 1`),
+  so round 2 is `mimo-v2.6-flash`.
 * **The OpenAI address instead of the Anthropic one.** The vendor lists it
   too; it is kept as a remark and measured, never as a path, because a
   fallback is what criterion 17 forbids.

@@ -2,12 +2,18 @@ schema_version: 1
 change: stage2-mimo
 question: adr
 answer: 'yes'
-reason: Xiaomi becomes a further foreign endpoint for Coding Harness content; ADR
-  0007 is widened in its own text to cover it, including the Token Plan's terms risk.
+reason: Every review — 2a, 4b and 6 — runs through OpenCode Go in rounds (round
+  1 DeepSeek V4.1 Flash, round 2 MiMo-V2.6-Flash, round 3 only when needed
+  MiMo-V2.6-Pro), on an ordered list in model-endpoints.yaml that a one-line
+  pull request reorders; ADR 0007 is widened in its own text to cover it.
+  Stated 2026-10-07 as "yes — widen ADR 0007" and, the same session, "ich
+  möchte mimo über opencode go anbinden"; it replaces the earlier Xiaomi
+  wording of this answer (Xiaomi direct, Token Plan), which the OpenCode Go
+  decision supersedes.
 shown:
   proposed: 'yes'
   proposal_reason: it widens where framework content may flow, which ADR 0007 limits
-    to Codex and GLM and nowhere else, to a third vendor, Xiaomi, chosen over OpenRouter,
-    and extends to that vendor the unconfined reads ADR 0007 accepted for its reviewers
+    to Codex and GLM and nowhere else, to the three models OpenCode Go serves for
+    reviews, and takes Codex and GLM out of the reviewer roles ADR 0007 names
 answered_by: framework-architect
 answered_at: 2026-10-07

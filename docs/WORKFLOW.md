@@ -4,7 +4,7 @@ category: governance
 status: current
 created: 2026-09-05
 last_reviewed: 2026-09-29
-updated: 2026-10-07
+updated: 2026-10-08
 owner: Data Architect
 provenance: ai-drafted-reviewed
 produced_by:
@@ -84,7 +84,7 @@ handover to the next phase — not the chat history.**
 | 2b | Design *(by class)* | `plans/changes/<name>/design.md` | validator green; for an `architectural` change, an ADR draft in it | [`02b-design.md`](../prompts/02b-design.md) |
 | 3 | Plan | `plans/changes/<name>/plan.md` | validator green | [`03-plan.md`](../prompts/03-plan.md) |
 | 4 | Implement | code + tests | `make verify` green | [`04-implement.md`](../prompts/04-implement.md) |
-| 4b | Review loop *(stage 2)* | the loop rows — outside the repository until the phase-6 verdict, then in `findings.md` (`release-loop`) | at most two rounds; `make verify` green after each repair | [`04b-review-loop.md`](../prompts/04b-review-loop.md) |
+| 4b | Review loop *(stage 2)* | the loop rows — outside the repository until the phase-6 verdict, then in `findings.md` (`release-loop`) | at most three rounds — round 3 only when round 2 wrote a taken row; `make verify` green after each repair | [`04b-review-loop.md`](../prompts/04b-review-loop.md) |
 | 5 | Verify | test output as evidence | the stop hook blocks on a red tree | [`05-verify.md`](../prompts/05-verify.md) |
 | 6 | Review | `plans/changes/<name>/findings.md` | no open `[AMBIGUITY]`, no open BLOCKER — `[DIVERGENT]` counts as a BLOCKER | [`06-review.md`](../prompts/06-review.md) |
 | 7 | Commit | pull request | CI green | [`07-commit.md`](../prompts/07-commit.md) |
@@ -389,19 +389,19 @@ none, because the registry keeps counting it as protection.
 | 1 Explore | **Haiku 4.5** | much input, little output, no deep reasoning; where the runner starts the phase (§4), GLM 5.3 Flash explores instead |
 | 1a Interview | **Opus 5.5** | the questions are the work, and there are few of them |
 | 2 Spec | **Opus 5.5** | effort `xhigh`; the highest reasoning demand, little output |
-| 2a Spec review | **Opus 5.5** | a fresh context that does not know the author's reasoning; a `bounded`, `feature` or `architectural` change goes to Codex (§4) |
+| 2a Spec review | **Opus 5.5** | a fresh context that does not know the author's reasoning; a `bounded`, `feature` or `architectural` change goes to the ladder's rung 1 (§4) |
 | 2b Design | **Opus 5.5** | effort `xhigh`; the same demand as spec and plan |
 | 3 Plan | **Opus 5.5** | effort `xhigh`; an error here is the most expensive in the whole run |
 | 4 Implement | **Sonnet 5.5** | effort `medium`; a solid worker given a clear plan; where the runner starts the phase (§4), GLM 5.3 Flash builds instead |
 | 5 Verify | — | deterministic |
-| 6 Review | **Opus 5.5** | finds what Sonnet misses, and reads the code a change calls instead of trusting its docstring; a `bounded`, `feature` or `architectural` change goes to Codex (§4) |
+| 6 Review | **Opus 5.5** | finds what Sonnet misses, and reads the code a change calls instead of trusting its docstring; a `bounded`, `feature` or `architectural` change goes to the ladder's rung 1 (§4) |
 | 7 Commit | **Haiku 4.5** | cheap and sufficient |
 
 **No Fable** (maintainer, 2026-10-06): no phase runs on Fable 5.1; Opus 5.5
 takes its places — the interview, the escalation below and the fallback of
 stage 2 (§4). **Where stage 2 applies (§4), four rows leave this table:** the
-reviews of a `bounded`, `feature` or `architectural` change go to Codex, and
-explore and implement go to GLM 5.3 Flash. The rows above stay what runs
+reviews of a `bounded`, `feature` or `architectural` change go to the ladder's
+rung 1, and explore and implement go to GLM 5.3 Flash. The rows above stay what runs
 wherever the runner does not start a phase — a `spike`'s reviews, and every
 phase until the runner starts it.
 
@@ -416,11 +416,12 @@ from its definition's frontmatter (`effort: xhigh`), not from the call that
 starts it, and a new definition is read only when a session starts.
 
 **Spec review and review on Opus 5.5, except the `bounded`, `feature` and
-`architectural` changes that §4 routes to Codex** (maintainer, 2026-09-30 and
-2026-10-06, for the whole repository). From 2026-09-29 both ran on Fable 5.1,
+`architectural` changes that §4 routes to the ladder's rung 1** (maintainer,
+2026-09-30 and 2026-10-06, for the whole repository; ADR 0011, 2026-10-07,
+moves those reviews from Codex to OpenCode Go). From 2026-09-29 both ran on Fable 5.1,
 and before that on Opus 5. An interim routing put both on Opus 5.5 from
 2026-09-30 until stage 2 was live; the merge of ADR 0007 ends it for the
-changes §4 routes to Codex. The cost is known: the spec review reads with the
+changes §4 routes to a foreign reviewer. The cost is known: the spec review reads with the
 same model as the spec's author (Opus 5.5), so what stays independent is the
 fresh context, not the error profile.
 
@@ -435,9 +436,9 @@ row into `spec.md` (or rejects it with a reason) before phase 3; the revised
 spec is the one yardstick for plan, code and review (`prompts/02-spec.md`,
 "After the spec review"). **One reviewer for both:** phase 6 resumes the session
 of phase 2a (`--session-id` there, `--resume` here; the id stands in
-`findings.md`). For Codex the runner resumes with `codex exec resume`, reading
-the id from the first call's `thread.started` event and writing it as
-`Reviewer session: codex <id>`. It measures the code against the revised spec and first checks
+`findings.md`). On the runner path the runner reads the session id from the
+first call's JSON result and writes it as `Reviewer session: <rung> <id>`
+(§4). It measures the code against the revised spec and first checks
 that its 2a rows arrived there. It still never saw the author's reasoning, and
 passing the spec in 2a is no argument in phase 6.
 
@@ -556,19 +557,21 @@ on Dagger describes a technique, it does not use one.
 `tests/test_repo_settings.py` holds the fence: a tracked `Dockerfile`,
 `devcontainer.json`, `dagger.json` or `docker-compose*` fails the suite.
 
-## 4 · Stage 2 — Codex and GLM (active for framework content)
+## 4 · Stage 2 — reviews through OpenCode Go (active for framework content)
 
-Since ADR 0007 (2026-09-30), reviewers from two other vendors read a change
+Since ADR 0007 (2026-09-30) a reviewer from another vendor reads a change
 before it merges — for **framework content only**: this repository's own tree,
-the class `framework` of `model-endpoints.yaml`. Codex (`gpt-6.1-sol`, OpenAI)
-reviews the spec and the code; GLM (`glm-5.3`, Z.ai) reviews in a short loop
-between implementation and the code review. **Since 2026-10-06** (maintainer,
-ADR 0007 as amended) GLM 5.3 Flash (`glm-5.3-flash`, the same Z.ai endpoint)
-also explores (phase 1) and implements (phase 4) — the two phases that read
-the repository broadly and write its code. Phases 1a, 2, 3 and 7 stay with
-Anthropic (1a, 2 and 3 on Opus 5.5). **No Fable and no Kimi:** Fable 5.1 left
-the routing on 2026-10-06 and Opus 5.5 takes its places, the fallback below
-included. ADR 0007 also amends
+the class `framework` of `model-endpoints.yaml`. **Since ADR 0011
+(2026-10-07)** every stage-2 review — the spec review (2a), the review loop
+(4b) and the review (6) — runs on OpenCode Go (`opencode-go` in
+`model-endpoints.yaml`) through Claude Code, and which model answers a round
+comes from the entry's ordered `modelle` list, the ladder; Codex and GLM have
+left the reviewer roles. **Since 2026-10-06** (maintainer) GLM 5.3 Flash
+(`glm-5.3-flash`, the Z.ai endpoint) also explores (phase 1) and implements
+(phase 4) — the two phases that read the repository broadly and write its
+code. Phases 1a, 2, 3 and 7 stay with Anthropic (1a, 2 and 3 on Opus 5.5).
+**No Fable and no Kimi:** Fable 5.1 left the routing on 2026-10-06 and Opus
+5.5 takes its places, the fallback below included. ADR 0007 also amends
 decision D-13 of the 2026-09-16 interview, which had set four criteria before
 any foreign call: a green leak check and a declared endpoint stay and are
 enforced on every call, lakeswitch-ai's own disclosure decision governs
@@ -579,17 +582,19 @@ the first call are replaced by the measurement at the end of this section.
 that do not overlap. Separating the context already finds measurably more
 errors; vendor diversity adds to it. A model rates its own output too kindly —
 a reviewer from another house does not know, by construction, that it is
-checking itself. **Disagreements are recorded, not resolved automatically.**
-"Codex flagged it, GLM did not" is the information. Kimi was considered and
-dropped (ADR 0007).
+checking itself. The ladder's rungs are three lineages — DeepSeek, and
+Xiaomi's MiMo in two sizes — so a round sees what the round before it did not.
+**Disagreements are recorded, not resolved automatically.**
+"Rung 1 flagged it, rung 2 did not" is the information. Kimi was considered
+and dropped (ADR 0007).
 
 ### Which change gets what
 
 | Change | Spec review (2a) | Review loop (4b) | Review (6) |
 |---|---|---|---|
 | a one-sentence change, a `spike` | no stage 2 | no stage 2 | no stage 2 |
-| `bounded` | Codex, where one is held | GLM | Codex — the 2a session resumed where one was held, else a fresh one |
-| `feature`, `architectural` | Codex | GLM | the same Codex agent, resumed |
+| `bounded` | the ladder | the ladder | rung 1 — the 2a session resumed where one was held, else a fresh one |
+| `feature`, `architectural` | the ladder | the ladder | rung 1 — the same session as 2a, resumed |
 
 This table routes the reviews. A `spike` or a one-sentence change gets no stage-2
 review and is reviewed by Opus 5.5 where §3 asks for a review. Explore and
@@ -604,15 +609,17 @@ its row allows.
 
 ### The routing
 
-The rows are in the form of §3's table:
+The rows are in the form of §3's table. Which model a review calls is the
+ladder's order in `model-endpoints.yaml`, not a line here: reordering that
+list is a one-line pull request that touches nothing else.
 
 | Phase | Model | Why |
 |---|---|---|
 | 1 Explore | **GLM 5.3 Flash** | much input, little output, no deep reasoning; through Claude Code against Z.ai and the runner, for every change |
-| 2a Spec review | **gpt-6.1-sol** | effort `max`, through the Codex CLI and the runner |
+| 2a Spec review | **deepseek-v4.1-flash** | rung 1 of the ladder, effort `max`, through Claude Code against OpenCode Go and the runner |
 | 4 Implement | **GLM 5.3 Flash** | a worker given a clear plan; through Claude Code against Z.ai and the runner, for every change |
-| 4b Review loop | **GLM 5.3** | effort `max`, through Claude Code against Z.ai and the runner |
-| 6 Review | **gpt-6.1-sol** | effort `max`; the same Codex session as 2a, resumed where one was held |
+| 4b Review loop | **deepseek-v4.1-flash** | the ladder: round 1 `deepseek-v4.1-flash`, round 2 `mimo-v2.6-flash`, round 3 `mimo-v2.6-pro` (`modelle[n-1]`), effort `max`, round 3 only when round 2 wrote a taken row |
+| 6 Review | **deepseek-v4.1-flash** | rung 1 of the ladder, effort `max`; the 2a session resumed where one was held |
 
 **The two Flash rows are live through the runner.** `explore` starts phase 1
 on GLM 5.3 Flash with read/search tools; `implement` starts phase 4 with file
@@ -628,17 +635,22 @@ undid and exits 1; the next step is `implement <change> --stage2-off`.
 ### The runner is the only way
 
 A foreign model is started only through `python3 scripts/stage2.py <verb>
-<change>`, never by typing `codex`, or `claude` against another endpoint, into
-a shell. Six verbs exist:
+<change>`, never by typing `claude` against another endpoint into a shell.
+Seven verbs exist:
 
 - `explore` — GLM 5.3 Flash, phase 1; `--stage2-off [REASON]` uses Haiku 4.5.
-- `spec-review` — Codex, phase 2a, a fresh session.
+- `spec-review` — the ladder's rung 1 (`deepseek-v4.1-flash`), phase 2a, a
+  fresh session.
 - `implement` — GLM 5.3 Flash, phase 4; `--stage2-off [REASON]` uses Sonnet
   5.5 at effort `medium`.
-- `review-loop` — GLM, one round of phase 4b.
+- `review-loop` — one round of phase 4b; round *n* goes to the ladder's
+  *n*-th rung.
 - `release-loop` — the loop rows into `findings.md`, after the phase-6 verdict.
-- `review` — Codex, phase 6, the phase-2a session resumed with `codex exec
-  resume`; it then releases the loop rows and has Codex mark each one.
+- `review` — rung 1, phase 6, the phase-2a session resumed; it then releases
+  the loop rows and has the reviewer mark each one.
+- `probe` — one call per rung of the ladder, the declaration and the leak
+  check in front of each; measures the address, writes no record (a change's
+  declared special run).
 
 **Before every call**, the runner checks, in this order: the change is named
 and its folder exists; `model-endpoints.yaml` clears the endpoint (declared,
@@ -685,55 +697,61 @@ these two runs is stated below.
 
 What every call then carries: one audit line (in `research.md` for Explore,
 otherwise `findings.md`), an empty standard input and an environment built
-from an allow-list, not the caller's. The runner starts Codex with the
-read-only sandbox, its session kept and its hooks and memories switched off.
-It starts GLM as Claude Code against Z.ai's Anthropic-compatible endpoint,
-with a fresh empty configuration directory and the project's settings, hooks
-and MCP servers skipped. Explore and the review loop get only `Read`, `Grep`
-and `Glob`; Implement also gets `Edit` and `Write`, never Bash or another
-command tool. On a successful implementation answer the runner runs exactly
+from an allow-list, not the caller's. The runner starts Claude Code for every
+reviewer call (spec-review, review-loop, review) against OpenCode Go's
+Anthropic-compatible endpoint, with the rung's id as the model, effort `max`,
+the tools `Read`, `Grep` and `Glob`, a fresh empty configuration directory and
+the project's settings, hooks and MCP servers skipped. Explore and implement
+start Claude Code against Z.ai with the same confinement; implement also gets
+`Edit` and `Write`, never Bash or another command tool. On a successful
+implementation answer the runner runs exactly
 `make verify`; a failed post-check gets one fresh Flash repair, then one
 Sonnet 5.5 fallback, and every attempt repeats the leak check. A failed model
-process stops instead of silently changing route. **Those settings are
+process stops instead of silently changing route, and a reviewer call that has
+not ended 30 minutes after it started is stopped. **Those settings are
 configured on every call, not measured** (the maintainer's decision of
-2026-09-30, ADR 0007): no test has run either program to see them take effect,
-on `codex exec resume` in particular, whose help lists no sandbox option. If
-Codex's hooks are not in fact off, the tracked `.codex/hooks.json` injects
-tracker text into the call that the leak check does not scan. GLM's credential
-(`GLM_KEY` in `~/.config/cc-routing/secrets.env`) stays in the runner's
-environment for that call, is outside the reach of the Claude Code file tools (`--restricted`, see
-"Reads" below; not measured) and is scrubbed from everything the runner prints or writes. The
-Stage-1 fallback uses normal Claude Code authentication and never reads that
-key.
+2026-09-30, ADR 0007): no test has run either program to see them take effect.
+If hooks are not in fact off for a call, the tracked `.codex/hooks.json` shows
+the kind of text such a switch would inject into a call that the leak check
+does not scan; the runner starts no Codex since ADR 0011, and the ask rule
+below still guards one typed by hand. The reviewer's credential
+(`OPENCODE_GO_KEY` in `~/.config/cc-routing/secrets.env`) and GLM's
+(`GLM_KEY`, the same file) each stay in the runner's environment for their own
+call only, are outside the reach of the Claude Code file tools
+(`--restricted`, see "Reads" below; not measured) and are scrubbed from
+everything the runner prints or writes. The Stage-1 fallback uses normal
+Claude Code authentication and never reads either key.
 
 `.claude/settings.json` asks before a `codex` typed directly in a Claude Code
 session (`Bash(codex *)`). That is a brake, not a lock: `sh -c`, an absolute
 path or a script file passes it, as it does for the merge rules in §2.
 
-**Reads: confined for the Claude Code calls, asked for Codex.** Every Claude
-Code call (explore, implement, the Sonnet 5.5 fallback attempts and the GLM
-review loop) starts in the worktree with `--restricted` and no `--add-dir`.
+**Reads: confined for every Claude Code call.** Every Claude Code call (the
+three reviews, explore, implement and the Sonnet 5.5 fallback attempts) starts
+in the worktree with `--restricted` and no `--add-dir`.
 `claude --help` says `--restricted` "confines the file tools to the working
 directories", so the credential file `~/.config/cc-routing/secrets.env`, which
 lies outside the worktree, is outside what the model's file tools reach. **That
 is the program's documented behaviour, not measured here:** no test has run it
-against a path outside the worktree. The Codex calls (`spec-review`, `review`)
-have no such flag. Their prompts ask the model to read nothing outside the
-worktree and the repository's git directory, and **that is a request, not a
-lock:** Codex can read the rest of the disk, the customer instance's checkout
-included. The maintainer accepted that as a residual risk on 2026-09-30
-(ADR 0007). The leak check scans what this repository presents, not what else
-the disk holds.
+against a path outside the worktree. Every reviewer's prompt additionally asks
+the model to read nothing outside the worktree and the repository's git
+directory, and **that is a request, not a lock** — the program can read the
+rest of the disk, the customer instance's checkout included. The maintainer
+accepted that as a residual risk for ADR 0007's reviewers on 2026-09-30, and
+ADR 0011 accepts it again for the rungs: the unconfined reads ADR 0007
+accepted for its reviewers extend to them. The leak check scans what this
+repository presents, not what else the disk holds.
 
 ### The review loop (phase 4b)
 
-After implementation and before phase 6, `review-loop` runs one round: GLM
-reads the change's diff against its merge base with `origin/main`, uncommitted
-changes included, and answers in table rows. **At most two rounds.** The rows
+After implementation and before phase 6, `review-loop` runs one round: the
+round's rung reads the change's diff against its merge base with `origin/main`,
+uncommitted changes included, and answers in table rows. **At most three
+rounds, and round 3 only when round 2 wrote at least one taken row.** The rows
 go into a **loop record** outside the worktree and outside the git directory
 (`${XDG_STATE_HOME:-~/.local/state}/coding-harness/stage2/<change>/loop.md`),
-not into the repository: Codex can read the whole worktree, and it writes its
-verdict before it sees them.
+not into the repository: the phase-6 reviewer writes its verdict before it
+reads any loop row.
 
 The implementer writes beside each row its `Status` — `taken — <test or
 criterion>` or `rejected — <reason>` — and, for a taken row, `Broke a test`. It
@@ -743,11 +761,12 @@ only when a test demonstrates it or the spec supports it. A row left
 undecided holds the next round and the release.
 
 The phase-6 reviewer writes its verdict first: the table, and under it the line
-`Phase 6 verdict: <reviewer> <session>, <date>` (the runner writes it for
-Codex; an Opus reviewer writes its own). Only then does `release-loop` carry
-every loop row into `findings.md` with reviewer `GLM`, and the reviewer marks
-each row in its `Phase 6` column, `agree` or `disagree — <reason>`. Nothing is
-netted: the reviewer's view of GLM's rows is the information.
+`Phase 6 verdict: <reviewer> <session>, <date>` (the runner writes it for the
+resumed reviewer; an Opus reviewer writes its own). Only then does
+`release-loop` carry every loop row into `findings.md` with the reviewer its
+round had, and the reviewer marks each row in its `Phase 6` column, `agree` or
+`disagree — <reason>`. Nothing is netted: the reviewer's view of the loop's
+rows is the information.
 
 ### Two columns for every stage-2 change
 
@@ -755,7 +774,8 @@ Beyond the vocabulary of §2, a stage-2 change's `findings.md` carries two
 columns, defined here because the findings template is not in this repository
 yet:
 
-- **`Reviewer`** — Codex, GLM or Opus: who raised the finding.
+- **`Reviewer`** — the rung that raised the finding (`deepseek-v4.1-flash`,
+  `mimo-v2.6-flash`, `mimo-v2.6-pro`), or Opus: who raised it.
 - **`Broke a test`** — for each taken row, `yes` when its repair turned a test
   red that was green before it, `no` when it did not. The finding's own new
   test does not count: the evidence rule expects it to be red first.
@@ -766,17 +786,18 @@ A **stage-2 run** is a change whose review made at least one call; runs are
 counted in the order their pull requests merge. Every finding records its
 reviewer, whether it was taken or rejected and, if taken, whether it broke a
 test. **After the third run, a short evaluation is written under
-`docs/research/`. If at least one taken Codex or GLM finding broke a test,
-stage 2 falls back to Opus 5.5 until the maintainer decides again** — Opus 5.5
-reviews every change, and phases 1 and 4 return to §3's Haiku 4.5 and Sonnet
-5.5. The rule is written, not counted by a script: a person reads the
+`docs/research/`. If at least one taken finding of a rung broke a test, stage 2
+falls back to Opus 5.5 until the maintainer decides again** — a taken finding
+of a rung counts like a Codex or GLM finding counted before 2026-10-07, and
+Opus 5.5 reviews every change, and phases 1 and 4 return to §3's Haiku 4.5 and
+Sonnet 5.5. The rule is written, not counted by a script: a person reads the
 evaluation, and its pull request applies the fallback. This replaces the three measured runs that
 D-13 asked for before the first foreign call; what the replacement gives up is
 the measured stage-1 baseline (ADR 0007).
 
 > **Two caveats, and the second one holds here in particular.** The vendors'
 > coding subscriptions are contractually limited to officially supported tools;
-> through the Codex CLI and through Claude Code that is covered, in a
+> through Claude Code, the program the vendors list, that is covered — in a
 > self-built harness it is not. The runner starts those programs, it does not
 > replace them.
 >

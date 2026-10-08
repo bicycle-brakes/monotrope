@@ -2,17 +2,20 @@
 """stage2.py - the one way this repository starts a foreign model.
 
 **What this is.** Stage 2 lets a reviewer from another vendor read framework
-content: GLM 5.3 Flash explores (phase 1) and implements (phase 4), Codex
-reviews the spec and code (phases 2a and 6), and GLM 5.3 runs the review loop
-(phase 4b). A declaration in `model-endpoints.yaml` stops nothing; this runner
+content: the three reviews - the spec review (2a), the review loop (4b) and
+the review (6) - run on OpenCode Go through Claude Code, the loop's round n on
+the n-th id of the `opencode-go` entry's ordered `modelle` list (the ladder,
+at most three rounds); GLM 5.3 Flash explores (phase 1) and implements
+(phase 4). A declaration in `model-endpoints.yaml` stops nothing; this runner
 stands between the rule and the call.
 
     python3 scripts/stage2.py explore      <change>   # GLM Flash, phase 1
-    python3 scripts/stage2.py spec-review  <change>   # Codex, phase 2a, a fresh session
+    python3 scripts/stage2.py spec-review  <change>   # the ladder's rung 1, phase 2a, a fresh session
     python3 scripts/stage2.py implement    <change>   # GLM Flash, phase 4
-    python3 scripts/stage2.py review-loop  <change>   # GLM, one round of phase 4b
+    python3 scripts/stage2.py review-loop  <change>   # one round of phase 4b: round n on rung n
     python3 scripts/stage2.py release-loop <change>   # loop rows into findings.md
-    python3 scripts/stage2.py review       <change>   # Codex, phase 6, the 2a session resumed
+    python3 scripts/stage2.py review       <change>   # rung 1, phase 6, the 2a session resumed
+    python3 scripts/stage2.py probe        <change>   # one call per rung, no record written
 
 `explore` and `implement` accept `--stage2-off [REASON]`: the declared
 Stage-1 route uses Haiku 4.5 or Sonnet 5.5. A leak refusal never falls back.
@@ -32,31 +35,33 @@ Implement lets the model edit but not run commands; the runner runs
 5. an empty standard input, and an environment the runner built from an
    allow-list - never the caller's.
 
-**Reads: confined for the Claude Code calls, asked for Codex.** Every Claude
-Code call (explore, implement, the Flash and Sonnet fallback attempts, the GLM
-review loop) starts in the worktree with `--restricted` and no `--add-dir`;
-`claude --help` says `--restricted` "confines the file tools to the working
-directories", so `~/.config/cc-routing/secrets.env` is outside what those file
-tools reach. That is the CLI's documented behaviour, not measured here: no test
-has run the real program against a path outside the worktree. The Codex calls
-(`spec-review`, `review`) have no such flag: every prompt ends with the request
-to read nothing outside the worktree and the repository's git directory, which
-is a request, not a lock - Codex can read the rest of the disk.
+**Reads: confined for every call the runner starts.** Every call (explore,
+implement, the Sonnet fallback attempts and the reviewers) starts in the
+worktree with `--restricted` and no `--add-dir`; `claude --help` says
+`--restricted` "confines the file tools to the working directories", so
+`~/.config/cc-routing/secrets.env` is outside what those file tools reach.
+That is the CLI's documented behaviour, not measured here: no test has run
+the real program against a path outside the worktree. Every prompt ends with
+the request to read nothing outside the worktree and the repository's git
+directory, which is a request, not a lock - the second fence beside
+`--restricted`, and the residual risk ADR 0007 accepted for its reviewers
+on 2026-09-30 and ADR 0011 extends to the rungs.
 
 **The loop record** lives outside the worktree
 (`${XDG_STATE_HOME:-~/.local/state}/coding-harness/stage2/<change>/loop.md`):
-GLM's rows and the implementer's decision on each, until the phase-6 verdict is
-written and `release-loop` carries them into `findings.md`. The release is the
-only thing that deletes the record, and it deletes nothing that has not arrived:
-every loop row, and every other line of the record as it stands, is in
-`findings.md` first. Not carried are only the record's own furniture: its
-heading, its intro, the round headings, the tables' header and separator, and
-the blank lines outside GLM's words. GLM's words are carried exactly as they
-came - a heading, a code comment or a table line with a loop id included; only
-a line of the round tables the runner wrote that carries a loop id and cannot
-be read as a row refuses the release, because the implementer has to decide
-that row. A call counts as a round when it succeeded and answered - with rows
-or with "no finding"; a failed call or an empty answer is no round.
+the rounds' rows and the implementer's decision on each, until the phase-6
+verdict is written and `release-loop` carries them into `findings.md`. The
+release is the only thing that deletes the record, and it deletes nothing that
+has not arrived: every loop row, and every other line of the record as it
+stands, is in `findings.md` first. Not carried are only the record's own
+furniture: its heading, its intro, the round headings, the tables' header and
+separator, and the blank lines outside the reviewer's words. The reviewer's
+words are carried exactly as they came - a heading, a code comment or a table
+line with a loop id included; only a line of the round tables the runner wrote
+that carries a loop id and cannot be read as a row refuses the release,
+because the implementer has to decide that row. A call counts as a round when
+it succeeded and answered - with rows or with "no finding"; a failed call, an
+empty answer or a call stopped by the reviewer time limit is no round.
 
 Exit: 0 done, 1 a call or implementation post-check failed, 2 refused.
 """
@@ -87,12 +92,17 @@ import merge_guard  # noqa: E402
 REPO_ROOT = Path(__file__).resolve().parent.parent
 
 # (endpoint, model, effort) - what the declaration must clear and the call pins.
-CODEX = ("openai-codex", "gpt-6.1-sol", "max")
-GLM = ("glm-coding-plan", "glm-5.3", "max")
+# The reviews have no fixed tuple: their model is the round's rung of the
+# `opencode-go` entry's ordered `modelle` list (the ladder, see `ladder`).
 GLM_FLASH = ("glm-coding-plan", "glm-5.3-flash", "max")
 HAIKU = ("claude-code-plan", "claude-haiku-4-5", None)
 SONNET = ("claude-code-plan", "claude-sonnet-5-5", "medium")
 GLM_BASE_URL = "https://api.z.ai/api/anthropic"
+OPENCODE = "opencode-go"
+OPENCODE_BASE_URL = "https://opencode.ai/zen/go/v1/messages"
+REVIEWER_TOOLS = "Read,Grep,Glob"
+# A reviewer call that has not ended after this many minutes is stopped (spec, criterion 15).
+REVIEWER_MINUTES = 30
 
 CODEX_ASK_RULE = (
     "Bash(codex *)",
@@ -122,7 +132,7 @@ ENV_ALLOW = (
     "TZ",
     "CODEX_HOME",
 )
-GLM_MODEL_VARIABLES = (
+MODEL_VARIABLES = (
     "ANTHROPIC_MODEL",
     "ANTHROPIC_DEFAULT_OPUS_MODEL",
     "ANTHROPIC_DEFAULT_SONNET_MODEL",
@@ -131,7 +141,7 @@ GLM_MODEL_VARIABLES = (
     "CLAUDE_CODE_SUBAGENT_MODEL",
 )
 
-MAX_ROUNDS = 2
+MAX_ROUNDS = 3
 ROW_COLUMNS = ["ID", "Severity", "Dimension", "Origin", "Where", "Finding", "Reviewer", "Status", "Broke a test"]
 RELEASED_COLUMNS = [*ROW_COLUMNS, "Phase 6"]
 
@@ -144,11 +154,11 @@ VERDICT_LINE = re.compile(
     r"^Phase 6 verdict:[ \t]+(?!(?i:pending)\b)\S[^\n]*?,[ \t]*\d{4}-\d{2}-\d{2}[ \t]*\.?[ \t]*$", re.M
 )
 VERDICT_START = re.compile(r"^phase 6 verdict\b[^\n]*$", re.M | re.I)
-SESSION_LINE = re.compile(r"^Reviewer session: codex (\S+)", re.M)
+SESSION_LINE = re.compile(r"^Reviewer session: (\S+) (\S+)", re.M)
 ROUNDS_LINE = re.compile(r"^Rounds run: (\d+)\s*$", re.M)
-ROUND_HEADING = re.compile(r"^## Round \d+ — GLM,", re.M)
-RELEASE_HEADING = "## Phase 4b — GLM loop rows, released"
-NO_LOOP_LINE = "Loop rows: none — the GLM loop did not run for this change."
+ROUND_HEADING = re.compile(r"^## Round \d+ — \S+,", re.M)
+RELEASE_HEADING = "## Phase 4b — loop rows, released"
+NO_LOOP_LINE = "Loop rows: none — the loop did not run for this change."
 LOOP_ID = re.compile(r"L\d+-\d+")
 NOT_ROWS_NOTE = "The answer was not only six-cell rows; what is not one is kept below as it came."
 
@@ -256,20 +266,33 @@ def foreign_env(own: dict[str, str]) -> dict[str, str]:
     return env
 
 
-def glm_env(key: str, config_dir: Path, model: str = GLM[1]) -> dict[str, str]:
+def claude_env(base_url: str, key: str, config_dir: Path, model: str) -> dict[str, str]:
+    """A Claude Code call's environment: the endpoint's address, its key only there, a fresh config."""
     own = {
-        "ANTHROPIC_BASE_URL": GLM_BASE_URL,
+        "ANTHROPIC_BASE_URL": base_url,
         "ANTHROPIC_AUTH_TOKEN": key,
         "ANTHROPIC_API_KEY": key,
         "CLAUDE_CONFIG_DIR": str(config_dir),
         "CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC": "1",
     }
-    own.update({name: model for name in GLM_MODEL_VARIABLES})
+    own.update({name: model for name in MODEL_VARIABLES})
     return foreign_env(own)
 
 
+def glm_env(key: str, config_dir: Path, model: str) -> dict[str, str]:
+    return claude_env(GLM_BASE_URL, key, config_dir, model)
+
+
+def opencode_env(key: str, config_dir: Path, model: str) -> dict[str, str]:
+    return claude_env(OPENCODE_BASE_URL, key, config_dir, model)
+
+
 def launch(
-    command: list[str], root: Path, env: dict[str, str], secret: str | None = None
+    command: list[str],
+    root: Path,
+    env: dict[str, str],
+    secret: str | None = None,
+    timeout: float | None = None,
 ) -> subprocess.CompletedProcess:
     """Start a foreign program: empty standard input, the worktree as its directory."""
     try:
@@ -282,7 +305,12 @@ def launch(
             text=True,
             errors="replace",
             check=False,
+            timeout=timeout,
         )
+    except subprocess.TimeoutExpired as error:
+        raise CallFailed(
+            f"{command[0]} was stopped by the reviewer time limit after {REVIEWER_MINUTES:g} minutes"
+        ) from error
     except OSError as error:
         raise CallFailed(f"{command[0]} could not be started: {scrub(str(error), secret)}") from error
 
@@ -382,7 +410,7 @@ def answer_parts(rows: list[list[str]], answer: str, reviewer: str, table: str) 
 
 
 def answer_block(rows: list[list[str]], answer: str, reviewer: str) -> str:
-    """The block of a Codex answer: its rows with the reviewer, `open` and no test mark."""
+    """The block of a reviewer's answer: its rows with the reviewer, `open` and no test mark."""
     table = render_table(ROW_COLUMNS, [[*row, reviewer, "open", "—"] for row in rows])
     return "\n\n".join(answer_parts(rows, answer, reviewer, table))
 
@@ -526,8 +554,7 @@ def begin_call(ctx: Context, verb: str, endpoint: tuple[str, str, str | None], p
     """The declaration, the leak check and the call line - for this one call, immediately before it."""
     result = checked_prompt(ctx, endpoint, prompt)
     if not ctx.findings.exists():
-        producer = "codex" if endpoint == CODEX else "claude-code"
-        ctx.findings.write_text(findings_header(ctx, producer), encoding="utf-8")
+        ctx.findings.write_text(findings_header(ctx, "claude-code"), encoding="utf-8")
     append(
         ctx.findings,
         f"Stage-2 call, {today()}: {verb} · endpoint {endpoint[0]} · model {endpoint[1]} · "
@@ -584,76 +611,170 @@ def work_prompt(root: Path, prompt_file: str, change: str, extra: str = "") -> s
 
 
 # ---------------------------------------------------------------------------
-# Codex
+# The reviews - one launch path for every reviewer call
 # ---------------------------------------------------------------------------
 
 
-def thread_id(stdout: str) -> str | None:
-    """The `thread_id` of the first JSON line of type `thread.started`."""
-    for line in stdout.splitlines():
-        try:
-            event = json.loads(line)
-        except ValueError:
-            continue
-        if isinstance(event, dict) and event.get("type") == "thread.started" and event.get("thread_id"):
-            return str(event["thread_id"])
-    return None
+def ladder(root: Path) -> list[str]:
+    """The `modelle` of the `opencode-go` entry, in order: position is the round (spec, criterion 4).
+
+    A rung the list does not hold is no model id in the code: reordering the
+    ladder or replacing its ids is a one-line pull request that touches
+    `model-endpoints.yaml` and nothing else (spec, criterion 5).
+    """
+    try:
+        data = yaml.safe_load((root / "model-endpoints.yaml").read_text(encoding="utf-8")) or {}
+    except (OSError, UnicodeDecodeError, yaml.YAMLError):
+        raise Refused("model-endpoints.yaml cannot be read") from None
+    entry = next(
+        (e for e in data.get("endpunkte") or [] if isinstance(e, dict) and e.get("name") == OPENCODE), None
+    )
+    if entry is None:
+        raise Refused(f"model-endpoints.yaml declares no endpoint {OPENCODE}")
+    models = [str(model) for model in entry.get("modelle") or []]
+    if not models:
+        raise Refused(f"the endpoint {OPENCODE} lists no model")
+    return models
 
 
-def run_codex(ctx: Context, prompt: str, resume: str | None = None) -> tuple[str, str]:
-    """One Codex call, first or resumed, pinned the same way. Returns (answer, thread id)."""
-    _, model, effort = CODEX
+def reviewer_key() -> str:
+    """The OpenCode Go key, read from the secrets file at call time. Never an argument."""
+    key = read_secret("OPENCODE_GO_KEY")
+    if key is None:
+        raise Refused(f"OPENCODE_GO_KEY is not in the secrets file {secrets_path()}.")
+    return key
+
+
+def result_of(stdout: str) -> tuple[str, str]:
+    """`(answer, session id)` from Claude Code's JSON output: one object, an array of them, or one per line."""
+    events: list[object] = []
+    try:
+        loaded = json.loads(stdout)
+    except ValueError:
+        for line in stdout.splitlines():
+            if not line.strip():
+                continue
+            try:
+                events.append(json.loads(line))
+            except ValueError:
+                continue
+    else:
+        events = loaded if isinstance(loaded, list) else [loaded]
+    for event in events:
+        if isinstance(event, dict) and event.get("session_id"):
+            return str(event.get("result") or ""), str(event["session_id"])
+    return "", ""
+
+
+def run_reviewer(
+    ctx: Context,
+    model: str,
+    prompt: str,
+    key: str,
+    *,
+    resume: str | None = None,
+    session: bool,
+) -> tuple[str, str]:
+    """One reviewer call: Claude Code against OpenCode Go's Anthropic address.
+
+    Every review verb launches the same way (spec, criterion 8): the rung's id
+    as the model, effort `max`, read and search tools only, a fresh empty
+    configuration directory, the project's settings skipped, and the key in
+    the environment only. `session` keeps the session for a later resume and
+    reads its id from the JSON result; a loop round needs no session and
+    answers in plain text. Returns (answer, session id - empty without
+    `session`). A call that has not ended after `REVIEWER_MINUTES` is stopped
+    (spec, criterion 15).
+    """
     with tempfile.TemporaryDirectory(prefix="stage2-") as tmp:
-        answer_file = Path(tmp) / "answer.md"
-        command = ["codex", "exec"]
-        if resume:
-            command += ["resume", resume]
-        command += [
-            "--json",
-            "-m",
+        prompt_file = Path(tmp) / "review-prompt.md"
+        prompt_file.write_text(prompt, encoding="utf-8")
+        config_dir = Path(tmp) / "claude-config"
+        config_dir.mkdir()
+        command = [
+            "claude",
+            "-p",
+            f"Review the change {ctx.change} as the appended instructions say.",
+            "--append-system-prompt-file",
+            str(prompt_file),
+            "--model",
             model,
-            "-c",
-            f'model_reasoning_effort="{effort}"',
-            "-c",
-            'sandbox_mode="read-only"',
-            "--disable",
-            "hooks",
-            "--disable",
-            "memories",
-            "-o",
-            str(answer_file),
-            prompt,
+            "--effort",
+            "max",
+            "--tools",
+            REVIEWER_TOOLS,
+            "--restricted",
+            "--strict-mcp-config",
+            "--permission-mode",
+            "dontAsk",
+            "--output-format",
+            "json" if session else "text",
         ]
-        done = launch(command, ctx.root, foreign_env({}))
-        thread = thread_id(done.stdout or "")
+        if resume:
+            command += ["--resume", resume]
+        if not session:
+            command += ["--no-session-persistence"]
+        done = launch(
+            command, ctx.root, opencode_env(key, config_dir, model), key, timeout=REVIEWER_MINUTES * 60
+        )
         if done.returncode != 0:
-            raise fail("codex", done, f"exit {done.returncode}")
-        if thread is None:
-            raise fail("codex", done, "no thread.started event")
-        try:
-            answer = answer_file.read_text(encoding="utf-8")
-        except (OSError, UnicodeDecodeError) as error:
-            raise fail("codex", done, "no answer file") from error
-    return answer, thread
+            raise fail("claude", done, f"exit {done.returncode}", key)
+        stdout = scrub(done.stdout or "", key)
+        if session:
+            answer, session_id = result_of(stdout)
+            if not session_id:
+                raise fail("claude", done, "no session id in the result", key)
+        else:
+            answer, session_id = stdout, ""
+        if not answer.strip():
+            # "No finding" is an answer; nothing at all is a call that failed.
+            raise fail("claude", done, "the answer is empty", key)
+    return answer, session_id
+
+
+def taken_in_round(rows: list[list[str]], round_number: int) -> bool:
+    """Whether the round wrote at least one row whose Status begins `taken` (spec, criterion 7)."""
+    prefix = f"L{round_number}-"
+    return any(row[0].startswith(prefix) and row[7].lower().startswith("taken") for row in rows)
+
+
+def released_rows(findings_text: str) -> list[list[str]]:
+    """The loop rows of the last released block in findings.md, with the status they were decided by."""
+    start = findings_text.rfind(RELEASE_HEADING)
+    if start < 0:
+        return []
+    rows = []
+    for line in findings_text[start:].splitlines():
+        cells = split_row(line)
+        if cells and len(cells) == len(RELEASED_COLUMNS) and LOOP_ID.fullmatch(cells[0]):
+            rows.append(cells)
+    return rows
 
 
 def spec_review(root: Path, change: str) -> None:
-    """Phase 2a: a fresh Codex session reads the spec."""
-    ctx = preflight(root, change, CODEX)
+    """Phase 2a: a fresh session on the ladder's first rung reads the spec."""
+    model = ladder(root)[0]
+    endpoint = (OPENCODE, model, "max")
+    ctx = preflight(root, change, endpoint)
+    key = reviewer_key()
     prompt = phase_prompt(root, "02a-spec-review.md", change)
-    begin_call(ctx, "spec-review", CODEX, prompt)
-    answer, thread = run_codex(ctx, prompt)
+    begin_call(ctx, "spec-review", endpoint, prompt)
+    answer, session = run_reviewer(ctx, model, prompt, key, session=True)
     rows, _ = parse_rows(answer)
     append(
         ctx.findings,
-        f"## Phase 2a — Codex, {today()}\n\n{answer_block(rows, answer, 'Codex')}\n\nReviewer session: codex {thread}",
+        f"## Phase 2a — {model}, {today()}\n\n"
+        f"{answer_block(rows, answer, model)}\n\nReviewer session: {model} {session}",
     )
-    print(f"spec-review: {len(rows)} rows appended to {ctx.findings.relative_to(root)}; session codex {thread}")
+    print(f"spec-review: {len(rows)} rows appended to {ctx.findings.relative_to(root)}; session {model} {session}")
 
 
 def review(root: Path, change: str) -> None:
     """Phase 6: the 2a session resumed, the verdict written, the loop rows released and marked."""
-    ctx = preflight(root, change, CODEX)
+    model = ladder(root)[0]
+    endpoint = (OPENCODE, model, "max")
+    ctx = preflight(root, change, endpoint)
+    key = reviewer_key()
     record = read_record(change)
     if record is not None:
         waiting = undecided(record_rows(record))
@@ -661,27 +782,27 @@ def review(root: Path, change: str) -> None:
             raise Refused(f"the loop record has undecided rows ({', '.join(waiting)}); decide them first.")
     text = ctx.findings.read_text(encoding="utf-8") if ctx.findings.exists() else ""
     sessions = SESSION_LINE.findall(text)
-    recorded = sessions[-1] if sessions else None
+    recorded = sessions[-1][1] if sessions else None
     prompt = phase_prompt(root, "06-review.md", change, "Write only your verdict now.")
-    begin_call(ctx, "review", CODEX, prompt)
-    answer, thread = run_codex(ctx, prompt, resume=recorded)
+    begin_call(ctx, "review", endpoint, prompt)
+    answer, session = run_reviewer(ctx, model, prompt, key, resume=recorded, session=True)
     rows, _ = parse_rows(answer)
     block = "\n\n".join(
         [
-            f"## Phase 6 — Codex, {today()}",
-            answer_block(rows, answer, "Codex"),
-            f"Phase 6 verdict: codex {thread}, {today()}",
+            f"## Phase 6 — {model}, {today()}",
+            answer_block(rows, answer, model),
+            f"Phase 6 verdict: {model} {session}, {today()}",
         ]
     )
     if recorded is None:
-        block += f"\nReviewer session: codex {thread} — a fresh session reviewed: no phase-2a session was recorded"
-    elif thread != recorded:
+        block += f"\nReviewer session: {model} {session} — a fresh session reviewed: no phase-2a session was recorded"
+    elif session != recorded:
         block += (
-            f"\nReviewer session: codex {thread} — a fresh session reviewed: "
-            f"the resume of {recorded} started a new thread"
+            f"\nReviewer session: {model} {session} — a fresh session reviewed: "
+            f"the resume of {recorded} started a new session"
         )
     append(ctx.findings, block)
-    print(f"review: verdict appended to {ctx.findings.relative_to(root)}; session codex {thread}")
+    print(f"review: verdict appended to {ctx.findings.relative_to(root)}; session {model} {session}")
 
     released = release(root, change)
     if not released:
@@ -690,8 +811,8 @@ def review(root: Path, change: str) -> None:
     marks_prompt = "\n\n".join(
         [MARK_FORMAT, "Your verdict stands and is not changed.", f"The loop rows:\n{listing}", READ_REQUEST]
     )
-    begin_call(ctx, "review (loop marks)", CODEX, marks_prompt)
-    answer, _ = run_codex(ctx, marks_prompt, resume=thread)
+    begin_call(ctx, "review (loop marks)", endpoint, marks_prompt)
+    answer, _ = run_reviewer(ctx, model, marks_prompt, key, resume=session, session=True)
     marks = parse_marks(answer)
     fill_marks(ctx.findings, [r[0] for r in released], marks)
     print(f"review: {len(marks)} of {len(released)} loop rows marked")
@@ -727,7 +848,7 @@ def fill_marks(findings: Path, ids: list[str], marks: dict[str, str]) -> None:
 
 
 # ---------------------------------------------------------------------------
-# The loop record, release, and the GLM round
+# The loop record, release, and the round
 # ---------------------------------------------------------------------------
 
 
@@ -747,31 +868,31 @@ def read_record(change: str) -> str | None:
 
 
 def _record_lines(record: str) -> list[tuple[str, bool]]:
-    """Each line of the record, and whether it is GLM's words - not the runner's or the implementer's.
+    """Each line of the record, and whether it is the reviewer's words - not the runner's or the implementer's.
 
     The runner writes a round as its heading, then a table or one statement and, when the answer was not
     only six-cell rows, the note `NOT_ROWS_NOTE` and the rest of the answer as it came. The lines after the
-    note, up to the next round heading, are GLM's; every other line is the record's own. A line of GLM's
-    that has the form of a round heading cannot be told from one.
+    note, up to the next round heading, are the reviewer's; every other line is the record's own. A line
+    of the reviewer's that has the form of a round heading cannot be told from one.
     """
     lines = []
-    glm = False
+    reviewer = False
     for line in record.splitlines():
         if ROUND_HEADING.match(line):
-            glm = False
-        elif not glm and line.strip() == NOT_ROWS_NOTE:
+            reviewer = False
+        elif not reviewer and line.strip() == NOT_ROWS_NOTE:
             lines.append((line, False))
-            glm = True
+            reviewer = True
             continue
-        lines.append((line, glm))
+        lines.append((line, reviewer))
     return lines
 
 
 def record_rows(record: str) -> list[list[str]]:
     """The loop rows of the record: every table line of its own whose first cell is a loop id.
 
-    Only the record's own lines are read, never GLM's words, which are carried as they came: a table line
-    GLM wrote is not a row the implementer has to decide, whatever its first cell says.
+    Only the record's own lines are read, never the reviewer's words, which are carried as they came: a
+    table line the reviewer wrote is not a row the implementer has to decide, whatever its first cell says.
 
     Nine cells are known. A `|` the implementer typed into `Status` makes a tenth; the cells between the
     reviewer and the last one are that reason, each pipe escaped. A line with a loop id and fewer cells
@@ -779,8 +900,8 @@ def record_rows(record: str) -> list[list[str]]:
     by its id.
     """
     rows = []
-    for line, glm in _record_lines(record):
-        cells = None if glm else split_row(line)
+    for line, reviewer in _record_lines(record):
+        cells = None if reviewer else split_row(line)
         if not cells or not LOOP_ID.fullmatch(cells[0]):
             continue
         if len(cells) < len(ROW_COLUMNS):
@@ -814,9 +935,9 @@ def kept_lines(record: str) -> str:
 
     Left out: the record's own furniture - its heading, its intro, the round headings, the tables' header and
     separator - and the loop rows (`record_rows` has them). What is left goes to `findings.md`, because the
-    record is deleted afterwards and is the only copy: the runner's own statements, and GLM's words line by
-    line as they came, blank lines between them included (a heading or a comment that starts with `#`, a table
-    line that is no row). GLM's words stand apart from the runner's lines by a blank line.
+    record is deleted afterwards and is the only copy: the runner's own statements, and the reviewer's words
+    line by line as they came, blank lines between them included (a heading or a comment that starts with `#`,
+    a table line that is no row). The reviewer's words stand apart from the runner's lines by a blank line.
     """
     intro = set(RECORD_INTRO.splitlines())
     furniture = set(render_table(ROW_COLUMNS, []).splitlines())
@@ -1239,8 +1360,10 @@ def implement(root: Path, change: str, stage2_off: str | None = None) -> None:
 
 
 def review_loop(root: Path, change: str) -> None:
-    """One round of phase 4b: GLM, through Claude Code against Z.ai, reads the diff."""
-    ctx = preflight(root, change, GLM)
+    """One round of phase 4b: round *n* goes to the ladder's *n*-th rung, through Claude Code at OpenCode Go."""
+    models = ladder(root)
+    endpoint = (OPENCODE, models[0], "max")
+    ctx = preflight(root, change, endpoint)
     record = read_record(change)
     findings_text = ctx.findings.read_text(encoding="utf-8") if ctx.findings.exists() else ""
     done_rounds = rounds_run(record, findings_text)
@@ -1250,51 +1373,25 @@ def review_loop(root: Path, change: str) -> None:
         waiting = undecided(record_rows(record))
         if waiting:
             raise Refused(f"the loop record has undecided rows ({', '.join(waiting)}); decide them first.")
-    key = read_secret("GLM_KEY")
-    if key is None:
-        raise Refused(f"GLM_KEY is not in the secrets file {secrets_path()}.")
-    diff = change_diff(root)
     round_number = done_rounds + 1
+    if round_number == MAX_ROUNDS and not taken_in_round(
+        record_rows(record) if record is not None else released_rows(findings_text), done_rounds
+    ):
+        raise Refused(f"round {done_rounds} wrote no taken row; the loop stops at {done_rounds}.")
+    if round_number > len(models):
+        raise Refused(f"the ladder of {OPENCODE} has {len(models)} rungs; round {round_number} has none.")
+    model = models[round_number - 1]
+    key = reviewer_key()
+    diff = change_diff(root)
     body = (root / "prompts" / "04b-review-loop.md").read_text(encoding="utf-8")
     # The request comes before the diff and again after it: a long diff would bury it.
     prompt = "\n\n".join([body.rstrip(), ANSWER_FORMAT, READ_REQUEST, f"## The diff\n\n{diff}", READ_REQUEST])
-    begin_call(ctx, "review-loop", GLM, prompt)
-    with tempfile.TemporaryDirectory(prefix="stage2-") as tmp:
-        prompt_file = Path(tmp) / "glm-prompt.md"
-        prompt_file.write_text(prompt, encoding="utf-8")
-        config_dir = Path(tmp) / "claude-config"
-        config_dir.mkdir()
-        command = [
-            "claude",
-            "-p",
-            f"Review the change {change} as the appended instructions say.",
-            "--append-system-prompt-file",
-            str(prompt_file),
-            "--model",
-            GLM[1],
-            "--effort",
-            GLM[2],
-            "--tools",
-            "Read,Grep,Glob",
-            "--restricted",
-            "--strict-mcp-config",
-            "--permission-mode",
-            "dontAsk",
-            "--no-session-persistence",
-            "--output-format",
-            "text",
-        ]
-        done = launch(command, root, glm_env(key, config_dir, GLM[1]), key)
-        if done.returncode != 0:
-            raise fail("claude", done, f"exit {done.returncode}", key)
-        answer = scrub(done.stdout or "", key)
-    if not answer.strip():
-        # "No finding" is an answer; nothing at all is a call that failed, and a failed call is no round.
-        raise fail("claude", done, "the answer is empty", key)
+    begin_call(ctx, "review-loop", (OPENCODE, model, "max"), prompt)
+    answer, _ = run_reviewer(ctx, model, prompt, key, session=False)
     rows, _ = parse_rows(answer)
-    numbered = [[f"L{round_number}-{k}", *row[1:], "GLM", "", ""] for k, row in enumerate(rows, 1)]
-    parts = [f"## Round {round_number} — GLM, {today()}"]
-    parts += answer_parts(rows, answer, "GLM", render_table(ROW_COLUMNS, numbered))
+    numbered = [[f"L{round_number}-{k}", *row[1:], model, "", ""] for k, row in enumerate(rows, 1)]
+    parts = [f"## Round {round_number} — {model}, {today()}"]
+    parts += answer_parts(rows, answer, model, render_table(ROW_COLUMNS, numbered))
     directory = record_dir(change)
     directory.mkdir(parents=True, exist_ok=True)
     path = directory / "loop.md"
@@ -1302,6 +1399,34 @@ def review_loop(root: Path, change: str) -> None:
         path.write_text(f"{RECORD_HEADING}{change}\n\n{RECORD_INTRO}\n", encoding="utf-8")
     append(path, "\n\n".join(parts))
     print(f"review-loop: round {round_number} written to {path}: {len(numbered)} rows")
+
+
+def probe(root: Path, change: str) -> None:
+    """The compatibility probe: one call per rung, the declaration and the leak check in front of each.
+
+    Declared special run of phase 4 (the Definition of Done): the three calls
+    measure whether OpenCode Go's Anthropic address accepts the ladder's ids -
+    the Go page lists them under the OpenAI address only. No record is
+    written; the rung's id and the answer's first line are printed for the
+    pull request body. A refused rung stops the run and is reported (spec,
+    criterion 17): no second address, no substituted model.
+    """
+    key = reviewer_key()
+    for model in ladder(root):
+        endpoint = (OPENCODE, model, "max")
+        ctx = preflight(root, change, endpoint)
+        prompt = "\n\n".join(
+            [
+                "Compatibility probe of this repository's stage-2 runner. Answer in one short line: "
+                "name the model id you answer as.",
+                READ_REQUEST,
+            ]
+        )
+        begin_call(ctx, "probe", endpoint, prompt)
+        answer, _ = run_reviewer(ctx, model, prompt, key, session=False)
+        first = answer.strip().splitlines()[0]
+        print(f"probe: {model} · {scrub(first, key)}")
+    print(f"probe: {len(ladder(root))} rungs answered")
 
 
 # ---------------------------------------------------------------------------
@@ -1330,6 +1455,7 @@ VERBS = {
     "review-loop": review_loop,
     "release-loop": release_loop,
     "review": review,
+    "probe": probe,
 }
 
 
@@ -1371,7 +1497,9 @@ def main(argv: list[str] | None = None) -> int:
         print(f"refused: {error}", file=sys.stderr)
         return 2
     except CallFailed as error:
-        print(f"failed: {error}", file=sys.stderr)
+        # A call that failed names its cause on standard output (spec, criterion 14):
+        # a round that did not review must say so where the caller reads it.
+        print(f"failed: {error}")
         return 1
     return 0
 

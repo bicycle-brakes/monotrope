@@ -24,6 +24,7 @@ import re
 import shutil
 import subprocess
 import sys
+import time
 from dataclasses import dataclass
 from pathlib import Path
 
@@ -43,6 +44,7 @@ import stage2  # noqa: E402
 GIT = shutil.which("git")  # resolved before any test narrows the PATH
 
 KEY = "sk-zq7Hk2mVw9Xr4Tn8Lb3Pd6Jc1Fy5Ga0"
+OKEY = "ok-7Rt2Wm9xQb4Nv6Lc"
 LEAK = "LEAKMARK-123456"
 DENYLIST = "planted = LEAKMARK-[0-9]{6}\n"
 SETTINGS = REPO_ROOT / ".claude" / "settings.json"
@@ -54,6 +56,7 @@ STAND_IN = """#!@PYTHON@
 import json
 import os
 import sys
+import time
 from pathlib import Path
 
 here = Path(__file__).resolve().parent
@@ -99,6 +102,7 @@ record = {
 }
 with log.open("a") as handle:
     handle.write(json.dumps(record) + "\\n")
+time.sleep(step.get("sleep", 0))
 key = os.environ.get("ANTHROPIC_AUTH_TOKEN", "")
 for relative, text in step.get("plant", {}).items():
     Path(relative).write_text(text.replace("@KEY@", key))
@@ -114,10 +118,9 @@ raise SystemExit(step.get("exit", 0))
 """
 
 
-def codex_ok(thread: str, answer: str, **more: object) -> dict:
-    """A Codex step that succeeds: a `thread.started` event and the answer file."""
-    started = json.dumps({"type": "thread.started", "thread_id": thread})
-    return {"stdout": started + '\n{"type": "turn.completed"}\n', "answer": answer, **more}
+def claude_ok(session: str, answer: str, **more: object) -> dict:
+    """A reviewer step that succeeds: the JSON result carries the session id and the answer."""
+    return {"stdout": json.dumps({"type": "result", "session_id": session, "result": answer}), **more}
 
 
 def rows(count: int, prefix: str = "X") -> str:
@@ -173,7 +176,9 @@ class World:
     def record(self) -> Path:
         return self.state / "coding-harness" / "stage2" / "demo" / "loop.md"
 
-    def write_record(self, decided: list[tuple[str, str, str]], finding: str = "") -> None:
+    def write_record(
+        self, decided: list[tuple[str, str, str]], finding: str = "", reviewer: str = "deepseek-v4.1-flash"
+    ) -> None:
         """A loop record of one round whose rows carry the given (id, status, broke a test)."""
         rows_ = [
             [
@@ -183,7 +188,7 @@ class World:
                 "impl",
                 "src/app.py:1",
                 f"finding of {ident} {finding}".strip(),
-                "GLM",
+                reviewer,
                 status,
                 broke,
             ]
@@ -192,7 +197,7 @@ class World:
         directory = self.record().parent
         directory.mkdir(parents=True, exist_ok=True)
         self.record().write_text(
-            f"# Loop record — demo\n\n{stage2.RECORD_INTRO}\n\n## Round 1 — GLM, 2026-09-30\n\n"
+            f"# Loop record — demo\n\n{stage2.RECORD_INTRO}\n\n## Round 1 — {reviewer}, 2026-09-30\n\n"
             f"{stage2.render_table(stage2.ROW_COLUMNS, rows_)}\n",
             encoding="utf-8",
         )
@@ -204,7 +209,7 @@ class World:
 def decide_record(w: World, status: str = "taken — test_a", broke: str = "no") -> None:
     """Decide every row of the loop record the way the implementer would: by editing the file."""
     text = w.record().read_text(encoding="utf-8")
-    text = re.sub(r"^(\| L\d+-\d+ \|.*\| GLM \|)  \|  \|$", rf"\1 {status} | {broke} |", text, flags=re.M)
+    text = re.sub(r"^(\| L\d+-\d+ \|.*\|)  \|  \|$", rf"\1 {status} | {broke} |", text, flags=re.M)
     w.record().write_text(text, encoding="utf-8")
 
 
@@ -251,7 +256,9 @@ def world(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> World:
     git_dir.mkdir()
     (git_dir / "git").symlink_to(GIT)
     (tmp_path / "denylist.txt").write_text(DENYLIST, encoding="utf-8")
-    (tmp_path / "secrets.env").write_text(f"# keys\nexport GLM_KEY='{KEY}'\nOTHER=1\n", encoding="utf-8")
+    (tmp_path / "secrets.env").write_text(
+        f"# keys\nexport GLM_KEY='{KEY}'\nexport OPENCODE_GO_KEY='{OKEY}'\nOTHER=1\n", encoding="utf-8"
+    )
 
     for name, value in {
         "PATH": f"{bin_dir}:{git_dir}",
@@ -301,20 +308,20 @@ def endpoints() -> dict[str, dict]:
 
 
 def verdict_block(text: str) -> str:
-    match = re.search(r"^## Phase 6 — Codex.*?^Phase 6 verdict: [^\n]*$", text, re.M | re.S)
+    match = re.search(r"^## Phase 6 — .*?^Phase 6 verdict: [^\n]*$", text, re.M | re.S)
     assert match, "no verdict block"
     return match.group(0)
 
 
 def full_flow(w: World) -> None:
-    """spec-review, one GLM round decided, the verdict, the release and the marks."""
+    """spec-review, one round decided, the verdict, the release and the marks."""
     w.script(
-        codex=[
-            codex_ok("T1", rows(2)),
-            codex_ok("T1", rows(1)),
-            codex_ok("T1", "L1-1: agree\nL1-2: disagree — no test shows it"),
-        ],
-        claude=[{"stdout": rows(2)}],
+        claude=[
+            claude_ok("T1", rows(2)),
+            {"stdout": rows(2)},
+            claude_ok("T1", rows(1)),
+            claude_ok("T1", "L1-1: agree\nL1-2: disagree — no test shows it"),
+        ]
     )
     assert w.run("spec-review") == 0
     assert w.run("review-loop") == 0
@@ -344,7 +351,7 @@ def test_a_stand_in_contacts_nothing() -> None:
     imported = {
         alias.name.split(".")[0] for node in ast.walk(tree) if isinstance(node, ast.Import) for alias in node.names
     } | {node.module.split(".")[0] for node in ast.walk(tree) if isinstance(node, ast.ImportFrom) and node.module}
-    assert imported <= {"json", "os", "sys", "pathlib"}
+    assert imported <= {"json", "os", "sys", "time", "pathlib"}
 
 
 @pytest.mark.usefixtures("world")
@@ -362,7 +369,7 @@ def test_the_suite_never_reaches_the_real_denylist_or_secrets(monkeypatch: pytes
 
 
 # ---------------------------------------------------------------------------
-# The endpoint declaration (criteria 4, 5, 7)
+# The entries that stay declared (the remark corrections of criterion 3)
 # ---------------------------------------------------------------------------
 
 
@@ -374,7 +381,8 @@ def test_openai_codex_is_declared_as_decided() -> None:
     assert codex["darf_sehen"] == ["framework"]
     assert codex["modelle"] == ["gpt-6.1-sol"]
     remark = codex["bemerkung"]
-    assert "Codex CLI" in remark and "2a" in remark and "6" in remark and "United States" in remark
+    assert "Codex CLI" in remark and "United States" in remark
+    assert "moved to `opencode-go`" in remark
 
 
 def test_kimi_is_excluded_not_declared() -> None:
@@ -387,11 +395,11 @@ def test_kimi_is_excluded_not_declared() -> None:
     assert "2026-09-30" in kimi[0]["grund"] and "maintainer" in kimi[0]["grund"]
 
 
-def test_the_glm_remark_names_all_three_live_verbs() -> None:
+def test_the_glm_remark_names_its_work_verbs_and_no_review_phase() -> None:
     remark = " ".join(endpoints()["glm-coding-plan"]["bemerkung"].lower().split())
-    assert "review loop" in remark and "phase 4b" in remark
-    assert "stage2.py review-loop" in remark
     assert "stage2.py explore" in remark and "stage2.py implement" in remark
+    assert "is used for the review loop" not in remark
+    assert "moved to `opencode-go`" in remark
     assert "does not have yet" not in remark
     for word in ("umsetzung", "marking"):
         assert word not in remark
@@ -439,7 +447,7 @@ def test_parse_rows_folds_a_pipe_inside_the_finding_into_it() -> None:
 )
 def test_table_lines_that_are_not_rows_are_never_reported_as_no_finding(world: World, answer: str) -> None:
     """Repair round 1, F-3: a table the parser cannot read is passed through, under a head that is true."""
-    world.script(codex=[codex_ok("T1", answer)], claude=[{"stdout": answer}])
+    world.script(claude=[claude_ok("T1", answer), {"stdout": answer}])
     assert world.run("spec-review") == 0
     assert world.run("review-loop") == 0
     kept = world.record().read_text(encoding="utf-8")
@@ -476,7 +484,7 @@ def test_no_change_or_a_missing_folder_refuses_every_verb(world: World, verb: st
 
 def test_a_leak_refuses_the_call(world: World) -> None:
     (world.root / "src" / "leak.txt").write_text(LEAK, encoding="utf-8")
-    for verb in ("spec-review", "review", "review-loop"):
+    for verb in ("spec-review", "review", "review-loop", "probe"):
         assert world.run(verb) == 2
     assert world.calls() == []
     assert not world.findings.exists()
@@ -484,23 +492,25 @@ def test_a_leak_refuses_the_call(world: World) -> None:
 
 def test_each_call_runs_its_own_leak_check(world: World) -> None:
     world.write_record([("L1-1", "taken — test_a", "no")])
-    world.script(codex=[codex_ok("T1", rows(1), plant={"leak.txt": LEAK}), codex_ok("T1", "L1-1: agree")])
+    world.script(claude=[claude_ok("T1", rows(1), plant={"leak.txt": LEAK}), claude_ok("T1", "L1-1: agree")])
     assert world.run("review") == 2
-    assert len(world.calls("codex")) == 1, "the mark call started on the first call's check"
+    assert len(world.calls("claude")) == 1, "the mark call started on the first call's check"
 
 
-@pytest.mark.parametrize(
-    ("verb", "endpoint"), [("spec-review", "openai-codex"), ("review-loop", "glm-coding-plan")], ids=["codex", "glm"]
-)
-@pytest.mark.parametrize("fault", ["missing", "no-model", "no-framework", "no-residency"])
-def test_an_endpoint_the_declaration_does_not_clear_refuses(world: World, verb: str, endpoint: str, fault: str) -> None:
+REVIEW_VERBS = ("spec-review", "review-loop", "review", "probe")
+
+
+@pytest.mark.parametrize("verb", REVIEW_VERBS)
+@pytest.mark.parametrize("fault", ["missing", "empty", "no-framework", "no-residency"])
+def test_an_endpoint_the_declaration_does_not_clear_refuses(world: World, verb: str, fault: str) -> None:
+    """Criterion 10: the review verbs clear the `opencode-go` entry, each call in front of its own check."""
     path = world.root / "model-endpoints.yaml"
     data = yaml.safe_load(path.read_text(encoding="utf-8"))
-    entry = next(e for e in data["endpunkte"] if e["name"] == endpoint)
+    entry = next(e for e in data["endpunkte"] if e["name"] == "opencode-go")
     if fault == "missing":
         data["endpunkte"].remove(entry)
-    elif fault == "no-model":
-        entry["modelle"] = ["another-model"]
+    elif fault == "empty":
+        entry["modelle"] = []
     elif fault == "no-framework":
         entry["darf_sehen"] = []
     else:
@@ -562,65 +572,82 @@ def test_a_missing_glm_key_refuses_the_flash_route(world: World, verb: str) -> N
 
 
 def test_the_foreign_environment_is_the_runners(world: World) -> None:
-    world.script(codex=[codex_ok("T1", rows(1))], claude=[{"stdout": rows(1)}])
+    world.script(claude=[claude_ok("T1", rows(1)), {"stdout": rows(1)}, {"stdout": "a fact"}])
     assert world.run("spec-review") == 0
     assert world.run("review-loop") == 0
-    codex, claude = world.calls("codex")[0]["env"], world.calls("claude")[0]["env"]
-    for env in (codex, claude):
+    assert world.run("explore") == 0
+    reviewer, loop, explorer = (call["env"] for call in world.calls("claude"))
+    for env in (reviewer, loop, explorer):
         assert "GH_TOKEN" not in env and "OPENAI_API_KEY" not in env and "X_SECRET" not in env
-    assert not [name for name in codex if name.startswith("ANTHROPIC_")]
-    assert claude["ANTHROPIC_BASE_URL"] == stage2.GLM_BASE_URL
-    assert claude["ANTHROPIC_AUTH_TOKEN"] == KEY and claude["ANTHROPIC_API_KEY"] == KEY
-    for name in stage2.GLM_MODEL_VARIABLES:
-        assert claude[name] == "glm-5.3"
-    credentials = [n for n in claude if n.endswith(("_KEY", "_TOKEN", "_SECRET"))]
+    for env in (reviewer, loop):
+        assert env["ANTHROPIC_BASE_URL"] == stage2.OPENCODE_BASE_URL
+        assert env["ANTHROPIC_AUTH_TOKEN"] == OKEY and env["ANTHROPIC_API_KEY"] == OKEY
+        assert all(value != KEY for value in env.values()), "an OpenCode Go call carries the GLM key"
+        for name in stage2.MODEL_VARIABLES:
+            assert env[name] == "deepseek-v4.1-flash"
+    assert explorer["ANTHROPIC_BASE_URL"] == stage2.GLM_BASE_URL
+    assert explorer["ANTHROPIC_AUTH_TOKEN"] == KEY
+    assert all(value != OKEY for value in explorer.values()), "a GLM call carries the OpenCode Go key"
+    credentials = [n for n in reviewer if n.endswith(("_KEY", "_TOKEN", "_SECRET"))]
     assert sorted(credentials) == ["ANTHROPIC_API_KEY", "ANTHROPIC_AUTH_TOKEN"]
+
+
+def test_no_call_carries_another_endpoints_key(world: World) -> None:
+    """Criterion 13: the OpenCode Go key and the GLM key never meet in one environment."""
+    world.script(claude=[claude_ok("T1", rows(1)), {"stdout": rows(1)}, {"stdout": "a fact"}])
+    assert world.run("spec-review") == 0
+    assert world.run("review-loop") == 0
+    assert world.run("explore") == 0
+    reviewer, _loop, explorer = (call["env"] for call in world.calls("claude"))
+    assert all(value != KEY for value in reviewer.values()), "an OpenCode Go call carries the GLM key"
+    assert all(value != OKEY for value in explorer.values()), "a GLM call carries the OpenCode Go key"
 
 
 @pytest.mark.usefixtures("busy_stdin")
 def test_every_call_gets_an_empty_standard_input(world: World) -> None:
-    world.script(codex=[codex_ok("T1", rows(1))], claude=[{"stdout": rows(1)}])
+    world.script(claude=[claude_ok("T1", rows(1)), {"stdout": rows(1)}])
     assert world.run("spec-review") == 0
     assert world.run("review-loop") == 0
     assert [call["stdin"] for call in world.calls()] == ["", ""]
 
 
-def test_the_glm_credential_never_leaves_the_runner(world: World, capsys: pytest.CaptureFixture[str]) -> None:
+def test_the_opencode_key_never_leaves_the_runner(world: World, capsys: pytest.CaptureFixture[str]) -> None:
+    """Criteria 11 and 12: the key rides in the environment only - no argv, no stream, no record carries it."""
     said = "| X1 | MAJOR | SPEC | a | b | saw @KEY@ |\n"
     world.script(
         claude=[{"stdout": said, "stderr": "@KEY@", "exit": 0}, {"stdout": said, "stderr": "@KEY@", "exit": 1}]
     )
     assert world.run("review-loop") == 0
+    assert world.calls("claude")[0]["env"]["ANTHROPIC_AUTH_TOKEN"] == OKEY
+    for call in world.calls():
+        assert not any(OKEY[i : i + 8] in " ".join(call["argv"]) for i in range(len(OKEY) - 7)), call["argv"]
     kept = "".join(p.read_text(encoding="utf-8") for p in world.state.rglob("*") if p.is_file())
     shutil.rmtree(world.state)
     assert world.run("review-loop") == 1
     seen = capsys.readouterr()
     everything = seen.out + seen.err + world.text() + kept
     assert "[credential]" in kept
-    assert not any(KEY[i : i + 8] in everything for i in range(len(KEY) - 7)), "the credential leaked"
+    assert not any(OKEY[i : i + 8] in everything for i in range(len(OKEY) - 7)), "the credential leaked"
 
 
 def test_every_call_leaves_its_line_in_findings(world: World) -> None:
-    world.script(codex=[codex_ok("T1", rows(1))], claude=[{"stdout": rows(1)}])
+    world.script(claude=[claude_ok("T1", rows(1)), {"stdout": rows(1)}])
     assert world.run("spec-review") == 0
     assert world.run("review-loop") == 0
     text = world.text()
     day = r"\d{4}-\d{2}-\d{2}"
     count = r"\d+ files, \d+ commits, 1 rules"
-    assert re.search(
-        rf"^Stage-2 call, {day}: spec-review · endpoint openai-codex · model gpt-6.1-sol · leak check clean over {count}\.$",
-        text,
-        re.M,
-    )
-    assert re.search(
-        rf"^Stage-2 call, {day}: review-loop · endpoint glm-coding-plan · model glm-5.3 · leak check clean over {count}\.$",
-        text,
-        re.M,
-    )
+    for verb in ("spec-review", "review-loop"):
+        assert re.search(
+            rf"^Stage-2 call, {day}: {verb} · endpoint opencode-go · model deepseek-v4.1-flash · "
+            rf"leak check clean over {count}\.$",
+            text,
+            re.M,
+        )
 
 
 def test_a_findings_file_the_runner_creates_has_a_registry_header(world: World) -> None:
-    world.script(codex=[codex_ok("T1", rows(1))])
+    world.script(claude=[claude_ok("T1", rows(1))])
     assert world.run("spec-review") == 0
     header = plans_registry._frontmatter(world.findings)
     assert header is not None
@@ -641,8 +668,12 @@ def test_every_write_to_findings_keeps_its_updated_stamp_current(world: World) -
     world.findings.write_text(old_header(), encoding="utf-8")
     assert updated_of(world.findings) == dt.date(2026, 9, 29)
     world.script(
-        codex=[codex_ok("T1", rows(1)), codex_ok("T1", rows(1)), codex_ok("T1", "L1-1: agree")],
-        claude=[{"stdout": rows(1)}],
+        claude=[
+            claude_ok("T1", rows(1)),
+            {"stdout": rows(1)},
+            claude_ok("T1", rows(1)),
+            claude_ok("T1", "L1-1: agree"),
+        ]
     )
     assert world.run("spec-review") == 0
     assert updated_of(world.findings) == today, "the call line left the header stale"
@@ -816,8 +847,8 @@ def test_a_failed_flash_process_restores_the_baseline_so_stage2_off_can_proceed(
 def test_a_failed_model_call_names_what_was_restored(world: World, capsys: pytest.CaptureFixture[str]) -> None:
     world.script(claude=[{"stderr": "boom", "exit": 1, "plant": {"src/half.py": "x = 1\n"}}])
     assert world.run("implement") == 1
-    err = capsys.readouterr().err
-    assert "restored the worktree" in err and "src/half.py" in err
+    out = capsys.readouterr().out
+    assert "restored the worktree" in out and "src/half.py" in out
 
 
 def test_a_postcheck_failure_gets_one_flash_repair_with_its_diagnostic(world: World) -> None:
@@ -1166,7 +1197,7 @@ def test_a_change_name_after_the_stage2_off_flag_is_named_as_eaten(
     assert world.calls() == []
 
 
-@pytest.mark.parametrize("verb", ["spec-review", "review-loop", "release-loop", "review"])
+@pytest.mark.parametrize("verb", [*REVIEW_VERBS, "release-loop"])
 def test_stage2_off_is_only_for_work_verbs(world: World, verb: str) -> None:
     assert world.run(verb, "demo", "--stage2-off") == 2
     assert world.calls() == []
@@ -1176,7 +1207,7 @@ def test_filling_the_marks_keeps_the_updated_stamp_current(world: World) -> None
     """Repair round 2 (F-7 note): `fill_marks` stamps the file by itself, not only through the append before it."""
     released = f"{stage2.RELEASE_HEADING} 2026-09-29\n\n" + stage2.render_table(
         stage2.RELEASED_COLUMNS,
-        [["L1-1", "MAJOR", "MAINT", "impl", "src/app.py:1", "f", "GLM", "taken — t", "no", "—"]],
+        [["L1-1", "MAJOR", "MAINT", "impl", "src/app.py:1", "f", "deepseek-v4.1-flash", "taken — t", "no", "—"]],
     )
     world.findings.write_text(old_header() + "\n" + released + "\n", encoding="utf-8")
     assert updated_of(world.findings) == dt.date(2026, 9, 29)
@@ -1200,124 +1231,128 @@ def test_a_spec_without_a_bead_refuses(world: World) -> None:
 
 def test_every_prompt_asks_to_read_nothing_outside(world: World) -> None:
     full_flow(world)
-    codex_prompts = [call["argv"][-1] for call in world.calls("codex")]
-    assert len(codex_prompts) == 3
-    glm_prompts = [call["prompt_file"] for call in world.calls("claude")]
-    for prompt in [*codex_prompts, *glm_prompts]:
+    prompts = [call["prompt_file"] for call in world.calls("claude")]
+    assert len(prompts) == 4
+    for prompt in prompts:
         assert prompt.rstrip().endswith(stage2.READ_REQUEST)
 
 
 # ---------------------------------------------------------------------------
-# Codex in phases 2a and 6 (criteria 23-31)
+# The reviewer in phases 2a and 6 (criteria 8, 9, 19)
 # ---------------------------------------------------------------------------
 
 
-def test_codex_is_pinned_on_first_and_resumed_calls(world: World) -> None:
-    world.script(codex=[codex_ok("T1", rows(1)), codex_ok("T1", rows(1))])
+def test_the_three_review_verbs_launch_claude_on_the_anthropic_address(world: World) -> None:
+    """Criterion 8: one launch path - the rung as model, effort max, the pinned settings, no Codex CLI."""
+    world.script(
+        claude=[
+            claude_ok("T1", rows(1)),
+            {"stdout": rows(1)},
+            claude_ok("T1", rows(1)),
+            claude_ok("T1", "L1-1: agree"),
+        ]
+    )
     assert world.run("spec-review") == 0
+    assert world.run("review-loop") == 0
+    world.write_record([("L1-1", "taken — test_a", "no")])
     assert world.run("review") == 0
-    first, resumed = (call["argv"] for call in world.calls("codex"))
-    assert first[:2] == ["exec", "--json"] and resumed[:3] == ["exec", "resume", "T1"]
-    for argv in (first, resumed):
-        assert argv[argv.index("-m") + 1] == "gpt-6.1-sol"
-        assert 'model_reasoning_effort="max"' in argv
-        assert 'sandbox_mode="read-only"' in argv
-        assert "--ephemeral" not in argv and "-s" not in argv
+    assert world.calls("codex") == []
+    calls = world.calls("claude")
+    assert [call["argv"][call["argv"].index("--output-format") + 1] for call in calls] == [
+        "json",
+        "text",
+        "json",
+        "json",
+    ]
+    for call in calls:
+        argv = call["argv"]
+        assert argv[0] == "-p"
+        assert argv[argv.index("--model") + 1] == "deepseek-v4.1-flash"
+        assert argv[argv.index("--effort") + 1] == "max"
+        assert set(argv[argv.index("--tools") + 1].split(",")) == {"Read", "Grep", "Glob"}
+        assert "--restricted" in argv and "--strict-mcp-config" in argv
+        assert argv[argv.index("--permission-mode") + 1] == "dontAsk"
+        assert call["env"]["ANTHROPIC_BASE_URL"] == stage2.OPENCODE_BASE_URL
+    assert ["--no-session-persistence" in call["argv"] for call in calls] == [False, True, False, False]
 
 
-def test_codex_runs_with_hooks_and_memories_off(world: World) -> None:
-    world.script(codex=[codex_ok("T1", rows(1)), codex_ok("T1", rows(1))])
-    assert world.run("spec-review") == 0
-    assert world.run("review") == 0
-    for call in world.calls("codex"):
-        disabled = [call["argv"][i + 1] for i, word in enumerate(call["argv"]) if word == "--disable"]
-        assert sorted(disabled) == ["hooks", "memories"]
-
-
-def test_the_codex_prompt_carries_its_phase_prompt_in_full(world: World) -> None:
-    world.script(codex=[codex_ok("T1", rows(1)), codex_ok("T1", rows(1))])
-    assert world.run("spec-review") == 0
-    assert world.run("review") == 0
-    for call, name in zip(world.calls("codex"), ("02a-spec-review.md", "06-review.md"), strict=True):
-        prompt = call["argv"][-1]
-        assert (REPO_ROOT / "prompts" / name).read_text(encoding="utf-8").rstrip() in prompt
-        assert "plans/changes/demo/" in prompt
-
-
-def test_the_spec_review_answer_lands_as_codex_rows_with_its_session(world: World) -> None:
-    world.script(codex=[codex_ok("T-42", rows(3))])
+def test_the_spec_review_answer_lands_as_its_rungs_rows_with_its_session(world: World) -> None:
+    world.script(claude=[claude_ok("T-42", rows(3))])
     assert world.run("spec-review") == 0
     text = world.text()
-    assert len(re.findall(r"^\| X\d \|.*\| Codex \| open \| — \|$", text, re.M)) == 3
-    assert "## Phase 2a — Codex, " in text
-    assert re.search(r"^Reviewer session: codex T-42$", text, re.M)
+    assert len(re.findall(r"^\| X\d \|.*\| deepseek-v4.1-flash \| open \| — \|$", text, re.M)) == 3
+    assert "## Phase 2a — deepseek-v4.1-flash, " in text
+    assert re.search(r"^Reviewer session: deepseek-v4.1-flash T-42$", text, re.M)
     assert "T-43" not in text
 
 
 def test_an_answer_that_is_not_rows_is_kept(world: World) -> None:
-    world.script(codex=[codex_ok("T1", "An opening remark.\n" + rows(1)), codex_ok("T2", "No finding at all.")])
+    world.script(claude=[claude_ok("T1", "An opening remark.\n" + rows(1)), claude_ok("T2", "No finding at all.")])
     assert world.run("spec-review") == 0
     assert "An opening remark." in world.text() and stage2.NOT_ROWS_NOTE in world.text()
     assert world.run("spec-review") == 0
-    assert "No finding at all." in world.text() and "Codex reported no finding." in world.text()
+    assert "No finding at all." in world.text() and "deepseek-v4.1-flash reported no finding." in world.text()
 
 
 @pytest.mark.parametrize(
     "step",
     [
-        {"stdout": '{"type": "turn.completed"}\n', "answer": rows(1)},
-        {"stdout": json.dumps({"type": "thread.started", "thread_id": "T9"}) + "\n", "answer": rows(1), "exit": 1},
+        {"stdout": json.dumps({"type": "result", "result": rows(1)})},
+        {"stdout": json.dumps({"type": "result", "session_id": "T9", "result": rows(1)}), "exit": 1},
     ],
-    ids=["no-thread-event", "non-zero-exit"],
+    ids=["no-session-id", "non-zero-exit"],
 )
-def test_a_failed_codex_call_writes_no_session_line(world: World, step: dict) -> None:
-    world.script(codex=[step])
+def test_a_failed_reviewer_call_writes_no_session_line(world: World, step: dict) -> None:
+    world.script(claude=[step])
     assert world.run("spec-review") == 1
     text = world.text()
     assert "Reviewer session" not in text and "## Phase 2a" not in text and "X1" not in text
 
 
 def test_review_resumes_the_recorded_session(world: World) -> None:
-    world.script(codex=[codex_ok("T1", rows(1)), codex_ok("T1", rows(1))])
+    world.script(claude=[claude_ok("T1", rows(1)), claude_ok("T1", rows(1)), claude_ok("T1", "L1-1: agree")])
     assert world.run("spec-review") == 0
+    world.write_record([("L1-1", "taken — test_a", "no")])
     assert world.run("review") == 0
-    assert world.calls("codex")[1]["argv"][:3] == ["exec", "resume", "T1"]
+    verdict_call = world.calls("claude")[1]
+    assert verdict_call["argv"][verdict_call["argv"].index("--resume") + 1] == "T1"
     text = world.text()
-    assert re.search(r"^Phase 6 verdict: codex T1, \d{4}-\d{2}-\d{2}$", text, re.M)
+    assert re.search(r"^Phase 6 verdict: deepseek-v4.1-flash T1, \d{4}-\d{2}-\d{2}$", text, re.M)
     assert "fresh session" not in text
 
 
 def test_a_fresh_phase_6_session_says_so(world: World) -> None:
-    world.script(codex=[codex_ok("T5", rows(1))])
+    world.script(claude=[claude_ok("T5", rows(1))])
     assert world.run("review") == 0
-    assert world.calls("codex")[0]["argv"][:2] == ["exec", "--json"]
+    assert "--resume" not in world.calls("claude")[0]["argv"]
     assert "a fresh session reviewed: no phase-2a session was recorded" in world.text()
 
     world.findings.unlink()
     (world.bin / "calls.jsonl").unlink()
-    world.script(codex=[codex_ok("T1", rows(1)), codex_ok("T2", rows(1))])
+    world.write_record([("L1-1", "taken — test_a", "no")])
+    world.script(claude=[claude_ok("T1", rows(1)), claude_ok("T2", rows(1)), claude_ok("T2", "L1-1: agree")])
     assert world.run("spec-review") == 0
     assert world.run("review") == 0
-    assert "a fresh session reviewed: the resume of T1 started a new thread" in world.text()
+    assert "a fresh session reviewed: the resume of T1 started a new session" in world.text()
 
 
 def test_no_loop_row_reaches_the_verdict_call(world: World) -> None:
     world.write_record([("L1-1", "taken — test_a", "no")], finding="LOOPMARK-7")
-    world.script(marker="LOOPMARK-7", codex=[codex_ok("T1", rows(1)), codex_ok("T1", "L1-1: agree")])
+    world.script(marker="LOOPMARK-7", claude=[claude_ok("T1", rows(1)), claude_ok("T1", "L1-1: agree")])
     assert world.run("review") == 0
-    verdict_call, mark_call = world.calls("codex")
-    assert "LOOPMARK-7" not in verdict_call["argv"][-1] and verdict_call["marker_paths"] == []
-    assert "LOOPMARK-7" in mark_call["argv"][-1]
+    verdict_call, mark_call = world.calls("claude")
+    assert "LOOPMARK-7" not in verdict_call["prompt_file"] and verdict_call["marker_paths"] == []
+    assert "LOOPMARK-7" in mark_call["prompt_file"]
 
 
-def test_codex_marks_each_loop_row_after_its_verdict(world: World) -> None:
+def test_the_reviewer_marks_each_loop_row_after_its_verdict(world: World) -> None:
     world.write_record(
         [("L1-1", "taken — test_a", "yes"), ("L1-2", "rejected — out of scope", ""), ("L1-3", "taken — crit 4", "no")]
     )
-    world.script(codex=[codex_ok("T1", rows(2)), codex_ok("T1", "L1-1: agree\nL1-2: disagree — it is covered")])
+    world.script(claude=[claude_ok("T1", rows(2)), claude_ok("T1", "L1-1: agree\nL1-2: disagree — it is covered")])
     assert world.run("review") == 0
     text = world.text()
-    before = verdict_block(world.calls("codex")[1]["findings"])
+    before = verdict_block(world.calls("claude")[1]["findings"])
     assert verdict_block(text) == before, "the mark call changed the verdict"
     released = {
         cells[0]: cells
@@ -1331,7 +1366,7 @@ def test_codex_marks_each_loop_row_after_its_verdict(world: World) -> None:
 
 def test_a_failed_mark_call_leaves_the_marks_empty(world: World) -> None:
     world.write_record([("L1-1", "taken — test_a", "no")])
-    world.script(codex=[codex_ok("T1", rows(1)), {"stdout": "", "exit": 1}])
+    world.script(claude=[claude_ok("T1", rows(1)), {"stdout": "", "exit": 1}])
     assert world.run("review") == 1
     assert "| — |" in world.text() and "agree" not in world.text()
 
@@ -1343,22 +1378,62 @@ def test_review_is_refused_while_a_loop_row_is_undecided(world: World) -> None:
 
 
 # ---------------------------------------------------------------------------
-# The GLM review loop (criteria 32-39)
+# The review loop on the ladder (criteria 4-7, 14, 15, 17, 18)
 # ---------------------------------------------------------------------------
 
 
-def test_the_glm_call_goes_to_zai_with_glm_5_3_at_max(world: World) -> None:
-    world.script(claude=[{"stdout": rows(1)}])
+def test_a_round_calls_its_rung_from_the_entry(world: World) -> None:
+    """Criterion 4: round n calls modelle[n-1]; no rung of the ladder stands as a literal in the runner."""
+    world.script(claude=[{"stdout": rows(1)}, {"stdout": rows(1)}, {"stdout": rows(1)}])
     assert world.run("review-loop") == 0
-    call = world.calls("claude")[0]
-    argv = call["argv"]
-    assert argv[0] == "-p" and argv[argv.index("--model") + 1] == "glm-5.3"
-    assert argv[argv.index("--effort") + 1] == "max"
-    assert call["env"]["ANTHROPIC_BASE_URL"] == "https://api.z.ai/api/anthropic"
-    assert call["env"]["ANTHROPIC_MODEL"] == "glm-5.3"
+    decide_record(world)
+    assert world.run("review-loop") == 0
+    decide_record(world)
+    assert world.run("review-loop") == 0
+    called = [call["argv"][call["argv"].index("--model") + 1] for call in world.calls("claude")]
+    assert called == stage2.ladder(world.root)
+    source = (REPO_ROOT / "scripts" / "stage2.py").read_text(encoding="utf-8")
+    for rung in stage2.ladder(world.root):
+        assert rung not in source, f"{rung} stands as a literal in scripts/stage2.py"
 
 
-def test_the_glm_call_carries_no_user_or_project_configuration(world: World) -> None:
+def test_reordering_the_ladder_touches_no_code(world: World) -> None:
+    """Criterion 5: the rounds call what the reordered list gives - the yaml changes, the runner does not."""
+    endpoints = world.root / "model-endpoints.yaml"
+    text = endpoints.read_text(encoding="utf-8")
+    reordered = text.replace(
+        "      - deepseek-v4.1-flash\n      - mimo-v2.6-flash\n      - mimo-v2.6-pro\n",
+        "      - mimo-v2.6-pro\n      - deepseek-v4.1-flash\n",
+    )
+    assert reordered != text
+    endpoints.write_text(reordered, encoding="utf-8")
+    world.script(claude=[{"stdout": rows(1)}, {"stdout": rows(1)}])
+    assert world.run("review-loop") == 0
+    decide_record(world)
+    assert world.run("review-loop") == 0
+    called = [call["argv"][call["argv"].index("--model") + 1] for call in world.calls("claude")]
+    assert called == ["mimo-v2.6-pro", "deepseek-v4.1-flash"]
+
+    shutil.rmtree(world.record().parent)
+    endpoints.write_text(
+        reordered.replace(
+            "      - mimo-v2.6-pro\n      - deepseek-v4.1-flash\n",
+            "      - spike-a\n      - spike-b\n      - spike-c\n",
+        ),
+        encoding="utf-8",
+    )
+    (world.bin / "calls.jsonl").unlink()
+    world.script(claude=[{"stdout": rows(1)}, {"stdout": rows(1)}, {"stdout": rows(1)}])
+    assert world.run("review-loop") == 0
+    decide_record(world)
+    assert world.run("review-loop") == 0
+    decide_record(world)
+    assert world.run("review-loop") == 0
+    called = [call["argv"][call["argv"].index("--model") + 1] for call in world.calls("claude")]
+    assert called == ["spike-a", "spike-b", "spike-c"]
+
+
+def test_the_reviewer_call_carries_no_user_or_project_configuration(world: World) -> None:
     world.script(claude=[{"stdout": rows(1)}])
     assert world.run("review-loop") == 0
     call = world.calls("claude")[0]
@@ -1369,7 +1444,7 @@ def test_the_glm_call_carries_no_user_or_project_configuration(world: World) -> 
     assert call["env"]["CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC"] == "1"
 
 
-def test_the_glm_call_can_only_read_and_search(world: World) -> None:
+def test_the_reviewer_call_can_only_read_and_search(world: World) -> None:
     world.script(claude=[{"stdout": rows(1)}])
     assert world.run("review-loop") == 0
     argv = world.calls("claude")[0]["argv"]
@@ -1385,7 +1460,7 @@ def test_the_glm_call_can_only_read_and_search(world: World) -> None:
     assert argv[argv.index("--permission-mode") + 1] == "dontAsk"
 
 
-def test_the_glm_prompt_carries_the_loop_prompt_and_the_uncommitted_diff(world: World) -> None:
+def test_the_reviewer_prompt_carries_the_loop_prompt_and_the_uncommitted_diff(world: World) -> None:
     (world.root / "src" / "app.py").write_text("value = 2\n", encoding="utf-8")
     (world.root / "src" / "new.py").write_text("fresh = 'untracked-content'\n", encoding="utf-8")
     world.script(claude=[{"stdout": rows(1)}])
@@ -1396,51 +1471,44 @@ def test_the_glm_prompt_carries_the_loop_prompt_and_the_uncommitted_diff(world: 
     assert "src/new.py" in prompt and "untracked-content" in prompt
 
 
-def test_a_round_lands_in_the_loop_record_not_the_worktree(world: World) -> None:
+def test_a_round_is_written_as_its_rung(world: World) -> None:
+    """Criterion 18: the heading, the Reviewer cell and the record's place carry the rung, outside the worktree."""
     world.script(claude=[{"stdout": rows(2)}])
     assert world.run("review-loop") == 0
     expected = Path(os.environ["XDG_STATE_HOME"]) / "coding-harness" / "stage2" / "demo" / "loop.md"
     text = expected.read_text(encoding="utf-8")
-    assert "## Round 1 — GLM, " in text
+    assert "## Round 1 — deepseek-v4.1-flash, " in text
     ids = [
         cells[0] for cells in (stage2.split_row(line) for line in text.splitlines()) if cells and cells[0][:1] == "L"
     ]
     assert ids == ["L1-1", "L1-2"]
-    assert all(cells[6] == "GLM" for cells in stage2.record_rows(text))
+    assert all(cells[6] == "deepseek-v4.1-flash" for cells in stage2.record_rows(text))
     for path in world.root.rglob("*"):
         if path.is_file() and ".git" not in path.parts:
             assert "FB1-unique-body" not in path.read_text(encoding="utf-8", errors="replace"), path
     assert not list(world.root.rglob("loop.md"))
-    assert "GLM" not in world.text()
+    assert "GLM" not in world.text() and "Codex" not in world.text()
 
 
-def test_a_failed_glm_call_writes_nothing(world: World) -> None:
+def test_a_round_that_did_not_review_writes_nothing(world: World, capsys: pytest.CaptureFixture[str]) -> None:
+    """Criterion 14: no block, exit 1, and the cause named on standard output."""
     world.script(claude=[{"stdout": rows(1), "stderr": "boom", "exit": 1}])
     assert world.run("review-loop") == 1
     assert not world.record().exists()
+    assert "claude call failed" in capsys.readouterr().out
 
 
-def test_a_round_without_a_finding_still_counts(world: World) -> None:
-    world.script(claude=[{"stdout": "Nothing to report."}, {"stdout": "Still nothing."}, {"stdout": "x"}])
+def test_a_round_without_a_finding_still_counts(world: World, capsys: pytest.CaptureFixture[str]) -> None:
+    """A round that reports no finding is a round; two of them stop the loop before round 3 (criterion 7)."""
+    world.script(claude=[{"stdout": "Nothing to report."}, {"stdout": "Still nothing."}])
     assert world.run("review-loop") == 0
-    assert "GLM reported no finding." in world.record().read_text(encoding="utf-8")
+    record = world.record().read_text(encoding="utf-8")
+    assert "deepseek-v4.1-flash reported no finding." in record
     assert world.run("review-loop") == 0
-    assert world.run("review-loop") == 2
-    assert len(world.calls("claude")) == 2
-
-
-def test_a_no_finding_answer_is_a_round_and_a_failed_call_is_not(
-    world: World, capsys: pytest.CaptureFixture[str]
-) -> None:
-    """Repair round 1, F-1. Round 1 answers "no finding", round 2 reports rows: a third call is refused."""
-    world.script(claude=[{"stdout": "Nothing to report."}, {"stdout": rows(2)}, {"stdout": rows(1)}])
-    assert world.run("review-loop") == 0
-    assert "GLM reported no finding." in world.record().read_text(encoding="utf-8")
-    assert world.run("review-loop") == 0
-    decide_record(world)
+    assert "mimo-v2.6-flash reported no finding." in record
     capsys.readouterr()
     assert world.run("review-loop") == 2
-    assert "2 rounds have run" in capsys.readouterr().err
+    assert "round 2 wrote no taken row; the loop stops at 2." in capsys.readouterr().err
     assert len(world.calls("claude")) == 2
 
 
@@ -1450,42 +1518,100 @@ def test_a_no_finding_answer_is_a_round_and_a_failed_call_is_not(
     ids=["non-zero-exit", "empty-answer"],
 )
 def test_a_call_without_an_answer_is_not_a_round(world: World, step: dict) -> None:
-    """Repair round 1, F-1: a failed call, or one with no answer at all, leaves both rounds for the maintainer."""
-    world.script(claude=[step, step, {"stdout": "Nothing."}, {"stdout": "Nothing."}, {"stdout": "x"}])
+    """Criterion 14: a failed call, or one with no answer at all, writes no round; the loop itself still runs to three."""
+    world.script(claude=[step, step, {"stdout": rows(1)}, {"stdout": rows(1)}, {"stdout": rows(1)}])
     assert world.run("review-loop") == 1
     assert world.run("review-loop") == 1
     assert not world.record().exists()
     assert world.run("review-loop") == 0
+    decide_record(world)
+    assert world.run("review-loop") == 0
+    decide_record(world)
     assert world.run("review-loop") == 0
     assert world.run("review-loop") == 2
-    assert len(world.calls("claude")) == 4
+    assert len(world.calls("claude")) == 5
 
 
-def test_the_loop_refuses_without_the_key(world: World) -> None:
+@pytest.mark.parametrize("verb", REVIEW_VERBS)
+def test_the_loop_refuses_without_the_key(world: World, verb: str) -> None:
     Path(os.environ["CC_SECRETS"]).write_text("OTHER=1\n", encoding="utf-8")
-    assert world.run("review-loop") == 2
+    assert world.run(verb) == 2
     assert world.calls() == []
 
 
-def test_a_third_round_is_refused(world: World) -> None:
+def test_the_loop_stops_at_three_rounds(world: World, capsys: pytest.CaptureFixture[str]) -> None:
+    """Criterion 6: three rounds run; the fourth is refused, also after the release."""
     world.script(claude=[{"stdout": rows(1)}, {"stdout": rows(1)}, {"stdout": rows(1)}])
     assert world.run("review-loop") == 0
-    world.write_record([("L1-1", "taken — test_a", "no")])
+    decide_record(world)
     assert world.run("review-loop") == 0
-    assert len(world.calls("claude")) == 2
-    # the rows of both rounds are decided, the third is refused
-    text = world.record().read_text(encoding="utf-8")
-    world.record().write_text(
-        re.sub(r"^(\| L2-1 \|.*)\|  \|  \|$", r"\1| rejected — no evidence |  |", text, flags=re.M), encoding="utf-8"
-    )
+    decide_record(world)
+    assert world.run("review-loop") == 0
+    assert len(world.calls("claude")) == 3
+    decide_record(world)
+    capsys.readouterr()
     assert world.run("review-loop") == 2
-    assert len(world.calls("claude")) == 2
+    assert "3 rounds have run; the loop stops at 3." in capsys.readouterr().err
+    assert len(world.calls("claude")) == 3
     # also after the release: the rounds stay counted
     world.write_findings(VERDICT)
     assert world.run("release-loop") == 0
     assert not world.record().exists()
     assert world.run("review-loop") == 2
+    assert len(world.calls("claude")) == 3
+
+
+def test_round_three_starts_only_after_a_taken_row(world: World, capsys: pytest.CaptureFixture[str]) -> None:
+    """Criterion 7: rounds 1 and 2 run as today; round 3 only when round 2 wrote at least one taken row."""
+    world.script(claude=[{"stdout": rows(1)}, {"stdout": rows(1)}, {"stdout": rows(1)}])
+    assert world.run("review-loop") == 0
+    decide_record(world, status="rejected — out of scope")
+    assert world.run("review-loop") == 0
+    decide_record(world, status="rejected — no evidence")
+    capsys.readouterr()
+    assert world.run("review-loop") == 2
+    assert "round 2 wrote no taken row; the loop stops at 2." in capsys.readouterr().err
     assert len(world.calls("claude")) == 2
+    text = world.record().read_text(encoding="utf-8")
+    world.record().write_text(
+        re.sub(
+            r"^(\| L2-1 \|.*\|) rejected — no evidence \|  \|$",
+            r"\1 taken — test_b | yes |",
+            text,
+            flags=re.M,
+        ),
+        encoding="utf-8",
+    )
+    assert world.run("review-loop") == 0
+    called = [call["argv"][call["argv"].index("--model") + 1] for call in world.calls("claude")]
+    assert called == ["deepseek-v4.1-flash", "mimo-v2.6-flash", "mimo-v2.6-pro"]
+
+
+def test_a_call_over_the_time_limit_is_stopped(
+    world: World, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+) -> None:
+    """Criterion 15: a call that outlasts the limit is stopped, and stopping is one of criterion 14's causes."""
+    assert stage2.REVIEWER_MINUTES == 30
+    monkeypatch.setattr(stage2, "REVIEWER_MINUTES", 0.03)
+    world.script(claude=[{"stdout": "too late", "sleep": 30}])
+    started = time.monotonic()
+    assert world.run("review-loop") == 1
+    assert time.monotonic() - started < 15
+    assert not world.record().exists()
+    assert "stopped by the reviewer time limit" in capsys.readouterr().out
+
+
+def test_a_refused_rung_stops_the_run_without_fallback(world: World, capsys: pytest.CaptureFixture[str]) -> None:
+    """Criterion 17: an address that refuses a rung stops the run - no second address, no other rung, no other endpoint."""
+    world.script(claude=[{"stdout": "refused: unknown model", "stderr": "404", "exit": 1}, {"stdout": "must not run"}])
+    assert world.run("review-loop") == 1
+    calls = world.calls("claude")
+    assert len(calls) == 1
+    assert calls[0]["argv"][calls[0]["argv"].index("--model") + 1] == "deepseek-v4.1-flash"
+    assert calls[0]["env"]["ANTHROPIC_BASE_URL"] == stage2.OPENCODE_BASE_URL
+    assert "chat/completions" not in calls[0]["env"]["ANTHROPIC_BASE_URL"]
+    assert not world.record().exists()
+    assert "claude call failed" in capsys.readouterr().out
 
 
 # ---------------------------------------------------------------------------
@@ -1504,21 +1630,22 @@ def test_release_without_a_verdict_line_refuses_and_changes_nothing(world: World
         assert world.record().exists()
 
 
-def test_release_carries_every_row_with_its_marks(world: World) -> None:
+def test_the_release_carries_each_rows_reviewer(world: World) -> None:
+    """Criterion 19: every released row carries the rung its round had, not one fixed name."""
     world.write_record(
         [("L1-1", "taken — test_a", "yes"), ("L1-2", "rejected — out of scope", ""), ("L1-3", "taken — crit 4", "no")]
     )
-    world.write_findings("## Phase 6 — Codex, 2026-09-30", VERDICT)
+    world.write_findings("## Phase 6 — deepseek-v4.1-flash, 2026-09-30", VERDICT)
     assert world.run("release-loop") == 0
     text = world.text()
-    assert "## Phase 4b — GLM loop rows, released " in text and re.search(r"^Rounds run: 1$", text, re.M)
+    assert stage2.RELEASE_HEADING + " " in text and re.search(r"^Rounds run: 1$", text, re.M)
     released = [
         cells for cells in (stage2.split_row(line) for line in text.splitlines()) if cells and cells[0][:3] == "L1-"
     ]
     assert [(c[0], c[6], c[7], c[8], c[9]) for c in released] == [
-        ("L1-1", "GLM", "taken — test_a", "yes", "—"),
-        ("L1-2", "GLM", "rejected — out of scope", "", "—"),
-        ("L1-3", "GLM", "taken — crit 4", "no", "—"),
+        ("L1-1", "deepseek-v4.1-flash", "taken — test_a", "yes", "—"),
+        ("L1-2", "deepseek-v4.1-flash", "rejected — out of scope", "", "—"),
+        ("L1-3", "deepseek-v4.1-flash", "taken — crit 4", "no", "—"),
     ]
     assert not world.record().exists()
 
@@ -1598,7 +1725,7 @@ def released_rows(text: str) -> list[list[str]]:
     return [c for c in (stage2.split_row(line) for line in block.splitlines()) if c and c[0].startswith("L")]
 
 
-def test_a_pipe_inside_a_glm_finding_reaches_findings(world: World) -> None:
+def test_a_pipe_inside_a_reviewers_finding_reaches_findings(world: World) -> None:
     """Repair round 1, F-2 (a): a shell pipe in a finding is part of the finding, not a seventh cell."""
     said = "| X1 | MAJOR | SPEC | a | src/app.py:1 | the filter `cat x | sort` drops the last row |"
     world.script(claude=[{"stdout": said}])
@@ -1612,7 +1739,7 @@ def test_a_pipe_inside_a_glm_finding_reaches_findings(world: World) -> None:
     assert "No loop row was reported." not in text
     (row,) = released_rows(text)
     assert row[0] == "L1-1" and "cat x" in row[5] and "sort` drops the last row" in row[5]
-    assert row[6:9] == ["GLM", "taken — test_a", "no"]
+    assert row[6:9] == ["deepseek-v4.1-flash", "taken — test_a", "no"]
 
 
 def test_a_line_that_is_not_a_loop_row_is_carried_to_findings(world: World) -> None:
@@ -1667,21 +1794,21 @@ def test_a_damaged_loop_row_refuses_instead_of_vanishing(world: World, capsys: p
     assert world.calls() == []
 
 
-GLM_PROSE = ["## Why this matters", "A remark.", "```sh", "# run: grep foo \\| wc -l", "ls", "```"]
+REVIEWER_PROSE = ["## Why this matters", "A remark.", "```sh", "# run: grep foo \\| wc -l", "ls", "```"]
 
 
-def test_every_line_of_glms_answer_reaches_findings_even_one_that_starts_with_a_hash(world: World) -> None:
-    """Repair round 2, F-10: a heading or a code comment of GLM is not one of the record's own headings."""
-    world.script(claude=[{"stdout": rows(1) + "\n" + "\n".join(GLM_PROSE) + "\n"}])
+def test_every_line_of_a_reviewers_answer_reaches_findings_even_one_that_starts_with_a_hash(world: World) -> None:
+    """Repair round 2, F-10: a heading or a code comment of the reviewer is not one of the record's own headings."""
+    world.script(claude=[{"stdout": rows(1) + "\n" + "\n".join(REVIEWER_PROSE) + "\n"}])
     assert world.run("review-loop") == 0
     decide_record(world)
     world.write_findings(VERDICT)
     assert world.run("release-loop") == 0
     text = world.text()
     lines = text.splitlines()
-    for line in GLM_PROSE:
+    for line in REVIEWER_PROSE:
         assert line in lines, line
-    assert "# Loop record" not in text and "## Round 1 — GLM" not in text, "the record's own headings were carried"
+    assert "# Loop record" not in text and "## Round 1 — deepseek" not in text, "the record's own headings were carried"
     assert not world.record().exists()
 
 
@@ -1693,10 +1820,10 @@ def test_an_answer_without_rows_reaches_findings_as_it_came(world: World) -> Non
     world.write_findings(VERDICT)
     assert world.run("release-loop") == 0
     assert answer in world.text()
-    assert "# Loop record" not in world.text() and "## Round 1 — GLM" not in world.text()
+    assert "# Loop record" not in world.text() and "## Round 1 — deepseek" not in world.text()
 
 
-def test_glm_lines_that_look_like_the_records_own_text_are_carried(world: World) -> None:
+def test_a_reviewers_lines_that_look_like_the_records_own_text_are_carried(world: World) -> None:
     """Repair round 2, F-10: the intro sentences are the runner's only where the runner wrote them."""
     world.script(claude=[{"stdout": stage2.RECORD_INTRO}])
     assert world.run("review-loop") == 0
@@ -1707,8 +1834,8 @@ def test_glm_lines_that_look_like_the_records_own_text_are_carried(world: World)
         assert line in lines, line
 
 
-def test_glms_words_of_one_round_do_not_swallow_the_rows_of_the_next(world: World) -> None:
-    """Repair round 2: GLM's words end at the next round heading; round 2's rows are read, round 1's words carried."""
+def test_a_rounds_words_do_not_swallow_the_rows_of_the_next(world: World) -> None:
+    """Repair round 2: one round's words end at the next round heading; round 2's rows are read, round 1's words carried."""
     world.script(
         claude=[{"stdout": rows(1) + "\nA remark of round 1."}, {"stdout": rows(1) + "\nA remark of round 2."}]
     )
@@ -1725,15 +1852,17 @@ def test_glms_words_of_one_round_do_not_swallow_the_rows_of_the_next(world: Worl
 
 
 @pytest.mark.parametrize("verb", ["release-loop", "review-loop", "review"])
-def test_a_table_line_glm_wrote_with_a_loop_id_is_carried_not_refused(
+def test_a_table_line_a_reviewer_wrote_with_a_loop_id_is_carried_not_refused(
     world: World, verb: str, capsys: pytest.CaptureFixture[str]
 ) -> None:
-    """Repair round 2, F-11: the refusal is for the rows the implementer must decide, not for GLM's own words."""
+    """Repair round 2, F-11: the refusal is for the rows the implementer must decide, not the reviewer's own words."""
     said = rows(1) + "\n| L1-1 | still open from the last round |\n"
-    world.script(
-        claude=[{"stdout": said}, {"stdout": "Nothing to report."}],
-        codex=[codex_ok("T1", "Nothing to report."), codex_ok("T1", "L1-1: agree")],
-    )
+    if verb == "review":
+        world.script(claude=[{"stdout": said}, claude_ok("T1", rows(1)), claude_ok("T1", "L1-1: agree")])
+    elif verb == "review-loop":
+        world.script(claude=[{"stdout": said}, {"stdout": "Nothing to report."}])
+    else:
+        world.script(claude=[{"stdout": said}])
     assert world.run("review-loop") == 0
     decide_record(world)
     if verb == "release-loop":
@@ -1741,7 +1870,7 @@ def test_a_table_line_glm_wrote_with_a_loop_id_is_carried_not_refused(
     capsys.readouterr()
     assert world.run(verb) == 0, capsys.readouterr().err
     if verb == "review-loop":
-        assert "## Round 2 — GLM, " in world.record().read_text(encoding="utf-8")
+        assert "## Round 2 — mimo-v2.6-flash, " in world.record().read_text(encoding="utf-8")
         return
     text = world.text()
     assert "| L1-1 | still open from the last round |" in text.splitlines()
@@ -1749,10 +1878,10 @@ def test_a_table_line_glm_wrote_with_a_loop_id_is_carried_not_refused(
     assert not world.record().exists()
 
 
-def test_a_damaged_row_of_the_record_still_refuses_beside_glm_text(
+def test_a_damaged_row_of_the_record_still_refuses_beside_reviewer_text(
     world: World, capsys: pytest.CaptureFixture[str]
 ) -> None:
-    """Repair round 2, F-11: criterion 39 holds for the record's own rows even when GLM's text stands below them."""
+    """Repair round 2, F-11: the record's own rows are held to the rule even when the reviewer's text stands below them."""
     world.script(claude=[{"stdout": rows(2) + "\n| L1-1 | still open |\n"}])
     assert world.run("review-loop") == 0
     record = world.record().read_text(encoding="utf-8")
@@ -1843,10 +1972,10 @@ def routing_rows(text: str) -> dict[str, tuple[str, str]]:
 
 STAGE2_ROUTING = {
     "1 Explore": "GLM 5.3 Flash",
-    "2a Spec review": "gpt-6.1-sol",
+    "2a Spec review": "deepseek-v4.1-flash",
     "4 Implement": "GLM 5.3 Flash",
-    "4b Review loop": "GLM 5.3",
-    "6 Review": "gpt-6.1-sol",
+    "4b Review loop": "deepseek-v4.1-flash",
+    "6 Review": "deepseek-v4.1-flash",
 }
 
 
@@ -1873,20 +2002,34 @@ def routing_problems(workflow: str) -> list[str]:
     return found
 
 
-def test_the_routing_rows_name_the_decided_models() -> None:
+def test_workflow_section_4_routes_the_three_reviews() -> None:
+    """Criterion 21: 2a, 4b and 6 ride the ladder; 1 and 4 stay on GLM 5.3 Flash; a spike gets no stage 2."""
     text = WORKFLOW.read_text(encoding="utf-8")
     assert routing_problems(text) == []
+    assert class_table_problems(text) == []
+    four = routing_rows(section(text, "## 4 · "))
+    for needle in (
+        "round 1 `deepseek-v4.1-flash`",
+        "round 2 `mimo-v2.6-flash`",
+        "round 3 `mimo-v2.6-pro`",
+        "modelle[n-1]",
+        "round 3 only when round 2 wrote a taken row",
+    ):
+        assert needle in four["4b Review loop"][1], needle
+    for phase in ("2a Spec review", "6 Review"):
+        assert "rung 1" in four[phase][1], phase
     for old, new in (
-        ("**gpt-6.1-sol** | effort `max`, through", "**k3** | effort `max`, through"),
-        ("**GLM 5.3** | effort `max`", "**GLM 5.3** | effort `high`"),
-        ("**Sonnet 5.5** | effort `medium`", "**Sonnet 5** | effort `medium`"),
-        ("**Sonnet 5.5** | effort `medium`", "**Sonnet 5.5** | effort `high`"),
-        ("| 2a Spec review | **Opus 5.5**", "| 2a Spec review | **Haiku 4.5**"),
-        ("| 1 Explore | **GLM 5.3 Flash**", "| 1 Explore | **Haiku 4.5**"),
-        ("| 4 Implement | **GLM 5.3 Flash**", "| 4 Implement | **Sonnet 5.5**"),
+        ("| 2a Spec review | **deepseek-v4.1-flash** |", "| 2a Spec review | **gpt-6.1-sol** |"),
+        ("| 4b Review loop | **deepseek-v4.1-flash** |", "| 4b Review loop | **GLM 5.3** |"),
+        ("| 6 Review | **deepseek-v4.1-flash** |", "| 6 Review | **Opus 5.5** |"),
+        ("| 1 Explore | **GLM 5.3 Flash** |", "| 1 Explore | **Haiku 4.5** |"),
+        ("| 4 Implement | **GLM 5.3 Flash** |", "| 4 Implement | **Sonnet 5.5** |"),
+        ("| `bounded` | the ladder | the ladder |", "| `bounded` | Codex | the ladder |"),
+        ("| a one-sentence change, a `spike` | no stage 2 |", "| a one-sentence change, a `spike` | the ladder |"),
     ):
         assert old in text, old
-        assert routing_problems(text.replace(old, new, 1)), (old, new)
+        changed = text.replace(old, new, 1)
+        assert routing_problems(changed) or class_table_problems(changed), (old, new)
 
 
 def phase_table_problems(workflow: str) -> list[str]:
@@ -1904,8 +2047,10 @@ def phase_table_problems(workflow: str) -> list[str]:
         return [f"the 4b row has {len(cells)} cells, not 5"]
     if "findings.md" not in cells[2] or "release-loop" not in cells[2]:
         found.append("the 4b artefact is not the loop rows in findings.md after release-loop")
-    if "at most two rounds" not in cells[3] or "make verify" not in cells[3]:
-        found.append("the 4b gate is not at most two rounds with make verify after each repair")
+    if "at most three rounds" not in cells[3] or "make verify" not in cells[3]:
+        found.append("the 4b gate is not at most three rounds with make verify after each repair")
+    if "round 3 only when round 2 wrote a taken row" not in cells[3]:
+        found.append("the 4b gate does not condition round 3 on round 2's taken row")
     if "04b-review-loop.md" not in cells[4] or not (PROMPTS / "04b-review-loop.md").is_file():
         found.append("the 4b row does not link an existing prompt")
     return found
@@ -1916,7 +2061,8 @@ def test_the_phase_table_has_the_review_loop() -> None:
     assert phase_table_problems(text) == []
     row = next(line for line in text.splitlines() if line.startswith("| 4b |"))
     assert phase_table_problems(text.replace(row + "\n", "")), "the row removed"
-    assert phase_table_problems(text.replace("at most two rounds", "rounds", 1))
+    assert phase_table_problems(text.replace("at most three rounds", "rounds", 1))
+    assert phase_table_problems(text.replace("round 3 only when round 2 wrote a taken row", "round 3 when needed", 1))
     assert phase_table_problems(text.replace("(`release-loop`)", "", 1))
     assert phase_table_problems(text.replace("04b-review-loop.md", "04c-review-loop.md"))
 
@@ -2009,7 +2155,9 @@ def test_section_4_says_the_foreign_settings_are_passed_not_measured() -> None:
     assert configured_not_measured_problems(text) == []
     flatter = text.replace("configured on every call, not measured", "in force")
     assert flatter != text and configured_not_measured_problems(flatter)
-    assert configured_not_measured_problems(text.replace("The runner starts Codex with", "Codex also runs in"))
+    assert configured_not_measured_problems(
+        text.replace("The runner starts Claude Code for every", "GLM runs as Claude Code for every")
+    )
     assert configured_not_measured_problems(text.replace("tracked `.codex/hooks.json`", "a hooks file"))
 
 
@@ -2017,7 +2165,7 @@ def review_prompt_problems(spec_review: str, review: str) -> list[str]:
     found = []
     for name, text in (("02a-spec-review.md", spec_review), ("06-review.md", review)):
         one = flat(text)
-        for needle in ("gpt-6.1-sol", "Opus 5.5", "scripts/stage2.py"):
+        for needle in ("deepseek-v4.1-flash", "Opus 5.5", "scripts/stage2.py"):
             if needle not in one:
                 found.append(f"{name} lacks {needle}")
     if "stage2.py spec-review <change>" not in flat(spec_review):
@@ -2036,7 +2184,7 @@ def test_the_review_prompts_give_both_paths() -> None:
     spec_review = (PROMPTS / "02a-spec-review.md").read_text(encoding="utf-8")
     review = (PROMPTS / "06-review.md").read_text(encoding="utf-8")
     assert review_prompt_problems(spec_review, review) == []
-    assert review_prompt_problems(spec_review.replace("gpt-6.1-sol", "gpt"), review)
+    assert review_prompt_problems(spec_review.replace("deepseek-v4.1-flash", "gpt"), review)
     assert review_prompt_problems(spec_review.replace("Opus 5.5", "Haiku 4.5"), review)
     assert review_prompt_problems(spec_review, review.replace("Phase 6 verdict:", "Verdict:"))
     assert review_prompt_problems(spec_review, review.replace("release-loop", "release"))
@@ -2158,7 +2306,7 @@ def test_the_doctrine_and_prompts_say_the_flash_verbs_are_live() -> None:
 
 
 def class_table_problems(workflow: str) -> list[str]:
-    """The class table: a `bounded` change's stage-2 reviews go to Codex, and nothing in it names Fable."""
+    """The class table: a change's reviews ride the ladder, a spike gets none, and nothing names Fable."""
     found = []
     rows = {
         line.split("|")[1].strip(): [cell.strip() for cell in line.split("|")[2:-1]]
@@ -2168,25 +2316,16 @@ def class_table_problems(workflow: str) -> list[str]:
     bounded = rows.get("`bounded`")
     if bounded is None or len(bounded) != 3:
         return ["the class table has no `bounded` row of three cells"]
-    if not bounded[0].startswith("Codex") or not bounded[2].startswith("Codex"):
-        found.append("the class table does not send a `bounded` change's 2a and 6 to Codex")
-    if bounded[1] != "GLM":
-        found.append("the class table does not keep GLM in the loop of a `bounded` change")
+    if not bounded[0].startswith("the ladder") or bounded[1] != "the ladder":
+        found.append("the class table does not send a change's 2a and 4b to the ladder")
+    if not bounded[2].startswith("rung 1"):
+        found.append("the class table does not put phase 6 on the ladder's rung 1")
+    spike = rows.get("a one-sentence change, a `spike`")
+    if spike is None or len(spike) != 3 or any(cell != "no stage 2" for cell in spike):
+        found.append("the class table does not leave a spike and a one-sentence change without stage 2")
     if "Fable" in "".join("".join(cells) for cells in rows.values()):
         found.append("the class table names Fable")
     return found
-
-
-def test_a_bounded_changes_reviews_go_to_codex() -> None:
-    text = WORKFLOW.read_text(encoding="utf-8")
-    assert class_table_problems(text) == []
-    for old, new in (
-        ("| `bounded` | Codex, where one is held |", "| `bounded` | Opus 5.5, where one is held |"),
-        ("| GLM | Codex — the 2a session", "| GLM | Opus 5.5 — the 2a session"),
-        ("| `bounded` | Codex, where one is held |", "| `bounded` | Fable 5.1, where one is held |"),
-    ):
-        assert old in text, old
-        assert class_table_problems(text.replace(old, new, 1)), (old, new)
 
 
 def test_no_fable_in_the_routing_rows_or_the_prompts() -> None:
@@ -2225,8 +2364,11 @@ def test_the_spec_prompt_asks_one_condition_and_a_refutation() -> None:
 
 def agents_md_problems(text: str) -> list[str]:
     found = []
-    if not re.search(r"^\| 4b \| Review loop \*\(stage 2\)\* \|.*two rounds.*\|$", text, re.M):
+    if not re.search(r"^\| 4b \| Review loop \*\(stage 2\)\* \|.*three rounds.*\|$", text, re.M):
         found.append("AGENTS.md has no 4b row with its gate")
+    row = next((line for line in text.splitlines() if line.startswith("| 4b |")), "")
+    if "round 3 only when round 2 wrote a taken row" not in row:
+        found.append("AGENTS.md has no 4b row with the round-3 condition")
     one = flat(text)
     if (
         "is started only through `python3 scripts/stage2.py`" not in one
@@ -2243,6 +2385,78 @@ def test_agents_md_names_the_loop_and_the_runner() -> None:
     row = next(line for line in text.splitlines() if line.startswith("| 4b |"))
     assert agents_md_problems(text.replace(row + "\n", ""))
     assert agents_md_problems(text.replace("only through", "also through"))
+    assert agents_md_problems(text.replace("round 3 only when round 2 wrote a taken row", "round 3 as needed"))
+
+
+def test_workflow_section_4_keeps_the_lineage_argument() -> None:
+    """Criterion 22: the why stands and names the rungs' lineages instead of two reviewers of one round."""
+    four = flat(section(WORKFLOW.read_text(encoding="utf-8"), "## 4 · "))
+    for phrase in (
+        "blind spots",
+        "Disagreements are recorded, not resolved automatically",
+        "is the information",
+        "DeepSeek",
+        "MiMo",
+        "Rung 1 flagged it, rung 2 did not",
+    ):
+        assert phrase in four, phrase
+    assert "Codex flagged it, GLM did not" not in four
+
+
+def test_the_prompts_name_the_ladder_and_the_limit() -> None:
+    """Criterion 23: the four review texts name the ladder and the three rounds; explore and implement keep Flash."""
+    texts = {
+        "02a": (PROMPTS / "02a-spec-review.md").read_text(encoding="utf-8"),
+        "04b": (PROMPTS / "04b-review-loop.md").read_text(encoding="utf-8"),
+        "06": (PROMPTS / "06-review.md").read_text(encoding="utf-8"),
+        "agents": (REPO_ROOT / "AGENTS.md").read_text(encoding="utf-8"),
+    }
+    for name, text in texts.items():
+        one = flat(text)
+        for needle in ("ladder", "opencode-go", "three rounds"):
+            assert needle in one, (name, needle)
+        assert "gpt-6.1-sol" not in one, name
+    for name in ("04b", "agents"):
+        one = flat(texts[name])
+        assert "round 3 only when round 2 wrote" in one and "taken" in one, name
+    for name in ("02a", "06"):
+        assert "deepseek-v4.1-flash" in flat(texts[name]), name
+    for name in ("01-explore.md", "04-implement.md"):
+        assert "GLM 5.3 Flash" in (PROMPTS / name).read_text(encoding="utf-8"), name
+
+
+def test_the_stop_rule_counts_every_rung() -> None:
+    """Criterion 24: the measurement counts a taken finding of any rung, not only the two former reviewers."""
+    four = flat(section(WORKFLOW.read_text(encoding="utf-8"), "## 4 · "))
+    assert "a taken finding of a rung counts like a Codex or GLM finding counted before 2026-10-07" in four
+    assert "taken Codex or GLM finding broke a test" not in four
+
+
+def test_the_adr_draft_states_every_point() -> None:
+    """Criterion 25: the draft in design.md carries the six points and the weighed options, ready to copy out."""
+    draft = section(
+        (REPO_ROOT / "plans/changes/stage2-mimo/design.md").read_text(encoding="utf-8"), "### ADR 0011"
+    )
+    assert draft, "the draft is not in design.md"
+    one = flat(draft)
+    for needle in (
+        "Framework content may also go to `opencode-go`",
+        "through Claude Code",
+        "the spec review (2a), the review loop (4b) and the review (6)",
+        "The reviewer roles move",
+        "explore and implement stay on GLM 5.3 Flash",
+        "The ladder is data, not code",
+        "modelle[n-1]",
+        "one-line pull request",
+        "at most three rounds",
+        "The unconfined reads accepted for ADR 0007's reviewers extend to the rungs",
+        "Keep Codex and GLM",
+        "An OpenCode product other than Go",
+        "OpenCode's own CLI as the launcher",
+        "The model of round 2",
+        "runde 2 flash",
+    ):
+        assert needle in one, needle
 
 
 def continuity_problems(amendments: dict, target: str, adr_dir: Path) -> list[str]:

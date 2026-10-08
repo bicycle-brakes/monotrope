@@ -6,7 +6,7 @@ implementation_status: none
 date: 2026-10-07
 created: 2026-10-07
 last_reviewed: 2026-10-07
-updated: 2026-10-07
+updated: 2026-10-08
 supersedes: null
 superseded_by: null
 bead: coding-harness-ymx
@@ -31,3 +31,9 @@ Stage-2 call, 2026-10-07: spec-review · endpoint openai-codex · model gpt-6.1-
 | S4 | MAJOR | SPEC | base | spec.md:150,156 | [AMBIGUITY] Consider two completed rounds with every row decided and no taken row in round 2, then request round 3. AC6 says refusing the third round refutes the criterion; AC7 requires that refusal. One reading permits the third round whenever two rounds have completed, violating AC7; the other permits it only after a taken row, violating AC6's stated test oracle. The same fixture cannot satisfy both. | Codex | in spec | — |
 
 Reviewer session: codex 01a116db-602e-73e2-bbee-d11f961debe4
+
+Stage-2 call, 2026-10-07: implement · attempt 1 · route flash · endpoint glm-coding-plan · model glm-5.3-flash · leak check clean over 273 files, 618 commits, 12 rules.
+
+Stage-2 call, 2026-10-08: implement · attempt 2 · route flash-repair · endpoint glm-coding-plan · model glm-5.3-flash · reason first Flash post-run check failed · leak check clean over 274 files, 626 commits, 12 rules.
+
+Stage-2 call, 2026-10-08: implement · attempt 3 · route stage-1 · endpoint claude-code-plan · model claude-sonnet-5-5 · reason two Flash post-run checks failed · leak check clean over 274 files, 627 commits, 12 rules.

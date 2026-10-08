@@ -312,3 +312,89 @@ def test_the_routing_check_reads_lettered_and_multi_word_rows() -> None:
     text = "| 2a Spec review | **k3** | x |\n| 4b Review loop | **k3** | x |\n"
     assert routing_models(text) == ["k3", "k3"]
     assert routing_models("| 1 | Explore | x |\n") == []
+
+
+# ---------------------------------------------------------------------------
+# The opencode-go entry (stage2-mimo)
+# ---------------------------------------------------------------------------
+
+
+def _endpunkt(name: str) -> dict:
+    """The one entry declared under `endpunkte:` with this name, or `{}`.
+
+    Defensive like the declaration itself: a test over a missing entry must
+    fail on its own assertion, not die on a `KeyError` the reader cannot place.
+    """
+    for e in _erklaerung()["endpunkte"]:
+        if isinstance(e, dict) and e.get("name") == name:
+            return e
+    return {}
+
+
+def test_the_opencode_go_entry_is_declared() -> None:
+    """Criterion 1: the entry, its fields and the ladder order - refuted by any other value."""
+    entry = _endpunkt("opencode-go")
+    assert entry["betreiber"] == "OpenCode (Operator Anomaly Innovations, Inc.)"
+    assert entry["residenz"] == "anbieter-erklaert"
+    assert entry["abrechnung"] == "abonnement"
+    assert entry["darf_sehen"] == ["framework"]
+    assert entry["modelle"] == ["deepseek-v4.1-flash", "mimo-v2.6-flash", "mimo-v2.6-pro"]
+
+
+def opencode_remark_problems(remark: str) -> list[str]:
+    """Criterion 2: every point of the remark, each one stated by its source."""
+    one = " ".join(remark.split())
+    found = []
+    for needle in (
+        "https://opencode.ai/zen/go/v1/messages",
+        "https://opencode.ai/zen/go/v1/chat/completions",
+        "OpenAI address only",
+        "measured in phase 4",
+        "Claude Code is a validated client",
+        "native session header",
+        "USD 10 a month",
+        "deepseek-v4.1-flash` USD 0.15",
+        "0.30 / 1.20",
+        "limit USD 60",
+        "mimo-v2.6-flash` 0.14 / 0.28, limit USD 60",
+        "mimo-v2.6-pro` 0.435 / 0.87, limit USD 15",
+        "0 days",
+        '"Not used"',
+        "valid through 2026-10-31",
+        "states no region",
+        '"All our models are hosted in the US and EU."',
+        "read 2026-10-07",
+        "phase 2a",
+        "phase 4b",
+        "phase 6",
+        "scripts/stage2.py",
+    ):
+        if needle not in one:
+            found.append(needle)
+    return found
+
+
+def test_the_opencode_go_remark_names_every_source() -> None:
+    """Criterion 2: the remark says what OpenCode states, with its source and date."""
+    remark = _endpunkt("opencode-go")["bemerkung"]
+    assert opencode_remark_problems(remark) == []
+    planted = remark.replace('"All our models are hosted in the US and EU."', "a region it does not name")
+    assert opencode_remark_problems(planted)
+    planted = remark.replace("valid through 2026-10-31", "renewed without end")
+    assert opencode_remark_problems(planted)
+    planted = remark.replace("measured in phase 4", "assumed")
+    assert opencode_remark_problems(planted)
+
+
+def test_no_old_reviewer_remark_claims_a_review_phase() -> None:
+    """Criterion 3: each old entry says which phases, if any, still route to it."""
+    codex = " ".join(_endpunkt("openai-codex")["bemerkung"].split())
+    glm = " ".join(_endpunkt("glm-coding-plan")["bemerkung"].split())
+    for remark in (codex, glm):
+        assert "Used for the spec review" not in remark
+        assert "is used for the review loop" not in remark
+        assert "moved to `opencode-go`" in remark and "2026-10-07" in remark
+    assert "stage2.py explore" in glm and "stage2.py implement" in glm
+    assert "the entry stays declared" in codex.lower()
+    planted = codex.replace("moved to `opencode-go`", "runs on `openai-codex` as before")
+    assert "moved to `opencode-go`" not in planted

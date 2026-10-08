@@ -4,7 +4,7 @@ status: draft
 implementation_status: none
 date: 2026-10-07
 last_reviewed: 2026-10-07
-updated: 2026-10-07
+updated: 2026-10-08
 supersedes: null
 superseded_by: null
 bead: coding-harness-ymx
@@ -162,4 +162,35 @@ The obvious reading of the files above would reach further. It does not:
 - The loop record's place, the evidence rule and verdict-first-release-after;
   `openai-codex` itself, which stays declared for what still routes to it.
 
+## Runner route — 2026-10-08
+
+Stage-1 route: implement · model claude-sonnet-5-5 · reason: two Flash post-run checks failed.
+
 ## Time used
+
+2026-10-08, phase-4 session under the Stage-2 runner — start and end clock
+times not readable in it (the runner's session has file tools and no command
+tool, so `date` could not be read; the span is not estimated). The session
+covered plan steps 1–6 and the file part of step 8 (entry, runner, tests,
+doctrine, `docs/adr/0011`, the re-recorded answer file); step 7 (the probe)
+and the pull request remain for a session with command access.
+
+2026-10-08, phase-4 repair session under the Stage-2 runner (attempt 2, after
+the first `make verify` came back red) — start and end clock times not
+readable in it either (file tools, no command tool; the span is not
+estimated). The session audited the red gates from the file side and
+repaired them: the `updated:` stamps of `docs/WORKFLOW.md`, `plan.md` and
+`design.md` (frontmatter-current measures a modified file against today),
+the AGENTS.md checker whose third planted fault could not fail, and the
+missing "three rounds" needles in `prompts/02a-spec-review.md` and
+`prompts/06-review.md`. Step 7 (the probe) and the pull request remain for a
+session with command access.
+
+2026-10-08, phase-4 repair session under the Stage-2 runner (attempt 3) —
+start and end clock times not readable (file tools, no command tool; the span
+is not estimated). The diagnostics are all markdownlint output on files this
+change does not touch (`README.md`, `templates/`,
+`tools/claude-code/README.md`), and the `markdownlint` gate is
+`enforcement: report` in `decisions/gates.yaml`, so it cannot be what turned
+`make verify` red. The blocking gate is not named in the diagnostics tail; no
+other file was changed.
