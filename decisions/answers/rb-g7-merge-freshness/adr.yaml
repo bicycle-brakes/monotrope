@@ -1,0 +1,14 @@
+schema_version: 1
+change: rb-g7-merge-freshness
+question: adr
+answer: 'no'
+reason: 'The maintainer answered ''nein'' to the shown proposal and its reason: the
+  rule set''s history entry records the decision, as it did for RB-M6.'
+shown:
+  proposed: 'no'
+  proposal_reason: it carries out the maintainer's answer of 2026-10-08 to rule RB-G7
+    with two tests and one ruleset setting, the upgrade tests/test_repo_settings.py
+    already anticipates; the rule set's history entry records it, as 4.0.0 did for
+    RB-M6, and a later rule-set version reverses it
+answered_by: framework-architect
+answered_at: 2026-10-08
