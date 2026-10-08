@@ -340,7 +340,8 @@ def test_the_opencode_go_entry_is_declared() -> None:
     assert entry["residenz"] == "anbieter-erklaert"
     assert entry["abrechnung"] == "abonnement"
     assert entry["darf_sehen"] == ["framework"]
-    assert entry["modelle"] == ["deepseek-v4.1-flash", "mimo-v2.6-flash", "mimo-v2.6-pro"]
+    # The order is the maintainer's to change in this file alone; only the set and the count are pinned.
+    assert sorted(entry["modelle"]) == ["deepseek-v4.1-flash", "mimo-v2.6-flash", "mimo-v2.6-pro"]
 
 
 def opencode_remark_problems(remark: str) -> list[str]:

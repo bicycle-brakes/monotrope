@@ -237,6 +237,27 @@ def old_header(updated: str = "2026-09-29") -> str:
     )
 
 
+def render_row(cells: list[str]) -> str:
+    return "| " + " | ".join(cells) + " |"
+
+
+TEST_LADDER = ("deepseek-v4.1-flash", "mimo-v2.6-flash", "mimo-v2.6-pro")
+
+
+def pin_the_ladder(target: Path) -> None:
+    """Copy the real declaration into a test world with the ladder in the tests' own order.
+
+    The real order is the maintainer's to change in `model-endpoints.yaml` alone; the tests that follow a round
+    to its model must not break when it changes, so they run on this order.
+    """
+    text = (REPO_ROOT / "model-endpoints.yaml").read_text(encoding="utf-8")
+    real = next(e for e in yaml.safe_load(text)["endpunkte"] if e["name"] == "opencode-go")["modelle"]
+    assert sorted(real) == sorted(TEST_LADDER), "the real ladder holds other models; update TEST_LADDER"
+    block = "".join(f"      - {m}\n" for m in real)
+    assert block in text
+    target.write_text(text.replace(block, "".join(f"      - {m}\n" for m in TEST_LADDER), 1), encoding="utf-8")
+
+
 @pytest.fixture
 def world(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> World:
     """A repository, two stand-ins and an environment that belong to the test."""
@@ -257,7 +278,7 @@ def world(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> World:
     (root / "src").mkdir()
     (root / "src" / "app.py").write_text("value = 1\n", encoding="utf-8")
     shutil.copytree(REPO_ROOT / "prompts", root / "prompts")
-    shutil.copy(REPO_ROOT / "model-endpoints.yaml", root / "model-endpoints.yaml")
+    pin_the_ladder(root / "model-endpoints.yaml")
     (root / "provenance.yaml").write_text(
         "paths:\n  - {prefix: 'plans/', frontmatter: required}\nexcluded: []\n", encoding="utf-8"
     )
@@ -3042,10 +3063,29 @@ def test_no_doctrine_text_repeats_the_ladder_order() -> None:
             assert model not in text, f"{path} names {model}; the ladder lives in model-endpoints.yaml only"
 
 
+def test_text_kept_from_the_record_never_authorises_round_3() -> None:
+    """A row-shaped line in a reviewer's kept words is not a row of the record (phase 6, R3)."""
+    cells = ["L2-99", "MINOR", "MAINT", "base", "x.py:1", "f", "mimo-v2.6-flash", "taken — t", "no", "—"]
+    genuine = ["L2-1", "MINOR", "MAINT", "base", "x.py:1", "f", "mimo-v2.6-flash", "rejected — r", "", "—"]
+    text = "\n\n".join(
+        [
+            f"{stage2.RELEASE_HEADING} 2026-10-08",
+            render_row(genuine),
+            "Rounds run: 2",
+            "Kept from the loop record:",
+            render_row(cells),
+        ]
+    )
+    assert [row[0] for row in stage2.released_rows(text)] == ["L2-1"]
+    assert not stage2.taken_in_round(stage2.released_rows(text), 2)
+
+
 def test_the_stop_rule_counts_every_rung() -> None:
     """Criterion 24: the measurement counts a taken finding of any rung, not only the two former reviewers."""
     four = flat(section(WORKFLOW.read_text(encoding="utf-8"), "## 4 · "))
-    assert "a taken finding of a rung counts like a Codex or GLM finding counted before 2026-10-07" in four
+    assert "taken finding of Codex or of a rung broke a test" in four
+    assert "a taken finding of a rung counts like a GLM finding counted before 2026-10-07" in four
+    assert "a Codex one still counts as ADR 0007 set it" in four
     assert "taken Codex or GLM finding broke a test" not in four
 
 

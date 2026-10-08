@@ -856,9 +856,10 @@ A **stage-2 run** is a change whose review made at least one call; runs are
 counted in the order their pull requests merge. Every finding records its
 reviewer, whether it was taken or rejected and, if taken, whether it broke a
 test. **After the third run, a short evaluation is written under
-`docs/research/`. If at least one taken finding of a rung broke a test, stage 2
+`docs/research/`. If at least one taken finding of Codex or of a rung broke a test, stage 2
 falls back to Opus 5.5 until the maintainer decides again** — a taken finding
-of a rung counts like a Codex or GLM finding counted before 2026-10-07, and
+of a rung counts like a GLM finding counted before 2026-10-07, a Codex one
+still counts as ADR 0007 set it, and
 Opus 5.5 reviews every change, and phases 1 and 4 return to §3's Haiku 4.5 and
 Sonnet 5.5. The rule is written, not counted by a script: a person reads the
 evaluation, and its pull request applies the fallback. This replaces the three measured runs that

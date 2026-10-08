@@ -812,8 +812,12 @@ def released_rows(findings_text: str) -> list[list[str]]:
     start = findings_text.rfind(RELEASE_HEADING)
     if start < 0:
         return []
+    block = findings_text[start:]
+    kept = block.find("Kept from the loop record:")
+    if kept >= 0:
+        block = block[:kept]  # what follows is the reviewers' words, carried as they came, not rows of the record
     rows = []
-    for line in findings_text[start:].splitlines():
+    for line in block.splitlines():
         cells = split_row(line)
         if cells and len(cells) == len(RELEASED_COLUMNS) and LOOP_ID.fullmatch(cells[0]):
             rows.append(cells)
