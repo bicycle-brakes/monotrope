@@ -3,10 +3,10 @@ title: "Regelwerk — die normativen Regeln für Agents, Hooks, Gates, Human Gat
 category: governance
 subcategory: regelwerk
 status: current
-version: 4.0.0
+version: 5.0.0
 created: 2026-08-14
 last_reviewed: 2026-09-19
-updated: 2026-10-06
+updated: 2026-10-08
 owner: Data Architect
 provenance: human-decided
 produced_by: {kind: llm-session, name: claude-code, version: "2026-08-14"}
@@ -135,7 +135,7 @@ neue Regel · PATCH = Wortlaut oder Testname.
 | **RB-G4** | Jedes Gate hat einen Mutationstest: einen Lauf, der rot wird, wenn man das kaputtmacht, wovor das Gate schützt — oder einen Grund in der Sperrklinke, die nur schrumpfen darf | 4 | `tests/test_ci.py`::test_every_gate_step_has_a_mutation_test · ::test_the_mutation_ratchet_only_turns_one_way | P L I |
 | **RB-G5** | Fehlender Input ist nicht „veraltet". Prüfer melden über das gemeinsame Vokabular, Schreiber über `check_verdict` — aktuell, veraltet, fehlend sind drei Zustände | 2 | `Ramp:kit-transfer` | P L I |
 | **RB-G6** | `--check` ist ein deklariertes Flag; ein unbekanntes Flag ist ein Fehler und kein Lauf; `--check` schreibt nie | 2 | `Ramp:kit-transfer` | P L I |
-| **RB-G7** | Eine leere Menge ist kein Ergebnis: jedes Gate behauptet seine Schlüsselmenge als nicht leer. Geprüft wird der Merge-Stand, nicht der Branch-Kopf | 4 | `tests/test_ramp_valves.py`::test_the_valve_list_is_not_empty · `tests/test_regelwerk.py`::test_the_list_is_not_empty · `Ramp:merge-freshness` | P L I |
+| **RB-G7** | Eine leere Menge ist kein Ergebnis: jedes Gate behauptet seine Schlüsselmenge als nicht leer. Geprüft wird der Merge-Stand, nicht der Branch-Kopf. Die CI prüft den Merge-Ref des Pull Requests, und das Ruleset verlangt, dass der Branch vor dem Merge auf dem Stand seines Ziels ist. Ob das Ruleset das verlangt, misst nur die Maschine des Maintainers (Gate `ruleset`, `placement: writer`): wird die Einstellung abgeschaltet, hält das einen Merge über GitHub nicht auf, nur den nächsten lokalen `make verify` | 4 | `tests/test_ramp_valves.py`::test_the_valve_list_is_not_empty · `tests/test_regelwerk.py`::test_the_list_is_not_empty · `tests/test_ci.py`::test_the_verification_runs_against_the_merge_ref · `tests/test_repo_settings.py`::test_master_has_a_ruleset_with_required_checks | P L I |
 
 ### M — Human Gates
 
@@ -193,6 +193,25 @@ Vier Teile, einzeln referenzierbar:
 ## 7 Änderungsverlauf
 
 Append-only. Jeder Eintrag trägt die vier Pflichtzeilen aus §4.
+
+### 5.0.0 — 2026-10-08
+
+**RB-G7** prüft den Merge-Stand jetzt ganz. Die CI prüft den Merge-Ref des
+Pull Requests (`refs/pull/N/merge`). Das allein reichte nicht: er wird
+berechnet, wenn die CI läuft, und bewegt sich `main` vorher, bleibt `verify`
+grün für einen Merge gegen ein älteres `main`. Darum verlangt das Ruleset
+jetzt, dass ein Branch vor dem Merge auf dem Stand seines Ziels ist.
+Entschieden vom Maintainer am 2026-10-08 (Änderung `rb-g7-merge-freshness`,
+Bead `coding-harness-34z`).
+
+MAJOR, weil §4 es so vorschreibt: die beiden Sätze der Regel bleiben, aber
+sie verlangt mehr als vorher — jedes Repository, in dem sie gilt, braucht
+die Ruleset-Einstellung „Require branches to be up to date before merging".
+
+- **Geändert:** RB-G7 — zwei Sätze angefügt (was CI und Ruleset prüfen, und dass nur die Maschine des Maintainers misst, ob das Ruleset es verlangt — §3, Stufe 4); Erzwinger um `tests/test_ci.py::test_the_verification_runs_against_the_merge_ref` und `tests/test_repo_settings.py::test_master_has_a_ruleset_with_required_checks` ergänzt, `Ramp:merge-freshness` entfällt; Stufe (4) und Geltung unverändert. Keine ID geändert, keine entfernt
+- **Tests:** neu `tests/test_ci.py::test_the_verification_runs_against_the_merge_ref` samt eingepflanzten Fehlern; `tests/test_repo_settings.py` verlangt als sechste Anforderung den aktuellen Branch (`strict_required_status_checks_policy`), gemessen im Gate `ruleset` auf der Maschine des Maintainers, nicht in der gehosteten CI; `tests/test_ramp_valves.py` nennt kein einzelnes Ventil mehr. Das Ventil `merge-freshness` ist geschlossen, nicht still gestrichen
+- **Agents/Hooks/Templates:** `prompts/07-commit.md`, „The merge", hat einen Schritt für einen Branch, der hinter seiner Basis liegt; `docs/governance/quality-gates.md` sagt unter den Maschinen-Gates, warum der geprüfte Merge-Ref der gemergte ist
+- **lakeswitch-ai:** nichts — das Ruleset dort („lakeswitch floor", gelesen am 2026-10-08) verlangt den aktuellen Branch bereits, und seine Workflows checken ohne `ref:` aus
 
 ### 4.0.0 — 2026-10-06
 

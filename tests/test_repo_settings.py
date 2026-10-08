@@ -1,4 +1,4 @@
-"""The branch ruleset asks for what rule RB-M6 asks — and a failed look is red.
+"""The branch ruleset asks for what rules RB-M6 and RB-G7 ask — and a failed look is red.
 
 **What RB-M6 asks.** The branch rules of the default branch are asserted from
 within the repository, and they ask for what one GitHub account can hold:
@@ -9,14 +9,21 @@ within the repository, and they ask for what one GitHub account can hold:
    status that any token can post (RB-M6, F-3),
 3. no force push,
 4. no deletion,
-5. no bypass — every ruleset that supplies (1) to (4) shows an empty bypass
-   list.
+5. no bypass — every ruleset that supplies (1) to (4), or (6) below, shows
+   an empty bypass list.
 
 The second approval (code-owner review, approval not by the last pusher) is not
 asked for. It returns when a second identity exists, for example a GitHub App:
 the maintainer, the agents and every token act under one account today, and
 GitHub lets no author approve their own pull request (ADR 0008). A ruleset that
-asks for more than the five still holds.
+asks for more than the six still holds.
+
+**What RB-G7 adds.** (6) Branches up to date before merging: an active
+`required_status_checks` rule with at least one check sets
+`strict_required_status_checks_policy` to `true`. The CI checks the merge ref
+(`tests/test_ci.py`), and this makes it the merge that happens. GitHub applies
+the most restrictive version of aggregated rules, so any ruleset may supply
+it, and (5) then covers that ruleset. Decided 2026-10-08.
 
 **Why only the writer machine measures.** GitHub shows the bypass list of a
 ruleset only to whoever may edit that ruleset ("Get a repository ruleset", REST
@@ -30,7 +37,7 @@ anything at GitHub.
 **Not measured is red, never green.** `gh` missing, a network or login failure,
 an answer that is not JSON or has the wrong shape, a ruleset that shows no
 bypass list, a repository other than the one this checkout is of: each is a finding that begins `not measured:` and says which step
-failed. An empty list of findings means the five requirements were seen to hold
+failed. An empty list of findings means the six requirements were seen to hold
 — nothing else does.
 
 **The return trigger.** When a second identity exists, a later rule-set version
@@ -66,6 +73,11 @@ LIVE_ENV = "RULESET_ASSERT"
 # The check context the required-check rule must list: the hosted job that
 # runs every verify gate.
 REQUIRED_CHECK = "verify"
+
+# RB-G7's requirement: the branch must be up to date with its target before it
+# merges, so the merge ref the CI checked is the merge that happens.
+UP_TO_DATE = "branches up to date before merging"
+UP_TO_DATE_OPTION = "Require branches to be up to date before merging"
 
 # The GitHub App id of GitHub Actions. A required check without it accepts a
 # commit status of that name from anyone with a token — every agent here —
@@ -160,6 +172,23 @@ def _lists_required_check(rule: dict[str, Any], *, pinned: bool = True) -> bool:
     )
 
 
+def _checks_are_readable(rule: dict[str, Any]) -> bool:
+    """Is every entry of a `required_status_checks` list an object with a non-empty `context`?
+
+    An entry of another shape is an answer this file does not know; counting
+    it as a check would let an unknown shape pass the floor (phase 6, F-2).
+    """
+    if rule.get("type") != "required_status_checks":
+        return True
+    parameters = rule.get("parameters")
+    checks = parameters.get("required_status_checks") if isinstance(parameters, dict) else None
+    if checks is None:
+        return True
+    return isinstance(checks, list) and all(
+        isinstance(c, dict) and isinstance(c.get("context"), str) and c["context"] for c in checks
+    )
+
+
 def _supplying_rules(rules: list[dict[str, Any]]) -> dict[str, list[dict[str, Any]]]:
     """The active rules that supply each of the four rule types."""
     supplied: dict[str, list[dict[str, Any]]] = {}
@@ -171,10 +200,30 @@ def _supplying_rules(rules: list[dict[str, Any]]) -> dict[str, list[dict[str, An
     return supplied
 
 
+def _up_to_date_rules(rules: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    """The `required_status_checks` rules that set the up-to-date flag to `true` and list a check.
+
+    Only the boolean counts: a missing key, `null` or the string "true" is not
+    asked for. GitHub applies the most restrictive version of aggregated rules,
+    so any such rule counts, not only the one that lists `verify`.
+    """
+    found = []
+    for rule in rules:
+        if rule.get("type") != "required_status_checks":
+            continue
+        parameters = rule.get("parameters")
+        if not isinstance(parameters, dict):
+            continue
+        checks = parameters.get("required_status_checks")
+        if parameters.get("strict_required_status_checks_policy") is True and isinstance(checks, list) and checks:
+            found.append(rule)
+    return found
+
+
 def _suppliers(rules: list[dict[str, Any]]) -> list[Any]:
-    """The `ruleset_id` of every rule that supplies one of the four, once each."""
+    """The `ruleset_id` of every rule that supplies one of the six requirements, once each."""
     ids: list[Any] = []
-    for matching in _supplying_rules(rules).values():
+    for matching in [*_supplying_rules(rules).values(), _up_to_date_rules(rules)]:
         for rule in matching:
             if rule.get("ruleset_id") not in ids:
                 ids.append(rule.get("ruleset_id"))
@@ -188,7 +237,7 @@ def _actor(actor: Any) -> str:
 
 
 def ruleset_findings(rules: list[dict[str, Any]], rulesets: dict[Any, Any]) -> list[str]:
-    """What fails the five requirements; empty only when all five were seen to hold.
+    """What fails the six requirements; empty only when all six were seen to hold.
 
     `rules` is the answer of the branch-rules endpoint (active rules only, each
     with the `ruleset_id` it comes from); `rulesets` maps a ruleset id to the
@@ -211,6 +260,8 @@ def ruleset_findings(rules: list[dict[str, Any]], rulesets: dict[Any, Any]) -> l
             )
         else:
             findings.append(f"{RULE_TYPES[rule_type]} is not asked for")
+    if not _up_to_date_rules(rules):
+        findings.append(f'{UP_TO_DATE} is not asked for — tick "{UP_TO_DATE_OPTION}" in the ruleset (RB-G7)')
 
     for ruleset_id in _suppliers(rules):
         detail = rulesets.get(ruleset_id)
@@ -276,6 +327,8 @@ def measure(api: Api = gh_api, local: Local = local_repository) -> list[str]:
         return [failed]
     if not isinstance(rules, list) or not all(isinstance(r, dict) for r in rules):
         return [f"not measured: {rules_path}: the answer is not a list of rules"]
+    if not all(_checks_are_readable(r) for r in rules):
+        return [f"not measured: {rules_path}: a required check is not an object with a context"]
 
     details: dict[Any, Any] = {}
     for ruleset_id in _suppliers(rules):
@@ -292,7 +345,8 @@ def measure(api: Api = gh_api, local: Local = local_repository) -> list[str]:
 
 
 # --------------------------------------------------------------------------
-# Invented answers — the live answers of 2026-10-05, only the keys read above
+# Invented answers — the live answers of 2026-10-05, only the keys read above,
+# plus the one key RB-G7 reads, set as the floor asks (live: false on 2026-10-08)
 # --------------------------------------------------------------------------
 
 RULESET_ID = 24528176
@@ -324,10 +378,27 @@ def _todays_rules() -> list[dict[str, Any]]:
         },
         {
             "type": "required_status_checks",
-            "parameters": {"required_status_checks": [{"context": "verify", "integration_id": 15368}]},
+            "parameters": {
+                "strict_required_status_checks_policy": True,
+                "required_status_checks": [{"context": "verify", "integration_id": 15368}],
+            },
             "ruleset_id": RULESET_ID,
         },
     ]
+
+
+def _rules_with_a_null_check() -> list[dict[str, Any]]:
+    """Phase 6, F-2: `verify` not strict, and a second rule strict over a check of no known shape."""
+    rules = _todays_rules()
+    rules[3]["parameters"]["strict_required_status_checks_policy"] = False
+    rules.append(
+        {
+            "type": "required_status_checks",
+            "parameters": {"strict_required_status_checks_policy": True, "required_status_checks": [None]},
+            "ruleset_id": RULESET_ID,
+        }
+    )
+    return rules
 
 
 def _todays_ruleset() -> dict[str, Any]:
@@ -368,7 +439,7 @@ def test_todays_ruleset_holds() -> None:
 
 
 def test_a_stricter_ruleset_still_holds() -> None:
-    """The five are a floor: asking for more is the upgrade the rule expects."""
+    """The six are a floor: asking for more is the upgrade the rule expects."""
     rules = _todays_rules()
     for rule in rules:
         if rule["type"] == "pull_request":
@@ -425,7 +496,14 @@ THE_FOUR_RULE_TYPES = ("pull_request", "required_status_checks", "non_fast_forwa
 def test_the_ruleset_check_goes_red_when_a_rule_is_removed(rule_type: str) -> None:
     rules = _without(_todays_rules(), rule_type)
     findings = ruleset_findings(rules, {RULESET_ID: _todays_ruleset()})
-    assert findings == [f"{RULE_TYPES[rule_type]} is not asked for"]
+    expected = [f"{RULE_TYPES[rule_type]} is not asked for"]
+    if rule_type == "required_status_checks":
+        # the flag lives in that rule, so it goes with it
+        assert len(findings) == 2
+        assert findings[0] == expected[0]
+        assert findings[1].startswith(f"{UP_TO_DATE} is not asked for")
+    else:
+        assert findings == expected
 
 
 def test_the_ruleset_check_goes_red_when_verify_is_not_required() -> None:
@@ -469,6 +547,67 @@ def test_one_pinned_verify_among_unpinned_ones_holds() -> None:
         }
     )
     assert ruleset_findings(rules, {RULESET_ID: _todays_ruleset(), 7: {"id": 7, "bypass_actors": []}}) == []
+
+
+def _set_flag(rules: list[dict[str, Any]], value: Any, *, remove: bool = False) -> None:
+    for rule in rules:
+        if rule["type"] == "required_status_checks":
+            if remove:
+                rule["parameters"].pop("strict_required_status_checks_policy", None)
+            else:
+                rule["parameters"]["strict_required_status_checks_policy"] = value
+
+
+@pytest.mark.parametrize(
+    ("value", "remove"),
+    [
+        pytest.param(False, False, id="live-2026-10-08"),
+        pytest.param(None, True, id="key-removed"),
+        pytest.param(None, False, id="null"),
+        pytest.param("true", False, id="string"),
+    ],
+)
+def test_the_ruleset_check_goes_red_when_branches_need_not_be_up_to_date(value: Any, remove: bool) -> None:
+    rules = _todays_rules()
+    _set_flag(rules, value, remove=remove)
+    findings = ruleset_findings(rules, {RULESET_ID: _todays_ruleset()})
+    assert len(findings) == 1
+    assert findings[0].startswith(UP_TO_DATE)
+    assert UP_TO_DATE_OPTION in findings[0]
+
+
+def _second_ruleset_rule(checks: list[dict[str, Any]]) -> dict[str, Any]:
+    return {
+        "type": "required_status_checks",
+        "parameters": {"strict_required_status_checks_policy": True, "required_status_checks": checks},
+        "ruleset_id": 7,
+    }
+
+
+def test_the_ruleset_check_goes_red_when_only_a_rule_without_checks_asks_for_it() -> None:
+    rules = _todays_rules()
+    _set_flag(rules, False)
+    rules.append(_second_ruleset_rule([]))
+    findings = ruleset_findings(rules, {RULESET_ID: _todays_ruleset(), 7: {"id": 7, "bypass_actors": []}})
+    assert len(findings) == 1
+    assert findings[0].startswith(UP_TO_DATE)
+
+
+def test_up_to_date_from_a_second_ruleset_holds() -> None:
+    rules = _todays_rules()
+    _set_flag(rules, False)
+    rules.append(_second_ruleset_rule([{"context": "floor"}]))
+    rulesets = {RULESET_ID: _todays_ruleset(), 7: {"id": 7, "bypass_actors": []}}
+    assert ruleset_findings(rules, rulesets) == []
+
+
+def test_the_ruleset_check_goes_red_when_the_up_to_date_ruleset_can_be_bypassed() -> None:
+    rules = _todays_rules()
+    _set_flag(rules, False)
+    rules.append(_second_ruleset_rule([{"context": "floor"}]))
+    bypass = [{"actor_id": 5, "actor_type": "RepositoryRole", "bypass_mode": "always"}]
+    rulesets = {RULESET_ID: _todays_ruleset(), 7: {"id": 7, "bypass_actors": bypass}}
+    assert ruleset_findings(rules, rulesets) == ["ruleset 7 lets RepositoryRole 5 bypass it"]
 
 
 def test_the_ruleset_check_goes_red_on_an_empty_rule_list() -> None:
@@ -546,6 +685,12 @@ def _failing(path: str, code: int, text: str) -> Api:
         pytest.param(
             "rules-with-a-string", f"{REPO_PATH}/rules/branches/main", "not a list of rules", id="rules-with-a-string"
         ),
+        pytest.param(
+            "rules-with-a-check-that-is-no-object",
+            f"{REPO_PATH}/rules/branches/main",
+            "not an object with a context",
+            id="rules-with-a-check-that-is-no-object",
+        ),
         pytest.param("ruleset-exit-1", f"{REPO_PATH}/rulesets/{RULESET_ID}", "HTTP 404", id="ruleset-exit-1"),
         pytest.param("ruleset-not-json", f"{REPO_PATH}/rulesets/{RULESET_ID}", "not JSON", id="ruleset-not-json"),
         pytest.param("ruleset-a-list", f"{REPO_PATH}/rulesets/{RULESET_ID}", "not a ruleset", id="ruleset-a-list"),
@@ -568,6 +713,7 @@ def test_an_unreachable_api_is_not_a_pass(
         "rules-exit-1-with-a-valid-answer": lambda: _failing(rules_path, 1, json.dumps(_todays_rules())),
         "rules-not-a-list": lambda: _failing(rules_path, 0, "{}"),
         "rules-with-a-string": lambda: _failing(rules_path, 0, '["deletion"]'),
+        "rules-with-a-check-that-is-no-object": lambda: _failing(rules_path, 0, json.dumps(_rules_with_a_null_check())),
         "ruleset-exit-1": lambda: _failing(ruleset_path, 1, "HTTP 404"),
         "ruleset-not-json": lambda: _failing(ruleset_path, 0, "not json"),
         "ruleset-a-list": lambda: _failing(ruleset_path, 0, "[]"),
@@ -660,7 +806,7 @@ def test_a_missing_gh_says_so(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -
     reason="reads GitHub; runs in the gate ruleset on a writer machine (decisions/gates.yaml)",
 )
 def test_master_has_a_ruleset_with_required_checks() -> None:
-    """The live ruleset of the default branch holds the five requirements.
+    """The live ruleset of the default branch holds the six requirements.
 
     The name `master` is the one RB-M6 has carried since 1.0.0; the branch is
     whatever the API calls the default.
