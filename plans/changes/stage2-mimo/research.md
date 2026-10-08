@@ -4,7 +4,7 @@ status: draft
 implementation_status: none
 date: 2026-10-07
 last_reviewed: 2026-10-07
-updated: 2026-10-07
+updated: 2026-10-08
 supersedes: null
 superseded_by: null
 bead: coding-harness-ymx
@@ -548,3 +548,382 @@ was looked at, and is read in full before phase 7 writes the pull request.
 Go page dates it (§G); the check is a calendar entry for the maintainer, not a
 code path.
 
+
+## Addendum 2026-10-08 (afternoon): Pi as the launcher
+
+The maintainer replaced the launcher of the loop's rounds with Pi on
+2026-10-08 (`decisions/answers/stage2-mimo/adr.yaml` at fc76287: "ich möchte
+pi nutzen", pinned `@earendil-works/pi-coding-agent` 1.1.0). This addendum
+adds what phase 2 needs about Pi. Nothing here reopens that answer.
+
+**How it was measured.** Pi 1.1.0 as installed at `/opt/homebrew/bin/pi`
+(`pi --version` → `1.1.0`, 2026-10-08). No real model call was made and no
+real key was used: every run had `OPENCODE_API_KEY=dummy` (or none), an
+environment built with `env -i` (only `PATH`, a scratch `HOME`, a scratch
+`PI_CODING_AGENT_DIR`), and — where a request was needed — a stand-in HTTP
+server on `127.0.0.1` that logged method, path, headers (the
+`authorization` value replaced by its scheme and length) and body, and
+answered with a canned OpenAI-style stream, an HTTP error, or a tool call.
+The stand-in was reached by a scratch `models.json` holding only
+`{"providers": {"opencode-go": {"baseUrl": "http://127.0.0.1:<port>/v1"}}}`.
+"Measured" below means one of those runs on 2026-10-08; "read" names the
+file under the package directory
+(`/opt/homebrew/lib/node_modules/@earendil-works/pi-coding-agent`, below
+`<pkg>`) or the URL, read on 2026-10-08. `~/.pi` was not read or touched.
+
+### L · Tools, and what else loads
+
+- **Built-in tools** (read: `<pkg>/docs/cli.md`, "Tools"): `read`, `bash`,
+  `powershell` (Windows), `edit`, `write`, `grep`, `find`, `ls`; two more
+  from built-in extensions, `codemode` (runs JavaScript that calls the other
+  tools) and `tool_search`. The default set is `read`, `bash`, `edit`,
+  `write`. Read-only among them: `read`, `grep`, `find`, `ls`.
+- **`--tools read,grep,find,ls` replaces the declared set** — measured: the
+  request's `tools` array held exactly `read`, `grep`, `find`, `ls`. A tool
+  call for an undeclared tool is refused by Pi, not executed — measured with
+  the stand-in answering a `bash` call (`touch <marker>`) and a `write` call:
+  `tool_execution_end` with `isError: true` and "Tool bash not found" /
+  "Tool write not found", no marker file, exit 0. A `read` call for a file
+  *outside* the working directory was executed and returned the file's text
+  (measured) — the tools are not confined to the worktree (`<pkg>/docs/security.md`:
+  "The working folder controls resource discovery and the default location
+  for tools, but it does not prevent commands from accessing other paths").
+  That is the residual risk ADR 0007 accepted for its reviewers on
+  2026-09-30 and ADR 0011 decision 4 extends to the rungs.
+- **`--tools` alone is not enough** — measured with a hostile fixture: a
+  scratch agent directory with `settings.json`
+  (`defaultTools: [read, bash, edit, write]`, `defaultProjectTrust: always`),
+  a user extension that registers `user_tool`, a second user extension that
+  registers a tool named **`grep`**, a user skill, a user `mcp.json` whose
+  server touches a marker, a user `AGENTS.md`; and a project with
+  `.pi/settings.json` (`+bash`, `+write`), a project extension, a project
+  skill, `.pi/mcp.json`, `.pi/APPEND_SYSTEM.md` and `AGENTS.md`. Each
+  extension wrote a marker file when loaded.
+
+  | Flags | Extension code ran | MCP servers started | Tools sent | Context and skills in the system prompt |
+  |---|---|---|---|---|
+  | none | user, project | user, project | read, bash, edit, write, proj_tool, grep (the extension's), user_tool, codemode | all |
+  | `--tools read,grep,find,ls --approve` | user, project | user, project | read, **grep = the extension's** ("fixture tool grep"), find, ls | all |
+  | `--tools read,grep,find,ls --no-approve` | user only | user only | read, grep (extension's), find, ls | user and project `AGENTS.md`, skills |
+  | full set¹ with `--approve` | none | none | read, grep, find, ls (built-ins) | project `APPEND_SYSTEM.md` only |
+  | full set¹ with `--no-approve` | none | none | read, grep, find, ls (built-ins) | none |
+
+  ¹ `--tools read,grep,find,ls --no-extensions --no-mcp --no-skills
+  --no-context-files --no-prompt-templates --no-themes`.
+
+  So: an extension can **shadow a built-in tool name** and `--tools` then
+  declares the extension's tool; extension code and MCP servers run at
+  startup whatever `--tools` says; and project files load under trust.
+- **The agent directory still loads under the full set** — measured: with
+  every flag above and `--no-approve`, a `SYSTEM.md` and an
+  `APPEND_SYSTEM.md` in the agent directory replaced and extended the
+  system prompt. The agent directory also holds `models.json` (whose
+  `apiKey` and header values may be `!command`, run at request time —
+  read: `<pkg>/docs/models.md`), `auth.json` and `settings.json`. A fresh,
+  empty `PI_CODING_AGENT_DIR` per call is therefore what isolates the call
+  from `~/.pi`, as a fresh `CLAUDE_CONFIG_DIR` does today.
+- **What isolates a call** (measured as the last two rows plus an empty
+  agent directory): a fresh empty `PI_CODING_AGENT_DIR`, `--no-approve`,
+  `--tools read,grep,find,ls`, `--no-extensions`, `--no-mcp`, `--no-skills`,
+  `--no-context-files`, `--no-prompt-templates`, `--no-themes`,
+  `--no-session`, `--offline`. `--no-tools` empties the set entirely
+  (measured: `tools: []`).
+- **Checking the set before the call: not possible for tools.** RPC mode's
+  `get_state` (measured, no request sent) returns the resolved model object —
+  `id`, `api`, `baseUrl` — and the effective `thinkingLevel`, but no tool
+  list; `get_messages` is empty before a prompt; no dry-run flag exists in
+  `<pkg>/docs/cli.md`. The declared set is visible only once the call runs:
+  JSON mode's first `message_start` carries the system message whose
+  `sections.tools` lists the tools, and the request carries `tools`. The
+  runner trusts the flags plus the empty agent directory; the stand-in tests
+  are what prove the set.
+- **Project trust** (read: `<pkg>/docs/security.md`): print, JSON and RPC
+  modes cannot prompt; without a CLI override they follow
+  `defaultProjectTrust` from the agent directory (default `ask` → skip).
+  Pi reads the project `sessionDir` setting before trust is resolved.
+  Context files (`AGENTS.md`, `CLAUDE.md`) "load regardless of project
+  trust unless you disable context loading".
+
+### M · The `opencode-go` provider and the request on the wire
+
+- **Definition** (read: `<pkg>/node_modules/@earendil-works/pi-ai/dist/providers/opencode-go.js`
+  and `providers/data/opencode-go.json`): provider id `opencode-go`, name
+  "OpenCode Go", key from `OPENCODE_API_KEY` only; three wire formats
+  registered (`anthropic-messages`, `openai-completions`,
+  `openai-responses`), each wrapped to add the `x-opencode-session` header.
+- **All three rungs are `openai-completions`** with
+  `baseUrl: https://opencode.ai/zen/go/v1` (read in the catalog; measured
+  through RPC `get_state` with an empty agent directory, `--offline`). The
+  Anthropic format is used in that catalog only for `claude-haiku-5-5`,
+  `minimax-m3`, `qwen3.7-plus`, `qwen3.8-flash`, `qwen3.8-max`. So Pi calls
+  `POST https://opencode.ai/zen/go/v1/chat/completions` — the address the Go
+  page lists for the three ids (§F) — and **not** the Anthropic address
+  `…/v1/messages` that spec criteria 8 and 17 and ADR 0011 name.
+- **The request** (measured against the stand-in, rung `mimo-v2.6-flash`):
+  `POST /v1/chat/completions`; headers `authorization: Bearer <key>`
+  (scheme `Bearer`, length = 7 + key length), `user-agent:
+  pi (darwin 27.0.0; arm64)`, `x-opencode-session: <uuid v7, new per run>`,
+  `x-opencode-client: pi`, plus the OpenAI SDK's `x-stainless-*` headers
+  (package version 7.19.0, runtime node v26.9.0); body `model`,
+  `stream: true`, `stream_options.include_usage`, `max_tokens` (131072 for
+  MiMo, 384000 for DeepSeek), the effort field (§O), `messages`
+  (`system`, `user`) and `tools`. Source of the two OpenCode headers (read:
+  `<pkg>/dist/core/provider-attribution.js`): sent whenever the provider is
+  `opencode`/`opencode-go` or the host is `opencode.ai`, independent of
+  telemetry. `PI_TELEMETRY=0` did not change them (measured).
+- **Base-URL override exists**: `providers.opencode-go.baseUrl` in the
+  agent directory's `models.json` (measured — it is how the stand-in was
+  reached). That is the test seam that replaces today's
+  `ANTHROPIC_BASE_URL`; in production the empty agent directory leaves the
+  built-in address in force.
+- **The key** is read from the environment (`OPENCODE_API_KEY`); `--api-key`
+  also exists but puts the key into argv (read: `<pkg>/docs/cli.md`), which
+  criterion 11 forbids. No key: `No API key found for opencode-go.`, exit 1,
+  no request (measured).
+
+### N · Headless behaviour
+
+- **`--print`** writes the final assistant text to stdout and exits
+  (measured: `STANDIN-ANSWER line two`, exit 0). **`--mode json`** writes
+  JSONL: a `session` header, then `agent_start`, `turn_start`,
+  `message_start`/`message_end` for the system message (with
+  `sections.preamble`, `sections.tools`, …), the user message, then the
+  assistant message (`message_update` deltas: `text_start`, `text_delta`,
+  `text_end`), `turn_end`, `agent_end`, `agent_settled` (measured; shapes as
+  `<pkg>/docs/json.md`). The answer is the last `message_end` whose
+  `message.role` is `assistant`: `content[].text`, with `stopReason`,
+  `usage` (tokens and cost) and `thinkingLevel`.
+- **Exit codes** (measured, stand-in answering the status):
+
+  | Case | `--print` | `--mode json` | Requests |
+  |---|---|---|---|
+  | 200 | 0, answer on stdout | 0 | 1 |
+  | 401, 404 | **1**, `<status>: <body>` on stderr | **0**, assistant `stopReason: "error"`, `errorMessage` | 1 |
+  | 429, 500 | **1** after ~14 s | **0**, `auto_retry_start` ×3 (2, 4, 8 s), `auto_retry_end success:false` | **4** |
+  | no key | 1 | 1 | 0 |
+  | unknown id `opencode-go/no-such-model` | **0** — warning "Using custom model id", request sent | 0 | 1 |
+  | unknown provider | 1, "not found" | — | 0 |
+  | connection refused | 1, "Connection error." | — | — |
+
+  JSON mode exits 0 on a provider error; only `--print` turns it into a
+  non-zero exit. An unknown id under a known provider is **sent**, not
+  refused locally. The agent-level retry (`retry.enabled`, default on, 3
+  retries — read: `<pkg>/docs/settings.md`) re-sends the call on 429 and
+  5xx; `{"retry": {"enabled": false}}` in the agent directory's
+  `settings.json` cut a 500 to one request and exit 1 within a second
+  (measured).
+- **Standard input is read** when it is not a terminal and is prepended to
+  the first prompt **without a separator** (measured: stdin `STDIN-TEXT` +
+  argv `ARGV-TEXT` → user text `STDIN-TEXTARGV-TEXT`; stdin alone with no
+  argv message → user text = stdin). With `stdin=DEVNULL` (the runner's
+  `launch`) nothing is prepended.
+- **Passing a long prompt.** `ARG_MAX` on this machine is 1048576 bytes
+  (`getconf ARG_MAX`, measured). `--append-system-prompt <path>` with an
+  existing file appends its text inside `<addendum>…</addendum>` to Pi's
+  system prompt, and `--system-prompt <path>` replaces the preamble (the
+  `<cwd>` block stays) — both measured. `@<path>` puts the file into the
+  user message as `<file name="<absolute path>">…</file>` (measured, so the
+  scratch path reaches the model). Read: `<pkg>/docs/cli.md` — the option
+  takes "text or an existing file": a path that does not exist is sent as
+  literal text.
+- **Pi's own system prompt** (measured, default preamble) says Pi is "an
+  expert coding assistant operating inside pi", lists the declared tools,
+  and adds a `<docs>` block pointing at Pi's own documentation and a
+  `<cwd>` block with the working directory.
+
+### O · Effort per rung
+
+Read: the catalog's `thinkingLevelMap` per model; measured: the request
+body for each `--thinking` level, and `get_state.thinkingLevel`.
+
+| Rung | `--thinking max` sends | Effective level | Other levels |
+|---|---|---|---|
+| `deepseek-v4.1-flash` | `thinking: {type: enabled}`, `reasoning_effort: "max"` | `max` | `xhigh`→`max`; `high`,`medium`→`high`; `low`,`minimal`,`off`→`low` (thinking stays enabled) |
+| `mimo-v2.6-flash` | `reasoning_effort: "high"` | `high` (clamped) | `xhigh`→`high`; `medium`,`low`,`minimal` sent as named; `off` sends no field |
+| `mimo-v2.6-pro` | `reasoning_effort: "high"` | `high` (clamped) | as `mimo-v2.6-flash` |
+
+The `:max` suffix (`--model opencode-go/mimo-v2.6-flash:max`) sent the
+same as `--thinking max` (measured). Without `--thinking` the level is
+`medium` (measured, JSON `thinkingLevel`). Whether OpenCode Go forwards
+`reasoning_effort` to the MiMo models unchanged was not read.
+
+### P · What Pi writes and whom it calls
+
+- **Files** (measured, empty agent directory, `--no-session`): Pi created
+  `auth.json` (`{}`), `models-store.json` (`{}`) and an empty
+  `sessions/<cwd-slug>/` directory in the agent directory; nothing in the
+  worktree (`git status --short --ignored` unchanged) and nothing in the
+  scratch `HOME`. Read: `<pkg>/dist/core/crash-log.js` writes
+  `<agent-dir>/crashes.json` on a crash.
+- **Network besides the model call.** Read: `<pkg>/dist/main.js` —
+  `--offline` sets `PI_OFFLINE=1` and `PI_SKIP_VERSION_CHECK=1`; the pi.dev
+  model-catalog refresh runs only in RPC mode (and interactive mode);
+  `<pkg>/dist/modes/interactive/interactive-mode.js` is the only caller of
+  the install telemetry report and the version check outside the package
+  commands. Measured: through an HTTP(S) proxy set to the stand-in, with
+  and without `--offline`, with and without `PI_TELEMETRY=0`, a print run
+  made no request other than the model call. `PI_TELEMETRY` controls the
+  install/update report and the attribution headers for OpenRouter, NVIDIA
+  and Cloudflare (read: `<pkg>/dist/core/provider-attribution.js`,
+  `core/telemetry.js`) — not the two OpenCode headers.
+
+### Q · OpenCode's terms on third-party clients
+
+- **Go page** (<https://opencode.ai/docs/go/>, read 2026-10-08, which now
+  ends "Last updated: Oct 8, 2026" — §E read the Oct 6 version):
+  "OpenCode Go is designed for OpenCode and other coding agents that produce
+  similar types of requests. Traffic is monitored for abuse that degrades
+  the experience for other users." Under "Validated Clients": "Besides
+  OpenCode, the following clients have been validated to work properly with
+  OpenCode Go. Although we do not guarantee that they will continue to work
+  in the future." Pi's row: "Current builds send session information for
+  OpenCode. Update older installations." Pi is not among the "Known
+  Problematic Clients". The page links no terms of service.
+- **Terms of use** (<https://opencode.ai/legal/terms-of-service>, full text
+  read 2026-10-08, "Effective date: Aug 15, 2026", contract party Anomaly
+  Innovations, Inc.): no clause names third-party clients, Go, or the use of
+  a Go key outside OpenCode — **not stated**. Clauses that bear on an
+  unattended reviewer, quoted: "You will only use the Services for your own
+  internal use, and not on behalf of or for the benefit of any third party";
+  among the restrictions, the user will not use the Services in a manner
+  that "automatically or programmatically extracts data or Output (defined
+  below)" and that "runs Maillist, Listserv, any form of auto-responder or
+  "spam" on the Services, or any processes that run or are activated while
+  you are not logged into the Services, or that otherwise interfere with the
+  proper working of the Services (including by placing an unreasonable load
+  on the Services' infrastructure)". How OpenCode reads these against a
+  validated client run by a script is not stated.
+
+### R · What in the spec and ADR 0011 says Claude Code or the Anthropic address
+
+`plans/changes/stage2-mimo/spec.md` at fc76287:
+
+- Criterion 2 (lines 131–143): the remark names the Anthropic address and
+  "that Claude Code is a validated client there and its native session
+  header needs no wrapper".
+- Criterion 8 (lines 183–194): "`review-loop` launches Claude Code against
+  `https://opencode.ai/zen/go/v1/messages` … effort `max`, … tools
+  `Read,Grep,Glob`, a fresh empty `CLAUDE_CONFIG_DIR`, `--restricted`,
+  `--strict-mcp-config`, permission mode `dontAsk`, `--output-format`".
+- Criterion 11 (lines 213–217): the key reaches the call "as
+  `ANTHROPIC_AUTH_TOKEN` and `ANTHROPIC_API_KEY`".
+- Criterion 17 (lines 250–255): "If the Anthropic address refuses a rung's
+  id … No second address"; refuted by "an automatic fallback to the OpenAI
+  address".
+- Criterion 25 (lines 318–335): the ADR records content going to
+  `opencode-go` "through Claude Code", and lists "OpenCode's own CLI as the
+  launcher" among the options weighed.
+- Non-goals (line 347): "Any launcher but Claude Code — OpenCode's own CLI,
+  the Codex CLI, a direct HTTP call by the runner".
+- `[GAP]` "Does the Anthropic address accept the three ids?" (lines 421–426).
+- `[DETAIL]`s "The request shape — the Anthropic address first, Claude
+  Code's own user agent and native session header" (lines 448–451) and
+  "The findings header's producer … `claude-code` for the loop's rungs"
+  (lines 460–463).
+- Criterion 9 and criterion 8's second half (Codex for 2a and 6) do not
+  change; criteria 14 and 15 hold as written but now meet §N's exit codes.
+
+`docs/adr/0011-stage-2-reviews-through-opencode-go.md` at fc76287:
+
+- Context, third bullet (lines 52–60): "the vendor documents Claude Code as
+  the way in"; "the Anthropic-compatible address … is the one Claude Code
+  needs".
+- Decision 1 (lines 68–73): "through Claude Code, which the vendor lists as
+  a supported tool".
+- Decision 5 (lines 92–95): the key "as `ANTHROPIC_AUTH_TOKEN` and
+  `ANTHROPIC_API_KEY`".
+- Decision 6 (lines 96–103): "The address is measured … If the address
+  refuses an id … no second address".
+- Options considered (lines 115–118, "OpenCode's own CLI as the launcher …
+  the vendor documents Claude Code") and (lines 123–126, "The OpenAI
+  address instead of the Anthropic one … kept as a remark … never as a
+  path").
+- Consequences, "The runner's shape" (lines 157–162): "the loop's calls are
+  Claude Code launches".
+- Validation (lines 166–176): "the runner launches `claude` with the
+  address, the rung and effort `max` and the settings of criterion 8".
+
+`design.md` (28 lines matching `claude`, case-insensitive) and `plan.md`
+(10) follow the spec and change with it; they were counted, not read line
+by line, here.
+
+### Tagged questions
+
+**[DECISION]** The loop's calls go to the OpenAI-compatible address
+`https://opencode.ai/zen/go/v1/chat/completions`, because Pi's built-in
+`opencode-go` provider speaks only that format for the three rungs (§M);
+ADR 0011 (decision 6, "Options considered") and spec criterion 17 rule that
+address out as a path. Recommendation: accept it as the one path and drop
+the Anthropic address from the change — it is the address the Go page lists
+for these ids (§F), so the open `[GAP]` of §F disappears. Consequence: ADR
+0011's text changes in decisions 1, 5, 6 and two options (§R), which is the
+maintainer's to approve in the decision pull request; no fallback exists in
+either direction.
+
+**[DECISION]** OpenCode's terms (§Q) do not address third-party clients;
+the Go page invites "other coding agents" and lists Pi as validated, while
+the terms forbid processes that "automatically or programmatically
+extract[s] … Output" and that run "while you are not logged into the
+Services". Recommendation: accept the residual risk on the strength of the
+Go page's validated-client list, record the reading with its date in the
+entry's `bemerkung`, and keep the loop at three calls per change.
+Consequence if declined: the ladder cannot run unattended through any
+client, Pi or another.
+
+**[GAP]** Whether the address answers the three ids for a real Go key, and
+with what — still phase 4's probe (one call per rung, leak check in front),
+now against `/chat/completions`.
+
+**[GAP]** Whether OpenCode Go passes `reasoning_effort: "high"` to MiMo and
+`"max"` with `thinking` to DeepSeek as sent (§O). Not readable; visible only
+in a real answer's usage (`reasoning` tokens).
+
+**[DETAIL]** Effort: the runner passes `--thinking max` for every rung and
+records the level Pi resolves (`max` for DeepSeek, `high` for both MiMo
+rungs, §O). Reason: `max` is what the spec asks for and Pi clamps it to
+each model's ceiling; a per-rung effort in code would undo "the ladder is
+data".
+
+**[DETAIL]** Isolation: a fresh empty `PI_CODING_AGENT_DIR` per call, plus
+`--no-approve --tools read,grep,find,ls --no-extensions --no-mcp
+--no-skills --no-context-files --no-prompt-templates --no-themes
+--no-session --offline`. Reason: §L measured that each of these closes a
+path a hostile file could open — in particular a shadowed `grep` and the
+agent directory's `SYSTEM.md` — and that `--tools` alone closes none of
+them.
+
+**[DETAIL]** The tool set cannot be checked before the call (§L); it is
+held by stand-in tests that assert the request's `tools` array is exactly
+`read, grep, find, ls` and that a hostile agent directory and project change
+nothing. Reason: a pre-call check does not exist in Pi 1.1.0; the RPC
+`get_state` check of `baseUrl`, `api` and `thinkingLevel` would add a
+second Pi process per call for facts the empty agent directory already
+fixes.
+
+**[DETAIL]** `--print`, not `--mode json`, for the loop. Reason: §N —
+`--print` exits 1 on 401/404/429/5xx, which criterion 14 needs, while JSON
+mode exits 0 and would need a parser of `stopReason`; the loop already
+consumes plain text.
+
+**[DETAIL]** Retries off: the fresh agent directory gets
+`settings.json` = `{"retry": {"enabled": false}}`. Reason: §N — Pi's retry
+re-sends a 429/5xx call three times inside one round, which the runner
+neither sees nor counts; a failed round is criterion 14's to report.
+
+**[DETAIL]** The key travels as `OPENCODE_API_KEY` in the child's
+environment, read from the secrets file entry the spec names; never
+`--api-key`. Reason: §M; criterion 11.
+
+**[DETAIL]** The prompt goes through `--append-system-prompt <tempfile>`
+as today's `--append-system-prompt-file`, with a short argv message; the
+runner checks the file exists before the call. Reason: §N — no `ARG_MAX`
+limit, the scratch path does not reach the model (unlike `@file`), and a
+missing file would otherwise be sent as its path in text.
+
+**[DETAIL]** The model id is checked against `modelle` of the entry before
+the call. Reason: §N — Pi sends an unknown id under a known provider
+instead of refusing it.
+
+**[DETAIL]** The findings producer for the loop's rungs becomes `pi`
+(spec `[DETAIL]`, lines 460–463). Reason: the producer names the program
+that made the call.
