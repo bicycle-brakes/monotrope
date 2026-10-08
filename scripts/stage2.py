@@ -13,11 +13,31 @@ stands between the rule and the call.
     python3 scripts/stage2.py review-loop  <change>   # GLM, one round of phase 4b
     python3 scripts/stage2.py release-loop <change>   # loop rows into findings.md
     python3 scripts/stage2.py review       <change>   # Codex, phase 6, the 2a session resumed
+    python3 scripts/stage2.py session      <change>   # interactive Codex/OpenCode, a Terminal window
 
 `explore` and `implement` accept `--stage2-off [REASON]`: the declared
 Stage-1 route uses Haiku 4.5 or Sonnet 5.5. A leak refusal never falls back.
 Implement lets the model edit but not run commands; the runner runs
 `make verify`, checks the time log and makes the one checkpoint commit.
+
+`session` starts one interactive OpenCode or Codex session in a new macOS
+Terminal window, inside the change's dedicated worktree
+(`<main checkout>/.claude/worktrees/<change>`, attached branch, that directory
+as the working one). It takes `--model <id>` - exactly as
+`model-endpoints.yaml` lists it: a plain id on `openai-codex` runs the
+official Codex CLI, a full `opencode-go/<model>` id runs OpenCode with a
+runner-supplied policy when `opencode-go` lists the bare `<model>` - and `--handover <path>` for a file inside the
+worktree (default: the change's `handover.md`); its full text is the first
+prompt. The declaration and the leak check run as for every call, the second
+time immediately before the window opens, and one audit line goes into
+`findings.md` as `dispatch pending.`, replaced afterwards by `accepted` or
+`failed`. **Accepted means Terminal took the command**, not that the CLI
+started, signed in or the model answered: what follows shows in the window.
+The leak check covered this launch only - later edits, later prompts and a
+model switched in the UI are not scanned, and the terminal permissions
+confine nothing at the operating-system level; another model starts again
+through this runner. `--model` and `--handover` belong to the session verb
+alone, and `--stage2-off` to explore and implement.
 
 **What every call carries** (before it starts, in this order):
 
@@ -423,9 +443,12 @@ def declaration_problem(root: Path, endpoint: str, model: str) -> str | None:
         return f"model-endpoints.yaml declares no endpoint {endpoint}"
     if model not in (found.get("modelle") or []):
         return f"the endpoint {endpoint} does not list the model {model}"
-    if "framework" not in (found.get("darf_sehen") or []):
+    allowed = found.get("darf_sehen")
+    # A list, not a string: `"framework" in "not-framework"` would be true (phase 6 of stage2-session, F-4).
+    if not isinstance(allowed, list) or "framework" not in allowed:
         return f"the endpoint {endpoint} may not see framework content"
-    if found.get("residenz") in (None, "nicht-erklaert"):
+    residency = found.get("residenz")
+    if not isinstance(residency, str) or not residency.strip() or residency == "nicht-erklaert":
         return f"the endpoint {endpoint} states no data residency"
     return None
 
@@ -1409,6 +1432,13 @@ def codex_rule_problems(settings: dict) -> list[str]:
     return found
 
 
+def session(root: Path, change: str, model: str | None, handover: str | None) -> None:
+    """One checked interactive session in the change's own Terminal window."""
+    import stage2_session
+
+    stage2_session.run(root, change, model or "", handover, sys.modules[__name__])
+
+
 VERBS = {
     "explore": explore,
     "implement": implement,
@@ -1425,7 +1455,7 @@ def main(argv: list[str] | None = None) -> int:
         formatter_class=argparse.RawDescriptionHelpFormatter,
         allow_abbrev=False,
     )
-    parser.add_argument("verb", choices=sorted(VERBS))
+    parser.add_argument("verb", choices=sorted([*VERBS, "session"]))
     parser.add_argument("change", nargs="?", default="", help="folder name under plans/changes/")
     parser.add_argument(
         "--stage2-off",
@@ -1434,6 +1464,16 @@ def main(argv: list[str] | None = None) -> int:
         default=None,
         metavar="REASON",
         help="use the Stage-1 route for explore or implement and record the optional reason",
+    )
+    parser.add_argument(
+        "--model",
+        default=None,
+        help="session only: the model id, exactly as model-endpoints.yaml lists it",
+    )
+    parser.add_argument(
+        "--handover",
+        default=None,
+        help="session only: a handover file inside the worktree (default: the change's handover.md)",
     )
     parser.add_argument("--root", default=str(REPO_ROOT), help=argparse.SUPPRESS)
     args = parser.parse_args(argv)
@@ -1449,8 +1489,15 @@ def main(argv: list[str] | None = None) -> int:
             )
         if args.stage2_off is not None and args.verb not in {"explore", "implement"}:
             raise Refused("--stage2-off applies only to explore and implement.")
+        if args.verb == "session":
+            if not args.model:
+                raise Refused("session needs --model <id>: name the model exactly as model-endpoints.yaml lists it.")
+        elif args.model is not None or args.handover is not None:
+            raise Refused("--model and --handover belong to the session verb alone.")
         if args.verb in {"explore", "implement"}:
             VERBS[args.verb](Path(args.root), args.change, args.stage2_off)
+        elif args.verb == "session":
+            session(Path(args.root), args.change, args.model, args.handover)
         else:
             VERBS[args.verb](Path(args.root), args.change)
     except Refused as error:
