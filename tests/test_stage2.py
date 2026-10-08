@@ -2659,14 +2659,15 @@ def test_the_stop_rule_counts_every_rung() -> None:
 
 
 def test_the_adr_draft_states_every_point() -> None:
-    """Criterion 25: the draft in design.md carries the six points and the weighed options, ready to copy out."""
+    """Criterion 25: the draft in design.md carries every point and weighed option, Pi as the launcher, Claude Code not."""
     draft = section((REPO_ROOT / "plans/changes/stage2-mimo/design.md").read_text(encoding="utf-8"), "### ADR 0011")
     assert draft, "the draft is not in design.md"
     one = flat(draft)
     for needle in (
         "Framework content may also go to `opencode-go`",
-        "through Claude Code",
-        "The review loop (4b) only",
+        "`https://opencode.ai/zen/go/v1/chat/completions`, through Pi",
+        "the review loop (4b) only",
+        "The interactive `session` verb reaches a declared endpoint under its own amendment",
         "The loop's reviewer role moves",
         "the spec review and the review stay with Codex",
         "explore and implement stay on GLM 5.3 Flash",
@@ -2675,13 +2676,21 @@ def test_the_adr_draft_states_every_point() -> None:
         "one-line pull request",
         "at most three rounds",
         "The unconfined reads accepted for ADR 0007's reviewers extend to the rungs",
+        "`read` reaches files outside the worktree",
+        "as `OPENCODE_API_KEY`",
+        "Each round is isolated, and Pi is pinned",
+        "`high` for both MiMo rungs",
+        "The terms risk is accepted",
         "Keep Codex and GLM in every review role",
         "An OpenCode product other than Go",
-        "OpenCode's own CLI as the launcher",
+        "Claude Code at the Anthropic-compatible address",
+        "OpenCode's own CLI",
+        "A round without tools",
         "The model of round 2",
         "runde 2 flash",
     ):
         assert needle in one, needle
+    assert "through Claude Code, which the vendor lists" not in one
 
 
 def continuity_problems(amendments: dict, target: str, adr_dir: Path) -> list[str]:

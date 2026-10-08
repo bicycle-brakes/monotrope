@@ -927,3 +927,71 @@ instead of refusing it.
 **[DETAIL]** The findings producer for the loop's rungs becomes `pi`
 (spec `[DETAIL]`, lines 460–463). Reason: the producer names the program
 that made the call.
+
+## Addendum 2026-10-08 (phase 2 re-entry): read for the spec
+
+Read by the phase-2 session on 2026-10-08 at `1d22f28`, to close what the
+spec, the design and the plan needed and §L–§R did not say. Nothing here
+reopens an answer of `decisions.md`.
+
+### S · What else bears on the Pi launch
+
+- **Pi's own options** (read: `<pkg>/docs/cli.md`, "Models" and "Prompts
+  and process"): `--model` "Selects by exact ID or fuzzy ID/name match";
+  `--thinking` "is clamped to the model's capabilities"; `--list-models
+  [search]` "Lists available models, optionally filtered by a fuzzy search,
+  then exits"; `--offline` "Disables automatic network activity, including
+  model catalog refreshes"; `-v, --version` "Shows the Pi version, then
+  exits". **Not measured:** what `--list-models` prints, and whether it needs
+  the key; whether an id that is close to a catalog id but not equal to it is
+  matched to that other id or sent as written (§N measured only an id close
+  to nothing).
+- **The runner at `1d22f28`** (read: `scripts/stage2.py`). `run_reviewer`
+  (lines 746–807) launches `claude` with `opencode_env`, which is
+  `claude_env(OPENCODE_BASE_URL, …)` (lines 290–314); `claude_env` sets
+  `CLAUDE_CODE_DISABLE_UNKNOWN_MODEL_WINDOW_ENFORCEMENT=1` for every Claude
+  Code call, so GLM's explore and implement calls carry it too
+  (`run_work_model`, line 1227), while main's `glm_env` sets no such
+  variable (`origin/main:scripts/stage2.py`, lines 279–288). The
+  parameters `resume` and `session` of `run_reviewer` and the function
+  `result_of` serve no caller: both callers pass `session=False` (lines 1544,
+  1580). `begin_call` writes a new `findings.md` header with the producer
+  `claude-code` for every endpoint (line 587), where main chose `codex` for
+  the Codex tuple (`origin/main`, line 552).
+- **Text that still names Claude Code as the loop's launcher** (read):
+  the runner's module docstring says all three reviews run on OpenCode Go
+  through Claude Code (lines 4–10) and counts the reviewers among the
+  `--restricted` calls (lines 58–68); `docs/WORKFLOW.md` §4 does the same in
+  its opening paragraph (line 565), in "What every call then carries" (lines
+  705–707), in the credential paragraph (lines 721–727) and in "Reads" (lines
+  733–747), and its caveat ties subscription coverage to Claude Code (lines
+  852–856); `AGENTS.md`'s stage-2 paragraph (line 34) and
+  `prompts/04b-review-loop.md` (line 4) say "through Claude Code".
+- **Tests that pin the Claude Code launch** (read: `tests/test_stage2.py`):
+  `test_the_review_loop_launches_claude_on_the_anthropic_address` (line
+  1441, the window-enforcement variable at 1455),
+  `test_a_refused_rung_stops_the_run_without_fallback` (line 1841), the
+  environment cases at lines 594–622 and 643; the stand-in reads its key
+  from `ANTHROPIC_AUTH_TOKEN` and its prompt from
+  `--append-system-prompt-file` (lines 72–108).
+  `test_the_adr_draft_states_every_point` (line 2661) holds the needles
+  "through Claude Code" and "OpenCode's own CLI as the launcher" against
+  the draft in `design.md`; `tests/test_model_endpoints.py` (lines 349–354)
+  holds the remark's needles for the Anthropic address, "Claude Code is a
+  validated client" and "native session header".
+- **The `session` verb waits on this entry** (read:
+  `plans/changes/stage2-session/spec.md`, "Supported models and
+  prerequisites"; `scripts/stage2_session.py`, line 61): its OpenCode path
+  "accepts `opencode-go/<model>` only when the separate OpenCode Go change
+  has declared `opencode-go` with that model for framework content", and it
+  starts OpenCode's own CLI for that transport. Declaring the entry therefore
+  opens that path for the three ids, under that verb's own checks.
+- **Where this change's own loop runs before the merge** (read). The spec of
+  `5309a58` said "Codex for 2a and 6, GLM for 4b"; `3af0c9c` changed it to
+  "the ladder for 4b". The maintainer's answer "1" of 2026-10-07
+  (`decisions.md`) and decision 6 of the ADR draft say the probe's three
+  calls are "the only content leaving before the merge"; the ADR's
+  consequences say "this change's own review runs on Opus 5.5". `findings.md`
+  records three calls to `opencode-go` on 2026-10-08: two `probe` calls and
+  one `review-loop` call (lines 41–45). No entry of `decisions.md` records a
+  maintainer's word on where this change's own loop runs.

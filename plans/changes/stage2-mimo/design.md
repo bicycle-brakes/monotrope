@@ -6,136 +6,119 @@ updated: 2026-10-08
 status: draft
 implementation_status: none
 date: 2026-10-07
-last_reviewed: 2026-10-07
+last_reviewed: 2026-10-08
 supersedes: null
 superseded_by: null
 bead: coding-harness-ymx
 owner: Data Architect
 provenance: ai-drafted-reviewed
-produced_by: {kind: llm-session, name: opencode, version: "2026-10-07"}
+produced_by: {kind: llm-session, name: claude-code, version: "2026-10-08"}
 review: {status: pending, approved_by: null, approved_at: null}
-tags: [design, stage-2, opencode-go, review-loop, adr]
+tags: [design, stage-2, opencode-go, pi, review-loop, adr]
 ---
 
 # Design — `stage2-mimo`
 
 How the system is shaped for the change `spec.md` describes, written from
-`spec.md`, `research.md` (sections E to K) and `decisions.md`. What the spec
-fixes is not decided again here. The class is `feature` and the maintainer
-answered "yes" to the ADR question, so this phase carries the ADR draft
-(prompts/02b-design.md, decision D-14).
+`spec.md`, `research.md` (sections E to K, L to R and S) and `decisions.md`.
+What the spec fixes is not decided again here. The class is `feature` and the
+maintainer answered "yes" to the ADR question, so this phase carries the ADR
+draft (prompts/02b-design.md, decision D-14). Revised on 2026-10-08 for Pi as
+the loop's launcher; the first version (Claude Code at the Anthropic address)
+is in this file's history at `1d22f28`.
 
 ## Alternatives
 
-- **Reviews through OpenCode Go in a ladder, launched by Claude Code on the
-  Anthropic address (chosen).** One new endpoint entry holds the three model
-  ids in order; the loop's verb launches `claude` with the
-  address pinned; round *n* reads `modelle[n-1]`.
-  Consequences: one vendor and one launch path for the loop's rounds;
-  reordering
-  the ladder is a one-line pull request that touches `model-endpoints.yaml`
-  and nothing else; the Codex CLI stays for the spec review and the review
-  (the maintainer, 2026-10-08), so phase 6 keeps resuming its Codex thread; the
-  address's acceptance of the three ids is unproven until the phase-4 probe,
-  and a refusal stops the run rather than being worked around (spec,
-  criterion 17).
-- **Keep Codex and GLM, and add OpenCode Go as a third reviewer beside
-  them.** Consequences: three vendors and two launch paths (a CLI and
-  Claude Code), the ladder cannot be one list because two of the reviewers
-  are not on the new entry, and ADR 0007's decision 2 would stand unchanged
-  — no ADR needed. The maintainer's decision of 2026-10-07 ("every stage-2
-  review through OpenCode Go") is not met by it, and criterion 8 ("no verb
-  of the runner starts the Codex CLI") refutes it outright.
-- **OpenCode's own CLI as the launcher.** Consequences: symmetric with
-  today's Codex CLI — a binary, an ask rule, a resumable thread — but the
-  Go page documents Claude Code as the way in, and an own integration
-  raises the subscription-coverage question that `model-endpoints.yaml`
-  already records for Z.ai: only through a vendor-supported tool is the
-  plan's terms question closed.
+The destination, the ladder and the routing are the maintainer's; what this
+design weighs is how a round is started.
 
-Chosen: the first, because the maintainer's decision names the destination
-and Claude Code is the launcher the vendor documents (research §F, §G), and
-because a single path is what criteria 8 to 13 can be tested against — one
-argv shape, one environment, one place the key passes through.
+- **Pi with the read tools, isolated per call, at `…/chat/completions`
+  (chosen — the maintainer, 2026-10-08).** One launch for the loop: `pi
+  --print` with `read,grep,find,ls`, every loader switched off, a fresh
+  configuration directory and a scratch home per call, the version pinned.
+  Consequences: Pi's built-in `opencode-go` provider reaches the address the
+  Go page lists for the three ids, as a client the page validates; the tool
+  set is measured once by hand and held to one version; a round's `read`
+  reaches outside the worktree, which ADR 0011's decision 4 accepts.
+- **Claude Code at `…/v1/messages`.** The first version of this design.
+  Consequences: the confinement `--restricted` documents, and the same
+  launch as GLM's — but three calls were refused on 2026-10-08, and Claude
+  Code cannot speak the OpenAI format the Go page lists for these ids.
+- **OpenCode's own CLI.** Consequences: the vendor's own client and
+  traffic; but 2.0.24 did not load the runner-supplied policy file
+  (measured 2026-10-08), so the runner could not show the round read-only.
+- **Pi without tools (`--no-tools`).** Consequences: no read outside the
+  prompt at all (measured: the request carries `tools: []`); but the round
+  sees the diff and nothing around it. Weighed in ADR 0011, not taken (spec,
+  `[DETAIL]`).
+- **Pi in JSON mode.** Consequences: the resolved effort and usage are
+  visible per call; but a provider error ends with exit 0 and would need a
+  parser of `stopReason` to count as a failed round (research §N).
+
+Chosen: the first, because it is the maintainer's launcher and the only one
+of the four that reaches the address with a tool set the runner can state;
+criteria 8 to 17 and 27 are written against its one argv and environment.
 
 ## Interfaces
 
-Four boundaries carry something across in this change.
+Five boundaries carry something across in this change.
 
-- **Runner → Claude Code → OpenCode Go (Anthropic address).** Two sides:
-  `scripts/stage2.py` and the `claude` binary the tree pins. Passed: the
-  phase prompt, the rung's id as the model, and the address as
-  `ANTHROPIC_BASE_URL` (`https://opencode.ai/zen/go/v1/messages`). Promised:
-  exactly the settings `review-loop` pins today (tools `Read,Grep,Glob`, a
-  fresh empty `CLAUDE_CONFIG_DIR`, `--restricted`, `--strict-mcp-config`,
-  permission mode `dontAsk`, `--output-format`, `--no-session-persistence`
-  and the runner's allow-listed environment), a session id on standard
-  output, an exit of 0 and a non-empty answer inside 30 minutes.
-  With it goes the record of who answered: today `run_codex` returns a Codex
-  thread id and `spec-review` writes `Reviewer session: codex <id>`; after
-  the change the session id comes from Claude Code and the line names the
-  rung instead of a fixed word (spec, criterion 9), so `SESSION_LINE`
-  becomes a pattern that reads the rung, not a literal.
-- **Runner → `model-endpoints.yaml`.** Two sides: the runner's
-  `declaration_problem` and the declared entry. Passed: the endpoint name
-  and the model id. Promised: an entry that exists, carries
-  `darf_sehen: [framework]`, declares a residency and lists the model id —
-  without it no call starts (spec, criterion 10). This is where the ladder
-  lives: the order of `modelle` is the only thing a reordering changes.
-- **Runner → secrets file.** Two sides: `read_secret` at call time and the
-  child process's environment. Passed: the OpenCode Go key as
-  `ANTHROPIC_AUTH_TOKEN` and `ANTHROPIC_API_KEY` only. Promised: never in
-  an argument, never in what the runner prints, never in `findings.md` or
-  the loop record (spec, criteria 11 and 12), and no key of another endpoint
-  in the same environment (criterion 13).
-- **Runner → the two record places.** Two sides: `findings.md` inside the
-  worktree and the loop record at `$XDG_STATE_HOME/coding-harness/stage2/
-  <change>/loop.md` (falling back to `~/.local/state/...`), outside the
-  worktree and outside the git directory. Passed: the call line, the
-  session line, `## Round <n> — <rung>, <date>` headings, rows numbered
-  `L<n>-<k>` with the rung in the `Reviewer` cell. Promised: a failed round
-  writes nothing (criterion 14), a red leak check writes nothing and exits 2
-  (criterion 16), and the verdict is written before anything is released
-  (criterion 19).
+- **Runner → Pi → OpenCode Go.** Two sides: `scripts/stage2.py` and the `pi`
+  binary on `PATH`. Passed: the argv of criterion 8 (`--model
+  opencode-go/<rung>`, `--thinking max`, `--tools read,grep,find,ls`, the
+  nine switches, `--append-system-prompt <file>` and a one-line message),
+  an empty standard input, the worktree as directory, and an environment of
+  the allow-list plus `OPENCODE_API_KEY`, `HOME` and `PI_CODING_AGENT_DIR`.
+  Promised by Pi (measured, research §L to §P): one `POST
+  …/chat/completions`, the final answer on standard output, exit 0 on an
+  answer and 1 on a provider's error status, nothing written to the
+  worktree. Promised by the runner: a call that has not ended in 30 minutes
+  is stopped (criterion 15).
+- **Runner → `pi --version`.** Before the leak check of each `review-loop`
+  or `probe` call. Passed: no key, a scratch home and configuration
+  directory. Promised: the pinned version on standard output within 30
+  seconds, or the runner refuses (criterion 27).
+- **Runner → `model-endpoints.yaml`.** Unchanged: `declaration_problem`
+  clears the endpoint and the model before each call; the ladder is the
+  order of `modelle`.
+- **Runner → secrets file.** `read_secret("OPENCODE_GO_KEY")` at call time;
+  the value goes into the child's environment as `OPENCODE_API_KEY` only
+  (criteria 11 to 13).
+- **Runner → the two record places.** Unchanged from the first version:
+  the call line in `findings.md`, the round block in the loop record outside
+  the worktree, nothing written by a failed round or a red check.
 
 ## Data model
 
-- **`model-endpoints.yaml` gains one entry, `opencode-go`**, written by this
-  change and read by the runner before each call: `name`, `betreiber:
-  "OpenCode (Operator Anomaly Innovations, Inc.)"`, `residenz:
-  anbieter-erklaert` (the answer of 2026-10-07), `abrechnung: abonnement`,
-  `darf_sehen: [framework]`, `modelle` in ladder order — `deepseek-v4.1-flash`,
-  `mimo-v2.6-flash`, `mimo-v2.6-pro` — and a `bemerkung` that names the
-  Anthropic address, Claude Code as the launcher, the OpenAI address as a
-  measurement and not a path, and the residency note (the Go page gives no
-  region; `opencode.ai/privacy` returned 404 on 2026-10-07; the Zen page
-  states US and EU for its models). Two existing `bemerkung`s change: the
-  `openai-codex` entry no longer claims the spec review and the review, and
-  `glm-coding-plan` no longer claims the review loop (spec, criterion 3).
-- **Two constants change shape.** `MAX_ROUNDS` goes from 2 to 3, and the 30
-  minutes of criterion 15 become one named constant (a timeout applied to
-  every reviewer call). The refusal text names the count that actually ran.
-- **The round heading and the reviewer cell become data.** `ROUND_HEADING`
-  today matches the literal `## Round <n> — GLM,`; it must match the rung
-  the round called, because criterion 18 names the heading after the model
-  and criterion 19 carries that model into the released row. `answer_block`
-  already takes the reviewer as an argument, so the row's `Reviewer` cell
-  needs no new field.
-- **The producer line becomes `claude-code`.** Line 529 of the runner picks
-  `codex` when the endpoint is the Codex tuple; after the change no review
-  call is a Codex call, so the branch goes and the producer is
-  `claude-code` (research §E, criterion 8's consequence).
-- **`decisions/answers/stage2-mimo/adr.yaml` is re-recorded at phase 7**,
-  from the maintainer's own words: its present reason still describes the
-  superseded Xiaomi wording, and only the maintainer's sentence may stand
-  there (house rule 8).
+- **`model-endpoints.yaml`, entry `opencode-go`** — its fields stand as
+  built; its `bemerkung` is rewritten to criterion 2: the loop alone, Pi at
+  the runner's pinned version, `…/chat/completions`, the Anthropic address
+  not used, Pi among the validated clients, prices and limits, privacy
+  table, region note, and the terms reading of 2026-10-08.
+- **Runner constants.** Added: `PI_VERSION = "1.1.0"`, `PI_TOOLS =
+  "read,grep,find,ls"`, the agent directory's `settings.json` content
+  `{"retry": {"enabled": false}}`. Kept: `OPENCODE`, `MAX_ROUNDS = 3`,
+  `REVIEWER_MINUTES = 30`. Removed: `OPENCODE_BASE_URL`, `REVIEWER_TOOLS`
+  in its Claude Code form, `claude_env`, `opencode_env`, `result_of`, the
+  `resume` and `session` parameters of `run_reviewer`, and the
+  window-enforcement variable; `glm_env` and its model variables return to
+  main's form.
+- **One scratch directory per call**, under the system's temporary
+  directory and removed after the call: `agent/settings.json`, `home/`,
+  `review-prompt.md`. Pi adds `auth.json`, `models-store.json` and an empty
+  `sessions/` there (research §P); all of it goes with the directory.
+- **The findings header's producer** — `codex` for the Codex tuple, `pi` for
+  `opencode-go`.
+- **`decisions/answers/stage2-mimo/adr.yaml`** — stands as recorded at
+  `fc76287`.
 
 ## ADR draft
 
-The text below becomes `docs/adr/0011-stage-2-reviews-through-opencode-go.md`
-in this change's decision pull request, with its headings raised by one level
-and the header below between `---` lines. `0011` is the first free number on
-2026-10-07; phase 7 renumbers it if a lower number has been taken meanwhile.
+The text below is `docs/adr/0011-stage-2-reviews-through-opencode-go.md` in
+this change's decision pull request, with its headings lowered two levels
+here and its header between `---` lines there. `0011` is the first free
+number on 2026-10-07; phase 7 renumbers it if a lower number has been taken
+meanwhile.
 
 ```yaml
 title: "ADR 0011 — The review loop runs through OpenCode Go, and ADR 0007's reviewer list is amended"
@@ -146,9 +129,9 @@ last_reviewed: <same>
 updated: <same>
 owner: framework-architect
 provenance: human-decided
-produced_by: {kind: llm-session, name: opencode, version: "<same>"}
+produced_by: {kind: llm-session, name: claude-code, version: "<same>"}
 review: {status: pending, approved_by: null, approved_at: null}
-tags: [adr, stage-2, opencode-go, reviews]
+tags: [adr, stage-2, opencode-go, pi, reviews]
 ```
 
 ### ADR 0011 — The review loop runs through OpenCode Go, and ADR 0007's reviewer list is amended
@@ -159,16 +142,18 @@ tags: [adr, stage-2, opencode-go, reviews]
   supersedes no ADR. Decision D-13 stands as ADR 0007 set it — no criterion
   of D-13 changes here.
 * Review: the decisions the maintainer stated on 2026-10-07 in a Claude Code
-  session (bead coding-harness-ymx: the review loop through OpenCode
-  Go; round 2 on `mimo-v2.6-flash`; the entry declares `anbieter-erklaert`;
-  the compatibility probe runs in phase 4 before the merge), narrowed on
-  2026-10-08 to the review loop alone — the spec review and the review stay
+  session (bead coding-harness-ymx: the review loop through OpenCode Go;
+  round 2 on `mimo-v2.6-flash`; the entry declares `anbieter-erklaert`; the
+  compatibility probe runs in phase 4 before the merge), and on 2026-10-08:
+  the ladder runs the review loop alone — the spec review and the review stay
   with Codex, after Codex's phase 6 found two real BLOCKERs in a change the
-  loop had passed · the acceptance
-  is the merge commit and is written nowhere else, so the header's `review`
-  stays empty (ADR 0008) · Decider: maintainer · prepared by an opencode
-  session
-* Date: 2026-10-07, narrowed to the review loop on 2026-10-08 · takes effect on merge
+  loop had passed; Pi starts the loop's rounds; the address is OpenCode Go's
+  OpenAI-compatible one; the residual risk of OpenCode's terms is accepted ·
+  the acceptance is the merge commit and is written nowhere else, so the
+  header's `review` stays empty (ADR 0008) · Decider: maintainer · prepared
+  by an opencode session, revised for Pi by a Claude Code session
+* Date: 2026-10-07; narrowed to the review loop and given Pi as its launcher
+  on 2026-10-08 · takes effect on merge
 
 #### Context
 
@@ -180,36 +165,60 @@ tags: [adr, stage-2, opencode-go, reviews]
   GLM, and, since 2026-10-06, exploration and implementation to GLM 5.3
   Flash.
 * **The maintainer decided otherwise on 2026-10-07** (bead
-  coding-harness-ymx): the review loop (4b) runs on
-  OpenCode Go with a fixed ladder of three models for its rounds; on
-  2026-10-08 the maintainer put the ladder to the loop alone — the spec
-  review and the review stay with Codex, because Codex's phase 6 found two
-  real BLOCKERs in a change the loop had passed, as on every change of the
-  night run. Without this record the
-  runner's declaration of `opencode-go` would run against ADR 0007's
-  decision 2, which is a decision nobody made.
-* **What OpenCode Go is** (research §E to §K, read 2026-10-07): OpenCode
-  (Operator Anomaly Innovations, Inc.) sells OpenCode Go by subscription
-  with a Go key; the vendor documents Claude Code as the way in and says no
-  custom-header wrapper is needed for it; three model ids are served —
-  `deepseek-v4.1-flash`, `mimo-v2.6-flash`, `mimo-v2.6-pro`. The Go page
-  lists them under `https://opencode.ai/zen/go/v1/chat/completions` only,
-  while the Anthropic-compatible address
-  `https://opencode.ai/zen/go/v1/messages` is the one Claude Code needs —
-  whether it accepts the three ids is measured, not assumed (below).
+  coding-harness-ymx): the review loop (4b) runs on OpenCode Go with a fixed
+  ladder of three models for its rounds. On 2026-10-08 the maintainer put
+  the ladder to the loop alone — the spec review and the review stay with
+  Codex, because Codex's phase 6 found two real BLOCKERs in a change the
+  loop had passed, as on every change of the night run — and, the same day,
+  named Pi as the program that starts each round ("ich möchte pi nutzen"),
+  the OpenAI-compatible address as its path, and accepted the residual risk
+  of OpenCode's terms. Without this record the runner's declaration of
+  `opencode-go` would run against ADR 0007's decision 2, which is a decision
+  nobody made.
+* **What OpenCode Go is** (`plans/changes/stage2-mimo/research.md` §E to
+  §K, read 2026-10-07; §Q, read 2026-10-08): OpenCode (Operator Anomaly
+  Innovations, Inc.) sells OpenCode Go by subscription with a Go key; three
+  of the model ids it serves are `deepseek-v4.1-flash`, `mimo-v2.6-flash`
+  and `mimo-v2.6-pro`. The Go page lists them under
+  `https://opencode.ai/zen/go/v1/chat/completions`, the OpenAI-compatible
+  address, and lists Pi among the clients it has validated ("Current builds
+  send session information for OpenCode"). Its terms of service (effective
+  2026-08-15) name no third-party client and forbid processes that
+  "automatically or programmatically extracts data or Output" and that run
+  "while you are not logged into the Services".
+* **Why the launcher changed twice on 2026-10-08.** Three calls through
+  Claude Code at the Anthropic-compatible address
+  `https://opencode.ai/zen/go/v1/messages` were refused, and Claude Code
+  speaks only that format. The maintainer then named OpenCode's own CLI; the
+  installed version 2.0.24 did not load the policy file the runner supplies,
+  which 1.18.35 loads (measured), so a read-only reviewer could not be shown.
+* **What Pi is, measured** (research §L to §P; Pi 1.1.0, 2026-10-08):
+  `@earendil-works/pi-coding-agent`, a coding-agent CLI. Its built-in
+  `opencode-go` provider sends the three ids to `…/chat/completions` with
+  Pi's own user agent and the `x-opencode-session` header the Go page asks
+  for. `--tools read,grep,find,ls` declares exactly those four tools, and a
+  call for any other tool is refused — but extension code, MCP servers,
+  project files and the configuration directory still load unless each is
+  switched off, and an extension can shadow a built-in tool's name. `read`
+  returned a file outside the working directory when asked.
 * **The class does not change.** What may be sent stays the `framework`
   class of `model-endpoints.yaml`: rules, templates, process, tests.
-  Customer code and customer rows go to neither endpoint, and the leak check
+  Customer code and customer rows go to no endpoint, and the leak check
   before every call is what blocks them (unchanged from ADR 0007).
 
 #### Decision
 
-1. **Framework content may also go to `opencode-go`** — through Claude Code,
-   which the vendor lists as a supported tool, with the three ids below.
-   The review loop (4b) only. The sentence of ADR 0007 decision 2 that closes with "Nothing else
-   goes, and nowhere else" now closes with Codex, Z.ai's GLM and OpenCode
-   Go; nothing else goes, and nowhere else. Customer code and rows go to
-   none of the three.
+1. **Framework content may also go to `opencode-go`** — at
+   `https://opencode.ai/zen/go/v1/chat/completions`, through Pi
+   (`@earendil-works/pi-coding-agent`, at the version the runner pins), with
+   the three ids below. Of the stage-2 phases, the review loop (4b) only,
+   with the runner's `probe` that measures its rungs. The
+   sentence of ADR 0007 decision 2 that closes with "Nothing else goes, and
+   nowhere else" now closes with Codex, Z.ai's GLM and OpenCode Go; nothing
+   else goes, and nowhere else. Customer code and rows go to none of the
+   three. The interactive `session` verb reaches a declared endpoint under
+   its own amendment (bead coding-harness-amp); this declaration is what that
+   verb waits for before it opens its OpenCode path to the three ids.
 2. **The loop's reviewer role moves.** The loop leaves GLM for the ladder;
    the spec review and the review stay with Codex exactly as ADR 0007 set
    them (the maintainer, 2026-10-08), and phase 6 keeps resuming the
@@ -224,21 +233,43 @@ tags: [adr, stage-2, opencode-go, reviews]
    a one-line pull request that touches `model-endpoints.yaml` and nothing
    else.
 4. **The unconfined reads accepted for ADR 0007's reviewers extend to the
-   rungs.** The prompts ask the model to read nothing outside the worktree
-   and the repository's git directory — a request, not a lock — and the
-   maintainer accepted that residual risk for reviewers on 2026-09-30.
-   It reaches the three rungs by this record.
+   rungs — measured, not assumed.** A round has `read`, `grep`, `find` and
+   `ls` and nothing that writes or runs a command; but `read` reaches files
+   outside the worktree, and Pi has no switch that confines it. A rung can
+   therefore read what the maintainer's user can read — the secrets file and
+   the customer instance's checkout included — and send it to OpenCode Go.
+   What bounds it is the prompt's request to read nothing outside the
+   worktree and the repository's git directory: a request, not a lock. The
+   leak check scans what this repository presents, not what a rung reads.
+   The maintainer accepted this residual risk for reviewers on 2026-09-30;
+   it reaches the three rungs by this record.
 5. **The key stays in the runner.** It is read from the secrets file at call
-   time, reaches the call only in its environment as `ANTHROPIC_AUTH_TOKEN`
-   and `ANTHROPIC_API_KEY`, never appears in an argument, and an OpenCode Go
-   call carries no other endpoint's key.
-6. **The address is measured before anything builds on it.** Three calls, one
-   per rung, run through the runner in phase 4 of the change that carries
-   this record — declaration and leak check in front of each, as one special
-   run whose commits are named in the pull request body. That is the only
-   content leaving before the merge, and the maintainer accepted it on
-   2026-10-07. If the address refuses an id, the run stops and reports it:
-   no second address, no second design, no substituted model.
+   time, reaches the call only in its environment as `OPENCODE_API_KEY`,
+   never appears in an argument or in a file the runner writes, and an
+   OpenCode Go call carries no other endpoint's key.
+6. **Each round is isolated, and Pi is pinned.** Each call gets a fresh,
+   empty Pi configuration directory whose one file switches Pi's own retries
+   off, a scratch home directory, and the switches that keep extensions, MCP
+   servers, skills, context files, prompt templates, themes, project trust,
+   sessions and every network request but the model call off. The isolation
+   was measured on Pi 1.1.0; the runner refuses any other version, and
+   raising the pin means measuring it again. The effort is Pi's `max`, which
+   Pi clamps to each model's ceiling — `max` for DeepSeek, `high` for both
+   MiMo rungs: a known limit, not a failure.
+7. **The address is measured before anything builds on it.** Three calls,
+   one per rung, run through the runner and Pi in phase 4 of the change that
+   carries this record — declaration and leak check in front of each, as one
+   special run whose commits are named in the pull request body. That is the
+   only content leaving before the merge, and the maintainer accepted it on
+   2026-10-07. If OpenCode Go refuses an id, the run stops and reports it:
+   no second address, no second launcher, no substituted model.
+8. **The terms risk is accepted.** The Go page invites "other coding agents"
+   and lists Pi as validated; the terms of service do not address
+   third-party clients and forbid automated extraction of output and
+   processes that run while the user is not logged in. The maintainer
+   accepted the residual risk on 2026-10-08. The reading and its date stand
+   in the entry's remark, so a later change of the terms can be held against
+   it, and the loop makes at most three calls per change.
 
 #### Options considered
 
@@ -248,20 +279,26 @@ tags: [adr, stage-2, opencode-go, reviews]
   there would not meet it.
 * **An OpenCode product other than Go.** Zen serves other models over its
   own addresses, and Go Plus is the second Go plan with higher monthly
-  caps; either keeps the launcher and changes only the billing. Chosen
-  against: the maintainer named Go, and the entry's billing and limits are
-  the Go plan's — another product needs its own entry and its own terms.
-* **OpenCode's own CLI as the launcher.** Symmetric with today's Codex CLI —
-  a binary, an ask rule, a resumable thread — but the vendor documents
-  Claude Code, and an own integration reopens the subscription-coverage
-  question `model-endpoints.yaml` records for Z.ai.
+  caps; either changes only the billing. Chosen against: the maintainer
+  named Go, and the entry's billing and limits are the Go plan's — another
+  product needs its own entry and its own terms.
+* **Claude Code at the Anthropic-compatible address.** The launcher this
+  record first named: the program ADR 0007 already starts, and a validated
+  client on the Go page. Chosen against on 2026-10-08: three calls through
+  it at `…/v1/messages` were refused, and the Go page lists the three ids
+  under the OpenAI-compatible address only.
+* **OpenCode's own CLI.** The vendor's own client, named by the maintainer
+  on the morning of 2026-10-08 and replaced the same day: the installed
+  2.0.24 did not load the runner-supplied policy file, so a read-only
+  reviewer could not be shown.
+* **A round without tools.** Pi with `--no-tools` sends no tool at all
+  (measured), which would close decision 4's reach entirely. Chosen against:
+  a round that cannot open the code around a hunk misses the contracts the
+  loop prompt asks about, and the loop's reviewer has had read and search
+  tools since ADR 0007.
 * **The model of round 2.** `mimo-v2.6-pro` in round 2 and again in round 3
   would give the third round nothing new over the second; the maintainer
-  answered "runde 2 flash" on 2026-10-07 (`decisions.md`, `[DECISION] 1`),
-  so round 2 is `mimo-v2.6-flash`.
-* **The OpenAI address instead of the Anthropic one.** The vendor lists it
-  too; it is kept as a remark and measured, never as a path, because a
-  fallback is what criterion 17 forbids.
+  answered "runde 2 flash" on 2026-10-07, so round 2 is `mimo-v2.6-flash`.
 * **Reviewer per phase written as code.** A model id as a literal in
   `scripts/stage2.py` would make every reordering a code change with tests
   to match — the opposite of what the decision asks for.
@@ -269,14 +306,16 @@ tags: [adr, stage-2, opencode-go, reviews]
 #### Consequences
 
 * **Nothing leaves before the merge except the probe.** The three probe calls
-  of phase 4 are the only foreign calls of the change, and the maintainer
-  accepted them explicitly on 2026-10-07; every other call is a stage-2 run
-  after the merge. Until then `main` routes as ADR 0007 says: spec review and
-  review on Codex, the loop on GLM, exploration and implementation on GLM 5.3
-  Flash, and this change's own review runs on Opus 5.5.
-* **A rule, not proof, at two places.** The address accepting the three ids
-  is measured once, in phase 4; a refusal found later stops that run
-  (criterion 17) instead of opening a second design. And which model a round
+  of phase 4 are the only foreign calls to OpenCode Go before the merge, and
+  the maintainer accepted them explicitly on 2026-10-07; every other call is
+  a stage-2 run after the merge. Until then `main` routes as ADR 0007 says:
+  spec review and review on Codex, the loop on GLM, exploration and
+  implementation on GLM 5.3 Flash.
+* **A rule, not proof, at three places.** The address accepting the three
+  ids is measured once, in phase 4; a refusal found later stops that run
+  instead of opening a second design. The isolation of a round is measured
+  by hand on one version and held to it by the pin; the test suite checks
+  that the flags are passed, not that Pi obeys them. And which model a round
   calls is held by a test that reorders a fixture's list — a review of the
   list itself is what keeps a wrong order from shipping.
 * **The continuity chain stops at ADR 0007.** This record amends ADR 0007,
@@ -285,89 +324,90 @@ tags: [adr, stage-2, opencode-go, reviews]
   declared endpoint with its residency) are untouched here, and the endpoint
   list is ADR 0007's text. The map in `scripts/check_decision_continuity.py`
   therefore gains nothing, and the D-13 row of the target document says the
-  same thing it said. This is a `[DETAIL]` of this design; the reason is in
-  this sentence's first half and is reversible.
+  same thing it said.
 * **Data use and terms.** The Go key sits in the secrets file and reaches the
   child process's environment only. The entry declares `anbieter-erklaert`
-  because the Go page gives no region, `opencode.ai/privacy` returned 404 on
-  2026-10-07 and the vendor's Zen page states US and EU for its models — the
-  provider explains the residency, and the measurement stays open as a
-  `[GAP]` of `spec.md`.
+  because the Go page gives no region and the vendor's Zen page states US
+  and EU for its models; the measurement stays open as a `[GAP]` of the
+  change's spec. The terms reading of 2026-10-08 stands in the entry's
+  remark beside it.
 * **The runner's shape.** `run_codex` and the Codex tuple stay for the spec
-  review and the review, and the loop's calls are Claude Code launches; the
-  ask rule on a directly typed `codex` and `.claude/settings.json` stay as
-  they are — a non-goal of this change and the subject of bead
-  coding-harness-amp.
+  review and the review; the loop's calls are Pi launches; explore and
+  implement stay Claude Code launches against Z.ai. The ask rule on a
+  directly typed `codex` and `.claude/settings.json` stay as they are — the
+  subject of bead coding-harness-amp.
 * **The resume stays where it was.** Phase 6 resumes the Codex thread of
   phase 2a; a thread that cannot be resumed starts a fresh session and says
-  so in `findings.md` (criterion 9).
+  so in `findings.md`.
 
 #### Validation
 
 * `python3 -m pytest tests/test_stage2.py tests/test_model_endpoints.py -q`
-  green: the runner launches `claude` with the address, the rung and effort
-  `max` and the settings of criterion 8 for the loop's rounds, and `codex
-  exec` pinned as on main for the spec review and the review; the
-  ladder round *n* → `modelle[n-1]` holds in a reordered fixture; three
-  rounds are the limit and round 3 only after a taken row; the 30-minute
-  limit is one constant and a stand-in that outlasts it is stopped; the key
-  is in no argv, no print and no record; a red leak check exits 2 with
-  nothing written.
+  green: the runner starts `pi` for the loop's rounds with the flags, the
+  environment and the fresh configuration directory of decision 6, the rung
+  as `opencode-go/<id>` and the key as `OPENCODE_API_KEY` only, and refuses
+  a Pi off the pin before the leak check; `codex exec` is started pinned as
+  on main for the spec review and the review; the ladder round *n* →
+  `modelle[n-1]` holds in a reordered fixture; three rounds are the limit
+  and round 3 only after a taken row; the 30-minute limit is one constant
+  and a stand-in that outlasts it is stopped; the key is in no argv, no
+  print and no record; a red leak check exits 2 with nothing written.
 * `make verify` green, and `scripts/touch_map.py origin/main HEAD` naming no
   protected area: `docs/adr/` gains only this file, `scripts/leakcheck.py`,
   `scripts/harness.py`, `scripts/touch_map.py`,
   `scripts/check_decision_continuity.py`, `scripts/new_change.py`,
   `docs/architecture/`, `ROADMAP.md`, `.claude/settings.json` and
   `model-endpoints.yaml`'s German keys are untouched.
-* The three probe commits named in the pull request body, each with its
-  rung's id and the answer's first line.
+* The probe's commit named in the pull request body, with each rung's id and
+  the first line of its answer through Pi.
 
 ## Architecture delta
 
 ```mermaid
 flowchart LR
     runner["Component: stage-2 runner (scripts/stage2.py)"]
+    pi["Container: Pi 1.1.0 (pinned)"]
     claude["Container: Claude Code"]
-    opencode["System: OpenCode Go — Anthropic address"]
+    codexcli["Container: Codex CLI"]
+    opencode["System: OpenCode Go — /zen/go/v1/chat/completions"]
     glm["System: Z.ai glm-coding-plan"]
-    codex["System: Codex CLI"]
-    runner --> claude
-    claude -->|"reviews: rung 1, 2, 3"| opencode
-    claude -->|"explore, implement: glm-5.3-flash"| glm
-    runner -. "no longer started" .-> codex
+    openai["System: OpenAI openai-codex"]
+    runner -->|"4b: rung 1, 2, 3; probe"| pi
+    pi --> opencode
+    runner -->|"1, 4: glm-5.3-flash"| claude
+    claude --> glm
+    runner -->|"2a, 6: gpt-6.1-sol"| codexcli
+    codexcli --> openai
 ```
 
 **Added**
 
 - The endpoint `opencode-go` with its three ordered rungs, its operator,
   billing, residency and `darf_sehen: [framework]` (`model-endpoints.yaml`).
-- The review call's Anthropic address and the one 30-minute constant in the
-  runner.
+- Pi as the loop's launcher, its version pin and the check before each call,
+  and one scratch directory per call.
 - Round 3 of the loop and the condition that starts it (a `taken` row of
-  round 2).
+  round 2); the `probe` verb; the 30-minute constant.
 - ADR 0011, drafted here and carried into the decision pull request.
 
 **Changed**
 
-- `review-loop` launches Claude Code on the Anthropic address instead of
-  the GLM launch, while `spec-review` and `review` keep launching the Codex
-  CLI (the maintainer, 2026-10-08); the producer line reads `claude-code`
-  for the loop's rounds and `codex` for the two Codex phases.
+- `review-loop` starts Pi instead of the GLM launch; `spec-review` and
+  `review` keep launching the Codex CLI; the producer line reads `pi` for
+  the loop's calls and `codex` for the two Codex phases.
 - `MAX_ROUNDS` 2 → 3; the round heading and the `Reviewer` cell name the
-  rung and its id instead of the literal `GLM`; the session line keeps
-  naming `codex`.
-- Nothing at the resume: phase 6 keeps resuming the Codex thread of phase
-  2a (the maintainer, 2026-10-08).
+  rung's id instead of the literal `GLM`.
 - The `bemerkung`s of `openai-codex` and `glm-coding-plan`, which stop
-  claiming the reviewer phases.
-- The routing the doctrine describes: `docs/WORKFLOW.md` §4,
+  claiming the loop.
+- The routing and the reads the doctrine describes: `docs/WORKFLOW.md` §4,
   `prompts/02a-spec-review.md`, `prompts/04b-review-loop.md`,
-  `prompts/06-review.md` and `AGENTS.md`'s stage-2 paragraph.
+  `prompts/06-review.md`, `AGENTS.md`'s stage-2 paragraph and the runner's
+  module docstring.
 
 **Removed**
 
-- The GLM launch of the loop and its round heading literal; `run_codex()`,
-  the Codex tuple and the `codex` branch of the producer line stay for the
-  spec review and the review.
-- The literal `GLM` in the round heading and in the released rows, and the
-  fixed reviewer word of the session line.
+- The GLM launch of the loop and the literal `GLM` in the round heading and
+  the released rows.
+- From the first version of this change: Claude Code as the loop's launcher,
+  the Anthropic address, `claude_env` and `opencode_env`, and the
+  window-enforcement variable in every Claude Code call.
