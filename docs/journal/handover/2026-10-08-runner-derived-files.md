@@ -204,3 +204,73 @@ integration, carry out the declared closure and artifact lifecycle. Separate
 remaining proposals: the phase-1 research swarm and mandatory feature/ADR
 interviews (at least three/five substantive questions) are not implemented by
 this PR. Kubernetes research PR 98 and OpenCode's MiMo work remain separate.
+
+## Addendum — 2026-10-08, requested merge and lifecycle continuation
+
+The maintainer explicitly requested merging PR #102, then closing the bead
+and artifacts, followed by implementing the phase-1 swarm and mandatory
+feature/ADR interviews. PR #102 was merged at 13:36:26 UTC as
+`2dd8e96fdba238dc88343d62ed073937d3415075`, after all mandatory hosted checks
+passed at `dba6ff7`. The merge used the exact-head guard; the restatement is
+recorded in PR comment 6061080004. Implementation commit `b602600` is an
+ancestor of origin/main and declares `Closes-Bead: coding-harness-mfv`.
+
+Lifecycle work is isolated on `chore/runner-derived-close` in
+`.claude/worktrees/runner-derived-close`, based on that merge. The accepted
+contract moves to `plans/specs/implementation-verification/spec.md`; the five
+change artifacts move to `plans/changes/archive/2026-10-08-runner-derived-files/`
+with accepted/done metadata. Original reviewer findings remain unchanged.
+The documented `make close-merged` target and its script are absent at this
+commit; closure must use the verified trailer and ancestry explicitly.
+
+The bead is not yet closed. An elevated session scan found live Claude
+sessions coding-harness-ce (idle) and coding-harness-e9 (busy) in the main
+checkout. Tracker ownership was asked of the maintainer and remains pending;
+no tracker writes have been made. No main-checkout or other worker files
+were changed. Swarm activation scope was also asked: features/architectural
+changes is recommended, every change is the alternative; no answer claimed.
+
+The proposal and its addenda were read from the separate
+`.claude/worktrees/explore-swarm-proposal` worktree. Swarm and interview
+implementation have not started. The stated interview minimums remain three
+for features and five for ADR work; other-class and overlap policies are still
+proposed. Resume: settle tracker ownership, close the integrated bead, verify
+and publish the lifecycle follow-up, then allocate the swarm change and
+resolve its remaining human decisions before implementation.
+
+## Addendum — 2026-10-08, lifecycle verification green
+
+The staged lifecycle follow-up passes complete `make verify`: 1270 passed,
+16 skipped; every blocking local gate passed, including the live GitHub
+ruleset check. Log: `/tmp/runner-derived-close-verify-final.log`. Markdownlint
+remains report-only and reports existing repository findings. The first run
+was red because unstaged moves remained in `git ls-files`, and because the
+sandbox denied the live GitHub query. Staging the moves fixed the first
+condition; the network-enabled complete rerun fixed the second. No test or
+gate was changed. Registry and frontmatter checks passed; the open bead
+produces expected report-only lifecycle drift until its authorized closure.
+
+The changes remain staged, uncommitted and unpublished on
+`chore/runner-derived-close`; HEAD is still the merge `2dd8e96`. Tracker
+ownership and swarm activation questions remain unanswered. No bead was
+created, changed or closed, and neither follow-on implementation has begun.
+Resume: receive the tracker ownership answer, then close coding-harness-mfv
+using the already verified merge/trailer evidence and push tracker before
+publishing the lifecycle follow-up. Continue with the swarm and interviews
+in separate allocated changes, preserving the stated three/five minimums.
+
+## Addendum — 2026-10-08, closure by Claude Code
+
+The maintainer transferred the closure to a Claude Code session
+(coding-harness-e9) and allowed it to close the bead. Checked first:
+implementation `b602600` carries `Closes-Bead: coding-harness-mfv` and is an
+ancestor of PR #102's merge `2dd8e96`, which is on `origin/main`. Bead
+coding-harness-mfv (runner regenerates derived files) was reassigned from
+`codex-runner-derived` (lease expired) and closed with that evidence; the
+tracker was pushed (`tools/bd dolt push`) before this commit. Closing it
+unblocks bead coding-harness-rwa (GLM through Pi). The staged lifecycle
+follow-up is committed unchanged on `chore/runner-derived-close`, together
+with the short Claude handover
+(`2026-10-08-runner-derived-close-claude.md`), and opened as a regular pull
+request. Resume: the maintainer merges that pull request once hosted CI is
+green; the swarm and interview work stay separate changes.
