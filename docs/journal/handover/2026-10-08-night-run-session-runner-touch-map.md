@@ -39,6 +39,10 @@ Three pull requests wait for the maintainer, all with hosted CI green on
    Measured: no link change here at `b32f488`; the three false F-10 links
    at portfolio-agentic-engineering `20a279c` are gone.
 
+4. **#95** — a research note counting the three runs' loop and phase-6
+   findings (partial evidence for bead coding-harness-kw0; tokens and cost
+   stay unmeasured).
+
 The RB-G7 merge-freshness valve (bead coding-harness-34z, due 2026-10-31)
 stands at one open `[DECISION]`, branch `decide/rb-g7-merge-freshness`,
 no pull request yet.
@@ -54,7 +58,8 @@ before 2026-10-31.
 ## Needed from the maintainer
 
 1. **RB-G7:** option 1, 2 or 3 (above).
-2. **Read and merge** #91 (a decision PR), #92, #93 when ready. #91 and #92
+2. **Read and merge** #91 (a decision PR), #92, #93, #95 and this
+   handover (#94) when ready. #91 and #92
    both change `scripts/stage2.py` in different functions; whichever merges
    second needs `main` merged in.
 3. **The session smoke**, once, in your own Terminal from
