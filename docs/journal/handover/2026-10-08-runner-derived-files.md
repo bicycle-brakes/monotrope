@@ -188,3 +188,19 @@ with repair dispositions recorded in their status cells. No open blocker or
 ambiguity remains. Full verification evidence is 1270 passed, 16 skipped.
 Publication will use branch fix/runner-derived-files; no merge is authorized.
 Next: push tracker before git, create the regular PR and check hosted CI.
+
+## Addendum — 2026-10-08, published PR
+
+Implementation commit b602600e1d075ff7a19edeb1ad0f553c51e094c6 is pushed on
+fix/runner-derived-files. Regular PR: https://github.com/MPAdesso/coding-harness/pull/102.
+The tracker handover was pushed before git. The bead remains in progress
+until its declared closure integrates. Hosted CI is pending at this record;
+check the current PR head and checks before calling the change ready.
+No merge was requested or performed. OpenCode retains stage2-mimo ownership;
+no other worker code or tracker task was modified by this change.
+
+Concrete resume: read PR 102 checks. If green, the maintainer may merge; after
+integration, carry out the declared closure and artifact lifecycle. Separate
+remaining proposals: the phase-1 research swarm and mandatory feature/ADR
+interviews (at least three/five substantive questions) are not implemented by
+this PR. Kubernetes research PR 98 and OpenCode's MiMo work remain separate.
