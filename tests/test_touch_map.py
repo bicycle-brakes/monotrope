@@ -488,6 +488,53 @@ def test_where_a_comment_starts_across_lines() -> None:
         assert tm._strip_comments(body) == kept, body
 
 
+def test_a_substitution_nests_its_own_quotes() -> None:
+    """Bead cff: quotes inside `$( … )` and `$'…'` no longer flip the rest of the file."""
+    # verbatim: portfolio-agentic-engineering 20a279c, templates/hooks/post-tool/format-code.sh, line 31
+    line31 = r'''FILE_PATH="$(echo "$INPUT" | grep -oE '"file_path"[[:space:]]*:[[:space:]]*"[^"]*"' | head -1 | sed 's/.*: *"\(.*\)"$/\1/')"'''
+    cases = {
+        # the measured case of F-10: portfolio-agentic-engineering's format-code.sh, lines 31 and 40
+        line31 + "\n# reads ruff.toml": line31 + "\n",
+        'echo "$(cat "x")" # c': 'echo "$(cat "x")" ',
+        "echo $'a\\'b' # c\n# d": "echo $'a\\'b' \n",
+        'echo "$(( 1 << 3 ))" # c\n# d': 'echo "$(( 1 << 3 ))" \n',
+        "x=$(f (a) ) # c\n# d": "x=$(f (a) ) \n",
+    }
+    for body, kept in cases.items():
+        assert tm._strip_comments(body) == kept, body
+    # loop row L1-1: a substitution's context is carried across lines - its `)` and the outer `"` close on the next
+    assert tm._strip_comments('x="$(\n)" # c\n# d') == 'x="$(\n)" \n'
+    # loop row L1-2: an escaped dollar starts no ANSI-C string; the shell's quote runs on, so the `#` is kept
+    assert tm._strip_comments("echo \\$'a\\'b' # c") == "echo \\$'a\\'b' # c"
+    # loop row L2-1: `$$` is the shell's process id, so `$$'a\'` is a plain quote, closed, and `# c` a comment
+    assert tm._strip_comments("echo $$'a\\' # c") == "echo $$'a\\' "
+    # phase 6, F-1: `$'` after a word character is still an ANSI-C string
+    assert tm._strip_comments("echo x$'a\\'b' # c\n# d") == "echo x$'a\\'b' \n"
+    # phase 6, F-2: `$$` is the process id, so `"$$("` opens no substitution
+    assert tm._strip_comments('echo "$$(" # c\n# d') == 'echo "$$(" \n'
+    # phase 6, F-3: a case pattern's `)` inside a substitution does not close it; `esac)` does
+    case = "x=\"$(case x in\nx)\n# c\nprintf '%s' ok;;\nesac)\"\n# d"
+    assert tm._strip_comments(case) == "x=\"$(case x in\nx)\n\nprintf '%s' ok;;\nesac)\"\n"
+    # phase 6, F-4: `case` as an argument is a word, not a reserved word
+    assert tm._strip_comments('x="$(echo case)" # c\n# d') == 'x="$(echo case)" \n'
+    # phase 6, F-5: two backslashes before `$(` escape each other; the substitution is live
+    assert tm._strip_comments('x="\\\\$(\n# c\n)"\n# d') == 'x="\\\\$(\n\n)"\n'
+    # phase 6, F-6: a `)` inside `${v%)}` belongs to the expansion
+    assert tm._strip_comments('x="$(printf %s ${v%)}\n# c\n)"\n# d') == 'x="$(printf %s ${v%)}\n\n)"\n'
+    # the shell itself reads an apostrophe in plain text as a quote: there the limit stays
+    assert tm._strip_comments("echo don't # a\n# b") == "echo don't # a\n# b"
+
+
+def test_an_apostrophe_inside_a_yaml_word_is_a_letter(tmp_path: Path) -> None:
+    """Bead cff: F-10's own fixture - `Don't` in a YAML name no longer cuts a name inside a later real quote."""
+    body = "steps:\n  - name: Don't skip the check\n    run: |\n      grep -q 'x # y' scripts/quoted_tool.py # z\n"
+    assert "scripts/quoted_tool.py" in tm._strip_comments(body, yaml=True)
+    assert "# z" not in tm._strip_comments(body, yaml=True)
+    base = {".github/workflows/ci.yml": body}
+    boxes = _boxes(_run(_fixture(tmp_path, base, {"scripts/quoted_tool.py": "V = 1\n"})))
+    assert boxes["scripts/quoted_tool.py"]["run by"] == ["workflows/ci.yml"]
+
+
 # ---------------------------------------------------------------------------
 # criterion 5: one hop from the change
 # ---------------------------------------------------------------------------
