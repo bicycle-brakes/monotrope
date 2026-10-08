@@ -3046,7 +3046,12 @@ def test_the_adr_draft_states_every_point() -> None:
     """Criterion 25: the draft in design.md carries every point and weighed option, Pi as the launcher, Claude Code not."""
     draft = section((REPO_ROOT / "plans/changes/stage2-mimo/design.md").read_text(encoding="utf-8"), "### ADR 0011")
     assert draft, "the draft is not in design.md"
-    one = flat(draft)
+    texts = {
+        "the draft in design.md": flat(draft),
+        "docs/adr/0011": flat(
+            (REPO_ROOT / "docs/adr/0011-stage-2-reviews-through-opencode-go.md").read_text(encoding="utf-8")
+        ),
+    }
     for needle in (
         "Framework content may also go to `opencode-go`",
         "`https://opencode.ai/zen/go/v1/chat/completions`, through Pi",
@@ -3073,8 +3078,10 @@ def test_the_adr_draft_states_every_point() -> None:
         "The model of round 2",
         "runde 2 flash",
     ):
-        assert needle in one, needle
-    assert "through Claude Code, which the vendor lists" not in one
+        for name, one in texts.items():
+            assert needle in one, f"{needle!r} is missing from {name}"
+    for name, one in texts.items():
+        assert "through Claude Code, which the vendor lists" not in one, name
 
 
 def continuity_problems(amendments: dict, target: str, adr_dir: Path) -> list[str]:

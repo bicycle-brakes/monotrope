@@ -349,6 +349,9 @@ are the two `[GAP]`s, which phase 4 measures instead of asking.
 
 ### [DETAIL] — decided here, reason recorded
 
+> **Superseded** by the addendum "the reviewer decision, verbatim" below:
+> phases 2a and 6 stay with Codex.
+
 1. **Which rung phase 2a and phase 6 take.** Both are one call each today
    (`spec_review`, `review` — no rounds). Taken: **rung 1**,
    `deepseek-v4.1-flash`. Reason: the decision gives the three rungs as

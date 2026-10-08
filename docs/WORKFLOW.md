@@ -652,8 +652,8 @@ into a shell. Eight verbs exist:
   resume`; it then releases the loop rows and has Codex mark each one.
 - `probe` — one call per rung of the ladder through Pi, the pinned version
   checked once first, the declaration and the leak check in front of each
-  call; measures the address, writes no record (a change's declared special
-  run).
+  call; measures the address, writes no loop record (its call lines go to
+  `findings.md` like any call; a change's declared special run).
 - `session` — one interactive OpenCode or Codex session in a new Terminal
   window; OpenCode waits on the separate Go declaration ("The interactive
   session" below).
