@@ -190,6 +190,22 @@ the fourth change is a rename, since the loop prompt's model line names the
 ladder's first rung (`deepseek-v4.1-flash`) where it named GLM 5.3 before
 (`scripts/kit/probe.py`, `REIST_NICHT` and its cap).
 
+`[DETAIL]` 2026-10-08 — the stream a failed call reports on. The implement
+run had moved the `failed:` line to standard output to follow criterion 14's
+wording, which broke the session verb's tests that read standard error (the
+runner has printed the failure line there since before the session verb
+merged). At the maintainer's word (2026-10-08) the line goes to standard
+error again, the tests read there, and criterion 14's sentence says "standard
+error" so the artifact set agrees again.
+
+`[DETAIL]` 2026-10-08 — the undeclared case of the session tests
+(`test_a_model_no_declaration_clears_for_a_session_refuses`) relied on the
+production declaration naming no `opencode-go` entry at all; this change
+declares that entry, so the case now names a rung no entry lists
+(`opencode-go/never-listed-rung`) and keeps the same refusal it always
+asserted. The test fixture copies the production declaration, so a case may
+not depend on what production happens to omit.
+
 ## Time used
 
 2026-10-08, phase-4 session under the Stage-2 runner — start and end clock

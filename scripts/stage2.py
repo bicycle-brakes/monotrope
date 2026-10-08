@@ -1626,9 +1626,9 @@ def main(argv: list[str] | None = None) -> int:
         print(f"refused: {error}", file=sys.stderr)
         return 2
     except CallFailed as error:
-        # A call that failed names its cause on standard output (spec, criterion 14):
+        # A call that failed names its cause on standard error (spec, criterion 14):
         # a round that did not review must say so where the caller reads it.
-        print(f"failed: {error}")
+        print(f"failed: {error}", file=sys.stderr)
         return 1
     return 0
 

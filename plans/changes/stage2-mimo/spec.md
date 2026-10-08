@@ -4,7 +4,7 @@ status: draft
 implementation_status: none
 date: 2026-10-07
 last_reviewed: 2026-10-07
-updated: 2026-10-07
+updated: 2026-10-08
 supersedes: null
 superseded_by: null
 bead: coding-harness-ymx
@@ -228,7 +228,7 @@ recording program the tests put on `PATH` in the callee's place.
 14. **A round that did not review is not a round.** If a round's call cannot
     start, ends non-zero, answers empty, or is stopped by the time limit
     (criterion 15), the loop record is unchanged, the runner names the cause
-    on standard output, and the exit is 1.
+    on standard error, and the exit is 1.
     *Refuted by:* a block in the loop record, an exit of 0, or a cause not
     named.
 

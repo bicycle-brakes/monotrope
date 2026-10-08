@@ -847,8 +847,8 @@ def test_a_failed_flash_process_restores_the_baseline_so_stage2_off_can_proceed(
 def test_a_failed_model_call_names_what_was_restored(world: World, capsys: pytest.CaptureFixture[str]) -> None:
     world.script(claude=[{"stderr": "boom", "exit": 1, "plant": {"src/half.py": "x = 1\n"}}])
     assert world.run("implement") == 1
-    out = capsys.readouterr().out
-    assert "restored the worktree" in out and "src/half.py" in out
+    err = capsys.readouterr().err
+    assert "restored the worktree" in err and "src/half.py" in err
 
 
 def test_a_postcheck_failure_gets_one_flash_repair_with_its_diagnostic(world: World) -> None:
@@ -1659,11 +1659,11 @@ def test_a_round_is_written_as_its_rung(world: World) -> None:
 
 
 def test_a_round_that_did_not_review_writes_nothing(world: World, capsys: pytest.CaptureFixture[str]) -> None:
-    """Criterion 14: no block, exit 1, and the cause named on standard output."""
+    """Criterion 14: no block, exit 1, and the cause named on standard error."""
     world.script(claude=[{"stdout": rows(1), "stderr": "boom", "exit": 1}])
     assert world.run("review-loop") == 1
     assert not world.record().exists()
-    assert "claude call failed" in capsys.readouterr().out
+    assert "claude call failed" in capsys.readouterr().err
 
 
 def test_a_round_without_a_finding_still_counts(world: World, capsys: pytest.CaptureFixture[str]) -> None:
@@ -1767,7 +1767,7 @@ def test_a_call_over_the_time_limit_is_stopped(
     assert world.run("review-loop") == 1
     assert time.monotonic() - started < 15
     assert not world.record().exists()
-    assert "stopped by the reviewer time limit" in capsys.readouterr().out
+    assert "stopped by the reviewer time limit" in capsys.readouterr().err
 
 
 def test_a_refused_rung_stops_the_run_without_fallback(world: World, capsys: pytest.CaptureFixture[str]) -> None:
@@ -1780,7 +1780,7 @@ def test_a_refused_rung_stops_the_run_without_fallback(world: World, capsys: pyt
     assert calls[0]["env"]["ANTHROPIC_BASE_URL"] == stage2.OPENCODE_BASE_URL
     assert "chat/completions" not in calls[0]["env"]["ANTHROPIC_BASE_URL"]
     assert not world.record().exists()
-    assert "claude call failed" in capsys.readouterr().out
+    assert "claude call failed" in capsys.readouterr().err
 
 
 # ---------------------------------------------------------------------------
