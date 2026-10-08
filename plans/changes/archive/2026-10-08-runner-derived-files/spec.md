@@ -1,7 +1,7 @@
 ---
 title: "Spec — runner-derived-files"
-status: draft
-implementation_status: partial
+status: accepted
+implementation_status: done
 date: 2026-10-08
 last_reviewed: 2026-10-08
 updated: 2026-10-08
