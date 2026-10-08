@@ -487,7 +487,13 @@ def test_concurrency_group_carries_the_event() -> None:
 
 # Keys on `pull_request` that would narrow which pull requests are checked.
 PR_TRIGGER_FILTERS = ("branches", "branches-ignore", "paths", "paths-ignore", "types")
-_MOVES_THE_TREE = re.compile(r"\bgit\s+(?:checkout|switch|reset|restore|pull|merge|rebase)\b")
+# Git's global options (`-C <dir>`, `-c <k=v>`, `--git-dir=...`) may stand
+# before the subcommand (phase 6, F-1); `gh pr checkout` moves the tree too.
+_GIT_GLOBAL_OPTION = r"(?:\s+(?:-[Cc]\s+\S+|--?[\w-]+(?:=\S+)?))*"
+_MOVES_THE_TREE = re.compile(
+    r"\bgit" + _GIT_GLOBAL_OPTION + r"\s+(?:checkout|switch|reset|restore|pull|merge|rebase)\b"
+    r"|\bgh\s+pr\s+checkout\b"
+)
 
 
 def _merge_ref_findings(doc: dict) -> list[str]:
@@ -596,6 +602,16 @@ def _plant_git_checkout_step(doc: dict) -> None:
     steps.insert(1, {"name": "Move to the head", "run": "git checkout ${{ github.head_ref }}"})
 
 
+def _plant_git_checkout_with_a_global_option(doc: dict) -> None:
+    steps = doc["jobs"][ci_gates.MATRIX_JOB]["steps"]
+    steps.insert(1, {"name": "Move to the head", "run": "git -C . checkout ${{ github.event.pull_request.head.sha }}"})
+
+
+def _plant_gh_pr_checkout(doc: dict) -> None:
+    steps = doc["jobs"][ci_gates.MATRIX_JOB]["steps"]
+    steps.insert(1, {"name": "Move to the head", "run": "gh pr checkout ${{ github.event.number }}"})
+
+
 def _plant_git_pull_step(doc: dict) -> None:
     steps = doc["jobs"][ci_gates.MATRIX_JOB]["steps"]
     steps.insert(1, {"name": "Pull the head", "run": "git pull origin ${{ github.head_ref }}"})
@@ -614,6 +630,8 @@ def _plant_git_pull_step(doc: dict) -> None:
         pytest.param(_plant_no_checkout, id="no-checkout"),
         pytest.param(_plant_git_checkout_step, id="git-checkout-step"),
         pytest.param(_plant_git_pull_step, id="git-pull-step"),
+        pytest.param(_plant_git_checkout_with_a_global_option, id="git-c-checkout-step"),
+        pytest.param(_plant_gh_pr_checkout, id="gh-pr-checkout-step"),
     ],
 )
 def test_the_merge_ref_check_flags_a_planted_fault(plant: Callable[[dict], None]) -> None:

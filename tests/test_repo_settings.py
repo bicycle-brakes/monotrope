@@ -172,6 +172,23 @@ def _lists_required_check(rule: dict[str, Any], *, pinned: bool = True) -> bool:
     )
 
 
+def _checks_are_readable(rule: dict[str, Any]) -> bool:
+    """Is every entry of a `required_status_checks` list an object with a non-empty `context`?
+
+    An entry of another shape is an answer this file does not know; counting
+    it as a check would let an unknown shape pass the floor (phase 6, F-2).
+    """
+    if rule.get("type") != "required_status_checks":
+        return True
+    parameters = rule.get("parameters")
+    checks = parameters.get("required_status_checks") if isinstance(parameters, dict) else None
+    if checks is None:
+        return True
+    return isinstance(checks, list) and all(
+        isinstance(c, dict) and isinstance(c.get("context"), str) and c["context"] for c in checks
+    )
+
+
 def _supplying_rules(rules: list[dict[str, Any]]) -> dict[str, list[dict[str, Any]]]:
     """The active rules that supply each of the four rule types."""
     supplied: dict[str, list[dict[str, Any]]] = {}
@@ -310,6 +327,8 @@ def measure(api: Api = gh_api, local: Local = local_repository) -> list[str]:
         return [failed]
     if not isinstance(rules, list) or not all(isinstance(r, dict) for r in rules):
         return [f"not measured: {rules_path}: the answer is not a list of rules"]
+    if not all(_checks_are_readable(r) for r in rules):
+        return [f"not measured: {rules_path}: a required check is not an object with a context"]
 
     details: dict[Any, Any] = {}
     for ruleset_id in _suppliers(rules):
@@ -366,6 +385,20 @@ def _todays_rules() -> list[dict[str, Any]]:
             "ruleset_id": RULESET_ID,
         },
     ]
+
+
+def _rules_with_a_null_check() -> list[dict[str, Any]]:
+    """Phase 6, F-2: `verify` not strict, and a second rule strict over a check of no known shape."""
+    rules = _todays_rules()
+    rules[3]["parameters"]["strict_required_status_checks_policy"] = False
+    rules.append(
+        {
+            "type": "required_status_checks",
+            "parameters": {"strict_required_status_checks_policy": True, "required_status_checks": [None]},
+            "ruleset_id": RULESET_ID,
+        }
+    )
+    return rules
 
 
 def _todays_ruleset() -> dict[str, Any]:
@@ -652,6 +685,12 @@ def _failing(path: str, code: int, text: str) -> Api:
         pytest.param(
             "rules-with-a-string", f"{REPO_PATH}/rules/branches/main", "not a list of rules", id="rules-with-a-string"
         ),
+        pytest.param(
+            "rules-with-a-check-that-is-no-object",
+            f"{REPO_PATH}/rules/branches/main",
+            "not an object with a context",
+            id="rules-with-a-check-that-is-no-object",
+        ),
         pytest.param("ruleset-exit-1", f"{REPO_PATH}/rulesets/{RULESET_ID}", "HTTP 404", id="ruleset-exit-1"),
         pytest.param("ruleset-not-json", f"{REPO_PATH}/rulesets/{RULESET_ID}", "not JSON", id="ruleset-not-json"),
         pytest.param("ruleset-a-list", f"{REPO_PATH}/rulesets/{RULESET_ID}", "not a ruleset", id="ruleset-a-list"),
@@ -674,6 +713,7 @@ def test_an_unreachable_api_is_not_a_pass(
         "rules-exit-1-with-a-valid-answer": lambda: _failing(rules_path, 1, json.dumps(_todays_rules())),
         "rules-not-a-list": lambda: _failing(rules_path, 0, "{}"),
         "rules-with-a-string": lambda: _failing(rules_path, 0, '["deletion"]'),
+        "rules-with-a-check-that-is-no-object": lambda: _failing(rules_path, 0, json.dumps(_rules_with_a_null_check())),
         "ruleset-exit-1": lambda: _failing(ruleset_path, 1, "HTTP 404"),
         "ruleset-not-json": lambda: _failing(ruleset_path, 0, "not json"),
         "ruleset-a-list": lambda: _failing(ruleset_path, 0, "[]"),
