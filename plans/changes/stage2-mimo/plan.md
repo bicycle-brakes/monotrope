@@ -316,3 +316,16 @@ change does not touch (`README.md`, `templates/`,
 other file was changed.
 
 2026-10-08 15:27–15:53, 26 min, plan steps 1–6 (Sonnet 5.5 sub-agent session; `date` read at start and before the commit; background `make verify` waits counted).
+
+## Probe — 2026-10-08
+
+`python3 scripts/stage2.py probe stage2-mimo` on `b3bd6fd`, through Pi 1.1.0
+with the real key: all three rungs answered (`probe: 3 rungs answered`, exit
+0), the leak check clean before each call (309 files, 693–694 commits, 12
+rules). Each model described itself as "Claude (Anthropic)" — self-report,
+not evidence. Measured the same day with one extra call per rung (`pi --print
+--mode json --no-tools`, prompt "Reply with the single word OK.", approved
+by the maintainer): every answer came back as `provider: opencode-go`, `api:
+openai-completions`, `model` equal to the rung, and Pi recorded no
+`responseModel` — which it sets only when the server's chunk names a model
+other than the one requested. So the server reported no other model.

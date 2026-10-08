@@ -43,3 +43,9 @@ Stage-2 call, 2026-10-08: probe · endpoint opencode-go · model deepseek-v4.1-f
 Stage-2 call, 2026-10-08: probe · endpoint opencode-go · model deepseek-v4.1-flash · leak check clean over 296 files, 676 commits, 12 rules.
 
 Stage-2 call, 2026-10-08: review-loop · endpoint opencode-go · model deepseek-v4.1-flash · leak check clean over 296 files, 677 commits, 12 rules.
+
+Stage-2 call, 2026-10-08: probe · endpoint opencode-go · model deepseek-v4.1-flash · leak check clean over 309 files, 693 commits, 12 rules.
+
+Stage-2 call, 2026-10-08: probe · endpoint opencode-go · model mimo-v2.6-flash · leak check clean over 309 files, 694 commits, 12 rules.
+
+Stage-2 call, 2026-10-08: probe · endpoint opencode-go · model mimo-v2.6-pro · leak check clean over 309 files, 694 commits, 12 rules.
