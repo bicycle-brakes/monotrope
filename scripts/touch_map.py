@@ -208,10 +208,30 @@ _HEREDOC = re.compile(r"<<-?[ \t]*(?:'([^']+)'|\"([^\"]+)\"|\\?([A-Za-z_][A-Za-z
 
 
 # The scan state across lines: one entry per open command substitution `$( … )`, the outermost first. Each
-# holds the quote open in that context ("" none, `'`, `"`, or `$'` for an ANSI-C string) and its count of
-# unquoted `(` still to close.
-State = tuple[tuple[str, int], ...]
-OUTSIDE: State = (("", 0),)
+# holds the quote open in that context ("" none, `'`, `"`, or `$'` for an ANSI-C string), its count of
+# unquoted `(` still to close, and its count of `case` still waiting for `esac`.
+State = tuple[tuple[str, int, int], ...]
+OUTSIDE: State = (("", 0, 0),)
+
+
+def _live_dollar(line: str, i: int) -> bool:
+    """Whether the `$` at `i` starts an expansion: `$$` is the process id, and `\\$` is a plain dollar.
+
+    The dollars of a run pair off from its start, after an escaped first one: so the `$` of `x$'`, `$$$(` and
+    `\\$$(` starts one, the second `$` of `$$'` and `$$(` does not (phase 6 of touch-map-comments, F-1, F-2).
+    """
+    start = i
+    while start > 0 and line[start - 1] == "$":
+        start -= 1
+    position = i - start + 1 - (1 if start > 0 and line[start - 1] == "\\" else 0)
+    return position % 2 == 1
+
+
+def _word(line: str, i: int, word: str) -> bool:
+    """Whether `word` stands at `i` as a shell word of its own."""
+    before = i == 0 or line[i - 1] in " \t(;|&"
+    end = i + len(word)
+    return before and line.startswith(word, i) and (end == len(line) or line[end] in " \t;)")
 
 
 def _scan(line: str, state: State, yaml: bool = False) -> tuple[str, State, list[str]]:
@@ -235,8 +255,8 @@ def _scan(line: str, state: State, yaml: bool = False) -> tuple[str, State, list
         if quote in ("'", "$'"):
             if char == "'":
                 stack[-1][0] = ""
-        elif line.startswith("$(", i):
-            stack.append(["", 0])  # inside double quotes too: a substitution starts its own quoting
+        elif line.startswith("$(", i) and _live_dollar(line, i):
+            stack.append(["", 0, 0])  # inside double quotes too: a substitution starts its own quoting
             i += 2
             blank = False
             continue
@@ -248,15 +268,24 @@ def _scan(line: str, state: State, yaml: bool = False) -> tuple[str, State, list
         elif char == "'":
             letters = 0 < i < len(line) - 1 and line[i - 1].isalpha() and line[i + 1].isalpha()
             if not (yaml and letters):
-                # `$'` opens an ANSI-C string only where the `$` starts a word: `\$'` and `$$'` are a plain quote
-                ansi = i > 0 and line[i - 1] == "$" and (i < 2 or line[i - 2] in " \t=(;|&")
+                ansi = i > 0 and line[i - 1] == "$" and _live_dollar(line, i - 1)
                 stack[-1][0] = "$'" if ansi else "'"
+        elif len(stack) > 1 and _word(line, i, "case"):
+            stack[-1][2] += 1  # a case pattern's `)` inside a substitution closes nothing (F-3)
+            i += 4
+            blank = False
+            continue
+        elif len(stack) > 1 and stack[-1][2] and _word(line, i, "esac"):
+            stack[-1][2] -= 1
+            i += 4
+            blank = False
+            continue
         elif char == "(":
             stack[-1][1] += 1
         elif char == ")":
             if stack[-1][1]:
                 stack[-1][1] -= 1
-            elif len(stack) > 1:
+            elif len(stack) > 1 and not stack[-1][2]:
                 stack.pop()
         elif char == "#" and blank:
             return line[:i], tuple(tuple(context) for context in stack), heredocs

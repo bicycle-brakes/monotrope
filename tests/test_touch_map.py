@@ -508,6 +508,13 @@ def test_a_substitution_nests_its_own_quotes() -> None:
     assert tm._strip_comments("echo \\$'a\\'b' # c") == "echo \\$'a\\'b' # c"
     # loop row L2-1: `$$` is the shell's process id, so `$$'a\'` is a plain quote, closed, and `# c` a comment
     assert tm._strip_comments("echo $$'a\\' # c") == "echo $$'a\\' "
+    # phase 6, F-1: `$'` after a word character is still an ANSI-C string
+    assert tm._strip_comments("echo x$'a\\'b' # c\n# d") == "echo x$'a\\'b' \n"
+    # phase 6, F-2: `$$` is the process id, so `"$$("` opens no substitution
+    assert tm._strip_comments('echo "$$(" # c\n# d') == 'echo "$$(" \n'
+    # phase 6, F-3: a case pattern's `)` inside a substitution does not close it; `esac)` does
+    case = "x=\"$(case x in\nx)\n# c\nprintf '%s' ok;;\nesac)\"\n# d"
+    assert tm._strip_comments(case) == "x=\"$(case x in\nx)\n\nprintf '%s' ok;;\nesac)\"\n"
     # the shell itself reads an apostrophe in plain text as a quote: there the limit stays
     assert tm._strip_comments("echo don't # a\n# b") == "echo don't # a\n# b"
 
