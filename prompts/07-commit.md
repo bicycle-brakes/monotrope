@@ -103,6 +103,12 @@ restatement is its one-line summary.
    the merge fail, and the agent restates again. This is rule RB-M1's idea
    ("what changes after the signature is unsigned again") applied to the
    merge.
+7. If GitHub refuses the merge because the branch is behind its base — the
+   ruleset requires branches to be up to date before merging (rule RB-G7)
+   — the agent runs `gh pr update-branch <n>`, waits until CI is green on
+   the new head and starts again at step 2: a new head needs a new
+   restatement. If the update reports a conflict, the agent stops and says
+   so.
 
 `.claude/settings.json` asks before every merge command it recognises, so the
 permission prompt appears right below the restatement; where no prompt can be
