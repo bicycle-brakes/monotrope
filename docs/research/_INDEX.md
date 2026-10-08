@@ -4,7 +4,7 @@ category: research
 status: proposed
 created: 2026-09-16
 last_reviewed: 2026-09-18
-updated: 2026-10-06
+updated: 2026-10-08
 owner: framework-architect
 provenance: ai-drafted-reviewed
 produced_by:
@@ -72,6 +72,7 @@ Vocabulary for older sources: **Stage 1–3** means model routing; **S0–S7** m
 | [Diagrams in pull requests](2026-10-06-diagrams-in-pull-requests.md) | proposed · 2026-10-06 | A generated touch list (what runs and tests the changed code) in every code pull request, a Mermaid map only at three or more changed code files and collapsed, the `design.md` architecture delta linked, never an agent-drawn diagram; review bots, deterministic generators and the GitHub Mobile app (Mermaid shows as code) checked; a prototype run read-only on `feat/project-lock` (14 of 14 links right, the map needs zooming on a phone) |
 | [mattpocock/skills against Coding Harness](2026-10-06-mattpocock-skills.md) | proposed · 2026-10-06 | Do not install the plugin; 22 skills mapped (9 rows covered or better here, 5 partly, 2 missing, 3 left out); adopt a debugging prompt, sharper interview, test and ADR-question lines, and a root `GLOSSARY.md` with a report-only check; an architecture survey as a second recurring job after the research re-check; where a process-owning framework takes control away, honestly |
 | [Ponytail, the least-code skill](2026-10-06-ponytail-skill.md) | proposed · 2026-10-06 | Take the ladder, not the plugin: fold it into prompts 03 and 04 and a "built and not promised" finding into 06, never thinner on tests and planted faults; the ladder run by hand over five changes finds about 5 % to cut, mostly grown in the review loop; deleting 29 of 30 tests of one script leaves `make verify` green, so only prompts and the reviewer hold per-criterion tests |
+| [Kubernetes across the three projects](2026-10-08-kubernetes-across-projects.md) | proposed · 2026-10-08 | A bounded read-only verifier pilot in Coding Harness, later CLI batch execution for LakeSwitch, and retaining ADHD Relief's macOS core; updates the older gate-runner assumptions against the dependency lock and accepted Hermes architecture |
 
 Original four-source intake note: copied in by the maintainer on 2026-09-16 (Phase 2 of the
 separation, bead `coding-harness-anw`). Provenance is set to
