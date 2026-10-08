@@ -390,11 +390,10 @@ def test_no_old_reviewer_remark_claims_a_review_phase() -> None:
     """Criterion 3: each old entry says which phases, if any, still route to it."""
     codex = " ".join(_endpunkt("openai-codex")["bemerkung"].split())
     glm = " ".join(_endpunkt("glm-coding-plan")["bemerkung"].split())
-    for remark in (codex, glm):
-        assert "Used for the spec review" not in remark
-        assert "is used for the review loop" not in remark
-        assert "moved to `opencode-go`" in remark and "2026-10-07" in remark
+    assert "Used for the spec review (phase 2a) and the review (phase 6)" in codex
+    assert "the review loop (phase 4b) moved to `opencode-go`" in codex
+    assert "No review phase routes to it" in glm
+    assert "the review loop (phase 4b) moved to `opencode-go`" in glm
     assert "stage2.py explore" in glm and "stage2.py implement" in glm
-    assert "the entry stays declared" in codex.lower()
-    planted = codex.replace("moved to `opencode-go`", "runs on `openai-codex` as before")
+    planted = codex.replace("the review loop (phase 4b) moved to `opencode-go`", "runs every review as before")
     assert "moved to `opencode-go`" not in planted

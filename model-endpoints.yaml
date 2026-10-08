@@ -136,9 +136,10 @@ endpunkte:
     bemerkung: >-
       Codex through the official Codex CLI only, signed in with the
       maintainer's ChatGPT subscription — any other way in is not covered.
-      No phase routes to it since 2026-10-07 (ADR 0011): the spec review
-      (phase 2a) and the review (phase 6) moved to `opencode-go`; the entry
-      stays declared for what a later change routes to it. OpenAI states that
+      Used for the spec review (phase 2a) and the review (phase 6) of
+      `bounded`, `feature` and `architectural` changes, through `python3
+      scripts/stage2.py`; the review loop (phase 4b) moved to `opencode-go`
+      (ADR 0011). OpenAI states that
       it processes and stores
       personal-plan data in the United States and wherever its affiliates and
       service providers are, and personal plans get no region choice (search
@@ -154,9 +155,9 @@ endpunkte:
       - mimo-v2.6-flash
       - mimo-v2.6-pro
     bemerkung: >-
-      The stage-2 reviews — the spec review (phase 2a), the review loop
-      (phase 4b) and the review (phase 6) — run here, through
-      `python3 scripts/stage2.py` only. The order of `modelle` is the loop's
+      The review loop (phase 4b) runs here — and only the review loop; the
+      spec review (phase 2a) and the review (phase 6) stay with Codex —
+      through `python3 scripts/stage2.py` only. The order of `modelle` is the loop's
       ladder: round n calls the n-th id, and a one-line pull request
       reorders it. Endpoints: the Anthropic-compatible
       `https://opencode.ai/zen/go/v1/messages` and the OpenAI-compatible

@@ -2,18 +2,21 @@ schema_version: 1
 change: stage2-mimo
 question: adr
 answer: 'yes'
-reason: Every review — 2a, 4b and 6 — runs through OpenCode Go in rounds (round
-  1 DeepSeek V4.1 Flash, round 2 MiMo-V2.6-Flash, round 3 only when needed
-  MiMo-V2.6-Pro), on an ordered list in model-endpoints.yaml that a one-line
-  pull request reorders; ADR 0007 is widened in its own text to cover it.
-  Stated 2026-10-07 as "yes — widen ADR 0007" and, the same session, "ich
-  möchte mimo über opencode go anbinden"; it replaces the earlier Xiaomi
-  wording of this answer (Xiaomi direct, Token Plan), which the OpenCode Go
-  decision supersedes.
+reason: The OpenCode Go ladder (DeepSeek V4.1 Flash -> MiMo-V2.6-Flash -> MiMo-V2.6-Pro)
+  runs only the 4b review loop; phases 2a and 6 stay with Codex exactly as on
+  main and phase 6 keeps resuming the phase-2a session (maintainer, 2026-10-08,
+  narrowing the answer of 2026-10-07), because on 2026-10-08 Codex's phase 6
+  found two real BLOCKERs in rb-g7-merge-freshness after the GLM loop had passed
+  it, as on every change of the night run. The loop runs on an ordered list in
+  model-endpoints.yaml that a one-line pull request reorders; ADR 0007 is
+  widened in its own text to cover it. Stated 2026-10-07 as "yes — widen ADR
+  0007" and, the same session, "ich möchte mimo über opencode go anbinden"; it
+  replaces the earlier Xiaomi wording of this answer (Xiaomi direct, Token
+  Plan), which the OpenCode Go decision supersedes.
 shown:
   proposed: 'yes'
   proposal_reason: it widens where framework content may flow, which ADR 0007 limits
     to Codex and GLM and nowhere else, to the three models OpenCode Go serves for
-    reviews, and takes Codex and GLM out of the reviewer roles ADR 0007 names
+    the review loop, and takes GLM out of the reviewer roles ADR 0007 names
 answered_by: framework-architect
 answered_at: 2026-10-07

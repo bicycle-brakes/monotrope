@@ -2,9 +2,7 @@
 
 **Model:** Opus 5.5 — finds what Sonnet misses, and reads the code a change
 calls instead of trusting its docstring, for a spike; for a bounded, feature or
-architectural change rung 1 of the ladder (`deepseek-v4.1-flash`, the first id
-of the `opencode-go` entry's `modelle` in `model-endpoints.yaml`) at effort
-`max`, resumed by `python3
+architectural change gpt-6.1-sol at effort `max`, resumed by `python3
 scripts/stage2.py review <change>` (a fresh session where no phase-2a session
 was held).
 **Input:** the diff, `spec.md` and, when the change has one, `design.md` —
@@ -15,8 +13,8 @@ whether the diff makes its architecture delta true is your question (ADR 0009).
 BLOCKER.
 **Session:** you are the spec reviewer of phase 2a, resumed. On the Claude path
 (Opus 5.5): `claude --model claude-opus-5-5 --resume <uuid>` (the id under the
-table in `findings.md`). On the runner path the runner resumes the recorded
-session (`Reviewer session: <rung> <session id>` in `findings.md`). Only when
+table in `findings.md`). On the Codex path the runner resumes the recorded
+session with `codex exec resume`. Only when
 that session is gone does a fresh
 one start;
 `findings.md` says so. Your yardstick is the current `spec.md` — the version
@@ -33,7 +31,7 @@ repository until your verdict stands, so that they cannot shape it. Only then
 do the loop rows come in. On the Claude path you run
 `python3 scripts/stage2.py release-loop
 <change>` and mark the `Phase 6` cell of each loop row `agree` or `disagree —
-<reason>`; on the runner path the runner does both. A change that ran stage 2
+<reason>`; on the Codex path the runner does both. A change that ran stage 2
 has the columns `Reviewer` and `Broke a test` in `findings.md`
 (`docs/WORKFLOW.md` §4). The verdict line is one line: `<date>` as `YYYY-MM-DD`
 comes last on it, `<session>` is left out when you have no id, and `<reviewer>` names

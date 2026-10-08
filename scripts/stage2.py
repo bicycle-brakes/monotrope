@@ -10,11 +10,11 @@ at most three rounds); GLM 5.3 Flash explores (phase 1) and implements
 stands between the rule and the call.
 
     python3 scripts/stage2.py explore      <change>   # GLM Flash, phase 1
-    python3 scripts/stage2.py spec-review  <change>   # the ladder's rung 1, phase 2a, a fresh session
+    python3 scripts/stage2.py spec-review  <change>   # Codex, phase 2a, a fresh session
     python3 scripts/stage2.py implement    <change>   # GLM Flash, phase 4
     python3 scripts/stage2.py review-loop  <change>   # one round of phase 4b: round n on rung n
     python3 scripts/stage2.py release-loop <change>   # loop rows into findings.md
-    python3 scripts/stage2.py review       <change>   # rung 1, phase 6, the 2a session resumed
+    python3 scripts/stage2.py review       <change>   # Codex, phase 6, the 2a session resumed
     python3 scripts/stage2.py probe        <change>   # one call per rung, no record written
     python3 scripts/stage2.py session      <change>   # interactive Codex/OpenCode, a Terminal window
 
@@ -117,6 +117,7 @@ REPO_ROOT = Path(__file__).resolve().parent.parent
 GLM_FLASH = ("glm-coding-plan", "glm-5.3-flash", "max")
 HAIKU = ("claude-code-plan", "claude-haiku-4-5", None)
 SONNET = ("claude-code-plan", "claude-sonnet-5-5", "medium")
+CODEX = ("openai-codex", "gpt-6.1-sol", "max")
 GLM_BASE_URL = "https://api.z.ai/api/anthropic"
 OPENCODE = "opencode-go"
 OPENCODE_BASE_URL = "https://opencode.ai/zen/go/v1/messages"
@@ -174,7 +175,7 @@ VERDICT_LINE = re.compile(
     r"^Phase 6 verdict:[ \t]+(?!(?i:pending)\b)\S[^\n]*?,[ \t]*\d{4}-\d{2}-\d{2}[ \t]*\.?[ \t]*$", re.M
 )
 VERDICT_START = re.compile(r"^phase 6 verdict\b[^\n]*$", re.M | re.I)
-SESSION_LINE = re.compile(r"^Reviewer session: (\S+) (\S+)", re.M)
+SESSION_LINE = re.compile(r"^Reviewer session: codex (\S+)", re.M)
 ROUNDS_LINE = re.compile(r"^Rounds run: (\d+)\s*$", re.M)
 ROUND_HEADING = re.compile(r"^## Round \d+ — \S+,", re.M)
 RELEASE_HEADING = "## Phase 4b — loop rows, released"
@@ -687,6 +688,55 @@ def result_of(stdout: str) -> tuple[str, str]:
     return "", ""
 
 
+def thread_id(stdout: str) -> str | None:
+    """The `thread_id` of the first JSON line of type `thread.started`."""
+    for line in stdout.splitlines():
+        try:
+            event = json.loads(line)
+        except ValueError:
+            continue
+        if isinstance(event, dict) and event.get("type") == "thread.started" and event.get("thread_id"):
+            return str(event["thread_id"])
+    return None
+
+
+def run_codex(ctx: Context, prompt: str, resume: str | None = None) -> tuple[str, str]:
+    """One Codex call, first or resumed, pinned the same way. Returns (answer, thread id)."""
+    _, model, effort = CODEX
+    with tempfile.TemporaryDirectory(prefix="stage2-") as tmp:
+        answer_file = Path(tmp) / "answer.md"
+        command = ["codex", "exec"]
+        if resume:
+            command += ["resume", resume]
+        command += [
+            "--json",
+            "-m",
+            model,
+            "-c",
+            f'model_reasoning_effort="{effort}"',
+            "-c",
+            'sandbox_mode="read-only"',
+            "--disable",
+            "hooks",
+            "--disable",
+            "memories",
+            "-o",
+            str(answer_file),
+            prompt,
+        ]
+        done = launch(command, ctx.root, foreign_env({}))
+        thread = thread_id(done.stdout or "")
+        if done.returncode != 0:
+            raise fail("codex", done, f"exit {done.returncode}")
+        if thread is None:
+            raise fail("codex", done, "no thread.started event")
+        try:
+            answer = answer_file.read_text(encoding="utf-8")
+        except (OSError, UnicodeDecodeError) as error:
+            raise fail("codex", done, "no answer file") from error
+    return answer, thread
+
+
 def run_reviewer(
     ctx: Context,
     model: str,
@@ -771,29 +821,22 @@ def released_rows(findings_text: str) -> list[list[str]]:
 
 
 def spec_review(root: Path, change: str) -> None:
-    """Phase 2a: a fresh session on the ladder's first rung reads the spec."""
-    model = ladder(root)[0]
-    endpoint = (OPENCODE, model, "max")
-    ctx = preflight(root, change, endpoint)
-    key = reviewer_key()
+    """Phase 2a: a fresh Codex session reads the spec."""
+    ctx = preflight(root, change, CODEX)
     prompt = phase_prompt(root, "02a-spec-review.md", change)
-    begin_call(ctx, "spec-review", endpoint, prompt)
-    answer, session = run_reviewer(ctx, model, prompt, key, session=True)
+    begin_call(ctx, "spec-review", CODEX, prompt)
+    answer, thread = run_codex(ctx, prompt)
     rows, _ = parse_rows(answer)
     append(
         ctx.findings,
-        f"## Phase 2a — {model}, {today()}\n\n"
-        f"{answer_block(rows, answer, model)}\n\nReviewer session: {model} {session}",
+        f"## Phase 2a — Codex, {today()}\n\n{answer_block(rows, answer, 'Codex')}\n\nReviewer session: codex {thread}",
     )
-    print(f"spec-review: {len(rows)} rows appended to {ctx.findings.relative_to(root)}; session {model} {session}")
+    print(f"spec-review: {len(rows)} rows appended to {ctx.findings.relative_to(root)}; session codex {thread}")
 
 
 def review(root: Path, change: str) -> None:
     """Phase 6: the 2a session resumed, the verdict written, the loop rows released and marked."""
-    model = ladder(root)[0]
-    endpoint = (OPENCODE, model, "max")
-    ctx = preflight(root, change, endpoint)
-    key = reviewer_key()
+    ctx = preflight(root, change, CODEX)
     record = read_record(change)
     if record is not None:
         waiting = undecided(record_rows(record))
@@ -801,27 +844,27 @@ def review(root: Path, change: str) -> None:
             raise Refused(f"the loop record has undecided rows ({', '.join(waiting)}); decide them first.")
     text = ctx.findings.read_text(encoding="utf-8") if ctx.findings.exists() else ""
     sessions = SESSION_LINE.findall(text)
-    recorded = sessions[-1][1] if sessions else None
+    recorded = sessions[-1] if sessions else None
     prompt = phase_prompt(root, "06-review.md", change, "Write only your verdict now.")
-    begin_call(ctx, "review", endpoint, prompt)
-    answer, session = run_reviewer(ctx, model, prompt, key, resume=recorded, session=True)
+    begin_call(ctx, "review", CODEX, prompt)
+    answer, thread = run_codex(ctx, prompt, resume=recorded)
     rows, _ = parse_rows(answer)
     block = "\n\n".join(
         [
-            f"## Phase 6 — {model}, {today()}",
-            answer_block(rows, answer, model),
-            f"Phase 6 verdict: {model} {session}, {today()}",
+            f"## Phase 6 — Codex, {today()}",
+            answer_block(rows, answer, "Codex"),
+            f"Phase 6 verdict: codex {thread}, {today()}",
         ]
     )
     if recorded is None:
-        block += f"\nReviewer session: {model} {session} — a fresh session reviewed: no phase-2a session was recorded"
-    elif session != recorded:
+        block += f"\nReviewer session: codex {thread} — a fresh session reviewed: no phase-2a session was recorded"
+    elif thread != recorded:
         block += (
-            f"\nReviewer session: {model} {session} — a fresh session reviewed: "
-            f"the resume of {recorded} started a new session"
+            f"\nReviewer session: codex {thread} — a fresh session reviewed: "
+            f"the resume of {recorded} started a new thread"
         )
     append(ctx.findings, block)
-    print(f"review: verdict appended to {ctx.findings.relative_to(root)}; session {model} {session}")
+    print(f"review: verdict appended to {ctx.findings.relative_to(root)}; session codex {thread}")
 
     released = release(root, change)
     if not released:
@@ -830,8 +873,8 @@ def review(root: Path, change: str) -> None:
     marks_prompt = "\n\n".join(
         [MARK_FORMAT, "Your verdict stands and is not changed.", f"The loop rows:\n{listing}", READ_REQUEST]
     )
-    begin_call(ctx, "review (loop marks)", endpoint, marks_prompt)
-    answer, _ = run_reviewer(ctx, model, marks_prompt, key, resume=session, session=True)
+    begin_call(ctx, "review (loop marks)", CODEX, marks_prompt)
+    answer, _ = run_codex(ctx, marks_prompt, resume=thread)
     marks = parse_marks(answer)
     fill_marks(ctx.findings, [r[0] for r in released], marks)
     print(f"review: {len(marks)} of {len(released)} loop rows marked")

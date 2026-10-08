@@ -21,11 +21,12 @@ adr_question: {proposed: "yes", answered_by: null, reason: "it widens where fram
 
 # Spec — stage2-mimo
 
-After this change every stage-2 review — the spec review (2a), the review
-loop (4b) and the review (6) — is called on OpenCode Go, and which model
-answers each round comes from one ordered list in `model-endpoints.yaml` that
-a one-line pull request can reorder without touching code. Codex and GLM are
-no longer reviewers (bead coding-harness-ymx).
+After this change the review loop (4b) is called on OpenCode Go, and which
+model answers each round comes from one ordered list in `model-endpoints.yaml`
+that a one-line pull request can reorder without touching code. The spec
+review (2a) and the review (6) stay with Codex exactly as on main (the
+maintainer's decision of 2026-10-08, `decisions.md`); GLM is no longer a
+reviewer (bead coding-harness-ymx).
 
 Inputs: [`research.md`](research.md) — sections E to K hold everything read
 about OpenCode Go on 2026-10-07 — and [`decisions.md`](decisions.md), whose
@@ -44,10 +45,10 @@ named below is meant as it stands there.
   start condition of the decision (bead coding-harness-ymx), and this branch
   holds `origin/main`.
 - This change's own spec review (2a), review loop (4b) and review (6) run on
-  the routing in force when they run — Codex for 2a and 6, GLM for 4b —
+  the routing in force when they run — Codex for 2a and 6, the ladder for 4b —
   because the code that routes them is the code this change replaces. The
-  first OpenCode Go call of any kind happens after this pull request is
-  merged: the entry it needs is added by this change.
+  first OpenCode Go call of any kind is the compatibility probe below: the
+  entry it needs is added by this change.
 - **One pull request decides and carries.** The ADR draft of phase 2b becomes
   `docs/adr/0011-stage-2-reviews-through-opencode-go.md` in this change's own
   pull request, and the pull request re-records
@@ -179,23 +180,26 @@ recording program the tests put on `PATH` in the callee's place.
 
 ### Who launches a call
 
-8. **The runner starts every reviewer the same way.** `spec-review`,
-   `review-loop` and `review` each launch Claude Code against
+8. **The runner starts every reviewer the same way.** `review-loop` launches
+   Claude Code against
    `https://opencode.ai/zen/go/v1/messages` with the rung's id as the model
    and effort `max`, and the settings `review-loop` pins today (tools
    `Read,Grep,Glob`, a fresh empty `CLAUDE_CONFIG_DIR`, `--restricted`,
    `--strict-mcp-config`, permission mode `dontAsk`, `--output-format`, the
-   runner's allow-listed environment). No verb of the runner starts the Codex
-   CLI.
-   *Refuted by:* a stand-in's recorded argv holding `codex`; a reviewer call
-   with another base URL, model or effort; one of those settings missing.
+   runner's allow-listed environment). `spec-review` and `review` start the
+   Codex CLI exactly as on main: `codex exec` with `gpt-6.1-sol` pinned, the
+   read-only sandbox, hooks and memories off.
+   *Refuted by:* a review-loop call with another base URL, model or effort,
+   one of those settings missing, or its argv holding `codex`; a `spec-review`
+   or `review` call that does not go through `codex exec` with those pins.
 
 9. **Phase 2a's session is what phase 6 resumes.** `spec-review` records the
-   session it held with the rung's id and the session id; `review` resumes
-   that session when one was recorded and otherwise starts a fresh one and
-   says so in `findings.md`, with the wording it uses today.
+   session it held as `Reviewer session: codex <thread id>`; `review` resumes
+   that session with `codex exec resume` when one was recorded and otherwise
+   starts a fresh one and says so in `findings.md`, with the wording it uses
+   today.
    *Refuted by:* a recorded session phase 6 does not resume; a fresh session
-   without the sentence that says so; a session line that names no model.
+   without the sentence that says so; a session line that names no reviewer.
 
 10. **Every call is checked for itself.** Immediately before each of the
     three verbs' calls: the declaration again, then the leak check over the
@@ -276,13 +280,15 @@ recording program the tests put on `PATH` in the callee's place.
 
 ### The doctrine
 
-21. **§4 routes the three reviews to OpenCode Go.** `docs/WORKFLOW.md` §4's
-    routing table gives 2a, 4b and 6 the ladder with the round-to-rung
-    mapping, keeps 1 and 4 on GLM 5.3 Flash, and keeps "no stage 2" for a
+21. **§4 routes the review loop to OpenCode Go and the spec review and the
+    review to Codex.** `docs/WORKFLOW.md` §4's
+    routing table gives 4b the ladder with the round-to-rung
+    mapping, keeps 2a and 6 on Codex, keeps 1 and 4 on GLM 5.3 Flash, and
+    keeps "no stage 2" for a
     `spike` and a one-sentence change; §3's model table keeps its rows for
     wherever the runner does not start a phase.
-    *Refuted by:* a table still routing 2a or 6 to Codex, or 4b to GLM, or a
-    `spike` given a stage-2 review.
+    *Refuted by:* a table routing 4b to GLM or to a single rung, or 2a or 6
+    to the ladder, or a `spike` given a stage-2 review.
 
 22. **The reason for reviewing across vendors still holds, and now says
     what the ladder records.** §4 keeps the argument that lineages see
@@ -293,13 +299,16 @@ recording program the tests put on `PATH` in the callee's place.
     reviewers of the same round.
 
 23. **The prompts and the instruction file follow.**
-    `prompts/02a-spec-review.md`, `prompts/04b-review-loop.md`,
-    `prompts/06-review.md` and the stage-2 paragraph of `AGENTS.md` name the
-    ladder, the round limit of three and the round-3 condition instead of
-    Codex and GLM as reviewers of those phases; `prompts/01-explore.md` and
+    `prompts/04b-review-loop.md` names the ladder and its round-to-rung
+    mapping; `prompts/02a-spec-review.md` and `prompts/06-review.md` name
+    Codex as their reviewer and the loop's round limit of three with the
+    round-3 condition; the stage-2 paragraph of `AGENTS.md` sends 2a and 6 to
+    Codex and the loop to the ladder;
+    `prompts/01-explore.md` and
     `prompts/04-implement.md` still name GLM 5.3 Flash.
-    *Refuted by:* one of the first four without the ladder; one of the last
-    two without GLM.
+    *Refuted by:* the loop prompt without the ladder; a review prompt naming a
+    rung as its reviewer; the instruction file sending 2a or 6 to the ladder;
+    one of the last two prompts without GLM.
 
 24. **The stop rule counts the new reviewers.** Where §4 measures the first
     stage-2 runs, a taken finding of a rung counts like a Codex or GLM
@@ -307,9 +316,11 @@ recording program the tests put on `PATH` in the callee's place.
     *Refuted by:* the measurement naming only the two former reviewers.
 
 25. **The ADR.** The ADR the maintainer's answer names records that framework
-    content may go to `opencode-go` through Claude Code for phases 2a, 4b and
-    6 only; that Codex and GLM leave the reviewer roles while explore and
-    implement stay on GLM 5.3 Flash; that the ladder is an ordered list a
+    content may go to `opencode-go` through Claude Code for phase 4b
+    only; that GLM leaves the reviewer roles while Codex keeps the spec
+    review and the review and
+    explore and implement stay on GLM 5.3 Flash; that the ladder is an ordered
+    list a
     one-line pull request changes; that the loop runs at most three rounds;
     that the unconfined reads ADR 0007 accepted for its reviewers extend to
     the rungs; and the options weighed — keeping Codex and GLM, an OpenCode
@@ -421,12 +432,10 @@ residency) were answered by the maintainer on 2026-10-07 and are recorded in
 
 Reversible, and nothing beyond this change depends on them.
 
-- **The rung for phases 2a and 6 is rung 1**, `deepseek-v4.1-flash` — the
-  decision gives the escalation to the loop, whose limit it raises to three;
-  a single call has no round to climb. Risk written down: rung 1 is the
-  cheapest of the three, so phase 6's verdict comes from the weakest model of
-  the ladder; a stronger rung for phase 6 takes one sentence from the
-  maintainer (`decisions.md`, `[DETAIL]` 1).
+- **Phases 2a and 6 run Codex, exactly as on main** — the maintainer put the
+  ladder to the review loop alone on 2026-10-08 (`decisions.md`, addendum of
+  2026-10-08); the earlier detail decision that gave 2a and 6 rung 1 goes
+  with it.
 - **Rounds 1 and 2 unconditional, round 3 conditional on round 2's taken
   rows** — see `decisions.md`, `[DETAIL]` 2. Undecided rows still hold the
   next round, unchanged.
@@ -448,10 +457,10 @@ Reversible, and nothing beyond this change depends on them.
 - **The `Reviewer` cell and the round heading carry the model id**, not a
   display name: two rungs are MiMo and would need a name invented for them,
   while the id is what the entry lists and what the round called.
-- **The findings header's producer becomes `claude-code`** — every reviewer
-  call is a Claude Code launch after this change, and the branch
-  `producer = "codex" if endpoint == CODEX else "claude-code"` already has
-  that value for a non-Codex endpoint.
+- **The findings header's producer follows the endpoint** — the branch
+  `producer = "codex" if endpoint == CODEX else "claude-code"` names Codex
+  for the spec review and the review and `claude-code` for the loop's rungs,
+  and no new wording is needed.
 - **The 30-minute limit is one constant with the reviewer's name in it**, the
   only time limit in the runner today being none: a hung call would hold the
   loop open for ever, and 30 minutes is well above what a round should take

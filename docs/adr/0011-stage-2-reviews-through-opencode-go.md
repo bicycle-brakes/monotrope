@@ -1,5 +1,5 @@
 ---
-title: "ADR 0011 — Reviews run through OpenCode Go, and ADR 0007's reviewer list is amended"
+title: "ADR 0011 — The review loop runs through OpenCode Go, and ADR 0007's reviewer list is amended"
 category: adr
 status: accepted
 created: 2026-10-08
@@ -12,7 +12,7 @@ review: {status: pending, approved_by: null, approved_at: null}
 tags: [adr, stage-2, opencode-go, reviews]
 ---
 
-# ADR 0011 — Reviews run through OpenCode Go, and ADR 0007's reviewer list is amended
+# ADR 0011 — The review loop runs through OpenCode Go, and ADR 0007's reviewer list is amended
 
 * Status: accepted by the merge of the pull request that carries this file.
   Until that merge, the pull request's state is the decision's state: open
@@ -20,13 +20,16 @@ tags: [adr, stage-2, opencode-go, reviews]
   supersedes no ADR. Decision D-13 stands as ADR 0007 set it — no criterion
   of D-13 changes here.
 * Review: the decisions the maintainer stated on 2026-10-07 in a Claude Code
-  session (bead coding-harness-ymx: every stage-2 review through OpenCode
+  session (bead coding-harness-ymx: the review loop through OpenCode
   Go; round 2 on `mimo-v2.6-flash`; the entry declares `anbieter-erklaert`;
-  the compatibility probe runs in phase 4 before the merge) · the acceptance
+  the compatibility probe runs in phase 4 before the merge), narrowed on
+  2026-10-08 to the review loop alone — the spec review and the review stay
+  with Codex, after Codex's phase 6 found two real BLOCKERs in a change the
+  loop had passed · the acceptance
   is the merge commit and is written nowhere else, so the header's `review`
   stays empty (ADR 0008) · Decider: maintainer · prepared by an opencode
   session
-* Date: 2026-10-07 · takes effect on merge
+* Date: 2026-10-07, narrowed to the review loop on 2026-10-08 · takes effect on merge
 
 ## Context
 
@@ -38,9 +41,12 @@ tags: [adr, stage-2, opencode-go, reviews]
   GLM, and, since 2026-10-06, exploration and implementation to GLM 5.3
   Flash.
 * **The maintainer decided otherwise on 2026-10-07** (bead
-  coding-harness-ymx): every stage-2 review — 2a, 4b and 6 — runs on
-  OpenCode Go, with a fixed ladder of three models for the loop's rounds and
-  a fixed model for the spec review and the review. Without this record the
+  coding-harness-ymx): the review loop (4b) runs on
+  OpenCode Go with a fixed ladder of three models for its rounds; on
+  2026-10-08 the maintainer put the ladder to the loop alone — the spec
+  review and the review stay with Codex, because Codex's phase 6 found two
+  real BLOCKERs in a change the loop had passed, as on every change of the
+  night run. Without this record the
   runner's declaration of `opencode-go` would run against ADR 0007's
   decision 2, which is a decision nobody made.
 * **What OpenCode Go is** (research §E to §K, read 2026-10-07): OpenCode
@@ -61,17 +67,15 @@ tags: [adr, stage-2, opencode-go, reviews]
 
 1. **Framework content may also go to `opencode-go`** — through Claude Code,
    which the vendor lists as a supported tool, with the three ids below.
-   Reviews only: the spec review (2a), the review loop (4b) and the review
-   (6). The sentence of ADR 0007 decision 2 that closes with "Nothing else
+   The review loop (4b) only. The sentence of ADR 0007 decision 2 that closes with "Nothing else
    goes, and nowhere else" now closes with Codex, Z.ai's GLM and OpenCode
    Go; nothing else goes, and nowhere else. Customer code and rows go to
    none of the three.
-2. **The reviewer roles move.** The spec review and the review leave Codex,
-   the loop leaves GLM, and Codex and GLM remain declared endpoints for what
-   still routes to them — explore and implement stay on GLM 5.3 Flash, and
-   `openai-codex` keeps what nothing in this repository routes to any more
-   until a later change retires it. The Codex CLI is started by no verb of
-   the runner afterwards.
+2. **The loop's reviewer role moves.** The loop leaves GLM for the ladder;
+   the spec review and the review stay with Codex exactly as ADR 0007 set
+   them (the maintainer, 2026-10-08), and phase 6 keeps resuming the
+   phase-2a session. Codex and GLM remain declared endpoints for what still
+   routes to them — explore and implement stay on GLM 5.3 Flash.
 3. **The ladder is data, not code.** Round *n* of the loop calls
    `modelle[n-1]` of the `opencode-go` entry: round 1
    `deepseek-v4.1-flash`, round 2 `mimo-v2.6-flash`, round 3
@@ -99,10 +103,10 @@ tags: [adr, stage-2, opencode-go, reviews]
 
 ## Options considered
 
-* **Keep Codex and GLM (chosen against).** Three vendors and two launch
-  paths would stay, the ladder could not be one list, and the maintainer's
-  decision would not be met; criterion 8's "no verb of the runner starts the
-  Codex CLI" refutes it outright.
+* **Keep Codex and GLM in every review role (chosen against for the
+  loop).** The maintainer kept Codex for the spec review and the review on
+  2026-10-08, but the loop runs the ladder his decision names; keeping GLM
+  there would not meet it.
 * **An OpenCode product other than Go.** Zen serves other models over its
   own addresses, and Go Plus is the second Go plan with higher monthly
   caps; either keeps the launcher and changes only the billing. Chosen
@@ -150,18 +154,21 @@ tags: [adr, stage-2, opencode-go, reviews]
   2026-10-07 and the vendor's Zen page states US and EU for its models — the
   provider explains the residency, and the measurement stays open as a
   `[GAP]` of `spec.md`.
-* **The runner's shape.** `run_codex` and the Codex tuple leave; the ask rule
-  on a directly typed `codex` and `.claude/settings.json` stay as they are —
-  a non-goal of this change and the subject of bead coding-harness-amp.
-* **The resume changes with the launcher.** Phase 6 resumes a Claude Code
-  session id instead of a Codex thread; a session that cannot be resumed
-  starts a fresh one and says so in `findings.md` (criterion 9).
+* **The runner's shape.** `run_codex` and the Codex tuple stay for the spec
+  review and the review, and the loop's calls are Claude Code launches; the
+  ask rule on a directly typed `codex` and `.claude/settings.json` stay as
+  they are — a non-goal of this change and the subject of bead
+  coding-harness-amp.
+* **The resume stays where it was.** Phase 6 resumes the Codex thread of
+  phase 2a; a thread that cannot be resumed starts a fresh session and says
+  so in `findings.md` (criterion 9).
 
 ## Validation
 
 * `python3 -m pytest tests/test_stage2.py tests/test_model_endpoints.py -q`
   green: the runner launches `claude` with the address, the rung and effort
-  `max` and the settings of criterion 8; no recorded argv holds `codex`; the
+  `max` and the settings of criterion 8 for the loop's rounds, and `codex
+  exec` pinned as on main for the spec review and the review; the
   ladder round *n* → `modelle[n-1]` holds in a reordered fixture; three
   rounds are the limit and round 3 only after a taken row; the 30-minute
   limit is one constant and a stand-in that outlasts it is stopped; the key

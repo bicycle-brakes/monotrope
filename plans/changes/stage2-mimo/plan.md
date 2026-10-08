@@ -18,7 +18,7 @@ tags: [plan, stage-2, opencode-go, review-loop, adr]
 # Plan — `stage2-mimo`
 
 ```text
-For you:     every stage-2 review runs on OpenCode Go — 2a and 6 on its first rung, the loop's three rounds on rung 1, 2, 3 — and the order is one line of model-endpoints.yaml you can change in a pull request that touches nothing else; Codex and GLM stop reviewing
+For you:     the review loop runs on OpenCode Go — its three rounds on rung 1, 2, 3 — and the order is one line of model-endpoints.yaml you can change in a pull request that touches nothing else; the spec review and the review stay with Codex, GLM stops reviewing
 Done when:   criteria 1–26 hold and the verification command below is green; the pull request carries docs/adr/0011, the answer file re-recorded in your own words and the three probe calls, and opens as `decide(stage2): …` with the label `decision`
 Appetite:    8 hours of phase 4, one repair round included
 Not now:     retiring `openai-codex`; `.claude/settings.json` and its ask rule on `codex` (bead coding-harness-amp); the German keys of `model-endpoints.yaml`; the residency [GAP] beyond the probe; the continuity chain of D-13; `Also raised` and matching rows across rounds
@@ -35,34 +35,34 @@ ADR 0011 draft). Class `feature`; the ADR question was answered "yes" on
 
 1. **The entry.** `model-endpoints.yaml`: add `opencode-go` with its operator,
    billing, residency and the three ids in ladder order; correct the
-   `bemerkung`s of `openai-codex` and `glm-coding-plan` so neither claims a
-   reviewer phase.
+   `bemerkung`s of `openai-codex` and `glm-coding-plan` so each names the
+   phases that still route to it.
 2. **Tests for the entry.** `tests/test_model_endpoints.py`: the entry's shape
    and order, every named point of its remark, the two corrected remarks, and
    that every model id a prompt names still resolves to a declared endpoint.
 3. **The ladder and the rounds.** `scripts/stage2.py`: read `modelle` from the
    entry, call `modelle[n-1]` in round *n*, `MAX_ROUNDS = 3`, round 3 only
    after a `taken` row of round 2, refusal text naming the count that ran, and
-   the round heading, the `Reviewer` cell and the session line carrying the
-   rung instead of the literals `GLM` and `codex`.
-4. **The launch.** `scripts/stage2.py`: one launch path for `spec-review`,
-   `review-loop` and `review` — Claude Code on
+   the round heading and the `Reviewer` cell carrying the
+   rung instead of the literal `GLM`.
+4. **The launch.** `scripts/stage2.py`: one launch path for `review-loop` —
+   Claude Code on
    `https://opencode.ai/zen/go/v1/messages`, the rung as model, effort `max`,
    the settings of criterion 8, the key from the secrets file into the
-   environment only, one named 30-minute constant, the `codex` branch of the
-   producer line gone, and a new `probe` verb (step 7). The Codex tuple and
-   `run_codex` leave; the ask rule on a typed `codex` and
-   `.claude/settings.json` stay.
+   environment only, one named 30-minute constant, and a new `probe` verb
+   (step 7). `spec-review` and `review` keep the Codex launch exactly as on
+   main (`codex exec`, `gpt-6.1-sol` pinned, the read-only sandbox, hooks and
+   memories off — the maintainer, 2026-10-08); `run_codex` and the Codex tuple
+   stay, and the ask rule on a typed `codex` and `.claude/settings.json` stay.
 5. **Tests for the runner.** `tests/test_stage2.py`: stand-ins for argv,
    environment, ladder order, the three-round limit, the round-3 condition,
-   the time limit, a refused rung, a failed round's silence, the session
-   line, and the record's rung names; the two Codex-specific tests are
-   replaced by their absence assertions (`codex` in no argv).
+   the time limit, a refused rung, a failed round's silence and the record's
+   rung names; the Codex tests of `spec-review` and `review` pass unchanged.
 6. **The doctrine.** `docs/WORKFLOW.md` §4 (routing table, lineages, stop
    rule), `prompts/02a-spec-review.md`, `prompts/04b-review-loop.md`,
-   `prompts/06-review.md` and the stage-2 paragraph of `AGENTS.md`: the
-   ladder, the limit of three and the round-3 condition in place of Codex and
-   GLM as reviewers. `prompts/01-explore.md` and `prompts/04-implement.md`
+   `prompts/06-review.md` and the stage-2 paragraph of `AGENTS.md`: the loop
+   on the ladder with the limit of three and the round-3 condition, while 2a
+   and 6 keep naming Codex. `prompts/01-explore.md` and `prompts/04-implement.md`
    keep GLM 5.3 Flash.
 7. **The compatibility probe.** `stage2.py probe` (a `[DETAIL]`: the DoD
    demands three calls through the runner and no verb of it exists for a
@@ -85,13 +85,13 @@ ADR 0011 draft). Class `feature`; the ADR question was answered "yes" on
 | File | What happens there |
 |---|---|
 | `model-endpoints.yaml` | The `opencode-go` entry is added; two existing remarks stop claiming reviewer phases (criteria 1–3). |
-| `scripts/stage2.py` | Ladder, three-round loop, one launch path, the 30-minute constant, the generalized headings and session line, the `probe` verb, the Codex path removed (criteria 4–20). |
+| `scripts/stage2.py` | Ladder, three-round loop, one launch path for the loop, the 30-minute constant, the generalized headings and session line, the `probe` verb; the Codex path stays for 2a and 6 (criteria 4–20). |
 | `tests/test_model_endpoints.py` | Holds the entry, its remark, the corrected remarks and the prompt ids (criteria 1–3). |
 | `tests/test_stage2.py` | Holds the launch, the ladder, the limits, the key and the record (criteria 4–20). |
 | `docs/WORKFLOW.md` | §4's routing table, lineage argument and stop rule follow the ladder (criteria 21, 22, 24). |
-| `prompts/02a-spec-review.md` | Names the ladder's rung 1 and the limit instead of Codex (criterion 23). |
+| `prompts/02a-spec-review.md` | Keeps Codex as its reviewer and names the loop's three-round limit (criterion 23). |
 | `prompts/04b-review-loop.md` | Names the ladder, the three rounds and the round-3 condition (criterion 23). |
-| `prompts/06-review.md` | Names the rung and the released rows' reviewers instead of Codex and GLM (criterion 23). |
+| `prompts/06-review.md` | Keeps Codex as its reviewer and names the loop's rounds and their reviewers (criterion 23). |
 | `AGENTS.md` | The stage-2 paragraph names the ladder and the three rounds (criterion 23). |
 | `plans/changes/stage2-mimo/design.md` | Holds the ADR 0011 draft; copied out in step 8 (criterion 25). |
 | `docs/adr/0011-stage-2-reviews-through-opencode-go.md` | Created in step 8 from that draft; makes the pull request a decision pull request (criterion 25). |
@@ -117,13 +117,13 @@ this change adds no amendment to the continuity map (`[DETAIL]` 7).
 |---|---|---|
 | 1 | `test_the_opencode_go_entry_is_declared` | any field differs, a fourth model, another order, a customer class inside `darf_sehen` |
 | 2 | `test_the_opencode_go_remark_names_every_source` | one of the named points missing or not stated by its source |
-| 3 | `test_no_old_reviewer_remark_claims_a_review_phase` | either entry still claiming 2a, 4b or 6 |
+| 3 | `test_no_old_reviewer_remark_claims_a_review_phase` | either entry misstating which phases still route to it |
 | 4 | `test_a_round_calls_its_rung_from_the_entry` | round *n* calling another id; a reviewer id as a literal in the runner |
 | 5 | `test_reordering_the_ladder_touches_no_code` | a reordered fixture's rounds calling the old model, or the change needing a line in `scripts/stage2.py` |
 | 6 | `test_the_loop_stops_at_three_rounds` | a fourth round starting, or the loop still stopping at two |
 | 7 | `test_round_three_starts_only_after_a_taken_row` | round 3 without a `taken` row, or none after one |
-| 8 | `test_the_three_review_verbs_launch_claude_on_the_anthropic_address` | `codex` in a recorded argv, another base URL, model or effort, one of the settings missing |
-| 9 | `test_the_session_line_is_written_and_resumed` | a recorded session not resumed; a fresh session without its sentence; a line naming no model |
+| 8 | `test_the_review_loop_launches_claude_on_the_anthropic_address` | another base URL, model or effort, one of the settings missing, `codex` in the loop's argv |
+| 9 | `test_review_resumes_the_recorded_session` and `test_a_fresh_phase_6_session_says_so` | a recorded session not resumed; a fresh session without its sentence; a line naming no reviewer |
 | 10 | `test_each_call_runs_its_own_leak_check` and `test_an_endpoint_the_declaration_does_not_clear_refuses` | a call without its own check, the check after it, one check for two calls |
 | 11 | `test_the_opencode_key_never_leaves_the_runner` | eight consecutive characters of the key in any argv |
 | 12 | `test_a_key_fragment_never_survives_the_relayed_streams` | the key in stdout, stderr, the loop record or `findings.md` |
@@ -135,9 +135,9 @@ this change adds no amendment to the continuity map (`[DETAIL]` 7).
 | 18 | `test_a_round_is_written_as_its_rung` | a heading naming another model, another reviewer cell, a row inside the worktree |
 | 19 | `test_the_release_carries_each_rows_reviewer` | a released row with another reviewer, or the release before the verdict |
 | 20 | `test_the_runner_finds_only_stand_ins` and `test_the_suite_never_reaches_the_real_denylist_or_secrets` | either of them red |
-| 21 | `test_workflow_section_4_routes_the_three_reviews` | a table still routing 2a or 6 to Codex, 4b to GLM, or a `spike` given a review |
+| 21 | `test_workflow_section_4_routes_the_three_reviews` | a table routing 4b to GLM or one rung, or 2a or 6 to the ladder, or a `spike` given a review |
 | 22 | `test_workflow_section_4_keeps_the_lineage_argument` | the argument gone, or a sentence naming two reviewers of one round |
-| 23 | `test_the_prompts_name_the_ladder_and_the_limit` | one of the four without the ladder; `01-explore` or `04-implement` without GLM |
+| 23 | `test_the_prompts_name_the_ladder_and_the_limit` | the loop prompt without the ladder; a review prompt naming a rung as its reviewer; the instruction file sending 2a or 6 to the ladder; `01-explore` or `04-implement` without GLM |
 | 24 | `test_the_stop_rule_counts_every_rung` | the measurement naming only the two former reviewers |
 | 25 | `test_the_adr_draft_states_every_point` | one of the six points of criterion 25 missing from the draft in `design.md` |
 | 26 | the verification command above | any gate red on the last commit |

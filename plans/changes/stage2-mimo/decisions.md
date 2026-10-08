@@ -4,7 +4,7 @@ status: draft
 implementation_status: none
 date: 2026-10-07
 last_reviewed: 2026-10-07
-updated: 2026-10-07
+updated: 2026-10-08
 supersedes: null
 superseded_by: null
 bead: coding-harness-ymx
@@ -418,3 +418,21 @@ whose commits are named in the pull request body. The Definition of Done now
 says so instead of "none", and no step of phase 4 builds on the address
 before the probe has run. If an address refuses a rung, criterion 17 stops
 the run and reports it — that part was never in question.
+
+## Addendum 2026-10-08: the ladder runs the review loop only
+
+The reviewer decision of 2026-10-07 moved every stage-2 review — 2a, 4b and
+6 — onto the OpenCode Go ladder. That part is superseded for phases 2a and 6
+by the maintainer's decision of 2026-10-08; the earlier entries above stand
+unchanged as the record of what was decided then.
+
+**Answer** (maintainer, 2026-10-08): the OpenCode Go ladder (DeepSeek V4.1
+Flash -> MiMo-V2.6-Flash -> MiMo-V2.6-Pro) runs **only the 4b review loop**.
+Phases 2a (spec-review) and 6 (review) stay with Codex exactly as on main,
+and phase 6 keeps resuming the phase-2a session. The loop keeps its three
+rounds and its round-3 rule; the probe (answer "1", 2026-10-07) still runs
+over the three rungs, because they are the loop's rungs.
+
+**Reason** (maintainer's, 2026-10-08): on 2026-10-08 Codex's phase 6 found
+two real BLOCKERs in `rb-g7-merge-freshness` after the GLM loop had passed
+it, as on every change of the night run.

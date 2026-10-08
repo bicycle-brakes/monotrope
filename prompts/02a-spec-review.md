@@ -1,18 +1,16 @@
 # Phase 2a · Spec review
 
 **Model:** Opus 5.5 — for a spike, in a fresh context that never saw the
-author's reasoning; for a bounded, feature or architectural change rung 1 of
-the ladder (`deepseek-v4.1-flash`, the first id of the `opencode-go` entry's
-`modelle` in `model-endpoints.yaml`) at effort `max`, started by
-`python3 scripts/stage2.py spec-review <change>`.
+author's reasoning; for a bounded, feature or architectural change gpt-6.1-sol
+at effort `max`, started by `python3 scripts/stage2.py spec-review <change>`.
 **Input:** `spec.md`, `research.md`, `decisions.md`. **Not** the author's reasoning.
 **Result:** rows for `plans/changes/<name>/findings.md`, dimension `SPEC`.
 **Gate:** no open `[AMBIGUITY]`.
 **Session:** the same reviewer later runs phase 6. On the Claude path (Opus 5.5),
 start it with a fixed id, `claude --model claude-opus-5-5 --session-id <uuid>
 -n review-<name>`, and write the id under the table in `findings.md`
-(`Reviewer session: <uuid>`). On the runner path the runner starts the session
-and writes `Reviewer session: <rung> <session id>` itself. The review loop
+(`Reviewer session: <uuid>`). On the Codex path the runner starts the session
+and writes `Reviewer session: codex <thread id>` itself. The review loop
 between the two phases runs at most three rounds on the ladder — round 3 only
 when round 2 wrote a taken row (`docs/WORKFLOW.md` §4).
 
