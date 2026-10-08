@@ -346,12 +346,16 @@ def opencode_remark_problems(remark: str) -> list[str]:
     one = " ".join(remark.split())
     found = []
     for needle in (
-        "https://opencode.ai/zen/go/v1/messages",
         "https://opencode.ai/zen/go/v1/chat/completions",
-        "OpenAI address only",
-        "measured in phase 4",
-        "Claude Code is a validated client",
-        "native session header",
+        "https://opencode.ai/zen/go/v1/messages` is not used",
+        "refused on 2026-10-08",
+        "Pi at the version the runner pins",
+        "lists Pi among its validated clients",
+        "`x-opencode-session` header",
+        '"automatically or programmatically extracts data or Output"',
+        '"while you are not logged into the Services"',
+        "effective 2026-08-15",
+        "accepted this residual risk on 2026-10-08",
         "USD 10 a month",
         "deepseek-v4.1-flash` USD 0.15",
         "0.30 / 1.20",
@@ -382,8 +386,13 @@ def test_the_opencode_go_remark_names_every_source() -> None:
     assert opencode_remark_problems(planted)
     planted = remark.replace("valid through 2026-10-31", "renewed without end")
     assert opencode_remark_problems(planted)
-    planted = remark.replace("measured in phase 4", "assumed")
+    planted = remark.replace("refused on 2026-10-08", "accepted")
     assert opencode_remark_problems(planted)
+    planted = remark.replace("lists Pi among its validated clients", "lists Claude Code as a validated client")
+    assert opencode_remark_problems(planted)
+    planted = remark.replace("accepted this residual risk on 2026-10-08", "saw no risk")
+    assert opencode_remark_problems(planted)
+    assert "Claude Code" not in remark and "native session header" not in remark
 
 
 def test_no_old_reviewer_remark_claims_a_review_phase() -> None:

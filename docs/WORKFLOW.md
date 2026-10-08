@@ -562,7 +562,8 @@ before it merges — for **framework content only**: this repository's own tree,
 the class `framework` of `model-endpoints.yaml`. Codex (`gpt-6.1-sol`, OpenAI)
 reviews the spec (2a) and the code (6). **Since ADR 0011 (2026-10-08)** the
 review loop (4b) between implementation and the code review runs on OpenCode
-Go (`opencode-go` in `model-endpoints.yaml`) through Claude Code, and which
+Go (`opencode-go` in `model-endpoints.yaml`) through Pi, pinned at 1.1.0 and
+calling OpenCode Go's chat-completions address, and which
 model answers a round comes from the entry's ordered `modelle` list, the
 ladder. The maintainer put the ladder to the loop alone on 2026-10-08 — after
 Codex's phase 6 found two real BLOCKERs in a change the loop had passed, as on
@@ -619,7 +620,7 @@ list is a one-line pull request that touches nothing else.
 | 1 Explore | **GLM 5.3 Flash** | much input, little output, no deep reasoning; through Claude Code against Z.ai and the runner, for every change |
 | 2a Spec review | **gpt-6.1-sol** | effort `max`, through the Codex CLI and the runner |
 | 4 Implement | **GLM 5.3 Flash** | a worker given a clear plan; through Claude Code against Z.ai and the runner, for every change |
-| 4b Review loop | **deepseek-v4.1-flash** | the ladder: round 1 `deepseek-v4.1-flash`, round 2 `mimo-v2.6-flash`, round 3 `mimo-v2.6-pro` (`modelle[n-1]`), effort `max`, round 3 only when round 2 wrote a taken row |
+| 4b Review loop | **deepseek-v4.1-flash** | the ladder: round 1 `deepseek-v4.1-flash`, round 2 `mimo-v2.6-flash`, round 3 `mimo-v2.6-pro` (`modelle[n-1]`), through Pi, effort `max` (Pi clamps it to `high` for both MiMo rungs), round 3 only when round 2 wrote a taken row |
 | 6 Review | **gpt-6.1-sol** | effort `max`; the same Codex session as 2a, resumed where one was held |
 
 **The two Flash rows are live through the runner.** `explore` starts phase 1
@@ -636,21 +637,22 @@ undid and exits 1; the next step is `implement <change> --stage2-off`.
 ### The runner is the only way
 
 A foreign model is started only through `python3 scripts/stage2.py <verb>
-<change>`, never by typing `codex`, or `claude` against another endpoint, into
-a shell. Eight verbs exist:
+<change>`, never by typing `codex`, `pi`, or `claude` against another endpoint,
+into a shell. Eight verbs exist:
 
 - `explore` — GLM 5.3 Flash, phase 1; `--stage2-off [REASON]` uses Haiku 4.5.
 - `spec-review` — Codex, phase 2a, a fresh session.
 - `implement` — GLM 5.3 Flash, phase 4; `--stage2-off [REASON]` uses Sonnet
   5.5 at effort `medium`.
-- `review-loop` — one round of phase 4b; round *n* goes to the ladder's
-  *n*-th rung.
+- `review-loop` — one round of phase 4b, started through Pi; round *n* goes
+  to the ladder's *n*-th rung.
 - `release-loop` — the loop rows into `findings.md`, after the phase-6 verdict.
 - `review` — Codex, phase 6, the phase-2a session resumed with `codex exec
   resume`; it then releases the loop rows and has Codex mark each one.
-- `probe` — one call per rung of the ladder, the declaration and the leak
-  check in front of each; measures the address, writes no record (a change's
-  declared special run).
+- `probe` — one call per rung of the ladder through Pi, the pinned version
+  checked once first, the declaration and the leak check in front of each
+  call; measures the address, writes no record (a change's declared special
+  run).
 - `session` — one interactive OpenCode or Codex session in a new Terminal
   window; OpenCode waits on the separate Go declaration ("The interactive
   session" below).
@@ -702,48 +704,62 @@ What every call then carries: one audit line (in `research.md` for Explore,
 otherwise `findings.md`), an empty standard input and an environment built
 from an allow-list, not the caller's. The runner starts Codex with the
 read-only sandbox, its session kept and its hooks and memories switched off.
-It starts the review loop's rung as Claude Code against OpenCode Go's
-Anthropic-compatible endpoint, with the rung's id as the model, effort `max`,
-the tools `Read`, `Grep` and `Glob`, a fresh empty configuration directory and
-the project's settings, hooks and MCP servers skipped. Explore and implement
-start Claude Code against Z.ai with the same confinement; implement also gets
+Before the loop's first call the runner runs `pi --version`; anything but
+the pinned `1.1.0` refuses with exit 2, before the leak check. It starts the
+review loop's rung as Pi (`--print`, no session) against OpenCode Go's
+chat-completions address, with the rung under the `opencode-go` provider,
+thinking `max`, the tools `read`, `grep`, `find` and `ls`, extensions, MCP
+servers, skills, context files, prompt templates and themes switched off,
+retries off, and a fresh home and agent directory per call. Explore and
+implement start Claude Code against Z.ai with `--restricted` and the project's
+settings, hooks and MCP servers skipped; implement also gets
 `Edit` and `Write`, never Bash or another command tool. On a successful
 implementation answer the runner runs exactly
 `make verify`; a failed post-check gets one fresh Flash repair, then one
 Sonnet 5.5 fallback, and every attempt repeats the leak check. A failed model
 process stops instead of silently changing route, and a reviewer call that has
 not ended 30 minutes after it started is stopped. **Those settings are
-configured on every call, not measured** (the maintainer's decision of
-2026-09-30, ADR 0007): no test has run either program to see them take effect.
+configured on every call, not measured by any test** (the maintainer's decision
+of 2026-09-30, ADR 0007): no test has run a real program to see them take
+effect. The loop's Pi flags were measured once by hand on the pinned version,
+which is why the version is pinned.
 If hooks are not in fact off for a call, the tracked `.codex/hooks.json` shows
 the kind of text such a switch would inject into a call that the leak check
 does not scan; the runner starts Codex with hooks and memories off, and the ask rule
 below still guards one typed by hand. The reviewer's credential
-(`OPENCODE_GO_KEY` in `~/.config/cc-routing/secrets.env`) and GLM's
-(`GLM_KEY`, the same file) each stay in the runner's environment for their own
-call only, are outside the reach of the Claude Code file tools
-(`--restricted`, see "Reads" below; not measured) and are scrubbed from
-everything the runner prints or writes. The Stage-1 fallback uses normal
-Claude Code authentication and never reads either key.
+(`OPENCODE_GO_KEY` in `~/.config/cc-routing/secrets.env`) reaches the loop's
+Pi call as `OPENCODE_API_KEY` in its environment, never in an argument or a
+file; GLM's (`GLM_KEY`, the same file) stays in the runner's environment for
+its own call only. Both are scrubbed from everything the runner prints or
+writes. GLM's file tools are outside the reach of the Claude Code file tools'
+`--restricted` (see "Reads" below; not measured); the loop's are not. The
+Stage-1 fallback uses normal Claude Code authentication and never reads
+either key.
 
 `.claude/settings.json` asks before a `codex` typed directly in a Claude Code
 session (`Bash(codex *)`). That is a brake, not a lock: `sh -c`, an absolute
 path or a script file passes it, as it does for the merge rules in §2.
 
-**Reads: confined for the Claude Code calls, asked for Codex.** Every Claude
-Code call (the review loop's calls, explore, implement and the Sonnet 5.5
-fallback attempts) starts
-in the worktree with `--restricted` and no `--add-dir`.
+**Reads: confined for the Claude Code calls, asked for Codex and for the
+loop.** Every Claude Code call (explore, implement and the Sonnet 5.5 fallback
+attempts) starts in the worktree with `--restricted` and no `--add-dir`.
 `claude --help` says `--restricted` "confines the file tools to the working
 directories", so the credential file `~/.config/cc-routing/secrets.env`, which
-lies outside the worktree, is outside what the model's file tools reach. **That
-is the program's documented behaviour, not measured here:** no test has run it
-against a path outside the worktree. Every reviewer's prompt additionally asks
-the model to read nothing outside the worktree and the repository's git
+lies outside the worktree, is outside what those calls' file tools reach.
+**That is the program's documented behaviour, not measured here:** no test has
+run it against a path outside the worktree. **The review loop's Pi calls are
+not among them, and they are not confined:** a round's `read` reaches files
+outside the worktree (measured with Pi 1.1.0), and the secrets file is among
+them; only the prompt's request bounds it. Every reviewer's prompt asks the
+model to read nothing outside the worktree and the repository's git
 directory, and **that is a request, not a lock** — the program can read the
-rest of the disk, the customer instance's checkout included. The maintainer
-accepted that as a residual risk for ADR 0007's reviewers on 2026-09-30, and
-ADR 0011 accepts it again for the rungs: the unconfined reads ADR 0007
+rest of the disk, the customer instance's checkout included. Pi's isolation
+flags (no extensions, MCP servers, skills, context files, prompt templates or
+themes; no approval; a fresh agent directory and home per call) are configured
+on every call and were measured once by hand on the pinned version; the suite
+starts no real Pi. The maintainer accepted the unconfined reads as a residual
+risk for ADR 0007's reviewers on 2026-09-30, and ADR 0011 accepts it again for
+the rungs, naming Pi and the secrets file: the unconfined reads ADR 0007
 accepted for its reviewers extend to them. The leak check scans what this
 repository presents, not what else the disk holds.
 
@@ -850,10 +866,12 @@ D-13 asked for before the first foreign call; what the replacement gives up is
 the measured stage-1 baseline (ADR 0007).
 
 > **Two caveats, and the second one holds here in particular.** The vendors'
-> coding subscriptions are contractually limited to officially supported tools;
-> through Claude Code, the program the vendors list, that is covered — in a
-> self-built harness it is not. The runner starts those programs, it does not
-> replace them.
+> coding subscriptions are contractually limited to officially supported tools,
+> and each runs through its own client: Claude Code for Z.ai, the Codex CLI for
+> OpenAI and Pi for OpenCode Go. Pi is a client the Go page lists as validated,
+> under terms of service that name no third-party client — a risk the
+> maintainer accepted on 2026-10-08. In a self-built harness none of this is
+> covered. The runner starts those programs, it does not replace them.
 >
 > **And: this repository contains abstracted knowledge from a productive
 > customer project.** No customer names, schemas, entity names or figures go to

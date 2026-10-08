@@ -31,7 +31,7 @@ it would silently replace it (`tests/test_entry_points.py`).
 | 6 | Review | `findings.md` | no open BLOCKER — `[DIVERGENT]` counts as BLOCKER |
 | 7 | Commit | pull request | CI green |
 
-**Stage 2** (framework content, ADR 0007 as amended by ADR 0011): a foreign model is started only through `python3 scripts/stage2.py`, which runs the leak check before every call. Codex reviews 2a and 6; the review loop (4b) runs on OpenCode Go through Claude Code, on the ladder — the ordered `modelle` list of the `opencode-go` entry: round *n* of the loop calls its *n*-th id (`deepseek-v4.1-flash`, `mimo-v2.6-flash`, `mimo-v2.6-pro`), at most three rounds, and round 3 only when round 2 wrote a taken row; a one-line pull request reorders it. GLM 5.3 Flash explores and implements; `explore <change>` and `implement <change>` are live;
+**Stage 2** (framework content, ADR 0007 as amended by ADR 0011): a foreign model is started only through `python3 scripts/stage2.py`, which runs the leak check before every call. Codex reviews 2a and 6; the review loop (4b) runs on OpenCode Go through Pi, on the ladder — the ordered `modelle` list of the `opencode-go` entry: round *n* of the loop calls its *n*-th id (`deepseek-v4.1-flash`, `mimo-v2.6-flash`, `mimo-v2.6-pro`), at most three rounds, and round 3 only when round 2 wrote a taken row; a one-line pull request reorders it. GLM 5.3 Flash explores and implements; `explore <change>` and `implement <change>` are live;
 `--stage2-off [REASON]` uses Haiku 4.5 or Sonnet 5.5 and records why when Stage 2 is off or Z.ai unavailable. A leak-check BLOCK stops without fallback. Reviews go by class; explore and implement do not.
 
 Plus the session handover (the eighth movement — `docs/journal/handover/`,

@@ -1,7 +1,7 @@
 # Phase 4b · Review loop
 
 **Model:** deepseek-v4.1-flash — the ladder's first rung, at effort `max`,
-through Claude Code against OpenCode Go; started only by
+through Pi against OpenCode Go; started only by
 `python3 scripts/stage2.py review-loop <change>`. The ladder is the ordered
 `modelle` list of the `opencode-go` entry in `model-endpoints.yaml`: round 1
 calls `deepseek-v4.1-flash`, round 2 `mimo-v2.6-flash`, round 3

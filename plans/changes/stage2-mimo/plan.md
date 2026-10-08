@@ -263,6 +263,30 @@ its one recorded reason was the rungs through Claude Code, Pi replaces that
 launcher (`decisions.md`, addendum of the afternoon), and GLM's environment
 returns to main's, which never carried it (spec, `[DETAIL]`s; step 3).
 
+`[DETAIL]` 2026-10-08 (phase 4, steps 1–6 at `b3799cd`) — `require_pi()` takes
+no argument. The plan wrote `require_pi(root)`, but the check runs in a
+scratch directory with no key and reads nothing from the worktree, so `root`
+was unused and the lint gate (`ARG001`) refused it.
+
+`[DETAIL]` 2026-10-08 (phase 4, steps 1–6) — `glm_env(key, config_dir, model)`
+keeps the `model` parameter and `GLM_MODEL_VARIABLES` keeps main's name, and
+only the window-enforcement variable and the shared `claude_env` go. Main's
+`glm_env` read the model from its `GLM` tuple, which this branch replaced by
+`GLM_FLASH` (explore and implement pass the model they run), so the model
+stays an argument; everything else is main's text.
+
+`[DETAIL]` 2026-10-08 (phase 4, steps 1–6) — `launch` takes an optional
+`limit` text for the stop message. The version check's 30-second stop and the
+reviewer's 30-minute stop both raise `CallFailed` from `launch`; without the
+text the version check would have reported "the reviewer time limit after 30
+minutes". The reviewer message is unchanged, so criterion 15's test still
+reads the same words.
+
+`[DETAIL]` 2026-10-08 (phase 4, steps 1–6) — one commit for steps 1–6. Steps 1
+to 4 cannot be green apart (the removals of step 3 and the stand-in of step 4
+change together), and the doctrine tests that hold steps 5 and 6 live in
+`tests/test_stage2.py`; `make verify` was green on the combined tree only.
+
 ## Time used
 
 2026-10-08, phase-4 session under the Stage-2 runner — start and end clock
@@ -291,3 +315,5 @@ change does not touch (`README.md`, `templates/`,
 `enforcement: report` in `decisions/gates.yaml`, so it cannot be what turned
 `make verify` red. The blocking gate is not named in the diagnostics tail; no
 other file was changed.
+
+2026-10-08 15:27–15:53, 26 min, plan steps 1–6 (Sonnet 5.5 sub-agent session; `date` read at start and before the commit; background `make verify` waits counted).

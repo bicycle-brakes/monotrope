@@ -157,16 +157,16 @@ endpunkte:
     bemerkung: >-
       The review loop (phase 4b) runs here — and only the review loop; the
       spec review (phase 2a) and the review (phase 6) stay with Codex —
-      through `python3 scripts/stage2.py` only. The order of `modelle` is the loop's
-      ladder: round n calls the n-th id, and a one-line pull request
-      reorders it. Endpoints: the Anthropic-compatible
-      `https://opencode.ai/zen/go/v1/messages` and the OpenAI-compatible
-      `https://opencode.ai/zen/go/v1/chat/completions`. The Go page (read
-      2026-10-07) lists the three ids under the OpenAI address only; whether
-      the Anthropic address accepts them is measured in phase 4, one call per
-      id through the runner. Claude Code is a validated client there — Go
-      recognizes its native session header, no custom-header wrapper is
-      needed. Subscription: the Go plan at USD 10 a month. Prices per million
+      through `python3 scripts/stage2.py` and Pi at the version the runner
+      pins (1.1.0) only. The order of `modelle` is the loop's ladder: round n
+      calls the n-th id, and a one-line pull request reorders it. Address:
+      `https://opencode.ai/zen/go/v1/chat/completions`, under which the Go
+      page (read 2026-10-07) lists the three ids; the Anthropic-compatible
+      `https://opencode.ai/zen/go/v1/messages` is not used — three calls
+      there were refused on 2026-10-08. The Go page lists Pi among its
+      validated clients (read 2026-10-08), and Pi sends the
+      `x-opencode-session` header the page asks for.
+      Subscription: the Go plan at USD 10 a month. Prices per million
       tokens and monthly limit on the Go plan: `deepseek-v4.1-flash` USD 0.15
       input / 0.60 output off-peak and 0.30 / 1.20 in peak hours, limit USD
       60; `mimo-v2.6-flash` 0.14 / 0.28, limit USD 60; `mimo-v2.6-pro` 0.435
@@ -176,7 +176,12 @@ endpunkte:
       monthly and the current one is valid through 2026-10-31. The Go page
       states no region; `anbieter-erklaert` rests on the Zen page's sentence
       "All our models are hosted in the US and EU." (read 2026-10-07) and is
-      corrected the day OpenCode states where Go runs.
+      corrected the day OpenCode states where Go runs. Terms
+      reading of 2026-10-08: the terms of service (effective 2026-08-15) name
+      no third-party client and forbid processes that "automatically or
+      programmatically extracts data or Output" and that run "while you are
+      not logged into the Services"; the maintainer accepted this residual
+      risk on 2026-10-08.
 
 # ---------------------------------------------------------------------------
 # Nutzungszweck — die Auflage, die kein technisches Gate prueft

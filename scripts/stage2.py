@@ -2,11 +2,11 @@
 """stage2.py - the one way this repository starts a foreign model.
 
 **What this is.** Stage 2 lets a reviewer from another vendor read framework
-content: the three reviews - the spec review (2a), the review loop (4b) and
-the review (6) - run on OpenCode Go through Claude Code, the loop's round n on
-the n-th id of the `opencode-go` entry's ordered `modelle` list (the ladder,
-at most three rounds); GLM 5.3 Flash explores (phase 1) and implements
-(phase 4). A declaration in `model-endpoints.yaml` stops nothing; this runner
+content: the review loop (4b) runs on OpenCode Go through Pi at
+`https://opencode.ai/zen/go/v1/chat/completions`, round n on the n-th id of the
+`opencode-go` entry's ordered `modelle` list (the ladder, at most three
+rounds); Codex reviews the spec (2a) and the change (6); GLM 5.3 Flash
+explores (phase 1) and implements (phase 4). A declaration in `model-endpoints.yaml` stops nothing; this runner
 stands between the rule and the call.
 
     python3 scripts/stage2.py explore      <change>   # GLM Flash, phase 1
@@ -17,6 +17,9 @@ stands between the rule and the call.
     python3 scripts/stage2.py review       <change>   # Codex, phase 6, the 2a session resumed
     python3 scripts/stage2.py probe        <change>   # one call per rung, no record written
     python3 scripts/stage2.py session      <change>   # interactive Codex/OpenCode, a Terminal window
+
+Each loop round and the probe check `pi --version` against `PI_VERSION` first;
+any other answer refuses with exit 2 before the leak check and before any call.
 
 `explore` and `implement` accept `--stage2-off [REASON]`: the declared
 Stage-1 route uses Haiku 4.5 or Sonnet 5.5. A leak refusal never falls back.
@@ -55,17 +58,24 @@ alone, and `--stage2-off` to explore and implement.
 5. an empty standard input, and an environment the runner built from an
    allow-list - never the caller's.
 
-**Reads: confined for every call the runner starts.** Every call (explore,
-implement, the Sonnet fallback attempts and the reviewers) starts in the
-worktree with `--restricted` and no `--add-dir`; `claude --help` says
-`--restricted` "confines the file tools to the working directories", so
+**Reads: what each call can reach.** The Claude Code calls (explore,
+implement, the Sonnet fallback attempts) start in the worktree with
+`--restricted` and no `--add-dir`; `claude --help` says `--restricted`
+"confines the file tools to the working directories", so
 `~/.config/cc-routing/secrets.env` is outside what those file tools reach.
-That is the CLI's documented behaviour, not measured here: no test has run
-the real program against a path outside the worktree. Every prompt ends with
-the request to read nothing outside the worktree and the repository's git
-directory, which is a request, not a lock - the second fence beside
-`--restricted`, and the residual risk ADR 0007 accepted for its reviewers
-on 2026-09-30 and ADR 0011 extends to the rungs.
+That is the CLI's documented behaviour, not measured here. **The review
+loop's Pi calls are not among them, and they are not confined:** a round's
+`read` reaches files outside the worktree (measured with Pi 1.1.0, research
+§L), and the secrets file is among them; only the prompt's request bounds it -
+to read nothing outside the worktree and the repository's git directory, a
+request and not a lock. That
+is the residual risk ADR 0007 accepted for its reviewers on 2026-09-30, which
+ADR 0011 extends to the rungs. The loop's isolation flags (no extensions, MCP
+servers, skills, context files, prompt templates or themes; no approval; a
+fresh agent directory and home per call) are configured on every call and
+were measured once by hand on the pinned version; the suite starts no real
+Pi, and the version pin (`require_pi`) is what ties the measurement to the
+call. The Codex calls run in the CLI's read-only sandbox.
 
 **The loop record** lives outside the worktree
 (`${XDG_STATE_HOME:-~/.local/state}/coding-harness/stage2/<change>/loop.md`):
@@ -120,10 +130,13 @@ SONNET = ("claude-code-plan", "claude-sonnet-5-5", "medium")
 CODEX = ("openai-codex", "gpt-6.1-sol", "max")
 GLM_BASE_URL = "https://api.z.ai/api/anthropic"
 OPENCODE = "opencode-go"
-OPENCODE_BASE_URL = "https://opencode.ai/zen/go/v1/messages"
-REVIEWER_TOOLS = "Read,Grep,Glob"
+# The one Pi the loop's isolation was measured on (research §L); any other prints a refusal.
+PI_VERSION = "1.1.0"
+PI_TOOLS = "read,grep,find,ls"
 # A reviewer call that has not ended after this many minutes is stopped (spec, criterion 15).
 REVIEWER_MINUTES = 30
+# `pi --version` that has not ended after this many seconds is a Pi off the pin (spec, criterion 27).
+PI_VERSION_SECONDS = 30
 
 CODEX_ASK_RULE = (
     "Bash(codex *)",
@@ -153,7 +166,7 @@ ENV_ALLOW = (
     "TZ",
     "CODEX_HOME",
 )
-MODEL_VARIABLES = (
+GLM_MODEL_VARIABLES = (
     "ANTHROPIC_MODEL",
     "ANTHROPIC_DEFAULT_OPUS_MODEL",
     "ANTHROPIC_DEFAULT_SONNET_MODEL",
@@ -287,31 +300,16 @@ def foreign_env(own: dict[str, str]) -> dict[str, str]:
     return env
 
 
-def claude_env(base_url: str, key: str, config_dir: Path, model: str) -> dict[str, str]:
-    """A Claude Code call's environment: the endpoint's address, its key only there, a fresh config."""
+def glm_env(key: str, config_dir: Path, model: str) -> dict[str, str]:
     own = {
-        "ANTHROPIC_BASE_URL": base_url,
+        "ANTHROPIC_BASE_URL": GLM_BASE_URL,
         "ANTHROPIC_AUTH_TOKEN": key,
         "ANTHROPIC_API_KEY": key,
         "CLAUDE_CONFIG_DIR": str(config_dir),
         "CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC": "1",
-        # The three rungs are no ids of this Claude Code's model catalog. Without
-        # this the window enforcement refuses such a model before the request is
-        # sent (probe 2026-10-08: `[claude-code:unrecognized_model]`, exit 1); the
-        # vendor's own message names the variable that restores waiting for the
-        # API, which is what the probe measures (spec, criterion 8 and 17).
-        "CLAUDE_CODE_DISABLE_UNKNOWN_MODEL_WINDOW_ENFORCEMENT": "1",
     }
-    own.update({name: model for name in MODEL_VARIABLES})
+    own.update({name: model for name in GLM_MODEL_VARIABLES})
     return foreign_env(own)
-
-
-def glm_env(key: str, config_dir: Path, model: str) -> dict[str, str]:
-    return claude_env(GLM_BASE_URL, key, config_dir, model)
-
-
-def opencode_env(key: str, config_dir: Path, model: str) -> dict[str, str]:
-    return claude_env(OPENCODE_BASE_URL, key, config_dir, model)
 
 
 def launch(
@@ -320,6 +318,7 @@ def launch(
     env: dict[str, str],
     secret: str | None = None,
     timeout: float | None = None,
+    limit: str | None = None,
 ) -> subprocess.CompletedProcess:
     """Start a foreign program: empty standard input, the worktree as its directory."""
     try:
@@ -335,9 +334,8 @@ def launch(
             timeout=timeout,
         )
     except subprocess.TimeoutExpired as error:
-        raise CallFailed(
-            f"{command[0]} was stopped by the reviewer time limit after {REVIEWER_MINUTES:g} minutes"
-        ) from error
+        what = limit or f"the reviewer time limit after {REVIEWER_MINUTES:g} minutes"
+        raise CallFailed(f"{command[0]} was stopped by {what}") from error
     except OSError as error:
         raise CallFailed(f"{command[0]} could not be started: {scrub(str(error), secret)}") from error
 
@@ -584,7 +582,8 @@ def begin_call(ctx: Context, verb: str, endpoint: tuple[str, str, str | None], p
     """The declaration, the leak check and the call line - for this one call, immediately before it."""
     result = checked_prompt(ctx, endpoint, prompt)
     if not ctx.findings.exists():
-        ctx.findings.write_text(findings_header(ctx, "claude-code"), encoding="utf-8")
+        producer = "codex" if endpoint == CODEX else "pi"
+        ctx.findings.write_text(findings_header(ctx, producer), encoding="utf-8")
     append(
         ctx.findings,
         f"Stage-2 call, {today()}: {verb} · endpoint {endpoint[0]} · model {endpoint[1]} · "
@@ -673,27 +672,6 @@ def reviewer_key() -> str:
     return key
 
 
-def result_of(stdout: str) -> tuple[str, str]:
-    """`(answer, session id)` from Claude Code's JSON output: one object, an array of them, or one per line."""
-    events: list[object] = []
-    try:
-        loaded = json.loads(stdout)
-    except ValueError:
-        for line in stdout.splitlines():
-            if not line.strip():
-                continue
-            try:
-                events.append(json.loads(line))
-            except ValueError:
-                continue
-    else:
-        events = loaded if isinstance(loaded, list) else [loaded]
-    for event in events:
-        if isinstance(event, dict) and event.get("session_id"):
-            return str(event.get("result") or ""), str(event["session_id"])
-    return "", ""
-
-
 def thread_id(stdout: str) -> str | None:
     """The `thread_id` of the first JSON line of type `thread.started`."""
     for line in stdout.splitlines():
@@ -743,68 +721,84 @@ def run_codex(ctx: Context, prompt: str, resume: str | None = None) -> tuple[str
     return answer, thread
 
 
-def run_reviewer(
-    ctx: Context,
-    model: str,
-    prompt: str,
-    key: str,
-    *,
-    resume: str | None = None,
-    session: bool,
-) -> tuple[str, str]:
-    """One reviewer call: Claude Code against OpenCode Go's Anthropic address.
+def require_pi() -> None:
+    """Refuse unless `pi --version` prints exactly the pinned version (spec, criterion 27).
 
-    Every review verb launches the same way (spec, criterion 8): the rung's id
-    as the model, effort `max`, read and search tools only, a fresh empty
-    configuration directory, the project's settings skipped, and the key in
-    the environment only. `session` keeps the session for a later resume and
-    reads its id from the JSON result; a loop round needs no session and
-    answers in plain text. Returns (answer, session id - empty without
-    `session`). A call that has not ended after `REVIEWER_MINUTES` is stopped
-    (spec, criterion 15).
+    Runs before the leak check, the call line and any call, in a scratch
+    directory with no key: a Pi off the pin sends nothing.
     """
     with tempfile.TemporaryDirectory(prefix="stage2-") as tmp:
-        prompt_file = Path(tmp) / "review-prompt.md"
+        env = foreign_env({"HOME": tmp, "PI_CODING_AGENT_DIR": tmp})
+        try:
+            done = launch(
+                ["pi", "--version"],
+                Path(tmp),
+                env,
+                timeout=PI_VERSION_SECONDS,
+                limit=f"the version check's limit of {PI_VERSION_SECONDS} seconds",
+            )
+        except CallFailed as error:
+            raise Refused(
+                f"pi could not be checked ({error}); it is not the pinned {PI_VERSION}; no call starts."
+            ) from None
+    said = (done.stdout or "").strip()
+    if done.returncode != 0:
+        raise Refused(f"pi --version ended {done.returncode}; it is not the pinned {PI_VERSION}; no call starts.")
+    if said != PI_VERSION:
+        raise Refused(f"pi {said or 'printed nothing'} is not the pinned {PI_VERSION}; no call starts.")
+
+
+def run_reviewer(ctx: Context, model: str, prompt: str, key: str) -> str:
+    """One reviewer call of the loop: Pi against OpenCode Go's chat-completions address.
+
+    The launch is the measured set (spec, criterion 8): the rung's id under
+    the `opencode-go` provider, thinking `max` (Pi clamps it per model), the
+    read-only tools, every discovery switched off, no session, retries off.
+    Each call gets its own scratch directory: a `HOME`, an agent directory
+    whose only file is `settings.json`, and the prompt file. The key reaches
+    Pi as `OPENCODE_API_KEY` only. Returns the scrubbed answer. A call that
+    has not ended after `REVIEWER_MINUTES` is stopped (criterion 15).
+    """
+    with tempfile.TemporaryDirectory(prefix="stage2-") as tmp:
+        scratch = Path(tmp)
+        agent = scratch / "agent"
+        agent.mkdir()
+        (agent / "settings.json").write_text(json.dumps({"retry": {"enabled": False}}), encoding="utf-8")
+        home = scratch / "home"
+        home.mkdir()
+        prompt_file = scratch / "review-prompt.md"
         prompt_file.write_text(prompt, encoding="utf-8")
-        config_dir = Path(tmp) / "claude-config"
-        config_dir.mkdir()
         command = [
-            "claude",
-            "-p",
-            f"Review the change {ctx.change} as the appended instructions say.",
-            "--append-system-prompt-file",
-            str(prompt_file),
-            "--model",
-            model,
-            "--effort",
-            "max",
+            "pi",
+            "--print",
+            "--no-session",
+            "--no-approve",
+            "--no-extensions",
+            "--no-mcp",
+            "--no-skills",
+            "--no-context-files",
+            "--no-prompt-templates",
+            "--no-themes",
+            "--offline",
             "--tools",
-            REVIEWER_TOOLS,
-            "--restricted",
-            "--strict-mcp-config",
-            "--permission-mode",
-            "dontAsk",
-            "--output-format",
-            "json" if session else "text",
+            PI_TOOLS,
+            "--thinking",
+            "max",
+            "--model",
+            f"{OPENCODE}/{model}",
+            "--append-system-prompt",
+            str(prompt_file),
+            f"Review the change {ctx.change} as the appended instructions say.",
         ]
-        if resume:
-            command += ["--resume", resume]
-        if not session:
-            command += ["--no-session-persistence"]
-        done = launch(command, ctx.root, opencode_env(key, config_dir, model), key, timeout=REVIEWER_MINUTES * 60)
+        env = foreign_env({"HOME": str(home), "PI_CODING_AGENT_DIR": str(agent), "OPENCODE_API_KEY": key})
+        done = launch(command, ctx.root, env, key, timeout=REVIEWER_MINUTES * 60)
         if done.returncode != 0:
-            raise fail("claude", done, f"exit {done.returncode}", key)
-        stdout = scrub(done.stdout or "", key)
-        if session:
-            answer, session_id = result_of(stdout)
-            if not session_id:
-                raise fail("claude", done, "no session id in the result", key)
-        else:
-            answer, session_id = stdout, ""
+            raise fail("pi", done, f"exit {done.returncode}", key)
+        answer = scrub(done.stdout or "", key)
         if not answer.strip():
             # "No finding" is an answer; nothing at all is a call that failed.
-            raise fail("claude", done, "the answer is empty", key)
-    return answer, session_id
+            raise fail("pi", done, "the answer is empty", key)
+    return answer
 
 
 def taken_in_round(rows: list[list[str]], round_number: int) -> bool:
@@ -1514,7 +1508,7 @@ def implement(root: Path, change: str, stage2_off: str | None = None) -> None:
 
 
 def review_loop(root: Path, change: str) -> None:
-    """One round of phase 4b: round *n* goes to the ladder's *n*-th rung, through Claude Code at OpenCode Go."""
+    """One round of phase 4b: round *n* goes to the ladder's *n*-th rung, through Pi at OpenCode Go."""
     models = ladder(root)
     endpoint = (OPENCODE, models[0], "max")
     ctx = preflight(root, change, endpoint)
@@ -1536,12 +1530,13 @@ def review_loop(root: Path, change: str) -> None:
         raise Refused(f"the ladder of {OPENCODE} has {len(models)} rungs; round {round_number} has none.")
     model = models[round_number - 1]
     key = reviewer_key()
+    require_pi()
     diff = change_diff(root)
     body = (root / "prompts" / "04b-review-loop.md").read_text(encoding="utf-8")
     # The request comes before the diff and again after it: a long diff would bury it.
     prompt = "\n\n".join([body.rstrip(), ANSWER_FORMAT, READ_REQUEST, f"## The diff\n\n{diff}", READ_REQUEST])
     begin_call(ctx, "review-loop", (OPENCODE, model, "max"), prompt)
-    answer, _ = run_reviewer(ctx, model, prompt, key, session=False)
+    answer = run_reviewer(ctx, model, prompt, key)
     rows, _ = parse_rows(answer)
     numbered = [[f"L{round_number}-{k}", *row[1:], model, "", ""] for k, row in enumerate(rows, 1)]
     parts = [f"## Round {round_number} — {model}, {today()}"]
@@ -1559,13 +1554,15 @@ def probe(root: Path, change: str) -> None:
     """The compatibility probe: one call per rung, the declaration and the leak check in front of each.
 
     Declared special run of phase 4 (the Definition of Done): the three calls
-    measure whether OpenCode Go's Anthropic address accepts the ladder's ids -
-    the Go page lists them under the OpenAI address only. No record is
-    written; the rung's id and the answer's first line are printed for the
-    pull request body. A refused rung stops the run and is reported (spec,
+    measure whether OpenCode Go's chat-completions address
+    (`https://opencode.ai/zen/go/v1/chat/completions`, the one Pi's built-in
+    provider calls) accepts the ladder's ids. The pinned Pi is checked once
+    before the first call. No record is written; the rung's id and the answer's
+    first line are printed for the pull request body. A refused rung stops the run and is reported (spec,
     criterion 17): no second address, no substituted model.
     """
     key = reviewer_key()
+    require_pi()
     for model in ladder(root):
         endpoint = (OPENCODE, model, "max")
         ctx = preflight(root, change, endpoint)
@@ -1577,7 +1574,7 @@ def probe(root: Path, change: str) -> None:
             ]
         )
         begin_call(ctx, "probe", endpoint, prompt)
-        answer, _ = run_reviewer(ctx, model, prompt, key, session=False)
+        answer = run_reviewer(ctx, model, prompt, key)
         first = answer.strip().splitlines()[0]
         print(f"probe: {model} · {scrub(first, key)}")
     print(f"probe: {len(ladder(root))} rungs answered")
