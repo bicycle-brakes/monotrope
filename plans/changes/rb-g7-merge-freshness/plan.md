@@ -277,3 +277,5 @@ after each merge; `make verify` on the maintainer's machine is red on the gate
 ## Time used
 
 Phase 4 appends its spans here (`prompts/04-implement.md`).
+
+- 2026-10-08 09:49–10:26, 37 min (Sonnet 5.5 sub-agent; steps 1–8, one `make verify` red on ruff only and one green run of 5 min, planted regressions; waiting on `make verify` counted). Of 1.5 h appetite. Done.
