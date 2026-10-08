@@ -506,6 +506,8 @@ def test_a_substitution_nests_its_own_quotes() -> None:
     assert tm._strip_comments('x="$(\n)" # c\n# d') == 'x="$(\n)" \n'
     # loop row L1-2: an escaped dollar starts no ANSI-C string; the shell's quote runs on, so the `#` is kept
     assert tm._strip_comments("echo \\$'a\\'b' # c") == "echo \\$'a\\'b' # c"
+    # loop row L2-1: `$$` is the shell's process id, so `$$'a\'` is a plain quote, closed, and `# c` a comment
+    assert tm._strip_comments("echo $$'a\\' # c") == "echo $$'a\\' "
     # the shell itself reads an apostrophe in plain text as a quote: there the limit stays
     assert tm._strip_comments("echo don't # a\n# b") == "echo don't # a\n# b"
 

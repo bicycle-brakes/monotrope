@@ -248,7 +248,8 @@ def _scan(line: str, state: State, yaml: bool = False) -> tuple[str, State, list
         elif char == "'":
             letters = 0 < i < len(line) - 1 and line[i - 1].isalpha() and line[i + 1].isalpha()
             if not (yaml and letters):
-                ansi = i > 0 and line[i - 1] == "$" and (i < 2 or line[i - 2] != "\\")  # `\$'` is a plain quote
+                # `$'` opens an ANSI-C string only where the `$` starts a word: `\$'` and `$$'` are a plain quote
+                ansi = i > 0 and line[i - 1] == "$" and (i < 2 or line[i - 2] in " \t=(;|&")
                 stack[-1][0] = "$'" if ansi else "'"
         elif char == "(":
             stack[-1][1] += 1
