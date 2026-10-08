@@ -123,3 +123,17 @@ and makes no tracker writes; the research task was already closed and pushed
 in the earlier assessment session. Existing test evidence remains applicable:
 only documentation was changed, and no code or gate configuration changed.
 The PR number and publication commit are recorded in the next addendum.
+
+## Addendum — 2026-10-08, publication
+
+The assessment was committed as `98e5d14` on `docs/research-kubernetes` and
+pushed to origin. The ordinary documentation pull request is
+[#98](https://github.com/MPAdesso/coding-harness/pull/98). This addendum is a
+follow-up documentation commit on the same branch. The publication uses
+process-local disabled commit signing, with an explicit assistant trailer;
+no persistent git setting was changed.
+
+The maintainer requested creating the PR, not merging it. No merge was run.
+Hosted CI is checked after the final push; its current result is available
+on the PR. Resume by reading this PR and its checks before choosing whether
+to merge the research note or prepare a separate pilot change.
