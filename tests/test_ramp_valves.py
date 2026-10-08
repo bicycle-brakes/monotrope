@@ -14,12 +14,13 @@ from pathlib import Path
 REPO = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(REPO / "scripts"))
 
-from ramp_valves import valves  # noqa: E402
+from ramp_valves import REGEL_VENTILE, valves  # noqa: E402
 
 
 def test_the_valve_list_is_not_empty() -> None:
     """Eine leere Ventil-Liste waere ein stillschweigend aufgehobener Vorbehalt."""
     ventile = valves()
     namen = {v.name for v in ventile}
-    assert "merge-freshness" in namen, "das Ventil aus RB-G7 fehlt — die Liste wurde geleert?"
+    missing = sorted(set(REGEL_VENTILE) - namen)
+    assert not missing, f"rule valves missing from valves(): {missing} — was the list emptied?"
     assert len(namen) >= 10, f"nur {len(namen)} Ventile — die Regel-Ventile wurden entfernt?"
