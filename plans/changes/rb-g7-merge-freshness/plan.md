@@ -1,7 +1,7 @@
 ---
 title: "Plan — rb-g7-merge-freshness"
 status: draft
-implementation_status: none
+implementation_status: partial
 date: 2026-10-08
 last_reviewed: 2026-10-08
 updated: 2026-10-08
@@ -46,6 +46,12 @@ No `[DECISION]` is open.
 - `[DETAIL]` **Ask the maintainer to tick the checkbox before phase 4**
   (Phase 7 below): a stricter ruleset holds today's code, and phase 4's
   `make verify` is then red only on `adr-answers` until the ADR answer.
+
+- `[DETAIL]` **Route (2026-10-08):** phase 4 and 5 run as a Sonnet 5.5
+  sub-agent of the orchestrating session, not through `python3
+  scripts/stage2.py implement`, because bead coding-harness-mfv (the runner
+  cannot regenerate derived files after it creates `findings.md`) is still
+  open; as in the pull requests #92 and #93.
 
 ## Steps
 

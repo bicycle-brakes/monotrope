@@ -21,6 +21,7 @@ import re
 import shutil
 import subprocess
 import sys
+from collections.abc import Callable
 from pathlib import Path
 
 import pytest
@@ -473,6 +474,160 @@ def test_concurrency_group_carries_the_event() -> None:
     doc = yaml.safe_load(CI_FILE.read_text(encoding="utf-8"))
     gruppe = doc["concurrency"]["group"]
     assert "event_name" in gruppe, f"Concurrency group without an event: {gruppe}"
+
+
+# --------------------------------------------------------------------------
+# 1a · The verification runs against the merge ref (RB-G7)
+#
+# The names below avoid the forms `MUTATIONS_NAMEN` counts as mutation evidence
+# (it is matched against names in this file): the planted-fault test is called
+# `..._flags_...`, never `..._goes_red_...`. Otherwise it would count as the
+# mutation evidence of some gate that has none.
+# --------------------------------------------------------------------------
+
+# Keys on `pull_request` that would narrow which pull requests are checked.
+PR_TRIGGER_FILTERS = ("branches", "branches-ignore", "paths", "paths-ignore", "types")
+_MOVES_THE_TREE = re.compile(r"\bgit\s+(?:checkout|switch|reset)\b")
+
+
+def _merge_ref_findings(doc: dict) -> list[str]:
+    """What keeps the workflow from checking the pull request's merge ref; empty when nothing does.
+
+    On `pull_request`, `actions/checkout` without `ref:` checks out
+    `refs/pull/<n>/merge` (RB-G7, MG-2). The ruleset's up-to-date requirement
+    (`tests/test_repo_settings.py`) makes that the merge which happens.
+    """
+    findings: list[str] = []
+    trigger = doc.get("on") or doc.get(True) or {}
+    if not isinstance(trigger, dict) or "pull_request" not in trigger:
+        findings.append("no `pull_request` trigger")
+    else:
+        block = trigger["pull_request"]
+        if isinstance(block, dict):
+            for key in PR_TRIGGER_FILTERS:
+                if key in block:
+                    findings.append(f"`pull_request` carries the filter `{key}`")
+    if isinstance(trigger, dict) and "pull_request_target" in trigger:
+        findings.append("a `pull_request_target` trigger checks the base, not the merge ref")
+
+    jobs = doc.get("jobs") or {}
+    matrix_job = jobs.get(ci_gates.MATRIX_JOB)
+    if not isinstance(matrix_job, dict):
+        findings.append(f"no job `{ci_gates.MATRIX_JOB}`")
+    else:
+        if "pull_request" not in str(matrix_job.get("if", "")):
+            findings.append(f"job `{ci_gates.MATRIX_JOB}` does not run on `pull_request` (its `if`)")
+        gate_ids = {g["id"] for g in gates()}
+        before_gates = []
+        for step in matrix_job.get("steps") or []:
+            if step.get("id") in gate_ids:
+                break
+            before_gates.append(step)
+        if not any(str(s.get("uses", "")).startswith("actions/checkout@") for s in before_gates):
+            findings.append(f"job `{ci_gates.MATRIX_JOB}` has no `actions/checkout` step before its first gate")
+
+    for job_name, job in jobs.items():
+        for step in (job or {}).get("steps") or []:
+            label = f"job `{job_name}`, step `{step.get('name') or step.get('id') or step.get('uses') or '?'}`"
+            if str(step.get("uses", "")).startswith("actions/checkout@"):
+                given = step.get("with") or {}
+                for key in ("ref", "repository"):
+                    if key in given:
+                        findings.append(f"{label}: the checkout sets `{key}`, so it is not the merge ref")
+            if _MOVES_THE_TREE.search(str(step.get("run", ""))):
+                findings.append(f"{label}: a `run` moves the checked-out tree")
+    return findings
+
+
+def test_the_verification_runs_against_the_merge_ref() -> None:
+    sources = [
+        ("ci.yml", CI_FILE.read_text(encoding="utf-8")),
+        ("generate_ci()", ci_gates.generate_ci()),
+    ]
+    for source, text in sources:
+        findings = _merge_ref_findings(yaml.safe_load(text))
+        assert findings == [], f"{source} does not check the merge ref:\n  " + "\n  ".join(findings)
+
+
+def _checkout_of(doc: dict, job: str) -> dict:
+    return next(s for s in doc["jobs"][job]["steps"] if str(s.get("uses", "")).startswith("actions/checkout@"))
+
+
+def _trigger_of(doc: dict) -> dict:
+    return doc["on"] if "on" in doc else doc[True]
+
+
+def _plant_head_sha(doc: dict) -> None:
+    _checkout_of(doc, ci_gates.MATRIX_JOB).setdefault("with", {})["ref"] = "${{ github.event.pull_request.head.sha }}"
+
+
+def _plant_head_ref(doc: dict) -> None:
+    _checkout_of(doc, "drift").setdefault("with", {})["ref"] = "${{ github.head_ref }}"
+
+
+def _plant_repository(doc: dict) -> None:
+    _checkout_of(doc, ci_gates.MATRIX_JOB).setdefault("with", {})["repository"] = "someone/else"
+
+
+def _plant_no_pull_request(doc: dict) -> None:
+    del _trigger_of(doc)["pull_request"]
+
+
+def _plant_pull_request_target(doc: dict) -> None:
+    trigger = _trigger_of(doc)
+    trigger["pull_request_target"] = trigger.pop("pull_request")
+
+
+def _plant_branches_filter(doc: dict) -> None:
+    _trigger_of(doc)["pull_request"] = {"branches": ["main"]}
+
+
+def _plant_matrix_job_off_pull_request(doc: dict) -> None:
+    doc["jobs"][ci_gates.MATRIX_JOB]["if"] = "github.event_name == 'push'"
+
+
+def _plant_no_checkout(doc: dict) -> None:
+    steps = doc["jobs"][ci_gates.MATRIX_JOB]["steps"]
+    steps.remove(_checkout_of(doc, ci_gates.MATRIX_JOB))
+
+
+def _plant_git_checkout_step(doc: dict) -> None:
+    steps = doc["jobs"][ci_gates.MATRIX_JOB]["steps"]
+    steps.insert(1, {"name": "Move to the head", "run": "git checkout ${{ github.head_ref }}"})
+
+
+@pytest.mark.parametrize(
+    "plant",
+    [
+        pytest.param(_plant_head_sha, id="head-sha-on-the-matrix-checkout"),
+        pytest.param(_plant_head_ref, id="head-ref-on-the-drift-checkout"),
+        pytest.param(_plant_repository, id="another-repository"),
+        pytest.param(_plant_no_pull_request, id="no-pull-request-trigger"),
+        pytest.param(_plant_pull_request_target, id="pull-request-target"),
+        pytest.param(_plant_branches_filter, id="branches-filter"),
+        pytest.param(_plant_matrix_job_off_pull_request, id="matrix-job-off-pull-request"),
+        pytest.param(_plant_no_checkout, id="no-checkout"),
+        pytest.param(_plant_git_checkout_step, id="git-checkout-step"),
+    ],
+)
+def test_the_merge_ref_check_flags_a_planted_fault(plant: Callable[[dict], None]) -> None:
+    doc = copy.deepcopy(_ci_doc())
+    assert _merge_ref_findings(doc) == [], "the committed workflow must be clean before a fault is planted"
+    plant(doc)
+    assert _merge_ref_findings(doc), f"{plant.__name__} left no finding"
+
+
+def test_the_merge_ref_check_flags_a_ref_the_generator_emits(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setattr(
+        ci_gates,
+        "_checkout",
+        lambda _gates: [
+            "      - uses: actions/checkout@v4",
+            "        with:",
+            "          ref: ${{ github.head_ref }}",
+        ],
+    )
+    assert _merge_ref_findings(yaml.safe_load(ci_gates.generate_ci()))
 
 
 # --------------------------------------------------------------------------

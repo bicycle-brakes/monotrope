@@ -5,7 +5,7 @@ subcategory: quality-gates
 status: current
 created: 2026-04-17
 last_reviewed: 2026-08-14
-updated: 2026-09-29
+updated: 2026-10-08
 owner: Data Architect
 provenance: human-decided
 review:
@@ -72,7 +72,10 @@ Prüfungen und ihre Betriebsregeln, diese Seite die *Tore* eines Liefergegenstan
 
 MG-2 prüft **`refs/pull/N/merge`**, nicht den Branch-Kopf. Lokal grün und in der
 CI rot ist deshalb kein Widerspruch, sondern der Normalfall: die CI baut, was
-nach dem Merge entsteht.
+nach dem Merge entsteht. Dass dieser Merge-Ref auch der gemergte ist, sichert das Ruleset: es
+verlangt, dass der Branch vor dem Merge auf dem Stand seines Ziels ist
+(RB-G7). Bewegt sich `main`, wird der Pull Request aktualisiert und neu
+geprüft.
 
 ### Human Gates
 
