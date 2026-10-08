@@ -43,6 +43,10 @@ Three pull requests wait for the maintainer, all with hosted CI green on
    findings (partial evidence for bead coding-harness-kw0; tokens and cost
    stay unmeasured).
 
+5. **#96** — a research note on holding the tests of acceptance criteria
+   (bead coding-harness-909), four options, recommended: a criterion ledger
+   per live change checked by a gate.
+
 The RB-G7 merge-freshness valve (bead coding-harness-34z, due 2026-10-31)
 stands at one open `[DECISION]`, branch `decide/rb-g7-merge-freshness`,
 no pull request yet.
@@ -58,11 +62,12 @@ before 2026-10-31.
 ## Needed from the maintainer
 
 1. **RB-G7:** option 1, 2 or 3 (above).
-2. **Read and merge** #91 (a decision PR), #92, #93, #95 and this
-   handover (#94) when ready. #91 and #92
+2. **Read and merge** #91 (a decision PR), #92, #93, #95, #96 and this
+   handover (#94) when ready.
+3. **Bead 909:** choose an option from #96 (not urgent). #91 and #92
    both change `scripts/stage2.py` in different functions; whichever merges
    second needs `main` merged in.
-3. **The session smoke**, once, in your own Terminal from
+4. **The session smoke**, once, in your own Terminal from
    `.claude/worktrees/stage2-session`:
    `python3 scripts/stage2.py session stage2-session --model gpt-6.1-sol --handover docs/journal/handover/2026-10-07-stage2-session-takeover.md`.
 
@@ -107,8 +112,9 @@ Task status is in Beads. Queue, one at a time (2026-10-08):
 
 1. RB-G7 (coding-harness-34z) — waits for the decision; due 2026-10-31.
 2. Runner: implement regenerates derived files (coding-harness-mfv, P1).
-3. Test-holding gap (coding-harness-909), stage-2 run measurements
-   (coding-harness-kw0) — not started tonight.
+3. Test-holding gap (coding-harness-909) — options in #96, waits for a
+   choice; stage-2 run measurements (coding-harness-kw0) — partial evidence
+   in #95, a counting script still missing.
 
 ## Working state and parallel-session boundary
 
