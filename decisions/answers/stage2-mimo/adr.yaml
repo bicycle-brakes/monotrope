@@ -12,7 +12,12 @@ reason: The OpenCode Go ladder (DeepSeek V4.1 Flash -> MiMo-V2.6-Flash -> MiMo-V
   widened in its own text to cover it. Stated 2026-10-07 as "yes — widen ADR
   0007" and, the same session, "ich möchte mimo über opencode go anbinden"; it
   replaces the earlier Xiaomi wording of this answer (Xiaomi direct, Token
-  Plan), which the OpenCode Go decision supersedes.
+  Plan), which the OpenCode Go decision supersedes. On 2026-10-08 the
+  maintainer named the launcher for OpenCode Go as OpenCode's own CLI ("für
+  opencode go nutze ich den opencode cli harness", Claude Code session of
+  2026-10-08), after three calls through Claude Code at OpenCode Go's
+  Anthropic address were refused, so the loop's rounds start through
+  `opencode run`, not through Claude Code.
 shown:
   proposed: 'yes'
   proposal_reason: it widens where framework content may flow, which ADR 0007 limits
