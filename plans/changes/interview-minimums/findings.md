@@ -93,3 +93,23 @@ Phase 6 verdict: codex 01a11c4d-7cf9-78d3-81e5-d51fe3941095, 2026-10-08
 Rounds run: 1
 
 Stage-2 call, 2026-10-08: review (loop marks) · endpoint openai-codex · model gpt-6.1-sol · leak check clean over 313 files, 703 commits, 12 rules.
+
+## PR review — maintainer, 2026-10-08
+
+Three P2 rows on the review of commit `a6dde6b`; all three taken.
+
+| ID | Severity | Dimension | Origin | Where | Finding | Reviewer | Status | Broke a test |
+|---|---|---|---|---|---|---|---|---|
+| P2-1 | P2 | MAINT | base | `scripts/check_interview_minimums.py`, `_changed_paths` | With rename detection on (the Git default), a `git mv` out of `docs/adr/` names only the destination; `adr_paths` stays empty and a bounded change with one answer passes although ADR changes demand five. | maintainer | taken — test_renamed_away_adr_is_seen | no |
+| P2-2 | P2 | SPEC | base | `scripts/check_interview_minimums.py`, `_DATE_LINE` | `date: 2026-10-07 # existing stock` is valid YAML, but the pattern demands end of line after the value: no match, `None`, and an exempt stock change becomes interview duty. The later comment stripping is never reached. | maintainer | taken — test_date_with_inline_comment_keeps_the_stock_exempt | no |
+| P2-3 | P2 | MAINT | base | `tests/test_check_interview_minimums.py`, `test_index_only_staged_adr_is_seen` | The fixture commits the original ADR on `feat/test`, so the push never moves `origin/main` and the ADR appears as an addition of the working-tree diff — the staged-only case is not tested; the test survives with the index diff removed. | maintainer | taken — the original ADR is now committed on main, pushed, and merged into the branch; removing the index diff turns the test red (demonstrated) | no |
+
+Repair evidence, 2026-10-08 (Codex takeover at `a6dde6b` plus the local
+repair diff): all three planted regressions made their named tests fail,
+then the exact repaired source was restored. The 38 interview tests and the
+handover unknown-field test passed; full `make verify` exited 0 with
+`VERIFY GREEN` (1311 passed, 16 skipped; live ruleset gate 90 passed).
+The full run used a process-local signing override for temporary Git
+fixtures and network access for the existing live GitHub check; no gate or
+persistent Git configuration changed. The maintainer's review rows above
+are preserved unchanged. Repairs are local and unpublished.

@@ -441,13 +441,19 @@ def test_minimal_blocks_are_not_interview_records(repo: Path) -> None:
 
 
 def test_index_only_staged_adr_is_seen(repo: Path) -> None:
-    # F-16: a staged ADR edit whose working file was restored to the base
-    # hides from the working-tree diff — the index diff must still see it.
+    # F-16, fixture per PR review P2-3: the original ADR must live in the
+    # comparison base — committed on main, pushed, then merged into this
+    # branch — so the staged edit (working file restored to the base) is
+    # visible to the index diff alone. Building it on the branch would make
+    # the ADR an addition of the working-tree diff and the test vacuous.
+    _git(repo, "checkout", "main")
     adr = repo / "docs" / "adr" / "0097-earlier.md"
     adr.parent.mkdir(parents=True, exist_ok=True)
     adr.write_text("# ADR 0097 — original\n")
     _commit_all(repo, "docs: an adr on main")
     _git(repo, "push", "origin", "main")
+    _git(repo, "checkout", "feat/test")
+    _git(repo, "merge", "main", "-m", "sync main into the branch")
     write_change(repo, "index-adr", "bounded", decisions=records(4))
     adr.write_text("# ADR 0097 — changed\n")
     _git(repo, "add", "docs/adr/0097-earlier.md")
@@ -466,6 +472,38 @@ def test_change_flag_typo_is_red_even_when_another_change_passes(repo: Path) -> 
     done = run_gate(repo, "--change", "owner-ok-typo")
     assert done.returncode == 1
     assert "no change folder" in done.stdout
+
+
+# --- PR review · the maintainer's three P2 rows -----------------------------
+
+
+def test_renamed_away_adr_is_seen(repo: Path) -> None:
+    # P2-1: `git mv` out of docs/adr/ names only the destination when rename
+    # detection is on — the abandoned ADR path must still count, and the
+    # bounded change with one answer must not pass.
+    _git(repo, "checkout", "main")
+    adr = repo / "docs" / "adr" / "0096-moved.md"
+    adr.parent.mkdir(parents=True, exist_ok=True)
+    adr.write_text("# ADR 0096\n")
+    _commit_all(repo, "docs: an adr on main")
+    _git(repo, "push", "origin", "main")
+    _git(repo, "checkout", "feat/test")
+    _git(repo, "merge", "main", "-m", "sync main into the branch")
+    write_change(repo, "moved-adr", "bounded", decisions=records(1))
+    _git(repo, "mv", "docs/adr/0096-moved.md", "docs/notes-0096.md")
+    done = run_gate(repo)
+    assert done.returncode == 1
+    assert "moved-adr" in done.stdout
+
+
+def test_date_with_inline_comment_keeps_the_stock_exempt(repo: Path) -> None:
+    # P2-2: `date: 2026-10-07 # existing stock` is valid YAML — the stock
+    # change stays exempt instead of becoming interview duty.
+    folder = write_change(repo, "noted-stock", "feature", day=BEFORE)  # empty decisions
+    spec = folder / "spec.md"
+    spec.write_text(spec.read_text(encoding="utf-8").replace(f"date: {BEFORE}", f"date: {BEFORE}  # existing stock"))
+    done = run_gate(repo)
+    assert done.returncode == 0, done.stdout
 
 
 # --- AC 9, 10, 11 · the spec gate, the declaration, the docs ----------------

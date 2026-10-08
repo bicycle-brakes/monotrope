@@ -77,7 +77,7 @@ _CLASS_LINE = re.compile(
     r"""^class:[ \t]+(?:"([^"\n]*)"|'([^'\n]*)'|([^\s"'#]\S*))(?:[ \t]+\#.*)?[ \t]*\r?$""",
     re.M,
 )
-_DATE_LINE = re.compile(r"^date:[ \t]*(\S+)[ \t]*\r?$", re.M)
+_DATE_LINE = re.compile(r"^date:[ \t]*(\S+)(?:[ \t]+\#.*)?[ \t]*\r?$", re.M)
 
 # One interview record: `## Q-<id> · <title>` and its field lines. One skip
 # record: `## SKIP · interview` with `status: skipped` and a `reason:`.
@@ -140,7 +140,7 @@ def _changed_paths(root: Path) -> set[str]:
     F-16 — a staged edit whose working file matches the base hides from the
     working-tree diff), and untracked files — the change_diff states."""
     base = _base(root)
-    flags = ["--name-only", "-z"]
+    flags = ["--name-only", "--no-renames", "-z"]
     worktree = _git(root, "diff", *flags, base).split("\0")
     index = _git(root, "diff", "--cached", *flags, base).split("\0")
     untracked = _git(root, "ls-files", "-z", "--others", "--exclude-standard").split("\0")

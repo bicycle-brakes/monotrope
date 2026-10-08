@@ -72,8 +72,9 @@ Phase 1a is voluntary today, and nothing measures it:
    exits non-zero and names the change.
    *Refuted by:* the check exits 0 on such a tree.
 2. When the measured diff changes a file under `docs/adr/` — committed,
-   staged against the index, unstaged, or untracked — the owning change owes
-   five counted records whatever its class and however old its folder: the
+   staged against the index, unstaged, untracked, or renamed out of that
+   directory — the owning change owes five counted records whatever its
+   class and however old its folder: the
    cut-off exempts a folder's own class minimums, never a new ADR edit (loop
    row L1-3). A diff that touches `docs/adr/` and owns no change folder, or
    more than one, is a finding and the check exits non-zero.
