@@ -1,8 +1,8 @@
 ---
 title: "Findings — runner-derived-files"
 category: findings
-status: draft
-implementation_status: none
+status: accepted
+implementation_status: done
 date: 2026-10-08
 created: 2026-10-08
 last_reviewed: 2026-10-08
