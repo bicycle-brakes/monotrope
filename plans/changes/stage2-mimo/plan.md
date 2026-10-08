@@ -128,6 +128,9 @@ through Pi after the probe (maintainer, "1", 2026-10-08).
 | `tests/test_model_endpoints.py` | The remark's needles (criterion 2). |
 | `docs/WORKFLOW.md` | §4: launcher, reads, caveat (criteria 21, 23, 28, 29). |
 | `AGENTS.md` | The stage-2 paragraph says Pi (criterion 23). |
+| `prompts/02a-spec-review.md`, `prompts/06-review.md` | The three-round sentences (criterion 23). |
+| `tests/test_stage2_session.py` | The case "the production declaration names no opencode-go" no longer holds once `opencode-go` is declared. |
+| `templates/findings.md` | The renamed heading and the none-line, as the runner writes them. |
 | `prompts/04b-review-loop.md` | The model line says Pi (criterion 23). |
 | `scripts/kit/probe.py` | Only if `kit-probe` names a new or renamed case (step 6). |
 | `plans/changes/stage2-mimo/findings.md` | The probe's and the loop's call lines, the phase-6 verdict and the released rows (runner-written). |
@@ -186,8 +189,8 @@ it touches", and `python3 scripts/check_adr_answers.py`.
 
 - `docs/adr/0007-stage-2-reviews-by-codex-and-glm.md` — amended by the new
   record, never edited in place.
-- `scripts/stage2_session.py` and its tests — the `session` verb's OpenCode
-  path is its own (bead coding-harness-amp).
+- `scripts/stage2_session.py` — the `session` verb's OpenCode path is its
+  own (bead coding-harness-amp). Its test file moves by one case, see Files.
 - `run_work_model`, `explore`, `implement` beyond `glm_env` returning to
   main's text; `run_codex`, `spec_review`, `review`.
 - `scripts/check_decision_continuity.py`, the continuity table of
@@ -196,8 +199,7 @@ it touches", and `python3 scripts/check_adr_answers.py`.
 - `scripts/leakcheck.py`, the denylist; `scripts/harness.py`,
   `scripts/touch_map.py`, `scripts/new_change.py`; `.claude/settings.json`.
 - `~/.pi`, the Pi install, the secrets file.
-- `prompts/02a-spec-review.md`, `prompts/06-review.md`,
-  `prompts/01-explore.md`, `prompts/04-implement.md` — no launcher named
+- `prompts/01-explore.md`, `prompts/04-implement.md` — no launcher named
   there.
 - The German keys and comments of `model-endpoints.yaml`.
 

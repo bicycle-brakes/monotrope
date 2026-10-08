@@ -718,7 +718,7 @@ settings, hooks and MCP servers skipped; implement also gets
 implementation answer the runner runs exactly
 `make verify`; a failed post-check gets one fresh Flash repair, then one
 Sonnet 5.5 fallback, and every attempt repeats the leak check. A failed model
-process stops instead of silently changing route, and a reviewer call that has
+process stops instead of silently changing route, and a review-loop call (through Pi) that has
 not ended 30 minutes after it started is stopped. **Those settings are
 configured on every call, not measured by any test** (the maintainer's decision
 of 2026-09-30, ADR 0007): no test has run a real program to see them take

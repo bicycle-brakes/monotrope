@@ -253,7 +253,7 @@ recording program the tests put on `PATH` in the callee's place (`pi`,
     *Refuted by:* a block in the loop record, an exit of 0, or a cause not
     named.
 
-15. **A time limit for every reviewer call.** A call that has not ended 30
+15. **A time limit for every loop call.** A call of the review loop (through Pi) that has not ended 30
     minutes after it started is stopped; the 30 minutes are one named
     constant. Stopping it is one of the causes of criterion 14.
     *Refuted by:* a stand-in that outlasts a shortened limit and a run that
@@ -476,6 +476,7 @@ Beyond the non-goals: none.
   `scripts/stage2.py`; `tests/test_stage2.py`; `tests/test_model_endpoints.py`;
   `docs/WORKFLOW.md` §4; `prompts/02a-spec-review.md`;
   `prompts/04b-review-loop.md`; `prompts/06-review.md`; `AGENTS.md`;
+  `tests/test_stage2_session.py`; `templates/findings.md`;
   `scripts/kit/probe.py` where a test's travel list changes;
   `docs/adr/0011-stage-2-reviews-through-opencode-go.md`;
   `decisions/answers/stage2-mimo/adr.yaml` as the maintainer stated it
