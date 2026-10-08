@@ -887,6 +887,174 @@ def test_verify_failure_is_bounded_in_the_repair_prompt(world: World) -> None:
     assert "line-0" not in prompt and "line-19" not in prompt and "line-20" in prompt
 
 
+def _gate(name: str, body: list[str], verdict: str) -> list[str]:
+    """One gate as `verify_all.sh` frames it."""
+    end = {
+        "green": f"── [{name}] gruen",
+        "red": f"── [{name}] RED (block) — der Lauf ist rot.",
+        "report": f"── [{name}] rot, aber nur report — er meldet, er blockiert nicht.",
+    }[verdict]
+    return [f"── [{name}] $ run {name}", *body, end, ""]
+
+
+def _red_run(world: World, output: str) -> str:
+    """Run implement with one red verify carrying `output`, then green; return the repair prompt."""
+    world.script(
+        claude=[
+            {
+                "stdout": "first",
+                "plant": {"src/app.py": "value = 2\n"},
+                "append": {"plans/changes/demo/plan.md": "2026-10-08 10:00–10:02, 2 min\n"},
+            },
+            {"stdout": "fixed"},
+        ],
+        make=[{"stdout": output, "exit": 1}, {"stdout": "green\n"}],
+    )
+    assert world.run("implement") == 0
+    return world.calls("claude")[1]["prompt_file"]
+
+
+def test_the_repair_prompt_names_the_gate_that_blocked_not_the_report_tail(world: World) -> None:
+    # runner-red-gate criterion 1. Planted fault: the tail instead of the red sections.
+    output = "\n".join(
+        _gate("pytest", ["FAILED tests/test_app.py::test_value - assert 2 == 1", "1 failed, 9 passed"], "red")
+        + _gate("ruff-check", ["All checks passed!"], "green")
+        + _gate("markdownlint", [f"README.md:{n} error MD013" for n in range(500)], "report")
+        + ["VERIFY RED — at least one gate failed; the report above names it."]
+    )
+    prompt = _red_run(world, output)
+    assert "FAILED tests/test_app.py::test_value" in prompt and "── [pytest] RED (block)" in prompt
+    assert "MD013" not in prompt and "[ruff-check]" not in prompt, "only blocking sections travel"
+
+
+def test_a_blocking_gates_standard_error_reaches_the_repair_prompt(world: World) -> None:
+    # Loop row L1-1: a gate's error on standard error arrives after every frame and must still travel.
+    world.script(
+        claude=[
+            {
+                "stdout": "first",
+                "plant": {"src/app.py": "value = 2\n"},
+                "append": {"plans/changes/demo/plan.md": "2026-10-08 10:00–10:02, 2 min\n"},
+            },
+            {"stdout": "fixed"},
+        ],
+        make=[
+            {
+                "stdout": "\n".join(_gate("shellcheck", [], "red")),
+                "stderr": "sh: shellcheck: command not found\n",
+                "exit": 1,
+            },
+            {"stdout": "green\n"},
+        ],
+    )
+    assert world.run("implement") == 0
+    prompt = world.calls("claude")[1]["prompt_file"]
+    assert "── [shellcheck] RED (block)" in prompt and "shellcheck: command not found" in prompt
+
+
+def test_a_long_standard_error_is_cut_with_a_marker(world: World) -> None:
+    # Loop row L2-3 and criterion 5: the standard-error window is bounded and says what it left out.
+    world.script(
+        claude=[
+            {
+                "stdout": "first",
+                "plant": {"src/app.py": "value = 2\n"},
+                "append": {"plans/changes/demo/plan.md": "2026-10-08 10:00–10:02, 2 min\n"},
+            },
+            {"stdout": "fixed"},
+        ],
+        make=[
+            {
+                "stdout": "\n".join(_gate("pytest", ["FAILED x"], "red")),
+                "stderr": "\n".join(f"err-{n}" for n in range(100)),
+                "exit": 1,
+            },
+            {"stdout": "green\n"},
+        ],
+    )
+    assert world.run("implement") == 0
+    prompt = world.calls("claude")[1]["prompt_file"]
+    assert "err-99" in prompt and "err-60" in prompt and "err-59\n" not in prompt
+    assert "[… 60 earlier lines left out …]" in prompt
+
+
+def test_a_gate_closes_on_any_verdict_spelling() -> None:
+    # Loop row L2-1: a renamed green verdict must not swallow the following red gate.
+    output = [
+        "── [ruff] $ ruff",
+        "ok",
+        "── [ruff] green",
+        "── [pytest] $ pytest",
+        "FAILED y",
+        "── [pytest] RED (block) — x",
+    ]
+    found = stage2.red_sections("\n".join(output))
+    assert found is not None and "FAILED y" in found and "ok" not in found
+
+
+def test_a_frame_quoted_inside_a_gate_opens_no_section() -> None:
+    # Loop row L1-2: another gate's frames printed inside the open gate are data. Accepted limit: a quoted end
+    # line of the open gate itself is indistinguishable from the real one and closes the section there.
+    body = ["── [ghost] $ quoted", "── [ghost] RED (block) — quoted", "real-failure"]
+    found = stage2.red_sections("\n".join(_gate("pytest", body, "red") + _gate("ruff", ["ok"], "green")))
+    assert found.count("── [pytest] $") == 1 and "real-failure" in found
+    assert found.splitlines()[-1].startswith("── [pytest] RED (block) — der Lauf ist rot.")
+
+
+def test_red_sections_are_bounded_and_say_what_they_left_out() -> None:
+    # runner-red-gate criterion 2, phase 6 F-2: markers count against both bounds.
+    long = _gate("pytest", [f"trace-{n}" for n in range(1000)], "red")
+    found = stage2.red_sections("\n".join(long))
+    lines = found.splitlines()
+    assert len(lines) == stage2.RED_SECTION_LINES and "trace-999" in found and "trace-0\n" not in found
+    assert "lines of this gate left out" in lines[1] and lines[0].startswith("── [pytest] $")
+    assert lines[-1].startswith("── [pytest] RED (block)")
+    for count in (2, 3, 4, 6, 7, 70):
+        many = []
+        for number in range(count):
+            many += _gate(f"gate-{number}", [f"g{number}-{n}" for n in range(100)], "red")
+        assert len(stage2.red_sections("\n".join(many)).splitlines()) <= stage2.RED_TOTAL_LINES, count
+
+
+def test_every_blocking_gate_keeps_its_frame_and_last_line() -> None:
+    # Phase 6, F-1: the budget is shared, so the fourth of four red gates is not left out.
+    many = []
+    for number in range(4):
+        many += _gate(f"gate-{number}", [f"g{number}-{n}" for n in range(100)], "red")
+    found = stage2.red_sections("\n".join(many))
+    for number in range(4):
+        assert f"── [gate-{number}] RED (block)" in found and f"g{number}-99" in found, number
+
+
+def test_a_frame_printed_onto_a_gates_last_line_is_still_a_frame() -> None:
+    # Phase 6, F-3: a gate whose output ends without a newline must not swallow the gates after it.
+    output = ["── [ruff] $ ruff", "no newline at the end── [ruff] gruen", *_gate("pytest", ["FAILED z"], "red")]
+    output += [f"README.md:{n} error MD013" for n in range(500)]
+    found = stage2.red_sections("\n".join(output))
+    assert found is not None and "FAILED z" in found and "no newline" not in found
+
+
+def test_the_frames_red_sections_reads_are_the_ones_verify_all_prints() -> None:
+    # runner-red-gate pre-mortem: verify_all.sh renames its frame lines and the parser finds nothing.
+    # The printed format, not the shell spelling (loop row L1-3): `── [<gate>] $ ` and `── [<gate>] RED (block)`.
+    script = (REPO_ROOT / "scripts" / "verify_all.sh").read_text(encoding="utf-8")
+    assert re.search(r"── \[\$\{?\w+\}?\] \$ ", script) and re.search(r"── \[\$\{?\w+\}?\] RED \(block\)", script)
+    assert stage2.GATE_START.match("── [pytest] $ make test") and stage2.GATE_END.match("── [pytest] RED (block) — x")
+
+
+def test_without_a_red_frame_the_repair_prompt_keeps_the_tail(world: World) -> None:
+    # runner-red-gate criterion 3. Planted fault: empty diagnostics when nothing is framed.
+    prompt = _red_run(world, "\n".join(f"make-{n}" for n in range(100)))
+    assert "make-99" in prompt and "make-20" in prompt and "make-19" not in prompt
+
+
+def test_a_red_section_is_scrubbed_of_the_glm_key(world: World) -> None:
+    # runner-red-gate criterion 4. Planted fault: the red section passed unscrubbed.
+    output = "\n".join(_gate("pytest", [f"E   AssertionError: token {KEY}"], "red"))
+    prompt = _red_run(world, output)
+    assert "── [pytest] RED (block)" in prompt and KEY not in prompt
+
+
 def test_a_time_heading_deleted_mid_run_becomes_a_repair_diagnostic(world: World) -> None:
     valid = "---\ntitle: Plan\nupdated: 2026-10-07\nbead: demo-1\n---\n\n# Plan\n\n## Time used\n"
     world.script(
