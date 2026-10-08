@@ -61,6 +61,11 @@ typed: a hand-kept list of files ages exactly as fast as files are added.
 | [`changes/research-currency/plan.md`](changes/research-currency/plan.md) | draft | partial | 2026-10-05 | coding-harness-pu9 |
 | [`changes/research-currency/research.md`](changes/research-currency/research.md) | draft | partial | 2026-10-05 | coding-harness-pu9 |
 | [`changes/research-currency/spec.md`](changes/research-currency/spec.md) | draft | partial | 2026-10-05 | coding-harness-pu9 |
+| [`changes/runner-derived-files/decisions.md`](changes/runner-derived-files/decisions.md) | draft | partial | 2026-10-08 | coding-harness-mfv |
+| [`changes/runner-derived-files/findings.md`](changes/runner-derived-files/findings.md) | draft | none | 2026-10-08 | coding-harness-mfv |
+| [`changes/runner-derived-files/plan.md`](changes/runner-derived-files/plan.md) | draft | partial | 2026-10-08 | coding-harness-mfv |
+| [`changes/runner-derived-files/research.md`](changes/runner-derived-files/research.md) | draft | partial | 2026-10-08 | coding-harness-mfv |
+| [`changes/runner-derived-files/spec.md`](changes/runner-derived-files/spec.md) | draft | partial | 2026-10-08 | coding-harness-mfv |
 | [`changes/runner-red-gate/findings.md`](changes/runner-red-gate/findings.md) | draft | none | 2026-10-08 | coding-harness-zci |
 | [`changes/runner-red-gate/plan.md`](changes/runner-red-gate/plan.md) | draft | partial | 2026-10-08 | coding-harness-zci |
 | [`changes/runner-red-gate/research.md`](changes/runner-red-gate/research.md) | draft | partial | 2026-10-08 | coding-harness-zci |
