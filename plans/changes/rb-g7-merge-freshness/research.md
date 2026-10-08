@@ -137,3 +137,63 @@ moves before the merge, the green check describes a merge that will not
 happen. Only a ruleset rule "require branches to be up to date before
 merging" (strict status checks) closes that gap; the asserted floor does not
 contain it (§4), and whether the live ruleset does is not measured here.
+
+## Addendum — spec phase, 2026-10-08
+
+Gaps the spec needed, closed by reading (worktree at `eae78a3`; GitHub API
+with the maintainer's `gh` login, GET only; GitHub documentation read as text).
+
+- **The live ruleset lacks the up-to-date requirement.** `gh api
+  'repos/{owner}/{repo}/rules/branches/main'` (2026-10-08): the
+  `required_status_checks` rule of ruleset `24528176` carries
+  `parameters: {strict_required_status_checks_policy: false,
+  do_not_enforce_on_create: false, required_status_checks: [{context: verify,
+  integration_id: 15368}]}`. The key sits in the same `parameters` object
+  `tests/test_repo_settings.py` already reads `required_status_checks` from;
+  `rulesets/24528176` shows the same rule. Answers §6, second bullet.
+- **What the key means** (REST "Repository rules"):
+  `strict_required_status_checks_policy` — "Whether pull requests targeting a
+  matching branch must be tested with the latest code. This setting will not
+  take effect unless at least one status check is enabled." In the web form
+  it is the checkbox "Require branches to be up to date before merging" under
+  "Require status checks to pass" ("Available rules for rulesets"). Rules of
+  several rulesets on one branch are aggregated, and "the most restrictive
+  version of the rule applies" ("About rulesets"). A ruleset is edited under
+  Settings → Rules → Rulesets → its name → "Save changes".
+- **LakeSwitch already asks for it.** Ruleset `22305982` of
+  `MPAdesso/lakeswitch-ai` (2026-10-08): `strict_required_status_checks_policy:
+  true`, checks `verify` and `floor`, neither pinned to an app. Its workflows
+  `verify.yml` and `floor.yml` check out with `actions/checkout@v4` and no
+  `ref:` (local clone at `471df3f`, 2026-09-30, not fetched).
+- **The provenance map is `provenance.yaml` at the root**, not under
+  `decisions/`: `docs/governance/regelwerk.md` and
+  `docs/governance/quality-gates.md` are `allowed: [human-decided]`,
+  `frontmatter: required`; `prompts/` is `human-written`, no header.
+- **A mutation-test name in `tests/test_ci.py` is a trap.** That file names
+  `plans_registry.py`, and `test_the_mutation_ratchet_only_turns_one_way`
+  counts any `MUTATIONS_NAMEN` match in a file that mentions a script as
+  evidence for that script's gate; `plans-registry` stands in
+  `OHNE_MUTATIONSTEST`, so such a name turns the ratchet red. No test in the
+  file matches today; `MAY_BE_WRITER_ONLY`'s comment names the trap
+  (rb-m6-one-account, D8).
+- **The kit probe has no room.** `REIST_NICHT` holds 33 entries and `DECKEL`
+  is 33. `tests/test_ci.py`, `tests/test_repo_settings.py`, `decisions/`,
+  `.github/workflows/ci.yml`, `scripts/ci_gates.py` and
+  `scripts/ramp_valves.py` travel as `mechanismus`; `tests/test_ramp_valves.py`
+  does not (catch-all `bestand`), which is why
+  `test_rules_at_level_three_or_higher_name_an_existing_enforcer[RB-G7]` is red
+  in the probe and listed.
+- **The valve falls due the moment its test exists.** `_enforcer_exists` is a
+  text search; once `tests/test_ci.py` defines the function, `ramp_valves.py`
+  exits 1 until the entry leaves `REGEL_VENTILE`, and `test_regelwerk.py`
+  needs `Ramp:merge-freshness` out of the RB-G7 row in the same commit.
+- **The merge flow is written in `prompts/07-commit.md`**, "The merge" (six
+  steps); it has no step for a branch that is behind. `docs/WORKFLOW.md`
+  points there and states no merge mechanics itself. `.claude/settings.json`
+  asks before `gh pr merge`, not before `gh pr update-branch` (gh 2.101.0
+  has the command; default: a merge commit from the base).
+- **`plans/INDEX.md` lists every artefact file**, so a new `spec.md` or
+  `plan.md` needs `python3 scripts/plans_registry.py --index`.
+- **Baseline:** `make verify` at `eae78a3` green (pytest 1125 passed,
+  16 skipped; gate `ruleset` 82 passed against the live ruleset);
+  `ramp_valves.py --format=json` 26 valves, none due.
