@@ -48,3 +48,8 @@ Pre-mortem:  suppose it failed: most likely because a new rule cut a name a real
 created to `make verify` green): code, tests, measurement (226 → 226;
 251 → 248, the three false links), four planted faults each turned a test
 red. The clock readings are the shell's `date -u` before and after.
+
+2026-10-09 00:00–00:25 UTC (approximate, from the commit times of `7d6b62d`
+and the round-2 repair): two phase-6 rounds, six BLOCKERs repaired. No third
+phase-6 round was run; the spec now names what the scanner follows and its
+limits instead.
