@@ -515,6 +515,12 @@ def test_a_substitution_nests_its_own_quotes() -> None:
     # phase 6, F-3: a case pattern's `)` inside a substitution does not close it; `esac)` does
     case = "x=\"$(case x in\nx)\n# c\nprintf '%s' ok;;\nesac)\"\n# d"
     assert tm._strip_comments(case) == "x=\"$(case x in\nx)\n\nprintf '%s' ok;;\nesac)\"\n"
+    # phase 6, F-4: `case` as an argument is a word, not a reserved word
+    assert tm._strip_comments('x="$(echo case)" # c\n# d') == 'x="$(echo case)" \n'
+    # phase 6, F-5: two backslashes before `$(` escape each other; the substitution is live
+    assert tm._strip_comments('x="\\\\$(\n# c\n)"\n# d') == 'x="\\\\$(\n\n)"\n'
+    # phase 6, F-6: a `)` inside `${v%)}` belongs to the expansion
+    assert tm._strip_comments('x="$(printf %s ${v%)}\n# c\n)"\n# d') == 'x="$(printf %s ${v%)}\n\n)"\n'
     # the shell itself reads an apostrophe in plain text as a quote: there the limit stays
     assert tm._strip_comments("echo don't # a\n# b") == "echo don't # a\n# b"
 

@@ -209,9 +209,10 @@ _HEREDOC = re.compile(r"<<-?[ \t]*(?:'([^']+)'|\"([^\"]+)\"|\\?([A-Za-z_][A-Za-z
 
 # The scan state across lines: one entry per open command substitution `$( … )`, the outermost first. Each
 # holds the quote open in that context ("" none, `'`, `"`, or `$'` for an ANSI-C string), its count of
-# unquoted `(` still to close, and its count of `case` still waiting for `esac`.
-State = tuple[tuple[str, int, int], ...]
-OUTSIDE: State = (("", 0, 0),)
+# unquoted `(` still to close, its count of `case` still waiting for `esac`, and its kind: `(` for a
+# command substitution, `{` for a parameter expansion `${ … }`, "" for the file itself.
+State = tuple[tuple[str, int, int, str], ...]
+OUTSIDE: State = (("", 0, 0, ""),)
 
 
 def _live_dollar(line: str, i: int) -> bool:
@@ -223,7 +224,11 @@ def _live_dollar(line: str, i: int) -> bool:
     start = i
     while start > 0 and line[start - 1] == "$":
         start -= 1
-    position = i - start + 1 - (1 if start > 0 and line[start - 1] == "\\" else 0)
+    slashes = start
+    while slashes > 0 and line[slashes - 1] == "\\":
+        slashes -= 1
+    escaped = (start - slashes) % 2 == 1  # `\\$` escapes the dollar, `\\\\$` only the backslash (F-5)
+    position = i - start + 1 - (1 if escaped else 0)
     return position % 2 == 1
 
 
@@ -244,6 +249,7 @@ def _scan(line: str, state: State, yaml: bool = False) -> tuple[str, State, list
     stack = [list(context) for context in state]
     heredocs: list[str] = []
     blank = True  # the first character of a line counts as following a blank
+    command = True  # a reserved word counts only where a command starts (F-4)
     i = 0
     while i < len(line):
         char = line[i]
@@ -255,10 +261,21 @@ def _scan(line: str, state: State, yaml: bool = False) -> tuple[str, State, list
         if quote in ("'", "$'"):
             if char == "'":
                 stack[-1][0] = ""
-        elif line.startswith("$(", i) and _live_dollar(line, i):
-            stack.append(["", 0, 0])  # inside double quotes too: a substitution starts its own quoting
+        elif line.startswith("${", i) and _live_dollar(line, i):
+            stack.append(["", 0, 0, "{"])  # a `)` or `#` inside `${v%)}` belongs to the expansion (F-6)
             i += 2
             blank = False
+            continue
+        elif stack[-1][3] == "{" and quote == "" and char == "}":
+            stack.pop()
+            i += 1
+            blank = command = False
+            continue
+        elif line.startswith("$(", i) and _live_dollar(line, i):
+            stack.append(["", 0, 0, "("])  # inside double quotes too: a substitution starts its own quoting
+            i += 2
+            blank = False
+            command = True
             continue
         elif quote == '"':
             if char == '"':
@@ -270,22 +287,24 @@ def _scan(line: str, state: State, yaml: bool = False) -> tuple[str, State, list
             if not (yaml and letters):
                 ansi = i > 0 and line[i - 1] == "$" and _live_dollar(line, i - 1)
                 stack[-1][0] = "$'" if ansi else "'"
-        elif len(stack) > 1 and _word(line, i, "case"):
+        elif stack[-1][3] == "{":
+            pass  # inside an expansion only quotes, nested expansions and its `}` count
+        elif command and stack[-1][3] == "(" and _word(line, i, "case"):
             stack[-1][2] += 1  # a case pattern's `)` inside a substitution closes nothing (F-3)
             i += 4
-            blank = False
+            blank = command = False
             continue
-        elif len(stack) > 1 and stack[-1][2] and _word(line, i, "esac"):
+        elif command and stack[-1][3] == "(" and stack[-1][2] and _word(line, i, "esac"):
             stack[-1][2] -= 1
             i += 4
-            blank = False
+            blank = command = False
             continue
         elif char == "(":
             stack[-1][1] += 1
         elif char == ")":
             if stack[-1][1]:
                 stack[-1][1] -= 1
-            elif len(stack) > 1 and not stack[-1][2]:
+            elif stack[-1][3] == "(" and not stack[-1][2]:
                 stack.pop()
         elif char == "#" and blank:
             return line[:i], tuple(tuple(context) for context in stack), heredocs
@@ -297,6 +316,10 @@ def _scan(line: str, state: State, yaml: bool = False) -> tuple[str, State, list
             blank = False
             continue
         blank = char in " \t"
+        if char in ";|&(":
+            command = True
+        elif not blank:
+            command = False
         i += 1
     return line, tuple(tuple(context) for context in stack), heredocs
 
@@ -309,8 +332,9 @@ def _strip_comments(body: str, yaml: bool = False) -> str:
     fragment of a URL (`/#top`) are code, `"a # b"` is a string, and `echo hi  # x` keeps
     `echo hi`. A backslash outside single quotes escapes the next character. A quote is followed
     across lines, so an inner line of a quote that runs over several lines is code, and so is a
-    heredoc body, up to its end line. Command substitutions nest their own quotes, `$'…'` takes
-    escaped quotes, and in YAML an apostrophe inside a word is a letter (bead coding-harness-cff).
+    heredoc body, up to its end line. Command substitutions nest their own quotes and `case`
+    patterns, `${…}` holds its own `)` and `#`, `$'…'` takes escaped quotes, `$$` and an escaped
+    dollar open nothing, and in YAML an apostrophe inside a word is a letter (bead coding-harness-cff).
     It does not parse the shell: a quote it still misreads - an apostrophe in a shell script's
     plain text, an apostrophe in YAML that does not stand between two letters (`users'`), a quote
     in backticks, `<<$end` - flips the rest of the file, and the error runs

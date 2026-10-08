@@ -22,10 +22,24 @@ appetite: 2
 The comment rule follows the two constructs that flipped files in F-10, and
 keeps every accepted case. Inputs: [`research.md`](research.md).
 
+## What the scanner follows, and what it does not
+
+It follows quotes (`'`, `"`, `$'…'`), command substitutions `$( … )` with
+their own quoting, parameter expansions `${ … }`, `case … esac` at command
+position inside a substitution, escaped and paired dollars (`\$`, `$$`),
+and heredocs. It is not a shell parser: backticks, arithmetic outside a
+substitution, `<<$end`, reserved words other than `case`, and a plain-text
+apostrophe in a shell script stay named limits — a quote misread there still
+flips the rest of the file, and links can be false or missing (phase 6 of
+this change found six such cases in two rounds; each one named is now
+handled and tested).
+
 ## Acceptance criteria
 
 1. A command substitution `$( … )` opens a quoting context of its own,
-   inside double quotes too, and closes with its matching `)`.
+   inside double quotes too, and closes with its matching `)` — not with a
+   case pattern's `)` or one inside `${ … }`; `$$(` and `\$(` open none,
+   `\\$(` does.
    *Refuted by:* line 31 of portfolio's `format-code.sh`, verbatim,
    leaving the next line's comment as code.
 2. In `$'…'` a backslash escapes the quote.

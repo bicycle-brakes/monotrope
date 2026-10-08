@@ -54,3 +54,15 @@ The answer was not only six-cell rows; what is not one is kept below as it came.
 |R-3|MINOR|MAINT|doc|scripts/touch_map.py:283|The docstring's list of quotes the scanner still misreads reads as complete but leaves out an apostrophe in a YAML word that does not sit between two letters — a value that ends the line, `name: Don't` — which still opens a quote and flips the rest of the file, exactly the failure mode the change set out to remove.
 
 Stage-2 call, 2026-10-08: review (loop marks) · endpoint openai-codex · model gpt-6.1-sol · leak check clean over 270 files, 634 commits, 12 rules.
+
+Stage-2 call, 2026-10-08: review · endpoint openai-codex · model gpt-6.1-sol · leak check clean over 270 files, 636 commits, 12 rules.
+
+## Phase 6 — Codex, 2026-10-08
+
+| ID | Severity | Dimension | Origin | Where | Finding | Reviewer | Status | Broke a test |
+|---|---|---|---|---|---|---|---|---|
+| F-4 | BLOCKER | SPEC | fix-r3 | `scripts/touch_map.py:273` | For valid Bash `x="$(echo case)" # scripts/comment_tool.py`, followed by another comment, the scanner treats the argument `case` as a reserved word. Its unmatched case counter prevents the substitution from closing, so both comments survive and produce false links. Both must be removed; `9453197` handled this input correctly. [AC 1] | Codex | open | — |
+| F-5 | BLOCKER | SPEC | fix-r3 | `scripts/touch_map.py:226` | For `x="\\$(\n# scripts/comment_tool.py\n)"`, where `\\` means two backslashes and `\n` means newlines, Bash recognizes the substitution because the backslashes escape each other. `_live_dollar` instead treats the dollar as escaped, preserves the inner comment and creates a false link. The comment must be removed; `9453197` handled this input correctly. [AC 1] | Codex | open | — |
+| F-6 | BLOCKER | SPEC | base | `scripts/touch_map.py:285` | For valid Bash `x="$(printf %s ${v%)}\n# scripts/comment_tool.py\n)"`, with `\n` representing newlines, the `)` inside `${v%)}` belongs to the suffix-removal pattern. The scanner incorrectly closes the command substitution there, preserving the subsequent comment and creating a false link. Only the final `)` closes the substitution; the comment must be removed. [AC 1] | Codex | open | — |
+
+Phase 6 verdict: codex 01a118d3-3548-7d30-bfd2-2892d1942ef6, 2026-10-08
