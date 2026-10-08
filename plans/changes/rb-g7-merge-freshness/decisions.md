@@ -17,7 +17,7 @@ tags: [decisions, governance, ramp-valve, rb-g7]
 
 # Decisions — rb-g7-merge-freshness
 
-## Open
+## Answered 2026-10-08
 
 - [DECISION] What does "the merge state is checked, not the branch head"
   (RB-G7) require, now that its valve falls due on 2026-10-31?
@@ -37,3 +37,15 @@ tags: [decisions, governance, ramp-valve, rb-g7]
   Recommended: 1 — it makes the rule's words true by a test and closes the
   valve before its date; option 2 can follow as the ruleset upgrade
   `tests/test_repo_settings.py` already anticipates ("The five are a floor").
+
+  **Answer (maintainer, Claude Code session of 2026-10-08): option 2** —
+  merge ref and up-to-date branches. Stated in German as "option 2", after
+  the orchestrating session had recommended option 1 and named its cost
+  (every open pull request is updated and re-verified after each merge) and
+  the gap it closes (a green check computed against an older `main`, e.g. two
+  open pull requests changing the same file). What this settles for the
+  change: RB-G7 keeps its wording; CI verifying the merge ref is asserted in
+  `tests/test_ci.py`; the branch ruleset's "require branches to be up to
+  date" is asserted in `tests/test_repo_settings.py`; the maintainer changes
+  the live ruleset. The rule set is `human-decided`, so the change goes out
+  as a decision pull request (`AGENTS.md` house rule 8).
