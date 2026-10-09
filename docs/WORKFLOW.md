@@ -886,6 +886,26 @@ evaluation, and its pull request applies the fallback. This replaces the three m
 D-13 asked for before the first foreign call; what the replacement gives up is
 the measured stage-1 baseline (ADR 0007).
 
+**The count is generated, not typed.** `python3 scripts/stage2_runs.py
+<change> … [--rev <commit>]` reads each change's `findings.md` and
+`research.md` (active or archived) with the runner's own row and line
+constants and prints, per change, the loop rows taken / rejected, the rows
+whose repair broke a test, the phase-6 rounds, the phase-2a and phase-6 rows
+by severity, the loop rows marked `disagree`, and the calls behind a clean
+leak check; under that, D-13's criteria as numbers. It counts; it applies no
+rule. At `cc020f5` (2026-10-08), over the first three runs:
+
+| D-13 criterion | Number at `cc020f5` |
+|---|---|
+| 1 — replaced by the first three stage-2 runs | 3 runs measured; 0 rows marked as having broken a test |
+| 2 — lakeswitch-ai's disclosure decision | no number: it governs content this repository never sends, and stays lakeswitch-ai's (ADR 0007) |
+| 3 — leak check green in every run | 18 of 18 recorded calls clean; a refused call writes no line, so a refusal is not in the count |
+| 4 — foreign endpoint declared with residency | 3 of 3 foreign routes cleared by `model-endpoints.yaml` |
+
+Tokens and cost per vendor are not recorded by the runner and are not in
+the count. The generated table and what it adds to the typed one:
+`docs/research/2026-10-08-stage2-three-runs.md`, addendum of 2026-10-08.
+
 > **Two caveats, and the second one holds here in particular.** The vendors'
 > coding subscriptions are contractually limited to officially supported tools,
 > and each runs through its own client: Claude Code for Z.ai, the Codex CLI for

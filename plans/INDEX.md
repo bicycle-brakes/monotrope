@@ -91,6 +91,10 @@ typed: a hand-kept list of files ages exactly as fast as files are added.
 | [`changes/stage2-mimo/plan.md`](changes/stage2-mimo/plan.md) | draft | none | 2026-10-08 | coding-harness-ymx |
 | [`changes/stage2-mimo/research.md`](changes/stage2-mimo/research.md) | draft | none | 2026-10-07 | coding-harness-ymx |
 | [`changes/stage2-mimo/spec.md`](changes/stage2-mimo/spec.md) | draft | none | 2026-10-08 | coding-harness-ymx |
+| [`changes/stage2-runs-count/findings.md`](changes/stage2-runs-count/findings.md) | draft | none | 2026-10-08 | coding-harness-kw0 |
+| [`changes/stage2-runs-count/plan.md`](changes/stage2-runs-count/plan.md) | draft | partial | 2026-10-08 | coding-harness-kw0 |
+| [`changes/stage2-runs-count/research.md`](changes/stage2-runs-count/research.md) | draft | partial | 2026-10-08 | coding-harness-kw0 |
+| [`changes/stage2-runs-count/spec.md`](changes/stage2-runs-count/spec.md) | draft | partial | 2026-10-08 | coding-harness-kw0 |
 | [`changes/stage2-session/adr-0007-session-amendment.md`](changes/stage2-session/adr-0007-session-amendment.md) | draft | partial | 2026-10-07 | coding-harness-amp |
 | [`changes/stage2-session/decisions.md`](changes/stage2-session/decisions.md) | draft | partial | 2026-10-07 | coding-harness-amp |
 | [`changes/stage2-session/design.md`](changes/stage2-session/design.md) | draft | partial | 2026-10-07 | coding-harness-amp |
