@@ -4,7 +4,8 @@
 //
 // A case is { mode: "handler", cwd, hasUI, answer, explode, event } (the
 // extension as Pi runs it: its default export, its `tool_call` handler) or
-// { mode: "decide", event, env } (the pure decision, for what the host fixes).
+// { mode: "decide", event, env } (the pure decision, for what the host fixes) or
+// { mode: "platform", platform } (the file-system case rule of a host).
 import { pathToFileURL } from "node:url";
 
 const chunks = [];
@@ -14,6 +15,10 @@ const policy = await import(pathToFileURL(request.module).href);
 
 const answers = [];
 for (const item of request.cases) {
+  if (item.mode === "platform") {
+    answers.push({ caseInsensitive: policy.caseInsensitiveOn(item.platform) });
+    continue;
+  }
   if (item.mode === "decide") {
     try {
       answers.push({ decision: policy.decide(item.event, item.env) });
