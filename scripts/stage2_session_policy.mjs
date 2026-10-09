@@ -31,19 +31,33 @@ export const WRITE_TOOLS = ["edit", "write"];
 export const PROTECTED_DIRS = [".stage2-sessions", ".pi"];
 
 // `git`, then any global options (`-C <dir>`, `-c k=v`, `--no-pager`), then a space: the verb follows.
-const GIT = String.raw`\bgit(?:\s+-\S+(?:\s+[^-\s]\S*)?)*\s+`;
+// An option value may be quoted and hold a space (`-C "my dir"`).
+const VALUE = String.raw`(?:"[^"]*"|'[^']*'|[^-\s"']\S*)`;
+const GIT = String.raw`\bgit(?:\s+-\S+(?:\s+${VALUE})?)*\s+`;
+// The rest of one simple command: a quoted string may hold `;`, `|` or `&`.
+const ARGS = String.raw`(?:"[^"]*"|'[^']*'|[^\n;|&"'])*`;
 
 // Dangerous `bash` patterns. The first three are the ones of Pi's shipped
-// example `permission-gate.ts` (Q-2); the last two are the maintainer's addition
-// (Q-8): the git commands that discard unsaved work. Network programs and
+// example `permission-gate.ts` (Q-2); the rest are the maintainer's addition
+// (Q-8 and its 2026-10-09 extension): the git commands that discard unsaved
+// work. The patterns read the text of the command and do not parse the shell:
+// a word split by quotes (`s""udo`) or built by expansion is not recognised. Network programs and
 // `git push` do not ask (Q-7, Q-8). The list is one array: change it here and
 // in its test, and record the decision in plans/changes/stage2-session/.
 export const DANGEROUS = [
-  { id: "rm-recursive", pattern: /\brm\b[^\n;|&]*\s(-[a-zA-Z]*[rR][a-zA-Z]*|--recursive)\b/ },
+  {
+    id: "rm-recursive",
+    pattern: new RegExp(String.raw`\brm\b${ARGS}\s(-[a-zA-Z]*[rR][a-zA-Z]*|--recursive)\b`),
+  },
   { id: "sudo", pattern: /\bsudo\b/ },
   { id: "chmod-777", pattern: /\b(chmod|chown)\b.*777/ },
-  { id: "git-reset-hard", pattern: new RegExp(`${GIT}reset\\b[^\\n;|&]*--hard\\b`) },
+  { id: "git-reset-hard", pattern: new RegExp(`${GIT}reset\\b${ARGS}--hard\\b`) },
   { id: "git-clean", pattern: new RegExp(`${GIT}clean\\b`) },
+  // Also discarding unsaved edits: `checkout -- <path>`, `checkout .`, `checkout -f`,
+  // `restore` (unless it only unstages).
+  { id: "git-checkout-discard", pattern: new RegExp(`${GIT}checkout\\b${ARGS}(\\s--(\\s|$)|\\s(-f|--force)\\b|\\s\\.(\\s|$))`) },
+  { id: "git-restore", pattern: new RegExp(`${GIT}restore\\b(?!${ARGS}(--staged|\\s-[a-zA-Z]*S)\\b)`) },
+  { id: "git-restore-worktree", pattern: new RegExp(`${GIT}restore\\b${ARGS}(--worktree|\\s-[a-zA-Z]*W)\\b`) },
 ];
 
 const UNICODE_SPACES = /[  -   　]/g;
@@ -86,6 +100,10 @@ function fold(path, caseInsensitive) {
   return caseInsensitive ? path.toLowerCase() : path;
 }
 
+export function caseInsensitiveOn(platform) {
+  return platform === "darwin" || platform === "win32";
+}
+
 export function isInside(root, target, caseInsensitive) {
   const rel = relative(fold(root, caseInsensitive), fold(target, caseInsensitive));
   return rel === "" || (rel !== ".." && !rel.startsWith(`..${sep}`) && !isAbsolute(rel));
@@ -111,7 +129,9 @@ export function decide(event, env) {
   if (tool === "bash") {
     const command = input && input.command;
     if (typeof command !== "string") return block("a bash call without a command");
-    const hit = DANGEROUS.find((entry) => entry.pattern.test(command));
+    // A backslash-newline joins the lines the way the shell reads them.
+    const joined = command.replace(/\\\r?\n/g, " ");
+    const hit = DANGEROUS.find((entry) => entry.pattern.test(joined));
     return hit
       ? { action: "ask", title: `Dangerous command (${hit.id}):\n\n  ${command}\n\nAllow?` }
       : { action: "allow" };
@@ -157,7 +177,7 @@ export default function (pi) {
         cwd: ctx.cwd,
         home: homedir(),
         ownFile: THIS_FILE,
-        caseInsensitive: process.platform === "darwin" || process.platform === "win32",
+        caseInsensitive: caseInsensitiveOn(process.platform),
       });
       if (verdict.action === "block") return { block: true, reason: verdict.reason };
       if (verdict.action === "ask") {
