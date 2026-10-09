@@ -105,17 +105,22 @@ def measure(findings: str, research: str = "") -> Counts:
     """The counts of one change, from the text of its findings.md and research.md."""
     counts = Counts(rounds=len(stage2.VERDICT_LINE.findall(findings)))
     section = None
+    # A table's header is the line above its separator, whatever its first cell; any line that is no
+    # table line ends the table, a heading included (phase 6, F-1, F-5, F-6).
     header: list[str] = []
+    previous: list[str] | None = None
     for line in findings.splitlines():
-        if line.startswith("## "):
-            section = _section(line)
-            continue
         cells = stage2.split_row(line)
         if not cells:
-            header = []
+            header, previous = [], None
+            if line.startswith("## "):
+                section = _section(line)
             continue
-        if cells[0].lower() == "id":
-            header = cells
+        if all(re.fullmatch(r":?-+:?", cell) for cell in cells):
+            header, previous = previous or [], None
+            continue
+        if previous is None and not header:
+            previous = cells
         if stage2._furniture(cells):
             continue
         # Every table that has the column, whatever its section or width (phase 6, F-1).

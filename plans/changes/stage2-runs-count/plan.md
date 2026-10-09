@@ -79,3 +79,9 @@ with the column, F-2 a prefixed call line that does not parse, F-3 `--rev`
 resolved once, F-4 a malformed declaration reported, not raised); seventeen
 tests in all. The span of this repair was interrupted by a session limit
 and is not clocked.
+
+Phase 6 round 2 (Codex, 2026-10-09) raised two BLOCKERs on the F-1 repair
+(F-5 a header without `ID` first, F-6 a header carried past a heading), both
+taken and closed by one test red under both planted faults; eighteen tests.
+2026-10-09 02:53–03:05 UTC, about 12 min, orchestrator clock, Codex's wait
+included.

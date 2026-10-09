@@ -370,3 +370,13 @@ def test_a_declaration_of_the_wrong_shape_is_reported_not_raised(tmp_path: Path,
     assert code == 0
     assert "0 of 3 foreign routes cleared" in out
     assert "has a shape the declaration check cannot read" in out
+
+
+def test_a_header_is_the_line_above_the_separator_and_ends_with_its_table() -> None:
+    """Fault: a header known only by a first cell `ID` (F-5), or kept past a heading into the next table (F-6)."""
+    no_id = stage2.render_table(["Finding", "Broke a test"], [["X-1", "yes"]])
+    assert stage2_runs.measure(HEADER + "\n" + no_id + "\n").broke == 1
+    first = stage2.render_table(["ID", "Broke a test"], [["X-1", "no"]])
+    second = stage2.render_table(["Name", "Available"], [["example", "yes"]])
+    assert stage2_runs.measure(HEADER + "\n" + first + "\n## Availability\n" + second + "\n").broke == 0
+    assert stage2_runs.measure(HEADER + "\n" + first + "\nprose\n" + second + "\n").broke == 0

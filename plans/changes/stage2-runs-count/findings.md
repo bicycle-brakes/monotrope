@@ -54,3 +54,14 @@ Reviewer session: codex 01a11d92-1deb-7832-a399-7fb4224bad2c — a fresh session
 Rounds run: 2
 
 Stage-2 call, 2026-10-09: review (loop marks) · endpoint openai-codex · model gpt-6.1-sol · leak check clean over 311 files, 715 commits, 12 rules.
+
+Stage-2 call, 2026-10-09: review · endpoint openai-codex · model gpt-6.1-sol · leak check clean over 311 files, 716 commits, 12 rules.
+
+## Phase 6 — Codex, 2026-10-09
+
+| ID | Severity | Dimension | Origin | Where | Finding | Reviewer | Status | Broke a test |
+|---|---|---|---|---|---|---|---|---|
+| F-5 | BLOCKER | SPEC | base | `scripts/stage2_runs.py:117–127` | A table with columns `Finding`, `Broke a test` and row `X-1`, `yes` still reports 0 instead of 1. Headers are recognized only when their first cell is `ID`; the new regression test uses only such headers. This supplies a failing case beyond those repaired for F-1. [AC 4] | Codex | closed — test_a_header_is_the_line_above_the_separator_and_ends_with_its_table; red under its planted fault | no |
+| F-6 | BLOCKER | SPEC | fix-r3 | `scripts/stage2_runs.py:110–125` | A table headed `ID, Broke a test` with a `no` row, followed immediately by `## Availability` and a table headed `Name, Available` with row `example, yes`, reports one broken-test row instead of zero. The heading preserves the previous header, so the unrelated availability value is counted. Before this repair the same input returned zero. [AC 4] | Codex | closed — test_a_header_is_the_line_above_the_separator_and_ends_with_its_table; red under its planted fault | no |
+
+Phase 6 verdict: codex 01a11d92-1deb-7832-a399-7fb4224bad2c, 2026-10-09

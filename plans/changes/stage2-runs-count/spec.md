@@ -53,7 +53,9 @@ Markdown table, one row per named change, then a few summary lines.
 4. "Rows marked Broke a test: yes" counts every row of every table in the
    file, whatever its status (the workflow asks for the mark on a taken row only) —
    phase 2a, phase 6, loop or any other table whose header has the column —
-   whose `Broke a test` cell is `yes` (phase 6, F-1).
+   whose `Broke a test` cell is `yes` (phase 6, F-1). A header is the line
+   above a table's separator; a heading or any other line ends the table
+   (F-5, F-6).
    *Refuted by:* a row marked `yes` in any such table not counted.
 5. Phase-6 rounds are the number of `Phase 6 verdict:` lines
    (`VERDICT_LINE`); phase-2a and phase-6 rows are counted by severity from
