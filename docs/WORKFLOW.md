@@ -797,8 +797,8 @@ program, and the OpenCode CLI is never called. No alias, no prefix guessing, and
 session approves no endpoint: a model the declaration does not list for a session
 transport is refused before anything starts, and the Pi path opens only for the
 models that `opencode-go` lists for framework content in `model-endpoints.yaml`.
-A Pi that is not the pinned version (the runner checks it first, as for the
-review loop) is refused. `--handover <path>` names another
+A Pi that is not the pinned version is refused; the runner checks the pin after
+its argument and handover checks and before any call, so nothing is sent first. `--handover <path>` names another
 handover inside the worktree; without it the change's own `handover.md` under
 `plans/changes/<change>/` is the first prompt. The file must be a readable,
 nonempty UTF-8 regular file inside the dedicated worktree; the prompt is bounded
@@ -816,29 +816,40 @@ own user interface — so another model goes through the runner again. The tool
 permissions are a configuration, not a confinement at the operating-system
 level. Codex gets `workspace-write` with approval on request. Pi asks for no
 approval and has no sandbox, so the runner supplies one policy extension, copied
-into the session's private directory and loaded alone (`--no-extensions -e`):
-it keeps `read`, `grep`, `find`, `ls`, `edit` and `write` inside the worktree,
+into the session's private directory and loaded alone (`--no-extensions -e`).
+The session also takes `--no-mcp`, `--no-skills`, `--no-prompt-templates` and
+`--no-themes`, so an MCP server cannot add a file tool that the extension does
+not see; context files stay on, so the session reads the repository's
+`AGENTS.md` (maintainer, 2026-10-09). The extension keeps `read`, `grep`, `find`, `ls`, `edit` and `write` inside the worktree,
 keeps `edit` and `write` off its own file, `.stage2-sessions/` and `.pi/` (not
 `.git/`), and asks before a recursive `rm`, `sudo`, `chmod` or `chown` with 777,
-`git reset --hard` and `git clean`, blocking them when no UI can ask. The runner
+and before the git commands that discard unsaved work (`git reset --hard`,
+`git clean`, `git checkout -- <path>`, `git checkout .`, `git checkout -f`, and
+`git restore` unless it only unstages), blocking them when no UI can ask. The
+patterns read the command's text and do not parse the shell: a word split by
+quotes (`s""udo`), built by expansion or run through `eval` or `sh -c` is not
+recognised, and everything else the list leaves out runs unasked. The runner
 confirms only that the extension loaded (Pi lists its flag in `--help`); how its
 handlers behave is held by tests that run without Pi. Every shell command
 outside the dangerous patterns runs without a question, network programs and
 `git push` included, and a shell command, asked or not, can read what the user
-can read. The Pi session signs in with the maintainer's own `~/.pi/agent`, which
-may hold other providers' credentials, so a model switched inside the session
-can leave the declared endpoint unscanned.
+can read, the sign-in directory `~/.pi/agent` included: `cat` on it does not
+ask, and its output goes to the endpoint. The Pi session signs in with that
+directory, which may hold other providers' credentials, so a model switched
+inside the session can leave the declared endpoint unscanned. The runner
+passes neither `PI_CODING_AGENT_DIR` nor `SSH_AUTH_SOCK` on, so a custom agent
+directory is ignored and `git push` over SSH fails inside the session.
 
 One audit line goes into the change's `findings.md` per attempt, first with
-`dispatch pending.`, then — and only that line changes — `dispatch accepted.`
-or `dispatch failed (<why>).` Accepted means Terminal took the command, nothing
+`dispatch pending.`, then `dispatch accepted.` or `dispatch failed (<why>).`
+(the file's `updated:` date follows the write; no other line changes) Accepted means Terminal took the command, nothing
 more: whether the CLI started, authenticated or answered shows in the new
 window, and a missing CLI or `osascript` is refused beforehand as a
 prerequisite. The runner's launch files live in a fresh private directory under
 the gitignored `.stage2-sessions/` in the worktree; they carry the launch script
-and, for Pi, the policy extension, no prompt and no credential. A refused or failed attempt
-removes its directory, an accepted one keeps it for the session to load, and
-nothing user-owned there is ever written or deleted. The session reads no
+and, for Pi, the policy extension, no prompt and no credential. A refused or failed attempt, or one
+stopped before the dispatch, removes its directory, an accepted one keeps it for the session to load, and
+nothing user-owned there is ever written or deleted. The runner reads no
 credential file, copies no caller token, hands Pi no key and sets no Pi agent
 directory, and starts no headless verb — no `codex exec`, no Pi print or RPC
 mode, and no call to the OpenCode CLI. The verb neither runs the review loop nor
