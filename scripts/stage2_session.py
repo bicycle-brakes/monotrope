@@ -336,7 +336,7 @@ def prepare(root: Path, transport: str, cli: str, runner) -> Path:
     if transport == "pi":
         try:
             confirm_loaded(root, cli, install_policy(private, runner), runner)
-        except runner.Refused:
+        except BaseException:  # any failure, an unwritable temp directory or Ctrl-C included
             shutil.rmtree(private, ignore_errors=True)
             raise
     return private
@@ -364,7 +364,25 @@ def cli_argv(transport: str, root: Path, cli: str, model: str, prompt: str, exte
             "--",
             prompt,
         ]
-    return [cli, "--no-extensions", "-e", str(extension), "--offline", "--no-approve", "--model", model, "--", prompt]
+    # Discovery is off like in the reviewer call (spec criterion 11): no MCP servers (an MCP file tool would
+    # bypass the policy's worktree bounds), skills, prompt templates or themes. Context files stay on, so the
+    # session reads the repository's AGENTS.md (maintainer, 2026-10-09).
+    return [
+        cli,
+        "--no-extensions",
+        "--no-mcp",
+        "--no-skills",
+        "--no-prompt-templates",
+        "--no-themes",
+        "-e",
+        str(extension),
+        "--offline",
+        "--no-approve",
+        "--model",
+        model,
+        "--",
+        prompt,
+    ]
 
 
 def terminal_command(root: Path, env: dict[str, str], argv: list[str]) -> str:
@@ -501,7 +519,7 @@ def run(root: Path, change: str, model: str, handover: str | None, runner) -> No
             )
         attempt = uuid.uuid4().hex[:12]
         write_pending(ctx, runner, audit_line(runner, attempt, selection, endpoint, source, result), producer)
-    except (runner.Refused, runner.CallFailed):
+    except BaseException:  # any failure before the dispatch, Ctrl-C included, leaves no private directory
         shutil.rmtree(private, ignore_errors=True)
         raise
     accepted, detail = dispatch(terminal, private / SCRIPT_NAME, command)

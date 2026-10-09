@@ -725,8 +725,9 @@ def run_codex(ctx: Context, prompt: str, resume: str | None = None) -> tuple[str
 def require_pi() -> None:
     """Refuse unless `pi --version` prints exactly the pinned version (spec, criterion 27).
 
-    Runs before the leak check, the call line and any call, in a scratch
-    directory with no key: a Pi off the pin sends nothing.
+    Runs before the prompt check, the call line and any call, in a scratch
+    directory with no key: a Pi off the pin sends nothing. The session verb
+    calls it after its argument and handover checks.
     """
     with tempfile.TemporaryDirectory(prefix="stage2-") as tmp:
         env = foreign_env({"HOME": tmp, "PI_CODING_AGENT_DIR": tmp})
