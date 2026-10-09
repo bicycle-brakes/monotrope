@@ -4,7 +4,7 @@ status: draft
 implementation_status: none
 date: 2026-10-07
 last_reviewed: 2026-10-07
-updated: 2026-10-08
+updated: 2026-10-09
 supersedes: null
 superseded_by: null
 bead: coding-harness-ymx
@@ -475,3 +475,91 @@ its date go into the `bemerkung` of the `opencode-go` entry in
 loop runs on the ladder through Pi, at most three rounds. With the probe it is
 the only content leaving for OpenCode Go before the merge; ADR 0011 decision 7
 says so. The answer of 2026-10-07 (probe only) is widened by this one.
+
+## Addendum 2026-10-09: the phase-1a interview on ADR 0011
+
+The interview-minimums rule (decision pull request "the phase-1a interview is
+owed where the class minimums stand") owes five counted maintainer answers to
+any change that adds or changes an ADR, whatever its class and date. This
+change adds ADR 0011. The five questions below were put to the maintainer one
+at a time in the directing conversation on 2026-10-09, each with a recommended
+option and its alternatives; the answers are recorded as given. Each restates
+a position the pull request and ADR 0011 already carry, so the interview
+confirms them and changes none.
+
+## Answers
+
+## Q-1 · What may go to OpenCode Go
+
+asked: 2026-10-09, the directing conversation
+answer: only framework content, and only for the review loop (phase 4b) and
+  the probe calls; no customer code and no customer rows
+answered_by: maintainer
+status: answered
+
+In the context of a new endpoint that receives framework content, facing the
+choice between the loop only, the loop plus the spec review and the review, or
+no use at all, we decided the loop and the probe only, to achieve a bounded
+disclosure that matches ADR 0007's reading of "nothing else goes", accepting
+that the spec review and the review stay on Codex. — 2026-10-09
+
+## Q-2 · Who reviews in which phase
+
+asked: 2026-10-09, the directing conversation
+answer: the review loop runs on the OpenCode Go ladder; the spec review (2a)
+  and the review (6) stay with Codex; explore and implement stay on GLM 5.3
+  Flash
+answered_by: maintainer
+status: answered
+
+In the context of ADR 0007 naming one GLM reviewer for the loop, facing the
+choice between keeping GLM, moving the loop to the ladder, or moving phase 6
+too, we decided the loop alone moves, to achieve three independent loop
+reviewers at subscription cost while Codex still reviews last, accepting that
+ADR 0007 decisions 2 and 3 are amended by ADR 0011. — 2026-10-09
+
+## Q-3 · Where the ladder lives and when round 3 runs
+
+asked: 2026-10-09, the directing conversation
+answer: the order stands only in `model-endpoints.yaml` and no doctrine text
+  repeats it; round 3 runs only when round 2 wrote a row whose status begins
+  `taken`
+answered_by: maintainer
+status: answered
+
+In the context of a ladder of three models, facing the choice between the yaml
+alone, a repeat in the doctrine text, or three rounds every time, we decided
+the yaml alone with a conditional third round, to achieve a reorder that is a
+one-line change and a third call only when the second found something real,
+accepting that a test has to keep the doctrine from repeating the order. —
+2026-10-09
+
+## Q-4 · The unconfined-read residual risk
+
+asked: 2026-10-09, the directing conversation
+answer: accepted for the three rungs, as it was accepted for the earlier
+  reviewers on 2026-09-30
+answered_by: maintainer
+status: answered
+
+In the context of Pi offering no switch that confines `read` to the worktree,
+facing the choice between accepting the residual risk and waiting for a
+technical confinement, we decided to accept it, bounded by the prompt's request
+to read nothing outside the worktree and the repository's git directory, to
+achieve a ladder that can run now, accepting that this is a request and not a
+lock and that the leak check scans what the repository presents, not what a
+rung reads. — 2026-10-09
+
+## Q-5 · What happens when OpenCode Go refuses a model
+
+asked: 2026-10-09, the directing conversation
+answer: the run stops and reports the refusal; no second address, no second
+  launcher and no substituted model
+answered_by: maintainer
+status: answered
+
+In the context of a rung that OpenCode Go may refuse, facing the choice between
+stopping, falling back to GLM, or moving to the next rung, we decided to stop
+and report, to achieve a refusal that shows as an empty round in the loop
+record and never as a silent fallback, accepting that a refused rung costs the
+round until the declaration is repaired. — 2026-10-09
