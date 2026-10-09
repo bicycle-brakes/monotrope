@@ -223,3 +223,13 @@ the maintainer's own `~/.pi/agent`, and a key exported in the shell, we decided
 the maintainer's own `~/.pi/agent`, to achieve no extra setup step, accepting
 that the directory may hold other providers' credentials the session could
 switch to. — 2026-10-09
+
+## Note — settled instructions 3 and the OpenCode details, 2026-10-09
+
+Settled instruction 3 above ("Deny outside-worktree reads in OpenCode as far
+as its configuration supports it") and the [DETAIL] lines on OpenCode (the
+dedicated primary agent, the effective-policy check against OpenCode 1.18.35)
+are the first build's record. For the OpenCode Go path they are superseded by
+Q-1 to Q-6: the launcher is Pi and the policy is a runner-supplied extension.
+The instruction's intent stands: deny outside-worktree reads as far as the
+launcher supports it, and name the remaining limit.

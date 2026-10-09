@@ -6,7 +6,7 @@ implementation_status: partial
 date: 2026-10-07
 created: 2026-10-07
 last_reviewed: 2026-10-07
-updated: 2026-10-08
+updated: 2026-10-09
 supersedes: null
 superseded_by: null
 bead: coding-harness-amp
@@ -113,3 +113,15 @@ Phase 6 verdict: codex 01a116cd-d624-7ee0-9e14-3db0027c8eff, 2026-10-08
 Rounds run: 2
 
 Stage-2 call, 2026-10-08: review (loop marks) · endpoint openai-codex · model gpt-6.1-sol · leak check clean over 276 files, 623 commits, 12 rules.
+
+## Addendum — re-pointed to Pi, 2026-10-09
+
+No review ran. The rows above are the first build's record and stay as
+written; they name OpenCode where the code then used it. On 2026-10-09 the
+maintainer answered the phase-1a interview for the Pi move (`decisions.md`,
+Q-1 to Q-6) and approved the plan
+`docs/research/2026-10-09-session-verb-on-pi-plan.md`. Work package 2
+re-pointed `spec.md`, `design.md`, `plan.md` and the ADR 0007 amendment draft
+from the OpenCode CLI to Pi. The code in `scripts/stage2_session.py` still
+starts OpenCode; nothing is implemented or tested for Pi, and the Mac smoke
+test is unrun. Review of the Pi code (phases 4b and 6) has not started.

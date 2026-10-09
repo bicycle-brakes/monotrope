@@ -4,7 +4,7 @@ status: draft
 implementation_status: partial
 date: 2026-10-07
 last_reviewed: 2026-10-07
-updated: 2026-10-07
+updated: 2026-10-09
 supersedes: null
 superseded_by: null
 bead: coding-harness-amp
@@ -167,3 +167,37 @@ uses last matching wildcard rules.
 return resolved agent/tools without a tool option. Never request diagnostic
 tool execution or print the captured configuration. This is source evidence,
 not a measured interactive session.
+
+## Addendum — the interactive launcher moves to Pi, 2026-10-09
+
+The sections above are the first build's record, read on 2026-10-07 against
+OpenCode 1.18.35, and stay as written. On 2026-10-09 the maintainer asked for
+no more OpenCode CLI (German: "ich will keine opencode mehr benutzen"), and
+answered six questions (`decisions.md`, Q-1 to Q-6). The OpenCode Go path of
+the session verb therefore launches Pi.
+
+Source: the npm tarball of `@earendil-works/pi-coding-agent@1.1.0`, unpacked
+and read in a scratch directory; no Pi code was executed (assessment: the
+addendum of `docs/journal/handover/2026-10-09-0al-local-start.md`; plan:
+`docs/research/2026-10-09-session-verb-on-pi-plan.md`).
+
+- Pi opens its terminal UI when stdin and stdout are terminals and no print or
+  RPC mode is selected (`docs/cli.md`). It asks for no approval before a tool
+  call and has no sandbox (`docs/security.md`), so the policy must be supplied.
+- An extension's `tool_call` handler can block a call, and a failing handler
+  blocks it; `--no-extensions` still loads an explicit `-e <path>`
+  (`docs/extensions.md`, `docs/cli.md`). Shipped examples:
+  `permission-gate.ts` and `protected-paths.ts`.
+- Pi has no sub-agent tool and no web-fetch tool; its built-ins are `read`,
+  `bash`, `edit`, `write`, `grep`, `find`, `ls`.
+- Pi has no command that reports an effective policy. It lists the flags of
+  loaded extensions in `pi --help`, so the runner can confirm that the
+  extension loaded, not that its handlers behave (Q-1).
+- A login is saved in `<agent dir>/auth.json`, default `~/.pi/agent`
+  (`docs/providers.md`, `docs/configuration.md`); the key variable is
+  `OPENCODE_API_KEY` (`docs/providers.md`).
+
+Not measured: any Pi launch, any extension, any model call, behaviour inside
+Terminal opened through `osascript` (the maintainer's smoke test, work
+package 7). The `require_pi` pin in `scripts/stage2.py` ties every
+statement above to Pi 1.1.0.
