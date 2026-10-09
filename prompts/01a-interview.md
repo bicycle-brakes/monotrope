@@ -2,12 +2,19 @@
 
 **Model:** Opus 5.5 — the questions are the work, and there are few of them.
 **Result:** `plans/changes/<name>/decisions.md`
-**Gate:** every `[DECISION]` answered, or the phase recorded as skipped with a
-reason.
+**Gate:** the `interview-minimums` check green — the minimums below met, every
+`[DECISION]` answered, or the phase a skip record with a reason.
 
-Optional, and called by a human. Where the change fits in one sentence, skip it
-— the phase overhead would eat the benefit (`docs/WORKFLOW.md`, rule 2). Skipped
-is recorded in `decisions.md` as one line with the reason, not left silent.
+Owed where a minimum stands — no longer optional. A `feature` owes at least
+**three distinct, substantive** questions the maintainer answered. Creating or
+changing an ADR owes **five**, whatever the class — and a feature that also
+carries an ADR owes **five in total**, never the sum. A `spike` owes the three
+topics — learning goal, time budget, expected outcome — or a skip with its
+reason. A `bounded` change owes at least one answered question or a reasoned
+skip. Where no duty stands, the skip is still written: one skip record in
+`decisions.md` with its reason, never silence. What is settled stays settled —
+a decision already made is not asked again, and a repeated confirmation
+fulfils no minimum.
 
 ## What this phase is
 
@@ -51,20 +58,41 @@ question was a `[DETAIL]`.
 
 ## What you write
 
-`decisions.md`, one entry per decision, each a Y-statement with its date:
+`decisions.md`, one entry per decision. Every question the maintainer answers
+becomes one **interview record** in the form the `interview-minimums` gate
+counts (`scripts/check_interview_minimums.py`):
 
 ```markdown
-## D-1 · <short title>
+## Q-1 · <short title>
+
+asked: 2026-10-09
+answer: <the answer, as stated>
+answered_by: maintainer
+status: answered
 
 In the context of <situation>, facing <constraint>, we decided <option>,
-to achieve <goal>, accepting <consequence>. — 2026-01-01
+to achieve <goal>, accepting <consequence>. — 2026-10-09
+```
+
+`status` is `answered` or `open`. Only records with `status: answered` and
+`answered_by: maintainer` count toward a minimum, distinct ids, first
+occurrence wins — an agent's answer, an open question and a repeated
+confirmation count for nothing. When no question is owed, one **skip record**
+ends the phase:
+
+```markdown
+## SKIP · interview
+
+status: skipped
+reason: <one sentence — a skip without its reason is not a skip>
 ```
 
 That is the durable record. What holds beyond this change later moves unchanged
 into an ADR under `docs/adr/` — which is why the form is the ADR's own.
 
-Decisions you took yourself (`[DETAIL]`) belong here too, marked as such. A
-default chosen silently is the decision that should have stayed visible.
+Decisions you took yourself (`[DETAIL]`) belong here too, marked as such — as
+prose paragraphs, never as Q-records. A default chosen silently is the decision
+that should have stayed visible.
 
 **Terms count.** Where the interview settles what a word means in this
 repository, that belongs in `docs/glossar/` — one note per term — not in a new

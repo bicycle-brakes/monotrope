@@ -20,7 +20,7 @@ it would silently replace it (`tests/test_entry_points.py`).
 | # | Phase | Artifact | Gate |
 |---|---|---|---|
 | 1 | Explore | `plans/changes/<name>/research.md` | — |
-| 1a | Interview *(optional, human-called)* | `decisions.md` | every `[DECISION]` answered — or skipped with a reason |
+| 1a | Interview | `decisions.md` | the class minimums met — feature ≥ 3 · ADR change ≥ 5 (feature with ADR: 5 total) · spike 3 topics or reasoned skip · bounded 1 or reasoned skip — gate `interview-minimums` |
 | 2 | Spec | `spec.md` | validator green, no open `[DECISION]` |
 | 2a | Spec-Review *(optional)* | lines for `findings.md`, dimension SPEC | no open `[AMBIGUITY]` |
 | 2b | Design *(by class)* | `design.md` | validator green; an ADR draft when `architectural` |

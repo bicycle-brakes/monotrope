@@ -109,6 +109,10 @@ jobs:
         id: adr-answers
         if: ${{ !cancelled() }}
         run: python3 scripts/check_adr_answers.py
+      - name: The phase-1a interview is owed where the class minimums stand
+        id: interview-minimums
+        if: ${{ !cancelled() }}
+        run: python3 scripts/check_interview_minimums.py
       - name: This gate file satisfies its own schema
         id: gate-schema
         if: ${{ !cancelled() }}
