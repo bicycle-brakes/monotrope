@@ -1,0 +1,31 @@
+schema_version: 1
+change: stage2-mimo
+question: adr
+answer: 'yes'
+reason: The OpenCode Go ladder (DeepSeek V4.1 Flash -> MiMo-V2.6-Flash -> MiMo-V2.6-Pro)
+  runs only the 4b review loop; phases 2a and 6 stay with Codex exactly as on
+  main and phase 6 keeps resuming the phase-2a session (maintainer, 2026-10-08,
+  narrowing the answer of 2026-10-07), because on 2026-10-08 Codex's phase 6
+  found two real BLOCKERs in rb-g7-merge-freshness after the GLM loop had passed
+  it, as on every change of the night run. The loop runs on an ordered list in
+  model-endpoints.yaml that a one-line pull request reorders; ADR 0007 is
+  widened in its own text to cover it. Stated 2026-10-07 as "yes — widen ADR
+  0007" and, the same session, "ich möchte mimo über opencode go anbinden"; it
+  replaces the earlier Xiaomi wording of this answer (Xiaomi direct, Token
+  Plan), which the OpenCode Go decision supersedes. On 2026-10-08 the
+  maintainer named the launcher for OpenCode Go as OpenCode's own CLI ("für
+  opencode go nutze ich den opencode cli harness", Claude Code session of
+  2026-10-08), after three calls through Claude Code at OpenCode Go's
+  Anthropic address were refused, so the loop's rounds start through
+  `opencode run`, not through Claude Code. Later on 2026-10-08 the maintainer
+  replaced that launcher with Pi ("ich möchte pi nutzen", Claude Code session
+  of 2026-10-08, pinned @earendil-works/pi-coding-agent 1.1.0), after the
+  installed OpenCode 2.0.24 was measured not to load the runner-supplied
+  policy file that 1.18.35 loads, so the loop's rounds start through `pi`.
+shown:
+  proposed: 'yes'
+  proposal_reason: it widens where framework content may flow, which ADR 0007 limits
+    to Codex and GLM and nowhere else, to the three models OpenCode Go serves for
+    the review loop, and takes GLM out of the reviewer roles ADR 0007 names
+answered_by: framework-architect
+answered_at: 2026-10-07

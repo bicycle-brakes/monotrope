@@ -1,12 +1,17 @@
 # Phase 4b · Review loop
 
-**Model:** GLM 5.3 — at effort `max`, through Claude Code against Z.ai; started
-only by `python3 scripts/stage2.py review-loop <change>`.
+**Model:** none of its own — the ladder's rung of the round, at effort `max`,
+through Pi against OpenCode Go; started only by
+`python3 scripts/stage2.py review-loop <change>`. The ladder is the ordered
+`modelle` list of the `opencode-go` entry in `model-endpoints.yaml`: round *n*
+calls the *n*-th id, and the runner names that id in the prompt it sends.
+Reordering the list is a one-line pull request; this text names no model.
 **Input:** the change's diff against its merge base with `origin/main`,
 uncommitted changes included, and this text — the runner puts both in the prompt.
 **Result:** rows for the loop record, outside the repository until the phase-6
 verdict.
-**Gate:** at most two rounds, `make verify` green after each repair.
+**Gate:** at most three rounds — round 3 only when round 2 wrote at least one
+taken row; `make verify` green after each repair.
 
 ## For the reviewer
 
@@ -32,7 +37,7 @@ cell as `\|`. When you find nothing, answer in one sentence.
 
 The rows are in the loop record, outside the worktree. Never copy them into it.
 
-**The evidence rule.** A Codex or GLM finding is taken only when a test
+**The evidence rule.** A finding of a rung is taken only when a test
 demonstrates it or the spec supports it; otherwise it is rejected with its
 reason and stays in `findings.md` as a disagreement. This holds in every repair
 round, so a finding about something the spec does not cover needs a test or is

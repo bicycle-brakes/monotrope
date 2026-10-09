@@ -421,11 +421,11 @@ def test_a_malformed_permission_or_residency_refuses(world: World, changes: dict
     [
         ("never-declared-1", None),
         ("mimo-v2.6-flash", "go-declared"),
-        (GO_MODEL, None),  # the production declaration names no opencode-go at all
+        ("opencode-go/never-listed-rung", None),  # the entry is declared now (stage2-mimo); no entry lists this rung
         ("glm-5.3", None),  # declared - but for a transport no session drives
         ("gpt-6.1-sol extra", None),
     ],
-    ids=["unknown", "plain-go-name", "go-undeclared", "other-transport", "whitespace"],
+    ids=["unknown", "plain-go-name", "go-rung-undeclared", "other-transport", "whitespace"],
 )
 def test_a_model_no_declaration_clears_for_a_session_refuses(world: World, model: str, prepare: str | None) -> None:
     if prepare == "go-declared":

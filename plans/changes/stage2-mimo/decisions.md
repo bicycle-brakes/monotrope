@@ -1,0 +1,565 @@
+---
+title: "Decisions — stage2-mimo"
+status: draft
+implementation_status: none
+date: 2026-10-07
+last_reviewed: 2026-10-07
+updated: 2026-10-09
+supersedes: null
+superseded_by: null
+bead: coding-harness-ymx
+owner: Data Architect
+provenance: ai-drafted-reviewed
+produced_by: {kind: llm-session, name: claude-code, version: "2026-10-07"}
+review: {status: pending, approved_by: null, approved_at: null}
+tags: [decisions]
+---
+
+# stage2-mimo — Decisions
+
+Phase 1a (interview) records the maintainer's request of 2026-10-06. No
+formal interview is called; the task is clear in scope (add MiMo-V2.6 as a
+reviewer in phase 4b) and in class (a `feature` — a new endpoint, new runner
+logic, and an amendment to ADR 0007).
+
+## What the maintainer decided on 2026-10-06
+
+Maintainer (in a Claude Code session, bead coding-harness-ymx): "Plane das
+als Stufe 2 reviewer ein — als zusätzlicher Prüfer in der Review-Schleife
+(4b)." — Plan MiMo-V2.6 as a Stage 2 reviewer, as an additional reviewer in
+the review loop (phase 4b).
+
+The maintainer did not specify:
+- Which endpoint to use (Xiaomi's own API, OpenRouter, or Z.ai's expansion).
+- Whether MiMo runs in the same round as GLM, or in round 2 after GLM, or in
+  a separate optional round.
+- Whether the model family has a `pro` (reasoning) and `flash` (fast)
+  variant, and which to choose for reviews.
+- Whether the change also covers Codex replacement or phase 1/4 expansion (per
+  ADR 0007 §5, those are open items of the stage-2-codex-glm change; the
+  maintainer widened that scope on 2026-10-06, but may limit this change to 4b
+  only).
+
+> **Superseded** by the addendum "the reviewer decision, verbatim" below
+> (2026-10-07, late evening). The class stands as `feature`.
+
+## [DECISION] 1 — the class of this change (not answered yet)
+
+The spec author must state the class. Two readings are plausible:
+
+```text
+Goal in one sentence:  Should MiMo be added to the review loop phase 4b only,
+                       or to the entire stage-2 framework (review loop, spec
+                       review, phase-6 review, and possibly explore/implement)?
+Options:
+  1. bounded.          It adds MiMo to phase 4b only, as an additional
+                       reviewer running after or alongside GLM. The runner,
+                       the endpoint declaration and the evidence rule change
+                       for one phase. Spec review (2a) and review (6) stay
+                       Codex and GLM; phases 1 and 4 stay Haiku/Sonnet (or
+                       Flash when that runner verb is built). Consequence: no
+                       ADR question; smaller scope; one revert removes phase-4b
+                       MiMo calls only.
+  2. feature.          It is a framework expansion: MiMo is added as a
+                       reviewer option throughout stage 2, complementing Codex
+                       (which reviews specs and code) and GLM (which reviews in
+                       loops). Where each reviews depends on change class and
+                       on the maintainer's stated preferences. Consequence:
+                       ADR 0007 is substantially amended, not patched; the
+                       architecture documents shift; every change routing may
+                       change. Higher risk; more reversible by an architecture
+                       decision than by a code revert.
+Recommendation:        Option 1 — phase 4b only. Rationale: (a) the
+                       maintainer said "in der Review-Schleife (4b)"
+                       explicitly; (b) the spec-review and review phases are
+                       already covered by Codex; (c) Codex and GLM track
+                       well; MiMo adds a third opinion, not a replacement;
+                       (d) the decision scope stays narrow; (e) if MiMo
+                       findings are poor (e.g., many false positives), the
+                       feature is easily disabled by the spec author,
+                       requiring no ADR amendment. If findings are good and
+                       want expansion, an ADR amendment comes later.
+If you say "ok":       `class: feature` in spec.md; the spec header gains
+                       `change: adr-0007-amendment`; an ADR 0007 amendment
+                       proposal is written as part of the spec; the gate
+                       `adr-answers` keeps `make verify` red until the
+                       maintainer answers in the chat.
+What is lost:         If this is option 1 (phase 4b only), the change is
+                       reversible with one git revert and no ADR write-up. If
+                       the maintainer later wants MiMo in spec review or phase
+                       6, a separate `feature` change adds it.
+```
+
+The recommendation is Option 1: class `feature`, but scoped to phase 4b only.
+(Note: "feature" is the class; "phase 4b only" is the implementation scope.)
+
+> **Superseded** by the addendum "the reviewer decision, verbatim" below
+> (2026-10-07, late evening): the endpoint is OpenCode Go.
+
+## [DECISION] 2 — the endpoint: Xiaomi API, OpenRouter, or Z.ai?
+
+Three vendors could serve MiMo-V2.6:
+
+1. **Xiaomi's official API** — if it exists and is accessible to external
+   developers. Unknown: whether it is Anthropic-compatible (like GLM),
+   OpenAI-compatible (like Codex), or a third API shape. Auth: unknown.
+   Residency: unknown. Data policy: unknown.
+
+2. **OpenRouter** (openrouter.ai) — an aggregator serving hundreds of models.
+   If MiMo is listed there, it is likely OpenAI-compatible; OpenRouter's data
+   policy is known. Cost is typically higher than direct access. One credential
+   (API key) handles all OpenRouter models.
+
+3. **Z.ai** (the current GLM host, `https://api.z.ai/api/anthropic`) — if it
+   has expanded to host MiMo alongside GLM. Anthropic-compatible. Uses the
+   same subscription and auth as GLM. No new credential to manage.
+
+**Recommendation:** Check Z.ai first; if MiMo is listed there, use that
+endpoint (reduces credential management to one file, auth method is known,
+residency is China like GLM). If not, OpenRouter is next (aggregator,
+OpenAI-compatible likely, documented data policy). Xiaomi's own API is a
+fallback only if it is shown to be OpenAI-compatible or the maintainer wants
+to manage a third endpoint.
+
+Consequence: endpoint declaration, runner's environment variables, and the
+launch logic differ by vendor. The spec will propose one; the maintainer will
+decide.
+
+> **Superseded** by the addendum "the reviewer decision, verbatim" below
+> (2026-10-07, late evening): one reviewer per round, three rounds.
+
+## [DECISION] 3 — scheduling: same round as GLM, or round 2?
+
+If both GLM and MiMo run in phase 4b, they can run in parallel (same round,
+same diff) or sequentially (GLM round 1, MiMo round 2, both on merged-base
+diff).
+
+1. **Parallel (same round).** Both see the same code. Two reviewers, two
+   verdict columns. Rows marked open for the implementer to decide. Cost: 2×
+   review cost per round; `MAX_ROUNDS = 2` means up to 4 rows per round, all
+   from two reviewers. Wall-clock: fast (both calls in parallel). Implementer
+   sees all findings at once.
+
+2. **Sequential (GLM round 1, MiMo round 2).** GLM runs first on merged-base
+   diff; implementer decides GLM rows (taken/rejected); then MiMo runs on the
+   same merged-base diff (original code, not repaired). Two separate
+   `review-loop` calls. Rows marked open for the implementer. Cost: 2× review
+   cost per round, but less wall-clock; implementer can fix GLM findings
+   before MiMo runs. Wall-clock: slower (serial); implementer sees GLM verdict
+   first, may reduce MiMo findings if the fixes address the root cause.
+
+**Recommendation:** Sequential (option 2). Rationale: (a) compatible with
+current runner structure (one `review-loop` call per reviewer); (b) lower
+wall-clock time is less important than seeing one reviewer's verdict before
+the next; (c) cost per round is the same, but implementer can act on GLM
+findings before MiMo sees the code, which may improve both sets of findings;
+(d) the current `MAX_ROUNDS = 2` is clear per reviewer; if both run, two
+rounds each is four total, which is acceptable given the two-reviewer constraint
+(ADR 0007 §1 names a fallback rule on the third run).
+
+Consequence: the runner gains a new verb (`review-loop-mimo`) or a scheduler
+that calls both in order. The spec will propose the verb structure; the
+maintainer will decide.
+
+## No [DETAIL] is open yet
+
+All details (model name, API shape, auth method, data residency) depend on
+reading the endpoint's documentation, which is blocked on [DECISION] 2. Once
+the endpoint is chosen, those details are looked up and recorded in the spec.
+
+
+## Addendum 2026-10-07: the maintainer's answers, and gaps closed by reading
+
+Gaps closed by the orchestrating session on 2026-10-07 (OpenRouter public API
+`/api/v1/models/xiaomi/mimo-v2.6-{flash,pro}/endpoints` and
+`/api/v1/providers`, read that day): MiMo-V2.6 is **not** served by Z.ai (the
+research note's guess is withdrawn). It is served by Xiaomi's own MiMo API
+Platform (headquarters CN, datacenters SG and NL per OpenRouter; privacy
+policy https://platform.xiaomimimo.com/#/docs/terms/privacy-policy, not read)
+and through OpenRouter by GMICloud (US, bf16), DeepInfra (US), Venice (US),
+Novita, io.net, Darkbloom and Xiaomi. Pro: USD 0.435 / 0.87 per million
+tokens (input/output); Flash: USD 0.14 / 0.28 (Darkbloom 0.10). OpenRouter's
+API is OpenAI-compatible.
+
+Asked one at a time in the Claude Code session on 2026-10-07:
+
+1. **Endpoint: "Xiaomi direkt"** — Xiaomi's own MiMo API Platform, with an
+   account and key of the maintainer's. Not chosen: OpenRouter pinned to a US
+   provider (the recommendation), OpenRouter with free provider choice.
+   Consequence for phase 2: the endpoint entry declares Xiaomi as operator
+   (residency per its terms: SG/NL datacenters, CN headquarters — to be read
+   from Xiaomi's own documentation), and the maintainer's personal-use
+   declaration covers Xiaomi's data policy, which phase 2 must read and quote.
+2. **Scheduling: "Beide unabhängig, gleicher Diff"** (recommended) — GLM and
+   MiMo review the same state in phase 4b without seeing each other's
+   findings; disagreements are recorded ("MiMo flagged it, GLM did not"); one
+   repair follows for both lists. Not chosen: GLM first, MiMo after GLM's
+   repair.
+
+Not asked, recorded as `[DETAIL]` for phase 2: the class is `feature` (a new
+foreign endpoint and an amendment of ADR 0007); MiMo-V2.6-Pro is the
+reviewer (71.9 vs Flash 67.9 on DeepSWE v1.1, vendor-reported; the cost
+difference per review is a fraction of a cent).
+
+## Addendum 2026-10-07 (later): [DECISION] 1 and the ADR question
+
+Asked one at a time in the Claude Code session on 2026-10-07:
+
+1. **Payment: "Token Plan"** — Xiaomi's subscription for programming tools.
+   Not chosen: pay per use (the recommendation). The question named the
+   consequence: the Token Plan's terms forbid "automated scripts", and the
+   stage-2 runner is one, so the choice carries a terms risk the maintainer
+   accepts; the ADR states it.
+2. **ADR question: "yes — widen ADR 0007"** — Xiaomi is added to ADR 0007's
+   own text (endpoint, data classes, the Token Plan terms risk, unconfined
+   reads through Claude Code as for GLM). Not chosen: a new ADR 0011 that
+   amends ADR 0007 (the recommendation); no ADR. The orchestrating session
+   records the answer with `scripts/harness.py decide adr`.
+
+## Addendum 2026-10-07 (evening): MiMo through OpenCode Go
+
+The maintainer, in the Claude Code session on 2026-10-07: "ich möchte mimo
+über opencode go anbinden" — MiMo is reached through the OpenCode Go
+subscription. This replaces the answer "Xiaomi direct" and [DECISION] 1
+"Token Plan" above; the ADR answer "yes — widen ADR 0007" stands, and the
+ADR's text names OpenCode Go instead of Xiaomi.
+
+Facts read on 2026-10-07 from <https://opencode.ai/docs/go/>, for phase 2:
+
+- Model `opencode-go/mimo-v2.6-pro` (a Flash variant also exists); the
+  `[DETAIL]` choice of Pro above is unchanged.
+- Endpoints: Anthropic-compatible `https://opencode.ai/zen/go/v1/messages`,
+  OpenAI-compatible `https://opencode.ai/zen/go/v1/chat/completions`.
+- Data: retention "0 days", not used for training, for both MiMo-V2.6
+  variants. The page does not name the provider that hosts the models.
+- Cost: subscription Go $10 a month (first month $5); MiMo-V2.6-Pro capped
+  at $15 a month on Go, $60 on Go Plus.
+- Terms: "designed for OpenCode and other coding agents"; outside use sends
+  "typical coding agent traffic", identifies itself with its own user agent
+  and sends a stable session id in `x-opencode-session`. The Token Plan's
+  "automated scripts" risk falls away; this condition replaces it.
+- Not read: whether the maintainer already holds a Go subscription (Hermes
+  is planned on OpenCode Go); the secrets file holds no OpenCode key name
+  on 2026-10-07.
+
+## Addendum 2026-10-07 (late evening): the reviewer decision, verbatim
+
+**Superseded** by the decision below: the three `[DECISION]` sections above
+and their answers — "Xiaomi direct", "Token Plan", "Beide unabhängig, gleicher
+Diff", "MiMo-V2.6-Pro is the reviewer". **Stands**: "yes — widen ADR 0007",
+with the ADR's text naming OpenCode Go instead of Xiaomi, and the class
+`feature`.
+
+Recorded in bead coding-harness-ymx (NOTES) on 2026-10-07, verbatim:
+
+> Maintainer, 2026-10-07 (Claude Code session, German): every review — 2a, 4b
+> and 6 — runs through OpenCode Go in rounds: round 1 DeepSeek V4.1 Flash,
+> round 2 MiMo-V2.6-Flash (the maintainer wrote 'mimo v2.6 pro flash';
+> OpenCode Go lists no such model, read as MiMo-V2.6-Flash — to confirm in the
+> interview), round 3 only when needed MiMo-V2.6-Pro. The models must be easy
+> to change as OpenCode Go's models perform or new ones arrive: an ordered
+> list in model-endpoints.yaml, a one-line pull request, no code change.
+> Consequences: Codex leaves the reviewer roles; the loop limit rises from two
+> to three rounds; ADR 0007 needs amending (docs/adr is human-decided, so a
+> decision PR). Needs an OpenCode Go key in the secrets file (maintainer adds
+> it). Starts after the Flash runner (coding-harness-qcp) merges.
+
+### Settled by it — no question
+
+- **Every review phase calls OpenCode Go.** `spec-review` (phase 2a) and
+  `review` (phase 6) leave Codex; `review-loop` (phase 4b) leaves GLM 5.3 on
+  `glm-coding-plan`. Read from the rounds, which name DeepSeek and MiMo only
+  and no fourth reviewer: GLM leaves the loop. GLM 5.3 Flash keeps explore
+  and implement (bead coding-harness-bib), which this change does not touch.
+  If a fourth reviewer was meant, that is the sentence to correct.
+- **The rungs are one ordered list** in `model-endpoints.yaml`: the entry's
+  `modelle:` is already a list, its position is the rung, and
+  `declaration_problem()` (scripts/stage2.py:351) takes the model from it.
+  Moving a rung is a one-line pull request, no code change.
+- **`MAX_ROUNDS` rises from 2 to 3** (scripts/stage2.py:117), and every call
+  is still launched by the runner, with the leak check and the declaration
+  before it.
+- **The key** enters the secrets file by the maintainer's hand; the runner
+  reads it, no agent does. Name: `OPENCODE_GO_KEY` ([DETAIL] 4).
+- **Nothing starts before** bead coding-harness-qcp (the Flash runner) is
+  merged.
+- **ADR 0007** is amended as a decision PR by the maintainer: OpenCode Go,
+  the three rungs, Codex and GLM out of the reviewer roles.
+
+### [DECISION] 1 — round 2's model id — answered 2026-10-07
+
+The bead records your round 2 as written "mimo v2.6 pro flash" and reads it
+as MiMo-V2.6-Flash, marked in the bead itself "to confirm in the interview".
+`GET https://opencode.ai/zen/go/v1/models` on 2026-10-07 holds
+`deepseek-v4.1-flash`, `mimo-v2.6-flash` and `mimo-v2.6-pro`; no id combines
+both words.
+
+Question: **MiMo-V2.6-Flash** in round 2 (the bead's reading), or
+**MiMo-V2.6-Pro** (the word you wrote)?
+
+Recommendation: Flash. Consequence: Flash is the cheaper and the weaker of
+the two (USD 0.14 / 0.28 per million tokens against 0.435 / 0.87; DeepSWE
+v1.1 67.9 against 71.9, vendor-reported), so the choice sets both what a
+second opinion costs and what it sees. Pro in round 2 and again in round 3
+would give the third round nothing new over the second.
+
+**Answer: "runde 2 flash"** (maintainer, Claude Code session, 2026-10-07) —
+round 2 is MiMo-V2.6-Flash, as the bead reads it, and the bead's "to confirm
+in the interview" is closed. The ladder is therefore, in order:
+`deepseek-v4.1-flash`, `mimo-v2.6-flash`, `mimo-v2.6-pro`.
+
+### [DECISION] 2 — the residency the OpenCode Go entry declares — answered 2026-10-07
+
+`model-endpoints.yaml` accepts three values. `nicht-erklaert` makes
+`declaration_problem()` refuse the call before it is made
+(scripts/stage2.py:364), so it would mean no reviewer runs at all; the
+`ausgeschlossen` list forbids that value only for `kundencode`, a class this
+change never sends.
+
+Exploration on 2026-10-07 for this gap: the Go docs page states no region
+(it carries region notes for Meta and Qwen models only); `opencode.ai/privacy`
+answers 404; the Zen docs state "All our models are hosted in the US and EU."
+— a sentence about Zen, a different product from Go.
+
+Question: declare **`anbieter-erklaert`**, resting on that sentence of
+OpenCode's, or **`region-waehlbar`**?
+
+Recommendation: `anbieter-erklaert`. Consequence: `region-waehlbar` would
+declare a region the maintainer can choose, and Go offers none — a statement
+of record that is false on its face. `anbieter-erklaert` quotes OpenCode's
+own words with their page and date in the entry's `bemerkung`, and is
+corrected the day OpenCode says where Go runs. `nicht-erklaert` is the honest
+value of today, and it stops every call.
+
+**Answer: "anbieter erklärt"** (maintainer, Claude Code session, 2026-10-07)
+— the entry declares `residenz: anbieter-erklaert`, resting on OpenCode's own
+sentence about its models, with that page and its date in the entry's
+`bemerkung`. Every `[DECISION]` in this file is now answered; what stays open
+are the two `[GAP]`s, which phase 4 measures instead of asking.
+
+### [GAP] — open, explored, not asked
+
+1. Does `POST https://opencode.ai/zen/go/v1/messages` accept the three ids?
+   The Go docs list them under `/v1/chat/completions`
+   (`@ai-sdk/openai-compatible`) and name the Anthropic address only in
+   passing. Measured in phase 4 with the maintainer's key; the fallback is
+   the OpenAI address ([DETAIL] 5).
+2. Whether OpenCode publishes a residency statement for Go later. Re-read
+   before the entry is written; correct `residenz` then.
+
+### [DETAIL] — decided here, reason recorded
+
+> **Superseded** by the addendum "the reviewer decision, verbatim" below:
+> phases 2a and 6 stay with Codex.
+
+1. **Which rung phase 2a and phase 6 take.** Both are one call each today
+   (`spec_review`, `review` — no rounds). Taken: **rung 1**,
+   `deepseek-v4.1-flash`. Reason: the decision gives the three rungs as
+   rounds and names a limit of three for the loop, so the escalation belongs
+   to phase 4b; a single call has no round to climb. Risk recorded: rung 1
+   is the cheapest of the three, so the phase-6 verdict would come from the
+   weakest model of the ladder — a stronger rung for phase 6 takes one
+   sentence from the maintainer.
+2. **When round 3 of the loop runs.** "round 3 only when needed" names no
+   trigger. Taken: rounds 1 and 2 always run, as the loop runs them today
+   (undecided rows still hold the next round); **round 3 runs only when round
+   2 produced at least one taken row**, and the ceiling is three. Reason: a
+   repair after round 2 is new code a third lineage should see, while a round
+   that produced nothing new gives the next model the same diff again — and
+   the two unconditional rounds keep today's behaviour unchanged, so the
+   decision adds exactly one conditional rung.
+3. **The rounds are a ladder over repaired code.** Round 2 sees round 1's
+   repair, as `review_loop` does today, and each round has one reviewer. The
+   answer "Beide unabhängig, gleicher Diff" goes with the superseded
+   sections, and with it the `Also raised` column of the old spec.
+4. **The entry's other fields**: `name: opencode-go`, `betreiber: "OpenCode
+   (Operator Anomaly Innovations, Inc.)"`, `abrechnung: abonnement`,
+   `darf_sehen: [framework]` — as `glm-coding-plan` and `openai-codex` stand
+   today; key `OPENCODE_GO_KEY`.
+5. **The request shape**: the Anthropic address, launched through Claude Code
+   with its own user agent and its native session header — the Go page says
+   for Claude Code that no custom-header wrapper is needed. The OpenAI address
+   is named in the entry's remark and measured, never used as a fallback: a
+   rung the Anthropic address refuses stops the run (spec, criterion 17), so
+   the earlier wording of this `[DETAIL]` that named it a fallback is
+   withdrawn. Measured in phase 4, not asked.
+6. **The class stays `feature`**, and the spec's `adr_question` is rewritten
+   from Xiaomi and OpenRouter to OpenCode Go.
+7. **The ADR amends ADR 0007, not decision D-13** (`design.md`,
+   Consequences): D-13's criteria — three measured stage-2 runs,
+   lakeswitch-ai's disclosure decision, a green leak check in every run, a
+   declared endpoint with its residency — change nowhere in this work, while
+   the list of endpoints is ADR 0007's own text. So
+   `scripts/check_decision_continuity.py` and the D-13 row of the target
+   document stay as they are: a chain entry is added only when a record
+   changes the decision it points at. Reversible — a reviewer who reads the
+   widening as a change to D-13 gets the map entry and the dated note in the
+   same pull request.
+8. **How the compatibility probe runs** (`plan.md`, step 7): a `probe` verb
+   of `scripts/stage2.py`. The Definition of Done demands three calls
+   *through the runner* with declaration and leak check in front of each, and
+   no verb of it does a measurement — the review verbs would write review
+   blocks into a real change's record, which is not what a probe is. Reason:
+   one call per rung, no record written, output that the pull request body
+   quotes. Reversible: the same three calls could be made by hand if the
+   maintainer prefers no new verb.
+
+## Addendum 2026-10-07 (after the phase-2a review): when the probe runs
+
+The spec review returned four rows (session `codex 01a116db-602e-73e2-bbee-
+d11f961debe4`); three were worked into the spec without asking, and row S1
+asked about intent.
+
+**Question:** `spec.md` says the compatibility of
+`https://opencode.ai/zen/go/v1/messages` with the three rungs is measured in
+phase 4, while the Definition of Done forbids a live call before the merge.
+
+**Answer: "1"** (maintainer, Claude Code session, 2026-10-07) — the probe
+runs **in phase 4, before the merge**: three calls through the runner, one
+per rung, declaration and leak check in front of each, as one special run
+whose commits are named in the pull request body. The Definition of Done now
+says so instead of "none", and no step of phase 4 builds on the address
+before the probe has run. If an address refuses a rung, criterion 17 stops
+the run and reports it — that part was never in question.
+
+## Addendum 2026-10-08: the ladder runs the review loop only
+
+The reviewer decision of 2026-10-07 moved every stage-2 review — 2a, 4b and
+6 — onto the OpenCode Go ladder. That part is superseded for phases 2a and 6
+by the maintainer's decision of 2026-10-08; the earlier entries above stand
+unchanged as the record of what was decided then.
+
+**Answer** (maintainer, 2026-10-08): the OpenCode Go ladder (DeepSeek V4.1
+Flash -> MiMo-V2.6-Flash -> MiMo-V2.6-Pro) runs **only the 4b review loop**.
+Phases 2a (spec-review) and 6 (review) stay with Codex exactly as on main,
+and phase 6 keeps resuming the phase-2a session. The loop keeps its three
+rounds and its round-3 rule; the probe (answer "1", 2026-10-07) still runs
+over the three rungs, because they are the loop's rungs.
+
+**Reason** (maintainer's, 2026-10-08): on 2026-10-08 Codex's phase 6 found
+two real BLOCKERs in `rb-g7-merge-freshness` after the GLM loop had passed
+it, as on every change of the night run.
+
+## Addendum 2026-10-08 (afternoon): Pi as the launcher, the chat-completions address
+
+The launcher answer of the same morning ("für opencode go nutze ich den
+opencode cli harness") is superseded; the entries above stand unchanged as
+the record of what was decided then.
+
+**Launcher** (maintainer, 2026-10-08): "ich möchte pi nutzen" — the loop's
+rounds start through Pi (`@earendil-works/pi-coding-agent`, pinned 1.1.0,
+installed by the maintainer the same day). Reason: the installed OpenCode
+2.0.24 did not load the runner-supplied policy file that 1.18.35 loads
+(measured 2026-10-08), so a read-only reviewer could not be shown; Pi
+restricts the tool set at launch (`research.md`, addendum of 2026-10-08
+afternoon).
+
+**Address** (maintainer, 2026-10-08, answer "ja" to the question whether the
+loop may use OpenCode Go's OpenAI-compatible address instead of the
+Anthropic one): the rounds go to `https://opencode.ai/zen/go/v1/chat/completions`,
+the address Pi's built-in `opencode-go` provider uses for all three rungs and
+the one OpenCode's Go page lists for them; the three refused calls at
+`https://opencode.ai/zen/go/v1/messages` of the same day are the reason.
+
+**Terms risk** (maintainer, 2026-10-08, answer "annehmen"): the residual risk
+of OpenCode's terms is accepted. Read the same day: the Go page ("Last
+updated: Oct 8, 2026") lists Pi among the validated clients; the terms of
+service (effective Aug 15, 2026) do not mention third-party clients and forbid
+processes that "automatically or programmatically extracts data or Output"
+and that run "while you are not logged into the Services". The reading and
+its date go into the `bemerkung` of the `opencode-go` entry in
+`model-endpoints.yaml`, so a later change of the terms can be held against it.
+
+**This change's own loop before the merge** (maintainer, 2026-10-08, answer
+"1" to the spec's open question): after the probe, this change's own review
+loop runs on the ladder through Pi, at most three rounds. With the probe it is
+the only content leaving for OpenCode Go before the merge; ADR 0011 decision 7
+says so. The answer of 2026-10-07 (probe only) is widened by this one.
+
+## Addendum 2026-10-09: the phase-1a interview on ADR 0011
+
+The interview-minimums rule (decision pull request "the phase-1a interview is
+owed where the class minimums stand") owes five counted maintainer answers to
+any change that adds or changes an ADR, whatever its class and date. This
+change adds ADR 0011. The five questions below were put to the maintainer one
+at a time in the directing conversation on 2026-10-09, each with a recommended
+option and its alternatives; the answers are recorded as given. Each restates
+a position the pull request and ADR 0011 already carry, so the interview
+confirms them and changes none.
+
+## Answers
+
+## Q-1 · What may go to OpenCode Go
+
+asked: 2026-10-09, the directing conversation
+answer: only framework content, and only for the review loop (phase 4b) and
+  the probe calls; no customer code and no customer rows
+answered_by: maintainer
+status: answered
+
+In the context of a new endpoint that receives framework content, facing the
+choice between the loop only, the loop plus the spec review and the review, or
+no use at all, we decided the loop and the probe only, to achieve a bounded
+disclosure that matches ADR 0007's reading of "nothing else goes", accepting
+that the spec review and the review stay on Codex. — 2026-10-09
+
+## Q-2 · Who reviews in which phase
+
+asked: 2026-10-09, the directing conversation
+answer: the review loop runs on the OpenCode Go ladder; the spec review (2a)
+  and the review (6) stay with Codex; explore and implement stay on GLM 5.3
+  Flash
+answered_by: maintainer
+status: answered
+
+In the context of ADR 0007 naming one GLM reviewer for the loop, facing the
+choice between keeping GLM, moving the loop to the ladder, or moving phase 6
+too, we decided the loop alone moves, to achieve three independent loop
+reviewers at subscription cost while Codex still reviews last, accepting that
+ADR 0007 decisions 2 and 3 are amended by ADR 0011. — 2026-10-09
+
+## Q-3 · Where the ladder lives and when round 3 runs
+
+asked: 2026-10-09, the directing conversation
+answer: the order stands only in `model-endpoints.yaml` and no doctrine text
+  repeats it; round 3 runs only when round 2 wrote a row whose status begins
+  `taken`
+answered_by: maintainer
+status: answered
+
+In the context of a ladder of three models, facing the choice between the yaml
+alone, a repeat in the doctrine text, or three rounds every time, we decided
+the yaml alone with a conditional third round, to achieve a reorder that is a
+one-line change and a third call only when the second found something real,
+accepting that a test has to keep the doctrine from repeating the order. —
+2026-10-09
+
+## Q-4 · The unconfined-read residual risk
+
+asked: 2026-10-09, the directing conversation
+answer: accepted for the three rungs, as it was accepted for the earlier
+  reviewers on 2026-09-30
+answered_by: maintainer
+status: answered
+
+In the context of Pi offering no switch that confines `read` to the worktree,
+facing the choice between accepting the residual risk and waiting for a
+technical confinement, we decided to accept it, bounded by the prompt's request
+to read nothing outside the worktree and the repository's git directory, to
+achieve a ladder that can run now, accepting that this is a request and not a
+lock and that the leak check scans what the repository presents, not what a
+rung reads. — 2026-10-09
+
+## Q-5 · What happens when OpenCode Go refuses a model
+
+asked: 2026-10-09, the directing conversation
+answer: the run stops and reports the refusal; no second address, no second
+  launcher and no substituted model
+answered_by: maintainer
+status: answered
+
+In the context of a rung that OpenCode Go may refuse, facing the choice between
+stopping, falling back to GLM, or moving to the next rung, we decided to stop
+and report, to achieve a refusal that shows as an empty round in the loop
+record and never as a silent fallback, accepting that a refused rung costs the
+round until the declaration is repaired. — 2026-10-09
