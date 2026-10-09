@@ -125,3 +125,29 @@ Task status is in Beads. Relevant beads, with their titles:
   (not possible with the runner as it is).
 - `python3 -m pytest tests/test_feedback_channel.py -q` on this handover:
   see the pull request text for the result.
+
+## Addendum 2026-10-09 (later, remote session): the next step above is superseded
+
+Written by the maintainer's remote session after the merges; the text above
+stays as it was.
+
+- **Do not start with coding-harness-0al.** The maintainer decided on
+  2026-10-09 to use no more OpenCode CLI ("ich will keine opencode mehr
+  benutzen") and to move `stage2.py session` to Pi. The measurement against
+  the two OpenCode binaries is no longer needed. Queue item 2 is now the Pi
+  port: plan in `docs/research/2026-10-09-session-verb-on-pi-plan.md`
+  (proposed, not yet approved, six interview questions open), assessment in
+  the addendum of `docs/journal/handover/2026-10-09-0al-local-start.md`.
+- **The merges are done**, in the order this file recommended and asked for
+  by the maintainer: #108, #107, #106 and #105. `main` is at `7afa5b8`.
+- **coding-harness-kw0** is decided: cost tracking is not needed because the
+  work runs on subscriptions, so it closes with that gap named.
+- **#107 was not the parallel session's work.** It came from the maintainer's
+  remote session (the cloud environment's setup script).
+- **The tracker on origin does not show any of this yet.** The remote session
+  closed coding-harness-ymx, coding-harness-6yg and coding-harness-kw0,
+  superseded coding-harness-0al and created the Pi bead in its own container,
+  but `tools/bd dolt push` failed there (HTTP 403). Until the commands in
+  `docs/journal/handover/2026-10-09-remote-session-merges-tracker-and-pi-plan.md`
+  ("Pending tracker writes") are replayed where the push works, `tools/bd
+  ready` still lists 0al and kw0 as open. Read that file next.
