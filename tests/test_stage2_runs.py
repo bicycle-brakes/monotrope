@@ -17,6 +17,7 @@ from pathlib import Path
 REPO_ROOT = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(REPO_ROOT / "scripts"))
 
+import pytest  # noqa: E402
 import stage2  # noqa: E402
 import stage2_runs  # noqa: E402
 
@@ -323,3 +324,49 @@ def test_a_findings_file_that_is_not_utf_8_exits_2_without_a_traceback(tmp_path:
         code, out, err = run(tmp_path, "run", *rev, capsys=capsys)
         assert (code, out) == (2, ""), rev
         assert "is not UTF-8 text" in err, rev
+
+
+def test_a_yes_counts_in_every_table_that_has_the_column() -> None:
+    """Fault: only phase-2a, phase-6 and loop tables of the runner's widths read (phase 6, F-1)."""
+    other = stage2.render_table(["ID", "Note", "Broke a test"], [["X-1", "wider or narrower", "yes"]])
+    text = (
+        HEADER
+        + "\n## Follow-up verification\n\n"
+        + codex_rows(("F-9", "MINOR", "closed", "yes"))
+        + "\n\n"
+        + other
+        + "\n"
+    )
+    assert stage2_runs.measure(text).broke == 2
+
+
+def test_a_call_line_not_in_the_runners_form_stays_in_the_count() -> None:
+    """Fault: a line with the call prefix dropped because the rest does not parse (phase 6, F-2)."""
+    text = HEADER + "\n" + call("review") + "\n\nStage-2 call, 2026-10-09:review · leak check BLOCK.\n"
+    counts = stage2_runs.measure(text)
+    assert counts.calls == [("review", True), ("unparsed", False)]
+
+
+def test_rev_resolves_its_commit_once(tmp_path: Path) -> None:
+    """Fault: the label taken from HEAD at one moment and the files read from HEAD later (phase 6, F-3)."""
+    make_repo(tmp_path, {"plans/changes/run": {"findings.md": SIMPLE}})
+    _git(tmp_path, "init", "-q")
+    _git(tmp_path, "add", "-A")
+    _git(tmp_path, "commit", "-q", "-m", "one")
+    first = _git(tmp_path, "rev-parse", "HEAD")
+    source = stage2_runs.Source(tmp_path, "HEAD")
+    (tmp_path / "plans/changes/run/findings.md").write_text(SIMPLE + "\n" + call("review") + "\n", encoding="utf-8")
+    _git(tmp_path, "commit", "-q", "-am", "two")
+    assert source.rev == first
+    assert source.label().startswith(f"`{first[:7]}")
+    assert source.read("plans/changes/run/findings.md") == SIMPLE
+
+
+@pytest.mark.parametrize("declaration", ["endpunkte: 42\n", "- a\n- b\n"])
+def test_a_declaration_of_the_wrong_shape_is_reported_not_raised(tmp_path: Path, capsys, declaration: str) -> None:
+    """Fault: `declaration_problem` raising TypeError or AttributeError out of the counter (phase 6, F-4)."""
+    make_repo(tmp_path, {"plans/changes/run": {"findings.md": SIMPLE}}, endpoints=declaration)
+    code, out, _ = run(tmp_path, "run", capsys=capsys)
+    assert code == 0
+    assert "0 of 3 foreign routes cleared" in out
+    assert "has a shape the declaration check cannot read" in out

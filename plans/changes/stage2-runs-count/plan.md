@@ -72,3 +72,10 @@ round 1 took L1-1, L1-2, L1-4 and L1-5 (one new test,
 L2-1, L2-2 and L2-3 (two new tests, `test_rev_lists_an_archived_folder_name_whole`
 and `test_a_findings_file_that_is_not_utf_8_exits_2_without_a_traceback`),
 twelve tests in all. Each new test went red under its planted fault.
+
+Phase 6 round 1 (Codex, 2026-10-09) raised four BLOCKERs, all taken and
+repaired with a test each that its planted fault turned red (F-1 every table
+with the column, F-2 a prefixed call line that does not parse, F-3 `--rev`
+resolved once, F-4 a malformed declaration reported, not raised); seventeen
+tests in all. The span of this repair was interrupted by a session limit
+and is not clocked.

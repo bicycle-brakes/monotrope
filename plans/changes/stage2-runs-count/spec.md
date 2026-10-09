@@ -4,7 +4,7 @@ status: draft
 implementation_status: partial
 date: 2026-10-08
 last_reviewed: 2026-10-08
-updated: 2026-10-08
+updated: 2026-10-09
 supersedes: null
 superseded_by: null
 bead: coding-harness-kw0
@@ -52,8 +52,9 @@ Markdown table, one row per named change, then a few summary lines.
    missing from every count.
 4. "Rows marked Broke a test: yes" counts every row of every table in the
    file, whatever its status (the workflow asks for the mark on a taken row only) —
-   phase 2a, phase 6 and loop — whose `Broke a test` cell is `yes`.
-   *Refuted by:* a phase-6 row marked `yes` not counted.
+   phase 2a, phase 6, loop or any other table whose header has the column —
+   whose `Broke a test` cell is `yes` (phase 6, F-1).
+   *Refuted by:* a row marked `yes` in any such table not counted.
 5. Phase-6 rounds are the number of `Phase 6 verdict:` lines
    (`VERDICT_LINE`); phase-2a and phase-6 rows are counted by severity from
    the rows under the headings `## Phase 2a` and `## Phase 6`, separately.
@@ -65,9 +66,11 @@ Markdown table, one row per named change, then a few summary lines.
 7. Every line that starts `Stage-2 call, ` or `Stage-2 session, ` in the
    change's `findings.md` and `research.md` is a call; a call is clean when
    its line says `leak check clean over`. The row shows clean / total.
-   *Refuted by:* an explore line in `research.md` not counted, or a line
-   without `leak check clean over` counted clean.
-8. With `--rev <commit>` every file (`findings.md`, `research.md`,
+   A line with the prefix whose rest is not the runner's form still counts,
+   as verb `unparsed` (phase 6, F-2).
+   *Refuted by:* an explore line in `research.md` not counted, a prefixed
+   line dropped, or a line without `leak check clean over` counted clean.
+8. With `--rev <commit>`, resolved once to one commit (phase 6, F-3), every file (`findings.md`, `research.md`,
    `model-endpoints.yaml`) is read from that commit through git, and the
    "Measured at" cell names its short sha; without it the working tree is
    read and the cell says `tree at <short HEAD>`.
@@ -80,8 +83,11 @@ Markdown table, one row per named change, then a few summary lines.
    (`CODEX`, `GLM`, `GLM_FLASH`) that `declaration_problem` clears, of
    three. Criterion 2 is named as not measured here. Tokens and cost per
    vendor are printed as "not recorded by the runner", never as a number.
+   A declaration of a shape the check cannot read clears no route and is
+   reported, not raised (phase 6, F-4).
    *Refuted by:* a fixture endpoint without residency still counted as
-   cleared, or any token or cost figure in the output.
+   cleared, a traceback on a malformed declaration, or any token or cost
+   figure in the output.
 10. The note `docs/research/2026-10-08-stage2-three-runs.md` gains a dated
     addendum carrying the script's output unchanged and the command that
     made it; nothing above the addendum changes. `docs/WORKFLOW.md` §4 names

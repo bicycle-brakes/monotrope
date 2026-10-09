@@ -47,11 +47,11 @@ REPO_ROOT = Path(__file__).resolve().parent.parent
 NAME = re.compile(r"^[a-z0-9]+(-[a-z0-9]+)*$")
 CALL_LINE = re.compile(r"^Stage-2 (call|session), \d{4}-\d{2}-\d{2}: (?P<rest>.*)$")
 CLEAN = "leak check clean over"
+CALL_PREFIXES = ("Stage-2 call, ", "Stage-2 session, ")
 SEVERITY_ORDER = ("BLOCKER", "MAJOR", "MINOR")
 FOREIGN_ROUTES = (stage2.CODEX, stage2.GLM, stage2.GLM_FLASH)
 SEVERITY = stage2.ROW_COLUMNS.index("Severity")
 STATUS = stage2.ROW_COLUMNS.index("Status")
-BROKE = stage2.ROW_COLUMNS.index("Broke a test")
 MARK = stage2.RELEASED_COLUMNS.index("Phase 6")
 COLUMNS = [
     "Change",
@@ -105,13 +105,26 @@ def measure(findings: str, research: str = "") -> Counts:
     """The counts of one change, from the text of its findings.md and research.md."""
     counts = Counts(rounds=len(stage2.VERDICT_LINE.findall(findings)))
     section = None
+    header: list[str] = []
     for line in findings.splitlines():
         if line.startswith("## "):
             section = _section(line)
             continue
         cells = stage2.split_row(line)
-        if not cells or stage2._furniture(cells):
+        if not cells:
+            header = []
             continue
+        if cells[0].lower() == "id":
+            header = cells
+        if stage2._furniture(cells):
+            continue
+        # Every table that has the column, whatever its section or width (phase 6, F-1).
+        if (
+            "Broke a test" in header
+            and len(cells) == len(header)
+            and cells[header.index("Broke a test")].lower() == "yes"
+        ):
+            counts.broke += 1
         if len(cells) == len(stage2.RELEASED_COLUMNS) and stage2.LOOP_ID.fullmatch(cells[0]):
             status = cells[STATUS].lower()
             if status.startswith("taken"):
@@ -125,15 +138,14 @@ def measure(findings: str, research: str = "") -> Counts:
         elif len(cells) == len(stage2.ROW_COLUMNS) and section in {"2a", "6"}:
             severity = cells[SEVERITY].upper() if cells[SEVERITY].upper() in stage2.SEVERITIES else "other"
             (counts.spec_review if section == "2a" else counts.phase6)[severity] += 1
-        else:
-            continue
-        if cells[BROKE].lower() == "yes":
-            counts.broke += 1
     for text in (findings, research):
         for line in text.splitlines():
+            if not line.startswith(CALL_PREFIXES):
+                continue
+            # A line with the prefix stays in the count even when the rest is not the runner's form (phase 6, F-2).
             match = CALL_LINE.match(line)
-            if match:
-                counts.calls.append((_verb(match.group("rest"), match.group(1)), CLEAN in line))
+            verb = _verb(match.group("rest"), match.group(1)) if match else "unparsed"
+            counts.calls.append((verb, CLEAN in line))
     return counts
 
 
@@ -145,7 +157,13 @@ def measure(findings: str, research: str = "") -> Counts:
 class Source:
     def __init__(self, root: Path, rev: str | None) -> None:
         self.root = root
-        self.rev = rev
+        self.rev = None
+        if rev is not None:
+            # Resolved once: a moving name such as HEAD must not label one commit and read another (phase 6, F-3).
+            done = self._git("rev-parse", "--verify", "--quiet", f"{rev}^{{commit}}")
+            if done.returncode != 0 or not done.stdout.strip():
+                raise NotFound(f"git does not know the revision {rev!r}.")
+            self.rev = done.stdout.strip()
 
     def _git(self, *args: str) -> subprocess.CompletedProcess:
         return subprocess.run(
@@ -156,9 +174,7 @@ class Source:
         done = self._git("rev-parse", "--short", self.rev or "HEAD")
         sha = done.stdout.strip() if done.returncode == 0 else None
         if self.rev:
-            if not sha:
-                raise NotFound(f"git does not know the revision {self.rev!r}.")
-            return f"`{sha}`"
+            return f"`{sha or self.rev}`"
         return f"tree at `{sha}`" if sha else "tree"
 
     def read(self, path: str) -> str | None:
@@ -239,7 +255,15 @@ def routes_cleared(source: Source) -> list[tuple[tuple[str, str, str | None], st
     with tempfile.TemporaryDirectory() as tmp:
         if text is not None:
             (Path(tmp) / "model-endpoints.yaml").write_text(text, encoding="utf-8")
-        return [(route, stage2.declaration_problem(Path(tmp), route[0], route[1])) for route in FOREIGN_ROUTES]
+        return [(route, _problem(Path(tmp), route)) for route in FOREIGN_ROUTES]
+
+
+def _problem(root: Path, route: tuple[str, str, str | None]) -> str | None:
+    """The runner's declaration check, with a shape it cannot read reported, not raised (phase 6, F-4)."""
+    try:
+        return stage2.declaration_problem(root, route[0], route[1])
+    except (AttributeError, TypeError):
+        return "model-endpoints.yaml has a shape the declaration check cannot read"
 
 
 def criteria_lines(measured: list[Counts], routes: list) -> list[str]:
