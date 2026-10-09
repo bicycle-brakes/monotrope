@@ -78,7 +78,7 @@ handover to the next phase — not the chat history.**
 | # | Phase | Artefact | Gate | Prompt |
 |---|---|---|---|---|
 | 1 | Explore | `plans/changes/<name>/research.md` | — | [`prompts/01-explore.md`](../prompts/01-explore.md) |
-| 1a | Interview | `plans/changes/<name>/decisions.md` | every `[DECISION]` answered — or its skip given a reason | [`01a-interview.md`](../prompts/01a-interview.md) |
+| 1a | Interview | `plans/changes/<name>/decisions.md` | the `interview-minimums` check — the class minimums met, or a skip record with a reason | [`01a-interview.md`](../prompts/01a-interview.md) |
 | 2 | Spec | `plans/changes/<name>/spec.md` | validator green, no open `[DECISION]` | [`02-spec.md`](../prompts/02-spec.md) |
 | 2a | Spec review | rows for `findings.md`, dimension `SPEC`; then the revised `spec.md` | every row worked into the spec or rejected with a reason; no open `[AMBIGUITY]` | [`02a-spec-review.md`](../prompts/02a-spec-review.md) |
 | 2b | Design *(by class)* | `plans/changes/<name>/design.md` | validator green; for an `architectural` change, an ADR draft in it | [`02b-design.md`](../prompts/02b-design.md) |
@@ -89,9 +89,21 @@ handover to the next phase — not the chat history.**
 | 6 | Review | `plans/changes/<name>/findings.md` | no open `[AMBIGUITY]`, no open BLOCKER — `[DIVERGENT]` counts as a BLOCKER | [`06-review.md`](../prompts/06-review.md) |
 | 7 | Commit | pull request | CI green | [`07-commit.md`](../prompts/07-commit.md) |
 
-Phase 1a is **optional and called by a person**. What fits in one sentence needs
-no interview; skipping it is given a one-sentence reason in `decisions.md`, not
-left unsaid.
+Phase 1a is **owed where a minimum stands** (maintainer, 2026-10-08): a
+`feature` owes at least three distinct, substantive questions the maintainer
+answered; creating or changing an ADR owes five, whatever the class — a
+feature that also carries an ADR owes five in total, never the sum; a `spike`
+owes the three topics or a reasoned skip; a `bounded` change owes one answered
+question or a reasoned skip. The gate `interview-minimums`
+(`scripts/check_interview_minimums.py`) counts the records at the spec gate
+and in `make verify`: only distinct, maintainer-answered records count, an
+agent's answer, an open question and a repeated confirmation count for
+nothing, and the check sees ADR paths in every diff state — committed,
+staged, unstaged, untracked. The duty is prospective: a change is subject
+when its spec `date` is later than the cut-off, **2026-10-08**, the merge
+date of the change that introduced the rule — the stock before that day
+stays exempt wherever it lies, and a change dated after the cut-off owes
+its interview also once archived.
 
 Across all of them runs the **session handover** — it belongs to no phase but to
 the end of a session; see below.
@@ -288,6 +300,13 @@ and a `spike` never run it. Nothing checks this until the change-artefact
 validator lands (bead coding-harness-jc3); the review before the merge holds
 it.
 
+**The interview goes by class too** (maintainer, 2026-10-08): a `feature`
+owes at least three distinct, substantive questions; creating or changing an
+ADR raises the debt to five in whatever class the change carries; a `spike`
+owes its three topics or a reasoned skip; a `bounded` change one answered
+question or a reasoned skip. What the gate counts and what the review judges
+stands in §2, the paragraph after the phase table.
+
 **Only a `feature` owes an answer to the ADR question:** is this change an
 architecture decision that needs an ADR? The spec author proposes, in the same
 header: `change: <folder name>` and `adr_question: {proposed: "yes"|"no",
@@ -362,6 +381,7 @@ What this does not do:
 | Stop hook | `.claude/hooks/session-stop/check-tests-green.sh` | blocks the end of a turn on a red tree |
 | Enforcement | `decisions/gates.yaml` | **the one gate list** (D-10); `.github/workflows/ci.yml` is generated from it |
 | Decisions | `scripts/check_adr_answers.py`, `scripts/harness.py`, `.github/PULL_REQUEST_TEMPLATE/decision.md` | the gate `adr-answers`; `decide adr` records the maintainer's ADR answers; the decision pull request's block |
+| Interview | `scripts/check_interview_minimums.py` | the gate `interview-minimums`: counts counted interview records per class at the spec gate and in verify, sees ADR paths in every diff state, compares per context — first parent on the main line (a `main` checkout or the hosted main-line run), else the merge base; a detached HEAD at `origin/main` is not measured and exits 3 — subject after the cut-off 2026-10-08 |
 
 ### Verification runs through git and CI, not through the harness
 
