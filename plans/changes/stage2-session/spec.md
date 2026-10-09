@@ -149,7 +149,8 @@ that canonical worktree root, not a subdirectory, another worktree or main.
     Pi it also says that the maintainer's `~/.pi/agent` may hold other
     providers' credentials, so a model switched inside the session can leave
     the declared endpoint unscanned (Q-6), and that a `bash` command outside
-    the dangerous patterns runs without a question (Q-2).
+    the dangerous patterns runs without a question (Q-2), which includes a
+    network program and `git push` (Q-7, Q-8).
     *Refuted by:* docs claiming continuous scanning, guaranteed whole-disk
     isolation or permission to switch to an undeclared model in the TUI.
 16. When the change is proposed for merge, it includes the ADR 0007 amendment
