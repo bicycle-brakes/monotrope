@@ -1,12 +1,14 @@
 #!/usr/bin/env python3
 """stage2_session.py - the checked interactive session behind `stage2.py session`.
 
-**What this is.** The mechanics of one interactive OpenCode or Codex session in
-a new macOS Terminal window: the model resolved against the declaration, the
-handover read as the first prompt, the runner-supplied OpenCode policy checked
-against the effective agent, and the dispatch to Terminal with an audit line in
-`findings.md`. `scripts/stage2.py` is the only way a foreign model starts; this
-file runs only through it and is never a second entry point.
+**What this is.** The mechanics of one interactive Pi or Codex session in a new
+macOS Terminal window: the model resolved against the declaration, the handover
+read as the first prompt, the runner-supplied Pi policy extension copied in and
+confirmed loaded, and the dispatch to Terminal with an audit line in
+`findings.md`. An `opencode-go/<model>` id names the endpoint, not the program:
+it starts Pi (maintainer's answer Q-5); the OpenCode CLI is never called.
+`scripts/stage2.py` is the only way a foreign model starts; this file runs only
+through it and is never a second entry point.
 
 **Why the runner module travels as a parameter.** Under `python3
 scripts/stage2.py` the file runs as `__main__`, and an `import stage2` here
@@ -20,36 +22,37 @@ than macOS, an invocation outside the change's dedicated worktree
 (`<main checkout>/.claude/worktrees/<change>`, attached branch, that directory
 as the working one), a model the declaration does not clear for a session
 transport, a handover that is missing, empty, unreadable, oversized, NUL-bound
-or resolving outside the worktree, a missing CLI or `osascript`, a policy the
-effective agent overrides, and a leak check that cannot measure or is not
+or resolving outside the worktree, a missing CLI or `osascript`, a Pi that is not
+the pinned version, a policy extension that did not load, and a leak check that cannot measure or is not
 clean - scanned once after the handover is read and a second time immediately
 before the window opens.
 
 **What acceptance means.** Exit 0 says Terminal took the command, nothing
 more: whether the CLI started, signed in or answered shows in the new window.
-A dispatch that Terminal refuses exits 1 and says so in the audit. The policy
+A dispatch that Terminal refuses exits 1 and says so in the audit. The private
 directory under the gitignored `.stage2-sessions/` holds no prompt and no
 credential; a failed attempt removes it, an accepted one keeps it for the
-session to load. The tool permissions passed along are a configuration, not
-confinement at the operating-system level.
+session to load. The policy extension bounds Pi's file tools and asks before a
+few shell commands; it is a configuration, not confinement at the operating-system
+level, and a Pi session signs in with the maintainer's own Pi agent directory, which
+the runner neither reads nor writes.
 """
 
 from __future__ import annotations
 
-import json
 import os
 import re
 import shlex
 import shutil
 import subprocess
 import sys
+import tempfile
 import uuid
 from pathlib import Path
 
 import yaml
 
 SESSION_ROOT = ".stage2-sessions"
-AGENT = "harness-session"
 SCRIPT_NAME = "terminal-session.applescript"
 PROMPT_LIMIT = 32 * 1024
 COMMAND_LIMIT = 64 * 1024
@@ -57,18 +60,9 @@ CLI_TIMEOUT = 30.0
 OSASCRIPT_TIMEOUT = 30.0
 
 # The endpoints a session can dispatch, and the one CLI each drives. Anything
-# else stays undeclared for sessions, whatever its modelle list says.
-TRANSPORTS = {"openai-codex": "codex", "opencode-go": "opencode"}
-
-# The guarded OpenCode permissions and the actions the effective policy may end
-# on: outside directories, subagents and web fetches denied, bash asked for or denied - an
-# allow anywhere is not the runner's policy.
-GUARDED = {
-    "external_directory": ("deny",),
-    "task": ("deny",),
-    "webfetch": ("deny",),
-    "bash": ("ask", "deny"),
-}
+# else stays undeclared for sessions, whatever its modelle list says. The id
+# `opencode-go/<model>` names the endpoint; the program that serves it is Pi.
+TRANSPORTS = {"openai-codex": "codex", "opencode-go": "pi"}
 
 # The fixed AppleScript source. The shell command arrives as argv data and is
 # never spliced into this text, so prompt content cannot become AppleScript.
@@ -81,7 +75,8 @@ LAUNCH_LIMITS = (
     "after that: not later edits, not later prompts, and not a model or agent switched in the user interface -\n"
     "stay with the model this session started with, and start any other model again through the runner. The\n"
     "terminal's tool permissions are a configuration, not a confinement at the operating-system level: shell\n"
-    "commands you approve can read what the user can read."
+    "commands that run, whether you approved them or the policy let them pass without a question, can read\n"
+    "what the user can read."
 )
 
 
@@ -160,7 +155,7 @@ def resolve_endpoint(root: Path, model: str, runner) -> tuple[tuple[str, str, No
     """The endpoint, the transport and the CLI's model selection for this exact id, or a refusal.
 
     A plain id selects only what `openai-codex` lists. A full `opencode-go/<model>` id selects `opencode-go`
-    when that entry lists `<model>` - the endpoint is called with the bare id, OpenCode's CLI takes the
+    when that entry lists `<model>` - the endpoint is called with the bare id, Pi's `--model` takes the
     provider/model pair. No alias, no suffix guessing, no approval of an endpoint the file does not name.
     """
     if not model or model.split() != [model]:
@@ -241,7 +236,7 @@ def handover_prompt(ctx, handover: str | None, runner) -> tuple[str, str]:
 
 def executables(transport: str, runner) -> tuple[str, str]:
     """The resolved CLI and osascript. A missing executable refuses before any dispatch (exit 2)."""
-    name = "codex" if transport == "codex" else "opencode"
+    name = "codex" if transport == "codex" else "pi"
     cli = shutil.which(name)
     if cli is None:
         raise runner.Refused(f"the {name} CLI is not on PATH; a session cannot start.")
@@ -252,174 +247,64 @@ def executables(transport: str, runner) -> tuple[str, str]:
 
 
 # ---------------------------------------------------------------------------
-# The runner-supplied OpenCode policy, checked against the effective agent
+# The runner-supplied Pi policy, copied in and confirmed loaded
 # ---------------------------------------------------------------------------
 
+# The one extension a Pi session loads: plain ESM with no imports beyond node's own, so a copy runs anywhere.
+# Its handlers are tested without Pi in tests/test_stage2_session_policy.py.
+POLICY_SOURCE = Path(__file__).resolve().parent / "stage2_session_policy.mjs"
+POLICY_FILE = "stage2-session-policy.mjs"
+# The flag that extension registers; `pi --help` lists it when the file is loaded.
+POLICY_FLAG = "--stage2-session-policy"
 
-def policy_config(model: str) -> dict:
-    """The policy handed to OpenCode: one primary agent pinned to the model; outside directories and
-    subagents denied, bash asked for. The rule maps are ordered and the last match wins, so what the tool
-    inserts after a catch-all denial can be named and denied explicitly in the same form.
+
+def install_policy(private: Path, runner) -> Path:
+    """Copy the extension into the session's private directory; the copy, not the source, is what Pi loads.
+
+    The extension refuses writes to its own file, and a copy under `.stage2-sessions/` is one the session's
+    file tools may not touch either, whereas `scripts/` holds a tracked file of the worktree.
     """
-    permission = {
-        "bash": {"**": "ask"},
-        "webfetch": {"**": "deny"},
-        "external_directory": {"**": "deny"},
-        "task": {"**": "deny"},
-    }
-    agent = {
-        "description": "started by scripts/stage2.py session; the runner checked this policy at launch",
-        "mode": "primary",
-        "model": model,
-        "permission": json.loads(json.dumps(permission)),
-    }
-    return {
-        "$schema": "https://opencode.ai/config.json",
-        "model": model,
-        "agent": {AGENT: agent},
-        "permission": permission,
-    }
-
-
-def effective_policy(root: Path, cli: str, model: str, env: dict[str, str], runner) -> list[dict]:
-    """The resolved rules of `opencode --pure debug agent`, captured, bounded and never printed.
-
-    OpenCode 1.18.35 prints the agent's `Agent.Info`: `model` as `{providerID, modelID}` and `permission`
-    as one ordered rule list (`{permission, pattern, action}`, defaults first, the agent's own last).
-    No `--tool`, no `--params`, no diagnostics on the terminal: the output is read here and the refusal
-    says only what could not be confirmed.
-    """
+    copy = private / POLICY_FILE
     try:
-        done = subprocess.run(
-            [cli, "--pure", "debug", "agent", AGENT],
-            cwd=root,
-            env=env,
-            stdin=subprocess.DEVNULL,
-            capture_output=True,
-            text=True,
-            errors="replace",
-            timeout=CLI_TIMEOUT,
-            check=False,
-        )
-    except subprocess.TimeoutExpired as error:
-        raise runner.Refused(
-            f"opencode debug agent did not answer within {CLI_TIMEOUT:g}s; the policy is unknown."
-        ) from error
+        shutil.copyfile(POLICY_SOURCE, copy)
     except OSError as error:
-        raise runner.Refused(f"opencode debug agent could not be started: {error}") from error
+        raise runner.Refused(f"the policy extension {POLICY_SOURCE.name} could not be copied: {error}") from error
+    return copy
+
+
+def confirm_loaded(root: Path, cli: str, extension: Path, runner) -> None:
+    """Refuse unless Pi, started with only this extension, lists the extension's flag.
+
+    This confirms that the extension *loaded*, not how it behaves; its handlers are tested without Pi
+    (maintainer's answer Q-1). No model is called and no output is printed. A scratch `HOME` and agent
+    directory keep this call from reading anything of the maintainer's; only the flag line is looked for.
+    """
+    with tempfile.TemporaryDirectory(prefix="stage2-session-") as scratch:
+        env = runner.foreign_env({"HOME": scratch, "PI_CODING_AGENT_DIR": scratch})
+        try:
+            done = subprocess.run(
+                [cli, "--no-extensions", "-e", str(extension), "--offline", "--no-approve", "--help"],
+                cwd=root,
+                env=env,
+                stdin=subprocess.DEVNULL,
+                capture_output=True,
+                text=True,
+                errors="replace",
+                timeout=CLI_TIMEOUT,
+                check=False,
+            )
+        except subprocess.TimeoutExpired as error:
+            raise runner.Refused(
+                f"pi --help did not answer within {CLI_TIMEOUT:g}s; the policy extension is not confirmed loaded."
+            ) from error
+        except OSError as error:
+            raise runner.Refused(f"pi --help could not be started: {error}") from error
     if done.returncode != 0:
-        raise runner.Refused(f"opencode debug agent exited {done.returncode}; the effective policy is unknown.")
-    try:
-        entry = json.loads(done.stdout)
-    except ValueError as error:
-        raise runner.Refused("opencode debug agent did not answer in JSON; the effective policy is unknown.") from error
-    if not isinstance(entry, dict) or entry.get("name") != AGENT:
-        raise runner.Refused(f"opencode debug agent does not describe the agent {AGENT}; no session starts.")
-    if entry.get("mode") != "primary":
-        raise runner.Refused(f"the agent {AGENT} resolves as {entry.get('mode')!r}, not as the primary agent.")
-    pinned = entry.get("model")
-    resolved = f"{pinned.get('providerID')}/{pinned.get('modelID')}" if isinstance(pinned, dict) else None
-    if resolved != model:
+        raise runner.Refused(f"pi --help exited {done.returncode}; the policy extension is not confirmed loaded.")
+    if not re.search(rf"(?<![\w-]){re.escape(POLICY_FLAG)}(?![\w-])", done.stdout):
         raise runner.Refused(
-            f"the effective agent runs the model {resolved!r}, not the pinned {model!r}; no session starts."
+            "pi did not list the policy extension's flag; the extension did not load, and no session starts."
         )
-    rules = entry.get("permission")
-    if (
-        not isinstance(rules, list)
-        or not rules
-        or not all(
-            isinstance(rule, dict)
-            and all(isinstance(rule.get(field), str) for field in ("permission", "pattern", "action"))
-            for rule in rules
-        )
-    ):
-        raise runner.Refused("the effective agent carries no ordered permission rule list; the policy is unknown.")
-    return rules
-
-
-def wildcard(text: str, pattern: str) -> bool:
-    """OpenCode's `Wildcard.match`: `*` is any run, `?` one character, the whole text must match."""
-    escaped = re.sub(r"[.+^${}()|[\]\\]", lambda found: "\\" + found.group(0), pattern.replace("\\", "/"))
-    escaped = escaped.replace("*", ".*").replace("?", ".")
-    if escaped.endswith(" .*"):
-        escaped = escaped[:-3] + "( .*)?"
-    return re.fullmatch(escaped, text.replace("\\", "/"), re.S) is not None
-
-
-def catch_all(pattern: str) -> bool:
-    """A pattern made of `*` only matches every request."""
-    return bool(pattern) and set(pattern) == {"*"}
-
-
-def policy_problems(rules: list[dict]) -> tuple[list[str], list[tuple[str, str, str]]]:
-    """Where the effective rules end outside the runner's policy.
-
-    OpenCode evaluates the last rule whose permission name and pattern both match. For each guarded
-    permission the last catch-all rule must carry an action the runner allows - anything else is a
-    global or agent override and refuses. After it, only one kind of rule is tolerated: a specific
-    `external_directory` allowance, which is what OpenCode appends for its truncation directory unless
-    that exact pattern is denied explicitly; it is denied once and rechecked. Every other later rule -
-    another permission name that matches by wildcard, another action - refuses.
-    """
-    fatal: list[str] = []
-    fixable: list[tuple[str, str, str]] = []
-    for key, allowed in GUARDED.items():
-        applying = [rule for rule in rules if wildcard(key, rule["permission"])]
-        last = max((i for i, rule in enumerate(applying) if catch_all(rule["pattern"])), default=None)
-        if last is None:
-            fatal.append(f"{key} has no catch-all rule")
-            continue
-        if applying[last]["action"] not in allowed:
-            fatal.append(f"{key} ends on the catch-all {applying[last]['action']}")
-        for rule in applying[last + 1 :]:
-            if rule["action"] in allowed:
-                continue
-            if key == "external_directory" and rule["permission"] == key and rule["action"] == "allow":
-                fixable.append((key, rule["pattern"], rule["action"]))
-            else:
-                fatal.append(f"{key} meets {rule['permission']} {rule['pattern']} {rule['action']} after its catch-all")
-    return fatal, fixable
-
-
-def insert_denials(config: Path, fixable: list[tuple[str, str, str]], runner) -> None:
-    """One explicit denial per automatic allowance, after it - the last match wins."""
-    try:
-        data = json.loads(config.read_text(encoding="utf-8"))
-    except (OSError, ValueError) as error:
-        raise runner.Refused(f"the OpenCode policy {config} cannot be re-read: {error}") from error
-    try:
-        maps = [data["permission"], data["agent"][AGENT]["permission"]]
-    except (KeyError, TypeError):
-        maps = []
-    if len(maps) != 2 or not all(isinstance(permission, dict) for permission in maps):
-        raise runner.Refused(f"the OpenCode policy {config} holds no permission map; a denial cannot be inserted.")
-    for permission in maps:
-        for key, pattern, _action in fixable:
-            rules = permission.get(key)
-            if not isinstance(rules, dict):
-                raise runner.Refused(f"the policy for {key} is not a rule map; an explicit denial cannot be inserted.")
-            rules[pattern] = "deny"
-    try:
-        config.write_text(json.dumps(data, indent=2) + "\n", encoding="utf-8")
-    except OSError as error:
-        raise runner.Refused(f"the OpenCode policy {config} could not be amended: {error}") from error
-
-
-def verify_policy(root: Path, private: Path, cli: str, model: str, runner) -> None:
-    """Write the policy, read the effective agent, insert explicit denials once, refuse what stays."""
-    config = private / "opencode.policy.json"
-    try:
-        config.write_text(json.dumps(policy_config(model), indent=2) + "\n", encoding="utf-8")
-    except OSError as error:
-        raise runner.Refused(f"the OpenCode policy {config} could not be written: {error}") from error
-    env = runner.foreign_env({"OPENCODE_CONFIG": str(config)})
-    fatal, fixable = policy_problems(effective_policy(root, cli, model, env, runner))
-    if fixable:
-        insert_denials(config, fixable, runner)
-        fatal, fixable = policy_problems(effective_policy(root, cli, model, env, runner))
-    if fatal or fixable:
-        detail = "; ".join(fatal + [f"{key} keeps {pattern} on {action}" for key, pattern, action in fixable])
-        raise runner.Refused(f"the effective OpenCode policy keeps what the runner did not write ({detail}).")
 
 
 # ---------------------------------------------------------------------------
@@ -427,8 +312,8 @@ def verify_policy(root: Path, private: Path, cli: str, model: str, runner) -> No
 # ---------------------------------------------------------------------------
 
 
-def prepare(root: Path, transport: str, selection: str, cli: str, runner) -> Path:
-    """A fresh private directory under `.stage2-sessions/`, the fixed AppleScript, and the checked policy.
+def prepare(root: Path, transport: str, cli: str, runner) -> Path:
+    """A fresh private directory under `.stage2-sessions/`: the fixed AppleScript and, for Pi, the policy extension.
 
     Nothing user-owned is written or replaced; a preparation failure removes only what this call created.
     """
@@ -448,21 +333,21 @@ def prepare(root: Path, transport: str, selection: str, cli: str, runner) -> Pat
     except OSError as error:
         shutil.rmtree(private, ignore_errors=True)
         raise runner.Refused(f"the launch script {script} could not be written: {error}") from error
-    if transport == "opencode":
+    if transport == "pi":
         try:
-            verify_policy(root, private, cli, selection, runner)
+            confirm_loaded(root, cli, install_policy(private, runner), runner)
         except runner.Refused:
             shutil.rmtree(private, ignore_errors=True)
             raise
     return private
 
 
-def cli_argv(transport: str, root: Path, cli: str, model: str, prompt: str) -> list[str]:
+def cli_argv(transport: str, root: Path, cli: str, model: str, prompt: str, extension: Path | None = None) -> list[str]:
     """The one interactive form per transport: no headless verb, no fallback, no extra writable directory.
 
     The prompt can begin with `---` (a handover's frontmatter) or with a word that is a subcommand. Codex
-    gets it after `--`, the end of its options; OpenCode as `--prompt=<text>`, since its parser would not
-    take a separate value that starts with a dash.
+    and Pi get it after `--`, the end of their options. Pi reads a prompt that starts with `@` as a file name,
+    which is why `run` refuses such a prompt; Pi has no print or RPC mode here, so the window stays interactive.
     """
     if transport == "codex":
         return [
@@ -479,7 +364,7 @@ def cli_argv(transport: str, root: Path, cli: str, model: str, prompt: str) -> l
             "--",
             prompt,
         ]
-    return [cli, "--pure", str(root), "--model", model, "--agent", AGENT, f"--prompt={prompt}"]
+    return [cli, "--no-extensions", "-e", str(extension), "--offline", "--no-approve", "--model", model, "--", prompt]
 
 
 def terminal_command(root: Path, env: dict[str, str], argv: list[str]) -> str:
@@ -594,17 +479,21 @@ def run(root: Path, change: str, model: str, handover: str | None, runner) -> No
             f"the prompt is {len(prompt.encode('utf-8'))} UTF-8 bytes; a session takes at most {PROMPT_LIMIT}."
         )
     cli, terminal = executables(transport, runner)
+    if transport == "pi":
+        if prompt.startswith("@"):
+            raise runner.Refused(
+                "the handover text starts with `@`; Pi would read the rest as a file name, so no session starts."
+            )
+        runner.require_pi()
     runner.checked_prompt(ctx, endpoint, prompt)
-    private = prepare(root, transport, selection, cli, runner)
-    producer = "codex" if transport == "codex" else "opencode"
+    private = prepare(root, transport, cli, runner)
+    producer = "codex" if transport == "codex" else "pi"
     try:
         result = runner.checked_prompt(ctx, endpoint, prompt)
         command = terminal_command(
             root,
-            runner.foreign_env(
-                {"OPENCODE_CONFIG": str(private / "opencode.policy.json")} if transport == "opencode" else {}
-            ),
-            cli_argv(transport, root, cli, selection, prompt),
+            runner.foreign_env({}),
+            cli_argv(transport, root, cli, selection, prompt, private / POLICY_FILE),
         )
         if len(command.encode("utf-8")) > COMMAND_LIMIT:
             raise runner.Refused(

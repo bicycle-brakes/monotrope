@@ -16,7 +16,7 @@ stands between the rule and the call.
     python3 scripts/stage2.py release-loop <change>   # loop rows into findings.md
     python3 scripts/stage2.py review       <change>   # Codex, phase 6, the 2a session resumed
     python3 scripts/stage2.py probe        <change>   # one call per rung, no record written
-    python3 scripts/stage2.py session      <change>   # interactive Codex/OpenCode, a Terminal window
+    python3 scripts/stage2.py session      <change>   # interactive Codex/Pi, a Terminal window
 
 Each loop round and the probe check `pi --version` against `PI_VERSION` first;
 any other answer refuses with exit 2 before the leak check and before any call.
@@ -26,14 +26,15 @@ Stage-1 route uses Haiku 4.5 or Sonnet 5.5. A leak refusal never falls back.
 Implement lets the model edit but not run commands; the runner runs
 `make verify`, checks the time log and makes the one checkpoint commit.
 
-`session` starts one interactive OpenCode or Codex session in a new macOS
+`session` starts one interactive Pi or Codex session in a new macOS
 Terminal window, inside the change's dedicated worktree
 (`<main checkout>/.claude/worktrees/<change>`, attached branch, that directory
 as the working one). It takes `--model <id>` - exactly as
 `model-endpoints.yaml` lists it: a plain id on `openai-codex` runs the
-official Codex CLI, a full `opencode-go/<model>` id runs OpenCode with a
-runner-supplied policy when `opencode-go` lists the bare `<model>` - and `--handover <path>` for a file inside the
-worktree (default: the change's `handover.md`); its full text is the first
+official Codex CLI, a full `opencode-go/<model>` id runs the pinned Pi (the
+id names the endpoint, not the program) with a runner-supplied policy
+extension when `opencode-go` lists the bare `<model>` - and `--handover <path>`
+for a file inside the worktree (default: the change's `handover.md`); its full text is the first
 prompt. The declaration and the leak check run as for every call, the second
 time immediately before the window opens, and one audit line goes into
 `findings.md` as `dispatch pending.`, replaced afterwards by `accepted` or
