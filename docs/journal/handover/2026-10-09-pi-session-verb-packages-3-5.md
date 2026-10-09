@@ -148,3 +148,52 @@ call path to the `opencode` CLI, no credential handed over.
 **Resumption:** a follow-up commit on `feat/stage2-session-pi-policy` (items 2, 3,
 7) and `feat/stage2-session-pi-runner` (items 1, 4, 5, 6), then the docs branch;
 the chain is not merged yet, so the fixes can go onto the existing branches.
+
+## Addendum — four Haiku reviews, one per pull request, 2026-10-09
+
+Read-only reviews by four small-model agents; I checked their claims against the
+code or the unpacked Pi 1.1.0 tarball where I could. They add to, and mostly
+confirm, the list above.
+
+**Confirmed or new, to act on:**
+
+- **Same as item 1 above, now from two more readers (#112):** the session argv
+  lacks `--no-mcp`, `--no-skills`, `--no-context-files`, `--no-prompt-templates`
+  and `--no-themes`, which the reviewer-loop call passes. Spec criterion 11 says
+  "discovery off"; the plan says the omission is deliberate. The two disagree and
+  the maintainer decides which stands.
+- **Private directory removed only on `Refused` and `CallFailed` (#112):** an
+  `OSError` (for example an unwritable temp directory in `confirm_loaded`) leaves
+  `.stage2-sessions/pi-<id>/` behind. Fix: remove on any exception, re-raise.
+- **Quoting defeats the `DANGEROUS` patterns (#111):** `rm "-rf" x`, `s""udo ls`,
+  `g""it reset --hard`, `git -C "my dir" reset --hard`. Proposed: name this limit
+  in the docs rather than parse shell.
+- **Open question for the maintainer:** `git checkout -- .` and `git restore .`
+  also discard unsaved edits and are not on the list (Q-8 named two commands).
+- **The shell can read the sign-in directory (#112):** `cat ~/.pi/agent/…` is not
+  dangerous, runs unasked, and its output goes to the endpoint; the leak check
+  scans the prompt and the tree only. This is the shell side of Q-6, but the test
+  name `test_the_session_reads_no_secrets_and_sends_no_tokens` and the docs
+  wording should be narrowed for Pi.
+- **Docs (#113):** "hands Pi no key" should say "the runner"; `stamp_updated`
+  also changes the `updated:` line, so "only that line changes" is not exact; the
+  dangerous list is short and the docs should say what it leaves out; the doc
+  test guards wording, not behaviour.
+- **Plan and spec (#110):** the four-hour appetite contradicts the package sizes
+  of the Pi plan (11 to 13 hours); `spec.md` still says "No implementation before
+  PR #89 is on main" although #89 is merged; the ADR amendment's consequences omit
+  the Q-7 and Q-8 consequences (network programs and `git push` run unasked),
+  which belong in the decision pull request (package 6).
+- **Skipped tests:** `tests/test_stage2_session_policy.py` skips when `node` is
+  absent. Whether CI has `node` and runs the 200 cases there was not read; check a
+  CI log before relying on it.
+- **Small:** the "imports only node" test misses `import "x";` and `require`.
+
+**Checked and not a defect:** that Pi may not honour `--` (its parser handles it,
+read from the tarball); that `grep`, `find` and `ls` might take their directory
+under another key than `path` (the Pi 1.1.0 tool schemas name it `path`).
+
+**Limits of these reviews:** none ran Pi; the `--no-approve` and `--offline`
+meanings and whether the `tool_call` handler fires are package 7 (Mac). One
+reviewer briefly wrote a copy of a file into `.git/` of the main checkout and
+deleted it; `git status` there was clean afterwards.
