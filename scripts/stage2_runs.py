@@ -49,7 +49,11 @@ CALL_LINE = re.compile(r"^Stage-2 (call|session), \d{4}-\d{2}-\d{2}: (?P<rest>.*
 CLEAN = "leak check clean over"
 CALL_PREFIXES = ("Stage-2 call, ", "Stage-2 session, ")
 SEVERITY_ORDER = ("BLOCKER", "MAJOR", "MINOR")
-FOREIGN_ROUTES = (stage2.CODEX, stage2.GLM, stage2.GLM_FLASH)
+# The loop's GLM route stood in stage2.py until ADR 0011 moved the loop to OpenCode Go; the runs this
+# script counts went through it, and `model-endpoints.yaml` still declares it, so criterion 4 keeps
+# naming it. Whether criterion 4 now also names the OpenCode Go rungs is the maintainer's call.
+GLM = ("glm-coding-plan", "glm-5.3", "max")
+FOREIGN_ROUTES = (stage2.CODEX, GLM, stage2.GLM_FLASH)
 SEVERITY = stage2.ROW_COLUMNS.index("Severity")
 STATUS = stage2.ROW_COLUMNS.index("Status")
 MARK = stage2.RELEASED_COLUMNS.index("Phase 6")

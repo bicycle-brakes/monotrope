@@ -124,7 +124,7 @@ The released loop rows stand in a section of their own, and the section holds
 the line `Rounds run: <n>`:
 
 ```text
-## Phase 4b — GLM loop rows, released <date>
+## Phase 4b — loop rows, released <date>
 Rounds run: <n>
 ```
 
@@ -132,5 +132,5 @@ When the loop did not run there is no section and no heading. The runner puts
 one line in its place, at the end of the file:
 
 ```text
-Loop rows: none — the GLM loop did not run for this change.
+Loop rows: none — the loop did not run for this change.
 ```

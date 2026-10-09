@@ -118,10 +118,10 @@ endpunkte:
       - glm-5.3-flash
     bemerkung: >-
       Anthropic-compatible endpoint (`https://api.z.ai/api/anthropic`), operated
-      in China. `glm-5.3` is used for the review loop before phase 6 (phase
-      4b), through `python3 scripts/stage2.py review-loop`; `glm-5.3-flash`
-      explores (phase 1) through `stage2.py explore` and implements (phase 4)
-      through `stage2.py implement` (maintainer, 2026-10-06; bead
+      in China. No review phase routes to it since 2026-10-07 (ADR 0011): the
+      review loop (phase 4b) moved to `opencode-go`. `glm-5.3-flash` explores
+      (phase 1) through `stage2.py explore` and implements (phase 4) through
+      `stage2.py implement` (maintainer, 2026-10-06; bead
       coding-harness-qcp). **Only through Claude Code**, which the vendor lists
       as a supported tool — an own integration would not be covered by the
       subscription.
@@ -138,10 +138,50 @@ endpunkte:
       maintainer's ChatGPT subscription — any other way in is not covered.
       Used for the spec review (phase 2a) and the review (phase 6) of
       `bounded`, `feature` and `architectural` changes, through `python3
-      scripts/stage2.py`. OpenAI states that it processes and stores
+      scripts/stage2.py`; the review loop (phase 4b) moved to `opencode-go`
+      (ADR 0011). OpenAI states that
+      it processes and stores
       personal-plan data in the United States and wherever its affiliates and
       service providers are, and personal plans get no region choice (search
       summaries of OpenAI's pages, 2026-09-30).
+
+  - name: opencode-go
+    betreiber: "OpenCode (Operator Anomaly Innovations, Inc.)"
+    residenz: anbieter-erklaert
+    abrechnung: abonnement
+    darf_sehen: [framework]
+    modelle:
+      - deepseek-v4.1-flash
+      - mimo-v2.6-flash
+      - mimo-v2.6-pro
+    bemerkung: >-
+      The review loop (phase 4b) runs here — and only the review loop; the
+      spec review (phase 2a) and the review (phase 6) stay with Codex —
+      through `python3 scripts/stage2.py` and Pi at the version the runner
+      pins (1.1.0) only. The order of `modelle` is the loop's ladder: round n
+      calls the n-th id, and a one-line pull request reorders it. Address:
+      `https://opencode.ai/zen/go/v1/chat/completions`, under which the Go
+      page (read 2026-10-07) lists the three ids; the Anthropic-compatible
+      `https://opencode.ai/zen/go/v1/messages` is not used — three calls
+      there were refused on 2026-10-08. The Go page lists Pi among its
+      validated clients (read 2026-10-08), and Pi sends the
+      `x-opencode-session` header the page asks for.
+      Subscription: the Go plan at USD 10 a month. Prices per million
+      tokens and monthly limit on the Go plan: `deepseek-v4.1-flash` USD 0.15
+      input / 0.60 output off-peak and 0.30 / 1.20 in peak hours, limit USD
+      60; `mimo-v2.6-flash` 0.14 / 0.28, limit USD 60; `mimo-v2.6-pro` 0.435
+      / 0.87, limit USD 15. Privacy table of the Go page (read 2026-10-07):
+      data retention `0 days` and model training "Not used" for all three;
+      the DeepSeek rows carry the footnote that the ZDR agreement is renewed
+      monthly and the current one is valid through 2026-10-31. The Go page
+      states no region; `anbieter-erklaert` rests on the Zen page's sentence
+      "All our models are hosted in the US and EU." (read 2026-10-07) and is
+      corrected the day OpenCode states where Go runs. Terms
+      reading of 2026-10-08: the terms of service (effective 2026-08-15) name
+      no third-party client and forbid processes that "automatically or
+      programmatically extracts data or Output" and that run "while you are
+      not logged into the Services"; the maintainer accepted this residual
+      risk on 2026-10-08.
 
 # ---------------------------------------------------------------------------
 # Nutzungszweck — die Auflage, die kein technisches Gate prueft

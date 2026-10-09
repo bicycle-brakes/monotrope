@@ -115,11 +115,13 @@ REIST_NICHT: dict[str, str] = {
     "tests.test_model_endpoints::test_every_model_in_a_phase_prompt_resolves[02b-design.md-Opus 5.5]": "bestand-dieses-repos",
     "tests.test_model_endpoints::test_every_model_in_a_phase_prompt_resolves[03-plan.md-Opus 5.5]": "bestand-dieses-repos",
     "tests.test_model_endpoints::test_every_model_in_a_phase_prompt_resolves[04-implement.md-GLM 5.3 Flash]": "bestand-dieses-repos",
-    "tests.test_model_endpoints::test_every_model_in_a_phase_prompt_resolves[04b-review-loop.md-GLM 5.3]": "bestand-dieses-repos",
     "tests.test_model_endpoints::test_every_model_in_a_phase_prompt_resolves[06-review.md-Opus 5.5]": "bestand-dieses-repos",
     "tests.test_model_endpoints::test_every_model_in_a_phase_prompt_resolves[07-commit.md-Haiku 4.5]": "bestand-dieses-repos",
     "tests.test_model_endpoints::test_every_model_in_the_routing_table_resolves": "bestand-dieses-repos",
+    "tests.test_model_endpoints::test_no_old_reviewer_remark_claims_a_review_phase": "bestand-dieses-repos",
     "tests.test_model_endpoints::test_the_declaration_is_not_empty": "bestand-dieses-repos",
+    "tests.test_model_endpoints::test_the_opencode_go_entry_is_declared": "bestand-dieses-repos",
+    "tests.test_model_endpoints::test_the_opencode_go_remark_names_every_source": "bestand-dieses-repos",
     "tests.test_regelwerk::test_rules_at_level_three_or_higher_name_an_existing_enforcer[RB-G7]": "braucht-ein-gate-das-hier-lebt",
     "tests.test_regelwerk::test_rules_at_level_three_or_higher_name_an_existing_enforcer[RB-P5]": "braucht-ein-gate-das-hier-lebt",
     "tests.test_regelwerk::test_rules_at_level_three_or_higher_name_an_existing_enforcer[RB-S1]": "braucht-ein-gate-das-hier-lebt",
@@ -165,7 +167,14 @@ REIST_NICHT: dict[str, str] = {
 # throwaway repo for the reason the other prompt cases are: `model-endpoints.yaml` stays home.
 # 32 -> 33 on 2026-10-07: `prompts/02b-design.md` came along (plans/changes/template-bundle),
 # one more prompt with a model line, red in the throwaway repo for the same reason.
-DECKEL = 33  # raised on 2026-10-07 (32 -> 33); earlier: raised 2026-10-05 (31 -> 32), 2026-09-30 (31 -> 32), lowered 2026-09-30 (32 -> 31), raised 2026-09-29 (31 -> 32)
+# 33 -> 36 on 2026-10-08 (plans/changes/stage2-mimo): one entry was renamed, not
+# added — the loop prompt's model line names the ladder's first rung
+# `deepseek-v4.1-flash` where it used to name `GLM 5.3`. Three cases are new:
+# `test_the_opencode_go_entry_is_declared`, `test_the_opencode_go_remark_names_every_source`
+# and `test_no_old_reviewer_remark_claims_a_review_phase`. All three read
+# `model-endpoints.yaml`, which stays home like it did for every prompt case
+# above — the same reason, `bestand-dieses-repos`, and no new kind of exception.
+DECKEL = 36  # raised on 2026-10-08 (33 -> 36); earlier: raised 2026-10-07 (32 -> 33), raised 2026-10-05 (31 -> 32), 2026-09-30 (31 -> 32), lowered 2026-09-30 (32 -> 31), raised 2026-09-29 (31 -> 32)
 
 
 # ---------------------------------------------------------------------------

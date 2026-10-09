@@ -283,6 +283,8 @@ def test_every_model_in_the_routing_table_resolves() -> None:
     # Die Tabelle nennt Anzeigenamen ("Haiku 4.5"), die Erklaerung IDs.
     ids = zugelassene_modelle()
     for anzeige in tabelle:
+        if anzeige == "the ladder":
+            continue  # no model id: the ids live in the `opencode-go` entry, checked by its own test
         assert _loest_auf(anzeige, ids), (
             f"docs/WORKFLOW.md routet auf '{anzeige}', das in keinem Endpunkt steht. "
             f"Gesucht: {' oder '.join(sorted(_kandidaten(anzeige)))}"
@@ -312,3 +314,110 @@ def test_the_routing_check_reads_lettered_and_multi_word_rows() -> None:
     text = "| 2a Spec review | **k3** | x |\n| 4b Review loop | **k3** | x |\n"
     assert routing_models(text) == ["k3", "k3"]
     assert routing_models("| 1 | Explore | x |\n") == []
+
+
+# ---------------------------------------------------------------------------
+# The opencode-go entry (stage2-mimo)
+# ---------------------------------------------------------------------------
+
+
+def _endpunkt(name: str) -> dict:
+    """The one entry declared under `endpunkte:` with this name, or `{}`.
+
+    Defensive like the declaration itself: a test over a missing entry must
+    fail on its own assertion, not die on a `KeyError` the reader cannot place.
+    """
+    for e in _erklaerung()["endpunkte"]:
+        if isinstance(e, dict) and e.get("name") == name:
+            return e
+    return {}
+
+
+def test_the_opencode_go_entry_is_declared() -> None:
+    """Criterion 1: the entry, its fields and the ladder order - refuted by any other value."""
+    entry = _endpunkt("opencode-go")
+    assert entry["betreiber"] == "OpenCode (Operator Anomaly Innovations, Inc.)"
+    assert entry["residenz"] == "anbieter-erklaert"
+    assert entry["abrechnung"] == "abonnement"
+    assert entry["darf_sehen"] == ["framework"]
+    # The order is the maintainer's to change in this file alone; only the set and the count are pinned.
+    assert sorted(entry["modelle"]) == ["deepseek-v4.1-flash", "mimo-v2.6-flash", "mimo-v2.6-pro"]
+
+
+def opencode_remark_problems(remark: str) -> list[str]:
+    """Criterion 2: every point of the remark, each one stated by its source."""
+    one = " ".join(remark.split())
+    found = []
+    for needle in (
+        "https://opencode.ai/zen/go/v1/chat/completions",
+        "https://opencode.ai/zen/go/v1/messages` is not used",
+        "refused on 2026-10-08",
+        "Pi at the version the runner pins",
+        "lists Pi among its validated clients",
+        "`x-opencode-session` header",
+        '"automatically or programmatically extracts data or Output"',
+        '"while you are not logged into the Services"',
+        "effective 2026-08-15",
+        "accepted this residual risk on 2026-10-08",
+        "USD 10 a month",
+        "deepseek-v4.1-flash` USD 0.15",
+        "0.30 / 1.20",
+        "limit USD 60",
+        "mimo-v2.6-flash` 0.14 / 0.28, limit USD 60",
+        "mimo-v2.6-pro` 0.435 / 0.87, limit USD 15",
+        "0 days",
+        '"Not used"',
+        "valid through 2026-10-31",
+        "states no region",
+        '"All our models are hosted in the US and EU."',
+        "read 2026-10-07",
+        "phase 2a",
+        "phase 4b",
+        "phase 6",
+        "scripts/stage2.py",
+    ):
+        if needle not in one:
+            found.append(needle)
+    return found
+
+
+def test_the_opencode_go_remark_names_every_source() -> None:
+    """Criterion 2: the remark says what OpenCode states, with its source and date."""
+    remark = _endpunkt("opencode-go")["bemerkung"]
+    assert opencode_remark_problems(remark) == []
+    planted = remark.replace('"All our models are hosted in the US and EU."', "a region it does not name")
+    assert opencode_remark_problems(planted)
+    planted = remark.replace("valid through 2026-10-31", "renewed without end")
+    assert opencode_remark_problems(planted)
+    planted = remark.replace("refused on 2026-10-08", "accepted")
+    assert opencode_remark_problems(planted)
+    planted = remark.replace("lists Pi among its validated clients", "lists Claude Code as a validated client")
+    assert opencode_remark_problems(planted)
+    planted = remark.replace("accepted this residual risk on 2026-10-08", "saw no risk")
+    assert opencode_remark_problems(planted)
+    assert "Claude Code" not in remark and "native session header" not in remark
+
+
+def _remark_problems(codex: str, glm: str) -> list[str]:
+    """What criterion 3 requires of the two old reviewer remarks, as the problems found."""
+    problems = []
+    if "Used for the spec review (phase 2a) and the review (phase 6)" not in codex:
+        problems.append("codex: the phases still routed to it")
+    if "the review loop (phase 4b) moved to `opencode-go`" not in codex:
+        problems.append("codex: the loop's move")
+    if "No review phase routes to it" not in glm:
+        problems.append("glm: no review phase")
+    if "the review loop (phase 4b) moved to `opencode-go`" not in glm:
+        problems.append("glm: the loop's move")
+    if not ("stage2.py explore" in glm and "stage2.py implement" in glm):
+        problems.append("glm: the work verbs")
+    return problems
+
+
+def test_no_old_reviewer_remark_claims_a_review_phase() -> None:
+    """Criterion 3: each old entry says which phases, if any, still route to it."""
+    codex = " ".join(_endpunkt("openai-codex")["bemerkung"].split())
+    glm = " ".join(_endpunkt("glm-coding-plan")["bemerkung"].split())
+    assert _remark_problems(codex, glm) == []
+    planted = codex.replace("the review loop (phase 4b) moved to `opencode-go`", "runs every review as before")
+    assert _remark_problems(planted, glm) == ["codex: the loop's move"]

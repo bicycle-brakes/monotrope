@@ -10,7 +10,9 @@ at effort `max`, started by `python3 scripts/stage2.py spec-review <change>`.
 start it with a fixed id, `claude --model claude-opus-5-5 --session-id <uuid>
 -n review-<name>`, and write the id under the table in `findings.md`
 (`Reviewer session: <uuid>`). On the Codex path the runner starts the session
-and writes `Reviewer session: codex <thread id>` itself.
+and writes `Reviewer session: codex <thread id>` itself. The review loop
+between the two phases runs at most three rounds on the ladder — round 3 only
+when round 2 wrote a taken row (`docs/WORKFLOW.md` §4).
 
 Through the runner you answer in table rows of six cells — `| ID | Severity |
 Dimension | Origin | Where | Finding |` — and the runner adds the reviewer, the
