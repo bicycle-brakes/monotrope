@@ -161,3 +161,100 @@ coding-harness-kw0` on origin should read CLOSED.
 - Not run: the setup script in a fresh environment; any Pi code (the Pi
   findings come from reading the docs of the pinned package); the tracker
   replay; `tools/bd dolt push` (failed, HTTP 403).
+
+## Addendum 2026-10-09 (later): resume after the maintainer's `/clear`
+
+The maintainer clears this remote session's context and resumes in the same
+session from this section. Read it first, then the rest of this file.
+
+### State at the time of writing
+
+- Pull request #109 (branch `chore/0al-prep`, documents only) is open: it
+  brings this file, the Pi plan, the 0al preparation and the addendum to the
+  night handover onto `main`. This session is subscribed to its events. When
+  CI is green, merge it only when the maintainer says so in their own message
+  (`expectedHeadSha` = the head CI ran on; not a decision pull request, so no
+  decision block is restated).
+- The container still holds: `/home/user/coding-harness` (on `main`), the
+  worktree `/home/user/coding-harness/.claude/worktrees/0al-prep`
+  (`chore/0al-prep`), `/home/user/lakeswitch-ai`, `/home/user/adhd-relief`,
+  the venvs (`coding-harness/.venv`, `lakeswitch-ai/.venv`, Python 3.11),
+  `~/.local/bin/bd-1.3.0`, and the bootstrapped tracker databases. The local
+  tracker of `coding-harness` carries the unpushed writes listed in "Pending
+  tracker writes"; the local id of the Pi bead is coding-harness-6h4. Do not
+  retry `tools/bd dolt push` blindly: it failed with HTTP 403, and the
+  environment's rules say a 403 is reported, not routed around.
+- The maintainer allowed this session to write the tracker on 2026-10-09
+  because no other session was running. Ask again before the next write if
+  time has passed.
+
+### The first thing to do: the six interview questions
+
+The maintainer asked for them ("Stelle mir dann die Fragen"). They are work
+package 1 of `docs/research/2026-10-09-session-verb-on-pi-plan.md`; asking them
+needs no further approval, but say in one line that the plan itself is still
+`proposed` and ask whether the answers also approve it.
+
+Ask one question at a time with the AskUserQuestion tool, in German, the
+recommended option first and marked "(Empfohlen)", each option with its
+consequence. The maintainer answered the five #105 questions this way and it
+worked. The six, with the recommendation:
+
+1. How strong is the read-back of the policy? Recommended: the runner confirms
+   the extension loaded; handler tests without Pi hold its behaviour.
+   Alternative: also a live canary call (needs a model call).
+2. Which `bash` calls ask? Recommended: every call (as today's `bash: ask`).
+   Alternative: only dangerous patterns, as Pi's `permission-gate.ts` example.
+3. What may the file tools do? Recommended: read and write inside the worktree,
+   block outside, and block writes to the extension's own file,
+   `.stage2-sessions/` and `.pi/`. Alternative: also block writes to `.git/`.
+4. One decision pull request or two, and in which change? Recommended: fold
+   the Pi move into the unmerged ADR 0007 session amendment and continue
+   `plans/changes/stage2-session` (class `architectural`, so no ADR answer
+   file is owed). Alternative: merge that amendment as it stands first.
+5. What does an `opencode-go/<model>` id select once the CLI is gone?
+   Recommended: Pi (the id names the endpoint). Alternative: refuse until a new
+   id scheme is decided.
+6. How does the Pi session sign in? Recommended: a dedicated Pi agent directory
+   outside the repository, set through `PI_CODING_AGENT_DIR`, filled once by
+   the maintainer with `/login`, holding only the `opencode-go` credential (the
+   runner reads nothing; no other provider to switch to). Alternatives: the
+   maintainer's own `~/.pi/agent`; `OPENCODE_API_KEY` exported in the shell.
+
+### Where the answers go
+
+In a fresh worktree from a freshly fetched `origin/main`
+(`.claude/worktrees/stage2-session-pi`, branch `feat/stage2-session-pi`),
+appended to `plans/changes/stage2-session/decisions.md` under a heading
+`## Answers` as records `## Q-1 · <title>` … `## Q-6 · <title>`, each with the
+lines `asked: 2026-10-09, the directing conversation`, `answer: …`,
+`answered_by: maintainer`, `status: answered`, then one sentence in the form
+"In the context of …, facing …, we decided …, to achieve …, accepting …".
+Answers given in German are recorded in English, translated faithfully.
+The file currently has no `Q-` records, so Q-1 to Q-6 are free. The gate
+`interview-minimums` exempts this change by its date today, but once the diff
+touches `docs/adr/` (the amendment moves there) five counted answers are owed
+whatever the date; `python3 scripts/check_interview_minimums.py` must then be
+green. Bump `updated:` in that file's frontmatter.
+
+Then `make verify`, commit (English, Conventional Commits, the attribution
+trailers the harness names), push, and continue with work package 2 of the
+plan only after the maintainer approved the plan.
+
+### Rules that held in this session
+
+- German with the maintainer: result first, short, one question with a
+  recommendation; say which of proposed, implemented and tested a thing is.
+- Everything in the repository is English.
+- Merge only when the maintainer asks in their own message; for a decision
+  pull request restate its decision block here and as a pull-request comment
+  first; never with an admin override.
+- A branch rule asks for `verify` on the merged commit: after any merge, the
+  next pull request takes `main` in (a merge commit, never a rebase of someone
+  else's branch) and waits for CI again.
+- `plans/INDEX.md` is generated: resolve it with
+  `python3 scripts/plans_registry.py --index`, never by hand.
+- Still open and not asked: entering the setup script
+  (`tools/cloud-env/setup.sh`) in the environment settings; whether D-13
+  criterion 4 should name the OpenCode Go rungs; archiving
+  `plans/changes/stage2-mimo` and `plans/changes/interview-minimums`.
