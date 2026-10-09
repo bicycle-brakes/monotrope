@@ -745,6 +745,10 @@ def test_pi_is_dispatched_interactively_with_the_policy_extension(world: World) 
     ], "the read-back runs once, bounded, with only this extension and no model call"
     assert launch["argv"] == [
         "--no-extensions",
+        "--no-mcp",
+        "--no-skills",
+        "--no-prompt-templates",
+        "--no-themes",
         "-e",
         str(extension),
         "--offline",
@@ -886,6 +890,33 @@ def test_a_missing_extension_source_refuses_and_cleans_up(
     assert "could not be copied" in capsys.readouterr().err
     assert len(world.calls("pi")) == 1, "the read-back is never asked about a file that is not there"
     assert world.calls("osascript") == [] and world.policies() == []
+
+
+@pytest.mark.parametrize(
+    "failure", [OSError("temp directory not writable"), KeyboardInterrupt()], ids=["oserror", "ctrl-c"]
+)
+def test_any_failure_before_the_dispatch_removes_the_private_directory(
+    world: World, monkeypatch: pytest.MonkeyPatch, failure: BaseException
+) -> None:
+    def broken(*_args: object, **_kwargs: object) -> None:
+        raise failure
+
+    monkeypatch.setattr(stage2_session, "confirm_loaded", broken)
+    world.declare_go()
+    world.script(pi=pi_steps())
+    with pytest.raises(type(failure)):
+        world.run(model=GO_MODEL)
+    assert world.calls("osascript") == [] and world.policies() == []
+
+
+def test_the_session_keeps_discovery_off_except_context_files(world: World) -> None:
+    world.declare_go()
+    world.script(pi=pi_steps({}), osascript=[{"exec_command": True}])
+    assert world.run(model=GO_MODEL) == 0
+    argv = world.calls("pi")[-1]["argv"]
+    for flag in ("--no-mcp", "--no-skills", "--no-prompt-templates", "--no-themes"):
+        assert flag in argv, f"the session takes {flag}"
+    assert "--no-context-files" not in argv, "AGENTS.md stays on on purpose"
 
 
 def test_the_extension_is_confirmed_again_for_every_launch(world: World) -> None:

