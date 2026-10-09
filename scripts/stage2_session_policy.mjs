@@ -34,15 +34,14 @@ export const PROTECTED_DIRS = [".stage2-sessions", ".pi"];
 const GIT = String.raw`\bgit(?:\s+-\S+(?:\s+[^-\s]\S*)?)*\s+`;
 
 // Dangerous `bash` patterns. The first three are the ones of Pi's shipped
-// example `permission-gate.ts`; the rest are the runner's addition for what the
-// previous OpenCode policy kept shut: a network client, a push, a hard reset.
-// The list is one array: extend it here and in its test.
+// example `permission-gate.ts` (Q-2); the last two are the maintainer's addition
+// (Q-8): the git commands that discard unsaved work. Network programs and
+// `git push` do not ask (Q-7, Q-8). The list is one array: change it here and
+// in its test, and record the decision in plans/changes/stage2-session/.
 export const DANGEROUS = [
   { id: "rm-recursive", pattern: /\brm\b[^\n;|&]*\s(-[a-zA-Z]*[rR][a-zA-Z]*|--recursive)\b/ },
   { id: "sudo", pattern: /\bsudo\b/ },
   { id: "chmod-777", pattern: /\b(chmod|chown)\b.*777/ },
-  { id: "network-client", pattern: /\b(curl|wget|scp|rsync|ssh|sftp|nc|ncat)\b/ },
-  { id: "git-push", pattern: new RegExp(`${GIT}push\\b`) },
   { id: "git-reset-hard", pattern: new RegExp(`${GIT}reset\\b[^\\n;|&]*--hard\\b`) },
   { id: "git-clean", pattern: new RegExp(`${GIT}clean\\b`) },
 ];

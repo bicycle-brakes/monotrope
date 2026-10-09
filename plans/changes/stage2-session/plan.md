@@ -224,20 +224,29 @@ unasked. The patterns now allow `-C <dir>`, `-c k=v` and `--no-pager` before the
 verb.
 
 **Planted faults, 2026-10-09:** one rule at a time was removed in the source,
-the suite run, the source restored. 25 faults: the outside check, the symlink
+the suite run, the source restored. 26 faults: the outside check, the symlink
 resolution, the `@` prefix, `~/` and a bare `~`, the `file://` form, the NUL
 check, the own-file and protected-directory rules, case folding, the `find`
 pattern and `grep` glob checks, a missing required path, the no-UI block, any
 answer accepted, a failing handler letting the call through, a `bash` call
-without a command, the flag not registered, and each of the seven dangerous
-patterns. The first run left two alive (a bare `~`, and the NUL check's own
-message); the tests were strengthened and both then went red. At the end all 25
-turn a test red; the suite is 200 cases, green.
+without a command, the flag not registered, each of the five dangerous
+patterns, the git prefix that sees a verb behind `-C`, and, after the answers Q-7
+and Q-8, the network and `git push` patterns put back. The first run left two
+alive (a bare `~`, and the NUL check's own message); the tests were
+strengthened and both then went red. At the end all 26 turn a test red; the
+suite is 200 cases, green.
 
-**Named limits.** The dangerous-pattern list is the three of Pi's shipped
-`permission-gate.ts` plus four of the runner's own (a network client, `git
-push`, `git reset --hard`, `git clean`), because the OpenCode policy kept
-network and pushes shut; it is one array, `DANGEROUS`, and the maintainer can
-shorten it. A tool name the extension does not know (none is enabled with
-discovery off) passes. Nothing here was run inside a live Pi: whether the
-handler behaves there the way the tests say is package 7, on the Mac.
+**The shell patterns that ask** are the three of Pi's shipped
+`permission-gate.ts` (a recursive `rm`, `sudo`, `chmod`/`chown` with 777, Q-2)
+and, by the maintainer's answer Q-8, `git reset --hard` and `git clean`.
+Network programs and `git push` run without a question (Q-7, Q-8; both answers
+differ from the recommendation, and `decisions.md` names the cost). The list is
+one array, `DANGEROUS`. An earlier draft of this package asked for network
+programs and `git push` as well, which the maintainer declined in the interview
+of 2026-10-09.
+
+**Named limits.** A tool name the extension does not know (none is enabled with
+discovery off) passes. A word inside a command that matches a pattern, such as
+`rm -r` in a quoted argument, asks too: noise, not a hole. Nothing here was run
+inside a live Pi: whether the handler behaves there the way the tests say is
+package 7, on the Mac.
