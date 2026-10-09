@@ -94,3 +94,57 @@ None known as of this handover. House rule 4 (one tracker writer) holds.
 
 Read this file, then `git fetch` and look at #110 to #113; if the maintainer has
 merged any, bring `main` into the next branch before anything else.
+
+## Addendum — review of #110 to #113, 2026-10-09
+
+An independent read of the chain (a subagent that had not seen this session's
+reasoning; it ran the policy's `decide()` in node, not pytest, and never saw a
+live Pi). Nothing is fixed yet; these are open items, ranked.
+
+**To fix before the chain merges (proposed):**
+
+1. **MCP, skills and prompt templates stay on in the session (confirmed by me).**
+   The reviewer call in `scripts/stage2.py` passes `--no-mcp`, `--no-skills`,
+   `--no-context-files`, `--no-prompt-templates` and `--no-themes`; the session
+   argv in `cli_argv` does not. Pi 1.1.0 reads MCP servers from
+   `<agent-dir>/mcp.json` and `.pi/mcp.json`, and `decide()` allows every tool
+   that is not a path tool or `bash`, so an MCP file tool bypasses the worktree
+   bounds. Fix: decide which of those flags the interactive session takes (at
+   least `--no-mcp`), add them to `cli_argv` with tests, and say so in the docs.
+   Context files (`AGENTS.md`) probably stay on on purpose; that is the
+   maintainer's call.
+2. **`git -C "my dir" reset --hard` is not caught** (the option-value part of the
+   `GIT` prefix cannot span a quoted space); the same for `git clean`. Fix the
+   regex and add a quoted-value test.
+3. **`rm` with a line continuation, or `;` inside a quoted argument, is not
+   caught** (`rm \` + newline + `-rf y`; `rm "a;b" -r`). Low likelihood.
+
+**Docs and small items:**
+
+4. `docs/WORKFLOW.md` says the pin check runs first; in `run()` the version check
+   comes after the leak check and the handover read. Nothing is sent before it,
+   so it is harmless, but the sentence and the `require_pi` docstring are wrong
+   for this verb.
+5. `ENV_ALLOW` drops `PI_CODING_AGENT_DIR` and `SSH_AUTH_SOCK`: a custom agent
+   directory is silently ignored, and `git push` over SSH fails inside the
+   session. The docs should say so, or the allow-list should change (maintainer's
+   call; Q-6 chose `~/.pi/agent`).
+6. Only `Refused` and `CallFailed` remove the private directory; Ctrl-C leaves
+   it. It is gitignored and holds no secret.
+7. No test for the `process.platform` to `caseInsensitive` mapping in the
+   extension's default export (matters on macOS).
+8. The read-back proves the flag name appears in `--help`, not that the
+   `tool_call` handler fires (known and accepted as Q-1; package 7 must show it).
+
+**Checked by me and found not a defect:** the review's worry that `--` might not
+be honoured by Pi: the pinned Pi's argument parser handles `--` explicitly
+(`dist/cli/args.js`, read from the tarball, not executed). `--no-approve` on the
+interactive launch is still only read from the docs.
+
+**Found fine by the review:** path resolution (`@`, `~`, `file://`, symlinks,
+`..` in find patterns), fail-closed handling, the Terminal launch quoting, no
+call path to the `opencode` CLI, no credential handed over.
+
+**Resumption:** a follow-up commit on `feat/stage2-session-pi-policy` (items 2, 3,
+7) and `feat/stage2-session-pi-runner` (items 1, 4, 5, 6), then the docs branch;
+the chain is not merged yet, so the fixes can go onto the existing branches.
