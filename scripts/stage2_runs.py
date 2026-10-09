@@ -106,7 +106,7 @@ def measure(findings: str, research: str = "") -> Counts:
     counts = Counts(rounds=len(stage2.VERDICT_LINE.findall(findings)))
     section = None
     # A table's header is the line above its separator, whatever its first cell; any line that is no
-    # table line ends the table, a heading included (phase 6, F-1, F-5, F-6).
+    # table line ends the table, a heading included (phase 6, F-1, F-5, F-6, F-8).
     header: list[str] = []
     previous: list[str] | None = None
     for line in findings.splitlines():
@@ -116,20 +116,23 @@ def measure(findings: str, research: str = "") -> Counts:
             if line.startswith("## "):
                 section = _section(line)
             continue
-        if all(re.fullmatch(r":?-+:?", cell) for cell in cells):
-            header, previous = previous or [], None
+        if not header:
+            # Only the second line of a table can be its separator; a body row of dashes is a row (F-8).
+            if previous is not None and all(re.fullmatch(r":?-+:?", cell) for cell in cells):
+                header, previous = previous, None
+            else:
+                previous = cells
             continue
-        if previous is None and not header:
-            previous = cells
-        if stage2._furniture(cells):
-            continue
-        # Every table that has the column, whatever its section or width (phase 6, F-1).
+        # Every body row of every table that has the column, whatever its section, width or first cell
+        # (phase 6, F-1, F-7).
         if (
             "Broke a test" in header
             and len(cells) == len(header)
             and cells[header.index("Broke a test")].lower() == "yes"
         ):
             counts.broke += 1
+        if stage2._furniture(cells):
+            continue
         if len(cells) == len(stage2.RELEASED_COLUMNS) and stage2.LOOP_ID.fullmatch(cells[0]):
             status = cells[STATUS].lower()
             if status.startswith("taken"):

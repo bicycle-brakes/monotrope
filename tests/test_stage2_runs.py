@@ -380,3 +380,11 @@ def test_a_header_is_the_line_above_the_separator_and_ends_with_its_table() -> N
     second = stage2.render_table(["Name", "Available"], [["example", "yes"]])
     assert stage2_runs.measure(HEADER + "\n" + first + "\n## Availability\n" + second + "\n").broke == 0
     assert stage2_runs.measure(HEADER + "\n" + first + "\nprose\n" + second + "\n").broke == 0
+
+
+def test_a_body_row_is_a_row_whatever_its_first_cell_or_dashes() -> None:
+    """Fault: a body row `ID, yes` taken for a header (F-7), or a body row `---, ---` for a separator (F-8)."""
+    id_row = stage2.render_table(["Finding", "Broke a test"], [["ID", "yes"]])
+    assert stage2_runs.measure(HEADER + "\n" + id_row + "\n").broke == 1
+    dashes = stage2.render_table(["ID", "Broke a test"], [["---", "---"], ["X-1", "yes"]])
+    assert stage2_runs.measure(HEADER + "\n" + dashes + "\n").broke == 1

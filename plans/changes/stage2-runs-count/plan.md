@@ -85,3 +85,10 @@ Phase 6 round 2 (Codex, 2026-10-09) raised two BLOCKERs on the F-1 repair
 taken and closed by one test red under both planted faults; eighteen tests.
 2026-10-09 02:53–03:05 UTC, about 12 min, orchestrator clock, Codex's wait
 included.
+
+Phase 6 round 3 (Codex, 2026-10-09) raised F-7 (a body row whose first cell
+is `ID`) and F-8 (a body row of dashes, origin `fix-r4`); both taken and
+closed by one test, red under both planted faults; nineteen tests. Two
+consecutive `fix-r` rounds: escalated by naming the reader's limits in the
+spec instead of a fourth round. 2026-10-09 03:06–03:15 UTC, about 9 min,
+orchestrator clock, Codex's wait included.

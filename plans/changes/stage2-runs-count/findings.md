@@ -65,3 +65,14 @@ Stage-2 call, 2026-10-09: review · endpoint openai-codex · model gpt-6.1-sol �
 | F-6 | BLOCKER | SPEC | fix-r3 | `scripts/stage2_runs.py:110–125` | A table headed `ID, Broke a test` with a `no` row, followed immediately by `## Availability` and a table headed `Name, Available` with row `example, yes`, reports one broken-test row instead of zero. The heading preserves the previous header, so the unrelated availability value is counted. Before this repair the same input returned zero. [AC 4] | Codex | closed — test_a_header_is_the_line_above_the_separator_and_ends_with_its_table; red under its planted fault | no |
 
 Phase 6 verdict: codex 01a11d92-1deb-7832-a399-7fb4224bad2c, 2026-10-09
+
+Stage-2 call, 2026-10-09: review · endpoint openai-codex · model gpt-6.1-sol · leak check clean over 311 files, 717 commits, 12 rules.
+
+## Phase 6 — Codex, 2026-10-09
+
+| ID | Severity | Dimension | Origin | Where | Finding | Reviewer | Status | Broke a test |
+|---|---|---|---|---|---|---|---|---|
+| F-7 | BLOCKER | SPEC | base | `scripts/stage2_runs.py:124–125`; `scripts/stage2.py:331–333` | A table headed `Finding, Broke a test` with data row `ID, yes` reports 0 instead of 1. `_furniture()` treats any first cell equal to `ID` as a header, even after the actual header and separator have been recognized. This legitimate data row must count. [AC 4] | Codex | closed — test_a_body_row_is_a_row_whatever_its_first_cell_or_dashes; red under its planted fault; not re-reviewed (escalation, see spec) | no |
+| F-8 | BLOCKER | SPEC | fix-r4 | `scripts/stage2_runs.py:119–121` | A table headed `ID, Broke a test` with body rows `---, ---` and `X-1, yes` reports 0 instead of 1. The hyphen-only body row is mistaken for another separator and clears the active header, dropping the following marked row. The same input returned 1 before this repair. [AC 4] | Codex | closed — test_a_body_row_is_a_row_whatever_its_first_cell_or_dashes; red under its planted fault; not re-reviewed (escalation, see spec) | no |
+
+Phase 6 verdict: codex 01a11d92-1deb-7832-a399-7fb4224bad2c, 2026-10-09

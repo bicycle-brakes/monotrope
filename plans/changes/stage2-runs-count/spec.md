@@ -119,3 +119,20 @@ Markdown table, one row per named change, then a few summary lines.
 - [DETAIL] `runner-derived-files` (#102) is measured beside the first three
   in the addendum, labelled as the fourth run: it is the first archived
   run, which exercises criterion 1's archive path on real data.
+
+## Named limits (after phase 6, 2026-10-09)
+
+Phase 6 ran three Codex rounds. Rounds 2 and 3 each found a fault that the
+previous repair had introduced (F-6 origin `fix-r3`, F-8 origin `fix-r4`):
+two consecutive `fix-r` rounds are an escalation, not a fourth round
+(`docs/WORKFLOW.md` §2, "The findings process"). F-7 and F-8 are closed
+with a test each and were not re-reviewed. What the table reader does not
+promise, beyond what the runner writes:
+
+- A table is a header line, a separator line directly under it, and body
+  rows of the header's width; a table without a separator, or with rows of
+  another width, is not read for `Broke a test`.
+- Two tables with no line between them read as one.
+- A pipe inside a cell must be written `\|`, as the runner writes it
+  (`stage2.split_row`).
+
