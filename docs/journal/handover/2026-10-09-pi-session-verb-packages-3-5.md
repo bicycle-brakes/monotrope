@@ -197,3 +197,28 @@ under another key than `path` (the Pi 1.1.0 tool schemas name it `path`).
 meanings and whether the `tool_call` handler fires are package 7 (Mac). One
 reviewer briefly wrote a copy of a file into `.git/` of the main checkout and
 deleted it; `git status` there was clean afterwards.
+
+## Addendum — review fixes pushed, 2026-10-09 (late)
+
+The maintainer answered the interview: four of the five discovery flags (not
+`--no-context-files`), `git checkout -- .` and `git restore .` ask too, the
+sign-in directory is handled by narrowing the docs, and the plan corrections
+go onto the existing branches. Implemented and tested (pytest on the touched
+suites green locally; `make verify` here is red only on two tests that are red
+on the untouched branch under Python 3.13, `test_lock` and one in
+`test_stage2`; the hosted check suite of #111 finished without a failure):
+
+| Branch | Commit | What |
+|---|---|---|
+| `feat/stage2-session-pi-policy` (#111) | `f5bb37a` | review items 2, 3, 7; plus `git checkout`/`git restore` ask |
+| `feat/stage2-session-pi-runner` (#112) | pushed after `f5bb37a` | item 1 (four flags), 4 (docstring), 6 (cleanup on any failure) |
+| `feat/stage2-session-pi-docs` (#113) | pushed after the runner | item 5 and the doc points: flags, limits of the patterns, shell can read `~/.pi/agent`, `ENV_ALLOW`, wording |
+| `feat/stage2-session-pi` (#110) | pushed | appetite 13 hours, #89 statements |
+
+Each downstream branch has the one above merged in, except #110's new commit,
+which they take when #110 is merged. Still open: whether the hosted CI has
+`node` and runs the 200+ policy cases (not read); the Q-7/Q-8 consequences in
+the ADR amendment (package 6); package 7 on the Mac; the tracker replays.
+
+**Resumption:** the maintainer says "merge" (chain order #110 to #113), then
+package 6.
