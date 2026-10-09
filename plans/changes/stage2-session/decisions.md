@@ -224,6 +224,40 @@ the maintainer's own `~/.pi/agent`, to achieve no extra setup step, accepting
 that the directory may hold other providers' credentials the session could
 switch to. — 2026-10-09
 
+## Q-7 · Whether network programs ask
+
+asked: 2026-10-09, the directing conversation
+answer: no — `curl`, `wget`, `scp`, `rsync`, `ssh`, `sftp` and `nc` run without a
+  question (asking was the recommendation)
+answered_by: maintainer
+status: answered
+
+In the context of the shell patterns that ask (Q-2), facing the choice between
+adding network programs to Pi's three (`rm -r`, `sudo`, `chmod/chown 777`) and
+leaving them out, we decided to leave them out, to achieve fewer interruptions
+and a list that stays close to Pi's own example, accepting that the session can
+send files out with a network program without a question, and that the leak
+check, which covers the launch only, does not see it. — 2026-10-09
+
+## Q-8 · Which git commands ask
+
+asked: 2026-10-09, the directing conversation
+answer: `git reset --hard` and `git clean` ask; `git push` does not (asking before
+  all three was the recommendation)
+answered_by: maintainer
+status: answered
+
+In the context of the shell patterns that ask (Q-2), facing the choice between
+asking before all three of `git push`, `git reset --hard` and `git clean`,
+before the two that discard work, and before none, we decided the two that
+discard unsaved work, to achieve a question before work in the worktree is
+lost, accepting that the session can push branches to GitHub without a
+question. — 2026-10-09
+
+The patterns that ask are therefore: a recursive `rm`, `sudo`, `chmod` or
+`chown` with 777 (Q-2), `git reset --hard` and `git clean` (Q-8). Q-7 and Q-8
+refine Q-2; they replace nothing in it.
+
 ## Note — settled instructions 3 and the OpenCode details, 2026-10-09
 
 Settled instruction 3 above ("Deny outside-worktree reads in OpenCode as far
