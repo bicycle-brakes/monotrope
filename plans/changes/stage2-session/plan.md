@@ -317,3 +317,21 @@ and the handlers hold in the TUI, that `--offline` leaves the model call alone,
 and that a multi-line first message opens the interactive session are package 7,
 on the Mac. The read-back confirms the load, not the behaviour (Q-1). The
 documents lag the code until package 5.
+
+## Package 5 — documents (2026-10-09)
+
+**Done.** `docs/WORKFLOW.md` describes the session verb on Pi: the `session`
+bullet, the dispatch paragraph (an `opencode-go` id starts the pinned Pi, never
+the OpenCode CLI; an off-pin Pi is refused), the limits paragraph (what the
+policy extension enforces, that the read-back confirms the load only, that
+unlisted shell commands including network programs and `git push` run unasked,
+that signing in through `~/.pi/agent` may bring other providers' credentials and
+leave a switched model's endpoint unscanned), the launch-files sentence and the
+credential sentence. `tests/test_stage2_session.py` now requires the new
+phrases and forbids the old claims; each new phrase has a replacement pair that
+turns the doc test red.
+
+**Not changed, on purpose.** `AGENTS.md` does not describe the session verb.
+`docs/adr/` is human-decided; the `bemerkung` of the `opencode-go` entry in
+`model-endpoints.yaml` ("only the review loop") moves with the decision pull
+request (package 6).

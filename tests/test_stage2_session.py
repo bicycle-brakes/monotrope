@@ -1011,10 +1011,20 @@ def session_doc_problems(text: str) -> list[str]:
         "opencode-go/<model>",
         "approves no endpoint",
         "the review order is not this verb's business",
+        "~/.pi/agent",
+        "may hold other providers' credentials",
+        "outside the dangerous patterns",
+        "no call to the OpenCode CLI",
     ):
         if phrase not in one:
             found.append(f"the session docs lack: {phrase}")
-    for claim in ("scans every later prompt", "confines the session to the worktree", "continuous scanning"):
+    for claim in (
+        "scans every later prompt",
+        "confines the session to the worktree",
+        "continuous scanning",
+        "dispatches OpenCode",
+        "OpenCode gets a runner-supplied policy",
+    ):
         if claim in one:
             found.append(f"the session docs claim: {claim}")
     return found
@@ -1028,6 +1038,9 @@ def test_the_workflow_states_what_a_session_proves_and_what_it_does_not() -> Non
         ("not a confinement at the operating-system level", "a confinement at the operating-system level"),
         ("another model goes through the runner again", "another model is picked in the window"),
         ("approves no endpoint", "approves the endpoint"),
+        ("may hold other providers' credentials", "holds only this endpoint's credential"),
+        ("outside the dangerous patterns", "inside the confined set"),
+        ("no call to the OpenCode CLI", "a call to the OpenCode CLI"),
     ):
         # Markdown wraps lines anywhere: the phrase is found, and replaced, across any whitespace.
         spaced = r"\s+".join(re.escape(word) for word in old.split())
