@@ -82,7 +82,7 @@ the maintainer's `/clear`, same result). Origin still shows the left column.
 | coding-harness-6yg (mandatory interviews, #104) | in progress, assignee `cline-interview-minimums` | closed (`--force`) | close |
 | coding-harness-kw0 (measure the first three runs) | open | closed, cost gap named | close |
 | coding-harness-0al (OpenCode 2.x bug) | open | closed, superseded by the Pi bead | comment, supersede |
-| the Pi bead (local id coding-harness-6h4) | absent | open, not yet claimed | create, then claim and comment |
+| the Pi bead (local id `6h4` after the prefix; it is not on origin, so the full id is not written here, where the gate on dangling bead ids would reject it) | absent | open, not yet claimed | create, then claim and comment |
 
 The exact commands for the first four rows are in
 `docs/journal/handover/2026-10-09-remote-session-merges-tracker-and-pi-plan.md`,
