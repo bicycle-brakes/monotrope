@@ -33,6 +33,10 @@ first, and the two fix options with a recommendation.
 
 ## Next step
 
+**Superseded by the addendum at the end of this file:** the maintainer wants
+no more OpenCode CLI, which changes what the local session does first. The
+original step follows for the record.
+
 On the Mac, in a worktree of its own from a freshly fetched `origin/main`
 (`git worktree add .claude/worktrees/stage2-session-opencode2 -b
 fix/stage2-session-opencode2 origin/main`, then `make venv`), run the
@@ -188,3 +192,105 @@ policy cannot be read starts no session.
 - The measurement commands are written from the code and the bead and were not
   executed; the `type -a`, `--version` and `debug` lines are the ones to
   correct if a flag differs.
+
+## Addendum 2026-10-09 (later): the port of the session verb to Pi
+
+The maintainer, in German, in the directing conversation: "Ja, prüfe die
+Umstellung auf pi, ich will keine opencode mehr benutzen." Read as: the
+`opencode` CLI goes; the OpenCode Go service stays, because the review loop
+already reaches it through Pi (ADR 0011). If that reading is wrong, the first
+question of the next session is which one is meant.
+
+### What it does to coding-harness-0al
+
+Both fixes in the section above are moot if the session verb stops calling
+`opencode`: no `opencode --pure debug agent` call remains, so there is
+nothing to pin or to port. The bead would close as superseded (the tracker
+writer's act). The local measurement against the two OpenCode binaries is no
+longer needed.
+
+### What Pi 1.1.0 offers (read, not run)
+
+Source: the npm tarball of `@earendil-works/pi-coding-agent@1.1.0`, unpacked and
+read in a scratch directory; no Pi code was executed. Files named below are
+inside that package.
+
+- **Interactive use exists.** Pi opens its terminal UI when stdin and stdout
+  are terminals and neither `--print` nor `--mode` selects another interface
+  (`docs/cli.md`). The loop's flags (`--model opencode-go/<id>`, `--tools`,
+  `--thinking`, `--offline`) apply to it too. The key is `OPENCODE_API_KEY`
+  (`docs/providers.md`), the same as the loop's.
+- **No approval prompts and no sandbox** (`docs/security.md`): Pi "does not ask
+  for approval before every tool call", and "lack of a built-in sandbox" is
+  stated as outside its security boundary. OpenCode's `bash: ask` and
+  `external_directory: deny` therefore have no built-in counterpart.
+- **An extension can gate tool calls.** A `tool_call` handler can block a call,
+  and a handler that fails blocks it (fail-safe) (`docs/extensions.md`).
+  `--no-extensions` still loads an explicit `-e <path>` (`docs/cli.md`), so the
+  runner can disable discovery and load exactly one policy extension.
+  Shipped examples: `examples/extensions/permission-gate.ts` (asks for
+  dangerous `bash` commands, blocks when there is no UI) and
+  `protected-paths.ts` (blocks `write`/`edit` on listed paths).
+- **No sub-agents** ("skips features like sub-agents", `README.md`) and **no
+  web-fetch tool**: the built-ins are `read`, `bash`, `edit`, `write`, `grep`,
+  `find`, `ls` (and `powershell` on Windows) (`docs/cli.md`).
+
+### The runner's OpenCode policy, rule by rule
+
+| Today (OpenCode, `policy_config`) | With Pi |
+|---|---|
+| `bash: ask` | policy extension: every `bash` call asks through the UI and is blocked when there is none |
+| `external_directory: deny` | policy extension: block `read`, `grep`, `find`, `ls`, `edit`, `write` with a path outside the worktree. `bash` cannot be confined; the doctrine already says an approved shell command can read what the user can read |
+| `task: deny` | nothing to deny: Pi has no sub-agent tool |
+| `webfetch: deny` | nothing to deny: no such tool; `--offline` stops Pi's own network use; `bash` is gated as above |
+| the model pinned for the agent | `--model opencode-go/<id>` |
+
+### What does not carry over
+
+The **read-back**. Today the runner asks OpenCode for its effective agent and
+refuses what it cannot confirm. Pi has no such command in the docs read. It
+lists the flags registered by loaded extensions in `pi --help`
+(`docs/cli.md`) and has RPC `get_state`/`get_commands`
+(`docs/rpc-commands.md`), so the runner could confirm that the policy
+extension *loaded*, not that its handlers *behave*. The behaviour would be
+held by tests of the handlers in this repository, run without Pi and without a
+model. That is a weaker guarantee than the read-back, and the maintainer
+should choose it knowingly.
+
+### Size and shape of the change
+
+In `scripts/stage2_session.py` the OpenCode-specific parts are
+`policy_config`, `effective_policy`, `wildcard`, `catch_all`,
+`policy_problems`, `insert_denials` and `verify_policy`, plus the OpenCode
+branches of `TRANSPORTS`, `executables`, `prepare` and `cli_argv`. In
+`tests/test_stage2_session.py` 25 uses of the canned `effective(...)` answer
+(the file has 43 tests) go or change. `require_pi` in `scripts/stage2.py`
+already pins Pi to 1.1.0 and can be reused. Terminal dispatch through
+`osascript` stays.
+
+### Is it a decision pull request?
+
+Recommended: yes. The endpoint (`opencode-go`) does not change and ADR 0011
+already declares it. What changes is the launcher of an *interactive* session
+that can write files and run approved shell commands, and the way its limits
+are enforced (an extension instead of OpenCode's read-back). The session
+verb's ADR 0007 amendment still travels as a draft in its change folder, which
+is where this belongs. The maintainer decides whether it is a decision pull
+request.
+
+### Next step
+
+Not a measurement against OpenCode. A one-page plan first (house rule: plan,
+then build), in a worktree of its own from a freshly fetched `origin/main`:
+
+1. State what the verb can do afterwards that it cannot today: start an
+   interactive OpenCode Go session without the OpenCode CLI.
+2. Measure Pi on the Mac without a model call: `pi --version` prints `1.1.0`;
+   `pi -ne -e <policy extension> --help` lists the extension's flag;
+   the extension's handlers pass tests with fake events (path outside the
+   worktree is blocked, `bash` without UI is blocked, a handler error blocks).
+3. Take the decision on the read-back (above) before writing code.
+
+Not run: Pi itself, any launch, any extension, any model call. The table is
+read from the docs of the pinned version; the first real launch may show a
+difference.
