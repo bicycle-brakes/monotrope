@@ -1,0 +1,14 @@
+schema_version: 1
+change: interview-minimums
+question: adr
+answer: 'no'
+reason: The change follows existing patterns - a gate in the check_adr_answers shape,
+  the diff states of stage2.change_diff, an entry in the one gate list - deciding
+  no new subsystem and breaking no interface; the rule itself takes effect through
+  its merge (ADR 0008).
+shown:
+  proposed: 'no'
+  proposal_reason: prompts, one gate script and documentation follow the existing
+    check_adr_answers pattern; no new subsystem and no interface break
+answered_by: framework-architect
+answered_at: 2026-10-08

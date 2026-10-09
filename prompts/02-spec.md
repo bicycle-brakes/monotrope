@@ -2,8 +2,11 @@
 
 **Model:** Opus 5.5 — at effort `xhigh` (`claude --model claude-opus-5-5 --effort xhigh`); the highest reasoning demand, little output.
 **Result:** `plans/changes/<name>/spec.md`
-**Gate:** `python3 scripts/validate_change_artefacts.py --check` green, and no
-open `[DECISION]`.
+**Gate:** the interview check green for this change — `python3
+scripts/check_interview_minimums.py --change <name>`; phase 1a has met its
+minimum or holds its skip record — plus `python3
+scripts/validate_change_artefacts.py --check` green, and no open
+`[DECISION]`.
 
 You describe **what** shall hold — not how it is built.
 
