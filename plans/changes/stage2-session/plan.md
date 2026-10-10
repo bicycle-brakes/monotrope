@@ -189,3 +189,64 @@ takes the full id` refusal in `scripts/stage2_session.py` fits on one line at
 exactly 120 characters and is now written as one. No command ran, so nothing is
 verified; the runner's `make verify` decides. The orchestrator's clock measures
 the real span; no duration is invented here.
+
+## Package 3 of the Pi plan: the policy extension (2026-10-09)
+
+Built and tested; the runner does not use it yet (package 4).
+
+**The [GAP] of the plan is settled by reading.** The extension is plain ESM
+JavaScript in `scripts/stage2_session_policy.mjs`: Pi loads direct TypeScript or
+JavaScript files (`docs/extensions.md` of the pinned Pi 1.1.0), and node ESM
+needs no build step. It imports only `node:` modules, so the runner can copy it
+into the session's private directory and the copy runs unchanged. The Python
+tests (`tests/test_stage2_session_policy.py`) run a copy through a node driver
+(`tests/stage2_session_policy_driver.mjs`) with made-up events, without Pi and
+without a model, and skip when `node` is not installed.
+
+**What it enforces**, with the Pi facts it rests on (all read, none run in a
+live Pi): it resolves a tool path the way Pi does (`dist/utils/paths.js`: a
+leading `@` stripped, `~` expanded, `file://` read, relative to `ctx.cwd`),
+follows symlinks to the deepest existing part so a new file beneath a link
+cannot leave the worktree, and blocks `read`, `grep`, `find`, `ls`, `edit`,
+`write` outside it; `grep`, `find` and `ls` without a path search the working
+directory. `edit` and `write` are also blocked on its own file,
+`.stage2-sessions/` and `.pi/`; `.git/` is not (Q-3). A `find` pattern or
+`grep` glob that is anchored elsewhere or climbs with `..` is blocked. A `bash`
+call matching a dangerous pattern asks through `ctx.ui.select`, and is blocked
+without a UI (Q-2). Any failure of the handler blocks the call, as Pi's own
+fail-safe does. It registers the flag `--stage2-session-policy`, which
+`pi --help` lists when the file is loaded: that is what package 4's read-back
+looks for (Q-1).
+
+**The test run caught one defect before any review.** The first pattern for
+`git push` did not know a global option with an argument, so `git -C . push` ran
+unasked. The patterns now allow `-C <dir>`, `-c k=v` and `--no-pager` before the
+verb.
+
+**Planted faults, 2026-10-09:** one rule at a time was removed in the source,
+the suite run, the source restored. 26 faults: the outside check, the symlink
+resolution, the `@` prefix, `~/` and a bare `~`, the `file://` form, the NUL
+check, the own-file and protected-directory rules, case folding, the `find`
+pattern and `grep` glob checks, a missing required path, the no-UI block, any
+answer accepted, a failing handler letting the call through, a `bash` call
+without a command, the flag not registered, each of the five dangerous
+patterns, the git prefix that sees a verb behind `-C`, and, after the answers Q-7
+and Q-8, the network and `git push` patterns put back. The first run left two
+alive (a bare `~`, and the NUL check's own message); the tests were
+strengthened and both then went red. At the end all 26 turn a test red; the
+suite is 200 cases, green.
+
+**The shell patterns that ask** are the three of Pi's shipped
+`permission-gate.ts` (a recursive `rm`, `sudo`, `chmod`/`chown` with 777, Q-2)
+and, by the maintainer's answer Q-8, `git reset --hard` and `git clean`.
+Network programs and `git push` run without a question (Q-7, Q-8; both answers
+differ from the recommendation, and `decisions.md` names the cost). The list is
+one array, `DANGEROUS`. An earlier draft of this package asked for network
+programs and `git push` as well, which the maintainer declined in the interview
+of 2026-10-09.
+
+**Named limits.** A tool name the extension does not know (none is enabled with
+discovery off) passes. A word inside a command that matches a pattern, such as
+`rm -r` in a quoted argument, asks too: noise, not a hole. Nothing here was run
+inside a live Pi: whether the handler behaves there the way the tests say is
+package 7, on the Mac.
