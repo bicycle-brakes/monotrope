@@ -4,7 +4,7 @@ status: draft
 implementation_status: partial
 date: 2026-10-05
 last_reviewed: 2026-10-05
-updated: 2026-10-05
+updated: 2026-10-10
 supersedes: null
 superseded_by: null
 bead: coding-harness-pu9
@@ -45,7 +45,7 @@ request holds it (`docs/WORKFLOW.md`, "Change classes, the ADR question and
 decision pull requests"). Here both definitions read plausibly, and the choice
 decides whether the maintainer is asked the ADR question. It is taken
 provisionally with the recommendation, as `adhd-frame` did
-(`plans/changes/adhd-frame/spec.md`, "Open decisions").
+(`plans/changes/archive/2026-09-30-adhd-frame/spec.md`, "Open decisions").
 
 ```text
 Goal in one sentence:  Is this change a small addition to the nightly job,

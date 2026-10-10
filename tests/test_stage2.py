@@ -3091,7 +3091,10 @@ def test_the_stop_rule_counts_every_rung() -> None:
 
 def test_the_adr_draft_states_every_point() -> None:
     """Criterion 25: the draft in design.md carries every point and weighed option, Pi as the launcher, Claude Code not."""
-    draft = section((REPO_ROOT / "plans/changes/stage2-mimo/design.md").read_text(encoding="utf-8"), "### ADR 0011")
+    draft = section(
+        (REPO_ROOT / "plans/changes/archive/2026-10-07-stage2-mimo/design.md").read_text(encoding="utf-8"),
+        "### ADR 0011",
+    )
     assert draft, "the draft is not in design.md"
     texts = {
         "the draft in design.md": flat(draft),

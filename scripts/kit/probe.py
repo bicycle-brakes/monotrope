@@ -163,11 +163,11 @@ REIST_NICHT: dict[str, str] = {
 # that when the ADR gate, its command and their two tests joined the mechanism
 # (plans/changes/harness-decide-adr). A lowered cap needs no reason; this one says why the entry went.
 # 31 -> 32 on 2026-09-30: the loop prompt `prompts/04b-review-loop.md` came along
-# (plans/changes/stage-2-codex-glm). A prompt with a model line is one case more, red in the
+# (plans/changes/archive/2026-09-30-stage-2-codex-glm). A prompt with a model line is one case more, red in the
 # throwaway repo for the reason the other prompt cases are: `model-endpoints.yaml` stays home.
-# 32 -> 33 on 2026-10-07: `prompts/02b-design.md` came along (plans/changes/template-bundle),
+# 32 -> 33 on 2026-10-07: `prompts/02b-design.md` came along (plans/changes/archive/2026-09-30-template-bundle),
 # one more prompt with a model line, red in the throwaway repo for the same reason.
-# 33 -> 36 on 2026-10-08 (plans/changes/stage2-mimo): one entry was renamed, not
+# 33 -> 36 on 2026-10-08 (plans/changes/archive/2026-10-07-stage2-mimo): one entry was renamed, not
 # added — the loop prompt's model line names the ladder's first rung
 # `deepseek-v4.1-flash` where it used to name `GLM 5.3`. Three cases are new:
 # `test_the_opencode_go_entry_is_declared`, `test_the_opencode_go_remark_names_every_source`

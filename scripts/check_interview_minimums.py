@@ -2,7 +2,7 @@
 """check_interview_minimums.py — the phase-1a interview is owed where minimums stand.
 
 The rules are the maintainer's ten decisions of 2026-10-08
-(`plans/changes/interview-minimums/decisions.md`):
+(`plans/changes/archive/2026-10-08-interview-minimums/decisions.md`):
 
 - a `feature` owes at least three counted interview records;
 - a change whose diff creates or changes a file under `docs/adr/` owes five,
@@ -56,7 +56,7 @@ from pathlib import Path
 
 REPO_ROOT = Path(__file__).resolve().parent.parent
 
-# The merge date of plans/changes/interview-minimums — the cut-off the
+# The merge date of plans/changes/archive/2026-10-08-interview-minimums — the cut-off the
 # maintainer set (decisions.md Q-4). A change is subject when its spec date
 # is strictly later (Q-8). Changing this constant changes when the rule
 # began; it is a governance act, stated in docs/WORKFLOW.md beside this gate.
