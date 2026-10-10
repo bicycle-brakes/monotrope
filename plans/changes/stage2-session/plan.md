@@ -4,7 +4,7 @@ status: draft
 implementation_status: partial
 date: 2026-10-07
 last_reviewed: 2026-10-07
-updated: 2026-10-08
+updated: 2026-10-09
 supersedes: null
 superseded_by: null
 bead: coding-harness-amp
@@ -18,11 +18,11 @@ tags: [plan, stage-2, session]
 # Plan — stage2-session
 
 ```text
-For you:     Start a checked interactive OpenCode or Codex session in a new Terminal window.
+For you:     Start a checked interactive Pi or Codex session in a new Terminal window.
 Done when:   Session refusal/dispatch tests and make verify pass, reviewed code is in a decision PR.
-Appetite:    4 hours of implementation and repairs; a stop, not an estimate.
+Appetite:    13 hours for the Pi work packages 3 to 7 (the Pi plan's own sizes: 11 to 13 hours); a stop, not an estimate.
 Not now:     Continuous scans, new endpoint approvals, review migration and full harness parity.
-Pre-mortem:  suppose it failed: most likely because a harness override weakened the supplied permissions.
+Pre-mortem:  suppose it failed: most likely because the policy extension's behaviour differs inside a live Pi from its tests.
 Starts unless you say stop.
 ```
 
@@ -30,10 +30,21 @@ Starts unless you say stop.
 
 Codex takeover produced research, spec, design and plan because the Claude
 session exhausted its budget; research was not a GLM explore call. Phase 4
-uses the existing GLM Flash runner. Stop at four hours, never merge. Leave
+uses the existing GLM Flash runner. Stop at the appetite of the Pi plan, never merge. Leave
 Flash branch, protected ADRs, provenance, declarations, global configuration,
 credentials and reviewer routing untouched. The wider parity bead stays open.
 The accepted spec and design are the contract; F-2 is answered.
+
+**Re-pointed on 2026-10-09** (work package 2 of
+`docs/research/2026-10-09-session-verb-on-pi-plan.md`, approved by the
+maintainer that day): the OpenCode Go path launches Pi, not the OpenCode CLI.
+This section, "Files and operations", "Helper algorithm" and "Tests and
+faults" describe the target; "Runner route" and "Time used" below are the
+record of the first build and stay as written. The code still starts the
+OpenCode CLI until work package 4 lands. Packages 3 to 7 of the Pi plan
+(extension, runner port, docs, decision PR, Mac smoke test) are the new
+implementation steps; the appetite for them is the Pi plan's own sizes, a
+stop and not an estimate.
 
 ## Files and operations
 
@@ -41,12 +52,23 @@ The accepted spec and design are the contract; F-2 is answered.
   `--handover`, reject these switches for other verbs and stage2-off here;
   pass the invoking module to preserve shared exception types under __main__.
 - `scripts/stage2_session.py`: implement the algorithm below as a helper,
-  never a standalone model entry or credential reader.
+  never a standalone model entry or credential reader. The seven OpenCode-only
+  functions (`policy_config`, `effective_policy`, `wildcard`, `catch_all`,
+  `policy_problems`, `insert_denials`, `verify_policy`) go; `pi` replaces
+  `opencode` in `TRANSPORTS`, `executables`, `prepare` and `cli_argv`.
+- The policy extension (JavaScript or TypeScript for Pi 1.1.0), written by the
+  helper into the private directory; its source lives in the repository and
+  its handlers are tested without Pi. Where it lives and how the Python tests
+  run it (a `node` call that skips when `node` is absent) is a [GAP] for
+  work package 3 to settle by reading.
 - `tests/test_stage2_session.py`: temporary linked worktrees and fake CLI,
-  effective-policy and Terminal stand-ins; no real model or GUI calls.
+  loaded-extension and Terminal stand-ins; no real model or GUI calls. The 25
+  uses of the canned `effective(...)` answer change.
 - `.gitignore`: ignore `.stage2-sessions/` runtime policies.
-- `docs/WORKFLOW.md`: describe command, activation dependency, audit meaning,
-  cleanup and start-only/tool-permission limits, not a review-order change.
+- `docs/WORKFLOW.md`, `AGENTS.md` and the comments in `model-endpoints.yaml`:
+  describe command, audit meaning, cleanup, the Pi policy and its limits
+  (start-only scan, tool permissions, `bash` outside the dangerous patterns,
+  other providers in `~/.pi/agent`), not a review-order change.
 - `plans/changes/stage2-session/research.md`, `decisions.md`, `spec.md`,
   `design.md`, `plan.md`, `findings.md`, `adr-0007-session-amendment.md`:
   retain decisions/reviews, record evidence/time and the proposed amendment.
@@ -60,27 +82,30 @@ The accepted spec and design are the contract; F-2 is answered.
    directory parent's `.claude/worktrees/<change>`. Use shared preflight.
    Defensively validate declaration structure, uniqueness, framework permission
    and residency. Exact plain IDs on openai-codex or full opencode-go/<model>
-   IDs whose bare model opencode-go lists; no aliases, guessing, approval or fallback.
+   IDs whose bare model opencode-go lists (these select Pi); no aliases,
+   guessing, approval or fallback. For a Pi model call `require_pi` first.
 2. Resolve default change-local handover.md or explicit source inside worktree
    before reading; require regular readable nonempty UTF-8. Full text is first
    prompt, with AGENTS/read and launch-limit instructions. Refuse NUL, prompt
    over 32 KiB UTF-8, command over 64 KiB. Resolve CLI and osascript executables
    first; missing prerequisites exit 2. Shared checked_prompt scans actual text.
-3. OpenCode: fresh private directory under non-symlink .stage2-sessions/;
-   file and inline config for primary harness-session agent pins model,
-   denies external_directory and task, asks for bash; --pure. Capture bounded
-   `opencode --pure debug agent harness-session` without --tool/--params or
-   printed diagnostics. Check schema, primary agent/model and ordered wildcard
-   rules. A catch-all denial must have no later allow/ask; bash may ask/deny,
-   never allow. Insert explicit denials for specific automatic allowances and
-   recheck once; unresolved/managed overrides refuse. No global-file reads.
+3. Pi: fresh private directory under non-symlink .stage2-sessions/ holding
+   the one policy extension. Its `tool_call` handler blocks read, grep, find,
+   ls, edit and write outside the worktree, blocks writes to its own file,
+   .stage2-sessions/ and .pi/, asks before a bash call that matches a
+   dangerous pattern (blocks it when there is no UI), and blocks when the
+   handler itself fails. Read-back: confirm the extension loaded (bounded
+   `pi --no-extensions -e FILE --help` lists its flag); no model call, no
+   printed diagnostics; the behaviour is the tests' job. No global-file reads.
 4. Codex argv: resolved CLI --no-daemon --model ID --cd ROOT --sandbox
    workspace-write --ask-for-approval on-request --, positional full prompt.
-   OpenCode argv: resolved CLI --pure ROOT --model FULL-ID --agent
-   harness-session --prompt=PROMPT. Use foreign_env allow-list, no caller API
-   tokens/model overrides. Separately shell-quote cd, env -i variables and
-   argv; fixed AppleScript takes shell command as argv data. Do not wait for
-   interactive exit, use headless verbs or add writable directories.
+   Pi argv: resolved CLI --no-extensions -e FILE --offline --no-approve
+   --model FULL-ID, positional full prompt (no print or RPC mode). Use
+   foreign_env allow-list, no caller API tokens/model overrides, no key
+   handed to Pi. Separately shell-quote cd, env -i variables and argv; fixed
+   AppleScript takes shell command as argv data. Do not wait for interactive
+   exit, use headless verbs or add writable directories. The exact flag
+   spelling is read from the pinned Pi's `docs/cli.md` in work package 4.
 5. Recheck prompt immediately before GUI dispatch. Persist unique pending
    audit with date/model/endpoint/source/real scan counts; preparation failure
    means no GUI. After bounded osascript invocation, update only this audit
@@ -94,15 +119,15 @@ The accepted spec and design are the contract; F-2 is answered.
 | Spec | Test | Fault that must go red |
 |---|---|---|
 | 1 | Parser/canonical worktree | main, wrong cwd, detached branch dispatch |
-| 2 | Declaration schema and exact selection | malformed, ambiguous, unapproved model/transport/residency accepted |
+| 2 | Declaration schema and exact selection | malformed, ambiguous, unapproved model/transport/residency accepted; a Pi off the pin reaching the terminal |
 | 3–4 | Handover boundaries | missing/empty/bad UTF-8/NUL/oversized/outside/symlink prompt sent |
 | 5–6 | Leak refusal and second scan | forbidden prompt/index or missing denylist reaches GUI |
 | 7–8 | Audit and GUI error injection | false counts, overwritten findings, false success, missing executables |
-| 9 | Recorded CLI argv/cwd | headless verb, fallback, wrong model or wait for TUI |
+| 9 | Recorded CLI argv/cwd | headless verb, any `opencode` call, fallback, wrong model or wait for TUI |
 | 10 | Execute command against fake CLI | hostile quotes/newlines/substitution run extra code |
-| 11 | Effective policy permutations | global/agent/automatic override escapes denial |
+| 11 | Extension handlers with fake events, run without Pi; loaded-extension check | outside path, protected-path write, listed bash pattern without a question or UI, failing handler, unloaded or second extension passes; each rule has a test that goes red when the rule is removed |
 | 12 | Codex exact safety flags | bypass, auto-approval or extra-dir |
-| 13–14 | Environment and preparation/cleanup faults | token copied, config overwritten, GUI after write failure or user files removed |
+| 13–14 | Environment and preparation/cleanup faults | token copied, key handed to Pi, config overwritten, GUI after write failure or user files removed |
 | 15–16 | Help/docs/draft/diff | continuous confinement claim, protected ADR or review routing edit |
 
 ## Verification and review
@@ -117,8 +142,11 @@ Full verify before every checkpoint. Existing GLM review loop (at most two
 rounds), then final Codex review via stage2.py; decide actual findings, repair
 and reverify. Keep loop rows out of final review context until its verdict.
 Decision-template PR with label, touch map and open-bead milestone; no merge.
-Name GUI/model smoke as unrun unless measured through runner. Handover and
-hosted green checks complete delivery.
+Name GUI/model smoke as unrun unless measured through runner; for Pi the
+smoke test is work package 7 of the Pi plan, the maintainer's, on the Mac
+(`pi --version` prints `1.1.0`, the extension is listed in `pi --help`, a
+launch opens the Terminal window). Handover and hosted green checks complete
+delivery.
 
 ## Runner route — 2026-10-07
 

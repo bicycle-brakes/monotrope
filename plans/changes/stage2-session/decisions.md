@@ -4,7 +4,7 @@ status: draft
 implementation_status: partial
 date: 2026-10-07
 last_reviewed: 2026-10-07
-updated: 2026-10-07
+updated: 2026-10-09
 supersedes: null
 superseded_by: null
 bead: coding-harness-amp
@@ -125,3 +125,145 @@ offer of direct Codex implementation or another GLM attempt. Continue with
 the existing GLM Flash runner route, not a direct Codex implementation.
 This requests another attempt; it is not evidence that the endpoint works.
 Keep declaration/leak checks, post-run gates, review phases and no-merge rule.
+
+## Answers
+
+The six questions are work package 1 of the plan to move the interactive
+session verb from the OpenCode CLI to Pi
+(`docs/research/2026-10-09-session-verb-on-pi-plan.md`, on branch
+`chore/0al-prep`, pull request #109). Asked one at a time in German with a
+recommended option; recorded here in a faithful English translation. In the
+same conversation the maintainer approved that plan (answer to "Do your
+answers also approve the plan?": "Yes, plan approved").
+
+## Q-1 · How strong is the read-back of the session policy
+
+asked: 2026-10-09, the directing conversation
+answer: confirm load — the runner confirms that Pi loaded the policy
+  extension; handler tests without Pi hold the extension's behaviour
+answered_by: maintainer
+status: answered
+
+In the context of a Pi session whose policy lives in a runner-supplied
+extension, facing the choice between confirming that the extension loaded and
+additionally firing a live canary call the policy must block, we decided to
+confirm the load and test the handlers without Pi, to achieve a start that
+costs no model call, accepting that whether the policy acts inside a running
+Pi is not checked live. — 2026-10-09
+
+## Q-2 · Which bash calls ask
+
+asked: 2026-10-09, the directing conversation
+answer: only dangerous patterns, as in Pi's `permission-gate.ts` example
+  (not every call, which was the recommendation)
+answered_by: maintainer
+status: answered
+
+In the context of the session's shell tool, facing the choice between asking
+before every call (today's `bash: ask`) and asking only on dangerous patterns,
+we decided to ask only on dangerous patterns, to achieve fewer interruptions
+during an interactive session, accepting that a command the pattern list does
+not know runs without a question. — 2026-10-09
+
+## Q-3 · What the file tools may do
+
+asked: 2026-10-09, the directing conversation
+answer: read and write inside the worktree, block outside, and block writes to
+  the extension's own file, `.stage2-sessions/` and `.pi/`; `.git/` is not
+  additionally blocked
+answered_by: maintainer
+status: answered
+
+In the context of Pi's read, write and edit tools, facing the choice between
+the worktree with a protected list and that list plus `.git/`, we decided the
+worktree with the protected list, to achieve a session that cannot rewrite its
+own policy, accepting that `.git/` stays writable for the model. — 2026-10-09
+
+## Q-4 · One decision pull request or two, and in which change
+
+asked: 2026-10-09, the directing conversation
+answer: one — fold the Pi move into the unmerged ADR 0007 session amendment
+  and continue `plans/changes/stage2-session` (class `architectural`, so no
+  ADR answer file is owed)
+answered_by: maintainer
+status: answered
+
+In the context of an ADR 0007 amendment for the session verb that is drafted
+but unmerged and still names OpenCode, facing the choice between merging it as
+it stands and following with a second decision pull request, or folding the Pi
+move into it, we decided to fold it into one, to achieve a single decision and
+no OpenCode wording on `main` that is superseded at once, accepting a larger
+diff in that one pull request. — 2026-10-09
+
+## Q-5 · What an `opencode-go/<model>` id selects once the CLI is gone
+
+asked: 2026-10-09, the directing conversation
+answer: Pi — the id names the endpoint, not the tool
+answered_by: maintainer
+status: answered
+
+In the context of the declared `opencode-go` entry in `model-endpoints.yaml`,
+facing the choice between letting its ids select Pi and refusing them until a
+new id scheme is decided, we decided they select Pi, to achieve unchanged ids
+and an unchanged ladder, accepting that the id no longer says which client
+program runs. — 2026-10-09
+
+## Q-6 · How the Pi session signs in
+
+asked: 2026-10-09, the directing conversation
+answer: the maintainer's own `~/.pi/agent` (not a dedicated agent directory set
+  through `PI_CODING_AGENT_DIR`, which was the recommendation, and not
+  `OPENCODE_API_KEY` exported in the shell)
+answered_by: maintainer
+status: answered
+
+In the context of a Pi session that needs the `opencode-go` credential, facing
+the choice between a dedicated agent directory holding only that credential,
+the maintainer's own `~/.pi/agent`, and a key exported in the shell, we decided
+the maintainer's own `~/.pi/agent`, to achieve no extra setup step, accepting
+that the directory may hold other providers' credentials the session could
+switch to. — 2026-10-09
+
+## Q-7 · Whether network programs ask
+
+asked: 2026-10-09, the directing conversation
+answer: no — `curl`, `wget`, `scp`, `rsync`, `ssh`, `sftp` and `nc` run without a
+  question (asking was the recommendation)
+answered_by: maintainer
+status: answered
+
+In the context of the shell patterns that ask (Q-2), facing the choice between
+adding network programs to Pi's three (`rm -r`, `sudo`, `chmod/chown 777`) and
+leaving them out, we decided to leave them out, to achieve fewer interruptions
+and a list that stays close to Pi's own example, accepting that the session can
+send files out with a network program without a question, and that the leak
+check, which covers the launch only, does not see it. — 2026-10-09
+
+## Q-8 · Which git commands ask
+
+asked: 2026-10-09, the directing conversation
+answer: `git reset --hard` and `git clean` ask; `git push` does not (asking before
+  all three was the recommendation)
+answered_by: maintainer
+status: answered
+
+In the context of the shell patterns that ask (Q-2), facing the choice between
+asking before all three of `git push`, `git reset --hard` and `git clean`,
+before the two that discard work, and before none, we decided the two that
+discard unsaved work, to achieve a question before work in the worktree is
+lost, accepting that the session can push branches to GitHub without a
+question. — 2026-10-09
+
+The patterns that ask are therefore: a recursive `rm`, `sudo`, `chmod` or
+`chown` with 777 (Q-2), `git reset --hard` and `git clean` (Q-8). Q-7 and Q-8
+refine Q-2; they replace nothing in it.
+
+## Note — settled instructions 3 and the OpenCode details, 2026-10-09
+
+Settled instruction 3 above ("Deny outside-worktree reads in OpenCode as far
+as its configuration supports it") and the [DETAIL] lines on OpenCode (the
+dedicated primary agent, the effective-policy check against OpenCode 1.18.35)
+are the first build's record. For the OpenCode Go path they are superseded by
+Q-1 to Q-6: the launcher is Pi and the policy is a runner-supplied extension.
+The instruction's intent stands: deny outside-worktree reads as far as the
+launcher supports it, and name the remaining limit.
