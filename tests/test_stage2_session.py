@@ -1,9 +1,9 @@
 """The checked interactive session behind `stage2.py session` - and every boundary it refuses.
 
 Every case runs the verb in-process against a temporary repository with a real
-git worktree at `.claude/worktrees/demo`, and against three stand-ins: `codex`,
-`opencode` and `osascript` record their call, print canned output and contact
-nothing. The `osascript` stand-in can execute the command it was handed through
+git worktree at `.claude/worktrees/demo`, and against four stand-ins: `codex`,
+`pi`, `opencode` and `osascript` record their call, print canned output and
+contact nothing. The `opencode` stand-in exists to prove it is never called. The `osascript` stand-in can execute the command it was handed through
 /bin/sh, so a test sees exactly what a Terminal would have run. No test opens a
 window, starts a real CLI or reaches a model endpoint; the platform check is
 stubbed, so the suite runs on a machine that has no Terminal at all.
@@ -37,7 +37,6 @@ LEAK = "LEAKMARK-123456"
 DENYLIST = "planted = LEAKMARK-[0-9]{6}\n"
 GO_BARE = "mimo-v2.6-flash"
 GO_MODEL = f"opencode-go/{GO_BARE}"
-TRUNCATION = "/var/folders/T/oc-truncation"
 HANDOVER = "Hand over: continue the session work where the last one stopped.\n"
 
 # A stand-in for all three programs: it records its call, may plant or delete
@@ -151,10 +150,9 @@ class World:
         base = self.tree / stage2_session.SESSION_ROOT
         return sorted(base.iterdir()) if base.is_dir() else []
 
-    def config(self) -> dict:
+    def extension(self) -> Path:
         (policy,) = [p for p in self.policies() if p.is_dir()]
-        file = policy / "opencode.policy.json"
-        return json.loads(file.read_text(encoding="utf-8")) if file.exists() else {}
+        return policy / stage2_session.POLICY_FILE
 
     def script_file(self) -> Path:
         (policy,) = [p for p in self.policies() if p.is_dir()]
@@ -201,61 +199,17 @@ def expected_prompt(world: World, handover_text: str) -> str:
     )
 
 
-def from_config(permission: dict) -> list[dict]:
-    """OpenCode's `Permission.fromConfig`: a config map as ordered `{permission, pattern, action}` rules."""
-    found = []
-    for key, value in permission.items():
-        if isinstance(value, str):
-            found.append({"permission": key, "pattern": "*", "action": value})
-        else:
-            found += [{"permission": key, "pattern": pattern, "action": action} for pattern, action in value.items()]
-    return found
+# The three calls a Pi session makes, in order: the runner's version check, its read-back of the extension,
+# and the launch the Terminal shell runs. The stand-in answers the n-th call of a program from its n-th step.
+PI_VERSION_STEP = {"stdout": f"{stage2.PI_VERSION}\n"}
+PI_HELP_STEP = {
+    "stdout": "Usage: pi [options] [messages...]\n\nOptions:\n"
+    f"  {stage2_session.POLICY_FLAG}  stage2 session policy: file tools bounded to the worktree\n"
+}
 
 
-def effective(
-    model: str,
-    *,
-    appended: bool = False,
-    after: tuple[dict, ...] = (),
-    pinned: str | None = None,
-    mode: str = "primary",
-) -> str:
-    """A canned `opencode --pure debug agent` answer in OpenCode 1.18.35's `Agent.Info` shape.
-
-    The rules come in OpenCode's order: its defaults (a catch-all allow, and an outside-directory ask with
-    the truncation directory allowed), the runner's policy at the global level, the same policy at the
-    agent level, `after` (what another configuration added for the agent), and - when `appended` - the
-    truncation allowance OpenCode appends unless that exact pattern is denied explicitly.
-    """
-    policy = stage2_session.policy_config(model)["permission"]
-    if not appended:
-        policy["external_directory"][TRUNCATION] = "deny"
-    defaults = {
-        "*": "allow",
-        "doom_loop": "ask",
-        "external_directory": {"*": "ask", TRUNCATION: "allow"},
-        "question": "deny",
-        "read": {"*": "allow", "*.env": "ask"},
-    }
-    rules = from_config(defaults) + from_config(policy) + from_config(policy) + list(after)
-    if appended:
-        rules.append({"permission": "external_directory", "pattern": TRUNCATION, "action": "allow"})
-    provider, _, model_id = (pinned or model).partition("/")
-    return json.dumps(
-        {
-            "name": stage2_session.AGENT,
-            "mode": mode,
-            "native": False,
-            "permission": rules,
-            "model": {"providerID": provider, "modelID": model_id},
-            "options": {},
-            "tools": {"bash": True, "read": True, "task": False},
-        }
-    )
-
-
-def rule(permission: str, pattern: str, action: str) -> dict:
-    return {"permission": permission, "pattern": pattern, "action": action}
+def pi_steps(*launch: dict, version: dict | None = None, help_step: dict | None = None) -> list[dict]:
+    return [version or PI_VERSION_STEP, help_step or PI_HELP_STEP, *launch]
 
 
 @pytest.fixture
@@ -275,7 +229,7 @@ def world(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> World:
 
     bin_dir = tmp_path / "bin"
     bin_dir.mkdir()
-    for name in ("codex", "opencode", "osascript"):
+    for name in ("codex", "pi", "opencode", "osascript"):
         program = bin_dir / name
         program.write_text(LAUNCH_STAND_IN.replace("@PYTHON@", sys.executable), encoding="utf-8")
         program.chmod(0o755)
@@ -322,12 +276,12 @@ def world(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> World:
 def test_only_stand_ins_answer_the_session() -> None:
     found = []
     for entry in os.environ["PATH"].split(os.pathsep):
-        for name in ("codex", "opencode", "osascript"):
+        for name in ("codex", "pi", "opencode", "osascript"):
             program = Path(entry) / name
             if program.is_file():
                 found.append(name)
                 assert "stage2-session stand-in" in program.read_text(encoding="utf-8"), f"{program} is no stand-in"
-    assert sorted(found) == ["codex", "opencode", "osascript"]
+    assert sorted(found) == ["codex", "opencode", "osascript", "pi"]
 
 
 def test_a_session_dispatches_from_the_dedicated_worktree(world: World) -> None:
@@ -395,12 +349,13 @@ def test_a_plain_codex_model_selects_the_codex_transport(world: World) -> None:
     assert "--sandbox workspace-write" in world.command()
 
 
-def test_a_declared_go_model_selects_the_opencode_transport(world: World) -> None:
+def test_a_declared_go_model_selects_the_pi_transport(world: World) -> None:
     world.declare_go()
-    world.script(opencode=[{"stdout": effective(GO_MODEL)}])
+    world.script(pi=pi_steps())
     assert world.run(model=GO_MODEL) == 0
     assert "endpoint opencode-go" in world.text()
     assert f"--model {GO_MODEL}" in world.command()
+    assert world.calls("opencode") == [], "the id names the endpoint; the OpenCode CLI is never called"
 
 
 @pytest.mark.parametrize(
@@ -411,7 +366,7 @@ def test_a_declared_go_model_selects_the_opencode_transport(world: World) -> Non
 def test_a_malformed_permission_or_residency_refuses(world: World, changes: dict) -> None:
     # Phase 6, F-4: a string is no list of what an endpoint may see, and an empty residency states none.
     world.declare_go(**changes)
-    world.script(opencode=[{"stdout": effective(GO_MODEL)}], osascript=[{}])
+    world.script(pi=pi_steps(), osascript=[{}])
     assert world.run(model=GO_MODEL) == 2
     assert world.calls() == [] and not world.findings.exists()
 
@@ -589,7 +544,7 @@ def test_a_leak_in_the_handover_or_the_tree_refuses_before_any_dispatch(world: W
 
 def test_the_second_scan_catches_what_arrived_after_the_first(world: World) -> None:
     world.declare_go()
-    world.script(opencode=[{"stdout": effective(GO_MODEL), "plant": {"late-leak.txt": LEAK}}])
+    world.script(pi=pi_steps(help_step={**PI_HELP_STEP, "plant": {"late-leak.txt": LEAK}}))
     assert world.run(model=GO_MODEL) == 2
     assert world.calls("osascript") == [], "the window opened on the first scan's verdict"
     assert world.policies() == [], "a refused launch cleans its policy directory"
@@ -599,7 +554,7 @@ def test_the_second_scan_catches_what_arrived_after_the_first(world: World) -> N
 def test_the_second_scan_rereads_the_denylist(world: World, capsys: pytest.CaptureFixture[str]) -> None:
     world.declare_go()
     denylist = os.environ["LEAKCHECK_DENYLIST"]
-    world.script(opencode=[{"stdout": effective(GO_MODEL), "delete": [denylist]}])
+    world.script(pi=pi_steps(help_step={**PI_HELP_STEP, "delete": [denylist]}))
     assert world.run(model=GO_MODEL) == 2
     assert "denylist" in capsys.readouterr().out, "the rendered verdict names the missing denylist"
     assert world.calls("osascript") == [] and world.policies() == []
@@ -773,35 +728,93 @@ def test_codex_is_dispatched_interactively_with_its_exact_safety_flags(world: Wo
     assert words[words.index(str(world.bin / "codex")) + 1 :] == argv, "Terminal runs the CLI with exactly this argv"
 
 
-def test_opencode_is_dispatched_interactively_with_the_checked_agent(world: World) -> None:
+def test_pi_is_dispatched_interactively_with_the_policy_extension(world: World) -> None:
     world.declare_go()
-    world.script(
-        opencode=[{"stdout": effective(GO_MODEL)}, {"stdout": effective(GO_MODEL)}],
-        osascript=[{"exec_command": True}],
-    )
+    world.script(pi=pi_steps({}), osascript=[{"exec_command": True}])
     assert world.run(model=GO_MODEL) == 0
-    debug = [call for call in world.calls("opencode") if call["argv"][:2] == ["--pure", "debug"]]
-    assert [call["argv"] for call in debug] == [
-        ["--pure", "debug", "agent", stage2_session.AGENT],
-    ], "the runner runs the diagnostics - once, bounded, without --tool or --params"
-    for call in debug:
-        assert "--tool" not in call["argv"] and "--params" not in call["argv"]
-    launched = [call for call in world.calls("opencode") if call["argv"][:2] == ["--pure", str(world.tree)]]
-    assert len(launched) == 1, "the launch is the only opencode call the Terminal shell runs"
-    (interactive,) = launched
-    assert interactive["argv"] == [
-        "--pure",
-        str(world.tree),
+    version, readback, launch = world.calls("pi")
+    extension = world.extension()
+    assert version["argv"] == ["--version"]
+    assert readback["argv"] == [
+        "--no-extensions",
+        "-e",
+        str(extension),
+        "--offline",
+        "--no-approve",
+        "--help",
+    ], "the read-back runs once, bounded, with only this extension and no model call"
+    assert launch["argv"] == [
+        "--no-extensions",
+        "--no-mcp",
+        "--no-skills",
+        "--no-prompt-templates",
+        "--no-themes",
+        "-e",
+        str(extension),
+        "--offline",
+        "--no-approve",
         "--model",
         GO_MODEL,
-        "--agent",
-        stage2_session.AGENT,
-        f"--prompt={expected_prompt(world, HANDOVER)}",
-    ]
-    assert interactive["env"]["OPENCODE_CONFIG"].startswith(str(world.tree / stage2_session.SESSION_ROOT))
+        "--",
+        expected_prompt(world, HANDOVER),
+    ], "discovery off, one extension, the declared model, then the prompt"
+    for flag in ("--print", "-p", "--mode", "--pure"):
+        assert flag not in launch["argv"], f"an interactive session never takes {flag}"
+    assert launch["cwd"] == str(world.tree)
+    assert extension.parent.parent == world.tree / stage2_session.SESSION_ROOT
+    assert extension.read_bytes() == stage2_session.POLICY_SOURCE.read_bytes(), "the copy is the tested source"
+    assert {p.name for p in extension.parent.iterdir()} == {stage2_session.SCRIPT_NAME, stage2_session.POLICY_FILE}
+    assert world.calls("opencode") == [], "the OpenCode CLI is never called"
 
 
-@pytest.mark.parametrize("transport", ["codex", "opencode"])
+def test_the_runners_own_pi_calls_read_nothing_of_the_maintainers(world: World) -> None:
+    world.declare_go()
+    world.script(pi=pi_steps({}), osascript=[{"exec_command": True}])
+    assert world.run(model=GO_MODEL) == 0
+    version, readback, launch = world.calls("pi")
+    for call in (version, readback):
+        scratch = call["env"]["HOME"]
+        assert scratch != os.environ["HOME"], "a scratch home, not the maintainer's"
+        assert call["env"]["PI_CODING_AGENT_DIR"] == scratch, "a scratch agent directory"
+    assert launch["env"]["HOME"] == os.environ["HOME"], (
+        "the session itself signs in from the maintainer's ~/.pi/agent (Q-6)"
+    )
+    assert "PI_CODING_AGENT_DIR" not in launch["env"], "the runner points Pi at no directory of its own"
+
+
+@pytest.mark.parametrize(
+    ("version", "needle"),
+    [
+        ({"stdout": "1.0.9\n"}, "not the pinned"),
+        ({"stdout": ""}, "printed nothing"),
+        ({"exit": 3}, "ended 3"),
+    ],
+    ids=["other-version", "silent", "fails"],
+)
+def test_a_pi_off_the_pin_refuses_before_anything_else(
+    world: World, version: dict, needle: str, capsys: pytest.CaptureFixture[str]
+) -> None:
+    world.declare_go()
+    world.script(pi=pi_steps(version=version))
+    assert world.run(model=GO_MODEL) == 2
+    assert needle in capsys.readouterr().err
+    assert len(world.calls("pi")) == 1, "only the version check ran"
+    assert world.calls("osascript") == [] and world.policies() == []
+
+
+def test_a_handover_that_starts_with_an_at_sign_refuses_for_pi(
+    world: World, capsys: pytest.CaptureFixture[str]
+) -> None:
+    # Pi reads a message that starts with `@` as a file name and sends that file's content instead.
+    world.handover.write_text("@secret.txt\nResume here.\n", encoding="utf-8")
+    world.declare_go()
+    world.script(pi=pi_steps())
+    assert world.run(model=GO_MODEL) == 2
+    assert "starts with `@`" in capsys.readouterr().err
+    assert world.calls("pi") == [] and world.calls("osascript") == [] and world.policies() == []
+
+
+@pytest.mark.parametrize("transport", ["codex", "pi"])
 def test_a_handover_that_starts_like_an_option_stays_the_prompt(world: World, transport: str) -> None:
     # Loop row L2-1: a journal handover starts with `---`; no CLI may read it as an option.
     text = "---\ntitle: a journal handover\n---\n\nResume here.\n"
@@ -813,10 +826,10 @@ def test_a_handover_that_starts_like_an_option_stays_the_prompt(world: World, tr
         assert argv[-2:] == ["--", expected_prompt(world, text)], "options end before the prompt"
     else:
         world.declare_go()
-        world.script(opencode=[{"stdout": effective(GO_MODEL)}, {}], osascript=[{"exec_command": True}])
+        world.script(pi=pi_steps({}), osascript=[{"exec_command": True}])
         assert world.run(model=GO_MODEL) == 0
-        launched = [call for call in world.calls("opencode") if call["argv"][:2] == ["--pure", str(world.tree)]]
-        assert launched[0]["argv"][-1] == f"--prompt={expected_prompt(world, text)}", "the prompt is bound to its flag"
+        argv = world.calls("pi")[-1]["argv"]
+        assert argv[-2:] == ["--", expected_prompt(world, text)], "options end before the prompt"
 
 
 def test_hostile_prompt_text_stays_data(world: World) -> None:
@@ -830,118 +843,93 @@ def test_hostile_prompt_text_stays_data(world: World) -> None:
     assert script == stage2_session.APPLESCRIPT and "PWNED" not in script, "the prompt reached the AppleScript source"
 
 
+# The Pi policy extension: copied in, confirmed loaded (spec 11)
 # ---------------------------------------------------------------------------
-# The OpenCode policy and what the effective agent says (spec 11)
-# ---------------------------------------------------------------------------
-
-
-def test_the_policy_repairs_the_truncation_allowance_once(world: World) -> None:
-    world.declare_go()
-    world.script(
-        opencode=[
-            {"stdout": effective(GO_MODEL, appended=True)},
-            {"stdout": effective(GO_MODEL)},
-            {},
-        ],
-        osascript=[{"exec_command": True}],
-    )
-    assert world.run(model=GO_MODEL) == 0
-    assert len(world.calls("opencode")) == 3, "two diagnostics and one interactive launch"
-    config = world.config()
-    assert config["permission"]["external_directory"] == {"**": "deny", TRUNCATION: "deny"}
-    assert config["agent"][stage2_session.AGENT]["permission"]["external_directory"] == {
-        "**": "deny",
-        TRUNCATION: "deny",
-    }, "the agent level carries the explicit denial too"
-    assert world.policies() != [], "an accepted launch keeps the policy for the session to load"
 
 
 @pytest.mark.parametrize(
-    ("second", "needle"),
+    ("step", "needle"),
     [
-        (effective(GO_MODEL, appended=True), "keeps"),
-        (effective(GO_MODEL, after=(rule("external_directory", "*", "allow"),)), "catch-all allow"),
-        (effective(GO_MODEL, after=(rule("bash", "**", "allow"),)), "catch-all allow"),
-        (effective(GO_MODEL, pinned="opencode-go/another-model"), "not the pinned"),
-        (effective(GO_MODEL, after=(rule("task", "*", "ask"),)), "catch-all ask"),
-        (effective(GO_MODEL, after=(rule("*", "*", "allow"),)), "catch-all allow"),
-        (effective(GO_MODEL, after=(rule("external*", "/etc/*", "allow"),)), "after its catch-all"),
-        (effective(GO_MODEL, after=(rule("bash", "rm *", "allow"),)), "after its catch-all"),
-        (effective(GO_MODEL, mode="all"), "not as the primary agent"),
-        (effective(GO_MODEL, after=(rule("webfetch", "*", "allow"),)), "webfetch ends on the catch-all allow"),
+        ({"stdout": "Usage: pi [options]\n"}, "did not load"),
+        ({"stdout": "  --stage2-session-policy-other  another flag\n"}, "did not load"),
+        ({"stdout": "  --x-stage2-session-policy  another flag\n"}, "did not load"),
+        ({**PI_HELP_STEP, "exit": 2}, "exited 2"),
+        ({"stdout": "", "exit": 1, "stderr": "no such extension"}, "exited 1"),
     ],
-    ids=[
-        "persistent-allowance",
-        "outside-allow",
-        "bash-allow",
-        "model-switch",
-        "task-ask",
-        "wildcard-name-allow",
-        "wildcard-name-specific",
-        "bash-specific-allow",
-        "not-primary",
-        "webfetch-allow",
-    ],
+    ids=["flag-missing", "longer-flag", "prefixed-flag", "help-fails", "help-fails-silently"],
 )
-def test_an_override_the_runner_did_not_write_refuses(
-    world: World, second: str, needle: str, capsys: pytest.CaptureFixture[str]
+def test_an_extension_that_did_not_load_refuses_and_cleans_up(
+    world: World, step: dict, needle: str, capsys: pytest.CaptureFixture[str]
 ) -> None:
     world.declare_go()
-    world.script(
-        opencode=[
-            {"stdout": effective(GO_MODEL, appended=True)},
-            {"stdout": second},
-        ]
-    )
+    world.script(pi=pi_steps(help_step=step))
     assert world.run(model=GO_MODEL) == 2
     assert needle in capsys.readouterr().err
+    assert world.calls("osascript") == [], "no window opens on an unconfirmed policy"
+    assert world.policies() == [], "a refused launch removes the private directory it made"
+
+
+def test_a_pi_that_hangs_on_the_read_back_refuses(
+    world: World, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+) -> None:
+    monkeypatch.setattr(stage2_session, "CLI_TIMEOUT", 0.5)
+    world.declare_go()
+    world.script(pi=pi_steps(help_step={**PI_HELP_STEP, "sleep": 5}))
+    assert world.run(model=GO_MODEL) == 2
+    assert "did not answer within" in capsys.readouterr().err
+    assert world.calls("osascript") == [] and world.policies() == []
+
+
+def test_a_missing_extension_source_refuses_and_cleans_up(
+    world: World, monkeypatch: pytest.MonkeyPatch, tmp_path: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    monkeypatch.setattr(stage2_session, "POLICY_SOURCE", tmp_path / "nowhere.mjs")
+    world.declare_go()
+    world.script(pi=pi_steps())
+    assert world.run(model=GO_MODEL) == 2
+    assert "could not be copied" in capsys.readouterr().err
+    assert len(world.calls("pi")) == 1, "the read-back is never asked about a file that is not there"
     assert world.calls("osascript") == [] and world.policies() == []
 
 
 @pytest.mark.parametrize(
-    "step",
-    [
-        {"stdout": effective(GO_MODEL, after=(rule("external_directory", "**", "allow"),))},
-        {"stdout": "not json"},
-        {"exit": 3, "stderr": "no agent"},
-        {"stdout": json.dumps({"name": "other-agent", "mode": "primary", "permission": []})},
-        {
-            "stdout": json.dumps(
-                {
-                    "name": stage2_session.AGENT,
-                    "mode": "primary",
-                    "model": {"providerID": "opencode-go", "modelID": GO_BARE},
-                }
-            )
-        },
-        {"stdout": json.dumps({**json.loads(effective(GO_MODEL)), "model": GO_MODEL})},
-        {
-            "stdout": json.dumps(
-                {**json.loads(effective(GO_MODEL)), "permission": {"external_directory": {"**": "deny"}}}
-            )
-        },
-        {"stdout": json.dumps({**json.loads(effective(GO_MODEL)), "permission": [{"permission": "bash"}]})},
-        {"stdout": effective(GO_MODEL)[:-1] + ', "permission": []}'},
-    ],
-    ids=[
-        "catch-all-allow",
-        "not-json",
-        "nonzero",
-        "agent-missing",
-        "no-permission-list",
-        "model-as-string",
-        "permission-as-map",
-        "rule-without-fields",
-        "empty-rule-list",
-    ],
+    "failure", [OSError("temp directory not writable"), KeyboardInterrupt()], ids=["oserror", "ctrl-c"]
 )
-def test_an_unknown_effective_policy_refuses(world: World, step: dict) -> None:
+def test_any_failure_before_the_dispatch_removes_the_private_directory(
+    world: World, monkeypatch: pytest.MonkeyPatch, failure: BaseException
+) -> None:
+    def broken(*_args: object, **_kwargs: object) -> None:
+        raise failure
+
+    monkeypatch.setattr(stage2_session, "confirm_loaded", broken)
     world.declare_go()
-    world.script(opencode=[step])
-    assert world.run(model=GO_MODEL) == 2
+    world.script(pi=pi_steps())
+    with pytest.raises(type(failure)):
+        world.run(model=GO_MODEL)
     assert world.calls("osascript") == [] and world.policies() == []
 
 
+def test_the_session_keeps_discovery_off_except_context_files(world: World) -> None:
+    world.declare_go()
+    world.script(pi=pi_steps({}), osascript=[{"exec_command": True}])
+    assert world.run(model=GO_MODEL) == 0
+    argv = world.calls("pi")[-1]["argv"]
+    for flag in ("--no-mcp", "--no-skills", "--no-prompt-templates", "--no-themes"):
+        assert flag in argv, f"the session takes {flag}"
+    assert "--no-context-files" not in argv, "AGENTS.md stays on on purpose"
+
+
+def test_the_extension_is_confirmed_again_for_every_launch(world: World) -> None:
+    world.declare_go()
+    # Terminal is a stand-in that starts nothing here, so each launch makes the two calls of the runner only.
+    world.script(pi=[PI_VERSION_STEP, PI_HELP_STEP, PI_VERSION_STEP, PI_HELP_STEP], osascript=[{}, {}])
+    assert world.run(model=GO_MODEL) == 0
+    assert world.run(model=GO_MODEL) == 0
+    readbacks = [call for call in world.calls("pi") if "--help" in call["argv"]]
+    assert len(readbacks) == 2 and readbacks[0]["argv"][2] != readbacks[1]["argv"][2], "each launch has its own copy"
+
+
+# ---------------------------------------------------------------------------
 # ---------------------------------------------------------------------------
 # Environment, launch files and cleanup (spec 13, 14)
 # ---------------------------------------------------------------------------
@@ -955,7 +943,23 @@ def test_the_session_reads_no_secrets_and_sends_no_tokens(world: World) -> None:
         assert name not in env
     assert not [name for name in env if name.startswith("ANTHROPIC_")], list(env)
     assert env["HOME"] == os.environ["HOME"] and "PATH" in env
-    assert "caller-openai-key" not in json.dumps(world.config())
+
+
+def test_the_pi_session_hands_over_no_key_and_writes_no_credential(
+    world: World, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    monkeypatch.setenv("OPENCODE_API_KEY", "caller-opencode-key")
+    monkeypatch.setenv("PI_CODING_AGENT_DIR", "/caller/agent")
+    world.declare_go()
+    world.script(pi=pi_steps({}), osascript=[{"exec_command": True}])
+    assert world.run(model=GO_MODEL) == 0
+    for call in world.calls("pi"):
+        for name in ("OPENCODE_API_KEY", "GH_TOKEN", "OPENAI_API_KEY", "X_SECRET"):
+            assert name not in call["env"], f"{name} reached Pi"
+        assert "caller-opencode-key" not in json.dumps(call)
+    assert "PI_CODING_AGENT_DIR" not in world.calls("pi")[-1]["env"]
+    for file in world.extension().parent.iterdir():
+        assert "caller-" not in file.read_text(encoding="utf-8"), f"{file.name} holds a caller secret"
 
 
 def test_launch_files_stay_inside_their_private_directory(world: World) -> None:
@@ -969,7 +973,7 @@ def test_launch_files_stay_inside_their_private_directory(world: World) -> None:
     strays = []
     for path in world.tree.rglob("*"):
         relative = path.relative_to(world.tree).as_posix()
-        launched = "terminal-session" in path.name or "opencode.policy" in path.name
+        launched = "terminal-session" in path.name or stage2_session.POLICY_FILE in path.name
         if path.is_file() and launched and not relative.startswith(stage2_session.SESSION_ROOT):
             strays.append(relative)
     assert strays == []

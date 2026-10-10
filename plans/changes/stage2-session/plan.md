@@ -250,3 +250,70 @@ discovery off) passes. A word inside a command that matches a pattern, such as
 `rm -r` in a quoted argument, asks too: noise, not a hole. Nothing here was run
 inside a live Pi: whether the handler behaves there the way the tests say is
 package 7, on the Mac.
+
+## Package 4 of the Pi plan: the runner port (2026-10-09)
+
+Built and tested; the documents that describe the session verb to a reader
+(`docs/WORKFLOW.md`, `AGENTS.md`, `model-endpoints.yaml` comments) still say
+OpenCode until package 5, so for now they contradict the code. Named here so that
+nobody reads them as current.
+
+**What changed in `scripts/stage2_session.py`.** `pi` replaces `opencode` in
+`TRANSPORTS` (the id `opencode-go/<model>` names the endpoint, Q-5), in
+`executables` and in `cli_argv`. The seven OpenCode-only functions are gone
+(`policy_config`, `effective_policy`, `wildcard`, `catch_all`, `policy_problems`,
+`insert_denials`, `verify_policy`), with `AGENT` and `GUARDED`: 200 lines out, 89
+in. Two functions come in. `install_policy` copies
+`scripts/stage2_session_policy.mjs` into the session's private directory; the
+copy, not the tracked source, is what Pi loads. `confirm_loaded` runs
+`pi --no-extensions -e <copy> --offline --no-approve --help` once, bounded by
+`CLI_TIMEOUT`, in a scratch `HOME` and agent directory, with the worktree as its
+directory, and refuses unless the output lists `--stage2-session-policy` as a
+whole word (Q-1). It prints nothing and calls no model. `run` checks the pinned
+Pi with the runner's own `require_pi` before the leak check, and the launch is
+`pi --no-extensions -e <copy> --offline --no-approve --model <id> -- <prompt>`
+with the environment allow-list only: no key, no `PI_CODING_AGENT_DIR`, so Pi
+signs in from the maintainer's own `~/.pi/agent` (Q-6; criterion 13). The launch
+is interactive: no print, no RPC mode.
+
+**Read in the pinned Pi's code, not run.** `dist/cli/args.js` of Pi 1.1.0 ends
+option parsing at `--` and then takes every argument as a message, except one
+that starts with `@`, which it reads as a file name. A handover's text begins
+with `---`, so the `--` is needed; a handover that begins with `@` would make
+Pi send that file instead of the text the leak check scanned, so `run` refuses
+such a prompt (a test pins it). `docs/security.md` says context files such as
+`AGENTS.md` load whatever the project trust, so the worktree's `AGENTS.md` also
+reaches the session as a context file beside the same text in the prompt:
+a duplicate, not a leak.
+
+**Not added, on purpose.** The launch carries only the flags of criterion 11.
+The loop's other switches (`--no-skills`, `--no-prompt-templates`,
+`--no-themes`, `--no-context-files`, `--no-mcp`) are not set: a session is
+interactive, nothing measured them there, and `--no-extensions` already drops the
+built-in MCP extension. Skills, prompt templates and themes of the maintainer's
+own `~/.pi/agent` therefore load, which Q-6 accepts with that directory.
+
+**Planted faults, 2026-10-09.** 19, one at a time in the runner: each launch flag
+dropped (`--no-extensions`, `-e`, `--offline`, `--no-approve`, the `--` before
+the prompt, the model), the read-back without the extension, with the
+maintainer's real `HOME`, in the wrong directory, with its exit code ignored,
+with the flag matched as a prefix, never asked, the extension not copied, a
+refused launch keeping its directory, the version pin skipped, a prompt with `@`
+allowed, the runner pointing Pi at a directory, the program looked up as
+`opencode`, and `opencode-go` ids selecting `opencode` again. All 19 turn a test
+red. The suite is 1560 cases, green.
+
+**The tests.** `tests/test_stage2_session.py` has four stand-ins now (`codex`,
+`pi`, `opencode`, `osascript`); the `opencode` one exists to show it is never
+called. A Pi session makes three calls in order, which `pi_steps` scripts: the
+runner's version check, its read-back, the launch the Terminal shell runs. The 25
+uses of the canned OpenCode `effective(...)` answer and the tests of the
+OpenCode policy are replaced by tests of the Pi version pin, the read-back
+(missing flag, a longer or prefixed flag, a failing or hanging `--help`, a missing
+source file), the `@` prompt, the scratch home, and the absence of any key.
+
+**Named limits.** Nothing here ran inside a live Pi: that the extension loads
+and the handlers hold in the TUI, that `--offline` leaves the model call alone,
+and that a multi-line first message opens the interactive session are package 7,
+on the Mac. The read-back confirms the load, not the behaviour (Q-1). The
+documents lag the code until package 5.
