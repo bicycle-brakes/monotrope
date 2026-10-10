@@ -4,7 +4,7 @@ status: draft
 implementation_status: partial
 date: 2026-10-07
 last_reviewed: 2026-10-07
-updated: 2026-10-09
+updated: 2026-10-10
 supersedes: null
 superseded_by: null
 bead: coding-harness-amp
@@ -154,8 +154,9 @@ that canonical worktree root, not a subdirectory, another worktree or main.
     *Refuted by:* docs claiming continuous scanning, guaranteed whole-disk
     isolation or permission to switch to an undeclared model in the TUI.
 16. When the change is proposed for merge, it includes the ADR 0007 amendment
-    draft and workflow documentation in a decision PR, without editing the
-    protected ADR directory or changing the reviewer-round routing. The one
+    draft and workflow documentation in a decision PR that adds the record as a
+    new file in the protected ADR directory (ADR 0012, 2026-10-10) without
+    editing an existing ADR, and without changing the reviewer-round routing. The one
     decision PR carries the Pi move (Q-4).
     *Refuted by:* an ordinary PR, edited `docs/adr/`, or a second OpenCode Go
     ordering added here instead of the reviewer change.

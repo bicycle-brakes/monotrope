@@ -4,7 +4,7 @@ status: draft
 implementation_status: partial
 date: 2026-10-07
 last_reviewed: 2026-10-07
-updated: 2026-10-09
+updated: 2026-10-10
 supersedes: null
 superseded_by: null
 bead: coding-harness-amp
@@ -257,6 +257,40 @@ question. — 2026-10-09
 The patterns that ask are therefore: a recursive `rm`, `sudo`, `chmod` or
 `chown` with 777 (Q-2), `git reset --hard` and `git clean` (Q-8). Q-7 and Q-8
 refine Q-2; they replace nothing in it.
+
+## Q-9 · Discovery flags of the session; further discarding git commands
+
+asked: 2026-10-09, the directing conversation (after the independent review of
+  the Pi chain, #110 to #113)
+answer: (1) the session takes `--no-mcp`, `--no-skills`,
+  `--no-prompt-templates` and `--no-themes`; context files (`AGENTS.md`) stay
+  on ("Vier von fünf (Empfohlen)"). (2) `git checkout -- .` and `git restore .`
+  ask as well, like `git reset --hard` and `git clean` of Q-8 ("Ja, beide
+  (Empfohlen)")
+answered_by: maintainer
+status: answered
+
+In the context of the interactive Pi session, which left MCP servers, skills,
+prompt templates and themes on, so that an MCP file tool could bypass the
+policy's worktree bounds, and of Q-8, which named only two of the git commands
+that discard unsaved work, facing the choice between all five, four, only
+`--no-mcp` or none of the reviewer call's discovery flags, and between
+extending Q-8 and keeping it, we decided four of the five flags with context
+files on, and that `git checkout -- .` and `git restore .` ask too, to achieve
+a session that cannot get around the worktree bounds through discovery while
+it still reads `AGENTS.md`, and a question before the common ways to lose
+unsaved edits, accepting that spec criterion 11 ("discovery off") is met
+except for context files and that two more commands ask. — 2026-10-09
+
+The maintainer chose the option marked as recommended in a multiple-choice
+question (transcript of the directing session, 2026-10-09T23:39Z), not wording
+of their own.
+
+[DETAIL] The agent generalised answer (2) to the other forms that discard the
+same way: `git checkout -f`, `git checkout .`, `git checkout <ref> -- <path>`,
+`git restore <path>` and `git restore --worktree`; `git restore --staged`
+alone only unstages and does not ask. Those forms were not asked one by one;
+the merge of the decision pull request confirms them (ADR 0012).
 
 ## Note — settled instructions 3 and the OpenCode details, 2026-10-09
 

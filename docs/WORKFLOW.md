@@ -4,7 +4,7 @@ category: governance
 status: current
 created: 2026-09-05
 last_reviewed: 2026-09-29
-updated: 2026-10-09
+updated: 2026-10-10
 owner: Data Architect
 provenance: ai-drafted-reviewed
 produced_by:
@@ -854,8 +854,7 @@ credential file, copies no caller token, hands Pi no key and sets no Pi agent
 directory, and starts no headless verb — no `codex exec`, no Pi print or RPC
 mode, and no call to the OpenCode CLI. The verb neither runs the review loop nor
 changes which reviewer sees what: the review order is not this verb's business.
-Its ADR 0007 amendment travels as a draft in the change folder until the
-decision PR is merged.
+Its decision record is ADR 0012.
 
 ### The review loop (phase 4b)
 

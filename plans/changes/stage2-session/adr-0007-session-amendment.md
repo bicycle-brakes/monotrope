@@ -5,7 +5,7 @@ implementation_status: partial
 date: 2026-10-07
 created: 2026-10-07
 last_reviewed: 2026-10-07
-updated: 2026-10-09
+updated: 2026-10-10
 supersedes: null
 superseded_by: null
 bead: coding-harness-amp
@@ -18,7 +18,7 @@ tags: [adr-draft, stage-2, session]
 
 # Draft ADR 0007 amendment — interactive sessions use the checked runner
 
-Status: proposed in the decision PR, not an accepted ADR 0007 edit.
+Status: moved on 2026-10-10 into the decision record `docs/adr/0012-interactive-stage-2-sessions-run-through-the-checked-runner.md` (ADR 0012), which the merge of its pull request accepts. This draft is kept as the change's record and is no longer edited.
 Decider: maintainer. Prepared by Codex, 2026-10-07; the OpenCode Go launcher
 re-pointed from the OpenCode CLI to Pi on 2026-10-09 (decisions Q-1 to Q-6).
 Amends launch scope, not reviewer/model selection; supersedes no whole ADR.

@@ -155,10 +155,10 @@ endpunkte:
       - mimo-v2.6-flash
       - mimo-v2.6-pro
     bemerkung: >-
-      The review loop (phase 4b) runs here — and only the review loop; the
-      spec review (phase 2a) and the review (phase 6) stay with Codex —
-      through `python3 scripts/stage2.py` and Pi at the version the runner
-      pins (1.1.0) only. The order of `modelle` is the loop's ladder: round n
+      The review loop (phase 4b) and the interactive session verb (`stage2.py
+      session`, ADR 0012) run here — and nothing else; the spec review (phase
+      2a) and the review (phase 6) stay with Codex — through `python3
+      scripts/stage2.py` and Pi at the version the runner pins (1.1.0) only. The order of `modelle` is the loop's ladder: round n
       calls the n-th id, and a one-line pull request reorders it. Address:
       `https://opencode.ai/zen/go/v1/chat/completions`, under which the Go
       page (read 2026-10-07) lists the three ids; the Anthropic-compatible
