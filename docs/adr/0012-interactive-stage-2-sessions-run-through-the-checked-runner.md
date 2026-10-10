@@ -16,17 +16,27 @@ tags: [adr, stage-2, session, pi, opencode-go]
 
 * Status: accepted by the merge of the pull request that carries this file.
   Until that merge, the pull request's state is the decision's state: open is
-  proposed, closed is rejected. Amends ADR 0007 (its launch scope: finite
-  phase calls only) and ADR 0011 (its scope: the review loop only); supersedes
-  no ADR.
+  proposed, closed is rejected. Amends ADR 0007 decision 1 (the leak check
+  "immediately before the call": for a session it runs at launch only) and
+  decision 4 (the accepted residual read risk now covers a session that
+  writes and runs a shell, not a read-only reviewer), and ADR 0011 decision 1
+  (scope: the review loop only) and decision 5 (the OpenCode Go key reaches a
+  call only as `OPENCODE_API_KEY`: a session signs in from `~/.pi/agent`
+  instead, for the session verb only); supersedes no ADR.
 * Review: the maintainer's answers of 2026-10-09 in a Claude Code session,
   recorded as Q-1 to Q-8 in `plans/changes/stage2-session/decisions.md`
   (confirm-load read-back; the shell asks only on dangerous patterns; file
   tools bounded to the worktree with a protected list; one decision pull
   request; `opencode-go` ids select Pi; sign-in through the maintainer's own
   `~/.pi/agent`; network programs do not ask; only `git reset --hard` and
-  `git clean` ask among the git commands). The acceptance is the merge commit
-  and is written nowhere else (ADR 0008) · Decider: maintainer · prepared by
+  `git clean` ask among the git commands). Two details went into the code after
+  an independent review of the first four pull requests and are not interview
+  records: the discovery flags (`--no-mcp`, `--no-skills`,
+  `--no-prompt-templates`, `--no-themes`; context files stay on) and the
+  further asking patterns (`git checkout` that discards, `git restore`). The
+  journal addendum of 2026-10-09 is their only record; this merge confirms
+  them. The acceptance is the merge commit and is written nowhere else
+  (ADR 0008) · Decider: maintainer · prepared by
   a Claude Code session; the first draft was written by Codex on 2026-10-07 for
   the OpenCode CLI and re-pointed to Pi on 2026-10-09
   (`plans/changes/stage2-session/adr-0007-session-amendment.md`).
@@ -60,21 +70,23 @@ tags: [adr, stage-2, session, pi, opencode-go]
 3. **The extension** keeps `read`, `grep`, `find`, `ls`, `edit` and `write`
    inside the worktree as Pi resolves a path, keeps `edit` and `write` off its
    own file, `.stage2-sessions/` and `.pi/`, asks before a recursive `rm`,
-   `sudo`, `chmod` or `chown` with 777, `git reset --hard`, `git clean` and the
-   other git commands that discard unsaved edits, blocks those when no UI can
-   ask, and blocks the call when its own handler fails. Every other `bash`
+   `sudo`, `chmod` or `chown` with 777, `git reset --hard`, `git clean`,
+   `git checkout` forms that discard (`--`, `.`, `-f`) and `git restore` (except
+   `--staged` alone), blocks those when no UI can ask, and blocks the call when its own handler fails. Every other `bash`
    command runs unasked, network programs and `git push` included. `.git/`
    stays writable.
-4. **The runner confirms the extension loaded** (its flag is listed by
-   `pi --help`) and refuses otherwise. Whether its handlers hold inside a live
+4. **The runner confirms the extension loaded** (its flag is listed by a
+   separate `pi --help` run under a scratch home, not by the session process
+   itself) and refuses otherwise. Whether its handlers hold inside a live
    Pi is held by tests that run the extension without Pi, not read back.
 5. **The session signs in with the maintainer's own `~/.pi/agent`**; the runner
    reads nothing from it and hands Pi no key.
 6. **Codex sessions** keep workspace-write with on-request approval and do not
-   claim worktree-only reads. Neither configuration is confinement at the
-   operating-system level.
+   claim worktree-only reads. This record claims no confinement beyond what
+   each harness provides itself; the runner does not verify Codex's sandbox,
+   and for Pi the extension confines the file tools only, not the shell.
 
-## Considered options
+## Options considered
 
 * Pi with a runner-supplied policy extension (**chosen**).
 * The OpenCode CLI with its effective-policy read-back (rejected by the
@@ -94,15 +106,27 @@ tags: [adr, stage-2, session, pi, opencode-go]
   does not see what such a command sends. `cat ~/.pi/agent/…` is an unlisted
   command too.
 * `~/.pi/agent` may hold other providers' credentials, so a model switched
-  inside the session can leave the declared endpoint unscanned.
+  inside the session can leave the declared endpoint unscanned. This changes
+  where a session's key comes from (ADR 0011 decision 5, for the verb only).
+* **Context files and the agent directory feed the session unscanned.**
+  `AGENTS.md` files stay on, and the maintainer's `~/.pi/agent` still loads
+  (system-prompt files, settings, `models.json`, whose key and header values
+  can run commands at request time); the leak check scans the prompt and the
+  tree only. Whether `models.json` can redirect the `opencode-go` address was
+  not measured.
+* The session starts with `env -i` and an allow-list: no `OPENCODE_API_KEY`,
+  no `SSH_AUTH_SOCK` (so `git push` over SSH fails inside the session; an
+  HTTPS push with a credential helper does not). A shell can also start another
+  shell (`sh -c`, `eval`), which no pattern sees.
 * The patterns match the command text: a quoted flag or command word
   (`rm "-rf" x`, `g""it reset --hard`) is not seen. The list is short on
   purpose and is not a parser.
 * The proof of the policy is weaker than the OpenCode read-back was: a bug in
   the extension that its tests miss is not seen at launch.
-* This decision approves no new endpoint, credential or review order; the
+* This decision approves no new endpoint and no new review order; the
   `opencode-go` declaration stays ADR 0011's, and the entry's note now also
-  names the session verb.
+  names the session verb. It does accept a new credential source for that verb
+  (see above).
 * Initial support is macOS Terminal only, with no silent fallback.
 * Bead coding-harness-0al is superseded: no `opencode` call remains.
 
