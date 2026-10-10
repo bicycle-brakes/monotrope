@@ -20,7 +20,7 @@ tags: [plan, stage-2, session]
 ```text
 For you:     Start a checked interactive Pi or Codex session in a new Terminal window.
 Done when:   Session refusal/dispatch tests and make verify pass, reviewed code is in a decision PR.
-Appetite:    4 hours of implementation and repairs; a stop, not an estimate.
+Appetite:    13 hours for the Pi work packages 3 to 7 (the Pi plan's own sizes: 11 to 13 hours); a stop, not an estimate.
 Not now:     Continuous scans, new endpoint approvals, review migration and full harness parity.
 Pre-mortem:  suppose it failed: most likely because the policy extension's behaviour differs inside a live Pi from its tests.
 Starts unless you say stop.
@@ -30,7 +30,7 @@ Starts unless you say stop.
 
 Codex takeover produced research, spec, design and plan because the Claude
 session exhausted its budget; research was not a GLM explore call. Phase 4
-uses the existing GLM Flash runner. Stop at four hours, never merge. Leave
+uses the existing GLM Flash runner. Stop at the appetite of the Pi plan, never merge. Leave
 Flash branch, protected ADRs, provenance, declarations, global configuration,
 credentials and reviewer routing untouched. The wider parity bead stays open.
 The accepted spec and design are the contract; F-2 is answered.

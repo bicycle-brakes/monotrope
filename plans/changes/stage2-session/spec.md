@@ -14,7 +14,7 @@ produced_by: {kind: llm-session, name: codex, version: "2026-10-07"}
 review: {status: pending, approved_by: null, approved_at: null}
 tags: [spec, stage-2, session]
 class: architectural
-appetite: 4
+appetite: 13
 ---
 
 # Spec — stage2-session
@@ -31,8 +31,8 @@ its endpoint declaration are unchanged.
 
 The runner has no interactive launch verb on main at `1c79860`. Direct TUI
 launches skip its declaration, prompt scan and audit. Budget takeover must
-not open a second unchecked entry point. The incoming Flash runner (`11abf42`,
-PR #89) changes the same file and must land first. Pi asks for no approval and has no sandbox
+not open a second unchecked entry point. The Flash runner (`11abf42`,
+PR #89), which changes the same file, is on main (read 2026-10-09). Pi asks for no approval and has no sandbox
 (`docs/security.md` of the pinned Pi 1.1.0), so the repository must supply
 the session policy itself, as an extension loaded explicitly by the runner
 (`research.md`, addendum of 2026-10-09).
@@ -181,7 +181,7 @@ still needs valid CLI authentication; the runner does not provision it.
 - Full `make verify` green; a real GUI/model smoke test is either measured
   through this runner or explicitly named as unrun, never implied by tests.
 - Phase 2a, architectural design, plan, implementation, verification and
-  review follow the workflow. No implementation before PR #89 is on main.
+  review follow the workflow. PR #89 is on main, so nothing waits on it.
 - Draft ADR amendment and workflow/help move with the code, with the touch
   map in the decision PR. No merge by this session.
 - Record the session-verb milestone on the bead but do not close the wider
