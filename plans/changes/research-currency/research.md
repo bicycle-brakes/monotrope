@@ -4,7 +4,7 @@ status: draft
 implementation_status: partial
 date: 2026-10-05
 last_reviewed: 2026-10-05
-updated: 2026-10-05
+updated: 2026-10-10
 supersedes: null
 superseded_by: null
 bead: coding-harness-pu9
@@ -215,7 +215,7 @@ Codex, Cline and Omnigent "change monthly".
   gate key) is a `feature`, answered "no" on 2026-09-30
   (`decisions/answers/frontmatter-current/adr.yaml`); `adhd-frame` asked its
   class as `[DECISION] 1` and took `bounded` provisionally
-  (`plans/changes/adhd-frame/spec.md`, "Open decisions").
+  (`plans/changes/archive/2026-09-30-adhd-frame/spec.md`, "Open decisions").
 - Bead coding-harness-pu9 is of type `feature`; it covers both parts.
 - `scripts/validate_change_artefacts.py`, the gate of phases 2 and 3, does
   not exist (`docs/WORKFLOW.md`, note "Not all of it is here yet");

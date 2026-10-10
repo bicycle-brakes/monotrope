@@ -1,4 +1,4 @@
-"""The counterexample matrix of plans/changes/interview-minimums/spec.md.
+"""The counterexample matrix of plans/changes/archive/2026-10-08-interview-minimums/spec.md.
 
 Each acceptance criterion gets the test that holds it and the fault that
 would refute it (plan.md, "Per acceptance criterion, the test"). The tree

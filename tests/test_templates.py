@@ -1,6 +1,6 @@
 """The templates and the design phase: a spec, a findings file, a decision record, a design.
 
-Criteria 1-62 of plans/changes/template-bundle/spec.md, criterion 47 in part;
+Criteria 1-62 of plans/changes/archive/2026-09-30-template-bundle/spec.md, criterion 47 in part;
 criteria 55 and 63-65 are held by review or by a command, not here (`plan.md`,
 "Tests and checks per criterion"). A template is a form to copy, so the tests
 hold it against what reads its copies: the gate modules

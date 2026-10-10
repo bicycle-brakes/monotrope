@@ -88,7 +88,7 @@ TOUCH_COMMAND = "python3 scripts/touch_map.py origin/main HEAD"
 
 
 def test_both_templates_carry_what_it_touches() -> None:
-    """Criterion 14 of plans/changes/touch-map/spec.md: one generated section, in its place, naming a script that exists."""
+    """Criterion 14 of plans/changes/archive/2026-10-06-touch-map/spec.md: one generated section, in its place, naming a script that exists."""
     for path, text, before in (
         (ORDINARY, _ordinary(), "## What changes"),
         (DECISION, _decision(), "## What changes for you"),

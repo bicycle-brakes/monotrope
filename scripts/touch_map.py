@@ -6,7 +6,7 @@ Usage:
 
 An agent runs it after the last push (`origin/main HEAD`) and pastes the output,
 unchanged, under "What it touches" in the pull request body (prompts/07-commit.md).
-Spec: plans/changes/touch-map/spec.md.
+Spec: plans/changes/archive/2026-10-06-touch-map/spec.md.
 
 Nothing is read from the working tree or the network. The script asks git for
 objects only (`rev-parse`, `merge-base`, `diff-tree`, `ls-tree`, `cat-file`), uses the
