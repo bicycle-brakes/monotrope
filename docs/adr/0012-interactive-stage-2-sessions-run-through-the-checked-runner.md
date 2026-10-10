@@ -29,13 +29,13 @@ tags: [adr, stage-2, session, pi, opencode-go]
   tools bounded to the worktree with a protected list; one decision pull
   request; `opencode-go` ids select Pi; sign-in through the maintainer's own
   `~/.pi/agent`; network programs do not ask; only `git reset --hard` and
-  `git clean` ask among the git commands). Two details went into the code after
-  an independent review of the first four pull requests and are not interview
-  records: the discovery flags (`--no-mcp`, `--no-skills`,
-  `--no-prompt-templates`, `--no-themes`; context files stay on) and the
-  further asking patterns (`git checkout` that discards, `git restore`). The
-  journal addendum of 2026-10-09 is their only record; this merge confirms
-  them. The acceptance is the merge commit and is written nowhere else
+  `git clean` ask among the git commands) and Q-9 (the discovery flags
+  `--no-mcp`, `--no-skills`, `--no-prompt-templates` and `--no-themes` with
+  context files on; `git checkout -- .` and `git restore .` ask too), both
+  chosen as recommended options in a multiple-choice question. The code asks
+  on more forms of the same two commands (`git checkout -f`, `git checkout
+  <ref> -- <path>`, `git restore <path>`); those were not asked one by one and
+  this merge confirms them. The acceptance is the merge commit and is written nowhere else
   (ADR 0008) · Decider: maintainer · prepared by
   a Claude Code session; the first draft was written by Codex on 2026-10-07 for
   the OpenCode CLI and re-pointed to Pi on 2026-10-09
