@@ -1080,7 +1080,9 @@ def test_the_workflow_states_what_a_session_proves_and_what_it_does_not() -> Non
         assert session_doc_problems(changed), old
 
 
-def test_the_amendment_stays_a_draft_beside_the_change() -> None:
+def test_the_amendment_moved_into_the_decision_record() -> None:
+    adr = REPO_ROOT / "docs" / "adr" / "0012-interactive-stage-2-sessions-run-through-the-checked-runner.md"
+    text = adr.read_text(encoding="utf-8")
+    assert "status: accepted" in text and "provenance: human-decided" in text
     draft = REPO_ROOT / "plans" / "changes" / "stage2-session" / "adr-0007-session-amendment.md"
-    assert draft.is_file() and "Status: proposed" in draft.read_text(encoding="utf-8")
-    assert [p.name for p in (REPO_ROOT / "docs" / "adr").glob("*session*")] == []
+    assert "ADR 0012" in draft.read_text(encoding="utf-8")
