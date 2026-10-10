@@ -104,3 +104,9 @@ None known.
 Read this file, `git fetch`, check #116; if it is green and open, merge it with
 its head SHA (the maintainer already asked). Then ask about the Mac test or the
 plan for coding-harness-909.
+
+## Addendum — #116 merged, 2026-10-10
+
+#116 is merged (`0c71403`) after its CI went green on the branch with `main`
+brought in. Step 1 of "Next step" is done; this pull request (#117) only adds
+this file and waits for the maintainer's merge.
