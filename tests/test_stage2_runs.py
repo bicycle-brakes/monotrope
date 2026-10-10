@@ -1,7 +1,7 @@
 """The run counter of stage 2 - and the cases in which its numbers hold.
 
 `scripts/stage2_runs.py` reads what `scripts/stage2.py` wrote into a change
-folder and counts it (plans/changes/stage2-runs-count/spec.md). Every case
+folder and counts it (plans/changes/archive/2026-10-08-stage2-runs-count/spec.md). Every case
 builds a small repository in `tmp_path` with rows rendered by the runner's own
 `render_table` and column constants, so a fixture has the shape the runner
 writes. Each test names the fault that turns it red; the plan's time log says

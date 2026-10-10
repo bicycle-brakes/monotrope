@@ -1,4 +1,4 @@
-"""The touch map: what a pull request touches (plans/changes/touch-map/spec.md, criteria 1-18).
+"""The touch map: what a pull request touches (plans/changes/archive/2026-10-06-touch-map/spec.md, criteria 1-18).
 
 Every test builds its own git repository in a temporary directory and reads nothing of
 this repository's history or files, so the file holds in the kit probe's copy too. The
@@ -6,7 +6,7 @@ one thing read from here is the kit manifest, through the probe, for the kit-rol
 
 Each rule stands next to the fault that turns it red (docs/WORKFLOW.md, phase 5: a gate
 that has never been red measures nothing). The faults planted for these tests, with the
-test each one turned red, are recorded in plans/changes/touch-map/plan.md.
+test each one turned red, are recorded in plans/changes/archive/2026-10-06-touch-map/plan.md.
 """
 
 from __future__ import annotations
