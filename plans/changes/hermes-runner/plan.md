@@ -4,7 +4,7 @@ status: draft
 implementation_status: partial
 date: 2026-10-05
 last_reviewed: 2026-10-05
-updated: 2026-10-05
+updated: 2026-10-11
 supersedes: null
 superseded_by: null
 bead: coding-harness-i3y
@@ -641,3 +641,23 @@ session): 2026-10-05 23:16–23:25, no break counted. `make verify` ended
 VERIFY GREEN at 23:22 (601 passed, 15 skipped; `docs-links` and `markdownlint`
 red but report-only, `markdownlint` naming prompt lines 4 and 6 as before and
 no new line), before the findings rows were set to fixed.
+
+## Addendum — parked, 2026-10-11
+
+The maintainer parked this change on 2026-10-11 and kept what is built. Why:
+the research re-check finds no note due before about 2026-12-15 (0 of 26 due
+on 2026-10-11, `scripts/check_research_currency.py` on `main` at `99bbe02`);
+ADR 0010's revisit trigger 5 fired when PR #60 merged on 2026-10-07, so the
+departure from the leak check goes back to the maintainer; and slice 2's
+endpoint entry conflicts with the stage-2 `opencode-go` entry on `main`, which
+serves the stage-2 review loop and session verb only.
+
+Where things are: slice 1 (the job prompt) and slice 3 (ADR 0010) are merged;
+slices 2 and 5 sit unmerged on `feat/hermes-runner-2` at `faffe99`
+(27 commits, 437 behind `main` on 2026-10-11, no pull request), with 20 open
+findings rows on that branch (three MAJOR: F-8, F-14, F-15); slice 4 and
+slice 7 are not started. Re-entry: when notes fall due, run
+`prompts/research-recheck.md` once by hand in a normal session and measure
+time and tokens; whether a runner is worth building is decided on that
+measurement, with ADR 0010's trigger 5 answered first. Beads: the Hermes
+runner (coding-harness-i3y), research currency (coding-harness-pu9).
