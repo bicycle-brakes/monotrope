@@ -449,6 +449,7 @@ changes beyond their `plan.md`.
 - 17: tests/test_check_criterion_ledger.py::test_an_empty_plan_or_spec_is_reported_without_a_traceback
   — a traceback or exit 0 for a plan, spec or named test file that is a directory or not UTF-8
 - 17: tests/test_check_criterion_ledger.py::test_an_unsearchable_change_directory_is_a_finding_and_later_plans_are_still_read
+- 17: tests/test_check_criterion_ledger.py::test_a_not_yet_written_file_behind_an_unsearchable_directory_is_a_finding
   — a change directory without search permission ends the run in a traceback, or later plans go unread
 - 18: tests/test_check_criterion_ledger.py::test_a_root_it_cannot_measure_exits_3
   — exit 0 or 1 for an empty directory, a missing one or a file as the root
@@ -535,7 +536,7 @@ GIT_CONFIG_COUNT=1 GIT_CONFIG_KEY_0=commit.gpgsign GIT_CONFIG_VALUE_0=false make
 ```
 
 Expected green line of the second command at the head (criterion 24):
-`held 5 plans (5 live, 0 archived); read 283 entries (209 test, 39 not yet
+`held 5 plans (5 live, 0 archived); read 284 entries (210 test, 39 not yet
 written, 35 not a test); 17 archived plans dated before 2026-10-11 exempt`
 (measured 2026-10-11 after review-loop round 1, which added four tests to
 this change's own ledger; the count before it was 270 with 196 test; round 3

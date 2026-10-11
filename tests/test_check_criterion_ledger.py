@@ -658,3 +658,30 @@ def test_an_unsearchable_change_directory_is_a_finding_and_later_plans_are_still
     assert "Traceback" not in done.stderr, done.stderr
     assert "plans/changes/a-locked/plan.md" in done.stdout, done.stdout
     assert "criterion 2 has no entry" in done.stdout, done.stdout
+
+
+def test_a_not_yet_written_file_behind_an_unsearchable_directory_is_a_finding(tmp_path: Path) -> None:
+    """Phase-6 row F-5, its second site: a `not yet written` entry whose test
+    file lies behind a directory without search permission makes the existence
+    check raise PermissionError. The gate reports the entry (exit 1, no
+    traceback). Fault: a bare `path.exists()` in place of `_exists` ends the
+    run in a traceback."""
+    if hasattr(os, "geteuid") and os.geteuid() == 0:
+        pytest.skip("root can search any directory")
+    root = _tree(tmp_path)
+    _put(root, "plans/changes/x/spec.md", _spec(1))
+    _put(
+        root,
+        "plans/changes/x/plan.md",
+        _plan_text(_ledger("- 1: not yet written tests/locked/test_example.py::test_a")),
+    )
+    _put(root, "tests/locked/test_example.py", "def test_other():\n    pass\n")
+    locked = root / "tests" / "locked"
+    locked.chmod(0o000)
+    try:
+        done = _run(root)
+    finally:
+        locked.chmod(0o755)
+    assert done.returncode == 1, (done.returncode, done.stdout, done.stderr)
+    assert "Traceback" not in done.stderr, done.stderr
+    assert "make the file readable UTF-8" in done.stdout, done.stdout
