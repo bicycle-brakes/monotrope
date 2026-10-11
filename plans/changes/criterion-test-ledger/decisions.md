@@ -17,7 +17,8 @@ tags: [decisions, interview, gates, tests]
 
 # Decisions — criterion-test-ledger
 
-Interview for a `feature` change (at least three counted records). Options and
+Interview for a `feature` change that carries an ADR (at least five counted
+records; the maintainer asked for the ADR on 2026-10-11). Options and
 their consequences: `docs/research/2026-10-08-holding-criterion-tests.md`.
 
 ## Q-1 · How the tests of acceptance criteria are held
@@ -66,4 +67,25 @@ In the context of four live plans that name their tests in no fixed form
 each on its next touch, we decided to migrate all four in this change, to
 achieve that `research-currency` — the change whose tests were deleted — is
 held at once, accepting that the migration is the largest part of the work. —
+2026-10-11
+
+## Q-4 · What the ADR fixes as a principle, and why
+
+asked: 2026-10-11, the directing conversation (after the maintainer's "Doch,
+  mach es als adr")
+answer: option (c), both reasons — the principle as proposed: every
+  acceptance criterion names in its plan what proves it, a gate checks that
+  this proof still exists, and a test disappears only through a visible edit
+  of the plan. It is a principle rather than a gate alone because (a) it holds
+  beyond this repository, in LakeSwitch and in whatever the kit carries into
+  new repositories, where a gate alone could be switched off unnoticed, and
+  (b) it is a trust rule against models that "repair" a red test by deleting
+  it
+answered_by: maintainer
+status: answered
+
+In the context of a gate that only this repository runs, facing a gate
+without a recorded principle, we decided to fix the criterion-proof rule as an
+ADR, to achieve that it travels with the kit and binds every model that
+writes tests, accepting that changing it later takes a decision PR. —
 2026-10-11
