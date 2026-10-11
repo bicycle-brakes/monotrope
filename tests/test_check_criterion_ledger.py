@@ -586,3 +586,15 @@ def test_the_workflow_names_the_gate_and_its_exemption() -> None:
     assert "criterion-ledger" in row
     assert "archived" in row
     assert "2026-10-11" in row
+
+
+def test_the_workflow_row_makes_moving_the_cutoff_a_governance_act() -> None:
+    """Review-loop row L2-3: the CUTOFF comment in the gate points to
+    docs/WORKFLOW.md for the rule that moving the date is a governance act, so
+    the gate's row there must state it. Fault: deleting that sentence from the
+    row turns this red."""
+    text = (REPO_ROOT / "docs" / "WORKFLOW.md").read_text(encoding="utf-8")
+    rows = [line for line in text.splitlines() if line.startswith("| Criterion tests |")]
+    assert len(rows) == 1, rows
+    assert "moving that cut-off date is a governance act" in rows[0]
+    assert "decision pull request" in rows[0]

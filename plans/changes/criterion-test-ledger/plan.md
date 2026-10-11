@@ -463,6 +463,8 @@ changes beyond their `plan.md`.
   — either of the two rules missing
 - 23: tests/test_check_criterion_ledger.py::test_the_workflow_names_the_gate_and_its_exemption
   — no row for the gate, or a row without the archive rule or 2026-10-11
+- 23: tests/test_check_criterion_ledger.py::test_the_workflow_row_makes_moving_the_cutoff_a_governance_act
+  — the row loses the sentence the CUTOFF comment points to
 - 24: not a test — the gate's run over this repository at the head, under "Verification"; output in the pull request body
 - 24: tests/test_check_interview_minimums.py::test_an_adr_with_only_its_own_plan_md_still_has_that_one_owner
   — dropping the fall-back to plan-only folders leaves the ADR with "owns 0 change folder(s)"
@@ -521,7 +523,7 @@ GIT_CONFIG_COUNT=1 GIT_CONFIG_KEY_0=commit.gpgsign GIT_CONFIG_VALUE_0=false make
 ```
 
 Expected green line of the second command at the head (criterion 24):
-`held 5 plans (5 live, 0 archived); read 276 entries (202 test, 39 not yet
+`held 5 plans (5 live, 0 archived); read 277 entries (203 test, 39 not yet
 written, 35 not a test); 17 archived plans dated before 2026-10-11 exempt`
 (measured 2026-10-11 after review-loop round 1, which added four tests to
 this change's own ledger; the count before it was 270 with 196 test; round 2
