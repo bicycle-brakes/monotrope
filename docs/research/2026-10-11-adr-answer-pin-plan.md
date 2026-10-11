@@ -122,3 +122,23 @@ verify-pin gate that checks them?
 *Agent's recommendation (not decided):* the minimal slice, because of the
 2026-12-15 deadline; its lock should name the commit and digests in a shape
 dj9 can extend rather than replace.
+
+## Addendum 2026-10-11 — the decision
+
+The maintainer answered in the directing conversation on 2026-10-11:
+"Vollständiger Pin" — the switch waits for the full pin route (bead
+coding-harness-dj9, after bead coding-harness-s6i); no minimal slice is
+built. The agent's recommendation above was not taken.
+
+Consequences for this plan:
+
+- Package 2 is the full route at size L: bead coding-harness-s6i first, then
+  bead coding-harness-dj9. Bead coding-harness-3ar now depends on
+  coding-harness-dj9 in the tracker.
+- The "Not now" entry for the full release route no longer holds; it is the
+  route.
+- The 2026-12-15 date is at risk: both beads carry no estimate on
+  2026-10-11. If the route cannot finish in time, moving the pilot's expiry
+  in LakeSwitch takes a decision pull request there, early enough that gate
+  M-31 never turns red.
+- Package 1 (provenance location) is unchanged and still waits for nothing.
