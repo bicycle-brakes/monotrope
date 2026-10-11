@@ -273,8 +273,12 @@ def measure(root: Path) -> tuple[list[tuple[str, int, str]], Tally]:
     if not changes.is_dir():
         raise CannotMeasure(f"{root} has no {CHANGES_DIR}/ directory")
     archive_dir = changes / ARCHIVE
-    live = sorted(folder for folder in changes.iterdir() if folder.is_dir() and folder.name != ARCHIVE)
-    archived = sorted(folder for folder in archive_dir.iterdir() if folder.is_dir()) if archive_dir.is_dir() else []
+    try:
+        live = sorted(folder for folder in changes.iterdir() if folder.is_dir() and folder.name != ARCHIVE)
+        archived = sorted(folder for folder in archive_dir.iterdir() if folder.is_dir()) if archive_dir.is_dir() else []
+    except OSError as error:
+        # exists but cannot be listed: not a readable directory (criterion 18)
+        raise CannotMeasure(f"{changes} cannot be listed ({error.strerror or error})") from error
     findings: list[tuple[str, int, str]] = []
     tally = Tally()
     files: dict[Path, Reading] = {}

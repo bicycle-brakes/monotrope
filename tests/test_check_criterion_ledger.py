@@ -9,10 +9,12 @@ stands next to the fault that turns it red.
 
 from __future__ import annotations
 
+import os
 import subprocess
 import sys
 from pathlib import Path
 
+import pytest
 import yaml
 
 REPO_ROOT = Path(__file__).resolve().parent.parent
@@ -532,6 +534,25 @@ def test_a_root_it_cannot_measure_exits_3(tmp_path: Path) -> None:
     done = _run(a_file)
     assert done.returncode == 3
     assert "not measured" in done.stdout
+
+
+def test_an_unlistable_plans_changes_directory_exits_3_without_a_traceback(tmp_path: Path) -> None:
+    """Review-loop row L3-5: a plans/changes/ that exists but cannot be listed
+    is a root that is not readable, so the run exits 3 with a clear message and
+    no traceback. Fault: testing only is_dir() lets the PermissionError out of
+    measure() (traceback, exit 1)."""
+    if hasattr(os, "geteuid") and os.geteuid() == 0:
+        pytest.skip("root can list any directory")
+    changes = tmp_path / "plans" / "changes"
+    changes.mkdir(parents=True)
+    changes.chmod(0o000)
+    try:
+        done = _run(tmp_path)
+    finally:
+        changes.chmod(0o755)
+    assert done.returncode == 3, (done.returncode, done.stdout, done.stderr)
+    assert "not measured" in done.stdout
+    assert "Traceback" not in done.stderr, done.stderr
 
 
 # --- criteria 19 to 23: the wiring and the texts ----------------------------
