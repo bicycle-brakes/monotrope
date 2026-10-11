@@ -82,3 +82,45 @@ Verified on 2026-10-11 in the worktree `feat/attempt-diagnostics` against the tr
 *Note by the orchestrating session (2026-10-11): GLM's answer opened with a German preamble and a duplicate heading, both removed here (house rule 1); the text below the heading is unchanged.*
 
 **Not read here.** The bead coding-harness-cit itself was not read: the tracker is the Dolt database under `.beads/`, and this session has no shell. `plans/changes/criterion-test-ledger/` does not exist in this worktree (its branch is unmerged), so the audit lines quoted under "What happened" stand as the orchestrating session recorded them and were not re-verifiable here. `~/.local/state/coding-harness/` is outside this worktree and was not read; what the runner may write there is stated from `record_dir` and the module docstring, not from a look at the directory.
+
+## Readers of findings.md — phase 2, 2026-10-11
+
+Read on 2026-10-11 at `b48e740` by the phase-2 session, to settle where a
+failed attempt's record may stand in `findings.md` without a reader taking it
+for its own. The bead (`tools/bd show coding-harness-cit`) was read this time:
+its acceptance asks that a passing attempt leave only its audit line.
+
+- **Line-anchored readers.** `scripts/stage2_runs.py`, `measure`: call lines
+  by `CALL_PREFIXES` at column 0, sections by `## ` at column 0, phase-6
+  rounds by `stage2.VERDICT_LINE`, rows through `stage2.split_row`, which
+  strips whitespace before it looks for `|` at both ends — an indented table
+  line is still a row. It splits with `str.splitlines()`, which also breaks at
+  U+2028, U+0085 and the other line boundaries Python knows. `scripts/stage2.py`:
+  `VERDICT_LINE`, `VERDICT_START` (case-insensitive), `SESSION_LINE`,
+  `ROUNDS_LINE`, `ROUND_HEADING`, all `^` with `re.M`, which breaks at `\n`
+  only.
+- **Readers that match anywhere.** `release` appends `NO_LOOP_LINE` only when
+  neither it nor `RELEASE_HEADING` occurs anywhere in the text (`in`);
+  `released_rows` and `fill_marks` start at `rfind(RELEASE_HEADING)`. A pytest
+  failure that quotes either constant is enough: `tests/test_stage2.py` asserts
+  on both, and a runner change implemented through the runner prints them.
+- **`scripts/stage2_session.py`, `finalize`**, matches its pending line by
+  `attempt <id> ·` and the line's ending; the id is `uuid4().hex[:12]`, fresh
+  per launch, so no earlier text can hold it.
+- **Gates.** No blocking gate of `decisions/gates.yaml` reads the body of a
+  change's `findings.md`: `dangling-beads` reads `docs/` only,
+  `plans-registry` and `frontmatter-current` read the header.
+- **The leak check** scans every file under the change folder
+  (`scripts/leakcheck.py`, docstring item a), so `findings.md` is in every
+  later call's scanned set; it does not scan objects no ref reaches.
+- **The credential scan** (`remove_changed_credential`) reads the contents of
+  changed files, never their names; the checkpoint's `git add -A` runs after
+  it.
+- **Stage 1 reads no key.** `test_stage2_off_implements_with_one_sonnet_attempt_and_records_reason`
+  and `test_explore_stage2_off_uses_haiku_without_reading_the_glm_key` fail
+  when `read_secret` is called under `--stage2-off`.
+- **`implement` keeps `findings.md` through a restore**: `restore_baseline`
+  puts every path back except the change's `findings.md`.
+- **The validator** `scripts/validate_change_artefacts.py`, named as the gate
+  of phases 2 and 3 in `prompts/02-spec.md` and `prompts/03-plan.md`, does not
+  exist in this tree (searched 2026-10-11); `make verify` is the measured gate.
