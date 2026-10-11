@@ -4,7 +4,7 @@ category: governance
 status: current
 created: 2026-09-05
 last_reviewed: 2026-09-29
-updated: 2026-10-10
+updated: 2026-10-11
 owner: Data Architect
 provenance: ai-drafted-reviewed
 produced_by:
@@ -654,6 +654,10 @@ the call; it never selects the fallback.
 If the model process itself fails, the runner restores the worktree to the
 baseline commit (every path except the change's `findings.md`), says what it
 undid and exits 1; the next step is `implement <change> --stage2-off`.
+If an attempt fails its post-run checks, the runner quotes its diagnostics and
+the files its model changed (lines added and removed) into `findings.md` below
+that attempt's audit line, before the next attempt starts or the run exits 1; a
+passing attempt leaves its audit line only.
 
 ### The runner is the only way
 

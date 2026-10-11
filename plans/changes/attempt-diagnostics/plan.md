@@ -153,21 +153,21 @@ make verify
 
 ## Criterion ledger
 
-- 1: not yet written tests/test_stage2.py::test_a_failed_attempt_quotes_its_diagnostics_below_its_audit_line — the blocks are written once, after the last audit line
-- 2: not yet written tests/test_stage2.py::test_each_failed_attempt_lists_only_the_files_its_model_changed — a snapshot taken at the baseline, before the route block or after verify
-- 3: not yet written tests/test_stage2.py::test_a_failed_attempt_that_changed_nothing_says_so — an empty list renders as a bare heading
-- 4: not yet written tests/test_stage2.py::test_an_unmeasured_file_list_says_why_and_changes_nothing_else — a snapshot failure propagates and stops the run
-- 5: not yet written tests/test_stage2.py::test_a_passing_attempt_leaves_only_its_audit_line — a block written for every attempt
-- 6: not yet written tests/test_stage2.py::test_when_every_attempt_fails_each_keeps_its_block_and_the_exit_names_findings — the loop raises before the last block
-- 7: not yet written tests/test_stage2.py::test_a_restore_after_a_dead_model_keeps_the_earlier_blocks — the blocks kept where the restore reaches
-- 8: not yet written tests/test_stage2.py::test_a_block_holds_no_fragment_of_the_key — the file list or the diagnostics written unscrubbed
-- 9: not yet written tests/test_stage2.py::test_measuring_files_stores_no_key_the_model_wrote — the second snapshot taken before the credential scan
-- 10: not yet written tests/test_stage2.py::test_measuring_files_leaves_index_stash_and_refs_alone — the snapshot written through the real index
-- 11: not yet written tests/test_stage2.py::test_quoted_reader_lines_count_for_no_reader — lines prefixed after a split at `\n` only
-- 12: not yet written tests/test_stage2.py::test_a_quoted_release_heading_or_no_loop_line_moves_no_release — today's substring checks
-- 13: not yet written tests/test_stage2.py::test_a_long_diagnostic_line_is_cut_with_a_marker — no cut, or a cut without its marker
-- 14: not yet written tests/test_stage2.py::test_a_long_file_list_is_cut_with_a_count — no cap on the list
-- 15: not yet written tests/test_stage2.py::test_a_failed_stage2_off_attempt_leaves_its_block_without_reading_the_key — the block reads the key to scrub it
+- 1: written tests/test_stage2.py::test_a_failed_attempt_quotes_its_diagnostics_below_its_audit_line — planted fault: the blocks are written once, after the last audit line
+- 2: written tests/test_stage2.py::test_each_failed_attempt_lists_only_the_files_its_model_changed — planted fault: a snapshot taken at the baseline, before the route block or after verify
+- 3: written tests/test_stage2.py::test_a_failed_attempt_that_changed_nothing_says_so — planted fault: an empty list renders as a bare heading
+- 4: written tests/test_stage2.py::test_an_unmeasured_file_list_says_why_and_changes_nothing_else — planted fault: a snapshot failure propagates and stops the run
+- 5: written tests/test_stage2.py::test_a_passing_attempt_leaves_only_its_audit_line — planted fault: a block written for every attempt
+- 6: written tests/test_stage2.py::test_when_every_attempt_fails_each_keeps_its_block_and_the_exit_names_findings — planted fault: the loop raises before the last block
+- 7: written tests/test_stage2.py::test_a_restore_after_a_dead_model_keeps_the_earlier_blocks — planted fault: the blocks kept where the restore reaches
+- 8: written tests/test_stage2.py::test_a_block_holds_no_fragment_of_the_key — planted fault: the file list or the diagnostics written unscrubbed
+- 9: written tests/test_stage2.py::test_measuring_files_stores_no_key_the_model_wrote — planted fault: the second snapshot taken before the credential scan
+- 10: written tests/test_stage2.py::test_measuring_files_leaves_index_stash_and_refs_alone — planted fault: the snapshot written through the real index
+- 11: written tests/test_stage2.py::test_quoted_reader_lines_count_for_no_reader — planted fault: lines prefixed after a split at `\n` only
+- 12: written tests/test_stage2.py::test_a_quoted_release_heading_or_no_loop_line_moves_no_release — planted fault: today's substring checks
+- 13: written tests/test_stage2.py::test_a_long_diagnostic_line_is_cut_with_a_marker — planted fault: no cut, or a cut without its marker
+- 14: written tests/test_stage2.py::test_a_long_file_list_is_cut_with_a_count — planted fault: no cap on the list
+- 15: written tests/test_stage2.py::test_a_failed_stage2_off_attempt_leaves_its_block_without_reading_the_key — planted fault: the block reads the key to scrub it
 - 16: tests/test_stage2.py::test_each_retry_prepares_before_verify_and_keeps_real_failure_diagnostics
 - 16: tests/test_stage2.py::test_sonnet_fallback_starts_with_both_diagnostics_when_both_flash_attempts_deleted_the_heading
 - 16: tests/test_stage2.py::test_stage2_off_implements_with_one_sonnet_attempt_and_records_reason
@@ -187,3 +187,12 @@ make verify
   `test_two_failed_postchecks_route_once_to_sonnet`.
 
 ## Time used
+
+- 2026-10-11 — this session ran under the Stage-2 runner, which owns the clock: its start, end and span
+  were not readable from here (no command tool) and are measured by the orchestrating session's `date`
+  reads around this run; no break fell inside the session.
+- 2026-10-11 — the repair session (attempt 2) likewise ran under the Stage-2 runner, which owns the
+  clock: its start, end and span are measured by the orchestrating session's `date` reads around this
+  run; no break fell inside the session. Work: two test repairs (criterion 14's assertion reads the
+  rendered, bulleted count line; criterion 15's scenario gained the no-op model step it describes) —
+  no implementation change was needed.
