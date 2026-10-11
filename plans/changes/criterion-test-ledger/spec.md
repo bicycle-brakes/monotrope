@@ -291,7 +291,10 @@ migration of the four live plans must leave behind.
 - **`plans/_README.md`** — German; house rule 1 forbids translating it in
   passing, and an English paragraph inside it would mix the two.
 - **`docs/adr/` and `docs/governance/`** — `human-decided` where
-  `provenance.yaml` says so; this change creates no ADR.
+  `provenance.yaml` says so. The maintainer asked for an ADR (answer recorded
+  2026-10-11, `decisions.md` Q-4 and Q-5); this change writes its draft
+  under `docs/adr/`, and it takes effect only with the maintainer's merge of
+  the decision pull request (ADR 0008).
 - **`decisions/answers/`** — `human-decided`; exactly one file is written
   there, `decisions/answers/criterion-test-ledger/adr.yaml`, and only through
   `python3 scripts/harness.py decide adr` from the maintainer's stated answer
@@ -309,8 +312,9 @@ migration of the four live plans must leave behind.
   `prompts/03-plan.md`, `prompts/04-implement.md`, `docs/WORKFLOW.md`, the
   `plan.md` of `harness-decide-adr`, `hermes-runner`, `research-currency` and
   `stage2-session`, this change's own `plan.md`, `plans/INDEX.md`
-  (regenerated), and `decisions/answers/criterion-test-ledger/adr.yaml` (the
-  maintainer's recorded answer) — none beyond these.
+  (regenerated), `decisions/answers/criterion-test-ledger/adr.yaml` (the
+  maintainer's recorded answer), this change's `design.md`, and the ADR draft
+  under `docs/adr/` with its index entry — none beyond these.
 - The protected areas untouched and the non-goals unbuilt, shown by the pull
   request's file list.
 - Bead: the pull request closes `coding-harness-909`, and its last commit
@@ -321,12 +325,16 @@ migration of the four live plans must leave behind.
 
 ## Open decisions
 
-No `[DECISION]` is open: the maintainer settled the three questions this
-change raises (`decisions.md` Q-1 to Q-3).
+No `[DECISION]` is open: the maintainer settled the five questions this
+change raises (`decisions.md` Q-1 to Q-5).
 
-**The ADR question** stands open by design: the header proposes "no"; the
-maintainer answers with `python3 scripts/harness.py decide adr`, and until
-then the gate `adr-answers` reports this change.
+**The ADR question** is answered: the header proposed "no"; the maintainer
+answered "yes" on 2026-10-11 (`decisions/answers/criterion-test-ledger/adr.yaml`).
+The ADR fixes the principle of Q-4 — every acceptance criterion names in its
+plan what proves it, a gate checks that this proof still exists, and a test
+disappears only through a visible edit of the plan — and, per Q-5, the gate
+travels with the kit from this change on. Design (phase 2b) writes the ADR
+draft; the Definition of Done gains that file.
 
 ### `[GAP]`s — closed by reading
 
