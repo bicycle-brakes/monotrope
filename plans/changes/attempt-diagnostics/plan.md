@@ -158,6 +158,7 @@ make verify
 - 3: written tests/test_stage2.py::test_a_failed_attempt_that_changed_nothing_says_so — planted fault: an empty list renders as a bare heading
 - 4: written tests/test_stage2.py::test_an_unmeasured_file_list_says_why_and_changes_nothing_else — planted fault: a snapshot failure propagates and stops the run
 - 4: written tests/test_stage2.py::test_a_malformed_numstat_record_says_not_measured_and_the_run_goes_on — planted fault: a record without two counts raises ValueError and ends the run
+- 4: written tests/test_stage2.py::test_a_failure_after_the_first_snapshot_says_why_and_changes_nothing_else — planted fault: only the first snapshot's failure is caught
 - 5: written tests/test_stage2.py::test_a_passing_attempt_leaves_only_its_audit_line — planted fault: a block written for every attempt
 - 6: written tests/test_stage2.py::test_when_every_attempt_fails_each_keeps_its_block_and_the_exit_names_findings — planted fault: the loop raises before the last block
 - 7: written tests/test_stage2.py::test_a_restore_after_a_dead_model_keeps_the_earlier_blocks — planted fault: the blocks kept where the restore reaches

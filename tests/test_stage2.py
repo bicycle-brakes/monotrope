@@ -1791,6 +1791,36 @@ def test_an_unmeasured_file_list_says_why_and_changes_nothing_else(
     assert world.text().count("not measured") == 1
 
 
+def test_a_failure_after_the_first_snapshot_says_why_and_changes_nothing_else(
+    world: World, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    # Criterion 4. Planted fault: only the first snapshot's failure is caught.
+    real = stage2.worktree_tree
+    calls: list[int] = []
+
+    def second_fails(root: Path) -> str:
+        calls.append(1)
+        if len(calls) == 2:
+            raise stage2.Refused("git write-tree failed: planted")
+        return real(root)
+
+    monkeypatch.setattr(stage2, "worktree_tree", second_fails)
+    baseline = git(world.root, "rev-parse", "HEAD")
+    world.script(
+        claude=[
+            {"stdout": "first", "plant": {"src/app.py": "value = 2\n"}},
+            {"stdout": "fixed", "append": {"plans/changes/demo/plan.md": "2026-10-08 10:00–10:02, 2 min\n"}},
+        ],
+        make=[{"stdout": "green"}, {"stdout": "green"}],
+    )
+    assert world.run("implement") == 0
+    assert len(calls) >= 2
+    assert git(world.root, "rev-list", "--count", f"{baseline}..HEAD") == "1"
+    (block,) = quote_blocks(world.text())
+    assert "Files the attempt changed: not measured — git write-tree failed: planted." in block
+    assert world.text().count("not measured") == 1
+
+
 def test_a_malformed_numstat_record_says_not_measured_and_the_run_goes_on(
     world: World, monkeypatch: pytest.MonkeyPatch
 ) -> None:
