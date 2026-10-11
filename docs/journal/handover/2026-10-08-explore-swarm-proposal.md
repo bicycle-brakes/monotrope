@@ -218,3 +218,10 @@ history, not open work; the stage-2 reviewers now run on OpenCode Go through
 Pi (ADR 0011, ADR 0012), which changes the "unmerged reviewer change" remark
 in the proposal. Still open: the maintainer's answer on the activation scope
 (every change, or only feature and architectural changes).
+
+Further outdated points, found by the review of the publishing pull request
+(2026-10-11): the runner-derived-file repair this file assesses as not yet
+done landed in PR #102 (2026-10-08; bead coding-harness-mfv, closed); the
+"Resume" step of the MiMo-watch addendum is superseded, since the stage-2
+reviewer work merged in PRs #101 and #105; and `coding-harness-82` in
+"Working state" is the start hook's name for a session, not a bead.
