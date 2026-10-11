@@ -321,7 +321,19 @@ migration of the four live plans must leave behind.
   artefacts under
   `plans/changes/criterion-test-ledger/` (`research.md`, `decisions.md`,
   `spec.md`, `design.md`, `plan.md`, `findings.md`) — no file beyond these
-  in the pull request's file list.
+  in the pull request's file list, except the one addition below.
+- **Added after phase 4, disclosed (maintainer, 2026-10-11):**
+  `scripts/check_interview_minimums.py` and
+  `tests/test_check_interview_minimums.py`. The implementation attempt found
+  the gate `interview-minimums` red: it infers an ADR's owning change from
+  the change folders the diff touches, and this change touches five (its own
+  and the four migrated plans). The implementer narrowed the inference — a
+  folder touched through its `plan.md` alone is not an owner — and added a
+  test with its mutation evidence. This loosens an existing gate inside the
+  change that needed it loosened, which is the case ADR 0013 guards against;
+  the phase-6 review judges it explicitly. It is an interim repair: the
+  lasting fix, an ADR naming its owning change instead of the gate inferring
+  it, is its own bead (named in the pull request).
 - The protected areas untouched and the non-goals unbuilt, shown by the pull
   request's file list.
 - Bead: the pull request closes `coding-harness-909`, and its last commit
