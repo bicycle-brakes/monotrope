@@ -156,6 +156,14 @@ tools/bd dolt push          # push tracker data to origin (refs/dolt/data)
   Each new checkout or worktree runs `make venv` once before `make verify`;
   the suite fails under an interpreter that does not match
   `requirements-ci.txt` (bead coding-harness-ei0).
+- **A text-only change does not run `make verify` locally** (maintainer,
+  2026-10-12). When a branch changes only Markdown outside `scripts/`,
+  `tests/`, `prompts/` and `decisions/`, the hosted CI's verify job is its
+  gate: push, open the pull request, and repair on the branch when it goes
+  red. The full local run takes minutes and over 1,600 tests no text
+  touches; the only gate the CI skips (`ruleset`, placement `writer`) reads
+  no file of the change. Code, tests, prompts and gate files still run
+  `make verify` after every green step.
 - **Omnigent starts inside the worktree** (`omnigent claude
   --use-native-config`, ADR 0006). Omnigent's own tools that write, run,
   spawn or change state are denied by name in `.claude/settings.json`;
