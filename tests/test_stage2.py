@@ -1791,6 +1791,36 @@ def test_an_unmeasured_file_list_says_why_and_changes_nothing_else(
     assert world.text().count("not measured") == 1
 
 
+def test_a_malformed_numstat_record_says_not_measured_and_the_run_goes_on(
+    world: World, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    # Criterion 4. Planted fault: a record without two counts raises ValueError and ends the run.
+    real = stage2._git_output
+
+    def malformed(root: Path, *args: str, **kwargs: object) -> str:
+        if args and args[0] == "diff-tree":
+            return "no-tabs-here\0"
+        return real(root, *args, **kwargs)
+
+    monkeypatch.setattr(stage2, "_git_output", malformed)
+    baseline = git(world.root, "rev-parse", "HEAD")
+    world.script(
+        claude=[
+            {"stdout": "first", "plant": {"src/app.py": "value = 2\n"}},
+            {"stdout": "fixed", "append": {"plans/changes/demo/plan.md": "2026-10-08 10:00–10:02, 2 min\n"}},
+        ],
+        make=[{"stdout": "green"}, {"stdout": "green"}],
+    )
+    assert world.run("implement") == 0
+    assert git(world.root, "rev-list", "--count", f"{baseline}..HEAD") == "1"
+    (block,) = quote_blocks(world.text())
+    assert (
+        "Files the attempt changed: not measured — "
+        "git diff-tree --numstat returned a record without two counts: 'no-tabs-here'."
+    ) in block
+    assert world.text().count("not measured") == 1
+
+
 @pytest.mark.parametrize("passing", ["first", "second"], ids=["first-try", "after-a-failure"])
 def test_a_passing_attempt_leaves_only_its_audit_line(world: World, passing: str) -> None:
     # Criterion 5. Planted fault: a block written for every attempt.

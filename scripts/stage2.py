@@ -1311,7 +1311,10 @@ def attempt_files(root: Path, before: str, after: str) -> list[str]:
     done = _git_output(root, "diff-tree", "-r", "-z", "--numstat", "--no-renames", before, after)
     entries = []
     for record in filter(None, done.split("\0")):
-        added, removed, relative = record.split("\t", 2)
+        fields = record.split("\t", 2)
+        if len(fields) != 3:
+            raise Refused(f"git diff-tree --numstat returned a record without two counts: {record!r}")
+        added, removed, relative = fields
         entries.append(f"`{relative}` binary" if added == "-" else f"`{relative}` +{added} -{removed}")
     if len(entries) > ATTEMPT_FILES:
         entries = entries[:ATTEMPT_FILES] + [f"… and {len(entries) - ATTEMPT_FILES} more files"]
