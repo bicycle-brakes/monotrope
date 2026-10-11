@@ -96,6 +96,7 @@ typed: a hand-kept list of files ages exactly as fast as files are added.
 | [`changes/criterion-test-ledger/decisions.md`](changes/criterion-test-ledger/decisions.md) | draft | none | 2026-10-11 | coding-harness-909 |
 | [`changes/criterion-test-ledger/design.md`](changes/criterion-test-ledger/design.md) | draft | none | 2026-10-11 | coding-harness-909 |
 | [`changes/criterion-test-ledger/findings.md`](changes/criterion-test-ledger/findings.md) | draft | none | 2026-10-11 | coding-harness-909 |
+| [`changes/criterion-test-ledger/plan.md`](changes/criterion-test-ledger/plan.md) | draft | none | 2026-10-11 | coding-harness-909 |
 | [`changes/criterion-test-ledger/research.md`](changes/criterion-test-ledger/research.md) | draft | none | 2026-10-11 | coding-harness-909 |
 | [`changes/criterion-test-ledger/spec.md`](changes/criterion-test-ledger/spec.md) | draft | none | 2026-10-11 | coding-harness-909 |
 | [`changes/harness-decide-adr/decisions.md`](changes/harness-decide-adr/decisions.md) | accepted | none | 2026-09-30 | coding-harness-3ar |
