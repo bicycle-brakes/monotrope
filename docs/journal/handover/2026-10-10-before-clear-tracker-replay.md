@@ -2,7 +2,7 @@
 title: "Session handover — before a /clear on 2026-10-10: open pull request, next steps and every bead change to replay"
 category: handover
 created: 2026-10-10
-updated: 2026-10-10
+updated: 2026-10-11
 direction: framework->framework
 provenance: ai-drafted-reviewed
 produced_by:
@@ -110,3 +110,15 @@ plan for coding-harness-909.
 #116 is merged (`0c71403`) after its CI went green on the branch with `main`
 brought in. Step 1 of "Next step" is done; this pull request (#117) only adds
 this file and waits for the maintainer's merge.
+
+## Addendum — tracker replayed, 2026-10-11
+
+The replay above ran on the maintainer's Mac on 2026-10-11, from the main
+checkout, as the only writing session (the maintainer confirmed it). Every
+command succeeded and `tools/bd dolt push` completed, so origin's
+`refs/dolt/data` now carries the changes: ymx, 6yg and kw0 are closed, 0al is
+superseded and closed, and the Pi bead was created again as
+**coding-harness-351** (Stage 2: run the interactive session verb on Pi, not on
+the OpenCode CLI), claimed, with the summary comment. Do not run the replay
+again. Step 3 of "Next step" is done; steps 2 (the Mac smoke test, then close
+coding-harness-351) and 4 (the plan for coding-harness-909) remain.
