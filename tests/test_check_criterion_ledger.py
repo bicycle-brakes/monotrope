@@ -346,6 +346,28 @@ def test_a_plan_without_a_spec_or_its_criteria_is_reported(tmp_path: Path) -> No
     assert "no criterion number" in done.stdout
 
 
+def test_a_spec_without_numbers_gives_one_finding_not_one_per_entry(tmp_path: Path) -> None:
+    """Review-loop row L2-2: a spec that yields no criterion number is one
+    finding, not that finding plus an "entry names criterion N, which spec.md
+    does not have" line per ledger entry. Fault: keeping the empty set in
+    `numbers` in scripts/check_criterion_ledger.py after the "no criterion
+    number" finding turns this red."""
+    root = _tree(tmp_path)
+    _put(root, "plans/changes/x/spec.md", "# Spec\n\nNothing numbered here.\n")
+    ledger = _ledger(
+        "- 1: tests/test_example.py::test_a",
+        "- 2: tests/test_example.py::test_a",
+        "- 3: not a test — review holds it",
+    )
+    _put(root, "plans/changes/x/plan.md", _plan_text(ledger))
+    _put(root, "tests/test_example.py", _test_file("test_a"))
+    done = _run(root)
+    assert done.returncode == 1, done.stdout
+    lines = [line for line in done.stdout.splitlines() if line.strip()]
+    assert len(lines) == 1, lines
+    assert "no criterion number" in lines[0]
+
+
 def test_criterion_numbers_are_read_across_level_3_headings_and_outside_fences(tmp_path: Path) -> None:
     root = _tree(tmp_path)
     body = (

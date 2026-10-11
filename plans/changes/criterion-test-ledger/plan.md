@@ -431,6 +431,8 @@ changes beyond their `plan.md`.
   — `- 99: …` beside a spec of 16 criteria exits 0
 - 14: tests/test_check_criterion_ledger.py::test_a_plan_without_a_spec_or_its_criteria_is_reported
   — a missing spec, or one without `## Acceptance criteria`, exits 0
+- 14: tests/test_check_criterion_ledger.py::test_a_spec_without_numbers_gives_one_finding_not_one_per_entry
+  — a numberless spec also reports every ledger entry as naming an unknown criterion
 - 14: tests/test_check_criterion_ledger.py::test_criterion_numbers_are_read_across_level_3_headings_and_outside_fences
   — a level-3 heading ends the section, or a numbered line inside a fence counts
 - 15: tests/test_check_criterion_ledger.py::test_a_clean_run_names_its_counts
@@ -519,7 +521,7 @@ GIT_CONFIG_COUNT=1 GIT_CONFIG_KEY_0=commit.gpgsign GIT_CONFIG_VALUE_0=false make
 ```
 
 Expected green line of the second command at the head (criterion 24):
-`held 5 plans (5 live, 0 archived); read 275 entries (201 test, 39 not yet
+`held 5 plans (5 live, 0 archived); read 276 entries (202 test, 39 not yet
 written, 35 not a test); 17 archived plans dated before 2026-10-11 exempt`
 (measured 2026-10-11 after review-loop round 1, which added four tests to
 this change's own ledger; the count before it was 270 with 196 test; round 2

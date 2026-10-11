@@ -335,6 +335,9 @@ def _measure_plan(
         if not numbers:
             unnumbered = f'{spec_rel} has no criterion number under "## Acceptance criteria"'
             findings.append((spec_rel, 0, f'{unnumbered} — number them "1. ", "2. ", …'))
+            # One finding says it all: with no numbers to compare against, every
+            # entry would otherwise be reported as unknown (loop row L2-2).
+            numbers = None
 
     entries: list[Entry] = []
     chain = False  # the line above is an entry or a continuation line
