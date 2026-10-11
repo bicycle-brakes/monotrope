@@ -259,6 +259,14 @@ def read(path: Path) -> Reading:
         return None, "is not valid UTF-8"
 
 
+def _exists(path: Path) -> bool:
+    """Whether path exists; one that cannot be examined counts as present, so the read finding stands."""
+    try:
+        return path.exists()
+    except OSError:
+        return True
+
+
 def _defined(text: str, function: str) -> bool:
     return re.search(rf"^def {function}\(", text, re.M | re.ASCII) is not None
 
@@ -304,7 +312,14 @@ def _measure_plan(
     plan_rel = f"{where}/plan.md"
     spec_rel = f"{where}/spec.md"
     plan_path = folder / "plan.md"
-    if not plan_path.exists():
+    try:
+        present = plan_path.exists()
+    except OSError as error:
+        # A directory that cannot be searched: a finding for this plan, the run goes on (criterion 17).
+        why = f"cannot be examined ({error.strerror or error})"
+        findings.append((plan_rel, 0, f"{plan_rel} {why} — make {where}/ searchable"))
+        return
+    if not present:
         return  # a change without a plan.md is not examined (criterion 1)
     text, reason = read(plan_path)
     if text is None:
@@ -385,7 +400,7 @@ def _measure_plan(
                 findings.append((plan_rel, entry.line, f"{promised} — {remedy}"))
             else:
                 found, why = _file(root, entry.path, files)
-                if found is None and (root / entry.path).exists():
+                if found is None and _exists(root / entry.path):
                     # Only a missing file may stand as not yet written; one it cannot read is a finding.
                     unread = f'criterion {entry.number}: "{entry.function}" — {entry.path} {why}'
                     findings.append((plan_rel, entry.line, f"{unread} — make the file readable UTF-8"))

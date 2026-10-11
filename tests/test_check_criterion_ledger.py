@@ -634,3 +634,27 @@ def test_a_backtick_fence_with_a_backtick_in_its_info_string_hides_no_criterion(
     done = _run(root)
     assert done.returncode == 1, done.stdout
     assert "criterion 2 has no entry" in done.stdout, done.stdout
+
+
+def test_an_unsearchable_change_directory_is_a_finding_and_later_plans_are_still_read(tmp_path: Path) -> None:
+    """Review-loop row F-5 (phase 6, Codex): a live change directory without
+    search permission makes the plan.md existence check raise PermissionError.
+    The gate reports it as a finding for that plan (exit 1, no traceback) and
+    still reads the plans after it. Fault: the unguarded exists() ends the run
+    in a traceback before the later plan is examined."""
+    if hasattr(os, "geteuid") and os.geteuid() == 0:
+        pytest.skip("root can search any directory")
+    root = _tree(tmp_path)
+    _put(root, "plans/changes/a-locked/plan.md", _plan_text(_ledger("- 1: not a test — review")))
+    _put(root, "plans/changes/b-later/spec.md", _spec(2))
+    _put(root, "plans/changes/b-later/plan.md", _plan_text(_ledger("- 1: not a test — review")))
+    locked = root / "plans" / "changes" / "a-locked"
+    locked.chmod(0o000)
+    try:
+        done = _run(root)
+    finally:
+        locked.chmod(0o755)
+    assert done.returncode == 1, (done.returncode, done.stdout, done.stderr)
+    assert "Traceback" not in done.stderr, done.stderr
+    assert "plans/changes/a-locked/plan.md" in done.stdout, done.stdout
+    assert "criterion 2 has no entry" in done.stdout, done.stdout
