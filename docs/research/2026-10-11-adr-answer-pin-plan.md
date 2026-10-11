@@ -55,7 +55,8 @@ listed above, no `pilot.yaml`; it carries `harness.lock.yaml` naming one
 Coding Harness commit; its CI runs a verify-pin gate and the pinned
 `adr-answers` gate green over all its answer files (13 at `ce88eee`). Measured
 by a `git ls-tree` of lakeswitch-ai `origin/main` and its last CI run. This is
-the bead's done-criterion: no second copy of the format.
+the bead's done-criterion: no second copy of the format. The date is at
+risk after the decision of 2026-10-11 (see the addendum).
 
 ## The eleven differences
 
@@ -79,7 +80,7 @@ the bead's done-criterion: no second copy of the format.
 | --- | --- | --- | --- | --- |
 | 0 | This plan | XS | CH | — (done) |
 | 1 | Provenance location for instances (row 7, CH half) in `check_adr_answers.py` and `harness.py`, with tests | S | CH | nothing — touches only those two scripts and their tests |
-| 2 | Pin slice per the `[DECISION]` below | S (minimal) or L (full) | CH | the decision; the merge of change criterion-test-ledger, which edits `decisions/gates.yaml`, `.github/workflows/ci.yml`, `scripts/kit/manifest.yaml`, `docs/WORKFLOW.md`, `prompts/03-plan.md`, `prompts/04-implement.md` and every `plans/changes/*/plan.md` |
+| 2 | The full pin route, as decided on 2026-10-11 (addendum): bead coding-harness-s6i, then bead coding-harness-dj9 | L | CH | the decision; the merge of change criterion-test-ledger, which edits `decisions/gates.yaml`, `.github/workflows/ci.yml`, `scripts/kit/manifest.yaml`, `docs/WORKFLOW.md`, `prompts/03-plan.md`, `prompts/04-implement.md` and every `plans/changes/*/plan.md` |
 | 3 | Dry run: pinned check over LakeSwitch's answer files and anchors (rows 4, 5) | S | LakeSwitch | package 1 |
 | 4 | Switch: `harness.lock.yaml`, adapter, `roles:`, gate entry, verify-pin in CI (rows 1, 2, 6-11) | M | LakeSwitch | packages 2 and 3; its own session and change |
 | 5 | Delete M-31, the five sources, `tests/adranswer/`, `pilot.yaml` (row 3) | S | LakeSwitch | package 4 green |
@@ -94,8 +95,8 @@ too; a pin limited to the two ADR-answer scripts does not.
 
 - The full release route of bead coding-harness-dj9 (release builder,
   exporter with bundle digest, compatibility contract, upgrade assess) and
-  its prerequisite bead coding-harness-s6i — unless the decision below says
-  the switch waits for them.
+  its prerequisite bead coding-harness-s6i — superseded: the decision of
+  2026-10-11 makes it the route (addendum).
 - A reader for `scripts/export/manifest.yaml`.
 - Any extension of the answer format beyond schema_version 1.
 - Commit signing (Coding Harness decided against it on 2026-09-30, ADR 0008);
@@ -126,9 +127,10 @@ dj9 can extend rather than replace.
 ## Addendum 2026-10-11 — the decision
 
 The maintainer answered in the directing conversation on 2026-10-11:
-"Vollständiger Pin" — the switch waits for the full pin route (bead
-coding-harness-dj9, after bead coding-harness-s6i); no minimal slice is
-built. The agent's recommendation above was not taken.
+"full pin" (in German: "Vollständiger Pin") — the switch waits for the full
+pin route (release builder, `harness.lock.yaml` and verify-pin, bead
+coding-harness-dj9; after the first slice of the harness foundation, bead
+coding-harness-s6i); no minimal slice is built. The agent's recommendation above was not taken.
 
 Consequences for this plan:
 
