@@ -35,3 +35,5 @@ Stage-2 call, 2026-10-11: implement · attempt 1 · route flash · endpoint glm-
 Stage-2 call, 2026-10-11: implement · attempt 2 · route flash-repair · endpoint glm-coding-plan · model glm-5.3-flash · reason first Flash post-run check failed · leak check clean over 355 files, 810 commits, 12 rules.
 
 Stage-2 call, 2026-10-11: implement · attempt 3 · route stage-1 · endpoint claude-code-plan · model claude-sonnet-5-5 · reason two Flash post-run checks failed · leak check clean over 355 files, 814 commits, 12 rules.
+
+Stage-2 call, 2026-10-11: review-loop · endpoint opencode-go · model deepseek-v4.1-flash · leak check clean over 355 files, 816 commits, 12 rules.

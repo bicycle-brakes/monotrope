@@ -401,6 +401,7 @@ changes beyond their `plan.md`.
 - 1: tests/test_check_criterion_ledger.py::test_a_live_change_without_a_plan_is_not_examined
   — a live folder holding only `research.md` is reported
 - 2: tests/test_check_criterion_ledger.py::test_a_plan_without_exactly_one_ledger_section_is_reported
+- 2: tests/test_check_criterion_ledger.py::test_a_doubled_ledger_heading_on_the_last_line_is_reported
   — no heading, the heading twice, or the heading only inside a fence exits 0
 - 3: tests/test_check_criterion_ledger.py::test_an_archived_ledger_is_held_whatever_its_date
   — an archived plan dated 2026-10-01 whose ledger names a deleted test exits 0
@@ -437,8 +438,11 @@ changes beyond their `plan.md`.
 - 15: tests/test_check_criterion_ledger.py::test_an_empty_tree_says_it_examined_nothing
   — "OK", "pass" or "green" printed, or no "examined nothing"
 - 16: tests/test_check_criterion_ledger.py::test_each_finding_is_one_line_with_path_line_and_remedy
+- 16: tests/test_check_criterion_ledger.py::test_the_summary_counts_a_change_with_plan_and_spec_findings_once
   — exit 0 or 3 with a finding; a line without the path, the line number or the remedy
 - 17: tests/test_check_criterion_ledger.py::test_an_unreadable_or_non_utf8_file_is_a_finding
+- 17: tests/test_check_criterion_ledger.py::test_a_not_yet_written_entry_whose_file_cannot_be_read_is_reported
+- 17: tests/test_check_criterion_ledger.py::test_an_empty_plan_or_spec_is_reported_without_a_traceback
   — a traceback or exit 0 for a plan, spec or named test file that is a directory or not UTF-8
 - 18: tests/test_check_criterion_ledger.py::test_a_root_it_cannot_measure_exits_3
   — exit 0 or 1 for an empty directory, a missing one or a file as the root
@@ -470,7 +474,7 @@ makes the checkpoint commit. What it will see:
 
 - **Step 1 — the four plans migrated.** A `## Criterion ledger` section in
   each, at the place of detail 11, and the pointer line above every
-  per-criterion table: `harness-decide-adr` (59 entries — 56 test,
+  per-criterion table: `harness-decide-adr` (60 entries — 57 test,
   3 not-a-test), `hermes-runner` (65 — 5 test, 39 not-yet-written,
   21 not-a-test), `research-currency` (35 — 33 test, 2 not-a-test),
   `stage2-session` (72 — 70 test, 2 not-a-test). Every named function was
@@ -513,8 +517,10 @@ GIT_CONFIG_COUNT=1 GIT_CONFIG_KEY_0=commit.gpgsign GIT_CONFIG_VALUE_0=false make
 ```
 
 Expected green line of the second command at the head (criterion 24):
-`held 5 plans (5 live, 0 archived); read 268 entries (194 test, 39 not yet
-written, 35 not a test); 17 archived plans dated before 2026-10-11 exempt`.
+`held 5 plans (5 live, 0 archived); read 274 entries (200 test, 39 not yet
+written, 35 not a test); 17 archived plans dated before 2026-10-11 exempt`
+(measured 2026-10-11 after review-loop round 1, which added four tests to
+this change's own ledger; the count before it was 270 with 196 test).
 Criterion 28's replay runs on the head commit; its command, output and
 commit go into the pull request body.
 

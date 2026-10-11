@@ -432,6 +432,70 @@ def test_an_unreadable_or_non_utf8_file_is_a_finding(tmp_path: Path) -> None:
     assert "Traceback" not in done.stderr
 
 
+def test_an_empty_plan_or_spec_is_reported_without_a_traceback(tmp_path: Path) -> None:
+    """Review-loop row L1-1: `ord("")` raised on an empty file. Fault: test the
+    byte-order mark with `ord(text[:1])` again and this run tracebacks."""
+    root = _tree(tmp_path)
+    _put(root, "plans/changes/x/spec.md", _spec(1))
+    _put(root, "plans/changes/x/plan.md", "")
+    done = _run(root)
+    assert done.returncode == 1, done.stdout
+    assert 'no "## Criterion ledger" section' in done.stdout
+    assert "Traceback" not in done.stderr
+    root = _tree(tmp_path)
+    _put(root, "plans/changes/x/spec.md", "")
+    _put(root, "plans/changes/x/plan.md", _plan_text(_ledger("- 1: not a test — review holds it")))
+    done = _run(root)
+    assert done.returncode == 1, done.stdout
+    assert "Traceback" not in done.stderr
+
+
+def test_a_doubled_ledger_heading_on_the_last_line_is_reported(tmp_path: Path) -> None:
+    """Review-loop row L1-2: an empty second section raised IndexError. Fault:
+    read the line as `sections[1][0][0]` again and this run tracebacks."""
+    root = _tree(tmp_path)
+    _put(root, "plans/changes/x/spec.md", _spec(1))
+    plan = _plan_text(_ledger("- 1: not a test — review holds it")) + "\n## Criterion ledger"
+    _put(root, "plans/changes/x/plan.md", plan)
+    done = _run(root)
+    assert done.returncode == 1, done.stdout
+    assert "sections — keep exactly one" in done.stdout
+    last = len(plan.split("\n"))
+    assert f"plans/changes/x/plan.md:{last}:" in done.stdout, done.stdout
+    assert "Traceback" not in done.stderr
+
+
+def test_a_not_yet_written_entry_whose_file_cannot_be_read_is_reported(tmp_path: Path) -> None:
+    """Review-loop row L1-3: only a missing file may stand as not yet written.
+    Fault: discard the read reason again and both runs go green."""
+    promised = _plan_text(_ledger("- 1: not yet written tests/test_example.py::test_a"))
+    for case, make in (
+        ("directory", lambda root: (root / "tests" / "test_example.py").mkdir(parents=True)),
+        ("bytes", lambda root: _put_bytes(root, "tests/test_example.py", b"\xff\xfe bad bytes")),
+    ):
+        root = _tree(tmp_path / case)
+        _put(root, "plans/changes/x/spec.md", _spec(1))
+        _put(root, "plans/changes/x/plan.md", promised)
+        make(root)
+        done = _run(root)
+        assert done.returncode == 1, done.stdout
+        assert "make the file readable UTF-8" in done.stdout
+
+
+def test_the_summary_counts_a_change_with_plan_and_spec_findings_once(tmp_path: Path) -> None:
+    """Review-loop row L1-5: findings on plan.md and spec.md of one change are
+    one plan. Fault: count distinct finding paths and the summary says 2 plans."""
+    root = _tree(tmp_path)
+    _put_bytes(root, "plans/changes/x/spec.md", b"\xff\xfe bad bytes")
+    _put(root, "plans/changes/x/plan.md", _plan_text(_ledger("- 1: tests/test_gone.py::test_a")))
+    done = _run(root)
+    assert done.returncode == 1, done.stdout
+    assert {"plans/changes/x/plan.md", "plans/changes/x/spec.md"} <= {
+        line.split(":")[0] for line in done.stdout.splitlines()
+    }, done.stdout
+    assert "in 1 plan" in done.stderr, done.stderr
+
+
 def test_a_root_it_cannot_measure_exits_3(tmp_path: Path) -> None:
     empty = tmp_path / "empty"
     empty.mkdir()

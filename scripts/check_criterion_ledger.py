@@ -123,7 +123,7 @@ class Tally:
 
 def _lines(text: str) -> list[str]:
     """Split on newline only; drop a leading byte-order mark and trailing whitespace."""
-    if ord(text[:1]) == 0xFEFF:  # a leading byte-order mark
+    if text.startswith("\ufeff"):  # a leading byte-order mark; an empty text has none
         text = text[1:]
     return [line.rstrip() for line in text.split("\n")]
 
@@ -305,7 +305,8 @@ def _measure_plan(
         unread = f"{plan_rel} {reason}"
         findings.append((plan_rel, 0, f"{unread} — a plan the gate cannot read is a plan it cannot hold"))
         return
-    sections = ledger_sections(_lines(text))
+    lines = _lines(text)
+    sections = ledger_sections(lines)
     if not sections:
         if archived and exempt_by_date(text):
             tally.exempt += 1
@@ -315,7 +316,9 @@ def _measure_plan(
         return
     if len(sections) > 1:
         doubled = f'{plan_rel} has {len(sections)} "{HEADING}" sections'
-        findings.append((plan_rel, sections[1][0][0], f"{doubled} — keep exactly one"))
+        # The second heading's line: one above its first line, or the last line when it holds none.
+        second = sections[1][0][0] - 1 if sections[1] else len(lines)
+        findings.append((plan_rel, second, f"{doubled} — keep exactly one"))
         return
     if archived:
         tally.archived += 1
@@ -372,8 +375,12 @@ def _measure_plan(
                 remedy = "write the test and remove `not yet written`, or make it a not-a-test entry"
                 findings.append((plan_rel, entry.line, f"{promised} — {remedy}"))
             else:
-                found, _ = _file(root, entry.path, files)
-                if found is not None and _defined(found, entry.function):
+                found, why = _file(root, entry.path, files)
+                if found is None and (root / entry.path).exists():
+                    # Only a missing file may stand as not yet written; one it cannot read is a finding.
+                    unread = f'criterion {entry.number}: "{entry.function}" — {entry.path} {why}'
+                    findings.append((plan_rel, entry.line, f"{unread} — make the file readable UTF-8"))
+                elif found is not None and _defined(found, entry.function):
                     written = f'criterion {entry.number}: "{entry.function}" exists'
                     findings.append((plan_rel, entry.line, f"{written} — remove `not yet written` from the entry"))
 
@@ -411,7 +418,8 @@ def run(root: Path, out: Callable[[str], None] = print) -> int:
     if findings:
         for path, line, finding in sorted(findings):
             out(f"{path}:{line}: {finding}" if line else f"{path}: {finding}")
-        plans = len({path for path, _, _ in findings})
+        # A change with findings on both its plan.md and its spec.md is one plan.
+        plans = len({str(Path(path).parent) for path, _, _ in findings})
         summary = f"criterion-ledger: {len(findings)} findings in {_s(plans, 'plan')}"
         print(summary, file=sys.stderr)
         return 1
