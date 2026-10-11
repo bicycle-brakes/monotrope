@@ -141,7 +141,9 @@ def _fenced(lines: list[str]) -> list[bool]:
                 marker, length = "", 0
             continue
         opened = _FENCE.match(line)
-        if opened:
+        # CommonMark: the info string of a backtick fence holds no backtick
+        # (tildes may); such a line opens nothing (review-loop row F-4).
+        if opened and not (opened.group(1)[0] == "`" and "`" in line[opened.end() :]):
             inside[i] = True
             marker, length = opened.group(1)[0], len(opened.group(1))
     return inside

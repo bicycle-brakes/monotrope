@@ -619,3 +619,18 @@ def test_the_workflow_row_makes_moving_the_cutoff_a_governance_act() -> None:
     assert len(rows) == 1, rows
     assert "moving that cut-off date is a governance act" in rows[0]
     assert "decision pull request" in rows[0]
+
+
+def test_a_backtick_fence_with_a_backtick_in_its_info_string_hides_no_criterion(tmp_path: Path) -> None:
+    """Review-loop row F-4 (phase 6, Codex): a line such as "```note `example`"
+    is no CommonMark opening fence (the info string of a backtick fence may not
+    hold a backtick), so the criteria after it still count. A ledger naming
+    only criterion 1 must report criterion 2 missing. Fault: treating the line
+    as a fence hides criterion 2 and the run exits 0."""
+    root = _tree(tmp_path)
+    spec = "# Spec\n\n## Acceptance criteria\n\n1. First holds.\n```note `example`\n2. Second holds.\n"
+    _put(root, "plans/changes/x/spec.md", spec)
+    _put(root, "plans/changes/x/plan.md", _plan_text(_ledger("- 1: not a test — review holds it")))
+    done = _run(root)
+    assert done.returncode == 1, done.stdout
+    assert "criterion 2 has no entry" in done.stdout, done.stdout

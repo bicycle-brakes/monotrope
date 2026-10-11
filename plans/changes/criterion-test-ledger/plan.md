@@ -427,6 +427,8 @@ changes beyond their `plan.md`.
   — a well-formed entry whose text names a missing test reported
 - 12: tests/test_check_criterion_ledger.py::test_a_criterion_without_an_entry_is_reported
   — exit 0 after a criterion's only entry is deleted
+- 12: tests/test_check_criterion_ledger.py::test_a_backtick_fence_with_a_backtick_in_its_info_string_hides_no_criterion
+  — a "```note `example`" line taken for a fence hides the criteria after it, so a missing entry exits 0
 - 13: tests/test_check_criterion_ledger.py::test_an_entry_for_an_unknown_criterion_is_reported
   — `- 99: …` beside a spec of 16 criteria exits 0
 - 14: tests/test_check_criterion_ledger.py::test_a_plan_without_a_spec_or_its_criteria_is_reported
@@ -531,7 +533,7 @@ GIT_CONFIG_COUNT=1 GIT_CONFIG_KEY_0=commit.gpgsign GIT_CONFIG_VALUE_0=false make
 ```
 
 Expected green line of the second command at the head (criterion 24):
-`held 5 plans (5 live, 0 archived); read 281 entries (207 test, 39 not yet
+`held 5 plans (5 live, 0 archived); read 282 entries (208 test, 39 not yet
 written, 35 not a test); 17 archived plans dated before 2026-10-11 exempt`
 (measured 2026-10-11 after review-loop round 1, which added four tests to
 this change's own ledger; the count before it was 270 with 196 test; round 3
