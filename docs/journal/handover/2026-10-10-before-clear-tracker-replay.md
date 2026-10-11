@@ -63,6 +63,10 @@ archived `stage2-mimo`, `interview-minimums` and `stage2-runs-count`.
 
 ### Replay
 
+> **Done on 2026-10-11 — do not run again** (note added 2026-10-11): running it a
+> second time would create a second Pi bead. See the addendum "tracker
+> replayed, 2026-10-11" below.
+
 Run from the coding-harness main checkout with no other writing session
 (house rule 4). The Pi bead gets a new id when it is created again; the script
 reads it from the output.
@@ -122,3 +126,12 @@ superseded and closed, and the Pi bead was created again as
 the OpenCode CLI), claimed, with the summary comment. Do not run the replay
 again. Step 3 of "Next step" is done; steps 2 (the Mac smoke test, then close
 coding-harness-351) and 4 (the plan for coding-harness-909) remain.
+
+The earlier sections of this file ("Where we are", "Next step", the tracker
+table, "Resumption") describe the state before #116 merged and before the
+replay; read them as history. For the beads named there without a title:
+coding-harness-909 is the bug that per-criterion tests are held by no gate,
+coding-harness-s6i the first slice of the foundation work, coding-harness-36z
+the D-60 write guard (one tracker writer, enforced), and coding-harness-yim the
+translation of the remaining German in the repository. The container-only
+short id 6h4 no longer exists; its bead is coding-harness-351.
