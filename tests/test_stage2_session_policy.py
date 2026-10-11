@@ -225,8 +225,10 @@ def test_case_folding_is_a_host_setting_and_catches_a_differently_cased_name(wor
     assert decide(".PI/settings.json", caseInsensitive=True)["action"] == "block"
     assert decide(".Stage2-Sessions/x", caseInsensitive=True)["action"] == "block"
     assert decide("TOOLS/POLICY.MJS", caseInsensitive=True)["action"] == "block"
-    # On a case-sensitive file system `.PI` is another directory.
-    assert decide(".PI/settings.json", caseInsensitive=False)["action"] == "allow"
+    # On a case-sensitive file system `.PI` is another directory. On a case-insensitive one (APFS on
+    # macOS) the path resolves into the protected `.pi`, so the block is right and the allow cannot hold.
+    if not (world.root / ".PI").exists():
+        assert decide(".PI/settings.json", caseInsensitive=False)["action"] == "allow"
 
 
 def test_the_case_rule_follows_the_host_platform(world: World) -> None:
