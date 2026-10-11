@@ -595,3 +595,23 @@ def test_change_flag_with_unknown_name_is_found(repo: Path) -> None:
     done = run_gate(repo, "--change", "real-typo")
     assert done.returncode == 1
     assert "no change folder" in done.stdout
+
+
+# --- the ADR owner: a plan-only folder is a migration, not an owner ---------
+
+
+def test_a_folder_whose_diff_touches_only_plan_md_is_no_owner(repo: Path) -> None:
+    """The ledger migration of change criterion-test-ledger (2026-10-11): one
+    ADR draft lands beside four migrated plans, and the diff then touches five
+    change folders. Only a folder that carries more than plan.md counts as the
+    owner, so the five answers answer for exactly one. Mutation evidence for
+    scripts/check_interview_minimums.py: counting the plan-only folder again
+    turns this run red with "owns 2 change folder(s)"."""
+    write_change(repo, "real", "bounded", decisions=records(5))
+    _stage_adr(repo)
+    migrated = repo / "plans" / "changes" / "migrated"
+    migrated.mkdir(parents=True)
+    (migrated / "plan.md").write_text("# Plan\n\n## Criterion ledger\n\n- 1: not a test — review\n")
+    done = run_gate(repo)
+    assert done.returncode == 0, done.stdout
+    assert "owns 2 change folder(s)" not in done.stdout

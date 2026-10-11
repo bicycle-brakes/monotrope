@@ -1,7 +1,7 @@
 ---
 title: "Plan — criterion-test-ledger"
 status: draft
-implementation_status: none
+implementation_status: partial
 date: 2026-10-11
 last_reviewed: 2026-10-11
 updated: 2026-10-11
@@ -396,66 +396,66 @@ changes beyond their `plan.md`.
 
 ## Criterion ledger
 
-- 1: not yet written tests/test_check_criterion_ledger.py::test_every_live_plan_is_held_whatever_its_date_and_class
+- 1: tests/test_check_criterion_ledger.py::test_every_live_plan_is_held_whatever_its_date_and_class
   — a live plan dated 2026-09-01 in a `bounded` change, without a ledger, exits 0
-- 1: not yet written tests/test_check_criterion_ledger.py::test_a_live_change_without_a_plan_is_not_examined
+- 1: tests/test_check_criterion_ledger.py::test_a_live_change_without_a_plan_is_not_examined
   — a live folder holding only `research.md` is reported
-- 2: not yet written tests/test_check_criterion_ledger.py::test_a_plan_without_exactly_one_ledger_section_is_reported
+- 2: tests/test_check_criterion_ledger.py::test_a_plan_without_exactly_one_ledger_section_is_reported
   — no heading, the heading twice, or the heading only inside a fence exits 0
-- 3: not yet written tests/test_check_criterion_ledger.py::test_an_archived_ledger_is_held_whatever_its_date
+- 3: tests/test_check_criterion_ledger.py::test_an_archived_ledger_is_held_whatever_its_date
   — an archived plan dated 2026-10-01 whose ledger names a deleted test exits 0
-- 4: not yet written tests/test_check_criterion_ledger.py::test_an_archived_plan_without_a_ledger_is_exempt_only_by_an_earlier_plain_date
+- 4: tests/test_check_criterion_ledger.py::test_an_archived_plan_without_a_ledger_is_exempt_only_by_an_earlier_plain_date
   — 2026-10-11, or a quoted, commented, missing, impossible or doubled date, exempted; 2026-10-10 reported
-- 5: not yet written tests/test_check_criterion_ledger.py::test_a_line_in_no_entry_form_is_reported_with_the_three_forms
+- 5: tests/test_check_criterion_ledger.py::test_a_line_in_no_entry_form_is_reported_with_the_three_forms
   — one of the eleven lines of criterion 5 accepted, or its finding without the three forms
-- 5: not yet written tests/test_check_criterion_ledger.py::test_the_three_entry_forms_and_continuation_lines_are_read
+- 5: tests/test_check_criterion_ledger.py::test_the_three_entry_forms_and_continuation_lines_are_read
   — a well-formed entry, a fault after the em dash or a continuation line reported
-- 6: not yet written tests/test_check_criterion_ledger.py::test_the_gate_goes_red_when_a_named_test_is_deleted
+- 6: tests/test_check_criterion_ledger.py::test_the_gate_goes_red_when_a_named_test_is_deleted
   — exit 0 after the named function, or its file, is deleted (the gate's mutation test)
-- 6: not yet written tests/test_check_criterion_ledger.py::test_a_prefix_or_an_indented_def_is_not_defined
+- 6: tests/test_check_criterion_ledger.py::test_a_prefix_or_an_indented_def_is_not_defined
   — `test_b_more` taken for `test_b`; a `def` inside a class or a function counted
-- 7: not yet written tests/test_check_criterion_ledger.py::test_the_gate_never_imports_a_named_test_file
+- 7: tests/test_check_criterion_ledger.py::test_the_gate_never_imports_a_named_test_file
   — a named module's top-level code leaves its file behind
-- 8: not yet written tests/test_check_criterion_ledger.py::test_a_live_not_yet_written_entry_is_accepted
+- 8: tests/test_check_criterion_ledger.py::test_a_live_not_yet_written_entry_is_accepted
   — a live plan reported for a test that does not exist yet
-- 9: not yet written tests/test_check_criterion_ledger.py::test_a_not_yet_written_entry_whose_test_exists_is_reported
+- 9: tests/test_check_criterion_ledger.py::test_a_not_yet_written_entry_whose_test_exists_is_reported
   — exit 0, or a finding that does not say to remove the marker
-- 10: not yet written tests/test_check_criterion_ledger.py::test_an_archived_not_yet_written_entry_is_reported
+- 10: tests/test_check_criterion_ledger.py::test_an_archived_not_yet_written_entry_is_reported
   — exit 0 for the entry, its test defined or not
-- 11: not yet written tests/test_check_criterion_ledger.py::test_a_not_a_test_entry_is_accepted_on_its_form
+- 11: tests/test_check_criterion_ledger.py::test_a_not_a_test_entry_is_accepted_on_its_form
   — a well-formed entry whose text names a missing test reported
-- 12: not yet written tests/test_check_criterion_ledger.py::test_a_criterion_without_an_entry_is_reported
+- 12: tests/test_check_criterion_ledger.py::test_a_criterion_without_an_entry_is_reported
   — exit 0 after a criterion's only entry is deleted
-- 13: not yet written tests/test_check_criterion_ledger.py::test_an_entry_for_an_unknown_criterion_is_reported
+- 13: tests/test_check_criterion_ledger.py::test_an_entry_for_an_unknown_criterion_is_reported
   — `- 99: …` beside a spec of 16 criteria exits 0
-- 14: not yet written tests/test_check_criterion_ledger.py::test_a_plan_without_a_spec_or_its_criteria_is_reported
+- 14: tests/test_check_criterion_ledger.py::test_a_plan_without_a_spec_or_its_criteria_is_reported
   — a missing spec, or one without `## Acceptance criteria`, exits 0
-- 14: not yet written tests/test_check_criterion_ledger.py::test_criterion_numbers_are_read_across_level_3_headings_and_outside_fences
+- 14: tests/test_check_criterion_ledger.py::test_criterion_numbers_are_read_across_level_3_headings_and_outside_fences
   — a level-3 heading ends the section, or a numbered line inside a fence counts
-- 15: not yet written tests/test_check_criterion_ledger.py::test_a_clean_run_names_its_counts
+- 15: tests/test_check_criterion_ledger.py::test_a_clean_run_names_its_counts
   — a count missing from the line
-- 15: not yet written tests/test_check_criterion_ledger.py::test_an_empty_tree_says_it_examined_nothing
+- 15: tests/test_check_criterion_ledger.py::test_an_empty_tree_says_it_examined_nothing
   — "OK", "pass" or "green" printed, or no "examined nothing"
-- 16: not yet written tests/test_check_criterion_ledger.py::test_each_finding_is_one_line_with_path_line_and_remedy
+- 16: tests/test_check_criterion_ledger.py::test_each_finding_is_one_line_with_path_line_and_remedy
   — exit 0 or 3 with a finding; a line without the path, the line number or the remedy
-- 17: not yet written tests/test_check_criterion_ledger.py::test_an_unreadable_or_non_utf8_file_is_a_finding
+- 17: tests/test_check_criterion_ledger.py::test_an_unreadable_or_non_utf8_file_is_a_finding
   — a traceback or exit 0 for a plan, spec or named test file that is a directory or not UTF-8
-- 18: not yet written tests/test_check_criterion_ledger.py::test_a_root_it_cannot_measure_exits_3
+- 18: tests/test_check_criterion_ledger.py::test_a_root_it_cannot_measure_exits_3
   — exit 0 or 1 for an empty directory, a missing one or a file as the root
-- 19: not yet written tests/test_check_criterion_ledger.py::test_gates_yaml_declares_criterion_ledger
+- 19: tests/test_check_criterion_ledger.py::test_gates_yaml_declares_criterion_ledger
   — green with the entry removed or one of its four fields changed
 - 19: tests/test_ci.py::test_every_gate_step_has_a_mutation_test — the gate without a `goes_red` test
 - 19: tests/test_ci.py::test_every_script_has_a_test_or_a_declared_reason
 - 19: tests/test_ci.py::test_every_script_has_a_caller_or_a_declared_reason
 - 19: not a test — the gate `ci-drift` in `make verify` holds `ci.yml` to the gate list
-- 20: not yet written tests/test_check_criterion_ledger.py::test_the_kit_carries_the_script_and_its_test
+- 20: tests/test_check_criterion_ledger.py::test_the_kit_carries_the_script_and_its_test
   — either file's role not `mechanismus`
 - 20: not a test — the gate `leerprobe` in `make verify` runs the new test in the empty-repository copy
-- 21: not yet written tests/test_check_criterion_ledger.py::test_the_plan_prompt_requires_the_ledger
+- 21: tests/test_check_criterion_ledger.py::test_the_plan_prompt_requires_the_ledger
   — the heading, the gate or the pointer from the test requirement missing; an example the parser refuses
-- 22: not yet written tests/test_check_criterion_ledger.py::test_the_implement_prompt_moves_the_ledger_with_the_tests
+- 22: tests/test_check_criterion_ledger.py::test_the_implement_prompt_moves_the_ledger_with_the_tests
   — either of the two rules missing
-- 23: not yet written tests/test_check_criterion_ledger.py::test_the_workflow_names_the_gate_and_its_exemption
+- 23: tests/test_check_criterion_ledger.py::test_the_workflow_names_the_gate_and_its_exemption
   — no row for the gate, or a row without the archive rule or 2026-10-11
 - 24: not a test — the gate's run over this repository at the head, under "Verification"; output in the pull request body
 - 25: not a test — the reading aid under "Verification", and the phase-6 review of each migrated ledger
@@ -463,4 +463,99 @@ changes beyond their `plan.md`.
 - 27: not a test — the `grep` under "Verification" shows the pointer line above each table
 - 28: not a test — the replay under "Verification"; command, output and commit in the pull request body
 
+## Evidence
+
+This worker has file tools and no shell: the runner runs the commands and
+makes the checkpoint commit. What it will see:
+
+- **Step 1 — the four plans migrated.** A `## Criterion ledger` section in
+  each, at the place of detail 11, and the pointer line above every
+  per-criterion table: `harness-decide-adr` (59 entries — 56 test,
+  3 not-a-test), `hermes-runner` (65 — 5 test, 39 not-yet-written,
+  21 not-a-test), `research-currency` (35 — 33 test, 2 not-a-test),
+  `stage2-session` (72 — 70 test, 2 not-a-test). Every named function was
+  checked against the `^def <name>(` line of its file; every criterion number
+  of each spec (1–15, 1–59, 1–16, 1–16) is covered.
+- **Step 2 — the gate.** `scripts/check_criterion_ledger.py` (standard
+  library only) and `tests/test_check_criterion_ledger.py` (28 tests against
+  criteria 1–23, each with its planted fault; the mutation test is
+  `test_the_gate_goes_red_when_a_named_test_is_deleted`). Wired into
+  `decisions/gates.yaml`, `.github/workflows/ci.yml` (the four lines by
+  hand — the phase-4 runner does not regenerate it; `ci-drift` checks them)
+  and `scripts/kit/manifest.yaml` (both files `mechanismus`). Every
+  `not yet written` marker of this step is removed from the ledger above.
+- **Step 3 — the texts.** `prompts/03-plan.md` (the test bullet ends "— as
+  entries of the criterion ledger below."; the section `## The criterion
+  ledger` with the three forms, the example and the gate paragraph),
+  `prompts/04-implement.md` ("The ledger moves with the tests."),
+  `docs/WORKFLOW.md` (the `Criterion tests` row after `Interview`). The
+  tests of criteria 21–23 stand in the ledger without a marker.
+- **Step 4 — close.** `implementation_status: partial` in the six artefacts
+  of this folder.
+- **Attempt 2 — the repairs after attempt 1 ran red.** Six tests crashed on a
+  `_tree` helper that could not build its tree twice (`mkdir` without
+  `exist_ok`); fixed. The gate reported a change folder without a `plan.md`
+  instead of not examining it (one live test, and the three archive folders
+  `2026-09-20-2ee-triage`, `2026-09-23-gate-placement` and
+  `2026-09-23-tracker-access-point`, which carry only a `research.md`);
+  fixed — a folder whose `plan.md` does not exist is skipped. The finding for
+  a named test file that cannot be read now names the criterion and the
+  function, so an archived ledger naming a deleted test is readable as such.
+  An indented `- <n>: …` line is no longer parsed as an entry after
+  stripping. `ruff`'s SIM108 is answered with the ternary it asks for, and
+  both new files are rewritten with exactly one trailing newline. The
+  `interview-minimums` amendment below closes the last block.
+
+```bash
+.venv/bin/python -m pytest tests/test_check_criterion_ledger.py -q
+.venv/bin/python scripts/check_criterion_ledger.py
+GIT_CONFIG_COUNT=1 GIT_CONFIG_KEY_0=commit.gpgsign GIT_CONFIG_VALUE_0=false make verify
+```
+
+Expected green line of the second command at the head (criterion 24):
+`held 5 plans (5 live, 0 archived); read 268 entries (194 test, 39 not yet
+written, 35 not a test); 17 archived plans dated before 2026-10-11 exempt`.
+Criterion 28's replay runs on the head commit; its command, output and
+commit go into the pull request body.
+
+**For the pull request body** (the plan's migration rule): four functions
+the plan names in its implementation notes hold no criterion of the spec and
+stand in no ledger line — `test_no_declared_reason_stands_for_a_script_that_has_a_caller`,
+`test_no_declared_reason_cites_a_closed_or_unknown_bead`,
+`test_the_mutation_ratchet_only_turns_one_way`,
+`test_the_two_manifests_really_disagree_somewhere`.
+
+## Phase 4 amendments
+
+Recorded here so the plan and the code say the same thing (a deviation that
+lives only in the code is the plan on the next reading):
+
+- **`scripts/check_interview_minimums.py` counts a change folder as the ADR's
+  owner only when the diff touches more than its `plan.md`** (amended
+  2026-10-11, second phase-4 session). As accepted, this change's diff
+  touches `docs/adr/0013-…` and five change folders — its own plus the four
+  migrated `plan.md` files — and the gate's owner rule demanded exactly one,
+  which made the card's "make verify ends VERIFY GREEN" unreachable, on this
+  branch and after the merge. A plan-only folder carries no spec, no
+  decisions and no research: it is the migration this plan orders, and the
+  gate `criterion-ledger` now polices those very edits. The five answers
+  still answer for exactly one folder, and the gate's finding text is
+  unchanged. Its counterpart test stands in
+  `tests/test_check_interview_minimums.py::test_a_folder_whose_diff_touches_only_plan_md_is_no_owner`;
+  counting the plan-only folder again turns it red with
+  "owns 2 change folder(s)".
+
+## Runner route — 2026-10-11
+
+Stage-1 route: implement · model claude-sonnet-5-5 · reason: two Flash post-run checks failed.
+
 ## Time used
+
+2026-10-11 — two sessions worked under this prompt; neither has a clock and
+neither claims a span. Each read the date 2026-10-11 at its start and again
+at its stop; the runner's clock measures the real span against the appetite
+of 8 h, and no duration is invented here.
+
+2026-10-11 — a third repair session (no clock): the count line said "entrys"
+for "entries"; fixed in `_s` of the gate, and two escaped quotes in the test
+file written as ruff format has them.

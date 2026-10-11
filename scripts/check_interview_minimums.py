@@ -29,7 +29,12 @@ The diff is the `stage2.change_diff()` states — `git diff <base>` covers
 committed, staged and unstaged paths, untracked files come from
 `ls-files --others` — restricted to `docs/adr/**`, attributed to the owning
 change: the `plans/changes/<name>/` paths the same diff touches (F-5). A diff
-that touches an ADR and owns no change, or more than one, is a finding.
+that touches an ADR and owns no change, or more than one, is a finding. A
+change folder the diff touches through its `plan.md` alone is not an owner:
+a plan edit is a ledger migration, not the home of an ADR's answers
+(criterion-test-ledger, bead coding-harness-909, 2026-10-11 — one ADR draft
+lands beside four migrated plans), and the five answers still answer for
+exactly one folder.
 
 Base rule (Q-7): a genuine checkout of `main` compares against the first
 parent (`HEAD^`); every other state — feature branch, detached HEAD,
@@ -242,8 +247,10 @@ def measure(root: Path, only: str | None = None) -> tuple[list[str], int]:
         if not path.startswith(CHANGES_DIR + "/"):
             continue
         parts = path.split("/")
-        # plans/changes/<name>/<file>: the owning folder sits at parts[2]
-        if len(parts) > 3 and parts[2] != ARCHIVE:
+        # plans/changes/<name>/<file>: the owning folder sits at parts[2]. A
+        # folder whose diff touches plan.md alone is a ledger migration, not
+        # the home of the ADR's answers (criterion-test-ledger, 2026-10-11).
+        if len(parts) > 3 and parts[2] != ARCHIVE and parts[3] != "plan.md":
             owning.add(parts[2])
 
     if adr_paths and len(owning) != 1:

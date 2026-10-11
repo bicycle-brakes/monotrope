@@ -4,7 +4,7 @@ status: draft
 implementation_status: partial
 date: 2026-10-05
 last_reviewed: 2026-10-05
-updated: 2026-10-05
+updated: 2026-10-11
 supersedes: null
 superseded_by: null
 bead: coding-harness-i3y
@@ -526,6 +526,8 @@ Steps, tests written with each:
 Test per criterion — the fault each must meet to go red is the criterion's
 "Refuted by":
 
+The list the gate criterion-ledger holds is the section "Criterion ledger" below; this table is the earlier record.
+
 | Criteria | Test in `tests/test_research_recheck.py` |
 | --- | --- |
 | 18, 19 | `test_takes_notes0_without_note`, `test_named_note_reads_no_list` |
@@ -583,6 +585,8 @@ Branch `feat/hermes-profile`, after slices 2 and 4. Files under
 Steps: config and env (35 min); wrapper, sudo rule, plist (30 min);
 runbook (60 min); test (40 min); verification, push (15 min).
 
+The list the gate criterion-ledger holds is the section "Criterion ledger" below; this table is the earlier record.
+
 | Criteria | Test in `tests/test_hermes_profile.py` |
 | --- | --- |
 | 45 | `test_every_core_toolset_but_web_file_search_is_disabled` |
@@ -618,6 +622,74 @@ One afternoon and a restart, by adhd-relief's runbook and then
 an agent records the results in "Spike results" in a pull request of its
 own (criterion 58). The weekly LaunchAgent is loaded only when every entry
 is green (criterion 59).
+
+## Criterion ledger
+
+- 1: not a test — the plan's check 1, the summary's first line
+- 2: not a test — the plan's check 2
+- 3: not a test — the plan's check 3
+- 4: not a test — the plan's check 4
+- 5: not a test — the plan's check 5
+- 6: not a test — the plan's check 6, the "Never" section only
+- 7: not a test — the plan's check 7
+- 8: tests/test_model_endpoints.py::test_every_model_in_a_phase_prompt_resolves — a model in a prompt's Model line is undeclared
+- 8: not a test — the plan's check 8: line 3 verbatim, exactly one Model line
+- 9: not a test — the plan's check 9: no runner named
+- 10: not a test — the plan's check 10
+- 11: tests/test_kit.py::test_the_workflow_itself_travels — the prompt's kit role not `mechanismus`
+- 11: not a test — the plan's check 11 and `probe.py --strict`
+- 12: not a test — slice 2's check 12, the endpoint entry read with PyYAML
+- 13: not a test — slice 2's check 13, the five statements in the remark
+- 14: not a test — `make verify`; `tests/test_model_endpoints.py` reads the entry
+- 15: not a test — slice 3's checks: the ADR file, and the pull request's title and label (`gh pr view`)
+- 16: not a test — slice 3's check 16, the ADR's terms grepped
+- 17: not a test — slice 3's check 17, the continuity gate and the D-7 row
+- 18: not yet written tests/test_research_recheck.py::test_takes_notes0_without_note
+- 19: not yet written tests/test_research_recheck.py::test_named_note_reads_no_list
+- 20: not yet written tests/test_research_recheck.py::test_note_with_a_problem_fails_unstaged
+- 21: not yet written tests/test_research_recheck.py::test_unknown_list_schema_fails
+- 22: not yet written tests/test_research_recheck.py::test_an_open_recheck_branch_means_nothing_to_do
+- 23: not yet written tests/test_research_recheck.py::test_run_dir_holds_only_job_query_and_note
+- 24: not yet written tests/test_research_recheck.py::test_agent_past_the_cap_is_ended_and_fails
+- 25: not yet written tests/test_research_recheck.py::test_tool_outside_the_allowlist_fails
+- 26: not yet written tests/test_research_recheck.py::test_agent_failure_fails
+- 27: not yet written tests/test_research_recheck.py::test_extra_file_in_work_fails
+- 28: not yet written tests/test_research_recheck.py::test_diff_check_accepts_a_good_addendum
+- 28: not yet written tests/test_research_recheck.py::test_diff_check_refuses
+- 29: not yet written tests/test_research_recheck.py::test_no_checked_item_fails
+- 30: not yet written tests/test_research_recheck.py::test_checked_item_without_url_fails
+- 31: not yet written tests/test_research_recheck.py::test_addendum_over_300_lines_fails
+- 32: not yet written tests/test_research_recheck.py::test_midnight_between_start_and_commit_fails
+- 33: not yet written tests/test_research_recheck.py::test_publish_moves_exactly_one_ref
+- 34: not yet written tests/test_research_recheck.py::test_one_pull_request_with_its_body
+- 35: not yet written tests/test_research_recheck.py::test_gh_calls_are_pr_create_and_the_rules_get_only
+- 35: not yet written tests/test_research_recheck.py::test_bd_is_never_called
+- 36: not yet written tests/test_research_recheck.py::test_a_missing_rule_blocks_the_push
+- 37: not yet written tests/test_research_recheck.py::test_check_ruleset_exit_codes
+- 38: not yet written tests/test_research_recheck.py::test_bad_token_file_stops_before_the_network
+- 39: not yet written tests/test_research_recheck.py::test_token_only_in_the_environment
+- 40: not yet written tests/test_research_recheck.py::test_record_fields_and_exit_codes
+- 41: not yet written tests/test_research_recheck.py::test_dry_run_pushes_nothing
+- 42: not yet written tests/test_research_recheck.py::test_commit_message_names_five_and_no_bead
+- 43: not a test — the fixture: `GIT_ALLOW_PROTOCOL=file` and the stubbed `gh` fail any network attempt
+- 44: tests/test_ci.py::test_every_script_has_a_caller_or_a_declared_reason — the script's reason missing from `OHNE_AUFRUFER`
+- 44: tests/test_ci.py::test_every_script_has_a_test_or_a_declared_reason — no test names the script
+- 44: tests/test_ci.py::test_every_gate_step_has_a_mutation_test — the gate step without its mutation test
+- 45: not yet written tests/test_hermes_profile.py::test_every_core_toolset_but_web_file_search_is_disabled
+- 46: not yet written tests/test_hermes_profile.py::test_learning_is_off
+- 47: not yet written tests/test_hermes_profile.py::test_approvals_deny_and_block_git_gh_bd
+- 48: not yet written tests/test_hermes_profile.py::test_model_route_and_every_named_model_is_declared
+- 49: not yet written tests/test_hermes_profile.py::test_web_backend_and_switches
+- 50: not yet written tests/test_hermes_profile.py::test_wrapper_flags_environment_and_alarm
+- 51: not yet written tests/test_hermes_profile.py::test_launch_agent_is_weekly_and_nothing_starts_a_gateway
+- 52: not yet written tests/test_hermes_profile.py::test_sudo_rule_allows_one_command
+- 53: not yet written tests/test_hermes_profile.py::test_no_adhd_relief_identity_in_the_profile_files
+- 54: not yet written tests/test_hermes_profile.py::test_env_example_names_only
+- 55: not yet written tests/test_hermes_profile.py::test_runbook_has_its_parts
+- 56: not yet written tests/test_hermes_profile.py::test_spike_part_has_eight_tests
+- 57: not a test — the maintainer's ruleset; `python3 scripts/research_recheck.py check-ruleset --repo MPAdesso/coding-harness` exits 0
+- 58: not a test — the "Spike results" table filled in a pull request of its own
+- 59: not a test — the weekly LaunchAgent is loaded only when every entry is green
 
 ## Not touched
 

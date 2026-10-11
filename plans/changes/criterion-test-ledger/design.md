@@ -4,7 +4,7 @@ category: design
 created: 2026-10-11
 updated: 2026-10-11
 status: draft
-implementation_status: none
+implementation_status: partial
 date: 2026-10-11
 last_reviewed: 2026-10-11
 supersedes: null
