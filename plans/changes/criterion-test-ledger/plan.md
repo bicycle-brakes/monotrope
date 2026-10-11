@@ -462,6 +462,8 @@ changes beyond their `plan.md`.
 - 23: tests/test_check_criterion_ledger.py::test_the_workflow_names_the_gate_and_its_exemption
   — no row for the gate, or a row without the archive rule or 2026-10-11
 - 24: not a test — the gate's run over this repository at the head, under "Verification"; output in the pull request body
+- 24: tests/test_check_interview_minimums.py::test_an_adr_with_only_its_own_plan_md_still_has_that_one_owner
+  — dropping the fall-back to plan-only folders leaves the ADR with "owns 0 change folder(s)"
 - 25: not a test — the reading aid under "Verification", and the phase-6 review of each migrated ledger
 - 26: not a test — the phase-6 review of the `stage2-session` ledger against its "Tests and faults"
 - 27: not a test — the `grep` under "Verification" shows the pointer line above each table
@@ -517,10 +519,11 @@ GIT_CONFIG_COUNT=1 GIT_CONFIG_KEY_0=commit.gpgsign GIT_CONFIG_VALUE_0=false make
 ```
 
 Expected green line of the second command at the head (criterion 24):
-`held 5 plans (5 live, 0 archived); read 274 entries (200 test, 39 not yet
+`held 5 plans (5 live, 0 archived); read 275 entries (201 test, 39 not yet
 written, 35 not a test); 17 archived plans dated before 2026-10-11 exempt`
 (measured 2026-10-11 after review-loop round 1, which added four tests to
-this change's own ledger; the count before it was 270 with 196 test).
+this change's own ledger; the count before it was 270 with 196 test; round 2
+adds three more, so the line is re-measured after each row).
 Criterion 28's replay runs on the head commit; its command, output and
 commit go into the pull request body.
 
@@ -549,7 +552,12 @@ lives only in the code is the plan on the next reading):
   unchanged. Its counterpart test stands in
   `tests/test_check_interview_minimums.py::test_a_folder_whose_diff_touches_only_plan_md_is_no_owner`;
   counting the plan-only folder again turns it red with
-  "owns 2 change folder(s)".
+  "owns 2 change folder(s)". Review-loop row L2-1: when no folder is touched
+  beyond `plan.md`, the plan-only folders own the ADR as before
+  (`test_an_adr_with_only_its_own_plan_md_still_has_that_one_owner`), and the
+  zero- or many-owner finding names the folders and the remedy. The rule is
+  interim; bead coding-harness-afa replaces it with an explicit owner
+  statement.
 
 ## Runner route — 2026-10-11
 

@@ -243,15 +243,21 @@ def measure(root: Path, only: str | None = None) -> tuple[list[str], int]:
     changed = _changed_paths(root)
     adr_paths = {p for p in changed if p.startswith(ADR_DIR + "/")}
     owning: set[str] = set()
+    plan_only: set[str] = set()
     for path in changed:
         if not path.startswith(CHANGES_DIR + "/"):
             continue
         parts = path.split("/")
-        # plans/changes/<name>/<file>: the owning folder sits at parts[2]. A
-        # folder whose diff touches plan.md alone is a ledger migration, not
-        # the home of the ADR's answers (criterion-test-ledger, 2026-10-11).
-        if len(parts) > 3 and parts[2] != ARCHIVE and parts[3] != "plan.md":
-            owning.add(parts[2])
+        # plans/changes/<name>/<file>: the owning folder sits at parts[2].
+        # INTERIM heuristic: a folder the diff touches through plan.md alone is
+        # a ledger migration (criterion-test-ledger, 2026-10-11), so it owns
+        # the ADR only when no other folder does; bead coding-harness-afa
+        # replaces this guess with an explicit owner statement.
+        if len(parts) > 3 and parts[2] != ARCHIVE:
+            (plan_only if parts[3] == "plan.md" else owning).add(parts[2])
+    # A folder touched through anything else wins; a plan-only folder counts
+    # again only when nothing else owns the ADR (loop row L2-1).
+    owning = owning or plan_only
 
     if adr_paths and len(owning) != 1:
         whom = ", ".join(sorted(owning)) or "none"
@@ -260,7 +266,13 @@ def measure(root: Path, only: str | None = None) -> tuple[list[str], int]:
                 f"{len(adr_paths)} ADR path(s) changed under {ADR_DIR}/ but the diff "
                 f"owns {len(owning)} change folder(s): {whom} — an ADR change runs "
                 "inside exactly one change folder under plans/changes/, whose "
-                "decisions.md carries the five answers"
+                "decisions.md carries the five answers; "
+                + (
+                    "the diff touches no change folder, so add the folder that owns "
+                    "the ADR (its decisions.md carrying the five answers)"
+                    if not owning
+                    else f"keep only one of {whom} in this diff, or split the ADR into its own pull request"
+                )
             ],
             0,
         )

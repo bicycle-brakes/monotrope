@@ -615,3 +615,24 @@ def test_a_folder_whose_diff_touches_only_plan_md_is_no_owner(repo: Path) -> Non
     done = run_gate(repo)
     assert done.returncode == 0, done.stdout
     assert "owns 2 change folder(s)" not in done.stdout
+
+
+def test_an_adr_with_only_its_own_plan_md_still_has_that_one_owner(repo: Path) -> None:
+    """Review-loop row L2-1: the plan-only narrowing must not leave an ADR
+    without an owner. A diff touching docs/adr/** and only the plan.md of its
+    own change folder still owns exactly that folder, which then owes the five
+    answers (here it has them, so the run is green). Fault: dropping the
+    fall-back to plan-only folders in scripts/check_interview_minimums.py
+    ("owns 0 change folder(s)") turns this red. The heuristic is interim; bead
+    coding-harness-afa replaces it with an explicit owner statement."""
+    _git(repo, "checkout", "main")
+    write_change(repo, "solo", "bounded", decisions=records(5))
+    _commit_all(repo, "feat: solo change with its answers")
+    _git(repo, "push", "origin", "main")
+    _git(repo, "checkout", "feat/test")
+    _git(repo, "merge", "main")
+    (repo / "plans" / "changes" / "solo" / "plan.md").write_text("# Plan\n")
+    _stage_adr(repo)
+    done = run_gate(repo)
+    assert done.returncode == 0, done.stdout
+    assert "owns 0 change folder(s)" not in done.stdout, done.stdout
