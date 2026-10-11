@@ -34,7 +34,10 @@ change folder the diff touches through its `plan.md` alone is not an owner:
 a plan edit is a ledger migration, not the home of an ADR's answers
 (criterion-test-ledger, bead coding-harness-909, 2026-10-11 — one ADR draft
 lands beside four migrated plans), and the five answers still answer for
-exactly one folder.
+exactly one folder. When such a plan-only folder sits beside another owner
+the paths cannot tell which one the ADR belongs to: the ADR text naming
+exactly one candidate decides, otherwise the run reports both (INTERIM,
+loop row L3-1; bead coding-harness-afa replaces the guess).
 
 Base rule (Q-7): a genuine checkout of `main` compares against the first
 parent (`HEAD^`); every other state — feature branch, detached HEAD,
@@ -238,6 +241,17 @@ def _has_reasoned_skip(skips: list[dict[str, str]]) -> bool:
 # ---------------------------------------------------------------------------
 
 
+def _folders_named_by_adrs(root: Path, adr_paths: set[str], candidates: set[str]) -> set[str]:
+    """The candidate change folders whose name appears in a changed ADR's text
+    (INTERIM, loop row L3-1; bead coding-harness-afa replaces it)."""
+    text = ""
+    for rel in sorted(adr_paths):
+        path = root / rel
+        if path.is_file():
+            text += path.read_text(encoding="utf-8", errors="replace") + "\n"
+    return {c for c in candidates if re.search(rf"(?<![\w-]){re.escape(c)}(?![\w-])", text)}
+
+
 def measure(root: Path, only: str | None = None) -> tuple[list[str], int]:
     """Findings and the number of changes measured; raises CannotMeasure."""
     changed = _changed_paths(root)
@@ -255,8 +269,28 @@ def measure(root: Path, only: str | None = None) -> tuple[list[str], int]:
         # replaces this guess with an explicit owner statement.
         if len(parts) > 3 and parts[2] != ARCHIVE:
             (plan_only if parts[3] == "plan.md" else owning).add(parts[2])
-    # A folder touched through anything else wins; a plan-only folder counts
-    # again only when nothing else owns the ADR (loop row L2-1).
+    # A plan-only folder counts again only when nothing else owns the ADR
+    # (loop row L2-1). Beside other owners it may be a ledger migration or the
+    # ADR's real home, and the path list cannot tell which (loop row L3-1):
+    # the ADR text decides when it names exactly one candidate folder; if it
+    # does not, the run reports both candidates instead of guessing green.
+    if adr_paths and plan_only and owning:
+        named = _folders_named_by_adrs(root, adr_paths, owning | plan_only)
+        if len(named) == 1:
+            owning = named
+        else:
+            both = ", ".join(sorted(owning | plan_only))
+            return (
+                [
+                    f"{len(adr_paths)} ADR path(s) changed under {ADR_DIR}/ and the diff "
+                    f"touches change folder(s) {', '.join(sorted(owning))} beyond plan.md and "
+                    f"{', '.join(sorted(plan_only))} through plan.md alone — the paths cannot "
+                    f"say which of {both} owns the ADR (INTERIM guess, bead "
+                    "coding-harness-afa); name the owning change folder in the ADR text "
+                    "(exactly one of them), or split the ADR into its own pull request"
+                ],
+                0,
+            )
     owning = owning or plan_only
 
     if adr_paths and len(owning) != 1:

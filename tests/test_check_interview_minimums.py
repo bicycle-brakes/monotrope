@@ -609,6 +609,8 @@ def test_a_folder_whose_diff_touches_only_plan_md_is_no_owner(repo: Path) -> Non
     turns this run red with "owns 2 change folder(s)"."""
     write_change(repo, "real", "bounded", decisions=records(5))
     _stage_adr(repo)
+    # the ADR names its owner, the one means the interim rule reads (row L3-1)
+    (repo / "docs" / "adr" / "0099-test-decision.md").write_text("# ADR 0099 — test\n\nChange: real\n")
     migrated = repo / "plans" / "changes" / "migrated"
     migrated.mkdir(parents=True)
     (migrated / "plan.md").write_text("# Plan\n\n## Criterion ledger\n\n- 1: not a test — review\n")
@@ -636,3 +638,28 @@ def test_an_adr_with_only_its_own_plan_md_still_has_that_one_owner(repo: Path) -
     done = run_gate(repo)
     assert done.returncode == 0, done.stdout
     assert "owns 0 change folder(s)" not in done.stdout, done.stdout
+
+
+def test_a_plan_md_only_folder_does_not_hide_the_adr_owner_among_other_folders(repo: Path) -> None:
+    """Review-loop row L3-1: folder A touched through decisions.md, folder B
+    through plan.md alone and one ADR that names neither. The paths cannot say
+    whether the ADR belongs to A or to B, so the run must not go green by
+    silently picking A: it reports both candidates. Fault: dropping the
+    plan-only folder whenever another folder owns (the L2-1 rule) reports one
+    owner and exits 0. When the ADR text names exactly one candidate, that
+    one owns it and the run is decided by its answers."""
+    write_change(repo, "folder-a", "bounded", decisions=records(5))
+    _stage_adr(repo)
+    other = repo / "plans" / "changes" / "folder-b"
+    other.mkdir(parents=True)
+    (other / "plan.md").write_text("# Plan\n\nA real plan edit, not a ledger migration.\n")
+    done = run_gate(repo)
+    assert done.returncode == 1, done.stdout
+    assert "folder-a" in done.stdout and "folder-b" in done.stdout
+    assert "name the owning change folder" in done.stdout
+
+    # the ADR names folder-b, which has no decisions.md: the owner owes five
+    (repo / "docs" / "adr" / "0099-test-decision.md").write_text("# ADR 0099\n\nChange: folder-b\n")
+    done = run_gate(repo)
+    assert done.returncode == 1, done.stdout
+    assert "folder-b" in done.stdout and "5" in done.stdout
