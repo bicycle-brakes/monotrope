@@ -89,3 +89,19 @@ without a recorded principle, we decided to fix the criterion-proof rule as an
 ADR, to achieve that it travels with the kit and binds every model that
 writes tests, accepting that changing it later takes a decision PR. —
 2026-10-11
+
+## Q-5 · How far the ADR reaches
+
+asked: 2026-10-11, the directing conversation
+answer: option 1 — at once with the kit: the gate script travels as kit
+  mechanism (`scripts/kit/manifest.yaml`), and an instance such as LakeSwitch
+  receives it with its next pinned Coding Harness release (bead
+  coding-harness-dj9)
+answered_by: maintainer
+status: answered
+
+In the context of a principle meant to hold beyond this repository, facing
+trying the gate here first or keeping it local behind a later ADR, we decided
+that the gate travels with the kit from this change on, to achieve that the
+principle is enforced wherever the workflow runs, accepting that an instance
+runs the gate without a trial period here first. — 2026-10-11
