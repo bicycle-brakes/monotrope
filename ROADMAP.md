@@ -29,14 +29,6 @@ changes them.
    slice (coding-harness-s6i), project file and locked dependencies
    (coding-harness-ei0), release builder and pin (coding-harness-dj9), the
    ADR-answer principle (coding-harness-3ar).
-3. **Hermes runs Coding Harness's recurring jobs.** Hermes Agent, already
-   prepared in adhd-relief, becomes the runner for unattended jobs here,
-   first the weekly re-check of research notes; it writes files only, and a
-   script the maintainer owns opens the pull request. Why: research ages
-   unnoticed, and the maintainer chose Hermes over the assessment's "not
-   now" (2026-10-05). Appetite: 4 sessions plus one afternoon at the laptop
-   for the shared spike. Beads: the Hermes runner (coding-harness-i3y),
-   research currency (coding-harness-pu9).
 
 ## Next
 
@@ -61,3 +53,14 @@ changes them.
   specifications (coding-harness-mr2), workflow-entry tests
   (coding-harness-kkh).
 - **Omnigent:** the default policy, layer 2 (coding-harness-671).
+- **Hermes runs the recurring jobs — parked** (maintainer, 2026-10-11; was
+  Now 3 since 2026-10-05). Why parked: the first job, the weekly re-check of
+  research notes, finds no note due before about 2026-12-15 (0 of 26 due on
+  2026-10-11); ADR 0010's revisit trigger 5 fired when PR #60 merged
+  (2026-10-07), so running Hermes without the leak check goes back to the
+  maintainer; and slice 2's endpoint entry conflicts with the stage-2
+  `opencode-go` entry on `main`. What is built stays: the job prompt
+  `prompts/research-recheck.md` on `main`, slices 2 and 5 on the branch
+  `feat/hermes-runner-2` at `faffe99`. Re-entry: when notes fall due, the
+  re-check runs once by hand and is measured first. Beads: the Hermes runner
+  (coding-harness-i3y), research currency (coding-harness-pu9).
