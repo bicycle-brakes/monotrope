@@ -6,7 +6,7 @@ created: 2026-10-11
 last_reviewed: 2026-10-11
 updated: 2026-10-11
 owner: framework-architect
-provenance: ai-generated
+provenance: ai-drafted-reviewed
 produced_by:
   kind: llm-session
   name: claude-code
@@ -43,7 +43,7 @@ built.
 
 ## Hurdle 1 — does the GLM Coding Plan cover Pi?
 
-**Yes. Z.ai lists Pi as a supported tool and publishes a Pi setup guide**
+**Yes, as far as read: Z.ai lists Pi as a supported tool and publishes a Pi setup guide** (quotes came through a summarising fetch; check the live wording before an ADR cites it)
 (documented, 2026-10-11).
 
 - `https://docs.z.ai/devpack/tool/others`, "Supported tools", step 1
@@ -100,7 +100,7 @@ maintainer wants Flash to run tests itself, which it does not do today.
 | Pi isolation flags for the loop (ADR 0011 decision 6) | fresh agent dir and home, `--no-extensions --no-mcp --no-skills --no-context-files --no-prompt-templates --no-themes --no-approve --offline --no-session` | measured once by hand on Pi 1.1.0 (`plans/changes/archive/2026-10-07-stage2-mimo/research.md` §L, §P) |
 | Undeclared tool refused | a `bash`/`write` call outside `--tools` → "Tool … not found", nothing run | measured, same §L |
 | Reads not confined | the loop's `read` returned a file outside the working directory | measured, same §L; WORKFLOW §4 "Reads" |
-| Policy extension `scripts/stage2_session_policy.mjs` (ADR 0012) | keeps `read grep find ls edit write` inside the worktree as Pi resolves a path (`@`, `~`, `file://`, symlinks), protects `.stage2-sessions/` and `.pi/`, asks or blocks dangerous `bash` patterns, blocks on handler failure | ~200 cases and 26 planted faults in `tests/test_stage2_session_policy.py`, run **without Pi** |
+| Policy extension `scripts/stage2_session_policy.mjs` (ADR 0012) | keeps `read grep find ls edit write` inside the worktree as Pi resolves a path (`@`, `~`, `file://`, symlinks), protects `.stage2-sessions/` and `.pi/`, asks or blocks dangerous `bash` patterns, blocks on handler failure | 21 test functions (about 200 cases per the ADR 0012 handover) in `tests/test_stage2_session_policy.py` at `origin/main` `0c71403`, 2026-10-11, run **without Pi** |
 | The suite on this Mac | one case red at `0c71403` on a clean tree: `test_case_folding_is_a_host_setting_…` expects `.PI/settings.json` allowed with `caseInsensitive: false`, but `realpathSync.native` on case-insensitive APFS resolves it to `.pi` and the policy blocks — the safe side; the test assumes a case-sensitive disk (CI on Linux is green) | measured here, 2026-10-11 |
 | The extension in a live Pi | not run — the Mac smoke test (handover 2026-10-10, package 7) is still open | not measured |
 | Claude Code `--restricted` for today's GLM calls | "confines the file tools to the working directories" | documented by `claude --help`, not measured (WORKFLOW §4) |
@@ -196,8 +196,9 @@ amendment is a new ADR, as ADR 0011 and 0012 did — not an edit of 0007.
   "The runner's shape": "explore and implement stay Claude Code launches
   against Z.ai" — amended. Decision 6 (Pi isolation, pin) is extended to the
   `zai` provider; decision 5 (key only in the environment) gains `ZAI_API_KEY`.
-- **`docs/adr/0012-…-checked-runner.md`:** Decision 3 scopes the extension to
-  the session verb; the new ADR extends it to non-interactive implement (in
+- **`docs/adr/0012-interactive-stage-2-sessions-run-through-the-checked-runner.md`:**
+  its header scopes the decision to the session verb only, and Decision 3 says
+  what the extension does; the new ADR extends it to non-interactive implement (in
   print mode the "ask" patterns block, which suits a run without `bash`).
 - **Not human-decided, changed in the same PR:** `model-endpoints.yaml`
   (`glm-coding-plan` remark: the Claude-Code-only sentence, and the coding
