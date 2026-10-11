@@ -269,6 +269,9 @@ def measure(root: Path, only: str | None = None) -> tuple[list[str], int]:
         # replaces this guess with an explicit owner statement.
         if len(parts) > 3 and parts[2] != ARCHIVE:
             (plan_only if parts[3] == "plan.md" else owning).add(parts[2])
+    # A folder touched beyond plan.md owns; its plan.md is not a second role
+    # (review-loop row F-3).
+    plan_only -= owning
     # A plan-only folder counts again only when nothing else owns the ADR
     # (loop row L2-1). Beside other owners it may be a ledger migration or the
     # ADR's real home, and the path list cannot tell which (loop row L3-1):

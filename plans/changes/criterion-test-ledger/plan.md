@@ -474,6 +474,8 @@ changes beyond their `plan.md`.
   — counting the plan-only folder as an owner again turns the run red with "owns 2 change folder(s)"
 - 24: tests/test_check_interview_minimums.py::test_a_plan_md_only_folder_does_not_hide_the_adr_owner_among_other_folders
   — dropping a plan-only folder whenever another folder owns exits 0 with one silent owner
+- 24: tests/test_check_interview_minimums.py::test_a_folder_touched_beyond_plan_md_is_never_also_plan_only
+  — a folder changed through spec.md, decisions.md and plan.md counted as plan-only too: ambiguity finding, exit 1
 - 25: not a test — the reading aid under "Verification", and the phase-6 review of each migrated ledger
 - 26: not a test — the phase-6 review of the `stage2-session` ledger against its "Tests and faults"
 - 27: not a test — the `grep` under "Verification" shows the pointer line above each table
@@ -529,7 +531,7 @@ GIT_CONFIG_COUNT=1 GIT_CONFIG_KEY_0=commit.gpgsign GIT_CONFIG_VALUE_0=false make
 ```
 
 Expected green line of the second command at the head (criterion 24):
-`held 5 plans (5 live, 0 archived); read 280 entries (206 test, 39 not yet
+`held 5 plans (5 live, 0 archived); read 281 entries (207 test, 39 not yet
 written, 35 not a test); 17 archived plans dated before 2026-10-11 exempt`
 (measured 2026-10-11 after review-loop round 1, which added four tests to
 this change's own ledger; the count before it was 270 with 196 test; round 3

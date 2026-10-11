@@ -663,3 +663,18 @@ def test_a_plan_md_only_folder_does_not_hide_the_adr_owner_among_other_folders(r
     done = run_gate(repo)
     assert done.returncode == 1, done.stdout
     assert "folder-b" in done.stdout and "5" in done.stdout
+
+
+def test_a_folder_touched_beyond_plan_md_is_never_also_plan_only(repo: Path) -> None:
+    """Review-loop row F-3 (phase 6, Codex): one feature changes its spec.md,
+    decisions.md and plan.md, and the ADR does not spell the folder name. The
+    folder owns the ADR through spec.md and decisions.md; its plan.md must not
+    also enter the plan-only set, or the ambiguity branch rejects a diff with
+    five valid answers and exactly one candidate owner. Fault: leaving the
+    folder in plan_only reports "cannot say which of" and exits 1."""
+    folder = write_change(repo, "solo-feature", "bounded", decisions=records(5))
+    (folder / "plan.md").write_text("# Plan\n\nA real plan edit.\n")
+    _stage_adr(repo)
+    done = run_gate(repo)
+    assert done.returncode == 0, done.stdout
+    assert "cannot say which" not in done.stdout, done.stdout
