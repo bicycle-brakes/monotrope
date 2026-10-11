@@ -315,8 +315,10 @@ migration of the four live plans must leave behind.
   `plan.md` of `harness-decide-adr`, `hermes-runner`, `research-currency` and
   `stage2-session`, this change's own `plan.md`, `plans/INDEX.md`
   (regenerated), `decisions/answers/criterion-test-ledger/adr.yaml` (the
-  maintainer's recorded answer), the ADR draft under `docs/adr/` with its
-  index entry, and this change's own workflow artefacts under
+  maintainer's recorded answer), the ADR draft
+  `docs/adr/0013-every-criterion-names-its-proof.md` (`docs/adr/` keeps no
+  index to enter it in, read 2026-10-11), and this change's own workflow
+  artefacts under
   `plans/changes/criterion-test-ledger/` (`research.md`, `decisions.md`,
   `spec.md`, `design.md`, `plan.md`, `findings.md`) — no file beyond these
   in the pull request's file list.
