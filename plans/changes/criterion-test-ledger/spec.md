@@ -268,10 +268,12 @@ migration of the four live plans must leave behind.
   phase 3 runs it whole.
 - **No change to the valves.** `scripts/ramp_valves.py` keeps its behaviour;
   whether the gate shares its text check is the plan's choice.
-- **No `design.md`:** the change adds one gate in the shape of the existing
-  check scripts, one entry in the one gate list and one section to an
-  existing artefact; nothing crosses a boundary or is stored beyond plan
-  text, so the feature runs without phase 2b (`prompts/02b-design.md`).
+- **No architecture beyond the ADR:** the change adds one gate in the shape
+  of the existing check scripts, one entry in the one gate list and one
+  section to an existing artefact; nothing else crosses a boundary or is
+  stored beyond plan text. Phase 2b runs only because the maintainer asked
+  for an ADR (2026-10-11): its `design.md` carries the ADR draft and nothing
+  more (`prompts/02b-design.md`).
 
 ## Protected areas
 
@@ -313,8 +315,11 @@ migration of the four live plans must leave behind.
   `plan.md` of `harness-decide-adr`, `hermes-runner`, `research-currency` and
   `stage2-session`, this change's own `plan.md`, `plans/INDEX.md`
   (regenerated), `decisions/answers/criterion-test-ledger/adr.yaml` (the
-  maintainer's recorded answer), this change's `design.md`, and the ADR draft
-  under `docs/adr/` with its index entry — none beyond these.
+  maintainer's recorded answer), the ADR draft under `docs/adr/` with its
+  index entry, and this change's own workflow artefacts under
+  `plans/changes/criterion-test-ledger/` (`research.md`, `decisions.md`,
+  `spec.md`, `design.md`, `plan.md`, `findings.md`) — no file beyond these
+  in the pull request's file list.
 - The protected areas untouched and the non-goals unbuilt, shown by the pull
   request's file list.
 - Bead: the pull request closes `coding-harness-909`, and its last commit

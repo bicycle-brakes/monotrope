@@ -94,6 +94,7 @@ typed: a hand-kept list of files ages exactly as fast as files are added.
 | [`changes/archive/2026-10-08-touch-map-comments/research.md`](changes/archive/2026-10-08-touch-map-comments/research.md) | accepted | done | 2026-10-08 | coding-harness-cff |
 | [`changes/archive/2026-10-08-touch-map-comments/spec.md`](changes/archive/2026-10-08-touch-map-comments/spec.md) | accepted | done | 2026-10-08 | coding-harness-cff |
 | [`changes/criterion-test-ledger/decisions.md`](changes/criterion-test-ledger/decisions.md) | draft | none | 2026-10-11 | coding-harness-909 |
+| [`changes/criterion-test-ledger/findings.md`](changes/criterion-test-ledger/findings.md) | draft | none | 2026-10-11 | coding-harness-909 |
 | [`changes/criterion-test-ledger/research.md`](changes/criterion-test-ledger/research.md) | draft | none | 2026-10-11 | coding-harness-909 |
 | [`changes/criterion-test-ledger/spec.md`](changes/criterion-test-ledger/spec.md) | draft | none | 2026-10-11 | coding-harness-909 |
 | [`changes/harness-decide-adr/decisions.md`](changes/harness-decide-adr/decisions.md) | accepted | none | 2026-09-30 | coding-harness-3ar |
