@@ -115,3 +115,13 @@ list of paths under `docs/adr/`); it must not be `owner`, which names a role.
 [DETAIL] Where an instance records its adoption date (Q-4) is left to the
 spec; bead coding-harness-wpv asks the same for the criterion-ledger gate, and
 the spec reads it before choosing, so both gates use one mechanism.
+
+## Addendum to Q-4 · The adoption day never excuses an ADR edit
+
+Asked after phase 2, 2026-10-12, because the spec read Q-4 one way: the
+adoption day exempts a change begun before it from the class minimums and the
+answer/claim agreement (Q-5), never from an ADR edit — a change begun before
+the adoption day that edits an ADR afterwards claims the file and owes five
+answers, as loop row L1-3 holds today. The maintainer confirmed this reading
+("Ja", Claude Code session of 2026-10-12). It clarifies Q-4 and counts as no
+additional record.
