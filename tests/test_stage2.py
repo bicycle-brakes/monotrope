@@ -3515,8 +3515,8 @@ def test_the_red_first_run_leaves_no_worktree_behind(world: World) -> None:
     assert {line.split()[-1] for line in git(world.root, "for-each-ref").splitlines()} == refs_before
 
 
-def test_the_red_first_run_removes_refs_the_named_test_created(world: World) -> None:
-    """Phase 6, F-4. Planted fault: a branch the named test created stayed in the shared repository."""
+def test_a_ref_created_while_the_named_test_ran_fails_the_proof_and_is_never_deleted(world: World) -> None:
+    """Phase 6, F-6. Planted fault: the clean-up deleted a branch that appeared during the red-first run."""
     repair_world(world)
     branch_test = (
         "import subprocess\nfrom pathlib import Path\n\n\ndef test_branch():\n"
@@ -3529,13 +3529,42 @@ def test_the_red_first_run_removes_refs_the_named_test_created(world: World) -> 
             repair_step(
                 stdout="L1-1: fixed — tests/test_branch.py::test_branch",
                 plant={"src/app.py": "value = 2\n", "tests/test_branch.py": branch_test},
-            )
+            ),
+            repair_step(),
         ],
-        make=[{"stdout": "green\n"}],
+        make=[{"stdout": "green\n"}] * 2,
     )
     assert world.run("repair") == 0
-    assert "refs/heads/red-first-probe" not in git(world.root, "for-each-ref")
+    prompt = world.calls("claude")[1]["prompt_file"]
+    assert "refs changed while the named test ran: refs/heads/red-first-probe" in prompt, prompt
+    assert "refs/heads/red-first-probe" in git(world.root, "for-each-ref"), "a neighbour's branch was deleted"
     assert len(git(world.root, "worktree", "list").splitlines()) == 1
+
+
+def test_an_existing_ref_moved_while_the_named_test_ran_fails_the_proof(world: World) -> None:
+    """Phase 6, F-7. Planted fault: the snapshot kept ref names only, so a moved branch passed as red first."""
+    repair_world(world)
+    git(world.root, "branch", "keep-me")
+    git(world.root, "commit", "--quiet", "--allow-empty", "-m", "advance past keep-me")
+    move_test = (
+        "import subprocess\nfrom pathlib import Path\n\n\ndef test_move():\n"
+        '    subprocess.run(["git", "branch", "-f", "keep-me", "HEAD"], check=True)\n'
+        '    value = (Path(__file__).resolve().parent.parent / "src" / "app.py").read_text(encoding="utf-8")\n'
+        '    assert "value = 2" in value\n'
+    )
+    world.script(
+        claude=[
+            repair_step(
+                stdout="L1-1: fixed — tests/test_move.py::test_move",
+                plant={"src/app.py": "value = 2\n", "tests/test_move.py": move_test},
+            ),
+            repair_step(),
+        ],
+        make=[{"stdout": "green\n"}] * 2,
+    )
+    assert world.run("repair") == 0
+    prompt = world.calls("claude")[1]["prompt_file"]
+    assert "refs changed while the named test ran: refs/heads/keep-me" in prompt, prompt
 
 
 def test_a_failed_worktree_remove_leaves_no_dead_entry_and_is_named(
@@ -3791,6 +3820,101 @@ def test_a_failed_repair_puts_every_status_back_as_it_stood(world: World) -> Non
     assert {row[0]: row for row in phase6}["F-1"][7] == "taken — crit 18"
     assert "fixed — tests/test_fix.py::test_fix" not in world.text()
     assert "taken — test_a" in world.record().read_text(encoding="utf-8")
+
+
+def test_a_credential_refusal_puts_the_original_statuses_back(world: World) -> None:
+    """Phase 6, F-8. Planted fault: the credential refusal left the model-written `fixed` Status in findings.md."""
+    repair_world(world)
+    world.write_findings(VERDICT, phase6_block([phase6_cells("F-1", "taken — crit 18", "phase finding")]))
+    vandal = (
+        "# Findings — demo\n\n"
+        + VERDICT
+        + "\n\n"
+        + phase6_block([phase6_cells("F-1", "fixed — tests/test_fix.py::test_fix", "phase finding")])
+        + "\n"
+    )
+    world.script(
+        claude=[
+            repair_step(
+                stdout="F-1: fixed — tests/test_fix.py::test_fix",
+                plant={
+                    "src/app.py": f"credential = '{KEY}'\n",
+                    "plans/changes/demo/findings.md": vandal,
+                },
+            ),
+            {"stdout": "must not run"},
+        ],
+        make=[{"stdout": "must not run"}],
+    )
+    assert world.run("repair") == 2
+    _, phase6 = stage2.findings_rows(world.text())
+    assert {row[0]: row for row in phase6}["F-1"][7] == "taken — crit 18"
+    assert "fixed — tests/test_fix.py::test_fix" not in world.text()
+
+
+def test_an_added_copy_of_a_rejected_row_fails_the_attempt(world: World) -> None:
+    """Phase 6, F-9. Planted fault: row preservation by membership let an identical extra copy through."""
+    repair_world(world)
+    both_lines = "L1-1: fixed — tests/test_fix.py::test_fix\nF-1: fixed — tests/test_fix.py::test_fix"
+    rows_ = [
+        phase6_cells("F-1", "taken — crit 21", "phase finding"),
+        phase6_cells("F-2", "rejected — covered elsewhere", "phase rejection"),
+    ]
+    world.write_findings(VERDICT, phase6_block(rows_))
+    vandal = (
+        "# Findings — demo\n\n"
+        + VERDICT
+        + "\n\n"
+        + phase6_block([*rows_, phase6_cells("F-2", "rejected — covered elsewhere", "phase rejection")])
+        + "\n"
+    )
+    world.script(
+        claude=[
+            repair_step(
+                stdout=both_lines,
+                plant={
+                    "src/app.py": "value = 2\n",
+                    "tests/test_fix.py": FIX_TEST,
+                    "plans/changes/demo/findings.md": vandal,
+                },
+            ),
+            repair_step(stdout=both_lines),
+        ],
+        make=[{"stdout": "green\n"}] * 2,
+    )
+    assert world.run("repair") == 0
+    prompt = world.calls("claude")[1]["prompt_file"]
+    assert "F-2: findings.md holds a phase-6 row that stood nowhere before the repair" in prompt, prompt
+    committed = git(world.root, "show", "HEAD:plans/changes/demo/findings.md")
+    assert committed.count("phase rejection") == 1
+
+
+def test_a_removed_audit_line_fails_the_attempt(world: World) -> None:
+    """Phase 6, F-11. Planted fault: a model that dropped this call's audit line was accepted and checkpointed."""
+    repair_world(world)
+    both_lines = "L1-1: fixed — tests/test_fix.py::test_fix\nF-1: fixed — tests/test_fix.py::test_fix"
+    rows_ = [phase6_cells("F-1", "taken — crit 21", "phase finding")]
+    world.write_findings(VERDICT, phase6_block(rows_))
+    vandal = "# Findings — demo\n\n" + VERDICT + "\n\n" + phase6_block(rows_) + "\n"
+    world.script(
+        claude=[
+            repair_step(
+                stdout=both_lines,
+                plant={
+                    "src/app.py": "value = 2\n",
+                    "tests/test_fix.py": FIX_TEST,
+                    "plans/changes/demo/findings.md": vandal,
+                },
+            ),
+            repair_step(stdout=both_lines),
+        ],
+        make=[{"stdout": "green\n"}] * 2,
+    )
+    assert world.run("repair") == 0
+    prompt = world.calls("claude")[1]["prompt_file"]
+    assert "findings.md no longer holds the audit line of this call" in prompt, prompt
+    committed = git(world.root, "show", "HEAD:plans/changes/demo/findings.md")
+    assert committed.count("Stage-2 call,") == 2, committed
 
 
 def test_the_record_is_marked_only_after_the_checkpoint_commit(world: World, monkeypatch: pytest.MonkeyPatch) -> None:

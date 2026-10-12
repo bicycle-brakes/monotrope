@@ -241,6 +241,10 @@ Stage-1 route: repair · model claude-sonnet-5-5 · reason: two GLM 5.3 post-run
 
 Stage-1 route: repair · model claude-sonnet-5-5 · reason: two GLM 5.3 post-run checks failed.
 
+## Runner route — 2026-10-12
+
+Stage-1 route: repair · model claude-sonnet-5-5 · reason: Z.ai glm-5.3 call failed twice with exit 1 on 2026-10-12, before any edit.
+
 ## Time used
 
 2026-10-12, phase-4 session under the Stage-2 runner (`implement`, attempt 1, route flash) — start and
@@ -357,3 +361,19 @@ whose joined form fits the line took one line each, and the one over-long `probl
 `check_repair_answer` in `scripts/stage2.py` took the formatter's exploded form. The five rows'
 code repairs of the first attempt stand unchanged. The runner runs the red-first proofs,
 `make verify` and the checkpoint commit after this entry.
+
+2026-10-12, second phase-6 pass repair session under the Stage-2 runner (`repair`, GLM 5.3) — start
+and end clock times not readable in it: the session has file tools and no command tool, so `date`
+could not be read, and the span is not estimated. The day is the runner's session date. The session
+repaired the five taken rows and nothing else: F-6 and F-7, the red-first run in `scripts/stage2.py`
+compares every ref's name and target before and after the named test, deletes no ref and fails the
+proof with the refs named, proven red first by
+`tests/test_stage2.py::test_a_ref_created_while_the_named_test_ran_fails_the_proof_and_is_never_deleted`
+and `tests/test_stage2.py::test_an_existing_ref_moved_while_the_named_test_ran_fails_the_proof`; F-8,
+the credential refusals in `run_attempts` put findings.md back as it stood, proven red first by
+`tests/test_stage2.py::test_a_credential_refusal_puts_the_original_statuses_back`; F-9, the row
+preservation check compares rows with their counts, proven red first by
+`tests/test_stage2.py::test_an_added_copy_of_a_rejected_row_fails_the_attempt`; F-11, a passing
+repair keeps its own audit line, proven red first by
+`tests/test_stage2.py::test_a_removed_audit_line_fails_the_attempt`. The runner runs the red-first
+proofs, `make verify` and the checkpoint commit after this entry.

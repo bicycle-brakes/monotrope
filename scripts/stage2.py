@@ -115,6 +115,7 @@ import shutil
 import subprocess
 import sys
 import tempfile
+from collections import Counter
 from dataclasses import dataclass
 from pathlib import Path
 
@@ -1730,6 +1731,12 @@ def red_first_python(root: Path) -> str:
     return str(venv) if (venv.is_file() and os.access(venv, os.X_OK)) else sys.executable
 
 
+def _ref_targets(root: Path) -> dict[str, str]:
+    """Every ref of the repository, remote-tracking ones included, with the object it names."""
+    listing = _git_output(root, "for-each-ref", "--format=%(refname) %(objectname)")
+    return {name: target for name, _, target in (line.partition(" ") for line in listing.splitlines() if line)}
+
+
 def red_first(root: Path, baseline: str, test: str, key: str | None) -> str | None:
     """Run one named test against the baseline's code in a temporary git worktree; None when it was red.
 
@@ -1739,8 +1746,9 @@ def red_first(root: Path, baseline: str, test: str, key: str | None) -> str | No
     exits 1 too, and reading it as red would accept a run in which the named test never ran (phase 6,
     F-1). Exit 1 or 2 is red. The clean-up deletes the temporary directory before it prunes, so a
     failed `git worktree remove` leaves no dead entry behind, and a failed removal is named in the
-    returned problem; refs the named test created in the shared repository are deleted too, so branch
-    state stands as before (phase 6, F-4).
+    returned problem. Every ref's name and target is compared before and after: a difference fails the
+    proof with the refs named and nothing is deleted, so another session's branch is never touched
+    (phase 6, F-6 and F-7).
     """
     file, _, function = test.partition("::")
     tree = None
@@ -1748,7 +1756,8 @@ def red_first(root: Path, baseline: str, test: str, key: str | None) -> str | No
     outcome = None
     removal = None
     added = False
-    refs_before: set[str] | None = None
+    refs_before: dict[str, str] | None = None
+    refs_changed: list[str] = []
     try:
         tmp = tempfile.mkdtemp(prefix="stage2-red-")
         tree = Path(tmp) / "tree"
@@ -1769,11 +1778,10 @@ def red_first(root: Path, baseline: str, test: str, key: str | None) -> str | No
                     f"{test}: the red-first checkout could not take the attempt's tests ({scrub(str(error), key)})"
                 )
         if outcome is None:
-            # Branches are shared with the temporary checkout, so only a snapshot taken now tells the
-            # clean-up which refs the named test itself created; a failed snapshot fails the attempt,
+            # Branches are shared with the temporary checkout; a failed snapshot fails the attempt,
             # because branch state could not be proven preserved.
             try:
-                refs_before = set(_git_output(root, "for-each-ref", "--format=%(refname)").split())
+                refs_before = _ref_targets(root)
             except Refused as error:
                 outcome = f"{test}: the red-first ref snapshot failed ({scrub(str(error), key)})"
         if outcome is None:
@@ -1822,15 +1830,20 @@ def red_first(root: Path, baseline: str, test: str, key: str | None) -> str | No
             # Only after the directory is gone: a prune over a present directory keeps a failed removal's entry.
             subprocess.run(["git", "-C", str(root), "worktree", "prune"], capture_output=True, check=False)
         if refs_before is not None:
-            # A test that fails before its own clean-up leaves its branch behind: the checkout is gone,
-            # the ref stays in the shared repository. Delete exactly what appeared since the snapshot.
+            # Nothing is deleted or reset here: another session may create a branch meanwhile, and only
+            # the comparison tells a change of the run from one of a neighbour. Any difference in a
+            # ref's name or target fails the proof with the refs named (phase 6, F-6 and F-7).
             try:
-                refs_now = set(_git_output(root, "for-each-ref", "--format=%(refname)").split())
-            except Refused:
-                refs_now = None
-            if refs_now is not None:
-                for ref in sorted(refs_now - refs_before):
-                    subprocess.run(["git", "-C", str(root), "update-ref", "-d", ref], capture_output=True, check=False)
+                refs_now = _ref_targets(root)
+            except Refused as error:
+                refs_changed = [f"the ref listing failed ({scrub(str(error), key)})"]
+            else:
+                refs_changed = sorted(
+                    ref for ref in refs_before.keys() | refs_now.keys() if refs_before.get(ref) != refs_now.get(ref)
+                )
+    if refs_changed:
+        named = scrub(f"{test}: refs changed while the named test ran: {', '.join(refs_changed)}", key)
+        outcome = f"{outcome}\n{named}" if outcome else named
     if removal is not None:
         named = scrub(f"{test}: {removal}", key)
         outcome = f"{outcome}\n{named}" if outcome else named
@@ -1867,6 +1880,7 @@ def check_repair_answer(
     baseline: str,
     key: str | None,
     before: tuple[list[list[str]], list[list[str]]],
+    audit_line: str | None = None,
 ) -> tuple[dict[str, str], list[str]]:
     """Read an answer's fixed lines: the Status each taken row takes, or the problems that fail the attempt.
 
@@ -1907,7 +1921,10 @@ def check_repair_answer(
         problems.append(f"{ident}: no taken row carries this id")
     if problems:
         return {}, [scrub(problem, key) for problem in problems]
-    released_now, phase6_now = findings_rows(ctx.findings.read_text(encoding="utf-8") if ctx.findings.exists() else "")
+    findings_now = ctx.findings.read_text(encoding="utf-8") if ctx.findings.exists() else ""
+    released_now, phase6_now = findings_rows(findings_now)
+    if audit_line and audit_line not in findings_now.splitlines():
+        problems.append("findings.md no longer holds the audit line of this call; a passing repair keeps it")
     for _place, row in taken:
         ident, fix = row[0], fixes[row[0]]
         if fix.startswith("fixed — not a test"):
@@ -1925,14 +1942,13 @@ def check_repair_answer(
         ("released", before[0], released_now),
         ("phase-6", before[1], phase6_now),
     ):
-        for row in rows_before:
-            if row not in rows_now:
-                problems.append(
-                    f"{row[0]}: the {place} row no longer stands in findings.md as it stood before the repair"
-                )
-        for row in rows_now:
-            if row not in rows_before:
-                problems.append(f"{row[0]}: findings.md holds a {place} row that stood nowhere before the repair")
+        # Rows are compared with their counts: an added or a removed identical copy fails too (F-9).
+        counts_before = Counter(tuple(row) for row in rows_before)
+        counts_now = Counter(tuple(row) for row in rows_now)
+        for row in (counts_before - counts_now).elements():
+            problems.append(f"{row[0]}: the {place} row no longer stands in findings.md as it stood before the repair")
+        for row in (counts_now - counts_before).elements():
+            problems.append(f"{row[0]}: findings.md holds a {place} row that stood nowhere before the repair")
     if problems:
         return {}, [scrub(problem, key) for problem in problems]
     for _place, row in taken:
@@ -2107,6 +2123,8 @@ def run_attempts(
             # the second snapshot can write the changed files into the object store (spec, criterion 9).
             exposed = remove_changed_credential(root, key, ignored_before)
             if exposed:
+                if kept is not None:
+                    restore_findings(kept)
                 raise Refused(credential_message(exposed))
         if unmeasured is None:
             # Both snapshots stand around the model call alone: the runner's own writes - the audit
@@ -2142,6 +2160,8 @@ def run_attempts(
             # The gate runs repository code the model just edited: scan again after it.
             exposed = remove_changed_credential(root, key, ignored_before)
             if exposed:
+                if kept is not None and not problems:
+                    restore_findings(kept)
                 raise Refused(credential_message(exposed))
         if cannot_start is not None:
             raise CallFailed(
@@ -2258,9 +2278,19 @@ def repair(root: Path, change: str, stage2_off: str | None = None) -> None:
         routes = [(SONNET, None, "stage-1", stage2_off)]
     fixes: dict[str, str] = {}
     rows_before = findings_rows(ctx.findings.read_text(encoding="utf-8") if ctx.findings.exists() else "")
+    standing: dict[str, str] = {}
+
+    def snapshot() -> str:
+        text = ctx.findings.read_text(encoding="utf-8") if ctx.findings.exists() else ""
+        standing["text"] = text
+        return text
 
     def check(answer: str) -> list[str]:
-        found, problems = check_repair_answer(ctx, answer, taken, baseline, key, rows_before)
+        # The last audit line of the snapshot is this attempt's own: it was appended just before it.
+        audits = [line for line in standing.get("text", "").splitlines() if line.startswith("Stage-2 call,")]
+        found, problems = check_repair_answer(
+            ctx, answer, taken, baseline, key, rows_before, audits[-1] if audits else None
+        )
         if not problems:
             fixes.clear()
             fixes.update(found)
@@ -2283,7 +2313,7 @@ def repair(root: Path, change: str, stage2_off: str | None = None) -> None:
         answer_check=check,
         before_commit=lambda: mark_repaired_findings(ctx, taken, fixes),
         after_commit=lambda: mark_repaired_record(change, taken, fixes),
-        snapshot_findings=lambda: ctx.findings.read_text(encoding="utf-8") if ctx.findings.exists() else "",
+        snapshot_findings=snapshot,
         restore_findings=lambda text: ctx.findings.write_text(text, encoding="utf-8"),
     )
 
