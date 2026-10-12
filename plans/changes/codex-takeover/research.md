@@ -93,3 +93,26 @@ Stage-2 call, 2026-10-12: explore · attempt 1 · route flash · endpoint glm-co
 
 
 *Note by the orchestrating session (2026-10-12): a German closing remark was removed (house rule 1). Question 4, a ranking of candidates by saving and rule change, is not answered above; it is open for the next session.*
+
+## Ranking of candidates (question 4) — orchestrating session, 2026-10-12
+
+Written by the orchestrating Claude Code session from the findings above, not
+by the runner. No candidate can be ranked by measured saving: the runner
+records no tokens for any vendor (`scripts/stage2_runs.py`,
+`docs/research/2026-10-08-stage2-three-runs.md`), and no Claude figure per
+phase is recorded either. The order below is by the size of the Claude work a
+candidate removes, as the routing table describes it, against the size of the
+rule change it needs. A decision on any of them is the maintainer's.
+
+| # | Candidate | Claude work it removes | Rule change it needs | Files |
+|---|---|---|---|---|
+| 0 | Measure first: the runner records tokens per call, for every vendor | none by itself; it turns every row below from a guess into a figure | none (no routing moves) | `scripts/stage2.py` (call log), `scripts/stage2_runs.py`, `tests/test_stage2.py` |
+| 1 | Repairs of taken review rows move off Claude | the Sonnet repair sub-agents of every review loop and phase 6 | a repair verb; GLM is already framed for it (bead coding-harness-g2f); Codex would need a writing headless call, which `run_codex` does not allow (`sandbox_mode="read-only"`) and an ADR 0007 amendment | `scripts/stage2.py`, `tests/test_stage2.py`, `prompts/04b-review-loop.md`, `docs/WORKFLOW.md` §4 |
+| 2 | Draft spec and plan in a Codex interactive session, Claude checks | the largest single Claude cost per change (phases 2, 2b, 3 at effort `xhigh`) | none to start the session (ADR 0012); but Codex then reviews its own spec in phase 2a, which removes the independence ADR 0011 decision 2 relies on — a maintainer decision and a routing change in `docs/WORKFLOW.md` §3 | `prompts/02-spec.md`, `prompts/03-plan.md` (`**Model:**` lines), `docs/WORKFLOW.md` §3/§4, an ADR amending 0007/0011 |
+| 3 | Commit and pull-request text, handover drafts | small: phase 7 already runs on Haiku 4.5 | a new Codex verb for a writing call | `scripts/stage2.py`, `prompts/07-commit.md` |
+| — | Stays with Claude or the maintainer | orchestration (the session itself), the interview (1a), ADR answers, merges, tracker writes | — | — |
+
+Reading: candidate 0 is the precondition for judging the others and changes no
+rule; candidate 1 is the largest saving for the smallest rule change, and it
+is already a bead (coding-harness-g2f) on GLM, without Codex; candidate 2
+saves the most but trades away the independent spec review.
