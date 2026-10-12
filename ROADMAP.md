@@ -9,7 +9,7 @@ checks whether Now is still true. This file becomes a kit template only
 after it stays true through two handovers; if a handover finds it stale
 twice, it is removed.
 
-Last checked: 2026-10-05, `main` at `87daf91`. Appetites are first proposals,
+Last checked: 2026-10-11, `main` at `a6b7150`. Appetites are first proposals,
 set by the agent that drafted this file; the maintainer's merge confirms or
 changes them.
 
@@ -19,16 +19,26 @@ changes them.
    design and its review findings, and a checker holds class, Definition of
    Done and the design duty. Why: specs and findings are written by hand from
    memory today, and nothing checks that a change has what its class owes.
-   Appetite: 3 sessions. Beads: template bundle (coding-harness-9qo),
-   change-artefact validator (coding-harness-jc3), findings as checked data
-   (coding-harness-4me).
+   Appetite: 3 sessions. The template bundle is done (coding-harness-9qo,
+   closed). Beads: change-artefact validator (coding-harness-jc3), findings
+   as checked data (coding-harness-4me; stays a table, a gate is open).
 2. **LakeSwitch reads Coding Harness.** LakeSwitch takes the workflow from a
    pinned Coding Harness release instead of its own copy, and drops its own
    ADR-answer pilot. Why: two copies of one rule set drift, and LakeSwitch's
-   pilot expires on 2026-12-15. Appetite: 5 sessions. Beads: foundation first
-   slice (coding-harness-s6i), project file and locked dependencies
-   (coding-harness-ei0), release builder and pin (coding-harness-dj9), the
-   ADR-answer principle (coding-harness-3ar).
+   pilot expires on 2026-12-15. Appetite: 5 sessions. Locked dependencies are
+   done (coding-harness-ei0, closed). Order, decided 2026-10-11: foundation
+   first slice (coding-harness-s6i), then release builder and pin
+   (coding-harness-dj9), then the ADR-answer principle with the full pin
+   (coding-harness-3ar; plan in
+   `docs/research/2026-10-11-adr-answer-pin-plan.md`).
+3. **Stage 2 that can be trusted.** The foreign-model runner stays live, and
+   its checks cannot be bypassed or lost. Why: on 2026-10-11 a model repaired
+   a red run by deleting tests and two failed attempts left no trace. Appetite:
+   3 sessions. Beads: every criterion names its proof (coding-harness-909,
+   ADR 0013 awaits the maintainer's merge), diagnostics of failed attempts
+   (coding-harness-cit), an ADR names its owning change (coding-harness-afa),
+   review rounds until one finds nothing (coding-harness-dx0), live view of a
+   round (coding-harness-uco).
 
 ## Next
 
@@ -36,10 +46,11 @@ changes them.
   matched messages with their tests, the rule set, German identifiers.
   Moved from Now on 2026-10-05 to make room for Hermes. Bead: translate the
   remaining German (coding-harness-yim).
-- **Stage 2 live.** Codex and GLM review Coding Harness changes before the
-  merge; the first three runs are measured. Waits for the maintainer at the
-  laptop (permission for `codex exec`, finding F-12, merging PR #60). Beads:
-  coding-harness-bc9, coding-harness-kw0.
+- **Stage 2 on Pi.** The interactive session and GLM runs go through Pi
+  instead of Claude Code. Waits for the maintainer's Mac smoke test planned
+  for 2026-10-14. Beads: session verb on Pi (coding-harness-351), GLM
+  through Pi (coding-harness-rwa). Stage 2 itself is live (coding-harness-bc9
+  and coding-harness-kw0, closed).
 
 ## Later
 

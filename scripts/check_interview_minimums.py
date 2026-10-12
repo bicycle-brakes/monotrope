@@ -29,7 +29,15 @@ The diff is the `stage2.change_diff()` states — `git diff <base>` covers
 committed, staged and unstaged paths, untracked files come from
 `ls-files --others` — restricted to `docs/adr/**`, attributed to the owning
 change: the `plans/changes/<name>/` paths the same diff touches (F-5). A diff
-that touches an ADR and owns no change, or more than one, is a finding.
+that touches an ADR and owns no change, or more than one, is a finding. A
+change folder the diff touches through its `plan.md` alone is not an owner:
+a plan edit is a ledger migration, not the home of an ADR's answers
+(criterion-test-ledger, bead coding-harness-909, 2026-10-11 — one ADR draft
+lands beside four migrated plans), and the five answers still answer for
+exactly one folder. When such a plan-only folder sits beside another owner
+the paths cannot tell which one the ADR belongs to: the ADR text naming
+exactly one candidate decides, otherwise the run reports both (INTERIM,
+loop row L3-1; bead coding-harness-afa replaces the guess).
 
 Base rule (Q-7): a genuine checkout of `main` compares against the first
 parent (`HEAD^`); every other state — feature branch, detached HEAD,
@@ -233,18 +241,60 @@ def _has_reasoned_skip(skips: list[dict[str, str]]) -> bool:
 # ---------------------------------------------------------------------------
 
 
+def _folders_named_by_adrs(root: Path, adr_paths: set[str], candidates: set[str]) -> set[str]:
+    """The candidate change folders whose name appears in a changed ADR's text
+    (INTERIM, loop row L3-1; bead coding-harness-afa replaces it)."""
+    text = ""
+    for rel in sorted(adr_paths):
+        path = root / rel
+        if path.is_file():
+            text += path.read_text(encoding="utf-8", errors="replace") + "\n"
+    return {c for c in candidates if re.search(rf"(?<![\w-]){re.escape(c)}(?![\w-])", text)}
+
+
 def measure(root: Path, only: str | None = None) -> tuple[list[str], int]:
     """Findings and the number of changes measured; raises CannotMeasure."""
     changed = _changed_paths(root)
     adr_paths = {p for p in changed if p.startswith(ADR_DIR + "/")}
     owning: set[str] = set()
+    plan_only: set[str] = set()
     for path in changed:
         if not path.startswith(CHANGES_DIR + "/"):
             continue
         parts = path.split("/")
-        # plans/changes/<name>/<file>: the owning folder sits at parts[2]
+        # plans/changes/<name>/<file>: the owning folder sits at parts[2].
+        # INTERIM heuristic: a folder the diff touches through plan.md alone is
+        # a ledger migration (criterion-test-ledger, 2026-10-11), so it owns
+        # the ADR only when no other folder does; bead coding-harness-afa
+        # replaces this guess with an explicit owner statement.
         if len(parts) > 3 and parts[2] != ARCHIVE:
-            owning.add(parts[2])
+            (plan_only if parts[3] == "plan.md" else owning).add(parts[2])
+    # A folder touched beyond plan.md owns; its plan.md is not a second role
+    # (review-loop row F-3).
+    plan_only -= owning
+    # A plan-only folder counts again only when nothing else owns the ADR
+    # (loop row L2-1). Beside other owners it may be a ledger migration or the
+    # ADR's real home, and the path list cannot tell which (loop row L3-1):
+    # the ADR text decides when it names exactly one candidate folder; if it
+    # does not, the run reports both candidates instead of guessing green.
+    if adr_paths and plan_only and owning:
+        named = _folders_named_by_adrs(root, adr_paths, owning | plan_only)
+        if len(named) == 1:
+            owning = named
+        else:
+            both = ", ".join(sorted(owning | plan_only))
+            return (
+                [
+                    f"{len(adr_paths)} ADR path(s) changed under {ADR_DIR}/ and the diff "
+                    f"touches change folder(s) {', '.join(sorted(owning))} beyond plan.md and "
+                    f"{', '.join(sorted(plan_only))} through plan.md alone — the paths cannot "
+                    f"say which of {both} owns the ADR (INTERIM guess, bead "
+                    "coding-harness-afa); name the owning change folder in the ADR text "
+                    "(exactly one of them), or split the ADR into its own pull request"
+                ],
+                0,
+            )
+    owning = owning or plan_only
 
     if adr_paths and len(owning) != 1:
         whom = ", ".join(sorted(owning)) or "none"
@@ -253,7 +303,13 @@ def measure(root: Path, only: str | None = None) -> tuple[list[str], int]:
                 f"{len(adr_paths)} ADR path(s) changed under {ADR_DIR}/ but the diff "
                 f"owns {len(owning)} change folder(s): {whom} — an ADR change runs "
                 "inside exactly one change folder under plans/changes/, whose "
-                "decisions.md carries the five answers"
+                "decisions.md carries the five answers; "
+                + (
+                    "the diff touches no change folder, so add the folder that owns "
+                    "the ADR (its decisions.md carrying the five answers)"
+                    if not owning
+                    else f"keep only one of {whom} in this diff, or split the ADR into its own pull request"
+                )
             ],
             0,
         )

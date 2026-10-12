@@ -158,6 +158,15 @@ gates:
     placement: both
     reason: A feature that merged without its maintainer's answers is the guess phase 1a exists to prevent (maintainer, 2026-10-08); the gate counts distinct answered records per class, sees ADR paths in every diff state, and holds the stock exempt before its cut-off.
 
+  - id: criterion-ledger
+    title: Every test a plan names for an acceptance criterion still exists
+    command: python3 scripts/check_criterion_ledger.py
+    job: verify
+    enforcement: block
+    floor: false
+    placement: both
+    reason: Deleting 29 of 30 criterion tests left make verify green (bead coding-harness-909), so every test a plan's criterion ledger names must still exist, while the change is live and after it is archived (ADR 0013).
+
   - id: gate-schema
     title: This gate file satisfies its own schema
     command: python3 scripts/ci_gates.py --check-schema

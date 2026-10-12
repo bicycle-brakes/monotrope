@@ -1,0 +1,15 @@
+schema_version: 1
+change: criterion-test-ledger
+question: adr
+answer: 'yes'
+reason: The criterion-proof rule holds beyond this repository, in LakeSwitch and wherever
+  the kit carries the workflow, where a gate alone could be switched off unnoticed,
+  and it is a trust rule against models that repair a red test by deleting it.
+shown:
+  proposed: 'no'
+  proposal_reason: One gate in the shape of the existing check scripts, a plan section
+    described in the phase-3 prompt and the text check scripts/ramp_valves.py already
+    makes; the rule itself is the maintainer's recorded answers, and no subsystem,
+    interface or trust boundary changes.
+answered_by: framework-architect
+answered_at: 2026-10-11
