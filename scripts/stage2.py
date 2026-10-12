@@ -1490,6 +1490,9 @@ def verify_attempt(root: Path, plan: Path, baseline_time: str, key: str | None =
 
     Preparation writes to the tree and executes its registry renderer. Return bounded
     diagnostics for failed preparation or postconditions, naming the gates that blocked.
+    A `make verify` that cannot be started at all (`launch` raises `CallFailed`) is such a
+    postcondition too: its scrubbed, bounded message comes back as a diagnostic, so the caller
+    never sees this function raise `CallFailed` for it.
     """
     env = foreign_env(
         {
@@ -1501,8 +1504,12 @@ def verify_attempt(root: Path, plan: Path, baseline_time: str, key: str | None =
     preparation = prepare_derived(root, env, key)
     if preparation:
         return preparation
-    done = launch(["make", "verify"], root, env)
     problems = []
+    try:
+        done = launch(["make", "verify"], root, env)
+    except CallFailed as error:
+        lines = scrub(str(error), key).splitlines() or ["make could not be started"]
+        return [f"`make verify` could not be run\n" + "\n".join(_shrink(lines, TAIL_LINES))]
     if done.returncode != 0:
         output = (done.stdout or "") + (done.stderr or "")
         # verify_all.sh frames gates on standard output; a gate's standard error arrives unframed after them.

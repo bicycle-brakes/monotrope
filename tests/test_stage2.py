@@ -1887,6 +1887,31 @@ def test_when_every_attempt_fails_each_keeps_its_block_and_the_exit_names_findin
     assert "plans/changes/demo/findings.md" in capsys.readouterr().err
 
 
+def test_a_verify_that_cannot_start_still_leaves_the_block_and_the_findings_exit_line(
+    world: World, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+) -> None:
+    # Criteria 1, 6 and 8. Planted fault: a CallFailed from verify_attempt escapes `implement` untouched.
+    original_launch = stage2.launch
+
+    def no_make(command, root, env, secret=None, **kwargs):
+        if command[:2] == ["make", "verify"]:
+            raise stage2.CallFailed(f"make could not be started: [Errno 2] no such file {KEY}")
+        return original_launch(command, root, env, secret, **kwargs)
+
+    monkeypatch.setattr(stage2, "launch", no_make)
+    world.script(claude=[{"stdout": "one"}, {"stdout": "two"}, {"stdout": "three"}], make=[{"stdout": "green"}] * 3)
+    assert world.run("implement") == 1
+    blocks_ = quote_blocks(world.text())
+    assert [block[0] for block in blocks_] == [
+        "Attempt 1 (flash) failed its post-run checks.",
+        "Attempt 2 (flash-repair) failed its post-run checks.",
+        "Attempt 3 (stage-1) failed its post-run checks.",
+    ]
+    assert "make could not be started" in "\n".join(blocks_[0])
+    assert not any(KEY[i : i + 8] in world.text() for i in range(len(KEY) - 7))
+    assert "plans/changes/demo/findings.md" in capsys.readouterr().err
+
+
 def test_a_restore_after_a_dead_model_keeps_the_earlier_blocks(world: World) -> None:
     # Criterion 7. Planted fault: the blocks kept where the restore reaches.
     world.script(

@@ -161,6 +161,7 @@ make verify
 - 4: written tests/test_stage2.py::test_a_failure_after_the_first_snapshot_says_why_and_changes_nothing_else — planted fault: only the first snapshot's failure is caught
 - 5: written tests/test_stage2.py::test_a_passing_attempt_leaves_only_its_audit_line — planted fault: a block written for every attempt
 - 6: written tests/test_stage2.py::test_when_every_attempt_fails_each_keeps_its_block_and_the_exit_names_findings — planted fault: the loop raises before the last block
+- 6: written tests/test_stage2.py::test_a_verify_that_cannot_start_still_leaves_the_block_and_the_findings_exit_line — planted fault: a CallFailed from verify_attempt escapes `implement` untouched
 - 7: written tests/test_stage2.py::test_a_restore_after_a_dead_model_keeps_the_earlier_blocks — planted fault: the blocks kept where the restore reaches
 - 8: written tests/test_stage2.py::test_a_block_holds_no_fragment_of_the_key — planted fault: the file list or the diagnostics written unscrubbed
 - 9: written tests/test_stage2.py::test_measuring_files_stores_no_key_the_model_wrote — planted fault: the second snapshot taken before the credential scan
