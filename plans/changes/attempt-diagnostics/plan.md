@@ -153,27 +153,27 @@ make verify
 
 ## Criterion ledger
 
-- 1: written tests/test_stage2.py::test_a_failed_attempt_quotes_its_diagnostics_below_its_audit_line — planted fault: the blocks are written once, after the last audit line
-- 1: written tests/test_stage2.py::test_a_diagnostic_with_a_blank_line_before_its_stderr_tail_is_compared_whole — planted fault: the entry is read back out of the prompt only up to its first blank line
-- 2: written tests/test_stage2.py::test_each_failed_attempt_lists_only_the_files_its_model_changed — planted fault: a snapshot taken at the baseline, before the route block or after verify
-- 3: written tests/test_stage2.py::test_a_failed_attempt_that_changed_nothing_says_so — planted fault: an empty list renders as a bare heading
-- 4: written tests/test_stage2.py::test_an_unmeasured_file_list_says_why_and_changes_nothing_else — planted fault: a snapshot failure propagates and stops the run
-- 4: written tests/test_stage2.py::test_an_unmeasured_reason_stays_one_line_with_one_full_stop — planted fault: the raw git error is put into the sentence as it is
-- 4: written tests/test_stage2.py::test_a_malformed_numstat_record_says_not_measured_and_the_run_goes_on — planted fault: a record without two counts raises ValueError and ends the run
-- 4: written tests/test_stage2.py::test_a_failure_after_the_first_snapshot_says_why_and_changes_nothing_else — planted fault: only the first snapshot's failure is caught
-- 5: written tests/test_stage2.py::test_a_passing_attempt_leaves_only_its_audit_line — planted fault: a block written for every attempt
-- 6: written tests/test_stage2.py::test_when_every_attempt_fails_each_keeps_its_block_and_the_exit_names_findings — planted fault: the loop raises before the last block
-- 6: written tests/test_stage2.py::test_a_verify_that_cannot_start_still_leaves_the_block_and_the_findings_exit_line — planted fault: a CallFailed from the verify launch escapes `implement` untouched, or becomes retry diagnostics so that further model attempts start
-- 7: written tests/test_stage2.py::test_a_restore_after_a_dead_model_keeps_the_earlier_blocks — planted fault: the blocks kept where the restore reaches
-- 8: written tests/test_stage2.py::test_a_block_holds_no_fragment_of_the_key — planted fault: the file list or the diagnostics written unscrubbed
-- 9: written tests/test_stage2.py::test_measuring_files_stores_no_key_the_model_wrote — planted fault: the second snapshot taken before the credential scan
-- 9: written tests/test_stage2.py::test_a_fallback_attempt_that_writes_the_key_leaves_no_blob_with_it — planted fault: the credential scan before the second snapshot skipped on the Sonnet route
-- 10: written tests/test_stage2.py::test_measuring_files_leaves_index_stash_and_refs_alone — planted fault: the snapshot written through the real index
-- 11: written tests/test_stage2.py::test_quoted_reader_lines_count_for_no_reader — planted fault: lines prefixed after a split at `\n` only
-- 12: written tests/test_stage2.py::test_a_quoted_release_heading_or_no_loop_line_moves_no_release — planted fault: today's substring checks
-- 13: written tests/test_stage2.py::test_a_long_diagnostic_line_is_cut_with_a_marker — planted fault: no cut, or a cut without its marker
-- 14: written tests/test_stage2.py::test_a_long_file_list_is_cut_with_a_count — planted fault: no cap on the list
-- 15: written tests/test_stage2.py::test_a_failed_stage2_off_attempt_leaves_its_block_without_reading_the_key — planted fault: the block reads the key to scrub it
+- 1: tests/test_stage2.py::test_a_failed_attempt_quotes_its_diagnostics_below_its_audit_line — planted fault: the blocks are written once, after the last audit line
+- 1: tests/test_stage2.py::test_a_diagnostic_with_a_blank_line_before_its_stderr_tail_is_compared_whole — planted fault: the entry is read back out of the prompt only up to its first blank line
+- 2: tests/test_stage2.py::test_each_failed_attempt_lists_only_the_files_its_model_changed — planted fault: a snapshot taken at the baseline, before the route block or after verify
+- 3: tests/test_stage2.py::test_a_failed_attempt_that_changed_nothing_says_so — planted fault: an empty list renders as a bare heading
+- 4: tests/test_stage2.py::test_an_unmeasured_file_list_says_why_and_changes_nothing_else — planted fault: a snapshot failure propagates and stops the run
+- 4: tests/test_stage2.py::test_an_unmeasured_reason_stays_one_line_with_one_full_stop — planted fault: the raw git error is put into the sentence as it is
+- 4: tests/test_stage2.py::test_a_malformed_numstat_record_says_not_measured_and_the_run_goes_on — planted fault: a record without two counts raises ValueError and ends the run
+- 4: tests/test_stage2.py::test_a_failure_after_the_first_snapshot_says_why_and_changes_nothing_else — planted fault: only the first snapshot's failure is caught
+- 5: tests/test_stage2.py::test_a_passing_attempt_leaves_only_its_audit_line — planted fault: a block written for every attempt
+- 6: tests/test_stage2.py::test_when_every_attempt_fails_each_keeps_its_block_and_the_exit_names_findings — planted fault: the loop raises before the last block
+- 6: tests/test_stage2.py::test_a_verify_that_cannot_start_still_leaves_the_block_and_the_findings_exit_line — planted fault: a CallFailed from the verify launch escapes `implement` untouched, or becomes retry diagnostics so that further model attempts start
+- 7: tests/test_stage2.py::test_a_restore_after_a_dead_model_keeps_the_earlier_blocks — planted fault: the blocks kept where the restore reaches
+- 8: tests/test_stage2.py::test_a_block_holds_no_fragment_of_the_key — planted fault: the file list or the diagnostics written unscrubbed
+- 9: tests/test_stage2.py::test_measuring_files_stores_no_key_the_model_wrote — planted fault: the second snapshot taken before the credential scan
+- 9: tests/test_stage2.py::test_a_fallback_attempt_that_writes_the_key_leaves_no_blob_with_it — planted fault: the credential scan before the second snapshot skipped on the Sonnet route
+- 10: tests/test_stage2.py::test_measuring_files_leaves_index_stash_and_refs_alone — planted fault: the snapshot written through the real index
+- 11: tests/test_stage2.py::test_quoted_reader_lines_count_for_no_reader — planted fault: lines prefixed after a split at `\n` only
+- 12: tests/test_stage2.py::test_a_quoted_release_heading_or_no_loop_line_moves_no_release — planted fault: today's substring checks
+- 13: tests/test_stage2.py::test_a_long_diagnostic_line_is_cut_with_a_marker — planted fault: no cut, or a cut without its marker
+- 14: tests/test_stage2.py::test_a_long_file_list_is_cut_with_a_count — planted fault: no cap on the list
+- 15: tests/test_stage2.py::test_a_failed_stage2_off_attempt_leaves_its_block_without_reading_the_key — planted fault: the block reads the key to scrub it
 - 16: tests/test_stage2.py::test_each_retry_prepares_before_verify_and_keeps_real_failure_diagnostics
 - 16: tests/test_stage2.py::test_sonnet_fallback_starts_with_both_diagnostics_when_both_flash_attempts_deleted_the_heading
 - 16: tests/test_stage2.py::test_stage2_off_implements_with_one_sonnet_attempt_and_records_reason
