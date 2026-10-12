@@ -83,6 +83,12 @@ choosing what it means, only following what it plainly says.
 You write the test **with** the change, not after it — and for every test its
 counterpart, which plants the fault and goes red.
 
+**The ledger moves with the tests.** The commit that writes a test the
+plan's `## Criterion ledger` names as not yet written removes `not yet
+written` from its line. The commit that renames or removes a test a ledger
+names changes that ledger line in the same commit, in an archived plan too.
+The gate `criterion-ledger` turns `make verify` red on either one left behind.
+
 **A foreign finding is taken on evidence.** Where a change ran stage 2, Codex
 and GLM report findings (`docs/WORKFLOW.md` §4). A finding of either is taken
 only when a test demonstrates it or the spec supports it; otherwise it is

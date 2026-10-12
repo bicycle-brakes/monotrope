@@ -113,6 +113,10 @@ jobs:
         id: interview-minimums
         if: ${{ !cancelled() }}
         run: python3 scripts/check_interview_minimums.py
+      - name: Every test a plan names for an acceptance criterion still exists
+        id: criterion-ledger
+        if: ${{ !cancelled() }}
+        run: python3 scripts/check_criterion_ledger.py
       - name: This gate file satisfies its own schema
         id: gate-schema
         if: ${{ !cancelled() }}
