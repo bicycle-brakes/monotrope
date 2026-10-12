@@ -121,6 +121,7 @@ typed: a hand-kept list of files ages exactly as fast as files are added.
 | [`changes/research-currency/research.md`](changes/research-currency/research.md) | draft | partial | 2026-10-05 | coding-harness-pu9 |
 | [`changes/research-currency/spec.md`](changes/research-currency/spec.md) | draft | partial | 2026-10-05 | coding-harness-pu9 |
 | [`changes/stage2-repair/decisions.md`](changes/stage2-repair/decisions.md) | draft | none | 2026-10-12 | coding-harness-g2f |
+| [`changes/stage2-repair/design.md`](changes/stage2-repair/design.md) | draft | none | 2026-10-12 | coding-harness-g2f |
 | [`changes/stage2-repair/research.md`](changes/stage2-repair/research.md) | draft | none | 2026-10-12 | coding-harness-g2f |
 | [`changes/stage2-repair/spec.md`](changes/stage2-repair/spec.md) | draft | none | 2026-10-12 | coding-harness-g2f |
 | [`changes/stage2-session/adr-0007-session-amendment.md`](changes/stage2-session/adr-0007-session-amendment.md) | draft | partial | 2026-10-07 | coding-harness-amp |
