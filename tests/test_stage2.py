@@ -1849,6 +1849,25 @@ def test_a_failure_after_the_first_snapshot_says_why_and_changes_nothing_else(
     assert world.text().count("not measured") == 1
 
 
+def test_an_unmeasured_reason_stays_one_line_with_one_full_stop(world: World, monkeypatch: pytest.MonkeyPatch) -> None:
+    # Criterion 4. Planted fault: the raw git error is put into the sentence as it is.
+    def broken(_root: Path) -> str:
+        raise stage2.Refused("git add failed: fatal: first line\n  second   line.\n")
+
+    monkeypatch.setattr(stage2, "worktree_tree", broken)
+    world.script(
+        claude=[
+            {"stdout": "first", "plant": {"src/app.py": "value = 2\n"}},
+            {"stdout": "fixed", "append": {"plans/changes/demo/plan.md": "2026-10-08 10:00–10:02, 2 min\n"}},
+        ],
+        make=[{"stdout": "green"}, {"stdout": "green"}],
+    )
+    assert world.run("implement") == 0
+    (block,) = quote_blocks(world.text())
+    lines = [line for line in block if line.startswith("Files the attempt changed")]
+    assert lines == ["Files the attempt changed: not measured — git add failed: fatal: first line second line."]
+
+
 def test_a_malformed_numstat_record_says_not_measured_and_the_run_goes_on(
     world: World, monkeypatch: pytest.MonkeyPatch
 ) -> None:

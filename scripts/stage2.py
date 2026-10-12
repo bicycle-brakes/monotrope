@@ -1331,7 +1331,9 @@ def attempt_block(attempt: int, route: str, listing: str, files: list[str] | str
     """
     head = f"Attempt {attempt} ({route}) failed its post-run checks."
     if isinstance(files, str):
-        file_part = f"Files the attempt changed: not measured — {files}."
+        # The reason is a raw git error: one line, and one full stop of this sentence's own.
+        reason = " ".join(files.split()).rstrip(".")
+        file_part = f"Files the attempt changed: not measured — {reason}."
     elif files:
         file_part = "Files the attempt changed (lines added, removed):\n" + "\n".join(f"- {entry}" for entry in files)
     else:
