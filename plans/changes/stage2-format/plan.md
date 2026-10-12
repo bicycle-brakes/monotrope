@@ -184,20 +184,20 @@ make verify
 
 ## Criterion ledger
 
-- 1: not yet written tests/test_stage2.py::test_the_format_step_runs_check_then_format_on_the_targets_before_verify — planted fault: format before check, or `--no-unsafe-fixes` dropped
-- 2: not yet written tests/test_stage2.py::test_the_format_step_runs_check_then_format_on_the_targets_before_verify — planted fault: ruff given `scripts/ tests/` whole
-- 2: not yet written tests/test_stage2.py::test_the_format_step_leaves_out_links_and_hard_linked_files — planted fault: targets filtered by suffix and directory only
-- 3: not yet written tests/test_stage2.py::test_without_a_target_file_no_ruff_starts — planted fault: ruff started with an empty path list
-- 4: not yet written tests/test_stage2.py::test_the_format_step_runs_the_worktrees_ruff_not_the_one_on_path — planted fault: ruff started by its bare name
-- 5: not yet written tests/test_stage2.py::test_ruff_gets_the_verify_environment_without_credentials — planted fault: the ruff launch given `glm_env` or `os.environ`
-- 6: not yet written tests/test_stage2.py::test_the_format_steps_writes_stay_out_of_the_models_file_list — planted fault: the second snapshot taken after `verify_attempt`
-- 7: not yet written tests/test_stage2.py::test_a_failed_attempt_carries_its_format_line_first_in_its_diagnostics — planted fault: the format line appended after the other entries
-- 8: not yet written tests/test_stage2.py::test_a_passing_run_lists_each_format_line_in_its_commit_message — planted fault: only the passing attempt's line kept, or a line for an attempt without targets
-- 8: not yet written tests/test_stage2.py::test_without_a_target_file_no_ruff_starts — planted fault: the heading written with no line below it
-- 9: not yet written tests/test_stage2.py::test_a_passing_attempt_that_was_formatted_leaves_only_its_audit_line — planted fault: the format line appended to findings.md for every attempt
-- 10: not yet written tests/test_stage2.py::test_a_ruff_failure_leaves_the_verdict_to_make_verify — planted fault: a non-zero ruff exit turned into a problem of the attempt
-- 11: not yet written tests/test_stage2.py::test_a_ruff_that_cannot_start_is_reported_as_not_run — planted fault: the ruff launch's `CallFailed` propagates like make's
-- 12: not yet written tests/test_stage2.py::test_a_commit_message_holds_no_fragment_of_the_key — planted fault: the format line built without `scrub`
+- 1: tests/test_stage2.py::test_the_format_step_runs_check_then_format_on_the_targets_before_verify — planted fault: format before check, or `--no-unsafe-fixes` dropped
+- 2: tests/test_stage2.py::test_the_format_step_runs_check_then_format_on_the_targets_before_verify — planted fault: ruff given `scripts/ tests/` whole
+- 2: tests/test_stage2.py::test_the_format_step_leaves_out_links_and_hard_linked_files — planted fault: targets filtered by suffix and directory only
+- 3: tests/test_stage2.py::test_without_a_target_file_no_ruff_starts — planted fault: ruff started with an empty path list
+- 4: tests/test_stage2.py::test_the_format_step_runs_the_worktrees_ruff_not_the_one_on_path — planted fault: ruff started by its bare name
+- 5: tests/test_stage2.py::test_ruff_gets_the_verify_environment_without_credentials — planted fault: the ruff launch given `glm_env` or `os.environ`
+- 6: tests/test_stage2.py::test_the_format_steps_writes_stay_out_of_the_models_file_list — planted fault: the second snapshot taken after `verify_attempt`
+- 7: tests/test_stage2.py::test_a_failed_attempt_carries_its_format_line_first_in_its_diagnostics — planted fault: the format line appended after the other entries
+- 8: tests/test_stage2.py::test_a_passing_run_lists_each_format_line_in_its_commit_message — planted fault: only the passing attempt's line kept, or a line for an attempt without targets
+- 8: tests/test_stage2.py::test_without_a_target_file_no_ruff_starts — planted fault: the heading written with no line below it
+- 9: tests/test_stage2.py::test_a_passing_attempt_that_was_formatted_leaves_only_its_audit_line — planted fault: the format line appended to findings.md for every attempt
+- 10: tests/test_stage2.py::test_a_ruff_failure_leaves_the_verdict_to_make_verify — planted fault: a non-zero ruff exit turned into a problem of the attempt
+- 11: tests/test_stage2.py::test_a_ruff_that_cannot_start_is_reported_as_not_run — planted fault: the ruff launch's `CallFailed` propagates like make's
+- 12: tests/test_stage2.py::test_a_commit_message_holds_no_fragment_of_the_key — planted fault: the format line built without `scrub`
 
 ## Not touched
 
@@ -210,3 +210,25 @@ make verify
   `pyproject.toml`, `requirements-ci.txt`, `prompts/`.
 
 ## Time used
+
+2026-10-12, phase-4 session under the Stage-2 runner (`implement`, route flash) — start and end clock
+times not readable in it: the session has file tools and no command tool, so `date` could not be read,
+and the span is not estimated. The day is the runner's session date. The session covered the whole
+plan in one sitting: step 0's check (pull request #131 merged at `14f6e1a`, already merged into this
+branch at `30fa8c5`, so the wiring went into `run_attempts` and the commit message through its
+`commit_message` argument — `checkpoint` already took `message`), step 1 (`scripts/stage2.py`: the
+constants, `format_targets`, `format_step`, the `verify_attempt` parameter, the four wiring points in
+`run_attempts`, the two docstrings), step 2 (the fourteen ledger tests with the helpers `venv_ruff`
+and `formatted_attempt`), steps 3–4 (`docs/WORKFLOW.md`, the criterion ledger). The stamp and the
+index render of step 4 are the runner's derived-file preparation; it runs `make verify` and makes the
+checkpoint commit after this session returns.
+
+2026-10-12, second phase-4 session under the Stage-2 runner (`implement`, the repair of attempt 1) —
+start and end clock times not readable in it: the session has file tools and no command tool, so
+`date` could not be read, and the span is not estimated. It repaired attempt 1's two blockers, both in
+`scripts/stage2.py`: the commit message joined the heading and the attempt lines with an empty line
+where the plan's line layout — subject, empty line, heading, record — has none, and the formatter
+would have collapsed the parenthesized `FORMAT_COMMIT_HEADING`, whose one-line form is 119
+characters, under the configured line-length 120. The stamp and the index render are the runner's
+derived-file preparation; it runs `make verify` and makes the checkpoint commit after this session
+returns.

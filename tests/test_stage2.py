@@ -2107,6 +2107,278 @@ def test_a_quoted_release_heading_or_no_loop_line_moves_no_release(world: World)
     assert [row[0] for row in stage2.released_rows(world.text())] == ["L1-1"]
 
 
+# ---------------------------------------------------------------------------
+# The format step before `make verify` (spec stage2-format, criteria 1-12, bead coding-harness-52r)
+# ---------------------------------------------------------------------------
+
+
+def venv_ruff(world: World, executable: bool = True) -> None:
+    """The test ruff: `STAND_IN` reached through `<worktree>/.venv/bin/ruff`, never on `PATH`.
+
+    The link resolves beside the scenario in `world.bin`, so the stand-in reads its steps and
+    records under the name the link gives it (`ruff`); `.venv/` is excluded, so no reader of
+    tracked files sees the link. With `executable=False` the path holds a plain file of mode 0644:
+    the system refuses to run it.
+    """
+    stand_in = world.bin / "ruff.stand-in"
+    stand_in.write_text(
+        STAND_IN.replace("@PYTHON@", sys.executable).replace("@PI@", stage2.PI_VERSION), encoding="utf-8"
+    )
+    stand_in.chmod(0o755)
+    ruff = world.root / ".venv" / "bin" / "ruff"
+    ruff.parent.mkdir(parents=True, exist_ok=True)
+    if executable:
+        ruff.symlink_to(stand_in)
+    else:
+        ruff.write_text("# a ruff stand-in that cannot be run\n", encoding="utf-8")
+        ruff.chmod(0o644)
+    (world.root / ".git" / "info" / "exclude").write_text(".venv/\n", encoding="utf-8")
+
+
+def formatted_attempt(**more: object) -> dict:
+    """One Flash attempt that plants an unformatted `scripts/a.py` and measures the plan."""
+    return {
+        "stdout": "implemented",
+        "plant": {"scripts/a.py": "a=1\n"},
+        "append": {"plans/changes/demo/plan.md": "2026-10-12 10:00–10:02, 2 min\n"},
+        **more,
+    }
+
+
+def test_the_format_step_runs_check_then_format_on_the_targets_before_verify(world: World) -> None:
+    # Criteria 1 and 2. Planted fault: the commands in another order, another argument list, or ruff
+    # given `scripts/ tests/` whole instead of the targets.
+    venv_ruff(world)
+    (world.root / "scripts/old.py").write_text("x = 1\n", encoding="utf-8")
+    (world.root / "scripts/gone.py").write_text("y = 2\n", encoding="utf-8")
+    git(world.root, "add", "-A")
+    git(world.root, "commit", "--quiet", "-m", "an unformatted neighbour, a file the attempt deletes")
+    world.script(
+        claude=[
+            formatted_attempt(
+                plant={
+                    "scripts/a.py": "a=1\n",
+                    "tests/test_b.py": "def test_b():\n    assert 1\n",
+                    "src/c.py": "c = 3\n",
+                    "scripts/notes.md": "# notes\n",
+                },
+                delete=["scripts/gone.py"],
+            )
+        ],
+        ruff=[{"plant": {"scripts/a.py": "a = 1\n"}}, {}],
+        make=[{"stdout": "green\n"}],
+    )
+    assert world.run("implement") == 0
+    assert [call["name"] for call in world.calls()] == ["claude", "ruff", "ruff", "make"]
+    assert [call["argv"] for call in world.calls("ruff")] == [
+        [
+            "check",
+            "--fix",
+            "--no-unsafe-fixes",
+            "--force-exclude",
+            "--no-cache",
+            "scripts/a.py",
+            "tests/test_b.py",
+        ],
+        ["format", "--force-exclude", "--no-cache", "scripts/a.py", "tests/test_b.py"],
+    ]
+    for call in world.calls("ruff"):
+        assert call["cwd"] == str(world.root)
+
+
+def test_the_format_step_leaves_out_links_and_hard_linked_files(world: World) -> None:
+    # Criterion 2. Planted fault: the targets filtered by suffix and directory alone.
+    venv_ruff(world)
+    (world.root / "scripts/real.py").write_text("real = 1\n", encoding="utf-8")
+    outside = world.root.parent / "outside.py"
+    outside.write_text("out = 1\n", encoding="utf-8")
+    (world.root / "scripts/link.py").symlink_to(outside)
+    (world.root / "tests").mkdir()
+    (world.root / "tests/hard_twin.py").write_text("twin = 1\n", encoding="utf-8")
+    os.link(world.root / "tests/hard_twin.py", world.root / "tests/hard.py")
+    world.script(ruff=[{}, {}], make=[{"stdout": "green\n"}])
+    formatted: list[str] = []
+    stage2.verify_attempt(world.root, world.plan, "", formatted=formatted)
+    assert [call["argv"] for call in world.calls("ruff")] == [
+        ["check", "--fix", "--no-unsafe-fixes", "--force-exclude", "--no-cache", "scripts/real.py"],
+        ["format", "--force-exclude", "--no-cache", "scripts/real.py"],
+    ]
+    assert formatted == ["ruff changed no file."]
+    assert outside.read_text(encoding="utf-8") == "out = 1\n"
+
+
+def test_without_a_target_file_no_ruff_starts(world: World) -> None:
+    # Criteria 3 and 8. Planted fault: ruff started with an empty path list, or the commit heading
+    # written with no line below it.
+    venv_ruff(world)
+    successful_implementation(world)
+    assert world.run("implement") == 0
+    assert world.calls("ruff") == []
+    assert git(world.root, "log", "-1", "--format=%B") == "feat(demo): implement accepted plan"
+
+
+def test_the_format_step_runs_the_worktrees_ruff_not_the_one_on_path(world: World) -> None:
+    # Criterion 4. Planted fault: ruff started by its bare name, so the program on `PATH` answers.
+    venv_ruff(world)
+    decoy = world.bin / "ruff"
+    decoy.write_text('#!/bin/sh\ntouch "$(dirname "$0")/decoy-called"\nexit 97\n', encoding="utf-8")
+    decoy.chmod(0o755)
+    world.script(claude=[formatted_attempt()], ruff=[{}, {}], make=[{"stdout": "green\n"}])
+    assert world.run("implement") == 0
+    assert len(world.calls("ruff")) == 2
+    assert not (world.bin / "decoy-called").exists()
+
+
+def test_ruff_gets_the_verify_environment_without_credentials(world: World) -> None:
+    # Criterion 5. Planted fault: the ruff launch given `glm_env` or the caller's environment.
+    venv_ruff(world)
+    world.script(claude=[formatted_attempt()], ruff=[{}, {}], make=[{"stdout": "green\n"}])
+    assert world.run("implement") == 0
+    make_env = world.calls("make")[0]["env"]
+    for call in world.calls("ruff"):
+        assert call["env"] == make_env
+        assert KEY not in call["env"].values()
+        for name in ("ANTHROPIC_AUTH_TOKEN", "GH_TOKEN", "OPENAI_API_KEY", "X_SECRET"):
+            assert name not in call["env"], name
+
+
+def test_the_format_steps_writes_stay_out_of_the_models_file_list(world: World) -> None:
+    # Criterion 6. Planted fault: the second snapshot taken after `verify_attempt`.
+    venv_ruff(world)
+    world.script(
+        claude=[
+            {"stdout": "first", "plant": {"scripts/a.py": "a=1\n"}},
+            {"stdout": "second"},
+            {"stdout": "third", "append": {"plans/changes/demo/plan.md": "2026-10-12 10:00–10:02, 2 min\n"}},
+        ],
+        ruff=[
+            {"plant": {"scripts/a.py": "a = 1  # the fix\n# and three\n# more\n# lines\n"}},
+            {"plant": {"scripts/a.py": "a = 1\n"}},
+            {},
+        ],
+        make=[{"stdout": "green\n"}] * 3,
+    )
+    assert world.run("implement") == 0
+    blocks_ = quote_blocks(world.text())
+    assert files_of(blocks_[0]) == [
+        "Files the attempt changed (lines added, removed):",
+        "- `scripts/a.py` +1 -0",
+    ]
+    assert "Files the attempt changed: none." in blocks_[1]
+
+
+def test_a_failed_attempt_carries_its_format_line_first_in_its_diagnostics(world: World) -> None:
+    # Criterion 7. Planted fault: the format line appended after the other entries.
+    venv_ruff(world)
+    red = "\n".join(_gate("pytest", ["FAILED tests/test_b.py::test_b - assert 1 == 2"], "red"))
+    world.script(
+        claude=[
+            {
+                "stdout": "first",
+                "plant": {"scripts/a.py": "a=1\n", "tests/test_b.py": "def test_b():\n    assert 1\n"},
+            },
+            {"stdout": "second", "append": {"plans/changes/demo/plan.md": "2026-10-12 10:00–10:02, 2 min\n"}},
+        ],
+        ruff=[{"plant": {"scripts/a.py": "a = 1\n"}}, {}],
+        make=[{"stdout": red, "exit": 1}, {"stdout": "green\n"}],
+    )
+    assert world.run("implement") == 0
+    first = "- Runner format before `make verify`: ruff changed `scripts/a.py`."
+    entry = quote_blocks(world.text())[0]
+    assert entry[entry.index("```text") + 1] == first
+    assert prompt_entry(world.calls("claude")[1]["prompt_file"], 1, "flash")[0] == first
+
+
+def test_a_passing_run_lists_each_format_line_in_its_commit_message(world: World) -> None:
+    # Criterion 8. Planted fault: only the passing attempt's line kept, or a line for an attempt
+    # that ran no format step.
+    venv_ruff(world)
+    world.script(
+        claude=[
+            {"stdout": "first", "plant": {"src/app.py": "value = 2\n"}},
+            formatted_attempt(),
+        ],
+        ruff=[{}, {"plant": {"scripts/a.py": "a = 1\n"}}],
+        make=[{"stdout": "green\n"}] * 2,
+    )
+    assert world.run("implement") == 0
+    assert git(world.root, "log", "-1", "--format=%B") == (
+        "feat(demo): implement accepted plan\n\n"
+        "Runner format before `make verify` (ruff check --fix with safe fixes only, then ruff format):\n"
+        "- Attempt 2 (flash-repair): ruff changed `scripts/a.py`."
+    )
+
+
+def test_a_passing_attempt_that_was_formatted_leaves_only_its_audit_line(world: World) -> None:
+    # Criterion 9. Planted fault: the format line appended to findings.md for every attempt.
+    venv_ruff(world)
+    world.script(
+        claude=[formatted_attempt()],
+        ruff=[{"plant": {"scripts/a.py": "a = 1\n"}}],
+        make=[{"stdout": "green\n"}],
+    )
+    assert world.run("implement") == 0
+    lines = world.text().splitlines()
+    audits = [i for i, line in enumerate(lines) if line.startswith("Stage-2 call,")]
+    assert audits and not lines[audits[-1] + 1 :], "something follows the passing attempt's audit line"
+
+
+@pytest.mark.parametrize("case", ["no-ruff", "not-executable", "findings-left", "format-error"])
+def test_a_ruff_failure_leaves_the_verdict_to_make_verify(world: World, case: str) -> None:
+    # Criterion 10. Planted fault: a non-zero ruff exit turned into a problem of the attempt.
+    if case == "not-executable":
+        venv_ruff(world, executable=False)
+    elif case != "no-ruff":  # no-ruff: no helper, no `.venv/bin/ruff` in the worktree
+        venv_ruff(world)
+    check: dict = {}
+    fmt: dict = {}
+    if case == "findings-left":
+        check = {"stdout": "scripts/a.py:1:1: F401 `a` imported but unused", "exit": 1}
+    elif case == "format-error":
+        fmt = {"stdout": "error: cannot reformat scripts/a.py", "exit": 2}
+    baseline = git(world.root, "rev-parse", "HEAD")
+    world.script(claude=[formatted_attempt()], ruff=[check, fmt], make=[{"stdout": "green\n"}])
+    assert world.run("implement") == 0
+    assert len(world.calls("claude")) == 1 and len(world.calls("make")) == 1
+    assert git(world.root, "rev-list", "--count", f"{baseline}..HEAD") == "1"
+    message = git(world.root, "log", "-1", "--format=%B")
+    if case == "findings-left":
+        assert "ruff check left findings without a safe fix" in message
+    if case == "format-error":
+        assert "ruff format exited 2" in message
+
+
+@pytest.mark.parametrize("case", ["no-ruff", "not-executable"])
+def test_a_ruff_that_cannot_start_is_reported_as_not_run(world: World, case: str) -> None:
+    # Criterion 11. Planted fault: the ruff launch's `CallFailed` propagates like make's.
+    if case == "not-executable":
+        venv_ruff(world, executable=False)
+    baseline = git(world.root, "rev-parse", "HEAD")
+    world.script(claude=[formatted_attempt()], ruff=[{}, {}], make=[{"stdout": "green\n"}])
+    assert world.run("implement") == 0
+    assert world.calls("ruff") == []
+    assert git(world.root, "rev-list", "--count", f"{baseline}..HEAD") == "1"
+    message = git(world.root, "log", "-1", "--format=%B")
+    line = next(line for line in message.splitlines() if line.startswith("- Attempt 1 (flash):"))
+    assert line.startswith("- Attempt 1 (flash): not run —")
+    assert "no ruff at" in line or "could not be started" in line
+
+
+def test_a_commit_message_holds_no_fragment_of_the_key(world: World) -> None:
+    # Criterion 12. Planted fault: the format line built without `scrub`.
+    venv_ruff(world)
+    name = f"scripts/k{KEY[3:15]}.py"
+    world.script(
+        claude=[formatted_attempt(plant={name: "a=1\n"})],
+        ruff=[{"plant": {name: "a = 1\n"}}],
+        make=[{"stdout": "green\n"}],
+    )
+    assert world.run("implement") == 0
+    message = git(world.root, "log", "-1", "--format=%B")
+    assert "[credential]" in message
+    assert not any(KEY[i : i + 8] in message for i in range(len(KEY) - 7))
+
+
 def test_a_long_diagnostic_line_is_cut_with_a_marker(world: World) -> None:
     # Criterion 13. Planted fault: no cut, or a cut without its marker.
     red = "\n".join(_gate("pytest", ["x" * 5000], "red"))
