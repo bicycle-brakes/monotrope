@@ -38,3 +38,19 @@ a change names the ADR files it creates or changes in the header of its own
 amends an ADR claims that amendment itself — without touching the ADR or the
 answer-file format, accepting that the claim lives in the change folder, not
 in the ADR a reader opens. — 2026-10-12
+
+## Q-2 · An ADR edit no change claims
+
+asked: 2026-10-12
+answer: A — the gate blocks and names the remedy; the inference from the diff goes, the interim rule of pull request #126 with it.
+answered_by: maintainer
+status: answered
+
+In the context of a diff that changes a file under `docs/adr/` which no
+change's spec header claims, facing the choice between one explicit rule and
+the explicit rule beside the old inference, we decided that the gate reports a
+finding that names the remedy (claim the file in the spec header of your
+change) and no longer infers an owner from the diff, to achieve one rule
+instead of two, accepting that even a typo fix in an ADR needs a change folder
+with a spec — which the five-question duty for every ADR edit already asks
+today. — 2026-10-12
