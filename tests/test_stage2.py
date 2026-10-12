@@ -2010,6 +2010,26 @@ def test_measuring_files_stores_no_key_the_model_wrote(world: World) -> None:
     assert not any(KEY[i : i + 8] in held for i in range(len(KEY) - 7))
 
 
+def test_a_fallback_attempt_that_writes_the_key_leaves_no_blob_with_it(world: World) -> None:
+    # Criterion 9. Planted fault: the credential scan before the second snapshot skipped on the Sonnet route.
+    red = "\n".join(_gate("pytest", ["E   AssertionError"], "red"))
+    world.script(
+        claude=[
+            {"stdout": "one"},
+            {"stdout": "two"},
+            {"stdout": "fallback", "plant": {"src/app.py": f"credential = '{KEY}'\n"}},
+        ],
+        make=[{"stdout": red, "exit": 1}, {"stdout": red, "exit": 1}],
+    )
+    assert world.run("implement") == 2
+    assert KEY not in (world.root / "src/app.py").read_text(encoding="utf-8")
+    done = subprocess.run(
+        [GIT, "-C", str(world.root), "cat-file", "--batch-all-objects", "--batch"], capture_output=True
+    )
+    held = done.stdout.decode("utf-8", "replace")
+    assert not any(KEY[i : i + 8] in held for i in range(len(KEY) - 7))
+
+
 def test_measuring_files_leaves_index_stash_and_refs_alone(world: World) -> None:
     # Criterion 10. Planted fault: the snapshot written through the real index.
     (world.root / "src/staged.py").write_text("staged = 1\n", encoding="utf-8")

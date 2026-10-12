@@ -1665,8 +1665,10 @@ def implement(root: Path, change: str, stage2_off: str | None = None) -> None:
             run_work_model(ctx, prompt, endpoint, writable=True, key=credential)
         except CallFailed as error:
             raise CallFailed(f"{error}; {restore_baseline(root, baseline, allowed)}") from error
-        if credential is not None:
-            exposed = remove_changed_credential(root, credential, ignored_before)
+        if key is not None:
+            # Every route scans with the key read in this run - the Sonnet fallback included - before
+            # the second snapshot can write the changed files into the object store (spec, criterion 9).
+            exposed = remove_changed_credential(root, key, ignored_before)
             if exposed:
                 raise Refused(credential_message(exposed))
         if unmeasured is None:

@@ -167,6 +167,7 @@ make verify
 - 7: written tests/test_stage2.py::test_a_restore_after_a_dead_model_keeps_the_earlier_blocks — planted fault: the blocks kept where the restore reaches
 - 8: written tests/test_stage2.py::test_a_block_holds_no_fragment_of_the_key — planted fault: the file list or the diagnostics written unscrubbed
 - 9: written tests/test_stage2.py::test_measuring_files_stores_no_key_the_model_wrote — planted fault: the second snapshot taken before the credential scan
+- 9: written tests/test_stage2.py::test_a_fallback_attempt_that_writes_the_key_leaves_no_blob_with_it — planted fault: the credential scan before the second snapshot skipped on the Sonnet route
 - 10: written tests/test_stage2.py::test_measuring_files_leaves_index_stash_and_refs_alone — planted fault: the snapshot written through the real index
 - 11: written tests/test_stage2.py::test_quoted_reader_lines_count_for_no_reader — planted fault: lines prefixed after a split at `\n` only
 - 12: written tests/test_stage2.py::test_a_quoted_release_heading_or_no_loop_line_moves_no_release — planted fault: today's substring checks
