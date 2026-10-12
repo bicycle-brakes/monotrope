@@ -82,12 +82,23 @@ All in `tests/test_harness_decide_adr.py`; "both flows" means the loop over
 ## Criterion ledger
 
 - 1: tests/test_harness_decide_adr.py::test_answered_by_is_the_role_the_map_names
-- 2: tests/test_harness_decide_adr.py::test_answered_by_is_the_role_the_map_names — parametrised over the two places in phase 4
-- 3: not yet written tests/test_harness_decide_adr.py::test_two_maps_refuse_before_asking
-- 4: not yet written tests/test_harness_decide_adr.py::test_without_a_map_the_refusal_names_both_places
-- 5: tests/test_harness_decide_adr.py::test_a_map_without_the_role_refuses_before_asking — extended to both places and the path in the message in phase 4
-- 6: tests/test_harness_decide_adr.py::test_a_map_without_the_role_refuses_before_asking — case "no roles: key" added in phase 4
-- 7: not yet written tests/test_harness_decide_adr.py::test_root_names_the_tree_not_the_working_directory
+- 2: tests/test_harness_decide_adr.py::test_answered_by_is_the_role_the_map_names — parametrised over the two places
+- 3: tests/test_harness_decide_adr.py::test_two_maps_refuse_before_asking
+- 4: tests/test_harness_decide_adr.py::test_without_a_map_the_refusal_names_both_places
+- 5: tests/test_harness_decide_adr.py::test_a_map_without_the_role_refuses_before_asking — both places, the place's path in the message
+- 6: tests/test_harness_decide_adr.py::test_a_map_without_the_role_refuses_before_asking — case "no roles: key"
+- 7: tests/test_harness_decide_adr.py::test_root_names_the_tree_not_the_working_directory
 - 8: tests/test_harness_decide_adr.py::test_this_repository_declares_the_answering_role
 
 ## Time used
+
+2026-10-12 — the implement session ran on the stage-2 runner with file tools
+only: it read the date at its start (2026-10-12) and again at its stop
+(2026-10-12) and claims no span; the runner's clock measures the real span
+against the appetite of 2 h, and no duration is invented here.
+
+2026-10-12 — the repair round after attempt 1 (ruff-format red on both code
+files) ran the same way, file tools only: it read the date at its start and at
+its stop (2026-10-12) and claims no span; the runner's clock measures the real
+span against the appetite of 2 h. It changed formatting only — no test, no
+message, no criterion.

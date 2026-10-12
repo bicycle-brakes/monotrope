@@ -28,6 +28,8 @@ import harness  # noqa: E402
 
 TODAY = date(2026, 9, 30)
 
+PLACES = ("provenance.yaml", "decisions/provenance.yaml")
+
 MAP = """\
 schema_version: 1
 roles:
@@ -93,12 +95,12 @@ def _feature(change: str, *, proposed: str = "no", outcome: str | None = None) -
     return "\n".join([*lines, "---", "", "# Spec", ""])
 
 
-def _repo(tmp_path: Path, *features: str, map_text: str | None = MAP) -> Path:
+def _repo(tmp_path: Path, *features: str, map_text: str | None = MAP, map_at: str = "provenance.yaml") -> Path:
     repo = tmp_path / "repo"
     repo.mkdir()
     _git(repo, "init", "-q")
     if map_text is not None:
-        _write(repo / "provenance.yaml", map_text)
+        _write(repo / map_at, map_text)
     for change in features:
         _write(repo / "plans" / "changes" / change / "spec.md", _feature(change))
     _write(repo / "README.md", "r\n")
@@ -163,7 +165,7 @@ def _cli(repo: Path, *args: str) -> subprocess.CompletedProcess[str]:
 
 
 def _written(repo: Path) -> list[str]:
-    answers = sorted(p.relative_to(repo).as_posix() for p in (repo / "decisions").rglob("*") if p.is_file())
+    answers = sorted(p.relative_to(repo).as_posix() for p in (repo / "decisions" / "answers").rglob("*") if p.is_file())
     return answers + (["message"] if _msg(repo).exists() else [])
 
 
@@ -428,8 +430,9 @@ def test_a_refusal_names_why_the_change_owes_no_answer(tmp_path: Path) -> None:
 # ---------------------------------------------------------------------------
 
 
-def test_answered_by_is_the_role_the_map_names(tmp_path: Path) -> None:
-    repo = _repo(tmp_path, "one", "two", map_text=MAP.replace("decider", "someone-else"))
+@pytest.mark.parametrize("map_at", PLACES)
+def test_answered_by_is_the_role_the_map_names(tmp_path: Path, map_at: str) -> None:
+    repo = _repo(tmp_path, "one", "two", map_text=MAP.replace("decider", "someone-else"), map_at=map_at)
     assert harness.answering_role(repo) == "someone-else"
     assert _main(repo, *_record())[0] == 0
     assert cag.load_answer(_answer_path(repo, "one"))[0]["answered_by"] == "someone-else"
@@ -439,23 +442,86 @@ def test_answered_by_is_the_role_the_map_names(tmp_path: Path) -> None:
 
 
 @pytest.mark.parametrize(
+    ("at_top", "below"),
+    [
+        ("map", "the same map"),
+        ("map", "not yaml"),
+        ("map", "a directory"),
+        ("a link to nowhere", "map"),
+    ],
+)
+def test_two_maps_refuse_before_asking(tmp_path: Path, at_top: str, below: str) -> None:
+    repo = _repo(tmp_path, "one", map_text=None)
+    top, under = repo / "provenance.yaml", repo / "decisions" / "provenance.yaml"
+    for place, holds in ((top, at_top), (under, below)):
+        if holds in ("map", "the same map"):
+            _write(place, MAP)
+        elif holds == "not yaml":
+            _write(place, "{\n")
+        elif holds == "a directory":
+            place.mkdir(parents=True)
+        else:
+            os.symlink(tmp_path / "nowhere", place)
+    for args in ((), tuple(_record())):
+        code, out = _main(repo, *args, ask=_never)
+        text = "\n".join(out)
+        assert code == 2, (at_top, below, args, out)
+        assert "provenance.yaml and decisions/provenance.yaml" in text, (at_top, below, out)
+        assert "keep one of them" in text, (at_top, below, out)
+        assert _written(repo) == []
+
+
+def test_without_a_map_the_refusal_names_both_places(tmp_path: Path) -> None:
+    repo = _repo(tmp_path, "one", map_text=None)
+    for args in ((), tuple(_record())):
+        code, out = _main(repo, *args, ask=_never)
+        text = "\n".join(out)
+        assert code == 2, (args, out)
+        assert "no provenance map: looked for provenance.yaml and decisions/provenance.yaml" in text, out
+        assert "one of them must name who answers" in text, out
+        assert 'prefix: "decisions/answers/"' in text and "owner_role" in text, out
+        assert _written(repo) == []
+
+
+@pytest.mark.parametrize("map_at", PLACES)
+@pytest.mark.parametrize(
     ("case", "map_text", "named"),
     [
-        ("no map", None, 'prefix: "decisions/answers/"'),
-        ("no entry", MAP.split('  - prefix: "decisions/answers/"')[0], 'prefix: "decisions/answers/"'),
-        ("no owner_role", MAP.replace("    owner_role: decider\n", ""), "owner_role"),
+        ("not yaml", "{\n", "cannot read"),
+        ("not a mapping", "- a list\n", "is not a mapping"),
+        ("no entry", MAP.split('  - prefix: "decisions/answers/"')[0], "no `paths:` entry"),
+        ("no owner_role", MAP.replace("    owner_role: decider\n", ""), "no `owner_role:`"),
         ("role not declared", MAP.replace("  decider:\n", "  other:\n"), "`decider:` under `roles:`"),
+        (
+            "no roles key",
+            MAP.replace('roles:\n  decider:\n    handle: "@someone"\n', ""),
+            "names no role under `roles:`",
+        ),
     ],
 )
 def test_a_map_without_the_role_refuses_before_asking(
-    tmp_path: Path, case: str, map_text: str | None, named: str
+    tmp_path: Path, case: str, map_text: str, named: str, map_at: str
 ) -> None:
-    repo = _repo(tmp_path, "one", map_text=map_text)
+    repo = _repo(tmp_path, "one", map_text=map_text, map_at=map_at)
     for args in ((), tuple(_record())):
         code, out = _main(repo, *args, ask=_never)
-        assert code == 2, (case, args, out)
-        assert named in "\n".join(out), (case, out)
+        text = "\n".join(out)
+        assert code == 2, (case, map_at, args, out)
+        assert named in text, (case, map_at, out)
+        assert map_at in text, (case, map_at, out)
+        if map_at == PLACES[0]:
+            assert PLACES[1] not in text, (case, out)
         assert _written(repo) == []
+
+
+def test_root_names_the_tree_not_the_working_directory(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    here = tmp_path / "here"
+    _write(here / "provenance.yaml", MAP.replace("decider", "decoy"))
+    repo = _repo(tmp_path, "one", map_text=MAP.replace("decider", "someone-else"), map_at="decisions/provenance.yaml")
+    monkeypatch.chdir(here)
+    code, out = _main(repo, *_record())
+    assert code == 0, out
+    assert cag.load_answer(_answer_path(repo, "one"))[0]["answered_by"] == "someone-else"
 
 
 def test_this_repository_declares_the_answering_role() -> None:
