@@ -86,3 +86,32 @@ the kit, we decided that the whole gate travels and that changes begun before
 the day an instance adopts it are exempt, to achieve one equally strict
 workflow in every repository without breaking the stock on adoption, accepting
 that each instance must record its adoption date. — 2026-10-12
+
+## Q-5 · The reverse direction: answer and ADR files agree
+
+asked: 2026-10-12
+answer: A — the gate checks both directions: an answer yes needs at least one claimed ADR file, an answer no admits none.
+answered_by: maintainer
+status: answered
+
+In the context of the gap `docs/WORKFLOW.md` §2 names — nothing checks that a
+`yes` to the ADR question is followed by an ADR — facing that the spec-header
+claim makes the check cheap, we decided that the gate also checks that an
+answer `yes` comes with at least one claimed ADR file and an answer `no` with
+none, to achieve that the recorded answer and the ADR files of a change cannot
+drift apart, accepting that a change like criterion-test-ledger (answer no,
+ADR 0013 written at the maintainer's request) goes red after the cut-off until
+its answer is corrected in a decision pull request. — 2026-10-12
+
+## Decisions taken by the agent
+
+[DETAIL] Class `feature`: the change adds a header field and tightens an
+existing gate; the ADR answer (Q-3) raises the interview minimum to five, met
+by Q-1 to Q-5. Revisable in the spec.
+
+[DETAIL] The field's name is left to the spec (working name `adr_files`, a
+list of paths under `docs/adr/`); it must not be `owner`, which names a role.
+
+[DETAIL] Where an instance records its adoption date (Q-4) is left to the
+spec; bead coding-harness-wpv asks the same for the criterion-ledger gate, and
+the spec reads it before choosing, so both gates use one mechanism.
