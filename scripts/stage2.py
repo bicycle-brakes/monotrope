@@ -1492,9 +1492,6 @@ def verify_attempt(root: Path, plan: Path, baseline_time: str, key: str | None =
 
     Preparation writes to the tree and executes its registry renderer. Return bounded
     diagnostics for failed preparation or postconditions, naming the gates that blocked.
-    A `make verify` that cannot be started at all (`launch` raises `CallFailed`) is such a
-    postcondition too: its scrubbed, bounded message comes back as a diagnostic, so the caller
-    never sees this function raise `CallFailed` for it.
     """
     env = foreign_env(
         {
@@ -1506,12 +1503,8 @@ def verify_attempt(root: Path, plan: Path, baseline_time: str, key: str | None =
     preparation = prepare_derived(root, env, key)
     if preparation:
         return preparation
+    done = launch(["make", "verify"], root, env)
     problems = []
-    try:
-        done = launch(["make", "verify"], root, env)
-    except CallFailed as error:
-        lines = scrub(str(error), key).splitlines() or ["make could not be started"]
-        return ["`make verify` could not be run\n" + "\n".join(_shrink(lines, TAIL_LINES))]
     if done.returncode != 0:
         output = (done.stdout or "") + (done.stderr or "")
         # verify_all.sh frames gates on standard output; a gate's standard error arrives unframed after them.
@@ -1680,7 +1673,15 @@ def implement(root: Path, change: str, stage2_off: str | None = None) -> None:
                 files = str(error)
         else:
             files = unmeasured
-        problems = verify_attempt(root, ctx.plan, baseline_time, key)
+        cannot_start: CallFailed | None = None
+        try:
+            problems = verify_attempt(root, ctx.plan, baseline_time, key)
+        except CallFailed as error:
+            # `make verify` could not be started: no model can repair that, so this attempt's block
+            # says why and the run stops after the scan below, with no further attempt (spec, criterion 6).
+            cannot_start = error
+            lines = scrub(str(error), key).splitlines() or ["make could not be started"]
+            problems = ["`make verify` could not be run\n" + "\n".join(_shrink(lines, TAIL_LINES))]
         if problems:
             # The block lands below this attempt's audit line, before the next attempt starts or the
             # run exits 1; the post-run scan after it covers the block too (spec, criteria 1 and 9).
@@ -1692,6 +1693,11 @@ def implement(root: Path, change: str, stage2_off: str | None = None) -> None:
             exposed = remove_changed_credential(root, key, ignored_before)
             if exposed:
                 raise Refused(credential_message(exposed))
+        if cannot_start is not None:
+            raise CallFailed(
+                f"`make verify` could not be started; why, and the files this attempt changed: "
+                f"{ctx.findings.relative_to(root)}"
+            ) from cannot_start
         if not problems:
             checkpoint(root, change, baseline, key, ignored_before)
             print(f"implement: verified and committed · route {route} · attempt {attempt}")
