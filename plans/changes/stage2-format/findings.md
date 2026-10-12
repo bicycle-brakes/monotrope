@@ -143,3 +143,44 @@ Stage-2 call, 2026-10-12: implement · attempt 1 · route flash · endpoint glm-
 > ````
 
 Stage-2 call, 2026-10-12: implement · attempt 2 · route flash-repair · endpoint glm-coding-plan · model glm-5.3-flash · reason first Flash post-run check failed · leak check clean over 382 files, 948 commits, 12 rules.
+
+Stage-2 call, 2026-10-12: review-loop · endpoint opencode-go · model deepseek-v4.1-flash · leak check clean over 382 files, 949 commits, 12 rules.
+
+Stage-2 call, 2026-10-12: repair · attempt 1 · route glm · endpoint glm-coding-plan · model glm-5.3 · leak check clean over 382 files, 949 commits, 12 rules.
+
+> Attempt 1 (glm) failed its post-run checks.
+>
+> Files the attempt changed (lines added, removed):
+> - `plans/changes/stage2-format/plan.md` +9 -0
+> - `tests/test_stage2.py` +10 -3
+>
+> Diagnostics:
+> ```text
+> - Runner format before `make verify`: ruff changed no file.
+> - L1-1: tests/test_stage2.py::test_a_passing_run_lists_each_format_line_in_its_commit_message: pytest ended 0 on the baseline's code; red first is exit 1 or 2
+> ```
+
+Stage-2 call, 2026-10-12: repair · attempt 2 · route glm-repair · endpoint glm-coding-plan · model glm-5.3 · reason first GLM 5.3 post-run check failed · leak check clean over 382 files, 949 commits, 12 rules.
+
+> Attempt 2 (glm-repair) failed its post-run checks.
+>
+> Files the attempt changed (lines added, removed):
+> - `plans/changes/stage2-format/plan.md` +24 -0
+>
+> Diagnostics:
+> ```text
+> - Runner format before `make verify`: ruff changed no file.
+> - L1-1: tests/test_stage2.py::test_a_passing_run_lists_each_format_line_in_its_commit_message: pytest ended 0 on the baseline's code; red first is exit 1 or 2
+> ```
+
+Stage-2 call, 2026-10-12: repair · attempt 3 · route stage-1 · endpoint claude-code-plan · model claude-sonnet-5-5 · reason two GLM 5.3 post-run checks failed · leak check clean over 382 files, 949 commits, 12 rules.
+
+> Attempt 3 (stage-1) failed its post-run checks.
+>
+> Files the attempt changed: none.
+>
+> Diagnostics:
+> ```text
+> - Runner format before `make verify`: ruff changed no file.
+> - L1-1: tests/test_stage2.py::test_a_passing_run_lists_each_format_line_in_its_commit_message: pytest ended 0 on the baseline's code; red first is exit 1 or 2
+> ```
