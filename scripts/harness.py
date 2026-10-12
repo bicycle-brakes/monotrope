@@ -66,9 +66,20 @@ class Refused(Exception):  # noqa: N818 — a verdict, not an error class
 # ---------------------------------------------------------------------------
 
 
+def _is_present(root: Path, place: str) -> bool:
+    """Whether `place` exists (a broken link counts); a place that cannot be checked is a refusal, not absence."""
+    try:
+        os.lstat(root / place)
+    except (FileNotFoundError, NotADirectoryError):
+        return False
+    except OSError as exc:
+        raise Refused(f"cannot check whether {place} exists ({exc}); fix access to it, then retry") from exc
+    return True
+
+
 def provenance_map(root: Path) -> tuple[Path, str]:
     """The one provenance map of the tree; `Refused` when neither place holds one and when both do."""
-    present = [place for place in PROVENANCE_PLACES if os.path.lexists(root / place)]
+    present = [place for place in PROVENANCE_PLACES if _is_present(root, place)]
     if not present:
         raise Refused(
             "no provenance map: looked for "
@@ -86,11 +97,14 @@ def answering_role(root: Path) -> str:
     path, where = provenance_map(root)
     try:
         doc = yaml.safe_load(path.read_text(encoding="utf-8"))
-    except (OSError, UnicodeDecodeError, yaml.YAMLError) as exc:
+    except (OSError, ValueError, yaml.YAMLError) as exc:
         raise Refused(f"cannot read {where} ({exc}); it must name who answers, under `paths:`:\n{OWNER_ENTRY}") from exc
     if not isinstance(doc, dict):
         raise Refused(f"{where} is not a mapping; add under `paths:`:\n{OWNER_ENTRY}")
-    entries = [e for e in doc.get("paths") or [] if isinstance(e, dict) and e.get("prefix") == ANSWERS_PREFIX]
+    listed = doc.get("paths")
+    if not isinstance(listed, list):
+        listed = []
+    entries = [e for e in listed if isinstance(e, dict) and e.get("prefix") == ANSWERS_PREFIX]
     if not entries:
         raise Refused(f'{where} has no `paths:` entry with prefix "{ANSWERS_PREFIX}"; add:\n{OWNER_ENTRY}')
     role = entries[0].get("owner_role")

@@ -77,6 +77,9 @@ All in `tests/test_harness_decide_adr.py`; "both flows" means the loop over
 | 4 | new `test_without_a_map_the_refusal_names_both_places`, both flows — the "no map" case moves here from the refusal test | the message names one place only, or loses `prefix: "decisions/answers/"` |
 | 5, 6 | `test_a_map_without_the_role_refuses_before_asking`, cases not YAML, not a mapping, no entry, no `owner_role`, role not declared, no `roles:` key, each at both places; asserts the place's path in the output, and for the top-level map that `decisions/provenance.yaml` is not | a message still says `provenance.yaml` about the map under `decisions/`; a missing `roles:` key passes |
 | 5 | new `test_a_map_that_is_not_utf8_refuses_before_asking` (loop row L1-2), both flows, at both places: bytes that are not UTF-8 | an undecodable map ends in a traceback instead of a refusal naming its path |
+| 5 | new `test_a_map_whose_paths_is_not_a_list_refuses_before_asking` (phase-6 row F-1), both flows, both places: `paths: 1`, `true`, a string | a scalar `paths:` ends in a `TypeError` instead of a refusal naming the map |
+| 5 | new `test_a_map_with_an_impossible_date_refuses_before_asking` (phase-6 row F-2), both flows, both places: `last_reviewed: 2026-13-01` | PyYAML's `ValueError` is not caught and ends in a traceback |
+| 3 | new `test_a_place_that_cannot_be_checked_refuses_before_asking` (phase-6 row F-3), both flows: `decisions/` has mode 000 beside a top-level map; skipped as root | an unreachable place reads as absent and the top-level map is chosen, or the check ends in a `PermissionError` |
 | 7 | new `test_root_names_the_tree_not_the_working_directory` — `monkeypatch.chdir` into a directory whose `provenance.yaml` names `decoy`; `--root` a tree whose `decisions/provenance.yaml` names `someone-else` | the places are resolved against the working directory |
 | 8 | `test_this_repository_declares_the_answering_role`, unchanged | a `decisions/provenance.yaml` added here, or the top-level map no longer read |
 
@@ -85,9 +88,12 @@ All in `tests/test_harness_decide_adr.py`; "both flows" means the loop over
 - 1: tests/test_harness_decide_adr.py::test_answered_by_is_the_role_the_map_names
 - 2: tests/test_harness_decide_adr.py::test_answered_by_is_the_role_the_map_names — parametrised over the two places
 - 3: tests/test_harness_decide_adr.py::test_two_maps_refuse_before_asking
+- 3: tests/test_harness_decide_adr.py::test_a_place_that_cannot_be_checked_refuses_before_asking — phase-6 row F-3
 - 4: tests/test_harness_decide_adr.py::test_without_a_map_the_refusal_names_both_places
 - 5: tests/test_harness_decide_adr.py::test_a_map_without_the_role_refuses_before_asking — both places, the place's path in the message
 - 5: tests/test_harness_decide_adr.py::test_a_map_that_is_not_utf8_refuses_before_asking
+- 5: tests/test_harness_decide_adr.py::test_a_map_whose_paths_is_not_a_list_refuses_before_asking — phase-6 row F-1
+- 5: tests/test_harness_decide_adr.py::test_a_map_with_an_impossible_date_refuses_before_asking — phase-6 row F-2
 - 6: tests/test_harness_decide_adr.py::test_a_map_without_the_role_refuses_before_asking — case "no roles: key"
 - 7: tests/test_harness_decide_adr.py::test_root_names_the_tree_not_the_working_directory
 - 8: tests/test_harness_decide_adr.py::test_this_repository_declares_the_answering_role
@@ -115,3 +121,8 @@ is claimed here; the runner's clock measures it.
 card and the spec's LakeSwitch half now name the `decisions/answers/` entry
 LakeSwitch still adds); L3-2 widened the tests' `_written` to all of
 `decisions/` except the placed map. No span is claimed here.
+
+2026-10-12 — phase-6 repair (Codex rows F-1, F-2, F-3): a scalar `paths:`, an
+impossible date in the map and a place that cannot be checked are now refusals
+(exit 2) naming the place; three new tests, each red on the old code first. No
+span is claimed here; the runner's clock measures it.

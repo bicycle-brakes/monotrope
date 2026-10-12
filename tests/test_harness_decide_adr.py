@@ -536,6 +536,49 @@ def test_a_map_that_is_not_utf8_refuses_before_asking(tmp_path: Path, map_at: st
         assert _written(repo) == []
 
 
+@pytest.mark.parametrize("map_at", PLACES)
+@pytest.mark.parametrize("paths", ["paths: 1\n", "paths: true\n", "paths: text\n"])
+def test_a_map_whose_paths_is_not_a_list_refuses_before_asking(tmp_path: Path, map_at: str, paths: str) -> None:
+    # Phase-6 row F-1: a scalar `paths:` is a refusal naming the map, never a TypeError.
+    repo = _repo(tmp_path, "one", map_text=f"schema_version: 1\nroles: {{}}\n{paths}", map_at=map_at)
+    for args in ((), tuple(_record())):
+        code, out = _main(repo, *args, ask=_never)
+        text = "\n".join(out)
+        assert code == 2, (map_at, paths, args, out)
+        assert map_at in text, (map_at, paths, out)
+        assert _written(repo) == []
+
+
+@pytest.mark.parametrize("map_at", PLACES)
+def test_a_map_with_an_impossible_date_refuses_before_asking(tmp_path: Path, map_at: str) -> None:
+    # Phase-6 row F-2: PyYAML raises ValueError for `2026-13-01`; that is a refusal naming the map.
+    repo = _repo(tmp_path, "one", map_text=MAP + "last_reviewed: 2026-13-01\n", map_at=map_at)
+    for args in ((), tuple(_record())):
+        code, out = _main(repo, *args, ask=_never)
+        text = "\n".join(out)
+        assert code == 2, (map_at, args, out)
+        assert map_at in text, (map_at, out)
+        assert _written(repo) == []
+
+
+@pytest.mark.skipif(os.geteuid() == 0, reason="root reads every directory")
+def test_a_place_that_cannot_be_checked_refuses_before_asking(tmp_path: Path) -> None:
+    # Phase-6 row F-3: an unreadable `decisions/` must not read as "no map there".
+    repo = _repo(tmp_path, "one", map_text=MAP)
+    _write(repo / PLACES[1], MAP)
+    below = repo / "decisions"
+    below.chmod(0o000)
+    try:
+        results = [_main(repo, *args, ask=_never) for args in ((), tuple(_record()))]
+    finally:
+        below.chmod(0o755)
+    for code, out in results:
+        text = "\n".join(out)
+        assert code == 2, out
+        assert PLACES[1] in text, out
+    assert _written(repo) == []
+
+
 def test_root_names_the_tree_not_the_working_directory(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
     here = tmp_path / "here"
     _write(here / "provenance.yaml", MAP.replace("decider", "decoy"))
