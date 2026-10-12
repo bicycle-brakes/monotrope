@@ -1509,7 +1509,7 @@ def verify_attempt(root: Path, plan: Path, baseline_time: str, key: str | None =
         done = launch(["make", "verify"], root, env)
     except CallFailed as error:
         lines = scrub(str(error), key).splitlines() or ["make could not be started"]
-        return [f"`make verify` could not be run\n" + "\n".join(_shrink(lines, TAIL_LINES))]
+        return ["`make verify` could not be run\n" + "\n".join(_shrink(lines, TAIL_LINES))]
     if done.returncode != 0:
         output = (done.stdout or "") + (done.stderr or "")
         # verify_all.sh frames gates on standard output; a gate's standard error arrives unframed after them.
