@@ -4,7 +4,7 @@ category: research
 status: proposed
 created: 2026-10-11
 last_reviewed: 2026-10-11
-updated: 2026-10-11
+updated: 2026-10-12
 owner: framework-architect
 provenance: ai-drafted-reviewed
 produced_by:
@@ -67,7 +67,7 @@ risk after the decision of 2026-10-11 (see the addendum).
 | 3 | Pilot expiry exists only in LakeSwitch | Deleted with the switch (`pilot.yaml`, `answer_pilot.py`); Coding Harness adds nothing | LakeSwitch |
 | 4 | Anchor strictness differs | Dry run of the pinned check over LakeSwitch's anchors before the switch; anchors it refuses are repaired in LakeSwitch | LakeSwitch |
 | 5 | Coding Harness requires `change` to equal the folder name | Same dry run; any answer file that differs is corrected | LakeSwitch |
-| 6 | `answered_by`: LakeSwitch writes the constant `architect`, Coding Harness the `owner_role` from provenance `roles:` | LakeSwitch declares `architect` as the owner role of `decisions/`, so the written value stays the same | LakeSwitch |
+| 6 | `answered_by`: LakeSwitch writes the constant `architect`, Coding Harness the `owner_role` from provenance `roles:` | LakeSwitch declares `architect` as the owner role of a `paths:` entry for `decisions/answers/` (the one entry the command reads; corrected 2026-10-12, change provenance-location), so the written value stays the same | LakeSwitch |
 | 7 | The Coding Harness command reads a root `provenance.yaml` with `roles:`; LakeSwitch has `decisions/provenance.yaml` without `roles:` — unchanged, the command refuses | Coding Harness lets an instance name where its provenance file lives (default unchanged); LakeSwitch adds `roles:` | both |
 | 8 | What the command shows before recording differs | LakeSwitch takes Coding Harness's display; the `shown` key stays as schema_version 1 defines it | LakeSwitch |
 | 9 | LakeSwitch runs its language check (M-6 / DL-5) on the commit message; Coding Harness does not | Stays a LakeSwitch rule, run by LakeSwitch's own commit check, not by the pinned command | LakeSwitch |
