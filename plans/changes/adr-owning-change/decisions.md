@@ -71,3 +71,18 @@ accepting a decision pull request and five interview records for this change.
 The answer is recorded with `scripts/harness.py decide adr` once the spec
 header names the change; on 2026-10-12 the command refused, because no change
 anchor exists before phase 2. — 2026-10-12
+
+## Q-4 · What travels to an instance
+
+asked: 2026-10-12
+answer: A — the whole interview-minimums gate travels, with a cut-off date per repository.
+answered_by: maintainer
+status: answered
+
+In the context of an interview-minimums gate that measures two things — the
+interview minimums per change class and the attribution of an ADR edit —
+facing that an instance such as LakeSwitch has changes begun before it takes
+the kit, we decided that the whole gate travels and that changes begun before
+the day an instance adopts it are exempt, to achieve one equally strict
+workflow in every repository without breaking the stock on adoption, accepting
+that each instance must record its adoption date. — 2026-10-12
