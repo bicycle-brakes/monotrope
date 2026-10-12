@@ -167,7 +167,12 @@ def _cli(repo: Path, *args: str) -> subprocess.CompletedProcess[str]:
 
 
 def _written(repo: Path) -> list[str]:
-    answers = sorted(p.relative_to(repo).as_posix() for p in (repo / "decisions" / "answers").rglob("*") if p.is_file())
+    # Loop row L3-2: all of `decisions/` counts, only the map a test placed there is not a write.
+    answers = sorted(
+        rel
+        for p in (repo / "decisions").rglob("*")
+        if p.is_file() and (rel := p.relative_to(repo).as_posix()) != "decisions/provenance.yaml"
+    )
     return answers + (["message"] if _msg(repo).exists() else [])
 
 

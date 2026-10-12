@@ -18,10 +18,10 @@ tags: [plan, provenance, adr-answers, kit]
 # Plan — provenance-location
 
 ```text
-For you:     The ADR-answer command also works where the provenance map is decisions/provenance.yaml (LakeSwitch), and refuses clearly when both places hold one.
+For you:     The ADR-answer command finds a provenance map at decisions/provenance.yaml (LakeSwitch's place), and refuses clearly when both places hold one; LakeSwitch still adds its own half before it works there.
 Done when:   tests/test_harness_decide_adr.py holds criteria 1-8 of spec.md, and make verify is green.
 Appetite:    2 hours of phase 4, repair rounds included; a stop, not an estimate.
-Not now:     the map's other readers, a configurable place, LakeSwitch adding roles:.
+Not now:     the map's other readers, a configurable place, LakeSwitch adding roles: and a decisions/answers/ entry.
 Pre-mortem:  suppose it failed: most likely because presence was tested with Path.exists, so a broken link at one place silently hands over to the map at the other.
 Starts unless you say stop.
 ```
@@ -110,3 +110,8 @@ L1-2 repaired; L1-2 added `test_a_map_that_is_not_utf8_refuses_before_asking`
 and `UnicodeDecodeError` to the refusals of `answering_role`. Round 2: the
 test module's docstring and this plan brought in line (L2-1, L2-2). No span
 is claimed here; the runner's clock measures it.
+
+2026-10-12 — review loop round 3: L3-1 corrected the promise (this plan's
+card and the spec's LakeSwitch half now name the `decisions/answers/` entry
+LakeSwitch still adds); L3-2 widened the tests' `_written` to all of
+`decisions/` except the placed map. No span is claimed here.

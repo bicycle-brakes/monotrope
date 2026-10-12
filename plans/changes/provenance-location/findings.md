@@ -26,3 +26,5 @@ Stage-2 call, 2026-10-12: implement · attempt 2 · route flash-repair · endpoi
 Stage-2 call, 2026-10-12: review-loop · endpoint opencode-go · model deepseek-v4.1-flash · leak check clean over 361 files, 900 commits, 12 rules.
 
 Stage-2 call, 2026-10-12: review-loop · endpoint opencode-go · model mimo-v2.6-flash · leak check clean over 361 files, 902 commits, 12 rules.
+
+Stage-2 call, 2026-10-12: review-loop · endpoint opencode-go · model mimo-v2.6-pro · leak check clean over 361 files, 903 commits, 12 rules.
