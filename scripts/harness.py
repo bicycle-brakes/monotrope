@@ -16,6 +16,9 @@ left: stage, commit, and carry the answers in a decision pull request, which
 takes effect when the maintainer merges it or asks for the merge. It never
 stages, commits, pushes, merges or signs anything itself.
 
+Who answers is named by the provenance map, looked for at `provenance.yaml`
+and then `decisions/provenance.yaml`; when both places hold one, it refuses.
+
 Usage:
     python3 scripts/harness.py decide adr
     python3 scripts/harness.py decide adr --change <name> --answer yes|no \\
@@ -27,6 +30,7 @@ Exit: 0 = done (or nothing open), 1 = interrupted, nothing written,
 from __future__ import annotations
 
 import argparse
+import os
 import subprocess
 import sys
 from collections.abc import Callable
@@ -40,8 +44,12 @@ import yaml
 REPO_ROOT = Path(__file__).resolve().parent.parent
 
 MESSAGE_FILE = "ADR_ANSWER_MSG"
-PROVENANCE = "provenance.yaml"
+PROVENANCE_PLACES = ("provenance.yaml", "decisions/provenance.yaml")
 ANSWERS_PREFIX = f"{gate.ANSWERS_DIR}/"
+OWNER_ENTRY = (
+    f'  - prefix: "{ANSWERS_PREFIX}"\n    allowed: [human-decided]\n    frontmatter: none\n'
+    "    owner_role: <a role declared under roles:>"
+)
 RECORDING = ("change", "answer", "reason", "stated_in")
 TEMPLATE = ".github/PULL_REQUEST_TEMPLATE/decision.md"
 
@@ -58,34 +66,57 @@ class Refused(Exception):  # noqa: N818 — a verdict, not an error class
 # ---------------------------------------------------------------------------
 
 
+def _is_present(root: Path, place: str) -> bool:
+    """Whether `place` exists (a broken link counts); a place that cannot be checked is a refusal, not absence."""
+    try:
+        os.lstat(root / place)
+    except (FileNotFoundError, NotADirectoryError):
+        return False
+    except OSError as exc:
+        raise Refused(f"cannot check whether {place} exists ({exc}); fix access to it, then retry") from exc
+    return True
+
+
+def provenance_map(root: Path) -> tuple[Path, str]:
+    """The one provenance map of the tree; `Refused` when neither place holds one and when both do."""
+    present = [place for place in PROVENANCE_PLACES if _is_present(root, place)]
+    if not present:
+        raise Refused(
+            "no provenance map: looked for "
+            f"{PROVENANCE_PLACES[0]} and {PROVENANCE_PLACES[1]}; one of them must name who "
+            f"answers, under `paths:`:\n{OWNER_ENTRY}"
+        )
+    if len(present) == 2:
+        raise Refused(f"two provenance maps, {PROVENANCE_PLACES[0]} and {PROVENANCE_PLACES[1]} — keep one of them")
+    where = present[0]
+    return root / where, where
+
+
 def answering_role(root: Path) -> str:
     """Criterion 10: the `owner_role` of the map's entry for `decisions/answers/`, declared under `roles:`."""
-    entry_text = (
-        f'  - prefix: "{ANSWERS_PREFIX}"\n    allowed: [human-decided]\n    frontmatter: none\n'
-        "    owner_role: <a role declared under roles:>"
-    )
-    path = root / PROVENANCE
+    path, where = provenance_map(root)
     try:
         doc = yaml.safe_load(path.read_text(encoding="utf-8"))
-    except (OSError, yaml.YAMLError) as exc:
-        raise Refused(
-            f"cannot read {PROVENANCE} ({exc}); it must name who answers, under `paths:`:\n{entry_text}"
-        ) from exc
+    except (OSError, ValueError, yaml.YAMLError) as exc:
+        raise Refused(f"cannot read {where} ({exc}); it must name who answers, under `paths:`:\n{OWNER_ENTRY}") from exc
     if not isinstance(doc, dict):
-        raise Refused(f"{PROVENANCE} is not a mapping; add under `paths:`:\n{entry_text}")
-    entries = [e for e in doc.get("paths") or [] if isinstance(e, dict) and e.get("prefix") == ANSWERS_PREFIX]
+        raise Refused(f"{where} is not a mapping; add under `paths:`:\n{OWNER_ENTRY}")
+    listed = doc.get("paths")
+    if not isinstance(listed, list):
+        listed = []
+    entries = [e for e in listed if isinstance(e, dict) and e.get("prefix") == ANSWERS_PREFIX]
     if not entries:
-        raise Refused(f'{PROVENANCE} has no `paths:` entry with prefix "{ANSWERS_PREFIX}"; add:\n{entry_text}')
+        raise Refused(f'{where} has no `paths:` entry with prefix "{ANSWERS_PREFIX}"; add:\n{OWNER_ENTRY}')
     role = entries[0].get("owner_role")
     if not isinstance(role, str) or not role.strip():
         raise Refused(
-            f'the `paths:` entry for "{ANSWERS_PREFIX}" in {PROVENANCE} has no `owner_role:`; '
+            f'the `paths:` entry for "{ANSWERS_PREFIX}" in {where} has no `owner_role:`; '
             "add `owner_role: <a role declared under roles:>` to it"
         )
     roles = doc.get("roles")
     if not isinstance(roles, dict) or role not in roles:
         raise Refused(
-            f"`owner_role: {role}` in {PROVENANCE} names no role under `roles:`; "
+            f"`owner_role: {role}` in {where} names no role under `roles:`; "
             f"add `{role}:` under `roles:`, or name a role that is there"
         )
     return role
