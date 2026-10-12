@@ -1,7 +1,7 @@
 ---
 title: "Plan — provenance-location"
 status: draft
-implementation_status: none
+implementation_status: partial
 date: 2026-10-12
 last_reviewed: 2026-10-12
 updated: 2026-10-12
@@ -86,6 +86,7 @@ All in `tests/test_harness_decide_adr.py`; "both flows" means the loop over
 - 3: tests/test_harness_decide_adr.py::test_two_maps_refuse_before_asking
 - 4: tests/test_harness_decide_adr.py::test_without_a_map_the_refusal_names_both_places
 - 5: tests/test_harness_decide_adr.py::test_a_map_without_the_role_refuses_before_asking — both places, the place's path in the message
+- 5: tests/test_harness_decide_adr.py::test_a_map_that_is_not_utf8_refuses_before_asking
 - 6: tests/test_harness_decide_adr.py::test_a_map_without_the_role_refuses_before_asking — case "no roles: key"
 - 7: tests/test_harness_decide_adr.py::test_root_names_the_tree_not_the_working_directory
 - 8: tests/test_harness_decide_adr.py::test_this_repository_declares_the_answering_role

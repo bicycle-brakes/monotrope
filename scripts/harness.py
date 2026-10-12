@@ -86,7 +86,7 @@ def answering_role(root: Path) -> str:
     path, where = provenance_map(root)
     try:
         doc = yaml.safe_load(path.read_text(encoding="utf-8"))
-    except (OSError, yaml.YAMLError) as exc:
+    except (OSError, UnicodeDecodeError, yaml.YAMLError) as exc:
         raise Refused(f"cannot read {where} ({exc}); it must name who answers, under `paths:`:\n{OWNER_ENTRY}") from exc
     if not isinstance(doc, dict):
         raise Refused(f"{where} is not a mapping; add under `paths:`:\n{OWNER_ENTRY}")

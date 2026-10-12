@@ -514,6 +514,20 @@ def test_a_map_without_the_role_refuses_before_asking(
         assert _written(repo) == []
 
 
+@pytest.mark.parametrize("map_at", PLACES)
+def test_a_map_that_is_not_utf8_refuses_before_asking(tmp_path: Path, map_at: str) -> None:
+    # Loop row L1-2: undecodable bytes are a refusal naming the map, never a traceback.
+    repo = _repo(tmp_path, "one", map_text=None)
+    (repo / map_at).parent.mkdir(parents=True, exist_ok=True)
+    (repo / map_at).write_bytes(b"paths:\n  - prefix: \xff\xfe\n")
+    for args in ((), tuple(_record())):
+        code, out = _main(repo, *args, ask=_never)
+        text = "\n".join(out)
+        assert code == 2, (map_at, args, out)
+        assert map_at in text, (map_at, out)
+        assert _written(repo) == []
+
+
 def test_root_names_the_tree_not_the_working_directory(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
     here = tmp_path / "here"
     _write(here / "provenance.yaml", MAP.replace("decider", "decoy"))
