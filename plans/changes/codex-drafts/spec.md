@@ -63,8 +63,10 @@ of the installed codex-cli 0.162.0, read the same day.
   outside what a draft may write, then the post-run checks.
 - **Baseline**: `HEAD` when the draft starts.
 - **New ADR file**: a path `docs/adr/<NNNN>-<slug>.md` (four digits, a slug of
-  lowercase letters, digits and hyphens) that the baseline commit does not
-  hold.
+  lowercase letters, digits and hyphens) that the merge base of the baseline
+  and `origin/main` does not hold — so an ADR an earlier draft of the same
+  change committed stays the change's one new ADR file, and a later draft
+  may edit it.
 - **Audit line**: the `Stage-2 call, …` line the runner writes into
   `findings.md` before each call.
 
@@ -131,12 +133,13 @@ of the installed codex-cli 0.162.0, read the same day.
     *Refuted by:* an attempt that passes with `make verify` red for a reason
     criterion 13 does not name, or that never runs `make verify`.
 13. If `make verify` is red and its only blocking gate is `adr-answers`, every
-    finding of which says this change has no answer file, the attempt's
-    post-run checks pass and `findings.md` says the ADR answer is owed to the
-    maintainer.
+    finding of which says this change has no answer file, that red
+    `make verify` does not fail the attempt and `findings.md` says the ADR
+    answer is owed to the maintainer; the checks of criteria 14 to 16 still
+    apply.
     *Refuted by:* a draft failing on that alone; or one passing when
-    `adr-answers` also reports another change or a refused answer file, or
-    when a second gate blocks.
+    `adr-answers` also reports another change or a refused answer file, when
+    a second gate blocks, or when `plan.md` lacks `## Time used`.
 14. If `spec.md` or `plan.md` is missing in the change folder after an
     attempt, the attempt fails its post-run checks with a diagnostic naming
     the file.
@@ -206,13 +209,15 @@ of the installed codex-cli 0.162.0, read the same day.
     header the runner writes names `claude-code` as its producer.
     *Refuted by:* `name: pi` or `name: codex` in that header.
 30. When `review` runs on a change whose `findings.md` holds no
-    `Reviewer session: codex <id>` line, Codex starts a fresh session and
+    `Reviewer session: codex <id>` line, or whose last `## Phase 2a` block is
+    headed `Opus 5.5`, Codex starts a fresh session and
     `findings.md` says that no phase-2a session was recorded.
     *Refuted by:* a `codex exec resume` call, or no such statement.
-31. When `review` runs on a change whose `findings.md` holds a
-    `Reviewer session: codex <id>` line (a change reviewed before this
-    change), it resumes that session as today.
-    *Refuted by:* a fresh session although the line stands.
+31. When `review` runs on a change whose last `## Phase 2a` block is Codex's
+    and holds a `Reviewer session: codex <id>` line (a change reviewed before
+    this change), it resumes that session as today.
+    *Refuted by:* a fresh session although that block and line stand, or a
+    resumed session after an Opus block that follows the line.
 32. When `docs/WORKFLOW.md` is read, its routing rows and its class table send
     phases 2, 2b and 3 to Codex through `draft` with GLM 5.3 after two failed
     attempts, phase 2a to Opus 5.5 through `spec-review`, and phase 6 to

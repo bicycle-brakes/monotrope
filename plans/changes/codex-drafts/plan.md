@@ -43,9 +43,11 @@ No `[DECISION]` is open. The spec's `[DETAIL]`s stand; these are the plan's:
   with options.** A failed call moves on here and stops there, and
   stage2-repair rewrites `implement` into a shared loop; a separate loop
   touches neither.
-- `[DETAIL]` **The phase-6 resume code stays as it is.** `review` already
-  starts fresh, and says so, when no `Reviewer session: codex` line stands
-  (criterion 30); a change reviewed before this one keeps its resume.
+- `[DETAIL]` **The phase-6 resume reads the last phase-2a block.** `review`
+  resumes only when the last `## Phase 2a` block is Codex's and holds a
+  `Reviewer session: codex` line; with no line, or after an Opus block, it
+  starts fresh and says so (criteria 30, 31). A change reviewed before this
+  one keeps its resume.
 - `[DETAIL]` **A moved `HEAD` is tested with a monkeypatched `run_codex`**
   that commits; the shared stand-in template stays unchanged.
 
@@ -81,8 +83,9 @@ No `[DECISION]` is open. The spec's `[DETAIL]`s stand; these are the plan's:
    - `draft_keep(root, ctx, baseline) -> tuple[set[Path], list[str]]`: every
      changed path under the change folder except its `decisions.md`, plus
      every changed path that `NEW_ADR` fully matches and
-     `git cat-file -e <baseline>:<path>` does not find; the second value is
-     those ADR paths.
+     `git cat-file -e <base>:<path>` does not find, `<base>` being
+     `git merge-base <baseline> origin/main` (so a second draft may edit the
+     ADR the first one committed); the second value is those ADR paths.
    - `red_gates(output) -> dict[str, list[str]]`: the gate id and body lines
      of each section `verify_all.sh` framed `RED (block)`, read with the frame
      logic of `red_sections` (`_frame_lines`, `GATE_START`, `GATE_END`), which
