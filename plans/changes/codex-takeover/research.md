@@ -116,3 +116,13 @@ Reading: candidate 0 is the precondition for judging the others and changes no
 rule; candidate 1 is the largest saving for the smallest rule change, and it
 is already a bead (coding-harness-g2f) on GLM, without Codex; candidate 2
 saves the most but trades away the independent spec review.
+
+## The maintainer's choice — 2026-10-12
+
+"Setze 1 und 2 um, mach dafür Claude reviewer in Stufe 2, nehme für 1 glm
+ohne Flash" (Claude Code session of 2026-10-12): candidates 1 and 2 are
+built; candidate 1 runs on GLM 5.3, not GLM 5.3 Flash (bead
+coding-harness-g2f); for candidate 2 a Claude model becomes the stage-2
+reviewer, so that Codex does not review the spec it drafted (a bead of its
+own, opened the same day). Candidate 0 and 3 were not chosen. The research is
+done with this section.
