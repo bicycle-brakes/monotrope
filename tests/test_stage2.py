@@ -2147,7 +2147,9 @@ def formatted_attempt(**more: object) -> dict:
 
 def test_the_format_step_runs_check_then_format_on_the_targets_before_verify(world: World) -> None:
     # Criteria 1 and 2. Planted fault: the commands in another order, another argument list, or ruff
-    # given `scripts/ tests/` whole instead of the targets.
+    # given `scripts/ tests/` whole instead of the targets. The modified, already tracked
+    # `scripts/old.py` must stand among them: dropping modified tracked files from the targets would
+    # pass while only newly created files carry the step.
     venv_ruff(world)
     (world.root / "scripts/old.py").write_text("x = 1\n", encoding="utf-8")
     (world.root / "scripts/gone.py").write_text("y = 2\n", encoding="utf-8")
@@ -2158,6 +2160,7 @@ def test_the_format_step_runs_check_then_format_on_the_targets_before_verify(wor
             formatted_attempt(
                 plant={
                     "scripts/a.py": "a=1\n",
+                    "scripts/old.py": "x=1\n",
                     "tests/test_b.py": "def test_b():\n    assert 1\n",
                     "src/c.py": "c = 3\n",
                     "scripts/notes.md": "# notes\n",
@@ -2178,9 +2181,10 @@ def test_the_format_step_runs_check_then_format_on_the_targets_before_verify(wor
             "--force-exclude",
             "--no-cache",
             "scripts/a.py",
+            "scripts/old.py",
             "tests/test_b.py",
         ],
-        ["format", "--force-exclude", "--no-cache", "scripts/a.py", "tests/test_b.py"],
+        ["format", "--force-exclude", "--no-cache", "scripts/a.py", "scripts/old.py", "tests/test_b.py"],
     ]
     for call in world.calls("ruff"):
         assert call["cwd"] == str(world.root)
@@ -2397,6 +2401,22 @@ def test_an_unreadable_target_is_named_by_its_repository_path(world: World) -> N
     assert world.calls("ruff") == []
     assert formatted == ["not run — cannot read `scripts/a.py`."]
     assert str(world.root) not in formatted[0]
+
+
+def test_a_target_named_with_a_line_break_keeps_the_format_line_one_line(world: World) -> None:
+    # Repair round 4 (F-1). Planted fault: the target path interpolated verbatim, so a newline in
+    # its name split the format line in two - in the block's entry and the checkpoint commit message.
+    venv_ruff(world)
+    name = "scripts/a\nb.py"
+    world.script(
+        claude=[formatted_attempt(plant={name: "a=1\n"})],
+        ruff=[{}, {"plant": {name: "a = 1\n"}}],
+        make=[{"stdout": "green\n"}],
+    )
+    assert world.run("implement") == 0
+    assert world.calls("ruff")[1]["argv"] == ["format", "--force-exclude", "--no-cache", name]
+    message = git(world.root, "log", "-1", "--format=%B")
+    assert "- Attempt 1 (flash): ruff changed `scripts/a\\nb.py`." in message.splitlines()
 
 
 def test_a_commit_message_holds_no_fragment_of_the_key(world: World) -> None:

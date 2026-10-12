@@ -1677,6 +1677,28 @@ def _not_run(reason: str, key: str | None) -> str:
     return scrub(f"not run — {' '.join(reason.split()).rstrip('.')}.", key)
 
 
+# Every character a path can hold and still break the line the format line lands in - the block's
+# first entry, the checkpoint commit message; `str.splitlines` splits on all of these. Each maps to
+# its written escape, so a path holding one keeps the format line one line.
+_LINE_BREAK_ESCAPES = {
+    "\n": "\\n",
+    "\r": "\\r",
+    "\v": "\\v",
+    "\f": "\\f",
+    "\x1c": "\\x1c",
+    "\x1d": "\\x1d",
+    "\x1e": "\\x1e",
+    "\x85": "\\x85",
+    chr(0x2028): "\\u2028",
+    chr(0x2029): "\\u2029",
+}
+
+
+def _one_line(path: str) -> str:
+    """A target path with its line breaks written as escapes, so the format line stays one line."""
+    return "".join(_LINE_BREAK_ESCAPES.get(character, character) for character in path)
+
+
 def format_step(root: Path, env: dict[str, str], key: str | None = None) -> str | None:
     """Ruff's safe fixes, then its formatter, over the targets - and what that changed, in one line.
 
@@ -1686,7 +1708,9 @@ def format_step(root: Path, env: dict[str, str], key: str | None = None) -> str 
     the step changed is measured by comparing each target's bytes around it, not out of ruff's
     output; a launch failure of either command makes the whole line `not run`, for the binary that
     cannot start for one cannot start for the other. A target that cannot be read is named by its
-    repository path, never by the absolute one its `OSError` would carry.
+    repository path, never by the absolute one its `OSError` would carry. A target whose name holds
+    a line break is written with that break escaped - the line stays one line, while ruff still gets
+    the path as it is.
     """
     try:
         targets = format_targets(root, env)
@@ -1724,7 +1748,8 @@ def format_step(root: Path, env: dict[str, str], key: str | None = None) -> str 
             after = None  # a target that cannot be read any more counts as changed
         if after != before[target]:
             changed.append(target)
-    line = "ruff changed " + ", ".join(f"`{target}`" for target in changed) if changed else "ruff changed no file"
+    named = ", ".join(f"`{_one_line(target)}`" for target in changed)
+    line = f"ruff changed {named}" if changed else "ruff changed no file"
     if notes:
         line += "; " + "; ".join(notes)
     return scrub(line + ".", key)

@@ -269,3 +269,17 @@ worktree's absolute path; held by
 tests/test_stage2.py::test_an_unreadable_target_is_named_by_its_repository_path, which fails on
 the baseline. The `format_step` docstring names both. The runner runs the red-on-baseline proof,
 `make verify` and the checkpoint commit after this session returns.
+
+2026-10-13, repair session under the Stage-2 runner (`repair`, rows F-1 taken as a code row and
+F-2 taken as `taken — not a test`) — start and end clock times not readable in it: the session has
+file tools and no command tool, so `date` could not be read, and the span is not estimated. F-1: a
+target path holding a line break is written with that break escaped (`_LINE_BREAK_ESCAPES` and
+`_one_line` in `scripts/stage2.py`), so the format line stays one line while ruff still gets the
+path as it is; held by
+tests/test_stage2.py::test_a_target_named_with_a_line_break_keeps_the_format_line_one_line, which
+fails on the baseline's verbatim interpolation. F-2: the criterion-1/2 test
+`test_the_format_step_runs_check_then_format_on_the_targets_before_verify` now plants a modified,
+already tracked `scripts/old.py` among the targets and expects it in both argv lists — the runner
+keeps such files already, so the strengthened test is green on the baseline's code and the row is
+answered `not a test`. The runner runs the red-on-baseline proof, `make verify` and the checkpoint
+commit after this session returns.

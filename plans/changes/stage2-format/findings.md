@@ -203,8 +203,8 @@ Stage-2 call, 2026-10-13: review · endpoint openai-codex · model gpt-6.1-sol �
 
 | ID | Severity | Dimension | Origin | Where | Finding | Reviewer | Status | Broke a test |
 |---|---|---|---|---|---|---|---|---|
-| F-1 | MINOR | SPEC | implementation | scripts/stage2.py:1727 | A formatted target named `scripts/a\nb.py`, with an actual newline in its filename, produces a two-line format record because the path is interpolated verbatim. Reproducing this with the current functions returned two lines, which then split the diagnostic and checkpoint entry. The promised format record must remain one line. [Format line definition; criteria 7–8] | Codex | taken — a target path with a newline is to keep the format line one line (quoted or escaped as the other path lines are); a test with such a target fails on the baseline | — |
-| F-2 | MINOR | SPEC | tests | tests/test_stage2.py:2148 | Every positive target in the formatter tests is newly created and untracked; committed Python files are only unchanged or deleted. Consequently, dropping modified tracked files from Ruff's targets would escape these assertions. The exact-target test needs a modified, already tracked Python file to enforce this part of the target contract. [criterion 2] | Codex | taken — not a test — a test-strength row: the exact-target test is to plant a modified, already tracked Python file among the targets; the runner keeps such files already, so the strengthened test is green on the baseline and no red-first proof exists (bead coding-harness-y17) | — |
+| F-1 | MINOR | SPEC | implementation | scripts/stage2.py:1727 | A formatted target named `scripts/a\nb.py`, with an actual newline in its filename, produces a two-line format record because the path is interpolated verbatim. Reproducing this with the current functions returned two lines, which then split the diagnostic and checkpoint entry. The promised format record must remain one line. [Format line definition; criteria 7–8] | Codex | fixed — tests/test_stage2.py::test_a_target_named_with_a_line_break_keeps_the_format_line_one_line | — |
+| F-2 | MINOR | SPEC | tests | tests/test_stage2.py:2148 | Every positive target in the formatter tests is newly created and untracked; committed Python files are only unchanged or deleted. Consequently, dropping modified tracked files from Ruff's targets would escape these assertions. The exact-target test needs a modified, already tracked Python file to enforce this part of the target contract. [criterion 2] | Codex | fixed — not a test — the runner keeps modified tracked files as targets already, so the strengthened test is green on the baseline (bead coding-harness-y17) | — |
 
 Phase 6 verdict: codex 01a13259-be65-7640-b401-36a447eafc73, 2026-10-13
 Reviewer session: codex 01a13259-be65-7640-b401-36a447eafc73 — a fresh session reviewed: no phase-2a session was recorded
@@ -267,3 +267,5 @@ Stage-2 call, 2026-10-13: repair · attempt 3 · route stage-1 · endpoint claud
 > - Runner format before `make verify`: ruff changed no file.
 > - F-2: tests/test_stage2.py::test_the_format_step_runs_check_then_format_on_the_targets_before_verify: pytest ended 0 on the baseline's code; red first is exit 1 or 2
 > ```
+
+Stage-2 call, 2026-10-13: repair · attempt 1 · route glm · endpoint glm-coding-plan · model glm-5.3 · leak check clean over 382 files, 958 commits, 12 rules.
