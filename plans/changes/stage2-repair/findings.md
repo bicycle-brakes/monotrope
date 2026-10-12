@@ -465,11 +465,11 @@ Stage-2 call, 2026-10-12: review · endpoint openai-codex · model gpt-6.1-sol �
 
 | ID | Severity | Dimension | Origin | Where | Finding | Reviewer | Status | Broke a test |
 |---|---|---|---|---|---|---|---|---|
-| F-1 | BLOCKER | SPEC | base | scripts/stage2.py:1752 | An executable but unpopulated `.venv` can be skipped by `make verify`, yet selected by `red_first_python`. Its `No module named pytest` startup failure exits 1 and is accepted as red first, allowing a checkpoint without running the named test. Interpreter startup failure must fail the attempt. [Acceptance criterion 18] | Codex | taken — the red-first run must show the named test ran: an interpreter that cannot start pytest fails the attempt instead of reading as red | — |
-| F-2 | BLOCKER | SPEC | base | scripts/stage2.py:2037 | If the model directly changes a taken phase-6 row to `fixed`, the answer check detects the changed row, but the failure path preserves that Status. After all attempts fail, the row remains `fixed` and the next repair excludes it. Failed attempts must preserve the original statuses. [Acceptance criterion 23] | Codex | taken — a failed run puts every phase-6 Status back as it stood before the run, a model-written `fixed` included | — |
-| F-3 | BLOCKER | SPEC | base | scripts/stage2.py:1835 | With taken F-1 unchanged and correctly answered, the model can also overwrite rejected F-2's Finding or Status. The answer check compares only taken rows, accepts this case without diagnostics, and the checkpoint commits the unrelated edits. Every other row and cell must remain unchanged. [Acceptance criterion 21] | Codex | taken — the answer check holds every row and cell outside the taken rows' Status unchanged, and names any other edit | — |
-| F-4 | BLOCKER | SPEC | base | scripts/stage2.py:1754 | A named test can create a Git branch, assert the repaired behavior, and delete the branch after the assertion. It passes and cleans up on repaired code, but fails before cleanup on baseline code. The temporary worktree shares branch refs with the repository; removing it leaves the branch behind while accepting red first. Branch state must be preserved. [Acceptance criterion 19] | Codex | taken — the red-first run removes refs the named test created in the shared repository, so branch state is as before | — |
-| F-5 | BLOCKER | SPEC | base | scripts/stage2.py:2010 | If the model creates an ignored file such as `lychee/repair.txt` and its process then fails, restoration leaves that file behind: `changed_paths` excludes ignored files and `git clean -fdq` preserves them. An ignored-only edit even reports that no restore was needed. Paths created by the failed attempt must be removed. [Acceptance criterion 20] | Codex | taken — a failed attempt removes the ignored paths it created too, and says so | — |
+| F-1 | BLOCKER | SPEC | base | scripts/stage2.py:1752 | An executable but unpopulated `.venv` can be skipped by `make verify`, yet selected by `red_first_python`. Its `No module named pytest` startup failure exits 1 and is accepted as red first, allowing a checkpoint without running the named test. Interpreter startup failure must fail the attempt. [Acceptance criterion 18] | Codex | fixed — tests/test_stage2.py::test_a_red_first_interpreter_that_cannot_start_pytest_fails_the_attempt | — |
+| F-2 | BLOCKER | SPEC | base | scripts/stage2.py:2037 | If the model directly changes a taken phase-6 row to `fixed`, the answer check detects the changed row, but the failure path preserves that Status. After all attempts fail, the row remains `fixed` and the next repair excludes it. Failed attempts must preserve the original statuses. [Acceptance criterion 23] | Codex | fixed — tests/test_stage2.py::test_a_failed_repair_puts_every_status_back_as_it_stood | — |
+| F-3 | BLOCKER | SPEC | base | scripts/stage2.py:1835 | With taken F-1 unchanged and correctly answered, the model can also overwrite rejected F-2's Finding or Status. The answer check compares only taken rows, accepts this case without diagnostics, and the checkpoint commits the unrelated edits. Every other row and cell must remain unchanged. [Acceptance criterion 21] | Codex | fixed — tests/test_stage2.py::test_an_edit_outside_the_taken_rows_fails_the_attempt_and_never_reaches_a_commit | — |
+| F-4 | BLOCKER | SPEC | base | scripts/stage2.py:1754 | A named test can create a Git branch, assert the repaired behavior, and delete the branch after the assertion. It passes and cleans up on repaired code, but fails before cleanup on baseline code. The temporary worktree shares branch refs with the repository; removing it leaves the branch behind while accepting red first. Branch state must be preserved. [Acceptance criterion 19] | Codex | fixed — tests/test_stage2.py::test_the_red_first_run_removes_refs_the_named_test_created | — |
+| F-5 | BLOCKER | SPEC | base | scripts/stage2.py:2010 | If the model creates an ignored file such as `lychee/repair.txt` and its process then fails, restoration leaves that file behind: `changed_paths` excludes ignored files and `git clean -fdq` preserves them. An ignored-only edit even reports that no restore was needed. Paths created by the failed attempt must be removed. [Acceptance criterion 20] | Codex | fixed — tests/test_stage2.py::test_a_failed_repair_process_removes_the_ignored_paths_it_created | — |
 
 Phase 6 verdict: codex 01a13140-9b04-73e2-857d-e2e14c8f14aa, 2026-10-12
 Reviewer session: codex 01a13140-9b04-73e2-857d-e2e14c8f14aa — a fresh session reviewed: no phase-2a session was recorded
@@ -500,3 +500,142 @@ Write `Status` (`taken — <test or criterion>` or `rejected — <reason>`) for 
 For a taken row also write `Broke a test` (`yes` or `no`) — before the next round or the release.
 
 Stage-2 call, 2026-10-12: review (loop marks) · endpoint openai-codex · model gpt-6.1-sol · leak check clean over 376 files, 936 commits, 12 rules.
+
+Stage-2 call, 2026-10-12: repair · attempt 1 · route glm · endpoint glm-coding-plan · model glm-5.3 · leak check clean over 376 files, 937 commits, 12 rules.
+
+> Attempt 1 (glm) failed its post-run checks.
+>
+> Files the attempt changed (lines added, removed):
+> - `plans/changes/stage2-repair/plan.md` +21 -0
+> - `scripts/stage2.py` +115 -16
+> - `tests/test_stage2.py` +153 -0
+>
+> Diagnostics:
+> ````text
+> - `make verify` exited 2
+> The gates that blocked, each with its last lines:
+> ── [pytest] $ lauf_cmd
+> [… 16 lines of this gate left out …]
+> .......................................................................F [ 69%]
+> ........................................................................ [ 73%]
+> ........................................................................ [ 77%]
+> ........................................................................ [ 81%]
+> ........................................................................ [ 85%]
+> ........................................................................ [ 89%]
+> ........................................................................ [ 93%]
+> ........................................................................ [ 97%]
+> ......................................                                   [100%]
+> =================================== FAILURES ===================================
+> ______ test_a_failed_repair_process_removes_the_ignored_paths_it_created _______
+>
+> world = World(root=PosixPath('/private/var/folders/44/yc0m3m456b51nyzwyfjptgm40000gn/T/pytest-of-mikypiky/pytest-3843/test_a_f...var/folders/44/yc0m3m456b51nyzwyfjptgm40000gn/T/pytest-of-mikypiky/pytest-3843/test_a_failed_repair_process_r1/state'))
+> capsys = <_pytest.capture.CaptureFixture object at 0x10971f320>
+>
+>     def test_a_failed_repair_process_removes_the_ignored_paths_it_created(
+>         world: World, capsys: pytest.CaptureFixture[str]
+>     ) -> None:
+>         """Phase 6, F-5. Planted fault: an ignored file the failed attempt created stayed behind."""
+>         repair_world(world)
+>         (world.root / ".gitignore").write_text("lychee/\n", encoding="utf-8")
+>         git(world.root, "add", "-A")
+>         git(world.root, "commit", "--quiet", "-m", "ignore lychee")
+>         world.script(
+>             claude=[
+>                 {
+>                     "stderr": "boom",
+>                     "exit": 1,
+>                     "plant": {"lychee/repair.txt": "left behind\n", "src/half.py": "x = 1\n"},
+>                 },
+>                 {"stdout": "must not run"},
+>             ],
+>             make=[{"stdout": "must not run"}],
+>         )
+>         assert world.run("repair") == 1
+>         assert not (world.root / "lychee" / "repair.txt").exists()
+>         assert not (world.root / "lychee").exists()
+>         err = capsys.readouterr().err
+> >       assert "ignored paths removed: lychee/repair.txt" in err, err
+> E       AssertionError: Traceback (most recent call last):
+> E           File "/private/var/folders/44/yc0m3m456b51nyzwyfjptgm40000gn/T/pytest-of-mikypiky/pytest-3843/test_a_failed_repair_process_r1/bin/claude", line 64, in <module>
+> E             Path(relative).write_text(text.replace("@KEY@", key))
+> E           File "/opt/homebrew/Cellar/python@3.12/3.12.4/Frameworks/Python.framework/Versions/3.12/lib/python3.12/pathlib.py", line 1047, in write_text
+> E             with self.open(mode='w', encoding=encoding, errors=errors, newline=newline) as f:
+> E                  ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+> E           File "/opt/homebrew/Cellar/python@3.12/3.12.4/Frameworks/Python.framework/Versions/3.12/lib/python3.12/pathlib.py", line 1013, in open
+> E             return io.open(self, mode, buffering, encoding, errors, newline)
+> E                    ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+> E         FileNotFoundError: [Errno 2] No such file or directory: 'lychee/repair.txt'
+> E         failed: claude call failed: exit 1; the worktree needed no restore.
+> E         
+> E       assert 'ignored paths removed: lychee/repair.txt' in 'Traceback (most recent call last):\n  File "/private/var/folders/44/yc0m3m456b51nyzwyfjptgm40000gn/T/pytest-of-mikypi...o such file or directory: \'lychee/repair.txt\'\nfailed: claude call failed: exit 1; the worktree needed no restore.\n'
+>
+> tests/test_stage2.py:3611: AssertionError
+> =========================== short test summary info ============================
+> FAILED tests/test_stage2.py::test_a_failed_repair_process_removes_the_ignored_paths_it_created
+> 1 failed, 1749 passed, 16 skipped in 235.98s (0:03:55)
+> ── [pytest] RED (block) — der Lauf ist rot.
+> ── [ruff-format] $ lauf_cmd
+> Would reformat: scripts/stage2.py
+> Would reformat: tests/test_stage2.py
+> 2 files would be reformatted, 59 files already formatted
+> ── [ruff-format] RED (block) — der Lauf ist rot.
+>
+> Standard error of the whole run, last lines:
+> [… 7480 earlier lines left out …]
+> templates/handover.md:21:81 error MD013/line-length Line length [Expected: 80; Actual: 162]
+> templates/handover.md:22:81 error MD013/line-length Line length [Expected: 80; Actual: 200]
+> templates/handover.md:48:81 error MD013/line-length Line length [Expected: 80; Actual: 88]
+> templates/spec.md:19 error MD041/first-line-heading/first-line-h1 First line in a file should be a top-level heading [Context: "```yaml"]
+> templates/spec.md:37:81 error MD013/line-length Line length [Expected: 80; Actual: 97]
+> tools/claude-code/README.md:17:81 error MD013/line-length Line length [Expected: 80; Actual: 105]
+> tools/claude-code/README.md:18:81 error MD013/line-length Line length [Expected: 80; Actual: 109]
+> tools/claude-code/README.md:19:81 error MD013/line-length Line length [Expected: 80; Actual: 134]
+> tools/claude-code/README.md:23:1 error MD060/table-column-style Table column style [Table pipe is missing space to the right for style "compact"]
+> tools/claude-code/README.md:23:5 error MD060/table-column-style Table column style [Table pipe is missing space to the left for style "compact"]
+> tools/claude-code/README.md:23:5 error MD060/table-column-style Table column style [Table pipe is missing space to the right for style "compact"]
+> tools/claude-code/README.md:23:9 error MD060/table-column-style Table column style [Table pipe is missing space to the left for style "compact"]
+> tools/claude-code/README.md:23:9 error MD060/table-column-style Table column style [Table pipe is missing space to the right for style "compact"]
+> tools/claude-code/README.md:23:13 error MD060/table-column-style Table column style [Table pipe is missing space to the left for style "compact"]
+> tools/claude-code/README.md:24:81 error MD013/line-length Line length [Expected: 80; Actual: 272]
+> tools/claude-code/README.md:25:81 error MD013/line-length Line length [Expected: 80; Actual: 180]
+> tools/claude-code/README.md:26:81 error MD013/line-length Line length [Expected: 80; Actual: 115]
+> tools/claude-code/README.md:28:81 error MD013/line-length Line length [Expected: 80; Actual: 124]
+> tools/claude-code/README.md:29:81 error MD013/line-length Line length [Expected: 80; Actual: 106]
+> tools/claude-code/README.md:38:1 error MD060/table-column-style Table column style [Table pipe is missing space to the right for style "compact"]
+> tools/claude-code/README.md:38:5 error MD060/table-column-style Table column style [Table pipe is missing space to the left for style "compact"]
+> tools/claude-code/README.md:38:5 error MD060/table-column-style Table column style [Table pipe is missing space to the right for style "compact"]
+> tools/claude-code/README.md:38:9 error MD060/table-column-style Table column style [Table pipe is missing space to the left for style "compact"]
+> tools/claude-code/README.md:38:9 error MD060/table-column-style Table column style [Table pipe is missing space to the right for style "compact"]
+> tools/claude-code/README.md:38:13 error MD060/table-column-style Table column style [Table pipe is missing space to the left for style "compact"]
+> tools/claude-code/README.md:40:81 error MD013/line-length Line length [Expected: 80; Actual: 442]
+> tools/claude-code/README.md:41:81 error MD013/line-length Line length [Expected: 80; Actual: 163]
+> tools/claude-code/README.md:42:81 error MD013/line-length Line length [Expected: 80; Actual: 126]
+> tools/claude-code/README.md:43:81 error MD013/line-length Line length [Expected: 80; Actual: 96]
+> tools/claude-code/README.md:44:81 error MD013/line-length Line length [Expected: 80; Actual: 167]
+> tools/claude-code/README.md:72:1 error MD060/table-column-style Table column style [Table pipe is missing space to the right for style "compact"]
+> tools/claude-code/README.md:72:5 error MD060/table-column-style Table column style [Table pipe is missing space to the left for style "compact"]
+> tools/claude-code/README.md:72:5 error MD060/table-column-style Table column style [Table pipe is missing space to the right for style "compact"]
+> tools/claude-code/README.md:72:9 error MD060/table-column-style Table column style [Table pipe is missing space to the left for style "compact"]
+> tools/claude-code/README.md:72:9 error MD060/table-column-style Table column style [Table pipe is missing space to the right for style "compact"]
+> tools/claude-code/README.md:72:13 error MD060/table-column-style Table column style [Table pipe is missing space to the left for style "compact"]
+> tools/claude-code/README.md:73:81 error MD013/line-length Line length [Expected: 80; Actual: 112]
+> tools/claude-code/README.md:74:81 error MD013/line-length Line length [Expected: 80; Actual: 89]
+> tools/claude-code/README.md:75:81 error MD013/line-length Line length [Expected: 80; Actual: 88]
+> make: *** [verify] Error 1
+> ````
+
+Stage-2 call, 2026-10-12: repair · attempt 2 · route glm-repair · endpoint glm-coding-plan · model glm-5.3 · reason first GLM 5.3 post-run check failed · leak check clean over 376 files, 937 commits, 12 rules.
+
+> Attempt 2 (glm-repair) failed its post-run checks.
+>
+> Files the attempt changed (lines added, removed):
+> - `plans/changes/stage2-repair/plan.md` +12 -0
+> - `scripts/stage2.py` +3 -1
+> - `tests/test_stage2.py` +3 -6
+>
+> Diagnostics:
+> ```text
+> - All checks hold: no taken row carries this id
+> ```
+
+Stage-2 call, 2026-10-12: repair · attempt 3 · route stage-1 · endpoint claude-code-plan · model claude-sonnet-5-5 · reason two GLM 5.3 post-run checks failed · leak check clean over 376 files, 938 commits, 12 rules.

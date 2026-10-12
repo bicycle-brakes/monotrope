@@ -237,6 +237,10 @@ Stage-1 route: implement · model claude-sonnet-5-5 · reason: two Flash post-ru
 
 Stage-1 route: repair · model claude-sonnet-5-5 · reason: two GLM 5.3 post-run checks failed.
 
+## Runner route — 2026-10-12
+
+Stage-1 route: repair · model claude-sonnet-5-5 · reason: two GLM 5.3 post-run checks failed.
+
 ## Time used
 
 2026-10-12, phase-4 session under the Stage-2 runner (`implement`, attempt 1, route flash) — start and
@@ -320,3 +324,36 @@ text row, the Status paragraph of `templates/findings.md` now lists `rejected �
 Status words of a stage-2 row, as a phase-6 finding takes it, and leaves only `taken — <test or
 criterion>` as a loop row's extra. The runner runs the red-first proofs, `make verify` and the
 checkpoint commit after this entry.
+
+2026-10-12, phase-6 repair session under the Stage-2 runner (`repair`, GLM 5.3) — start and
+end clock times not readable in it: the session has file tools and no command tool, so `date` could
+not be read, and the span is not estimated. The day is the runner's session date. The session
+repaired the five taken rows and nothing else: F-1, the red-first run in `scripts/stage2.py`
+(`red_first`) now proves the chosen interpreter starts pytest before the named test runs, so a
+`No module named pytest` startup failure fails the attempt instead of reading as red, proven red
+first by `tests/test_stage2.py::test_a_red_first_interpreter_that_cannot_start_pytest_fails_the_attempt`;
+F-2, a failed repair attempt now puts findings.md back as it stood right before the model call
+(`run_attempts` with `snapshot_findings`/`restore_findings` from `repair`), so a model-written
+`fixed` survives no failed run, proven red first by
+`tests/test_stage2.py::test_a_failed_repair_puts_every_status_back_as_it_stood`; F-3, the answer
+check (`check_repair_answer`) now compares every findings row against the snapshot from before the
+run and names any edit outside the taken rows' Status, proven red first by
+`tests/test_stage2.py::test_an_edit_outside_the_taken_rows_fails_the_attempt_and_never_reaches_a_commit`;
+F-4, the red-first clean-up now deletes the refs the named test created in the shared repository,
+proven red first by `tests/test_stage2.py::test_the_red_first_run_removes_refs_the_named_test_created`;
+F-5, `restore_baseline` now takes the run's ignored snapshot and removes the ignored paths a failed
+attempt created, and says so, proven red first by
+`tests/test_stage2.py::test_a_failed_repair_process_removes_the_ignored_paths_it_created`. The
+runner runs the red-first proofs, `make verify` and the checkpoint commit after this entry.
+
+2026-10-12, phase-6 second repair session under the Stage-2 runner (`repair`, attempt 2, route
+glm-repair) — start and end clock times not readable in it: the session has file tools and no
+command tool, so `date` could not be read, and the span is not estimated. The day is the runner's
+session date. The session repaired the first attempt's two red gates and nothing else: the F-5 test
+failed inside its own `claude` stand-in, which crashed planting `lychee/repair.txt` because the
+directory did not exist, so the stand-in in `tests/test_stage2.py` now creates a planted path's
+parent directories; and the ruff-format deviations went — the two asserts of the F-1 and F-3 tests
+whose joined form fits the line took one line each, and the one over-long `problems.append` in
+`check_repair_answer` in `scripts/stage2.py` took the formatter's exploded form. The five rows'
+code repairs of the first attempt stand unchanged. The runner runs the red-first proofs,
+`make verify` and the checkpoint commit after this entry.

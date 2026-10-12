@@ -1272,22 +1272,50 @@ def ignored_snapshot(root: Path) -> dict[Path, tuple[int, int]]:
     return snapshot
 
 
-def restore_baseline(root: Path, baseline: str, keep: set[Path]) -> str:
+def restore_baseline(
+    root: Path, baseline: str, keep: set[Path], ignored_before: dict[Path, tuple[int, int]] | None = None
+) -> str:
     """After a failed model call, put every path but `keep` back at the baseline; say what was undone.
 
     The runner refused pre-existing changes outside `keep` before the first call, so what differs
     from the baseline outside it is the run's own - including a half-finished edit of a dead process.
+    Gitignored paths the attempt created are removed too: `changed_paths` cannot see them and
+    `git clean` without `-x` keeps them, so the run's earlier snapshot of the ignored files tells them
+    apart from the ones that stood before (phase 6, F-5).
     """
     touched = sorted(path.as_posix() for path in changed_paths(root) - keep)
-    if not touched:
+    created = sorted(ignored_snapshot(root).keys() - ignored_before.keys()) if ignored_before is not None else []
+    if not touched and not created:
         return "the worktree needed no restore."
     spec = [f":(exclude){path.as_posix()}" for path in sorted(keep, key=lambda path: path.as_posix())]
     try:
         _git_output(root, "restore", f"--source={baseline}", "--staged", "--worktree", "--", ".", *spec)
         _git_output(root, "clean", "-fdq", "--", ".", *spec)
     except Refused as error:
-        return f"restoring the worktree to {baseline[:12]} failed ({error}); discard {', '.join(touched)} by hand."
-    return f"the runner restored the worktree to {baseline[:12]} (undone: {', '.join(touched)}); rerun the verb or add --stage2-off."
+        listing = ", ".join([*touched, *(path.as_posix() for path in created)])
+        return f"restoring the worktree to {baseline[:12]} failed ({error}); discard {listing} by hand."
+    removed = []
+    for relative in created:
+        path = root / relative
+        try:
+            if path.is_dir() and not path.is_symlink():
+                shutil.rmtree(path)
+            else:
+                path.unlink()
+        except OSError:
+            continue
+        removed.append(relative.as_posix())
+        parent = path.parent
+        while parent not in (root, parent.parent):
+            try:
+                parent.rmdir()
+            except OSError:
+                break
+            parent = parent.parent
+    undone = f"undone: {', '.join(touched)}" if touched else ""
+    ignored = f"ignored paths removed: {', '.join(removed)}" if removed else ""
+    inner = "; ".join(part for part in (undone, ignored) if part)
+    return f"the runner restored the worktree to {baseline[:12]} ({inner}); rerun the verb or add --stage2-off."
 
 
 def time_log(path: Path) -> str:
@@ -1707,9 +1735,12 @@ def red_first(root: Path, baseline: str, test: str, key: str | None) -> str | No
 
     The worktree's `tests/` is the attempt's, without `__pycache__` and `.pytest_cache`: a test of the
     new tests against the old code is what "red first" means, and a real git checkout keeps tests that
-    call git honest. Exit 1 or 2 is red. The clean-up deletes the temporary directory before it prunes,
-    so a failed `git worktree remove` leaves no dead entry behind, and a failed removal is named in the
-    returned problem.
+    call git honest. The interpreter must start pytest first: a `No module named pytest` startup failure
+    exits 1 too, and reading it as red would accept a run in which the named test never ran (phase 6,
+    F-1). Exit 1 or 2 is red. The clean-up deletes the temporary directory before it prunes, so a
+    failed `git worktree remove` leaves no dead entry behind, and a failed removal is named in the
+    returned problem; refs the named test created in the shared repository are deleted too, so branch
+    state stands as before (phase 6, F-4).
     """
     file, _, function = test.partition("::")
     tree = None
@@ -1717,6 +1748,7 @@ def red_first(root: Path, baseline: str, test: str, key: str | None) -> str | No
     outcome = None
     removal = None
     added = False
+    refs_before: set[str] | None = None
     try:
         tmp = tempfile.mkdtemp(prefix="stage2-red-")
         tree = Path(tmp) / "tree"
@@ -1736,6 +1768,32 @@ def red_first(root: Path, baseline: str, test: str, key: str | None) -> str | No
                 outcome = (
                     f"{test}: the red-first checkout could not take the attempt's tests ({scrub(str(error), key)})"
                 )
+        if outcome is None:
+            # Branches are shared with the temporary checkout, so only a snapshot taken now tells the
+            # clean-up which refs the named test itself created; a failed snapshot fails the attempt,
+            # because branch state could not be proven preserved.
+            try:
+                refs_before = set(_git_output(root, "for-each-ref", "--format=%(refname)").split())
+            except Refused as error:
+                outcome = f"{test}: the red-first ref snapshot failed ({scrub(str(error), key)})"
+        if outcome is None:
+            try:
+                started = launch(
+                    [red_first_python(root), "-c", "import pytest"],
+                    tree,
+                    foreign_env({"PYTHONDONTWRITEBYTECODE": "1"}),
+                    key,
+                    timeout=RED_FIRST_MINUTES * 60,
+                    limit="the red-first time limit",
+                )
+            except CallFailed as error:
+                outcome = f"{test}: {scrub(str(error), key)}"
+            else:
+                if started.returncode != 0:
+                    outcome = (
+                        f"{test}: the red-first interpreter cannot start pytest (exit {started.returncode}); "
+                        "the named test did not run"
+                    )
         if outcome is None:
             try:
                 done = launch(
@@ -1763,6 +1821,16 @@ def red_first(root: Path, baseline: str, test: str, key: str | None) -> str | No
         if tree is not None:
             # Only after the directory is gone: a prune over a present directory keeps a failed removal's entry.
             subprocess.run(["git", "-C", str(root), "worktree", "prune"], capture_output=True, check=False)
+        if refs_before is not None:
+            # A test that fails before its own clean-up leaves its branch behind: the checkout is gone,
+            # the ref stays in the shared repository. Delete exactly what appeared since the snapshot.
+            try:
+                refs_now = set(_git_output(root, "for-each-ref", "--format=%(refname)").split())
+            except Refused:
+                refs_now = None
+            if refs_now is not None:
+                for ref in sorted(refs_now - refs_before):
+                    subprocess.run(["git", "-C", str(root), "update-ref", "-d", ref], capture_output=True, check=False)
     if removal is not None:
         named = scrub(f"{test}: {removal}", key)
         outcome = f"{outcome}\n{named}" if outcome else named
@@ -1793,12 +1861,19 @@ def fixed_status(ident: str, rest: str) -> str:
 
 
 def check_repair_answer(
-    ctx: Context, answer: str, taken: list[tuple[str, list[str]]], baseline: str, key: str | None
+    ctx: Context,
+    answer: str,
+    taken: list[tuple[str, list[str]]],
+    baseline: str,
+    key: str | None,
+    before: tuple[list[list[str]], list[list[str]]],
 ) -> tuple[dict[str, str], list[str]]:
     """Read an answer's fixed lines: the Status each taken row takes, or the problems that fail the attempt.
 
-    Each problem names its ID. Only when none stands do the red-first runs start, one pytest run per
-    named test; every text is scrubbed with the key.
+    Each problem names its ID. Every row of findings.md must also stand as `before` holds it - the taken
+    rows and the others alike, cell for cell: an edit outside the taken rows' Status is named, not
+    checkpointed (phase 6, F-3). Only when no problem stands do the red-first runs start, one pytest run
+    per named test; every text is scrubbed with the key.
     """
     problems: list[str] = []
     parsed: dict[str, list[str]] = {}
@@ -1833,7 +1908,7 @@ def check_repair_answer(
     if problems:
         return {}, [scrub(problem, key) for problem in problems]
     released_now, phase6_now = findings_rows(ctx.findings.read_text(encoding="utf-8") if ctx.findings.exists() else "")
-    for place, row in taken:
+    for _place, row in taken:
         ident, fix = row[0], fixes[row[0]]
         if fix.startswith("fixed — not a test"):
             if not row[7].lower().startswith("taken — not a test"):
@@ -1846,8 +1921,18 @@ def check_repair_answer(
             body = _read_quietly(ctx.root / test.partition("::")[0])
             if not any(line.startswith(f"def {function}(") for line in body.splitlines()):
                 problems.append(f"{ident}: {test} defines no function `def {function}(`")
-        if place != "record" and row not in (released_now if place == "released" else phase6_now):
-            problems.append(f"{ident}: the row no longer stands in findings.md as the repair took it")
+    for place, rows_before, rows_now in (
+        ("released", before[0], released_now),
+        ("phase-6", before[1], phase6_now),
+    ):
+        for row in rows_before:
+            if row not in rows_now:
+                problems.append(
+                    f"{row[0]}: the {place} row no longer stands in findings.md as it stood before the repair"
+                )
+        for row in rows_now:
+            if row not in rows_before:
+                problems.append(f"{row[0]}: findings.md holds a {place} row that stood nowhere before the repair")
     if problems:
         return {}, [scrub(problem, key) for problem in problems]
     for _place, row in taken:
@@ -1982,11 +2067,17 @@ def run_attempts(
     answer_check=None,  # answer -> problems, only when `verify_attempt` returned none
     before_commit=None,  # a write between the checks and the checkpoint commit
     after_commit=None,  # a write after the checkpoint commit
+    snapshot_findings=None,  # () -> the findings text as it stands right before the model call
+    restore_findings=None,  # (text) -> None, put findings.md back after a failed attempt
 ) -> None:
     """The attempt loop the work verbs share: call, measure, check, commit - or leave the diagnostics.
 
     A failed attempt leaves its diagnostics and the files its model changed, quoted, below its audit
-    line in `findings.md`; the route block on `stage-1` names the verb.
+    line in `findings.md`; the route block on `stage-1` names the verb. A verb that passes
+    `snapshot_findings` and `restore_findings` puts findings.md back as it stood right before the model
+    call whenever an attempt fails: the audit line above the snapshot stays, the model's own edits to
+    the file - a Status it wrote itself included - go, so no failed run leaves them behind (phase 6,
+    F-2).
     """
     root = ctx.root
     allowed = {ctx.findings.relative_to(root)}
@@ -1999,6 +2090,7 @@ def run_attempts(
                 ctx.plan,
                 f"## Runner route — {today()}\n\nStage-1 route: {verb} · model {endpoint[1]} · reason: {reason}.",
             )
+        kept = snapshot_findings() if snapshot_findings is not None else None
         unmeasured: str | None = None
         try:
             before = worktree_tree(root)
@@ -2007,7 +2099,9 @@ def run_attempts(
         try:
             answer = run_work_model(ctx, prompt, endpoint, writable=True, key=credential)
         except CallFailed as error:
-            raise CallFailed(f"{error}; {restore_baseline(root, baseline, allowed)}") from error
+            if kept is not None:
+                restore_findings(kept)
+            raise CallFailed(f"{error}; {restore_baseline(root, baseline, allowed, ignored_before)}") from error
         if key is not None:
             # Every route scans with the key read in this run - the Sonnet fallback included - before
             # the second snapshot can write the changed files into the object store (spec, criterion 9).
@@ -2035,6 +2129,10 @@ def run_attempts(
         if not problems and answer_check is not None:
             problems = answer_check(answer)
         if problems:
+            if kept is not None:
+                # Before the block is appended, so the quoted diagnostics stand beside the rows as
+                # they were, not beside the model's edits of them.
+                restore_findings(kept)
             # The block lands below this attempt's audit line, before the next attempt starts or the
             # run exits 1; the post-run scan after it covers the block too (spec, criteria 1 and 9).
             listing = "\n".join(f"- {p}" for p in problems)
@@ -2159,9 +2257,10 @@ def repair(root: Path, change: str, stage2_off: str | None = None) -> None:
         key = None
         routes = [(SONNET, None, "stage-1", stage2_off)]
     fixes: dict[str, str] = {}
+    rows_before = findings_rows(ctx.findings.read_text(encoding="utf-8") if ctx.findings.exists() else "")
 
     def check(answer: str) -> list[str]:
-        found, problems = check_repair_answer(ctx, answer, taken, baseline, key)
+        found, problems = check_repair_answer(ctx, answer, taken, baseline, key, rows_before)
         if not problems:
             fixes.clear()
             fixes.update(found)
@@ -2184,6 +2283,8 @@ def repair(root: Path, change: str, stage2_off: str | None = None) -> None:
         answer_check=check,
         before_commit=lambda: mark_repaired_findings(ctx, taken, fixes),
         after_commit=lambda: mark_repaired_record(change, taken, fixes),
+        snapshot_findings=lambda: ctx.findings.read_text(encoding="utf-8") if ctx.findings.exists() else "",
+        restore_findings=lambda text: ctx.findings.write_text(text, encoding="utf-8"),
     )
 
 

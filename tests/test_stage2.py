@@ -120,6 +120,7 @@ with log.open("a") as handle:
 time.sleep(step.get("sleep", 0))
 key = os.environ.get("ANTHROPIC_AUTH_TOKEN") or os.environ.get("OPENCODE_API_KEY", "")
 for relative, text in step.get("plant", {}).items():
+    Path(relative).parent.mkdir(parents=True, exist_ok=True)
     Path(relative).write_text(text.replace("@KEY@", key))
 for relative in step.get("delete", []):
     Path(relative).unlink()
@@ -3484,6 +3485,25 @@ def test_a_named_test_that_is_not_red_first_fails_the_attempt(world: World) -> N
     ) in prompt
 
 
+def test_a_red_first_interpreter_that_cannot_start_pytest_fails_the_attempt(world: World) -> None:
+    """Phase 6, F-1. Planted fault: an interpreter whose pytest never starts, exit 1, read as red first."""
+    repair_world(world)
+    (world.root / ".gitignore").write_text(".venv/\n", encoding="utf-8")
+    git(world.root, "add", "-A")
+    git(world.root, "commit", "--quiet", "-m", "ignore the venv")
+    python = world.root / ".venv" / "bin" / "python3"
+    python.parent.mkdir(parents=True)
+    python.write_text("#!/bin/sh\necho 'No module named pytest' >&2\nexit 1\n", encoding="utf-8")
+    python.chmod(0o755)
+    head = git(world.root, "rev-parse", "HEAD")
+    world.script(claude=[repair_step()] * 3, make=[{"stdout": "green\n"}] * 3)
+    assert world.run("repair") == 1
+    prompt = world.calls("claude")[1]["prompt_file"]
+    assert "L1-1: tests/test_fix.py::test_fix: the red-first interpreter cannot start pytest (exit 1)" in prompt
+    assert "taken — test_a" in world.record().read_text(encoding="utf-8")
+    assert git(world.root, "rev-parse", "HEAD") == head, "a checkpoint landed without the named test running"
+
+
 def test_the_red_first_run_leaves_no_worktree_behind(world: World) -> None:
     """Criterion 19. Planted fault: the temporary worktree not removed."""
     repair_world(world)
@@ -3493,6 +3513,29 @@ def test_the_red_first_run_leaves_no_worktree_behind(world: World) -> None:
     assert len(listed) == 1, listed
     assert git(world.root, "status", "--porcelain") == ""
     assert {line.split()[-1] for line in git(world.root, "for-each-ref").splitlines()} == refs_before
+
+
+def test_the_red_first_run_removes_refs_the_named_test_created(world: World) -> None:
+    """Phase 6, F-4. Planted fault: a branch the named test created stayed in the shared repository."""
+    repair_world(world)
+    branch_test = (
+        "import subprocess\nfrom pathlib import Path\n\n\ndef test_branch():\n"
+        '    subprocess.run(["git", "branch", "red-first-probe"], check=True)\n'
+        '    value = (Path(__file__).resolve().parent.parent / "src" / "app.py").read_text(encoding="utf-8")\n'
+        '    assert "value = 2" in value\n'
+    )
+    world.script(
+        claude=[
+            repair_step(
+                stdout="L1-1: fixed — tests/test_branch.py::test_branch",
+                plant={"src/app.py": "value = 2\n", "tests/test_branch.py": branch_test},
+            )
+        ],
+        make=[{"stdout": "green\n"}],
+    )
+    assert world.run("repair") == 0
+    assert "refs/heads/red-first-probe" not in git(world.root, "for-each-ref")
+    assert len(git(world.root, "worktree", "list").splitlines()) == 1
 
 
 def test_a_failed_worktree_remove_leaves_no_dead_entry_and_is_named(
@@ -3539,6 +3582,33 @@ def test_a_failed_repair_process_restores_the_baseline_without_a_further_attempt
     assert git(world.root, "rev-parse", "HEAD") == head
     assert "taken — test_a" in world.record().read_text(encoding="utf-8")
     assert "Stage-2 call" in world.text(), "the audit line stays in findings.md"
+
+
+def test_a_failed_repair_process_removes_the_ignored_paths_it_created(
+    world: World, capsys: pytest.CaptureFixture[str]
+) -> None:
+    """Phase 6, F-5. Planted fault: an ignored file the failed attempt created stayed behind."""
+    repair_world(world)
+    (world.root / ".gitignore").write_text("lychee/\n", encoding="utf-8")
+    git(world.root, "add", "-A")
+    git(world.root, "commit", "--quiet", "-m", "ignore lychee")
+    world.script(
+        claude=[
+            {
+                "stderr": "boom",
+                "exit": 1,
+                "plant": {"lychee/repair.txt": "left behind\n", "src/half.py": "x = 1\n"},
+            },
+            {"stdout": "must not run"},
+        ],
+        make=[{"stdout": "must not run"}],
+    )
+    assert world.run("repair") == 1
+    assert not (world.root / "lychee" / "repair.txt").exists()
+    assert not (world.root / "lychee").exists()
+    err = capsys.readouterr().err
+    assert "ignored paths removed: lychee/repair.txt" in err, err
+    assert "undone: src/half.py" in err
 
 
 def test_a_passing_repair_writes_fixed_into_each_rows_place_and_nothing_else(world: World) -> None:
@@ -3598,6 +3668,55 @@ def test_a_passing_repair_writes_fixed_into_each_rows_place_and_nothing_else(wor
         assert untouched in lines, untouched
 
 
+def test_an_edit_outside_the_taken_rows_fails_the_attempt_and_never_reaches_a_commit(world: World) -> None:
+    """Phase 6, F-3. Planted fault: an overwritten rejected row passed the check into the checkpoint."""
+    repair_world(world, ("L1-1", "rejected — out of scope", ""))
+    world.write_findings(
+        VERDICT,
+        phase6_block(
+            [
+                phase6_cells("F-1", "taken — crit 21", "phase finding"),
+                phase6_cells("F-2", "rejected — covered elsewhere", "phase rejection"),
+            ]
+        ),
+    )
+    vandal = (
+        "# Findings — demo\n\n"
+        + VERDICT
+        + "\n\n"
+        + phase6_block(
+            [
+                phase6_cells("F-1", "taken — crit 21", "phase finding"),
+                phase6_cells("F-2", "rejected — silenced by the model", "phase rejection overwritten"),
+            ]
+        )
+        + "\n"
+    )
+    world.script(
+        claude=[
+            repair_step(
+                stdout="F-1: fixed — tests/test_fix.py::test_fix",
+                plant={
+                    "src/app.py": "value = 2\n",
+                    "tests/test_fix.py": FIX_TEST,
+                    "plans/changes/demo/findings.md": vandal,
+                },
+            ),
+            repair_step(stdout="F-1: fixed — tests/test_fix.py::test_fix"),
+        ],
+        make=[{"stdout": "green\n"}] * 2,
+    )
+    assert world.run("repair") == 0
+    prompt = world.calls("claude")[1]["prompt_file"]
+    assert "F-2: the phase-6 row no longer stands in findings.md as it stood before the repair" in prompt
+    _, phase6 = stage2.findings_rows(world.text())
+    rows = {row[0]: row for row in phase6}
+    assert rows["F-2"][5] == "phase rejection" and rows["F-2"][7] == "rejected — covered elsewhere"
+    assert rows["F-1"][7] == "fixed — tests/test_fix.py::test_fix"
+    committed = git(world.root, "show", "HEAD:plans/changes/demo/findings.md")
+    assert "silenced by the model" not in committed and "rejected — covered elsewhere" in committed
+
+
 def test_a_passing_repair_ends_in_one_checkpoint_commit_with_its_statuses(world: World) -> None:
     """Criterion 22. Planted fault: implement's message, or the statuses outside the commit."""
     repair_world(
@@ -3641,6 +3760,37 @@ def test_a_failed_repair_writes_no_fixed_status(world: World) -> None:
         "Attempt 2 (glm-repair) failed its post-run checks.",
         "Attempt 3 (stage-1) failed its post-run checks.",
     ]
+
+
+def test_a_failed_repair_puts_every_status_back_as_it_stood(world: World) -> None:
+    """Phase 6, F-2. Planted fault: a model-written `fixed` survived the failed attempts."""
+    repair_world(world)
+    world.write_findings(VERDICT, phase6_block([phase6_cells("F-1", "taken — crit 18", "phase finding")]))
+    vandal = (
+        "# Findings — demo\n\n"
+        + VERDICT
+        + "\n\n"
+        + phase6_block([phase6_cells("F-1", "fixed — tests/test_fix.py::test_fix", "phase finding")])
+        + "\n"
+    )
+
+    def vandal_step() -> dict:
+        return {
+            "stdout": "working on it",
+            "plant": {
+                "src/app.py": "value = 2\n",
+                "tests/test_fix.py": FIX_TEST,
+                "plans/changes/demo/findings.md": vandal,
+            },
+            "append": {"plans/changes/demo/plan.md": "2026-10-12 10:00–10:05, 5 min\n"},
+        }
+
+    world.script(claude=[vandal_step()] * 3, make=[{"stdout": "green\n"}] * 3)
+    assert world.run("repair") == 1
+    _, phase6 = stage2.findings_rows(world.text())
+    assert {row[0]: row for row in phase6}["F-1"][7] == "taken — crit 18"
+    assert "fixed — tests/test_fix.py::test_fix" not in world.text()
+    assert "taken — test_a" in world.record().read_text(encoding="utf-8")
 
 
 def test_the_record_is_marked_only_after_the_checkpoint_commit(world: World, monkeypatch: pytest.MonkeyPatch) -> None:
