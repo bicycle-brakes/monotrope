@@ -1,10 +1,12 @@
 """The command `python3 scripts/harness.py decide adr`.
 
-Criteria 7-10 of plans/changes/harness-decide-adr/spec.md. Every test builds its
-own git repository in a temporary directory; the terminal dialogue is scripted
-through an injected `ask`, and the terminal guard is run through the real
-command line with stdin from /dev/null. The one file of this repository read
-is `provenance.yaml`, which travels with the kit.
+Criteria 7-10 of plans/changes/harness-decide-adr/spec.md, and criteria 1-8 of
+plans/changes/provenance-location/spec.md (where the provenance map lies: the
+top of the tree or `decisions/provenance.yaml`, a refusal when both do). Every
+test builds its own git repository in a temporary directory; the terminal
+dialogue is scripted through an injected `ask`, and the terminal guard is run
+through the real command line with stdin from /dev/null. The one file of this
+repository read is `provenance.yaml`, which travels with the kit.
 """
 
 from __future__ import annotations
@@ -426,7 +428,8 @@ def test_a_refusal_names_why_the_change_owes_no_answer(tmp_path: Path) -> None:
 
 
 # ---------------------------------------------------------------------------
-# criterion 10 — who answered is configuration
+# criterion 10 — who answered is configuration; from here on also the criteria
+# of plans/changes/provenance-location/spec.md (the map's two places)
 # ---------------------------------------------------------------------------
 
 

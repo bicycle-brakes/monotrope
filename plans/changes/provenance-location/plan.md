@@ -76,6 +76,7 @@ All in `tests/test_harness_decide_adr.py`; "both flows" means the loop over
 | 3 | new `test_two_maps_refuse_before_asking`, both flows, over (top, `decisions/`) = (map, same map), (map, not YAML), (map, a directory), (a link to nowhere, map); asserts both paths and `keep one` | presence follows links, so the broken top-level link hands over to the other map; one place silently wins; one path unnamed |
 | 4 | new `test_without_a_map_the_refusal_names_both_places`, both flows — the "no map" case moves here from the refusal test | the message names one place only, or loses `prefix: "decisions/answers/"` |
 | 5, 6 | `test_a_map_without_the_role_refuses_before_asking`, cases not YAML, not a mapping, no entry, no `owner_role`, role not declared, no `roles:` key, each at both places; asserts the place's path in the output, and for the top-level map that `decisions/provenance.yaml` is not | a message still says `provenance.yaml` about the map under `decisions/`; a missing `roles:` key passes |
+| 5 | new `test_a_map_that_is_not_utf8_refuses_before_asking` (loop row L1-2), both flows, at both places: bytes that are not UTF-8 | an undecodable map ends in a traceback instead of a refusal naming its path |
 | 7 | new `test_root_names_the_tree_not_the_working_directory` — `monkeypatch.chdir` into a directory whose `provenance.yaml` names `decoy`; `--root` a tree whose `decisions/provenance.yaml` names `someone-else` | the places are resolved against the working directory |
 | 8 | `test_this_repository_declares_the_answering_role`, unchanged | a `decisions/provenance.yaml` added here, or the top-level map no longer read |
 
@@ -103,3 +104,9 @@ files) ran the same way, file tools only: it read the date at its start and at
 its stop (2026-10-12) and claims no span; the runner's clock measures the real
 span against the appetite of 2 h. It changed formatting only — no test, no
 message, no criterion.
+
+2026-10-12 — review loop round 1 (orchestrating session): loop rows L1-1 and
+L1-2 repaired; L1-2 added `test_a_map_that_is_not_utf8_refuses_before_asking`
+and `UnicodeDecodeError` to the refusals of `answering_role`. Round 2: the
+test module's docstring and this plan brought in line (L2-1, L2-2). No span
+is claimed here; the runner's clock measures it.
