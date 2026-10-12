@@ -1,0 +1,13 @@
+schema_version: 1
+change: stage2-repair
+question: adr
+answer: 'yes'
+reason: 'A short new ADR amends ADR 0011: the repair of taken findings runs on GLM
+  5.3, and a reviewer never repairs its own findings.'
+shown:
+  proposed: 'yes'
+  proposal_reason: The change routes a new kind of stage-2 work, the repair of taken
+    findings, to GLM 5.3 and amends the routing and the round-3 condition of ADR 0011,
+    and the maintainer keeps model routing in ADRs (decisions.md Q-4).
+answered_by: framework-architect
+answered_at: 2026-10-12

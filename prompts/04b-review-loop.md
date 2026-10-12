@@ -33,7 +33,7 @@ Answer with table rows only: `| ID | Severity | Dimension | Origin | Where |
 Finding |` — six cells, one row per finding, no header; write a `|` inside a
 cell as `\|`. When you find nothing, answer in one sentence.
 
-## For the implementer
+## For the orchestrator
 
 The rows are in the loop record, outside the worktree. Never copy them into it.
 
@@ -43,11 +43,15 @@ reason and stays in `findings.md` as a disagreement. This holds in every repair
 round, so a finding about something the spec does not cover needs a test or is
 rejected.
 
-1. For each row write `Status` in the record: `taken — <test or criterion>` or
-   `rejected — <reason>`.
-2. For a taken row also write `Broke a test`: `yes` when its repair turned a
-   test red that was green before it, `no` when it did not.
-3. Repair the taken rows, then run `make verify`; round 2 starts only when it
-   is green.
+1. For each row write its `Status` in the record: `taken — <test or
+   criterion>`, `taken — not a test — <reason>` for a finding no test can
+   show, or `rejected — <reason>`.
+2. Hand the taken rows to the repair: `python3 scripts/stage2.py repair
+   <change>` gives them to GLM 5.3 in one call; the runner runs `make verify`
+   and writes each row's `Status` (`docs/WORKFLOW.md` §4, "Repairing taken
+   findings").
+3. For each row the repair marked `fixed`, write `Broke a test` from the run's
+   evidence: `yes` when its repair turned a test red that was green before it,
+   `no` when it did not; round 2 starts only when `make verify` is green.
 4. After the phase-6 verdict, the rows enter `findings.md` with
    `release-loop`.

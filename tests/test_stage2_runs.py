@@ -135,6 +135,22 @@ def test_loop_rows_are_taken_rejected_or_undecided_and_none_is_dropped() -> None
     assert (counts.taken, counts.rejected, counts.undecided) == (1, 2, 1)
 
 
+def test_a_fixed_loop_row_counts_as_taken() -> None:
+    """Fault: a `fixed` row counted as undecided, or not counted (criterion 27)."""
+    text = (
+        HEADER
+        + f"\n{stage2.RELEASE_HEADING} 2026-10-08\n\n"
+        + loop_rows(
+            ("L1-1", "taken — t", "no", "agree"),
+            ("L1-2", "fixed — tests/test_x.py::test_x", "no", "agree"),
+            ("L1-3", "fixed — tests/test_x.py::test_x", "", "agree"),
+        )
+        + "\n\nRounds run: 1\n"
+    )
+    counts = stage2_runs.measure(text)
+    assert (counts.taken, counts.undecided, counts.loop_rows) == (3, 0, 3)
+
+
 def test_a_yes_in_any_table_counts_as_a_broken_test() -> None:
     """Fault: only loop rows read for `Broke a test`, or `no` counted (criterion 4)."""
     text = (
