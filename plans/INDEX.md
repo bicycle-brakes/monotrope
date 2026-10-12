@@ -93,6 +93,7 @@ typed: a hand-kept list of files ages exactly as fast as files are added.
 | [`changes/archive/2026-10-08-touch-map-comments/plan.md`](changes/archive/2026-10-08-touch-map-comments/plan.md) | accepted | done | 2026-10-08 | coding-harness-cff |
 | [`changes/archive/2026-10-08-touch-map-comments/research.md`](changes/archive/2026-10-08-touch-map-comments/research.md) | accepted | done | 2026-10-08 | coding-harness-cff |
 | [`changes/archive/2026-10-08-touch-map-comments/spec.md`](changes/archive/2026-10-08-touch-map-comments/spec.md) | accepted | done | 2026-10-08 | coding-harness-cff |
+| [`changes/codex-takeover/research.md`](changes/codex-takeover/research.md) | draft | none | 2026-10-12 | coding-harness-nsm |
 | [`changes/harness-decide-adr/decisions.md`](changes/harness-decide-adr/decisions.md) | accepted | none | 2026-09-30 | coding-harness-3ar |
 | [`changes/harness-decide-adr/findings.md`](changes/harness-decide-adr/findings.md) | draft | partial | 2026-09-30 | coding-harness-3ar |
 | [`changes/harness-decide-adr/plan.md`](changes/harness-decide-adr/plan.md) | draft | partial | 2026-09-30 | coding-harness-3ar |
