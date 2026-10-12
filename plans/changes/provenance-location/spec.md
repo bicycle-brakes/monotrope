@@ -143,10 +143,9 @@ with at least one feature anchor.
   `provenance.yaml`" and stays true of this repository.
 - **LakeSwitch's half** — adding `roles:` to its map (pin plan, row 7, its
   package 4), and a `paths:` entry for `decisions/answers/` whose
-  `owner_role` names `architect`: the pin plan records LakeSwitch's owner
-  entry as `decisions/` (row 6), and this command reads only the entry for
-  `decisions/answers/` (loop row L3-1). Matching the owner by the longest
-  covering prefix instead is a later change.
+  `owner_role` names `architect`: this command reads only the entry for
+  `decisions/answers/` (loop row L3-1); the pin plan's row 6 named
+  `decisions/` until it was corrected with this change.
 
 No design phase: a `bounded` change never runs 2b (`docs/WORKFLOW.md`,
 "Change classes, the ADR question and decision pull requests").
