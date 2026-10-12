@@ -156,6 +156,8 @@ tools/bd dolt push          # push tracker data to origin (refs/dolt/data)
   Each new checkout or worktree runs `make venv` once before `make verify`;
   the suite fails under an interpreter that does not match
   `requirements-ci.txt` (bead coding-harness-ei0).
+- **A text-only change (Markdown outside `scripts/`, `tests/`, `prompts/`,
+  `decisions/`) skips the local `make verify`;** the CI is its gate.
 - **Omnigent starts inside the worktree** (`omnigent claude
   --use-native-config`, ADR 0006). Omnigent's own tools that write, run,
   spawn or change state are denied by name in `.claude/settings.json`;
