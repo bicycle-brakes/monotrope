@@ -89,3 +89,5 @@ All in `tests/test_harness_decide_adr.py`; "both flows" means the loop over
 - 6: not yet written — tests/test_harness_decide_adr.py::test_a_map_without_the_role_refuses_before_asking, case "no roles: key" added in phase 4
 - 7: not yet written — tests/test_harness_decide_adr.py::test_root_names_the_tree_not_the_working_directory
 - 8: tests/test_harness_decide_adr.py::test_this_repository_declares_the_answering_role
+
+## Time used
