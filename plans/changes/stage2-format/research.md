@@ -90,3 +90,58 @@ Runner post-run path: `scripts/stage2.py` (`changed_paths`, `ignored_snapshot`, 
 ### Files a change would have to touch (observed, not recommended)
 
 `scripts/stage2.py` — a formatting step sits beside `prepare_derived` inside `verify_attempt`'s preparation phase, reusing `launch`, `foreign_env`, `scrub`, `_shrink`; a failure would join the existing diagnostic vocabulary (`Derived-file preparation failed: …` pattern). `tests/test_stage2.py` — the fixture's stand-in name list and the sequence tests named above. `docs/WORKFLOW.md` — only if the post-run contract's prose (the "runs `make verify`" sentence) must name the step. `decisions/gates.yaml` and `scripts/verify_all.sh` hold no runner knowledge; nothing else in the chain references the preparation step by name.
+
+## Phase 2 additions — 2026-10-12
+
+Gaps closed by reading and measuring while the spec was written, on
+`feat/stage2-format` at `9be21fb`. None of them disagrees with the text above;
+two answer points it left open.
+
+- **The tree is clean today.** `.venv/bin/ruff format --check --no-cache` and
+  `.venv/bin/ruff check --no-cache` over `scripts/` and `tests/` with this
+  repository's `ruff.toml`: "61 files already formatted", "All checks passed!",
+  both exit 0. This answers "whether any file under `scripts/` or `tests/` is
+  currently unformatted" above.
+- **ruff 0.9.10, measured** on a scratch copy outside the repository with this
+  repository's `ruff.toml`:
+  - `ruff check --fix --no-unsafe-fixes --force-exclude --no-cache <file>`
+    exits 0 when every finding was fixed ("2 fixed, 0 remaining": an unused
+    import removed, imports sorted) and 1 when findings without a fix remain
+    (ARG001, E741) or the file does not parse;
+  - `ruff format --force-exclude --no-cache <files>` exits 2 when one file does
+    not parse, after reformatting the others ("2 files reformatted");
+  - `--no-unsafe-fixes` is accepted (`ruff check`'s usage line lists it; the
+    help names it only as the way to switch unsafe fixes off);
+  - `--force-exclude` leaves a named path under an excluded directory untouched
+    ("No Python files found", exit 0);
+  - `--no-cache` leaves no `.ruff_cache` directory behind;
+  - **ruff writes through a symbolic link**: `ruff format scripts/link.py`, a
+    link to a file outside `scripts/`, rewrote that outside file;
+  - **without a path ruff walks the whole working directory** (`ruff format
+    --check` with no path reported a file in a directory nobody named).
+- **Only `.py`.** No `.pyi` or `.ipynb` file exists under `scripts/` or
+  `tests/` (find, 2026-10-12).
+- **No held document is Python.** `check_frontmatter_current.is_held` holds
+  Markdown files only, and `provenance.yaml` gives `tests/` `frontmatter:
+  none`; formatting a `.py` file never moves a stamp or the index.
+- **No existing test reaches a format step.** Only the renderer tests change a
+  `.py` file under `scripts/` (`scripts/plans_registry.py`), and in each of
+  them the derived-file preparation fails or the file is back at its committed
+  bytes before `make verify` would run.
+- **The passing attempt is pinned.** `test_a_passing_attempt_leaves_only_its_audit_line`
+  holds criterion 5 of change attempt-diagnostics (bead coding-harness-cit): a
+  passing attempt adds nothing to `findings.md` after its audit line.
+- **Where the repair verb lives.** Branch `feat/stage2-repair` (pull request
+  #131, bead coding-harness-g2f), read at `origin/feat/stage2-repair`
+  (`f86b7de`), not merged into `origin/main` on 2026-10-12: it moves
+  `implement`'s attempt loop into `run_attempts(…)`, which `implement` and the
+  new `repair` both call; it leaves `verify_attempt` unchanged; it gives
+  `checkpoint` the parameter `message: str | None = None`, used as `message or
+  f"feat({change}): implement accepted plan"`. This answers "where that work
+  lives is not readable from this worktree" above.
+- **The phase validator is not in this tree.** `prompts/02-spec.md` and
+  `prompts/03-plan.md` name `scripts/validate_change_artefacts.py` as their
+  gate; `docs/WORKFLOW.md` ("Not all of it is here yet") lists it among the
+  pieces this repository does not have. The gates that measure a spec and plan
+  here are `make verify`'s: `plans-registry`, `frontmatter-current`,
+  `interview-minimums`, `adr-answers` and `criterion-ledger`.
