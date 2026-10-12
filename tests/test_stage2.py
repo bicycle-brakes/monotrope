@@ -2290,21 +2290,22 @@ def test_a_failed_attempt_carries_its_format_line_first_in_its_diagnostics(world
 
 
 def test_a_passing_run_lists_each_format_line_in_its_commit_message(world: World) -> None:
-    # Criterion 8. Planted fault: only the passing attempt's line kept, or a line for an attempt
-    # that ran no format step.
+    # Criterion 8. Planted fault: an earlier attempt's format line dropped before the checkpoint
+    # (only the passing attempt's line kept), or a line for an attempt that ran no format step.
     venv_ruff(world)
     world.script(
         claude=[
-            {"stdout": "first", "plant": {"src/app.py": "value = 2\n"}},
+            {"stdout": "first", "plant": {"src/app.py": "value = 2\n", "scripts/b.py": "b=1\n"}},
             formatted_attempt(),
         ],
-        ruff=[{}, {"plant": {"scripts/a.py": "a = 1\n"}}],
+        ruff=[{}, {"plant": {"scripts/b.py": "b = 1\n"}}, {}, {"plant": {"scripts/a.py": "a = 1\n"}}],
         make=[{"stdout": "green\n"}] * 2,
     )
     assert world.run("implement") == 0
     assert git(world.root, "log", "-1", "--format=%B") == (
         "feat(demo): implement accepted plan\n\n"
         "Runner format before `make verify` (ruff check --fix with safe fixes only, then ruff format):\n"
+        "- Attempt 1 (flash): ruff changed `scripts/b.py`.\n"
         "- Attempt 2 (flash-repair): ruff changed `scripts/a.py`."
     )
 

@@ -232,3 +232,15 @@ would have collapsed the parenthesized `FORMAT_COMMIT_HEADING`, whose one-line f
 characters, under the configured line-length 120. The stamp and the index render are the runner's
 derived-file preparation; it runs `make verify` and makes the checkpoint commit after this session
 returns.
+
+2026-10-12, repair session under the Stage-2 runner (`repair`, row L1-1 taken as `taken — not a
+test`) — start and end clock times not readable in it: the session has file tools and no command
+tool, so `date` could not be read, and the span is not estimated. It strengthened the criterion-8
+test `test_a_passing_run_lists_each_format_line_in_its_commit_message`: the failed first attempt
+now plants `scripts/b.py` beside `src/app.py`, so it runs the format step and its line
+`- Attempt 1 (flash): ruff changed \`scripts/b.py\`.` must survive into the checkpoint commit's
+message next to attempt 2's — the "every attempt" part of criterion 8, unmeasured before (finding
+L1-1) — and the comment names the planted fault as an earlier attempt's format line dropped before
+the checkpoint. The runner's code already keeps every attempt's line, so the strengthened test is
+green on the baseline's code and the row is answered `not a test`. The runner runs `make verify`
+and makes the checkpoint commit after this session returns.

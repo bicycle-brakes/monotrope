@@ -184,3 +184,5 @@ Stage-2 call, 2026-10-12: repair · attempt 3 · route stage-1 · endpoint claud
 > - Runner format before `make verify`: ruff changed no file.
 > - L1-1: tests/test_stage2.py::test_a_passing_run_lists_each_format_line_in_its_commit_message: pytest ended 0 on the baseline's code; red first is exit 1 or 2
 > ```
+
+Stage-2 call, 2026-10-12: repair · attempt 1 · route glm · endpoint glm-coding-plan · model glm-5.3 · leak check clean over 382 files, 950 commits, 12 rules.
