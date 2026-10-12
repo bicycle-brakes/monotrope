@@ -1681,11 +1681,12 @@ def format_step(root: Path, env: dict[str, str], key: str | None = None) -> str 
     """Ruff's safe fixes, then its formatter, over the targets - and what that changed, in one line.
 
     `None` without targets: no ruff process starts. A ruff that cannot start, a command that ends
-    non-zero another way, findings without a safe fix - the line says so, and the attempt passes or
-    fails exactly as `make verify` and the time check decide. What the step changed is measured by
-    comparing each target's bytes around it, not out of ruff's output; a launch failure of either
-    command makes the whole line `not run`, for the binary that cannot start for one cannot start
-    for the other.
+    non-zero another way, findings without a safe fix or a file that does not parse - the line says
+    so, and the attempt passes or fails exactly as `make verify` and the time check decide. What
+    the step changed is measured by comparing each target's bytes around it, not out of ruff's
+    output; a launch failure of either command makes the whole line `not run`, for the binary that
+    cannot start for one cannot start for the other. A target that cannot be read is named by its
+    repository path, never by the absolute one its `OSError` would carry.
     """
     try:
         targets = format_targets(root, env)
@@ -1695,10 +1696,14 @@ def format_step(root: Path, env: dict[str, str], key: str | None = None) -> str 
         return None
     if not (root / RUFF).is_file():
         return scrub(f"not run — no ruff at `{RUFF}`; `make venv` builds it.", key)
-    try:
-        before = {target: (root / target).read_bytes() for target in targets}
-    except OSError as error:
-        return _not_run(str(error), key)
+    before: dict[str, bytes] = {}
+    for target in targets:
+        try:
+            before[target] = (root / target).read_bytes()
+        except OSError:
+            # The reason names the target by its repository path; the raw error text would carry the
+            # machine's absolute one into the block and the checkpoint commit message.
+            return _not_run(f"cannot read `{target}`", key)
     notes: list[str] = []
     for command in RUFF_COMMANDS:
         try:
@@ -1706,7 +1711,9 @@ def format_step(root: Path, env: dict[str, str], key: str | None = None) -> str 
         except CallFailed as error:
             return _not_run(str(error), key)
         if done.returncode == 1 and command[0] == "check":
-            notes.append("ruff check left findings without a safe fix")
+            # Exit 1 also covers a target that does not parse, and the exit code alone does not say
+            # which of the two it left, so the note names both.
+            notes.append("ruff check left findings without a safe fix or a file that does not parse")
         elif done.returncode:
             notes.append(f"ruff {command[0]} exited {done.returncode}")
     changed = []

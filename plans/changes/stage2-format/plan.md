@@ -256,3 +256,16 @@ snapshot taken after `verify_attempt` now counts the four lines in block 1 and n
 in block 2. The runner's snapshot code is unchanged, so the strengthened test is green on the
 baseline's code by design and the row is answered `not a test`. The runner runs `make verify` and
 makes the checkpoint commit after this session returns.
+
+2026-10-13, repair session under the Stage-2 runner (`repair`, rows L3-1 and L3-3, both taken as
+code rows) — start and end clock times not readable in it: the session has file tools and no
+command tool, so `date` could not be read, and the span is not estimated. L3-1: the note for a
+`ruff check` exit 1 now reads `ruff check left findings without a safe fix or a file that does not
+parse`, for exit 1 covers both and the exit code alone does not say which; held by
+tests/test_stage2.py::test_a_check_exit_one_covers_findings_and_a_file_that_does_not_parse, which
+fails on the baseline wording. L3-3: a target whose bytes cannot be read makes the line `not run —
+cannot read \`scripts/a.py\`.` — the repository path, not the raw `OSError` text with the
+worktree's absolute path; held by
+tests/test_stage2.py::test_an_unreadable_target_is_named_by_its_repository_path, which fails on
+the baseline. The `format_step` docstring names both. The runner runs the red-on-baseline proof,
+`make verify` and the checkpoint commit after this session returns.

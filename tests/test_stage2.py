@@ -2369,6 +2369,36 @@ def test_a_ruff_that_cannot_start_is_reported_as_not_run(world: World, case: str
     assert "no ruff at" in line or "could not be started" in line
 
 
+def test_a_check_exit_one_covers_findings_and_a_file_that_does_not_parse(world: World) -> None:
+    # Repair round 3 (L3-1). Planted fault: the note calls every exit 1 of `ruff check` findings
+    # without a safe fix alone, although a target that does not parse exits 1 as well.
+    venv_ruff(world)
+    world.script(
+        claude=[formatted_attempt()],
+        ruff=[{"stdout": "error: Failed to parse scripts/a.py:1:5: expected an expression", "exit": 1}, {}],
+        make=[{"stdout": "green\n"}],
+    )
+    assert world.run("implement") == 0
+    message = git(world.root, "log", "-1", "--format=%B")
+    line = next(entry for entry in message.splitlines() if entry.startswith("- Attempt 1 (flash):"))
+    assert "ruff check left findings without a safe fix or a file that does not parse" in line
+
+
+def test_an_unreadable_target_is_named_by_its_repository_path(world: World) -> None:
+    # Repair round 3 (L3-3). Planted fault: the raw `OSError` text as the `not run` reason, carrying
+    # the worktree's absolute path into the block and the checkpoint commit message.
+    venv_ruff(world)
+    unreadable = world.root / "scripts" / "a.py"
+    unreadable.write_text("a=1\n", encoding="utf-8")
+    unreadable.chmod(0o000)
+    world.script(ruff=[{}, {}], make=[{"stdout": "green\n"}])
+    formatted: list[str] = []
+    stage2.verify_attempt(world.root, world.plan, "", formatted=formatted)
+    assert world.calls("ruff") == []
+    assert formatted == ["not run — cannot read `scripts/a.py`."]
+    assert str(world.root) not in formatted[0]
+
+
 def test_a_commit_message_holds_no_fragment_of_the_key(world: World) -> None:
     # Criterion 12. Planted fault: the format line built without `scrub`.
     venv_ruff(world)
