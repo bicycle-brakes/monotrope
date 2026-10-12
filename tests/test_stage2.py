@@ -2907,6 +2907,15 @@ def test_a_reviewers_lines_that_look_like_the_records_own_text_are_carried(world
         assert line in lines, line
 
 
+def test_a_new_records_intro_names_the_not_a_test_status_and_the_fixed_mark(world: World) -> None:
+    """Repair round 1, L1-2. Planted fault: the intro a new record gets names only the two old Status words."""
+    world.script(pi=[{"stdout": rows(1)}])
+    assert world.run("review-loop") == 0
+    record = world.record().read_text(encoding="utf-8")
+    assert "taken — not a test — <reason>" in record
+    assert "a row the repair marked `fixed` needs the mark too" in record
+
+
 def test_a_rounds_words_do_not_swallow_the_rows_of_the_next(world: World) -> None:
     """Repair round 2: one round's words end at the next round heading; round 2's rows are read, round 1's words carried."""
     world.script(pi=[{"stdout": rows(1) + "\nA remark of round 1."}, {"stdout": rows(1) + "\nA remark of round 2."}])
@@ -3394,6 +3403,28 @@ def test_a_fixed_line_naming_an_undefined_test_fails_the_attempt(world: World) -
     assert world.run("repair") == 0
     prompt = world.calls("claude")[1]["prompt_file"]
     assert "L1-1: tests/test_absent.py::test_absent defines no function `def test_absent(`" in prompt
+
+
+def test_a_fixed_line_whose_test_path_climbs_out_of_tests_fails_the_attempt(world: World) -> None:
+    """Repair round 1, L1-1. Planted fault: a `.` or `..` path segment in the fixed line's test accepted."""
+    seed_tests(world)
+    (world.root / "src" / "test_x.py").write_text(FIX_TEST, encoding="utf-8")
+    git(world.root, "add", "-A")
+    git(world.root, "commit", "--quiet", "-m", "a test outside tests/, red on the baseline")
+    world.write_record([("L1-1", "taken — test_a", "no")])
+    world.script(
+        claude=[
+            repair_step(
+                stdout="L1-1: fixed — tests/../src/test_x.py::test_fix",
+                plant={"src/app.py": "value = 2\n", "src/test_x.py": FIX_TEST},
+            ),
+            repair_step(),
+        ],
+        make=[{"stdout": "green\n"}] * 2,
+    )
+    assert world.run("repair") == 0
+    prompt = world.calls("claude")[1]["prompt_file"]
+    assert "would climb out of `tests/`; a `.` or `..` path segment is no test path" in prompt, prompt
 
 
 def test_a_named_test_that_is_not_red_first_fails_the_attempt(world: World) -> None:

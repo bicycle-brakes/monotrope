@@ -267,3 +267,7 @@ Stage-2 call, 2026-10-12: implement · attempt 3 · route stage-1 · endpoint cl
 > tools/claude-code/README.md:75:81 error MD013/line-length Line length [Expected: 80; Actual: 88]
 > make: *** [verify] Error 1
 > ````
+
+Stage-2 call, 2026-10-12: review-loop · endpoint opencode-go · model deepseek-v4.1-flash · leak check clean over 376 files, 927 commits, 12 rules.
+
+Stage-2 call, 2026-10-12: repair · attempt 1 · route glm · endpoint glm-coding-plan · model glm-5.3 · leak check clean over 376 files, 927 commits, 12 rules.

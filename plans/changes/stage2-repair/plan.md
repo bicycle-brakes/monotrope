@@ -270,3 +270,17 @@ string literals with escaped double quotes (`FIX_TEST` and `green_on_baseline`) 
 and the signature of `test_the_record_is_marked_only_after_the_checkpoint_commit`, which fits in
 118 characters, went onto one line. The runner runs `make verify` and makes the checkpoint commit
 after this entry.
+
+2026-10-12, loop round-1 repair session under the Stage-2 runner (`repair`, GLM 5.3) — start and
+end clock times not readable in it: the session has file tools and no command tool, so `date` could
+not be read, and the span is not estimated. The day is the runner's session date. The session
+repaired the three taken rows and nothing else: L1-1, the fixed line's test path in
+`scripts/stage2.py` (`fixed_status`), now refuses a `.` or `..` path segment as the criterion
+ledger's gate does, proven red first by
+`tests/test_stage2.py::test_a_fixed_line_whose_test_path_climbs_out_of_tests_fails_the_attempt`;
+L1-2, `RECORD_INTRO` now names `taken — not a test — <reason>` and says a row the repair marked
+`fixed` needs the `Broke a test` mark too, proven red first by
+`tests/test_stage2.py::test_a_new_records_intro_names_the_not_a_test_status_and_the_fixed_mark`;
+L1-3, a text row, the "Reads" passages of `docs/WORKFLOW.md` §4 and the `scripts/stage2.py` module
+docstring now name `repair` among the calls the `--restricted` boundary covers. The runner runs the
+red-first proofs, `make verify` and the checkpoint commit after this entry.

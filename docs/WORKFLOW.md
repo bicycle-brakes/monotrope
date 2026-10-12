@@ -775,8 +775,9 @@ session (`Bash(codex *)`). That is a brake, not a lock: `sh -c`, an absolute
 path or a script file passes it, as it does for the merge rules in §2.
 
 **Reads: confined for the Claude Code calls, asked for Codex and for the
-loop.** Every Claude Code call (explore, implement and the Sonnet 5.5 fallback
-attempts) starts in the worktree with `--restricted` and no `--add-dir`.
+loop.** Every Claude Code call (explore, implement, repair and the Sonnet 5.5
+fallback attempts) starts in the worktree with `--restricted` and no
+`--add-dir`.
 `claude --help` says `--restricted` "confines the file tools to the working
 directories", so the credential file `~/.config/cc-routing/secrets.env`, which
 lies outside the worktree, is outside what those calls' file tools reach.

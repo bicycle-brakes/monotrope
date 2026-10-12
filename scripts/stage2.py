@@ -66,8 +66,8 @@ alone, and `--stage2-off` to explore, implement and repair.
    allow-list - never the caller's.
 
 **Reads: what each call can reach.** The Claude Code calls (explore,
-implement, the Sonnet fallback attempts) start in the worktree with
-`--restricted` and no `--add-dir`; `claude --help` says `--restricted`
+implement, repair and the Sonnet fallback attempts) start in the worktree
+with `--restricted` and no `--add-dir`; `claude --help` says `--restricted`
 "confines the file tools to the working directories", so
 `~/.config/cc-routing/secrets.env` is outside what those file tools reach.
 That is the CLI's documented behaviour, not measured here. **The review
@@ -219,15 +219,19 @@ QUOTE_LINE_CHARS = 500
 ATTEMPT_FILES = 40
 LOOP_ID = re.compile(r"L\d+-\d+")
 NOT_ROWS_NOTE = "The answer was not only six-cell rows; what is not one is kept below as it came."
-# A fixed line's test, in the form of ADR 0013's criterion ledger: a file `tests/…/test_*.py`, a function `test_…`.
+# A fixed line's test, in the form of ADR 0013's criterion ledger: a file `tests/…/test_*.py`, a function
+# `test_…`. A `.` or `..` path segment would climb out of `tests/`; `fixed_status` refuses it as the
+# ledger's gate does (`check_criterion_ledger.py`).
 FIXED_TEST = re.compile(r"^tests/(?P<file>[^|\s]+\.py)::(?P<function>test_\w+)$")
 # A red-first pytest run that has not ended after this many minutes is stopped (spec, criterion 18).
 RED_FIRST_MINUTES = 10
 
 RECORD_HEADING = "# Loop record — "
 RECORD_INTRO = (
-    "Write `Status` (`taken — <test or criterion>` or `rejected — <reason>`) for every row below.\n"
-    "For a taken row also write `Broke a test` (`yes` or `no`) — before the next round or the release."
+    "Write `Status` (`taken — <test or criterion>`, `taken — not a test — <reason>` or "
+    "`rejected — <reason>`) for every row below.\n"
+    "For a taken row also write `Broke a test` (`yes` or `no`) — before the next round or the release; "
+    "a row the repair marked `fixed` needs the mark too."
 )
 
 _PIPE = re.compile(r"(?<!\\)\|")
@@ -1736,6 +1740,8 @@ def fixed_status(ident: str, rest: str) -> str:
             return f"{ident}: `fixed — not a test` without a reason"
         return "fixed — not a test — " + reason.replace("|", "\\|")
     if (test := FIXED_TEST.fullmatch(body)) and Path(test.group("file")).name.startswith("test_"):
+        if any(segment in (".", "..") for segment in body.partition("::")[0].split("/")):
+            return f"{ident}: `{body}` would climb out of `tests/`; a `.` or `..` path segment is no test path"
         return f"fixed — {body}"
     return f"{ident}: `{body}` is neither a test `tests/<path>::<function>` nor `not a test — <reason>`"
 
