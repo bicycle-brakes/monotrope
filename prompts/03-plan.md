@@ -42,7 +42,7 @@ Required:
   on what happens there.
 - **The verification command**, verbatim, as it stands in the shell.
 - **Per acceptance criterion the test** that holds it, and the fault that test
-  would have to meet to go red.
+  would have to meet to go red — as entries of the criterion ledger below.
 - **What you do not touch**, where the obvious reading would include it.
 - **No longer than the change.** A plan with more lines than the diff it
   describes is a finding, not diligence. What fits in one sentence stays one
@@ -51,6 +51,36 @@ Required:
   Stage-1 route because Stage 2 was off or Z.ai unavailable, copy that route,
   model and reason into `plan.md`; phase 1 cannot write it here before this
   file exists.
+
+## The criterion ledger
+
+Every `plan.md` has exactly one section headed `## Criterion ledger`, with
+one line per criterion and test in one of three forms:
+
+- a test entry, `- <n>: tests/<path>::<function>` — a top-level
+  `def test_…` in a file `tests/…/test_*.py`;
+- a not-yet-written entry, `- <n>: not yet written tests/<path>::<function>`
+  — a test phase 4 has still to write;
+- a not-a-test entry, `- <n>: not a test — <what holds it>` — a review, a
+  gate or a command; where a test can hold the criterion, write the test.
+
+`<n>` is a criterion number of `spec.md`, without a leading zero, and every
+criterion has at least one entry. A test entry or a not-yet-written entry may
+end in ` — ` and the fault that turns the test red; an indented line
+continues an entry. For example:
+
+```markdown
+## Criterion ledger
+
+- 1: tests/test_example.py::test_a_missing_file_is_reported — the check exits 0 without the file
+- 2: not yet written tests/test_example.py::test_an_empty_file_is_reported
+- 3: not a test — the phase-6 review reads the help text against the spec
+```
+
+The gate `criterion-ledger` holds the ledger of every live change, and keeps
+holding it after the change is archived: a named test that is not defined, a
+not-yet-written test that exists, a criterion without an entry, an entry for
+no criterion and a line in none of the three forms turn `make verify` red.
 
 ## Questions
 

@@ -595,3 +595,86 @@ def test_change_flag_with_unknown_name_is_found(repo: Path) -> None:
     done = run_gate(repo, "--change", "real-typo")
     assert done.returncode == 1
     assert "no change folder" in done.stdout
+
+
+# --- the ADR owner: a plan-only folder is a migration, not an owner ---------
+
+
+def test_a_folder_whose_diff_touches_only_plan_md_is_no_owner(repo: Path) -> None:
+    """The ledger migration of change criterion-test-ledger (2026-10-11): one
+    ADR draft lands beside four migrated plans, and the diff then touches five
+    change folders. Only a folder that carries more than plan.md counts as the
+    owner, so the five answers answer for exactly one. Mutation evidence for
+    scripts/check_interview_minimums.py: counting the plan-only folder again
+    turns this run red with "owns 2 change folder(s)"."""
+    write_change(repo, "real", "bounded", decisions=records(5))
+    _stage_adr(repo)
+    # the ADR names its owner, the one means the interim rule reads (row L3-1)
+    (repo / "docs" / "adr" / "0099-test-decision.md").write_text("# ADR 0099 — test\n\nChange: real\n")
+    migrated = repo / "plans" / "changes" / "migrated"
+    migrated.mkdir(parents=True)
+    (migrated / "plan.md").write_text("# Plan\n\n## Criterion ledger\n\n- 1: not a test — review\n")
+    done = run_gate(repo)
+    assert done.returncode == 0, done.stdout
+    assert "owns 2 change folder(s)" not in done.stdout
+
+
+def test_an_adr_with_only_its_own_plan_md_still_has_that_one_owner(repo: Path) -> None:
+    """Review-loop row L2-1: the plan-only narrowing must not leave an ADR
+    without an owner. A diff touching docs/adr/** and only the plan.md of its
+    own change folder still owns exactly that folder, which then owes the five
+    answers (here it has them, so the run is green). Fault: dropping the
+    fall-back to plan-only folders in scripts/check_interview_minimums.py
+    ("owns 0 change folder(s)") turns this red. The heuristic is interim; bead
+    coding-harness-afa replaces it with an explicit owner statement."""
+    _git(repo, "checkout", "main")
+    write_change(repo, "solo", "bounded", decisions=records(5))
+    _commit_all(repo, "feat: solo change with its answers")
+    _git(repo, "push", "origin", "main")
+    _git(repo, "checkout", "feat/test")
+    _git(repo, "merge", "main")
+    (repo / "plans" / "changes" / "solo" / "plan.md").write_text("# Plan\n")
+    _stage_adr(repo)
+    done = run_gate(repo)
+    assert done.returncode == 0, done.stdout
+    assert "owns 0 change folder(s)" not in done.stdout, done.stdout
+
+
+def test_a_plan_md_only_folder_does_not_hide_the_adr_owner_among_other_folders(repo: Path) -> None:
+    """Review-loop row L3-1: folder A touched through decisions.md, folder B
+    through plan.md alone and one ADR that names neither. The paths cannot say
+    whether the ADR belongs to A or to B, so the run must not go green by
+    silently picking A: it reports both candidates. Fault: dropping the
+    plan-only folder whenever another folder owns (the L2-1 rule) reports one
+    owner and exits 0. When the ADR text names exactly one candidate, that
+    one owns it and the run is decided by its answers."""
+    write_change(repo, "folder-a", "bounded", decisions=records(5))
+    _stage_adr(repo)
+    other = repo / "plans" / "changes" / "folder-b"
+    other.mkdir(parents=True)
+    (other / "plan.md").write_text("# Plan\n\nA real plan edit, not a ledger migration.\n")
+    done = run_gate(repo)
+    assert done.returncode == 1, done.stdout
+    assert "folder-a" in done.stdout and "folder-b" in done.stdout
+    assert "name the owning change folder" in done.stdout
+
+    # the ADR names folder-b, which has no decisions.md: the owner owes five
+    (repo / "docs" / "adr" / "0099-test-decision.md").write_text("# ADR 0099\n\nChange: folder-b\n")
+    done = run_gate(repo)
+    assert done.returncode == 1, done.stdout
+    assert "folder-b" in done.stdout and "5" in done.stdout
+
+
+def test_a_folder_touched_beyond_plan_md_is_never_also_plan_only(repo: Path) -> None:
+    """Review-loop row F-3 (phase 6, Codex): one feature changes its spec.md,
+    decisions.md and plan.md, and the ADR does not spell the folder name. The
+    folder owns the ADR through spec.md and decisions.md; its plan.md must not
+    also enter the plan-only set, or the ambiguity branch rejects a diff with
+    five valid answers and exactly one candidate owner. Fault: leaving the
+    folder in plan_only reports "cannot say which of" and exits 1."""
+    folder = write_change(repo, "solo-feature", "bounded", decisions=records(5))
+    (folder / "plan.md").write_text("# Plan\n\nA real plan edit.\n")
+    _stage_adr(repo)
+    done = run_gate(repo)
+    assert done.returncode == 0, done.stdout
+    assert "cannot say which" not in done.stdout, done.stdout

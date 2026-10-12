@@ -4,7 +4,7 @@ status: draft
 implementation_status: partial
 date: 2026-10-05
 last_reviewed: 2026-10-05
-updated: 2026-10-05
+updated: 2026-10-11
 supersedes: null
 superseded_by: null
 bead: coding-harness-pu9
@@ -137,6 +137,8 @@ Read `date` at each step boundary (`prompts/04-implement.md`).
 
 ## Tests
 
+The list the gate criterion-ledger holds is the section "Criterion ledger" below; this table is the earlier record.
+
 | Criterion | Test | Goes red when |
 | --- | --- | --- |
 | 1 | `test_only_notes_under_docs_research_are_listed` — `_INDEX.md`, `a.txt`, `docs/other/b.md`, `docs/research/sub/c.md` | the glob covers `docs/`, skips no `_` name, or is not recursive |
@@ -155,6 +157,44 @@ Read `date` at each step boundary (`prompts/04-implement.md`).
 | 14 | `test_the_kit_carries_the_script_and_its_test` (`probe.rolle`); gate `leerprobe` | a role not `mechanismus`; a test that reads this repository's notes |
 | 15 | the run under "Verification", output under `## Evidence` | — |
 | 16 | read in phase 6 | — |
+
+## Criterion ledger
+
+- 1: tests/test_research_currency.py::test_only_notes_under_docs_research_are_listed — the glob covers `docs/`, skips no `_` name, or is not recursive
+- 2: tests/test_research_currency.py::test_the_review_date_is_last_reviewed_and_nothing_else — `updated:` or `created:` is read
+- 2: tests/test_research_currency.py::test_a_header_with_a_byte_order_mark_and_crlf_line_endings_is_read — a BOM or CRLF header misread
+- 3: tests/test_research_currency.py::test_the_list_notices_a_note_past_the_threshold — `>=`, another number, no threshold
+- 3: tests/test_research_currency.py::test_the_threshold_is_one_named_constant — the constant bypassed
+- 3: tests/test_research_currency.py::test_today_names_the_day_whatever_the_clock_says — a fixed day changes the list
+- 4: tests/test_research_currency.py::test_an_unusable_review_date_is_due_with_its_reason — a case skipped, raises, or loses its reason
+- 4: tests/test_research_currency.py::test_a_date_on_the_next_day_is_usable — no slack or more than a day
+- 4: tests/test_research_currency.py::test_a_note_that_cannot_be_read_is_due_with_its_reason — an unreadable note ends the run
+- 4: tests/test_research_currency.py::test_a_reason_is_one_short_line — a value not cut to one short line
+- 4: tests/test_research_currency.py::test_a_pathological_header_does_not_end_the_run — a nested header ends the run with a traceback
+- 4: tests/test_research_currency.py::test_a_header_too_large_to_read_is_due_with_its_reason — a too-large header ends the run
+- 4: tests/test_research_currency.py::test_an_alias_bomb_is_not_expanded_to_describe_it — the alias is expanded to describe it
+- 4: tests/test_research_currency.py::test_the_oldest_line_reads_naturally_for_today_and_tomorrow
+- 5: tests/test_research_currency.py::test_unusable_first_then_oldest_then_path — glob order, mtime order, ties not by path
+- 5: tests/test_research_currency.py::test_two_runs_give_the_same_bytes — two runs differ
+- 6: tests/test_research_currency.py::test_without_today_the_local_date_counts — a fixed date, `--today` ignored
+- 6: tests/test_research_currency.py::test_a_malformed_today_is_a_usage_error — `--today 20261220` accepted
+- 7: tests/test_research_currency.py::test_the_text_names_the_oldest_even_when_none_is_due — no oldest line on an empty list
+- 7: tests/test_research_currency.py::test_the_text_has_a_line_per_due_note — a due note unprinted
+- 7: tests/test_research_currency.py::test_the_summary_has_a_table_only_when_a_note_is_due — a table without a due note
+- 8: tests/test_research_currency.py::test_the_json_carries_every_note_in_order — a key missing, only due notes, another order
+- 9: tests/test_research_currency.py::test_the_summary_is_written_only_when_asked — no append with the variable, a file without it
+- 9: tests/test_research_currency.py::test_the_summary_carries_the_not_measured_line — the not-measured line missing from the summary
+- 9: tests/test_research_currency.py::test_an_unwritable_summary_does_not_end_the_run — an unwritable summary ends the run
+- 10: tests/test_research_currency.py::test_due_notes_never_turn_the_run_red — exit depends on due notes
+- 10: tests/test_research_currency.py::test_a_missing_or_empty_corpus_is_not_measured — exit 0 over nothing
+- 11: tests/test_research_currency.py::test_the_run_changes_no_byte_and_needs_no_git — a write, a git call
+- 12: tests/test_research_currency.py::test_the_gate_reports_in_the_drift_job_only — another job or level, no `continue-on-error`
+- 13: tests/test_ci.py::test_every_script_has_a_caller_or_a_declared_reason — the step missing from `ci.yml`
+- 13: tests/test_ci.py::test_every_script_has_a_test_or_a_declared_reason — no test names the script
+- 13: tests/test_ci.py::test_every_gate_step_has_a_mutation_test — no `notices` test for the script
+- 14: tests/test_research_currency.py::test_the_kit_carries_the_script_and_its_test — a role not `mechanismus`
+- 15: not a test — the run under "Verification", its output under `## Evidence`
+- 16: not a test — the phase-6 review reads `docs/research/_INDEX.md` against the criterion
 
 ## Verification
 

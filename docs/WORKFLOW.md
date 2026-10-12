@@ -4,7 +4,7 @@ category: governance
 status: current
 created: 2026-09-05
 last_reviewed: 2026-09-29
-updated: 2026-10-10
+updated: 2026-10-11
 owner: Data Architect
 provenance: ai-drafted-reviewed
 produced_by:
@@ -382,6 +382,7 @@ What this does not do:
 | Enforcement | `decisions/gates.yaml` | **the one gate list** (D-10); `.github/workflows/ci.yml` is generated from it |
 | Decisions | `scripts/check_adr_answers.py`, `scripts/harness.py`, `.github/PULL_REQUEST_TEMPLATE/decision.md` | the gate `adr-answers`; `decide adr` records the maintainer's ADR answers; the decision pull request's block |
 | Interview | `scripts/check_interview_minimums.py` | the gate `interview-minimums`: counts counted interview records per class at the spec gate and in verify, sees ADR paths in every diff state, compares per context — first parent on the main line (a `main` checkout or the hosted main-line run), else the merge base; a detached HEAD at `origin/main` is not measured and exits 3 — subject after the cut-off 2026-10-08 |
+| Criterion tests | `scripts/check_criterion_ledger.py` | the gate `criterion-ledger`: every test a plan's `## Criterion ledger` names is defined, every criterion of the spec has an entry, a not-yet-written entry stands only while the change is live; ledgers stay held after archiving, and archived plans dated before 2026-10-11 without one are exempt (ADR 0013); moving that cut-off date is a governance act — a decision pull request, never a drive-by edit of the gate |
 
 ### Verification runs through git and CI, not through the harness
 
