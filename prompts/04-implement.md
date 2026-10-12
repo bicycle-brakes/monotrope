@@ -96,3 +96,12 @@ rejected with its reason and stays in `findings.md` as a disagreement. This
 holds in every repair round, so a finding about something the spec does not
 cover needs a test, or it is rejected. `04b-review-loop.md` says how the loop
 rows are decided and recorded.
+
+**Repair.** The orchestrator decides taken or rejected and hands every taken
+row to `python3 scripts/stage2.py repair <change>` — GLM 5.3 (`glm-5.3`)
+repairs them in one guarded call. The model answers one fixed line per row:
+`<ID>: fixed — tests/<path>::<function>`, or `<ID>: fixed — not a test —
+<reason>` for a row taken as `taken — not a test`. A code row needs a test
+that is red first — it fails on the baseline's code — and the runner runs
+that proof itself, then writes each row's Status and ends in one checkpoint
+commit.

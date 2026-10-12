@@ -4,7 +4,7 @@ category: governance
 status: current
 created: 2026-09-05
 last_reviewed: 2026-09-29
-updated: 2026-10-11
+updated: 2026-10-12
 owner: Data Architect
 provenance: ai-drafted-reviewed
 produced_by:
@@ -593,7 +593,11 @@ every change of the night run — so GLM has left the reviewer roles and the
 spec review and the review stay with Codex. **Since 2026-10-06** (maintainer) GLM 5.3 Flash
 (`glm-5.3-flash`, the Z.ai endpoint) also explores (phase 1) and implements
 (phase 4) — the two phases that read the repository broadly and write its
-code. Phases 1a, 2, 3 and 7 stay with Anthropic (1a, 2 and 3 on Opus 5.5).
+code. **Since 2026-10-12** (ADR 0015) GLM 5.3 (`glm-5.3`, the same endpoint)
+repairs the findings the orchestrator takes, of the loop (4b) and of phase 6,
+through the runner's `repair` verb — since that day `taken` on a row means
+decided and waiting for the repair, and `fixed` means repaired. Phases 1a, 2,
+3 and 7 stay with Anthropic (1a, 2 and 3 on Opus 5.5).
 **No Fable and no Kimi:** Fable 5.1 left the routing on 2026-10-06 and Opus
 5.5 takes its places, the fallback below included. ADR 0007 also amends
 decision D-13 of the 2026-09-16 interview, which had set four criteria before
@@ -643,6 +647,7 @@ list is a one-line pull request that touches nothing else.
 | 2a Spec review | **gpt-6.1-sol** | effort `max`, through the Codex CLI and the runner |
 | 4 Implement | **GLM 5.3 Flash** | a worker given a clear plan; through Claude Code against Z.ai and the runner, for every change |
 | 4b Review loop | **the ladder** | the ordered `modelle` list of the `opencode-go` entry in `model-endpoints.yaml`: round *n* calls its *n*-th id (`modelle[n-1]`), through Pi, effort `max` (Pi clamps it to `high` for a rung that takes no `max`), round 3 only when round 2 wrote a taken row |
+| Repair after 4b and 6 | **GLM 5.3** | one GLM 5.3 repair attempt through Claude Code against Z.ai and the runner, effort `max`; a first GLM 5.3 attempt before it, and Sonnet 5.5 at effort `medium` after two failed post-run checks (`repair`, ADR 0015) |
 | 6 Review | **gpt-6.1-sol** | effort `max`; the same Codex session as 2a, resumed where one was held |
 
 **The two Flash rows are live through the runner.** `explore` starts phase 1
@@ -664,12 +669,15 @@ passing attempt leaves its audit line only.
 
 A foreign model is started only through `python3 scripts/stage2.py <verb>
 <change>`, never by typing `codex`, `pi`, or `claude` against another endpoint,
-into a shell. Eight verbs exist:
+into a shell. Nine verbs exist:
 
 - `explore` — GLM 5.3 Flash, phase 1; `--stage2-off [REASON]` uses Haiku 4.5.
 - `spec-review` — Codex, phase 2a, a fresh session.
 - `implement` — GLM 5.3 Flash, phase 4; `--stage2-off [REASON]` uses Sonnet
   5.5 at effort `medium`.
+- `repair` — GLM 5.3, every taken finding of the loop record, the released
+  blocks and the phase-6 tables in one call; `--stage2-off [REASON]` uses
+  Sonnet 5.5 at effort `medium` ("Repairing taken findings" below).
 - `review-loop` — one round of phase 4b, started through Pi; round *n* goes
   to the ladder's *n*-th rung.
 - `release-loop` — the loop rows into `findings.md`, after the phase-6 verdict.
@@ -872,10 +880,12 @@ go into a **loop record** outside the worktree and outside the git directory
 not into the repository: the phase-6 reviewer writes its verdict before it
 reads any loop row.
 
-The implementer writes beside each row its `Status` — `taken — <test or
-criterion>` or `rejected — <reason>` — and, for a taken row, `Broke a test`. It
-repairs the taken rows and runs `make verify`, which must be green before the
-next round starts. **The evidence rule of §2 holds here:** a finding is taken
+The orchestrator writes beside each row its `Status` — `taken — <test or
+criterion>`, `taken — not a test — <reason>` for a finding no test can show,
+or `rejected — <reason>` — and, for a taken row, `Broke a test`. The runner's
+`repair` verb repairs the taken rows ("Repairing taken findings" below) and
+runs `make verify`, which must be green before the next round starts. **The
+evidence rule of §2 holds here:** a finding is taken
 only when a test demonstrates it or the spec supports it. A row left
 undecided holds the next round and the release.
 
@@ -886,6 +896,36 @@ resumed reviewer; an Opus reviewer writes its own). Only then does
 round had, and the reviewer marks each row in its `Phase 6` column, `agree` or
 `disagree — <reason>`. Nothing is netted: the reviewer's view of the loop's
 rows is the information.
+
+### Repairing taken findings (repair)
+
+**The orchestrator decides, the verb repairs, the reviewer re-checks.** The
+orchestrator writes `taken` or `rejected` on a phase-6 finding as into a loop
+row, marks a finding no test can show `taken — not a test — <reason>` when
+taking it, and starts the re-check afterwards: the loop's next round for loop
+rows, `review` for phase-6 findings. The verb starts no review of its own.
+
+`python3 scripts/stage2.py repair <change>` takes every taken row — of the
+loop record, of every released block and of every phase-6 table — to GLM 5.3
+in one guarded call, and refuses while a row stands undecided or an ID is
+doubled. The model answers one **fixed line** per row, `<ID>: fixed —
+tests/<path>::<function>` or `<ID>: fixed — not a test — <reason>`, in the
+form of ADR 0013's criterion ledger; only a row taken as `taken — not a test`
+may be answered `not a test`. **Red first:** the runner proves each repair of
+code by running the named test alone against the baseline's code, in a
+temporary git worktree whose `tests/` is the attempt's, and accepts a test
+only when pytest exits 1 or 2 there. When every post-run check passes —
+`make verify` green, a measured line in the time log, every fixed line
+checked — the runner writes each row's Status `fixed` in its place, makes the
+one checkpoint commit `fix(<change>): repair taken findings <IDs>` and marks
+the loop record after it. The attempts are GLM 5.3, one GLM 5.3 repair
+attempt with the first one's diagnostics, and Sonnet 5.5 at effort `medium`;
+`--stage2-off [REASON]` runs Sonnet 5.5 alone and records why. A leak-check
+BLOCK stops without a fallback. A fixed row counts as a taken one for round 3
+and for the run count; **`Broke a test` stays the orchestrator's mark**,
+written from the run's evidence before the next round or the release. A
+reviewer never repairs its own findings: the rungs and Codex keep their
+read-only tools (ADR 0015).
 
 ### Two columns for every stage-2 change
 

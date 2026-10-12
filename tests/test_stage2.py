@@ -2968,6 +2968,699 @@ def test_a_damaged_row_of_the_record_still_refuses_beside_reviewer_text(
 
 
 # ---------------------------------------------------------------------------
+# The repair of the taken findings (stage2-repair criteria 1-28)
+# ---------------------------------------------------------------------------
+
+
+FIX_TEST = (
+    "from pathlib import Path\n\n\ndef test_fix():\n"
+    '    value = (Path(__file__).resolve().parent.parent / "src" / "app.py").read_text(encoding="utf-8")\n'
+    '    assert "value = 2" in value\n'
+)
+
+
+def seed_tests(world: World) -> None:
+    """A committed `tests/test_seed.py`, so a red-first checkout has a baseline tree to take tests from."""
+    tests = world.root / "tests"
+    tests.mkdir(exist_ok=True)
+    (tests / "test_seed.py").write_text("def test_seed():\n    assert True\n", encoding="utf-8")
+    git(world.root, "add", "-A")
+    git(world.root, "commit", "--quiet", "-m", "seed tests")
+
+
+def repair_step(**more: object) -> dict:
+    """A model step that repairs `src/app.py`, plants the test that is red on it, and measures the plan."""
+    return {
+        "stdout": "L1-1: fixed — tests/test_fix.py::test_fix",
+        "plant": {"src/app.py": "value = 2\n", "tests/test_fix.py": FIX_TEST},
+        "append": {"plans/changes/demo/plan.md": "2026-10-12 10:00–10:05, 5 min\n"},
+        **more,
+    }
+
+
+def repair_world(world: World, *record: tuple[str, str, str]) -> str:
+    """A clean tree with a committed tests/ directory and a decided loop record, scripted for one repair."""
+    seed_tests(world)
+    world.write_record([*record] or [("L1-1", "taken — test_a", "no")])
+    world.script(claude=[repair_step()], make=[{"stdout": "green\n"}])
+    return git(world.root, "rev-parse", "HEAD")
+
+
+def released_cells(ident: str, status: str, broke: str, finding: str) -> list[str]:
+    return [ident, "MAJOR", "MAINT", "impl", "src/app.py:1", finding, "deepseek-v4.1-flash", status, broke, "—"]
+
+
+def phase6_cells(ident: str, status: str, finding: str) -> list[str]:
+    return [ident, "MAJOR", "SPEC", "base", "spec.md:3", finding, "Codex", status, "—"]
+
+
+def released_block(rows_: list[list[str]]) -> str:
+    return f"{stage2.RELEASE_HEADING} 2026-10-12\n\nRounds run: 1\n\n" + stage2.render_table(
+        stage2.RELEASED_COLUMNS, rows_
+    )
+
+
+def phase6_block(rows_: list[list[str]]) -> str:
+    return "## Phase 6 — Codex, 2026-10-12\n\n" + stage2.render_table(stage2.ROW_COLUMNS, rows_)
+
+
+def test_repair_lists_every_taken_row_and_no_rejected_or_fixed_one(world: World) -> None:
+    """Criterion 1. Planted fault: a released block or a phase-6 table is not read, or a rejected row is listed."""
+    baseline = repair_world(
+        world,
+        ("L1-1", "taken — test_a", "no"),
+        ("L1-2", "rejected — out of scope", ""),
+    )
+    world.write_findings(
+        VERDICT,
+        released_block(
+            [
+                released_cells("L1-3", "taken — test_c", "no", "released finding"),
+                released_cells("L1-4", "rejected — no evidence", "", "released rejection"),
+                released_cells("L1-5", "fixed — tests/test_seed.py::test_seed", "no", "released repaired"),
+            ]
+        ),
+        phase6_block(
+            [
+                phase6_cells("F-1", "taken — crit 6", "phase finding"),
+                phase6_cells("F-2", "rejected — covered", "phase rejection"),
+                phase6_cells("F-3", "fixed — tests/test_seed.py::test_seed", "phase repaired"),
+            ]
+        ),
+    )
+    answer = "\n".join(
+        [
+            "L1-1: fixed — tests/test_fix.py::test_fix",
+            "L1-3: fixed — tests/test_fix.py::test_fix",
+            "F-1: fixed — tests/test_fix.py::test_fix",
+        ]
+    )
+    world.script(claude=[repair_step(stdout=answer)], make=[{"stdout": "green\n"}])
+    assert world.run("repair") == 0
+    prompt = world.calls("claude")[0]["prompt_file"]
+    assert f"Repair baseline: {baseline}" in prompt
+    for listed in (
+        "- L1-1 [MAJOR, MAINT] src/app.py:1: finding of L1-1 — Status: taken — test_a",
+        "- L1-3 [MAJOR, MAINT] src/app.py:1: released finding — Status: taken — test_c",
+        "- F-1 [MAJOR, SPEC] spec.md:3: phase finding — Status: taken — crit 6",
+    ):
+        assert listed in prompt, listed
+    for body in ("finding of L1-2", "released rejection", "phase rejection", "released repaired", "phase repaired"):
+        assert body not in prompt, body
+
+
+def test_the_repair_prompt_carries_the_contract_and_ends_with_the_read_request(world: World) -> None:
+    """Criterion 2. Planted fault: the plan left out, or the read request standing before the rows."""
+    baseline = repair_world(world)
+    assert world.run("repair") == 0
+    prompt = world.calls("claude")[0]["prompt_file"]
+    assert stage2.REPAIR_FORMAT in prompt
+    assert f"Repair baseline: {baseline}" in prompt
+    assert "## Taken rows" in prompt
+    assert "## Accepted spec" in prompt and "# Spec" in prompt
+    assert "## Accepted plan" in prompt and "## Time used" in prompt
+    assert (PROMPTS / "04-implement.md").read_text(encoding="utf-8").rstrip() in prompt
+    assert "Stay inside the repository." in prompt
+    assert prompt.rstrip().endswith(stage2.READ_REQUEST)
+
+
+def test_repair_with_nothing_taken_refuses_before_any_call(
+    world: World, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+) -> None:
+    """Criterion 3. Planted fault: a model call with an empty row list, or a refusal after the key."""
+    monkeypatch.setattr(stage2, "read_secret", lambda name: pytest.fail(f"read secret before the refusals: {name}"))
+    seed_tests(world)
+    world.write_record([("L1-1", "rejected — out of scope", "")])
+    world.script(claude=[{"stdout": "must not run"}])
+    assert world.run("repair") == 2
+    assert world.calls() == [] and not world.findings.exists()
+    assert "no row is taken" in capsys.readouterr().err
+    shutil.rmtree(world.record().parent)
+    assert world.run("repair") == 2
+    assert world.calls() == []
+
+
+def test_an_undecided_row_holds_the_repair(
+    world: World, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+) -> None:
+    """Criterion 4. Planted fault: an `open` phase-6 row ignored, or a refusal that names no ID."""
+    monkeypatch.setattr(stage2, "read_secret", lambda name: pytest.fail(f"read secret before the refusals: {name}"))
+    seed_tests(world)
+    world.write_record([("L1-1", "taken — test_a", "no"), ("L1-2", "", "")])
+    world.script(claude=[{"stdout": "must not run"}])
+    assert world.run("repair") == 2
+    assert world.calls() == []
+    assert "L1-2" in capsys.readouterr().err
+    world.write_record([("L1-1", "taken — test_a", "no"), ("L1-2", "rejected — out of scope", "")])
+    world.write_findings(VERDICT, phase6_block([phase6_cells("F-1", "open", "phase finding")]))
+    assert world.run("repair") == 2
+    assert world.calls() == []
+    error = capsys.readouterr().err
+    assert "F-1" in error and "waiting for a decision" in error
+
+
+def test_a_doubled_taken_id_refuses_the_repair(
+    world: World, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+) -> None:
+    """Criterion 5. Planted fault: the first row of an ID wins and the call starts."""
+    monkeypatch.setattr(stage2, "read_secret", lambda name: pytest.fail(f"read secret before the refusals: {name}"))
+    seed_tests(world)
+    world.write_record([("L1-1", "taken — test_a", "no")])
+    world.write_findings(VERDICT, released_block([released_cells("L1-1", "taken — test_c", "no", "released finding")]))
+    world.script(claude=[{"stdout": "must not run"}])
+    assert world.run("repair") == 2
+    assert world.calls() == []
+    error = capsys.readouterr().err
+    assert "L1-1" in error and "same id" in error
+
+
+def test_repair_requires_a_clean_tree_a_spec_and_a_plan_with_its_time_heading(
+    world: World, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Criterion 6. Planted fault: a preflight that lets one of the three states reach a model call."""
+    monkeypatch.setattr(stage2, "read_secret", lambda name: pytest.fail(f"read secret before the refusals: {name}"))
+    seed_tests(world)
+    world.write_record([("L1-1", "taken — test_a", "no")])
+    world.script(claude=[{"stdout": "must not run"}])
+    plan = world.plan.read_text(encoding="utf-8")
+    spec = (world.root / "plans" / "changes" / "demo" / "spec.md").read_text(encoding="utf-8")
+
+    world.plan.unlink()
+    assert world.run("repair") == 2 and world.calls() == []
+
+    # committed, so the tree stays clean and the time heading itself is what refuses
+    world.plan.write_text("---\nbead: demo-1\n---\n# Plan\n", encoding="utf-8")
+    git(world.root, "add", "-A")
+    git(world.root, "commit", "--quiet", "-m", "plan without the time heading")
+    assert world.run("repair") == 2 and world.calls() == []
+    world.plan.write_text(plan, encoding="utf-8")
+    git(world.root, "add", "-A")
+    git(world.root, "commit", "--quiet", "-m", "plan restored")
+
+    (world.root / "plans" / "changes" / "demo" / "spec.md").write_text("---\ntitle: Spec\n---\n", encoding="utf-8")
+    assert world.run("repair") == 2 and world.calls() == []
+    (world.root / "plans" / "changes" / "demo" / "spec.md").write_text(spec, encoding="utf-8")
+
+    (world.root / "src" / "dirty.py").write_text("dirty = True\n", encoding="utf-8")
+    assert world.run("repair") == 2 and world.calls() == []
+
+
+def test_repair_routes_glm_5_3_then_its_repair_then_sonnet(world: World) -> None:
+    """Criterion 7. Planted fault: `glm-5.3-flash` in the routes, or no diagnostics carried forward."""
+    repair_world(world)
+    world.script(
+        claude=[{"stdout": "still looking"}, {"stdout": "still stuck"}, repair_step()],
+        make=[{"stdout": "green\n"}] * 3,
+    )
+    assert world.run("repair") == 0
+    calls = world.calls("claude")
+    assert len(calls) == 3
+    models = [call["argv"][call["argv"].index("--model") + 1] for call in calls]
+    assert models == ["glm-5.3", "glm-5.3", "claude-sonnet-5-5"]
+    assert [call["argv"][call["argv"].index("--effort") + 1] for call in calls[:2]] == ["max", "max"]
+    assert calls[2]["argv"][calls[2]["argv"].index("--effort") + 1] == "medium"
+    assert not any("glm-5.3-flash" in " ".join(call["argv"]) for call in calls)
+    prompt = calls[2]["prompt_file"]
+    assert "Attempt 1 (glm):" in prompt and "Attempt 2 (glm-repair):" in prompt
+    assert "did not add a measured line" in prompt
+    text = world.text()
+    for line in (
+        "attempt 1 · route glm",
+        "attempt 2 · route glm-repair",
+        "attempt 3 · route stage-1",
+        "reason first GLM 5.3 post-run check failed",
+        "reason two GLM 5.3 post-run checks failed",
+    ):
+        assert line in text, line
+    assert len(world.calls("make")) == 3
+
+
+def test_stage2_off_repairs_with_one_sonnet_attempt_and_records_the_reason(
+    world: World, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Criterion 8. Planted fault: the key read on Stage 1, or the reason missing from one of the two places."""
+    monkeypatch.setattr(stage2, "read_secret", lambda name: pytest.fail(f"read secret on Stage 1: {name}"))
+    repair_world(world)
+    assert world.run("repair", "demo", "--stage2-off", "Z.ai unavailable") == 0
+    calls = world.calls("claude")
+    assert len(calls) == 1
+    argv, env = calls[0]["argv"], calls[0]["env"]
+    assert argv[argv.index("--model") + 1] == "claude-sonnet-5-5"
+    assert argv[argv.index("--effort") + 1] == "medium"
+    assert "ANTHROPIC_BASE_URL" not in env and "ANTHROPIC_AUTH_TOKEN" not in env
+    text = world.text()
+    assert "route stage-1" in text and "reason Z.ai unavailable" in text
+    plan = world.plan.read_text(encoding="utf-8")
+    assert "Stage-1 route: repair · model claude-sonnet-5-5 · reason: Z.ai unavailable." in plan
+    assert plan.index("## Runner route") < plan.index("## Time used")
+
+
+def test_a_missing_glm_key_refuses_the_repair(world: World) -> None:
+    """Criterion 9. Planted fault: a model call without the key."""
+    Path(os.environ["CC_SECRETS"]).write_text("OTHER=1\n", encoding="utf-8")
+    seed_tests(world)
+    world.write_record([("L1-1", "taken — test_a", "no")])
+    world.script(claude=[{"stdout": "must not run"}])
+    assert world.run("repair") == 2
+    assert world.calls() == []
+
+
+def test_a_leak_in_a_taken_row_stops_the_repair_without_fallback(world: World) -> None:
+    """Criterion 10. Planted fault: the rows outside the scanned prompt, or a fallback after the BLOCK."""
+    seed_tests(world)
+    world.write_record([("L1-1", "taken — test_a", "no")], finding=f"leak {LEAK}")
+    world.script(
+        claude=[{"stdout": "must not run"}] * 3,
+        make=[{"stdout": "must not run"}],
+    )
+    assert world.run("repair") == 2
+    assert world.calls() == []
+    assert not world.findings.exists()
+
+
+def test_an_undeclared_glm_5_3_refuses_the_repair(world: World) -> None:
+    """Criterion 10. Planted fault: no declaration check for `glm-5.3`."""
+    seed_tests(world)
+    world.write_record([("L1-1", "taken — test_a", "no")])
+    path = world.root / "model-endpoints.yaml"
+    text = path.read_text(encoding="utf-8")
+    line = "      - glm-5.3\n"
+    assert line in text
+    path.write_text(text.replace(line, "", 1), encoding="utf-8")
+    world.script(claude=[{"stdout": "must not run"}])
+    assert world.run("repair") == 2
+    assert world.calls() == []
+
+
+def test_each_repair_attempt_leaves_an_audit_line_the_count_reads(world: World) -> None:
+    """Criterion 11. Planted fault: the verb word `implement` in the line, or a line the count cannot read."""
+    repair_world(world)
+    assert world.run("repair") == 0
+    day = r"\d{4}-\d{2}-\d{2}"
+    count = r"\d+ files, \d+ commits, \d+ rules"
+    assert re.search(
+        rf"^Stage-2 call, {day}: repair · attempt 1 · route glm · endpoint glm-coding-plan · model glm-5.3 · "
+        rf"leak check clean over {count}\.$",
+        world.text(),
+        re.M,
+    )
+    assert stage2_runs.measure(world.text()).calls == [("repair", True)]
+
+
+def test_repair_has_file_tools_and_pins_glm_5_3(world: World) -> None:
+    """Criterion 12. Planted fault: `Bash` among the tools, or a model variable naming another model."""
+    repair_world(world)
+    assert world.run("repair") == 0
+    call = world.calls("claude")[0]
+    argv, env = call["argv"], call["env"]
+    assert argv[argv.index("--model") + 1] == "glm-5.3"
+    assert argv[argv.index("--effort") + 1] == "max"
+    assert set(argv[argv.index("--tools") + 1].split(",")) == {"Read", "Grep", "Glob", "Edit", "Write"}
+    assert "Bash" not in argv[argv.index("--tools") + 1]
+    assert "--restricted" in argv and "--safe-mode" in argv and "--strict-mcp-config" in argv
+    assert "--add-dir" not in argv and call["cwd"] == str(world.root) and call["stdin"] == ""
+    assert argv[argv.index("--permission-mode") + 1] == "acceptEdits"
+    assert argv[argv.index("--permission-prompts") + 1] == "none"
+    assert env["ANTHROPIC_BASE_URL"] == stage2.GLM_BASE_URL and env["ANTHROPIC_AUTH_TOKEN"] == KEY
+    for name in stage2.GLM_MODEL_VARIABLES:
+        assert env[name] == "glm-5.3", name
+    for name in ("GH_TOKEN", "OPENAI_API_KEY", "X_SECRET"):
+        assert name not in env, name
+    assert all(value != OKEY for value in env.values())
+
+
+def test_record_rows_reach_the_model_only_in_the_prompt(world: World) -> None:
+    """Criterion 13. Planted fault: the rows written into a worktree file."""
+    seed_tests(world)
+    world.write_record([("L1-1", "taken — test_a", "no")], finding="LOOPMARK-9")
+    world.script(marker="LOOPMARK-9", claude=[repair_step()], make=[{"stdout": "green\n"}])
+    assert world.run("repair") == 0
+    call = world.calls("claude")[0]
+    assert "LOOPMARK-9" in call["prompt_file"]
+    assert call["marker_paths"] == [], call["marker_paths"]
+    assert "LOOPMARK-9" not in world.text()
+
+
+def test_a_red_verify_or_a_missing_time_line_fails_a_repair_attempt(world: World) -> None:
+    """Criterion 14. Planted fault: a checkpoint after a red `make verify`, or a failed attempt without its block."""
+    seed_tests(world)
+    world.write_record([("L1-1", "taken — test_a", "no")])
+    baseline = git(world.root, "rev-parse", "HEAD")
+    red = "\n".join(_gate("pytest", ["FAILED tests/test_fix.py::test_fix - assert 2 == 1"], "red"))
+    world.script(
+        claude=[
+            {"stdout": "attempt one", "plant": {"src/app.py": "value = 2\n", "tests/test_fix.py": FIX_TEST}},
+            repair_step(),
+        ],
+        make=[{"stdout": red, "exit": 1}, {"stdout": "green\n"}],
+    )
+    assert world.run("repair") == 0
+    prompt = world.calls("claude")[1]["prompt_file"]
+    assert "Attempt 1 (glm):" in prompt
+    assert "`make verify` exited 1" in prompt and "did not add a measured line" in prompt
+    assert "attempt 2 · route glm-repair" in world.text()
+    assert git(world.root, "rev-list", "--count", f"{baseline}..HEAD") == "1"
+    assert len(quote_blocks(world.text())) == 1, "the failed attempt left no block"
+
+
+@pytest.mark.parametrize(
+    ("record", "first", "second", "problem"),
+    [
+        pytest.param(
+            [("L1-1", "taken — test_a", "no"), ("L1-2", "taken — test_b", "no")],
+            "L1-1: fixed — tests/test_fix.py::test_fix",
+            "L1-1: fixed — tests/test_fix.py::test_fix\nL1-2: fixed — tests/test_fix.py::test_fix",
+            "L1-2: no fixed line",
+            id="missing",
+        ),
+        pytest.param(
+            [("L1-1", "taken — test_a", "no")],
+            "L1-1: fixed — tests/test_fix.py::test_fix\nL1-1: fixed — tests/test_fix.py::test_fix",
+            "L1-1: fixed — tests/test_fix.py::test_fix",
+            "L1-1: several fixed lines",
+            id="doubled",
+        ),
+        pytest.param(
+            [("L1-1", "taken — test_a", "no")],
+            "L1-1: fixed — tests/test_fix.py::test_fix\nL9-9: fixed — not a test — nothing carries it",
+            "L1-1: fixed — tests/test_fix.py::test_fix",
+            "L9-9: no taken row carries this id",
+            id="unknown",
+        ),
+    ],
+)
+def test_each_taken_row_needs_exactly_one_fixed_line(
+    world: World, record: list, first: str, second: str, problem: str
+) -> None:
+    """Criterion 15. Planted fault: a missing, doubled or unknown fixed line accepted."""
+    seed_tests(world)
+    world.write_record(record)
+    world.script(
+        claude=[repair_step(stdout=first), repair_step(stdout=second)],
+        make=[{"stdout": "green\n"}] * 2,
+    )
+    assert world.run("repair") == 0
+    prompt = world.calls("claude")[1]["prompt_file"]
+    assert "Attempt 1 (glm):" in prompt and problem in prompt, prompt
+
+
+def test_a_code_row_answered_not_a_test_fails_the_attempt(world: World) -> None:
+    """Criterion 16. Planted fault: `not a test` accepted for a code row."""
+    seed_tests(world)
+    world.write_record([("L1-1", "taken — test_a", "no")])
+    world.script(
+        claude=[
+            repair_step(stdout="L1-1: fixed — not a test — the spec pins the behavior"),
+            repair_step(),
+        ],
+        make=[{"stdout": "green\n"}] * 2,
+    )
+    assert world.run("repair") == 0
+    prompt = world.calls("claude")[1]["prompt_file"]
+    assert "L1-1: answered `not a test`, but the row is a code row; it needs a test that was red first" in prompt
+
+
+def test_a_fixed_line_naming_an_undefined_test_fails_the_attempt(world: World) -> None:
+    """Criterion 17. Planted fault: no definition check."""
+    seed_tests(world)
+    world.write_record([("L1-1", "taken — test_a", "no")])
+    world.script(
+        claude=[
+            repair_step(stdout="L1-1: fixed — tests/test_absent.py::test_absent"),
+            repair_step(),
+        ],
+        make=[{"stdout": "green\n"}] * 2,
+    )
+    assert world.run("repair") == 0
+    prompt = world.calls("claude")[1]["prompt_file"]
+    assert "L1-1: tests/test_absent.py::test_absent defines no function `def test_absent(`" in prompt
+
+
+def test_a_named_test_that_is_not_red_first_fails_the_attempt(world: World) -> None:
+    """Criterion 18. Planted fault: exit 0 on the baseline accepted as red first."""
+    seed_tests(world)
+    world.write_record([("L1-1", "taken — test_a", "no")])
+    green_on_baseline = (
+        "from pathlib import Path\n\n\ndef test_not_red():\n"
+        '    value = (Path(__file__).resolve().parent.parent / "src" / "app.py").read_text(encoding="utf-8")\n'
+        '    assert "value = 1" in value\n'
+    )
+    world.script(
+        claude=[
+            repair_step(
+                stdout="L1-1: fixed — tests/test_notred.py::test_not_red",
+                plant={"src/app.py": "value = 2\n", "tests/test_notred.py": green_on_baseline},
+            ),
+            repair_step(),
+        ],
+        make=[{"stdout": "green\n"}] * 2,
+    )
+    assert world.run("repair") == 0
+    prompt = world.calls("claude")[1]["prompt_file"]
+    assert (
+        "L1-1: tests/test_notred.py::test_not_red: pytest ended 0 on the baseline's code; red first is exit 1 or 2"
+    ) in prompt
+
+
+def test_the_red_first_run_leaves_no_worktree_behind(world: World) -> None:
+    """Criterion 19. Planted fault: the temporary worktree not removed."""
+    repair_world(world)
+    refs_before = {line.split()[-1] for line in git(world.root, "for-each-ref").splitlines()}
+    assert world.run("repair") == 0
+    listed = git(world.root, "worktree", "list").splitlines()
+    assert len(listed) == 1, listed
+    assert git(world.root, "status", "--porcelain") == ""
+    assert {line.split()[-1] for line in git(world.root, "for-each-ref").splitlines()} == refs_before
+
+
+def test_a_failed_repair_process_restores_the_baseline_without_a_further_attempt(world: World) -> None:
+    """Criterion 20. Planted fault: a fallback after a dead model process, or a path left in place."""
+    seed_tests(world)
+    world.write_record([("L1-1", "taken — test_a", "no")])
+    head = git(world.root, "rev-parse", "HEAD")
+    world.script(
+        claude=[
+            {
+                "stderr": "boom",
+                "exit": 1,
+                "plant": {"src/half.py": "x = 1\n"},
+                "append": {"plans/changes/demo/plan.md": "2026-10-12 10:00–10:05, 5 min\n"},
+            },
+            {"stdout": "must not run"},
+        ],
+        make=[{"stdout": "must not run"}],
+    )
+    assert world.run("repair") == 1
+    assert len(world.calls("claude")) == 1 and world.calls("make") == []
+    assert not (world.root / "src/half.py").exists()
+    assert git(world.root, "rev-parse", "HEAD") == head
+    assert "taken — test_a" in world.record().read_text(encoding="utf-8")
+    assert "Stage-2 call" in world.text(), "the audit line stays in findings.md"
+
+
+def test_a_passing_repair_writes_fixed_into_each_rows_place_and_nothing_else(world: World) -> None:
+    """Criterion 21. Planted fault: `Broke a test` written, or a rejected row changed."""
+    repair_world(
+        world,
+        ("L1-1", "taken — test_a", "no"),
+        ("L1-2", "rejected — out of scope", ""),
+    )
+    released_before = released_block(
+        [
+            released_cells("L1-3", "taken — test_c", "no", "released finding"),
+            released_cells("L1-4", "rejected — no evidence", "", "released rejection"),
+        ]
+    )
+    phase6_before = phase6_block(
+        [
+            phase6_cells("F-1", "taken — crit 6", "phase finding"),
+            phase6_cells("F-2", "rejected — covered", "phase rejection"),
+        ]
+    )
+    world.write_findings(VERDICT, released_before, phase6_before)
+    answer = "\n".join(
+        [
+            "L1-1: fixed — tests/test_fix.py::test_fix",
+            "L1-3: fixed — tests/test_fix.py::test_fix",
+            "F-1: fixed — tests/test_fix.py::test_fix",
+        ]
+    )
+    world.script(claude=[repair_step(stdout=answer)], make=[{"stdout": "green\n"}])
+    assert world.run("repair") == 0
+    record = {row[0]: row for row in stage2.record_rows(world.record().read_text(encoding="utf-8"))}
+    assert record["L1-1"][7] == "fixed — tests/test_fix.py::test_fix"
+    assert record["L1-1"][8] == "no", "the runner wrote Broke a test"
+    assert record["L1-1"][:7] == [
+        "L1-1",
+        "MAJOR",
+        "MAINT",
+        "impl",
+        "src/app.py:1",
+        "finding of L1-1",
+        "deepseek-v4.1-flash",
+    ]
+    assert record["L1-2"][7] == "rejected — out of scope"
+    released_now, phase6_now = stage2.findings_rows(world.text())
+    rows = {row[0]: row for row in [*released_now, *phase6_now]}
+    for ident in ("L1-3", "F-1"):
+        assert rows[ident][7] == "fixed — tests/test_fix.py::test_fix", ident
+    assert rows["L1-3"][9] == "—" and rows["L1-3"][5] == "released finding"
+    assert rows["F-1"][6] == "Codex" and rows["F-1"][5] == "phase finding"
+    assert rows["L1-4"][7] == "rejected — no evidence" and rows["F-2"][7] == "rejected — covered"
+    lines = world.text().splitlines()
+    for untouched in (
+        render_row(released_cells("L1-4", "rejected — no evidence", "", "released rejection")),
+        render_row(phase6_cells("F-2", "rejected — covered", "phase rejection")),
+    ):
+        assert untouched in lines, untouched
+
+
+def test_a_passing_repair_ends_in_one_checkpoint_commit_with_its_statuses(world: World) -> None:
+    """Criterion 22. Planted fault: implement's message, or the statuses outside the commit."""
+    repair_world(
+        world,
+        ("L1-1", "taken — test_a", "no"),
+        ("L1-2", "rejected — out of scope", ""),
+    )
+    world.write_findings(
+        VERDICT,
+        released_block([released_cells("L1-3", "taken — test_c", "no", "released finding")]),
+        phase6_block([phase6_cells("F-1", "taken — crit 6", "phase finding")]),
+    )
+    answer = "\n".join(
+        [
+            "L1-1: fixed — tests/test_fix.py::test_fix",
+            "L1-3: fixed — tests/test_fix.py::test_fix",
+            "F-1: fixed — tests/test_fix.py::test_fix",
+        ]
+    )
+    baseline = git(world.root, "rev-parse", "HEAD")
+    world.script(claude=[repair_step(stdout=answer)], make=[{"stdout": "green\n"}])
+    assert world.run("repair") == 0
+    assert git(world.root, "rev-list", "--count", f"{baseline}..HEAD") == "1"
+    assert git(world.root, "log", "-1", "--pretty=%s") == "fix(demo): repair taken findings L1-1, L1-3, F-1"
+    assert git(world.root, "status", "--porcelain") == ""
+    committed = git(world.root, "show", "HEAD:plans/changes/demo/findings.md")
+    assert committed.count("fixed — tests/test_fix.py::test_fix") == 2
+    assert "taken — test_c" not in committed
+
+
+def test_a_failed_repair_writes_no_fixed_status(world: World) -> None:
+    """Criterion 23. Planted fault: statuses written before the checks pass."""
+    seed_tests(world)
+    world.write_record([("L1-1", "taken — test_a", "no")])
+    world.script(claude=[{"stdout": "working"}] * 3, make=[{"stdout": "green\n"}] * 3)
+    assert world.run("repair") == 1
+    assert "taken — test_a" in world.record().read_text(encoding="utf-8")
+    assert "fixed — " not in world.text()
+    assert [block[0] for block in quote_blocks(world.text())] == [
+        "Attempt 1 (glm) failed its post-run checks.",
+        "Attempt 2 (glm-repair) failed its post-run checks.",
+        "Attempt 3 (stage-1) failed its post-run checks.",
+    ]
+
+
+def test_the_record_is_marked_only_after_the_checkpoint_commit(world: World, monkeypatch: pytest.MonkeyPatch) -> None:
+    """Criterion 23. Planted fault: the record written before the commit exists."""
+    seed_tests(world)
+    world.write_record([("L1-1", "taken — test_a", "no")])
+    baseline = git(world.root, "rev-parse", "HEAD")
+    seen = []
+    real = stage2.mark_repaired_findings
+
+    def spy_findings(ctx: stage2.Context, taken: list, fixes: dict) -> None:
+        seen.append(("findings", git(world.root, "rev-list", "--count", f"{baseline}..HEAD")))
+        real(ctx, taken, fixes)
+
+    def spy_record(_change: str, _taken: list, _fixes: dict) -> None:
+        seen.append(("record", git(world.root, "rev-list", "--count", f"{baseline}..HEAD")))
+
+    monkeypatch.setattr(stage2, "mark_repaired_findings", spy_findings)
+    monkeypatch.setattr(stage2, "mark_repaired_record", spy_record)
+    world.script(claude=[repair_step()], make=[{"stdout": "green\n"}])
+    assert world.run("repair") == 0
+    assert seen == [("findings", "0"), ("record", "1")]
+    assert "taken — test_a" in world.record().read_text(encoding="utf-8"), "the spy must not write the record"
+
+
+def test_repair_starts_no_review_call(world: World) -> None:
+    """Criterion 24. Planted fault: the verb calls `review-loop` or `review`."""
+    repair_world(world)
+    world.script(
+        claude=[repair_step()],
+        make=[{"stdout": "green\n"}],
+        codex=[{"stdout": "must not run"}],
+        pi=[{"stdout": "must not run"}],
+    )
+    assert world.run("repair") == 0
+    assert world.calls("codex") == [] and world.calls("pi") == []
+
+
+def test_a_fixed_loop_row_is_decided_only_with_its_broke_a_test_mark(world: World) -> None:
+    """Criterion 25. Planted fault: `undecided` reads only `taken` and `rejected`."""
+    fixed = "fixed — tests/test_seed.py::test_seed"
+    row = ["L1-1", "MAJOR", "MAINT", "impl", "src/app.py:1", "f", "deepseek-v4.1-flash", fixed, ""]
+    assert stage2.undecided([row]) == ["L1-1"]
+    assert stage2.undecided([[*row[:8], "no"]]) == []
+    world.write_record([("L1-1", fixed, "")])
+    world.write_findings(VERDICT)
+    assert world.run("release-loop") == 2 and world.run("review-loop") == 2
+    record = world.record().read_text(encoding="utf-8")
+    world.record().write_text(record.replace(f"| {fixed} |  |", f"| {fixed} | no |"), encoding="utf-8")
+    assert world.run("release-loop") == 0
+
+
+def test_round_three_starts_after_a_fixed_round_two_row(world: World) -> None:
+    """Criterion 26. Planted fault: `taken_in_round` reads only `taken`."""
+    row = [
+        "L2-1",
+        "MAJOR",
+        "MAINT",
+        "impl",
+        "src/app.py:1",
+        "f",
+        "mimo-v2.6-flash",
+        "fixed — tests/test_seed.py::test_seed",
+        "no",
+    ]
+    assert stage2.taken_in_round([row], 2)
+    assert not stage2.taken_in_round([[*row[:7], "rejected — r", ""]], 2)
+    world.script(pi=[{"stdout": rows(1)}] * 3)
+    assert world.run("review-loop") == 0
+    decide_record(world, status="rejected — out of scope")
+    assert world.run("review-loop") == 0
+    decide_record(world, status="rejected — out of scope")
+    record = world.record().read_text(encoding="utf-8")
+    world.record().write_text(
+        re.sub(
+            r"^(\| L2-1 \|.*\|) rejected — out of scope \| no \|$",
+            r"\1 fixed — tests/test_seed.py::test_seed | no |",
+            record,
+            flags=re.M,
+        ),
+        encoding="utf-8",
+    )
+    assert world.run("review-loop") == 0
+    assert [rung_of(call) for call in world.calls("pi")] == [
+        "deepseek-v4.1-flash",
+        "mimo-v2.6-flash",
+        "mimo-v2.6-pro",
+    ]
+
+
+def test_stage2_off_is_accepted_for_repair(world: World, monkeypatch: pytest.MonkeyPatch) -> None:
+    """Criterion 28. Planted fault: the flag refused for repair."""
+    monkeypatch.setattr(stage2, "read_secret", lambda name: pytest.fail(f"read secret on Stage 1: {name}"))
+    repair_world(world)
+    world.script(claude=[repair_step()], make=[{"stdout": "green\n"}])
+    assert world.run("repair", "demo", "--stage2-off", "Z.ai unavailable") == 0
+    calls = world.calls("claude")
+    assert len(calls) == 1
+    argv = calls[0]["argv"]
+    assert argv[argv.index("--model") + 1] == "claude-sonnet-5-5"
+
+
+# ---------------------------------------------------------------------------
 # The ask rule on `codex` (criterion 61)
 # ---------------------------------------------------------------------------
 
@@ -3690,3 +4383,174 @@ def test_d13_is_amended_by_adr_0007(tmp_path: Path) -> None:
     for doc in (TARGET, PLAN_DOC):
         note = flat(doc.read_text(encoding="utf-8"))
         assert "Changed, 2026-09-30" in note and "ADR 0007" in note, doc.name
+
+
+# ---------------------------------------------------------------------------
+# The repair of the taken findings in the doctrine (stage2-repair criteria 29-33)
+# ---------------------------------------------------------------------------
+
+
+def glm_entry_problems(entry: dict) -> list[str]:
+    """Criterion 29: the GLM entry keeps its models and its remark names every work verb."""
+    found = []
+    if entry.get("betreiber") != "Zhipu AI (Z.ai)":
+        found.append("the operator changed")
+    if entry.get("residenz") != "anbieter-erklaert" or entry.get("darf_sehen") != ["framework"]:
+        found.append("residency or visibility changed")
+    if entry.get("modelle") != ["glm-5.3", "glm-5.3-flash"]:
+        found.append("the model list changed")
+    remark = " ".join(str(entry.get("bemerkung", "")).lower().split())
+    for needle in ("stage2.py explore", "stage2.py implement", "stage2.py repair", "no review phase routes to it"):
+        if needle not in remark:
+            found.append(f"the remark lacks '{needle}'")
+    return found
+
+
+def test_the_glm_entry_keeps_its_models_and_names_the_repair_verb() -> None:
+    """Criterion 29. Planted fault: a model dropped, or the remark without `stage2.py repair`."""
+    entry = endpoints()["glm-coding-plan"]
+    assert glm_entry_problems(entry) == []
+    assert glm_entry_problems({**entry, "modelle": ["glm-5.3-flash"]})
+    assert glm_entry_problems(
+        {**entry, "bemerkung": entry["bemerkung"].replace("stage2.py repair", "stage2.py fix", 1)}
+    )
+    assert glm_entry_problems({**entry, "residenz": "unbekannt"})
+
+
+def repair_doctrine_problems(workflow: str, agents: str) -> list[str]:
+    """Criterion 30: the doctrine names the verb, routes the repair, and gives the Status to the orchestrator."""
+    found = []
+    four = flat(section(workflow, "## 4 · "))
+    if "Eight verbs exist" in four or "Nine verbs exist" not in four:
+        found.append("section 4 does not say nine verbs")
+    if "- `repair` — GLM 5.3, every taken finding" not in workflow:
+        found.append("the verb list has no repair bullet")
+    if "| Repair after 4b and 6 | **GLM 5.3** |" not in workflow:
+        found.append("the routing table has no repair row")
+    if "### Repairing taken findings (repair)" not in workflow:
+        found.append("the repair subsection is missing")
+    loop = flat(section(workflow, "### The review loop"))
+    if "The orchestrator writes" not in loop or "verb repairs the taken rows" not in loop:
+        found.append("the loop section does not give the Status to the orchestrator and the repair to the verb")
+    fixing = flat(section(workflow, "### Repairing taken findings"))
+    for needle in ("python3 scripts/stage2.py repair <change>", "Red first", "Broke a test"):
+        if needle not in fixing:
+            found.append(f"the repair subsection lacks '{needle}'")
+    one = flat(agents)
+    if "GLM 5.3 repairs the findings the orchestrator takes" not in one:
+        found.append("AGENTS.md does not name the repair on GLM 5.3")
+    if "explore, implement and repair do not" not in one:
+        found.append("AGENTS.md does not count repair among the verbs without reviews by class")
+    return found
+
+
+def test_the_doctrine_names_the_repair_verb() -> None:
+    """Criterion 30. Planted fault: "Eight verbs exist" kept, or AGENTS.md without the verb."""
+    workflow = WORKFLOW.read_text(encoding="utf-8")
+    agents = (REPO_ROOT / "AGENTS.md").read_text(encoding="utf-8")
+    assert repair_doctrine_problems(workflow, agents) == []
+    assert repair_doctrine_problems(workflow.replace("Nine verbs exist", "Eight verbs exist", 1), agents)
+    assert repair_doctrine_problems(
+        workflow.replace("- `repair` — GLM 5.3, every taken finding", "- `repair` — GLM 5.3 Flash, taken findings", 1),
+        agents,
+    )
+    assert repair_doctrine_problems(
+        workflow.replace("| Repair after 4b and 6 | **GLM 5.3** |", "| Repair after 4b and 6 | **Sonnet 5.5** |", 1),
+        agents,
+    )
+    assert repair_doctrine_problems(
+        workflow.replace("### Repairing taken findings (repair)", "### Fixing findings", 1),
+        agents,
+    )
+    assert repair_doctrine_problems(
+        workflow.replace(
+            "The orchestrator writes beside each row its", "The implementer writes beside each row its", 1
+        ),
+        agents,
+    )
+    assert repair_doctrine_problems(
+        workflow,
+        agents.replace(
+            "GLM 5.3 repairs the findings the orchestrator takes", "GLM 5.3 Flash explores and implements", 1
+        ),
+    )
+    assert repair_doctrine_problems(
+        workflow, agents.replace("explore, implement and repair do not", "explore and implement do not", 1)
+    )
+
+
+def repair_prompt_problems(loop: str, implement: str) -> list[str]:
+    """Criterion 31: the orchestrator's steps in 04b, the verb and red first in 04."""
+    found = []
+    one, four = flat(loop), flat(implement)
+    if "For the orchestrator" not in one or "For the implementer" in one:
+        found.append("04b does not speak to the orchestrator")
+    for name, text in (("04b", one), ("04", four)):
+        if "python3 scripts/stage2.py repair <change>" not in text:
+            found.append(f"{name} does not name `stage2.py repair <change>`")
+    for needle in ("taken — not a test — <reason>", "Broke a test"):
+        if needle not in one:
+            found.append(f"04b lacks '{needle}'")
+    for needle in ("red first", "glm-5.3", "fixed — tests/<path>::<function>", "fixed — not a test — <reason>"):
+        if needle not in four:
+            found.append(f"04 lacks '{needle}'")
+    return found
+
+
+def test_the_prompts_name_the_repair_verb_and_red_first() -> None:
+    """Criterion 31. Planted fault: 04b without the command, or 04 without red first."""
+    loop = (PROMPTS / "04b-review-loop.md").read_text(encoding="utf-8")
+    implement = (PROMPTS / "04-implement.md").read_text(encoding="utf-8")
+    assert repair_prompt_problems(loop, implement) == []
+    assert repair_prompt_problems(
+        loop.replace("python3 scripts/stage2.py repair", "python3 scripts/stage2.py fix", 1),
+        implement,
+    )
+    assert repair_prompt_problems(loop.replace("## For the orchestrator", "## For the implementer", 1), implement)
+    assert repair_prompt_problems(loop, implement.replace("red first", "green first", 1))
+    assert repair_prompt_problems(loop, implement.replace("fixed — tests/<path>::<function>", "fixed — tests", 1))
+
+
+REPAIR_STATUS_WORDS = [
+    "taken — <reason>",
+    "taken — not a test — <reason>",
+    "fixed — tests/<path>::<function>",
+    "fixed — not a test — <reason>",
+]
+
+
+def template_problems(template: str) -> list[str]:
+    """Criterion 32: the four Status words of a stage-2 row stand in the findings template."""
+    one = flat(template)
+    return [word for word in REPAIR_STATUS_WORDS if word not in one]
+
+
+def test_the_findings_template_names_the_repair_statuses() -> None:
+    """Criterion 32. Planted fault: one of the four words missing."""
+    template = (REPO_ROOT / "templates" / "findings.md").read_text(encoding="utf-8")
+    assert template_problems(template) == []
+    one = flat(template)
+    for word in REPAIR_STATUS_WORDS:
+        assert template_problems(one.replace(word, "—", 1)), word
+
+
+def adr_0015_problems(text: str) -> list[str]:
+    """Criterion 33: the record amends ADR 0011 and holds the routing sentences."""
+    found = []
+    if not text.startswith("---\n"):
+        found.append("the record has no yaml header")
+    one = flat(text)
+    for needle in ("Amends ADR 0011", "The repair of taken findings runs on GLM 5.3", "never repairs its own findings"):
+        if needle not in one:
+            found.append(f"the record lacks '{needle}'")
+    return found
+
+
+def test_adr_0015_amends_adr_0011_and_records_the_repair_route() -> None:
+    """Criterion 33. Planted fault: the file missing, or the amendment unstated."""
+    path = REPO_ROOT / "docs" / "adr" / "0015-glm-5-3-repairs-taken-findings.md"
+    assert path.is_file(), "the record is missing"
+    text = path.read_text(encoding="utf-8")
+    assert adr_0015_problems(text) == []
+    for needle in ("Amends ADR 0011", "The repair of taken findings runs on GLM 5.3", "never repairs its own findings"):
+        assert adr_0015_problems(text.replace(needle, "something else", 1)), needle

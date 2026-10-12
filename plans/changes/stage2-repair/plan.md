@@ -190,43 +190,83 @@ Under `python3 scripts/stage2.py implement stage2-repair` the runner runs
 
 ## Criterion ledger
 
-- 1: not yet written tests/test_stage2.py::test_repair_lists_every_taken_row_and_no_rejected_or_fixed_one — the released block or a phase-6 table is not read, or a rejected row is listed
-- 2: not yet written tests/test_stage2.py::test_the_repair_prompt_carries_the_contract_and_ends_with_the_read_request — the plan left out, or the read request before the rows
-- 3: not yet written tests/test_stage2.py::test_repair_with_nothing_taken_refuses_before_any_call — a call with an empty row list
-- 4: not yet written tests/test_stage2.py::test_an_undecided_row_holds_the_repair — an `open` phase-6 row ignored
-- 5: not yet written tests/test_stage2.py::test_a_doubled_taken_id_refuses_the_repair — the first row of an ID wins
-- 6: not yet written tests/test_stage2.py::test_repair_requires_a_clean_tree_a_spec_and_a_plan_with_its_time_heading — preflight without `plan.md`
-- 7: not yet written tests/test_stage2.py::test_repair_routes_glm_5_3_then_its_repair_then_sonnet — `GLM_FLASH` in the routes, or no diagnostics carried
-- 8: not yet written tests/test_stage2.py::test_stage2_off_repairs_with_one_sonnet_attempt_and_records_the_reason — the key read, or no route block
-- 9: not yet written tests/test_stage2.py::test_a_missing_glm_key_refuses_the_repair — a call without the key
-- 10: not yet written tests/test_stage2.py::test_a_leak_in_a_taken_row_stops_the_repair_without_fallback — the rows outside the scanned prompt, or a fallback after the BLOCK
-- 10: not yet written tests/test_stage2.py::test_an_undeclared_glm_5_3_refuses_the_repair — no declaration check for `glm-5.3`
-- 11: not yet written tests/test_stage2.py::test_each_repair_attempt_leaves_an_audit_line_the_count_reads — the verb word `implement` in the line
-- 12: not yet written tests/test_stage2.py::test_repair_has_file_tools_and_pins_glm_5_3 — `Bash` among the tools, or `glm-5.3-flash` pinned
-- 13: not yet written tests/test_stage2.py::test_record_rows_reach_the_model_only_in_the_prompt — the rows written into a worktree file
-- 14: not yet written tests/test_stage2.py::test_a_red_verify_or_a_missing_time_line_fails_a_repair_attempt — a checkpoint after a red `make verify`
-- 15: not yet written tests/test_stage2.py::test_each_taken_row_needs_exactly_one_fixed_line — a missing, doubled or unknown line accepted
-- 16: not yet written tests/test_stage2.py::test_a_code_row_answered_not_a_test_fails_the_attempt — `not a test` accepted for a code row
-- 17: not yet written tests/test_stage2.py::test_a_fixed_line_naming_an_undefined_test_fails_the_attempt — no definition check
-- 18: not yet written tests/test_stage2.py::test_a_named_test_that_is_not_red_first_fails_the_attempt — exit 0 or 5 on the baseline accepted
-- 19: not yet written tests/test_stage2.py::test_the_red_first_run_leaves_no_worktree_behind — the temporary worktree not removed
-- 20: not yet written tests/test_stage2.py::test_a_failed_repair_process_restores_the_baseline_without_a_further_attempt — a fallback after a dead model process
-- 21: not yet written tests/test_stage2.py::test_a_passing_repair_writes_fixed_into_each_rows_place_and_nothing_else — `Broke a test` written, or a rejected row changed
-- 22: not yet written tests/test_stage2.py::test_a_passing_repair_ends_in_one_checkpoint_commit_with_its_statuses — implement's message, or the statuses outside the commit
-- 23: not yet written tests/test_stage2.py::test_a_failed_repair_writes_no_fixed_status — statuses written before the checks
-- 23: not yet written tests/test_stage2.py::test_the_record_is_marked_only_after_the_checkpoint_commit — the record written before the commit
-- 24: not yet written tests/test_stage2.py::test_repair_starts_no_review_call — the verb calls `review-loop` or `review`
-- 25: not yet written tests/test_stage2.py::test_a_fixed_loop_row_is_decided_only_with_its_broke_a_test_mark — `undecided` reads only `taken` and `rejected`
+- 1: tests/test_stage2.py::test_repair_lists_every_taken_row_and_no_rejected_or_fixed_one — the released block or a phase-6 table is not read, or a rejected row is listed
+- 2: tests/test_stage2.py::test_the_repair_prompt_carries_the_contract_and_ends_with_the_read_request — the plan left out, or the read request before the rows
+- 3: tests/test_stage2.py::test_repair_with_nothing_taken_refuses_before_any_call — a call with an empty row list
+- 4: tests/test_stage2.py::test_an_undecided_row_holds_the_repair — an `open` phase-6 row ignored
+- 5: tests/test_stage2.py::test_a_doubled_taken_id_refuses_the_repair — the first row of an ID wins
+- 6: tests/test_stage2.py::test_repair_requires_a_clean_tree_a_spec_and_a_plan_with_its_time_heading — preflight without `plan.md`
+- 7: tests/test_stage2.py::test_repair_routes_glm_5_3_then_its_repair_then_sonnet — `GLM_FLASH` in the routes, or no diagnostics carried
+- 8: tests/test_stage2.py::test_stage2_off_repairs_with_one_sonnet_attempt_and_records_the_reason — the key read, or no route block
+- 9: tests/test_stage2.py::test_a_missing_glm_key_refuses_the_repair — a call without the key
+- 10: tests/test_stage2.py::test_a_leak_in_a_taken_row_stops_the_repair_without_fallback — the rows outside the scanned prompt, or a fallback after the BLOCK
+- 10: tests/test_stage2.py::test_an_undeclared_glm_5_3_refuses_the_repair — no declaration check for `glm-5.3`
+- 11: tests/test_stage2.py::test_each_repair_attempt_leaves_an_audit_line_the_count_reads — the verb word `implement` in the line
+- 12: tests/test_stage2.py::test_repair_has_file_tools_and_pins_glm_5_3 — `Bash` among the tools, or `glm-5.3-flash` pinned
+- 13: tests/test_stage2.py::test_record_rows_reach_the_model_only_in_the_prompt — the rows written into a worktree file
+- 14: tests/test_stage2.py::test_a_red_verify_or_a_missing_time_line_fails_a_repair_attempt — a checkpoint after a red `make verify`
+- 15: tests/test_stage2.py::test_each_taken_row_needs_exactly_one_fixed_line — a missing, doubled or unknown line accepted
+- 16: tests/test_stage2.py::test_a_code_row_answered_not_a_test_fails_the_attempt — `not a test` accepted for a code row
+- 17: tests/test_stage2.py::test_a_fixed_line_naming_an_undefined_test_fails_the_attempt — no definition check
+- 18: tests/test_stage2.py::test_a_named_test_that_is_not_red_first_fails_the_attempt — exit 0 or 5 on the baseline accepted
+- 19: tests/test_stage2.py::test_the_red_first_run_leaves_no_worktree_behind — the temporary worktree not removed
+- 20: tests/test_stage2.py::test_a_failed_repair_process_restores_the_baseline_without_a_further_attempt — a fallback after a dead model process
+- 21: tests/test_stage2.py::test_a_passing_repair_writes_fixed_into_each_rows_place_and_nothing_else — `Broke a test` written, or a rejected row changed
+- 22: tests/test_stage2.py::test_a_passing_repair_ends_in_one_checkpoint_commit_with_its_statuses — implement's message, or the statuses outside the commit
+- 23: tests/test_stage2.py::test_a_failed_repair_writes_no_fixed_status — statuses written before the checks
+- 23: tests/test_stage2.py::test_the_record_is_marked_only_after_the_checkpoint_commit — the record written before the commit
+- 24: tests/test_stage2.py::test_repair_starts_no_review_call — the verb calls `review-loop` or `review`
+- 25: tests/test_stage2.py::test_a_fixed_loop_row_is_decided_only_with_its_broke_a_test_mark — `undecided` reads only `taken` and `rejected`
 - 25: tests/test_stage2.py::test_an_undecided_loop_row_holds_the_next_round_and_the_release — an undecided row no longer holds the round
-- 26: not yet written tests/test_stage2.py::test_round_three_starts_after_a_fixed_round_two_row — `taken_in_round` reads only `taken`
-- 27: not yet written tests/test_stage2_runs.py::test_a_fixed_loop_row_counts_as_taken — a fixed row counted as undecided
-- 28: not yet written tests/test_stage2.py::test_stage2_off_is_accepted_for_repair — the flag refused for repair
+- 26: tests/test_stage2.py::test_round_three_starts_after_a_fixed_round_two_row — `taken_in_round` reads only `taken`
+- 27: tests/test_stage2_runs.py::test_a_fixed_loop_row_counts_as_taken — a fixed row counted as undecided
+- 28: tests/test_stage2.py::test_stage2_off_is_accepted_for_repair — the flag refused for repair
 - 28: tests/test_stage2.py::test_stage2_off_is_only_for_work_verbs — a review verb accepts the flag
-- 29: not yet written tests/test_stage2.py::test_the_glm_entry_keeps_its_models_and_names_the_repair_verb — a model dropped, or the remark without `stage2.py repair`
+- 29: tests/test_stage2.py::test_the_glm_entry_keeps_its_models_and_names_the_repair_verb — a model dropped, or the remark without `stage2.py repair`
 - 29: tests/test_stage2.py::test_the_glm_remark_names_its_work_verbs_and_no_review_phase — the remark names a review phase
-- 30: not yet written tests/test_stage2.py::test_the_doctrine_names_the_repair_verb — "Eight verbs exist" kept, or AGENTS.md without the verb
-- 31: not yet written tests/test_stage2.py::test_the_prompts_name_the_repair_verb_and_red_first — 04b without the command, or 04 without red first
-- 32: not yet written tests/test_stage2.py::test_the_findings_template_names_the_repair_statuses — one of the four words missing
-- 33: not yet written tests/test_stage2.py::test_adr_0015_amends_adr_0011_and_records_the_repair_route — the file missing, or the amendment unstated
+- 30: tests/test_stage2.py::test_the_doctrine_names_the_repair_verb — "Eight verbs exist" kept, or AGENTS.md without the verb
+- 31: tests/test_stage2.py::test_the_prompts_name_the_repair_verb_and_red_first — 04b without the command, or 04 without red first
+- 32: tests/test_stage2.py::test_the_findings_template_names_the_repair_statuses — one of the four words missing
+- 33: tests/test_stage2.py::test_adr_0015_amends_adr_0011_and_records_the_repair_route — the file missing, or the amendment unstated
+
+## Runner route — 2026-10-12
+
+Stage-1 route: implement · model claude-sonnet-5-5 · reason: two Flash post-run checks failed.
 
 ## Time used
+
+2026-10-12, phase-4 session under the Stage-2 runner (`implement`, attempt 1, route flash) — start and
+end clock times not readable in it: the session has file tools and no command tool, so `date` could not
+be read, and the span is not estimated. The day is the runner's session date. The session covered the
+whole plan in one sitting: steps 1–8 (`scripts/stage2.py` — the shared attempt loop, the three status
+words, the row places, the verb `repair` with its refusals and routes, the answer check with the
+red-first run, the statuses and the checkpoint, the entry and `--stage2-off`; `scripts/stage2_runs.py`
+— a fixed released row counts as taken), step 9 (the doctrine, AGENTS.md, the two prompts, the
+findings template, the `glm-coding-plan` remark; the ADR 0015 draft stood already from phase 2b), and
+the 35 tests of the criterion ledger that were still unwritten, each with its planted fault named in
+its docstring. The runner runs `make verify` and makes the checkpoint commit after this entry.
+
+2026-10-12, phase-4 repair session under the Stage-2 runner (`implement`, attempt 2, route flash) —
+start and end clock times not readable in it: the session has file tools and no command tool, so
+`date` could not be read, and the span is not estimated. The day is the runner's session date. The
+session repaired attempt 1's post-run diagnostics, and nothing else: the five ruff-check errors (the
+two unused loop variables `place` in `check_repair_answer` renamed `_place`; the three unused
+arguments of the test spy `spy_record` renamed with a leading underscore) and the ruff-format
+deviations in `scripts/stage2.py` (the red-first teardown's `subprocess.run` wrapped into the
+formatter's body layout; the `findings_rows` call collapsed that fits on one line) and in
+`tests/test_stage2.py` (six statements whose one-line form passed 120 characters exploded, and whose
+inner call wrapped, to the formatter's form). The markdownlint lines in the run's standard error come
+from the gate `markdownlint`, which `decisions/gates.yaml` holds at `enforcement: report` — it
+reports and blocks nothing, and its files are not this change's. The runner runs `make verify` and
+makes the checkpoint commit after this entry.
+
+2026-10-12, phase-4 second repair session under the Stage-2 runner (`implement`, attempt 3, route
+stage-1) — start and end clock times not readable in it: the session has file tools and no command
+tool, so `date` could not be read, and the span is not estimated. The day is the runner's session
+date. The session repaired the one remaining gate, `ruff-format`, and nothing else: the two nested
+conditional expressions that assign `kind` in `scripts/stage2.py` (`findings_rows`,
+`mark_repaired_findings`) became plain `if`/`elif` statements; in `tests/test_stage2.py` the four
+string literals with escaped double quotes (`FIX_TEST` and `green_on_baseline`) took single quotes,
+and the signature of `test_the_record_is_marked_only_after_the_checkpoint_commit`, which fits in
+118 characters, went onto one line. The runner runs `make verify` and makes the checkpoint commit
+after this entry.

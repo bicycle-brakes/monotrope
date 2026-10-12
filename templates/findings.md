@@ -111,8 +111,10 @@ them:
 | ID | Severity | Dimension | Origin | Where | Finding | Reviewer | Status | Broke a test | Phase 6 |
 ```
 
-The second header is for released rows. The Status of a loop row is
-`taken — <test or criterion>` or `rejected — <reason>`. Lines:
+The second header is for released rows. The Status words of a stage-2 row are
+`taken — <reason>`, `taken — not a test — <reason>`, `fixed —
+tests/<path>::<function>` and `fixed — not a test — <reason>`; a loop row also
+reads `taken — <test or criterion>` and `rejected — <reason>`. Lines:
 
 ```text
 Reviewer session: codex <id>
