@@ -723,16 +723,20 @@ value taken out by rewriting a commit therefore reads clean while `git log -g
 --expire=now --all`, then `git gc --prune=now`); the check cannot tell whether
 that was done, and its advice for a match in a commit says so.
 
-**Explore and implement send more than a review does.** A reviewer reads one
-diff and one spec; explore reads the repository broadly and implement reads
-the tree and writes code into the worktree, so far more of this repository
-goes to Z.ai than before 2026-10-06. The leak check covers what these two runs
-send — the same scan, immediately before each call, over the tree, the staged
-changes, the commits reachable from the branches and the call's own prompt — and
-what stays out stays out: LakeSwitch and customer content never go, to any
-endpoint, and the check is what blocks it (the maintainer asked about it on
-2026-10-06 and kept it). How the runner confines the tools and writes of
-these two runs is stated below.
+**Explore, implement and repair send more than a review does.** A reviewer
+reads one diff and one spec; explore reads the repository broadly, implement
+reads the tree and writes code into the worktree, and every repair prompt
+carries the change's spec, plan and repository rules plus the taken rows of
+the loop record — rows the repository does not hold until the phase-6 verdict
+releases them into `findings.md`, so they reach Z.ai in that prompt before
+the verdict (ADR 0015). Far more of this repository goes to Z.ai than before
+2026-10-06. The leak check covers what these three runs send — the same scan,
+immediately before each call, over the tree, the staged changes, the commits
+reachable from the branches and the call's own prompt — and what stays out
+stays out: LakeSwitch and customer content never go, to any endpoint, and the
+check is what blocks it (the maintainer asked about it on 2026-10-06 and kept
+it). How the runner confines the tools and writes of these runs is stated
+below.
 
 What every call then carries: one audit line (in `research.md` for Explore,
 otherwise `findings.md`), an empty standard input and an environment built

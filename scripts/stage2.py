@@ -86,7 +86,7 @@ call. The Codex calls run in the CLI's read-only sandbox.
 
 **The loop record** lives outside the worktree
 (`${XDG_STATE_HOME:-~/.local/state}/coding-harness/stage2/<change>/loop.md`):
-the rounds' rows and the implementer's decision on each, until the phase-6
+the rounds' rows and the orchestrator's decision on each, until the phase-6
 verdict is written and `release-loop` carries them into `findings.md`. The
 release is the only thing that deletes the record, and it deletes nothing that
 has not arrived: every loop row, and every other line of the record as it
@@ -96,7 +96,7 @@ separator, and the blank lines outside the reviewer's words. The reviewer's
 words are carried exactly as they came - a heading, a code comment or a table
 line with a loop id included; only a line of the round tables the runner wrote
 that carries a loop id and cannot be read as a row refuses the release,
-because the implementer has to decide that row. A call counts as a round when
+because the orchestrator has to decide that row. A call counts as a round when
 it succeeded and answered - with rows or with "no finding"; a failed call, an
 empty answer or a call stopped by the reviewer time limit is no round.
 
@@ -952,9 +952,9 @@ def review(root: Path, change: str) -> None:
     ctx = preflight(root, change, CODEX)
     record = read_record(change)
     if record is not None:
-        waiting = undecided(record_rows(record))
-        if waiting:
-            raise Refused(f"the loop record has undecided rows ({', '.join(waiting)}); decide them first.")
+        refusal = undecided_refusal(record_rows(record), "decide them first")
+        if refusal:
+            raise Refused(refusal)
     text = ctx.findings.read_text(encoding="utf-8") if ctx.findings.exists() else ""
     sessions = SESSION_LINE.findall(text)
     recorded = sessions[-1] if sessions else None
@@ -1043,7 +1043,7 @@ def read_record(change: str) -> str | None:
 
 
 def _record_lines(record: str) -> list[tuple[str, bool]]:
-    """Each line of the record, and whether it is the reviewer's words - not the runner's or the implementer's.
+    """Each line of the record, and whether it is the reviewer's words - not the runner's or the orchestrator's.
 
     The runner writes a round as its heading, then a table or one statement and, when the answer was not
     only six-cell rows, the note `NOT_ROWS_NOTE` and the rest of the answer as it came. The lines after the
@@ -1067,9 +1067,9 @@ def record_rows(record: str) -> list[list[str]]:
     """The loop rows of the record: every table line of its own whose first cell is a loop id.
 
     Only the record's own lines are read, never the reviewer's words, which are carried as they came: a
-    table line the reviewer wrote is not a row the implementer has to decide, whatever its first cell says.
+    table line the reviewer wrote is not a row the orchestrator has to decide, whatever its first cell says.
 
-    Nine cells are known. A `|` the implementer typed into `Status` makes a tenth; the cells between the
+    Nine cells are known. A `|` the orchestrator typed into `Status` makes a tenth; the cells between the
     reviewer and the last one are that reason, each pipe escaped. A line with a loop id and fewer cells
     than a row has is not skipped, which would let the release delete it with the record: it is refused,
     by its id.
@@ -1101,6 +1101,31 @@ def undecided(rows: list[list[str]]) -> list[str]:
         if not decided:
             waiting.append(row[0])
     return waiting
+
+
+def undecided_refusal(rows: list[list[str]], consequence: str) -> str | None:
+    """The refusal that holds the verbs while a row of the record waits, or None when none does.
+
+    An undecided row gets the consequence the caller names. A fixed row whose `Broke a test` is
+    neither `yes` nor `no` is decided already: what it waits for is the mark the orchestrator writes
+    from the repair run's evidence, so the refusal names that mark instead of asking for a decision
+    the row carries (spec, criterion 25).
+    """
+    waiting = undecided(rows)
+    if not waiting:
+        return None
+    fixed = {row[0] for row in rows if row[7].lower().startswith("fixed")}
+    plain = [ident for ident in waiting if ident not in fixed]
+    unmarked = [ident for ident in waiting if ident in fixed]
+    parts: list[str] = []
+    if plain:
+        parts.append(f"the loop record has undecided rows ({', '.join(plain)}); {consequence}")
+    if unmarked:
+        parts.append(
+            f"the loop record has fixed rows without their `Broke a test` mark ({', '.join(unmarked)}); "
+            "write `yes` or `no` from the repair run's evidence first"
+        )
+    return "; ".join(parts) + "."
 
 
 def rounds_run(record: str | None, findings_text: str) -> int:
@@ -1167,9 +1192,9 @@ def release(root: Path, change: str) -> list[list[str]]:
             append(findings, NO_LOOP_LINE)
         return []
     rows = record_rows(record)
-    waiting = undecided(rows)
-    if waiting:
-        raise Refused(f"the loop record has undecided rows ({', '.join(waiting)}); nothing is released.")
+    refusal = undecided_refusal(rows, "nothing is released")
+    if refusal:
+        raise Refused(refusal)
     block = [f"{RELEASE_HEADING} {today()}", render_table(RELEASED_COLUMNS, [[*row, "—"] for row in rows])]
     if not rows:
         block.append("No loop row was reported.")
@@ -1738,7 +1763,9 @@ def fixed_status(ident: str, rest: str) -> str:
         reason = body.partition("—")[2].strip()
         if not reason:
             return f"{ident}: `fixed — not a test` without a reason"
-        return "fixed — not a test — " + reason.replace("|", "\\|")
+        # Escaped once, whatever the fixed line spelled: a `\|` the format asked for is unfolded first,
+        # so a reason written the way REPAIR_FORMAT asks never lands with a second backslash.
+        return "fixed — not a test — " + reason.replace("\\|", "|").replace("|", "\\|")
     if (test := FIXED_TEST.fullmatch(body)) and Path(test.group("file")).name.startswith("test_"):
         if any(segment in (".", "..") for segment in body.partition("::")[0].split("/")):
             return f"{ident}: `{body}` would climb out of `tests/`; a `.` or `..` path segment is no test path"
@@ -1827,12 +1854,13 @@ def mark_repaired_findings(ctx: Context, taken: list[tuple[str, list[str]]], fix
     """Write each taken findings row's fixed Status in its place, before the checkpoint commit.
 
     Only the Status cell (index 7) of a taken row changes; a `|` of a reason stands escaped, as the
-    fixed line carried it. Every other cell of any row and every other line stays as it is.
+    fixed line carried it. Every other cell of any row and every other line stays as it is, the
+    file's final newline included: the lines are split on `\\n`, so the ending empty line survives.
     """
     by_key = {(place, row[0]): row for place, row in taken}
     lines: list[str] = []
     kind = ""
-    for line in ctx.findings.read_text(encoding="utf-8").splitlines():
+    for line in ctx.findings.read_text(encoding="utf-8").split("\n"):
         if line.startswith("## "):
             kind = ""
             if line.startswith(RELEASE_HEADING):
@@ -1855,12 +1883,14 @@ def mark_repaired_record(change: str, taken: list[tuple[str, list[str]]], fixes:
     """Mark the record's own row lines the same way, after the checkpoint commit.
 
     The record lies outside what the file tools reach, so only the runner can write it; a failure
-    leaves the statuses unwritten there and names the IDs to mark by hand.
+    leaves the statuses unwritten there and names the IDs to mark by hand. The record's ending stays
+    as it was read.
     """
     by_key = {row[0]: row for place, row in taken if place == "record"}
     record = read_record(change)
     if not by_key or record is None:
         return
+    ending = "\n" if record.endswith("\n") else ""
     lines: list[str] = []
     for line, reviewer in _record_lines(record):
         if not reviewer:
@@ -1875,7 +1905,7 @@ def mark_repaired_record(change: str, taken: list[tuple[str, list[str]]], fixes:
                 line = "| " + " | ".join([*cells[:7], fixes[cells[0]], cells[-1]]) + " |"
         lines.append(line)
     try:
-        (record_dir(change) / "loop.md").write_text("\n".join(lines), encoding="utf-8")
+        (record_dir(change) / "loop.md").write_text("\n".join(lines) + ending, encoding="utf-8")
     except OSError as error:
         waiting = ", ".join(sorted(by_key))
         raise CallFailed(f"the loop record could not be marked ({error}); mark {waiting} by hand.") from error
@@ -2149,9 +2179,9 @@ def review_loop(root: Path, change: str) -> None:
     if done_rounds >= MAX_ROUNDS:
         raise Refused(f"{done_rounds} rounds have run; the loop stops at {MAX_ROUNDS}.")
     if record is not None:
-        waiting = undecided(record_rows(record))
-        if waiting:
-            raise Refused(f"the loop record has undecided rows ({', '.join(waiting)}); decide them first.")
+        refusal = undecided_refusal(record_rows(record), "decide them first")
+        if refusal:
+            raise Refused(refusal)
     round_number = done_rounds + 1
     if round_number == MAX_ROUNDS and not taken_in_round(
         record_rows(record) if record is not None else released_rows(findings_text), done_rounds

@@ -284,3 +284,22 @@ L1-2, `RECORD_INTRO` now names `taken — not a test — <reason>` and says a ro
 L1-3, a text row, the "Reads" passages of `docs/WORKFLOW.md` §4 and the `scripts/stage2.py` module
 docstring now name `repair` among the calls the `--restricted` boundary covers. The runner runs the
 red-first proofs, `make verify` and the checkpoint commit after this entry.
+
+2026-10-12, loop round-2 repair session under the Stage-2 runner (`repair`, GLM 5.3) — start and
+end clock times not readable in it: the session has file tools and no command tool, so `date` could
+not be read, and the span is not estimated. The day is the runner's session date. The session
+repaired the six taken rows and nothing else: L2-1, a reason's `|` is now escaped exactly once by
+`fixed_status` in `scripts/stage2.py`, whatever spelling the fixed line used, proven red first by
+`tests/test_stage2.py::test_a_reason_with_a_pipe_is_escaped_once_as_its_fixed_line_gives_it`; L2-2,
+the write path of a text row's repair — the record, the phase-6 table, the checkpoint commit — now
+runs in a test, proven red first by
+`tests/test_stage2.py::test_a_text_row_taken_as_not_a_test_is_repaired_and_its_status_written`;
+L2-3, `mark_repaired_findings` and `mark_repaired_record` keep the file's final newline, proven red
+first by `tests/test_stage2.py::test_a_repair_keeps_the_final_newline_of_findings_and_the_record`;
+L2-6, `undecided_refusal` in `scripts/stage2.py` names the missing `Broke a test` mark of a fixed
+row for `review`, `review-loop` and `release-loop`, proven red first by
+`tests/test_stage2.py::test_a_fixed_row_without_its_mark_is_refused_with_the_missing_mark_named`;
+L2-4, a text row, WORKFLOW §4 now says repair prompts carry the taken loop rows to Z.ai before the
+phase-6 verdict; L2-5, a text row, the five docstring places of `scripts/stage2.py` name the
+orchestrator as the one who decides a row. The runner runs the red-first proofs, `make verify` and
+the checkpoint commit after this entry.

@@ -3389,6 +3389,37 @@ def test_a_code_row_answered_not_a_test_fails_the_attempt(world: World) -> None:
     assert "L1-1: answered `not a test`, but the row is a code row; it needs a test that was red first" in prompt
 
 
+def test_a_reason_with_a_pipe_is_escaped_once_as_its_fixed_line_gives_it(world: World) -> None:
+    """Repair round 2, L2-1. Planted fault: a pipe the fixed line already escaped is escaped again."""
+    repair_world(world, ("L1-1", "taken — not a test — one", "no"), ("L1-2", "taken — not a test — two", "no"))
+    answer = "L1-1: fixed — not a test — a pipe \\| inside the reason\nL1-2: fixed — not a test — a bare | pipe"
+    world.script(claude=[repair_step(stdout=answer)], make=[{"stdout": "green\n"}])
+    assert world.run("repair") == 0
+    written = {row[0]: row[7] for row in stage2.record_rows(world.record().read_text(encoding="utf-8"))}
+    assert written["L1-1"] == "fixed — not a test — a pipe \\| inside the reason", repr(written["L1-1"])
+    assert written["L1-2"] == "fixed — not a test — a bare \\| pipe", repr(written["L1-2"])
+
+
+def test_a_text_row_taken_as_not_a_test_is_repaired_and_its_status_written(world: World) -> None:
+    """Repair round 2, L2-2. Planted fault: the write path of a text row's repair ran in no test."""
+    repair_world(world, ("L1-1", "taken — not a test — no test can show it", "no"))
+    world.write_findings(
+        VERDICT, phase6_block([phase6_cells("F-1", "taken — not a test — the doctrine pins it", "a text finding")])
+    )
+    answer = "L1-1: fixed — not a test — the record row is written\nF-1: fixed — not a test — a pipe \\| in the reason"
+    world.script(claude=[repair_step(stdout=answer)], make=[{"stdout": "green\n"}])
+    assert world.run("repair") == 0
+    record = {row[0]: row for row in stage2.record_rows(world.record().read_text(encoding="utf-8"))}
+    assert record["L1-1"][7] == "fixed — not a test — the record row is written"
+    assert record["L1-1"][8] == "no", "the runner wrote Broke a test"
+    _, phase6 = stage2.findings_rows(world.text())
+    assert {row[0]: row for row in phase6}["F-1"][7] == "fixed — not a test — a pipe \\| in the reason"
+    committed = git(world.root, "show", "HEAD:plans/changes/demo/findings.md")
+    assert "fixed — not a test — a pipe \\| in the reason" in committed
+    assert "taken — not a test — the doctrine pins it" not in committed
+    assert git(world.root, "log", "-1", "--pretty=%s") == "fix(demo): repair taken findings L1-1, F-1"
+
+
 def test_a_fixed_line_naming_an_undefined_test_fails_the_attempt(world: World) -> None:
     """Criterion 17. Planted fault: no definition check."""
     seed_tests(world)
@@ -3614,6 +3645,17 @@ def test_the_record_is_marked_only_after_the_checkpoint_commit(world: World, mon
     assert "taken — test_a" in world.record().read_text(encoding="utf-8"), "the spy must not write the record"
 
 
+def test_a_repair_keeps_the_final_newline_of_findings_and_the_record(world: World) -> None:
+    """Repair round 2, L2-3. Planted fault: the rewrites join split lines and drop each file's final newline."""
+    repair_world(world, ("L1-1", "taken — not a test — no test can show it", "no"))
+    world.script(
+        claude=[repair_step(stdout="L1-1: fixed — not a test — the doctrine names it")], make=[{"stdout": "green\n"}]
+    )
+    assert world.run("repair") == 0
+    assert world.text().endswith("\n"), "findings.md lost its final newline"
+    assert world.record().read_text(encoding="utf-8").endswith("\n"), "the loop record lost its final newline"
+
+
 def test_repair_starts_no_review_call(world: World) -> None:
     """Criterion 24. Planted fault: the verb calls `review-loop` or `review`."""
     repair_world(world)
@@ -3639,6 +3681,28 @@ def test_a_fixed_loop_row_is_decided_only_with_its_broke_a_test_mark(world: Worl
     record = world.record().read_text(encoding="utf-8")
     world.record().write_text(record.replace(f"| {fixed} |  |", f"| {fixed} | no |"), encoding="utf-8")
     assert world.run("release-loop") == 0
+
+
+def test_a_fixed_row_without_its_mark_is_refused_with_the_missing_mark_named(
+    world: World, capsys: pytest.CaptureFixture[str]
+) -> None:
+    """Repair round 2, L2-6. Planted fault: a fixed row without its mark is told to be decided, not marked."""
+    fixed = "fixed — tests/test_seed.py::test_seed"
+    seed_tests(world)
+    world.write_record([("L1-1", fixed, ""), ("L1-2", "taken — test_b", "")])
+    world.write_findings(VERDICT)
+    for verb in ("review", "review-loop", "release-loop"):
+        assert world.run(verb) == 2
+        error = capsys.readouterr().err
+        assert "undecided rows (L1-2)" in error, error
+        assert "fixed rows without their `Broke a test` mark (L1-1)" in error, error
+        assert "repair run's evidence" in error, error
+    world.write_record([("L1-1", fixed, "")])
+    for verb in ("review", "review-loop", "release-loop"):
+        assert world.run(verb) == 2
+        error = capsys.readouterr().err
+        assert "decide them first" not in error, error
+        assert "fixed rows without their `Broke a test` mark (L1-1)" in error, error
 
 
 def test_round_three_starts_after_a_fixed_round_two_row(world: World) -> None:
