@@ -34,3 +34,14 @@ formatting alone, and every fix including the unsafe ones, we decided on
 formatting plus safe fixes to achieve that both gates seen failing in
 change stage2-repair are caught by the runner, accepting that a lint finding
 without a safe fix still fails the attempt. — 2026-10-12
+
+## The ADR question
+
+asked: 2026-10-12
+answer: no — "Nein", the maintainer's answer to "does this change get an ADR?", after the recommendation that the step automates a hand step of the orchestrator within the guards ADR 0007 and ADR 0011 already set, as the derived-file step of bead coding-harness-mfv did without an ADR.
+answered_by: maintainer
+status: answered
+
+## Decisions taken by the agent
+
+[DETAIL] Class `bounded`: one runner step, its tests and a doctrine sentence; Q-1 meets the minimum of one answered question.
