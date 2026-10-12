@@ -260,4 +260,4 @@ file: `scripts/check_frontmatter_current.py` (`load_map`),
 map fixtures (`tests/test_frontmatter_current.py`,
 `tests/test_stage2.py`, and the harness test above).
 
-**Wo wir sind:** Phase 1 (Explore) für `provenance-location` ist inhaltlich abgeschlossen; der Befundstext oben ist unverändert in `research.md` zu übernehmen (mit `updated:` bleibt 2026-10-12). **Nächster Schritt:** Commit des Artefakts, dann Phase 1a (Interview) mit Ihnen — dort gehören die offenen Fragen hin (v. a. ob die Karten-Kopfzeilen-Leser stale sind und ob andere Leser einem umgezogenen Pfad folgen). **Von Ihnen benötige ich gerade:** nichts.
+*Note by the orchestrating session (2026-10-12): a German closing paragraph of GLM's answer (status and next step, addressed to the maintainer) stood here and was removed (house rule 1). It named the interview as the next phase and the two open questions above as its subject.*
