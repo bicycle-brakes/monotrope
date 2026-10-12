@@ -107,3 +107,10 @@ adr-owning-change, 0015 for change stage2-repair).
 orchestrating session, from the maintainer's stated answer in
 `decisions.md` (`scripts/harness.py decide adr … --stated-in …`); a drafting
 model never records one.
+
+## The ADR question
+
+asked: 2026-10-12
+answer: yes — "Ja", the maintainer's answer to "does this change get an ADR?", recorded in `decisions/answers/codex-drafts/adr.yaml` with `scripts/harness.py decide adr`.
+answered_by: maintainer
+status: answered
