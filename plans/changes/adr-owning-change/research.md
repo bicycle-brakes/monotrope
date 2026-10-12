@@ -219,3 +219,75 @@ answer format grows; the twelve ADR headers if it lands in frontmatter ·
 phase table row 1a, classes section) · `AGENTS.md` (workflow table) ·
 `scripts/check_decision_continuity.py` when ADR 0013 arrives ·
 `decisions/gates.yaml` only if a new gate joins.
+
+## Corrections after verification
+
+Phase 2, 2026-10-12. Read on branch `feat/adr-owning-change` at `2d6a1c6`
+(merge base `a6b7150`; `origin/main` at `e43f3c0` adds only a `ROADMAP.md`
+edit), and on branch `feat/criterion-test-ledger` (pull request #126, open and
+mergeable) at `7f53552`. Where this section disagrees with the text above, it
+holds.
+
+- **The interim rule of pull request #126, read.** It adds
+  `_folders_named_by_adrs()` and a set `plan_only` to `measure()` of
+  `scripts/check_interview_minimums.py`: a folder the diff touches only through
+  `plan.md` owns an ADR only when no other folder does; beside another owner,
+  the changed ADR text naming exactly one candidate folder decides, otherwise
+  the run reports both. The module docstring marks it INTERIM and names bead
+  coding-harness-afa. It brings four tests to
+  `tests/test_check_interview_minimums.py`
+  (`test_a_folder_whose_diff_touches_only_plan_md_is_no_owner`,
+  `test_an_adr_with_only_its_own_plan_md_still_has_that_one_owner`,
+  `test_a_plan_md_only_folder_does_not_hide_the_adr_owner_among_other_folders`,
+  `test_a_folder_touched_beyond_plan_md_is_never_also_plan_only`), and the
+  criterion ledger of `plans/changes/criterion-test-ledger/plan.md` names all
+  four under its criterion 24. ADR 0013 (rule: a test a ledger names
+  disappears only through an edit of that ledger line in the same commit)
+  makes that ledger line move with any of the four.
+- **criterion-test-ledger's answer is "yes", not "no".** Its answer file
+  (`decisions/answers/criterion-test-ledger/adr.yaml`, on #126) records
+  `answer: 'yes'`, `answered_at: 2026-10-11`, beside the proposal "no"; its
+  spec is a `feature` dated 2026-10-11, and ADR 0013 is the only file under
+  `docs/adr/` its diff touches. The consequence decisions.md Q-5 accepts —
+  that change going red until its answer is corrected — therefore does not
+  arise: it needs one claim of ADR 0013, and nothing else.
+- **The stock after the cut-off.** On `2d6a1c6` no spec is dated after
+  2026-10-08; 21 specs are dated on or before it, ten of them features with
+  an answer file (two "yes": `harness-decide-adr`, `stage2-mimo`). The only
+  features after the cut-off are criterion-test-ledger (on #126) and this
+  change.
+- **Bead coding-harness-wpv, read.** The criterion-ledger gate of #126 holds
+  its own constant, `CUTOFF = date(2026, 10, 11)` in
+  `scripts/check_criterion_ledger.py`, in the same shape as `CUTOFF =
+  date(2026, 10, 8)` here; the bead asks how an instance sets its own
+  adoption date for it. No file in the tree holds a per-repository value
+  today. `scripts/kit/manifest.yaml` gives `decisions/` the role
+  `mechanismus` ("im Zielrepo gilt dieselbe Datei") and only
+  `decisions/answers/` the role `bestand`: a date written into
+  `decisions/gates.yaml` would travel as this repository's date.
+- **The kit probe.** `scripts/kit/probe.py` copies the `mechanismus` files
+  into an empty repository and runs `pytest` there; a skipped case counts as
+  neither red nor green, and a red case without an entry in `REIST_NICHT` is
+  a finding, while `tests/test_kit.py` caps that list (it only shrinks).
+  In `tests/test_check_interview_minimums.py`, one case reads a file that does
+  not travel: `test_workflow_and_agents_state_the_duty` reads `AGENTS.md`
+  (role `bestand`). The other three cases that read this repository read
+  `prompts/` and `decisions/gates.yaml`, which travel.
+- **A new library script needs a declared reason.** `tests/test_ci.py` holds
+  every script under `scripts/` to a caller in `ci.yml` or an entry in
+  `ci_gates.OHNE_AUFRUFER`, and to a test that imports or runs it.
+- **What the new header field meets.** `check_adr_answers.read_feature()`
+  ignores header keys it does not know, so an `adr_files:` line does not
+  disturb the gate `adr-answers`; `tests/test_templates.py` fills the spec
+  template's placeholders and runs the header through `plans_registry` and
+  `adr-answers` only.
+- **ADR 0014 amends no D- or O-number.** The "Decision continuity" table of
+  `docs/architecture/2026-09-17-omnigent-first-target.md` holds no row on
+  interview minimums or ADR attribution; D-2 lists what a spec carries, and a
+  further header field adds to it without changing it. `AMENDMENT_ADRS` in
+  `scripts/check_decision_continuity.py` needs no entry.
+- **Validators.** `scripts/validate_change_artefacts.py`, named by the phase
+  prompts, does not exist yet (bead coding-harness-jc3); the artefact gate in
+  use is `python3 scripts/plans_registry.py --check`. At `2d6a1c6` it reports
+  one BLOCK before any phase-2 file exists: `plans/INDEX.md` deviates from its
+  inputs (the `decisions.md` of this change is not listed).
