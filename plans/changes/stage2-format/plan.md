@@ -4,7 +4,7 @@ status: draft
 implementation_status: none
 date: 2026-10-12
 last_reviewed: 2026-10-12
-updated: 2026-10-12
+updated: 2026-10-13
 supersedes: null
 superseded_by: null
 bead: coding-harness-52r
@@ -244,3 +244,15 @@ L1-1) — and the comment names the planted fault as an earlier attempt's format
 the checkpoint. The runner's code already keeps every attempt's line, so the strengthened test is
 green on the baseline's code and the row is answered `not a test`. The runner runs `make verify`
 and makes the checkpoint commit after this session returns.
+
+2026-10-13, repair session under the Stage-2 runner (`repair`, row L2-1 taken as `taken — not a
+test`) — start and end clock times not readable in it: the session has file tools and no command
+tool, so `date` could not be read, and the span is not estimated. It strengthened the criterion-6
+test `test_the_format_steps_writes_stay_out_of_the_models_file_list`: the ruff step list gains `{}`
+padding steps so the four-line plant lands on attempt 1's format call and the `a = 1` plant on
+attempt 2's — the stand-in spends one ruff scenario step per call, check and format each take one,
+so a plant on a check call is overwritten before any snapshot sees it (finding L2-1) — and a second
+snapshot taken after `verify_attempt` now counts the four lines in block 1 and names `scripts/a.py`
+in block 2. The runner's snapshot code is unchanged, so the strengthened test is green on the
+baseline's code by design and the row is answered `not a test`. The runner runs `make verify` and
+makes the checkpoint commit after this session returns.

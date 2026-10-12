@@ -2243,7 +2243,10 @@ def test_ruff_gets_the_verify_environment_without_credentials(world: World) -> N
 
 
 def test_the_format_steps_writes_stay_out_of_the_models_file_list(world: World) -> None:
-    # Criterion 6. Planted fault: the second snapshot taken after `verify_attempt`.
+    # Criterion 6. Planted fault: the second snapshot taken after `verify_attempt`. The stand-in
+    # spends one ruff step per call - check and format each take one - so the `{}` entries put each
+    # plant on a format call, the only place its bytes survive to a snapshot: the faulted snapshot
+    # counts ruff's four lines in block 1 and names `scripts/a.py` in block 2.
     venv_ruff(world)
     world.script(
         claude=[
@@ -2252,9 +2255,10 @@ def test_the_format_steps_writes_stay_out_of_the_models_file_list(world: World) 
             {"stdout": "third", "append": {"plans/changes/demo/plan.md": "2026-10-12 10:00–10:02, 2 min\n"}},
         ],
         ruff=[
-            {"plant": {"scripts/a.py": "a = 1  # the fix\n# and three\n# more\n# lines\n"}},
-            {"plant": {"scripts/a.py": "a = 1\n"}},
             {},
+            {"plant": {"scripts/a.py": "a = 1  # the fix\n# and three\n# more\n# lines\n"}},
+            {},
+            {"plant": {"scripts/a.py": "a = 1\n"}},
         ],
         make=[{"stdout": "green\n"}] * 3,
     )
