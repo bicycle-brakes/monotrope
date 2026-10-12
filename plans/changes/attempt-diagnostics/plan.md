@@ -154,6 +154,7 @@ make verify
 ## Criterion ledger
 
 - 1: written tests/test_stage2.py::test_a_failed_attempt_quotes_its_diagnostics_below_its_audit_line — planted fault: the blocks are written once, after the last audit line
+- 1: written tests/test_stage2.py::test_a_diagnostic_with_a_blank_line_before_its_stderr_tail_is_compared_whole — planted fault: the entry is read back out of the prompt only up to its first blank line
 - 2: written tests/test_stage2.py::test_each_failed_attempt_lists_only_the_files_its_model_changed — planted fault: a snapshot taken at the baseline, before the route block or after verify
 - 3: written tests/test_stage2.py::test_a_failed_attempt_that_changed_nothing_says_so — planted fault: an empty list renders as a bare heading
 - 4: written tests/test_stage2.py::test_an_unmeasured_file_list_says_why_and_changes_nothing_else — planted fault: a snapshot failure propagates and stops the run

@@ -1667,10 +1667,15 @@ def quote_blocks(text: str) -> list[list[str]]:
 
 
 def prompt_entry(prompt: str, attempt: int, route: str) -> list[str]:
-    """One attempt's diagnostics entry in a prompt: the lines after its `Attempt` line."""
+    """One attempt's diagnostics entry in a prompt: the lines after its `Attempt` line.
+
+    The entry ends where the next `Attempt <n> (` heading begins, or where the prompt's closing read
+    request begins: a diagnostic may hold blank lines of its own, so a blank line is no boundary.
+    """
     head = f"Attempt {attempt} ({route}):"
     after = prompt[prompt.index(head) + len(head) + 1 :]
-    return after.split("\n\n", 1)[0].splitlines()
+    boundary = rf"\n\nAttempt \d+ \(|\n\n{re.escape(stage2.READ_REQUEST)}"
+    return re.split(boundary, after, maxsplit=1)[0].splitlines()
 
 
 def files_of(block: list[str]) -> list[str]:
@@ -1715,6 +1720,29 @@ def test_a_failed_attempt_quotes_its_diagnostics_below_its_audit_line(world: Wor
         line_of(lines, "attempt 3 · route stage-1"),
     ]
     assert order == sorted(order), "a block does not stand below its own audit line"
+
+
+def test_a_diagnostic_with_a_blank_line_before_its_stderr_tail_is_compared_whole(world: World) -> None:
+    # Criterion 1. Planted fault: the entry is read back out of the prompt only up to its first blank line.
+    red = "\n".join(_gate("pytest", ["FAILED tests/test_app.py::test_value - assert 2 == 1"], "red"))
+    world.script(
+        claude=[
+            {"stdout": "first", "plant": {"src/app.py": "value = 2\n"}},
+            {"stdout": "repair"},
+            {"stdout": "fixed", "append": {"plans/changes/demo/plan.md": "2026-10-08 10:00–10:03, 3 min\n"}},
+        ],
+        make=[
+            {"stdout": red, "stderr": "warning: unframed\nTraceback: tail", "exit": 1},
+            {"stdout": "green"},
+            {"stdout": "green"},
+        ],
+    )
+    assert world.run("implement") == 0
+    entry = prompt_entry(world.calls("claude")[1]["prompt_file"], 1, "flash")
+    assert "" in entry, "the scenario has no blank line inside the diagnostics"
+    assert "Traceback: tail" in entry
+    block = quote_blocks(world.text())[0]
+    assert block[block.index("```text") + 1 : -1] == entry, "the block does not quote the entry whole"
 
 
 def test_each_failed_attempt_lists_only_the_files_its_model_changed(world: World) -> None:
