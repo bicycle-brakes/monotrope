@@ -52,7 +52,8 @@ SEVERITY_ORDER = ("BLOCKER", "MAJOR", "MINOR")
 # The loop's GLM route stood in stage2.py until ADR 0011 moved the loop to OpenCode Go; the runs this
 # script counts went through it, and `model-endpoints.yaml` still declares it, so criterion 4 keeps
 # naming it. Whether criterion 4 now also names the OpenCode Go rungs is the maintainer's call.
-GLM = ("glm-coding-plan", "glm-5.3", "max")
+# The tuple now routes the repair too (ADR 0015), so it is read from stage2.py and cannot drift.
+GLM = stage2.GLM
 FOREIGN_ROUTES = (stage2.CODEX, GLM, stage2.GLM_FLASH)
 SEVERITY = stage2.ROW_COLUMNS.index("Severity")
 STATUS = stage2.ROW_COLUMNS.index("Status")
@@ -139,7 +140,8 @@ def measure(findings: str, research: str = "") -> Counts:
             continue
         if len(cells) == len(stage2.RELEASED_COLUMNS) and stage2.LOOP_ID.fullmatch(cells[0]):
             status = cells[STATUS].lower()
-            if status.startswith("taken"):
+            # A fixed row was taken when the repair took it: it counts as taken (spec, criterion 27).
+            if status.startswith("taken") or status.startswith("fixed"):
                 counts.taken += 1
             elif status.startswith("rejected"):
                 counts.rejected += 1

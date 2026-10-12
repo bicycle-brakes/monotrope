@@ -130,6 +130,12 @@ typed: a hand-kept list of files ages exactly as fast as files are added.
 | [`changes/stage2-format/plan.md`](changes/stage2-format/plan.md) | draft | none | 2026-10-12 | coding-harness-52r |
 | [`changes/stage2-format/research.md`](changes/stage2-format/research.md) | draft | none | 2026-10-12 | coding-harness-52r |
 | [`changes/stage2-format/spec.md`](changes/stage2-format/spec.md) | draft | none | 2026-10-12 | coding-harness-52r |
+| [`changes/stage2-repair/decisions.md`](changes/stage2-repair/decisions.md) | draft | none | 2026-10-12 | coding-harness-g2f |
+| [`changes/stage2-repair/design.md`](changes/stage2-repair/design.md) | draft | none | 2026-10-12 | coding-harness-g2f |
+| [`changes/stage2-repair/findings.md`](changes/stage2-repair/findings.md) | draft | none | 2026-10-12 | coding-harness-g2f |
+| [`changes/stage2-repair/plan.md`](changes/stage2-repair/plan.md) | draft | none | 2026-10-12 | coding-harness-g2f |
+| [`changes/stage2-repair/research.md`](changes/stage2-repair/research.md) | draft | none | 2026-10-12 | coding-harness-g2f |
+| [`changes/stage2-repair/spec.md`](changes/stage2-repair/spec.md) | draft | none | 2026-10-12 | coding-harness-g2f |
 | [`changes/stage2-session/adr-0007-session-amendment.md`](changes/stage2-session/adr-0007-session-amendment.md) | draft | partial | 2026-10-07 | coding-harness-amp |
 | [`changes/stage2-session/decisions.md`](changes/stage2-session/decisions.md) | draft | partial | 2026-10-07 | coding-harness-amp |
 | [`changes/stage2-session/design.md`](changes/stage2-session/design.md) | draft | partial | 2026-10-07 | coding-harness-amp |
