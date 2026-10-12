@@ -291,8 +291,9 @@ proposed "yes".
 - Moved in the same pull request: `docs/WORKFLOW.md` §3 and §4, `AGENTS.md`,
   the three remarks in `model-endpoints.yaml`, the `**Model:**` lines of
   `prompts/02-spec.md`, `02b-design.md`, `03-plan.md`, `02a-spec-review.md`
-  and the Session lines of `02a-spec-review.md` and `06-review.md`, the module
-  docstring of `scripts/stage2.py`, and the new
+  and `06-review.md`, the Session lines of the last two, the runner-path
+  sentences of `02-spec.md` ("After the spec review") and `03-plan.md` (the
+  card), the module docstring of `scripts/stage2.py`, and the new
   `docs/adr/0016-codex-drafts-and-opus-reviews-the-spec.md`.
 - The protected areas untouched and the non-goals unbuilt, shown by the pull
   request's file list.
