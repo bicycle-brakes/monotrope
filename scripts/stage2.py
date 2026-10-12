@@ -24,7 +24,9 @@ any other answer refuses with exit 2 before the leak check and before any call.
 `explore` and `implement` accept `--stage2-off [REASON]`: the declared
 Stage-1 route uses Haiku 4.5 or Sonnet 5.5. A leak refusal never falls back.
 Implement lets the model edit but not run commands; the runner runs
-`make verify`, checks the time log and makes the one checkpoint commit.
+`make verify`, checks the time log and makes the one checkpoint commit. A
+failed attempt leaves its diagnostics and the files its model changed, quoted,
+below its audit line in `findings.md`.
 
 `session` starts one interactive Pi or Codex session in a new macOS
 Terminal window, inside the change's dedicated worktree
@@ -194,6 +196,14 @@ ROUNDS_LINE = re.compile(r"^Rounds run: (\d+)\s*$", re.M)
 ROUND_HEADING = re.compile(r"^## Round \d+ — \S+,", re.M)
 RELEASE_HEADING = "## Phase 4b — loop rows, released"
 NO_LOOP_LINE = "Loop rows: none — the loop did not run for this change."
+# Readers of findings.md match these at the start of a line only: a failed attempt's block quotes its
+# lines with `>`, so quoted gate output can hold them without being taken for the runner's own (criterion 11).
+RELEASE_LINE = re.compile("^" + re.escape(RELEASE_HEADING), re.M)
+NO_LOOP = re.compile("^" + re.escape(NO_LOOP_LINE) + r"[ \t]*$", re.M)
+# Bounds of a failed attempt's block: a gate line and a file entry keep their first characters…
+QUOTE_LINE_CHARS = 500
+# …and the file list keeps its first entries (spec, criteria 13 and 14).
+ATTEMPT_FILES = 40
 LOOP_ID = re.compile(r"L\d+-\d+")
 NOT_ROWS_NOTE = "The answer was not only six-cell rows; what is not one is kept below as it came."
 
@@ -809,9 +819,19 @@ def taken_in_round(rows: list[list[str]], round_number: int) -> bool:
     return any(row[0].startswith(prefix) and row[7].lower().startswith("taken") for row in rows)
 
 
+def _last_release(text: str) -> int:
+    """The start of the last line the release block begins on, -1 without one.
+
+    The heading is matched at the start of a line: a failed attempt's block quotes it with `>`, and a
+    quoted heading is not the block's beginning (criterion 12).
+    """
+    matches = list(RELEASE_LINE.finditer(text))
+    return matches[-1].start() if matches else -1
+
+
 def released_rows(findings_text: str) -> list[list[str]]:
     """The loop rows of the last released block in findings.md, with the status they were decided by."""
-    start = findings_text.rfind(RELEASE_HEADING)
+    start = _last_release(findings_text)
     if start < 0:
         return []
     block = findings_text[start:]
@@ -902,7 +922,7 @@ def parse_marks(answer: str) -> dict[str, str]:
 def fill_marks(findings: Path, ids: list[str], marks: dict[str, str]) -> None:
     """Fill the `Phase 6` cell of each released row, in the block `release` wrote and nowhere else."""
     text = findings.read_text(encoding="utf-8")
-    start = text.rfind(RELEASE_HEADING)
+    start = _last_release(text)
     head, tail = text[:start], text[start:]
     lines = []
     for line in tail.split("\n"):
@@ -1051,7 +1071,8 @@ def release(root: Path, change: str) -> list[list[str]]:
         raise Refused("findings.md has no phase-6 verdict line; nothing is released.")
     record = read_record(change)
     if record is None:
-        if NO_LOOP_LINE not in text and RELEASE_HEADING not in text:
+        # The runner's own lines stand at a line start; a block's quote of either line is not one (criterion 12).
+        if not (NO_LOOP.search(text) or RELEASE_LINE.search(text)):
             append(findings, NO_LOOP_LINE)
         return []
     rows = record_rows(record)
@@ -1264,6 +1285,78 @@ def remove_changed_credential(
 def credential_message(exposed: list[Path]) -> str:
     listing = ", ".join(path.as_posix() for path in exposed)
     return f"the GLM credential occurred in changed files and was removed ({listing}); no fallback starts."
+
+
+def worktree_tree(root: Path) -> str:
+    """The tree id of the worktree as git counts it, written through a temporary index.
+
+    The temporary index is seeded with `git read-tree HEAD`, not copied from the real one: a file
+    tracked although ignored stays in the snapshot, and the real index, the stash and the refs are
+    never touched (spec, criterion 10).
+    """
+    with tempfile.TemporaryDirectory(prefix="stage2-") as tmp:
+        env = {**os.environ, "GIT_INDEX_FILE": str(Path(tmp) / "index")}
+        _git_output(root, "read-tree", "HEAD", env=env)
+        _git_output(root, "add", "-A", env=env)
+        return _git_output(root, "write-tree", env=env).strip()
+
+
+def attempt_files(root: Path, before: str, after: str) -> list[str]:
+    """The files between two trees, as `git diff-tree --numstat` counts them, bounded at `ATTEMPT_FILES`.
+
+    One entry is `` `<path>` +<added> -<removed> ``, or `` `<path>` binary `` where git counts none.
+    With more entries than the bound, the first ones stand and one line says how many follow
+    (spec, criterion 14). `-z` keeps paths with newlines or tabs whole; the path is the record's last field.
+    """
+    done = _git_output(root, "diff-tree", "-r", "-z", "--numstat", "--no-renames", before, after)
+    entries = []
+    for record in filter(None, done.split("\0")):
+        fields = record.split("\t", 2)
+        if len(fields) != 3:
+            raise Refused(f"git diff-tree --numstat returned a record without two counts: {record!r}")
+        added, removed, relative = fields
+        entries.append(f"`{relative}` binary" if added == "-" else f"`{relative}` +{added} -{removed}")
+    if len(entries) > ATTEMPT_FILES:
+        entries = entries[:ATTEMPT_FILES] + [f"… and {len(entries) - ATTEMPT_FILES} more files"]
+    return entries
+
+
+def attempt_block(attempt: int, route: str, listing: str, files: list[str] | str) -> str:
+    """The unquoted text of one failed attempt's block: its header, the files, the diagnostics.
+
+    `files` is the entry list of `attempt_files`, a reason string when the trees could not be measured,
+    or empty when the attempt's model changed no file. The diagnostics stand in a fenced code block
+    whose fence is one backtick longer than the longest run they contain, at least three, so gate
+    output with fences of its own is quoted whole (spec: the block's shape).
+    """
+    head = f"Attempt {attempt} ({route}) failed its post-run checks."
+    if isinstance(files, str):
+        # The reason is a raw git error: one line, and one full stop of this sentence's own.
+        reason = " ".join(files.split()).rstrip(".")
+        file_part = f"Files the attempt changed: not measured — {reason}."
+    elif files:
+        file_part = "Files the attempt changed (lines added, removed):\n" + "\n".join(f"- {entry}" for entry in files)
+    else:
+        file_part = "Files the attempt changed: none."
+    longest = max((len(run) for run in re.findall(r"`+", listing)), default=2)
+    fence = "`" * max(longest + 1, 3)
+    return f"{head}\n\n{file_part}\n\nDiagnostics:\n{fence}text\n{listing}\n{fence}"
+
+
+def quote_block(text: str, key: str | None) -> str:
+    """`text` as one Markdown quote: every line begins `>`, the key scrubbed, long lines cut.
+
+    One mark on every line defeats the line-anchored readers of findings.md at once (spec, criterion 11).
+    A line longer than `QUOTE_LINE_CHARS` keeps its first characters and says how many were left out
+    (criterion 13). Under `--stage2-off` the key is `None` and nothing is scrubbed: that run never
+    reads it.
+    """
+    lines = []
+    for line in scrub(text, key).splitlines():
+        if len(line) > QUOTE_LINE_CHARS:
+            line = f"{line[:QUOTE_LINE_CHARS]} [… {len(line) - QUOTE_LINE_CHARS} characters left out …]"
+        lines.append(f"> {line}" if line else ">")
+    return scrub("\n".join(lines), key)
 
 
 RED_SECTION_LINES = 60
@@ -1520,7 +1613,11 @@ def implementation_prompt(ctx: Context, baseline: str, diagnostics: list[str]) -
 
 
 def implement(root: Path, change: str, stage2_off: str | None = None) -> None:
-    """Phase 4: Flash, one Flash repair and Sonnet fallback, checked and committed by the runner."""
+    """Phase 4: Flash, one Flash repair and Sonnet fallback, checked and committed by the runner.
+
+    A failed attempt leaves its diagnostics and the files its model changed, quoted, below its audit
+    line in `findings.md`.
+    """
     first = SONNET if stage2_off is not None else GLM_FLASH
     ctx = preflight(root, change, first, required=("plan.md",))
     allowed = {ctx.findings.relative_to(root)}
@@ -1552,26 +1649,63 @@ def implement(root: Path, change: str, stage2_off: str | None = None) -> None:
                 ctx.plan,
                 f"## Runner route — {today()}\n\nStage-1 route: implement · model {endpoint[1]} · reason: {reason}.",
             )
+        unmeasured: str | None = None
+        try:
+            before = worktree_tree(root)
+        except (Refused, OSError) as error:
+            before, unmeasured = "", str(error)
         try:
             run_work_model(ctx, prompt, endpoint, writable=True, key=credential)
         except CallFailed as error:
             raise CallFailed(f"{error}; {restore_baseline(root, baseline, allowed)}") from error
-        if credential is not None:
-            exposed = remove_changed_credential(root, credential, ignored_before)
+        if key is not None:
+            # Every route scans with the key read in this run - the Sonnet fallback included - before
+            # the second snapshot can write the changed files into the object store (spec, criterion 9).
+            exposed = remove_changed_credential(root, key, ignored_before)
             if exposed:
                 raise Refused(credential_message(exposed))
-        problems = verify_attempt(root, ctx.plan, baseline_time, key)
+        if unmeasured is None:
+            # Both snapshots stand around the model call alone: the runner's own writes - the audit
+            # line, the route block, the preparation, the block below - fall outside both of them.
+            try:
+                files: list[str] | str = attempt_files(root, before, worktree_tree(root))
+            except (Refused, OSError) as error:
+                files = str(error)
+        else:
+            files = unmeasured
+        cannot_start: CallFailed | None = None
+        try:
+            problems = verify_attempt(root, ctx.plan, baseline_time, key)
+        except CallFailed as error:
+            # `make verify` could not be started: no model can repair that, so this attempt's block
+            # says why and the run stops after the scan below, with no further attempt (spec, criterion 6).
+            cannot_start = error
+            lines = scrub(str(error), key).splitlines() or ["make could not be started"]
+            problems = ["`make verify` could not be run\n" + "\n".join(_shrink(lines, TAIL_LINES))]
+        if problems:
+            # The block lands below this attempt's audit line, before the next attempt starts or the
+            # run exits 1; the post-run scan after it covers the block too (spec, criteria 1 and 9).
+            listing = "\n".join(f"- {p}" for p in problems)
+            diagnostics.append(f"Attempt {attempt} ({route}):\n{listing}")
+            append(ctx.findings, quote_block(attempt_block(attempt, route, listing, files), key))
         if key is not None:
             # The gate runs repository code the model just edited: scan again after it.
             exposed = remove_changed_credential(root, key, ignored_before)
             if exposed:
                 raise Refused(credential_message(exposed))
+        if cannot_start is not None:
+            raise CallFailed(
+                f"`make verify` could not be started; why, and the files this attempt changed: "
+                f"{ctx.findings.relative_to(root)}"
+            ) from cannot_start
         if not problems:
             checkpoint(root, change, baseline, key, ignored_before)
             print(f"implement: verified and committed · route {route} · attempt {attempt}")
             return
-        diagnostics.append(f"Attempt {attempt} ({route}):\n" + "\n".join(f"- {p}" for p in problems))
-    raise CallFailed("implementation post-run checks failed after the allowed attempts")
+    raise CallFailed(
+        "implementation post-run checks failed after the allowed attempts; why each attempt failed and "
+        f"the files it changed: {ctx.findings.relative_to(root)}"
+    )
 
 
 def review_loop(root: Path, change: str) -> None:

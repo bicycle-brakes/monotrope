@@ -4,7 +4,7 @@ status: draft
 implementation_status: partial
 date: 2026-09-30
 last_reviewed: 2026-09-30
-updated: 2026-09-30
+updated: 2026-10-11
 supersedes: null
 superseded_by: null
 bead: coding-harness-3ar
@@ -528,6 +528,8 @@ files and without `check_adr_answers.py`, which do not exist yet.
 Gate tests in `tests/test_check_adr_answers.py`, command tests in
 `tests/test_harness_decide_adr.py`, unless noted.
 
+The list the gate criterion-ledger holds is the section "Criterion ledger" below; this table is the earlier record.
+
 | Criterion | Test | Fault that turns it red |
 |---|---|---|
 | 1 | `test_an_anchor_whose_class_is_unknown_goes_red` — no header, no `class:`, `class: Feature`, two lines, invalid UTF-8 | any of them exits 0 |
@@ -567,6 +569,69 @@ Slice 2: skip archived anchors; accept a bare `no`; drop the folder
 comparison; accept `schema_version: true`; print "OK" on an empty tree;
 exit 0 on a finding; remove the terminal guard; write before the last
 prompt; accept `yes`; overwrite an existing answer; hard-code the role.
+
+## Criterion ledger
+
+- 1: tests/test_check_adr_answers.py::test_an_anchor_whose_class_is_unknown_goes_red — any of the five shapes exits 0
+- 1: tests/test_check_adr_answers.py::test_the_class_line_takes_quotes_and_a_comment — quoting or a comment misread
+- 1: tests/test_check_adr_answers.py::test_a_non_feature_is_held_to_nothing_further — a bounded anchor reported
+- 1: tests/test_check_adr_answers.py::test_a_class_line_whose_value_runs_into_a_hash_is_not_misread — `class: feature#x` read as `feature`
+- 2: tests/test_check_adr_answers.py::test_a_feature_header_that_breaks_the_shape_goes_red — one of the eight shapes accepted
+- 2: tests/test_check_adr_answers.py::test_a_feature_in_the_pilots_full_shape_is_read — the pilot shape reported
+- 2: tests/test_check_adr_answers.py::test_an_archived_folder_loses_its_date — an archived folder's date kept
+- 2: tests/test_check_adr_answers.py::test_two_features_naming_one_change_go_red — a doubled change passes
+- 3: tests/test_check_adr_answers.py::test_an_answer_in_the_pilots_shape_is_accepted — refused
+- 3: tests/test_check_adr_answers.py::test_every_single_deviation_of_an_answer_goes_red — one deviation accepted
+- 4: tests/test_check_adr_answers.py::test_an_active_feature_without_an_answer_goes_red — exit 0, or the line lacks change, file or command
+- 4: tests/test_check_adr_answers.py::test_an_archived_feature_without_an_answer_goes_red — exit 0
+- 4: tests/test_check_adr_answers.py::test_an_answer_naming_another_change_goes_red — exit 0
+- 4: tests/test_check_adr_answers.py::test_a_malformed_answer_goes_red — exit 0
+- 4: tests/test_check_adr_answers.py::test_a_feature_with_a_valid_answer_is_not_reported — a valid answer reported
+- 4: tests/test_check_adr_answers.py::test_no_report_line_calls_an_answer_confirmed — "confirm", "approved" or "signed" in any output
+- 5: tests/test_check_adr_answers.py::test_a_green_run_names_the_count_and_the_features — a count missing
+- 5: tests/test_check_adr_answers.py::test_an_empty_tree_examined_nothing_and_is_not_a_pass — "OK" or "pass" on an empty tree
+- 5: tests/test_check_adr_answers.py::test_an_unreadable_root_is_exit_3 — exit other than 3
+- 5: tests/test_check_adr_answers.py::test_the_command_line_exits_1_on_a_finding_and_0_when_green — exit 0 on a finding
+- 6: tests/test_check_adr_answers.py::test_the_gate_is_in_the_one_list — a field of the entry changed
+- 6: tests/test_check_adr_answers.py::test_the_kit_carries_the_mechanism_and_not_the_answers — an answer path `mechanismus`
+- 7: tests/test_harness_decide_adr.py::test_without_a_terminal_the_dialogue_refuses_and_never_writes — the guard removed
+- 7: tests/test_harness_decide_adr.py::test_each_question_shows_its_context — context or proposal missing
+- 7: tests/test_harness_decide_adr.py::test_only_y_or_n_is_taken_as_an_answer — `yes`, `maybe` taken
+- 7: tests/test_harness_decide_adr.py::test_a_lower_case_or_blank_reason_is_refused — a lower-case line taken
+- 7: tests/test_harness_decide_adr.py::test_an_interrupt_at_any_prompt_never_writes — a file or the message written
+- 7: tests/test_harness_decide_adr.py::test_a_broken_anchor_or_a_refused_answer_is_listed_before_any_question — `ask` called
+- 7: tests/test_harness_decide_adr.py::test_nothing_open_says_so — exit other than 0
+- 8: tests/test_harness_decide_adr.py::test_the_written_answer_is_what_the_gate_accepts — the gate refuses the file
+- 8: tests/test_harness_decide_adr.py::test_the_command_never_stages_or_commits — a staged file or a commit
+- 8: tests/test_harness_decide_adr.py::test_the_message_lands_where_git_says — message elsewhere
+- 8: tests/test_harness_decide_adr.py::test_the_printed_steps_name_the_merge — steps without the merge
+- 8: tests/test_harness_decide_adr.py::test_an_unknown_verb_or_option_is_exit_2_and_never_writes — anything asked or written
+- 9: tests/test_harness_decide_adr.py::test_a_stated_answer_is_recorded_without_a_terminal — refused without a terminal
+- 9: tests/test_harness_decide_adr.py::test_a_stated_answer_that_breaks_a_rule_is_refused_and_never_writes — anything written
+- 9: tests/test_harness_decide_adr.py::test_a_refusal_names_why_the_change_owes_no_answer — the three reasons unnamed
+- 10: tests/test_harness_decide_adr.py::test_answered_by_is_the_role_the_map_names — a constant role
+- 10: tests/test_harness_decide_adr.py::test_a_map_without_the_role_refuses_before_asking — asking without the role
+- 10: tests/test_harness_decide_adr.py::test_this_repository_declares_the_answering_role — the entry missing
+- 11: not a test — the maintainer's merge confirms a decision; the phase-6 review reads the texts
+- 12: tests/test_merge_guard.py::test_settings_ask_before_every_merge — a rule missing
+- 12: tests/test_merge_guard.py::test_no_deny_or_allow_rule_covers_a_merge — a covering rule
+- 12: tests/test_merge_guard.py::test_each_rule_matches_its_own_sample — a sample unmatched
+- 12: tests/test_merge_guard.py::test_every_rule_has_a_reason_and_a_sample — a rule without one
+- 12: tests/test_merge_guard.py::test_a_missing_or_covered_merge_rule_is_caught — a rule dropped unseen
+- 12: tests/test_merge_guard.py::test_the_omnigent_render_keeps_the_merge_rules — `--write` dropping one
+- 12: tests/test_merge_guard.py::test_the_repository_flag_before_a_subcommand_still_asks — a flagged spelling passing
+- 12: tests/test_merge_guard.py::test_a_rule_beside_the_merges_is_not_reported — a harmless rule reported
+- 12: tests/test_merge_guard.py::test_the_matcher_follows_the_documented_forms — a documented form unmatched
+- 12: tests/test_omnigent_deny_layers.py::test_settings_ask_exactly_the_asked_tools — a foreign Omnigent ask rule
+- 13: tests/test_pr_templates.py::test_the_decision_template_has_every_part — a part removed
+- 13: tests/test_pr_templates.py::test_a_template_missing_a_part_is_caught — caught nothing
+- 13: tests/test_pr_templates.py::test_the_decision_line_comes_first — the decision line moved down
+- 13: tests/test_pr_templates.py::test_one_alert_and_no_table_or_checkbox — a table or `- [ ]` added
+- 13: tests/test_pr_templates.py::test_the_ordinary_template_says_nothing_is_decided — the template decides
+- 13: tests/test_pr_templates.py::test_the_template_tells_an_agent_how_to_merge — the merge comment missing
+- 13: not a test — the label on GitHub and the pull request's body, checked in phase 7 (`gh label list`)
+- 14: not a test — the gate runs on the pull request's last commit; the phase-6 review reads each answer against its source
+- 15: tests/test_entry_points.py::test_instruction_file_is_under_200_lines — `AGENTS.md` over 200 lines
 
 ## Not touched
 
