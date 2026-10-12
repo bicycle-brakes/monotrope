@@ -93,6 +93,11 @@ typed: a hand-kept list of files ages exactly as fast as files are added.
 | [`changes/archive/2026-10-08-touch-map-comments/plan.md`](changes/archive/2026-10-08-touch-map-comments/plan.md) | accepted | done | 2026-10-08 | coding-harness-cff |
 | [`changes/archive/2026-10-08-touch-map-comments/research.md`](changes/archive/2026-10-08-touch-map-comments/research.md) | accepted | done | 2026-10-08 | coding-harness-cff |
 | [`changes/archive/2026-10-08-touch-map-comments/spec.md`](changes/archive/2026-10-08-touch-map-comments/spec.md) | accepted | done | 2026-10-08 | coding-harness-cff |
+| [`changes/attempt-diagnostics/decisions.md`](changes/attempt-diagnostics/decisions.md) | draft | partial | 2026-10-11 | coding-harness-cit |
+| [`changes/attempt-diagnostics/findings.md`](changes/attempt-diagnostics/findings.md) | draft | partial | 2026-10-11 | coding-harness-cit |
+| [`changes/attempt-diagnostics/plan.md`](changes/attempt-diagnostics/plan.md) | draft | partial | 2026-10-11 | coding-harness-cit |
+| [`changes/attempt-diagnostics/research.md`](changes/attempt-diagnostics/research.md) | draft | partial | 2026-10-11 | coding-harness-cit |
+| [`changes/attempt-diagnostics/spec.md`](changes/attempt-diagnostics/spec.md) | draft | partial | 2026-10-11 | coding-harness-cit |
 | [`changes/criterion-test-ledger/decisions.md`](changes/criterion-test-ledger/decisions.md) | draft | partial | 2026-10-11 | coding-harness-909 |
 | [`changes/criterion-test-ledger/design.md`](changes/criterion-test-ledger/design.md) | draft | partial | 2026-10-11 | coding-harness-909 |
 | [`changes/criterion-test-ledger/findings.md`](changes/criterion-test-ledger/findings.md) | draft | partial | 2026-10-11 | coding-harness-909 |

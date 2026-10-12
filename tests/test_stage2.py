@@ -40,6 +40,7 @@ import leakcheck  # noqa: E402
 import omnigent_policy  # noqa: E402
 import plans_registry  # noqa: E402
 import stage2  # noqa: E402
+import stage2_runs  # noqa: E402
 
 GIT = shutil.which("git")  # resolved before any test narrows the PATH
 
@@ -120,6 +121,8 @@ time.sleep(step.get("sleep", 0))
 key = os.environ.get("ANTHROPIC_AUTH_TOKEN") or os.environ.get("OPENCODE_API_KEY", "")
 for relative, text in step.get("plant", {}).items():
     Path(relative).write_text(text.replace("@KEY@", key))
+for relative in step.get("delete", []):
+    Path(relative).unlink()
 for relative, text in step.get("append", {}).items():
     with Path(relative).open("a") as handle:
         handle.write(text.replace("@KEY@", key))
@@ -1641,6 +1644,511 @@ def test_findings_only_dirt_is_allowed_and_committed(world: World) -> None:
     assert world.run("implement") == 0
     assert git(world.root, "status", "--porcelain") == ""
     assert "Earlier failed attempt." in world.text()
+
+
+# ---------------------------------------------------------------------------
+# The failed attempt's block in findings.md (spec criteria 1-15, bead coding-harness-cit)
+# ---------------------------------------------------------------------------
+
+
+def quote_blocks(text: str) -> list[list[str]]:
+    """Each maximal run of consecutive `>` lines of findings.md, mark and one space stripped."""
+    found: list[list[str]] = []
+    quoted = False
+    for line in text.splitlines():
+        if line.startswith(">"):
+            if not quoted:
+                found.append([])
+            quoted = True
+            found[-1].append("" if line == ">" else line[2:])
+        else:
+            quoted = False
+    return found
+
+
+def prompt_entry(prompt: str, attempt: int, route: str) -> list[str]:
+    """One attempt's diagnostics entry in a prompt: the lines after its `Attempt` line.
+
+    The entry ends where the next `Attempt <n> (` heading begins, or where the prompt's closing read
+    request begins: a diagnostic may hold blank lines of its own, so a blank line is no boundary.
+    """
+    head = f"Attempt {attempt} ({route}):"
+    after = prompt[prompt.index(head) + len(head) + 1 :]
+    boundary = rf"\n\nAttempt \d+ \(|\n\n{re.escape(stage2.READ_REQUEST)}"
+    return re.split(boundary, after, maxsplit=1)[0].splitlines()
+
+
+def files_of(block: list[str]) -> list[str]:
+    """The file part of a block: its `Files` line and the entries below it."""
+    start = next(i for i, line in enumerate(block) if line.startswith("Files the attempt changed"))
+    return block[start : block.index("Diagnostics:") - 1]
+
+
+def line_of(lines: list[str], needle: str) -> int:
+    """The index of the first line holding `needle`."""
+    return next(i for i, line in enumerate(lines) if needle in line)
+
+
+def test_a_failed_attempt_quotes_its_diagnostics_below_its_audit_line(world: World) -> None:
+    # Criterion 1. Planted fault: the blocks are written once, after the last audit line.
+    red = "\n".join(_gate("pytest", ["FAILED tests/test_app.py::test_value - assert 2 == 1"], "red"))
+    world.script(
+        claude=[
+            {"stdout": "first", "plant": {"src/app.py": "value = 2\n"}},
+            {"stdout": "repair"},
+            {"stdout": "fixed", "append": {"plans/changes/demo/plan.md": "2026-10-08 10:00–10:03, 3 min\n"}},
+        ],
+        make=[{"stdout": red, "exit": 1}, {"stdout": "green"}, {"stdout": "green"}],
+    )
+    assert world.run("implement") == 0
+    calls = world.calls("claude")
+    entry1 = prompt_entry(calls[1]["prompt_file"], 1, "flash")
+    entry2 = prompt_entry(calls[2]["prompt_file"], 2, "flash-repair")
+    blocks_ = quote_blocks(world.text())
+    assert [block[0] for block in blocks_] == [
+        "Attempt 1 (flash) failed its post-run checks.",
+        "Attempt 2 (flash-repair) failed its post-run checks.",
+    ]
+    for entry, block in ((entry1, blocks_[0]), (entry2, blocks_[1])):
+        assert block[block.index("```text") + 1 : -1] == entry, "the block does not quote the entry whole"
+    lines = world.text().splitlines()
+    order = [
+        line_of(lines, "attempt 1 · route flash"),
+        line_of(lines, blocks_[0][0]),
+        line_of(lines, "attempt 2 · route flash-repair"),
+        line_of(lines, blocks_[1][0]),
+        line_of(lines, "attempt 3 · route stage-1"),
+    ]
+    assert order == sorted(order), "a block does not stand below its own audit line"
+
+
+def test_a_diagnostic_with_a_blank_line_before_its_stderr_tail_is_compared_whole(world: World) -> None:
+    # Criterion 1. Planted fault: the entry is read back out of the prompt only up to its first blank line.
+    red = "\n".join(_gate("pytest", ["FAILED tests/test_app.py::test_value - assert 2 == 1"], "red"))
+    world.script(
+        claude=[
+            {"stdout": "first", "plant": {"src/app.py": "value = 2\n"}},
+            {"stdout": "repair"},
+            {"stdout": "fixed", "append": {"plans/changes/demo/plan.md": "2026-10-08 10:00–10:03, 3 min\n"}},
+        ],
+        make=[
+            {"stdout": red, "stderr": "warning: unframed\nTraceback: tail", "exit": 1},
+            {"stdout": "green"},
+            {"stdout": "green"},
+        ],
+    )
+    assert world.run("implement") == 0
+    entry = prompt_entry(world.calls("claude")[1]["prompt_file"], 1, "flash")
+    assert "" in entry, "the scenario has no blank line inside the diagnostics"
+    assert "Traceback: tail" in entry
+    block = quote_blocks(world.text())[0]
+    assert block[block.index("```text") + 1 : -1] == entry, "the block does not quote the entry whole"
+
+
+def test_each_failed_attempt_lists_only_the_files_its_model_changed(world: World) -> None:
+    # Criterion 2. Planted fault: a snapshot taken at the baseline, before the route block or after verify.
+    red = "\n".join(_gate("pytest", ["FAILED src/test_app.py - assertion"], "red"))
+    world.script(
+        claude=[
+            {"stdout": "first", "plant": {"src/a.py": "alpha\nbeta\n"}},
+            {
+                "stdout": "second",
+                "plant": {"src/b.py": "bravo\n", "src/app.py": "value = 22\n", "src/blob.bin": "a\x00b"},
+                "delete": ["src/a.py"],
+            },
+            {"stdout": "third", "append": {"plans/changes/demo/plan.md": "2026-10-08 10:00–10:03, 3 min\n"}},
+        ],
+        make=[{"stdout": red, "exit": 1}] * 3,
+    )
+    assert world.run("implement") == 1
+    blocks_ = quote_blocks(world.text())
+    assert len(blocks_) == 3
+    assert set(files_of(blocks_[0])) == {
+        "Files the attempt changed (lines added, removed):",
+        "- `src/a.py` +2 -0",
+    }
+    assert set(files_of(blocks_[1])) == {
+        "Files the attempt changed (lines added, removed):",
+        "- `src/a.py` +0 -2",
+        "- `src/app.py` +1 -1",
+        "- `src/b.py` +1 -0",
+        "- `src/blob.bin` binary",
+    }
+    assert set(files_of(blocks_[2])) == {
+        "Files the attempt changed (lines added, removed):",
+        "- `plans/changes/demo/plan.md` +1 -0",
+    }
+    joined = "\n".join(part for block in blocks_ for part in files_of(block))
+    assert "plans/INDEX.md" not in joined and "findings.md" not in joined
+
+
+def test_a_failed_attempt_that_changed_nothing_says_so(world: World) -> None:
+    # Criterion 3. Planted fault: an empty list renders as a bare heading.
+    world.script(
+        claude=[
+            {"stdout": "nothing"},
+            {"stdout": "fixed", "append": {"plans/changes/demo/plan.md": "2026-10-08 10:00–10:02, 2 min\n"}},
+        ],
+        make=[{"stdout": "green"}, {"stdout": "green"}],
+    )
+    assert world.run("implement") == 0
+    (block,) = quote_blocks(world.text())
+    assert "Files the attempt changed: none." in block
+
+
+def test_an_unmeasured_file_list_says_why_and_changes_nothing_else(
+    world: World, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    # Criterion 4. Planted fault: a snapshot failure propagates and stops the run.
+    def broken(_root: Path) -> str:
+        raise stage2.Refused("git add failed: planted")
+
+    monkeypatch.setattr(stage2, "worktree_tree", broken)
+    baseline = git(world.root, "rev-parse", "HEAD")
+    world.script(
+        claude=[
+            {"stdout": "first", "plant": {"src/app.py": "value = 2\n"}},
+            {"stdout": "fixed", "append": {"plans/changes/demo/plan.md": "2026-10-08 10:00–10:02, 2 min\n"}},
+        ],
+        make=[{"stdout": "green"}, {"stdout": "green"}],
+    )
+    assert world.run("implement") == 0
+    assert git(world.root, "rev-list", "--count", f"{baseline}..HEAD") == "1"
+    (block,) = quote_blocks(world.text())
+    assert "Files the attempt changed: not measured — git add failed: planted." in block
+    assert world.text().count("not measured") == 1
+
+
+def test_a_failure_after_the_first_snapshot_says_why_and_changes_nothing_else(
+    world: World, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    # Criterion 4. Planted fault: only the first snapshot's failure is caught.
+    real = stage2.worktree_tree
+    calls: list[int] = []
+
+    def second_fails(root: Path) -> str:
+        calls.append(1)
+        if len(calls) == 2:
+            raise stage2.Refused("git write-tree failed: planted")
+        return real(root)
+
+    monkeypatch.setattr(stage2, "worktree_tree", second_fails)
+    baseline = git(world.root, "rev-parse", "HEAD")
+    world.script(
+        claude=[
+            {"stdout": "first", "plant": {"src/app.py": "value = 2\n"}},
+            {"stdout": "fixed", "append": {"plans/changes/demo/plan.md": "2026-10-08 10:00–10:02, 2 min\n"}},
+        ],
+        make=[{"stdout": "green"}, {"stdout": "green"}],
+    )
+    assert world.run("implement") == 0
+    assert len(calls) >= 2
+    assert git(world.root, "rev-list", "--count", f"{baseline}..HEAD") == "1"
+    (block,) = quote_blocks(world.text())
+    assert "Files the attempt changed: not measured — git write-tree failed: planted." in block
+    assert world.text().count("not measured") == 1
+
+
+def test_an_unmeasured_reason_stays_one_line_with_one_full_stop(world: World, monkeypatch: pytest.MonkeyPatch) -> None:
+    # Criterion 4. Planted fault: the raw git error is put into the sentence as it is.
+    def broken(_root: Path) -> str:
+        raise stage2.Refused("git add failed: fatal: first line\n  second   line.\n")
+
+    monkeypatch.setattr(stage2, "worktree_tree", broken)
+    world.script(
+        claude=[
+            {"stdout": "first", "plant": {"src/app.py": "value = 2\n"}},
+            {"stdout": "fixed", "append": {"plans/changes/demo/plan.md": "2026-10-08 10:00–10:02, 2 min\n"}},
+        ],
+        make=[{"stdout": "green"}, {"stdout": "green"}],
+    )
+    assert world.run("implement") == 0
+    (block,) = quote_blocks(world.text())
+    lines = [line for line in block if line.startswith("Files the attempt changed")]
+    assert lines == ["Files the attempt changed: not measured — git add failed: fatal: first line second line."]
+
+
+def test_a_malformed_numstat_record_says_not_measured_and_the_run_goes_on(
+    world: World, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    # Criterion 4. Planted fault: a record without two counts raises ValueError and ends the run.
+    real = stage2._git_output
+
+    def malformed(root: Path, *args: str, **kwargs: object) -> str:
+        if args and args[0] == "diff-tree":
+            return "no-tabs-here\0"
+        return real(root, *args, **kwargs)
+
+    monkeypatch.setattr(stage2, "_git_output", malformed)
+    baseline = git(world.root, "rev-parse", "HEAD")
+    world.script(
+        claude=[
+            {"stdout": "first", "plant": {"src/app.py": "value = 2\n"}},
+            {"stdout": "fixed", "append": {"plans/changes/demo/plan.md": "2026-10-08 10:00–10:02, 2 min\n"}},
+        ],
+        make=[{"stdout": "green"}, {"stdout": "green"}],
+    )
+    assert world.run("implement") == 0
+    assert git(world.root, "rev-list", "--count", f"{baseline}..HEAD") == "1"
+    (block,) = quote_blocks(world.text())
+    assert (
+        "Files the attempt changed: not measured — "
+        "git diff-tree --numstat returned a record without two counts: 'no-tabs-here'."
+    ) in block
+    assert world.text().count("not measured") == 1
+
+
+@pytest.mark.parametrize("passing", ["first", "second"], ids=["first-try", "after-a-failure"])
+def test_a_passing_attempt_leaves_only_its_audit_line(world: World, passing: str) -> None:
+    # Criterion 5. Planted fault: a block written for every attempt.
+    fixed = {"stdout": "fixed", "append": {"plans/changes/demo/plan.md": "2026-10-08 10:00–10:02, 2 min\n"}}
+    if passing == "first":
+        world.script(claude=[fixed], make=[{"stdout": "green"}])
+    else:
+        world.script(
+            claude=[{"stdout": "first", "plant": {"src/app.py": "value = 2\n"}}, fixed],
+            make=[{"stdout": "green"}, {"stdout": "green"}],
+        )
+    assert world.run("implement") == 0
+    lines = world.text().splitlines()
+    audits = [i for i, line in enumerate(lines) if line.startswith("Stage-2 call,")]
+    assert audits and not lines[audits[-1] + 1 :], "something follows the passing attempt's audit line"
+    assert world.text().count("failed its post-run checks.") == (0 if passing == "first" else 1)
+
+
+def test_when_every_attempt_fails_each_keeps_its_block_and_the_exit_names_findings(
+    world: World, capsys: pytest.CaptureFixture[str]
+) -> None:
+    # Criterion 6. Planted fault: the loop raises before the last block.
+    world.script(
+        claude=[{"stdout": "one"}, {"stdout": "two"}, {"stdout": "three"}],
+        make=[{"stdout": "green"}] * 3,
+    )
+    assert world.run("implement") == 1
+    blocks_ = quote_blocks(world.text())
+    assert [block[0] for block in blocks_] == [
+        "Attempt 1 (flash) failed its post-run checks.",
+        "Attempt 2 (flash-repair) failed its post-run checks.",
+        "Attempt 3 (stage-1) failed its post-run checks.",
+    ]
+    assert "plans/changes/demo/findings.md" in capsys.readouterr().err
+
+
+def test_a_verify_that_cannot_start_still_leaves_the_block_and_the_findings_exit_line(
+    world: World, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+) -> None:
+    # Criteria 1, 6 and 8. Planted fault: a CallFailed from the verify launch escapes `implement` untouched,
+    # or is turned into retry diagnostics so that further model attempts start.
+    original_launch = stage2.launch
+
+    def no_make(command, root, env, secret=None, **kwargs):
+        if command[:2] == ["make", "verify"]:
+            raise stage2.CallFailed(f"make could not be started: [Errno 2] no such file {KEY}")
+        return original_launch(command, root, env, secret, **kwargs)
+
+    monkeypatch.setattr(stage2, "launch", no_make)
+    world.script(claude=[{"stdout": "one"}, {"stdout": "two"}, {"stdout": "three"}], make=[{"stdout": "green"}] * 3)
+    assert world.run("implement") == 1
+    blocks_ = quote_blocks(world.text())
+    assert [block[0] for block in blocks_] == ["Attempt 1 (flash) failed its post-run checks."]
+    assert len(world.calls("claude")) == 1
+    assert "make could not be started" in "\n".join(blocks_[0])
+    assert not any(KEY[i : i + 8] in world.text() for i in range(len(KEY) - 7))
+    assert "plans/changes/demo/findings.md" in capsys.readouterr().err
+
+
+def test_a_restore_after_a_dead_model_keeps_the_earlier_blocks(world: World) -> None:
+    # Criterion 7. Planted fault: the blocks kept where the restore reaches.
+    world.script(
+        claude=[
+            {"stdout": "first", "plant": {"src/app.py": "value = 2\n"}},
+            {"stdout": "dead", "stderr": "boom", "exit": 1, "plant": {"src/half.py": "x = 1\n"}},
+            {"stdout": "must not run"},
+        ],
+        make=[{"stdout": "green"}],
+    )
+    assert world.run("implement") == 1
+    assert not (world.root / "src/half.py").exists()
+    (block,) = quote_blocks(world.text())
+    assert block[0] == "Attempt 1 (flash) failed its post-run checks."
+
+
+def test_a_block_holds_no_fragment_of_the_key(world: World) -> None:
+    # Criterion 8. Planted fault: the file list or the diagnostics written unscrubbed.
+    red = "\n".join(_gate("pytest", [f"E   AssertionError: token {KEY}"], "red"))
+    world.script(
+        claude=[
+            {"stdout": "first", "plant": {f"src/k{KEY[3:15]}.txt": "named after the credential\n"}},
+            {"stdout": "fixed", "append": {"plans/changes/demo/plan.md": "2026-10-08 10:00–10:02, 2 min\n"}},
+        ],
+        make=[{"stdout": red, "exit": 1}, {"stdout": "green"}],
+    )
+    assert world.run("implement") == 0
+    text = world.text()
+    assert "[credential]" in text
+    assert f"src/k{KEY[3:15]}" not in text and "src/k[credential].txt" in text
+    assert not any(KEY[i : i + 8] in text for i in range(len(KEY) - 7))
+
+
+def test_measuring_files_stores_no_key_the_model_wrote(world: World) -> None:
+    # Criterion 9. Planted fault: the second snapshot taken before the credential scan.
+    world.script(
+        claude=[
+            {"stdout": "implemented", "plant": {"src/app.py": f"credential = '{KEY}'\n"}},
+            {"stdout": "must not run"},
+        ],
+        make=[{"stdout": "must not run"}],
+    )
+    assert world.run("implement") == 2
+    assert world.calls("make") == []
+    done = subprocess.run(
+        [GIT, "-C", str(world.root), "cat-file", "--batch-all-objects", "--batch"], capture_output=True
+    )
+    held = done.stdout.decode("utf-8", "replace")
+    assert not any(KEY[i : i + 8] in held for i in range(len(KEY) - 7))
+
+
+def test_a_fallback_attempt_that_writes_the_key_leaves_no_blob_with_it(world: World) -> None:
+    # Criterion 9. Planted fault: the credential scan before the second snapshot skipped on the Sonnet route.
+    red = "\n".join(_gate("pytest", ["E   AssertionError"], "red"))
+    world.script(
+        claude=[
+            {"stdout": "one"},
+            {"stdout": "two"},
+            {"stdout": "fallback", "plant": {"src/app.py": f"credential = '{KEY}'\n"}},
+        ],
+        make=[{"stdout": red, "exit": 1}, {"stdout": red, "exit": 1}],
+    )
+    assert world.run("implement") == 2
+    assert KEY not in (world.root / "src/app.py").read_text(encoding="utf-8")
+    done = subprocess.run(
+        [GIT, "-C", str(world.root), "cat-file", "--batch-all-objects", "--batch"], capture_output=True
+    )
+    held = done.stdout.decode("utf-8", "replace")
+    assert not any(KEY[i : i + 8] in held for i in range(len(KEY) - 7))
+
+
+def test_measuring_files_leaves_index_stash_and_refs_alone(world: World) -> None:
+    # Criterion 10. Planted fault: the snapshot written through the real index.
+    (world.root / "src/staged.py").write_text("staged = 1\n", encoding="utf-8")
+    git(world.root, "add", "src/staged.py")
+    (world.root / "src/loose.py").write_text("untracked = 1\n", encoding="utf-8")
+    (world.root / "src/app.py").write_text("value = 3\n", encoding="utf-8")
+    git(world.root, "stash", "push", "-m", "wip", "--", "src/app.py")
+    index = world.root / ".git" / "index"
+    index_before = index.read_bytes()
+    stash_before = git(world.root, "stash", "list")
+    refs_before = git(world.root, "for-each-ref")
+    tree = stage2.worktree_tree(world.root)
+    assert index.read_bytes() == index_before
+    assert git(world.root, "stash", "list") == stash_before
+    assert git(world.root, "for-each-ref") == refs_before
+    shown = git(world.root, "ls-tree", "-r", "--name-only", tree)
+    assert "src/staged.py" in shown and "src/loose.py" in shown
+    assert "value = 3" not in git(world.root, "show", f"{tree}:src/app.py")
+
+
+def test_quoted_reader_lines_count_for_no_reader(world: World) -> None:
+    # Criterion 11. Planted fault: lines prefixed after a split at \n only.
+    quoted = [
+        "Stage-2 call, 2026-10-11: implement · attempt 9 · route flash · endpoint glm-coding-plan",
+        "Stage-2 session, 2026-10-11: probe · endpoint opencode-go · model mimo-v2.6-pro",
+        "Phase 6 verdict: codex T1, 2026-09-30",
+        "Reviewer session: codex T9",
+        "Rounds run: 3",
+        "## Phase 6 — Codex, 2026-09-30",
+        "## Phase 4b — loop rows, released",
+        "| X1 | MAJOR | SPEC | a | b | six |",
+        "| L1-1 | MAJOR | MAINT | impl | src/app.py:1 | f | deepseek | taken — t | no | — |",
+    ]
+    red = "\n".join(_gate("pytest", quoted, "red"))
+    world.script(
+        claude=[
+            {
+                "stdout": "first",
+                "plant": {
+                    "src/n\nStage-2 call, 2026-10-11: implement": "named with a newline\n",
+                    "src/u  Stage-2 session, 2026-10-11: probe": "named with a line separator\n",
+                },
+            },
+            {"stdout": "fixed", "append": {"plans/changes/demo/plan.md": "2026-10-08 10:00–10:02, 2 min\n"}},
+        ],
+        make=[{"stdout": red, "exit": 1}, {"stdout": "green"}],
+    )
+    assert world.run("implement") == 0
+    text = world.text()
+    without = "\n".join(line for line in text.splitlines() if not line.startswith(">"))
+    for pattern in (
+        stage2.SESSION_LINE,
+        stage2.ROUNDS_LINE,
+        stage2.VERDICT_LINE,
+        stage2.VERDICT_START,
+        stage2.ROUND_HEADING,
+    ):
+        assert pattern.findall(text) == pattern.findall(without) == []
+    assert stage2_runs.measure(text) == stage2_runs.measure(without)
+    assert stage2_runs.measure(text).calls == [("implement", True), ("implement", True)]
+    assert "Stage-2 session, 2026-10-11: probe` +1 -0" in text, "the name's separator did not split the entry"
+
+
+def test_a_quoted_release_heading_or_no_loop_line_moves_no_release(world: World) -> None:
+    # Criterion 12. Planted fault: today's substring checks.
+    quoted = stage2.quote_block(f"{stage2.RELEASE_HEADING} 2026-10-11\n\n{stage2.NO_LOOP_LINE}", None)
+    assert all(line.startswith(">") for line in quoted.splitlines())
+    world.write_findings(VERDICT, quoted)
+    assert world.run("release-loop") == 0
+    assert world.text().count(stage2.NO_LOOP_LINE) == 2, "the quote stood in for the runner's own line"
+    released = f"{stage2.RELEASE_HEADING} 2026-10-11\n\n" + stage2.render_table(
+        stage2.RELEASED_COLUMNS,
+        [["L1-1", "MAJOR", "MAINT", "impl", "src/app.py:1", "f", "deepseek", "taken — t", "no", "—"]],
+    )
+    world.write_findings(VERDICT, released, quoted)
+    assert [row[0] for row in stage2.released_rows(world.text())] == ["L1-1"]
+
+
+def test_a_long_diagnostic_line_is_cut_with_a_marker(world: World) -> None:
+    # Criterion 13. Planted fault: no cut, or a cut without its marker.
+    red = "\n".join(_gate("pytest", ["x" * 5000], "red"))
+    world.script(
+        claude=[
+            {"stdout": "first", "plant": {"src/app.py": "value = 2\n"}},
+            {"stdout": "fixed", "append": {"plans/changes/demo/plan.md": "2026-10-08 10:00–10:02, 2 min\n"}},
+        ],
+        make=[{"stdout": red, "exit": 1}, {"stdout": "green"}],
+    )
+    assert world.run("implement") == 0
+    text = world.text()
+    assert "x" * 500 in text and "x" * 501 not in text
+    assert "… 4500 characters left out …" in text
+
+
+def test_a_long_file_list_is_cut_with_a_count(world: World) -> None:
+    # Criterion 14. Planted fault: no cap on the list.
+    world.script(
+        claude=[
+            {"stdout": "first", "plant": {f"src/bulk-{n:02d}.py": f"value = {n}\n" for n in range(60)}},
+            {"stdout": "fixed", "append": {"plans/changes/demo/plan.md": "2026-10-08 10:00–10:02, 2 min\n"}},
+        ],
+        make=[{"stdout": "green"}, {"stdout": "green"}],
+    )
+    assert world.run("implement") == 0
+    (block,) = quote_blocks(world.text())
+    assert len([line for line in block if line.startswith("- `src/bulk-")]) == 40
+    assert "- … and 20 more files" in block
+    assert "src/bulk-40.py" not in "\n".join(block)
+
+
+def test_a_failed_stage2_off_attempt_leaves_its_block_without_reading_the_key(
+    world: World, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+) -> None:
+    # Criterion 15. Planted fault: the block reads the key to scrub it.
+    monkeypatch.setattr(stage2, "read_secret", lambda name: pytest.fail(f"read secret on Stage 1: {name}"))
+    world.script(claude=[{"stdout": "nothing"}], make=[{"stdout": "green"}])
+    assert world.run("implement", "demo", "--stage2-off", "Z.ai unavailable") == 1
+    (block,) = quote_blocks(world.text())
+    assert block[0] == "Attempt 1 (stage-1) failed its post-run checks."
+    assert "Files the attempt changed: none." in block
+    assert "plans/changes/demo/findings.md" in capsys.readouterr().err
 
 
 @pytest.mark.parametrize("fault", ["command", "non-descendant", "dirty", "status-fails"])
