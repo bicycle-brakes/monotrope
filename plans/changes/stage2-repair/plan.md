@@ -233,6 +233,10 @@ Under `python3 scripts/stage2.py implement stage2-repair` the runner runs
 
 Stage-1 route: implement · model claude-sonnet-5-5 · reason: two Flash post-run checks failed.
 
+## Runner route — 2026-10-12
+
+Stage-1 route: repair · model claude-sonnet-5-5 · reason: two GLM 5.3 post-run checks failed.
+
 ## Time used
 
 2026-10-12, phase-4 session under the Stage-2 runner (`implement`, attempt 1, route flash) — start and
@@ -303,3 +307,16 @@ L2-4, a text row, WORKFLOW §4 now says repair prompts carry the taken loop rows
 phase-6 verdict; L2-5, a text row, the five docstring places of `scripts/stage2.py` name the
 orchestrator as the one who decides a row. The runner runs the red-first proofs, `make verify` and
 the checkpoint commit after this entry.
+
+2026-10-12, loop round-3 repair session under the Stage-2 runner (`repair`, GLM 5.3) — start and
+end clock times not readable in it: the session has file tools and no command tool, so `date` could
+not be read, and the span is not estimated. The day is the runner's session date. The session
+repaired the two taken rows and nothing else: L3-4, the red-first clean-up in `scripts/stage2.py`
+now deletes the temporary directory before `git worktree prune`, so a failed `git worktree remove`
+leaves no dead entry in `git worktree list`, and names a failed removal in the returned problem,
+proven red first by
+`tests/test_stage2.py::test_a_failed_worktree_remove_leaves_no_dead_entry_and_is_named`; L3-2, a
+text row, the Status paragraph of `templates/findings.md` now lists `rejected — <reason>` among the
+Status words of a stage-2 row, as a phase-6 finding takes it, and leaves only `taken — <test or
+criterion>` as a loop row's extra. The runner runs the red-first proofs, `make verify` and the
+checkpoint commit after this entry.

@@ -1707,47 +1707,66 @@ def red_first(root: Path, baseline: str, test: str, key: str | None) -> str | No
 
     The worktree's `tests/` is the attempt's, without `__pycache__` and `.pytest_cache`: a test of the
     new tests against the old code is what "red first" means, and a real git checkout keeps tests that
-    call git honest. Exit 1 or 2 is red; the checkout and its admin entry are removed on every path.
+    call git honest. Exit 1 or 2 is red. The clean-up deletes the temporary directory before it prunes,
+    so a failed `git worktree remove` leaves no dead entry behind, and a failed removal is named in the
+    returned problem.
     """
     file, _, function = test.partition("::")
     tree = None
     tmp = None
+    outcome = None
+    removal = None
+    added = False
     try:
         tmp = tempfile.mkdtemp(prefix="stage2-red-")
         tree = Path(tmp) / "tree"
         try:
             _git_output(root, "worktree", "add", "--detach", str(tree), baseline)
         except Refused as error:
-            return f"{test}: the red-first checkout failed ({scrub(str(error), key)})"
-        shutil.rmtree(tree / "tests", ignore_errors=True)
-        try:
-            shutil.copytree(
-                root / "tests", tree / "tests", ignore=shutil.ignore_patterns("__pycache__", ".pytest_cache")
-            )
-        except OSError as error:
-            return f"{test}: the red-first checkout could not take the attempt's tests ({scrub(str(error), key)})"
-        try:
-            done = launch(
-                [red_first_python(root), "-m", "pytest", "-q", "-p", "no:cacheprovider", f"{file}::{function}"],
-                tree,
-                foreign_env({"PYTHONDONTWRITEBYTECODE": "1"}),
-                key,
-                timeout=RED_FIRST_MINUTES * 60,
-                limit="the red-first time limit",
-            )
-        except CallFailed as error:
-            return f"{test}: {scrub(str(error), key)}"
-        if done.returncode in (1, 2):
-            return None
-        return f"{test}: pytest ended {done.returncode} on the baseline's code; red first is exit 1 or 2"
+            outcome = f"{test}: the red-first checkout failed ({scrub(str(error), key)})"
+        else:
+            added = True
+        if outcome is None:
+            shutil.rmtree(tree / "tests", ignore_errors=True)
+            try:
+                shutil.copytree(
+                    root / "tests", tree / "tests", ignore=shutil.ignore_patterns("__pycache__", ".pytest_cache")
+                )
+            except OSError as error:
+                outcome = (
+                    f"{test}: the red-first checkout could not take the attempt's tests ({scrub(str(error), key)})"
+                )
+        if outcome is None:
+            try:
+                done = launch(
+                    [red_first_python(root), "-m", "pytest", "-q", "-p", "no:cacheprovider", f"{file}::{function}"],
+                    tree,
+                    foreign_env({"PYTHONDONTWRITEBYTECODE": "1"}),
+                    key,
+                    timeout=RED_FIRST_MINUTES * 60,
+                    limit="the red-first time limit",
+                )
+            except CallFailed as error:
+                outcome = f"{test}: {scrub(str(error), key)}"
+            else:
+                if done.returncode not in (1, 2):
+                    outcome = f"{test}: pytest ended {done.returncode} on the baseline's code; red first is exit 1 or 2"
     finally:
         if tree is not None:
-            subprocess.run(
+            done = subprocess.run(
                 ["git", "-C", str(root), "worktree", "remove", "--force", str(tree)], capture_output=True, check=False
             )
-            subprocess.run(["git", "-C", str(root), "worktree", "prune"], capture_output=True, check=False)
+            if added and done.returncode != 0:
+                removal = f"`git worktree remove` ended {done.returncode} on the red-first checkout"
         if tmp is not None:
             shutil.rmtree(tmp, ignore_errors=True)
+        if tree is not None:
+            # Only after the directory is gone: a prune over a present directory keeps a failed removal's entry.
+            subprocess.run(["git", "-C", str(root), "worktree", "prune"], capture_output=True, check=False)
+    if removal is not None:
+        named = scrub(f"{test}: {removal}", key)
+        outcome = f"{outcome}\n{named}" if outcome else named
+    return outcome
 
 
 def fixed_status(ident: str, rest: str) -> str:

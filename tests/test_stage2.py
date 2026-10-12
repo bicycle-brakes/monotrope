@@ -3495,6 +3495,27 @@ def test_the_red_first_run_leaves_no_worktree_behind(world: World) -> None:
     assert {line.split()[-1] for line in git(world.root, "for-each-ref").splitlines()} == refs_before
 
 
+def test_a_failed_worktree_remove_leaves_no_dead_entry_and_is_named(
+    world: World, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Repair round 3, L3-4. Planted fault: a failed removal left a dead entry and went unnamed."""
+    seed_tests(world)
+    (world.root / "tests" / "test_fix.py").write_text(FIX_TEST, encoding="utf-8")
+    baseline = git(world.root, "rev-parse", "HEAD")
+    original_run = stage2.subprocess.run
+
+    def refusing(command, *args, **kwargs):
+        if "worktree" in command and "remove" in command:
+            return subprocess.CompletedProcess(command, 128, stdout="", stderr="planted removal failure")
+        return original_run(command, *args, **kwargs)
+
+    monkeypatch.setattr(stage2.subprocess, "run", refusing)
+    outcome = stage2.red_first(world.root, baseline, "tests/test_fix.py::test_fix", None)
+    listed = git(world.root, "worktree", "list")
+    assert "stage2-red-" not in listed, listed
+    assert outcome is not None and "`git worktree remove` ended 128" in outcome, outcome
+
+
 def test_a_failed_repair_process_restores_the_baseline_without_a_further_attempt(world: World) -> None:
     """Criterion 20. Planted fault: a fallback after a dead model process, or a path left in place."""
     seed_tests(world)

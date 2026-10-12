@@ -113,8 +113,8 @@ them:
 
 The second header is for released rows. The Status words of a stage-2 row are
 `taken — <reason>`, `taken — not a test — <reason>`, `fixed —
-tests/<path>::<function>` and `fixed — not a test — <reason>`; a loop row also
-reads `taken — <test or criterion>` and `rejected — <reason>`. Lines:
+tests/<path>::<function>`, `fixed — not a test — <reason>` and `rejected —
+<reason>`; a loop row also reads `taken — <test or criterion>`. Lines:
 
 ```text
 Reviewer session: codex <id>
