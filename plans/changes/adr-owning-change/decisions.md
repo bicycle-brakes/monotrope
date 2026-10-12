@@ -54,3 +54,20 @@ change) and no longer infers an owner from the diff, to achieve one rule
 instead of two, accepting that even a typo fix in an ADR needs a change folder
 with a spec — which the five-question duty for every ADR edit already asks
 today. — 2026-10-12
+
+## Q-3 · The ADR question, and whether the gate travels
+
+asked: 2026-10-12
+answer: Yes to both — the rule gets an ADR of its own, and it travels with the kit together with the interview-minimums gate ("Das soll auch reisen, beides").
+answered_by: maintainer
+status: answered
+
+In the context of a rule that so far would hold in this repository alone —
+the interview-minimums gate has no entry in `scripts/kit/manifest.yaml` —
+facing that a rule for other repositories is what an ADR records, we decided
+that the change answers the ADR question yes and that the gate travels with
+the kit, to achieve that every instance attributes an ADR edit the same way,
+accepting a decision pull request and five interview records for this change.
+The answer is recorded with `scripts/harness.py decide adr` once the spec
+header names the change; on 2026-10-12 the command refused, because no change
+anchor exists before phase 2. — 2026-10-12
