@@ -122,7 +122,9 @@ endpunkte:
       review loop (phase 4b) moved to `opencode-go`. `glm-5.3-flash` explores
       (phase 1) through `stage2.py explore` and implements (phase 4) through
       `stage2.py implement` (maintainer, 2026-10-06; bead
-      coding-harness-qcp). **Only through Claude Code**, which the vendor lists
+      coding-harness-qcp). `glm-5.3` repairs the findings the orchestrator takes
+      through `stage2.py repair` (maintainer, 2026-10-12; ADR 0015). **Only
+      through Claude Code**, which the vendor lists
       as a supported tool — an own integration would not be covered by the
       subscription.
 
