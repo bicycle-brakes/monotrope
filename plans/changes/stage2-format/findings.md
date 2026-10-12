@@ -186,3 +186,5 @@ Stage-2 call, 2026-10-12: repair · attempt 3 · route stage-1 · endpoint claud
 > ```
 
 Stage-2 call, 2026-10-12: repair · attempt 1 · route glm · endpoint glm-coding-plan · model glm-5.3 · leak check clean over 382 files, 950 commits, 12 rules.
+
+Stage-2 call, 2026-10-12: review-loop · endpoint opencode-go · model mimo-v2.6-flash · leak check clean over 382 files, 951 commits, 12 rules.
