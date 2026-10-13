@@ -2416,7 +2416,7 @@ def run_attempts(
         # Each attempt must add its own line. Keep all existing plan lines even if an earlier
         # attempt removed the time heading, so restoring it cannot reuse an earlier measurement.
         baseline_time = ctx.plan.read_text(encoding="utf-8")
-        # Restore a deleted plan with this attempt's time evidence and runner route, while the
+        # Restore a changed plan with this attempt's pre-call time evidence and runner route, while the
         # accepted plan in every prompt stays the original snapshot. No older line satisfies a retry.
         inputs_before = {**inputs, ctx.plan: baseline_time.encode("utf-8")}
         kept = snapshot_findings() if snapshot_findings is not None else None
@@ -2541,10 +2541,11 @@ def run_attempts(
             print(f"{verb}: verified and committed · route {route} · attempt {attempt}")
             return
         if attempt < len(routes):
-            # Deletions stay in the failed attempt's evidence. Restore each missing pre-call input
-            # before building the next prompt; the retry still needs its own measured time line.
+            # Failed edits stay in the attempt's evidence. Restore every differing snapshotted input
+            # before the next attempt, comparing bytes so undecodable files are restored too.
+            # The plan keeps its pre-call time evidence; the retry must add its own measured line.
             for path, content in inputs_before.items():
-                if not path.exists():
+                if not path.exists() or path.read_bytes() != content:
                     path.parent.mkdir(parents=True, exist_ok=True)
                     path.write_bytes(content)
     raise CallFailed(closing)

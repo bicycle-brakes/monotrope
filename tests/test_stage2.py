@@ -4752,14 +4752,107 @@ def test_repair_retry_starts_after_a_completed_attempt_deletes_plan(
     assert git(world.root, "status", "--porcelain") == ""
 
 
+@pytest.mark.parametrize("corrupted_attempts", [(1,), (2,), (1, 2)], ids=["first", "second", "both"])
+@pytest.mark.parametrize(
+    "corrupted_inputs",
+    [
+        ("plans/changes/demo/spec.md",),
+        ("plans/changes/demo/plan.md",),
+        ("plans/changes/demo/decisions.md",),
+        ("plans/changes/demo/design.md",),
+        ("prompts/04-implement.md",),
+        ("AGENTS.md",),
+        (
+            "plans/changes/demo/spec.md",
+            "plans/changes/demo/plan.md",
+            "plans/changes/demo/decisions.md",
+            "plans/changes/demo/design.md",
+            "prompts/04-implement.md",
+            "AGENTS.md",
+        ),
+    ],
+    ids=["spec", "plan", "decisions", "design", "phase-prompt", "agent-rules", "all-inputs"],
+)
+def test_repair_retry_restores_non_utf8_prompt_inputs(
+    world: World,
+    monkeypatch: pytest.MonkeyPatch,
+    corrupted_attempts: tuple[int, ...],
+    corrupted_inputs: tuple[str, ...],
+) -> None:
+    """F-12: undecodable inputs cannot prevent a fresh Codex retry or the Sonnet fallback."""
+    for name in ("decisions.md", "design.md"):
+        (world.plan.parent / name).write_text(f"---\ntitle: {name}\nbead: demo-1\n---\n\n# {name}\n", encoding="utf-8")
+    baseline = repair_world(world)
+    original = {relative: (world.root / relative).read_bytes() for relative in corrupted_inputs}
+    failed_attempts = max(corrupted_attempts)
+    script_repair(
+        world,
+        [repair_step(append={}) for _ in range(failed_attempts)] + [repair_step()],
+        make=[{"stdout": "green\n"}] * 3,
+    )
+    real_codex, real_begin = stage2.run_codex, stage2.begin_work_call
+    real_input, real_checkpoint = stage2.prompt_input, stage2.checkpoint
+    observed_inputs: list[dict[str, bytes]] = []
+    checkpoints: list[int] = []
+
+    def codex(*args, **kwargs):
+        result = real_codex(*args, **kwargs)
+        if len(world.calls("codex")) in corrupted_attempts:
+            for relative, content in original.items():
+                (world.root / relative).write_bytes(b"\xff" + content)
+        return result
+
+    def begin_work_call(*args, **kwargs):
+        # Observe bytes without decoding or asserting here, so the baseline shows its actual crash.
+        observed_inputs.append({relative: (world.root / relative).read_bytes() for relative in original})
+        real_begin(*args, **kwargs)
+
+    def prompt_input(*args, **kwargs):
+        assert not repair_calls(world), "a later prompt reread an input after the first model call"
+        return real_input(*args, **kwargs)
+
+    def checkpoint(*args, **kwargs):
+        checkpoints.append(len(repair_calls(world)))
+        real_checkpoint(*args, **kwargs)
+
+    monkeypatch.setattr(stage2, "run_codex", codex)
+    monkeypatch.setattr(stage2, "begin_work_call", begin_work_call)
+    monkeypatch.setattr(stage2, "prompt_input", prompt_input)
+    monkeypatch.setattr(stage2, "checkpoint", checkpoint)
+    assert world.run("repair") == 0
+    calls = repair_calls(world)
+    assert [call["name"] for call in calls] == ["codex", "codex", "claude"][: failed_attempts + 1]
+    assert observed_inputs == [original] * (failed_attempts + 1)
+    assert checkpoints == [failed_attempts + 1], "a failed attempt reached the checkpoint"
+    assert all("resume" not in call["argv"] for call in world.calls("codex"))
+    final_prompt = prompt_of(calls[-1])
+    for attempt in range(1, failed_attempts + 1):
+        route = "codex" if attempt == 1 else "codex-repair"
+        assert f"Attempt {attempt} ({route}):" in final_prompt
+        diagnostics = "\n".join(prompt_entry(final_prompt, attempt, route))
+        if attempt in corrupted_attempts and any(relative.startswith("plans/") for relative in original):
+            assert "Derived-file preparation failed" in diagnostics
+        else:
+            assert "did not add a measured line" in diagnostics
+    for relative, content in original.items():
+        if relative not in ("plans/changes/demo/decisions.md", "plans/changes/demo/design.md"):
+            assert content.decode("utf-8").rstrip() in final_prompt
+        assert f"> - `{relative}`" in world.text()
+    assert "2026-10-12 10:00–10:05, 5 min" in world.plan.read_text(encoding="utf-8")
+    assert git(world.root, "rev-list", "--count", f"{baseline}..HEAD") == "1"
+    assert git(world.root, "status", "--porcelain") == ""
+
+
 @pytest.mark.parametrize("edited_attempt", [1, 2])
 @pytest.mark.parametrize(
     "edited_input",
     ["plans/changes/demo/spec.md", "plans/changes/demo/plan.md", "prompts/04-implement.md", "AGENTS.md"],
     ids=["spec", "plan", "phase-prompt", "agent-rules"],
 )
-def test_repair_prompts_keep_the_initial_input_snapshot(world: World, edited_attempt: int, edited_input: str) -> None:
-    """F-11: edits by either failed attempt cannot replace the accepted prompt inputs of later calls."""
+def test_repair_prompts_keep_the_initial_input_snapshot(
+    world: World, monkeypatch: pytest.MonkeyPatch, edited_attempt: int, edited_input: str
+) -> None:
+    """F-11/F-12: failed edits cannot replace later calls' accepted inputs, in the prompt or on disk."""
     baseline = repair_world(world)
     original = (world.root / edited_input).read_text(encoding="utf-8")
     marker = "FAILED-ATTEMPT-INPUT-EDIT"
@@ -4776,6 +4869,13 @@ def test_repair_prompts_keep_the_initial_input_snapshot(world: World, edited_att
         make=[{"stdout": f"snapshot-diagnostic-{n}\n", "exit": 1} for n in range(1, edited_attempt + 1)]
         + [{"stdout": "green\n"}],
     )
+    real_begin = stage2.begin_work_call
+
+    def begin_work_call(*args, **kwargs):
+        assert (world.root / edited_input).read_text(encoding="utf-8") == original
+        real_begin(*args, **kwargs)
+
+    monkeypatch.setattr(stage2, "begin_work_call", begin_work_call)
     assert world.run("repair") == 0
     calls = repair_calls(world)
     assert len(calls) == edited_attempt + 1
@@ -5124,7 +5224,7 @@ def test_a_repair_cannot_change_a_finding_outside_its_batch(
 def test_each_repair_retry_must_add_its_own_time_entry(
     world: World, monkeypatch: pytest.MonkeyPatch, attempt: int, removed_heading: bool
 ) -> None:
-    """Codex-repairs F-7: earlier failed attempts' measured entries cannot satisfy a later attempt's gate."""
+    """F-7/F-12: a retry still needs its own measurement after the failed plan edit is restored."""
     baseline = repair_world(world)
     steps = [repair_step()] * 3
     steps[attempt - 1] = repair_step(append={})
@@ -5143,9 +5243,11 @@ def test_each_repair_retry_must_add_its_own_time_entry(
         if number not in (attempt - 1, attempt):
             return
         before, after = ("## Time used", "## Omitted time heading")
-        if number == attempt:
-            before, after = after, before
         text = world.plan.read_text(encoding="utf-8")
+        if number == attempt:
+            # F-12 restores the failed edit before this retry; the model adds no measured line.
+            assert before in text and after not in text
+            return
         assert before in text
         world.plan.write_text(text.replace(before, after, 1), encoding="utf-8")
 
