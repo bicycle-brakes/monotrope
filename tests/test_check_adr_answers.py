@@ -80,6 +80,12 @@ intent:
 """
 
 
+@pytest.fixture(autouse=True)
+def _no_tolerance_from_the_caller(monkeypatch: pytest.MonkeyPatch) -> None:
+    """A draft run's `make verify` sets the tolerance; the tests below measure the gate without it."""
+    monkeypatch.delenv(cag.TOLERATE_ENV, raising=False)
+
+
 def _tree(tmp_path: Path) -> Path:
     root = tmp_path / "tree"
     (root / "plans" / "changes" / "archive").mkdir(parents=True)
@@ -482,3 +488,25 @@ def test_the_kit_carries_the_mechanism_and_not_the_answers() -> None:
         assert probe.rolle(path) is not None and probe.rolle(path)[0] == "mechanismus", path
     for path in ("decisions/answers/some-change/adr.yaml", "decisions/answers/"):
         assert probe.rolle(path) == ("bestand", "decisions/answers/"), path
+
+
+def test_the_named_change_alone_has_its_missing_answer_tolerated(tmp_path: Path) -> None:
+    # The draft verb of scripts/stage2.py asks for this through the environment (phase-6 F-9, F-10).
+    # Planted fault: any change tolerated, or the tolerance also covers a refused answer file.
+    root = _tree(tmp_path)
+    _anchor(root, "mine", _feature("mine"))
+    lines: list[str] = []
+    assert cag.run(root, out=lines.append, tolerate="mine") == 0
+    assert any("answer owed" in line and "mine" in line for line in lines)
+
+    _anchor(root, "other", _feature("other"))
+    lines = []
+    assert cag.run(root, out=lines.append, tolerate="mine") == 1
+    assert any("other: no answer" in line for line in lines)
+
+    answers = root / "decisions" / "answers" / "mine"
+    answers.mkdir(parents=True)
+    (answers / "adr.yaml").write_text("not: an answer\n", encoding="utf-8")
+    lines = []
+    assert cag.run(root, out=lines.append, tolerate="mine") == 1
+    assert any("is refused" in line for line in lines)

@@ -1,0 +1,5 @@
+# The day this repository adopted each gate that exempts the changes begun
+# before it (ADR 0014). Moving a day is a decision pull request.
+schema_version: 1
+adopted:
+  interview-minimums: 2026-10-08

@@ -364,8 +364,8 @@ def verdict_block(text: str) -> str:
 def full_flow(w: World) -> None:
     """spec-review, one loop round decided, the verdict, the release and the marks."""
     w.script(
+        claude=[{"stdout": rows(2)}],
         codex=[
-            codex_ok("T1", rows(2)),
             codex_ok("T1", rows(1)),
             codex_ok("T1", "L1-1: agree\nL1-2: disagree — no test shows it"),
         ],
@@ -444,8 +444,10 @@ def test_kimi_is_excluded_not_declared() -> None:
 
 
 def test_the_glm_remark_names_its_work_verbs_and_no_review_phase() -> None:
+    # Criterion 36. Planted fault: the remark loses `stage2.py draft`, or claims a review phase.
     remark = " ".join(endpoints()["glm-coding-plan"]["bemerkung"].lower().split())
     assert "stage2.py explore" in remark and "stage2.py implement" in remark
+    assert "stage2.py draft" in remark and "glm-5.3" in remark
     assert "is used for the review loop" not in remark
     assert "moved to `opencode-go`" in remark
     assert "does not have yet" not in remark
@@ -495,7 +497,7 @@ def test_parse_rows_folds_a_pipe_inside_the_finding_into_it() -> None:
 )
 def test_table_lines_that_are_not_rows_are_never_reported_as_no_finding(world: World, answer: str) -> None:
     """Repair round 1, F-3: a table the parser cannot read is passed through, under a head that is true."""
-    world.script(codex=[codex_ok("T1", answer)], pi=[{"stdout": answer}])
+    world.script(claude=[{"stdout": answer}], pi=[{"stdout": answer}])
     assert world.run("spec-review") == 0
     assert world.run("review-loop") == 0
     kept = world.record().read_text(encoding="utf-8")
@@ -551,7 +553,7 @@ REVIEW_VERBS = ("spec-review", "review-loop", "review", "probe")
 @pytest.mark.parametrize(
     ("verb", "endpoint"),
     [
-        ("spec-review", "openai-codex"),
+        ("spec-review", "claude-code-plan"),
         ("review", "openai-codex"),
         ("review-loop", "opencode-go"),
         ("probe", "opencode-go"),
@@ -628,18 +630,19 @@ def test_a_missing_glm_key_refuses_the_flash_route(world: World, verb: str) -> N
 
 
 def test_the_foreign_environment_is_the_runners(world: World) -> None:
-    world.script(codex=[codex_ok("T1", rows(1))], pi=[{"stdout": rows(1)}], claude=[{"stdout": "a fact"}])
+    # Two Claude calls run: the spec review first, then the explorer.
+    world.script(pi=[{"stdout": rows(1)}], claude=[{"stdout": rows(1)}, {"stdout": "a fact"}])
     assert world.run("spec-review") == 0
     assert world.run("review-loop") == 0
     assert world.run("explore") == 0
     spec, loop, explorer = (
-        world.calls("codex")[0]["env"],
-        world.calls("pi")[0]["env"],
         world.calls("claude")[0]["env"],
+        world.calls("pi")[0]["env"],
+        world.calls("claude")[1]["env"],
     )
     for env in (spec, loop, explorer):
         assert "GH_TOKEN" not in env and "OPENAI_API_KEY" not in env and "X_SECRET" not in env
-    assert not [name for name in spec if name.startswith("ANTHROPIC_")], "a Codex call carries an Anthropic variable"
+    assert not [name for name in spec if name.startswith("ANTHROPIC_")], "the spec review carries an Anthropic variable"
     assert loop["OPENCODE_API_KEY"] == OKEY
     assert all(value != KEY for value in loop.values()), "an OpenCode Go call carries the GLM key"
     assert not [n for n in loop if n.startswith(("ANTHROPIC_", "CLAUDE_"))], "a Pi call carries a Claude variable"
@@ -654,14 +657,14 @@ def test_the_foreign_environment_is_the_runners(world: World) -> None:
 
 def test_no_call_carries_another_endpoints_key(world: World) -> None:
     """Criterion 13: the OpenCode Go key and the GLM key never meet in one environment."""
-    world.script(codex=[codex_ok("T1", rows(1))], pi=[{"stdout": rows(1)}], claude=[{"stdout": "a fact"}])
+    world.script(pi=[{"stdout": rows(1)}], claude=[{"stdout": rows(1)}, {"stdout": "a fact"}])
     assert world.run("spec-review") == 0
     assert world.run("review-loop") == 0
     assert world.run("explore") == 0
     _spec, loop, explorer = (
-        world.calls("codex")[0]["env"],
-        world.calls("pi")[0]["env"],
         world.calls("claude")[0]["env"],
+        world.calls("pi")[0]["env"],
+        world.calls("claude")[1]["env"],
     )
     assert all(value != KEY for value in loop.values()), "an OpenCode Go call carries the GLM key"
     assert all(value != OKEY for value in explorer.values()), "a GLM call carries the OpenCode Go key"
@@ -669,7 +672,7 @@ def test_no_call_carries_another_endpoints_key(world: World) -> None:
 
 @pytest.mark.usefixtures("busy_stdin")
 def test_every_call_gets_an_empty_standard_input(world: World) -> None:
-    world.script(codex=[codex_ok("T1", rows(1))], pi=[{"stdout": rows(1)}])
+    world.script(claude=[{"stdout": rows(1)}], pi=[{"stdout": rows(1)}])
     assert world.run("spec-review") == 0
     assert world.run("review-loop") == 0
     assert [call["stdin"] for call in world.calls()] == ["", ""]
@@ -699,14 +702,14 @@ def test_the_opencode_key_never_leaves_the_runner(world: World, capsys: pytest.C
 
 
 def test_every_call_leaves_its_line_in_findings(world: World) -> None:
-    world.script(codex=[codex_ok("T1", rows(1))], pi=[{"stdout": rows(1)}])
+    world.script(claude=[{"stdout": rows(1)}], pi=[{"stdout": rows(1)}])
     assert world.run("spec-review") == 0
     assert world.run("review-loop") == 0
     text = world.text()
     day = r"\d{4}-\d{2}-\d{2}"
     count = r"\d+ files, \d+ commits, 1 rules"
     assert re.search(
-        rf"^Stage-2 call, {day}: spec-review · endpoint openai-codex · model gpt-6.1-sol · "
+        rf"^Stage-2 call, {day}: spec-review · endpoint claude-code-plan · model claude-opus-5-5 · "
         rf"leak check clean over {count}\.$",
         text,
         re.M,
@@ -720,7 +723,7 @@ def test_every_call_leaves_its_line_in_findings(world: World) -> None:
 
 
 def test_a_findings_file_the_runner_creates_has_a_registry_header(world: World) -> None:
-    world.script(codex=[codex_ok("T1", rows(1))])
+    world.script(claude=[{"stdout": rows(1)}])
     assert world.run("spec-review") == 0
     header = plans_registry._frontmatter(world.findings)
     assert header is not None
@@ -741,8 +744,8 @@ def test_every_write_to_findings_keeps_its_updated_stamp_current(world: World) -
     world.findings.write_text(old_header(), encoding="utf-8")
     assert updated_of(world.findings) == dt.date(2026, 9, 29)
     world.script(
+        claude=[{"stdout": rows(1)}],
         codex=[
-            codex_ok("T1", rows(1)),
             codex_ok("T1", rows(1)),
             codex_ok("T1", "L1-1: agree"),
         ],
@@ -1647,6 +1650,964 @@ def test_findings_only_dirt_is_allowed_and_committed(world: World) -> None:
     assert "Earlier failed attempt." in world.text()
 
 
+def test_a_findings_file_an_implement_run_creates_names_claude_code(world: World) -> None:
+    # Repair L2-1. Planted fault: `producer_for` falls through to `pi` for the GLM endpoints.
+    assert not world.findings.exists()
+    successful_implementation(world)
+    assert world.run("implement") == 0
+    header = plans_registry._frontmatter(world.findings)
+    assert header is not None and header["produced_by"]["name"] == "claude-code"
+
+
+# ---------------------------------------------------------------------------
+# The draft (phases 2, 2b and 3; spec criteria 1-26)
+# ---------------------------------------------------------------------------
+
+
+PLAN_CARD = (
+    "---\ntitle: Plan\nupdated: 2026-09-30\nbead: demo-1\n---\n\n# Plan\n\n"
+    "```text\n"
+    "For you:     one command drafts the change\n"
+    "Done when:   the criteria hold\n"
+    "Appetite:    8 h\n"
+    "Not now:     nothing\n"
+    "Pre-mortem:  it failed\n"
+    "```\n\n## Time used\n"
+)
+
+
+def draft_world(world: World) -> None:
+    """A change a draft can start from: no spec, no plan, a decisions.md with its bead, committed.
+
+    The commit that adds the existing ADR is also where `origin/main` goes, so the merge base a
+    `draft_keep` reads holds that ADR and only a second, new one counts as new (spec, criterion 8).
+    """
+    folder = world.root / "plans" / "changes" / "demo"
+    (folder / "spec.md").unlink()
+    world.plan.unlink()
+    (folder / "decisions.md").write_text(
+        "---\ntitle: Decisions\nupdated: 2026-09-30\nbead: demo-1\n---\n\n# Decisions\n\nQ-1 answered.\n",
+        encoding="utf-8",
+    )
+    (world.root / "docs" / "adr").mkdir(parents=True)
+    (world.root / "docs" / "adr" / "0007-existing-record.md").write_text("# ADR\n\nheld.\n", encoding="utf-8")
+    git(world.root, "add", "-A")
+    git(world.root, "commit", "--quiet", "-m", "decisions")
+    git(world.root, "update-ref", "refs/remotes/origin/main", "HEAD")
+
+
+def clear_derived_leftovers(world: World) -> None:
+    """Remove what a failed run's `prepare_derived` left untracked; the next run would refuse it."""
+    (world.root / "plans" / "INDEX.md").unlink(missing_ok=True)
+    for cache in (world.root / "scripts").rglob("__pycache__"):
+        shutil.rmtree(cache, ignore_errors=True)
+
+
+def passing_draft(world: World) -> None:
+    """One Codex step that plants spec and plan, and a `make` that answers green."""
+    world.script(
+        codex=[
+            codex_ok(
+                "T1",
+                "drafted",
+                plant={
+                    "plans/changes/demo/spec.md": "---\ntitle: Spec\nupdated: 2026-09-30\nbead: demo-1\n---\n\n# Spec\n",
+                    "plans/changes/demo/plan.md": PLAN_CARD,
+                },
+            )
+        ],
+        make=[{"stdout": "green\n"}],
+    )
+
+
+def red_verify(*gates: list[str]) -> dict:
+    """A red `make verify` with the given blocking gate bodies; `gates` entries are (name, lines)."""
+    output = ""
+    for name, lines in gates:
+        output += "\n".join(_gate(name, lines, "red"))
+    return {"stdout": output, "exit": 1}
+
+
+def test_a_draft_starts_codex_with_workspace_write_and_no_bypass(world: World) -> None:
+    # Criterion 1. Planted fault: the draft call keeps `read-only`, or passes `--add-dir`.
+    draft_world(world)
+    passing_draft(world)
+    assert world.run("draft") == 0
+    (call,) = world.calls("codex")
+    argv = call["argv"]
+    assert argv[:2] == ["exec", "--json"]
+    assert argv[argv.index("-m") + 1] == "gpt-6.1-sol"
+    assert 'model_reasoning_effort="max"' in argv
+    assert 'sandbox_mode="workspace-write"' in argv
+    assert 'sandbox_mode="read-only"' not in argv
+    disabled = [argv[i + 1] for i, word in enumerate(argv) if word == "--disable"]
+    assert sorted(disabled) == ["hooks", "memories"]
+    for flag in (
+        "--add-dir",
+        "--approve-for-me",
+        "--dangerously-bypass-approvals-and-sandbox",
+        "-s",
+        "--sandbox",
+        "--ephemeral",
+    ):
+        assert flag not in argv
+
+
+def test_a_findings_file_the_draft_creates_names_codex(world: World) -> None:
+    # Repair L1-4. Planted fault: the header's producer stays `claude-code` whatever the endpoint.
+    draft_world(world)
+    assert not world.findings.exists()
+    passing_draft(world)
+    assert world.run("draft") == 0
+    header = plans_registry._frontmatter(world.findings)
+    assert header is not None and header["produced_by"]["name"] == "codex"
+
+
+def test_the_draft_prompt_carries_the_three_phase_prompts_and_the_rules(world: World) -> None:
+    # Criterion 3. Planted fault: the prompt built without `03-plan.md`, or for another change.
+    draft_world(world)
+    passing_draft(world)
+    assert world.run("draft") == 0
+    prompt = world.calls("codex")[0]["argv"][-1]
+    for name in ("02-spec.md", "02b-design.md", "03-plan.md"):
+        assert (REPO_ROOT / "prompts" / name).read_text(encoding="utf-8").rstrip() in prompt, name
+    assert "## Repository agent rules" in prompt and "Stay inside the repository." in prompt
+    assert "Change: demo (`plans/changes/demo/`)" in prompt and "Change: other" not in prompt
+    flat = " ".join(prompt.split())
+    assert "the runner puts back every changed path outside the change folder except the one new ADR draft" in flat
+    assert "the change's `decisions.md`" in flat and "Never write an answer for the maintainer" in flat
+    assert "## Phase 2b prompt" in prompt and "## Phase 3 prompt" in prompt
+    assert prompt.rstrip().endswith(stage2.READ_REQUEST)
+
+
+def test_a_draft_without_decisions_or_a_research_bead_refuses(world: World) -> None:
+    # Criterion 4. Planted fault: `required` left empty, or the bead file the wrong one.
+    draft_world(world)
+    (world.root / "plans/changes/demo/decisions.md").unlink()
+    git(world.root, "add", "-A")
+    git(world.root, "commit", "--quiet", "-m", "no decisions")
+    assert world.run("draft") == 2
+    assert world.calls() == []
+    (world.root / "plans/changes/demo/decisions.md").write_text(
+        "---\ntitle: Decisions\nupdated: 2026-09-30\nbead: demo-1\n---\n\n# Decisions\n", encoding="utf-8"
+    )
+    (world.root / "plans/changes/demo/research.md").write_text(
+        "---\ntitle: Research\nupdated: 2026-09-30\n---\n\n# Research\n", encoding="utf-8"
+    )
+    git(world.root, "add", "-A")
+    git(world.root, "commit", "--quiet", "-m", "no bead")
+    assert world.run("draft") == 2
+    assert world.calls() == []
+
+
+def test_a_draft_refuses_changes_outside_findings(world: World, capsys: pytest.CaptureFixture[str]) -> None:
+    # Criterion 5. Planted fault: the pre-existing check skipped for the draft.
+    draft_world(world)
+    (world.root / "src" / "app.py").write_text("value = 2\n", encoding="utf-8")
+    world.script(codex=[{"stdout": "must not run"}])
+    assert world.run("draft") == 2
+    assert world.calls() == []
+    error = capsys.readouterr().err
+    assert "pre-existing changes outside this change's findings.md" in error and "src/app.py" in error
+
+
+def test_each_draft_attempt_has_its_audit_line_and_reason(world: World) -> None:
+    # Criterion 6. Planted fault: the reason dropped from a fallback attempt's audit line.
+    draft_world(world)
+    world.script(
+        codex=[
+            codex_ok("T1", "drafted", plant={"plans/changes/demo/plan.md": PLAN_CARD}),
+            codex_ok("T2", "drafted again"),
+        ],
+        claude=[{"stdout": "drafted by GLM"}],
+        make=[red_verify(("pytest", ["FAILED tests/test_x.py::test_a - assert"]))] * 3,
+    )
+    assert world.run("draft") == 1
+    text = world.text()
+    day = r"\d{4}-\d{2}-\d{2}"
+    count = r"\d+ files, \d+ commits, \d+ rules"
+    assert re.search(
+        rf"^Stage-2 call, {day}: draft · attempt 1 · route codex · endpoint openai-codex · model gpt-6.1-sol · "
+        rf"leak check clean over {count}\.$",
+        text,
+        re.M,
+    )
+    assert re.search(
+        rf"^Stage-2 call, {day}: draft · attempt 2 · route codex-repair · endpoint openai-codex · model gpt-6.1-sol"
+        rf" · reason the first draft attempt failed · leak check clean over {count}\.$",
+        text,
+        re.M,
+    )
+    assert re.search(
+        rf"^Stage-2 call, {day}: draft · attempt 3 · route glm · endpoint glm-coding-plan · model glm-5\.3"
+        rf" · reason two Codex draft attempts failed · leak check clean over {count}\.$",
+        text,
+        re.M,
+    )
+
+
+def test_a_leak_before_a_draft_attempt_stops_the_chain(world: World) -> None:
+    # Criterion 7. Planted fault: a `Refused` caught as a failed call, so a later attempt starts.
+    draft_world(world)
+    (world.root / "src" / "leak.txt").write_text(LEAK, encoding="utf-8")
+    git(world.root, "add", "-A")
+    git(world.root, "commit", "--quiet", "-m", "planted leak")
+    world.script(codex=[{"stdout": "must not run"}, {"stdout": "nor this"}], claude=[{"stdout": "nor GLM"}])
+    assert world.run("draft") == 2
+    assert world.calls() == [], "a leak refusal starts no later attempt"
+
+
+def test_paths_outside_the_change_folder_are_put_back_and_named(world: World) -> None:
+    # Criterion 8. Planted fault: the put-back skipped, or an existing ADR kept as new.
+    draft_world(world)
+    world.script(
+        codex=[
+            codex_ok(
+                "T1",
+                "drafted",
+                plant={
+                    "plans/changes/demo/spec.md": "---\ntitle: Spec\nupdated: 2026-09-30\nbead: demo-1\n---\n\n# Spec\n",
+                    "plans/changes/demo/plan.md": PLAN_CARD,
+                    "src/new.py": "new = 1\n",
+                    "src/app.py": "value = 2\n",
+                    "docs/adr/0007-existing-record.md": "# ADR\n\nedited by the model.\n",
+                },
+            )
+        ],
+        make=[{"stdout": "green\n"}],
+    )
+    assert world.run("draft") == 0
+    assert git(world.root, "status", "--porcelain") == ""
+    assert (world.root / "src" / "app.py").read_text(encoding="utf-8") == "value = 1\n"
+    assert not (world.root / "src" / "new.py").exists()
+    assert "edited by the model" not in (world.root / "docs" / "adr" / "0007-existing-record.md").read_text(
+        encoding="utf-8"
+    )
+    committed = git(world.root, "show", "--name-only", "--pretty=format:", "HEAD").splitlines()
+    assert "src/app.py" not in committed and "src/new.py" not in committed
+    assert "docs/adr/0007-existing-record.md" not in committed
+    assert "plans/changes/demo/decisions.md" not in committed
+    block = quote_blocks(world.text())[0]
+    assert block[0] == "Attempt 1 (codex): the runner put back what a draft may not change:"
+    for path in ("`src/app.py`", "`src/new.py`", "`docs/adr/0007-existing-record.md`"):
+        assert f"- {path}" in block, path
+
+
+def test_the_put_back_names_every_path_beyond_the_bound(world: World) -> None:
+    # 2a's F-8. Planted fault: the put-back listing stops at `ATTEMPT_FILES` and hides the last
+    # path behind a remainder line, so the audit cannot name every restored path.
+    draft_world(world)
+    plant = {
+        "plans/changes/demo/spec.md": "---\ntitle: Spec\nupdated: 2026-09-30\nbead: demo-1\n---\n\n# Spec\n",
+        "plans/changes/demo/plan.md": PLAN_CARD,
+    }
+    for n in range(stage2.ATTEMPT_FILES + 1):
+        plant[f"stray/file-{n:02d}.txt"] = f"stray {n}\n"
+    world.script(codex=[codex_ok("T1", "drafted", plant=plant)], make=[{"stdout": "green\n"}])
+    assert world.run("draft") == 0
+    assert git(world.root, "status", "--porcelain") == ""
+    block = quote_blocks(world.text())[0]
+    assert block[0] == "Attempt 1 (codex): the runner put back what a draft may not change:"
+    assert f"- `stray/file-{stage2.ATTEMPT_FILES:02d}.txt`" in block, "the path beyond the bound is named"
+    assert "more files" not in "\n".join(block), "no remainder line hides a path"
+
+
+def test_an_edited_decisions_file_is_put_back(world: World) -> None:
+    # Criterion 9. Planted fault: `decisions.md` kept with the folder.
+    draft_world(world)
+    world.script(
+        codex=[
+            codex_ok(
+                "T1",
+                "drafted",
+                plant={
+                    "plans/changes/demo/spec.md": "---\ntitle: Spec\nupdated: 2026-09-30\nbead: demo-1\n---\n\n# Spec\n",
+                    "plans/changes/demo/plan.md": PLAN_CARD,
+                    "plans/changes/demo/decisions.md": "---\ntitle: Decisions\nupdated: 2026-09-30\nbead: demo-1\n"
+                    "---\n\n# Decisions\n\nQ-1 answered.\nQ-2 answered by the model.\n",
+                },
+            )
+        ],
+        make=[{"stdout": "green\n"}],
+    )
+    assert world.run("draft") == 0
+    committed = git(world.root, "show", "--name-only", "--pretty=format:", "HEAD").splitlines()
+    assert "plans/changes/demo/decisions.md" not in committed
+    assert "Q-2 answered by the model" not in (world.root / "plans/changes/demo/decisions.md").read_text(
+        encoding="utf-8"
+    )
+    assert "- `plans/changes/demo/decisions.md`" in quote_blocks(world.text())[0]
+
+
+def test_two_new_adr_files_fail_the_attempt(world: World) -> None:
+    # Criterion 10. Planted fault: no count of new ADR files.
+    draft_world(world)
+    plants = {
+        "plans/changes/demo/spec.md": "---\ntitle: Spec\nupdated: 2026-09-30\nbead: demo-1\n---\n\n# Spec\n",
+        "plans/changes/demo/plan.md": PLAN_CARD,
+        "docs/adr/0016-first-record.md": "# First\n",
+        "docs/adr/0017-second-record.md": "# Second\n",
+    }
+    world.script(
+        codex=[codex_ok("T1", "drafted", plant=plants), codex_ok("T2", "again", plant=plants)],
+        claude=[{"stdout": "glm", "plant": plants}],
+        make=[{"stdout": "green\n"}] * 3,
+    )
+    before = git(world.root, "rev-parse", "HEAD")
+    assert world.run("draft") == 1
+    assert git(world.root, "rev-list", "--count", f"{before}..HEAD") == "0", "no commit is made"
+    block = [b for b in quote_blocks(world.text()) if "post-run checks" in b[0]][0]
+    joined = "\n".join(block)
+    assert "the attempt left more than one new ADR file" in joined
+    assert "`docs/adr/0016-first-record.md`" in joined and "`docs/adr/0017-second-record.md`" in joined
+
+
+def test_a_second_draft_that_adds_another_adr_fails_the_attempt(world: World) -> None:
+    # 2a's F-5. Planted fault: the count reads only paths changed against HEAD, so the first
+    # draft's committed ADR no longer counts and a second one reaches the commit.
+    draft_world(world)
+    first = {
+        "plans/changes/demo/spec.md": "---\ntitle: Spec\nupdated: 2026-09-30\nbead: demo-1\n---\n\n# Spec\n",
+        "plans/changes/demo/plan.md": PLAN_CARD,
+        "docs/adr/0016-first-record.md": "# First\n",
+    }
+    world.script(codex=[codex_ok("T1", "drafted", plant=first)], make=[{"stdout": "green\n"}])
+    assert world.run("draft") == 0
+    (world.bin / "calls.jsonl").unlink()
+    second = {"docs/adr/0017-second-record.md": "# Second\n"}
+    world.script(
+        codex=[codex_ok("T1", "again", plant=second), codex_ok("T2", "once more", plant=second)],
+        claude=[{"stdout": "glm", "plant": second}],
+    )
+    before = git(world.root, "rev-parse", "HEAD")
+    assert world.run("draft") == 1
+    assert git(world.root, "rev-list", "--count", f"{before}..HEAD") == "0", "no second commit is made"
+    block = [b for b in quote_blocks(world.text()) if "post-run checks" in b[0]][0]
+    joined = "\n".join(block)
+    assert "the attempt left more than one new ADR file" in joined
+    assert "`docs/adr/0016-first-record.md`" in joined and "`docs/adr/0017-second-record.md`" in joined
+
+
+def test_a_draft_call_that_moves_head_stops_the_run(
+    world: World, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+) -> None:
+    # Criterion 11. Planted fault: the HEAD check after the put-back, or skipped.
+    draft_world(world)
+    started = [0]
+
+    def committing_codex(ctx, prompt, resume=None, writable=False):
+        del prompt, resume, writable
+        git(ctx.root, "commit", "--quiet", "--allow-empty", "-m", "the model committed")
+        started[0] += 1
+        return "drafted", "T1"
+
+    monkeypatch.setattr(stage2, "run_codex", committing_codex)
+    assert world.run("draft") == 1
+    assert started == [1], "no later attempt starts"
+    error = capsys.readouterr().err
+    assert "moved HEAD from" in error and "nothing was put back or committed" in error
+    assert git(world.root, "log", "-1", "--pretty=%s") == "the model committed", "the runner makes no commit"
+
+
+def test_a_red_verify_fails_the_draft_attempt(world: World) -> None:
+    # Criterion 12. Planted fault: the exit code of `make verify` ignored, or `make` never run.
+    draft_world(world)
+    red = red_verify(("pytest", ["FAILED tests/test_x.py::test_a - assert 2 == 1"]))
+    world.script(
+        codex=[
+            codex_ok("T1", "drafted", plant={"plans/changes/demo/plan.md": PLAN_CARD}),
+            codex_ok("T2", "again"),
+        ],
+        claude=[{"stdout": "glm"}],
+        make=[red, red, red],
+    )
+    before = git(world.root, "rev-parse", "HEAD")
+    assert world.run("draft") == 1
+    assert [call["argv"] for call in world.calls("make")] == [["verify"]] * 3
+    block = [b for b in quote_blocks(world.text()) if "post-run checks" in b[0]][0]
+    joined = "\n".join(block)
+    assert "`make verify` exited 1" in joined and "── [pytest] RED (block)" in joined
+    assert "FAILED tests/test_x.py::test_a" in joined
+    assert git(world.root, "rev-list", "--count", f"{before}..HEAD") == "0"
+
+
+FEATURE_SPEC = (
+    "---\ntitle: Spec\nupdated: 2026-09-30\nbead: demo-1\nchange: demo\nclass: feature\n"
+    'adr_question: {proposed: "no", answered_by: null, reason: "A reason."}\n---\n\n# Spec\n'
+)
+
+
+def test_only_the_changes_own_missing_adr_answer_is_tolerated(world: World) -> None:
+    # Criterion 13 (phase-6 F-9, F-10: the gate tolerates, the exit code decides). Planted fault:
+    # the runner does not ask the gate to tolerate this change, or does not say the answer is owed.
+    draft_world(world)
+    owed = (
+        "adr-answers: demo: no answer — demo.rel is a feature and decisions/answers/demo/adr.yaml does not exist; "
+        "fix: python3 scripts/harness.py decide adr"
+    )
+    world.script(
+        codex=[
+            codex_ok(
+                "T1",
+                "drafted",
+                plant={"plans/changes/demo/spec.md": FEATURE_SPEC, "plans/changes/demo/plan.md": PLAN_CARD},
+            )
+        ],
+        make=[{"stdout": "green\n"}],
+    )
+    assert world.run("draft") == 0
+    assert world.calls("make")[0]["env"][stage2.check_adr_answers.TOLERATE_ENV] == "demo"
+    assert "ADR answer owed: decisions/answers/demo/adr.yaml does not exist" in world.text()
+    assert "tolerated that for this run" in world.text()
+    assert "was red only because" not in world.text(), "make verify exited 0 (F-14)"
+    assert "the answer is the maintainer's" in world.text()
+    assert git(world.root, "log", "-1", "--pretty=%s") == "docs(demo): draft spec and plan — route codex"
+
+    (world.bin / "calls.jsonl").unlink()
+    other = "\n".join(_gate("adr-answers", [owed.replace("demo:", "other:", 1)], "red"))
+    world.script(
+        codex=[codex_ok("T1", "drafted"), codex_ok("T2", "again")],
+        claude=[{"stdout": "glm"}],
+        make=[{"stdout": other, "exit": 1}] * 3,
+    )
+    assert world.run("draft") == 1
+    assert world.text().count("ADR answer owed") == 1, "another change's missing answer is not tolerated"
+    (world.bin / "calls.jsonl").unlink()
+    second_gate = "\n".join(
+        _gate("adr-answers", [owed], "red") + _gate("pytest", ["FAILED tests/test_x.py::test_a"], "red")
+    )
+    world.script(
+        codex=[codex_ok("T1", "drafted"), codex_ok("T2", "again")],
+        claude=[{"stdout": "glm"}],
+        make=[{"stdout": second_gate, "exit": 1}] * 3,
+    )
+    assert world.run("draft") == 1
+    assert world.text().count("ADR answer owed") == 1, "a second blocking gate is not tolerated"
+    (world.bin / "calls.jsonl").unlink()
+    no_time = PLAN_CARD.replace("\n## Time used\n", "\n")
+    world.script(
+        codex=[codex_ok("T1", "drafted", plant={"plans/changes/demo/plan.md": no_time}), codex_ok("T2", "again")],
+        claude=[{"stdout": "glm"}],
+        make=[{"stdout": "\n".join(_gate("adr-answers", [owed], "red")), "exit": 1}] * 3,
+    )
+    assert world.run("draft") == 1
+    assert "plans/changes/demo/plan.md has no `## Time used` heading." in world.text()
+    assert world.text().count("ADR answer owed") == 1, "criteria 14 to 16 still apply"
+
+
+OWED_ANSWER = (
+    "adr-answers: demo: no answer — demo.rel is a feature and decisions/answers/demo/adr.yaml does not exist; "
+    "fix: python3 scripts/harness.py decide adr"
+)
+
+
+def refused_verification(world: World, verification: str) -> None:
+    """Run a draft whose every `make verify` prints `verification` and exits 1; nothing may be committed."""
+    draft_world(world)
+    planted = {
+        "plans/changes/demo/spec.md": "---\ntitle: Spec\nupdated: 2026-09-30\nbead: demo-1\n---\n\n# Spec\n",
+        "plans/changes/demo/plan.md": PLAN_CARD,
+    }
+    world.script(
+        codex=[codex_ok("T1", "drafted", plant=planted), codex_ok("T2", "again")],
+        claude=[{"stdout": "glm"}],
+        make=[{"stdout": verification, "exit": 1}] * 3,
+    )
+    before = git(world.root, "rev-parse", "HEAD")
+    assert world.run("draft") == 1
+    assert git(world.root, "rev-list", "--count", f"{before}..HEAD") == "0", "the draft was committed"
+    assert "ADR answer owed" not in world.text()
+    block = [b for b in quote_blocks(world.text()) if "post-run checks" in b[0]][0]
+    assert "`make verify` exited 1" in "\n".join(block)
+
+
+def test_a_verification_that_stopped_before_its_gates_closed_owes_nothing(world: World) -> None:
+    # 2a's F-6, first case. Planted fault: the exception reads only the gates that closed, so the
+    # missing ADR answer followed by an unfinished `interview-minimums` gate passes for tolerated.
+    interview = "── [interview-minimums] $ run the gate\nhalf the report\n"
+    refused_verification(world, "\n".join(_gate("adr-answers", [OWED_ANSWER], "red")) + interview)
+
+
+def test_a_gate_output_printing_a_green_frame_does_not_hide_its_red_frame(world: World) -> None:
+    # 2a's F-6, second case. Planted fault: a pytest line `── [pytest] gruen` in a gate's output
+    # passes for the gate's closing frame, hiding the real RED one.
+    spoofed = "\n".join(
+        _gate("adr-answers", [OWED_ANSWER], "red")
+        + _gate("pytest", ["FAILED tests/test_x.py::test_a", "── [pytest] gruen"], "red")
+    )
+    refused_verification(world, spoofed)
+
+
+def test_a_verification_that_ended_right_after_the_adr_gate_owes_nothing(world: World) -> None:
+    # Phase-6 F-9. Planted fault: the exception reads gate frames, so output that stops right after the
+    # missing-answer gate closed - before the next gate started - looks like a complete run.
+    refused_verification(world, "\n".join(_gate("adr-answers", [OWED_ANSWER], "red")))
+
+
+def test_a_failing_gate_printing_gate_frames_cannot_hide_its_red_frame(world: World) -> None:
+    # Phase-6 F-10. Planted fault: a failing pytest gate prints `── [pytest] gruen` and a start frame of
+    # ruff-check, the frame reader follows them and the real RED frame of pytest goes unseen.
+    spoofed = "\n".join(
+        _gate("pytest", ["── [pytest] gruen", "── [ruff-check] $ captured command"], "red")
+        + _gate("ruff-check", [], "green")
+        + _gate("adr-answers", [OWED_ANSWER], "red")
+    )
+    refused_verification(world, spoofed)
+
+
+def test_a_rename_of_the_drafts_own_unmerged_adr_counts_one_adr(world: World) -> None:
+    # Phase-6 F-11. Planted fault: the count includes the deleted old path, so a rename reads as two new ADRs.
+    draft_world(world)
+    first = {
+        "plans/changes/demo/spec.md": "---\ntitle: Spec\nupdated: 2026-09-30\nbead: demo-1\n---\n\n# Spec\n",
+        "plans/changes/demo/plan.md": PLAN_CARD,
+        "docs/adr/0016-first-record.md": "# First\n",
+    }
+    world.script(codex=[codex_ok("T1", "drafted", plant=first)], make=[{"stdout": "green\n"}])
+    assert world.run("draft") == 0
+    (world.bin / "calls.jsonl").unlink()
+    world.script(
+        codex=[
+            codex_ok(
+                "T1",
+                "renamed",
+                plant={"docs/adr/0016-renamed-record.md": "# First\n"},
+                delete=["docs/adr/0016-first-record.md"],
+            )
+        ],
+        make=[{"stdout": "green\n"}],
+    )
+    assert world.run("draft") == 0
+    assert (world.root / "docs/adr/0016-renamed-record.md").is_file()
+    assert not (world.root / "docs/adr/0016-first-record.md").exists()
+
+
+def test_put_back_paths_are_named_in_full_however_long(world: World) -> None:
+    # Phase-6 F-12. Planted fault: quote_block cuts each put-back path at 500 characters, so two
+    # long paths that share their first 500 characters become one line.
+    draft_world(world)
+    head = "src/" + "d" * 250 + "/" + "e" * 250 + "/"
+    tail = 616 - len(head)
+    one = head + "f" * (tail - len("one.txt")) + "one.txt"
+    two = head + "f" * (tail - len("two.txt")) + "two.txt"
+    assert len(one) == len(two) == 616
+    world.script(
+        codex=[
+            codex_ok(
+                "T1",
+                "drafted",
+                plant={
+                    "plans/changes/demo/spec.md": "---\ntitle: Spec\nupdated: 2026-09-30\nbead: demo-1\n---\n\n# Spec\n",
+                    "plans/changes/demo/plan.md": PLAN_CARD,
+                    one: "x\n",
+                    two: "y\n",
+                },
+            )
+        ],
+        make=[{"stdout": "green\n"}],
+    )
+    assert world.run("draft") == 0
+    text = world.text()
+    assert f"> - `{one}`" in text and f"> - `{two}`" in text
+
+
+def test_a_put_back_path_with_a_newline_is_never_cut() -> None:
+    # Phase-6 F-15. Planted fault: quote_block compares the split lines of an entry with the whole
+    # entries, so the long continuation line of a multiline path is cut and two paths become one.
+    head = "src/dir\n" + "e" * 600 + "/"
+    one, two = head + "one.txt", head + "two.txt"
+    entries = stage2.put_back_lines([one, two])
+    block = stage2.quote_block("Attempt 1 (codex): put back:\n" + "\n".join(entries), None, entries)
+    assert "left out" not in block
+    assert one.split("\n")[1] in block and two.split("\n")[1] in block
+
+
+def test_a_make_that_cannot_start_fails_the_attempt_and_moves_the_chain(world: World) -> None:
+    # 2a's F-7. Planted fault: the `CallFailed` of a make that cannot start escapes the post-run
+    # checks, so the runner stops after one attempt without a block and starts no later route.
+    draft_world(world)
+    world.script(
+        codex=[
+            codex_ok(
+                "T1",
+                "drafted",
+                plant={
+                    "plans/changes/demo/spec.md": "---\ntitle: Spec\nupdated: 2026-09-30\nbead: demo-1\n---\n\n# Spec\n",
+                    "plans/changes/demo/plan.md": PLAN_CARD,
+                },
+            ),
+            codex_ok("T2", "again"),
+        ],
+        claude=[{"stdout": "glm drafted"}],
+    )
+    (world.bin / "make").chmod(0o644)
+    before = git(world.root, "rev-parse", "HEAD")
+    assert world.run("draft") == 1
+    assert world.calls("make") == [], "make never ran"
+    assert len(world.calls("codex")) == 2 and len(world.calls("claude")) == 1
+    assert git(world.root, "rev-list", "--count", f"{before}..HEAD") == "0"
+    block = [b for b in quote_blocks(world.text()) if "post-run checks" in b[0]][0]
+    joined = "\n".join(block)
+    assert "`make verify` could not run" in joined and "could not be started" in joined
+    assert "Permission denied" in joined
+
+
+def test_a_missing_spec_or_plan_fails_the_attempt(world: World) -> None:
+    # Criterion 14. Planted fault: only `plan.md` checked.
+    draft_world(world)
+    world.script(
+        codex=[codex_ok("T1", "drafted", plant={"plans/changes/demo/plan.md": PLAN_CARD}), codex_ok("T2", "again")],
+        claude=[{"stdout": "glm"}],
+        make=[{"stdout": "green\n"}] * 3,
+    )
+    assert world.run("draft") == 1
+    assert "plans/changes/demo/spec.md is missing after the draft." in world.text()
+    world.plan.unlink()
+    clear_derived_leftovers(world)
+    (world.bin / "calls.jsonl").unlink()
+    world.script(
+        codex=[
+            codex_ok(
+                "T1",
+                "drafted",
+                plant={
+                    "plans/changes/demo/spec.md": "---\ntitle: Spec\nupdated: 2026-09-30\nbead: demo-1\n---\n\n# Spec\n",
+                },
+            ),
+            codex_ok("T2", "again"),
+        ],
+        claude=[{"stdout": "glm"}],
+        make=[{"stdout": "green\n"}] * 3,
+    )
+    assert world.run("draft") == 1
+    assert "plans/changes/demo/plan.md is missing after the draft." in world.text()
+
+
+def test_a_missing_plan_md_is_reported_once(world: World) -> None:
+    # Repair L3-4. Planted fault: the card and Time-used checks read an empty string for an absent plan.md.
+    draft_world(world)
+    world.script(
+        codex=[
+            codex_ok(
+                "T1",
+                "drafted",
+                plant={
+                    "plans/changes/demo/spec.md": "---\ntitle: Spec\nupdated: 2026-09-30\nbead: demo-1\n---\n\n# Spec\n",
+                },
+            ),
+            codex_ok("T2", "again"),
+        ],
+        claude=[{"stdout": "glm"}],
+        make=[{"stdout": "green\n"}] * 3,
+    )
+    assert world.run("draft") == 1
+    text = world.text()
+    assert "plans/changes/demo/plan.md is missing after the draft." in text
+    assert stage2.CARD_PROBLEM not in text
+    assert "has no `## Time used` heading" not in text
+
+
+def test_a_plan_without_its_card_fails_the_attempt(world: World) -> None:
+    # Criterion 15. Planted fault: the labels looked for anywhere in the file.
+    draft_world(world)
+    no_pre = PLAN_CARD.replace("Pre-mortem:  it failed\n", "")
+    world.script(
+        codex=[codex_ok("T1", "drafted", plant={"plans/changes/demo/plan.md": no_pre}), codex_ok("T2", "again")],
+        claude=[{"stdout": "glm"}],
+        make=[{"stdout": "green\n"}] * 3,
+    )
+    assert world.run("draft") == 1
+    assert stage2.CARD_PROBLEM in world.text()
+    world.plan.unlink()
+    clear_derived_leftovers(world)
+    (world.bin / "calls.jsonl").unlink()
+    late = (
+        "---\ntitle: Plan\nupdated: 2026-09-30\nbead: demo-1\n---\n\n# Plan\n\n## Criterion ledger\n\n"
+        "```text\nFor you:     x\nDone when:   y\nAppetite:    8 h\nNot now:     n\nPre-mortem:  p\n```\n\n## Time used\n"
+    )
+    world.script(
+        codex=[codex_ok("T1", "drafted", plant={"plans/changes/demo/plan.md": late}), codex_ok("T2", "again")],
+        claude=[{"stdout": "glm"}],
+        make=[{"stdout": "green\n"}] * 3,
+    )
+    assert world.run("draft") == 1
+    assert stage2.CARD_PROBLEM in world.text()
+
+
+def test_a_plan_without_time_used_fails_the_attempt(world: World) -> None:
+    # Criterion 16. Planted fault: the heading check left out.
+    draft_world(world)
+    no_time = PLAN_CARD.replace("\n## Time used\n", "\n")
+    world.script(
+        codex=[codex_ok("T1", "drafted", plant={"plans/changes/demo/plan.md": no_time}), codex_ok("T2", "again")],
+        claude=[{"stdout": "glm"}],
+        make=[{"stdout": "green\n"}] * 3,
+    )
+    assert world.run("draft") == 1
+    assert "plans/changes/demo/plan.md has no `## Time used` heading." in world.text()
+
+
+def test_a_passing_draft_makes_one_commit_and_leaves_a_clean_tree(world: World) -> None:
+    # Criterion 17. Planted fault: `findings.md` written after the commit, or a second commit made.
+    draft_world(world)
+    passing_draft(world)
+    before = git(world.root, "rev-parse", "HEAD")
+    assert world.run("draft") == 0
+    assert git(world.root, "rev-list", "--count", f"{before}..HEAD") == "1"
+    assert git(world.root, "log", "-1", "--pretty=%s") == "docs(demo): draft spec and plan — route codex"
+    assert git(world.root, "status", "--porcelain") == ""
+    committed = git(world.root, "show", "--name-only", "--pretty=format:", "HEAD").splitlines()
+    for name in ("plans/changes/demo/spec.md", "plans/changes/demo/plan.md", "plans/changes/demo/findings.md"):
+        assert name in committed, name
+
+
+def test_a_failed_first_draft_gets_one_codex_repair_with_its_diagnostics(world: World) -> None:
+    # Criterion 18. Planted fault: the diagnostics not passed to the second prompt.
+    draft_world(world)
+    red = red_verify(("pytest", ["FAILED tests/test_x.py::test_a - assert 2 == 1"]))
+    world.script(
+        codex=[
+            codex_ok("T1", "drafted", plant={"plans/changes/demo/plan.md": PLAN_CARD}),
+            codex_ok(
+                "T2",
+                "repaired",
+                plant={
+                    "plans/changes/demo/spec.md": "---\ntitle: Spec\nupdated: 2026-09-30\nbead: demo-1\n---\n\n# Spec\n",
+                },
+            ),
+        ],
+        make=[red, {"stdout": "green\n"}],
+    )
+    assert world.run("draft") == 0
+    assert len(world.calls("codex")) == 2
+    assert world.calls("claude") == []
+    prompt = world.calls("codex")[1]["argv"][-1]
+    assert "## Earlier attempts' diagnostics" in prompt
+    assert "Attempt 1 (codex)" in prompt and "── [pytest] RED (block)" in prompt
+    assert git(world.root, "log", "-1", "--pretty=%s") == "docs(demo): draft spec and plan — route codex-repair"
+
+
+def test_two_failed_codex_attempts_fall_back_to_glm_5_3(world: World) -> None:
+    # Criterion 19. Planted fault: the GLM route on `glm-5.3-flash`, a shell tool, or a fourth attempt.
+    draft_world(world)
+    red = red_verify(("pytest", ["FAILED tests/test_x.py::test_a - assert 2 == 1"]))
+    world.script(
+        codex=[codex_ok("T1", "drafted", plant={"plans/changes/demo/plan.md": PLAN_CARD}), codex_ok("T2", "again")],
+        claude=[
+            {
+                "stdout": "glm drafted",
+                "plant": {
+                    "plans/changes/demo/spec.md": "---\ntitle: Spec\nupdated: 2026-09-30\nbead: demo-1\n---\n\n# Spec\n",
+                },
+            }
+        ],
+        make=[red, red, {"stdout": "green\n"}],
+    )
+    assert world.run("draft") == 0
+    assert len(world.calls("codex")) == 2
+    (call,) = world.calls("claude")
+    argv, prompt = call["argv"], call["prompt_file"]
+    assert argv[argv.index("--model") + 1] == "glm-5.3"
+    assert argv[argv.index("--effort") + 1] == "max"
+    assert set(argv[argv.index("--tools") + 1].split(",")) == {"Read", "Grep", "Glob", "Edit", "Write"}
+    assert "glm-5.3-flash" not in argv
+    for name in ("02-spec.md", "02b-design.md", "03-plan.md"):
+        assert (REPO_ROOT / "prompts" / name).read_text(encoding="utf-8").rstrip() in prompt, name
+    assert "Attempt 1 (codex)" in prompt and "Attempt 2 (codex-repair)" in prompt
+    assert git(world.root, "log", "-1", "--pretty=%s") == "docs(demo): draft spec and plan — route glm"
+
+
+def test_a_failed_draft_call_is_put_back_and_recorded(world: World) -> None:
+    # Criterion 20. Planted fault: the put-back left out after a dead call, or no block written.
+    draft_world(world)
+    world.script(
+        codex=[
+            {"stdout": "", "exit": 1, "plant": {"plans/changes/demo/spec.md": "# half-written spec\n"}},
+            codex_ok(
+                "T2",
+                "drafted",
+                plant={
+                    "plans/changes/demo/spec.md": "---\ntitle: Spec\nupdated: 2026-09-30\nbead: demo-1\n---\n\n# Spec\n",
+                    "plans/changes/demo/plan.md": PLAN_CARD,
+                },
+            ),
+        ],
+        make=[{"stdout": "green\n"}],
+    )
+    assert world.run("draft") == 0
+    block = quote_blocks(world.text())[0]
+    assert block[0].startswith("Attempt 1 (codex) failed its call:")
+    assert "The runner put back:" in block and "- `plans/changes/demo/spec.md`" in block
+    committed = git(world.root, "show", "--name-only", "--pretty=format:", "HEAD").splitlines()
+    assert "plans/changes/demo/spec.md" in committed
+    assert "half-written" not in (world.root / "plans/changes/demo/spec.md").read_text(encoding="utf-8")
+
+
+def test_a_failed_draft_check_leaves_its_block_and_its_tree(world: World) -> None:
+    # Criterion 21. Planted fault: the tree put back after a post-run failure.
+    draft_world(world)
+    red = red_verify(("pytest", ["FAILED tests/test_x.py::test_a - assert 2 == 1"]))
+    world.script(
+        codex=[
+            codex_ok(
+                "T1",
+                "drafted",
+                plant={
+                    "plans/changes/demo/spec.md": "---\ntitle: Spec\nupdated: 2026-09-30\nbead: demo-1\n---\n\n# Spec\n",
+                    "plans/changes/demo/plan.md": PLAN_CARD,
+                },
+            ),
+            codex_ok("T2", "passed on the tree the first attempt left"),
+        ],
+        make=[red, {"stdout": "green\n"}],
+    )
+    assert world.run("draft") == 0
+    (block,) = [b for b in quote_blocks(world.text()) if "post-run checks" in b[0]]
+    files = "\n".join(block)
+    assert "plans/changes/demo/spec.md" in files and "plans/changes/demo/plan.md" in files
+    prompt = world.calls("codex")[1]["argv"][-1]
+    assert "Attempt 1 (codex)" in prompt and "── [pytest] RED (block)" in prompt
+    committed = git(world.root, "show", "--name-only", "--pretty=format:", "HEAD").splitlines()
+    assert "plans/changes/demo/spec.md" in committed and "plans/changes/demo/plan.md" in committed
+
+
+def test_three_failed_draft_attempts_exit_1_without_a_commit(world: World, capsys: pytest.CaptureFixture[str]) -> None:
+    # Criterion 22. Planted fault: the loop ends without raising, or a commit is still made.
+    draft_world(world)
+    red = red_verify(("pytest", ["FAILED tests/test_x.py::test_a - assert 2 == 1"]))
+    world.script(
+        codex=[
+            codex_ok("T1", "drafted", plant={"plans/changes/demo/plan.md": PLAN_CARD}),
+            codex_ok("T2", "again"),
+        ],
+        claude=[{"stdout": "glm"}],
+        make=[red, red, red],
+    )
+    before = git(world.root, "rev-parse", "HEAD")
+    assert world.run("draft") == 1
+    assert git(world.root, "rev-list", "--count", f"{before}..HEAD") == "0"
+    assert "findings.md" in capsys.readouterr().err
+    blocks_ = [b for b in quote_blocks(world.text()) if "post-run checks" in b[0]]
+    assert [block[0] for block in blocks_] == [
+        "Attempt 1 (codex) failed its post-run checks.",
+        "Attempt 2 (codex-repair) failed its post-run checks.",
+        "Attempt 3 (glm) failed its post-run checks.",
+    ]
+
+
+def test_a_codex_draft_never_reads_the_glm_key(world: World, monkeypatch: pytest.MonkeyPatch) -> None:
+    # Criterion 23. Planted fault: the key read before the loop.
+    draft_world(world)
+    monkeypatch.setattr(stage2, "read_secret", lambda name: pytest.fail(f"read secret on a Codex draft: {name}"))
+    passing_draft(world)
+    assert world.run("draft") == 0
+
+
+def test_a_missing_glm_key_refuses_the_glm_draft_attempt(world: World, capsys: pytest.CaptureFixture[str]) -> None:
+    # Criterion 24. Planted fault: a `None` key passed to the GLM call.
+    draft_world(world)
+    Path(os.environ["CC_SECRETS"]).write_text("OTHER=1\n", encoding="utf-8")
+    red = red_verify(("pytest", ["FAILED tests/test_x.py::test_a - assert 2 == 1"]))
+    world.script(
+        codex=[codex_ok("T1", "drafted", plant={"plans/changes/demo/plan.md": PLAN_CARD}), codex_ok("T2", "again")],
+        claude=[{"stdout": "must not run"}],
+        make=[red, red],
+    )
+    assert world.run("draft") == 2
+    assert len(world.calls("codex")) == 2 and world.calls("claude") == []
+    assert "GLM_KEY" in capsys.readouterr().err
+
+
+def test_a_glm_draft_that_writes_the_key_is_refused_without_a_commit(
+    world: World, capsys: pytest.CaptureFixture[str]
+) -> None:
+    # Criterion 25. Planted fault: the scan skipped on the GLM route.
+    draft_world(world)
+    red = red_verify(("pytest", ["FAILED tests/test_x.py::test_a - assert 2 == 1"]))
+    world.script(
+        codex=[{"stdout": "drafted"}, {"stdout": "again"}],
+        claude=[{"stdout": "glm drafted", "plant": {"plans/changes/demo/spec.md": "the key was @KEY@\n"}}],
+        make=[red, red, {"stdout": "green\n"}],
+    )
+    before = git(world.root, "rev-parse", "HEAD")
+    assert world.run("draft") == 2
+    assert git(world.root, "rev-list", "--count", f"{before}..HEAD") == "0"
+    spec = (world.root / "plans/changes/demo/spec.md").read_text(encoding="utf-8")
+    assert "[credential]" in spec and not any(KEY[i : i + 8] in spec for i in range(len(KEY) - 7))
+    text = world.text()
+    assert not any(KEY[i : i + 8] in text for i in range(len(KEY) - 7))
+    assert "refused" in capsys.readouterr().err
+
+
+def test_a_failed_glm_draft_call_that_writes_the_key_is_refused(
+    world: World, capsys: pytest.CaptureFixture[str]
+) -> None:
+    # Repair L2-4. Planted fault: the failed-call branch scans nothing, so the key stays in findings.md.
+    draft_world(world)
+    red = red_verify(("pytest", ["FAILED tests/test_x.py::test_a - assert 2 == 1"]))
+    world.script(
+        codex=[{"stdout": "drafted"}, {"stdout": "again"}],
+        claude=[{"stdout": "", "exit": 1, "append": {"plans/changes/demo/findings.md": "the key was @KEY@\n"}}],
+        make=[red, red],
+    )
+    before = git(world.root, "rev-parse", "HEAD")
+    assert world.run("draft") == 2
+    assert git(world.root, "rev-list", "--count", f"{before}..HEAD") == "0"
+    text = world.text()
+    assert "[credential]" in text and not any(KEY[i : i + 8] in text for i in range(len(KEY) - 7))
+    assert "refused" in capsys.readouterr().err
+
+
+def test_a_glm_draft_that_writes_the_key_and_moves_head_still_refuses(
+    world: World, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+) -> None:
+    # Repair L3-2. Planted fault: the moved-HEAD stop runs before the credential scan, so the key stays.
+    draft_world(world)
+
+    def committing_glm(ctx, prompt, endpoint, writable=False, key=None):
+        del prompt, endpoint, writable
+        (ctx.root / "plans" / "changes" / "demo" / "spec.md").write_text(f"the key was {key}\n", encoding="utf-8")
+        git(ctx.root, "commit", "--quiet", "--allow-empty", "-m", "the model committed")
+        return "drafted"
+
+    monkeypatch.setattr(stage2, "run_work_model", committing_glm)
+    world.script(codex=[{"stdout": "drafted"}, {"stdout": "again"}])
+    before = git(world.root, "rev-parse", "HEAD")
+    assert world.run("draft") == 2
+    assert git(world.root, "rev-list", "--count", f"{before}..HEAD") == "1", "only the model's commit stands"
+    spec = (world.root / "plans" / "changes" / "demo" / "spec.md").read_text(encoding="utf-8")
+    assert "[credential]" in spec and not any(KEY[i : i + 8] in spec for i in range(len(KEY) - 7))
+    error = capsys.readouterr().err
+    assert "refused:" in error and "the GLM credential occurred in changed files" in error
+    assert "moved HEAD" not in error
+
+
+def test_a_glm_draft_that_commits_the_key_is_refused(
+    world: World, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+) -> None:
+    # 2a's F-4. Planted fault: the credential scan compares against the model's new HEAD, so the
+    # committed key file reads as clean and the moved-HEAD stop leaves the key in file and commit.
+    draft_world(world)
+
+    def committing_glm(ctx, prompt, endpoint, writable=False, key=None):
+        del prompt, endpoint, writable
+        (ctx.root / "plans" / "changes" / "demo" / "spec.md").write_text(f"the key was {key}\n", encoding="utf-8")
+        git(ctx.root, "add", "-A")
+        git(ctx.root, "commit", "--quiet", "-m", "the model committed the key")
+        return "drafted"
+
+    monkeypatch.setattr(stage2, "run_work_model", committing_glm)
+    world.script(codex=[{"stdout": "drafted"}, {"stdout": "again"}])
+    before = git(world.root, "rev-parse", "HEAD")
+    assert world.run("draft") == 2
+    assert git(world.root, "rev-list", "--count", f"{before}..HEAD") == "1", "only the model's commit stands"
+    spec = (world.root / "plans" / "changes" / "demo" / "spec.md").read_text(encoding="utf-8")
+    assert "[credential]" in spec and not any(KEY[i : i + 8] in spec for i in range(len(KEY) - 7))
+    error = capsys.readouterr().err
+    assert "refused:" in error and "the GLM credential occurred in changed files" in error
+    assert "moved HEAD" not in error
+
+
 # ---------------------------------------------------------------------------
 # The failed attempt's block in findings.md (spec criteria 1-15, bead coding-harness-cit)
 # ---------------------------------------------------------------------------
@@ -2107,6 +3068,333 @@ def test_a_quoted_release_heading_or_no_loop_line_moves_no_release(world: World)
     assert [row[0] for row in stage2.released_rows(world.text())] == ["L1-1"]
 
 
+# ---------------------------------------------------------------------------
+# The format step before `make verify` (spec stage2-format, criteria 1-12, bead coding-harness-52r)
+# ---------------------------------------------------------------------------
+
+
+def venv_ruff(world: World, executable: bool = True) -> None:
+    """The test ruff: `STAND_IN` reached through `<worktree>/.venv/bin/ruff`, never on `PATH`.
+
+    The link resolves beside the scenario in `world.bin`, so the stand-in reads its steps and
+    records under the name the link gives it (`ruff`); `.venv/` is excluded, so no reader of
+    tracked files sees the link. With `executable=False` the path holds a plain file of mode 0644:
+    the system refuses to run it.
+    """
+    stand_in = world.bin / "ruff.stand-in"
+    stand_in.write_text(
+        STAND_IN.replace("@PYTHON@", sys.executable).replace("@PI@", stage2.PI_VERSION), encoding="utf-8"
+    )
+    stand_in.chmod(0o755)
+    ruff = world.root / ".venv" / "bin" / "ruff"
+    ruff.parent.mkdir(parents=True, exist_ok=True)
+    if executable:
+        ruff.symlink_to(stand_in)
+    else:
+        ruff.write_text("# a ruff stand-in that cannot be run\n", encoding="utf-8")
+        ruff.chmod(0o644)
+    (world.root / ".git" / "info" / "exclude").write_text(".venv/\n", encoding="utf-8")
+
+
+def formatted_attempt(**more: object) -> dict:
+    """One Flash attempt that plants an unformatted `scripts/a.py` and measures the plan."""
+    return {
+        "stdout": "implemented",
+        "plant": {"scripts/a.py": "a=1\n"},
+        "append": {"plans/changes/demo/plan.md": "2026-10-12 10:00–10:02, 2 min\n"},
+        **more,
+    }
+
+
+def test_the_format_step_runs_check_then_format_on_the_targets_before_verify(world: World) -> None:
+    # Criteria 1 and 2. Planted fault: the commands in another order, another argument list, or ruff
+    # given `scripts/ tests/` whole instead of the targets. The modified, already tracked
+    # `scripts/old.py` must stand among them: dropping modified tracked files from the targets would
+    # pass while only newly created files carry the step.
+    venv_ruff(world)
+    (world.root / "scripts/old.py").write_text("x = 1\n", encoding="utf-8")
+    (world.root / "scripts/gone.py").write_text("y = 2\n", encoding="utf-8")
+    git(world.root, "add", "-A")
+    git(world.root, "commit", "--quiet", "-m", "an unformatted neighbour, a file the attempt deletes")
+    world.script(
+        claude=[
+            formatted_attempt(
+                plant={
+                    "scripts/a.py": "a=1\n",
+                    "scripts/old.py": "x=1\n",
+                    "tests/test_b.py": "def test_b():\n    assert 1\n",
+                    "src/c.py": "c = 3\n",
+                    "scripts/notes.md": "# notes\n",
+                },
+                delete=["scripts/gone.py"],
+            )
+        ],
+        ruff=[{"plant": {"scripts/a.py": "a = 1\n"}}, {}],
+        make=[{"stdout": "green\n"}],
+    )
+    assert world.run("implement") == 0
+    assert [call["name"] for call in world.calls()] == ["claude", "ruff", "ruff", "make"]
+    assert [call["argv"] for call in world.calls("ruff")] == [
+        [
+            "check",
+            "--fix",
+            "--no-unsafe-fixes",
+            "--force-exclude",
+            "--no-cache",
+            "scripts/a.py",
+            "scripts/old.py",
+            "tests/test_b.py",
+        ],
+        ["format", "--force-exclude", "--no-cache", "scripts/a.py", "scripts/old.py", "tests/test_b.py"],
+    ]
+    for call in world.calls("ruff"):
+        assert call["cwd"] == str(world.root)
+
+
+def test_the_format_step_leaves_out_links_and_hard_linked_files(world: World) -> None:
+    # Criterion 2. Planted fault: the targets filtered by suffix and directory alone.
+    venv_ruff(world)
+    (world.root / "scripts/real.py").write_text("real = 1\n", encoding="utf-8")
+    outside = world.root.parent / "outside.py"
+    outside.write_text("out = 1\n", encoding="utf-8")
+    (world.root / "scripts/link.py").symlink_to(outside)
+    (world.root / "tests").mkdir()
+    (world.root / "tests/hard_twin.py").write_text("twin = 1\n", encoding="utf-8")
+    os.link(world.root / "tests/hard_twin.py", world.root / "tests/hard.py")
+    world.script(ruff=[{}, {}], make=[{"stdout": "green\n"}])
+    formatted: list[str] = []
+    stage2.verify_attempt(world.root, world.plan, "", formatted=formatted)
+    assert [call["argv"] for call in world.calls("ruff")] == [
+        ["check", "--fix", "--no-unsafe-fixes", "--force-exclude", "--no-cache", "scripts/real.py"],
+        ["format", "--force-exclude", "--no-cache", "scripts/real.py"],
+    ]
+    assert formatted == ["ruff changed no file."]
+    assert outside.read_text(encoding="utf-8") == "out = 1\n"
+
+
+def test_without_a_target_file_no_ruff_starts(world: World) -> None:
+    # Criteria 3 and 8. Planted fault: ruff started with an empty path list, or the commit heading
+    # written with no line below it.
+    venv_ruff(world)
+    successful_implementation(world)
+    assert world.run("implement") == 0
+    assert world.calls("ruff") == []
+    assert git(world.root, "log", "-1", "--format=%B") == "feat(demo): implement accepted plan"
+
+
+def test_the_format_step_runs_the_worktrees_ruff_not_the_one_on_path(world: World) -> None:
+    # Criterion 4. Planted fault: ruff started by its bare name, so the program on `PATH` answers.
+    venv_ruff(world)
+    decoy = world.bin / "ruff"
+    decoy.write_text('#!/bin/sh\ntouch "$(dirname "$0")/decoy-called"\nexit 97\n', encoding="utf-8")
+    decoy.chmod(0o755)
+    world.script(claude=[formatted_attempt()], ruff=[{}, {}], make=[{"stdout": "green\n"}])
+    assert world.run("implement") == 0
+    assert len(world.calls("ruff")) == 2
+    assert not (world.bin / "decoy-called").exists()
+
+
+def test_ruff_gets_the_verify_environment_without_credentials(world: World) -> None:
+    # Criterion 5. Planted fault: the ruff launch given `glm_env` or the caller's environment.
+    venv_ruff(world)
+    world.script(claude=[formatted_attempt()], ruff=[{}, {}], make=[{"stdout": "green\n"}])
+    assert world.run("implement") == 0
+    make_env = world.calls("make")[0]["env"]
+    for call in world.calls("ruff"):
+        assert call["env"] == make_env
+        assert KEY not in call["env"].values()
+        for name in ("ANTHROPIC_AUTH_TOKEN", "GH_TOKEN", "OPENAI_API_KEY", "X_SECRET"):
+            assert name not in call["env"], name
+
+
+def test_the_format_steps_writes_stay_out_of_the_models_file_list(world: World) -> None:
+    # Criterion 6. Planted fault: the second snapshot taken after `verify_attempt`. The stand-in
+    # spends one ruff step per call - check and format each take one - so the `{}` entries put each
+    # plant on a format call, the only place its bytes survive to a snapshot: the faulted snapshot
+    # counts ruff's four lines in block 1 and names `scripts/a.py` in block 2.
+    venv_ruff(world)
+    world.script(
+        claude=[
+            {"stdout": "first", "plant": {"scripts/a.py": "a=1\n"}},
+            {"stdout": "second"},
+            {"stdout": "third", "append": {"plans/changes/demo/plan.md": "2026-10-12 10:00–10:02, 2 min\n"}},
+        ],
+        ruff=[
+            {},
+            {"plant": {"scripts/a.py": "a = 1  # the fix\n# and three\n# more\n# lines\n"}},
+            {},
+            {"plant": {"scripts/a.py": "a = 1\n"}},
+        ],
+        make=[{"stdout": "green\n"}] * 3,
+    )
+    assert world.run("implement") == 0
+    blocks_ = quote_blocks(world.text())
+    assert files_of(blocks_[0]) == [
+        "Files the attempt changed (lines added, removed):",
+        "- `scripts/a.py` +1 -0",
+    ]
+    assert "Files the attempt changed: none." in blocks_[1]
+
+
+def test_a_failed_attempt_carries_its_format_line_first_in_its_diagnostics(world: World) -> None:
+    # Criterion 7. Planted fault: the format line appended after the other entries.
+    venv_ruff(world)
+    red = "\n".join(_gate("pytest", ["FAILED tests/test_b.py::test_b - assert 1 == 2"], "red"))
+    world.script(
+        claude=[
+            {
+                "stdout": "first",
+                "plant": {"scripts/a.py": "a=1\n", "tests/test_b.py": "def test_b():\n    assert 1\n"},
+            },
+            {"stdout": "second", "append": {"plans/changes/demo/plan.md": "2026-10-12 10:00–10:02, 2 min\n"}},
+        ],
+        ruff=[{"plant": {"scripts/a.py": "a = 1\n"}}, {}],
+        make=[{"stdout": red, "exit": 1}, {"stdout": "green\n"}],
+    )
+    assert world.run("implement") == 0
+    first = "- Runner format before `make verify`: ruff changed `scripts/a.py`."
+    entry = quote_blocks(world.text())[0]
+    assert entry[entry.index("```text") + 1] == first
+    assert prompt_entry(world.calls("claude")[1]["prompt_file"], 1, "flash")[0] == first
+
+
+def test_a_passing_run_lists_each_format_line_in_its_commit_message(world: World) -> None:
+    # Criterion 8. Planted fault: an earlier attempt's format line dropped before the checkpoint
+    # (only the passing attempt's line kept), or a line for an attempt that ran no format step.
+    venv_ruff(world)
+    world.script(
+        claude=[
+            {"stdout": "first", "plant": {"src/app.py": "value = 2\n", "scripts/b.py": "b=1\n"}},
+            formatted_attempt(),
+        ],
+        ruff=[{}, {"plant": {"scripts/b.py": "b = 1\n"}}, {}, {"plant": {"scripts/a.py": "a = 1\n"}}],
+        make=[{"stdout": "green\n"}] * 2,
+    )
+    assert world.run("implement") == 0
+    assert git(world.root, "log", "-1", "--format=%B") == (
+        "feat(demo): implement accepted plan\n\n"
+        "Runner format before `make verify` (ruff check --fix with safe fixes only, then ruff format):\n"
+        "- Attempt 1 (flash): ruff changed `scripts/b.py`.\n"
+        "- Attempt 2 (flash-repair): ruff changed `scripts/a.py`."
+    )
+
+
+def test_a_passing_attempt_that_was_formatted_leaves_only_its_audit_line(world: World) -> None:
+    # Criterion 9. Planted fault: the format line appended to findings.md for every attempt.
+    venv_ruff(world)
+    world.script(
+        claude=[formatted_attempt()],
+        ruff=[{"plant": {"scripts/a.py": "a = 1\n"}}],
+        make=[{"stdout": "green\n"}],
+    )
+    assert world.run("implement") == 0
+    lines = world.text().splitlines()
+    audits = [i for i, line in enumerate(lines) if line.startswith("Stage-2 call,")]
+    assert audits and not lines[audits[-1] + 1 :], "something follows the passing attempt's audit line"
+
+
+@pytest.mark.parametrize("case", ["no-ruff", "not-executable", "findings-left", "format-error"])
+def test_a_ruff_failure_leaves_the_verdict_to_make_verify(world: World, case: str) -> None:
+    # Criterion 10. Planted fault: a non-zero ruff exit turned into a problem of the attempt.
+    if case == "not-executable":
+        venv_ruff(world, executable=False)
+    elif case != "no-ruff":  # no-ruff: no helper, no `.venv/bin/ruff` in the worktree
+        venv_ruff(world)
+    check: dict = {}
+    fmt: dict = {}
+    if case == "findings-left":
+        check = {"stdout": "scripts/a.py:1:1: F401 `a` imported but unused", "exit": 1}
+    elif case == "format-error":
+        fmt = {"stdout": "error: cannot reformat scripts/a.py", "exit": 2}
+    baseline = git(world.root, "rev-parse", "HEAD")
+    world.script(claude=[formatted_attempt()], ruff=[check, fmt], make=[{"stdout": "green\n"}])
+    assert world.run("implement") == 0
+    assert len(world.calls("claude")) == 1 and len(world.calls("make")) == 1
+    assert git(world.root, "rev-list", "--count", f"{baseline}..HEAD") == "1"
+    message = git(world.root, "log", "-1", "--format=%B")
+    if case == "findings-left":
+        assert "ruff check left findings without a safe fix" in message
+    if case == "format-error":
+        assert "ruff format exited 2" in message
+
+
+@pytest.mark.parametrize("case", ["no-ruff", "not-executable"])
+def test_a_ruff_that_cannot_start_is_reported_as_not_run(world: World, case: str) -> None:
+    # Criterion 11. Planted fault: the ruff launch's `CallFailed` propagates like make's.
+    if case == "not-executable":
+        venv_ruff(world, executable=False)
+    baseline = git(world.root, "rev-parse", "HEAD")
+    world.script(claude=[formatted_attempt()], ruff=[{}, {}], make=[{"stdout": "green\n"}])
+    assert world.run("implement") == 0
+    assert world.calls("ruff") == []
+    assert git(world.root, "rev-list", "--count", f"{baseline}..HEAD") == "1"
+    message = git(world.root, "log", "-1", "--format=%B")
+    line = next(line for line in message.splitlines() if line.startswith("- Attempt 1 (flash):"))
+    assert line.startswith("- Attempt 1 (flash): not run —")
+    assert "no ruff at" in line or "could not be started" in line
+
+
+def test_a_check_exit_one_covers_findings_and_a_file_that_does_not_parse(world: World) -> None:
+    # Repair round 3 (L3-1). Planted fault: the note calls every exit 1 of `ruff check` findings
+    # without a safe fix alone, although a target that does not parse exits 1 as well.
+    venv_ruff(world)
+    world.script(
+        claude=[formatted_attempt()],
+        ruff=[{"stdout": "error: Failed to parse scripts/a.py:1:5: expected an expression", "exit": 1}, {}],
+        make=[{"stdout": "green\n"}],
+    )
+    assert world.run("implement") == 0
+    message = git(world.root, "log", "-1", "--format=%B")
+    line = next(entry for entry in message.splitlines() if entry.startswith("- Attempt 1 (flash):"))
+    assert "ruff check left findings without a safe fix or a file that does not parse" in line
+
+
+def test_an_unreadable_target_is_named_by_its_repository_path(world: World) -> None:
+    # Repair round 3 (L3-3). Planted fault: the raw `OSError` text as the `not run` reason, carrying
+    # the worktree's absolute path into the block and the checkpoint commit message.
+    venv_ruff(world)
+    unreadable = world.root / "scripts" / "a.py"
+    unreadable.write_text("a=1\n", encoding="utf-8")
+    unreadable.chmod(0o000)
+    world.script(ruff=[{}, {}], make=[{"stdout": "green\n"}])
+    formatted: list[str] = []
+    stage2.verify_attempt(world.root, world.plan, "", formatted=formatted)
+    assert world.calls("ruff") == []
+    assert formatted == ["not run — cannot read `scripts/a.py`."]
+    assert str(world.root) not in formatted[0]
+
+
+def test_a_target_named_with_a_line_break_keeps_the_format_line_one_line(world: World) -> None:
+    # Repair round 4 (F-1). Planted fault: the target path interpolated verbatim, so a newline in
+    # its name split the format line in two - in the block's entry and the checkpoint commit message.
+    venv_ruff(world)
+    name = "scripts/a\nb.py"
+    world.script(
+        claude=[formatted_attempt(plant={name: "a=1\n"})],
+        ruff=[{}, {"plant": {name: "a = 1\n"}}],
+        make=[{"stdout": "green\n"}],
+    )
+    assert world.run("implement") == 0
+    assert world.calls("ruff")[1]["argv"] == ["format", "--force-exclude", "--no-cache", name]
+    message = git(world.root, "log", "-1", "--format=%B")
+    assert "- Attempt 1 (flash): ruff changed `scripts/a\\nb.py`." in message.splitlines()
+
+
+def test_a_commit_message_holds_no_fragment_of_the_key(world: World) -> None:
+    # Criterion 12. Planted fault: the format line built without `scrub`.
+    venv_ruff(world)
+    name = f"scripts/k{KEY[3:15]}.py"
+    world.script(
+        claude=[formatted_attempt(plant={name: "a=1\n"})],
+        ruff=[{"plant": {name: "a = 1\n"}}],
+        make=[{"stdout": "green\n"}],
+    )
+    assert world.run("implement") == 0
+    message = git(world.root, "log", "-1", "--format=%B")
+    assert "[credential]" in message
+    assert not any(KEY[i : i + 8] in message for i in range(len(KEY) - 7))
+
+
 def test_a_long_diagnostic_line_is_cut_with_a_marker(world: World) -> None:
     # Criterion 13. Planted fault: no cut, or a cut without its marker.
     red = "\n".join(_gate("pytest", ["x" * 5000], "red"))
@@ -2187,8 +3475,9 @@ def test_a_change_name_after_the_stage2_off_flag_is_named_as_eaten(
     assert world.calls() == []
 
 
-@pytest.mark.parametrize("verb", [*REVIEW_VERBS, "release-loop"])
+@pytest.mark.parametrize("verb", ["draft", *REVIEW_VERBS, "release-loop"])
 def test_stage2_off_is_only_for_work_verbs(world: World, verb: str) -> None:
+    # Criterion 26. Planted fault: `draft` joins the verbs that accept `--stage2-off`.
     assert world.run(verb, "demo", "--stage2-off") == 2
     assert world.calls() == []
 
@@ -2222,9 +3511,10 @@ def test_a_spec_without_a_bead_refuses(world: World) -> None:
 def test_every_prompt_asks_to_read_nothing_outside(world: World) -> None:
     full_flow(world)
     codex_prompts = [call["argv"][-1] for call in world.calls("codex")]
-    assert len(codex_prompts) == 3
+    assert len(codex_prompts) == 2
     loop_prompts = [call["prompt_file"] for call in world.calls("pi")]
-    for prompt in [*codex_prompts, *loop_prompts]:
+    spec_prompt = world.calls("claude")[0]["prompt_file"]
+    for prompt in [*codex_prompts, *loop_prompts, spec_prompt]:
         assert prompt.rstrip().endswith(stage2.READ_REQUEST)
 
 
@@ -2325,54 +3615,87 @@ def test_the_pinned_pi_runs_the_probe_on_every_rung(world: World) -> None:
 
 
 def test_an_answer_that_is_not_rows_is_kept(world: World) -> None:
-    world.script(codex=[codex_ok("T1", "An opening remark.\n" + rows(1)), codex_ok("T2", "No finding at all.")])
+    world.script(claude=[{"stdout": "An opening remark.\n" + rows(1)}, {"stdout": "No finding at all."}])
     assert world.run("spec-review") == 0
     assert "An opening remark." in world.text() and stage2.NOT_ROWS_NOTE in world.text()
     assert world.run("spec-review") == 0
-    assert "No finding at all." in world.text() and "Codex reported no finding." in world.text()
+    assert "No finding at all." in world.text() and "Opus reported no finding." in world.text()
 
 
-def test_the_spec_review_answer_lands_as_codex_rows_with_its_session(world: World) -> None:
-    world.script(codex=[codex_ok("T-42", rows(3))])
+def test_the_spec_review_answer_lands_as_opus_rows_without_a_session(world: World) -> None:
+    # Criterion 28. Planted fault: the session line of the Codex review is appended after the rows.
+    world.script(claude=[{"stdout": rows(3)}])
     assert world.run("spec-review") == 0
     text = world.text()
-    assert len(re.findall(r"^\| X\d \|.*\| Codex \| open \| — \|$", text, re.M)) == 3
-    assert "## Phase 2a — Codex, " in text
-    assert re.search(r"^Reviewer session: codex T-42$", text, re.M)
-    assert "T-43" not in text
+    assert len(re.findall(r"^\| X\d \|.*\| Opus \| open \| — \|$", text, re.M)) == 3
+    assert "## Phase 2a — Opus 5.5, " in text
+    assert "Reviewer session" not in text
 
 
 @pytest.mark.parametrize(
     "step",
     [
-        {"stdout": '{"type": "turn.completed"}\n', "answer": rows(1)},
-        {"stdout": json.dumps({"type": "thread.started", "thread_id": "T9"}) + "\n", "answer": rows(1), "exit": 1},
+        {"stdout": ""},
+        {"stdout": rows(1), "exit": 1},
     ],
-    ids=["no-thread-event", "non-zero-exit"],
+    ids=["empty-answer", "non-zero-exit"],
 )
-def test_a_failed_codex_call_writes_no_session_line(world: World, step: dict) -> None:
-    world.script(codex=[step])
+def test_a_failed_spec_review_call_writes_no_rows(world: World, step: dict) -> None:
+    world.script(claude=[step])
     assert world.run("spec-review") == 1
     text = world.text()
     assert "Reviewer session" not in text and "## Phase 2a" not in text and "X1" not in text
 
 
-def test_codex_is_pinned_on_first_and_resumed_calls(world: World) -> None:
-    world.script(codex=[codex_ok("T1", rows(1)), codex_ok("T1", rows(1))])
+def test_the_spec_review_starts_opus_with_read_only_tools(world: World) -> None:
+    # Criterion 27. Planted fault: the spec review still calls `codex`, or the Claude call writes.
+    world.script(claude=[{"stdout": rows(1)}])
     assert world.run("spec-review") == 0
+    assert world.calls("codex") == []
+    call = world.calls("claude")[0]
+    argv, prompt = call["argv"], call["prompt_file"]
+    assert argv[argv.index("--model") + 1] == "claude-opus-5-5"
+    assert argv[argv.index("--effort") + 1] == "xhigh"
+    assert set(argv[argv.index("--tools") + 1].split(",")) == {"Read", "Grep", "Glob"}
+    assert "--restricted" in argv and "--no-session-persistence" in argv
+    assert "ANTHROPIC_BASE_URL" not in call["env"] and "OPENCODE_API_KEY" not in call["env"]
+    assert (REPO_ROOT / "prompts" / "02a-spec-review.md").read_text(encoding="utf-8").rstrip() in prompt
+    assert "plans/changes/demo/" in prompt
+
+
+def test_a_findings_file_the_spec_review_creates_names_claude_code(world: World) -> None:
+    # Criterion 29. Planted fault: the producer map stays at `codex` or `pi`.
+    assert not world.findings.exists()
+    world.script(claude=[{"stdout": rows(1)}])
+    assert world.run("spec-review") == 0
+    header = plans_registry._frontmatter(world.findings)
+    assert header is not None and header["produced_by"]["name"] == "claude-code"
+
+
+def seed_2a_session(world: World, session: str = "T1") -> None:
+    """A findings.md whose last phase-2a block is a Codex one with its session line (criteria 30 and 31)."""
+    world.write_findings(f"## Phase 2a — Codex, 2026-09-30\n\n{rows(1)}\n\nReviewer session: codex {session}")
+
+
+def test_codex_is_pinned_on_first_and_resumed_calls(world: World) -> None:
+    # Criterion 2. Planted fault: `review` passes `workspace-write`, a bypass flag or another pin.
+    seed_2a_session(world)
+    world.script(codex=[codex_ok("T1", rows(1)), codex_ok("T1", "L1-1: agree")])
     assert world.run("review") == 0
-    first, resumed = (call["argv"] for call in world.calls("codex"))
-    assert first[:2] == ["exec", "--json"] and resumed[:3] == ["exec", "resume", "T1"]
-    for argv in (first, resumed):
+    for call in world.calls("codex"):
+        argv = call["argv"]
+        assert argv[:3] == ["exec", "resume", "T1"]
         assert argv[argv.index("-m") + 1] == "gpt-6.1-sol"
         assert 'model_reasoning_effort="max"' in argv
         assert 'sandbox_mode="read-only"' in argv
         assert "--ephemeral" not in argv and "-s" not in argv
+        for flag in ("--add-dir", "--approve-for-me", "--dangerously-bypass-approvals-and-sandbox", "--sandbox"):
+            assert flag not in argv
 
 
 def test_codex_runs_with_hooks_and_memories_off(world: World) -> None:
-    world.script(codex=[codex_ok("T1", rows(1)), codex_ok("T1", rows(1))])
-    assert world.run("spec-review") == 0
+    seed_2a_session(world)
+    world.script(codex=[codex_ok("T1", rows(1)), codex_ok("T1", "L1-1: agree")])
     assert world.run("review") == 0
     for call in world.calls("codex"):
         disabled = [call["argv"][i + 1] for i, word in enumerate(call["argv"]) if word == "--disable"]
@@ -2380,26 +3703,28 @@ def test_codex_runs_with_hooks_and_memories_off(world: World) -> None:
 
 
 def test_the_codex_prompt_carries_its_phase_prompt_in_full(world: World) -> None:
-    world.script(codex=[codex_ok("T1", rows(1)), codex_ok("T1", rows(1))])
-    assert world.run("spec-review") == 0
+    seed_2a_session(world)
+    world.script(codex=[codex_ok("T1", rows(1)), codex_ok("T1", "L1-1: agree")])
     assert world.run("review") == 0
-    for call, name in zip(world.calls("codex"), ("02a-spec-review.md", "06-review.md"), strict=True):
+    for call in world.calls("codex"):
         prompt = call["argv"][-1]
-        assert (REPO_ROOT / "prompts" / name).read_text(encoding="utf-8").rstrip() in prompt
+        assert (REPO_ROOT / "prompts" / "06-review.md").read_text(encoding="utf-8").rstrip() in prompt
         assert "plans/changes/demo/" in prompt
 
 
 def test_review_resumes_the_recorded_session(world: World) -> None:
-    world.script(codex=[codex_ok("T1", rows(1)), codex_ok("T1", rows(1))])
-    assert world.run("spec-review") == 0
+    # Criterion 31. Planted fault: the last phase-2a block is not read, so a recorded session is not resumed.
+    seed_2a_session(world)
+    world.script(codex=[codex_ok("T1", rows(1)), codex_ok("T1", "L1-1: agree")])
     assert world.run("review") == 0
-    assert world.calls("codex")[1]["argv"][:3] == ["exec", "resume", "T1"]
+    assert world.calls("codex")[0]["argv"][:3] == ["exec", "resume", "T1"]
     text = world.text()
     assert re.search(r"^Phase 6 verdict: codex T1, \d{4}-\d{2}-\d{2}$", text, re.M)
     assert "fresh session" not in text
 
 
 def test_a_fresh_phase_6_session_says_so(world: World) -> None:
+    # Criterion 30. Planted fault: the last `Reviewer session: codex` line anywhere is resumed.
     world.script(codex=[codex_ok("T5", rows(1))])
     assert world.run("review") == 0
     assert world.calls("codex")[0]["argv"][:2] == ["exec", "--json"]
@@ -2407,8 +3732,19 @@ def test_a_fresh_phase_6_session_says_so(world: World) -> None:
 
     world.findings.unlink()
     (world.bin / "calls.jsonl").unlink()
-    world.script(codex=[codex_ok("T1", rows(1)), codex_ok("T2", rows(1))])
-    assert world.run("spec-review") == 0
+    world.write_findings(
+        f"## Phase 2a — Codex, 2026-09-30\n\n{rows(1)}\n\nReviewer session: codex T1",
+        f"## Phase 2a — Opus 5.5, 2026-10-13\n\n{rows(1)}",
+    )
+    world.script(codex=[codex_ok("T5", rows(1))])
+    assert world.run("review") == 0
+    assert world.calls("codex")[0]["argv"][:2] == ["exec", "--json"], "an Opus block after the line is no resume"
+    assert "a fresh session reviewed: no phase-2a session was recorded" in world.text()
+
+    world.findings.unlink()
+    (world.bin / "calls.jsonl").unlink()
+    world.write_findings(f"## Phase 2a — Codex, 2026-09-30\n\n{rows(1)}\n\nReviewer session: codex T1")
+    world.script(codex=[codex_ok("T2", rows(1))])
     assert world.run("review") == 0
     assert "a fresh session reviewed: the resume of T1 started a new thread" in world.text()
 
@@ -2463,7 +3799,9 @@ def test_the_review_prompts_give_both_paths() -> None:
     spec_review = (PROMPTS / "02a-spec-review.md").read_text(encoding="utf-8")
     review = (PROMPTS / "06-review.md").read_text(encoding="utf-8")
     assert review_prompt_problems(spec_review, review) == []
-    assert review_prompt_problems(spec_review.replace("gpt-6.1-sol", "gpt"), review)
+    assert review_prompt_problems(
+        spec_review.replace("python3 scripts/stage2.py spec-review <change>", "codex exec -m gpt-6.1-sol"), review
+    )
     assert review_prompt_problems(spec_review.replace("Opus 5.5", "Haiku 4.5"), review)
     assert review_prompt_problems(spec_review, review.replace("Phase 6 verdict:", "Verdict:"))
     assert review_prompt_problems(spec_review, review.replace("release-loop", "release"))
@@ -4127,7 +5465,10 @@ def routing_rows(text: str) -> dict[str, tuple[str, str]]:
 
 STAGE2_ROUTING = {
     "1 Explore": "GLM 5.3 Flash",
-    "2a Spec review": "gpt-6.1-sol",
+    "2 Spec": "gpt-6.1-sol",
+    "2b Design": "gpt-6.1-sol",
+    "2a Spec review": "Opus 5.5",
+    "3 Plan": "gpt-6.1-sol",
     "4 Implement": "GLM 5.3 Flash",
     "4b Review loop": "the ladder",
     "6 Review": "gpt-6.1-sol",
@@ -4135,7 +5476,7 @@ STAGE2_ROUTING = {
 
 
 def routing_problems(workflow: str) -> list[str]:
-    """What the routing rows of the doctrine get wrong: section 4's five rows and section 3's two."""
+    """What the routing rows of the doctrine get wrong: section 4's eight rows and section 3's two."""
     found = []
     stage2_rows = routing_rows(section(workflow, "## 4 · "))
     for phase, model in STAGE2_ROUTING.items():
@@ -4144,6 +5485,9 @@ def routing_problems(workflow: str) -> list[str]:
             found.append(f"section 4 has no routing row {phase}")
         elif row[0] != model:
             found.append(f"section 4 routes {phase} to {row[0]}, not {model}")
+        elif phase == "2a Spec review":
+            if "effort `xhigh`" not in row[1]:
+                found.append(f"section 4 gives {phase} no effort `xhigh`")
         elif not model.endswith("Flash") and "effort `max`" not in row[1]:
             found.append(f"section 4 gives {phase} no effort `max`")
     default = routing_rows(section(workflow, "## 3 · "))
@@ -4158,27 +5502,80 @@ def routing_problems(workflow: str) -> list[str]:
 
 
 def test_workflow_section_4_routes_the_three_reviews() -> None:
-    """Criterion 21: 4b rides the ladder, 2a and 6 stay Codex, 1 and 4 stay on GLM 5.3 Flash; a spike gets no stage 2."""
+    """Criterion 32: 2, 2b, 3 and 6 stay Codex, 2a is Opus 5.5, 4b rides the ladder, 1 and 4 stay on GLM 5.3 Flash."""
     text = WORKFLOW.read_text(encoding="utf-8")
     assert routing_problems(text) == []
     assert class_table_problems(text) == []
     four = routing_rows(section(text, "## 4 · "))
     for needle in ("model-endpoints.yaml", "modelle[n-1]", "round 3 only when round 2 wrote a taken row"):
         assert needle in four["4b Review loop"][1], needle
-    for phase in ("2a Spec review", "6 Review"):
+    assert four["2a Spec review"][0] == "Opus 5.5"
+    for phase in ("2 Spec", "2b Design", "3 Plan", "6 Review"):
         assert four[phase][0] == "gpt-6.1-sol", phase
     for old, new in (
-        ("| 2a Spec review | **gpt-6.1-sol** |", "| 2a Spec review | **Opus 5.5** |"),
+        ("| 2a Spec review | **Opus 5.5** |", "| 2a Spec review | **gpt-6.1-sol** |"),
         ("| 4b Review loop | **the ladder** |", "| 4b Review loop | **GLM 5.3** |"),
         ("| 6 Review | **gpt-6.1-sol** |", "| 6 Review | **Opus 5.5** |"),
+        ("| 2 Spec | **gpt-6.1-sol** | effort `max`, one call", "| 2 Spec | **Opus 5.5** | effort `max`, one call"),
+        (
+            "| 2b Design | **gpt-6.1-sol** | effort `max`, drafted",
+            "| 2b Design | **GLM 5.3 Flash** | effort `max`, drafted",
+        ),
+        ("| 3 Plan | **gpt-6.1-sol** | effort `max`, drafted", "| 3 Plan | **Sonnet 5.5** | effort `max`, drafted"),
         ("| 1 Explore | **GLM 5.3 Flash** |", "| 1 Explore | **Haiku 4.5** |"),
         ("| 4 Implement | **GLM 5.3 Flash** |", "| 4 Implement | **Sonnet 5.5** |"),
-        ("| `bounded` | Codex, where one is held | the ladder |", "| `bounded` | the ladder | the ladder |"),
+        ("| `bounded` | Opus 5.5, where one is held | the ladder |", "| `bounded` | the ladder | the ladder |"),
         ("| a one-sentence change, a `spike` | no stage 2 |", "| a one-sentence change, a `spike` | the ladder |"),
     ):
         assert old in text, old
         changed = text.replace(old, new, 1)
         assert routing_problems(changed) or class_table_problems(changed), (old, new)
+
+
+DRAFT_ORDER_NEEDLES = (
+    ("`python3 scripts/stage2.py draft <change>`", "Codex writes"),
+    ("reads the whole draft",),
+    ("`python3 scripts/stage2.py spec-review <change>`", "Opus 5.5"),
+    ("second `draft <change>`", "open rows in"),
+    ("unchanged",),
+)
+
+
+def draft_order_problems(workflow: str) -> list[str]:
+    """The draft section's five numbered steps, each carrying its own needles (spec, criterion 33)."""
+    draft = section(workflow, "### The draft (phases 2, 2b and 3)")
+    if not draft:
+        return ["section 4 has no draft section"]
+    steps = re.findall(r"^\d+\. (.*)$", draft, re.M)
+    if len(steps) != 5:
+        return [f"the draft section holds {len(steps)} numbered steps, not 5"]
+    found = []
+    for step, needles in zip(steps, DRAFT_ORDER_NEEDLES, strict=True):
+        one = flat(step)
+        for needle in needles:
+            if needle not in one:
+                found.append(f"a draft-order step lacks '{needle}'")
+    return found
+
+
+def test_the_workflow_states_the_order_of_a_drafted_change() -> None:
+    # Criterion 33. Planted fault: one of the five steps removed from the draft section.
+    text = WORKFLOW.read_text(encoding="utf-8")
+    assert draft_order_problems(text) == []
+    steps = re.findall(r"^(\d+\. .*)$", section(text, "### The draft (phases 2, 2b and 3)"), re.M)
+    for line in steps:
+        assert draft_order_problems(text.replace(line + "\n", "", 1)), line
+
+
+def test_the_drafting_prompts_name_the_draft_verb() -> None:
+    # Criterion 34. Planted fault: a drafting prompt's Model line without `stage2.py draft <change>`.
+    for name in ("02-spec.md", "02b-design.md", "03-plan.md"):
+        line = model_line((PROMPTS / name).read_text(encoding="utf-8"))
+        assert "Codex (`gpt-6.1-sol`)" in line, name
+        assert "python3 scripts/stage2.py draft <change>" in line, name
+        assert "GLM 5.3 after two failed attempts" in line, name
+        planted = line.replace("python3 scripts/stage2.py draft <change>", "the model writes them by hand", 1)
+        assert "python3 scripts/stage2.py draft <change>" not in planted, name
 
 
 def phase_table_problems(workflow: str) -> list[str]:
@@ -4311,15 +5708,17 @@ def test_section_4_says_the_foreign_settings_are_passed_not_measured() -> None:
 
 
 def review_prompt_problems(spec_review: str, review: str) -> list[str]:
+    """Criterion 34: 2a's Model line is Opus 5.5 through the runner and no Codex; 6 keeps its verb and verdict."""
     found = []
-    for name, text in (("02a-spec-review.md", spec_review), ("06-review.md", review)):
-        one = flat(text)
-        for needle in ("gpt-6.1-sol", "Opus 5.5", "scripts/stage2.py"):
-            if needle not in one:
-                found.append(f"{name} lacks {needle}")
-    if "stage2.py spec-review <change>" not in flat(spec_review):
-        found.append("02a-spec-review.md does not name the verb spec-review")
+    model = model_line(spec_review)
+    if "gpt-6.1-sol" in model or "Codex" in model:
+        found.append("02a-spec-review.md's Model line still routes the spec review to Codex")
+    for needle in ("Opus 5.5", "stage2.py spec-review <change>", "scripts/stage2.py"):
+        if needle not in model:
+            found.append(f"02a-spec-review.md's Model line lacks {needle}")
     one = flat(review)
+    if "gpt-6.1-sol" not in one or "scripts/stage2.py" not in one:
+        found.append("06-review.md lacks the Codex model or the runner")
     if "stage2.py review <change>" not in one:
         found.append("06-review.md does not name the verb review")
     if "Phase 6 verdict:" not in one or "release-loop" not in one:
@@ -4443,7 +5842,7 @@ def test_the_doctrine_and_prompts_say_the_flash_verbs_are_live() -> None:
 
 
 def class_table_problems(workflow: str) -> list[str]:
-    """The class table: a change's loop rides the ladder, its two reviews stay Codex, a spike gets none."""
+    """The class table: a change's 2a is Opus 5.5, its loop rides the ladder, phase 6 is a fresh Codex session."""
     found = []
     rows = {
         line.split("|")[1].strip(): [cell.strip() for cell in line.split("|")[2:-1]]
@@ -4453,10 +5852,10 @@ def class_table_problems(workflow: str) -> list[str]:
     bounded = rows.get("`bounded`")
     if bounded is None or len(bounded) != 3:
         return ["the class table has no `bounded` row of three cells"]
-    if not bounded[0].startswith("Codex") or not bounded[1].startswith("the ladder"):
-        found.append("the class table does not send a change's 2a to Codex and its 4b to the ladder")
-    if not bounded[2].startswith("Codex"):
-        found.append("the class table does not keep phase 6 with Codex")
+    if not bounded[0].startswith("Opus 5.5") or not bounded[1].startswith("the ladder"):
+        found.append("the class table does not send a change's 2a to Opus 5.5 and its 4b to the ladder")
+    if not bounded[2].startswith("Codex, a fresh session"):
+        found.append("the class table does not start phase 6 in a fresh Codex session")
     spike = rows.get("a one-sentence change, a `spike`")
     if spike is None or len(spike) != 3 or any(cell != "no stage 2" for cell in spike):
         found.append("the class table does not leave a spike and a one-sentence change without stage 2")
@@ -4512,6 +5911,16 @@ def agents_md_problems(text: str) -> list[str]:
         or "runs the leak check before every call" not in one
     ):
         found.append("AGENTS.md lacks the sentence that a foreign reviewer is started only through the runner")
+    if "Codex reviews 2a and 6" in one:
+        found.append("AGENTS.md still says Codex reviews 2a and 6")
+    for needle in (
+        "Codex drafts spec, design and plan (`draft <change>`; GLM 5.3 after two failed attempts)",
+        "Opus 5.5 reviews 2a (`spec-review <change>`)",
+        "reviews 6",
+        "`draft <change>`,",
+    ):
+        if needle not in one:
+            found.append(f"AGENTS.md lacks '{needle}'")
     return found
 
 
@@ -4523,6 +5932,9 @@ def test_agents_md_names_the_loop_and_the_runner() -> None:
     assert agents_md_problems(text.replace(row + "\n", ""))
     assert agents_md_problems(text.replace("only through", "also through"))
     assert agents_md_problems(text.replace("round 3 only when round 2 wrote a taken row", "round 3 as needed"))
+    assert agents_md_problems(text.replace("Codex drafts spec, design and plan", "Codex reviews spec, design", 1))
+    assert agents_md_problems(text.replace("Opus 5.5 reviews 2a", "Codex reviews 2a", 1))
+    assert agents_md_problems(text.replace("GLM 5.3 after two failed attempts", "GLM 5.3 when asked", 1))
 
 
 def test_workflow_section_4_keeps_the_lineage_argument() -> None:
@@ -4790,7 +6202,13 @@ def glm_entry_problems(entry: dict) -> list[str]:
     if entry.get("modelle") != ["glm-5.3", "glm-5.3-flash"]:
         found.append("the model list changed")
     remark = " ".join(str(entry.get("bemerkung", "")).lower().split())
-    for needle in ("stage2.py explore", "stage2.py implement", "stage2.py repair", "no review phase routes to it"):
+    for needle in (
+        "stage2.py explore",
+        "stage2.py implement",
+        "stage2.py repair",
+        "stage2.py draft",
+        "no review phase routes to it",
+    ):
         if needle not in remark:
             found.append(f"the remark lacks '{needle}'")
     return found
@@ -4804,6 +6222,9 @@ def test_the_glm_entry_keeps_its_models_and_names_the_repair_verb() -> None:
     assert glm_entry_problems(
         {**entry, "bemerkung": entry["bemerkung"].replace("stage2.py repair", "stage2.py fix", 1)}
     )
+    assert glm_entry_problems(
+        {**entry, "bemerkung": entry["bemerkung"].replace("stage2.py draft", "stage2.py sketch", 1)}
+    )
     assert glm_entry_problems({**entry, "residenz": "unbekannt"})
 
 
@@ -4811,8 +6232,8 @@ def repair_doctrine_problems(workflow: str, agents: str) -> list[str]:
     """Criterion 30: the doctrine names the verb, routes the repair, and gives the Status to the orchestrator."""
     found = []
     four = flat(section(workflow, "## 4 · "))
-    if "Eight verbs exist" in four or "Nine verbs exist" not in four:
-        found.append("section 4 does not say nine verbs")
+    if "Nine verbs exist" in four or "Ten verbs exist" not in four:
+        found.append("section 4 does not say ten verbs")
     if "- `repair` — GLM 5.3, every taken finding" not in workflow:
         found.append("the verb list has no repair bullet")
     if "| Repair after 4b and 6 | **GLM 5.3** |" not in workflow:
@@ -4829,17 +6250,17 @@ def repair_doctrine_problems(workflow: str, agents: str) -> list[str]:
     one = flat(agents)
     if "GLM 5.3 repairs the findings the orchestrator takes" not in one:
         found.append("AGENTS.md does not name the repair on GLM 5.3")
-    if "explore, implement and repair do not" not in one:
-        found.append("AGENTS.md does not count repair among the verbs without reviews by class")
+    if "explore, draft, implement and repair do not" not in one:
+        found.append("AGENTS.md does not count repair and draft among the verbs without reviews by class")
     return found
 
 
 def test_the_doctrine_names_the_repair_verb() -> None:
-    """Criterion 30. Planted fault: "Eight verbs exist" kept, or AGENTS.md without the verb."""
+    """Criterion 30. Planted fault: "Nine verbs exist" kept, or AGENTS.md without the verb."""
     workflow = WORKFLOW.read_text(encoding="utf-8")
     agents = (REPO_ROOT / "AGENTS.md").read_text(encoding="utf-8")
     assert repair_doctrine_problems(workflow, agents) == []
-    assert repair_doctrine_problems(workflow.replace("Nine verbs exist", "Eight verbs exist", 1), agents)
+    assert repair_doctrine_problems(workflow.replace("Ten verbs exist", "Nine verbs exist", 1), agents)
     assert repair_doctrine_problems(
         workflow.replace("- `repair` — GLM 5.3, every taken finding", "- `repair` — GLM 5.3 Flash, taken findings", 1),
         agents,
@@ -4864,8 +6285,9 @@ def test_the_doctrine_names_the_repair_verb() -> None:
             "GLM 5.3 repairs the findings the orchestrator takes", "GLM 5.3 Flash explores and implements", 1
         ),
     )
+    assert repair_doctrine_problems(workflow, agents.replace("implement and repair do not", "implement do not", 1))
     assert repair_doctrine_problems(
-        workflow, agents.replace("explore, implement and repair do not", "explore and implement do not", 1)
+        workflow, agents.replace("draft, implement and repair do not", "implement and repair do not", 1)
     )
 
 

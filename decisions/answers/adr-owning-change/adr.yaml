@@ -1,0 +1,15 @@
+schema_version: 1
+change: adr-owning-change
+question: adr
+answer: 'yes'
+reason: The rule that a change claims its ADR files in its spec header must travel
+  to other repositories, and the interview-minimums gate travels with the kit with
+  it; stated 2026-10-12 as "Das soll auch reisen, beides".
+shown:
+  proposed: 'yes'
+  proposal_reason: 'The rule binds every repository the kit reaches: a change claims
+    the ADR files it creates or changes in its spec header, the interview gate attributes
+    an ADR edit by that claim alone and holds the recorded answer to it, and the gate
+    travels with a per-repository adoption day.'
+answered_by: framework-architect
+answered_at: 2026-10-12

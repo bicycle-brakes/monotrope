@@ -7,6 +7,12 @@ typed: a hand-kept list of files ages exactly as fast as files are added.
 
 | Artefact | status | implementation_status | last reviewed | Bead |
 |---|---|---|---|---|
+| [`changes/adr-owning-change/decisions.md`](changes/adr-owning-change/decisions.md) | draft | none | 2026-10-12 | coding-harness-afa |
+| [`changes/adr-owning-change/design.md`](changes/adr-owning-change/design.md) | draft | none | 2026-10-12 | coding-harness-afa |
+| [`changes/adr-owning-change/findings.md`](changes/adr-owning-change/findings.md) | draft | none | 2026-10-13 | coding-harness-afa |
+| [`changes/adr-owning-change/plan.md`](changes/adr-owning-change/plan.md) | draft | none | 2026-10-12 | coding-harness-afa |
+| [`changes/adr-owning-change/research.md`](changes/adr-owning-change/research.md) | draft | none | 2026-10-12 | coding-harness-afa |
+| [`changes/adr-owning-change/spec.md`](changes/adr-owning-change/spec.md) | draft | none | 2026-10-12 | coding-harness-afa |
 | [`changes/archive/2026-09-20-2ee-triage/research.md`](changes/archive/2026-09-20-2ee-triage/research.md) | accepted | done | 2026-09-19 | coding-harness-2ee |
 | [`changes/archive/2026-09-21-reproducible-bead-export/decisions.md`](changes/archive/2026-09-21-reproducible-bead-export/decisions.md) | accepted | done | 2026-09-21 | coding-harness-1jg.1 |
 | [`changes/archive/2026-09-21-reproducible-bead-export/findings.md`](changes/archive/2026-09-21-reproducible-bead-export/findings.md) | accepted | done | 2026-09-21 | coding-harness-1jg.1 |
@@ -102,6 +108,12 @@ typed: a hand-kept list of files ages exactly as fast as files are added.
 | [`changes/ci-minutes/plan.md`](changes/ci-minutes/plan.md) | draft | none | 2026-10-13 | coding-harness-cac |
 | [`changes/ci-minutes/research.md`](changes/ci-minutes/research.md) | draft | none | 2026-10-13 | coding-harness-cac |
 | [`changes/ci-minutes/spec.md`](changes/ci-minutes/spec.md) | draft | none | 2026-10-13 | coding-harness-cac |
+| [`changes/codex-drafts/decisions.md`](changes/codex-drafts/decisions.md) | draft | none | 2026-10-12 | coding-harness-rhq |
+| [`changes/codex-drafts/design.md`](changes/codex-drafts/design.md) | draft | none | 2026-10-12 | coding-harness-rhq |
+| [`changes/codex-drafts/findings.md`](changes/codex-drafts/findings.md) | draft | none | 2026-10-12 | coding-harness-rhq |
+| [`changes/codex-drafts/plan.md`](changes/codex-drafts/plan.md) | draft | none | 2026-10-12 | coding-harness-rhq |
+| [`changes/codex-drafts/research.md`](changes/codex-drafts/research.md) | draft | none | 2026-10-12 | coding-harness-rhq |
+| [`changes/codex-drafts/spec.md`](changes/codex-drafts/spec.md) | draft | none | 2026-10-12 | coding-harness-rhq |
 | [`changes/codex-takeover/research.md`](changes/codex-takeover/research.md) | draft | none | 2026-10-12 | coding-harness-nsm |
 | [`changes/criterion-test-ledger/decisions.md`](changes/criterion-test-ledger/decisions.md) | draft | partial | 2026-10-11 | coding-harness-909 |
 | [`changes/criterion-test-ledger/design.md`](changes/criterion-test-ledger/design.md) | draft | partial | 2026-10-11 | coding-harness-909 |
@@ -130,6 +142,11 @@ typed: a hand-kept list of files ages exactly as fast as files are added.
 | [`changes/research-currency/plan.md`](changes/research-currency/plan.md) | draft | partial | 2026-10-05 | coding-harness-pu9 |
 | [`changes/research-currency/research.md`](changes/research-currency/research.md) | draft | partial | 2026-10-05 | coding-harness-pu9 |
 | [`changes/research-currency/spec.md`](changes/research-currency/spec.md) | draft | partial | 2026-10-05 | coding-harness-pu9 |
+| [`changes/stage2-format/decisions.md`](changes/stage2-format/decisions.md) | draft | none | 2026-10-12 | coding-harness-52r |
+| [`changes/stage2-format/findings.md`](changes/stage2-format/findings.md) | draft | none | 2026-10-12 | coding-harness-52r |
+| [`changes/stage2-format/plan.md`](changes/stage2-format/plan.md) | draft | none | 2026-10-12 | coding-harness-52r |
+| [`changes/stage2-format/research.md`](changes/stage2-format/research.md) | draft | none | 2026-10-12 | coding-harness-52r |
+| [`changes/stage2-format/spec.md`](changes/stage2-format/spec.md) | draft | none | 2026-10-12 | coding-harness-52r |
 | [`changes/stage2-repair/decisions.md`](changes/stage2-repair/decisions.md) | draft | none | 2026-10-12 | coding-harness-g2f |
 | [`changes/stage2-repair/design.md`](changes/stage2-repair/design.md) | draft | none | 2026-10-12 | coding-harness-g2f |
 | [`changes/stage2-repair/findings.md`](changes/stage2-repair/findings.md) | draft | none | 2026-10-12 | coding-harness-g2f |
