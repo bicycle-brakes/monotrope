@@ -94,3 +94,58 @@ updates the workflow, facing the choice between a new ADR and a plain feature
 whose rules live only in the spec and the code, we decided on an ADR to
 achieve one durable, citable record of the distribution rules, accepting a
 decision pull request the maintainer merges. — 2026-10-13
+
+## Q-6 · Whether the change is split
+
+asked: 2026-10-13
+answer: A — yes: this change delivers `kit install` for fresh repositories, the comparison report and the lock file; `kit update` follows as a change of its own.
+answered_by: maintainer
+status: answered
+
+In the context of a phase-2a review that found fifteen gaps, five of them in
+the update path alone, facing the choice between splitting install from
+update and resolving every gap in one larger change, we decided on the split
+to achieve a smaller first change and an earlier report for lakeswitch-ai,
+accepting that updates arrive with the follow-up change (bead
+coding-harness-2uk's follow-up). — 2026-10-13
+
+## Phase 2a rulings — 2026-10-13, orchestrator
+
+`[DETAIL]` rulings on Opus 5.5's phase-2a rows (`findings.md`), each within
+the maintainer's answers Q-1 to Q-6; the redraft carries them into the spec.
+
+- F-1: a target is fresh when it has at least one commit, no
+  `harness.lock.yaml`, and tracked files only from `README*`, `LICENSE*`,
+  `.gitignore`, `.gitattributes`; any other target is refused and pointed to
+  the report (Q-1: existing instances get the report, not the install).
+- F-2: only what a fresh instance's `make verify` needs becomes `template`
+  (Q-3's three names, plus a starter Makefile and dependency declaration if
+  the kit's own are `bestand`); `AGENTS.md`, `provenance.yaml`, `.claude/`,
+  `.codex/`, `tools/` and tracker pins are not installed (non-goal).
+- F-3, F-4, F-5, F-13: move to the update change (Q-6).
+- F-6: the report reads a named target commit (default `HEAD`) from git
+  objects, never the working tree, names that commit as its cut-off, and
+  compares exact tree paths, so a case-insensitive filesystem cannot fold two.
+- F-7: `.github/workflows/ci.yml` gets a role of its own, `derived`: never
+  copied; install generates it in the target from the target's gate file with
+  the kit's generator, before the target's `make verify`.
+- F-8: the starter gate file holds the kit's gates that need neither the
+  source's tracker nor its inventory; its pytest gate deselects by name the
+  cases the probe declares in `REIST_NICHT`. The target needs at least one
+  commit (F-1), and verification sees the payload untracked (Q-4).
+- F-9: the lock records the source by its `origin` remote URL and the commit
+  sha; how a later run treats another URL belongs to the update change.
+- F-10: the probe tree receives the templates with the source's bytes, as a
+  fresh install would; `REIST_NICHT` does not grow.
+- F-11: install refuses a target that holds `harness.lock.yaml` (F-1).
+- F-12: install creates the manifest's `geruest_ordner` with a `.gitkeep`
+  each; the lock records them as kit-owned.
+- F-14: the steps are writing a file, creating a directory and writing the
+  lock; on any failure install removes every file it wrote and every
+  directory it created, so the target's tree is as before.
+- F-15: the target's `make verify` runs with `BEAD_RENDER` and `PYTHON`
+  removed from its environment, as the probe does.
+- ADR number: the draft stays `docs/adr/0018-pinned-kit-install-and-update.md`
+  (ADR 0017 belongs to bead coding-harness-0ga's branch, `research.md`
+  amendment); its scope narrows to install, report and lock, and names
+  `kit update` as the follow-up (bead coding-harness-66q).
