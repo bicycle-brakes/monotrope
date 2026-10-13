@@ -5258,7 +5258,7 @@ def test_a_failed_codex_repair_call_that_moves_head_stops_without_rewriting(worl
 def test_a_codex_repair_that_commits_findings_restores_statuses_and_records_diagnostics(
     world: World, monkeypatch: pytest.MonkeyPatch, call_failed: bool
 ) -> None:
-    """L2-3. Planted fault: committing a model-written fixed Status bypasses restoration and diagnostics."""
+    """L2-3/L3-3: restore statuses and report a moved-HEAD stop without claiming post-run checks ran."""
     repair_world(world)
     world.write_findings(VERDICT, phase6_block([phase6_cells("F-1", "taken — crit 18", "phase finding")]))
     vandal = (
@@ -5286,7 +5286,12 @@ def test_a_codex_repair_that_commits_findings_restores_statuses_and_records_diag
             moved.append(git(Path(cwd), "rev-parse", "HEAD"))
         return done
 
+    def unexpected_check(*_args, **_kwargs):
+        pytest.fail("a moved-HEAD stop must precede every post-run check")
+
     monkeypatch.setattr(stage2, "launch", committing)
+    monkeypatch.setattr(stage2, "verify_attempt", unexpected_check)
+    monkeypatch.setattr(stage2, "check_repair_answer", unexpected_check)
     assert world.run("repair") == 1
     assert len(moved) == 1 and git(world.root, "rev-parse", "HEAD") == moved[0]
     assert (world.root / "src" / "app.py").read_text(encoding="utf-8") == "value = 2\n"
@@ -5298,7 +5303,8 @@ def test_a_codex_repair_that_commits_findings_restores_statuses_and_records_diag
     assert {row[0]: row for row in phase6}["F-1"][7] == "taken — crit 18"
     assert "fixed — tests/test_fix.py::test_fix" not in text
     (block,) = quote_blocks(text)
-    assert block[0] == "Attempt 1 (codex) failed its post-run checks."
+    assert block[0] == "Attempt 1 (codex) stopped because the call moved HEAD; no post-run check ran."
+    assert "failed its post-run checks" not in "\n".join(block)
     assert any("moved HEAD from" in line for line in block)
     changed = "\n".join(files_of(block))
     assert "`plans/changes/demo/findings.md`" in changed and "`src/app.py`" in changed
@@ -6350,7 +6356,7 @@ def reads_problems(text: str, where: str) -> list[str]:
     one = flat(text)
     found = []
     for needle, why in (
-        ("not confined", "does not say the loop's Pi calls are not confined"),
+        ("and they are not confined", "does not say the loop's Pi calls are not confined"),
         (
             "outside the worktree (measured with Pi 1.1.0",
             "does not say a round's read reaches outside the worktree, measured",
@@ -6778,7 +6784,7 @@ def test_adr_0017_supersedes_0015_and_keeps_the_repair_contract() -> None:
 
 
 def codex_repair_doctrine_problems(texts: dict[str, str]) -> list[str]:
-    """Criteria 18 and 20: repair routing and each phase-6 session rule agree with the runner."""
+    """Criteria 18 and 20: repair routing, confinement and each phase-6 session rule agree with the runner."""
     found = []
     runner = texts["scripts/stage2.py"]
     if "repair       <change>   # Codex" not in runner:
@@ -6791,6 +6797,36 @@ def codex_repair_doctrine_problems(texts: dict[str, str]) -> list[str]:
             found.append(f"WORKFLOW lacks '{needle}'")
     if "A reviewer never repairs its own findings" in workflow:
         found.append("WORKFLOW keeps the blanket ban")
+    call_settings = workflow.partition("What every call then carries:")[2].partition("Before the loop's first call")[0]
+    reads = workflow.partition("**Reads: confined for the Claude Code calls")[2].partition("### The draft")[0]
+    claude_calls = re.search(r"Every Claude Code call \(([^)]*)\) starts", reads)
+    if claude_calls is None:
+        found.append("WORKFLOW Reads lacks the Claude Code call list")
+    elif re.search(r"\brepair\b", claude_calls[1]):
+        found.append("WORKFLOW Reads lists repair among the Claude Code calls")
+    for where, rule, needles in (
+        (
+            "WORKFLOW call settings",
+            call_settings,
+            (
+                "A repair's first two attempts run as Codex calls in the `workspace-write` sandbox",
+                "What a repair's Codex call writes is checked and committed by the runner, "
+                "including changes outside the change folder",
+            ),
+        ),
+        (
+            "WORKFLOW Reads",
+            reads,
+            (
+                "Codex's review, draft and repair calls are not confined in their reads",
+                "only the prompt's request bounds them",
+                "ADR 0017 retains ADR 0016's residual risks for ignored files, external paths and the git directory",
+            ),
+        ),
+    ):
+        for needle in needles:
+            if needle not in rule:
+                found.append(f"{where} lacks '{needle}'")
     review_docstring = next(
         (
             ast.get_docstring(node) or ""
@@ -6831,7 +6867,7 @@ def codex_repair_doctrine_problems(texts: dict[str, str]) -> list[str]:
 
 
 def test_codex_repair_doctrine_and_endpoint_remarks_agree() -> None:
-    """Criteria 18 and 20. Plant a wrong repair route or a phase-6 session rule without the re-check exception."""
+    """Criteria 18 and 20: plant wrong repair routes, confinement claims and phase-6 session rules."""
     paths = [
         "scripts/stage2.py",
         "docs/WORKFLOW.md",
@@ -6857,6 +6893,41 @@ def test_codex_repair_doctrine_and_endpoint_remarks_agree() -> None:
         assert count == 1, (name, needle)
         planted = {**texts, name: mutated}
         assert codex_repair_doctrine_problems(planted), (name, needle)
+    for needle, replacement, where in (
+        ("implement, `spec-review`", "implement, repair, `spec-review`", "WORKFLOW Reads"),
+        (
+            "A repair's first two attempts run as Codex calls in the `workspace-write` sandbox",
+            "A draft's Codex call runs in the `workspace-write` sandbox",
+            "WORKFLOW call settings",
+        ),
+        (
+            "A repair's first two attempts run as Codex calls in the `workspace-write` sandbox",
+            "A repair's first two attempts run as Codex calls in the read-only sandbox",
+            "WORKFLOW call settings",
+        ),
+        (
+            "What a repair's Codex call writes is checked and committed by the runner, "
+            "including changes outside the change folder",
+            "What such a call writes outside the change folder the runner puts back before it verifies",
+            "WORKFLOW call settings",
+        ),
+        (
+            "Codex's review, draft and repair calls are not confined in their reads",
+            "Codex's review and draft calls are not confined in their reads",
+            "WORKFLOW Reads",
+        ),
+        ("only the prompt's request bounds them", "the sandbox confines them", "WORKFLOW Reads"),
+        (
+            "ADR 0017 retains ADR 0016's residual risks for ignored files, external paths and the git directory",
+            "ADR 0016's residual risks end",
+            "WORKFLOW Reads",
+        ),
+    ):
+        pattern = r"\s+".join(re.escape(word) for word in needle.split())
+        mutated, count = re.subn(pattern, replacement, texts["docs/WORKFLOW.md"], count=1)
+        assert count == 1, needle
+        planted = {**texts, "docs/WORKFLOW.md": mutated}
+        assert any(problem.startswith(where) for problem in codex_repair_doctrine_problems(planted)), needle
     for name, start, end, where in (
         ("docs/WORKFLOW.md", "- `review` —", "- `probe` —", "WORKFLOW review bullet"),
         ("prompts/06-review.md", "**Model:**", "**Input:**", "06-review Model paragraph"),

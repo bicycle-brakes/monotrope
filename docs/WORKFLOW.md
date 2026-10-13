@@ -785,11 +785,12 @@ change's inputs and its call writes into the worktree, implement
 reads the tree and writes code into the worktree, and every repair prompt
 carries the change's spec, plan and repository rules plus the taken rows of
 the loop record — rows the repository does not hold until the phase-6 verdict
-releases them into `findings.md`, so they reach Z.ai in that prompt before
-the verdict (ADR 0015, since ADR 0017 to Codex instead of Z.ai). Far more of
-this repository goes to Z.ai than before 2026-10-06. The leak check covers what these four runs send — the same scan,
-immediately before each call, over the tree, the staged changes, the commits
-reachable from the branches and the call's own prompt — and what stays out
+releases them into `findings.md`. Under ADR 0017 those repair prompts send the
+rows to Codex (OpenAI) before the verdict; the Sonnet 5.5 fallback or an
+explicit Stage-1 repair sends them to Anthropic. The leak check covers what
+these four runs send — the same scan, immediately before each call, over the
+tree, the staged changes, the commits reachable from the branches and the
+call's own prompt — and what stays out
 stays out: LakeSwitch and customer content never go, to any endpoint, and the
 check is what blocks it (the maintainer asked about it on 2026-10-06 and kept
 it). How the runner confines the tools and writes of these runs is stated
@@ -799,9 +800,12 @@ What every call then carries: one audit line (in `research.md` for Explore,
 otherwise `findings.md`), an empty standard input and an environment built
 from an allow-list, not the caller's. The runner starts Codex with the
 read-only sandbox for a review call, its session kept and its hooks and
-memories switched off; a draft's Codex call runs in the `workspace-write`
-sandbox, and what such a call writes outside the change folder the runner
-puts back before it verifies ("The draft" below). A `draft` or `spec-review`
+memories switched off. A draft's Codex call runs in the `workspace-write`
+sandbox; the runner puts back its writes outside the change folder before it
+verifies ("The draft" below). A repair's first two attempts run as Codex calls
+in the `workspace-write` sandbox. What a repair's Codex call writes is checked
+and committed by the runner, including changes outside the change folder; a
+checkpoint requires all checks to pass. A `draft`, `repair` or `spec-review`
 call keeps no session. Before the loop's first call the runner runs `pi --version`; anything but
 the pinned `1.1.0` refuses with exit 2, before the leak check. It starts the
 review loop's rung as Pi (`--print`, no session) against OpenCode Go's
@@ -840,19 +844,21 @@ path or a script file passes it, as it does for the merge rules in §2.
 
 **Reads: confined for the Claude Code calls, asked for Codex and for the
 loop.** Every Claude Code call (explore, the draft's GLM attempt, implement,
-repair, `spec-review` and the Sonnet 5.5
-fallback attempts) starts in the worktree with `--restricted` and no
-`--add-dir`.
+`spec-review` and the Sonnet 5.5 fallback attempts) starts in the worktree
+with `--restricted` and no `--add-dir`.
 `claude --help` says `--restricted` "confines the file tools to the working
 directories", so the credential file `~/.config/cc-routing/secrets.env`, which
 lies outside the worktree, is outside what those calls' file tools reach.
 **That is the program's documented behaviour, not measured here:** no test has
-run it against a path outside the worktree. **The review loop's Pi calls are
-not among them, and they are not confined:** a round's `read` reaches files
-outside the worktree (measured with Pi 1.1.0), and the secrets file is among
-them; only the prompt's request bounds it. Every reviewer's prompt asks the
-model to read nothing outside the worktree and the repository's git
-directory, and **that is a request, not a lock** — the program can read the
+run it against a path outside the worktree. Codex's review, draft and repair
+calls are not confined in their reads: only the prompt's request bounds them.
+ADR 0017 retains ADR 0016's residual risks for ignored files, external paths
+and the git directory. **The review loop's Pi calls are not Claude Code calls,
+and they are not confined:** a round's `read` reaches files outside the
+worktree (measured with Pi 1.1.0), and the secrets file is among
+them; only the prompt's request bounds it. Every Codex prompt and every
+reviewer's prompt asks the model to read nothing outside the worktree and the
+repository's git directory, and **that is a request, not a lock** — the program can read the
 rest of the disk, the customer instance's checkout included. Pi's isolation
 flags (no extensions, MCP servers, skills, context files, prompt templates or
 themes; no approval; a fresh agent directory and home per call) are configured

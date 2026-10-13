@@ -1587,15 +1587,20 @@ def put_back_lines(paths: list[str]) -> list[str]:
     return [f"- `{path}`" for path in paths]
 
 
-def attempt_block(attempt: int, route: str, listing: str, files: list[str] | str) -> str:
+def attempt_block(attempt: int, route: str, listing: str, files: list[str] | str, *, moved_head: bool = False) -> str:
     """The unquoted text of one failed attempt's block: its header, the files, the diagnostics.
 
     `files` is the entry list of `attempt_files`, a reason string when the trees could not be measured,
     or empty when the attempt's model changed no file. The diagnostics stand in a fenced code block
     whose fence is one backtick longer than the longest run they contain, at least three, so gate
-    output with fences of its own is quoted whole (spec: the block's shape).
+    output with fences of its own is quoted whole (spec: the block's shape). A moved-HEAD stop
+    precedes all post-run checks, so its header must not claim those checks failed.
     """
-    head = f"Attempt {attempt} ({route}) failed its post-run checks."
+    head = (
+        f"Attempt {attempt} ({route}) stopped because the call moved HEAD; no post-run check ran."
+        if moved_head
+        else f"Attempt {attempt} ({route}) failed its post-run checks."
+    )
     if isinstance(files, str):
         # The reason is a raw git error: one line, and one full stop of this sentence's own.
         reason = " ".join(files.split()).rstrip(".")
@@ -2398,7 +2403,10 @@ def run_attempts(
                 listing = f"- {problem}"
                 if call_error is not None:
                     listing += f"\n- {call_error}"
-                append(ctx.findings, quote_block(attempt_block(attempt, route, listing, moved_files), key))
+                append(
+                    ctx.findings,
+                    quote_block(attempt_block(attempt, route, listing, moved_files, moved_head=True), key),
+                )
                 raise CallFailed(problem) from call_error
         if call_error is not None:
             error = call_error
