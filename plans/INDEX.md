@@ -133,6 +133,7 @@ typed: a hand-kept list of files ages exactly as fast as files are added.
 | [`changes/hermes-runner/plan.md`](changes/hermes-runner/plan.md) | draft | partial | 2026-10-05 | coding-harness-i3y |
 | [`changes/hermes-runner/research.md`](changes/hermes-runner/research.md) | draft | none | 2026-10-05 | coding-harness-i3y |
 | [`changes/hermes-runner/spec.md`](changes/hermes-runner/spec.md) | draft | none | 2026-10-05 | coding-harness-i3y |
+| [`changes/kit-install/research.md`](changes/kit-install/research.md) | draft | none | 2026-10-13 | coding-harness-2uk |
 | [`changes/provenance-location/decisions.md`](changes/provenance-location/decisions.md) | draft | partial | 2026-10-12 | coding-harness-3ar.1 |
 | [`changes/provenance-location/findings.md`](changes/provenance-location/findings.md) | draft | partial | 2026-10-12 | coding-harness-3ar.1 |
 | [`changes/provenance-location/plan.md`](changes/provenance-location/plan.md) | draft | partial | 2026-10-12 | coding-harness-3ar.1 |
