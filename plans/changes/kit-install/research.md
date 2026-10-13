@@ -314,3 +314,45 @@ Other facts:
 fields), `scripts/export/manifest.yaml`, `tests/test_kit.py`, `docs/WORKFLOW.md`;
 on the lakeswitch side, a lock file and `decisions/provenance.yaml`
 (human-decided; decision PR).
+
+## Local drafting gap resolution — 2026-10-13
+
+Read only this worktree and repository Git metadata at
+`bb80ed03def5d4ec346d77904f4f06009b4c9e3c`; the earlier instance observations
+above retain their original commits and were not re-read externally.
+
+- The four intent questions under "Open items" were answered by the
+  maintainer on 2026-10-13 (decisions Q-1 through Q-4); Q-5 requests a new
+  ADR. Those questions are historical exploration items, not new open
+  decisions. No phase-2a finding rows exist in the supplied findings file.
+- [GAP] The repository contains no `templates/plan.md`. The available
+  templates define spec, design and ADR; the phase-3 prompt defines the
+  plan's opening card, criterion ledger and empty `Time used` section.
+  The draft follows that prompt without introducing another template.
+- [GAP] The repository contains no `scripts/validate_change_artefacts.py`.
+  Its future gate is still named as pending in the workflow's class/design
+  rule; the referenced general validation command cannot run here. This
+  change does not implement that separate validator.
+- [GAP] Fresh-target verification needs initial configuration: the existing
+  Makefile delegates to `scripts/verify_all.sh` and builds a locked venv;
+  the manifest classifies it, `pyproject.toml` and `requirements-ci.txt` as
+  inventory. The source gate file names tracker-dependent checks, a live
+  branch-ruleset check and source decision continuity. Copying the current
+  gate list unchanged is not evidence that a bare target can verify.
+- The role/export distinction remains explicit: the existing kit tests
+  require these two classifications not to be derivable from each other.
+  A fresh-install payload is not the legacy migration export list
+  (`tests/test_kit.py`, same cut-off).
+- The probe currently copies only `mechanismus` source files and runs
+  pytest in a disposable committed tree. It does not exercise first-install
+  recipes or target `make verify`; those need separate integration evidence
+  (`scripts/kit/probe.py::_baue` and `_faelle`, same cut-off).
+- The highest ADR in this checkout is 0016. A single new draft can therefore
+  use 0017; source numbering is a local observation at this cut-off, not a
+  reservation against another branch.
+
+The counterpart comparison, Python-3.11 compatibility, original export
+history and release/tag inventory remain unmeasured beyond the original
+research. Fresh Python-3.12 installation and read-only, path-based reports
+do not require those gaps to be answered; existing-instance conversion and
+release construction remain outside this change.
