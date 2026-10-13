@@ -602,11 +602,11 @@ Stage-2 call, 2026-10-13: review · endpoint openai-codex · model gpt-6.1-sol �
 
 | ID | Severity | Dimension | Origin | Where | Finding | Reviewer | Status | Broke a test |
 |---|---|---|---|---|---|---|---|---|
-| F-4 | BLOCKER | SPEC | base | `scripts/stage2.py:2529`; `tests/test_stage2.py:2378` | If the GLM attempt stages and commits a file containing its key, the credential scan compares against the model's new HEAD and skips that now-clean file. The runner exits 1 for moved HEAD while leaving the key in the file and commit. The regression test uses an empty commit, leaving the contaminated file uncommitted, so it misses this case. [criterion 25] | Codex | taken — the credential scan is to compare against the baseline, not the model's HEAD, so a committed key file is found; a test whose GLM attempt commits a file holding the key fails on the baseline | — |
-| F-5 | BLOCKER | SPEC | base | `scripts/stage2.py:2352` | A second draft can retain the first draft's committed ADR unchanged and add another ADR. The count examines only paths changed against HEAD, so it counts the second file alone and permits a commit containing two ADRs absent from the merge base. The check must count the new ADR files remaining across the whole change. [criterion 10] | Codex | taken — count the new ADR files of the whole change against the merge base with origin/main; a test of a second draft that keeps the first ADR and adds another fails on the baseline | — |
-| F-6 | BLOCKER | SPEC | base | `scripts/stage2.py:2369`; `scripts/stage2.py:2461` | The missing-answer exception accepts verification whose other failures were not measured correctly. Terminating verification after the missing ADR answer and an unfinished `interview-minimums` gate makes `only_answer_owed` return True. A failing pytest gate printing `── [pytest] gruen` in its output also hides its real RED closing frame. Either case can commit the draft despite incomplete or failed verification. [criterion 13] | Codex | taken — the missing-answer exception is to hold only when every gate ran to its closing frame and the one red gate is the change's own ADR answer, read from the closing frame, not from a line in a gate's output; tests of an unfinished gate and of a pytest output printing a green frame fail on the baseline | — |
-| F-7 | MAJOR | SPEC | base | `scripts/stage2.py:2458`; `scripts/stage2.py:2570` | If `make` cannot start after a successful Codex call, `CallFailed` escapes the post-run checks. The runner stops after one attempt, writes no quoted failure block, and starts neither the Codex repair nor the GLM fallback. Post-run failures must leave their diagnostics and advance through the attempt chain. [criteria 18 and 21] | Codex | taken — a make that cannot start is a failed post-run check: quoted block, then the next attempt in the chain; a test with an unstartable make fails on the baseline | — |
-| F-8 | MAJOR | SPEC | base | `scripts/stage2.py:1543`; `tests/test_stage2.py:1896` | When an attempt writes 41 forbidden paths, the runner restores them but names only the first 40; the last becomes “1 more files.” The test explicitly requires that path's name to be absent. Thus the audit cannot identify every restored path, contrary to the required evidence. [criterion 8] | Codex | taken — criterion 8 requires every put-back path named, so the put-back record carries no bound (it replaces the remainder line of loop row L2-5); the test is to require the 41st path by name, which fails on the baseline | — |
+| F-4 | BLOCKER | SPEC | base | `scripts/stage2.py:2529`; `tests/test_stage2.py:2378` | If the GLM attempt stages and commits a file containing its key, the credential scan compares against the model's new HEAD and skips that now-clean file. The runner exits 1 for moved HEAD while leaving the key in the file and commit. The regression test uses an empty commit, leaving the contaminated file uncommitted, so it misses this case. [criterion 25] | Codex | fixed — `tests/test_stage2.py::test_a_glm_draft_that_commits_the_key_is_refused` | no |
+| F-5 | BLOCKER | SPEC | base | `scripts/stage2.py:2352` | A second draft can retain the first draft's committed ADR unchanged and add another ADR. The count examines only paths changed against HEAD, so it counts the second file alone and permits a commit containing two ADRs absent from the merge base. The check must count the new ADR files remaining across the whole change. [criterion 10] | Codex | fixed — `tests/test_stage2.py::test_a_second_draft_that_adds_another_adr_fails_the_attempt` | no |
+| F-6 | BLOCKER | SPEC | base | `scripts/stage2.py:2369`; `scripts/stage2.py:2461` | The missing-answer exception accepts verification whose other failures were not measured correctly. Terminating verification after the missing ADR answer and an unfinished `interview-minimums` gate makes `only_answer_owed` return True. A failing pytest gate printing `── [pytest] gruen` in its output also hides its real RED closing frame. Either case can commit the draft despite incomplete or failed verification. [criterion 13] | Codex | fixed — `tests/test_stage2.py::test_a_verification_that_stopped_before_its_gates_closed_owes_nothing` and `tests/test_stage2.py::test_a_gate_output_printing_a_green_frame_does_not_hide_its_red_frame` | no |
+| F-7 | MAJOR | SPEC | base | `scripts/stage2.py:2458`; `scripts/stage2.py:2570` | If `make` cannot start after a successful Codex call, `CallFailed` escapes the post-run checks. The runner stops after one attempt, writes no quoted failure block, and starts neither the Codex repair nor the GLM fallback. Post-run failures must leave their diagnostics and advance through the attempt chain. [criteria 18 and 21] | Codex | fixed — `tests/test_stage2.py::test_a_make_that_cannot_start_fails_the_attempt_and_moves_the_chain` | no |
+| F-8 | MAJOR | SPEC | base | `scripts/stage2.py:1543`; `tests/test_stage2.py:1896` | When an attempt writes 41 forbidden paths, the runner restores them but names only the first 40; the last becomes “1 more files.” The test explicitly requires that path's name to be absent. Thus the audit cannot identify every restored path, contrary to the required evidence. [criterion 8] | Codex | fixed — `tests/test_stage2.py::test_the_put_back_names_every_path_beyond_the_bound` | yes |
 
 Phase 6 verdict: codex 01a130f4-7a06-7710-82b0-acf5a60d9dd1, 2026-10-13
 
@@ -635,3 +635,39 @@ Phase 6 verdict: codex 01a130f4-7a06-7710-82b0-acf5a60d9dd1, 2026-10-13
 Rounds run: 3
 
 Stage-2 call, 2026-10-13: review (loop marks) · endpoint openai-codex · model gpt-6.1-sol · leak check clean over 385 files, 968 commits, 12 rules.
+
+Stage-2 call, 2026-10-13: repair · attempt 1 · route glm · endpoint glm-coding-plan · model glm-5.3 · leak check clean over 385 files, 969 commits, 12 rules.
+
+> Attempt 1 (glm) failed its post-run checks.
+>
+> Files the attempt changed (lines added, removed):
+> - `scripts/stage2.py` +79 -39
+> - `tests/test_stage2.py` +132 -5
+>
+> Diagnostics:
+> ```text
+> - `plan.md` did not add a measured line below `## Time used`
+> ```
+
+Stage-2 call, 2026-10-13: repair · attempt 2 · route glm-repair · endpoint glm-coding-plan · model glm-5.3 · reason first GLM 5.3 post-run check failed · leak check clean over 385 files, 969 commits, 12 rules.
+
+> Attempt 2 (glm-repair) failed its post-run checks.
+>
+> Files the attempt changed: none.
+>
+> Diagnostics:
+> ```text
+> - `plan.md` did not add a measured line below `## Time used`
+> ```
+
+Stage-2 call, 2026-10-13: repair · attempt 3 · route stage-1 · endpoint claude-code-plan · model claude-sonnet-5-5 · reason two GLM 5.3 post-run checks failed · leak check clean over 385 files, 969 commits, 12 rules.
+
+> Attempt 3 (stage-1) failed its post-run checks.
+>
+> Files the attempt changed (lines added, removed):
+> - `plans/changes/codex-drafts/plan.md` +7 -0
+>
+> Diagnostics:
+> ```text
+> - F-6: tests/test_stage2.py::test_only_the_changes_own_missing_adr_answer_is_tolerated: pytest ended 0 on the baseline's code; red first is exit 1 or 2
+> ```

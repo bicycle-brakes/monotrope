@@ -1316,9 +1316,9 @@ WORK_READ_TOOLS = "Read,Grep,Glob"
 WORK_WRITE_TOOLS = "Read,Grep,Glob,Edit,Write"
 
 
-def changed_paths(root: Path, env: dict[str, str] | None = None) -> set[Path]:
-    """Tracked changes against HEAD and untracked files, as repository-relative paths."""
-    tracked = _git_output(root, "diff", "--name-only", "-z", "HEAD", env=env).split("\0")
+def changed_paths(root: Path, env: dict[str, str] | None = None, against: str = "HEAD") -> set[Path]:
+    """Tracked changes against `against` and untracked files, as repository-relative paths."""
+    tracked = _git_output(root, "diff", "--name-only", "-z", against, env=env).split("\0")
     untracked = _git_output(root, "ls-files", "-z", "--others", "--exclude-standard", env=env).split("\0")
     return {Path(name) for name in [*tracked, *untracked] if name}
 
@@ -1469,14 +1469,20 @@ def run_work_model(
 
 
 def remove_changed_credential(
-    root: Path, key: str, ignored_before: dict[Path, tuple[int, int]] | None = None
+    root: Path,
+    key: str,
+    ignored_before: dict[Path, tuple[int, int]] | None = None,
+    against: str = "HEAD",
 ) -> list[Path]:
     """Remove an exact GLM credential from changed regular files and name those files.
 
     "Changed" is tracked changes, untracked files, and - when the run's earlier snapshot of the
-    gitignored files is given - every ignored file created or touched since that snapshot.
+    gitignored files is given - every ignored file created or touched since that snapshot. The
+    comparison is `against`, not always HEAD: a draft passes its baseline, because files a model
+    committed read as clean against its own new HEAD and must still be found (spec, criterion 25;
+    2a's F-4).
     """
-    paths = changed_paths(root)
+    paths = changed_paths(root, against=against)
     if ignored_before is not None:
         paths |= {p for p, stat in ignored_snapshot(root).items() if ignored_before.get(p) != stat}
     found = []
@@ -1535,15 +1541,13 @@ def attempt_files(root: Path, before: str, after: str) -> list[str]:
 
 
 def put_back_lines(paths: list[str]) -> list[str]:
-    """The put-back list lines, bounded at `ATTEMPT_FILES`, the remainder named as `attempt_files` names its own.
+    """The put-back list lines: every path in backticks, without a bound.
 
-    Each path stands in backticks; the remainder line stays plain, as the record of what the runner
-    put back names what it restored (spec, criterion 8).
+    The record of what the runner put back is the audit's only way to name each restored path, so
+    no remainder line may hide one (spec, criterion 8; 2a's F-8 replaces the bound of loop row
+    L2-5).
     """
-    lines = [f"- `{path}`" for path in paths[:ATTEMPT_FILES]]
-    if len(paths) > ATTEMPT_FILES:
-        lines.append(f"- … and {len(paths) - ATTEMPT_FILES} more files")
-    return lines
+    return [f"- `{path}`" for path in paths]
 
 
 def attempt_block(attempt: int, route: str, listing: str, files: list[str] | str) -> str:
@@ -2346,14 +2350,18 @@ def draft_keep(root: Path, ctx: Context, baseline: str) -> tuple[set[Path], list
     maintainer's answers stand there (spec, criterion 9) - plus every changed path that a new ADR
     file is and the merge base of the baseline and `origin/main` does not hold, so the ADR an
     earlier draft of the same change committed stays the one new ADR file a later draft may edit
-    (spec, criterion 8, and 2a's F-3).
+    (spec, criterion 8, and 2a's F-3). The new ADR files are counted across the whole change -
+    against that merge base, what an earlier draft committed included - not only among this
+    attempt's changes against HEAD: a second draft that keeps the first ADR and adds another still
+    leaves two (2a's F-5).
     """
     prefix = Path("plans") / "changes" / ctx.change
     changed = changed_paths(root)
     keep = {path for path in changed if path.is_relative_to(prefix) and path != prefix / "decisions.md"}
     base = _git_output(root, "merge-base", baseline, "origin/main").strip()
+    whole = changed_paths(root, against=base) | changed
     new_adrs: list[str] = []
-    for path in sorted(changed - keep, key=lambda path: path.as_posix()):
+    for path in sorted(whole - keep, key=lambda path: path.as_posix()):
         posix = path.as_posix()
         if not NEW_ADR.fullmatch(posix):
             continue
@@ -2366,29 +2374,47 @@ def draft_keep(root: Path, ctx: Context, baseline: str) -> tuple[set[Path], list
     return keep, new_adrs
 
 
+def gate_sections(output: str) -> dict[str, tuple[list[str], str | None]]:
+    """Each gate's body lines and the verdict of its closing frame - None when it never closed.
+
+    A section runs from a gate's start frame to the next gate's. Its closing frame is the last
+    end-shaped line of the gate's own name, so a line a gate's output prints in the frame's shape
+    cannot stand in for the frame (spec, criterion 13; 2a's F-6). A start-shaped line while the
+    open gate has no closing frame yet is that gate's own output, not the next gate - the reading
+    of loop row L2-1.
+    """
+    lines = _frame_lines(output)
+    sections: dict[str, tuple[list[str], str | None]] = {}
+    name: str | None = None
+    begin = end = 0
+    verdict: str | None = None
+    for index, line in enumerate(lines):
+        start = GATE_START.match(line)
+        if start and (name is None or verdict is not None):
+            if name is not None:
+                sections[name] = (lines[begin + 1 : end], verdict)
+            name, begin, verdict, end = start["gate"], index, None, index
+            continue
+        closing = GATE_END.match(line)
+        if name is not None and closing and closing["gate"] == name:
+            verdict, end = closing["verdict"], index
+    if name is not None:
+        sections[name] = (lines[begin + 1 : end], verdict)
+    return sections
+
+
 def red_gates(output: str) -> dict[str, list[str]]:
     """Each gate `verify_all.sh` framed `RED (block)`, with its body lines, in run order.
 
-    The frame logic is `red_sections`': a frame line counts only as the open gate's end or, with
-    none open, as the next gate's start.
+    The verdict is read from the closing frame - the last end-shaped line of the gate's own name -
+    so a line a gate's output prints in that shape cannot hide the frame (2a's F-6). The frame
+    logic is `red_sections`'.
     """
-    lines = _frame_lines(output)
-    gates: dict[str, list[str]] = {}
-    open_gate: tuple[str, int] | None = None
-    for index, line in enumerate(lines):
-        if open_gate is None:
-            start = GATE_START.match(line)
-            if start:
-                open_gate = (start["gate"], index)
-            continue
-        end = GATE_END.match(line)
-        if not end or end["gate"] != open_gate[0]:
-            continue
-        name, begin = open_gate
-        open_gate = None
-        if end["verdict"].startswith("RED (block)"):
-            gates.setdefault(name, lines[begin + 1 : index])
-    return gates
+    return {
+        name: body
+        for name, (body, verdict) in gate_sections(output).items()
+        if verdict is not None and verdict.startswith("RED (block)")
+    }
 
 
 def only_answer_owed(output: str, change: str) -> bool:
@@ -2396,8 +2422,14 @@ def only_answer_owed(output: str, change: str) -> bool:
 
     That one red gate does not fail a draft attempt (spec, criterion 13): only the maintainer's
     stated answer may create `decisions/answers/<change>/adr.yaml`, so a drafted feature would
-    never pass. Every other red gate, and another change's missing answer, still fails it.
+    never pass. Every other red gate, and another change's missing answer, still fails it - and so
+    does a verification that stopped before its gates had run: the exception holds only when every
+    gate ran to its closing frame, read from that frame and not from a line in a gate's output
+    (2a's F-6).
     """
+    sections = gate_sections(output)
+    if any(verdict is None for _, verdict in sections.values()):
+        return False
     gates = red_gates(output)
     if list(gates) != ["adr-answers"]:
         return False
@@ -2455,7 +2487,12 @@ def verify_draft(root: Path, ctx: Context, key: str | None, new_adrs: list[str])
     preparation = prepare_derived(root, env, key)
     if preparation:
         return preparation, owed
-    done = launch(["make", "verify"], root, env)
+    try:
+        done = launch(["make", "verify"], root, env)
+    except CallFailed as error:
+        # A make that cannot start is as failed a post-run check as a red one: its diagnostics
+        # reach the attempt's block, and the chain moves on to the next attempt (2a's F-7).
+        return [f"`make verify` could not run: {error}"], owed
     problems = []
     if done.returncode != 0:
         if only_answer_owed(done.stdout or "", ctx.change):
@@ -2525,8 +2562,10 @@ def draft(root: Path, change: str) -> None:
             # Before any stop, the moved-HEAD one below included: a call that wrote the key and moved
             # HEAD must not leave the key in the tree and in the model's commit - the runner removes
             # it and refuses (spec, criterion 25). This is also before the second snapshot below can
-            # write the changed files into the object store, a dead call included.
-            exposed = remove_changed_credential(root, key, ignored_before)
+            # write the changed files into the object store, a dead call included. The comparison is
+            # the baseline, not the model's new HEAD: a file the call committed reads as clean
+            # against its own commit and must still be found (2a's F-4).
+            exposed = remove_changed_credential(root, key, ignored_before, against=baseline)
             if exposed:
                 raise Refused(credential_message(exposed))
         try:
@@ -2575,8 +2614,9 @@ def draft(root: Path, change: str) -> None:
             diagnostics.append(f"Attempt {attempt} ({route}):\n{listing}")
             append(ctx.findings, quote_block(attempt_block(attempt, route, listing, files), key))
         if key is not None:
-            # The gate runs repository code the model just edited: scan again after it.
-            exposed = remove_changed_credential(root, key, ignored_before)
+            # The gate runs repository code the model just edited: scan again after it, against the
+            # baseline as before (2a's F-4).
+            exposed = remove_changed_credential(root, key, ignored_before, against=baseline)
             if exposed:
                 raise Refused(credential_message(exposed))
         if not problems:

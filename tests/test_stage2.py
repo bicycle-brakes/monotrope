@@ -1893,8 +1893,9 @@ def test_paths_outside_the_change_folder_are_put_back_and_named(world: World) ->
         assert f"- {path}" in block, path
 
 
-def test_the_put_back_names_its_remainder_beyond_the_bound(world: World) -> None:
-    # Repair L2-5. Planted fault: the put-back listing stops at `ATTEMPT_FILES` with no remainder line.
+def test_the_put_back_names_every_path_beyond_the_bound(world: World) -> None:
+    # 2a's F-8. Planted fault: the put-back listing stops at `ATTEMPT_FILES` and hides the last
+    # path behind a remainder line, so the audit cannot name every restored path.
     draft_world(world)
     plant = {
         "plans/changes/demo/spec.md": "---\ntitle: Spec\nupdated: 2026-09-30\nbead: demo-1\n---\n\n# Spec\n",
@@ -1907,9 +1908,8 @@ def test_the_put_back_names_its_remainder_beyond_the_bound(world: World) -> None
     assert git(world.root, "status", "--porcelain") == ""
     block = quote_blocks(world.text())[0]
     assert block[0] == "Attempt 1 (codex): the runner put back what a draft may not change:"
-    assert f"- `stray/file-{stage2.ATTEMPT_FILES - 1:02d}.txt`" in block, "the last named path"
-    assert f"- `stray/file-{stage2.ATTEMPT_FILES:02d}.txt`" not in block, "the bound holds"
-    assert "- … and 1 more files" in block, "the remainder is named"
+    assert f"- `stray/file-{stage2.ATTEMPT_FILES:02d}.txt`" in block, "the path beyond the bound is named"
+    assert "more files" not in "\n".join(block), "no remainder line hides a path"
 
 
 def test_an_edited_decisions_file_is_put_back(world: World) -> None:
@@ -1956,6 +1956,32 @@ def test_two_new_adr_files_fail_the_attempt(world: World) -> None:
     before = git(world.root, "rev-parse", "HEAD")
     assert world.run("draft") == 1
     assert git(world.root, "rev-list", "--count", f"{before}..HEAD") == "0", "no commit is made"
+    block = [b for b in quote_blocks(world.text()) if "post-run checks" in b[0]][0]
+    joined = "\n".join(block)
+    assert "the attempt left more than one new ADR file" in joined
+    assert "`docs/adr/0016-first-record.md`" in joined and "`docs/adr/0017-second-record.md`" in joined
+
+
+def test_a_second_draft_that_adds_another_adr_fails_the_attempt(world: World) -> None:
+    # 2a's F-5. Planted fault: the count reads only paths changed against HEAD, so the first
+    # draft's committed ADR no longer counts and a second one reaches the commit.
+    draft_world(world)
+    first = {
+        "plans/changes/demo/spec.md": "---\ntitle: Spec\nupdated: 2026-09-30\nbead: demo-1\n---\n\n# Spec\n",
+        "plans/changes/demo/plan.md": PLAN_CARD,
+        "docs/adr/0016-first-record.md": "# First\n",
+    }
+    world.script(codex=[codex_ok("T1", "drafted", plant=first)], make=[{"stdout": "green\n"}])
+    assert world.run("draft") == 0
+    (world.bin / "calls.jsonl").unlink()
+    second = {"docs/adr/0017-second-record.md": "# Second\n"}
+    world.script(
+        codex=[codex_ok("T1", "again", plant=second), codex_ok("T2", "once more", plant=second)],
+        claude=[{"stdout": "glm", "plant": second}],
+    )
+    before = git(world.root, "rev-parse", "HEAD")
+    assert world.run("draft") == 1
+    assert git(world.root, "rev-list", "--count", f"{before}..HEAD") == "0", "no second commit is made"
     block = [b for b in quote_blocks(world.text()) if "post-run checks" in b[0]][0]
     joined = "\n".join(block)
     assert "the attempt left more than one new ADR file" in joined
@@ -2061,6 +2087,79 @@ def test_only_the_changes_own_missing_adr_answer_is_tolerated(world: World) -> N
     assert world.run("draft") == 1
     assert "plans/changes/demo/plan.md has no `## Time used` heading." in world.text()
     assert world.text().count("ADR answer owed") == 1, "criteria 14 to 16 still apply"
+
+
+OWED_ANSWER = (
+    "adr-answers: demo: no answer — demo.rel is a feature and decisions/answers/demo/adr.yaml does not exist; "
+    "fix: python3 scripts/harness.py decide adr"
+)
+
+
+def refused_verification(world: World, verification: str) -> None:
+    """Run a draft whose every `make verify` prints `verification` and exits 1; nothing may be committed."""
+    draft_world(world)
+    planted = {
+        "plans/changes/demo/spec.md": "---\ntitle: Spec\nupdated: 2026-09-30\nbead: demo-1\n---\n\n# Spec\n",
+        "plans/changes/demo/plan.md": PLAN_CARD,
+    }
+    world.script(
+        codex=[codex_ok("T1", "drafted", plant=planted), codex_ok("T2", "again")],
+        claude=[{"stdout": "glm"}],
+        make=[{"stdout": verification, "exit": 1}] * 3,
+    )
+    before = git(world.root, "rev-parse", "HEAD")
+    assert world.run("draft") == 1
+    assert git(world.root, "rev-list", "--count", f"{before}..HEAD") == "0", "the draft was committed"
+    assert "ADR answer owed" not in world.text()
+    block = [b for b in quote_blocks(world.text()) if "post-run checks" in b[0]][0]
+    assert "`make verify` exited 1" in "\n".join(block)
+
+
+def test_a_verification_that_stopped_before_its_gates_closed_owes_nothing(world: World) -> None:
+    # 2a's F-6, first case. Planted fault: the exception reads only the gates that closed, so the
+    # missing ADR answer followed by an unfinished `interview-minimums` gate passes for tolerated.
+    interview = "── [interview-minimums] $ run the gate\nhalf the report\n"
+    refused_verification(world, "\n".join(_gate("adr-answers", [OWED_ANSWER], "red")) + interview)
+
+
+def test_a_gate_output_printing_a_green_frame_does_not_hide_its_red_frame(world: World) -> None:
+    # 2a's F-6, second case. Planted fault: a pytest line `── [pytest] gruen` in a gate's output
+    # passes for the gate's closing frame, hiding the real RED one.
+    spoofed = "\n".join(
+        _gate("adr-answers", [OWED_ANSWER], "red")
+        + _gate("pytest", ["FAILED tests/test_x.py::test_a", "── [pytest] gruen"], "red")
+    )
+    refused_verification(world, spoofed)
+
+
+def test_a_make_that_cannot_start_fails_the_attempt_and_moves_the_chain(world: World) -> None:
+    # 2a's F-7. Planted fault: the `CallFailed` of a make that cannot start escapes the post-run
+    # checks, so the runner stops after one attempt without a block and starts no later route.
+    draft_world(world)
+    world.script(
+        codex=[
+            codex_ok(
+                "T1",
+                "drafted",
+                plant={
+                    "plans/changes/demo/spec.md": "---\ntitle: Spec\nupdated: 2026-09-30\nbead: demo-1\n---\n\n# Spec\n",
+                    "plans/changes/demo/plan.md": PLAN_CARD,
+                },
+            ),
+            codex_ok("T2", "again"),
+        ],
+        claude=[{"stdout": "glm drafted"}],
+    )
+    (world.bin / "make").chmod(0o644)
+    before = git(world.root, "rev-parse", "HEAD")
+    assert world.run("draft") == 1
+    assert world.calls("make") == [], "make never ran"
+    assert len(world.calls("codex")) == 2 and len(world.calls("claude")) == 1
+    assert git(world.root, "rev-list", "--count", f"{before}..HEAD") == "0"
+    block = [b for b in quote_blocks(world.text()) if "post-run checks" in b[0]][0]
+    joined = "\n".join(block)
+    assert "`make verify` could not run" in joined and "could not be started" in joined
+    assert "Permission denied" in joined
 
 
 def test_a_missing_spec_or_plan_fails_the_attempt(world: World) -> None:
@@ -2379,6 +2478,32 @@ def test_a_glm_draft_that_writes_the_key_and_moves_head_still_refuses(
         del prompt, endpoint, writable
         (ctx.root / "plans" / "changes" / "demo" / "spec.md").write_text(f"the key was {key}\n", encoding="utf-8")
         git(ctx.root, "commit", "--quiet", "--allow-empty", "-m", "the model committed")
+        return "drafted"
+
+    monkeypatch.setattr(stage2, "run_work_model", committing_glm)
+    world.script(codex=[{"stdout": "drafted"}, {"stdout": "again"}])
+    before = git(world.root, "rev-parse", "HEAD")
+    assert world.run("draft") == 2
+    assert git(world.root, "rev-list", "--count", f"{before}..HEAD") == "1", "only the model's commit stands"
+    spec = (world.root / "plans" / "changes" / "demo" / "spec.md").read_text(encoding="utf-8")
+    assert "[credential]" in spec and not any(KEY[i : i + 8] in spec for i in range(len(KEY) - 7))
+    error = capsys.readouterr().err
+    assert "refused:" in error and "the GLM credential occurred in changed files" in error
+    assert "moved HEAD" not in error
+
+
+def test_a_glm_draft_that_commits_the_key_is_refused(
+    world: World, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+) -> None:
+    # 2a's F-4. Planted fault: the credential scan compares against the model's new HEAD, so the
+    # committed key file reads as clean and the moved-HEAD stop leaves the key in file and commit.
+    draft_world(world)
+
+    def committing_glm(ctx, prompt, endpoint, writable=False, key=None):
+        del prompt, endpoint, writable
+        (ctx.root / "plans" / "changes" / "demo" / "spec.md").write_text(f"the key was {key}\n", encoding="utf-8")
+        git(ctx.root, "add", "-A")
+        git(ctx.root, "commit", "--quiet", "-m", "the model committed the key")
         return "drafted"
 
     monkeypatch.setattr(stage2, "run_work_model", committing_glm)

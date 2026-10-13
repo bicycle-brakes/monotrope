@@ -399,6 +399,10 @@ Stage-1 route: repair · model claude-sonnet-5-5 · reason: two GLM 5.3 post-run
 
 Stage-1 route: repair · model claude-sonnet-5-5 · reason: two GLM 5.3 post-run checks failed.
 
+## Runner route — 2026-10-13
+
+Stage-1 route: repair · model claude-sonnet-5-5 · reason: two GLM 5.3 post-run checks failed.
+
 ## Time used
 
 2026-10-13 — phase 4 under the Stage-2 runner (`implement codex-drafts`), one
@@ -428,3 +432,8 @@ and states in the drafting rules that the runner puts back what changed
 outside the change folder. Its three attempts failed only for this missing
 line; the orchestrator added it, showed both new tests red on the baseline
 and ran `make verify`.
+The round-4 repair window (2026-10-13, phase-6 repair round 1 of the rows F-4 to
+F-8; no wall-clock reading) completed the runner's repair left in the tree: each
+row now has its own test shown red on the baseline's `scripts/stage2.py` (the
+missing-answer row F-6 has two, one per case). The runner's `make verify` and
+checkpoint commit are still to come. The appetite of 8 h is not reached.
