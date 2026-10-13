@@ -780,11 +780,17 @@ def test_only_pull_request_runs_cancel_superseded_runs() -> None:
 
 def test_the_schedule_runs_only_the_drift_job() -> None:
     """The matrix job and the summary job admit `push` and `pull_request`, never `schedule` or a manual start."""
-    doc = _ci_doc()
-    for name in (ci_gates.MATRIX_JOB, ci_gates.SUMMARY_JOB):
-        condition = doc["jobs"][name]["if"]
-        assert "push" in condition and "pull_request" in condition, condition
-        assert "schedule" not in condition and "workflow_dispatch" not in condition, condition
+    events = "github.event_name == 'push' || github.event_name == 'pull_request'"
+    # Exact conditions, not substrings: an appended `|| true` keeps every event name in place and
+    # still runs the matrix on schedule and manual start (phase 6, F-1)
+    expected = {ci_gates.MATRIX_JOB: events, ci_gates.SUMMARY_JOB: f"always() && ({events})"}
+    for doc in (_ci_doc(), _ci_doc(ci_gates.generate_ci())):
+        for name, condition in expected.items():
+            assert doc["jobs"][name]["if"] == condition, doc["jobs"][name]["if"]
+        drift = [job for job in doc["jobs"].values() if "schedule" in str(job.get("if", ""))]
+        assert drift and all(
+            job["if"] == "github.event_name == 'schedule' || github.event_name == 'workflow_dispatch'" for job in drift
+        ), [job.get("if") for job in drift]
 
 
 def test_the_toolchain_comes_only_from_the_lock() -> None:
