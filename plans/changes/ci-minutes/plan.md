@@ -90,8 +90,14 @@ git add -A && make verify
 
 Stage-1 route: implement · model claude-sonnet-5-5 · reason: Claude Code 2.1.296 refused glm-5.3(-flash) as an unrecognized model before any call (bead coding-harness-6th).
 
+## Runner route — 2026-10-13
+
+Stage-1 route: repair · model claude-sonnet-5-5 · reason: Z.ai weekly limit exhausted until 2026-10-14 14:34 CEST (HTTP 429, code 1310), and Claude Code 2.1.296 refuses the GLM names (bead coding-harness-6th).
+
 ## Time used
 
 2026-10-13 span not measured: this session has file tools only and no `date`, so no start or end was read; the runner's timestamps are the record.
 
 2026-10-13 orchestrator repair after the failed attempt, not timed: renamed the floor test (its old name matched the mutation-test pattern by accident, `declared_once` holds `red_on`) and declared it in the kit probe (cap 36 -> 37).
+
+2026-10-13 loop round 1 repair (Sonnet 5.5 under --stage2-off), not timed: the runner refused the attempt only for the missing line here; the orchestrator added it.

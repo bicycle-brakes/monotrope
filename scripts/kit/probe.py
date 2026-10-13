@@ -96,7 +96,8 @@ REIST_NICHT: dict[str, str] = {
     "tests.test_ci::test_no_declared_reason_stands_for_a_script_that_has_a_caller": "bestand-dieses-repos",
     "tests.test_ci::test_der_echte_lesepfad_des_bead_gates_wird_erkannt": "bestand-dieses-repos",
     "tests.test_ci::test_the_makefile_runs_what_the_one_list_runs": "bestand-dieses-repos",
-    "tests.test_ci::test_one_version_is_the_interpreter_floor": "bestand-dieses-repos",
+    "tests.test_ci::test_one_version_is_the_interpreter_floor": "braucht-die-vollstaendige-suite",
+    "tests.test_ci::test_the_cloud_environment_builds_the_venv_with_the_floor": "braucht-die-vollstaendige-suite",
     "tests.test_feedback_channel::test_journal_index_lists_every_open_project_handover": "bestand-dieses-repos",
     "tests.test_feedback_channel::test_the_field_checks_read_the_schema_instead_of_a_copy[GEMEINSAM-fehlende_gemeinsame]": "bestand-dieses-repos",
     "tests.test_feedback_channel::test_the_field_checks_read_the_schema_instead_of_a_copy[PROJEKT_PFLICHT-fehlende_kanalpflicht]": "bestand-dieses-repos",
@@ -182,9 +183,10 @@ REIST_NICHT: dict[str, str] = {
 # `model-endpoints.yaml`, which stays home — the same reason, `bestand-dieses-repos`.
 # The count stays at the cap; no raise.
 # 36 -> 37 on 2026-10-13 (plans/changes/ci-minutes): `tests.test_ci::test_one_version_is_the_interpreter_floor`
-# came along. It reads `pyproject.toml`, which is `bestand` and stays home — an instance declares
-# its own interpreter floor. Same reason as the other cases, `bestand-dieses-repos`.
-DECKEL = 37  # raised on 2026-10-13 (36 -> 37); earlier: raised 2026-10-08 (33 -> 36), raised 2026-10-07 (32 -> 33), raised 2026-10-05 (31 -> 32), 2026-09-30 (31 -> 32), lowered 2026-09-30 (32 -> 31), raised 2026-09-29 (31 -> 32)
+# came along. It reads `pyproject.toml`, a file the kit does not carry: the missing file maps to
+# `braucht-die-vollstaendige-suite`. 37 -> 38 on 2026-10-13: `tests.test_ci::test_the_cloud_environment_builds_the_venv_with_the_floor`
+# reads `tools/cloud-env/setup.sh`, also not carried — the same reason.
+DECKEL = 38  # raised on 2026-10-13 (36 -> 38); earlier: raised 2026-10-08 (33 -> 36), raised 2026-10-07 (32 -> 33), raised 2026-10-05 (31 -> 32), 2026-09-30 (31 -> 32), lowered 2026-09-30 (32 -> 31), raised 2026-09-29 (31 -> 32)
 
 
 # ---------------------------------------------------------------------------

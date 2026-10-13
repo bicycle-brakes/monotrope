@@ -757,6 +757,16 @@ def test_one_version_is_the_interpreter_floor() -> None:
     assert ruff["target-version"] == "py" + oldest.replace(".", "")
 
 
+def test_the_cloud_environment_builds_the_venv_with_the_floor() -> None:
+    """The cloud setup script builds this repository's `.venv` with the oldest declared interpreter."""
+    oldest = _declared()[0]
+    script = (REPO_ROOT / "tools" / "cloud-env" / "setup.sh").read_text(encoding="utf-8")
+    block = script.split("R=/home/user/coding-harness", 1)[1].split("fi", 1)[0]
+    venv = [line for line in block.splitlines() if "uv venv" in line]
+    assert len(venv) == 1, f"expected one `uv venv` in the coding-harness block, found {venv!r}"
+    assert f"--python {oldest} " in venv[0], f"venv built with another interpreter than {oldest}: {venv[0]!r}"
+
+
 def test_only_pull_request_runs_cancel_superseded_runs() -> None:
     """`cancel-in-progress` is true for a pull request and for nothing else: a push run is never cancelled."""
     for doc in (_ci_doc(), _ci_doc(ci_gates.generate_ci())):

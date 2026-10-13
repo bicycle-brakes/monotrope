@@ -152,3 +152,22 @@ Stage-2 call, 2026-10-13: implement · attempt 1 · route stage-1 · endpoint cl
 > tools/claude-code/README.md:75:81 error MD013/line-length Line length [Expected: 80; Actual: 88]
 > make: *** [verify] Error 1
 > ````
+
+Stage-2 call, 2026-10-13: review-loop · endpoint opencode-go · model deepseek-v4.1-flash · leak check clean over 408 files, 1011 commits, 12 rules.
+
+Stage-2 call, 2026-10-13: repair · attempt 1 · route stage-1 · endpoint claude-code-plan · model claude-sonnet-5-5 · reason Z.ai weekly limit exhausted until 2026-10-14 14:34 CEST (HTTP 429, code 1310), and Claude Code 2.1.296 refuses the GLM names (bead coding-harness-6th) · leak check clean over 408 files, 1011 commits, 12 rules.
+
+> Attempt 1 (stage-1) failed its post-run checks.
+>
+> Files the attempt changed (lines added, removed):
+> - `plans/changes/ci-minutes/spec.md` +3 -2
+> - `scripts/kit/probe.py` +6 -4
+> - `tests/test_ci.py` +10 -0
+> - `tools/cloud-env/README.md` +5 -3
+> - `tools/cloud-env/setup.sh` +3 -3
+>
+> Diagnostics:
+> ```text
+> - Runner format before `make verify`: ruff changed no file.
+> - `plan.md` did not add a measured line below `## Time used`
+> ```

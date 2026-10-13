@@ -10,8 +10,8 @@ BD_VERSION=1.3.0
 BD_SHA256=2f92b904ecf35b607e44dc5c39229173af69c54f1183e8d709f1773540cdcf3b  # = tools/beads/checksums/beads_1.3.0_linux_amd64.tar.gz.sha256
 BD_DEST="$HOME/.local/bin/bd-$BD_VERSION"
 
-# 1. Python 3.11 (lakeswitch-ai requires >=3.11,<3.12)
-uv python install 3.11
+# 1. Python 3.11 (lakeswitch-ai requires >=3.11,<3.12) and 3.12 (coding-harness requires >=3.12)
+uv python install 3.11 3.12
 
 # 2. bd, pinned and checksum-verified (fail closed)
 if ! { [ -x "$BD_DEST" ] && "$BD_DEST" version 2>/dev/null | grep -q "$BD_VERSION"; }; then
@@ -43,7 +43,7 @@ fi
 
 R=/home/user/coding-harness
 if [ -f "$R/requirements-ci.txt" ]; then
-  uv venv --allow-existing --python 3.11 "$R/.venv"
+  uv venv --allow-existing --python 3.12 "$R/.venv"
   uv pip install --python "$R/.venv/bin/python" --require-hashes -r "$R/requirements-ci.txt"
 fi
 

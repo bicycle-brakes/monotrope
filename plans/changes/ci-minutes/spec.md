@@ -101,8 +101,9 @@ coding-harness-cac). Research: `research.md`. Decisions: `decisions.md`.
 - (amended 2026-10-13: maintainer decided 3.12 only) Regenerating
   `requirements-ci.txt`: it carries no interpreter marker and already
   installs on 3.12 (`research.md`, amendment).
-- (amended 2026-10-13) `tools/cloud-env/`: it installs lakeswitch-ai's
-  interpreter, which moves with lakeswitch-ai-6sj.
+- (amended 2026-10-13) In `tools/cloud-env/`, lakeswitch-ai's interpreter
+  (3.11), which moves with lakeswitch-ai-6sj. This repository's own `.venv`
+  there is built with 3.12, the floor (round 1, L1-1).
 - (amended 2026-10-13) Sample interpreter lists in tests and in the schema's
   error text: 3.11 there is data, not a claim about this repository.
 - A configurable default-branch name for repositories that take the kit;
