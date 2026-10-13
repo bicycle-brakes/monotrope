@@ -4654,28 +4654,47 @@ def test_repair_retry_uses_fresh_codex_with_diagnostics(world: World) -> None:
 @pytest.mark.parametrize(
     "deleted_inputs",
     [
-        ("spec.md",),
-        ("plan.md",),
-        ("decisions.md",),
-        ("design.md",),
-        ("spec.md", "plan.md", "decisions.md", "design.md"),
+        ("plans/changes/demo/spec.md",),
+        ("plans/changes/demo/plan.md",),
+        ("plans/changes/demo/decisions.md",),
+        ("plans/changes/demo/design.md",),
+        ("prompts/04-implement.md",),
+        ("AGENTS.md",),
+        (
+            "plans/changes/demo/spec.md",
+            "plans/changes/demo/plan.md",
+            "plans/changes/demo/decisions.md",
+            "plans/changes/demo/design.md",
+            "prompts/04-implement.md",
+            "AGENTS.md",
+        ),
     ],
-    ids=["spec", "plan", "decisions", "design", "all-inputs"],
+    ids=["spec", "plan", "decisions", "design", "phase-prompt", "agent-rules", "all-inputs"],
 )
 def test_repair_retry_starts_after_a_completed_attempt_deletes_plan(
     world: World, monkeypatch: pytest.MonkeyPatch, deleted_attempt: int, deleted_inputs: tuple[str, ...]
 ) -> None:
-    """F-10: every deleted change input is restored before a fresh retry or Sonnet gets the diagnostics.
+    """F-11: every prompt input can be deleted without preventing either retry's diagnostics.
 
-    The F-8 name remains a criterion-ledger anchor; its plan-only case now covers all four inputs.
+    The F-8 name remains a criterion-ledger anchor; it covers the change files, phase prompt and rules.
     """
     folder = world.plan.parent
     for name in ("decisions.md", "design.md"):
         (folder / name).write_text(f"---\ntitle: {name}\nbead: demo-1\n---\n\n# {name}\n", encoding="utf-8")
     baseline = repair_world(world)
-    inputs = {name: (folder / name).read_bytes() for name in ("spec.md", "plan.md", "decisions.md", "design.md")}
+    inputs = {
+        relative: (world.root / relative).read_bytes()
+        for relative in (
+            "plans/changes/demo/spec.md",
+            "plans/changes/demo/plan.md",
+            "plans/changes/demo/decisions.md",
+            "plans/changes/demo/design.md",
+            "prompts/04-implement.md",
+            "AGENTS.md",
+        )
+    }
     steps = [{"stdout": "still looking"}] * (deleted_attempt - 1)
-    steps += [repair_step(delete=[f"plans/changes/demo/{name}" for name in deleted_inputs], append={}), repair_step()]
+    steps += [repair_step(delete=list(deleted_inputs), append={}), repair_step()]
     script_repair(
         world,
         steps,
@@ -4689,9 +4708,9 @@ def test_repair_retry_starts_after_a_completed_attempt_deletes_plan(
 
     def begin_work_call(*args, **kwargs):
         # Check on disk before either transport starts, including inputs not inlined in its prompt.
-        for name, content in inputs.items():
-            assert (folder / name).is_file(), f"{name} was not restored before the next attempt"
-            assert (folder / name).read_bytes() == content
+        for relative, content in inputs.items():
+            assert (world.root / relative).is_file(), f"{relative} was not restored before the next attempt"
+            assert (world.root / relative).read_bytes() == content
         ready_attempts.append(len(repair_calls(world)) + 1)
         real_begin_work_call(*args, **kwargs)
 
@@ -4714,17 +4733,62 @@ def test_repair_retry_starts_after_a_completed_attempt_deletes_plan(
         route = "codex" if attempt == 1 else "codex-repair"
         assert f"Attempt {attempt} ({route}):" in retry_prompt
         assert f"post-run-check-{attempt}" in retry_prompt and f"post-run-check-{attempt}" in world.text()
-    if "plan.md" in deleted_inputs:
+    if "plans/changes/demo/plan.md" in deleted_inputs:
         assert "plan.md cannot be read." in retry_prompt
     else:
         assert "did not add a measured line" in retry_prompt
     for name in ("spec.md", "plan.md"):
-        assert f"## Accepted {name.removesuffix('.md')}\n\n{inputs[name].decode('utf-8')}" in retry_prompt
-    for name in deleted_inputs:
-        assert f"> - `plans/changes/demo/{name}` +0 -{len(inputs[name].splitlines())}" in world.text()
-    for name in ("spec.md", "decisions.md", "design.md"):
-        assert (folder / name).read_bytes() == inputs[name]
+        content = inputs[f"plans/changes/demo/{name}"].decode("utf-8")
+        assert f"## Accepted {name.removesuffix('.md')}\n\n{content}" in retry_prompt
+    assert inputs["prompts/04-implement.md"].decode("utf-8").rstrip() in retry_prompt
+    assert inputs["AGENTS.md"].decode("utf-8").rstrip() in retry_prompt
+    for relative in deleted_inputs:
+        assert f"> - `{relative}` +0 -{len(inputs[relative].splitlines())}" in world.text()
+    for relative, content in inputs.items():
+        if relative != "plans/changes/demo/plan.md":
+            assert (world.root / relative).read_bytes() == content
     assert "2026-10-12 10:00–10:05, 5 min" in world.plan.read_text(encoding="utf-8")
+    assert git(world.root, "rev-list", "--count", f"{baseline}..HEAD") == "1"
+    assert git(world.root, "status", "--porcelain") == ""
+
+
+@pytest.mark.parametrize("edited_attempt", [1, 2])
+@pytest.mark.parametrize(
+    "edited_input",
+    ["plans/changes/demo/spec.md", "plans/changes/demo/plan.md", "prompts/04-implement.md", "AGENTS.md"],
+    ids=["spec", "plan", "phase-prompt", "agent-rules"],
+)
+def test_repair_prompts_keep_the_initial_input_snapshot(world: World, edited_attempt: int, edited_input: str) -> None:
+    """F-11: edits by either failed attempt cannot replace the accepted prompt inputs of later calls."""
+    baseline = repair_world(world)
+    original = (world.root / edited_input).read_text(encoding="utf-8")
+    marker = "FAILED-ATTEMPT-INPUT-EDIT"
+    # Keep the time heading available: the failure is verification, not inability to read the plan.
+    edited = original + f"\n{marker}\n"
+    steps = [{"stdout": "still looking"}] * (edited_attempt - 1)
+    steps += [repair_step(plant={edited_input: edited}, append={})]
+    last = repair_step()
+    last["plant"][edited_input] = original
+    steps.append(last)
+    script_repair(
+        world,
+        steps,
+        make=[{"stdout": f"snapshot-diagnostic-{n}\n", "exit": 1} for n in range(1, edited_attempt + 1)]
+        + [{"stdout": "green\n"}],
+    )
+    assert world.run("repair") == 0
+    calls = repair_calls(world)
+    assert len(calls) == edited_attempt + 1
+    assert [call["name"] for call in calls] == ["codex", "codex", "claude"][: edited_attempt + 1]
+    for call in calls:
+        prompt = prompt_of(call)
+        assert original.rstrip() in prompt
+        assert marker not in prompt
+    for attempt in range(1, edited_attempt + 1):
+        route = "codex" if attempt == 1 else "codex-repair"
+        assert f"Attempt {attempt} ({route}):" in prompt_of(calls[-1])
+        assert f"snapshot-diagnostic-{attempt}" in prompt_of(calls[-1])
+    assert all("resume" not in call["argv"] for call in world.calls("codex"))
     assert git(world.root, "rev-list", "--count", f"{baseline}..HEAD") == "1"
     assert git(world.root, "status", "--porcelain") == ""
 

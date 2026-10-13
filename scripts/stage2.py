@@ -713,10 +713,21 @@ def phase_prompt(root: Path, prompt_file: str, change: str, extra: str = "") -> 
     return "\n\n".join(parts)
 
 
-def work_prompt(root: Path, prompt_file: str, change: str, extra: str = "") -> str:
+def prompt_input(path: Path, inputs: dict[Path, bytes] | None = None) -> str:
+    """Read a prompt dependency once into the run's snapshot, keeping its bytes for restoration."""
+    if inputs is None:
+        return path.read_text(encoding="utf-8")
+    if path not in inputs:
+        inputs[path] = path.read_bytes()
+    return inputs[path].decode("utf-8")
+
+
+def work_prompt(
+    root: Path, prompt_file: str, change: str, extra: str = "", inputs: dict[Path, bytes] | None = None
+) -> str:
     """A work phase, the repository rules and its inputs, without review row instructions."""
-    body = (root / "prompts" / prompt_file).read_text(encoding="utf-8")
-    rules = (root / "AGENTS.md").read_text(encoding="utf-8")
+    body = prompt_input(root / "prompts" / prompt_file, inputs)
+    rules = prompt_input(root / "AGENTS.md", inputs)
     parts = [
         body.rstrip(),
         f"---\n\nChange: {change} (`plans/changes/{change}/`).",
@@ -2325,10 +2336,12 @@ def explore(root: Path, change: str, stage2_off: str | None = None) -> None:
     print(f"explore: answer appended to {ctx.research.relative_to(root)} · route {route}")
 
 
-def implementation_prompt(ctx: Context, baseline: str, diagnostics: list[str]) -> str:
-    """The current accepted inputs and the bounded evidence from earlier attempts."""
-    spec = (ctx.folder / "spec.md").read_text(encoding="utf-8")
-    plan = ctx.plan.read_text(encoding="utf-8")
+def implementation_prompt(
+    ctx: Context, baseline: str, diagnostics: list[str], inputs: dict[Path, bytes] | None = None
+) -> str:
+    """The accepted inputs and the bounded evidence from earlier attempts."""
+    spec = prompt_input(ctx.folder / "spec.md", inputs)
+    plan = prompt_input(ctx.plan, inputs)
     extra = [
         "Implement only the accepted plan with the available file tools. You cannot run commands. "
         "Update the measured span below `## Time used` in plan.md before returning; the runner runs "
@@ -2339,14 +2352,14 @@ def implementation_prompt(ctx: Context, baseline: str, diagnostics: list[str]) -
     ]
     if diagnostics:
         extra.append("## Earlier post-run diagnostics\n\n" + "\n\n".join(diagnostics))
-    return work_prompt(ctx.root, "04-implement.md", ctx.change, "\n\n".join(extra))
+    return work_prompt(ctx.root, "04-implement.md", ctx.change, "\n\n".join(extra), inputs)
 
 
 def run_attempts(
     ctx: Context,
     verb: str,
     routes: list[tuple[tuple[str, str, str | None], str | None, str, str | None]],
-    build_prompt,  # (diagnostics, endpoint) -> prompt
+    build_prompt,  # (diagnostics, endpoint, inputs) -> prompt
     baseline: str,
     key: str | None,
     ignored_before: dict[Path, tuple[int, int]] | None,
@@ -2369,11 +2382,31 @@ def run_attempts(
     """
     root = ctx.root
     allowed = {ctx.findings.relative_to(root)}
-    input_paths = [ctx.folder / name for name in ("spec.md", "plan.md", "decisions.md", "design.md")]
+    # Build each endpoint's base prompt before any model can edit or delete a dependency. Every
+    # builder read goes into the same snapshot, including the phase prompt and repository rules;
+    # later attempts append diagnostics to these strings and never read prompt inputs again.
+    inputs: dict[Path, bytes] = {}
+    prompts = {}
+    for endpoint, _, _, _ in routes:
+        if endpoint not in prompts:
+            prompts[endpoint] = build_prompt([], endpoint, inputs)
+    # These optional change inputs are read by the worker rather than inlined in its prompt.
+    for name in ("decisions.md", "design.md"):
+        path = ctx.folder / name
+        if path.is_file():
+            prompt_input(path, inputs)
     diagnostics: list[str] = []
     record: list[str] = []
     for attempt, (endpoint, credential, route, reason) in enumerate(routes, 1):
-        prompt = build_prompt(diagnostics, endpoint)
+        prompt = prompts[endpoint]
+        if diagnostics:
+            prompt = "\n\n".join(
+                [
+                    prompt.removesuffix(f"\n\n{READ_REQUEST}"),
+                    "## Earlier post-run diagnostics\n\n" + "\n\n".join(diagnostics),
+                    READ_REQUEST,
+                ]
+            )
         begin_work_call(ctx, verb, endpoint, prompt, attempt, route, ctx.findings, reason)
         if route == "stage-1":
             insert_before_time(
@@ -2383,8 +2416,9 @@ def run_attempts(
         # Each attempt must add its own line. Keep all existing plan lines even if an earlier
         # attempt removed the time heading, so restoring it cannot reuse an earlier measurement.
         baseline_time = ctx.plan.read_text(encoding="utf-8")
-        # Optional decisions and design files are kept only when they existed before this call.
-        inputs_before = {path: path.read_bytes() for path in input_paths if path.is_file()}
+        # Restore a deleted plan with this attempt's time evidence and runner route, while the
+        # accepted plan in every prompt stays the original snapshot. No older line satisfies a retry.
+        inputs_before = {**inputs, ctx.plan: baseline_time.encode("utf-8")}
         kept = snapshot_findings() if snapshot_findings is not None else None
         unmeasured: str | None = None
         try:
@@ -2511,6 +2545,7 @@ def run_attempts(
             # before building the next prompt; the retry still needs its own measured time line.
             for path, content in inputs_before.items():
                 if not path.exists():
+                    path.parent.mkdir(parents=True, exist_ok=True)
                     path.write_bytes(content)
     raise CallFailed(closing)
 
@@ -2543,7 +2578,7 @@ def implement(root: Path, change: str, stage2_off: str | None = None) -> None:
         ctx,
         "implement",
         routes,
-        lambda diagnostics, _endpoint: implementation_prompt(ctx, baseline, diagnostics),
+        lambda diagnostics, _endpoint, inputs: implementation_prompt(ctx, baseline, diagnostics, inputs),
         baseline,
         key,
         ignored_before,
@@ -2849,11 +2884,12 @@ def repair_prompt(
     taken: list[tuple[str, list[str]]],
     diagnostics: list[str],
     endpoint: tuple[str, str, str | None] = CODEX,
+    inputs: dict[Path, bytes] | None = None,
 ) -> str:
     """The implement contract with the repair block: the format, the baseline, the taken rows, the inputs."""
     rows = "\n".join(f"- {row[0]} [{row[1]}, {row[2]}] {row[4]}: {row[5]} — Status: {row[7]}" for _, row in taken)
-    spec = (ctx.folder / "spec.md").read_text(encoding="utf-8")
-    plan = ctx.plan.read_text(encoding="utf-8")
+    spec = prompt_input(ctx.folder / "spec.md", inputs)
+    plan = prompt_input(ctx.plan, inputs)
     extra = [
         REPAIR_FORMAT if endpoint == CODEX else REPAIR_FORMAT_FILE_TOOLS,
         f"Repair baseline: {baseline}",
@@ -2863,7 +2899,7 @@ def repair_prompt(
     ]
     if diagnostics:
         extra.append("## Earlier post-run diagnostics\n\n" + "\n\n".join(diagnostics))
-    return work_prompt(ctx.root, "04-implement.md", ctx.change, "\n\n".join(extra))
+    return work_prompt(ctx.root, "04-implement.md", ctx.change, "\n\n".join(extra), inputs)
 
 
 def repair(root: Path, change: str, stage2_off: str | None = None) -> None:
@@ -2928,7 +2964,7 @@ def repair(root: Path, change: str, stage2_off: str | None = None) -> None:
         ctx,
         "repair",
         routes,
-        lambda diagnostics, endpoint: repair_prompt(ctx, baseline, taken, diagnostics, endpoint),
+        lambda diagnostics, endpoint, inputs: repair_prompt(ctx, baseline, taken, diagnostics, endpoint, inputs),
         baseline,
         key,
         ignored_before,
