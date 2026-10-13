@@ -98,7 +98,9 @@ typed: a hand-kept list of files ages exactly as fast as files are added.
 | [`changes/attempt-diagnostics/plan.md`](changes/attempt-diagnostics/plan.md) | draft | partial | 2026-10-11 | coding-harness-cit |
 | [`changes/attempt-diagnostics/research.md`](changes/attempt-diagnostics/research.md) | draft | partial | 2026-10-11 | coding-harness-cit |
 | [`changes/attempt-diagnostics/spec.md`](changes/attempt-diagnostics/spec.md) | draft | partial | 2026-10-11 | coding-harness-cit |
+| [`changes/ci-minutes/decisions.md`](changes/ci-minutes/decisions.md) | draft | none | 2026-10-13 | coding-harness-cac |
 | [`changes/ci-minutes/research.md`](changes/ci-minutes/research.md) | draft | none | 2026-10-13 | coding-harness-cac |
+| [`changes/ci-minutes/spec.md`](changes/ci-minutes/spec.md) | draft | none | 2026-10-13 | coding-harness-cac |
 | [`changes/codex-takeover/research.md`](changes/codex-takeover/research.md) | draft | none | 2026-10-12 | coding-harness-nsm |
 | [`changes/criterion-test-ledger/decisions.md`](changes/criterion-test-ledger/decisions.md) | draft | partial | 2026-10-11 | coding-harness-909 |
 | [`changes/criterion-test-ledger/design.md`](changes/criterion-test-ledger/design.md) | draft | partial | 2026-10-11 | coding-harness-909 |
