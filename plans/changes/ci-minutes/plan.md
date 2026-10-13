@@ -109,3 +109,5 @@ Stage-1 route: repair · model claude-sonnet-5-5 · reason: Z.ai weekly limit ex
 2026-10-13 loop round 2 repair (L2-1, text only) and round 3 repairs (L3-1 this line, L3-2, L3-3) by the orchestrator, not timed; round 2 had no runner record because no runner call made it.
 
 2026-10-13 phase-6 repair F-1 by the orchestrator (one test tightened, mutant measured red), not timed.
+
+2026-10-13 phase-6 repair round 2 (F-2, F-3, F-4) by the orchestrator, not timed; both tightened tests measured red against their mutant.

@@ -202,3 +202,16 @@ Reviewer session: codex 01a13596-2046-7a62-a426-31b0958e11db — a fresh session
 Rounds run: 3
 
 Stage-2 call, 2026-10-13: review (loop marks) · endpoint openai-codex · model gpt-6.1-sol · leak check clean over 408 files, 1014 commits, 12 rules.
+
+Stage-2 call, 2026-10-13: review · endpoint openai-codex · model gpt-6.1-sol · leak check clean over 408 files, 1015 commits, 12 rules.
+
+## Phase 6 — Codex, 2026-10-13
+
+| ID | Severity | Dimension | Origin | Where | Finding | Reviewer | Status | Broke a test |
+|---|---|---|---|---|---|---|---|---|
+| F-2 | MINOR | SPEC | base | `tests/test_ci.py:777–778` | The cancellation test accepts a concurrency group containing `${{ github.run_id }}` because it checks only event/ref substrings. Such a group separates successive runs of the same pull request, preventing cancellation. An in-memory replay on `88e44bf` with the matching generated workflow passes all 15 targeted CI tests, schema validation and `ci-drift`. [criterion 4] | Codex | fixed — tests/test_ci.py::test_only_pull_request_runs_cancel_superseded_runs (the group is compared exactly; a group with `${{ github.run_id }}` was measured to go red) | no |
+| F-3 | MINOR | SPEC | base | `tests/test_ci.py:724–727,753–757` | Declaring `tools.python: ["3.12", "3.11"]` and regenerating the workflow adds a prohibited 3.11 leg while preserving the first-entry floor checks. An in-memory replay on `88e44bf` passes all 15 targeted CI tests, schema validation and `ci-drift`; no test rejects the additional 3.11 entry. [criterion 2] | Codex | fixed — tests/test_ci.py::test_one_version_is_the_interpreter_floor (the floor is the oldest declared version, not the first; `["3.12", "3.11"]` was measured to go red) | no |
+| F-4 | MINOR | SPEC | base | `decisions/gates.yaml:16` | The header documents which events run each job but omits that newer pull-request runs cancel superseded runs. This cancellation policy must appear in the gate-file header as well as the workflow guide. [criterion 8] | Codex | fixed — not a test — the `job` key in the header of decisions/gates.yaml now says a newer pull-request run cancels the older one and a push run is never cancelled | no |
+
+Phase 6 verdict: codex 01a135a5-8323-7913-bafa-07b76c72cb09, 2026-10-13
+Reviewer session: codex 01a135a5-8323-7913-bafa-07b76c72cb09 — a fresh session reviewed: no phase-2a session was recorded

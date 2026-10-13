@@ -750,7 +750,8 @@ def test_one_version_is_the_interpreter_floor() -> None:
     """`requires-python`, the ruff target and the oldest declared interpreter name one version."""
     import tomllib
 
-    oldest = _declared()[0]
+    # The oldest by version, not the first entry: ["3.12", "3.11"] adds a leg below the floor (phase 6, F-3)
+    oldest = min(_declared(), key=lambda v: tuple(int(part) for part in v.split(".")))
     project = tomllib.loads((REPO_ROOT / "pyproject.toml").read_text(encoding="utf-8"))
     ruff = tomllib.loads((REPO_ROOT / "ruff.toml").read_text(encoding="utf-8"))
     assert project["project"]["requires-python"] == f">={oldest}"
@@ -774,8 +775,8 @@ def test_only_pull_request_runs_cancel_superseded_runs() -> None:
         cancel = doc["concurrency"]["cancel-in-progress"]
         assert isinstance(cancel, str), f"a literal {cancel!r} holds for every event"
         assert re.fullmatch(r"\$\{\{\s*github\.event_name == 'pull_request'\s*\}\}", cancel), cancel
-        assert "github.event_name" in doc["concurrency"]["group"]
-        assert "github.ref" in doc["concurrency"]["group"]
+        # Exact: a group with `${{ github.run_id }}` separates the runs it should cancel (phase 6, F-2)
+        assert doc["concurrency"]["group"] == "verify-${{ github.event_name }}-${{ github.ref }}", doc["concurrency"]
 
 
 def test_the_schedule_runs_only_the_drift_job() -> None:

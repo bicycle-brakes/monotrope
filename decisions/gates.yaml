@@ -14,6 +14,8 @@
 #   command     what the runner calls — exactly as a developer would type it.
 #   action      marketplace action instead of a command (mutually exclusive).
 #   job         verify (per push to main / pull request) or drift (per schedule/dispatch).
+#               A newer run of the same pull request cancels the older one;
+#               a push run is never cancelled.
 #   enforcement closed vocabulary: advisory / report / block (bo0).
 #   floor       true = non-negotiable set; changing it is a governance act.
 #               Unreachable counts as failing: a gate that cannot measure
