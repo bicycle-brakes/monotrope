@@ -101,4 +101,6 @@ or the lock check an invented interpreter list, 3.11 is data, not a claim
 about this repository; rewriting it would change nothing the tests show.
 
 [DETAIL] **`tools/cloud-env/` is not touched.** It installs lakeswitch's
-interpreter, which changes with lakeswitch-ai-6sj.
+interpreter, which changes with lakeswitch-ai-6sj. (amended 2026-10-13, loop
+round 1, L1-1) Except this repository's own `.venv` there: it is built with
+3.12, the new floor, and `setup.sh` installs 3.12 beside 3.11; the README says so.

@@ -61,7 +61,11 @@ the runner; Stage 2 is blocked for GLM (bead coding-harness-6th) — see
 ## Not touched
 
 `requirements-ci.txt` (valid for 3.12, `research.md` amendment);
-`tools/cloud-env/`; `tests/test_repo_settings.py` and the ruleset;
+`tools/cloud-env/` except this repository's own `.venv` line and the
+installed interpreters in `setup.sh` and its README (amended 2026-10-13, loop
+round 1, L1-1: built with 3.12, pinned by
+`tests/test_ci.py::test_the_cloud_environment_builds_the_venv_with_the_floor`);
+`tests/test_repo_settings.py` and the ruleset;
 `_merge_ref_findings` and the checkout steps; the gate list itself;
 `AGENTS.md` (nothing there names 3.11 or the matrix; its text-only rule stays
 true); `scripts/kit/manifest.yaml`; sample `3.11` lists in `tests/` and the

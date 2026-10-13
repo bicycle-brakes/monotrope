@@ -128,7 +128,11 @@ coding-harness-cac). Research: `research.md`. Decisions: `decisions.md`.
   `decisions/gates.yaml` (`tools.python` and its comments),
   `pyproject.toml` (`requires-python`), `ruff.toml` (`target-version`), the
   comment in `scripts/check_research_currency.py`, `docs/WORKFLOW.md` (one
-  sentence). (amended 2026-10-13: maintainer decided 3.12 only)
+  sentence). (amended 2026-10-13: maintainer decided 3.12 only) Also
+  `scripts/ci_gates.py` (the triggers and the concurrency), `tests/test_ci.py`,
+  `scripts/kit/probe.py` (two declared probe cases, cap 36 -> 38) and
+  `tools/cloud-env/setup.sh` with its README (this repository's `.venv` on
+  3.12; amended 2026-10-13, loop rounds 1 and 2: L1-1, L1-2, L2-1).
 - The protected areas untouched and the non-goals unbuilt, shown by the pull
   request's file list.
 - Bead: the pull request closes coding-harness-cac, and its last commit
