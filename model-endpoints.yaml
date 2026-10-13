@@ -142,7 +142,8 @@ endpunkte:
       Codex through the official Codex CLI only, signed in with the
       maintainer's ChatGPT subscription — any other way in is not covered.
       Used for drafting spec, design and plan (phases 2, 2b and 3) through
-      `stage2.py draft`, writing in the CLI's workspace-write sandbox, and for
+      `stage2.py draft` and repairing taken findings through `stage2.py repair`
+      (ADR 0017), writing in the CLI's workspace-write sandbox, and for
       the review (phase 6) of `bounded`, `feature` and `architectural` changes,
       through `python3 scripts/stage2.py`; the spec review (phase 2a) moved to
       Opus 5.5 (ADR 0016) and the review loop (phase 4b) moved to

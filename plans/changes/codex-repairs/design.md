@@ -62,10 +62,11 @@ repair's deliberately stopping behavior.
   preparation, formatting, `make verify`, time check, answer check, red-first
   proof, finding-status write, checkpoint and private-record write ordering.
 - **Runner → phase-6 reviewer:** the repair starts no review. A later `review`
-  with fixed phase-6 findings starts Codex without resume, even if a historical
-  Codex phase-2a session exists; loop marks still resume that new verdict's
-  thread only after the verdict. Initial reviews retain their historical
-  phase-2a compatibility when no phase-6 finding has been repaired.
+  after an earlier `## Phase 6` block in `findings.md` starts a fresh read-only
+  Codex session without resume, even if a historical Codex phase-2a session
+  exists; loop marks still resume that new verdict's thread only after the
+  verdict. The first phase-6 review retains its historical phase-2a
+  compatibility when no earlier `## Phase 6` block exists.
 
 ## Data model
 
@@ -77,10 +78,10 @@ that GLM currently routes repair is corrected without changing that parser.
 
 The plan's route block and measured-time section, quoted failed-attempt
 blocks, fixed-status forms and loop-record fields stay as they are. Repair
-threads are not stored as reviewer sessions. Existing phase-6 rows whose
-Status begins `fixed` are sufficient to select a fresh re-check, with no new
-metadata or answer file. The supersession marker on ADR 0015 is added in
-phase 4; this drafting call writes only the new ADR file.
+threads are not stored as reviewer sessions. An earlier `## Phase 6` block in
+`findings.md` selects a fresh re-check regardless of the rows' Status, with
+no new metadata or answer file. The supersession marker on ADR 0015 is added
+in phase 4; this drafting call writes only the new ADR file.
 
 ## ADR draft
 

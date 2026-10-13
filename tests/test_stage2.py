@@ -6709,7 +6709,7 @@ def test_adr_0017_supersedes_0015_and_keeps_the_repair_contract() -> None:
 
 
 def codex_repair_doctrine_problems(texts: dict[str, str]) -> list[str]:
-    """Criterion 20: the runner text, doctrine, rules, prompts and endpoint remark agree on the Codex route."""
+    """Criteria 18 and 20: repair routing and each phase-6 session rule agree with the runner."""
     found = []
     runner = texts["scripts/stage2.py"]
     if "repair       <change>   # Codex" not in runner:
@@ -6722,6 +6722,31 @@ def codex_repair_doctrine_problems(texts: dict[str, str]) -> list[str]:
             found.append(f"WORKFLOW lacks '{needle}'")
     if "A reviewer never repairs its own findings" in workflow:
         found.append("WORKFLOW keeps the blanket ban")
+    review_docstring = next(
+        (
+            ast.get_docstring(node) or ""
+            for node in ast.parse(runner).body
+            if isinstance(node, ast.FunctionDef) and node.name == "review"
+        ),
+        "",
+    )
+    review_prompt = texts["prompts/06-review.md"]
+    session_rules = {
+        "WORKFLOW review bullet": workflow.partition("- `review` —")[2].partition("- `probe` —")[0],
+        "06-review Model paragraph": review_prompt.partition("**Model:**")[2].partition("**Input:**")[0],
+        "06-review Session paragraph": review_prompt.partition("**Session:**")[2].partition("**Verdict first.**")[0],
+        "review() docstring": review_docstring,
+    }
+    for where, rule in session_rules.items():
+        one = flat(rule)
+        for needle in (
+            "after an earlier `## Phase 6` block",
+            "fresh read-only Codex session",
+            "The first phase-6 review",
+            "recorded Codex phase-2a session",
+        ):
+            if needle not in one:
+                found.append(f"{where} lacks '{needle}'")
     if "Codex repairs the findings the orchestrator takes" not in flat(texts["AGENTS.md"]):
         found.append("AGENTS.md does not name the Codex repair")
     for name in ("prompts/04-implement.md", "prompts/04b-review-loop.md"):
@@ -6737,13 +6762,14 @@ def codex_repair_doctrine_problems(texts: dict[str, str]) -> list[str]:
 
 
 def test_codex_repair_doctrine_and_endpoint_remarks_agree() -> None:
-    """Criterion 20. Planted fault: an active GLM repair claim, a blanket ban or a false confinement claim."""
+    """Criteria 18 and 20. Plant a wrong repair route or a phase-6 session rule without the re-check exception."""
     paths = [
         "scripts/stage2.py",
         "docs/WORKFLOW.md",
         "AGENTS.md",
         "prompts/04-implement.md",
         "prompts/04b-review-loop.md",
+        "prompts/06-review.md",
         "model-endpoints.yaml",
     ]
     texts = {name: (REPO_ROOT / name).read_text(encoding="utf-8") for name in paths}
@@ -6756,10 +6782,33 @@ def test_codex_repair_doctrine_and_endpoint_remarks_agree() -> None:
         ("prompts/04b-review-loop.md", "gives them to Codex in one call", "gives them to GLM 5.3 in one call"),
         ("model-endpoints.yaml", "`glm-5.3` repaired the findings", "`glm-5.3` repairs the findings"),
     ):
-        # A needle broken across lines is planted on the flattened text, which the checker reads
-        source = texts[name] if needle in texts[name] else flat(texts[name])
-        assert needle in source, (name, needle)
-        planted = {**texts, name: source.replace(needle, replacement, 1)}
+        # Match wrapped sentences without flattening away the boundaries of the session rules.
+        pattern = r"\s+".join(re.escape(word) for word in needle.split())
+        mutated, count = re.subn(pattern, replacement, texts[name], count=1)
+        assert count == 1, (name, needle)
+        planted = {**texts, name: mutated}
         assert codex_repair_doctrine_problems(planted), (name, needle)
+    for name, start, end, where in (
+        ("docs/WORKFLOW.md", "- `review` —", "- `probe` —", "WORKFLOW review bullet"),
+        ("prompts/06-review.md", "**Model:**", "**Input:**", "06-review Model paragraph"),
+        ("prompts/06-review.md", "**Session:**", "**Verdict first.**", "06-review Session paragraph"),
+        ("scripts/stage2.py", "def review(", "    ctx = preflight(", "review() docstring"),
+    ):
+        before, opening, rest = texts[name].partition(start)
+        rule, closing, after = rest.partition(end)
+        assert opening and closing, (name, where)
+        for needle, replacement in (
+            ("after an earlier `## Phase 6` block", "after fixed phase-6 rows"),
+            ("fresh read-only Codex session", "recorded Codex phase-2a session"),
+            ("The first phase-6 review", "Every phase-6 review"),
+        ):
+            pattern = r"\s+".join(re.escape(word) for word in needle.split())
+            mutated, count = re.subn(pattern, replacement, rule, count=1)
+            assert count == 1, (name, where, needle)
+            planted = {**texts, name: before + opening + mutated + closing + after}
+            assert any(problem.startswith(where) for problem in codex_repair_doctrine_problems(planted)), (
+                where,
+                needle,
+            )
     assert stage2.REPAIR_FORMAT_FILE_TOOLS.count("you cannot run commands") == 1
     assert "you cannot run commands" not in stage2.REPAIR_FORMAT

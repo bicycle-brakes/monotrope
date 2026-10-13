@@ -1032,7 +1032,12 @@ def recorded_2a_session(text: str) -> str | None:
 
 
 def review(root: Path, change: str) -> None:
-    """Phase 6: a recorded Codex 2a session resumed - otherwise fresh - the verdict written, the loop rows released and marked."""
+    """Phase 6: verdict first, then release and mark the loop rows.
+
+    A re-check after an earlier `## Phase 6` block in `findings.md` starts a
+    fresh read-only Codex session. The first phase-6 review resumes a recorded
+    Codex phase-2a session, otherwise starts fresh; loop marks resume the verdict thread.
+    """
     ctx = preflight(root, change, CODEX)
     record = read_record(change)
     if record is not None:

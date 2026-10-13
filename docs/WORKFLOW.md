@@ -733,9 +733,11 @@ into a shell. Ten verbs exist:
 - `review-loop` — one round of phase 4b, started through Pi; round *n* goes
   to the ladder's *n*-th rung.
 - `release-loop` — the loop rows into `findings.md`, after the phase-6 verdict.
-- `review` — Codex, phase 6, a fresh session unless `findings.md` holds a
-  recorded Codex phase-2a session, which it resumes with `codex exec resume`;
-  it then releases the loop rows and has Codex mark each one.
+- `review` — Codex, phase 6. A re-check after an earlier `## Phase 6` block
+  in `findings.md` starts a fresh read-only Codex session. The first phase-6
+  review resumes a recorded Codex phase-2a session with `codex exec resume`;
+  otherwise it starts fresh. It then releases the loop rows and has Codex
+  mark each one.
 - `probe` — one call per rung of the ladder through Pi, the pinned version
   checked once first, the declaration and the leak check in front of each
   call; measures the address, writes no loop record (its call lines go to

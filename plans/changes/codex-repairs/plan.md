@@ -46,9 +46,10 @@ interview answers stand; no implementation or ADR answer is recorded here.
    red-first proof, status restoration and checkpoint callbacks unchanged.
    Make `REPAIR_FORMAT` prohibit commands/commits and findings edits, request
    a measured time entry and retain the fixed-line forms; it must not claim
-   Codex lacks command tools. In `review`, fixed phase-6 rows disable a
-   historical 2a resume; verdict and loop-mark calls stay read-only and only
-   the latter resumes the fresh verdict thread. Update repair/help comments.
+   Codex lacks command tools. In `review`, an earlier `## Phase 6` block in
+   `findings.md` disables a historical 2a resume; verdict and loop-mark calls
+   stay read-only and only the latter resumes the fresh verdict thread.
+   Update repair/help comments.
 2. **`tests/test_stage2.py`** adapts repair scenarios to `codex_ok` answer-file
    steps, tests both transports, and adds the ledger's new cases; keep existing
    top-level test names because other plans name them. Old GLM-route test
@@ -171,3 +172,5 @@ Stage-1 route: implement · model claude-sonnet-5-5 · reason: Z.ai weekly limit
 2026-10-13 span not measured: this session (Sonnet 5.5, Stage-1 route, file tools only) has no command tool, so `date` could not be read at start or end and no span is estimated; the orchestrator supplies the measured span of this session before the appetite is compared.
 
 2026-10-13 orchestrator repair after the failed implementation attempt, not timed: two doctrine tests planted their fault on raw text where the needle was broken across lines; they now plant on the flattened text the checker reads.
+
+2026-10-13 17:57:06–18:06:17, 9 min 11 s — Codex repaired the taken loop findings (L1-1 to L1-3). The doctrine regression test failed on baseline 25a5a2e before the repairs and passed afterward, including the planted faults for each session-rule location. The focused stage-2, run-count and endpoint suite passed 487 tests; the final doctrine test, ruff lint and format checks, and git diff --check passed. The runner owns make verify and the checkpoint.

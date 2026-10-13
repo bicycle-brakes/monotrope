@@ -3,19 +3,23 @@
 **Model:** Opus 5.5 — finds what Sonnet misses, and reads the code a change
 calls instead of trusting its docstring, for a spike; for a bounded, feature or
 architectural change gpt-6.1-sol at effort `max`, started by `python3
-scripts/stage2.py review <change>` — a fresh session where phase 2a ran on
-Opus 5.5 (ADR 0016), and the resume of a recorded Codex phase-2a session where
-one stands.
+scripts/stage2.py review <change>`. A re-check after an earlier `## Phase 6`
+block in `findings.md` starts a fresh read-only Codex session (ADR 0017).
+The first phase-6 review starts fresh where phase 2a ran on Opus 5.5
+(ADR 0016), and resumes a recorded Codex phase-2a session where one stands.
 **Input:** the diff, `spec.md` and, when the change has one, `design.md` —
 whether the diff makes its architecture delta true is your question (ADR 0009).
 **Not** the author's reasoning.
 **Result:** `plans/changes/<name>/findings.md`
 **Gate:** no open `[AMBIGUITY]`, no open BLOCKER — `[DIVERGENT]` counts as
 BLOCKER.
-**Session:** where phase 2a ran on Opus 5.5, your session starts fresh — no
-phase-2a session of yours exists, and `findings.md` says so. Where a recorded
-Codex phase-2a session stands (`Reviewer session: codex <id>` in its block,
-and it is the change's last 2a block), the runner resumes it with
+**Session:** a re-check after an earlier `## Phase 6` block in `findings.md`
+starts a fresh read-only Codex session, without resuming a repair, earlier
+phase-6 or historical Codex phase-2a thread (ADR 0017). The first phase-6
+review starts fresh where phase 2a ran on Opus 5.5 — no phase-2a session of
+yours exists, and `findings.md` says so. Only that first review resumes a
+recorded Codex phase-2a session (`Reviewer session: codex <id>` in the change's
+last 2a block), with
 `codex exec resume`. Your yardstick is the current `spec.md` — the version
 revised after the 2a review, not the one written first. Read it again, and
 check first that each of the 2a rows arrived in it as `findings.md` says.
