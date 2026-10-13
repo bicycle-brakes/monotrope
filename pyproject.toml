@@ -14,7 +14,7 @@ name = "coding-harness"
 version = "0.0.0"
 # A lower bound only: the interpreters that are tested are `tools.python`
 # in `decisions/gates.yaml`.
-requires-python = ">=3.11"
+requires-python = ">=3.12"
 dependencies = [
     "PyYAML==6.0.2",
     "Jinja2==3.1.6",

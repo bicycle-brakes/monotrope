@@ -14,13 +14,15 @@ snapshot expires (about seven days).
 
 ## What it does
 
-- **Python 3.11** via `uv python install 3.11`: `lakeswitch-ai` requires
-  `>=3.11,<3.12`, and the image ships 3.13.
+- **Python 3.11 and 3.12** via `uv python install 3.11 3.12`: `lakeswitch-ai`
+  requires `>=3.11,<3.12`, `coding-harness` requires `>=3.12`, and the image
+  ships 3.13.
 - **bd 1.3.0** to `~/.local/bin/bd-1.3.0`, checksum-verified: `tools/bd`
   looks there first; a mismatch skips the install (fail closed).
 - **`lakeswitch-ai/.venv`** from `requirements-ci.txt`, plus an editable
   install of the package: the same pins CI installs.
-- **`coding-harness/.venv`** with `--require-hashes`: what `make venv` builds.
+- **`coding-harness/.venv`** on Python 3.12 with `--require-hashes`: what
+  `make venv` builds.
 - **Tracker** via `tools/bd bootstrap --yes` in `adhd-relief` and
   `coding-harness`: clones from `refs/dolt/data`, reads only, pushes nothing.
   Bootstrap rewrites `.beads/.gitignore` and `.beads/config.yaml`; the script

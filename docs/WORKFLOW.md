@@ -421,6 +421,10 @@ make index      # regenerate plans/INDEX.md
 gate. A second list is the reason local runs and CI drift apart — not its
 symptom.
 
+CI runs on pull requests (a superseded run is cancelled) and on pushes to
+`main`, under Python 3.12; a branch without a pull request gets no hosted run,
+and the schedule runs only the drift gates.
+
 The stop hook is the comfort layer, not the enforcement. It runs only when
 Python was touched since `HEAD`: a hook that costs a minute when nothing has
 happened is switched off within a week — and a switched-off hook is worse than

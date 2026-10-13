@@ -722,7 +722,7 @@ def test_every_declared_interpreter_gets_a_leg(monkeypatch: pytest.MonkeyPatch) 
     """
     declared = _declared()
     assert ci_gates.interpreters() == declared, "the generator reads another list than tools.python"
-    assert len(declared) >= 2, f"tools.python declares {declared} — a matrix of one is not the second interpreter"
+    assert declared, "tools.python declares no interpreter — the matrix would be empty"
     job = _ci_doc()["jobs"][ci_gates.MATRIX_JOB]
     assert _matrix(job) == declared, f"matrix {_matrix(job)} differs from tools.python {declared}"
     assert job["strategy"].get("fail-fast") is False, "a red leg must not cancel the other"
@@ -735,6 +735,63 @@ def test_every_declared_interpreter_gets_a_leg(monkeypatch: pytest.MonkeyPatch) 
     monkeypatch.setattr(ci_gates, "interpreters", lambda: ["3.11", "3.12", "3.13"])
     generated = _ci_doc(ci_gates.generate_ci())
     assert _matrix(generated["jobs"][ci_gates.MATRIX_JOB]) == ["3.11", "3.12", "3.13"]
+
+
+def test_push_starts_the_workflow_only_on_main() -> None:
+    """A branch without a pull request costs no hosted minutes; its pull request is its check."""
+    assert ci_gates.MAIN_BRANCH == "main"
+    for doc in (_ci_doc(), _ci_doc(ci_gates.generate_ci())):
+        trigger = _trigger_of(doc)
+        assert trigger["push"] == {"branches": ["main"]}, f"push trigger: {trigger['push']!r}"
+        assert trigger["pull_request"] is None, f"pull_request is filtered: {trigger['pull_request']!r}"
+
+
+def test_one_version_is_the_interpreter_floor() -> None:
+    """`requires-python`, the ruff target and the oldest declared interpreter name one version."""
+    import tomllib
+
+    # The oldest by version, not the first entry: ["3.12", "3.11"] adds a leg below the floor (phase 6, F-3)
+    oldest = min(_declared(), key=lambda v: tuple(int(part) for part in v.split(".")))
+    project = tomllib.loads((REPO_ROOT / "pyproject.toml").read_text(encoding="utf-8"))
+    ruff = tomllib.loads((REPO_ROOT / "ruff.toml").read_text(encoding="utf-8"))
+    assert project["project"]["requires-python"] == f">={oldest}"
+    assert ruff["target-version"] == "py" + oldest.replace(".", "")
+
+
+def test_the_cloud_environment_builds_the_venv_with_the_floor() -> None:
+    """The cloud setup script builds this repository's `.venv` with the oldest declared interpreter."""
+    oldest = _declared()[0]
+    script = (REPO_ROOT / "tools" / "cloud-env" / "setup.sh").read_text(encoding="utf-8")
+    # The block ends at its own closing `fi` line, not at any word that starts with "fi" (L3-2)
+    block = re.split(r"^fi$", script.split("R=/home/user/coding-harness", 1)[1], maxsplit=1, flags=re.M)[0]
+    venv = [line for line in block.splitlines() if "uv venv" in line]
+    assert len(venv) == 1, f"expected one `uv venv` in the coding-harness block, found {venv!r}"
+    assert f"--python {oldest} " in venv[0], f"venv built with another interpreter than {oldest}: {venv[0]!r}"
+
+
+def test_only_pull_request_runs_cancel_superseded_runs() -> None:
+    """`cancel-in-progress` is true for a pull request and for nothing else: a push run is never cancelled."""
+    for doc in (_ci_doc(), _ci_doc(ci_gates.generate_ci())):
+        cancel = doc["concurrency"]["cancel-in-progress"]
+        assert isinstance(cancel, str), f"a literal {cancel!r} holds for every event"
+        assert re.fullmatch(r"\$\{\{\s*github\.event_name == 'pull_request'\s*\}\}", cancel), cancel
+        # Exact: a group with `${{ github.run_id }}` separates the runs it should cancel (phase 6, F-2)
+        assert doc["concurrency"]["group"] == "verify-${{ github.event_name }}-${{ github.ref }}", doc["concurrency"]
+
+
+def test_the_schedule_runs_only_the_drift_job() -> None:
+    """The matrix job and the summary job admit `push` and `pull_request`, never `schedule` or a manual start."""
+    events = "github.event_name == 'push' || github.event_name == 'pull_request'"
+    # Exact conditions, not substrings: an appended `|| true` keeps every event name in place and
+    # still runs the matrix on schedule and manual start (phase 6, F-1)
+    expected = {ci_gates.MATRIX_JOB: events, ci_gates.SUMMARY_JOB: f"always() && ({events})"}
+    for doc in (_ci_doc(), _ci_doc(ci_gates.generate_ci())):
+        for name, condition in expected.items():
+            assert doc["jobs"][name]["if"] == condition, doc["jobs"][name]["if"]
+        drift = [job for job in doc["jobs"].values() if "schedule" in str(job.get("if", ""))]
+        assert drift and all(
+            job["if"] == "github.event_name == 'schedule' || github.event_name == 'workflow_dispatch'" for job in drift
+        ), [job.get("if") for job in drift]
 
 
 def test_the_toolchain_comes_only_from_the_lock() -> None:

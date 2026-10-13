@@ -47,6 +47,10 @@ JOBS: tuple[str, ...] = ("verify", "drift")
 MATRIX_JOB = "gates"
 SUMMARY_JOB = "verify"
 
+# The one branch whose pushes start the workflow; every other branch is checked
+# through its pull request (bead coding-harness-cac).
+MAIN_BRANCH = "main"
+
 # The one line that installs the toolchain in every CI job: the hash-checked
 # lock and nothing else. The package versions live in `pyproject.toml` and, with
 # their hashes, in `requirements-ci.txt` — never in this file.
@@ -495,6 +499,7 @@ def generate_ci() -> str:
         "",
         "on:",
         "  push:",
+        f"    branches: [{MAIN_BRANCH}]",
         "  pull_request:",
         "  schedule:",
         '    - cron: "23 4 * * *"',
@@ -502,7 +507,7 @@ def generate_ci() -> str:
         "",
         "concurrency:",
         "  group: verify-${{ github.event_name }}-${{ github.ref }}",
-        "  cancel-in-progress: false",
+        "  cancel-in-progress: ${{ github.event_name == 'pull_request' }}",
         "",
         "jobs:",
         f"  {MATRIX_JOB}:",

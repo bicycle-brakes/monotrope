@@ -5,6 +5,7 @@ name: verify
 
 on:
   push:
+    branches: [main]
   pull_request:
   schedule:
     - cron: "23 4 * * *"
@@ -12,7 +13,7 @@ on:
 
 concurrency:
   group: verify-${{ github.event_name }}-${{ github.ref }}
-  cancel-in-progress: false
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
 jobs:
   gates:
@@ -20,7 +21,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        python: ["3.11", "3.12"]
+        python: ["3.12"]
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4

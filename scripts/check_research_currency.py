@@ -64,7 +64,7 @@ _REASON_WIDTH = 80
 # value from aliases (a list of ten aliases of a list of ten ..., seven deep, stands for ten
 # million items), and `str()` would expand it. `reprlib` reads a few items of a few levels.
 # `reprlib.Repr` takes keyword arguments from Python 3.12 only; the limits are attributes in
-# every version, and the repository is checked under 3.11 too (bead coding-harness-ei0).
+# every version, and an older interpreter would reject the keywords (bead coding-harness-ei0).
 _GLIMPSE = reprlib.Repr()
 _GLIMPSE.maxlevel = 3
 _GLIMPSE.maxlist = 6

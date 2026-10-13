@@ -11,7 +11,7 @@
 # Der Wert 120 ist von der Projekt-Instanz uebernommen, damit beide Seiten
 # dieselbe Sprache sprechen. Das ist der einzige Grund fuer genau diese Zahl.
 line-length = 120
-target-version = "py311"
+target-version = "py312"
 
 # `exclude` allein gilt nur fuer die Dateisuche. Nennt jemand eine Datei
 # ausdruecklich auf der Kommandozeile — `ruff format docs/patterns/x.py` —
