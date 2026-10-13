@@ -67,3 +67,17 @@ reports, or not shipping them at all, we decided on a starting template to
 achieve that each repository keeps its own gates and rules by design,
 accepting that a later improvement of such a template reaches a target only
 by hand or through the comparison report. — 2026-10-13
+
+## Q-4 · What `kit install` does with its changes at the end
+
+asked: 2026-10-13
+answer: A — it writes the files and the lock file, runs the target's `make verify`, and does not commit; a person or a session reviews the result and brings it in as a pull request.
+answered_by: maintainer
+status: answered
+
+In the context of a command that writes into another repository, facing the
+choice between leaving the verified changes uncommitted, committing on a new
+branch and opening the pull request, or committing directly, we decided on
+leaving them uncommitted to achieve that the target's own review and merge
+stay the only way the kit takes effect there (ADR 0008), accepting one manual
+step after every install or update. — 2026-10-13
