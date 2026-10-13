@@ -680,6 +680,11 @@ If an attempt fails its post-run checks, the runner quotes its diagnostics and
 the files its model changed (lines added and removed) into `findings.md` below
 that attempt's audit line, before the next attempt starts or the run exits 1; a
 passing attempt leaves its audit line only.
+Before `make verify`, the runner runs the worktree's own `.venv/bin/ruff` —
+`check --fix` with safe fixes only, then `format` — on the change's Python
+files under `scripts/` and `tests/`; what that changed stands first in a failed
+attempt's diagnostics and in the checkpoint commit's message, and a ruff that
+cannot run or leaves findings leaves the verdict to `make verify`.
 
 ### The runner is the only way
 
