@@ -152,3 +152,5 @@ Stage-2 call, 2026-10-13: repair · attempt 1 · route stage-1 · endpoint claud
 > ```text
 > - `plan.md` did not add a measured line below `## Time used`
 > ```
+
+Stage-2 call, 2026-10-13: review-loop · endpoint opencode-go · model mimo-v2.6-flash · leak check clean over 389 files, 982 commits, 12 rules.
