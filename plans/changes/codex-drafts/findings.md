@@ -684,3 +684,5 @@ Stage-2 call, 2026-10-13: review · endpoint openai-codex · model gpt-6.1-sol �
 | F-12 | MINOR | SPEC | base | `scripts/stage2.py:1585` | Two legal 616-character relative paths sharing their first 500 characters and ending in `one.txt` and `two.txt` produce identical restored-path audit lines. Although the list now retains every entry, `quote_block` truncates each path before its filename, so neither restored path is named in full. [criterion 8] | Codex | fixed — tests/test_stage2.py::test_put_back_paths_are_named_in_full_however_long | no |
 
 Phase 6 verdict: codex 01a130f4-7a06-7710-82b0-acf5a60d9dd1, 2026-10-13
+
+Stage-2 call, 2026-10-13: review · endpoint openai-codex · model gpt-6.1-sol · leak check clean over 385 files, 972 commits, 12 rules.
