@@ -28,7 +28,7 @@ Pre-mortem:  suppose it failed: most likely because source inventory assumptions
 Starts unless you say stop.
 ```
 
-Implement from this plan and `spec.md`. Both rounds of phase-2a rulings are incorporated;
+Implement from this plan and `spec.md`. All three rounds of phase-2a rulings are incorporated;
 Q-6 removes update work. The card widens neither scope nor the existing
 12-hour appetite. No Stage-1 Explore fallback route, model or reason is
 recorded in research. This drafting call ends before implementation; the
@@ -63,7 +63,8 @@ orchestrator displays the card and starts phase 4 after the runner's checks.
 No source file is deleted. Target writes are selected kit files, missing
 regular templates, derived CI, scaffold placeholders and `harness.lock.yaml`.
 The new regression suites remain `bestand` under the test catch-all; the
-real-install test never ships and recursively starts another installation.
+real-install test does not ship, so target verification cannot recursively
+start another installation.
 Recipe assets and `install.py` travel under `scripts/kit/`.
 
 ## Implementation
@@ -78,9 +79,11 @@ Recipe assets and `install.py` travel under `scripts/kit/`.
    bytes. CI has one derived rule, using `scripts/ci_gates.py` and
    `decisions/gates.yaml`. Exclude root provenance, agent definitions and all
    spec-listed harness/endpoint/tracker settings; add exact `bestand` rules
-   for the lock and `LICENSE`. Keep schema-1 classification readable for
-   existing helper callers, but install/report accept exactly schema 2 at
-   the requested commit. Reject unknown roles/schemas, contradictory rules,
+   for the lock and `LICENSE`. Payload tests assert these two inventory roles
+   directly, without relying on the source's tracked-file set. Keep schema-1
+   classification readable for existing helper callers, but install/report
+   accept exactly schema 2 at the requested commit. Reject unknown
+   roles/schemas, contradictory rules,
    unclassified committed files, unsafe recipes and destination collisions
    before application. Leave the independent export manifest unchanged.
 2. **Portable verification and probe.** The starter Makefile delegates
@@ -103,13 +106,16 @@ Recipe assets and `install.py` travel under `scripts/kit/`.
    Portable pytest runs all installed `tests/`, converting `REIST_NICHT`
    to exact `--deselect` IDs (`tests.module` to `tests/module.py`, preserving
    function/parameter suffixes); forward failure and empty-collection exits.
-   `_baue` uses the same initializer as an empty fresh install: unchanged kit
+   `_baue` initializes its own disposable tree directly with unchanged kit
    bytes, gate/Makefile starters, source-original bytes for the other three
    templates, CI derived from starter gates, scaffolds and the complete lock.
    It invokes neither install nor target verification and commits only its
    own disposable tree before measuring pytest. Prove file-set, bytes, modes
    and lock equality against an actual fixture install of the same selected
-   commit, excluding Git metadata and later verifier/measurement output.
+   commit, comparing installed payload paths only: exclude pre-existing
+   allowlisted root files, Git metadata and later verifier/measurement output.
+   The probe's initially empty preparation directory does not undergo target
+   eligibility checks; its tracked-set check runs after the probe commits.
    For unstaged runner checks, build a committed source candidate only in an
    owned temporary repository, from tracked working files plus untracked
    kit/recipe assets selected by the manifest. Resolve that candidate commit
@@ -148,9 +154,11 @@ Recipe assets and `install.py` travel under `scripts/kit/`.
    unsupported/missing source manifest, naming the commit and observed
    schema. Never classify historical schema-1 paths with the command's roles.
 4. **Install and lock.** Require a non-bare target root, readable HEAD, no
-   lock of any type, and index paths only from exact root `README.md`,
-   `LICENSE`, `.gitignore`, `.gitattributes`; reject `README.rst`,
-   `LICENSE.txt` and every other name, directing to report. Preserve existing
+   lock of any type, and a nonempty set of index paths only from exact root
+   `README.md`, `LICENSE`, `.gitignore`, `.gitattributes`; reject `README.rst`,
+   `LICENSE.txt` and every other name, directing to report. A repository with
+   an empty commit and no tracked file is refused without writes; its
+   diagnostic says to commit a `README.md`. Preserve existing
    regular templates and modes; refuse template symlinks, directories,
    submodules and special files, plus every occupied kit/CI/scaffold path.
    Preflight all paths, ancestors, recipes and scaffolds for escapes, Git
@@ -186,8 +194,15 @@ Recipe assets and `install.py` travel under `scripts/kit/`.
    source inheritance. Poison caller overrides/PATH and remove endpoint
    credentials; assert real verification, unchanged index/HEAD and untracked
    payload. The fixture then commits only recorded payload paths and the lock
-   (never its venv/caches), and runs real target
-   `make verify` again, including the lock's role check and all seven gates.
+   (never its venv/caches), and runs real target `make verify` again under
+   the same isolated environment and target-runtime rule, with all seven
+   gates. Before this second run, plant inherited `PYTHON`/`BEAD_RENDER` and
+   a source-first PATH, then remove the overrides and every PATH entry inside
+   the command repository; assert the actual verifier uses the target
+   interpreter and never receives that source environment. The source-only
+   role check skips by its listed lock predicate; arbitrary instance paths
+   do not require edits to the kit manifest. The nonempty tracked-set check
+   remains active in both target states.
    Record source/target commits and output. Its committed source snapshot
    explicitly contains new installer/recipe/test assets; never depend on the
    runner staging them in this checkout first. Tracker, PR and merge work
@@ -202,6 +217,7 @@ prerequisites still fail. Generic cases use fixtures, not these skips.
 
 | Case | Source-only assertion |
 |---|---|
+| `tests/test_kit.py::test_every_tracked_file_has_a_role` | Every tracked file in this repository, rather than an instance's own set, is classified by the kit manifest. |
 | `tests/test_kit.py::test_the_kit_actually_carries_something` | At least 20 tracked mechanism files in this repository. |
 | `tests/test_kit.py::test_the_two_manifests_really_disagree_somewhere` | More than 60 tracked files in both source manifests. |
 | `tests/test_kit.py::test_the_kit_list_is_not_derivable_from_the_export_list` | Independence measured over the full source stock. |
@@ -228,7 +244,7 @@ new measurement proves it green, skipped or absent, and lower the cap.
 - 2: not yet written tests/test_kit_payload.py::test_payload_excludes_inventory_and_harness_configuration — a protected source path is published.
 - 3: not yet written tests/test_kit_payload.py::test_exact_initial_configuration_has_template_role — an extra starter is added or one of the five is kit-owned.
 - 4: not yet written tests/test_kit_install.py::test_install_preserves_existing_templates — matching/different regular templates or modes are replaced or kit-owned.
-- 5: not yet written tests/test_kit_install.py::test_install_refuses_targets_outside_freshness_allowlist — an alternative filename, populated, unborn, pinned, bare or non-root target receives a write.
+- 5: not yet written tests/test_kit_install.py::test_install_refuses_targets_outside_freshness_allowlist — an alternative filename, populated, unborn, pinned, bare, non-root or committed-but-empty target receives a write, or the empty-target refusal omits the README.md remedy.
 - 6: not yet written tests/test_kit_install.py::test_install_refuses_occupied_destinations_before_writes — a kit/CI/scaffold collision or non-regular template allows any target write.
 - 7: not yet written tests/test_kit_install.py::test_lock_records_origin_commit_and_ownership_baselines — a URL, commit, role, recipe, hash or mode is wrong or absent.
 - 8: not yet written tests/test_kit_install.py::test_report_uses_named_commits_exact_paths_and_ownership — dirty bytes, folded case or missing paths give a dishonest result.
@@ -242,13 +258,13 @@ new measurement proves it green, skipped or absent, and lower the cap.
 - 15: not yet written tests/test_kit_install.py::test_failed_or_unavailable_verification_keeps_application — failure is hidden or applied files/lock disappear.
 - 16: not yet written tests/test_kit_install.py::test_install_preserves_target_git_state — installer actions change index, HEAD, refs or remotes.
 - 17: not yet written tests/test_kit_install.py::test_fresh_committed_target_passes_real_make_verify_untracked — verification needs staging, source state, credentials, inherited dependencies or an extra starter; the fixture tracks all four allowed names.
-- 18: not yet written tests/test_kit_install.py::test_committed_installed_target_passes_real_make_verify — post-adoption verification fails or the committed lock/LICENSE is unclassified.
+- 18: not yet written tests/test_kit_install.py::test_committed_installed_target_passes_real_make_verify — post-adoption verification fails, is omitted, or receives poisoned inherited PYTHON/BEAD_RENDER, source PATH entries or the source interpreter.
 - 19: not yet written tests/test_kit_payload.py::test_starter_gates_run_shipped_tests_except_probe_exemptions — a gate/test file disappears or extra deselections hide a failing unexempted case.
 - 19: not yet written tests/test_kit_payload.py::test_changed_shipped_skips_are_listed_and_scoped — a new/changed skip is unlisted or uses a forbidden predicate.
 - 20: not yet written tests/test_kit_install.py::test_ci_is_derived_from_selected_target_gates — source CI is copied, retained gates are ignored or regeneration differs.
 - 20: not yet written tests/test_kit_install.py::test_invalid_target_gates_refuse_before_writes — rejected CI derivation happens after a target write.
 - 21: not yet written tests/test_kit_install.py::test_scaffold_placeholders_are_empty_and_kit_owned — a scaffold is missing/populated or its placeholder lacks a baseline.
-- 22: not yet written tests/test_kit_payload.py::test_probe_matches_initialized_install_payload — file-set, starters, CI, modes or lock differ from an empty fresh fixture install.
+- 22: not yet written tests/test_kit_payload.py::test_probe_matches_initialized_install_payload — payload file-set, starters, CI, modes or lock differ between the probe's own committed tree and a fixture install at the same source commit.
 - 22: not yet written tests/test_kit_payload.py::test_probe_includes_untracked_kit_assets_from_candidate_snapshot — the pre-staging probe omits a new installer/bootstrap asset or changes source Git state.
 - 22: tests/test_kit.py::test_the_exemption_list_only_shrinks — the exception count exceeds its cap.
 - 22: not yet written tests/test_kit_payload.py::test_changed_shipped_skips_are_listed_and_scoped — a new/changed skip is unlisted or uses a forbidden predicate.
@@ -272,7 +288,11 @@ make verify
 The measurement command supplies evidence, not a pass verdict; the strict
 probe in `make verify` blocks unexplained, expired and orphaned exemptions.
 The real integration tests invoke actual target `make verify` in both
-untracked and fixture-committed states and capture all seven gate results.
+untracked and fixture-committed states under criterion 14's isolated
+environment and target runtime, and capture all seven gate results plus
+the actual interpreter and environment. Poisoned source overrides/PATH must
+not reach either run. The refusal suite includes a repository with an empty
+commit and no tracked files, and checks its `README.md` remedy.
 The focused source run must show every listed scoped case ran without
 skipping. Keep independent export and `decide adr` regressions green.
 
@@ -369,5 +389,44 @@ the orchestrator's responsibility; this addendum is the worker's handoff.
 Resume: let the runner verify and commit the redraft, display the identical
 opening card, then start phase 4 from this plan and `spec.md`, implementing
 install/report/lock only and recording time below.
+
+## Draft handoff addendum — 2026-10-14, third review
+
+Objective: redraft phases 2, 2b and 3 from the recorded rulings on F-25
+through F-27. Branch `feat/kit-install`, input HEAD
+`bffb64369aa2002c32b1a84fe7d3de29108b7968`; local `origin/main` remains
+`3199a2823f738b4305dce4b73de6aa8c8c89a6d3`. Remote PR state and real
+instances were not read under the worktree/Git-directory boundary. The only
+initial dirty path was the runner's findings audit. The runner is the active
+orchestrator; this drafting worker creates no parallel session, Git mutation,
+tracker write or real-instance application. Tracker ownership, full checks
+and the single commit remain with the runner/orchestrator.
+
+Completed: spec/design/plan and the existing single new-to-main ADR 0018
+incorporate the third review; the research addendum records local evidence.
+All 27 phase-2a rows have dispositions as of this input HEAD. Reviewer text,
+prior incorporation records, audit lines, decisions and ADR answers are
+unchanged; only the F-18 and F-25–F-27 Status cells were revised. The role
+check joins the exact lock-scoped case list, now 14 cases, with source
+enforcement intact. Freshness requires a tracked file, the empty-target
+refusal names its remedy, and post-commit verification has the same isolation
+and target-runtime contract as install. Class, all 23 criterion numbers,
+the ADR claim, six maintainer answers and the 12-hour appetite are preserved.
+
+Checks passed on 2026-10-14: `python3 scripts/check_interview_minimums.py
+--change kit-install`, `python3 scripts/check_criterion_ledger.py` and
+`git diff --check`. Artifact QA checked YAML headers, triggered/refutable
+criteria, unchanged opening card, empty `Time used`, the five design parts,
+each named skip function, review-text/audit preservation, decisions unchanged,
+exactly one new-to-main ADR and the permitted file scope. Implementation,
+integration/runtime evidence and new portability measurements remain undone.
+The general artifact validator and plan template are absent; registry and
+full `make verify` stay with the runner. A repository-wide handover under
+`docs/journal/handover/` is outside this worker's allowed writes and remains
+the orchestrator's responsibility; this dated addendum carries the handoff.
+
+Resume: let the runner verify and commit this draft, display the identical
+opening card, then implement install/report/lock from this plan and `spec.md`,
+recording phase-4 time below.
 
 ## Time used

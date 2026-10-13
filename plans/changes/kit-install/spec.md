@@ -27,7 +27,7 @@ existing instance a comparison report for adoption in its own changes (bead
 coding-harness-2uk). Research: `research.md`. Maintainer answers:
 `decisions.md`, Q-1 through Q-6, including the split that defers updates.
 
-This revision incorporates both rounds of recorded phase-2a rulings, through
+This revision incorporates all three rounds of recorded phase-2a rulings, through
 2026-10-14. Q-6 defers updates; ruling F-18 adds proof after the adoption
 commit as criterion 18, shifting the former criteria 18–22 to 19–23. These
 changes follow the recorded scope and rulings, not a gate result. Design
@@ -58,7 +58,8 @@ runs in `design.md`.
 ## Terms
 
 - **Fresh target:** the root of a non-bare Git working tree with at least one
-  commit, no `harness.lock.yaml` of any file type, and tracked paths only from
+  commit and at least one tracked file, no `harness.lock.yaml` of any file
+  type, and tracked paths only from
   the exact root names `README.md`, `LICENSE`, `.gitignore` and
   `.gitattributes`. Other names, including `README.rst` and `LICENSE.txt`,
   are outside the allowlist. Untracked files
@@ -91,7 +92,9 @@ runs in `design.md`.
 - **Scoped test skip:** a case and predicate listed in `plan.md`; an added or
   changed predicate may use only an absent path the kit does not ship or
   the root `harness.lock.yaml` marking an installed instance. The latter is
-  present in the probe and target, absent in the source.
+  present in the probe and target, absent in the source. The shipped
+  tracked-file role check is source-only and uses this lock predicate;
+  an instance's own tracked files need no kit-manifest classification.
 
 ## Acceptance criteria
 
@@ -114,10 +117,12 @@ runs in `design.md`.
    *Refuted by:* an existing template is overwritten, merged or kit-owned,
    including when its bytes equal the starter.
 5. If the target fails the freshness definition, install refuses before any
-   target write and directs the caller to the comparison report.
-   *Refuted by:* an unborn, non-root, bare, already pinned or populated target
-   receives any installation file; repeating an install after red verification
-   is also refused while its lock remains.
+   target write with a diagnostic directing the caller to the comparison
+   report or, for a target with no tracked file, to commit a `README.md`.
+   *Refuted by:* an unborn, non-root, bare, already pinned, populated or
+   committed-but-empty target receives any installation file, or the
+   empty-target refusal omits the remedy, or a repeat install after red
+   verification writes while its lock remains.
 6. If a non-template destination is occupied or a template destination exists
    as anything other than a regular file, install refuses before any target
    write.
@@ -185,10 +190,13 @@ runs in `design.md`.
     or dependencies inherited from the source; omitting an allowed root name
     from the evidence fixture does not meet this criterion.
 18. When a disposable fixture commits the reviewed installed payload,
-    including the lock, actual target `make verify` passes again.
-    *Refuted by:* a shipped case fails after commit, including the role check
-    for `harness.lock.yaml` or `LICENSE`, or only the untracked state is tested;
-    the fixture's commit is not an installer action.
+    including the lock, actual target `make verify` passes again in the same
+    isolated verification environment and target runtime as criterion 14.
+    *Refuted by:* a shipped portable case fails after commit, only the
+    untracked state is tested, or a planted inherited `PYTHON`, `BEAD_RENDER`
+    or source PATH entry/runtime reaches the post-commit verifier. The
+    fixture's commit is not an installer action; the source-only role check
+    uses the listed lock-scoped skip rather than classifying instance files.
 19. When the starting gate file is supplied, its blocking local gates are
     portable pytest, ruff check, ruff format, ADR answers, criterion ledger,
     gate schema and CI drift, with pytest running all shipped test files and
@@ -209,7 +217,7 @@ runs in `design.md`.
     *Refuted by:* a declared folder or placeholder is absent, source contents
     populate a scaffold, or its placeholder has no kit baseline.
 22. When the portability probe builds and commits its disposable tree, the
-    payload equals an empty fresh installation of the selected version,
+    tree contains the selected version's initialized installation payload,
     without growing `REIST_NICHT` or its cap and with only listed scoped skips.
     *Refuted by:* a kit file, initialized template, derived CI, scaffold
     placeholder or lock differs or is missing; source gates/Makefile replace
@@ -261,8 +269,9 @@ runs in `design.md`.
   in the locked source environment.
 - The real fresh-target install passes target `make verify` before and after
   the fixture commits its payload, with all four allowlisted names tracked;
-  fixture reports,
-  refusals, failure injection and environment isolation have test evidence
+  both runs use criterion 14's isolated environment and target runtime, with
+  poisoned inherited variables/PATH proving the post-commit isolation too.
+  Fixture reports, refusals and failure injection have test evidence
   naming the source commit in the PR. No real instance is installed.
 - The PR carries the implementation files listed in `plan.md`, revised spec,
   design and plan, review dispositions, `docs/WORKFLOW.md` and the single
@@ -298,8 +307,16 @@ writing an answer or an ADR-answer record.
   initialize these same starters (F-16), while report compares source-original
   references, so portability measures what an instance receives.
 - [DETAIL] Use the installed lock to scope the plan's source-stock/policy
-  cases (F-17/F-20); this keeps missing source prerequisites red without
-  treating an instance's untracked payload as missing source inventory.
+  cases, including the tracked-file role check (F-17/F-20/F-25); this keeps
+  missing source prerequisites red without imposing source path rules on
+  an instance's own files. Keep the lock and `LICENSE` inventory rules.
+- [DETAIL] Refuse a committed target with no tracked file and name the
+  `README.md` remedy (F-26), so the shipped nonempty-set check can run before
+  payload adoption. The probe initializes its own disposable tree directly;
+  it does not claim that this initially empty tree is an eligible target.
+- [DETAIL] Apply the same runtime isolation to the fixture's post-commit
+  verification (F-27), so inherited source dependencies cannot make the
+  second proof appear green.
 - [DETAIL] Let the probe select a complete temporary candidate snapshot for
   pending-tree measurement, so newly added kit assets are measured before
   the runner stages them; this changes no source Git state or install/report

@@ -478,3 +478,38 @@ cut-off. Interview/ledger checks can read inside this boundary; the registry
 needs the shared tracker through `bead_render.py`, so registry and full
 verification remain with the runner. No implementation, fresh-target runtime
 test or new portability measurement is claimed by this draft.
+
+## Third-review gap resolution — 2026-10-14
+
+Read only this worktree and repository Git metadata at input HEAD
+`bffb64369aa2002c32b1a84fe7d3de29108b7968`; local `origin/main` remains
+`3199a2823f738b4305dce4b73de6aa8c8c89a6d3`. The runner's findings audit
+was the only initial dirty path. Remote PR state and real instances were
+not read under this call's boundary.
+
+- F-25 through F-27 have recorded third-round rulings in `decisions.md`.
+  No new interview or maintainer answer is needed to incorporate them.
+- [GAP] `test_every_tracked_file_has_a_role` reads the entire tracked set
+  through `probe.nach_rolle()` (`tests/test_kit.py:52–61`, this input HEAD).
+  It is a source-stock check, so ruling F-25 adds it to the plan's exact
+  lock-scoped case list. The lock and `LICENSE` still receive explicit
+  inventory rules; this does not turn instance files into kit inventory.
+- [GAP] `test_the_examined_set_is_not_empty` requires tracked files even
+  before payload adoption (`tests/test_kit.py:42–49`, the same cut-off).
+  Ruling F-26 refuses a committed-but-empty target and names the `README.md`
+  remedy. The case remains active; the probe's own prepared tree is committed
+  before measurement and is not itself an install-eligibility fixture.
+- [GAP] The verifier honours and exports `PYTHON`, and can choose the
+  inherited PATH interpreter (`scripts/verify_all.sh:28–55`, the same
+  cut-off). Ruling F-27 therefore binds the fixture's post-commit run to
+  criterion 14's isolation too; both integration states must plant and
+  remove the inherited overrides and source PATH entries.
+- The existing new-to-main ADR 0018 remains the single permitted draft
+  (`scripts/stage2.py::draft_keep`); no second ADR or renumbering is needed.
+  The absent plan template and general artifact validator remain separate
+  gaps. Registry/shared-tracker and full verification stay with the runner.
+
+Before this redraft, the named-change interview and criterion-ledger checks
+passed on 2026-10-14. Implementation, target verification and new portability
+measurements remain outstanding; these observations add no test result for
+the proposed implementation.

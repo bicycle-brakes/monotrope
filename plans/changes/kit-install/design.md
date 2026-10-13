@@ -20,7 +20,7 @@ tags: [design, kit, install, report]
 # Design — kit-install
 
 The shape for the revised `spec.md`, from `research.md`, the six maintainer
-answers and both rounds of phase-2a rulings in `decisions.md`, through
+answers and all three rounds of phase-2a rulings in `decisions.md`, through
 2026-10-14. Updates are deferred by Q-6; this design contains no update
 algorithm or pending-pin model.
 
@@ -92,7 +92,9 @@ potentially incompatible gate schema to compute comparison bytes.
 
 **Command → target working tree.** Require the target root and the freshness
 allowlist in the spec: exactly root `README.md`, `LICENSE`, `.gitignore` and
-`.gitattributes`, using a readable HEAD plus the index's tracked paths.
+`.gitattributes`, using a readable HEAD plus a nonempty set of index paths.
+A committed target with no tracked file is refused before any write,
+with the remedy to commit a `README.md`.
 Untracked content is preserved unless it conflicts with a destination.
 Preflight every file and ancestor, including initial recipe and scaffold
 paths: refuse escapes, Git metadata, symlinks, submodules, type collisions
@@ -183,11 +185,13 @@ Source inventory gates, missing provenance/adoption records, external ruleset
 inspection, tracker prerequisites and another nested probe are not starter
 gates. Existing templates retain their own gates and can fail verification.
 
-The probe uses the same payload preparation as install into an empty fresh
-target: unchanged kit bytes, the gate and Makefile starters, source-original
-bytes for the other three templates, CI derived from the starter gates,
+The probe initializes its own disposable tree with the same payload
+preparation as install: unchanged kit bytes, gate/Makefile starters,
+source-original bytes for the other three templates, CI derived from starter gates,
 scaffold placeholders and a complete lock. It does not run the installer or
 target verifier; it commits the payload and measures pytest as before.
+Its initially empty directory is a preparation tree, not an eligible install
+target; the nonempty tracked-set check runs after the probe commits.
 Report alone keeps source-original same-path template/derived references.
 
 Generic gate/schema/CI tests use complete fixture declarations for optional
@@ -195,6 +199,10 @@ tracker, history, drift and writer-only gates; fixtures exercise the real
 generator. Source-stock and source-policy cases use only the case-specific
 lock predicate listed in the plan, so they skip in an installed or probe tree
 and still run in the source, even when a source prerequisite is broken.
+This includes `test_every_tracked_file_has_a_role`: it checks this
+repository's tracked set, not an instance's own files. The source retains
+the `bestand` rules for the lock and `LICENSE`; installed instances never
+need to edit the kit-owned manifest to classify their own tracked files.
 The two manifest policies remain independent: test that the legacy
 mechanism/inventory partition cannot derive export verdicts or vice versa;
 new ownership roles are checked explicitly, not required to span multiple
@@ -207,7 +215,11 @@ bootstrap pass. Installer regression tests stay source inventory so target
 verification cannot recursively install another target. A real-install
 fixture tracks all four allowed root names and provides its own runtime and
 dependencies; after proving untracked verification it commits the payload
-itself and runs actual target verification again.
+itself and runs actual target verification again under the same environment
+rule: remove inherited `PYTHON` and `BEAD_RENDER`, strip command-repository
+PATH entries, and use the target runtime. Plant those overrides and a source
+interpreter first on PATH for both runs, and record the verifier environment
+and interpreter to make any inherited runtime fail the proof.
 
 **Target lock, schema 1.** `source: {url, commit}` stores origin identity and
 the full resolved pin. `files` is keyed by exact target-relative path. A
