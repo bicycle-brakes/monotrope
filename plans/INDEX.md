@@ -116,7 +116,11 @@ typed: a hand-kept list of files ages exactly as fast as files are added.
 | [`changes/codex-drafts/research.md`](changes/codex-drafts/research.md) | draft | none | 2026-10-12 | coding-harness-rhq |
 | [`changes/codex-drafts/spec.md`](changes/codex-drafts/spec.md) | draft | none | 2026-10-12 | coding-harness-rhq |
 | [`changes/codex-repairs/decisions.md`](changes/codex-repairs/decisions.md) | draft | none | 2026-10-13 | coding-harness-0ga |
+| [`changes/codex-repairs/design.md`](changes/codex-repairs/design.md) | draft | none | 2026-10-13 | coding-harness-0ga |
+| [`changes/codex-repairs/findings.md`](changes/codex-repairs/findings.md) | draft | none | 2026-10-13 | coding-harness-0ga |
+| [`changes/codex-repairs/plan.md`](changes/codex-repairs/plan.md) | draft | none | 2026-10-13 | coding-harness-0ga |
 | [`changes/codex-repairs/research.md`](changes/codex-repairs/research.md) | draft | none | 2026-10-13 | coding-harness-0ga |
+| [`changes/codex-repairs/spec.md`](changes/codex-repairs/spec.md) | draft | none | 2026-10-13 | coding-harness-0ga |
 | [`changes/codex-takeover/research.md`](changes/codex-takeover/research.md) | draft | none | 2026-10-12 | coding-harness-nsm |
 | [`changes/criterion-test-ledger/decisions.md`](changes/criterion-test-ledger/decisions.md) | draft | partial | 2026-10-11 | coding-harness-909 |
 | [`changes/criterion-test-ledger/design.md`](changes/criterion-test-ledger/design.md) | draft | partial | 2026-10-11 | coding-harness-909 |
