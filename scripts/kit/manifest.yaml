@@ -179,7 +179,7 @@ rules:
     reason: "builds its own git repositories; the half that reads AGENTS.md skips where that file does not travel (ADR 0014)"
   - prefix: tests/test_adoption.py
     rolle: mechanismus
-    reason: "builds its own trees; the case that reads this repository's record skips where the record stays home (ADR 0014)"
+    reason: "builds its own trees and holds in the probe copy; the case that reads this repository's own record lives in tests/test_this_repository_adoption.py, which no rule lets travel because the record stays home (ADR 0014)"
   - prefix: tests/test_harness_decide_adr.py
     rolle: mechanismus
     reason: "builds its own trees; holds in the probe copy"

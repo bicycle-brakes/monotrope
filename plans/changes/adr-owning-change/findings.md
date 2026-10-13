@@ -160,3 +160,17 @@ Stage-2 call, 2026-10-13: repair · attempt 1 · route stage-1 · endpoint claud
 Stage-2 call, 2026-10-13: review-loop · endpoint opencode-go · model mimo-v2.6-pro · leak check clean over 389 files, 985 commits, 12 rules.
 
 Stage-2 call, 2026-10-13: review-loop · endpoint opencode-go · model mimo-v2.6-pro · leak check clean over 389 files, 986 commits, 12 rules.
+
+Stage-2 call, 2026-10-13: repair · attempt 1 · route stage-1 · endpoint claude-code-plan · model claude-sonnet-5-5 · reason Claude Code 2.1.296 refused glm-5.3(-flash) as an unrecognized model before any call (bead coding-harness-6th) · leak check clean over 389 files, 987 commits, 12 rules.
+
+> Attempt 1 (stage-1) failed its post-run checks.
+>
+> Files the attempt changed (lines added, removed):
+> - `docs/WORKFLOW.md` +8 -5
+> - `docs/adr/0014-a-change-claims-its-adr-files.md` +3 -1
+> - `scripts/kit/manifest.yaml` +1 -1
+>
+> Diagnostics:
+> ```text
+> - `plan.md` did not add a measured line below `## Time used`
+> ```

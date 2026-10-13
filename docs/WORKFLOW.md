@@ -113,15 +113,18 @@ An ADR edit belongs to the change that **claims** the file: the list
 under `docs/adr/` the change creates, changes or removes. The gate attributes
 an edit to the claimant among the changes of the diff and to nobody else,
 whichever other change folders the diff touches and whatever the ADR says; the
-claimant owes its five records whatever its class and date, the adoption day
-exempting only the class minimums. An edit no change of the diff claims is a
+claimant owes its five records whatever its class and date; the adoption day
+exempts a change begun on or before it from the class minimums and from the
+agreement of answer and claim, never an ADR edit. An edit no change of the diff claims is a
 finding that names the remedy — list the file under `adr_files` in the spec
 header of the change it belongs to — and so is an edit two changes claim, or
 a claim that cannot be read. A subject `feature`'s answer to the ADR question
 agrees with its claim: "yes" with at least one claimed file, "no" with none.
-A claim never expires, so once the edit of an earlier change is on main, that
-change's claim is **retired** — the path is removed from its spec header — when
-a later change claims the same file; two claims in one diff are a finding.
+An amendment costs one header line: the amending change lists the file in its
+own spec, and nothing else moves. An earlier change's claim stays, and is
+removed only when the amending diff also touches that earlier change's folder —
+two claimants in one diff are a finding, and removing the earlier claim is its
+remedy.
 
 Across all of them runs the **session handover** — it belongs to no phase but to
 the end of a session; see below.

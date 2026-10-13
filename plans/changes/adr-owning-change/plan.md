@@ -275,6 +275,10 @@ Stage-1 route: repair · model claude-sonnet-5-5 · reason: Claude Code 2.1.296 
 
 Stage-1 route: repair · model claude-sonnet-5-5 · reason: Claude Code 2.1.296 refused glm-5.3(-flash) as an unrecognized model before any call (bead coding-harness-6th).
 
+## Runner route — 2026-10-13
+
+Stage-1 route: repair · model claude-sonnet-5-5 · reason: Claude Code 2.1.296 refused glm-5.3(-flash) as an unrecognized model before any call (bead coding-harness-6th).
+
 ## Time used
 
 2026-10-13 — review-loop round 2 repair (L2-1 to L2-4) under the Stage-2
@@ -292,3 +296,11 @@ asserting this repository's adoption day moved to a test file the kit does not
 carry, the gate's docstring and the criterion-test-ledger plan prose were
 corrected. The attempt failed only for this missing line; the orchestrator
 added it and ran `make verify`.
+
+2026-10-13 — review-loop round 3 repair (L3-1 to L3-3, text only) under the
+Stage-2 runner, Sonnet 5.5 under `--stage2-off` (Claude Code 2.1.296 refused
+glm-5.3 as an unrecognized model); no wall-clock reading. The workflow and the
+ADR now state one amendment rule, the adoption-day sentence names both
+exemptions, and the kit manifest's reason for `tests/test_adoption.py` names
+where the moved case lives. The attempt failed only for this missing line; the
+orchestrator added it and ran `make verify`.
