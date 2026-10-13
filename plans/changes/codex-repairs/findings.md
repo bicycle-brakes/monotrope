@@ -290,3 +290,16 @@ Stage-2 call, 2026-10-13: repair · attempt 1 · route stage-1 · endpoint claud
 > - Runner format before `make verify`: ruff changed no file.
 > - `plan.md` did not add a measured line below `## Time used`
 > ```
+
+Stage-2 call, 2026-10-13: review · endpoint openai-codex · model gpt-6.1-sol · leak check clean over 416 files, 1060 commits, 12 rules.
+
+## Phase 6 — Codex, 2026-10-13
+
+| ID | Severity | Dimension | Origin | Where | Finding | Reviewer | Status | Broke a test |
+|---|---|---|---|---|---|---|---|---|
+| F-15 | MAJOR | MAINT | base | `scripts/stage2.py:2550–2556` | If a completed attempt replaces `prompts/` with a symlink to an external directory containing a different `04-implement.md`, retry restoration unlinks and overwrites that external file. The symlink check covers only the leaf. Isolated execution reproduces both operations; restoration must remain inside the worktree. [Protected areas: files outside this worktree] | Codex | open | — |
+| F-16 | MAJOR | MAINT | base | `scripts/stage2.py:2511`; `scripts/stage2.py:2987` | If a completed repair replaces `findings.md` with a symlink to a writable external file, preparation rejects the alias, but findings restoration follows it and overwrites the target with the saved findings. Isolated execution reproduces the external write. The restoration callback must replace the alias without writing through it. [Protected areas: files outside this worktree] | Codex | open | — |
+| F-17 | MAJOR | SPEC | base | `scripts/stage2.py:2511`; `scripts/stage2.py:2987` | If the first completed Codex attempt replaces `findings.md` with a directory and fails a post-run check, findings restoration raises an uncaught `IsADirectoryError` before recording diagnostics or starting the fresh Codex retry. Isolated execution reproduces the stop; the prescribed retry must receive the failed attempt’s diagnostics. [criteria 4, 12] | Codex | open | — |
+
+Phase 6 verdict: codex 01a1372f-3250-7673-8b55-16ae3d44fb4c, 2026-10-13
+Reviewer session: codex 01a1372f-3250-7673-8b55-16ae3d44fb4c — a fresh session reviewed: an earlier ## Phase 6 block makes this a re-check
