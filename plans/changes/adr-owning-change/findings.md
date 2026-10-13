@@ -218,3 +218,13 @@ Stage-2 call, 2026-10-13: review · endpoint openai-codex · model gpt-6.1-sol �
 | F-6 | BLOCKER | SPEC | phase-6 | scripts/check_interview_minimums.py:94; scripts/check_interview_minimums.py:260 | The revised prefilter still bypasses claim validation for other valid YAML spellings. An archived stock spec containing `"adr\u005ffiles": [plans/x.md]`, or `? adr_files` followed on the next line by `: [plans/x.md]`, exits 0 without findings. The shared YAML loader resolves both to `adr_files`, but the regex skips them. These invalid claims must be reported regardless of spelling, class or date. [AC 2] | Codex | fixed — tests/test_check_interview_minimums.py::test_an_unreadable_claim_is_reported | no |
 
 Phase 6 verdict: codex 01a1348d-d2d6-7682-a2f1-1097d8ef46c4, 2026-10-13
+
+Stage-2 call, 2026-10-13: review · endpoint openai-codex · model gpt-6.1-sol · leak check clean over 389 files, 992 commits, 12 rules.
+
+## Phase 6 — Codex, 2026-10-13
+
+| ID | Severity | Dimension | Origin | Where | Finding | Reviewer | Status | Broke a test |
+|---|---|---|---|---|---|---|---|---|
+| F-7 | MAJOR | MAINT | phase-6 | scripts/check_interview_minimums.py:257; scripts/check_interview_minimums.py:400; scripts/check_interview_minimums.py:179 | A spec containing `adr_files: []` and a Latin-1 encoded `é` makes `_claim()` return an unreadable-spec diagnostic. `measure()` then rereads that same file for its class and date without catching the decoding error. Reproduced with an archived stock spec: exit 1, empty stdout and a `UnicodeDecodeError` traceback; the collected findings are lost. The gate must retain and report the diagnostic naming the spec and expected claim form. [AC 2] | Codex | open | — |
+
+Phase 6 verdict: codex 01a1348d-d2d6-7682-a2f1-1097d8ef46c4, 2026-10-13
