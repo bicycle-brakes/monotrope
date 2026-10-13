@@ -686,3 +686,15 @@ Stage-2 call, 2026-10-13: review · endpoint openai-codex · model gpt-6.1-sol �
 Phase 6 verdict: codex 01a130f4-7a06-7710-82b0-acf5a60d9dd1, 2026-10-13
 
 Stage-2 call, 2026-10-13: review · endpoint openai-codex · model gpt-6.1-sol · leak check clean over 385 files, 972 commits, 12 rules.
+
+Stage-2 call, 2026-10-13: review · endpoint openai-codex · model gpt-6.1-sol · leak check clean over 385 files, 973 commits, 12 rules.
+
+## Phase 6 — Codex, 2026-10-13
+
+| ID | Severity | Dimension | Origin | Where | Finding | Reviewer | Status | Broke a test |
+|---|---|---|---|---|---|---|---|---|
+| F-13 | BLOCKER | SPEC | fix-r2 | `spec.md:283`; `design.md:71`; `scripts/check_adr_answers.py:436` | [DIVERGENT] For a feature lacking its ADR answer, the implementation now makes the central gate pass through `ADR_ANSWERS_TOLERATE_CHANGE`. WORKFLOW and ADR 0016 describe this gate-side exception, while the current spec protects the gate from modification and the design chooses runner-side interpretation of an unchanged gate's red output. The implementation crosses that protected boundary and does not match the specified architecture. [Protected areas; Definition of Done; criterion 13] | Codex | open — escalated to the maintainer: the phase-6 repair limit of two rounds is reached (2026-10-13) | — |
+| F-14 | MINOR | MAINT | fix-r2 | `scripts/stage2.py:2583`; `tests/test_stage2.py:2060` | When the missing answer is tolerated and every other check passes, `make verify` exits 0. The success audit nevertheless records that it “was red only because” the answer was missing, and the updated test requires that false statement. The recorded verification result contradicts the execution. | Codex | open — escalated to the maintainer: the phase-6 repair limit of two rounds is reached (2026-10-13) | — |
+| F-15 | MINOR | SPEC | base | `scripts/stage2.py:1586` | Two legal 616-character restored paths containing an embedded newline and ending in different filenames still produce identical partial audit records. The exemption stores whole multiline entries, but truncation compares their individual split lines; the long continuation is therefore cut and neither filename survives. This is additional evidence beyond the repaired single-line path case. [criterion 8] | Codex | open — escalated to the maintainer: the phase-6 repair limit of two rounds is reached (2026-10-13) | — |
+
+Phase 6 verdict: codex 01a130f4-7a06-7710-82b0-acf5a60d9dd1, 2026-10-13
