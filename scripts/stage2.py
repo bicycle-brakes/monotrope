@@ -185,8 +185,9 @@ DRAFT_RULES = (
     "Write, in `plans/changes/<change>/`, `spec.md`, `design.md` when `prompts/02b-design.md` asks for one,\n"
     "and `plan.md`, as the three prompts above say and in the form of the files under `templates/`. An ADR\n"
     "draft, when one is due, is exactly one new file `docs/adr/<NNNN>-<slug>.md`, numbered after the highest\n"
-    "file there. Change nothing else: the runner puts back every other path git sees as changed, and the\n"
-    "change's `decisions.md`. If `findings.md` holds phase-2a rows whose Status is `open`, work each into\n"
+    "file there. Change nothing else: the runner puts back every changed path outside the change folder\n"
+    "except the one new ADR draft, and the change's `decisions.md`. If `findings.md` holds phase-2a\n"
+    "rows whose Status is `open`, work each into\n"
     '`spec.md` as `prompts/02-spec.md`, "After the spec review", says, write its Status in `findings.md`,\n'
     'and bring `design.md` and `plan.md` into line. A `[DECISION]` goes into the spec\'s "Open decisions"\n'
     "in the form `prompts/02-spec.md` gives. Never write an answer for the maintainer, never record an ADR\n"
@@ -2461,14 +2462,18 @@ def verify_draft(root: Path, ctx: Context, key: str | None, new_adrs: list[str])
             owed = True
         else:
             problems.append(f"`make verify` exited {done.returncode}\n{verify_evidence(done, key)}".rstrip())
+    plan_missing = not ctx.plan.is_file()
     for name in ("spec.md", "plan.md"):
         if not (ctx.folder / name).is_file():
             problems.append(f"plans/changes/{ctx.change}/{name} is missing after the draft.")
-    plan_text = _read_quietly(ctx.plan)
-    if card_problem(plan_text) is not None:
-        problems.append(CARD_PROBLEM)
-    if not TIME_HEADING.search(plan_text):
-        problems.append(f"plans/changes/{ctx.change}/plan.md has no `## Time used` heading.")
+    if not plan_missing:
+        # An absent plan.md is one problem of its own: the card and Time-used checks would read an
+        # empty string and name two faults a missing file cannot have (repair L3-4).
+        plan_text = _read_quietly(ctx.plan)
+        if card_problem(plan_text) is not None:
+            problems.append(CARD_PROBLEM)
+        if not TIME_HEADING.search(plan_text):
+            problems.append(f"plans/changes/{ctx.change}/plan.md has no `## Time used` heading.")
     return problems, owed
 
 
@@ -2516,6 +2521,14 @@ def draft(root: Path, change: str) -> None:
                 run_work_model(ctx, prompt, endpoint, writable=True, key=key)
         except CallFailed as error:
             call_error = error
+        if key is not None:
+            # Before any stop, the moved-HEAD one below included: a call that wrote the key and moved
+            # HEAD must not leave the key in the tree and in the model's commit - the runner removes
+            # it and refuses (spec, criterion 25). This is also before the second snapshot below can
+            # write the changed files into the object store, a dead call included.
+            exposed = remove_changed_credential(root, key, ignored_before)
+            if exposed:
+                raise Refused(credential_message(exposed))
         try:
             head_now = _git_output(root, "rev-parse", "HEAD").strip()
         except Refused as error:
@@ -2527,12 +2540,6 @@ def draft(root: Path, change: str) -> None:
                 f"the draft call moved HEAD from {baseline[:12]} to {head_now[:12]}; nothing was put back or committed"
             )
         if call_error is not None:
-            if key is not None:
-                # A dead call is no exception: the key it may have written is removed and the run
-                # refuses, as the success path below does (spec, criterion 25).
-                exposed = remove_changed_credential(root, key, ignored_before)
-                if exposed:
-                    raise Refused(credential_message(exposed))
             put = put_back(root, baseline, allowed)
             listing = f"- the call failed: {call_error}"
             diagnostics.append(f"Attempt {attempt} ({route}):\n{listing}")
@@ -2541,11 +2548,6 @@ def draft(root: Path, change: str) -> None:
                 block += "\n\nThe runner put back:\n" + "\n".join(put_back_lines(put))
             append(ctx.findings, quote_block(block, key))
             continue
-        if key is not None:
-            # Before the second snapshot can write the changed files into the object store.
-            exposed = remove_changed_credential(root, key, ignored_before)
-            if exposed:
-                raise Refused(credential_message(exposed))
         if unmeasured is None:
             # Both snapshots stand around the model call alone: the runner's own writes - the audit
             # line, the block below - fall outside both of them.

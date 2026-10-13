@@ -395,6 +395,10 @@ Stage-1 route: implement · model claude-sonnet-5-5 · reason: two Flash post-ru
 
 Stage-1 route: repair · model claude-sonnet-5-5 · reason: two GLM 5.3 post-run checks failed.
 
+## Runner route — 2026-10-13
+
+Stage-1 route: repair · model claude-sonnet-5-5 · reason: two GLM 5.3 post-run checks failed.
+
 ## Time used
 
 2026-10-13 — phase 4 under the Stage-2 runner (`implement codex-drafts`), one
@@ -417,3 +421,10 @@ over-wrapped assert ruff-format flagged in `tests/test_stage2.py`, and left the
 L2-1, L2-4 and L2-6 code, tests and doctrine edits as the earlier windows had
 written them. The runner's `make verify` and checkpoint commit are still to
 come. The appetite of 8 h is not reached.
+The round-3 repair window (2026-10-13, the review loop's taken rows L3-1,
+L3-2 and L3-4; no command tool, so no wall-clock reading) moved the
+credential scan before the moved-HEAD stop, reports a missing `plan.md` once,
+and states in the drafting rules that the runner puts back what changed
+outside the change folder. Its three attempts failed only for this missing
+line; the orchestrator added it, showed both new tests red on the baseline
+and ran `make verify`.

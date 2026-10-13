@@ -1774,7 +1774,7 @@ def test_the_draft_prompt_carries_the_three_phase_prompts_and_the_rules(world: W
     assert "## Repository agent rules" in prompt and "Stay inside the repository." in prompt
     assert "Change: demo (`plans/changes/demo/`)" in prompt and "Change: other" not in prompt
     flat = " ".join(prompt.split())
-    assert "the runner puts back every other path git sees as changed" in flat
+    assert "the runner puts back every changed path outside the change folder except the one new ADR draft" in flat
     assert "the change's `decisions.md`" in flat and "Never write an answer for the maintainer" in flat
     assert "## Phase 2b prompt" in prompt and "## Phase 3 prompt" in prompt
     assert prompt.rstrip().endswith(stage2.READ_REQUEST)
@@ -2094,6 +2094,30 @@ def test_a_missing_spec_or_plan_fails_the_attempt(world: World) -> None:
     assert "plans/changes/demo/plan.md is missing after the draft." in world.text()
 
 
+def test_a_missing_plan_md_is_reported_once(world: World) -> None:
+    # Repair L3-4. Planted fault: the card and Time-used checks read an empty string for an absent plan.md.
+    draft_world(world)
+    world.script(
+        codex=[
+            codex_ok(
+                "T1",
+                "drafted",
+                plant={
+                    "plans/changes/demo/spec.md": "---\ntitle: Spec\nupdated: 2026-09-30\nbead: demo-1\n---\n\n# Spec\n",
+                },
+            ),
+            codex_ok("T2", "again"),
+        ],
+        claude=[{"stdout": "glm"}],
+        make=[{"stdout": "green\n"}] * 3,
+    )
+    assert world.run("draft") == 1
+    text = world.text()
+    assert "plans/changes/demo/plan.md is missing after the draft." in text
+    assert stage2.CARD_PROBLEM not in text
+    assert "has no `## Time used` heading" not in text
+
+
 def test_a_plan_without_its_card_fails_the_attempt(world: World) -> None:
     # Criterion 15. Planted fault: the labels looked for anywhere in the file.
     draft_world(world)
@@ -2343,6 +2367,30 @@ def test_a_failed_glm_draft_call_that_writes_the_key_is_refused(
     text = world.text()
     assert "[credential]" in text and not any(KEY[i : i + 8] in text for i in range(len(KEY) - 7))
     assert "refused" in capsys.readouterr().err
+
+
+def test_a_glm_draft_that_writes_the_key_and_moves_head_still_refuses(
+    world: World, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+) -> None:
+    # Repair L3-2. Planted fault: the moved-HEAD stop runs before the credential scan, so the key stays.
+    draft_world(world)
+
+    def committing_glm(ctx, prompt, endpoint, writable=False, key=None):
+        del prompt, endpoint, writable
+        (ctx.root / "plans" / "changes" / "demo" / "spec.md").write_text(f"the key was {key}\n", encoding="utf-8")
+        git(ctx.root, "commit", "--quiet", "--allow-empty", "-m", "the model committed")
+        return "drafted"
+
+    monkeypatch.setattr(stage2, "run_work_model", committing_glm)
+    world.script(codex=[{"stdout": "drafted"}, {"stdout": "again"}])
+    before = git(world.root, "rev-parse", "HEAD")
+    assert world.run("draft") == 2
+    assert git(world.root, "rev-list", "--count", f"{before}..HEAD") == "1", "only the model's commit stands"
+    spec = (world.root / "plans" / "changes" / "demo" / "spec.md").read_text(encoding="utf-8")
+    assert "[credential]" in spec and not any(KEY[i : i + 8] in spec for i in range(len(KEY) - 7))
+    error = capsys.readouterr().err
+    assert "refused:" in error and "the GLM credential occurred in changed files" in error
+    assert "moved HEAD" not in error
 
 
 # ---------------------------------------------------------------------------
