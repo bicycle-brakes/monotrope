@@ -304,3 +304,5 @@ ADR now state one amendment rule, the adoption-day sentence names both
 exemptions, and the kit manifest's reason for `tests/test_adoption.py` names
 where the moved case lives. The attempt failed only for this missing line; the
 orchestrator added it and ran `make verify`.
+
+2026-10-13 — phase-6 repair round 1 (rows F-1 to F-4), Sonnet 5.5 sub-agent; no wall-clock reading.

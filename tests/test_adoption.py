@@ -52,6 +52,14 @@ def test_the_reader_refuses_a_record_it_cannot_read(tmp_path: Path, text: str | 
     assert "interview-minimums: YYYY-MM-DD" in str(refused.value)
 
 
+def test_an_impossible_date_is_refused_with_the_remedy(tmp_path: Path) -> None:
+    _record(tmp_path, "schema_version: 1\nadopted:\n  interview-minimums: 2026-02-30\n")
+    with pytest.raises(adoption.NotRecorded) as refused:
+        adoption.adopted_on(tmp_path, "interview-minimums")
+    assert RECORD in str(refused.value)
+    assert "interview-minimums: YYYY-MM-DD" in str(refused.value)
+
+
 def test_the_reader_returns_each_gates_own_day(tmp_path: Path) -> None:
     _record(
         tmp_path,

@@ -49,7 +49,7 @@ def adopted_on(root: Path, gate: str) -> date:
         raise NotRecorded(f"{RECORD} cannot be read ({exc}) — {_remedy(gate)}") from None
     try:
         data = check_adr_answers.strict_load(text)
-    except yaml.YAMLError as exc:
+    except (yaml.YAMLError, ValueError) as exc:  # ValueError: an impossible date such as 2026-02-30
         raise NotRecorded(f"{RECORD} is not valid YAML ({' '.join(str(exc).split())}) — {_remedy(gate)}") from None
     if not isinstance(data, dict):
         raise NotRecorded(f"{RECORD} is not a YAML mapping — {_remedy(gate)}")

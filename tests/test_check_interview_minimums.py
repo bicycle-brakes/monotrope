@@ -278,7 +278,10 @@ def test_adr_with_two_owning_changes_is_a_finding(repo: Path) -> None:
     done = run_gate(repo)
     assert done.returncode == 1
     assert f"{ADR} is claimed by owner-a, owner-b" in done.stdout
-    assert "retire the claim of an earlier change" in done.stdout
+    assert "split the pull request" in done.stdout
+    assert "the amendment in one" in done.stdout
+    assert "drop the other claims" not in done.stdout
+    assert "retire" not in done.stdout
 
 
 def test_an_unreadable_claim_does_not_also_report_a_missing_one(repo: Path) -> None:
@@ -290,6 +293,39 @@ def test_an_unreadable_claim_does_not_also_report_a_missing_one(repo: Path) -> N
     assert done.returncode == 1
     assert "adr_files cannot be read" in done.stdout
     assert "claims no ADR file" not in done.stdout
+
+
+@pytest.mark.parametrize("key", ['"adr_files"', "'adr_files'", "adr_files "])
+def test_a_claim_key_in_any_yaml_spelling_is_seen(repo: Path, key: str) -> None:
+    # F-2: a quoted key or a blank before the colon is the same key — a
+    # malformed claim in an archived stock spec is reported, a valid one claims.
+    write_change(repo, "fine", "bounded", decisions=records(1))
+    write_change(repo, "stock", "feature", day=BEFORE, extra_header=f"{key}: [plans/x.md]\n")
+    archive = repo / "plans" / "changes" / "archive"
+    archive.mkdir(exist_ok=True)
+    (repo / "plans" / "changes" / "stock").rename(archive / f"{BEFORE}-stock")
+    done = run_gate(repo)
+    assert done.returncode == 1, done.stdout
+    assert "adr_files cannot be read" in done.stdout
+
+
+@pytest.mark.parametrize("key", ['"adr_files"', "adr_files "])
+def test_a_claim_in_another_spelling_attributes_the_edit(repo: Path, key: str) -> None:
+    write_change(repo, "spelled", "bounded", decisions=records(4), extra_header=f"{key}: [{ADR}]\n")
+    _stage_adr(repo)
+    _git(repo, "add", "-A")
+    done = run_gate(repo)
+    assert done.returncode == 1
+    assert "spelled (ADR change): 4 of 5" in done.stdout
+
+
+def test_an_impossible_date_in_a_claiming_header_is_a_finding(repo: Path) -> None:
+    # F-3: the YAML loader raises ValueError on 2026-02-30; the gate reports.
+    write_change(repo, "dated", "bounded", decisions=records(1), extra_header="adr_files: []\nwhen: 2026-02-30\n")
+    done = run_gate(repo)
+    assert done.returncode == 1, done.stdout
+    assert "adr_files cannot be read" in done.stdout
+    assert "Traceback" not in done.stderr
 
 
 # --- AC 3 · feature with ADR: five in total, never the sum -----------------

@@ -89,7 +89,9 @@ _CLASS_LINE = re.compile(
     r"""^class:[ \t]+(?:"([^"\n]*)"|'([^'\n]*)'|([^\s"'#]\S*))(?:[ \t]+\#.*)?[ \t]*\r?$""",
     re.M,
 )
-_CLAIM_LINE = re.compile(r"^adr_files:", re.M)
+# The key at the top level of the header in any YAML spelling: plain, double- or
+# single-quoted, with blanks before the colon (phase-6 row F-2).
+_CLAIM_LINE = re.compile(r"""^(?:adr_files|"adr_files"|'adr_files')[ \t]*:""", re.M)
 _DATE_LINE = re.compile(r"^date:[ \t]*(\S+)(?:[ \t]+\#.*)?[ \t]*\r?$", re.M)
 
 # One interview record: `## Q-<id> · <title>` and its field lines. One skip
@@ -248,7 +250,7 @@ def _has_reasoned_skip(skips: list[dict[str, str]]) -> bool:
 
 def _claim(spec: Path) -> tuple[list[str], str | None]:
     """The paths a spec header claims under `adr_files`, and why the claim
-    cannot be read. A header without an `adr_files:` line claims nothing and is
+    cannot be read. A header without the key `adr_files` (plain or quoted, at the top level) claims nothing and is
     never parsed as YAML, so the stock cannot trip it."""
     try:
         text = spec.read_text(encoding="utf-8")
@@ -259,7 +261,7 @@ def _claim(spec: Path) -> tuple[list[str], str | None]:
         return [], None
     try:
         data = check_adr_answers.strict_load(block.group(1))
-    except yaml.YAMLError as exc:
+    except (yaml.YAMLError, ValueError) as exc:  # ValueError: an impossible date such as 2026-02-30
         return [], f"the header is not valid YAML ({' '.join(str(exc).split())})"
     if not isinstance(data, dict):
         return [], "the header is not a mapping"
@@ -360,9 +362,8 @@ def measure(root: Path, only: str | None = None) -> tuple[list[str], int]:
         elif len(claimants) > 1:
             findings.append(
                 f"{path} is claimed by {', '.join(claimants)} in one diff — one change "
-                "claims an edit; drop the other claims, retire the claim of an earlier "
-                "change whose edit is already on main (remove the path from its spec "
-                "header), or split the pull request"
+                "claims an edit and a claim is never removed; split the pull request — "
+                "the amendment in one, the edit to the other change's folder in another"
             )
         else:
             owners.add(claimants[0])

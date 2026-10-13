@@ -4,7 +4,7 @@ status: draft
 implementation_status: none
 date: 2026-10-12
 last_reviewed: 2026-10-12
-updated: 2026-10-12
+updated: 2026-10-13
 supersedes: null
 superseded_by: null
 bead: coding-harness-afa
@@ -255,7 +255,11 @@ Criteria 1 and 2 say what a claim is, 3 to 8 how an ADR edit is attributed,
   format, and the criterion-ledger gate belongs to bead `coding-harness-wpv`.
 - Other change folders, except two edits in criterion-test-ledger: the
   `adr_files` line of its spec header (criterion 23) and the criterion-24
-  lines of its plan's ledger (criterion 24).
+  lines of its plan's ledger (criterion 24). (Amended 2026-10-13 after phase-6
+  row F-4: a third edit is permitted — the "Phase 4 amendments" narrative of
+  that plan, rewritten because the old text described as current the interim
+  owner rule this change deletes and named tests that no longer exist, a false
+  statement (loop row L1-3).)
 
 ## Definition of Done
 
