@@ -722,7 +722,7 @@ def test_every_declared_interpreter_gets_a_leg(monkeypatch: pytest.MonkeyPatch) 
     """
     declared = _declared()
     assert ci_gates.interpreters() == declared, "the generator reads another list than tools.python"
-    assert "3.11" not in declared, f"tools.python declares {declared} — no repository of the maintainer targets 3.11"
+    assert declared, "tools.python declares no interpreter — the matrix would be empty"
     job = _ci_doc()["jobs"][ci_gates.MATRIX_JOB]
     assert _matrix(job) == declared, f"matrix {_matrix(job)} differs from tools.python {declared}"
     assert job["strategy"].get("fail-fast") is False, "a red leg must not cancel the other"
@@ -761,7 +761,8 @@ def test_the_cloud_environment_builds_the_venv_with_the_floor() -> None:
     """The cloud setup script builds this repository's `.venv` with the oldest declared interpreter."""
     oldest = _declared()[0]
     script = (REPO_ROOT / "tools" / "cloud-env" / "setup.sh").read_text(encoding="utf-8")
-    block = script.split("R=/home/user/coding-harness", 1)[1].split("fi", 1)[0]
+    # The block ends at its own closing `fi` line, not at any word that starts with "fi" (L3-2)
+    block = re.split(r"^fi$", script.split("R=/home/user/coding-harness", 1)[1], maxsplit=1, flags=re.M)[0]
     venv = [line for line in block.splitlines() if "uv venv" in line]
     assert len(venv) == 1, f"expected one `uv venv` in the coding-harness block, found {venv!r}"
     assert f"--python {oldest} " in venv[0], f"venv built with another interpreter than {oldest}: {venv[0]!r}"

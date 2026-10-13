@@ -105,3 +105,5 @@ Stage-1 route: repair · model claude-sonnet-5-5 · reason: Z.ai weekly limit ex
 2026-10-13 orchestrator repair after the failed attempt, not timed: renamed the floor test (its old name matched the mutation-test pattern by accident, `declared_once` holds `red_on`) and declared it in the kit probe (cap 36 -> 37).
 
 2026-10-13 loop round 1 repair (Sonnet 5.5 under --stage2-off), not timed: the runner refused the attempt only for the missing line here; the orchestrator added it.
+
+2026-10-13 loop round 2 repair (L2-1, text only) and round 3 repairs (L3-1 this line, L3-2, L3-3) by the orchestrator, not timed; round 2 had no runner record because no runner call made it.
