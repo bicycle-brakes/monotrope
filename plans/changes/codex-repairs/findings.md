@@ -251,3 +251,14 @@ Phase 6 verdict: codex 01a136c5-c1ff-7882-a91f-235052d1cc35, 2026-10-13
 Reviewer session: codex 01a136c5-c1ff-7882-a91f-235052d1cc35 — a fresh session reviewed: an earlier ## Phase 6 block makes this a re-check
 
 Stage-2 call, 2026-10-13: repair · attempt 1 · route codex · endpoint openai-codex · model gpt-6.1-sol · leak check clean over 416 files, 1050 commits, 12 rules.
+
+Stage-2 call, 2026-10-13: review · endpoint openai-codex · model gpt-6.1-sol · leak check clean over 416 files, 1052 commits, 12 rules.
+
+## Phase 6 — Codex, 2026-10-13
+
+| ID | Severity | Dimension | Origin | Where | Finding | Reviewer | Status | Broke a test |
+|---|---|---|---|---|---|---|---|---|
+| F-12 | MAJOR | SPEC | base | `scripts/stage2.py:2418`; `scripts/stage2.py:2546–2549` | If either completed Codex attempt leaves `plan.md` containing non-UTF-8 bytes, its post-run check rejects the file, but restoration skips it because it still exists. Preparing the next attempt then raises an uncaught `UnicodeDecodeError`, preventing the fresh Codex retry or Sonnet fallback. Isolated execution reproduces both cases; the prescribed next attempt must receive the failed attempts’ diagnostics. [criteria 4–5] | Codex | open | — |
+
+Phase 6 verdict: codex 01a136df-6a6f-79f1-912e-a920d7cfdcb6, 2026-10-13
+Reviewer session: codex 01a136df-6a6f-79f1-912e-a920d7cfdcb6 — a fresh session reviewed: an earlier ## Phase 6 block makes this a re-check
