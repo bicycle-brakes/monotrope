@@ -207,3 +207,14 @@ Reviewer session: codex 01a1348d-d2d6-7682-a2f1-1097d8ef46c4 — a fresh session
 Rounds run: 3
 
 Stage-2 call, 2026-10-13: review (loop marks) · endpoint openai-codex · model gpt-6.1-sol · leak check clean over 389 files, 988 commits, 12 rules.
+
+Stage-2 call, 2026-10-13: review · endpoint openai-codex · model gpt-6.1-sol · leak check clean over 389 files, 990 commits, 12 rules.
+
+## Phase 6 — Codex, 2026-10-13
+
+| ID | Severity | Dimension | Origin | Where | Finding | Reviewer | Status | Broke a test |
+|---|---|---|---|---|---|---|---|---|
+| F-5 | BLOCKER | MAINT | phase-6 | docs/WORKFLOW.md:124; docs/adr/0014-a-change-claims-its-adr-files.md:153; scripts/check_interview_minimums.py:313 | [DIVERGENT] The repair now says “A claim is never removed,” but a subject feature with a valid “no” answer and an erroneous claim is still told to “remove the claim.” Reproduced: removing that claim while retaining the answer changes the gate from exit 1 to exit 0. The documentation forbids the correction the gate prescribes and accepts. [AC 10, 21] | Codex | open | — |
+| F-6 | BLOCKER | SPEC | phase-6 | scripts/check_interview_minimums.py:94; scripts/check_interview_minimums.py:260 | The revised prefilter still bypasses claim validation for other valid YAML spellings. An archived stock spec containing `"adr\u005ffiles": [plans/x.md]`, or `? adr_files` followed on the next line by `: [plans/x.md]`, exits 0 without findings. The shared YAML loader resolves both to `adr_files`, but the regex skips them. These invalid claims must be reported regardless of spelling, class or date. [AC 2] | Codex | open | — |
+
+Phase 6 verdict: codex 01a1348d-d2d6-7682-a2f1-1097d8ef46c4, 2026-10-13
