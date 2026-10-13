@@ -110,15 +110,16 @@ REIST_NICHT: dict[str, str] = {
     "tests.test_model_endpoints::test_every_agent_model_resolves_to_a_declared_endpoint[reconciliation-orchestrator.md-claude-sonnet-5]": "braucht-die-vollstaendige-suite",
     "tests.test_model_endpoints::test_every_model_in_a_phase_prompt_resolves[01-explore.md-GLM 5.3 Flash]": "bestand-dieses-repos",
     "tests.test_model_endpoints::test_every_model_in_a_phase_prompt_resolves[01a-interview.md-Opus 5.5]": "bestand-dieses-repos",
-    "tests.test_model_endpoints::test_every_model_in_a_phase_prompt_resolves[02-spec.md-Opus 5.5]": "bestand-dieses-repos",
+    "tests.test_model_endpoints::test_every_model_in_a_phase_prompt_resolves[02-spec.md-gpt-6.1-sol]": "bestand-dieses-repos",
     "tests.test_model_endpoints::test_every_model_in_a_phase_prompt_resolves[02a-spec-review.md-Opus 5.5]": "bestand-dieses-repos",
-    "tests.test_model_endpoints::test_every_model_in_a_phase_prompt_resolves[02b-design.md-Opus 5.5]": "bestand-dieses-repos",
-    "tests.test_model_endpoints::test_every_model_in_a_phase_prompt_resolves[03-plan.md-Opus 5.5]": "bestand-dieses-repos",
+    "tests.test_model_endpoints::test_every_model_in_a_phase_prompt_resolves[02b-design.md-gpt-6.1-sol]": "bestand-dieses-repos",
+    "tests.test_model_endpoints::test_every_model_in_a_phase_prompt_resolves[03-plan.md-gpt-6.1-sol]": "bestand-dieses-repos",
     "tests.test_model_endpoints::test_every_model_in_a_phase_prompt_resolves[04-implement.md-GLM 5.3 Flash]": "bestand-dieses-repos",
     "tests.test_model_endpoints::test_every_model_in_a_phase_prompt_resolves[06-review.md-Opus 5.5]": "bestand-dieses-repos",
     "tests.test_model_endpoints::test_every_model_in_a_phase_prompt_resolves[07-commit.md-Haiku 4.5]": "bestand-dieses-repos",
     "tests.test_model_endpoints::test_every_model_in_the_routing_table_resolves": "bestand-dieses-repos",
     "tests.test_model_endpoints::test_no_old_reviewer_remark_claims_a_review_phase": "bestand-dieses-repos",
+    "tests.test_model_endpoints::test_no_remark_routes_the_spec_review_to_codex": "bestand-dieses-repos",
     "tests.test_model_endpoints::test_the_declaration_is_not_empty": "bestand-dieses-repos",
     "tests.test_model_endpoints::test_the_opencode_go_entry_is_declared": "bestand-dieses-repos",
     "tests.test_model_endpoints::test_the_opencode_go_remark_names_every_source": "bestand-dieses-repos",
@@ -174,6 +175,11 @@ REIST_NICHT: dict[str, str] = {
 # and `test_no_old_reviewer_remark_claims_a_review_phase`. All three read
 # `model-endpoints.yaml`, which stays home like it did for every prompt case
 # above — the same reason, `bestand-dieses-repos`, and no new kind of exception.
+# 35 -> 36 on 2026-10-13 (plans/changes/codex-drafts): three prompt cases were renamed, not added —
+# the drafting prompts' model lines now lead with the id `gpt-6.1-sol` where they named
+# `Opus 5.5`. One case is new: `test_no_remark_routes_the_spec_review_to_codex` reads
+# `model-endpoints.yaml`, which stays home — the same reason, `bestand-dieses-repos`.
+# The count stays at the cap; no raise.
 DECKEL = 36  # raised on 2026-10-08 (33 -> 36); earlier: raised 2026-10-07 (32 -> 33), raised 2026-10-05 (31 -> 32), 2026-09-30 (31 -> 32), lowered 2026-09-30 (32 -> 31), raised 2026-09-29 (31 -> 32)
 
 
