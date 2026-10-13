@@ -2057,8 +2057,9 @@ def test_only_the_changes_own_missing_adr_answer_is_tolerated(world: World) -> N
     )
     assert world.run("draft") == 0
     assert world.calls("make")[0]["env"][stage2.check_adr_answers.TOLERATE_ENV] == "demo"
-    assert "ADR answer owed: `make verify` was red only because" in world.text()
-    assert "decisions/answers/demo/adr.yaml does not exist" in world.text()
+    assert "ADR answer owed: decisions/answers/demo/adr.yaml does not exist" in world.text()
+    assert "tolerated that for this run" in world.text()
+    assert "was red only because" not in world.text(), "make verify exited 0 (F-14)"
     assert "the answer is the maintainer's" in world.text()
     assert git(world.root, "log", "-1", "--pretty=%s") == "docs(demo): draft spec and plan — route codex"
 
@@ -2208,6 +2209,17 @@ def test_put_back_paths_are_named_in_full_however_long(world: World) -> None:
     assert world.run("draft") == 0
     text = world.text()
     assert f"> - `{one}`" in text and f"> - `{two}`" in text
+
+
+def test_a_put_back_path_with_a_newline_is_never_cut() -> None:
+    # Phase-6 F-15. Planted fault: quote_block compares the split lines of an entry with the whole
+    # entries, so the long continuation line of a multiline path is cut and two paths become one.
+    head = "src/dir\n" + "e" * 600 + "/"
+    one, two = head + "one.txt", head + "two.txt"
+    entries = stage2.put_back_lines([one, two])
+    block = stage2.quote_block("Attempt 1 (codex): put back:\n" + "\n".join(entries), None, entries)
+    assert "left out" not in block
+    assert one.split("\n")[1] in block and two.split("\n")[1] in block
 
 
 def test_a_make_that_cannot_start_fails_the_attempt_and_moves_the_chain(world: World) -> None:

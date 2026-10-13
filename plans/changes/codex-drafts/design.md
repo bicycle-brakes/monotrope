@@ -2,7 +2,7 @@
 title: "Design — codex-drafts"
 category: design
 created: 2026-10-12
-updated: 2026-10-12
+updated: 2026-10-13
 status: draft
 implementation_status: none
 date: 2026-10-12
@@ -68,10 +68,17 @@ Four choices shape the change.
 
 **What `make verify` may leave red.**
 
-- **Nothing but this change's own missing ADR answer**, read from the
-  `adr-answers` section of the run's output. Consequences: a feature can be
-  drafted unattended; the commit lands with one known red gate, and the
-  orchestrating session records the maintainer's answer afterwards.
+- **The gate checks the exception itself** (chosen; maintainer, 2026-10-13,
+  "Die ADR-Prüfung selbst"). The runner sets `ADR_ANSWERS_TOLERATE_CHANGE=<change>`
+  for its own `make verify`; `adr-answers` tolerates exactly that change's
+  missing answer file, and the exit code decides. Consequences: a feature can
+  be drafted unattended; the runner reads no gate output; the gate script
+  changes (not `decisions/gates.yaml`); the orchestrating session records the
+  maintainer's answer afterwards, and the owed answer is noted in `findings.md`.
+- **The runner reads the `adr-answers` section of the output** (the first
+  choice, rejected). Consequences: the gate stays unchanged, but a forged
+  gate frame in any gate's output passes as the tolerated red (phase-6 rows
+  F-6, F-9, F-10), and the runner has to parse a format it does not own.
 - **Nothing.** Consequences: every feature draft fails three attempts, since
   no drafter may write the answer.
 - **A gate that skips a pending answer.** Consequences: a change of the gate
@@ -80,7 +87,8 @@ Four choices shape the change.
 Chosen: one call per attempt, `spec-review` through Claude Code, a second
 `draft` for the 2a rows, and the one tolerated red gate — because each keeps
 the drafting off Claude tokens while the review reads a fixed prompt. The
-choices are a proposal; the merge of the pull request decides them.
+choices are a proposal; the merge of the pull request decides them. The gate
+choice was amended by the maintainer on 2026-10-13 after phase-6 row F-13.
 
 ## Interfaces
 
@@ -100,8 +108,9 @@ choices are a proposal; the merge of the pull request decides them.
   own sign-in, no key from the secrets file.
 - **Runner → git** — the baseline, the put-back of paths outside what a draft
   may write, the `HEAD` check, one commit as `stage2-runner`.
-- **Runner → `make verify`** — run as `implement` runs it; the `adr-answers`
-  section of its standard output is read for criterion 13.
+- **Runner → `make verify`** — run as `implement` runs it, with
+  `ADR_ANSWERS_TOLERATE_CHANGE=<change>` in its environment (criterion 13);
+  the exit code decides, no output is read for it.
 - **Orchestrating session → runner** — between the two `draft` runs the
   orchestrating session reads the draft, records the ADR answer the
   maintainer stated (`scripts/harness.py decide adr`), commits, runs
@@ -162,8 +171,8 @@ flowchart LR
 - The `draft` verb of the stage2 runner, with its routes to `openai-codex`
   (workspace-write) and to `glm-coding-plan` on `glm-5.3`.
 - The put-back of paths outside the change folder (and of `decisions.md`),
-  the `HEAD` check, and the reading of the `adr-answers` section of
-  `make verify`.
+  the `HEAD` check, and the gate-side tolerance of this change's missing ADR
+  answer in `scripts/check_adr_answers.py` (`ADR_ANSWERS_TOLERATE_CHANGE`).
 - The edge from the runner to `claude-code-plan` on `claude-opus-5-5` for the
   spec review.
 

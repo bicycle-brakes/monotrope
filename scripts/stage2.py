@@ -1583,7 +1583,8 @@ def quote_block(text: str, key: str | None, whole: tuple[str, ...] | list[str] =
     `--stage2-off` the key is `None` and nothing is scrubbed: that run never reads it.
     """
     lines = []
-    uncut = {scrub(line, key) for line in whole}
+    # An entry may itself hold line breaks (a path can): every line it splits into stays uncut (F-15).
+    uncut = {part for line in whole for part in scrub(line, key).splitlines()}
     for line in scrub(text, key).splitlines():
         if len(line) > QUOTE_LINE_CHARS and line not in uncut:
             line = f"{line[:QUOTE_LINE_CHARS]} [… {len(line) - QUOTE_LINE_CHARS} characters left out …]"
@@ -2580,8 +2581,8 @@ def draft(root: Path, change: str) -> None:
             if owed:
                 append(
                     ctx.findings,
-                    f"ADR answer owed: `make verify` was red only because decisions/answers/{ctx.change}/adr.yaml "
-                    "does not exist; the answer is the maintainer's (python3 scripts/harness.py decide adr).",
+                    f"ADR answer owed: decisions/answers/{ctx.change}/adr.yaml does not exist and the gate "
+                    "tolerated that for this run; the answer is the maintainer's (python3 scripts/harness.py decide adr).",
                 )
             checkpoint(
                 root,

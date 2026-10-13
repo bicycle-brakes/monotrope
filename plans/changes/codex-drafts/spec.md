@@ -4,7 +4,7 @@ status: draft
 implementation_status: none
 date: 2026-10-12
 last_reviewed: 2026-10-12
-updated: 2026-10-12
+updated: 2026-10-13
 supersedes: null
 superseded_by: null
 bead: coding-harness-rhq
@@ -51,7 +51,8 @@ of the installed codex-cli 0.162.0, read the same day.
 - The gate `adr-answers` holds every `feature` to an answer file that only the
   maintainer's stated answer may create (`scripts/check_adr_answers.py`;
   `decisions.md`, second agent detail). A drafted feature therefore meets a
-  red `make verify` that no drafter can repair.
+  red `make verify` that no drafter can repair (criterion 13 gives the gate
+  one exception for it).
 - `begin_call` writes a new `findings.md` header with producer `codex` or
   `pi` only; a Claude reviewer would be recorded as `pi`.
 
@@ -132,14 +133,18 @@ of the installed codex-cli 0.162.0, read the same day.
     checks.
     *Refuted by:* an attempt that passes with `make verify` red for a reason
     criterion 13 does not name, or that never runs `make verify`.
-13. If `make verify` is red and its only blocking gate is `adr-answers`, every
-    finding of which says this change has no answer file, that red
-    `make verify` does not fail the attempt and `findings.md` says the ADR
-    answer is owed to the maintainer; the checks of criteria 14 to 16 still
-    apply.
-    *Refuted by:* a draft failing on that alone; or one passing when
-    `adr-answers` also reports another change or a refused answer file, when
-    a second gate blocks, or when `plan.md` lacks `## Time used`.
+13. The gate `adr-answers` itself checks the one exception: the runner sets
+    `ADR_ANSWERS_TOLERATE_CHANGE=<change>` for its own `make verify` only, and
+    the gate then tolerates exactly that change's missing answer file. The
+    runner reads no gate output for this; the exit code of `make verify`
+    decides. When the answer was tolerated, `findings.md` says the ADR answer
+    is owed to the maintainer; the checks of criteria 14 to 16 still apply.
+    Any other red gate, another change's missing answer and a refused answer
+    file still fail the gate, and so the attempt.
+    *Refuted by:* a draft failing on that alone; or one passing when the gate
+    reports another change or a refused answer file, when a second gate
+    blocks, or when `plan.md` lacks `## Time used`; or a gate that tolerates
+    a missing answer without the variable set to that change.
 14. If `spec.md` or `plan.md` is missing in the change folder after an
     attempt, the attempt fails its post-run checks with a diagnostic naming
     the file.
@@ -280,8 +285,10 @@ proposed "yes".
 
 - `provenance.yaml`, `decisions/` — maintainer-owned; the ADR answer of this
   change is recorded only from the maintainer's stated answer.
-- `scripts/check_adr_answers.py`, `decisions/gates.yaml` — criterion 13
-  reads the gate's output; the gate itself does not change.
+- `decisions/gates.yaml` — the gate list does not change. (The gate's script
+  `scripts/check_adr_answers.py` is not protected: criterion 13 puts the
+  exception there. Amended by the maintainer on 2026-10-13 after phase-6 row
+  F-13: "Die ADR-Prüfung selbst" checks the exception.)
 - `scripts/stage2_runs.py`, `scripts/stage2_session.py`,
   `scripts/leakcheck.py` — they read and scan what this change writes
   unchanged.

@@ -135,9 +135,9 @@ No `[DECISION]` is open. The spec's `[DETAIL]`s stand; these are the plan's:
      - `verify_draft`; problems become the diagnostics and the quoted
        `attempt_block`, exactly as in `implement`; the key scan again;
      - no problems: when the answer is owed, `append` the line ``ADR answer
-       owed: `make verify` was red only because
-       decisions/answers/<change>/adr.yaml does not exist; the answer is the
-       maintainer's (python3 scripts/harness.py decide adr).``; then
+       owed: decisions/answers/<change>/adr.yaml does not exist and the gate
+       tolerated that for this run; the answer is the maintainer's (python3
+       scripts/harness.py decide adr).``; then
        `checkpoint(…, message=f"docs({change}): draft spec and plan — route
        {route}")` and return.
      After the third: `CallFailed("the draft failed after the allowed
@@ -267,8 +267,9 @@ No `[DECISION]` is open. The spec's `[DETAIL]`s stand; these are the plan's:
 make verify
 ```
 
-`make verify` stays red on `adr-answers` until the orchestrating session
-records the maintainer's answer for this change.
+`make verify` on this branch passes `adr-answers` only through the runner's
+`ADR_ANSWERS_TOLERATE_CHANGE`; a plain run stays red until the orchestrating
+session records the maintainer's answer for this change.
 
 ## Criterion ledger
 
@@ -284,7 +285,7 @@ records the maintainer's answer for this change.
 - 10: tests/test_stage2.py::test_two_new_adr_files_fail_the_attempt — no count of new ADR files
 - 11: tests/test_stage2.py::test_a_draft_call_that_moves_head_stops_the_run — the HEAD check after the put-back
 - 12: tests/test_stage2.py::test_a_red_verify_fails_the_draft_attempt — the exit code of `make verify` ignored
-- 13: tests/test_stage2.py::test_only_the_changes_own_missing_adr_answer_is_tolerated — any red `adr-answers` section tolerated
+- 13: tests/test_stage2.py::test_only_the_changes_own_missing_adr_answer_is_tolerated — the gate not asked to tolerate this change, or the owed answer not said
 - 14: tests/test_stage2.py::test_a_missing_spec_or_plan_fails_the_attempt — only `plan.md` checked
 - 15: tests/test_stage2.py::test_a_plan_without_its_card_fails_the_attempt — the labels looked for anywhere in the file
 - 16: tests/test_stage2.py::test_a_plan_without_time_used_fails_the_attempt — the heading check left out
@@ -319,7 +320,8 @@ records the maintainer's answer for this change.
   `verify_evidence`), `red_sections`, `restore_baseline`, `review_loop`,
   `release`, `probe`, `session` in `scripts/stage2.py`.
 - `scripts/stage2_runs.py`, `scripts/stage2_session.py`,
-  `scripts/leakcheck.py`, `scripts/check_adr_answers.py`, `decisions/`,
+  `scripts/leakcheck.py`, `decisions/` (the gate script
+  `scripts/check_adr_answers.py` is touched: criterion 13, amended 2026-10-13),
   `provenance.yaml`, `.claude/settings.json`, `templates/`.
 - `docs/adr/0007-…`, `0011-…`, `0012-…`; the ADR 0016 draft is written in
   phase 2b, and phase 4's one edit to it names the git directory among what
@@ -442,3 +444,11 @@ verify`, `check_adr_answers.py` tolerates exactly that change's missing answer
 and the exit code decides (F-9, F-10); the new-ADR count ignores a deleted path
 (F-11); put-back paths are never cut (F-12). Each row has its own test shown red
 on the baseline's code. The appetite of 8 h is not reached.
+
+2026-10-13, the F-13 amendment and the F-14/F-15 repair window (no command
+tool for the doctrine edits, so no wall-clock reading): after the maintainer's
+decision ("Die ADR-Prüfung selbst") spec criterion 13, the protected areas and
+the design now describe the gate-side exception the code already had; the
+success audit no longer says `make verify` was red when it exited 0 (F-14),
+and put-back entries survive whole when they hold line breaks (F-15), each
+with a test shown red on the baseline. The appetite of 8 h is not reached.
