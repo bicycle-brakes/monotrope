@@ -4650,6 +4650,42 @@ def test_repair_retry_uses_fresh_codex_with_diagnostics(world: World) -> None:
     assert "attempt 2 · route codex-repair" in text and "reason first Codex post-run check failed" in text
 
 
+@pytest.mark.parametrize("deleted_attempt", [1, 2])
+def test_repair_retry_starts_after_a_completed_attempt_deletes_plan(
+    world: World, monkeypatch: pytest.MonkeyPatch, deleted_attempt: int
+) -> None:
+    """Codex-repairs F-8: deleting the plan must fail the check and still let the next attempt start."""
+    baseline = repair_world(world)
+    plan = world.plan.read_text(encoding="utf-8")
+    steps = [{"stdout": "still looking"}] * (deleted_attempt - 1)
+    steps += [repair_step(delete=["plans/changes/demo/plan.md"], append={}), repair_step()]
+    script_repair(world, steps, make=[{"stdout": "green\n"}] * len(steps))
+    real_checkpoint = stage2.checkpoint
+    checkpoints: list[int] = []
+
+    def checkpoint(*args, **kwargs):
+        checkpoints.append(len(repair_calls(world)))
+        real_checkpoint(*args, **kwargs)
+
+    monkeypatch.setattr(stage2, "checkpoint", checkpoint)
+    assert world.run("repair") == 0
+    calls = repair_calls(world)
+    assert len(calls) == deleted_attempt + 1
+    assert checkpoints == [deleted_attempt + 1], "the attempt that deleted the plan reached a checkpoint"
+    assert len(world.calls("codex")) == 2
+    assert len(world.calls("claude")) == deleted_attempt - 1
+    assert all("resume" not in call["argv"] for call in world.calls("codex"))
+    retry_prompt = prompt_of(calls[deleted_attempt])
+    route = "codex" if deleted_attempt == 1 else "codex-repair"
+    assert f"Attempt {deleted_attempt} ({route}):" in retry_prompt
+    assert "plan.md cannot be read." in retry_prompt
+    assert f"## Accepted plan\n\n{plan}" in retry_prompt
+    assert f"> - `plans/changes/demo/plan.md` +0 -{len(plan.splitlines())}" in world.text()
+    assert "2026-10-12 10:00–10:05, 5 min" in world.plan.read_text(encoding="utf-8")
+    assert git(world.root, "rev-list", "--count", f"{baseline}..HEAD") == "1"
+    assert git(world.root, "status", "--porcelain") == ""
+
+
 def test_two_failed_codex_repairs_fall_back_to_sonnet(world: World) -> None:
     """Criterion 5. Planted fault: GLM as the fallback, lost earlier evidence or a fourth attempt."""
     repair_world(world)

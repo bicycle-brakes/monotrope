@@ -71,12 +71,17 @@ alone, and `--stage2-off` to explore, implement and repair.
 5. an empty standard input, and an environment the runner built from an
    allow-list - never the caller's.
 
-**Reads: what each call can reach.** The Claude Code calls (explore,
-implement, repair and the Sonnet fallback attempts) start in the worktree
+**Reads: what each call can reach.** The Claude Code calls (explore, the
+draft's GLM attempt, implement, spec-review and the Sonnet 5.5 fallback attempts) start in the worktree
 with `--restricted` and no `--add-dir`; `claude --help` says `--restricted`
 "confines the file tools to the working directories", so
 `~/.config/cc-routing/secrets.env` is outside what those file tools reach.
-That is the CLI's documented behaviour, not measured here. **The review
+That is the CLI's documented behaviour, not measured here. Codex's draft and
+repair attempts have command tools in the configured `workspace-write`
+sandbox; a repair may run tests and `make verify` but must not commit or run
+git commands that change the repository. Codex's review, draft and repair
+calls are not confined in their reads: only the prompt's request bounds them
+to the worktree and the repository's git directory. **The review
 loop's Pi calls are not among them, and they are not confined:** a round's
 `read` reaches files outside the worktree (measured with Pi 1.1.0, research
 §L), and the secrets file is among them; only the prompt's request bounds it -
@@ -1340,9 +1345,10 @@ TIME_HEADING = re.compile(r"^## Time used[ \t]*$", re.M)
 WORK_READ_TOOLS = "Read,Grep,Glob"
 WORK_WRITE_TOOLS = "Read,Grep,Glob,Edit,Write"
 
-# Before `make verify` the runner formats the change's Python files itself: the work models have no
-# command tool, and both ruff gates only check. Safe fixes only, never `--unsafe-fixes` (Q-1 of the
-# spec), and the worktree's own ruff by a path with a slash, so `PATH` is never consulted.
+# Before `make verify` the runner formats the change's Python files itself: Claude Code work calls
+# have file tools only; Codex repair attempts are command-capable workspace-write calls. Both ruff
+# gates only check. Safe fixes only, never `--unsafe-fixes` (Q-1 of the spec), and the worktree's own
+# ruff by a path with a slash, so `PATH` is never consulted.
 RUFF = ".venv/bin/ruff"
 FORMAT_DIRS = ("scripts/", "tests/")
 RUFF_COMMANDS = (
@@ -2497,6 +2503,10 @@ def run_attempts(
                 after_commit()
             print(f"{verb}: verified and committed · route {route} · attempt {attempt}")
             return
+        if attempt < len(routes) and not ctx.plan.exists():
+            # The failed attempt's deletion stays in its evidence. Restore the pre-call plan so
+            # the next prompt and time check can read it; the retry still needs its own time line.
+            ctx.plan.write_text(baseline_time, encoding="utf-8")
     raise CallFailed(closing)
 
 
