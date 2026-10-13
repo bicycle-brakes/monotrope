@@ -91,13 +91,11 @@ No `[DECISION]` is open. The spec's `[DETAIL]`s stand; these are the plan's:
      `git cat-file -e <base>:<path>` does not find, `<base>` being
      `git merge-base <baseline> origin/main` (so a second draft may edit the
      ADR the first one committed); the second value is those ADR paths.
-   - `red_gates(output) -> dict[str, list[str]]`: the gate id and body lines
-     of each section `verify_all.sh` framed `RED (block)`, read with the frame
-     logic of `red_sections` (`_frame_lines`, `GATE_START`, `GATE_END`), which
-     stays as it is.
-   - `only_answer_owed(output, change) -> bool`: `red_gates` has exactly the
-     key `adr-answers`, and its body has at least one non-blank line and every
-     non-blank line begins `adr-answers: <change>: no answer — `.
+   - `answer_is_owed(root, change) -> bool`: `check_adr_answers.examine(root)`
+     lists `change` among its missing answers. (Phase-6 round 2 replaced the
+     output-reading `red_gates` / `only_answer_owed`: the runner sets
+     `check_adr_answers.TOLERATE_ENV` to the change for `make verify`, the gate
+     tolerates exactly that change's missing answer, and the exit code decides.)
    - `card_problem(text) -> str | None`: below the header, before the first
      line starting `## `, the first fenced block must hold lines beginning
      with the five `CARD_LABELS` in that order; otherwise "`plan.md` does not
@@ -108,8 +106,8 @@ No `[DECISION]` is open. The spec's `[DETAIL]`s stand; these are the plan's:
      problem naming them; `prepare_derived` with `verify_attempt`'s
      environment, its problems returned as they are; `make verify`, whose red
      run is a problem with `verify_attempt`'s evidence (moved into a helper
-     `verify_evidence(done, key)` that both call) unless `only_answer_owed`
-     holds; a missing `spec.md` or `plan.md`; `card_problem`; a `plan.md`
+     `verify_evidence(done, key)` that both call); a green run whose answer
+     `answer_is_owed` is the owed case; a missing `spec.md` or `plan.md`; `card_problem`; a `plan.md`
      without `TIME_HEADING`.
    - `draft(root, change)`: `preflight(root, change, CODEX,
      bead_file="research.md", required=("decisions.md",))`; refuse changes
@@ -437,3 +435,10 @@ F-8; no wall-clock reading) completed the runner's repair left in the tree: each
 row now has its own test shown red on the baseline's `scripts/stage2.py` (the
 missing-answer row F-6 has two, one per case). The runner's `make verify` and
 checkpoint commit are still to come. The appetite of 8 h is not reached.
+The round-5 repair window (2026-10-13, phase-6 repair round 2 of the rows F-9 to
+F-12; no wall-clock reading) replaced the gate-output reading by a structural
+tolerance: the runner sets `ADR_ANSWERS_TOLERATE_CHANGE=<change>` for `make
+verify`, `check_adr_answers.py` tolerates exactly that change's missing answer
+and the exit code decides (F-9, F-10); the new-ADR count ignores a deleted path
+(F-11); put-back paths are never cut (F-12). Each row has its own test shown red
+on the baseline's code. The appetite of 8 h is not reached.

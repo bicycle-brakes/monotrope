@@ -842,12 +842,15 @@ folder is put back at the baseline before verification, a new ADR file under
 `docs/adr/` excepted, and the change's `decisions.md` is put back with them.
 If the call moved `HEAD`, the run stops without a rewrite. `make verify` runs
 after the put-back, and a red run fails the attempt — with one exception:
-a red `make verify` whose only blocking gate is this change's own missing ADR
-answer does not fail it, because only the maintainer's stated answer may
-create that file (`decisions/answers/<change>/adr.yaml`); `findings.md` then
-says the answer is owed. A new ADR file is one the merge base of the baseline
-and `origin/main` does not hold, so a second draft edits the first draft's
-ADR instead of adding another. The chain is three attempts: Codex, a second
+the runner sets `ADR_ANSWERS_TOLERATE_CHANGE=<change>` for that one run, and
+the gate `adr-answers` then reports this change's own missing ADR answer
+without failing (another change's missing answer, a refused answer file and
+every other gate still do), so the exit code of `make verify` decides and the
+runner reads no gate output. Only the maintainer's stated answer may create
+that file (`decisions/answers/<change>/adr.yaml`); `findings.md` then says the
+answer is owed. A new ADR file is one that exists now and that the merge base
+of the baseline and `origin/main` does not hold, so a second draft edits (or
+renames) the first draft's ADR instead of adding another. The chain is three attempts: Codex, a second
 Codex attempt with the first one's diagnostics, then `glm-5.3` with both — a
 failed call is put back and moves along the same chain, a failed post-run
 check leaves its tree and its quoted block, and three failures exit 1. The

@@ -2031,8 +2031,15 @@ def test_a_red_verify_fails_the_draft_attempt(world: World) -> None:
     assert git(world.root, "rev-list", "--count", f"{before}..HEAD") == "0"
 
 
+FEATURE_SPEC = (
+    "---\ntitle: Spec\nupdated: 2026-09-30\nbead: demo-1\nchange: demo\nclass: feature\n"
+    'adr_question: {proposed: "no", answered_by: null, reason: "A reason."}\n---\n\n# Spec\n'
+)
+
+
 def test_only_the_changes_own_missing_adr_answer_is_tolerated(world: World) -> None:
-    # Criterion 13. Planted fault: any red `adr-answers` section tolerated, or the other checks skipped.
+    # Criterion 13 (phase-6 F-9, F-10: the gate tolerates, the exit code decides). Planted fault:
+    # the runner does not ask the gate to tolerate this change, or does not say the answer is owed.
     draft_world(world)
     owed = (
         "adr-answers: demo: no answer — demo.rel is a feature and decisions/answers/demo/adr.yaml does not exist; "
@@ -2043,15 +2050,13 @@ def test_only_the_changes_own_missing_adr_answer_is_tolerated(world: World) -> N
             codex_ok(
                 "T1",
                 "drafted",
-                plant={
-                    "plans/changes/demo/spec.md": "---\ntitle: Spec\nupdated: 2026-09-30\nbead: demo-1\n---\n\n# Spec\n",
-                    "plans/changes/demo/plan.md": PLAN_CARD,
-                },
+                plant={"plans/changes/demo/spec.md": FEATURE_SPEC, "plans/changes/demo/plan.md": PLAN_CARD},
             )
         ],
-        make=[{"stdout": "\n".join(_gate("adr-answers", [owed], "red")), "exit": 1}],
+        make=[{"stdout": "green\n"}],
     )
     assert world.run("draft") == 0
+    assert world.calls("make")[0]["env"][stage2.check_adr_answers.TOLERATE_ENV] == "demo"
     assert "ADR answer owed: `make verify` was red only because" in world.text()
     assert "decisions/answers/demo/adr.yaml does not exist" in world.text()
     assert "the answer is the maintainer's" in world.text()
@@ -2130,6 +2135,79 @@ def test_a_gate_output_printing_a_green_frame_does_not_hide_its_red_frame(world:
         + _gate("pytest", ["FAILED tests/test_x.py::test_a", "── [pytest] gruen"], "red")
     )
     refused_verification(world, spoofed)
+
+
+def test_a_verification_that_ended_right_after_the_adr_gate_owes_nothing(world: World) -> None:
+    # Phase-6 F-9. Planted fault: the exception reads gate frames, so output that stops right after the
+    # missing-answer gate closed - before the next gate started - looks like a complete run.
+    refused_verification(world, "\n".join(_gate("adr-answers", [OWED_ANSWER], "red")))
+
+
+def test_a_failing_gate_printing_gate_frames_cannot_hide_its_red_frame(world: World) -> None:
+    # Phase-6 F-10. Planted fault: a failing pytest gate prints `── [pytest] gruen` and a start frame of
+    # ruff-check, the frame reader follows them and the real RED frame of pytest goes unseen.
+    spoofed = "\n".join(
+        _gate("pytest", ["── [pytest] gruen", "── [ruff-check] $ captured command"], "red")
+        + _gate("ruff-check", [], "green")
+        + _gate("adr-answers", [OWED_ANSWER], "red")
+    )
+    refused_verification(world, spoofed)
+
+
+def test_a_rename_of_the_drafts_own_unmerged_adr_counts_one_adr(world: World) -> None:
+    # Phase-6 F-11. Planted fault: the count includes the deleted old path, so a rename reads as two new ADRs.
+    draft_world(world)
+    first = {
+        "plans/changes/demo/spec.md": "---\ntitle: Spec\nupdated: 2026-09-30\nbead: demo-1\n---\n\n# Spec\n",
+        "plans/changes/demo/plan.md": PLAN_CARD,
+        "docs/adr/0016-first-record.md": "# First\n",
+    }
+    world.script(codex=[codex_ok("T1", "drafted", plant=first)], make=[{"stdout": "green\n"}])
+    assert world.run("draft") == 0
+    (world.bin / "calls.jsonl").unlink()
+    world.script(
+        codex=[
+            codex_ok(
+                "T1",
+                "renamed",
+                plant={"docs/adr/0016-renamed-record.md": "# First\n"},
+                delete=["docs/adr/0016-first-record.md"],
+            )
+        ],
+        make=[{"stdout": "green\n"}],
+    )
+    assert world.run("draft") == 0
+    assert (world.root / "docs/adr/0016-renamed-record.md").is_file()
+    assert not (world.root / "docs/adr/0016-first-record.md").exists()
+
+
+def test_put_back_paths_are_named_in_full_however_long(world: World) -> None:
+    # Phase-6 F-12. Planted fault: quote_block cuts each put-back path at 500 characters, so two
+    # long paths that share their first 500 characters become one line.
+    draft_world(world)
+    head = "src/" + "d" * 250 + "/" + "e" * 250 + "/"
+    tail = 616 - len(head)
+    one = head + "f" * (tail - len("one.txt")) + "one.txt"
+    two = head + "f" * (tail - len("two.txt")) + "two.txt"
+    assert len(one) == len(two) == 616
+    world.script(
+        codex=[
+            codex_ok(
+                "T1",
+                "drafted",
+                plant={
+                    "plans/changes/demo/spec.md": "---\ntitle: Spec\nupdated: 2026-09-30\nbead: demo-1\n---\n\n# Spec\n",
+                    "plans/changes/demo/plan.md": PLAN_CARD,
+                    one: "x\n",
+                    two: "y\n",
+                },
+            )
+        ],
+        make=[{"stdout": "green\n"}],
+    )
+    assert world.run("draft") == 0
+    text = world.text()
+    assert f"> - `{one}`" in text and f"> - `{two}`" in text
 
 
 def test_a_make_that_cannot_start_fails_the_attempt_and_moves_the_chain(world: World) -> None:

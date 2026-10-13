@@ -113,8 +113,10 @@ model, decides what may change.
    `plan.md` exist and `plan.md` carries its card and `## Time used`. A
    passing attempt makes exactly one commit.
 3. **The one red gate a draft accepts** is `adr-answers` reporting that the
-   drafted change has no answer file, and nothing else; `findings.md` says
-   the answer is owed. The orchestrating session records the maintainer's
+   drafted change has no answer file, and nothing else: the runner sets
+   `ADR_ANSWERS_TOLERATE_CHANGE=<change>` for its `make verify`, the gate
+   tolerates exactly that change's missing answer, and the exit code decides;
+   no gate output is parsed. `findings.md` says the answer is owed. The orchestrating session records the maintainer's
    stated answer afterwards (`python3 scripts/harness.py decide adr …
    --stated-in …`); no drafting model records one.
 4. **The chain** (Q-5): Codex; Codex again with the first attempt's

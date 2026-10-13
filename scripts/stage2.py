@@ -127,6 +127,7 @@ import yaml
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 
+import check_adr_answers  # noqa: E402
 import check_frontmatter_current  # noqa: E402
 import leakcheck  # noqa: E402
 import merge_guard  # noqa: E402
@@ -1572,17 +1573,19 @@ def attempt_block(attempt: int, route: str, listing: str, files: list[str] | str
     return f"{head}\n\n{file_part}\n\nDiagnostics:\n{fence}text\n{listing}\n{fence}"
 
 
-def quote_block(text: str, key: str | None) -> str:
+def quote_block(text: str, key: str | None, whole: tuple[str, ...] | list[str] = ()) -> str:
     """`text` as one Markdown quote: every line begins `>`, the key scrubbed, long lines cut.
 
     One mark on every line defeats the line-anchored readers of findings.md at once (spec, criterion 11).
     A line longer than `QUOTE_LINE_CHARS` keeps its first characters and says how many were left out
-    (criterion 13). Under `--stage2-off` the key is `None` and nothing is scrubbed: that run never
-    reads it.
+    (criterion 13). A line that is one of `whole` is never cut: the put-back list names each path in
+    full, and a cut would turn two long paths into one line (spec, criterion 8; phase-6 F-12). Under
+    `--stage2-off` the key is `None` and nothing is scrubbed: that run never reads it.
     """
     lines = []
+    uncut = {scrub(line, key) for line in whole}
     for line in scrub(text, key).splitlines():
-        if len(line) > QUOTE_LINE_CHARS:
+        if len(line) > QUOTE_LINE_CHARS and line not in uncut:
             line = f"{line[:QUOTE_LINE_CHARS]} [… {len(line) - QUOTE_LINE_CHARS} characters left out …]"
         lines.append(f"> {line}" if line else ">")
     return scrub("\n".join(lines), key)
@@ -2369,72 +2372,20 @@ def draft_keep(root: Path, ctx: Context, baseline: str) -> tuple[set[Path], list
             ["git", "-C", str(root), "cat-file", "-e", f"{base}:{posix}"], capture_output=True, check=False
         )
         if held.returncode != 0:
+            # Deleting the draft's own unmerged ADR is allowed, so the path stays a keep; only a
+            # file that exists now counts, or a rename would read as two new ADRs (F-11).
             keep.add(path)
-            new_adrs.append(posix)
+            if (root / path).exists():
+                new_adrs.append(posix)
     return keep, new_adrs
 
 
-def gate_sections(output: str) -> dict[str, tuple[list[str], str | None]]:
-    """Each gate's body lines and the verdict of its closing frame - None when it never closed.
-
-    A section runs from a gate's start frame to the next gate's. Its closing frame is the last
-    end-shaped line of the gate's own name, so a line a gate's output prints in the frame's shape
-    cannot stand in for the frame (spec, criterion 13; 2a's F-6). A start-shaped line while the
-    open gate has no closing frame yet is that gate's own output, not the next gate - the reading
-    of loop row L2-1.
-    """
-    lines = _frame_lines(output)
-    sections: dict[str, tuple[list[str], str | None]] = {}
-    name: str | None = None
-    begin = end = 0
-    verdict: str | None = None
-    for index, line in enumerate(lines):
-        start = GATE_START.match(line)
-        if start and (name is None or verdict is not None):
-            if name is not None:
-                sections[name] = (lines[begin + 1 : end], verdict)
-            name, begin, verdict, end = start["gate"], index, None, index
-            continue
-        closing = GATE_END.match(line)
-        if name is not None and closing and closing["gate"] == name:
-            verdict, end = closing["verdict"], index
-    if name is not None:
-        sections[name] = (lines[begin + 1 : end], verdict)
-    return sections
-
-
-def red_gates(output: str) -> dict[str, list[str]]:
-    """Each gate `verify_all.sh` framed `RED (block)`, with its body lines, in run order.
-
-    The verdict is read from the closing frame - the last end-shaped line of the gate's own name -
-    so a line a gate's output prints in that shape cannot hide the frame (2a's F-6). The frame
-    logic is `red_sections`'.
-    """
-    return {
-        name: body
-        for name, (body, verdict) in gate_sections(output).items()
-        if verdict is not None and verdict.startswith("RED (block)")
-    }
-
-
-def only_answer_owed(output: str, change: str) -> bool:
-    """Whether a red `make verify` is red only on this change's own missing ADR answer.
-
-    That one red gate does not fail a draft attempt (spec, criterion 13): only the maintainer's
-    stated answer may create `decisions/answers/<change>/adr.yaml`, so a drafted feature would
-    never pass. Every other red gate, and another change's missing answer, still fails it - and so
-    does a verification that stopped before its gates had run: the exception holds only when every
-    gate ran to its closing frame, read from that frame and not from a line in a gate's output
-    (2a's F-6).
-    """
-    sections = gate_sections(output)
-    if any(verdict is None for _, verdict in sections.values()):
+def answer_is_owed(root: Path, change: str) -> bool:
+    """Whether `change` is a feature whose ADR answer file does not exist in `root` now."""
+    try:
+        return any(feature.change == change for feature in check_adr_answers.examine(root).missing)
+    except (OSError, ValueError):
         return False
-    gates = red_gates(output)
-    if list(gates) != ["adr-answers"]:
-        return False
-    body = [line for line in gates["adr-answers"] if line.strip()]
-    return bool(body) and all(line.startswith(f"adr-answers: {change}: no answer — ") for line in body)
 
 
 CARD_PROBLEM = "`plan.md` does not open with the plan card (For you:, Done when:, Appetite:, Not now:, Pre-mortem:)"
@@ -2470,7 +2421,8 @@ def verify_draft(root: Path, ctx: Context, key: str | None, new_adrs: list[str])
     """A draft attempt's post-run checks: the problems, and whether the answer is owed.
 
     The order is the spec's (criteria 10 to 16): the ADR count, the derived files, `make verify` -
-    red is a problem unless the one gate is this change's own missing ADR answer - the two
+    its exit code decides; the one missing answer it tolerates is the gate's own, asked for through
+    `check_adr_answers.TOLERATE_ENV`, never read from its output - the two
     artefacts, the plan card and the `## Time used` heading.
     """
     owed = False
@@ -2482,6 +2434,10 @@ def verify_draft(root: Path, ctx: Context, key: str | None, new_adrs: list[str])
             "GIT_CONFIG_COUNT": "1",
             "GIT_CONFIG_KEY_0": "commit.gpgsign",
             "GIT_CONFIG_VALUE_0": "false",
+            # The one tolerance of a draft is the gate's own, set by this runner alone: with this
+            # variable `adr-answers` reports this change's missing answer and passes, so the
+            # exit code of `make verify` decides and no output is read (spec, criterion 13; F-9, F-10).
+            check_adr_answers.TOLERATE_ENV: ctx.change,
         }
     )
     preparation = prepare_derived(root, env, key)
@@ -2495,10 +2451,9 @@ def verify_draft(root: Path, ctx: Context, key: str | None, new_adrs: list[str])
         return [f"`make verify` could not run: {error}"], owed
     problems = []
     if done.returncode != 0:
-        if only_answer_owed(done.stdout or "", ctx.change):
-            owed = True
-        else:
-            problems.append(f"`make verify` exited {done.returncode}\n{verify_evidence(done, key)}".rstrip())
+        problems.append(f"`make verify` exited {done.returncode}\n{verify_evidence(done, key)}".rstrip())
+    else:
+        owed = answer_is_owed(root, ctx.change)
     plan_missing = not ctx.plan.is_file()
     for name in ("spec.md", "plan.md"):
         if not (ctx.folder / name).is_file():
@@ -2585,7 +2540,7 @@ def draft(root: Path, change: str) -> None:
             block = f"Attempt {attempt} ({route}) failed its call: {call_error}"
             if put:
                 block += "\n\nThe runner put back:\n" + "\n".join(put_back_lines(put))
-            append(ctx.findings, quote_block(block, key))
+            append(ctx.findings, quote_block(block, key, put_back_lines(put)))
             continue
         if unmeasured is None:
             # Both snapshots stand around the model call alone: the runner's own writes - the audit
@@ -2603,7 +2558,9 @@ def draft(root: Path, change: str) -> None:
             append(
                 ctx.findings,
                 quote_block(
-                    f"Attempt {attempt} ({route}): the runner put back what a draft may not change:\n{listing}", key
+                    f"Attempt {attempt} ({route}): the runner put back what a draft may not change:\n{listing}",
+                    key,
+                    put_back_lines(put),
                 ),
             )
         problems, owed = verify_draft(root, ctx, key, new_adrs)
