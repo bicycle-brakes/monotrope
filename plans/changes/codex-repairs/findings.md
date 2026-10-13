@@ -238,3 +238,14 @@ Phase 6 verdict: codex 01a136aa-2a43-7370-ac31-a0a5732edea6, 2026-10-13
 Reviewer session: codex 01a136aa-2a43-7370-ac31-a0a5732edea6 — a fresh session reviewed: an earlier ## Phase 6 block makes this a re-check
 
 Stage-2 call, 2026-10-13: repair · attempt 1 · route codex · endpoint openai-codex · model gpt-6.1-sol · leak check clean over 416 files, 1046 commits, 12 rules.
+
+Stage-2 call, 2026-10-13: review · endpoint openai-codex · model gpt-6.1-sol · leak check clean over 416 files, 1048 commits, 12 rules.
+
+## Phase 6 — Codex, 2026-10-13
+
+| ID | Severity | Dimension | Origin | Where | Finding | Reviewer | Status | Broke a test |
+|---|---|---|---|---|---|---|---|---|
+| F-11 | MAJOR | SPEC | base | `scripts/stage2.py:2372`; `scripts/stage2.py:718–719` | If a completed Codex attempt deletes `prompts/04-implement.md` or `AGENTS.md` and fails verification, constructing the next prompt raises an uncaught `FileNotFoundError`. The restoration list covers only change-folder inputs. Isolated execution reproduces both cases: deletion by attempt 1 prevents the fresh Codex retry; deletion by attempt 2 prevents the Sonnet fallback. Both prompt dependencies must remain available so the prescribed next attempt receives the failed attempts’ diagnostics. [criteria 4–5] | Codex | open | — |
+
+Phase 6 verdict: codex 01a136c5-c1ff-7882-a91f-235052d1cc35, 2026-10-13
+Reviewer session: codex 01a136c5-c1ff-7882-a91f-235052d1cc35 — a fresh session reviewed: an earlier ## Phase 6 block makes this a re-check
