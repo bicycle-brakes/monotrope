@@ -1,0 +1,13 @@
+schema_version: 1
+change: kit-install
+question: adr
+answer: 'yes'
+reason: The change fixes for good how the workflow reaches other repositories (a pinned
+  version in a lock file, the template role, no commit by the tool), so a new ADR
+  records it.
+shown:
+  proposed: 'yes'
+  proposal_reason: Pinned distribution, template ownership and uncommitted installation
+    bind future workflow instances.
+answered_by: framework-architect
+answered_at: 2026-10-13

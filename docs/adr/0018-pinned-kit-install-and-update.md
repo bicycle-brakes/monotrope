@@ -1,5 +1,5 @@
 ---
-title: "ADR 0017 — The kit installs and updates by a pinned source commit"
+title: "ADR 0018 — The kit installs and updates by a pinned source commit"
 category: adr
 status: accepted
 created: 2026-10-13
@@ -12,7 +12,7 @@ review: {status: pending, approved_by: null, approved_at: null}
 tags: [adr, kit, install, update, ownership]
 ---
 
-# ADR 0017 — The kit installs and updates by a pinned source commit
+# ADR 0018 — The kit installs and updates by a pinned source commit
 
 * Status: accepted by the merge of the pull request that carries this file.
   Until that merge, the pull request's state is the decision's state: open is

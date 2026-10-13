@@ -53,7 +53,7 @@ its scope or appetite. No Stage-1 Explore fallback was recorded in research.
 | change | `tests/test_kit.py` | Hold the third role and shared-reader survey without weakening the classification or portability ratchets. |
 | change | `tests/test_ci.py` | Cover the new caller declarations through the existing inventory checks, adjusting only directly affected assertions if necessary. |
 | change | `docs/WORKFLOW.md` | Document the three invocations, ownership, bootstrap prerequisites, partial pins and uncommitted verification result. |
-| create | `docs/adr/0017-pinned-kit-install-and-update.md` | Carry the single MADR draft for Q-1 through Q-5; acceptance is its decision PR's merge. |
+| create | `docs/adr/0018-pinned-kit-install-and-update.md` | Carry the single MADR draft for Q-1 through Q-5; acceptance is its decision PR's merge. |
 | change | `plans/changes/kit-install/spec.md` | Incorporate accepted 2a clarifications and eventually record implementation state without changing intent. |
 | change | `plans/changes/kit-install/design.md` | Keep the published design aligned with the revised spec and implementation. |
 | change | `plans/changes/kit-install/plan.md` | Record time and turn each completed ledger entry into an existing-test entry. |

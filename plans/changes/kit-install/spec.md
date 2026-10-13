@@ -17,7 +17,7 @@ class: feature
 appetite: 12
 change: kit-install
 adr_question: {proposed: "yes", reason: "Pinned distribution, template ownership and uncommitted installation bind future workflow instances."}
-adr_files: [docs/adr/0017-pinned-kit-install-and-update.md]
+adr_files: [docs/adr/0018-pinned-kit-install-and-update.md]
 ---
 
 # Spec — kit-install
@@ -215,7 +215,7 @@ report for adoption in its own changes (bead coding-harness-2uk). Research:
   after a partial update. Evidence names the tested source commit in the PR.
 - The code PR carries these spec, design and plan files, the implementation
   paths listed in the plan, the updated workflow instructions and
-  `docs/adr/0017-pinned-kit-install-and-update.md` together.
+  `docs/adr/0018-pinned-kit-install-and-update.md` together.
 - The protected areas and non-goals remain outside the PR's file list.
 - The decision PR records the distribution rules chosen in Q-1 through Q-5;
   merge is acceptance. Any required ADR-answer file is recorded by the

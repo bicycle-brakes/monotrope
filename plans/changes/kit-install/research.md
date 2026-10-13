@@ -356,3 +356,9 @@ history and release/tag inventory remain unmeasured beyond the original
 research. Fresh Python-3.12 installation and read-only, path-based reports
 do not require those gaps to be answered; existing-instance conversion and
 release construction remain outside this change.
+
+## Amendment — 2026-10-13, ADR number
+
+The branch of bead coding-harness-0ga (`feat/codex-repairs`) already holds
+`docs/adr/0017-codex-repairs-taken-findings.md` and merges first, so this
+change's draft is ADR 0018 (renumbered by the orchestrator after the draft).

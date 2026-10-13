@@ -209,7 +209,7 @@ in an initialized instance when it still runs its existing pytest survey.
 
 ## ADR draft
 
-The one draft is [ADR 0017 — pinned kit install and update](../../../docs/adr/0017-pinned-kit-install-and-update.md),
+The one draft is [ADR 0018 — pinned kit install and update](../../../docs/adr/0018-pinned-kit-install-and-update.md),
 in the form of `templates/adr.md`. It records Q-1 through Q-5: fresh targets
 first, reports for existing instances, commit pins, first-install template
 ownership and verified changes left uncommitted. It amends no D-/O-number or
