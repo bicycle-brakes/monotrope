@@ -50,9 +50,10 @@ repair's deliberately stopping behavior.
 - **Runner → Codex CLI:** call `run_codex(..., writable=True)` without resume,
   consume the answer-file text and discard the repair thread id. Use its
   existing environment allow-list and writing configuration; no GLM key is
-  read. The repair prompt prohibits commands, commits and edits to findings,
-  and asks for a measured time entry and one fixed line per taken row. These
-  are instructions, not a claim that Codex has no command tools.
+  read. The repair prompt permits tests and `make verify`, prohibits commits,
+  git commands that change the repository and edits to findings, and asks for
+  a measured time entry and one fixed line per taken row. These are
+  instructions, not a claim that Codex has no command tools.
 - **Runner → Claude Code:** the existing Sonnet 5.5 transport with file tools
   only, no Z.ai credential, at effort `medium`. The explicit Stage-1 route
   records the caller's reason; the post-check fallback records its cause.

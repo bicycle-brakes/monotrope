@@ -1228,7 +1228,10 @@ def test_verify_failure_is_bounded_in_the_repair_prompt(world: World) -> None:
                 "plant": {"src/app.py": "value = 2\n"},
                 "append": {"plans/changes/demo/plan.md": "2026-10-07 10:00–10:02, 2 min\n"},
             },
-            {"stdout": "fixed"},
+            {
+                "stdout": "fixed",
+                "append": {"plans/changes/demo/plan.md": "2026-10-07 10:02–10:03, 1 min\n"},
+            },
         ],
         make=[{"stdout": noisy, "exit": 1}, {"stdout": "green\n"}],
     )
@@ -1257,7 +1260,10 @@ def _red_run(world: World, output: str) -> str:
                 "plant": {"src/app.py": "value = 2\n"},
                 "append": {"plans/changes/demo/plan.md": "2026-10-08 10:00–10:02, 2 min\n"},
             },
-            {"stdout": "fixed"},
+            {
+                "stdout": "fixed",
+                "append": {"plans/changes/demo/plan.md": "2026-10-08 10:02–10:03, 1 min\n"},
+            },
         ],
         make=[{"stdout": output, "exit": 1}, {"stdout": "green\n"}],
     )
@@ -1287,7 +1293,10 @@ def test_a_blocking_gates_standard_error_reaches_the_repair_prompt(world: World)
                 "plant": {"src/app.py": "value = 2\n"},
                 "append": {"plans/changes/demo/plan.md": "2026-10-08 10:00–10:02, 2 min\n"},
             },
-            {"stdout": "fixed"},
+            {
+                "stdout": "fixed",
+                "append": {"plans/changes/demo/plan.md": "2026-10-08 10:02–10:03, 1 min\n"},
+            },
         ],
         make=[
             {
@@ -1312,7 +1321,10 @@ def test_a_long_standard_error_is_cut_with_a_marker(world: World) -> None:
                 "plant": {"src/app.py": "value = 2\n"},
                 "append": {"plans/changes/demo/plan.md": "2026-10-08 10:00–10:02, 2 min\n"},
             },
-            {"stdout": "fixed"},
+            {
+                "stdout": "fixed",
+                "append": {"plans/changes/demo/plan.md": "2026-10-08 10:02–10:03, 1 min\n"},
+            },
         ],
         make=[
             {
@@ -4851,6 +4863,171 @@ def test_each_repair_attempt_leaves_an_audit_line_the_count_reads(world: World) 
             re.M,
         ), attempt
     assert stage2_runs.measure(world.text()).calls == [("repair", True)] * 3
+
+
+@pytest.mark.parametrize(("attempt", "earlier"), [(2, 1), (3, 1), (3, 2)])
+@pytest.mark.parametrize("evidence", ["audit", "diagnostics", "files"])
+def test_a_repair_retry_cannot_remove_earlier_attempt_evidence(
+    world: World, monkeypatch: pytest.MonkeyPatch, attempt: int, earlier: int, evidence: str
+) -> None:
+    """Codex-repairs F-5: a valid retry deletes earlier evidence while keeping its own audit and rows."""
+    baseline = repair_world(world)
+    script_repair(
+        world,
+        [repair_step()] * 3,
+        make=[
+            {"stdout": f"DIAGNOSTIC-ATTEMPT-{number}\n", "exit": 1} if number < attempt else {"stdout": "green\n"}
+            for number in range(1, 4)
+        ],
+    )
+    protected: list[str] = []
+    checkpoints: list[int] = []
+    real_codex, real_claude, real_checkpoint = stage2.run_codex, stage2.run_work_model, stage2.checkpoint
+
+    def remove_evidence() -> None:
+        if len(repair_calls(world)) != attempt:
+            return
+        text = world.text()
+        protected.append(text)
+        audit = next(line for line in text.splitlines() if f"repair · attempt {earlier} ·" in line)
+        start = text.index(audit)
+        end = text.index("Stage-2 call,", start + len(audit))
+        block = text[start:end]
+        if evidence == "audit":
+            removed = audit
+        elif evidence == "diagnostics":
+            removed = f"> DIAGNOSTIC-ATTEMPT-{earlier}"
+        else:
+            removed = next(line for line in block.splitlines() if line.startswith("> - `plans/changes/demo/plan.md`"))
+        assert removed in block
+        world.findings.write_text(text[:start] + block.replace(removed + "\n", "", 1) + text[end:], encoding="utf-8")
+
+    def codex(*args, **kwargs):
+        result = real_codex(*args, **kwargs)
+        remove_evidence()
+        return result
+
+    def claude(*args, **kwargs):
+        result = real_claude(*args, **kwargs)
+        remove_evidence()
+        return result
+
+    def checkpoint(*args, **kwargs):
+        checkpoints.append(len(repair_calls(world)))
+        real_checkpoint(*args, **kwargs)
+
+    monkeypatch.setattr(stage2, "run_codex", codex)
+    monkeypatch.setattr(stage2, "run_work_model", claude)
+    monkeypatch.setattr(stage2, "checkpoint", checkpoint)
+    assert world.run("repair") == (0 if attempt == 2 else 1)
+    assert checkpoints == ([3] if attempt == 2 else [])
+    assert len(repair_calls(world)) == 3
+    assert world.text().startswith(protected[0]), "the retry lost an earlier attempt's evidence"
+    assert git(world.root, "rev-list", "--count", f"{baseline}..HEAD") == ("1" if attempt == 2 else "0")
+
+
+@pytest.mark.parametrize(
+    ("phase", "status"),
+    [
+        ("2a", "taken — already decided"),
+        ("2a", "rejected — covered"),
+        ("2a", "fixed — prior repair"),
+        ("6", "rejected — covered"),
+        ("released", "rejected — covered"),
+    ],
+)
+def test_a_repair_cannot_change_a_finding_outside_its_batch(
+    world: World, monkeypatch: pytest.MonkeyPatch, phase: str, status: str
+) -> None:
+    """Codex-repairs F-6: the model changes an unrelated finding's Status, including a phase-2a row."""
+    repair_world(world)
+    if phase == "released":
+        row = released_cells("L1-2", status, "", "unrelated finding")
+        block = released_block([row])
+    else:
+        row = phase6_cells("S-1", status, "unrelated finding")
+        block = phase6_block([row]).replace("## Phase 6", f"## Phase {phase}", 1)
+    world.write_findings(block)
+    altered = [*row]
+    altered[7] = "rejected — changed by repair" if status.startswith("fixed") else "fixed — tests/test_fix.py::test_fix"
+    script_repair(world, [repair_step()] * 2, make=[{"stdout": "green\n"}] * 2)
+    real_codex, real_checkpoint = stage2.run_codex, stage2.checkpoint
+    checkpoints: list[int] = []
+
+    def codex(*args, **kwargs):
+        result = real_codex(*args, **kwargs)
+        if len(world.calls("codex")) == 1:
+            text = world.text()
+            assert render_row(row) in text
+            world.findings.write_text(text.replace(render_row(row), render_row(altered), 1), encoding="utf-8")
+        return result
+
+    def checkpoint(*args, **kwargs):
+        checkpoints.append(len(repair_calls(world)))
+        real_checkpoint(*args, **kwargs)
+
+    monkeypatch.setattr(stage2, "run_codex", codex)
+    monkeypatch.setattr(stage2, "checkpoint", checkpoint)
+    assert world.run("repair") == 0
+    assert checkpoints == [2], "an attempt that changed an unrelated finding reached the checkpoint"
+    assert render_row(row) in world.text()
+    assert render_row(altered) not in world.text()
+    prompt = prompt_of(world.calls("codex")[0])
+    assert f"- {row[0]} [" not in prompt, "the unrelated finding was put in the repair batch"
+
+
+@pytest.mark.parametrize("attempt", [2, 3])
+@pytest.mark.parametrize("removed_heading", [False, True])
+def test_each_repair_retry_must_add_its_own_time_entry(
+    world: World, monkeypatch: pytest.MonkeyPatch, attempt: int, removed_heading: bool
+) -> None:
+    """Codex-repairs F-7: earlier failed attempts' measured entries cannot satisfy a later attempt's gate."""
+    baseline = repair_world(world)
+    steps = [repair_step()] * 3
+    steps[attempt - 1] = repair_step(append={})
+    script_repair(
+        world,
+        steps,
+        make=[{"stdout": "red\n", "exit": 1}] * (attempt - 1) + [{"stdout": "green\n"}] * (4 - attempt),
+    )
+    real_codex, real_claude, real_checkpoint = stage2.run_codex, stage2.run_work_model, stage2.checkpoint
+    checkpoints: list[int] = []
+
+    def change_heading() -> None:
+        if not removed_heading:
+            return
+        number = len(repair_calls(world))
+        if number not in (attempt - 1, attempt):
+            return
+        before, after = ("## Time used", "## Omitted time heading")
+        if number == attempt:
+            before, after = after, before
+        text = world.plan.read_text(encoding="utf-8")
+        assert before in text
+        world.plan.write_text(text.replace(before, after, 1), encoding="utf-8")
+
+    def codex(*args, **kwargs):
+        result = real_codex(*args, **kwargs)
+        change_heading()
+        return result
+
+    def claude(*args, **kwargs):
+        result = real_claude(*args, **kwargs)
+        change_heading()
+        return result
+
+    def checkpoint(*args, **kwargs):
+        checkpoints.append(len(repair_calls(world)))
+        real_checkpoint(*args, **kwargs)
+
+    monkeypatch.setattr(stage2, "run_codex", codex)
+    monkeypatch.setattr(stage2, "run_work_model", claude)
+    monkeypatch.setattr(stage2, "checkpoint", checkpoint)
+    assert world.run("repair") == (0 if attempt == 2 else 1)
+    assert checkpoints == ([3] if attempt == 2 else [])
+    assert len(repair_calls(world)) == 3
+    assert "did not add a measured line below `## Time used`" in world.text()
+    assert git(world.root, "rev-list", "--count", f"{baseline}..HEAD") == ("1" if attempt == 2 else "0")
 
 
 def test_record_rows_reach_the_model_only_in_the_prompt(world: World) -> None:

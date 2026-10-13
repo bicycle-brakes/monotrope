@@ -44,9 +44,10 @@ interview answers stand; no implementation or ADR answer is recorded here.
    mismatch; otherwise preserve the existing call-error restoration and stop.
    Keep the declaration/leak checks per attempt, diagnostics, time check,
    red-first proof, status restoration and checkpoint callbacks unchanged.
-   Make `REPAIR_FORMAT` prohibit commands/commits and findings edits, request
-   a measured time entry and retain the fixed-line forms; it must not claim
-   Codex lacks command tools. In `review`, an earlier `## Phase 6` block in
+   Make `REPAIR_FORMAT` permit tests and `make verify`, prohibit commits,
+   repository-changing git commands and findings edits, request a measured
+   time entry and retain the fixed-line forms; it must not claim Codex lacks
+   command tools. In `review`, an earlier `## Phase 6` block in
    `findings.md` disables a historical 2a resume; verdict and loop-mark calls
    stay read-only and only the latter resumes the fresh verdict thread.
    Update repair/help comments.
@@ -131,11 +132,15 @@ the script has not landed; the runner's checks and existing gates apply.
 - 9: tests/test_stage2.py::test_an_undeclared_repair_endpoint_refuses_before_call — declaration skipped on any of the three routes
 - 10: tests/test_stage2.py::test_repair_leak_blocks_each_route_without_fallback — a planted leak at any attempt reaches another call
 - 11: tests/test_stage2.py::test_each_repair_attempt_leaves_an_audit_line_the_count_reads — wrong endpoint/route or an uncounted Codex line; extend to all attempts and reasons
+- 11: tests/test_stage2.py::test_a_repair_retry_cannot_remove_earlier_attempt_evidence — a passing retry deletes an earlier attempt's audit line
 - 12: tests/test_stage2.py::test_a_red_verify_or_a_missing_time_line_fails_a_repair_attempt — diagnostic block/file evidence lost
 - 12: tests/test_stage2.py::test_a_failed_repair_puts_every_status_back_as_it_stood — failed model edits survive
 - 12: tests/test_stage2.py::test_a_codex_repair_that_commits_findings_restores_statuses_and_records_diagnostics — moved HEAD leaves model-written statuses or loses diagnostics/file evidence
+- 12: tests/test_stage2.py::test_a_repair_retry_cannot_remove_earlier_attempt_evidence — a passing retry deletes earlier quoted diagnostics or changed-file evidence
 - 13: tests/test_stage2.py::test_a_red_verify_or_a_missing_time_line_fails_a_repair_attempt — checkpoint before a green verify and measured time; assert no checkpoint at the failed boundary
+- 13: tests/test_stage2.py::test_each_repair_retry_must_add_its_own_time_entry — a failed attempt's time entry satisfies a retry that records none
 - 14: tests/test_stage2.py::test_a_passing_repair_ends_in_one_checkpoint_commit_with_its_statuses — wrong commit count, status or dirty tree
+- 14: tests/test_stage2.py::test_a_repair_cannot_change_a_finding_outside_its_batch — a repair changes an unrelated finding's Status, including a phase-2a row
 - 14: tests/test_stage2.py::test_the_record_is_marked_only_after_the_checkpoint_commit — private record marked before commit
 - 15: tests/test_stage2.py::test_a_named_test_that_is_not_red_first_fails_the_attempt — green baseline test accepted
 - 15: tests/test_stage2.py::test_a_fixed_line_naming_an_undefined_test_fails_the_attempt — undefined test accepted
@@ -180,3 +185,7 @@ Stage-1 route: implement · model claude-sonnet-5-5 · reason: Z.ai weekly limit
 2026-10-13 18:31:58–18:40:36, 8 min 38 s — Codex repaired only the taken round-2 rows L2-1, L2-3, L2-4 and L2-5. The cited top-level test name is restored; a moved-HEAD repair restores the original finding statuses and writes its quoted diagnostics and changed-file evidence without rewriting history; a repeated phase-6 review records the earlier Phase 6 block as its reason; the Definition of Done includes prompts/06-review.md. The three new regression cases failed on baseline e371b18 before the code repairs and passed afterward. The focused stage-2, run-count and endpoint suite passed 490 tests; ruff lint and format checks, interview minimums, criterion ledger and git diff --check passed. The runner owns make verify, findings bookkeeping and the checkpoint; the orchestrator owns tracker writes and the dated session handover. Live PR state was not read within this worktree-only boundary.
 
 2026-10-13 19:12:17–19:29:02, 16 min 45 s — Codex repaired only the taken round-3 rows L3-1 to L3-3. WORKFLOW §4 states the Codex repair calls' workspace-write configuration, checked and committed writes, residual read risk and repair prompt destinations at OpenAI and, for Sonnet 5.5, Anthropic. A moved-HEAD audit reports a stop before any post-run check, preserving restored statuses and changed-file evidence. The three regression cases failed on baseline d89bbeb before the repairs and passed afterward, including planted confinement faults; the existing Pi doctrine check now matches its own claim so the Codex paragraph cannot mask a planted Pi fault. The focused stage-2, run-count and endpoint stand-in suite passed 490 tests; ruff lint and format checks, interview minimums, criterion ledger and git diff --check passed. HEAD stays d89bbeb on feat/codex-repairs. The runner owns make verify, findings bookkeeping and the checkpoint; the orchestrator owns tracker writes and the dated session handover. Live PR state was not read within the worktree-only boundary.
+
+2026-10-13 19:53:04–20:12:22, 19 min 18 s — Codex repaired only the taken phase-6 rows F-4 to F-7. Design and plan permit tests and `make verify`, and prohibit commits, repository-changing git commands and findings edits. A passing repair must preserve the pre-call findings body, including every phase-2a row and every earlier attempt’s audit line, quoted diagnostics and changed-file evidence. Each attempt must add its own time line, including after restoring a removed time heading; older diagnostics fixtures now record their retry spans without changing any test name. The final regression functions produced 16 failures and two passing controls against baseline 5dac45c, then passed all 18 cases with the repairs. The focused stage-2, run-count and endpoint stand-in suite passed 508 tests; ruff lint and format checks, interview minimums, criterion ledger and git diff --check passed. HEAD remains 5dac45c on feat/codex-repairs; this call neither edits findings.md nor commits. The runner owns make verify, findings bookkeeping and the checkpoint; the orchestrator owns tracker writes and the dated session handover. Live PR state was not read within this worktree-only boundary.
+
+Resume: run `make verify` for the runner’s final verification and checkpoint.

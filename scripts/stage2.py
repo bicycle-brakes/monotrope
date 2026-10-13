@@ -1900,6 +1900,8 @@ def verify_attempt(
     runner applies ruff's safe fixes and its formatter to the changed Python files under `scripts/`
     and `tests/`; when `formatted` is given, the step's line lands there. Return bounded
     diagnostics for failed preparation or postconditions, naming the gates that blocked.
+    `baseline_time` holds the pre-call plan: restoring a heading or moving an old entry into the
+    time section cannot count as this attempt's new measured line.
     """
     env = foreign_env(
         {
@@ -1923,7 +1925,8 @@ def verify_attempt(
     except Refused as error:
         problems.append(str(error))
     else:
-        if not current_time.strip() or current_time == baseline_time:
+        added_time = Counter(current_time.splitlines()) - Counter(baseline_time.splitlines())
+        if not any(line.strip() for line in added_time):
             problems.append("`plan.md` did not add a measured line below `## Time used`")
     return problems
 
@@ -2134,13 +2137,16 @@ def check_repair_answer(
     key: str | None,
     before: tuple[list[list[str]], list[list[str]]],
     audit_line: str | None = None,
+    findings_before: str | None = None,
 ) -> tuple[dict[str, str], list[str]]:
     """Read an answer's fixed lines: the Status each taken row takes, or the problems that fail the attempt.
 
     Each problem names its ID. Every row of findings.md must also stand as `before` holds it - the taken
     rows and the others alike, cell for cell: an edit outside the taken rows' Status is named, not
-    checkpointed (phase 6, F-3). Only when no problem stands do the red-first runs start, one pytest run
-    per named test; every text is scrubbed with the key.
+    checkpointed (phase 6, F-3). The pre-call findings body also protects other phases and every earlier
+    attempt's evidence; only the frontmatter is excluded, because the runner refreshes `updated:`.
+    Only when no problem stands do the red-first runs start, one pytest run per named test; every
+    text is scrubbed with the key.
     """
     problems: list[str] = []
     parsed: dict[str, list[str]] = {}
@@ -2178,6 +2184,14 @@ def check_repair_answer(
     released_now, phase6_now = findings_rows(findings_now)
     if audit_line and audit_line not in findings_now.splitlines():
         problems.append("findings.md no longer holds the audit line of this call; a passing repair keeps it")
+    if findings_before is not None:
+        header = r"\A---\n.*?\n---\n"
+        body_before = re.sub(header, "", findings_before, count=1, flags=re.S)
+        body_now = re.sub(header, "", findings_now, count=1, flags=re.S)
+        if body_now != body_before:
+            problems.append(
+                "findings.md changed outside runner bookkeeping; every finding and earlier attempt's evidence must stand"
+            )
     for _place, row in taken:
         ident, fix = row[0], fixes[row[0]]
         if fix.startswith("fixed — not a test"):
@@ -2328,7 +2342,6 @@ def run_attempts(
     routes: list[tuple[tuple[str, str, str | None], str | None, str, str | None]],
     build_prompt,  # (diagnostics, endpoint) -> prompt
     baseline: str,
-    baseline_time: str,
     key: str | None,
     ignored_before: dict[Path, tuple[int, int]] | None,
     commit_message: str,
@@ -2360,6 +2373,9 @@ def run_attempts(
                 ctx.plan,
                 f"## Runner route — {today()}\n\nStage-1 route: {verb} · model {endpoint[1]} · reason: {reason}.",
             )
+        # Each attempt must add its own line. Keep all existing plan lines even if an earlier
+        # attempt removed the time heading, so restoring it cannot reuse an earlier measurement.
+        baseline_time = ctx.plan.read_text(encoding="utf-8")
         kept = snapshot_findings() if snapshot_findings is not None else None
         unmeasured: str | None = None
         try:
@@ -2494,7 +2510,7 @@ def implement(root: Path, change: str, stage2_off: str | None = None) -> None:
         listing = ", ".join(sorted(path.as_posix() for path in outside))
         raise Refused(f"the worktree has pre-existing changes outside this change's findings.md: {listing}")
     baseline = _git_output(root, "rev-parse", "HEAD").strip()
-    baseline_time = time_log(ctx.plan)
+    time_log(ctx.plan)  # Require the initial time heading before a model call starts.
     ignored_before = ignored_snapshot(root)
     if stage2_off is None:
         key = read_secret("GLM_KEY")
@@ -2514,7 +2530,6 @@ def implement(root: Path, change: str, stage2_off: str | None = None) -> None:
         routes,
         lambda diagnostics, _endpoint: implementation_prompt(ctx, baseline, diagnostics),
         baseline,
-        baseline_time,
         key,
         ignored_before,
         commit_message=f"feat({change}): implement accepted plan",
@@ -2862,7 +2877,7 @@ def repair(root: Path, change: str, stage2_off: str | None = None) -> None:
     if doubled:
         raise Refused(f"several taken rows carry the same id ({', '.join(doubled)}); mend the rows first.")
     baseline = _git_output(root, "rev-parse", "HEAD").strip()
-    baseline_time = time_log(ctx.plan)
+    time_log(ctx.plan)  # Require the initial time heading before a model call starts.
     ignored_before = ignored_snapshot(root)
     # No route reads the GLM credential: the repair is Codex, then Sonnet (ADR 0017).
     key = None
@@ -2887,7 +2902,7 @@ def repair(root: Path, change: str, stage2_off: str | None = None) -> None:
         # The last audit line of the snapshot is this attempt's own: it was appended just before it.
         audits = [line for line in standing.get("text", "").splitlines() if line.startswith("Stage-2 call,")]
         found, problems = check_repair_answer(
-            ctx, answer, taken, baseline, key, rows_before, audits[-1] if audits else None
+            ctx, answer, taken, baseline, key, rows_before, audits[-1] if audits else None, standing["text"]
         )
         if not problems:
             fixes.clear()
@@ -2900,7 +2915,6 @@ def repair(root: Path, change: str, stage2_off: str | None = None) -> None:
         routes,
         lambda diagnostics, endpoint: repair_prompt(ctx, baseline, taken, diagnostics, endpoint),
         baseline,
-        baseline_time,
         key,
         ignored_before,
         commit_message=f"fix({change}): repair taken findings {', '.join(ids)}",
