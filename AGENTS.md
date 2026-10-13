@@ -31,8 +31,8 @@ it would silently replace it (`tests/test_entry_points.py`).
 | 6 | Review | `findings.md` | no open BLOCKER — `[DIVERGENT]` counts as BLOCKER |
 | 7 | Commit | pull request | CI green |
 
-**Stage 2** (framework content, ADR 0007 as amended by ADR 0011): a foreign model is started only through `python3 scripts/stage2.py`, which runs the leak check before every call. Codex reviews 2a and 6; the review loop (4b) runs on OpenCode Go through Pi, on the ladder — the ordered `modelle` list of the `opencode-go` entry: round *n* of the loop calls its *n*-th id, at most three rounds, and round 3 only when round 2 wrote a taken row; a one-line pull request reorders it. GLM 5.3 Flash explores and implements; `explore <change>` and `implement <change>` are live;
-`--stage2-off [REASON]` uses Haiku 4.5 or Sonnet 5.5 and records why when Stage 2 is off or Z.ai unavailable. A leak-check BLOCK stops without fallback. Reviews go by class; explore and implement do not.
+**Stage 2** (framework content, ADR 0007 as amended by ADR 0011): a foreign model is started only through `python3 scripts/stage2.py`, which runs the leak check before every call. Codex reviews 2a and 6; the review loop (4b) runs on OpenCode Go through Pi, on the ladder — the ordered `modelle` list of the `opencode-go` entry: round *n* of the loop calls its *n*-th id, at most three rounds, and round 3 only when round 2 wrote a taken row; a one-line pull request reorders it. GLM 5.3 Flash explores and implements, and GLM 5.3 repairs the findings the orchestrator takes (`repair <change>`, ADR 0015); `explore <change>`, `implement <change>` and `repair <change>` are live;
+`--stage2-off [REASON]` uses Haiku 4.5 or Sonnet 5.5 and records why when Stage 2 is off or Z.ai unavailable. A leak-check BLOCK stops without fallback. Reviews go by class; explore, implement and repair do not.
 
 Plus the session handover (the eighth movement — `docs/journal/handover/`,
 `direction: framework->framework`) and the question protocol:
@@ -156,6 +156,8 @@ tools/bd dolt push          # push tracker data to origin (refs/dolt/data)
   Each new checkout or worktree runs `make venv` once before `make verify`;
   the suite fails under an interpreter that does not match
   `requirements-ci.txt` (bead coding-harness-ei0).
+- **A text-only change (Markdown outside `scripts/`, `tests/`, `prompts/`,
+  `decisions/`) skips the local `make verify`;** the CI is its gate.
 - **Omnigent starts inside the worktree** (`omnigent claude
   --use-native-config`, ADR 0006). Omnigent's own tools that write, run,
   spawn or change state are denied by name in `.claude/settings.json`;

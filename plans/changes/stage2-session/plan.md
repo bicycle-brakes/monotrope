@@ -4,7 +4,7 @@ status: draft
 implementation_status: partial
 date: 2026-10-07
 last_reviewed: 2026-10-07
-updated: 2026-10-09
+updated: 2026-10-11
 supersedes: null
 superseded_by: null
 bead: coding-harness-amp
@@ -116,6 +116,8 @@ stop and not an estimate.
 
 ## Tests and faults
 
+The list the gate criterion-ledger holds is the section "Criterion ledger" below; this table is the earlier record.
+
 | Spec | Test | Fault that must go red |
 |---|---|---|
 | 1 | Parser/canonical worktree | main, wrong cwd, detached branch dispatch |
@@ -129,6 +131,81 @@ stop and not an estimate.
 | 12 | Codex exact safety flags | bypass, auto-approval or extra-dir |
 | 13–14 | Environment and preparation/cleanup faults | token copied, key handed to Pi, config overwritten, GUI after write failure or user files removed |
 | 15–16 | Help/docs/draft/diff | continuous confinement claim, protected ADR or review routing edit |
+
+## Criterion ledger
+
+- 1: tests/test_stage2_session.py::test_a_session_dispatches_from_the_dedicated_worktree
+- 1: tests/test_stage2_session.py::test_a_session_outside_its_boundaries_refuses_before_anything_starts
+- 1: tests/test_stage2_session.py::test_a_link_that_aliases_the_main_checkout_refuses
+- 1: tests/test_stage2_session.py::test_the_refusal_reason_reaches_the_caller
+- 1: tests/test_stage2_session.py::test_a_runtime_root_that_is_not_a_real_directory_refuses
+- 1: tests/test_stage2_session.py::test_the_session_switches_belong_to_no_other_verb
+- 2: tests/test_stage2_session.py::test_a_plain_codex_model_selects_the_codex_transport
+- 2: tests/test_stage2_session.py::test_a_declared_go_model_selects_the_pi_transport
+- 2: tests/test_stage2_session.py::test_a_malformed_permission_or_residency_refuses
+- 2: tests/test_stage2_session.py::test_a_model_no_declaration_clears_for_a_session_refuses
+- 2: tests/test_stage2_session.py::test_the_id_form_decides_and_a_disallowing_declaration_refuses
+- 2: tests/test_stage2_session.py::test_a_malformed_declaration_refuses
+- 2: tests/test_stage2_session.py::test_a_pi_off_the_pin_refuses_before_anything_else
+- 3: tests/test_stage2_session.py::test_the_handover_text_itself_becomes_the_first_prompt
+- 3: tests/test_stage2_session.py::test_an_explicit_handover_is_taken_over_the_default
+- 3: tests/test_stage2_session.py::test_a_handover_named_like_the_status_keeps_its_source
+- 3: tests/test_stage2_session.py::test_a_handover_that_cannot_be_sent_refuses
+- 3: tests/test_stage2_session.py::test_an_empty_handover_value_refuses_instead_of_taking_the_default
+- 4: tests/test_stage2_session.py::test_a_handover_that_resolves_outside_the_worktree_refuses
+- 4: tests/test_stage2_session.py::test_a_symlink_that_stays_inside_is_read
+- 5: tests/test_stage2_session.py::test_a_leak_in_the_handover_or_the_tree_refuses_before_any_dispatch
+- 6: tests/test_stage2_session.py::test_the_second_scan_catches_what_arrived_after_the_first
+- 6: tests/test_stage2_session.py::test_the_second_scan_rereads_the_denylist
+- 7: tests/test_stage2_session.py::test_the_audit_names_the_attempt_and_keeps_prior_findings
+- 7: tests/test_stage2_session.py::test_two_attempts_leave_two_distinct_audit_lines
+- 8: tests/test_stage2_session.py::test_a_failed_terminal_dispatch_is_recorded_and_cleaned
+- 8: tests/test_stage2_session.py::test_a_missing_cli_or_terminal_refuses_as_a_prerequisite
+- 8: tests/test_stage2_session.py::test_a_terminal_that_never_answers_is_a_failed_dispatch
+- 8: tests/test_stage2_session.py::test_a_failed_audit_update_leaves_the_pending_line
+- 8: tests/test_stage2_session.py::test_an_update_that_fails_mid_write_keeps_the_record_whole
+- 8: tests/test_stage2_session.py::test_a_stamp_failure_after_the_update_is_reported
+- 9: tests/test_stage2_session.py::test_pi_is_dispatched_interactively_with_the_policy_extension
+- 9: tests/test_stage2_session.py::test_a_handover_that_starts_with_an_at_sign_refuses_for_pi
+- 9: tests/test_stage2_session.py::test_a_handover_that_starts_like_an_option_stays_the_prompt
+- 10: tests/test_stage2_session.py::test_hostile_prompt_text_stays_data
+- 11: tests/test_stage2_session.py::test_the_session_keeps_discovery_off_except_context_files
+- 11: tests/test_stage2_session.py::test_an_extension_that_did_not_load_refuses_and_cleans_up
+- 11: tests/test_stage2_session.py::test_a_missing_extension_source_refuses_and_cleans_up
+- 11: tests/test_stage2_session.py::test_a_pi_that_hangs_on_the_read_back_refuses
+- 11: tests/test_stage2_session.py::test_the_extension_is_confirmed_again_for_every_launch
+- 11: tests/test_stage2_session_policy.py::test_a_path_inside_the_worktree_passes
+- 11: tests/test_stage2_session_policy.py::test_a_search_without_a_path_stays_in_the_working_directory
+- 11: tests/test_stage2_session_policy.py::test_a_path_outside_the_worktree_is_blocked
+- 11: tests/test_stage2_session_policy.py::test_a_missing_or_malformed_path_is_blocked
+- 11: tests/test_stage2_session_policy.py::test_a_find_pattern_or_grep_glob_that_reaches_out_is_blocked
+- 11: tests/test_stage2_session_policy.py::test_a_find_pattern_or_grep_glob_inside_passes
+- 11: tests/test_stage2_session_policy.py::test_a_write_to_a_protected_place_is_blocked
+- 11: tests/test_stage2_session_policy.py::test_a_read_of_a_protected_place_passes
+- 11: tests/test_stage2_session_policy.py::test_a_write_to_the_git_directory_is_not_protected
+- 11: tests/test_stage2_session_policy.py::test_a_symlink_to_a_protected_place_does_not_hide_it
+- 11: tests/test_stage2_session_policy.py::test_case_folding_is_a_host_setting_and_catches_a_differently_cased_name
+- 11: tests/test_stage2_session_policy.py::test_the_case_rule_follows_the_host_platform
+- 11: tests/test_stage2_session_policy.py::test_a_dangerous_command_asks_and_runs_only_on_yes
+- 11: tests/test_stage2_session_policy.py::test_a_dangerous_command_is_blocked_when_no_ui_can_ask
+- 11: tests/test_stage2_session_policy.py::test_any_other_command_runs_without_a_question
+- 11: tests/test_stage2_session_policy.py::test_a_bash_call_without_a_command_is_blocked
+- 11: tests/test_stage2_session_policy.py::test_a_handler_that_throws_blocks_the_call
+- 11: tests/test_stage2_session_policy.py::test_a_symlink_loop_the_file_system_refuses_blocks_the_call
+- 11: tests/test_stage2_session_policy.py::test_a_question_that_fails_blocks_the_call
+- 11: tests/test_stage2_session_policy.py::test_loading_registers_one_flag_and_one_tool_call_handler
+- 11: tests/test_stage2_session_policy.py::test_the_extension_imports_nothing_but_node_so_a_copy_runs_anywhere
+- 12: tests/test_stage2_session.py::test_codex_is_dispatched_interactively_with_its_exact_safety_flags
+- 13: tests/test_stage2_session.py::test_the_runners_own_pi_calls_read_nothing_of_the_maintainers
+- 13: tests/test_stage2_session.py::test_the_session_reads_no_secrets_and_sends_no_tokens
+- 13: tests/test_stage2_session.py::test_the_pi_session_hands_over_no_key_and_writes_no_credential
+- 14: tests/test_stage2_session.py::test_an_unwritable_audit_starts_no_session
+- 14: tests/test_stage2_session.py::test_any_failure_before_the_dispatch_removes_the_private_directory
+- 14: tests/test_stage2_session.py::test_launch_files_stay_inside_their_private_directory
+- 15: tests/test_stage2_session.py::test_the_workflow_states_what_a_session_proves_and_what_it_does_not
+- 15: not a test — the phase-6 review reads the help and the workflow paragraphs against the criterion
+- 16: tests/test_stage2_session.py::test_the_amendment_moved_into_the_decision_record
+- 16: not a test — the decision pull request carries the amendment; its routing is the phase-6 review's question
 
 ## Verification and review
 
