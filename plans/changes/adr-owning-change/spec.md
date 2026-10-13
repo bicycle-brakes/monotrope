@@ -263,6 +263,11 @@ Criteria 1 and 2 say what a claim is, 3 to 8 how an ADR edit is attributed,
   that plan, rewritten because the old text described as current the interim
   owner rule this change deletes and named tests that no longer exist, a false
   statement (loop row L1-3).)
+  (Amended 2026-10-13 after the merge of codex-drafts: that change's spec
+  header gains `adr_files: [docs/adr/0016-…]`. It answered "yes" and added
+  ADR 0016 on main before this gate's claim rule existed, so the agreement of
+  answer and claim turned red on the updated branch; the claim records the
+  edit it made.)
 
 ## Definition of Done
 
