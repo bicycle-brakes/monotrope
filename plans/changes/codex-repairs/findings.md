@@ -264,3 +264,15 @@ Phase 6 verdict: codex 01a136df-6a6f-79f1-912e-a920d7cfdcb6, 2026-10-13
 Reviewer session: codex 01a136df-6a6f-79f1-912e-a920d7cfdcb6 — a fresh session reviewed: an earlier ## Phase 6 block makes this a re-check
 
 Stage-2 call, 2026-10-13: repair · attempt 1 · route codex · endpoint openai-codex · model gpt-6.1-sol · leak check clean over 416 files, 1054 commits, 12 rules.
+
+Stage-2 call, 2026-10-13: review · endpoint openai-codex · model gpt-6.1-sol · leak check clean over 416 files, 1057 commits, 12 rules.
+
+## Phase 6 — Codex, 2026-10-13
+
+| ID | Severity | Dimension | Origin | Where | Finding | Reviewer | Status | Broke a test |
+|---|---|---|---|---|---|---|---|---|
+| F-13 | MAJOR | MAINT | base | `scripts/stage2.py:2548–2550`; `scripts/stage2.py:1743–1746` | If a completed repair replaces `spec.md` with a symlink to a writable file outside the worktree, preparation rejects the alias, but retry restoration follows it and overwrites the target with the saved specification. Isolated execution of the current preparation and attempt loop reproduces this. Restoration must replace the worktree path without writing through the alias. [Protected areas: files outside this worktree] | Codex | open | — |
+| F-14 | MAJOR | SPEC | base | `scripts/stage2.py:2548` | If a completed Codex attempt replaces a snapshotted input with a directory and fails a post-run check, restoration raises an uncaught `IsADirectoryError`. Isolated execution confirms that replacing `plan.md` in attempt 1 prevents the fresh Codex retry, and replacing `spec.md` in attempt 2 prevents the Sonnet fallback. The prescribed next attempt must receive the diagnostics. [criteria 4–5] | Codex | open | — |
+
+Phase 6 verdict: codex 01a13710-a765-7452-9e56-02d64c94a0c3, 2026-10-13
+Reviewer session: codex 01a13710-a765-7452-9e56-02d64c94a0c3 — a fresh session reviewed: an earlier ## Phase 6 block makes this a re-check
