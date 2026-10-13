@@ -118,16 +118,20 @@ rulings and proposed design details, not invented maintainer answers.
 
 ## Validation
 
-* Fresh-install integration exercises actual target `make verify` with an
-  allowed initial commit, untracked payload and an isolated target environment.
+* Fresh-install integration exercises actual target `make verify` with all
+  four allowed root names in its initial commit, an untracked payload and a
+  target environment isolated from source overrides and PATH entries; the
+  fixture commits the payload and proves target verification again.
 * Install regressions hold committed bytes/modes, template/derived ownership,
   freshness refusals, collisions, complete lock records and rollback on I/O
   failures.
 * Report regressions hold exact Git-tree states to named commits and prove
   target files/Git state stay unchanged, including dirty working trees.
-* The probe includes source-original templates and derives CI without
-  growing its exceptions; source `make verify` and the criterion ledger pass
-  before the decision PR is ready.
+* The probe measures the same initialized payload as an empty fresh install,
+  including starters, derived CI, scaffolds and lock, without growing its
+  exceptions or cap. Every added/changed skip is explicitly scoped and listed;
+  its source case still runs. Source `make verify` and the criterion ledger
+  pass before the decision PR is ready.
 * Phase 6 measures against the revised install/report spec; update validation
   belongs to the follow-up. The maintainer's merge confirms this record;
   the drafting model writes no approval or ADR answer.

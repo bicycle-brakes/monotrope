@@ -20,8 +20,9 @@ tags: [design, kit, install, report]
 # Design — kit-install
 
 The shape for the revised `spec.md`, from `research.md`, the six maintainer
-answers and the phase-2a rulings in `decisions.md`. Updates are deferred by
-Q-6; this design contains no update algorithm or pending-pin model.
+answers and both rounds of phase-2a rulings in `decisions.md`, through
+2026-10-14. Updates are deferred by Q-6; this design contains no update
+algorithm or pending-pin model.
 
 ## Alternatives
 
@@ -39,9 +40,18 @@ proposal confirmed by the decision PR's merge.
 
 For implementation, moving classification into a new imported library would
 create another traveling prerequisite during the runner's unstaged checks.
-Keep the classifier in the existing `probe.py`, extend its role handling,
-and let `install.py` consume it. This preserves the probe's public helpers
-and avoids coupling this change to the separate untracked-file repair.
+Keep classification and shared payload preparation in the existing
+`probe.py`, and let `install.py` consume them. The probe must not import the
+new installer: it prepares the same initialized payload without invoking
+target verification, then commits its own disposable measurement tree.
+Committed fixture snapshots explicitly contain every new installer/recipe
+asset; they do not depend on the source index already staging those files.
+For the probe's pending-tree survey, materialize a source candidate snapshot
+in an owned temporary repository from tracked working files plus untracked
+files classified as traveling kit/recipe assets. Resolve its commit for the
+shared initializer; never stage or commit in the source checkout. This keeps
+the probe's payload complete during the runner's unstaged checks, while
+actual install/report still read only their requested committed snapshots.
 
 ## Interfaces
 
@@ -68,8 +78,11 @@ Local dirty bytes are ignored. Validate the complete source classification
 and recipe references before any target write. No existing instance is
 selected implicitly.
 
-**Manifest → install or reference payload.** The kit manifest, not the
-independent export manifest, selects the payload. Install uses exact committed
+**Manifest → install or reference payload.** Both verbs require schema 2 at
+the selected source commit; missing, older or other schemas fail with that
+commit and schema named, never a fallback to the command's own role map.
+The kit manifest, not the independent export manifest, selects the payload.
+Install uses exact committed
 kit bytes, retained or initialized templates, derived CI and empty scaffold
 placeholders. Report compares the same-path source originals of all three
 published roles, with labels that make template and derived differences
@@ -78,7 +91,8 @@ Git tree names; it does not stat working-tree paths or run the target's
 potentially incompatible gate schema to compute comparison bytes.
 
 **Command → target working tree.** Require the target root and the freshness
-allowlist in the spec, using a readable HEAD plus the index's tracked paths.
+allowlist in the spec: exactly root `README.md`, `LICENSE`, `.gitignore` and
+`.gitattributes`, using a readable HEAD plus the index's tracked paths.
 Untracked content is preserved unless it conflicts with a destination.
 Preflight every file and ancestor, including initial recipe and scaffold
 paths: refuse escapes, Git metadata, symlinks, submodules, type collisions
@@ -97,8 +111,12 @@ uninterrupted process are the operating assumptions.
 
 **Command → target verifier.** After complete application, invoke the literal
 argument array `["make", "verify"]` once with target cwd. Remove `BEAD_RENDER`
-and `PYTHON` from the child environment; the target runner selects its own
-available interpreter. Preserve stdout/stderr and distinguish an application
+and `PYTHON` from the child environment, and remove every PATH directory
+inside the command repository, including its `.venv/bin`. Resolve PATH
+entries against the caller's cwd when filtering. The runtime is the target's
+available `.venv/bin/python3`, otherwise the first `python3` on that cleaned
+PATH; a source-first PATH must not supply the verifier. Preserve
+stdout/stderr and distinguish an application
 error from a verifier failure. A verifier failure returns nonzero and retains
 the payload and pin. The installer never stages or commits; a retained target
 verifier can have its own behavior, so tests of installer Git preservation
@@ -120,7 +138,8 @@ and changes no target Git metadata.
 `reason` and `geruest_ordner`; longest segment-aware prefix wins. Extend
 `nach_rolle()` and probe reporting for `template` and `derived`. Keep schema-1
 classification readable for existing callers; install/report require schema
-2. Reject unsupported schemas, unknown roles, conflicting duplicates,
+2, including for reports against historical commits. Reject unsupported
+schemas, unknown roles, conflicting duplicates,
 unclassified committed paths, unsafe recipe paths and destination collisions.
 Consolidate the current duplicate CI rule into one derived declaration.
 
@@ -135,7 +154,9 @@ Consolidate the current duplicate CI rule into one derived declaration.
   `scripts/ci_gates.py` and input `decisions/gates.yaml`; never copied.
 - `bestand`: not installed, including the lock, root provenance and all agent,
   endpoint and tracker settings. Override the existing `.claude/agents/`
-  mechanism rule with inventory. The source `pyproject.toml` stays inventory.
+  mechanism rule with inventory. Add exact inventory rules for
+  `harness.lock.yaml` and `LICENSE`; the other three allowed root names are
+  already classified. The source `pyproject.toml` stays inventory.
 - `geruest_ordner`: create each declared folder and an empty, kit-owned
   `.gitkeep`; never copy that folder's source contents.
 
@@ -162,14 +183,31 @@ Source inventory gates, missing provenance/adoption records, external ruleset
 inspection, tracker prerequisites and another nested probe are not starter
 gates. Existing templates retain their own gates and can fail verification.
 
-The probe differs from install: its survey copies source-original template
-bytes, then generates CI from its copied source gate list. Source policy tests
-that depend on excluded agent definitions or a full source gate list must
-keep their source assertions and use fixtures or an explicit foreign-tree
-skip, as existing traveling tests do. Remove obsolete exceptions only after
+The probe uses the same payload preparation as install into an empty fresh
+target: unchanged kit bytes, the gate and Makefile starters, source-original
+bytes for the other three templates, CI derived from the starter gates,
+scaffold placeholders and a complete lock. It does not run the installer or
+target verifier; it commits the payload and measures pytest as before.
+Report alone keeps source-original same-path template/derived references.
+
+Generic gate/schema/CI tests use complete fixture declarations for optional
+tracker, history, drift and writer-only gates; fixtures exercise the real
+generator. Source-stock and source-policy cases use only the case-specific
+lock predicate listed in the plan, so they skip in an installed or probe tree
+and still run in the source, even when a source prerequisite is broken.
+The two manifest policies remain independent: test that the legacy
+mechanism/inventory partition cannot derive export verdicts or vice versa;
+new ownership roles are checked explicitly, not required to span multiple
+export verdicts despite the single derived file.
+
+Audit every added or changed skip against the plan's cases and permitted
+predicates. Remove green, skipped or disappeared exemptions only after
 measurement and reduce the cap with the count; never add exceptions to make
 bootstrap pass. Installer regression tests stay source inventory so target
-verification cannot recursively install another target.
+verification cannot recursively install another target. A real-install
+fixture tracks all four allowed root names and provides its own runtime and
+dependencies; after proving untracked verification it commits the payload
+itself and runs actual target verification again.
 
 **Target lock, schema 1.** `source: {url, commit}` stores origin identity and
 the full resolved pin. `files` is keyed by exact target-relative path. A
@@ -203,25 +241,30 @@ flowchart LR
     installer --> snapshot["Container: Temporary Git snapshot"]
     snapshot --> manifest["Component: Kit manifest and classifier"]
     manifest --> installer
-    installer --> generator["Component: CI gate generator"]
+    installer --> payload["Component: Shared payload preparation"]
+    manifest --> payload
+    payload --> generator["Component: CI gate generator"]
     generator --> preparation["Container: Temporary preparation tree"]
     installer --> target["System: Target repository"]
     target --> lock["Component: Source pin and ownership lock"]
     installer --> verifier["Component: Target make verify"]
     verifier --> target
     manifest --> probe["Component: Portability probe"]
+    probe --> payload
 ```
 
 **Added**
 
-- Kit install/report dispatch, temporary snapshot/preparation boundaries and
+- Kit install/report dispatch, shared initialized-payload preparation,
+  temporary snapshot/preparation boundaries and
   the target's source pin and ownership record.
 - Template/derived classification and the two verification starter assets.
 
 **Changed**
 
 - The Coding Harness command exposes delivery and comparison alongside
-  `decide adr`; the probe carries templates and derives its workflow.
+  `decide adr`; the probe measures the initialized install payload, including
+  its lock, and the committed target remains verifiable.
 - CI generation also supplies the target from its own gate configuration;
   the target retains configuration ownership and review/merge responsibility.
 

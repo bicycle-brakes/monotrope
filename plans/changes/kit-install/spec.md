@@ -27,10 +27,11 @@ existing instance a comparison report for adoption in its own changes (bead
 coding-harness-2uk). Research: `research.md`. Maintainer answers:
 `decisions.md`, Q-1 through Q-6, including the split that defers updates.
 
-This revision incorporates the phase-2a rulings of 2026-10-13. The former
-update criteria 9–16 leave this change because the maintainer chose the split,
-not because a gate required it; the install/report criteria below replace the
-old numbering. Design runs in `design.md`.
+This revision incorporates both rounds of recorded phase-2a rulings, through
+2026-10-14. Q-6 defers updates; ruling F-18 adds proof after the adoption
+commit as criterion 18, shifting the former criteria 18–22 to 19–23. These
+changes follow the recorded scope and rulings, not a gate result. Design
+runs in `design.md`.
 
 ## Problem
 
@@ -58,8 +59,9 @@ old numbering. Design runs in `design.md`.
 
 - **Fresh target:** the root of a non-bare Git working tree with at least one
   commit, no `harness.lock.yaml` of any file type, and tracked paths only from
-  root-level `README*`, `LICENSE*`, `.gitignore` and `.gitattributes`. The
-  allowlist applies to whole root filenames, not folders. Untracked files
+  the exact root names `README.md`, `LICENSE`, `.gitignore` and
+  `.gitattributes`. Other names, including `README.rst` and `LICENSE.txt`,
+  are outside the allowlist. Untracked files
   do not establish ownership and still undergo destination checks.
 - **Kit file:** a selected source file with role `mechanismus`; its bytes and
   executable bit remain the source version's, and the lock records kit
@@ -73,11 +75,23 @@ old numbering. Design runs in `design.md`.
 - **Source version:** the full Git commit resolved from an explicit requested
   revision; dirty source files do not belong to it. Source identity is the
   source repository's `origin` remote URL, never a fallback checkout path.
+- **Supported manifest:** exactly kit manifest schema 2, which declares
+  template and derived ownership. Install and report refuse any other or
+  missing schema at the selected source commit.
 - **Comparison:** exact, case-sensitive Git tree paths, committed bytes and
   Git modes at named source and target commits. Template and derived rows
   use the source's same-path committed file as a reference, not as a claim
   that target-owned content should be overwritten. Uncommitted files are
   outside the measurement; target revision defaults to `HEAD`.
+- **Isolated verification environment:** neither `BEAD_RENDER` nor the
+  caller's `PYTHON`, and a PATH with every entry inside the command's
+  repository removed, including its `.venv/bin`. The runtime is the target
+  root's available `.venv/bin/python3`, otherwise the first `python3` on that
+  cleaned PATH; dependency setup belongs to the caller.
+- **Scoped test skip:** a case and predicate listed in `plan.md`; an added or
+  changed predicate may use only an absent path the kit does not ship or
+  the root `harness.lock.yaml` marking an installed instance. The latter is
+  present in the probe and target, absent in the source.
 
 ## Acceptance criteria
 
@@ -104,10 +118,12 @@ old numbering. Design runs in `design.md`.
    *Refuted by:* an unborn, non-root, bare, already pinned or populated target
    receives any installation file; repeating an install after red verification
    is also refused while its lock remains.
-6. If a non-template destination is occupied, install refuses before writing
-   any target file.
+6. If a non-template destination is occupied or a template destination exists
+   as anything other than a regular file, install refuses before any target
+   write.
    *Refuted by:* an existing kit file, derived workflow or scaffold placeholder
-   is overwritten or silently adopted, even with identical bytes.
+   is overwritten or silently adopted, even with identical bytes, or a
+   template symlink, directory, submodule or special file is retained or replaced.
 7. When installation publishes `harness.lock.yaml`, it identifies the source
    origin URL, full commit and each installed destination's ownership,
    source or derivation, byte hash and Git mode.
@@ -126,10 +142,12 @@ old numbering. Design runs in `design.md`.
    *Refuted by:* a lock, report file, index, ref, configuration or verifier
    output is created or changed by the report.
 10. If the revision, source identity, manifest or complete proposed payload
-    cannot be validated, install refuses before any target write.
+    including CI derivation cannot be validated, install refuses before any
+    target write.
     *Refuted by:* an unavailable commit, missing origin, unsupported schema,
     unclassified source file, conflicting rule or unrepresentable destination
-    permits a partial install.
+    permits a partial install, or the selected generator rejects retained or
+    starter gate bytes after a target file or lock has been written.
 11. If a payload path, recipe or scaffold escapes the target, traverses a
     symlink or enters Git metadata, install refuses before writing.
     *Refuted by:* an absolute or parent-traversing path, source symlink or
@@ -144,10 +162,12 @@ old numbering. Design runs in `design.md`.
     exactly once in the target root with the applied lock visible.
     *Refuted by:* verification is skipped, duplicated, substituted, run in the
     source, or started before lock publication.
-14. When target verification starts, its environment contains neither
-    `BEAD_RENDER` nor the caller's `PYTHON` override.
-    *Refuted by:* either source-session value reaches the target process;
-    verification must select the target's own available runtime normally.
+14. When target verification starts, it uses the isolated verification
+    environment and target runtime defined above.
+    *Refuted by:* either source-session variable or any PATH entry inside the
+    command repository reaches the verifier, or it chooses that repository's
+    interpreter; tests put the source interpreter directory first on the
+    caller's PATH and cover both target-venv and cleaned-PATH selection.
 15. If target verification fails or cannot start, install returns failure with
     the reason and leaves the applied files and lock available for review.
     *Refuted by:* an unavailable or red `make verify` produces success, hides
@@ -156,37 +176,53 @@ old numbering. Design runs in `design.md`.
     and remotes remain unchanged.
     *Refuted by:* the command stages, commits, switches, fetches into the
     target, pushes, merges or opens a pull request.
-17. When an eligible target uses the supplied starters and has Git, make,
-    Python 3.12 and the declared dependencies available, actual target
+17. When an eligible target tracking all four allowed root names uses the
+    supplied starters and has Git, make, Python 3.12 and the declared
+    dependencies available in its own environment, actual target
     `make verify` passes with the installed payload untracked.
     *Refuted by:* it needs staging, source inventory or tracker data, model
-    endpoint credentials, an extra starter, or a command absent from the payload.
-18. When the starting gate file is supplied, its blocking local gates are
+    endpoint credentials, an extra starter, a command absent from the payload,
+    or dependencies inherited from the source; omitting an allowed root name
+    from the evidence fixture does not meet this criterion.
+18. When a disposable fixture commits the reviewed installed payload,
+    including the lock, actual target `make verify` passes again.
+    *Refuted by:* a shipped case fails after commit, including the role check
+    for `harness.lock.yaml` or `LICENSE`, or only the untracked state is tested;
+    the fixture's commit is not an installer action.
+19. When the starting gate file is supplied, its blocking local gates are
     portable pytest, ruff check, ruff format, ADR answers, criterion ledger,
     gate schema and CI drift, with pytest running all shipped test files and
-    deselecting exactly the named cases in the selected version's `REIST_NICHT`.
+    deselecting exactly the named cases in the selected version's `REIST_NICHT`
+    alongside only the explicitly listed scoped skips.
     *Refuted by:* a gate is replaced by an always-green command, a shipped
     test file is silently dropped, or extra cases are deselected to hide a
-    target failure; gates requiring source inventory are not starter gates.
-19. When install supplies `.github/workflows/ci.yml`, it derives the file
+    target failure; an added or changed skip absent from the plan or using
+    another predicate also refutes it. Source inventory gates are not starters.
+20. When install supplies `.github/workflows/ci.yml`, it derives the file
     from the selected target gate contents using that kit version's generator
-    before verification.
+    before any target write.
     *Refuted by:* the source workflow is copied, retained templates are
-    ignored, or regenerating CI from the target gate file yields other bytes.
-20. When installation supplies the manifest's scaffold folders, each contains
+    ignored, regenerating CI from the target gate file yields other bytes,
+    or rejected gate contents leave target files or a lock.
+21. When installation supplies the manifest's scaffold folders, each contains
     an empty `.gitkeep` recorded as kit-owned in the lock.
     *Refuted by:* a declared folder or placeholder is absent, source contents
     populate a scaffold, or its placeholder has no kit baseline.
-21. When the portability probe builds its disposable tree, it includes the
-    source-original bytes of both kit files and templates and derives CI from
-    the copied gate file without growing `REIST_NICHT` or its cap.
-    *Refuted by:* a reclassified template disappears, a bootstrap substitution
-    masks the source probe's result, CI is copied, or additional exceptions
-    hide new failures; removals of exemptions require measured evidence.
-22. If comparison cannot resolve or read a required source or target Git
-    state, it returns failure and identifies what was not measured.
+22. When the portability probe builds and commits its disposable tree, the
+    payload equals an empty fresh installation of the selected version,
+    without growing `REIST_NICHT` or its cap and with only listed scoped skips.
+    *Refuted by:* a kit file, initialized template, derived CI, scaffold
+    placeholder or lock differs or is missing; source gates/Makefile replace
+    their starters; exceptions or the cap grow; or an added/changed skip is
+    unlisted or uses another predicate. The probe commits for measurement;
+    the installer does not. Exemption removals require measured evidence.
+23. If comparison cannot resolve or read required Git state or the selected
+    source has no supported manifest, it returns failure and identifies what
+    was not measured.
     *Refuted by:* an unresolved revision or unreadable object is reported as
-    absence, equality or a successful empty comparison.
+    absence, equality or a successful empty comparison, or schema 1/absent
+    schema is compared using the running version's classification instead of
+    failing with the selected commit and observed schema named.
 
 ## Non-goals
 
@@ -223,14 +259,18 @@ old numbering. Design runs in `design.md`.
 
 - `make verify`, the named-change interview check and criterion ledger pass
   in the locked source environment.
-- The real fresh-target install passes target `make verify`; fixture reports,
+- The real fresh-target install passes target `make verify` before and after
+  the fixture commits its payload, with all four allowlisted names tracked;
+  fixture reports,
   refusals, failure injection and environment isolation have test evidence
   naming the source commit in the PR. No real instance is installed.
 - The PR carries the implementation files listed in `plan.md`, revised spec,
   design and plan, review dispositions, `docs/WORKFLOW.md` and the single
   new-to-main ADR draft `docs/adr/0018-pinned-kit-install-and-update.md`.
 - The protected policies remain intact and the PR's file list excludes the
-  non-goals; source tests retain their enforcement when made portable.
+  non-goals. Every added or changed skip matches the case/predicate list in
+  `plan.md`; each listed case runs without skipping in the source, with its
+  original source assertions enforced.
 - The decision PR records the already stated choices; merge is acceptance.
   No ADR answer is authored or changed by this drafting call.
 - The PR closes the install/report work item with the final commit trailer
@@ -254,8 +294,16 @@ writing an answer or an ADR-answer record.
   visibly labelled as target-owned references, so an existing instance with
   a different gate schema can still receive the promised comparison.
 - [DETAIL] Use separate Makefile and gate starters; the dependency template
-  uses the selected source's hash-checked declaration. This supplies only
-  verification prerequisites and leaves live source policies intact.
+  uses the selected source's hash-checked declaration. Both install and probe
+  initialize these same starters (F-16), while report compares source-original
+  references, so portability measures what an instance receives.
+- [DETAIL] Use the installed lock to scope the plan's source-stock/policy
+  cases (F-17/F-20); this keeps missing source prerequisites red without
+  treating an instance's untracked payload as missing source inventory.
+- [DETAIL] Let the probe select a complete temporary candidate snapshot for
+  pending-tree measurement, so newly added kit assets are measured before
+  the runner stages them; this changes no source Git state or install/report
+  commit contract.
 - [DETAIL] Distinguish a completed readable comparison (success, even with
   differences) from a refusal or failed verification (failure), so missing
   paths in an existing instance do not themselves make measurement fail.

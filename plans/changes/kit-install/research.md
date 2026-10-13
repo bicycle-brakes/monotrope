@@ -417,3 +417,64 @@ Before redrafting, `check_interview_minimums.py --change kit-install` and
 `check_criterion_ledger.py` returned success on 2026-10-14. Implementation,
 initialized-target portability and post-redraft full verification remain
 unmeasured in this drafting call and belong to the runner/phase 4.
+
+## Second-review gap resolution — 2026-10-14
+
+Read only this worktree and repository Git metadata at input HEAD
+`a1b29a0aa28d3a0171bf55452adf6ec5c40f7756`; local `origin/main` remains
+`3199a2823f738b4305dce4b73de6aa8c8c89a6d3`. No instance was re-read.
+The initial dirty path was the runner's findings audit line. A read-only PR
+query failed to connect to GitHub; remote PR state is not read.
+
+- All nine second-round findings have recorded rulings in `decisions.md`:
+  F-16 explicitly supersedes the original-template probe reading, F-18 adds
+  post-adoption verification, and F-19 narrows the freshness names. The
+  draft incorporates those rulings; it does not interview or amend a
+  maintainer answer.
+- [GAP] The three other freshness names already have inventory rules, but
+  `LICENSE` and `harness.lock.yaml` have none at this input commit
+  (`scripts/kit/manifest.yaml`). Exact rules are needed for both the initial
+  tracked state and the fixture-committed payload. A README-only fixture
+  would not exercise the recorded allowlist.
+- [GAP] Source-stock assertions extend beyond the two named kit counts:
+  the independent-manifest case reads tracked stock, CI requires ten gates
+  and five surveyed directories, live writer/drift policies require optional
+  source gates, and rule-reference discovery requires nonempty tracked
+  references (`tests/test_kit.py`, `tests/test_ci.py`,
+  `tests/test_regelwerk.py`, same cut-off). These are named individually in
+  the plan's lock-scoped skip table. Generic optional gate/schema/CI/runner
+  behavior instead uses complete fixtures with the real generator/runner.
+- [GAP] The source independence test assumes each role spans multiple export
+  verdicts, which cannot hold for a sole derived CI path. The two policies
+  remain independent: source evidence holds the legacy mechanism/inventory
+  partition in both directions; explicit template/derived assertions hold
+  the new ownership roles without rewriting the independent export policy.
+- [GAP] `verify_all.sh` exports its chosen interpreter and prepends its
+  directory to PATH. Removing `PYTHON` alone still exposes source `.venv/bin`
+  to a target without a venv. F-24's PATH filtering and both runtime-selection
+  cases are therefore needed; integration dependencies are supplied to the
+  fixture target separately.
+- [GAP] `ci_gates.py::generate_ci` reads its own root's gate file, raises for
+  invalid schema and emits a drift infrastructure job even with no drift
+  gates. Preparation must run the selected generator against retained or
+  starter gate bytes before target writes; generic tests requiring optional
+  gate steps need fixture declarations, not extra target gates.
+- [DETAIL] Proposed shared payload preparation belongs in the existing `probe.py`;
+  it receives the selected source tree, initializes the five templates,
+  derives CI and builds the lock for both installer and probe. The probe
+  commits only its measurement tree and never calls the installer/verifier.
+  Complete committed source fixtures include new assets explicitly, avoiding
+  an imported classifier/installer dependency missing during unstaged checks.
+- [GAP] `_baue` currently selects only the index's tracked mechanism paths.
+  Merely removing a new import cannot carry untracked installer/bootstrap
+  assets in the runner's pre-staging probe. The proposed probe materializes
+  its complete pending source candidate in a temporary committed tree,
+  adding manifest-selected untracked kit/recipe assets; the shared payload
+  initializer then uses that resolved candidate. Source Git state remains
+  untouched, and real install/report still use requested committed bytes.
+
+The plan template and general artifact validator remain absent at this
+cut-off. Interview/ledger checks can read inside this boundary; the registry
+needs the shared tracker through `bead_render.py`, so registry and full
+verification remain with the runner. No implementation, fresh-target runtime
+test or new portability measurement is claimed by this draft.
