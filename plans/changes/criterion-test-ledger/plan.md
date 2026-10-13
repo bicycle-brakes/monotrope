@@ -4,7 +4,7 @@ status: draft
 implementation_status: partial
 date: 2026-10-11
 last_reviewed: 2026-10-11
-updated: 2026-10-12
+updated: 2026-10-13
 supersedes: null
 superseded_by: null
 bead: coding-harness-909
@@ -473,14 +473,8 @@ changes beyond their `plan.md`.
 - 23: tests/test_check_criterion_ledger.py::test_the_workflow_row_makes_moving_the_cutoff_a_governance_act
   — the row loses the sentence the CUTOFF comment points to
 - 24: not a test — the gate's run over this repository at the head, under "Verification"; output in the pull request body
-- 24: tests/test_check_interview_minimums.py::test_an_adr_with_only_its_own_plan_md_still_has_that_one_owner
-  — dropping the fall-back to plan-only folders leaves the ADR with "owns 0 change folder(s)"
-- 24: tests/test_check_interview_minimums.py::test_a_folder_whose_diff_touches_only_plan_md_is_no_owner
-  — counting the plan-only folder as an owner again turns the run red with "owns 2 change folder(s)"
-- 24: tests/test_check_interview_minimums.py::test_a_plan_md_only_folder_does_not_hide_the_adr_owner_among_other_folders
-  — dropping a plan-only folder whenever another folder owns exits 0 with one silent owner
-- 24: tests/test_check_interview_minimums.py::test_a_folder_touched_beyond_plan_md_is_never_also_plan_only
-  — a folder changed through spec.md, decisions.md and plan.md counted as plan-only too: ambiguity finding, exit 1
+- 24: tests/test_check_interview_minimums.py::test_a_claimant_beside_unclaiming_folders_is_decided_by_its_own_records
+  — the interim rule of this change is gone (ADR 0014): one claimant beside four plan-only folders is decided by its own records, and a finding naming a plan-only folder turns the run red
 - 25: not a test — the reading aid under "Verification", and the phase-6 review of each migrated ledger
 - 26: not a test — the phase-6 review of the `stage2-session` ledger against its "Tests and faults"
 - 27: not a test — the `grep` under "Verification" shows the pointer line above each table

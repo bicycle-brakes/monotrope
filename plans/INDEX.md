@@ -9,6 +9,7 @@ typed: a hand-kept list of files ages exactly as fast as files are added.
 |---|---|---|---|---|
 | [`changes/adr-owning-change/decisions.md`](changes/adr-owning-change/decisions.md) | draft | none | 2026-10-12 | coding-harness-afa |
 | [`changes/adr-owning-change/design.md`](changes/adr-owning-change/design.md) | draft | none | 2026-10-12 | coding-harness-afa |
+| [`changes/adr-owning-change/findings.md`](changes/adr-owning-change/findings.md) | draft | none | 2026-10-13 | coding-harness-afa |
 | [`changes/adr-owning-change/plan.md`](changes/adr-owning-change/plan.md) | draft | none | 2026-10-12 | coding-harness-afa |
 | [`changes/adr-owning-change/research.md`](changes/adr-owning-change/research.md) | draft | none | 2026-10-12 | coding-harness-afa |
 | [`changes/adr-owning-change/spec.md`](changes/adr-owning-change/spec.md) | draft | none | 2026-10-12 | coding-harness-afa |

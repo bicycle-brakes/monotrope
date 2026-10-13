@@ -141,6 +141,11 @@ paths:
     allowed: [human-decided]
     frontmatter: none
     owner_role: framework-architect
+  # The day this repository adopted each gate that exempts older changes
+  # (ADR 0014); moving a day is a decision pull request.
+  - prefix: "decisions/adoption.yaml"
+    allowed: [human-decided]
+    frontmatter: none
 
   # --- Phase 2: kartiert, Klassifizierung folgt als eigene Arbeit ---------
   - prefix: "docs/adr/"

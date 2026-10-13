@@ -73,6 +73,13 @@ decision pull requests"). For a `feature`, also `change: <folder name>` and
 `adr-answers` refuses the header. The proposal only proposes; the maintainer
 answers, with `python3 scripts/harness.py decide adr`.
 
+Every class lists under `adr_files: [docs/adr/<file>, …]` each file under
+`docs/adr/` the change creates, changes or removes — `[]` or no line when it
+touches none. The header lists every ADR file the change touches: the gate
+`interview-minimums` attributes an ADR edit to that claim alone and holds a
+feature's answer to it, "yes" with at least one claimed file and "no" with none
+(ADR 0014, `docs/WORKFLOW.md`).
+
 ## After the spec review
 
 Phase 2a returns its rows in `findings.md`. Before phase 3 starts, you work

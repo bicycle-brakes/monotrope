@@ -4,7 +4,7 @@ status: draft
 implementation_status: none
 date: 2026-10-12
 last_reviewed: 2026-10-12
-updated: 2026-10-12
+updated: 2026-10-13
 supersedes: null
 superseded_by: null
 bead: coding-harness-afa
@@ -205,61 +205,69 @@ D- or O-number (`research.md`, "Corrections after verification");
 
 ## Criterion ledger
 
-- 1: not yet written tests/test_check_interview_minimums.py::test_a_claim_in_flow_or_block_form_names_the_owner
+- 1: tests/test_check_interview_minimums.py::test_a_claim_in_flow_or_block_form_names_the_owner
   — a block-style list read as no claim; a path under another key taken as one
-- 2: not yet written tests/test_check_interview_minimums.py::test_an_unreadable_claim_is_reported
+- 2: tests/test_check_interview_minimums.py::test_an_unreadable_claim_is_reported
   — any of the five bad forms, or one in an archived stock spec, exits 0
 - 3: tests/test_check_interview_minimums.py::test_adr_change_demands_five_regardless_of_class
   — a bounded claimant with four records exits 0
 - 3: tests/test_check_interview_minimums.py::test_adr_edit_in_a_stock_folder_still_owes_five
   — the adoption day exempting a claimant dated before it
-- 4: not yet written tests/test_check_interview_minimums.py::test_the_gate_goes_red_when_an_adr_edit_is_unclaimed
+- 4: tests/test_check_interview_minimums.py::test_the_gate_goes_red_when_an_adr_edit_is_unclaimed
   — one touched folder that does not claim the edit taken as its owner again; a message without `adr_files`
-- 4: not yet written tests/test_check_interview_minimums.py::test_a_claim_outside_the_diff_does_not_own_the_edit
+- 4: tests/test_check_interview_minimums.py::test_a_claim_outside_the_diff_does_not_own_the_edit
   — an active change outside the diff, or an archived one, taken as the claimant
 - 4: tests/test_check_interview_minimums.py::test_adr_outside_any_change_is_a_finding
   — a diff touching no change folder exits 0, or its finding lacks the path
 - 5: tests/test_check_interview_minimums.py::test_adr_with_two_owning_changes_is_a_finding
   — two claimants with five records each exit 0
-- 6: not yet written tests/test_check_interview_minimums.py::test_a_claimant_beside_unclaiming_folders_is_decided_by_its_own_records
+- 6: tests/test_check_interview_minimums.py::test_a_claimant_beside_unclaiming_folders_is_decided_by_its_own_records
   — a finding naming one of four plan-only folders beside a claimant with five; green with four
-- 6: not yet written tests/test_check_interview_minimums.py::test_a_claimant_touched_through_plan_md_alone_owns_its_edit
+- 6: tests/test_check_interview_minimums.py::test_a_claimant_touched_through_plan_md_alone_owns_its_edit
   — a claimant touched only through plan.md reported unclaimed
-- 7: not yet written tests/test_check_interview_minimums.py::test_each_claimant_owes_its_own_five
+- 7: tests/test_check_interview_minimums.py::test_each_claimant_owes_its_own_five
   — one claimant with five and another with four exits 0
-- 8: not yet written tests/test_check_interview_minimums.py::test_the_adr_text_does_not_decide_the_owner
+- 8: tests/test_check_interview_minimums.py::test_the_adr_text_does_not_decide_the_owner
   — an ADR naming an unclaiming touched folder changes the verdict
-- 9: not yet written tests/test_check_interview_minimums.py::test_a_yes_answer_without_a_claim_is_reported
+- 9: tests/test_check_interview_minimums.py::test_a_yes_answer_without_a_claim_is_reported
   — a subject yes-feature without `adr_files`, or with `[]`, exits 0
-- 10: not yet written tests/test_check_interview_minimums.py::test_a_no_answer_with_a_claim_is_reported
+- 10: tests/test_check_interview_minimums.py::test_a_no_answer_with_a_claim_is_reported
   — a subject no-feature claiming a path exits 0
-- 11: not yet written tests/test_check_interview_minimums.py::test_the_agreement_holds_subject_features_alone
+- 11: tests/test_check_interview_minimums.py::test_the_agreement_holds_subject_features_alone
   — a feature dated on the day, a bounded claimant or another change under `--change` reported; an archived subject feature exempted
-- 12: not yet written tests/test_check_interview_minimums.py::test_a_missing_or_refused_answer_is_left_to_adr_answers
+- 12: tests/test_check_interview_minimums.py::test_a_missing_or_refused_answer_is_left_to_adr_answers
   — a finding of this gate for a missing answer file or an unquoted `answer: yes`
-- 13: not yet written tests/test_check_interview_minimums.py::test_the_adoption_day_comes_from_the_record
+- 13: tests/test_check_interview_minimums.py::test_the_adoption_day_comes_from_the_record
   — with the day moved to 2026-10-10, a feature dated 2026-10-09 still reported
-- 14: not yet written tests/test_check_interview_minimums.py::test_a_missing_adoption_record_is_not_measured
+- 14: tests/test_check_interview_minimums.py::test_a_missing_adoption_record_is_not_measured
   — exit 0 or 1 without the record; a message without its path
-- 14: not yet written tests/test_adoption.py::test_the_reader_refuses_a_record_it_cannot_read
+- 14: tests/test_adoption.py::test_the_reader_refuses_a_record_it_cannot_read
   — a missing file, invalid YAML, `schema_version: 2`, a quoted day, a missing key or a doubled key accepted
-- 15: not yet written tests/test_adoption.py::test_the_reader_returns_each_gates_own_day
+- 15: tests/test_adoption.py::test_the_reader_returns_each_gates_own_day
   — another gate's id answered with the interview day, or a record with two gates refused
-- 16: not yet written tests/test_adoption.py::test_this_repository_adopted_the_gate_on_2026_10_08
+- 16: tests/test_adoption.py::test_this_repository_adopted_the_gate_on_2026_10_08
   — another day in this repository's record; skips where the record stays home
 - 16: not a test — the gate's run over this repository at the head, under "Verification": no stock change reported
-- 17: not yet written tests/test_adoption.py::test_the_gate_and_its_reader_travel_and_the_record_stays
+- 17: tests/test_adoption.py::test_the_gate_and_its_reader_travel_and_the_record_stays
   — one of the four files left to a catch-all `bestand`, or the record `mechanismus`
 - 18: not a test — the gate `leerprobe` in `make verify`, with `REIST_NICHT` and `DECKEL` unchanged in the diff
-- 19: not yet written tests/test_adoption.py::test_the_adoption_record_is_human_decided
+- 19: tests/test_adoption.py::test_the_adoption_record_is_human_decided
   — no `paths:` entry for the record, or one allowing another class
-- 20: not yet written tests/test_check_interview_minimums.py::test_the_spec_template_and_prompt_name_the_claim
+- 20: tests/test_check_interview_minimums.py::test_the_spec_template_and_prompt_name_the_claim
   — the template line missing or reported by the claim reader; the prompt without `adr_files`
-- 21: not yet written tests/test_check_interview_minimums.py::test_the_workflow_states_the_claim_and_the_adoption_record
+- 21: tests/test_check_interview_minimums.py::test_the_workflow_states_the_claim_and_the_adoption_record
   — `adr_files`, `decisions/adoption.yaml` or ADR 0014 missing; the old "yes is followed by an ADR" sentence still there
 - 22: not a test — the phase-6 review reads `docs/adr/0014-a-change-claims-its-adr-files.md` against the draft in `design.md`; the gate `decision-continuity` stays green
 - 23: not a test — the gate's run over this repository at the head, under "Verification"; its output in the pull request body
 - 24: not a test — the gate `criterion-ledger` in `make verify` reports a ledger line that names a removed test
 
+## Runner route — 2026-10-13
+
+Stage-1 route: implement · model claude-sonnet-5-5 · reason: Claude Code 2.1.296 refused glm-5.3-flash as an unrecognized model twice on 2026-10-13 (bead coding-harness-3fc).
+
 ## Time used
 
+2026-10-13 span not measured — this session had file tools and no command tool, so `date` could not be read at start or end; the runner's own timestamps for this call are the record. Appetite not reached as far as the session could tell (6 h; no reading exists).
+
+
+Phase 4, 2026-10-13: the Stage-2 route (GLM 5.3 Flash) was refused twice by Claude Code 2.1.296 as an unrecognized model, so Sonnet 5.5 implemented under `--stage2-off`; the orchestrator's sub-agent completed the `leerprobe` fix (the kit probe copies only git-tracked files, so the untracked `scripts/adoption.py` was missing in the foreign repository and collection of the interview-minimums tests aborted). No wall-clock reading exists.
