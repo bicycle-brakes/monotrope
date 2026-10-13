@@ -10,9 +10,10 @@ A leak-check BLOCK stops; it never falls back.
 **Gate:** `make verify` green.
 
 You follow the plan. You read the spec to know what you are building against.
-Under the Stage-2 runner you have file tools but no command tool: update the
-time log before returning; the runner runs `make verify` and makes the local
-checkpoint commit. In an ordinary Stage-1 session, you still run the commands
+Under the Stage-2 runner an implement attempt has
+file tools but no command tool (a Codex repair attempt may run tests and
+`make verify`, never commit): update the time log before returning; the runner
+runs `make verify` and makes the local checkpoint commit. In an ordinary Stage-1 session, you still run the commands
 and commits this prompt assigns to you.
 
 **The plan is the contract.** Where it no longer holds — a file does not exist,
@@ -98,8 +99,11 @@ cover needs a test, or it is rejected. `04b-review-loop.md` says how the loop
 rows are decided and recorded.
 
 **Repair.** The orchestrator decides taken or rejected and hands every taken
-row to `python3 scripts/stage2.py repair <change>` — GLM 5.3 (`glm-5.3`)
-repairs them in one guarded call. The model answers one fixed line per row:
+row to `python3 scripts/stage2.py repair <change>` — Codex (`gpt-6.1-sol`),
+then a fresh Codex attempt and Sonnet 5.5 after failed post-run checks,
+repairs them in one guarded call (ADR 0017). Codex may run tests and
+`make verify` in its configured sandbox but never commits; the phase-6
+re-check is a fresh read-only Codex session. The model answers one fixed line per row:
 `<ID>: fixed — tests/<path>::<function>`, or `<ID>: fixed — not a test —
 <reason>` for a row taken as `taken — not a test`. A code row needs a test
 that is red first — it fails on the baseline's code — and the runner runs

@@ -633,8 +633,10 @@ every change of the night run — so GLM has left the reviewer roles.
 (`glm-5.3-flash`, the Z.ai endpoint) also explores (phase 1) and implements
 (phase 4) — the two phases that read the repository broadly and write its
 code. **Since 2026-10-12** (ADR 0015) GLM 5.3 (`glm-5.3`, the same endpoint)
-repairs the findings the orchestrator takes, of the loop (4b) and of phase 6,
-through the runner's `repair` verb — since that day `taken` on a row means
+repaired the findings the orchestrator takes, of the loop (4b) and of phase 6;
+**since the merge of ADR 0017** Codex (`gpt-6.1-sol`) does, with Sonnet 5.5
+after two failed post-run checks, through the runner's `repair` verb — since the
+first day `taken` on a row means
 decided and waiting for the repair, and `fixed` means repaired. Phases 1a, 2a
 and 7 stay with Anthropic (2a on Opus 5.5).
 **No Fable and no Kimi:** Fable 5.1 left the routing on 2026-10-06 and Opus
@@ -689,7 +691,7 @@ list is a one-line pull request that touches nothing else.
 | 2a Spec review | **Opus 5.5** | effort `xhigh`, through Claude Code and `spec-review`, read-only tools |
 | 4 Implement | **GLM 5.3 Flash** | a worker given a clear plan; through Claude Code against Z.ai and the runner, for every change |
 | 4b Review loop | **the ladder** | the ordered `modelle` list of the `opencode-go` entry in `model-endpoints.yaml`: round *n* calls its *n*-th id (`modelle[n-1]`), through Pi, effort `max` (Pi clamps it to `high` for a rung that takes no `max`), round 3 only when round 2 wrote a taken row |
-| Repair after 4b and 6 | **GLM 5.3** | one GLM 5.3 repair attempt through Claude Code against Z.ai and the runner, effort `max`; a first GLM 5.3 attempt before it, and Sonnet 5.5 at effort `medium` after two failed post-run checks (`repair`, ADR 0015) |
+| Repair after 4b and 6 | **gpt-6.1-sol** | a Codex attempt in the configured `workspace-write` sandbox, effort `max`; one fresh Codex attempt after a failed post-run check, and Sonnet 5.5 at effort `medium` after two failed ones; no GLM credential (`repair`, ADR 0017) |
 | 6 Review | **gpt-6.1-sol** | effort `max`, through the Codex CLI and `review`, a fresh Codex session |
 
 **The two Flash rows are live through the runner.** `explore` starts phase 1
@@ -725,7 +727,7 @@ into a shell. Ten verbs exist:
   no session kept.
 - `implement` — GLM 5.3 Flash, phase 4; `--stage2-off [REASON]` uses Sonnet
   5.5 at effort `medium`.
-- `repair` — GLM 5.3, every taken finding of the loop record, the released
+- `repair` — Codex, every taken finding of the loop record, the released
   blocks and the phase-6 tables in one call; `--stage2-off [REASON]` uses
   Sonnet 5.5 at effort `medium` ("Repairing taken findings" below).
 - `review-loop` — one round of phase 4b, started through Pi; round *n* goes
@@ -782,8 +784,8 @@ reads the tree and writes code into the worktree, and every repair prompt
 carries the change's spec, plan and repository rules plus the taken rows of
 the loop record — rows the repository does not hold until the phase-6 verdict
 releases them into `findings.md`, so they reach Z.ai in that prompt before
-the verdict (ADR 0015). Far more of this repository goes to Z.ai than before
-2026-10-06. The leak check covers what these four runs send — the same scan,
+the verdict (ADR 0015, since ADR 0017 to Codex instead of Z.ai). Far more of
+this repository goes to Z.ai than before 2026-10-06. The leak check covers what these four runs send — the same scan,
 immediately before each call, over the tree, the staged changes, the commits
 reachable from the branches and the call's own prompt — and what stays out
 stays out: LakeSwitch and customer content never go, to any endpoint, and the
@@ -1018,7 +1020,7 @@ taking it, and starts the re-check afterwards: the loop's next round for loop
 rows, `review` for phase-6 findings. The verb starts no review of its own.
 
 `python3 scripts/stage2.py repair <change>` takes every taken row — of the
-loop record, of every released block and of every phase-6 table — to GLM 5.3
+loop record, of every released block and of every phase-6 table — to Codex
 in one guarded call, and refuses while a row stands undecided or an ID is
 doubled. The model answers one **fixed line** per row, `<ID>: fixed —
 tests/<path>::<function>` or `<ID>: fixed — not a test — <reason>`, in the
@@ -1030,14 +1032,20 @@ only when pytest exits 1 or 2 there. When every post-run check passes —
 `make verify` green, a measured line in the time log, every fixed line
 checked — the runner writes each row's Status `fixed` in its place, makes the
 one checkpoint commit `fix(<change>): repair taken findings <IDs>` and marks
-the loop record after it. The attempts are GLM 5.3, one GLM 5.3 repair
-attempt with the first one's diagnostics, and Sonnet 5.5 at effort `medium`;
-`--stage2-off [REASON]` runs Sonnet 5.5 alone and records why. A leak-check
-BLOCK stops without a fallback. A fixed row counts as a taken one for round 3
+the loop record after it. The attempts are Codex, one fresh Codex attempt
+with the first one's diagnostics, and Sonnet 5.5 at effort `medium`, the last
+only after two failed post-run checks; a failed call stops the run without a
+fallback and `--stage2-off [REASON]` runs Sonnet 5.5 alone and records why. A
+leak-check BLOCK stops without a fallback, and a Codex call that moves HEAD
+stops the run unrewritten. A fixed row counts as a taken one for round 3
 and for the run count; **`Broke a test` stays the orchestrator's mark**,
-written from the run's evidence before the next round or the release. A
-reviewer never repairs its own findings: the rungs and Codex keep their
-read-only tools (ADR 0015).
+written from the run's evidence before the next round or the release. The
+rungs keep their read-only tools. **The exception (ADR 0017):** Codex, which
+reviews phase 6, also repairs; its own session never does both — a phase-6
+re-check (a `review` run after an earlier `## Phase 6` block) starts a fresh
+read-only Codex session, resuming neither the repair nor an earlier thread.
+The sandbox is the CLI's configured `workspace-write`; the tests show the
+configured call, not the CLI's confinement.
 
 ### Two columns for every stage-2 change
 

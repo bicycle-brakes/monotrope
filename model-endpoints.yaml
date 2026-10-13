@@ -122,8 +122,9 @@ endpunkte:
       review loop (phase 4b) moved to `opencode-go`. `glm-5.3-flash` explores
       (phase 1) through `stage2.py explore` and implements (phase 4) through
       `stage2.py implement` (maintainer, 2026-10-06; bead
-      coding-harness-qcp). `glm-5.3` repairs the findings the orchestrator takes
-      through `stage2.py repair` (maintainer, 2026-10-12; ADR 0015), and drafts
+      coding-harness-qcp). `glm-5.3` repaired the findings the orchestrator took
+      until ADR 0017, which moved `stage2.py repair` to Codex (maintainer,
+      2026-10-13; the repair route reads no GLM credential), and drafts
       spec, design and plan (phases 2, 2b and 3) through `stage2.py draft` when
       two Codex attempts failed (maintainer, 2026-10-12; ADR 0016). **Only
       through Claude Code**, which the vendor lists

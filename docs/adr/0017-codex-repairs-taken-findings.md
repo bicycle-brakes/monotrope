@@ -104,8 +104,10 @@ repair evidence contract.
    rows are marked only after the checkpoint; unreleased rows reach the
    repair in the prompt rather than a worktree file.
 5. **The same model may repair phase-6 findings; a fresh session re-checks.**
-   A subsequent phase-6 verdict runs Codex read-only without resuming the
-   repair, a prior verdict or a historical phase-2a session. Loop marks may
+   A phase-6 verdict after an earlier `## Phase 6` block in `findings.md` — a
+   re-check — runs Codex read-only without resuming the repair, a prior
+   verdict or a historical phase-2a session; the first phase-6 review keeps
+   the resume rule of ADR 0016. Loop marks may
    resume only that new verdict thread after its verdict. This replaces ADR
    0015's blanket reviewer/repairer separation; it does not give review calls
    write tools or move any review to another model.
@@ -124,7 +126,8 @@ repair evidence contract.
   is discarded; a fresh verdict does not receive that history. The same
   model's judgment may still be correlated, a limit Q-1 accepts.
 * Codex can run commands inside its configured sandbox. The prompt instructs
-  it not to run commands or commit; the runner checks HEAD, but does not
+  that it may run tests and `make verify` but must not commit or run a git
+  command that changes the repository; the runner checks HEAD, but does not
   measure sandbox enforcement or broaden read confinement. ADR 0016's
   residual risks for ignored files, external paths and the git directory
   remain; the tests measure the invocation and runner behavior with stand-ins.

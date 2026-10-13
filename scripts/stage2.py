@@ -14,10 +14,10 @@ stands between the rule and the call.
     python3 scripts/stage2.py draft        <change>   # Codex, phases 2, 2b and 3; GLM 5.3 after two failed attempts
     python3 scripts/stage2.py spec-review  <change>   # Opus 5.5, phase 2a
     python3 scripts/stage2.py implement    <change>   # GLM Flash, phase 4
-    python3 scripts/stage2.py repair       <change>   # GLM 5.3, the taken findings
+    python3 scripts/stage2.py repair       <change>   # Codex, the taken findings; Sonnet 5.5 after two failed checks
     python3 scripts/stage2.py review-loop  <change>   # one round of phase 4b: round n on rung n
     python3 scripts/stage2.py release-loop <change>   # loop rows into findings.md
-    python3 scripts/stage2.py review       <change>   # Codex, phase 6, a recorded Codex 2a session resumed
+    python3 scripts/stage2.py review       <change>   # Codex, phase 6; a re-check is a fresh read-only session
     python3 scripts/stage2.py probe        <change>   # one call per rung, no record written
     python3 scripts/stage2.py session      <change>   # interactive Codex/Pi, a Terminal window
 
@@ -32,9 +32,11 @@ under `scripts/` and `tests/`, then runs `make verify`, checks the time log and
 makes the one checkpoint commit. A
 failed attempt leaves its diagnostics and the files its model changed, quoted,
 below its audit line in `findings.md`. `repair` takes every taken finding of
-the loop record, the released blocks and the phase-6 tables to GLM 5.3 in one
-call, proves each repair of code with a test that was red first, and marks the
-rows `fixed` from the answer's fixed lines.
+the loop record, the released blocks and the phase-6 tables to Codex in one
+call (a fresh Codex attempt after a failed check, then Sonnet 5.5; a failed call
+stops), proves each repair of code with a test that was red first, and marks the
+rows `fixed` from the answer's fixed lines. Codex runs in its configured
+`workspace-write` sandbox; the tests do not measure that confinement.
 
 `session` starts one interactive Pi or Codex session in a new macOS
 Terminal window, inside the change's dedicated worktree
@@ -140,7 +142,7 @@ REPO_ROOT = Path(__file__).resolve().parent.parent
 # The reviews have no fixed tuple: their model is the round's rung of the
 # `opencode-go` entry's ordered `modelle` list (the ladder, see `ladder`).
 GLM_FLASH = ("glm-coding-plan", "glm-5.3-flash", "max")
-# GLM 5.3, not Flash: the repair of the taken findings routes here (ADR 0015), shared with stage2_runs.py.
+# GLM 5.3, not Flash: the draft's fallback routes here (the repair did until ADR 0017), shared with stage2_runs.py.
 GLM = ("glm-coding-plan", "glm-5.3", "max")
 HAIKU = ("claude-code-plan", "claude-haiku-4-5", None)
 SONNET = ("claude-code-plan", "claude-sonnet-5-5", "medium")
@@ -176,12 +178,21 @@ ANSWER_FORMAT = (
     "The runner adds the reviewer, the status and the test mark. When there is no finding, answer in one sentence."
 )
 MARK_FORMAT = "For each loop row answer one line and nothing else: `<ID>: agree` or `<ID>: disagree — <reason>`."
-REPAIR_FORMAT = (
-    "Repair only the taken rows below, with the available file tools; you cannot run commands. Answer with\n"
-    "one fixed line per row and no other text: `<ID>: fixed — tests/<path>::<function>` or\n"
+REPAIR_ANSWER = (
+    "Answer with one fixed line per row and no other text: `<ID>: fixed — tests/<path>::<function>` or\n"
     "`<ID>: fixed — not a test — <reason>`. Write a `|` inside a reason as `\\|`. A code row needs a test that\n"
     "fails on the baseline's code, which the runner runs; only a row taken as `taken — not a test — <reason>`\n"
     "may be answered `not a test`. Do not edit `findings.md`."
+)
+# The Codex attempts (ADR 0017): Codex has command tools in its configured sandbox, so it is told what it may run.
+REPAIR_FORMAT = (
+    "Repair only the taken rows below. You may run tests and `make verify`; write a measured entry under\n"
+    "`## Time used` in `plan.md`. Do not commit and run no git command that changes the repository: the\n"
+    "runner runs `make verify` and makes the one commit. " + REPAIR_ANSWER
+)
+# The Sonnet attempt keeps the file-tools sentence it always had.
+REPAIR_FORMAT_FILE_TOOLS = (
+    "Repair only the taken rows below, with the available file tools; you cannot run commands. " + REPAIR_ANSWER
 )
 # What a draft may write and what the runner takes back; `<change>` is filled in (spec, criterion 3).
 DRAFT_RULES = (
@@ -1030,6 +1041,11 @@ def review(root: Path, change: str) -> None:
             raise Refused(refusal)
     text = ctx.findings.read_text(encoding="utf-8") if ctx.findings.exists() else ""
     recorded = recorded_2a_session(text)
+    recheck = any(line.startswith("## Phase 6") for line in text.splitlines())
+    if recheck:
+        # A re-check after a Codex repair is a fresh read-only session: no 2a thread, no earlier
+        # verdict thread, never the repair's (ADR 0017). The first review keeps ADR 0016's rule.
+        recorded = None
     prompt = phase_prompt(root, "06-review.md", change, "Write only your verdict now.")
     begin_call(ctx, "review", CODEX, prompt)
     answer, thread = run_codex(ctx, prompt, resume=recorded)
@@ -1042,7 +1058,8 @@ def review(root: Path, change: str) -> None:
         ]
     )
     if recorded is None:
-        block += f"\nReviewer session: codex {thread} — a fresh session reviewed: no phase-2a session was recorded"
+        reason = "a re-check after a repair starts fresh" if recheck else "no phase-2a session was recorded"
+        block += f"\nReviewer session: codex {thread} — a fresh session reviewed: {reason}"
     elif thread != recorded:
         block += (
             f"\nReviewer session: codex {thread} — a fresh session reviewed: "
@@ -2299,7 +2316,7 @@ def run_attempts(
     ctx: Context,
     verb: str,
     routes: list[tuple[tuple[str, str, str | None], str | None, str, str | None]],
-    build_prompt,  # diagnostics -> prompt
+    build_prompt,  # (diagnostics, endpoint) -> prompt
     baseline: str,
     baseline_time: str,
     key: str | None,
@@ -2326,7 +2343,7 @@ def run_attempts(
     diagnostics: list[str] = []
     record: list[str] = []
     for attempt, (endpoint, credential, route, reason) in enumerate(routes, 1):
-        prompt = build_prompt(diagnostics)
+        prompt = build_prompt(diagnostics, endpoint)
         begin_work_call(ctx, verb, endpoint, prompt, attempt, route, ctx.findings, reason)
         if route == "stage-1":
             insert_before_time(
@@ -2339,9 +2356,32 @@ def run_attempts(
             before = worktree_tree(root)
         except (Refused, OSError) as error:
             before, unmeasured = "", str(error)
+        call_error: CallFailed | None = None
+        answer = ""
         try:
-            answer = run_work_model(ctx, prompt, endpoint, writable=True, key=credential)
+            if endpoint == CODEX:
+                # A fresh writing Codex call, never resumed; its thread is not kept (ADR 0017).
+                answer, _ = run_codex(ctx, prompt, writable=True)
+                if not answer.strip():
+                    raise CallFailed("codex: the answer is empty")
+            else:
+                answer = run_work_model(ctx, prompt, endpoint, writable=True, key=credential)
         except CallFailed as error:
+            call_error = error
+        if endpoint == CODEX:
+            try:
+                head_now = _git_output(root, "rev-parse", "HEAD").strip()
+            except Refused as error:
+                raise CallFailed(f"the {verb} call's HEAD could not be read ({error})") from error
+            if head_now != baseline:
+                # A moved HEAD stops the run without a rewrite: resetting a commit the model made
+                # would rewrite history, and the decision is a person's (ADR 0017).
+                raise CallFailed(
+                    f"the {verb} call moved HEAD from {baseline[:12]} to {head_now[:12]}; "
+                    "nothing was put back or committed"
+                )
+        if call_error is not None:
+            error = call_error
             if kept is not None:
                 restore_findings(kept)
             raise CallFailed(f"{error}; {restore_baseline(root, baseline, allowed, ignored_before)}") from error
@@ -2444,7 +2484,7 @@ def implement(root: Path, change: str, stage2_off: str | None = None) -> None:
         ctx,
         "implement",
         routes,
-        lambda diagnostics: implementation_prompt(ctx, baseline, diagnostics),
+        lambda diagnostics, _endpoint: implementation_prompt(ctx, baseline, diagnostics),
         baseline,
         baseline_time,
         key,
@@ -2745,13 +2785,19 @@ def draft(root: Path, change: str) -> None:
     )
 
 
-def repair_prompt(ctx: Context, baseline: str, taken: list[tuple[str, list[str]]], diagnostics: list[str]) -> str:
+def repair_prompt(
+    ctx: Context,
+    baseline: str,
+    taken: list[tuple[str, list[str]]],
+    diagnostics: list[str],
+    endpoint: tuple[str, str, str | None] = CODEX,
+) -> str:
     """The implement contract with the repair block: the format, the baseline, the taken rows, the inputs."""
     rows = "\n".join(f"- {row[0]} [{row[1]}, {row[2]}] {row[4]}: {row[5]} — Status: {row[7]}" for _, row in taken)
     spec = (ctx.folder / "spec.md").read_text(encoding="utf-8")
     plan = ctx.plan.read_text(encoding="utf-8")
     extra = [
-        REPAIR_FORMAT,
+        REPAIR_FORMAT if endpoint == CODEX else REPAIR_FORMAT_FILE_TOOLS,
         f"Repair baseline: {baseline}",
         f"## Taken rows\n\n{rows}",
         f"## Accepted spec\n\n{spec}",
@@ -2763,14 +2809,15 @@ def repair_prompt(ctx: Context, baseline: str, taken: list[tuple[str, list[str]]
 
 
 def repair(root: Path, change: str, stage2_off: str | None = None) -> None:
-    """Phase 4b and 6: GLM 5.3 repairs every taken finding in one call, checked and committed by the runner.
+    """Phase 4b and 6: Codex repairs every taken finding in one call, checked and committed by the runner.
 
-    The attempts are GLM 5.3, one GLM 5.3 repair attempt with the first one's diagnostics, and one
-    Sonnet 5.5 stage-1 fallback; a leak-check BLOCK stops without a fallback. The orchestrator decides
-    taken or rejected and re-checks with the loop's next round and `review`; the verb writes no
+    The attempts are Codex, one fresh Codex repair attempt with the first one's diagnostics, and one
+    Sonnet 5.5 stage-1 fallback after two failed post-run checks; a failed call or a leak-check BLOCK
+    stops without a fallback (ADR 0017). The orchestrator decides taken or rejected and re-checks with
+    the loop's next round and `review`, a fresh read-only Codex session; the verb writes no
     `Broke a test` and starts no review.
     """
-    first = SONNET if stage2_off is not None else GLM
+    first = SONNET if stage2_off is not None else CODEX
     ctx = preflight(root, change, first, required=("plan.md",))
     allowed = {ctx.findings.relative_to(root)}
     outside = changed_paths(root) - allowed
@@ -2789,17 +2836,15 @@ def repair(root: Path, change: str, stage2_off: str | None = None) -> None:
     baseline = _git_output(root, "rev-parse", "HEAD").strip()
     baseline_time = time_log(ctx.plan)
     ignored_before = ignored_snapshot(root)
+    # No route reads the GLM credential: the repair is Codex, then Sonnet (ADR 0017).
+    key = None
     if stage2_off is None:
-        key = read_secret("GLM_KEY")
-        if key is None:
-            raise Refused(f"GLM_KEY is not in the secrets file {secrets_path()}.")
         routes = [
-            (GLM, key, "glm", None),
-            (GLM, key, "glm-repair", "first GLM 5.3 post-run check failed"),
-            (SONNET, None, "stage-1", "two GLM 5.3 post-run checks failed"),
+            (CODEX, None, "codex", None),
+            (CODEX, None, "codex-repair", "first Codex post-run check failed"),
+            (SONNET, None, "stage-1", "two Codex post-run checks failed"),
         ]
     else:
-        key = None
         routes = [(SONNET, None, "stage-1", stage2_off)]
     fixes: dict[str, str] = {}
     rows_before = findings_rows(ctx.findings.read_text(encoding="utf-8") if ctx.findings.exists() else "")
@@ -2825,7 +2870,7 @@ def repair(root: Path, change: str, stage2_off: str | None = None) -> None:
         ctx,
         "repair",
         routes,
-        lambda diagnostics: repair_prompt(ctx, baseline, taken, diagnostics),
+        lambda diagnostics, endpoint: repair_prompt(ctx, baseline, taken, diagnostics, endpoint),
         baseline,
         baseline_time,
         key,
