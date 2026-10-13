@@ -558,3 +558,5 @@ Stage-2 call, 2026-10-13: repair · attempt 1 · route glm · endpoint glm-codin
 > ````
 
 Stage-2 call, 2026-10-13: repair · attempt 2 · route glm-repair · endpoint glm-coding-plan · model glm-5.3 · reason first GLM 5.3 post-run check failed · leak check clean over 385 files, 965 commits, 12 rules.
+
+Stage-2 call, 2026-10-13: review-loop · endpoint opencode-go · model mimo-v2.6-pro · leak check clean over 385 files, 966 commits, 12 rules.
