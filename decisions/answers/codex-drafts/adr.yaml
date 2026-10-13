@@ -1,0 +1,14 @@
+schema_version: 1
+change: codex-drafts
+question: adr
+answer: 'yes'
+reason: The change moves the spec review from Codex to Opus 5.5 and lets Codex draft
+  unattended, which amends the reviewer roles of ADR 0007 and ADR 0011; a new ADR
+  records it.
+shown:
+  proposed: 'yes'
+  proposal_reason: It moves the spec review from Codex to Opus 5.5 and lets Codex
+    write unattended, which amends the reviewer roles of ADR 0007 and ADR 0011, a
+    maintainer decision.
+answered_by: framework-architect
+answered_at: 2026-10-12

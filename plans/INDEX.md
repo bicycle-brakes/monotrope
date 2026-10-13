@@ -104,6 +104,12 @@ typed: a hand-kept list of files ages exactly as fast as files are added.
 | [`changes/attempt-diagnostics/plan.md`](changes/attempt-diagnostics/plan.md) | draft | partial | 2026-10-11 | coding-harness-cit |
 | [`changes/attempt-diagnostics/research.md`](changes/attempt-diagnostics/research.md) | draft | partial | 2026-10-11 | coding-harness-cit |
 | [`changes/attempt-diagnostics/spec.md`](changes/attempt-diagnostics/spec.md) | draft | partial | 2026-10-11 | coding-harness-cit |
+| [`changes/codex-drafts/decisions.md`](changes/codex-drafts/decisions.md) | draft | none | 2026-10-12 | coding-harness-rhq |
+| [`changes/codex-drafts/design.md`](changes/codex-drafts/design.md) | draft | none | 2026-10-12 | coding-harness-rhq |
+| [`changes/codex-drafts/findings.md`](changes/codex-drafts/findings.md) | draft | none | 2026-10-12 | coding-harness-rhq |
+| [`changes/codex-drafts/plan.md`](changes/codex-drafts/plan.md) | draft | none | 2026-10-12 | coding-harness-rhq |
+| [`changes/codex-drafts/research.md`](changes/codex-drafts/research.md) | draft | none | 2026-10-12 | coding-harness-rhq |
+| [`changes/codex-drafts/spec.md`](changes/codex-drafts/spec.md) | draft | none | 2026-10-12 | coding-harness-rhq |
 | [`changes/codex-takeover/research.md`](changes/codex-takeover/research.md) | draft | none | 2026-10-12 | coding-harness-nsm |
 | [`changes/criterion-test-ledger/decisions.md`](changes/criterion-test-ledger/decisions.md) | draft | partial | 2026-10-11 | coding-harness-909 |
 | [`changes/criterion-test-ledger/design.md`](changes/criterion-test-ledger/design.md) | draft | partial | 2026-10-11 | coding-harness-909 |
@@ -132,6 +138,11 @@ typed: a hand-kept list of files ages exactly as fast as files are added.
 | [`changes/research-currency/plan.md`](changes/research-currency/plan.md) | draft | partial | 2026-10-05 | coding-harness-pu9 |
 | [`changes/research-currency/research.md`](changes/research-currency/research.md) | draft | partial | 2026-10-05 | coding-harness-pu9 |
 | [`changes/research-currency/spec.md`](changes/research-currency/spec.md) | draft | partial | 2026-10-05 | coding-harness-pu9 |
+| [`changes/stage2-format/decisions.md`](changes/stage2-format/decisions.md) | draft | none | 2026-10-12 | coding-harness-52r |
+| [`changes/stage2-format/findings.md`](changes/stage2-format/findings.md) | draft | none | 2026-10-12 | coding-harness-52r |
+| [`changes/stage2-format/plan.md`](changes/stage2-format/plan.md) | draft | none | 2026-10-12 | coding-harness-52r |
+| [`changes/stage2-format/research.md`](changes/stage2-format/research.md) | draft | none | 2026-10-12 | coding-harness-52r |
+| [`changes/stage2-format/spec.md`](changes/stage2-format/spec.md) | draft | none | 2026-10-12 | coding-harness-52r |
 | [`changes/stage2-repair/decisions.md`](changes/stage2-repair/decisions.md) | draft | none | 2026-10-12 | coding-harness-g2f |
 | [`changes/stage2-repair/design.md`](changes/stage2-repair/design.md) | draft | none | 2026-10-12 | coding-harness-g2f |
 | [`changes/stage2-repair/findings.md`](changes/stage2-repair/findings.md) | draft | none | 2026-10-12 | coding-harness-g2f |

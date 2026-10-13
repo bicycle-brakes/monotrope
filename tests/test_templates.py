@@ -749,9 +749,10 @@ def test_phase_table_has_2b_between_2a_and_3() -> None:
 
 
 def test_routing_gives_2b_the_prompt_model() -> None:
-    rows = first_table(markdown_section(workflow_text("docs/WORKFLOW.md"), "Model routing"))
+    """Section 3's row names the model that runs without the runner; the prompt's model is §4's routing."""
+    rows = first_table(markdown_section(workflow_text("docs/WORKFLOW.md"), "The routing"))
     firsts = [row[0].split()[0] for row in rows]
-    assert any(firsts[i : i + 3] == ["2a", "2b", "3"] for i in range(len(firsts))), firsts
+    assert "2b" in firsts, firsts
     bold = re.search(r"\*\*(.+?)\*\*", rows[firsts.index("2b")][1])
     assert bold and bold.group(1) == prompt_model(workflow_text(DESIGN_PROMPT))
 

@@ -401,15 +401,19 @@ def test_the_opencode_go_remark_names_every_source() -> None:
 def _remark_problems(codex: str, glm: str) -> list[str]:
     """What criterion 3 requires of the two old reviewer remarks, as the problems found."""
     problems = []
-    if "Used for the spec review (phase 2a) and the review (phase 6)" not in codex:
-        problems.append("codex: the phases still routed to it")
+    if "Used for drafting spec, design and plan" not in codex:
+        problems.append("codex: the draft")
+    if "the review (phase 6)" not in codex:
+        problems.append("codex: the review")
+    if "the spec review (phase 2a) moved to Opus 5.5" not in codex:
+        problems.append("codex: 2a's move")
     if "the review loop (phase 4b) moved to `opencode-go`" not in codex:
         problems.append("codex: the loop's move")
     if "No review phase routes to it" not in glm:
         problems.append("glm: no review phase")
     if "the review loop (phase 4b) moved to `opencode-go`" not in glm:
         problems.append("glm: the loop's move")
-    if not ("stage2.py explore" in glm and "stage2.py implement" in glm):
+    if not ("stage2.py explore" in glm and "stage2.py implement" in glm and "stage2.py draft" in glm):
         problems.append("glm: the work verbs")
     return problems
 
@@ -421,3 +425,24 @@ def test_no_old_reviewer_remark_claims_a_review_phase() -> None:
     assert _remark_problems(codex, glm) == []
     planted = codex.replace("the review loop (phase 4b) moved to `opencode-go`", "runs every review as before")
     assert _remark_problems(planted, glm) == ["codex: the loop's move"]
+    planted = codex.replace("Used for drafting spec, design and plan", "Used for every phase")
+    assert _remark_problems(planted, glm) == ["codex: the draft"]
+    planted = codex.replace("the spec review (phase 2a) moved to Opus 5.5", "keeps the spec review")
+    assert _remark_problems(planted, glm) == ["codex: 2a's move"]
+    planted = codex.replace(
+        "and for the review (phase 6) of `bounded`, `feature` and `architectural` changes,",
+        "and for nothing else,",
+    )
+    assert _remark_problems(planted, glm) == ["codex: the review"]
+    planted = glm.replace("stage2.py draft", "stage2.py sketch")
+    assert _remark_problems(codex, planted) == ["glm: the work verbs"]
+
+
+def test_no_remark_routes_the_spec_review_to_codex() -> None:
+    """Criterion 36: the ladder's remark sends 2a to Opus 5.5 and 6 to Codex — 2a no longer to Codex."""
+    remark = " ".join(_endpunkt("opencode-go")["bemerkung"].split())
+    assert "the spec review (phase 2a) runs on Opus 5.5" in remark
+    assert "the review (phase 6) on Codex" in remark
+    assert "spec review (phase 2a) stays with Codex" not in remark
+    planted = remark.replace("runs on Opus 5.5", "stays with Codex", 1)
+    assert "spec review (phase 2a) stays with Codex" in planted, "the planted fault is the old routing"
