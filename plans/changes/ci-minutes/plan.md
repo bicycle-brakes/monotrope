@@ -75,15 +75,23 @@ git add -A && make verify
 
 ## Criterion ledger
 
-- 1: not yet written tests/test_ci.py::test_push_starts_the_workflow_only_on_main — a bare `push:`, or a filter on `pull_request`
+- 1: tests/test_ci.py::test_push_starts_the_workflow_only_on_main — a bare `push:`, or a filter on `pull_request`
 - 2: tests/test_ci.py::test_every_declared_interpreter_gets_a_leg — 3.11 declared, or a matrix that ignores `tools.python`
-- 3: not yet written tests/test_ci.py::test_the_interpreter_floor_is_declared_once — `requires-python`, the ruff target and `tools.python[0]` disagree
-- 4: not yet written tests/test_ci.py::test_only_pull_request_runs_cancel_superseded_runs — `cancel-in-progress` true or false for every event
+- 3: tests/test_ci.py::test_one_version_is_the_interpreter_floor — `requires-python`, the ruff target and `tools.python[0]` disagree
+- 4: tests/test_ci.py::test_only_pull_request_runs_cancel_superseded_runs — `cancel-in-progress` true or false for every event
 - 4: tests/test_ci.py::test_concurrency_group_carries_the_event — the group loses the event
 - 5: tests/test_ci.py::test_drift_job_runs_on_schedule_and_dispatch_only — the drift job on push or pull request
-- 5: not yet written tests/test_ci.py::test_the_schedule_runs_only_the_drift_job — the matrix or summary job's `if` admits `schedule`
+- 5: tests/test_ci.py::test_the_schedule_runs_only_the_drift_job — the matrix or summary job's `if` admits `schedule`
 - 6: tests/test_ci.py::test_the_summary_check_passes_only_when_every_leg_passed — `verify` passes on a failed or cancelled leg
 - 7: tests/test_gate_machinery.py::test_ci_drift_gate_goes_red_when_the_workflow_is_hand_edited — `check_ci` green on a hand edit
 - 8: not a test — the phase-6 review reads the `decisions/gates.yaml` header comment, the `docs/WORKFLOW.md` sentence and the `scripts/check_research_currency.py` comment against criterion 8
 
+## Runner route — 2026-10-13
+
+Stage-1 route: implement · model claude-sonnet-5-5 · reason: Claude Code 2.1.296 refused glm-5.3(-flash) as an unrecognized model before any call (bead coding-harness-6th).
+
 ## Time used
+
+2026-10-13 span not measured: this session has file tools only and no `date`, so no start or end was read; the runner's timestamps are the record.
+
+2026-10-13 orchestrator repair after the failed attempt, not timed: renamed the floor test (its old name matched the mutation-test pattern by accident, `declared_once` holds `red_on`) and declared it in the kit probe (cap 36 -> 37).

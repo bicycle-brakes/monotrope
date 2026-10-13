@@ -105,6 +105,7 @@ typed: a hand-kept list of files ages exactly as fast as files are added.
 | [`changes/attempt-diagnostics/research.md`](changes/attempt-diagnostics/research.md) | draft | partial | 2026-10-11 | coding-harness-cit |
 | [`changes/attempt-diagnostics/spec.md`](changes/attempt-diagnostics/spec.md) | draft | partial | 2026-10-11 | coding-harness-cit |
 | [`changes/ci-minutes/decisions.md`](changes/ci-minutes/decisions.md) | draft | none | 2026-10-13 | coding-harness-cac |
+| [`changes/ci-minutes/findings.md`](changes/ci-minutes/findings.md) | draft | none | 2026-10-13 | coding-harness-cac |
 | [`changes/ci-minutes/plan.md`](changes/ci-minutes/plan.md) | draft | none | 2026-10-13 | coding-harness-cac |
 | [`changes/ci-minutes/research.md`](changes/ci-minutes/research.md) | draft | none | 2026-10-13 | coding-harness-cac |
 | [`changes/ci-minutes/spec.md`](changes/ci-minutes/spec.md) | draft | none | 2026-10-13 | coding-harness-cac |
