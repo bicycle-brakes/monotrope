@@ -81,3 +81,16 @@ branch and opening the pull request, or committing directly, we decided on
 leaving them uncommitted to achieve that the target's own review and merge
 stay the only way the kit takes effect there (ADR 0008), accepting one manual
 step after every install or update. — 2026-10-13
+
+## Q-5 · Whether the change carries an ADR
+
+asked: 2026-10-13
+answer: A — yes: the change fixes for good how the workflow reaches other repositories (a pinned version in a lock file, the "template" role, no commit by the tool), which binds every future instance and lakeswitch-ai's planned `harness.lock.yaml`; a new ADR records it.
+answered_by: maintainer
+status: answered
+
+In the context of a command that decides how every instance receives and
+updates the workflow, facing the choice between a new ADR and a plain feature
+whose rules live only in the spec and the code, we decided on an ADR to
+achieve one durable, citable record of the distribution rules, accepting a
+decision pull request the maintainer merges. — 2026-10-13
