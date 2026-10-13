@@ -4651,36 +4651,79 @@ def test_repair_retry_uses_fresh_codex_with_diagnostics(world: World) -> None:
 
 
 @pytest.mark.parametrize("deleted_attempt", [1, 2])
+@pytest.mark.parametrize(
+    "deleted_inputs",
+    [
+        ("spec.md",),
+        ("plan.md",),
+        ("decisions.md",),
+        ("design.md",),
+        ("spec.md", "plan.md", "decisions.md", "design.md"),
+    ],
+    ids=["spec", "plan", "decisions", "design", "all-inputs"],
+)
 def test_repair_retry_starts_after_a_completed_attempt_deletes_plan(
-    world: World, monkeypatch: pytest.MonkeyPatch, deleted_attempt: int
+    world: World, monkeypatch: pytest.MonkeyPatch, deleted_attempt: int, deleted_inputs: tuple[str, ...]
 ) -> None:
-    """Codex-repairs F-8: deleting the plan must fail the check and still let the next attempt start."""
+    """F-10: every deleted change input is restored before a fresh retry or Sonnet gets the diagnostics.
+
+    The F-8 name remains a criterion-ledger anchor; its plan-only case now covers all four inputs.
+    """
+    folder = world.plan.parent
+    for name in ("decisions.md", "design.md"):
+        (folder / name).write_text(f"---\ntitle: {name}\nbead: demo-1\n---\n\n# {name}\n", encoding="utf-8")
     baseline = repair_world(world)
-    plan = world.plan.read_text(encoding="utf-8")
+    inputs = {name: (folder / name).read_bytes() for name in ("spec.md", "plan.md", "decisions.md", "design.md")}
     steps = [{"stdout": "still looking"}] * (deleted_attempt - 1)
-    steps += [repair_step(delete=["plans/changes/demo/plan.md"], append={}), repair_step()]
-    script_repair(world, steps, make=[{"stdout": "green\n"}] * len(steps))
+    steps += [repair_step(delete=[f"plans/changes/demo/{name}" for name in deleted_inputs], append={}), repair_step()]
+    script_repair(
+        world,
+        steps,
+        make=[{"stdout": f"post-run-check-{n}\n", "exit": 1} for n in range(1, deleted_attempt + 1)]
+        + [{"stdout": "green\n"}],
+    )
+    real_begin_work_call = stage2.begin_work_call
     real_checkpoint = stage2.checkpoint
+    ready_attempts: list[int] = []
     checkpoints: list[int] = []
+
+    def begin_work_call(*args, **kwargs):
+        # Check on disk before either transport starts, including inputs not inlined in its prompt.
+        for name, content in inputs.items():
+            assert (folder / name).is_file(), f"{name} was not restored before the next attempt"
+            assert (folder / name).read_bytes() == content
+        ready_attempts.append(len(repair_calls(world)) + 1)
+        real_begin_work_call(*args, **kwargs)
 
     def checkpoint(*args, **kwargs):
         checkpoints.append(len(repair_calls(world)))
         real_checkpoint(*args, **kwargs)
 
+    monkeypatch.setattr(stage2, "begin_work_call", begin_work_call)
     monkeypatch.setattr(stage2, "checkpoint", checkpoint)
     assert world.run("repair") == 0
     calls = repair_calls(world)
     assert len(calls) == deleted_attempt + 1
-    assert checkpoints == [deleted_attempt + 1], "the attempt that deleted the plan reached a checkpoint"
+    assert ready_attempts == list(range(1, deleted_attempt + 2))
+    assert checkpoints == [deleted_attempt + 1], "the attempt that deleted an input reached a checkpoint"
     assert len(world.calls("codex")) == 2
     assert len(world.calls("claude")) == deleted_attempt - 1
     assert all("resume" not in call["argv"] for call in world.calls("codex"))
     retry_prompt = prompt_of(calls[deleted_attempt])
-    route = "codex" if deleted_attempt == 1 else "codex-repair"
-    assert f"Attempt {deleted_attempt} ({route}):" in retry_prompt
-    assert "plan.md cannot be read." in retry_prompt
-    assert f"## Accepted plan\n\n{plan}" in retry_prompt
-    assert f"> - `plans/changes/demo/plan.md` +0 -{len(plan.splitlines())}" in world.text()
+    for attempt in range(1, deleted_attempt + 1):
+        route = "codex" if attempt == 1 else "codex-repair"
+        assert f"Attempt {attempt} ({route}):" in retry_prompt
+        assert f"post-run-check-{attempt}" in retry_prompt and f"post-run-check-{attempt}" in world.text()
+    if "plan.md" in deleted_inputs:
+        assert "plan.md cannot be read." in retry_prompt
+    else:
+        assert "did not add a measured line" in retry_prompt
+    for name in ("spec.md", "plan.md"):
+        assert f"## Accepted {name.removesuffix('.md')}\n\n{inputs[name].decode('utf-8')}" in retry_prompt
+    for name in deleted_inputs:
+        assert f"> - `plans/changes/demo/{name}` +0 -{len(inputs[name].splitlines())}" in world.text()
+    for name in ("spec.md", "decisions.md", "design.md"):
+        assert (folder / name).read_bytes() == inputs[name]
     assert "2026-10-12 10:00–10:05, 5 min" in world.plan.read_text(encoding="utf-8")
     assert git(world.root, "rev-list", "--count", f"{baseline}..HEAD") == "1"
     assert git(world.root, "status", "--porcelain") == ""

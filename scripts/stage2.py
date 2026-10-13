@@ -2369,6 +2369,7 @@ def run_attempts(
     """
     root = ctx.root
     allowed = {ctx.findings.relative_to(root)}
+    input_paths = [ctx.folder / name for name in ("spec.md", "plan.md", "decisions.md", "design.md")]
     diagnostics: list[str] = []
     record: list[str] = []
     for attempt, (endpoint, credential, route, reason) in enumerate(routes, 1):
@@ -2382,6 +2383,8 @@ def run_attempts(
         # Each attempt must add its own line. Keep all existing plan lines even if an earlier
         # attempt removed the time heading, so restoring it cannot reuse an earlier measurement.
         baseline_time = ctx.plan.read_text(encoding="utf-8")
+        # Optional decisions and design files are kept only when they existed before this call.
+        inputs_before = {path: path.read_bytes() for path in input_paths if path.is_file()}
         kept = snapshot_findings() if snapshot_findings is not None else None
         unmeasured: str | None = None
         try:
@@ -2503,10 +2506,12 @@ def run_attempts(
                 after_commit()
             print(f"{verb}: verified and committed · route {route} · attempt {attempt}")
             return
-        if attempt < len(routes) and not ctx.plan.exists():
-            # The failed attempt's deletion stays in its evidence. Restore the pre-call plan so
-            # the next prompt and time check can read it; the retry still needs its own time line.
-            ctx.plan.write_text(baseline_time, encoding="utf-8")
+        if attempt < len(routes):
+            # Deletions stay in the failed attempt's evidence. Restore each missing pre-call input
+            # before building the next prompt; the retry still needs its own measured time line.
+            for path, content in inputs_before.items():
+                if not path.exists():
+                    path.write_bytes(content)
     raise CallFailed(closing)
 
 

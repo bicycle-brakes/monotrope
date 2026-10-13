@@ -232,7 +232,9 @@ Stage-2 call, 2026-10-13: review · endpoint openai-codex · model gpt-6.1-sol �
 
 | ID | Severity | Dimension | Origin | Where | Finding | Reviewer | Status | Broke a test |
 |---|---|---|---|---|---|---|---|---|
-| F-10 | MAJOR | SPEC | base | `scripts/stage2.py:2506`; `scripts/stage2.py:2850` | If a completed Codex attempt deletes `spec.md` and fails a post-run check, constructing the next prompt raises an uncaught `FileNotFoundError`: only `plan.md` is restored. Isolated execution reproduces both cases—deletion by attempt 1 prevents the fresh Codex retry; deletion by attempt 2 prevents the Sonnet fallback. The prescribed next attempt must receive the failed attempt’s diagnostics. [criteria 4–5] | Codex | taken — tests/test_stage2.py: a completed Codex attempt that deletes any input of the change folder (spec.md, plan.md, decisions.md, design.md) and fails a post-run check still leads to the next attempt with its diagnostics, for the Codex retry and the Sonnet fallback; every input is restored, not only plan.md (third repair round, maintainer 2026-10-13) | — |
+| F-10 | MAJOR | SPEC | base | `scripts/stage2.py:2506`; `scripts/stage2.py:2850` | If a completed Codex attempt deletes `spec.md` and fails a post-run check, constructing the next prompt raises an uncaught `FileNotFoundError`: only `plan.md` is restored. Isolated execution reproduces both cases—deletion by attempt 1 prevents the fresh Codex retry; deletion by attempt 2 prevents the Sonnet fallback. The prescribed next attempt must receive the failed attempt’s diagnostics. [criteria 4–5] | Codex | fixed — tests/test_stage2.py::test_repair_retry_starts_after_a_completed_attempt_deletes_plan | — |
 
 Phase 6 verdict: codex 01a136aa-2a43-7370-ac31-a0a5732edea6, 2026-10-13
 Reviewer session: codex 01a136aa-2a43-7370-ac31-a0a5732edea6 — a fresh session reviewed: an earlier ## Phase 6 block makes this a re-check
+
+Stage-2 call, 2026-10-13: repair · attempt 1 · route codex · endpoint openai-codex · model gpt-6.1-sol · leak check clean over 416 files, 1046 commits, 12 rules.
