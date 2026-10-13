@@ -220,3 +220,27 @@ above; the redraft carries them into the spec.
   and finds it in the verifier's PATH or interpreter; the AC 17 fixture
   supplies its dependencies in the target, never by inheritance (AC 14,
   AC 17).
+
+## Phase 2a rulings — 2026-10-14, orchestrator (third round)
+
+`[DETAIL]` rulings on the three rows of the third phase-2a review, each
+within the maintainer's answers Q-1 to Q-6 and the earlier rulings; the next
+redraft carries them into the spec before implementation starts.
+
+- F-25: the shipped role check (every tracked file falls under a manifest
+  rule) is a check of this repository's own tracked set, so it takes the
+  ruling F-17 skip: it skips when the tree holds `harness.lock.yaml`. AC 18
+  drops its clause on the role check for `harness.lock.yaml` and `LICENSE`;
+  the source keeps their `bestand` rules (rulings F-18, F-19) and keeps
+  enforcing the check. An instance's own files therefore never turn its
+  gate red (AC 18, 19).
+- F-26: a target with no tracked file is not fresh. Freshness needs at least
+  one commit and at least one tracked file, every tracked file one of the
+  four names of ruling F-19; install refuses an empty target before any
+  write and names the remedy (commit a `README.md`). AC 22's "empty fresh
+  installation" is reworded to the probe's own tree (Terms, AC 5, 17, 22).
+- F-27: the fixture starts the post-commit `make verify` of ruling F-18
+  under the same environment rule as AC 14 and ruling F-24: `PYTHON` and
+  `BEAD_RENDER` removed, and every `PATH` entry inside the running
+  command's repository removed; AC 18 and the Definition of Done say so,
+  and a planted inherited `PYTHON` turns the test red (AC 14, 18).
