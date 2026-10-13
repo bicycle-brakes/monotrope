@@ -51,8 +51,10 @@ and "Runner exploration").
   inability to start a required runner command retains its existing stop
   behavior and does not advance the chain.
 - **Call failure:** the model process cannot start or finish successfully, or
-  its transport response lacks the required answer file or thread event;
-  this is distinct from a repair answer rejected by a post-run check.
+  its transport response lacks the required answer file or thread event,
+  or the answer is empty (amended 2026-10-13, phase 2a F-3: as the Claude Code
+  path treats an empty answer today); this is distinct from a repair answer
+  rejected by a post-run check.
 - **Fresh session:** a new Codex call without `resume`; a read-only re-check
   receives neither the repair thread nor its conversation history.
 
@@ -140,7 +142,10 @@ and "Runner exploration").
     fallback, or adding a runner commit after HEAD moved.
 
 18. When phase 6 re-checks repaired phase-6 findings, it starts a fresh
-    read-only Codex session.
+    read-only Codex session. A `review` run is a re-check when `findings.md`
+    already holds a `## Phase 6` block; the first phase-6 review keeps its
+    existing session rule (ADR 0016, decision 6) unchanged (amended
+    2026-10-13, phase 2a F-1).
     *Refuted by:* resuming the repair thread, a prior phase-6 thread or a
     historical Codex phase-2a thread, or giving the verdict call write access.
 
@@ -153,7 +158,13 @@ and "Runner exploration").
     the Codex route and fresh-session re-check exception.
     *Refuted by:* an active GLM repair instruction, a blanket ban contradicting
     the exception, or a claim that Codex lacks command tools or that its
-    configured sandbox was measured by the tests.
+    configured sandbox was measured by the tests. The repair text sent to a
+    Codex attempt (`REPAIR_FORMAT` and the phase prompt it carries) says Codex
+    may run tests and `make verify` but must not commit or run any git command
+    that changes the repository; the Sonnet attempt keeps its file-tools
+    sentence (amended 2026-10-13, phase 2a F-2).
+    *Also refuted by:* a Codex repair prompt saying it cannot run commands, or
+    one without the no-commit instruction.
 
 21. When the decision pull request introduces the new repair ADR, it
     supersedes ADR 0015 while preserving that record as marked history.
@@ -214,6 +225,15 @@ I decided the following reversible details and recorded their reasons:
   drafting route names and existing audit schema instead of adding a format.
 - `[DETAIL]` ADR 0017: 0016 is the highest ADR in this worktree on 2026-10-13;
   only the new draft is written here, and phase 4 adds ADR 0015's marker.
+- `[DETAIL]` (2026-10-13, phase 2a) F-1: a re-check is a `review` run with
+  an earlier `## Phase 6` block in `findings.md`, the one marker every
+  re-check has and no first review has; the first review's resume rule of
+  ADR 0016 stays, so ADR 0016 and `prompts/06-review.md` stay true. F-2: Codex
+  is told what it can do (run tests and `make verify`) and what it may not
+  (commit, change the repository through git), as a draft is; the Sonnet
+  attempt's sentence stays true for Sonnet. F-3: an empty answer is a call
+  failure, as on the Claude Code path today, so a silent Codex never reaches
+  Sonnet without `--stage2-off` (Q-4).
 - `[DETAIL]` A moved-HEAD stop follows the existing Codex drafting precedent,
   because Codex has command tools and repair must not rewrite its history.
 - `[DETAIL]` No plan template exists in this tree; the phase-3 prompt supplies
