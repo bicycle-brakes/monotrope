@@ -4843,6 +4843,49 @@ def test_repair_retry_restores_non_utf8_prompt_inputs(
     assert git(world.root, "status", "--porcelain") == ""
 
 
+def test_repair_retry_restores_aliased_and_directory_inputs_without_following(
+    world: World, monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    """F-13/F-14: restoration removes what stands at an input's path, never writing through it."""
+    baseline = repair_world(world)
+    spec, plan = world.root / "plans/changes/demo/spec.md", world.plan
+    spec_bytes, plan_bytes = spec.read_bytes(), plan.read_bytes()
+    outside = tmp_path / "outside-target.md"
+    outside.write_bytes(b"outside content\n")
+    script_repair(
+        world,
+        [repair_step(append={}), repair_step(append={}), repair_step()],
+        make=[{"stdout": "green\n"}] * 3,
+    )
+    real_codex, real_begin = stage2.run_codex, stage2.begin_work_call
+    observed: list[tuple[bytes, bytes, bool, bool]] = []
+
+    def codex(*args, **kwargs):
+        result = real_codex(*args, **kwargs)
+        count = len(world.calls("codex"))
+        if count == 1:
+            spec.unlink()
+            spec.symlink_to(outside)
+        elif count == 2:
+            plan.unlink()
+            plan.mkdir()
+        return result
+
+    def begin_work_call(*args, **kwargs):
+        observed.append(
+            (spec.read_bytes(), plan.read_bytes(), spec.is_symlink(), plan.is_file() and not plan.is_symlink())
+        )
+        real_begin(*args, **kwargs)
+
+    monkeypatch.setattr(stage2, "run_codex", codex)
+    monkeypatch.setattr(stage2, "begin_work_call", begin_work_call)
+    assert world.run("repair") == 0
+    assert outside.read_bytes() == b"outside content\n", "restoration wrote through the symlink"
+    assert [call["name"] for call in repair_calls(world)] == ["codex", "codex", "claude"]
+    assert observed == [(spec_bytes, plan_bytes, False, True)] * 3
+    assert git(world.root, "rev-list", "--count", f"{baseline}..HEAD") == "1"
+
+
 @pytest.mark.parametrize("edited_attempt", [1, 2])
 @pytest.mark.parametrize(
     "edited_input",

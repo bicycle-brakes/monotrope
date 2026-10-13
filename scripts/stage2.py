@@ -2544,8 +2544,14 @@ def run_attempts(
             # Failed edits stay in the attempt's evidence. Restore every differing snapshotted input
             # before the next attempt, comparing bytes so undecodable files are restored too.
             # The plan keeps its pre-call time evidence; the retry must add its own measured line.
+            # Restoration never writes through a worktree path: whatever stands there (a symlink, a
+            # directory or a file) is removed without being followed, then the bytes are written anew.
             for path, content in inputs_before.items():
-                if not path.exists() or path.read_bytes() != content:
+                if path.is_symlink() or not path.is_file() or path.read_bytes() != content:
+                    if path.is_symlink() or path.is_file():
+                        path.unlink()
+                    elif path.is_dir():
+                        shutil.rmtree(path)
                     path.parent.mkdir(parents=True, exist_ok=True)
                     path.write_bytes(content)
     raise CallFailed(closing)
