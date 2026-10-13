@@ -176,7 +176,12 @@ def _active_changes(root: Path) -> list[Path]:
 
 def _spec_class_and_date(spec: Path) -> tuple[str, date | None]:
     """The `class:` and `date:` of a spec header; class "" when absent."""
-    text = spec.read_text(encoding="utf-8")
+    try:
+        text = spec.read_text(encoding="utf-8")
+    except (OSError, UnicodeDecodeError):
+        # `_claim` has already reported the spec as unreadable, so the run is
+        # red; this second read must not abort it and lose the findings (F-7)
+        return "", None
     block = _BLOCK.match(text)
     if not block:
         return "", None

@@ -757,6 +757,23 @@ def test_an_unreadable_claim_is_reported(repo: Path, line: str) -> None:
         assert "adr_files: [docs/adr/<file>" in done.stdout
 
 
+def test_a_spec_that_is_not_utf8_is_reported_not_a_traceback(repo: Path) -> None:
+    # F-7: a spec the gate cannot decode is one finding naming it; the second
+    # read for its class and date must not abort the run and lose the findings.
+    write_change(repo, "fine", "bounded", decisions=records(1))
+    write_change(repo, "stock", "feature", day=BEFORE, extra_header="adr_files: []\n")
+    spec = repo / "plans" / "changes" / "stock" / "spec.md"
+    spec.write_bytes(spec.read_bytes() + "café\n".encode("latin-1"))
+    archive = repo / "plans" / "changes" / "archive"
+    archive.mkdir(exist_ok=True)
+    (repo / "plans" / "changes" / "stock").rename(archive / f"{BEFORE}-stock")
+    done = run_gate(repo)
+    assert done.returncode == 1, done.stdout + done.stderr
+    assert "Traceback" not in done.stderr
+    assert f"archive/{BEFORE}-stock/spec.md: adr_files cannot be read" in done.stdout
+    assert "adr_files: [docs/adr/<file>" in done.stdout
+
+
 def test_the_gate_goes_red_when_an_adr_edit_is_unclaimed(repo: Path) -> None:
     """Mutation evidence for scripts/check_interview_minimums.py: the inference
     of the old gate — the one touched change folder owns the edit — turns this

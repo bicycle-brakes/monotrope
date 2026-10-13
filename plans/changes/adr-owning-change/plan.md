@@ -312,3 +312,8 @@ orchestrator added it and ran `make verify`.
 2026-10-13 — phase-6 repair round 1 (rows F-1 to F-4), Sonnet 5.5 sub-agent; no wall-clock reading.
 
 2026-10-13 — phase-6 repair round 2 (rows F-5, F-6, the last round), Sonnet 5.5 sub-agent; no wall-clock reading.
+
+2026-10-13 — phase-6 row F-7 repaired by the orchestrator after the two
+repair rounds, as a third round the maintainer approved in the conversation
+("Jetzt reparieren"): the class-and-date read no longer aborts on a spec the
+gate cannot decode. No wall-clock reading.
