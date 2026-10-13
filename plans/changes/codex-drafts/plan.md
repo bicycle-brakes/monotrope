@@ -408,5 +408,12 @@ wall-clock reading) fixed attempt 2's three draft tests: the prompt test reads
 the drafting rules with whitespace flattened, and the two multi-run tests
 clear `plans/INDEX.md` and `scripts/__pycache__` between runs through
 `clear_derived_leftovers`; single-entry plant dicts gained their trailing
-commas. The runner's `make verify` and checkpoint commit are still to come.
-The appetite of 8 h is not reached.
+commas.
+The round-2 repair window (2026-10-13, the review loop's taken rows L2-1 to
+L2-6; again no command tool, so no wall-clock reading) mended the L2-5
+remainder line — `put_back_lines` now emits the bounded put-back listing with
+its plain remainder line, as `attempt_files` names its own — collapsed the one
+over-wrapped assert ruff-format flagged in `tests/test_stage2.py`, and left the
+L2-1, L2-4 and L2-6 code, tests and doctrine edits as the earlier windows had
+written them. The runner's `make verify` and checkpoint commit are still to
+come. The appetite of 8 h is not reached.

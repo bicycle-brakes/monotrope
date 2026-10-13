@@ -431,3 +431,130 @@ Stage-2 call, 2026-10-13: repair · attempt 3 · route stage-1 · endpoint claud
 > ```
 
 Stage-2 call, 2026-10-13: review-loop · endpoint opencode-go · model mimo-v2.6-flash · leak check clean over 385 files, 964 commits, 12 rules.
+
+Stage-2 call, 2026-10-13: repair · attempt 1 · route glm · endpoint glm-coding-plan · model glm-5.3 · leak check clean over 385 files, 965 commits, 12 rules.
+
+> Attempt 1 (glm) failed its post-run checks.
+>
+> Files the attempt changed (lines added, removed):
+> - `AGENTS.md` +1 -1
+> - `docs/WORKFLOW.md` +14 -11
+> - `scripts/stage2.py` +22 -4
+> - `tests/test_stage2.py` +53 -3
+> - `tests/test_templates.py` +3 -2
+>
+> Diagnostics:
+> ````text
+> - `make verify` exited 2
+> The gates that blocked, each with its last lines:
+> ── [pytest] $ lauf_cmd
+> [… 2 lines of this gate left out …]
+> .....................................................s..........s....... [ 11%]
+> ...........ss................................ss.sssssss..s.......s...... [ 15%]
+> ........................................................................ [ 19%]
+> ........................................................................ [ 23%]
+> ........................................................................ [ 27%]
+> ........................................................................ [ 31%]
+> ........................................................................ [ 35%]
+> ........................................................................ [ 39%]
+> ........................................................................ [ 43%]
+> ..................s..................................................... [ 47%]
+> ........................................................................ [ 51%]
+> ........................................................................ [ 55%]
+> ........................................................................ [ 59%]
+> ..............F......................................................... [ 63%]
+> ........................................................................ [ 67%]
+> ........................................................................ [ 71%]
+> ........................................................................ [ 75%]
+> ........................................................................ [ 79%]
+> ........................................................................ [ 83%]
+> ........................................................................ [ 87%]
+> ........................................................................ [ 91%]
+> ........................................................................ [ 95%]
+> ........................................................................ [ 99%]
+> ........                                                                 [100%]
+> =================================== FAILURES ===================================
+> ____________ test_the_put_back_names_its_remainder_beyond_the_bound ____________
+>
+> world = World(root=PosixPath('/private/var/folders/44/yc0m3m456b51nyzwyfjptgm40000gn/T/pytest-of-mikypiky/pytest-3949/test_the...var/folders/44/yc0m3m456b51nyzwyfjptgm40000gn/T/pytest-of-mikypiky/pytest-3949/test_the_put_back_names_its_re0/state'))
+>
+>     def test_the_put_back_names_its_remainder_beyond_the_bound(world: World) -> None:
+>         # Repair L2-5. Planted fault: the put-back listing stops at `ATTEMPT_FILES` with no remainder line.
+>         draft_world(world)
+>         plant = {
+>             "plans/changes/demo/spec.md": "---\ntitle: Spec\nupdated: 2026-09-30\nbead: demo-1\n---\n\n# Spec\n",
+>             "plans/changes/demo/plan.md": PLAN_CARD,
+>         }
+>         for n in range(stage2.ATTEMPT_FILES + 1):
+>             plant[f"stray/file-{n:02d}.txt"] = f"stray {n}\n"
+>         world.script(codex=[codex_ok("T1", "drafted", plant=plant)], make=[{"stdout": "green\n"}])
+>         assert world.run("draft") == 0
+>         assert git(world.root, "status", "--porcelain") == ""
+>         block = quote_blocks(world.text())[0]
+>         assert block[0] == "Attempt 1 (codex): the runner put back what a draft may not change:"
+>         assert f"- `stray/file-{stage2.ATTEMPT_FILES - 1:02d}.txt`" in block, "the last named path"
+>         assert f"- `stray/file-{stage2.ATTEMPT_FILES:02d}.txt`" not in block, "the bound holds"
+> >       assert "- … and 1 more files" in block, "the remainder is named"
+> E       AssertionError: the remainder is named
+> E       assert '- … and 1 more files' in ['Attempt 1 (codex): the runner put back what a draft may not change:', '- `stray/file-00.txt`', '- `stray/file-01.txt`', '- `stray/file-02.txt`', '- `stray/file-03.txt`', '- `stray/file-04.txt`', ...]
+>
+> tests/test_stage2.py:1912: AssertionError
+> ----------------------------- Captured stdout call -----------------------------
+> INFO  (1):
+>   - leak check clean: 21 files, 2 commits, 1 rules, 1 prompt texts
+> draft: verified and committed · route codex · attempt 1
+> =========================== short test summary info ============================
+> FAILED tests/test_stage2.py::test_the_put_back_names_its_remainder_beyond_the_bound
+> 1 failed, 1791 passed, 16 skipped in 268.46s (0:04:28)
+> ── [pytest] RED (block) — der Lauf ist rot.
+> ── [ruff-format] $ lauf_cmd
+> Would reformat: tests/test_stage2.py
+> 1 file would be reformatted, 60 files already formatted
+> ── [ruff-format] RED (block) — der Lauf ist rot.
+>
+> Standard error of the whole run, last lines:
+> [… 7951 earlier lines left out …]
+> templates/handover.md:21:81 error MD013/line-length Line length [Expected: 80; Actual: 162]
+> templates/handover.md:22:81 error MD013/line-length Line length [Expected: 80; Actual: 200]
+> templates/handover.md:48:81 error MD013/line-length Line length [Expected: 80; Actual: 88]
+> templates/spec.md:19 error MD041/first-line-heading/first-line-h1 First line in a file should be a top-level heading [Context: "```yaml"]
+> templates/spec.md:37:81 error MD013/line-length Line length [Expected: 80; Actual: 97]
+> tools/claude-code/README.md:17:81 error MD013/line-length Line length [Expected: 80; Actual: 105]
+> tools/claude-code/README.md:18:81 error MD013/line-length Line length [Expected: 80; Actual: 109]
+> tools/claude-code/README.md:19:81 error MD013/line-length Line length [Expected: 80; Actual: 134]
+> tools/claude-code/README.md:23:1 error MD060/table-column-style Table column style [Table pipe is missing space to the right for style "compact"]
+> tools/claude-code/README.md:23:5 error MD060/table-column-style Table column style [Table pipe is missing space to the left for style "compact"]
+> tools/claude-code/README.md:23:5 error MD060/table-column-style Table column style [Table pipe is missing space to the right for style "compact"]
+> tools/claude-code/README.md:23:9 error MD060/table-column-style Table column style [Table pipe is missing space to the left for style "compact"]
+> tools/claude-code/README.md:23:9 error MD060/table-column-style Table column style [Table pipe is missing space to the right for style "compact"]
+> tools/claude-code/README.md:23:13 error MD060/table-column-style Table column style [Table pipe is missing space to the left for style "compact"]
+> tools/claude-code/README.md:24:81 error MD013/line-length Line length [Expected: 80; Actual: 272]
+> tools/claude-code/README.md:25:81 error MD013/line-length Line length [Expected: 80; Actual: 180]
+> tools/claude-code/README.md:26:81 error MD013/line-length Line length [Expected: 80; Actual: 115]
+> tools/claude-code/README.md:28:81 error MD013/line-length Line length [Expected: 80; Actual: 124]
+> tools/claude-code/README.md:29:81 error MD013/line-length Line length [Expected: 80; Actual: 106]
+> tools/claude-code/README.md:38:1 error MD060/table-column-style Table column style [Table pipe is missing space to the right for style "compact"]
+> tools/claude-code/README.md:38:5 error MD060/table-column-style Table column style [Table pipe is missing space to the left for style "compact"]
+> tools/claude-code/README.md:38:5 error MD060/table-column-style Table column style [Table pipe is missing space to the right for style "compact"]
+> tools/claude-code/README.md:38:9 error MD060/table-column-style Table column style [Table pipe is missing space to the left for style "compact"]
+> tools/claude-code/README.md:38:9 error MD060/table-column-style Table column style [Table pipe is missing space to the right for style "compact"]
+> tools/claude-code/README.md:38:13 error MD060/table-column-style Table column style [Table pipe is missing space to the left for style "compact"]
+> tools/claude-code/README.md:40:81 error MD013/line-length Line length [Expected: 80; Actual: 442]
+> tools/claude-code/README.md:41:81 error MD013/line-length Line length [Expected: 80; Actual: 163]
+> tools/claude-code/README.md:42:81 error MD013/line-length Line length [Expected: 80; Actual: 126]
+> tools/claude-code/README.md:43:81 error MD013/line-length Line length [Expected: 80; Actual: 96]
+> tools/claude-code/README.md:44:81 error MD013/line-length Line length [Expected: 80; Actual: 167]
+> tools/claude-code/README.md:72:1 error MD060/table-column-style Table column style [Table pipe is missing space to the right for style "compact"]
+> tools/claude-code/README.md:72:5 error MD060/table-column-style Table column style [Table pipe is missing space to the left for style "compact"]
+> tools/claude-code/README.md:72:5 error MD060/table-column-style Table column style [Table pipe is missing space to the right for style "compact"]
+> tools/claude-code/README.md:72:9 error MD060/table-column-style Table column style [Table pipe is missing space to the left for style "compact"]
+> tools/claude-code/README.md:72:9 error MD060/table-column-style Table column style [Table pipe is missing space to the right for style "compact"]
+> tools/claude-code/README.md:72:13 error MD060/table-column-style Table column style [Table pipe is missing space to the left for style "compact"]
+> tools/claude-code/README.md:73:81 error MD013/line-length Line length [Expected: 80; Actual: 112]
+> tools/claude-code/README.md:74:81 error MD013/line-length Line length [Expected: 80; Actual: 89]
+> tools/claude-code/README.md:75:81 error MD013/line-length Line length [Expected: 80; Actual: 88]
+> make: *** [verify] Error 1
+> - `plan.md` did not add a measured line below `## Time used`
+> ````
+
+Stage-2 call, 2026-10-13: repair · attempt 2 · route glm-repair · endpoint glm-coding-plan · model glm-5.3 · reason first GLM 5.3 post-run check failed · leak check clean over 385 files, 965 commits, 12 rules.

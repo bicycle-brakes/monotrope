@@ -1650,6 +1650,15 @@ def test_findings_only_dirt_is_allowed_and_committed(world: World) -> None:
     assert "Earlier failed attempt." in world.text()
 
 
+def test_a_findings_file_an_implement_run_creates_names_claude_code(world: World) -> None:
+    # Repair L2-1. Planted fault: `producer_for` falls through to `pi` for the GLM endpoints.
+    assert not world.findings.exists()
+    successful_implementation(world)
+    assert world.run("implement") == 0
+    header = plans_registry._frontmatter(world.findings)
+    assert header is not None and header["produced_by"]["name"] == "claude-code"
+
+
 # ---------------------------------------------------------------------------
 # The draft (phases 2, 2b and 3; spec criteria 1-26)
 # ---------------------------------------------------------------------------
@@ -1882,6 +1891,25 @@ def test_paths_outside_the_change_folder_are_put_back_and_named(world: World) ->
     assert block[0] == "Attempt 1 (codex): the runner put back what a draft may not change:"
     for path in ("`src/app.py`", "`src/new.py`", "`docs/adr/0007-existing-record.md`"):
         assert f"- {path}" in block, path
+
+
+def test_the_put_back_names_its_remainder_beyond_the_bound(world: World) -> None:
+    # Repair L2-5. Planted fault: the put-back listing stops at `ATTEMPT_FILES` with no remainder line.
+    draft_world(world)
+    plant = {
+        "plans/changes/demo/spec.md": "---\ntitle: Spec\nupdated: 2026-09-30\nbead: demo-1\n---\n\n# Spec\n",
+        "plans/changes/demo/plan.md": PLAN_CARD,
+    }
+    for n in range(stage2.ATTEMPT_FILES + 1):
+        plant[f"stray/file-{n:02d}.txt"] = f"stray {n}\n"
+    world.script(codex=[codex_ok("T1", "drafted", plant=plant)], make=[{"stdout": "green\n"}])
+    assert world.run("draft") == 0
+    assert git(world.root, "status", "--porcelain") == ""
+    block = quote_blocks(world.text())[0]
+    assert block[0] == "Attempt 1 (codex): the runner put back what a draft may not change:"
+    assert f"- `stray/file-{stage2.ATTEMPT_FILES - 1:02d}.txt`" in block, "the last named path"
+    assert f"- `stray/file-{stage2.ATTEMPT_FILES:02d}.txt`" not in block, "the bound holds"
+    assert "- … and 1 more files" in block, "the remainder is named"
 
 
 def test_an_edited_decisions_file_is_put_back(world: World) -> None:
@@ -2295,6 +2323,25 @@ def test_a_glm_draft_that_writes_the_key_is_refused_without_a_commit(
     assert "[credential]" in spec and not any(KEY[i : i + 8] in spec for i in range(len(KEY) - 7))
     text = world.text()
     assert not any(KEY[i : i + 8] in text for i in range(len(KEY) - 7))
+    assert "refused" in capsys.readouterr().err
+
+
+def test_a_failed_glm_draft_call_that_writes_the_key_is_refused(
+    world: World, capsys: pytest.CaptureFixture[str]
+) -> None:
+    # Repair L2-4. Planted fault: the failed-call branch scans nothing, so the key stays in findings.md.
+    draft_world(world)
+    red = red_verify(("pytest", ["FAILED tests/test_x.py::test_a - assert 2 == 1"]))
+    world.script(
+        codex=[{"stdout": "drafted"}, {"stdout": "again"}],
+        claude=[{"stdout": "", "exit": 1, "append": {"plans/changes/demo/findings.md": "the key was @KEY@\n"}}],
+        make=[red, red],
+    )
+    before = git(world.root, "rev-parse", "HEAD")
+    assert world.run("draft") == 2
+    assert git(world.root, "rev-list", "--count", f"{before}..HEAD") == "0"
+    text = world.text()
+    assert "[credential]" in text and not any(KEY[i : i + 8] in text for i in range(len(KEY) - 7))
     assert "refused" in capsys.readouterr().err
 
 
@@ -5613,8 +5660,8 @@ def repair_doctrine_problems(workflow: str, agents: str) -> list[str]:
     one = flat(agents)
     if "GLM 5.3 repairs the findings the orchestrator takes" not in one:
         found.append("AGENTS.md does not name the repair on GLM 5.3")
-    if "explore, draft and implement do not" not in one:
-        found.append("AGENTS.md does not count draft among the verbs without reviews by class")
+    if "explore, draft, implement and repair do not" not in one:
+        found.append("AGENTS.md does not count repair and draft among the verbs without reviews by class")
     return found
 
 
@@ -5648,8 +5695,9 @@ def test_the_doctrine_names_the_repair_verb() -> None:
             "GLM 5.3 repairs the findings the orchestrator takes", "GLM 5.3 Flash explores and implements", 1
         ),
     )
+    assert repair_doctrine_problems(workflow, agents.replace("implement and repair do not", "implement do not", 1))
     assert repair_doctrine_problems(
-        workflow, agents.replace("explore, draft and implement do not", "explore and implement do not", 1)
+        workflow, agents.replace("draft, implement and repair do not", "implement and repair do not", 1)
     )
 
 

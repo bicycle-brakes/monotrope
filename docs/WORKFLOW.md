@@ -410,10 +410,10 @@ none, because the registry keeps counting it as protection.
 |---|---|---|
 | 1 Explore | **Haiku 4.5** | much input, little output, no deep reasoning; where the runner starts the phase (§4), GLM 5.3 Flash explores instead |
 | 1a Interview | **Opus 5.5** | the questions are the work, and there are few of them |
-| 2 Spec | **gpt-6.1-sol** | effort `max`; the highest reasoning demand, little output; where Stage 2 is off, Opus 5.5 at effort `xhigh` writes it |
+| 2 Spec | **Opus 5.5** | effort `xhigh`; the highest reasoning demand, little output; where the runner drafts (§4), `gpt-6.1-sol` at effort `max` writes it instead |
 | 2a Spec review | **Opus 5.5** | a fresh context that does not know the author's reasoning; where the runner starts it (§4), a headless Claude Code call |
-| 2b Design | **gpt-6.1-sol** | effort `max`; the same demand as spec and plan; where Stage 2 is off, Opus 5.5 at effort `xhigh` writes it |
-| 3 Plan | **gpt-6.1-sol** | effort `max`; an error here is the most expensive in the whole run; where Stage 2 is off, Opus 5.5 at effort `xhigh` writes it |
+| 2b Design | **Opus 5.5** | effort `xhigh`; the same demand as spec and plan; where the runner drafts (§4), `gpt-6.1-sol` at effort `max` writes it instead |
+| 3 Plan | **Opus 5.5** | effort `xhigh`; an error here is the most expensive in the whole run; where the runner drafts (§4), `gpt-6.1-sol` at effort `max` writes it instead |
 | 4 Implement | **Sonnet 5.5** | effort `medium`; a solid worker given a clear plan; where the runner starts the phase (§4), GLM 5.3 Flash builds instead |
 | 5 Verify | — | deterministic |
 | 6 Review | **Opus 5.5** | finds what Sonnet misses, and reads the code a change calls instead of trusting its docstring; a `bounded`, `feature` or `architectural` change goes to Codex (§4) |
@@ -432,9 +432,9 @@ Switch with `/model sonnet`, `/model opus`, `/model haiku`. The alias
 `opusplan` runs Opus while planning and switches to Sonnet for execution.
 
 **Spec and plan on Opus 5.5 at effort `xhigh` by hand** — a spike, or Stage 2
-off; where the runner drafts (§4), Codex writes them instead — the default
-since ADR 0016 (maintainer, 2026-09-29, for the whole repository; until then
-both ran on Fable 5.1). In a session: `/model` and `/effort xhigh`; for a
+off (maintainer, 2026-09-29, for the whole repository; until then both ran on
+Fable 5.1); where the runner drafts (§4), Codex writes them instead — the
+default since ADR 0016. In a session: `/model` and `/effort xhigh`; for a
 phase run as its own session:
 `claude --model claude-opus-5-5 --effort xhigh`. A sub-agent takes its effort
 from its definition's frontmatter (`effort: xhigh`), not from the call that
@@ -446,9 +446,11 @@ Codex** (maintainer, 2026-09-30 and 2026-10-06, for the whole repository; ADR
 0016 moved the spec review off Codex on 2026-10-12). From 2026-09-29 both ran on Fable 5.1,
 and before that on Opus 5. An interim routing put both on Opus 5.5 from
 2026-09-30 until stage 2 was live; the merge of ADR 0007 ends it for the
-changes §4 routes to Codex. The cost is known: the spec review reads with the
-same model as the spec's author (Opus 5.5), so what stays independent is the
-fresh context, not the error profile.
+changes §4 routes to Codex. The cost is known: where the runner drafts (§4),
+the spec's author is Codex or GLM 5.3 and the review reads another vendor's
+error profile; where a person writes the spec by hand — a spike, or Stage 2
+off — the author is Opus 5.5 itself, so what stays independent is the fresh
+context, not the error profile.
 
 **Implement on Sonnet 5.5 at effort `medium`, wherever the runner does not start
 the phase** (maintainer, 2026-09-30; until then Sonnet 5; §4 moves the phase to
@@ -590,8 +592,9 @@ before it merges — for **framework content only**: this repository's own tree,
 the class `framework` of `model-endpoints.yaml`. Codex (`gpt-6.1-sol`, OpenAI)
 drafts the spec, the design and the plan (2, 2b and 3, the `draft` verb) and
 reviews the code (6). **Since ADR 0016 (2026-10-12)** the spec review (2a) runs
-on Opus 5.5 through the `spec-review` verb — the model that writes the
-framework, in a fresh context, where Codex drafted the artefacts it reads.
+on Opus 5.5 through the `spec-review` verb — a fresh context, and a model other
+than the Codex or GLM 5.3 that drafted the artefacts it reads: no model reviews
+its own draft.
 **Since ADR 0011 (2026-10-08)** the
 review loop (4b) between implementation and the code review runs on OpenCode
 Go (`opencode-go` in `model-endpoints.yaml`) through Pi, pinned at 1.1.0 and

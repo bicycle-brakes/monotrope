@@ -627,8 +627,13 @@ def findings_header(ctx: Context, producer: str) -> str:
 
 
 def producer_for(endpoint: tuple[str, str, str | None]) -> str:
-    """The header's producer names the program: codex, claude-code, pi (spec, criterion 29)."""
-    return {"openai-codex": "codex", "claude-code-plan": "claude-code"}.get(endpoint[0], "pi")
+    """The header's producer names the program: codex, claude-code, pi (spec, criterion 29).
+
+    The GLM endpoints run as Claude Code against Z.ai, so their producer is `claude-code`
+    too; `pi` stays the producer of an endpoint nothing here names.
+    """
+    producers = {"openai-codex": "codex", "claude-code-plan": "claude-code", "glm-coding-plan": "claude-code"}
+    return producers.get(endpoint[0], "pi")
 
 
 def checked_prompt(ctx: Context, endpoint: tuple[str, str, str | None], prompt: str):
@@ -1526,6 +1531,18 @@ def attempt_files(root: Path, before: str, after: str) -> list[str]:
     if len(entries) > ATTEMPT_FILES:
         entries = entries[:ATTEMPT_FILES] + [f"… and {len(entries) - ATTEMPT_FILES} more files"]
     return entries
+
+
+def put_back_lines(paths: list[str]) -> list[str]:
+    """The put-back list lines, bounded at `ATTEMPT_FILES`, the remainder named as `attempt_files` names its own.
+
+    Each path stands in backticks; the remainder line stays plain, as the record of what the runner
+    put back names what it restored (spec, criterion 8).
+    """
+    lines = [f"- `{path}`" for path in paths[:ATTEMPT_FILES]]
+    if len(paths) > ATTEMPT_FILES:
+        lines.append(f"- … and {len(paths) - ATTEMPT_FILES} more files")
+    return lines
 
 
 def attempt_block(attempt: int, route: str, listing: str, files: list[str] | str) -> str:
@@ -2510,12 +2527,18 @@ def draft(root: Path, change: str) -> None:
                 f"the draft call moved HEAD from {baseline[:12]} to {head_now[:12]}; nothing was put back or committed"
             )
         if call_error is not None:
+            if key is not None:
+                # A dead call is no exception: the key it may have written is removed and the run
+                # refuses, as the success path below does (spec, criterion 25).
+                exposed = remove_changed_credential(root, key, ignored_before)
+                if exposed:
+                    raise Refused(credential_message(exposed))
             put = put_back(root, baseline, allowed)
             listing = f"- the call failed: {call_error}"
             diagnostics.append(f"Attempt {attempt} ({route}):\n{listing}")
             block = f"Attempt {attempt} ({route}) failed its call: {call_error}"
             if put:
-                block += "\n\nThe runner put back:\n" + "\n".join(f"- `{path}`" for path in put[:ATTEMPT_FILES])
+                block += "\n\nThe runner put back:\n" + "\n".join(put_back_lines(put))
             append(ctx.findings, quote_block(block, key))
             continue
         if key is not None:
@@ -2535,7 +2558,7 @@ def draft(root: Path, change: str) -> None:
         keep, new_adrs = draft_keep(root, ctx, baseline)
         put = put_back(root, baseline, keep)
         if put:
-            listing = "\n".join(f"- `{path}`" for path in put[:ATTEMPT_FILES])
+            listing = "\n".join(put_back_lines(put))
             append(
                 ctx.findings,
                 quote_block(
