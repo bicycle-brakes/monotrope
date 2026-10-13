@@ -260,3 +260,6 @@ D- or O-number (`research.md`, "Corrections after verification");
 - 22: not a test — the phase-6 review reads `docs/adr/0014-a-change-claims-its-adr-files.md` against the draft in `design.md`; the gate `decision-continuity` stays green
 - 23: not a test — the gate's run over this repository at the head, under "Verification"; its output in the pull request body
 - 24: not a test — the gate `criterion-ledger` in `make verify` reports a ledger line that names a removed test
+
+## Time used
+
