@@ -89,9 +89,6 @@ _CLASS_LINE = re.compile(
     r"""^class:[ \t]+(?:"([^"\n]*)"|'([^'\n]*)'|([^\s"'#]\S*))(?:[ \t]+\#.*)?[ \t]*\r?$""",
     re.M,
 )
-# The key at the top level of the header in any YAML spelling: plain, double- or
-# single-quoted, with blanks before the colon (phase-6 row F-2).
-_CLAIM_LINE = re.compile(r"""^(?:adr_files|"adr_files"|'adr_files')[ \t]*:""", re.M)
 _DATE_LINE = re.compile(r"^date:[ \t]*(\S+)(?:[ \t]+\#.*)?[ \t]*\r?$", re.M)
 
 # One interview record: `## Q-<id> · <title>` and its field lines. One skip
@@ -250,14 +247,17 @@ def _has_reasoned_skip(skips: list[dict[str, str]]) -> bool:
 
 def _claim(spec: Path) -> tuple[list[str], str | None]:
     """The paths a spec header claims under `adr_files`, and why the claim
-    cannot be read. A header without the key `adr_files` (plain or quoted, at the top level) claims nothing and is
-    never parsed as YAML, so the stock cannot trip it."""
+    cannot be read. Every spec header is parsed as YAML and the claim is decided
+    by the parsed key `adr_files`, in whatever spelling YAML allows (escaped,
+    quoted, explicit-key form; phase-6 row F-6) — no textual prefilter can
+    cover them. A header that does not parse cannot be decided, so it is
+    reported; a header that parses without the key claims nothing."""
     try:
         text = spec.read_text(encoding="utf-8")
     except (OSError, UnicodeDecodeError) as exc:
         return [], f"the spec cannot be read ({exc})"
     block = _BLOCK.match(text)
-    if not block or not _CLAIM_LINE.search(block.group(1)):
+    if not block:
         return [], None
     try:
         data = check_adr_answers.strict_load(block.group(1))
@@ -265,7 +265,9 @@ def _claim(spec: Path) -> tuple[list[str], str | None]:
         return [], f"the header is not valid YAML ({' '.join(str(exc).split())})"
     if not isinstance(data, dict):
         return [], "the header is not a mapping"
-    value = data.get("adr_files")
+    if "adr_files" not in data:
+        return [], None
+    value = data["adr_files"]
     if not isinstance(value, list):
         return [], "the value is not a list"
     paths: list[str] = []
@@ -311,7 +313,7 @@ def _disagreement(root: Path, name: str, claim: list[str]) -> list[str]:
     if data["answer"] == "no" and claim:
         return [
             f"{name}: answers no to the ADR question but claims {', '.join(claim)} — remove the "
-            "claim, or correct the answer in a decision pull request"
+            "claim (it contradicts the answer), or correct the answer in a decision pull request"
         ]
     return []
 
@@ -362,7 +364,7 @@ def measure(root: Path, only: str | None = None) -> tuple[list[str], int]:
         elif len(claimants) > 1:
             findings.append(
                 f"{path} is claimed by {', '.join(claimants)} in one diff — one change "
-                "claims an edit and a claim is never removed; split the pull request — "
+                "claims an edit and a correct claim is never removed to settle it; split the pull request — "
                 "the amendment in one, the edit to the other change's folder in another"
             )
         else:

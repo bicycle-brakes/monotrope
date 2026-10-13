@@ -121,7 +121,9 @@ header of the change it belongs to — and so is an edit two changes claim, or
 a claim that cannot be read. A subject `feature`'s answer to the ADR question
 agrees with its claim: "yes" with at least one claimed file, "no" with none.
 An amendment costs one header line: the amending change lists the file in its
-own spec, and nothing else moves. A claim is never removed. Two claimants of one file in one diff are a finding,
+own spec, and nothing else moves. A correct claim — one whose edit the change made — is never removed to settle
+a clash; an erroneous claim, one the change's own "no" answer contradicts, is
+corrected by removing it. Two claimants of one file in one diff are a finding,
 and its only remedy is to split the pull request: the amendment in one, the
 edit to the earlier change's folder in another.
 

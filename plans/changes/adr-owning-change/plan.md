@@ -67,7 +67,9 @@ No `[DECISION]` is open. `[GAP]`s closed by reading, recorded in `research.md`,
 
 `[DETAIL]`s decided here: all findings of one run are collected, none returns
 early; a header is parsed as YAML only when it has a line beginning
-`adr_files:`, so stock headers are never parsed; the reader loads the record
+`adr_files:`, so stock headers are never parsed (amended 2026-10-13 after
+phase-6 row F-6: every spec header is parsed and the claim is decided by the
+parsed key; the 26 stock headers of 2026-10-13 all parse); the reader loads the record
 with `check_adr_answers.strict_load`, which refuses a doubled key; test and
 helper names as below.
 
@@ -124,8 +126,10 @@ helper names as below.
 1. `day = adoption.adopted_on(root, "interview-minimums")`; `NotRecorded`
    becomes `CannotMeasure` with the reader's message (exit 3).
 2. `claims`: for every change folder with a spec, active and archived,
-   `_claim(spec)` → `(paths, problem)`. No line beginning `adr_files:` → no
-   claim. Otherwise the header block is matched with the gate's own copy of
+   `_claim(spec)` → `(paths, problem)`. No parsed key `adr_files` → no
+   claim (amended 2026-10-13 after phase-6 row F-6: formerly "no line beginning
+   `adr_files:`"; no textual prefilter, every header is parsed and an unparseable
+   one is a finding). Otherwise the header block is matched with the gate's own copy of
    `check_adr_answers`' block regex and loaded with `check_adr_answers.strict_load`
    (not `read_header`: a spec without a `---` header block claims nothing, like
    one without `adr_files`, instead of being a problem here), and the value must be a list of distinct texts, each
@@ -306,3 +310,5 @@ where the moved case lives. The attempt failed only for this missing line; the
 orchestrator added it and ran `make verify`.
 
 2026-10-13 — phase-6 repair round 1 (rows F-1 to F-4), Sonnet 5.5 sub-agent; no wall-clock reading.
+
+2026-10-13 — phase-6 repair round 2 (rows F-5, F-6, the last round), Sonnet 5.5 sub-agent; no wall-clock reading.

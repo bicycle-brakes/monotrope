@@ -737,6 +737,8 @@ def test_a_claim_in_flow_or_block_form_names_the_owner(repo: Path) -> None:
         "adr_files: [7]",
         "adr_files: [docs/adr/0099-x.md",
         "adr_files: []\nadr_files: []",
+        '"adr\\u005ffiles": [plans/x.md]',  # F-6: an escaped key
+        "? adr_files\n: [plans/x.md]",  # F-6: the explicit-key form
     ],
 )
 def test_an_unreadable_claim_is_reported(repo: Path, line: str) -> None:
@@ -870,6 +872,26 @@ def test_a_yes_answer_without_a_claim_is_reported(repo: Path) -> None:
     write_change(repo, "yes-feature", "feature", decisions=records(3), adr_files=[ADR])
     done = run_gate(repo)
     assert done.returncode == 0, done.stdout
+
+
+def test_each_clash_message_names_its_own_remedy(repo: Path) -> None:
+    # F-5: two claimants -> split the pull request, never "remove the claim";
+    # a "no" answer with a claim -> remove the erroneous claim.
+    write_change(repo, "owner-a", "bounded", decisions=records(5), adr_files=[ADR])
+    write_change(repo, "owner-b", "bounded", decisions=records(5), adr_files=[ADR])
+    _stage_adr(repo)
+    _git(repo, "add", "-A")
+    clash = run_gate(repo).stdout
+    assert "split the pull request" in clash
+    assert "remove the claim" not in clash
+    assert "a correct claim is never removed" in clash
+    _git(repo, "reset", "-q", "--hard")
+    _git(repo, "clean", "-fdq")
+    write_change(repo, "no-feature", "feature", decisions=records(3), adr_files=["docs/adr/0099-x.md"])
+    write_answer(repo, "no-feature", "no")
+    wrong = run_gate(repo).stdout
+    assert "remove the claim" in wrong
+    assert "split the pull request" not in wrong
 
 
 def test_a_no_answer_with_a_claim_is_reported(repo: Path) -> None:

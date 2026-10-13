@@ -150,7 +150,9 @@ the interim rule of pull request #126; ADR 0013 is unchanged.
 * **Even a typo fix in an ADR needs a change folder** whose spec claims the
   file and whose interview carries five answers (Q-2).
 * **An amendment costs one header line** in the amending change's spec;
-  nothing else in the tree moves. A claim is never removed. When the amending
+  nothing else in the tree moves. A correct claim (one whose edit the change made) is never removed to settle a
+  clash; an erroneous claim (one the change's own "no" answer contradicts) is
+  corrected by removing it. When the amending
   diff also touches an earlier claimant's folder, two claimants stand in one
   diff, which is a finding; its only remedy is to split the pull request, the
   amendment in one and the edit to the earlier change's folder in another.

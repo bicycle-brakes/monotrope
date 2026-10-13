@@ -67,7 +67,10 @@ after it.
   paths under `docs/adr/` the change creates, changes or removes. A
   **claimable path** begins `docs/adr/`, names a file below that folder, and
   holds no empty, `.` or `..` segment. A header without the field claims
-  nothing, and so does `adr_files: []`.
+  nothing, and so does `adr_files: []` (amended 2026-10-13 after phase-6 row
+  F-6: the field is recognised by the parsed key in any YAML spelling, and a
+  header that does not parse as YAML is reported, since it cannot be decided
+  whether it claims).
 - **Changes of the diff** — the active change folders, directly under
   `plans/changes/` and not `archive/`, that hold at least one path of the
   measured diff, whichever file it is.
