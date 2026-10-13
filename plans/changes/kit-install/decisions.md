@@ -51,3 +51,19 @@ the pinned version to achieve a simple, traceable update that fits the
 planned release builder and pin (bead coding-harness-dj9), accepting that a
 target's edit of a kit file stops the update for that file until someone
 resolves it. — 2026-10-13
+
+## Q-3 · Files both the kit and a target hold with their own content
+
+asked: 2026-10-13
+answer: A — the kit ships them only at the first install, as a starting template; afterwards they belong to the target and `kit update` never touches them again; the manifest gives them a role of their own ("template").
+answered_by: maintainer
+status: answered
+
+In the context of `decisions/gates.yaml`, `ruff.toml` and the decision pull
+request template, which the kit classifies as travelling but lakeswitch-ai
+holds with heavily changed content, facing the choice between a starting
+template the target owns after install, kit files whose drift every update
+reports, or not shipping them at all, we decided on a starting template to
+achieve that each repository keeps its own gates and rules by design,
+accepting that a later improvement of such a template reaches a target only
+by hand or through the comparison report. — 2026-10-13
