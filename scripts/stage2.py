@@ -24,8 +24,10 @@ any other answer refuses with exit 2 before the leak check and before any call.
 
 `explore`, `implement` and `repair` accept `--stage2-off [REASON]`: the declared
 Stage-1 route uses Haiku 4.5 or Sonnet 5.5. A leak refusal never falls back.
-Implement lets the model edit but not run commands; the runner runs
-`make verify`, checks the time log and makes the one checkpoint commit. A
+Implement lets the model edit but not run commands; before `make verify` the
+runner applies ruff's safe fixes and its formatter to the changed Python files
+under `scripts/` and `tests/`, then runs `make verify`, checks the time log and
+makes the one checkpoint commit. A
 failed attempt leaves its diagnostics and the files its model changed, quoted,
 below its audit line in `findings.md`. `repair` takes every taken finding of
 the loop record, the released blocks and the phase-6 tables to GLM 5.3 in one
@@ -1247,6 +1249,18 @@ TIME_HEADING = re.compile(r"^## Time used[ \t]*$", re.M)
 WORK_READ_TOOLS = "Read,Grep,Glob"
 WORK_WRITE_TOOLS = "Read,Grep,Glob,Edit,Write"
 
+# Before `make verify` the runner formats the change's Python files itself: the work models have no
+# command tool, and both ruff gates only check. Safe fixes only, never `--unsafe-fixes` (Q-1 of the
+# spec), and the worktree's own ruff by a path with a slash, so `PATH` is never consulted.
+RUFF = ".venv/bin/ruff"
+FORMAT_DIRS = ("scripts/", "tests/")
+RUFF_COMMANDS = (
+    ("check", "--fix", "--no-unsafe-fixes", "--force-exclude", "--no-cache"),
+    ("format", "--force-exclude", "--no-cache"),
+)
+FORMAT_LABEL = "Runner format before `make verify`"
+FORMAT_COMMIT_HEADING = "Runner format before `make verify` (ruff check --fix with safe fixes only, then ruff format):"
+
 
 def changed_paths(root: Path, env: dict[str, str] | None = None) -> set[Path]:
     """Tracked changes against HEAD and untracked files, as repository-relative paths."""
@@ -1632,10 +1646,127 @@ def prepare_derived(root: Path, env: dict[str, str], key: str | None = None) -> 
     return []
 
 
-def verify_attempt(root: Path, plan: Path, baseline_time: str, key: str | None = None) -> list[str]:
-    """Stamp changed held documents, render the index, then run `make verify`.
+def format_targets(root: Path, env: dict[str, str]) -> list[str]:
+    """The change's Python files under `scripts/` and `tests/` that the format step may rewrite.
 
-    Preparation writes to the tree and executes its registry renderer. Return bounded
+    Targets are the changes against HEAD - what the checkpoint commits and the gates measure - not
+    one attempt's file list; formatting is idempotent, so a file an earlier attempt formatted stays
+    as it is. A link is left out (ruff would write through it, out of the worktree), so is a
+    hard-linked file, and a path that cannot be stated (`OSError`); the gates name whatever then
+    stays unformatted.
+    """
+    targets: list[str] = []
+    for relative in changed_paths(root, env=env):
+        posix = relative.as_posix()
+        if not posix.endswith(".py") or not posix.startswith(FORMAT_DIRS):
+            continue
+        path = root / relative
+        try:
+            if path.is_symlink() or not path.is_file():
+                continue
+            if path.resolve() != root.resolve() / relative or path.stat().st_nlink != 1:
+                continue
+        except OSError:
+            continue
+        targets.append(posix)
+    return sorted(targets)
+
+
+def _not_run(reason: str, key: str | None) -> str:
+    """The format line of a step that did not run: the reason on one line, one full stop of its own."""
+    return scrub(f"not run — {' '.join(reason.split()).rstrip('.')}.", key)
+
+
+# Every character a path can hold and still break the line the format line lands in - the block's
+# first entry, the checkpoint commit message; `str.splitlines` splits on all of these. Each maps to
+# its written escape, so a path holding one keeps the format line one line.
+_LINE_BREAK_ESCAPES = {
+    "\n": "\\n",
+    "\r": "\\r",
+    "\v": "\\v",
+    "\f": "\\f",
+    "\x1c": "\\x1c",
+    "\x1d": "\\x1d",
+    "\x1e": "\\x1e",
+    "\x85": "\\x85",
+    chr(0x2028): "\\u2028",
+    chr(0x2029): "\\u2029",
+}
+
+
+def _one_line(path: str) -> str:
+    """A target path with its line breaks written as escapes, so the format line stays one line."""
+    return "".join(_LINE_BREAK_ESCAPES.get(character, character) for character in path)
+
+
+def format_step(root: Path, env: dict[str, str], key: str | None = None) -> str | None:
+    """Ruff's safe fixes, then its formatter, over the targets - and what that changed, in one line.
+
+    `None` without targets: no ruff process starts. A ruff that cannot start, a command that ends
+    non-zero another way, findings without a safe fix or a file that does not parse - the line says
+    so, and the attempt passes or fails exactly as `make verify` and the time check decide. What
+    the step changed is measured by comparing each target's bytes around it, not out of ruff's
+    output; a launch failure of either command makes the whole line `not run`, for the binary that
+    cannot start for one cannot start for the other. A target that cannot be read is named by its
+    repository path, never by the absolute one its `OSError` would carry. A target whose name holds
+    a line break is written with that break escaped - the line stays one line, while ruff still gets
+    the path as it is.
+    """
+    try:
+        targets = format_targets(root, env)
+    except (Refused, OSError) as error:
+        return _not_run(str(error), key)
+    if not targets:
+        return None
+    if not (root / RUFF).is_file():
+        return scrub(f"not run — no ruff at `{RUFF}`; `make venv` builds it.", key)
+    before: dict[str, bytes] = {}
+    for target in targets:
+        try:
+            before[target] = (root / target).read_bytes()
+        except OSError:
+            # The reason names the target by its repository path; the raw error text would carry the
+            # machine's absolute one into the block and the checkpoint commit message.
+            return _not_run(f"cannot read `{target}`", key)
+    notes: list[str] = []
+    for command in RUFF_COMMANDS:
+        try:
+            done = launch([RUFF, *command, *targets], root, env, key)
+        except CallFailed as error:
+            return _not_run(str(error), key)
+        if done.returncode == 1 and command[0] == "check":
+            # Exit 1 also covers a target that does not parse, and the exit code alone does not say
+            # which of the two it left, so the note names both.
+            notes.append("ruff check left findings without a safe fix or a file that does not parse")
+        elif done.returncode:
+            notes.append(f"ruff {command[0]} exited {done.returncode}")
+    changed = []
+    for target in targets:
+        try:
+            after = (root / target).read_bytes()
+        except OSError:
+            after = None  # a target that cannot be read any more counts as changed
+        if after != before[target]:
+            changed.append(target)
+    named = ", ".join(f"`{_one_line(target)}`" for target in changed)
+    line = f"ruff changed {named}" if changed else "ruff changed no file"
+    if notes:
+        line += "; " + "; ".join(notes)
+    return scrub(line + ".", key)
+
+
+def verify_attempt(
+    root: Path,
+    plan: Path,
+    baseline_time: str,
+    key: str | None = None,
+    formatted: list[str] | None = None,
+) -> list[str]:
+    """Stamp changed held documents, render the index, format the targets, then run `make verify`.
+
+    Preparation writes to the tree and executes its registry renderer. Before `make verify` the
+    runner applies ruff's safe fixes and its formatter to the changed Python files under `scripts/`
+    and `tests/`; when `formatted` is given, the step's line lands there. Return bounded
     diagnostics for failed preparation or postconditions, naming the gates that blocked.
     """
     env = foreign_env(
@@ -1648,6 +1779,9 @@ def verify_attempt(root: Path, plan: Path, baseline_time: str, key: str | None =
     preparation = prepare_derived(root, env, key)
     if preparation:
         return preparation
+    line = format_step(root, env, key)
+    if formatted is not None and line is not None:
+        formatted.append(line)
     done = launch(["make", "verify"], root, env)
     problems = []
     if done.returncode != 0:
@@ -2098,6 +2232,7 @@ def run_attempts(
     root = ctx.root
     allowed = {ctx.findings.relative_to(root)}
     diagnostics: list[str] = []
+    record: list[str] = []
     for attempt, (endpoint, credential, route, reason) in enumerate(routes, 1):
         prompt = build_prompt(diagnostics)
         begin_work_call(ctx, verb, endpoint, prompt, attempt, route, ctx.findings, reason)
@@ -2136,8 +2271,9 @@ def run_attempts(
         else:
             files = unmeasured
         cannot_start: CallFailed | None = None
+        formatted: list[str] = []
         try:
-            problems = verify_attempt(root, ctx.plan, baseline_time, key)
+            problems = verify_attempt(root, ctx.plan, baseline_time, key, formatted)
         except CallFailed as error:
             # `make verify` could not be started: no model can repair that, so this attempt's block
             # says why and the run stops after the scan below, with no further attempt (spec, criterion 6).
@@ -2147,6 +2283,9 @@ def run_attempts(
         if not problems and answer_check is not None:
             problems = answer_check(answer)
         if problems:
+            # The format line stands first: the step ran before `make verify`, and the next model
+            # learns that the runner formats and whether ruff left findings it could not fix.
+            problems = [*(f"{FORMAT_LABEL}: {line}" for line in formatted), *problems]
             if kept is not None:
                 # Before the block is appended, so the quoted diagnostics stand beside the rows as
                 # they were, not beside the model's edits of them.
@@ -2156,6 +2295,7 @@ def run_attempts(
             listing = "\n".join(f"- {p}" for p in problems)
             diagnostics.append(f"Attempt {attempt} ({route}):\n{listing}")
             append(ctx.findings, quote_block(attempt_block(attempt, route, listing, files), key))
+        record += [f"- Attempt {attempt} ({route}): {line}" for line in formatted]
         if key is not None:
             # The gate runs repository code the model just edited: scan again after it.
             exposed = remove_changed_credential(root, key, ignored_before)
@@ -2171,7 +2311,12 @@ def run_attempts(
         if not problems:
             if before_commit is not None:
                 before_commit()
-            checkpoint(root, ctx.change, baseline, key, ignored_before, message=commit_message)
+            message = commit_message
+            if record:
+                # The subject stays the subject; the format line of every attempt that ran the step
+                # stands below the heading, in the commit that holds the formatted bytes.
+                message = commit_message + "\n\n" + FORMAT_COMMIT_HEADING + "\n" + "\n".join(record)
+            checkpoint(root, ctx.change, baseline, key, ignored_before, message=message)
             if after_commit is not None:
                 after_commit()
             print(f"{verb}: verified and committed · route {route} · attempt {attempt}")
