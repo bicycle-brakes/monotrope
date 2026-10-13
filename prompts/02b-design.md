@@ -1,6 +1,10 @@
 # Phase 2b · Design
 
-**Model:** Opus 5.5 — at effort `xhigh` (`claude --model claude-opus-5-5 --effort xhigh`); the same demand as spec and plan.
+**Model:** gpt-6.1-sol — Codex (`gpt-6.1-sol`) at effort `max`, started by
+`python3 scripts/stage2.py draft <change>`: one call writes spec, design and
+plan (phases 2, 2b and 3), and GLM 5.3 after two failed attempts; the same
+demand as spec and plan. Where Stage 2 is off, Opus 5.5 at effort `xhigh`
+(`claude --model claude-opus-5-5 --effort xhigh`) writes it.
 **Input:** `spec.md` as revised after phase 2a, `research.md`, `decisions.md`.
 **Result:** `plans/changes/<name>/design.md`
 **Gate:** `python3 scripts/plans_registry.py --check` green, and for an

@@ -1,23 +1,25 @@
 # Phase 2a · Spec review
 
-**Model:** Opus 5.5 — for a spike, in a fresh context that never saw the
-author's reasoning; for a bounded, feature or architectural change gpt-6.1-sol
-at effort `max`, started by `python3 scripts/stage2.py spec-review <change>`.
+**Model:** Opus 5.5 — in a fresh context that never saw the author's
+reasoning; for a spike by hand, where §3 keeps the whole phase in a session;
+otherwise started by `python3 scripts/stage2.py spec-review <change>`
+(Claude Code, effort `xhigh`, read-only tools).
 **Input:** `spec.md`, `research.md`, `decisions.md`. **Not** the author's reasoning.
 **Result:** rows for `plans/changes/<name>/findings.md`, dimension `SPEC`.
 **Gate:** no open `[AMBIGUITY]`.
-**Session:** the same reviewer later runs phase 6. On the Claude path (Opus 5.5),
-start it with a fixed id, `claude --model claude-opus-5-5 --session-id <uuid>
--n review-<name>`, and write the id under the table in `findings.md`
-(`Reviewer session: <uuid>`). On the Codex path the runner starts the session
-and writes `Reviewer session: codex <thread id>` itself. The review loop
+**Session:** the same reviewer later runs phase 6 for a spike. On the by-hand
+path (a spike), start it with a fixed id, `claude --model claude-opus-5-5
+--session-id <uuid> -n review-<name>`, and write the id under the table in
+`findings.md` (`Reviewer session: <uuid>`). Through the runner no session is
+kept: phase 6 is Codex's (`gpt-6.1-sol`), in a fresh session. The runner adds
+the reviewer and the Status to each row it writes, and no session line. The
+review loop
 between the two phases runs at most three rounds on the ladder — round 3 only
 when round 2 wrote a taken row (`docs/WORKFLOW.md` §4).
 
 Through the runner you answer in table rows of six cells — `| ID | Severity |
-Dimension | Origin | Where | Finding |` — and the runner adds the reviewer, the
-status and the session line (`docs/WORKFLOW.md` §4). Write a `|` inside a cell
-as `\|`.
+Dimension | Origin | Where | Finding |` — and the runner adds the reviewer and
+the status (`docs/WORKFLOW.md` §4). Write a `|` inside a cell as `\|`.
 
 A validator checks that the sections are there. It cannot check that they say
 the right thing. A clean, complete spec describing the wrong thing passes every

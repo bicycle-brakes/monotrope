@@ -1,6 +1,10 @@
 # Phase 3 · Plan
 
-**Model:** Opus 5.5 — at effort `xhigh` (`claude --model claude-opus-5-5 --effort xhigh`); a mistake here is the most expensive one.
+**Model:** gpt-6.1-sol — Codex (`gpt-6.1-sol`) at effort `max`, started by
+`python3 scripts/stage2.py draft <change>`: one call writes spec, design and
+plan (phases 2, 2b and 3), and GLM 5.3 after two failed attempts; a mistake
+here is the most expensive one. Where Stage 2 is off, Opus 5.5 at effort
+`xhigh` (`claude --model claude-opus-5-5 --effort xhigh`) writes it.
 **Result:** `plans/changes/<name>/plan.md`
 **Gate:** `python3 scripts/validate_change_artefacts.py --check` green.
 
@@ -25,8 +29,9 @@ Starts unless you say stop.
 The pre-mortem is one line with one reason, never a list of risks. When phase 3
 ends, show the card in the closing message, identical to the one in `plan.md`.
 While the maintainer has not said stop, phase 4 starts once the card is shown;
-no "ok" is needed. When phase 3 runs as a subagent, the orchestrating session
-shows the card to the maintainer unchanged; the veto stays the maintainer's.
+no "ok" is needed. When phase 3 runs as a subagent or through the runner, the
+orchestrating session shows the card to the maintainer unchanged; the veto
+stays the maintainer's.
 
 A card **widens** the scope when its `For you:` or `Done when:` line includes
 what `spec.md` names as a non-goal or no acceptance criterion covers, and the

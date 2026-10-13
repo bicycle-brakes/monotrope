@@ -2,24 +2,23 @@
 
 **Model:** Opus 5.5 — finds what Sonnet misses, and reads the code a change
 calls instead of trusting its docstring, for a spike; for a bounded, feature or
-architectural change gpt-6.1-sol at effort `max`, resumed by `python3
-scripts/stage2.py review <change>` (a fresh session where no phase-2a session
-was held).
+architectural change gpt-6.1-sol at effort `max`, started by `python3
+scripts/stage2.py review <change>` — a fresh session where phase 2a ran on
+Opus 5.5 (ADR 0016), and the resume of a recorded Codex phase-2a session where
+one stands.
 **Input:** the diff, `spec.md` and, when the change has one, `design.md` —
 whether the diff makes its architecture delta true is your question (ADR 0009).
 **Not** the author's reasoning.
 **Result:** `plans/changes/<name>/findings.md`
 **Gate:** no open `[AMBIGUITY]`, no open BLOCKER — `[DIVERGENT]` counts as
 BLOCKER.
-**Session:** you are the spec reviewer of phase 2a, resumed. On the Claude path
-(Opus 5.5): `claude --model claude-opus-5-5 --resume <uuid>` (the id under the
-table in `findings.md`). On the Codex path the runner resumes the recorded
-session with `codex exec resume`. Only when
-that session is gone does a fresh
-one start;
-`findings.md` says so. Your yardstick is the current `spec.md` — the version
-revised after your 2a review, not the one you read then. Read it again, and
-check first that each of your 2a rows arrived in it as `findings.md` says.
+**Session:** where phase 2a ran on Opus 5.5, your session starts fresh — no
+phase-2a session of yours exists, and `findings.md` says so. Where a recorded
+Codex phase-2a session stands (`Reviewer session: codex <id>` in its block,
+and it is the change's last 2a block), the runner resumes it with
+`codex exec resume`. Your yardstick is the current `spec.md` — the version
+revised after the 2a review, not the one written first. Read it again, and
+check first that each of the 2a rows arrived in it as `findings.md` says.
 
 **Verdict first.** Write your verdict — the table and, under it, the line
 `Phase 6 verdict: <reviewer> <session>, <date>` — before you read any loop

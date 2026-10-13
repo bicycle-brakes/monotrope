@@ -1,6 +1,10 @@
 # Phase 2 · Spec
 
-**Model:** Opus 5.5 — at effort `xhigh` (`claude --model claude-opus-5-5 --effort xhigh`); the highest reasoning demand, little output.
+**Model:** gpt-6.1-sol — Codex (`gpt-6.1-sol`) at effort `max`, started by
+`python3 scripts/stage2.py draft <change>`: one call writes spec, design and
+plan (phases 2, 2b and 3), and GLM 5.3 after two failed attempts; the highest
+reasoning demand, little output. Where Stage 2 is off, Opus 5.5 at effort
+`xhigh` (`claude --model claude-opus-5-5 --effort xhigh`) writes it.
 **Result:** `plans/changes/<name>/spec.md`
 **Gate:** the interview check green for this change — `python3
 scripts/check_interview_minimums.py --change <name>`; phase 1a has met its
@@ -73,6 +77,13 @@ decision pull requests"). For a `feature`, also `change: <folder name>` and
 `adr-answers` refuses the header. The proposal only proposes; the maintainer
 answers, with `python3 scripts/harness.py decide adr`.
 
+Every class lists under `adr_files: [docs/adr/<file>, …]` each file under
+`docs/adr/` the change creates, changes or removes — `[]` or no line when it
+touches none. The header lists every ADR file the change touches: the gate
+`interview-minimums` attributes an ADR edit to that claim alone and holds a
+feature's answer to it, "yes" with at least one claimed file and "no" with none
+(ADR 0014, `docs/WORKFLOW.md`).
+
 ## After the spec review
 
 Phase 2a returns its rows in `findings.md`. Before phase 3 starts, you work
@@ -81,4 +92,6 @@ go red gets its refuting case. A row you do not take over gets its reason in
 `findings.md`. An `[AMBIGUITY]` goes to the person, and their answer goes into
 the spec. Each 2a row then says `in spec` or `rejected — <reason>`; none stays
 open. The revised `spec.md` is the one yardstick from here on: plan, code and
-the phase 6 review measure against it, not against the 2a rows.
+the phase 6 review measure against it, not against the 2a rows. On the runner
+path (`docs/WORKFLOW.md` §4) a second `draft <change>` does this, after the
+maintainer has answered every `[AMBIGUITY]` a row raised.

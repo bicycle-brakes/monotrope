@@ -5,17 +5,19 @@
 content: the review loop (4b) runs on OpenCode Go through Pi at
 `https://opencode.ai/zen/go/v1/chat/completions`, round n on the n-th id of the
 `opencode-go` entry's ordered `modelle` list (the ladder, at most three
-rounds); Codex reviews the spec (2a) and the change (6); GLM 5.3 Flash
-explores (phase 1) and implements (phase 4). A declaration in `model-endpoints.yaml` stops nothing; this runner
+rounds); Codex drafts the spec, the design and the plan (2, 2b and 3; GLM 5.3
+after two failed Codex attempts) and reviews the change (6); Opus 5.5 reviews
+the spec (2a); GLM 5.3 Flash explores (phase 1) and implements (phase 4). A declaration in `model-endpoints.yaml` stops nothing; this runner
 stands between the rule and the call.
 
     python3 scripts/stage2.py explore      <change>   # GLM Flash, phase 1
-    python3 scripts/stage2.py spec-review  <change>   # Codex, phase 2a, a fresh session
+    python3 scripts/stage2.py draft        <change>   # Codex, phases 2, 2b and 3; GLM 5.3 after two failed attempts
+    python3 scripts/stage2.py spec-review  <change>   # Opus 5.5, phase 2a
     python3 scripts/stage2.py implement    <change>   # GLM Flash, phase 4
     python3 scripts/stage2.py repair       <change>   # GLM 5.3, the taken findings
     python3 scripts/stage2.py review-loop  <change>   # one round of phase 4b: round n on rung n
     python3 scripts/stage2.py release-loop <change>   # loop rows into findings.md
-    python3 scripts/stage2.py review       <change>   # Codex, phase 6, the 2a session resumed
+    python3 scripts/stage2.py review       <change>   # Codex, phase 6, a recorded Codex 2a session resumed
     python3 scripts/stage2.py probe        <change>   # one call per rung, no record written
     python3 scripts/stage2.py session      <change>   # interactive Codex/Pi, a Terminal window
 
@@ -24,8 +26,10 @@ any other answer refuses with exit 2 before the leak check and before any call.
 
 `explore`, `implement` and `repair` accept `--stage2-off [REASON]`: the declared
 Stage-1 route uses Haiku 4.5 or Sonnet 5.5. A leak refusal never falls back.
-Implement lets the model edit but not run commands; the runner runs
-`make verify`, checks the time log and makes the one checkpoint commit. A
+Implement lets the model edit but not run commands; before `make verify` the
+runner applies ruff's safe fixes and its formatter to the changed Python files
+under `scripts/` and `tests/`, then runs `make verify`, checks the time log and
+makes the one checkpoint commit. A
 failed attempt leaves its diagnostics and the files its model changed, quoted,
 below its audit line in `findings.md`. `repair` takes every taken finding of
 the loop record, the released blocks and the phase-6 tables to GLM 5.3 in one
@@ -82,7 +86,9 @@ servers, skills, context files, prompt templates or themes; no approval; a
 fresh agent directory and home per call) are configured on every call and
 were measured once by hand on the pinned version; the suite starts no real
 Pi, and the version pin (`require_pi`) is what ties the measurement to the
-call. The Codex calls run in the CLI's read-only sandbox.
+call. The Codex review calls run in the CLI's read-only sandbox; a draft's
+Codex call runs in `workspace-write`, and the runner puts back what lands
+outside the change folder.
 
 **The loop record** lives outside the worktree
 (`${XDG_STATE_HOME:-~/.local/state}/coding-harness/stage2/<change>/loop.md`):
@@ -123,6 +129,7 @@ import yaml
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 
+import check_adr_answers  # noqa: E402
 import check_frontmatter_current  # noqa: E402
 import leakcheck  # noqa: E402
 import merge_guard  # noqa: E402
@@ -138,6 +145,15 @@ GLM = ("glm-coding-plan", "glm-5.3", "max")
 HAIKU = ("claude-code-plan", "claude-haiku-4-5", None)
 SONNET = ("claude-code-plan", "claude-sonnet-5-5", "medium")
 CODEX = ("openai-codex", "gpt-6.1-sol", "max")
+# Opus 5.5, the spec review (2a) since ADR 0016: the strongest review on the repository's highest-demand effort.
+OPUS = ("claude-code-plan", "claude-opus-5-5", "xhigh")
+# A new ADR file of a draft: four digits, a slug of lowercase letters, digits and hyphens. Counted against the
+# merge base of the baseline and origin/main, so a second draft may edit the ADR the first one committed.
+NEW_ADR = re.compile(r"docs/adr/\d{4}-[a-z0-9][a-z0-9-]*\.md")
+# The plan card's lines, in the order the drafted plan.md must open with (spec, criterion 15).
+CARD_LABELS = ("For you:", "Done when:", "Appetite:", "Not now:", "Pre-mortem:")
+# The phase prompts a draft carries in full, in drafting order (spec, criterion 3).
+DRAFT_PROMPTS = ("02-spec.md", "02b-design.md", "03-plan.md")
 GLM_BASE_URL = "https://api.z.ai/api/anthropic"
 OPENCODE = "opencode-go"
 # The one Pi the loop's isolation was measured on (research §L); any other prints a refusal.
@@ -166,6 +182,21 @@ REPAIR_FORMAT = (
     "`<ID>: fixed — not a test — <reason>`. Write a `|` inside a reason as `\\|`. A code row needs a test that\n"
     "fails on the baseline's code, which the runner runs; only a row taken as `taken — not a test — <reason>`\n"
     "may be answered `not a test`. Do not edit `findings.md`."
+)
+# What a draft may write and what the runner takes back; `<change>` is filled in (spec, criterion 3).
+DRAFT_RULES = (
+    "Write, in `plans/changes/<change>/`, `spec.md`, `design.md` when `prompts/02b-design.md` asks for one,\n"
+    "and `plan.md`, as the three prompts above say and in the form of the files under `templates/`. An ADR\n"
+    "draft, when one is due, is exactly one new file `docs/adr/<NNNN>-<slug>.md`, numbered after the highest\n"
+    "file there. Change nothing else: the runner puts back every changed path outside the change folder\n"
+    "except the one new ADR draft, and the change's `decisions.md`. If `findings.md` holds phase-2a\n"
+    "rows whose Status is `open`, work each into\n"
+    '`spec.md` as `prompts/02-spec.md`, "After the spec review", says, write its Status in `findings.md`,\n'
+    'and bring `design.md` and `plan.md` into line. A `[DECISION]` goes into the spec\'s "Open decisions"\n'
+    "in the form `prompts/02-spec.md` gives. Never write an answer for the maintainer, never record an ADR\n"
+    "answer, and never change a class, a criterion or a decision to make a gate green. `plan.md` opens with\n"
+    "the card and holds a `## Time used` section, empty until phase 4. Do not commit and run no git command\n"
+    "that changes the repository: the runner runs `make verify` and makes the one commit."
 )
 
 # The environment a foreign program gets: these, when set, then the call's own.
@@ -599,6 +630,16 @@ def findings_header(ctx: Context, producer: str) -> str:
     )
 
 
+def producer_for(endpoint: tuple[str, str, str | None]) -> str:
+    """The header's producer names the program: codex, claude-code, pi (spec, criterion 29).
+
+    The GLM endpoints run as Claude Code against Z.ai, so their producer is `claude-code`
+    too; `pi` stays the producer of an endpoint nothing here names.
+    """
+    producers = {"openai-codex": "codex", "claude-code-plan": "claude-code", "glm-coding-plan": "claude-code"}
+    return producers.get(endpoint[0], "pi")
+
+
 def checked_prompt(ctx: Context, endpoint: tuple[str, str, str | None], prompt: str):
     """Check the declaration and exact prompt immediately before one call."""
     problem = declaration_problem(ctx.root, endpoint[0], endpoint[1])
@@ -615,8 +656,7 @@ def begin_call(ctx: Context, verb: str, endpoint: tuple[str, str, str | None], p
     """The declaration, the leak check and the call line - for this one call, immediately before it."""
     result = checked_prompt(ctx, endpoint, prompt)
     if not ctx.findings.exists():
-        producer = "codex" if endpoint == CODEX else "pi"
-        ctx.findings.write_text(findings_header(ctx, producer), encoding="utf-8")
+        ctx.findings.write_text(findings_header(ctx, producer_for(endpoint)), encoding="utf-8")
     append(
         ctx.findings,
         f"Stage-2 call, {today()}: {verb} · endpoint {endpoint[0]} · model {endpoint[1]} · "
@@ -637,7 +677,7 @@ def begin_work_call(
     """Check and record one explore/implement attempt in its phase artefact."""
     result = checked_prompt(ctx, endpoint, prompt)
     if destination == ctx.findings and not destination.exists():
-        destination.write_text(findings_header(ctx, "claude-code"), encoding="utf-8")
+        destination.write_text(findings_header(ctx, producer_for(endpoint)), encoding="utf-8")
     why = f" · reason {reason}" if reason else ""
     append(
         destination,
@@ -717,8 +757,13 @@ def thread_id(stdout: str) -> str | None:
     return None
 
 
-def run_codex(ctx: Context, prompt: str, resume: str | None = None) -> tuple[str, str]:
-    """One Codex call, first or resumed, pinned the same way. Returns (answer, thread id)."""
+def run_codex(ctx: Context, prompt: str, resume: str | None = None, writable: bool = False) -> tuple[str, str]:
+    """One Codex call, first or resumed, pinned the same way. Returns (answer, thread id).
+
+    A review reads in the CLI's `read-only` sandbox; a draft writes in
+    `workspace-write`, and the runner puts back what lands outside the change
+    folder. No call takes a bypass flag (spec, criterion 1).
+    """
     _, model, effort = CODEX
     with tempfile.TemporaryDirectory(prefix="stage2-") as tmp:
         answer_file = Path(tmp) / "answer.md"
@@ -732,7 +777,7 @@ def run_codex(ctx: Context, prompt: str, resume: str | None = None) -> tuple[str
             "-c",
             f'model_reasoning_effort="{effort}"',
             "-c",
-            'sandbox_mode="read-only"',
+            f'sandbox_mode="{"workspace-write" if writable else "read-only"}"',
             "--disable",
             "hooks",
             "--disable",
@@ -935,21 +980,48 @@ def repair_targets(ctx: Context, record: str | None) -> tuple[list[tuple[str, li
 
 
 def spec_review(root: Path, change: str) -> None:
-    """Phase 2a: a fresh Codex session reads the spec."""
-    ctx = preflight(root, change, CODEX)
+    """Phase 2a: Opus 5.5 in a fresh context reads the spec (ADR 0016).
+
+    The call is a headless Claude Code run with read-only tools and no session
+    kept: the reviewer is recorded by the rows alone, so phase 6 starts a fresh
+    Codex session where no phase-2a session was recorded.
+    """
+    ctx = preflight(root, change, OPUS)
     prompt = phase_prompt(root, "02a-spec-review.md", change)
-    begin_call(ctx, "spec-review", CODEX, prompt)
-    answer, thread = run_codex(ctx, prompt)
+    begin_call(ctx, "spec-review", OPUS, prompt)
+    answer = run_work_model(ctx, prompt, OPUS, writable=False)
     rows, _ = parse_rows(answer)
-    append(
-        ctx.findings,
-        f"## Phase 2a — Codex, {today()}\n\n{answer_block(rows, answer, 'Codex')}\n\nReviewer session: codex {thread}",
-    )
-    print(f"spec-review: {len(rows)} rows appended to {ctx.findings.relative_to(root)}; session codex {thread}")
+    append(ctx.findings, f"## Phase 2a — Opus 5.5, {today()}\n\n{answer_block(rows, answer, 'Opus')}")
+    print(f"spec-review: {len(rows)} rows appended to {ctx.findings.relative_to(root)}")
+
+
+def recorded_2a_session(text: str) -> str | None:
+    """The session id of the last `## Phase 2a` block, when that block is a Codex one with its line.
+
+    Only then does phase 6 resume (spec, criteria 30 and 31): the last block is the
+    change's latest spec review, so a block headed `Opus 5.5`, and a Codex block
+    without its `Reviewer session: codex` line, leave no session to resume.
+    """
+    start = None
+    lines = text.splitlines()
+    for index, line in enumerate(lines):
+        if line.startswith("## Phase 2a"):
+            start = index
+    if start is None:
+        return None
+    block = []
+    for line in lines[start + 1 :]:
+        if line.startswith("## "):
+            break
+        block.append(line)
+    if "Opus 5.5" in lines[start]:
+        return None
+    found = SESSION_LINE.search("\n".join(block))
+    return found.group(1) if found else None
 
 
 def review(root: Path, change: str) -> None:
-    """Phase 6: the 2a session resumed, the verdict written, the loop rows released and marked."""
+    """Phase 6: a recorded Codex 2a session resumed - otherwise fresh - the verdict written, the loop rows released and marked."""
     ctx = preflight(root, change, CODEX)
     record = read_record(change)
     if record is not None:
@@ -957,8 +1029,7 @@ def review(root: Path, change: str) -> None:
         if refusal:
             raise Refused(refusal)
     text = ctx.findings.read_text(encoding="utf-8") if ctx.findings.exists() else ""
-    sessions = SESSION_LINE.findall(text)
-    recorded = sessions[-1] if sessions else None
+    recorded = recorded_2a_session(text)
     prompt = phase_prompt(root, "06-review.md", change, "Write only your verdict now.")
     begin_call(ctx, "review", CODEX, prompt)
     answer, thread = run_codex(ctx, prompt, resume=recorded)
@@ -1247,10 +1318,22 @@ TIME_HEADING = re.compile(r"^## Time used[ \t]*$", re.M)
 WORK_READ_TOOLS = "Read,Grep,Glob"
 WORK_WRITE_TOOLS = "Read,Grep,Glob,Edit,Write"
 
+# Before `make verify` the runner formats the change's Python files itself: the work models have no
+# command tool, and both ruff gates only check. Safe fixes only, never `--unsafe-fixes` (Q-1 of the
+# spec), and the worktree's own ruff by a path with a slash, so `PATH` is never consulted.
+RUFF = ".venv/bin/ruff"
+FORMAT_DIRS = ("scripts/", "tests/")
+RUFF_COMMANDS = (
+    ("check", "--fix", "--no-unsafe-fixes", "--force-exclude", "--no-cache"),
+    ("format", "--force-exclude", "--no-cache"),
+)
+FORMAT_LABEL = "Runner format before `make verify`"
+FORMAT_COMMIT_HEADING = "Runner format before `make verify` (ruff check --fix with safe fixes only, then ruff format):"
 
-def changed_paths(root: Path, env: dict[str, str] | None = None) -> set[Path]:
-    """Tracked changes against HEAD and untracked files, as repository-relative paths."""
-    tracked = _git_output(root, "diff", "--name-only", "-z", "HEAD", env=env).split("\0")
+
+def changed_paths(root: Path, env: dict[str, str] | None = None, against: str = "HEAD") -> set[Path]:
+    """Tracked changes against `against` and untracked files, as repository-relative paths."""
+    tracked = _git_output(root, "diff", "--name-only", "-z", against, env=env).split("\0")
     untracked = _git_output(root, "ls-files", "-z", "--others", "--exclude-standard", env=env).split("\0")
     return {Path(name) for name in [*tracked, *untracked] if name}
 
@@ -1401,14 +1484,20 @@ def run_work_model(
 
 
 def remove_changed_credential(
-    root: Path, key: str, ignored_before: dict[Path, tuple[int, int]] | None = None
+    root: Path,
+    key: str,
+    ignored_before: dict[Path, tuple[int, int]] | None = None,
+    against: str = "HEAD",
 ) -> list[Path]:
     """Remove an exact GLM credential from changed regular files and name those files.
 
     "Changed" is tracked changes, untracked files, and - when the run's earlier snapshot of the
-    gitignored files is given - every ignored file created or touched since that snapshot.
+    gitignored files is given - every ignored file created or touched since that snapshot. The
+    comparison is `against`, not always HEAD: a draft passes its baseline, because files a model
+    committed read as clean against its own new HEAD and must still be found (spec, criterion 25;
+    2a's F-4).
     """
-    paths = changed_paths(root)
+    paths = changed_paths(root, against=against)
     if ignored_before is not None:
         paths |= {p for p, stat in ignored_snapshot(root).items() if ignored_before.get(p) != stat}
     found = []
@@ -1466,6 +1555,16 @@ def attempt_files(root: Path, before: str, after: str) -> list[str]:
     return entries
 
 
+def put_back_lines(paths: list[str]) -> list[str]:
+    """The put-back list lines: every path in backticks, without a bound.
+
+    The record of what the runner put back is the audit's only way to name each restored path, so
+    no remainder line may hide one (spec, criterion 8; 2a's F-8 replaces the bound of loop row
+    L2-5).
+    """
+    return [f"- `{path}`" for path in paths]
+
+
 def attempt_block(attempt: int, route: str, listing: str, files: list[str] | str) -> str:
     """The unquoted text of one failed attempt's block: its header, the files, the diagnostics.
 
@@ -1488,17 +1587,20 @@ def attempt_block(attempt: int, route: str, listing: str, files: list[str] | str
     return f"{head}\n\n{file_part}\n\nDiagnostics:\n{fence}text\n{listing}\n{fence}"
 
 
-def quote_block(text: str, key: str | None) -> str:
+def quote_block(text: str, key: str | None, whole: tuple[str, ...] | list[str] = ()) -> str:
     """`text` as one Markdown quote: every line begins `>`, the key scrubbed, long lines cut.
 
     One mark on every line defeats the line-anchored readers of findings.md at once (spec, criterion 11).
     A line longer than `QUOTE_LINE_CHARS` keeps its first characters and says how many were left out
-    (criterion 13). Under `--stage2-off` the key is `None` and nothing is scrubbed: that run never
-    reads it.
+    (criterion 13). A line that is one of `whole` is never cut: the put-back list names each path in
+    full, and a cut would turn two long paths into one line (spec, criterion 8; phase-6 F-12). Under
+    `--stage2-off` the key is `None` and nothing is scrubbed: that run never reads it.
     """
     lines = []
+    # An entry may itself hold line breaks (a path can): every line it splits into stays uncut (F-15).
+    uncut = {part for line in whole for part in scrub(line, key).splitlines()}
     for line in scrub(text, key).splitlines():
-        if len(line) > QUOTE_LINE_CHARS:
+        if len(line) > QUOTE_LINE_CHARS and line not in uncut:
             line = f"{line[:QUOTE_LINE_CHARS]} [… {len(line) - QUOTE_LINE_CHARS} characters left out …]"
         lines.append(f"> {line}" if line else ">")
     return scrub("\n".join(lines), key)
@@ -1632,10 +1734,144 @@ def prepare_derived(root: Path, env: dict[str, str], key: str | None = None) -> 
     return []
 
 
-def verify_attempt(root: Path, plan: Path, baseline_time: str, key: str | None = None) -> list[str]:
-    """Stamp changed held documents, render the index, then run `make verify`.
+def verify_evidence(done: subprocess.CompletedProcess, key: str | None) -> str:
+    """The bounded evidence of a red `make verify`: the framed gates that blocked, else the run's tail."""
+    output = (done.stdout or "") + (done.stderr or "")
+    # verify_all.sh frames gates on standard output; a gate's standard error arrives unframed after them.
+    red = red_sections(done.stdout or "")
+    if red is None:
+        return scrub("\n".join(output.splitlines()[-TAIL_LINES:]), key)
+    evidence = "The gates that blocked, each with its last lines:\n" + red
+    errors = (done.stderr or "").splitlines()
+    if errors:
+        # Unframed: the last lines of the whole run's standard error, not of the blocking gate alone.
+        cut = len(errors) - STDERR_LINES
+        kept = ([f"[… {cut} earlier lines left out …]"] if cut > 0 else []) + errors[-STDERR_LINES:]
+        evidence += "\n\nStandard error of the whole run, last lines:\n" + "\n".join(kept)
+    return scrub(evidence, key)
 
-    Preparation writes to the tree and executes its registry renderer. Return bounded
+
+def format_targets(root: Path, env: dict[str, str]) -> list[str]:
+    """The change's Python files under `scripts/` and `tests/` that the format step may rewrite.
+
+    Targets are the changes against HEAD - what the checkpoint commits and the gates measure - not
+    one attempt's file list; formatting is idempotent, so a file an earlier attempt formatted stays
+    as it is. A link is left out (ruff would write through it, out of the worktree), so is a
+    hard-linked file, and a path that cannot be stated (`OSError`); the gates name whatever then
+    stays unformatted.
+    """
+    targets: list[str] = []
+    for relative in changed_paths(root, env=env):
+        posix = relative.as_posix()
+        if not posix.endswith(".py") or not posix.startswith(FORMAT_DIRS):
+            continue
+        path = root / relative
+        try:
+            if path.is_symlink() or not path.is_file():
+                continue
+            if path.resolve() != root.resolve() / relative or path.stat().st_nlink != 1:
+                continue
+        except OSError:
+            continue
+        targets.append(posix)
+    return sorted(targets)
+
+
+def _not_run(reason: str, key: str | None) -> str:
+    """The format line of a step that did not run: the reason on one line, one full stop of its own."""
+    return scrub(f"not run — {' '.join(reason.split()).rstrip('.')}.", key)
+
+
+# Every character a path can hold and still break the line the format line lands in - the block's
+# first entry, the checkpoint commit message; `str.splitlines` splits on all of these. Each maps to
+# its written escape, so a path holding one keeps the format line one line.
+_LINE_BREAK_ESCAPES = {
+    "\n": "\\n",
+    "\r": "\\r",
+    "\v": "\\v",
+    "\f": "\\f",
+    "\x1c": "\\x1c",
+    "\x1d": "\\x1d",
+    "\x1e": "\\x1e",
+    "\x85": "\\x85",
+    chr(0x2028): "\\u2028",
+    chr(0x2029): "\\u2029",
+}
+
+
+def _one_line(path: str) -> str:
+    """A target path with its line breaks written as escapes, so the format line stays one line."""
+    return "".join(_LINE_BREAK_ESCAPES.get(character, character) for character in path)
+
+
+def format_step(root: Path, env: dict[str, str], key: str | None = None) -> str | None:
+    """Ruff's safe fixes, then its formatter, over the targets - and what that changed, in one line.
+
+    `None` without targets: no ruff process starts. A ruff that cannot start, a command that ends
+    non-zero another way, findings without a safe fix or a file that does not parse - the line says
+    so, and the attempt passes or fails exactly as `make verify` and the time check decide. What
+    the step changed is measured by comparing each target's bytes around it, not out of ruff's
+    output; a launch failure of either command makes the whole line `not run`, for the binary that
+    cannot start for one cannot start for the other. A target that cannot be read is named by its
+    repository path, never by the absolute one its `OSError` would carry. A target whose name holds
+    a line break is written with that break escaped - the line stays one line, while ruff still gets
+    the path as it is.
+    """
+    try:
+        targets = format_targets(root, env)
+    except (Refused, OSError) as error:
+        return _not_run(str(error), key)
+    if not targets:
+        return None
+    if not (root / RUFF).is_file():
+        return scrub(f"not run — no ruff at `{RUFF}`; `make venv` builds it.", key)
+    before: dict[str, bytes] = {}
+    for target in targets:
+        try:
+            before[target] = (root / target).read_bytes()
+        except OSError:
+            # The reason names the target by its repository path; the raw error text would carry the
+            # machine's absolute one into the block and the checkpoint commit message.
+            return _not_run(f"cannot read `{target}`", key)
+    notes: list[str] = []
+    for command in RUFF_COMMANDS:
+        try:
+            done = launch([RUFF, *command, *targets], root, env, key)
+        except CallFailed as error:
+            return _not_run(str(error), key)
+        if done.returncode == 1 and command[0] == "check":
+            # Exit 1 also covers a target that does not parse, and the exit code alone does not say
+            # which of the two it left, so the note names both.
+            notes.append("ruff check left findings without a safe fix or a file that does not parse")
+        elif done.returncode:
+            notes.append(f"ruff {command[0]} exited {done.returncode}")
+    changed = []
+    for target in targets:
+        try:
+            after = (root / target).read_bytes()
+        except OSError:
+            after = None  # a target that cannot be read any more counts as changed
+        if after != before[target]:
+            changed.append(target)
+    named = ", ".join(f"`{_one_line(target)}`" for target in changed)
+    line = f"ruff changed {named}" if changed else "ruff changed no file"
+    if notes:
+        line += "; " + "; ".join(notes)
+    return scrub(line + ".", key)
+
+
+def verify_attempt(
+    root: Path,
+    plan: Path,
+    baseline_time: str,
+    key: str | None = None,
+    formatted: list[str] | None = None,
+) -> list[str]:
+    """Stamp changed held documents, render the index, format the targets, then run `make verify`.
+
+    Preparation writes to the tree and executes its registry renderer. Before `make verify` the
+    runner applies ruff's safe fixes and its formatter to the changed Python files under `scripts/`
+    and `tests/`; when `formatted` is given, the step's line lands there. Return bounded
     diagnostics for failed preparation or postconditions, naming the gates that blocked.
     """
     env = foreign_env(
@@ -1648,23 +1884,13 @@ def verify_attempt(root: Path, plan: Path, baseline_time: str, key: str | None =
     preparation = prepare_derived(root, env, key)
     if preparation:
         return preparation
+    line = format_step(root, env, key)
+    if formatted is not None and line is not None:
+        formatted.append(line)
     done = launch(["make", "verify"], root, env)
     problems = []
     if done.returncode != 0:
-        output = (done.stdout or "") + (done.stderr or "")
-        # verify_all.sh frames gates on standard output; a gate's standard error arrives unframed after them.
-        red = red_sections(done.stdout or "")
-        if red is None:
-            evidence = "\n".join(output.splitlines()[-TAIL_LINES:])
-        else:
-            evidence = "The gates that blocked, each with its last lines:\n" + red
-            errors = (done.stderr or "").splitlines()
-            if errors:
-                # Unframed: the last lines of the whole run's standard error, not of the blocking gate alone.
-                cut = len(errors) - STDERR_LINES
-                kept = ([f"[… {cut} earlier lines left out …]"] if cut > 0 else []) + errors[-STDERR_LINES:]
-                evidence += "\n\nStandard error of the whole run, last lines:\n" + "\n".join(kept)
-        problems.append(f"`make verify` exited {done.returncode}\n{scrub(evidence, key)}".rstrip())
+        problems.append(f"`make verify` exited {done.returncode}\n{verify_evidence(done, key)}".rstrip())
     try:
         current_time = time_log(plan)
     except Refused as error:
@@ -2098,6 +2324,7 @@ def run_attempts(
     root = ctx.root
     allowed = {ctx.findings.relative_to(root)}
     diagnostics: list[str] = []
+    record: list[str] = []
     for attempt, (endpoint, credential, route, reason) in enumerate(routes, 1):
         prompt = build_prompt(diagnostics)
         begin_work_call(ctx, verb, endpoint, prompt, attempt, route, ctx.findings, reason)
@@ -2136,8 +2363,9 @@ def run_attempts(
         else:
             files = unmeasured
         cannot_start: CallFailed | None = None
+        formatted: list[str] = []
         try:
-            problems = verify_attempt(root, ctx.plan, baseline_time, key)
+            problems = verify_attempt(root, ctx.plan, baseline_time, key, formatted)
         except CallFailed as error:
             # `make verify` could not be started: no model can repair that, so this attempt's block
             # says why and the run stops after the scan below, with no further attempt (spec, criterion 6).
@@ -2147,6 +2375,9 @@ def run_attempts(
         if not problems and answer_check is not None:
             problems = answer_check(answer)
         if problems:
+            # The format line stands first: the step ran before `make verify`, and the next model
+            # learns that the runner formats and whether ruff left findings it could not fix.
+            problems = [*(f"{FORMAT_LABEL}: {line}" for line in formatted), *problems]
             if kept is not None:
                 # Before the block is appended, so the quoted diagnostics stand beside the rows as
                 # they were, not beside the model's edits of them.
@@ -2156,6 +2387,7 @@ def run_attempts(
             listing = "\n".join(f"- {p}" for p in problems)
             diagnostics.append(f"Attempt {attempt} ({route}):\n{listing}")
             append(ctx.findings, quote_block(attempt_block(attempt, route, listing, files), key))
+        record += [f"- Attempt {attempt} ({route}): {line}" for line in formatted]
         if key is not None:
             # The gate runs repository code the model just edited: scan again after it.
             exposed = remove_changed_credential(root, key, ignored_before)
@@ -2171,7 +2403,12 @@ def run_attempts(
         if not problems:
             if before_commit is not None:
                 before_commit()
-            checkpoint(root, ctx.change, baseline, key, ignored_before, message=commit_message)
+            message = commit_message
+            if record:
+                # The subject stays the subject; the format line of every attempt that ran the step
+                # stands below the heading, in the commit that holds the formatted bytes.
+                message = commit_message + "\n\n" + FORMAT_COMMIT_HEADING + "\n" + "\n".join(record)
+            checkpoint(root, ctx.change, baseline, key, ignored_before, message=message)
             if after_commit is not None:
                 after_commit()
             print(f"{verb}: verified and committed · route {route} · attempt {attempt}")
@@ -2217,6 +2454,294 @@ def implement(root: Path, change: str, stage2_off: str | None = None) -> None:
             "implementation post-run checks failed after the allowed attempts; why each attempt failed and "
             f"the files it changed: {ctx.findings.relative_to(root)}"
         ),
+    )
+
+
+# ---------------------------------------------------------------------------
+# The draft - Codex writes phases 2, 2b and 3
+# ---------------------------------------------------------------------------
+
+
+def draft_prompt(ctx: Context, diagnostics: list[str]) -> str:
+    """The spec prompt with the design and plan prompts, the drafting rules and earlier diagnostics."""
+    extra = []
+    for heading, name in (("## Phase 2b prompt", "02b-design.md"), ("## Phase 3 prompt", "03-plan.md")):
+        body = (ctx.root / "prompts" / name).read_text(encoding="utf-8")
+        extra.append(f"{heading}\n\n{body.rstrip()}")
+    extra.append(DRAFT_RULES.replace("<change>", ctx.change))
+    if diagnostics:
+        extra.append("## Earlier attempts' diagnostics\n\n" + "\n\n".join(diagnostics))
+    return work_prompt(ctx.root, "02-spec.md", ctx.change, "\n\n".join(extra))
+
+
+def put_back(root: Path, baseline: str, keep: set[Path]) -> list[str]:
+    """Put every changed path but `keep` back at the baseline; name what was put back, sorted.
+
+    The same restore and clean as `restore_baseline`, without its ignored-file bookkeeping: a draft's
+    leftover is what git sees. A git that refuses is a failed call, not a refusal of this run.
+    """
+    changed = sorted(changed_paths(root) - keep, key=lambda path: path.as_posix())
+    if not changed:
+        return []
+    spec = [f":(exclude){path.as_posix()}" for path in sorted(keep, key=lambda path: path.as_posix())]
+    try:
+        _git_output(root, "restore", f"--source={baseline}", "--staged", "--worktree", "--", ".", *spec)
+        _git_output(root, "clean", "-fdq", "--", ".", *spec)
+    except Refused as error:
+        raise CallFailed(f"putting the paths back at {baseline[:12]} failed ({error})") from error
+    return changed
+
+
+def draft_keep(root: Path, ctx: Context, baseline: str) -> tuple[set[Path], list[str]]:
+    """What a draft attempt may keep changed, and the new ADR files among what it may not.
+
+    A keep is every changed path under the change folder except its `decisions.md` - the
+    maintainer's answers stand there (spec, criterion 9) - plus every changed path that a new ADR
+    file is and the merge base of the baseline and `origin/main` does not hold, so the ADR an
+    earlier draft of the same change committed stays the one new ADR file a later draft may edit
+    (spec, criterion 8, and 2a's F-3). The new ADR files are counted across the whole change -
+    against that merge base, what an earlier draft committed included - not only among this
+    attempt's changes against HEAD: a second draft that keeps the first ADR and adds another still
+    leaves two (2a's F-5).
+    """
+    prefix = Path("plans") / "changes" / ctx.change
+    changed = changed_paths(root)
+    keep = {path for path in changed if path.is_relative_to(prefix) and path != prefix / "decisions.md"}
+    base = _git_output(root, "merge-base", baseline, "origin/main").strip()
+    whole = changed_paths(root, against=base) | changed
+    new_adrs: list[str] = []
+    for path in sorted(whole - keep, key=lambda path: path.as_posix()):
+        posix = path.as_posix()
+        if not NEW_ADR.fullmatch(posix):
+            continue
+        held = subprocess.run(
+            ["git", "-C", str(root), "cat-file", "-e", f"{base}:{posix}"], capture_output=True, check=False
+        )
+        if held.returncode != 0:
+            # Deleting the draft's own unmerged ADR is allowed, so the path stays a keep; only a
+            # file that exists now counts, or a rename would read as two new ADRs (F-11).
+            keep.add(path)
+            if (root / path).exists():
+                new_adrs.append(posix)
+    return keep, new_adrs
+
+
+def answer_is_owed(root: Path, change: str) -> bool:
+    """Whether `change` is a feature whose ADR answer file does not exist in `root` now."""
+    try:
+        return any(feature.change == change for feature in check_adr_answers.examine(root).missing)
+    except (OSError, ValueError):
+        return False
+
+
+CARD_PROBLEM = "`plan.md` does not open with the plan card (For you:, Done when:, Appetite:, Not now:, Pre-mortem:)"
+
+
+def card_problem(text: str) -> str | None:
+    """Why a plan.md does not open with its card, or None (spec, criterion 15).
+
+    Below the frontmatter, before the first level-two heading, the first fenced block must hold
+    lines beginning with the five `CARD_LABELS` in that order.
+    """
+    body = re.sub(r"\A---\n.*?\n---\n", "", text, count=1, flags=re.S)
+    head = re.split(r"^## ", body, maxsplit=1, flags=re.M)[0]
+    lines = head.splitlines()
+    opening = next((i for i, line in enumerate(lines) if re.match(r"^(```|~~~)", line)), None)
+    if opening is None:
+        return CARD_PROBLEM
+    block = []
+    for line in lines[opening + 1 :]:
+        if re.match(r"^(```|~~~)", line):
+            break
+        block.append(line)
+    walk = 0
+    for label in CARD_LABELS:
+        found = next((i for i in range(walk, len(block)) if block[i].startswith(label)), None)
+        if found is None:
+            return CARD_PROBLEM
+        walk = found + 1
+    return None
+
+
+def verify_draft(root: Path, ctx: Context, key: str | None, new_adrs: list[str]) -> tuple[list[str], bool]:
+    """A draft attempt's post-run checks: the problems, and whether the answer is owed.
+
+    The order is the spec's (criteria 10 to 16): the ADR count, the derived files, `make verify` -
+    its exit code decides; the one missing answer it tolerates is the gate's own, asked for through
+    `check_adr_answers.TOLERATE_ENV`, never read from its output - the two
+    artefacts, the plan card and the `## Time used` heading.
+    """
+    owed = False
+    if len(new_adrs) > 1:
+        problems = ["the attempt left more than one new ADR file: " + ", ".join(f"`{path}`" for path in new_adrs)]
+        return problems, owed
+    env = foreign_env(
+        {
+            "GIT_CONFIG_COUNT": "1",
+            "GIT_CONFIG_KEY_0": "commit.gpgsign",
+            "GIT_CONFIG_VALUE_0": "false",
+            # The one tolerance of a draft is the gate's own, set by this runner alone: with this
+            # variable `adr-answers` reports this change's missing answer and passes, so the
+            # exit code of `make verify` decides and no output is read (spec, criterion 13; F-9, F-10).
+            check_adr_answers.TOLERATE_ENV: ctx.change,
+        }
+    )
+    preparation = prepare_derived(root, env, key)
+    if preparation:
+        return preparation, owed
+    try:
+        done = launch(["make", "verify"], root, env)
+    except CallFailed as error:
+        # A make that cannot start is as failed a post-run check as a red one: its diagnostics
+        # reach the attempt's block, and the chain moves on to the next attempt (2a's F-7).
+        return [f"`make verify` could not run: {error}"], owed
+    problems = []
+    if done.returncode != 0:
+        problems.append(f"`make verify` exited {done.returncode}\n{verify_evidence(done, key)}".rstrip())
+    else:
+        owed = answer_is_owed(root, ctx.change)
+    plan_missing = not ctx.plan.is_file()
+    for name in ("spec.md", "plan.md"):
+        if not (ctx.folder / name).is_file():
+            problems.append(f"plans/changes/{ctx.change}/{name} is missing after the draft.")
+    if not plan_missing:
+        # An absent plan.md is one problem of its own: the card and Time-used checks would read an
+        # empty string and name two faults a missing file cannot have (repair L3-4).
+        plan_text = _read_quietly(ctx.plan)
+        if card_problem(plan_text) is not None:
+            problems.append(CARD_PROBLEM)
+        if not TIME_HEADING.search(plan_text):
+            problems.append(f"plans/changes/{ctx.change}/plan.md has no `## Time used` heading.")
+    return problems, owed
+
+
+def draft(root: Path, change: str) -> None:
+    """Phases 2, 2b and 3: Codex drafts the change; GLM 5.3 after two failed Codex attempts (ADR 0016).
+
+    The guards are `implement`'s - the preflight, the pre-existing-change refusal, the leak check
+    before each call, the credential scans, the one commit - plus what a writing Codex call needs:
+    each attempt puts back what a draft may not change, and the one red gate a draft tolerates is
+    its own missing ADR answer, which only the maintainer can record.
+    """
+    ctx = preflight(root, change, CODEX, bead_file="research.md", required=("decisions.md",))
+    allowed = {ctx.findings.relative_to(root)}
+    outside = changed_paths(root) - allowed
+    if outside:
+        listing = ", ".join(sorted(path.as_posix() for path in outside))
+        raise Refused(f"the worktree has pre-existing changes outside this change's findings.md: {listing}")
+    baseline = _git_output(root, "rev-parse", "HEAD").strip()
+    ignored_before = ignored_snapshot(root)
+    routes = [
+        (CODEX, "codex", None),
+        (CODEX, "codex-repair", "the first draft attempt failed"),
+        (GLM, "glm", "two Codex draft attempts failed"),
+    ]
+    diagnostics: list[str] = []
+    for attempt, (endpoint, route, reason) in enumerate(routes, 1):
+        key = None
+        if endpoint == GLM:
+            # The key is read only when the GLM attempt is due (spec, criteria 23 and 24).
+            key = read_secret("GLM_KEY")
+            if key is None:
+                raise Refused(f"GLM_KEY is not in the secrets file {secrets_path()}.")
+        prompt = draft_prompt(ctx, diagnostics)
+        begin_work_call(ctx, "draft", endpoint, prompt, attempt, route, ctx.findings, reason)
+        unmeasured: str | None = None
+        try:
+            before = worktree_tree(root)
+        except (Refused, OSError) as error:
+            before, unmeasured = "", str(error)
+        call_error: CallFailed | None = None
+        try:
+            if endpoint == CODEX:
+                run_codex(ctx, prompt, writable=True)
+            else:
+                run_work_model(ctx, prompt, endpoint, writable=True, key=key)
+        except CallFailed as error:
+            call_error = error
+        if key is not None:
+            # Before any stop, the moved-HEAD one below included: a call that wrote the key and moved
+            # HEAD must not leave the key in the tree and in the model's commit - the runner removes
+            # it and refuses (spec, criterion 25). This is also before the second snapshot below can
+            # write the changed files into the object store, a dead call included. The comparison is
+            # the baseline, not the model's new HEAD: a file the call committed reads as clean
+            # against its own commit and must still be found (2a's F-4).
+            exposed = remove_changed_credential(root, key, ignored_before, against=baseline)
+            if exposed:
+                raise Refused(credential_message(exposed))
+        try:
+            head_now = _git_output(root, "rev-parse", "HEAD").strip()
+        except Refused as error:
+            raise CallFailed(f"the draft call's HEAD could not be read ({error})") from error
+        if head_now != baseline:
+            # A moved HEAD stops the run without a rewrite: resetting a commit the model made would
+            # rewrite history, and the decision is a person's (spec, criterion 11).
+            raise CallFailed(
+                f"the draft call moved HEAD from {baseline[:12]} to {head_now[:12]}; nothing was put back or committed"
+            )
+        if call_error is not None:
+            put = put_back(root, baseline, allowed)
+            listing = f"- the call failed: {call_error}"
+            diagnostics.append(f"Attempt {attempt} ({route}):\n{listing}")
+            block = f"Attempt {attempt} ({route}) failed its call: {call_error}"
+            if put:
+                block += "\n\nThe runner put back:\n" + "\n".join(put_back_lines(put))
+            append(ctx.findings, quote_block(block, key, put_back_lines(put)))
+            continue
+        if unmeasured is None:
+            # Both snapshots stand around the model call alone: the runner's own writes - the audit
+            # line, the block below - fall outside both of them.
+            try:
+                files: list[str] | str = attempt_files(root, before, worktree_tree(root))
+            except (Refused, OSError) as error:
+                files = str(error)
+        else:
+            files = unmeasured
+        keep, new_adrs = draft_keep(root, ctx, baseline)
+        put = put_back(root, baseline, keep)
+        if put:
+            listing = "\n".join(put_back_lines(put))
+            append(
+                ctx.findings,
+                quote_block(
+                    f"Attempt {attempt} ({route}): the runner put back what a draft may not change:\n{listing}",
+                    key,
+                    put_back_lines(put),
+                ),
+            )
+        problems, owed = verify_draft(root, ctx, key, new_adrs)
+        if problems:
+            # The next attempt starts on the tree this one left; the block quotes its files and
+            # diagnostics below its audit line (spec, criterion 21).
+            listing = "\n".join(f"- {problem}" for problem in problems)
+            diagnostics.append(f"Attempt {attempt} ({route}):\n{listing}")
+            append(ctx.findings, quote_block(attempt_block(attempt, route, listing, files), key))
+        if key is not None:
+            # The gate runs repository code the model just edited: scan again after it, against the
+            # baseline as before (2a's F-4).
+            exposed = remove_changed_credential(root, key, ignored_before, against=baseline)
+            if exposed:
+                raise Refused(credential_message(exposed))
+        if not problems:
+            if owed:
+                append(
+                    ctx.findings,
+                    f"ADR answer owed: decisions/answers/{ctx.change}/adr.yaml does not exist and the gate "
+                    "tolerated that for this run; the answer is the maintainer's (python3 scripts/harness.py decide adr).",
+                )
+            checkpoint(
+                root,
+                ctx.change,
+                baseline,
+                key,
+                ignored_before,
+                message=f"docs({change}): draft spec and plan — route {route}",
+            )
+            print(f"draft: verified and committed · route {route} · attempt {attempt}")
+            return
+    raise CallFailed(
+        "the draft failed after the allowed attempts; why each attempt failed and the files each changed: "
+        f"{ctx.findings.relative_to(root)}"
     )
 
 
@@ -2428,6 +2953,7 @@ def session(root: Path, change: str, model: str | None, handover: str | None) ->
 
 VERBS = {
     "explore": explore,
+    "draft": draft,
     "implement": implement,
     "repair": repair,
     "spec-review": spec_review,

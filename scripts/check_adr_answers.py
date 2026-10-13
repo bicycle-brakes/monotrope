@@ -18,6 +18,12 @@ Usage:
     python3 scripts/check_adr_answers.py             # measure this repository
     python3 scripts/check_adr_answers.py --root DIR  # another tree (tests)
 Exit: 0 = nothing found, 1 = findings, 3 = could not measure.
+
+Environment: `ADR_ANSWERS_TOLERATE_CHANGE=<change>` makes the missing answer of that one change
+a report line and not a finding. `scripts/stage2.py draft` sets it for its `make verify`: only
+the maintainer may create the answer, so a drafted feature never has it, and the exit code then
+decides without the runner reading any output. Another change's missing answer, a refused answer
+file and every anchor problem stay findings.
 """
 
 from __future__ import annotations
@@ -424,7 +430,10 @@ def examine(root: Path) -> Examination:
 # ---------------------------------------------------------------------------
 
 
-def run(root: Path, out: Any = print) -> int:
+TOLERATE_ENV = "ADR_ANSWERS_TOLERATE_CHANGE"
+
+
+def run(root: Path, out: Any = print, tolerate: str | None = None) -> int:
     try:
         if not root.is_dir() or not os.access(root, os.R_OK | os.X_OK):
             raise CannotMeasure(f"{root} is not a readable directory")
@@ -432,6 +441,13 @@ def run(root: Path, out: Any = print) -> int:
     except (CannotMeasure, OSError) as exc:
         out(f"adr-answers: cannot measure — {exc}")
         return 3
+    if tolerate:
+        owed = [f for f in ex.missing if f.change == tolerate]
+        ex.missing = [f for f in ex.missing if f.change != tolerate]
+        for f in owed:
+            out(
+                f"adr-answers: {f.change}: answer owed to the maintainer, tolerated for this run — {answer_rel(f.change)}"
+            )
     lines = ex.lines()
     if lines:
         for line in lines:
@@ -451,7 +467,7 @@ def main(argv: list[str] | None = None) -> int:
     ap = argparse.ArgumentParser(description=(__doc__ or "").split("\n")[0], allow_abbrev=False)
     ap.add_argument("--root", type=Path, default=REPO_ROOT, help="tree to measure (default: this repository)")
     args = ap.parse_args(argv)
-    return run(args.root.resolve())
+    return run(args.root.resolve(), tolerate=os.environ.get(TOLERATE_ENV) or None)
 
 
 if __name__ == "__main__":
