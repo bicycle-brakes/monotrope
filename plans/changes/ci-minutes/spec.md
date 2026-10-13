@@ -20,9 +20,15 @@ appetite: 2
 # Spec — `ci-minutes`
 
 After this change the hosted CI runs only where its result is used: a branch
-push without a pull request starts nothing, a pull request runs one
-interpreter and only for its newest commit, and `main` keeps the full check
-(bead coding-harness-cac). Research: `research.md`. Decisions: `decisions.md`.
+push without a pull request starts nothing, a pull request runs only for its
+newest commit, and every run checks one interpreter, Python 3.12 (bead
+coding-harness-cac). Research: `research.md`. Decisions: `decisions.md`.
+
+> Amended 2026-10-13: maintainer decided 3.12 only. The per-event matrix of
+> the first draft (pull requests on 3.12, `main` on 3.11 and 3.12) is
+> replaced by one interpreter everywhere (`decisions.md`, addendum).
+> Criteria 2, 3 and 8, the non-goals and the Definition of Done carry the
+> marker where they changed; criteria 1 and 4–7 stand as first written.
 
 ## Problem
 
@@ -34,8 +40,11 @@ interpreter and only for its newest commit, and `main` keeps the full check
   an open pull request starts it twice: `generate_ci` in
   `scripts/ci_gates.py` writes a bare `push:` and a bare `pull_request:`
   (`research.md`, "What exists today", read at `14f6e1a`).
-- Every pull-request run runs both interpreters, 3.11 and 3.12: the matrix is
-  the literal `tools.python` list for every event (same source).
+- Every run runs both interpreters, 3.11 and 3.12: the matrix is the
+  literal `tools.python` list for every event (same source). (amended
+  2026-10-13: maintainer decided 3.12 only — lakeswitch-ai enforces 3.12 as
+  well, so a 3.11 leg checks an interpreter no repository of the maintainer
+  targets.)
 - A newer push to a pull request never cancels the older run:
   `cancel-in-progress: false` for every event (same source).
 
@@ -46,14 +55,17 @@ interpreter and only for its newest commit, and `main` keeps the full check
    without any filter.
    *Refuted by:* a bare `push:`, a push filter naming another branch or a path,
    or a `branches`, `paths` or `types` key on `pull_request`.
-2. When the workflow runs on `pull_request`, the matrix job resolves to
-   exactly one leg, the last interpreter `tools.python` declares.
-   *Refuted by:* two legs on a pull request, or a leg other than the last
-   declared interpreter, also after `tools.python` changes.
-3. When the workflow runs on `push`, the matrix job resolves to every
-   interpreter `tools.python` declares, in the declared order.
-   *Refuted by:* one leg on a push to `main`, or a list that does not follow a
-   changed `tools.python`.
+2. (amended 2026-10-13: maintainer decided 3.12 only) When the workflow runs
+   on `push` or `pull_request`, the matrix job has exactly the legs
+   `tools.python` declares, and `tools.python` declares no 3.11.
+   *Refuted by:* a 3.11 leg, a declared 3.11, or a matrix that does not follow
+   a changed `tools.python`.
+3. (amended 2026-10-13: maintainer decided 3.12 only) When the repository
+   states its oldest supported interpreter, `pyproject.toml`
+   (`requires-python`), `ruff.toml` (`target-version`) and the first entry
+   of `tools.python` name the same version.
+   *Refuted by:* `requires-python = ">=3.11"`, `target-version = "py311"`, or
+   any of the three disagreeing with the others.
 4. If a newer `pull_request` run of the same pull request starts, the older
    run is cancelled; a `push` run is never cancelled. The concurrency group
    still carries the event name and the ref.
@@ -69,20 +81,30 @@ interpreter and only for its newest commit, and `main` keeps the full check
 7. When the change is merged, the committed `.github/workflows/ci.yml` is
    byte-identical to `python3 scripts/ci_gates.py --generate-ci`.
    *Refuted by:* the `ci-drift` gate red.
-8. When a reader looks up which event runs what, `decisions/gates.yaml` (its
-   header and `tools` comments) and `docs/WORKFLOW.md` §3 ("Verification runs
-   through git and CI, not through the harness") say: push to `main` runs
-   every interpreter, a pull request runs the last one and cancels its
-   superseded runs, the schedule runs only the drift gates.
-   *Refuted by:* a comment still saying "per push/PR" or "once per entry"
-   without the pull-request exception.
+8. (amended 2026-10-13: maintainer decided 3.12 only) When a reader looks up
+   which event runs what, `decisions/gates.yaml` (its header comment) and
+   `docs/WORKFLOW.md` §3 ("Verification runs through git and CI, not through
+   the harness") say: a push runs CI only on `main`, a pull request cancels
+   its superseded runs, the schedule runs only the drift gates; and no
+   document or comment of this repository outside sample data and history
+   says the repository is checked under 3.11.
+   *Refuted by:* a comment still saying "per push/PR", or the comment in
+   `scripts/check_research_currency.py` still saying the repository "is
+   checked under 3.11 too".
 
 ## Non-goals
 
 - A self-hosted runner (rejected by the maintainer on 2026-10-13).
-- More gate legs on the nightly schedule (`decisions.md`, the schedule
-  stays as it is).
+- More gate legs on the nightly schedule (moot since the amendment of
+  2026-10-13: one interpreter).
 - A new key or schema version in `decisions/gates.yaml`.
+- (amended 2026-10-13: maintainer decided 3.12 only) Regenerating
+  `requirements-ci.txt`: it carries no interpreter marker and already
+  installs on 3.12 (`research.md`, amendment).
+- (amended 2026-10-13) `tools/cloud-env/`: it installs lakeswitch-ai's
+  interpreter, which moves with lakeswitch-ai-6sj.
+- (amended 2026-10-13) Sample interpreter lists in tests and in the schema's
+  error text: 3.11 there is data, not a claim about this repository.
 - A configurable default-branch name for repositories that take the kit;
   it comes back when a kit repository's default branch is not `main`.
 - Path filters that skip CI for text-only pull requests: the pull request
@@ -96,24 +118,29 @@ interpreter and only for its newest commit, and `main` keeps the full check
 - The `pull_request` trigger's checkout of the merge ref (RB-G7,
   `_merge_ref_findings` in `tests/test_ci.py`): untouched.
 - The gate list in `decisions/gates.yaml`: no gate added, removed or moved.
+- `requirements-ci.txt`: not regenerated (amended 2026-10-13).
 
 ## Definition of Done
 
 - `verify` green.
 - Moved in the same pull request: `.github/workflows/ci.yml` (regenerated),
-  `decisions/gates.yaml` (comments only), `docs/WORKFLOW.md` (one sentence).
+  `decisions/gates.yaml` (`tools.python` and its comments),
+  `pyproject.toml` (`requires-python`), `ruff.toml` (`target-version`), the
+  comment in `scripts/check_research_currency.py`, `docs/WORKFLOW.md` (one
+  sentence). (amended 2026-10-13: maintainer decided 3.12 only)
 - The protected areas untouched and the non-goals unbuilt, shown by the pull
   request's file list.
 - Bead: the pull request closes coding-harness-cac, and its last commit
   carries the trailer `Closes-Bead: coding-harness-cac`
   (`prompts/07-commit.md`).
 - Special runs: the first hosted run on the pull request shows one leg
-  (3.12), and the push run after the merge shows two — its link in the bead's
-  closing note, or "not observed" if GitHub still starts no jobs.
+  (3.12), and so does the push run after the merge (amended 2026-10-13) —
+  its link in the bead's closing note, or "not observed" if GitHub still
+  starts no jobs.
 
 ## Open decisions
 
-None open. The three measures were the maintainer's (2026-10-13); the
+None open. The measures were the maintainer's (2026-10-13), the one
+interpreter included (amended 2026-10-13: maintainer decided 3.12 only); the
 remaining points are `[DETAIL]` decisions with their reasons in
-`decisions.md` — notably that the nightly schedule stays unchanged, because it
-runs no gate legs today and every merge to `main` already runs both.
+`decisions.md`, addendum.

@@ -66,3 +66,39 @@ unchanged.
 [DETAIL] **A cancelled pull-request run may show a red `verify` on the
 superseded commit.** The summary job runs under `always()`. Only the newest
 commit's check gates the merge, so this is accepted and not worked around.
+
+## Addendum — 2026-10-13 (amended 2026-10-13: maintainer decided 3.12 only)
+
+The maintainer stopped the per-event matrix on 2026-10-13 and decided Python
+3.12 only for coding-harness ("ich will 3.12 bei lakeswitch enforcen. Keine
+doppelte Arbeit" — 3.12 is enforced in lakeswitch-ai too, so no work is done
+twice; lakeswitch-ai moves under its bead lakeswitch-ai-6sj). This replaces
+measure 2 above. Measures 1 and 3 stand. The skip record stands: the decision
+was the maintainer's, not asked here.
+
+Superseded by this addendum: the `[DETAIL]` points "The nightly schedule
+stays as it is" (moot — there is one interpreter), "The pull-request
+interpreter is the last declared one" and "One expression picks the legs per
+event" (no per-event matrix any more).
+
+[DETAIL] **Class stays `bounded`.** Dropping 3.11 edits declarations that
+already exist (`tools.python`, `requires-python`, the ruff target) and decides
+nothing the maintainer did not decide.
+
+[DETAIL] **The matrix job keeps its shape with one leg.** The summary check
+`verify` and the ruleset's required check stay unchanged; restructuring the
+generator would be work this change does not need.
+
+[DETAIL] **The ruff target moves to `py312`.** It names the oldest interpreter
+the code must run on; measured with no new finding (`research.md`,
+amendment).
+
+[DETAIL] **The lock is not regenerated.** It carries no interpreter marker and
+already installs on 3.12 in CI and in `make venv` (`research.md`, amendment).
+
+[DETAIL] **Sample lists in tests keep `3.11`.** Where a test feeds the schema
+or the lock check an invented interpreter list, 3.11 is data, not a claim
+about this repository; rewriting it would change nothing the tests show.
+
+[DETAIL] **`tools/cloud-env/` is not touched.** It installs lakeswitch's
+interpreter, which changes with lakeswitch-ai-6sj.
