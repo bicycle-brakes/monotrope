@@ -225,3 +225,14 @@ Stage-2 call, 2026-10-13: repair · attempt 1 · route codex · endpoint openai-
 Stage-2 call, 2026-10-13: review · endpoint openai-codex · model gpt-6.1-sol · leak check clean over 416 files, 1041 commits, 12 rules.
 
 Stage-2 call, 2026-10-13: review · endpoint openai-codex · model gpt-6.1-sol · leak check clean over 416 files, 1043 commits, 12 rules.
+
+Stage-2 call, 2026-10-13: review · endpoint openai-codex · model gpt-6.1-sol · leak check clean over 416 files, 1044 commits, 12 rules.
+
+## Phase 6 — Codex, 2026-10-13
+
+| ID | Severity | Dimension | Origin | Where | Finding | Reviewer | Status | Broke a test |
+|---|---|---|---|---|---|---|---|---|
+| F-10 | MAJOR | SPEC | base | `scripts/stage2.py:2506`; `scripts/stage2.py:2850` | If a completed Codex attempt deletes `spec.md` and fails a post-run check, constructing the next prompt raises an uncaught `FileNotFoundError`: only `plan.md` is restored. Isolated execution reproduces both cases—deletion by attempt 1 prevents the fresh Codex retry; deletion by attempt 2 prevents the Sonnet fallback. The prescribed next attempt must receive the failed attempt’s diagnostics. [criteria 4–5] | Codex | open | — |
+
+Phase 6 verdict: codex 01a136aa-2a43-7370-ac31-a0a5732edea6, 2026-10-13
+Reviewer session: codex 01a136aa-2a43-7370-ac31-a0a5732edea6 — a fresh session reviewed: an earlier ## Phase 6 block makes this a re-check
