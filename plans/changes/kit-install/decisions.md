@@ -4,7 +4,7 @@ status: draft
 implementation_status: none
 date: 2026-10-13
 last_reviewed: 2026-10-13
-updated: 2026-10-13
+updated: 2026-10-14
 supersedes: null
 superseded_by: null
 bead: coding-harness-2uk
@@ -149,3 +149,74 @@ the maintainer's answers Q-1 to Q-6; the redraft carries them into the spec.
   (ADR 0017 belongs to bead coding-harness-0ga's branch, `research.md`
   amendment); its scope narrows to install, report and lock, and names
   `kit update` as the follow-up (bead coding-harness-66q).
+
+## Phase 2a rulings — 2026-10-14, orchestrator (second round)
+
+`[DETAIL]` rulings on Opus 5.5's second phase-2a rows (`findings.md`, F-16 to
+F-24), each within the maintainer's answers Q-1 to Q-6 and the first rulings
+above; the redraft carries them into the spec.
+
+- F-16: reading B. The probe tree is exactly what install writes into an
+  empty fresh target at the selected version — kit files, the five templates
+  as install initializes them (the gate and Makefile starters, the source's
+  bytes for the other three), CI derived from the starter gate file, the
+  scaffold placeholders and the lock — and the probe commits it as today.
+  This supersedes ruling F-10's "with the source's bytes": F-10 predates the
+  separate starters, and its purpose, "as a fresh install would", is what
+  makes `REIST_NICHT` a measurement of what a target receives, which AC 18
+  then deselects exactly. Cases that read source gate ids or source Makefile
+  recipes become generic with fixtures or are scoped under F-17/F-20;
+  `REIST_NICHT` and its cap still do not grow (AC 18, AC 21; AC 21's
+  "source-original bytes" and its "bootstrap substitution" refutation are
+  replaced by this reading).
+- F-17: the third disposition is a scoped skip: a shipped case that asserts
+  this repository's tracked-file stock (the counts at `tests/test_kit.py:64–70`
+  and `:189–200`) or a source-only policy skips when the tree root holds
+  `harness.lock.yaml`, the mark of an installed instance — present in the
+  probe tree (F-16) and in the target from lock publication on (AC 13), absent
+  in the source, which keeps enforcing. The installer's own tests, the
+  real-install test included, are `bestand` and do not ship (AC 17, 18, 21).
+- F-18: a new criterion after AC 17: a disposable fixture commits the
+  installed payload (the adoption pull request's step, taken by the test,
+  never by the installer — Q-4, AC 16) and the target's `make verify` passes
+  again; the kit manifest gains a `bestand` rule for `harness.lock.yaml`, so
+  the lock is classified but never selected for install. Refuted by a shipped
+  case red in the committed state, the role check at `tests/test_kit.py:52–61`
+  included (AC 7, 17, 19).
+- F-19: the freshness allowlist becomes exact root names — `README.md`,
+  `LICENSE`, `.gitignore`, `.gitattributes`; any other tracked name
+  (`README.rst`, `LICENSE.txt`, …) is refused like every non-fresh target
+  (Q-1). The kit manifest gains a `bestand` rule for `LICENSE` (the other
+  three have one), and the evidence fixture of AC 17 and F-18 tracks all four
+  names (Terms "Fresh target", AC 5, AC 17).
+- F-20: every skip condition this change adds to or changes in a shipped test
+  file is listed in `plan.md` by case with its predicate, and only two
+  predicates are allowed: absence of a path the kit does not ship (the
+  existing convention, `tests/test_handover_entry.py`) or the lock mark of
+  F-17. Refuted in AC 18 and AC 21 by a skip in the change's diff against its
+  merge base that the plan does not list or that uses another predicate; the
+  Definition of Done's retained enforcement is shown by each listed case
+  running, not skipping, in the source.
+- F-21: CI derivation belongs to the proposed payload AC 10 validates: install
+  runs the selected generator in the temporary preparation tree before any
+  target write, and a gate file the generator rejects — retained or starter —
+  refuses with nothing written and no lock (AC 10, AC 19). Ruling F-7's "in
+  the target" reads "for the target", as `design.md` already prepares.
+- F-22: install refuses before any target write when a template destination
+  exists as anything but a regular file — a symlink (also one to a regular
+  file), a directory, a submodule or a special file; only a regular file is
+  retained (AC 4, AC 6, AC 11).
+- F-23: the change raises the kit manifest's `schema_version` from 1 to 2 (it
+  adds `template` and `derived`); install and report accept exactly 2, and a
+  report against a source commit with another or no manifest schema fails,
+  naming that commit and its schema, never classifying the old paths by the
+  running version's roles (AC 10, AC 22). A comparison for lakeswitch-ai uses
+  a source commit from this change onward.
+- F-24: the target's own runtime is the target root's `.venv/bin/python3`,
+  else the first `python3` on a PATH from which install has removed every
+  entry inside the repository the command runs from (the source `.venv`
+  included), besides removing `PYTHON` and `BEAD_RENDER`. Refuted by a test
+  that starts install with the source interpreter's directory first on PATH
+  and finds it in the verifier's PATH or interpreter; the AC 17 fixture
+  supplies its dependencies in the target, never by inheritance (AC 14,
+  AC 17).
