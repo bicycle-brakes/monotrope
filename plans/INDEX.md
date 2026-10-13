@@ -100,6 +100,7 @@ typed: a hand-kept list of files ages exactly as fast as files are added.
 | [`changes/attempt-diagnostics/spec.md`](changes/attempt-diagnostics/spec.md) | draft | partial | 2026-10-11 | coding-harness-cit |
 | [`changes/codex-drafts/decisions.md`](changes/codex-drafts/decisions.md) | draft | none | 2026-10-12 | coding-harness-rhq |
 | [`changes/codex-drafts/design.md`](changes/codex-drafts/design.md) | draft | none | 2026-10-12 | coding-harness-rhq |
+| [`changes/codex-drafts/findings.md`](changes/codex-drafts/findings.md) | draft | none | 2026-10-12 | coding-harness-rhq |
 | [`changes/codex-drafts/plan.md`](changes/codex-drafts/plan.md) | draft | none | 2026-10-12 | coding-harness-rhq |
 | [`changes/codex-drafts/research.md`](changes/codex-drafts/research.md) | draft | none | 2026-10-12 | coding-harness-rhq |
 | [`changes/codex-drafts/spec.md`](changes/codex-drafts/spec.md) | draft | none | 2026-10-12 | coding-harness-rhq |

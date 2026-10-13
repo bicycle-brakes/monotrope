@@ -4,7 +4,7 @@ status: draft
 implementation_status: none
 date: 2026-10-12
 last_reviewed: 2026-10-12
-updated: 2026-10-12
+updated: 2026-10-13
 supersedes: null
 superseded_by: null
 bead: coding-harness-rhq
@@ -269,45 +269,45 @@ records the maintainer's answer for this change.
 
 ## Criterion ledger
 
-- 1: not yet written tests/test_stage2.py::test_a_draft_starts_codex_with_workspace_write_and_no_bypass — the draft call keeps `read-only`, or passes `--add-dir`
+- 1: tests/test_stage2.py::test_a_draft_starts_codex_with_workspace_write_and_no_bypass — the draft call keeps `read-only`, or passes `--add-dir`
 - 2: tests/test_stage2.py::test_codex_is_pinned_on_first_and_resumed_calls — rewritten on a seeded Codex 2a session; red when `review` passes `workspace-write`
-- 3: not yet written tests/test_stage2.py::test_the_draft_prompt_carries_the_three_phase_prompts_and_the_rules — the GLM route built without `03-plan.md`
-- 4: not yet written tests/test_stage2.py::test_a_draft_without_decisions_or_a_research_bead_refuses — `required` left empty
-- 5: not yet written tests/test_stage2.py::test_a_draft_refuses_changes_outside_findings — the pre-existing check skipped
-- 6: not yet written tests/test_stage2.py::test_each_draft_attempt_has_its_audit_line_and_reason — the reason dropped from the fallback's line
-- 7: not yet written tests/test_stage2.py::test_a_leak_before_a_draft_attempt_stops_the_chain — a `Refused` caught as a failed call
-- 8: not yet written tests/test_stage2.py::test_paths_outside_the_change_folder_are_put_back_and_named — the put-back skipped, or an existing ADR kept
-- 9: not yet written tests/test_stage2.py::test_an_edited_decisions_file_is_put_back — `decisions.md` kept with the folder
-- 10: not yet written tests/test_stage2.py::test_two_new_adr_files_fail_the_attempt — no count of new ADR files
-- 11: not yet written tests/test_stage2.py::test_a_draft_call_that_moves_head_stops_the_run — the HEAD check after the put-back
-- 12: not yet written tests/test_stage2.py::test_a_red_verify_fails_the_draft_attempt — the exit code of `make verify` ignored
-- 13: not yet written tests/test_stage2.py::test_only_the_changes_own_missing_adr_answer_is_tolerated — any red `adr-answers` section tolerated
-- 14: not yet written tests/test_stage2.py::test_a_missing_spec_or_plan_fails_the_attempt — only `plan.md` checked
-- 15: not yet written tests/test_stage2.py::test_a_plan_without_its_card_fails_the_attempt — the labels looked for anywhere in the file
-- 16: not yet written tests/test_stage2.py::test_a_plan_without_time_used_fails_the_attempt — the heading check left out
-- 17: not yet written tests/test_stage2.py::test_a_passing_draft_makes_one_commit_and_leaves_a_clean_tree — `findings.md` written after the commit
-- 18: not yet written tests/test_stage2.py::test_a_failed_first_draft_gets_one_codex_repair_with_its_diagnostics — the diagnostics not passed to the second prompt
-- 19: not yet written tests/test_stage2.py::test_two_failed_codex_attempts_fall_back_to_glm_5_3 — the GLM route on `GLM_FLASH`
-- 20: not yet written tests/test_stage2.py::test_a_failed_draft_call_is_put_back_and_recorded — the put-back left out after a dead call
-- 21: not yet written tests/test_stage2.py::test_a_failed_draft_check_leaves_its_block_and_its_tree — the tree put back after a post-run failure
-- 22: not yet written tests/test_stage2.py::test_three_failed_draft_attempts_exit_1_without_a_commit — the loop ends without raising
-- 23: not yet written tests/test_stage2.py::test_a_codex_draft_never_reads_the_glm_key — the key read before the loop
-- 24: not yet written tests/test_stage2.py::test_a_missing_glm_key_refuses_the_glm_draft_attempt — a `None` key passed to the GLM call
-- 25: not yet written tests/test_stage2.py::test_a_glm_draft_that_writes_the_key_is_refused_without_a_commit — the scan skipped on the GLM route
+- 3: tests/test_stage2.py::test_the_draft_prompt_carries_the_three_phase_prompts_and_the_rules — the GLM route built without `03-plan.md`
+- 4: tests/test_stage2.py::test_a_draft_without_decisions_or_a_research_bead_refuses — `required` left empty
+- 5: tests/test_stage2.py::test_a_draft_refuses_changes_outside_findings — the pre-existing check skipped
+- 6: tests/test_stage2.py::test_each_draft_attempt_has_its_audit_line_and_reason — the reason dropped from the fallback's line
+- 7: tests/test_stage2.py::test_a_leak_before_a_draft_attempt_stops_the_chain — a `Refused` caught as a failed call
+- 8: tests/test_stage2.py::test_paths_outside_the_change_folder_are_put_back_and_named — the put-back skipped, or an existing ADR kept
+- 9: tests/test_stage2.py::test_an_edited_decisions_file_is_put_back — `decisions.md` kept with the folder
+- 10: tests/test_stage2.py::test_two_new_adr_files_fail_the_attempt — no count of new ADR files
+- 11: tests/test_stage2.py::test_a_draft_call_that_moves_head_stops_the_run — the HEAD check after the put-back
+- 12: tests/test_stage2.py::test_a_red_verify_fails_the_draft_attempt — the exit code of `make verify` ignored
+- 13: tests/test_stage2.py::test_only_the_changes_own_missing_adr_answer_is_tolerated — any red `adr-answers` section tolerated
+- 14: tests/test_stage2.py::test_a_missing_spec_or_plan_fails_the_attempt — only `plan.md` checked
+- 15: tests/test_stage2.py::test_a_plan_without_its_card_fails_the_attempt — the labels looked for anywhere in the file
+- 16: tests/test_stage2.py::test_a_plan_without_time_used_fails_the_attempt — the heading check left out
+- 17: tests/test_stage2.py::test_a_passing_draft_makes_one_commit_and_leaves_a_clean_tree — `findings.md` written after the commit
+- 18: tests/test_stage2.py::test_a_failed_first_draft_gets_one_codex_repair_with_its_diagnostics — the diagnostics not passed to the second prompt
+- 19: tests/test_stage2.py::test_two_failed_codex_attempts_fall_back_to_glm_5_3 — the GLM route on `GLM_FLASH`
+- 20: tests/test_stage2.py::test_a_failed_draft_call_is_put_back_and_recorded — the put-back left out after a dead call
+- 21: tests/test_stage2.py::test_a_failed_draft_check_leaves_its_block_and_its_tree — the tree put back after a post-run failure
+- 22: tests/test_stage2.py::test_three_failed_draft_attempts_exit_1_without_a_commit — the loop ends without raising
+- 23: tests/test_stage2.py::test_a_codex_draft_never_reads_the_glm_key — the key read before the loop
+- 24: tests/test_stage2.py::test_a_missing_glm_key_refuses_the_glm_draft_attempt — a `None` key passed to the GLM call
+- 25: tests/test_stage2.py::test_a_glm_draft_that_writes_the_key_is_refused_without_a_commit — the scan skipped on the GLM route
 - 26: tests/test_stage2.py::test_stage2_off_is_only_for_work_verbs — `draft` joins its parameters; red when `draft` accepts the flag
-- 27: not yet written tests/test_stage2.py::test_the_spec_review_starts_opus_with_read_only_tools — the spec review still calls `run_codex`
-- 28: not yet written tests/test_stage2.py::test_the_spec_review_answer_lands_as_opus_rows_without_a_session — the session line still appended
-- 29: not yet written tests/test_stage2.py::test_a_findings_file_the_spec_review_creates_names_claude_code — the producer map left at `codex` or `pi`
+- 27: tests/test_stage2.py::test_the_spec_review_starts_opus_with_read_only_tools — the spec review still calls `run_codex`
+- 28: tests/test_stage2.py::test_the_spec_review_answer_lands_as_opus_rows_without_a_session — the session line still appended
+- 29: tests/test_stage2.py::test_a_findings_file_the_spec_review_creates_names_claude_code — the producer map left at `codex` or `pi`
 - 30: tests/test_stage2.py::test_a_fresh_phase_6_session_says_so — its second half seeds the session line; red when `review` resumes without one
 - 31: tests/test_stage2.py::test_review_resumes_the_recorded_session — the line seeded by hand; red when a recorded session is not resumed
 - 32: tests/test_stage2.py::test_workflow_section_4_routes_the_three_reviews — `STAGE2_ROUTING` and `class_table_problems` rewritten; red on a 2a row on Codex
-- 33: not yet written tests/test_stage2.py::test_the_workflow_states_the_order_of_a_drafted_change — one of the five steps removed
+- 33: tests/test_stage2.py::test_the_workflow_states_the_order_of_a_drafted_change — one of the five steps removed
 - 34: tests/test_stage2.py::test_the_review_prompts_give_both_paths — `review_prompt_problems` rewritten; red when 02a's Model line names gpt-6.1-sol
-- 34: not yet written tests/test_stage2.py::test_the_drafting_prompts_name_the_draft_verb — a drafting prompt's Model line without `stage2.py draft <change>`
+- 34: tests/test_stage2.py::test_the_drafting_prompts_name_the_draft_verb — a drafting prompt's Model line without `stage2.py draft <change>`
 - 35: tests/test_stage2.py::test_agents_md_names_the_loop_and_the_runner — `agents_md_problems` gains the draft and Opus needles; red on "Codex reviews 2a and 6"
 - 36: tests/test_model_endpoints.py::test_no_old_reviewer_remark_claims_a_review_phase — `_remark_problems` rewritten; red when the Codex remark claims phase 2a
 - 36: tests/test_stage2.py::test_the_glm_remark_names_its_work_verbs_and_no_review_phase — gains the `glm-5.3` draft needle
-- 36: not yet written tests/test_model_endpoints.py::test_no_remark_routes_the_spec_review_to_codex — the opencode-go remark still says 2a stays with Codex
+- 36: tests/test_model_endpoints.py::test_no_remark_routes_the_spec_review_to_codex — the opencode-go remark still says 2a stays with Codex
 - 37: not a test — the touch map in the decision pull request shows `docs/adr/` gaining only `0016-codex-drafts-and-opus-reviews-the-spec.md`
 
 ## Not touched
@@ -343,4 +343,60 @@ records the maintainer's answer for this change.
 - **Unmeasured sandbox.** `workspace-write` is configured, not measured; the
   ADR says so, and the first real draft is a later change's.
 
+## Phase-4 notes (2026-10-13)
+
+What the repair pass over attempt 1's diagnostics settled, for the next
+reading of this plan:
+
+- **§3's Model routing (step 4).** The plan's wording kept rows 2, 2b and 3 on
+  `**Opus 5.5**` and only reworded their why-cells. The pre-existing pin test
+  `test_routing_gives_2b_the_prompt_model` holds row 2b's bold cell against
+  `prompts/02b-design.md`'s Model line, which now leads with `gpt-6.1-sol` —
+  so the three bold cells move to `**gpt-6.1-sol**` and the why-cells carry
+  effort `max` and the Stage-2-off clause. Rows 1, 1a, 2a, 4, 5, 6 and 7 are
+  untouched, as `routing_problems` pins them.
+- **The drafting prompts' Model lines lead with the bare id**
+  (`**Model:** gpt-6.1-sol — Codex (`gpt-6.1-sol`) at effort `max`, …`): the
+  model-line resolvers in `tests/test_templates.py` and
+  `tests/test_model_endpoints.py` cut at the first em-dash, and the earlier
+  form (`Codex (`gpt-6.1-sol`) — …`) resolved to no declared id.
+- **`verify_evidence` scrubs with its `key`** (the evidence lines moved into
+  it, as "Not touched" allows), and both call sites dropped their outer
+  `scrub` — scrubbing twice is a no-op, once is enough.
+- **Codex stand-in steps in the draft tests carry `codex_ok(...)`** (a
+  `thread.started` event and the answer file) wherever the attempt's call must
+  succeed; the dead first step of criterion 20's test stays bare. The failed
+  runs of the multi-scenario tests leave an untracked `plans/INDEX.md` (from
+  `prepare_derived`), which the next run would refuse as a pre-existing
+  change; those scenarios unlink it. The two tests that read a Codex call's
+  prompt take `["argv"][-1]` — `run_codex` passes the prompt as the last
+  argv element, and the stand-in's `prompt_file` is a Claude-option read.
+- **The planted §4 mutations of `test_workflow_section_4_routes_the_three_reviews`**
+  name §4's why-cell heads for rows 2, 2b and 3 (`… | effort `max`, one call`,
+  `… | effort `max`, drafted`): with §3's bold cells now `gpt-6.1-sol` too,
+  the bare `| 2 Spec | **gpt-6.1-sol** |` needle matched §3's row first, and
+  `text.replace(…, 1)` mutated the section `routing_problems` does not pin.
+- **`REIST_NICHT`** (`scripts/kit/probe.py`) renames the three prompt cases to
+  the new model-line ids and adds
+  `test_no_remark_routes_the_spec_review_to_codex`; 35 -> 36, at the cap, no
+  raise.
+
+## Runner route — 2026-10-13
+
+Stage-1 route: implement · model claude-sonnet-5-5 · reason: two Flash post-run checks failed.
+
 ## Time used
+
+2026-10-13 — phase 4 under the Stage-2 runner (`implement codex-drafts`), one
+span over three context windows, the compaction breaks counted. The session
+has no command tool, so no wall-clock start–end could be read; the date is the
+runner's reading (2026-10-13, also on the audit lines in `findings.md`).
+Attempt 1's red `make verify` — 24 pytest failures, two ruff-check errors, one
+formatting rewrap, five leerprobe cases — was repaired in that window.
+A further repair window (attempt 3, same date, no command tool, so no
+wall-clock reading) fixed attempt 2's three draft tests: the prompt test reads
+the drafting rules with whitespace flattened, and the two multi-run tests
+clear `plans/INDEX.md` and `scripts/__pycache__` between runs through
+`clear_derived_leftovers`; single-entry plant dicts gained their trailing
+commas. The runner's `make verify` and checkpoint commit are still to come.
+The appetite of 8 h is not reached.

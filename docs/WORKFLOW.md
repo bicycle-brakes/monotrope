@@ -4,7 +4,7 @@ category: governance
 status: current
 created: 2026-09-05
 last_reviewed: 2026-09-29
-updated: 2026-10-12
+updated: 2026-10-13
 owner: Data Architect
 provenance: ai-drafted-reviewed
 produced_by:
@@ -410,10 +410,10 @@ none, because the registry keeps counting it as protection.
 |---|---|---|
 | 1 Explore | **Haiku 4.5** | much input, little output, no deep reasoning; where the runner starts the phase (§4), GLM 5.3 Flash explores instead |
 | 1a Interview | **Opus 5.5** | the questions are the work, and there are few of them |
-| 2 Spec | **Opus 5.5** | effort `xhigh`; the highest reasoning demand, little output |
-| 2a Spec review | **Opus 5.5** | a fresh context that does not know the author's reasoning; a `bounded`, `feature` or `architectural` change goes to Codex (§4) |
-| 2b Design | **Opus 5.5** | effort `xhigh`; the same demand as spec and plan |
-| 3 Plan | **Opus 5.5** | effort `xhigh`; an error here is the most expensive in the whole run |
+| 2 Spec | **gpt-6.1-sol** | effort `max`; the highest reasoning demand, little output; where Stage 2 is off, Opus 5.5 at effort `xhigh` writes it |
+| 2a Spec review | **Opus 5.5** | a fresh context that does not know the author's reasoning; where the runner starts it (§4), a headless Claude Code call |
+| 2b Design | **gpt-6.1-sol** | effort `max`; the same demand as spec and plan; where Stage 2 is off, Opus 5.5 at effort `xhigh` writes it |
+| 3 Plan | **gpt-6.1-sol** | effort `max`; an error here is the most expensive in the whole run; where Stage 2 is off, Opus 5.5 at effort `xhigh` writes it |
 | 4 Implement | **Sonnet 5.5** | effort `medium`; a solid worker given a clear plan; where the runner starts the phase (§4), GLM 5.3 Flash builds instead |
 | 5 Verify | — | deterministic |
 | 6 Review | **Opus 5.5** | finds what Sonnet misses, and reads the code a change calls instead of trusting its docstring; a `bounded`, `feature` or `architectural` change goes to Codex (§4) |
@@ -421,8 +421,10 @@ none, because the registry keeps counting it as protection.
 
 **No Fable** (maintainer, 2026-10-06): no phase runs on Fable 5.1; Opus 5.5
 takes its places — the interview, the escalation below and the fallback of
-stage 2 (§4). **Where stage 2 applies (§4), four rows leave this table:** the
-reviews of a `bounded`, `feature` or `architectural` change go to Codex, and explore and implement go to GLM 5.3 Flash. The rows above stay what runs
+stage 2 (§4). **Where stage 2 applies (§4), five rows leave this table:** where
+the runner drafts (§4), Codex writes spec, design and plan instead, and explore
+and implement go to GLM 5.3 Flash; where the runner starts the spec review
+(§4), it stays on Opus 5.5 as a headless call. The rows above stay what runs
 wherever the runner does not start a phase — a `spike`'s reviews, and every
 phase until the runner starts it.
 
@@ -436,9 +438,10 @@ the whole repository; until then both ran on Fable 5.1). In a session:
 from its definition's frontmatter (`effort: xhigh`), not from the call that
 starts it, and a new definition is read only when a session starts.
 
-**Spec review and review on Opus 5.5, except the `bounded`, `feature` and
-`architectural` changes that §4 routes to Codex** (maintainer,
-2026-09-30 and 2026-10-06, for the whole repository). From 2026-09-29 both ran on Fable 5.1,
+**Spec review on Opus 5.5 for every change since ADR 0016; review on Opus 5.5,
+except the `bounded`, `feature` and `architectural` changes that §4 routes to
+Codex** (maintainer, 2026-09-30 and 2026-10-06, for the whole repository; ADR
+0016 moved the spec review off Codex on 2026-10-12). From 2026-09-29 both ran on Fable 5.1,
 and before that on Opus 5. An interim routing put both on Opus 5.5 from
 2026-09-30 until stage 2 was live; the merge of ADR 0007 ends it for the
 changes §4 routes to Codex. The cost is known: the spec review reads with the
@@ -454,13 +457,14 @@ medium`; for a phase run as its own session: `claude --model claude-sonnet-5-5
 **The spec review improves the spec first.** The spec's author works each 2a
 row into `spec.md` (or rejects it with a reason) before phase 3; the revised
 spec is the one yardstick for plan, code and review (`prompts/02-spec.md`,
-"After the spec review"). **One reviewer for both:** phase 6 resumes the session
-of phase 2a (`--session-id` there, `--resume` here; the id stands in
-`findings.md`). On the Codex path the runner keeps the session and writes it
-as `Reviewer session: codex <id>`
-(§4). It measures the code against the revised spec and first checks
-that its 2a rows arrived there. It still never saw the author's reasoning, and
-passing the spec in 2a is no argument in phase 6.
+"After the spec review"). **One reviewer for both:** since ADR 0016 this holds
+for a `spike` only — a routed change's phase 6 is a fresh Codex session that
+first checks that each 2a row arrived in `findings.md`. A change reviewed
+before ADR 0016 keeps its recorded Codex 2a session (`Reviewer session: codex
+<id>` in `findings.md`), and the runner resumes it while that block is the
+change's last one (§4). It measures the code against the revised spec and
+first checks that its 2a rows arrived there. It still never saw the author's
+reasoning, and passing the spec in 2a is no argument in phase 6.
 
 **Cost logic.** The expensive models run only in the phases with little output.
 The token-heavy part runs on Sonnet — and, where the runner starts them (§4), on
@@ -582,22 +586,26 @@ on Dagger describes a technique, it does not use one.
 Since ADR 0007 (2026-09-30) a reviewer from another vendor reads a change
 before it merges — for **framework content only**: this repository's own tree,
 the class `framework` of `model-endpoints.yaml`. Codex (`gpt-6.1-sol`, OpenAI)
-reviews the spec (2a) and the code (6). **Since ADR 0011 (2026-10-08)** the
+drafts the spec, the design and the plan (2, 2b and 3, the `draft` verb) and
+reviews the code (6). **Since ADR 0016 (2026-10-12)** the spec review (2a) runs
+on Opus 5.5 through the `spec-review` verb — the model that writes the
+framework, in a fresh context, where Codex drafted the artefacts it reads.
+**Since ADR 0011 (2026-10-08)** the
 review loop (4b) between implementation and the code review runs on OpenCode
 Go (`opencode-go` in `model-endpoints.yaml`) through Pi, pinned at 1.1.0 and
 calling OpenCode Go's chat-completions address, and which
 model answers a round comes from the entry's ordered `modelle` list, the
 ladder. The maintainer put the ladder to the loop alone on 2026-10-08 — after
 Codex's phase 6 found two real BLOCKERs in a change the loop had passed, as on
-every change of the night run — so GLM has left the reviewer roles and the
-spec review and the review stay with Codex. **Since 2026-10-06** (maintainer) GLM 5.3 Flash
+every change of the night run — so GLM has left the reviewer roles.
+**Since 2026-10-06** (maintainer) GLM 5.3 Flash
 (`glm-5.3-flash`, the Z.ai endpoint) also explores (phase 1) and implements
 (phase 4) — the two phases that read the repository broadly and write its
 code. **Since 2026-10-12** (ADR 0015) GLM 5.3 (`glm-5.3`, the same endpoint)
 repairs the findings the orchestrator takes, of the loop (4b) and of phase 6,
 through the runner's `repair` verb — since that day `taken` on a row means
-decided and waiting for the repair, and `fixed` means repaired. Phases 1a, 2,
-3 and 7 stay with Anthropic (1a, 2 and 3 on Opus 5.5).
+decided and waiting for the repair, and `fixed` means repaired. Phases 1a, 2a
+and 7 stay with Anthropic (2a on Opus 5.5).
 **No Fable and no Kimi:** Fable 5.1 left the routing on 2026-10-06 and Opus
 5.5 takes its places, the fallback below included. ADR 0007 also amends
 decision D-13 of the 2026-09-16 interview, which had set four criteria before
@@ -621,13 +629,13 @@ and dropped (ADR 0007).
 | Change | Spec review (2a) | Review loop (4b) | Review (6) |
 |---|---|---|---|
 | a one-sentence change, a `spike` | no stage 2 | no stage 2 | no stage 2 |
-| `bounded` | Codex, where one is held | the ladder | Codex — the 2a session resumed where one was held, else a fresh one |
-| `feature`, `architectural` | Codex | the ladder | the same Codex agent, resumed |
+| `bounded` | Opus 5.5, where one is held | the ladder | Codex, a fresh session |
+| `feature`, `architectural` | Opus 5.5 | the ladder | Codex, a fresh session |
 
 This table routes the reviews. A `spike` or a one-sentence change gets no stage-2
-review and is reviewed by Opus 5.5 where §3 asks for a review. Explore and
-implement are not routed by class — the class is stated in the spec, after
-phase 1 — and are set by the table below.
+review and is reviewed by Opus 5.5 where §3 asks for a review. Explore, the
+draft and implement are not routed by class — the class is stated in the spec,
+after phase 1 — and are set by the table below.
 
 **Nothing checks a change's class.** A `feature` stated as a `spike` skips every
 stage-2 review, and one stated as `bounded` may skip the spec review, which is
@@ -644,11 +652,14 @@ list is a one-line pull request that touches nothing else.
 | Phase | Model | Why |
 |---|---|---|
 | 1 Explore | **GLM 5.3 Flash** | much input, little output, no deep reasoning; through Claude Code against Z.ai and the runner, for every change |
-| 2a Spec review | **gpt-6.1-sol** | effort `max`, through the Codex CLI and the runner |
+| 2 Spec | **gpt-6.1-sol** | effort `max`, one call for 2, 2b and 3 through the Codex CLI and `draft`, writing in the CLI's workspace-write sandbox; `glm-5.3` drafts through Claude Code against Z.ai after two failed Codex attempts (ADR 0016) |
+| 2b Design | **gpt-6.1-sol** | effort `max`, drafted in the same call as 2 and 3 |
+| 3 Plan | **gpt-6.1-sol** | effort `max`, drafted in the same call as 2 and 2b |
+| 2a Spec review | **Opus 5.5** | effort `xhigh`, through Claude Code and `spec-review`, read-only tools |
 | 4 Implement | **GLM 5.3 Flash** | a worker given a clear plan; through Claude Code against Z.ai and the runner, for every change |
 | 4b Review loop | **the ladder** | the ordered `modelle` list of the `opencode-go` entry in `model-endpoints.yaml`: round *n* calls its *n*-th id (`modelle[n-1]`), through Pi, effort `max` (Pi clamps it to `high` for a rung that takes no `max`), round 3 only when round 2 wrote a taken row |
 | Repair after 4b and 6 | **GLM 5.3** | one GLM 5.3 repair attempt through Claude Code against Z.ai and the runner, effort `max`; a first GLM 5.3 attempt before it, and Sonnet 5.5 at effort `medium` after two failed post-run checks (`repair`, ADR 0015) |
-| 6 Review | **gpt-6.1-sol** | effort `max`; the same Codex session as 2a, resumed where one was held |
+| 6 Review | **gpt-6.1-sol** | effort `max`, through the Codex CLI and `review`, a fresh Codex session |
 
 **The two Flash rows are live through the runner.** `explore` starts phase 1
 on GLM 5.3 Flash with read/search tools; `implement` starts phase 4 with file
@@ -669,10 +680,13 @@ passing attempt leaves its audit line only.
 
 A foreign model is started only through `python3 scripts/stage2.py <verb>
 <change>`, never by typing `codex`, `pi`, or `claude` against another endpoint,
-into a shell. Nine verbs exist:
+into a shell. Ten verbs exist:
 
 - `explore` — GLM 5.3 Flash, phase 1; `--stage2-off [REASON]` uses Haiku 4.5.
-- `spec-review` — Codex, phase 2a, a fresh session.
+- `draft` — Codex, phases 2, 2b and 3 in one call; GLM 5.3 (`glm-5.3`) after
+  two failed Codex attempts ("The draft" below).
+- `spec-review` — Opus 5.5, phase 2a, a headless call with read-only tools and
+  no session kept.
 - `implement` — GLM 5.3 Flash, phase 4; `--stage2-off [REASON]` uses Sonnet
   5.5 at effort `medium`.
 - `repair` — GLM 5.3, every taken finding of the loop record, the released
@@ -681,8 +695,9 @@ into a shell. Nine verbs exist:
 - `review-loop` — one round of phase 4b, started through Pi; round *n* goes
   to the ladder's *n*-th rung.
 - `release-loop` — the loop rows into `findings.md`, after the phase-6 verdict.
-- `review` — Codex, phase 6, the phase-2a session resumed with `codex exec
-  resume`; it then releases the loop rows and has Codex mark each one.
+- `review` — Codex, phase 6, a fresh session unless `findings.md` holds a
+  recorded Codex phase-2a session, which it resumes with `codex exec resume`;
+  it then releases the loop rows and has Codex mark each one.
 - `probe` — one call per rung of the ladder through Pi, the pinned version
   checked once first, the declaration and the leak check in front of each
   call; measures the address, writes no loop record (its call lines go to
@@ -723,14 +738,16 @@ value taken out by rewriting a commit therefore reads clean while `git log -g
 --expire=now --all`, then `git gc --prune=now`); the check cannot tell whether
 that was done, and its advice for a match in a commit says so.
 
-**Explore, implement and repair send more than a review does.** A reviewer
-reads one diff and one spec; explore reads the repository broadly, implement
+**Explore, the draft, implement and repair send more than a review does.** A
+reviewer reads one diff and one spec; explore reads the repository broadly,
+a draft's prompt carries the three phase prompts, the repository rules and the
+change's inputs and its call writes into the worktree, implement
 reads the tree and writes code into the worktree, and every repair prompt
 carries the change's spec, plan and repository rules plus the taken rows of
 the loop record — rows the repository does not hold until the phase-6 verdict
 releases them into `findings.md`, so they reach Z.ai in that prompt before
 the verdict (ADR 0015). Far more of this repository goes to Z.ai than before
-2026-10-06. The leak check covers what these three runs send — the same scan,
+2026-10-06. The leak check covers what these four runs send — the same scan,
 immediately before each call, over the tree, the staged changes, the commits
 reachable from the branches and the call's own prompt — and what stays out
 stays out: LakeSwitch and customer content never go, to any endpoint, and the
@@ -741,8 +758,11 @@ below.
 What every call then carries: one audit line (in `research.md` for Explore,
 otherwise `findings.md`), an empty standard input and an environment built
 from an allow-list, not the caller's. The runner starts Codex with the
-read-only sandbox, its session kept and its hooks and memories switched off.
-Before the loop's first call the runner runs `pi --version`; anything but
+read-only sandbox for a review call, its session kept and its hooks and
+memories switched off; a draft's Codex call runs in the `workspace-write`
+sandbox, and what such a call writes outside the change folder the runner
+puts back before it verifies ("The draft" below). A `draft` or `spec-review`
+call keeps no session. Before the loop's first call the runner runs `pi --version`; anything but
 the pinned `1.1.0` refuses with exit 2, before the leak check. It starts the
 review loop's rung as Pi (`--print`, no session) against OpenCode Go's
 chat-completions address, with the rung under the `opencode-go` provider,
@@ -779,7 +799,8 @@ session (`Bash(codex *)`). That is a brake, not a lock: `sh -c`, an absolute
 path or a script file passes it, as it does for the merge rules in §2.
 
 **Reads: confined for the Claude Code calls, asked for Codex and for the
-loop.** Every Claude Code call (explore, implement, repair and the Sonnet 5.5
+loop.** Every Claude Code call (explore, the draft's GLM attempt, implement,
+repair, `spec-review` and the Sonnet 5.5
 fallback attempts) starts in the worktree with `--restricted` and no
 `--add-dir`.
 `claude --help` says `--restricted` "confines the file tools to the working
@@ -801,6 +822,50 @@ risk for ADR 0007's reviewers on 2026-09-30, and ADR 0011 accepts it again for
 the rungs, naming Pi and the secrets file: the unconfined reads ADR 0007
 accepted for its reviewers extend to them. The leak check scans what this
 repository presents, not what else the disk holds.
+
+### The draft (phases 2, 2b and 3)
+
+`python3 scripts/stage2.py draft <change>` has Codex (`gpt-6.1-sol`, effort
+`max`) write `spec.md`, `design.md` and `plan.md` in one call (ADR 0016). The
+guards are `implement`'s: the preflight (a `research.md` with its bead, a
+`decisions.md`), the refusal of pre-existing changes outside the change's
+`findings.md`, the declaration and the leak check before each attempt's call,
+the credential scans, and exactly one commit when an attempt passes. A draft's
+Codex call runs in the CLI's `workspace-write` sandbox; what the runner can
+see — what git reports changed — it bounds: every path outside the change
+folder is put back at the baseline before verification, a new ADR file under
+`docs/adr/` excepted, and the change's `decisions.md` is put back with them.
+If the call moved `HEAD`, the run stops without a rewrite. `make verify` runs
+after the put-back, and a red run fails the attempt — with one exception:
+a red `make verify` whose only blocking gate is this change's own missing ADR
+answer does not fail it, because only the maintainer's stated answer may
+create that file (`decisions/answers/<change>/adr.yaml`); `findings.md` then
+says the answer is owed. A new ADR file is one the merge base of the baseline
+and `origin/main` does not hold, so a second draft edits the first draft's
+ADR instead of adding another. The chain is three attempts: Codex, a second
+Codex attempt with the first one's diagnostics, then `glm-5.3` with both — a
+failed call is put back and moves along the same chain, a failed post-run
+check leaves its tree and its quoted block, and three failures exit 1. The
+GLM key is read only when the GLM attempt is due, and a draft takes no
+`--stage2-off`: where Stage 2 is off, Opus 5.5 drafts as §3 says, by hand.
+
+A drafted change runs in this order:
+
+1. `python3 scripts/stage2.py draft <change>` — Codex writes `spec.md`,
+   `design.md` and `plan.md`, up to three attempts, GLM 5.3 after two failed
+   Codex attempts.
+2. The orchestrating session reads the whole draft against the change's
+   problem.
+3. `python3 scripts/stage2.py spec-review <change>` — Opus 5.5 reviews the
+   spec (phase 2a), its rows into `findings.md`.
+4. A second `draft <change>` works the review's open rows in, once the
+   maintainer has answered every `[AMBIGUITY]` a row raised.
+5. The plan card reaches the maintainer unchanged — the veto stays theirs.
+
+What the runner cannot see: which paths a draft's Codex call reads, and
+whether its sandbox in fact confines its writes. The put-back bounds what git
+sees, not what the program touched elsewhere; that residual risk is ADR 0016's
+to state, and the first real draft is a later change's.
 
 ### The interactive session (`session`)
 

@@ -123,7 +123,9 @@ endpunkte:
       (phase 1) through `stage2.py explore` and implements (phase 4) through
       `stage2.py implement` (maintainer, 2026-10-06; bead
       coding-harness-qcp). `glm-5.3` repairs the findings the orchestrator takes
-      through `stage2.py repair` (maintainer, 2026-10-12; ADR 0015). **Only
+      through `stage2.py repair` (maintainer, 2026-10-12; ADR 0015), and drafts
+      spec, design and plan (phases 2, 2b and 3) through `stage2.py draft` when
+      two Codex attempts failed (maintainer, 2026-10-12; ADR 0016). **Only
       through Claude Code**, which the vendor lists
       as a supported tool — an own integration would not be covered by the
       subscription.
@@ -138,10 +140,12 @@ endpunkte:
     bemerkung: >-
       Codex through the official Codex CLI only, signed in with the
       maintainer's ChatGPT subscription — any other way in is not covered.
-      Used for the spec review (phase 2a) and the review (phase 6) of
-      `bounded`, `feature` and `architectural` changes, through `python3
-      scripts/stage2.py`; the review loop (phase 4b) moved to `opencode-go`
-      (ADR 0011). OpenAI states that
+      Used for drafting spec, design and plan (phases 2, 2b and 3) through
+      `stage2.py draft`, writing in the CLI's workspace-write sandbox, and for
+      the review (phase 6) of `bounded`, `feature` and `architectural` changes,
+      through `python3 scripts/stage2.py`; the spec review (phase 2a) moved to
+      Opus 5.5 (ADR 0016) and the review loop (phase 4b) moved to
+      `opencode-go` (ADR 0011). OpenAI states that
       it processes and stores
       personal-plan data in the United States and wherever its affiliates and
       service providers are, and personal plans get no region choice (search
@@ -159,7 +163,8 @@ endpunkte:
     bemerkung: >-
       The review loop (phase 4b) and the interactive session verb (`stage2.py
       session`, ADR 0012) run here — and nothing else; the spec review (phase
-      2a) and the review (phase 6) stay with Codex — through `python3
+      2a) runs on Opus 5.5 and the review (phase 6) on Codex — through
+      `python3
       scripts/stage2.py` and Pi at the version the runner pins (1.1.0) only. The order of `modelle` is the loop's ladder: round n
       calls the n-th id, and a one-line pull request reorders it. Address:
       `https://opencode.ai/zen/go/v1/chat/completions`, under which the Go
