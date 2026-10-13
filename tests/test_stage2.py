@@ -3764,8 +3764,26 @@ def test_phase6_after_codex_repair_starts_a_fresh_read_only_session(world: World
     assert "resume" not in argv and argv[:2] == ["exec", "--json"]
     assert "T1" not in argv and "T7" not in argv and "TR1" not in argv
     assert 'sandbox_mode="read-only"' in argv and not any("workspace-write" in part for part in argv)
-    assert "a fresh session reviewed: a re-check after a repair starts fresh" in world.text()
+    assert "a fresh session reviewed: an earlier ## Phase 6 block makes this a re-check" in world.text()
     assert re.search(r"^Phase 6 verdict: codex T9, \d{4}-\d{2}-\d{2}$", world.text(), re.M)
+
+
+def test_a_phase6_rerun_without_repair_records_the_actual_recheck_reason(world: World) -> None:
+    """L2-4. Planted fault: a second verdict claims a repair ran, although only an earlier verdict exists."""
+    seed_2a_session(world)
+    world.script(codex=[codex_ok("T1", rows(1)), codex_ok("T9", rows(1))])
+    assert world.run("review") == 0
+    assert world.run("review") == 0
+    first, second = world.calls("codex")
+    assert first["argv"][:3] == ["exec", "resume", "T1"]
+    assert "resume" not in second["argv"] and 'sandbox_mode="read-only"' in second["argv"]
+    text = world.text()
+    assert (
+        "Reviewer session: codex T9 — a fresh session reviewed: an earlier ## Phase 6 block makes this a re-check"
+        in text
+    )
+    assert "after a repair" not in text and "fixed —" not in text
+    assert world.calls("claude") == [] and world.calls("make") == []
 
 
 def test_the_first_phase6_review_still_resumes_the_recorded_2a_session(world: World) -> None:
@@ -5236,6 +5254,59 @@ def test_a_failed_codex_repair_call_that_moves_head_stops_without_rewriting(worl
     assert len(repair_calls(world)) == 1 and world.calls("make") == []
 
 
+@pytest.mark.parametrize("call_failed", [False, True], ids=["completed-call", "failed-call"])
+def test_a_codex_repair_that_commits_findings_restores_statuses_and_records_diagnostics(
+    world: World, monkeypatch: pytest.MonkeyPatch, call_failed: bool
+) -> None:
+    """L2-3. Planted fault: committing a model-written fixed Status bypasses restoration and diagnostics."""
+    repair_world(world)
+    world.write_findings(VERDICT, phase6_block([phase6_cells("F-1", "taken — crit 18", "phase finding")]))
+    vandal = (
+        VERDICT + "\n\n" + phase6_block([phase6_cells("F-1", "fixed — tests/test_fix.py::test_fix", "phase finding")])
+    )
+    plant = {"src/app.py": "value = 2\n", "plans/changes/demo/findings.md": vandal}
+    step = (
+        {"stderr": "boom after writing", "exit": 1, "plant": plant}
+        if call_failed
+        else codex_ok("T9", "F-1: fixed — tests/test_fix.py::test_fix", plant=plant)
+    )
+    world.script(
+        codex=[step, {"stdout": "must not run"}],
+        claude=[{"stdout": "must not run"}],
+        make=[{"stdout": "must not run"}],
+    )
+    real_launch = stage2.launch
+    moved: list[str] = []
+
+    def committing(command, cwd, env, *args, **kwargs):
+        done = real_launch(command, cwd, env, *args, **kwargs)
+        if command[0] == "codex":
+            git(Path(cwd), "add", "-A")
+            git(Path(cwd), "commit", "--quiet", "-m", "the model committed its own statuses")
+            moved.append(git(Path(cwd), "rev-parse", "HEAD"))
+        return done
+
+    monkeypatch.setattr(stage2, "launch", committing)
+    assert world.run("repair") == 1
+    assert len(moved) == 1 and git(world.root, "rev-parse", "HEAD") == moved[0]
+    assert (world.root / "src" / "app.py").read_text(encoding="utf-8") == "value = 2\n"
+    (call,) = repair_calls(world)
+    assert call["name"] == "codex" and world.calls("make") == []
+    text = world.text()
+    assert text.startswith(call["findings"]), "the original statuses and this attempt's audit must be restored"
+    _, phase6 = stage2.findings_rows(text)
+    assert {row[0]: row for row in phase6}["F-1"][7] == "taken — crit 18"
+    assert "fixed — tests/test_fix.py::test_fix" not in text
+    (block,) = quote_blocks(text)
+    assert block[0] == "Attempt 1 (codex) failed its post-run checks."
+    assert any("moved HEAD from" in line for line in block)
+    changed = "\n".join(files_of(block))
+    assert "`plans/changes/demo/findings.md`" in changed and "`src/app.py`" in changed
+    if call_failed:
+        assert any("codex call failed: exit 1" in line for line in block)
+    assert "taken — test_a" in world.record().read_text(encoding="utf-8")
+
+
 def test_a_failed_repair_process_removes_the_ignored_paths_it_created(
     world: World, capsys: pytest.CaptureFixture[str]
 ) -> None:
@@ -5447,9 +5518,7 @@ def test_a_failed_repair_puts_every_status_back_as_it_stood(world: World) -> Non
     assert "taken — test_a" in world.record().read_text(encoding="utf-8")
 
 
-def test_a_leak_block_after_a_failed_attempt_leaves_the_original_statuses(
-    world: World, monkeypatch: pytest.MonkeyPatch
-) -> None:
+def test_a_credential_refusal_puts_the_original_statuses_back(world: World, monkeypatch: pytest.MonkeyPatch) -> None:
     """Phase 6, F-8, kept for the Codex route. Planted fault: the block left the model-written `fixed` Status."""
     real = leakcheck.check
     seen: list[str] = []

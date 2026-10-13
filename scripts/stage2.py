@@ -1048,7 +1048,7 @@ def review(root: Path, change: str) -> None:
     recorded = recorded_2a_session(text)
     recheck = any(line.startswith("## Phase 6") for line in text.splitlines())
     if recheck:
-        # A re-check after a Codex repair is a fresh read-only session: no 2a thread, no earlier
+        # An earlier phase-6 block makes this a fresh read-only session: no 2a thread, no earlier
         # verdict thread, never the repair's (ADR 0017). The first review keeps ADR 0016's rule.
         recorded = None
     prompt = phase_prompt(root, "06-review.md", change, "Write only your verdict now.")
@@ -1063,7 +1063,7 @@ def review(root: Path, change: str) -> None:
         ]
     )
     if recorded is None:
-        reason = "a re-check after a repair starts fresh" if recheck else "no phase-2a session was recorded"
+        reason = "an earlier ## Phase 6 block makes this a re-check" if recheck else "no phase-2a session was recorded"
         block += f"\nReviewer session: codex {thread} — a fresh session reviewed: {reason}"
     elif thread != recorded:
         block += (
@@ -2380,11 +2380,26 @@ def run_attempts(
                 raise CallFailed(f"the {verb} call's HEAD could not be read ({error})") from error
             if head_now != baseline:
                 # A moved HEAD stops the run without a rewrite: resetting a commit the model made
-                # would rewrite history, and the decision is a person's (ADR 0017).
-                raise CallFailed(
+                # would rewrite history, and the decision is a person's (ADR 0017). Measure its
+                # files before restoring findings alone, so its own statuses go and the audit stays.
+                problem = (
                     f"the {verb} call moved HEAD from {baseline[:12]} to {head_now[:12]}; "
-                    "nothing was put back or committed"
+                    "history was not rewritten and no runner checkpoint was made"
                 )
+                if unmeasured is None:
+                    try:
+                        moved_files: list[str] | str = attempt_files(root, before, worktree_tree(root))
+                    except (Refused, OSError) as error:
+                        moved_files = str(error)
+                else:
+                    moved_files = unmeasured
+                if kept is not None:
+                    restore_findings(kept)
+                listing = f"- {problem}"
+                if call_error is not None:
+                    listing += f"\n- {call_error}"
+                append(ctx.findings, quote_block(attempt_block(attempt, route, listing, moved_files), key))
+                raise CallFailed(problem) from call_error
         if call_error is not None:
             error = call_error
             if kept is not None:

@@ -201,7 +201,8 @@ and "Runner exploration").
   `tests/test_stage2.py`, the route comment in `scripts/stage2_runs.py`,
   `AGENTS.md`, `docs/WORKFLOW.md`,
   `model-endpoints.yaml`, `prompts/04-implement.md`,
-  `prompts/04b-review-loop.md`, ADR 0017 and ADR 0015's history marker.
+  `prompts/04b-review-loop.md`, `prompts/06-review.md`, ADR 0017 and ADR 0015's
+  history marker.
 - The file list demonstrates the protected areas and non-goals are respected.
 - The pull request closes `coding-harness-0ga`; its closing commit carries
   `Closes-Bead: coding-harness-0ga`.

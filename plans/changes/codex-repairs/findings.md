@@ -163,3 +163,7 @@ Stage-2 call, 2026-10-13: implement · attempt 1 · route stage-1 · endpoint cl
 Stage-2 call, 2026-10-13: review-loop · endpoint opencode-go · model deepseek-v4.1-flash · leak check clean over 416 files, 1024 commits, 12 rules.
 
 Stage-2 call, 2026-10-13: repair · attempt 1 · route codex · endpoint openai-codex · model gpt-6.1-sol · leak check clean over 416 files, 1024 commits, 12 rules.
+
+Stage-2 call, 2026-10-13: review-loop · endpoint opencode-go · model mimo-v2.6-flash · leak check clean over 416 files, 1026 commits, 12 rules.
+
+Stage-2 call, 2026-10-13: repair · attempt 1 · route codex · endpoint openai-codex · model gpt-6.1-sol · leak check clean over 416 files, 1026 commits, 12 rules.

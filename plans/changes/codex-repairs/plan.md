@@ -133,6 +133,7 @@ the script has not landed; the runner's checks and existing gates apply.
 - 11: tests/test_stage2.py::test_each_repair_attempt_leaves_an_audit_line_the_count_reads — wrong endpoint/route or an uncounted Codex line; extend to all attempts and reasons
 - 12: tests/test_stage2.py::test_a_red_verify_or_a_missing_time_line_fails_a_repair_attempt — diagnostic block/file evidence lost
 - 12: tests/test_stage2.py::test_a_failed_repair_puts_every_status_back_as_it_stood — failed model edits survive
+- 12: tests/test_stage2.py::test_a_codex_repair_that_commits_findings_restores_statuses_and_records_diagnostics — moved HEAD leaves model-written statuses or loses diagnostics/file evidence
 - 13: tests/test_stage2.py::test_a_red_verify_or_a_missing_time_line_fails_a_repair_attempt — checkpoint before a green verify and measured time; assert no checkpoint at the failed boundary
 - 14: tests/test_stage2.py::test_a_passing_repair_ends_in_one_checkpoint_commit_with_its_statuses — wrong commit count, status or dirty tree
 - 14: tests/test_stage2.py::test_the_record_is_marked_only_after_the_checkpoint_commit — private record marked before commit
@@ -143,6 +144,7 @@ the script has not landed; the runner's checks and existing gates apply.
 - 16: tests/test_stage2.py::test_a_text_row_taken_as_not_a_test_is_repaired_and_its_status_written — text-row status/reason lost
 - 17: tests/test_stage2.py::test_codex_repair_that_moves_head_stops_without_rewriting — restoration, verification, retry or commit after moved HEAD
 - 18: tests/test_stage2.py::test_phase6_after_codex_repair_starts_a_fresh_read_only_session — repair/reviewer/old 2a thread resumed or writable verdict
+- 18: tests/test_stage2.py::test_a_phase6_rerun_without_repair_records_the_actual_recheck_reason — an earlier phase-6 block is falsely recorded as a repair
 - 19: tests/test_stage2.py::test_repair_starts_no_review_call — an extra verdict/mark call or orchestrator mark written; distinguish Codex repair calls from reviews
 - 19: tests/test_stage2.py::test_round_three_starts_after_a_fixed_round_two_row — changed eligibility or an extra round
 - 20: tests/test_stage2.py::test_codex_repair_doctrine_and_endpoint_remarks_agree — an active GLM repair claim or a false confinement claim
@@ -174,3 +176,5 @@ Stage-1 route: implement · model claude-sonnet-5-5 · reason: Z.ai weekly limit
 2026-10-13 orchestrator repair after the failed implementation attempt, not timed: two doctrine tests planted their fault on raw text where the needle was broken across lines; they now plant on the flattened text the checker reads.
 
 2026-10-13 17:57:06–18:06:17, 9 min 11 s — Codex repaired the taken loop findings (L1-1 to L1-3). The doctrine regression test failed on baseline 25a5a2e before the repairs and passed afterward, including the planted faults for each session-rule location. The focused stage-2, run-count and endpoint suite passed 487 tests; the final doctrine test, ruff lint and format checks, and git diff --check passed. The runner owns make verify and the checkpoint.
+
+2026-10-13 18:31:58–18:40:36, 8 min 38 s — Codex repaired only the taken round-2 rows L2-1, L2-3, L2-4 and L2-5. The cited top-level test name is restored; a moved-HEAD repair restores the original finding statuses and writes its quoted diagnostics and changed-file evidence without rewriting history; a repeated phase-6 review records the earlier Phase 6 block as its reason; the Definition of Done includes prompts/06-review.md. The three new regression cases failed on baseline e371b18 before the code repairs and passed afterward. The focused stage-2, run-count and endpoint suite passed 490 tests; ruff lint and format checks, interview minimums, criterion ledger and git diff --check passed. The runner owns make verify, findings bookkeeping and the checkpoint; the orchestrator owns tracker writes and the dated session handover. Live PR state was not read within this worktree-only boundary.
