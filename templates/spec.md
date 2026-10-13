@@ -9,6 +9,8 @@ This comment is not copied.
    backticks included.
 2. The header is a feature's, the form with the most keys. `change` and
    `adr_question` belong to a `feature` only: delete both for any other class.
+   `adr_files` belongs to every class: list each file under `docs/adr/` the
+   change creates, changes or removes, or leave `[]`.
    What the four classes mean: `docs/WORKFLOW.md`, "Change classes, the ADR
    question and decision pull requests".
 3. The rules for each section are in `prompts/02-spec.md`. Replace the
@@ -35,6 +37,7 @@ class: feature  # spike | bounded | feature | architectural
 appetite: <hours>  # hours of phase 4, repair rounds included — a stop, not an estimate
 change: <change>  # a feature only
 adr_question: {proposed: "<yes|no>", reason: "<one sentence>"}  # a feature only, the quotes kept
+adr_files: []  # every class: the files under docs/adr/ this change creates, changes or removes
 ```
 
 # Spec — `<change>`

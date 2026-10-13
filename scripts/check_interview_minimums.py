@@ -5,14 +5,16 @@ The rules are the maintainer's ten decisions of 2026-10-08
 (`plans/changes/archive/2026-10-08-interview-minimums/decisions.md`):
 
 - a `feature` owes at least three counted interview records;
-- a change whose diff creates or changes a file under `docs/adr/` owes five,
-  whatever its class; a feature that is also an ADR change owes five in
-  total, never the sum (Q-1);
+- a change that claims a file under `docs/adr/` in its spec header
+  (`adr_files`) and whose diff edits it owes five, whatever its class; a
+  feature that is also an ADR change owes five in total, never the sum (Q-1);
 - a `spike` owes three counted records — learning goal, time budget,
   expected outcome — or a skip record with its reason (Q-3);
 - a `bounded` change owes at least one counted record or a skip record with
   its reason (Q-6);
-- an `architectural` change owes five only when its diff touches `docs/adr/`.
+- an `architectural` change owes five only when it claims the ADR file its
+  diff edits, like every other class; an ADR edit it does not claim is the
+  unclaimed finding, not the five (ADR 0014).
 
 Counted means: `status: answered`, `answered_by: maintainer`, and the first
 occurrence of its question id in the file (Q-5). Agent answers, open
@@ -23,21 +25,19 @@ answers; it cannot see who wrote them — the merge confirms them (ADR 0008),
 exactly the limit `check_adr_answers.py` states for its own file.
 
 Prospective only (Q-4, Q-8): a change is subject when its spec `date` is
-later than `CUTOFF`; the stock, active and archived, stays exempt.
+later than the repository's adoption day (`decisions/adoption.yaml`, read
+through `scripts/adoption.py`; ADR 0014); the stock, active and archived,
+stays exempt. A repository without that record is not measured (exit 3).
 
 The diff is the `stage2.change_diff()` states — `git diff <base>` covers
 committed, staged and unstaged paths, untracked files come from
-`ls-files --others` — restricted to `docs/adr/**`, attributed to the owning
-change: the `plans/changes/<name>/` paths the same diff touches (F-5). A diff
-that touches an ADR and owns no change, or more than one, is a finding. A
-change folder the diff touches through its `plan.md` alone is not an owner:
-a plan edit is a ledger migration, not the home of an ADR's answers
-(criterion-test-ledger, bead coding-harness-909, 2026-10-11 — one ADR draft
-lands beside four migrated plans), and the five answers still answer for
-exactly one folder. When such a plan-only folder sits beside another owner
-the paths cannot tell which one the ADR belongs to: the ADR text naming
-exactly one candidate decides, otherwise the run reports both (INTERIM,
-loop row L3-1; bead coding-harness-afa replaces the guess).
+`ls-files --others` — restricted to `docs/adr/**`. An ADR edit belongs to the
+change of the diff that claims the file under `adr_files` in its spec header
+(ADR 0014): the claim alone decides, never the folders the diff touches and
+never an ADR's text. An edit no change of the diff claims, or two claim, is a
+finding; each claimant owes its five records. A claim that cannot be read is a
+finding in every spec. A subject feature's answer to the ADR question agrees
+with its claim: "yes" with at least one claimed file, "no" with none.
 
 Base rule (Q-7): a genuine checkout of `main` compares against the first
 parent (`HEAD^`); every other state — feature branch, detached HEAD,
@@ -62,13 +62,17 @@ import sys
 from datetime import date
 from pathlib import Path
 
+import yaml
+
+sys.path.insert(0, str(Path(__file__).resolve().parent))
+import adoption  # noqa: E402 — the one reader of the adoption record
+import check_adr_answers  # noqa: E402 — the one reader of the answer format
+
 REPO_ROOT = Path(__file__).resolve().parent.parent
 
-# The merge date of plans/changes/archive/2026-10-08-interview-minimums — the cut-off the
-# maintainer set (decisions.md Q-4). A change is subject when its spec date
-# is strictly later (Q-8). Changing this constant changes when the rule
-# began; it is a governance act, stated in docs/WORKFLOW.md beside this gate.
-CUTOFF = date(2026, 10, 8)
+# The id of this gate in decisions/gates.yaml: the key of its adoption day. A
+# change is subject when its spec date is strictly later than that day (Q-8).
+GATE = "interview-minimums"
 
 CHANGES_DIR = "plans/changes"
 ARCHIVE = "archive"
@@ -157,9 +161,9 @@ def _changed_paths(root: Path) -> set[str]:
 
 def _active_changes(root: Path) -> list[Path]:
     """Every change folder that carries a spec — active and archived. The
-    cut-off decides who is subject, not the folder's place (phase-6 row
-    F-11): a change dated after the cut-off owes its interview also once
-    archived, while the stock stays exempt wherever it lies."""
+    adoption day decides who is subject, not the folder's place (phase-6 row
+    F-11): a change dated after it owes its interview also once archived,
+    while the stock stays exempt wherever it lies."""
     changes = root / CHANGES_DIR
     if not changes.is_dir():
         return []
@@ -172,7 +176,12 @@ def _active_changes(root: Path) -> list[Path]:
 
 def _spec_class_and_date(spec: Path) -> tuple[str, date | None]:
     """The `class:` and `date:` of a spec header; class "" when absent."""
-    text = spec.read_text(encoding="utf-8")
+    try:
+        text = spec.read_text(encoding="utf-8")
+    except (OSError, UnicodeDecodeError):
+        # `_claim` has already reported the spec as unreadable, so the run is
+        # red; this second read must not abort it and lose the findings (F-7)
+        return "", None
     block = _BLOCK.match(text)
     if not block:
         return "", None
@@ -241,92 +250,140 @@ def _has_reasoned_skip(skips: list[dict[str, str]]) -> bool:
 # ---------------------------------------------------------------------------
 
 
-def _folders_named_by_adrs(root: Path, adr_paths: set[str], candidates: set[str]) -> set[str]:
-    """The candidate change folders whose name appears in a changed ADR's text
-    (INTERIM, loop row L3-1; bead coding-harness-afa replaces it)."""
-    text = ""
-    for rel in sorted(adr_paths):
-        path = root / rel
-        if path.is_file():
-            text += path.read_text(encoding="utf-8", errors="replace") + "\n"
-    return {c for c in candidates if re.search(rf"(?<![\w-]){re.escape(c)}(?![\w-])", text)}
+def _claim(spec: Path) -> tuple[list[str], str | None]:
+    """The paths a spec header claims under `adr_files`, and why the claim
+    cannot be read. Every spec header is parsed as YAML and the claim is decided
+    by the parsed key `adr_files`, in whatever spelling YAML allows (escaped,
+    quoted, explicit-key form; phase-6 row F-6) — no textual prefilter can
+    cover them. A header that does not parse cannot be decided, so it is
+    reported; a header that parses without the key claims nothing."""
+    try:
+        text = spec.read_text(encoding="utf-8")
+    except (OSError, UnicodeDecodeError) as exc:
+        return [], f"the spec cannot be read ({exc})"
+    block = _BLOCK.match(text)
+    if not block:
+        return [], None
+    try:
+        data = check_adr_answers.strict_load(block.group(1))
+    except (yaml.YAMLError, ValueError) as exc:  # ValueError: an impossible date such as 2026-02-30
+        return [], f"the header is not valid YAML ({' '.join(str(exc).split())})"
+    if not isinstance(data, dict):
+        return [], "the header is not a mapping"
+    if "adr_files" not in data:
+        return [], None
+    value = data["adr_files"]
+    if not isinstance(value, list):
+        return [], "the value is not a list"
+    paths: list[str] = []
+    for item in value:
+        if not isinstance(item, str):
+            return [], f"the item {item!r} is not text"
+        if not _claimable(item):
+            return [], f"the item {item!r} is not a path of a file under {ADR_DIR}/"
+        if item in paths:
+            return [], f"the path {item} stands twice"
+        paths.append(item)
+    return paths, None
+
+
+def _claimable(path: str) -> bool:
+    if not path.startswith(ADR_DIR + "/"):
+        return False
+    return all(seg not in ("", ".", "..") for seg in path[len(ADR_DIR) + 1 :].split("/"))
+
+
+def _name(folder: Path) -> str:
+    """The change's name: the folder's, without the date of an archived one."""
+    if folder.parent.name == ARCHIVE:
+        return re.sub(r"^\d{4}-\d{2}-\d{2}-", "", folder.name)
+    return folder.name
+
+
+def _disagreement(root: Path, name: str, claim: list[str]) -> list[str]:
+    """A feature's recorded answer against its claim: "yes" claims at least one
+    ADR file, "no" claims none. An answer the gate adr-answers refuses, or does
+    not find, says nothing here."""
+    path = root / check_adr_answers.answer_rel(name)
+    if not path.is_file():
+        return []
+    data, problems = check_adr_answers.load_answer(path)
+    if problems or data.get("change") != name:
+        return []
+    if data["answer"] == "yes" and not claim:
+        return [
+            f"{name}: answers yes to the ADR question but claims no ADR file — list it under "
+            "adr_files in its spec header, or correct the answer in a decision pull request"
+        ]
+    if data["answer"] == "no" and claim:
+        return [
+            f"{name}: answers no to the ADR question but claims {', '.join(claim)} — remove the "
+            "claim (it contradicts the answer), or correct the answer in a decision pull request"
+        ]
+    return []
 
 
 def measure(root: Path, only: str | None = None) -> tuple[list[str], int]:
     """Findings and the number of changes measured; raises CannotMeasure."""
+    try:
+        day = adoption.adopted_on(root, GATE)
+    except adoption.NotRecorded as cannot:
+        raise CannotMeasure(str(cannot)) from None
     changed = _changed_paths(root)
-    adr_paths = {p for p in changed if p.startswith(ADR_DIR + "/")}
-    owning: set[str] = set()
-    plan_only: set[str] = set()
+    adr_paths = sorted(p for p in changed if p.startswith(ADR_DIR + "/"))
+    # The changes of the diff: active folders holding any path of it.
+    touched: set[str] = set()
     for path in changed:
-        if not path.startswith(CHANGES_DIR + "/"):
-            continue
         parts = path.split("/")
-        # plans/changes/<name>/<file>: the owning folder sits at parts[2].
-        # INTERIM heuristic: a folder the diff touches through plan.md alone is
-        # a ledger migration (criterion-test-ledger, 2026-10-11), so it owns
-        # the ADR only when no other folder does; bead coding-harness-afa
-        # replaces this guess with an explicit owner statement.
-        if len(parts) > 3 and parts[2] != ARCHIVE:
-            (plan_only if parts[3] == "plan.md" else owning).add(parts[2])
-    # A folder touched beyond plan.md owns; its plan.md is not a second role
-    # (review-loop row F-3).
-    plan_only -= owning
-    # A plan-only folder counts again only when nothing else owns the ADR
-    # (loop row L2-1). Beside other owners it may be a ledger migration or the
-    # ADR's real home, and the path list cannot tell which (loop row L3-1):
-    # the ADR text decides when it names exactly one candidate folder; if it
-    # does not, the run reports both candidates instead of guessing green.
-    if adr_paths and plan_only and owning:
-        named = _folders_named_by_adrs(root, adr_paths, owning | plan_only)
-        if len(named) == 1:
-            owning = named
-        else:
-            both = ", ".join(sorted(owning | plan_only))
-            return (
-                [
-                    f"{len(adr_paths)} ADR path(s) changed under {ADR_DIR}/ and the diff "
-                    f"touches change folder(s) {', '.join(sorted(owning))} beyond plan.md and "
-                    f"{', '.join(sorted(plan_only))} through plan.md alone — the paths cannot "
-                    f"say which of {both} owns the ADR (INTERIM guess, bead "
-                    "coding-harness-afa); name the owning change folder in the ADR text "
-                    "(exactly one of them), or split the ADR into its own pull request"
-                ],
-                0,
-            )
-    owning = owning or plan_only
-
-    if adr_paths and len(owning) != 1:
-        whom = ", ".join(sorted(owning)) or "none"
-        return (
-            [
-                f"{len(adr_paths)} ADR path(s) changed under {ADR_DIR}/ but the diff "
-                f"owns {len(owning)} change folder(s): {whom} — an ADR change runs "
-                "inside exactly one change folder under plans/changes/, whose "
-                "decisions.md carries the five answers; "
-                + (
-                    "the diff touches no change folder, so add the folder that owns "
-                    "the ADR (its decisions.md carrying the five answers)"
-                    if not owning
-                    else f"keep only one of {whom} in this diff, or split the ADR into its own pull request"
-                )
-            ],
-            0,
-        )
-
-    adr_touched = bool(adr_paths)
-    owner = next(iter(owning)) if adr_touched else None
+        if path.startswith(CHANGES_DIR + "/") and len(parts) > 3 and parts[2] != ARCHIVE:
+            touched.add(parts[2])
 
     findings: list[str] = []
+    folders = _active_changes(root)
+    claims: dict[str, list[str]] = {}  # active change -> its claim
+    claimed_by_folder: dict[Path, list[str]] = {}
+    unreadable: set[Path] = set()  # folders whose claim is already a finding
+    for folder in folders:
+        paths, problem = _claim(folder / "spec.md")
+        claimed_by_folder[folder] = paths
+        if problem:
+            unreadable.add(folder)
+            findings.append(
+                f"{(folder / 'spec.md').relative_to(root).as_posix()}: adr_files cannot be read — {problem}; "
+                f"the form is adr_files: [{ADR_DIR}/<file>, …]"
+            )
+        if folder.parent.name != ARCHIVE:
+            claims[folder.name] = paths
+
+    # Each ADR edit belongs to the change of the diff that claims it, and to
+    # no other whichever of its files the diff touches.
+    owners: set[str] = set()
+    for path in adr_paths:
+        claimants = sorted(name for name in touched if path in claims.get(name, []))
+        if not claimants:
+            findings.append(
+                f"{path} changed, but no change in this diff claims it — list it under "
+                "adr_files in the spec header of the change it belongs to, whose "
+                "decisions.md carries five answers"
+            )
+        elif len(claimants) > 1:
+            findings.append(
+                f"{path} is claimed by {', '.join(claimants)} in one diff — one change "
+                "claims an edit and a correct claim is never removed to settle it; split the pull request — "
+                "the amendment in one, the edit to the other change's folder in another"
+            )
+        else:
+            owners.add(claimants[0])
+
     measured = 0
     named_found = False
     named_measured = False
 
     # The ADR duty attaches to the work, not to the folder's age or class
-    # (G-2, G-5; loop row L1-3): the owner owes five counted records whatever
-    # its class and whatever its spec date — the cut-off exempts a folder's
-    # own class minimums, never a new ADR edit.
-    if adr_touched:
+    # (G-2, G-5; loop row L1-3): each owner owes five counted records whatever
+    # its class and whatever its spec date — the adoption day exempts a
+    # folder's own class minimums, never a new ADR edit.
+    for owner in sorted(owners):
         measured += 1
         if only and owner == only:
             named_found = True
@@ -340,19 +397,23 @@ def measure(root: Path, only: str | None = None) -> tuple[list[str], int]:
                 "record(s) in decisions.md — five are owed whatever the class"
             )
 
-    for folder in _active_changes(root):
-        name = folder.name
-        if folder.parent.name == ARCHIVE:
-            name = re.sub(r"^\d{4}-\d{2}-\d{2}-", "", name)
+    for folder in folders:
+        name = _name(folder)
         if only and name != only:
             continue
         named_found = True
-        if adr_touched and name == owner:
-            continue  # already measured above
         klass, spec_date = _spec_class_and_date(folder / "spec.md")
+        subject = spec_date is None or spec_date > day
+        if klass == "feature" and subject and folder not in unreadable:
+            # the answer and the claim agree (ADR 0014); a missing or refused
+            # answer is the gate adr-answers' finding, not a second one here,
+            # and an unreadable claim is reported once, above
+            findings.extend(_disagreement(root, name, claimed_by_folder[folder]))
+        if name in owners and folder.parent.name != ARCHIVE:
+            continue  # already measured above
         if klass not in CLASSES:
             continue
-        if spec_date is not None and spec_date <= CUTOFF:
+        if not subject:
             continue  # Q-4/Q-8: the stock stays exempt — a change whose date
             # cannot be read is measured, never silently exempted (F-10)
         measured += 1
@@ -386,13 +447,13 @@ def measure(root: Path, only: str | None = None) -> tuple[list[str], int]:
         # Loop row L1-6 and phase-6 row F-17: the spec gate's verdict belongs
         # to the named change alone — a passing unrelated measurement does
         # not answer for it, and a folder that exists but is exempt by the
-        # cut-off is named, not silent.
+        # adoption day is named, not silent.
         if not named_found:
             findings.append(f"--change {only}: no change folder under {CHANGES_DIR}/ — nothing was measured")
         elif not named_measured:
             print(
-                f"interview-minimums: {only} is exempt by the cut-off "
-                f"({CUTOFF.isoformat()}) — the class minimums do not hold for it."
+                f"interview-minimums: {only} is exempt by the adoption day "
+                f"({day.isoformat()}) — the class minimums do not hold for it."
             )
     return findings, measured
 
@@ -415,7 +476,7 @@ def main() -> int:
     print(
         f"interview-minimums ok: {measured} change(s) measured"
         + (f", {args.change} green" if args.change else "")
-        + f"; cut-off {CUTOFF.isoformat()}, stock exempt."
+        + f"; adoption day {adoption.adopted_on(args.root, GATE).isoformat()}, stock exempt."
     )
     return 0
 

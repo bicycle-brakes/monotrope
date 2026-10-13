@@ -71,6 +71,10 @@ SCHEMA_VERSION = 2
 # tests/test_ci.py haelt beide Seiten zusammen.
 OHNE_AUFRUFER: dict[str, str] = {
     "_verdict.py": ("Bibliothek — das gemeinsame Exit-Vokabular der Scripts, kein eigenstaendiges Werkzeug"),
+    "adoption.py": (
+        "Library — reads the day a repository adopted a gate for the gates that exempt older changes; "
+        "tests/test_adoption.py runs it"
+    ),
     "bead_render.py": (
         "Bibliothek — der EINE Zugriffspunkt des Tracker-Stands (bead 1jg.3); "
         "die Leser importieren ihn, ein eigener CI-Schritt haette keinen Gegenstand"

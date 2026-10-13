@@ -100,10 +100,32 @@ and in `make verify`: only distinct, maintainer-answered records count, an
 agent's answer, an open question and a repeated confirmation count for
 nothing, and the check sees ADR paths in every diff state — committed,
 staged, unstaged, untracked. The duty is prospective: a change is subject
-when its spec `date` is later than the cut-off, **2026-10-08**, the merge
-date of the change that introduced the rule — the stock before that day
-stays exempt wherever it lies, and a change dated after the cut-off owes
-its interview also once archived.
+when its spec `date` is later than the repository's adoption day, which
+`decisions/adoption.yaml` records per repository and `scripts/adoption.py`
+reads — here **2026-10-08**, the merge date of the change that introduced the
+rule. The stock before that day stays exempt wherever it lies, and a change
+dated after it owes its interview also once archived. The record stays in its
+repository; without it the gate is not measured (exit 3), and moving a day is
+a decision pull request (ADR 0014).
+
+An ADR edit belongs to the change that **claims** the file: the list
+`adr_files` in the header of its `spec.md`, in every class, names each file
+under `docs/adr/` the change creates, changes or removes. The gate attributes
+an edit to the claimant among the changes of the diff and to nobody else,
+whichever other change folders the diff touches and whatever the ADR says; the
+claimant owes its five records whatever its class and date; the adoption day
+exempts a change begun on or before it from the class minimums and from the
+agreement of answer and claim, never an ADR edit. An edit no change of the diff claims is a
+finding that names the remedy — list the file under `adr_files` in the spec
+header of the change it belongs to — and so is an edit two changes claim, or
+a claim that cannot be read. A subject `feature`'s answer to the ADR question
+agrees with its claim: "yes" with at least one claimed file, "no" with none.
+An amendment costs one header line: the amending change lists the file in its
+own spec, and nothing else moves. A correct claim — one whose edit the change made — is never removed to settle
+a clash; an erroneous claim, one the change's own "no" answer contradicts, is
+corrected by removing it. Two claimants of one file in one diff are a finding,
+and its only remedy is to split the pull request: the amendment in one, the
+edit to the earlier change's folder in another.
 
 Across all of them runs the **session handover** — it belongs to no phase but to
 the end of a session; see below.
@@ -302,7 +324,7 @@ it.
 
 **The interview goes by class too** (maintainer, 2026-10-08): a `feature`
 owes at least three distinct, substantive questions; creating or changing an
-ADR raises the debt to five in whatever class the change carries; a `spike`
+ADR (one it claims under `adr_files`) raises the debt to five in whatever class the change carries; a `spike`
 owes its three topics or a reasoned skip; a `bounded` change one answered
 question or a reasoned skip. What the gate counts and what the review judges
 stands in §2, the paragraph after the phase table.
@@ -358,8 +380,8 @@ What this does not do:
   `merge` (`gh pr --squash 54 merge`), a GraphQL merge mutation read from a
   file (`gh api graphql --input <file>` or `-F query=@<file>`), and an alias
   set by `gh alias import` or by editing gh's own config file.
-- Nothing checks that the class is right, that a "yes" is followed by an ADR,
-  or that a decision pull request carries its label and block. The review
+- Nothing checks that the class is right, that a claimed ADR file exists, or
+  that a decision pull request carries its label and block. The review
   before the merge holds them.
 - The upgrade, if an agent is ever found deciding on the maintainer's behalf:
   agents under a bot identity of their own, and branch protection that asks for
@@ -381,7 +403,7 @@ What this does not do:
 | Stop hook | `.claude/hooks/session-stop/check-tests-green.sh` | blocks the end of a turn on a red tree |
 | Enforcement | `decisions/gates.yaml` | **the one gate list** (D-10); `.github/workflows/ci.yml` is generated from it |
 | Decisions | `scripts/check_adr_answers.py`, `scripts/harness.py`, `.github/PULL_REQUEST_TEMPLATE/decision.md` | the gate `adr-answers`; `decide adr` records the maintainer's ADR answers; the decision pull request's block |
-| Interview | `scripts/check_interview_minimums.py` | the gate `interview-minimums`: counts counted interview records per class at the spec gate and in verify, sees ADR paths in every diff state, compares per context — first parent on the main line (a `main` checkout or the hosted main-line run), else the merge base; a detached HEAD at `origin/main` is not measured and exits 3 — subject after the cut-off 2026-10-08 |
+| Interview | `scripts/check_interview_minimums.py` | the gate `interview-minimums`: counts counted interview records per class at the spec gate and in verify, sees ADR paths in every diff state, compares per context — first parent on the main line (a `main` checkout or the hosted main-line run), else the merge base; a detached HEAD at `origin/main` is not measured and exits 3 — attributes an ADR edit to the change that claims it under `adr_files` (ADR 0014) — subject after the adoption day of `decisions/adoption.yaml`, here 2026-10-08 |
 | Criterion tests | `scripts/check_criterion_ledger.py` | the gate `criterion-ledger`: every test a plan's `## Criterion ledger` names is defined, every criterion of the spec has an entry, a not-yet-written entry stands only while the change is live; ledgers stay held after archiving, and archived plans dated before 2026-10-11 without one are exempt (ADR 0013); moving that cut-off date is a governance act — a decision pull request, never a drive-by edit of the gate |
 
 ### Verification runs through git and CI, not through the harness

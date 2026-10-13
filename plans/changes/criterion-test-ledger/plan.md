@@ -4,7 +4,7 @@ status: draft
 implementation_status: partial
 date: 2026-10-11
 last_reviewed: 2026-10-11
-updated: 2026-10-12
+updated: 2026-10-13
 supersedes: null
 superseded_by: null
 bead: coding-harness-909
@@ -473,14 +473,8 @@ changes beyond their `plan.md`.
 - 23: tests/test_check_criterion_ledger.py::test_the_workflow_row_makes_moving_the_cutoff_a_governance_act
   — the row loses the sentence the CUTOFF comment points to
 - 24: not a test — the gate's run over this repository at the head, under "Verification"; output in the pull request body
-- 24: tests/test_check_interview_minimums.py::test_an_adr_with_only_its_own_plan_md_still_has_that_one_owner
-  — dropping the fall-back to plan-only folders leaves the ADR with "owns 0 change folder(s)"
-- 24: tests/test_check_interview_minimums.py::test_a_folder_whose_diff_touches_only_plan_md_is_no_owner
-  — counting the plan-only folder as an owner again turns the run red with "owns 2 change folder(s)"
-- 24: tests/test_check_interview_minimums.py::test_a_plan_md_only_folder_does_not_hide_the_adr_owner_among_other_folders
-  — dropping a plan-only folder whenever another folder owns exits 0 with one silent owner
-- 24: tests/test_check_interview_minimums.py::test_a_folder_touched_beyond_plan_md_is_never_also_plan_only
-  — a folder changed through spec.md, decisions.md and plan.md counted as plan-only too: ambiguity finding, exit 1
+- 24: tests/test_check_interview_minimums.py::test_a_claimant_beside_unclaiming_folders_is_decided_by_its_own_records
+  — the interim rule of this change is gone (ADR 0014): one claimant beside four plan-only folders is decided by its own records, and a finding naming a plan-only folder turns the run red
 - 25: not a test — the reading aid under "Verification", and the phase-6 review of each migrated ledger
 - 26: not a test — the phase-6 review of the `stage2-session` ledger against its "Tests and faults"
 - 27: not a test — the `grep` under "Verification" shows the pointer line above each table
@@ -558,25 +552,22 @@ stand in no ledger line — `test_no_declared_reason_stands_for_a_script_that_ha
 Recorded here so the plan and the code say the same thing (a deviation that
 lives only in the code is the plan on the next reading):
 
-- **`scripts/check_interview_minimums.py` counts a change folder as the ADR's
-  owner only when the diff touches more than its `plan.md`** (amended
-  2026-10-11, second phase-4 session). As accepted, this change's diff
-  touches `docs/adr/0013-…` and five change folders — its own plus the four
-  migrated `plan.md` files — and the gate's owner rule demanded exactly one,
-  which made the card's "make verify ends VERIFY GREEN" unreachable, on this
-  branch and after the merge. A plan-only folder carries no spec, no
-  decisions and no research: it is the migration this plan orders, and the
-  gate `criterion-ledger` now polices those very edits. The five answers
-  still answer for exactly one folder, and the gate's finding text is
-  unchanged. Its counterpart test stands in
-  `tests/test_check_interview_minimums.py::test_a_folder_whose_diff_touches_only_plan_md_is_no_owner`;
-  counting the plan-only folder again turns it red with
-  "owns 2 change folder(s)". Review-loop row L2-1: when no folder is touched
-  beyond `plan.md`, the plan-only folders own the ADR as before
-  (`test_an_adr_with_only_its_own_plan_md_still_has_that_one_owner`), and the
-  zero- or many-owner finding names the folders and the remedy. The rule is
-  interim; bead coding-harness-afa replaces it with an explicit owner
-  statement.
+- **`scripts/check_interview_minimums.py` attributes an ADR edit by the claim
+  in the spec header, not by the folders the diff touches** (amended
+  2026-10-11, second phase-4 session; the interim rule it first carried was
+  replaced by ADR 0014, bead coding-harness-afa). As accepted, this change's
+  diff touches `docs/adr/0013-…` and five change folders — its own plus the
+  four migrated `plan.md` files — and the gate's owner rule demanded exactly
+  one, which made the card's "make verify ends VERIFY GREEN" unreachable, on
+  this branch and after the merge. Under ADR 0014 the change lists
+  `docs/adr/0013-every-criterion-names-its-proof.md` under `adr_files` in its
+  spec header, the four plan-only folders claim nothing and own nothing, and
+  its five answers answer for that one claimant. Its counterpart test stands
+  in
+  `tests/test_check_interview_minimums.py::test_a_claimant_beside_unclaiming_folders_is_decided_by_its_own_records`;
+  deciding the owner by the touched folders again turns it red. An edit no
+  touched change claims, or two claim, is a finding that names the path and
+  the remedy.
 
 ## Runner route — 2026-10-11
 

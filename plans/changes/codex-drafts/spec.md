@@ -17,6 +17,7 @@ class: feature
 appetite: 8
 change: codex-drafts
 adr_question: {proposed: "yes", reason: "It moves the spec review from Codex to Opus 5.5 and lets Codex write unattended, which amends the reviewer roles of ADR 0007 and ADR 0011, a maintainer decision."}
+adr_files: [docs/adr/0016-codex-drafts-and-opus-reviews-the-spec.md]
 ---
 
 # Spec — `codex-drafts`

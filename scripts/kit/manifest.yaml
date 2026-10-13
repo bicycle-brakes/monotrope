@@ -97,6 +97,12 @@ rules:
   - prefix: scripts/check_criterion_ledger.py
     rolle: mechanismus
     reason: "the check behind the gate criterion-ledger — the gate file travels, so its script does (ADR 0013)"
+  - prefix: scripts/check_interview_minimums.py
+    rolle: mechanismus
+    reason: "the check behind the gate interview-minimums — the gate file travels, so its script does; the day it exempts from comes from the repository's own record (ADR 0014)"
+  - prefix: scripts/adoption.py
+    rolle: mechanismus
+    reason: "the one reader of decisions/adoption.yaml, the day a repository adopted a gate; the record stays, the reader travels (ADR 0014)"
   - prefix: scripts/harness.py
     rolle: mechanismus
     reason: "the command the gate's finding names"
@@ -168,6 +174,12 @@ rules:
   - prefix: tests/test_check_criterion_ledger.py
     rolle: mechanismus
     reason: "builds its own trees and reads only files that travel; holds in the probe copy"
+  - prefix: tests/test_check_interview_minimums.py
+    rolle: mechanismus
+    reason: "builds its own git repositories; the half that reads AGENTS.md skips where that file does not travel (ADR 0014)"
+  - prefix: tests/test_adoption.py
+    rolle: mechanismus
+    reason: "builds its own trees and holds in the probe copy; the case that reads this repository's own record lives in tests/test_this_repository_adoption.py, which no rule lets travel because the record stays home (ADR 0014)"
   - prefix: tests/test_harness_decide_adr.py
     rolle: mechanismus
     reason: "builds its own trees; holds in the probe copy"
@@ -266,6 +278,9 @@ rules:
     reason: "RB-A6 verlangt sie im Ziel; der Export-Manifest traegt dort weiter den Rumpf — im Kit war sie das letzte getrackte Mitglied der aufgeloesten geruest-Rolle (bead 1jg.3, AK-6)"
 
   # --- Bestand ---------------------------------------------------------------
+  - prefix: decisions/adoption.yaml
+    rolle: bestand
+    reason: "this repository's adoption days; another repository records its own (ADR 0014)"
   - prefix: decisions/answers/
     rolle: bestand
     reason: "this repository's ADR answers; another repository's answers are its own"

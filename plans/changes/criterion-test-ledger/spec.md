@@ -4,7 +4,7 @@ status: draft
 implementation_status: partial
 date: 2026-10-11
 last_reviewed: 2026-10-11
-updated: 2026-10-11
+updated: 2026-10-13
 supersedes: null
 superseded_by: null
 bead: coding-harness-909
@@ -17,6 +17,7 @@ class: feature
 appetite: 8
 change: criterion-test-ledger
 adr_question: {proposed: "no", reason: "One gate in the shape of the existing check scripts, a plan section described in the phase-3 prompt and the text check scripts/ramp_valves.py already makes; the rule itself is the maintainer's recorded answers, and no subsystem, interface or trust boundary changes."}
+adr_files: [docs/adr/0013-every-criterion-names-its-proof.md]
 ---
 
 # Spec — `criterion-test-ledger`
