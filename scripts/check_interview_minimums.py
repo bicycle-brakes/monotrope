@@ -5,9 +5,9 @@ The rules are the maintainer's ten decisions of 2026-10-08
 (`plans/changes/archive/2026-10-08-interview-minimums/decisions.md`):
 
 - a `feature` owes at least three counted interview records;
-- a change whose diff creates or changes a file under `docs/adr/` owes five,
-  whatever its class; a feature that is also an ADR change owes five in
-  total, never the sum (Q-1);
+- a change that claims a file under `docs/adr/` in its spec header
+  (`adr_files`) and whose diff edits it owes five, whatever its class; a
+  feature that is also an ADR change owes five in total, never the sum (Q-1);
 - a `spike` owes three counted records — learning goal, time budget,
   expected outcome — or a skip record with its reason (Q-3);
 - a `bounded` change owes at least one counted record or a skip record with

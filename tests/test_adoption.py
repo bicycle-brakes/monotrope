@@ -63,12 +63,6 @@ def test_the_reader_returns_each_gates_own_day(tmp_path: Path) -> None:
         adoption.adopted_on(tmp_path, "a-third-gate")
 
 
-def test_this_repository_adopted_the_gate_on_2026_10_08() -> None:
-    if not (REPO_ROOT / RECORD).is_file():
-        pytest.skip(f"{RECORD} stays in its repository and does not travel with the kit")
-    assert adoption.adopted_on(REPO_ROOT, "interview-minimums") == date(2026, 10, 8)
-
-
 def test_the_gate_and_its_reader_travel_and_the_record_stays() -> None:
     for path in (
         "scripts/check_interview_minimums.py",

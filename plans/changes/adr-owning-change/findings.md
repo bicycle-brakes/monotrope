@@ -136,3 +136,19 @@ Stage-2 call, 2026-10-13: implement · attempt 1 · route stage-1 · endpoint cl
 Stage-2 call, 2026-10-13: review-loop · endpoint opencode-go · model deepseek-v4.1-flash · leak check clean over 388 files, 977 commits, 12 rules.
 
 Stage-2 call, 2026-10-13: repair · attempt 1 · route glm · endpoint glm-coding-plan · model glm-5.3 · leak check clean over 388 files, 978 commits, 12 rules.
+
+Stage-2 call, 2026-10-13: repair · attempt 1 · route stage-1 · endpoint claude-code-plan · model claude-sonnet-5-5 · reason Claude Code 2.1.296 refused glm-5.3 as an unrecognized model on 2026-10-13 (bead coding-harness-3fc) · leak check clean over 388 files, 980 commits, 12 rules.
+
+> Attempt 1 (stage-1) failed its post-run checks.
+>
+> Files the attempt changed (lines added, removed):
+> - `plans/changes/adr-owning-change/plan.md` +2 -2
+> - `plans/changes/criterion-test-ledger/plan.md` +16 -19
+> - `scripts/check_interview_minimums.py` +3 -3
+> - `tests/test_adoption.py` +0 -6
+> - `tests/test_this_repository_adoption.py` +20 -0
+>
+> Diagnostics:
+> ```text
+> - `plan.md` did not add a measured line below `## Time used`
+> ```

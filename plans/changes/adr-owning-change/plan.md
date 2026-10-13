@@ -245,8 +245,8 @@ D- or O-number (`research.md`, "Corrections after verification");
   — a missing file, invalid YAML, `schema_version: 2`, a quoted day, a missing key or a doubled key accepted
 - 15: tests/test_adoption.py::test_the_reader_returns_each_gates_own_day
   — another gate's id answered with the interview day, or a record with two gates refused
-- 16: tests/test_adoption.py::test_this_repository_adopted_the_gate_on_2026_10_08
-  — another day in this repository's record; skips where the record stays home
+- 16: tests/test_this_repository_adoption.py::test_this_repository_adopted_the_gate_on_2026_10_08
+  — another day in this repository's record; the case stays home, in a file no manifest rule lets travel
 - 16: not a test — the gate's run over this repository at the head, under "Verification": no stock change reported
 - 17: tests/test_adoption.py::test_the_gate_and_its_reader_travel_and_the_record_stays
   — one of the four files left to a catch-all `bestand`, or the record `mechanismus`
@@ -265,9 +265,21 @@ D- or O-number (`research.md`, "Corrections after verification");
 
 Stage-1 route: implement · model claude-sonnet-5-5 · reason: Claude Code 2.1.296 refused glm-5.3-flash as an unrecognized model twice on 2026-10-13 (bead coding-harness-3fc).
 
+## Runner route — 2026-10-13
+
+Stage-1 route: repair · model claude-sonnet-5-5 · reason: Claude Code 2.1.296 refused glm-5.3 as an unrecognized model on 2026-10-13 (bead coding-harness-3fc).
+
 ## Time used
 
 2026-10-13 span not measured — this session had file tools and no command tool, so `date` could not be read at start or end; the runner's own timestamps for this call are the record. Appetite not reached as far as the session could tell (6 h; no reading exists).
 
 
 Phase 4, 2026-10-13: the Stage-2 route (GLM 5.3 Flash) was refused twice by Claude Code 2.1.296 as an unrecognized model, so Sonnet 5.5 implemented under `--stage2-off`; the orchestrator's sub-agent completed the `leerprobe` fix (the kit probe copies only git-tracked files, so the untracked `scripts/adoption.py` was missing in the foreign repository and collection of the interview-minimums tests aborted). No wall-clock reading exists.
+
+2026-10-13 — review-loop round 1 repair (L1-1 to L1-3) under the Stage-2
+runner, Sonnet 5.5 under `--stage2-off` (Claude Code 2.1.296 refused glm-5.3 as
+an unrecognized model); no command tool, so no wall-clock reading. The case
+asserting this repository's adoption day moved to a test file the kit does not
+carry, the gate's docstring and the criterion-test-ledger plan prose were
+corrected. The attempt failed only for this missing line; the orchestrator
+added it and ran `make verify`.
