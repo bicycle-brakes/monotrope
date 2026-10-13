@@ -44,3 +44,22 @@ Stage-2 call, 2026-10-13: spec-review · endpoint claude-code-plan · model clau
 | F-13 | MINOR | SPEC | base | `spec.md`, AC 13, 16, 20, 21 | [GAP] The result of an update that applied safe files, left conflicts and passed `make verify` is not stated: AC 13 and 16 say "reports", and AC 21 defines failure for verification only. The tests for AC 13 and 16 must assert a return value, and a caller reading only that value cannot tell a complete pin from a partial one. | Opus | taken — not a test — moved to the update change (decisions.md, Q-6) | — |
 | F-14 | MINOR | SPEC | base | `spec.md`, AC 19, Non-goals (crash recovery) | AC 19 cannot go red beyond what the implementation chooses to catch: "handled" puts any uncaught failure outside the criterion by its own wording, while the refutation speaks of "an injected write failure" without limit. Not stated: which steps count (replacing a file, deleting a retired one, changing a mode, creating a directory, writing the lock) and whether directories created for the payload belong to the restored state. | Opus | taken — not a test — ruled in decisions.md, Phase 2a rulings (F-14); the redraft carries it into the spec | — |
 | F-15 | MINOR | SPEC | base | `spec.md`, AC 20, AC 23; `scripts/verify_all.sh:28–43`; `scripts/kit/probe.py:330–334` | [GAP] AC 20 fixes the working directory of the target's `make verify`, not its environment. `verify_all.sh` honours and exports `$PYTHON`, and the probe strips `BEAD_RENDER` before it runs a foreign tree so that tree cannot see this repository's tracker. An integration run started from this repository's own `make verify` hands both to the target, so AC 23's "without source tracker data" can be green on the source's interpreter and tracker render. | Opus | taken — not a test — ruled in decisions.md, Phase 2a rulings (F-15); the redraft carries it into the spec | — |
+
+Stage-2 call, 2026-10-13: draft · attempt 1 · route codex · endpoint openai-codex · model gpt-6.1-sol · leak check clean over 416 files, 1038 commits, 12 rules.
+
+> Attempt 1 (codex) failed its call: codex call failed: exit 1
+>
+> The runner put back:
+> - `docs/adr/0018-pinned-kit-install-and-update.md`
+> - `plans/changes/kit-install/design.md`
+> - `plans/changes/kit-install/plan.md`
+> - `plans/changes/kit-install/research.md`
+> - `plans/changes/kit-install/spec.md`
+
+Stage-2 call, 2026-10-13: draft · attempt 2 · route codex-repair · endpoint openai-codex · model gpt-6.1-sol · reason the first draft attempt failed · leak check clean over 416 files, 1042 commits, 12 rules.
+
+> Attempt 2 (codex-repair) failed its call: codex call failed: exit 1
+
+Stage-2 call, 2026-10-13: draft · attempt 3 · route glm · endpoint glm-coding-plan · model glm-5.3 · reason two Codex draft attempts failed · leak check clean over 416 files, 1042 commits, 12 rules.
+
+> Attempt 3 (glm) failed its call: claude call failed: exit 1
