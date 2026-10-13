@@ -3,16 +3,16 @@ title: "Spec — kit-install"
 status: draft
 implementation_status: none
 date: 2026-10-13
-last_reviewed: 2026-10-13
-updated: 2026-10-13
+last_reviewed: 2026-10-14
+updated: 2026-10-14
 supersedes: null
 superseded_by: null
 bead: coding-harness-2uk
 owner: framework-architect
 provenance: ai-drafted-reviewed
-produced_by: {kind: llm-session, name: codex, version: "2026-10-13"}
+produced_by: {kind: llm-session, name: codex, version: "2026-10-14"}
 review: {status: pending, approved_by: null, approved_at: null}
-tags: [spec, kit, install, update]
+tags: [spec, kit, install, report]
 class: feature
 appetite: 12
 change: kit-install
@@ -22,233 +22,243 @@ adr_files: [docs/adr/0018-pinned-kit-install-and-update.md]
 
 # Spec — kit-install
 
-Install the workflow in a fresh repository, update its unchanged kit files
-from a pinned source version, and give an existing instance a comparison
-report for adoption in its own changes (bead coding-harness-2uk). Research:
-`research.md`. Maintainer answers: `decisions.md`, Q-1 through Q-5.
+Install the workflow in a fresh repository with a source pin and give an
+existing instance a comparison report for adoption in its own changes (bead
+coding-harness-2uk). Research: `research.md`. Maintainer answers:
+`decisions.md`, Q-1 through Q-6, including the split that defers updates.
+
+This revision incorporates the phase-2a rulings of 2026-10-13. The former
+update criteria 9–16 leave this change because the maintainer chose the split,
+not because a gate required it; the install/report criteria below replace the
+old numbering. Design runs in `design.md`.
 
 ## Problem
 
-- The kit can measure portability but cannot install or update an instance:
-  its probe writes only a throwaway tree, the export directory has no
-  exporter, and the command exposes only `decide adr` (research §1,
-  coding-harness `3199a28`, 2026-10-13).
-- An instance cannot establish which source bytes it received. Neither
-  repository has a lock or per-file baseline; the existing instance names
+- The kit measures portability but cannot install an instance: the probe
+  writes a throwaway tree, the export directory has no exporter, and the
+  command exposes only `decide adr` (research §1, coding-harness `3199a28`,
+  2026-10-13).
+- An instance cannot establish which source bytes it received: neither
+  repository has a lock or per-file baseline, and the existing instance names
   one historical comparison commit only in prose (research §§1 and 4,
   coding-harness `3199a28`, lakeswitch-ai `ce88eee`, 2026-10-13).
-- Files with the same name have different owners. The target's gates,
-  lint rules and decision pull request template are intentionally different,
-  yet all three are classified as unchanged mechanism today (research §2,
-  the same source and target commits).
-- A whole-instance replacement would discard deliberate adaptations. Of
-  the 83 source kit files measured at those commits, the target has no
-  identical file, three edited files and 80 missing at the source paths
-  (research §§2–3). The maintainer chose a report and gradual adoption.
-- A bare repository cannot run the promised verification from the present
-  payload: its manifest excludes the Makefile and dependency declarations,
-  and its gate list includes source-repository prerequisites (research §2
-  and the local drafting addendum, 2026-10-13).
+- Shared filenames hide different owners: the target's gates, lint rules and
+  decision pull request template are deliberately different, yet all three
+  are classified as unchanged mechanism (research §2, the same cut-offs).
+- A wholesale replacement would displace deliberate adaptations: of the 83
+  kit paths measured at those cut-offs, the target has none identical, three
+  edited and 80 missing (research §§2–3). It needs a report for gradual
+  adoption, not automatic conversion (Q-1).
+- The current payload cannot give a fresh target a passing verification:
+  the Makefile and dependency declaration stay behind, the source gate list
+  needs its own inventory, and copied CI would describe that source list
+  rather than the target's starting list (research §2 and drafting addenda).
 
 ## Terms
 
-- **Fresh target:** a Git working tree selected for its first workflow
-  adoption, without `harness.lock.yaml` or files at the proposed kit-owned
-  destinations; it may already contain project files and configuration.
-  Missing kit paths alone do not establish freshness: a separately
-  reimplemented workflow uses the existing-instance report route (Q-1).
-- **Kit file:** a published file with role `mechanismus`; updates own only
-  paths whose installed baseline is recorded in the target lock.
-- **Template:** a first-install starting file with role `template`; after
-  installation its path belongs to the target, including when it is edited
-  or removed there.
-- **Source version:** the full Git commit resolved from the requested
-  revision; dirty source working files do not belong to that version.
-- **Conflict:** a path that cannot receive the requested change without
-  replacing local work or changing its recorded ownership.
+- **Fresh target:** the root of a non-bare Git working tree with at least one
+  commit, no `harness.lock.yaml` of any file type, and tracked paths only from
+  root-level `README*`, `LICENSE*`, `.gitignore` and `.gitattributes`. The
+  allowlist applies to whole root filenames, not folders. Untracked files
+  do not establish ownership and still undergo destination checks.
+- **Kit file:** a selected source file with role `mechanismus`; its bytes and
+  executable bit remain the source version's, and the lock records kit
+  ownership. Scaffold `.gitkeep` files also have kit ownership.
+- **Template:** initial target configuration with role `template`; its path
+  belongs to the target after install, including when the target edits or
+  removes it. An existing regular template is retained.
+- **Derived file:** `.github/workflows/ci.yml`, produced from the target's
+  gate file rather than copied; its contents belong to the target's gate
+  configuration and are recorded separately from kit-file baselines.
+- **Source version:** the full Git commit resolved from an explicit requested
+  revision; dirty source files do not belong to it. Source identity is the
+  source repository's `origin` remote URL, never a fallback checkout path.
+- **Comparison:** exact, case-sensitive Git tree paths, committed bytes and
+  Git modes at named source and target commits. Template and derived rows
+  use the source's same-path committed file as a reference, not as a claim
+  that target-owned content should be overwritten. Uncommitted files are
+  outside the measurement; target revision defaults to `HEAD`.
 
 ## Acceptance criteria
 
 1. When a fresh target is installed from an available source version, every
-   manifest-selected kit file is present with that version's bytes and Git
-   executable bit.
-   *Refuted by:* a selected file is omitted, transformed or copied from the
-   dirty source working tree instead of the resolved commit.
-2. While the kit is installed, source inventory classified as `bestand`
-   remains outside the payload.
-   *Refuted by:* a source journal, change artifact, ADR answer or tracker
-   record appears in the target through installation.
-3. When the manifest classifies initial configuration, the gates file, lint
-   configuration and decision pull request template have the `template` role.
-   *Refuted by:* any of `decisions/gates.yaml`, `ruff.toml` or
-   `.github/PULL_REQUEST_TEMPLATE/decision.md` is classified as kit-owned.
-4. If an initial template destination already exists as a regular file,
-   installation preserves its contents and reports that the target owns it.
-   *Refuted by:* an existing template is overwritten, merged or claimed as
-   a kit file, even when its bytes equal the source.
-5. If an unpinned target already contains a proposed kit-file destination,
-   installation refuses before writing any target file.
-   *Refuted by:* an existing mechanism is overwritten or silently adopted,
-   or unrelated installation writes occur before the collision is refused.
-6. When installation writes its lock, the lock identifies the source
-   repository, full resolved commit and installed per-file ownership and
-   byte/mode baselines.
-   *Refuted by:* a branch name stands in place of a resolved commit, a
-   published file lacks its baseline, or a preserved template is kit-owned.
-7. When an instance is compared with a source version, the report identifies
-   both repository commits and each expected destination's ownership and
-   state as missing, identical or different.
-   *Refuted by:* a missing or changed path is omitted, template differences
-   are labelled accidental kit drift, or the report has no source/target
-   commit cut-off.
-8. While a comparison report runs, the command leaves target files and Git
-   state unchanged.
-   *Refuted by:* reporting creates a lock, writes a proposal into the target,
-   invokes verification there or changes its index, refs or configuration.
-9. If update has no readable, supported lock, it refuses before writing.
-   *Refuted by:* update infers ownership from matching filenames or hashes,
-   repairs a malformed lock silently, or begins applying files without it.
-10. When the selected version retains a recorded kit file whose byte/mode
-    baseline is unchanged locally, update replaces it with that version's file.
-    *Refuted by:* unchanged files stay at the old version or receive bytes or
-    executable bits from a different revision.
-11. When the selected version adds a kit file at an absent, previously unowned
-    target path, update installs it and records its baseline.
-    *Refuted by:* the new file is omitted or remains outside the lock.
-12. When the selected payload no longer contains an unchanged installed kit
-    path, update removes that file.
-    *Refuted by:* the retired file remains, or its containing directory and
-    unrelated target content are removed with it.
-13. If an installed kit path has changed locally, update preserves that path
-    and reports its conflict.
-    *Refuted by:* edited bytes, a local deletion, a changed executable bit or
-    a replacement file type is overwritten, including on upstream removal.
-14. While a path belongs to the target as a template, update never writes or
-    deletes it.
-    *Refuted by:* a newer, removed or locally deleted template changes the
-    target path during update.
-15. If an upstream change would transfer a recorded path between kit and
-    target ownership, update reports an ownership conflict without changing
-    that path or its recorded owner.
-    *Refuted by:* a template is acquired as mechanism or a kit file is
-    silently released into target ownership.
-16. If an update applies safe files while other paths conflict, the lock
-    retains each conflicted file's prior baseline and identifies the
-    incomplete requested version.
-    *Refuted by:* a blocked file is recorded as newly installed, or a partial
-    update is presented as a fully applied source pin.
-17. If the source revision, manifest or planned payload cannot be validated,
-    the command refuses before writing target files.
-    *Refuted by:* an unavailable revision, unsupported schema, unclassified
-    source file or conflicting destination produces a partial installation.
-18. If a published or locked path escapes the target, traverses a symlink or
-    enters its Git metadata, the command refuses before writing.
-    *Refuted by:* an absolute path, `..`, a linked ancestor, source symlink
-    or `.git` destination causes a write outside the validated payload.
-19. If a handled payload write fails before verification, the command restores the
-    target files and lock to their state before that application's writes.
-    *Refuted by:* an injected write failure leaves advanced lock entries,
-    replaced files, deletions or newly created payload files behind.
-20. When install or update reaches the end of an application, the command
-    invokes `make verify` once in the target working directory.
-    *Refuted by:* verification is skipped, run in the source repository,
-    substituted with a different command or run before the applied lock is
-    visible; a partial update also requires this run.
-21. If target verification fails or cannot start, the command returns failure
-    with the reason and leaves the applied files available for review.
-    *Refuted by:* a red or unavailable `make verify` yields success, hides
-    its failure or rolls back the reviewable result as if application failed.
-22. While install or update performs its own actions, it leaves the target's
-    Git index, HEAD, branches and remotes unchanged.
-    *Refuted by:* the tool stages, commits, switches branches, pushes, merges
-    or opens a pull request automatically.
-23. When a bare fresh target has Git, make and the declared Python runtime
-    dependencies available, the supplied initial configuration gives it a
-    passing `make verify` without source tracker data or endpoint credentials.
-    *Refuted by:* the bootstrap needs this repository's inventory, a tracker
-    bootstrap, a model key or a verification command missing from the payload.
-24. If comparison cannot read a source or target state, it reports the
-    unmeasured state and returns failure.
-    *Refuted by:* a permission error, unreadable file or unresolved commit is
-    reported as absence, equality or a successful empty comparison.
+   selected kit file has that commit's bytes and Git executable bit.
+   *Refuted by:* a selected file is omitted, transformed or copied from dirty
+   source files instead of the resolved commit.
+2. While installation selects its payload, source inventory and the excluded
+   agent, provenance, endpoint and tracker configuration stay outside it.
+   *Refuted by:* installation writes source journals, change artifacts, ADR
+   answers, tracker data, `AGENTS.md`, `provenance.yaml`, `.claude/`, `.codex/`,
+   `.agents/`, `tools/` or `model-endpoints.yaml` into the target.
+3. When initial configuration is classified, exactly `decisions/gates.yaml`,
+   `ruff.toml`, `.github/PULL_REQUEST_TEMPLATE/decision.md`, `Makefile` and
+   `requirements-ci.txt` are target-owned templates.
+   *Refuted by:* one of these is kit-owned, or another destination is silently
+   initialized as target configuration; CI has the separate derived role.
+4. If a template destination already holds a regular file, installation
+   preserves its bytes and executable bit and reports target ownership.
+   *Refuted by:* an existing template is overwritten, merged or kit-owned,
+   including when its bytes equal the starter.
+5. If the target fails the freshness definition, install refuses before any
+   target write and directs the caller to the comparison report.
+   *Refuted by:* an unborn, non-root, bare, already pinned or populated target
+   receives any installation file; repeating an install after red verification
+   is also refused while its lock remains.
+6. If a non-template destination is occupied, install refuses before writing
+   any target file.
+   *Refuted by:* an existing kit file, derived workflow or scaffold placeholder
+   is overwritten or silently adopted, even with identical bytes.
+7. When installation publishes `harness.lock.yaml`, it identifies the source
+   origin URL, full commit and each installed destination's ownership,
+   source or derivation, byte hash and Git mode.
+   *Refuted by:* a checkout path or branch name replaces the origin URL or
+   resolved commit, a file or scaffold baseline is missing, or a retained
+   template is claimed as a kit file; retained-template records must identify
+   that no source baseline was installed there.
+8. When comparison succeeds, it names both resolved commits and reports every
+   selected same-path source file as missing, identical or different with its
+   kit, template or derived ownership.
+   *Refuted by:* dirty target files influence the result, case-distinct tree
+   paths are folded, a selected path or commit cut-off is absent, or a
+   template/derived difference is called accidental kit drift.
+9. While comparison runs, target files and Git state remain unchanged and no
+   target verification runs.
+   *Refuted by:* a lock, report file, index, ref, configuration or verifier
+   output is created or changed by the report.
+10. If the revision, source identity, manifest or complete proposed payload
+    cannot be validated, install refuses before any target write.
+    *Refuted by:* an unavailable commit, missing origin, unsupported schema,
+    unclassified source file, conflicting rule or unrepresentable destination
+    permits a partial install.
+11. If a payload path, recipe or scaffold escapes the target, traverses a
+    symlink or enters Git metadata, install refuses before writing.
+    *Refuted by:* an absolute or parent-traversing path, source symlink or
+    submodule, linked target ancestor, or `.git` destination receives a write.
+12. If a filesystem operation fails while writing a payload file, setting its
+    mode, creating a directory or publishing the lock before verification,
+    install restores the target's prior files and directories.
+    *Refuted by:* an injected filesystem error at any of those steps leaves
+    an installer-created file, lock, temporary file or directory, or changes
+    an existing template or directory; the verifier must not start.
+13. When installation completes its application, it invokes `make verify`
+    exactly once in the target root with the applied lock visible.
+    *Refuted by:* verification is skipped, duplicated, substituted, run in the
+    source, or started before lock publication.
+14. When target verification starts, its environment contains neither
+    `BEAD_RENDER` nor the caller's `PYTHON` override.
+    *Refuted by:* either source-session value reaches the target process;
+    verification must select the target's own available runtime normally.
+15. If target verification fails or cannot start, install returns failure with
+    the reason and leaves the applied files and lock available for review.
+    *Refuted by:* an unavailable or red `make verify` produces success, hides
+    its failure or rolls back the reviewable application.
+16. While install performs its own actions, the target's index, HEAD, branches
+    and remotes remain unchanged.
+    *Refuted by:* the command stages, commits, switches, fetches into the
+    target, pushes, merges or opens a pull request.
+17. When an eligible target uses the supplied starters and has Git, make,
+    Python 3.12 and the declared dependencies available, actual target
+    `make verify` passes with the installed payload untracked.
+    *Refuted by:* it needs staging, source inventory or tracker data, model
+    endpoint credentials, an extra starter, or a command absent from the payload.
+18. When the starting gate file is supplied, its blocking local gates are
+    portable pytest, ruff check, ruff format, ADR answers, criterion ledger,
+    gate schema and CI drift, with pytest running all shipped test files and
+    deselecting exactly the named cases in the selected version's `REIST_NICHT`.
+    *Refuted by:* a gate is replaced by an always-green command, a shipped
+    test file is silently dropped, or extra cases are deselected to hide a
+    target failure; gates requiring source inventory are not starter gates.
+19. When install supplies `.github/workflows/ci.yml`, it derives the file
+    from the selected target gate contents using that kit version's generator
+    before verification.
+    *Refuted by:* the source workflow is copied, retained templates are
+    ignored, or regenerating CI from the target gate file yields other bytes.
+20. When installation supplies the manifest's scaffold folders, each contains
+    an empty `.gitkeep` recorded as kit-owned in the lock.
+    *Refuted by:* a declared folder or placeholder is absent, source contents
+    populate a scaffold, or its placeholder has no kit baseline.
+21. When the portability probe builds its disposable tree, it includes the
+    source-original bytes of both kit files and templates and derives CI from
+    the copied gate file without growing `REIST_NICHT` or its cap.
+    *Refuted by:* a reclassified template disappears, a bootstrap substitution
+    masks the source probe's result, CI is copied, or additional exceptions
+    hide new failures; removals of exemptions require measured evidence.
+22. If comparison cannot resolve or read a required source or target Git
+    state, it returns failure and identifies what was not measured.
+    *Refuted by:* an unresolved revision or unreadable object is reported as
+    absence, equality or a successful empty comparison.
 
 ## Non-goals
 
-- Switching lakeswitch-ai to the kit, rewriting its counterparts, discovering
-  semantic equivalence at renamed paths, or writing proposals into it. Its
-  owner uses the report in separate adoption changes (Q-1).
-- Three-way merging, a vendor directory, a force-overwrite option or changing
-  ownership automatically (Q-2 and Q-3).
-- A release builder, public releases, automatic version selection or the
-  planned distribution bundle; that work can consume the resolved-commit
-  interface later (bead coding-harness-dj9).
-- Installing runtimes, packages, trackers, model endpoints or local harness
-  settings. Missing runtime dependencies make verification fail explicitly.
-- Crash recovery or simultaneous writers in one target. The application
-  assumes one writer and restores its own batch on handled write failures.
-- Enabling every source-repository gate in a new instance. Its initial gate
-  list checks the portable baseline; its owner adopts repository-dependent
-  gates in that instance. Existing configuration takes precedence (Q-3).
-- Changing phase routing, interview rules, the legacy export policy or the
-  unavailable general change-artifact validator.
+- `kit update`, retry/conflict resolution, role transfers, retired-file
+  removal and partial pins. They resume in the separate update change,
+  including findings F-3, F-4, F-5 and F-13 (Q-6; bead coding-harness-66q).
+- Converting lakeswitch-ai or any existing instance, rewriting counterparts,
+  semantic matching at renamed paths, or working-tree drift measurement.
+  Adoption uses separate instance changes after the report (Q-1).
+- Installing agent entry points, provenance maps, harness settings, trackers,
+  endpoint declarations, runtimes or packages. The caller provides runtime
+  dependencies; missing dependencies produce an explicit verification failure.
+- A release builder, bundles, public releases, automatic version selection,
+  three-way merging, vendor folders or force overwrites (Q-2; release work
+  follows separately, bead coding-harness-dj9).
+- Crash/power-loss recovery and simultaneous writers in one target. The
+  filesystem-error rollback criterion covers one uninterrupted writer.
+- Changing phase routing, interview rules, the independent legacy export
+  policy or implementing the absent general change-artifact validator.
 
 ## Protected areas
 
-- All existing instances and customer repositories: this change tests
-  disposable repositories only; existing instances receive read-only reports.
-- Source journals, tracker data, ADR answers and project inventory: they are
-  excluded from the delivered workflow and are not rewritten by this change.
-- `AGENTS.md`, `provenance.yaml`, `decisions/gates.yaml`, source dependency
-  pins, `.claude/`, `.codex/` and `tools/`: their live policies stay intact;
-  fresh-instance starting content is kept separately in the kit.
-- `scripts/export/manifest.yaml`: its independent migration/export decision
-  remains separate from installing the role-defined kit.
-- Existing ADRs and their continuity map: this change adds one new record
-  and amends no numbered interview decision.
+- All real instances and customer repositories: implementation operates only
+  on disposable fixture repositories; comparison itself remains read-only.
+- Source inventory, journals, tracker data, ADR answers and all pre-existing
+  ADRs: this change owns only its still-unmerged ADR 0018 draft.
+- Source `AGENTS.md`, `provenance.yaml`, `decisions/gates.yaml`, dependency
+  versions, runtime settings, `.claude/`, `.codex/`, `.agents/` and `tools/`:
+  their live policies and pins are not changed to bootstrap an instance.
+- `scripts/export/manifest.yaml` and decision-continuity mappings: installation
+  does not reinterpret their independent migration and amendment policies.
 
 ## Definition of Done
 
-- `make verify` is green in this worktree using its locked environment; the
-  interview check and criterion ledger also hold for this change.
-- The fresh-install integration run passes actual target `make verify`;
-  update regressions prove local edits survive and the lock tells the truth
-  after a partial update. Evidence names the tested source commit in the PR.
-- The code PR carries these spec, design and plan files, the implementation
-  paths listed in the plan, the updated workflow instructions and
-  `docs/adr/0018-pinned-kit-install-and-update.md` together.
-- The protected areas and non-goals remain outside the PR's file list.
-- The decision PR records the distribution rules chosen in Q-1 through Q-5;
-  merge is acceptance. Any required ADR-answer file is recorded by the
-  orchestrating session from Q-5, never by this drafting call.
-- The PR closes the install/update work item and its final commit carries
-  `Closes-Bead: coding-harness-2uk`; only the authorized tracker writer closes
-  it after the workflow gates (bead coding-harness-2uk).
-- The general artifact-validator command cannot run in this checkout because
-  its script is absent; no implementation step fabricates that gate. Its
-  availability must be checked again before claiming that particular gate.
+- `make verify`, the named-change interview check and criterion ledger pass
+  in the locked source environment.
+- The real fresh-target install passes target `make verify`; fixture reports,
+  refusals, failure injection and environment isolation have test evidence
+  naming the source commit in the PR. No real instance is installed.
+- The PR carries the implementation files listed in `plan.md`, revised spec,
+  design and plan, review dispositions, `docs/WORKFLOW.md` and the single
+  new-to-main ADR draft `docs/adr/0018-pinned-kit-install-and-update.md`.
+- The protected policies remain intact and the PR's file list excludes the
+  non-goals; source tests retain their enforcement when made portable.
+- The decision PR records the already stated choices; merge is acceptance.
+  No ADR answer is authored or changed by this drafting call.
+- The PR closes the install/report work item with the final commit trailer
+  `Closes-Bead: coding-harness-2uk`; update remains its separate work item.
+- `scripts/validate_change_artefacts.py` is absent at the 2026-10-14 drafting
+  cut-off, so its named gate is not claimed green; the runner checks the
+  available registry and full verification gates.
 
 ## Open decisions
 
-None open. All five intent choices are recorded in `decisions.md`; Q-5 is
-the maintainer's stated ADR choice, without an ADR-answer file authored here.
-No phase-2a finding row exists in the input `findings.md` as of 2026-10-13.
+None open. The six maintainer answers and the orchestrator's phase-2a rulings
+are recorded in `decisions.md`; this revision incorporates them without
+writing an answer or an ADR-answer record.
 
-- [DETAIL] Use `class: feature`: this adds delivery to the existing kit and
-  command rather than replacing a subsystem or breaking an existing command;
-  its durable distribution contract still requires the proposed ADR.
-- [DETAIL] Require an explicit revision for install, update and report so
-  selection is visible; resolve it to a full commit before comparing or
-  writing. Command spelling and transport staging stay reversible details.
-- [DETAIL] Keep per-file baselines and a pending version after partial
-  updates: Q-2 stops the edited file, and this makes safe progress traceable
-  without claiming that the blocked file received new bytes.
-- [DETAIL] Supply separate portable bootstrap templates for missing initial
-  configuration, retaining existing files. Copying the source's inventory
-  dependent gate list would prevent the fresh repository promised by Q-1 and
-  Q-4 from verifying; template ownership permits later instance adaptation.
-- [DETAIL] Set a 12-hour phase-4 appetite, repair rounds included, as the stop
-  for the installer, update safety and disposable-repository evidence; no
-  earlier artifact sets an appetite for this change.
+- [DETAIL] Keep `class: feature`, the existing quoted ADR proposal, the
+  claimed ADR 0018 and the 12-hour appetite. Q-6 narrows the deliverable; it
+  does not reclassify it, renumber its reserved ADR or enlarge its appetite.
+- [DETAIL] Require `--ref` for install/report and add `--target-ref` to report,
+  defaulting to `HEAD`, so each measurement has an honest commit cut-off.
+- [DETAIL] Compare source-original template and derived files in the report,
+  visibly labelled as target-owned references, so an existing instance with
+  a different gate schema can still receive the promised comparison.
+- [DETAIL] Use separate Makefile and gate starters; the dependency template
+  uses the selected source's hash-checked declaration. This supplies only
+  verification prerequisites and leaves live source policies intact.
+- [DETAIL] Distinguish a completed readable comparison (success, even with
+  differences) from a refusal or failed verification (failure), so missing
+  paths in an existing instance do not themselves make measurement fail.
 
-These reversible details are chosen here with their reasons; they do not
-answer a new question on the maintainer's behalf.
+These reversible details are chosen here with their reasons; none supplies
+another maintainer answer.

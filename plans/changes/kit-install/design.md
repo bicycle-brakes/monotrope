@@ -2,252 +2,230 @@
 title: "Design — kit-install"
 category: design
 created: 2026-10-13
-updated: 2026-10-13
+updated: 2026-10-14
 status: draft
 implementation_status: none
 date: 2026-10-13
-last_reviewed: 2026-10-13
+last_reviewed: 2026-10-14
 supersedes: null
 superseded_by: null
 bead: coding-harness-2uk
 owner: framework-architect
 provenance: ai-drafted-reviewed
-produced_by: {kind: llm-session, name: codex, version: "2026-10-13"}
+produced_by: {kind: llm-session, name: codex, version: "2026-10-14"}
 review: {status: pending, approved_by: null, approved_at: null}
-tags: [design, kit, install, update]
+tags: [design, kit, install, report]
 ---
 
 # Design — kit-install
 
-The system shape for `spec.md`, using the evidence in `research.md` and the
-five maintainer answers in `decisions.md`. The pinned-version, template and
-no-commit choices are settled; the implementation arrangements below remain
-revisable proposals.
+The shape for the revised `spec.md`, from `research.md`, the six maintainer
+answers and the phase-2a rulings in `decisions.md`. Updates are deferred by
+Q-6; this design contains no update algorithm or pending-pin model.
 
 ## Alternatives
 
-- **Acquire the requested snapshot in a temporary Git repository.** Local
-  repositories and remote URLs use the same revision resolution and committed
-  object reads. A target needs Git and, for a remote, network access, but
-  neither its metadata nor the source checkout's refs need to change.
-- **Read an already prepared release bundle.** Installation needs no Git
-  transport and can be offline; a builder must first define and publish the
-  bundle and its provenance. That couples this change to the future release
-  builder before either has shipped.
+- **Acquire the requested Git snapshot in an owned temporary repository.**
+  Local sources and URLs yield committed paths, bytes and modes without
+  changing source or target refs. Git and, for remote sources, connectivity
+  are prerequisites; dirty source files never become payload.
+- **Consume a prepared release bundle.** Installation could avoid Git
+  transport and work offline, but a builder and bundle/provenance format
+  would have to ship first. That delays this change behind release work.
 
-Chosen: temporary acquisition of an explicitly requested Git revision. It
-meets the pinned-source decision without making the release builder a
-prerequisite. A future bundle adapter can supply the same payload records.
+Chosen: temporary Git acquisition, because it supplies the already chosen
+source pin without making a release builder a prerequisite. The choice is a
+proposal confirmed by the decision PR's merge.
 
-For conflicted updates, refusing the whole update would keep one uniform pin
-but stall unchanged files; applying safe paths with per-file baselines lets
-those files progress and keeps the edited path intact. Choose the latter to
-honor Q-2's stop for that file. These choices are proposals confirmed by the
-decision PR's merge.
+For implementation, moving classification into a new imported library would
+create another traveling prerequisite during the runner's unstaged checks.
+Keep the classifier in the existing `probe.py`, extend its role handling,
+and let `install.py` consume it. This preserves the probe's public helpers
+and avoids coupling this change to the separate untracked-file repair.
 
 ## Interfaces
 
-**Maintainer → Coding Harness command.** Add these invocations, keeping
-`decide adr` unchanged:
+**Maintainer → Coding Harness command.** Preserve `decide adr` and add:
 
 ```text
 python3 scripts/harness.py kit install --target DIR --ref REV [--source LOCATION]
-python3 scripts/harness.py kit update --target DIR --ref REV
-python3 scripts/harness.py kit report --target DIR --ref REV [--source LOCATION]
+python3 scripts/harness.py kit report --target DIR --ref REV [--source LOCATION] [--target-ref REV]
 ```
 
-Install and an unpinned report default to the command's repository as source.
-Update and a pinned report use the lock's source location. An explicit source
-on a pinned report is a comparison only, not a source migration. For a local
-source, use its origin URL when available, otherwise its absolute repository
-path; no endpoint, credentials or tracker bytes enter the lock. `--ref` is
-required; branches and tags are resolved once to the full commit. Report
-requires a readable target HEAD so its cut-off is real; install may bootstrap
-an unborn Git target, whose absence of HEAD is stated explicitly.
-The owner selects install for first workflow adoption and report for an
-existing implementation; the command does not infer semantic freshness from
-missing same-path files or choose a real instance automatically.
+Default source is the command's repository. A local source must have an
+`origin` URL; use that URL as identity while reading the requested commit
+from the local repository. For a URL source, that URL is identity. Never
+substitute an absolute checkout path in the lock; refuse missing identity or
+embedded secret credentials. Both verbs require `--ref`; report defaults
+`--target-ref` to `HEAD`. Reporting does not interpret a target lock to select
+or migrate its source. Future handling of another source URL belongs to update.
 
-**Command → source Git.** Acquire the requested ref into an owned temporary
-repository, with local-source acquisition insulated from its working tree.
-Read the manifest, tracked tree, blob bytes and modes at that exact commit.
-Fetches happen only in the temporary repository. Subprocess arguments are
-arrays, revision options cannot be injected, and failed acquisition is a
-refusal before target application. No source checkout or target gitdir is
-used as a fetch cache.
+**Command → source Git objects.** Resolve the requested revision once to a
+full commit and read the manifest, tree entries, modes and blob bytes there.
+Acquire/fetch in an owned temporary repository only, with argument arrays
+and option-safe revision handling; neither checkout supplies a fetch cache.
+Local dirty bytes are ignored. Validate the complete source classification
+and recipe references before any target write. No existing instance is
+selected implicitly.
 
-**Source manifest → payload.** A shared reader supplies path classification
-and published records to the command; `probe.py` retains its public helper
-names through wrappers. Installation follows the kit's role map. The
-independent legacy export policy keeps answering its separate migration
-question and is not consulted or rewritten.
+**Manifest → install or reference payload.** The kit manifest, not the
+independent export manifest, selects the payload. Install uses exact committed
+kit bytes, retained or initialized templates, derived CI and empty scaffold
+placeholders. Report compares the same-path source originals of all three
+published roles, with labels that make template and derived differences
+expected target ownership. It reads the target's selected commit with exact
+Git tree names; it does not stat working-tree paths or run the target's
+potentially incompatible gate schema to compute comparison bytes.
 
-**Command → target working tree.** Resolve the explicitly selected target
-root, validate every destination and existing ancestor, and compute the full
-action list before writing. Existing templates are retained; an unpinned kit
-destination is an install refusal. Plan update actions from each installed
-baseline: replace unchanged files, add absent new files, delete unchanged
-retired files, or report conflicts. File bytes and executable bits determine
-identity; local deletion and type changes are edits too.
+**Command → target working tree.** Require the target root and the freshness
+allowlist in the spec, using a readable HEAD plus the index's tracked paths.
+Untracked content is preserved unless it conflicts with a destination.
+Preflight every file and ancestor, including initial recipe and scaffold
+paths: refuse escapes, Git metadata, symlinks, submodules, type collisions
+and filesystem aliases that would fold different destinations. Any existing
+non-template destination, including a lock, CI file or `.gitkeep`, is a
+refusal. Only regular existing templates are retained.
 
-Template ownership is permanent for the recorded path. Retain its ownership
-entry after upstream removal so later reintroduction cannot acquire it. A
-mechanism/template ownership transition is a conflict, with no transfer.
-Templates newly introduced after first install are reported for manual
-adoption and recorded as target-owned with null baselines; update never
-initializes them automatically.
-Directories containing unrelated target files are never removed.
+Prepare the payload and run the selected version's CI generator in a temporary
+preparation tree containing the chosen target gate bytes. Invalid retained
+gates refuse before application. Keep a journal of created files/directories,
+check destinations again before creating them, set Git executable bits and
+publish the lock last. An I/O error in file creation/write, chmod, mkdir or
+lock publication removes this batch and leaves pre-existing content intact.
+There is no replacement/deletion/update path. One writer per target and an
+uninterrupted process are the operating assumptions.
 
-Stage replacement bytes outside the target, recheck the observed target
-states immediately before application, and journal originals during the
-write batch. Publish the lock atomically with the batch. On a handled write
-failure, restore this batch's files, modes, lock and newly created empty
-directories; do not claim crash recovery or simultaneous-writer isolation.
-Stop if a path changes between observation and application. One writer per
-target remains the operating assumption.
+**Command → target verifier.** After complete application, invoke the literal
+argument array `["make", "verify"]` once with target cwd. Remove `BEAD_RENDER`
+and `PYTHON` from the child environment; the target runner selects its own
+available interpreter. Preserve stdout/stderr and distinguish an application
+error from a verifier failure. A verifier failure returns nonzero and retains
+the payload and pin. The installer never stages or commits; a retained target
+verifier can have its own behavior, so tests of installer Git preservation
+use a verifier that makes no Git mutations.
 
-**Command → target verifier.** After a completed application, including a
-partial update, run the literal argument array `["make", "verify"]` with
-`cwd=target`; preserve its output and explain a missing command or nonzero
-exit. Never stage or commit the result. Verification failure leaves the
-applied payload and truthful lock for review; it is distinct from write
-failure. Existing target verification code runs with the caller's ordinary
-environment and may have its own effects; the installer makes no Git
-mutation of its own.
-
-**Command → report.** Print the source location/full commit, target commit,
-requested revision, sorted destination records and totals. Records distinguish
-kit drift, target-owned template differences, missing paths, update conflicts
-and safe actions. Plain-text output is sufficient; report does not execute
-target code or write a report file there. Unreadable state is an error,
-not `missing`. Exit 0 means a completed successful operation or readable
-comparison; exit 2 means refusal, conflict, application or verification
-failure, with the underlying reason shown.
+**Command → report.** Print origin identity, source/target full commits,
+requested revisions, sorted reference rows and totals. Row identity includes
+exact path, role, owner and missing/identical/different state (bytes and mode).
+Derived rows say reference only; no scaffold directory is mistaken for a
+committed source file. Exit 0 means a complete readable comparison even with
+differences, or an install with green verification. Exit 2 means refusal,
+unmeasured state, application failure or verifier failure with the reason.
+An unreadable Git object is not a missing path. Report creates no target file
+and changes no target Git metadata.
 
 ## Data model
 
-**Kit manifest.** Keep `rollen`, `rules`, `prefix`, `rolle`, `reason` and
-`geruest_ordner`; use schema version 2 for the additive publishing fields
-and `template` role. Longest segment-aware prefix wins, as today. Identical
-duplicate rules can be normalized; conflicting duplicates, unsafe paths,
-unknown roles and unclassified source files refuse publication. The shared
-classifier can still read schema 1 for existing callers; installation requires
-schema 2's explicit initial-template contract.
-Classify `harness.lock.yaml` as target inventory, never a deliverable from
-another repository's source snapshot.
+**Kit manifest, schema 2.** Retain `rollen`, `rules`, `prefix`, `rolle`,
+`reason` and `geruest_ordner`; longest segment-aware prefix wins. Extend
+`nach_rolle()` and probe reporting for `template` and `derived`. Keep schema-1
+classification readable for existing callers; install/report require schema
+2. Reject unsupported schemas, unknown roles, conflicting duplicates,
+unclassified committed paths, unsafe recipe paths and destination collisions.
+Consolidate the current duplicate CI rule into one derived declaration.
 
-- `mechanismus`: source-relative destination, exact committed bytes/mode,
-  update-owned after recording the initial baseline.
-- `template`: source-relative destination by default; an exact-file rule may
-  name `initial_source`, a committed bootstrap asset for the first write.
-  `initial_generator: ci-gates` is the sole alternative, mutually exclusive
-  with `initial_source`; it initializes a missing CI workflow from the chosen
-  target gate list with the existing CI generator.
-- `bestand`: never published. Scaffold directories carry no source contents;
-  create a target-owned `.gitkeep` only when needed to preserve an empty
-  initial directory in Git. Update never removes scaffold directories.
+- `mechanismus`: same-path committed bytes/mode; includes the installer and
+  starter recipe assets under `scripts/kit/bootstrap/`.
+- `template`: exactly the five spec destinations. Gates and Makefile use an
+  exact-rule `initial_source` pointing respectively to
+  `scripts/kit/bootstrap/gates.yaml` and `scripts/kit/bootstrap/Makefile`.
+  Ruff, the decision PR template and the dependency lock use their committed
+  source-original bytes. A retained template is never reinitialized.
+- `derived`: exactly `.github/workflows/ci.yml`, with generator
+  `scripts/ci_gates.py` and input `decisions/gates.yaml`; never copied.
+- `bestand`: not installed, including the lock, root provenance and all agent,
+  endpoint and tracker settings. Override the existing `.claude/agents/`
+  mechanism rule with inventory. The source `pyproject.toml` stays inventory.
+- `geruest_ordner`: create each declared folder and an empty, kit-owned
+  `.gitkeep`; never copy that folder's source contents.
 
-Make the three paths named in Q-3 templates. The root provenance map, agent
-entry point, Makefile, project/dependency declarations and generated CI
-workflow are also first-install templates because the target owns their
-configuration. Their source originals stay intact. New bootstrap assets
-under `scripts/kit/bootstrap/` are mechanism: they are the versioned recipe
-inputs, distinct from the target's initialized files.
+**Bootstrap configuration.** The Makefile offers `verify` via
+`bash scripts/verify_all.sh` and opt-in `venv` via the hash-checked
+`requirements-ci.txt`. Installation itself installs no packages. The starting
+gates use schema 2 and `tools.python: ["3.12"]`, with exactly these blocking
+`verify` gates at `placement: both`:
 
-The bootstrap supplies a generic entry point linking to `docs/WORKFLOW.md`,
-a provenance map without source inventory, a generic Python project file,
-and a Makefile whose verify recipe delegates to `scripts/verify_all.sh` and
-whose venv recipe uses the hash-checked dependency lock. Copy the committed
-dependency lock only on first installation when absent; retain existing
-dependency files. Supply Python 3.12 and three starter gates: the portable
-test command below, `gate-schema`, and `ci-drift`, using the existing gate
-schema and one list. No tracker or history-dependent gate is silently marked
-green or installed as mandatory before that instance has its own setup.
+| ID | Command |
+|---|---|
+| pytest | `python3 scripts/kit/probe.py --portable-tests` |
+| ruff-check | `python3 -m ruff check scripts/ tests/` |
+| ruff-format | `python3 -m ruff format --check scripts/ tests/` |
+| adr-answers | `python3 scripts/check_adr_answers.py` |
+| criterion-ledger | `python3 scripts/check_criterion_ledger.py` |
+| gate-schema | `python3 scripts/ci_gates.py --check-schema` |
+| ci-drift | `python3 scripts/ci_gates.py --check-ci` |
 
-```text
-python3 -m pytest tests/test_gate_record.py tests/test_check_adr_answers.py tests/test_check_criterion_ledger.py tests/test_adoption.py -q
-```
+Pytest retains the floor flag. The portable mode runs all installed `tests/`
+and converts the selected version's one `REIST_NICHT` case map to exact pytest
+node IDs for deselection; no separately maintained exclusion list exists.
+Source inventory gates, missing provenance/adoption records, external ruleset
+inspection, tracker prerequisites and another nested probe are not starter
+gates. Existing templates retain their own gates and can fail verification.
 
-Generate an absent `.github/workflows/ci.yml` from the selected gate contents,
-including preserved existing gates. Run the selected snapshot's generator
-in an isolated preparation tree and capture stdout; validate schema first,
-then stage the output. Existing CI is a retained template, never regenerated
-by install or update. Runtime/package installation remains an owner action;
-the installer calls verification and reports missing dependencies.
+The probe differs from install: its survey copies source-original template
+bytes, then generates CI from its copied source gate list. Source policy tests
+that depend on excluded agent definitions or a full source gate list must
+keep their source assertions and use fixtures or an explicit foreign-tree
+skip, as existing traveling tests do. Remove obsolete exceptions only after
+measurement and reduce the cap with the count; never add exceptions to make
+bootstrap pass. Installer regression tests stay source inventory so target
+verification cannot recursively install another target.
 
-**Target lock (`harness.lock.yaml`).** The command is its only automatic
-writer. Schema version 1 holds:
-
-- `source.repository`: transport location, without embedded credentials;
-  `source.commit`: the last completely applied source commit, or null until
-  an initial application completes.
-- `files`: destination → `{role, source_path, applied_commit, sha256, mode}`.
-  The digest covers installed bytes; mode is the Git executable/nonexecutable
-  mode. Initialized templates record their starting bytes; retained templates
-  have target ownership and null installation-baseline fields. They never
-  become overwrite candidates because they lack a baseline.
-- `scaffolds`: directory paths introduced by installation.
-- `pending`: null after complete application; otherwise `{commit, conflicts}`
-  identifies the incomplete requested version and its blocked destinations.
-
-After partial update, safe files have new individual baselines, conflicted
-files keep their old ones, and `source.commit` stays at the previous completed
-pin. Retry compares the actual file with its own baseline, not merely with
-that global pin. Removing a safe retired kit file removes its ownership
-entry; template entries remain. A pin records applied provenance, not proof
-that target verification passed. A verification failure is reported even
-when the applied source pin is complete.
-
-**Portability survey.** Keep the existing probe's source-file survey separate
-from actual fresh-target initialization: copy the source originals of both
-traveling roles into the throwaway survey tree. Bootstrap substitutions and
-the target gate list are proved by installer integration tests. Preserve the
-probe's failed-case and orphan checks; remove only exemptions measured as
-newly passing, with evidence, and never raise its cap to accommodate a broken
-installer. This separation avoids claiming that the survey ran `make verify`
-in an initialized instance when it still runs its existing pytest survey.
+**Target lock, schema 1.** `source: {url, commit}` stores origin identity and
+the full resolved pin. `files` is keyed by exact target-relative path. A
+record holds `role`, `owner` (`kit` or `target`), `source_path` or `generated_by`,
+`installed` and an installed `baseline: {sha256, git_mode}`. Retained templates
+have `installed: false`, `baseline: null` and an observed hash/mode; ownership
+is still target. Derived records name the generator and input hash, with
+actual output hash/mode and target ownership. Scaffold records use kit
+ownership, a null source path, `generated_by: scaffold`, and the empty-file
+baseline. The lock itself is metadata, not a recursively hashed payload file.
+There is no pending commit, partial-update state or ownership-transfer rule.
+The installer alone writes this lock; report needs no lock.
 
 ## ADR draft
 
-The one draft is [ADR 0018 — pinned kit install and update](../../../docs/adr/0018-pinned-kit-install-and-update.md),
-in the form of `templates/adr.md`. It records Q-1 through Q-5: fresh targets
-first, reports for existing instances, commit pins, first-install template
-ownership and verified changes left uncommitted. It amends no D-/O-number or
-earlier ADR. Its acceptance is the maintainer's merge; the drafting call
-neither records an ADR answer nor writes an approval.
+The single MADR draft remains
+`docs/adr/0018-pinned-kit-install-and-update.md`, reserved in `decisions.md`.
+It is new relative to this change's merge base even though the first draft
+already committed it; the runner permits redrafting that one file. It records
+install, report, pin and target ownership, retains Q-2/Q-3 as direction for
+the separate update change, and claims no update implementation or test
+completion in this PR. The decision PR's merge accepts the proposal; this
+call writes no maintainer answer or approval.
 
 ## Architecture delta
 
-Names retain the existing target's Human, Git and Reviewed PR to main; the
-Coding Harness command and kit extend its existing process-delivery boundary.
-
 ```mermaid
 flowchart LR
-    H["Person: Human"] -->|"target and requested revision"| C["Container: Coding Harness command"]
-    C --> K["Component: Kit install, update and report"]
-    M["Component: Kit manifest and bootstrap assets"] -->|"roles and payload"| K
-    G["System: Git source repository"] -->|"resolved commit and blobs"| K
-    K -->|"owned files and lock"| T["System: Target repository"]
-    K -->|"make verify"| V["Component: Target verifier"]
-    T --> V
-    K -->|"comparison and conflicts"| H
-    H -->|"reviewed uncommitted result"| P["System: Reviewed PR to main"]
-    T --> P
+    maintainer["Person: Maintainer"] --> command["Component: Coding Harness command"]
+    command --> installer["Component: Kit installer and report"]
+    installer --> snapshot["Container: Temporary Git snapshot"]
+    snapshot --> manifest["Component: Kit manifest and classifier"]
+    manifest --> installer
+    installer --> generator["Component: CI gate generator"]
+    generator --> preparation["Container: Temporary preparation tree"]
+    installer --> target["System: Target repository"]
+    target --> lock["Component: Source pin and ownership lock"]
+    installer --> verifier["Component: Target make verify"]
+    verifier --> target
+    manifest --> probe["Component: Portability probe"]
 ```
 
 **Added**
 
-- Kit application/report component and its immutable Git-source boundary.
-- Target lock, per-file ownership baselines and initial bootstrap assets.
-- Human-readable comparison and conflict evidence without target mutation.
+- Kit install/report dispatch, temporary snapshot/preparation boundaries and
+  the target's source pin and ownership record.
+- Template/derived classification and the two verification starter assets.
 
 **Changed**
 
-- The command gains the kit verbs alongside `decide adr`.
-- Kit classification gains first-install templates and one shared reader.
-- Initial target verification comes from its own gate list and Makefile.
+- The Coding Harness command exposes delivery and comparison alongside
+  `decide adr`; the probe carries templates and derives its workflow.
+- CI generation also supplies the target from its own gate configuration;
+  the target retains configuration ownership and review/merge responsibility.
 
 **Removed**
 
-- The assumption that shared-name configuration is update-owned mechanism.
-- No existing command, gate, export decision or instance is removed.
+- The kit manifest's kit ownership of initial configuration, copied CI,
+  root provenance and source agent definitions; source files stay in place.

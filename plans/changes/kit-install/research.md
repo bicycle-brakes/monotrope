@@ -3,8 +3,8 @@ title: "Research — kit-install"
 status: draft
 implementation_status: none
 date: 2026-10-13
-last_reviewed: 2026-10-13
-updated: 2026-10-13
+last_reviewed: 2026-10-14
+updated: 2026-10-14
 supersedes: null
 superseded_by: null
 bead: coding-harness-2uk
@@ -362,3 +362,58 @@ release construction remain outside this change.
 The branch of bead coding-harness-0ga (`feat/codex-repairs`) already holds
 `docs/adr/0017-codex-repairs-taken-findings.md` and merges first, so this
 change's draft is ADR 0018 (renumbered by the orchestrator after the draft).
+
+## Local redraft gap resolution — 2026-10-14
+
+Read only this worktree and repository Git metadata at input HEAD
+`6e0ced9b8ce0012d9c79281a38d7a1d6e3df337f`; the local `origin/main` cut-off
+is still `3199a2823f738b4305dce4b73de6aa8c8c89a6d3`. Earlier instance
+observations were not re-read externally; their counts keep their original
+cut-offs. The remote PR state was not read under this call's boundary.
+
+- Q-6 and the phase-2a rulings are present in `decisions.md`. Updates leave
+  this change; the revised spec/design/plan implement the recorded install,
+  report and lock scope. The historical exploration questions above are
+  settled or out of scope, not an invitation to interview again.
+- `templates/plan.md` and `scripts/validate_change_artefacts.py` are still
+  absent. The available spec/design/ADR templates and phase-3 prompt define
+  the artifacts; no new template or validator is introduced.
+- The one ADR is already committed on this branch but absent from its merge
+  base with `origin/main`. `scripts/stage2.py::draft_keep` explicitly permits
+  a second draft to edit that one new-to-main file, counting new ADRs across
+  the whole change. Therefore the reserved ADR 0018 can be narrowed in place;
+  another numbered draft would violate the one-file rule.
+- [GAP] `verify_all.sh` selects the checkout's own interpreter before PATH
+  unless `PYTHON` is set, and its report reads HEAD. A committed target with
+  separately available dependencies meets those prerequisites; stripping
+  `PYTHON` and `BEAD_RENDER` is an explicit install requirement (F-15).
+- [GAP] `ci_gates.py` emits CI using a hash-checked requirements-ci.txt and
+  conditionally emits tracker hydration only for `needs_tracker` gates.
+  A Makefile/dependency starter and a portable gate list can therefore use
+  the current generator without installing tracker tools or source policies.
+- [GAP] Source pytest assumptions also occur in `tests/test_ci.py`: generic
+  schema tests read optional source gate ids, and the Makefile policy test
+  requires source-only `test`/`staleness` recipes. The reduced target gate
+  list needs fixture-based generic tests and explicit source-policy scoping;
+  copying templates into the probe alone does not prove target verification.
+- [GAP] Excluding `.claude/agents/` affects three currently unexempted source
+  assertions in `tests/test_regelwerk.py` and `tests/test_model_endpoints.py`,
+  and removes the seven agent/model parameter cases currently in
+  `REIST_NICHT`. The plan preserves source enforcement and existing enforcer
+  names, uses the traveling-test foreign-tree convention, and requires measured
+  removal of obsolete exemptions. It does not add exceptions or relax the
+  cap, which is 38 at this input commit.
+- [GAP] Moving the classifier into a new module would make the probe import
+  an untracked traveling dependency before the runner stages files. Keeping
+  shared classification in the existing probe avoids that known failure;
+  integration fixtures must explicitly commit the new installer/assets in
+  their own disposable snapshot rather than copying the source index only.
+- [DETAIL] Report references source-original template/derived bytes, labelled
+  with target ownership. It does not need to execute or validate an existing
+  instance's unrelated gate schema to report missing/different paths (F-6,
+  F-7 and Q-1).
+
+Before redrafting, `check_interview_minimums.py --change kit-install` and
+`check_criterion_ledger.py` returned success on 2026-10-14. Implementation,
+initialized-target portability and post-redraft full verification remain
+unmeasured in this drafting call and belong to the runner/phase 4.
