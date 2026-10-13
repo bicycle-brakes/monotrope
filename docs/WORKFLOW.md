@@ -431,9 +431,11 @@ phase until the runner starts it.
 Switch with `/model sonnet`, `/model opus`, `/model haiku`. The alias
 `opusplan` runs Opus while planning and switches to Sonnet for execution.
 
-**Spec and plan on Opus 5.5 at effort `xhigh`** (maintainer, 2026-09-29, for
-the whole repository; until then both ran on Fable 5.1). In a session:
-`/model` and `/effort xhigh`; for a phase run as its own session:
+**Spec and plan on Opus 5.5 at effort `xhigh` by hand** — a spike, or Stage 2
+off; where the runner drafts (§4), Codex writes them instead — the default
+since ADR 0016 (maintainer, 2026-09-29, for the whole repository; until then
+both ran on Fable 5.1). In a session: `/model` and `/effort xhigh`; for a
+phase run as its own session:
 `claude --model claude-opus-5-5 --effort xhigh`. A sub-agent takes its effort
 from its definition's frontmatter (`effort: xhigh`), not from the call that
 starts it, and a new definition is read only when a session starts.
@@ -459,12 +461,12 @@ row into `spec.md` (or rejects it with a reason) before phase 3; the revised
 spec is the one yardstick for plan, code and review (`prompts/02-spec.md`,
 "After the spec review"). **One reviewer for both:** since ADR 0016 this holds
 for a `spike` only — a routed change's phase 6 is a fresh Codex session that
-first checks that each 2a row arrived in `findings.md`. A change reviewed
-before ADR 0016 keeps its recorded Codex 2a session (`Reviewer session: codex
-<id>` in `findings.md`), and the runner resumes it while that block is the
-change's last one (§4). It measures the code against the revised spec and
-first checks that its 2a rows arrived there. It still never saw the author's
-reasoning, and passing the spec in 2a is no argument in phase 6.
+first checks that each 2a row arrived in the revised `spec.md`. A change
+reviewed before ADR 0016 keeps its recorded Codex 2a session (`Reviewer
+session: codex <id>` in `findings.md`), and the runner resumes it while that
+block is the change's last one (§4). It measures the code against the revised
+spec and first checks that its 2a rows arrived there. It still never saw the
+author's reasoning, and passing the spec in 2a is no argument in phase 6.
 
 **Cost logic.** The expensive models run only in the phases with little output.
 The token-heavy part runs on Sonnet — and, where the runner starts them (§4), on
@@ -864,8 +866,11 @@ A drafted change runs in this order:
 
 What the runner cannot see: which paths a draft's Codex call reads, and
 whether its sandbox in fact confines its writes. The put-back bounds what git
-sees, not what the program touched elsewhere; that residual risk is ADR 0016's
-to state, and the first real draft is a later change's.
+sees, not what the program touched elsewhere — not an ignored file, not a
+path outside the worktree, and not the repository's git directory (`.git`:
+hooks, config), which `git restore` and `git clean` never touch although the
+runner commits right after the draft; that residual risk is ADR 0016's to
+state, and the first real draft is a later change's.
 
 ### The interactive session (`session`)
 

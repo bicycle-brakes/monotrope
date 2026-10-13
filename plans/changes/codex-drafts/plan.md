@@ -68,6 +68,11 @@ No `[DECISION]` is open. The spec's `[DETAIL]`s stand; these are the plan's:
      `run_work_model(ctx, prompt, OPUS, writable=False)`, then
      `append` of `## Phase 2a — Opus 5.5, <date>` with
      `answer_block(rows, answer, "Opus")` and no session line.
+   - `recorded_2a_session(text) -> str | None` and `review`: the session id
+     of the last `## Phase 2a` block when that block is a Codex one holding a
+     `Reviewer session: codex` line; `review` resumes only then and otherwise
+     starts fresh, its block saying `no phase-2a session was recorded`
+     (criteria 30 and 31).
    - `checkpoint`: the `message` parameter, used as
      `message or f"feat({change}): implement accepted plan"`.
    - `draft_prompt(ctx, diagnostics)`: `work_prompt(root, "02-spec.md",
@@ -313,13 +318,14 @@ records the maintainer's answer for this change.
 ## Not touched
 
 - `implement`, `verify_attempt` (except moving its evidence lines into
-  `verify_evidence`), `red_sections`, `restore_baseline`, `review`,
-  `review_loop`, `release`, `probe`, `session` in `scripts/stage2.py`.
+  `verify_evidence`), `red_sections`, `restore_baseline`, `review_loop`,
+  `release`, `probe`, `session` in `scripts/stage2.py`.
 - `scripts/stage2_runs.py`, `scripts/stage2_session.py`,
   `scripts/leakcheck.py`, `scripts/check_adr_answers.py`, `decisions/`,
   `provenance.yaml`, `.claude/settings.json`, `templates/`.
 - `docs/adr/0007-…`, `0011-…`, `0012-…`; the ADR 0016 draft is written in
-  phase 2b and phase 4 does not edit it.
+  phase 2b, and phase 4's one edit to it names the git directory among what
+  the put-back cannot bound (review round 1, finding L1-7).
 - The user-level `spec-planner` definition outside the repository.
 
 ## Risks
@@ -384,6 +390,10 @@ reading of this plan:
 ## Runner route — 2026-10-13
 
 Stage-1 route: implement · model claude-sonnet-5-5 · reason: two Flash post-run checks failed.
+
+## Runner route — 2026-10-13
+
+Stage-1 route: repair · model claude-sonnet-5-5 · reason: two GLM 5.3 post-run checks failed.
 
 ## Time used
 

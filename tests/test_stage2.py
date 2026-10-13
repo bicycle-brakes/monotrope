@@ -1744,6 +1744,16 @@ def test_a_draft_starts_codex_with_workspace_write_and_no_bypass(world: World) -
         assert flag not in argv
 
 
+def test_a_findings_file_the_draft_creates_names_codex(world: World) -> None:
+    # Repair L1-4. Planted fault: the header's producer stays `claude-code` whatever the endpoint.
+    draft_world(world)
+    assert not world.findings.exists()
+    passing_draft(world)
+    assert world.run("draft") == 0
+    header = plans_registry._frontmatter(world.findings)
+    assert header is not None and header["produced_by"]["name"] == "codex"
+
+
 def test_the_draft_prompt_carries_the_three_phase_prompts_and_the_rules(world: World) -> None:
     # Criterion 3. Planted fault: the prompt built without `03-plan.md`, or for another change.
     draft_world(world)

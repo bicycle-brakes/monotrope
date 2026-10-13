@@ -403,6 +403,8 @@ def _remark_problems(codex: str, glm: str) -> list[str]:
     problems = []
     if "Used for drafting spec, design and plan" not in codex:
         problems.append("codex: the draft")
+    if "the review (phase 6)" not in codex:
+        problems.append("codex: the review")
     if "the spec review (phase 2a) moved to Opus 5.5" not in codex:
         problems.append("codex: 2a's move")
     if "the review loop (phase 4b) moved to `opencode-go`" not in codex:
@@ -427,6 +429,11 @@ def test_no_old_reviewer_remark_claims_a_review_phase() -> None:
     assert _remark_problems(planted, glm) == ["codex: the draft"]
     planted = codex.replace("the spec review (phase 2a) moved to Opus 5.5", "keeps the spec review")
     assert _remark_problems(planted, glm) == ["codex: 2a's move"]
+    planted = codex.replace(
+        "and for the review (phase 6) of `bounded`, `feature` and `architectural` changes,",
+        "and for nothing else,",
+    )
+    assert _remark_problems(planted, glm) == ["codex: the review"]
     planted = glm.replace("stage2.py draft", "stage2.py sketch")
     assert _remark_problems(codex, planted) == ["glm: the work verbs"]
 

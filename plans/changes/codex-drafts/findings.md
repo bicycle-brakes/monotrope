@@ -387,3 +387,45 @@ Stage-2 call, 2026-10-13: implement · attempt 3 · route stage-1 · endpoint cl
 > ````
 
 Stage-2 call, 2026-10-13: review-loop · endpoint opencode-go · model deepseek-v4.1-flash · leak check clean over 385 files, 962 commits, 12 rules.
+
+Stage-2 call, 2026-10-13: repair · attempt 1 · route glm · endpoint glm-coding-plan · model glm-5.3 · leak check clean over 385 files, 963 commits, 12 rules.
+
+> Attempt 1 (glm) failed its post-run checks.
+>
+> Files the attempt changed (lines added, removed):
+> - `docs/WORKFLOW.md` +16 -11
+> - `docs/adr/0016-codex-drafts-and-opus-reviews-the-spec.md` +4 -1
+> - `plans/changes/codex-drafts/plan.md` +9 -3
+> - `prompts/02a-spec-review.md` +2 -3
+> - `scripts/stage2.py` +7 -4
+> - `tests/test_model_endpoints.py` +7 -0
+> - `tests/test_stage2.py` +10 -0
+>
+> Diagnostics:
+> ```text
+> - `plan.md` did not add a measured line below `## Time used`
+> ```
+
+Stage-2 call, 2026-10-13: repair · attempt 2 · route glm-repair · endpoint glm-coding-plan · model glm-5.3 · reason first GLM 5.3 post-run check failed · leak check clean over 385 files, 963 commits, 12 rules.
+
+> Attempt 2 (glm-repair) failed its post-run checks.
+>
+> Files the attempt changed (lines added, removed):
+> - `plans/changes/codex-drafts/plan.md` +12 -0
+>
+> Diagnostics:
+> ```text
+> - L1-6: tests/test_model_endpoints.py::test_no_old_reviewer_remark_claims_a_review_phase: pytest ended 0 on the baseline's code; red first is exit 1 or 2
+> ```
+
+Stage-2 call, 2026-10-13: repair · attempt 3 · route stage-1 · endpoint claude-code-plan · model claude-sonnet-5-5 · reason two GLM 5.3 post-run checks failed · leak check clean over 385 files, 963 commits, 12 rules.
+
+> Attempt 3 (stage-1) failed its post-run checks.
+>
+> Files the attempt changed: none.
+>
+> Diagnostics:
+> ```text
+> - the answer holds a line that is no fixed line: All seven rows are already repaired in the tree. I checked L1-1 (the prompt) and
+> - On L1-4, `begin_work_call` now takes its producer from `producer_for(endpoint)`. I did not find the name of the pinning test: no taken row carries this id
+> ```

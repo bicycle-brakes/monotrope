@@ -4,7 +4,7 @@ category: adr
 status: accepted
 created: 2026-10-12
 last_reviewed: 2026-10-12
-updated: 2026-10-12
+updated: 2026-10-13
 owner: framework-architect
 provenance: human-decided
 produced_by: {kind: llm-session, name: claude-code, version: "2026-10-12"}
@@ -143,7 +143,10 @@ model, decides what may change.
    the maintainer's user can read and send it to OpenAI, and inside its
    sandbox it writes and runs commands. The runner does not verify that
    sandbox, and it puts back only what git sees in the worktree — not an
-   ignored file, not a path outside the worktree.
+   ignored file, not a path outside the worktree, and not the repository's
+   git directory: `git restore` and `git clean` never touch `.git`, so a
+   draft call in a plain checkout can leave `.git/hooks` or `.git/config`
+   changed while the runner commits right after it.
 9. **Where Stage 2 is off**, Opus 5.5 drafts by hand as §3 says; `draft` has
    no Stage-1 route.
 

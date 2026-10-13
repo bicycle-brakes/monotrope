@@ -626,6 +626,11 @@ def findings_header(ctx: Context, producer: str) -> str:
     )
 
 
+def producer_for(endpoint: tuple[str, str, str | None]) -> str:
+    """The header's producer names the program: codex, claude-code, pi (spec, criterion 29)."""
+    return {"openai-codex": "codex", "claude-code-plan": "claude-code"}.get(endpoint[0], "pi")
+
+
 def checked_prompt(ctx: Context, endpoint: tuple[str, str, str | None], prompt: str):
     """Check the declaration and exact prompt immediately before one call."""
     problem = declaration_problem(ctx.root, endpoint[0], endpoint[1])
@@ -642,9 +647,7 @@ def begin_call(ctx: Context, verb: str, endpoint: tuple[str, str, str | None], p
     """The declaration, the leak check and the call line - for this one call, immediately before it."""
     result = checked_prompt(ctx, endpoint, prompt)
     if not ctx.findings.exists():
-        # The header's producer names the program: codex, claude-code, pi (spec, criterion 29).
-        producer = {"openai-codex": "codex", "claude-code-plan": "claude-code"}.get(endpoint[0], "pi")
-        ctx.findings.write_text(findings_header(ctx, producer), encoding="utf-8")
+        ctx.findings.write_text(findings_header(ctx, producer_for(endpoint)), encoding="utf-8")
     append(
         ctx.findings,
         f"Stage-2 call, {today()}: {verb} · endpoint {endpoint[0]} · model {endpoint[1]} · "
@@ -665,7 +668,7 @@ def begin_work_call(
     """Check and record one explore/implement attempt in its phase artefact."""
     result = checked_prompt(ctx, endpoint, prompt)
     if destination == ctx.findings and not destination.exists():
-        destination.write_text(findings_header(ctx, "claude-code"), encoding="utf-8")
+        destination.write_text(findings_header(ctx, producer_for(endpoint)), encoding="utf-8")
     why = f" · reason {reason}" if reason else ""
     append(
         destination,
