@@ -134,3 +134,5 @@ Stage-2 call, 2026-10-13: implement · attempt 1 · route stage-1 · endpoint cl
 > ````
 
 Stage-2 call, 2026-10-13: review-loop · endpoint opencode-go · model deepseek-v4.1-flash · leak check clean over 388 files, 977 commits, 12 rules.
+
+Stage-2 call, 2026-10-13: repair · attempt 1 · route glm · endpoint glm-coding-plan · model glm-5.3 · leak check clean over 388 files, 978 commits, 12 rules.
