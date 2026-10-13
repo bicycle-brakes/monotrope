@@ -671,3 +671,16 @@ Stage-2 call, 2026-10-13: repair · attempt 3 · route stage-1 · endpoint claud
 > ```text
 > - F-6: tests/test_stage2.py::test_only_the_changes_own_missing_adr_answer_is_tolerated: pytest ended 0 on the baseline's code; red first is exit 1 or 2
 > ```
+
+Stage-2 call, 2026-10-13: review · endpoint openai-codex · model gpt-6.1-sol · leak check clean over 385 files, 970 commits, 12 rules.
+
+## Phase 6 — Codex, 2026-10-13
+
+| ID | Severity | Dimension | Origin | Where | Finding | Reviewer | Status | Broke a test |
+|---|---|---|---|---|---|---|---|---|
+| F-9 | BLOCKER | SPEC | base | `scripts/stage2.py:2430` | If verification terminates immediately after the missing-answer ADR gate closes, before the next gate starts, every observed section has a verdict. The exception returns True and the post-run checks return no problems, permitting a commit although subsequent blocking gates were never measured. The repair detects an unfinished gate, but not gates that never started. [criterion 13] | Codex | open | — |
+| F-10 | BLOCKER | SPEC | base | `scripts/stage2.py:2393` | A failing pytest gate prints an embedded `── [pytest] gruen` followed by `── [ruff-check] $ captured command`. The parser switches to ruff-check and ignores the real pytest RED frame. After ruff-check closes green and the ADR gate reports the missing answer, post-run checks pass despite the pytest failure. This additional frame sequence still bypasses the repaired guard. [criterion 13] | Codex | open | — |
+| F-11 | MAJOR | SPEC | base | `scripts/stage2.py:2364` | A second draft renames its own unmerged ADR by deleting the old path and creating one replacement. Git reports both paths as changed, and the counter includes the deleted path because neither existed at the merge base. It therefore reports two new ADR files and rejects the attempt although only one remains. [criterion 10] | Codex | open | — |
+| F-12 | MINOR | SPEC | base | `scripts/stage2.py:1585` | Two legal 616-character relative paths sharing their first 500 characters and ending in `one.txt` and `two.txt` produce identical restored-path audit lines. Although the list now retains every entry, `quote_block` truncates each path before its filename, so neither restored path is named in full. [criterion 8] | Codex | open | — |
+
+Phase 6 verdict: codex 01a130f4-7a06-7710-82b0-acf5a60d9dd1, 2026-10-13
