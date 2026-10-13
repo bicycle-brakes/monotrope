@@ -36,3 +36,18 @@ instances, a full switch of lakeswitch-ai to the kit now, or a lakeswitch-only
 command, we decided on fresh repositories first plus the report to achieve a
 usable command soon without risk to lakeswitch-ai, accepting that lakeswitch
 gains only step by step. — 2026-10-13
+
+## Q-2 · How later improvements reach a target
+
+asked: 2026-10-13
+answer: A — a pinned version: the target carries a lock file with the kit commit (`harness.lock.yaml`, as lakeswitch-ai already plans); `kit update` fetches the new version, overwrites only kit files, and reports a kit file the target has changed instead of overwriting it.
+answered_by: maintainer
+status: answered
+
+In the context of a kit with no version or source marker today, facing the
+choice between a pinned version in a lock file, a three-way merge of kit files
+the target may edit, or a vendored copy in a folder of its own, we decided on
+the pinned version to achieve a simple, traceable update that fits the
+planned release builder and pin (bead coding-harness-dj9), accepting that a
+target's edit of a kit file stops the update for that file until someone
+resolves it. — 2026-10-13
