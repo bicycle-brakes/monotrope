@@ -278,6 +278,18 @@ def test_adr_with_two_owning_changes_is_a_finding(repo: Path) -> None:
     done = run_gate(repo)
     assert done.returncode == 1
     assert f"{ADR} is claimed by owner-a, owner-b" in done.stdout
+    assert "retire the claim of an earlier change" in done.stdout
+
+
+def test_an_unreadable_claim_does_not_also_report_a_missing_one(repo: Path) -> None:
+    # L2-4: one fault, one finding — the agreement check skips a feature whose
+    # claim cannot be read.
+    write_change(repo, "broken", "feature", decisions=records(3), extra_header="adr_files: docs/adr/0099-x.md\n")
+    write_answer(repo, "broken", "yes")
+    done = run_gate(repo)
+    assert done.returncode == 1
+    assert "adr_files cannot be read" in done.stdout
+    assert "claims no ADR file" not in done.stdout
 
 
 # --- AC 3 · feature with ADR: five in total, never the sum -----------------

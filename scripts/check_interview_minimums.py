@@ -12,7 +12,9 @@ The rules are the maintainer's ten decisions of 2026-10-08
   expected outcome — or a skip record with its reason (Q-3);
 - a `bounded` change owes at least one counted record or a skip record with
   its reason (Q-6);
-- an `architectural` change owes five only when its diff touches `docs/adr/`.
+- an `architectural` change owes five only when it claims the ADR file its
+  diff edits, like every other class; an ADR edit it does not claim is the
+  unclaimed finding, not the five (ADR 0014).
 
 Counted means: `status: answered`, `answered_by: maintainer`, and the first
 occurrence of its question id in the file (Q-5). Agent answers, open
@@ -331,10 +333,12 @@ def measure(root: Path, only: str | None = None) -> tuple[list[str], int]:
     folders = _active_changes(root)
     claims: dict[str, list[str]] = {}  # active change -> its claim
     claimed_by_folder: dict[Path, list[str]] = {}
+    unreadable: set[Path] = set()  # folders whose claim is already a finding
     for folder in folders:
         paths, problem = _claim(folder / "spec.md")
         claimed_by_folder[folder] = paths
         if problem:
+            unreadable.add(folder)
             findings.append(
                 f"{(folder / 'spec.md').relative_to(root).as_posix()}: adr_files cannot be read — {problem}; "
                 f"the form is adr_files: [{ADR_DIR}/<file>, …]"
@@ -356,7 +360,9 @@ def measure(root: Path, only: str | None = None) -> tuple[list[str], int]:
         elif len(claimants) > 1:
             findings.append(
                 f"{path} is claimed by {', '.join(claimants)} in one diff — one change "
-                "claims an edit; drop the other claims or split the pull request"
+                "claims an edit; drop the other claims, retire the claim of an earlier "
+                "change whose edit is already on main (remove the path from its spec "
+                "header), or split the pull request"
             )
         else:
             owners.add(claimants[0])
@@ -390,9 +396,10 @@ def measure(root: Path, only: str | None = None) -> tuple[list[str], int]:
         named_found = True
         klass, spec_date = _spec_class_and_date(folder / "spec.md")
         subject = spec_date is None or spec_date > day
-        if klass == "feature" and subject:
+        if klass == "feature" and subject and folder not in unreadable:
             # the answer and the claim agree (ADR 0014); a missing or refused
-            # answer is the gate adr-answers' finding, not a second one here
+            # answer is the gate adr-answers' finding, not a second one here,
+            # and an unreadable claim is reported once, above
             findings.extend(_disagreement(root, name, claimed_by_folder[folder]))
         if name in owners and folder.parent.name != ARCHIVE:
             continue  # already measured above

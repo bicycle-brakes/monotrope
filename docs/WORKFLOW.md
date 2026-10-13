@@ -119,6 +119,9 @@ finding that names the remedy — list the file under `adr_files` in the spec
 header of the change it belongs to — and so is an edit two changes claim, or
 a claim that cannot be read. A subject `feature`'s answer to the ADR question
 agrees with its claim: "yes" with at least one claimed file, "no" with none.
+A claim never expires, so once the edit of an earlier change is on main, that
+change's claim is **retired** — the path is removed from its spec header — when
+a later change claims the same file; two claims in one diff are a finding.
 
 Across all of them runs the **session handover** — it belongs to no phase but to
 the end of a session; see below.
@@ -317,7 +320,7 @@ it.
 
 **The interview goes by class too** (maintainer, 2026-10-08): a `feature`
 owes at least three distinct, substantive questions; creating or changing an
-ADR raises the debt to five in whatever class the change carries; a `spike`
+ADR (one it claims under `adr_files`) raises the debt to five in whatever class the change carries; a `spike`
 owes its three topics or a reasoned skip; a `bounded` change one answered
 question or a reasoned skip. What the gate counts and what the review judges
 stands in §2, the paragraph after the phase table.

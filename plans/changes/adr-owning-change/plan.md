@@ -125,8 +125,10 @@ helper names as below.
    becomes `CannotMeasure` with the reader's message (exit 3).
 2. `claims`: for every change folder with a spec, active and archived,
    `_claim(spec)` → `(paths, problem)`. No line beginning `adr_files:` → no
-   claim. Otherwise the header is loaded with `check_adr_answers.read_header`
-   and `strict_load`, and the value must be a list of distinct texts, each
+   claim. Otherwise the header block is matched with the gate's own copy of
+   `check_adr_answers`' block regex and loaded with `check_adr_answers.strict_load`
+   (not `read_header`: a spec without a `---` header block claims nothing, like
+   one without `adr_files`, instead of being a problem here), and the value must be a list of distinct texts, each
    matching `docs/adr/` plus segments that are neither empty, `.` nor `..`.
    A problem is a finding: `<spec path>: adr_files cannot be read — <why>; the
    form is adr_files: [docs/adr/<file>, …]`.
@@ -269,7 +271,14 @@ Stage-1 route: implement · model claude-sonnet-5-5 · reason: Claude Code 2.1.2
 
 Stage-1 route: repair · model claude-sonnet-5-5 · reason: Claude Code 2.1.296 refused glm-5.3 as an unrecognized model on 2026-10-13 (bead coding-harness-3fc).
 
+## Runner route — 2026-10-13
+
+Stage-1 route: repair · model claude-sonnet-5-5 · reason: Claude Code 2.1.296 refused glm-5.3(-flash) as an unrecognized model before any call (bead coding-harness-6th).
+
 ## Time used
+
+2026-10-13 — review-loop round 2 repair (L2-1 to L2-4) under the Stage-2
+runner; no command tool, so no wall-clock reading.
 
 2026-10-13 span not measured — this session had file tools and no command tool, so `date` could not be read at start or end; the runner's own timestamps for this call are the record. Appetite not reached as far as the session could tell (6 h; no reading exists).
 

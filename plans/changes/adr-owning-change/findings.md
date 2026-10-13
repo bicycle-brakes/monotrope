@@ -154,3 +154,5 @@ Stage-2 call, 2026-10-13: repair · attempt 1 · route stage-1 · endpoint claud
 > ```
 
 Stage-2 call, 2026-10-13: review-loop · endpoint opencode-go · model mimo-v2.6-flash · leak check clean over 389 files, 982 commits, 12 rules.
+
+Stage-2 call, 2026-10-13: repair · attempt 1 · route stage-1 · endpoint claude-code-plan · model claude-sonnet-5-5 · reason Claude Code 2.1.296 refused glm-5.3(-flash) as an unrecognized model before any call (bead coding-harness-6th) · leak check clean over 389 files, 984 commits, 12 rules.
