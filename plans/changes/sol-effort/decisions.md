@@ -109,3 +109,20 @@ between reading the effort per model and refusing any `max` or `medium` in a
 Sol row, we decided to read the effort per model to achieve that correct rows
 stay green and non-Sol text stays untouched, accepting a more involved check.
 — 2026-10-14
+
+## Q-6 · What the test of the resumed phase-6 call proves (finding S-3)
+
+asked: 2026-10-14
+answer: the test proves that the runner passes effort `high` on the resumed call's arguments; whether a thread first started at `max` then really works at `high` is not proven.
+answered_by: maintainer
+status: answered
+
+The maintainer chose option A on 2026-10-14 ("A"), after the question was
+explained: the first phase-6 review continues an earlier recorded Codex
+thread of the same change (ADR 0016), which may have run at `max`.
+
+In the context of a resumed Codex thread whose inner effort is not visible
+from outside, facing the choice between an argument check offline and a live
+paid call, we decided on the argument check to achieve a test that runs in
+`make verify`, accepting that what Codex does inside a resumed thread stays
+unproven. — 2026-10-14
