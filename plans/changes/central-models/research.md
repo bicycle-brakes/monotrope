@@ -256,3 +256,42 @@ Stage-2 call, 2026-10-14: explore · attempt 1 · route flash · endpoint glm-co
 - `owner:` habe ich vom Skelett-Wert `Data Architect` auf den Rollen-Schlüssel `data-architect` aus `provenance.yaml` geändert (`RB-M8`: `owner` nennt eine Rolle von dort) — Begründung steht hier, damit es der Review nicht als stille Änderung durchgeht.
 - Die Stage-2-Aufrufzeile wurde unverändert aus dem Skelett übernommen.
 - Nächster Schritt: Datei committen (Commit-Meldung sagt, dass der Text vom Explorer zurückkam), dann `tools/bd show coding-harness-ylu` in der schreibenden Sitzung lesen und die Interviewfragen (Phase 1a) darauf aufbauen — die erste Frage steht im Abschnitt „What is unclear".
+
+## Drafting addendum — 2026-10-14
+
+Read inside this worktree at `e048fa4`, branch `explore/central-models`;
+the earlier explorer's returned text above is preserved.
+
+- The five maintainer-answered records in `decisions.md` settle the source,
+  generated documentation, role contracts, four consumers and repository-local
+  values. `findings.md` has a draft audit line and no phase-2a rows to resolve.
+- The promised `scripts/validate_change_artefacts.py` is absent. The workflow
+  still describes that validator as future work. `templates/` has spec, design
+  and ADR templates but no plan template; `prompts/03-plan.md` supplies its form.
+- `run_codex` ignores its caller's selection and unpacks global `CODEX`;
+  `run_reviewer` pins thinking to `max`. Work attempts also dispatch by tuple
+  equality. Removing declarations alone would not centralize the real call.
+- `stage2_session.py::cli_argv` takes an explicit model and no effort;
+  `stage2.py::main` requires `session --model`. A default can be proposed by a
+  read-only query without changing that safety contract. Workflow section 3
+  documents native sub-agent `effort` frontmatter and reading new definitions
+  only at a new session; generated agent fields can use that existing surface.
+- `stage2_runs.py::routes_cleared` reads declaration text through `Source`,
+  including a revision, but combines it with imported current route constants.
+  The shared parser must use the same revision for both selection and clearance.
+- The mechanism manifest currently treats the three stage-2 Python modules
+  as inventory under its `scripts/` fallback; the export manifest carries a
+  narrow core and an empty endpoint skeleton. Transferring the runner needs
+  explicit dependency rules: its direct project imports are `check_adr_answers`,
+  `check_frontmatter_current`, `leakcheck`, `merge_guard`, and the session module.
+- No research/review swarm implementation was found in the current runner.
+  The latest relevant handover records them as separate pending work and says
+  the free models' terms have not been read. Empty central swarm ladders avoid
+  inventing either membership or data clearance.
+- The highest existing ADR number is 0017. The central role amendment changes
+  no D-/O-number's contract, so the existing continuity map can remain intact.
+- Tracker and current remote PR state were not read: this draft is confined
+  to the worktree and git directory. `BEAD_RENDER` is not preset, and the full
+  registry check would ask the renderer for tracker state outside that scope;
+  the runner performs that measurement after the draft. The latest handover's
+  PR statement is historical, dated 2026-10-14 11:31, not a current query.

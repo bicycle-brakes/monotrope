@@ -104,7 +104,12 @@ typed: a hand-kept list of files ages exactly as fast as files are added.
 | [`changes/attempt-diagnostics/plan.md`](changes/attempt-diagnostics/plan.md) | draft | partial | 2026-10-11 | coding-harness-cit |
 | [`changes/attempt-diagnostics/research.md`](changes/attempt-diagnostics/research.md) | draft | partial | 2026-10-11 | coding-harness-cit |
 | [`changes/attempt-diagnostics/spec.md`](changes/attempt-diagnostics/spec.md) | draft | partial | 2026-10-11 | coding-harness-cit |
+| [`changes/central-models/decisions.md`](changes/central-models/decisions.md) | draft | none | 2026-10-14 | coding-harness-ylu |
+| [`changes/central-models/design.md`](changes/central-models/design.md) | draft | none | 2026-10-14 | coding-harness-ylu |
+| [`changes/central-models/findings.md`](changes/central-models/findings.md) | draft | none | 2026-10-14 | coding-harness-ylu |
+| [`changes/central-models/plan.md`](changes/central-models/plan.md) | draft | none | 2026-10-14 | coding-harness-ylu |
 | [`changes/central-models/research.md`](changes/central-models/research.md) | draft | none | 2026-10-14 | coding-harness-ylu |
+| [`changes/central-models/spec.md`](changes/central-models/spec.md) | draft | none | 2026-10-14 | coding-harness-ylu |
 | [`changes/ci-minutes/decisions.md`](changes/ci-minutes/decisions.md) | draft | none | 2026-10-13 | coding-harness-cac |
 | [`changes/ci-minutes/findings.md`](changes/ci-minutes/findings.md) | draft | none | 2026-10-13 | coding-harness-cac |
 | [`changes/ci-minutes/plan.md`](changes/ci-minutes/plan.md) | draft | none | 2026-10-13 | coding-harness-cac |
