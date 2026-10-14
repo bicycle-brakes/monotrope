@@ -163,4 +163,32 @@ Stage-2 call, 2026-10-14: draft · attempt 3 · route glm · endpoint glm-coding
 > - `plans/changes/sol-effort/research.md`
 > - `plans/changes/sol-effort/spec.md`
 
+Stage-2 call, 2026-10-14: draft · attempt 1 · route codex · endpoint openai-codex · model gpt-6.1-sol · leak check clean over 420 files, 1108 commits, 12 rules.
+
+> Reconstructed from the session, not the original output: the record of this second run was not committed and a checkout discarded it.
+>
+> Attempt 1 (codex) failed its post-run checks. `make verify` exited 2 at the gate `frontmatter-current`: `plans/changes/sol-effort/decisions.md` is stale, its `updated` date 2026-10-13 is older than its last change (commit `20bc86c`, rebased on 2026-10-14).
+>
+> Files the attempt changed (lines added, removed):
+> - `plans/changes/sol-effort/plan.md` +124 -0
+> - `plans/changes/sol-effort/research.md` +75 -2
+> - `plans/changes/sol-effort/spec.md` +136 -0
+
+Stage-2 call, 2026-10-14: draft · attempt 2 · route codex-repair · endpoint openai-codex · model gpt-6.1-sol · reason the first draft attempt failed · leak check clean over 422 files, 1108 commits, 12 rules.
+
+> Reconstructed from the session, not the original output (see above).
+>
+> Attempt 2 (codex-repair): the runner put back what a draft may not change: `plans/INDEX.md` and `plans/changes/sol-effort/decisions.md`. The attempt failed its post-run checks; `make verify` exited 2 at the gate `frontmatter-current`.
+>
+> Files the attempt changed (lines added, removed):
+> - `plans/changes/sol-effort/decisions.md` +2 -2
+> - `plans/changes/sol-effort/plan.md` +6 -6
+> - `plans/changes/sol-effort/research.md` +48 -0
+
+Stage-2 call, 2026-10-14: draft · attempt 3 · route glm · endpoint glm-coding-plan · model glm-5.3 · reason two Codex draft attempts failed · leak check clean over 422 files, 1108 commits, 12 rules.
+
+> Reconstructed from the session, not the original output (see above).
+>
+> Attempt 3 (glm) failed its call: claude call failed: exit 1. The Claude Code output names `glm-5.3` as not in this version's model catalog. Z.ai is exhausted until 2026-10-14 14:34 CEST.
+
 Stage-2 call, 2026-10-14: draft · attempt 1 · route codex · endpoint openai-codex · model gpt-6.1-sol · leak check clean over 420 files, 1109 commits, 12 rules.
