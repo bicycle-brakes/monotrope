@@ -7,7 +7,7 @@ last_reviewed: 2026-10-14
 updated: 2026-10-14
 supersedes: null
 superseded_by: null
-bead: coding-harness-dx0
+bead: coding-harness-4fk
 owner: Data Architect
 provenance: human-written
 tags: [research]
