@@ -9,20 +9,17 @@ supersedes: null
 superseded_by: null
 bead: coding-harness-icw
 owner: Data Architect
-provenance: human-written
+provenance: ai-drafted-reviewed
+produced_by: {kind: llm-session, name: codex, version: "2026-10-14"}
+review: {status: pending, approved_by: null, approved_at: null}
 tags: [research]
 ---
 
 # research swarm — Research
 
-Phase 1 per [`prompts/01-explore.md`](../../../prompts/01-explore.md); this
-file is empty until it has run.
-
-> **Bring the provenance up to date.** The frontmatter says
-> `provenance: human-written` — that holds for this skeleton. Whoever fills it
-> with a language model sets `ai-drafted-reviewed` and adds `produced_by:` and
-> `review:` (`provenance.yaml`, class `ai-drafted-reviewed`,
-> `review_required: true`).
+Phase 1 per [`prompts/01-explore.md`](../../../prompts/01-explore.md). The
+runner preserved the GLM exploration below; Codex added the dated repository
+evidence at the end while drafting, without changing that report's wording.
 
 Stage-2 call, 2026-10-14: explore · attempt 1 · route flash · endpoint glm-coding-plan · model glm-5.3-flash · leak check clean over 418 files, 1126 commits, 12 rules.
 
@@ -70,3 +67,65 @@ I have all the facts. Per the phase instructions (`prompts/01-explore.md` and th
 - `AGENTS.md` — the workflow-in-one-screen table's phase-1 row.
 - `tests/test_stage2.py` — the explore pins: `test_explore_uses_flash_read_only_and_appends_research`, `test_explore_needs_research_but_not_spec_or_plan`, `test_explore_stage2_off_uses_haiku_without_reading_the_glm_key`, `test_explore_scrubs_the_flash_credential_from_its_answer`, `test_an_empty_explore_answer_fails_without_an_answer_block`, `test_the_explore_prompt_names_the_live_flash_command_and_haiku_fallback`; and `tests/test_model_endpoints.py`, which checks the declaration.
 - If the change is architectural, an ADR under `docs/adr/` plus its answer under `decisions/answers/<change>/adr.yaml` — consistent with ADR 0007/0011/0012 precedent for stage-2 routing changes; whether this change claims one is a phase-2 answer, not a phase-1 fact.
+
+## Supplementary repository evidence — 2026-10-14
+
+Read within this worktree at `1e29f6e384a3942c1003b8449465bbe830ddd355`; the
+earlier exploration above is retained as evidence of what was known then.
+
+- **Interview closes the original intent gaps.** The five answered records
+  supply the free/Flash ids, six topics, public-only free-model boundary,
+  activation for feature/architectural work and Opus 5.5 as judge. Q-3
+  explicitly leaves replacement of repository-bound free seats to the spec.
+  These answers supersede the corresponding "unclear" observations in the
+  earlier report (`decisions.md`, Q-1 to Q-5).
+- **The architectural class owes no ADR-question answer file.** Only a
+  `feature` owes that answer; an `architectural` change carries its ADR
+  already. The earlier last bullet's suggestion that every architectural
+  change also needs an answer file is incorrect (`docs/WORKFLOW.md`, "Change
+  classes, the ADR question and decision pull requests").
+- **Early class input is absent.** `explore` preflights `research.md`, not
+  `spec.md`, and does not read a class. `main` exposes no `--class` argument;
+  `--model` and `--handover` belong to `session`. The doctrine explains that
+  current explore routing is not class-dependent because the spec comes
+  later (`scripts/stage2.py`, `explore`, `preflight`, `main`;
+  `docs/WORKFLOW.md`, "Which change gets what").
+- **Public authorization needs a separate data class.** `declaration_problem`
+  checks `framework` and declared residency on every current call. The
+  endpoint tests recognize billing only as `token` or `abonnement`, require
+  nonempty permission/model lists, and accept permissions only from declared
+  data classes. No public-only endpoint or free-model id is currently
+  declared (`scripts/stage2.py`, `declaration_problem`;
+  `tests/test_model_endpoints.py`, `ABRECHNUNGEN`,
+  `test_every_endpoint_states_operator_residency_and_billing`,
+  `test_only_a_declared_data_class_may_be_seen`; `model-endpoints.yaml`).
+- **Existing launch helpers provide some, not all, boundaries.**
+  `run_reviewer` uses a fresh home/config, disables discovery and retries,
+  but launches from the repository with `read,grep,find,ls` tools. The
+  runner's own documentation says those reads are unconfined. Its tools
+  contain no public search/fetch facility (`scripts/stage2.py`,
+  `run_reviewer`, `PI_TOOLS`, "Reads").
+- **Routing group labels require actual resolution.** The model-line
+  readers inspect root phase prompts and bold routing-table cells; only
+  `the ladder` currently has a declared-group exception. A new swarm label
+  cannot be silently skipped (`tests/test_model_endpoints.py`,
+  `prompt_modelle`, `routing_models`,
+  `test_every_model_in_the_routing_table_resolves`).
+- **The new runtime helpers remain local under current kit classification.**
+  No specific `stage2.py` rule exists in the kit manifest, so the `scripts/`
+  and `tests/` stock catch-alls apply to its new helpers/tests too; the
+  `prompts/` prefix already covers subdirectories. No classification change
+  is needed for this scope (`scripts/kit/manifest.yaml`).
+- [GAP] **Free transport and live web support are not qualified.** Q-1
+  records model ids seen in Pi, but no source read in this worktree maps
+  them to a Pi provider or service address. No public search/fetch adapter
+  exists here. Actual availability, the pinned runtime's tool/event contract
+  and page retrieval must be measured before claiming live support; this
+  drafting call made no external reads or live probes.
+- [GAP] **The named change-artifact validator is not present.** The file
+  `scripts/validate_change_artefacts.py` is absent, as the workflow still
+  anticipates its future delivery. `templates/` contains spec/design/ADR
+  forms but no plan template; phase 3's prompt defines that file's shape
+  (`docs/WORKFLOW.md`, "Change classes"; `prompts/03-plan.md`;
+  worktree file inventory). Existing interview and criterion-ledger gates
+  can be measured; the runner owns the derived index and full verification.
