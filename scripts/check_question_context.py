@@ -23,7 +23,8 @@ else; the gate holds no date of its own. The adoption day itself is subject
 
 For a subject record the gate accepts one non-blank context text value — a
 plain scalar or a multiline literal block. Missing, blank, duplicate, or a
-non-text value (unquoted null, boolean, number, collection) is a finding.
+non-text value (unquoted null, boolean, number, date, timestamp, collection)
+is a finding.
 Presence only: the gate does not grade wording, and fidelity to what was
 shown stays a review duty. Absent or unreadable evidence — the adoption day,
 a recording day that is missing, ambiguous or impossible, a file that cannot
@@ -43,6 +44,8 @@ import re
 import sys
 from datetime import date
 from pathlib import Path
+
+import yaml
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 import adoption  # noqa: E402 — the one reader of the adoption record
@@ -231,6 +234,17 @@ def _context_findings(rel: str, record_id: str, body: list[tuple[int, str]], mar
     if len(text) >= 2 and text[0] == text[-1] and text[0] in "\"'":
         text = text[1:-1]
     else:
+        # Resolve only the context scalar, never the Markdown record. The
+        # tag identifies YAML dates and timestamps without constructing them.
+        try:
+            scalar = yaml.compose(text, Loader=yaml.SafeLoader)
+        except yaml.YAMLError:
+            scalar = None
+        if isinstance(scalar, yaml.ScalarNode) and scalar.tag == "tag:yaml.org,2002:timestamp":
+            return [
+                f"{rel}: {record_id} — the context value is a date or timestamp, not text; "
+                "record the explanation that was shown"
+            ]
         if _NONTEXT.match(text):
             return [
                 f"{rel}: {record_id} — the context value is {text}, not text; record the explanation that was shown"

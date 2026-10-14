@@ -2,7 +2,7 @@
 title: "Design — interview-context"
 category: design
 created: 2026-10-14
-updated: 2026-10-14
+updated: 2026-10-15
 status: draft
 implementation_status: partial
 date: 2026-10-14

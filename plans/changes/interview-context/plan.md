@@ -4,7 +4,7 @@ status: draft
 implementation_status: partial
 date: 2026-10-14
 last_reviewed: 2026-10-14
-updated: 2026-10-14
+updated: 2026-10-15
 supersedes: null
 superseded_by: null
 bead: coding-harness-zs7
@@ -117,13 +117,14 @@ card templates, harness configuration and sibling repositories untouched.
 
 - 1: tests/test_check_question_context.py::test_general_rule_covers_all_questions — remove conversation or review ambiguities from the rule
 - 2: tests/test_check_question_context.py::test_question_forms_put_context_before_options_and_question_last — remove Intention or Architecture change from a form
-- 2: tests/test_check_question_context.py::test_plan_card_requires_preface_and_preserves_veto — require an extra approval or alter the card's fields
+- 2: tests/test_check_question_context.py::test_plan_card_requires_preface_and_preserves_veto — move the preface after the card, remove a context part, require an extra approval or alter the card's fields
 - 3: not a test — phase-6 review presents a sample decision and a review ambiguity in isolation; an unexplained identifier or reliance on prior chat refutes it
 - 4: tests/test_check_question_context.py::test_interview_record_has_a_dedicated_context_field — remove the context field from the record example
 - 4: tests/test_check_question_context.py::test_interview_minimums_still_counts_a_record_with_a_context_field — a record with a context block stops counting toward the interview minimum
 - 4: not a test — review compares recorded meaning with the context actually shown; an invented explanation or omitted part refutes fidelity
 - 5: tests/test_check_question_context.py::test_missing_context_goes_red — delete only the subject record's context and require exit 1 with its file and Q-id
 - 5: tests/test_check_question_context.py::test_empty_or_non_text_context_goes_red — replace context by whitespace, an empty literal block, null or a collection
+- 5: tests/test_check_question_context.py::test_date_or_timestamp_context_goes_red — accept an unquoted date or timestamp as context text
 - 5: tests/test_check_question_context.py::test_context_cannot_be_borrowed_from_another_record — put context only in another Q-block or outside all records
 - 5: tests/test_check_question_context.py::test_every_answered_occurrence_needs_context — exempt a duplicate Q-id or an agent-attributed answered record
 - 6: tests/test_check_question_context.py::test_nonblank_context_passes_without_clarity_scoring — reject a plain scalar or multiline explanation on wording alone
@@ -193,3 +194,30 @@ Stage-1 route: implement · model claude-sonnet-5-5 · reason: two Flash post-ru
 ## Time used
 
 2026-10-14, span not measured: this session had file tools only and could not read `date`; no estimate is written. The appetite stop is therefore not evaluated for this span.
+
+2026-10-15 01:11:51–01:14:38, 2m 47s (CEST, UTC+02:00).
+
+Repair attempt 2 (Codex) retained and verified the first attempt's
+plan-card and YAML date/timestamp fixes. The plan-card test rejects moving
+the preface after the card, deleting any of its five parts, reversing the
+ordering instruction, or adding text after the veto. The scalar test
+rejects four unquoted date/timestamp forms while accepting quoted and
+literal-block text. The criterion ledger now names this regression test.
+
+A temporary copy of baseline f47745d with the current tests produced five
+expected failures: the plan-card test and four date/timestamp cases. The
+current question-context test module passed all 36 tests. The adjacent
+adoption, interview-minimums and CI test modules produced 150 passed,
+2 skipped and 1 failure: the CI exception-reason test could not open the
+tracker database under the sandbox permissions. No tracker repair was
+attempted.
+
+The metadata correction in f47745d already sets all six artifacts and
+the generated index to partial, and records the adoption-day author and
+reason. This attempt refreshed stale updated headers in the four
+artifacts reported by the first post-run check and in this plan. The
+frontmatter-current, criterion-ledger and question-context gates, Ruff
+checks and git diff --check passed. The inherited findings file was not
+edited. The runner owns full verification and the checkpoint commit.
+
+Resume: when I start, I will run `make verify` through the repair runner.

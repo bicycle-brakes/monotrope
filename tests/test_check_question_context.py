@@ -132,13 +132,42 @@ def test_question_forms_put_context_before_options_and_question_last() -> None:
     assert "comes last" in interview
 
 
+def _assert_plan_card_form(plan: str) -> str:
+    before_card, card_and_tail = plan.split("```text\n", 1)
+    card, tail = card_and_tail.split("\n```", 1)
+    prefaces = [paragraph for paragraph in before_card.split("\n\n") if "contextual preface" in paragraph]
+    assert len(prefaces) == 1, "The contextual preface must precede the card."
+    preface = prefaces[0]
+    instruction = " ".join(preface.split())
+    assert "before the card" in instruction
+    assert "then the card" in instruction
+    parts = ("Topic", "Intention", "Today", "Repository change", "Architecture change")
+    for part in parts:
+        assert part in preface, part
+    positions = [preface.index(part) for part in parts]
+    assert positions == sorted(positions), "The five context parts must stay in order."
+    lines = card.splitlines()
+    assert len(lines) == 6
+    for line, field in zip(lines[:-1], ("For you:", "Done when:", "Appetite:", "Not now:", "Pre-mortem:"), strict=True):
+        assert line.startswith(field), field
+    assert lines[-1] == "Starts unless you say stop."
+    assert 'no "ok" is needed' in tail  # the preface asks for no extra approval
+    return preface
+
+
 def test_plan_card_requires_preface_and_preserves_veto() -> None:
     plan = (REPO / "prompts" / "03-plan.md").read_text(encoding="utf-8")
-    assert "context" in plan and "before" in plan  # the preface precedes the card
-    for field in ("For you:", "Done when:", "Appetite:", "Not now:", "Pre-mortem:"):
-        assert field in plan, field
-    assert "Starts unless you say stop." in plan  # the veto invitation survives
-    assert 'no "ok" is needed' in plan  # the preface asks for no extra approval
+    preface = _assert_plan_card_form(plan)
+    mutations = [
+        plan.replace(preface, "", 1) + "\n\n" + preface,
+        plan.replace(preface, preface.replace("before the card", "after the card"), 1),
+        plan.replace("Starts unless you say stop.\n```", "Starts unless you say stop.\nMore explanation.\n```", 1),
+    ]
+    for part in ("Topic", "Intention", "Today", "Repository change", "Architecture change"):
+        mutations.append(plan.replace(preface, preface.replace(part, "", 1), 1))
+    for mutation in mutations:
+        with pytest.raises(AssertionError):
+            _assert_plan_card_form(mutation)
 
 
 # --- AC 4 · the record keeps the context in its own field -------------------
@@ -192,6 +221,27 @@ def test_empty_or_non_text_context_goes_red(tmp_path: Path, value: str) -> None:
     done = run(root)
     assert done.returncode == 1, done.stdout
     assert "Q-1" in done.stdout
+
+
+@pytest.mark.parametrize(
+    "value",
+    ["2026-10-14", "2026-10-14T12:34:56Z", "2026-10-14 12:34:56+02:00", "2026-10-14t12:34:56.789Z"],
+    ids=["date", "utc-timestamp", "offset-timestamp", "fractional-timestamp"],
+)
+def test_date_or_timestamp_context_goes_red(tmp_path: Path, value: str) -> None:
+    root = _tree(tmp_path)
+    decisions = _change(root, "dated", record("Q-1", context=f'context: "{value}"\n'))
+    assert run(root).returncode == 0  # a quoted date is text
+    decisions.write_text(record("Q-1", context=f"context: |\n  {value}\n"), encoding="utf-8")
+    assert run(root).returncode == 0  # a literal block also remains text
+    decisions.write_text(record("Q-1", context=f"context: {value}\n"), encoding="utf-8")
+    before = _snapshot(root)
+    done = run(root)
+    assert done.returncode == 1, done.stdout
+    assert "plans/changes/dated/decisions.md" in done.stdout
+    assert "Q-1" in done.stdout
+    assert "not text" in done.stdout
+    assert _snapshot(root) == before
 
 
 def test_context_cannot_be_borrowed_from_another_record(tmp_path: Path) -> None:
