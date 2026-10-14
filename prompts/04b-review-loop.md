@@ -47,7 +47,7 @@ rejected.
    criterion>`, `taken — not a test — <reason>` for a finding no test can
    show, or `rejected — <reason>`.
 2. Hand the taken rows to the repair: `python3 scripts/stage2.py repair
-   <change>` gives them to GLM 5.3 in one call; the runner runs `make verify`
+   <change>` gives them to Codex in one call; the runner runs `make verify`
    and writes each row's `Status` (`docs/WORKFLOW.md` §4, "Repairing taken
    findings").
 3. For each row the repair marked `fixed`, write `Broke a test` from the run's

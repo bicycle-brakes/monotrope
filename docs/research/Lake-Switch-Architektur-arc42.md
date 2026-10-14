@@ -4,7 +4,7 @@ category: research
 status: current
 created: 2026-09-16
 last_reviewed: 2026-09-16
-updated: 2026-09-29
+updated: 2026-10-14
 owner: Data Architect
 provenance: ai-drafted-reviewed
 review:
@@ -22,8 +22,8 @@ tags: [research, arc42, lakeswitch, toolchain, wissensumgebung]
 | | |
 |---|---|
 | **Version** | 4.0 |
-| **Status** | Review-fähig; vor Stufe 0 der Umsetzung |
-| **Datum** | 2026-09-17 |
+| **Status** | Review-fähig; vor Setup-Schritt S0 der Umsetzung |
+| **Datum** | 2026-09-16 |
 | **Autor** | Michael (mit KI-Unterstützung) |
 | **Ablageort** | `docs/architecture/toolchain.md` |
 | **Template** | arc42 (de), v8.2-Gliederung |
@@ -71,7 +71,7 @@ Die operationalisierten Bewertungsszenarien stehen in Kapitel 10.
 | Rolle | Bezug zur Architektur | Erwartung |
 |-------|----------------------|-----------|
 | Michael (Solo-Entwickler, Product Owner, Reviewer) | Einziger Mensch im Loop; plant, entscheidet, mergt | Q1–Q5; minimale Reibung im Alltag, maximale Rekonstruierbarkeit nach Unterbrechungen |
-| Zukünftige Teammitglieder | Treten ab Stufe 1 des Skalierungspfads bei (8.8) | Onboarding ohne mündliche Übergabe; Q6 |
+| Zukünftige Teammitglieder | Treten ab Team-Level T1 des Skalierungspfads bei (8.8) | Onboarding ohne mündliche Übergabe; Q6 |
 | Agenten (Orchestrator, Worker, Reviewer) | Ausführende „Nutzer" der Toolchain | Eindeutige, maschinenlesbare Verträge (Ticket-Schema, AGENTS.md, Policies) |
 | Externe Nutzer des CLI (später) | Konsumenten von `docs/guide/` und PyPI-Releases | Verlässliche Nutzerdokumentation; keine internen Artefakte im Blick |
 | Arbeitgeber (indirekt) | IP-Abgrenzung (Anhang B.2) | Saubere Trennung von Arbeitsmitteln, Accounts und Inhalten |
@@ -101,15 +101,15 @@ Die operationalisierten Bewertungsszenarien stehen in Kapitel 10.
 - ADRs im **MADR-Format**, Dateiname `NNNN-kurzer-titel.md`, Status `proposed` / `accepted` / `superseded-by`.
 - Conventional Commits, SemVer, Changelog via `git-cliff`.
 - Standard-Markdown-Links als Default, keine Wikilinks (Ausnahme: der gewählte SSG rendert sie nachweislich).
-- Sprache der Artefakte: Deutsch für Wissen und Entscheidungen, Englisch für Code und Commit-Messages.
+- Sprache der Artefakte: English for content artefacts, commit messages and PR bodies (decided direction; German transitional in existing documents). *(Editorial correction 2026-10-14; the line formerly read "Deutsch für Wissen und Entscheidungen, Englisch für Code und Commit-Messages".)*
 
 ### 2.4 Nicht-Ziele
 
-- Keine Team-Kollaboration in Echtzeit in der ersten Ausbaustufe.
+- Keine Team-Kollaboration in Echtzeit auf Team-Level T0 (solo).
 - Kein Enterprise-Entwicklerportal.
 - Keine vollautomatische Ticket-Erzeugung ohne menschliches Bestätigungs-Gate.
 - Keine harte Kopplung an Omnigent-Interna, solange dessen API als alpha gilt.
-- Keine bidirektionale Synchronisation zwischen Beads und GitHub in der Solo-Stufe.
+- Keine bidirektionale Synchronisation zwischen Beads und GitHub auf Team-Level T0 (solo).
 - Kein Betrieb über den Arbeitgeber-Databricks-Account.
 
 ### 2.5 Stack-Grenzen und Ausstiegspfade
@@ -163,7 +163,7 @@ Die Toolchain läuft lokal. Planung, Ticket-Erzeugung, Ausführung und lokale Ga
 ### 4.1 Tragende Ideen
 
 1. **Schichten nach Zeithorizont.** Jedes Artefakt liegt in genau einer von sieben Schichten (L0–L6), sortiert nach Lebensdauer. Je langlebiger, desto höher die Änderungshürde. Zwischen Planung/Wissen und Ausführung liegt genau eine Schleuse (Ticket-Generator), zwischen Ausführung und Hauptzweig genau ein Gate-Verbund.
-2. **Zweistufige Durchsetzung.** Schutz geschieht präventiv (Policies und Sandbox lassen eine Aktion gar nicht entstehen) *und* reaktiv (Review-Gates und CI hindern sie am Merge) — unabhängig voneinander, damit der Ausfall einer Stufe den Schutz nicht kippt.
+2. **Zweistufige Durchsetzung.** Schutz geschieht präventiv (Policies und Sandbox lassen eine Aktion gar nicht entstehen) *und* reaktiv (Review-Gates und CI hindern sie am Merge) — unabhängig voneinander, damit der Ausfall eines Weges den Schutz nicht kippt.
 
 ### 4.2 Architekturprinzipien
 
@@ -185,7 +185,7 @@ Integration über Kommandozeilenaufrufe, Shell-Skripte, Git-Hooks und Slash-Comm
 Überlappungen erzeugen Drift. Die Zuordnung in 8.1.4 ist normativ. Wenn ein Artefakt in zwei Zeilen passt, ist es falsch geschnitten. Gilt auch für Steuerdateien: `AGENTS.md` ist die eine Instruktionsquelle.
 
 **P6 — Isolation vor Vertrauen, zweistufig.**
-Agenten arbeiten in separaten Worktrees auf eigenen Branches; der Hauptzweig ist geschützt. Durchgesetzt **präventiv** (Policies, Sandbox-Pfadgrenzen) und **reaktiv** (Review-Gates, CI). Beide Wege müssen unabhängig funktionieren; die präventive Stufe darf keine Voraussetzung für die reaktive sein.
+Agenten arbeiten in separaten Worktrees auf eigenen Branches; der Hauptzweig ist geschützt. Durchgesetzt **präventiv** (Policies, Sandbox-Pfadgrenzen) und **reaktiv** (Review-Gates, CI). Beide Wege müssen unabhängig funktionieren; der präventive Weg darf keine Voraussetzung für den reaktiven sein.
 
 **P7 — Nicht erfinden.**
 Agenten markieren Unklares als `OFFEN` statt zu raten. Ein Ticket, ein ADR oder ein Modell-Abschnitt, der eine Annahme enthält, die nicht aus einem Quellartefakt belegt ist, gilt als fehlerhaft. Die Korrektur von `OFFEN` ist menschliche Aufgabe und hat Vorrang vor neuer Arbeit. Gilt auch für die Obsidian-Kuration (6.4): Eine Notiz mit unbelegter Aussage wird nicht promoviert, sondern als `OFFEN` markiert oder verworfen.
@@ -201,7 +201,7 @@ Neue Werkzeuge, Renderer oder Speicherorte werden nur per ADR eingeführt. Die A
 | `ROADMAP.md` als einzige Planungsquelle | Planung ist Prosa in Git | ADR-0002 (9.1) |
 | `AGENTS.md` als einzige Instruktionsquelle | `CLAUDE.md` enthält nur `@AGENTS.md` | ADR-0012 (9.3) |
 | LikeC4 als einzige C4-Modellquelle | Kein paralleles Structurizr-Modell | ADR-0010 (9.3) |
-| Omnigent ab Stufe 5, rein additiv | Git-native Gates funktionieren allein | ADR-0007 (9.2) |
+| Omnigent ab Setup-Schritt S5, rein additiv | Git-native Gates funktionieren allein | ADR-0007 (9.2) |
 | SSG publiziert nur `docs/guide/` | Interne Artefakte bleiben intern | ADR-0004 (9.3) |
 
 ---
@@ -222,11 +222,11 @@ Neue Werkzeuge, Renderer oder Speicherorte werden nur per ADR eingeführt. Die A
 
 Der Zeithorizont ist das Sortierkriterium. Je langlebiger ein Artefakt, desto weiter unten liegt es und desto höher die Hürde für Änderungen.
 
-**Zwei Durchsetzungswege.** Die präventive Spalte beschreibt, was ein Agent technisch nicht tun kann: Ein Worker mit `write_paths: [src, tests, .beads]` kann `docs/`, `brain/`, `model/`, `ROADMAP.md` und `.claude/` nicht beschreiben — der Tool-Call schlägt fehl, bevor eine Datei entsteht. Die reaktive Spalte beschreibt, was beim Merge geprüft wird: ein deterministischer Pfad-Check in CI plus (ab Team-Stufe) CODEOWNERS-Review auf den geschützten Pfaden.
+**Zwei Durchsetzungswege.** Die präventive Spalte beschreibt, was ein Agent technisch nicht tun kann: Ein Worker mit `write_paths: [src, tests, .beads]` kann `docs/`, `brain/`, `model/`, `ROADMAP.md` und `.claude/` nicht beschreiben — der Tool-Call schlägt fehl, bevor eine Datei entsteht. Die reaktive Spalte beschreibt, was beim Merge geprüft wird: ein deterministischer Pfad-Check in CI plus (ab Team-Level T1) CODEOWNERS-Review auf den geschützten Pfaden.
 
-**Solo-Betrieb und CODEOWNERS.** GitHub erfüllt „Require review from Code Owners" nicht durch Selbst-Review. In der Solo-Stufe gilt daher: Branch Protection mit Bypass-Berechtigung für den Repo-Admin, und der eigentliche Pfad-Schutz läuft als CI-Job, der PR-Diffs gegen die geschützte Pfadliste prüft und den Merge blockiert. CODEOWNERS wird trotzdem gepflegt — als Dokumentation der Schutzzonen und als nahtloser Übergang in die Team-Stufe (ADR-0008).
+**Solo-Betrieb und CODEOWNERS.** GitHub erfüllt „Require review from Code Owners" nicht durch Selbst-Review. Auf Team-Level T0 (solo) gilt daher: Branch Protection mit Bypass-Berechtigung für den Repo-Admin, und der eigentliche Pfad-Schutz läuft als CI-Job, der PR-Diffs gegen die geschützte Pfadliste prüft und den Merge blockiert. CODEOWNERS wird trotzdem gepflegt — als Dokumentation der Schutzzonen und als nahtloser Übergang in Team-Level T1 (ADR-0008).
 
-**L4 und L5 sind verbunden, aber nicht voneinander abhängig.** Die Policy-Ebene gehört formal zu L5, greift aber zur Laufzeit von L4. Läuft kein Omnigent, fehlt die präventive Stufe — die reaktive greift trotzdem. Das ist die Bedingung aus P6 und der Grund, warum die git-nativen Gates nicht durch Policies ersetzt werden.
+**L4 und L5 sind verbunden, aber nicht voneinander abhängig.** Die Policy-Ebene gehört formal zu L5, greift aber zur Laufzeit von L4. Läuft kein Omnigent, fehlt der präventive Weg — der reaktive greift trotzdem. Das ist die Bedingung aus P6 und der Grund, warum die git-nativen Gates nicht durch Policies ersetzt werden.
 
 ### 5.2 Ebene 2: Bausteine je Schicht
 
@@ -290,7 +290,7 @@ Spec: docs/decisions/0009-schema-evolution.md
 
 `ROADMAP.md` enthält keine Tasks, sondern Themen, Begründungen und Zeitbudgets. Das ist die Ebene, auf der Shape Up wirkt: fester Appetite statt Schätzung, Zyklus mit Cool-down, Scope wird geschnitten statt der Termin verschoben.
 
-**GitHub Milestones — die Sicht.** Jedes Now-Item entspricht einem Milestone; Milestones liefern die Fortschrittsanzeige, gepflegt über die `gh-milestone`-Extension. Sie sind eine abgeleitete Ansicht, kein zweiter Planungsspeicher: Bei Divergenz gilt `ROADMAP.md`. In der Solo-Stufe optional.
+**GitHub Milestones — die Sicht.** Jedes Now-Item entspricht einem Milestone; Milestones liefern die Fortschrittsanzeige, gepflegt über die `gh-milestone`-Extension. Sie sind eine abgeleitete Ansicht, kein zweiter Planungsspeicher: Bei Divergenz gilt `ROADMAP.md`. Auf Team-Level T0 (solo) optional.
 
 **Abgleich L1 ↔ L3.** Keine Automatik. Die Wochenroutine (6.3) listet Now-Items mit geschlossenem Epic; der Mensch verschiebt oder streicht sie. Die Kopplung ist absichtlich manuell.
 
@@ -314,7 +314,7 @@ Drei Phasen:
 |---------|----------|------|
 | `/decompose` | Mensch, aus L0/L1 | Bestätigung der Ticket-Liste |
 | `bd create --deps discovered-from:<id>` | Agent während Ausführung | Muss auf ein Eltern-Bead verweisen; wird in der Wochenroutine gesichtet |
-| `bd github sync --pull` | GitHub-Issue | **In der Solo-Stufe deaktiviert.** Issues werden vom Menschen triagiert und gehen über `/decompose` |
+| `bd github sync --pull` | GitHub-Issue | **Auf Team-Level T0 (solo) deaktiviert.** Issues werden vom Menschen triagiert und gehen über `/decompose` |
 
 Ein bidirektionaler Sync würde jedes GitHub-Issue ungefiltert in die Agenten-Queue heben. Der Sync ist deshalb ausschließlich push-only (5.2.5).
 
@@ -334,9 +334,9 @@ Ein bidirektionaler Sync würde jedes GitHub-Issue ungefiltert in die Agenten-Qu
 - Der JSONL-Export wird **ausschließlich in `/land-the-plane` auf `main`** geschrieben. Schriebe jeder parallele Worktree dieselbe getrackte Datei, entstünden Merge-Konflikte bei jedem PR.
 - Die Dolt-Dateien selbst stehen in `.gitignore`.
 
-**Selbständigkeit von `bd` begrenzen.** `bd` kann automatisch committen, Git-Hooks installieren und als RPC-Daemon laufen. Alle drei Verhaltensweisen kollidieren mit dieser Architektur: Auto-Commit unterläuft den seriellen Export-Punkt `/land-the-plane`, automatische Hooks unterlaufen den pre-commit-Verbund, und ein Daemon ist eine weitere Betriebskomponente (Q4). Auto-Commit und Auto-Hooks sind daher abzuschalten, und die Deaktivierbarkeit ist vor Abschluss von Stufe 1 zu belegen (Risiko R15, Anhang B.1).
+**Selbständigkeit von `bd` begrenzen.** `bd` kann automatisch committen, Git-Hooks installieren und als RPC-Daemon laufen. Alle drei Verhaltensweisen kollidieren mit dieser Architektur: Auto-Commit unterläuft den seriellen Export-Punkt `/land-the-plane`, automatische Hooks unterlaufen den pre-commit-Verbund, und ein Daemon ist eine weitere Betriebskomponente (Q4). Auto-Commit und Auto-Hooks sind daher abzuschalten, und die Deaktivierbarkeit ist vor Abschluss von Setup-Schritt S1 zu belegen (Risiko R15, Anhang B.1).
 
-**Nebenläufigkeit.** Mehrere Worktrees greifen auf dieselbe Dolt-Datenbank zu. Vor Stufe 2 ist zu verifizieren, ob embedded Dolt zwei gleichzeitige Writer toleriert; falls nicht, ist `bd init --shared-server` der dafür vorgesehene Modus (Risiko R13).
+**Nebenläufigkeit.** Mehrere Worktrees greifen auf dieselbe Dolt-Datenbank zu. Vor Setup-Schritt S2 ist zu verifizieren, ob embedded Dolt zwei gleichzeitige Writer toleriert; falls nicht, ist `bd init --shared-server` der dafür vorgesehene Modus (Risiko R13).
 
 **Rückfalloption `br`.** Der Rust-Port von Beads (SQLite-Primärspeicher mit JSONL-Export, kein Dolt, kein Daemon, keine automatischen Git-Operationen) friert die klassische Architektur bewusst ein, während `bd` sich weiterentwickelt. Drei seiner Fähigkeiten treffen offene Punkte dieser Architektur direkt: `br lint` prüft Issues auf fehlende Template-Abschnitte und macht das Ticket-Schema (8.1.1) maschinell durchsetzbar; `br history` hält begrenzte lokale JSONL-Snapshots (mildert R14); `br coordination status --json` macht verwaiste Claims sichtbar, und SQLite im WAL-Modus mit gebundenen Write-Locks adressiert das Nebenläufigkeitsrisiko nativ, ohne Server-Modus. Zu prüfen bleiben Claim-Semantik und die Abbildung der vier Kantentypen. Die Entscheidung zwischen `bd` und `br` ist offen und Gegenstand von ADR-0005.
 
@@ -418,13 +418,13 @@ Fehlgeschlagene Sub-Agent-Turns bleiben fehlgeschlagen und melden ihren Fehler a
 2. **Umgebungsvariablen.** `BEADS_DIR`, `LS_ROLE` und `GITHUB_TOKEN` müssen in `env_passthrough` deklariert sein. Ohne diese Deklaration sieht ein Worker sie nicht — das Rollenprotokoll und die Beads-Auffindbarkeit hängen daran.
 3. **Dotfile-Sichtbarkeit.** `.beads/` ist ein Dot-Verzeichnis auf oberster Ebene. Ob es unter Standardeinstellungen für einen sandboxed Worker sichtbar ist, geht aus der Dokumentation nicht eindeutig hervor.
 
-**Verifikationspflicht vor Stufe 2 — ein Testlauf, vier Prüfungen.** Ein Sub-Agent in einem Worktree muss (a) dasselbe `bd list` sehen wie das Hauptverzeichnis, (b) `echo $LS_ROLE` und `echo $BEADS_DIR` gefüllt bekommen, (c) mit `bd create` ein Bead anlegen, das im Hauptverzeichnis sichtbar ist, und (d) **gleichzeitig mit einem zweiten Worktree** claimen und schreiben können. Schlägt eines davon fehl und lässt sich nicht über `env_passthrough` beziehungsweise Sandbox-Konfiguration beheben, sind die Rückfalloptionen in dieser Reihenfolge: `bd init --shared-server` (bei Nebenläufigkeitsproblemen), Sandbox auf `type: auto` (der seit v0.9.0 explizit wählbare Plattform-Default), Sandbox vorübergehend auf `type: none` (verliert die präventive Durchsetzung), dann `br` statt `bd`.
+**Verifikationspflicht vor Setup-Schritt S2 — ein Testlauf, vier Prüfungen.** Ein Sub-Agent in einem Worktree muss (a) dasselbe `bd list` sehen wie das Hauptverzeichnis, (b) `echo $LS_ROLE` und `echo $BEADS_DIR` gefüllt bekommen, (c) mit `bd create` ein Bead anlegen, das im Hauptverzeichnis sichtbar ist, und (d) **gleichzeitig mit einem zweiten Worktree** claimen und schreiben können. Schlägt eines davon fehl und lässt sich nicht über `env_passthrough` beziehungsweise Sandbox-Konfiguration beheben, sind die Rückfalloptionen in dieser Reihenfolge: `bd init --shared-server` (bei Nebenläufigkeitsproblemen), Sandbox auf `type: auto` (der seit v0.9.0 explizit wählbare Plattform-Default), Sandbox vorübergehend auf `type: none` (verliert die präventive Durchsetzung), dann `br` statt `bd`.
 
 #### 5.2.7 L5 — Qualitäts-Gates
 
-Gates greifen auf drei Stufen.
+Gates greifen auf drei Wegen.
 
-**Stufe 1 — Präventiv: Policies zur Laufzeit.** Omnigent-Policies sind deklarative Gates mit den Verdikten ALLOW, DENY und ASK. Sie komponieren sich, werden in Deklarationsreihenfolge ausgewertet, und ein DENY kurzschließt den Rest. Drei Ebenen: Session (zuerst), Agent-Spec (Mitte), Server-weit (zuletzt).
+**Gate-Weg 1 — Präventiv: Policies zur Laufzeit.** Omnigent-Policies sind deklarative Gates mit den Verdikten ALLOW, DENY und ASK. Sie komponieren sich, werden in Deklarationsreihenfolge ausgewertet, und ein DENY kurzschließt den Rest. Drei Ebenen: Session (zuerst), Agent-Spec (Mitte), Server-weit (zuletzt).
 
 | Policy | Wirkung | Deckt ab |
 |---|---|---|
@@ -441,7 +441,7 @@ Die GitHub-Policy blockiert destruktive Löschoperationen standardmäßig; `allo
 > **Warnung: `block_working_dir_changes` nicht aktivieren.**
 > Diese Builtin-Policy blockiert Shell-Kommandos, die das Arbeitsverzeichnis wechseln (`cd`, `pushd`, `git -C`) **oder Git-Worktrees verwalten**, und parst verkettete Kommandos gegen Umgehungen. `block_worktree` steht standardmäßig auf `true`. Aktiviert schlägt `git worktree add` fehl und damit die gesamte Isolationsmechanik aus P6. Falls sie aus anderen Gründen gebraucht wird, nur mit `block_worktree: false` und einer `allowed_dirs`-Liste, die `.claude/worktrees/` einschließt.
 
-**Stufe 2 — Lokal: pre-commit.**
+**Gate-Weg 2 — Lokal: pre-commit.**
 
 | Gate | Werkzeug |
 |------|----------|
@@ -451,11 +451,11 @@ Die GitHub-Policy blockiert destruktive Löschoperationen standardmäßig; `allo
 | Commit-Format | `conventional-pre-commit` |
 | Beads-Frische | `bd export --check` (nur prüfend, nicht schreibend; falls kein Check-Modus existiert: Vergleich via `bd export` in Temp-Datei) |
 
-**Stufe 3 — Reaktiv: CI und Review.**
+**Gate-Weg 3 — Reaktiv: CI und Review.**
 
 | Gate | Werkzeug | Blockiert Merge |
 |------|----------|-----------------|
-| Lint, Typen, Secrets | wie Stufe 2, serverseitig | ja |
+| Lint, Typen, Secrets | wie Gate-Weg 2, serverseitig | ja |
 | Tests | `pytest` + `hypothesis` | ja |
 | Golden Files | `pytest`-Fixtures mit Ein-/Ausgabepaaren | ja |
 | Architektur-Modell | `likec4 build` | ja |
@@ -623,7 +623,7 @@ C4Deployment
   }
   Deployment_Node(gh, "GitHub", "SaaS") {
     Container(remote, "Repository-Remote", "git", "Branch Protection, CODEOWNERS")
-    Container(actions, "GitHub Actions", "CI", "Gates Stufe 3, Nightly-Evals, Pages-Build, PyPI-Release")
+    Container(actions, "GitHub Actions", "CI", "Gate-Weg 3, Nightly-Evals, Pages-Build, PyPI-Release")
     Container(issues, "Issues + Milestones", "", "Menschliche Spiegelung, push-only")
   }
   Deployment_Node(api, "Modell-APIs", "SaaS") {
@@ -778,7 +778,7 @@ Die Datei ist zugleich Prompt-Quelle für Claude Code (über `CLAUDE.md` → `@A
 
 `/land-the-plane` führt in dieser Reihenfolge aus: alle Änderungen committen; für offene Beads mit gemergtem PR `bd close`; `bd export` nach `.beads/issues.jsonl` (**einzige Stelle, die diese Datei schreibt**); `bd github sync --push-only` (Statusabgleich); kurzen Handoff-Kontext schreiben.
 
-`/bootstrap-arch` ist der Bootstrapping-Command für Stufe 0 (Anhang A): „Lies AGENTS.md. Analysiere den bestehenden Code und fülle die arc42-Abschnitte 1, 3, 4 und 5 sowie das LikeC4-Modell in `model/` mit der tatsächlichen Ist-Architektur. Lege für jede erkannte wesentliche Entscheidung einen ADR im Status `proposed` an. Markiere alles Unklare als `OFFEN` statt zu raten."
+`/bootstrap-arch` ist der Bootstrapping-Command für Setup-Schritt S0 (Anhang A): „Lies AGENTS.md. Analysiere den bestehenden Code und fülle die arc42-Abschnitte 1, 3, 4 und 5 sowie das LikeC4-Modell in `model/` mit der tatsächlichen Ist-Architektur. Lege für jede erkannte wesentliche Entscheidung einen ADR im Status `proposed` an. Markiere alles Unklare als `OFFEN` statt zu raten."
 
 #### 8.2.3 Hooks und Automations
 
@@ -862,13 +862,15 @@ Zwei Ebenen, die nicht verwechselt werden dürfen:
 
 ### 8.8 Skalierung Solo → Team
 
-| Stufe | Auslöser | Änderung |
+| Team-Level | Auslöser | Änderung |
 |-------|----------|----------|
-| 0 | heute | Beads kanonisch für Agenten; Sync push-only; Milestones optional; Obsidian lokal; Pfad-Schutz via CI, Admin-Bypass in Branch Protection |
-| 1 | erster Mitarbeiter | Milestones verpflichtend; Issue Forms + Labels; CODEOWNERS-Review wird aktiviert (Admin-Bypass entfällt); Policies auf Server-Ebene statt nur Agent-Spec |
-| 2 | mehrere Entwickler | GitHub Projects v2 als Board; `docs/guide/` publiziert; Triage-Rolle; bidirektionaler Sync neu bewerten; `user_daily_cost_budget` pro Person |
-| 3 | mehrere Maschinen / Omnigent-Team | Omnigent-Server mit Authentifizierung; geteilte Sessions; Beads server-seitig (`bd init --shared-server`) oder `bd dolt push/pull` |
-| 4 | GitHub soll kanonisch werden | Einmalige Migration der Beads nach GitHub Issues; Beads für dieses Repo stilllegen |
+| T0 | heute | Beads kanonisch für Agenten; Sync push-only; Milestones optional; Obsidian lokal; Pfad-Schutz via CI, Admin-Bypass in Branch Protection |
+| T1 | erster Mitarbeiter | Milestones verpflichtend; Issue Forms + Labels; CODEOWNERS-Review wird aktiviert (Admin-Bypass entfällt); Policies auf Server-Ebene statt nur Agent-Spec |
+| T2 | mehrere Entwickler | GitHub Projects v2 als Board; `docs/guide/` publiziert; Triage-Rolle; bidirektionaler Sync neu bewerten; `user_daily_cost_budget` pro Person |
+| — (Ereignis) | mehrere Maschinen / Omnigent-Team | Omnigent-Server mit Authentifizierung; geteilte Sessions; Beads server-seitig (`bd init --shared-server`) oder `bd dolt push/pull` |
+| — (Ereignis) | GitHub soll kanonisch werden | Einmalige Migration der Beads nach GitHub Issues; Beads für dieses Repo stilllegen |
+
+*Editorial note (2026-10-14): the rows formerly numbered 0–4 are relabelled to the team levels T0–T2 of coding-harness (target architecture D-1). The former rows 3 (several machines / Omnigent team) and 4 (GitHub becomes canonical) are events, not team sizes, and carry no level; their content is unchanged.*
 
 **Was skaliert:** Beads, GitHub Issues und Milestones, ADRs, LikeC4, docs-as-code, alle Gates, das Rollenprotokoll, die Policy-Ebene (sie ist für Server-weite Durchsetzung gebaut).
 **Was sich ändern muss:** `ROADMAP.md` als alleinige Planungsquelle trägt bis etwa drei Personen; danach übernimmt GitHub Projects die Rolle. Rein lokale Obsidian-Notizen müssen nach `docs/`.
@@ -901,11 +903,11 @@ Zwei Ebenen, die nicht verwechselt werden dürfen:
 | Option | Vorteil | Nachteil |
 |--------|---------|----------|
 | A: Omnigent gar nicht, Claude Code direkt | Keine Alpha-Abhängigkeit | Keine präventive Durchsetzung, keine Kostendeckel, keine Parallelitätsgrenze |
-| B: Omnigent ab Stufe 1 als Fundament | Policies von Anfang an | Schutzmechanismen hängen an Alpha-API; Fehler nicht zuordenbar |
-| C: Omnigent ab Stufe 5, rein additiv | Git-native Gates stehen zuerst und funktionieren allein; Policies verschärfen sie | Bis Stufe 5 keine präventive Durchsetzung |
+| B: Omnigent ab Setup-Schritt S1 als Fundament | Policies von Anfang an | Schutzmechanismen hängen an Alpha-API; Fehler nicht zuordenbar |
+| C: Omnigent ab Setup-Schritt S5, rein additiv | Git-native Gates stehen zuerst und funktionieren allein; Policies verschärfen sie | Bis Setup-Schritt S5 keine präventive Durchsetzung |
 | D: Omnigent ersetzt die git-nativen Gates | Weniger Doppelung | Verstoß gegen P6; Ausfall von Omnigent = Ausfall des Schutzes |
 
-**Entscheidung: C.** Omnigent wird ab Stufe 5 eingeführt, ausschließlich additiv. Die präventive Stufe darf keine Voraussetzung für die reaktive sein (P6). Betriebsform: OSS-Variante, nicht die Databricks-managed Version — das hält den Stack unabhängig vom Arbeitgeberkonto und ist angesichts der IP-Frage (Anhang B.2) die sauberere Trennung.
+**Entscheidung: C.** Omnigent wird ab Setup-Schritt S5 eingeführt, ausschließlich additiv. Der präventive Weg darf keine Voraussetzung für den reaktiven sein (P6). Betriebsform: OSS-Variante, nicht die Databricks-managed Version — das hält den Stack unabhängig vom Arbeitgeberkonto und ist angesichts der IP-Frage (Anhang B.2) die sauberere Trennung.
 
 **Policy-Set zum Start:** `cost_budget`, `github_policy`, `max_tool_calls_per_session`, `detect_loop`. Ausdrücklich **nicht**: `block_working_dir_changes`.
 
@@ -922,7 +924,7 @@ Zwei Ebenen, die nicht verwechselt werden dürfen:
 | ADR-0005 | Beads: `bd` mit Export-/Backup-Pflicht oder `br` (SQLite+JSONL)? `bd` bietet `bd prime`, semantische Kompaktion und Dolt-Sync, bringt aber Auto-Commit/Auto-Hooks/Daemon mit (R15); `br` bietet `br lint` als Schema-Gate, `br history` gegen R14 und WAL+Write-Locks gegen R13, friert die klassische Architektur ein und akzeptiert keine externen Contributions. Abhängig vom Verifikationstest inklusive Nebenläufigkeit **und** vom Auto-Commit-Nachweis | offen |
 | ADR-0006 | Lizenzmodell von Lake Switch; Konsequenz für den Extraktionspfad | offen |
 | ADR-0007 | Omnigent als Durchsetzungsschicht — Inhalt aus 9.2 formal ablegen | entschieden, zu formalisieren |
-| ADR-0008 | Solo-Pfad-Schutz: CI-Pfad-Check + Admin-Bypass statt CODEOWNERS-Review; Aktivierung von CODEOWNERS ab Team-Stufe 1 | entschieden, zu formalisieren |
+| ADR-0008 | Solo-Pfad-Schutz: CI-Pfad-Check + Admin-Bypass statt CODEOWNERS-Review; Aktivierung von CODEOWNERS ab Team-Level T1 | entschieden, zu formalisieren |
 | ADR-0009 | Zeitpunkt des GitHub-Push-Syncs: bei Ticket-Erzeugung statt erst beim Session-Abschluss | entschieden, zu formalisieren |
 | ADR-0010 | LikeC4 als einzige C4-Modellquelle; kein paralleles Structurizr-Modell | entschieden, zu formalisieren |
 | ADR-0011 | arc42-Produktdokumentation als zwölf Einzeldateien statt Einzeldokument | entschieden, zu formalisieren |
@@ -985,15 +987,15 @@ Szenarioformat: Auslöser → Reaktion → Zielmaß. Das Zielbild (Seite 1) gilt
 | R4 | deny-by-default-Environment verbirgt `BEADS_DIR`, `LS_ROLE`, `GITHUB_TOKEN` | Rollenprotokoll und Beads-Zugriff scheitern ohne klare Fehlermeldung | `env_passthrough` explizit deklarieren; Verifikationstest (5.2.6) |
 | R5 | Dotfile-Maskierung verbirgt `.beads/` im Sandbox | Worker sieht keinen Ticket-Stand | Verifikationstest (5.2.6); Fallback `sandbox.type: none`, dann `br` |
 | R6 | Omnigent-Breaking-Changes im Wochentakt | Konfiguration bricht nach Upgrade | Version pinnen; Agent-YAML unter Pfad-Schutz; Upgrade nur bewusst |
-| R7 | Worktree sieht anderes `.beads/` | divergierender Ticket-Stand | Worktrees im Repo; Verifikation vor Stufe 2 |
+| R7 | Worktree sieht anderes `.beads/` | divergierender Ticket-Stand | Worktrees im Repo; Verifikation vor Setup-Schritt S2 |
 | R8 | Agenten nutzen Werkzeuge nicht proaktiv | Claims fehlen, Tickets veralten | Protokoll explizit; Hooks; Stichproben im Review |
 | R9 | Policies blocken zu viel oder zu wenig | Reibung oder Scheinsicherheit | Wochenroutine prüft Policy-Wirkung (6.3) |
 | R10 | Werkzeug-Wildwuchs | Rückfall in adwaive-Muster | Abschnitt 8.1.4 normativ; P8; neue Werkzeuge nur per ADR |
 | R11 | Interne Artefakte werden publiziert | Geschäftsüberlegungen öffentlich | SSG-Quelle nur `docs/guide/`; Extraktionspfad vorbereitet |
 | R12 | Wikilinks binden an Obsidian | Migrationsverlust | Standard-Links als Default (2.3) |
 | R13 | `ROADMAP.md` und Milestones laufen auseinander | zwei Wahrheiten | Wochenroutine; `ROADMAP.md` gilt |
-| R14 | Embedded-Dolt verträgt keine parallelen Writer aus mehreren Worktrees | Beschädigter Ticket-Stand, verlorene Claims | Concurrency-Test vor Stufe 2; `bd init --shared-server`; Rückfall `br` (SQLite/WAL) |
-| R15 | `bd` commitiert automatisch, installiert eigene Hooks, läuft als Daemon | Auto-Commits unterlaufen `/land-the-plane` und den pre-commit-Verbund; Daemon widerspricht Q4/P1 | Auto-Commit und Auto-Hooks deaktivieren und Deaktivierung verifizieren (Stufe-1-Kriterium); fällt das aus, kippt ADR-0005 zugunsten von `br` |
+| R14 | Embedded-Dolt verträgt keine parallelen Writer aus mehreren Worktrees | Beschädigter Ticket-Stand, verlorene Claims | Concurrency-Test vor Setup-Schritt S2; `bd init --shared-server`; Rückfall `br` (SQLite/WAL) |
+| R15 | `bd` commitiert automatisch, installiert eigene Hooks, läuft als Daemon | Auto-Commits unterlaufen `/land-the-plane` und den pre-commit-Verbund; Daemon widerspricht Q4/P1 | Auto-Commit und Auto-Hooks deaktivieren und Deaktivierung verifizieren (Kriterium von Setup-Schritt S1); fällt das aus, kippt ADR-0005 zugunsten von `br` |
 | R16 | JSONL-Export unvollständig (kein Dolt-Verlauf, keine Nicht-Issue-Tabellen) | Wiederherstellung lückenhaft trotz „grünem" Export | `bd backup` zusätzlich einrichten; Wiederherstellung halbjährlich proben; bei `br` eingebaute `br history`-Snapshots |
 | R17 | Toolchain- und Produkt-arc42 werden verwechselt | Agenten schreiben Produktfakten in dieses Dokument oder umgekehrt | Pfad-Konvention in 8.1.4; `AGENTS.md` benennt beide Orte explizit; Pfad-Schutz trennt beide |
 | R18 | Agenten erfinden Architekturfakten beim Befüllen der arc42-Dateien | Falsche Ist-Architektur wird kanonisch | P7 in `AGENTS.md`; S11 als Test; `/bootstrap-arch` verlangt `OFFEN`-Marker |
@@ -1003,8 +1005,8 @@ Szenarioformat: Auslöser → Reaktion → Zielmaß. Das Zielbild (Seite 1) gilt
 
 ### 11.2 Technische Schulden (bewusst eingegangen)
 
-- **Solo-Bypass in Branch Protection** schwächt die reaktive Stufe formal ab — akzeptiert, weil der CI-Pfad-Check deterministisch blockiert; wird in Team-Stufe 1 geschlossen (ADR-0008).
-- **Bis Stufe 5 keine präventive Durchsetzung** (ADR-0007, Option C) — akzeptiert zugunsten unabhängig verifizierbarer git-nativer Gates.
+- **Solo-Bypass in Branch Protection** schwächt den reaktiven Weg formal ab — akzeptiert, weil der CI-Pfad-Check deterministisch blockiert; wird auf Team-Level T1 geschlossen (ADR-0008).
+- **Bis Setup-Schritt S5 keine präventive Durchsetzung** (ADR-0007, Option C) — akzeptiert zugunsten unabhängig verifizierbarer git-nativer Gates.
 - **Die arc42-Produktdokumentation startet als Gerüst mit `OFFEN`-Markern** — akzeptiert, weil das Befüllen ohne Code-Beleg sonst R18 auslöst.
 
 ---
@@ -1044,20 +1046,20 @@ Szenarioformat: Auslöser → Reaktion → Zielmaß. Das Zielbild (Seite 1) gilt
 
 ## Anhang A — Umsetzungsreihenfolge
 
-| Stufe | Inhalt | Agenten | Prüfkriterium |
+| Setup-Schritt | Inhalt | Agenten | Prüfkriterium |
 |-------|--------|---------|---------------|
-| 0 | Repo-Skelett anlegen: `AGENTS.md`, `ROADMAP.md`, `docs/decisions/`, `docs/arc42/`-Gerüst, `model/`-Gerüst; `/bootstrap-arch` ausführen lassen; alle `OFFEN`-Marker menschlich auflösen | nein | arc42-Abschnitte 1, 3, 4, 5 der Produktdateien sind befüllt; 0 unmarkierte Annahmen; alle erkannten Entscheidungen haben ADR `proposed` |
-| 1 | `bd init`, `bd backup` einrichten, bd-Auto-Commit/Auto-Hooks deaktivieren, `AGENTS.md` mit Rollenprotokoll, `docs/decisions/` mit ADR-0001 | **nein** | Ein Ticket von Hand end-to-end; `bd import` auf frischem Klon stellt den Issue-Stand her; kein automatischer Commit durch bd nachweisbar |
-| 2 | Worktree-Test inkl. Concurrency; pre-commit (ruff, mypy, gitleaks); Branch Protection mit Admin-Bypass; CI-Pfad-Check; CODEOWNERS; `.claude/worktrees/` | ja, einzeln | Kein direkter Commit auf `main`; zwei Sub-Agenten in Worktrees sehen und schreiben dasselbe `.beads/` konfliktfrei |
-| 3 | `/decompose` mit Gate und frühem Push-Sync; Ticket-Schema; Issue Form; `/land-the-plane` | ja, mit Orchestrator | Ein ADR erzeugt reproduzierbar gut geschnittene Tickets; jede Ticket-GH-Nummer existiert vor dem ersten PR |
-| 4 | pytest + hypothesis + Golden Files; CI-Workflow; `likec4 build` in CI | ja | Ein roter Test blockiert den Merge |
-| 5 | Omnigent als Durchsetzungsschicht — sieben Teilschritte (A.1) | ja, parallel | Ein Worker kann `docs/` nachweislich nicht beschreiben |
-| 6 | Argdown, LikeC4, Obsidian mit Excluded Files, Inbox-Konvention und Kurationspfad, `/weekly-review` | ja | Eine Architekturfrage ist ohne Chatverlauf rekonstruierbar; `brain/inbox/` ist nach Wochenroutine leer |
-| 7 | Milestones, SSG nur für `docs/guide/`, `git-cliff`-Release | ja | Ein Außenstehender versteht Stand und Richtung aus dem Repo |
+| S0 | Repo-Skelett anlegen: `AGENTS.md`, `ROADMAP.md`, `docs/decisions/`, `docs/arc42/`-Gerüst, `model/`-Gerüst; `/bootstrap-arch` ausführen lassen; alle `OFFEN`-Marker menschlich auflösen | nein | arc42-Abschnitte 1, 3, 4, 5 der Produktdateien sind befüllt; 0 unmarkierte Annahmen; alle erkannten Entscheidungen haben ADR `proposed` |
+| S1 | `bd init`, `bd backup` einrichten, bd-Auto-Commit/Auto-Hooks deaktivieren, `AGENTS.md` mit Rollenprotokoll, `docs/decisions/` mit ADR-0001 | **nein** | Ein Ticket von Hand end-to-end; `bd import` auf frischem Klon stellt den Issue-Stand her; kein automatischer Commit durch bd nachweisbar |
+| S2 | Worktree-Test inkl. Concurrency; pre-commit (ruff, mypy, gitleaks); Branch Protection mit Admin-Bypass; CI-Pfad-Check; CODEOWNERS; `.claude/worktrees/` | ja, einzeln | Kein direkter Commit auf `main`; zwei Sub-Agenten in Worktrees sehen und schreiben dasselbe `.beads/` konfliktfrei |
+| S3 | `/decompose` mit Gate und frühem Push-Sync; Ticket-Schema; Issue Form; `/land-the-plane` | ja, mit Orchestrator | Ein ADR erzeugt reproduzierbar gut geschnittene Tickets; jede Ticket-GH-Nummer existiert vor dem ersten PR |
+| S4 | pytest + hypothesis + Golden Files; CI-Workflow; `likec4 build` in CI | ja | Ein roter Test blockiert den Merge |
+| S5 | Omnigent als Durchsetzungsschicht — sieben Teilschritte (A.1) | ja, parallel | Ein Worker kann `docs/` nachweislich nicht beschreiben |
+| S6 | Argdown, LikeC4, Obsidian mit Excluded Files, Inbox-Konvention und Kurationspfad, `/weekly-review` | ja | Eine Architekturfrage ist ohne Chatverlauf rekonstruierbar; `brain/inbox/` ist nach Wochenroutine leer |
+| S7 | Milestones, SSG nur für `docs/guide/`, `git-cliff`-Release | ja | Ein Außenstehender versteht Stand und Richtung aus dem Repo |
 
-Agenten-Ausführung beginnt erst mit Stufe 2, nachdem Isolation und reaktive Gates stehen. Ein Ticket-Generator (Stufe 3) ohne diese Mechanik erzeugt genau die Dynamik, die zum Kontrollverlust bei adwaive geführt hat.
+Agenten-Ausführung beginnt erst mit Setup-Schritt S2, nachdem Isolation und reaktive Gates stehen. Ein Ticket-Generator (Setup-Schritt S3) ohne diese Mechanik erzeugt genau die Dynamik, die zum Kontrollverlust bei adwaive geführt hat.
 
-### A.1 Stufe 5 im Detail
+### A.1 Setup-Schritt S5 im Detail
 
 Die Reihenfolge ist nicht beliebig: Schritt 2 ist ein Gate für alles Weitere, und die Policies kommen nach der Sandbox, weil sie sonst Fehler maskieren, die von der Sandbox stammen.
 
@@ -1071,7 +1073,7 @@ Die Reihenfolge ist nicht beliebig: Schritt 2 ist ein Gate für alles Weitere, u
 | 5.6 | Automations für Wochenroutine und Eval-Nacht, jeweils mit `max_cost_usd` und explizitem Permission-Mode; `omni host enable` für Dienstbetrieb | Ein Lauf erscheint in der History und läuft unbeaufsichtigt durch |
 | 5.7 | Canvas aktivieren (`OMNIGENT_FEATURES=canvas`) | Erst sinnvoll ab drei parallelen Workern |
 
-Bricht Stufe 5 an irgendeinem Punkt ab, bleibt der Stand aus Stufe 4 vollständig arbeitsfähig. Das ist der Zweck der additiven Einführung aus ADR-0007.
+Bricht Setup-Schritt S5 an irgendeinem Punkt ab, bleibt der Stand aus Setup-Schritt S4 vollständig arbeitsfähig. Das ist der Zweck der additiven Einführung aus ADR-0007.
 
 ---
 
@@ -1079,8 +1081,8 @@ Bricht Stufe 5 an irgendeinem Punkt ab, bleibt der Stand aus Stufe 4 vollständi
 
 ### B.1 Vor Produktivnutzung zu verifizieren
 
-- **Verifikationstest aus 5.2.6** (Worktree-Sicht, `env_passthrough`, Dotfile-Sichtbarkeit, Concurrency aus zwei Worktrees) — Voraussetzung für Stufe 2 beziehungsweise für den Omnigent-Einsatz in Stufe 5.
-- **`bd`-Auto-Commit und Auto-Hooks deaktivieren** und die Deaktivierung belegen (R15) — Stufe-1-Abbruchkriterium zugunsten von `br`.
+- **Verifikationstest aus 5.2.6** (Worktree-Sicht, `env_passthrough`, Dotfile-Sichtbarkeit, Concurrency aus zwei Worktrees) — Voraussetzung für Setup-Schritt S2 beziehungsweise für den Omnigent-Einsatz in Setup-Schritt S5.
+- **`bd`-Auto-Commit und Auto-Hooks deaktivieren** und die Deaktivierung belegen (R15) — Abbruchkriterium von Setup-Schritt S1 zugunsten von `br`.
 - Exakte Schreibweise von `env_passthrough` in der eingesetzten Omnigent-Version (erscheint als `enforce_sandbox`-Parameter und als `os_env.sandbox.env_passthrough`).
 - Sicherstellen, dass Omnigents globale Worktree-Einstellung **deaktiviert** ist; Worktrees entstehen nur über das Rollenprotokoll.
 - Permission-Mode je Automation explizit setzen; `omni host enable` für den Dienstbetrieb der Automations.
@@ -1101,7 +1103,7 @@ Nach deutschem Recht liegt das Urheberrecht an Software beim Entwickler; nur bei
 |---------|-------|----------|
 | 1.0–1.2 | bis 2026-09-15 | Erstentwurf; Prüfung gegen Omnigent v0.13.0; L4/L5 als verbundene Durchsetzungsschicht; ADR-0007 |
 | 2.0 | 2026-09-16 | Formalisierung nach arc42; zwei Logikfehler korrigiert (Push-Sync-Zeitpunkt, CODEOWNERS im Solo-Betrieb); Merge-Konflikt-Falle beim JSONL-Export behoben |
-| 2.1 | 2026-09-17 | Werkzeugstand 2026-09 aktualisiert: Omnigent v0.9–v0.13 (Smart Routing, Permission-Modes, `omni host`, Zufalls-Worktrees als Antipattern), Beads-Selbständigkeit als Risiko R15, `br` als gleichwertige Option in ADR-0005 |
-| 3.0 | 2026-09-17 | Konsolidierung mit Repo-Vorlage (UEBERGABE): MADR statt Nygard, LikeC4 als einzige C4-Quelle, Produkt-arc42 als zwölf Einzeldateien, P7/P8 neu, Bootstrapping-Stufe 0 |
-| 3.1 | 2026-09-17 | Obsidian als Wissensmanagement-Ebene ausdifferenziert: Inbox-Konvention, Dataview-Regel, Agenten-Ausschluss, Kurationspfad 6.4 |
-| 4.0 | 2026-09-17 | Best-Practice-Neuauflage: Review-Annotationen aus dem Fließtext entfernt, Entscheidungen nach Kapitel 9 (ADRs) verlagert, Risiken konsolidiert (R1–R21), Nummerierung bereinigt, Dokument-Metadatenblock nach arc42 |
+| 2.1 | 2026-09-16 | Werkzeugstand 2026-09 aktualisiert: Omnigent v0.9–v0.13 (Smart Routing, Permission-Modes, `omni host`, Zufalls-Worktrees als Antipattern), Beads-Selbständigkeit als Risiko R15, `br` als gleichwertige Option in ADR-0005 |
+| 3.0 | 2026-09-16 | Konsolidierung mit Repo-Vorlage (UEBERGABE): MADR statt Nygard, LikeC4 als einzige C4-Quelle, Produkt-arc42 als zwölf Einzeldateien, P7/P8 neu, Bootstrapping als Setup-Schritt S0 |
+| 3.1 | 2026-09-16 | Obsidian als Wissensmanagement-Ebene ausdifferenziert: Inbox-Konvention, Dataview-Regel, Agenten-Ausschluss, Kurationspfad 6.4 |
+| 4.0 | 2026-09-16 | Best-Practice-Neuauflage: Review-Annotationen aus dem Fließtext entfernt, Entscheidungen nach Kapitel 9 (ADRs) verlagert, Risiken konsolidiert (R1–R21), Nummerierung bereinigt, Dokument-Metadatenblock nach arc42 |

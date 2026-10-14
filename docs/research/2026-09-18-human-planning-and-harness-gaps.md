@@ -4,7 +4,7 @@ category: research
 status: proposed
 created: 2026-09-18
 last_reviewed: 2026-09-18
-updated: 2026-09-29
+updated: 2026-10-14
 owner: framework-architect
 provenance: ai-drafted-reviewed
 produced_by:
@@ -41,7 +41,7 @@ capturing an idea must not automatically create assigned work.
 The [ADW architecture](arc42_Referenzarchitektur_Agentischer_Delivery-Workflow.md),
 especially its enforcement discussion, and the
 [migration plan](Migrationsplan_Omnigent_Referenzarchitektur.md) establish
-protected controls, policy probes and staged adoption. The remaining gaps are
+protected controls, policy probes and stepwise adoption (M0–M4). The remaining gaps are
 the concrete adapters, acceptance evidence and the human-facing interaction.
 
 ## Largest remaining gaps

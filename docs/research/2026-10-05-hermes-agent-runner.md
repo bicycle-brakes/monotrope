@@ -4,7 +4,7 @@ category: research
 status: proposed
 created: 2026-10-05
 last_reviewed: 2026-10-05
-updated: 2026-10-05
+updated: 2026-10-14
 owner: framework-architect
 provenance: ai-drafted-reviewed
 produced_by:
@@ -464,9 +464,9 @@ in the ADR that brings the first scheduled agent (§6.2).
 The [proposal](2026-09-26-kubernetes-gate-runner.md) runs `make verify` in a
 pinned container as a Kubernetes Job. It is built for the opposite of this
 job: "Model calls from pods stay out of scope" until decision 1 of the Agent
-SDK note; pods never push. Its stage 6, a model runner, is "open". No
-stage is built: `main` has no `deploy/` folder (measured). As a runner for
-this job it would come after stage 6, and it would need the same split, an
+SDK note; pods never push. Its step 6, a model runner, is "open". No
+step is built: `main` has no `deploy/` folder (measured). As a runner for
+this job it would come after step 6, and it would need the same split, an
 egress proxy that allows the open web, and an always-on cluster. Not a
 candidate now.
 
@@ -500,7 +500,7 @@ estimate from list prices of 2026-10-05.
 | **C′** | as C, GLM-5.3 by API key | as C + an endpoint entry + leak check wiring | about $0.3–0.8 |
 | **D** | Hermes on the Mac, GLM-5.3 by API key | the prompt + 2–3 sessions + an ADR | about $0.3–0.8; the Mac must be awake or the job catches up later |
 | **D′** | Hermes Cloud, GLM-5.3 by API key | as D + a Nous account | about $0.5–1.6 |
-| **E** | Kubernetes gate runner | after its stage 6 | not before that |
+| **E** | Kubernetes gate runner | after its step 6 | not before that |
 
 For comparison, Claude Sonnet 5.5 by API key would cost about $0.7–1.1 a
 run ($2 input, $0.20 cached, $10 output per million tokens, $10 per 1,000

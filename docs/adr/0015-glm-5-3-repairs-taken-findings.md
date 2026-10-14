@@ -1,10 +1,11 @@
 ---
 title: "ADR 0015 — GLM 5.3 repairs the findings the orchestrator takes, and no reviewer repairs its own"
 category: adr
-status: accepted
+status: superseded
 created: 2026-10-12
 last_reviewed: 2026-10-12
-updated: 2026-10-12
+updated: 2026-10-13
+superseded_by: "0017"
 owner: framework-architect
 provenance: human-decided
 produced_by: {kind: llm-session, name: claude-code, version: "2026-10-12"}
@@ -31,6 +32,11 @@ tags: [adr, stage-2, glm, repair, review-loop]
   commit and is written nowhere else, so the header's `review` stays empty
   (ADR 0008) · Decider: maintainer · prepared by a Claude Code session
 * Date: 2026-10-12 · takes effect on merge
+* Note, 2026-10-13: [ADR 0017](0017-codex-repairs-taken-findings.md) supersedes
+  this decision; it takes effect when the pull request that carries it is
+  merged (ADR 0008). The text below is kept unchanged as history: the repair
+  route, the same-model prohibition and the Z.ai spend it records are
+  replaced, while its evidence, status and loop-budget rules stand in ADR 0017.
 
 ## Context
 
