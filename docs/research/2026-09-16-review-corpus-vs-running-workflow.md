@@ -563,3 +563,32 @@ hold them open.
 - Did not create a bead: one writer per tracker, and a parallel session
   could not be excluded. The maintainer creates the intake bead when picking
   up §7.
+
+## Addendum — 2026-10-14: the mechanical corrections are applied
+
+Decided on 2026-09-16 (target architecture §9.1, D-1 and D-8) and applied in
+one pull request (bead coding-harness-bt8). The text above is unchanged except
+for the vocabulary and the decision prefixes; its findings stay as written at
+`5a950c2`.
+
+- **Applied:** D1 (the reference architecture's header and the toolchain
+  document's metadata and history rows now say 2026-09-16); D2 (both image
+  references removed with a dated note, §5.1 names the four main blocks in
+  words); D3 (the reference architecture's decisions are `ADW-D01`…`ADW-D17`,
+  and every corpus citation follows); D6 (the CVE row names the CVE record,
+  checked against cve.org and NVD on 2026-10-14: Omnigent, CVSS 9.0, fixed in
+  0.3.0); D9 (the toolchain document's language line); D4 and D-1 (one
+  vocabulary across `docs/research/`, this review included, with the team
+  levels T0–T2 instead of the T0–T4 §6 proposed).
+- **Already fixed before this correction:** D10 — this repository has no
+  `CLAUDE.md` any more; `AGENTS.md` is the only instruction file.
+- **Left, because they are content findings:** D5, D7, D8 and the §8 items
+  that add or change substance (reference architecture items 3, 4, 5 and 8;
+  toolchain items 3, 4 and 5; the Migrationsplan's "parked" header and its
+  missing abort and exit criteria). They stay beside the sources, here.
+- **Found while correcting, not in the findings above:** the toolchain
+  document used "Stufe" with a sixth meaning, its three gate tiers in §5.2.7
+  and the preventive and reactive paths of P6; they now read "Gate-Weg 1–3"
+  and "Weg", the document's own word for its enforcement paths. The reference
+  architecture's appendix dates two prior reviews 17.09.2026; their true dates
+  are not known here, so they are left.

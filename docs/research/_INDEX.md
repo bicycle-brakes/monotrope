@@ -44,7 +44,7 @@ is evidence and options, not a second normative workflow.
 - **Choose an external component:** read the three dated assessments below, then test a bounded claim against the target's M0/M1 gates before adoption. They are source reviews, not successful pilots.
 - **Recover the original rationale:** read the four intake sources below and the [decision continuity table](../architecture/2026-09-17-omnigent-first-target.md#decision-continuity). Keep their dates and provenance attached to each claim.
 
-Vocabulary for older sources: **Stage 1–3** means model routing; **S0–S7** means instance setup; **T0–T2** means team scale; **M0–M4** means Omnigent adoption; **levels 1–5** means rule enforcement. Older uses of *Stufe* are ambiguous; this map aids reading without rewriting the sources.
+Vocabulary of the corpus: **Stage 1–3** means model routing; **S0–S7** means instance setup (Setup step); **T0–T2** means team scale (Team level); **M0–M4** means Omnigent adoption; **levels 1–5** means rule enforcement. The corpus uses it since the correction of 2026-10-14 (bead coding-harness-bt8; target architecture D-1 and D-8): every other meaning of *Stufe* or *stage* was renamed in place, and quotes and proper names (Stage-Gate) keep their words. The review's addendum lists what changed.
 
 | Document | Internal stand | Focus | Tags |
 |---|---|---|---|
