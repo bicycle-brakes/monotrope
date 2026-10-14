@@ -47,6 +47,12 @@ yet observed in a live status-line input on this machine.
     `resets_at` has passed.
   - The script re-runs when a window reaches its `resets_at`.
   - Since which version the fields exist is not documented.
+  - The installed 2.1.296 has them: its binary carries the status-line
+    schema with `rate_limits.five_hour.used_percentage` and builds a
+    `rate_limits` object (and `rate_limits_available`) into the status-line
+    input (`grep -a` over the binary, 2026-10-14). That is the code, not a
+    live value: whether this subscription's session receives it is still
+    the gap below.
 - **No hook input carries the percentage** (not documented in the part
   read). The common hook fields are `session_id`, `transcript_path`, `cwd`,
   `permission_mode`, `effort`, `hook_event_name` and a few more; the
@@ -97,8 +103,8 @@ yet observed in a live status-line input on this machine.
 - [DECISION] Whether 95 % leaves enough of the window for a handover pull
   request, or the threshold is lower (for example 90 %). To be measured on
   one real handover before the interview, if the maintainer wants a number.
-- [GAP] Whether 2.1.296 actually sends `rate_limits` on this machine's
-  subscription: one logged status-line input settles it. Logging it means a
+- [GAP] Whether this machine's subscription session receives a value
+  (2.1.296 has the field, see above): one logged status-line input settles it. Logging it means a
   change in `tools/claude-code/statusline.sh` and a reinstall, so it waits
   for the maintainer's go.
 - [DETAIL] Marker files live under `~/.claude/` next to the session notes,
