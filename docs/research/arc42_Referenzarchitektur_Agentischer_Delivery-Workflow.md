@@ -107,7 +107,7 @@ Das System erhält als fachliche Eingaben Produktideen, Change Requests und Fehl
 | **Omnigent-Server** (Ziel-Laufzeitschicht, C11) | bidirektional | Omnigent-API/Socket, Web-UI, Mobile-Follow | Meta-Harness: verwaltet Sessions/Terminals, wertet Action-Policies aus (allow/block/approve), provisioniert Sandboxes, stellt Gate- und Beobachtungskanal über Geräte hinweg |
 | **Cloud-Sandbox-Provider** (optional: Modal, E2B, Daytona, Kubernetes u. a.) | ausgehend | Omnigent-Sandbox-Adapter | Disposable Remote-Ausführung von Agenten-Sessions außerhalb der Entwickler-Maschine (§7) |
 
-![Bausteinsicht Ebene 1: Systemkontext und Hauptbausteine](assets/arc42_bausteinsicht.png)
+*Editorial note (2026-10-14): the figure "Bausteinsicht Ebene 1: Systemkontext und Hauptbausteine" (`assets/arc42_bausteinsicht.png`) was referenced but never added to this repository; the reference is removed. §5.1 names the main building blocks in words.*
 
 ---
 
@@ -131,7 +131,7 @@ Die Architektur beruht auf fünf strategischen Grundentscheidungen, aus denen al
 
 ### 5.1 Ebene 1: Whitebox Gesamtsystem
 
-Das Gesamtsystem besteht aus vier Hauptbausteinen (blau im Diagramm §3.2), zwei Infrastrukturbausteinen (mittelblau) und den externen Partnern Mensch und LLM-Provider.
+Das Gesamtsystem besteht aus vier Hauptbausteinen (Coding-Agent, Spezifikationskern, Gate-Engine, Ausführungsebene — die ersten vier Zeilen der Tabelle), zwei Infrastrukturbausteinen und den externen Partnern Mensch und LLM-Provider.
 
 | Baustein | Verantwortung | Zentrale Regeln |
 |---|---|---|
@@ -284,7 +284,7 @@ Verifikation nicht-deterministischer Prüfobjekte (LLM-generierter Code, flaky T
 
 Die Durchsetzungsschicht (Gates, Hooks, Verifikation, Regelwerke, Evidenz) muss selbst kontextsparend gebaut sein, sonst erzeugt sie genau den Zustand, gegen den C3 und I3 die Architektur schützen: Ein voller Kontext degradiert die Modellqualität weit vor dem Fensterlimit (Context Rot), und Regeln in der Fenstermitte verlieren messbar an Wirksamkeit (Lost-in-the-Middle) — eine Guardrail-Regel, die das Modell nicht mehr „sieht", wird nicht durchgesetzt. Das Grundprinzip lautet daher: **Prüfungen laufen außerhalb des Kontexts; ins Fenster gelangen nur Verdicts.** Die schwere Maschinerie (Tests, Mutationsanalyse, Policy-Evaluierung, Drift-Matrix, Attestierungs-Verifikation) gehört in CI, auf den Server oder in eine Governance-Middleware; der Agent erhält Ergebnis plus Verweis (Pfad/Hash), nie Rohdaten. Die Budget-Modellrechnung (siehe „Kontextbudget-Prüfung und -Begrenzung") zeigt: Diszipliniert umgesetzt kostet die gesamte Durchsetzungsschicht ~5–10k Token (~7 % eines 200k-Fensters); die naive Variante (volle Specs, Logs und Attestierungs-JSONs im Prompt) reißt die Kompaktifizierungsschwelle bereits vor Arbeitsbeginn.
 
-![Kontextbudget-Allokation: disziplinierte vs. naive Umsetzung](assets/kontextbudget_allokation.png)
+*Editorial note (2026-10-14): the figure "Kontextbudget-Allokation: disziplinierte vs. naive Umsetzung" (`assets/kontextbudget_allokation.png`) was referenced but never added to this repository; the reference is removed.*
 
 | ID | Anforderung | Stufe |
 |---|---|---|
