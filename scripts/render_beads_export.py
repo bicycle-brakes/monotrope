@@ -1,23 +1,22 @@
 #!/usr/bin/env python3
-"""render_beads_export.py — der Eine-Schreiber-Renderer des Trackers (D-4).
+"""render_beads_export.py — the one-writer renderer of the tracker (D-4).
 
-Der Render ist der tragende Vertrag (ADR 0004); eine committete Kopie gibt
-es seit bead coding-harness-1jg.3 nicht mehr. Wer das Render braucht, geht
-ueber `scripts/bead_render.py` — dieses Script ist der Eine-Schreiber
-HINTER dem Zugriffspunkt:
+The render is the load-bearing contract (ADR 0004); since bead
+coding-harness-1jg.3 there is no committed copy any more. Whoever needs the
+render goes through `scripts/bead_render.py` — this script is the one writer
+BEHIND that access point:
 
     python3 scripts/render_beads_export.py
 
-Es rendert über das gepinnte `tools/bd` in eine Temp-Datei, prueft das
-Ergebnis Zeile fuer Zeile (ueber check_bead_export.run) und schreibt es
-erst dann an seinen Zielort — kaputte Renders erreichen keinen Leser. Die
- gehostete CI ruft es im Hydratationsschritt genau einmal auf und setzt
-`BEAD_RENDER` auf das Ergebnis; alle Leser des Laufs nehmen dieses Render
-(D-52, Bedingung 2).
+It renders through the pinned `tools/bd` into a temp file, checks the result
+line by line (via check_bead_export.run) and only then writes it to its
+destination — a broken render never reaches a reader. The hosted CI calls it
+exactly once in the hydration step and sets `BEAD_RENDER` to the result; all
+readers of the run take that render (D-52, condition 2).
 
 Usage:
     python3 scripts/render_beads_export.py
-Exit: 0 = gerendert, 1 = Befund, 2 = Vorbedingung.
+Exit: 0 = rendered, 1 = finding, 2 = precondition.
 """
 
 from __future__ import annotations
@@ -33,25 +32,25 @@ from pathlib import Path
 REPO_ROOT = Path(__file__).resolve().parent.parent
 EXPORT = REPO_ROOT / ".beads" / "issues.jsonl"
 BD = REPO_ROOT / "tools" / "bd"
-BD_FEHLT = 127  # tools/bd: "no bd binary found" — und nur das
+BD_FEHLT = 127  # tools/bd: "no bd binary found" — and only that
 
 
-# Maschinenlokale Felder. Eine Lease gehoert der Maschine, die den Vorgang
-# gerade haelt: bd 1.3.0 schreibt `heartbeat_at` und `lease_expires_at` in den
-# Export des Schreibers, ein frischer Klon desselben Dolt-Stands rendert sie
-# nicht (gemessen 2026-09-21: identischer Inhalt, zwei abweichende Felder an
-# einem Vorgang in Arbeit). Mit ihnen ist der Export nur auf der Maschine
-# byte-gleich, die zuletzt gerendert hat — und die Identitaetspruefung haelt
-# nirgends sonst. Die Liste steht EINMAL, hier; Tests lesen sie von hier.
+# Machine-local fields. A lease belongs to the machine that currently holds
+# the item: bd 1.3.0 writes `heartbeat_at` and `lease_expires_at` into the
+# writer's export, while a fresh clone of the same Dolt state does not render
+# them (measured 2026-09-21: identical content, two differing fields on one
+# item in progress). With them the export is byte-equal only on the machine
+# that rendered last — and the identity check holds nowhere else. The list
+# stands ONCE, here; tests read it from here.
 MASCHINENLOKAL: tuple[str, ...] = ("heartbeat_at", "lease_expires_at")
 
-# So schreibt der Tracker JSON: kompakt, und `<`, `>`, `&` sowie U+2028/U+2029
-# als \uXXXX. Wer eine Zeile neu schreibt, muss genau das treffen.
+# This is how the tracker writes JSON: compact, with `<`, `>`, `&` and
+# U+2028/U+2029 as \uXXXX. Whoever rewrites a line must hit exactly that.
 _TRACKER_ESCAPES = {"<": "\\u003c", ">": "\\u003e", "&": "\\u0026", "\u2028": "\\u2028", "\u2029": "\\u2029"}
 
 
 class NichtReproduzierbar(RuntimeError):
-    """Eine Exportzeile laesst sich nicht byte-gleich wiedergeben — also wird sie nicht umgeschrieben."""
+    """An export line cannot be reproduced byte-for-byte — so it is not rewritten."""
 
 
 def _wie_der_tracker(satz: dict) -> str:
@@ -62,42 +61,41 @@ def _wie_der_tracker(satz: dict) -> str:
 
 
 def _ohne_maschinenlokales(roh: str) -> str:
-    """Nimmt die maschinenlokalen Felder heraus und laesst jedes andere Byte stehen.
+    """Removes the machine-local fields and leaves every other byte alone.
 
-    Eine Zeile ohne ein solches Feld geht unberuehrt durch. Eine Zeile mit
-    einem wird neu geschrieben — aber erst, nachdem dieselbe Schreibweise die
-    UNVERAENDERTE Zeile byte-gleich wiedergegeben hat. Gelingt das nicht, ist
-    die Schreibweise des Trackers eine andere geworden, und ein stilles
-    Umschreiben waere genau die Drift, gegen die diese Datei steht.
+    A line without such a field passes through untouched. A line with one is
+    rewritten — but only after the same notation has reproduced the UNCHANGED
+    line byte-for-byte. If that fails, the tracker's notation has changed, and
+    a silent rewrite would be exactly the drift this file stands against.
     """
     zeilen = []
-    # Nur `\n` trennt Saetze. `str.splitlines()` schneidet auch an U+0085,
-    # U+2028 und anderen Zeichen, die der Tracker roh in einen Text schreibt —
-    # und zerlegte damit einen Satz in zwei kaputte Zeilen (Review F-1).
+    # Only `\n` separates records. `str.splitlines()` also cuts at U+0085,
+    # U+2028 and other characters the tracker writes raw into a text — and
+    # would thereby split one record into two broken lines (review F-1).
     ende = "\n" if roh.endswith("\n") else ""
     for nr, zeile in enumerate((roh[:-1] if ende else roh).split("\n"), 1):
         try:
             satz = json.loads(zeile) if zeile.strip() else None
         except json.JSONDecodeError:
-            satz = None  # die Zeilenpruefung danach benennt den Befund
+            satz = None  # the line check afterwards names the finding
         if not isinstance(satz, dict) or not any(k in satz for k in MASCHINENLOKAL):
             zeilen.append(zeile)
             continue
         if _wie_der_tracker(satz) != zeile:
             raise NichtReproduzierbar(
-                f"Zeile {nr} ({satz.get('id', '?')}): die Schreibweise des Trackers laesst sich nicht "
-                "byte-gleich wiedergeben — maschinenlokale Felder bleiben stehen, der Render wird verworfen"
+                f"Line {nr} ({satz.get('id', '?')}): the tracker's notation cannot be reproduced "
+                "byte-for-byte — machine-local fields stay in place, the render is discarded"
             )
         zeilen.append(_wie_der_tracker({k: v for k, v in satz.items() if k not in MASCHINENLOKAL}))
     return "\n".join(zeilen) + ende
 
 
 class RendererFehlt(RuntimeError):
-    """`tools/bd` ist in dieser Umgebung nicht ausfuehrbar (z. B. CI ohne Tracker)."""
+    """`tools/bd` is not executable in this environment (e.g. CI without a tracker)."""
 
 
 def _render_nach(tmp: Path) -> None:
-    """Rendert ueber tools/bd in die Temp-Datei. Kein bare bd, kein zweiter Pfad."""
+    """Renders through tools/bd into the temp file. No bare bd, no second path."""
     try:
         erg = subprocess.run(
             [str(BD), "export", "-o", str(tmp)],
@@ -108,9 +106,9 @@ def _render_nach(tmp: Path) -> None:
     except FileNotFoundError as exc:
         raise RendererFehlt(str(exc)) from exc
     if erg.returncode == BD_FEHLT:
-        # Der Wrapper ist da, das gepinnte Binary nicht: dieselbe Lage wie ein
-        # fehlender Wrapper. Jeder andere Fehler (Versionskonflikt, kaputter
-        # Store) bleibt ein harter Fehler.
+        # The wrapper is there, the pinned binary is not: the same situation
+        # as a missing wrapper. Every other error (version conflict, broken
+        # store) remains a hard error.
         raise RendererFehlt((erg.stderr or erg.stdout).strip().splitlines()[0])
     if erg.returncode != 0:
         sys.stderr.write(erg.stdout + erg.stderr)
@@ -126,7 +124,7 @@ def main(argv: list[str] | None = None) -> int:
     try:
         return _main(argv)
     except NichtReproduzierbar as exc:
-        print(f"Render verworfen: {exc}")
+        print(f"Render discarded: {exc}")
         return 1
 
 
@@ -137,17 +135,17 @@ def _main(argv: list[str] | None = None) -> int:
     with tempfile.TemporaryDirectory() as td:
         tmp = Path(td) / "issues.jsonl"
         _render_nach(tmp)
-        from check_bead_export import run  # noqa: E402 — gleiche Zeilenpruefung
+        from check_bead_export import run  # noqa: E402 — same line check
 
         befunde = run(tmp)
         if befunde:
-            print("Render verworfen — der Renderer schreibt keinen kaputten Export:")
+            print("Render discarded — the renderer does not write a broken export:")
             for b in befunde:
                 print(f"  - {b}")
             return 1
         EXPORT.write_bytes(tmp.read_bytes())
 
-    print(f"Render geschrieben: {EXPORT.relative_to(REPO_ROOT)} (sha256 {_sha(EXPORT)[:12]}…)")
+    print(f"Render written: {EXPORT.relative_to(REPO_ROOT)} (sha256 {_sha(EXPORT)[:12]}…)")
     return 0
 
 
