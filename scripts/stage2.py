@@ -14,10 +14,10 @@ stands between the rule and the call.
     python3 scripts/stage2.py draft        <change>   # Codex, phases 2, 2b and 3; GLM 5.3 after two failed attempts
     python3 scripts/stage2.py spec-review  <change>   # Opus 5.5, phase 2a
     python3 scripts/stage2.py implement    <change>   # GLM Flash, phase 4
-    python3 scripts/stage2.py repair       <change>   # GLM 5.3, the taken findings
+    python3 scripts/stage2.py repair       <change>   # Codex, the taken findings; Sonnet 5.5 after two failed checks
     python3 scripts/stage2.py review-loop  <change>   # one round of phase 4b: round n on rung n
     python3 scripts/stage2.py release-loop <change>   # loop rows into findings.md
-    python3 scripts/stage2.py review       <change>   # Codex, phase 6, a recorded Codex 2a session resumed
+    python3 scripts/stage2.py review       <change>   # Codex, phase 6; a re-check is a fresh read-only session
     python3 scripts/stage2.py probe        <change>   # one call per rung, no record written
     python3 scripts/stage2.py session      <change>   # interactive Codex/Pi, a Terminal window
 
@@ -32,9 +32,11 @@ under `scripts/` and `tests/`, then runs `make verify`, checks the time log and
 makes the one checkpoint commit. A
 failed attempt leaves its diagnostics and the files its model changed, quoted,
 below its audit line in `findings.md`. `repair` takes every taken finding of
-the loop record, the released blocks and the phase-6 tables to GLM 5.3 in one
-call, proves each repair of code with a test that was red first, and marks the
-rows `fixed` from the answer's fixed lines.
+the loop record, the released blocks and the phase-6 tables to Codex in one
+call (a fresh Codex attempt after a failed check, then Sonnet 5.5; a failed call
+stops), proves each repair of code with a test that was red first, and marks the
+rows `fixed` from the answer's fixed lines. Codex runs in its configured
+`workspace-write` sandbox; the tests do not measure that confinement.
 
 `session` starts one interactive Pi or Codex session in a new macOS
 Terminal window, inside the change's dedicated worktree
@@ -69,12 +71,17 @@ alone, and `--stage2-off` to explore, implement and repair.
 5. an empty standard input, and an environment the runner built from an
    allow-list - never the caller's.
 
-**Reads: what each call can reach.** The Claude Code calls (explore,
-implement, repair and the Sonnet fallback attempts) start in the worktree
+**Reads: what each call can reach.** The Claude Code calls (explore, the
+draft's GLM attempt, implement, spec-review and the Sonnet 5.5 fallback attempts) start in the worktree
 with `--restricted` and no `--add-dir`; `claude --help` says `--restricted`
 "confines the file tools to the working directories", so
 `~/.config/cc-routing/secrets.env` is outside what those file tools reach.
-That is the CLI's documented behaviour, not measured here. **The review
+That is the CLI's documented behaviour, not measured here. Codex's draft and
+repair attempts have command tools in the configured `workspace-write`
+sandbox; a repair may run tests and `make verify` but must not commit or run
+git commands that change the repository. Codex's review, draft and repair
+calls are not confined in their reads: only the prompt's request bounds them
+to the worktree and the repository's git directory. **The review
 loop's Pi calls are not among them, and they are not confined:** a round's
 `read` reaches files outside the worktree (measured with Pi 1.1.0, research
 §L), and the secrets file is among them; only the prompt's request bounds it -
@@ -140,7 +147,7 @@ REPO_ROOT = Path(__file__).resolve().parent.parent
 # The reviews have no fixed tuple: their model is the round's rung of the
 # `opencode-go` entry's ordered `modelle` list (the ladder, see `ladder`).
 GLM_FLASH = ("glm-coding-plan", "glm-5.3-flash", "max")
-# GLM 5.3, not Flash: the repair of the taken findings routes here (ADR 0015), shared with stage2_runs.py.
+# GLM 5.3, not Flash: the draft's fallback routes here (the repair did until ADR 0017), shared with stage2_runs.py.
 GLM = ("glm-coding-plan", "glm-5.3", "max")
 HAIKU = ("claude-code-plan", "claude-haiku-4-5", None)
 SONNET = ("claude-code-plan", "claude-sonnet-5-5", "medium")
@@ -176,12 +183,21 @@ ANSWER_FORMAT = (
     "The runner adds the reviewer, the status and the test mark. When there is no finding, answer in one sentence."
 )
 MARK_FORMAT = "For each loop row answer one line and nothing else: `<ID>: agree` or `<ID>: disagree — <reason>`."
-REPAIR_FORMAT = (
-    "Repair only the taken rows below, with the available file tools; you cannot run commands. Answer with\n"
-    "one fixed line per row and no other text: `<ID>: fixed — tests/<path>::<function>` or\n"
+REPAIR_ANSWER = (
+    "Answer with one fixed line per row and no other text: `<ID>: fixed — tests/<path>::<function>` or\n"
     "`<ID>: fixed — not a test — <reason>`. Write a `|` inside a reason as `\\|`. A code row needs a test that\n"
     "fails on the baseline's code, which the runner runs; only a row taken as `taken — not a test — <reason>`\n"
     "may be answered `not a test`. Do not edit `findings.md`."
+)
+# The Codex attempts (ADR 0017): Codex has command tools in its configured sandbox, so it is told what it may run.
+REPAIR_FORMAT = (
+    "Repair only the taken rows below. You may run tests and `make verify`; write a measured entry under\n"
+    "`## Time used` in `plan.md`. Do not commit and run no git command that changes the repository: the\n"
+    "runner runs `make verify` and makes the one commit. " + REPAIR_ANSWER
+)
+# The Sonnet attempt keeps the file-tools sentence it always had.
+REPAIR_FORMAT_FILE_TOOLS = (
+    "Repair only the taken rows below, with the available file tools; you cannot run commands. " + REPAIR_ANSWER
 )
 # What a draft may write and what the runner takes back; `<change>` is filled in (spec, criterion 3).
 DRAFT_RULES = (
@@ -697,10 +713,21 @@ def phase_prompt(root: Path, prompt_file: str, change: str, extra: str = "") -> 
     return "\n\n".join(parts)
 
 
-def work_prompt(root: Path, prompt_file: str, change: str, extra: str = "") -> str:
+def prompt_input(path: Path, inputs: dict[Path, bytes] | None = None) -> str:
+    """Read a prompt dependency once into the run's snapshot, keeping its bytes for restoration."""
+    if inputs is None:
+        return path.read_text(encoding="utf-8")
+    if path not in inputs:
+        inputs[path] = path.read_bytes()
+    return inputs[path].decode("utf-8")
+
+
+def work_prompt(
+    root: Path, prompt_file: str, change: str, extra: str = "", inputs: dict[Path, bytes] | None = None
+) -> str:
     """A work phase, the repository rules and its inputs, without review row instructions."""
-    body = (root / "prompts" / prompt_file).read_text(encoding="utf-8")
-    rules = (root / "AGENTS.md").read_text(encoding="utf-8")
+    body = prompt_input(root / "prompts" / prompt_file, inputs)
+    rules = prompt_input(root / "AGENTS.md", inputs)
     parts = [
         body.rstrip(),
         f"---\n\nChange: {change} (`plans/changes/{change}/`).",
@@ -1021,7 +1048,12 @@ def recorded_2a_session(text: str) -> str | None:
 
 
 def review(root: Path, change: str) -> None:
-    """Phase 6: a recorded Codex 2a session resumed - otherwise fresh - the verdict written, the loop rows released and marked."""
+    """Phase 6: verdict first, then release and mark the loop rows.
+
+    A re-check after an earlier `## Phase 6` block in `findings.md` starts a
+    fresh read-only Codex session. The first phase-6 review resumes a recorded
+    Codex phase-2a session, otherwise starts fresh; loop marks resume the verdict thread.
+    """
     ctx = preflight(root, change, CODEX)
     record = read_record(change)
     if record is not None:
@@ -1030,6 +1062,11 @@ def review(root: Path, change: str) -> None:
             raise Refused(refusal)
     text = ctx.findings.read_text(encoding="utf-8") if ctx.findings.exists() else ""
     recorded = recorded_2a_session(text)
+    recheck = any(line.startswith("## Phase 6") for line in text.splitlines())
+    if recheck:
+        # An earlier phase-6 block makes this a fresh read-only session: no 2a thread, no earlier
+        # verdict thread, never the repair's (ADR 0017). The first review keeps ADR 0016's rule.
+        recorded = None
     prompt = phase_prompt(root, "06-review.md", change, "Write only your verdict now.")
     begin_call(ctx, "review", CODEX, prompt)
     answer, thread = run_codex(ctx, prompt, resume=recorded)
@@ -1042,7 +1079,8 @@ def review(root: Path, change: str) -> None:
         ]
     )
     if recorded is None:
-        block += f"\nReviewer session: codex {thread} — a fresh session reviewed: no phase-2a session was recorded"
+        reason = "an earlier ## Phase 6 block makes this a re-check" if recheck else "no phase-2a session was recorded"
+        block += f"\nReviewer session: codex {thread} — a fresh session reviewed: {reason}"
     elif thread != recorded:
         block += (
             f"\nReviewer session: codex {thread} — a fresh session reviewed: "
@@ -1318,9 +1356,10 @@ TIME_HEADING = re.compile(r"^## Time used[ \t]*$", re.M)
 WORK_READ_TOOLS = "Read,Grep,Glob"
 WORK_WRITE_TOOLS = "Read,Grep,Glob,Edit,Write"
 
-# Before `make verify` the runner formats the change's Python files itself: the work models have no
-# command tool, and both ruff gates only check. Safe fixes only, never `--unsafe-fixes` (Q-1 of the
-# spec), and the worktree's own ruff by a path with a slash, so `PATH` is never consulted.
+# Before `make verify` the runner formats the change's Python files itself: Claude Code work calls
+# have file tools only; Codex repair attempts are command-capable workspace-write calls. Both ruff
+# gates only check. Safe fixes only, never `--unsafe-fixes` (Q-1 of the spec), and the worktree's own
+# ruff by a path with a slash, so `PATH` is never consulted.
 RUFF = ".venv/bin/ruff"
 FORMAT_DIRS = ("scripts/", "tests/")
 RUFF_COMMANDS = (
@@ -1565,15 +1604,20 @@ def put_back_lines(paths: list[str]) -> list[str]:
     return [f"- `{path}`" for path in paths]
 
 
-def attempt_block(attempt: int, route: str, listing: str, files: list[str] | str) -> str:
+def attempt_block(attempt: int, route: str, listing: str, files: list[str] | str, *, moved_head: bool = False) -> str:
     """The unquoted text of one failed attempt's block: its header, the files, the diagnostics.
 
     `files` is the entry list of `attempt_files`, a reason string when the trees could not be measured,
     or empty when the attempt's model changed no file. The diagnostics stand in a fenced code block
     whose fence is one backtick longer than the longest run they contain, at least three, so gate
-    output with fences of its own is quoted whole (spec: the block's shape).
+    output with fences of its own is quoted whole (spec: the block's shape). A moved-HEAD stop
+    precedes all post-run checks, so its header must not claim those checks failed.
     """
-    head = f"Attempt {attempt} ({route}) failed its post-run checks."
+    head = (
+        f"Attempt {attempt} ({route}) stopped because the call moved HEAD; no post-run check ran."
+        if moved_head
+        else f"Attempt {attempt} ({route}) failed its post-run checks."
+    )
     if isinstance(files, str):
         # The reason is a raw git error: one line, and one full stop of this sentence's own.
         reason = " ".join(files.split()).rstrip(".")
@@ -1873,6 +1917,8 @@ def verify_attempt(
     runner applies ruff's safe fixes and its formatter to the changed Python files under `scripts/`
     and `tests/`; when `formatted` is given, the step's line lands there. Return bounded
     diagnostics for failed preparation or postconditions, naming the gates that blocked.
+    `baseline_time` holds the pre-call plan: restoring a heading or moving an old entry into the
+    time section cannot count as this attempt's new measured line.
     """
     env = foreign_env(
         {
@@ -1896,7 +1942,8 @@ def verify_attempt(
     except Refused as error:
         problems.append(str(error))
     else:
-        if not current_time.strip() or current_time == baseline_time:
+        added_time = Counter(current_time.splitlines()) - Counter(baseline_time.splitlines())
+        if not any(line.strip() for line in added_time):
             problems.append("`plan.md` did not add a measured line below `## Time used`")
     return problems
 
@@ -2107,13 +2154,16 @@ def check_repair_answer(
     key: str | None,
     before: tuple[list[list[str]], list[list[str]]],
     audit_line: str | None = None,
+    findings_before: str | None = None,
 ) -> tuple[dict[str, str], list[str]]:
     """Read an answer's fixed lines: the Status each taken row takes, or the problems that fail the attempt.
 
     Each problem names its ID. Every row of findings.md must also stand as `before` holds it - the taken
     rows and the others alike, cell for cell: an edit outside the taken rows' Status is named, not
-    checkpointed (phase 6, F-3). Only when no problem stands do the red-first runs start, one pytest run
-    per named test; every text is scrubbed with the key.
+    checkpointed (phase 6, F-3). The pre-call findings body also protects other phases and every earlier
+    attempt's evidence; only the frontmatter is excluded, because the runner refreshes `updated:`.
+    Only when no problem stands do the red-first runs start, one pytest run per named test; every
+    text is scrubbed with the key.
     """
     problems: list[str] = []
     parsed: dict[str, list[str]] = {}
@@ -2151,6 +2201,14 @@ def check_repair_answer(
     released_now, phase6_now = findings_rows(findings_now)
     if audit_line and audit_line not in findings_now.splitlines():
         problems.append("findings.md no longer holds the audit line of this call; a passing repair keeps it")
+    if findings_before is not None:
+        header = r"\A---\n.*?\n---\n"
+        body_before = re.sub(header, "", findings_before, count=1, flags=re.S)
+        body_now = re.sub(header, "", findings_now, count=1, flags=re.S)
+        if body_now != body_before:
+            problems.append(
+                "findings.md changed outside runner bookkeeping; every finding and earlier attempt's evidence must stand"
+            )
     for _place, row in taken:
         ident, fix = row[0], fixes[row[0]]
         if fix.startswith("fixed — not a test"):
@@ -2278,10 +2336,12 @@ def explore(root: Path, change: str, stage2_off: str | None = None) -> None:
     print(f"explore: answer appended to {ctx.research.relative_to(root)} · route {route}")
 
 
-def implementation_prompt(ctx: Context, baseline: str, diagnostics: list[str]) -> str:
-    """The current accepted inputs and the bounded evidence from earlier attempts."""
-    spec = (ctx.folder / "spec.md").read_text(encoding="utf-8")
-    plan = ctx.plan.read_text(encoding="utf-8")
+def implementation_prompt(
+    ctx: Context, baseline: str, diagnostics: list[str], inputs: dict[Path, bytes] | None = None
+) -> str:
+    """The accepted inputs and the bounded evidence from earlier attempts."""
+    spec = prompt_input(ctx.folder / "spec.md", inputs)
+    plan = prompt_input(ctx.plan, inputs)
     extra = [
         "Implement only the accepted plan with the available file tools. You cannot run commands. "
         "Update the measured span below `## Time used` in plan.md before returning; the runner runs "
@@ -2292,16 +2352,15 @@ def implementation_prompt(ctx: Context, baseline: str, diagnostics: list[str]) -
     ]
     if diagnostics:
         extra.append("## Earlier post-run diagnostics\n\n" + "\n\n".join(diagnostics))
-    return work_prompt(ctx.root, "04-implement.md", ctx.change, "\n\n".join(extra))
+    return work_prompt(ctx.root, "04-implement.md", ctx.change, "\n\n".join(extra), inputs)
 
 
 def run_attempts(
     ctx: Context,
     verb: str,
     routes: list[tuple[tuple[str, str, str | None], str | None, str, str | None]],
-    build_prompt,  # diagnostics -> prompt
+    build_prompt,  # (diagnostics, endpoint, inputs) -> prompt
     baseline: str,
-    baseline_time: str,
     key: str | None,
     ignored_before: dict[Path, tuple[int, int]] | None,
     commit_message: str,
@@ -2323,25 +2382,93 @@ def run_attempts(
     """
     root = ctx.root
     allowed = {ctx.findings.relative_to(root)}
+    # Build each endpoint's base prompt before any model can edit or delete a dependency. Every
+    # builder read goes into the same snapshot, including the phase prompt and repository rules;
+    # later attempts append diagnostics to these strings and never read prompt inputs again.
+    inputs: dict[Path, bytes] = {}
+    prompts = {}
+    for endpoint, _, _, _ in routes:
+        if endpoint not in prompts:
+            prompts[endpoint] = build_prompt([], endpoint, inputs)
+    # These optional change inputs are read by the worker rather than inlined in its prompt.
+    for name in ("decisions.md", "design.md"):
+        path = ctx.folder / name
+        if path.is_file():
+            prompt_input(path, inputs)
     diagnostics: list[str] = []
     record: list[str] = []
     for attempt, (endpoint, credential, route, reason) in enumerate(routes, 1):
-        prompt = build_prompt(diagnostics)
+        prompt = prompts[endpoint]
+        if diagnostics:
+            prompt = "\n\n".join(
+                [
+                    prompt.removesuffix(f"\n\n{READ_REQUEST}"),
+                    "## Earlier post-run diagnostics\n\n" + "\n\n".join(diagnostics),
+                    READ_REQUEST,
+                ]
+            )
         begin_work_call(ctx, verb, endpoint, prompt, attempt, route, ctx.findings, reason)
         if route == "stage-1":
             insert_before_time(
                 ctx.plan,
                 f"## Runner route — {today()}\n\nStage-1 route: {verb} · model {endpoint[1]} · reason: {reason}.",
             )
+        # Each attempt must add its own line. Keep all existing plan lines even if an earlier
+        # attempt removed the time heading, so restoring it cannot reuse an earlier measurement.
+        baseline_time = ctx.plan.read_text(encoding="utf-8")
+        # Restore a changed plan with this attempt's pre-call time evidence and runner route, while the
+        # accepted plan in every prompt stays the original snapshot. No older line satisfies a retry.
+        inputs_before = {**inputs, ctx.plan: baseline_time.encode("utf-8")}
         kept = snapshot_findings() if snapshot_findings is not None else None
         unmeasured: str | None = None
         try:
             before = worktree_tree(root)
         except (Refused, OSError) as error:
             before, unmeasured = "", str(error)
+        call_error: CallFailed | None = None
+        answer = ""
         try:
-            answer = run_work_model(ctx, prompt, endpoint, writable=True, key=credential)
+            if endpoint == CODEX:
+                # A fresh writing Codex call, never resumed; its thread is not kept (ADR 0017).
+                answer, _ = run_codex(ctx, prompt, writable=True)
+                if not answer.strip():
+                    raise CallFailed("codex: the answer is empty")
+            else:
+                answer = run_work_model(ctx, prompt, endpoint, writable=True, key=credential)
         except CallFailed as error:
+            call_error = error
+        if endpoint == CODEX:
+            try:
+                head_now = _git_output(root, "rev-parse", "HEAD").strip()
+            except Refused as error:
+                raise CallFailed(f"the {verb} call's HEAD could not be read ({error})") from error
+            if head_now != baseline:
+                # A moved HEAD stops the run without a rewrite: resetting a commit the model made
+                # would rewrite history, and the decision is a person's (ADR 0017). Measure its
+                # files before restoring findings alone, so its own statuses go and the audit stays.
+                problem = (
+                    f"the {verb} call moved HEAD from {baseline[:12]} to {head_now[:12]}; "
+                    "history was not rewritten and no runner checkpoint was made"
+                )
+                if unmeasured is None:
+                    try:
+                        moved_files: list[str] | str = attempt_files(root, before, worktree_tree(root))
+                    except (Refused, OSError) as error:
+                        moved_files = str(error)
+                else:
+                    moved_files = unmeasured
+                if kept is not None:
+                    restore_findings(kept)
+                listing = f"- {problem}"
+                if call_error is not None:
+                    listing += f"\n- {call_error}"
+                append(
+                    ctx.findings,
+                    quote_block(attempt_block(attempt, route, listing, moved_files, moved_head=True), key),
+                )
+                raise CallFailed(problem) from call_error
+        if call_error is not None:
+            error = call_error
             if kept is not None:
                 restore_findings(kept)
             raise CallFailed(f"{error}; {restore_baseline(root, baseline, allowed, ignored_before)}") from error
@@ -2413,6 +2540,20 @@ def run_attempts(
                 after_commit()
             print(f"{verb}: verified and committed · route {route} · attempt {attempt}")
             return
+        if attempt < len(routes):
+            # Failed edits stay in the attempt's evidence. Restore every differing snapshotted input
+            # before the next attempt, comparing bytes so undecodable files are restored too.
+            # The plan keeps its pre-call time evidence; the retry must add its own measured line.
+            # Restoration never writes through a worktree path: whatever stands there (a symlink, a
+            # directory or a file) is removed without being followed, then the bytes are written anew.
+            for path, content in inputs_before.items():
+                if path.is_symlink() or not path.is_file() or path.read_bytes() != content:
+                    if path.is_symlink() or path.is_file():
+                        path.unlink()
+                    elif path.is_dir():
+                        shutil.rmtree(path)
+                    path.parent.mkdir(parents=True, exist_ok=True)
+                    path.write_bytes(content)
     raise CallFailed(closing)
 
 
@@ -2426,7 +2567,7 @@ def implement(root: Path, change: str, stage2_off: str | None = None) -> None:
         listing = ", ".join(sorted(path.as_posix() for path in outside))
         raise Refused(f"the worktree has pre-existing changes outside this change's findings.md: {listing}")
     baseline = _git_output(root, "rev-parse", "HEAD").strip()
-    baseline_time = time_log(ctx.plan)
+    time_log(ctx.plan)  # Require the initial time heading before a model call starts.
     ignored_before = ignored_snapshot(root)
     if stage2_off is None:
         key = read_secret("GLM_KEY")
@@ -2444,9 +2585,8 @@ def implement(root: Path, change: str, stage2_off: str | None = None) -> None:
         ctx,
         "implement",
         routes,
-        lambda diagnostics: implementation_prompt(ctx, baseline, diagnostics),
+        lambda diagnostics, _endpoint, inputs: implementation_prompt(ctx, baseline, diagnostics, inputs),
         baseline,
-        baseline_time,
         key,
         ignored_before,
         commit_message=f"feat({change}): implement accepted plan",
@@ -2745,13 +2885,20 @@ def draft(root: Path, change: str) -> None:
     )
 
 
-def repair_prompt(ctx: Context, baseline: str, taken: list[tuple[str, list[str]]], diagnostics: list[str]) -> str:
+def repair_prompt(
+    ctx: Context,
+    baseline: str,
+    taken: list[tuple[str, list[str]]],
+    diagnostics: list[str],
+    endpoint: tuple[str, str, str | None] = CODEX,
+    inputs: dict[Path, bytes] | None = None,
+) -> str:
     """The implement contract with the repair block: the format, the baseline, the taken rows, the inputs."""
     rows = "\n".join(f"- {row[0]} [{row[1]}, {row[2]}] {row[4]}: {row[5]} — Status: {row[7]}" for _, row in taken)
-    spec = (ctx.folder / "spec.md").read_text(encoding="utf-8")
-    plan = ctx.plan.read_text(encoding="utf-8")
+    spec = prompt_input(ctx.folder / "spec.md", inputs)
+    plan = prompt_input(ctx.plan, inputs)
     extra = [
-        REPAIR_FORMAT,
+        REPAIR_FORMAT if endpoint == CODEX else REPAIR_FORMAT_FILE_TOOLS,
         f"Repair baseline: {baseline}",
         f"## Taken rows\n\n{rows}",
         f"## Accepted spec\n\n{spec}",
@@ -2759,18 +2906,19 @@ def repair_prompt(ctx: Context, baseline: str, taken: list[tuple[str, list[str]]
     ]
     if diagnostics:
         extra.append("## Earlier post-run diagnostics\n\n" + "\n\n".join(diagnostics))
-    return work_prompt(ctx.root, "04-implement.md", ctx.change, "\n\n".join(extra))
+    return work_prompt(ctx.root, "04-implement.md", ctx.change, "\n\n".join(extra), inputs)
 
 
 def repair(root: Path, change: str, stage2_off: str | None = None) -> None:
-    """Phase 4b and 6: GLM 5.3 repairs every taken finding in one call, checked and committed by the runner.
+    """Phase 4b and 6: Codex repairs every taken finding in one call, checked and committed by the runner.
 
-    The attempts are GLM 5.3, one GLM 5.3 repair attempt with the first one's diagnostics, and one
-    Sonnet 5.5 stage-1 fallback; a leak-check BLOCK stops without a fallback. The orchestrator decides
-    taken or rejected and re-checks with the loop's next round and `review`; the verb writes no
+    The attempts are Codex, one fresh Codex repair attempt with the first one's diagnostics, and one
+    Sonnet 5.5 stage-1 fallback after two failed post-run checks; a failed call or a leak-check BLOCK
+    stops without a fallback (ADR 0017). The orchestrator decides taken or rejected and re-checks with
+    the loop's next round and `review`, a fresh read-only Codex session; the verb writes no
     `Broke a test` and starts no review.
     """
-    first = SONNET if stage2_off is not None else GLM
+    first = SONNET if stage2_off is not None else CODEX
     ctx = preflight(root, change, first, required=("plan.md",))
     allowed = {ctx.findings.relative_to(root)}
     outside = changed_paths(root) - allowed
@@ -2787,19 +2935,17 @@ def repair(root: Path, change: str, stage2_off: str | None = None) -> None:
     if doubled:
         raise Refused(f"several taken rows carry the same id ({', '.join(doubled)}); mend the rows first.")
     baseline = _git_output(root, "rev-parse", "HEAD").strip()
-    baseline_time = time_log(ctx.plan)
+    time_log(ctx.plan)  # Require the initial time heading before a model call starts.
     ignored_before = ignored_snapshot(root)
+    # No route reads the GLM credential: the repair is Codex, then Sonnet (ADR 0017).
+    key = None
     if stage2_off is None:
-        key = read_secret("GLM_KEY")
-        if key is None:
-            raise Refused(f"GLM_KEY is not in the secrets file {secrets_path()}.")
         routes = [
-            (GLM, key, "glm", None),
-            (GLM, key, "glm-repair", "first GLM 5.3 post-run check failed"),
-            (SONNET, None, "stage-1", "two GLM 5.3 post-run checks failed"),
+            (CODEX, None, "codex", None),
+            (CODEX, None, "codex-repair", "first Codex post-run check failed"),
+            (SONNET, None, "stage-1", "two Codex post-run checks failed"),
         ]
     else:
-        key = None
         routes = [(SONNET, None, "stage-1", stage2_off)]
     fixes: dict[str, str] = {}
     rows_before = findings_rows(ctx.findings.read_text(encoding="utf-8") if ctx.findings.exists() else "")
@@ -2814,7 +2960,7 @@ def repair(root: Path, change: str, stage2_off: str | None = None) -> None:
         # The last audit line of the snapshot is this attempt's own: it was appended just before it.
         audits = [line for line in standing.get("text", "").splitlines() if line.startswith("Stage-2 call,")]
         found, problems = check_repair_answer(
-            ctx, answer, taken, baseline, key, rows_before, audits[-1] if audits else None
+            ctx, answer, taken, baseline, key, rows_before, audits[-1] if audits else None, standing["text"]
         )
         if not problems:
             fixes.clear()
@@ -2825,9 +2971,8 @@ def repair(root: Path, change: str, stage2_off: str | None = None) -> None:
         ctx,
         "repair",
         routes,
-        lambda diagnostics: repair_prompt(ctx, baseline, taken, diagnostics),
+        lambda diagnostics, endpoint, inputs: repair_prompt(ctx, baseline, taken, diagnostics, endpoint, inputs),
         baseline,
-        baseline_time,
         key,
         ignored_before,
         commit_message=f"fix({change}): repair taken findings {', '.join(ids)}",

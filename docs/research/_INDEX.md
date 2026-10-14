@@ -4,7 +4,7 @@ category: research
 status: proposed
 created: 2026-09-16
 last_reviewed: 2026-09-18
-updated: 2026-10-11
+updated: 2026-10-14
 owner: framework-architect
 provenance: ai-drafted-reviewed
 produced_by:
@@ -44,13 +44,13 @@ is evidence and options, not a second normative workflow.
 - **Choose an external component:** read the three dated assessments below, then test a bounded claim against the target's M0/M1 gates before adoption. They are source reviews, not successful pilots.
 - **Recover the original rationale:** read the four intake sources below and the [decision continuity table](../architecture/2026-09-17-omnigent-first-target.md#decision-continuity). Keep their dates and provenance attached to each claim.
 
-Vocabulary for older sources: **Stage 1–3** means model routing; **S0–S7** means instance setup; **T0–T2** means team scale; **M0–M4** means Omnigent adoption; **levels 1–5** means rule enforcement. Older uses of *Stufe* are ambiguous; this map aids reading without rewriting the sources.
+Vocabulary of the corpus: **Stage 1–3** means model routing; **S0–S7** means instance setup (Setup step); **T0–T2** means team scale (Team level); **M0–M4** means Omnigent adoption; **levels 1–5** means rule enforcement. The corpus uses it since the correction of 2026-10-14 (bead coding-harness-bt8; target architecture D-1 and D-8): every other meaning of *Stufe* or *stage* was renamed in place, and quotes and proper names (Stage-Gate) keep their words. The review's addendum lists what changed.
 
 | Document | Internal stand | Focus | Tags |
 |---|---|---|---|
-| [`arc42_Referenzarchitektur_Agentischer_Delivery-Workflow.md`](arc42_Referenzarchitektur_Agentischer_Delivery-Workflow.md) | Version 1.2 · 17.09.2026 | arc42 reference architecture „Agentischer Delivery-Workflow“ (ADW), tool-neutral conventions, Omnigent as target runtime | arc42, adw, omnigent |
+| [`arc42_Referenzarchitektur_Agentischer_Delivery-Workflow.md`](arc42_Referenzarchitektur_Agentischer_Delivery-Workflow.md) | Version 1.2 · 16.09.2026 | arc42 reference architecture „Agentischer Delivery-Workflow“ (ADW), tool-neutral conventions, Omnigent as target runtime | arc42, adw, omnigent |
 | [`Lake-Switch-Architektur-arc42.md`](Lake-Switch-Architektur-arc42.md) | 2026-09 | arc42 documentation of the toolchain/working environment Lake Switch is developed in (the product's own arc42 lives in `lakeswitch-ai`) | arc42, lakeswitch, toolchain |
-| [`Migrationsplan_Omnigent_Referenzarchitektur.md`](Migrationsplan_Omnigent_Referenzarchitektur.md) | 2026-09 | stepwise instantiation of the ADW reference architecture into a productive Omnigent topology — no big bang, abort criteria per stage | migration, omnigent |
+| [`Migrationsplan_Omnigent_Referenzarchitektur.md`](Migrationsplan_Omnigent_Referenzarchitektur.md) | 2026-09 | stepwise instantiation of the ADW reference architecture into a productive Omnigent topology — no big bang, abort criteria per adoption step (M0–M4) | migration, omnigent |
 | [`2026-09-16-review-corpus-vs-running-workflow.md`](2026-09-16-review-corpus-vs-running-workflow.md) | read at `5a950c2` · 2026-09-16 | review of the three documents above against the running workflow: adopt / keep / decide per topic, contradictions between the sources, eight decisions for the maintainer, proposed corrections | review, adw, lakeswitch, omnigent |
 
 ## New assessments and planning research
@@ -61,7 +61,7 @@ Vocabulary for older sources: **Stage 1–3** means model routing; **S0–S7** m
 | [CrewAI assessment](2026-09-18-crewai-assessment.md) | proposed · 2026-09-18 | Runtime overlap with Omnigent; defer coordinator adoption pending a measured gap |
 | [Open Code Review assessment](2026-09-18-open-code-review-assessment.md) | proposed · 2026-09-18 | Review tool fit, limits and smallest gated pilot |
 | [Obsidian as a reader](2026-09-23-obsidian-as-reader.md) | proposed · 2026-09-23, re-checked 2026-09-27 | Seven recommendations for reading this repository in Obsidian, each with its status at `4e7ea5c` |
-| [Kubernetes gate runner](2026-09-26-kubernetes-gate-runner.md) | proposed · 2026-09-26 | The verifier in a pinned container, run as a Kubernetes Job in five stages; bead proposal and ADR draft |
+| [Kubernetes gate runner](2026-09-26-kubernetes-gate-runner.md) | proposed · 2026-09-26 | The verifier in a pinned container, run as a Kubernetes Job in five steps; bead proposal and ADR draft |
 | [Tracker writes from worktrees](2026-09-23-worktree-tracker-writes.md) | accepted · 2026-09-23 | D-5's five checks green with bd 1.3.0; the worktree write ban lifts, the one-writer rule stays |
 | [Agent Skills assessment](2026-09-18-agent-skills-assessment.md) | proposed · 2026-09-18 | Selective technique adaptation and evaluation without importing a competing workflow |
 | [Agent SDK and formal models](2026-09-26-agent-sdk-and-formal-models.md) | proposed · 2026-09-26 | TLA+ for four protocol seams alongside M0 (three models run, one new finding in the recap lock, reproduced), property tests before Lean for pure logic (Lean run and checked against the code; four alternatives measured on the same targets), the Agent SDK as one adapter of a runner-neutral qualification runner |

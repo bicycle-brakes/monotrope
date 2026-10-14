@@ -4,7 +4,7 @@ category: research
 status: proposed
 created: 2026-09-26
 last_reviewed: 2026-09-27
-updated: 2026-09-29
+updated: 2026-10-14
 owner: framework-architect
 provenance: ai-drafted-reviewed
 produced_by:
@@ -54,11 +54,11 @@ missing function the plan asks of every third-party component.
 | Just create `deploy/` | Kit manifest: an unclassified file is a BLOCK, and the `leerprobe` gate blocks | Classify `deploy/` in `scripts/kit/manifest.yaml`, `scripts/export/manifest.yaml` and `provenance.yaml` |
 | The container runs the gates | `scripts/verify_all.sh` has no commands of its own; the only list is `decisions/gates.yaml` (D-10) | The image calls only `scripts/verify_all.sh` and names no gate |
 
-## Stages
+## Steps
 
-Each stage is complete on its own.
+Each step is complete on its own.
 
-| Stage | What | Evidence, known-bad included | Effort |
+| Step | What | Evidence, known-bad included | Effort |
 |---|---|---|---|
 | **1 · Image** | `deploy/verify.Dockerfile`: base image pinned by digest, tool versions from `decisions/gates.yaml`, `bd` through `tools/beads/install.sh` (checksum), the tracker read-only through `git fetch origin refs/dolt/data`; entry point `scripts/verify_all.sh` | The same gate IDs and verdicts as CI on the same SHA; a deliberately broken commit turns red | about one session |
 | **2 · Job** | OrbStack Kubernetes. A Job receives a SHA, clones read-only, runs and stores the report as an artifact; a Secret with a read-only token; CPU and memory limits | The Job is green on `main`; a pod without a push credential cannot push (probe) | about one session |
@@ -69,8 +69,8 @@ Each stage is complete on its own.
 
 **Open: the M0 status.** The repository still names M0 as next. A note in the
 maintainer's vault reports that the lakeswitch journal of 2026-09-24 dropped
-the M0 pilot and uses Omnigent without its sandbox; not verified here. Stages
-1 to 5 do not depend on it; stage 6 does.
+the M0 pilot and uses Omnigent without its sandbox; not verified here. Steps
+1 to 5 do not depend on it; step 6 does.
 
 ## Bead proposal, not created
 
@@ -78,8 +78,8 @@ Create it when no other session writes the tracker (house rule 4).
 
 - **Title:** Pinned verify container and Kubernetes Job runner
 - **Class:** Architectural: a new runtime component, so an ADR is required.
-- **Scope:** stages 1 to 3; stages 4 and 5 get a bead each.
-- **Acceptance:** the evidence of stages 1 to 3; `deploy/` classified in both
+- **Scope:** steps 1 to 3; steps 4 and 5 get a bead each.
+- **Acceptance:** the evidence of steps 1 to 3; `deploy/` classified in both
   manifests and in `provenance.yaml`; `make verify` green.
 - **Out of scope:** model calls, tracker writes from pods, Omnigent.
 
@@ -138,7 +138,7 @@ Status: proposed (draft, not committed)
 - Same gate IDs and verdicts as CI on the same SHA.
 - A known-bad commit fails inside the pod.
 - A pod without a push credential cannot push.
-- (Stage 4) A forbidden host is unreachable; an allowed one works.
+- (Step 4) A forbidden host is unreachable; an allowed one works.
 ```
 
 ## Limits and evidence status
