@@ -3,8 +3,8 @@ title: "Research — sol-effort"
 status: draft
 implementation_status: none
 date: 2026-10-13
-last_reviewed: 2026-10-13
-updated: 2026-10-13
+last_reviewed: 2026-10-14
+updated: 2026-10-14
 supersedes: null
 superseded_by: null
 bead: coding-harness-yzk
@@ -86,3 +86,42 @@ Read together: repair `medium`, draft (spec, design and plan in one call)
 - [DETAIL] How the effort reaches `run_codex` (parameter or tuple per verb)
   is the design's choice, under the constraint above that every Codex route
   keeps its Codex branch.
+
+## Draft preparation — 2026-10-14
+
+Read in the dedicated worktree on `feat/sol-effort`, HEAD `9113a3d`.
+The latest session handover says the maintainer merged the prerequisite
+repair change on 2026-10-14; the local diff against `origin/main` now holds
+only the generated plans index and this change's inputs. It contains no
+ADR edit or edit to the earlier repair change's folder. The earlier
+competing-claim failure is therefore not the current diff's state
+(`docs/journal/handover/2026-10-14-night-run-third.md`, dated addendum;
+`git diff --name-only origin/main...HEAD`). Live PR state was not read
+within the worktree-only boundary.
+
+The current runner still pins Sol to `max`. Draft's two Codex routes share
+one call site; repair's two routes use `run_attempts`, which already receives
+the caller's verb; review has separate verdict and loop-marks call sites.
+The label `codex-repair` names a retry in both draft and repair, so the label
+alone cannot select an effort (`scripts/stage2.py`, `draft`, `run_attempts`,
+`repair` and `review`). The interactive session's exact-argv regression
+already requires a launch without a reasoning-effort override
+(`tests/test_stage2_session.py`,
+`test_codex_is_dispatched_interactively_with_its_exact_safety_flags`).
+
+Only two distinct maintainer-answered interview records stand in
+`decisions.md`. The class minimum for a bounded change is one, but editing
+either claimed ADR raises the duty to five regardless of class. The check
+currently applies that ADR minimum only when an ADR edit is in the measured
+diff; a green check on draft files alone does not discharge the planned
+amendments' interview debt (`scripts/check_interview_minimums.py`,
+`measure`; `docs/WORKFLOW.md`, "Change classes, the ADR question and
+decision pull requests"). Completing phase 1a belongs to the orchestrator,
+not this drafting call; no missing answer is inferred or invented here.
+
+The requested change-artefact validator and a plan template are not present
+in this worktree (`rg --files scripts templates`). The spec uses the spec
+template; the plan uses the phase-3 prompt's prescribed form and the existing
+plan conventions. The findings file contains draft-attempt audit evidence,
+with no phase-2a rows to resolve. This research records no Stage-1 Explore
+route to carry forward.
