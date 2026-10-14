@@ -633,8 +633,10 @@ every change of the night run — so GLM has left the reviewer roles.
 (`glm-5.3-flash`, the Z.ai endpoint) also explores (phase 1) and implements
 (phase 4) — the two phases that read the repository broadly and write its
 code. **Since 2026-10-12** (ADR 0015) GLM 5.3 (`glm-5.3`, the same endpoint)
-repairs the findings the orchestrator takes, of the loop (4b) and of phase 6,
-through the runner's `repair` verb — since that day `taken` on a row means
+repaired the findings the orchestrator takes, of the loop (4b) and of phase 6;
+**since the merge of ADR 0017** Codex (`gpt-6.1-sol`) does, with Sonnet 5.5
+after two failed post-run checks, through the runner's `repair` verb — since the
+first day `taken` on a row means
 decided and waiting for the repair, and `fixed` means repaired. Phases 1a, 2a
 and 7 stay with Anthropic (2a on Opus 5.5).
 **No Fable and no Kimi:** Fable 5.1 left the routing on 2026-10-06 and Opus
@@ -689,7 +691,7 @@ list is a one-line pull request that touches nothing else.
 | 2a Spec review | **Opus 5.5** | effort `xhigh`, through Claude Code and `spec-review`, read-only tools |
 | 4 Implement | **GLM 5.3 Flash** | a worker given a clear plan; through Claude Code against Z.ai and the runner, for every change |
 | 4b Review loop | **the ladder** | the ordered `modelle` list of the `opencode-go` entry in `model-endpoints.yaml`: round *n* calls its *n*-th id (`modelle[n-1]`), through Pi, effort `max` (Pi clamps it to `high` for a rung that takes no `max`), round 3 only when round 2 wrote a taken row |
-| Repair after 4b and 6 | **GLM 5.3** | one GLM 5.3 repair attempt through Claude Code against Z.ai and the runner, effort `max`; a first GLM 5.3 attempt before it, and Sonnet 5.5 at effort `medium` after two failed post-run checks (`repair`, ADR 0015) |
+| Repair after 4b and 6 | **gpt-6.1-sol** | a Codex attempt in the configured `workspace-write` sandbox, effort `max`; one fresh Codex attempt after a failed post-run check, and Sonnet 5.5 at effort `medium` after two failed ones; no GLM credential (`repair`, ADR 0017) |
 | 6 Review | **gpt-6.1-sol** | effort `max`, through the Codex CLI and `review`, a fresh Codex session |
 
 **The two Flash rows are live through the runner.** `explore` starts phase 1
@@ -725,15 +727,17 @@ into a shell. Ten verbs exist:
   no session kept.
 - `implement` — GLM 5.3 Flash, phase 4; `--stage2-off [REASON]` uses Sonnet
   5.5 at effort `medium`.
-- `repair` — GLM 5.3, every taken finding of the loop record, the released
+- `repair` — Codex, every taken finding of the loop record, the released
   blocks and the phase-6 tables in one call; `--stage2-off [REASON]` uses
   Sonnet 5.5 at effort `medium` ("Repairing taken findings" below).
 - `review-loop` — one round of phase 4b, started through Pi; round *n* goes
   to the ladder's *n*-th rung.
 - `release-loop` — the loop rows into `findings.md`, after the phase-6 verdict.
-- `review` — Codex, phase 6, a fresh session unless `findings.md` holds a
-  recorded Codex phase-2a session, which it resumes with `codex exec resume`;
-  it then releases the loop rows and has Codex mark each one.
+- `review` — Codex, phase 6. A re-check after an earlier `## Phase 6` block
+  in `findings.md` starts a fresh read-only Codex session. The first phase-6
+  review resumes a recorded Codex phase-2a session with `codex exec resume`;
+  otherwise it starts fresh. It then releases the loop rows and has Codex
+  mark each one.
 - `probe` — one call per rung of the ladder through Pi, the pinned version
   checked once first, the declaration and the leak check in front of each
   call; measures the address, writes no loop record (its call lines go to
@@ -781,11 +785,12 @@ change's inputs and its call writes into the worktree, implement
 reads the tree and writes code into the worktree, and every repair prompt
 carries the change's spec, plan and repository rules plus the taken rows of
 the loop record — rows the repository does not hold until the phase-6 verdict
-releases them into `findings.md`, so they reach Z.ai in that prompt before
-the verdict (ADR 0015). Far more of this repository goes to Z.ai than before
-2026-10-06. The leak check covers what these four runs send — the same scan,
-immediately before each call, over the tree, the staged changes, the commits
-reachable from the branches and the call's own prompt — and what stays out
+releases them into `findings.md`. Under ADR 0017 those repair prompts send the
+rows to Codex (OpenAI) before the verdict; the Sonnet 5.5 fallback or an
+explicit Stage-1 repair sends them to Anthropic. The leak check covers what
+these four runs send — the same scan, immediately before each call, over the
+tree, the staged changes, the commits reachable from the branches and the
+call's own prompt — and what stays out
 stays out: LakeSwitch and customer content never go, to any endpoint, and the
 check is what blocks it (the maintainer asked about it on 2026-10-06 and kept
 it). How the runner confines the tools and writes of these runs is stated
@@ -795,9 +800,12 @@ What every call then carries: one audit line (in `research.md` for Explore,
 otherwise `findings.md`), an empty standard input and an environment built
 from an allow-list, not the caller's. The runner starts Codex with the
 read-only sandbox for a review call, its session kept and its hooks and
-memories switched off; a draft's Codex call runs in the `workspace-write`
-sandbox, and what such a call writes outside the change folder the runner
-puts back before it verifies ("The draft" below). A `draft` or `spec-review`
+memories switched off. A draft's Codex call runs in the `workspace-write`
+sandbox; the runner puts back its writes outside the change folder before it
+verifies ("The draft" below). A repair's first two attempts run as Codex calls
+in the `workspace-write` sandbox. What a repair's Codex call writes is checked
+and committed by the runner, including changes outside the change folder; a
+checkpoint requires all checks to pass. A `draft`, `repair` or `spec-review`
 call keeps no session. Before the loop's first call the runner runs `pi --version`; anything but
 the pinned `1.1.0` refuses with exit 2, before the leak check. It starts the
 review loop's rung as Pi (`--print`, no session) against OpenCode Go's
@@ -836,19 +844,21 @@ path or a script file passes it, as it does for the merge rules in §2.
 
 **Reads: confined for the Claude Code calls, asked for Codex and for the
 loop.** Every Claude Code call (explore, the draft's GLM attempt, implement,
-repair, `spec-review` and the Sonnet 5.5
-fallback attempts) starts in the worktree with `--restricted` and no
-`--add-dir`.
+`spec-review` and the Sonnet 5.5 fallback attempts) starts in the worktree
+with `--restricted` and no `--add-dir`.
 `claude --help` says `--restricted` "confines the file tools to the working
 directories", so the credential file `~/.config/cc-routing/secrets.env`, which
 lies outside the worktree, is outside what those calls' file tools reach.
 **That is the program's documented behaviour, not measured here:** no test has
-run it against a path outside the worktree. **The review loop's Pi calls are
-not among them, and they are not confined:** a round's `read` reaches files
-outside the worktree (measured with Pi 1.1.0), and the secrets file is among
-them; only the prompt's request bounds it. Every reviewer's prompt asks the
-model to read nothing outside the worktree and the repository's git
-directory, and **that is a request, not a lock** — the program can read the
+run it against a path outside the worktree. Codex's review, draft and repair
+calls are not confined in their reads: only the prompt's request bounds them.
+ADR 0017 retains ADR 0016's residual risks for ignored files, external paths
+and the git directory. **The review loop's Pi calls are not Claude Code calls,
+and they are not confined:** a round's `read` reaches files outside the
+worktree (measured with Pi 1.1.0), and the secrets file is among
+them; only the prompt's request bounds it. Every Codex prompt and every
+reviewer's prompt asks the model to read nothing outside the worktree and the
+repository's git directory, and **that is a request, not a lock** — the program can read the
 rest of the disk, the customer instance's checkout included. Pi's isolation
 flags (no extensions, MCP servers, skills, context files, prompt templates or
 themes; no approval; a fresh agent directory and home per call) are configured
@@ -1018,7 +1028,7 @@ taking it, and starts the re-check afterwards: the loop's next round for loop
 rows, `review` for phase-6 findings. The verb starts no review of its own.
 
 `python3 scripts/stage2.py repair <change>` takes every taken row — of the
-loop record, of every released block and of every phase-6 table — to GLM 5.3
+loop record, of every released block and of every phase-6 table — to Codex
 in one guarded call, and refuses while a row stands undecided or an ID is
 doubled. The model answers one **fixed line** per row, `<ID>: fixed —
 tests/<path>::<function>` or `<ID>: fixed — not a test — <reason>`, in the
@@ -1030,14 +1040,20 @@ only when pytest exits 1 or 2 there. When every post-run check passes —
 `make verify` green, a measured line in the time log, every fixed line
 checked — the runner writes each row's Status `fixed` in its place, makes the
 one checkpoint commit `fix(<change>): repair taken findings <IDs>` and marks
-the loop record after it. The attempts are GLM 5.3, one GLM 5.3 repair
-attempt with the first one's diagnostics, and Sonnet 5.5 at effort `medium`;
-`--stage2-off [REASON]` runs Sonnet 5.5 alone and records why. A leak-check
-BLOCK stops without a fallback. A fixed row counts as a taken one for round 3
+the loop record after it. The attempts are Codex, one fresh Codex attempt
+with the first one's diagnostics, and Sonnet 5.5 at effort `medium`, the last
+only after two failed post-run checks; a failed call stops the run without a
+fallback and `--stage2-off [REASON]` runs Sonnet 5.5 alone and records why. A
+leak-check BLOCK stops without a fallback, and a Codex call that moves HEAD
+stops the run unrewritten. A fixed row counts as a taken one for round 3
 and for the run count; **`Broke a test` stays the orchestrator's mark**,
-written from the run's evidence before the next round or the release. A
-reviewer never repairs its own findings: the rungs and Codex keep their
-read-only tools (ADR 0015).
+written from the run's evidence before the next round or the release. The
+rungs keep their read-only tools. **The exception (ADR 0017):** Codex, which
+reviews phase 6, also repairs; its own session never does both — a phase-6
+re-check (a `review` run after an earlier `## Phase 6` block) starts a fresh
+read-only Codex session, resuming neither the repair nor an earlier thread.
+The sandbox is the CLI's configured `workspace-write`; the tests show the
+configured call, not the CLI's confinement.
 
 ### Two columns for every stage-2 change
 

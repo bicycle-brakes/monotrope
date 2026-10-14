@@ -52,7 +52,8 @@ SEVERITY_ORDER = ("BLOCKER", "MAJOR", "MINOR")
 # The loop's GLM route stood in stage2.py until ADR 0011 moved the loop to OpenCode Go; the runs this
 # script counts went through it, and `model-endpoints.yaml` still declares it, so criterion 4 keeps
 # naming it. Whether criterion 4 now also names the OpenCode Go rungs is the maintainer's call.
-# The tuple now routes the repair too (ADR 0015), so it is read from stage2.py and cannot drift.
+# The tuple routes the draft's fallback and keeps historical GLM repair runs counted (ADR 0015, superseded
+# by ADR 0017: the repair itself is Codex now), so it is read from stage2.py and cannot drift.
 GLM = stage2.GLM
 FOREIGN_ROUTES = (stage2.CODEX, GLM, stage2.GLM_FLASH)
 SEVERITY = stage2.ROW_COLUMNS.index("Severity")

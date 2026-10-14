@@ -1,0 +1,12 @@
+schema_version: 1
+change: codex-repairs
+question: adr
+answer: 'yes'
+reason: A new ADR in which Codex repairs the taken findings supersedes ADR 0015, which
+  stays as history marked as superseded.
+shown:
+  proposed: 'yes'
+  proposal_reason: It replaces the repair routing and reviewer separation of ADR 0015
+    with Codex repairs and a fresh Codex re-check, as requested in the interview.
+answered_by: framework-architect
+answered_at: 2026-10-13
