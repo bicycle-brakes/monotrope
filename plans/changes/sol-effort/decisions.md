@@ -55,3 +55,22 @@ In the context of an effort that both ADRs name, facing the choice between a
 new ADR and amendments, we decided on dated amendments to achieve that each
 ADR still states its own route completely, accepting two ADR files touched by
 one change. — 2026-10-13
+
+## Q-3 · Whether the ADR amendments stay in this change (finding S-2)
+
+asked: 2026-10-14
+answer: the ADR amendments to ADR 0016 and ADR 0017 are taken out of this change; they follow in a change of their own once the three missing interview answers exist. This change keeps the runner, the active instructions and the tests.
+answered_by: maintainer
+status: answered
+
+The phase 2a review found that editing a claimed ADR needs five interview
+records and this change has two (`findings.md`, S-2). The orchestrating
+session proposed on 2026-10-14: "die ADR-Änderungen aus #143 herausnehmen und
+nach den drei fehlenden Interview-Antworten nachholen". The maintainer
+answered "ja" the same day.
+
+In the context of an ADR edit that the interview minimum blocks, facing the
+choice between waiting for three more answers and splitting the ADR
+amendments off, we decided to split them off to achieve that the runner stops
+spending Sol at `max` now, accepting that ADR 0016 and ADR 0017 name `max`
+until their amendment merges. — 2026-10-14
