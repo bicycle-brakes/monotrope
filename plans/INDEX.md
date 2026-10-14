@@ -149,6 +149,7 @@ typed: a hand-kept list of files ages exactly as fast as files are added.
 | [`changes/research-currency/plan.md`](changes/research-currency/plan.md) | draft | partial | 2026-10-05 | coding-harness-pu9 |
 | [`changes/research-currency/research.md`](changes/research-currency/research.md) | draft | partial | 2026-10-05 | coding-harness-pu9 |
 | [`changes/research-currency/spec.md`](changes/research-currency/spec.md) | draft | partial | 2026-10-05 | coding-harness-pu9 |
+| [`changes/research-swarm/research.md`](changes/research-swarm/research.md) | draft | none | 2026-10-14 | coding-harness-icw |
 | [`changes/stage2-format/decisions.md`](changes/stage2-format/decisions.md) | draft | none | 2026-10-12 | coding-harness-52r |
 | [`changes/stage2-format/findings.md`](changes/stage2-format/findings.md) | draft | none | 2026-10-12 | coding-harness-52r |
 | [`changes/stage2-format/plan.md`](changes/stage2-format/plan.md) | draft | none | 2026-10-12 | coding-harness-52r |
