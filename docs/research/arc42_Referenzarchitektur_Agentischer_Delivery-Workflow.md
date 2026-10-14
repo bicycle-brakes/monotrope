@@ -4,7 +4,7 @@ category: research
 status: current
 created: 2026-09-16
 last_reviewed: 2026-09-16
-updated: 2026-09-29
+updated: 2026-10-14
 owner: Data Architect
 provenance: ai-drafted-reviewed
 review:
@@ -18,7 +18,7 @@ tags: [research, arc42, adw, referenzarchitektur, omnigent]
 
 ## Referenzarchitektur „Agentischer Delivery-Workflow“ (ADW)
 
-**Version 1.2 · Stand: 17. September 2026 · Status: Referenzarchitektur (konzeptionell, werkzeugneutral in den Konventionen; Ziel-Instanziierung der Laufzeitschicht: Omnigent)**
+**Version 1.2 · Stand: 16. September 2026 (übernommen), Fassung 1.2 · Status: Referenzarchitektur (konzeptionell, werkzeugneutral in den Konventionen; Ziel-Instanziierung der Laufzeitschicht: Omnigent)**
 
 > Dieses Dokument beschreibt die in den Vorarbeiten entwickelte Best-Practice-Architektur für agentengestützte Softwareentwicklung nach dem arc42-Template. „System“ ist hierbei das *socio-technische Gesamtsystem* aus Coding-Agenten, Menschen, Artefakten und Infrastruktur, das ein Softwareprodukt vom Zielbild bis zum Merge führt. Normative Anforderungen verwenden MUSS/SOLL/KANN; Phasen (P0–P6), Gates (G0–G5), Invarianten (I1–I6) und Spec-Management-Regeln (SM-1 bis SM-31) verweisen auf die Vorarbeiten und werden hier konsolidiert.
 

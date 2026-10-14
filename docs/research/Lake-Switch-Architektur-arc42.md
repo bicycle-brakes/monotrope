@@ -4,7 +4,7 @@ category: research
 status: current
 created: 2026-09-16
 last_reviewed: 2026-09-16
-updated: 2026-09-29
+updated: 2026-10-14
 owner: Data Architect
 provenance: ai-drafted-reviewed
 review:
@@ -23,7 +23,7 @@ tags: [research, arc42, lakeswitch, toolchain, wissensumgebung]
 |---|---|
 | **Version** | 4.0 |
 | **Status** | Review-fähig; vor Stufe 0 der Umsetzung |
-| **Datum** | 2026-09-17 |
+| **Datum** | 2026-09-16 |
 | **Autor** | Michael (mit KI-Unterstützung) |
 | **Ablageort** | `docs/architecture/toolchain.md` |
 | **Template** | arc42 (de), v8.2-Gliederung |
@@ -1101,7 +1101,7 @@ Nach deutschem Recht liegt das Urheberrecht an Software beim Entwickler; nur bei
 |---------|-------|----------|
 | 1.0–1.2 | bis 2026-09-15 | Erstentwurf; Prüfung gegen Omnigent v0.13.0; L4/L5 als verbundene Durchsetzungsschicht; ADR-0007 |
 | 2.0 | 2026-09-16 | Formalisierung nach arc42; zwei Logikfehler korrigiert (Push-Sync-Zeitpunkt, CODEOWNERS im Solo-Betrieb); Merge-Konflikt-Falle beim JSONL-Export behoben |
-| 2.1 | 2026-09-17 | Werkzeugstand 2026-09 aktualisiert: Omnigent v0.9–v0.13 (Smart Routing, Permission-Modes, `omni host`, Zufalls-Worktrees als Antipattern), Beads-Selbständigkeit als Risiko R15, `br` als gleichwertige Option in ADR-0005 |
-| 3.0 | 2026-09-17 | Konsolidierung mit Repo-Vorlage (UEBERGABE): MADR statt Nygard, LikeC4 als einzige C4-Quelle, Produkt-arc42 als zwölf Einzeldateien, P7/P8 neu, Bootstrapping-Stufe 0 |
-| 3.1 | 2026-09-17 | Obsidian als Wissensmanagement-Ebene ausdifferenziert: Inbox-Konvention, Dataview-Regel, Agenten-Ausschluss, Kurationspfad 6.4 |
-| 4.0 | 2026-09-17 | Best-Practice-Neuauflage: Review-Annotationen aus dem Fließtext entfernt, Entscheidungen nach Kapitel 9 (ADRs) verlagert, Risiken konsolidiert (R1–R21), Nummerierung bereinigt, Dokument-Metadatenblock nach arc42 |
+| 2.1 | 2026-09-16 | Werkzeugstand 2026-09 aktualisiert: Omnigent v0.9–v0.13 (Smart Routing, Permission-Modes, `omni host`, Zufalls-Worktrees als Antipattern), Beads-Selbständigkeit als Risiko R15, `br` als gleichwertige Option in ADR-0005 |
+| 3.0 | 2026-09-16 | Konsolidierung mit Repo-Vorlage (UEBERGABE): MADR statt Nygard, LikeC4 als einzige C4-Quelle, Produkt-arc42 als zwölf Einzeldateien, P7/P8 neu, Bootstrapping-Stufe 0 |
+| 3.1 | 2026-09-16 | Obsidian als Wissensmanagement-Ebene ausdifferenziert: Inbox-Konvention, Dataview-Regel, Agenten-Ausschluss, Kurationspfad 6.4 |
+| 4.0 | 2026-09-16 | Best-Practice-Neuauflage: Review-Annotationen aus dem Fließtext entfernt, Entscheidungen nach Kapitel 9 (ADRs) verlagert, Risiken konsolidiert (R1–R21), Nummerierung bereinigt, Dokument-Metadatenblock nach arc42 |
