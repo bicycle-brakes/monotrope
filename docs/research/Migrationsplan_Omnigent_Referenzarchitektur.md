@@ -16,17 +16,17 @@ tags: [research, migration, omnigent, referenzarchitektur]
 
 # Migrationsplan: Referenzarchitektur mit Omnigent instanziieren
 
-**Ziel:** Die arc42-Referenzarchitektur (Version 1.2) schrittweise in eine produktive Omnigent-Zieltopologie überführen — ohne Big Bang, ohne Unterbrechung laufender Arbeit, mit definierten Abbruchkriterien pro Stufe. Der Plan folgt dem Prozessgewichtungs-Prinzip der Architektur selbst (§8.2): Die Migration skaliert mit dem Risiko, nicht mit der Begeisterung.
+**Ziel:** Die arc42-Referenzarchitektur (Version 1.2) schrittweise in eine produktive Omnigent-Zieltopologie überführen — ohne Big Bang, ohne Unterbrechung laufender Arbeit, mit definierten Abbruchkriterien pro Adoptionsschritt (M0–M4). Der Plan folgt dem Prozessgewichtungs-Prinzip der Architektur selbst (§8.2): Die Migration skaliert mit dem Risiko, nicht mit der Begeisterung.
 
 **Grundprinzipien des Plans:**
 
-1. **Fallback bleibt geübt.** Die tmux/Beads-Fallback-Topologie (§8.10) bleibt bis zum Abschluss von Stufe 4 voll funktionsfähig; jede Stufe kann ohne Arbeitsverlust zurückgerollt werden, weil die Modellwahrheit in Repo und Arbeitsgraph liegt, nicht im Omnigent-Server (Deployment-Invariante, §7).
-2. **Jede Stufe hat Exit-Kriterien, keine Zeiträume.** Die Dauer hängt von Teamgröße und Nutzungsfrequenz ab; die Kriterien sind messbar und an die Qualitätsszenarien des arc42 (Q1–Q10) angelehnt.
-3. **Nichts wird parallel doppelt geführt.** Pro Stufe gibt es genau eine aktive Topologie pro Workflow-Klasse — doppelte Task-Verfolgung oder doppelte Gate-Kanäle sind verboten (AG-1-Geist).
+1. **Fallback bleibt geübt.** Die tmux/Beads-Fallback-Topologie (§8.10) bleibt bis zum Abschluss von M4 voll funktionsfähig; jeder Adoptionsschritt kann ohne Arbeitsverlust zurückgerollt werden, weil die Modellwahrheit in Repo und Arbeitsgraph liegt, nicht im Omnigent-Server (Deployment-Invariante, §7).
+2. **Jeder Adoptionsschritt hat Exit-Kriterien, keine Zeiträume.** Die Dauer hängt von Teamgröße und Nutzungsfrequenz ab; die Kriterien sind messbar und an die Qualitätsszenarien des arc42 (Q1–Q10) angelehnt.
+3. **Nichts wird parallel doppelt geführt.** Pro Adoptionsschritt gibt es genau eine aktive Topologie pro Workflow-Klasse — doppelte Task-Verfolgung oder doppelte Gate-Kanäle sind verboten (AG-1-Geist).
 
 ---
 
-## Stufe 0: Voraussetzungen und POC (1–2 Wochen)
+## M0: Voraussetzungen und POC (1–2 Wochen)
 
 **Ziel:** Technische Machbarkeit beweisen, Reife-Risiken (§11: Alpha-Reife, CVE-Historie) an einem nicht-kritischen Pfad vermessen.
 
@@ -48,7 +48,7 @@ tags: [research, migration, omnigent, referenzarchitektur]
 
 ---
 
-## Stufe 1: Bounded-Klasse produktiv (2–4 Wochen)
+## M1: Bounded-Klasse produktiv (2–4 Wochen)
 
 **Ziel:** Erster echter Arbeitsfluss — die risikoärmste Aufgabenklasse (Bounded: G1 kurz + G5, §8.2) läuft vollständig in der Omnigent-Topologie.
 
@@ -70,7 +70,7 @@ tags: [research, migration, omnigent, referenzarchitektur]
 
 ---
 
-## Stufe 2: Feature-Pfad mit Cross-Vendor-Review (4–8 Wochen)
+## M2: Feature-Pfad mit Cross-Vendor-Review (4–8 Wochen)
 
 **Ziel:** Der volle Gate-Pfad (G1–G5) läuft für die Feature-Klasse in der Zieltopologie — inklusive der anspruchsvollsten Neuerung: G4 als Cross-Vendor-Review.
 
@@ -87,15 +87,15 @@ tags: [research, migration, omnigent, referenzarchitektur]
 - G4-Cross-Vendor-Review hat mindestens einen echten Befund gefunden, den die Selbstprüfung des Implementierers nicht gefunden hatte (Wirksamkeitsnachweis von I4 — sonst Konfiguration prüfen: gleicher Vendor? gleicher Kontext?).
 - Q10-Checkliste für den Nachtmodus-Probelauf vollständig grün, inklusive Spend-Cap-Wirksamkeit.
 - Drift-Audit ohne blockierende Befunde (oder Realign-Changes abgeschlossen ≤ 5 Arbeitstage, Q4).
-- Q2-Stichprobe: Ein Außenstehender rekonstruiert ein Feature der Stufe allein aus dem Repo in < 10 Minuten.
+- Q2-Stichprobe: Ein Außenstehender rekonstruiert ein Feature dieses Adoptionsschritts allein aus dem Repo in < 10 Minuten.
 
 **Abbruchkriterien:** Cross-Vendor-Review erweist sich als nicht betreibbar (Lizenz-/Setup-Hürden) — dann G4 auf interne Reviewer-Session mit verschärfter Kontext-Trennung zurückstufen und als technische Schuld in §11 eintragen; wiederholte Eskalations-Stürme am G4 (Review-Flut statt Review-Qualität → Befundschwellen und Input-Kurierung nachschärfen).
 
 ---
 
-## Stufe 3: Nachtmodus und Parallelität als Standard (laufend)
+## M3: Nachtmodus und Parallelität als Standard (laufend)
 
-**Ziel:** Unbeaufsichtigte Läufe und parallele Multi-Task-Ausführung werden Routine — die Stufe, in der die Zieltopologie ihren eigentlichen Produktivitätsgewinn entfaltet.
+**Ziel:** Unbeaufsichtigte Läufe und parallele Multi-Task-Ausführung werden Routine — der Adoptionsschritt, in dem die Zieltopologie ihren eigentlichen Produktivitätsgewinn entfaltet.
 
 **Schritte:**
 
@@ -111,7 +111,7 @@ tags: [research, migration, omnigent, referenzarchitektur]
 
 ---
 
-## Stufe 4: Härtung, Vollausbau und Fallback-Abbau (nach Bedarf)
+## M4: Härtung, Vollausbau und Fallback-Abbau (nach Bedarf)
 
 **Ziel:** Die optionale Evidenzebene aus dem Lösungsdokument nachrüsten und den Fallback von „geübt" auf „dokumentiert" herunterfahren.
 
@@ -125,22 +125,22 @@ tags: [research, migration, omnigent, referenzarchitektur]
 
 ---
 
-## Übersicht: Stufen, Gates, Messlatten
+## Übersicht: Adoptionsschritte, Gates, Messlatten
 
-| Stufe | Scope | Zentrale neue Fähigkeit | Messlatte (arc42-Referenz) | Rollback |
+| Adoptionsschritt | Scope | Zentrale neue Fähigkeit | Messlatte (arc42-Referenz) | Rollback |
 |---|---|---|---|---|
-| 0 — POC | Test-Repo, keine Produktivarbeit | Policies feuern nachweislich (Non-Vacuity), Beads-Schleife, Telemetrie aus | Testprotokolle vollständig | tmux-Übung |
-| 1 — Bounded | 1 Repo, Bounded-Klasse | Erster echter Fluss, Mobile-Approval, Spend-Cap, KB-10-Baseline | Q5 (≤ 10 min), Q8 (≤ 15 %) | Stufe-0-Zustand |
-| 2 — Feature | Feature-Klasse, voller Gate-Pfad | Cross-Vendor-G4, normierter Verifikations-Report, Nachtmodus-Probe | Q1, Q2, Q4, Q10; G4-Wirksamkeitsnachweis | G4-Intern-Variante |
-| 3 — Nachtmodus/Parallel | Dauerbetrieb | Cloud-Sandbox-Nachtläufe, Multi-Worktree-Parallelität, optional Polly | ≥ 1 PR/Woche aus Nachtläufen, G5-Ritual ≤ 15 min | Tagesbetrieb Stufe 2 |
-| 4 — Härtung | Alle Klassen | Mutation-Gate, Attestierungen, Traceability-Matrix im CI | Lücken-Dokument Kap. 6 | Fallback als DR-Pfad |
+| M0 — POC | Test-Repo, keine Produktivarbeit | Policies feuern nachweislich (Non-Vacuity), Beads-Schleife, Telemetrie aus | Testprotokolle vollständig | tmux-Übung |
+| M1 — Bounded | 1 Repo, Bounded-Klasse | Erster echter Fluss, Mobile-Approval, Spend-Cap, KB-10-Baseline | Q5 (≤ 10 min), Q8 (≤ 15 %) | M0-Zustand |
+| M2 — Feature | Feature-Klasse, voller Gate-Pfad | Cross-Vendor-G4, normierter Verifikations-Report, Nachtmodus-Probe | Q1, Q2, Q4, Q10; G4-Wirksamkeitsnachweis | G4-Intern-Variante |
+| M3 — Nachtmodus/Parallel | Dauerbetrieb | Cloud-Sandbox-Nachtläufe, Multi-Worktree-Parallelität, optional Polly | ≥ 1 PR/Woche aus Nachtläufen, G5-Ritual ≤ 15 min | Tagesbetrieb M2 |
+| M4 — Härtung | Alle Klassen | Mutation-Gate, Attestierungen, Traceability-Matrix im CI | Lücken-Dokument Kap. 6 | Fallback als DR-Pfad |
 
-**Querschnittsregeln für alle Stufen:**
+**Querschnittsregeln für alle Adoptionsschritte:**
 
 - **Versions-Pinning mit Upgrade-Prozess (ADW-D17):** Omnigent-Upgrades nur nach Changelog-Lektüre und Test-Deployment; kein Auto-Update auf dem Produktiv-Server. Dasselbe gilt für `bd` (AG-6) und Aider.
 - **Policy-Änderungen sind Regelwerk-Änderungen:** Sie durchlaufen den menschlich reviewten PR-Pfad (§8.4) — nie direkt auf dem Server editiert.
 - **Keine zwei aktiven Topologien pro Workflow-Klasse:** Eine Klasse ist entweder migriert oder nicht; Mischzustände innerhalb einer Klasse erzeugen doppelte Wahrheiten.
-- **Jede Stufe endet mit einer Retrospektive im Repo:** Befunde, Policy-Nachschärfungen und Reife-Beobachtungen (Alpha-Risiko!) werden als Change-Dokument abgelegt — die Migration selbst unterliegt denselben Artefakt-Regeln wie jede andere Arbeit am System (I1 gilt auch für den Migrationsprozess).
+- **Jeder Adoptionsschritt endet mit einer Retrospektive im Repo:** Befunde, Policy-Nachschärfungen und Reife-Beobachtungen (Alpha-Risiko!) werden als Change-Dokument abgelegt — die Migration selbst unterliegt denselben Artefakt-Regeln wie jede andere Arbeit am System (I1 gilt auch für den Migrationsprozess).
 
 ---
 
