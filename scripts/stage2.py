@@ -25,7 +25,7 @@ Each loop round and the probe check `pi --version` against `PI_VERSION` first;
 any other answer refuses with exit 2 before the leak check and before any call.
 
 `explore`, `implement` and `repair` accept `--stage2-off [REASON]`: the declared
-Stage-1 route uses Haiku 4.5 or Sonnet 5.5. A leak refusal never falls back.
+Stage-1 route uses Haiku 5.5 or Sonnet 5.5. A leak refusal never falls back.
 Implement lets the model edit but not run commands; before `make verify` the
 runner applies ruff's safe fixes and its formatter to the changed Python files
 under `scripts/` and `tests/`, then runs `make verify`, checks the time log and
@@ -149,7 +149,7 @@ REPO_ROOT = Path(__file__).resolve().parent.parent
 GLM_FLASH = ("glm-coding-plan", "glm-5.3-flash", "max")
 # GLM 5.3, not Flash: the draft's fallback routes here (the repair did until ADR 0017), shared with stage2_runs.py.
 GLM = ("glm-coding-plan", "glm-5.3", "max")
-HAIKU = ("claude-code-plan", "claude-haiku-4-5", None)
+HAIKU = ("claude-code-plan", "claude-haiku-5-5", None)
 SONNET = ("claude-code-plan", "claude-sonnet-5-5", "medium")
 CODEX = ("openai-codex", "gpt-6.1-sol", "max")
 # Opus 5.5, the spec review (2a) since ADR 0016: the strongest review on the repository's highest-demand effort.

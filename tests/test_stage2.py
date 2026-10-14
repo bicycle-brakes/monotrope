@@ -825,11 +825,12 @@ def test_explore_stage2_off_uses_haiku_without_reading_the_glm_key(
     assert world.run("explore", "demo", "--stage2-off", "Z.ai unavailable") == 0
     call = world.calls("claude")[0]
     argv, env = call["argv"], call["env"]
-    assert argv[argv.index("--model") + 1] == "claude-haiku-4-5"
+    assert argv[argv.index("--model") + 1] == "claude-haiku-5-5"
     assert "--effort" not in argv
     assert "ANTHROPIC_BASE_URL" not in env and "ANTHROPIC_AUTH_TOKEN" not in env
     text = world.research.read_text(encoding="utf-8")
     assert "route stage-1" in text and "reason Z.ai unavailable" in text
+    assert "model claude-haiku-5-5" in text
 
 
 def test_explore_scrubs_the_flash_credential_from_its_answer(world: World) -> None:
@@ -6608,15 +6609,15 @@ def test_the_explore_prompt_names_the_live_flash_command_and_haiku_fallback() ->
     for required in (
         "stage2.py explore <change>",
         "--stage2-off [REASON]",
-        "Haiku 4.5 explores",
+        "Haiku 5.5 explores",
         "leak-check BLOCK stops",
         "never falls back",
     ):
         assert required in line
-    for planted in ("Haiku 4.5 — much input", "GLM 5.3 Flash — much input; Haiku 4.5 explores"):
+    for planted in ("Haiku 5.5 — much input", "GLM 5.3 Flash — much input; Haiku 5.5 explores"):
         bad = model_line(f"**Model:** {planted}\n**Input:** x\n")
         assert not all(
-            phrase in bad for phrase in ("stage2.py explore <change>", "--stage2-off [REASON]", "Haiku 4.5 explores")
+            phrase in bad for phrase in ("stage2.py explore <change>", "--stage2-off [REASON]", "Haiku 5.5 explores")
         ), planted
 
 

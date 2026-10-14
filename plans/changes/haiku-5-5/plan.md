@@ -57,3 +57,9 @@ The prompt's `python3 scripts/validate_change_artefacts.py --check` cannot run a
 - 4: not a test — `python3 scripts/kit/probe.py --strict` fails on the stale 4.5 key or an unexplained 5.5 case.
 
 ## Time used
+
+2026-10-14, implement attempt 1 (Stage 2, route flash, `glm-5.3-flash`): the
+clock was not readable — this attempt runs with file tools and no command tool,
+so no `date` could be read and start/end/span stand unmeasured; the runner's
+record may complete the span. One span, no break: the plan's Changes list,
+tests and production moved together.

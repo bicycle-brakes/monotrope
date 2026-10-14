@@ -118,7 +118,7 @@ REIST_NICHT: dict[str, str] = {
     "tests.test_model_endpoints::test_every_model_in_a_phase_prompt_resolves[03-plan.md-gpt-6.1-sol]": "bestand-dieses-repos",
     "tests.test_model_endpoints::test_every_model_in_a_phase_prompt_resolves[04-implement.md-GLM 5.3 Flash]": "bestand-dieses-repos",
     "tests.test_model_endpoints::test_every_model_in_a_phase_prompt_resolves[06-review.md-Opus 5.5]": "bestand-dieses-repos",
-    "tests.test_model_endpoints::test_every_model_in_a_phase_prompt_resolves[07-commit.md-Haiku 4.5]": "bestand-dieses-repos",
+    "tests.test_model_endpoints::test_every_model_in_a_phase_prompt_resolves[07-commit.md-Haiku 5.5]": "bestand-dieses-repos",
     "tests.test_model_endpoints::test_every_model_in_the_routing_table_resolves": "bestand-dieses-repos",
     "tests.test_model_endpoints::test_no_old_reviewer_remark_claims_a_review_phase": "bestand-dieses-repos",
     "tests.test_model_endpoints::test_no_remark_routes_the_spec_review_to_codex": "bestand-dieses-repos",

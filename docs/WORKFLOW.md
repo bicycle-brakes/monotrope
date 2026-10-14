@@ -4,7 +4,7 @@ category: governance
 status: current
 created: 2026-09-05
 last_reviewed: 2026-09-29
-updated: 2026-10-13
+updated: 2026-10-14
 owner: Data Architect
 provenance: ai-drafted-reviewed
 produced_by:
@@ -434,7 +434,7 @@ none, because the registry keeps counting it as protection.
 
 | Phase | Model | Why |
 |---|---|---|
-| 1 Explore | **Haiku 4.5** | much input, little output, no deep reasoning; where the runner starts the phase (§4), GLM 5.3 Flash explores instead |
+| 1 Explore | **Haiku 5.5** | much input, little output, no deep reasoning; where the runner starts the phase (§4), GLM 5.3 Flash explores instead |
 | 1a Interview | **Opus 5.5** | the questions are the work, and there are few of them |
 | 2 Spec | **Opus 5.5** | effort `xhigh`; the highest reasoning demand, little output; where the runner drafts (§4), `gpt-6.1-sol` at effort `max` writes it instead |
 | 2a Spec review | **Opus 5.5** | a fresh context that does not know the author's reasoning; where the runner starts it (§4), a headless Claude Code call |
@@ -443,7 +443,7 @@ none, because the registry keeps counting it as protection.
 | 4 Implement | **Sonnet 5.5** | effort `medium`; a solid worker given a clear plan; where the runner starts the phase (§4), GLM 5.3 Flash builds instead |
 | 5 Verify | — | deterministic |
 | 6 Review | **Opus 5.5** | finds what Sonnet misses, and reads the code a change calls instead of trusting its docstring; a `bounded`, `feature` or `architectural` change goes to Codex (§4) |
-| 7 Commit | **Haiku 4.5** | cheap and sufficient |
+| 7 Commit | **Haiku 5.5** | cheap and sufficient |
 
 **No Fable** (maintainer, 2026-10-06): no phase runs on Fable 5.1; Opus 5.5
 takes its places — the interview, the escalation below and the fallback of
@@ -699,7 +699,7 @@ on GLM 5.3 Flash with read/search tools; `implement` starts phase 4 with file
 read/search/edit/write tools but no shell. The runner, not the implementation
 model, runs `make verify`, checks for a measured line below `## Time used` and
 makes the local checkpoint commit. An explicit `--stage2-off [REASON]` uses
-§3's Haiku 4.5 or Sonnet 5.5 route and records why. A leak refusal always stops
+§3's Haiku 5.5 or Sonnet 5.5 route and records why. A leak refusal always stops
 the call; it never selects the fallback.
 If the model process itself fails, the runner restores the worktree to the
 baseline commit (every path except the change's `findings.md`), says what it
@@ -720,7 +720,7 @@ A foreign model is started only through `python3 scripts/stage2.py <verb>
 <change>`, never by typing `codex`, `pi`, or `claude` against another endpoint,
 into a shell. Ten verbs exist:
 
-- `explore` — GLM 5.3 Flash, phase 1; `--stage2-off [REASON]` uses Haiku 4.5.
+- `explore` — GLM 5.3 Flash, phase 1; `--stage2-off [REASON]` uses Haiku 5.5.
 - `draft` — Codex, phases 2, 2b and 3 in one call; GLM 5.3 (`glm-5.3`) after
   two failed Codex attempts ("The draft" below).
 - `spec-review` — Opus 5.5, phase 2a, a headless call with read-only tools and
@@ -1076,7 +1076,7 @@ test. **After the third run, a short evaluation is written under
 falls back to Opus 5.5 until the maintainer decides again** — a taken finding
 of a rung counts like a GLM finding counted before 2026-10-07, a Codex one
 still counts as ADR 0007 set it, and
-Opus 5.5 reviews every change, and phases 1 and 4 return to §3's Haiku 4.5 and
+Opus 5.5 reviews every change, and phases 1 and 4 return to §3's Haiku 5.5 and
 Sonnet 5.5. The rule is written, not counted by a script: a person reads the
 evaluation, and its pull request applies the fallback. This replaces the three measured runs that
 D-13 asked for before the first foreign call; what the replacement gives up is
