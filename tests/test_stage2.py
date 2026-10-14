@@ -6341,20 +6341,37 @@ def effort_reference(verb: str) -> str:
     return f'[`CODEX_EFFORTS["{verb}"]`](../scripts/stage2.py)'
 
 
-def sol_clause(text: str) -> str:
-    """From Sol's model id to the next model's mention, so another model's effort stays outside (Q-5)."""
-    start = text.find("gpt-6.1-sol")
-    rest = text[start + len("gpt-6.1-sol") :] if start >= 0 else text
-    stop = OTHER_MODEL.search(rest)
-    return rest[: stop.start()] if stop else rest
+SOL_MODEL = re.compile(r"gpt-6\.1-sol|\bSol\b|\bCodex\b")
 
 
-def sol_effort_clause_problems(clause: str, verb: str, where: str) -> list[str]:
-    """One Sol clause must reference its verb's central entry and name no independent effort value."""
+def sol_clauses(text: str) -> list[str]:
+    """Read every Sol mention up to the next model, sentence, row or paragraph (Q-5)."""
+    clauses = []
+    for paragraph in re.split(r"\n\s*\n|\n(?=\|)|(?<=[.!?])\s+", text):
+        mentions = list(SOL_MODEL.finditer(paragraph))
+        for index, mention in enumerate(mentions):
+            end = mentions[index + 1].start() if index + 1 < len(mentions) else len(paragraph)
+            rest = paragraph[mention.end() : end]
+            stop = OTHER_MODEL.search(rest)
+            clauses.append(rest[: stop.start()] if stop else rest)
+    return clauses
+
+
+def sol_effort_clause_problems(text: str, verb: str | None, where: str) -> list[str]:
+    """Check each Sol effort independently; another mention cannot supply its reference."""
     found = []
-    if (literal := EFFORT_LITERAL.search(clause)) is not None:
-        found.append(f"{where} sets Sol's effort independently ({literal.group(0)})")
-    if effort_reference(verb) not in clause:
+    clauses = sol_clauses(text) or [text]  # A routing row's model can be in the preceding cell.
+    checked = False
+    for clause in clauses:
+        if not re.search(r"\beffort\b", clause):
+            continue
+        checked = True
+        if (literal := EFFORT_LITERAL.search(clause)) is not None:
+            found.append(f"{where} sets Sol's effort independently ({literal.group(0)})")
+        references = [effort_reference(verb)] if verb else [effort_reference(key) for key in stage2.CODEX_EFFORTS]
+        if not any(reference in clause for reference in references):
+            found.append(f"{where} does not reference {references}")
+    if verb and not checked:
         found.append(f"{where} does not reference {effort_reference(verb)}")
     return found
 
@@ -6373,35 +6390,40 @@ def sol_texts(doc: str, text: str) -> tuple[str, dict[str, str]]:
 def sol_effort_problems(workflow: str, prompts: dict[str, str]) -> list[str]:
     """Every active Sol effort clause references its verb's entry of `CODEX_EFFORTS` (spec, criteria 4-6)."""
     found = []
+    # New prose and later mentions in existing rows are active instructions too.
+    for title in ("## 3 · ", "## 4 · "):
+        for clause in sol_clauses(section(workflow, title)):
+            if re.search(r"\beffort\b", clause):
+                found += sol_effort_clause_problems(clause, None, title)
     rows_3 = routing_rows(section(workflow, "## 3 · "))
     for phase, verb in SOL_ROUTING_VERBS.items():
         row = routing_rows(section(workflow, "## 4 · ")).get(phase)
         if row is None:
             found.append(f"section 4 has no routing row {phase}")
         else:
-            found += sol_effort_clause_problems(sol_clause(row[1]), verb, f"section 4 routes {phase}")
+            found += sol_effort_clause_problems("gpt-6.1-sol " + row[1], verb, f"section 4 routes {phase}")
     for phase in ("2 Spec", "2b Design", "3 Plan"):  # §3 routes these to Opus and defers review's Sol clause to §4
         stage_1 = rows_3.get(phase)
         if stage_1 is None:
             found.append(f"section 3 has no routing row {phase}")
         else:
-            found += sol_effort_clause_problems(sol_clause(stage_1[1]), "draft", f"section 3 routes {phase}")
+            found += sol_effort_clause_problems(stage_1[1], "draft", f"section 3 routes {phase}")
     line = next((row for row in section(workflow, "## 4 · ").splitlines() if row.startswith(REPAIR_ROW_LABEL)), "")
     cells = stage2.split_row(line) or []
     if len(cells) != 3 or cells[1] != "**gpt-6.1-sol**":
         found.append("section 4 has no repair row for gpt-6.1-sol")
     else:
-        found += sol_effort_clause_problems(sol_clause(cells[2]), "repair", "section 4 routes the repair")
+        found += sol_effort_clause_problems("gpt-6.1-sol " + cells[2], "repair", "section 4 routes the repair")
     draft = section(workflow, "### The draft (phases 2, 2b and 3)")
     prose = flat(draft.partition("A drafted change runs in this order:")[0])
-    found += sol_effort_clause_problems(sol_clause(prose), "draft", "the draft prose")
+    found += sol_effort_clause_problems(prose, "draft", "the draft prose")
     for name, verb in (
         ("02-spec.md", "draft"),
         ("02b-design.md", "draft"),
         ("03-plan.md", "draft"),
         ("06-review.md", "review"),
     ):
-        found += sol_effort_clause_problems(sol_clause(model_line(prompts[name])), verb, f"{name}'s Model paragraph")
+        found += sol_effort_clause_problems(model_line(prompts[name]), verb, f"{name}'s Model paragraph")
     return found
 
 
@@ -6455,7 +6477,7 @@ def routing_problems(workflow: str) -> list[str]:
                 found.append(f"section 4 gives {phase} no effort `xhigh`")
         elif phase in SOL_ROUTING_VERBS:
             found += sol_effort_clause_problems(
-                sol_clause(row[1]), SOL_ROUTING_VERBS[phase], f"section 4 routes {phase}"
+                "gpt-6.1-sol " + row[1], SOL_ROUTING_VERBS[phase], f"section 4 routes {phase}"
             )
         elif not model.endswith("Flash") and "effort `max`" not in row[1]:
             found.append(f"section 4 gives {phase} no effort `max`")
@@ -6607,6 +6629,33 @@ def test_sol_effort_checks_allow_other_models_in_the_same_instruction() -> None:
     assert "Sonnet 5.5 at effort `medium`" in line, "the row does not mix another model's effort in"
     mixed = workflow.replace(line, line[:-2] + "; Sonnet 5.5 drafts by hand at effort `medium` |", 1)
     assert sol_effort_problems(mixed, prompts) == [], "another model's effort is rejected"
+    for model in ("`gpt-6.1-sol`", "Sol", "Codex"):
+        later = f"; {model} repairs at effort `high`"
+        planted = mixed.replace(
+            "; Sonnet 5.5 drafts by hand at effort `medium` |",
+            "; Sonnet 5.5 drafts by hand at effort `medium`" + later + " |",
+            1,
+        )
+        assert sol_effort_problems(planted, prompts), "a later independent Sol effort passes"
+        valid = planted.replace(later, f"; {model} repairs at effort {effort_reference('repair')}", 1)
+        assert sol_effort_problems(valid, prompts) == [], "a later central Sol reference is rejected"
+        wrong_later = valid.replace(
+            f"; {model} repairs at effort {effort_reference('repair')}",
+            f"; {model} repairs at effort {effort_reference('review')}",
+            1,
+        )
+        assert sol_effort_problems(wrong_later, prompts), "a later wrong Sol reference passes"
+        prose = f"\n\n{model} reviews at effort `high`.\n\n"
+        planted = workflow.replace(
+            "### The draft (phases 2, 2b and 3)", prose + "### The draft (phases 2, 2b and 3)", 1
+        )
+        assert sol_effort_problems(planted, prompts), "new prose with an independent Sol effort passes"
+    for name, text in prompts.items():
+        planted = re.sub(
+            r"(^\*\*Model:\*\*.*?)(?=^\*\*[A-Z])", r"\1Codex runs at effort `high`.\n", text, count=1, flags=re.M | re.S
+        )
+        assert planted != text, name
+        assert sol_effort_problems(workflow, {**prompts, name: planted}), name
     wrong = workflow.replace(line, line.replace(effort_reference("repair"), effort_reference("review"), 1), 1)
     assert sol_effort_problems(wrong, prompts), "a wrong Sol reference passes"
     planted = prompts["02b-design.md"].replace(effort_reference("draft"), effort_reference("review"), 1)

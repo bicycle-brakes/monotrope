@@ -4,7 +4,7 @@ status: draft
 implementation_status: none
 date: 2026-10-14
 last_reviewed: 2026-10-14
-updated: 2026-10-14
+updated: 2026-10-15
 supersedes: null
 superseded_by: null
 bead: coding-harness-yzk
@@ -155,3 +155,14 @@ start, end and span unreadable — this session runs without a command tool, so
 `date` could not be read and no time was estimated; the runner's audit line in
 `findings.md` dates the session. The one-hour appetite is measured by the
 orchestrator's readings, not by this record.
+
+2026-10-15 00:36:27–00:42:13 +0200, 5m 46s — measured repair session
+for L1-1. Only the doctrine test helpers and their planted faults changed;
+no production logic moved. The current targeted doctrine run passed all 15
+cases; criterion-ledger and `git diff --check` passed. The full test-file run
+loaded an intermediate version before the prompt mutation was corrected:
+511 passed, one failed; the corrected case and the other 14 doctrine cases
+passed again afterwards. Running the new mutation against the baseline's
+doctrine helpers refuted them on the added independent Sol prose sentence.
+The runner owns the final `make verify`, checkpoint commit and handover;
+this repair made no git or tracker writes.

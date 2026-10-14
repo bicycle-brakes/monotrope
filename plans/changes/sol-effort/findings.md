@@ -283,3 +283,5 @@ Stage-2 call, 2026-10-15: repair · attempt 3 · route stage-1 · endpoint claud
 > - Runner format before `make verify`: ruff changed `scripts/stage2.py`.
 > - `plan.md` did not add a measured line below `## Time used`
 > ```
+
+Stage-2 call, 2026-10-15: repair · attempt 1 · route codex · endpoint openai-codex · model gpt-6.1-sol · leak check clean over 422 files, 1166 commits, 12 rules.
