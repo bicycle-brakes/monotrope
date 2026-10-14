@@ -125,3 +125,37 @@ template; the plan uses the phase-3 prompt's prescribed form and the existing
 plan conventions. The findings file contains draft-attempt audit evidence,
 with no phase-2a rows to resolve. This research records no Stage-1 Explore
 route to carry forward.
+
+## Redraft evidence — 2026-10-14, at `9943b8f`
+
+The current decisions file records six distinct maintainer answers. The
+later answers split the ADR amendments into their own change, require one
+central effort setting per Sol verb, limit the resumed-call proof to argv,
+and restrict Sol doctrine checks to Sol's part of a mixed-model instruction
+(Q-3 to Q-6). The four phase-2a rows now have those answers as inputs; the
+earlier observation that only two answers existed describes the earlier
+draft, not this redraft.
+
+The runtime still has a single effort-bearing `CODEX` tuple. Its endpoint
+identity is compared in draft, repair and repair-prompt selection;
+`stage2_runs.FOREIGN_ROUTES` also imports it. The declaration and audit
+functions read only its endpoint and model, while `run_codex` reads its
+effort. Keeping the identity and moving effort lookup to the caller's verb
+therefore requires no edit to the endpoint registry or run coordinator
+(`scripts/stage2.py`, `scripts/stage2_runs.py`, read on 2026-10-14).
+
+The active drafting prose also repeats `max`, outside the tables. The
+doctrine helper `routing_rows` recognizes numeric phase labels and does not
+cover the repair row, whose first cell is words; the repair row and the
+section-3 Opus rows mix Sol with another model's effort. These are separate
+coverage points for the new reference checks (`docs/WORKFLOW.md`, "The
+draft (phases 2, 2b and 3)" and the routing tables;
+`tests/test_stage2.py`, `routing_rows` and `routing_problems`).
+
+The plan template and change-artefact validator are still absent. The named
+validator command exited 2 because its file does not exist. The interview
+and criterion-ledger gates ran successfully before edits. A full plans
+registry check would render the shared tracker outside this worktree:
+`BEAD_RENDER` is unset, so it remains with the runner under this call's
+reading boundary. The recorded current PR is #143 (Q-3); its live state
+could not be read because the connection to GitHub failed.

@@ -15,16 +15,15 @@ review: {status: pending, approved_by: null, approved_at: null}
 tags: [spec, stage2, codex, effort]
 class: bounded
 appetite: 1
-adr_files:
-  - docs/adr/0016-codex-drafts-and-opus-reviews-the-spec.md
-  - docs/adr/0017-codex-repairs-taken-findings.md
+adr_files: []
 ---
 
 # Spec — sol-effort
 
-Sol drafts and reviews at effort `high` and repairs at effort `medium`,
-with the existing runner contracts retained (bead coding-harness-yzk).
-Sources: [research](research.md) and [decisions](decisions.md), Q-1 and Q-2.
+Sol's effort is set once per runner verb, initially `high` for drafting and
+review and `medium` for repair, and instructions and tests follow that setting
+(bead coding-harness-yzk). Sources: [research](research.md) and
+[decisions](decisions.md), Q-1 to Q-6.
 
 ## Problem
 
@@ -36,43 +35,57 @@ repair and drafting or review (research, "The request" and "Where it
 stands", read at `135cb8e` on 2026-10-13 and checked at `9113a3d` on
 2026-10-14).
 
-The workflow tables, four phase prompts and the two governing ADRs still
-describe Sol at `max`; the doctrine regression also requires it. Changing
-only the launch would leave the instructions and checks describing a
-different policy (research, "Where it stands" and "Draft preparation").
+The workflow tables, drafting prose and four phase prompts repeat Sol's
+effort, and launch and doctrine regressions repeat `max`. Changing only the
+launch would leave contradictory instructions; replacing all literals would
+still require several edits for the next adjustment. The maintainer instead
+asked for one central parameter that runner, instructions and tests follow
+(research, "Where it stands"; decisions, Q-4). ADR amendments are deferred
+to their own change by the maintainer's later answer (decisions, Q-3).
 
 ## Terms
 
 **Sol** means `gpt-6.1-sol` on the declared `openai-codex` endpoint.
 **Draft** includes spec, design when due, and plan in one runner call.
-**Active instructions** excludes dated historical evidence and the original
-ADR decision text that a dated amendment explicitly supersedes.
+**Initial settings** means the effort values this change ships, fixed by Q-1;
+a later deliberate adjustment uses the same central declaration.
+**Active instructions** means Sol effort instructions in the workflow's
+section-3 and section-4 tables and prose, including "The draft (phases 2, 2b
+and 3)", and in the Model paragraphs of the spec, design, plan and review
+prompts. It excludes dated evidence, change artifacts and the ADR text whose
+amendment Q-3 explicitly defers.
 
 ## Acceptance criteria
 
-1. When `stage2.py draft` invokes Sol, every attempt uses effort `high`.
-   *Refuted by:* either the initial call or the `codex-repair` retry passes
-   another effort or leaves the effort to the CLI default.
-2. When `stage2.py repair` invokes Sol, every attempt uses effort `medium`.
-   *Refuted by:* either fresh Codex attempt passes `high`, `max` or no
-   explicit effort.
-3. When `stage2.py review` invokes Sol, every verdict or loop-marks call
-   uses effort `high`.
+1. When `stage2.py draft` invokes Sol with the initial settings, every
+   attempt explicitly passes reasoning effort `high`.
+   *Refuted by:* the initial call or its `codex-repair` retry passes another
+   effort or leaves it to the CLI default.
+2. When `stage2.py repair` invokes Sol with the initial settings, every
+   attempt explicitly passes reasoning effort `medium`.
+   *Refuted by:* either fresh Codex attempt passes another effort or omits
+   the override.
+3. When `stage2.py review` invokes Sol with the initial settings, every
+   verdict or loop-marks call explicitly passes reasoning effort `high`.
    *Refuted by:* a fresh, historically resumed, repeated-review or resumed
-   loop-marks call passes another effort or omits the pin.
-4. When active workflow tables or the Model lines of the spec, design,
-   plan and review prompts describe Sol, their efforts match the agreed
-   per-verb policy.
-   *Refuted by:* a Sol draft/design/plan/review instruction still says `max`
-   or `medium`, or a Sol repair instruction says anything but `medium`.
-5. When this change is ready for merge, ADR 0016 contains a dated amendment
-   stating that `high` supersedes `max` for Sol drafting.
-   *Refuted by:* the amendment is missing, undated or assigns another
-   drafting effort.
-6. When this change is ready for merge, ADR 0017 contains a dated amendment
-   stating `medium` for Sol repairs and `high` for phase-6 reviews.
-   *Refuted by:* either effort is missing or wrong, or the amendment is
-   missing or undated.
+   loop-marks argv passes another effort or omits the pin; the effort actually
+   used inside a resumed thread is not asserted (Q-6).
+4. When an active instruction describes Sol's effort, it references the
+   central setting for that instruction's runner verb.
+   *Refuted by:* a table, drafting prose sentence or Model paragraph supplies
+   an independent Sol effort value, omits the reference or points to the wrong
+   verb; spec, design and plan all belong to `draft` (Q-4).
+5. When one supported Sol effort is changed in the central declaration, the
+   next runner invocation of that verb passes the new setting without edits
+   to instructions or tests.
+   *Refuted by:* another operational default must be edited, a retry or resume
+   retains the old setting, or a correct adjustment breaks tests that repeat
+   the old value (Q-4).
+6. When a Sol effort check reads an instruction naming several models, it
+   assesses only the effort reference associated with Sol.
+   *Refuted by:* a valid Sol reference is rejected because Opus or Sonnet has
+   its own literal effort, or a wrong Sol reference passes because another
+   model has a correct effort (Q-5).
 7. When `stage2.py session` launches interactive Codex, the runner supplies
    no reasoning-effort override.
    *Refuted by:* an effort flag or configuration override is added to that
@@ -86,53 +99,57 @@ ADR decision text that a dated amendment explicitly supersedes.
   rules, sandboxes, leak checks, evidence, checkpoints or audit formats.
 - Changing any non-Sol effort, including GLM, the OpenCode Go ladder,
   Opus and Stage-1 fallbacks, or selecting an interactive-session default.
-- Creating a new ADR or rewriting historical decisions and findings.
+- Creating or amending an ADR: the dated amendments to ADR 0016 and ADR 0017
+  follow in their own change after its interview prerequisite is met (Q-3).
+- Rewriting historical evidence or introducing a general model configuration
+  system, a new CLI option or an environment override.
 - A design artifact: this bounded configuration change adds no subsystem
   or boundary; phase 2b does not run for its class.
 
 ## Protected areas
 
-Keep the interactive runner, endpoint declaration, permissions, provenance,
-gates, decision answers and decision-continuity map unchanged. Other change
-folders and historical ADR decision bodies stay intact: the new policy is
-recorded by this change's claimed amendments, not by altering earlier
-criteria or removing correct ADR claims.
+Keep `scripts/stage2_session.py`, `model-endpoints.yaml`, `AGENTS.md`,
+permissions, provenance, gates, decision answer files and the
+decision-continuity map unchanged: this change adjusts effort, not authority
+or routing. Other change folders and all ADR files stay intact under Q-3.
+The six maintainer answers in this change's `decisions.md` are inputs, not
+editable defaults.
 
 ## Definition of Done
 
-- `make verify` is green, and argv and doctrine regressions cover retries,
-  resumed calls and each dated amendment with refuting cases.
+- `make verify` is green; argv and doctrine regressions cover retries,
+  resumed calls, central-setting changes and the active prose with refuting
+  cases. Phase 6 independently compares the shipped defaults to criteria 1–3.
 - The same PR updates `scripts/stage2.py`, `tests/test_stage2.py`,
   `docs/WORKFLOW.md`, `prompts/02-spec.md`, `prompts/02b-design.md`,
-  `prompts/03-plan.md`, `prompts/06-review.md`,
-  `docs/adr/0016-codex-drafts-and-opus-reviews-the-spec.md` and
-  `docs/adr/0017-codex-repairs-taken-findings.md`.
-- The PR file list confirms the protected areas and non-goals; the two
-  original ADR decision bodies remain readable with dated overrides.
-- The decision PR names every changed bead, closes coding-harness-yzk and
-  carries `Closes-Bead: coding-harness-yzk` on its last commit; the
-  maintainer's merge makes the amendments effective.
+  `prompts/03-plan.md` and `prompts/06-review.md`. No model declaration or ADR
+  moves in this PR; the workflow identifies the separately deferred ADR text.
+- The PR file list confirms the protected areas and non-goals.
+- The PR names every changed bead, closes coding-harness-yzk and carries
+  `Closes-Bead: coding-harness-yzk` on its last commit.
 - Special live-model runs: none required; stand-ins establish configured
   arguments, not quota savings or live model quality.
 
 ## Open decisions
 
-None open on intent: Q-1 settles the efforts and Q-2 settles dated amendments
-without a new ADR. Phase 1a still owes three additional distinct substantive
-maintainer answers before the planned ADR edits: only two of five are
-recorded. A green draft-only check does not satisfy that prerequisite; this
-phase neither interviews nor writes answers for the maintainer.
+None open. Q-3 supersedes Q-2's scope for this PR: the earlier ADR criteria
+are removed because the maintainer split that work off, not to bypass a gate.
+Q-4 adds central parameterization; Q-5 settles mixed-model checks; Q-6 limits
+resumed-call evidence to argv. All four phase-2a rows are in this spec.
 
-- [DETAIL] Class `bounded`: the agreed change adjusts existing readable
-  flows without adding a capability or changing a boundary; this does not
-  reduce the five-answer duty for ADR edits.
-- [DETAIL] Allow one hour for phase 4 including repairs, stopping at that
-  limit: the change is a configuration and instruction update, not a
-  budget-measurement project.
-- [DETAIL] Select effort by the caller's verb, including all its retries:
-  the shared retry label cannot distinguish drafting from repairing.
-- [DETAIL] Retain existing test function names used by older criterion
-  ledgers; update their assertions to this amendment rather than editing
-  earlier criteria or breaking the ledger anchors.
+- [DETAIL] Keep the existing `bounded` class and one-hour implementation
+  appetite, including repairs: the answers adjust an existing runner flow;
+  phase 2b therefore produces no design artifact.
+- [DETAIL] Put the small per-verb declaration in the existing runner and
+  reference it from instructions: this is one reversible editing location
+  without a new configuration file or subsystem.
+- [DETAIL] Select effort by caller verb, including retries: `codex-repair`
+  names a retry of both draft and repair and cannot select the policy itself.
+- [DETAIL] Tests read the central settings and plant distinct alternative
+  settings to catch crossed verbs; phase 6 checks the initial values against
+  this spec, avoiding a second operational policy inside test assertions.
+- [DETAIL] Keep existing test names used by older ledgers, including the name
+  mentioning `max`, while updating their assertions: historical artifacts
+  and their anchors stay readable.
 
 These reversible details are decided here with their reasons.

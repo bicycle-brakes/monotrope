@@ -5,7 +5,7 @@ status: draft
 implementation_status: none
 date: 2026-10-13
 created: 2026-10-13
-last_reviewed: 2026-10-13
+last_reviewed: 2026-10-14
 updated: 2026-10-14
 supersedes: null
 superseded_by: null
@@ -207,10 +207,31 @@ prompts and ADRs 0016 and 0017.
 
 | ID | Severity | Dimension | Origin | Where | Finding | Reviewer | Status | Broke a test |
 |---|---|---|---|---|---|---|---|---|
-| S-1 | MAJOR | SPEC | spec | Criterion 4; Terms ("Active instructions") | [AMBIGUITY] Criterion 4 is limited to "active workflow tables" and the four prompts' Model lines, while Terms defines a wider "Active instructions" that no criterion uses; the prose of `docs/WORKFLOW.md` §"The draft (phases 2, 2b and 3)" also says Codex (`gpt-6.1-sol`, effort `max`). Reading A: only tables and Model lines are in scope, the prose keeps `max`, criterion 4 stays green and the workflow contradicts itself. Reading B: every active instruction as Terms defines it is in scope, the prose changes too, and the doctrine check must cover it. As written the criterion cannot go red on the prose sentence. | Opus 5.5 | open | — |
-| S-2 | MAJOR | SPEC | decisions | Open decisions; Definition of Done ("`make verify` is green") | [GAP] Editing a claimed ADR (`adr_files` lists 0016 and 0017) requires five maintainer interview records under `check_interview_minimums.py`; `decisions.md` holds two. The spec says three more answers are owed before the ADR edits but names no questions, and does not say whether phases 3/4 wait for them or whether the ADR amendments are split off until they exist. As written, criteria 5 and 6 and a green `make verify` cannot all be reached, so the implementer would have to decide whether to stop, defer the ADR edits or proceed. | Opus 5.5 | open | — |
-| S-3 | MINOR | SPEC | spec | Criterion 3 | [AMBIGUITY] The refuting cases include a "historically resumed" verdict call: the first phase-6 review resumes a recorded phase-2a Codex thread (ADR 0016), which may have been started at `max`. Reading A: the runner only has to pass `high` on the resume argv, which an argv stand-in can prove. Reading B: the resumed thread must actually run at `high`, which needs live evidence the Definition of Done excludes ("stand-ins establish configured arguments"). Under A the criterion is an argv check; under B it cannot be proven red or green offline. | Opus 5.5 | open | — |
-| S-4 | MINOR | SPEC | spec | Criterion 4 (refutation) | [AMBIGUITY] Draft, design, plan and review instructions are refuted if they "still say `max` or `medium`", but the WORKFLOW §4 repair row names both Sol and "Sonnet 5.5 at effort `medium`", and the stage-1 rows (2 Spec, 2b Design, 3 Plan) put Sol inside Opus rows. Reading A: only the effort attached to Sol counts, so the doctrine check must parse effort per model. Reading B: any `max` or `medium` in a row that mentions Sol refutes, which turns correct rows red or forces edits to non-Sol text the non-goals protect. The existing row-level regression in `tests/test_stage2.py` (effort `max` in every non-Flash row of WORKFLOW §4) leaves open which granularity replaces it. | Opus 5.5 | open | — |
+| S-1 | MAJOR | SPEC | spec | Criterion 4; Terms ("Active instructions") | [AMBIGUITY] Criterion 4 is limited to "active workflow tables" and the four prompts' Model lines, while Terms defines a wider "Active instructions" that no criterion uses; the prose of `docs/WORKFLOW.md` §"The draft (phases 2, 2b and 3)" also says Codex (`gpt-6.1-sol`, effort `max`). Reading A: only tables and Model lines are in scope, the prose keeps `max`, criterion 4 stays green and the workflow contradicts itself. Reading B: every active instruction as Terms defines it is in scope, the prose changes too, and the doctrine check must cover it. As written the criterion cannot go red on the prose sentence. | Opus 5.5 | in spec | — |
+| S-2 | MAJOR | SPEC | decisions | Open decisions; Definition of Done ("`make verify` is green") | [GAP] Editing a claimed ADR (`adr_files` lists 0016 and 0017) requires five maintainer interview records under `check_interview_minimums.py`; `decisions.md` holds two. The spec says three more answers are owed before the ADR edits but names no questions, and does not say whether phases 3/4 wait for them or whether the ADR amendments are split off until they exist. As written, criteria 5 and 6 and a green `make verify` cannot all be reached, so the implementer would have to decide whether to stop, defer the ADR edits or proceed. | Opus 5.5 | in spec | — |
+| S-3 | MINOR | SPEC | spec | Criterion 3 | [AMBIGUITY] The refuting cases include a "historically resumed" verdict call: the first phase-6 review resumes a recorded phase-2a Codex thread (ADR 0016), which may have been started at `max`. Reading A: the runner only has to pass `high` on the resume argv, which an argv stand-in can prove. Reading B: the resumed thread must actually run at `high`, which needs live evidence the Definition of Done excludes ("stand-ins establish configured arguments"). Under A the criterion is an argv check; under B it cannot be proven red or green offline. | Opus 5.5 | in spec | — |
+| S-4 | MINOR | SPEC | spec | Criterion 4 (refutation) | [AMBIGUITY] Draft, design, plan and review instructions are refuted if they "still say `max` or `medium`", but the WORKFLOW §4 repair row names both Sol and "Sonnet 5.5 at effort `medium`", and the stage-1 rows (2 Spec, 2b Design, 3 Plan) put Sol inside Opus rows. Reading A: only the effort attached to Sol counts, so the doctrine check must parse effort per model. Reading B: any `max` or `medium` in a row that mentions Sol refutes, which turns correct rows red or forces edits to non-Sol text the non-goals protect. The existing row-level regression in `tests/test_stage2.py` (effort `max` in every non-Flash row of WORKFLOW §4) leaves open which granularity replaces it. | Opus 5.5 | in spec | — |
 
-Gate: four `[AMBIGUITY]`/`[GAP]` rows open — the spec does not pass phase 2a
-until the maintainer settles S-1 to S-4.
+Original phase-2a verdict, before the maintainer's answers: four
+`[AMBIGUITY]`/`[GAP]` rows were open; the spec did not pass that review.
+
+Stage-2 call, 2026-10-14: draft · attempt 1 · route codex · endpoint openai-codex · model gpt-6.1-sol · leak check clean over 422 files, 1119 commits, 12 rules.
+
+## Phase-2a integration — 2026-10-14
+
+The maintainer's answers are preserved in Q-3 to Q-6 of `decisions.md`.
+The reviewer text is unchanged; only the rows' Status cells are resolved.
+
+- S-1: in spec — Q-4 requires one central setting; criterion 4 includes all
+  active Sol effort instructions, including drafting prose, and criterion 5
+  requires subsequent adjustments to propagate without other edits.
+- S-2: in spec — Q-3 splits off the ADR amendments; the former ADR criteria
+  are removed, `adr_files: []` records the authorized scope, and the plan
+  has no ADR work or interview wait for this change.
+- S-3: in spec — Q-6 makes criterion 3 an argument check; the resumed thread's
+  actual internal effort remains explicitly unproven.
+- S-4: in spec — Q-5 makes criterion 6 assess Sol's effort reference per
+  model; other models' valid effort literals remain allowed.
+
+Gate after integration: no phase-2a row is open; spec and plan follow the
+recorded answers. The bounded class requires no design artifact.
