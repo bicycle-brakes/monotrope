@@ -9,7 +9,9 @@ supersedes: null
 superseded_by: null
 bead: coding-harness-zs7
 owner: Data Architect
-provenance: human-written
+provenance: ai-drafted-reviewed
+produced_by: {kind: llm-session, name: codex, version: "2026-10-14"}
+review: {status: pending, approved_by: null, approved_at: null}
 tags: [research]
 ---
 
@@ -196,3 +198,42 @@ written for a reader with ADHD — what exists around it today.
 ---
 
 Stage-2 call line of the skeleton stays untouched below the body. No design, no recommendation — open points 3 and 4 are written as `[DECISION]` material for phase 1a, as the header demands.
+
+## Draft gap resolution — 2026-10-14
+
+Read at `c7fa059`, before the draft's uncommitted additions:
+
+- The five answered interview records now settle scope, enforcement,
+  distribution, form and the prospective cut-off (`decisions.md`, Q-1 to
+  Q-5); the exploration's statements that this file does not exist and that
+  scope is undecided describe the earlier exploration only.
+- The class definitions distinguish a self-contained new check (`feature`)
+  from a new subsystem or broken interface (`architectural`); an ADR does
+  not itself make a change architectural (`docs/WORKFLOW.md`, "Change
+  classes, the ADR question and decision pull requests").
+- The existing record ends its decision statement with `— YYYY-MM-DD`
+  (`prompts/01a-interview.md`, "What you write"). A scan of answered
+  Q-records under `plans/changes/`, including its archive, found 55 records
+  and exactly one such date in each, as of `c7fa059`, 2026-10-14. The
+  existing gate reads `asked`, not this date, and does not collect context
+  (`scripts/check_interview_minimums.py`, `_FIELDS`, `_parse_records`).
+- The one adoption reader returns a day per gate, and rejects an absent or
+  unreadable day; the adoption record belongs to each repository
+  (`scripts/adoption.py`; `decisions/adoption.yaml`). The current
+  interview-minimums exemption uses the spec's date strictly after its
+  adoption day; that rule differs from Q-5's inclusive answer-date cut-off.
+- The workflow and prompts travel, while this repository's `AGENTS.md` and
+  adoption record stay here; new scripts and tests need explicit mechanism
+  entries (`scripts/kit/manifest.yaml`). The probe creates a repository
+  from that mechanism and runs its tests (`scripts/kit/probe.py`, `_baue`).
+- There is no plan template under `templates/`, and the named
+  `scripts/validate_change_artefacts.py` does not exist at this commit. The
+  plan's form is supplied by `prompts/03-plan.md`; existing checks include
+  the plans registry, interview minimums and criterion ledger. The runner
+  prepares derived files and runs verification after a draft
+  (`scripts/stage2.py`, `verify_draft`).
+- The current five answers have no field preserving their originally
+  displayed context. If their date is on or after the eventual adoption
+  day, the implementation needs that actual context from the orchestrator;
+  this worktree does not supply it, and it must not be invented. Q-5 does
+  not exempt answers from the adoption day itself.

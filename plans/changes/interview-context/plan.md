@@ -1,0 +1,189 @@
+---
+title: "Plan — interview-context"
+status: draft
+implementation_status: none
+date: 2026-10-14
+last_reviewed: 2026-10-14
+updated: 2026-10-14
+supersedes: null
+superseded_by: null
+bead: coding-harness-zs7
+owner: framework-architect
+provenance: ai-drafted-reviewed
+produced_by: {kind: llm-session, name: glm, version: "2026-10-14"}
+review: {status: pending, approved_by: null, approved_at: null}
+tags: [plan, questions, context, gates]
+---
+
+# Plan — interview-context
+
+```text
+For you:     Every question explains its intention and its effects on the repository and architecture before asking.
+Done when:   Missing context in new answered records makes verification fail, older answers stay exempt, and the kit probe and make verify pass.
+Appetite:    4 hours of phase 4, including repairs; stop at the limit.
+Not now:     Backfilling older answers, grading clarity automatically, or adding profile switches.
+Pre-mortem:  suppose it failed: most likely because the gate uses change dates instead of each answer's recording day.
+Starts unless you say stop.
+```
+
+## Build
+
+Implement the separate `question-context` gate; keep interview counting intact.
+Explore ran on Stage 2, route flash, endpoint glm-coding-plan, model
+glm-5.3-flash, 2026-10-14; no Stage-1 fallback is recorded.
+
+1. Write fixture-first tests for the gate's command. Discover live and archived
+   `decisions.md` files without requiring specs; parse real level-two Q-records
+   outside fences, and keep indented context inside its value. Check every
+   `status: answered` occurrence, not just records counted toward a minimum.
+2. Read the cut-off only through `adoption.adopted_on(root, "question-context")`.
+   Read each recording day from exactly one suffix `— YYYY-MM-DD` ending its
+   top-level MADR paragraph beginning `In the context of`; join wrapped lines,
+   including the dash/date split in this change's fifth answer. Ignore dates
+   in context, fields and examples. Dates before adoption are exempt; the
+   adoption day and later are subject, even with an earlier `asked` date or
+   old spec. A changed answer gets its actual new recording day.
+3. For subject records accept one non-blank context text scalar, including a
+   multiline literal block; missing, whitespace, non-text or duplicate values
+   exit 1. Decode only the context scalar, not the whole Markdown record;
+   unquoted null, booleans, numbers and collections are not text. Do not score
+   wording or enforce headings in the gate. Absent, invalid or ambiguous
+   applicability evidence and unreadable files exit 3;
+   collect all findings, with exit 3 taking precedence over exit 1. Success
+   exits 0. CLI diagnostics name the file and Q-id, and support `--root`.
+   Record and adoption files remain byte-for-byte unchanged by the command.
+4. Publish the context form in the workflow and general instructions: Topic,
+   Intention (including why now), Today, Repository change, Architecture change;
+   short explanations in that order precede options, and the question stands
+   last. Explain terms at first use; an unchanged area says why. Translate labels
+   in conversation and preserve shown meaning in English records. Keep the MADR
+   decision form and present the five-part preface before an unchanged plan card.
+   The interview prompt keeps its header model line and the strings its tests
+   pin (`answered_by`, `status: skipped`, `## SKIP · interview` —
+   tests/test_check_interview_minimums.py::test_interview_prompt_defines_the_records,
+   scripts/kit/probe.py).
+5. Register the blocking gate for both placements, add its script/tests to the
+   kit, and record this repository's intended merge day. Align that day before
+   merging if the calendar day changes; never advance an adopted day to pass.
+   The orchestrator supplies original displayed context for any existing answer
+   dated on/after adoption. If it is unavailable, stop rather than fabricate
+   context or change the cut-off. Review the ADR against Q-1 to Q-5.
+
+## Files
+
+- `AGENTS.md`: add the universal standing rule, fixed form and ADHD rationale.
+- `docs/WORKFLOW.md`: state the portable rule, context record, inclusive
+  recorded-answer cut-off and presence-only gate in the question protocol
+  and gate table.
+- `prompts/01a-interview.md`: replace the free context paragraph with the fixed
+  form and show `context: |` in the record with its actual decision recording day.
+- `prompts/02-spec.md`: prefix its MADR question block with the context form and
+  put the actual question last without dropping the existing decision information.
+- `prompts/03-plan.md`: require the context preface when showing the unchanged
+  card; `plan.md` still opens with the card and asks for no additional approval.
+- `scripts/check_question_context.py`: create the standalone read-only gate and
+  CLI with the record/date/value rules above; import the existing adoption reader.
+- `tests/test_check_question_context.py`: create independent fixtures, CLI
+  mutations, cut-off cases, instruction/form pins and kit membership checks;
+  skip only the AGENTS assertion when that inventory file is absent, retaining
+  the workflow and prompt assertions in the kit probe.
+- `decisions/gates.yaml`: register `question-context` with `title` and
+  `reason` like its neighbours, command
+  `python3 scripts/check_question_context.py`, job verify, enforcement block,
+  floor false, placement both; no tracker or history hydration is needed.
+- `decisions/adoption.yaml`: add the new gate's actual adoption day through the
+  decision PR, preserving the interview-minimums day.
+- `tests/test_this_repository_adoption.py`: add a local assertion that the
+  question-context day is the merge day prepared for this PR, updating it with
+  the adoption entry if that day changes; keep the interview-minimums assertion.
+- `scripts/kit/manifest.yaml`: add explicit mechanism entries for the new gate
+  and test file; retain the workflow/prompts prefixes and local adoption record.
+- `docs/adr/0018-every-question-carries-its-context.md`: carry the draft into the
+  decision PR, retaining pending review and acceptance only by merge.
+- `plans/changes/interview-context/decisions.md`: only if its answers are subject,
+  the orchestrator adds their actual presented contexts; this draft leaves it intact.
+- `plans/changes/interview-context/spec.md`, `design.md`, `plan.md`, `research.md`
+  and `findings.md`: retain the agreed contract, record verified implementation
+  evidence/time and resolve review rows without inventing maintainer answers.
+- `.github/workflows/ci.yml` and `plans/INDEX.md`: regenerated from their sources
+  by the runner; neither is hand-edited.
+
+No files are deleted. The orchestrator owns tracker, commits, PR and session
+handover. Leave `scripts/check_interview_minimums.py`, its counting tests,
+`scripts/adoption.py`, ADR-answer files, glossary pointers, other phase prompts,
+card templates, harness configuration and sibling repositories untouched.
+
+## Criterion ledger
+
+- 1: not yet written tests/test_check_question_context.py::test_general_rule_covers_all_questions — remove conversation or review ambiguities from the rule
+- 2: not yet written tests/test_check_question_context.py::test_question_forms_put_context_before_options_and_question_last — remove Intention or Architecture change from a form
+- 2: not yet written tests/test_check_question_context.py::test_plan_card_requires_preface_and_preserves_veto — require an extra approval or alter the card's fields
+- 3: not a test — phase-6 review presents a sample decision and a review ambiguity in isolation; an unexplained identifier or reliance on prior chat refutes it
+- 4: not yet written tests/test_check_question_context.py::test_interview_record_has_a_dedicated_context_field — remove the context field from the record example
+- 4: not yet written tests/test_check_question_context.py::test_interview_minimums_still_counts_a_record_with_a_context_field — a record with a context block stops counting toward the interview minimum
+- 4: not a test — review compares recorded meaning with the context actually shown; an invented explanation or omitted part refutes fidelity
+- 5: not yet written tests/test_check_question_context.py::test_missing_context_goes_red — delete only the subject record's context and require exit 1 with its file and Q-id
+- 5: not yet written tests/test_check_question_context.py::test_empty_or_non_text_context_goes_red — replace context by whitespace, an empty literal block, null or a collection
+- 5: not yet written tests/test_check_question_context.py::test_context_cannot_be_borrowed_from_another_record — put context only in another Q-block or outside all records
+- 5: not yet written tests/test_check_question_context.py::test_every_answered_occurrence_needs_context — exempt a duplicate Q-id or an agent-attributed answered record
+- 6: not yet written tests/test_check_question_context.py::test_nonblank_context_passes_without_clarity_scoring — reject a plain scalar or multiline explanation on wording alone
+- 7: not yet written tests/test_check_question_context.py::test_adoption_day_and_later_answers_are_subject — change the comparison from inclusive to strict or select by spec/asked date
+- 7: not yet written tests/test_check_question_context.py::test_answer_date_uses_wrapped_decision_suffix — take a date from context or fail to read the dash/date split
+- 7: not yet written tests/test_check_question_context.py::test_archived_and_spec_less_answers_are_subject — move a missing-context answer into the archive or remove its spec
+- 7: not yet written tests/test_check_question_context.py::test_examples_open_and_skip_records_are_not_answers — count fenced examples or skip/open blocks as answered records
+- 8: not yet written tests/test_check_question_context.py::test_older_answers_stay_exempt_in_mixed_files — require backfill or let an old answer exempt the whole file
+- 8: not yet written tests/test_check_question_context.py::test_gate_never_writes_records_or_adoption — fill an older record or move the adoption day while checking
+- 9: not yet written tests/test_check_question_context.py::test_unreadable_evidence_is_not_a_pass — return 0 for missing/invalid adoption, absent/ambiguous decision dates or an unreadable file
+- 9: not yet written tests/test_check_question_context.py::test_unmeasured_evidence_takes_exit_precedence — return 1 after one context failure hides another record's unknown date
+- 10: not yet written tests/test_check_question_context.py::test_gate_is_blocking_in_both_placements — omit the command or change enforcement/placement
+- 10: tests/test_ci.py::test_no_blocking_gate_step_carries_continue_on_error — allow the derived hosted step to ignore a failure
+- 10: tests/test_ci.py::test_every_gate_step_has_a_mutation_test — add the gate without an executable seeded failure case
+- 11: not yet written tests/test_check_question_context.py::test_context_gate_and_tests_travel_with_the_principle — leave a dependency to the inventory catch-all or add a profile switch
+- 11: not a test — `python3 scripts/kit/probe.py --strict` checks the portable copy; missing mechanism files or this repository's adoption data in it refute the criterion
+- 12: not a test — phase-6 review compares the single claimed ADR to Q-1 through Q-5 and the PR file list; a changed answer, second draft or unmade approval refutes it
+
+## Verification
+
+Run `make venv` once if this checkout lacks its locked environment. Then:
+
+```bash
+.venv/bin/python3 -m pytest tests/test_check_question_context.py tests/test_this_repository_adoption.py tests/test_check_interview_minimums.py tests/test_ci.py -q
+.venv/bin/python3 scripts/check_question_context.py
+.venv/bin/python3 scripts/check_interview_minimums.py --change interview-context
+.venv/bin/python3 scripts/check_criterion_ledger.py
+.venv/bin/python3 scripts/ci_gates.py --check-schema
+.venv/bin/python3 scripts/kit/probe.py --strict
+make verify
+```
+
+Replace each `not yet written` ledger entry with a test entry when its function
+exists. Seed the missing-context mutation in a fixture that first passes, then
+remove only that record's context and assert exit 1 and its diagnostic; the
+test names already satisfy CI's mutation-evidence form. Keep the kit test
+dependent only on mechanism files and fixture adoption days.
+
+The runner prepares derived files before full verification; do not claim the
+absent change-artefact validator ran. Recording the maintainer's ADR answer
+is an orchestrator prerequisite for ordinary verification, never a guessed
+answer or an implementation-side tolerance. Review semantic criteria separately.
+
+## Draft handoff — 2026-10-14
+
+Attempt 3 (glm) revised these three artifacts only, on `docs/interview-context`
+at `c7fa059`; implementation has not started. The runner owns verification, the
+one commit and tracker writes, and this call ran no command — every claim above
+was read from the tree. No phase-2a rows are open in `findings.md`; it holds
+the runner's attempt log.
+
+The artifacts keep the header, ledger and record forms that attempt 2's run
+left green in every gate except pytest; the two attempts' failures lie outside
+this change (session-policy tests in the sandbox; a tracker render that was
+not byte-stable) and are no draft repair. The artifact validator command still
+exits 2 because its script is absent at this commit.
+
+Resume: the runner runs full verification and commits only on green, then the
+orchestrator presents the unchanged card and starts phase 4. Before enabling
+the new gate, recover authentic context for any interview answers whose
+recording day is on or after the actual merge day.
+
+## Time used
