@@ -9,20 +9,17 @@ supersedes: null
 superseded_by: null
 bead: coding-harness-s9r
 owner: Data Architect
-provenance: human-written
+provenance: ai-drafted-reviewed
+produced_by: {kind: llm-session, name: codex, version: "2026-10-14"}
+review: {status: pending, approved_by: null, approved_at: null}
 tags: [research]
 ---
 
 # isolated attempts — Research
 
-Phase 1 per [`prompts/01-explore.md`](../../../prompts/01-explore.md); this
-file is empty until it has run.
-
-> **Bring the provenance up to date.** The frontmatter says
-> `provenance: human-written` — that holds for this skeleton. Whoever fills it
-> with a language model sets `ai-drafted-reviewed` and adds `produced_by:` and
-> `review:` (`provenance.yaml`, class `ai-drafted-reviewed`,
-> `review_required: true`).
+Phase 1 per `prompts/01-explore.md`. The runner exploration below preserves
+the returned report; the dated draft checks add repository facts used by
+phases 2, 2b and 3.
 
 Stage-2 call, 2026-10-14: explore · attempt 1 · route flash · endpoint glm-coding-plan · model glm-5.3-flash · leak check clean over 418 files, 1123 commits, 12 rules.
 
@@ -188,3 +185,35 @@ such in the sub-agent's report were not relied on for a ranking reason.
 Open: start times measured on this Mac; which platforms `sbx` supports and
 whether it runs Codex and Pi; how `--internal` blocks egress in Podman and
 Apple `container`.
+
+## Draft repository checks — 2026-10-14
+
+Repository gaps checked by Codex at `36e4349`, without reading another
+checkout or the host's credential/runtime state:
+
+- Correction to "the writing attempts": `run_attempts` is shared by
+  `implement` and `repair`; `draft` has its own three-attempt loop. Both
+  paths must move to the boundary chosen in Q-1 to Q-5.
+- The absorbed failed-run exploration was read from the repository's Git
+  object at `c8b009b:plans/changes/derived-leftovers/research.md`. It names
+  index rendering, frontmatter stamps, formatting and the Stage-1 route
+  block, and records that retaining failed model trees was deliberate.
+  Q-4 now explicitly chooses to discard failed-run changes rather than
+  tolerate those leftovers; its old interview questions are not reopened.
+- `verify_attempt` and `verify_draft` launch `make verify` in the current
+  worktree, executing repository code the model may have changed. Isolating
+  only the model call would leave that execution on the host.
+- `stage2_session.run` dispatches a direct interactive CLI to macOS Terminal;
+  its Pi transport signs in from its home. An isolated session therefore
+  needs a selected-login input and a supervised return path, not only a
+  different working-directory flag.
+- The interview has five distinct answered maintainer records. There are no
+  phase-2a finding rows in this change at this cut-off. The highest ADR file
+  number is 0017; no `templates/plan.md` or
+  `scripts/validate_change_artefacts.py` exists. The plan uses the established
+  card/steps/verification/ledger/time form and the available gates.
+- Subscription-login export, exact API-only host profiles and the real
+  capabilities of each container backend have not been measured here.
+  Implementation must qualify them with the official clients and boundary
+  probes; another sign-in site or a broader mount is not silently authorised
+  by Q-1. The recorded container comparison remains desk research.
