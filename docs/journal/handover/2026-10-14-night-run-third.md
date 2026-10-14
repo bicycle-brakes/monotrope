@@ -10,7 +10,7 @@ produced_by:
   name: claude-code
   version: "2026-10-14"
 tags: [handover, session, night-run]
-target_ref: 3199a28
+target_ref: e0cea42
 bead: coding-harness-yuw
 status: pending
 review:
@@ -179,3 +179,66 @@ translation steps and the handover-at-95 exploration.
 
 Merge #138 if you agree; then the session rebases `feat/sol-effort` on main
 and runs `python3 scripts/stage2.py draft sol-effort`.
+
+## Addendum 2026-10-14, 11:31 — the merges are in
+
+Written by the same orchestrating Claude Code session, against `origin/main`
+at `e0cea42`.
+
+### What happened since 08:00
+
+- The maintainer merged #138 at 10:24 (Codex repairs the taken review
+  findings; ADR 0017 supersedes ADR 0015; bead coding-harness-0ga). Main
+  went to `c52bf14`.
+- On the maintainer's instruction ("Bitte merge die offen prs"), a Haiku
+  sub-agent merged the four others with merge commits, through `gh` only:
+  #137 (this page) at `3100055`, #141 (corpus correction, bead
+  coding-harness-bt8) at `cb79dda`, #139 (`plans/_README.md` in English, bead
+  coding-harness-yim step 1) at `059e6f0`, #140 (script and test texts in
+  English, bead coding-harness-yim step 2) at `e0cea42`.
+- #139, #140 and #141 were first refused: GitHub requires a branch to be up
+  to date with main, and each merge put the next branch behind. The agent
+  updated each branch on the server (`gh pr update-branch`), waited for CI
+  and merged. Lesson for the next merge round: expect one CI run per pull
+  request after the previous merge, about 15 to 20 minutes each.
+- No pull request is open (read 2026-10-14 11:31). No bead was opened,
+  changed or closed in this addendum.
+
+### What is next, in order
+
+1. **Sol's effort per verb** (bead coding-harness-yzk: repair medium, draft
+   high, review high). The blocker is gone with #138: rebase
+   `feat/sol-effort` (`cace591`) on main, then
+   `python3 scripts/stage2.py draft sol-effort` (about 25 minutes of Codex).
+   While Z.ai is exhausted (until 2026-10-14 14:34 CEST), the GLM 5.3 last
+   attempt of a failed draft is a wasted call.
+2. **The kit install's plan card** (bead coding-harness-2uk, branch
+   `feat/kit-install` at `bd6c55d`) still waits for the maintainer's veto
+   or go; the card is in section 1 above.
+3. **Six interviews** (phase 1a) for the explorations in section 3. The
+   three runner explorations (coding-harness-fdz, coding-harness-b5w,
+   coding-harness-y17) were waiting for #138 and can start now.
+4. After 14:34 CEST: the live GLM probe of bead coding-harness-6th (the GLM
+   refusal in Claude Code).
+
+### Open question for the maintainer
+
+The six explorations of the night ran on Opus 5.5 sub-agents, not through
+`python3 scripts/stage2.py explore` and not under `--stage2-off`, and their
+`research.md` files name neither the model nor the reason. Recommendation:
+add one line with model and reason to each before its interview.
+
+### Recorded rules still waiting for their change
+
+- Research in phase 1 as a swarm of OpenCode Go models — one free and one
+  Flash model per topic, first stage all free models, six topics (bead
+  coding-harness-icw). Open: whether the free models may see repository
+  content (their data terms are not read).
+- Review of the implementation as an OpenCode Go swarm (bead
+  coding-harness-4fk).
+
+### Resume (addendum)
+
+Create a worktree for bead coding-harness-yzk from `feat/sol-effort`,
+rebase it on `origin/main` (`e0cea42` or later), and run
+`python3 scripts/stage2.py draft sol-effort`.
