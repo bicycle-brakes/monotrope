@@ -192,3 +192,25 @@ Stage-2 call, 2026-10-14: draft · attempt 3 · route glm · endpoint glm-coding
 > Attempt 3 (glm) failed its call: claude call failed: exit 1. The Claude Code output names `glm-5.3` as not in this version's model catalog. Z.ai is exhausted until 2026-10-14 14:34 CEST.
 
 Stage-2 call, 2026-10-14: draft · attempt 1 · route codex · endpoint openai-codex · model gpt-6.1-sol · leak check clean over 420 files, 1109 commits, 12 rules.
+
+## Phase 2a — Opus 5.5, 2026-10-14
+
+Spec review by hand in a remote Claude Code session (Opus 5.5 sub-agent in a
+fresh context, read-only; input: `spec.md`, `research.md`, `decisions.md`, and
+the code and documents on `main` the spec names). Not started through
+`stage2.py spec-review`. Checked: the three files; on `main` `scripts/stage2.py`
+(`CODEX`, `run_codex`, `review`, `draft`, `repair`, `run_attempts`,
+`begin_call`, `preflight`), `scripts/stage2_runs.py` (`FOREIGN_ROUTES`),
+`scripts/check_interview_minimums.py` (`MINIMUMS`), the `openai-codex` entry in
+`model-endpoints.yaml`, the Sol `max` mentions in `docs/WORKFLOW.md`, the four
+prompts and ADRs 0016 and 0017.
+
+| ID | Severity | Dimension | Origin | Where | Finding | Reviewer | Status | Broke a test |
+|---|---|---|---|---|---|---|---|---|
+| S-1 | MAJOR | SPEC | spec | Criterion 4; Terms ("Active instructions") | [AMBIGUITY] Criterion 4 is limited to "active workflow tables" and the four prompts' Model lines, while Terms defines a wider "Active instructions" that no criterion uses; the prose of `docs/WORKFLOW.md` §"The draft (phases 2, 2b and 3)" also says Codex (`gpt-6.1-sol`, effort `max`). Reading A: only tables and Model lines are in scope, the prose keeps `max`, criterion 4 stays green and the workflow contradicts itself. Reading B: every active instruction as Terms defines it is in scope, the prose changes too, and the doctrine check must cover it. As written the criterion cannot go red on the prose sentence. | Opus 5.5 | open | — |
+| S-2 | MAJOR | SPEC | decisions | Open decisions; Definition of Done ("`make verify` is green") | [GAP] Editing a claimed ADR (`adr_files` lists 0016 and 0017) requires five maintainer interview records under `check_interview_minimums.py`; `decisions.md` holds two. The spec says three more answers are owed before the ADR edits but names no questions, and does not say whether phases 3/4 wait for them or whether the ADR amendments are split off until they exist. As written, criteria 5 and 6 and a green `make verify` cannot all be reached, so the implementer would have to decide whether to stop, defer the ADR edits or proceed. | Opus 5.5 | open | — |
+| S-3 | MINOR | SPEC | spec | Criterion 3 | [AMBIGUITY] The refuting cases include a "historically resumed" verdict call: the first phase-6 review resumes a recorded phase-2a Codex thread (ADR 0016), which may have been started at `max`. Reading A: the runner only has to pass `high` on the resume argv, which an argv stand-in can prove. Reading B: the resumed thread must actually run at `high`, which needs live evidence the Definition of Done excludes ("stand-ins establish configured arguments"). Under A the criterion is an argv check; under B it cannot be proven red or green offline. | Opus 5.5 | open | — |
+| S-4 | MINOR | SPEC | spec | Criterion 4 (refutation) | [AMBIGUITY] Draft, design, plan and review instructions are refuted if they "still say `max` or `medium`", but the WORKFLOW §4 repair row names both Sol and "Sonnet 5.5 at effort `medium`", and the stage-1 rows (2 Spec, 2b Design, 3 Plan) put Sol inside Opus rows. Reading A: only the effort attached to Sol counts, so the doctrine check must parse effort per model. Reading B: any `max` or `medium` in a row that mentions Sol refutes, which turns correct rows red or forces edits to non-Sol text the non-goals protect. The existing row-level regression in `tests/test_stage2.py` (effort `max` in every non-Flash row of WORKFLOW §4) leaves open which granularity replaces it. | Opus 5.5 | open | — |
+
+Gate: four `[AMBIGUITY]`/`[GAP]` rows open — the spec does not pass phase 2a
+until the maintainer settles S-1 to S-4.
