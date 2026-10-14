@@ -24,3 +24,5 @@ Stage-2 call, 2026-10-14: draft · attempt 1 · route codex · endpoint openai-c
 Stage-2 call, 2026-10-14: implement · attempt 1 · route flash · endpoint glm-coding-plan · model glm-5.3-flash · leak check clean over 422 files, 1157 commits, 12 rules.
 
 Stage-2 call, 2026-10-14: review-loop · endpoint opencode-go · model deepseek-v4.1-flash · leak check clean over 422 files, 1158 commits, 12 rules.
+
+Stage-2 call, 2026-10-14: review-loop · endpoint opencode-go · model mimo-v2.6-flash · leak check clean over 422 files, 1159 commits, 12 rules.
