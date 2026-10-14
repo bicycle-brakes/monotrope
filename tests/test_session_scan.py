@@ -1,16 +1,16 @@
-"""Der Session-Scan und die Statuszeile — die Scharstellung hinter dem ⚠ (bead hit).
+"""The session scan and the status line — the arming behind the ⚠ (bead hit).
 
-Bis zum 2026-09-22 las `IFS=$'\\t' read` leere Felder auf die Nachbarn
-rutschen: eine Session ohne Namen oder Status rutschte in der Spalte `kind`,
-galt als nicht-interaktiv und wurde nie als Clash gemeldet — der Bead hat das
-mit drei fake Sessions verifiziert (PR #10-Review). Diese Datei haelt den
-Nachweis als Test: den Produzenten (`hooks/session-scan.sh`, Feldtrennung per
-NUL) und den Consumer (`statusline.sh`, Trennung per Parameter-Expansion),
-sowie den Fall Ende-zu-Ende.
+Until 2026-09-22 `IFS=$'\\t' read` let empty fields slide onto their
+neighbours: a session without a name or status slid into the `kind` column,
+counted as non-interactive and was never reported as a clash — the bead
+verified this with three fake sessions (PR #10 review). This file keeps the
+proof as a test: the producer (`hooks/session-scan.sh`, NUL-separated
+fields), the consumer (`statusline.sh`, split by parameter expansion), and
+the case end to end.
 
-Das Objekt selbst (`tools/claude-code/`) ist Bestand dieses Repos und reist
-nicht mit dem Kit — in der Leerprobe skippt diese Datei deshalb (skipif
-unten), sie misst hier.
+The subject itself (`tools/claude-code/`) is part of this repo and does not
+travel with the kit — in the dry run this file therefore skips (skipif
+below); it measures here.
 """
 
 from __future__ import annotations
@@ -29,7 +29,7 @@ STATUSLINE = REPO_ROOT / "tools" / "claude-code" / "statusline.sh"
 
 pytestmark = pytest.mark.skipif(
     not (SCAN.is_file() and STATUSLINE.is_file()),
-    reason="tools/claude-code ist Bestand dieses Repos und reist nicht (Kit-Probe)",
+    reason="tools/claude-code is part of this repo and does not travel (kit probe)",
 )
 
 
@@ -48,11 +48,11 @@ def _session(
     kind: str = "interactive",
     start: str = "",
 ) -> None:
-    """Eine fake Session-Datei, wie Claude Code sie nach ~/.claude/sessions/ schreibt.
+    """A fake session file, as Claude Code writes it to ~/.claude/sessions/.
 
-    `procStart` bleibt absichtlich leer: der Scan vergleicht ihn nur, wenn er
-    da ist, und ein Test, der `ps`-Lokalisierung faken muesste, pruefte die
-    falsche Sache.
+    `procStart` is left empty on purpose: the scan compares it only when it
+    is present, and a test that had to fake `ps` localisation would check the
+    wrong thing.
     """
     satz = {
         "pid": pid,
@@ -75,14 +75,14 @@ def _scan(home: Path, sid: str, cwd: Path) -> list[list[str]]:
         env={**os.environ, "HOME": str(home)},
     )
     assert erg.returncode == 0, erg.stderr
-    # Python-Split kollabiert keine leeren Felder — genau der Maszstab, an dem
-    # der alte `IFS=$'\t' read` zerbrach.
+    # Python's split does not collapse empty fields — exactly the yardstick
+    # the old `IFS=$'\t' read` broke on.
     return [zeile.split("\t") for zeile in erg.stdout.splitlines()]
 
 
 @pytest.fixture
 def werkstatt(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> Path:
-    """Fake-HOME mit installiertem Scan und leerem Session-Register."""
+    """Fake HOME with the scan installed and an empty session registry."""
     home = tmp_path / "home"
     (home / ".claude" / "hooks").mkdir(parents=True)
     (home / ".claude" / "sessions").mkdir()
@@ -93,7 +93,7 @@ def werkstatt(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> Path:
 
 @pytest.fixture
 def repo(tmp_path: Path) -> Path:
-    """Ein echtes Mini-Repository mit einem Commit — nie der Baum dieses Projekts."""
+    """A real mini repository with one commit — never this project's tree."""
     r = tmp_path / "repo"
     r.mkdir()
     _git(r, "init", "--initial-branch=main", "--quiet")
@@ -106,11 +106,11 @@ def repo(tmp_path: Path) -> Path:
 
 
 def test_a_session_without_name_or_status_is_reported_and_never_shifts(werkstatt: Path, tmp_path: Path) -> None:
-    """Der Bead-Fall: leere Felder verschieben keine Spalten.
+    """The bead case: empty fields do not shift columns.
 
-    Vor dem Fix rutschte hinter einem leeren Namen der Status in die Spalte
-    `kind` — die Session galt als nicht-interaktiv und war unsichtbar, genau
-    wenn sie am wenigsten sichtbar sein durfte.
+    Before the fix, behind an empty name the status slid into the `kind`
+    column — the session counted as non-interactive and was invisible, exactly
+    when it was least allowed to be.
     """
     fremd = tmp_path / "fremd"
     fremd.mkdir()
@@ -127,12 +127,12 @@ def test_a_session_without_name_or_status_is_reported_and_never_shifts(werkstatt
         )
 
         zeilen = _scan(werkstatt, "ich", fremd)
-        assert len(zeilen) == 2, f"beide Sessions melden sich: {zeilen}"
+        assert len(zeilen) == 2, f"both sessions report: {zeilen}"
 
         leer = next(z for z in zeilen if z[3] == "f1")
         assert leer[0] == "other"
-        assert leer[1] == "fremd", "label faellt auf basename(cwd) zurueck"
-        assert leer[2] == "", "fehlender Status bleibt leeres Feld, kein Verschieben"
+        assert leer[1] == "fremd", "label falls back to basename(cwd)"
+        assert leer[2] == "", "a missing status stays an empty field, no shifting"
         assert leer[4] == str(fremd)
 
         voll = next(z for z in zeilen if z[3] == "f2")
@@ -143,11 +143,11 @@ def test_a_session_without_name_or_status_is_reported_and_never_shifts(werkstatt
 
 
 def test_a_clash_with_empty_fields_is_reported_as_a_clash(werkstatt: Path, repo: Path) -> None:
-    """Die Folge, die der Bead meint: ein echter Clash darf nie unsichtbar sein."""
-    _session(werkstatt, pid=os.getpid(), sid="klon", cwd=repo)  # Name und Status leer
+    """The consequence the bead means: a real clash must never be invisible."""
+    _session(werkstatt, pid=os.getpid(), sid="klon", cwd=repo)  # name and status empty
     zeilen = _scan(werkstatt, "ich", repo)
     assert len(zeilen) == 1, zeilen
-    assert zeilen[0][0] == "clash", f"gleicher Checkout nicht erkannt: {zeilen}"
+    assert zeilen[0][0] == "clash", f"same checkout not detected: {zeilen}"
     assert zeilen[0][3] == "klon"
 
 
@@ -163,7 +163,7 @@ def test_another_worktree_of_the_same_repo_is_a_sibling(werkstatt: Path, repo: P
 def test_own_non_interactive_and_dead_sessions_are_not_reported(werkstatt: Path, tmp_path: Path) -> None:
     hier = tmp_path / "hier"
     hier.mkdir()
-    _session(werkstatt, pid=os.getpid(), sid="ich", cwd=hier)  # eigene: gefiltert
+    _session(werkstatt, pid=os.getpid(), sid="ich", cwd=hier)  # own session: filtered
     _session(werkstatt, pid=os.getpid(), sid="hook", cwd=hier, kind="hook")
     tot = subprocess.Popen(["true"])
     tot.wait()
@@ -172,21 +172,21 @@ def test_own_non_interactive_and_dead_sessions_are_not_reported(werkstatt: Path,
 
 
 def test_a_tab_in_the_session_name_does_not_break_the_row_format(werkstatt: Path, tmp_path: Path) -> None:
-    """Der Name reist sichtbar als \\t weiter — die Zellen bleiben fuenf."""
+    """The name travels on visibly as \\t — the cells stay five."""
     fremd = tmp_path / "fremd"
     fremd.mkdir()
     _session(werkstatt, pid=os.getpid(), sid="t1", cwd=fremd, name="zwei\tspalten")
     zeilen = _scan(werkstatt, "ich", fremd)
-    assert len(zeilen) == 1, "ein Tab im Namen darf keine sechste Zelle aufmachen"
+    assert len(zeilen) == 1, "a tab in the name must not open a sixth cell"
     assert zeilen[0][1] == "zwei\\tspalten"
 
 
 def test_the_status_line_names_the_clash_even_with_empty_fields(werkstatt: Path, repo: Path) -> None:
-    """Ende-zu-Ende: die Statuszeile warnt, auch wenn beide Felder leer sind.
+    """End to end: the status line warns even when both fields are empty.
 
-    Genau die Kette des Beads: Scan wirft die Session weg, die Statuszeile
-    zeigt keinen ⚠, zwei Sessions schreiben in einen Baum, ohne dass eine es
-    erfahrt. Der Test faehrt die echte statusline.sh mit Fake-Register.
+    Exactly the bead's chain: the scan drops the session, the status line
+    shows no ⚠, two sessions write into one tree without either learning of
+    it. The test runs the real statusline.sh with a fake registry.
     """
     _session(werkstatt, pid=os.getpid(), sid="klon", cwd=repo)
     erg = subprocess.run(
@@ -199,6 +199,8 @@ def test_the_status_line_names_the_clash_even_with_empty_fields(werkstatt: Path,
     )
     assert erg.returncode == 0, erg.stderr
     assert "Gleicher Checkout" in erg.stdout, erg.stdout
-    # Label faellt auf basename(cwd) zurueck, der leere Status bleibt leer:
-    # die Zelle sieht als "()" — der Verschiebe-Fix ist hier sichtbar.
+    # The label falls back to basename(cwd), the empty status stays empty:
+    # the cell reads "()" — the shift fix is visible here.
+    # "Gleicher Checkout" and "arbeitet" above are German display texts of
+    # tools/claude-code and stay German by rule.
     assert "repo ()" in erg.stdout, erg.stdout
