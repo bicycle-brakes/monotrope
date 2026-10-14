@@ -52,6 +52,13 @@ this happens, should the system do A or B — A means …, B means …". Options
 named after what they do to users, operations or risk, never after their
 mechanism.
 
+**Every question brings its context, written for a reader with ADHD**
+(maintainer, 2026-10-14). Before the options, two to four short sentences say
+what the question is about, why it comes up now and what happens today — in
+plain words, without assuming the reader knows the code, the finding or an
+earlier conversation. Every id or technical term is explained where it first
+appears. The question itself comes last and stands on its own line.
+
 **Stop when the design tree has no unresolved branch left.** Not when you run
 out of ideas for questions. If two answers would lead to the same build, the
 question was a `[DETAIL]`.
