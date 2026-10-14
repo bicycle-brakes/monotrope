@@ -52,3 +52,57 @@ In the context of a research that must cover code, rules, history, tests,
 risks and neighbours, facing the choice between free-form research and fixed
 topics, we decided on six fixed topics to achieve that no area is skipped,
 accepting twelve research calls per change. — 2026-10-14
+
+## Q-3 · What the free models may see
+
+asked: 2026-10-14
+answer: the free models do the kind of research that needs no repository content — finding best practice, what already exists outside; they are not given repository content. The swarm follows set patterns: the search for best practice, the comparison with the overall architecture, and the comparison with the nearby specs.
+answered_by: maintainer
+status: answered
+
+Context given with the question: the repository is private (checked
+2026-10-14); the data terms of the three paid OpenCode Go models were read
+(retention 0 days, no training), those of the free models were not. The
+maintainer's words: "nutzte die kostenlosen modelle für die art recherche, für
+die die repo nicht gelesen werden muss. sowas wie best practice finden, was
+gibt es da draußen schon. der schwarm soll ja auch gewissen mustern folgen,
+wie die such nach best practice, den abgleich mit der gesamtarchitektur und
+den naheliegenden specs". How the patterns map onto the six topics of Q-2,
+and which model takes a repository-bound topic's second seat, is left to the
+spec.
+
+In the context of free models whose data terms are unread and a private
+repository, facing the choice between waiting for their terms and giving them
+no repository content, we decided to give them only outward research to
+achieve the free first stage without exposing the repository, accepting that
+repository-bound topics need another model for their second view. —
+2026-10-14
+
+## Q-4 · Which changes get the swarm
+
+asked: 2026-10-14
+answer: changes of class `feature` and `architectural`; a `bounded` change keeps the single exploration.
+answered_by: maintainer
+status: answered
+
+In the context of twelve research calls and a judge per change, facing the
+choice between every change and the larger classes, we decided on feature and
+architectural changes to achieve depth where it pays, accepting that a small
+change gets one view. — 2026-10-14
+
+## Q-5 · Who judges
+
+asked: 2026-10-14
+answer: Opus 5.5 reconciles the pair of each topic into `research.md`.
+answered_by: maintainer
+status: answered
+
+Options shown: MiMo-V2.6-Pro (recommended by the session: cheap, spares Codex
+and Claude quota), Codex Sol (five-hour limit), Opus 5.5 (Claude quota; the
+orchestrating session itself, outside the runner's leak check). The
+maintainer chose Opus 5.5.
+
+In the context of two views per topic that may contradict each other, facing
+the choice between an OpenCode Go model, Codex and Opus as the judge, we
+decided on Opus 5.5 to achieve the strongest reconciliation, accepting the
+Claude quota it uses. — 2026-10-14
