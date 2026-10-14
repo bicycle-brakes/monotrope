@@ -2,7 +2,7 @@
 title: "Findings — interview-context"
 category: findings
 status: draft
-implementation_status: none
+implementation_status: partial
 date: 2026-10-14
 created: 2026-10-14
 last_reviewed: 2026-10-14
@@ -596,3 +596,16 @@ Stage-2 call, 2026-10-14: implement · attempt 3 · route stage-1 · endpoint cl
 > tools/claude-code/README.md:75:81 error MD013/line-length Line length [Expected: 80; Actual: 88]
 > make: *** [verify] Error 1
 > ````
+
+Stage-2 call, 2026-10-14: review-loop · endpoint opencode-go · model deepseek-v4.1-flash · leak check clean over 427 files, 1164 commits, 12 rules.
+
+Orchestrator completion, 2026-10-14 (after implement attempt 3): the
+orchestrating Claude Code session (Opus 5.5) completed the red tree by hand.
+It reworded the AGENTS.md rule so it names "every question", and set the
+`question-context` adoption day in `decisions/adoption.yaml` to 2026-10-15.
+Reason: plan step 5 records this repository's intended merge day, and the
+earliest day the maintainer can merge is 2026-10-15; the gate was never
+adopted at 2026-10-14, so no adopted day was advanced. The 2026-10-14
+interview answers stay exempt as Q-5 decided. If the merge falls on a later
+day, the day is aligned before the merge (plan step 5). make verify was green
+afterwards (commit f8a7bda). Recorded after review-loop finding L1-4.

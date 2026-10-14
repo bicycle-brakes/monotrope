@@ -1,7 +1,7 @@
 ---
 title: "Plan — interview-context"
 status: draft
-implementation_status: none
+implementation_status: partial
 date: 2026-10-14
 last_reviewed: 2026-10-14
 updated: 2026-10-14
