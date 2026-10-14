@@ -81,3 +81,16 @@ the choice between free text and a fixed form, we decided on a fixed form
 that names the intention and the effect on repository and architecture to
 achieve that the maintainer finds each part in the same place, accepting a
 longer question. — 2026-10-14
+
+## Q-5 · Whether the gate reaches older records
+
+asked: 2026-10-14
+answer: only from its adoption — the gate checks answers recorded on or after the day it merges; older `decisions.md` files stay as they are.
+answered_by: maintainer
+status: answered
+
+In the context of many existing records without a context field, facing the
+choice between a cut-off date and backfilling every old record, we decided on
+the cut-off date to achieve a gate that holds from day one without
+reconstructed context, accepting that older answers show no context. —
+2026-10-14
