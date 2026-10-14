@@ -28,7 +28,7 @@ repositories and the tracker, then did two things:
 
 1. **Tidied its own container.** Nine worktrees of merged branches (the Pi
    move #110 to #114, #115 to #117, #109) and their local branches are
-   removed. The local-only bead coding-harness-6h4, a duplicate of
+   removed. The local-only Pi bead with the short id 6h4, a duplicate of
    coding-harness-351 that the Mac session created when it replayed this
    container's writes on 2026-10-11, is closed in this container's tracker. It
    was never pushed; if this container ever pushes the tracker, it arrives
@@ -66,7 +66,7 @@ repositories and the tracker, then did two things:
 
 ## Tracker
 
-Nothing pushed from here. Only change: coding-harness-6h4 closed as a duplicate
+Nothing pushed from here. Only change: the local bead 6h4 closed as a duplicate
 (local). The bead of #143 (coding-harness-yzk) is not changed here.
 
 ## Parallel sessions
