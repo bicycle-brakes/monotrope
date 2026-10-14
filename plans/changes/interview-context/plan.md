@@ -115,30 +115,30 @@ card templates, harness configuration and sibling repositories untouched.
 
 ## Criterion ledger
 
-- 1: not yet written tests/test_check_question_context.py::test_general_rule_covers_all_questions — remove conversation or review ambiguities from the rule
-- 2: not yet written tests/test_check_question_context.py::test_question_forms_put_context_before_options_and_question_last — remove Intention or Architecture change from a form
-- 2: not yet written tests/test_check_question_context.py::test_plan_card_requires_preface_and_preserves_veto — require an extra approval or alter the card's fields
+- 1: tests/test_check_question_context.py::test_general_rule_covers_all_questions — remove conversation or review ambiguities from the rule
+- 2: tests/test_check_question_context.py::test_question_forms_put_context_before_options_and_question_last — remove Intention or Architecture change from a form
+- 2: tests/test_check_question_context.py::test_plan_card_requires_preface_and_preserves_veto — require an extra approval or alter the card's fields
 - 3: not a test — phase-6 review presents a sample decision and a review ambiguity in isolation; an unexplained identifier or reliance on prior chat refutes it
-- 4: not yet written tests/test_check_question_context.py::test_interview_record_has_a_dedicated_context_field — remove the context field from the record example
-- 4: not yet written tests/test_check_question_context.py::test_interview_minimums_still_counts_a_record_with_a_context_field — a record with a context block stops counting toward the interview minimum
+- 4: tests/test_check_question_context.py::test_interview_record_has_a_dedicated_context_field — remove the context field from the record example
+- 4: tests/test_check_question_context.py::test_interview_minimums_still_counts_a_record_with_a_context_field — a record with a context block stops counting toward the interview minimum
 - 4: not a test — review compares recorded meaning with the context actually shown; an invented explanation or omitted part refutes fidelity
-- 5: not yet written tests/test_check_question_context.py::test_missing_context_goes_red — delete only the subject record's context and require exit 1 with its file and Q-id
-- 5: not yet written tests/test_check_question_context.py::test_empty_or_non_text_context_goes_red — replace context by whitespace, an empty literal block, null or a collection
-- 5: not yet written tests/test_check_question_context.py::test_context_cannot_be_borrowed_from_another_record — put context only in another Q-block or outside all records
-- 5: not yet written tests/test_check_question_context.py::test_every_answered_occurrence_needs_context — exempt a duplicate Q-id or an agent-attributed answered record
-- 6: not yet written tests/test_check_question_context.py::test_nonblank_context_passes_without_clarity_scoring — reject a plain scalar or multiline explanation on wording alone
-- 7: not yet written tests/test_check_question_context.py::test_adoption_day_and_later_answers_are_subject — change the comparison from inclusive to strict or select by spec/asked date
-- 7: not yet written tests/test_check_question_context.py::test_answer_date_uses_wrapped_decision_suffix — take a date from context or fail to read the dash/date split
-- 7: not yet written tests/test_check_question_context.py::test_archived_and_spec_less_answers_are_subject — move a missing-context answer into the archive or remove its spec
-- 7: not yet written tests/test_check_question_context.py::test_examples_open_and_skip_records_are_not_answers — count fenced examples or skip/open blocks as answered records
-- 8: not yet written tests/test_check_question_context.py::test_older_answers_stay_exempt_in_mixed_files — require backfill or let an old answer exempt the whole file
-- 8: not yet written tests/test_check_question_context.py::test_gate_never_writes_records_or_adoption — fill an older record or move the adoption day while checking
-- 9: not yet written tests/test_check_question_context.py::test_unreadable_evidence_is_not_a_pass — return 0 for missing/invalid adoption, absent/ambiguous decision dates or an unreadable file
-- 9: not yet written tests/test_check_question_context.py::test_unmeasured_evidence_takes_exit_precedence — return 1 after one context failure hides another record's unknown date
-- 10: not yet written tests/test_check_question_context.py::test_gate_is_blocking_in_both_placements — omit the command or change enforcement/placement
+- 5: tests/test_check_question_context.py::test_missing_context_goes_red — delete only the subject record's context and require exit 1 with its file and Q-id
+- 5: tests/test_check_question_context.py::test_empty_or_non_text_context_goes_red — replace context by whitespace, an empty literal block, null or a collection
+- 5: tests/test_check_question_context.py::test_context_cannot_be_borrowed_from_another_record — put context only in another Q-block or outside all records
+- 5: tests/test_check_question_context.py::test_every_answered_occurrence_needs_context — exempt a duplicate Q-id or an agent-attributed answered record
+- 6: tests/test_check_question_context.py::test_nonblank_context_passes_without_clarity_scoring — reject a plain scalar or multiline explanation on wording alone
+- 7: tests/test_check_question_context.py::test_adoption_day_and_later_answers_are_subject — change the comparison from inclusive to strict or select by spec/asked date
+- 7: tests/test_check_question_context.py::test_answer_date_uses_wrapped_decision_suffix — take a date from context or fail to read the dash/date split
+- 7: tests/test_check_question_context.py::test_archived_and_spec_less_answers_are_subject — move a missing-context answer into the archive or remove its spec
+- 7: tests/test_check_question_context.py::test_examples_open_and_skip_records_are_not_answers — count fenced examples or skip/open blocks as answered records
+- 8: tests/test_check_question_context.py::test_older_answers_stay_exempt_in_mixed_files — require backfill or let an old answer exempt the whole file
+- 8: tests/test_check_question_context.py::test_gate_never_writes_records_or_adoption — fill an older record or move the adoption day while checking
+- 9: tests/test_check_question_context.py::test_unreadable_evidence_is_not_a_pass — return 0 for missing/invalid adoption, absent/ambiguous decision dates or an unreadable file
+- 9: tests/test_check_question_context.py::test_unmeasured_evidence_takes_exit_precedence — return 1 after one context failure hides another record's unknown date
+- 10: tests/test_check_question_context.py::test_gate_is_blocking_in_both_placements — omit the command or change enforcement/placement
 - 10: tests/test_ci.py::test_no_blocking_gate_step_carries_continue_on_error — allow the derived hosted step to ignore a failure
 - 10: tests/test_ci.py::test_every_gate_step_has_a_mutation_test — add the gate without an executable seeded failure case
-- 11: not yet written tests/test_check_question_context.py::test_context_gate_and_tests_travel_with_the_principle — leave a dependency to the inventory catch-all or add a profile switch
+- 11: tests/test_check_question_context.py::test_context_gate_and_tests_travel_with_the_principle — leave a dependency to the inventory catch-all or add a profile switch
 - 11: not a test — `python3 scripts/kit/probe.py --strict` checks the portable copy; missing mechanism files or this repository's adoption data in it refute the criterion
 - 12: not a test — phase-6 review compares the single claimed ADR to Q-1 through Q-5 and the PR file list; a changed answer, second draft or unmade approval refutes it
 
@@ -186,4 +186,10 @@ orchestrator presents the unchanged card and starts phase 4. Before enabling
 the new gate, recover authentic context for any interview answers whose
 recording day is on or after the actual merge day.
 
+## Runner route — 2026-10-14
+
+Stage-1 route: implement · model claude-sonnet-5-5 · reason: two Flash post-run checks failed.
+
 ## Time used
+
+2026-10-14, span not measured: this session had file tools only and could not read `date`; no estimate is written. The appetite stop is therefore not evaluated for this span.

@@ -265,3 +265,334 @@ Stage-2 call, 2026-10-14: draft · attempt 3 · route glm · endpoint glm-coding
 > - `plans/INDEX.md`
 
 ADR answer owed: decisions/answers/interview-context/adr.yaml does not exist and the gate tolerated that for this run; the answer is the maintainer's (python3 scripts/harness.py decide adr).
+
+Stage-2 call, 2026-10-14: implement · attempt 1 · route flash · endpoint glm-coding-plan · model glm-5.3-flash · leak check clean over 424 files, 1162 commits, 12 rules.
+
+> Attempt 1 (flash) failed its post-run checks.
+>
+> Files the attempt changed (lines added, removed):
+> - `.github/workflows/ci.yml` +4 -0
+> - `AGENTS.md` +8 -0
+> - `decisions/adoption.yaml` +1 -0
+> - `decisions/gates.yaml` +9 -0
+> - `docs/WORKFLOW.md` +24 -1
+> - `plans/changes/interview-context/plan.md` +25 -20
+> - `prompts/01a-interview.md` +21 -8
+> - `prompts/02-spec.md` +13 -0
+> - `prompts/03-plan.md` +5 -2
+> - `scripts/check_question_context.py` +357 -0
+> - `scripts/kit/manifest.yaml` +6 -0
+> - `tests/test_check_question_context.py` +415 -0
+> - `tests/test_this_repository_adoption.py` +4 -0
+>
+> Diagnostics:
+> ````text
+> - Runner format before `make verify`: ruff changed `scripts/check_question_context.py`, `tests/test_check_question_context.py`.
+> - `make verify` exited 2
+> The gates that blocked, each with its last lines:
+> ── [pytest] $ lauf_cmd
+> [… 57 lines of this gate left out …]
+>     )
+>     def test_unreadable_evidence_is_not_a_pass(tmp_path: Path, mutation: str, evidence: str) -> None:
+>         root = _tree(tmp_path)
+>         if mutation == "no-adoption":
+>             (root / "decisions" / "adoption.yaml").unlink()
+>             _change(root, "case", record("Q-1", context=None))
+>         elif mutation == "impossible":
+>             _change(
+>                 root, "case", record("Q-1", context=None, madr="In the context of a change, we decided. — 2026-13-45\n")
+>             )
+>         elif mutation == "two-dates":
+>             madr = (
+>                 "In the context of a change, we decided on the earlier note — 2026-10-14 "
+>                 "and on the later one — 2026-10-15.\n"
+>             )
+>             _change(root, "case", record("Q-1", context=None, madr=madr))
+>         elif mutation == "no-statement":
+>             _change(root, "case", record("Q-1", context=None, madr="We decided. — 2026-10-14\n"))
+>         elif mutation == "no-dash":
+>             _change(
+>                 root,
+>                 "case",
+>                 record("Q-1", context=None, madr="In the context of a change, we decided. Recorded 2026-10-14.\n"),
+>             )
+>         else:
+>             decisions = _change(root, "case", record("Q-1", context=None))
+> >           decisions.write_bytes("In the context of café. — 2026-10-14\n".encode("latin-1"))
+> E           UnicodeEncodeError: 'latin-1' codec can't encode character '\u2014' in position 24: ordinal not in range(256)
+>
+> tests/test_check_question_context.py:363: UnicodeEncodeError
+> ___________________ test_instruction_file_is_under_200_lines ___________________
+>
+>     def test_instruction_file_is_under_200_lines() -> None:
+>         """Das Budget gilt fuer die Instruktionsdatei, nicht fuer die Doku dahinter."""
+>         zeilen = AGENTS_MD.read_text(encoding="utf-8").count("\n")
+> >       assert zeilen <= BUDGET, f"AGENTS.md hat {zeilen} Zeilen — das Budget liegt bei {BUDGET}"
+> E       AssertionError: AGENTS.md hat 208 Zeilen — das Budget liegt bei 200
+> E       assert 208 <= 200
+>
+> tests/test_entry_points.py:32: AssertionError
+> _________________ test_agents_md_names_the_loop_and_the_runner _________________
+>
+>     def test_agents_md_names_the_loop_and_the_runner() -> None:
+>         text = (REPO_ROOT / "AGENTS.md").read_text(encoding="utf-8")
+>         assert agents_md_problems(text) == []
+> >       assert text.count("\n") <= 200
+> E       AssertionError: assert 208 <= 200
+> E        +  where 208 = <built-in method count of str object at 0x7cd14fc000>('\n')
+> E        +    where <built-in method count of str object at 0x7cd14fc000> = '# coding-harness — Agent Instructions\n\nThe home of the coding workflow: **seven phases, three stages**, the session...nce of the workflow |\n| `oracle-source-inventory` | customer instance — read-only boundary for framework sessions |\n'.count
+>
+> tests/test_stage2.py:6771: AssertionError
+> =========================== short test summary info ============================
+> FAILED tests/test_check_question_context.py::test_question_forms_put_context_before_options_and_question_last
+> FAILED tests/test_check_question_context.py::test_unreadable_evidence_is_not_a_pass[unreadable-file]
+> FAILED tests/test_entry_points.py::test_instruction_file_is_under_200_lines
+> FAILED tests/test_stage2.py::test_agents_md_names_the_loop_and_the_runner - A...
+> 4 failed, 1993 passed, 16 skipped in 402.97s (0:06:42)
+> ── [pytest] RED (block) — der Lauf ist rot.
+> ── [adr-answers] $ lauf_cmd
+> adr-answers: interview-context: no answer — plans/changes/interview-context/spec.md is a feature and decisions/answers/interview-context/adr.yaml does not exist; fix: python3 scripts/harness.py decide adr
+> ── [adr-answers] RED (block) — der Lauf ist rot.
+> ── [question-context] $ lauf_cmd
+>   - plans/changes/interview-context/decisions.md: Q-1 — the answered record keeps no context; put what was shown when it was answered in its own field (`context: |` followed by the explanation)
+>   - plans/changes/interview-context/decisions.md: Q-2 — the answered record keeps no context; put what was shown when it was answered in its own field (`context: |` followed by the explanation)
+>   - plans/changes/interview-context/decisions.md: Q-3 — the answered record keeps no context; put what was shown when it was answered in its own field (`context: |` followed by the explanation)
+>   - plans/changes/interview-context/decisions.md: Q-4 — the answered record keeps no context; put what was shown when it was answered in its own field (`context: |` followed by the explanation)
+>   - plans/changes/interview-context/decisions.md: Q-5 — the answered record keeps no context; put what was shown when it was answered in its own field (`context: |` followed by the explanation)
+> question-context: 5 finding(s) — exit 1.
+> ── [question-context] RED (block) — der Lauf ist rot.
+>
+> Standard error of the whole run, last lines:
+> [… 9325 earlier lines left out …]
+> templates/handover.md:22:81 error MD013/line-length Line length [Expected: 80; Actual: 200]
+> templates/handover.md:48:81 error MD013/line-length Line length [Expected: 80; Actual: 88]
+> templates/spec.md:21 error MD041/first-line-heading/first-line-h1 First line in a file should be a top-level heading [Context: "```yaml"]
+> templates/spec.md:39:81 error MD013/line-length Line length [Expected: 80; Actual: 97]
+> templates/spec.md:40:81 error MD013/line-length Line length [Expected: 80; Actual: 95]
+> tools/claude-code/README.md:17:81 error MD013/line-length Line length [Expected: 80; Actual: 105]
+> tools/claude-code/README.md:18:81 error MD013/line-length Line length [Expected: 80; Actual: 109]
+> tools/claude-code/README.md:19:81 error MD013/line-length Line length [Expected: 80; Actual: 134]
+> tools/claude-code/README.md:23:1 error MD060/table-column-style Table column style [Table pipe is missing space to the right for style "compact"]
+> tools/claude-code/README.md:23:5 error MD060/table-column-style Table column style [Table pipe is missing space to the left for style "compact"]
+> tools/claude-code/README.md:23:5 error MD060/table-column-style Table column style [Table pipe is missing space to the right for style "compact"]
+> tools/claude-code/README.md:23:9 error MD060/table-column-style Table column style [Table pipe is missing space to the left for style "compact"]
+> tools/claude-code/README.md:23:9 error MD060/table-column-style Table column style [Table pipe is missing space to the right for style "compact"]
+> tools/claude-code/README.md:23:13 error MD060/table-column-style Table column style [Table pipe is missing space to the left for style "compact"]
+> tools/claude-code/README.md:24:81 error MD013/line-length Line length [Expected: 80; Actual: 272]
+> tools/claude-code/README.md:25:81 error MD013/line-length Line length [Expected: 80; Actual: 180]
+> tools/claude-code/README.md:26:81 error MD013/line-length Line length [Expected: 80; Actual: 115]
+> tools/claude-code/README.md:28:81 error MD013/line-length Line length [Expected: 80; Actual: 124]
+> tools/claude-code/README.md:29:81 error MD013/line-length Line length [Expected: 80; Actual: 106]
+> tools/claude-code/README.md:38:1 error MD060/table-column-style Table column style [Table pipe is missing space to the right for style "compact"]
+> tools/claude-code/README.md:38:5 error MD060/table-column-style Table column style [Table pipe is missing space to the left for style "compact"]
+> tools/claude-code/README.md:38:5 error MD060/table-column-style Table column style [Table pipe is missing space to the right for style "compact"]
+> tools/claude-code/README.md:38:9 error MD060/table-column-style Table column style [Table pipe is missing space to the left for style "compact"]
+> tools/claude-code/README.md:38:9 error MD060/table-column-style Table column style [Table pipe is missing space to the right for style "compact"]
+> tools/claude-code/README.md:38:13 error MD060/table-column-style Table column style [Table pipe is missing space to the left for style "compact"]
+> tools/claude-code/README.md:40:81 error MD013/line-length Line length [Expected: 80; Actual: 442]
+> tools/claude-code/README.md:41:81 error MD013/line-length Line length [Expected: 80; Actual: 163]
+> tools/claude-code/README.md:42:81 error MD013/line-length Line length [Expected: 80; Actual: 126]
+> tools/claude-code/README.md:43:81 error MD013/line-length Line length [Expected: 80; Actual: 96]
+> tools/claude-code/README.md:44:81 error MD013/line-length Line length [Expected: 80; Actual: 167]
+> tools/claude-code/README.md:72:1 error MD060/table-column-style Table column style [Table pipe is missing space to the right for style "compact"]
+> tools/claude-code/README.md:72:5 error MD060/table-column-style Table column style [Table pipe is missing space to the left for style "compact"]
+> tools/claude-code/README.md:72:5 error MD060/table-column-style Table column style [Table pipe is missing space to the right for style "compact"]
+> tools/claude-code/README.md:72:9 error MD060/table-column-style Table column style [Table pipe is missing space to the left for style "compact"]
+> tools/claude-code/README.md:72:9 error MD060/table-column-style Table column style [Table pipe is missing space to the right for style "compact"]
+> tools/claude-code/README.md:72:13 error MD060/table-column-style Table column style [Table pipe is missing space to the left for style "compact"]
+> tools/claude-code/README.md:73:81 error MD013/line-length Line length [Expected: 80; Actual: 112]
+> tools/claude-code/README.md:74:81 error MD013/line-length Line length [Expected: 80; Actual: 89]
+> tools/claude-code/README.md:75:81 error MD013/line-length Line length [Expected: 80; Actual: 88]
+> make: *** [verify] Error 1
+> ````
+
+Stage-2 call, 2026-10-14: implement · attempt 2 · route flash-repair · endpoint glm-coding-plan · model glm-5.3-flash · reason first Flash post-run check failed · leak check clean over 426 files, 1162 commits, 12 rules.
+
+> Attempt 2 (flash-repair) failed its post-run checks.
+>
+> Files the attempt changed (lines added, removed):
+> - `AGENTS.md` +2 -4
+> - `plans/changes/interview-context/plan.md` +27 -20
+> - `prompts/01a-interview.md` +10 -9
+> - `tests/test_check_question_context.py` +4 -1
+>
+> Diagnostics:
+> ````text
+> - Runner format before `make verify`: ruff changed no file.
+> - `make verify` exited 2
+> The gates that blocked, each with its last lines:
+> ── [adr-answers] $ lauf_cmd
+> adr-answers: interview-context: no answer — plans/changes/interview-context/spec.md is a feature and decisions/answers/interview-context/adr.yaml does not exist; fix: python3 scripts/harness.py decide adr
+> ── [adr-answers] RED (block) — der Lauf ist rot.
+> ── [question-context] $ lauf_cmd
+>   - plans/changes/interview-context/decisions.md: Q-1 — the answered record keeps no context; put what was shown when it was answered in its own field (`context: |` followed by the explanation)
+>   - plans/changes/interview-context/decisions.md: Q-2 — the answered record keeps no context; put what was shown when it was answered in its own field (`context: |` followed by the explanation)
+>   - plans/changes/interview-context/decisions.md: Q-3 — the answered record keeps no context; put what was shown when it was answered in its own field (`context: |` followed by the explanation)
+>   - plans/changes/interview-context/decisions.md: Q-4 — the answered record keeps no context; put what was shown when it was answered in its own field (`context: |` followed by the explanation)
+>   - plans/changes/interview-context/decisions.md: Q-5 — the answered record keeps no context; put what was shown when it was answered in its own field (`context: |` followed by the explanation)
+> question-context: 5 finding(s) — exit 1.
+> ── [question-context] RED (block) — der Lauf ist rot.
+>
+> Standard error of the whole run, last lines:
+> [… 9384 earlier lines left out …]
+> templates/handover.md:22:81 error MD013/line-length Line length [Expected: 80; Actual: 200]
+> templates/handover.md:48:81 error MD013/line-length Line length [Expected: 80; Actual: 88]
+> templates/spec.md:21 error MD041/first-line-heading/first-line-h1 First line in a file should be a top-level heading [Context: "```yaml"]
+> templates/spec.md:39:81 error MD013/line-length Line length [Expected: 80; Actual: 97]
+> templates/spec.md:40:81 error MD013/line-length Line length [Expected: 80; Actual: 95]
+> tools/claude-code/README.md:17:81 error MD013/line-length Line length [Expected: 80; Actual: 105]
+> tools/claude-code/README.md:18:81 error MD013/line-length Line length [Expected: 80; Actual: 109]
+> tools/claude-code/README.md:19:81 error MD013/line-length Line length [Expected: 80; Actual: 134]
+> tools/claude-code/README.md:23:1 error MD060/table-column-style Table column style [Table pipe is missing space to the right for style "compact"]
+> tools/claude-code/README.md:23:5 error MD060/table-column-style Table column style [Table pipe is missing space to the left for style "compact"]
+> tools/claude-code/README.md:23:5 error MD060/table-column-style Table column style [Table pipe is missing space to the right for style "compact"]
+> tools/claude-code/README.md:23:9 error MD060/table-column-style Table column style [Table pipe is missing space to the left for style "compact"]
+> tools/claude-code/README.md:23:9 error MD060/table-column-style Table column style [Table pipe is missing space to the right for style "compact"]
+> tools/claude-code/README.md:23:13 error MD060/table-column-style Table column style [Table pipe is missing space to the left for style "compact"]
+> tools/claude-code/README.md:24:81 error MD013/line-length Line length [Expected: 80; Actual: 272]
+> tools/claude-code/README.md:25:81 error MD013/line-length Line length [Expected: 80; Actual: 180]
+> tools/claude-code/README.md:26:81 error MD013/line-length Line length [Expected: 80; Actual: 115]
+> tools/claude-code/README.md:28:81 error MD013/line-length Line length [Expected: 80; Actual: 124]
+> tools/claude-code/README.md:29:81 error MD013/line-length Line length [Expected: 80; Actual: 106]
+> tools/claude-code/README.md:38:1 error MD060/table-column-style Table column style [Table pipe is missing space to the right for style "compact"]
+> tools/claude-code/README.md:38:5 error MD060/table-column-style Table column style [Table pipe is missing space to the left for style "compact"]
+> tools/claude-code/README.md:38:5 error MD060/table-column-style Table column style [Table pipe is missing space to the right for style "compact"]
+> tools/claude-code/README.md:38:9 error MD060/table-column-style Table column style [Table pipe is missing space to the left for style "compact"]
+> tools/claude-code/README.md:38:9 error MD060/table-column-style Table column style [Table pipe is missing space to the right for style "compact"]
+> tools/claude-code/README.md:38:13 error MD060/table-column-style Table column style [Table pipe is missing space to the left for style "compact"]
+> tools/claude-code/README.md:40:81 error MD013/line-length Line length [Expected: 80; Actual: 442]
+> tools/claude-code/README.md:41:81 error MD013/line-length Line length [Expected: 80; Actual: 163]
+> tools/claude-code/README.md:42:81 error MD013/line-length Line length [Expected: 80; Actual: 126]
+> tools/claude-code/README.md:43:81 error MD013/line-length Line length [Expected: 80; Actual: 96]
+> tools/claude-code/README.md:44:81 error MD013/line-length Line length [Expected: 80; Actual: 167]
+> tools/claude-code/README.md:72:1 error MD060/table-column-style Table column style [Table pipe is missing space to the right for style "compact"]
+> tools/claude-code/README.md:72:5 error MD060/table-column-style Table column style [Table pipe is missing space to the left for style "compact"]
+> tools/claude-code/README.md:72:5 error MD060/table-column-style Table column style [Table pipe is missing space to the right for style "compact"]
+> tools/claude-code/README.md:72:9 error MD060/table-column-style Table column style [Table pipe is missing space to the left for style "compact"]
+> tools/claude-code/README.md:72:9 error MD060/table-column-style Table column style [Table pipe is missing space to the right for style "compact"]
+> tools/claude-code/README.md:72:13 error MD060/table-column-style Table column style [Table pipe is missing space to the left for style "compact"]
+> tools/claude-code/README.md:73:81 error MD013/line-length Line length [Expected: 80; Actual: 112]
+> tools/claude-code/README.md:74:81 error MD013/line-length Line length [Expected: 80; Actual: 89]
+> tools/claude-code/README.md:75:81 error MD013/line-length Line length [Expected: 80; Actual: 88]
+> make: *** [verify] Error 1
+> ````
+
+Stage-2 call, 2026-10-14: implement · attempt 3 · route stage-1 · endpoint claude-code-plan · model claude-sonnet-5-5 · reason two Flash post-run checks failed · leak check clean over 426 files, 1162 commits, 12 rules.
+
+> Attempt 3 (stage-1) failed its post-run checks.
+>
+> Files the attempt changed (lines added, removed):
+> - `AGENTS.md` +31 -31
+> - `plans/changes/interview-context/plan.md` +22 -20
+>
+> Diagnostics:
+> ````text
+> - Runner format before `make verify`: ruff changed no file.
+> - `make verify` exited 2
+> The gates that blocked, each with its last lines:
+> ── [pytest] $ lauf_cmd
+> ........................................................................ [  3%]
+> ........................................................................ [  7%]
+> .......................................................F................ [ 10%]
+> .................................................................s...... [ 14%]
+> ....s..................ss..................................ss.sssssss..s [ 17%]
+> .......s................................................................ [ 21%]
+> ........................................................................ [ 25%]
+> ........................................................................ [ 28%]
+> ........................................................................ [ 32%]
+> ........................................................................ [ 35%]
+> ........................................................................ [ 39%]
+> ........................................................................ [ 42%]
+> ................................s....................................... [ 46%]
+> ........................................................................ [ 50%]
+> ........................................................................ [ 53%]
+> ........................................................................ [ 57%]
+> ........................................................................ [ 60%]
+> ........................................................................ [ 64%]
+> ........................................................................ [ 67%]
+> ........................................................................ [ 71%]
+> ........................................................................ [ 75%]
+> ........................................................................ [ 78%]
+> ........................................................................ [ 82%]
+> ........................................................................ [ 85%]
+> ........................................................................ [ 89%]
+> ........................................................................ [ 92%]
+> ........................................................................ [ 96%]
+> .....................................................................    [100%]
+> =================================== FAILURES ===================================
+> ____________________ test_general_rule_covers_all_questions ____________________
+>
+>     def test_general_rule_covers_all_questions() -> None:
+>         """The rule stands in the general instructions, not in the interview
+>         prompt alone — conversation and the review ambiguity are named."""
+>         workflow = WORKFLOW.read_text(encoding="utf-8")
+>         assert "question-context" in workflow
+>         assert "conversation" in workflow
+>         assert "review ambiguities" in workflow
+>         agents = REPO / "AGENTS.md"
+>         if not agents.is_file():
+>             return  # AGENTS.md stays in its repository; the workflow carries the rule
+>         text = agents.read_text(encoding="utf-8")
+> >       assert "every question" in text
+> E       AssertionError: assert 'every question' in '# coding-harness — Agent Instructions\n\nThe home of the coding workflow: **seven phases, three stages**, the session...nce of the workflow |\n| `oracle-source-inventory` | customer instance — read-only boundary for framework sessions |\n'
+>
+> tests/test_check_question_context.py:117: AssertionError
+> =========================== short test summary info ============================
+> FAILED tests/test_check_question_context.py::test_general_rule_covers_all_questions
+> 1 failed, 1996 passed, 16 skipped in 414.65s (0:06:54)
+> ── [pytest] RED (block) — der Lauf ist rot.
+> ── [adr-answers] $ lauf_cmd
+> adr-answers: interview-context: no answer — plans/changes/interview-context/spec.md is a feature and decisions/answers/interview-context/adr.yaml does not exist; fix: python3 scripts/harness.py decide adr
+> ── [adr-answers] RED (block) — der Lauf ist rot.
+> ── [question-context] $ lauf_cmd
+>   - plans/changes/interview-context/decisions.md: Q-1 — the answered record keeps no context; put what was shown when it was answered in its own field (`context: |` followed by the explanation)
+>   - plans/changes/interview-context/decisions.md: Q-2 — the answered record keeps no context; put what was shown when it was answered in its own field (`context: |` followed by the explanation)
+>   - plans/changes/interview-context/decisions.md: Q-3 — the answered record keeps no context; put what was shown when it was answered in its own field (`context: |` followed by the explanation)
+>   - plans/changes/interview-context/decisions.md: Q-4 — the answered record keeps no context; put what was shown when it was answered in its own field (`context: |` followed by the explanation)
+>   - plans/changes/interview-context/decisions.md: Q-5 — the answered record keeps no context; put what was shown when it was answered in its own field (`context: |` followed by the explanation)
+> question-context: 5 finding(s) — exit 1.
+> ── [question-context] RED (block) — der Lauf ist rot.
+>
+> Standard error of the whole run, last lines:
+> [… 9431 earlier lines left out …]
+> templates/handover.md:22:81 error MD013/line-length Line length [Expected: 80; Actual: 200]
+> templates/handover.md:48:81 error MD013/line-length Line length [Expected: 80; Actual: 88]
+> templates/spec.md:21 error MD041/first-line-heading/first-line-h1 First line in a file should be a top-level heading [Context: "```yaml"]
+> templates/spec.md:39:81 error MD013/line-length Line length [Expected: 80; Actual: 97]
+> templates/spec.md:40:81 error MD013/line-length Line length [Expected: 80; Actual: 95]
+> tools/claude-code/README.md:17:81 error MD013/line-length Line length [Expected: 80; Actual: 105]
+> tools/claude-code/README.md:18:81 error MD013/line-length Line length [Expected: 80; Actual: 109]
+> tools/claude-code/README.md:19:81 error MD013/line-length Line length [Expected: 80; Actual: 134]
+> tools/claude-code/README.md:23:1 error MD060/table-column-style Table column style [Table pipe is missing space to the right for style "compact"]
+> tools/claude-code/README.md:23:5 error MD060/table-column-style Table column style [Table pipe is missing space to the left for style "compact"]
+> tools/claude-code/README.md:23:5 error MD060/table-column-style Table column style [Table pipe is missing space to the right for style "compact"]
+> tools/claude-code/README.md:23:9 error MD060/table-column-style Table column style [Table pipe is missing space to the left for style "compact"]
+> tools/claude-code/README.md:23:9 error MD060/table-column-style Table column style [Table pipe is missing space to the right for style "compact"]
+> tools/claude-code/README.md:23:13 error MD060/table-column-style Table column style [Table pipe is missing space to the left for style "compact"]
+> tools/claude-code/README.md:24:81 error MD013/line-length Line length [Expected: 80; Actual: 272]
+> tools/claude-code/README.md:25:81 error MD013/line-length Line length [Expected: 80; Actual: 180]
+> tools/claude-code/README.md:26:81 error MD013/line-length Line length [Expected: 80; Actual: 115]
+> tools/claude-code/README.md:28:81 error MD013/line-length Line length [Expected: 80; Actual: 124]
+> tools/claude-code/README.md:29:81 error MD013/line-length Line length [Expected: 80; Actual: 106]
+> tools/claude-code/README.md:38:1 error MD060/table-column-style Table column style [Table pipe is missing space to the right for style "compact"]
+> tools/claude-code/README.md:38:5 error MD060/table-column-style Table column style [Table pipe is missing space to the left for style "compact"]
+> tools/claude-code/README.md:38:5 error MD060/table-column-style Table column style [Table pipe is missing space to the right for style "compact"]
+> tools/claude-code/README.md:38:9 error MD060/table-column-style Table column style [Table pipe is missing space to the left for style "compact"]
+> tools/claude-code/README.md:38:9 error MD060/table-column-style Table column style [Table pipe is missing space to the right for style "compact"]
+> tools/claude-code/README.md:38:13 error MD060/table-column-style Table column style [Table pipe is missing space to the left for style "compact"]
+> tools/claude-code/README.md:40:81 error MD013/line-length Line length [Expected: 80; Actual: 442]
+> tools/claude-code/README.md:41:81 error MD013/line-length Line length [Expected: 80; Actual: 163]
+> tools/claude-code/README.md:42:81 error MD013/line-length Line length [Expected: 80; Actual: 126]
+> tools/claude-code/README.md:43:81 error MD013/line-length Line length [Expected: 80; Actual: 96]
+> tools/claude-code/README.md:44:81 error MD013/line-length Line length [Expected: 80; Actual: 167]
+> tools/claude-code/README.md:72:1 error MD060/table-column-style Table column style [Table pipe is missing space to the right for style "compact"]
+> tools/claude-code/README.md:72:5 error MD060/table-column-style Table column style [Table pipe is missing space to the left for style "compact"]
+> tools/claude-code/README.md:72:5 error MD060/table-column-style Table column style [Table pipe is missing space to the right for style "compact"]
+> tools/claude-code/README.md:72:9 error MD060/table-column-style Table column style [Table pipe is missing space to the left for style "compact"]
+> tools/claude-code/README.md:72:9 error MD060/table-column-style Table column style [Table pipe is missing space to the right for style "compact"]
+> tools/claude-code/README.md:72:13 error MD060/table-column-style Table column style [Table pipe is missing space to the left for style "compact"]
+> tools/claude-code/README.md:73:81 error MD013/line-length Line length [Expected: 80; Actual: 112]
+> tools/claude-code/README.md:74:81 error MD013/line-length Line length [Expected: 80; Actual: 89]
+> tools/claude-code/README.md:75:81 error MD013/line-length Line length [Expected: 80; Actual: 88]
+> make: *** [verify] Error 1
+> ````

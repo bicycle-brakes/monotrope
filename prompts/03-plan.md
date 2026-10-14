@@ -27,8 +27,11 @@ Starts unless you say stop.
 ```
 
 The pre-mortem is one line with one reason, never a list of risks. When phase 3
-ends, show the card in the closing message, identical to the one in `plan.md`.
-While the maintainer has not said stop, phase 4 starts once the card is shown;
+ends, show a short contextual preface before the card — Topic, Intention,
+Today, Repository change, Architecture change, as `docs/WORKFLOW.md` sets
+them out — and then the card in the closing message, identical to the one in
+`plan.md`; the preface names no field of the card and asks for no approval of
+its own. While the maintainer has not said stop, phase 4 starts once the card is shown;
 no "ok" is needed. When phase 3 runs as a subagent or through the runner, the
 orchestrating session shows the card to the maintainer unchanged; the veto
 stays the maintainer's.

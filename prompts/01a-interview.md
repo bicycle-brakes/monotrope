@@ -52,12 +52,18 @@ this happens, should the system do A or B — A means …, B means …". Options
 named after what they do to users, operations or risk, never after their
 mechanism.
 
-**Every question brings its context, written for a reader with ADHD**
-(maintainer, 2026-10-14). Before the options, two to four short sentences say
-what the question is about, why it comes up now and what happens today — in
-plain words, without assuming the reader knows the code, the finding or an
-earlier conversation. Every id or technical term is explained where it first
-appears. The question itself comes last and stands on its own line.
+**Every question brings its context, written for a reader with ADHD** — and
+this holds for every question to the maintainer, in every phase and in
+conversation, not only here (maintainer, 2026-10-14, ADR 0018).
+Before the options, five short parts stand in this order: **Topic:** what
+the question is about; **Intention:** why it comes up now and what it is
+for; **Today:** what happens today, in plain words; **Repository change:**
+what changes in the repository if it is built; **Architecture change:**
+what changes in its architecture. An unchanged area says so and why it
+stays as it is. Every id or technical term is explained where it first
+appears, without assuming the reader knows the code, the finding or an
+earlier conversation. The question itself comes last and stands on its
+own line.
 
 **Stop when the design tree has no unresolved branch left.** Not when you run
 out of ideas for questions. If two answers would lead to the same build, the
@@ -76,6 +82,12 @@ asked: 2026-10-09
 answer: <the answer, as stated>
 answered_by: maintainer
 status: answered
+context: |
+  Topic: <what the question is about>
+  Intention: <why it comes up now>
+  Today: <what happens today>
+  Repository change: <what changes in the repository>
+  Architecture change: <what changes in the architecture>
 
 In the context of <situation>, facing <constraint>, we decided <option>,
 to achieve <goal>, accepting <consequence>. — 2026-10-09
@@ -84,8 +96,10 @@ to achieve <goal>, accepting <consequence>. — 2026-10-09
 `status` is `answered` or `open`. Only records with `status: answered` and
 `answered_by: maintainer` count toward a minimum, distinct ids, first
 occurrence wins — an agent's answer, an open question and a repeated
-confirmation count for nothing. When no question is owed, one **skip record**
-ends the phase:
+confirmation count for nothing. The `context` field keeps what was actually
+shown with the question, faithfully in English when the conversation was
+German, and the date after the statement is the day the answer was recorded.
+When no question is owed, one **skip record** ends the phase:
 
 ```markdown
 ## SKIP · interview
