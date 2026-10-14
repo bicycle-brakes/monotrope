@@ -1,10 +1,10 @@
 ---
-title: "plans/ — die Artefakte, die zwischen den Phasen übergeben werden"
+title: "plans/ — the artifacts handed over between the phases"
 category: engine
 status: current
 created: 2026-09-05
 last_reviewed: 2026-09-05
-updated: 2026-09-29
+updated: 2026-10-14
 owner: Data Architect
 provenance: ai-drafted-reviewed
 produced_by:
@@ -15,38 +15,39 @@ review:
   status: pending
   approved_by: null
   approved_at: null
-tags: [workflow, artefakte, spec, plan, lebenszyklus]
+tags: [workflow, artifacts, spec, plan, lifecycle]
 ---
 
 # plans/
 
-Hier liegt das, was eine Phase des Arbeitsablaufs an die nächste übergibt. **Die
-Übergabe ist die Datei, nicht der Chat-Verlauf.** Der ganze Sinn: zwischen Plan
-und Umsetzung wird der Kontext gelöscht, und danach muss trotzdem alles da sein.
+This is where what one phase of the workflow hands to the next lives. **The
+handover is the file, not the chat history.** The whole point: between plan and
+implementation the context is wiped, and everything must still be there
+afterwards.
 
-Der Ablauf selbst steht in [`docs/WORKFLOW.md`](../docs/WORKFLOW.md).
+The workflow itself is in [`docs/WORKFLOW.md`](../docs/WORKFLOW.md).
 
-## Drei Zustände, drei Orte
+## Three states, three places
 
-| Ort | Was dort liegt | Lebensdauer |
+| Place | What lives there | Lifetime |
 |---|---|---|
-| `specs/<capability>/spec.md` | **lebend** — was eine Fähigkeit heute leisten soll | bleibt, wird fortgeschrieben |
-| `changes/<name>/` | **aktiv** — eine Änderung in Arbeit: `research.md`, `spec.md`, `plan.md` | bis zum Abschluss |
-| `changes/archive/YYYY-MM-DD-<name>/` | **historisch** — abgeschlossen | bleibt als Beleg, wird nie zitiert |
+| `specs/<capability>/spec.md` | **living** — what a capability is meant to deliver today | stays, is kept up to date |
+| `changes/<name>/` | **active** — a change in progress: `research.md`, `spec.md`, `plan.md` | until completion |
+| `changes/archive/YYYY-MM-DD-<name>/` | **historical** — completed | stays as evidence, is never cited |
 
-Nach Abschluss einer Änderung: das Delta in die lebende Capability-Spec mergen,
-dauerhafte Architekturentscheidungen als ADR nach `docs/adr/` heben, den Rest
-archivieren. **Eine implementierte Feature-Spec bleibt nicht als lebendes
-Dokument stehen** — dafür sind Code und Git-Historie da, und zwei Wahrheiten über
-denselben Gegenstand sind eine zu viel.
+After a change is completed: merge the delta into the living capability spec,
+lift lasting architecture decisions into an ADR under `docs/adr/`, archive the
+rest. **An implemented feature spec does not stay behind as a living
+document** — code and Git history are there for that, and two truths about the
+same subject are one too many.
 
 ## Frontmatter
 
-Zwei getrennte Statusfelder, und die Trennung ist der Punkt:
+Two separate status fields, and the separation is the point:
 
 ```yaml
-status: draft | accepted | superseded      # bewegt sich, wenn das Projekt entscheidet
-implementation_status: none | partial | done   # bewegt sich, wenn der Code sich bewegt
+status: draft | accepted | superseded      # moves when the project decides
+implementation_status: none | partial | done   # moves when the code moves
 date: 2026-09-05
 last_reviewed: 2026-09-05
 supersedes: null
@@ -54,58 +55,56 @@ superseded_by: null
 bead: portfolio-agentic-engineering-<id>
 ```
 
-Ein Feld, das beides trägt, kann nicht sagen, ob eine akzeptierte Spec noch
-ungebaut ist oder ob gebauter Code auf einer zurückgezogenen Spec steht. Genau
-diese beiden Fälle sind die interessanten.
+A field that carries both cannot say whether an accepted spec is still unbuilt
+or whether built code rests on a withdrawn spec. Exactly these two cases are the
+interesting ones.
 
-`bead:` verbindet das Artefakt mit dem Tracker. Arbeit wird in Beads geführt,
-nicht in Markdown-Listen (AGENTS.md) — die Artefakte hier beschreiben *was*
-gebaut wird, der Tracker sagt, *wo es steht*.
+`bead:` connects the artifact to the tracker. Work is tracked in Beads, not in
+Markdown lists (AGENTS.md) — the artifacts here describe *what* is being built,
+the tracker says *where it stands*.
 
-**Pflicht** sind `status`, `implementation_status`, `date`, `last_reviewed`
-und `bead`; `plans_registry.py --check` blockiert, wenn eines fehlt — **oder
-da ist, aber leer bzw. `null`**. „Vorhanden" und „gefüllt" sind nicht dasselbe:
-ein `last_reviewed:` ohne Wert ist für jede nachgelagerte Prüfung derselbe
-blinde Fleck wie ein fehlendes Feld. `supersedes` und `superseded_by` sind die
-einzigen zwei Felder, die `null` sein dürfen. Bis zum 06.09. war `bead` nur
-Konvention — alle Artefakte trugen es, geprüft hat es niemand. Eine Regel,
-die jeder befolgt und kein Gate kennt, ist eine Gewohnheit.
+`status`, `implementation_status`, `date`, `last_reviewed` and `bead` are
+**mandatory**; `plans_registry.py --check` blocks if one is missing — **or
+present but empty or `null`**. "Present" and "filled" are not the same thing: a
+`last_reviewed:` without a value is the same blind spot for every downstream
+check as a missing field. `supersedes` and `superseded_by` are the only two
+fields allowed to be `null`. Until 06 September `bead` was only a convention —
+all artifacts carried it, nobody checked it. A rule that everyone follows and no
+gate knows is a habit.
 
-`bead:` ist mehr als ein Verweis: `plans_registry.py` hält `implementation_status`
-gegen den Zustand desselben Vorgangs im Tracker-Render — über den einen
-Zugriffspunkt `scripts/bead_render.py` (in der CI das vorgesetzte `BEAD_RENDER`,
-sonst ein frisches Render). Ist der Bead
-geschlossen, muss das Artefakt `done` sein **und** unter `changes/archive/`
-liegen; steht es auf `done`, muss der Bead geschlossen sein. Beide Richtungen
-melden DRIFT und werden erst im nächtlichen `--strict`-Lauf scharf, nicht am
-Pull Request — zwischen `bd close` und dem Nacharchivieren liegt bewusst ein
-Fenster von Stunden, kein Grund zum Blocken.
+`bead:` is more than a pointer: `plans_registry.py` holds `implementation_status`
+against the state of the same item in the tracker render — through the single
+access point `scripts/bead_render.py` (in CI the preset `BEAD_RENDER`, otherwise
+a fresh render). If the bead is closed, the artifact must be `done` **and** lie
+under `changes/archive/`; if it is `done`, the bead must be closed. Both
+directions report DRIFT and only become sharp in the nightly `--strict` run, not
+at the pull request — between `bd close` and the later archiving there is
+deliberately a window of hours, no reason to block.
 
-Bewegt sich `implementation_status` von `none` weg, muss der Ordner ein
-`plan.md` tragen — DRIFT im selben `--strict`-Lauf.
+If `implementation_status` moves away from `none`, the folder must carry a
+`plan.md` — DRIFT in the same `--strict` run.
 
-`last_reviewed` altert: liegt es mehr als `STALE_AFTER_DAYS` Tage zurück (heute
-90, die Zahl steht in `scripts/plans_registry.py`, nicht hier), ist das DRIFT.
-Archivierte Artefakte sind ausgenommen — ein Archiv altert per Definition. Und
-ein `date` oder `last_reviewed`, das sich **nicht als Datum lesen lässt**, ist
-selbst ein DRIFT-Befund: ein unlesbarer Wert ist kein Grund, die Prüfung zu
-überspringen, sondern der Anlass, sie zu melden.
+`last_reviewed` ages: if it lies more than `STALE_AFTER_DAYS` days back (today
+90; the number is in `scripts/plans_registry.py`, not here), that is DRIFT.
+Archived artifacts are exempt — an archive ages by definition. And a `date` or
+`last_reviewed` that **cannot be read as a date** is itself a DRIFT finding: an
+unreadable value is no reason to skip the check, but the occasion to report it.
 
-**Alle DRIFT-Regeln zusammen** — gebaut und nicht archiviert, einseitige
-Ablösung, Altersschwelle, unlesbares Datum, die Kopplung an den Vorgang, das
-fehlende `plan.md` — werden nachts im `drift`-Job scharf
-(`plans_registry.py --check --strict`), nicht am Pull Request. Was am Pull
-Request blockt, ist BLOCK: fehlendes oder leeres Pflichtfeld, ein Status
-außerhalb der erlaubten Menge, ein Ablösungszeiger ins Leere, ein veralteter
-`INDEX.md`, ein fehlender Tracker-Export.
+**All DRIFT rules together** — built and not archived, one-sided supersession,
+age threshold, unreadable date, the coupling to the item, the missing
+`plan.md` — become sharp at night in the `drift` job
+(`plans_registry.py --check --strict`), not at the pull request. What blocks at
+the pull request is BLOCK: a missing or empty mandatory field, a status outside
+the allowed set, a supersession pointer into nothing, a stale `INDEX.md`, a
+missing tracker export.
 
-## Die Regel gegen Mehrfacherzeugung
+## The rule against duplicate creation
 
-> Vor dem Anlegen eines Spec- oder Plan-Artefakts: **immer erst** per `rg` in
-> `plans/specs/` und `plans/changes/` nach dem Thema suchen. Existiert ein
-> passendes Artefakt, wird es **aktualisiert** — nicht neu angelegt.
+> Before creating a spec or plan artifact: **always first** search `plans/specs/`
+> and `plans/changes/` for the topic with `rg`. If a matching artifact exists,
+> it is **updated** — not created anew.
 
-Sie steht wörtlich auch in `AGENTS.md`, weil ein Agent diese Datei hier nicht
-zwangsläufig liest. Was `make staleness` prüft, ist die Folge davon: Artefakte
-ohne Frontmatter, ohne Bead, mit widersprüchlichem Status, oder fertig und nie
-archiviert.
+It appears verbatim in `AGENTS.md` too, because an agent does not necessarily
+read this file. What `make staleness` checks is the consequence: artifacts
+without frontmatter, without a bead, with a contradictory status, or finished
+and never archived.
