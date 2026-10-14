@@ -4,7 +4,7 @@ category: research
 status: current
 created: 2026-09-16
 last_reviewed: 2026-09-16
-updated: 2026-09-29
+updated: 2026-10-14
 owner: Data Architect
 provenance: ai-drafted-reviewed
 produced_by:
@@ -113,18 +113,18 @@ human choice, listed in §7), **out** (not harness material).
 | Task tracking granularity | Plan approved first, then transcribed into epic + task beads with dependencies (AG-2) | `/decompose` creates epic + task beads before work; workers claim | One bead per change, created before the change folder (`make change … BEAD=`); plan steps are not beads | **decide** (§7 D-3) — recommendation: one bead per change by default; task beads only where parallel workers claim |
 | Bead closing | After the G4 verdict (§6.1 steps 8–9, AG-4) | At `/land-the-plane` after merge | Declared by `Closes-Bead:` trailer, executed on the integration branch; the `merged-beads` gate reports a declaration nobody carried out | **keep** — strictest, and enforced |
 | Discovered work | New bead with `discovered-from` edge, never in the running task (AG-3) | Same, sighted in the weekly review | "File issues for follow-up" (AGENTS.md); no edge type named | **adopt** — the edge is one `bd` flag and makes scope creep visible |
-| Test-first | "Iron law": failing test before code (ADR-05) | Tests first in the worker protocol | Test *with* the change, and for every test its counterpart that plants the fault and goes red (RB-G4 ratchet) | **keep + adopt** — keep the counterpart rule (the corpus lacks it), add the ordering as a SOLL |
+| Test-first | "Iron law": failing test before code (ADW-D05) | Tests first in the worker protocol | Test *with* the change, and for every test its counterpart that plants the fault and goes red (RB-G4 ratchet) | **keep + adopt** — keep the counterpart rule (the corpus lacks it), add the ordering as a SOLL |
 | Review | G4: reviewer subagent, SHA-range diff + spec slice, Critical/Important/Minor, escalate on repeat FAIL | Cross-vendor reviewer via Omnigent | Phase 6: fresh Opus, diff + spec only, findings table with dimension (SPEC/MAINT), origin (`base`/`fix-r<N>`), `[AMBIGUITY]`, `[DIVERGENT]`; two fix-origin rounds = escalation | **keep** — richer and implemented; vocabulary stays BLOCKER/MAJOR/MINOR |
 | Cross-vendor review | Target instantiation of I4 (Polly) | Reviewer with `executor.harness: kimi` | Stage 2: review on Kimi, implement on GLM, with the leak-check barrier before any foreign endpoint | **keep** — same idea; ours adds the barrier the corpus lacks (see §5.4) |
 | Model endpoints and residency | Not addressed; "LLM-Provider … austauschbar" | `deny_pii_in_llm_request` policy; keys in `.env` | `model-endpoints.yaml`: every named model resolves to a declared endpoint with operator, residency, billing; customer code only to declared residency; unlisted is BLOCK (RB-A6, tested) | **keep and feed back** — a hard gap in the corpus for any customer-facing instance |
 | Rule enforcement over time | MUSS/SOLL/KANN; Migrationsplan has exit criteria per stage | Policies as gates; verification list B.1 | Enforcement ladder 1–5; each rule names its test; ramp valves with due dates (`ramp_valves.py`); mutation test per gate (RB-G4); non-vacuity (RB-G7) | **keep and feed back** — the corpus has no mechanism for a rule that is not yet enforced |
-| Portability | Harness neutrality via MCP/ACP/AGENTS.md (C2, ADR-07) — asserted | Portability via `AGENTS.md` + Omnigent YAML (Q2, S4) — asserted | Kit manifest with the roles `mechanismus`/`geruest`/`bestand`, Leerprobe copies the mechanism into an empty repo and measures (173 of 235 green, 2026-09-16) | **keep** — the Leerprobe is the only *measurement* of C2 in the whole corpus |
-| Learning loop | Confidence lifecycle for learned rules: score 0.3–0.9, project scope, promote after 2+ projects, injection budget of 6 rules (ADR-13, KB-3) | Lessons in `brain/`, weekly curation | Lessons (level 7) are experience, not rule; binding only through governance + a gate; human PR | **keep** — see §5.6; the confidence score has no measurement behind it |
+| Portability | Harness neutrality via MCP/ACP/AGENTS.md (C2, ADW-D07) — asserted | Portability via `AGENTS.md` + Omnigent YAML (Q2, S4) — asserted | Kit manifest with the roles `mechanismus`/`geruest`/`bestand`, Leerprobe copies the mechanism into an empty repo and measures (173 of 235 green, 2026-09-16) | **keep** — the Leerprobe is the only *measurement* of C2 in the whole corpus |
+| Learning loop | Confidence lifecycle for learned rules: score 0.3–0.9, project scope, promote after 2+ projects, injection budget of 6 rules (ADW-D13, KB-3) | Lessons in `brain/`, weekly curation | Lessons (level 7) are experience, not rule; binding only through governance + a gate; human PR | **keep** — see §5.6; the confidence score has no measurement behind it |
 | Context budget | KB-1–10: verdict-not-log, delta loading, ≤ 15 % fixed cost, telemetry in every gate report | Sessions end at about half the window; tickets cut by budget | `/clear` between plan and implement; new session at ~60 %; instruction files ≤ 200 lines (RB-S1, tested); subagents for exploration and review | **adopt in part** — KB-1/2/6/8 are already practice; KB-10 (telemetry) has no enforcer in Claude Code today → level 2 with a valve |
 | Unattended runs | Night mode with stop conditions, heartbeat, spend cap, checkpoint commits (P6-5, §6.4, §8.4) | Omnigent automations with `max_cost_usd` and explicit permission mode | Stage 2 `run_change.sh`: segments a marked plan into sessions with a verify gate after each, pauses with exit 2 on an open `[AMBIGUITY]`, BLOCKER or MAJOR; no stop conditions | **adopt** — stop conditions (max iterations, time, idle) belong into the Stage-2 runner spec; the Omnigent parts wait |
 | Approval boundaries | Model is never final authority for unsandboxed shell, network egress, secret paths, writes outside the repo, workflow dispatch (§8.4) | `write_paths`, `github_policy`, `ask_on_os_tools` | `permissions.deny` ≥ prod deploy, `bundle destroy`, force-push, `rm -rf` (RB-A2, tested); read-only agents have no shell | **adopt** — complete RB-A2's list with the five boundaries; note that path rules do not catch `Bash` writes (WORKFLOW §3) |
 | Planning above beads | Vision + spec register | `ROADMAP.md` Now/Next/Later, Shape-Up appetite, one page; milestones as derived view | None — `journal/planning/` ages by design; beads carry epics | **adopt** — one `ROADMAP.md` per instance, in the kit as a template |
-| Meta-harness / Omnigent | Target runtime from stage 0 (C11, ADR-17); Migrationsplan stages 0–4 | From build-up stage 5 only, purely additive; git-native gates must work alone (ADR-0007, P6) | Stage 3, "evaluative, not productive"; order: process, then model diversity, then orchestration (§6) | **keep** — the toolchain document and the running workflow agree; ADW's C11 is the outlier (§5.1) |
+| Meta-harness / Omnigent | Target runtime from stage 0 (C11, ADW-D17); Migrationsplan stages 0–4 | From build-up stage 5 only, purely additive; git-native gates must work alone (ADR-0007, P6) | Stage 3, "evaluative, not productive"; order: process, then model diversity, then orchestration (§6) | **keep** — the toolchain document and the running workflow agree; ADW's C11 is the outlier (§5.1) |
 | Session substrate (tmux/Herdr) | IS-1–6 | Omnigent terminals | Stage 2 `--mode herdr` as a *human's* visibility tool, not a dependency; "no multiplexer isolates anything" | **keep** — IS-5 in ADW says the same; the rest is Omnigent-specific |
 | Worktrees | Worktree per task (P4) | Inside the repo under `.claude/worktrees/<ticket-id>/` so `bd` finds `.beads/` walking up | One worktree per change, condition: every tree sees the same tracker state and the export moves only by what a session did — "half two holds nothing today" (§3) | **decide** (§7 D-5) — the prefix defect reproduced today (portfolio wp-p0.1) is exactly this seam |
 | JSONL export | Committed alongside as audit view (AG-6) | Written **only** at `/land-the-plane` on main, never from a worktree; `bd` auto-commit and auto-hooks off (R15) | Rendered by script; coding-harness set `export.auto true` at bootstrap | **decide** (§7 D-4) — portfolio broke the export three times in four days; the toolchain document's rule is the measured lesson |
@@ -143,7 +143,7 @@ human choice, listed in §7), **out** (not harness material).
 Contradictions between sources are findings, not preferences. Each needs one
 answer.
 
-1. **When Omnigent.** ADW C11/ADR-17: target runtime, POC in stage 0 of the
+1. **When Omnigent.** ADW C11/ADW-D17: target runtime, POC in stage 0 of the
    Migrationsplan. Toolchain ADR-0007: from build-up stage 5, additive only,
    "the preventive layer may never be a precondition for the reactive one"
    (P6). WORKFLOW §5–6: stage 3, evaluative, after process and model
@@ -186,7 +186,7 @@ answer.
 
 ### 5.1 Omnigent as target runtime is a commitment the evidence does not carry
 
-ADW makes Omnigent a *constraint* (C11) and a *decision* (ADR-17). Its
+ADW makes Omnigent a *constraint* (C11) and a *decision* (ADW-D17). Its
 evidence is a feature list. Its own risk table says: alpha with fast breaking
 changes, telemetry opt-out required, one critical CVE in history, sandbox
 asymmetric across platforms; the toolchain document adds "breaking changes
@@ -273,7 +273,7 @@ lower edge of Bounded.
 
 ### 5.6 The confidence lifecycle is pseudo-precision
 
-ADW ADR-13 (from ECC) gives learned rules a confidence score 0.3–0.9, a
+ADW-D13 (from ECC) gives learned rules a confidence score 0.3–0.9, a
 project scope, promotion after two projects, an injection budget of six rules
 at ≤ 250 tokens. Nothing measures the score; it is set by the writer. The
 running workflow's model is simpler and honest: a lesson is written as

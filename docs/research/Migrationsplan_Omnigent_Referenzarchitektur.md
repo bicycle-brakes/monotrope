@@ -4,7 +4,7 @@ category: research
 status: current
 created: 2026-09-16
 last_reviewed: 2026-09-16
-updated: 2026-09-29
+updated: 2026-10-14
 owner: Data Architect
 provenance: ai-drafted-reviewed
 review:
@@ -32,7 +32,7 @@ tags: [research, migration, omnigent, referenzarchitektur]
 
 **Schritte:**
 
-1. **Infrastruktur:** Omnigent-Server auf einer dedizierten Linux-Maschine (nicht dem Produktiv-Laptop) installieren; `bwrap` verifizieren (fehlt es, dürfen keine Terminals starten — das ist gewollt, IS-6); Omnigent-Version **pinnen** (exakte Versionsnummer dokumentieren, ADR-17-Konsequenz); **Telemetrie-Opt-out als allererster Konfigurationsschritt** (C11-Pflicht).
+1. **Infrastruktur:** Omnigent-Server auf einer dedizierten Linux-Maschine (nicht dem Produktiv-Laptop) installieren; `bwrap` verifizieren (fehlt es, dürfen keine Terminals starten — das ist gewollt, IS-6); Omnigent-Version **pinnen** (exakte Versionsnummer dokumentieren, ADW-D17-Konsequenz); **Telemetrie-Opt-out als allererster Konfigurationsschritt** (C11-Pflicht).
 2. **Policy-Basisset:** Die Approval Boundaries aus §8.4 als Server-Policies kodieren (unsandboxed Shell, Netzwerk-Egress, secret-haltende Pfade, Schreiben außerhalb des Repos, Workflow-Dispatch → block/approve). Policy-Dateien ins Repo legen und dem menschlich reviewten PR-Pfad unterstellen — von Anfang an, nicht nachträglich.
 3. **Non-Vacuity-Test der Policies (§8.7):** Für jede Policy ein bekannt-böser Testfall: Agent anweisen, genau die blockierte Aktion zu versuchen (z. B. `cat ~/.ssh/id_rsa`, Schreiben nach `/tmp` außerhalb des Repos, `curl` zu externem Host). Erwartung: block oder approve-Prompt, plus Eintrag im Aktionslog. **Eine Policy, die im Test nicht feuert, ist nicht deployed** — das ist die Laufzeit-Non-Vacuity, die ECC fehlte.
 4. **Beads-Integration prüfen:** Test-Repo mit `bd` initialisieren; verifizieren, dass Agenten-Sessions in Omnigent-Terminals `bd ready`/`bd update`/`bd close` korrekt ausführen und der Graph über Git synchronisiert; „Landing the Plane" (AG-5) einmal manuell durchspielen.
@@ -56,7 +56,7 @@ tags: [research, migration, omnigent, referenzarchitektur]
 
 1. **Scope scharf ziehen:** Nur Bounded-Tasks (Änderung an existierendem, lesbarem Flow) in genau einem Repo. Feature- und Architectural-Klassen bleiben explizit im Fallback.
 2. **G1/G5 über den Omnigent-Kanal:** Die kurze G1-Freigabe und das G5-Review laufen über die Omnigent-Session (Mensch-Gate-Kanal, §5.3); mindestens eine Freigabe bewusst vom Mobilgerät erteilen, um den Kanal zu üben.
-3. **Worker-Instanziierung:** Bounded-Tasks als Beads claimen; Implementierung durch eine frische Session pro Task (I3) in eigener Pane (IS-1). Optional: **Aider als Worker** in der Omnigent-Pane (`aider --message "<Task-Beschreibung + FR-Referenz>"`), mit `git-commit-verify: true` in `.aider.conf.yml` (Pflicht wegen ADR-11 — Aider umgeht Commit-Hooks sonst per Default) und Commit-Prompt-Konvention für Bead-/FR-Referenz (AG-7).
+3. **Worker-Instanziierung:** Bounded-Tasks als Beads claimen; Implementierung durch eine frische Session pro Task (I3) in eigener Pane (IS-1). Optional: **Aider als Worker** in der Omnigent-Pane (`aider --message "<Task-Beschreibung + FR-Referenz>"`), mit `git-commit-verify: true` in `.aider.conf.yml` (Pflicht wegen ADW-D11 — Aider umgeht Commit-Hooks sonst per Default) und Commit-Prompt-Konvention für Bead-/FR-Referenz (AG-7).
 4. **Spend-Cap setzen:** Erstes hartes Kosten-Deckel pro Session (konservativ, z. B. doppelte erwartete Task-Kosten); Verhalten bei Erreichen beobachten.
 5. **Kontextbudget-Telemetrie einschalten (KB-10):** Gate-Reports um die Kontextbelegung ergänzen; Baseline-Werte für Q8 sammeln.
 
@@ -119,7 +119,7 @@ tags: [research, migration, omnigent, referenzarchitektur]
 
 1. **Mutation-Score-Gate im CI (Lücke 1):** Diff-basierte Mutationsanalyse (PIT/Stryker/mutmut je nach Stack) als Quality Gate mit Mindest-Score; Known-Bad-Verifikation der Gates selbst in den Scheduled-CI-Job (§8.7).
 2. **Evidenzgebundene Status (Lücke 3):** Attestierungs-Dateien unter `.workflow/attestations/` (hash-verkettet, mit dem Change committed); G5 prüft Attestierungs-Vollständigkeit. Vollausbau Witness/Archivista nur bei Compliance-Druck.
-3. **Evidenzgebundener Confidence-Lifecycle (Lücke 2, ADR-13-Schärfung):** Gelernte Regeln mit Evidenz-Metadaten (verweis auf verifizierte Commits/PRs); M_core-Schutz für verifizierte Invarianten; Promotion weiterhin menschlich.
+3. **Evidenzgebundener Confidence-Lifecycle (Lücke 2, ADW-D13-Schärfung):** Gelernte Regeln mit Evidenz-Metadaten (verweis auf verifizierte Commits/PRs); M_core-Schutz für verifizierte Invarianten; Promotion weiterhin menschlich.
 4. **Traceability-Matrix als CI-Artefakt (Lücke 5):** FR × Test × Pfad-Matrix automatisiert berechnen; Lücken (FR ohne Test, Test ohne FR, Code ohne FR-Bezug) als blockierende Befunde (§8.5).
 5. **Fallback-Härtung statt Abbau:** Die tmux-Fallback-Topologie wird nicht gelöscht, sondern als **Disaster-Recovery-Pfad** in der Betriebsdoku fixiert (inkl. halbjährlicher Übung — ein untrainierter Fallback ist kein Fallback).
 
@@ -137,7 +137,7 @@ tags: [research, migration, omnigent, referenzarchitektur]
 
 **Querschnittsregeln für alle Stufen:**
 
-- **Versions-Pinning mit Upgrade-Prozess (ADR-17):** Omnigent-Upgrades nur nach Changelog-Lektüre und Test-Deployment; kein Auto-Update auf dem Produktiv-Server. Dasselbe gilt für `bd` (AG-6) und Aider.
+- **Versions-Pinning mit Upgrade-Prozess (ADW-D17):** Omnigent-Upgrades nur nach Changelog-Lektüre und Test-Deployment; kein Auto-Update auf dem Produktiv-Server. Dasselbe gilt für `bd` (AG-6) und Aider.
 - **Policy-Änderungen sind Regelwerk-Änderungen:** Sie durchlaufen den menschlich reviewten PR-Pfad (§8.4) — nie direkt auf dem Server editiert.
 - **Keine zwei aktiven Topologien pro Workflow-Klasse:** Eine Klasse ist entweder migriert oder nicht; Mischzustände innerhalb einer Klasse erzeugen doppelte Wahrheiten.
 - **Jede Stufe endet mit einer Retrospektive im Repo:** Befunde, Policy-Nachschärfungen und Reife-Beobachtungen (Alpha-Risiko!) werden als Change-Dokument abgelegt — die Migration selbst unterliegt denselben Artefakt-Regeln wie jede andere Arbeit am System (I1 gilt auch für den Migrationsprozess).
