@@ -77,3 +77,22 @@ container, facing the choice between one change and two on the same code, we
 decided on one change to achieve that a failed run leaves nothing behind,
 accepting that the spec must also cover writes outside the attempt. The
 exploration of b5w is on branch `explore/derived-leftovers`. — 2026-10-14
+
+## Q-5 · Which container tool is the default
+
+asked: 2026-10-14
+answer: Podman as the default; the runner calls one configurable container program, so Docker or Apple `container` can replace it by a setting.
+answered_by: maintainer
+status: answered
+
+The maintainer asked for a deep dive first ("die beste Option, die sich evtl.
+auch auf Windows-Maschinen nutzen lässt"); the comparison is in
+`research.md`, "Container tool comparison — 2026-10-14". No container tool is
+installed on the maintainer's Mac yet; the live boundary test waits for the
+install.
+
+In the context of a container per attempt that should also work on Windows,
+facing the choice between Podman, Apple `container` and a trial of Docker
+Sandboxes, we decided on Podman behind a configurable program to achieve one
+free, rootless tool on macOS, Windows and Linux CI, accepting that attempts
+share one machine VM with each other. — 2026-10-14
