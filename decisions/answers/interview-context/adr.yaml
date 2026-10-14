@@ -1,0 +1,13 @@
+schema_version: 1
+change: interview-context
+question: adr
+answer: 'yes'
+reason: The maintainer answered "Ja" when asked whether the context rule is recorded
+  as an ADR, after the proposed reason (a durable context field and a gate that travels
+  with the kit) was shown.
+shown:
+  proposed: 'yes'
+  proposal_reason: A rule for every question adds a durable context field and a prospective
+    verification contract across workflow instances.
+answered_by: framework-architect
+answered_at: 2026-10-14
