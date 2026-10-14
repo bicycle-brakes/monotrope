@@ -4,7 +4,7 @@ category: research
 status: proposed
 created: 2026-09-18
 last_reviewed: 2026-09-18
-updated: 2026-09-29
+updated: 2026-10-14
 owner: framework-architect
 provenance: ai-drafted-reviewed
 produced_by:
@@ -40,7 +40,7 @@ The framework also documents [human-feedback pause and resume](https://docs.crew
 
 | Target contract | CrewAI fit and gap |
 |---|---|
-| Seven-phase change contract | A Flow can sequence stages and branch on outcomes. It has no native coding-harness `spec.md`, `plan.md`, `findings.md`, phase gates, class rules, or canonical verifier. Retain Git artifacts and the single manifest as authority. ([Flows](https://docs.crewai.com/v1.15.22/en/concepts/flows)) |
+| Seven-phase change contract | A Flow can sequence steps and branch on outcomes. It has no native coding-harness `spec.md`, `plan.md`, `findings.md`, phase gates, class rules, or canonical verifier. Retain Git artifacts and the single manifest as authority. ([Flows](https://docs.crewai.com/v1.15.22/en/concepts/flows)) |
 | Two isolated coding workers | Crews and tasks support agent collaboration and asynchronous work. That is not evidence of separate worktrees, branch ownership, restricted shells and descendants, safe shared Git resources, or candidate assembly. W0 isolation and M0 probes remain necessary. ([Tasks](https://docs.crewai.com/v1.15.22/en/concepts/tasks), [crews](https://docs.crewai.com/v1.15.22/en/concepts/crews)) |
 | One Beads writer | Flow persistence stores execution state. It does not establish the target's `tools/bd` use, exclusive writer lock, Dolt transport, run/attempt fencing, or stale-result rejection. An adapter may read Beads snapshots; the authorized coordinator alone updates Beads. ([Flow persistence](https://docs.crewai.com/v1.15.22/en/concepts/flows), [target ownership contract](../architecture/2026-09-17-omnigent-first-target.md)) |
 | Human decisions and merge | OSS feedback can pause and resume; its guide calls for an idempotent callback handler. Harness decision records, approval identity, timeout, and human merge still require explicit controls. ([Human feedback](https://docs.crewai.com/v1.15.22/en/learn/human-feedback-in-flows)) |
