@@ -23,7 +23,7 @@ adr_files: [docs/adr/0018-phase-1-research-swarm.md]
 Phase 1 gives larger changes six reconciled research topics, using all declared
 free models for public research, Flash models for repository comparisons and
 Opus 5.5 for reconciliation (bead coding-harness-icw). Sources:
-[`research.md`](research.md) and [`decisions.md`](decisions.md), Q-1 to Q-5.
+[`research.md`](research.md) and [`decisions.md`](decisions.md), Q-1 to Q-6.
 
 ## Problem
 
@@ -54,8 +54,12 @@ Evidence was collected on 2026-10-14; the drafting baseline is `1e29f6e`.
 - **Topics:** (1) code today, (2) rules and decisions, (3) history,
   (4) tests and gates, (5) risks and edge cases,
   (6) outside world and neighbours (Q-2).
-- **Public brief:** fixed generic engineering questions and public sources;
-  no change-specific text or information obtained from repository content.
+- **Public topic:** one sentence, written by a fresh Opus 5.5 call, that
+  names what the change is about in plain words, without file, path, code,
+  identifier, change or bead names (Q-6). Example: "container isolation for
+  AI agent runs".
+- **Public brief:** fixed generic engineering questions, the public topic and
+  public sources; no other change-specific text or repository-derived content.
 - **Research stage:** one part of this phase-1 run; it is not Stage 1 or 2
   of the workflow's model routing.
 - **Role invocation:** one isolated CLI process; its tool use can entail
@@ -94,10 +98,11 @@ Evidence was collected on 2026-10-14; the drafting baseline is `1e29f6e`.
    *Refuted by:* six code summaries with none of those comparisons or an
    assertion that unread adjacent specs are absent.
 8. While a free researcher runs, its model requests and web requests contain
-   no repository-derived content, including the change name, identifiers,
-   paths, history, instructions, private briefs or paid-model reports.
+   no repository-derived content other than the public topic, in particular
+   no change name, identifiers, paths, history, instructions, private briefs
+   or paid-model reports.
    *Refuted by:* a repository canary in a captured public request, including
-   one introduced through ambient context or a web query.
+   one introduced through ambient context, the public topic or a web query.
 9. While a free researcher runs, it has no tool or automatic context path
    through which it can obtain repository files, git data or other private
    local content.
@@ -160,14 +165,22 @@ Evidence was collected on 2026-10-14; the drafting baseline is `1e29f6e`.
     research-swarm ADR.
     *Refuted by:* documentation still routing every class to one explorer,
     free ids added to the review ladder, or an existing ADR rewritten.
+23. Before the free research stage, a fresh Opus 5.5 call writes the public
+    topic, and the runner accepts it only if it is a single sentence of at
+    most 20 words with no path, file name, identifier-shaped token, change
+    name or bead id, and its leak check is clean; otherwise the run stops
+    before any free call. The accepted sentence is recorded in the research.
+    *Refuted by:* a free call after a rejected or missing topic, a topic
+    written by a researcher or the runner itself, or an unrecorded topic.
 
 ## Non-goals
 
 - The implementation-review swarm is separate work (bead coding-harness-4fk).
 - Changing phase 1a, the draft, implementation, repairs, reviews or interactive
   sessions, or replacing the phase-2 input contract of research plus decisions.
-- Sharing repository content with free models, reading their terms as a
-  substitute for Q-3, or using a repository summary as a public brief.
+- Sharing repository content beyond the one-sentence public topic with free
+  models, reading their terms as a substitute for Q-3 and Q-6, or using a
+  repository summary as a public brief.
 - The old proposal's three-role team, cross-critique round, Codex judge,
   activation for every class or automatic research-completeness gate.
 - A new agent framework, service, persistent web cache, benchmark project,
@@ -202,7 +215,7 @@ Evidence was collected on 2026-10-14; the drafting baseline is `1e29f6e`.
 
 ## Open decisions
 
-None open. Q-1 to Q-5 settle the human choices; no ADR answer is recorded here.
+None open. Q-1 to Q-6 settle the human choices; no ADR answer is recorded here.
 I choose the following reversible details and record their reasons explicitly.
 
 - [DETAIL] The class is `architectural`: the swarm scheduler and separate
@@ -220,15 +233,22 @@ I choose the following reversible details and record their reasons explicitly.
 - [DETAIL] The initial free roster is exactly the three ids recorded in Q-1;
   every declared member is used automatically, and new ids need an explicit
   declaration. Availability and their Pi provider mapping are not presumed.
+- [DETAIL] The public topic comes from its own headless Opus 5.5 call at effort
+  `high`, given the private brief and the instruction of criterion 23, because
+  Q-6 names Opus as its author and a runner call is auditable like every
+  other role. A mechanical filter, not the model's promise, enforces the
+  shape; a rejected topic stops the run rather than falling back to generic
+  questions, so the maintainer sees the failure. The topic is the same for
+  all free researchers.
 - [DETAIL] One fresh headless Opus 5.5 call, at effort `xhigh` through official
   Claude Code, reconciles all six pairs: Q-5 chooses the judge, not six
   separate Claude calls, and the runner applies the leak check to this call.
 - [DETAIL] Research remains evidence collection: the judge assesses support
   and exposes gaps, dissent and human questions, without selecting a design
   or adding a workflow gate. This meets Q-5 without adopting the old proposal.
-- [DETAIL] The stages run sequentially, with one invocation per free model,
-  eleven Flash contributions and one judge; the initial roster means fifteen
-  invocations. Researcher deadlines are 10 minutes, the judge's 15 minutes,
+- [DETAIL] The stages run sequentially, with one topic call, one invocation
+  per free model, eleven Flash contributions and one judge; the initial
+  roster means sixteen invocations. The topic call's deadline is 5 minutes. Researcher deadlines are 10 minutes, the judge's 15 minutes,
   and the whole run's 150 minutes, measured monotonically. Partial results
   fail visibly rather than spending unbounded quota.
 - [DETAIL] Phase 4 has an appetite of 12 hours including repairs, stopping at

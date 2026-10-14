@@ -18,7 +18,7 @@ tags: [plan, stage-2, research, swarm]
 # Plan — research-swarm
 
 ```text
-For you:     Larger changes receive six reconciled research topics; free models research public practice without repository content, and Opus 5.5 reconciles the evidence.
+For you:     Larger changes receive six reconciled research topics; free models research public practice from a one-sentence topic, and Opus 5.5 reconciles the evidence.
 Done when:   Routing, public-boundary qualification, source and failure checks hold, and make verify is green.
 Appetite:    12 hours of phase 4, including repairs; stop at the limit.
 Not now:     The implementation-review swarm, changes to other phases, access to sibling checkouts, or a cost benchmark.
@@ -99,7 +99,14 @@ Every implementation path is named here; no file is deleted.
    explicit Haiku fallback. Freeze the private packet and its state digest;
    include bounded runner-collected git history, architecture and adjacent
    specs because Pi's file tools alone are no git-history command.
-4. Run every declared free researcher first on fixed generic briefs. Initial
+4. Before the free stage, run one fresh headless Opus 5.5 call (effort
+   `high`, 5-minute deadline, own leak check and audit) on the private brief
+   to write the public topic (spec criterion 23, Q-6). Accept it only through
+   the mechanical filter: one sentence, at most 20 words, no path, file name,
+   identifier-shaped token, change name or bead id; otherwise stop with exit 1
+   before any free call. Record the accepted sentence in the research.
+   Run every declared free researcher next on fixed generic briefs plus that
+   one topic sentence. Initial
    focuses are LongCat on topics 1/4, Space Bunny on 2/3 and HY4 on 5/6.
    Then run separate DeepSeek/MiMo Flash contexts for each of topics 1–5,
    and DeepSeek Flash for topic 6 paired with HY4's public contribution.
@@ -117,9 +124,9 @@ Every implementation path is named here; no file is deleted.
 6. Before each call, validate the role's declaration, leak-check its exact
    prompt with the current tree/history, and write its own audit. Scrub
    credentials from all outputs/receipts/diagnostics. Use monotonic deadlines:
-   10 minutes per researcher, 15 for Opus, 150 for the whole run; each launch
+   10 minutes per researcher, 5 for the topic call, 15 for the judge, 150 for the whole run; each launch
    takes the smaller remaining allowance. One invocation per roster member,
-   eleven Flash calls and one judge (fifteen initially), no retries, recursive
+   one topic call, eleven Flash calls and one judge (sixteen initially), no retries, recursive
    delegation or debate. Preserve non-security failures, attempt remaining
    scheduled roles within the budget, and exit 1 for any incomplete run;
    declaration/leak refusals record the blocked slot, exit 2 and stop, never
@@ -180,6 +187,7 @@ provider does not expose is unknown; no Claude/cost saving is asserted.
 - 21: not yet written tests/test_stage2_swarm.py::test_all_outputs_scrub_every_used_credential — a planted eight-character fragment survives in output, receipts or diagnostics.
 - 22: not yet written tests/test_stage2_swarm.py::test_phase_one_doctrine_and_declarations_agree — universal single-explorer prose remains, the roster is unresolvable or the Go ladder changes.
 - 22: not a test — phase-6 review and the decision PR file list confirm only ADR 0018 is added and no existing ADR is edited.
+- 23: not yet written tests/test_stage2_swarm.py::test_public_topic_is_filtered_before_free_calls — a multi-sentence, over-long, path-, identifier-, change-name- or bead-id-bearing topic reaches a free call, or the accepted topic is missing from the research.
 
 ## Not touched
 
@@ -250,3 +258,10 @@ an unchanged tracker state. Once green, obtain the Opus phase-2a review and
 incorporate its rows before implementation.
 
 ## Time used
+
+## Addendum — 2026-10-14, Q-6
+
+After the draft, the maintainer answered Q-6: the free models receive one
+Opus-written topic sentence without file or code names. Spec criterion 23,
+build step 4, the role count (sixteen) and the ledger row for 23 were
+adapted by the orchestrating session; design and ADR draft follow.

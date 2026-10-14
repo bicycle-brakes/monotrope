@@ -19,7 +19,7 @@ tags: [design, stage-2, research, swarm]
 
 # Design — research-swarm
 
-This proposed shape implements [`spec.md`](spec.md), using Q-1 to Q-5 of
+This proposed shape implements [`spec.md`](spec.md), using Q-1 to Q-6 of
 [`decisions.md`](decisions.md). The older research proposal supplies evidence
 requirements, not authority for its superseded team or judge assignment.
 
@@ -68,8 +68,12 @@ file/shell tools, sessions, retries, MCP, skills, prompt discovery or themes.
 Load only the runner-owned research-tools extension; never the session policy
 or ambient extensions. Copy that extension and the public prompt to generic
 scratch paths, so repository paths cannot enter discovery metadata. The prompt
-uses fixed generic questions, not
+uses fixed generic questions plus the one-sentence public topic (Q-6), not
 `work_prompt`, `AGENTS.md`, a change brief or a sanitized repository summary.
+The topic comes from its own fresh Opus 5.5 call on the private brief and
+passes a mechanical filter (one sentence, at most 20 words, no path, file
+name, identifier-shaped token, change name or bead id) and a leak check
+before the free stage; a rejected topic stops the run.
 Its environment carries only required runtime settings and the credential
 for its qualified OpenCode transport; user identity, private paths and other
 endpoint credentials are not inherited into model context.

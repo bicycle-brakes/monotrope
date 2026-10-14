@@ -18,7 +18,7 @@ tags: [adr, stage-2, research, swarm, public-boundary]
   Until that merge, open is proposed and closed is rejected. Amends only
   ADR 0007's universal phase-1 route and ADR 0011's OpenCode Go research
   purpose; supersedes no whole ADR and changes no numbered D/O decision.
-* Review: direction chosen by the maintainer in Q-1 to Q-5 on 2026-10-13/14
+* Review: direction chosen by the maintainer in Q-1 to Q-6 on 2026-10-13/14
   (`plans/changes/research-swarm/decisions.md`); subsystem shape and runtime
   details proposed by Codex, not answered for the maintainer. Acceptance is
   the merge commit, written nowhere else, so approval fields stay empty
@@ -35,7 +35,8 @@ accepted for that route, and cannot be reused for free public-only research
 (`scripts/stage2.py`, "Reads"; ADR 0011).
 
 The maintainer chose a research swarm, all free models in its first stage,
-six fixed topics, free models receiving no repository content, activation
+six fixed topics, free models receiving no repository content beyond one
+Opus-written topic sentence without file or code names (Q-6), activation
 for feature/architectural changes, and Opus 5.5 reconciling each pair. Q-3
 explicitly leaves replacement of repository-bound free seats to the spec.
 The earlier three-researcher/Codex-judge proposal is not the chosen team
@@ -49,7 +50,8 @@ unread; the existing paid models' privacy statement is not applied to them.
 
 * Independent research on code, rules, history, tests, risks and neighbours.
 * Public practice, architecture and nearby-spec comparisons are explicit.
-* No repository content goes to a free model, including indirect context.
+* No repository content goes to a free model, including indirect context,
+  except the filtered one-sentence public topic.
 * Opus reconciles evidence without taking the maintainer's decisions.
 * Every call has a declared role, an individual leak check and visible outcome.
 
@@ -99,9 +101,10 @@ surface rather than depend on a model obeying an instruction.
 
 ## Consequences
 
-* The initial run has fifteen role invocations, rather than one; Opus uses
+* The initial run has sixteen role invocations, rather than one; Opus uses
   Claude quota, as Q-5 accepts. This draft makes no cost-saving claim.
-* Public questions are deliberately generic; Flash and Opus own the
+* Public questions are generic apart from the one-sentence topic, so free
+  providers learn what a change is about (accepted in Q-6); Flash and Opus own the
   applicability comparison that cannot be delegated to free models.
 * Paid Pi retains its already documented residual read risk; that is not an
   exemption from the stronger public-only boundary for free models.

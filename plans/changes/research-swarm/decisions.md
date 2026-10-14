@@ -106,3 +106,24 @@ In the context of two views per topic that may contradict each other, facing
 the choice between an OpenCode Go model, Codex and Opus as the judge, we
 decided on Opus 5.5 to achieve the strongest reconciliation, accepting the
 Claude quota it uses. — 2026-10-14
+
+## Q-6 · What the free models learn about the change
+
+asked: 2026-10-14
+answer: "Kurzes Thema mitgeben: Die freien Modelle bekommen eine von Opus geschriebene Ein-Satz-Beschreibung ohne Datei- und Codenamen (zum Beispiel „Container-Isolation für KI-Agenten-Läufe“). Die Spec wird vor der Nacht angepasst."
+answered_by: maintainer
+status: answered
+
+Asked after the first draft (`01ff6d9`), whose spec gave the free models only
+fixed generic questions. Context shown: with the topic they find practice that
+fits this change; without it the private repository stays entirely local.
+Options shown: keep generic questions (recommended by the session while the
+free models' data terms are unread), or pass a short topic. The maintainer
+chose the short topic. This narrows Q-3: the one-sentence topic is the only
+change-derived text a free model receives.
+
+In the context of free researchers whose generic questions yield generic
+practice, facing the choice between no change information and a one-sentence
+topic, we decided on an Opus-written sentence without file or code names to
+achieve best practice that fits the change, accepting that the free providers
+learn what the change is about. — 2026-10-14
