@@ -161,4 +161,5 @@ typed: a hand-kept list of files ages exactly as fast as files are added.
 | [`changes/stage2-session/plan.md`](changes/stage2-session/plan.md) | draft | partial | 2026-10-07 | coding-harness-amp |
 | [`changes/stage2-session/research.md`](changes/stage2-session/research.md) | draft | partial | 2026-10-07 | coding-harness-amp |
 | [`changes/stage2-session/spec.md`](changes/stage2-session/spec.md) | draft | partial | 2026-10-07 | coding-harness-amp |
+| [`changes/test-strength-rows/research.md`](changes/test-strength-rows/research.md) | draft | none | 2026-10-14 | coding-harness-y17 |
 | [`specs/implementation-verification/spec.md`](specs/implementation-verification/spec.md) | accepted | done | 2026-10-08 | coding-harness-mfv |
