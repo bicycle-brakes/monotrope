@@ -159,3 +159,46 @@ registry check would render the shared tracker outside this worktree:
 `BEAD_RENDER` is unset, so it remains with the runner under this call's
 reading boundary. The recorded current PR is #143 (Q-3); its live state
 could not be read because the connection to GitHub failed.
+
+## Implementation evidence — 2026-10-14, phase 4
+
+Read in the implementation worktree on `feat/sol-effort`, baseline `a98614d`.
+
+- The central declaration stands once in `scripts/stage2.py`
+  (`CODEX_EFFORTS`, draft `high`, repair `medium`, review `high`). `CODEX`
+  keeps its endpoint identity with an empty effort slot; `run_codex` takes a
+  keyword-only `verb` and reads the caller verb's entry onto every argv. The
+  four call sites pass their caller verb: the single draft call site,
+  `run_attempts` for both repair routes, and review's verdict and resumed
+  loop-marks calls. The `codex-repair` label names a retry of draft and
+  repair and selects no policy of its own — a draft's retry keeps the draft
+  entry.
+- `scripts/stage2_runs.py` reads only the route's endpoint and model, so the
+  empty effort slot moves nothing there (`FOREIGN_ROUTES`, read 2026-10-14).
+- The nine active literal locations in `docs/WORKFLOW.md` — the three
+  section-3 Opus rows' Codex clauses, five section-4 rows and the drafting
+  prose — and the four Model paragraphs of `prompts/02-spec.md`,
+  `02b-design.md`, `03-plan.md` and `06-review.md` now carry a markdown link
+  whose label is the quoted entry name and whose target is
+  `../scripts/stage2.py`. That relative target resolves from both `docs/`
+  and `prompts/`, in the form of the existing `../prompts/…` links, and
+  `scripts/check_docs.py` resolves `](…)` targets the same way. The plan's
+  example spelled `../../../scripts/stage2.py`; the operative sentence
+  ("From each edited document the link target is `../scripts/stage2.py`")
+  is what the change follows.
+- A note under the section-4 table names the deferred ADR 0016/0017 effort
+  amendments (Q-3); the ADR files themselves are untouched. Non-Sol efforts
+  stand unchanged: Opus `xhigh`, the ladder's `max`, Sonnet `medium`, GLM
+  `max`. `prompts/04-implement.md`, `02a-spec-review.md` and
+  `04b-review-loop.md` name no Sol effort and stay untouched.
+- `scripts/stage2_session.py` reads no effort, and its exact-argv regression
+  (`tests/test_stage2_session.py`,
+  `test_codex_is_dispatched_interactively_with_its_exact_safety_flags`) pins
+  the interactive launch without an override — criterion 7 holds unedited.
+- The existing argv regressions in `tests/test_stage2.py` read the central
+  entries; the three new tests (instructions reference the central setting,
+  substituted settings propagate through retry, resume, re-check and marks,
+  mixed-model clause checks see only Sol's part) stand beside them. The
+  doctrine checks (`routing_problems`, the new `sol_effort_problems`) bound a
+  Sol clause at the next model mention, so another model's effort in the same
+  instruction neither fails nor masks a wrong Sol reference (Q-5).

@@ -121,9 +121,9 @@ assertion follows the repair setting without editing the earlier artifacts.
 - 3: tests/test_stage2.py::test_a_phase6_rerun_without_repair_records_the_actual_recheck_reason — extend argv checks; a repeated review selects the wrong entry
 - 3: tests/test_stage2.py::test_the_loop_marks_after_a_recheck_resume_the_fresh_verdict_thread — extend both argv checks; resumed marks lose the review entry
 - 3: not a test — phase 6 compares the shipped central review default with criterion 3; a default other than high refutes it, while live thread internals remain unproven under Q-6
-- 4: not yet written tests/test_stage2.py::test_sol_instructions_reference_the_central_effort_for_each_verb — a missing or wrong reference or independent Sol literal survives in a table, Model paragraph or drafting prose
-- 5: not yet written tests/test_stage2.py::test_sol_effort_changes_propagate_without_other_edits — distinct planted settings fail to reach any initial, retry or resumed argv
-- 6: not yet written tests/test_stage2.py::test_sol_effort_checks_allow_other_models_in_the_same_instruction — a valid mixed-model instruction is rejected, or another model's effort masks a wrong Sol reference
+- 4: tests/test_stage2.py::test_sol_instructions_reference_the_central_effort_for_each_verb — a missing or wrong reference or independent Sol literal survives in a table, Model paragraph or drafting prose
+- 5: tests/test_stage2.py::test_sol_effort_changes_propagate_without_other_edits — distinct planted settings fail to reach any initial, retry or resumed argv
+- 6: tests/test_stage2.py::test_sol_effort_checks_allow_other_models_in_the_same_instruction — a valid mixed-model instruction is rejected, or another model's effort masks a wrong Sol reference
 - 7: tests/test_stage2_session.py::test_codex_is_dispatched_interactively_with_its_exact_safety_flags — an added interactive effort override changes the exact argv
 
 ## Runner handoff — 2026-10-14
@@ -149,3 +149,9 @@ Redraft checks, 2026-10-14, before the runner's post-check:
   runner. No implementation test or live model call was started here.
 
 ## Time used
+
+2026-10-14, phase-4 implementation session (stage-2 `implement`, route flash):
+start, end and span unreadable — this session runs without a command tool, so
+`date` could not be read and no time was estimated; the runner's audit line in
+`findings.md` dates the session. The one-hour appetite is measured by the
+orchestrator's readings, not by this record.
