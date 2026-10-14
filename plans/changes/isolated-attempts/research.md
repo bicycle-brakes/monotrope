@@ -119,3 +119,72 @@ Beyond the class, `docs/WORKFLOW.md` §4 ("The draft") and ADR 0017's consequenc
 ---
 
 *Orchestrator notes:* this file (`plans/changes/isolated-attempts/research.md`) is the phase's whole result — no gate on phase 1. Suggested next step: commit this on `explore/isolated-attempts`, then run the phase-1a interview (`prompts/01a-interview.md`) against bead coding-harness-s9r — the class minimums apply, and the `[DECISION]` questions above are the interview's starting material.
+
+## Container tool comparison — 2026-10-14
+
+Desk research by an Opus 5.5 sub-agent with web search, asked by the
+orchestrating session after the maintainer's answer Q-1 (a container per
+attempt) and the request for "the best option that may also work on Windows".
+Nothing was installed or measured locally; no container tool is installed on
+the maintainer's Mac (checked 2026-10-14 18:40). Sources read 2026-10-14.
+
+| Tool | macOS (Apple silicon) | Windows 11 | Linux/CI | Licence | Isolation | CLI | Status |
+|---|---|---|---|---|---|---|---|
+| Podman (+ Desktop) | yes, VM via libkrun/applehv | yes, via WSL | native | Apache-2.0, free | containers share one machine VM | Docker-compatible, rootless default | v6.1.4, 2026-10-12 |
+| Docker Desktop | yes | yes (WSL2) | Docker Engine | free only below 250 employees and $10M revenue | one shared VM | reference | mature |
+| Docker Sandboxes (`sbx`) | not verified | not verified | not verified | CLI free, also commercial | microVM per sandbox, host proxy enforces network policy | own CLI | maturity not stated |
+| Apple `container` | yes, supported on macOS 26 | no | no | Apache-2.0 | VM per container | own, Docker-like flags | 1.5.0, "under active development" |
+| OrbStack | yes | no | no | commercial $8/user/month | lightweight VM | Docker | mature |
+| Colima / Rancher Desktop | yes | Rancher yes (WSL2) | yes | MIT / Apache-2.0 | one shared VM | Docker or nerdctl | maintained |
+
+Findings:
+
+- Only Apple `container` and Docker Sandboxes give each attempt its own
+  kernel; the others share one Linux VM between attempts (still a hard
+  boundary against the host).
+- No tool offers a single-host egress allow-list as a flag: each needs an
+  internal network plus a filtering proxy (the pattern Claude Code's sandbox
+  and Docker Sandboxes use) or a firewall inside the container.
+- Lighter sandboxes do not confine reads portably: Claude Code's sandbox
+  covers shell commands only; `@anthropic-ai/sandbox-runtime` confines reads
+  but is a beta preview without native Windows; the Codex sandbox documents
+  write bounds, read confinement not verified; `sandbox-exec` is deprecated.
+- Start times: no authoritative measurement found (forum and blog figures of
+  0.2 to 0.9 s, methods not verified).
+- Pitfalls: anything readable in the container can leave through an allowed
+  host; pass a long-lived token as a variable rather than mounting a home
+  directory; Claude Code refuses its permission-skip flag as root, so run as a
+  non-root user; on Windows keep worktrees on the WSL filesystem and pin LF
+  line endings.
+
+Ranked by the sub-agent: (1) Podman — free for companies, rootless, one CLI on
+macOS, Windows (WSL) and Linux CI; (2) Docker Sandboxes — best fit on paper
+(microVM per attempt, built-in network policy, credentials outside the VM),
+platforms not verified, worth a timed trial; (3) Apple `container` — strongest
+per-attempt wall on the Mac, macOS only, egress control undocumented, macOS 27
+not verified. Portable design: the runner calls one configurable binary
+(`podman` | `docker` | `container`) with the common flag subset, an internal
+network and one proxy container that allow-lists the provider's API host.
+
+A minimal live boundary test (proposed): sentinel files outside the worktree
+and in the home directory must not be readable from inside; exactly one
+credential variable in the environment; the provider host reachable only
+through the proxy, any other host and any direct route refused; no attempt
+container left after exit.
+
+Sources: github.com/apple/container (README, docs/technical-overview.md,
+docs/command-reference.md, releases); github.com/containers/podman and
+releases; podman-desktop.io/docs/podman/creating-a-podman-machine;
+docs.podman.io podman-machine-init; docs.docker.com/subscription/desktop-license;
+docs.docker.com/ai/sandboxes and its architecture page; docs.orbstack.dev/faq;
+lima-vm.io/docs/config/mount; github.com/abiosoft/colima;
+github.com/rancher-sandbox/rancher-desktop; docs.rancherdesktop.io/faq;
+code.claude.com/docs/en/sandboxing, sandbox-environments, devcontainer;
+learn.chatgpt.com/docs/sandboxing; gvisor.dev/docs;
+github.com/firecracker-microvm/firecracker;
+learn.microsoft.com/en-us/windows/wsl/filesystems. Secondary sources marked as
+such in the sub-agent's report were not relied on for a ranking reason.
+
+Open: start times measured on this Mac; which platforms `sbx` supports and
+whether it runs Codex and Pi; how `--internal` blocks egress in Podman and
+Apple `container`.
