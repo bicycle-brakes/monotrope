@@ -74,3 +74,38 @@ choice between waiting for three more answers and splitting the ADR
 amendments off, we decided to split them off to achieve that the runner stops
 spending Sol at `max` now, accepting that ADR 0016 and ADR 0017 name `max`
 until their amendment merges. — 2026-10-14
+
+## Q-4 · Which texts change with the effort (finding S-1)
+
+asked: 2026-10-14
+answer: the effort of each Sol verb is set in one central place, where it can be changed once and simply; runner, instructions and tests take it from there instead of each repeating the value.
+answered_by: maintainer
+status: answered
+
+The maintainer's words, 2026-10-14, asked whether only tables and Model lines
+or also the prose of `docs/WORKFLOW.md` change: "ich brauche ein zentrale
+stelle wo sich sowas parametrisiert und einmal einfach umstellen lässt". How
+the instructions point to that place, and which file it is, is left to the
+design.
+
+In the context of the effort being written in the runner, four prompts, the
+workflow tables and its prose, facing the choice between editing every
+mention and one central parameter, we decided on one central parameter to
+achieve that a later change of effort is one edit, accepting a larger change
+now than renaming `max` where it stands. — 2026-10-14
+
+## Q-5 · What the doctrine check counts (finding S-4)
+
+asked: 2026-10-14
+answer: only the effort attached to Sol counts; another model's effort in the same row, such as Sonnet 5.5 at `medium`, stays allowed.
+answered_by: maintainer
+status: answered
+
+The maintainer chose the recommended option on 2026-10-14 ("Nur Sols
+Aufwand").
+
+In the context of rows that name Sol beside other models, facing the choice
+between reading the effort per model and refusing any `max` or `medium` in a
+Sol row, we decided to read the effort per model to achieve that correct rows
+stay green and non-Sol text stays untouched, accepting a more involved check.
+— 2026-10-14
