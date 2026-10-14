@@ -101,7 +101,7 @@ Die operationalisierten Bewertungsszenarien stehen in Kapitel 10.
 - ADRs im **MADR-Format**, Dateiname `NNNN-kurzer-titel.md`, Status `proposed` / `accepted` / `superseded-by`.
 - Conventional Commits, SemVer, Changelog via `git-cliff`.
 - Standard-Markdown-Links als Default, keine Wikilinks (Ausnahme: der gewählte SSG rendert sie nachweislich).
-- Sprache der Artefakte: Deutsch für Wissen und Entscheidungen, Englisch für Code und Commit-Messages.
+- Sprache der Artefakte: English for content artefacts, commit messages and PR bodies (decided direction; German transitional in existing documents). *(Editorial correction 2026-10-14; the line formerly read "Deutsch für Wissen und Entscheidungen, Englisch für Code und Commit-Messages".)*
 
 ### 2.4 Nicht-Ziele
 
