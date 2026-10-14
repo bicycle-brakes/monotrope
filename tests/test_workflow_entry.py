@@ -1,17 +1,17 @@
-"""Der Einstieg in den Arbeitsablauf — das Scaffold eines Change-Ordners.
+"""The entry into the workflow — the scaffold of a change folder.
 
-`scripts/new_change.py` ist der dokumentierte Einstieg in Phase 1
-(docs/WORKFLOW.md). Bis zum 2026-09-21 blockte er hier still: sein Waechter
-`scripts/check_worktree_state.sh` war beim Umzug des Mechanismus aus
-portfolio-agentic-engineering nicht mitgereist (Bead coding-harness-cke) —
-jeder Change startete von Hand.
+`scripts/new_change.py` is the documented entry into phase 1
+(docs/WORKFLOW.md). Until 2026-09-21 it blocked silently here: its guard
+`scripts/check_worktree_state.sh` had not travelled along when the mechanism
+moved out of portfolio-agentic-engineering (bead coding-harness-cke) — every
+change started by hand.
 
-Die fuenf Wrapper- und Make-Target-Tests aus portfolio gehoeren zu einem
-Startkommando, das es hier noch nicht gibt (Bead coding-harness-kkh); die
-volle Verhaltensmenge steht in portfolio, `tests/test_workflow_entry.py`.
+The five wrapper and make-target tests from portfolio belong to a start
+command that does not exist here yet (bead coding-harness-kkh); the full set
+of behaviour lives in portfolio, `tests/test_workflow_entry.py`.
 
-Jede Regel hier steht neben ihrer Gegenprobe. Eine Pruefung, die nie rot war,
-misst nichts — der fehlende Guard hat das hier auf eigene Haut erfahren.
+Every rule here stands next to its counter-check. A check that was never red
+measures nothing — the missing guard learned that the hard way.
 """
 
 from __future__ import annotations
@@ -30,10 +30,10 @@ sys.path.insert(0, str(REPO_ROOT / "scripts"))
 import new_change  # noqa: E402
 import plans_registry as reg  # noqa: E402
 
-# Platzhalter-IDs: das Drift-Gate (check_dangling_bead_ids.py) liest nur
-# docs/**/*.md — diese Datei wird nie gescannt. Die Form folgt trotzdem dem
-# Muster aus portfolio (Praefix + kurzes Suffix), damit eine spaetere
-# Ausweitung des Gates nicht hier zuerst bunt wird.
+# Placeholder IDs: the drift gate (check_dangling_bead_ids.py) reads only
+# docs/**/*.md — this file is never scanned. The shape still follows the
+# pattern from portfolio (prefix + short suffix), so that a later widening of
+# the gate does not light up here first.
 OPEN_BEAD = "coding-harness-xyz"
 CLOSED_BEAD = "coding-harness-abc"
 
@@ -46,13 +46,13 @@ def _write_bead_export(repo: Path, entries: dict[str, str]) -> None:
 
 
 def _init_git(repo: Path) -> None:
-    """Ein echter Arbeitsbaum, weil `new_change.py` seit dem 2026-09-10 einen verlangt.
+    """A real worktree, because `new_change.py` has required one since 2026-09-10.
 
-    Der Aufruf prueft vor dem Schreiben, dass der Baum auf einem Zweig steht
-    (`scripts/check_worktree_state.sh`). Ein `tmp_path` ohne git ist kein
-    Arbeitsbaum — und die Pruefung deshalb stillzulegen waere die falsche
-    Reparatur: dann liefe die Vorbedingung im Test nie, und ihr Ausfall waere
-    genau hier unsichtbar.
+    Before writing, the call checks that the tree stands on a branch
+    (`scripts/check_worktree_state.sh`). A `tmp_path` without git is not a
+    worktree — and silencing the check for that reason would be the wrong
+    repair: the precondition would then never run in the test, and its failure
+    would be invisible right here.
     """
     run = lambda *a: subprocess.run(  # noqa: E731
         ["git", *a], cwd=repo, check=True, capture_output=True, text=True
@@ -67,7 +67,7 @@ def _init_git(repo: Path) -> None:
 
 @pytest.fixture
 def workflow(tmp_path, monkeypatch):
-    """Eigener plans/-Baum, eigener Bead-Export — nie der echte Baum dieses Repos."""
+    """Own plans/ tree, own bead export — never this repo's real tree."""
     _init_git(tmp_path)
     root = tmp_path / "plans"
     (root / "changes").mkdir(parents=True)
@@ -80,29 +80,29 @@ def workflow(tmp_path, monkeypatch):
 
 
 def test_new_change_creates_the_folder_and_a_current_index(workflow) -> None:
-    """Die Akzeptanz von cke, erste Haelfte: der Einstieg scaffoldet hier."""
+    """Acceptance of cke, first half: the entry scaffolds here."""
     exit_code = new_change.main(["probe", "--bead", OPEN_BEAD])
     assert exit_code == 0
     assert (workflow / "changes" / "probe" / "research.md").is_file()
-    assert reg.INDEX.is_file(), "der Index wurde nicht mitgerendert"
+    assert reg.INDEX.is_file(), "the index was not rendered along"
     # qd7: a new document is born current, or the check behind `frontmatter-current` would report it.
     scaffold = (workflow / "changes" / "probe" / "research.md").read_text(encoding="utf-8")
     assert f"\nupdated: {date.today().isoformat()}\n" in scaffold.split("\n---\n", 1)[0] + "\n"
 
 
 def test_new_change_refuses_a_closed_bead(workflow) -> None:
-    """Ein neuer Ordner an einem geschlossenen Vorgang waere sofort DRIFT."""
+    """A new folder on a closed item would be DRIFT at once."""
     exit_code = new_change.main(["probe", "--bead", CLOSED_BEAD])
     assert exit_code == 2
-    assert not (workflow / "changes" / "probe").exists(), "trotz geschlossenem Vorgang geschrieben"
+    assert not (workflow / "changes" / "probe").exists(), "written despite a closed item"
 
 
 def test_new_change_refuses_a_detached_head(workflow, tmp_path) -> None:
-    """Die Gegenprobe zur Vorbedingung aus Schritt 2a.
+    """The counter-check to the precondition from step 2a.
 
-    Ein Ordner, an einem losgeloesten HEAD angelegt, haengt an einem Commit, den
-    kein Zweig haelt. Sichtbar wird das erst, wenn jemand ihn sucht — also haelt
-    der Aufruf vorher an.
+    A folder created on a detached HEAD hangs on a commit that no branch holds.
+    That becomes visible only when someone looks for it — so the call stops
+    beforehand.
     """
     subprocess.run(
         ["git", "checkout", "--detach", "--quiet", "HEAD"],
@@ -113,32 +113,32 @@ def test_new_change_refuses_a_detached_head(workflow, tmp_path) -> None:
     )
     exit_code = new_change.main(["probe", "--bead", OPEN_BEAD])
     assert exit_code == 2
-    assert not (workflow / "changes" / "probe").exists(), "trotz BLOCK geschrieben"
+    assert not (workflow / "changes" / "probe").exists(), "written despite BLOCK"
 
 
 @pytest.mark.usefixtures("workflow")
 def test_the_precondition_is_actually_reached(capsys) -> None:
-    """Gegenprobe zur Gegenprobe: der gesunde Fall meldet den Waechter NICHT.
+    """Counter-check to the counter-check: the healthy case does NOT report the guard.
 
-    Sonst koennte der Test oben auch gruen sein, weil der Aufruf aus einem
-    ganz anderen Grund blockt.
+    Otherwise the test above could also be green because the call blocks for
+    an entirely different reason.
     """
     assert new_change.main(["probe", "--bead", OPEN_BEAD]) == 0
     assert "Worktree is not" not in capsys.readouterr().out
 
 
 def test_a_missing_guard_blocks_the_entry(workflow, monkeypatch, capsys) -> None:
-    """Der Akzeptanztest von cke: fehlt der Guard, blockt der Einstieg — nennend.
+    """The acceptance test of cke: if the guard is missing, the entry blocks — and says why.
 
-    Genau das geschah live: `new_change.py` verlangte den Waechter, der Waechter
-    war beim Umzug nicht mitgereist, und der Einstieg blockte mit genau dieser
-    Meldung — aber kein Test wusste davon. Der BLOCK muss nennen, was fehlt,
-    nicht still scheitern; und er muss BLOCK sein, nicht Durchlassen.
+    This is exactly what happened live: `new_change.py` required the guard, the
+    guard had not travelled along in the move, and the entry blocked with
+    exactly this message — but no test knew about it. The BLOCK must name what
+    is missing, not fail silently; and it must be a BLOCK, not a pass-through.
     """
     fehlend = workflow / "gibt-es-nicht" / "check_worktree_state.sh"
     monkeypatch.setattr(new_change, "WAECHTER", fehlend)
     exit_code = new_change.main(["probe", "--bead", OPEN_BEAD])
     assert exit_code == 2
     ausgabe = capsys.readouterr().out
-    assert "check_worktree_state.sh missing" in ausgabe, "der BLOCK muss die fehlende Datei beim Namen nennen"
-    assert not (workflow / "changes" / "probe").exists(), "trotz fehlendem Guard geschrieben"
+    assert "check_worktree_state.sh missing" in ausgabe, "the BLOCK must name the missing file"
+    assert not (workflow / "changes" / "probe").exists(), "written despite a missing guard"

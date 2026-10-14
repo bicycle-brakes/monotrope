@@ -383,9 +383,9 @@ def test_decision_continuity_gate_goes_red_when_an_id_is_missing(tmp_path: Path)
         encoding="utf-8",
     )
     befunde = check_decision_continuity.run(ziel, tmp_path)
-    assert any("D-17 fehlt" in b for b in befunde), befunde
-    assert any("D-2 fehlt" in b for b in befunde), befunde
-    assert any("ADR fehlt" in b for b in befunde), befunde
+    assert any("D-17 missing" in b for b in befunde), befunde
+    assert any("D-2 missing" in b for b in befunde), befunde
+    assert any("ADR missing" in b for b in befunde), befunde
 
 
 def test_the_real_decision_continuity_check_runs_green_here() -> None:
@@ -467,12 +467,12 @@ def test_the_render_refuses_a_line_it_cannot_reproduce(tmp_path: Path, monkeypat
     monkeypatch.setattr(rbe, "EXPORT", committed)
 
     def wirft(_p: Path) -> None:
-        raise rbe.NichtReproduzierbar("Zeile 1 (x-3)")
+        raise rbe.NichtReproduzierbar("Line 1 (x-3)")
 
     monkeypatch.setattr(rbe, "_render_nach", wirft)
     assert rbe.main([]) == 1
     assert committed.read_text(encoding="utf-8") == _ZEILE_OHNE_LEASE + "\n", "a discarded render has written"
-    assert "verworfen" in capsys.readouterr().out
+    assert "discarded" in capsys.readouterr().out
 
 
 def test_the_omitted_keys_are_named_once() -> None:

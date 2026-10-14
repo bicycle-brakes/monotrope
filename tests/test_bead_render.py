@@ -1,5 +1,5 @@
-"""Der EINE Zugriffspunkt fuers Tracker-Render (bead 1jg.3): Reihenfolge,
-Rueckfallebene, und die D-54-Reproduzierbarkeit als wiederholbarer Test."""
+"""The ONE access point for the tracker render (bead 1jg.3): order,
+fallback, and the D-54 reproducibility as a repeatable test."""
 
 from __future__ import annotations
 
@@ -14,8 +14,8 @@ sys.path.insert(0, str(REPO_ROOT / "scripts"))
 
 
 def test_the_env_render_wins_over_everything(tmp_path: Path, monkeypatch) -> None:
-    """Die CI rendert EINMAL und setzt BEAD_RENDER — alle Leser dieses Laufs
-    nehmen genau dieses Render, nicht je eines."""
+    """The CI renders ONCE and sets BEAD_RENDER — all readers of this run
+    take exactly this render, not one each."""
     import bead_render
 
     vorgesetzt = tmp_path / "vorgesetzt.jsonl"
@@ -27,9 +27,8 @@ def test_the_env_render_wins_over_everything(tmp_path: Path, monkeypatch) -> Non
 
 
 def test_a_missing_env_render_is_an_error_not_a_silent_fallback(tmp_path: Path, monkeypatch) -> None:
-    """Ein angesetztes Render, das verschwunden ist, ist ein Setupfehler —
-    die stille Rueckfallebene wuerde genau die Drift verbergen, gegen die der
-    Zugriffspunkt steht."""
+    """A preset render that has vanished is a setup error — the silent
+    fallback would hide exactly the drift the access point stands against."""
     import bead_render
 
     monkeypatch.setenv("BEAD_RENDER", str(tmp_path / "fehlt.jsonl"))
@@ -39,13 +38,13 @@ def test_a_missing_env_render_is_an_error_not_a_silent_fallback(tmp_path: Path, 
 
 
 def test_without_renderer_or_preset_render_it_raises_and_names_both_ways_out(monkeypatch) -> None:
-    """Keine Kopie mehr, auf die man still fallen koennte (D-52 erfuellt): der
-    Zugriffspunkt wirft — und der Grund nennt bootstrap und BEAD_RENDER, damit
-    eine Maschine ohne Tracker weiss, was zu tun ist."""
+    """No copy left to fall back on silently (D-52 fulfilled): the access
+    point raises — and the reason names bootstrap and BEAD_RENDER, so that a
+    machine without a tracker knows what to do."""
     import bead_render
 
     def kaputt() -> None:
-        raise bead_render.RendererNichtMoeglich("kein Renderer in dieser Umgebung")
+        raise bead_render.RendererNichtMoeglich("no renderer in this environment")
 
     monkeypatch.setattr(bead_render, "_frisches_render", kaputt)
     monkeypatch.delenv("BEAD_RENDER", raising=False)
@@ -58,8 +57,8 @@ def test_without_renderer_or_preset_render_it_raises_and_names_both_ways_out(mon
 
 
 def test_render_twice_is_byte_equal() -> None:
-    """D-54: die Verifikation lebt als wiederholbarer Test — zweimal rendern,
-    byte-gleich. Ohne ausfuehrbaren Tracker (Leerprobe) springt er ehrlich ab.
+    """D-54: the verification lives as a repeatable test — render twice,
+    byte-equal. Without an executable tracker (dry run) it honestly skips.
     """
     from render_beads_export import RendererFehlt, _render_nach
 
@@ -68,17 +67,17 @@ def test_render_twice_is_byte_equal() -> None:
         try:
             _render_nach(erstes)
         except (RendererFehlt, SystemExit) as exc:
-            pytest.skip(f"kein ausfuehrbarer Tracker in dieser Umgebung: {exc}")
+            pytest.skip(f"no executable tracker in this environment: {exc}")
         _render_nach(zweites)
         assert erstes.read_bytes() == zweites.read_bytes(), (
-            "derselbe Tracker-Stand muss auf derselben Maschine byte-gleich rendern"
+            "the same tracker state must render byte-equal on the same machine"
         )
 
 
 def test_the_access_point_cli_names_its_source_or_its_way_out(monkeypatch, capsys) -> None:
-    """Der CLI-Bericht hat zwei ehrliche Ausgaenge: Pfad plus Herkunft (0),
-    oder — ohne Renderer und ohne vorgesetztes Render — Exit 2 mit dem Weg
-    zum Ziel auf stderr. Beide Antworten benennbar, keine schweigt."""
+    """The CLI report has two honest outcomes: path plus origin (0), or —
+    without a renderer and without a preset render — exit 2 with the way out
+    on stderr. Both answers nameable, neither is silent."""
     import bead_render
 
     monkeypatch.delenv("BEAD_RENDER", raising=False)
@@ -95,13 +94,13 @@ def test_the_access_point_cli_names_its_source_or_its_way_out(monkeypatch, capsy
         assert "BEAD_RENDER" in gefangen.err
 
 
-# --- Review von e02c915, 2026-09-23 ------------------------------------------
+# --- Review of e02c915, 2026-09-23 ------------------------------------------
 
 
 def test_without_a_bd_binary_the_access_point_names_both_ways(monkeypatch) -> None:
-    """Der haeufigste Fall ohne Tracker — kein bd auf der Maschine — wirft im
-    Renderer `RendererFehlt`. Der Zugriffspunkt macht daraus seinen eigenen
-    Fehler mit beiden Wegen, statt einen Traceback durchzureichen."""
+    """The most common case without a tracker — no bd on the machine — makes
+    the renderer raise `RendererFehlt`. The access point turns that into its
+    own error naming both ways out, instead of passing a traceback through."""
     import bead_render
     import render_beads_export
 
@@ -109,9 +108,9 @@ def test_without_a_bd_binary_the_access_point_names_both_ways(monkeypatch) -> No
         raise render_beads_export.RendererFehlt("no bd binary found.")
 
     monkeypatch.setattr(render_beads_export, "_render_nach", fehlt)
-    # Beide zuruecksetzen: monkeypatch haelt die Originale am Leben und stellt
-    # sie wieder her — sonst loeschte der Finalizer des alten Temp-Ordners das
-    # zwischengespeicherte Render, das spaetere Tests desselben Prozesses lesen.
+    # Reset both: monkeypatch keeps the originals alive and restores them —
+    # otherwise the finalizer of the old temp folder would delete the cached
+    # render that later tests of the same process read.
     monkeypatch.setattr(bead_render, "_HALTER", None)
     monkeypatch.setattr(bead_render, "_GERENDERT", None)
     monkeypatch.delenv("BEAD_RENDER", raising=False)
@@ -124,14 +123,14 @@ def test_without_a_bd_binary_the_access_point_names_both_ways(monkeypatch) -> No
     ("modul", "gate"), [("check_bead_export", "bead-export"), ("check_dangling_bead_ids", "dangling-beads")]
 )
 def test_a_reader_without_tracker_exits_3_not_measured(modul: str, gate: str, monkeypatch, capsys) -> None:
-    """Bead 4t8: ein Gate, das nicht misst, endet in Exit 3 mit Grund — nicht
-    in einem Traceback, der wie ein Befund im Code aussieht."""
+    """Bead 4t8: a gate that does not measure ends in exit 3 with a reason —
+    not in a traceback that looks like a finding in the code."""
     import importlib
 
     import bead_render
 
     def kaputt() -> Path:
-        raise bead_render.RendererNichtMoeglich("kein bd ausfuehrbar")
+        raise bead_render.RendererNichtMoeglich("no executable bd")
 
     monkeypatch.setattr(bead_render, "render_pfad", kaputt)
     leser = importlib.import_module(modul)
@@ -144,7 +143,7 @@ def test_plans_registry_blocks_instead_of_crashing_without_tracker(monkeypatch) 
     import plans_registry
 
     def kaputt() -> Path:
-        raise bead_render.RendererNichtMoeglich("kein bd ausfuehrbar")
+        raise bead_render.RendererNichtMoeglich("no executable bd")
 
     monkeypatch.setattr(plans_registry, "_bead_export_path", kaputt)
     verdict = plans_registry.check()
@@ -152,8 +151,8 @@ def test_plans_registry_blocks_instead_of_crashing_without_tracker(monkeypatch) 
 
 
 def test_plans_registry_names_a_render_outside_the_repo(tmp_path: Path, monkeypatch) -> None:
-    """Ein frisches Render liegt in /tmp: die Meldung zeigt den Pfad, statt an
-    `relative_to(REPO)` mit ValueError abzustuerzen."""
+    """A fresh render lives in /tmp: the message shows the path instead of
+    crashing on `relative_to(REPO)` with a ValueError."""
     import plans_registry
 
     leer = tmp_path / "issues.jsonl"
