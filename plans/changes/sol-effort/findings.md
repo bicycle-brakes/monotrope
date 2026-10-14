@@ -6,7 +6,7 @@ implementation_status: none
 date: 2026-10-13
 created: 2026-10-13
 last_reviewed: 2026-10-14
-updated: 2026-10-14
+updated: 2026-10-15
 supersedes: null
 superseded_by: null
 bead: coding-harness-yzk
@@ -241,3 +241,45 @@ Stage-2 call, 2026-10-14: implement · attempt 1 · route flash · endpoint glm-
 Stage-2 call, 2026-10-14: review-loop · endpoint opencode-go · model deepseek-v4.1-flash · leak check clean over 422 files, 1154 commits, 12 rules.
 
 Stage-2 call, 2026-10-14: repair · attempt 1 · route codex · endpoint openai-codex · model gpt-6.1-sol · leak check clean over 422 files, 1155 commits, 12 rules.
+
+Stage-2 call, 2026-10-14: repair · attempt 1 · route codex · endpoint openai-codex · model gpt-6.1-sol · leak check clean over 422 files, 1164 commits, 12 rules.
+
+> Attempt 1 (codex) failed its post-run checks.
+>
+> Files the attempt changed (lines added, removed):
+> - `plans/changes/sol-effort/plan.md` +3 -0
+> - `tests/test_stage2.py` +38 -15
+>
+> Diagnostics:
+> ```text
+> - Runner format before `make verify`: ruff changed no file.
+> - L1-1: tests/test_stage2.py::test_sol_effort_checks_every_later_sol_mention: pytest ended 0 on the baseline's code; red first is exit 1 or 2
+> ```
+
+Stage-2 call, 2026-10-15: repair · attempt 2 · route codex-repair · endpoint openai-codex · model gpt-6.1-sol · reason first Codex post-run check failed · leak check clean over 422 files, 1165 commits, 12 rules.
+
+> Attempt 2 (codex-repair) failed its post-run checks.
+>
+> Files the attempt changed (lines added, removed):
+> - `plans/changes/sol-effort/plan.md` +11 -1
+> - `tests/test_stage2.py` +26 -0
+>
+> Diagnostics:
+> ```text
+> - Runner format before `make verify`: ruff changed no file.
+> - L1-1: tests/test_stage2.py::test_sol_effort_checks_appended_sol_sentences: pytest ended 0 on the baseline's code; red first is exit 1 or 2
+> ```
+
+Stage-2 call, 2026-10-15: repair · attempt 3 · route stage-1 · endpoint claude-code-plan · model claude-sonnet-5-5 · reason two Codex post-run checks failed · leak check clean over 422 files, 1165 commits, 12 rules.
+
+> Attempt 3 (stage-1) failed its post-run checks.
+>
+> Files the attempt changed (lines added, removed):
+> - `scripts/stage2.py` +15 -0
+> - `tests/test_stage2.py` +1 -7
+>
+> Diagnostics:
+> ```text
+> - Runner format before `make verify`: ruff changed `scripts/stage2.py`.
+> - `plan.md` did not add a measured line below `## Time used`
+> ```
