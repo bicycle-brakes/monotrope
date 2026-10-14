@@ -9,20 +9,18 @@ supersedes: null
 superseded_by: null
 bead: coding-harness-ni8
 owner: Data Architect
-provenance: human-written
+provenance: ai-drafted-reviewed
+produced_by: {kind: llm-session, name: glm-5.3-flash, version: "2026-10-14"}
+review: {status: pending, approved_by: null, approved_at: null}
 tags: [research]
 ---
 
 # handover currency — Research
 
-Phase 1 per [`prompts/01-explore.md`](../../../prompts/01-explore.md); this
-file is empty until it has run.
-
-> **Bring the provenance up to date.** The frontmatter says
-> `provenance: human-written` — that holds for this skeleton. Whoever fills it
-> with a language model sets `ai-drafted-reviewed` and adds `produced_by:` and
-> `review:` (`provenance.yaml`, class `ai-drafted-reviewed`,
-> `review_required: true`).
+Phase 1 per [`prompts/01-explore.md`](../../../prompts/01-explore.md).
+The runner preserved the explorer's returned text below; the draft-stage
+repository gaps are appended separately. The outer provenance describes the
+GLM exploration, and the addendum names its own drafting model.
 
 Stage-2 call, 2026-10-14: explore · attempt 1 · route flash · endpoint glm-coding-plan · model glm-5.3-flash · leak check clean over 418 files, 1129 commits, 12 rules.
 
@@ -283,3 +281,44 @@ surface, not as a design:
 **Nichts weiter von dir gerade** — die zwei offenen Punkte für die Folgephasen: Bead-Beschreibung lesen (`tools/bd show coding-harness-ni8`, Orchestrator), dann Interview (1a) zur Bedeutung von „Currency" mit je einer Empfehlung pro Frage.
 
 Resume: `plans/changes/handover-currency/research.md` mit dem obigen Inhalt überschreiben (Provenance-Block ist schon gesetzt), committen auf `explore/handover-currency`, dann `tools/bd show coding-harness-ni8` für die Bead-Beschreibung vor dem Interview.
+
+## Draft-stage repository gaps — 2026-10-14
+
+Written by gpt-6.1-sol; read in this worktree at
+`d9cbe209d3201e3ebeea35b23743ab4aae01d2dd`;
+`origin/main` is locally recorded at `659fb354129589b364f2d38ded8a496d344a8a45`.
+These findings extend the exploration after decisions Q-1 through Q-4 settled
+the requested meaning of currency; they do not replace those answers.
+
+- The class definitions distinguish a feature (changes the required behavior
+  or its check) from an architectural change (new subsystem/interface break).
+  The existing schema already owns both directions and the existing gate
+  runner has block/unmeasured/history semantics (`docs/WORKFLOW.md`, "Change
+  classes"; `scripts/handover_schema.py`; `decisions/gates.yaml`). No living
+  capability spec matching handover currency was found under `plans/specs/`.
+- There is no `templates/plan.md` or
+  `scripts/validate_change_artefacts.py` in this checkout. The plan form is
+  the phase-3 prompt; available artifact checks are the interview gate,
+  criterion ledger and plans registry. The runner regenerates derived files
+  and runs `make verify` itself (`scripts/stage2.py`, `verify_draft`).
+- Adoption already belongs to the instance: the existing adoption file stays
+  home while its reader travels (`scripts/adoption.py`;
+  `scripts/kit/manifest.yaml`). That file records days for older changes,
+  not historical handover bodies. A backdated header alone cannot distinguish
+  a newly created handover from the legacy corpus.
+- The current authoring skill appends dated addenda, and its first three
+  sections carry the next session's entry; the latest handover also uses the
+  older `## Addendum <date>` form (`tools/claude-code/skills/handover/SKILL.md`;
+  `docs/journal/handover/2026-10-14-night-run-third.md`). New session evidence
+  must cover addenda without retroactively completing earlier bodies.
+- The kit roles and export verdicts are different maps: schema and feedback
+  tests are mechanism, but the export's default drops the schema. A new
+  exported checker importing it needs an explicit export dependency entry
+  (`scripts/kit/manifest.yaml`; `scripts/export/manifest.yaml`).
+- The latest relevant handover's addendum says no PR was open at its
+  2026-10-14 11:31 cut-off. Current remote PR state, tracker status, parallel
+  sessions outside this worktree and private vault contents were not read:
+  this runner draft is restricted to the worktree and repository git directory.
+  The vault registration and known project-note locator are interviewer
+  evidence in decisions Q-1; resolving the live registration is an authoring
+  lookup for the orchestrator, not a new interview or a guessed implementation.

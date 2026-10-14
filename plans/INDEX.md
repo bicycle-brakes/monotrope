@@ -128,7 +128,12 @@ typed: a hand-kept list of files ages exactly as fast as files are added.
 | [`changes/criterion-test-ledger/plan.md`](changes/criterion-test-ledger/plan.md) | draft | partial | 2026-10-11 | coding-harness-909 |
 | [`changes/criterion-test-ledger/research.md`](changes/criterion-test-ledger/research.md) | draft | partial | 2026-10-11 | coding-harness-909 |
 | [`changes/criterion-test-ledger/spec.md`](changes/criterion-test-ledger/spec.md) | draft | partial | 2026-10-11 | coding-harness-909 |
+| [`changes/handover-currency/decisions.md`](changes/handover-currency/decisions.md) | draft | none | 2026-10-14 | coding-harness-ni8 |
+| [`changes/handover-currency/design.md`](changes/handover-currency/design.md) | draft | none | 2026-10-14 | coding-harness-ni8 |
+| [`changes/handover-currency/findings.md`](changes/handover-currency/findings.md) | draft | none | 2026-10-14 | coding-harness-ni8 |
+| [`changes/handover-currency/plan.md`](changes/handover-currency/plan.md) | draft | none | 2026-10-14 | coding-harness-ni8 |
 | [`changes/handover-currency/research.md`](changes/handover-currency/research.md) | draft | none | 2026-10-14 | coding-harness-ni8 |
+| [`changes/handover-currency/spec.md`](changes/handover-currency/spec.md) | draft | none | 2026-10-14 | coding-harness-ni8 |
 | [`changes/harness-decide-adr/decisions.md`](changes/harness-decide-adr/decisions.md) | accepted | none | 2026-09-30 | coding-harness-3ar |
 | [`changes/harness-decide-adr/findings.md`](changes/harness-decide-adr/findings.md) | draft | partial | 2026-09-30 | coding-harness-3ar |
 | [`changes/harness-decide-adr/plan.md`](changes/harness-decide-adr/plan.md) | draft | partial | 2026-09-30 | coding-harness-3ar |
