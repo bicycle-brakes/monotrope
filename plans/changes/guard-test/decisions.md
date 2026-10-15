@@ -4,7 +4,7 @@ status: draft
 implementation_status: none
 date: 2026-10-15
 last_reviewed: 2026-10-15
-updated: 2026-10-15
+updated: 2026-10-16
 supersedes: null
 superseded_by: null
 bead: coding-harness-0ho
@@ -43,3 +43,80 @@ runner that disables a named function, we decided on the switch
 `STAGE2_PLANT_FAULT` with one red run with it and one green run without, to
 achieve a proof for guard tests that matches the maintainer's choice,
 accepting that phase 6 must check that the switch plants a real fault. — 2026-10-15
+
+## Q-2 · Who may book a repair as a guard test
+
+asked: 2026-10-16
+answer: "Nur markierte Zeilen" — option A: only a row the orchestrator took as `taken — guard test — <reason>` may be answered `fixed — guard test — tests/<path>::<function>`; the repairing model cannot choose the form for any other row.
+answered_by: maintainer
+status: answered
+context: |
+  Topic: who decides that a repair is a guard test, the orchestrator when it takes the row or the repairing model when it answers.
+  Intention: the guard proof must not become a way for a model to avoid the red-first proof.
+  Today: `fixed — not a test` is allowed only for a row the orchestrator took as `taken — not a test`; every code row needs a test that is red on the baseline code.
+  Repository change: Options: A — a new taken form `taken — guard test — <reason>`, and the parser accepts the guard answer only for such rows (as for `not a test`); B — the model may choose the guard form for any taken row, and only phase 6 catches a misuse.
+  Architecture change: part of the ADR 0017 addendum; no new ADR.
+
+In the context of guard tests that prove a test-only repair, facing the
+choice between an orchestrator mark and a free choice of the repairing model,
+we decided that only a row taken as `taken — guard test` may be answered as a
+guard test, to achieve that no model can sidestep the red-first proof,
+accepting that a test-only row the orchestrator does not recognise at triage
+fails its repair on the ordinary proof. — 2026-10-16
+
+## Q-3 · How phase 6 checks a guard test
+
+asked: 2026-10-16
+answer: "Jeder Test, Pflicht" — option A: phase 6 reads every guard test and writes one line per test naming the real fault it plants and whether the test would catch that fault in the real code without the switch; a bare conditional failure is a BLOCKER.
+answered_by: maintainer
+status: answered
+context: |
+  Topic: how phase 6 confirms that a guard test plants a real fault.
+  Intention: the runner proves only "red with the switch, green without"; a test that runs `assert False` under the switch passes that proof.
+  Today: the spec's non-goals leave the meaning of the planted fault to phase 6, without saying how much of it phase 6 checks.
+  Repository change: Options: A — every guard test is checked, one line each, a bare conditional failure is a BLOCKER (in `prompts/06-review.md` or its equivalent and `docs/WORKFLOW.md`); B — phase 6 samples guard tests at its own discretion.
+  Architecture change: part of the ADR 0017 addendum; no new ADR.
+
+In the context of a runner that cannot judge whether a planted fault is real,
+facing the choice between a mandatory check of every guard test and a
+sample, we decided that phase 6 checks every guard test and treats a bare
+conditional failure as a BLOCKER, to achieve that no empty guard test
+reaches main, accepting more review time per guard repair. — 2026-10-16
+
+## Q-4 · Where the guard test applies
+
+asked: 2026-10-16
+answer: "Nur Reparatur" — option A: only `stage2.py repair` knows the guard form; phase 4 and the plan's criterion ledger keep their evidence rules; an extension would be a bead of its own.
+answered_by: maintainer
+status: answered
+context: |
+  Topic: whether the guard proof is limited to repairs of taken findings or also used in phase 4 and the criterion ledger.
+  Intention: keep bead coding-harness-0ho bounded.
+  Today: phase 4 and the criterion ledger have their own evidence rules; the three test-only failures of 2026-10-14/15 all came from repairs.
+  Repository change: Options: A — repair only; B — also phase 4 and the criterion ledger (larger, closer to a feature).
+  Architecture change: part of the ADR 0017 addendum; no new ADR.
+
+In the context of the test-only repairs that failed the red-first proof,
+facing the choice between a repair-only guard form and one for every phase,
+we decided to limit the guard form to `stage2.py repair`, to achieve a
+bounded change, accepting that phase 4 and the criterion ledger stay without
+it until a bead of their own. — 2026-10-16
+
+## Q-5 · What happens to the switch after the merge
+
+asked: 2026-10-16
+answer: "Bleibt, CI sichert ab" — option A: the planting branch stays in the guard test so the proof can be repeated later, and a gate in `make verify` fails when `STAGE2_PLANT_FAULT` is set in its environment, so a planted run never counts as a green verify.
+answered_by: maintainer
+status: answered
+context: |
+  Topic: whether the `STAGE2_PLANT_FAULT` branch stays in a merged guard test.
+  Intention: keep the proof repeatable without letting a planted run pass as a green `make verify`.
+  Today: neither `make verify` nor CI sets the switch; nothing stops a session that has it in its environment.
+  Repository change: Options: A — the branch stays and a `make verify` gate refuses a set switch; B — the branch stays without a gate; C — the repair removes the branch after the proof (the runner would then check a second state).
+  Architecture change: part of the ADR 0017 addendum; no new ADR.
+
+In the context of guard tests that carry their own fault switch, facing the
+choice between keeping the switch with a gate, keeping it without, and
+removing it, we decided to keep it and to make `make verify` fail when the
+switch is set, to achieve a repeatable proof that can never pass as a green
+verify, accepting one more gate in `make verify`. — 2026-10-16
