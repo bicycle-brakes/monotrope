@@ -354,3 +354,27 @@ not measured; a queue in the runner, the leak check still before every
 call, logs that keep concurrent calls apart); B — all in sequence (rough
 estimate 4–8 h); C — in sequence with fewer topics for `feature`. The
 maintainer chose A (answer: "A").
+
+## Q-8 · What runs the online topics now that Zen's free tier refuses Pi
+
+asked: 2026-10-15
+answer: "Mache A, stelle B für später an" — the online topics 9 to 11 run on OpenCode Go models through Pi; the free models through the OpenCode CLI are deferred to a later bead.
+answered_by: maintainer
+status: answered
+context: |
+  Topic: what runs the online research (topics 9 to 11 of the swarm).
+  Intention: a call to a free OpenCode Zen model from the maintainer's own Pi answered 403 FreeTierError, "OpenCode's free tier can only be used from within OpenCode" (2026-10-15); without a replacement all three online topics fail.
+  Today: spec and code send the free models through Pi; every call would fail with 403. Disguising Pi as OpenCode would break the terms and is not an option.
+  Repository change: A — topics 9 to 11 take OpenCode Go models through Pi instead of free models, still with only the Opus sentence and no repository content; B — free models through the OpenCode CLI (`opencode run`), a second program with its own isolation, measurement and pin; C — online topics by Haiku 5.5 only.
+  Architecture change: A keeps one path to foreign models (Pi, pinned by coding-harness-agx) and costs subscription quota instead of nothing; B adds a second path whose isolation must be measured anew and whose terms for automated use were not read; C gives up the model comparison on topics 9 to 11.
+
+In the context of a free tier that refuses every client but OpenCode,
+facing the choice between Go models through Pi, a second client and Claude
+alone, we decided on OpenCode Go models through Pi for the online topics,
+to achieve one measured path to foreign models, accepting that the online
+research uses subscription quota; the OpenCode CLI path is deferred. — 2026-10-15
+
+This supersedes, for the online topics, the free-model part of Q-1 and of
+its addendum of 2026-10-15 (the free roster and Big Pickle's training
+terms): no free model is called while this holds. Which Go models take the
+online topics is settled next.
