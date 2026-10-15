@@ -61,3 +61,55 @@ between a repository install with a lock file and a versioned global
 install, we decided on `tools/pi/` with lock file, install script and
 wrapper, to achieve the same pin pattern as `tools/bd` with every
 dependency locked, accepting a `node_modules` folder under `tools/pi/`. — 2026-10-15
+
+## Q-3 · What "works with Zen" means after the free-tier refusal
+
+asked: (prepared 2026-10-15, not yet asked)
+answer: —
+answered_by: —
+status: open
+context: |
+  Topic: whether the runner's Pi must reach OpenCode Zen, now that Zen's free tier refuses every client but OpenCode.
+  Intention: the maintainer required that the runner's own Pi works with OpenCode Go and Zen; on 2026-10-15 a free Zen call from Pi answered 403 FreeTierError, and the research swarm moved its online topics to Go models (research-swarm Q-8).
+  Today: the runner calls only `opencode-go`; the global Pi has no usable Zen credential; paid Zen models through Pi were not tried.
+  Repository change: A (recommended) — Go only now; the contract suite still covers the `opencode` provider offline (address, key variable) so that paid Zen can be added by one declaration later; B — declare paid Zen now, with its own endpoint entry and quota note.
+  Architecture change: none for A; B adds a second declared paid endpoint.
+
+## Q-4 · Does the interactive session use the same Pi
+
+asked: (prepared 2026-10-15, not yet asked)
+answer: —
+answered_by: —
+status: open
+context: |
+  Topic: whether `stage2.py session` also starts Pi through `tools/pi/pi`.
+  Intention: Q-2 makes the wrapper the runner's only path to Pi; the session verb resolves `pi` through PATH today and signs in from the maintainer's own `~/.pi/agent`.
+  Today: the session runs whatever global Pi is installed; from 1.2.0 it may load `AGENTS.md` in nested worktrees where 1.1.0 did not.
+  Repository change: A (recommended) — the session uses the wrapper too, so every Pi the runner starts is the measured one; B — the session keeps the global Pi.
+  Architecture change: A gives one Pi for every runner path; B keeps a second, unmeasured one for the interactive path.
+
+## Q-5 · Is Node pinned too
+
+asked: (prepared 2026-10-15, not yet asked)
+answer: —
+answered_by: —
+status: open
+context: |
+  Topic: which Node runs the runner's Pi.
+  Intention: Pi is a Node program; its behaviour can depend on the Node version, and a lock file pins only the packages.
+  Today: Node comes from Homebrew on the maintainer's machine; CI has whatever its image provides; the policy tests skip without Node.
+  Repository change: A (recommended) — CI installs one exact Node version, and the wrapper refuses a Node major other than the one the suite measured; B — Node unpinned, only Pi pinned.
+  Architecture change: A adds Node to the measured toolchain; B leaves it outside.
+
+## Q-6 · The rule as an ADR
+
+asked: (prepared 2026-10-15, not yet asked)
+answer: —
+answered_by: —
+status: open
+context: |
+  Topic: recording "Pi is pinned in the repository and a version move is measured by the contract suite" as an ADR.
+  Intention: ADR 0011 decision 6 says the isolation was measured on Pi 1.1.0 and raising the pin means measuring again; ADR files are decided by the maintainer.
+  Today: ADR 0011 ties the measurement to one version by hand.
+  Repository change: a new ADR that amends ADR 0011 decision 6 (and ADR 0012's Pi 1.1.0 statements), its answer recorded with `harness.py decide adr` as the maintainer states it; the change becomes a decision pull request.
+  Architecture change: the isolation guarantee is held by a repeatable suite instead of a one-off measurement.
