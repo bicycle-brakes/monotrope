@@ -131,3 +131,14 @@ Exploration complete. Here is the research as prose ready to append to `plans/ch
 - Bead coding-harness-agx's full text: the tracker is the Dolt database under `.beads/`, the rendered export is not committed, and the render needs the hydrated store — the bead body beyond the seed's summary was not read.
 - How a Node CLI would be provisioned on a fresh clone and in CI (node itself, an npm cache, an offline-installable artifact) has no precedent in the tree — the two existing patterns are a checksummed binary download (`tools/beads/install.sh`) and a hash-locked Python requirements file.
 - Still open from the records, unchanged by this change's question: whether `~/.pi/agent`'s `models.json` can redirect an address (ADR 0012 Consequences, "not measured"), and the live-Mac smoke test of the policy extension in a real Terminal session (ADR 0012 Validation, "Not validated: any live Pi"; still listed as open in `docs/research/2026-10-11-glm-through-pi.md`).
+
+## Observed by the maintainer — 2026-10-15
+
+A call to a free OpenCode Zen model from the maintainer's own Pi answered:
+`Error: 403: {"type":"FreeTierError","message":"OpenCode's free tier can only
+be used from within OpenCode. Download it at https://opencode.ai and keep
+building."}` (reported in the conversation on 2026-10-15; the model id and
+the Pi version of that call were not recorded). So the free tier of Zen is
+not reachable through Pi at all; what Pi can reach on the `opencode`
+provider is at most the paid Zen models. The requirement "das eigene pi muss
+mit opencode go und zen funktioneren" needs restating for Zen.
