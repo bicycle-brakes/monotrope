@@ -202,3 +202,14 @@ in `research.md`. Also accepted: interview questions derive from the
 reports' `[DECISION]` claims and from disagreements between models, naming
 the claim ids; spec criteria name the claims or answers they rest on; a gate
 checks that no research `[DECISION]` is lost.
+
+### Topic walk-through (2026-10-15)
+
+- Topic 0, finder — guiding questions: which files and functions the change
+  touches; which ADRs and rules apply; which tests and gates check those
+  places; which specs are neighbours (those in `neighbours:` are given,
+  further ones are marked suggestions). Boundary: it locates and lists,
+  it does not judge. Output: one list per question, each entry
+  `path::symbol` with one sentence why. The maintainer chose option A:
+  DeepSeek Flash, MiMo Flash and Haiku 5.5 each search, and Opus 5.5 merges
+  the three lists into one map (answer: "A").
