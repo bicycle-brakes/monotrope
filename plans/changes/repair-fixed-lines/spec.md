@@ -46,9 +46,11 @@ completed rows and is the agreed form for both writers.
 - **Fixed line:** `<ID>: fixed — tests/<path>::<function>` or
   `<ID>: fixed — not a test — <reason>`, with the existing leading bullet,
   bold and backtick handling retained.
-- **Finding-shaped identifier:** a complete `L<digits>-<digits>` identifier
-  or ASCII letters followed by a hyphen and digits, such as `F-12`.
-- **Legacy completion marker:** `; fixed by` or `; fixed:` within a Status
+- **Finding-shaped identifier:** a complete `L<digits>-<digits>` identifier,
+  or ASCII letters, a hyphen and digits whose letters are the prefix of a row
+  id in the change's loop record or findings tables, such as `F-12` where
+  phase-6 rows are `F-<n>` (loop round 1, row L1-3).
+- **Legacy completion marker:** `; fixed by`, `; fixed:` or `; repaired by` within a Status
   beginning `taken — …`, compared without regard to case.
 
 ## Acceptance criteria
@@ -57,7 +59,9 @@ completed rows and is the agreed form for both writers.
    colon lines whose left side is neither an active identifier nor a
    finding-shaped identifier, those lines do not fail the attempt.
    *Refuted by:* a heading, fence, report label or closing `Resume:` causes
-   a retry or a format diagnostic despite all required fixed lines being valid.
+   a retry or a format diagnostic despite all required fixed lines being valid,
+   or a line such as `ADR-0017: …` or `UTF-8: …` does, when no row id uses
+   that prefix.
 2. When a colon line names an active row exactly, it is checked as that row's
    fixed line regardless of whether the identifier has the usual finding shape.
    *Refuted by:* a phase-6 row named `custom` or `expected` is ignored or
@@ -79,7 +83,7 @@ completed rows and is the agreed form for both writers.
 7. When any active row carries a legacy completion marker, repair refuses
    before a model call or `make verify`, naming the row and both canonical
    fixed-status forms without rewriting the row.
-   *Refuted by:* either marker in any row location reaches an attempt, is
+   *Refuted by:* any marker in any row location reaches an attempt, is
    silently skipped, or yields a refusal without the corrective form.
 8. When a fixed line survives identifier filtering, the existing test-reference,
    code-row eligibility and red-first proof requirements continue to apply.
@@ -95,8 +99,7 @@ completed rows and is the agreed form for both writers.
 ## Non-goals
 
 - Migrate historical completed findings in other change folders.
-- Add a status vocabulary, infer completion from arbitrary prose, or accept
-  `; repaired by …` as an additional legacy marker.
+- Add a status vocabulary, or infer completion from arbitrary prose.
 - Change model routes, retries, review ownership, test-proof rules or gates.
 - Redesign other answer parsers or phase-6 identifier conventions.
 - Write phase-2b design or an ADR: this remains a bounded correction using
@@ -126,7 +129,7 @@ None open. The interview's reasoned skip and three recorded details stand.
 - [DETAIL] Preserve exact active-identifier matching before applying the
   finding-shape filter: phase-6 identifiers are free text, so shape alone
   cannot identify every real fixed line.
-- [DETAIL] Use case-insensitive detection of the two recorded legacy markers,
+- [DETAIL] Use case-insensitive detection of the three recorded legacy markers,
   matching the existing case-insensitive Status handling; require the
   semicolon marker rather than any mention of a fix in a reason.
 - [DETAIL] Set a one-hour phase-4 appetite, repairs included, because the work

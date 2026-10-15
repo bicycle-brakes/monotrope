@@ -54,3 +54,19 @@ none of them changes a decision of record.
    sentence each; `docs/WORKFLOW.md` §4 ("Repairing taken findings") states
    the hand-repair form. Reason: the prompt and the doctrine must agree with
    the parser.
+
+## Addendum 2026-10-16 — after loop round 1
+
+Two details above are revised; the text above stays as it was written.
+
+- **Detail 1, narrowed (row L1-3).** Letters, a hyphen and digits count as a
+  finding-shaped identifier only when the letters are the prefix of a row id
+  in the change's loop record or findings tables (for example `F` where the
+  phase-6 rows are `F-<n>`). Reason: `ADR-0017:` or `UTF-8:` at the start of a
+  report line is prose, and failing on it after a green `make verify` is the
+  spurious retry this change removes. `L<n>-<m>` always counts.
+- **Detail 2, widened (row L1-2).** `; repaired by` is a third legacy marker.
+  Reason: the row the bead names (haiku-5-5, L1-1) reads `taken — not a test
+  — …; repaired by the orchestrating session`; without the marker, that very
+  row would still be sent to the model. The refusal only names the row and
+  the canonical form, so a false match costs one rewrite, not a lost repair.
