@@ -42,3 +42,22 @@ suite and a suite that also runs in CI, we decided on a contract suite
 against the real pinned Pi run locally and in CI, to achieve that every
 version move is measured automatically, accepting node and a Pi download in
 CI. — 2026-10-15
+
+## Q-2 · How the runner's Pi is installed
+
+asked: 2026-10-15
+answer: "A" — `tools/pi/` with `package.json` and `package-lock.json`, an install script running `npm ci --ignore-scripts`, and a wrapper `tools/pi/pi` that runs exactly this Pi and checks its version; the runner calls only the wrapper.
+answered_by: maintainer
+status: answered
+context: |
+  Topic: how the runner's own Pi is installed.
+  Intention: the runner must stop using the global Pi, which updates itself; such an update stopped the runner on 2026-10-15 at 13:14.
+  Today: the runner calls `pi` through PATH and finds the global `/opt/homebrew/bin/pi`; nothing in the repository pins Pi; no Node precedent exists, only `tools/bd` (a checksummed binary) and the hash-locked Python requirements.
+  Repository change: A — `tools/pi/` with a lock file holding a checksum per package, an install script (`npm ci --ignore-scripts`), a wrapper that checks the version; an update is a pull request changing one line and the lock file, and CI installs with the same script; B — a versioned global install such as `~/.local/bin/pi-1.2.0`, without a lock file for Pi's own dependencies.
+  Architecture change: the wrapper becomes the only path to Pi; `stage2.py` and `stage2_session.py` no longer call `pi` through PATH.
+
+In the context of a global Pi that updates itself, facing the choice
+between a repository install with a lock file and a versioned global
+install, we decided on `tools/pi/` with lock file, install script and
+wrapper, to achieve the same pin pattern as `tools/bd` with every
+dependency locked, accepting a `node_modules` folder under `tools/pi/`. — 2026-10-15
