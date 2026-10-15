@@ -1,7 +1,7 @@
 ---
 title: "Plan — repair-fixed-lines"
 status: draft
-implementation_status: none
+implementation_status: partial
 date: 2026-10-15
 last_reviewed: 2026-10-15
 updated: 2026-10-16
@@ -41,13 +41,14 @@ verification and the commit.
    Retain current line trimming, leading-list-marker removal and identifier
    decoration stripping. Ignore lines without a colon; for colon lines,
    collect exact active identifiers first. Collect unknown identifiers only
-   when a full match of `L\d+-\d+` or `[A-Za-z]+-[0-9]+` holds; ignore the
-   rest. Leave missing, duplicate, unknown and malformed-status diagnostics,
+   when a full match of `L\d+-\d+` holds, or `[A-Za-z]+-[0-9]+` holds
+   and its prefix occurs in the change's row ids (including rejected and fixed
+   rows); ignore the rest. Leave missing, duplicate, unknown and malformed-status diagnostics,
    findings integrity checks and red-first execution in their existing order.
 2. After `repair_targets` returns and before any attempt starts in `repair`,
    inspect every selected row's Status for the case-insensitive patterns
-   `; fixed by` and `; fixed:`. Refuse with the affected identifiers and the
-   instructions to replace Status with `fixed — tests/<path>::<function>`
+   `; fixed by`, `; fixed:` and `; repaired by`. Refuse with the affected
+   identifiers and the instructions to replace Status with `fixed — tests/<path>::<function>`
    or `fixed — not a test — <reason>` and set the loop row's test mark.
    Do not rewrite or silently skip legacy rows. Keep canonical fixed-row
    selection and the undecided/duplicate refusals intact.
@@ -77,9 +78,14 @@ verification and the commit.
 - `plans/INDEX.md`: the runner refreshes this derived registry; do not hand-edit it.
 
 No implementation-time deletions or new modules are planned. Do not touch
-other change folders, ADRs, `decisions.md`, other prompts, `AGENTS.md`, tracker
+other change folders, ADRs, other prompts, `AGENTS.md`, tracker
 data, endpoint settings, permissions or gates. `prompts/04-implement.md`
 already describes fixed lines without forbidding incidental text.
+
+The accepted loop-round-1 repairs also update implementation metadata in this
+change's artifacts, including `decisions.md`, and regenerate the index. The
+runner retains ownership of the finding rows in `findings.md`; only the
+explicitly requested frontmatter implementation status changes in this repair.
 
 ## Verification
 
@@ -123,3 +129,12 @@ repair session) ran under the Stage-2 runner with file tools and no command
 tool: `date` could not be read, so no start, end or span is claimed and none
 is estimated. The runner's clock measures both against the one-hour appetite;
 its audit lines in `findings.md` carry each attempt's day and order.
+
+2026-10-16 01:00:03–01:11:23 +0200, 11m 20s — Codex repair of loop-round-1 rows L1-1, L1-2 and L1-3; no break. Start and end read from `date`; earlier unmeasured spans above remain unestimated.
+
+Verification at repair baseline `8542e0611118cec8ab95c01c732353de6630416e` plus this working diff, 2026-10-16:
+
+- Red first, before the code repair: the two named regression functions produced three failing cases and two passing controls. After the repair all five cases passed.
+- `.venv/bin/python3 -m pytest tests/test_stage2.py -q`: 530 passed. Ruff check and format check, interview minimums, criterion ledger, metadata assertions and `git diff --check` passed. All five implementation-status fields read `partial`; the index was regenerated.
+- `make verify`: exit 2, not green. Its main pytest run reported 14 failed, 2086 passed, 17 skipped and 15 errors. Failures include unavailable tracker access, forbidden local-server binds and signing failures in temporary fixture repositories. The kit probe also failed on fixture commits; the live ruleset check could not reach GitHub. The separate registry check could not measure tracker state. These are verification limits, not accepted passing evidence; no out-of-scope repairs or permission changes were made.
+- The findings body and all finding statuses remain unchanged; only its explicitly requested implementation-status metadata was updated. No repository commit was made; the runner owns status booking, full verification and the checkpoint.

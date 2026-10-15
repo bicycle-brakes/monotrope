@@ -1,10 +1,10 @@
 ---
 title: "Spec — repair-fixed-lines"
 status: draft
-implementation_status: none
+implementation_status: partial
 date: 2026-10-15
 last_reviewed: 2026-10-15
-updated: 2026-10-15
+updated: 2026-10-16
 supersedes: null
 superseded_by: null
 bead: coding-harness-ugi

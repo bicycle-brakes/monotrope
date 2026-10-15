@@ -4710,7 +4710,11 @@ def test_a_doubled_taken_id_refuses_the_repair(
 
 @pytest.mark.parametrize(
     "marker",
-    ["; fixed by hand in the last session", "; fixed: tests/test_seed.py::test_seed"],
+    [
+        "; fixed by hand in the last session",
+        "; fixed: tests/test_seed.py::test_seed",
+        "; repaired by the orchestrating session",
+    ],
 )
 def test_repair_refuses_legacy_completed_taken_statuses_before_call(
     world: World, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str], marker: str
@@ -4721,13 +4725,16 @@ def test_repair_refuses_legacy_completed_taken_statuses_before_call(
     seed_tests(world)
     world.write_record([("L1-1", f"taken — test_a{marker}", "no")])
     world.write_findings(
-        VERDICT, phase6_block([phase6_cells("F-1", f"taken — crit 6{marker.upper()}", "phase finding")])
+        VERDICT,
+        released_block([released_cells("L2-1", f"taken — test_c{marker}", "no", "released finding")]),
+        phase6_block([phase6_cells("F-1", f"taken — crit 6{marker.upper()}", "phase finding")]),
     )
     world.script(claude=[{"stdout": "must not run"}])
     assert world.run("repair") == 2
     assert world.calls() == []
     error = capsys.readouterr().err
-    assert "L1-1" in error and "F-1" in error
+    assert "L1-1" in error and "L2-1" in error and "F-1" in error
+    assert f"taken — test_c{marker}" in world.text()
     assert "fixed — tests/<path>::<function>" in error and "fixed — not a test — <reason>" in error
     assert "Broke a test" in error
     assert f"taken — test_a{marker}" in world.record().read_text(encoding="utf-8")
@@ -5600,24 +5607,40 @@ def test_repair_accepts_exact_free_text_identifiers(world: World) -> None:
     assert record["L1-1"] == "fixed — tests/test_fix.py::test_fix"
 
 
-def test_repair_rejects_unknown_finding_shaped_identifiers(world: World) -> None:
+@pytest.mark.parametrize("prefix", ["F", "QA"])
+def test_repair_rejects_unknown_finding_shaped_identifiers(world: World, prefix: str) -> None:
     """Criterion 3. Planted fault: an unknown `L9-9` or `F-999` is ignored and checkpointed."""
     baseline = repair_world(world)
+    # Rejected rows still establish the change's prefixes, though they are not repair targets.
+    world.write_findings(
+        VERDICT, phase6_block([phase6_cells(f"{prefix}-1", "rejected — out of scope", "phase finding")])
+    )
     answer = "\n".join(
         [
             "L1-1: fixed — tests/test_fix.py::test_fix",
             "L9-9: fixed — tests/test_fix.py::test_fix",
-            "F-999: fixed — not a test — nothing carries it",
+            f"{prefix}-999: fixed — not a test — nothing carries it",
+        ]
+    )
+    prose_answer = "\n".join(
+        [
+            "L1-1: fixed — tests/test_fix.py::test_fix",
+            "ADR-0017: the retry policy",
+            "UTF-8: the encoding",
+            "OTHER-3: already rejected elsewhere",
         ]
     )
     script_repair(
         world,
-        [repair_step(stdout=answer), repair_step(stdout="L1-1: fixed — tests/test_fix.py::test_fix")],
+        [repair_step(stdout=answer), repair_step(stdout=prose_answer)],
         make=[{"stdout": "green\n"}] * 2,
     )
     assert world.run("repair") == 0
+    assert len(world.calls("codex")) == 2
+    assert world.calls("claude") == []
     prompt = prompt_of(world.calls("codex")[1])
-    assert "L9-9: no taken row carries this id" in prompt and "F-999: no taken row carries this id" in prompt
+    assert "L9-9: no taken row carries this id" in prompt
+    assert f"{prefix}-999: no taken row carries this id" in prompt
     record = {row[0]: row[7] for row in stage2.record_rows(world.record().read_text(encoding="utf-8"))}
     assert record["L1-1"] == "fixed — tests/test_fix.py::test_fix"
     assert git(world.root, "rev-list", "--count", f"{baseline}..HEAD") == "1"

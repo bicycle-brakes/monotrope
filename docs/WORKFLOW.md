@@ -1098,13 +1098,16 @@ tests/<path>::<function>` or `<ID>: fixed — not a test — <reason>`, in the
 form of ADR 0013's criterion ledger; only a row taken as `taken — not a test`
 may be answered `not a test`. Headings, fences and report prose around the
 fixed lines are ignored; a colon line whose id looks like a finding id
-(`L1-2`, `F-12`) and names no taken row still fails the attempt. A hand
+(`L1-2`, `F-12`) and names no taken row still fails the attempt. Loop ids
+always count; letters-hyphen-digits ids count only when their prefix occurs
+in the change's row ids, including rejected and fixed rows. Other prefixes
+(such as `ADR-0017:` or `UTF-8:`) remain report prose. A hand
 repair books itself in the row's Status alone: replace the finished row's
 `taken — …` with one of the two fixed statuses and set the loop row's
 `Broke a test` mark from the evidence. A Status that still begins `taken`
-while naming a fix in the old form (`; fixed by …`, `; fixed: …`) stops the
-repair before any call, and the row stands as it is. **Red first:** the runner proves each repair of
-code by running the named test alone against the baseline's code, in a
+while naming a fix in the old form (`; fixed by …`, `; fixed: …`,
+`; repaired by …`) stops the repair before any call, and the row stands as it
+is. **Red first:** the runner proves each repair of code by running the named test alone against the baseline's code, in a
 temporary git worktree whose `tests/` is the attempt's, and accepts a test
 only when pytest exits 1 or 2 there. When every post-run check passes —
 `make verify` green, a measured line in the time log, every fixed line

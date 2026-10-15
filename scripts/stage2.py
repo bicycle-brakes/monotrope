@@ -222,11 +222,12 @@ REPAIR_ANSWER = (
     "Answer with one fixed line per taken row: `<ID>: fixed — tests/<path>::<function>` or\n"
     "`<ID>: fixed — not a test — <reason>`. Headings, fences and report prose around the fixed lines are\n"
     "ignored, but a colon line whose id looks like a finding id (`L1-2`, `F-12`) and names no taken row\n"
-    "still fails. Write a `|` inside a reason as `\\|`. A code row needs a test that fails on the\n"
+    "still fails. Letters-hyphen-digits ids count only for prefixes used by this change's row ids;\n"
+    "`L<digits>-<digits>` always counts. Write a `|` inside a reason as `\\|`. A code row needs a test that fails on the\n"
     "baseline's code, which the runner runs; only a row taken as `taken — not a test — <reason>` may be\n"
     "answered `not a test`. Do not edit `findings.md`. A hand repair is booked in the row's own Status as\n"
     "one of the two fixed statuses above; a Status that still begins `taken` while naming a fix\n"
-    "(`; fixed by …`, `; fixed: …`) refuses the repair before any call."
+    "(`; fixed by …`, `; fixed: …`, `; repaired by …`) refuses the repair before any call."
 )
 # The Codex attempts (ADR 0017): Codex has command tools in its configured sandbox, so it is told what it may run.
 REPAIR_FORMAT = (
@@ -305,10 +306,9 @@ QUOTE_LINE_CHARS = 500
 # …and the file list keeps its first entries (spec, criteria 13 and 14).
 ATTEMPT_FILES = 40
 LOOP_ID = re.compile(r"L\d+-\d+")
-# A finding-shaped identifier of a repair answer: a loop id, or ASCII letters, a hyphen and digits
-# (`F-12`), the shape every row writer uses. A colon line that names no taken row still fails when its
-# identifier has this shape; anything else in the answer is incidental prose (spec, criteria 1 and 3).
-FINDING_ID = re.compile(r"(?:L\d+-\d+|[A-Za-z]+-[0-9]+)")
+# Non-loop finding shapes count only for prefixes already used by the change's rows.
+# Loop identifiers always count; an unrelated colon label remains report prose.
+FINDING_ID = re.compile(r"([A-Za-z]+)-[0-9]+")
 NOT_ROWS_NOTE = "The answer was not only six-cell rows; what is not one is kept below as it came."
 # A fixed line's test, in the form of ADR 0013's criterion ledger: a file `tests/…/test_*.py`, a function
 # `test_…`. A `.` or `..` path segment would climb out of `tests/`; `fixed_status` refuses it as the
@@ -1068,13 +1068,13 @@ def repair_targets(ctx: Context, record: str | None) -> tuple[list[tuple[str, li
 
 
 # A taken Status that names a fix in the hand-written form the runner never wrote: the row is done, and
-# an attempt would demand a fixed line for it in vain. Both markers are matched without regard to case,
+# an attempt would demand a fixed line for it in vain. All three markers are matched without regard to case,
 # as every Status read here is (bead coding-harness-ugi).
-LEGACY_FIXED = ("; fixed by", "; fixed:")
+LEGACY_FIXED = ("; fixed by", "; fixed:", "; repaired by")
 
 
 def legacy_completed(status: str) -> bool:
-    """Whether a Status still begins `taken` while naming a fix in one of the two legacy forms."""
+    """Whether a Status still begins `taken` while naming a fix in one of the three legacy forms."""
     lowered = status.lower()
     return any(marker in lowered for marker in LEGACY_FIXED)
 
@@ -2241,6 +2241,12 @@ def check_repair_answer(
     per named test; every text is scrubbed with the key.
     """
     active = {row[0] for _, row in taken}
+    # Include rejected and fixed findings: they establish the same vocabulary as active rows.
+    prefixes = {
+        match[1]
+        for row in [*(row for _, row in taken), *before[0], *before[1]]
+        if (match := FINDING_ID.fullmatch(row[0]))
+    }
     problems: list[str] = []
     parsed: dict[str, list[str]] = {}
     for raw in answer.splitlines():
@@ -2255,7 +2261,8 @@ def check_repair_answer(
         # cannot carry every real fixed line (spec, criterion 2).
         if not sep or not ident:
             continue
-        if ident not in active and not FINDING_ID.fullmatch(ident):
+        shape = FINDING_ID.fullmatch(ident)
+        if ident not in active and not LOOP_ID.fullmatch(ident) and not (shape and shape[1] in prefixes):
             continue
         parsed.setdefault(ident, []).append(rest)
     fixes: dict[str, str] = {}
@@ -2996,7 +3003,7 @@ def repair(root: Path, change: str, stage2_off: str | None = None) -> None:
     stops without a fallback (ADR 0017). The orchestrator decides taken or rejected and re-checks with
     the loop's next round and `review`, a fresh read-only Codex session; the verb writes no
     `Broke a test` and starts no review. A taken Status that already names a fix in the old hand-written
-    form (`; fixed by`, `; fixed:`) refuses before any call.
+    form (`; fixed by`, `; fixed:`, `; repaired by`) refuses before any call.
     """
     first = SONNET if stage2_off is not None else CODEX
     ctx = preflight(root, change, first, required=("plan.md",))

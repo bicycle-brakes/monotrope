@@ -2,7 +2,7 @@
 title: "Findings — repair-fixed-lines"
 category: findings
 status: draft
-implementation_status: none
+implementation_status: partial
 date: 2026-10-15
 created: 2026-10-15
 last_reviewed: 2026-10-15
@@ -144,3 +144,5 @@ Stage-2 call, 2026-10-15: implement · attempt 1 · route flash · endpoint glm-
 Stage-2 call, 2026-10-16: implement · attempt 2 · route flash-repair · endpoint glm-coding-plan · model glm-5.3-flash · reason first Flash post-run check failed · leak check clean over 462 files, 1279 commits, 12 rules.
 
 Stage-2 call, 2026-10-16: review-loop · endpoint opencode-go · model deepseek-v4.1-flash · leak check clean over 462 files, 1280 commits, 12 rules.
+
+Stage-2 call, 2026-10-16: repair · attempt 1 · route codex · endpoint openai-codex · model gpt-6.1-sol · leak check clean over 462 files, 1281 commits, 12 rules.
