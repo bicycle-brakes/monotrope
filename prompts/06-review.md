@@ -2,7 +2,7 @@
 
 **Model:** Opus 5.5 — finds what Sonnet misses, and reads the code a change
 calls instead of trusting its docstring, for a spike; for a bounded, feature or
-architectural change gpt-6.1-sol at effort `max`, started by `python3
+architectural change gpt-6.1-sol at effort [`CODEX_EFFORTS["review"]`](../scripts/stage2.py), started by `python3
 scripts/stage2.py review <change>`. A re-check after an earlier `## Phase 6`
 block in `findings.md` starts a fresh read-only Codex session (ADR 0017).
 The first phase-6 review starts fresh where phase 2a ran on Opus 5.5
