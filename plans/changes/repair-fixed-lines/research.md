@@ -187,3 +187,27 @@ record for the repair route is ADR 0017 (`docs/adr/0017-codex-repairs-taken-find
 **Next step for you:** append the block to `research.md`, commit on `explore/repair-fixed-lines`, and continue with Phase 1a (interview; class *bounded* per the seed's frontmatter — minimum 1 topic or a reasoned skip).
 
 **Needed from you:** nothing right now.
+
+## Draft gap checks — 2026-10-15
+
+Read at draft baseline `b3e5810`:
+
+- `scripts/stage2.py` defines `LOOP_ID` as `L\d+-\d+`; phase-6 rows keep
+  their free-text identifiers. Exact active identifiers must therefore be
+  recognized before applying a shape filter to unknown identifiers.
+- `repair` obtains all selected rows before dispatch, and `repair_targets`
+  already excludes statuses beginning `fixed` in every row location. The
+  legacy-marker check can refuse before an attempt without changing target
+  selection or adding status vocabulary.
+- `tests/test_stage2.py` supplies deterministic repair and row-building
+  helpers plus existing missing/duplicate/unknown, test-reference and
+  red-first regressions. Add cases there without renaming tests referenced
+  by other changes' ledgers.
+- `templates/` has no plan template, and
+  `scripts/validate_change_artefacts.py` is absent. The phase-3 prompt supplies
+  the plan form; the existing interview and criterion-ledger checks remain
+  available. `scripts/plans_registry.py --check` delegates tracker reads to
+  `scripts/bead_render.py`; it is left to the runner because this draft may
+  read only the worktree and repository git directory.
+- The change's `findings.md` holds the draft call's audit line and no
+  phase-2a review rows to resolve.
