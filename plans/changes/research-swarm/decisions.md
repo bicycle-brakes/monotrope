@@ -221,3 +221,12 @@ checks that no research `[DECISION]` is lost.
   directly; no judgement whether the change is sensible; no proposals for
   new code. Three agents on the same brief; template report with every key
   claim backed by `path::symbol` (answer: "ja").
+- Topic 2, callers and interfaces — guiding questions: who calls the
+  affected functions, scripts or commands (code, tests, Makefile, CI, hooks,
+  prompts); which interfaces are affected (signatures, options, file and
+  header formats, configuration keys); which callers would have to change
+  with an interface and which only read; which interfaces other
+  repositories use (lakeswitch, the kit). Boundary: only connections to the
+  finder's map; no judgement whether an interface is good (topic 4). Three
+  agents on the same brief; every key claim names caller and callee as
+  `path::symbol` (answer: "ja").
