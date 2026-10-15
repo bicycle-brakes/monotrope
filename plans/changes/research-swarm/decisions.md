@@ -256,3 +256,16 @@ checks that no research `[DECISION]` is lost.
   architecture and the code on the finder's map; no new target
   architecture; neighbouring specs belong to topic 5. Three agents on the
   same brief; evidence `path::section` or `path::symbol` (answer: "ja").
+- Topic 5, neighbouring specs — input: the neighbours in the header of
+  `research.md` are given, the finder's suggestions added. Guiding
+  questions: what each neighbouring spec fixes that this change touches
+  (a criterion, interface or decision); where the two specs contradict or
+  this change would break a neighbour's criterion; where they overlap so
+  that work doubles or an order is needed; which resources both claim
+  (ADR numbers, files, configuration keys, gate names); which of the
+  finder's suggestions really is a neighbour, with a reason. Boundary:
+  only the neighbours' spec, design, plan and `decisions.md` (their code
+  belongs to topics 1 and 2); no judgement which spec is right. Three
+  agents on the same brief; evidence `path::section` or criterion number;
+  confirmed neighbours go into `neighbours:` in the spec header; every
+  contradiction becomes an interview `[DECISION]` (answer: "5 passt").
