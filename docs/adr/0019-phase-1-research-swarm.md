@@ -95,7 +95,7 @@ surface rather than depend on a model obeying an instruction.
 6. Calls are finite and sequential: one per free model, eleven Flash calls
    and one judge, with no automatic retries or debate. Initial deadlines
    are 10 minutes per researcher, 15 for Opus and 150 for the whole run.
-7. Explicit Stage-1 exploration keeps Haiku 4.5 and its recorded reason.
+7. Explicit Stage-1 exploration keeps Haiku 5.5 and its recorded reason.
    No unrequested fallback follows a failed swarm or a leak BLOCK.
 8. The public boundary is qualified offline on the pinned Pi with synthetic
    canaries before live calls. New free endpoints are contacted only after

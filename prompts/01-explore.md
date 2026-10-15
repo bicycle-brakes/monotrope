@@ -15,7 +15,7 @@ GLM 5.3 Flash explorer. The runner reads the class wherever stated in the
 explore-only `--class` argument and the headers of `research.md` and `spec.md`.
 All available declarations must agree; missing, invalid or disagreeing
 declarations refuse before any model call. `--stage2-off [REASON]`
-keeps the Haiku 4.5 route and skips the class. In the swarm, free researchers
+keeps the Haiku 5.5 route and skips the class. In the swarm, free researchers
 see public sources only — one filtered topic sentence, no repository content;
 the Flash pair compares the repository on six topics; a fresh Opus 5.5 context
 reconciles the six pairs. The judge holds evidence authority only: it exposes
