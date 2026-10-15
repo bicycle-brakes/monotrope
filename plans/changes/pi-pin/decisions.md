@@ -64,16 +64,21 @@ dependency locked, accepting a `node_modules` folder under `tools/pi/`. — 2026
 
 ## Q-3 · What "works with Zen" means after the free-tier refusal
 
-asked: (prepared 2026-10-15, not yet asked)
-answer: —
-answered_by: —
-status: open
+asked: 2026-10-15
+answer: "A" — Go only now; the contract suite still checks the `opencode` (Zen) provider offline (address, key variable), so paid Zen can be enabled later by one declaration.
+answered_by: maintainer
+status: answered
 context: |
   Topic: whether the runner's Pi must reach OpenCode Zen, now that Zen's free tier refuses every client but OpenCode.
   Intention: the maintainer required that the runner's own Pi works with OpenCode Go and Zen; on 2026-10-15 a free Zen call from Pi answered 403 FreeTierError, and the research swarm moved its online topics to Go models (research-swarm Q-8).
   Today: the runner calls only `opencode-go`; the global Pi has no usable Zen credential; paid Zen models through Pi were not tried.
   Repository change: A (recommended) — Go only now; the contract suite still covers the `opencode` provider offline (address, key variable) so that paid Zen can be added by one declaration later; B — declare paid Zen now, with its own endpoint entry and quota note.
   Architecture change: none for A; B adds a second declared paid endpoint.
+
+In the context of a Zen free tier that refuses Pi, facing the choice
+between Go only and a paid Zen endpoint now, we decided on Go only with the
+Zen provider checked offline, to achieve one declared endpoint and a ready
+path to paid Zen, accepting that no Zen model is callable until declared. — 2026-10-15
 
 ## Q-4 · Does the interactive session use the same Pi
 
