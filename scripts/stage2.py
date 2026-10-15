@@ -219,10 +219,14 @@ ANSWER_FORMAT = (
 )
 MARK_FORMAT = "For each loop row answer one line and nothing else: `<ID>: agree` or `<ID>: disagree — <reason>`."
 REPAIR_ANSWER = (
-    "Answer with one fixed line per row and no other text: `<ID>: fixed — tests/<path>::<function>` or\n"
-    "`<ID>: fixed — not a test — <reason>`. Write a `|` inside a reason as `\\|`. A code row needs a test that\n"
-    "fails on the baseline's code, which the runner runs; only a row taken as `taken — not a test — <reason>`\n"
-    "may be answered `not a test`. Do not edit `findings.md`."
+    "Answer with one fixed line per taken row: `<ID>: fixed — tests/<path>::<function>` or\n"
+    "`<ID>: fixed — not a test — <reason>`. Headings, fences and report prose around the fixed lines are\n"
+    "ignored, but a colon line whose id looks like a finding id (`L1-2`, `F-12`) and names no taken row\n"
+    "still fails. Write a `|` inside a reason as `\\|`. A code row needs a test that fails on the\n"
+    "baseline's code, which the runner runs; only a row taken as `taken — not a test — <reason>` may be\n"
+    "answered `not a test`. Do not edit `findings.md`. A hand repair is booked in the row's own Status as\n"
+    "one of the two fixed statuses above; a Status that still begins `taken` while naming a fix\n"
+    "(`; fixed by …`, `; fixed: …`) refuses the repair before any call."
 )
 # The Codex attempts (ADR 0017): Codex has command tools in its configured sandbox, so it is told what it may run.
 REPAIR_FORMAT = (
@@ -301,6 +305,10 @@ QUOTE_LINE_CHARS = 500
 # …and the file list keeps its first entries (spec, criteria 13 and 14).
 ATTEMPT_FILES = 40
 LOOP_ID = re.compile(r"L\d+-\d+")
+# A finding-shaped identifier of a repair answer: a loop id, or ASCII letters, a hyphen and digits
+# (`F-12`), the shape every row writer uses. A colon line that names no taken row still fails when its
+# identifier has this shape; anything else in the answer is incidental prose (spec, criteria 1 and 3).
+FINDING_ID = re.compile(r"(?:L\d+-\d+|[A-Za-z]+-[0-9]+)")
 NOT_ROWS_NOTE = "The answer was not only six-cell rows; what is not one is kept below as it came."
 # A fixed line's test, in the form of ADR 0013's criterion ledger: a file `tests/…/test_*.py`, a function
 # `test_…`. A `.` or `..` path segment would climb out of `tests/`; `fixed_status` refuses it as the
@@ -1057,6 +1065,18 @@ def repair_targets(ctx: Context, record: str | None) -> tuple[list[tuple[str, li
             elif place == "phase-6" and not (status.startswith("rejected") or status.startswith("fixed")):
                 waiting.append(row[0])
     return taken, waiting
+
+
+# A taken Status that names a fix in the hand-written form the runner never wrote: the row is done, and
+# an attempt would demand a fixed line for it in vain. Both markers are matched without regard to case,
+# as every Status read here is (bead coding-harness-ugi).
+LEGACY_FIXED = ("; fixed by", "; fixed:")
+
+
+def legacy_completed(status: str) -> bool:
+    """Whether a Status still begins `taken` while naming a fix in one of the two legacy forms."""
+    lowered = status.lower()
+    return any(marker in lowered for marker in LEGACY_FIXED)
 
 
 def spec_review(root: Path, change: str) -> None:
@@ -2211,13 +2231,16 @@ def check_repair_answer(
 ) -> tuple[dict[str, str], list[str]]:
     """Read an answer's fixed lines: the Status each taken row takes, or the problems that fail the attempt.
 
-    Each problem names its ID. Every row of findings.md must also stand as `before` holds it - the taken
-    rows and the others alike, cell for cell: an edit outside the taken rows' Status is named, not
-    checkpointed (phase 6, F-3). The pre-call findings body also protects other phases and every earlier
-    attempt's evidence; only the frontmatter is excluded, because the runner refreshes `updated:`.
-    Only when no problem stands do the red-first runs start, one pytest run per named test; every
-    text is scrubbed with the key.
+    Each problem names its ID. Lines without a colon, and colon lines whose left side names neither an
+    active row exactly nor a finding-shaped id, are the report's incidental prose and are ignored; a
+    finding-shaped id that names no taken row still fails. Every row of findings.md must also stand as
+    `before` holds it - the taken rows and the others alike, cell for cell: an edit outside the taken
+    rows' Status is named, not checkpointed (phase 6, F-3). The pre-call findings body also protects
+    other phases and every earlier attempt's evidence; only the frontmatter is excluded, because the
+    runner refreshes `updated:`. Only when no problem stands do the red-first runs start, one pytest run
+    per named test; every text is scrubbed with the key.
     """
+    active = {row[0] for _, row in taken}
     problems: list[str] = []
     parsed: dict[str, list[str]] = {}
     for raw in answer.splitlines():
@@ -2228,8 +2251,11 @@ def check_repair_answer(
         ident, sep, rest = line.partition(":")
         ident = ident.strip().strip("*`").strip()
         rest = rest.strip()
+        # An active row is matched exactly first: a phase-6 id is free text, so the finding shape alone
+        # cannot carry every real fixed line (spec, criterion 2).
         if not sep or not ident:
-            problems.append(f"the answer holds a line that is no fixed line: {line[:80]}")
+            continue
+        if ident not in active and not FINDING_ID.fullmatch(ident):
             continue
         parsed.setdefault(ident, []).append(rest)
     fixes: dict[str, str] = {}
@@ -2969,7 +2995,8 @@ def repair(root: Path, change: str, stage2_off: str | None = None) -> None:
     Sonnet 5.5 stage-1 fallback after two failed post-run checks; a failed call or a leak-check BLOCK
     stops without a fallback (ADR 0017). The orchestrator decides taken or rejected and re-checks with
     the loop's next round and `review`, a fresh read-only Codex session; the verb writes no
-    `Broke a test` and starts no review.
+    `Broke a test` and starts no review. A taken Status that already names a fix in the old hand-written
+    form (`; fixed by`, `; fixed:`) refuses before any call.
     """
     first = SONNET if stage2_off is not None else CODEX
     ctx = preflight(root, change, first, required=("plan.md",))
@@ -2987,6 +3014,16 @@ def repair(root: Path, change: str, stage2_off: str | None = None) -> None:
     doubled = sorted({ident for ident in ids if ids.count(ident) > 1})
     if doubled:
         raise Refused(f"several taken rows carry the same id ({', '.join(doubled)}); mend the rows first.")
+    legacy = [row[0] for _, row in taken if legacy_completed(row[7])]
+    if legacy:
+        # The row is done and only its Status is of the old hand-written form: no attempt can fill it,
+        # so the repair stops before a call and the row stands as it is (spec, criterion 7).
+        raise Refused(
+            f"rows carry a taken status that already names a fix ({', '.join(legacy)}); book the hand repair "
+            "by replacing the Status with `fixed — tests/<path>::<function>` or "
+            "`fixed — not a test — <reason>` and setting the loop row's `Broke a test` mark, then run "
+            "repair again."
+        )
     baseline = _git_output(root, "rev-parse", "HEAD").strip()
     time_log(ctx.plan)  # Require the initial time heading before a model call starts.
     ignored_before = ignored_snapshot(root)

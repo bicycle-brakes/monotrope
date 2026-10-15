@@ -4,7 +4,7 @@ status: draft
 implementation_status: none
 date: 2026-10-15
 last_reviewed: 2026-10-15
-updated: 2026-10-15
+updated: 2026-10-16
 supersedes: null
 superseded_by: null
 bead: coding-harness-ugi
@@ -101,19 +101,25 @@ checks; this draft's local checks stay inside the worktree and git directory.
 
 ## Criterion ledger
 
-- 1: not yet written tests/test_stage2.py::test_repair_ignores_incidental_answer_prose — headings, fences or report labels trigger a retry after valid fixed lines
-- 2: not yet written tests/test_stage2.py::test_repair_accepts_exact_free_text_identifiers — a custom or report-like phase-6 identifier is filtered out
-- 3: not yet written tests/test_stage2.py::test_repair_rejects_unknown_finding_shaped_identifiers — an unknown loop or letters-hyphen-digits identifier is ignored
+- 1: tests/test_stage2.py::test_repair_ignores_incidental_answer_prose — headings, fences or report labels trigger a retry after valid fixed lines
+- 2: tests/test_stage2.py::test_repair_accepts_exact_free_text_identifiers — a custom or report-like phase-6 identifier is filtered out
+- 3: tests/test_stage2.py::test_repair_rejects_unknown_finding_shaped_identifiers — an unknown loop or letters-hyphen-digits identifier is ignored
 - 4: tests/test_stage2.py::test_each_taken_row_needs_exactly_one_fixed_line — a missing or doubled fixed line passes
-- 4: not yet written tests/test_stage2.py::test_repair_prose_alone_still_needs_fixed_lines — prose alone passes or duplicates separated by prose escape detection
-- 5: not yet written tests/test_stage2.py::test_repair_rejects_malformed_known_fixed_lines — a known identifier with an invalid status or empty reason is treated as prose
+- 4: tests/test_stage2.py::test_repair_prose_alone_still_needs_fixed_lines — prose alone passes or duplicates separated by prose escape detection
+- 5: tests/test_stage2.py::test_repair_rejects_malformed_known_fixed_lines — a known identifier with an invalid status or empty reason is treated as prose
 - 6: tests/test_stage2.py::test_repair_lists_every_taken_row_and_no_rejected_or_fixed_one — a completed released or phase-6 row is sent again
-- 6: not yet written tests/test_stage2.py::test_repair_skips_canonical_hand_repairs_in_every_location — either canonical status is demanded again in any location, including fixed-only batches
-- 7: not yet written tests/test_stage2.py::test_repair_refuses_legacy_completed_taken_statuses_before_call — a marker starts an attempt, rewrites a row or lacks corrective diagnostics
+- 6: tests/test_stage2.py::test_repair_skips_canonical_hand_repairs_in_every_location — either canonical status is demanded again in any location, including fixed-only batches
+- 7: tests/test_stage2.py::test_repair_refuses_legacy_completed_taken_statuses_before_call — a marker starts an attempt, rewrites a row or lacks corrective diagnostics
 - 8: tests/test_stage2.py::test_a_fixed_line_naming_an_undefined_test_fails_the_attempt — an undefined test is accepted
 - 8: tests/test_stage2.py::test_a_fixed_line_whose_test_path_climbs_out_of_tests_fails_the_attempt — an escaping test path is accepted
 - 8: tests/test_stage2.py::test_a_code_row_answered_not_a_test_fails_the_attempt — a code row bypasses the required test
 - 8: tests/test_stage2.py::test_a_named_test_that_is_not_red_first_fails_the_attempt — a baseline-green test is accepted as evidence
-- 9: not yet written tests/test_stage2.py::test_repair_instructions_describe_answer_filtering_and_hand_repairs — prompt and workflow omit or contradict the filtering or hand-repair rule
+- 9: tests/test_stage2.py::test_repair_instructions_describe_answer_filtering_and_hand_repairs — prompt and workflow omit or contradict the filtering or hand-repair rule
 
 ## Time used
+
+2026-10-16 — both phase-4 sessions so far (attempt 1, route flash, and this
+repair session) ran under the Stage-2 runner with file tools and no command
+tool: `date` could not be read, so no start, end or span is claimed and none
+is estimated. The runner's clock measures both against the one-hour appetite;
+its audit lines in `findings.md` carry each attempt's day and order.

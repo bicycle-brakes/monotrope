@@ -4,7 +4,7 @@ category: governance
 status: current
 created: 2026-09-05
 last_reviewed: 2026-09-29
-updated: 2026-10-15
+updated: 2026-10-16
 owner: Data Architect
 provenance: ai-drafted-reviewed
 produced_by:
@@ -1096,7 +1096,14 @@ in one guarded call, and refuses while a row stands undecided or an ID is
 doubled. The model answers one **fixed line** per row, `<ID>: fixed —
 tests/<path>::<function>` or `<ID>: fixed — not a test — <reason>`, in the
 form of ADR 0013's criterion ledger; only a row taken as `taken — not a test`
-may be answered `not a test`. **Red first:** the runner proves each repair of
+may be answered `not a test`. Headings, fences and report prose around the
+fixed lines are ignored; a colon line whose id looks like a finding id
+(`L1-2`, `F-12`) and names no taken row still fails the attempt. A hand
+repair books itself in the row's Status alone: replace the finished row's
+`taken — …` with one of the two fixed statuses and set the loop row's
+`Broke a test` mark from the evidence. A Status that still begins `taken`
+while naming a fix in the old form (`; fixed by …`, `; fixed: …`) stops the
+repair before any call, and the row stands as it is. **Red first:** the runner proves each repair of
 code by running the named test alone against the baseline's code, in a
 temporary git worktree whose `tests/` is the attempt's, and accepts a test
 only when pytest exits 1 or 2 there. When every post-run check passes —
