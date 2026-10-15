@@ -456,7 +456,7 @@ def test_declared_free_focuses_shape_research_and_topic_pairs(sworld: SwarmWorld
         )
         roles["topic6_free"] = first
         declaration.write_text(yaml.safe_dump(data), encoding="utf-8")
-    sworld.complete(public=[{"stdout": f"PUBLIC-SEAT-{n}"} for n in range(3)])
+    sworld.complete(public=[{"stdout": f"PUBLIC-SEAT-{n}", "receipts": [RECEIPT]} for n in range(3)])
     assert sworld.run() == 0
     for member, call in zip(FREE_IDS, sworld.calls("public"), strict=True):
         assert "## Your assigned focus\n" in call["prompt"], "the model must receive its declared assignment"
@@ -557,6 +557,8 @@ def test_public_requests_exclude_every_private_input(sworld: SwarmWorld) -> None
         assert Path(extension).name == "research-tools.mjs" and str(sworld.root) not in extension
         assert str(sworld.root) not in call["env"]["STAGE2_PUBLIC_RECEIPTS"]
         assert "--no-extensions" in call["argv"], "the built-in tool surface stays off"
+        # F-5. Planted fault: no `--tools` allow-list, so Pi declares its built-in tools to the free model.
+        assert call["argv"][call["argv"].index("--tools") + 1] == "public_search,public_fetch"
     text = sworld.research.read_text(encoding="utf-8")
     assert canary not in text, "nothing private is published"
     assert "### Public source receipts" in text
@@ -575,6 +577,23 @@ def test_public_claims_require_retrieved_source_receipts(
     assert "citations no receipt backs" in capsys.readouterr().err
     text = sworld.research.read_text(encoding="utf-8")
     assert "citations without receipts" in text, "the unbacked report is published as failed, not dropped"
+
+
+@pytest.mark.parametrize("receipts", [[], [dict(RECEIPT, kind="search")], [dict(RECEIPT, status=404)]])
+def test_a_free_report_without_a_retrieved_page_is_no_contribution(sworld: SwarmWorld, receipts: list) -> None:
+    # F-3. Planted fault: a report from memory, with no URL and no page retrieved, passes as public evidence.
+    sworld.complete(
+        public=[
+            {"stdout": PUBLIC_REPORT, "receipts": [RECEIPT]},
+            {"stdout": "From memory: teams usually isolate such runs.", "receipts": receipts},
+            {"stdout": PUBLIC_REPORT, "receipts": [RECEIPT]},
+        ]
+    )
+    assert sworld.run() == 1, "a run cannot end complete on a contribution that retrieved no page"
+    record = sworld.research.read_text(encoding="utf-8")
+    assert "free researcher space-bunny: retrieved no public page" in status_line(record)
+    assert "### Free researcher space-bunny (no retrieved page)" in record, "the report is kept, marked"
+    assert len(sworld.calls("flash")) == 11 and sworld.calls("judge"), "the remaining roles still run"
 
 
 @pytest.mark.parametrize("fault", ["invented-url", "search-snippet"])
@@ -645,6 +664,12 @@ def test_free_environment_excludes_identity_and_private_paths(
         "isolation for myValue runs",
         "the demo change's isolation",
         "isolation for the demo-1 tracker work",
+        # F-4. Planted fault: a hyphenated identifier without a digit passes as a plain word.
+        "isolation for the coding-harness-yim tracker work",
+        "container isolation in the coding-harness repository",
+        "routing research through claude-code-plan",
+        "public research on the opencode-free endpoint",
+        "exploration in the style of research-swarm",
     ],
 )
 def test_public_topic_is_filtered_before_free_calls(sworld: SwarmWorld, answer: str) -> None:

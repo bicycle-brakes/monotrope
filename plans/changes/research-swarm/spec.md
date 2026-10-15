@@ -4,7 +4,7 @@ status: draft
 implementation_status: none
 date: 2026-10-14
 last_reviewed: 2026-10-14
-updated: 2026-10-14
+updated: 2026-10-15
 supersedes: null
 superseded_by: null
 bead: coding-harness-icw
@@ -167,8 +167,9 @@ Evidence was collected on 2026-10-14; the drafting baseline is `1e29f6e`.
     free ids added to the review ladder, or an existing ADR rewritten.
 23. Before the free research stage, a fresh Opus 5.5 call writes the public
     topic, and the runner accepts it only if it is a single sentence of at
-    most 20 words with no path, file name, identifier-shaped token, change
-    name or bead id, and its leak check is clean; otherwise the run stops
+    most 20 words with no path, file name, identifier-shaped token (a
+    hyphenated token counts as one), change name or bead id, and its leak
+    check is clean; otherwise the run stops
     before any free call. The accepted sentence is recorded in the research.
     *Refuted by:* a free call after a rejected or missing topic, a topic
     written by a researcher or the runner itself, or an unrecorded topic.

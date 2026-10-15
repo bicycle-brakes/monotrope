@@ -72,8 +72,12 @@ uses fixed generic questions plus the one-sentence public topic (Q-6), not
 `work_prompt`, `AGENTS.md`, a change brief or a sanitized repository summary.
 The topic comes from its own fresh Opus 5.5 call on the private brief and
 passes a mechanical filter (one sentence, at most 20 words, no path, file
-name, identifier-shaped token, change name or bead id) and a leak check
-before the free stage; a rejected topic stops the run.
+name, identifier-shaped token, change name or bead id; a hyphenated token
+counts as identifier-shaped, because bead ids, the repository name and
+endpoint and change names are hyphenated words) and a leak check before the
+free stage; a rejected topic stops the run. The free Pi command carries the
+tool allow-list `--tools public_search,public_fetch`, so no built-in tool is
+declared to the model; the extension's gate stays as the second layer.
 Its environment carries only required runtime settings and the credential
 for its qualified OpenCode transport; user identity, private paths and other
 endpoint credentials are not inherited into model context.
@@ -150,7 +154,9 @@ result into `research.md`. Phase 2 still reads research plus decisions.
 - **Source receipt**, tool/runner-owned: public URL/title/retrieval date and
   excerpt/locator, or repository path/symbol/input-state reference. The
   runner validates local paths and state and checks public citations against
-  actual retrieval receipts, not model assertions of a successful fetch.
+  actual retrieval receipts, not model assertions of a successful fetch. A
+  free contribution with no successful page retrieval is no contribution:
+  its slot is failed and the run incomplete, whatever the report cites.
 - **Research output**, written only by the runner: append one dated run
   block containing status, budget, contribution/audit records, source
   receipts and compact supporting reports, then the judge's six-topic

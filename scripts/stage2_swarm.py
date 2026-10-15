@@ -74,8 +74,11 @@ RESEARCHER_MINUTES = 10.0
 JUDGE_MINUTES = 15.0
 RUN_MINUTES = 150.0
 PACKET_FILES = ("research.md", "decisions.md", "spec.md", "design.md", "plan.md", "findings.md")
-WORD = re.compile(r"^[A-Za-z][A-Za-z'-]*$")
+WORD = re.compile(r"^[A-Za-z][A-Za-z']*$")
 URL = re.compile(r"""https?://[^\s)>"'\\]+""")
+# The free researcher's whole tool surface, as Pi's `--tools` allow-list: the
+# extension's two tools and no built-in one (the extension's own gate stays).
+PUBLIC_TOOLS = "public_search,public_fetch"
 
 
 def allowance(elapsed: float, role_minutes: float) -> float:
@@ -366,7 +369,8 @@ def topic_author_prompt(ctx) -> str:
         "You write the one-sentence public topic for a research run about the change described below.",
         "Answer with the sentence and nothing else: one sentence of at most 20 words, in plain words,",
         "naming what the change is about - no file or path name, no identifier, no code, no change",
-        'name, no tracker id. The shape to match: "container isolation for AI agent runs".',
+        "name, no tracker id, no hyphenated compound (write its parts as separate words).",
+        'The shape to match: "container isolation for AI agent runs".',
         "---",
         "# The change's problem",
         _brief(ctx, "spec.md"),
@@ -536,8 +540,9 @@ def pi_public_call(runner, prompt_text: str, model_id: str, key: str, seconds: f
     Fresh scratch cwd, home and agent directory; the extension and the prompt
     are copied to generic scratch paths before loading, so no repository path
     can enter discovery metadata; only the OpenCode key and the receipts path
-    join the allow-listed environment. The extension's gate is the tool
-    surface: no file or shell tool passes it.
+    join the allow-listed environment. The `--tools` allow-list declares only
+    the extension's two tools to the model, and the extension's gate blocks
+    any other call: no file or shell tool is offered or passes.
     """
     with tempfile.TemporaryDirectory(prefix="stage2-public-") as tmp:
         scratch = Path(tmp)
@@ -567,6 +572,8 @@ def pi_public_call(runner, prompt_text: str, model_id: str, key: str, seconds: f
             "--no-context-files",
             "--no-prompt-templates",
             "--no-themes",
+            "--tools",
+            PUBLIC_TOOLS,
             "--model",
             model_id,
             "--append-system-prompt",
@@ -667,8 +674,11 @@ def topic_problems(answer: str, change: str, bead: str) -> list[str]:
     """The mechanical filter for the public topic (spec, criterion 23).
 
     One sentence, at most 20 words, no path, file name, identifier-shaped
-    token, change name or bead id. A rejected topic stops the run before any
-    free call.
+    token, change name or bead id. A word is letters and apostrophes only: a
+    hyphenated token is refused, because the repository's identifiers (bead
+    ids, the repository name, endpoint and change names) are hyphenated words
+    that no list of this change's own names can hold. A rejected topic stops
+    the run before any free call.
     """
     text = answer.strip()
     text = re.sub(r"^[#>*\"'`\s]+", "", text)
@@ -861,10 +871,16 @@ def run(root: Path, change: str, runner, klass: str) -> None:
         receipts = parse_receipts(str(receipts_text))
         receipts_all.extend(receipts)
         unbacked = receipt_problems(str(report), receipts)
+        retrieved = any(receipt.get("kind") == "fetch" and receipt.get("status") == 200 for receipt in receipts)
         note = " (failed — partial evidence)" if answer is None else ""
         note += f" (citations without receipts: {'; '.join(unbacked)})" if unbacked else ""
         if unbacked:
             failed.append(f"free researcher {member}: citations no receipt backs - {', '.join(unbacked)}")
+        if answer is not None and not retrieved:
+            # Public evidence is a retrieved page; a report from memory or from
+            # failed tools is no contribution (spec, criteria 10 and 18).
+            note += " (no retrieved page)"
+            failed.append(f"free researcher {member}: retrieved no public page")
         if str(report).strip() or receipts_text:
             free_reports[member] = (
                 f"### Free researcher {member}{note}\n\n{report or '(no answer; source receipts retained)'}"

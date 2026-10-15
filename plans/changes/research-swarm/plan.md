@@ -181,6 +181,7 @@ provider does not expose is unknown; no Claude/cost saving is asserted.
 - 10: tests/test_stage2_swarm.py::test_public_claims_require_retrieved_source_receipts — an unfetched URL or search snippet is accepted as page evidence.
 - 10: tests/test_stage2_swarm.py::test_judge_public_citations_require_retrieved_receipts — the judge promotes an invented URL or search-only snippet to a supported public fact.
 - 10: tests/test_stage2_research_tools.py::test_search_results_carry_the_decoded_destination — a search result keeps the search engine's redirect wrapper instead of the destination URL.
+- 10: tests/test_stage2_swarm.py::test_a_free_report_without_a_retrieved_page_is_no_contribution — a free report from memory or failed tools, with no retrieved page, counts as a contribution.
 - 10: tests/test_stage2_swarm.py::test_redirect_receipts_back_requested_and_final_urls — a successful redirected retrieval fails to back its requested or final URL.
 - 11: tests/test_stage2_swarm.py::test_declarations_clear_only_the_role_data_class — an undeclared model or public-only endpoint receives framework content.
 - 11: tests/test_stage2_swarm.py::test_declared_paid_endpoint_and_models_are_called — topic author and judge ignore the declared endpoint and model identities.

@@ -11,6 +11,8 @@ Topic of the research (given as one sentence):
 
 Answer only your assigned questions from the fixed generic questions below.
 Every answer comes from a page you actually retrieved during this session.
+A report without at least one page retrieved with `public_fetch` counts as a
+failed contribution, whatever it says.
 
 ## Your assigned focus
 
