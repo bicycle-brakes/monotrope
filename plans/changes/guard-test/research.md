@@ -103,3 +103,60 @@ Red-first appears in: `prompts/04-implement.md`, the "Repair" paragraph ("A code
 ---
 
 Stage-2 explore call for this phase, per the seed's record: attempt 1, route flash, model glm-5.3-flash, leak check clean. Nothing was designed, recommended or edited; every statement above names its file and symbol.
+
+## Draft-stage gap checks — 2026-10-15
+
+Read against `a4b0780813ca2cf14b41c03b23c9bf6e698df77b`:
+
+- The interview settles the switch and the answer spelling; the earlier
+  exploration's uncertainty about separating the runs is closed by Q-1 in
+  `decisions.md`.
+- `repair_targets` selects statuses beginning `taken` and treats statuses
+  beginning `fixed` as already decided. `mark_repaired_findings` and
+  `mark_repaired_record` copy the supplied fixed status into the row's Status
+  cell. The guard mark therefore needs no new taken-row grammar or record
+  field (`scripts/stage2.py`, the three named functions).
+- The criterion ledger accepts test references, not repair-answer statuses;
+  the guard mark does not belong in its grammar
+  (`scripts/check_criterion_ledger.py`, `TEST`, `NOT_YET`, `NOT_A_TEST`).
+- There is no plan template under `templates/`; the plan follows
+  `prompts/03-plan.md` and the existing bounded example
+  `plans/changes/haiku-5-5/plan.md`. The requested
+  `scripts/validate_change_artefacts.py` is also absent; it cannot provide a
+  green result at this baseline.
+- The planned note in ADR 0017 is still an ADR edit: the interview gate
+  requires five human answers for any claimed ADR file actually edited,
+  whatever the class; a bounded change otherwise requires one. There is
+  one answered record in this change's `decisions.md`. Thus a green check
+  before the ADR edit does not discharge the four additional records owed
+  before implementation (`scripts/check_interview_minimums.py`, `measure`;
+  `docs/WORKFLOW.md`, "Change classes, the ADR question and decision pull
+  requests"). This is an interview prerequisite, not an unanswered choice
+  about the switch. No answers or skip records are invented in this draft.
+- ADR files are reserved for `human-decided` provenance. Its planned note
+  consequently makes the eventual implementation pull request a decision
+  pull request; no new ADR is due under the recorded bounded classification
+  (`provenance.yaml`, prefix `docs/adr/`; `docs/WORKFLOW.md`, the same section).
+
+The latest handover read was `docs/journal/handover/2026-10-15-night-run-fourth.md`;
+its test-only repair blockage agrees with the seed. The local branch and its
+remote-tracking ref both name the commit above. Live pull-request state and
+other sessions were not read; this runner task changes no tracker state.
+
+### Draft validation — 2026-10-15, uncommitted artifacts over `a4b0780`
+
+- `python3 scripts/check_interview_minimums.py --change guard-test` through
+  the worktree's `.venv/bin/python3`: exit 0 for the current draft-only diff;
+  ADR 0017 is not edited yet. Counting the recorded human answers separately
+  confirms one of the five needed for its planned edit, so phase 4 remains
+  blocked on phase 1a.
+- `python3 scripts/check_criterion_ledger.py` through the same interpreter:
+  exit 0, including the new plan's not-yet-written test entries.
+- Frontmatter parsed with `plans_registry._frontmatter`: both new artifacts
+  have the required nonempty fields and remain draft/unimplemented; the
+  spec retains `bounded` and claims ADR 0017; the plan opens with its card,
+  has one ledger and an empty time section. No design file was created.
+- `git diff --check`: exit 0. The complete registry check was not run:
+  its tracker renderer can read the main checkout outside this task's read
+  boundary. The absent change-artifact validator was not run. Full
+  `make verify`, derived-file refresh and the commit belong to the runner.
