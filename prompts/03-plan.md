@@ -1,6 +1,6 @@
 # Phase 3 · Plan
 
-**Model:** gpt-6.1-sol — Codex (`gpt-6.1-sol`) at effort `max`, started by
+**Model:** gpt-6.1-sol — Codex (`gpt-6.1-sol`) at effort [`CODEX_EFFORTS["draft"]`](../scripts/stage2.py), started by
 `python3 scripts/stage2.py draft <change>`: one call writes spec, design and
 plan (phases 2, 2b and 3), and GLM 5.3 after two failed attempts; a mistake
 here is the most expensive one. Where Stage 2 is off, Opus 5.5 at effort
