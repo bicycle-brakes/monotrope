@@ -24,6 +24,8 @@ tags: [adr, stage-2, research, swarm, public-boundary]
   the merge commit, written nowhere else, so approval fields stay empty
   (ADR 0008) · Decider: maintainer · prepared by Codex.
 * Date: 2026-10-14 · takes effect on merge.
+* Number: drafted as 0018 and renumbered to 0019 on 2026-10-15, after
+  ADR 0018 (every question carries its context) merged first.
 
 ## Context
 
