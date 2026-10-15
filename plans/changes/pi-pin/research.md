@@ -182,3 +182,28 @@ Nothing in the 1.2.0 section names `--tools`, `--offline`, `--no-extensions`,
 `--list-models`, the `read` tool's path handling or the `opencode` /
 `opencode-go` providers. Absence in a changelog is not a measurement: the
 contract suite (Q-1) is what would show it.
+
+## Draft-time repository checks — 2026-10-15
+
+Read against HEAD `40934c108f7f63aac860175c8076c385fe69ba2e`; no installed
+package outside the worktree was read and no real Pi was run by the drafter.
+
+- All six records in `decisions.md` are answered by the maintainer; Q-6 asks
+  for a new ADR amending ADR 0011 and ADR 0012. The highest ADR file in this
+  worktree is 0018, so this draft uses 0019; concurrent branches were not read.
+- `docs/research/2026-10-05-likec4-roadmap-arc42.md` records Node 26.9.0 and
+  npm 11.19.1 on macOS as of 2026-10-05. This is evidence for a reversible
+  runtime candidate, not a Pi/Node compatibility measurement.
+- `scripts/ci_gates.py::_toolchain` generates Python provisioning for verify
+  and drift jobs. `.github/workflows/ci.yml` is its output; provisioning Pi
+  belongs in that generator, without a duplicate gate list.
+- `scripts/kit/manifest.yaml` already classifies `tools/`, `scripts/` and
+  `tests/` additions with catch-all rules; this change need not decide exports.
+- `templates/` contains spec, design and ADR templates but no plan template.
+  The plan therefore follows the phase-3 prompt and existing plan structure.
+- `scripts/validate_change_artefacts.py` is absent. Interview, criterion-ledger
+  and registry scripts exist; registry reads a tracker render and the generated
+  index, which the orchestrator must supply/refresh outside this draft's scope.
+- `findings.md` contains only the draft-attempt audit line, no phase-2a rows.
+  Live pull-request state and external parallel-session registries were not read
+  under this call's worktree/git-directory-only read boundary.
