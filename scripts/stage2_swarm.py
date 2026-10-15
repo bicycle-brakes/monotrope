@@ -259,20 +259,31 @@ def build_packet(ctx) -> tuple[str, str, dict[Path, bytes], str]:
     return packet, hashlib.sha256((packet + head).encode("utf-8")).hexdigest(), frozen, head
 
 
+def without_updated(data: bytes) -> bytes:
+    """The bytes with the header's `updated:` value blanked - the one line the runner's appends re-stamp."""
+    match = re.match(rb"---\r?\n(.*?)\r?\n---", data, re.S)
+    if not match:
+        return data
+    header = re.sub(rb"(?m)^updated:[^\r\n]*", b"updated:", match.group(1), count=1)
+    return data[: match.start(1)] + header + data[match.end(1) :]
+
+
 def input_state_holds(ctx, frozen: dict[Path, bytes], head: str) -> str | None:
     """None while every frozen input stands; the changed path's name otherwise.
 
     `research.md` is compared up to the point this run appended: the file must
     begin with the frozen bytes, so the run cannot publish over other writing,
     while its own appended block does not invalidate its digest (plan, step 6).
+    Every append re-stamps the header's `updated:` line, so a run that crosses
+    midnight changes that one value itself; it is left out of the comparison.
     """
     for path, data in frozen.items():
         try:
             now = path.read_bytes()
         except OSError:
             return path.relative_to(ctx.root).as_posix()
-        if path.name == "research.md":
-            if not now.startswith(data):
+        if path.name == "research.md" and path.parent == ctx.folder:
+            if not without_updated(now).startswith(without_updated(data)):
                 return path.relative_to(ctx.root).as_posix()
         elif now != data:
             return path.relative_to(ctx.root).as_posix()
@@ -737,12 +748,55 @@ JUDGE_FIELDS = (
 )
 
 
-def judge_problems(answer: str, tracked: set[str]) -> list[str]:
+# A path-shaped token: slash-separated segments ending in a file extension.
+PATH_SHAPE = re.compile(r"[\w.-]+(?:/[\w.-]+)*\.[A-Za-z][A-Za-z0-9]*")
+LINE_CITATION = re.compile(r"(?<![\w/.:-])([\w./-]+\.[A-Za-z][A-Za-z0-9]*):(\d+)(?:[-:]\d+)?(?![\w/.-])")
+SYMBOL_CITATION = re.compile(r"(?<![\w/.:-])([\w./-]+)::([^\s`]+)")
+
+
+def symbol_problem(path: str, symbol: str, sources: dict[str, bytes]) -> str | None:
+    """None when the cited symbol stands in the frozen bytes of the cited path; the problem otherwise."""
+    if path not in sources:
+        return f"the citation '{path}::{symbol}' names no tracked path at the frozen state"
+    text = sources[path].decode("utf-8", errors="replace")
+    name = symbol.strip().rstrip("()").strip()
+    parts = [part for part in name.split(".") if part]
+    found = bool(parts) and (name in text or all(re.search(rf"(?<!\w){re.escape(part)}(?!\w)", text) for part in parts))
+    return None if found else f"the citation '{path}::{symbol}' names no symbol of {path} at the frozen state"
+
+
+def citation_problems(answer: str, sources: dict[str, bytes]) -> list[str]:
+    """The judge's local citations that do not bind to the frozen state (spec, criterion 16).
+
+    A `path::symbol` must name a tracked path and a symbol its frozen bytes
+    contain; a citation by line numbers alone, or a bare path in backticks,
+    is refused, because neither names what it claims stands there.
+    """
+    problems: list[str] = []
+
+    def add(problem: str | None) -> None:
+        if problem and problem not in problems:
+            problems.append(problem)
+
+    for path, symbol in SYMBOL_CITATION.findall(answer):
+        add(symbol_problem(path, symbol, sources))
+    for match in LINE_CITATION.finditer(answer):
+        add(f"the citation '{match.group(0)}' gives line numbers only; cite `path::symbol`")
+    for token in (raw.strip() for raw in re.findall(r"`([^`\n]+)`", answer)):
+        if "::" in token or token.startswith(("http://", "https://")) or LINE_CITATION.fullmatch(token):
+            continue
+        if token in sources or ("/" in token and PATH_SHAPE.fullmatch(token)):
+            add(f"the citation '{token}' is a bare path; cite `path::symbol`")
+    return problems
+
+
+def judge_problems(answer: str, sources: dict[str, bytes]) -> list[str]:
     """The judge's six sections, their labelled fields and their local citations.
 
     Sections must be `### Topic <n>` for 1-6, once each; every section names
-    the six labelled fields; a repository citation must name a path that
-    existed at the frozen input state (spec, criteria 7, 14, 15 and 16).
+    the six labelled fields; a repository citation must name a path and a
+    symbol that existed at the frozen input state (spec, criteria 7, 14, 15
+    and 16). `sources` maps each tracked path to its frozen bytes.
     """
     problems: list[str] = []
     sections: list[tuple[int, int]] = [
@@ -756,10 +810,7 @@ def judge_problems(answer: str, tracked: set[str]) -> list[str]:
         for field in JUDGE_FIELDS:
             if field not in body:
                 problems.append(f"topic {number} lacks '{field}'")
-    for citation in sorted(set(re.findall(r"`([^`]+::[^`]+)`", answer))):
-        path = citation.split("::", 1)[0]
-        if path not in tracked:
-            problems.append(f"the citation '{citation}' names no tracked path at the frozen state")
+    problems.extend(citation_problems(answer, sources))
     return problems
 
 
@@ -785,6 +836,7 @@ def run(root: Path, change: str, runner, klass: str) -> None:
     runner.stamp_updated(ctx.research)
     packet, digest, frozen, head = build_packet(ctx)
     tracked = tracked_paths(root)
+    sources = {relative: frozen[ctx.root / relative] for relative in sorted(tracked) if (ctx.root / relative) in frozen}
     run_id = f"swarm-{uuid.uuid4().hex[:8]}"
     audit = Audit(runner, ctx.research, run_id)
     runner.append(
@@ -801,6 +853,20 @@ def run(root: Path, change: str, runner, klass: str) -> None:
     def remaining() -> float:
         return time.monotonic() - started
 
+    def budget(role: str, topic: int | None, model: str, minutes: float) -> float | None:
+        """The seconds a launch may take, or None - recorded - once the whole-run deadline is spent.
+
+        A spent deadline refuses before the gate: no leak-check line, no
+        process, and the slot is recorded unfinished (spec, criterion 19).
+        """
+        seconds = allowance(remaining(), minutes)
+        if seconds > 0:
+            return seconds
+        slot = role + (f" (topic {topic})" if topic is not None else "")
+        failed.append(f"{slot}: not started - the whole-run deadline of {RUN_MINUTES:g} minutes is spent")
+        audit.outcome(role, topic, model, "not started - the whole-run deadline is spent", 0.0)
+        return None
+
     def attempt(role: str, topic: int | None, call, model: str, how_ok: str) -> object | None:
         """Run one scheduled call; a failure marks its slot and the run carries on."""
         begin = time.monotonic()
@@ -816,6 +882,7 @@ def run(root: Path, change: str, runner, klass: str) -> None:
 
     # --- the public topic -----------------------------------------------------------------------
     prompt = topic_author_prompt(ctx)
+    topic_seconds = allowance(remaining(), TOPIC_MINUTES)  # the run has just begun: never spent
     gate(runner, ctx, topic_call[0], topic_call[1], prompt, False, audit, "public topic", None)
     topic_answer = attempt(
         "public topic",
@@ -825,7 +892,7 @@ def run(root: Path, change: str, runner, klass: str) -> None:
             prompt,
             topic_call,
             writable=False,
-            timeout=allowance(remaining(), TOPIC_MINUTES),
+            timeout=topic_seconds,
             limit=f"the topic call's deadline of {TOPIC_MINUTES:g} minutes",
         ),
         topic_call[1],
@@ -852,16 +919,19 @@ def run(root: Path, change: str, runner, klass: str) -> None:
         member = str(member)
         model_id = transport[member]
         public_text = public_prompt(root, topic, roles["focuses"][member])
+        seconds = budget("free researcher", None, model_id, RESEARCHER_MINUTES)
+        if seconds is None:
+            continue
         gate(runner, ctx, roles["free_endpoint"], member, public_text, True, audit, "free researcher", None)
         answer = attempt(
             "free researcher",
             None,
-            lambda model_id=model_id, public_text=public_text: pi_public_call(
+            lambda model_id=model_id, public_text=public_text, seconds=seconds: pi_public_call(
                 runner,
                 public_text,
                 model_id,
                 key,
-                allowance(remaining(), RESEARCHER_MINUTES),
+                seconds,
                 f"the researcher deadline of {RESEARCHER_MINUTES:g} minutes",
             ),
             model_id,
@@ -902,6 +972,9 @@ def run(root: Path, change: str, runner, klass: str) -> None:
             model = str(roles["pair"][seat])
             angle = ANGLES[(seat, topic_id)]
             flash_text = repository_prompt(root, runner.READ_REQUEST, topic_id, angle, packet, pair_text)
+            seconds = budget("flash researcher", topic_id, model, RESEARCHER_MINUTES)
+            if seconds is None:
+                continue
             gate(
                 runner,
                 ctx,
@@ -916,13 +989,13 @@ def run(root: Path, change: str, runner, klass: str) -> None:
             answer = attempt(
                 "flash researcher",
                 topic_id,
-                lambda model=model, flash_text=flash_text: pi_repository_call(
+                lambda model=model, flash_text=flash_text, seconds=seconds: pi_repository_call(
                     runner,
                     ctx,
                     flash_text,
                     model,
                     key,
-                    allowance(remaining(), RESEARCHER_MINUTES),
+                    seconds,
                     f"the researcher deadline of {RESEARCHER_MINUTES:g} minutes",
                 ),
                 model,
@@ -940,22 +1013,30 @@ def run(root: Path, change: str, runner, klass: str) -> None:
     # --- the judge ------------------------------------------------------------------------------
     pairs = topic_pairs(roles, free_reports, flash_reports)
     judge_text = judge_prompt(root, runner.READ_REQUEST, packet, pairs, jsonl(receipts_all), failed)
-    gate(runner, ctx, judge_call[0], judge_call[1], judge_text, False, audit, "judge", None)
-    reconciliation = attempt(
-        "judge",
-        None,
-        lambda: runner.run_work_model(
-            ctx,
-            judge_text,
-            judge_call,
-            writable=False,
-            timeout=allowance(remaining(), JUDGE_MINUTES),
-            limit=f"the judge deadline of {JUDGE_MINUTES:g} minutes",
-        ),
-        judge_call[1],
-        "ok",
-    )
-    judge_faults = ["the judge call failed"] if reconciliation is None else judge_problems(str(reconciliation), tracked)
+    judge_seconds = budget("judge", None, judge_call[1], JUDGE_MINUTES)
+    reconciliation = None
+    if judge_seconds is not None:
+        gate(runner, ctx, judge_call[0], judge_call[1], judge_text, False, audit, "judge", None)
+        reconciliation = attempt(
+            "judge",
+            None,
+            lambda: runner.run_work_model(
+                ctx,
+                judge_text,
+                judge_call,
+                writable=False,
+                timeout=judge_seconds,
+                limit=f"the judge deadline of {JUDGE_MINUTES:g} minutes",
+            ),
+            judge_call[1],
+            "ok",
+        )
+    if judge_seconds is None:
+        judge_faults = []  # the unfinished slot is already recorded
+    elif reconciliation is None:
+        judge_faults = ["the judge call failed"]
+    else:
+        judge_faults = judge_problems(str(reconciliation), sources)
     if reconciliation is not None:
         unbacked = receipt_problems(str(reconciliation), receipts_all)
         if unbacked:

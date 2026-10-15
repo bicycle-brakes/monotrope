@@ -2366,8 +2366,10 @@ def declared_class(root: Path, change: str, klass: str | None) -> str:
 
     Sources: the explore-only `--class` argument and the `class:` of
     `research.md`'s and `spec.md`'s headers. Every statement that is present
-    must name a class and agree with the others; an explicit argument does not
-    cure a stated one, and none present refuses, because a silently assumed
+    must name a class and agree with the others - a header that does not
+    parse, or a `class:` key with an empty value, is a present statement that
+    names none and refuses; an explicit argument does not cure a stated one,
+    and none present refuses, because a silently assumed
     small change would keep a large change off the swarm (spec, criteria 3
     and 4).
     """
@@ -2384,10 +2386,17 @@ def declared_class(root: Path, change: str, klass: str | None) -> str:
         try:
             header = yaml.safe_load(match.group(1))
         except yaml.YAMLError:
+            header = None
+        if not isinstance(header, dict):
+            # A present header that does not read is no statement of "no class":
+            # it may say `bounded`, so an explicit argument cannot cure it.
+            raise Refused(
+                f"plans/changes/{change}/{name} has a header that does not read as YAML fields; "
+                "the class it states cannot be known."
+            )
+        if "class" not in header:
             continue
-        stated = header.get("class") if isinstance(header, dict) else None
-        if stated is None:
-            continue
+        stated = header["class"]
         if not isinstance(stated, str) or stated not in CLASSES:
             raise Refused(
                 f"plans/changes/{change}/{name} states the class '{stated}', which is none of {', '.join(CLASSES)}."

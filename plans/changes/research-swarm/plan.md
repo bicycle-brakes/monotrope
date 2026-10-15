@@ -165,6 +165,7 @@ provider does not expose is unknown; no Claude/cost saving is asserted.
 - 1: tests/test_stage2_swarm.py::test_large_classes_dispatch_the_swarm — a feature or architectural fixture invokes the single explorer.
 - 2: tests/test_stage2_swarm.py::test_small_classes_keep_the_single_explorer — a bounded or spike fixture starts a swarm role.
 - 3: tests/test_stage2_swarm.py::test_explicit_class_explores_without_spec_or_plan — early exploration refuses despite a valid research class or argument.
+- 4: tests/test_stage2_swarm.py::test_an_unreadable_header_or_empty_class_refuses — a header that does not parse, or an empty `class:`, reads as no class and lets `--class` route.
 - 4: tests/test_stage2_swarm.py::test_missing_invalid_or_conflicting_class_refuses — a captured model call follows a missing, malformed or contrary class.
 - 5: tests/test_stage2_swarm.py::test_all_free_roles_are_attempted_before_flash — a roster member is skipped or Flash starts during the free stage.
 - 6: tests/test_stage2_swarm.py::test_six_topics_have_independent_permitted_pairs — a local topic uses a free seat, duplicate report or shared peer session.
@@ -191,10 +192,13 @@ provider does not expose is unknown; no Claude/cost saving is asserted.
 - 14: tests/test_stage2_swarm.py::test_fresh_opus_reconciles_all_six_topics — another model, resumed context or missing topic is accepted.
 - 15: tests/test_stage2_swarm.py::test_unresolved_dissent_and_human_questions_survive_reconciliation — sourced dissent disappears or judge preference becomes a human answer.
 - 16: tests/test_stage2_swarm.py::test_local_citations_bind_to_the_frozen_input_state — nonexistent sources, wrong states or lost original reports pass validation.
+- 16: tests/test_stage2_swarm.py::test_local_citations_name_a_path_and_a_symbol — a missing symbol, a line-only citation or a bare path passes the judge's validation.
+- 17: tests/test_stage2_swarm.py::test_a_run_across_midnight_keeps_its_frozen_research — the runner's own `updated:` re-stamp after midnight makes a run incomplete.
 - 17: tests/test_stage2_swarm.py::test_only_the_runner_appends_research — earlier research or another repository file changes, or git/tracker mutation is launched.
 - 18: tests/test_stage2_swarm.py::test_failures_preserve_evidence_and_never_report_complete — an empty, unavailable, timed-out or malformed contribution yields exit 0.
 - 18: tests/test_stage2_swarm.py::test_failed_pi_calls_preserve_partial_evidence — nonzero exit, empty answer or timeout discards retrieved receipts or partial stdout before scratch cleanup.
 - 19: tests/test_stage2_swarm.py::test_deadlines_and_role_counts_bound_the_run — a role retries or a launch exceeds its remaining monotonic allowance.
+- 19: tests/test_stage2_swarm.py::test_no_call_starts_once_the_run_deadline_is_spent — a slot after the whole-run deadline is gated, audited as clean or launched.
 - 20: tests/test_stage2.py::test_explore_stage2_off_uses_haiku_without_reading_the_glm_key — explicit fallback reads a foreign key, calls the swarm or loses its reason.
 - 21: tests/test_stage2_swarm.py::test_all_outputs_scrub_every_used_credential — a planted eight-character fragment survives in output, receipts or diagnostics.
 - 22: tests/test_stage2_swarm.py::test_phase_one_doctrine_and_declarations_agree — universal single-explorer prose remains, the roster is unresolvable or the Go ladder changes.

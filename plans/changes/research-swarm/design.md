@@ -47,8 +47,9 @@ for free and paid roles cannot meet the spec and is not an alternative.
 **Caller to phase-1 router.** Keep `python3 scripts/stage2.py explore <change>`.
 Add explore-only `--class spike|bounded|feature|architectural`; resolve it
 against `spec.md` and `research.md` headers, requiring agreement wherever a
-class is stated. A present invalid header refuses; an explicit argument does
-not cure it. Before a spec, an explicit class is enough. With Stage 2 on,
+class is stated. A present invalid header refuses - one that does not parse,
+or whose `class:` is empty, as much as one naming no known class; an explicit
+argument does not cure it. Before a spec, an explicit class is enough. With Stage 2 on,
 missing/conflicting input exits 2. `--stage2-off [REASON]` keeps today's Haiku
 path without this new prerequisite. Other verbs reject the new argument.
 
@@ -137,7 +138,9 @@ retrieval receipts and the original contributions, including failed-slot
 markers. Declaration and exact-prompt leak check also precede this call.
 The judge returns six structured topic sections; no session is resumed.
 The runner validates topic coverage and source references and renders the
-result into `research.md`. Phase 2 still reads research plus decisions.
+result into `research.md`. A repository reference must be `path::symbol`
+with a tracked path whose frozen bytes contain the symbol; a citation by line
+numbers alone or a bare path is refused. Phase 2 still reads research plus decisions.
 
 ## Data model
 
@@ -145,6 +148,8 @@ result into `research.md`. Phase 2 still reads research plus decisions.
   class and source, and a digest of the frozen relevant working-tree inputs.
   Runner-generated audit/appended research is excluded from that digest;
   changes to other inputs invalidate publication and yield an incomplete run.
+  The runner's own re-stamp of `research.md`'s `updated:` line, which moves
+  when a run crosses midnight, is not such a change.
   This is provenance, not a resumable cache or a claim that HEAD describes
   uncommitted content.
 - **Contribution**, runner-owned: role/topic/model/endpoint, outcome,
@@ -176,7 +181,8 @@ roles continue within the same budget; the judge can summarize partial
 evidence but the run exits 1. A missing declaration or leak BLOCK refuses
 with exit 2 and no subsequent call; record the blocked slot and reason without
 claiming a clean audit for it. A total deadline stops dispatch and
-records unfinished slots, without forcing a judge call past the deadline.
+records unfinished slots, without forcing a judge call past the deadline:
+once it is spent, no further slot is gated, audited as clean or launched.
 
 ## ADR draft
 

@@ -15,7 +15,9 @@ Write one section per topic, headed `### Topic <n>` with n from 1 to 6, in
 order. In each section give these labelled fields:
 
 - **Supported facts:** what the contributions establish, each with its source
-  reference (repository `path::symbol` or a retrieved public page).
+  reference (repository `path::symbol` or a retrieved public page). A
+  repository reference names a tracked path and a symbol that stands in it;
+  a bare path or a line number alone is refused.
 - **Practice comparison:** how the topic's subject compares with public
   practice per the evidence; if no comparison could be made, write
   "Practice comparison: not made — <what is missing>".

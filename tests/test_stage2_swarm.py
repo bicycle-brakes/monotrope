@@ -15,6 +15,7 @@ the repository's own declaration and documents.
 
 from __future__ import annotations
 
+import datetime
 import json
 import re
 import shutil
@@ -390,6 +391,22 @@ def test_missing_invalid_or_conflicting_class_refuses(sworld: SwarmWorld) -> Non
     assert sworld.run() == 2
     assert sworld.calls() == []
     assert sworld.run("--class", "feature") == 2, "an explicit argument does not override a stated class"
+    assert sworld.calls() == []
+    assert "## Research swarm" not in sworld.research.read_text(encoding="utf-8")
+
+
+@pytest.mark.parametrize("header", ["unreadable", "empty-class"])
+def test_an_unreadable_header_or_empty_class_refuses(sworld: SwarmWorld, header: str) -> None:
+    # F-9. Planted fault: a header that does not parse, or an empty `class:`, reads as "no class stated".
+    sworld.complete()
+    if header == "unreadable":
+        # In spec.md: the research header carries the bead, so preflight would refuse an unreadable one anyway.
+        (sworld.root / "plans/changes/demo/spec.md").write_text(
+            "---\ntitle: [unclosed\nbead: demo-1\nclass: bounded\n---\n\n# Spec\n", encoding="utf-8"
+        )
+    else:
+        sworld.research_class("")
+    assert sworld.run("--class", "feature") == 2, "an explicit argument does not cure a present invalid header"
     assert sworld.calls() == []
     assert "## Research swarm" not in sworld.research.read_text(encoding="utf-8")
 
@@ -942,6 +959,49 @@ def test_deadlines_and_role_counts_bound_the_run(sworld: SwarmWorld) -> None:
     assert models.count("opencode-go/deepseek-v4.1-flash") == 6
 
 
+def test_no_call_starts_once_the_run_deadline_is_spent(sworld: SwarmWorld, monkeypatch: pytest.MonkeyPatch) -> None:
+    # F-6. Planted fault: a spent deadline still gates, audits as clean and launches with timeout 0.
+    launch = stage2.launch
+
+    def spend_after_the_free_stage(command, root, env, *args, **kwargs):
+        done = launch(command, root, env, *args, **kwargs)
+        if "STAGE2_PUBLIC_RECEIPTS" in env and len(sworld.calls("public")) == 3:
+            monkeypatch.setattr(stage2_swarm, "RUN_MINUTES", 0.0)
+        return done
+
+    monkeypatch.setattr(stage2, "launch", spend_after_the_free_stage)
+    sworld.complete()
+    assert sworld.run() == 1
+    assert [call["kind"] for call in sworld.calls()] == ["topic"] + ["public"] * 3, "no process after the deadline"
+    record = sworld.research.read_text(encoding="utf-8")
+    assert record.count("leak check clean over") == 4, "no gate and no clean claim for an unstarted slot"
+    assert record.count("not started - the whole-run deadline is spent") == 12, "every unfinished slot is recorded"
+    assert "judge: not started - the whole-run deadline of 0 minutes is spent" in status_line(record)
+
+
+def test_a_run_across_midnight_keeps_its_frozen_research(sworld: SwarmWorld, monkeypatch: pytest.MonkeyPatch) -> None:
+    # F-7. Planted fault: the runner's own `updated:` re-stamp counts as a changed input.
+    day = [datetime.date(2026, 10, 15)]
+    stamp = stage2.check_frontmatter_current.stamp
+    monkeypatch.setattr(stage2.check_frontmatter_current, "stamp", lambda path, _today: stamp(path, day[0]))
+    launch = stage2.launch
+
+    def midnight(command, root, env, *args, **kwargs):
+        if "STAGE2_PUBLIC_RECEIPTS" in env:
+            day[0] = datetime.date(2026, 10, 16)
+        return launch(command, root, env, *args, **kwargs)
+
+    monkeypatch.setattr(stage2, "launch", midnight)
+    sworld.complete()
+    assert sworld.run() == 0
+    text = sworld.research.read_text(encoding="utf-8")
+    assert "\nupdated: 2026-10-16\n" in text.split("\n---\n", 1)[0], "the date did cross during the run"
+    assert "status: complete" in status_line(text)
+    assert stage2_swarm.without_updated(b"---\ntitle: A\nupdated: 2026-10-16\n---\nbody updated: x\n") == (
+        b"---\ntitle: A\nupdated:\n---\nbody updated: x\n"
+    ), "only the header's stamp is left out; the body and other fields still compare"
+
+
 def test_all_outputs_scrub_every_used_credential(sworld: SwarmWorld, capsys: pytest.CaptureFixture[str]) -> None:
     # Criterion 21. Planted fault: an eight-character fragment of the used credential survives anywhere.
     receipt = dict(RECEIPT, excerpt="bytes @KEY@ here")
@@ -1003,6 +1063,24 @@ def test_local_citations_bind_to_the_frozen_input_state(sworld: SwarmWorld, caps
     text = sworld.research.read_text(encoding="utf-8")
     assert "the frozen input state changed: src/app.py" in text
     assert "### Reconciliation" in text, "the run still publishes what it collected, as incomplete"
+
+
+@pytest.mark.parametrize(
+    ("citation", "problem"),
+    [
+        ("`src/app.py::no_such_symbol`", "names no symbol of src/app.py"),
+        ("`src/app.py:1`", "gives line numbers only"),
+        ("`src/app.py`", "is a bare path"),
+    ],
+)
+def test_local_citations_name_a_path_and_a_symbol(
+    sworld: SwarmWorld, capsys: pytest.CaptureFixture[str], citation: str, problem: str
+) -> None:
+    # F-8. Planted fault: a tracked path vouches for a missing symbol, or line numbers stand in for one.
+    sworld.complete(judge={"stdout": judge_ok().replace("`src/app.py::value`", citation, 1)})
+    assert sworld.run() == 1
+    assert problem in capsys.readouterr().err
+    assert "### Reconciliation (failed validation" in sworld.research.read_text(encoding="utf-8")
 
 
 def test_only_the_runner_appends_research(sworld: SwarmWorld) -> None:
