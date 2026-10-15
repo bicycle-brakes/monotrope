@@ -221,6 +221,7 @@ gates:
       globs: |
         **/*.md
         !docs/journal/**
+        !tools/pi/node_modules/**
     job: verify
     enforcement: report
     floor: false

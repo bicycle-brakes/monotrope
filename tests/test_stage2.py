@@ -67,17 +67,23 @@ from pathlib import Path
 
 here = Path(__file__).resolve().parent
 name = Path(sys.argv[0]).name
+# The repository wrapper stand-in (`pin-pi`) answers and records as `pi`, so the
+# scripted steps line up; the record's path is what says which program ran.
+alias = "pi" if name == "pin-pi" else name
 scenario = json.loads((here / "scenario.json").read_text())
 log = here / "calls.jsonl"
 previous = [json.loads(line) for line in log.read_text().splitlines()] if log.exists() else []
-steps = scenario.get(name, [])
-index = sum(1 for call in previous if call["name"] == name)
+steps = scenario.get(alias, [])
+index = sum(1 for call in previous if call["name"] == alias)
 step = steps[index] if index < len(steps) else {}
 argv = sys.argv[1:]
-if name == "pi" and argv == ["--version"]:
-    # The version check is answered from the scenario and not recorded: it is no call.
+if alias == "pi" and argv == ["--version"]:
+    # The version check is answered from the scenario and kept out of the call
+    # log; its own log says which path answered it.
     time.sleep(scenario.get("pi_version_sleep", 0))
     sys.stdout.write(scenario.get("pi_version", "@PI@") + "\\n")
+    with (here / "versions.jsonl").open("a") as handle:
+        handle.write(json.dumps({"name": name, "path": sys.argv[0], "cwd": os.getcwd()}) + "\\n")
     raise SystemExit(scenario.get("pi_version_exit", 0))
 
 
@@ -102,7 +108,8 @@ if marker:
                 pass
 findings = Path("plans/changes/demo/findings.md")
 record = {
-    "name": name,
+    "name": alias,
+    "path": sys.argv[0],
     "argv": argv,
     "env": dict(os.environ),
     "cwd": os.getcwd(),
@@ -172,6 +179,11 @@ class World:
         log = self.bin / "calls.jsonl"
         found = [json.loads(line) for line in log.read_text(encoding="utf-8").splitlines()] if log.exists() else []
         return [call for call in found if name is None or call["name"] == name]
+
+    def versions(self) -> list[dict]:
+        """The `pi --version` checks: which path answered them (the wrapper, or a PATH pi that must stay silent)."""
+        log = self.bin / "versions.jsonl"
+        return [json.loads(line) for line in log.read_text(encoding="utf-8").splitlines()] if log.exists() else []
 
     def run(self, verb: str, change: str | None = "demo", *options: str) -> int:
         argv = [verb] if change is None else [verb, change]
@@ -294,12 +306,15 @@ def world(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> World:
     home.mkdir()
     bin_dir = tmp_path / "bin"
     bin_dir.mkdir()
-    for name in ("codex", "claude", "pi", "make"):
+    for name in ("codex", "claude", "pi", "make", "pin-pi"):
         program = bin_dir / name
         program.write_text(
             STAND_IN.replace("@PYTHON@", sys.executable).replace("@PI@", stage2.PI_VERSION), encoding="utf-8"
         )
         program.chmod(0o755)
+    # The runner's one path to Pi is patched to the wrapper stand-in: its records
+    # carry the program path, so a call that bypasses the wrapper cannot hide.
+    monkeypatch.setattr(stage2, "PI_WRAPPER", bin_dir / "pin-pi")
     git_dir = tmp_path / "gitbin"
     git_dir.mkdir()
     (git_dir / "git").symlink_to(GIT)
@@ -3623,11 +3638,11 @@ def test_the_review_loop_launches_pi_isolated(world: World) -> None:
 @pytest.mark.parametrize(
     "fault",
     [
-        {"pi_version": "1.1.1"},
-        {"pi_version": "1.1.0 (dev)"},
+        {"pi_version": "999.0.0"},
+        {"pi_version": f"{stage2.PI_VERSION} (dev)"},
         {"pi_version": ""},
-        {"pi_version": "1.1.0", "pi_version_exit": 1},
-        {"pi_version": "1.1.0", "pi_version_sleep": 30},
+        {"pi_version": stage2.PI_VERSION, "pi_version_exit": 1},
+        {"pi_version": stage2.PI_VERSION, "pi_version_sleep": 30},
         "absent",
     ],
     ids=["newer", "suffix", "silent", "non-zero", "too-slow", "absent"],
@@ -3636,11 +3651,14 @@ def test_a_pi_off_the_pin_is_refused(
     world: World, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str], verb: str, fault: dict | str
 ) -> None:
     """Criterion 27: a Pi that is not exactly the pinned version starts no leak check, no call line and no call."""
-    assert stage2.PI_VERSION == "1.1.0"
+    manifest = json.loads((REPO_ROOT / "tools" / "pi" / "package.json").read_text(encoding="utf-8"))
+    assert manifest["dependencies"]["@earendil-works/pi-coding-agent"] == stage2.PI_VERSION, (
+        "the runner's pin must be the manifest's, not a literal of its own"
+    )
     monkeypatch.setattr(stage2, "PI_VERSION_SECONDS", 0.5)
     steps = {"pi": [{"stdout": rows(1)}] * 3}
     if fault == "absent":
-        (world.bin / "pi").unlink()
+        (world.bin / "pin-pi").unlink()
         world.script(**steps)
     else:
         world.script(**steps, **fault)
@@ -3649,6 +3667,42 @@ def test_a_pi_off_the_pin_is_refused(
     assert not world.record().exists()
     assert not world.findings.exists() or "Stage-2 call" not in world.text(), "a call line was written"
     assert "leak check" not in capsys.readouterr().out.lower(), "the leak check ran before the pin"
+
+
+def test_loop_and_probe_use_repository_pi(world: World) -> None:
+    """Criterion 5: the preflight and every loop/probe launch go through the repository wrapper; the PATH pi stays unused."""
+    world.script(pi=[{"stdout": rows(1)}, {"stdout": "probe one"}, {"stdout": "probe two"}, {"stdout": "probe three"}])
+    assert world.run("review-loop") == 0
+    assert world.run("probe") == 0
+    wrapper = str(world.bin / "pin-pi")
+    assert len(world.calls("pi")) == 4, "one loop round and three probe rungs were expected"
+    for call in world.calls("pi"):
+        assert call["path"] == wrapper, f"a launch left the repository wrapper: {call['path']}"
+    assert [entry["path"] for entry in world.versions()] == [wrapper, wrapper], (
+        "the preflight did not ask the repository wrapper twice (once per verb)"
+    )
+    # the fault: the PATH pi stand-in exists, and nothing called it
+    assert (world.bin / "pi").is_file()
+    assert not [entry for entry in world.versions() if entry["path"] == str(world.bin / "pi")]
+    assert not [call for call in world.calls() if call["path"] == str(world.bin / "pi")]
+
+
+def test_truncated_pi_print_failure_is_refused(world: World) -> None:
+    """Criterion 13 unit guard: a stand-in nonzero truncated print is never read as a review."""
+    world.script(
+        pi=[
+            {
+                "stdout": rows(1),
+                "stderr": "warning: the answer was cut off at the output token limit",
+                "exit": 1,
+            }
+        ]
+    )
+    assert world.run("review-loop") != 0, "a non-zero truncated print passed as a review"
+    assert len(world.calls("pi")) == 1, "the truncated call was retried as if it had succeeded"
+    assert not world.record().exists()
+    text = world.text() if world.findings.exists() else ""
+    assert "X1" not in text, "the truncated answer was read as rows"
 
 
 def test_the_pinned_pi_runs_the_probe_on_every_rung(world: World) -> None:
@@ -7859,3 +7913,8 @@ def test_codex_repair_doctrine_and_endpoint_remarks_agree() -> None:
             )
     assert stage2.REPAIR_FORMAT_FILE_TOOLS.count("you cannot run commands") == 1
     assert "you cannot run commands" not in stage2.REPAIR_FORMAT
+
+
+def test_pi_wrapper_is_repository_local() -> None:
+    """Criterion 2: the production runner never selects a global Pi, even at the same version."""
+    assert stage2.PI_WRAPPER == REPO_ROOT / "tools" / "pi" / "pi"

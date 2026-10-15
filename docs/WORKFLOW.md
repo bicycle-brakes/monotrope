@@ -662,8 +662,10 @@ than the Codex or GLM 5.3 that drafted the artefacts it reads: no model reviews
 its own draft.
 **Since ADR 0011 (2026-10-08)** the
 review loop (4b) between implementation and the code review runs on OpenCode
-Go (`opencode-go` in `model-endpoints.yaml`) through Pi, pinned at 1.1.0 and
-calling OpenCode Go's chat-completions address, and which
+Go (`opencode-go` in `model-endpoints.yaml`) through Pi — **since ADR 0019
+(2026-10-15)** the repository's own pinned install under `tools/pi/`, whose
+exact version `tools/pi/package.json` pins — calling OpenCode Go's
+chat-completions address, and which
 model answers a round comes from the entry's ordered `modelle` list, the
 ladder. The maintainer put the ladder to the loop alone on 2026-10-08 — after
 Codex's phase 6 found two real BLOCKERs in a change the loop had passed, as on
@@ -848,8 +850,12 @@ verifies ("The draft" below). A repair's first two attempts run as Codex calls
 in the `workspace-write` sandbox. What a repair's Codex call writes is checked
 and committed by the runner, including changes outside the change folder; a
 checkpoint requires all checks to pass. A `draft`, `repair` or `spec-review`
-call keeps no session. Before the loop's first call the runner runs `pi --version`; anything but
-the pinned `1.1.0` refuses with exit 2, before the leak check. It starts the
+call keeps no session. Before the loop's first call the runner runs the
+repository wrapper `tools/pi/pi --version`; anything but the exact version
+pinned in `tools/pi/package.json` refuses with exit 2, before the leak check.
+The wrapper is the runner's only path to Pi (ADR 0019): a missing, mismatched
+or unusable local install refuses with setup guidance before any model
+request, and no call installs, uses `npx` or falls back to a global Pi. It starts the
 review loop's rung as Pi (`--print`, no session) against OpenCode Go's
 chat-completions address, with the rung under the `opencode-go` provider,
 thinking `max`, the tools `read`, `grep`, `find` and `ls`, extensions, MCP
@@ -862,11 +868,19 @@ implementation answer the runner runs exactly
 `make verify`; a failed post-check gets one fresh Flash repair, then one
 Sonnet 5.5 fallback, and every attempt repeats the leak check. A failed model
 process stops instead of silently changing route, and a review-loop call (through Pi) that has
-not ended 30 minutes after it started is stopped. **Those settings are
-configured on every call, not measured by any test** (the maintainer's decision
-of 2026-09-30, ADR 0007): no test has run a real program to see them take
-effect. The loop's Pi flags were measured once by hand on the pinned version,
-which is why the version is pinned.
+not ended 30 minutes after it started is stopped. For the other foreign CLIs,
+isolation settings are configured on every call, not measured
+by these Pi contracts (the maintainer's decision of 2026-09-30, ADR 0007).
+The loop's Pi flags were first measured by hand on the pinned version;
+**since ADR 0019** the offline suite (`tests/test_pi_contract.py`) starts the
+real pinned install. It measures the four-tool declaration and refusal,
+extension and MCP startup suppression, skill/prompt/theme discovery reads,
+context-file exclusion and scratch-agent separation from saved authentication
+and command-valued model configuration. Positive controls run through Pi;
+project-resource controls also grant trust so trust refusal cannot mask a
+missing discovery flag. Provider contracts read native addresses from the installed Pi catalog and
+measure synthetic-key requests and model ids through loopback transport. These contracts do not
+measure every other model CLI's isolation settings.
 If hooks are not in fact off for a call, the tracked `.codex/hooks.json` shows
 the kind of text such a switch would inject into a call that the leak check
 does not scan; the runner starts Codex with hooks and memories off, and the ask rule
@@ -905,7 +919,11 @@ rest of the disk, the customer instance's checkout included. Pi's isolation
 flags (no extensions, MCP servers, skills, context files, prompt templates or
 themes; no approval; a fresh agent directory and home per call) are configured
 on every call and were measured once by hand on the pinned version; the suite
-starts no real Pi. The maintainer accepted the unconfined reads as a residual
+starts no real Pi — a statement of 2026-10-08 that ADR 0019 retired: the
+offline contract suite now starts the real pinned install against a loopback
+stand-in and holds the tool declaration, the ambient-configuration isolation,
+the session policy's foreign-read blocking and the provider address and key
+mapping, while the reviewer's reads stay unconfined. The maintainer accepted the unconfined reads as a residual
 risk for ADR 0007's reviewers on 2026-09-30, and ADR 0011 accepts it again for
 the rungs, naming Pi and the secrets file: the unconfined reads ADR 0007
 accepted for its reviewers extend to them. The leak check scans what this
@@ -969,13 +987,16 @@ checked runner as every other call. The `--model <id>` is required and taken
 literally: a plain id selects what `openai-codex` lists and dispatches the
 official Codex CLI; a full `opencode-go/<model>` id selects `opencode-go` when
 that entry lists the bare `<model>`, as the reviewer declaration writes it, and
-dispatches the pinned Pi with the full id: the id names the endpoint, not the
+dispatches the pinned Pi through the repository wrapper `tools/pi/pi` with the
+full id: the id names the endpoint, not the
 program, and the OpenCode CLI is never called. No alias, no prefix guessing, and the
 session approves no endpoint: a model the declaration does not list for a session
 transport is refused before anything starts, and the Pi path opens only for the
 models that `opencode-go` lists for framework content in `model-endpoints.yaml`.
 A Pi that is not the pinned version is refused; the runner checks the pin after
-its argument and handover checks and before any call, so nothing is sent first. `--handover <path>` names another
+its argument and handover checks and before any call, so nothing is sent first —
+the pin check and the confirm-load, like the dispatch itself, go through the
+wrapper (ADR 0019), never a global `pi`. `--handover <path>` names another
 handover inside the worktree; without it the change's own `handover.md` under
 `plans/changes/<change>/` is the first prompt. The file must be a readable,
 nonempty UTF-8 regular file inside the dedicated worktree; the prompt is bounded

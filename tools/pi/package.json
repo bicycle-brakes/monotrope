@@ -1,0 +1,10 @@
+{
+  "name": "coding-harness-pi",
+  "private": true,
+  "version": "1.0.0",
+  "description": "The runner's own pinned Pi (bead coding-harness-agx, ADR 0019): tools/pi/install.sh installs exactly this manifest and its lock file with lifecycle scripts disabled, and tools/pi/pi starts it. A version move changes this pin, regenerates the lock file and passes the offline contract suite first.",
+  "license": "UNLICENSED",
+  "dependencies": {
+    "@earendil-works/pi-coding-agent": "1.2.0"
+  }
+}

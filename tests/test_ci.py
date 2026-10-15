@@ -823,6 +823,52 @@ def test_every_job_sets_a_declared_interpreter_before_installing() -> None:
     assert checked >= 2, f"only {checked} job(s) install — this test ran over too few jobs"
 
 
+def test_real_pi_is_provisioned_before_contracts() -> None:
+    """Criterion 12 (pi-pin): both toolchain jobs set up the exact declared Node and install the locked Pi with the shared installer, before pytest runs.
+
+    Planted faults: dropping the Node step, duplicating the runtime version as a
+    literal, a job-local installer instead of `tools/pi/install.sh`, or letting
+    the install fail softly — each turned this red. The order anchor is each
+    job's first gate step: the drift job runs neither pytest nor ramp_valves.
+    """
+    declared_node = (REPO_ROOT / "tools" / "pi" / ".node-version").read_text(encoding="utf-8").strip()
+    assert re.fullmatch(r"\d+\.\d+\.\d+", declared_node), "the Node runtime declaration is not an exact version"
+    checked = 0
+    for name, job in _ci_doc()["jobs"].items():
+        if _install_index(job) is None:
+            continue
+        checked += 1
+        steps = job["steps"]
+        node = next((step for step in steps if step.get("id") == "setup-node"), None)
+        assert node is not None, f"{name}: no declared Node runtime is set up"
+        assert node["uses"] == "actions/setup-node@v4", f"{name}: the Node runtime comes from {node.get('uses')!r}"
+        assert node["with"]["node-version-file"] == "tools/pi/.node-version", (
+            f"{name}: the runtime is not read from the repository's declaration"
+        )
+        assert "if" not in node and "continue-on-error" not in node, f"{name}: the Node setup can fail softly"
+        pi = next((step for step in steps if step.get("id") == "setup-pi"), None)
+        assert pi is not None, f"{name}: the pinned Pi is not installed"
+        assert pi["run"] == "bash tools/pi/install.sh", (
+            f"{name}: the installer is {pi.get('run')!r}, not the shared one"
+        )
+        assert "if" not in pi and "continue-on-error" not in pi, f"{name}: the Pi install can fail softly"
+        # The anchor is the job's first gate-shaped step — one that runs a
+        # command under `!cancelled()`. In the matrix job that is the pytest
+        # step the contracts ride on; the drift job runs neither pytest nor a
+        # ramp_valves step, so its first gate anchors the same order there.
+        first_gate = next(
+            (index for index, step in enumerate(steps) if "run" in step and step.get("if") == "${{ !cancelled() }}"),
+            None,
+        )
+        assert first_gate is not None, f"{name}: the job runs no gate the provisioning must precede"
+        assert steps.index(node) < first_gate, f"{name}: contracts could run before their Node existed"
+        assert steps.index(pi) < first_gate, f"{name}: contracts could run before the pinned Pi existed"
+    assert checked >= 2, f"only {checked} job(s) provision — this test ran over too few jobs"
+    assert ci_gates.generate_ci() == CI_FILE.read_text(encoding="utf-8"), (
+        "the committed ci.yml is not the generated one"
+    )
+
+
 def test_the_summary_check_passes_only_when_every_leg_passed() -> None:
     """The ruleset requires `verify`, and GitHub counts a skipped job as passed.
 
@@ -1904,3 +1950,14 @@ def test_the_mutation_ratchet_only_turns_one_way() -> None:
 
     ohne_grund = [g for g, grund in OHNE_MUTATIONSTEST.items() if len(grund.strip()) < 10]
     assert not ohne_grund, f"Exception without a reason: {ohne_grund}"
+
+
+def test_pi_provisioning_only_in_repositories_with_pi(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    """Kit recipients without tools/pi must not receive an unusable installer step."""
+    monkeypatch.setattr(ci_gates, "REPO_ROOT", tmp_path)
+    assert "setup-node" not in "\n".join(ci_gates._toolchain('"3.12"'))
+    assert "setup-pi" not in "\n".join(ci_gates._toolchain('"3.12"'))
+    (tmp_path / "tools" / "pi").mkdir(parents=True)
+    steps = "\n".join(ci_gates._toolchain('"3.12"'))
+    assert "actions/setup-node@v4" in steps
+    assert "bash tools/pi/install.sh" in steps
