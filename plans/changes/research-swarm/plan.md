@@ -284,6 +284,8 @@ Stage-1 route: implement · model claude-sonnet-5-5 · reason: two Flash post-ru
 
 2026-10-15 05:49:28–06:00:30 CEST, 11 minutes 2 seconds (Codex repair of L1-1–L1-8; no break).
 
+2026-10-15 09:40–10:31 CEST, about 51 minutes (Opus 5.5 sub-agent repair of phase-6 F-2 to F-10 outside `stage2.py repair`, maintainer-approved; four `make verify` runs of about 8–10 minutes each, the first red on formatting and a stale `updated:`; no break).
+
 Repair evidence and runner resumption: [dated handover](../../../docs/journal/handover/2026-10-15-research-swarm-loop-one-repair.md).
 
 ## Addendum — 2026-10-14, Q-6
