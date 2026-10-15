@@ -34,3 +34,8 @@ implementation_plan.md
 # It is CI output, never a tracked file — without this line the kit probe
 # reports it as an unclassified file and `--strict` turns the run red.
 lychee/
+
+# The runner's pinned Pi install (bead coding-harness-agx): the dependency
+# graph is rebuildable with `bash tools/pi/install.sh` and never tracked; the
+# manifest and its lock file are.
+tools/pi/node_modules/
