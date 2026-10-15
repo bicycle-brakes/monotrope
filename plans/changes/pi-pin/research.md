@@ -207,3 +207,7 @@ package outside the worktree was read and no real Pi was run by the drafter.
 - `findings.md` contains only the draft-attempt audit line, no phase-2a rows.
   Live pull-request state and external parallel-session registries were not read
   under this call's worktree/git-directory-only read boundary.
+
+## Addendum 2026-10-15 (phase 6, round 2)
+
+The claim above that Pi exits 1 with a warning on a truncated answer is contradicted by a measurement on Pi 1.2.0: exit 0, empty stdout, and a context edit that removes the truncated message before printing. The measured contract is `tests/test_pi_contract.py::test_real_truncated_pi_print_failure_is_refused`. This record stays as it was written; the measurement is the current evidence.

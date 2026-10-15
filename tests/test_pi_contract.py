@@ -909,9 +909,10 @@ def test_contract_prerequisites_and_failures_are_mandatory(
 def test_real_truncated_pi_print_failure_is_refused(project: Path, transport) -> None:
     """Criterion 13: the runner refuses the real Pi result of a length finish.
 
-    Measured on Pi 1.2.0: the text printer drops the truncated assistant
-    message, returning zero with empty stdout. The runner's empty-answer guard
-    refuses it; the separate unit test covers nonzero print refusals.
+    Measured on Pi 1.2.0: Pi appends a context edit that removes the truncated
+    assistant message before printing, so the process returns zero with empty
+    stdout. The runner's empty-answer guard refuses it; the separate unit test
+    covers nonzero print refusals.
     """
     standin = StandIn([{"content": "partial review", "finish_reason": "length"}])
     transport.providers["opencode-go"] = {"baseUrl": standin.url}

@@ -136,6 +136,7 @@ status/evidence updates through the runner's normal lifecycle.
 - 5: tests/test_stage2_session.py::test_all_session_pi_launches_use_repository_wrapper — confirmation or Terminal argv bypasses wrapper
 - 6: tests/test_pi_contract.py::test_real_reviewer_tool_contract — extra tool declared or forbidden call executes
 - 7: tests/test_pi_contract.py::test_real_reviewer_ignores_discovery_traps — an armed trap affects the clean reviewer call
+- 7: tests/test_pi_contract.py::test_real_reviewer_ignores_ambient_credentials — saved authentication or command-valued model configuration reaches the scratch reviewer
 - 8: tests/test_pi_contract.py::test_real_extension_tool_input_and_result — changed execute signature loses input or result
 - 9: tests/test_pi_contract.py::test_real_session_policy_blocks_foreign_reads — outside/symlink sentinel appears or positive read fails
 - 10: tests/test_pi_contract.py::test_real_model_listing_is_a_provider_table — JSON assumption or missing Go/Zen provider passes
@@ -143,6 +144,7 @@ status/evidence updates through the runner's normal lifecycle.
 - 11: tests/test_pi_contract.py::test_contract_network_guard_denies_external_destinations — external destination accepted by test transport
 - 12: tests/test_pi_contract.py::test_contract_prerequisites_and_failures_are_mandatory — absent runtime, timeout or malformed exchange becomes skip/success
 - 12: tests/test_ci.py::test_real_pi_is_provisioned_before_contracts — CI omits exact Node, shared installer or failure propagation
+- 12: tests/test_ci.py::test_pi_provisioning_only_in_repositories_with_pi — a repository without tools/pi receives an installer step it cannot run
 - 13: tests/test_stage2.py::test_each_call_runs_its_own_leak_check — a request starts without its leak check
 - 13: tests/test_stage2.py::test_no_call_carries_another_endpoints_key — foreign environment includes another key
 - 13: tests/test_stage2.py::test_the_opencode_key_never_leaves_the_runner — key reaches argv/output/records

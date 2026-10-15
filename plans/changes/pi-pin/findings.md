@@ -646,3 +646,103 @@ Stage-2 call, 2026-10-15: repair · attempt 3 · route stage-1 · endpoint claud
 > - Runner format before `make verify`: ruff changed no file.
 > - `plan.md` did not add a measured line below `## Time used`
 > ```
+
+## Phase 6 — round 2, Opus 5.5, 2026-10-15
+
+Orchestrator's decision on the round-2 rows (2026-10-15, at commit e249423 plus the repairs of this commit):
+- The three MINOR rows: the red-first defect is not repaired in this change, because it lies in the runner's check, not in pi-pin; it is recorded as bead `coding-harness-omp` (P1) and named in the pull request. The WORKFLOW.md overclaim and the missing ledger entries are repaired in this commit. The truncation docstring (one STYLE row, a false statement) is repaired; `research.md` gets a dated addendum, because its historical claim is contradicted by the measurement.
+- The other STYLE row (unused imports in the synthetic script strings of `tests/test_pi_install.py`) is an accepted limit: it harms no test and is named here.
+
+The review text as returned (committed unchanged; the reviewer's own indentation removed):
+
+Open BLOCKER: no — BLOCKER 0 · DIVERGENT 0 · MAJOR 0 · MINOR 3 · STYLE 2 (new rows only; round 2 of explore/pi-pin at e249423, 2026-10-15)
+
+## Rows F-1 to F-14
+- F-1: FIXED. The traps are now a `.js` extension, a skill, an MCP entry, a prompt, a theme and AGENTS.md (tests/test_pi_contract.py:503-524). Each flag gets a negative and a positive real-Pi call with trust granted (:527-577). The seam swaps `--no-approve` for `--approve` and drops exactly one flag from the captured production command (:328-344). The preload observer is at tests/pi_contract_driver.mjs:22-41 and the MCP peer at :45-57. I ran it in a scratch copy (baseline green, 17.8 s). Removing each flag from `run_reviewer` (scripts/stage2.py:934-940) made the test go RED every time:
+  - `--no-skills`: RED at :571. Observed `{'--no-skills': True}`, every other trap False.
+  - `--no-themes`: RED at :571. Observed `{'--no-themes': True}`, every other trap False.
+  - `--no-extensions`: RED at :571.
+  - `--no-prompt-templates`: RED at :571.
+  - `--no-mcp`: RED at :576.
+  - `--no-context-files`: RED at :570.
+- F-2: FIXED. Every ladder id must be in `opencode-go`'s `openai-completions` section with GO_NATIVE (tests/test_pi_contract.py:778-781). Experiment: I swapped the first rung in model-endpoints.yaml:162 for `minimax-m3`, which sits in `anthropic-messages`. Result: RED, "ladder model minimax-m3 moved outside the checked wire API".
+- F-3: FIXED. The non-zero and too-slow cases print `stage2.PI_VERSION`, and "newer" is 999.0.0 (tests/test_stage2.py:3641-3645). Mutations of scripts/stage2.py `require_pi` (baseline 12 passed):
+  - `if said != PI_VERSION` → `if False` (:905): 6 failed (newer, suffix, silent × 2 verbs).
+  - exit-code check → `if False` (:899): 2 failed (non-zero × 2 verbs).
+  - `timeout=PI_VERSION_SECONDS` → `timeout=None` (:889): 2 failed (too-slow × 2 verbs).
+- F-4: FIXED. `assert_real_npm_lock_refusals` (tests/test_pi_install.py:359-438) runs real npm 11.20.0 offline over a local tarball and an empty cache. It has a positive lifecycle control, a real "Missing:" refusal and a real EINTEGRITY refusal. Mutations of tools/pi/install.sh:41 (baseline 1 passed):
+  - Dropping `--ignore-scripts`: RED, "real npm executed a lifecycle script" (:416).
+  - `npm ci --ignore-scripts || npm install --ignore-scripts`: RED at the mismatch assertion. npm install accepted the extra dependency.
+  - Plain `npm install --ignore-scripts`: RED, but only through the positive control (:422), not the mismatch check.
+- F-5: FIXED. `REVIEWER_FLAGS` is captured from `run_reviewer` (tests/test_pi_contract.py:425-441) and now contains `--no-context-files`. The docstrings at :9-11 and :314-320 are true.
+- F-6: FIXED. The "discovery isolation" claim and the "no test has run a real program" contradiction are gone (docs/WORKFLOW.md:871-884, ADR 0019:74-80, tools/pi/README.md:55-66). One new overclaim is in the same paragraph; see the MINOR row below.
+- F-7: FIXED. Each refusal is checked on the latest tool message of its own request (tests/test_pi_contract.py:732-734). requests[3]'s latest message is the symlink result.
+- F-8: FIXED. The real-Pi length-finish contract is at tests/test_pi_contract.py:908-929. My own probe gave rc 0, empty stdout and one request. JSON mode shows the assistant message with `stopReason: "length"`, then a `context_edit` with `replacement: null` that removes it. So the runner's empty-answer guard is what refuses, as the test says.
+- F-9: FIXED. tests/test_stage2.py:7918-7920 pins `PI_WRAPPER == REPO_ROOT/tools/pi/pi` (scripts/stage2.py:180-181).
+- F-10: FIXED. `contract_environment()` (tests/test_pi_contract.py:420-422) is used by `run_pi` (:288-295) and `require_installed_pi` (:85-89). The test is at :932-959. Mutation: making `contract_environment` return `dict(os.environ)` gave RED, with ANTHROPIC_API_KEY present in the child.
+- F-11: FIXED. `!tools/pi/node_modules/**` is at decisions/gates.yaml:224 and .github/workflows/ci.yml:68. Running `ci_gates.py --generate-ci` in the scratch copy reproduces the committed ci.yml byte for byte.
+- F-12: FIXED. The Node and Pi steps are emitted only when `REPO_ROOT/tools/pi` is a directory (scripts/ci_gates.py:446-468). tests/test_ci.py:1955-1963 covers both cases. No step references `steps.setup-pi`.
+- F-13: FIXED. plans/changes/pi-pin/plan.md:112-121 names scripts/kit/probe.py, the `REIST_NICHT` entry and `DECKEL` 38→39.
+- F-14: FIXED. scripts/stage2.py:24 now says `tools/pi/pi --version`.
+
+## Check 4 — soft passes
+No soft pass found:
+- tests/test_pi_contract.py, tests/test_pi_install.py, tests/pi_contract_driver.mjs and tests/pi_network_guard.mjs contain no skip, skipif, xfail, importorskip or `assert True`.
+- The bare `return`s are inside HTTP handlers or fixture builders (test_pi_contract.py:154/158/209/212, test_pi_install.py:239).
+- The new tests in test_stage2.py and test_ci.py contain none either.
+- Every negative trap or credential check is paired with a positive control that must fire, so none is vacuous. The one exception: ambient test :615 is trivially true for `command_key=False`, but meaningful for True.
+
+## Check 5 — red-first exception
+For F-3, F-4 and F-9 the exception is honest:
+- The production code these tests guard was already correct at baseline and is unchanged by d5d5f2d: stage2.py:886-906 and :181, install.sh:41. Only stage2.py's docstring line changed.
+- A test that is red against the baseline's code was therefore not writable. The defect was in the tests.
+- The honest substitute is a mutation run. I did it (F-3 and F-4 above): RED.
+
+The same holds for F-1, F-2, F-7, F-8 and F-10, which are also test-only repairs over unchanged production code. Their red-first pass is hollow; see the first MINOR row.
+
+## Check 8 — deviations
+All named:
+- markdownlint globs in gates.yaml and ci.yml: plan.md:117-120 and F-11.
+- ADR 0019 item 4 wording: the F-6 Status cell (a promise for the decision PR, so it must actually appear there).
+- scripts/kit/probe.py: plan.md:113-116 and F-13.
+- scripts/ci_gates.py: plan.md:120-121 and F-12.
+
+## New findings
+[MINOR] scripts/stage2.py:2066-2145 (`red_first`) with tests/test_pi_contract.py:75-116 — the runner's red-first proof is hollow for every real-Pi contract test.
+- Evidence:
+  - `red_first` checks out the baseline with `git worktree add`, which carries no `tools/pi/node_modules` (gitignored).
+  - `require_installed_pi` then fails the test, and exit 1 counts as "red".
+  - I measured it: with node_modules moved away, `test_real_opencode_provider_contracts` ends in an ERROR with pytest exit 1.
+- Effect: the repair runner would accept any F-1, F-2, F-7, F-8 or F-10 test as red-first, although those tests pass on the baseline's code. That is why attempt 1 flagged only F-3, F-4 and F-9 (findings.md:601-603).
+- Verdict: CONFIRMED for the exit-1 mechanism. PLAUSIBLE for the runner path, which I did not run.
+
+[MINOR] docs/WORKFLOW.md:881-882 — "Provider contracts measure native addresses and synthetic-key requests through loopback transport" overclaims.
+- Evidence: the native addresses are a static read of the installed catalog JSON (tests/test_pi_contract.py:772-781, 395-417). The loopback override replaces the address, so transport cannot measure it. Only the key mapping and the model id go through loopback (:783-807).
+- Verdict: PLAUSIBLE (the sentence can be read as "addresses [from the catalog]").
+
+[MINOR] plans/changes/pi-pin/plan.md:131-153 (criterion ledger) — two new tests are missing from the ledger.
+- `test_real_reviewer_ignores_ambient_credentials` (tests/test_pi_contract.py:580-633) is now the only evidence for criterion 7's "saved authentication or command-valued configuration" part. Neither the ledger nor the F-1 Status cell names it; F-1 only says the inert traps "are gone".
+- `tests/test_ci.py::test_pi_provisioning_only_in_repositories_with_pi` is not in the ledger either.
+- Verdict: CONFIRMED.
+
+[STYLE] tests/test_pi_install.py:51-54, 89-92, 150-153, 175-178 — `base64`, `hashlib`, `io` and `tarfile` are imported into the four synthetic script strings (node, npm, local CLI, PATH pi) and never used there. It looks like a stray replace. Verdict: CONFIRMED.
+
+[STYLE] tests/test_pi_contract.py:912-914 — the docstring says "the text printer drops the truncated assistant message". That is not where it happens:
+- print-mode.js:125-127 would print the text and exit 1.
+- Measured: Pi appends a `context_edit` (replacement null) that removes the message before the printer runs.
+- plans/changes/pi-pin/research.md:152-154 (from the CHANGELOG: exit 1 with a warning) is now contradicted by the measurement. The research note is historical, but nothing records the contradiction.
+- Verdict: CONFIRMED.
+
+## Not read
+- Hosted CI run of this branch: not read.
+- The orchestrator's current `make verify` output: not read.
+- The full suites test_stage2.py, test_ci.py, test_pi_contract.py and test_pi_install.py: not run. I ran only the named tests in the scratch copy.
+- `red_first` actually executed against this change: not run (code read only).
+- Real-provider truncation behaviour (as opposed to the loopback stand-in): not measured.
+- Whether markdownlint-cli2 honours the negated glob in CI: not measured.
+- F-9 and F-12 mutation runs: not done (their tests are direct equality and membership checks).
+- An integrity-only installer mutation: not done (npm has no switch to skip integrity).
+
+How I measured: a scratch copy at /private/tmp/claude-501/-Users-mikypiky-coding-harness/f3f1f2a8-3bee-45a3-88b9-9772a53278f7/scratchpad/r2/tree (`git archive HEAD`, with .venv and tools/pi/node_modules symlinked from the worktree). Every mutation was restored and checked with `cmp`. `git status` in the worktree is clean.
+
+Resume: round-2 review complete, no edits made

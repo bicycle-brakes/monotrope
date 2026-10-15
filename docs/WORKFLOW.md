@@ -878,8 +878,8 @@ extension and MCP startup suppression, skill/prompt/theme discovery reads,
 context-file exclusion and scratch-agent separation from saved authentication
 and command-valued model configuration. Positive controls run through Pi;
 project-resource controls also grant trust so trust refusal cannot mask a
-missing discovery flag. Provider contracts measure native addresses and
-synthetic-key requests through loopback transport. These contracts do not
+missing discovery flag. Provider contracts read native addresses from the installed Pi catalog and
+measure synthetic-key requests and model ids through loopback transport. These contracts do not
 measure every other model CLI's isolation settings.
 If hooks are not in fact off for a call, the tracked `.codex/hooks.json` shows
 the kind of text such a switch would inject into a call that the leak check
