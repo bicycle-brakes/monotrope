@@ -1779,7 +1779,7 @@ def test_a_draft_starts_codex_with_workspace_write_and_no_bypass(world: World) -
     argv = call["argv"]
     assert argv[:2] == ["exec", "--json"]
     assert argv[argv.index("-m") + 1] == "gpt-6.1-sol"
-    assert 'model_reasoning_effort="max"' in argv
+    assert f'model_reasoning_effort="{stage2.CODEX_EFFORTS["draft"]}"' in argv
     assert 'sandbox_mode="workspace-write"' in argv
     assert 'sandbox_mode="read-only"' not in argv
     disabled = [argv[i + 1] for i, word in enumerate(argv) if word == "--disable"]
@@ -2037,8 +2037,8 @@ def test_a_draft_call_that_moves_head_stops_the_run(
     draft_world(world)
     started = [0]
 
-    def committing_codex(ctx, prompt, resume=None, writable=False):
-        del prompt, resume, writable
+    def committing_codex(ctx, prompt, resume=None, writable=False, verb=""):
+        del prompt, resume, writable, verb
         git(ctx.root, "commit", "--quiet", "--allow-empty", "-m", "the model committed")
         started[0] += 1
         return "drafted", "T1"
@@ -2423,6 +2423,8 @@ def test_a_failed_first_draft_gets_one_codex_repair_with_its_diagnostics(world: 
     assert world.run("draft") == 0
     assert len(world.calls("codex")) == 2
     assert world.calls("claude") == []
+    for call in world.calls("codex"):  # the retry keeps the draft entry (bead coding-harness-yzk)
+        assert f'model_reasoning_effort="{stage2.CODEX_EFFORTS["draft"]}"' in call["argv"]
     prompt = world.calls("codex")[1]["argv"][-1]
     assert "## Earlier attempts' diagnostics" in prompt
     assert "Attempt 1 (codex)" in prompt and "── [pytest] RED (block)" in prompt
@@ -3728,7 +3730,7 @@ def test_codex_is_pinned_on_first_and_resumed_calls(world: World) -> None:
         argv = call["argv"]
         assert argv[:3] == ["exec", "resume", "T1"]
         assert argv[argv.index("-m") + 1] == "gpt-6.1-sol"
-        assert 'model_reasoning_effort="max"' in argv
+        assert f'model_reasoning_effort="{stage2.CODEX_EFFORTS["review"]}"' in argv
         assert 'sandbox_mode="read-only"' in argv
         assert "--ephemeral" not in argv and "-s" not in argv
         for flag in ("--add-dir", "--approve-for-me", "--dangerously-bypass-approvals-and-sandbox", "--sandbox"):
@@ -3770,6 +3772,7 @@ def test_a_fresh_phase_6_session_says_so(world: World) -> None:
     world.script(codex=[codex_ok("T5", rows(1))])
     assert world.run("review") == 0
     assert world.calls("codex")[0]["argv"][:2] == ["exec", "--json"]
+    assert f'model_reasoning_effort="{stage2.CODEX_EFFORTS["review"]}"' in world.calls("codex")[0]["argv"]
     assert "a fresh session reviewed: no phase-2a session was recorded" in world.text()
 
     world.findings.unlink()
@@ -3781,6 +3784,7 @@ def test_a_fresh_phase_6_session_says_so(world: World) -> None:
     world.script(codex=[codex_ok("T5", rows(1))])
     assert world.run("review") == 0
     assert world.calls("codex")[0]["argv"][:2] == ["exec", "--json"], "an Opus block after the line is no resume"
+    assert f'model_reasoning_effort="{stage2.CODEX_EFFORTS["review"]}"' in world.calls("codex")[0]["argv"]
     assert "a fresh session reviewed: no phase-2a session was recorded" in world.text()
 
     world.findings.unlink()
@@ -3788,6 +3792,7 @@ def test_a_fresh_phase_6_session_says_so(world: World) -> None:
     world.write_findings(f"## Phase 2a — Codex, 2026-09-30\n\n{rows(1)}\n\nReviewer session: codex T1")
     world.script(codex=[codex_ok("T2", rows(1))])
     assert world.run("review") == 0
+    assert f'model_reasoning_effort="{stage2.CODEX_EFFORTS["review"]}"' in world.calls("codex")[0]["argv"]
     assert "a fresh session reviewed: the resume of T1 started a new thread" in world.text()
 
 
@@ -3803,6 +3808,7 @@ def test_phase6_after_codex_repair_starts_a_fresh_read_only_session(world: World
     assert world.run("review") == 0
     (call,) = world.calls("codex")
     argv = call["argv"]
+    assert f'model_reasoning_effort="{stage2.CODEX_EFFORTS["review"]}"' in argv
     assert "resume" not in argv and argv[:2] == ["exec", "--json"]
     assert "T1" not in argv and "T7" not in argv and "TR1" not in argv
     assert 'sandbox_mode="read-only"' in argv and not any("workspace-write" in part for part in argv)
@@ -3817,6 +3823,8 @@ def test_a_phase6_rerun_without_repair_records_the_actual_recheck_reason(world: 
     assert world.run("review") == 0
     assert world.run("review") == 0
     first, second = world.calls("codex")
+    for call in (first, second):  # both review calls keep the review entry (bead coding-harness-yzk)
+        assert f'model_reasoning_effort="{stage2.CODEX_EFFORTS["review"]}"' in call["argv"]
     assert first["argv"][:3] == ["exec", "resume", "T1"]
     assert "resume" not in second["argv"] and 'sandbox_mode="read-only"' in second["argv"]
     text = world.text()
@@ -3843,6 +3851,8 @@ def test_the_loop_marks_after_a_recheck_resume_the_fresh_verdict_thread(world: W
     world.script(codex=[codex_ok("T9", rows(1)), codex_ok("T9", "L1-1: agree")])
     assert world.run("review") == 0
     verdict_call, mark_call = world.calls("codex")
+    for call in (verdict_call, mark_call):  # both review calls keep the review entry (bead coding-harness-yzk)
+        assert f'model_reasoning_effort="{stage2.CODEX_EFFORTS["review"]}"' in call["argv"]
     assert "resume" not in verdict_call["argv"] and mark_call["argv"][:3] == ["exec", "resume", "T9"]
     assert 'sandbox_mode="read-only"' in mark_call["argv"]
 
@@ -4647,7 +4657,7 @@ def test_repair_uses_codex_at_max_effort(world: World) -> None:
     (call,) = world.calls("codex")
     argv = call["argv"]
     assert argv[argv.index("-m") + 1] == "gpt-6.1-sol"
-    assert 'model_reasoning_effort="max"' in argv
+    assert f'model_reasoning_effort="{stage2.CODEX_EFFORTS["repair"]}"' in argv
     assert "resume" not in argv, "a repair attempt resumed a thread"
     assert "route codex · endpoint openai-codex · model gpt-6.1-sol" in world.text()
 
@@ -4672,6 +4682,8 @@ def test_repair_retry_uses_fresh_codex_with_diagnostics(world: World) -> None:
     script_repair(world, [{"stdout": "still looking"}, repair_step()], make=[{"stdout": "green\n"}] * 2)
     assert world.run("repair") == 0
     first, second = world.calls("codex")
+    for call in (first, second):  # both attempts keep the repair entry (bead coding-harness-yzk)
+        assert f'model_reasoning_effort="{stage2.CODEX_EFFORTS["repair"]}"' in call["argv"]
     assert "resume" not in first["argv"] and "resume" not in second["argv"]
     assert world.calls("claude") == []
     prompt = prompt_of(second)
@@ -6345,6 +6357,190 @@ STAGE2_ROUTING = {
     "6 Review": "gpt-6.1-sol",
 }
 
+# Sol's effort lives once per verb in `CODEX_EFFORTS`; every active instruction links its verb's
+# entry instead of naming a value of its own (bead coding-harness-yzk, spec criteria 4-6).
+SOL_ROUTING_VERBS = {"2 Spec": "draft", "2b Design": "draft", "3 Plan": "draft", "6 Review": "review"}
+SOL_EFFORT_PROMPTS = ("02-spec.md", "02b-design.md", "03-plan.md", "06-review.md")
+REPAIR_ROW_LABEL = "| Repair after 4b and 6 |"
+EFFORT_LITERAL = re.compile(r"effort `[^`]+`")
+OTHER_MODEL = re.compile(r"Opus|Sonnet|GLM|`?glm-5|the ladder|Haiku")
+
+
+def effort_reference(verb: str) -> str:
+    """The link form through which an instruction names one verb's entry of `CODEX_EFFORTS`."""
+    return f'[`CODEX_EFFORTS["{verb}"]`](../scripts/stage2.py)'
+
+
+SOL_MODEL = re.compile(r"gpt-6\.1-sol|\bSol\b|\bCodex\b")
+
+
+def sol_clauses(text: str) -> list[str]:
+    """Read every Sol mention up to the next model, sentence, row or paragraph (Q-5)."""
+    clauses = []
+    for paragraph in re.split(r"\n\s*\n|\n(?=\|)|(?<=[.!?])\s+", text):
+        mentions = list(SOL_MODEL.finditer(paragraph))
+        for index, mention in enumerate(mentions):
+            end = mentions[index + 1].start() if index + 1 < len(mentions) else len(paragraph)
+            rest = paragraph[mention.end() : end]
+            stop = OTHER_MODEL.search(rest)
+            clauses.append(rest[: stop.start()] if stop else rest)
+    return clauses
+
+
+def sol_effort_clause_problems(text: str, verb: str | frozenset[str], where: str) -> list[str]:
+    """Check each Sol effort independently; another mention cannot supply its reference.
+
+    `verb` is the runner verb the instruction serves, or the set of verbs an unpinned instruction
+    names (`instruction_verbs`); only those verbs' entries satisfy it. An empty set means the
+    instruction names no verb, and every effort clause in it is reported.
+    """
+    found = []
+    clauses = sol_clauses(text) or [text]  # A routing row's model can be in the preceding cell.
+    verbs = sorted({verb} if isinstance(verb, str) else verb)
+    checked = False
+    for clause in clauses:
+        if not re.search(r"\beffort\b", clause):
+            continue
+        checked = True
+        if (literal := EFFORT_LITERAL.search(clause)) is not None:
+            found.append(f"{where} sets Sol's effort independently ({literal.group(0)})")
+        if not verbs:
+            found.append(f"{where} gives Sol an effort but names no runner verb (draft, repair or review)")
+            continue
+        references = [effort_reference(key) for key in verbs]
+        if not any(reference in clause for reference in references):
+            found.append(f"{where} does not reference {references}")
+    if isinstance(verb, str) and not checked:
+        found.append(f"{where} does not reference {effort_reference(verb)}")
+    return found
+
+
+RUNNER_VERB = re.compile(r"\b(draft|repair|review)", re.I)
+ROW_LABEL_VERBS = (("repair", ("repair",)), ("review", ("review",)), ("draft", ("draft", "spec", "design", "plan")))
+
+
+def instruction_verbs(unit: str, heading: str) -> frozenset[str]:
+    """The runner verbs an unpinned instruction serves, read from its own context.
+
+    A routing row serves the verb of its phase cell (`2 Spec` drafts, `6 Review` and `2a Spec
+    review` review, `Repair after 4b and 6` repairs). A sentence, or a row whose phase cell names no
+    verb, serves the verbs it names itself (draft, repair or review in any inflection); when it
+    names several, an entry of any of them satisfies it, and an entry of a verb it does not name
+    stays red. A sentence that names no verb serves the verb of the `###` subsection it stands in
+    (`### Repairing taken findings (repair)` repairs). An instruction with no verb in either place
+    cannot be attributed and is reported, so a Sol effort always says which runner verb it follows.
+    """
+    if unit.startswith("|"):
+        label = (stage2.split_row(unit.splitlines()[0]) or [""])[0].lower()
+        for verb, words in ROW_LABEL_VERBS:
+            if any(word in label for word in words):
+                return frozenset({verb})
+    own_words = re.sub(r'CODEX_EFFORTS\["[^"]*"\]', "", unit)  # the linked key is what is being checked
+    named = {word.lower() for word in RUNNER_VERB.findall(own_words)}
+    return frozenset(named or {word.lower() for word in RUNNER_VERB.findall(heading)})
+
+
+def sol_section_problems(text: str, where: str) -> list[str]:
+    """Every Sol effort clause of a doctrine section, checked against the verb of its own instruction."""
+    found = []
+    heading = ""
+    for block in re.split(r"\n\s*\n|\n(?=\|)", text):
+        for line in block.splitlines():
+            if line.startswith("### "):
+                heading = line
+            elif line.startswith("## "):
+                heading = ""  # a stage heading names verbs it does not route; only a subsection attributes
+        units = [block] if block.startswith("|") else re.split(r"(?<=[.!?])\s+", block)
+        for unit in units:
+            if any(re.search(r"\beffort\b", clause) for clause in sol_clauses(unit)):
+                found += sol_effort_clause_problems(unit, instruction_verbs(unit, heading), where)
+    return found
+
+
+def sol_prompt_texts() -> dict[str, str]:
+    return {name: (PROMPTS / name).read_text(encoding="utf-8") for name in SOL_EFFORT_PROMPTS}
+
+
+def sol_texts(doc: str, text: str) -> tuple[str, dict[str, str]]:
+    """The doctrine and prompt texts with one document replaced, for planting a fault in it."""
+    if doc == "workflow":
+        return text, sol_prompt_texts()
+    return WORKFLOW.read_text(encoding="utf-8"), {**sol_prompt_texts(), doc: text}
+
+
+def sol_effort_problems(workflow: str, prompts: dict[str, str]) -> list[str]:
+    """Every active Sol effort clause references its verb's entry of `CODEX_EFFORTS` (spec, criteria 4-6)."""
+    found = []
+    # New prose, unpinned rows and later mentions in existing rows are active instructions too,
+    # each checked against the verb of its own context.
+    for title in ("## 3 · ", "## 4 · "):
+        found += sol_section_problems(section(workflow, title), title)
+    rows_3 = routing_rows(section(workflow, "## 3 · "))
+    for phase, verb in SOL_ROUTING_VERBS.items():
+        row = routing_rows(section(workflow, "## 4 · ")).get(phase)
+        if row is None:
+            found.append(f"section 4 has no routing row {phase}")
+        else:
+            found += sol_effort_clause_problems("gpt-6.1-sol " + row[1], verb, f"section 4 routes {phase}")
+    for phase in ("2 Spec", "2b Design", "3 Plan"):  # §3 routes these to Opus and defers review's Sol clause to §4
+        stage_1 = rows_3.get(phase)
+        if stage_1 is None:
+            found.append(f"section 3 has no routing row {phase}")
+        else:
+            found += sol_effort_clause_problems(stage_1[1], "draft", f"section 3 routes {phase}")
+    line = next((row for row in section(workflow, "## 4 · ").splitlines() if row.startswith(REPAIR_ROW_LABEL)), "")
+    cells = stage2.split_row(line) or []
+    if len(cells) != 3 or cells[1] != "**gpt-6.1-sol**":
+        found.append("section 4 has no repair row for gpt-6.1-sol")
+    else:
+        found += sol_effort_clause_problems("gpt-6.1-sol " + cells[2], "repair", "section 4 routes the repair")
+    draft = section(workflow, "### The draft (phases 2, 2b and 3)")
+    prose = flat(draft.partition("A drafted change runs in this order:")[0])
+    found += sol_effort_clause_problems(prose, "draft", "the draft prose")
+    for name, verb in (
+        ("02-spec.md", "draft"),
+        ("02b-design.md", "draft"),
+        ("03-plan.md", "draft"),
+        ("06-review.md", "review"),
+    ):
+        found += sol_effort_clause_problems(model_line(prompts[name]), verb, f"{name}'s Model paragraph")
+    return found
+
+
+SOL_EFFORT_PLACES = (
+    (
+        "workflow",
+        "the highest reasoning demand, little output; where the runner drafts (§4), `gpt-6.1-sol` at effort "
+        + effort_reference("draft")
+        + " writes it instead",
+        "draft",
+    ),
+    (
+        "workflow",
+        "the same demand as spec and plan; where the runner drafts (§4), `gpt-6.1-sol` at effort "
+        + effort_reference("draft")
+        + " writes it instead",
+        "draft",
+    ),
+    (
+        "workflow",
+        "an error here is the most expensive in the whole run; where the runner drafts (§4), `gpt-6.1-sol` at effort "
+        + effort_reference("draft")
+        + " writes it instead",
+        "draft",
+    ),
+    ("workflow", "effort " + effort_reference("draft") + ", one call for 2, 2b and 3", "draft"),
+    ("workflow", "effort " + effort_reference("draft") + ", drafted in the same call as 2 and 3", "draft"),
+    ("workflow", "effort " + effort_reference("draft") + ", drafted in the same call as 2 and 2b", "draft"),
+    ("workflow", "sandbox, effort " + effort_reference("repair") + "; one fresh Codex attempt", "repair"),
+    ("workflow", "effort " + effort_reference("review") + ", through the Codex CLI", "review"),
+    ("workflow", "(`gpt-6.1-sol`, effort " + effort_reference("draft") + ") write", "draft"),
+    ("02-spec.md", "(`gpt-6.1-sol`) at effort " + effort_reference("draft") + ", started by", "draft"),
+    ("02b-design.md", "(`gpt-6.1-sol`) at effort " + effort_reference("draft") + ", started by", "draft"),
+    ("03-plan.md", "(`gpt-6.1-sol`) at effort " + effort_reference("draft") + ", started by", "draft"),
+    ("06-review.md", "gpt-6.1-sol at effort " + effort_reference("review") + ", started by", "review"),
+)
+
 
 def routing_problems(workflow: str) -> list[str]:
     """What the routing rows of the doctrine get wrong: section 4's eight rows and section 3's two."""
@@ -6359,6 +6555,10 @@ def routing_problems(workflow: str) -> list[str]:
         elif phase == "2a Spec review":
             if "effort `xhigh`" not in row[1]:
                 found.append(f"section 4 gives {phase} no effort `xhigh`")
+        elif phase in SOL_ROUTING_VERBS:
+            found += sol_effort_clause_problems(
+                "gpt-6.1-sol " + row[1], SOL_ROUTING_VERBS[phase], f"section 4 routes {phase}"
+            )
         elif not model.endswith("Flash") and "effort `max`" not in row[1]:
             found.append(f"section 4 gives {phase} no effort `max`")
     default = routing_rows(section(workflow, "## 3 · "))
@@ -6387,12 +6587,18 @@ def test_workflow_section_4_routes_the_three_reviews() -> None:
         ("| 2a Spec review | **Opus 5.5** |", "| 2a Spec review | **gpt-6.1-sol** |"),
         ("| 4b Review loop | **the ladder** |", "| 4b Review loop | **GLM 5.3** |"),
         ("| 6 Review | **gpt-6.1-sol** |", "| 6 Review | **Opus 5.5** |"),
-        ("| 2 Spec | **gpt-6.1-sol** | effort `max`, one call", "| 2 Spec | **Opus 5.5** | effort `max`, one call"),
         (
-            "| 2b Design | **gpt-6.1-sol** | effort `max`, drafted",
-            "| 2b Design | **GLM 5.3 Flash** | effort `max`, drafted",
+            f"| 2 Spec | **gpt-6.1-sol** | effort {effort_reference('draft')}, one call",
+            f"| 2 Spec | **Opus 5.5** | effort {effort_reference('draft')}, one call",
         ),
-        ("| 3 Plan | **gpt-6.1-sol** | effort `max`, drafted", "| 3 Plan | **Sonnet 5.5** | effort `max`, drafted"),
+        (
+            f"| 2b Design | **gpt-6.1-sol** | effort {effort_reference('draft')}, drafted",
+            f"| 2b Design | **GLM 5.3 Flash** | effort {effort_reference('draft')}, drafted",
+        ),
+        (
+            f"| 3 Plan | **gpt-6.1-sol** | effort {effort_reference('draft')}, drafted",
+            f"| 3 Plan | **Sonnet 5.5** | effort {effort_reference('draft')}, drafted",
+        ),
         ("| 1 Explore | **GLM 5.3 Flash** |", "| 1 Explore | **Haiku 4.5** |"),
         ("| 4 Implement | **GLM 5.3 Flash** |", "| 4 Implement | **Sonnet 5.5** |"),
         ("| `bounded` | Opus 5.5, where one is held | the ladder |", "| `bounded` | the ladder | the ladder |"),
@@ -6401,6 +6607,180 @@ def test_workflow_section_4_routes_the_three_reviews() -> None:
         assert old in text, old
         changed = text.replace(old, new, 1)
         assert routing_problems(changed) or class_table_problems(changed), (old, new)
+
+
+@pytest.mark.parametrize(
+    ("doc", "fragment", "verb"),
+    SOL_EFFORT_PLACES,
+    ids=[f"place-{n}" for n in range(1, len(SOL_EFFORT_PLACES) + 1)],
+)
+def test_sol_instructions_reference_the_central_effort_for_each_verb(doc: str, fragment: str, verb: str) -> None:
+    # Criterion 4. Planted faults: the link dropped, another verb's entry named, or an independent value stands.
+    assert sol_effort_problems(WORKFLOW.read_text(encoding="utf-8"), sol_prompt_texts()) == []
+    other = next(key for key in stage2.CODEX_EFFORTS if key != verb)
+    for planted, why in (
+        (fragment.replace(effort_reference(verb), f'`CODEX_EFFORTS["{verb}"]`'), "the link is dropped"),
+        (fragment.replace(f'"{verb}"', f'"{other}"'), "another verb's entry is named"),
+        (fragment.replace(effort_reference(verb), f"`{stage2.CODEX_EFFORTS[verb]}`"), "an independent literal stands"),
+    ):
+        doc_text = (WORKFLOW if doc == "workflow" else PROMPTS / doc).read_text(encoding="utf-8")
+        assert fragment in doc_text, (doc, fragment)
+        assert sol_effort_problems(*sol_texts(doc, doc_text.replace(fragment, planted, 1))), (doc, why)
+
+
+def test_sol_effort_check_reads_the_verb_of_every_unpinned_instruction() -> None:
+    # Criterion 4 beyond the pinned places (loop L3-1). Planted faults: a new sentence in the repair
+    # prose, a sentence naming its verb under another verb's heading, and an unpinned routing row
+    # each link another verb's entry; a Sol effort naming no verb at all cannot be attributed.
+    workflow, prompts = WORKFLOW.read_text(encoding="utf-8"), sol_prompt_texts()
+    assert sol_effort_problems(workflow, prompts) == []
+    repair_heading = "### Repairing taken findings (repair)"
+    loop_heading = "### The review loop (phase 4b)"
+    row = next(line for line in workflow.splitlines() if line.startswith("| 2a Spec review | **Opus 5.5** | effort"))
+    assert repair_heading in workflow and loop_heading in workflow
+    neutral = "### The runner is the only way"
+    assert neutral in workflow
+
+    def prose(heading: str, sentence: str) -> str:
+        return workflow.replace(heading, f"{heading}\n\n{sentence}", 1)
+
+    def unpinned_row(addition: str) -> str:
+        return workflow.replace(row, row[:-2] + addition + " |", 1)
+
+    for wrong, right in (
+        (
+            prose(repair_heading, f"Each attempt runs Codex at effort {effort_reference('draft')}."),
+            prose(repair_heading, f"Each attempt runs Codex at effort {effort_reference('repair')}."),
+        ),
+        (
+            prose(loop_heading, f"A repair reruns Codex at effort {effort_reference('draft')}."),
+            prose(loop_heading, f"A repair reruns Codex at effort {effort_reference('repair')}."),
+        ),
+        (
+            unpinned_row(f"; `gpt-6.1-sol` re-checks at effort {effort_reference('draft')}"),
+            unpinned_row(f"; `gpt-6.1-sol` re-checks at effort {effort_reference('review')}"),
+        ),
+    ):
+        assert wrong != workflow and right != workflow
+        assert sol_effort_problems(wrong, prompts), "another verb's entry passes in an unpinned instruction"
+        assert sol_effort_problems(right, prompts) == [], "the instruction's own entry is rejected"
+    unattributed = prose(neutral, f"Codex runs at effort {effort_reference('draft')}.")
+    assert sol_effort_problems(unattributed, prompts), "a Sol effort naming no verb passes"
+
+
+@pytest.mark.parametrize(
+    ("draft_effort", "repair_effort", "review_effort"),
+    [("low", "xhigh", "medium"), ("medium", "high", "xhigh")],
+    ids=["low-xhigh-medium", "medium-high-xhigh"],
+)
+@pytest.mark.parametrize("verb", ["draft", "repair", "review"])
+def test_sol_effort_changes_propagate_without_other_edits(
+    world: World,
+    monkeypatch: pytest.MonkeyPatch,
+    verb: str,
+    draft_effort: str,
+    repair_effort: str,
+    review_effort: str,
+) -> None:
+    # Criterion 5. Planted faults: an argv keeps the shipped value, or a retry, resume or re-check loses the setting.
+    monkeypatch.setattr(
+        stage2, "CODEX_EFFORTS", {"draft": draft_effort, "repair": repair_effort, "review": review_effort}
+    )
+    if verb == "draft":
+        draft_world(world)
+        red = red_verify(("pytest", ["FAILED tests/test_x.py::test_a - assert 2 == 1"]))
+        world.script(
+            codex=[
+                codex_ok("T1", "drafted", plant={"plans/changes/demo/plan.md": PLAN_CARD}),
+                codex_ok(
+                    "T2",
+                    "repaired",
+                    plant={
+                        "plans/changes/demo/spec.md": "---\ntitle: Spec\nupdated: 2026-09-30\nbead: demo-1\n---\n\n# Spec\n"
+                    },
+                ),
+            ],
+            make=[red, {"stdout": "green\n"}],
+        )
+        assert world.run("draft") == 0
+        for call in world.calls("codex"):  # the retry keeps the substituted draft entry
+            assert f'model_reasoning_effort="{draft_effort}"' in call["argv"]
+    elif verb == "repair":
+        repair_world(world)
+        script_repair(world, [{"stdout": "still looking"}, repair_step()], make=[{"stdout": "green\n"}] * 2)
+        assert world.run("repair") == 0
+        for call in world.calls("codex"):  # both attempts keep the substituted repair entry
+            assert f'model_reasoning_effort="{repair_effort}"' in call["argv"]
+    else:
+        world.write_findings(
+            phase6_block([phase6_cells("F-1", "fixed — tests/test_seed.py::test_seed", "phase finding")])
+        )
+        world.write_record([("L1-1", "taken — test_a", "no")])
+        world.script(codex=[codex_ok("T9", rows(1)), codex_ok("T9", "L1-1: agree")])
+        assert world.run("review") == 0
+        verdict_call, mark_call = world.calls("codex")
+        for call in (verdict_call, mark_call):  # the re-check and its resumed marks keep the substituted entry
+            assert f'model_reasoning_effort="{review_effort}"' in call["argv"]
+        assert "resume" not in verdict_call["argv"] and mark_call["argv"][:3] == ["exec", "resume", "T9"]
+
+        world.record().unlink(missing_ok=True)
+        world.findings.unlink()
+        (world.bin / "calls.jsonl").unlink()
+        world.write_findings(f"## Phase 2a — Codex, 2026-09-30\n\n{rows(1)}\n\nReviewer session: codex T1")
+        world.script(codex=[codex_ok("T1", rows(1))])
+        assert world.run("review") == 0
+        (resumed,) = world.calls("codex")  # the historical resume keeps it too
+        assert f'model_reasoning_effort="{review_effort}"' in resumed["argv"]
+        assert resumed["argv"][:3] == ["exec", "resume", "T1"]
+
+        (world.bin / "calls.jsonl").unlink()
+        world.script(codex=[codex_ok("T8", rows(1))])
+        assert world.run("review") == 0  # the repeated review re-checks fresh, at the same entry
+        (recheck,) = world.calls("codex")
+        assert f'model_reasoning_effort="{review_effort}"' in recheck["argv"]
+        assert "resume" not in recheck["argv"]
+
+
+def test_sol_effort_checks_allow_other_models_in_the_same_instruction() -> None:
+    # Criterion 6. Planted faults: a valid non-Sol effort is rejected, or it masks a wrong Sol reference.
+    workflow, prompts = WORKFLOW.read_text(encoding="utf-8"), sol_prompt_texts()
+    assert sol_effort_problems(workflow, prompts) == []
+    line = next(row for row in workflow.splitlines() if row.startswith(REPAIR_ROW_LABEL))
+    assert "Sonnet 5.5 at effort `medium`" in line, "the row does not mix another model's effort in"
+    mixed = workflow.replace(line, line[:-2] + "; Sonnet 5.5 drafts by hand at effort `medium` |", 1)
+    assert sol_effort_problems(mixed, prompts) == [], "another model's effort is rejected"
+    for model in ("`gpt-6.1-sol`", "Sol", "Codex"):
+        later = f"; {model} repairs at effort `high`"
+        planted = mixed.replace(
+            "; Sonnet 5.5 drafts by hand at effort `medium` |",
+            "; Sonnet 5.5 drafts by hand at effort `medium`" + later + " |",
+            1,
+        )
+        assert sol_effort_problems(planted, prompts), "a later independent Sol effort passes"
+        valid = planted.replace(later, f"; {model} repairs at effort {effort_reference('repair')}", 1)
+        assert sol_effort_problems(valid, prompts) == [], "a later central Sol reference is rejected"
+        wrong_later = valid.replace(
+            f"; {model} repairs at effort {effort_reference('repair')}",
+            f"; {model} repairs at effort {effort_reference('review')}",
+            1,
+        )
+        assert sol_effort_problems(wrong_later, prompts), "a later wrong Sol reference passes"
+        prose = f"\n\n{model} reviews at effort `high`.\n\n"
+        planted = workflow.replace(
+            "### The draft (phases 2, 2b and 3)", prose + "### The draft (phases 2, 2b and 3)", 1
+        )
+        assert sol_effort_problems(planted, prompts), "new prose with an independent Sol effort passes"
+    for name, text in prompts.items():
+        planted = re.sub(
+            r"(^\*\*Model:\*\*.*?)(?=^\*\*[A-Z])", r"\1Codex runs at effort `high`.\n", text, count=1, flags=re.M | re.S
+        )
+        assert planted != text, name
+        assert sol_effort_problems(workflow, {**prompts, name: planted}), name
+    wrong = workflow.replace(line, line.replace(effort_reference("repair"), effort_reference("review"), 1), 1)
+    assert sol_effort_problems(wrong, prompts), "a wrong Sol reference passes"
+    planted = prompts["02b-design.md"].replace(effort_reference("draft"), effort_reference("review"), 1)
+    assert "Opus 5.5 at effort `xhigh`" in flat(planted), "the planted prompt holds no other model's effort"
+    assert sol_effort_problems(workflow, {**prompts, "02b-design.md": planted}), "a wrong Sol reference is masked"
 
 
 DRAFT_ORDER_NEEDLES = (

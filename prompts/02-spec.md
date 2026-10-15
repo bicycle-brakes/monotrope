@@ -1,6 +1,6 @@
 # Phase 2 · Spec
 
-**Model:** gpt-6.1-sol — Codex (`gpt-6.1-sol`) at effort `max`, started by
+**Model:** gpt-6.1-sol — Codex (`gpt-6.1-sol`) at effort [`CODEX_EFFORTS["draft"]`](../scripts/stage2.py), started by
 `python3 scripts/stage2.py draft <change>`: one call writes spec, design and
 plan (phases 2, 2b and 3), and GLM 5.3 after two failed attempts; the highest
 reasoning demand, little output. Where Stage 2 is off, Opus 5.5 at effort
@@ -55,6 +55,13 @@ question — those are `[DETAIL]` or `[GAP]`, and asking one of an intent owner 
 a protocol violation, not thoroughness.
 
 ```
+Topic:                 <what this is about, in plain words>
+Intention:             <why this comes up now and what it is for>
+Today:                 <what happens today>
+Repository change:     <what changes in the repository if it is built>
+Architecture change:   <what changes in its architecture; an unchanged
+                       area says why it stays as it is>
+
 Goal in one sentence:  <what this is about, in plain words>
 Options:               each named after what it does, with its consequence
                        for users, operations or risk — not its mechanism
@@ -62,6 +69,12 @@ Recommendation:        <one option> — because <one sentence>
 If you say "ok":       <exactly what will then be built>
 What is lost:          <what the other option would have given>
 ```
+
+The five context lines come first, in the maintainer's language, before any
+option; identifiers are explained at first use, and the actual question
+stands last, on its own line. When the answer is recorded, the context shown
+here goes into the record's own `context` field
+(`docs/WORKFLOW.md`, "The question protocol").
 
 Answers are: **ok** · **option N** · **change criterion N to "…"** · **no,
 because …**. That is the decision record (MADR) in question form. Shorthand

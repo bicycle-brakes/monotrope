@@ -242,3 +242,60 @@ add one line with model and reason to each before its interview.
 Create a worktree for bead coding-harness-yzk from `feat/sol-effort`,
 rebase it on `origin/main` (`e0cea42` or later), and run
 `python3 scripts/stage2.py draft sol-effort`.
+
+## Addendum 2026-10-14, 14:49 — draft of sol-effort done, review by the remote session
+
+Written by the maintainer's Mac session (`019EPak4XgNE5A3cvTW7eZ4G`), against
+`origin/main` at `659fb35`.
+
+### What happened since the first addendum
+
+- **Sol's effort per verb** (bead coding-harness-yzk): `feat/sol-effort` was
+  rebased on main. Two drafts failed on the gate `frontmatter-current`: the
+  rebase set the commit date to 2026-10-14 while `decisions.md` said
+  `updated: 2026-10-13`. After the date was corrected (`9113a3d`), Codex Sol
+  drafted spec and plan in the first attempt (`5440262`, route codex, verified
+  and committed by the runner).
+- **A mistake of the orchestrator:** an uncommitted `findings.md` was
+  discarded with `git checkout --`. The first run's attempt records are in git;
+  the three attempt blocks of the second run are restored from session
+  excerpts and marked "reconstructed" (`440c749`). Original output not read.
+- **Branch:** `origin/feat/sol-effort` still holds the pre-rebase commits and a
+  push was refused (no force push). The rebased stand is on
+  **`feat/sol-effort-r2`**, draft pull request **#143**.
+- **Phase 2a review:** a remote session reviewed the spec with an Opus 5.5
+  sub-agent and found four rows (`bd0cec5` on `feat/sol-effort-r2`; its own
+  handover is #144, not merged at 14:49):
+  - S-1 MAJOR: criterion 4 covers tables and Model lines, while the prose of
+    `docs/WORKFLOW.md` also says Sol at `max`.
+  - S-2 MAJOR: editing ADR 0016 and 0017 needs five interview records;
+    `decisions.md` holds two.
+  - S-3, S-4 MINOR: two ambiguities in criteria 3 and 4.
+- A remote session was also told to work on bead coding-harness-fdz (the kit
+  probe misses untracked new files); no result read by 14:49.
+- No tracker write was made by this session in this addendum.
+
+### Waiting for the maintainer
+
+1. **S-2:** proposal made, no answer yet: take the ADR edits out of #143 and
+   resume them after the three missing interview answers.
+2. S-1 to S-4 must be settled before the phase 2a gate (no open `[AMBIGUITY]`).
+3. The plan card of the kit install (bead coding-harness-2uk), still no veto
+   or go.
+4. Six interviews (phase 1a) for the explorations in section 3.
+5. Whether to add a model and reason line to the six `research.md` files.
+
+### Next, in order
+
+1. After the maintainer's answer on S-1 to S-4: repair the spec on
+   `feat/sol-effort-r2`, then plan, implement and phase 6 for coding-harness-yzk.
+2. Live GLM probe of coding-harness-6th (Z.ai reset passed at 14:34 CEST, not
+   yet probed).
+3. Start of bead coding-harness-icw (research swarm) and coding-harness-4fk
+   (review swarm) only after the open data question: may the free models see
+   repository content?
+
+### Resume (second addendum)
+
+Ask the maintainer for the answer on S-2, then settle S-1 to S-4 on #143 and
+repair `spec.md` on `feat/sol-effort-r2`.
