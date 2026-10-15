@@ -142,3 +142,43 @@ the Pi version of that call were not recorded). So the free tier of Zen is
 not reachable through Pi at all; what Pi can reach on the `opencode`
 provider is at most the paid Zen models. The requirement "das eigene pi muss
 mit opencode go und zen funktioneren" needs restating for Zen.
+
+## Pi 1.1.0 → 1.2.0, from the installed changelog — 2026-10-15
+
+Read by the orchestrating session in `CHANGELOG.md` of the installed
+package (`@earendil-works/pi-coding-agent` 1.2.0, released 2026-10-12);
+nothing was run. Entries that touch what the runner relies on:
+
+- **Print mode exit code:** `-p` now exits 1 with a stderr warning when the
+  final answer was cut off at the output token limit (was 0). The loop and
+  the swarm read `--print` answers; a truncated answer now fails the call.
+- **Project context in nested worktrees:** a symlinked `AGENTS.md` in a git
+  worktree nested inside its main repository previously loaded no project
+  context file; that is fixed. The runner's reviewer launch passes
+  `--no-context-files`, but the interactive `session` verb keeps context
+  files on — from 1.2.0 a session in `.claude/worktrees/<name>` may load
+  `AGENTS.md` where 1.1.0 loaded none (whether this repository's worktrees
+  hit that case was not measured).
+- **Extension API:** `before_agent_start` now also fires for runs started by
+  `pi.sendMessage(..., { triggerTurn: true })` and its event became a union
+  on `messageType`; the session counts as busy while a run starts. The
+  runner's two extensions (`scripts/stage2_session_policy.mjs`, the research
+  tools) use `tool_call` and tool registration; whether either touches
+  `before_agent_start` was not checked here.
+- **Tool definitions:** a new optional `reachesTools` field; no stated change
+  to the `execute` contract or the parameter schema handling.
+- **Provider errors:** "The upstream provider returned an error" is now
+  retried as transient. The runner's scratch agent directory disables
+  retries (`{"retry": {"enabled": false}}`), so this should not apply there
+  (not measured).
+- **Configuration schemas:** published schemas for `models.json` and
+  `settings.json`; the theme schema moved. The runner writes only
+  `settings.json` with the retry switch.
+- **Removed:** the unreleased experimental server/client stack and the
+  `@earendil-works/chord` dependency — the package's dependency tree
+  changed, which a lock file would record.
+
+Nothing in the 1.2.0 section names `--tools`, `--offline`, `--no-extensions`,
+`--list-models`, the `read` tool's path handling or the `opencode` /
+`opencode-go` providers. Absence in a changelog is not a measurement: the
+contract suite (Q-1) is what would show it.
