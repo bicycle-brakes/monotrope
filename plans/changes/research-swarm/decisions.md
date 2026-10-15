@@ -169,3 +169,10 @@ smaller topics with a finder step, we decided on a finder, three agents with
 distinct perspectives per repository topic on one template, and every
 available free model on each online topic to achieve clear assignments and
 independent views, accepting many more calls per run. — 2026-10-15
+
+Addendum 2026-10-15: on where the neighbouring specs are kept, the
+maintainer said: "die nachbar specs sollen auch im specs header festgehalten
+werden." The finder's neighbours (the ones given in the header of
+`research.md` plus its marked suggestions, once accepted) are carried into a
+`neighbours:` field in the header of `spec.md`; the exact field form and
+its check are settled in the spec.
