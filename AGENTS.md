@@ -11,9 +11,8 @@ kit scripts) migrates from `portfolio-agentic-engineering` in measured steps.
 The migration plan and current state live in the bootstrap handover:
 `docs/journal/handover/2026-09-16-coding-harness-bootstrap.md`.
 
-This is the only instruction file. There is no `CLAUDE.md` — Claude Code
-(≥ 2.1.277) reads `AGENTS.md` itself when none exists, and a `CLAUDE.md` beside
-it would silently replace it (`tests/test_entry_points.py`).
+This is the only instruction file: Claude Code (≥ 2.1.277) reads it itself, and
+a `CLAUDE.md` would silently replace it (`tests/test_entry_points.py`).
 
 ## The workflow in one screen
 
@@ -106,15 +105,16 @@ Full doctrine: `docs/WORKFLOW.md`, in English since 2026-09-29.
 ## Communication and session continuity
 
 - Speak German with the maintainer; keep repository artifacts English.
-- Use short, plainly worded messages with clear headings. Lead with the main
+- Use short, plainly worded messages with clear headings. Explain technical
+  terms and identifiers at first use in every message. Lead with the main
   point and one concrete next action; show at most three immediate priorities.
   Keep optional detail separate.
 - **Every question carries its context** (ADR 0018): before any options, short
-  Topic; Intention (why now); Today; Repository change; Architecture change —
-  in plain words, terms explained at first use, the question last on its own
-  line. It covers every question: interviews, spec decisions, review
-  ambiguities, plan cards and conversation, in every harness, for everyone;
-  the reason is ADHD (`docs/WORKFLOW.md`, "The question protocol").
+  Topic; Intention (why now); Today; Repository change; Architecture change,
+  in plain words, the question last on its own line. It covers every question
+  — interviews, spec decisions, review ambiguities, plan cards, conversation
+  — in every harness, for everyone; the reason is ADHD (`docs/WORKFLOW.md`,
+  "The question protocol").
 - Say what behavior changed and why it matters; mark proposed, implemented and
   tested work apart. Ask one decision at a time, with a recommendation and its
   consequence; do not re-ask settled decisions or existing permission.
@@ -150,25 +150,23 @@ tools/bd dolt push          # push tracker data to origin (refs/dolt/data)
   committing or switching the branch, and offer a worktree. House rule 4 holds
   for the tracker meanwhile.
 - **Worktrees: one change, one bead, one branch, one worktree, one session.**
-  A worktree lives under `.claude/worktrees/<name>` (ignored already, and
-  Claude Code's own place), is branched from a freshly fetched `origin/main`,
-  and is removed after the merge. Sibling directories are retired (D-5).
-  `tools/bd` finds the main checkout's tracker from there without any
-  variable, and concurrent writers lose nothing
+  A worktree lives under `.claude/worktrees/<name>`, is branched from a
+  freshly fetched `origin/main`, and is removed after the merge. Sibling
+  directories are retired (D-5). `tools/bd` finds the main checkout's tracker
+  from there, and concurrent writers lose nothing
   (`docs/research/2026-09-23-worktree-tracker-writes.md`); who may write is
-  still house rule 4, and a worker claims with `--actor <session>`.
-  Each new checkout or worktree runs `make venv` once before `make verify`;
-  the suite fails under an interpreter that does not match
-  `requirements-ci.txt` (bead coding-harness-ei0).
+  still house rule 4, and a worker claims with `--actor <session>`. Each new
+  checkout or worktree runs `make venv` once before `make verify`; the suite
+  fails under an interpreter that does not match `requirements-ci.txt`
+  (bead coding-harness-ei0).
 - **A text-only change (Markdown outside `scripts/`, `tests/`, `prompts/`,
   `decisions/`) skips the local `make verify`;** CI is its gate.
 - **Omnigent starts inside the worktree** (`omnigent claude
-  --use-native-config`, ADR 0006). Omnigent's own tools that write, run,
-  spawn or change state are denied by name in `.claude/settings.json`;
-  read-only ones stay usable, and the one that may send task text to a routing
-  judge (`sys_advise_models`) is asked about each time. The one list is
-  `scripts/omnigent_policy.py`; its Omnigent default policy
-  (`tools/omnigent/`) is a second layer the maintainer installs. Details:
+  --use-native-config`, ADR 0006). Its tools that write, run, spawn or change
+  state are denied by name in `.claude/settings.json`; the one that may send
+  task text to a routing judge (`sys_advise_models`) is asked each time. Its
+  Omnigent default policy (`tools/omnigent/`) is a second layer the maintainer
+  installs; nothing depends on it alone. The one list and details:
   `docs/WORKFLOW.md` §3, "Worktrees".
 - **What could not be read is "not read", never "none"** — an unopened file
   and an empty query say different things.
@@ -177,7 +175,8 @@ tools/bd dolt push          # push tracker data to origin (refs/dolt/data)
   agent may not write it (lakeswitch: `human-decided`), propose the text.
 - **Research about this repository lives in `docs/research/`.** A vault note,
   chat or rendered page is a view of it: it names the source path and commit,
-  and a finding is never first written there.
+  and a finding is never first written there. Personal reasons to care stay
+  outside the repository.
 - **The maintainer's Claude Code display** (status line, session entry,
   handover safety net, `/handover`) lives, documented, in `tools/claude-code/`;
   change it there and reinstall with `tools/claude-code/install.sh`, never
@@ -185,7 +184,8 @@ tools/bd dolt push          # push tracker data to origin (refs/dolt/data)
 - **Sub-agents survive a budget pause** (maintainer, 2026-10-06). Each commits
   and pushes after every green step and ends its report with a `Resume:` line;
   the orchestrator keeps a list (agent id, branch, last pushed commit, next
-  step) and resumes or restarts there. One change at a time, few agents.
+  step) and resumes or restarts there. One change at a time, with few agents
+  and a visible queue.
 - **Findings returned as text** (when the harness refuses a reviewer's write)
   are committed unchanged by the orchestrator, which says so in the commit.
   MINOR rows on tests, security or false statements are repaired without

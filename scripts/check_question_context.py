@@ -14,7 +14,7 @@ not, first occurrence or repeat, maintainer or agent. Fenced examples, skip
 records, open questions and prose decisions are not records.
 
 The cut-off is each answer's own recording day, read from exactly one em-dash
-date (`— YYYY-MM-DD`) anywhere in the record's top-level decision statement
+date (`— YYYY-MM-DD`) that ends the record's top-level decision statement
 beginning `In the context of`, its wrapped lines joined first. A date inside the
 context value, a field or a fence never dates an answer. The day comes from
 `decisions/adoption.yaml` through `scripts/adoption.py` and from nowhere
@@ -71,6 +71,9 @@ _STATEMENT = re.compile(r"^In the context of(?:\s|$)")
 _CONTEXT_FIELD = re.compile(r"^context:(?P<rest>.*)$")
 _BLOCK_INDICATOR = re.compile(r"^[|>](?:[0-9][+-]?|[+-]?[0-9]?)(?:[ \t]+#.*)?$")
 _DECISION_DATE = re.compile(r"—[ \t]*([0-9]{4})-([0-9]{2})-([0-9]{2})")
+# The date ends the statement; one closing parenthetical remark may follow it
+# ("— 2026-10-12 (recorded on the bead the same day)").
+_DATE_SUFFIX = re.compile(_DECISION_DATE.pattern + r"(?:[ \t]*\([^()]*\))?[ \t]*$")
 _DATE_CONTINUATION = re.compile(r"(?:—[ \t]*)?(?:[0-9]{4}-[0-9]{2}-[0-9]{2})?$")
 _FIELD = re.compile(r"^[A-Za-z_][A-Za-z0-9_-]*:")
 
@@ -160,8 +163,9 @@ def _status(body: list[tuple[int, str]], marks: list[bool]) -> str:
 def _recording_day(rel: str, record_id: str, body: list[tuple[int, str]], marks: list[bool]) -> date:
     """The day the answer was recorded, or CannotMeasure with the reason.
 
-    Read from exactly one em-dash date (`— YYYY-MM-DD`) anywhere in the one
-    top-level decision statement beginning `In the context of`, joining
+    Read from exactly one em-dash date (`— YYYY-MM-DD`) that ends the one
+    top-level decision statement beginning `In the context of` (a closing
+    parenthetical remark after the date is allowed), joining
     indented wraps and blank-separated dash/date continuations first. This
     change's own fifth answer splits the dash and date. Dates inside the
     context value, a field or a fence are not read.
@@ -203,20 +207,20 @@ def _recording_day(rel: str, record_id: str, body: list[tuple[int, str]], marks:
         )
     joined = " ".join(statement.strip() for statement in statements[0])
     found = _DECISION_DATE.findall(joined)
-    if not found:
-        raise CannotMeasure(
-            f"{rel}: {record_id} — no `— YYYY-MM-DD` date occurs in the decision statement; "
-            "the recording day cannot be read"
-        )
     if len(found) > 1:
         raise CannotMeasure(
             f"{rel}: {record_id} — the decision statement carries {len(found)} dates; the recording day is ambiguous"
         )
+    suffix = _DATE_SUFFIX.search(joined)
+    if suffix is None:
+        raise CannotMeasure(
+            f"{rel}: {record_id} — no `— YYYY-MM-DD` date ends the decision statement; the recording day cannot be read"
+        )
     try:
-        return date(int(found[0][0]), int(found[0][1]), int(found[0][2]))
+        return date(*(int(part) for part in suffix.groups()))
     except ValueError:
         raise CannotMeasure(
-            f"{rel}: {record_id} — `{'-'.join(found[0])}` names no calendar day; the recording day is invalid"
+            f"{rel}: {record_id} — `{'-'.join(suffix.groups())}` names no calendar day; the recording day is invalid"
         ) from None
 
 
@@ -255,6 +259,14 @@ def _context_findings(rel: str, record_id: str, body: list[tuple[int, str]], mar
             "record the explanation that was shown"
         ]
     if scalar is None:
+        following = body[position + 1][1] if position + 1 < len(body) else ""
+        if following[:1].isspace() and following.strip():
+            # A bare `context:` over indented prose: the text is there, but the
+            # gate reads only a block or a one-line value; name the fix.
+            return [
+                f"{rel}: {record_id} — the context text stands on the lines below a bare `context:`; "
+                "write `context: |` so it is read as one block"
+            ]
         return [f"{rel}: {record_id} — the context value is blank; record the explanation that was shown"]
     if not isinstance(scalar, yaml.ScalarNode) or scalar.tag != "tag:yaml.org,2002:str":
         return [f"{rel}: {record_id} — the context value is not text; record the explanation that was shown"]

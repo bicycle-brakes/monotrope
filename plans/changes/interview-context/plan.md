@@ -38,7 +38,7 @@ glm-5.3-flash, 2026-10-14; no Stage-1 fallback is recorded.
    `status: answered` occurrence, not just records counted toward a minimum.
 2. Read the cut-off only through `adoption.adopted_on(root, "question-context")`.
    Read each recording day from exactly one em-dash date (`— YYYY-MM-DD`)
-   anywhere in its top-level MADR paragraph beginning `In the context of`;
+   that ends its top-level MADR paragraph beginning `In the context of`;
    join indented wraps and blank-separated dash/date continuations,
    including the dash/date split in this change's fifth answer. Ignore dates
    in context, fields and examples. Dates before adoption are exempt; the
@@ -116,6 +116,7 @@ card templates, harness configuration and sibling repositories untouched.
 
 ## Criterion ledger
 
+- 1: tests/test_check_question_context.py::test_context_rule_preserves_existing_standing_rules — drop a standing rule from AGENTS.md to fit the line budget
 - 1: tests/test_check_question_context.py::test_general_rule_covers_all_questions — remove conversation or review ambiguities from the rule
 - 2: tests/test_check_question_context.py::test_question_forms_put_context_before_options_and_question_last — remove Intention or Architecture change from a form
 - 2: tests/test_check_question_context.py::test_plan_card_requires_preface_and_preserves_veto — move the preface after the card, remove a context part, require an extra approval or alter the card's fields
@@ -130,6 +131,7 @@ card templates, harness configuration and sibling repositories untouched.
 - 5: tests/test_check_question_context.py::test_every_answered_occurrence_needs_context — exempt a duplicate Q-id or an agent-attributed answered record
 - 6: tests/test_check_question_context.py::test_nonblank_context_passes_without_clarity_scoring — reject a plain scalar or multiline explanation on wording alone
 - 7: tests/test_check_question_context.py::test_adoption_day_and_later_answers_are_subject — change the comparison from inclusive to strict or select by spec/asked date
+- 7: tests/test_check_question_context.py::test_late_answer_uses_only_the_decision_statement_suffix — take the cut-off from `asked` instead of the statement, or accept a mid-sentence date as the recording day
 - 7: tests/test_check_question_context.py::test_answer_date_uses_wrapped_decision_suffix — take a date from context or fail to read an indented or blank-separated dash/date split
 - 7: tests/test_check_question_context.py::test_archived_and_spec_less_answers_are_subject — move a missing-context answer into the archive or remove its spec
 - 7: tests/test_check_question_context.py::test_examples_open_and_skip_records_are_not_answers — count fenced examples or skip/open blocks as answered records
@@ -192,6 +194,10 @@ recording day is on or after the actual merge day.
 ## Runner route — 2026-10-14
 
 Stage-1 route: implement · model claude-sonnet-5-5 · reason: two Flash post-run checks failed.
+
+## Runner route — 2026-10-15
+
+Stage-1 route: repair · model claude-sonnet-5-5 · reason: two Codex post-run checks failed.
 
 ## Time used
 
@@ -291,5 +297,15 @@ commit; the orchestrator owns the tracker, pull request and handover.
 
 Measured repair spans now total 13m 19s; the earlier unmeasured
 implementation span remains unknown and is not estimated.
+
+Resume: when I start, I will run `make verify` through the repair runner.
+
+### Repair of F-1, F-2 and F-4 — 2026-10-15
+
+Span not measured: this session had file tools only and could not read
+`date`; no estimate is written. F-1 restores the four dropped standing rules
+in `AGENTS.md` within its 200-line budget; F-2 and F-4 are pinned by
+`test_late_answer_uses_only_the_decision_statement_suffix`. No command ran;
+the runner owns `make verify` and the checkpoint commit.
 
 Resume: when I start, I will run `make verify` through the repair runner.

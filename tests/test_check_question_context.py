@@ -62,16 +62,18 @@ def record(
     qid: str,
     *,
     day: str = ON,
+    asked: str | None = None,
     status: str = "answered",
     answered_by: str = "maintainer",
     context: str | None = CONTEXT,
     madr: str | None = None,
 ) -> str:
     """One Q-record; `context=None` omits the field, `madr=None` writes the
-    ordinary one-line statement dated with the recording day."""
+    ordinary one-line statement dated with the recording day. `asked` can
+    precede that day when an older question receives a later answer."""
     parts = [
         f"## {qid} · the question\n\n",
-        f"asked: {day}\nanswer: yes\nanswered_by: {answered_by}\nstatus: {status}\n\n",
+        f"asked: {day if asked is None else asked}\nanswer: yes\nanswered_by: {answered_by}\nstatus: {status}\n\n",
     ]
     if context is not None:
         parts.append(context + "\n")
@@ -116,6 +118,26 @@ def test_general_rule_covers_all_questions() -> None:
     text = agents.read_text(encoding="utf-8")
     assert "every question" in text
     assert "ADHD" in text
+
+
+@pytest.mark.parametrize(
+    "standing_rule",
+    [
+        "technical terms and identifiers at first use in every message",
+        "personal reasons to care stay outside the repository",
+        "nothing depends on it alone",
+        "with few agents and a visible queue",
+    ],
+    ids=["all-messages", "personal-reasons", "policy-layers", "visible-queue"],
+)
+def test_context_rule_preserves_existing_standing_rules(standing_rule: str) -> None:
+    """Making room for question context must retain the standing rules for
+    communication, research, tool permissions and coordinated work."""
+    agents = REPO / "AGENTS.md"
+    if not agents.is_file():
+        return  # the kit carries the workflow; its AGENTS.md is local inventory
+    text = " ".join(agents.read_text(encoding="utf-8").lower().split())
+    assert standing_rule in text
 
 
 # --- AC 2 · the form: context first, the question last ----------------------
@@ -316,6 +338,37 @@ def test_adoption_day_and_later_answers_are_subject(tmp_path: Path) -> None:
     assert "on-day" in done.stdout  # the adoption day itself is subject
     assert "late" in done.stdout
     assert "early" not in done.stdout  # the stock stays exempt
+
+
+@pytest.mark.parametrize("day", [ON, LATE], ids=["adoption-day", "after-adoption"])
+def test_late_answer_uses_only_the_decision_statement_suffix(tmp_path: Path, day: str) -> None:
+    """An earlier asked day cannot exempt a later answer; a date embedded
+    within its statement cannot supply the missing recording-day suffix."""
+    root = _tree(tmp_path)
+    decisions = _change(root, "old-question", record("Q-1", day=day, asked=EARLY))
+    assert run(root).returncode == 0
+    decisions.write_text(record("Q-1", day=day, asked=EARLY, context=None), encoding="utf-8")
+    done = run(root)
+    assert done.returncode == 1, done.stdout
+    assert "plans/changes/old-question/decisions.md: Q-1" in done.stdout
+    assert "keeps no context" in done.stdout
+
+    statement = f"In the context of a choice, we decided A — {day} and recorded B later.\n"
+    decisions.write_text(record("Q-1", day=day, asked=EARLY, context=None, madr=statement), encoding="utf-8")
+    done = run(root)
+    assert done.returncode == 3, done.stdout
+    assert "NOT MEASURED" in done.stdout
+    assert "plans/changes/old-question/decisions.md: Q-1" in done.stdout
+    assert "no `— YYYY-MM-DD` date ends the decision statement" in done.stdout
+
+    remark = f"In the context of a choice, we decided A, accepting B. — {day} (recorded on the bead the same day)\n"
+    decisions.write_text(record("Q-1", day=day, asked=EARLY, context=None, madr=remark), encoding="utf-8")
+    done = run(root)
+    assert done.returncode == 1, done.stdout  # a closing remark after the date keeps the day readable
+    assert "keeps no context" in done.stdout
+    trailing = remark.replace(" (recorded", " and more (recorded")
+    decisions.write_text(record("Q-1", day=day, asked=EARLY, context=None, madr=trailing), encoding="utf-8")
+    assert run(root).returncode == 3  # prose after the date is not a closing remark
 
 
 @pytest.mark.parametrize(
@@ -527,3 +580,13 @@ def test_context_gate_and_tests_travel_with_the_principle() -> None:
         text = adr.read_text(encoding="utf-8")
         assert "Q-1" in text and "Q-5" in text
         assert "ADHD" in text
+
+
+def test_bare_context_over_indented_prose_names_the_block_fix(tmp_path: Path) -> None:
+    """F-3: indented prose under a bare `context:` is not reported as blank."""
+    root = _tree(tmp_path)
+    _change(root, "bare", record("Q-1", context="context:\n  Topic: the cut-off.\n  Intention: a gate that holds.\n"))
+    done = run(root)
+    assert done.returncode == 1, done.stdout
+    assert "write `context: |`" in done.stdout
+    assert "is blank" not in done.stdout

@@ -691,10 +691,10 @@ Stage-2 call, 2026-10-15: repair · attempt 1 · route codex · endpoint openai-
 
 | ID | Severity | Dimension | Origin | Where | Finding | Reviewer | Status | Broke a test |
 |---|---|---|---|---|---|---|---|---|
-| F-1 | MAJOR | MAINT | base | `AGENTS.md`, sections "Communication and session continuity" and "Sessions across checkouts" | To fit the new rule into the 200-line budget, the diff rewrote unrelated bullets and dropped standing rules that no criterion or decision asked to remove: (a) "Explain necessary technical terms" now binds questions only, so a status report or closing message that carries an unexplained finding or bead id breaks no rule in the file any more; (b) "Personal reasons to care stay outside the repository" (research notes) is gone; (c) the Omnigent default policy lost "nothing depends on it alone"; (d) "with few agents and a visible queue" (maintainer, 2026-10-06) lost the visible queue. A grep of `docs/WORKFLOW.md`, `tools/claude-code/README.md` and `docs/research/` at `7b7f9ad` finds none of them elsewhere (only the new, question-scoped "technical term"). Restore them, making room by moving detail into `docs/WORKFLOW.md` rather than deleting a rule. [Non-goals; no criterion covers these removals] | Opus 5.5 | taken — restore the dropped standing rules in AGENTS.md (technical terms explained in every message, personal reasons stay outside the repository, nothing depends on the Omnigent default policy alone, a visible queue) and keep the file within its line budget by moving detail to docs/WORKFLOW.md, not by cutting rules; not a test — the line-budget test stays green | |
-| F-2 | MINOR | SPEC | base | `tests/test_check_question_context.py` (the criterion-7 tests) | No test separates an answer's recording day from its `asked` day. Every fixture built by `record()` writes the same date into `asked:` and into the decision statement; the one fixture that differs (asked 2026-10-13, statement 2026-10-14, in `test_answer_date_uses_wrapped_decision_suffix`) carries its context and passes either way. Measured at `7b7f9ad`: a mutant gate that takes the cut-off from `asked:` instead of the statement passes all 66 tests, and under it a late answer to a question asked before adoption, recorded without context, is exempt. Needed: a fixture asked before the adoption day, answered on or after it, without context — exit 1 naming the record. [criterion 7, "a late answer to an older question"] | Opus 5.5 | taken — a test whose fixture has an `asked:` day before the decision statement's day shows the gate measures the recording day from the statement, not from `asked:` | |
-| F-3 | MINOR | MAINT | base | `scripts/check_question_context.py`, `_context_findings` | A bare `context:` followed by indented prose lines — valid YAML for a non-blank plain text scalar — goes red with "the context value is blank", because only the rest of the `context:` line is parsed. Measured at `7b7f9ad` with a two-line indented prose value: exit 1, message "blank". The five labels indented under a bare `context:` (a YAML mapping, rightly not text) get the same message. Failing closed is defensible, but the diagnostic states something false and names no remedy, so an agent following it looks for a missing value that is there. For a bare `context:` with indented lines, name the literal-block form (`context: \|`) in the message, or accept the plain multi-line scalar. [criterion 5, the diagnostic; criterion 6, readable context rejected for its form] | Opus 5.5 | taken — a bare `context:` with indented prose lines below is read as its scalar value (not blank), or the diagnostic names `context: |` as the fix; the test plants the case | |
-| F-4 | BLOCKER | SPEC | this change | `scripts/check_question_context.py`, `_recording_day` / `_DATE_SUFFIX`; `docs/WORKFLOW.md` gate row; the module docstring | [DIVERGENT] The L2-1 repair aligned the prose with the code instead of the code with the spec: spec.md (Terms) and design.md (Data model) define the recording day as the `— YYYY-MM-DD` date that ends the decision statement, while code, docstring and docs/WORKFLOW.md now accept an em-dash date anywhere in it; "we decided A — 2026-10-14 and recorded B later." is measured from 2026-10-14 where the spec says not measured (exit 3). Raised from the phase-6 disagree on loop row L2-1. | Opus 5.5 | taken — anchor the match to the end of the decision statement (wrapped continuations from L2-2 still accepted), restore the "ends the statement" wording in docstring, docs/WORKFLOW.md and the diagnostic; the test plants a mid-sentence date (exit 3) and an end date (measured) | |
+| F-1 | MAJOR | MAINT | base | `AGENTS.md`, sections "Communication and session continuity" and "Sessions across checkouts" | To fit the new rule into the 200-line budget, the diff rewrote unrelated bullets and dropped standing rules that no criterion or decision asked to remove: (a) "Explain necessary technical terms" now binds questions only, so a status report or closing message that carries an unexplained finding or bead id breaks no rule in the file any more; (b) "Personal reasons to care stay outside the repository" (research notes) is gone; (c) the Omnigent default policy lost "nothing depends on it alone"; (d) "with few agents and a visible queue" (maintainer, 2026-10-06) lost the visible queue. A grep of `docs/WORKFLOW.md`, `tools/claude-code/README.md` and `docs/research/` at `7b7f9ad` finds none of them elsewhere (only the new, question-scoped "technical term"). Restore them, making room by moving detail into `docs/WORKFLOW.md` rather than deleting a rule. [Non-goals; no criterion covers these removals] | Opus 5.5 | fixed — not a test — the four standing rules stand in AGENTS.md again (terms explained at first use in every message, personal reasons outside the repository, nothing depends on the Omnigent default policy alone, a visible queue); `tests/test_check_question_context.py::test_context_rule_preserves_existing_standing_rules` pins them | no |
+| F-2 | MINOR | SPEC | base | `tests/test_check_question_context.py` (the criterion-7 tests) | No test separates an answer's recording day from its `asked` day. Every fixture built by `record()` writes the same date into `asked:` and into the decision statement; the one fixture that differs (asked 2026-10-13, statement 2026-10-14, in `test_answer_date_uses_wrapped_decision_suffix`) carries its context and passes either way. Measured at `7b7f9ad`: a mutant gate that takes the cut-off from `asked:` instead of the statement passes all 66 tests, and under it a late answer to a question asked before adoption, recorded without context, is exempt. Needed: a fixture asked before the adoption day, answered on or after it, without context — exit 1 naming the record. [criterion 7, "a late answer to an older question"] | Opus 5.5 | fixed — tests/test_check_question_context.py::test_late_answer_uses_only_the_decision_statement_suffix | no |
+| F-3 | MINOR | MAINT | base | `scripts/check_question_context.py`, `_context_findings` | A bare `context:` followed by indented prose lines — valid YAML for a non-blank plain text scalar — goes red with "the context value is blank", because only the rest of the `context:` line is parsed. Measured at `7b7f9ad` with a two-line indented prose value: exit 1, message "blank". The five labels indented under a bare `context:` (a YAML mapping, rightly not text) get the same message. Failing closed is defensible, but the diagnostic states something false and names no remedy, so an agent following it looks for a missing value that is there. For a bare `context:` with indented lines, name the literal-block form (`context: \|`) in the message, or accept the plain multi-line scalar. [criterion 5, the diagnostic; criterion 6, readable context rejected for its form] | Opus 5.5 | taken — a bare `context:` with indented prose lines below is read as its scalar value (not blank), or the diagnostic names `context: | fixed — tests/test_check_question_context.py::test_bare_context_over_indented_prose_names_the_block_fix | no |
+| F-4 | BLOCKER | SPEC | this change | `scripts/check_question_context.py`, `_recording_day` / `_DATE_SUFFIX`; `docs/WORKFLOW.md` gate row; the module docstring | [DIVERGENT] The L2-1 repair aligned the prose with the code instead of the code with the spec: spec.md (Terms) and design.md (Data model) define the recording day as the `— YYYY-MM-DD` date that ends the decision statement, while code, docstring and docs/WORKFLOW.md now accept an em-dash date anywhere in it; "we decided A — 2026-10-14 and recorded B later." is measured from 2026-10-14 where the spec says not measured (exit 3). Raised from the phase-6 disagree on loop row L2-1. | Opus 5.5 | fixed — tests/test_check_question_context.py::test_late_answer_uses_only_the_decision_statement_suffix (mid-sentence date not measured; a date with a closing parenthetical remark, as in plans/changes/codex-drafts Q-1, is read) — completed by the orchestrating session after three runner attempts failed on that live record | no |
 
 Checked: every criterion of `spec.md` (updated 2026-10-15) against `git diff origin/main...HEAD` at `7b7f9ad` and against `design.md`; no phase-2a review is recorded for this change, so this is a fresh review with no 2a rows to trace. Criteria 1–3: `AGENTS.md`, `docs/WORKFLOW.md` ("The question protocol"), `prompts/01a-interview.md`, `prompts/02-spec.md` and `prompts/03-plan.md` state the five-part form before options or the unchanged card, the question last on its own line, terms explained at first use, every question in every harness; the orchestrator's duty to preface a sub-agent's card follows from the general rule. Criteria 4–9: read `scripts/check_question_context.py` in full — record selection (fences, skip/open blocks, repeated ids, agent answers), the statement-only recording day with wrapped and blank-separated suffixes, inclusive comparison against `adoption.adopted_on`, scalar parsing by tag via `yaml.compose`, exit precedence 3 over 1, no writes; ran a mutation (F-2) and a probe (F-3). An answer whose recording day cannot be read is not known to predate adoption, so its exit 3 does not contradict criterion 8 — the spec's own [DETAIL] chooses it. Criterion 10: `decisions/gates.yaml` entry (block, both) and the derived step in `.github/workflows/ci.yml`. Criterion 11: the manifest carries the script and its test as `mechanismus`; every file the test reads travels (`prompts/`, `docs/WORKFLOW.md`, `decisions/`, `ci.yml`, `scripts/kit/`, `scripts/check_interview_minimums.py`), the ADR and `AGENTS.md` halves skip where absent, `decisions/adoption.yaml` stays home; the principle travels in substance ("Plain language", context before options, ADHD as the reason) though not under the literal name "plain language, context first". The strict kit probe is a special run for the pull request, not run here. Criterion 12: ADR 0018 is the only new ADR, states Q-1 to Q-5 as answered in `decisions.md` without changing one, and declares no approval (`review: pending`, acceptance by merge — the repository's convention for `status: accepted`). Protected areas: the interview-minimums contract is unchanged (pinned by `test_interview_minimums_still_counts_a_record_with_a_context_field`); no answer dated before adoption was edited. The two gates still disagree on whether a fenced `## Q-` block is a record — the counting gate counts it — which is a gap in the protected counting gate, not in this change. The adoption day 2026-10-15 in `decisions/adoption.yaml` anticipates the merge day; the pull request touches human-decided files (the ADR, the adoption record), so phase 7 owes the decision-PR form and the day's alignment if the merge slips.
 
@@ -714,3 +714,193 @@ Phase 6 verdict: opus-5.5, 2026-10-15
 | L3-2 | MINOR | MAINT | the module docstring of `scripts/check_question_context.py` against `scripts/check_interview_minimums.py`, `_parse_records` | `scripts/check_question_context.py`, `_records` docstring ("the two gates cannot disagree about what a record is") | The claimed contract is false: the counting gate splits on `## ` and reads record fields without fence awareness, while this gate skips fenced content, so the two gates do disagree about what a record is. The change's own fixture shows it — the fenced example of `test_examples_open_and_skip_records_are_not_answers` (a `## Q-9` block with `answered_by: maintainer` and `status: answered` inside a fence) is counted toward the interview minimum by `check_interview_minimums` but is never held for context by this gate; a maintainer who trusts the docstring will believe a counted answer always carries its context. | mimo-v2.6-pro | fixed — not a test — The _records docstring now states that this gate skips fenced content while the counting gate does not. | no | agree — the corrected docstring is true; the gap it names lives in the protected counting gate (a fenced `## Q-` example counts toward a minimum, failing open; no `decisions.md` holds one at `7b7f9ad`) and belongs in a follow-up change, not here |
 
 Rounds run: 3
+
+Stage-2 call, 2026-10-15: repair · attempt 1 · route codex · endpoint openai-codex · model gpt-6.1-sol · leak check clean over 427 files, 1181 commits, 12 rules.
+
+> Attempt 1 (codex) failed its post-run checks.
+>
+> Files the attempt changed (lines added, removed):
+> - `AGENTS.md` +9 -9
+> - `docs/WORKFLOW.md` +6 -5
+> - `plans/changes/interview-context/plan.md` +62 -1
+> - `scripts/check_question_context.py` +10 -9
+> - `tests/test_check_question_context.py` +46 -2
+>
+> Diagnostics:
+> ````text
+> - Runner format before `make verify`: ruff changed no file.
+> - `make verify` exited 2
+> The gates that blocked, each with its last lines:
+> ── [question-context] $ lauf_cmd
+>   - plans/changes/codex-drafts/decisions.md: Q-1 — no `— YYYY-MM-DD` date ends the decision statement; the recording day cannot be read
+> question-context NOT MEASURED: 1 unreadable evidence — exit 3, nothing measured.
+> ── [question-context] RED (block) — der Lauf ist rot.
+>
+> Standard error of the whole run, last lines:
+> [… 10353 earlier lines left out …]
+> templates/handover.md:22:81 error MD013/line-length Line length [Expected: 80; Actual: 200]
+> templates/handover.md:48:81 error MD013/line-length Line length [Expected: 80; Actual: 88]
+> templates/spec.md:21 error MD041/first-line-heading/first-line-h1 First line in a file should be a top-level heading [Context: "```yaml"]
+> templates/spec.md:39:81 error MD013/line-length Line length [Expected: 80; Actual: 97]
+> templates/spec.md:40:81 error MD013/line-length Line length [Expected: 80; Actual: 95]
+> tools/claude-code/README.md:17:81 error MD013/line-length Line length [Expected: 80; Actual: 105]
+> tools/claude-code/README.md:18:81 error MD013/line-length Line length [Expected: 80; Actual: 109]
+> tools/claude-code/README.md:19:81 error MD013/line-length Line length [Expected: 80; Actual: 134]
+> tools/claude-code/README.md:23:1 error MD060/table-column-style Table column style [Table pipe is missing space to the right for style "compact"]
+> tools/claude-code/README.md:23:5 error MD060/table-column-style Table column style [Table pipe is missing space to the left for style "compact"]
+> tools/claude-code/README.md:23:5 error MD060/table-column-style Table column style [Table pipe is missing space to the right for style "compact"]
+> tools/claude-code/README.md:23:9 error MD060/table-column-style Table column style [Table pipe is missing space to the left for style "compact"]
+> tools/claude-code/README.md:23:9 error MD060/table-column-style Table column style [Table pipe is missing space to the right for style "compact"]
+> tools/claude-code/README.md:23:13 error MD060/table-column-style Table column style [Table pipe is missing space to the left for style "compact"]
+> tools/claude-code/README.md:24:81 error MD013/line-length Line length [Expected: 80; Actual: 272]
+> tools/claude-code/README.md:25:81 error MD013/line-length Line length [Expected: 80; Actual: 180]
+> tools/claude-code/README.md:26:81 error MD013/line-length Line length [Expected: 80; Actual: 115]
+> tools/claude-code/README.md:28:81 error MD013/line-length Line length [Expected: 80; Actual: 124]
+> tools/claude-code/README.md:29:81 error MD013/line-length Line length [Expected: 80; Actual: 106]
+> tools/claude-code/README.md:38:1 error MD060/table-column-style Table column style [Table pipe is missing space to the right for style "compact"]
+> tools/claude-code/README.md:38:5 error MD060/table-column-style Table column style [Table pipe is missing space to the left for style "compact"]
+> tools/claude-code/README.md:38:5 error MD060/table-column-style Table column style [Table pipe is missing space to the right for style "compact"]
+> tools/claude-code/README.md:38:9 error MD060/table-column-style Table column style [Table pipe is missing space to the left for style "compact"]
+> tools/claude-code/README.md:38:9 error MD060/table-column-style Table column style [Table pipe is missing space to the right for style "compact"]
+> tools/claude-code/README.md:38:13 error MD060/table-column-style Table column style [Table pipe is missing space to the left for style "compact"]
+> tools/claude-code/README.md:40:81 error MD013/line-length Line length [Expected: 80; Actual: 442]
+> tools/claude-code/README.md:41:81 error MD013/line-length Line length [Expected: 80; Actual: 163]
+> tools/claude-code/README.md:42:81 error MD013/line-length Line length [Expected: 80; Actual: 126]
+> tools/claude-code/README.md:43:81 error MD013/line-length Line length [Expected: 80; Actual: 96]
+> tools/claude-code/README.md:44:81 error MD013/line-length Line length [Expected: 80; Actual: 167]
+> tools/claude-code/README.md:72:1 error MD060/table-column-style Table column style [Table pipe is missing space to the right for style "compact"]
+> tools/claude-code/README.md:72:5 error MD060/table-column-style Table column style [Table pipe is missing space to the left for style "compact"]
+> tools/claude-code/README.md:72:5 error MD060/table-column-style Table column style [Table pipe is missing space to the right for style "compact"]
+> tools/claude-code/README.md:72:9 error MD060/table-column-style Table column style [Table pipe is missing space to the left for style "compact"]
+> tools/claude-code/README.md:72:9 error MD060/table-column-style Table column style [Table pipe is missing space to the right for style "compact"]
+> tools/claude-code/README.md:72:13 error MD060/table-column-style Table column style [Table pipe is missing space to the left for style "compact"]
+> tools/claude-code/README.md:73:81 error MD013/line-length Line length [Expected: 80; Actual: 112]
+> tools/claude-code/README.md:74:81 error MD013/line-length Line length [Expected: 80; Actual: 89]
+> tools/claude-code/README.md:75:81 error MD013/line-length Line length [Expected: 80; Actual: 88]
+> make: *** [verify] Error 1
+> ````
+
+Stage-2 call, 2026-10-15: repair · attempt 2 · route codex-repair · endpoint openai-codex · model gpt-6.1-sol · reason first Codex post-run check failed · leak check clean over 427 files, 1181 commits, 12 rules.
+
+> Attempt 2 (codex-repair) failed its post-run checks.
+>
+> Files the attempt changed (lines added, removed):
+> - `AGENTS.md` +11 -17
+> - `docs/WORKFLOW.md` +16 -1
+> - `plans/changes/interview-context/plan.md` +70 -1
+>
+> Diagnostics:
+> ````text
+> - Runner format before `make verify`: ruff changed no file.
+> - `make verify` exited 2
+> The gates that blocked, each with its last lines:
+> ── [question-context] $ lauf_cmd
+>   - plans/changes/codex-drafts/decisions.md: Q-1 — no `— YYYY-MM-DD` date ends the decision statement; the recording day cannot be read
+> question-context NOT MEASURED: 1 unreadable evidence — exit 3, nothing measured.
+> ── [question-context] RED (block) — der Lauf ist rot.
+>
+> Standard error of the whole run, last lines:
+> [… 11287 earlier lines left out …]
+> templates/handover.md:22:81 error MD013/line-length Line length [Expected: 80; Actual: 200]
+> templates/handover.md:48:81 error MD013/line-length Line length [Expected: 80; Actual: 88]
+> templates/spec.md:21 error MD041/first-line-heading/first-line-h1 First line in a file should be a top-level heading [Context: "```yaml"]
+> templates/spec.md:39:81 error MD013/line-length Line length [Expected: 80; Actual: 97]
+> templates/spec.md:40:81 error MD013/line-length Line length [Expected: 80; Actual: 95]
+> tools/claude-code/README.md:17:81 error MD013/line-length Line length [Expected: 80; Actual: 105]
+> tools/claude-code/README.md:18:81 error MD013/line-length Line length [Expected: 80; Actual: 109]
+> tools/claude-code/README.md:19:81 error MD013/line-length Line length [Expected: 80; Actual: 134]
+> tools/claude-code/README.md:23:1 error MD060/table-column-style Table column style [Table pipe is missing space to the right for style "compact"]
+> tools/claude-code/README.md:23:5 error MD060/table-column-style Table column style [Table pipe is missing space to the left for style "compact"]
+> tools/claude-code/README.md:23:5 error MD060/table-column-style Table column style [Table pipe is missing space to the right for style "compact"]
+> tools/claude-code/README.md:23:9 error MD060/table-column-style Table column style [Table pipe is missing space to the left for style "compact"]
+> tools/claude-code/README.md:23:9 error MD060/table-column-style Table column style [Table pipe is missing space to the right for style "compact"]
+> tools/claude-code/README.md:23:13 error MD060/table-column-style Table column style [Table pipe is missing space to the left for style "compact"]
+> tools/claude-code/README.md:24:81 error MD013/line-length Line length [Expected: 80; Actual: 272]
+> tools/claude-code/README.md:25:81 error MD013/line-length Line length [Expected: 80; Actual: 180]
+> tools/claude-code/README.md:26:81 error MD013/line-length Line length [Expected: 80; Actual: 115]
+> tools/claude-code/README.md:28:81 error MD013/line-length Line length [Expected: 80; Actual: 124]
+> tools/claude-code/README.md:29:81 error MD013/line-length Line length [Expected: 80; Actual: 106]
+> tools/claude-code/README.md:38:1 error MD060/table-column-style Table column style [Table pipe is missing space to the right for style "compact"]
+> tools/claude-code/README.md:38:5 error MD060/table-column-style Table column style [Table pipe is missing space to the left for style "compact"]
+> tools/claude-code/README.md:38:5 error MD060/table-column-style Table column style [Table pipe is missing space to the right for style "compact"]
+> tools/claude-code/README.md:38:9 error MD060/table-column-style Table column style [Table pipe is missing space to the left for style "compact"]
+> tools/claude-code/README.md:38:9 error MD060/table-column-style Table column style [Table pipe is missing space to the right for style "compact"]
+> tools/claude-code/README.md:38:13 error MD060/table-column-style Table column style [Table pipe is missing space to the left for style "compact"]
+> tools/claude-code/README.md:40:81 error MD013/line-length Line length [Expected: 80; Actual: 442]
+> tools/claude-code/README.md:41:81 error MD013/line-length Line length [Expected: 80; Actual: 163]
+> tools/claude-code/README.md:42:81 error MD013/line-length Line length [Expected: 80; Actual: 126]
+> tools/claude-code/README.md:43:81 error MD013/line-length Line length [Expected: 80; Actual: 96]
+> tools/claude-code/README.md:44:81 error MD013/line-length Line length [Expected: 80; Actual: 167]
+> tools/claude-code/README.md:72:1 error MD060/table-column-style Table column style [Table pipe is missing space to the right for style "compact"]
+> tools/claude-code/README.md:72:5 error MD060/table-column-style Table column style [Table pipe is missing space to the left for style "compact"]
+> tools/claude-code/README.md:72:5 error MD060/table-column-style Table column style [Table pipe is missing space to the right for style "compact"]
+> tools/claude-code/README.md:72:9 error MD060/table-column-style Table column style [Table pipe is missing space to the left for style "compact"]
+> tools/claude-code/README.md:72:9 error MD060/table-column-style Table column style [Table pipe is missing space to the right for style "compact"]
+> tools/claude-code/README.md:72:13 error MD060/table-column-style Table column style [Table pipe is missing space to the left for style "compact"]
+> tools/claude-code/README.md:73:81 error MD013/line-length Line length [Expected: 80; Actual: 112]
+> tools/claude-code/README.md:74:81 error MD013/line-length Line length [Expected: 80; Actual: 89]
+> tools/claude-code/README.md:75:81 error MD013/line-length Line length [Expected: 80; Actual: 88]
+> make: *** [verify] Error 1
+> ````
+
+Stage-2 call, 2026-10-15: repair · attempt 3 · route stage-1 · endpoint claude-code-plan · model claude-sonnet-5-5 · reason two Codex post-run checks failed · leak check clean over 427 files, 1181 commits, 12 rules.
+
+> Attempt 3 (stage-1) failed its post-run checks.
+>
+> Files the attempt changed (lines added, removed):
+> - `AGENTS.md` +26 -26
+> - `plans/changes/interview-context/plan.md` +13 -1
+>
+> Diagnostics:
+> ````text
+> - Runner format before `make verify`: ruff changed no file.
+> - `make verify` exited 2
+> The gates that blocked, each with its last lines:
+> ── [question-context] $ lauf_cmd
+>   - plans/changes/codex-drafts/decisions.md: Q-1 — no `— YYYY-MM-DD` date ends the decision statement; the recording day cannot be read
+> question-context NOT MEASURED: 1 unreadable evidence — exit 3, nothing measured.
+> ── [question-context] RED (block) — der Lauf ist rot.
+>
+> Standard error of the whole run, last lines:
+> [… 11324 earlier lines left out …]
+> templates/handover.md:22:81 error MD013/line-length Line length [Expected: 80; Actual: 200]
+> templates/handover.md:48:81 error MD013/line-length Line length [Expected: 80; Actual: 88]
+> templates/spec.md:21 error MD041/first-line-heading/first-line-h1 First line in a file should be a top-level heading [Context: "```yaml"]
+> templates/spec.md:39:81 error MD013/line-length Line length [Expected: 80; Actual: 97]
+> templates/spec.md:40:81 error MD013/line-length Line length [Expected: 80; Actual: 95]
+> tools/claude-code/README.md:17:81 error MD013/line-length Line length [Expected: 80; Actual: 105]
+> tools/claude-code/README.md:18:81 error MD013/line-length Line length [Expected: 80; Actual: 109]
+> tools/claude-code/README.md:19:81 error MD013/line-length Line length [Expected: 80; Actual: 134]
+> tools/claude-code/README.md:23:1 error MD060/table-column-style Table column style [Table pipe is missing space to the right for style "compact"]
+> tools/claude-code/README.md:23:5 error MD060/table-column-style Table column style [Table pipe is missing space to the left for style "compact"]
+> tools/claude-code/README.md:23:5 error MD060/table-column-style Table column style [Table pipe is missing space to the right for style "compact"]
+> tools/claude-code/README.md:23:9 error MD060/table-column-style Table column style [Table pipe is missing space to the left for style "compact"]
+> tools/claude-code/README.md:23:9 error MD060/table-column-style Table column style [Table pipe is missing space to the right for style "compact"]
+> tools/claude-code/README.md:23:13 error MD060/table-column-style Table column style [Table pipe is missing space to the left for style "compact"]
+> tools/claude-code/README.md:24:81 error MD013/line-length Line length [Expected: 80; Actual: 272]
+> tools/claude-code/README.md:25:81 error MD013/line-length Line length [Expected: 80; Actual: 180]
+> tools/claude-code/README.md:26:81 error MD013/line-length Line length [Expected: 80; Actual: 115]
+> tools/claude-code/README.md:28:81 error MD013/line-length Line length [Expected: 80; Actual: 124]
+> tools/claude-code/README.md:29:81 error MD013/line-length Line length [Expected: 80; Actual: 106]
+> tools/claude-code/README.md:38:1 error MD060/table-column-style Table column style [Table pipe is missing space to the right for style "compact"]
+> tools/claude-code/README.md:38:5 error MD060/table-column-style Table column style [Table pipe is missing space to the left for style "compact"]
+> tools/claude-code/README.md:38:5 error MD060/table-column-style Table column style [Table pipe is missing space to the right for style "compact"]
+> tools/claude-code/README.md:38:9 error MD060/table-column-style Table column style [Table pipe is missing space to the left for style "compact"]
+> tools/claude-code/README.md:38:9 error MD060/table-column-style Table column style [Table pipe is missing space to the right for style "compact"]
+> tools/claude-code/README.md:38:13 error MD060/table-column-style Table column style [Table pipe is missing space to the left for style "compact"]
+> tools/claude-code/README.md:40:81 error MD013/line-length Line length [Expected: 80; Actual: 442]
+> tools/claude-code/README.md:41:81 error MD013/line-length Line length [Expected: 80; Actual: 163]
+> tools/claude-code/README.md:42:81 error MD013/line-length Line length [Expected: 80; Actual: 126]
+> tools/claude-code/README.md:43:81 error MD013/line-length Line length [Expected: 80; Actual: 96]
+> tools/claude-code/README.md:44:81 error MD013/line-length Line length [Expected: 80; Actual: 167]
+> tools/claude-code/README.md:72:1 error MD060/table-column-style Table column style [Table pipe is missing space to the right for style "compact"]
+> tools/claude-code/README.md:72:5 error MD060/table-column-style Table column style [Table pipe is missing space to the left for style "compact"]
+> tools/claude-code/README.md:72:5 error MD060/table-column-style Table column style [Table pipe is missing space to the right for style "compact"]
+> tools/claude-code/README.md:72:9 error MD060/table-column-style Table column style [Table pipe is missing space to the left for style "compact"]
+> tools/claude-code/README.md:72:9 error MD060/table-column-style Table column style [Table pipe is missing space to the right for style "compact"]
+> tools/claude-code/README.md:72:13 error MD060/table-column-style Table column style [Table pipe is missing space to the left for style "compact"]
+> tools/claude-code/README.md:73:81 error MD013/line-length Line length [Expected: 80; Actual: 112]
+> tools/claude-code/README.md:74:81 error MD013/line-length Line length [Expected: 80; Actual: 89]
+> tools/claude-code/README.md:75:81 error MD013/line-length Line length [Expected: 80; Actual: 88]
+> make: *** [verify] Error 1
+> ````
