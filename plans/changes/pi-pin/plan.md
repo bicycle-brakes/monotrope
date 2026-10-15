@@ -179,3 +179,5 @@ Explore used Stage 2 on 2026-10-15, attempt 1, route `flash`, endpoint
 Stage-1 route: implement · model claude-sonnet-5-5 · reason: two Flash post-run checks failed.
 
 ## Time used
+
+2026-10-15 — phase-4 repair after the runner's third failed attempt, measured with `date` on the writer machine: 16:03 (phase-4 start) to 17:56 (this commit) = 1 h 53 min. Spent on the executable bits, the npm-generated lock file, the pinned install, three contract assertions repaired against the installed Pi 1.2.0, the ledger and one `make verify`; appetite 8 h of phase 4, not reached.
