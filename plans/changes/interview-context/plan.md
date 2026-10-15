@@ -258,3 +258,38 @@ Measured repair spans now total 10m 2s; the earlier unmeasured
 implementation span remains unknown and is not estimated.
 
 Resume: when I start, I will run `make verify` through the repair runner.
+
+### Repair of L3-1 and L3-2 — 2026-10-15
+
+2026-10-15 03:44:23–03:47:40, 3m 17s (CEST, UTC+02:00).
+
+L3-1 checks inline context by its parsed YAML scalar type and value rather
+than the raw line. Block-scalar headers recognize trailing comments before
+their content is checked. Empty blocks, empty quoted strings and block
+sequences are rejected with and without comments; non-blank plain, quoted,
+literal and folded text still passes, including a hash inside quoted text.
+
+The expanded empty/non-text and non-blank tests ran before the script
+changed from baseline 7b3e46c: nine expected failures demonstrated the
+bypasses and 21 cases passed. Each invalid-value case first verifies a
+non-blank value passes, then plants the fault and requires exit 1 with its
+file and question id.
+
+L3-2 removes the false agreement claim from the heading comment and states
+in the _records docstring that this gate skips fenced content while the
+interview-minimums counting gate does not. The counting gate is unchanged;
+this row is the accepted documentation correction.
+
+After repair, the question-context, repository-adoption and
+interview-minimums test modules passed all 142 tests. The repository
+question-context command read 55 answered records successfully. The
+criterion-ledger, frontmatter-current, interview-minimums and gate-schema
+checks, Ruff check/format checks and git diff --check passed.
+This attempt did not run make verify or the kit probe, make a commit or
+edit findings.md. The runner owns full verification and the checkpoint
+commit; the orchestrator owns the tracker, pull request and handover.
+
+Measured repair spans now total 13m 19s; the earlier unmeasured
+implementation span remains unknown and is not estimated.
+
+Resume: when I start, I will run `make verify` through the repair runner.

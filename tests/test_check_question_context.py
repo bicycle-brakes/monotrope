@@ -211,15 +211,32 @@ def test_missing_context_goes_red(tmp_path: Path) -> None:
         "context: 42\n",
         "context: [a, b]\n",
         "context: {a: b}\n",
+        "context: - item\n",
         'context: ""\n',
+        "context: ''\n",
     ],
-    ids=["whitespace", "empty-block", "null", "boolean", "number", "flow-list", "flow-map", "quoted-blank"],
+    ids=[
+        "whitespace",
+        "empty-block",
+        "null",
+        "boolean",
+        "number",
+        "flow-list",
+        "flow-map",
+        "block-list",
+        "quoted-blank",
+        "single-quoted-blank",
+    ],
 )
-def test_empty_or_non_text_context_goes_red(tmp_path: Path, value: str) -> None:
+@pytest.mark.parametrize("comment", ["", " # shown with the question"], ids=["no-comment", "comment"])
+def test_empty_or_non_text_context_goes_red(tmp_path: Path, value: str, comment: str) -> None:
     root = _tree(tmp_path)
-    _change(root, "thin", record("Q-1", context=value))
+    decisions = _change(root, "thin", record("Q-1", context=f"context: kept.{comment}\n"))
+    assert run(root).returncode == 0
+    decisions.write_text(record("Q-1", context=value.replace("\n", f"{comment}\n", 1)), encoding="utf-8")
     done = run(root)
     assert done.returncode == 1, done.stdout
+    assert "plans/changes/thin/decisions.md" in done.stdout
     assert "Q-1" in done.stdout
 
 
@@ -273,9 +290,15 @@ def test_every_answered_occurrence_needs_context(tmp_path: Path) -> None:
 # --- AC 6 · presence only ----------------------------------------------------
 
 
-def test_nonblank_context_passes_without_clarity_scoring(tmp_path: Path) -> None:
+@pytest.mark.parametrize(
+    "value",
+    ["kept.\n", '"kept # as text."\n', "'kept # as text.'\n", "|\n  kept.\n", ">\n  kept.\n"],
+    ids=["plain", "double-quoted", "single-quoted", "literal", "folded"],
+)
+@pytest.mark.parametrize("comment", ["", " # shown with the question"], ids=["no-comment", "comment"])
+def test_nonblank_context_passes_without_clarity_scoring(tmp_path: Path, value: str, comment: str) -> None:
     root = _tree(tmp_path)
-    _change(root, "terse", record("Q-1", context="context: kept.\n"))
+    _change(root, "terse", record("Q-1", context="context: " + value.replace("\n", f"{comment}\n", 1)))
     _change(root, "full", record("Q-2"))
     assert run(root).returncode == 0  # wording and length are not graded
 

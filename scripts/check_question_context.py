@@ -58,9 +58,8 @@ GATE = "question-context"
 CHANGES_DIR = "plans/changes"
 ARCHIVE = "archive"
 
-# One interview record: `## Q-<id> · <title>`, the same heading form the
-# interview-minimums gate counts, so the two gates cannot disagree about what
-# a record is. The `## ` itself is split away before this matches.
+# One interview record: `## Q-<id> · <title>`. The `## ` itself is split
+# away before this matches; fence handling belongs to _records.
 _RECORD = re.compile(r"^(Q-[^\s·]+)[ \t]*·[ \t]*(.*)$")
 
 # CommonMark fences, the same rule check_criterion_ledger.py applies: a
@@ -70,8 +69,7 @@ _FENCE_CLOSE = re.compile(r"^ {0,3}(`{3,}|~{3,})[ \t]*$")
 
 _STATEMENT = re.compile(r"^In the context of(?:\s|$)")
 _CONTEXT_FIELD = re.compile(r"^context:(?P<rest>.*)$")
-_BLOCK_INDICATOR = re.compile(r"^[|>](?:[0-9][+-]?|[+-]?[0-9]?)$")
-_NONTEXT = re.compile(r"^(?:null|~|true|false|yes|no|on|off)$", re.IGNORECASE)
+_BLOCK_INDICATOR = re.compile(r"^[|>](?:[0-9][+-]?|[+-]?[0-9]?)(?:[ \t]+#.*)?$")
 _DECISION_DATE = re.compile(r"—[ \t]*([0-9]{4})-([0-9]{2})-([0-9]{2})")
 _DATE_CONTINUATION = re.compile(r"(?:—[ \t]*)?(?:[0-9]{4}-[0-9]{2}-[0-9]{2})?$")
 _FIELD = re.compile(r"^[A-Za-z_][A-Za-z0-9_-]*:")
@@ -118,6 +116,10 @@ def _records(text: str) -> list[tuple[str, list[tuple[int, str]], list[bool]]]:
     states `status: answered`. Every `status: answered` Q-record is returned —
     a repeated id and an agent-attributed answer are records here even though
     they count towards no interview minimum.
+
+    This gate skips fenced content; the interview-minimums counting gate
+    splits on `## ` headings and reads fields without fence awareness.
+    The shared heading form does not make their record sets identical.
     """
     lines = text.splitlines()
     inside = _fenced(lines)
@@ -241,38 +243,22 @@ def _context_findings(rel: str, record_id: str, body: list[tuple[int, str]], mar
         if not text.strip():
             return [f"{rel}: {record_id} — the context value is an empty block; record the explanation that was shown"]
         return []
-    if rest.startswith(("[", "{")):
+    # Resolve only the context value, never the Markdown record. Inspect the
+    # parsed scalar's tag and value so comments cannot supply missing text,
+    # and every collection form is rejected alike. Compose avoids constructing
+    # typed values such as dates and timestamps.
+    try:
+        scalar = yaml.compose(rest, Loader=yaml.SafeLoader)
+    except yaml.YAMLError:
         return [
-            f"{rel}: {record_id} — the context value is a collection, not text; record the explanation that was shown"
+            f"{rel}: {record_id} — the context value is not a readable text scalar; "
+            "record the explanation that was shown"
         ]
-    text = rest
-    if len(text) >= 2 and text[0] == text[-1] and text[0] in "\"'":
-        text = text[1:-1]
-    else:
-        # Resolve only the context scalar, never the Markdown record. The
-        # tag identifies YAML dates and timestamps without constructing them.
-        try:
-            scalar = yaml.compose(text, Loader=yaml.SafeLoader)
-        except yaml.YAMLError:
-            scalar = None
-        if isinstance(scalar, yaml.ScalarNode) and scalar.tag == "tag:yaml.org,2002:timestamp":
-            return [
-                f"{rel}: {record_id} — the context value is a date or timestamp, not text; "
-                "record the explanation that was shown"
-            ]
-        if _NONTEXT.match(text):
-            return [
-                f"{rel}: {record_id} — the context value is {text}, not text; record the explanation that was shown"
-            ]
-        for decode in (int, float):
-            try:
-                decode(text)  # type: ignore[arg-type]
-            except ValueError:
-                continue
-            return [
-                f"{rel}: {record_id} — the context value is a number, not text; record the explanation that was shown"
-            ]
-    if not text.strip():
+    if scalar is None:
+        return [f"{rel}: {record_id} — the context value is blank; record the explanation that was shown"]
+    if not isinstance(scalar, yaml.ScalarNode) or scalar.tag != "tag:yaml.org,2002:str":
+        return [f"{rel}: {record_id} — the context value is not text; record the explanation that was shown"]
+    if not scalar.value.strip():
         return [f"{rel}: {record_id} — the context value is blank; record the explanation that was shown"]
     return []
 
