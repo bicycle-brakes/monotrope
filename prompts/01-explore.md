@@ -11,9 +11,10 @@ back.
 
 **Routing by class (ADR 0018).** A `feature` or `architectural` change explores
 through the research swarm; a `bounded` change or a `spike` through the single
-GLM 5.3 Flash explorer. The runner reads the class from the explore-only
-`--class` argument or from `research.md`'s header, and refuses a missing,
-invalid or contradictory answer before any model call; `--stage2-off [REASON]`
+GLM 5.3 Flash explorer. The runner reads the class wherever stated in the
+explore-only `--class` argument and the headers of `research.md` and `spec.md`.
+All available declarations must agree; missing, invalid or disagreeing
+declarations refuse before any model call. `--stage2-off [REASON]`
 keeps the Haiku 4.5 route and skips the class. In the swarm, free researchers
 see public sources only — one filtered topic sentence, no repository content;
 the Flash pair compares the repository on six topics; a fresh Opus 5.5 context

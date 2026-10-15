@@ -535,6 +535,8 @@ def swarm_block_problems(geladen: dict) -> list[str]:
 
     if block.get("topic6_free") not in set(roster):
         problems.append("topic6_free is not a roster id")
+    elif mit_sechs != [block.get("topic6_free")]:
+        problems.append("topic6_free does not match the topic-6 focus")
     return problems
 
 
@@ -586,6 +588,7 @@ def test_the_swarm_declaration_clears_every_role() -> None:
         ("focus-roster-mismatch", "do not match the roster"),
         ("public-web-class-gone", "public-web data class not declared"),
         ("topic6-free-not-roster", "topic6_free is not a roster id"),
+        ("topic6-free-wrong-focus", "topic6_free does not match the topic-6 focus"),
     ],
 )
 def test_a_broken_swarm_declaration_is_named(how: str, expected: str) -> None:
@@ -618,6 +621,8 @@ def test_a_broken_swarm_declaration_is_named(how: str, expected: str) -> None:
         del data["datenklassen"]["public-web"]
     elif how == "topic6-free-not-roster":
         block["topic6_free"] = "stranger"
+    elif how == "topic6-free-wrong-focus":
+        block["topic6_free"] = "longcat"
     found = swarm_block_problems(data)
     assert any(expected in p for p in found), (how, found)
 

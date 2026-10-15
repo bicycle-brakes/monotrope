@@ -9,6 +9,7 @@
 //   { mode: "validate", url }         — the destination check alone
 //   { mode: "private-ip", ip }        — the address classification
 //   { mode: "fetch", url, transport } — a retrieval over a scripted transport
+//   { mode: "node-fetch", url, transport, all } — real transport with DNS/TLS calls captured
 //   { mode: "search", query, transport }
 //   { mode: "parse", html }           — the result parser
 //
@@ -16,6 +17,9 @@
 // Each call consumes the next entry, repeating the last one — so a redirect chain
 // can be given a fresh lookup per hop, which is exactly what the extension must do.
 import { pathToFileURL } from "node:url";
+import https from "node:https";
+import dns from "node:dns/promises";
+import { syncBuiltinESMExports } from "node:module";
 
 const chunks = [];
 for await (const chunk of process.stdin) chunks.push(chunk);
@@ -70,6 +74,44 @@ for (const item of request.cases) {
       answers.push({ ok: url.hostname });
     } else if (item.mode === "private-ip") {
       answers.push({ private: extension.isPrivateIp(item.ip) });
+    } else if (item.mode === "node-fetch") {
+      // Exercise the production transport's lookup callback, without opening a socket.
+      const originalLookup = dns.lookup;
+      const originalGet = https.get;
+      seen = { lookups: [], gets: [], pinned: [] };
+      try {
+        dns.lookup = async (hostname, options) => {
+          seen.lookups.push({ hostname, options });
+          return item.transport.lookups[0];
+        };
+        syncBuiltinESMExports();
+        https.get = (url, options, resolve) => {
+          seen.gets.push({ url, headers: options.headers });
+          options.lookup(url.hostname, { all: item.all }, (error, address, family) => {
+            if (error) throw error;
+            seen.pinned.push({ address, family });
+          });
+          const response = item.transport.responses[0];
+          resolve({
+            statusCode: response.status,
+            headers: {},
+            resume() {},
+            destroy() {},
+            on(name, fn) {
+              if (name === "data") fn(Buffer.from(response.body ?? ""));
+              if (name === "end") fn();
+            },
+          });
+          return { on() {} };
+        };
+        const lines = [];
+        const json = await extension.executeFetch(item.url, extension.nodeTransport(), (line) => lines.push(JSON.parse(line)));
+        answers.push({ receipt: JSON.parse(json), receipts: lines, seen });
+      } finally {
+        dns.lookup = originalLookup;
+        https.get = originalGet;
+        syncBuiltinESMExports();
+      }
     } else if (item.mode === "fetch") {
       const deps = fakeTransport(item.transport);
       seen = deps.seen;

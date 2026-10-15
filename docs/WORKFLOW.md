@@ -671,9 +671,10 @@ implement are not routed by class; phase 1 now is: a `feature` or
 `architectural` change explores through the research swarm (ADR 0018), a
 `bounded` change or a `spike` through the single explorer of this section's
 routing table. The class is therefore needed before the spec exists: explore
-takes an explicit `--class` argument or reads the class stated in
-`research.md`'s header, and refuses a missing, invalid or contradictory answer
-before any model call. `--stage2-off [REASON]` keeps the Stage-1 route and
+takes the class from the explicit `--class` argument and the headers of
+`research.md` and `spec.md`, wherever stated. All available declarations must
+agree; missing, invalid or disagreeing declarations refuse before any model
+call. `--stage2-off [REASON]` keeps the Stage-1 route and
 skips the class entirely.
 
 **Nothing checks a change's class beyond explore.** A `feature` stated as a
@@ -741,7 +742,8 @@ into a shell. Ten verbs exist:
 
 - `explore` — GLM 5.3 Flash for a `bounded` change or a `spike`, the research
   swarm for a `feature` or `architectural` change (ADR 0018), phase 1; the
-  class comes from `--class` or `research.md`'s header;
+  class is read wherever stated in `--class` and the headers of `research.md`
+  and `spec.md`; missing, invalid or disagreeing declarations refuse before any model call;
   `--stage2-off [REASON]` uses Haiku 4.5 and skips the class.
 - `draft` — Codex, phases 2, 2b and 3 in one call; GLM 5.3 (`glm-5.3`) after
   two failed Codex attempts ("The draft" below).

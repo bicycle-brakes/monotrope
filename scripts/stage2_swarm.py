@@ -36,6 +36,7 @@ from __future__ import annotations
 
 import hashlib
 import json
+import os
 import re
 import subprocess
 import sys
@@ -146,6 +147,8 @@ def swarm_problems(data: dict) -> list[str]:
             problems.append(f"{role} not on the paid endpoint")
     if block.get("topic6_free") not in set(roster):
         problems.append("topic6_free is not a roster id")
+    elif with_six != [block.get("topic6_free")]:
+        problems.append("topic6_free does not match the topic-6 focus")
     return problems
 
 
@@ -373,9 +376,10 @@ def topic_author_prompt(ctx) -> str:
     return "\n\n".join(parts)
 
 
-def public_prompt(root: Path, topic: str) -> str:
-    """The fixed generic questions plus the one topic sentence - no other change text."""
-    return _prompt(root, "public.md").replace("{{TOPIC}}", topic)
+def public_prompt(root: Path, topic: str, focuses: list[int]) -> str:
+    """Generic assigned questions plus the one topic sentence - no other change text."""
+    focus = "\n".join(f"- Topic {number}: {TOPICS[number]}" for number in focuses)
+    return _prompt(root, "public.md").replace("{{TOPIC}}", topic).replace("{{FOCUS}}", focus)
 
 
 def repository_prompt(
@@ -421,9 +425,36 @@ def judge_prompt(root: Path, read_request: str, packet: str, pairs: str, receipt
     )
 
 
+def topic_pairs(roles: dict, free_reports: dict[str, str], flash_reports: dict[tuple[int, int], str]) -> str:
+    """Map independent seats and their public comparison evidence to each topic, including missing slots."""
+    sections = []
+    for topic_id, name in TOPICS.items():
+        parts = [f"## Topic {topic_id}: {name}"]
+        if topic_id == 6:
+            member = roles["topic6_free"]
+            parts += [f"Free seat: {member}", free_reports.get(member, "(missing contribution)")]
+        for seat in (0, 1) if topic_id <= 5 else (0,):
+            parts += [
+                f"Flash seat: {roles['pair'][seat]}",
+                flash_reports.get((topic_id, seat), "(missing contribution)"),
+            ]
+        if topic_id <= 5:
+            parts.append("Public practice comparisons:")
+            for member in roles["roster"]:
+                if topic_id in roles["focuses"][member]:
+                    parts += [f"Public focus: {member}", free_reports.get(member, "(missing contribution)")]
+        sections.append("\n\n".join(parts))
+    return "\n\n".join(sections)
+
+
 # ---------------------------------------------------------------------------
 # The calls
 # ---------------------------------------------------------------------------
+
+
+def public_env(own: dict[str, str]) -> dict[str, str]:
+    """Only executable lookup is inherited; home/config/credential paths belong to this scratch run."""
+    return {**({"PATH": os.environ["PATH"]} if "PATH" in os.environ else {}), **own}
 
 
 def free_transport(runner, roles: dict) -> dict[str, str]:
@@ -437,7 +468,7 @@ def free_transport(runner, roles: dict) -> dict[str, str]:
     """
     runner.require_pi()
     with tempfile.TemporaryDirectory(prefix="stage2-swarm-") as tmp:
-        env = runner.foreign_env({"HOME": tmp, "PI_CODING_AGENT_DIR": tmp})
+        env = public_env({"HOME": tmp, "PI_CODING_AGENT_DIR": tmp})
         done = runner.launch(
             ["pi", "--list-models"],
             Path(tmp),
@@ -514,7 +545,7 @@ def pi_public_call(runner, prompt_text: str, model_id: str, key: str, seconds: f
             str(prompt_file),
             "Research the public topic as the appended instructions say.",
         ]
-        env = runner.foreign_env(
+        env = public_env(
             {
                 "HOME": str(home),
                 "PI_CODING_AGENT_DIR": str(agent),
@@ -522,15 +553,7 @@ def pi_public_call(runner, prompt_text: str, model_id: str, key: str, seconds: f
                 "STAGE2_PUBLIC_RECEIPTS": str(receipts),
             }
         )
-        done = runner.launch(command, scratch, env, key, timeout=seconds, limit=limit)
-        receipts_text = receipts.read_text(encoding="utf-8") if receipts.exists() else ""
-    if done.returncode != 0:
-        _relay_stderr(runner, done, key)
-        raise runner.CallFailed(f"pi ({model_id}) ended {done.returncode}")
-    answer = runner.scrub(done.stdout or "", key)
-    if not answer.strip():
-        raise runner.CallFailed(f"pi ({model_id}) answered nothing")
-    return answer, runner.scrub(receipts_text, key)
+        return pi_result(runner, command, scratch, env, model_id, key, seconds, limit, receipts)
 
 
 def pi_repository_call(runner, ctx, prompt: str, model: str, key: str, seconds: float, limit: str) -> str:
@@ -564,14 +587,40 @@ def pi_repository_call(runner, ctx, prompt: str, model: str, key: str, seconds: 
             f"Research the change {ctx.change} as the appended instructions say.",
         ]
         env = runner.foreign_env({"HOME": str(home), "PI_CODING_AGENT_DIR": str(agent), "OPENCODE_API_KEY": key})
-        done = runner.launch(command, ctx.root, env, key, timeout=seconds, limit=limit)
-    if done.returncode != 0:
+        answer, _ = pi_result(runner, command, ctx.root, env, model, key, seconds, limit)
+        return answer
+
+
+def pi_result(runner, command, cwd, env, model, key, seconds, limit, receipts: Path | None = None) -> tuple[str, str]:
+    """Read evidence before the caller removes its scratch directory, on every exit path."""
+
+    def receipt_text() -> str:
+        return (
+            runner.scrub(receipts.read_text(encoding="utf-8", errors="replace"), key)
+            if receipts and receipts.exists()
+            else ""
+        )
+
+    def output(value) -> str:
+        # TimeoutExpired.output/stderr can be bytes even when subprocess.run uses text=True.
+        return runner.scrub(value.decode("utf-8", errors="replace") if isinstance(value, bytes) else value or "", key)
+
+    try:
+        done = runner.launch(command, cwd, env, key, timeout=seconds, limit=limit)
+    except runner.CallFailed as error:
+        cause = error.__cause__
+        partial = output(getattr(cause, "stdout", ""))
+        stderr = output(getattr(cause, "stderr", ""))
+        if stderr:
+            print("\n".join(stderr.splitlines()[-40:]), file=sys.stderr)
+        raise runner.CallFailed(str(error), partial_answer=partial, receipts_text=receipt_text()) from error
+    answer = output(done.stdout)
+    receipts_text = receipt_text()
+    if done.returncode != 0 or not answer.strip():
         _relay_stderr(runner, done, key)
-        raise runner.CallFailed(f"pi ({model}) ended {done.returncode}")
-    answer = runner.scrub(done.stdout or "", key)
-    if not answer.strip():
-        raise runner.CallFailed(f"pi ({model}) answered nothing")
-    return answer
+        reason = f"ended {done.returncode}" if done.returncode != 0 else "answered nothing"
+        raise runner.CallFailed(f"pi ({model}) {reason}", partial_answer=answer, receipts_text=receipts_text)
+    return answer, receipts_text
 
 
 def _relay_stderr(runner, done, key: str) -> None:
@@ -618,9 +667,11 @@ def topic_problems(answer: str, change: str, bead: str) -> list[str]:
 def receipt_problems(report: str, receipts: list[dict]) -> list[str]:
     """The public URLs a report cites that no successful fetch receipt backs (spec, criterion 10)."""
     backed = {
-        str(receipt.get("final_url") or receipt.get("url"))
+        str(url)
         for receipt in receipts
         if receipt.get("kind") == "fetch" and receipt.get("status") == 200
+        for url in (receipt.get("url"), receipt.get("final_url"))
+        if url
     }
     return [url for url in (u.rstrip(".,;:") for u in URL.findall(report)) if url not in backed]
 
@@ -682,12 +733,15 @@ def judge_problems(answer: str, tracked: set[str]) -> list[str]:
 def run(root: Path, change: str, runner, klass: str) -> None:
     """The whole phase-1 swarm; raises the runner's Refused (exit 2) or CallFailed (exit 1)."""
     started = time.monotonic()
-    ctx = runner.preflight(root, change, runner.JUDGE_CALL, bead_file="research.md")
     try:
         data = yaml.safe_load((root / "model-endpoints.yaml").read_text(encoding="utf-8")) or {}
     except (OSError, UnicodeDecodeError, yaml.YAMLError) as error:
         raise runner.Refused("model-endpoints.yaml cannot be read") from error
     roles = swarm_roles(runner, data)
+    # Role identities come from the declaration; the spec fixes the two efforts.
+    topic_call = (roles["paid_endpoint"], roles["topic_author"], "high")
+    judge_call = (roles["paid_endpoint"], roles["judge"], "xhigh")
+    ctx = runner.preflight(root, change, topic_call, bead_file="research.md")
     # The runner's appends stamp `updated:`; stamping before the freeze keeps
     # the frozen prefix of `research.md` intact for the publication check.
     runner.stamp_updated(ctx.research)
@@ -701,9 +755,10 @@ def run(root: Path, change: str, runner, klass: str) -> None:
         f"run {run_id} · class {klass} · baseline HEAD {head[:12]} · input digest {digest[:16]}\n",
     )
     failed: list[str] = []
-    free_reports: list[str] = []
-    flash_reports: list[str] = []
+    free_reports: dict[str, str] = {}
+    flash_reports: dict[tuple[int, int], str] = {}
     receipts_all: list[dict] = []
+    partials: dict[tuple[str, int | None, str], tuple[str, str]] = {}
 
     def remaining() -> float:
         return time.monotonic() - started
@@ -714,6 +769,7 @@ def run(root: Path, change: str, runner, klass: str) -> None:
         try:
             answer = call()
         except runner.CallFailed as error:
+            partials[(role, topic, model)] = (error.partial_answer, error.receipts_text)
             failed.append(f"{role}" + (f" (topic {topic})" if topic is not None else "") + f": {error}")
             audit.outcome(role, topic, model, f"failed - {error}", time.monotonic() - begin)
             return None
@@ -722,19 +778,19 @@ def run(root: Path, change: str, runner, klass: str) -> None:
 
     # --- the public topic -----------------------------------------------------------------------
     prompt = topic_author_prompt(ctx)
-    gate(runner, ctx, runner.TOPIC_CALL[0], runner.TOPIC_CALL[1], prompt, False, audit, "public topic", None)
+    gate(runner, ctx, topic_call[0], topic_call[1], prompt, False, audit, "public topic", None)
     topic_answer = attempt(
         "public topic",
         None,
         lambda: runner.run_work_model(
             ctx,
             prompt,
-            runner.TOPIC_CALL,
+            topic_call,
             writable=False,
             timeout=allowance(remaining(), TOPIC_MINUTES),
             limit=f"the topic call's deadline of {TOPIC_MINUTES:g} minutes",
         ),
-        runner.TOPIC_CALL[1],
+        topic_call[1],
         "ok",
     )
     if topic_answer is None:
@@ -757,7 +813,7 @@ def run(root: Path, change: str, runner, klass: str) -> None:
     for member in roles["roster"]:
         member = str(member)
         model_id = transport[member]
-        public_text = public_prompt(root, topic)
+        public_text = public_prompt(root, topic, roles["focuses"][member])
         gate(runner, ctx, roles["free_endpoint"], member, public_text, True, audit, "free researcher", None)
         answer = attempt(
             "free researcher",
@@ -773,19 +829,21 @@ def run(root: Path, change: str, runner, klass: str) -> None:
             model_id,
             "ok",
         )
-        if answer is None:
-            continue
-        report, receipts_text = answer
+        report, receipts_text = answer if answer is not None else partials[("free researcher", None, model_id)]
         receipts = parse_receipts(str(receipts_text))
         receipts_all.extend(receipts)
         unbacked = receipt_problems(str(report), receipts)
-        note = f" (citations without receipts: {'; '.join(unbacked)})" if unbacked else ""
+        note = " (failed — partial evidence)" if answer is None else ""
+        note += f" (citations without receipts: {'; '.join(unbacked)})" if unbacked else ""
         if unbacked:
             failed.append(f"free researcher {member}: citations no receipt backs - {', '.join(unbacked)}")
-        free_reports.append(f"### Free researcher {member}{note}\n\n{report}")
+        if str(report).strip() or receipts_text:
+            free_reports[member] = (
+                f"### Free researcher {member}{note}\n\n{report or '(no answer; source receipts retained)'}"
+            )
     runner.append(
         ctx.research,
-        "### Public reports\n\n" + ("\n\n".join(free_reports) if free_reports else "(none succeeded)"),
+        "### Public reports\n\n" + ("\n\n".join(free_reports.values()) if free_reports else "(none succeeded)"),
     )
     runner.append(
         ctx.research,
@@ -793,7 +851,7 @@ def run(root: Path, change: str, runner, klass: str) -> None:
     )
 
     # --- the Flash stage: private text buffered until the stage ends ----------------------------
-    pair_text = "\n\n".join(free_reports) if free_reports else "(no public reports arrived)"
+    pair_text = "\n\n".join(free_reports.values()) if free_reports else "(no public reports arrived)"
     for topic_id in range(1, 7):
         seats = (0, 1) if topic_id <= 5 else (0,)
         for seat in seats:
@@ -826,32 +884,38 @@ def run(root: Path, change: str, runner, klass: str) -> None:
                 model,
                 "ok",
             )
-            if answer is not None:
-                flash_reports.append(f"### Flash researcher {model} · topic {topic_id}\n\n{answer}")
+            report = answer if answer is not None else partials[("flash researcher", topic_id, model)][0]
+            if report and str(report).strip():
+                note = " (failed — partial evidence)" if answer is None else ""
+                flash_reports[(topic_id, seat)] = f"### Flash researcher {model} · topic {topic_id}{note}\n\n{report}"
     runner.append(
         ctx.research,
-        "### Repository reports\n\n" + ("\n\n".join(flash_reports) if flash_reports else "(none succeeded)"),
+        "### Repository reports\n\n" + ("\n\n".join(flash_reports.values()) if flash_reports else "(none succeeded)"),
     )
 
     # --- the judge ------------------------------------------------------------------------------
-    pairs = "\n\n".join(free_reports + flash_reports) or "(no reports arrived)"
+    pairs = topic_pairs(roles, free_reports, flash_reports)
     judge_text = judge_prompt(root, runner.READ_REQUEST, packet, pairs, jsonl(receipts_all), failed)
-    gate(runner, ctx, runner.JUDGE_CALL[0], runner.JUDGE_CALL[1], judge_text, False, audit, "judge", None)
+    gate(runner, ctx, judge_call[0], judge_call[1], judge_text, False, audit, "judge", None)
     reconciliation = attempt(
         "judge",
         None,
         lambda: runner.run_work_model(
             ctx,
             judge_text,
-            runner.JUDGE_CALL,
+            judge_call,
             writable=False,
             timeout=allowance(remaining(), JUDGE_MINUTES),
             limit=f"the judge deadline of {JUDGE_MINUTES:g} minutes",
         ),
-        runner.JUDGE_CALL[1],
+        judge_call[1],
         "ok",
     )
     judge_faults = ["the judge call failed"] if reconciliation is None else judge_problems(str(reconciliation), tracked)
+    if reconciliation is not None:
+        unbacked = receipt_problems(str(reconciliation), receipts_all)
+        if unbacked:
+            judge_faults.append("public citations no receipt backs - " + "; ".join(unbacked))
     if judge_faults:
         failed.append("judge: " + "; ".join(judge_faults))
 
@@ -860,7 +924,8 @@ def run(root: Path, change: str, runner, klass: str) -> None:
     if changed is not None:
         failed.append(f"the frozen input state changed: {changed}")
     if reconciliation:
-        runner.append(ctx.research, "### Reconciliation\n\n" + str(reconciliation).strip())
+        note = " (failed validation — partial evidence)" if judge_faults else ""
+        runner.append(ctx.research, f"### Reconciliation{note}\n\n" + str(reconciliation).strip())
     status = "complete" if not failed else "incomplete - " + "; ".join(failed)
     runner.append(ctx.research, f"run {run_id} status: {status}.")
     if failed:

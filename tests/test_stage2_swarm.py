@@ -149,7 +149,6 @@ record = {
 }
 with log.open("a") as handle:
     handle.write(json.dumps(record) + "\\n")
-time.sleep(step.get("sleep", 0))
 key = os.environ.get("ANTHROPIC_AUTH_TOKEN") or os.environ.get("OPENCODE_API_KEY", "")
 receipts = os.environ.get("STAGE2_PUBLIC_RECEIPTS")
 if receipts and step.get("receipts"):
@@ -164,6 +163,9 @@ for relative, text in step.get("append", {}).items():
         handle.write(text.replace("@KEY@", key))
 sys.stdout.write(step.get("stdout", "").replace("@KEY@", key))
 sys.stderr.write(step.get("stderr", "").replace("@KEY@", key))
+sys.stdout.flush()
+sys.stderr.flush()
+time.sleep(step.get("sleep", 0))
 raise SystemExit(step.get("exit", 0))
 """
 
@@ -422,6 +424,57 @@ def test_six_topics_have_independent_permitted_pairs(sworld: SwarmWorld) -> None
     assert all(f"FLASH-{n}" in judge_prompt for n in range(11)), "the judge receives every pair"
 
 
+@pytest.mark.parametrize("swap", [False, True])
+def test_declared_free_focuses_shape_research_and_topic_pairs(sworld: SwarmWorld, swap: bool) -> None:
+    # L1-2: swap two public assignments, including the declared topic-6 seat.
+    declaration = sworld.root / "model-endpoints.yaml"
+    data = yaml.safe_load(declaration.read_text(encoding="utf-8"))
+    roles = data["research_swarm"]
+    if swap:
+        first, last = FREE_IDS[0], FREE_IDS[2]
+        roles["free_focuses"][first], roles["free_focuses"][last] = (
+            roles["free_focuses"][last],
+            roles["free_focuses"][first],
+        )
+        roles["topic6_free"] = first
+        declaration.write_text(yaml.safe_dump(data), encoding="utf-8")
+    sworld.complete(public=[{"stdout": f"PUBLIC-SEAT-{n}"} for n in range(3)])
+    assert sworld.run() == 0
+    for member, call in zip(FREE_IDS, sworld.calls("public"), strict=True):
+        assert "## Your assigned focus\n" in call["prompt"], "the model must receive its declared assignment"
+        focus = call["prompt"].split("## Your assigned focus\n", 1)[1].split("\n## ", 1)[0]
+        assert re.findall(r"Topic (\d):", focus) == [str(n) for n in roles["free_focuses"][member]]
+        assert "Answer only your assigned questions" in call["prompt"]
+    pairs = sworld.calls("judge")[0]["prompt"].split("# The six pairs\n", 1)[1].split("# Public source receipts", 1)[0]
+    for topic in range(1, 7):
+        section = pairs.split(f"## Topic {topic}:", 1)[1].split("\n## Topic ", 1)[0]
+        for n, member in enumerate(FREE_IDS):
+            assert (f"PUBLIC-SEAT-{n}" in section) == (topic in roles["free_focuses"][member])
+        expected_flash = [2 * (topic - 1), 2 * (topic - 1) + 1] if topic <= 5 else [10]
+        assert [int(n) for n in re.findall(r"FLASH-(\d+)", section)] == expected_flash
+    assert f"Free seat: {roles['topic6_free']}" in pairs.split("## Topic 6:", 1)[1]
+
+
+def test_declared_paid_endpoint_and_models_are_called(sworld: SwarmWorld) -> None:
+    # L1-3: remove the old paid endpoint so even preflight must use the declaration.
+    declaration = sworld.root / "model-endpoints.yaml"
+    data = yaml.safe_load(declaration.read_text(encoding="utf-8"))
+    roles = data["research_swarm"]
+    paid = next(entry for entry in data["endpunkte"] if entry["name"] == roles["paid_endpoint"])
+    paid["name"] = roles["paid_endpoint"] = "declared-paid-route"
+    roles["topic_author"] = "claude-sonnet-5-5"
+    roles["judge"] = "claude-haiku-4-5"
+    paid["modelle"] = [roles["topic_author"], roles["judge"]]
+    declaration.write_text(yaml.safe_dump(data), encoding="utf-8")
+    sworld.complete()
+    assert sworld.run() == 0
+    assert model_of(sworld.calls("topic")[0]) == roles["topic_author"]
+    assert model_of(sworld.calls("judge")[0]) == roles["judge"]
+    record = sworld.research.read_text(encoding="utf-8")
+    for model in (roles["topic_author"], roles["judge"]):
+        assert f"endpoint declared-paid-route · model {model} · leak check clean" in record
+
+
 def test_fresh_opus_reconciles_all_six_topics(sworld: SwarmWorld, capsys: pytest.CaptureFixture[str]) -> None:
     # Criterion 14. Planted fault: another model judges, a context is resumed, or a topic is missing.
     sworld.complete()
@@ -506,6 +559,64 @@ def test_public_claims_require_retrieved_source_receipts(
     assert "citations without receipts" in text, "the unbacked report is published as failed, not dropped"
 
 
+@pytest.mark.parametrize("fault", ["invented-url", "search-snippet"])
+def test_judge_public_citations_require_retrieved_receipts(sworld: SwarmWorld, fault: str) -> None:
+    # L1-4: a judge cannot promote its own invented URL or a search-only receipt to fact.
+    supported = judge_ok().replace("topic 1 holds", PUBLIC_REPORT + " topic 1 holds", 1)
+    sworld.complete(judge={"stdout": supported})
+    assert sworld.run() == 0, "a retrieved public page can support the reconciliation"
+    sworld.rewind()
+    if fault == "invented-url":
+        sworld.complete(judge={"stdout": supported.replace("example.com/pattern", "example.com/invented")})
+    else:
+        sworld.complete(
+            public=[{"stdout": "No public facts established.", "receipts": [dict(RECEIPT, kind="search")]}] * 3,
+            judge={"stdout": supported},
+        )
+    assert sworld.run() == 1
+    record = sworld.research.read_text(encoding="utf-8")
+    assert "judge: public citations no receipt backs" in status_line(record)
+    assert "### Reconciliation (failed validation" in record
+
+
+def test_redirect_receipts_back_requested_and_final_urls(sworld: SwarmWorld) -> None:
+    # L1-7: citing either side of a successful redirect is backed by the same retrieval.
+    redirected = dict(RECEIPT, final_url="https://example.com/final-pattern")
+    sworld.complete(
+        public=[{"stdout": PUBLIC_REPORT, "receipts": [redirected]}] * 3,
+        judge={"stdout": judge_ok() + "\n" + PUBLIC_REPORT.replace("/pattern", "/final-pattern")},
+    )
+    assert sworld.run() == 0
+    assert "status: complete" in status_line(sworld.research.read_text(encoding="utf-8"))
+    assert stage2_swarm.receipt_problems(PUBLIC_REPORT, [dict(redirected, status=503)])
+
+
+def test_free_environment_excludes_identity_and_private_paths(
+    sworld: SwarmWorld, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    # L1-5: plant ambient identity, configuration, temp paths and every locale variable.
+    forbidden = ("USER", "LOGNAME", "SHELL", "TMPDIR", "LANG", "LC_ALL", "LC_CTYPE", "LC_MESSAGES", "CODEX_HOME")
+    for name in forbidden:
+        monkeypatch.setenv(name, "/private-identity/ambient")
+    captured: list[dict] = []
+    launch = stage2.launch
+
+    def capture(command, root, env, *args, **kwargs):
+        if "STAGE2_PUBLIC_RECEIPTS" in env or command == ["pi", "--list-models"]:
+            captured.append(dict(env))
+        return launch(command, root, env, *args, **kwargs)
+
+    monkeypatch.setattr(stage2, "launch", capture)
+    sworld.complete()
+    assert sworld.run() == 0
+    assert len(captured) == 4
+    for env in captured:
+        assert not set(forbidden) & env.keys(), env
+        assert "PATH" in env and "HOME" in env and "PI_CODING_AGENT_DIR" in env
+        assert "/private-identity/ambient" not in json.dumps(env)
+        assert set(env) <= {"PATH", "HOME", "PI_CODING_AGENT_DIR", "OPENCODE_API_KEY", "STAGE2_PUBLIC_RECEIPTS"}
+
+
 @pytest.mark.parametrize(
     "answer",
     [
@@ -550,7 +661,7 @@ def test_an_accepted_topic_is_recorded_and_reaches_the_free_calls(
 
 @pytest.mark.parametrize(
     "mutate",
-    ["free-sees-framework", "roster-off-endpoint", "pair-off-endpoint", "judge-off-endpoint"],
+    ["free-sees-framework", "roster-off-endpoint", "pair-off-endpoint", "judge-off-endpoint", "topic6-wrong-focus"],
 )
 def test_declarations_clear_only_the_role_data_class(sworld: SwarmWorld, mutate: str) -> None:
     # Criterion 11. Planted fault: an undeclared model is called or a public endpoint reads framework content.
@@ -565,8 +676,10 @@ def test_declarations_clear_only_the_role_data_class(sworld: SwarmWorld, mutate:
             "  flash_pair: [deepseek-v4.1-flash, mimo-v2.6-flash]",
             "  flash_pair: [deepseek-v4.1-flash, glm-5.3-flash]",
         )
-    else:
+    elif mutate == "judge-off-endpoint":
         text = text.replace("  judge: claude-opus-5-5", "  judge: mimo-v2.6-pro")
+    else:
+        text = text.replace("  topic6_free: hy4-preview", "  topic6_free: longcat-2.5-preview-free")
     (sworld.root / "model-endpoints.yaml").write_text(text, encoding="utf-8")
     assert sworld.run() == 2
     assert sworld.calls() == [], "a declaration fault refuses before any model call"
@@ -600,6 +713,45 @@ def test_every_call_is_checked_and_a_leak_block_stops_dispatch(sworld: SwarmWorl
 # ---------------------------------------------------------------------------
 # The audit, the failures and the budgets (spec, criteria 13, 18, 19, 21)
 # ---------------------------------------------------------------------------
+
+
+@pytest.mark.parametrize("kind", ["public", "flash"])
+@pytest.mark.parametrize("fault", ["nonzero", "empty", "timeout"])
+def test_failed_pi_calls_preserve_partial_evidence(
+    sworld: SwarmWorld, monkeypatch: pytest.MonkeyPatch, kind: str, fault: str
+) -> None:
+    # L1-1: retrieve a page and emit partial output before failure or the actual subprocess timeout.
+    partial = f"PARTIAL-{kind} @KEY@"
+    step = {
+        "stdout": "" if fault == "empty" else partial,
+        "receipts": [dict(RECEIPT, excerpt="page @KEY@")],
+        "exit": 7 if fault == "nonzero" else 0,
+        "sleep": 5 if fault == "timeout" else 0,
+    }
+    sworld.complete(**{kind: [step]})
+    if fault == "timeout":
+        launch = stage2.launch
+
+        def short_launch(command, root, env, *args, **kwargs):
+            is_public = "STAGE2_PUBLIC_RECEIPTS" in env
+            if command[0] == "pi" and "--print" in command and is_public == (kind == "public"):
+                kwargs["timeout"] = 1.0
+            return launch(command, root, env, *args, **kwargs)
+
+        monkeypatch.setattr(stage2, "launch", short_launch)
+    assert sworld.run() == 1
+    record = sworld.research.read_text(encoding="utf-8")
+    assert "status: incomplete" in status_line(record)
+    assert "failed" in record
+    if fault != "empty":
+        assert f"PARTIAL-{kind} [credential]" in record, "failed stdout is durable and scrubbed"
+        assert f"PARTIAL-{kind} [credential]" in sworld.calls("judge")[0]["prompt"]
+    if kind == "public":
+        assert '"excerpt": "page [credential]"' in record, "receipts survive scratch cleanup on every failure"
+        assert '"excerpt": "page [credential]"' in sworld.calls("judge")[0]["prompt"]
+        assert len(sworld.calls("public")) == 3
+    assert len(sworld.calls("flash")) == 11
+    assert not any(OKEY[n : n + 8] in record for n in range(len(OKEY) - 7))
 
 
 def test_every_attempt_has_identity_audit_and_outcome(sworld: SwarmWorld) -> None:

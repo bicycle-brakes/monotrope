@@ -166,14 +166,9 @@ OPUS = ("claude-code-plan", "claude-opus-5-5", "xhigh")
 # The change classes (check_interview_minimums.py's vocabulary). Explore routes on
 # one: the swarm for the two large classes, the single explorer for the two small
 # ones (ADR 0018 draft). Stated before the spec exists - explore-only `--class`
-# or `research.md`'s header - and every available statement must agree.
+# or the headers of `research.md` and `spec.md` - and every available statement must agree.
 CLASSES = ("spike", "bounded", "feature", "architectural")
 SWARM_CLASSES = ("feature", "architectural")
-# The swarm's paid calls: the public topic from its own Opus call at effort
-# `high`, the six-topic reconciliation from a fresh Opus context at `xhigh`
-# (spec criteria 14 and 23; the design's Open decisions).
-TOPIC_CALL = ("claude-code-plan", "claude-opus-5-5", "high")
-JUDGE_CALL = ("claude-code-plan", "claude-opus-5-5", "xhigh")
 # A new ADR file of a draft: four digits, a slug of lowercase letters, digits and hyphens. Counted against the
 # merge base of the baseline and origin/main, so a second draft may edit the ADR the first one committed.
 NEW_ADR = re.compile(r"docs/adr/\d{4}-[a-z0-9][a-z0-9-]*\.md")
@@ -311,6 +306,11 @@ class Refused(Exception):
 
 class CallFailed(Exception):
     """A call ended without a usable answer: exit 1."""
+
+    def __init__(self, message: str, *, partial_answer: str = "", receipts_text: str = "") -> None:
+        super().__init__(message)
+        self.partial_answer = partial_answer
+        self.receipts_text = receipts_text
 
 
 def today() -> str:

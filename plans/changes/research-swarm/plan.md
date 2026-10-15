@@ -168,13 +168,19 @@ provider does not expose is unknown; no Claude/cost saving is asserted.
 - 4: tests/test_stage2_swarm.py::test_missing_invalid_or_conflicting_class_refuses — a captured model call follows a missing, malformed or contrary class.
 - 5: tests/test_stage2_swarm.py::test_all_free_roles_are_attempted_before_flash — a roster member is skipped or Flash starts during the free stage.
 - 6: tests/test_stage2_swarm.py::test_six_topics_have_independent_permitted_pairs — a local topic uses a free seat, duplicate report or shared peer session.
+- 6: tests/test_stage2_swarm.py::test_declared_free_focuses_shape_research_and_topic_pairs — a swapped public focus or topic-6 seat fails to change the prompts and per-topic evidence map.
 - 7: tests/test_stage2_swarm.py::test_research_carries_practice_architecture_and_adjacent_spec_comparisons — comparison fields disappear or unread neighbours are labelled absent.
 - 8: tests/test_stage2_swarm.py::test_public_requests_exclude_every_private_input — a canary in rules, briefs, paths, history or paid reports reaches public model/web requests.
+- 8: tests/test_stage2_swarm.py::test_free_environment_excludes_identity_and_private_paths — ambient identity, private paths or locale settings enter the free launcher environment.
 - 8: not a test — the pre-live offline pinned-Pi capture in build step 2 checks actual ambient discovery and outbound payloads; any private canary refutes the boundary.
 - 9: tests/test_stage2_research_tools.py::test_public_tools_cannot_read_local_or_private_sources — a local-file tool, private destination, redirected private address or DNS rebinding is accepted.
+- 9: tests/test_stage2_research_tools.py::test_node_transport_pins_the_resolved_ipv6_family — an IPv6-only or IPv6-first lookup is pinned with the wrong socket address family.
 - 9: not a test — the same pinned-Pi capture attempts unavailable file/shell tools and repository context discovery; an obtainable private source refutes isolation.
 - 10: tests/test_stage2_swarm.py::test_public_claims_require_retrieved_source_receipts — an unfetched URL or search snippet is accepted as page evidence.
+- 10: tests/test_stage2_swarm.py::test_judge_public_citations_require_retrieved_receipts — the judge promotes an invented URL or search-only snippet to a supported public fact.
+- 10: tests/test_stage2_swarm.py::test_redirect_receipts_back_requested_and_final_urls — a successful redirected retrieval fails to back its requested or final URL.
 - 11: tests/test_stage2_swarm.py::test_declarations_clear_only_the_role_data_class — an undeclared model or public-only endpoint receives framework content.
+- 11: tests/test_stage2_swarm.py::test_declared_paid_endpoint_and_models_are_called — topic author and judge ignore the declared endpoint and model identities.
 - 12: tests/test_stage2_swarm.py::test_every_call_is_checked_and_a_leak_block_stops_dispatch — a later call reuses the first scan or follows a planted BLOCK.
 - 13: tests/test_stage2_swarm.py::test_every_attempt_has_identity_audit_and_outcome — a failed slot or judge lacks a distinct durable audit.
 - 14: tests/test_stage2_swarm.py::test_fresh_opus_reconciles_all_six_topics — another model, resumed context or missing topic is accepted.
@@ -182,6 +188,7 @@ provider does not expose is unknown; no Claude/cost saving is asserted.
 - 16: tests/test_stage2_swarm.py::test_local_citations_bind_to_the_frozen_input_state — nonexistent sources, wrong states or lost original reports pass validation.
 - 17: tests/test_stage2_swarm.py::test_only_the_runner_appends_research — earlier research or another repository file changes, or git/tracker mutation is launched.
 - 18: tests/test_stage2_swarm.py::test_failures_preserve_evidence_and_never_report_complete — an empty, unavailable, timed-out or malformed contribution yields exit 0.
+- 18: tests/test_stage2_swarm.py::test_failed_pi_calls_preserve_partial_evidence — nonzero exit, empty answer or timeout discards retrieved receipts or partial stdout before scratch cleanup.
 - 19: tests/test_stage2_swarm.py::test_deadlines_and_role_counts_bound_the_run — a role retries or a launch exceeds its remaining monotonic allowance.
 - 20: tests/test_stage2.py::test_explore_stage2_off_uses_haiku_without_reading_the_glm_key — explicit fallback reads a foreign key, calls the swarm or loses its reason.
 - 21: tests/test_stage2_swarm.py::test_all_outputs_scrub_every_used_credential — a planted eight-character fragment survives in output, receipts or diagnostics.
@@ -265,6 +272,10 @@ Stage-1 route: implement · model claude-sonnet-5-5 · reason: two Flash post-ru
 
 2026-10-15 repair attempt 3, span not measured: this session had no command tool to read `date`.
 2026-10-15 completion (Opus 5.5): 05:15–05:31 CEST, about 16 minutes including one `make verify` run (05:20:38–05:30:25, green: 2038 passed, 16 skipped).
+
+2026-10-15 05:49:28–06:00:30 CEST, 11 minutes 2 seconds (Codex repair of L1-1–L1-8; no break).
+
+Repair evidence and runner resumption: [dated handover](../../../docs/journal/handover/2026-10-15-research-swarm-loop-one-repair.md).
 
 ## Addendum — 2026-10-14, Q-6
 

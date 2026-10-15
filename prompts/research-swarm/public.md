@@ -9,24 +9,28 @@ Topic of the research (given as one sentence):
 
 > {{TOPIC}}
 
-Answer the fixed generic questions below for this topic. Every answer comes
-from a page you actually retrieved during this session.
+Answer only your assigned questions from the fixed generic questions below.
+Every answer comes from a page you actually retrieved during this session.
+
+## Your assigned focus
+
+{{FOCUS}}
 
 ## The questions
 
 1. How do practitioner teams typically structure and organise work of this
    kind today?
-2. Which public engineering practices, standards or style guides do they cite
-   for verifying and testing such work?
-3. How do teams typically document, review and govern decisions of this kind?
-4. What does recorded public practice say about how such approaches evolved
+2. How do teams typically document, review and govern decisions of this kind?
+3. What does recorded public practice say about how such approaches evolved
    or were replaced over time?
+4. Which public engineering practices, standards or style guides do they cite
+   for verifying and testing such work?
 5. Which recurring risks, failure modes and edge cases does public practice
    name for work of this kind?
 6. Which neighbouring practices, tools or movements does this topic sit
    next to?
 
-Answer every question, including the ones where public material is thin: for
+Answer every assigned question, including the ones where public material is thin: for
 those, say what you searched and that public evidence is thin. That is a
 finding, not a failure.
 

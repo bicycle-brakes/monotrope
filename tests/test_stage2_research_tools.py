@@ -275,6 +275,26 @@ def test_a_public_fetch_pins_the_validated_address_and_records_a_receipt(world: 
     assert gets[0]["url"] == "https://example.com/x", "the host name stays the TLS name"
 
 
+@pytest.mark.parametrize("all_addresses", [False, True])
+@pytest.mark.parametrize("ipv6_first", [False, True])
+def test_node_transport_pins_the_resolved_ipv6_family(world: World, all_addresses: bool, ipv6_first: bool) -> None:
+    # L1-8: an IPv6-only or IPv6-first DNS result reaches the real HTTPS lookup callback.
+    address = "2001:4860:4860::8888"
+    lookups = [{"address": address, "family": 6}]
+    if ipv6_first:
+        lookups.append({"address": PUBLIC_IP, "family": 4})
+    answer = world.call(
+        mode="node-fetch",
+        url="https://example.com/ipv6",
+        all=all_addresses,
+        transport={"lookups": [lookups], "responses": [{"status": 200, "body": "IPv6 page"}]},
+    )
+    assert "threw" not in answer, answer
+    pinned = answer["seen"]["pinned"]
+    assert pinned == ([{"address": lookups[:1]}] if all_addresses else [{"address": address, "family": 6}])
+    assert answer["receipt"]["status"] == 200
+
+
 def test_a_redirect_is_followed_over_a_fresh_public_lookup(world: World) -> None:
     answer = world.call(
         mode="fetch",

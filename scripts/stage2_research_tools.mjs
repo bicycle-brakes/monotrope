@@ -21,6 +21,7 @@
 import https from "node:https";
 import { appendFileSync } from "node:fs";
 import { lookup as dnsLookup } from "node:dns/promises";
+import { isIP } from "node:net";
 
 const MAX_REDIRECTS = 3;
 const MAX_BYTES = 5 * 1024 * 1024;
@@ -111,13 +112,15 @@ export function validateDestination(raw) {
 // so the certificate and SNI still name the requested host.
 export function nodeTransport() {
   return {
-    lookup: async (hostname) => (await dnsLookup(hostname, { all: true, verbatim: true })).map((r) => r.address),
-    get: ({ url, pinnedIp, headers }) =>
+    lookup: async (hostname) => await dnsLookup(hostname, { all: true, verbatim: true }),
+    get: ({ url, pinnedIp, pinnedFamily, headers }) =>
       new Promise((resolve, reject) => {
         const request = https.get(
           url,
           {
-            lookup: (_host, _options, callback) => callback(null, pinnedIp, 4),
+            lookup: (_host, options, callback) => options?.all
+              ? callback(null, [{ address: pinnedIp, family: pinnedFamily }])
+              : callback(null, pinnedIp, pinnedFamily),
             headers,
             timeout: 20000,
           },
@@ -129,17 +132,21 @@ export function nodeTransport() {
   };
 }
 
-// Resolves a host and checks every address. Returns the first public address
-// to pin the connection to.
+// Resolves a host and checks every address. Keeps the chosen address's family
+// with it, including when IPv6 is the first or only answer.
 async function validatedAddress(hostname, deps) {
-  const addresses = await deps.lookup(hostname);
-  if (!Array.isArray(addresses) || addresses.length === 0) {
+  const results = await deps.lookup(hostname);
+  if (!Array.isArray(results) || results.length === 0) {
     throw new Error(`the lookup of ${hostname} returned no address`);
   }
-  for (const address of addresses) {
+  // Scripted transports may supply bare IPs; real DNS supplies address/family records.
+  const addresses = results.map((entry) => typeof entry === "string"
+    ? { address: entry, family: isIP(entry) } : entry);
+  for (const { address, family } of addresses) {
     if (isPrivateIp(address)) {
       throw new Error(`the lookup of ${hostname} returned the private address ${address} — refused`);
     }
+    if (!family || family !== isIP(address)) throw new Error("the lookup returned an invalid address family");
   }
   return addresses[0];
 }
@@ -167,10 +174,11 @@ function readBody(response) {
 // lookup cannot swap one in after the check.
 export async function fetchPage(raw, deps, depth = 0) {
   const url = validateDestination(raw);
-  const pinnedIp = await validatedAddress(url.hostname, deps);
+  const { address: pinnedIp, family: pinnedFamily } = await validatedAddress(url.hostname, deps);
   const response = await deps.get({
     url,
     pinnedIp,
+    pinnedFamily,
     headers: { host: url.hostname, "user-agent": USER_AGENT, accept: "text/html" },
   });
   const status = response.statusCode;
