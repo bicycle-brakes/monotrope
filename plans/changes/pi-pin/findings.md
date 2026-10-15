@@ -458,3 +458,120 @@ Stage-2 call, 2026-10-15: implement · attempt 3 · route stage-1 · endpoint cl
 > make: *** [verify] Error 1
 > - `plan.md` did not add a measured line below `## Time used`
 > ````
+
+## Phase 6 — Opus 5.5, 2026-10-15
+
+Orchestrator's decision on each row below (2026-10-15): every BLOCKER and MAJOR is taken; MINOR rows on tests, security and false statements are taken; the one STYLE row is taken because it is a false statement. Each taken row names the criterion or test the repair must satisfy. The review text itself is committed unchanged below the table.
+
+| ID | Severity | Dimension | Origin | Where | Finding | Reviewer | Status | Broke a test |
+|---|---|---|---|---|---|---|---|---|
+| F-1 | BLOCKER | SPEC | base | `tests/test_pi_contract.py:466-537`; `tests/test_pi_contract.py:479`; `tests/pi_contract_driver.mjs` | Criterion 7's trap test cannot fail for most trap types. The extension trap is a `.mjs` file, and Pi auto-discovers only `.ts` and `.js` (`core/package-manager.js:444`). Without isolation flags, print mode treats the project as untrusted and loads none of its `.pi/` resources, so removing `--no-extensions`, `--no-mcp`, `--no-skills`, `--no-prompt-templates` or `--no-themes` would leave the test green. `.pi/auth.json` and `.pi/agent/models.json` are never read (`config.js:503-508`). No assertion covers the skill, prompt-template or theme traps, and the positive controls run plain node, not Pi. Only the AGENTS.md context-file trap tests real behaviour. | Opus 5.5 | taken — criterion 7: `test_real_reviewer_ignores_discovery_traps`; each trap must fire through real Pi when its isolation flag is removed (positive controls through Pi); the `.mjs` trap becomes `.js`; the inert auth and models traps are removed or replaced by paths Pi reads; skill, prompt and theme traps get assertions | no |
+| F-2 | MAJOR | SPEC | base | `tests/test_pi_contract.py:396-401`; `tests/test_pi_contract.py:683-688` | The native-address check reads only the `openai-completions` section of the installed catalog, and nothing ties the runner's ladder models to that section. In the installed catalog `opencode-go` lists `https://opencode.ai/zen/go` under `anthropic-messages`, and `opencode` lists `https://opencode.ai/zen`. The three ladder ids in `model-endpoints.yaml` are in `openai-completions` today. A future Pi could move one and the test would stay green (criterion 11: a wrong native address or key mapping). | Opus 5.5 | taken — criterion 11: `test_real_opencode_provider_contracts`; every ladder id of `opencode-go` is asserted in the section whose base URL is checked | no |
+| F-3 | MAJOR | SPEC | base | `tests/test_stage2.py:3644-3651` | Two existing pin-check guards lost their power. "non-zero" and "too-slow" now print the off-pin version, so the version mismatch alone causes the refusal: a runner that ignored the exit code or the timeout would still pass. The case "newer" now carries `1.2.0-rc1`, which is not newer. | Opus 5.5 | taken — criterion 3: the runner's pin-check cases in `tests/test_stage2.py`; the non-zero and too-slow cases use `stage2.PI_VERSION`; "newer" uses a real higher version | no |
+| F-4 | MAJOR | SPEC | base | `tests/test_pi_install.py:79-130`; `tests/test_pi_install.py:339-375` | Criterion 1's refusals (lock mismatch, integrity error) come from a synthetic npm written to refuse. Real `npm ci` is never run against a broken lock. The subject `install.sh` is real, but the refusal evidence is not. An offline check with real npm and a `file:` fixture is possible. | Opus 5.5 | taken — criterion 1: `test_install_obeys_lock_integrity_and_disables_scripts`; add a case where real `npm ci` refuses a manifest and lock mismatch, and a broken integrity value, offline | no |
+| F-5 | MINOR | TEST | base | `tests/test_pi_contract.py:9-11`; `tests/test_pi_contract.py:317-318`; `tests/test_pi_contract.py:404-414` | Two docstrings say no second flag list exists, but `REVIEWER_FLAGS` is one: a hand-written list without `--no-context-files`, against plan step 5 (no second handwritten isolation-flag list). | Opus 5.5 | taken — not a test — correct both docstrings; if the list can be derived from the runner's flags instead of written twice, derive it | no |
+| F-6 | MINOR | DOC | base | `docs/WORKFLOW.md:871-878`; `docs/adr/0019-repository-pinned-pi-and-contract-tests.md:74-78`; `tools/pi/README.md:59-61` | The docs say the suite measures discovery isolation, which F-1 disproves (criterion 14: unsupported safety claim). `docs/WORKFLOW.md:871-873` also says no test has run a real program to see its isolation take effect, and the next sentence contradicts it. | Opus 5.5 | taken — not a test — after F-1 is repaired, state only what the suite measures; remove the self-contradiction in WORKFLOW.md; in ADR 0019 correct only the discovery-isolation claim and name that edit in the decision pull request | no |
+| F-7 | MINOR | TEST | base | `tests/test_pi_contract.py:644-645` | The symlink read's refusal is not checked on its own. `requests[3]` carries the whole conversation, so the phrase "outside the worktree" from the `../outside` refusal already satisfies the assertion; the symlink read could fail for another reason and still pass. | Opus 5.5 | taken — criterion 9: `test_real_session_policy_blocks_foreign_reads`; assert the symlink refusal on its own | no |
+| F-8 | MINOR | TEST | base | `tests/test_stage2.py:3693-3708` | Criterion 13's truncated-print test uses a stand-in that exits 1. Whether real Pi 1.2.0 exits non-zero on a truncated print is not measured; no contract sends `finish_reason: "length"`. | Opus 5.5 | taken — criterion 13: `test_truncated_pi_print_failure_is_refused`; add a real-Pi contract with a truncated answer; keep the stand-in as a unit test only | no |
+| F-9 | MINOR | TEST | base | `scripts/stage2.py:181` | No test pins `PI_WRAPPER` to `REPO_ROOT/tools/pi/pi`. Every runner test monkeypatches it, and the contract tests accept whatever it points to if it prints 1.2.0, so a global Pi 1.2.0 would pass. | Opus 5.5 | taken — criterion 2: a test asserts that `PI_WRAPPER` is exactly `REPO_ROOT/tools/pi/pi` | no |
+| F-10 | MINOR | SECURITY | base | `tests/test_pi_contract.py:287-294` | `run_pi` passes the whole parent environment to real Pi, including any real provider keys in the maintainer's shell. The network guard and the overridden `OPENCODE_API_KEY` stop real calls, but keys should not reach the contract run at all. | Opus 5.5 | taken — criterion 10: `run_pi` passes an allow-listed environment (what Pi needs: home and agent directory, PATH, locale); a test shows a provider key in the parent environment does not reach Pi | no |
+| F-11 | MINOR | SCOPE | base | `decisions/gates.yaml:217-223`; `.github/workflows/ci.yml:61-68` | markdownlint now also scans `tools/pi/node_modules/` (278 third-party `.md` files, counted 2026-10-15). The gate is report-only, but the noise can hide findings in this change's own Markdown. | Opus 5.5 | taken — not a test — exclude `tools/pi/node_modules` from the markdownlint globs in `decisions/gates.yaml` and regenerate `.github/workflows/ci.yml` with `scripts/ci_gates.py`; this deviates from plan step 7 (gates.yaml unchanged) and is named in the pull request | no |
+| F-12 | MINOR | SCOPE | base | `scripts/ci_gates.py:455-462`; `scripts/kit/manifest.yaml:76`; `.github/workflows/ci.yml:133` | The generator, which travels with the kit, now always emits the `setup-node` step and `bash tools/pi/install.sh`. `tools/` stays behind in the kit (`manifest.yaml:329`), so a repository built from the kit gets CI steps it cannot run. | Opus 5.5 | taken — not a test — emit the Pi steps only when `tools/pi/` exists in the repository being generated for; `tests/test_ci.py` covers both cases | no |
+| F-13 | MINOR | SCOPE | base | `scripts/kit/probe.py:101`; `scripts/kit/probe.py:190-193`; `plans/changes/pi-pin/plan.md:112-113` | `plan.md` says all created or changed files are named above, but `scripts/kit/probe.py` is not named. The edit adds a `REIST_NICHT` entry and raises the `DECKEL` cap from 38 to 39, with a reason. | Opus 5.5 | taken — not a test — name `scripts/kit/probe.py` and the cap change in `plan.md`, with the reason | no |
+| F-14 | STYLE | DOC | base | `scripts/stage2.py:24` | The module docstring still says each round checks `pi --version`; it is now the wrapper. | Opus 5.5 | taken — not a test — the docstring names `tools/pi/pi` | no |
+
+Review text as returned by the Opus 5.5 reviewer (committed unchanged; the reviewer's own indentation removed, nothing else changed):
+
+Open BLOCKER: yes — BLOCKER 1 · DIVERGENT 0 · MAJOR 3 · MINOR 9 · STYLE 1 (review of explore/pi-pin at f071a51, 2026-10-15)
+
+## Check 1 — the three repaired assertions (none was changed to match output)
+Commit 58614f8 names the three repairs. The earlier versions of the file are gone: there are no unreachable blobs and no copies on disk. So I judged each repair against the spec text.
+- Repair 1, the extension driver signature (tests/pi_contract_driver.mjs:44-52). It now follows the declared API, `execute(toolCallId, params, signal, onUpdate, ctx)` in `pi-coding-agent/dist/core/extensions/types.d.ts:514`. The expected values did not change: the input must equal the requested input, and the echo result must reach the model (test_pi_contract.py:580, :585). This does not violate the spec.
+- Repair 2, the listing by exact provider id (test_pi_contract.py:666-670). The expected ids `opencode-go` and `opencode` are the spec's own words (criterion 10). I ran the real Pi listing: its header row is `provider model …`, so the header assertion matches what Pi prints. This does not violate the spec.
+- Repair 3, the native addresses read from the installed catalog (test_pi_contract.py:379-401, :683-688). The expected values GO_NATIVE and ZEN_NATIVE equal the spec text. The scope was narrowed, though; see the MAJOR row below. This is not a BLOCKER.
+
+## Findings
+[BLOCKER] tests/test_pi_contract.py:466-537 — Criterion 7's trap test cannot fail for most trap types, so it gives no real evidence for the extension, MCP, skill, prompt-template, theme, saved-auth and command-config parts — spec: "Refuted by: a planted extension, MCP server, skill, context file, prompt template, theme, saved authentication or command-valued configuration marker being loaded…". Plan step 6 also asks for "ambient discovery/config traps with positive activation controls". Measured on the pinned Pi 1.2.0 in scratch directories:
+  - (a) The extension trap is `.pi/extensions/trap-extension.mjs` (:479). Pi only auto-discovers `.ts` and `.js` files (`core/package-manager.js:444`). A `.mjs` trap did not fire even with `--approve`; the same trap as `.js` fired with `--approve`.
+  - (b) Without any isolation flag, print mode treats the project as untrusted. Untrusted projects get none of their `.pi/` resources loaded (`core/project-trust.js`, `core/trust-manager.js:8-17`; a `.js` trap did not fire with no flags). So removing `--no-extensions`, `--no-mcp`, `--no-skills`, `--no-prompt-templates` or `--no-themes` from the runner would leave this test green.
+  - (c) `.pi/auth.json` and `.pi/agent/models.json` inside the project are paths Pi never reads: auth and models come only from the agent directory (`config.js:503-508`). Those two traps are inert in every configuration.
+  - (d) Nothing asserts that TRAP-SKILL-TEXT, TRAP-PROMPT-TEXT or the theme stayed out.
+  - (e) The "positive controls" (:501-514) run the trap with plain `node` and `touch`, never through Pi.
+  - Only the AGENTS.md context-file trap can tell a pass from a failure.
+  - Verdict: CONFIRMED (measured).
+
+[MAJOR] tests/test_pi_contract.py:396-401, :683-688 — The native-address check now reads only the `openai-completions` section of the catalog, and nothing ties the runner's ladder models to that section — evidence: in the installed catalog, `opencode-go` lists `https://opencode.ai/zen/go` for `anthropic-messages`, and `opencode` lists `https://opencode.ai/zen`. The three ladder ids in model-endpoints.yaml (deepseek-v4.1-flash, mimo-v2.6-flash, mimo-v2.6-pro) are in `openai-completions` today (measured). If a future Pi moves one of them, this test stays green. Spec criterion 11 is refuted by "a wrong native address/key mapping". Repair: assert that every `modelle` id of `opencode-go` sits in the section whose baseUrl is checked — CONFIRMED.
+
+[MAJOR] tests/test_stage2.py:3644-3651 — Two existing pin-check guards lost their power — evidence: on main, "non-zero" and "too-slow" printed the pinned version with exit 1 or a 30 s sleep. They now print OFF_PIN, so the version mismatch alone causes the refusal: a runner that ignored the exit code or the timeout would still pass. The case with id "newer" now carries `1.2.0-rc1`, which is not newer. No other test sets `pi_version_exit` or `pi_version_sleep`. Repair: use `stage2.PI_VERSION` for those two cases, and a real higher version for "newer" — CONFIRMED.
+
+[MAJOR] tests/test_pi_install.py:79-130, :339-375 — Criterion 1's refusals (lock mismatch, integrity error) come from a synthetic npm that is written to refuse; real `npm ci` is never run against a broken lock — evidence: the synthetic npm "refuse(... not in sync)" and an integrity check by regex only. The plan (step 4) accepted fixtures, and the subject `install.sh` is real. Real npm runs only on the happy path, in CI (not read: no CI run of this branch exists). An offline real-npm check with a `file:` fixture is possible — PLAUSIBLE.
+
+[MINOR] tests/test_pi_contract.py:9-11, :317-318 vs :404-414 — Two docstrings say no second flag list exists, but `REVIEWER_FLAGS` is exactly that — a hand-written list, without `--no-context-files`, against plan step 5 ("do not maintain a second handwritten isolation-flag list"). Criteria 8, 11 and 12 use it, not 6 and 7 — CONFIRMED.
+
+[MINOR] docs/WORKFLOW.md:871-878, docs/adr/0019-repository-pinned-pi-and-contract-tests.md:74-78, tools/pi/README.md:59-61 — The docs say the suite "measures … the discovery isolation", which the BLOCKER above disproves (criterion 14: "unsupported safety/compatibility claim"). WORKFLOW.md:871-873 also still says "no test has run a real program to see them take effect", and the next sentence now contradicts it — CONFIRMED.
+
+[MINOR] tests/test_pi_contract.py:644-645 — The symlink read's refusal is not checked on its own. requests[3] carries the whole conversation, so the phrase "outside the worktree" from the `../outside` refusal already satisfies the assertion. The symlink read could fail for another reason and still pass, though the check that the sentinel never leaks does hold (:641-643) — CONFIRMED.
+
+[MINOR] tests/test_stage2.py:3693-3708 — Criterion 13's truncated-print test uses a stand-in that exits 1. Whether real Pi 1.2.0 really exits non-zero on a truncated print is not measured: no contract sends `finish_reason: "length"` — CONFIRMED.
+
+[MINOR] scripts/stage2.py:181 — No test pins `PI_WRAPPER` to `REPO_ROOT/tools/pi/pi`. Every runner test monkeypatches it, and the contract tests accept whatever it points to if it prints 1.2.0, so a global Pi 1.2.0 would pass — CONFIRMED.
+
+[MINOR] tests/test_pi_contract.py:287-294 — `run_pi` passes the whole parent environment to real Pi, including any real provider keys in the maintainer's shell. The network guard blocks egress, and `OPENCODE_API_KEY` is overridden, so the assertions cannot pass through a real key. Hygiene against spec criterion 10's "maintainer's credentials" — PLAUSIBLE.
+
+[MINOR] decisions/gates.yaml:217-223 (generated .github/workflows/ci.yml:61-68) — markdownlint now also scans `tools/pi/node_modules/`: 278 third-party .md files next to 316 repository files (counted 2026-10-15).
+  - Caused by this change: the installer creates the directory locally, and in CI `setup-pi` (ci.yml:44, :173) runs before the lint step.
+  - Severity: only noise. The gate is `report` with `continue-on-error`, but the noise can hide findings in this change's own Markdown.
+  - Minimal repair: add `!tools/pi/node_modules/**` (or `#node_modules`) to the `globs` of the markdownlint gate in `decisions/gates.yaml`, then regenerate ci.yml with `scripts/ci_gates.py --generate-ci`. The local `npx` equivalent reads the same block. `gates.yaml` is not human-decided (provenance.yaml read), but plan step 7 promised to keep it unchanged, so name the deviation in the pull request — CONFIRMED.
+
+[MINOR] scripts/ci_gates.py:455-462 — The generator, which travels with the kit (`scripts/kit/manifest.yaml:76`, `.github/workflows/ci.yml` at :133), now always emits `setup-node` from `tools/pi/.node-version` and `bash tools/pi/install.sh`. `tools/` stays behind (manifest.yaml:329), so a repository built from the kit would get CI steps it cannot run. There is precedent: `bash tools/beads/install.sh` (ci_gates.py:404) already does the same — PLAUSIBLE.
+
+[MINOR] scripts/kit/probe.py:101, :190-193 — This change is outside the plan: plan.md:112-113 says "all created/changed files are named above", but probe.py is not named. The edit adds a REIST_NICHT entry and raises the cap DECKEL from 38 to 39, with a reason. It was needed after attempt 3 — CONFIRMED.
+
+[STYLE] scripts/stage2.py:24 — The module docstring still says each round checks "`pi --version`"; it is now the wrapper — CONFIRMED.
+
+## Check 2 — evidence per criterion
+- 1: test_pi_install.py::test_install_obeys_lock_integrity_and_disables_scripts. The real install.sh runs; npm and node are imitations (MAJOR above).
+- 2: test_wrapper_ignores_global_pi_from_any_cwd. The real wrapper script runs with a synthetic node, a synthetic local CLI and a hostile PATH `pi`. `require_installed_pi` also starts real Pi through the wrapper from a temporary working directory. Real evidence for the wrapper.
+- 3: test_wrapper_refuses_unusable_local_pi. The real wrapper with synthetic node. Real evidence for the wrapper.
+- 4: test_wrapper_checks_node_major and test_a_wrapper_without_node_refuses_before_everything. Same setup as 3; real evidence for the wrapper.
+- 5: test_loop_and_probe_use_repository_pi and test_all_session_pi_launches_use_repository_wrapper. The runner code is real, Pi is a stand-in. test_real_reviewer_tool_contract:454 additionally shows real Pi through the wrapper. Sufficient for the routing claim.
+- 6: test_real_reviewer_tool_contract. Real Pi through the wrapper, using the production `run_reviewer`. Real evidence.
+- 7: test_real_reviewer_ignores_discovery_traps. Real Pi, but the traps cannot fire (BLOCKER). Only the context-file part is evidence.
+- 8: test_real_extension_tool_input_and_result. Real Pi through the wrapper. Real evidence.
+- 9: test_real_session_policy_blocks_foreign_reads. Real Pi with the production policy file and hand-listed flags. Real evidence, with the MINOR symlink gap.
+- 10: test_real_model_listing_is_a_provider_table. Real Pi; the expected output matches what I measured.
+- 11: test_real_opencode_provider_contracts uses real Pi plus a static catalog read (MAJOR narrowing). test_contract_network_guard_denies_external_destinations uses plain node, not Pi; the guard did deny opencode.ai inside real Pi in my run.
+- 12: test_contract_prerequisites_and_failures_are_mandatory: real Pi for the timeout and malformed-exchange cases; the missing-prerequisite cases test the helper itself. test_real_pi_is_provisioned_before_contracts checks the YAML structure only. A real CI run is not read.
+- 13: existing runner tests plus the stand-in truncation test. The runner side is real; Pi's truncation behaviour is imitated (MINOR).
+- 14: not a test, judged by review: README, WORKFLOW, the endpoint remark and ADR 0019 exist, the historical ADRs are unchanged, and no Zen endpoint is enabled. The discovery-isolation claim is unsupported (MINOR).
+
+## Check 3 — no soft pass
+- The four Pi test files (test_pi_contract.py, test_pi_install.py and the two .mjs files) contain no skip, skipif, importorskip, xfail or `assert True`.
+- The `return`s at test_pi_contract.py:153/157/208/211 and test_pi_install.py:219 are inside HTTP handlers or fixture builders, not inside test bodies.
+- A missing prerequisite ends in `pytest.fail` or `ContractFailure`. The `PIN` lookup at import time (:71) raises, which fails collection.
+- Skip markers, all pre-existing (test_ci.py's diff adds none): test_feedback_channel.py (8 unconditional); test_ci.py:1186 and :1400 (2 unconditional); conditional ones in test_repo_settings, test_omnigent_deny_layers, test_bead_render, test_templates, test_check_criterion_ledger and test_leakcheck (both root-only), test_harness_decide_adr, test_handover_entry, test_recap_lock and test_session_scan.
+- The only skip near Pi is test_stage2_session_policy.py:29, `skipif` when node is absent. It is not a test_pi_* file, the plan keeps it unchanged, and node is present whenever the Pi suite runs.
+- Which 6 conditional skips make up the 16 is not measured (I did not run pytest).
+
+## Check 4 — wrapper and installer
+- Matches ADR 0019 and design.md: no global fallback, no `npx`, no install from the wrapper, `npm ci --ignore-scripts`, Node major checked in both scripts, exact pin by regex. Both scripts are committed with mode 100755.
+- Lock file: lockfileVersion 3, 119 entries, every non-root entry has a well-formed `sha512-…==` integrity, the only host is registry.npmjs.org, and all `@earendil-works/*` packages are at 1.2.0. Two packages (@google/genai, protobufjs) declare install scripts, which `--ignore-scripts` suppresses. Nothing suggests hand editing.
+
+## Check 5 — scope
+- Named in the plan: `.github/workflows/ci.yml` (regenerated), `.gitignore` (only `tools/pi/node_modules/`), `docs/WORKFLOW.md`, `model-endpoints.yaml`, `scripts/ci_gates.py`, `scripts/stage2.py`, `scripts/stage2_session.py`, `scripts/stage2_session_policy.mjs` (comments only), `tests/test_ci.py`, `tests/test_stage2.py`, `tests/test_stage2_session.py`, and the ADR.
+- Owned by the orchestrator, as the plan says: `plans/INDEX.md` and `decisions/answers/pi-pin/adr.yaml`.
+- Not named: `scripts/kit/probe.py` (MINOR above).
+- Protected areas untouched: decisions/gates.yaml, .claude/settings.json, existing ADRs, test_stage2_session_policy.py and its driver.
+
+## Check 7 — secrets
+No credential-like values found. The only key-shaped strings are synthetic test constants (tests/test_pi_contract.py:48-49), a fake integrity value (tests/test_pi_install.py:32) and the registry integrity hashes in tools/pi/package-lock.json.
+
+## Not read
+- No earlier version of tests/test_pi_contract.py exists to diff the repairs against: not read.
+- Results of a hosted CI run of this branch: not read, including whether actions/setup-node resolves Node 26.9.0.
+- pi-mcp's real config schema for the `.pi/mcp.json` trap: not read.
+- Which tests produced the 16 skips: not measured.
+- markdownlint-cli2's default handling of node_modules: not read, inferred from the report you passed on.
+- How I measured: I ran the real pinned Pi through `tools/pi/pi` 5 times, with scratch HOME and agent directories under my scratchpad, a synthetic key and the network guard. Pi wrote auth.json and models-store.json only into that scratch agent directory. Nothing in the repository was changed.
+
+Resume: review complete, no edits made
