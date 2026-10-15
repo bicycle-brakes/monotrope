@@ -65,6 +65,7 @@ jobs:
           globs: |
             **/*.md
             !docs/journal/**
+            !tools/pi/node_modules/**
         continue-on-error: true
       - name: External links resolve
         id: lychee

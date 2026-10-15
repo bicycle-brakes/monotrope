@@ -7,8 +7,8 @@ model, no user configuration, no external network: the credentials are
 synthetic, the HOME and agent directories are scratch, and a test-only preload
 (`tests/pi_network_guard.mjs`) denies every non-loopback connection the child
 attempts. The reviewer-shaped cases run the runner's own `run_reviewer` and
-inject only the test transport at its subprocess seam - no second flag list
-exists.
+inject test transport at its subprocess seam. Helper launches derive their
+isolation flags from that same production command.
 
 Missing Pi, missing Node, a refused loopback bind, a timeout or a malformed
 exchange FAILS its case (spec, criterion 12). The suite never skips.
@@ -33,6 +33,7 @@ import types
 from dataclasses import dataclass
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
+from unittest.mock import patch
 
 import pytest
 
@@ -82,7 +83,7 @@ def require_installed_pi() -> str:
         pytest.fail(f"the repository Pi wrapper {wrapper} is missing; run bash tools/pi/install.sh")
     with tempfile.TemporaryDirectory(prefix="pi-contract-") as tmp:
         env = {
-            **os.environ,
+            **contract_environment(),
             "HOME": tmp,
             "PI_CODING_AGENT_DIR": tmp,
         }
@@ -241,7 +242,7 @@ class StandIn:
             finish = "tool_calls"
         else:
             message = {"role": "assistant", "content": answer.get("content", "No finding."), "tool_calls": None}
-            finish = "stop"
+            finish = answer.get("finish_reason", "stop")
         return {
             "id": "chatcmpl-contract",
             "object": "chat.completion",
@@ -285,7 +286,7 @@ def run_pi(
     if providers:
         (agent / "models.json").write_text(json.dumps({"providers": providers}), encoding="utf-8")
     env = {
-        **os.environ,
+        **contract_environment(),
         "HOME": str(home),
         "PI_CODING_AGENT_DIR": str(agent),
         "OPENCODE_API_KEY": key,
@@ -312,20 +313,35 @@ def run_pi(
 def transport(monkeypatch: pytest.MonkeyPatch) -> types.SimpleNamespace:
     """The test transport, injected at the runner's subprocess seam (plan step 5).
 
-    The launch command itself stays production code: the seam adds only the
-    network-guard preload and plants the scratch `models.json` that repoints
-    the OpenCode providers at the loopback stand-in. No second isolation-flag
-    list is maintained here - the reviewer flags are `run_reviewer`'s own.
+    The default command comes from production code; the seam adds a network
+    guard, a resource-read observer and loopback transport configuration.
+    Trap controls grant project trust and omit individual guards. MCP controls
+    explicitly request its built-in extension so --no-extensions cannot mask
+    --no-mcp. Helper flags are captured from `run_reviewer` as well.
     """
     calls: list[dict] = []
     providers: dict = {}
+    controls = {"trusted": False, "omit": None, "mcp_control": False}
     original_launch = stage2.launch
     original_env = stage2.foreign_env
 
     def guarded_launch(command, cwd, env, key=None, timeout=None, limit=None):
-        env = {**env, "NODE_OPTIONS": f"--import {GUARD}"}
+        env = {
+            **env,
+            "NODE_OPTIONS": f"--import {GUARD} --import {DRIVER}",
+            "CONTRACT_RESOURCE_LOG": str(Path(cwd) / "resource-reads.jsonl"),
+        }
+        command = list(command)
+        if controls["trusted"]:
+            command[command.index("--no-approve")] = "--approve"
+        if controls["omit"]:
+            command.remove(controls["omit"])
+        if controls["mcp_control"]:
+            command[1:1] = ["-e", "builtin:mcp"]
         calls.append({"argv": list(command), "cwd": str(cwd), "env": dict(env)})
-        return original_launch(command, cwd, env, key, timeout=timeout, limit=limit)
+        done = original_launch(command, cwd, env, key, timeout=timeout, limit=limit)
+        calls[-1]["result"] = done
+        return done
 
     def planted_env(own):
         env = original_env(own)
@@ -336,7 +352,7 @@ def transport(monkeypatch: pytest.MonkeyPatch) -> types.SimpleNamespace:
 
     monkeypatch.setattr(stage2, "launch", guarded_launch)
     monkeypatch.setattr(stage2, "foreign_env", planted_env)
-    return types.SimpleNamespace(calls=calls, providers=providers)
+    return types.SimpleNamespace(calls=calls, providers=providers, controls=controls)
 
 
 @pytest.fixture
@@ -401,17 +417,28 @@ def native_base_urls(provider: str, api: str) -> set[str]:
     return {model.get("baseUrl") for model in section.values() if isinstance(model, dict)}
 
 
-REVIEWER_FLAGS = [
-    "--print",
-    "--no-session",
-    "--no-approve",
-    "--no-extensions",
-    "--no-mcp",
-    "--no-skills",
-    "--no-prompt-templates",
-    "--no-themes",
-    "--offline",
-]
+def contract_environment() -> dict[str, str]:
+    """Only runtime search and locale cross from the parent; credentials never do."""
+    return {name: value for name, value in os.environ.items() if name in {"PATH", "LANG", "LC_ALL", "LC_CTYPE", "TZ"}}
+
+
+def reviewer_flags() -> list[str]:
+    """Capture the production prefix without starting Pi or copying its flag list."""
+    commands = []
+
+    def capture(command, *_args, **_kwargs):
+        commands.append(command)
+        return subprocess.CompletedProcess(command, 0, "captured", "")
+
+    with patch.object(stage2, "launch", capture):
+        stage2.run_reviewer(
+            types.SimpleNamespace(change="contract", root=REPO_ROOT), "contract-rung", "capture only", SYNTHETIC_KEY
+        )
+    command = commands[0]
+    return command[1 : command.index("--tools")]
+
+
+REVIEWER_FLAGS = reviewer_flags()
 
 
 # ---------------------------------------------------------------------------
@@ -474,17 +501,20 @@ EXTENSION_TRAP = (
 
 
 def arm_traps(project: Path) -> dict[str, str]:
-    """Plant the discovery and configuration traps in the project, with their markers' names."""
+    """Project resources Pi actually discovers; each has a real-Pi positive control."""
+    theme = REPO_ROOT / "tools/pi/node_modules/@earendil-works/pi-coding-agent/dist/modes/interactive/theme/dark.json"
     traps = {
-        ".pi/extensions/trap-extension.mjs": EXTENSION_TRAP,
-        ".pi/agent/models.json": json.dumps(
-            {"providers": {"opencode-go": {"baseUrl": "http://127.0.0.1:9/v1", "apiKey": "!touch trap-command-ran"}}}
+        ".pi/extensions/trap-extension.js": EXTENSION_TRAP,
+        ".pi/skills/trap-skill/SKILL.md": "---\nname: trap-skill\ndescription: TRAP-SKILL-TEXT\n---\nTRAP-SKILL-BODY\n",
+        ".pi/mcp.json": json.dumps(
+            {
+                "mcpServers": {
+                    "trap": {"command": "node", "args": [str(DRIVER), "mcp-trap", str(project / "trap-mcp-ran")]}
+                }
+            }
         ),
-        ".pi/skills/trap-skill/SKILL.md": "TRAP-SKILL-TEXT\n",
-        ".pi/mcp.json": json.dumps({"mcpServers": {"trap": {"command": "touch", "args": ["trap-mcp-ran"]}}}),
         ".pi/prompts/trap-prompt.md": "TRAP-PROMPT-TEXT\n",
-        ".pi/themes/trap-theme.json": json.dumps({"colors": {"primary": "#000000"}}),
-        ".pi/auth.json": json.dumps({"opencode-go": {"key": PLANTED_KEY}}),
+        ".pi/themes/trap-theme.json": theme.read_text(),
         "AGENTS.md": "TRAP-CONTEXT-TEXT\n",
     }
     for relative, text in traps.items():
@@ -496,45 +526,111 @@ def arm_traps(project: Path) -> dict[str, str]:
 
 @pytest.mark.usefixtures("installed_pi")
 def test_real_reviewer_ignores_discovery_traps(project: Path, transport) -> None:
-    """Criterion 7: among armed traps the clean reviewer call uses only its scratch configuration."""
-    arm_traps(project)
-    # positive activation controls: each trap leaves its marker when it really executes
-    done = subprocess.run(
-        ["node", str(project / ".pi" / "extensions" / "trap-extension.mjs")],
-        cwd=project,
-        capture_output=True,
-        text=True,
-        timeout=60,
-        check=False,
-    )
-    assert done.returncode == 0, done.stderr
-    assert (project / "trap-extension-ran").is_file(), "the extension trap cannot prove its own execution"
-    subprocess.run(["touch", "trap-command-ran"], cwd=project, capture_output=True, timeout=60, check=True)
-    for marker in ("trap-extension-ran", "trap-command-ran"):
-        (project / marker).unlink()
+    """Criterion 7: flags suppress armed resources even with project trust granted.
 
-    standin = StandIn([{"content": "No finding."}])
-    transport.providers["opencode-go"] = {"baseUrl": standin.url}
-    try:
-        ctx = types.SimpleNamespace(change="demo", root=project)
-        answer = stage2.run_reviewer(
-            ctx, "contract-rung", "Review the change demo as the appended instructions say.", SYNTHETIC_KEY
-        )
-        assert "No finding." in answer
-        assert len(standin.requests) == 1, "the call went anywhere but the loopback stand-in"
-    finally:
-        standin.close()
-    for marker in (
-        "trap-extension-ran",
-        "trap-command-ran",
-        "trap-mcp-ran",
-    ):
-        assert not (project / marker).exists(), f"the armed trap {marker} fired"
-    for exchange in standin.requests:
-        assert "TRAP-CONTEXT-TEXT" not in json.dumps(exchange.body), "a planted context file reached the model"
-        assert PLANTED_KEY not in json.dumps(exchange.body), "a planted credential reached the model"
-        assert PLANTED_KEY not in json.dumps(exchange.headers), "a planted credential travelled in a header"
-        assert "127.0.0.1:9" not in json.dumps(exchange.body), "a planted baseUrl reached the exchange"
+    Each positive control removes exactly its isolation flag from the captured
+    production command and starts real Pi. The preload observes actual resource
+    reads; it neither loads resources nor imitates Pi's discovery API.
+    """
+    arm_traps(project)
+    checks = {
+        "--no-extensions": "trap-extension-ran",
+        "--no-mcp": "trap-mcp-ran",
+        "--no-skills": ".pi/skills/trap-skill/SKILL.md",
+        "--no-context-files": "TRAP-CONTEXT-TEXT",
+        "--no-prompt-templates": ".pi/prompts/trap-prompt.md",
+        "--no-themes": ".pi/themes/trap-theme.json",
+    }
+
+    def call(omit=None, trusted=True):
+        for marker in ("trap-extension-ran", "trap-mcp-ran", "resource-reads.jsonl"):
+            (project / marker).unlink(missing_ok=True)
+        transport.controls.update(trusted=trusted, omit=omit)
+        standin = StandIn([{"content": "No finding."}])
+        transport.providers["opencode-go"] = {"baseUrl": standin.url}
+        try:
+            answer = stage2.run_reviewer(
+                types.SimpleNamespace(change="demo", root=project), "contract-rung", "Review demo.", SYNTHETIC_KEY
+            )
+            assert "No finding." in answer
+            assert len(standin.requests) == 1
+            reads = (
+                (project / "resource-reads.jsonl").read_text() if (project / "resource-reads.jsonl").exists() else ""
+            )
+            observed = {
+                "--no-extensions": (project / "trap-extension-ran").exists(),
+                "--no-mcp": (project / "trap-mcp-ran").exists(),
+                "--no-context-files": "TRAP-CONTEXT-TEXT" in json.dumps(standin.requests[0].body),
+            }
+            observed.update({flag: path in reads for flag, path in checks.items() if flag not in observed})
+            return observed
+        finally:
+            standin.close()
+
+    assert not any(call(trusted=False).values()), "a trap fired under the production flags"
+    assert not any(call().values()), "an isolation flag failed with project trust granted"
+    for flag in checks:
+        # --no-extensions also suppresses the built-in MCP extension. Explicitly
+        # request it in this paired control so --no-mcp is tested independently.
+        transport.controls["mcp_control"] = flag == "--no-mcp"
+        assert not any(call().values())
+        assert call(omit=flag)[flag], f"{flag}: its real-Pi positive control did not fire"
+
+
+@pytest.mark.usefixtures("installed_pi")
+def test_real_reviewer_ignores_ambient_credentials(project: Path, transport, tmp_path: Path) -> None:
+    """The scratch agent directory excludes saved auth and command-valued models config.
+
+    Positive controls start real Pi with its ambient agent directory instead;
+    both saved auth and model commands must demonstrably affect those calls.
+    """
+    ambient = tmp_path / "ambient-agent"
+    ambient.mkdir()
+    original_env = stage2.foreign_env
+
+    def ambient_env(own):
+        env = original_env(own)
+        home_agent = Path(env["HOME"]) / ".pi" / "agent"
+        home_agent.mkdir(parents=True)
+        for name in ("models.json", "auth.json"):
+            shutil.copyfile(ambient / name, home_agent / name)
+        return env
+
+    with patch.object(stage2, "foreign_env", ambient_env):
+        for command_key in (False, True):
+            marker = project / "trap-command-ran"
+            standin = StandIn([{"content": "No finding."}, {"content": "positive"}])
+            model = {"baseUrl": standin.url}
+            if command_key:
+                model["apiKey"] = f"!touch {marker}; printf {PLANTED_KEY}"
+            (ambient / "models.json").write_text(json.dumps({"providers": {"opencode-go": model}}))
+            (ambient / "auth.json").write_text(
+                json.dumps({} if command_key else {"opencode-go": {"type": "api_key", "key": PLANTED_KEY}})
+            )
+            transport.providers["opencode-go"] = {"baseUrl": standin.url}
+            try:
+                stage2.run_reviewer(
+                    types.SimpleNamespace(change="demo", root=project), "contract-rung", "Review demo.", SYNTHETIC_KEY
+                )
+                assert not marker.exists()
+                assert PLANTED_KEY not in json.dumps(standin.requests[0].headers)
+                scratch = tmp_path / ("command-control" if command_key else "auth-control")
+                scratch.mkdir()
+                done = run_pi(
+                    project,
+                    scratch,
+                    *REVIEWER_FLAGS,
+                    "--model",
+                    "opencode-go/contract-rung",
+                    "positive",
+                    env_extra={"PI_CODING_AGENT_DIR": str(ambient), "OPENCODE_API_KEY": ""},
+                )
+                assert done.returncode == 0, done.stderr
+                assert len(standin.requests) == 2
+                assert PLANTED_KEY in json.dumps(standin.requests[1].headers)
+                assert marker.exists() == command_key
+            finally:
+                standin.close()
 
 
 # ---------------------------------------------------------------------------
@@ -618,17 +714,9 @@ def test_real_session_policy_blocks_foreign_reads(project: Path, tmp_path: Path)
         done = run_pi(
             project,
             scratch,
-            "--print",
-            "--no-session",
-            "--no-approve",
-            "--no-extensions",
+            *REVIEWER_FLAGS,
             "-e",
             str(copy),
-            "--no-mcp",
-            "--no-skills",
-            "--no-prompt-templates",
-            "--no-themes",
-            "--offline",
             "--model",
             "opencode-go/contract-rung",
             "--",
@@ -641,8 +729,9 @@ def test_real_session_policy_blocks_foreign_reads(project: Path, tmp_path: Path)
         for exchange in standin.requests:
             body = json.dumps(exchange.body)
             assert SENTINEL_OUT not in body, "an outside read's content entered a tool result"
-        blocked = message_text(standin.requests[2]) + message_text(standin.requests[3])
-        assert "outside the worktree" in blocked, f"the policy's refusal is not visible to the model: {blocked[:400]}"
+        for exchange in standin.requests[2:4]:
+            latest = [message for message in exchange.body["messages"] if message["role"] == "tool"][-1]
+            assert "outside the worktree" in json.dumps(latest), latest
     finally:
         standin.close()
 
@@ -686,6 +775,10 @@ def test_real_opencode_provider_contracts(tmp_path: Path) -> None:
     assert native_base_urls("opencode", "openai-completions") == {ZEN_NATIVE}, (
         "the installed opencode (Zen) catalog lost its native address"
     )
+    catalog = {model["id"]: model for model in provider_data("opencode-go")["openai-completions"].values()}
+    for rung in stage2.ladder(REPO_ROOT):
+        assert rung in catalog, f"ladder model {rung} moved outside the checked wire API"
+        assert catalog[rung]["baseUrl"] == GO_NATIVE
     scratch = scratch_of(tmp_path)
     for provider, model in (("opencode-go", "contract-go-model"), ("opencode", "contract-zen-model")):
         standin = StandIn([{"content": "ok"}])
@@ -810,3 +903,57 @@ def test_contract_prerequisites_and_failures_are_mandatory(
         assert empty.failures, "the stand-in swallowed the unusable exchange"
     finally:
         empty.close()
+
+
+@pytest.mark.usefixtures("installed_pi")
+def test_real_truncated_pi_print_failure_is_refused(project: Path, transport) -> None:
+    """Criterion 13: the runner refuses the real Pi result of a length finish.
+
+    Measured on Pi 1.2.0: the text printer drops the truncated assistant
+    message, returning zero with empty stdout. The runner's empty-answer guard
+    refuses it; the separate unit test covers nonzero print refusals.
+    """
+    standin = StandIn([{"content": "partial review", "finish_reason": "length"}])
+    transport.providers["opencode-go"] = {"baseUrl": standin.url}
+    try:
+        with pytest.raises(stage2.CallFailed, match="answer is empty"):
+            stage2.run_reviewer(
+                types.SimpleNamespace(change="demo", root=project), "contract-rung", "Review demo.", SYNTHETIC_KEY
+            )
+        assert len(standin.requests) == 1
+        result = transport.calls[-1]["result"]
+        assert result.returncode == 0 and not result.stdout.strip(), (
+            "Pi's measured truncated-print behavior changed; recheck the refusal path"
+        )
+    finally:
+        standin.close()
+
+
+@pytest.mark.usefixtures("installed_pi")
+def test_contract_environment_excludes_parent_provider_keys(
+    project: Path, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """A parent provider secret cannot enter the real Pi process."""
+    monkeypatch.setenv("ANTHROPIC_API_KEY", PLANTED_KEY)
+    log = tmp_path / "child-env.json"
+    standin = StandIn([{"content": "ok"}])
+    try:
+        done = run_pi(
+            project,
+            scratch_of(tmp_path),
+            *REVIEWER_FLAGS,
+            "-e",
+            str(DRIVER),
+            "--model",
+            "opencode-go/contract-rung",
+            "ok",
+            providers={"opencode-go": {"baseUrl": standin.url}},
+            env_extra={"CONTRACT_ENV_LOG": str(log)},
+        )
+        assert done.returncode == 0, done.stderr
+        child = json.loads(log.read_text())
+        assert "ANTHROPIC_API_KEY" not in child
+        assert PLANTED_KEY not in json.dumps(child)
+        assert child["OPENCODE_API_KEY"] == SYNTHETIC_KEY
+    finally:
+        standin.close()

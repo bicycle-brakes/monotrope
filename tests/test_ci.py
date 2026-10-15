@@ -1950,3 +1950,14 @@ def test_the_mutation_ratchet_only_turns_one_way() -> None:
 
     ohne_grund = [g for g, grund in OHNE_MUTATIONSTEST.items() if len(grund.strip()) < 10]
     assert not ohne_grund, f"Exception without a reason: {ohne_grund}"
+
+
+def test_pi_provisioning_only_in_repositories_with_pi(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    """Kit recipients without tools/pi must not receive an unusable installer step."""
+    monkeypatch.setattr(ci_gates, "REPO_ROOT", tmp_path)
+    assert "setup-node" not in "\n".join(ci_gates._toolchain('"3.12"'))
+    assert "setup-pi" not in "\n".join(ci_gates._toolchain('"3.12"'))
+    (tmp_path / "tools" / "pi").mkdir(parents=True)
+    steps = "\n".join(ci_gates._toolchain('"3.12"'))
+    assert "actions/setup-node@v4" in steps
+    assert "bash tools/pi/install.sh" in steps

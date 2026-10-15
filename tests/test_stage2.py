@@ -3634,18 +3634,15 @@ def test_the_review_loop_launches_pi_isolated(world: World) -> None:
     assert second["PI_CODING_AGENT_DIR"] != env["PI_CODING_AGENT_DIR"] and second["HOME"] != env["HOME"]
 
 
-OFF_PIN = "0.0.1" if stage2.PI_VERSION != "0.0.1" else "0.0.2"
-
-
 @pytest.mark.parametrize("verb", ["review-loop", "probe"])
 @pytest.mark.parametrize(
     "fault",
     [
-        {"pi_version": f"{stage2.PI_VERSION}-rc1"},
+        {"pi_version": "999.0.0"},
         {"pi_version": f"{stage2.PI_VERSION} (dev)"},
         {"pi_version": ""},
-        {"pi_version": OFF_PIN, "pi_version_exit": 1},
-        {"pi_version": OFF_PIN, "pi_version_sleep": 30},
+        {"pi_version": stage2.PI_VERSION, "pi_version_exit": 1},
+        {"pi_version": stage2.PI_VERSION, "pi_version_sleep": 30},
         "absent",
     ],
     ids=["newer", "suffix", "silent", "non-zero", "too-slow", "absent"],
@@ -3691,7 +3688,7 @@ def test_loop_and_probe_use_repository_pi(world: World) -> None:
 
 
 def test_truncated_pi_print_failure_is_refused(world: World) -> None:
-    """Criterion 13: Pi 1.2.0 ends a truncated --print with exit 1 and a warning; such a call is never read as a review."""
+    """Criterion 13 unit guard: a stand-in nonzero truncated print is never read as a review."""
     world.script(
         pi=[
             {
@@ -7916,3 +7913,8 @@ def test_codex_repair_doctrine_and_endpoint_remarks_agree() -> None:
             )
     assert stage2.REPAIR_FORMAT_FILE_TOOLS.count("you cannot run commands") == 1
     assert "you cannot run commands" not in stage2.REPAIR_FORMAT
+
+
+def test_pi_wrapper_is_repository_local() -> None:
+    """Criterion 2: the production runner never selects a global Pi, even at the same version."""
+    assert stage2.PI_WRAPPER == REPO_ROOT / "tools" / "pi" / "pi"

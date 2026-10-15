@@ -6,7 +6,7 @@ synthetic `node` and `npm` executables that implement exactly the call shapes
 the two scripts use, a fixture package that stands for the installed Pi, and a
 hostile `pi` on PATH that marks every run. A fallback to a global Pi, a silent
 auto-install or a lifecycle script cannot hide. Nothing here contacts a
-registry or a real install.
+registry. The lock/integrity case also runs real npm offline over a local tarball.
 
 Each test comes with its fault: the mutated installer or the broken metadata is
 planted one variant at a time and named in the test.
@@ -14,11 +14,15 @@ planted one variant at a time and named in the test.
 
 from __future__ import annotations
 
+import base64
+import hashlib
+import io
 import json
 import os
 import shutil
 import subprocess
 import sys
+import tarfile
 from dataclasses import dataclass
 from pathlib import Path
 
@@ -44,6 +48,10 @@ def write_exec(path: Path, text: str) -> None:
 # them) and running the local CLI file. Anything else is a loud refusal.
 SYNTHETIC_NODE = """#!@PYTHON@
 import json
+import base64
+import hashlib
+import io
+import tarfile
 import os
 import sys
 from pathlib import Path
@@ -78,6 +86,10 @@ else:
 # nothing and logs every call.
 SYNTHETIC_NPM = """#!@PYTHON@
 import json
+import base64
+import hashlib
+import io
+import tarfile
 import os
 import re
 import shutil
@@ -135,6 +147,10 @@ if not ignore_scripts:
 LOCAL_CLI = """#!@PYTHON@
 # synthetic local Pi CLI: records the run the wrapper gave it.
 import json
+import base64
+import hashlib
+import io
+import tarfile
 import os
 import sys
 from pathlib import Path
@@ -156,6 +172,10 @@ sys.stdout.write("local-pi ran\\n")
 # A hostile PATH pi: any run is a fault - the wrapper must never fall back.
 PATH_PI = """#!@PYTHON@
 import json
+import base64
+import hashlib
+import io
+import tarfile
 import os
 import sys
 from pathlib import Path
@@ -336,8 +356,91 @@ def pin(tmp_path: Path) -> Pin:
 # ---------------------------------------------------------------------------
 
 
+def assert_real_npm_lock_refusals(root: Path) -> None:
+    """Real npm, local tarballs and an empty cache: no synthetic refusal evidence."""
+    node, npm = shutil.which("node"), shutil.which("npm")
+    assert node and npm, "real Node and npm are mandatory for the offline installer contract"
+    root.mkdir()
+    fixture = root / "fixture.tgz"
+    package = {"name": PKG, "version": PIN, "scripts": {"preinstall": "touch ../../../dependency-lifecycle-ran"}}
+    data = json.dumps(package).encode()
+    with tarfile.open(fixture, "w:gz") as archive:
+        info = tarfile.TarInfo("package/package.json")
+        info.size = len(data)
+        archive.addfile(info, io.BytesIO(data))
+    integrity = "sha512-" + base64.b64encode(hashlib.sha512(fixture.read_bytes()).digest()).decode()
+    manifest = {
+        "name": "offline-contract",
+        "private": True,
+        "version": "1.0.0",
+        "dependencies": {PKG: PIN},
+        "scripts": {"preinstall": "touch lifecycle-ran"},
+    }
+    lock = {
+        "name": "offline-contract",
+        "version": "1.0.0",
+        "lockfileVersion": 3,
+        "packages": {
+            "": manifest,
+            f"node_modules/{PKG}": {
+                "version": PIN,
+                "resolved": "file:fixture.tgz",
+                "integrity": integrity,
+                "hasInstallScript": True,
+            },
+        },
+    }
+    (root / "package.json").write_text(json.dumps(manifest, indent=2))
+    (root / "package-lock.json").write_text(json.dumps(lock, indent=2))
+    major = subprocess.check_output([node, "-p", "process.versions.node"], text=True).strip()
+    (root / ".node-version").write_text(major + "\n")
+    installer = root / "install.sh"
+    source = (REPO_ROOT / "tools/pi/install.sh").read_text()
+    installer.write_text(source)
+    env = {
+        "PATH": os.environ["PATH"],
+        "HOME": str(root),
+        "npm_config_offline": "true",
+        "npm_config_cache": str(root / "cache"),
+        "npm_config_audit": "false",
+        "npm_config_fund": "false",
+    }
+
+    def run():
+        return subprocess.run(
+            ["/bin/sh", str(installer)], cwd=root, env=env, capture_output=True, text=True, timeout=60, check=False
+        )
+
+    done = run()
+    assert done.returncode == 0, done.stderr
+    assert not (root / "lifecycle-ran").exists(), "real npm executed a lifecycle script"
+    assert not (root / "dependency-lifecycle-ran").exists()
+    assert json.loads((root / "node_modules" / PKG / "package.json").read_text())["version"] == PIN
+    installer.write_text(source.replace("npm ci --ignore-scripts", "npm ci"))
+    done = run()
+    assert done.returncode == 0, done.stderr
+    assert (root / "lifecycle-ran").exists(), "the real-npm lifecycle positive control did not fire"
+    assert (root / "dependency-lifecycle-ran").exists()
+    installer.write_text(source)
+    (root / "lifecycle-ran").unlink()
+    # A manifest dependency absent from the lock: real npm ci must reject it.
+    manifest["dependencies"]["extra-fixture"] = "file:fixture.tgz"
+    (root / "package.json").write_text(json.dumps(manifest, indent=2))
+    done = run()
+    assert done.returncode != 0 and "Missing:" in done.stderr, done.stderr
+    del manifest["dependencies"]["extra-fixture"]
+    (root / "package.json").write_text(json.dumps(manifest, indent=2))
+    lock["packages"][f"node_modules/{PKG}"]["integrity"] = "sha512-" + base64.b64encode(bytes(64)).decode()
+    (root / "package-lock.json").write_text(json.dumps(lock, indent=2))
+    shutil.rmtree(root / "cache")
+    done = run()
+    assert done.returncode != 0 and "EINTEGRITY" in done.stderr, done.stderr
+    assert not (root / "lifecycle-ran").exists()
+
+
 def test_install_obeys_lock_integrity_and_disables_scripts(pin: Pin) -> None:
     """Criterion 1: exactly the lock's graph, scripts off; a changed graph, corrupt integrity, a floating pin refuse."""
+    assert_real_npm_lock_refusals(pin.root.parent / "real-npm")
     done = pin.run_installer()
     assert done.returncode == 0, done.stderr
     assert (pin.root / "node_modules" / PKG / "dist" / "cli.py").is_file(), "the pinned package is not installed"

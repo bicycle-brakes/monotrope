@@ -433,7 +433,7 @@ def _checkout(job_gates: list[dict[str, Any]]) -> list[str]:
 
 
 def _toolchain(python_version: str) -> list[str]:
-    """The four steps that give a job its interpreter, its packages and its pinned Pi — in this order.
+    """The toolchain steps: Python everywhere, pinned Pi where tools/pi exists — in this order.
 
     `actions/setup-python` first: `python3` after it is the declared interpreter,
     and `INSTALL` then installs the hash-checked lock into exactly that one
@@ -443,7 +443,7 @@ def _toolchain(python_version: str) -> list[str]:
     Like checkout, none of these steps carries the `if` of a gate: without them
     no gate has a subject.
     """
-    return [
+    steps = [
         "      - name: Set up the declared interpreter",
         "        id: setup-python",
         "        uses: actions/setup-python@v5",
@@ -452,6 +452,10 @@ def _toolchain(python_version: str) -> list[str]:
         "      - name: Install the pinned toolchain",
         "        id: setup-deps",
         f"        run: {INSTALL}",
+    ]
+    if not (REPO_ROOT / "tools" / "pi").is_dir():
+        return steps
+    return steps + [
         "      - name: Set up the declared Node runtime",
         "        id: setup-node",
         "        uses: actions/setup-node@v4",

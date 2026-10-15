@@ -21,7 +21,7 @@ stands between the rule and the call.
     python3 scripts/stage2.py probe        <change>   # one call per rung, no record written
     python3 scripts/stage2.py session      <change>   # interactive Codex/Pi, a Terminal window
 
-Each loop round and the probe check `pi --version` against `PI_VERSION` first;
+Each loop round and the probe check `tools/pi/pi --version` against `PI_VERSION` first;
 any other answer refuses with exit 2 before the leak check and before any call.
 
 `explore`, `implement` and `repair` accept `--stage2-off [REASON]`: the declared

@@ -16,6 +16,45 @@ import fs from "node:fs";
 import http from "node:http";
 import net from "node:net";
 import tls from "node:tls";
+import { syncBuiltinESMExports } from "node:module";
+import readline from "node:readline";
+
+// A preload observer records real Pi reads of the planted resources. It does
+// not load them: removing an isolation flag must make Pi perform the read.
+if (process.env.CONTRACT_RESOURCE_LOG) {
+  const record = (path) => {
+    const name = String(path);
+    if (/\.pi\/(skills|prompts|themes)\//.test(name)) {
+      fs.appendFileSync(process.env.CONTRACT_RESOURCE_LOG, `${JSON.stringify(name)}\n`);
+    }
+  };
+  const originalSync = fs.readFileSync;
+  fs.readFileSync = function (path, ...args) {
+    record(path);
+    return originalSync.call(this, path, ...args);
+  };
+  const originalAsync = fs.promises.readFile;
+  fs.promises.readFile = function (path, ...args) {
+    record(path);
+    return originalAsync.call(this, path, ...args);
+  };
+  syncBuiltinESMExports();
+}
+
+// A real local MCP peer: marks startup and answers the initialization and
+// tool-list exchanges, without using the network or a hosted service.
+if (process.argv[1]?.endsWith("pi_contract_driver.mjs") && process.argv[2] === "mcp-trap") {
+  fs.writeFileSync(process.argv[3], "started");
+  const lines = readline.createInterface({ input: process.stdin });
+  for await (const line of lines) {
+    const request = JSON.parse(line);
+    if (request.id === undefined) continue;
+    const result = request.method === "initialize"
+      ? { protocolVersion: request.params.protocolVersion, capabilities: { tools: {} }, serverInfo: { name: "trap", version: "1" } }
+      : { tools: [] };
+    console.log(JSON.stringify({ jsonrpc: "2.0", id: request.id, result }));
+  }
+}
 
 export const ECHO_PREFIX = "echo:";
 
@@ -25,6 +64,11 @@ export default function main(pi) {
       "contract driver: the installed Pi exposes no registerTool; the extension contract cannot be measured",
     );
   }
+  pi.on("session_start", () => {
+    if (process.env.CONTRACT_ENV_LOG) {
+      fs.writeFileSync(process.env.CONTRACT_ENV_LOG, JSON.stringify(process.env));
+    }
+  });
   pi.registerTool({
     name: "contract-echo",
     label: "Contract echo",
