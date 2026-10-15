@@ -82,16 +82,21 @@ path to paid Zen, accepting that no Zen model is callable until declared. — 20
 
 ## Q-4 · Does the interactive session use the same Pi
 
-asked: (prepared 2026-10-15, not yet asked)
-answer: —
-answered_by: —
-status: open
+asked: 2026-10-15
+answer: "A" — the interactive session also starts Pi through the wrapper `tools/pi/pi`; its sign-in stays the maintainer's `~/.pi/agent`.
+answered_by: maintainer
+status: answered
 context: |
   Topic: whether `stage2.py session` also starts Pi through `tools/pi/pi`.
   Intention: Q-2 makes the wrapper the runner's only path to Pi; the session verb resolves `pi` through PATH today and signs in from the maintainer's own `~/.pi/agent`.
   Today: the session runs whatever global Pi is installed; from 1.2.0 it may load `AGENTS.md` in nested worktrees where 1.1.0 did not.
   Repository change: A (recommended) — the session uses the wrapper too, so every Pi the runner starts is the measured one; B — the session keeps the global Pi.
   Architecture change: A gives one Pi for every runner path; B keeps a second, unmeasured one for the interactive path.
+
+In the context of a wrapper that is the runner's only path to Pi, facing
+the choice between the session on the wrapper and the session on the global
+Pi, we decided on the wrapper, to achieve that every Pi the runner starts is
+the measured one, accepting that a session waits for the pinned install. — 2026-10-15
 
 ## Q-5 · Is Node pinned too
 
