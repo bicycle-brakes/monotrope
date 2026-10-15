@@ -176,3 +176,11 @@ werden." The finder's neighbours (the ones given in the header of
 `research.md` plus its marked suggestions, once accepted) are carried into a
 `neighbours:` field in the header of `spec.md`; the exact field form and
 its check are settled in the spec.
+
+Addendum 2026-10-15: on the perspectives, the session proposed one fixed
+perspective per model (DeepSeek existing state, MiMo critique, Haiku
+impact). The maintainer said instead: "ich möchte, das jedes model die
+gleichen blcikwinkel am anfang bekommt um deren ergebnisse evaluieren zu
+könenn." At the start every model receives the same brief and perspectives
+for a topic, so that their results can be compared and evaluated; per-model
+perspectives are a later decision on that evidence.
