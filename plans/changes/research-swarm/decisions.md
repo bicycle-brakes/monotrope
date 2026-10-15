@@ -281,3 +281,12 @@ checks that no research `[DECISION]` is lost.
   maintainer added: "bei themen wie haiku 5.5 sollte auch generelle
   abgeleitet werden, ob das nicht themen sind, die sich dauerhaft öndern und
   wie das in der repo geregelt werden kann" — the form is settled next.
+  Accepted form (answer: "ja"): topic 6 gets a fifth guiding question —
+  which stale facts found are of a kind that keeps changing, and how the
+  repository should govern them. Each agent assigns each such fact one of
+  three ways: one central place (changes rarely but regularly — model ids
+  and efforts, cf. bead coding-harness-ylu), looked up at run time (changes
+  constantly — the free models from Pi's list), or written down with a
+  read-on date and a gate that warns after a period (must stay fixed). A
+  finding becomes a proposal for the spec, or a follow-up bead when it
+  reaches beyond the change; the maintainer decides each.
