@@ -139,8 +139,14 @@ def serve_connection(stream: socket.socket, api_hosts: list[str], dial) -> bool:
     if upstream is None:
         stream.sendall(b"HTTP/1.1 502 Bad Gateway\r\n\r\n")
         return False
-    stream.sendall(b"HTTP/1.1 200 Connection established\r\n\r\n")
-    _relay(stream, upstream)
+    try:
+        stream.sendall(b"HTTP/1.1 200 Connection established\r\n\r\n")
+        _relay(stream, upstream)
+    finally:
+        try:
+            upstream.close()
+        except OSError:
+            pass
     return True
 
 

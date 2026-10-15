@@ -86,6 +86,7 @@ def test_the_wire_refuses_a_bypass_and_relays_the_declared_path(monkeypatch: pyt
     upstream_in, upstream_out = socket.socketpair()
     dialled = []
     client.settimeout(5)
+    upstream_in.settimeout(5)
     threading.Thread(target=stage2_egress.serve_connection, args=(server, DECLARED, fake_dial), daemon=True).start()
     client.sendall(b"CONNECT api.z.ai:443 HTTP/1.1\r\n\r\n")
     answer = b""
@@ -96,7 +97,9 @@ def test_the_wire_refuses_a_bypass_and_relays_the_declared_path(monkeypatch: pyt
     upstream_in.sendall(b"tls-bytes")
     assert client.recv(1024) == b"tls-bytes"
     client.sendall(b"client-bytes")
-    assert upstream_out.recv(1024) == b"client-bytes"
+    # `upstream_out` is the proxy's own end (what `fake_dial` returned); the
+    # remote API side of the pair, where relayed bytes arrive, is `upstream_in`.
+    assert upstream_in.recv(1024) == b"client-bytes"
     client.close()
     server.close()
     upstream_in.close()
