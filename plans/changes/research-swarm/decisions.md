@@ -344,3 +344,13 @@ checks that no research `[DECISION]` is lost.
   opinions; each report with its date. Every free model available at run
   time on the same brief; evidence a URL with a retrieval receipt (answer:
   "ja").
+
+Addendum 2026-10-15, run time: with the new cut a run holds about 52 calls
+(topic sentence 1; finder 3 plus an Opus merge; topics 1–8 24; topics 9–11
+21 with today's seven free models; judge 1). The earlier spec ran every
+call in sequence ([DETAIL]). Options shown: A — each stage runs its calls
+concurrently, at most four at once per provider (rough estimate 1–1.5 h,
+not measured; a queue in the runner, the leak check still before every
+call, logs that keep concurrent calls apart); B — all in sequence (rough
+estimate 4–8 h); C — in sequence with fewer topics for `feature`. The
+maintainer chose A (answer: "A").
