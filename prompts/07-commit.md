@@ -1,6 +1,6 @@
 # Phase 7 · Commit
 
-**Model:** Haiku 4.5 — cheap and sufficient.
+**Model:** Haiku 5.5 — cheap and sufficient.
 **Result:** pull request.
 **Gate:** CI green.
 

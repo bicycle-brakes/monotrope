@@ -128,6 +128,11 @@ typed: a hand-kept list of files ages exactly as fast as files are added.
 | [`changes/criterion-test-ledger/plan.md`](changes/criterion-test-ledger/plan.md) | draft | partial | 2026-10-11 | coding-harness-909 |
 | [`changes/criterion-test-ledger/research.md`](changes/criterion-test-ledger/research.md) | draft | partial | 2026-10-11 | coding-harness-909 |
 | [`changes/criterion-test-ledger/spec.md`](changes/criterion-test-ledger/spec.md) | draft | partial | 2026-10-11 | coding-harness-909 |
+| [`changes/haiku-5-5/decisions.md`](changes/haiku-5-5/decisions.md) | draft | none | 2026-10-14 | coding-harness-eao |
+| [`changes/haiku-5-5/findings.md`](changes/haiku-5-5/findings.md) | draft | none | 2026-10-14 | coding-harness-eao |
+| [`changes/haiku-5-5/plan.md`](changes/haiku-5-5/plan.md) | draft | none | 2026-10-14 | coding-harness-eao |
+| [`changes/haiku-5-5/research.md`](changes/haiku-5-5/research.md) | draft | none | 2026-10-14 | coding-harness-eao |
+| [`changes/haiku-5-5/spec.md`](changes/haiku-5-5/spec.md) | draft | none | 2026-10-14 | coding-harness-eao |
 | [`changes/harness-decide-adr/decisions.md`](changes/harness-decide-adr/decisions.md) | accepted | none | 2026-09-30 | coding-harness-3ar |
 | [`changes/harness-decide-adr/findings.md`](changes/harness-decide-adr/findings.md) | draft | partial | 2026-09-30 | coding-harness-3ar |
 | [`changes/harness-decide-adr/plan.md`](changes/harness-decide-adr/plan.md) | draft | partial | 2026-09-30 | coding-harness-3ar |
