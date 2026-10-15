@@ -802,6 +802,8 @@ def run_codex(
     effort is the caller verb's entry of `CODEX_EFFORTS`, passed explicitly on
     every argv, a resumed call included; that a resumed thread actually runs at
     that effort inside Codex is not asserted (bead coding-harness-yzk, Q-6).
+    Only the verbs `CODEX_EFFORTS` names (draft, repair, review) may carry a
+    Codex route; any other verb stops with a `KeyError` before the call.
     """
     _, model, _ = CODEX
     effort = CODEX_EFFORTS[verb]

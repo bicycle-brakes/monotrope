@@ -47,8 +47,9 @@ when preparing a worktree for implementation verification.
    equality, retry labels, session selection, sandboxes and audit formats.
 2. Replace independent Sol effort literals throughout the active workflow
    tables and prose and the four Model paragraphs with links to the matching
-   entry, e.g. [`CODEX_EFFORTS["draft"]`](../../../scripts/stage2.py).
-   From each edited document the link target is `../scripts/stage2.py`.
+   entry, e.g. `[CODEX_EFFORTS["draft"]](../scripts/stage2.py)` as written
+   in `docs/WORKFLOW.md` and the four prompts: from each edited document the
+   link target is `../scripts/stage2.py`.
    Include the section-3 Opus rows' Codex clauses, the section-4 repair row,
    and "The draft (phases 2, 2b and 3)"; add a note that the ADR effort text
    awaits its separately agreed amendments. Other models keep their values.
