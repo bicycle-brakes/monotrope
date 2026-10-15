@@ -18,3 +18,7 @@ import adoption  # noqa: E402
 
 def test_this_repository_adopted_the_gate_on_2026_10_08() -> None:
     assert adoption.adopted_on(REPO_ROOT, "interview-minimums") == date(2026, 10, 8)
+
+
+def test_this_repository_adopted_question_context_on_2026_10_15() -> None:
+    assert adoption.adopted_on(REPO_ROOT, "question-context") == date(2026, 10, 15)

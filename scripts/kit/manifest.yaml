@@ -103,6 +103,9 @@ rules:
   - prefix: scripts/adoption.py
     rolle: mechanismus
     reason: "the one reader of decisions/adoption.yaml, the day a repository adopted a gate; the record stays, the reader travels (ADR 0014)"
+  - prefix: scripts/check_question_context.py
+    rolle: mechanismus
+    reason: "the check behind the gate question-context — the gate file travels, so its script does; the day it holds from comes from the repository's own record (ADR 0018)"
   - prefix: scripts/harness.py
     rolle: mechanismus
     reason: "the command the gate's finding names"
@@ -177,6 +180,9 @@ rules:
   - prefix: tests/test_check_interview_minimums.py
     rolle: mechanismus
     reason: "builds its own git repositories; the half that reads AGENTS.md skips where that file does not travel (ADR 0014)"
+  - prefix: tests/test_check_question_context.py
+    rolle: mechanismus
+    reason: "builds its own trees with their own adoption days; the half that reads AGENTS.md skips where that file does not travel (ADR 0018)"
   - prefix: tests/test_adoption.py
     rolle: mechanismus
     reason: "builds its own trees and holds in the probe copy; the case that reads this repository's own record lives in tests/test_this_repository_adoption.py, which no rule lets travel because the record stays home (ADR 0014)"
