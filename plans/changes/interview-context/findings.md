@@ -717,6 +717,10 @@ Checked in this re-check: `git diff origin/main...HEAD` for `AGENTS.md`, `git sh
 
 Phase 6 re-check: opus-5.5, 2026-10-15
 
+F-5 — confirmed fixed, against `a2065f1`; no new row. The change artifacts and the gate now answer "… — 2026-10-12 (recorded on the bead the same day)" the same way: the recording day is read. `spec.md` (Terms, "Recorded-answer day") carries the [DETAIL] with its reason (a live answered record ends that way; without the allowance the whole gate is unmeasured) and its bound (other prose after the date leaves the day unread); `design.md` carries the same sentence under Interfaces ("Agent → decision artifact"); `plan.md` step 2 allows the one closing remark and points to the spec's [DETAIL]. They match `_DATE_SUFFIX` (one parenthetical without nested parentheses, then end of line), its comment, the `_recording_day` docstring and both `docs/WORKFLOW.md` places (the gate prose and the gate-table row). The code is unchanged, as the row asked. Evidence, 2026-10-15 at `a2065f1`: `tests/test_check_question_context.py` 73 passed; the gate exits 0 (55 answered records read, 0 subject), so `plans/changes/codex-drafts/decisions.md` Q-1 is read. Residual, not a new row: the extraction sentence in `design.md` Data model ("exactly one date ending the top-level decision paragraph") and the module docstring's summary paragraph still say only "ends", without the allowance or a pointer to it; under the spec's term they read consistently, so no reader is led to a different answer, but a pointer would spare the cross-reading. The F-5 Status cell names the design section "data flow"; it is "Interfaces". Record hygiene: the F-3 row now has 9 cells, its Status cell reads `fixed — tests/test_check_question_context.py::test_bare_context_over_indented_prose_names_the_block_fix` and `Broke a test` reads `no`.
+
+Phase 6 re-check: opus-5.5, 2026-10-15
+
 ## Phase 4b — loop rows, released 2026-10-15
 
 | ID | Severity | Dimension | Origin | Where | Finding | Reviewer | Status | Broke a test | Phase 6 |
