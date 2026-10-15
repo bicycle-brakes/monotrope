@@ -289,3 +289,74 @@ Stage-2 call, 2026-10-15: repair · attempt 1 · route codex · endpoint openai-
 Stage-2 call, 2026-10-15: review-loop · endpoint opencode-go · model mimo-v2.6-flash · leak check clean over 422 files, 1169 commits, 12 rules.
 
 Stage-2 call, 2026-10-15: review-loop · endpoint opencode-go · model mimo-v2.6-pro · leak check clean over 422 files, 1171 commits, 12 rules.
+
+## Phase 6 — Opus 5.5, 2026-10-15
+
+Claude path of `prompts/06-review.md`: an Opus 5.5 sub-agent at effort high
+in a fresh context, started by the orchestrator, not through `stage2.py
+review`. Phase 2a ran on Opus 5.5, so no phase-2a session of this reviewer
+exists and none was resumed. Diff read: `git diff origin/main...HEAD` at
+`5c8a460`; yardstick: the current `spec.md`, whose four phase-2a rows (S-1 to
+S-4) arrived as the integration block above says (criteria 3, 4 and 6, and
+the removed ADR criteria with `adr_files: []`).
+
+| ID | Severity | Dimension | Origin | Where | Finding | Reviewer | Status | Broke a test |
+|---|---|---|---|---|---|---|---|---|
+
+No finding: the diff meets criteria 1 to 7 and the Definition of Done as far
+as phase 6 can measure it.
+
+Checked: the shipped defaults against criteria 1 to 3 — `CODEX_EFFORTS` is
+`{"draft": "high", "repair": "medium", "review": "high"}` and `CODEX` carries
+no effort of its own (`scripts/stage2.py`); every `run_codex` caller passes
+its verb — `draft` (initial and `codex-repair` attempt, one call site),
+`run_attempts` with `repair` from `repair()` (both Codex attempts), and
+`review` for the verdict and the resumed loop-marks call — and `run_codex`
+puts `model_reasoning_effort` on every argv, a resume included; the only
+other reader of an endpoint's effort slot (`run_work_model`, `--effort`) is
+never reached with `CODEX`, and `implement` routes no Codex attempt, so the
+`KeyError` for an unnamed verb is unreachable today; `declaration_problem`,
+`begin_call`, `begin_work_call` and `stage2_runs.FOREIGN_ROUTES` read only
+endpoint and model, so the empty effort slot changes no audit line or
+declaration check. Criterion 4: no Sol effort literal is left in the
+section-3 and section-4 tables, the drafting prose or the four Model
+paragraphs (`git grep` over tracked files outside change folders, journal
+and research finds only ADR 0016, line 103, deferred by Q-3 and named as
+deferred in `docs/WORKFLOW.md` §4); each link names its own verb and resolves
+from `docs/` and `prompts/`. Criterion 5: the tests read `CODEX_EFFORTS`
+instead of repeating values, and the propagation test plants distinct
+settings per verb across initial, retry, historical resume, re-check and
+resumed marks argv; no other operational default exists (`git grep`
+`model_reasoning` finds one site). Criterion 6: the doctrine checker cuts a
+Sol clause at the next model name and was read against the planted
+mixed-model cases. Criterion 7: `scripts/stage2_session.py` is untouched and
+`test_codex_is_dispatched_interactively_with_its_exact_safety_flags` pins the
+exact interactive argv. Protected areas: the file list touches no
+`model-endpoints.yaml`, `AGENTS.md`, ADR, gate, permission, provenance or
+other change folder. Considered and not raised: the doctrine checker keys
+on the word "effort", so a future Sol sentence that states a value without
+that word would pass; every current Sol effort sentence uses it, and the
+pinned places fail closed when the word is missing. The `Closes-Bead`
+trailer and the PR body are phase 7's and were not measurable here.
+
+Phase 6 verdict: opus-5.5, 2026-10-15
+
+## Phase 4b — loop rows, released 2026-10-15
+
+| ID | Severity | Dimension | Origin | Where | Finding | Reviewer | Status | Broke a test | Phase 6 |
+|---|---|---|---|---|---|---|---|---|---|
+| L1-1 | MINOR | MAINT | impl | tests/test_stage2.py — `sol_clause` / `sol_effort_problems` | The new doctrine check inspects Sol's effort only inside the enumerated instruction spans and ends each span at the next mention of another model, so an independent Sol effort written after that mention — for example a further sentence appended to the repair row, which already names Sonnet 5.5, or a new prose sentence elsewhere in the workflow — is never read; the planted-fault test rewrites only the reference in place, and `test_sol_effort_checks_allow_other_models_in_the_same_instruction` even asserts an appended other-model sentence passes. Such an edit leaves the suite green while the instruction then names a value independently and contradicts the central setting the change exists to enforce. | deepseek-v4.1-flash | fixed — not a test — doctrine checker now checks every Sol mention in active instructions; planted later independent efforts and new prose refute the baseline helper. | no | agree |
+| L2-1 | MINOR | MAINT | review | tests/test_stage2.py:6336 (`OTHER_MODEL`), 6347–6353 (`sol_clauses`) | The mixed-model boundary the check truncates a Sol clause at knows only six display-name spellings (`Opus \| Sonnet \| GLM \| glm-5 \| the ladder \| Haiku`); the repository also names the same models by id (`claude-sonnet-5-5` in the SONNET tuple and in §3's session commands, `claude-haiku-4-5`, `claude-opus-5-5`) and prose names Fable, Kimi, MiMo and DeepSeek. Rewrite the §4 repair row's "Sonnet 5.5 at effort `medium`" as `claude-sonnet-5-5 at effort \`medium\`` and `sol_effort_clause_problems` reads that literal as Sol's own independent effort and turns red, although spec criterion 6 (Q-5) says another model's effort in the same instruction stays allowed; the case is shown offline, no live call needed | mimo-v2.6-flash | rejected — the checker fails closed: an unknown model name makes it red, never green, so no wrong effort can pass; a reworded row would surface at once; named in the PR as an accepted limit |  | agree |
+| L2-2 | MINOR | MAINT | review | scripts/stage2.py:807, 2446, 2597 | `run_codex` now takes a required keyword-only `verb` and indexes `CODEX_EFFORTS[verb]` without checking it, while `run_attempts` is shared and forwards its caller verb — `implement` already calls it with "implement". A Codex route added to any verb outside draft/repair/review crashes with a bare `KeyError` after the preflight and after the audit line has been written into `findings.md`, and neither `run_codex`'s nor `run_attempts`' docstring says which verbs a Codex route may carry | mimo-v2.6-flash | taken — not a test — docstring: `run_codex` now names the verbs that may carry a Codex route and that any other stops with a KeyError before the call; repaired by the orchestrating session | no | agree |
+| L2-3 | MINOR | MAINT | review | plans/changes/sol-effort/plan.md:50–51 | Plan step 2's example link spells `../../../scripts/stage2.py`, which resolves outside the repository from both documents the change edits (`docs/WORKFLOW.md` and the four prompts) and contradicts the operative sentence on the next line ("From each edited document the link target is `../scripts/stage2.py`", the form the implementation and `effort_reference` at tests/test_stage2.py:6341 enforce); research.md records the choice the implementer made, the plan alone would lead a maintainer to links that resolve nowhere | mimo-v2.6-flash | taken — not a test — false statement in the plan: the example now shows the link as written in the edited documents (`../scripts/stage2.py`); repaired by the orchestrating session | no | agree |
+| L3-1 | MAJOR | SPEC | spec | tests/test_stage2.py · `sol_effort_problems` / `sol_effort_clause_problems` | The check that an instruction names its own verb's entry runs verb-aware only for the pinned fragments, the drafting prose and the Model paragraphs; every other instruction it scans — other prose and unpinned rows of the two routing tables — is checked without a verb, so any entry of `CODEX_EFFORTS` satisfies it. An active instruction naming another verb's entry (e.g. a new sentence in the repair prose linking the drafting entry) stays green, while the central-reference criterion names the wrong verb as refuting and the plan promises a planted wrong key at every location including prose; that refutation cannot go red outside the pinned spots. | mimo-v2.6-pro | fixed — tests/test_stage2.py::test_sol_effort_check_reads_the_verb_of_every_unpinned_instruction | no | agree |
+| L3-2 | MINOR | MAINT | diff | scripts/stage2.py · `run_codex` | An unmapped verb raises a bare `KeyError` out of the effort lookup instead of a refusal, and the shared attempt runner forwards its caller verb, which the mapping does not name for the implement route; a route change that ever pairs that verb with this endpoint stops the run with a traceback after the call's audit line is already written, with no message naming the cause. | mimo-v2.6-pro | rejected — repeats L2-2: the `run_codex` docstring now names the verbs a Codex route may carry; the lookup stops before the call, and no route pairs implement with Codex; a refusal message would be new runner scope, named in the PR as an accepted limit |  | agree |
+| L3-3 | MINOR | MAINT | diff | tests/test_stage2.py · `SOL_EFFORT_PLACES` / `test_sol_instructions_reference_the_central_effort_for_each_verb` | The regression demands each listed instruction's full wording as a substring before it evaluates the reference rule, so a rewording of one of those sentences that keeps the correct reference still fails at the presence assertion; a maintainer editing unrelated prose there sees a red suite with no wrong reference to find. | mimo-v2.6-pro | rejected — the wording pin fails closed (red, never falsely green) and makes the reader update the pinned sentence on purpose; named in the PR as an accepted limit |  | agree |
+
+Rounds run: 3
+
+Kept from the loop record:
+
+The answer was not only six-cell rows; what is not one is kept below as it came.
+
+I found the following after reading the diff, the touched files (`scripts/stage2.py`, `tests/test_stage2.py`, `docs/WORKFLOW.md`, the four prompts, the change's spec/plan/research/decisions/findings, `plans/INDEX.md`, `plans_registry.py`, `check_docs.py`) and tracing every `run_codex` call site:
