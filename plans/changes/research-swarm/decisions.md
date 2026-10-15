@@ -191,3 +191,14 @@ definition eingehen. es dürfen gegenfalls auch mehr interview fragen
 gestellt werden". The reconciled findings feed phase 1a and phase 2
 traceably, and the interview may ask more questions than the class
 minimum where the research raises them.
+
+Addendum 2026-10-15: the maintainer accepted ("ja") the report template —
+one fixed template; at most seven key claims, each with an id, one-sentence
+statement, evidence (`path::symbol` or URL), kind (fact, assumption,
+judgement) and confidence with its basis; counter-evidence; what was not
+read; relation to the neighbouring specs; questions for the spec — and the
+judge's per-model scoring (supported, refuted, unique, off-brief), recorded
+in `research.md`. Also accepted: interview questions derive from the
+reports' `[DECISION]` claims and from disagreements between models, naming
+the claim ids; spec criteria name the claims or answers they rest on; a gate
+checks that no research `[DECISION]` is lost.
