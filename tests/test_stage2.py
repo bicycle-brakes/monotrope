@@ -833,6 +833,35 @@ def test_explore_stage2_off_uses_haiku_without_reading_the_glm_key(
     assert "model claude-haiku-5-5" in text
 
 
+def anthropic_haiku_problems(declaration: dict) -> list[str]:
+    """Both Anthropic endpoints replace the old Haiku id, independently of model resolution."""
+    entries = {entry["name"]: entry for entry in declaration["endpunkte"]}
+    found = []
+    for name in ("anthropic-api", "claude-code-plan"):
+        models = entries.get(name, {}).get("modelle", [])
+        if "claude-haiku-5-5" not in models:
+            found.append(f"{name}: missing claude-haiku-5-5")
+        if "claude-haiku-4-5" in models:
+            found.append(f"{name}: retains claude-haiku-4-5")
+    return found
+
+
+def test_both_anthropic_endpoints_authorize_haiku_5_5_instead_of_4_5() -> None:
+    """Haiku criterion 2 (F-1): either missing 5.5 or retained 4.5 refutes the declaration."""
+    declaration = yaml.safe_load((REPO_ROOT / "model-endpoints.yaml").read_text(encoding="utf-8"))
+    assert anthropic_haiku_problems(declaration) == []
+    for name in ("anthropic-api", "claude-code-plan"):
+        for fault in ("missing", "replaced", "retained"):
+            planted = copy.deepcopy(declaration)
+            entry = next(entry for entry in planted["endpunkte"] if entry["name"] == name)
+            if fault in ("missing", "replaced"):
+                entry["modelle"].remove("claude-haiku-5-5")
+            if fault in ("replaced", "retained"):
+                entry["modelle"].append("claude-haiku-4-5")
+            problems = anthropic_haiku_problems(planted)
+            assert problems and all(problem.startswith(f"{name}:") for problem in problems), (name, fault)
+
+
 def test_explore_scrubs_the_flash_credential_from_its_answer(world: World) -> None:
     world.script(claude=[{"stdout": "the credential was @KEY@"}])
     assert world.run("explore") == 0
@@ -6619,6 +6648,38 @@ def test_the_explore_prompt_names_the_live_flash_command_and_haiku_fallback() ->
         assert not all(
             phrase in bad for phrase in ("stage2.py explore <change>", "--stage2-off [REASON]", "Haiku 5.5 explores")
         ), planted
+
+
+def haiku_instruction_problems(text: str) -> list[str]:
+    """Reject the obsolete version in operative prose, without reading historical records."""
+    return re.findall(r"\b(?:Haiku\s+4\.5|claude-haiku-4-5)\b", text, re.I)
+
+
+def test_the_current_haiku_instructions_reject_4_5() -> None:
+    """Haiku criterion 3 (F-2): each current instruction refuses an independently restored old pin."""
+    workflow = WORKFLOW.read_text(encoding="utf-8")
+    runner = ast.parse((REPO_ROOT / "scripts/stage2.py").read_text(encoding="utf-8"))
+    docstrings = [
+        ast.get_docstring(node) or ""
+        for node in ast.walk(runner)
+        if isinstance(node, ast.Module | ast.ClassDef | ast.FunctionDef | ast.AsyncFunctionDef)
+    ]
+    texts = {
+        "AGENTS.md": (REPO_ROOT / "AGENTS.md").read_text(encoding="utf-8"),
+        "docs/WORKFLOW.md section 3": section(workflow, "## 3 · "),
+        "docs/WORKFLOW.md section 4": section(workflow, "## 4 · "),
+        "prompts/01-explore.md": (PROMPTS / "01-explore.md").read_text(encoding="utf-8"),
+        "prompts/07-commit.md": (PROMPTS / "07-commit.md").read_text(encoding="utf-8"),
+        "scripts/stage2.py docstrings": "\n".join(docstrings),
+    }
+    for name, text in texts.items():
+        assert haiku_instruction_problems(text) == [], name
+        pins = list(re.finditer(r"\bHaiku\s+5\.5\b", text))
+        assert pins, f"{name}: no versioned Haiku instruction read"
+        for pin in pins:
+            planted = text[: pin.start()] + "Haiku 4.5" + text[pin.end() :]
+            assert haiku_instruction_problems(planted) == ["Haiku 4.5"], (name, pin.start())
+        assert haiku_instruction_problems(text + "\nUse claude-haiku-4-5.") == ["claude-haiku-4-5"], name
 
 
 def flash_runner_doctrine_problems(texts: dict[str, str]) -> list[str]:

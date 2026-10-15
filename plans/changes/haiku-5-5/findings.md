@@ -6,7 +6,7 @@ implementation_status: none
 date: 2026-10-14
 created: 2026-10-14
 last_reviewed: 2026-10-14
-updated: 2026-10-14
+updated: 2026-10-15
 supersedes: null
 superseded_by: null
 bead: coding-harness-eao
@@ -31,8 +31,8 @@ Stage-2 call, 2026-10-14: review-loop · endpoint opencode-go · model mimo-v2.6
 
 | ID | Severity | Dimension | Origin | Where | Finding | Reviewer | Status | Broke a test |
 |---|---|---|---|---|---|---|---|---|
-| F-1 | MINOR | SPEC | base | `model-endpoints.yaml:53`; `model-endpoints.yaml:68`; `tests/test_model_endpoints.py`; `tests/test_stage2.py:828` | Nothing measures the `anthropic-api` half of the criterion or the removal of the old id. If `anthropic-api` listed `claude-haiku-4-5` instead of `claude-haiku-5-5`, or either Anthropic endpoint listed `claude-haiku-4-5` beside the new id, `make verify` would stay green: the display-name resolution tests are satisfied by any one endpoint carrying `claude-haiku-5-5` (here `claude-code-plan`), and the only runner test that reads the declaration, the `--stage2-off` explore test, consults `claude-code-plan` alone. A test should require both endpoints to list `claude-haiku-5-5` and neither to list `claude-haiku-4-5`. [criterion 2] | Opus 5.5 | taken — criterion 2: a test asserts both Anthropic endpoints list claude-haiku-5-5 and neither lists claude-haiku-4-5 | — |
-| F-2 | MINOR | SPEC | base | `AGENTS.md:35`; `docs/WORKFLOW.md:702`; `docs/WORKFLOW.md:723`; `docs/WORKFLOW.md:1079`; `scripts/stage2.py:28` | Of the operative Haiku instructions, only the §3 routing rows and the two prompts' Model lines are guarded: the rows and the commit prompt go red through display-name resolution once `claude-haiku-4-5` is no longer declared, and the explore prompt's "Haiku 5.5 explores" is pinned. The five prose spots this change rewrote — the `--stage2-off` sentence in `AGENTS.md`, `docs/WORKFLOW.md` §4's flash-rows paragraph, its `explore` verb entry and its stage-2-run fallback sentence, and the runner's module docstring — have no test; restoring "Haiku 4.5" in any of them leaves `make verify` green, so the refutation the criterion names cannot be measured there. A test should refuse a Haiku 4.5 pin in these files. [criterion 3] | Opus 5.5 | taken — criterion 3: a test rejects a Haiku 4.5 instruction in AGENTS.md, docs/WORKFLOW.md operative sections and the stage2.py docstring | — |
+| F-1 | MINOR | SPEC | base | `model-endpoints.yaml:53`; `model-endpoints.yaml:68`; `tests/test_model_endpoints.py`; `tests/test_stage2.py:828` | Nothing measures the `anthropic-api` half of the criterion or the removal of the old id. If `anthropic-api` listed `claude-haiku-4-5` instead of `claude-haiku-5-5`, or either Anthropic endpoint listed `claude-haiku-4-5` beside the new id, `make verify` would stay green: the display-name resolution tests are satisfied by any one endpoint carrying `claude-haiku-5-5` (here `claude-code-plan`), and the only runner test that reads the declaration, the `--stage2-off` explore test, consults `claude-code-plan` alone. A test should require both endpoints to list `claude-haiku-5-5` and neither to list `claude-haiku-4-5`. [criterion 2] | Opus 5.5 | taken — criterion 2: a test asserts both Anthropic endpoints list claude-haiku-5-5 and neither lists claude-haiku-4-5; fixed by `tests/test_stage2.py::test_both_anthropic_endpoints_authorize_haiku_5_5_instead_of_4_5` (guard test, plants each fault itself; red first impossible because the code was already right — completed by the orchestrating session after three runner attempts) | no |
+| F-2 | MINOR | SPEC | base | `AGENTS.md:35`; `docs/WORKFLOW.md:702`; `docs/WORKFLOW.md:723`; `docs/WORKFLOW.md:1079`; `scripts/stage2.py:28` | Of the operative Haiku instructions, only the §3 routing rows and the two prompts' Model lines are guarded: the rows and the commit prompt go red through display-name resolution once `claude-haiku-4-5` is no longer declared, and the explore prompt's "Haiku 5.5 explores" is pinned. The five prose spots this change rewrote — the `--stage2-off` sentence in `AGENTS.md`, `docs/WORKFLOW.md` §4's flash-rows paragraph, its `explore` verb entry and its stage-2-run fallback sentence, and the runner's module docstring — have no test; restoring "Haiku 4.5" in any of them leaves `make verify` green, so the refutation the criterion names cannot be measured there. A test should refuse a Haiku 4.5 pin in these files. [criterion 3] | Opus 5.5 | taken — criterion 3: a test rejects a Haiku 4.5 instruction in AGENTS.md, docs/WORKFLOW.md operative sections and the stage2.py docstring; fixed by `tests/test_stage2.py::test_the_current_haiku_instructions_reject_4_5` (guard test, plants each fault itself; completed by the orchestrating session) | no |
 
 Checked: the runner's `HAIKU` constant and its only consumer `explore()` under `--stage2-off`, the audit line that records the model from that tuple, and the new assertion on it (criterion 1); both Anthropic endpoint lists and every reader of them (criterion 2); every remaining "Haiku 4.5" or `claude-haiku-4-5` outside dated records — only the two planted wrong-model fixtures in `tests/test_stage2.py` and two German example comments in `tests/test_model_endpoints.py` remain, both allowed by the spec's last `[DETAIL]` (criterion 3); the renamed `REIST_NICHT` key against the parametrized test id it measures, with entry count and `DECKEL` unchanged (criterion 4); the protected areas and non-goals untouched in `git diff origin/main...HEAD`. No correctness fault was found; both rows are untested refutations, not wrong behaviour.
 
@@ -54,3 +54,57 @@ mimo-v2.6-flash reported no finding.
 The answer was not only six-cell rows; what is not one is kept below as it came.
 
 No findings — every operative Haiku reference (runner constant, both endpoint declarations, §3/§4 routing tables, both phase prompts, AGENTS.md, stage2 docstrings, tests and the probe entry) now reads `claude-haiku-5-5`/Haiku 5.5 consistently, the remaining Haiku 4.5 mentions are in dated records the spec protects, and the kit exemption list and cap are unchanged.
+
+Stage-2 call, 2026-10-15: repair · attempt 1 · route codex · endpoint openai-codex · model gpt-6.1-sol · leak check clean over 422 files, 1168 commits, 12 rules.
+
+> Attempt 1 (codex) failed its post-run checks.
+>
+> Files the attempt changed (lines added, removed):
+> - `plans/changes/haiku-5-5/plan.md` +20 -0
+>
+> Diagnostics:
+> ```text
+> - L1-1: no fixed line
+> - F-1: no fixed line
+> - F-2: no fixed line
+> - expected: no taken row carries this id
+> - found: no taken row carries this id
+> - relevant: no taken row carries this id
+> - proposal: no taken row carries this id
+> - Resume: no taken row carries this id
+> ```
+
+Stage-2 call, 2026-10-15: repair · attempt 2 · route codex-repair · endpoint openai-codex · model gpt-6.1-sol · reason first Codex post-run check failed · leak check clean over 422 files, 1168 commits, 12 rules.
+
+> Attempt 2 (codex-repair) failed its post-run checks.
+>
+> Files the attempt changed (lines added, removed):
+> - `plans/changes/haiku-5-5/plan.md` +34 -2
+> - `tests/test_stage2.py` +61 -0
+>
+> Diagnostics:
+> ```text
+> - Runner format before `make verify`: ruff changed no file.
+> - L1-1: no fixed line
+> - F-1: no fixed line
+> - F-2: no fixed line
+> - expected: no taken row carries this id
+> - found: no taken row carries this id
+> - relevant: no taken row carries this id
+> - proposal: no taken row carries this id
+> - Resume: no taken row carries this id
+> ```
+
+Stage-2 call, 2026-10-15: repair · attempt 3 · route stage-1 · endpoint claude-code-plan · model claude-sonnet-5-5 · reason two Codex post-run checks failed · leak check clean over 422 files, 1168 commits, 12 rules.
+
+> Attempt 3 (stage-1) failed its post-run checks.
+>
+> Files the attempt changed (lines added, removed):
+> - `plans/changes/haiku-5-5/plan.md` +6 -2
+>
+> Diagnostics:
+> ```text
+> - Runner format before `make verify`: ruff changed no file.
+> - F-1: tests/test_stage2.py::test_both_anthropic_endpoints_authorize_haiku_5_5_instead_of_4_5: pytest ended 0 on the baseline's code; red first is exit 1 or 2
+> - F-2: tests/test_stage2.py::test_the_current_haiku_instructions_reject_4_5: pytest ended 0 on the baseline's code; red first is exit 1 or 2
+> ```

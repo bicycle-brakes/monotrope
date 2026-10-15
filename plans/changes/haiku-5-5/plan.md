@@ -4,7 +4,7 @@ status: draft
 implementation_status: none
 date: 2026-10-14
 last_reviewed: 2026-10-14
-updated: 2026-10-14
+updated: 2026-10-15
 supersedes: null
 superseded_by: null
 bead: coding-harness-eao
@@ -48,13 +48,17 @@ The prompt's `python3 scripts/validate_change_artefacts.py --check` cannot run a
 
 - 1: tests/test_stage2.py::test_explore_stage2_off_uses_haiku_without_reading_the_glm_key — the command or new audit line names the old model; this existing test gains the audit assertion.
 - 2: tests/test_model_endpoints.py::test_every_model_in_the_routing_table_resolves — the new table model has no declared endpoint.
-- 2: not a test — phase-6 diff review checks both Anthropic lists; either retaining 4.5 or lacking 5.5 fails, even if the other list resolves the model.
+- 2: tests/test_stage2.py::test_both_anthropic_endpoints_authorize_haiku_5_5_instead_of_4_5 — either Anthropic endpoint lacks 5.5 or retains 4.5, even if the other list resolves the model.
 - 3: tests/test_stage2.py::test_the_explore_prompt_names_the_live_flash_command_and_haiku_fallback — the explore prompt retains 4.5.
 - 3: tests/test_model_endpoints.py::test_every_model_in_a_phase_prompt_resolves — the commit prompt retains a model removed from the declaration.
 - 3: tests/test_model_endpoints.py::test_every_model_in_the_routing_table_resolves — a routing row retains a model removed from the declaration.
-- 3: not a test — phase-6 review reads the remaining prose in AGENTS.md, WORKFLOW.md and the runner docstrings; any operative 4.5 instruction fails.
+- 3: tests/test_stage2.py::test_the_current_haiku_instructions_reject_4_5 — a Haiku 4.5 instruction returns in AGENTS.md, WORKFLOW.md sections 3 and 4, the two prompts or the runner docstrings.
 - 4: tests/test_kit.py::test_the_exemption_list_only_shrinks — the exception count or cap increases.
 - 4: not a test — `python3 scripts/kit/probe.py --strict` fails on the stale 4.5 key or an unexplained 5.5 case.
+
+## Runner route — 2026-10-15
+
+Stage-1 route: repair · model claude-sonnet-5-5 · reason: two Codex post-run checks failed.
 
 ## Time used
 
@@ -63,3 +67,7 @@ clock was not readable — this attempt runs with file tools and no command tool
 so no `date` could be read and start/end/span stand unmeasured; the runner's
 record may complete the span. One span, no break: the plan's Changes list,
 tests and production moved together.
+
+2026-10-15, repair attempt (file tools only, no command tool): no `date`
+readable, span unmeasured. Rows F-1 and F-2 taken with tests; L1-1 was
+repaired by the orchestrating session.
