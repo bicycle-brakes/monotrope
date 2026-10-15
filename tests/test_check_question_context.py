@@ -295,20 +295,57 @@ def test_adoption_day_and_later_answers_are_subject(tmp_path: Path) -> None:
     assert "early" not in done.stdout  # the stock stays exempt
 
 
-def test_answer_date_uses_wrapped_decision_suffix(tmp_path: Path) -> None:
-    """The dash and the date may wrap onto separate lines, and a date inside
-    the context value never dates the answer."""
+@pytest.mark.parametrize(
+    "continuation",
+    [
+        pytest.param("—\n2026-10-14", id="split-date"),
+        pytest.param("\n  — 2026-10-14", id="indented-suffix"),
+        pytest.param("—\n  2026-10-14", id="indented-date"),
+        pytest.param("\n\n— 2026-10-14", id="blank-before-suffix"),
+        pytest.param("—\n\n2026-10-14", id="blank-before-date"),
+        pytest.param("\n\n  —\n\n  2026-10-14", id="blank-and-indented"),
+    ],
+)
+def test_answer_date_uses_wrapped_decision_suffix(tmp_path: Path, continuation: str) -> None:
+    """Indented or blank-separated date continuations remain measurable;
+    a date inside the context value never dates the answer."""
     wrapped = (
         "In the context of many existing records without a context field, facing a choice, we decided "
-        "the cut-off, to achieve a gate that holds, accepting that older answers show no context. —\n2026-10-14\n"
+        f"the cut-off, to achieve a gate that holds, accepting that older answers show no context. {continuation}\n"
     )
     root = _tree(tmp_path)
+    _change(root, "wrapped", record("Q-1", day=EARLY, madr=wrapped))
+    assert run(root).returncode == 0
+    _change(root, "other", record("Q-2", context=None), archive=True)
     _change(root, "wrapped", record("Q-1", context=None, madr=wrapped))
-    assert run(root).returncode == 1
+    done = run(root)
+    assert done.returncode == 1, done.stdout
+    assert "plans/changes/wrapped/decisions.md: Q-1" in done.stdout
+    assert "plans/changes/archive/other/decisions.md: Q-2" in done.stdout
+    assert "NOT MEASURED" not in done.stdout
     dated = CONTEXT.replace("Architecture change:", "Recorded 2026-10-13 earlier. Architecture change:")
     _change(root, "wrapped", record("Q-1", context=dated, madr=wrapped.replace("2026-10-14", "")))
     done = run(root)
-    assert done.returncode == 3  # only the suffix dates the answer, and none stands
+    assert done.returncode == 3  # only the statement dates the answer, and its date is missing
+
+
+@pytest.mark.parametrize(
+    "unrelated",
+    [
+        "context: |\n  — 2026-10-14\n",
+        "recorded: — 2026-10-14\n",
+        "\nAnother paragraph. — 2026-10-14\n",
+        "```text\n— 2026-10-14\n```\n",
+    ],
+)
+def test_wrapped_date_cannot_come_from_another_field_or_example(tmp_path: Path, unrelated: str) -> None:
+    root = _tree(tmp_path)
+    statement = "In the context of a choice, we decided one, accepting the cost. —\n"
+    _change(root, "case", record("Q-1", madr=statement + unrelated))
+    done = run(root)
+    assert done.returncode == 3, done.stdout
+    assert "plans/changes/case/decisions.md: Q-1" in done.stdout
+    assert "no `— YYYY-MM-DD` date" in done.stdout
 
 
 def test_archived_and_spec_less_answers_are_subject(tmp_path: Path) -> None:
@@ -381,7 +418,7 @@ def test_gate_never_writes_records_or_adoption(tmp_path: Path) -> None:
         pytest.param("impossible", "calendar", id="impossible-date"),
         pytest.param("two-dates", "ambiguous", id="ambiguous-date"),
         pytest.param("no-statement", "In the context of", id="no-statement"),
-        pytest.param("no-dash", "suffix", id="date-without-the-dash"),
+        pytest.param("no-dash", "— YYYY-MM-DD", id="date-without-the-dash"),
         pytest.param("bytes", "cannot be read", id="unreadable-file"),
     ],
 )

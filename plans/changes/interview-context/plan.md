@@ -37,8 +37,9 @@ glm-5.3-flash, 2026-10-14; no Stage-1 fallback is recorded.
    outside fences, and keep indented context inside its value. Check every
    `status: answered` occurrence, not just records counted toward a minimum.
 2. Read the cut-off only through `adoption.adopted_on(root, "question-context")`.
-   Read each recording day from exactly one suffix `— YYYY-MM-DD` ending its
-   top-level MADR paragraph beginning `In the context of`; join wrapped lines,
+   Read each recording day from exactly one em-dash date (`— YYYY-MM-DD`)
+   anywhere in its top-level MADR paragraph beginning `In the context of`;
+   join indented wraps and blank-separated dash/date continuations,
    including the dash/date split in this change's fifth answer. Ignore dates
    in context, fields and examples. Dates before adoption are exempt; the
    adoption day and later are subject, even with an earlier `asked` date or
@@ -129,12 +130,13 @@ card templates, harness configuration and sibling repositories untouched.
 - 5: tests/test_check_question_context.py::test_every_answered_occurrence_needs_context — exempt a duplicate Q-id or an agent-attributed answered record
 - 6: tests/test_check_question_context.py::test_nonblank_context_passes_without_clarity_scoring — reject a plain scalar or multiline explanation on wording alone
 - 7: tests/test_check_question_context.py::test_adoption_day_and_later_answers_are_subject — change the comparison from inclusive to strict or select by spec/asked date
-- 7: tests/test_check_question_context.py::test_answer_date_uses_wrapped_decision_suffix — take a date from context or fail to read the dash/date split
+- 7: tests/test_check_question_context.py::test_answer_date_uses_wrapped_decision_suffix — take a date from context or fail to read an indented or blank-separated dash/date split
 - 7: tests/test_check_question_context.py::test_archived_and_spec_less_answers_are_subject — move a missing-context answer into the archive or remove its spec
 - 7: tests/test_check_question_context.py::test_examples_open_and_skip_records_are_not_answers — count fenced examples or skip/open blocks as answered records
 - 8: tests/test_check_question_context.py::test_older_answers_stay_exempt_in_mixed_files — require backfill or let an old answer exempt the whole file
 - 8: tests/test_check_question_context.py::test_gate_never_writes_records_or_adoption — fill an older record or move the adoption day while checking
 - 9: tests/test_check_question_context.py::test_unreadable_evidence_is_not_a_pass — return 0 for missing/invalid adoption, absent/ambiguous decision dates or an unreadable file
+- 9: tests/test_check_question_context.py::test_wrapped_date_cannot_come_from_another_field_or_example — borrow the recording day from context, a field, another paragraph or a fenced example
 - 9: tests/test_check_question_context.py::test_unmeasured_evidence_takes_exit_precedence — return 1 after one context failure hides another record's unknown date
 - 10: tests/test_check_question_context.py::test_gate_is_blocking_in_both_placements — omit the command or change enforcement/placement
 - 10: tests/test_ci.py::test_no_blocking_gate_step_carries_continue_on_error — allow the derived hosted step to ignore a failure
@@ -219,5 +221,40 @@ artifacts reported by the first post-run check and in this plan. The
 frontmatter-current, criterion-ledger and question-context gates, Ruff
 checks and git diff --check passed. The inherited findings file was not
 edited. The runner owns full verification and the checkpoint commit.
+
+Resume: when I start, I will run `make verify` through the repair runner.
+
+
+### Repair of L2-1 and L2-2 — 2026-10-15
+
+2026-10-15 03:08:14–03:15:29, 7m 15s (CEST, UTC+02:00).
+
+L2-1 uses the explicitly permitted documentation correction: exactly one
+em-dash date anywhere in the decision statement supplies the recording day.
+A historical answer includes a recording note after its date; requiring the
+date at the end made that readable evidence unmeasured. The module and
+function docstrings, workflow protocol and gate table, diagnostic and Build
+step 2 now describe the accepted position. Historical answers were not edited.
+The orchestrator records the choice and row status in findings.md.
+
+L2-2 joins indented statement continuations and blank-separated dash/date
+lines without borrowing dates from fields, another paragraph or fenced
+examples. The existing ledger test now plants both wraps, verifies a readable
+record passes, then removes its context and checks both its failure and an
+archived record's failure without an unmeasured verdict. The added boundary
+test is named in the ledger.
+
+Before the script changed from baseline f3b00bd, the wrapped-date regression
+produced five expected failures and one passing flush-left split. After the
+repair, the question-context, repository-adoption and interview-minimums test
+modules passed all 121 tests. The repository question-context command read
+55 answered records successfully. The criterion-ledger, frontmatter-current,
+interview-minimums and gate-schema checks, Ruff check/format checks and
+`git diff --check` passed. No make verify or kit probe is claimed here; the
+runner owns full verification and the checkpoint commit. This attempt made
+no commit and did not edit the inherited findings file.
+
+Measured repair spans now total 10m 2s; the earlier unmeasured
+implementation span remains unknown and is not estimated.
 
 Resume: when I start, I will run `make verify` through the repair runner.

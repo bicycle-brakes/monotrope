@@ -4,7 +4,7 @@ category: governance
 status: current
 created: 2026-09-05
 last_reviewed: 2026-09-29
-updated: 2026-10-14
+updated: 2026-10-15
 owner: Data Architect
 provenance: ai-drafted-reviewed
 produced_by:
@@ -215,10 +215,10 @@ recorded on or after the repository's adoption day
 (`decisions/adoption.yaml`, read through `scripts/adoption.py`) to one
 non-blank `context` text value — presence only, never a grade of wording —
 in live and archived changes, with or without a spec. The cut-off is each
-answer's own recording day, the `— YYYY-MM-DD` that ends its decision
-statement; the adoption day itself is included, older answers stay exempt
-and unchanged, and evidence the gate cannot read is not measured (exit 3)
-instead of passing.
+answer's own recording day, the one em-dash date (`— YYYY-MM-DD`) anywhere
+in its decision statement; the adoption day itself is included, older answers
+stay exempt and unchanged, and evidence the gate cannot read is not measured
+(exit 3) instead of passing.
 
 **An ambiguity is not mechanics.** "The plan is the contract" governs departures
 from an *unambiguous* contract. Where the plan allows two readings, nothing is
@@ -426,7 +426,7 @@ What this does not do:
 | Enforcement | `decisions/gates.yaml` | **the one gate list** (D-10); `.github/workflows/ci.yml` is generated from it |
 | Decisions | `scripts/check_adr_answers.py`, `scripts/harness.py`, `.github/PULL_REQUEST_TEMPLATE/decision.md` | the gate `adr-answers`; `decide adr` records the maintainer's ADR answers; the decision pull request's block |
 | Interview | `scripts/check_interview_minimums.py` | the gate `interview-minimums`: counts counted interview records per class at the spec gate and in verify, sees ADR paths in every diff state, compares per context — first parent on the main line (a `main` checkout or the hosted main-line run), else the merge base; a detached HEAD at `origin/main` is not measured and exits 3 — attributes an ADR edit to the change that claims it under `adr_files` (ADR 0014) — subject after the adoption day of `decisions/adoption.yaml`, here 2026-10-08 |
-| Question context | `scripts/check_question_context.py` | the gate `question-context`: every `status: answered` record recorded on or after the adoption day keeps the context that was shown with it in its own `context` field — presence only, in live and archived `decisions.md`, with or without a spec; the cut-off is each answer's own recording day, read from the `— YYYY-MM-DD` ending its decision statement; the adoption day itself is subject, older answers stay exempt, unreadable evidence exits 3 (ADR 0018) |
+| Question context | `scripts/check_question_context.py` | the gate `question-context`: every `status: answered` record recorded on or after the adoption day keeps the context that was shown with it in its own `context` field — presence only, in live and archived `decisions.md`, with or without a spec; the cut-off is each answer's own recording day, read from the one em-dash date (`— YYYY-MM-DD`) anywhere in its decision statement; the adoption day itself is subject, older answers stay exempt, unreadable evidence exits 3 (ADR 0018) |
 | Criterion tests | `scripts/check_criterion_ledger.py` | the gate `criterion-ledger`: every test a plan's `## Criterion ledger` names is defined, every criterion of the spec has an entry, a not-yet-written entry stands only while the change is live; ledgers stay held after archiving, and archived plans dated before 2026-10-11 without one are exempt (ADR 0013); moving that cut-off date is a governance act — a decision pull request, never a drive-by edit of the gate |
 
 ### Verification runs through git and CI, not through the harness

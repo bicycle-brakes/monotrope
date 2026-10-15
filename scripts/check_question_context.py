@@ -13,9 +13,9 @@ a change needs no spec for its records to be held. It inspects every block
 not, first occurrence or repeat, maintainer or agent. Fenced examples, skip
 records, open questions and prose decisions are not records.
 
-The cut-off is each answer's own recording day, read from exactly one
-`— YYYY-MM-DD` suffix in the record's top-level decision statement beginning
-`In the context of`, its wrapped lines joined first. A date inside the
+The cut-off is each answer's own recording day, read from exactly one em-dash
+date (`— YYYY-MM-DD`) anywhere in the record's top-level decision statement
+beginning `In the context of`, its wrapped lines joined first. A date inside the
 context value, a field or a fence never dates an answer. The day comes from
 `decisions/adoption.yaml` through `scripts/adoption.py` and from nowhere
 else; the gate holds no date of its own. The adoption day itself is subject
@@ -72,7 +72,9 @@ _STATEMENT = re.compile(r"^In the context of(?:\s|$)")
 _CONTEXT_FIELD = re.compile(r"^context:(?P<rest>.*)$")
 _BLOCK_INDICATOR = re.compile(r"^[|>](?:[0-9][+-]?|[+-]?[0-9]?)$")
 _NONTEXT = re.compile(r"^(?:null|~|true|false|yes|no|on|off)$", re.IGNORECASE)
-_DATE_SUFFIX = re.compile(r"—[ \t]*([0-9]{4})-([0-9]{2})-([0-9]{2})")
+_DECISION_DATE = re.compile(r"—[ \t]*([0-9]{4})-([0-9]{2})-([0-9]{2})")
+_DATE_CONTINUATION = re.compile(r"(?:—[ \t]*)?(?:[0-9]{4}-[0-9]{2}-[0-9]{2})?$")
+_FIELD = re.compile(r"^[A-Za-z_][A-Za-z0-9_-]*:")
 
 
 class CannotMeasure(Exception):  # noqa: N818 — a verdict, not an error class
@@ -156,23 +158,36 @@ def _status(body: list[tuple[int, str]], marks: list[bool]) -> str:
 def _recording_day(rel: str, record_id: str, body: list[tuple[int, str]], marks: list[bool]) -> date:
     """The day the answer was recorded, or CannotMeasure with the reason.
 
-    Read from exactly one `— YYYY-MM-DD` suffix in the one top-level decision
-    statement beginning `In the context of`, its wrapped lines joined first —
-    this change's own fifth answer wraps the dash and the date onto separate
-    lines. Dates inside the context value, a field or a fence are not read.
+    Read from exactly one em-dash date (`— YYYY-MM-DD`) anywhere in the one
+    top-level decision statement beginning `In the context of`, joining
+    indented wraps and blank-separated dash/date continuations first. This
+    change's own fifth answer splits the dash and date. Dates inside the
+    context value, a field or a fence are not read.
     """
     statements: list[list[str]] = []
     for position, (_, line) in enumerate(body):
         if marks[position] or line[:1].isspace() or not _STATEMENT.match(line):
             continue
         paragraph = [line]
+        separated = False
         for offset in range(position + 1, len(body)):
             if marks[offset]:
                 break  # a fence ends the statement; its lines are never read
             following = body[offset][1]
-            if not following.strip() or following[:1].isspace():
+            if not following.strip():
+                separated = True
+                continue
+            if separated:
+                # A blank normally ends the paragraph, except when its missing
+                # dash/date marker continues on the next non-blank line.
+                if _DECISION_DATE.search(" ".join(part.strip() for part in paragraph)):
+                    break
+                if not _DATE_CONTINUATION.fullmatch(following.strip()):
+                    break
+            if _FIELD.match(following) or following.startswith("#") or _STATEMENT.match(following):
                 break
             paragraph.append(following)
+            separated = False
         statements.append(paragraph)
     if not statements:
         raise CannotMeasure(
@@ -185,10 +200,10 @@ def _recording_day(rel: str, record_id: str, body: list[tuple[int, str]], marks:
             "the recording day is ambiguous"
         )
     joined = " ".join(statement.strip() for statement in statements[0])
-    found = _DATE_SUFFIX.findall(joined)
+    found = _DECISION_DATE.findall(joined)
     if not found:
         raise CannotMeasure(
-            f"{rel}: {record_id} — no `— YYYY-MM-DD` suffix ends the decision statement; "
+            f"{rel}: {record_id} — no `— YYYY-MM-DD` date occurs in the decision statement; "
             "the recording day cannot be read"
         )
     if len(found) > 1:
