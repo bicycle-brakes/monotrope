@@ -4,7 +4,7 @@ status: draft
 implementation_status: none
 date: 2026-10-14
 last_reviewed: 2026-10-14
-updated: 2026-10-14
+updated: 2026-10-15
 supersedes: null
 superseded_by: null
 bead: coding-harness-icw
@@ -257,7 +257,13 @@ fails again, the tracker-owning session investigates both exports against
 an unchanged tracker state. Once green, obtain the Opus phase-2a review and
 incorporate its rows before implementation.
 
+## Runner route — 2026-10-15
+
+Stage-1 route: implement · model claude-sonnet-5-5 · reason: two Flash post-run checks failed.
+
 ## Time used
+
+2026-10-15 repair attempt 3, span not measured: this session had no command tool to read `date`.
 
 ## Addendum — 2026-10-14, Q-6
 

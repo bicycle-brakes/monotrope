@@ -26,7 +26,9 @@ WORKFLOW = REPO_ROOT / "docs" / "WORKFLOW.md"
 PROMPTS = REPO_ROOT / "prompts"
 
 RESIDENZEN = ("anbieter-erklaert", "region-waehlbar", "nicht-erklaert")
-ABRECHNUNGEN = ("token", "abonnement")
+# `free` ist der kostenlose Plan der Schwarm-Forscher (ADR 0018): keine
+# Abrechnungseinheit, aber eine Zusage, die eintraegig geprueft wird.
+ABRECHNUNGEN = ("token", "abonnement", "free")
 
 
 def _erklaerung() -> dict:
@@ -285,6 +287,14 @@ def test_every_model_in_the_routing_table_resolves() -> None:
     for anzeige in tabelle:
         if anzeige == "the ladder":
             continue  # no model id: the ids live in the `opencode-go` entry, checked by its own test
+        if anzeige == "the research swarm":
+            # No single model id: the swarm is a declared role roster. The row
+            # resolves only while the declaration itself is complete and every
+            # id it names sits on its declared endpoint.
+            assert swarm_block_problems(_erklaerung()) == [], (
+                "docs/WORKFLOW.md routet auf 'the research swarm', aber der deklarierte Schwarm ist unvollstaendig"
+            )
+            continue
         assert _loest_auf(anzeige, ids), (
             f"docs/WORKFLOW.md routet auf '{anzeige}', das in keinem Endpunkt steht. "
             f"Gesucht: {' oder '.join(sorted(_kandidaten(anzeige)))}"
@@ -446,3 +456,175 @@ def test_no_remark_routes_the_spec_review_to_codex() -> None:
     assert "spec review (phase 2a) stays with Codex" not in remark
     planted = remark.replace("runs on Opus 5.5", "stays with Codex", 1)
     assert "spec review (phase 2a) stays with Codex" in planted, "the planted fault is the old routing"
+
+
+# ---------------------------------------------------------------------------
+# The research swarm declaration (research-swarm, ADR 0018 draft)
+# ---------------------------------------------------------------------------
+
+
+def swarm_block_problems(geladen: dict) -> list[str]:
+    """What the swarm's role declaration requires, as the problems found.
+
+    The swarm runner refuses a role whose endpoint or model this block does not
+    clear (spec criterion 11): the free roster rides on one endpoint cleared
+    only for `public-web` with `free` billing, the Flash pair on its declared
+    endpoint, topic author and judge on the paid endpoint, every id on its
+    endpoint's `modelle`, every focus inside topics 1-6 and topic 6 on exactly
+    one free seat. A present but broken block refuses; an absent block leaves
+    the swarm undeployable.
+
+    The fixture tests below carry the synthetic cases, so the function itself
+    travels without reading this repository's declaration.
+    """
+    problems: list[str] = []
+    block = geladen.get("research_swarm")
+    if not isinstance(block, dict):
+        return ["no research_swarm block"]
+    klassen = set(geladen.get("datenklassen") or {})
+
+    def endpunkt(name: object) -> dict:
+        for e in geladen.get("endpunkte") or []:
+            if isinstance(e, dict) and e.get("name") == name:
+                return e
+        return {}
+
+    free = endpunkt(block.get("free_endpoint"))
+    if not free:
+        problems.append("free endpoint not declared")
+    else:
+        if free.get("abrechnung") != "free":
+            problems.append("free endpoint billing is not free")
+        if list(free.get("darf_sehen") or []) != ["public-web"]:
+            problems.append("free endpoint must be cleared for public-web only")
+    if "public-web" not in klassen:
+        problems.append("public-web data class not declared")
+
+    roster = block.get("free_roster") or []
+    if not roster or len(set(roster)) != len(roster):
+        problems.append("free roster empty or duplicated")
+    elif free:
+        unbekannt = sorted(set(roster) - set(free.get("modelle") or []))
+        if unbekannt:
+            problems.append(f"roster ids not on the free endpoint: {unbekannt}")
+
+    focuses = block.get("free_focuses") or {}
+    if set(focuses) != set(roster):
+        problems.append("free_focuses do not match the roster")
+    for thema in focuses.values():
+        liste = thema if isinstance(thema, list) else None
+        if not liste or any(t not in (1, 2, 3, 4, 5, 6) for t in liste):
+            problems.append("a focus names a topic outside 1-6")
+    mit_sechs = [m for m, thema in focuses.items() if isinstance(thema, list) and 6 in thema]
+    if len(mit_sechs) != 1:
+        problems.append("topic 6 needs exactly one free seat")
+
+    flash = endpunkt(block.get("flash_endpoint"))
+    pair = block.get("flash_pair") or []
+    if not flash:
+        problems.append("flash endpoint not declared")
+    elif len(pair) != 2 or len(set(pair)) != 2 or not set(pair) <= set(flash.get("modelle") or []):
+        problems.append("flash pair must be two distinct ids on the flash endpoint")
+
+    paid = endpunkt(block.get("paid_endpoint"))
+    if not paid:
+        problems.append("paid endpoint not declared")
+    for rolle in ("topic_author", "judge"):
+        if block.get(rolle) not in set(paid.get("modelle") or []):
+            problems.append(f"{rolle} not on the paid endpoint")
+
+    if block.get("topic6_free") not in set(roster):
+        problems.append("topic6_free is not a roster id")
+    return problems
+
+
+def _swarm_fixture() -> dict:
+    """A minimal, complete declaration — no repository file needed."""
+    return {
+        "datenklassen": {"framework": {}, "public-web": {}},
+        "endpunkte": [
+            {
+                "name": "free-e",
+                "abrechnung": "free",
+                "darf_sehen": ["public-web"],
+                "modelle": ["longcat", "bunny", "hy4"],
+            },
+            {"name": "flash-e", "darf_sehen": ["framework"], "modelle": ["d-flash", "m-flash"]},
+            {"name": "paid-e", "darf_sehen": ["framework"], "modelle": ["opus"]},
+        ],
+        "research_swarm": {
+            "free_endpoint": "free-e",
+            "free_roster": ["longcat", "bunny", "hy4"],
+            "free_focuses": {"longcat": [1, 4], "bunny": [2, 3], "hy4": [5, 6]},
+            "topic6_free": "hy4",
+            "flash_endpoint": "flash-e",
+            "flash_pair": ["d-flash", "m-flash"],
+            "paid_endpoint": "paid-e",
+            "topic_author": "opus",
+            "judge": "opus",
+        },
+    }
+
+
+def test_the_swarm_declaration_clears_every_role() -> None:
+    assert swarm_block_problems(_swarm_fixture()) == []
+
+
+@pytest.mark.parametrize(
+    ("how", "expected"),
+    [
+        ("drop-block", "no research_swarm block"),
+        ("free-sees-framework", "public-web only"),
+        ("free-billing-lost", "billing is not free"),
+        ("roster-id-unlisted", "not on the free endpoint"),
+        ("pair-shrinks", "two distinct ids"),
+        ("pair-id-unlisted", "two distinct ids"),
+        ("author-on-free-endpoint", "not on the paid endpoint"),
+        ("judge-unlisted", "not on the paid endpoint"),
+        ("topic-six-unseated", "exactly one free seat"),
+        ("focus-out-of-range", "outside 1-6"),
+        ("focus-roster-mismatch", "do not match the roster"),
+        ("public-web-class-gone", "public-web data class not declared"),
+        ("topic6-free-not-roster", "topic6_free is not a roster id"),
+    ],
+)
+def test_a_broken_swarm_declaration_is_named(how: str, expected: str) -> None:
+    """Each broken declaration names its fault — the counterpart that goes red."""
+    data = _swarm_fixture()
+    block = data["research_swarm"]
+    if how == "drop-block":
+        del data["research_swarm"]
+    elif how == "free-sees-framework":
+        data["endpunkte"][0]["darf_sehen"] = ["public-web", "framework"]
+    elif how == "free-billing-lost":
+        data["endpunkte"][0]["abrechnung"] = "abonnement"
+    elif how == "roster-id-unlisted":
+        block["free_roster"] = ["longcat", "bunny", "stranger"]
+    elif how == "pair-shrinks":
+        block["flash_pair"] = ["d-flash"]
+    elif how == "pair-id-unlisted":
+        block["flash_pair"] = ["d-flash", "stranger"]
+    elif how == "author-on-free-endpoint":
+        block["topic_author"] = "longcat"
+    elif how == "judge-unlisted":
+        block["judge"] = "stranger"
+    elif how == "topic-six-unseated":
+        block["free_focuses"]["hy4"] = [5]
+    elif how == "focus-out-of-range":
+        block["free_focuses"]["longcat"] = [1, 9]
+    elif how == "focus-roster-mismatch":
+        block["free_focuses"] = {"longcat": [1, 4], "bunny": [2, 3]}
+    elif how == "public-web-class-gone":
+        del data["datenklassen"]["public-web"]
+    elif how == "topic6-free-not-roster":
+        block["topic6_free"] = "stranger"
+    found = swarm_block_problems(data)
+    assert any(expected in p for p in found), (how, found)
+
+
+def test_the_declaration_carries_the_swarm_block() -> None:
+    """The real declaration must clear the swarm; the kit's empty stub skips."""
+    geladen = _erklaerung()
+    if not geladen.get("research_swarm"):
+        pytest.skip("no research_swarm block in this declaration (the kit's stub is empty)")
+    assert swarm_block_problems(geladen) == []

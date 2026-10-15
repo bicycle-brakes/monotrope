@@ -32,6 +32,13 @@ datenklassen:
     bemerkung: >-
       Verlaesst die Umgebung des Kunden nicht. Kein hier gelisteter Endpunkt ist
       dafuer zugelassen; die Reconciliation laeuft im Warehouse, nicht im Modell.
+  public-web:
+    was: "Oeffentlich zugaengliche Quellen: Suchergebnisse und abgerufene Webseiten"
+    bemerkung: >-
+      Nur fuer die oeffentliche Forschungsstufe des Recherche-Scharms (ADR 0018
+      draft). Kein Repositorien-Inhalt und keine Kundenbezuege — zu einem Aufruf
+      auf dieser Klasse verlaesst nur der gefilterte Ein-Satz-Themensatz die
+      Grenze; die Antworten der Modelle sind Daten, kein Beweis fuer Lokales.
 
 # ---------------------------------------------------------------------------
 # Die zugelassenen Endpunkte
@@ -120,7 +127,10 @@ endpunkte:
       Anthropic-compatible endpoint (`https://api.z.ai/api/anthropic`), operated
       in China. No review phase routes to it since 2026-10-07 (ADR 0011): the
       review loop (phase 4b) moved to `opencode-go`. `glm-5.3-flash` explores
-      (phase 1) through `stage2.py explore` and implements (phase 4) through
+      (phase 1) through `stage2.py explore` — since ADR 0018 only for a
+      `bounded` or `spike` change, while a `feature` or `architectural` change
+      explores through the research swarm declared below — and implements
+      (phase 4) through
       `stage2.py implement` (maintainer, 2026-10-06; bead
       coding-harness-qcp). `glm-5.3` repaired the findings the orchestrator took
       until ADR 0017, which moved `stage2.py repair` to Codex (maintainer,
@@ -163,8 +173,9 @@ endpunkte:
       - mimo-v2.6-flash
       - mimo-v2.6-pro
     bemerkung: >-
-      The review loop (phase 4b) and the interactive session verb (`stage2.py
-      session`, ADR 0012) run here — and nothing else; the spec review (phase
+      The review loop (phase 4b), the interactive session verb (`stage2.py
+      session`, ADR 0012) and, since ADR 0018, the eleven Flash research calls
+      of the swarm declared below run here; the spec review (phase
       2a) runs on Opus 5.5 and the review (phase 6) on Codex — through
       `python3
       scripts/stage2.py` and Pi at the version the runner pins (1.1.0) only. The order of `modelle` is the loop's ladder: round n
@@ -191,6 +202,55 @@ endpunkte:
       programmatically extracts data or Output" and that run "while you are
       not logged into the Services"; the maintainer accepted this residual
       risk on 2026-10-08.
+
+  - name: opencode-free
+    betreiber: "OpenCode (Operator Anomaly Innovations, Inc.)"
+    residenz: nicht-erklaert
+    abrechnung: free
+    darf_sehen: [public-web]
+    modelle:
+      - longcat-2.5-preview-free
+      - space-bunny
+      - hy4-preview
+    bemerkung: >-
+      Public-only research endpoint of the swarm (ADR 0018 draft): the three
+      free ids the maintainer declared in Q-1 receive nothing but the filtered
+      one-sentence public topic and fixed generic questions. The endpoint name
+      is this declaration's, not an asserted Pi provider id — before any call
+      the runner maps each id through the pinned Pi model inventory, and an
+      unmapped or unsupported id refuses instead of assuming
+      `opencode-go/<id>`. The data terms and residency of the free ids are
+      UNREAD: `nicht-erklaert` records exactly that, and the default framework
+      check refuses this endpoint on the residency alone. `darf_sehen` grants
+      only `public-web`; no repository content, no `framework` permission, no
+      customer class. First contact happens only after the decision merge, on
+      the post-merge live qualification (ADR 0018, point 8).
+
+# ---------------------------------------------------------------------------
+# Der Recherche-Schwarm (ADR 0018 draft) — wer in welcher Rolle laeuft
+# ---------------------------------------------------------------------------
+#
+# Die Rollen sind hier DEKLARIERT, nicht in einem Skript hardkodiert: der
+# Schwarm-Lauf liest diesen Block und lehnt jede Rolle ab, deren Endpunkt oder
+# Modell hier nicht so steht, wie die Rolle sie braucht. Der Block aendert
+# NICHT die Reihenfolge von `opencode-go.modelle` — die bleibt die Leiter der
+# Review-Schleife (phase 4b).
+research_swarm:
+  free_endpoint: opencode-free
+  free_roster: [longcat-2.5-preview-free, space-bunny, hy4-preview]
+  # Die anfaenglichen Schwerpunkte (Q-1): LongCat Code/Test-Praxis, Space Bunny
+  # Governance/Geschichte, HY4 Risiko/Integration. Alles generische oeffentliche
+  # Fragen; ein Bericht kann mehrere Themen stuetzen.
+  free_focuses:
+    longcat-2.5-preview-free: [1, 4]
+    space-bunny: [2, 3]
+    hy4-preview: [5, 6]
+  topic6_free: hy4-preview
+  flash_endpoint: opencode-go
+  flash_pair: [deepseek-v4.1-flash, mimo-v2.6-flash]
+  paid_endpoint: claude-code-plan
+  topic_author: claude-opus-5-5
+  judge: claude-opus-5-5
 
 # ---------------------------------------------------------------------------
 # Nutzungszweck — die Auflage, die kein technisches Gate prueft

@@ -7,10 +7,14 @@ content: the review loop (4b) runs on OpenCode Go through Pi at
 `opencode-go` entry's ordered `modelle` list (the ladder, at most three
 rounds); Codex drafts the spec, the design and the plan (2, 2b and 3; GLM 5.3
 after two failed Codex attempts) and reviews the change (6); Opus 5.5 reviews
-the spec (2a); GLM 5.3 Flash explores (phase 1) and implements (phase 4). A declaration in `model-endpoints.yaml` stops nothing; this runner
+the spec (2a); GLM 5.3 Flash implements (phase 4) and explores (phase 1) a
+`bounded` change or a `spike`, while a `feature` or `architectural` change
+explores through the research swarm (ADR 0018 draft: free public researchers
+from one filtered topic sentence, a Flash pair on the repository, one fresh
+Opus 5.5 reconciliation). A declaration in `model-endpoints.yaml` stops nothing; this runner
 stands between the rule and the call.
 
-    python3 scripts/stage2.py explore      <change>   # GLM Flash, phase 1
+    python3 scripts/stage2.py explore      <change>   # the swarm or GLM Flash by class, phase 1
     python3 scripts/stage2.py draft        <change>   # Codex, phases 2, 2b and 3; GLM 5.3 after two failed attempts
     python3 scripts/stage2.py spec-review  <change>   # Opus 5.5, phase 2a
     python3 scripts/stage2.py implement    <change>   # GLM Flash, phase 4
@@ -95,7 +99,12 @@ were measured once by hand on the pinned version; the suite starts no real
 Pi, and the version pin (`require_pi`) is what ties the measurement to the
 call. The Codex review calls run in the CLI's read-only sandbox; a draft's
 Codex call runs in `workspace-write`, and the runner puts back what lands
-outside the change folder.
+outside the change folder. The swarm's free researcher contexts are a
+different route: fresh scratch working directory, home and agent directory,
+every discovery surface off, only the runner-owned research-tools extension
+loaded, and no repository path in play - the offline capture on the pinned Pi
+with synthetic private canaries, not this suite, is their isolation evidence
+(ADR 0018 draft).
 
 **The loop record** lives outside the worktree
 (`${XDG_STATE_HOME:-~/.local/state}/coding-harness/stage2/<change>/loop.md`):
@@ -154,6 +163,17 @@ SONNET = ("claude-code-plan", "claude-sonnet-5-5", "medium")
 CODEX = ("openai-codex", "gpt-6.1-sol", "max")
 # Opus 5.5, the spec review (2a) since ADR 0016: the strongest review on the repository's highest-demand effort.
 OPUS = ("claude-code-plan", "claude-opus-5-5", "xhigh")
+# The change classes (check_interview_minimums.py's vocabulary). Explore routes on
+# one: the swarm for the two large classes, the single explorer for the two small
+# ones (ADR 0018 draft). Stated before the spec exists - explore-only `--class`
+# or `research.md`'s header - and every available statement must agree.
+CLASSES = ("spike", "bounded", "feature", "architectural")
+SWARM_CLASSES = ("feature", "architectural")
+# The swarm's paid calls: the public topic from its own Opus call at effort
+# `high`, the six-topic reconciliation from a fresh Opus context at `xhigh`
+# (spec criteria 14 and 23; the design's Open decisions).
+TOPIC_CALL = ("claude-code-plan", "claude-opus-5-5", "high")
+JUDGE_CALL = ("claude-code-plan", "claude-opus-5-5", "xhigh")
 # A new ADR file of a draft: four digits, a slug of lowercase letters, digits and hyphens. Counted against the
 # merge base of the baseline and origin/main, so a second draft may edit the ADR the first one committed.
 NEW_ADR = re.compile(r"docs/adr/\d{4}-[a-z0-9][a-z0-9-]*\.md")
@@ -563,6 +583,30 @@ def declaration_problem(root: Path, endpoint: str, model: str) -> str | None:
     residency = found.get("residenz")
     if not isinstance(residency, str) or not residency.strip() or residency == "nicht-erklaert":
         return f"the endpoint {endpoint} states no data residency"
+    return None
+
+
+def public_declaration_problem(root: Path, endpoint: str, model: str) -> str | None:
+    """Why the declaration does not clear this endpoint and model for public-web data, or None.
+
+    The swarm's free researchers are the only role on the public class (ADR 0018
+    draft): the endpoint must be cleared for `public-web` and nothing else, and
+    the model must be listed. Unknown residency does not refuse here - it is
+    what the declaration honestly records - while the framework check above
+    still refuses every public-only endpoint and every residency it cannot
+    read (spec, criterion 11).
+    """
+    try:
+        data = yaml.safe_load((root / "model-endpoints.yaml").read_text(encoding="utf-8")) or {}
+    except (OSError, UnicodeDecodeError, yaml.YAMLError):
+        return "model-endpoints.yaml cannot be read"
+    found = next((e for e in data.get("endpunkte") or [] if isinstance(e, dict) and e.get("name") == endpoint), None)
+    if found is None:
+        return f"model-endpoints.yaml declares no endpoint {endpoint}"
+    if model not in (found.get("modelle") or []):
+        return f"the endpoint {endpoint} does not list the model {model}"
+    if found.get("darf_sehen") != ["public-web"]:
+        return f"the endpoint {endpoint} is not cleared for public-web data only"
     return None
 
 
@@ -1477,6 +1521,8 @@ def run_work_model(
     endpoint: tuple[str, str, str | None],
     writable: bool,
     key: str | None = None,
+    timeout: float | None = None,
+    limit: str | None = None,
 ) -> str:
     """One non-interactive Claude Code work call with file tools only."""
     with tempfile.TemporaryDirectory(prefix="stage2-") as tmp:
@@ -1513,7 +1559,7 @@ def run_work_model(
             config_dir = Path(tmp) / "claude-config"
             config_dir.mkdir()
             env = glm_env(key, config_dir, endpoint[1])
-        done = launch(command, ctx.root, env, key)
+        done = launch(command, ctx.root, env, key, timeout=timeout, limit=limit)
     if done.returncode != 0:
         raise fail("claude", done, f"exit {done.returncode}", key)
     answer = scrub(done.stdout or "", key)
@@ -2315,9 +2361,74 @@ def mark_repaired_record(change: str, taken: list[tuple[str, list[str]]], fixes:
         raise CallFailed(f"the loop record could not be marked ({error}); mark {waiting} by hand.") from error
 
 
-def explore(root: Path, change: str, stage2_off: str | None = None) -> None:
-    """Phase 1: GLM Flash, or explicit Haiku fallback, appends repository facts."""
-    endpoint = HAIKU if stage2_off is not None else GLM_FLASH
+def declared_class(root: Path, change: str, klass: str | None) -> str:
+    """The one class every available statement states, or the refusal before any call.
+
+    Sources: the explore-only `--class` argument and the `class:` of
+    `research.md`'s and `spec.md`'s headers. Every statement that is present
+    must name a class and agree with the others; an explicit argument does not
+    cure a stated one, and none present refuses, because a silently assumed
+    small change would keep a large change off the swarm (spec, criteria 3
+    and 4).
+    """
+    folder = root / "plans" / "changes" / change
+    found: dict[str, str] = {}
+    for name in ("research.md", "spec.md"):
+        try:
+            text = (folder / name).read_text(encoding="utf-8")
+        except (OSError, UnicodeDecodeError):
+            continue  # not written yet is the normal state before the spec
+        match = re.match(r"---\n(.*?)\n---", text, re.S)
+        if not match:
+            continue
+        try:
+            header = yaml.safe_load(match.group(1))
+        except yaml.YAMLError:
+            continue
+        stated = header.get("class") if isinstance(header, dict) else None
+        if stated is None:
+            continue
+        if not isinstance(stated, str) or stated not in CLASSES:
+            raise Refused(
+                f"plans/changes/{change}/{name} states the class '{stated}', which is none of {', '.join(CLASSES)}."
+            )
+        found[name] = stated
+    if klass is not None and klass not in CLASSES:
+        raise Refused(f"--class {klass} is none of {', '.join(CLASSES)}.")
+    for name, stated in found.items():
+        if klass is not None and stated != klass:
+            raise Refused(
+                f"--class {klass} contradicts the class '{stated}' of plans/changes/{change}/{name}; "
+                "the runner does not override a stated class."
+            )
+    if len(set(found.values())) > 1:
+        listing = ", ".join(f"{name} says {stated}" for name, stated in sorted(found.items()))
+        raise Refused(f"the stated classes disagree: {listing}.")
+    if klass is not None:
+        return klass
+    if found:
+        return next(iter(found.values()))
+    raise Refused(
+        f"no class is stated for {change}: pass --class <{'|'.join(CLASSES)}> or state `class:` in "
+        "research.md's header - a change must say which before phase 1 routes."
+    )
+
+
+def explore(root: Path, change: str, stage2_off: str | None = None, klass: str | None = None) -> None:
+    """Phase 1: the swarm for a feature or architectural change, GLM Flash for a bounded
+    change or a spike, or the explicit Haiku fallback - the answer lands in research.md."""
+    if stage2_off is None:
+        klass = declared_class(root, change, klass)
+        if klass in SWARM_CLASSES:
+            import stage2_swarm
+
+            stage2_swarm.run(root, change, sys.modules[__name__], klass)
+            return
+        endpoint = GLM_FLASH
+    else:
+        # The explicit Stage-1 route skips the class entirely: Haiku explores,
+        # and only the reason is carried for the later plan (spec, criterion 20).
+        endpoint = HAIKU
     ctx = preflight(root, change, endpoint, bead_file="research.md")
     key = None
     route = "stage-1" if stage2_off is not None else "flash"
@@ -3131,6 +3242,13 @@ def main(argv: list[str] | None = None) -> int:
         help="session only: the model id, exactly as model-endpoints.yaml lists it",
     )
     parser.add_argument(
+        "--class",
+        dest="klass",
+        default=None,
+        choices=CLASSES,
+        help="explore only: the change class before a spec exists, agreeing with every stated one",
+    )
+    parser.add_argument(
         "--handover",
         default=None,
         help="session only: a handover file inside the worktree (default: the change's handover.md)",
@@ -3149,12 +3267,16 @@ def main(argv: list[str] | None = None) -> int:
             )
         if args.stage2_off is not None and args.verb not in {"explore", "implement", "repair"}:
             raise Refused("--stage2-off applies only to explore, implement and repair.")
+        if args.klass is not None and args.verb != "explore":
+            raise Refused("--class belongs to the explore verb alone.")
         if args.verb == "session":
             if not args.model:
                 raise Refused("session needs --model <id>: name the model exactly as model-endpoints.yaml lists it.")
         elif args.model is not None or args.handover is not None:
             raise Refused("--model and --handover belong to the session verb alone.")
-        if args.verb in {"explore", "implement", "repair"}:
+        if args.verb == "explore":
+            explore(Path(args.root), args.change, args.stage2_off, args.klass)
+        elif args.verb in {"implement", "repair"}:
             VERBS[args.verb](Path(args.root), args.change, args.stage2_off)
         elif args.verb == "session":
             session(Path(args.root), args.change, args.model, args.handover)

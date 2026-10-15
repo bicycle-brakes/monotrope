@@ -271,7 +271,7 @@ def world(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> World:
         "---\ntitle: Spec\nbead: demo-1\n---\n\n# Spec\n", encoding="utf-8"
     )
     (root / "plans" / "changes" / "demo" / "research.md").write_text(
-        "---\ntitle: Research\nupdated: 2026-09-30\nbead: demo-1\n---\n\n# Research\n\nseed fact\n",
+        "---\ntitle: Research\nupdated: 2026-09-30\nbead: demo-1\nclass: bounded\n---\n\n# Research\n\nseed fact\n",
         encoding="utf-8",
     )
     (root / "plans" / "changes" / "demo" / "plan.md").write_text(
@@ -832,6 +832,14 @@ def test_explore_stage2_off_uses_haiku_without_reading_the_glm_key(
     assert "route stage-1" in text and "reason Z.ai unavailable" in text
 
 
+@pytest.mark.parametrize("verb", ["implement", "review"])
+def test_the_class_argument_belongs_to_explore_alone(world: World, verb: str) -> None:
+    # Criterion 3's guard: --class is the explore verb's early routing input, no other verb's.
+    world.script(claude=[{"stdout": "must not run"}])
+    assert world.run(verb, "demo", "--class", "bounded") == 2
+    assert world.calls() == []
+
+
 def test_explore_scrubs_the_flash_credential_from_its_answer(world: World) -> None:
     world.script(claude=[{"stdout": "the credential was @KEY@"}])
     assert world.run("explore") == 0
@@ -1083,9 +1091,9 @@ def test_preparation_commands_receive_no_model_or_caller_credentials(
     original_launch = stage2.launch
     commands = []
 
-    def record(command, root, env, secret=None):
+    def record(command, root, env, secret=None, **kwargs):
         commands.append((command, dict(env)))
-        return original_launch(command, root, env, secret)
+        return original_launch(command, root, env, secret, **kwargs)
 
     monkeypatch.setattr(stage2, "launch", record)
     successful_implementation(world)
