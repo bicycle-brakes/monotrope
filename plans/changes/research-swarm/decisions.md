@@ -290,3 +290,12 @@ checks that no research `[DECISION]` is lost.
   read-on date and a gate that warns after a period (must stay fixed). A
   finding becomes a proposal for the spec, or a follow-up bead when it
   reaches beyond the change; the maintainer decides each.
+- Topic 7, tests and gates — guiding questions: which tests
+  (`tests/…::test_…`) and gates check the affected places and what each
+  checks; which behaviour no test or gate checks; which tests drive only
+  stand-ins, so real evidence is missing; which tests or gates the change
+  would turn red, and why; how each new behaviour can be tested red-first,
+  and where that is hard. Boundary: only tests and gates of the places on
+  the finder's map; describe, write no tests; no `make verify` run. Three
+  agents on the same brief; evidence `tests/…::test_…` or the gate name
+  from `decisions/gates.yaml` (answer: "ja").
