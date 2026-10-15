@@ -321,3 +321,14 @@ checks that no research `[DECISION]` is lost.
   papers and known projects before SEO pages; each source with its date
   where given. Every free model available at run time on the same brief;
   evidence a URL with a retrieval receipt (answer: "ja").
+- Topic 10, existing tools and standards (online) — input: only the Opus
+  sentence and the fixed guiding questions. Guiding questions: which tools,
+  libraries or services solve the problem fully or in part; how mature
+  each is (version, last release, licence, maintained); which standards or
+  formats exist for it; what each costs and whether it runs locally or
+  sends data out. Boundary: only public pages with a retrieval receipt; no
+  recommendation whether to adopt (spec and interview decide); general
+  approaches belong to topic 9. Source quality: the tool's project page,
+  repository and docs before comparison portals; versions and licence only
+  with source and date. Every free model available at run time on the same
+  brief; evidence a URL with a retrieval receipt (answer: "ja").
