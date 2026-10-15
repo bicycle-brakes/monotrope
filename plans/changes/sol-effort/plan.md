@@ -123,6 +123,7 @@ assertion follows the repair setting without editing the earlier artifacts.
 - 3: tests/test_stage2.py::test_the_loop_marks_after_a_recheck_resume_the_fresh_verdict_thread — extend both argv checks; resumed marks lose the review entry
 - 3: not a test — phase 6 compares the shipped central review default with criterion 3; a default other than high refutes it, while live thread internals remain unproven under Q-6
 - 4: tests/test_stage2.py::test_sol_instructions_reference_the_central_effort_for_each_verb — a missing or wrong reference or independent Sol literal survives in a table, Model paragraph or drafting prose
+- 4: tests/test_stage2.py::test_sol_effort_check_reads_the_verb_of_every_unpinned_instruction — another verb's entry linked from new repair prose, from a sentence naming its verb under another heading or from the unpinned 2a routing row passes, or a Sol effort naming no verb passes (loop L3-1)
 - 5: tests/test_stage2.py::test_sol_effort_changes_propagate_without_other_edits — distinct planted settings fail to reach any initial, retry or resumed argv
 - 6: tests/test_stage2.py::test_sol_effort_checks_allow_other_models_in_the_same_instruction — a valid mixed-model instruction is rejected, or another model's effort masks a wrong Sol reference
 - 7: tests/test_stage2_session.py::test_codex_is_dispatched_interactively_with_its_exact_safety_flags — an added interactive effort override changes the exact argv
@@ -167,3 +168,8 @@ passed again afterwards. Running the new mutation against the baseline's
 doctrine helpers refuted them on the added independent Sol prose sentence.
 The runner owns the final `make verify`, checkpoint commit and handover;
 this repair made no git or tracker writes.
+
+2026-10-15 03:25:58–03:27:47 +0200 — measured repair session for loop L3-1
+(Opus sub-agent, test code only: the runner cannot pass a test-only fix). The
+doctrine checker now reads the verb of every unpinned Sol instruction; the new
+planted cases were red against the previous helper and are green on the tree.

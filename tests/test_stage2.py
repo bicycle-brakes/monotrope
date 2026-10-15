@@ -6357,10 +6357,16 @@ def sol_clauses(text: str) -> list[str]:
     return clauses
 
 
-def sol_effort_clause_problems(text: str, verb: str | None, where: str) -> list[str]:
-    """Check each Sol effort independently; another mention cannot supply its reference."""
+def sol_effort_clause_problems(text: str, verb: str | frozenset[str], where: str) -> list[str]:
+    """Check each Sol effort independently; another mention cannot supply its reference.
+
+    `verb` is the runner verb the instruction serves, or the set of verbs an unpinned instruction
+    names (`instruction_verbs`); only those verbs' entries satisfy it. An empty set means the
+    instruction names no verb, and every effort clause in it is reported.
+    """
     found = []
     clauses = sol_clauses(text) or [text]  # A routing row's model can be in the preceding cell.
+    verbs = sorted({verb} if isinstance(verb, str) else verb)
     checked = False
     for clause in clauses:
         if not re.search(r"\beffort\b", clause):
@@ -6368,11 +6374,56 @@ def sol_effort_clause_problems(text: str, verb: str | None, where: str) -> list[
         checked = True
         if (literal := EFFORT_LITERAL.search(clause)) is not None:
             found.append(f"{where} sets Sol's effort independently ({literal.group(0)})")
-        references = [effort_reference(verb)] if verb else [effort_reference(key) for key in stage2.CODEX_EFFORTS]
+        if not verbs:
+            found.append(f"{where} gives Sol an effort but names no runner verb (draft, repair or review)")
+            continue
+        references = [effort_reference(key) for key in verbs]
         if not any(reference in clause for reference in references):
             found.append(f"{where} does not reference {references}")
-    if verb and not checked:
+    if isinstance(verb, str) and not checked:
         found.append(f"{where} does not reference {effort_reference(verb)}")
+    return found
+
+
+RUNNER_VERB = re.compile(r"\b(draft|repair|review)", re.I)
+ROW_LABEL_VERBS = (("repair", ("repair",)), ("review", ("review",)), ("draft", ("draft", "spec", "design", "plan")))
+
+
+def instruction_verbs(unit: str, heading: str) -> frozenset[str]:
+    """The runner verbs an unpinned instruction serves, read from its own context.
+
+    A routing row serves the verb of its phase cell (`2 Spec` drafts, `6 Review` and `2a Spec
+    review` review, `Repair after 4b and 6` repairs). A sentence, or a row whose phase cell names no
+    verb, serves the verbs it names itself (draft, repair or review in any inflection); when it
+    names several, an entry of any of them satisfies it, and an entry of a verb it does not name
+    stays red. A sentence that names no verb serves the verb of the `###` subsection it stands in
+    (`### Repairing taken findings (repair)` repairs). An instruction with no verb in either place
+    cannot be attributed and is reported, so a Sol effort always says which runner verb it follows.
+    """
+    if unit.startswith("|"):
+        label = (stage2.split_row(unit.splitlines()[0]) or [""])[0].lower()
+        for verb, words in ROW_LABEL_VERBS:
+            if any(word in label for word in words):
+                return frozenset({verb})
+    own_words = re.sub(r'CODEX_EFFORTS\["[^"]*"\]', "", unit)  # the linked key is what is being checked
+    named = {word.lower() for word in RUNNER_VERB.findall(own_words)}
+    return frozenset(named or {word.lower() for word in RUNNER_VERB.findall(heading)})
+
+
+def sol_section_problems(text: str, where: str) -> list[str]:
+    """Every Sol effort clause of a doctrine section, checked against the verb of its own instruction."""
+    found = []
+    heading = ""
+    for block in re.split(r"\n\s*\n|\n(?=\|)", text):
+        for line in block.splitlines():
+            if line.startswith("### "):
+                heading = line
+            elif line.startswith("## "):
+                heading = ""  # a stage heading names verbs it does not route; only a subsection attributes
+        units = [block] if block.startswith("|") else re.split(r"(?<=[.!?])\s+", block)
+        for unit in units:
+            if any(re.search(r"\beffort\b", clause) for clause in sol_clauses(unit)):
+                found += sol_effort_clause_problems(unit, instruction_verbs(unit, heading), where)
     return found
 
 
@@ -6390,11 +6441,10 @@ def sol_texts(doc: str, text: str) -> tuple[str, dict[str, str]]:
 def sol_effort_problems(workflow: str, prompts: dict[str, str]) -> list[str]:
     """Every active Sol effort clause references its verb's entry of `CODEX_EFFORTS` (spec, criteria 4-6)."""
     found = []
-    # New prose and later mentions in existing rows are active instructions too.
+    # New prose, unpinned rows and later mentions in existing rows are active instructions too,
+    # each checked against the verb of its own context.
     for title in ("## 3 · ", "## 4 · "):
-        for clause in sol_clauses(section(workflow, title)):
-            if re.search(r"\beffort\b", clause):
-                found += sol_effort_clause_problems(clause, None, title)
+        found += sol_section_problems(section(workflow, title), title)
     rows_3 = routing_rows(section(workflow, "## 3 · "))
     for phase, verb in SOL_ROUTING_VERBS.items():
         row = routing_rows(section(workflow, "## 4 · ")).get(phase)
@@ -6546,6 +6596,46 @@ def test_sol_instructions_reference_the_central_effort_for_each_verb(doc: str, f
         doc_text = (WORKFLOW if doc == "workflow" else PROMPTS / doc).read_text(encoding="utf-8")
         assert fragment in doc_text, (doc, fragment)
         assert sol_effort_problems(*sol_texts(doc, doc_text.replace(fragment, planted, 1))), (doc, why)
+
+
+def test_sol_effort_check_reads_the_verb_of_every_unpinned_instruction() -> None:
+    # Criterion 4 beyond the pinned places (loop L3-1). Planted faults: a new sentence in the repair
+    # prose, a sentence naming its verb under another verb's heading, and an unpinned routing row
+    # each link another verb's entry; a Sol effort naming no verb at all cannot be attributed.
+    workflow, prompts = WORKFLOW.read_text(encoding="utf-8"), sol_prompt_texts()
+    assert sol_effort_problems(workflow, prompts) == []
+    repair_heading = "### Repairing taken findings (repair)"
+    loop_heading = "### The review loop (phase 4b)"
+    row = next(line for line in workflow.splitlines() if line.startswith("| 2a Spec review | **Opus 5.5** | effort"))
+    assert repair_heading in workflow and loop_heading in workflow
+    neutral = "### The runner is the only way"
+    assert neutral in workflow
+
+    def prose(heading: str, sentence: str) -> str:
+        return workflow.replace(heading, f"{heading}\n\n{sentence}", 1)
+
+    def unpinned_row(addition: str) -> str:
+        return workflow.replace(row, row[:-2] + addition + " |", 1)
+
+    for wrong, right in (
+        (
+            prose(repair_heading, f"Each attempt runs Codex at effort {effort_reference('draft')}."),
+            prose(repair_heading, f"Each attempt runs Codex at effort {effort_reference('repair')}."),
+        ),
+        (
+            prose(loop_heading, f"A repair reruns Codex at effort {effort_reference('draft')}."),
+            prose(loop_heading, f"A repair reruns Codex at effort {effort_reference('repair')}."),
+        ),
+        (
+            unpinned_row(f"; `gpt-6.1-sol` re-checks at effort {effort_reference('draft')}"),
+            unpinned_row(f"; `gpt-6.1-sol` re-checks at effort {effort_reference('review')}"),
+        ),
+    ):
+        assert wrong != workflow and right != workflow
+        assert sol_effort_problems(wrong, prompts), "another verb's entry passes in an unpinned instruction"
+        assert sol_effort_problems(right, prompts) == [], "the instruction's own entry is rejected"
+    unattributed = prose(neutral, f"Codex runs at effort {effort_reference('draft')}.")
+    assert sol_effort_problems(unattributed, prompts), "a Sol effort naming no verb passes"
 
 
 @pytest.mark.parametrize(
