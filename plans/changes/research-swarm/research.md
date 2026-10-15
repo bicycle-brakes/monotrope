@@ -3,8 +3,8 @@ title: "Research — research-swarm"
 status: draft
 implementation_status: none
 date: 2026-10-14
-last_reviewed: 2026-10-14
-updated: 2026-10-14
+last_reviewed: 2026-10-15
+updated: 2026-10-15
 supersedes: null
 superseded_by: null
 bead: coding-harness-icw
@@ -13,6 +13,7 @@ provenance: ai-drafted-reviewed
 produced_by: {kind: llm-session, name: codex, version: "2026-10-14"}
 review: {status: pending, approved_by: null, approved_at: null}
 tags: [research]
+neighbours: [plans/changes/interview-context/spec.md, plans/changes/haiku-5-5/spec.md]
 ---
 
 # research swarm — Research
@@ -129,3 +130,81 @@ earlier exploration above is retained as evidence of what was known then.
   (`docs/WORKFLOW.md`, "Change classes"; `prompts/03-plan.md`;
   worktree file inventory). Existing interview and criterion-ledger gates
   can be measured; the runner owns the derived index and full verification.
+
+
+## Redraft repository evidence — 2026-10-15
+
+Read inside this worktree at `6e80ded42785cc3a53ebb1c3f0a7f557fcd8d6e9`
+(branch `explore/research-swarm`). This adds current facts without rewriting
+historical exploration or claiming that the amended swarm has run.
+
+- **The interview now amends the original shape.** Q-7 records the locator
+  trio/Opus merge, eight repository topics and three online topics, identical
+  initial perspectives, report template, claim-based scoring, neighbour
+  headers, research/interview/spec links and concurrent provider queues.
+  Q-8 records the maintainer's Pi free-tier 403 observation and selects Go
+  through Pi instead; Q-9 fixes the online trio as DeepSeek, MiMo and Qwen
+  Flash. These supersede the old free roster and six-topic pairing; the
+  drafting call performed no external read or provider probe (`decisions.md`,
+  Q-7–Q-9, including the dated addenda and complete topic walk-through).
+- **The implemented earlier slice has six pairs and differing angles.**
+  `TOPICS` contains 1–6; `ANGLES`, `repository_prompt`, `topic_pairs` and
+  `run` dispatch the former pair assignments, with sequential loops and
+  buffered Flash output. `swarm_problems`/`swarm_roles` validate the fixed
+  free roster and focuses; `free_transport` inventories Pi providers. There
+  is no finder stage, eight-topic trio or provider queue in the read source
+  (`scripts/stage2_swarm.py`, named symbols). Existing citation, deadline,
+  partial-output and public-tools corrections are retained rather than
+  evidence that the new graph already works.
+- **The declaration still reflects the earlier slice.** It has
+  `opencode-free`, `free_roster`, `free_focuses`, `topic6_free`, `flash_pair`
+  and paid author/judge fields, with no Qwen research role. The Go `modelle`
+  list is also the review ladder, so adding a research model there would
+  change review ordering/membership (`model-endpoints.yaml`, `research_swarm`
+  and `opencode-go`; `scripts/stage2.py`, `ladder`).
+- **The current fallback already selects Haiku 5.5.** `HAIKU` is
+  `claude-haiku-5-5`; restoring the older spec's 4.5 wording would contradict
+  the read neighbouring version-change spec (`scripts/stage2.py`, `HAIKU`;
+  `plans/changes/haiku-5-5/spec.md`, criteria 1–3).
+- **Research obligations are not currently checked.** The interview prompt
+  counts minimum answers and preserves context, but has no research item/claim
+  link fields. The spec prompt has no criterion-basis or neighbour-header
+  rule. Existing `interview-minimums`, `question-context` and
+  `criterion-ledger` checks have different contracts; none of the entries in
+  the read gate list checks research decision coverage (`prompts/01a-interview.md`,
+  `prompts/02-spec.md`, `decisions/gates.yaml`; headers/docstrings of
+  `scripts/check_interview_minimums.py` and `scripts/check_criterion_ledger.py`).
+- **Two neighbours were read for this redraft.** The context-form change
+  requires truthful retained context and keeps minimum counts unchanged;
+  the Haiku version change fixes the fallback at 5.5. The new trace links
+  must coexist with those contracts, without backfilling old answers or
+  changing their meaning (`plans/changes/interview-context/spec.md`,
+  criteria 4, 8 and 10; `plans/changes/haiku-5-5/spec.md`, criteria 1–3).
+  Other named worktree changes from the night handover (central models,
+  loop-until-clean, isolated attempts) have no spec at the queried paths in
+  this worktree; their other worktrees and current PR states were not read.
+- **A new gate needs kit and generated-CI integration.** The one gate list
+  generates CI, while existing checker/tests travel by explicit mechanism
+  entries; the catch-all for runtime scripts alone is not sufficient for a
+  newly travelling gate (`decisions/gates.yaml`, schema commentary;
+  `scripts/kit/manifest.yaml`, entries for the existing interview/context/
+  ledger checkers; `tests/test_ci.py`, gate ratchets).
+- **An earlier pre-merge blocker remains.** F-1 is the attended offline
+  real-Pi isolation capture; its recorded disposition says it remains a
+  pre-merge requirement. No phase-2a open table row was found in the current
+  findings. Phase-6 rows and runner audits are historical evidence, not
+  newly closed spec-review findings (`findings.md`, Phase 6).
+- **ADR numbering and checks.** The highest existing ADR file is 0018;
+  local HEAD removed the earlier 0019 draft specifically before redrafting.
+  Exactly one new 0019 draft is therefore due. The named
+  `scripts/validate_change_artefacts.py` remains absent. The registry's real
+  tracker path calls `bead_render.render_pfad()`, which may resolve outside
+  this worktree; the drafting call leaves that check and full verification
+  to its runner (`scripts/plans_registry.py`, `_bead_export_path`).
+
+[DETAIL] The three-agent finder, two Opus preparatory roles, 24 repository
+contributions, nine online contributions and final Opus judge total 39
+invocations under Q-7–Q-9 (calculation, 2026-10-15). This is a planned graph,
+not a measured run duration, token count or cost saving. The contract and
+its test ledger live in the revised spec/design/plan; no v2 research reports,
+maintainer answers or runtime qualification evidence are fabricated here.

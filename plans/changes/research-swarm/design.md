@@ -1,232 +1,254 @@
 ---
 title: "Design — research-swarm"
-category: design
-created: 2026-10-14
-updated: 2026-10-15
 status: draft
 implementation_status: none
 date: 2026-10-14
-last_reviewed: 2026-10-14
+last_reviewed: 2026-10-15
+updated: 2026-10-15
 supersedes: null
 superseded_by: null
 bead: coding-harness-icw
 owner: framework-architect
 provenance: ai-drafted-reviewed
-produced_by: {kind: llm-session, name: codex, version: "2026-10-14"}
+produced_by: {kind: llm-session, name: codex, version: "2026-10-15"}
 review: {status: pending, approved_by: null, approved_at: null}
 tags: [design, stage-2, research, swarm]
+category: design
+created: 2026-10-14
 ---
 
 # Design — research-swarm
 
-This proposed shape implements [`spec.md`](spec.md), using Q-1 to Q-6 of
-[`decisions.md`](decisions.md). The older research proposal supplies evidence
-requirements, not authority for its superseded team or judge assignment.
+Proposed shape for [spec.md](spec.md), based on the amended interview Q-7–Q-9.
+This replaces the earlier six-topic/free-stage design; the merge decides it.
 
 ## Alternatives
 
-- **A runner that separates public and repository research** (chosen).
-  Public researchers cannot receive the private packet; two Flash contexts
-  cover local topics, and a fresh Opus context reconciles them. The runner
-  owns the stages and durable output; qualifying the public tools costs work.
-- **An interactive orchestrator handing out the same separated roles.**
-  It can meet the six-topic contract, but every operator must reproduce the
-  context boundary, order, audit trail and failure accounting by hand.
-- **Independent research commands plus a separate judge command.** It can
-  retain the same boundaries, but leaves more intermediate state and allows
-  a judge to mix contributions from different input states unless a manifest
-  guards every command.
+- **One runner with provider queues and stage barriers** (chosen): one input
+  state, common briefs and an auditable public/private boundary; cancellation
+  and concurrent output accounting become runner responsibilities.
+- **Separate finder, research and judge commands:** independently inspectable
+  steps, but operators must bind intermediate results to the same state and
+  enforce per-provider limits across commands; more recovery state to govern.
+- **A sequential runner with the same roles:** retains comparisons and context
+  isolation, but cannot meet Q-7's selected concurrent execution.
 
-Chosen: one runner-controlled sequence with a separate public packet, because
-it makes Q-3's boundary checkable and keeps the existing explore entry point.
-The merge decides this proposal. A shared repository-reading Pi invocation
-for free and paid roles cannot meet the spec and is not an alternative.
+Choose the first because existing explore remains the entry point and one
+owner can enforce provider limits, source provenance and publication rules.
 
 ## Interfaces
 
-**Caller to phase-1 router.** Keep `python3 scripts/stage2.py explore <change>`.
-Add explore-only `--class spike|bounded|feature|architectural`; resolve it
-against `spec.md` and `research.md` headers, requiring agreement wherever a
-class is stated. A present invalid header refuses - one that does not parse,
-or whose `class:` is empty, as much as one naming no known class; an explicit
-argument does not cure it. Before a spec, an explicit class is enough. With Stage 2 on,
-missing/conflicting input exits 2. `--stage2-off [REASON]` keeps today's Haiku
-path without this new prerequisite. Other verbs reject the new argument.
+**Caller → router.** Keep `stage2.py explore <change>` and explore-only
+`--class`; all stated research/spec/argument classes must agree. Invalid YAML,
+empty/unknown class and conflicts exit 2 before any call. No spec or plan is
+required when research or the argument supplies a valid class. Explicit
+`--stage2-off [REASON]` keeps single Haiku 5.5 and its route record; bounded
+and spike keep single GLM Flash. Other verbs keep their contracts.
 
-**Runner to declaration.** `opencode-go.modelle` remains the review ladder.
-A separate `research_swarm` block selects the two declared Flash ids and
-the public-topic assignment; it cannot change review ordering. Add a
-`public-web` data class and an `opencode-free` declaration containing only
-that permission and the three free ids, with billing `free` and residency
-`nicht-erklaert`. This is a declaration name, not an asserted Pi provider id.
-Qualification must establish its actual provider and service address before
-enabling calls. The public check accepts only this explicit role and class;
-the existing framework check retains its default and residency requirement.
+**Declaration → roles.** Replace `research_swarm`'s `free_endpoint`,
+`free_roster`, `free_focuses`, `topic6_free` and `flash_pair` with role lists:
+`repository_agents` and `online_agents`, each a list of `{endpoint, model}`;
+`finder_agents` equals the repository trio; `finder_merge`, `topic_author`
+and `judge` each declare endpoint/model/effort. Resolve the actual declaration
+for every call, rather than validating it then using a hardcoded tuple.
+Repository/finder roles use DeepSeek Flash and MiMo Flash on `opencode-go`
+and Haiku 5.5 on `claude-code-plan`; online roles use DeepSeek Flash, MiMo
+Flash and Qwen 3.8 Flash on `opencode-go`. Add Qwen under a separate
+`research_modelle` list on that endpoint; leave its `modelle` review ladder
+unchanged. Model resolution accepts the union for declared research purposes
+only. Remove the unused `opencode-free` endpoint and free billing support
+introduced by this change; keep `public-web` as a role data class. No model
+inventory grants permission and no free transport is attempted. Unknown
+Qwen terms/residency are not invented: online receives public data only;
+framework roles retain their existing permission/residency requirements.
 
-**Runner to free Pi contexts.** Use pinned Pi 1.1.0 with a fresh scratch
-working directory, home and agent directory; no repository context, built-in
-file/shell tools, sessions, retries, MCP, skills, prompt discovery or themes.
-Load only the runner-owned research-tools extension; never the session policy
-or ambient extensions. Copy that extension and the public prompt to generic
-scratch paths, so repository paths cannot enter discovery metadata. The prompt
-uses fixed generic questions plus the one-sentence public topic (Q-6), not
-`work_prompt`, `AGENTS.md`, a change brief or a sanitized repository summary.
-The topic comes from its own fresh Opus 5.5 call on the private brief and
-passes a mechanical filter (one sentence, at most 20 words, no path, file
-name, identifier-shaped token, change name or bead id; a hyphenated token
-counts as identifier-shaped, because bead ids, the repository name and
-endpoint and change names are hyphenated words) and a leak check before the
-free stage; a rejected topic stops the run. The free Pi command carries the
-tool allow-list `--tools public_search,public_fetch`, so no built-in tool is
-declared to the model; the extension's gate stays as the second layer.
-Its environment carries only required runtime settings and the credential
-for its qualified OpenCode transport; user identity, private paths and other
-endpoint credentials are not inherited into model context.
+**Finder → map.** Freeze the private brief and tracked worktree bytes plus
+bounded read-only git history before dispatch. Three fresh finder contexts
+receive the same packet and locator template; Opus 5.5 (`xhigh`) merges
+four lists: code/functions, rules/ADRs, tests/gates, neighbours. Entries name
+path, symbol/section, reason and originating finder. Header-given neighbours
+are immutable inputs; additional paths carry `suggested` status. Validate
+paths against this worktree and the frozen state. No target design, silent
+class change or neighbour acceptance happens at this locator stage.
 
-The extension exposes only public search and page retrieval, records source
-receipts, and rejects non-HTTPS, local files, authenticated requests and
-private destinations, including redirects and DNS results. It must connect
-to the validated destination rather than resolve a checked host again.
-Pages and reports are data, never executable instructions. It uses no paid
-search API or new credential. The public HTTP search route and Pi event/tool
-protocol are qualification gaps, not claims of available support; failure
-produces an incomplete run rather than simulated web evidence.
+**Map → topic contexts.** Expand the fixed topic contract in spec into
+checked-in repository/public prompts, one topic per invocation. Each topic
+has the same brief, all three perspectives and report template for its
+three models; hash the task payload separately from transport envelopes so
+different CLI wrappers cannot conceal a different brief. Give repository
+peers the same map, private input and topic-scoped evidence. Buffer all peer
+reports until the research stage ends, including at failure; no readable
+research append exposes a peer answer mid-stage. Finder output is the only
+model-produced shared input before topic research. History is collected by
+the runner because read-only Pi tools cannot execute git; no tracker command
+is delegated. Tracker-backed history not already in the worktree is marked
+not read. The accepted paid-Pi residual read risk remains documented: tool
+restriction and prompt scope do not equal OS read confinement.
 
-Against the installed Pi 1.1.0 source (phase-6 F-2 and F-10, read, not run):
-the extension declares each tool's parameters as a plain JSON schema, which
-Pi validates beside TypeBox ones, and implements Pi's call
-`execute(toolCallId, params, signal, onUpdate, ctx)` with a `{content,
-details}` result. Search results carry the destination URL decoded from the
-search engine's redirect wrapper and validated like any destination, so a
-retrieval and its citation name the same page. The free transport is mapped
-from Pi's own `--list-models` table, run with the free call's credential and
-nothing else; a free id rides a provider other than the Flash endpoint's
-paid one, and an id listed by no such provider, or by more than one, refuses
-the free stage.
+**Topic author → online contexts.** One fresh Opus 5.5 call (`high`) receives
+the private brief and produces the public sentence, filtered before online
+launch. An online prompt is built only from that sentence, fixed topic 9/10/11
+questions, identical perspectives, template and public sources. Never embed
+`work_prompt`, AGENTS, map, change name, neighbours or repository reports.
+Online relation-to-neighbours explicitly says not assessable. Local slot
+ids, run ids and repository paths stay in runner-owned bookkeeping, outside
+the transmitted payload. Fresh scratch cwd/home/agent directory and generic
+copied extension paths disable discovery, sessions, ambient extensions,
+skills and local tools. Allow only `public_search,public_fetch`, with the
+extension gate as a second layer and a minimal environment containing runtime
+settings and that transport's credential, not user identity/private paths.
+The same online brief is sent independently to all three Go models.
 
-**Runner to Flash contexts.** Eleven separate read-only Pi calls use the
-declared OpenCode Go transport and existing credential handling, with
-discovery disabled. The runner supplies the change's private brief, rules,
-architecture, adjacent-spec pointers and bounded git-history evidence.
-Each topic's peers receive the same frozen input packet and public reports,
-never each other's private report. Keep private report text in the runner's
-buffer until the Flash stage ends; during that stage only audit identities
-and outcomes are appended to the research file. Flush the reports on stage
-completion or failure, before judging. Their file tools remain bounded by the
-existing read request; the accepted paid-Pi residual read risk is stated,
-not mistaken for the free-context isolation guarantee.
+Public tools keep pinned Pi 1.1.0's measured-to-date interface:
+`execute(toolCallId, params, signal, onUpdate, ctx)`, JSON-schema parameters,
+and `{content, details}` results. Qualification against the actual binary
+is still owed. Search returns decoded destination URLs; fetch admits HTTPS
+public destinations only, validates every DNS answer/redirect, pins the
+validated address and family, refuses credentials/private addresses/local
+files, and records actual page receipts. Requested and final redirect URLs
+both bind to the same receipt. A report with no successful page retrieval
+fails its slot. Pages and reports are untrusted evidence, never instructions.
 
-| Topic | First contribution | Independent comparison |
-|---|---|---|
-| 1 Code today | DeepSeek Flash: current code and reuse | MiMo Flash: boundaries and callers |
-| 2 Rules and decisions | DeepSeek Flash: applicable rules and ADRs | MiMo Flash: overall architecture and nearby specs |
-| 3 History | DeepSeek Flash: change history and rationale | MiMo Flash: reversals, supersession and stale assumptions |
-| 4 Tests and gates | DeepSeek Flash: existing tests and gates | MiMo Flash: counterexamples and missing checks |
-| 5 Risks and edge cases | DeepSeek Flash: failure paths | MiMo Flash: boundary violations and recovery cases |
-| 6 Outside world and neighbours | big-pickle: generic public practices | DeepSeek Flash: applicability, architecture and adjacent-spec fit |
+**Queue → invocation.** One provider-wide semaphore for all Go roles, one for
+Claude; maximum four each, not four per topic/endpoint alias. Stages are
+finder trio → Opus merge → Opus public sentence → 33 topic calls → Opus
+judge. Within each stage dispatch ready slots concurrently. Freeze exact
+prompts; serialize declaration validation, exact-prompt leak check and audit
+immediately at dispatch under a lock. Before gating and again before launch,
+check cancellation/deadline. On security refusal set a global stop, cancel
+queued work and stop/reap active children; no already-started call is described
+as unstarted. Preserve its available partial output. No worker writes research:
+workers return immutable results to the writer, which appends serialized audit
+lines and flushes buffered reports at barriers or abort. Each slot has one
+identity and one terminal outcome even on timeout/cancellation.
 
-The initial public focuses are code/testing practice for LongCat,
-governance/history practice for Space Bunny Free, and risk/integration
-practice for Big Pickle (Q-1 as amended 2026-10-15). All are generic public questions; reports can support several
-topics. Membership and assignments are validated from the declaration,
-including topic 6's free seat; no model is silently skipped or substituted.
+39 invocations maximum: finder 3 + merge 1 + sentence 1 + repository 24 +
+online 9 + judge 1 (Q-7–Q-9, 2026-10-15). Deadlines: sentence 5 minutes,
+finder/researcher/map merge 10 each, judge 15, whole run 150. Queue wait counts
+against the total, not a child's running allowance; launch takes the lesser
+remaining role/run allowance. Recheck after a long leak scan. No retries,
+recursive delegation, unbounded subprocess or zero-timeout launch.
 
-**Runner to judge and phase 2.** After the free stage and Flash stage, one
-fresh official Claude Code call runs Opus 5.5 at `xhigh`. Read-only file
-tools verify local citations; the runner supplies retrieved public excerpts,
-retrieval receipts and the original contributions, including failed-slot
-markers. Declaration and exact-prompt leak check also precede this call.
-The judge returns six structured topic sections; no session is resumed.
-The runner validates topic coverage and source references and renders the
-result into `research.md`. A repository reference must be `path::symbol`
-with a tracked path whose frozen bytes contain the symbol; a citation by line
-numbers alone or a bare path is refused. Phase 2 still reads research plus decisions.
+**Reports → judge.** Validate the fixed report template and claims before a
+fresh Opus 5.5 (`xhigh`) reconciles topics 1–11 with the map, original reports
+and receipts. Validation retains malformed/failed output as partial evidence;
+it cannot label it a complete contribution. Check local symbols/sections in
+frozen bytes, public citations against successful fetch receipts, and source
+identity in every judgement. Judge output separates supported facts,
+assumptions, applicability, gaps, disagreements and human decisions. Per-model
+scores contain counts and claim-id lists for supported/refuted/unique/off-brief;
+unique means a supported contribution absent from peers, not an unsupported
+minority claim. No composite ranking or model-specific angles follow.
+
+**Research → interview → spec.** Publish an explicit obligation inventory
+covering all raw `[DECISION]` items and unresolved disagreements; topic-3
+class mismatches and topic-5 contradictions are always included. A judge may
+link duplicates to one interview item while preserving every source claim.
+Phase 1a adds `research_items:` and `research_claims:` lists to the relevant
+Q-record, preserving its context, actual answer and answered-by fields.
+Questions can exceed the unchanged class minimum. `[GAP]` remains research
+work and `[DETAIL]` remains a reasoned agent choice; neither waives a human
+obligation. Phase 2 carries confirmed neighbours to the spec header and adds
+`*Basis:*` claim ids and/or Q-record ids per acceptance criterion. This
+redraft uses its existing interview answers as bases; no generated v2 report
+is fabricated for it.
+
+**Handoff gate → verification.** New `check_research_handoff.py` reads the v2
+manifests/reports and their explicit item and claim references without tracker,
+model or network calls. It independently derives required ids from all raw
+reports and the judge's disagreements, checks inventory coverage, answered
+maintainer Q-records, neighbour parity and criterion bases. A new completed
+v2 run awaiting phase 1a is research-complete but verification-red. An
+incomplete run cannot support a passing handoff. Every v2 run in live or
+archived folders remains checked; older evidence without this schema is
+explicitly exempt, not retroactively fabricated. Findings exit 1, unreadable
+or ambiguous inputs exit 3, measured valid input exits 0; no applicable v2
+run is a reported measured exemption. Register blocking/both placement in the
+one gate list and regenerate CI. The kit carries checker and fixture-based
+tests because the gate travels, without carrying this repository's corpus.
+Semantic fidelity remains a review duty; presence checking cannot prove it.
 
 ## Data model
 
-- **Input record**, runner-owned: opaque run id, UTC date, HEAD, routing
-  class and source, and a digest of the frozen relevant working-tree inputs.
-  Runner-generated audit/appended research is excluded from that digest;
-  changes to other inputs invalidate publication and yield an incomplete run.
-  The runner's own re-stamp of `research.md`'s `updated:` line, which moves
-  when a run crosses midnight, is not such a change.
-  This is provenance, not a resumable cache or a claim that HEAD describes
-  uncommitted content.
-- **Contribution**, runner-owned: role/topic/model/endpoint, outcome,
-  individual audit, elapsed time, typed observations, source references and
-  unresolved questions. Public and private packets have different types;
-  private-to-public conversion is absent. Freeze each report before judging.
-- **Source receipt**, tool/runner-owned: public URL/title/retrieval date and
-  excerpt/locator, or repository path/symbol/input-state reference. The
-  runner validates local paths and state and checks public citations against
-  actual retrieval receipts, not model assertions of a successful fetch. A
-  free contribution with no successful page retrieval is no contribution:
-  its slot is failed and the run incomplete, whatever the report cites.
-- **Research output**, written only by the runner: append one dated run
-  block containing status, budget, contribution/audit records, source
-  receipts and compact supporting reports, then the judge's six-topic
-  reconciliation and handoff summary. Existing research stays. Successful
-  and failed records are retained; credentials are scrubbed before writing.
-- **Judge section**: topic id, supported facts, practice/applicability
-  comparison, architecture/adjacent-spec fit where relevant, source refs,
-  disagreement, gaps, human questions and likely affected files. These are
-  research fields, not accepted spec criteria, ADR answers or review rows.
+Only the runner persists exploration output, append-only inside `research.md`:
 
-No persistent store besides `research.md` is added. Scratch configuration,
-public receipts and process transcripts are collected by the runner and
-removed on completion. Record unavailable usage as unknown, not zero.
+| Record | Required fields |
+|---|---|
+| Run manifest | schema `research-swarm/v2`, opaque run id, UTC date, HEAD, frozen-byte digest, class/source, expected 39 slot identities, budgets, given neighbours, status |
+| Map | four locator lists, source refs, finder provenance, suggested-neighbour status, missing/unread categories |
+| Slot | role/topic/endpoint/model, task-payload hash, individual leak audit, start/end/elapsed/outcome, report or partial output, source receipts |
+| Claim | run/topic/model-scoped id and local id, statement, evidence, kind, confidence/basis; at most seven per topic report |
+| Topic report | claims, counter-evidence, not read, neighbour relation, questions with classification and source ids |
+| Reconciliation | all topic sections, supported/refuted/unique/off-brief claim lists and counts, comparisons, disagreements, gaps, required interview items |
+| Handoff | item id, originating claim ids, reason (`decision`, `disagreement`, `class`, `neighbour`), neighbour confirmations/rejections and reasons |
 
-Non-security participant failures are recorded and the remaining scheduled
-roles continue within the same budget; the judge can summarize partial
-evidence but the run exits 1. A missing declaration or leak BLOCK refuses
-with exit 2 and no subsequent call; record the blocked slot and reason without
-claiming a clean audit for it. A total deadline stops dispatch and
-records unfinished slots, without forcing a judge call past the deadline:
-once it is spent, no further slot is gated, audited as clean or launched.
+Use fenced JSON blocks under stable headings as the machine-readable records;
+prose may explain them but is not a second source of ids. Claim ids combine
+run, topic, model seat and local id; endpoint-qualified seat ids avoid collisions.
+Q-record link fields and spec `*Basis:*` lines reference these exact ids.
+References to Q-records include the change-relative decisions path and Q-id;
+the checker resolves them inside the owning change, also after archival.
+`neighbours:` is a unique YAML list of repository-relative `spec.md` paths;
+this redraft names the read interview-context and Haiku neighbours. Relative
+paths must stay inside the worktree; missing sources are unread, never absent.
+
+Freeze tracked bytes and relevant untracked change inputs; pre-existing
+research is a frozen prefix. Ignore only runner appends and its own `updated:`
+restamp, including across midnight. A changed frozen input invalidates complete
+publication; retain outputs and failure state. Reports remain available for
+citation even when their producer failed. Scratch files are cleaned after
+collecting partial stdout/stderr/receipts; scrub every used secret before any
+persistence/diagnostic. No cache, extra database or resumable runtime is added.
 
 ## ADR draft
 
-The sole draft is
-[`docs/adr/0019-phase-1-research-swarm.md`](../../../docs/adr/0019-phase-1-research-swarm.md),
-in the form of `templates/adr.md`. It amends phase-1 routing under ADR 0007
-and the permitted research purpose under ADR 0011, supersedes neither whole
-ADR, and leaves numbered D/O decisions and their continuity map unchanged.
-The maintainer's merge decides; no ADR answer or approval is written here.
+The sole new draft is [ADR 0019 — Phase 1 research swarm](../../../docs/adr/0019-phase-1-research-swarm.md),
+numbered after the highest file present at baseline `6e80ded` (0018).
+It amends phase-1 routing under ADR 0007 and research purpose under ADR 0011,
+without superseding those whole ADRs or amending numbered D/O decisions.
+Only the maintainer's merge accepts it; no answer or approval is recorded here.
 
 ## Architecture delta
 
 ```mermaid
 flowchart LR
-    maintainer["Person: maintainer"] --> runner["Container: stage2.py runner"]
-    runner --> router["Component: explore class router"]
-    router --> single["Component: single explorer"]
-    router --> swarm["Component: research swarm scheduler"]
-    swarm --> public["Component: public-only Pi contexts"]
-    public --> web["System: public web sources"]
-    public --> free["System: declared OpenCode free models"]
-    public --> swarm
-    swarm --> flash["Component: repository Pi contexts"]
-    flash --> go["System: OpenCode Go"]
-    flash --> swarm
-    swarm --> opus["System: Opus 5.5 through Claude Code"]
-    opus --> swarm
-    swarm --> research["Component: research artifact writer"]
-    single --> research
-    research --> spec["Component: phase-2 synthesis"]
+    m["Person: maintainer"] --> r["Container: stage2.py runner"]
+    r --> c["Component: explore class router"]
+    c --> s["Component: single explorer"]
+    c --> q["Component: provider queues and research stages"]
+    q --> f["Component: repository finder trio"]
+    f --> merge["System: Opus map merge via Claude Code"]
+    merge --> q
+    q --> topic["System: Opus public topic via Claude Code"]
+    topic --> q
+    q --> local["Component: repository topic trio"]
+    q --> online["Component: isolated public Pi topic trio"]
+    online --> web["System: public web"]
+    online --> go["System: OpenCode Go"]
+    local --> go
+    local --> claude["System: Haiku via Claude Code"]
+    local --> judge["System: Opus reconciliation via Claude Code"]
+    online --> judge
+    judge --> w["Component: research artifact writer"]
+    s --> w
+    w --> interview["Component: phase-1a interview"]
+    interview --> spec["Component: phase-2 spec synthesis"]
+    w --> gate["Component: research handoff gate"]
+    interview --> gate
+    spec --> gate
 ```
 
 **Added**
 
-- A research swarm scheduler, public-only Pi contexts and public-web tools.
-- A public-only endpoint declaration and independent research-role roster.
-- A Flash pair and an Opus research-reconciliation boundary.
+- Finder trio, Opus map merge, provider queues, claim evaluation and handoff gate.
+- Declared online trio including Qwen, same-brief report contract and neighbours.
 
 **Changed**
 
-- Explore dispatches by an explicit early class; the runner appends several
-  sourced contributions and a reconciliation instead of one report for larger changes.
+- Larger changes move from six pairs to eight repository and three online topics.
+- Research obligations and evidence are checked through interview and spec.
 
 **Removed**
 
-- The universal single-explorer route for feature and architectural changes;
-  that route remains for bounded/spike work and the explicit Stage-1 fallback.
+- The unused free endpoint, discovery and fixed free/Flash assignments from
+  the earlier unmerged slice; the existing small-change route stays available.
