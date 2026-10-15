@@ -123,11 +123,11 @@ not mistaken for the free-context isolation guarantee.
 | 3 History | DeepSeek Flash: change history and rationale | MiMo Flash: reversals, supersession and stale assumptions |
 | 4 Tests and gates | DeepSeek Flash: existing tests and gates | MiMo Flash: counterexamples and missing checks |
 | 5 Risks and edge cases | DeepSeek Flash: failure paths | MiMo Flash: boundary violations and recovery cases |
-| 6 Outside world and neighbours | hy4-preview: generic public practices | DeepSeek Flash: applicability, architecture and adjacent-spec fit |
+| 6 Outside world and neighbours | big-pickle: generic public practices | DeepSeek Flash: applicability, architecture and adjacent-spec fit |
 
 The initial public focuses are code/testing practice for LongCat,
-governance/history practice for Space Bunny, and risk/integration practice
-for HY4. All are generic public questions; reports can support several
+governance/history practice for Space Bunny Free, and risk/integration
+practice for Big Pickle (Q-1 as amended 2026-10-15). All are generic public questions; reports can support several
 topics. Membership and assignments are validated from the declaration,
 including topic 6's free seat; no model is silently skipped or substituted.
 

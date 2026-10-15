@@ -4,7 +4,7 @@ status: draft
 implementation_status: none
 date: 2026-10-14
 last_reviewed: 2026-10-14
-updated: 2026-10-14
+updated: 2026-10-15
 supersedes: null
 superseded_by: null
 bead: coding-harness-icw
@@ -37,6 +37,16 @@ In the context of one exploring model that misses what a second view would
 find, facing the choice between one explorer and a swarm, we decided on a
 swarm of free and Flash OpenCode Go models to achieve two independent views
 per topic at low cost, accepting more calls per change. — 2026-10-13
+
+Addendum 2026-10-15: `space-bunny` and `hy4-preview` turned out to be paid
+OpenCode Go models (OpenCode Go and Zen documentation and the pinned Pi
+1.1.0 registry, read 2026-10-15); the free seats are now
+`longcat-2.5-preview-free`, `space-bunny-free` and `big-pickle`. Big Pickle
+may use what it receives to improve the model. Asked whether that is
+acceptable, the maintainer said: "Es ist für mich okay wenn es nur anhand des
+Opus Satzes ist und die Modelle nicht in die repo schauen". The maintainer
+also noted that the free models change constantly and the list must keep
+being adjusted.
 
 ## Q-2 · The research topics
 

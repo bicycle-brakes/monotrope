@@ -107,9 +107,9 @@ Every implementation path is named here; no file is deleted.
    before any free call. Record the accepted sentence in the research.
    Run every declared free researcher next on fixed generic briefs plus that
    one topic sentence. Initial
-   focuses are LongCat on topics 1/4, Space Bunny on 2/3 and HY4 on 5/6.
+   focuses are LongCat on topics 1/4, Space Bunny Free on 2/3 and Big Pickle on 5/6.
    Then run separate DeepSeek/MiMo Flash contexts for each of topics 1–5,
-   and DeepSeek Flash for topic 6 paired with HY4's public contribution.
+   and DeepSeek Flash for topic 6 paired with Big Pickle's public contribution.
    Share only public reports and the same private input packet with Flash
    peers, never a peer's answer. Buffer private report text until all peers
    finish, writing only audit identities/outcomes during their stage; flush

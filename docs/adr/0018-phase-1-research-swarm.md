@@ -4,7 +4,7 @@ category: adr
 status: accepted
 created: 2026-10-14
 last_reviewed: 2026-10-14
-updated: 2026-10-14
+updated: 2026-10-15
 owner: framework-architect
 provenance: human-decided
 produced_by: {kind: llm-session, name: codex, version: "2026-10-14"}
@@ -74,12 +74,13 @@ surface rather than depend on a model obeying an instruction.
    spikes retain the single explorer. Explore accepts an explicit early
    class without requiring a spec and refuses contradictory class inputs.
 2. All declared free models run first on fixed generic public questions.
-   Initially these are LongCat, Space Bunny and HY4 as recorded in Q-1.
+   Initially these are LongCat, Space Bunny Free and Big Pickle (Q-1, as
+   amended 2026-10-15).
    Their contexts expose only qualified public search and page retrieval,
    no local tools or repository-derived prompts. The public declaration
    records unknown terms/residency; it grants no framework permission.
 3. Each repository-bound topic (1–5) gets independent DeepSeek Flash and
-   MiMo Flash contributions on OpenCode Go. Topic 6 pairs HY4's public
+   MiMo Flash contributions on OpenCode Go. Topic 6 pairs Big Pickle's public
    research with DeepSeek Flash's local applicability comparison. Public
    reports can inform private researchers; private reports never flow back.
 4. One fresh Opus 5.5 context through official Claude Code reconciles all

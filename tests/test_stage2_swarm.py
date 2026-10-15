@@ -70,14 +70,14 @@ def pi_table(rows: list[tuple[str, str]]) -> list[str]:
 PI_MODELS = pi_table(
     [
         ("opencode", "longcat-2.5-preview-free"),
-        ("opencode", "space-bunny"),
-        ("opencode", "hy4-preview"),
+        ("opencode", "space-bunny-free"),
+        ("opencode", "big-pickle"),
         ("opencode-go", "longcat-2.5-preview-free"),
         ("opencode-go", "deepseek-v4.1-flash"),
         ("opencode-go", "mimo-v2.6-flash"),
     ]
 )
-FREE_IDS = ("longcat-2.5-preview-free", "space-bunny", "hy4-preview")
+FREE_IDS = ("longcat-2.5-preview-free", "space-bunny-free", "big-pickle")
 
 SEED = "---\ntitle: Research\nupdated: 2026-10-15\nbead: demo-1\nclass: feature\n---\n\n# Research\n\nseed fact\n"
 
@@ -425,8 +425,8 @@ def test_all_free_roles_are_attempted_before_flash(sworld: SwarmWorld) -> None:
     )
     assert [model_of(call) for call in sworld.calls("public")] == [
         "opencode/longcat-2.5-preview-free",
-        "opencode/space-bunny",
-        "opencode/hy4-preview",
+        "opencode/space-bunny-free",
+        "opencode/big-pickle",
     ], "every declared roster member rides the mapped inventory id, none skipped"
 
 
@@ -608,8 +608,8 @@ def test_a_free_report_without_a_retrieved_page_is_no_contribution(sworld: Swarm
     )
     assert sworld.run() == 1, "a run cannot end complete on a contribution that retrieved no page"
     record = sworld.research.read_text(encoding="utf-8")
-    assert "free researcher space-bunny: retrieved no public page" in status_line(record)
-    assert "### Free researcher space-bunny (no retrieved page)" in record, "the report is kept, marked"
+    assert "free researcher space-bunny-free: retrieved no public page" in status_line(record)
+    assert "### Free researcher space-bunny-free (no retrieved page)" in record, "the report is kept, marked"
     assert len(sworld.calls("flash")) == 11 and sworld.calls("judge"), "the remaining roles still run"
 
 
@@ -731,7 +731,7 @@ def test_declarations_clear_only_the_role_data_class(sworld: SwarmWorld, mutate:
     if mutate == "free-sees-framework":
         text = text.replace("    darf_sehen: [public-web]\n", "    darf_sehen: [public-web, framework]\n", 1)
     elif mutate == "roster-off-endpoint":
-        text = text.replace("      - space-bunny\n", "", 1)
+        text = text.replace("      - space-bunny-free\n", "", 1)
     elif mutate == "pair-off-endpoint":
         text = text.replace(
             "  flash_pair: [deepseek-v4.1-flash, mimo-v2.6-flash]",
@@ -740,7 +740,7 @@ def test_declarations_clear_only_the_role_data_class(sworld: SwarmWorld, mutate:
     elif mutate == "judge-off-endpoint":
         text = text.replace("  judge: claude-opus-5-5", "  judge: mimo-v2.6-pro")
     else:
-        text = text.replace("  topic6_free: hy4-preview", "  topic6_free: longcat-2.5-preview-free")
+        text = text.replace("  topic6_free: big-pickle", "  topic6_free: longcat-2.5-preview-free")
     (sworld.root / "model-endpoints.yaml").write_text(text, encoding="utf-8")
     assert sworld.run() == 2
     assert sworld.calls() == [], "a declaration fault refuses before any model call"
@@ -880,7 +880,7 @@ def test_failures_preserve_evidence_and_never_report_complete(sworld: SwarmWorld
     assert sworld.run() == 1
     text = sworld.research.read_text(encoding="utf-8")
     if fault == "unmapped-free-id":
-        assert "does not map the free id(s) space-bunny, hy4-preview" in text
+        assert "does not map the free id(s) space-bunny-free, big-pickle" in text
         assert "status:" not in text and not sworld.calls("public")
         return
     assert "status: complete" not in text
@@ -900,23 +900,24 @@ def test_failures_preserve_evidence_and_never_report_complete(sworld: SwarmWorld
 def test_the_free_inventory_reads_what_the_pinned_pi_prints(sworld: SwarmWorld, inventory: str) -> None:
     # F-2(b). Planted fault: the inventory parses only JSON lines, or takes whichever provider is listed last.
     if inventory == "pinned-registry":
-        # The rows Pi 1.1.0's own registry holds for the roster under the OpenCode credential (read, not run).
+        # Pi 1.1.0's registry (read, not run) listed the first roster's `space-bunny` and `hy4-preview`
+        # only under the paid Go provider; here a roster id stands only there.
         listing = pi_table(
             [
                 ("opencode", "longcat-2.5-preview-free"),
                 ("opencode", "space-bunny-free"),
-                ("opencode-go", "hy4-preview"),
+                ("opencode-go", "big-pickle"),
                 ("opencode-go", "longcat-2.5-preview-free"),
                 ("opencode-go", "space-bunny"),
             ]
         )
-        expected = "does not map the free id(s) space-bunny, hy4-preview to a provider other than the paid opencode-go"
+        expected = "does not map the free id(s) big-pickle to a provider other than the paid opencode-go"
     elif inventory == "ambiguous":
-        listing = pi_table([*(("opencode", member) for member in FREE_IDS), ("mirror", "space-bunny")])
-        expected = "lists the free id(s) space-bunny (mirror, opencode) under more than one provider"
+        listing = pi_table([*(("opencode", member) for member in FREE_IDS), ("mirror", "space-bunny-free")])
+        expected = "lists the free id(s) space-bunny-free (mirror, opencode) under more than one provider"
     else:
         listing = ["No models available. Set an API key or log in."]
-        expected = "does not map the free id(s) longcat-2.5-preview-free, space-bunny, hy4-preview"
+        expected = "does not map the free id(s) longcat-2.5-preview-free, space-bunny-free, big-pickle"
     sworld.script(pi_models=listing)
     sworld.complete()
     assert sworld.run() == 1

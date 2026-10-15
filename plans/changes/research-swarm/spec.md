@@ -49,7 +49,8 @@ Evidence was collected on 2026-10-14; the drafting baseline is `1e29f6e`.
 ## Terms
 
 - **Free roster:** every model declared for public-only OpenCode research;
-  initially `longcat-2.5-preview-free`, `space-bunny`, `hy4-preview` (Q-1).
+  `longcat-2.5-preview-free`, `space-bunny-free`, `big-pickle` (Q-1, as
+  amended 2026-10-15).
 - **Flash pair:** `deepseek-v4.1-flash` and `mimo-v2.6-flash` on OpenCode Go.
 - **Topics:** (1) code today, (2) rules and decisions, (3) history,
   (4) tests and gates, (5) risks and edge cases,
@@ -85,7 +86,7 @@ Evidence was collected on 2026-10-14; the drafting baseline is `1e29f6e`.
    a model after the conflict.
 5. When a swarm starts, its first research stage attempts every model in the
    declared free roster before any Flash researcher starts.
-   *Refuted by:* omitting `space-bunny` or starting Flash before the free
+   *Refuted by:* omitting `space-bunny-free` or starting Flash before the free
    roster's attempted contributions are recorded.
 6. When the six topic pairs are assembled, topics 1–5 each have separate
    contributions from both Flash models and topic 6 has a free public
