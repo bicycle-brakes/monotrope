@@ -38,7 +38,8 @@ glm-5.3-flash, 2026-10-14; no Stage-1 fallback is recorded.
    `status: answered` occurrence, not just records counted toward a minimum.
 2. Read the cut-off only through `adoption.adopted_on(root, "question-context")`.
    Read each recording day from exactly one em-dash date (`— YYYY-MM-DD`)
-   that ends its top-level MADR paragraph beginning `In the context of`;
+   that ends its top-level MADR paragraph beginning `In the context of`
+   (one closing parenthetical remark may follow; see the [DETAIL] in spec.md Terms);
    join indented wraps and blank-separated dash/date continuations,
    including the dash/date split in this change's fifth answer. Ignore dates
    in context, fields and examples. Dates before adoption are exempt; the

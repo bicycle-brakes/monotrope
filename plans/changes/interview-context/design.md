@@ -44,6 +44,7 @@ differs from the existing class duty. This is a proposal until merge.
   English, as one `context: |` literal text block in each subject answered
   Q-record. Record the actual recording day in the existing dated decision
   statement; a late answer does not inherit the question's earlier `asked` day.
+  [DETAIL] One closing parenthetical remark may follow the date ("— 2026-10-12 (recorded on the bead the same day)"): an answered record already in the tree carries one, and without the allowance it would turn the whole gate unmeasured; prose after the date still leaves the day unread (phase-6 row F-5, 2026-10-15).
 - Decision files → gate: inspect actual Q-blocks in live and archived change
   directories, including folders without a spec. Ignore fenced examples,
   indented context content, skip records and open questions. Inspect every

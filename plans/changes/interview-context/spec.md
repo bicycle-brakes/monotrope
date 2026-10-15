@@ -63,7 +63,7 @@ coding-harness-zs7). Sources: `research.md` and `decisions.md`, Q-1 to Q-5.
   statement, `— YYYY-MM-DD`, when that answer was recorded; MADR is the
   existing decision form that states situation, choice, goal and consequence.
   A changed answer carries its new recording day, independently of `asked`
-  and file dates.
+  and file dates. [DETAIL] One closing parenthetical remark may follow the date ("— 2026-10-12 (recorded on the bead the same day)"): an answered record already in the tree carries one, and without the allowance it would turn the whole gate unmeasured; prose after the date still leaves the day unread (phase-6 row F-5, 2026-10-15).
 - **Adoption day:** the calendar day the decision pull request merges in that
   repository; answers dated that day are included, not exempt.
 - **Measured check:** the adoption day, recording days and decision files
