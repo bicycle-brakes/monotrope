@@ -175,12 +175,16 @@ provider does not expose is unknown; no Claude/cost saving is asserted.
 - 8: not a test — the pre-live offline pinned-Pi capture in build step 2 checks actual ambient discovery and outbound payloads; any private canary refutes the boundary.
 - 9: tests/test_stage2_research_tools.py::test_public_tools_cannot_read_local_or_private_sources — a local-file tool, private destination, redirected private address or DNS rebinding is accepted.
 - 9: tests/test_stage2_research_tools.py::test_node_transport_pins_the_resolved_ipv6_family — an IPv6-only or IPv6-first lookup is pinned with the wrong socket address family.
+- 9: tests/test_stage2_research_tools.py::test_the_tools_run_as_pi_calls_them — a tool called as Pi 1.1.0 calls it (`execute(toolCallId, params, …)`) loses its parameters or returns no `content`.
+- 9: tests/test_stage2_research_tools.py::test_the_tool_parameters_are_json_schemas — a tool's parameters are no JSON schema Pi can validate.
 - 9: not a test — the same pinned-Pi capture attempts unavailable file/shell tools and repository context discovery; an obtainable private source refutes isolation.
 - 10: tests/test_stage2_swarm.py::test_public_claims_require_retrieved_source_receipts — an unfetched URL or search snippet is accepted as page evidence.
 - 10: tests/test_stage2_swarm.py::test_judge_public_citations_require_retrieved_receipts — the judge promotes an invented URL or search-only snippet to a supported public fact.
+- 10: tests/test_stage2_research_tools.py::test_search_results_carry_the_decoded_destination — a search result keeps the search engine's redirect wrapper instead of the destination URL.
 - 10: tests/test_stage2_swarm.py::test_redirect_receipts_back_requested_and_final_urls — a successful redirected retrieval fails to back its requested or final URL.
 - 11: tests/test_stage2_swarm.py::test_declarations_clear_only_the_role_data_class — an undeclared model or public-only endpoint receives framework content.
 - 11: tests/test_stage2_swarm.py::test_declared_paid_endpoint_and_models_are_called — topic author and judge ignore the declared endpoint and model identities.
+- 11: tests/test_stage2_swarm.py::test_the_free_inventory_reads_what_the_pinned_pi_prints — Pi's `--list-models` table yields no mapping, or a free id rides the paid Go provider or an arbitrary one of several.
 - 12: tests/test_stage2_swarm.py::test_every_call_is_checked_and_a_leak_block_stops_dispatch — a later call reuses the first scan or follows a planted BLOCK.
 - 13: tests/test_stage2_swarm.py::test_every_attempt_has_identity_audit_and_outcome — a failed slot or judge lacks a distinct durable audit.
 - 14: tests/test_stage2_swarm.py::test_fresh_opus_reconciles_all_six_topics — another model, resumed context or missing topic is accepted.

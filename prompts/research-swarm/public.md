@@ -42,6 +42,10 @@ finding, not a failure.
   you have is a snippet, the claim stays unsupported and is written as an
   open question.
 - If a page could not be reached, say so; do not substitute a plausible URL.
+- Your two tools: `public_search` finds pages and returns each result's
+  destination URL; `public_fetch` retrieves one page. Cite a page by the URL
+  you passed to `public_fetch` or the final URL it reports, never by a
+  search-result link you did not retrieve.
 
 ## Facts and applicability are different
 

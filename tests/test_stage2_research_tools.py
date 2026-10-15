@@ -330,6 +330,75 @@ def test_search_records_a_receipt_and_parses_results(world: World) -> None:
     assert answer["receipts"][0]["kind"] == "search"
 
 
+# A DuckDuckGo HTML answer as the endpoint serves it: every result anchor is a
+# redirect wrapper whose `uddg` parameter carries the destination (F-10).
+WRAPPED = (
+    '<a rel="nofollow" class="result__a" '
+    'href="//duckduckgo.com/l/?uddg=https%3A%2F%2Fa.example%2Fguide%3Fpart%3D2&amp;rut=abc123">A guide</a>'
+    '<a class="result__snippet" href="//duckduckgo.com/l/?uddg=https%3A%2F%2Fa.example%2Fguide">Snippet</a>'
+    '<a rel="nofollow" class="result__a" '
+    'href="//duckduckgo.com/l/?uddg=http%3A%2F%2Fplain.example%2F&amp;rut=def">Plain http</a>'
+    '<a rel="nofollow" class="result__a" href="https://duckduckgo.com/y.js?ad_domain=ads.example">Advert</a>'
+)
+
+
+def test_search_results_carry_the_decoded_destination(world: World) -> None:
+    # F-10. Planted fault: a result keeps the wrapper URL, so its receipt and its citation never meet.
+    answer = world.call(mode="parse", html=WRAPPED)
+    assert answer["results"] == [{"title": "A guide", "url": "https://a.example/guide?part=2", "snippet": "Snippet"}], (
+        "the wrapper is decoded; a non-https destination and an advert without one are dropped"
+    )
+    fetched = world.call(
+        mode="fetch",
+        url=answer["results"][0]["url"],
+        transport={"lookups": [[PUBLIC_IP]], "responses": [{"status": 200, "body": "<title>Guide</title>"}]},
+    )
+    assert fetched["receipt"]["url"] == "https://a.example/guide?part=2", "the decoded destination is fetchable"
+
+
+def test_the_tool_parameters_are_json_schemas(world: World) -> None:
+    # F-2(a). Planted fault: a `{query: "string"}` map that no JSON-schema validator accepts as a schema.
+    schemas = world.call(mode="load")["schemas"]
+    for tool, field in (("public_search", "query"), ("public_fetch", "url")):
+        schema = schemas[tool]
+        assert schema["type"] == "object" and schema["required"] == [field], schema
+        assert schema["properties"][field]["type"] == "string", schema
+        assert schema["additionalProperties"] is False, schema
+
+
+def test_the_tools_run_as_pi_calls_them(world: World) -> None:
+    # F-2(a). Planted fault: `execute({ query })` destructures Pi's tool-call id, or a bare string is returned.
+    search, fetch = world.run(
+        [
+            {
+                "mode": "pi-execute",
+                "tool": "public_search",
+                "params": {"query": "public practice"},
+                "transport": {"lookups": [[PUBLIC_IP]], "responses": [{"status": 200, "body": WRAPPED}]},
+            },
+            {
+                "mode": "pi-execute",
+                "tool": "public_fetch",
+                "params": {"url": "https://a.example/guide"},
+                "transport": {
+                    "lookups": [[PUBLIC_IP]],
+                    "responses": [{"status": 200, "body": "<html><title>Guide</title>text</html>"}],
+                },
+            },
+        ]
+    )
+    for answer in (search, fetch):
+        assert "threw" not in answer, answer
+        content = answer["result"]["content"]
+        assert [part["type"] for part in content] == ["text"], answer["result"]
+    assert "q=public%20practice" in search["seen"]["gets"][0]["url"], "the query from the params reaches the search"
+    assert json.loads(search["result"]["content"][0]["text"])[0]["url"] == "https://a.example/guide?part=2"
+    assert search["receipts"][0]["kind"] == "search"
+    receipt = json.loads(fetch["result"]["content"][0]["text"])
+    assert receipt["url"] == "https://a.example/guide" and receipt["title"] == "Guide"
+    assert fetch["receipts"] == [receipt], "the tool step under Pi writes its receipt"
+
+
 def test_the_parser_skips_pages_without_results(world: World) -> None:
     answer = world.call(mode="parse", html="<html><title>nothing</title></html>")
     assert answer["results"] == []

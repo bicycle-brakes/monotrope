@@ -53,11 +53,29 @@ RECEIPT = {
     "excerpt": "public practice text",
     "bytes": 20,
 }
-PI_MODELS = [
-    '{"id": "longcat-2.5-preview-free", "provider": "opencode"}',
-    '{"id": "space-bunny", "provider": "opencode"}',
-    '{"id": "hy4-preview", "provider": "opencode"}',
-]
+
+
+def pi_table(rows: list[tuple[str, str]]) -> list[str]:
+    """`pi --list-models` as Pi 1.1.0 prints it (`dist/cli/list-models.js`): a padded table, provider first."""
+    header = ("provider", "model", "context", "max-out", "thinking", "images")
+    cells = [header] + [(provider, model, "256K", "128K", "yes", "no") for provider, model in sorted(rows)]
+    widths = [max(len(row[n]) for row in cells) for n in range(6)]
+    return ["  ".join(cell.ljust(width) for cell, width in zip(row, widths, strict=True)) for row in cells]
+
+
+# The test inventory: the roster on the free provider beside rows the pinned
+# Pi also lists for the same credential - the paid Go provider's ids, one of
+# them a free id's namesake. The Flash endpoint's provider never carries a free call.
+PI_MODELS = pi_table(
+    [
+        ("opencode", "longcat-2.5-preview-free"),
+        ("opencode", "space-bunny"),
+        ("opencode", "hy4-preview"),
+        ("opencode-go", "longcat-2.5-preview-free"),
+        ("opencode-go", "deepseek-v4.1-flash"),
+        ("opencode-go", "mimo-v2.6-flash"),
+    ]
+)
 FREE_IDS = ("longcat-2.5-preview-free", "space-bunny", "hy4-preview")
 
 SEED = "---\ntitle: Research\nupdated: 2026-10-15\nbead: demo-1\nclass: feature\n---\n\n# Research\n\nseed fact\n"
@@ -610,6 +628,7 @@ def test_free_environment_excludes_identity_and_private_paths(
     sworld.complete()
     assert sworld.run() == 0
     assert len(captured) == 4
+    assert captured[0]["OPENCODE_API_KEY"] == OKEY, "the inventory runs with the free call's own credential"
     for env in captured:
         assert not set(forbidden) & env.keys(), env
         assert "PATH" in env and "HOME" in env and "PI_CODING_AGENT_DIR" in env
@@ -814,7 +833,7 @@ def test_failures_preserve_evidence_and_never_report_complete(sworld: SwarmWorld
     elif fault == "all-free-fail":
         sworld.complete(public=[{"stdout": "", "exit": 1}] * 3)
     else:
-        sworld.script(pi_models=[PI_MODELS[0]])
+        sworld.script(pi_models=pi_table([("opencode", "longcat-2.5-preview-free")]))
         sworld.complete()
     assert sworld.run() == 1
     text = sworld.research.read_text(encoding="utf-8")
@@ -833,6 +852,42 @@ def test_failures_preserve_evidence_and_never_report_complete(sworld: SwarmWorld
         assert "### Reconciliation" in text
     if fault == "all-free-fail":
         assert "(none succeeded)" in text and "flash researcher · topic 1" in text
+
+
+@pytest.mark.parametrize("inventory", ["pinned-registry", "ambiguous", "no-models"])
+def test_the_free_inventory_reads_what_the_pinned_pi_prints(sworld: SwarmWorld, inventory: str) -> None:
+    # F-2(b). Planted fault: the inventory parses only JSON lines, or takes whichever provider is listed last.
+    if inventory == "pinned-registry":
+        # The rows Pi 1.1.0's own registry holds for the roster under the OpenCode credential (read, not run).
+        listing = pi_table(
+            [
+                ("opencode", "longcat-2.5-preview-free"),
+                ("opencode", "space-bunny-free"),
+                ("opencode-go", "hy4-preview"),
+                ("opencode-go", "longcat-2.5-preview-free"),
+                ("opencode-go", "space-bunny"),
+            ]
+        )
+        expected = "does not map the free id(s) space-bunny, hy4-preview to a provider other than the paid opencode-go"
+    elif inventory == "ambiguous":
+        listing = pi_table([*(("opencode", member) for member in FREE_IDS), ("mirror", "space-bunny")])
+        expected = "lists the free id(s) space-bunny (mirror, opencode) under more than one provider"
+    else:
+        listing = ["No models available. Set an API key or log in."]
+        expected = "does not map the free id(s) longcat-2.5-preview-free, space-bunny, hy4-preview"
+    sworld.script(pi_models=listing)
+    sworld.complete()
+    assert sworld.run() == 1
+    text = sworld.research.read_text(encoding="utf-8")
+    assert expected in text, text[-800:]
+    assert not sworld.calls("public") and not sworld.calls("flash") and not sworld.calls("judge")
+    sworld.rewind()
+    sworld.script(pi_models=PI_MODELS)
+    sworld.complete()
+    assert sworld.run() == 0
+    assert "free transport: longcat-2.5-preview-free rides opencode/longcat-2.5-preview-free;" in (
+        sworld.research.read_text(encoding="utf-8")
+    ), "the free provider wins over the paid namesake"
 
 
 def test_deadlines_and_role_counts_bound_the_run(sworld: SwarmWorld) -> None:

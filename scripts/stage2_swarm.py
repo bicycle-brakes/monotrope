@@ -457,49 +457,77 @@ def public_env(own: dict[str, str]) -> dict[str, str]:
     return {**({"PATH": os.environ["PATH"]} if "PATH" in os.environ else {}), **own}
 
 
-def free_transport(runner, roles: dict) -> dict[str, str]:
+def inventory_providers(listing: str) -> dict[str, set[str]]:
+    """Every model id of a `pi --list-models` answer, with the providers that list it.
+
+    Pi 1.1.0 prints a padded table (`dist/cli/list-models.js`): a header line
+    `provider  model  context  max-out  thinking  images`, then one row per
+    model whose provider has usable authentication, provider first and model
+    id second. With no authenticated model it prints a guidance message
+    instead, which yields no id here.
+    """
+    found: dict[str, set[str]] = {}
+    for line in listing.splitlines():
+        cells = line.split()
+        if len(cells) < 6 or cells[:2] == ["provider", "model"]:
+            continue
+        found.setdefault(cells[1], set()).add(cells[0])
+    return found
+
+
+def free_transport(runner, roles: dict, key: str) -> dict[str, str]:
     """Map every free id to the Pi model id it actually rides on.
 
     The declaration's name is not an asserted provider id: the pinned
     runtime's own model inventory is what a call uses, and an id it does not
-    map refuses the free stage here instead of assuming `opencode-go/<id>`
-    (plan, step 1; the design's "declaration name" remark). Terms and
-    residency of the free ids stay unknown; nothing here reads them.
+    map refuses the free stage here instead of assuming a provider (plan,
+    step 1; the design's "declaration name" remark). The inventory runs with
+    the free call's own credential and nothing else, so it lists exactly the
+    providers that credential reaches. The Flash endpoint's provider is the
+    paid subscription, never the free endpoint, so a free id listed only there
+    is unmapped; an id that more than one remaining provider lists refuses as
+    ambiguous instead of taking whichever comes last. Terms and residency of
+    the free ids stay unknown; nothing here reads them.
     """
     runner.require_pi()
     with tempfile.TemporaryDirectory(prefix="stage2-swarm-") as tmp:
-        env = public_env({"HOME": tmp, "PI_CODING_AGENT_DIR": tmp})
+        env = public_env({"HOME": tmp, "PI_CODING_AGENT_DIR": tmp, "OPENCODE_API_KEY": key})
         done = runner.launch(
             ["pi", "--list-models"],
             Path(tmp),
             env,
+            key,
             timeout=60.0,
             limit="the model inventory's limit of 60 seconds",
         )
     if done.returncode != 0:
         raise runner.CallFailed(f"pi --list-models ended {done.returncode}; the free transport is unqualified.")
+    listed = inventory_providers(done.stdout or "")
+    paid = str(roles["flash_endpoint"])
     mapping: dict[str, str] = {}
-    for line in (done.stdout or "").splitlines():
-        text = line.strip()
-        if not text:
-            continue
-        try:
-            event = json.loads(text)
-        except ValueError:
-            event = None
-        if isinstance(event, dict) and isinstance(event.get("id"), str) and isinstance(event.get("provider"), str):
-            mapping[event["id"]] = f"{event['provider']}/{event['id']}"
-            continue
-        for match in re.finditer(r"([A-Za-z0-9_.-]+)/([A-Za-z0-9_.-]+)", text):
-            mapping[match.group(2)] = match.group(0)
-    missing = [str(model) for model in roles["roster"] if str(model) not in mapping]
+    missing: list[str] = []
+    ambiguous: list[str] = []
+    for model in (str(member) for member in roles["roster"]):
+        providers = sorted(listed.get(model, set()) - {paid})
+        if not providers:
+            missing.append(model)
+        elif len(providers) > 1:
+            ambiguous.append(f"{model} ({', '.join(providers)})")
+        else:
+            mapping[model] = f"{providers[0]}/{model}"
     if missing:
         raise runner.CallFailed(
             "the pinned Pi's model inventory does not map the free id(s) "
             + ", ".join(missing)
-            + "; the free stage refuses rather than assume a provider."
+            + f" to a provider other than the paid {paid}; the free stage refuses rather than assume a provider."
         )
-    return {str(model): mapping[str(model)] for model in roles["roster"]}
+    if ambiguous:
+        raise runner.CallFailed(
+            "the pinned Pi's model inventory lists the free id(s) "
+            + "; ".join(ambiguous)
+            + " under more than one provider; the free stage refuses rather than pick one."
+        )
+    return mapping
 
 
 def pi_public_call(runner, prompt_text: str, model_id: str, key: str, seconds: float, limit: str) -> tuple[str, str]:
@@ -803,13 +831,13 @@ def run(root: Path, change: str, runner, klass: str) -> None:
     runner.append(ctx.research, f"public topic: {topic}")
 
     # --- the free stage -------------------------------------------------------------------------
+    key = runner.reviewer_key()
     try:
-        transport = free_transport(runner, roles)
+        transport = free_transport(runner, roles, key)
     except runner.CallFailed as error:
         runner.append(ctx.research, f"free transport unqualified - {error}. No free call starts.")
         raise
     runner.append(ctx.research, "free transport: " + "; ".join(f"{a} rides {b}" for a, b in transport.items()))
-    key = runner.reviewer_key()
     for member in roles["roster"]:
         member = str(member)
         model_id = transport[member]

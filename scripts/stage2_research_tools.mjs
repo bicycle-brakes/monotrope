@@ -15,6 +15,8 @@
 // validates public citations against them, never against a model's word.
 //
 // Search uses the DuckDuckGo HTML endpoint — no paid API, no new credential.
+// Its redirect wrappers are decoded to the destination URL before a result
+// reaches the researcher, so what it fetches and cites is the real page.
 //
 // The pure helpers are exported so tests can inject a scripted transport
 // (tests/test_stage2_research_tools.py) and run without Pi and without network.
@@ -204,15 +206,42 @@ function unescapeText(text) {
   return text.replace(/&(?:amp|lt|gt|quot|#x27|#39);/g, (m) => ENTITIES[m] || m);
 }
 
+// The destination a DuckDuckGo result anchor points at. The HTML endpoint
+// wraps every result in a redirect (`//duckduckgo.com/l/?uddg=<destination>`);
+// the wrapper is decoded so the researcher fetches, and cites, the real page.
+// The decoded destination is validated like any other: a result whose
+// destination is not a fetchable public https URL — or a DuckDuckGo link that
+// carries no destination, such as an advert — is dropped (null).
+export function resultDestination(href) {
+  let url;
+  try {
+    url = new URL(href, "https://duckduckgo.com/");
+  } catch {
+    return null;
+  }
+  const host = url.hostname.toLowerCase();
+  if (host === "duckduckgo.com" || host.endsWith(".duckduckgo.com")) {
+    const target = url.pathname === "/l/" ? url.searchParams.get("uddg") : null;
+    return target ? resultDestination(target) : null;
+  }
+  try {
+    return validateDestination(url.href).href;
+  } catch {
+    return null;
+  }
+}
+
 // Parses the DuckDuckGo HTML answer: result anchors of the class `result__a`.
 export function parseResults(html) {
   const results = [];
   const pattern = /<a[^>]*class="result__a"[^>]*href="([^"]+)"[^>]*>([\s\S]*?)<\/a>/g;
   for (const match of html.matchAll(pattern)) {
+    const destination = resultDestination(unescapeText(match[1]).trim());
+    if (destination === null) continue;
     const snippetMatch = /<a[^>]*class="result__snippet"[^>]*>([\s\S]*?)<\/a>/.exec(html.slice(match.index, match.index + 2000));
     results.push({
       title: unescapeText(match[2].replace(/<[^>]*>/g, "")).trim(),
-      url: unescapeText(match[1]).trim(),
+      url: destination,
       snippet: snippetMatch ? unescapeText(snippetMatch[1].replace(/<[^>]*>/g, "")).trim() : "",
     });
   }
@@ -220,6 +249,7 @@ export function parseResults(html) {
 }
 
 export async function searchWeb(query, deps) {
+  if (typeof query !== "string" || !query.trim()) throw new Error("a search query is required");
   const url = validateDestination(
     `https://html.duckduckgo.com/html/?q=${encodeURIComponent(query)}`,
   );
@@ -279,21 +309,50 @@ export async function executeSearch(query, deps, sink = (line) => appendFileSync
 
 // --- the extension Pi loads ---------------------------------------------------------------------
 
-export default function (pi) {
+// Pi 1.1.0 validates a tool's parameters against a JSON schema (a TypeBox
+// schema or a plain one; pi-ai's `validateToolArguments`), calls
+// `execute(toolCallId, params, signal, onUpdate, ctx)` and expects a result of
+// model-facing `content` plus `details` (docs/extensions.md, "Tools"). The
+// extension is loaded from a scratch copy, so it imports nothing from Pi and
+// declares plain JSON schemas.
+const SEARCH_PARAMETERS = {
+  type: "object",
+  properties: { query: { type: "string", description: "The public web search query." } },
+  required: ["query"],
+  additionalProperties: false,
+};
+const FETCH_PARAMETERS = {
+  type: "object",
+  properties: { url: { type: "string", description: "The public https:// page to retrieve." } },
+  required: ["url"],
+  additionalProperties: false,
+};
+
+function toolResult(text) {
+  return { content: [{ type: "text", text }], details: undefined };
+}
+
+// Registers the two tools and the gate. `transport` and `sink` are seams for
+// the tests; under Pi the default export passes neither.
+export function registerResearchTools(pi, transport = nodeTransport, sink = undefined) {
   if (!pi || typeof pi.registerTool !== "function") {
     throw new Error("this extension needs a Pi host with registerTool; it refuses to load anywhere else");
   }
   pi.registerTool({
     name: "public_search",
-    description: "Search the public web with a query. Records a source receipt. No local access exists.",
-    parameters: { query: "string" },
-    execute: async ({ query }) => executeSearch(query, nodeTransport()),
+    label: "Public search",
+    description:
+      "Search the public web with a query. Returns result titles, destination URLs and snippets; a " +
+      "snippet is not a retrieved page. Records a source receipt. No local access exists.",
+    parameters: SEARCH_PARAMETERS,
+    execute: async (_toolCallId, params) => toolResult(await executeSearch(params?.query, transport(), sink)),
   });
   pi.registerTool({
     name: "public_fetch",
+    label: "Public fetch",
     description: "Retrieve one public https page. Records a source receipt. No local access exists.",
-    parameters: { url: "string" },
-    execute: async ({ url }) => executeFetch(url, nodeTransport()),
+    parameters: FETCH_PARAMETERS,
+    execute: async (_toolCallId, params) => toolResult(await executeFetch(params?.url, transport(), sink)),
   });
   pi.on("tool_call", async (event) => {
     const name = event && event.toolName;
@@ -306,4 +365,8 @@ export default function (pi) {
         "network tool is blocked at the extension boundary",
     };
   });
+}
+
+export default function (pi) {
+  registerResearchTools(pi);
 }

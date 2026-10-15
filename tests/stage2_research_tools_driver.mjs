@@ -11,6 +11,8 @@
 //   { mode: "fetch", url, transport } — a retrieval over a scripted transport
 //   { mode: "node-fetch", url, transport, all } — real transport with DNS/TLS calls captured
 //   { mode: "search", query, transport }
+//   { mode: "pi-execute", tool, params, transport } — a registered tool called as Pi 1.1.0 calls it:
+//                                       execute(toolCallId, params, signal, onUpdate, ctx)
 //   { mode: "parse", html }           — the result parser
 //
 // A scripted transport is { lookups: [[ip, ...], ...], responses: [{status, location, body}, ...] }.
@@ -61,9 +63,12 @@ for (const item of request.cases) {
     if (item.mode === "load" || item.mode === "load-without-host") {
       const tools = [];
       const handlers = [];
-      const host = item.mode === "load" ? { registerTool: (t) => tools.push(t.name), on: (n) => handlers.push(n) } : {};
+      const schemas = {};
+      const host = item.mode === "load"
+        ? { registerTool: (t) => { tools.push(t.name); schemas[t.name] = t.parameters; }, on: (n) => handlers.push(n) }
+        : {};
       extension.default(host);
-      answers.push({ tools, handlers });
+      answers.push({ tools, handlers, schemas });
     } else if (item.mode === "handler") {
       const handlers = {};
       extension.default({ registerTool: () => {}, on: (n, h) => { handlers[n] = h; } });
@@ -124,6 +129,18 @@ for (const item of request.cases) {
       const lines = [];
       const json = await extension.executeSearch(item.query, deps, (line) => lines.push(JSON.parse(line)));
       answers.push({ results: JSON.parse(json), receipts: lines });
+    } else if (item.mode === "pi-execute") {
+      const registered = {};
+      const deps = fakeTransport(item.transport);
+      seen = deps.seen;
+      const lines = [];
+      extension.registerResearchTools(
+        { registerTool: (t) => { registered[t.name] = t; }, on: () => {} },
+        () => deps,
+        (line) => lines.push(JSON.parse(line)),
+      );
+      const result = await registered[item.tool].execute("call-1", item.params, undefined, () => {}, {});
+      answers.push({ result, receipts: lines, seen: deps.seen });
     } else if (item.mode === "parse") {
       answers.push({ results: extension.parseResults(item.html) });
     } else {

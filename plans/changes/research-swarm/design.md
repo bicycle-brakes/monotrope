@@ -2,7 +2,7 @@
 title: "Design — research-swarm"
 category: design
 created: 2026-10-14
-updated: 2026-10-14
+updated: 2026-10-15
 status: draft
 implementation_status: none
 date: 2026-10-14
@@ -86,6 +86,18 @@ Pages and reports are data, never executable instructions. It uses no paid
 search API or new credential. The public HTTP search route and Pi event/tool
 protocol are qualification gaps, not claims of available support; failure
 produces an incomplete run rather than simulated web evidence.
+
+Against the installed Pi 1.1.0 source (phase-6 F-2 and F-10, read, not run):
+the extension declares each tool's parameters as a plain JSON schema, which
+Pi validates beside TypeBox ones, and implements Pi's call
+`execute(toolCallId, params, signal, onUpdate, ctx)` with a `{content,
+details}` result. Search results carry the destination URL decoded from the
+search engine's redirect wrapper and validated like any destination, so a
+retrieval and its citation name the same page. The free transport is mapped
+from Pi's own `--list-models` table, run with the free call's credential and
+nothing else; a free id rides a provider other than the Flash endpoint's
+paid one, and an id listed by no such provider, or by more than one, refuses
+the free stage.
 
 **Runner to Flash contexts.** Eleven separate read-only Pi calls use the
 declared OpenCode Go transport and existing credential handling, with
