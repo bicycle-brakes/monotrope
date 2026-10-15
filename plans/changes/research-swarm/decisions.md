@@ -378,3 +378,22 @@ This supersedes, for the online topics, the free-model part of Q-1 and of
 its addendum of 2026-10-15 (the free roster and Big Pickle's training
 terms): no free model is called while this holds. Which Go models take the
 online topics is settled next.
+
+## Q-9 · Which Go models take the online topics
+
+asked: 2026-10-15
+answer: "A" — DeepSeek Flash, MiMo Flash and Qwen 3.8 Flash (`deepseek-v4.1-flash`, `mimo-v2.6-flash`, `qwen3.8-flash` on OpenCode Go) work topics 9 to 11, three agents per topic.
+answered_by: maintainer
+status: answered
+context: |
+  Topic: which OpenCode Go models work the online topics 9 to 11.
+  Intention: "all free models" fell away with Q-8; the Go subscription lists 33 models, each with its own monthly limit inside the subscription, and running all of them would spend it fast.
+  Today: the spec still names free models; the repository topics 1 to 8 run on DeepSeek Flash, MiMo Flash and Haiku 5.5.
+  Repository change: A — DeepSeek Flash, MiMo Flash and Qwen 3.8 Flash, cheap and from three vendors, three agents per topic like topics 1 to 8, 9 calls instead of 21, all through Pi with retrieval receipts; B — the same trio as topics 1 to 8 including Haiku, which runs through Claude Code and lacks the retrieval receipt; C — a fixed list the maintainer picks. In each case `model-endpoints.yaml` turns the free roster into a list of Go models for the online topics.
+  Architecture change: none beyond Q-8 — one path through Pi.
+
+In the context of online topics that must leave the free tier, facing the
+choice between three cheap Go Flash models, the repository trio with Haiku
+and a hand-picked list, we decided on DeepSeek, MiMo and Qwen Flash through
+Pi, to achieve three comparable agents per topic with retrieval receipts at
+low quota, accepting a third vendor that sees only the Opus sentence. — 2026-10-15
