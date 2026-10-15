@@ -230,3 +230,14 @@ checks that no research `[DECISION]` is lost.
   finder's map; no judgement whether an interface is good (topic 4). Three
   agents on the same brief; every key claim names caller and callee as
   `path::symbol` (answer: "ja").
+- Topic 3, rules and ADRs — guiding questions: which ADRs and house rules
+  bear on the change and what exactly they require, quoting the place;
+  whether the change touches a file `provenance.yaml` reserves for the
+  maintainer and so becomes a decision PR; whether a rule or ADR must be
+  amended, superseded or written, and which ADR number is free; whether two
+  applicable rules contradict each other. Boundary: only rules written in
+  the repository; no judgement of a rule; no new rules. Three agents on the
+  same brief; evidence `path::section` or ADR number and point (answer:
+  "ja"). The maintainer added: "evtl. macht hier die frage auch sinn ob es
+  ein spike, bound, feature oder adr ist?" — the form of that question is
+  settled next.
