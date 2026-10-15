@@ -226,6 +226,25 @@ def world(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> World:
     (root / "src" / "app.py").write_text("value = 1\n", encoding="utf-8")
     shutil.copy(REPO_ROOT / "model-endpoints.yaml", root / "model-endpoints.yaml")
     shutil.copytree(REPO_ROOT / "prompts", root / "prompts")
+    # The window's supervisor runs the worktree's own scripts (ADR 0018), so the
+    # tree carries the runner chain, a provenance map that holds nothing, and a
+    # `make verify` that measures green - what a real worktree's checks need.
+    (root / "provenance.yaml").write_text("paths: []\nexcluded: []\n", encoding="utf-8")
+    (root / "Makefile").write_text("verify:\n\t@echo ok\n", encoding="utf-8")
+    (root / "scripts").mkdir()
+    for script in (
+        "check_adr_answers.py",
+        "check_frontmatter_current.py",
+        "leakcheck.py",
+        "merge_guard.py",
+        "plans_registry.py",
+        "stage2.py",
+        "stage2_attempt.py",
+        "stage2_verify_inside.py",
+        "_verdict.py",
+    ):
+        shutil.copy(REPO_ROOT / "scripts" / script, root / "scripts" / script)
+    shutil.copytree(REPO_ROOT / "tools" / "stage2", root / "tools" / "stage2")
 
     bin_dir = tmp_path / "bin"
     bin_dir.mkdir()
@@ -236,6 +255,7 @@ def world(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> World:
     git_dir = tmp_path / "gitbin"
     git_dir.mkdir()
     (git_dir / "git").symlink_to(shutil.which("git"))
+    (git_dir / "make").symlink_to(shutil.which("make"))
     (tmp_path / "denylist.txt").write_text(DENYLIST, encoding="utf-8")
     (tmp_path / "secrets.env").write_text("OTHER=1\n", encoding="utf-8")
 
@@ -243,6 +263,11 @@ def world(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> World:
         "PATH": f"{bin_dir}:{git_dir}",
         "HOME": str(tmp_path / "home"),
         "LEAKCHECK_DENYLIST": str(tmp_path / "denylist.txt"),
+        # The window's supervisor runs the isolated transport (ADR 0018): its
+        # operations land in the stand-in's runtime log, its state in the test's
+        # own directory.
+        "STAGE2_STATE_DIR": str(tmp_path / "stage2-state"),
+        "STAGE2_RUNTIME_STAND_IN": str(tmp_path / "stage2-runtime"),
         "CC_SECRETS": str(tmp_path / "secrets.env"),
         "GIT_CONFIG_GLOBAL": "/dev/null",
         "GIT_CONFIG_NOSYSTEM": "1",
@@ -600,7 +625,7 @@ def test_a_failed_terminal_dispatch_is_recorded_and_cleaned(world: World, capsys
     assert "dispatch pending" not in world.text()
     kept = world.tree / stage2_session.SESSION_ROOT / "keep" / "user.txt"
     assert kept.read_text(encoding="utf-8") == "mine\n", "the cleanup removes only what the run created"
-    assert [p for p in world.policies() if p.name.startswith("codex-")] == []
+    assert [p for p in world.policies() if p.name.startswith("session-")] == []
 
 
 def test_a_missing_cli_or_terminal_refuses_as_a_prerequisite(world: World, capsys: pytest.CaptureFixture[str]) -> None:
@@ -703,6 +728,9 @@ def test_a_stamp_failure_after_the_update_is_reported(
 
 
 def test_codex_is_dispatched_interactively_with_its_exact_safety_flags(world: World) -> None:
+    # ADR 0018: the window starts the trusted supervisor with the opaque id
+    # alone; the CLI runs inside the supervisor's isolated launch, where the
+    # exact flags below still reach it unchanged.
     world.script(osascript=[{"exec_command": True}])
     assert world.run() == 0
     argv = world.cli_argv()
@@ -723,9 +751,13 @@ def test_codex_is_dispatched_interactively_with_its_exact_safety_flags(world: Wo
     (sh_record,) = [call for call in world.calls() if call["name"] == "sh"]
     assert sh_record["returncode"] == 0
     words = shlex.split(world.command())
-    assert words[:5] == ["cd", str(world.tree), "&&", "exec", "/usr/bin/env"], "env is absolute, not looked up"
-    assert words.count(str(world.bin / "codex")) == 1, "the CLI is named once"
-    assert words[words.index(str(world.bin / "codex")) + 1 :] == argv, "Terminal runs the CLI with exactly this argv"
+    assert words[:5] == ["cd", str(world.tree), "&&", "exec", sys.executable], "the interpreter is absolute"
+    assert words[5:8] == [stage2_session.SUPERVISOR_SCRIPT, stage2_session.SUPERVISOR_VERB, words[7]], (
+        "Terminal runs the supervisor with one opaque id"
+    )
+    assert re.fullmatch(r"[0-9a-f]{12}", words[7]), "the invocation id is opaque"
+    assert str(world.bin / "codex") not in words, "the command names no CLI path"
+    assert all("Hand over" not in word for word in words), "the command carries no prompt text"
 
 
 def test_pi_is_dispatched_interactively_with_the_policy_extension(world: World) -> None:
@@ -763,7 +795,11 @@ def test_pi_is_dispatched_interactively_with_the_policy_extension(world: World) 
     assert launch["cwd"] == str(world.tree)
     assert extension.parent.parent == world.tree / stage2_session.SESSION_ROOT
     assert extension.read_bytes() == stage2_session.POLICY_SOURCE.read_bytes(), "the copy is the tested source"
-    assert {p.name for p in extension.parent.iterdir()} == {stage2_session.SCRIPT_NAME, stage2_session.POLICY_FILE}
+    assert {p.name for p in extension.parent.iterdir()} == {
+        stage2_session.SCRIPT_NAME,
+        stage2_session.POLICY_FILE,
+        "invocation.json",
+    }
     assert world.calls("opencode") == [], "the OpenCode CLI is never called"
 
 
@@ -967,8 +1003,11 @@ def test_launch_files_stay_inside_their_private_directory(world: World) -> None:
     (base / "existing").mkdir(parents=True)
     (base / "existing" / "user.txt").write_text("mine\n", encoding="utf-8")
     assert world.run() == 0
-    (policy,) = [p for p in world.policies() if p.name.startswith("codex-")]
-    assert {p.name for p in policy.iterdir()} == {stage2_session.SCRIPT_NAME}
+    (policy,) = [p for p in world.policies() if p.name.startswith("session-")]
+    # ADR 0018: the private directory holds the launch state (the record with
+    # the prompt, until the attempt ends) beside the AppleScript - and never a
+    # credential.
+    assert {p.name for p in policy.iterdir()} == {stage2_session.SCRIPT_NAME, "invocation.json"}
     assert (base / "existing" / "user.txt").exists(), "an accepted launch keeps user files"
     strays = []
     for path in world.tree.rglob("*"):
@@ -988,6 +1027,71 @@ def test_a_runtime_root_that_is_not_a_real_directory_refuses(world: World, shape
         base.symlink_to(world.root / "elsewhere")
     assert world.run() == 2
     assert world.calls() == [] and world.policies() == []
+
+
+# ---------------------------------------------------------------------------
+# The isolated session lifetime (ADR 0018, the plan's criterion ledger)
+# ---------------------------------------------------------------------------
+
+
+def runtime_log() -> list[dict]:
+    """What the isolated transport recorded: every operation the supervisor made."""
+    log = Path(os.environ["STAGE2_RUNTIME_STAND_IN"]) / "runtime-calls.jsonl"
+    if not log.exists():
+        return []
+    return [json.loads(line) for line in log.read_text(encoding="utf-8").splitlines()]
+
+
+def test_session_uses_fresh_attached_container(world: World) -> None:
+    """Criterion 1. Planted fault: the dispatch starts the CLI on the host, or a second
+    session reuses the first one's candidate volume or launch state."""
+    world.script(osascript=[{"exec_command": True}])
+    assert world.run() == 0
+    # The window's command is the supervisor's alone - no CLI path rides in it -
+    # and the launch went through the isolated transport: one run op whose
+    # candidate volume sits at the work directory, writable, non-root.
+    command = world.command()
+    assert stage2_session.SUPERVISOR_VERB in command and str(world.bin / "codex") not in command
+    (run,) = [entry for entry in runtime_log() if entry["op"] == "run"]
+    assert run["image"] == "stand-in" and run["user"] == "1000:1000"
+    assert run["argv"][0] == "codex" and run["cwd"] == str(world.tree)
+    volume, mount, read_only = run["volumes"][0]
+    assert mount == "/work" and read_only is False and run["volumes"] == [[volume, mount, read_only]]
+    # A second session gets its own fresh candidate and its own launch state.
+    assert world.run() == 0
+    runs = [entry for entry in runtime_log() if entry["op"] == "run"]
+    assert len(runs) == 2 and runs[1]["argv"][0] == "codex"
+    assert runs[1]["volumes"][0][0] != volume, "the second session mounts a fresh candidate"
+    directories = sorted(p.name for p in world.policies())
+    assert len(directories) == 2 and len({name.split("-", 1)[1] for name in directories}) == 2, (
+        "each launch keeps its own recorded state"
+    )
+
+
+def test_isolated_session_keeps_both_launch_scans(world: World) -> None:
+    """Criterion 8. Planted fault: the dispatch happens on the first scan's verdict, or
+    an isolated launch starts although the final scan was blocked or omitted."""
+    world.declare_go()
+    world.script(pi=pi_steps(help_step={**PI_HELP_STEP, "plant": {"late-leak.txt": LEAK}}))
+    assert world.run(model=GO_MODEL) == 2
+    assert world.calls("osascript") == [], "the window opened although the final scan was not clean"
+    assert runtime_log() == [], "an isolated launch started on a blocked payload"
+    assert world.policies() == [], "a refused launch removes the launch state it wrote"
+
+
+def test_session_returns_verified_edits_without_a_host_commit(world: World) -> None:
+    """Criterion 20. Planted fault: the edits return before the checks run, a failed
+    check keeps them as verified, or the return makes a host commit."""
+    world.script(codex=[{"plant": {"src/app.py": "value = 2\n"}}], osascript=[{"exec_command": True}])
+    before = git(world.tree, "rev-list", "--count", "HEAD")
+    assert world.run() == 0
+    # The planted edit survived the checks and stands uncommitted - no commit
+    # was made, and the outcome line names the verified return.
+    assert (world.tree / "src" / "app.py").read_text(encoding="utf-8") == "value = 2\n"
+    assert "M src/app.py" in git(world.tree, "status", "--porcelain")
+    assert git(world.tree, "rev-list", "--count", "HEAD") == before, "a session makes no host commit"
+    outcomes = [line for line in world.text().splitlines() if line.startswith("Session attempt ")]
+    assert len(outcomes) == 1 and "verified; the edits stand uncommitted" in outcomes[0]
 
 
 # ---------------------------------------------------------------------------

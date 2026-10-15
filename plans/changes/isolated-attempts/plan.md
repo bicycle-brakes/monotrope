@@ -4,7 +4,7 @@ status: draft
 implementation_status: none
 date: 2026-10-14
 last_reviewed: 2026-10-14
-updated: 2026-10-14
+updated: 2026-10-15
 supersedes: null
 superseded_by: null
 bead: coding-harness-s9r
@@ -224,38 +224,46 @@ not read the shared tracker outside its allowed worktree boundary.
 
 ## Criterion ledger
 
-- 1: not yet written tests/test_stage2.py::test_writing_retries_use_distinct_container_state — an automatic attempt reuses a volume/home or launches on the host
-- 1: not yet written tests/test_stage2_session.py::test_session_uses_fresh_attached_container — interactive dispatch starts a host CLI or reuses state
-- 2: not yet written tests/test_stage2_isolation.py::test_live_host_files_are_unreadable — a file or shell read obtains a host/home/Git sentinel through the production adapter
-- 3: not yet written tests/test_stage2_isolation.py::test_live_attempt_cannot_write_host_state — a host sentinel, worktree, index, config, hook or ref changes
-- 4: not yet written tests/test_stage2_attempt.py::test_only_the_selected_login_is_passed — another token, sign-in directory or agent socket is supplied
-- 4: not yet written tests/test_stage2_isolation.py::test_live_attempt_sees_only_selected_credentials — a synthetic unrelated login becomes readable
-- 5: not yet written tests/test_stage2_isolation.py::test_live_egress_allows_only_the_selected_api — approved traffic fails or proxy/direct/DNS/IPv6/gateway traffic escapes
-- 5: not yet written tests/test_stage2_egress.py::test_proxy_refuses_host_and_tls_name_bypasses — wildcard, IP, local, mismatched or uninspectable names are accepted
-- 6: not yet written tests/test_stage2_attempt.py::test_backend_selection_preserves_required_capabilities — a setting is ignored or a backend receives weaker requirements
-- 7: not yet written tests/test_stage2_attempt.py::test_missing_boundary_prerequisites_never_launch_a_writer — a missing runtime/image/login/profile launches a host or Stage-1 writer
-- 8: not yet written tests/test_stage2.py::test_every_attempt_scans_its_exact_outgoing_payload — a changed prompt or visible payload escapes its own declaration/leak check
-- 8: not yet written tests/test_stage2_session.py::test_isolated_session_keeps_both_launch_scans — dispatch occurs after a blocked or omitted final scan
-- 9: not yet written tests/test_stage2.py::test_isolated_retry_starts_from_the_run_baseline — failed edits/instructions/statuses/ignored or Git state reach a retry
-- 9: not yet written tests/test_stage2_isolation.py::test_live_retry_has_no_prior_attempt_state — a real second container sees the first one's marker
-- 10: not yet written tests/test_stage2.py::test_failed_runs_discard_model_and_derived_changes — a failure leaves edits/stamps/index/format/route or ignored files and the next invocation refuses them
-- 11: not yet written tests/test_stage2_attempt.py::test_publication_rejects_untrusted_topology — traversal, aliases, links, special files or a file-to-directory replacement reaches the host
-- 11: not yet written tests/test_stage2_attempt.py::test_safe_nested_file_changes_can_be_published — the validator rejects an ordinary new directory/file or safe deletion
-- 12: not yet written tests/test_stage2.py::test_isolated_draft_keeps_its_existing_output_allowance — answers/outside files or two new ADRs are published, or a second draft cannot revise its own ADR
-- 13: not yet written tests/test_stage2_isolation.py::test_live_verifier_has_no_host_access_credentials_or_egress — candidate gate/proof code reaches host state, model tokens, live tracker or network
-- 14: not yet written tests/test_stage2_attempt.py::test_publication_requires_the_exact_clean_verified_bytes — red, unmeasured, credential-bearing or changed-after-validation bytes are published
-- 15: not yet written tests/test_stage2_attempt.py::test_publication_preserves_intervening_host_work — a concurrent HEAD/index/file/evidence change is overwritten or reset
-- 16: not yet written tests/test_stage2_attempt.py::test_publication_failure_undoes_only_owned_writes — injected failure leaves partial files/index or removes another writer's work/ref
-- 17: not yet written tests/test_stage2.py::test_isolated_success_makes_one_clean_checkpoint — zero/multiple commits, model-owned host HEAD changes or unverified leftovers count as success
-- 18: not yet written tests/test_stage2.py::test_isolated_repair_preserves_red_first_proof_and_status_forms — missing/baseline-green/candidate-red proof marks a row fixed or changes the not-a-test contract
-- 19: not yet written tests/test_stage2.py::test_only_the_successful_attempts_new_measured_time_is_published — an old/invented/lost measurement satisfies the successful attempt
-- 20: not yet written tests/test_stage2_session.py::test_session_returns_verified_edits_without_a_host_commit — dispatch/failed exit publishes early, valid edits are lost or normal exit creates a host commit
-- 21: not yet written tests/test_stage2.py::test_attempt_evidence_survives_discard_and_names_derived_paths — audits/diagnostics vanish, failed statuses survive or derived edits are called model edits
-- 22: not yet written tests/test_stage2_attempt.py::test_recovery_cleans_only_recorded_owned_resources — cleanup deletes another invocation's resources or falsely reports completion
-- 22: not yet written tests/test_stage2_isolation.py::test_live_cleanup_and_interrupted_attempt_recovery — controlled exit or next-start recovery retains candidate/login/helper state
-- 23: not yet written tests/test_stage2_isolation.py::test_qualification_report_requires_all_probes_and_exact_identities — skipped/missing probes or another image/policy/platform qualify a call
+- 1: tests/test_stage2.py::test_writing_retries_use_distinct_container_state — an automatic attempt reuses a volume/home or launches on the host
+- 1: tests/test_stage2_session.py::test_session_uses_fresh_attached_container — interactive dispatch starts a host CLI or reuses state
+- 2: tests/test_stage2_isolation.py::test_live_host_files_are_unreadable — a file or shell read obtains a host/home/Git sentinel through the production adapter
+- 3: tests/test_stage2_isolation.py::test_live_attempt_cannot_write_host_state — a host sentinel, worktree, index, config, hook or ref changes
+- 4: tests/test_stage2_attempt.py::test_only_the_selected_login_is_passed — another token, sign-in directory or agent socket is supplied
+- 4: tests/test_stage2_isolation.py::test_live_attempt_sees_only_selected_credentials — a synthetic unrelated login becomes readable
+- 5: tests/test_stage2_isolation.py::test_live_egress_allows_only_the_selected_api — approved traffic fails or proxy/direct/DNS/IPv6/gateway traffic escapes
+- 5: tests/test_stage2_egress.py::test_proxy_refuses_host_and_tls_name_bypasses — wildcard, IP, local, mismatched or uninspectable names are accepted
+- 6: tests/test_stage2_attempt.py::test_backend_selection_preserves_required_capabilities — a setting is ignored or a backend receives weaker requirements
+- 7: tests/test_stage2_attempt.py::test_missing_boundary_prerequisites_never_launch_a_writer — a missing runtime/image/login/profile launches a host or Stage-1 writer
+- 8: tests/test_stage2.py::test_every_attempt_scans_its_exact_outgoing_payload — a changed prompt or visible payload escapes its own declaration/leak check
+- 8: tests/test_stage2_session.py::test_isolated_session_keeps_both_launch_scans — dispatch occurs after a blocked or omitted final scan
+- 9: tests/test_stage2.py::test_isolated_retry_starts_from_the_run_baseline — failed edits/instructions/statuses/ignored or Git state reach a retry
+- 9: tests/test_stage2_isolation.py::test_live_retry_has_no_prior_attempt_state — a real second container sees the first one's marker
+- 10: tests/test_stage2.py::test_failed_runs_discard_model_and_derived_changes — a failure leaves edits/stamps/index/format/route or ignored files and the next invocation refuses them
+- 11: tests/test_stage2_attempt.py::test_publication_rejects_untrusted_topology — traversal, aliases, links, special files or a file-to-directory replacement reaches the host
+- 11: tests/test_stage2_attempt.py::test_safe_nested_file_changes_can_be_published — the validator rejects an ordinary new directory/file or safe deletion
+- 12: tests/test_stage2.py::test_isolated_draft_keeps_its_existing_output_allowance — answers/outside files or two new ADRs are published, or a second draft cannot revise its own ADR
+- 13: tests/test_stage2_isolation.py::test_live_verifier_has_no_host_access_credentials_or_egress — candidate gate/proof code reaches host state, model tokens, live tracker or network
+- 14: tests/test_stage2_attempt.py::test_publication_requires_the_exact_clean_verified_bytes — red, unmeasured, credential-bearing or changed-after-validation bytes are published
+- 15: tests/test_stage2_attempt.py::test_publication_preserves_intervening_host_work — a concurrent HEAD/index/file/evidence change is overwritten or reset
+- 16: tests/test_stage2_attempt.py::test_publication_failure_undoes_only_owned_writes — injected failure leaves partial files/index or removes another writer's work/ref
+- 17: tests/test_stage2.py::test_isolated_success_makes_one_clean_checkpoint — zero/multiple commits, model-owned host HEAD changes or unverified leftovers count as success
+- 18: tests/test_stage2.py::test_isolated_repair_preserves_red_first_proof_and_status_forms — missing/baseline-green/candidate-red proof marks a row fixed or changes the not-a-test contract
+- 19: tests/test_stage2.py::test_only_the_successful_attempts_new_measured_time_is_published — an old/invented/lost measurement satisfies the successful attempt
+- 20: tests/test_stage2_session.py::test_session_returns_verified_edits_without_a_host_commit — dispatch/failed exit publishes early, valid edits are lost or normal exit creates a host commit
+- 21: tests/test_stage2.py::test_attempt_evidence_survives_discard_and_names_derived_paths — audits/diagnostics vanish, failed statuses survive or derived edits are called model edits
+- 22: tests/test_stage2_attempt.py::test_recovery_cleans_only_recorded_owned_resources — cleanup deletes another invocation's resources or falsely reports completion
+- 22: tests/test_stage2_isolation.py::test_live_cleanup_and_interrupted_attempt_recovery — controlled exit or next-start recovery retains candidate/login/helper state
+- 23: tests/test_stage2_isolation.py::test_qualification_report_requires_all_probes_and_exact_identities — skipped/missing probes or another image/policy/platform qualify a call
 - 23: not a test — the hosted Podman gate and macOS report run python3 scripts/check_stage2_isolation.py --program podman --build at named commits; missing either live report refutes completion
-- 24: not yet written tests/test_stage2.py::test_container_boundary_preserves_existing_routes_and_proof_guards — routes/efforts/pins/fallback triggers/rounds/statuses or ADR tolerance change
+- 24: tests/test_stage2.py::test_container_boundary_preserves_existing_routes_and_proof_guards — routes/efforts/pins/fallback triggers/rounds/statuses or ADR tolerance change
 - 24: not a test — phase 6 compares the doctrine and ADR against Q-1 to Q-5 and confirms read-only routes and protected areas remain; a contradictory statement refutes this review
 
 ## Time used
+
+2026-10-14 and 2026-10-15, phase-4 sessions of the Stage-2 implement worker
+(route `flash`, endpoint `glm-coding-plan`), working across one continued
+chat with a context break. The worker holds file tools only — no clock, no
+command tool — so it records no span or sum of its own and estimates nothing;
+the Stage-2 runner appends the measured span with its checkpoint commit, and
+its `make verify` is the gate. The 24-hour appetite stop has not been
+declared: no reading of `date` under this prompt has shown it reached.

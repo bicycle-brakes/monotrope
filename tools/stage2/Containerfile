@@ -1,0 +1,74 @@
+# Containerfile — the image an isolated stage-2 writing attempt runs in
+# (ADR 0018, plan step 1).
+#
+# **What this file is.** The build recipe of the two roles an attempt needs:
+# `model` (the official writing CLI, one selected login, API-only egress) and
+# `verifier` (the credential-free checker: derived stamps, index rendering,
+# ruff, `make verify`, red-first repair proofs). Both roles run as non-root
+# with a read-only root filesystem; their writes go to the volumes the
+# supervisor creates per attempt.
+#
+# **What this file is not.** It is not an approval. The image this file builds
+# is unmeasured until `scripts/check_stage2_isolation.py --build` has built it
+# on the target platform and `tools/stage2/runtime.lock.yaml` carries the
+# digest it measured; the supervisor refuses every writing call until then
+# (spec criterion 7). Nothing is installed during an attempt — the installs
+# below run once, in explicit setup, from the inputs the lock names.
+#
+# The base image is a build argument: qualification pins and measures it. The
+# default names the release whose Python matches the lock's `toolchain.python`;
+# the digest the build pulls is recorded in the qualification report, not here.
+
+ARG BASE_IMAGE=python:3.12-slim-bookworm
+
+FROM ${BASE_IMAGE} AS base
+
+# The toolchain an attempt needs to run the repository's gates: git (the
+# private candidate metadata), make and bash (the verify runner and its gate
+# list), certificates (TLS to the one allowed API), and Node (the official
+# CLIs are npm packages). No editor, no build essentials beyond what the
+# locked wheels need, no extra network clients.
+RUN apt-get update \
+    && apt-get install -y --no-install-recommends git make bash ca-certificates nodejs npm \
+    && rm -rf /var/lib/apt/lists/*
+
+# The Pi pin is the runner's own (`PI_VERSION`, stage2.py): the version the
+# loop's isolation flags were measured on. A build that cannot install exactly
+# this version must fail, not fall back.
+ARG PI_VERSION=1.1.0
+RUN npm install --global @mariozechner/pi@${PI_VERSION} \
+    && pi --version | grep -qx "${PI_VERSION}"
+
+# The Codex and Claude Code CLIs stay unpinned until qualification measures
+# them: an empty version installs nothing, and the lock's `measured: false`
+# keeps every writing call refused meanwhile. Qualification passes the
+# versions it verified as build arguments.
+ARG CODEX_CLI_VERSION=""
+RUN if [ -n "${CODEX_CLI_VERSION}" ]; then npm install --global "@openai/codex@${CODEX_CLI_VERSION}"; fi
+ARG CLAUDE_CODE_VERSION=""
+RUN if [ -n "${CLAUDE_CODE_VERSION}" ]; then npm install --global "@anthropic-ai/claude-code@${CLAUDE_CODE_VERSION}"; fi
+
+# The verifier's Python toolchain: exactly the repository's lock, hashes
+# checked, built once here and never during an attempt. This is the same
+# install the CI runs (`LOCK_INSTALL` in tests/test_ci.py).
+COPY requirements-ci.txt /build/requirements-ci.txt
+RUN python3 -m pip install --no-cache-dir --require-hashes -r /build/requirements-ci.txt \
+    && rm -rf /build
+
+# Non-root roles. The model role never needs to write outside its volumes;
+# neither does the verifier. UID and GID are fixed so the supervisor can state
+# them in every launch argv instead of trusting image defaults.
+RUN groupadd --gid 1000 runner && useradd --uid 1000 --gid 1000 --create-home runner
+
+FROM base AS model
+USER 1000:1000
+ENV HOME=/home/runner
+# No shell history, no npm cache, nothing that outlives the attempt in the
+# image layer: the roles' writable state lives in per-attempt volumes.
+ENV npm_config_cache=/tmp/npm-cache \
+    PI_CODING_AGENT_DIR=/tmp/pi-agent
+
+FROM base AS verifier
+USER 1000:1000
+ENV HOME=/home/runner \
+    PYTHONDONTWRITEBYTECODE=1

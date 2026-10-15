@@ -14,6 +14,7 @@ einzige Zeile Nutzdaten.
 from __future__ import annotations
 
 import re
+import sys
 from pathlib import Path
 
 import pytest
@@ -24,6 +25,10 @@ ENDPUNKTE = REPO_ROOT / "model-endpoints.yaml"
 AGENTEN = REPO_ROOT / ".claude" / "agents"
 WORKFLOW = REPO_ROOT / "docs" / "WORKFLOW.md"
 PROMPTS = REPO_ROOT / "prompts"
+
+sys.path.insert(0, str(REPO_ROOT / "scripts"))
+
+from stage2_attempt import api_profile_problems  # noqa: E402
 
 RESIDENZEN = ("anbieter-erklaert", "region-waehlbar", "nicht-erklaert")
 ABRECHNUNGEN = ("token", "abonnement")
@@ -446,3 +451,41 @@ def test_no_remark_routes_the_spec_review_to_codex() -> None:
     assert "spec review (phase 2a) stays with Codex" not in remark
     planted = remark.replace("runs on Opus 5.5", "stays with Codex", 1)
     assert "spec review (phase 2a) stays with Codex" in planted, "the planted fault is the old routing"
+
+
+# ---------------------------------------------------------------------------
+# The isolated attempt's API-host profiles (ADR 0018)
+#
+# `api_hosts` is the egress allow-list a writing container may reach. An empty
+# or absent list is a refusal, never unrestricted networking: the isolated
+# attempt refuses the endpoint until its profile is qualified. Each case here
+# is one shape the allow-list must refuse.
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.parametrize(
+    "hosts",
+    [
+        pytest.param([], id="missing-empty"),
+        pytest.param(["*.z.ai"], id="wildcard"),
+        pytest.param(["192.0.2.10"], id="ip-literal"),
+        pytest.param(["api.z.ai:8443"], id="port-suffix"),
+        pytest.param(["api .z.ai"], id="not-canonical"),
+        pytest.param(["API.Z.AI."], id="not-lowercased"),
+        pytest.param(["api.z.ai", "*.z.ai"], id="one-bad-spoils-all"),
+    ],
+)
+def test_a_host_profile_that_is_not_exact_canonical_names_is_refused(hosts: list[str]) -> None:
+    """Missing, wildcard, IP, ported or non-canonical profiles are no approval."""
+    problems = api_profile_problems(hosts)
+    assert problems, f"{hosts!r} must not pass as an API profile"
+    planted = ["api.z.ai"]
+    assert api_profile_problems(planted) == [], "the exact known profile must pass"
+
+
+def test_an_unmeasured_profile_means_refusal_not_open_egress() -> None:
+    """The two unmeasured entries refuse; the two known ones carry exactly their one host."""
+    assert _endpunkt("openai-codex").get("api_hosts") == [], "codex needs measurement before any host stands here"
+    assert _endpunkt("claude-code-plan").get("api_hosts") == [], "claude needs measurement before any host stands here"
+    assert _endpunkt("glm-coding-plan").get("api_hosts") == ["api.z.ai"]
+    assert _endpunkt("opencode-go").get("api_hosts") == ["opencode.ai"]

@@ -30,18 +30,24 @@ Implement lets the model edit but not run commands; before `make verify` the
 runner applies ruff's safe fixes and its formatter to the changed Python files
 under `scripts/` and `tests/`, then runs `make verify`, checks the time log and
 makes the one checkpoint commit. A
-failed attempt leaves its diagnostics and the files its model changed, quoted,
-below its audit line in `findings.md`. `repair` takes every taken finding of
+failed attempt leaves only the runner's own evidence - its audit line, quoted
+diagnostics and changed-path lists - below it in `findings.md`; the failed
+candidate tree is discarded, and the next attempt starts from the run baseline
+(ADR 0018). `repair` takes every taken finding of
 the loop record, the released blocks and the phase-6 tables to Codex in one
 call (a fresh Codex attempt after a failed check, then Sonnet 5.5; a failed call
 stops), proves each repair of code with a test that was red first, and marks the
-rows `fixed` from the answer's fixed lines. Codex runs in its configured
-`workspace-write` sandbox; the tests do not measure that confinement.
+rows `fixed` from the answer's fixed lines. Every writing attempt runs in the
+isolated boundary container (ADR 0018); the CLI's own sandbox flags stay
+configured, and the isolation gate measures the container, not the flags.
 
 `session` starts one interactive Pi or Codex session in a new macOS
-Terminal window, inside the change's dedicated worktree
-(`<main checkout>/.claude/worktrees/<change>`, attached branch, that directory
-as the working one). It takes `--model <id>` - exactly as
+Terminal window. The window runs the trusted supervisor
+(`python3 scripts/stage2_attempt.py session-supervisor <opaque-id>`, the
+invocation id its only argument), and the supervisor starts the writing
+attempt in the boundary container against a private candidate - the change's
+dedicated worktree stays untouched until a verified return. It takes
+`--model <id>` - exactly as
 `model-endpoints.yaml` lists it: a plain id on `openai-codex` runs the
 official Codex CLI, a full `opencode-go/<model>` id runs the pinned Pi (the
 id names the endpoint, not the program) with a runner-supplied policy
@@ -53,9 +59,12 @@ time immediately before the window opens, and one audit line goes into
 `failed`. **Accepted means Terminal took the command**, not that the CLI
 started, signed in or the model answered: what follows shows in the window.
 The leak check covered this launch only - later edits, later prompts and a
-model switched in the UI are not scanned, and the terminal permissions
-confine nothing at the operating-system level; another model starts again
-through this runner. `--model` and `--handover` belong to the session verb
+model switched in the UI are not scanned, and another model starts again
+through this runner; the confinement is the boundary container, not the
+terminal's permissions. On a normal exit the supervisor runs the private
+checks and returns the verified edits to the host worktree uncommitted; a
+cancellation or a failed check discards the candidate. `--model` and
+`--handover` belong to the session verb
 alone, and `--stage2-off` to explore, implement and repair.
 
 **What every call carries** (before it starts, in this order):
@@ -71,15 +80,23 @@ alone, and `--stage2-off` to explore, implement and repair.
 5. an empty standard input, and an environment the runner built from an
    allow-list - never the caller's.
 
-**Reads: what each call can reach.** The Claude Code calls (explore, the
-draft's GLM attempt, implement, spec-review and the Sonnet 5.5 fallback attempts) start in the worktree
-with `--restricted` and no `--add-dir`; `claude --help` says `--restricted`
-"confines the file tools to the working directories", so
-`~/.config/cc-routing/secrets.env` is outside what those file tools reach.
-That is the CLI's documented behaviour, not measured here. Codex's draft and
-repair attempts have command tools in the configured `workspace-write`
-sandbox; a repair may run tests and `make verify` but must not commit or run
-git commands that change the repository. Codex's review, draft and repair
+**Reads: what each call can reach.** Since ADR 0018 the writing verbs
+(`draft`, `implement`, `repair` and `session`) read and write inside the
+boundary container: the host worktree, the host home and everything else
+outside the passed inputs are outside their reach, and the isolation gate
+measures that. The read-only calls keep their configured limits. Every Claude
+Code call (explore, the draft's GLM attempt, implement, `spec-review` and the
+Sonnet 5.5 fallback attempts) still starts with
+`--restricted` and no `--add-dir` - for the writing verbs inside the
+container, a second belt over the measured boundary; `claude --help` says
+`--restricted`
+"confines the file tools to the working directories". For the read-only
+calls that documented behaviour is the whole story and is not measured here;
+for the writing verbs the measured container stands outside it. Inside the
+container a Codex draft or repair attempt still has command tools under its
+configured `workspace-write` sandbox; a repair may run tests and `make verify`
+but must not commit or run
+git commands that change the repository. Codex's review
 calls are not confined in their reads: only the prompt's request bounds them
 to the worktree and the repository's git directory. **The review
 loop's Pi calls are not among them, and they are not confined:** a round's
@@ -94,8 +111,8 @@ fresh agent directory and home per call) are configured on every call and
 were measured once by hand on the pinned version; the suite starts no real
 Pi, and the version pin (`require_pi`) is what ties the measurement to the
 call. The Codex review calls run in the CLI's read-only sandbox; a draft's
-Codex call runs in `workspace-write`, and the runner puts back what lands
-outside the change folder.
+Codex call keeps its `workspace-write` flags inside the container, and
+publication validates what leaves the candidate.
 
 **The loop record** lives outside the worktree
 (`${XDG_STATE_HOME:-~/.local/state}/coding-harness/stage2/<change>/loop.md`):
@@ -140,6 +157,7 @@ import check_adr_answers  # noqa: E402
 import check_frontmatter_current  # noqa: E402
 import leakcheck  # noqa: E402
 import merge_guard  # noqa: E402
+import stage2_attempt  # noqa: E402
 
 REPO_ROOT = Path(__file__).resolve().parent.parent
 
@@ -545,6 +563,17 @@ class Context:
         return self.folder / "plan.md"
 
 
+def context_for(root: Path, change: str) -> Context:
+    """A Context for a change whose preflight already ran - the verifier's entry (ADR 0018).
+
+    The verification shim builds one inside the container, where the checks
+    need the same paths the host runner would have used and no preflight of
+    its own: the attempt's caller preflighted before the launch.
+    """
+    folder = root / "plans" / "changes" / change
+    return Context(root, change, folder, _artefact_bead(folder / "spec.md") or "")
+
+
 def declaration_problem(root: Path, endpoint: str, model: str) -> str | None:
     """Why the declaration does not clear this endpoint and model for framework content, or None."""
     try:
@@ -789,9 +818,18 @@ def run_codex(ctx: Context, prompt: str, resume: str | None = None, writable: bo
 
     A review reads in the CLI's `read-only` sandbox; a draft writes in
     `workspace-write`, and the runner puts back what lands outside the change
-    folder. No call takes a bypass flag (spec, criterion 1).
+    folder. No call takes a bypass flag (spec, criterion 1). A writable call
+    is an isolated attempt (ADR 0018) when the attempt loop has noted one: the
+    supervisor launches it in a fresh container and hands the stopped run back
+    through `_LAST_WRITER_RUN`; without the note the call keeps the host
+    launch a test's replacement may intercept.
     """
     _, model, effort = CODEX
+    global _PENDING_ATTEMPT
+    pending = _PENDING_ATTEMPT if writable and resume is None else None
+    _PENDING_ATTEMPT = None
+    if pending is not None:
+        return _isolated_codex_call(ctx, prompt, pending)
     with tempfile.TemporaryDirectory(prefix="stage2-") as tmp:
         answer_file = Path(tmp) / "answer.md"
         command = ["codex", "exec"]
@@ -1471,6 +1509,156 @@ def insert_before_time(path: Path, block: str) -> None:
     stamp_updated(path)
 
 
+# ---------------------------------------------------------------------------
+# The isolated writing attempt (ADR 0018): the supervisor carries every
+# writable call; the pending-attempt note carries what the call's own shape
+# cannot, so the functions a route contract pins keep their signatures.
+# ---------------------------------------------------------------------------
+
+# What the next writable call is, set by the attempt loop right before it and
+# consumed by the call: verb, baseline, attempt number and the permitted
+# evidence bytes the candidate may start from.
+_PENDING_ATTEMPT: dict | None = None
+
+# The stopped run of the last writing call, or None when the call did not go
+# through the supervisor - a read-only call, or a test's replacement of the
+# call function, which keeps the transparent semantics the suite measures.
+_LAST_WRITER_RUN: stage2_attempt.WriterRun | None = None
+
+
+def _work_inner_env(endpoint: tuple[str, str, str | None]) -> dict[str, str]:
+    """A writable work call's own variables: the GLM endpoint's address and config placeholder.
+
+    The login itself is not here: the supervisor reads only the selected
+    endpoint's material at launch time (criterion 4).
+    """
+    if endpoint[0] != "glm-coding-plan":
+        return {}
+    own = {
+        "ANTHROPIC_BASE_URL": GLM_BASE_URL,
+        "CLAUDE_CONFIG_DIR": stage2_attempt.CONFIG_PLACEHOLDER,
+        "CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC": "1",
+    }
+    own.update({name: endpoint[1] for name in GLM_MODEL_VARIABLES})
+    return own
+
+
+def _isolated_work_call(
+    ctx: Context,
+    prompt: str,
+    endpoint: tuple[str, str, str | None],
+    key: str | None,
+    pending: dict,
+) -> str:
+    """The writable work call as an isolated attempt; the answer, scrubbed as always."""
+    command = [
+        "claude",
+        "-p",
+        f"Run the phase for {ctx.change} exactly as the appended instructions say.",
+        "--append-system-prompt-file",
+        stage2_attempt.PROMPT_PLACEHOLDER,
+        "--model",
+        endpoint[1],
+    ]
+    if endpoint[2]:
+        command += ["--effort", endpoint[2]]
+    command += [
+        "--tools",
+        WORK_WRITE_TOOLS,
+        "--restricted",
+        "--safe-mode",
+        "--strict-mcp-config",
+        "--permission-mode",
+        "acceptEdits",
+        "--permission-prompts",
+        "none",
+        "--no-session-persistence",
+        "--output-format",
+        "text",
+    ]
+    try:
+        run = stage2_attempt.launch_writer_call(
+            root=ctx.root,
+            spec=stage2_attempt.WriterSpec(
+                verb=pending["verb"],
+                change=ctx.change,
+                endpoint=endpoint[0],
+                model=endpoint[1],
+                prompt=prompt,
+                inner_command=command,
+                inner_env=foreign_env(_work_inner_env(endpoint)),
+                baseline=pending["baseline"],
+                attempt=pending["attempt"],
+                permitted=pending["permitted"],
+            ),
+        )
+    except stage2_attempt.AttemptCallFailed as error:
+        raise CallFailed(scrub(str(error), key)) from error
+    global _LAST_WRITER_RUN
+    _LAST_WRITER_RUN = run
+    if run.done.returncode != 0:
+        raise fail("claude", run.done, f"exit {run.done.returncode}", key)
+    # The work CLI answers on standard output, as it always has; the candidate's
+    # answer file is the Codex route's channel, not this one's.
+    answer = scrub(run.done.stdout or "", key)
+    if not answer.strip():
+        raise fail("claude", run.done, "the answer is empty", key)
+    return answer
+
+
+def _isolated_codex_call(ctx: Context, prompt: str, pending: dict) -> tuple[str, str]:
+    """The writable Codex call as an isolated attempt; the answer and the thread id."""
+    try:
+        run = stage2_attempt.launch_writer_call(
+            root=ctx.root,
+            spec=stage2_attempt.WriterSpec(
+                verb=pending["verb"],
+                change=ctx.change,
+                endpoint=CODEX[0],
+                model=CODEX[1],
+                prompt=prompt,
+                inner_command=[
+                    "codex",
+                    "exec",
+                    "--json",
+                    "-m",
+                    CODEX[1],
+                    "-c",
+                    f'model_reasoning_effort="{CODEX[2]}"',
+                    "-c",
+                    'sandbox_mode="workspace-write"',
+                    "--disable",
+                    "hooks",
+                    "--disable",
+                    "memories",
+                    "-o",
+                    stage2_attempt.ANSWER_PLACEHOLDER,
+                    prompt,
+                ],
+                inner_env=foreign_env({}),
+                baseline=pending["baseline"],
+                attempt=pending["attempt"],
+                permitted=pending["permitted"],
+            ),
+        )
+    except stage2_attempt.AttemptCallFailed as error:
+        raise CallFailed(scrub(str(error), None)) from error
+    global _LAST_WRITER_RUN
+    _LAST_WRITER_RUN = run
+    if run.done.returncode != 0:
+        raise fail("codex", run.done, f"exit {run.done.returncode}")
+    thread = thread_id(run.done.stdout or "")
+    if thread is None:
+        raise fail("codex", run.done, "no thread.started event")
+    answer = ""
+    if run.answer_path is not None:
+        try:
+            answer = run.answer_path.read_text(encoding="utf-8")
+        except (OSError, UnicodeDecodeError) as error:
+            raise fail("codex", run.done, "no answer file") from error
+    return answer, thread
+
+
 def run_work_model(
     ctx: Context,
     prompt: str,
@@ -1478,7 +1666,20 @@ def run_work_model(
     writable: bool,
     key: str | None = None,
 ) -> str:
-    """One non-interactive Claude Code work call with file tools only."""
+    """One non-interactive Claude Code work call with file tools only.
+
+    A writable call is an isolated attempt (ADR 0018) when the attempt loop
+    has noted one: the supervisor launches it in a fresh container with a
+    private candidate and hands the stopped run back through
+    `_LAST_WRITER_RUN`. Without the note - a read-only call, or a test's
+    direct replacement of this function - the call keeps the host launch the
+    routing contract has always pinned.
+    """
+    global _PENDING_ATTEMPT
+    pending = _PENDING_ATTEMPT if writable else None
+    _PENDING_ATTEMPT = None
+    if pending is not None:
+        return _isolated_work_call(ctx, prompt, endpoint, key, pending)
     with tempfile.TemporaryDirectory(prefix="stage2-") as tmp:
         prompt_file = Path(tmp) / "work-prompt.md"
         prompt_file.write_text(prompt, encoding="utf-8")
@@ -1994,6 +2195,183 @@ def checkpoint(
 
 
 # ---------------------------------------------------------------------------
+# The isolated verification (ADR 0018, criteria 13, 14, 18, 21)
+# ---------------------------------------------------------------------------
+
+# A verifier check that has not ended after this many minutes is a stopped
+# failure, never a hung launch; the shim's own pytest proofs run under the
+# red-first limit inside.
+VERIFIER_MINUTES = 90
+
+
+def _verify_report(done: subprocess.CompletedProcess, key: str | None) -> tuple[list[str], list[str], bool]:
+    """The verifier's one JSON report line: its problems, its format lines, whether the answer is owed.
+
+    A report that does not arrive is a failed verification, never a pass: the
+    exit code and the output tail name why, scrubbed and bounded like every
+    diagnostic.
+    """
+    line = ""
+    for candidate in (done.stdout or "").splitlines():
+        if candidate.startswith("{"):
+            line = candidate
+    if not line:
+        evidence = "\n".join(((done.stdout or "") + (done.stderr or "")).splitlines()[-TAIL_LINES:])
+        return [f"the verifier's report did not arrive (exit {done.returncode}):\n{scrub(evidence, key)}"], [], False
+    try:
+        report = json.loads(line)
+    except ValueError:
+        return [f"the verifier's report is not JSON: {scrub(line[:200], key)}"], [], False
+    problems = [scrub(str(problem), key) for problem in report.get("problems") or []]
+    formatted = [scrub(str(entry), key) for entry in report.get("formatted") or []]
+    return problems, formatted, bool(report.get("owed"))
+
+
+def _verify_command() -> list[str]:
+    return ["python3", f"{stage2_attempt.CANDIDATE_WORK}/.stage2/stage2_verify_inside.py"]
+
+
+def _merge_verified_delta(run: stage2_attempt.WriterRun, post: bytes | None) -> None:
+    """Fold what the checks changed back into the run's delta, as runner-derived paths.
+
+    The model's own paths keep their classification - a file the format step
+    polished is still the model's file, in the bytes the checks verified -
+    and everything the checks added or moved is the runner's (criterion 21).
+    The publication then publishes exactly the checked bytes (criterion 14).
+    """
+    if post is None or run.baseline_archive is None:
+        return
+    post_delta = stage2_attempt.diff_candidate(run.baseline_archive, post)
+    model_paths = set(run.delta.model_paths)
+    run.delta.entries = post_delta.entries
+    run.delta.model_paths = [entry.path for entry in post_delta.entries if entry.path in model_paths]
+    run.delta.derived_paths = [entry.path for entry in post_delta.entries if entry.path not in model_paths]
+
+
+def verify_isolated(
+    ctx: Context,
+    run: stage2_attempt.WriterRun,
+    baseline_time: str,
+    key: str | None,
+    formatted: list[str],
+) -> list[str]:
+    """The work attempt's checks inside the credential-free verifier (criterion 13).
+
+    The verifier composes its candidate from the trusted baseline bytes and
+    the validated delta, prepares the derived files, formats, runs
+    `make verify` and the time check there - with no network and no model
+    credential - and reports the problems and the format line.
+    """
+    assert run.baseline_archive is not None
+    candidate = stage2_attempt.compose_candidate(run.baseline_archive, run.delta)
+    git_bytes = stage2_attempt.git_tar(ctx.root, run.state.baseline)
+    env = {
+        "VERIFY_MODE": "work",
+        "VERIFY_PLAN": ctx.plan.relative_to(ctx.root).as_posix(),
+        "VERIFY_BASELINE_TIME": baseline_time,
+        "PATH": "/usr/local/bin:/usr/bin:/bin",
+        "HOME": "/home/runner",
+    }
+    done, post = stage2_attempt.run_verifier(
+        ctx.root, candidate, git_bytes, _verify_command(), env, timeout=VERIFIER_MINUTES * 60
+    )
+    problems, verified_format, _owed = _verify_report(done, key)
+    formatted.extend(verified_format)
+    if problems:
+        return problems
+    _merge_verified_delta(run, post)
+    return []
+
+
+def verify_isolated_draft(
+    ctx: Context,
+    run: stage2_attempt.WriterRun,
+    key: str | None,
+    new_adrs: list[str],
+) -> tuple[list[str], bool]:
+    """The draft's checks inside the credential-free verifier (criterion 13).
+
+    The one missing-ADR-answer tolerance travels with the checks, so `owed`
+    comes from the verifier's own report, computed against the candidate.
+    """
+    assert run.baseline_archive is not None
+    candidate = stage2_attempt.compose_candidate(run.baseline_archive, run.delta)
+    git_bytes = stage2_attempt.git_tar(ctx.root, run.state.baseline)
+    env = {
+        "VERIFY_MODE": "draft",
+        "VERIFY_CHANGE": ctx.change,
+        "VERIFY_NEW_ADRS": "\n".join(new_adrs),
+        "PATH": "/usr/local/bin:/usr/bin:/bin",
+        "HOME": "/home/runner",
+    }
+    done, post = stage2_attempt.run_verifier(
+        ctx.root, candidate, git_bytes, _verify_command(), env, timeout=VERIFIER_MINUTES * 60
+    )
+    problems, _formatted, owed = _verify_report(done, key)
+    if not problems:
+        _merge_verified_delta(run, post)
+    return problems, owed
+
+
+def red_first_isolated(ctx: Context, run: stage2_attempt.WriterRun, baseline: str, test: str) -> str | None:
+    """The red-first proof inside the credential-free verifier; None when the test was red (criterion 18)."""
+    assert run.baseline_archive is not None
+    candidate = stage2_attempt.compose_candidate(run.baseline_archive, run.delta)
+    git_bytes = stage2_attempt.git_tar(ctx.root, baseline)
+    env = {
+        "VERIFY_MODE": "red-first",
+        "VERIFY_BASELINE": baseline,
+        "VERIFY_TEST": test,
+        "PATH": "/usr/local/bin:/usr/bin:/bin",
+        "HOME": "/home/runner",
+    }
+    done, _post = stage2_attempt.run_verifier(
+        ctx.root, candidate, git_bytes, _verify_command(), env, timeout=RED_FIRST_MINUTES * 60 * 4
+    )
+    problems, _formatted, _owed = _verify_report(done, None)
+    return problems[0] if problems else None
+
+
+def isolated_attempt_files(delta: stage2_attempt.CandidateDelta) -> list[str]:
+    """The stopped candidate's files for an attempt block: the model's own, then the runner-derived.
+
+    The candidate never touched the host tree, so the host's tree diff has
+    nothing to say; the delta the trusted exporter produced is the record.
+    """
+    lines = []
+    for path in delta.model_paths:
+        entry = next(item for item in delta.entries if item.path == path)
+        lines.append(f"`{path.as_posix()}` {'removed' if entry.data is None else 'changed'} in the candidate")
+    lines += [f"runner-derived: `{path.as_posix()}`" for path in delta.derived_paths]
+    return lines
+
+
+def publication_scan(key: str | None, endpoint: str):
+    """The credential scan of the exact published bytes (criterion 14).
+
+    The run's own credential and the selected endpoint's login values must
+    never land in the worktree; a finding refuses the publication before the
+    first host write.
+    """
+    values = [key] if key else []
+    login_file = stage2_attempt.LOGIN_FILES.get(endpoint)
+    if login_file:
+        try:
+            values.append(Path(login_file).expanduser().read_text(encoding="utf-8"))
+        except (OSError, UnicodeDecodeError):
+            pass
+
+    def scan(path: Path, data: bytes) -> list[str]:
+        return [
+            f"{path.as_posix()}: a login value appears in the candidate's bytes"
+            for value in values
+            if value and credential_spans(data, value)
+        ]
+
+    return scan
+
+
+# ---------------------------------------------------------------------------
 # The repair of the taken findings
 # ---------------------------------------------------------------------------
 
@@ -2155,6 +2533,8 @@ def check_repair_answer(
     before: tuple[list[list[str]], list[list[str]]],
     audit_line: str | None = None,
     findings_before: str | None = None,
+    proof=None,  # (baseline, test) -> problem | None; the isolated red-first run (ADR 0018)
+    candidate_files: dict[Path, bytes] | None = None,  # the candidate's bytes, when it never touched the host
 ) -> tuple[dict[str, str], list[str]]:
     """Read an answer's fixed lines: the Status each taken row takes, or the problems that fail the attempt.
 
@@ -2163,7 +2543,9 @@ def check_repair_answer(
     checkpointed (phase 6, F-3). The pre-call findings body also protects other phases and every earlier
     attempt's evidence; only the frontmatter is excluded, because the runner refreshes `updated:`.
     Only when no problem stands do the red-first runs start, one pytest run per named test; every
-    text is scrubbed with the key.
+    text is scrubbed with the key. An isolated attempt carries its own candidate: `candidate_files`
+    answers the file reads with the candidate's bytes, and `proof` runs the red-first check in the
+    credential-free verifier instead of on the host.
     """
     problems: list[str] = []
     parsed: dict[str, list[str]] = {}
@@ -2197,7 +2579,12 @@ def check_repair_answer(
         problems.append(f"{ident}: no taken row carries this id")
     if problems:
         return {}, [scrub(problem, key) for problem in problems]
-    findings_now = ctx.findings.read_text(encoding="utf-8") if ctx.findings.exists() else ""
+    candidate = candidate_files or {}
+    findings_bytes = candidate.get(ctx.findings.relative_to(ctx.root))
+    if findings_bytes is not None:
+        findings_now = findings_bytes.decode("utf-8", errors="replace")
+    else:
+        findings_now = ctx.findings.read_text(encoding="utf-8") if ctx.findings.exists() else ""
     released_now, phase6_now = findings_rows(findings_now)
     if audit_line and audit_line not in findings_now.splitlines():
         problems.append("findings.md no longer holds the audit line of this call; a passing repair keeps it")
@@ -2219,7 +2606,13 @@ def check_repair_answer(
         else:
             test = fix[len("fixed — ") :]
             function = test.partition("::")[2]
-            body = _read_quietly(ctx.root / test.partition("::")[0])
+            test_path = Path(test.partition("::")[0])
+            override = candidate.get(test_path)
+            body = (
+                override.decode("utf-8", errors="replace")
+                if override is not None
+                else _read_quietly(ctx.root / test_path)
+            )
             if not any(line.startswith(f"def {function}(") for line in body.splitlines()):
                 problems.append(f"{ident}: {test} defines no function `def {function}(`")
     for place, rows_before, rows_now in (
@@ -2239,7 +2632,8 @@ def check_repair_answer(
         fix = fixes[row[0]]
         if not fix.startswith("fixed — tests/"):
             continue
-        outcome = red_first(ctx.root, baseline, fix[len("fixed — ") :], key)
+        named_test = fix[len("fixed — ") :]
+        outcome = proof(baseline, named_test) if proof is not None else red_first(ctx.root, baseline, named_test, key)
         if outcome is not None:
             problems.append(f"{row[0]}: {outcome}")
     if problems:
@@ -2365,7 +2759,7 @@ def run_attempts(
     ignored_before: dict[Path, tuple[int, int]] | None,
     commit_message: str,
     closing: str,
-    answer_check=None,  # answer -> problems, only when `verify_attempt` returned none
+    answer_check=None,  # (answer, run) -> problems, only when the verification returned none
     before_commit=None,  # a write between the checks and the checkpoint commit
     after_commit=None,  # a write after the checkpoint commit
     snapshot_findings=None,  # () -> the findings text as it stands right before the model call
@@ -2378,8 +2772,11 @@ def run_attempts(
     `snapshot_findings` and `restore_findings` puts findings.md back as it stood right before the model
     call whenever an attempt fails: the audit line above the snapshot stays, the model's own edits to
     the file - a Status it wrote itself included - go, so no failed run leaves them behind (phase 6,
-    F-2).
+    F-2). Since ADR 0018 every attempt is an isolated one: its candidate is a private container tree,
+    a failed attempt's edits are discarded (the block above carries them), and the verified delta is
+    published against the host state the attempt started from.
     """
+    global _PENDING_ATTEMPT, _LAST_WRITER_RUN
     root = ctx.root
     allowed = {ctx.findings.relative_to(root)}
     # Build each endpoint's base prompt before any model can edit or delete a dependency. Every
@@ -2419,6 +2816,21 @@ def run_attempts(
         # Restore a changed plan with this attempt's pre-call time evidence and runner route, while the
         # accepted plan in every prompt stays the original snapshot. No older line satisfies a retry.
         inputs_before = {**inputs, ctx.plan: baseline_time.encode("utf-8")}
+        # The candidate starts from this attempt's evidence: the audit line the
+        # call records and the route block the plan carries travel with it, so
+        # the publication can preserve them (ADR 0018, the run baseline).
+        permitted = {
+            ctx.findings.relative_to(root): ctx.findings.read_bytes(),
+            ctx.plan.relative_to(root): ctx.plan.read_bytes(),
+        }
+        # What the publication must find on return: the attempt refuses to
+        # overwrite work that arrived while it ran (criterion 15). The
+        # evidence file stays out of the hash: the runner's own blocks are the
+        # intentional exception a run leaves behind.
+        try:
+            expected = stage2_attempt.host_state(root, keep={ctx.findings.relative_to(root)})
+        except stage2_attempt.BoundaryRefused as error:
+            raise Refused(str(error)) from error
         kept = snapshot_findings() if snapshot_findings is not None else None
         unmeasured: str | None = None
         try:
@@ -2427,6 +2839,12 @@ def run_attempts(
             before, unmeasured = "", str(error)
         call_error: CallFailed | None = None
         answer = ""
+        _PENDING_ATTEMPT = {
+            "verb": verb,
+            "baseline": baseline,
+            "attempt": attempt,
+            "permitted": permitted,
+        }
         try:
             if endpoint == CODEX:
                 # A fresh writing Codex call, never resumed; its thread is not kept (ADR 0017).
@@ -2435,8 +2853,18 @@ def run_attempts(
                     raise CallFailed("codex: the answer is empty")
             else:
                 answer = run_work_model(ctx, prompt, endpoint, writable=True, key=credential)
+        except stage2_attempt.BoundaryRefused as error:
+            # The boundary refused the attempt before it started: the routing
+            # table never advances on a refusal (spec, criterion 7).
+            raise Refused(scrub(str(error), key)) from error
+        except stage2_attempt.AttemptCallFailed as error:
+            call_error = CallFailed(scrub(str(error), key))
         except CallFailed as error:
             call_error = error
+        finally:
+            _PENDING_ATTEMPT = None
+        run = _LAST_WRITER_RUN
+        _LAST_WRITER_RUN = None
         if endpoint == CODEX:
             try:
                 head_now = _git_output(root, "rev-parse", "HEAD").strip()
@@ -2469,6 +2897,10 @@ def run_attempts(
                 raise CallFailed(problem) from call_error
         if call_error is not None:
             error = call_error
+            if run is not None:
+                # The attempt's candidate and its runtime resources are the
+                # runner's to clean; the host tree gets the restore below.
+                run.discard()
             if kept is not None:
                 restore_findings(kept)
             raise CallFailed(f"{error}; {restore_baseline(root, baseline, allowed, ignored_before)}") from error
@@ -2489,18 +2921,29 @@ def run_attempts(
                 files = str(error)
         else:
             files = unmeasured
+        isolated = run is not None and not run.transparent
         cannot_start: CallFailed | None = None
         formatted: list[str] = []
         try:
-            problems = verify_attempt(root, ctx.plan, baseline_time, key, formatted)
+            if isolated:
+                # The credential-free verifier checks the composed candidate:
+                # no candidate-controlled code runs on the host (criterion 13).
+                problems = verify_isolated(ctx, run, baseline_time, key, formatted)
+            else:
+                problems = verify_attempt(root, ctx.plan, baseline_time, key, formatted)
         except CallFailed as error:
             # `make verify` could not be started: no model can repair that, so this attempt's block
             # says why and the run stops after the scan below, with no further attempt (spec, criterion 6).
             cannot_start = error
             lines = scrub(str(error), key).splitlines() or ["make could not be started"]
             problems = ["`make verify` could not be run\n" + "\n".join(_shrink(lines, TAIL_LINES))]
+        if isolated and not cannot_start:
+            # The candidate's own file list stands in the block: the model's
+            # paths first, the runner-derived ones named as the runner's
+            # (criterion 21).
+            files = isolated_attempt_files(run.delta)
         if not problems and answer_check is not None:
-            problems = answer_check(answer)
+            problems = answer_check(answer, run)
         if problems:
             # The format line stands first: the step ran before `make verify`, and the next model
             # learns that the runner formats and whether ruff left findings it could not fix.
@@ -2514,6 +2957,13 @@ def run_attempts(
             listing = "\n".join(f"- {p}" for p in problems)
             diagnostics.append(f"Attempt {attempt} ({route}):\n{listing}")
             append(ctx.findings, quote_block(attempt_block(attempt, route, listing, files), key))
+            if run is not None:
+                # ADR 0018 (criteria 9 and 10): the failed candidate is discarded, its edits live on
+                # in the block above. The retry starts from the run baseline plus this evidence -
+                # the restore below and the snapshot inputs - never from the failed tree.
+                run.discard()
+                run = None
+            restore_baseline(root, baseline, allowed, ignored_before)
         record += [f"- Attempt {attempt} ({route}): {line}" for line in formatted]
         if key is not None:
             # The gate runs repository code the model just edited: scan again after it.
@@ -2528,6 +2978,20 @@ def run_attempts(
                 f"{ctx.findings.relative_to(root)}"
             ) from cannot_start
         if not problems:
+            applied: list = []
+            if isolated:
+                # The host must still be where the attempt found it, and the
+                # exact verified bytes must pass the credential scan before
+                # the first write (criteria 14 and 15).
+                stage2_attempt.assert_host_state(root, expected, keep={ctx.findings.relative_to(root)})
+                # The evidence path is the runner's: the candidate's findings.md,
+                # if the model touched it, is never what lands (criterion 21).
+                evidence = ctx.findings.relative_to(root)
+                applied = run.publish(
+                    root,
+                    only={entry.path for entry in run.delta.entries} - {evidence},
+                    scan=publication_scan(key, endpoint[0]),
+                )
             if before_commit is not None:
                 before_commit()
             message = commit_message
@@ -2535,9 +2999,20 @@ def run_attempts(
                 # The subject stays the subject; the format line of every attempt that ran the step
                 # stands below the heading, in the commit that holds the formatted bytes.
                 message = commit_message + "\n\n" + FORMAT_COMMIT_HEADING + "\n" + "\n".join(record)
-            checkpoint(root, ctx.change, baseline, key, ignored_before, message=message)
+            try:
+                checkpoint(root, ctx.change, baseline, key, ignored_before, message=message)
+            except CallFailed:
+                if isolated:
+                    # A checkpoint that did not succeed leaves only the
+                    # runner's own partial publication behind: undo it and put
+                    # the host back at the baseline (criterion 16).
+                    stage2_attempt.undo_owned(root, applied, baseline)
+                    restore_baseline(root, baseline, allowed, ignored_before)
+                raise
             if after_commit is not None:
                 after_commit()
+            if isolated:
+                run.discard()
             print(f"{verb}: verified and committed · route {route} · attempt {attempt}")
             return
         if attempt < len(routes):
@@ -2666,6 +3141,47 @@ def draft_keep(root: Path, ctx: Context, baseline: str) -> tuple[set[Path], list
     return keep, new_adrs
 
 
+def draft_delta_allowance(ctx: Context, run: stage2_attempt.WriterRun, baseline: str) -> tuple[list[str], list[Path]]:
+    """The draft's output allowance, enforced on the stopped candidate's delta (spec, criterion 12).
+
+    The same rule `draft_keep` measures on the host, read from the candidate:
+    a keep is every changed path under the change folder except its
+    `decisions.md`, plus the one new ADR file the whole change may hold -
+    counted against the merge base of the baseline and `origin/main`, so a
+    second draft may revise its own unmerged ADR. Returns the new ADR files
+    the candidate holds, and the paths the allowance refuses; the caller has
+    them dropped from the delta, so no check and no publication ever sees
+    them.
+    """
+    root = ctx.root
+    prefix = Path("plans") / "changes" / ctx.change
+    delta_paths = {entry.path for entry in run.delta.entries}
+    base = _git_output(root, "merge-base", baseline, "origin/main").strip()
+    whole = changed_paths(root, against=base) | delta_paths
+    keep = {path for path in delta_paths if path.is_relative_to(prefix) and path != prefix / "decisions.md"}
+    new_adrs: list[str] = []
+    for path in sorted(whole - keep, key=lambda path: path.as_posix()):
+        posix = path.as_posix()
+        if not NEW_ADR.fullmatch(posix):
+            continue
+        held = subprocess.run(
+            ["git", "-C", str(root), "cat-file", "-e", f"{base}:{posix}"], capture_output=True, check=False
+        )
+        if held.returncode != 0:
+            keep.add(path)
+            holds = (root / path).exists() or any(
+                entry.path == path and entry.data is not None for entry in run.delta.entries
+            )
+            if holds:
+                new_adrs.append(posix)
+    refused = sorted(delta_paths - keep, key=lambda path: path.as_posix())
+    if refused:
+        run.delta.entries = [entry for entry in run.delta.entries if entry.path in keep]
+        run.delta.model_paths = [path for path in run.delta.model_paths if path in keep]
+        run.delta.derived_paths = [path for path in run.delta.derived_paths if path in keep]
+    return new_adrs, refused
+
+
 def answer_is_owed(root: Path, change: str) -> bool:
     """Whether `change` is a feature whose ADR answer file does not exist in `root` now."""
     try:
@@ -2786,19 +3302,45 @@ def draft(root: Path, change: str) -> None:
                 raise Refused(f"GLM_KEY is not in the secrets file {secrets_path()}.")
         prompt = draft_prompt(ctx, diagnostics)
         begin_work_call(ctx, "draft", endpoint, prompt, attempt, route, ctx.findings, reason)
+        # The candidate starts from this attempt's evidence; the plan does not
+        # exist yet - the draft writes it (ADR 0018, the run baseline).
+        permitted = {ctx.findings.relative_to(root): ctx.findings.read_bytes()}
+        try:
+            # The evidence file stays out of the tree hash: the runner's own
+            # blocks are the intentional exception a run leaves behind.
+            expected = stage2_attempt.host_state(root, keep={ctx.findings.relative_to(root)})
+        except stage2_attempt.BoundaryRefused as error:
+            raise Refused(str(error)) from error
         unmeasured: str | None = None
         try:
             before = worktree_tree(root)
         except (Refused, OSError) as error:
             before, unmeasured = "", str(error)
         call_error: CallFailed | None = None
+        global _PENDING_ATTEMPT, _LAST_WRITER_RUN
+        _PENDING_ATTEMPT = {
+            "verb": "draft",
+            "baseline": baseline,
+            "attempt": attempt,
+            "permitted": permitted,
+        }
         try:
             if endpoint == CODEX:
                 run_codex(ctx, prompt, writable=True)
             else:
                 run_work_model(ctx, prompt, endpoint, writable=True, key=key)
+        except stage2_attempt.BoundaryRefused as error:
+            # The boundary refused the attempt before it started: the routing
+            # table never advances on a refusal (spec, criterion 7).
+            raise Refused(scrub(str(error), key)) from error
+        except stage2_attempt.AttemptCallFailed as error:
+            call_error = CallFailed(scrub(str(error), key))
         except CallFailed as error:
             call_error = error
+        finally:
+            _PENDING_ATTEMPT = None
+        run = _LAST_WRITER_RUN
+        _LAST_WRITER_RUN = None
         if key is not None:
             # Before any stop, the moved-HEAD one below included: a call that wrote the key and moved
             # HEAD must not leave the key in the tree and in the model's commit - the runner removes
@@ -2820,6 +3362,8 @@ def draft(root: Path, change: str) -> None:
                 f"the draft call moved HEAD from {baseline[:12]} to {head_now[:12]}; nothing was put back or committed"
             )
         if call_error is not None:
+            if run is not None:
+                run.discard()
             put = put_back(root, baseline, allowed)
             listing = f"- the call failed: {call_error}"
             diagnostics.append(f"Attempt {attempt} ({route}):\n{listing}")
@@ -2828,6 +3372,7 @@ def draft(root: Path, change: str) -> None:
                 block += "\n\nThe runner put back:\n" + "\n".join(put_back_lines(put))
             append(ctx.findings, quote_block(block, key, put_back_lines(put)))
             continue
+        isolated = run is not None and not run.transparent
         if unmeasured is None:
             # Both snapshots stand around the model call alone: the runner's own writes - the audit
             # line, the block below - fall outside both of them.
@@ -2837,25 +3382,53 @@ def draft(root: Path, change: str) -> None:
                 files = str(error)
         else:
             files = unmeasured
-        keep, new_adrs = draft_keep(root, ctx, baseline)
-        put = put_back(root, baseline, keep)
-        if put:
-            listing = "\n".join(put_back_lines(put))
-            append(
-                ctx.findings,
-                quote_block(
-                    f"Attempt {attempt} ({route}): the runner put back what a draft may not change:\n{listing}",
+        refused_block: str | None = None
+        if isolated:
+            # The candidate's allowance is enforced on the delta: what the
+            # draft may not keep is dropped here, before any check or
+            # publication sees it (criterion 12). The evidence block is held,
+            # not written: it must land after the publication, or the
+            # candidate's findings.md would overwrite it.
+            new_adrs, refused = draft_delta_allowance(ctx, run, baseline)
+            if refused:
+                listing = "\n".join(put_back_lines([path.as_posix() for path in refused]))
+                refused_block = quote_block(
+                    f"Attempt {attempt} ({route}): the candidate held what a draft may not change:\n{listing}",
                     key,
-                    put_back_lines(put),
-                ),
-            )
-        problems, owed = verify_draft(root, ctx, key, new_adrs)
+                    put_back_lines([path.as_posix() for path in refused]),
+                )
+        else:
+            keep, new_adrs = draft_keep(root, ctx, baseline)
+            put = put_back(root, baseline, keep)
+            if put:
+                listing = "\n".join(put_back_lines(put))
+                append(
+                    ctx.findings,
+                    quote_block(
+                        f"Attempt {attempt} ({route}): the runner put back what a draft may not change:\n{listing}",
+                        key,
+                        put_back_lines(put),
+                    ),
+                )
+        if isolated:
+            problems, owed = verify_isolated_draft(ctx, run, key, new_adrs)
+            files = isolated_attempt_files(run.delta)
+        else:
+            problems, owed = verify_draft(root, ctx, key, new_adrs)
         if problems:
             # The next attempt starts on the tree this one left; the block quotes its files and
             # diagnostics below its audit line (spec, criterion 21).
+            if refused_block is not None:
+                append(ctx.findings, refused_block)
             listing = "\n".join(f"- {problem}" for problem in problems)
             diagnostics.append(f"Attempt {attempt} ({route}):\n{listing}")
             append(ctx.findings, quote_block(attempt_block(attempt, route, listing, files), key))
+            if run is not None:
+                # ADR 0018 (criteria 9 and 10): the failed candidate is discarded and the host tree
+                # goes back to the baseline; the block above carries the evidence forward.
+                run.discard()
+                run = None
+            restore_baseline(root, baseline, allowed, ignored_before)
         if key is not None:
             # The gate runs repository code the model just edited: scan again after it, against the
             # baseline as before (2a's F-4).
@@ -2863,6 +3436,21 @@ def draft(root: Path, change: str) -> None:
             if exposed:
                 raise Refused(credential_message(exposed))
         if not problems:
+            if isolated:
+                stage2_attempt.assert_host_state(root, expected, keep={ctx.findings.relative_to(root)})
+                # The evidence path is the runner's own (criterion 21); the
+                # publication below never replaces it with the candidate's.
+                evidence = ctx.findings.relative_to(root)
+                run.publish(
+                    root,
+                    only={entry.path for entry in run.delta.entries} - {evidence},
+                    scan=publication_scan(key, endpoint[0]),
+                )
+            # The runner's own evidence lands after the publication, so the
+            # candidate's findings.md cannot overwrite it: the allowance block
+            # first, then the owed note.
+            if refused_block is not None:
+                append(ctx.findings, refused_block)
             if owed:
                 append(
                     ctx.findings,
@@ -2877,6 +3465,8 @@ def draft(root: Path, change: str) -> None:
                 ignored_before,
                 message=f"docs({change}): draft spec and plan — route {route}",
             )
+            if isolated:
+                run.discard()
             print(f"draft: verified and committed · route {route} · attempt {attempt}")
             return
     raise CallFailed(
@@ -2956,11 +3546,27 @@ def repair(root: Path, change: str, stage2_off: str | None = None) -> None:
         standing["text"] = text
         return text
 
-    def check(answer: str) -> list[str]:
+    def check(answer: str, run=None) -> list[str]:
         # The last audit line of the snapshot is this attempt's own: it was appended just before it.
         audits = [line for line in standing.get("text", "").splitlines() if line.startswith("Stage-2 call,")]
+        # An isolated attempt's rows are read from its candidate, and its
+        # red-first proof runs in the credential-free verifier (ADR 0018).
+        candidate_files: dict[Path, bytes] | None = None
+        proof = None
+        if run is not None and not run.transparent:
+            candidate_files = {entry.path: entry.data for entry in run.delta.entries if entry.data is not None}
+            proof = lambda baseline_, test_: red_first_isolated(ctx, run, baseline_, test_)  # noqa: E731
         found, problems = check_repair_answer(
-            ctx, answer, taken, baseline, key, rows_before, audits[-1] if audits else None, standing["text"]
+            ctx,
+            answer,
+            taken,
+            baseline,
+            key,
+            rows_before,
+            audits[-1] if audits else None,
+            standing["text"],
+            proof=proof,
+            candidate_files=candidate_files,
         )
         if not problems:
             fixes.clear()

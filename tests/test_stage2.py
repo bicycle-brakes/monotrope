@@ -40,6 +40,7 @@ import leakcheck  # noqa: E402
 import omnigent_policy  # noqa: E402
 import plans_registry  # noqa: E402
 import stage2  # noqa: E402
+import stage2_attempt  # noqa: E402
 import stage2_runs  # noqa: E402
 
 GIT = shutil.which("git")  # resolved before any test narrows the PATH
@@ -172,6 +173,12 @@ class World:
         log = self.bin / "calls.jsonl"
         found = [json.loads(line) for line in log.read_text(encoding="utf-8").splitlines()] if log.exists() else []
         return [call for call in found if name is None or call["name"] == name]
+
+    def runtime_calls(self, op: str | None = None) -> list[dict]:
+        """The stand-in runtime's recorded operations, optionally filtered by op."""
+        log = Path(os.environ["STAGE2_RUNTIME_STAND_IN"]) / "runtime-calls.jsonl"
+        found = [json.loads(line) for line in log.read_text(encoding="utf-8").splitlines()] if log.exists() else []
+        return [entry for entry in found if op is None or entry["op"] == op]
 
     def run(self, verb: str, change: str | None = "demo", *options: str) -> int:
         argv = [verb] if change is None else [verb, change]
@@ -314,6 +321,11 @@ def world(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> World:
         "XDG_STATE_HOME": str(tmp_path / "state"),
         "CC_SECRETS": str(tmp_path / "secrets.env"),
         "LEAKCHECK_DENYLIST": str(tmp_path / "denylist.txt"),
+        # The writing attempts run through the recorded stand-in runtime (ADR
+        # 0018): every op lands in runtime-calls.jsonl, the writer itself runs
+        # transparently so the tree semantics stay measurable.
+        "STAGE2_STATE_DIR": str(tmp_path / "stage2-state"),
+        "STAGE2_RUNTIME_STAND_IN": str(tmp_path / "stage2-runtime"),
         "GIT_CONFIG_GLOBAL": "/dev/null",
         "GIT_CONFIG_NOSYSTEM": "1",
         "GIT_CEILING_DIRECTORIES": str(tmp_path),
@@ -6227,6 +6239,275 @@ def test_stage2_off_is_accepted_for_repair(world: World, monkeypatch: pytest.Mon
     assert len(calls) == 1
     argv = calls[0]["argv"]
     assert argv[argv.index("--model") + 1] == "claude-sonnet-5-5"
+
+
+# ---------------------------------------------------------------------------
+# The isolated writing attempts (ADR 0018; the plan's criterion ledger)
+# ---------------------------------------------------------------------------
+
+
+def broken_then_recovered(world: World, *, first_extra: dict | None = None) -> None:
+    """A first flash attempt that fails its post-run check and a second that passes."""
+    first = {
+        "stdout": "broken",
+        "plant": {"src/app.py": "value = 2\n"},
+        "append": {"plans/changes/demo/plan.md": "2026-10-15 10:00–10:05, 5 min\n"},
+    }
+    first.update(first_extra or {})
+    world.script(
+        claude=[
+            first,
+            {
+                "stdout": "recovered",
+                "plant": {"src/app.py": "value = 2\n"},
+                "append": {"plans/changes/demo/plan.md": "2026-10-15 11:00–11:03, 3 min\n"},
+            },
+        ],
+        make=[{"stdout": "red\n", "exit": 1}, {"stdout": "green\n"}],
+    )
+
+
+def test_writing_retries_use_distinct_container_state(world: World) -> None:
+    """Criterion 1. Planted fault: a retry reuses the first attempt's volume or home, or a writer starts outside the supervisor."""
+    broken_then_recovered(world)
+    assert world.run("implement") == 0
+    runs = world.runtime_calls("run")
+    assert len(runs) == 2, "a writing call did not go through the supervisor"
+    for entry in runs:
+        assert entry["image"] == "stand-in" and entry["user"] == stage2_attempt.NON_ROOT
+        assert entry["volumes"], "the writer ran without its private candidate volume"
+        volume, mount, read_only = entry["volumes"][0]
+        assert mount == stage2_attempt.CANDIDATE_WORK and not read_only
+    assert runs[0]["volumes"][0][0] != runs[1]["volumes"][0][0], "the retry reused the first attempt's volume"
+    assert runs[0]["env"]["CLAUDE_CONFIG_DIR"] != runs[1]["env"]["CLAUDE_CONFIG_DIR"], (
+        "the retry reused the first attempt's home"
+    )
+    timeline = world.runtime_calls()
+    first_run = next(index for index, entry in enumerate(timeline) if entry["op"] == "run")
+    second_run = next(index for index, entry in enumerate(timeline) if entry["op"] == "run" and index > first_run)
+    between = timeline[first_run + 1 : second_run]
+    assert any(entry["op"] == "remove" for entry in between), (
+        "the failed attempt's runtime state was not discarded before the retry started"
+    )
+
+
+def test_every_attempt_scans_its_exact_outgoing_payload(
+    world: World, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+) -> None:
+    """Criterion 8. Planted fault: payload bytes beyond the tree scan are made visible without their own leak check."""
+    successful_implementation(world)
+    # The fresh render is a payload piece the tree scan never sees: only the
+    # outgoing scan covers it (ADR 0018, criterion 8).
+    monkeypatch.setattr(stage2_attempt, "prepare_render", lambda root: b"LEAKMARK-654321\n")
+    assert world.run("implement") == 2
+    assert world.calls("claude") == [] and world.calls("make") == []
+    assert world.runtime_calls() == [], "a refused payload still launched runtime work"
+    assert "outgoing payload is not clean" in capsys.readouterr().err
+
+
+def test_isolated_retry_starts_from_the_run_baseline(world: World) -> None:
+    """Criterion 9. Planted fault: the retry starts from the failed attempt's tree, or loses the accumulated evidence."""
+    broken_then_recovered(
+        world,
+        first_extra={"plant": {"src/app.py": "value = 2  # RETRY-MARK-9\n", "leftover/leftover.txt": "RETRY-MARK-9\n"}},
+    )
+    assert world.run("implement") == 0
+    second = world.calls("claude")[1]
+    assert second["marker_paths"] == [], "the retry saw the failed attempt's edits or ignored files"
+    assert second["findings"] is not None and "Attempt 1 (flash) failed its post-run checks." in second["findings"], (
+        "the retry lost the accumulated evidence"
+    )
+    assert "Attempt 1 (flash)" in second["prompt_file"], "the retry's prompt lost the diagnostics"
+    assert "10:00–10:05" not in second["prompt_file"], "the failed attempt's plan line stayed in the retry's baseline"
+    assert "11:00–11:03" in second["prompt_file"]
+
+
+def test_failed_runs_discard_model_and_derived_changes(world: World) -> None:
+    """Criterion 10. Planted fault: a failed run leaves edits, stamps, index rendering or ignored files behind."""
+    broken_then_recovered(world, first_extra={"plant": {"src/app.py": "value = 2\n", "leftover/keep.txt": "x\n"}})
+    (world.bin / "make").write_text(
+        STAND_IN.replace("@PYTHON@", sys.executable).replace(
+            "record = {",
+            'if name == "make" and index == 0:\n'
+            "    Path('plans/INDEX.md').parent.mkdir(parents=True, exist_ok=True)\n"
+            "    Path('plans/INDEX.md').write_text('stale render\\n')\n"
+            "record = {",
+        ),
+        encoding="utf-8",
+    )
+    assert world.run("implement") == 0
+    assert git(world.root, "status", "--porcelain") == "", "the run left unverified files behind"
+    head_index = git(world.root, "show", "HEAD:plans/INDEX.md")
+    assert "stale render" not in head_index, "the failed attempt's index rendering was checkpointed"
+    assert "changes/demo/findings.md" in head_index, "the fresh render of the successful attempt is missing"
+    head_plan = git(world.root, "show", "HEAD:plans/changes/demo/plan.md")
+    assert "10:00–10:05" not in head_plan, "the failed attempt's stamp survived"
+    assert "11:00–11:03" in head_plan
+    assert not (world.root / "leftover").exists(), "a newly created file survived the failed run"
+
+
+def test_isolated_draft_keeps_its_existing_output_allowance(world: World) -> None:
+    """Criterion 12. Planted fault: a decision answer or a second new ADR is published, or the one new ADR is refused."""
+    draft_world(world)
+    world.script(
+        codex=[
+            codex_ok(
+                "T1",
+                "drafted",
+                plant={
+                    "plans/changes/demo/spec.md": (
+                        "---\ntitle: Spec\nupdated: 2026-09-30\nbead: demo-1\n---\n\n# Spec\n"
+                    ),
+                    "plans/changes/demo/plan.md": PLAN_CARD,
+                    "docs/adr/0018-proposed.md": "# ADR\n\nthe one new record.\n",
+                    "plans/changes/demo/decisions.md": (
+                        "---\ntitle: Decisions\nupdated: 2026-09-30\nbead: demo-1\n---\n\n"
+                        "# Decisions\n\nQ-1 answered by the model.\n"
+                    ),
+                },
+            )
+        ],
+        make=[{"stdout": "green\n"}],
+    )
+    assert world.run("draft") == 0
+    text = world.text()
+    assert "put back what a draft may not change" in text and "decisions.md" in text, (
+        "an interview answer was published"
+    )
+    committed = git(world.root, "show", "HEAD:plans/changes/demo/decisions.md")
+    assert "Q-1 answered." in committed and "by the model" not in committed
+    names = git(world.root, "show", "--name-only", "--pretty=", "HEAD").splitlines()
+    assert "docs/adr/0018-proposed.md" in names, "the change's one new ADR was not published"
+    assert git(world.root, "status", "--porcelain") == ""
+    assert "draft spec and plan" in git(world.root, "log", "-1", "--pretty=%s")
+
+
+def test_isolated_success_makes_one_clean_checkpoint(world: World) -> None:
+    """Criterion 17. Planted fault: zero or several checkpoints, or unverified files after success."""
+    successful_implementation(world)
+    before = git(world.root, "rev-parse", "HEAD")
+    assert world.run("implement") == 0
+    assert git(world.root, "rev-list", f"{before}..HEAD", "--count") == "1", "success is not exactly one checkpoint"
+    assert git(world.root, "status", "--porcelain") == "", "unverified files survived the checkpoint"
+    names = git(world.root, "show", "--name-only", "--pretty=", "HEAD").splitlines()
+    assert "src/app.py" in names, "the validated result is not in the checkpoint"
+    head_plan = git(world.root, "show", "HEAD:plans/changes/demo/plan.md")
+    assert "2026-10-07 10:00–10:05, 5 min" in head_plan
+    assert world.runtime_calls("run") and world.runtime_calls("remove"), (
+        "the attempt's runtime state was not discarded after success"
+    )
+
+
+def test_isolated_repair_preserves_red_first_proof_and_status_forms(world: World) -> None:
+    """Criterion 18. Planted fault: the boundary drops the red-first proof or bends the fixed-line forms."""
+    seed_tests(world)
+    world.write_record([("L1-1", "taken — test_a", "no")])
+    green_on_baseline = (
+        "from pathlib import Path\n\n\ndef test_boundary():\n"
+        '    value = (Path(__file__).resolve().parent.parent / "src" / "app.py").read_text(encoding="utf-8")\n'
+        '    assert "value = 1" in value\n'
+    )
+    script_repair(
+        world,
+        [
+            repair_step(
+                stdout="L1-1: fixed — tests/test_boundary.py::test_boundary",
+                plant={"src/app.py": "value = 2\n", "tests/test_boundary.py": green_on_baseline},
+            ),
+            repair_step(stdout="L1-1: fixed"),
+            repair_step(),
+        ],
+        make=[{"stdout": "green\n"}] * 3,
+    )
+    assert world.run("repair") == 0
+    calls = repair_calls(world)
+    assert len(calls) == 3
+    assert "pytest ended 0 on the baseline's code; red first is exit 1 or 2" in prompt_of(calls[1]), (
+        "the red-first proof did not gate the attempt"
+    )
+    assert "the line is neither `<ID>: fixed — tests/<path>::<function>` nor" in prompt_of(calls[2]), (
+        "the fixed-line form contract did not gate the attempt"
+    )
+    record = {row[0]: row for row in stage2.record_rows(world.record().read_text(encoding="utf-8"))}
+    assert record["L1-1"][7] == "fixed — tests/test_fix.py::test_fix"
+
+
+def test_only_the_successful_attempts_new_measured_time_is_published(world: World) -> None:
+    """Criterion 19. Planted fault: an old or invented measurement satisfies the successful attempt."""
+    world.script(
+        claude=[
+            {
+                "stdout": "broken",
+                "plant": {"src/app.py": "value = 2\n"},
+                "append": {"plans/changes/demo/plan.md": "2026-10-15 10:00–10:05, 5 min\n"},
+            },
+            {
+                "stdout": "no new line",
+                "plant": {"src/app.py": "value = 2\n"},
+            },
+            {
+                "stdout": "recovered",
+                "plant": {"src/app.py": "value = 2\n"},
+                "append": {"plans/changes/demo/plan.md": "2026-10-15 11:00–11:03, 3 min\n"},
+            },
+        ],
+        make=[{"stdout": "red\n", "exit": 1}, {"stdout": "green\n"}, {"stdout": "green\n"}],
+    )
+    assert world.run("implement") == 0
+    calls = world.calls("claude")
+    assert len(calls) == 3
+    assert "10:00–10:05" not in calls[1]["prompt_file"], "the failed attempt's line stayed in the retry's baseline"
+    assert "did not add a measured line" in calls[2]["prompt_file"], "the retry ran without demanding its own line"
+    head_plan = git(world.root, "show", "HEAD:plans/changes/demo/plan.md")
+    assert "10:00–10:05" not in head_plan, "the failed attempt's measurement was reused"
+    assert "2026-10-15 11:00–11:03, 3 min" in head_plan, "the successful attempt's measurement is missing"
+
+
+def test_attempt_evidence_survives_discard_and_names_derived_paths(world: World) -> None:
+    """Criterion 21. Planted fault: the discard eats the audit, or a derived write is named as the model's."""
+    broken_then_recovered(world)
+    assert world.run("implement") == 0
+    text = world.text()
+    audits = [line for line in text.splitlines() if line.startswith("Stage-2 call,")]
+    assert len(audits) == 2, "the discard ate an audit line"
+    assert "Attempt 1 (flash) failed its post-run checks." in text, "the failed attempt's diagnostics are gone"
+    block = text[text.index("Attempt 1 (flash) failed") : text.index("attempt 2 · route")]
+    assert "src/app.py" in block, "the failed attempt's changed paths are not in the evidence"
+    assert "findings.md" not in block, "a runner-derived write is named as the model's change"
+    delta = stage2_attempt.CandidateDelta(
+        entries=[stage2_attempt.DeltaEntry(path=Path("src/app.py"), data=b"value = 2\n")],
+        model_paths=[Path("src/app.py")],
+        derived_paths=[Path("plans/INDEX.md")],
+    )
+    listing = stage2.isolated_attempt_files(delta)
+    assert "`src/app.py` changed in the candidate" in listing
+    assert "runner-derived: `plans/INDEX.md`" in listing, "a derived path is named as the model's"
+
+
+def test_container_boundary_preserves_existing_routes_and_proof_guards(
+    world: World, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Criterion 24. Planted fault: the boundary changes a pinned route, or a refusal advances the routing table."""
+    broken_then_recovered(world)
+    assert world.run("implement") == 0
+    calls = world.calls("claude")
+    assert [call["argv"][call["argv"].index("--model") + 1] for call in calls] == [
+        "glm-5.3-flash",
+        "glm-5.3-flash",
+    ]
+    for call in calls:
+        argv = call["argv"]
+        assert set(argv[argv.index("--tools") + 1].split(",")) == {"Read", "Grep", "Glob", "Edit", "Write"}
+        assert argv[argv.index("--permission-mode") + 1] == "acceptEdits"
+        assert "--effort" not in argv and "--add-dir" not in argv
+        for carried in ("GH_TOKEN", "OPENAI_API_KEY", "X_SECRET"):
+            assert carried not in call["env"], f"the caller's {carried} reached the writer"
+    assert [call["argv"] for call in world.calls("make")] == [["verify"], ["verify"]]
+    # A boundary refusal never advances the table - not even to the Stage-1 fallback (criterion 7).
+    monkeypatch.setenv("STAGE2_CONTAINER_PROGRAM", "orbstack")
+    assert world.run("implement") == 2
+    assert len(world.calls("claude")) == 2, "a refused boundary started or advanced a model call"
+    assert len(world.runtime_calls("run")) == 2, "a refused boundary launched a writer"
 
 
 # ---------------------------------------------------------------------------

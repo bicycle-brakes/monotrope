@@ -62,6 +62,14 @@ endpunkte:
     residenz: anbieter-erklaert
     abrechnung: abonnement
     darf_sehen: [framework, kundencode]
+    # api_hosts is the isolated attempt's egress allow-list (ADR 0018): the exact
+    # hosts a writing call may reach on HTTPS 443, nothing else. This entry's
+    # hosts are NOT measured yet (plan, 2026-10-14): the official client's
+    # traffic must be qualified before a value stands here, and an empty list
+    # means the isolated attempt refuses this endpoint - it never means
+    # unrestricted networking. Sign-in and telemetry hosts are not added to make
+    # authentication work.
+    api_hosts: []
     modelle:
       - claude-opus-5
       - claude-sonnet-5
@@ -113,6 +121,10 @@ endpunkte:
     residenz: anbieter-erklaert
     abrechnung: abonnement
     darf_sehen: [framework]
+    # The host of `https://api.z.ai/api/anthropic`, the base URL the runner
+    # already sets for this endpoint. Host only, no path, no wildcard, no
+    # address literal: the egress proxy admits exact canonical names.
+    api_hosts: [api.z.ai]
     modelle:
       - glm-5.3
       - glm-5.3-flash
@@ -136,6 +148,10 @@ endpunkte:
     residenz: anbieter-erklaert
     abrechnung: abonnement
     darf_sehen: [framework]
+    # NOT measured yet: the official Codex CLI's API hosts must be qualified
+    # with the client itself before a value stands here (plan, 2026-10-14).
+    # An empty list means the isolated attempt refuses this endpoint.
+    api_hosts: []
     modelle:
       - gpt-6.1-sol
     bemerkung: >-
@@ -158,6 +174,10 @@ endpunkte:
     residenz: anbieter-erklaert
     abrechnung: abonnement
     darf_sehen: [framework]
+    # The host of `https://opencode.ai/zen/go/v1/chat/completions`, the address
+    # the runner already uses. Host only, no path, no wildcard, no address
+    # literal: the egress proxy admits exact canonical names.
+    api_hosts: [opencode.ai]
     modelle:
       - deepseek-v4.1-flash
       - mimo-v2.6-flash

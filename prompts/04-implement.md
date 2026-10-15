@@ -13,8 +13,24 @@ You follow the plan. You read the spec to know what you are building against.
 Under the Stage-2 runner an implement attempt has
 file tools but no command tool (a Codex repair attempt may run tests and
 `make verify`, never commit): update the time log before returning; the runner
-runs `make verify` and makes the local checkpoint commit. In an ordinary Stage-1 session, you still run the commands
+runs `make verify` in the credential-free verifier container and makes the
+local checkpoint commit. In an ordinary Stage-1 session, you still run the commands
 and commits this prompt assigns to you.
+
+**Where you work (ADR 0018).** Under the Stage-2 runner your edits land on a
+private candidate — a fresh repository snapshot inside the boundary container
+— not on the host worktree. After your call the credential-free verifier
+checks them there, and publication returns exactly the validated files, so
+what you write reaches the real worktree only through that verified return.
+A failed attempt leaves only diagnostics: the failed candidate is discarded,
+and the next attempt starts from the run baseline — your partial edits do not
+survive a failed post-check, and no one restores them by hand. The attempt
+sees only its passed inputs, its endpoint's own login and the declared API
+hosts; a missing runtime, an unqualified login or a refused boundary stops
+the call — it never widens the boundary and never falls forward. The
+read-only calls (explore, spec-review, the reviewers) keep their previous
+limits: they are not containerised, and their unconfined-read residual risks
+stand as `docs/WORKFLOW.md` states them.
 
 **The plan is the contract.** Where it no longer holds — a file does not exist,
 an assumption does not carry, a test cannot be written that way — you **stop**

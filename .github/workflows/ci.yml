@@ -130,6 +130,16 @@ jobs:
         id: ramp-valves
         if: ${{ !cancelled() }}
         run: python3 scripts/ramp_valves.py
+      - name: Prepare rootless Podman
+        id: setup-podman
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends podman
+          podman info
+      - name: The writing boundary is measured, not assumed
+        id: stage2-isolation
+        if: ${{ !cancelled() }}
+        run: python3 scripts/check_stage2_isolation.py --program podman --build
   verify:
     needs: gates
     if: always() && (github.event_name == 'push' || github.event_name == 'pull_request')

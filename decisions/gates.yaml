@@ -229,6 +229,17 @@ gates:
     placement: hosted
     reason: Foreign servers; a red run here says something about the network, not the candidate.
 
+  - id: stage2-isolation
+    title: The writing boundary is measured, not assumed
+    command: python3 scripts/check_stage2_isolation.py --program podman --build
+    job: verify
+    enforcement: block
+    floor: false
+    placement: hosted
+    reason: Isolated writing attempts are a measured container boundary, not a claim (ADR 0018, criterion 23) — the hosted runner builds the locked images and probes read, write, credential, egress, retry and cleanup on the real backend; locally the checker refuses without a runtime instead of skipping.
+
+
+
   - id: plans-registry-strict
     title: Plans hygiene holds strictly against the outside world
     command: python3 scripts/plans_registry.py --check --strict

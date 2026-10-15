@@ -4,7 +4,7 @@ category: governance
 status: current
 created: 2026-09-05
 last_reviewed: 2026-09-29
-updated: 2026-10-13
+updated: 2026-10-15
 owner: Data Architect
 provenance: ai-drafted-reviewed
 produced_by:
@@ -800,10 +800,11 @@ What every call then carries: one audit line (in `research.md` for Explore,
 otherwise `findings.md`), an empty standard input and an environment built
 from an allow-list, not the caller's. The runner starts Codex with the
 read-only sandbox for a review call, its session kept and its hooks and
-memories switched off. A draft's Codex call runs in the `workspace-write`
-sandbox; the runner puts back its writes outside the change folder before it
-verifies ("The draft" below). A repair's first two attempts run as Codex calls
-in the `workspace-write` sandbox. What a repair's Codex call writes is checked
+memories switched off. A draft's Codex call runs in the isolated boundary
+container (ADR 0018, above) with its `workspace-write` flags set; publication
+validates its writes ("The draft" below). A repair's first two attempts are
+Codex calls in the same container, `workspace-write` flags set. What a
+repair's Codex call writes is checked
 and committed by the runner, including changes outside the change folder; a
 checkpoint requires all checks to pass. A `draft`, `repair` or `spec-review`
 call keeps no session. Before the loop's first call the runner runs `pi --version`; anything but
@@ -812,18 +813,24 @@ review loop's rung as Pi (`--print`, no session) against OpenCode Go's
 chat-completions address, with the rung under the `opencode-go` provider,
 thinking `max`, the tools `read`, `grep`, `find` and `ls`, extensions, MCP
 servers, skills, context files, prompt templates and themes switched off,
-retries off, and a fresh home and agent directory per call. Explore and
-implement start Claude Code against Z.ai with `--restricted` and the project's
-settings, hooks and MCP servers skipped; implement also gets
-`Edit` and `Write`, never Bash or another command tool. On a successful
-implementation answer the runner runs exactly
-`make verify`; a failed post-check gets one fresh Flash repair, then one
+retries off, and a fresh home and agent directory per call. Explore starts
+Claude Code against Z.ai with `--restricted` and the project's settings,
+hooks and MCP servers skipped. Implement's attempts run in the boundary
+container (ADR 0018, above), where Claude Code starts against Z.ai with the
+same `--restricted`, skipped settings, hooks and MCP servers, gets
+`Edit` and `Write`, and never a Bash or another command tool. On a successful
+implementation answer the verifier runs exactly
+`make verify` - in the credential-free verifier container, not on the host; a failed post-check gets one fresh Flash repair, then one
 Sonnet 5.5 fallback, and every attempt repeats the leak check. A failed model
 process stops instead of silently changing route, and a review-loop call (through Pi) that has
-not ended 30 minutes after it started is stopped. **Those settings are
+not ended 30 minutes after it started is stopped. **Those routing settings are
 configured on every call, not measured by any test** (the maintainer's decision
 of 2026-09-30, ADR 0007): no test has run a real program to see them take
-effect. The loop's Pi flags were measured once by hand on the pinned version,
+effect. What ADR 0018 added is measured instead: the isolation gate
+(`stage2-isolation`) runs the boundary probes through the production
+supervisor, so the writing attempt's confinement is a measurement, not a
+configuration claim. The loop's Pi flags were measured once by hand on the
+pinned version,
 which is why the version is pinned.
 If hooks are not in fact off for a call, the tracked `.codex/hooks.json` shows
 the kind of text such a switch would inject into a call that the leak check
@@ -842,16 +849,25 @@ either key.
 session (`Bash(codex *)`). That is a brake, not a lock: `sh -c`, an absolute
 path or a script file passes it, as it does for the merge rules in §2.
 
-**Reads: confined for the Claude Code calls, asked for Codex and for the
-loop.** Every Claude Code call (explore, the draft's GLM attempt, implement,
-`spec-review` and the Sonnet 5.5 fallback attempts) starts in the worktree
-with `--restricted` and no `--add-dir`.
+**Reads: measured for the writing verbs, configured for the read-only
+calls, asked for Codex's reviewers and for the
+loop.** The writing verbs (`draft`, `implement`, `repair`, `session`) read
+inside the boundary container (ADR 0018, above): the host worktree, the host
+home and everything else outside the passed inputs are outside their reach,
+and the isolation gate measures exactly that — a planted sentinel in the host
+home, a sibling directory or the real Git directory stays unread, through the
+file tools and through shell commands, planted links included. Every Claude
+Code call (explore, the draft's GLM attempt, implement,
+`spec-review` and the Sonnet 5.5 fallback attempts) still starts with
+`--restricted` and no `--add-dir` — for the writing verbs inside the
+container, a second belt over the measured boundary.
 `claude --help` says `--restricted` "confines the file tools to the working
-directories", so the credential file `~/.config/cc-routing/secrets.env`, which
-lies outside the worktree, is outside what those calls' file tools reach.
-**That is the program's documented behaviour, not measured here:** no test has
-run it against a path outside the worktree. Codex's review, draft and repair
-calls are not confined in their reads: only the prompt's request bounds them.
+directories"; for the read-only calls (explore, `spec-review`) that
+documented behaviour is the whole story and is not measured here — the
+credential file `~/.config/cc-routing/secrets.env` lies outside the worktree
+and outside what those calls' file tools reach, on the CLI's word alone.
+Codex's review calls are not confined in their reads: only the prompt's
+request bounds them.
 ADR 0017 retains ADR 0016's residual risks for ignored files, external paths
 and the git directory. **The review loop's Pi calls are not Claude Code calls,
 and they are not confined:** a round's `read` reaches files outside the
@@ -869,6 +885,49 @@ the rungs, naming Pi and the secrets file: the unconfined reads ADR 0007
 accepted for its reviewers extend to them. The leak check scans what this
 repository presents, not what else the disk holds.
 
+### The isolated writing boundary (ADR 0018)
+
+Every automatic writing attempt — `draft`, `implement`, `repair` — and every
+interactive `session` runs in a fresh container against a private candidate:
+a repository snapshot with its own Git metadata, built from the run baseline
+before the model starts. The host worktree, its Git directory, the host home,
+sibling checkouts and ignored host state are not inputs; the attempt receives
+the exact prompt, the runner's input files and one fresh tracker render, every
+byte of them scanned before the call. The selected login travels alone — a key
+from the secrets file as the CLI's own variables, or a size-limited copy of
+the interactive sign-in state for a session — never a host home, a full
+sign-in directory, a keychain or an agent socket. Egress runs through a
+trusted proxy on a private network that admits only the endpoint's declared
+`api_hosts` on port 443; direct routes, foreign DNS and unrelated providers
+are refused. The writer is stopped before its result is inspected; a
+credential-free verifier with no network checks the candidate (derived
+stamps, format, `make verify`, the red-first repair proofs), and only
+validated bytes are published — under an invocation lock, journaled, and
+undone alone when publication fails. A successful automatic run makes exactly
+one clean checkpoint commit; a retry starts from the run baseline plus
+scrubbed diagnostics, never from a failed attempt's tree, so a failed run
+leaves the worktree at its baseline except the runner's own evidence in
+`findings.md`. When the attempt ends, its containers, volumes, networks and
+copied login are removed; an interrupted invocation is recovered at the next
+start, by its recorded resource ids, never by a global prune.
+
+A boundary prerequisite that is missing or unproven refuses the writing call
+before it starts — no container program, no measured image digest
+(`tools/stage2/runtime.lock.yaml`), no qualified `api_hosts` profile, no
+selected login — and a refusal never advances the routing table. The boundary
+is measured, not assumed:
+`python3 scripts/check_stage2_isolation.py --program podman --build` builds
+the locked images and probes reads, writes, credentials, egress, retry
+separation, verifier isolation and cleanup against the real backend, with
+synthetic login data and no paid model call; the hosted gate
+`stage2-isolation` runs it on every push and pull request, and the macOS and
+Linux reports at named commits are the change's completion evidence. The
+backend is a setting (`STAGE2_CONTAINER_PROGRAM`, default Podman), never a
+substitution: an adapter that cannot express the required boundary refuses.
+Read-only calls keep their stated limitations: `explore`, `spec-review`,
+`review-loop` and `review` are not containerised, and their unconfined reads
+remain as "Reads" below states.
+
 ### The draft (phases 2, 2b and 3)
 
 `python3 scripts/stage2.py draft <change>` has Codex (`gpt-6.1-sol`, effort
@@ -877,12 +936,14 @@ guards are `implement`'s: the preflight (a `research.md` with its bead, a
 `decisions.md`), the refusal of pre-existing changes outside the change's
 `findings.md`, the declaration and the leak check before each attempt's call,
 the credential scans, and exactly one commit when an attempt passes. A draft's
-Codex call runs in the CLI's `workspace-write` sandbox; what the runner can
-see — what git reports changed — it bounds: every path outside the change
-folder is put back at the baseline before verification, a new ADR file under
-`docs/adr/` excepted, and the change's `decisions.md` is put back with them.
-If the call moved `HEAD`, the run stops without a rewrite. `make verify` runs
-after the put-back, and a red run fails the attempt — with one exception:
+Codex call runs in the isolated writing boundary above; what reaches the host
+is the validated candidate delta, and the allowances still hold: every path
+outside the change folder is kept off the publication, a new ADR file under
+`docs/adr/` excepted, and the change's `decisions.md` never publishes (the
+candidate starts as the baseline snapshot, so an out-of-allowance edit is
+simply not imported). If the call moved `HEAD` in its own candidate, the run
+stops without a rewrite. `make verify` runs in the credential-free verifier,
+and a red run fails the attempt — with one exception:
 the runner sets `ADR_ANSWERS_TOLERATE_CHANGE=<change>` for that one run, and
 the gate `adr-answers` then reports this change's own missing ADR answer
 without failing (another change's missing answer, a refused answer file and
@@ -893,8 +954,10 @@ answer is owed. A new ADR file is one that exists now and that the merge base
 of the baseline and `origin/main` does not hold, so a second draft edits (or
 renames) the first draft's ADR instead of adding another. The chain is three attempts: Codex, a second
 Codex attempt with the first one's diagnostics, then `glm-5.3` with both — a
-failed call is put back and moves along the same chain, a failed post-run
-check leaves its tree and its quoted block, and three failures exit 1. The
+failed call moves along the same chain, a failed post-run check leaves only
+its quoted block and the runner's audit lines: the failed candidate is
+discarded, and the next attempt starts from the run baseline, never from the
+failed tree. Three failures exit 1. The
 GLM key is read only when the GLM attempt is due, and a draft takes no
 `--stage2-off`: where Stage 2 is off, Opus 5.5 drafts as §3 says, by hand.
 
@@ -911,13 +974,16 @@ A drafted change runs in this order:
    maintainer has answered every `[AMBIGUITY]` a row raised.
 5. The plan card reaches the maintainer unchanged — the veto stays theirs.
 
-What the runner cannot see: which paths a draft's Codex call reads, and
-whether its sandbox in fact confines its writes. The put-back bounds what git
-sees, not what the program touched elsewhere — not an ignored file, not a
-path outside the worktree, and not the repository's git directory (`.git`:
-hooks, config), which `git restore` and `git clean` never touch although the
-runner commits right after the draft; that residual risk is ADR 0016's to
-state, and the first real draft is a later change's.
+What the runner cannot see since ADR 0016 was written was which paths a
+draft's Codex call reads, and whether its sandbox in fact confines its
+writes — the put-back bounded what git sees, not what the program touched
+elsewhere: not an ignored file, not a path outside the worktree, and not the
+repository's git directory (`.git`: hooks, config). For the writing verbs
+this residual risk is closed by the isolated writing boundary above: the
+candidate's Git metadata is the attempt's own, the host worktree and the
+host's files are not inputs, and the boundary probes measure exactly this.
+The put-back's allowances remain as the publication rules above; for the
+read-only calls the risk stands as ADR 0016 stated it.
 
 ### The interactive session (`session`)
 
@@ -939,9 +1005,12 @@ handover inside the worktree; without it the change's own `handover.md` under
 nonempty UTF-8 regular file inside the dedicated worktree; the prompt is bounded
 at 32 KiB and the whole command at 64 KiB.
 
-A session runs only in the change's own dedicated worktree
+A session runs only from the change's own dedicated worktree
 (`<main checkout>/.claude/worktrees/<change>`, attached branch, that directory
-as the working one) and only on macOS. Before anything opens, the runner checks
+as the dispatch's working one) and only on macOS, and the model works against
+a private candidate in the boundary container (ADR 0018, above): the host
+worktree stays untouched until the session's edits come back verified and
+uncommitted. Before anything opens, the runner checks
 the declaration, reads the handover, and runs the leak check over the tree, the
 index, the history and the exact outgoing prompt — the check runs twice in the
 same invocation: once after the handover is read, and a second time immediately
@@ -949,13 +1018,14 @@ before Terminal is told to start. It covers this launch only: nothing later is
 scanned — not later prompts, not edits, not a model switched in the session's
 own user interface — so another model goes through the runner again. The tool
 permissions are a configuration, not a confinement at the operating-system
-level. Codex gets `workspace-write` with approval on request. Pi asks for no
+level; the container is. Codex gets `workspace-write` with approval on request,
+inside the container. Pi asks for no
 approval and has no sandbox, so the runner supplies one policy extension, copied
 into the session's private directory and loaded alone (`--no-extensions -e`).
 The session also takes `--no-mcp`, `--no-skills`, `--no-prompt-templates` and
 `--no-themes`, so an MCP server cannot add a file tool that the extension does
 not see; context files stay on, so the session reads the repository's
-`AGENTS.md` (maintainer, 2026-10-09). The extension keeps `read`, `grep`, `find`, `ls`, `edit` and `write` inside the worktree,
+`AGENTS.md` (maintainer, 2026-10-09). The extension keeps `read`, `grep`, `find`, `ls`, `edit` and `write` inside the worktree it runs in — the candidate, as the container presents it —
 keeps `edit` and `write` off its own file, `.stage2-sessions/` and `.pi/` (not
 `.git/`), and asks before a recursive `rm`, `sudo`, `chmod` or `chown` with 777,
 and before the git commands that discard unsaved work (`git reset --hard`,
@@ -967,29 +1037,45 @@ recognised, and everything else the list leaves out runs unasked. The runner
 confirms only that the extension loaded (Pi lists its flag in `--help`); how its
 handlers behave is held by tests that run without Pi. Every shell command
 outside the dangerous patterns runs without a question, network programs and
-`git push` included, and a shell command, asked or not, can read what the user
-can read, the sign-in directory `~/.pi/agent` included: `cat` on it does not
-ask, and its output goes to the endpoint. The Pi session signs in with that
-directory, which may hold other providers' credentials, so a model switched
-inside the session can leave the declared endpoint unscanned. The runner
-passes neither `PI_CODING_AGENT_DIR` nor `SSH_AUTH_SOCK` on, so a custom agent
-directory is ignored and `git push` over SSH fails inside the session.
+`git push` included — but it runs in the container, so it reads what the
+candidate and the passed inputs hold, not what the user can: the host home,
+the real sign-in directories and the secrets file are not inputs. The session
+signs in with a copied, size-limited selection of the selected CLI's own
+sign-in state — Codex's `auth.json`; the Pi agent directory
+(`~/.pi/agent`) the recorded session decision keeps, which
+may hold other providers' credentials. The host original is never mounted,
+never written, and nothing else from it travels. Inside the container
+`PI_CODING_AGENT_DIR` names that copied home; the dispatch itself passes
+neither `PI_CODING_AGENT_DIR` nor `SSH_AUTH_SOCK`, so a custom host agent
+directory is ignored and `git push` over SSH fails inside the session, as
+every non-API destination does at the egress proxy.
 
 One audit line goes into the change's `findings.md` per attempt, first with
 `dispatch pending.`, then `dispatch accepted.` or `dispatch failed (<why>).`
 (the file's `updated:` date follows the write; no other line changes) Accepted means Terminal took the command, nothing
 more: whether the CLI started, authenticated or answered shows in the new
 window, and a missing CLI or `osascript` is refused beforehand as a
-prerequisite. The runner's launch files live in a fresh private directory under
-the gitignored `.stage2-sessions/` in the worktree; they carry the launch script
-and, for Pi, the policy extension, no prompt and no credential. A refused or failed attempt, or one
+prerequisite. The command Terminal takes is the trusted supervisor's
+(`python3 scripts/stage2_attempt.py session-supervisor <opaque-id>`) with the
+opaque invocation id as its only argument — never the prompt, never a login
+value. The runner's launch files live in a fresh private directory under
+the gitignored `.stage2-sessions/` in the worktree; they carry the recorded
+launch state, the scanned prompt included, the fixed AppleScript and, for Pi,
+the policy extension — never a credential. A refused or failed attempt, or one
 stopped before the dispatch, removes its directory, an accepted one keeps it for the session to load, and
-nothing user-owned there is ever written or deleted. The runner reads no
-credential file, copies no caller token, hands Pi no key and sets no Pi agent
-directory, and starts no headless verb — no `codex exec`, no Pi print or RPC
-mode, and no call to the OpenCode CLI. The verb neither runs the review loop nor
+nothing user-owned there is ever written or deleted. The dispatch carries no
+credential and no agent socket — the copied sign-in state travels among the
+attempt's inputs, read by the supervisor — and the runner starts no headless
+verb — no `codex exec`, no Pi print or RPC
+mode, and no call to the OpenCode CLI. On a normal exit the supervisor runs
+the candidate's checks in the credential-free verifier and returns the
+verified edits to the host worktree uncommitted; a failed check or a
+cancelled session discards the candidate and leaves only the audit.
+Acceptance says nothing about the return: dispatch acceptance is only
+acceptance, and `session` never makes a commit — the automatic verbs'
+checkpoint discipline is not this verb's. The verb neither runs the review loop nor
 changes which reviewer sees what: the review order is not this verb's business.
-Its decision record is ADR 0012.
+Its decision record is ADR 0012; its boundary is ADR 0018.
 
 ### The review loop (phase 4b)
 
@@ -1034,8 +1120,9 @@ doubled. The model answers one **fixed line** per row, `<ID>: fixed —
 tests/<path>::<function>` or `<ID>: fixed — not a test — <reason>`, in the
 form of ADR 0013's criterion ledger; only a row taken as `taken — not a test`
 may be answered `not a test`. **Red first:** the runner proves each repair of
-code by running the named test alone against the baseline's code, in a
-temporary git worktree whose `tests/` is the attempt's, and accepts a test
+code by running the named test alone against the baseline's code, staged
+privately in the credential-free verifier with the attempt's `tests/`, and
+accepts a test
 only when pytest exits 1 or 2 there. When every post-run check passes —
 `make verify` green, a measured line in the time log, every fixed line
 checked — the runner writes each row's Status `fixed` in its place, makes the
@@ -1052,8 +1139,10 @@ rungs keep their read-only tools. **The exception (ADR 0017):** Codex, which
 reviews phase 6, also repairs; its own session never does both — a phase-6
 re-check (a `review` run after an earlier `## Phase 6` block) starts a fresh
 read-only Codex session, resuming neither the repair nor an earlier thread.
-The sandbox is the CLI's configured `workspace-write`; the tests show the
-configured call, not the CLI's confinement.
+The repair attempts run in the boundary container (ADR 0018, above) with the
+CLI's `workspace-write` flags set inside it; the container, measured by the
+isolation gate, is the confinement — the tests show the configured call and
+the publication's checks.
 
 ### Two columns for every stage-2 change
 

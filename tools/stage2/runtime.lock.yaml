@@ -1,0 +1,109 @@
+# runtime.lock.yaml — what an isolated stage-2 attempt may run, and what is
+# measured (ADR 0018, plan step 1).
+#
+# **Why this file exists.** An isolated writing attempt runs in a container
+# built from pinned inputs. A pin that nobody measured is a claim, not a pin:
+# every identity below carries `measured`, and the supervisor refuses a writing
+# call while the identity its launch needs is unmeasured (spec criterion 7 —
+# refusal before the call, never a broader boundary as a substitute).
+#
+# **What is measured on 2026-10-15.** Only the Python toolchain: its versions
+# and hashes are `requirements-ci.txt`, which `make venv` already builds and
+# `test_ci.py` holds against the CI installs. No image digest stands here yet:
+# the live Podman probes (spec criterion 23) measure them at named commits, on
+# macOS and Linux, and only then do the `measured` flags below turn true. The
+# supervisor reads this file at every launch; an unmeasured flag is a refusal.
+#
+# Nothing in an attempt installs a package: the image is built once, in
+# explicit setup, from exactly the inputs named here.
+
+schema_version: 1
+
+# ---------------------------------------------------------------------------
+# The container images. `reference` names what is built; `digest` is the
+# immutable identity the supervisor requires at launch (a tag is not enough).
+# Both start unmeasured: `scripts/check_stage2_isolation.py --build` builds
+# `tools/stage2/Containerfile` and writes the digest it measured.
+# ---------------------------------------------------------------------------
+images:
+  model:
+    reference: "localhost/coding-harness-stage2-model"
+    digest: null
+    measured: false
+    measured_at: null
+    measured_commit: null
+    base:
+      name: "python:3.12-slim-bookworm"
+      digest: null
+      measured: false
+  verifier:
+    reference: "localhost/coding-harness-stage2-verifier"
+    digest: null
+    measured: false
+    measured_at: null
+    measured_commit: null
+    base:
+      name: "python:3.12-slim-bookworm"
+      digest: null
+      measured: false
+
+# ---------------------------------------------------------------------------
+# The official clients inside the image. The Pi pin is the one the runner has
+# measured its isolation flags on (`PI_VERSION`); the suite starts no real Pi,
+# and this pin is what ties the measurement to the call. Codex and Claude Code
+# keep the versions the maintainer's host installs until a qualified image
+# pins its own; a lock entry without a version is unmeasured, and the image
+# build that needs one stops.
+# ---------------------------------------------------------------------------
+clients:
+  pi:
+    package: "@mariozechner/pi"
+    version: "1.1.0"
+    hash: null
+    measured: false
+    reason: "the version the loop's isolation flags were measured on (research §L)"
+  codex-cli:
+    package: "@openai/codex"
+    version: null
+    hash: null
+    measured: false
+    reason: "unmeasured — qualification installs the official client and records its identity"
+  claude-code:
+    package: "@anthropic-ai/claude-code"
+    version: null
+    hash: null
+    measured: false
+    reason: "unmeasured — qualification installs the official client and records its identity"
+
+# ---------------------------------------------------------------------------
+# The verifier's toolchain: exactly the lock `make venv` and the CI install
+# from. Versions and hashes live in requirements-ci.txt; nothing is duplicated
+# here, so a drift between the image and the suite is impossible by
+# construction. `source` is read, never copied.
+# ---------------------------------------------------------------------------
+toolchain:
+  python: "3.12"
+  requirements: "requirements-ci.txt"
+  interpreter_flag: "--require-hashes"
+
+# ---------------------------------------------------------------------------
+# The boundary every launch must request, whatever backend the setting names.
+# An adapter that cannot express one of these refuses the call; it never
+# launches with weaker requirements (spec criterion 6).
+# ---------------------------------------------------------------------------
+boundary:
+  require:
+    - non-root-user
+    - read-only-rootfs
+    - cap-drop-all
+    - no-new-privileges
+    - no-devices
+    - no-published-ports
+    - no-host-network
+    - no-host-path-mounts
+    - private-candidate-volume
+    - read-only-git-metadata
+    - api-only-egress
+    - no-model-credentials-in-verifier
+  programs: [podman, docker, container]
+  default_program: podman

@@ -29,17 +29,25 @@ before the window opens.
 
 **What acceptance means.** Exit 0 says Terminal took the command, nothing
 more: whether the CLI started, signed in or answered shows in the new window.
-A dispatch that Terminal refuses exits 1 and says so in the audit. The private
-directory under the gitignored `.stage2-sessions/` holds no prompt and no
-credential; a failed attempt removes it, an accepted one keeps it for the
-session to load. The policy extension bounds Pi's file tools and asks before a
-few shell commands; it is a configuration, not confinement at the operating-system
-level, and a Pi session signs in with the maintainer's own Pi agent directory, which
-the runner neither reads nor writes.
+A dispatch that Terminal refuses exits 1 and says so in the audit. The command
+the window runs is the trusted supervisor (`scripts/stage2_attempt.py
+session-supervisor`) with the opaque invocation id alone - never the prompt,
+never a login: since the isolation boundary (ADR 0018) the window populates a
+private candidate from the worktree's accepted state, runs the interactive CLI
+inside it, and after a normal exit returns the verified edits to the worktree
+uncommitted; a cancellation or a failed check discards the candidate. The
+private directory under the gitignored `.stage2-sessions/` holds that launch
+state, the prompt included, for the supervisor to read, and never a credential;
+a failed dispatch removes it, an accepted one keeps it. The policy extension
+bounds Pi's file tools and asks before a few shell commands; it is a
+configuration, not confinement at the operating-system level, and a Pi session
+signs in with the maintainer's own Pi agent directory, which the runner
+neither reads nor writes.
 """
 
 from __future__ import annotations
 
+import json
 import os
 import re
 import shlex
@@ -50,10 +58,19 @@ import tempfile
 import uuid
 from pathlib import Path
 
+import stage2_attempt
 import yaml
 
 SESSION_ROOT = ".stage2-sessions"
 SCRIPT_NAME = "terminal-session.applescript"
+# The window runs the trusted supervisor with the opaque id alone; the prompt,
+# the policy path and the worktree travel through the recorded launch state.
+# The supervisor inherits the window's own environment: the writer's container
+# environment is built through the allow-list later (stage2_attempt), so the
+# dispatch needs no assignments of its own - only the interpreter, which is
+# named absolutely, and the sign-in home `interactive_login` copies from.
+SUPERVISOR_SCRIPT = "scripts/stage2_attempt.py"
+SUPERVISOR_VERB = "session-supervisor"
 PROMPT_LIMIT = 32 * 1024
 COMMAND_LIMIT = 64 * 1024
 CLI_TIMEOUT = 30.0
@@ -312,42 +329,80 @@ def confirm_loaded(root: Path, cli: str, extension: Path, runner) -> None:
 # ---------------------------------------------------------------------------
 
 
-def prepare(root: Path, transport: str, cli: str, runner) -> Path:
-    """A fresh private directory under `.stage2-sessions/`: the fixed AppleScript and, for Pi, the policy extension.
+def prepare(
+    root: Path,
+    change: str,
+    endpoint: str,
+    selection: str,
+    transport: str,
+    cli: str,
+    prompt: str,
+    baseline: str,
+    runner,
+) -> tuple[Path, str]:
+    """A fresh private directory under `.stage2-sessions/`: the recorded launch state, the fixed
+    AppleScript and, for Pi, the policy extension.
 
-    Nothing user-owned is written or replaced; a preparation failure removes only what this call created.
+    The record carries the opaque invocation id's whole lifetime: the worktree, the change, the
+    endpoint and model, the accepted baseline commit, the scanned prompt, the inner command with its
+    placeholders, and the policy copy's name. It holds no credential - an interactive session signs
+    in with its own copied sign-in state, read by the supervisor, not dispatched. Nothing
+    user-owned is written or replaced; a preparation failure removes only what this call created.
     """
     base = root / SESSION_ROOT
     if base.is_symlink() or (base.exists() and not base.is_dir()):
         raise runner.Refused(
             f"{SESSION_ROOT}/ is a link or not a directory; the runner writes session policies only into a real directory there."
         )
-    private = base / f"{transport}-{uuid.uuid4().hex[:12]}"
+    attempt = uuid.uuid4().hex[:12]
+    private = base / f"session-{attempt}"
     try:
         private.mkdir(parents=True)
     except OSError as error:
         raise runner.Refused(f"the session directory {private} could not be created: {error}") from error
-    script = private / SCRIPT_NAME
     try:
-        script.write_text(APPLESCRIPT, encoding="utf-8")
+        (private / SCRIPT_NAME).write_text(APPLESCRIPT, encoding="utf-8")
+        record = {
+            "root": str(root),
+            "change": change,
+            "endpoint": endpoint,
+            "model": selection,
+            "baseline": baseline,
+            "prompt": prompt,
+            "inner_command": cli_argv(
+                transport,
+                "codex" if transport == "codex" else "pi",
+                selection,
+                prompt,
+                stage2_attempt.POLICY_PLACEHOLDER if transport == "pi" else None,
+            ),
+            "inner_env": {},
+            "policy": POLICY_FILE if transport == "pi" else "",
+        }
+        (private / "invocation.json").write_text(
+            json.dumps(record, ensure_ascii=False, indent=2, sort_keys=True) + "\n", encoding="utf-8"
+        )
     except OSError as error:
         shutil.rmtree(private, ignore_errors=True)
-        raise runner.Refused(f"the launch script {script} could not be written: {error}") from error
+        raise runner.Refused(f"the launch state for attempt {attempt} could not be written: {error}") from error
     if transport == "pi":
         try:
             confirm_loaded(root, cli, install_policy(private, runner), runner)
         except BaseException:  # any failure, an unwritable temp directory or Ctrl-C included
             shutil.rmtree(private, ignore_errors=True)
             raise
-    return private
+    return private, attempt
 
 
-def cli_argv(transport: str, root: Path, cli: str, model: str, prompt: str, extension: Path | None = None) -> list[str]:
+def cli_argv(transport: str, cli: str, model: str, prompt: str, extension: str | None = None) -> list[str]:
     """The one interactive form per transport: no headless verb, no fallback, no extra writable directory.
 
     The prompt can begin with `---` (a handover's frontmatter) or with a word that is a subcommand. Codex
     and Pi get it after `--`, the end of their options. Pi reads a prompt that starts with `@` as a file name,
     which is why `run` refuses such a prompt; Pi has no print or RPC mode here, so the window stays interactive.
+    `cli` is the bare program name: the supervisor's launch resolves it inside the qualified image, so no host
+    path travels in the recorded command. The worktree and the extension copy ride as the supervisor's own
+    placeholders (`@STAGE2_WORK@`, `@STAGE2_POLICY_FILE@`), which it fills with the candidate's paths.
     """
     if transport == "codex":
         return [
@@ -356,7 +411,7 @@ def cli_argv(transport: str, root: Path, cli: str, model: str, prompt: str, exte
             "--model",
             model,
             "--cd",
-            str(root),
+            stage2_attempt.WORK_PLACEHOLDER,
             "--sandbox",
             "workspace-write",
             "--ask-for-approval",
@@ -375,7 +430,7 @@ def cli_argv(transport: str, root: Path, cli: str, model: str, prompt: str, exte
         "--no-prompt-templates",
         "--no-themes",
         "-e",
-        str(extension),
+        extension or "",
         "--offline",
         "--no-approve",
         "--model",
@@ -389,12 +444,14 @@ def terminal_command(root: Path, env: dict[str, str], argv: list[str]) -> str:
     """One shell line. `cd`, the `/usr/bin/env -i` assignments and every argument are quoted separately, so
     paths and prompt text stay data: quotes, substitutions and newlines in them execute nothing extra. The
     absolute `env` does not depend on the PATH it is about to replace; `argv` already starts with the CLI.
+    An empty `env` passes the window's own environment through unchanged - the supervisor's dispatch needs
+    exactly that, because its launch boundary is built inside `stage2_attempt`, not here.
     """
-    assignments = [f"{shlex.quote(key)}={shlex.quote(value)}" for key, value in sorted(env.items())]
-    return " ".join(
-        ["cd", shlex.quote(str(root)), "&&", "exec", "/usr/bin/env", "-i", *assignments]
-        + [shlex.quote(argument) for argument in argv]
-    )
+    head = ["cd", shlex.quote(str(root)), "&&", "exec"]
+    if env:
+        assignments = [f"{shlex.quote(key)}={shlex.quote(value)}" for key, value in sorted(env.items())]
+        head += ["/usr/bin/env", "-i", *assignments]
+    return " ".join(head + [shlex.quote(argument) for argument in argv])
 
 
 def dispatch(terminal: str, script: Path, command: str) -> tuple[bool, str]:
@@ -482,7 +539,11 @@ def finalize(ctx, runner, attempt: str, status: str) -> None:
 
 
 def run(root: Path, change: str, model: str, handover: str | None, runner) -> None:
-    """One checked session: worktree, declaration, handover, two scans, policy, dispatch, audit."""
+    """One checked session: worktree, declaration, handover, two scans, policy, dispatch, audit.
+
+    The window receives the supervisor and the opaque id only; the prompt, the policy path and the
+    candidate's worktree live in the recorded launch state the supervisor reads (ADR 0018).
+    """
     root = Path(root)
     if not on_macos():
         raise runner.Refused("session dispatches to macOS Terminal; this platform is not supported.")
@@ -504,20 +565,23 @@ def run(root: Path, change: str, model: str, handover: str | None, runner) -> No
             )
         runner.require_pi()
     runner.checked_prompt(ctx, endpoint, prompt)
-    private = prepare(root, transport, cli, runner)
+    done = _git(root, "rev-parse", "HEAD")
+    if done.returncode != 0:
+        raise runner.Refused(f"the worktree has no HEAD commit to baseline the session on: {done.stderr.strip()[:200]}")
+    baseline = done.stdout.strip()
+    private, attempt = prepare(root, change, endpoint[0], selection, transport, cli, prompt, baseline, runner)
     producer = "codex" if transport == "codex" else "pi"
     try:
         result = runner.checked_prompt(ctx, endpoint, prompt)
         command = terminal_command(
             root,
-            runner.foreign_env({}),
-            cli_argv(transport, root, cli, selection, prompt, private / POLICY_FILE),
+            {},
+            [sys.executable, SUPERVISOR_SCRIPT, SUPERVISOR_VERB, attempt],
         )
         if len(command.encode("utf-8")) > COMMAND_LIMIT:
             raise runner.Refused(
                 f"the dispatch command is {len(command.encode('utf-8'))} bytes; the launch transport takes at most {COMMAND_LIMIT}."
             )
-        attempt = uuid.uuid4().hex[:12]
         write_pending(ctx, runner, audit_line(runner, attempt, selection, endpoint, source, result), producer)
     except BaseException:  # any failure before the dispatch, Ctrl-C included, leaves no private directory
         shutil.rmtree(private, ignore_errors=True)
@@ -530,5 +594,6 @@ def run(root: Path, change: str, model: str, handover: str | None, runner) -> No
     finalize(ctx, runner, attempt, "accepted")
     print(
         f"session: Terminal accepted the launch of {selection} in {root} (attempt {attempt}); acceptance is "
-        "not a statement about the CLI, the login or the model - what follows shows in the new window."
+        "not a statement about the CLI, the login or the model - what follows shows in the new window. The "
+        "supervisor returns the session's verified edits uncommitted; a failed check discards them."
     )

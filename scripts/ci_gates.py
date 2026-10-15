@@ -128,6 +128,21 @@ OHNE_AUFRUFER: dict[str, str] = {
         "eigenes Gate haette keinen Gegenstand, denn die CI faehrt ohnehin "
         "von einem sauberen Checkout aus"
     ),
+    "stage2_attempt.py": (
+        "Library of the isolated writing attempt (ADR 0018) - the supervisor the runner, the session "
+        "dispatcher and the isolation checker import; it launches containers on a writer machine with a "
+        "login no CI step holds; tests/test_stage2_attempt.py runs it against stand-ins"
+    ),
+    "stage2_egress.py": (
+        "The egress proxy of an isolated attempt - the supervisor starts it INSIDE the private network "
+        "of a container; a CI step would measure nothing the tests do not; tests/test_stage2_egress.py "
+        "runs it directly"
+    ),
+    "stage2_verify_inside.py": (
+        "The verifier's entry point - it runs INSIDE the verifier container (or the test transport's "
+        "stand-in), started by the supervisor, never on a CI host; the suite exercises it through "
+        "tests/test_stage2.py and tests/test_stage2_session.py"
+    ),
     "omnigent_policy.py": (
         "Library and maintainer tool - the one list of denied Omnigent tools and everything rendered "
         "from it. tests/test_omnigent_deny_layers.py runs it (the render, the merge, and under "
@@ -151,6 +166,23 @@ OHNE_AUFRUFER: dict[str, str] = {
 # ("check_worktree_state.sh fehlt in diesem Checkout") — der Waechter reist
 # jetzt mit, und tests/test_workflow_entry.py faehrt den Einstieg.
 OHNE_TEST: dict[str, str] = {}
+
+# Vorbereitungen einzelner Gates — vollstaendige Schritt-Zeilen, die der
+# Generator unmittelbar vor dem Schritt des Gates einsetzt (ADR 0018): das
+# Werkzeug, das ein Gate braucht, ist da, bevor es misst. Jeder Schluessel
+# muss eine echte Gate-id sein (validate_schema haelt das fest); ein Schritt
+# hier ist eine Vorbedingung und traegt deshalb wie checkout und setup-deps
+# kein Gate-`if`.
+GATE_VORBEREITUNG: dict[str, list[str]] = {
+    "stage2-isolation": [
+        "      - name: Prepare rootless Podman",
+        "        id: setup-podman",
+        "        run: |",
+        "          sudo apt-get update",
+        "          sudo apt-get install -y --no-install-recommends podman",
+        "          podman info",
+    ],
+}
 
 # Marketplace-Actions, deren Werkzeug es auch lokal gibt. Die Argumente werden
 # NICHT hier gepflegt — sie stammen aus dem `with`-Block der Gate-Datei.
@@ -261,6 +293,9 @@ def validate_schema(doc: dict[str, Any] | None = None) -> list[str]:
             fehler.append(f"{gid}: ohne reason — ein Gate ohne Warum wird nicht gepflegt")
         if g.get("action") and not isinstance(g.get("with"), dict | None):
             fehler.append(f"{gid}: 'with' muss ein Mapping sein")
+    unbekannt = sorted(set(GATE_VORBEREITUNG) - bekannt)
+    if unbekannt:
+        fehler.append(f"Vorbereitung ohne Gate: {', '.join(unbekannt)}")
     return fehler
 
 
@@ -530,6 +565,9 @@ def generate_ci() -> str:
     for g in aktionen:
         zeilen.extend(_schritt(g))
     for g in kommandos:
+        # Die Vorbereitung eines Gates steht unmittelbar vor seinem Schritt:
+        # das Werkzeug ist da, bevor der Gate misst (GATE_VORBEREITUNG, ADR 0018).
+        zeilen.extend(GATE_VORBEREITUNG.get(g["id"], []))
         zeilen.extend(_schritt(g))
     zeilen.extend(_summary_job())
     # The drift gates read the outside world, not the interpreter: one run, under

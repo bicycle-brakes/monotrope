@@ -1904,3 +1904,60 @@ def test_the_mutation_ratchet_only_turns_one_way() -> None:
 
     ohne_grund = [g for g, grund in OHNE_MUTATIONSTEST.items() if len(grund.strip()) < 10]
     assert not ohne_grund, f"Exception without a reason: {ohne_grund}"
+
+
+# ---------------------------------------------------------------------------
+# The isolation gate (ADR 0018): its preparation, its generation, and the
+# rule that no paid-model credential reaches the workflow.
+# ---------------------------------------------------------------------------
+
+
+def test_the_isolation_gate_prepares_its_backend() -> None:
+    """The hosted gate measures the real boundary: hosted, blocking, built images.
+
+    The plan names the exact command (`--program podman --build`); a gate that
+    drifted from it would qualify a different boundary than the change claimed.
+    """
+    isolation = next(g for g in gates() if g["id"] == "stage2-isolation")
+    assert isolation["placement"] == "hosted", "the local runner skips it by declaration, not by accident"
+    assert isolation["enforcement"] == "block"
+    assert isolation["floor"] is False
+    assert not isolation["needs_tracker"]
+    assert isolation["command"] == "python3 scripts/check_stage2_isolation.py --program podman --build"
+
+    generated = ci_gates.generate_ci().splitlines()
+    prep = generated.index("      - name: Prepare rootless Podman")
+    run_line = "        run: python3 scripts/check_stage2_isolation.py --program podman --build"
+    step = next(i for i, line in enumerate(generated) if line == run_line)
+    assert prep < step, "the preparation must stand before the gate it serves"
+    between = generated[prep:step]
+    assert not any(line.strip() == "if: ${{ !cancelled() }}" for line in between), (
+        "the preparation is a precondition like checkout and setup-deps; a gate `if` would let it "
+        "run only when no earlier gate failed, which is backwards"
+    )
+    assert "          podman info" in between, "the backend must prove itself usable, not merely be installed"
+
+
+def test_a_preparation_without_a_gate_is_a_schema_error(monkeypatch: pytest.MonkeyPatch) -> None:
+    """GATE_VORBEREITUNG keys are bound to real gate ids — a stray key is a schema error."""
+    monkeypatch.setitem(ci_gates.GATE_VORBEREITUNG, "ohne-gate", ["      - name: x"])
+    fehler = ci_gates.validate_schema()
+    assert any("Vorbereitung ohne Gate: ohne-gate" in fehler_text for fehler_text in fehler)
+
+
+def test_the_workflow_carries_no_paid_model_credentials() -> None:
+    """The hosted gate measures the boundary without a login of its own.
+
+    The checker signs its probe launches in with synthetic secrets it writes
+    at run time; the workflow must therefore name no credential variable of
+    any provider and pass no GitHub secret at all.
+    """
+    import stage2_attempt
+
+    workflow = ci_gates.generate_ci()
+    committed = ci_gates.CI_FILE.read_text(encoding="utf-8")
+    names = (*stage2_attempt.CREDENTIAL_ENV_NAMES, "CC_SECRETS")
+    for text, quelle in ((workflow, "the generated workflow"), (committed, "the committed ci.yml")):
+        leaked = [name for name in names if name in text]
+        assert leaked == [], f"{quelle} names credential variables: {leaked}"
+        assert "${{ secrets." not in text, f"{quelle} passes a GitHub secret; the boundary needs none"
