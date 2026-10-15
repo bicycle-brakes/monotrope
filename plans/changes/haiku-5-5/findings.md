@@ -38,6 +38,12 @@ Checked: the runner's `HAIKU` constant and its only consumer `explore()` under `
 
 Phase 6 verdict: opus-5.5, 2026-10-14
 
+Re-check F-1 — confirmed fixed. `test_both_anthropic_endpoints_authorize_haiku_5_5_instead_of_4_5` reads `model-endpoints.yaml` itself and asserts, per endpoint by name, that `anthropic-api` and `claude-code-plan` each list `claude-haiku-5-5` and neither lists `claude-haiku-4-5`, so it no longer depends on display-name resolution being satisfied by one endpoint. Planted into the real declaration and restored one at a time, each fault turned it red: `claude-haiku-5-5` replaced by `claude-haiku-4-5` on `anthropic-api` (line 53) and on `claude-code-plan` (line 68), and `claude-haiku-4-5` added beside the new id on each endpoint. Red first could not hold because the declaration was already right; the in-test planted copies and these mutations stand in for it.
+
+Re-check F-2 — confirmed fixed. `test_the_current_haiku_instructions_reject_4_5` rejects `Haiku 4.5` or `claude-haiku-4-5` in `AGENTS.md` (whole file), `docs/WORKFLOW.md` §3 and §4, both phase prompts and every docstring of `scripts/stage2.py`. All five spots the row names lie inside what it reads: `docs/WORKFLOW.md:702`, `:723` and `:1079` are in §4 (lines 614–1117), and `scripts/stage2.py:28` is in the module docstring. Restoring "Haiku 4.5" in each of the five, one at a time in the real file and restored afterwards, turned the test red with the file named in the message. Accepted limit, not a new row: the pattern does not catch other spellings such as `Haiku-4.5` or `claude-haiku-4.5`, and `docs/WORKFLOW.md` outside §3 and §4 is not read; neither is a spot the row named.
+
+Phase 6 re-check: opus-5.5, 2026-10-15
+
 ## Phase 4b — loop rows, released 2026-10-14
 
 | ID | Severity | Dimension | Origin | Where | Finding | Reviewer | Status | Broke a test | Phase 6 |
