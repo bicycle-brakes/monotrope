@@ -137,3 +137,35 @@ practice, facing the choice between no change information and a one-sentence
 topic, we decided on an Opus-written sentence without file or code names to
 achieve best practice that fits the change, accepting that the free providers
 learn what the change is about. — 2026-10-14
+
+## Q-7 · How the topics are cut and who works each
+
+asked: 2026-10-15
+answer: "ja, finder als schritt 0, ich möchte für jedes thema drei agenten, einmal deepseek, einmal mimo, einmal haiku, jeweils auch eigener blickwinkel, es soll immer einen template gefolgt werden. bei der online recherche möchte ich, dass alle verfügbaren freien modelle zu diesen thema recherchieren, also 1 bis x modelle"
+answered_by: maintainer
+status: answered
+
+Asked after phase 6 and the F-2 to F-10 repairs, while walking through the
+six topics of Q-2. The maintainer first asked for smaller topics; the session
+proposed thirteen (ten repository topics, three online topics) and, after an
+online search on multi-agent research design (Anthropic's multi-agent
+research system, locator-then-analyzer code research, STORM, studies on
+model diversity), a step 0 "finder" that maps files, ADRs, tests and
+neighbouring specs (`neighbours:` in the header of `research.md`, later the
+spec's) for every repository topic. The maintainer had also said, on the
+free roster, that the free models change constantly and the list must keep
+being adjusted; "all available free models" replaces a fixed roster.
+
+This amends Q-1 (one free and one Flash model per topic) and Q-2 (six
+topics): each repository topic is worked by three agents — DeepSeek Flash,
+MiMo Flash and Haiku 5.5 — each from its own perspective and on one fixed
+template; each online topic is worked by every free model available at run
+time. The exact topic list, the perspectives and the template are settled
+in the following questions and then in the spec.
+
+In the context of six broad topics shared by two models and a fixed free
+roster that goes stale, facing the choice between keeping that cut and
+smaller topics with a finder step, we decided on a finder, three agents with
+distinct perspectives per repository topic on one template, and every
+available free model on each online topic to achieve clear assignments and
+independent views, accepting many more calls per run. — 2026-10-15
