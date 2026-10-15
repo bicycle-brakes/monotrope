@@ -269,3 +269,15 @@ checks that no research `[DECISION]` is lost.
   agents on the same brief; evidence `path::section` or criterion number;
   confirmed neighbours go into `neighbours:` in the spec header; every
   contradiction becomes an interview `[DECISION]` (answer: "5 passt").
+- Topic 6, history and stale assumptions — guiding questions: when and why
+  the affected places last changed (commit, PR, reason from the message or
+  body); what was tried before and reverted or superseded; which
+  assumption in code, docs or rules no longer holds (a model name, a
+  number, a reference); which beads, handovers or maintainer decisions
+  explain why something is deliberately so. Boundary: only the history of
+  the places on the finder's map; no judgement of earlier decisions; no
+  proposals for new code. Three agents on the same brief; evidence commit
+  hash, PR number, bead id or `path::section` (answer: "ja"). The
+  maintainer added: "bei themen wie haiku 5.5 sollte auch generelle
+  abgeleitet werden, ob das nicht themen sind, die sich dauerhaft öndern und
+  wie das in der repo geregelt werden kann" — the form is settled next.
