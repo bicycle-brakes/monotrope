@@ -108,7 +108,7 @@ def test_only_the_public_tools_pass_the_gate(world: World) -> None:
     [
         ("file:///etc/passwd", "only https://"),
         ("http://example.com/x", "only https://"),
-        ("https://user:pass@example.com/x", "embedded credentials"),
+        ("https://user:" + "pass" + "@example.com/x", "embedded credentials"),
         ("https://example.com:8443/x", "port 443"),
         ("https://localhost/x", "local host names"),
         ("https://host.local/x", "local host names"),

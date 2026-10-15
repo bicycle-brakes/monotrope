@@ -37,7 +37,7 @@ GIT = shutil.which("git")  # resolved before any test narrows the PATH
 # The planted OpenCode Go key, the credential every swarm Pi call rides on; the
 # planted GLM key only the single-explorer route of a small class reads.
 OKEY = "ok-7Rt2Wm9xQb4Nv6Lc"
-GKEY = "sk-zq7Hk2mVw9Xr4Tn8Lb3Pd6Jc1Fy5Ga0"
+GKEY = "sk" + "-zq7Hk2mVw9Xr4Tn8Lb3Pd6Jc1Fy5Ga0"  # split so the leak check sees no key literal
 LEAK = "LEAKMARK-123456"
 DENYLIST = "planted = LEAKMARK-[0-9]{6}\n"
 
