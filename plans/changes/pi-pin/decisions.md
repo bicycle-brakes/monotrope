@@ -100,16 +100,22 @@ the measured one, accepting that a session waits for the pinned install. — 202
 
 ## Q-5 · Is Node pinned too
 
-asked: (prepared 2026-10-15, not yet asked)
-answer: —
-answered_by: —
-status: open
+asked: 2026-10-15
+answer: "A" — CI installs one exact Node version, and the wrapper refuses a Node major version other than the one the contract suite measured; minor Node updates stay allowed.
+answered_by: maintainer
+status: answered
 context: |
   Topic: which Node runs the runner's Pi.
   Intention: Pi is a Node program; its behaviour can depend on the Node version, and a lock file pins only the packages.
   Today: Node comes from Homebrew on the maintainer's machine; CI has whatever its image provides; the policy tests skip without Node.
   Repository change: A (recommended) — CI installs one exact Node version, and the wrapper refuses a Node major other than the one the suite measured; B — Node unpinned, only Pi pinned.
   Architecture change: A adds Node to the measured toolchain; B leaves it outside.
+
+In the context of a lock file that pins packages but not their runtime,
+facing the choice between pinning Node's major version and leaving Node
+free, we decided on the major version, checked by the wrapper and exact in
+CI, to achieve that Node belongs to the measured toolchain, accepting a pull
+request for every Node major move. — 2026-10-15
 
 ## Q-6 · The rule as an ADR
 
