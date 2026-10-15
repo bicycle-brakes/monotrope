@@ -332,3 +332,15 @@ checks that no research `[DECISION]` is lost.
   repository and docs before comparison portals; versions and licence only
   with source and date. Every free model available at run time on the same
   brief; evidence a URL with a retrieval receipt (answer: "ja").
+- Topic 11, known risks and failure reports (online) — input: only the
+  Opus sentence and the fixed guiding questions. Guiding questions: which
+  failures or incidents with similar solutions are publicly reported, and
+  their cause; which security vulnerabilities or advisories exist for
+  tools in the area; which non-obvious traps experience reports describe;
+  how others fixed or prevented them. Boundary: only public pages with a
+  retrieval receipt; no transfer to our code (the judge does that with
+  topic 8); tool overviews belong to topic 10. Source quality: issue
+  trackers, vendor advisories, CVE databases and postmortems before forum
+  opinions; each report with its date. Every free model available at run
+  time on the same brief; evidence a URL with a retrieval receipt (answer:
+  "ja").
