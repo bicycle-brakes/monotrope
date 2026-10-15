@@ -741,8 +741,8 @@ into a shell. Ten verbs exist:
 
 - `explore` — GLM 5.3 Flash for a `bounded` change or a `spike`, the research
   swarm for a `feature` or `architectural` change (ADR 0018), phase 1; the
-  class comes from `--class` or `research.md`'s header; `--stage2-off
-  [REASON]` uses Haiku 4.5 and skips the class.
+  class comes from `--class` or `research.md`'s header;
+  `--stage2-off [REASON]` uses Haiku 4.5 and skips the class.
 - `draft` — Codex, phases 2, 2b and 3 in one call; GLM 5.3 (`glm-5.3`) after
   two failed Codex attempts ("The draft" below).
 - `spec-review` — Opus 5.5, phase 2a, a headless call with read-only tools and
