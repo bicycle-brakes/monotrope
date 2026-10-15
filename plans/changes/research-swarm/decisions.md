@@ -184,3 +184,10 @@ gleichen blcikwinkel am anfang bekommt um deren ergebnisse evaluieren zu
 könenn." At the start every model receives the same brief and perspectives
 for a topic, so that their results can be compared and evaluated; per-model
 perspectives are a later decision on that evidence.
+
+Addendum 2026-10-15: on how the research is used, the maintainer said: "die
+recherce ergebnisse sollen dann klar in die interview phase und die spec
+definition eingehen. es dürfen gegenfalls auch mehr interview fragen
+gestellt werden". The reconciled findings feed phase 1a and phase 2
+traceably, and the interview may ask more questions than the class
+minimum where the research raises them.
