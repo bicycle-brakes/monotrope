@@ -1,7 +1,9 @@
 // The policy of an interactive Pi session started by `scripts/stage2.py session`.
 //
-// Pi asks for no approval and has no sandbox (docs/security.md of the pinned
-// Pi 1.1.0), so the runner supplies the policy itself: this file, copied into
+// Pi asks for no approval and has no sandbox (docs/security.md, measured on
+// Pi 1.1.0 on 2026-10-08; the runner now runs its own pinned install under
+// `tools/pi/`, whose behaviour `tests/test_pi_contract.py` holds against real
+// Pi), so the runner supplies the policy itself: this file, copied into
 // the session's private directory and loaded explicitly with
 // `pi --no-extensions -e <copy>`. It is plain ESM with no imports beyond node's
 // own, so a copy runs anywhere, and `tests/test_stage2_session_policy.py` runs
@@ -63,7 +65,10 @@ export const DANGEROUS = [
 const UNICODE_SPACES = /[  -   　]/g;
 const THIS_FILE = fileURLToPath(import.meta.url);
 
-// A path the way Pi's `resolvePath` reads it (dist/utils/paths.js, Pi 1.1.0).
+// A path the way Pi's `resolvePath` reads it (dist/utils/paths.js, Pi 1.1.0 —
+// the original measurement; the real-Pi contract test
+// `test_real_session_policy_blocks_foreign_reads` now holds this against the
+// pinned install too).
 export function resolveToolPath(input, cwd, home) {
   if (typeof input !== "string" || input.includes("\0")) {
     throw new Error("the path is not a string, or holds a NUL byte");

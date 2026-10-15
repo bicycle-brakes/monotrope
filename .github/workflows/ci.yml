@@ -35,6 +35,14 @@ jobs:
       - name: Install the pinned toolchain
         id: setup-deps
         run: python3 -m pip install --require-hashes -r requirements-ci.txt
+      - name: Set up the declared Node runtime
+        id: setup-node
+        uses: actions/setup-node@v4
+        with:
+          node-version-file: tools/pi/.node-version
+      - name: Install the pinned Pi
+        id: setup-pi
+        run: bash tools/pi/install.sh
       - name: Hydrate the tracker (pinned bd, checksum-verified)
         id: setup-tracker
         run: |
@@ -156,6 +164,14 @@ jobs:
       - name: Install the pinned toolchain
         id: setup-deps
         run: python3 -m pip install --require-hashes -r requirements-ci.txt
+      - name: Set up the declared Node runtime
+        id: setup-node
+        uses: actions/setup-node@v4
+        with:
+          node-version-file: tools/pi/.node-version
+      - name: Install the pinned Pi
+        id: setup-pi
+        run: bash tools/pi/install.sh
       - name: Hydrate the tracker (pinned bd, checksum-verified)
         id: setup-tracker
         run: |

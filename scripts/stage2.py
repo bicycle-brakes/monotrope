@@ -170,8 +170,36 @@ CARD_LABELS = ("For you:", "Done when:", "Appetite:", "Not now:", "Pre-mortem:")
 DRAFT_PROMPTS = ("02-spec.md", "02b-design.md", "03-plan.md")
 GLM_BASE_URL = "https://api.z.ai/api/anthropic"
 OPENCODE = "opencode-go"
-# The one Pi the loop's isolation was measured on (research §L); any other prints a refusal.
-PI_VERSION = "1.1.0"
+# The runner's own Pi (bead coding-harness-agx, ADR 0019): one repository-local
+# install under `tools/pi/`, started only through its wrapper. The pin has one
+# source - the manifest the wrapper enforces - and is read from it, so a moved
+# pin cannot leave the runner checking a version it no longer ships. A missing
+# or floating pin stops the import: without it the runner has no pin to check.
+# The loop's isolation was first measured by hand on Pi 1.1.0 (research §L);
+# the offline contract suite now measures the pinned install itself.
+PI_TOOLS_DIR = REPO_ROOT / "tools" / "pi"
+PI_WRAPPER = PI_TOOLS_DIR / "pi"
+PI_MANIFEST = PI_TOOLS_DIR / "package.json"
+PI_PACKAGE = "@earendil-works/pi-coding-agent"
+
+
+def _pi_pin() -> str:
+    """The exact Pi version `tools/pi/package.json` pins - anything else stops the runner."""
+    try:
+        manifest = json.loads(PI_MANIFEST.read_text(encoding="utf-8"))
+        pin = manifest["dependencies"][PI_PACKAGE]
+        exact = isinstance(pin, str) and re.fullmatch(r"\d+\.\d+\.\d+", pin) is not None
+    except (OSError, UnicodeDecodeError, json.JSONDecodeError, KeyError, TypeError):
+        exact = False
+    if not exact:
+        raise SystemExit(
+            f"stage2: {PI_MANIFEST} does not pin an exact {PI_PACKAGE} version; "
+            "the runner has no pin to check (see tools/pi/README.md)."
+        )
+    return pin
+
+
+PI_VERSION = _pi_pin()
 PI_TOOLS = "read,grep,find,ls"
 # A reviewer call that has not ended after this many minutes is stopped (spec, criterion 15).
 REVIEWER_MINUTES = 30
@@ -842,17 +870,20 @@ def run_codex(
 
 
 def require_pi() -> None:
-    """Refuse unless `pi --version` prints exactly the pinned version (spec, criterion 27).
+    """Refuse unless the repository wrapper prints exactly the pinned version (spec, criterion 27).
 
-    Runs before the prompt check, the call line and any call, in a scratch
-    directory with no key: a Pi off the pin sends nothing. The session verb
-    calls it after its argument and handover checks.
+    The wrapper is the one path to Pi (ADR 0019): it refuses a missing,
+    mismatched or unusable local install before any model request, and this
+    check ties its answer to the manifest pin. Runs before the prompt check,
+    the call line and any call, in a scratch directory with no key: a Pi off
+    the pin sends nothing. The session verb calls it after its argument and
+    handover checks.
     """
     with tempfile.TemporaryDirectory(prefix="stage2-") as tmp:
         env = foreign_env({"HOME": tmp, "PI_CODING_AGENT_DIR": tmp})
         try:
             done = launch(
-                ["pi", "--version"],
+                [str(PI_WRAPPER), "--version"],
                 Path(tmp),
                 env,
                 timeout=PI_VERSION_SECONDS,
@@ -860,11 +891,17 @@ def require_pi() -> None:
             )
         except CallFailed as error:
             raise Refused(
-                f"pi could not be checked ({error}); it is not the pinned {PI_VERSION}; no call starts."
+                f"{PI_WRAPPER} could not be checked ({error}); it is not the pinned {PI_VERSION}; no call starts."
             ) from None
     said = (done.stdout or "").strip()
     if done.returncode != 0:
-        raise Refused(f"pi --version ended {done.returncode}; it is not the pinned {PI_VERSION}; no call starts.")
+        # The wrapper's own refusal names the defect; its last lines travel with this one.
+        tail = "\n".join((done.stderr or "").splitlines()[-5:])
+        detail = f": {tail}" if tail else ""
+        raise Refused(
+            f"{PI_WRAPPER} --version ended {done.returncode}; it is not the pinned {PI_VERSION}; "
+            f"no call starts{detail}."
+        )
     if said != PI_VERSION:
         raise Refused(f"pi {said or 'printed nothing'} is not the pinned {PI_VERSION}; no call starts.")
 
@@ -872,13 +909,14 @@ def require_pi() -> None:
 def run_reviewer(ctx: Context, model: str, prompt: str, key: str) -> str:
     """One reviewer call of the loop: Pi against OpenCode Go's chat-completions address.
 
-    The launch is the measured set (spec, criterion 8): the rung's id under
-    the `opencode-go` provider, thinking `max` (Pi clamps it per model), the
-    read-only tools, every discovery switched off, no session, retries off.
-    Each call gets its own scratch directory: a `HOME`, an agent directory
-    whose only file is `settings.json`, and the prompt file. The key reaches
-    Pi as `OPENCODE_API_KEY` only. Returns the scrubbed answer. A call that
-    has not ended after `REVIEWER_MINUTES` is stopped (criterion 15).
+    The launch is the measured set (spec, criterion 8), started through the
+    repository wrapper (ADR 0019): the rung's id under the `opencode-go`
+    provider, thinking `max` (Pi clamps it per model), the read-only tools,
+    every discovery switched off, no session, retries off. Each call gets its
+    own scratch directory: a `HOME`, an agent directory whose only file is
+    `settings.json`, and the prompt file. The key reaches Pi as
+    `OPENCODE_API_KEY` only. Returns the scrubbed answer. A call that has not
+    ended after `REVIEWER_MINUTES` is stopped (criterion 15).
     """
     with tempfile.TemporaryDirectory(prefix="stage2-") as tmp:
         scratch = Path(tmp)
@@ -890,7 +928,7 @@ def run_reviewer(ctx: Context, model: str, prompt: str, key: str) -> str:
         prompt_file = scratch / "review-prompt.md"
         prompt_file.write_text(prompt, encoding="utf-8")
         command = [
-            "pi",
+            str(PI_WRAPPER),
             "--print",
             "--no-session",
             "--no-approve",
