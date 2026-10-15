@@ -241,3 +241,8 @@ checks that no research `[DECISION]` is lost.
   "ja"). The maintainer added: "evtl. macht hier die frage auch sinn ob es
   ein spike, bound, feature oder adr ist?" — the form of that question is
   settled next.
+  Accepted form (answer: "ja"): topic 3 gets a fifth guiding question —
+  does the declared class fit what was found? Each agent names the class
+  it holds right, with evidence; any disagreement with the declared class
+  becomes an interview question and is always a `[DECISION]` for the lost-
+  decision gate; the class never changes by itself.
