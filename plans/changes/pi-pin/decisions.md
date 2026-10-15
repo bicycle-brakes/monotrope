@@ -119,13 +119,19 @@ request for every Node major move. — 2026-10-15
 
 ## Q-6 · The rule as an ADR
 
-asked: (prepared 2026-10-15, not yet asked)
-answer: —
-answered_by: —
-status: open
+asked: 2026-10-15
+answer: "Ja" — the rule is recorded as a new ADR that amends ADR 0011 decision 6 and the Pi 1.1.0 statements of ADR 0012; asked after the session recommended it (no clean alternative, a real architecture decision, readers need the reason, effective only on merge).
+answered_by: maintainer
+status: answered
 context: |
   Topic: recording "Pi is pinned in the repository and a version move is measured by the contract suite" as an ADR.
   Intention: ADR 0011 decision 6 says the isolation was measured on Pi 1.1.0 and raising the pin means measuring again; ADR files are decided by the maintainer.
   Today: ADR 0011 ties the measurement to one version by hand.
   Repository change: a new ADR that amends ADR 0011 decision 6 (and ADR 0012's Pi 1.1.0 statements), its answer recorded with `harness.py decide adr` as the maintainer states it; the change becomes a decision pull request.
   Architecture change: the isolation guarantee is held by a repeatable suite instead of a one-off measurement.
+
+In the context of ADR 0011 tying the isolation to a hand measurement of Pi
+1.1.0, facing the choice between a new ADR and a change without one, we
+decided on a new ADR that amends ADR 0011 decision 6 and ADR 0012's Pi
+statements, to achieve that the isolation guarantee rests on a repeatable
+suite, accepting a decision pull request. — 2026-10-15
