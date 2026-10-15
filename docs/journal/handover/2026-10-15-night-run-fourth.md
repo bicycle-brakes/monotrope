@@ -83,9 +83,19 @@ Drafts only, already queued before the start, plan cards for the morning:
    #148 every question carries its context. Before merging #148, move its
    adoption day (`decisions/adoption.yaml`, now 2026-10-15) to the real
    merge day.
-2. **Research swarm** (coding-harness-icw): read the phase-6 result below;
-   then the offline capture with the pinned Pi and synthetic canaries
-   (spec build step 2) — deliberately not run unattended.
+2. **Research swarm** (coding-harness-icw, branch `explore/research-swarm`
+   at `83a4f31`): phase 6 (Opus 5.5) left one open BLOCKER, F-1 — the
+   offline capture with the pinned Pi and synthetic canaries (spec build
+   step 2) never ran, and it is the only real evidence for criteria 8 and 9
+   (nothing private reaches a free model; free models get no tool that reads
+   the repository). It was deliberately not run unattended. Rows F-2 to
+   F-10 are taken (among them: the free path cannot run on the real Pi
+   1.1.0 at all — wrong tool signature, `--list-models` prints a table, not
+   JSON; a report with no retrieved page counts as success; the topic
+   filter lets hyphenated identifiers through; search returns redirect
+   wrappers, not page URLs), but the runner refuses to repair while F-1
+   waits for a decision. Decide how F-1 is run (or deferred), then
+   `stage2.py repair research-swarm`.
 3. **Decide whether the runner's red-first check needs an exception** for
    fixes that live only in test code (see section 3); it stopped three
    repairs tonight.
@@ -115,6 +125,12 @@ interview-minimums gate counts fenced examples as records).
 - **The runner misreads repaired loop rows.** For eao it reported "L1-1: no
   fixed line" for a row already repaired by hand, and read words such as
   `expected:` and `Resume:` from the answer as finding ids. Proposed bead.
+- **The loop silently dropped a round's findings.** Round 2 on the research
+  swarm (mimo-v2.6-flash) numbered its rows `R2-1`… instead of `L2-1`…; the
+  runner kept them as raw text in `findings.md` and reported "0 rows", so
+  round 3 never ran. The phase-6 review found it; one of the seven rows was
+  real and new (raised as F-10). Proposed bead: refuse or renumber
+  non-conforming row ids instead of reporting a clean round.
 - **The "Broke a test" cell accepts only `yes` or `no`.** A mark with an
   explanation made the next loop round refuse; the explanation now lives
   in the commit message.
@@ -128,12 +144,14 @@ interview-minimums gate counts fenced examples as records).
   doctrine tests red); an Opus sub-agent completed it. The leak check then
   blocked the loop on two synthetic test keys in new test files; they are
   built from parts now. Not done: the offline Pi capture (spec build
-  step 2), and `pytest --collect-only` finds 2081 tests while `make verify`
-  reports 2054 — the gap was not read.
+  step 2). An earlier gap between collected and run tests (2081 against
+  2054) did not recur at phase 6 (2100 collected, 2084 passed + 16 skipped);
+  its cause was not measured.
 - **ADR 0018 is claimed by four open changes** (interview-context, research
   swarm, isolated attempts, loop-until-clean); each later merge renumbers.
-- **Isolated attempts** (coding-harness-s9r) did not start: the night was
-  spent on the four changes above.
+- **Isolated attempts** (coding-harness-s9r) started late: implement
+  (GLM 5.3 Flash) began at about 06:35 in `.claude/worktrees/isolated-attempts`;
+  its result is recorded in that branch's `findings.md`.
 - **Codex usage limit** was hit at about 20:50 the evening before ("try
   again at 10:48 PM"); the runner printed only "codex call failed: exit 1",
   the reason stood only in `~/.codex/sessions/…/rollout-*.jsonl`.
