@@ -246,3 +246,13 @@ checks that no research `[DECISION]` is lost.
   it holds right, with evidence; any disagreement with the declared class
   becomes an interview question and is always a `[DECISION]` for the lost-
   decision gate; the class never changes by itself.
+- Topic 4, fit with the overall architecture — guiding questions: which
+  layer or building block the change belongs to per `docs/architecture/`
+  and `docs/WORKFLOW.md`; whether it uses the intended paths (models only
+  through `stage2.py`, tracker only through `tools/bd`, gates through
+  `make verify`) or builds a second one; whether it shifts responsibility
+  between framework, kit and instances; what in the architecture documents
+  would no longer hold after it. Boundary: only the documented
+  architecture and the code on the finder's map; no new target
+  architecture; neighbouring specs belong to topic 5. Three agents on the
+  same brief; evidence `path::section` or `path::symbol` (answer: "ja").
