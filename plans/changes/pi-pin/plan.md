@@ -117,26 +117,26 @@ status/evidence updates through the runner's normal lifecycle.
 
 ## Criterion ledger
 
-- 1: not yet written tests/test_pi_install.py::test_install_obeys_lock_integrity_and_disables_scripts — changed graph, corrupt integrity or lifecycle sentinel accepted
-- 2: not yet written tests/test_pi_install.py::test_wrapper_ignores_global_pi_from_any_cwd — hostile PATH Pi runs
-- 3: not yet written tests/test_pi_install.py::test_wrapper_refuses_unusable_local_pi — missing/mismatched/broken Pi launches, installs or falls back
-- 4: not yet written tests/test_pi_install.py::test_wrapper_checks_node_major — wrong major starts Pi or same-major patch is refused
-- 5: not yet written tests/test_stage2.py::test_loop_and_probe_use_repository_pi — preflight/reviewer argv resolves global Pi
-- 5: not yet written tests/test_stage2_session.py::test_all_session_pi_launches_use_repository_wrapper — confirmation or Terminal argv bypasses wrapper
-- 6: not yet written tests/test_pi_contract.py::test_real_reviewer_tool_contract — extra tool declared or forbidden call executes
-- 7: not yet written tests/test_pi_contract.py::test_real_reviewer_ignores_discovery_traps — an armed trap affects the clean reviewer call
-- 8: not yet written tests/test_pi_contract.py::test_real_extension_tool_input_and_result — changed execute signature loses input or result
-- 9: not yet written tests/test_pi_contract.py::test_real_session_policy_blocks_foreign_reads — outside/symlink sentinel appears or positive read fails
-- 10: not yet written tests/test_pi_contract.py::test_real_model_listing_is_a_provider_table — JSON assumption or missing Go/Zen provider passes
-- 11: not yet written tests/test_pi_contract.py::test_real_opencode_provider_contracts — wrong native address/key mapping passes
-- 11: not yet written tests/test_pi_contract.py::test_contract_network_guard_denies_external_destinations — external destination accepted by test transport
-- 12: not yet written tests/test_pi_contract.py::test_contract_prerequisites_and_failures_are_mandatory — absent runtime, timeout or malformed exchange becomes skip/success
-- 12: not yet written tests/test_ci.py::test_real_pi_is_provisioned_before_contracts — CI omits exact Node, shared installer or failure propagation
+- 1: tests/test_pi_install.py::test_install_obeys_lock_integrity_and_disables_scripts — changed graph, corrupt integrity or lifecycle sentinel accepted
+- 2: tests/test_pi_install.py::test_wrapper_ignores_global_pi_from_any_cwd — hostile PATH Pi runs
+- 3: tests/test_pi_install.py::test_wrapper_refuses_unusable_local_pi — missing/mismatched/broken Pi launches, installs or falls back
+- 4: tests/test_pi_install.py::test_wrapper_checks_node_major — wrong major starts Pi or same-major patch is refused
+- 5: tests/test_stage2.py::test_loop_and_probe_use_repository_pi — preflight/reviewer argv resolves global Pi
+- 5: tests/test_stage2_session.py::test_all_session_pi_launches_use_repository_wrapper — confirmation or Terminal argv bypasses wrapper
+- 6: tests/test_pi_contract.py::test_real_reviewer_tool_contract — extra tool declared or forbidden call executes
+- 7: tests/test_pi_contract.py::test_real_reviewer_ignores_discovery_traps — an armed trap affects the clean reviewer call
+- 8: tests/test_pi_contract.py::test_real_extension_tool_input_and_result — changed execute signature loses input or result
+- 9: tests/test_pi_contract.py::test_real_session_policy_blocks_foreign_reads — outside/symlink sentinel appears or positive read fails
+- 10: tests/test_pi_contract.py::test_real_model_listing_is_a_provider_table — JSON assumption or missing Go/Zen provider passes
+- 11: tests/test_pi_contract.py::test_real_opencode_provider_contracts — wrong native address/key mapping passes
+- 11: tests/test_pi_contract.py::test_contract_network_guard_denies_external_destinations — external destination accepted by test transport
+- 12: tests/test_pi_contract.py::test_contract_prerequisites_and_failures_are_mandatory — absent runtime, timeout or malformed exchange becomes skip/success
+- 12: tests/test_ci.py::test_real_pi_is_provisioned_before_contracts — CI omits exact Node, shared installer or failure propagation
 - 13: tests/test_stage2.py::test_each_call_runs_its_own_leak_check — a request starts without its leak check
 - 13: tests/test_stage2.py::test_no_call_carries_another_endpoints_key — foreign environment includes another key
 - 13: tests/test_stage2.py::test_the_opencode_key_never_leaves_the_runner — key reaches argv/output/records
 - 13: tests/test_stage2_session.py::test_the_pi_session_hands_over_no_key_and_writes_no_credential — session copies auth or injects runner keys
-- 13: not yet written tests/test_stage2.py::test_truncated_pi_print_failure_is_refused — nonzero truncated answer accepted
+- 13: tests/test_stage2.py::test_truncated_pi_print_failure_is_refused — nonzero truncated answer accepted
 - 14: not a test — phase-6 review and PR file list check current documentation, unchanged historical ADRs, the new amendment and absence of Zen enablement; stale guidance or an unsupported confinement/live-Zen claim refutes it
 
 ## Verification
@@ -173,5 +173,9 @@ change is included. No live session/provider probe is planned.
 
 Explore used Stage 2 on 2026-10-15, attempt 1, route `flash`, endpoint
 `glm-coding-plan`, model `glm-5.3-flash`; research records no Stage-1 fallback.
+
+## Runner route — 2026-10-15
+
+Stage-1 route: implement · model claude-sonnet-5-5 · reason: two Flash post-run checks failed.
 
 ## Time used
