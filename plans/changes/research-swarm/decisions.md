@@ -213,3 +213,11 @@ checks that no research `[DECISION]` is lost.
   `path::symbol` with one sentence why. The maintainer chose option A:
   DeepSeek Flash, MiMo Flash and Haiku 5.5 each search, and Opus 5.5 merges
   the three lists into one map (answer: "A").
+- Topic 1, code and reuse — guiding questions: which existing functions or
+  modules already do part of what the change needs; which pattern in the
+  repository serves as a model (a similar script or test); what would have
+  to change in existing code to reuse it, and what speaks against it.
+  Boundary: only existing code on the finder's map plus what it imports
+  directly; no judgement whether the change is sensible; no proposals for
+  new code. Three agents on the same brief; template report with every key
+  claim backed by `path::symbol` (answer: "ja").
