@@ -151,7 +151,14 @@ GLM_FLASH = ("glm-coding-plan", "glm-5.3-flash", "max")
 GLM = ("glm-coding-plan", "glm-5.3", "max")
 HAIKU = ("claude-code-plan", "claude-haiku-4-5", None)
 SONNET = ("claude-code-plan", "claude-sonnet-5-5", "medium")
-CODEX = ("openai-codex", "gpt-6.1-sol", "max")
+# Sol's reasoning effort, one entry per runner verb (bead coding-harness-yzk): the draft and the
+# review start at `high`, the repair at `medium`. This mapping is the one place a later adjustment
+# edits - the instructions link its entries and the tests read them. A call's verb selects the
+# entry, retries included: the `codex-repair` route label names a retry of draft and repair and
+# picks no policy of its own. `CODEX` keeps its endpoint identity with an empty effort slot;
+# `run_codex` takes the effort from the caller's verb instead.
+CODEX_EFFORTS = {"draft": "high", "repair": "medium", "review": "high"}
+CODEX = ("openai-codex", "gpt-6.1-sol", None)
 # Opus 5.5, the spec review (2a) since ADR 0016: the strongest review on the repository's highest-demand effort.
 OPUS = ("claude-code-plan", "claude-opus-5-5", "xhigh")
 # A new ADR file of a draft: four digits, a slug of lowercase letters, digits and hyphens. Counted against the
@@ -784,14 +791,22 @@ def thread_id(stdout: str) -> str | None:
     return None
 
 
-def run_codex(ctx: Context, prompt: str, resume: str | None = None, writable: bool = False) -> tuple[str, str]:
+def run_codex(
+    ctx: Context, prompt: str, resume: str | None = None, writable: bool = False, *, verb: str
+) -> tuple[str, str]:
     """One Codex call, first or resumed, pinned the same way. Returns (answer, thread id).
 
     A review reads in the CLI's `read-only` sandbox; a draft writes in
     `workspace-write`, and the runner puts back what lands outside the change
-    folder. No call takes a bypass flag (spec, criterion 1).
+    folder. No call takes a bypass flag (spec, criterion 1). The reasoning
+    effort is the caller verb's entry of `CODEX_EFFORTS`, passed explicitly on
+    every argv, a resumed call included; that a resumed thread actually runs at
+    that effort inside Codex is not asserted (bead coding-harness-yzk, Q-6).
+    Only the verbs `CODEX_EFFORTS` names (draft, repair, review) may carry a
+    Codex route; any other verb stops with a `KeyError` before the call.
     """
-    _, model, effort = CODEX
+    _, model, _ = CODEX
+    effort = CODEX_EFFORTS[verb]
     with tempfile.TemporaryDirectory(prefix="stage2-") as tmp:
         answer_file = Path(tmp) / "answer.md"
         command = ["codex", "exec"]
@@ -1069,7 +1084,7 @@ def review(root: Path, change: str) -> None:
         recorded = None
     prompt = phase_prompt(root, "06-review.md", change, "Write only your verdict now.")
     begin_call(ctx, "review", CODEX, prompt)
-    answer, thread = run_codex(ctx, prompt, resume=recorded)
+    answer, thread = run_codex(ctx, prompt, resume=recorded, verb="review")
     rows, _ = parse_rows(answer)
     block = "\n\n".join(
         [
@@ -1097,7 +1112,7 @@ def review(root: Path, change: str) -> None:
         [MARK_FORMAT, "Your verdict stands and is not changed.", f"The loop rows:\n{listing}", READ_REQUEST]
     )
     begin_call(ctx, "review (loop marks)", CODEX, marks_prompt)
-    answer, _ = run_codex(ctx, marks_prompt, resume=thread)
+    answer, _ = run_codex(ctx, marks_prompt, resume=thread, verb="review")
     marks = parse_marks(answer)
     fill_marks(ctx.findings, [r[0] for r in released], marks)
     print(f"review: {len(marks)} of {len(released)} loop rows marked")
@@ -2430,7 +2445,7 @@ def run_attempts(
         try:
             if endpoint == CODEX:
                 # A fresh writing Codex call, never resumed; its thread is not kept (ADR 0017).
-                answer, _ = run_codex(ctx, prompt, writable=True)
+                answer, _ = run_codex(ctx, prompt, writable=True, verb=verb)
                 if not answer.strip():
                     raise CallFailed("codex: the answer is empty")
             else:
@@ -2794,7 +2809,7 @@ def draft(root: Path, change: str) -> None:
         call_error: CallFailed | None = None
         try:
             if endpoint == CODEX:
-                run_codex(ctx, prompt, writable=True)
+                run_codex(ctx, prompt, writable=True, verb="draft")
             else:
                 run_work_model(ctx, prompt, endpoint, writable=True, key=key)
         except CallFailed as error:
