@@ -73,7 +73,9 @@ isolation measurement repeatable on every proposed version change.
    for the same contracts. Pi and Node changes are proposed in pull requests.
 4. The suite starts real pinned Pi with synthetic credentials and a loopback
    model stand-in, locally and in CI. It holds reviewer tool declarations and
-   refusal, discovery isolation, extension input/results, the production session
+   refusal, suppression of discovered extension/MCP startup and skill/prompt/theme
+   reads, context-file exclusion and scratch-agent separation from ambient auth
+   and command-valued model configuration, extension input/results, the production session
    policy's foreign-read blocking, model-list table and Go/Zen provider address
    and key mapping. Missing prerequisites fail rather than skip these contracts.
 5. This replaces the requirement to repeat a manual measurement alone when the

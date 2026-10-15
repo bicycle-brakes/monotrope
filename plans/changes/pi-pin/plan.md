@@ -109,6 +109,17 @@ the new ADR. This draft neither records an ADR answer nor starts phase 4.
    preserve it as a merge-effective proposal, renumbering its claim/references
    only if another ADR takes that number before merge.
 
+Two files not planned at first are named here after the phase-6 review.
+`scripts/kit/probe.py` gains a `REIST_NICHT` entry and its `DECKEL` cap rises from
+38 to 39: `tests/test_ci.py::test_real_pi_is_provisioned_before_contracts` reads
+`tools/pi/.node-version`, which the kit does not carry, so the missing file maps
+to `braucht-die-vollstaendige-suite`, and the list may only grow with a visible
+cap raise. `decisions/gates.yaml` (step 7 said unchanged) now excludes
+`tools/pi/node_modules` from the markdownlint globs, so third-party Markdown does
+not bury this change's own findings; `.github/workflows/ci.yml` is regenerated
+for it. `scripts/ci_gates.py` emits the Node and Pi steps only when `tools/pi/`
+exists in the repository it generates for, since the kit leaves `tools/` behind.
+
 No other implementation files are planned; all created/changed files are named
 above. The orchestrator owns generated `plans/INDEX.md` refresh and recording the
 maintainer's already-stated ADR answer through the normal harness command before
@@ -137,6 +148,9 @@ status/evidence updates through the runner's normal lifecycle.
 - 13: tests/test_stage2.py::test_the_opencode_key_never_leaves_the_runner — key reaches argv/output/records
 - 13: tests/test_stage2_session.py::test_the_pi_session_hands_over_no_key_and_writes_no_credential — session copies auth or injects runner keys
 - 13: tests/test_stage2.py::test_truncated_pi_print_failure_is_refused — nonzero truncated answer accepted
+- 13: tests/test_pi_contract.py::test_real_truncated_pi_print_failure_is_refused — real Pi's truncated answer accepted
+- 10: tests/test_pi_contract.py::test_contract_environment_excludes_parent_provider_keys — a parent provider key reaches real Pi
+- 2: tests/test_stage2.py::test_pi_wrapper_is_repository_local — the runner's wrapper path points anywhere but tools/pi/pi
 - 14: not a test — phase-6 review and PR file list check current documentation, unchanged historical ADRs, the new amendment and absence of Zen enablement; stale guidance or an unsupported confinement/live-Zen claim refutes it
 
 ## Verification
@@ -178,6 +192,12 @@ Explore used Stage 2 on 2026-10-15, attempt 1, route `flash`, endpoint
 
 Stage-1 route: implement · model claude-sonnet-5-5 · reason: two Flash post-run checks failed.
 
+## Runner route — 2026-10-15
+
+Stage-1 route: repair · model claude-sonnet-5-5 · reason: two Codex post-run checks failed.
+
 ## Time used
 
 2026-10-15 — phase-4 repair after the runner's third failed attempt, measured with `date` on the writer machine: 16:03 (phase-4 start) to 17:56 (this commit) = 1 h 53 min. Spent on the executable bits, the npm-generated lock file, the pinned install, three contract assertions repaired against the installed Pi 1.2.0, the ledger and one `make verify`; appetite 8 h of phase 4, not reached.
+
+2026-10-15 — phase-6 repair round 1, completed by the orchestrating session after the runner's repair failed three times: 20:40 (findings commit 5dfbf31) to 22:31 (this commit) = 1 h 51 min.

@@ -55,10 +55,14 @@ major, a missing or floating pin, an absent, mismatched or broken install.
 `tests/test_pi_install.py` builds a fake `tools/pi` tree around the real
 scripts with synthetic `node`/`npm` executables: it exercises the installer's
 and wrapper's refusals (lock mismatch, corrupt integrity, lifecycle-script
-denial, hostile PATH Pi, wrong Node major) without contacting a registry.
+denial, hostile PATH Pi, wrong Node major). Lock mismatch, integrity and
+lifecycle controls also run real npm offline over a local tarball and empty
+cache; no registry is contacted.
 `tests/test_pi_contract.py` runs the **real** installed Pi against a loopback
-stand-in: tool declarations, discovery isolation, the session policy, the
-provider addresses and key mapping. Missing Pi or Node fails those contracts;
+stand-in: tool declarations, suppressed extension/MCP startup and
+skill/prompt/theme discovery reads, context-file exclusion, scratch-agent
+separation from ambient saved auth and command-valued model configuration,
+the session policy, provider addresses and key mapping. Missing Pi or Node fails those contracts;
 they never skip.
 
 ## Moving the pin

@@ -868,14 +868,19 @@ implementation answer the runner runs exactly
 `make verify`; a failed post-check gets one fresh Flash repair, then one
 Sonnet 5.5 fallback, and every attempt repeats the leak check. A failed model
 process stops instead of silently changing route, and a review-loop call (through Pi) that has
-not ended 30 minutes after it started is stopped. **Those settings are
-configured on every call, not measured by any test** (the maintainer's decision
-of 2026-09-30, ADR 0007): no test has run a real program to see them take
-effect. The loop's Pi flags were measured once by hand on the pinned version,
-which is why the version is pinned; **since ADR 0019** the offline contract
-suite (`tests/test_pi_contract.py`) starts the real pinned install and measures
-the four-tool declaration, the discovery isolation and the provider contracts
-that hand measurement first covered.
+not ended 30 minutes after it started is stopped. For the other foreign CLIs,
+isolation settings are configured on every call, not measured
+by these Pi contracts (the maintainer's decision of 2026-09-30, ADR 0007).
+The loop's Pi flags were first measured by hand on the pinned version;
+**since ADR 0019** the offline suite (`tests/test_pi_contract.py`) starts the
+real pinned install. It measures the four-tool declaration and refusal,
+extension and MCP startup suppression, skill/prompt/theme discovery reads,
+context-file exclusion and scratch-agent separation from saved authentication
+and command-valued model configuration. Positive controls run through Pi;
+project-resource controls also grant trust so trust refusal cannot mask a
+missing discovery flag. Provider contracts measure native addresses and
+synthetic-key requests through loopback transport. These contracts do not
+measure every other model CLI's isolation settings.
 If hooks are not in fact off for a call, the tracked `.codex/hooks.json` shows
 the kind of text such a switch would inject into a call that the leak check
 does not scan; the runner starts Codex with hooks and memories off, and the ask rule
