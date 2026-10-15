@@ -299,3 +299,14 @@ checks that no research `[DECISION]` is lost.
   the finder's map; describe, write no tests; no `make verify` run. Three
   agents on the same brief; evidence `tests/…::test_…` or the gate name
   from `decisions/gates.yaml` (answer: "ja").
+- Topic 8, risks and edge cases — guiding questions: which failure paths
+  exist (aborts, timeouts, missing files, unreachable services) and what
+  happens today; which unusual inputs are conceivable (empty or broken
+  headers, date boundaries, duplicate ids, special characters); which
+  security boundaries the change touches (leak check, secrets, what
+  foreign models see, maintainer-only files); how the system recovers
+  after an abort (resume, partial state, clean-up); what happens when two
+  sessions or worktrees work on it at once. Boundary: only risks of the
+  places on the finder's map; name, do not design solutions; others'
+  public failure reports belong to topic 11. Three agents on the same
+  brief; evidence `path::symbol` plus the trigger (answer: "ja").
