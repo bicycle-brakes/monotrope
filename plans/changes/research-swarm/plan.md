@@ -68,7 +68,7 @@ not recreated. No file is deleted. Only the ADR is new under `docs/adr/`.
 | `plans/changes/research-swarm/research.md` | Preserve past reports; append redraft facts, capture evidence and later live qualification. |
 | `plans/changes/research-swarm/decisions.md` | Preserve all human answers; append only actual later answers or reasoned detail records. |
 | `plans/changes/research-swarm/findings.md` | Preserve existing reviews and the open offline-capture blocker; record later review dispositions. |
-| `docs/adr/0019-phase-1-research-swarm.md` (new) | Propose this complete amended subsystem in the decision PR. |
+| `docs/adr/0020-phase-1-research-swarm.md` (new) | Propose this complete amended subsystem in the decision PR. |
 | `plans/INDEX.md` | Runner regenerates after artifact changes. |
 
 ## Build sequence
@@ -240,7 +240,8 @@ model and reason into their plan.
 ## Draft handoff — 2026-10-15
 
 Baseline `6e80ded`, branch `explore/research-swarm`; local history removed the
-old ADR before this redraft, so 0019 is the single new draft after 0018.
+old ADR before this redraft, so 0020 is the single new draft (renumbered
+from 0019 on 2026-10-15: ADR 0019 goes to the pi-pin change, which merges first).
 No phase-2a open review rows were found; phase-6 F-1 remains open. Existing
 findings and human decisions are retained. Hosted PR state and parallel-session
 ownership were not read outside the worktree; no tracker access is assumed.
@@ -253,7 +254,7 @@ Draft validation on 2026-10-15: the focused interview-minimums check,
 repository-wide criterion-ledger check and `git diff --check` passed. Structural
 inspection passed for all 37 criteria/refutations/bases, pending reviews,
 metadata, local artifact links, opening card, single ledger, retained time log
-and sole new ADR 0019. No full `make verify`, tracker-backed registry check,
+and sole new ADR 0020. No full `make verify`, tracker-backed registry check,
 offline runtime capture or live model qualification was run by this draft.
 
 ## Time used

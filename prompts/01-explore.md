@@ -9,7 +9,7 @@ back.
 **Result:** `plans/changes/<name>/research.md`
 **Gate:** none.
 
-**Routing by class (ADR 0019).** A `feature` or `architectural` change explores
+**Routing by class (ADR 0020).** A `feature` or `architectural` change explores
 through the research swarm; a `bounded` change or a `spike` through the single
 GLM 5.3 Flash explorer. The runner reads the class wherever stated in the
 explore-only `--class` argument and the headers of `research.md` and `spec.md`.

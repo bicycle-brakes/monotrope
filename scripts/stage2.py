@@ -9,7 +9,7 @@ rounds); Codex drafts the spec, the design and the plan (2, 2b and 3; GLM 5.3
 after two failed Codex attempts) and reviews the change (6); Opus 5.5 reviews
 the spec (2a); GLM 5.3 Flash implements (phase 4) and explores (phase 1) a
 `bounded` change or a `spike`, while a `feature` or `architectural` change
-explores through the research swarm (ADR 0019 draft: free public researchers
+explores through the research swarm (ADR 0020 draft: free public researchers
 from one filtered topic sentence, a Flash pair on the repository, one fresh
 Opus 5.5 reconciliation). A declaration in `model-endpoints.yaml` stops nothing; this runner
 stands between the rule and the call.
@@ -104,7 +104,7 @@ different route: fresh scratch working directory, home and agent directory,
 every discovery surface off, only the runner-owned research-tools extension
 loaded, and no repository path in play - the offline capture on the pinned Pi
 with synthetic private canaries, not this suite, is their isolation evidence
-(ADR 0019 draft).
+(ADR 0020 draft).
 
 **The loop record** lives outside the worktree
 (`${XDG_STATE_HOME:-~/.local/state}/coding-harness/stage2/<change>/loop.md`):
@@ -172,7 +172,7 @@ CODEX = ("openai-codex", "gpt-6.1-sol", None)
 OPUS = ("claude-code-plan", "claude-opus-5-5", "xhigh")
 # The change classes (check_interview_minimums.py's vocabulary). Explore routes on
 # one: the swarm for the two large classes, the single explorer for the two small
-# ones (ADR 0019 draft). Stated before the spec exists - explore-only `--class`
+# ones (ADR 0020 draft). Stated before the spec exists - explore-only `--class`
 # or the headers of `research.md` and `spec.md` - and every available statement must agree.
 CLASSES = ("spike", "bounded", "feature", "architectural")
 SWARM_CLASSES = ("feature", "architectural")
@@ -596,7 +596,7 @@ def declaration_problem(root: Path, endpoint: str, model: str) -> str | None:
 def public_declaration_problem(root: Path, endpoint: str, model: str) -> str | None:
     """Why the declaration does not clear this endpoint and model for public-web data, or None.
 
-    The swarm's free researchers are the only role on the public class (ADR 0019
+    The swarm's free researchers are the only role on the public class (ADR 0020
     draft): the endpoint must be cleared for `public-web` and nothing else, and
     the model must be listed. Unknown residency does not refuse here - it is
     what the declaration honestly records - while the framework check above

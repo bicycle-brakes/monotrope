@@ -1,5 +1,5 @@
 ---
-title: "ADR 0019 — Phase 1 uses a research swarm with a checked handoff"
+title: "ADR 0020 — Phase 1 uses a research swarm with a checked handoff"
 category: adr
 status: accepted
 created: 2026-10-15
@@ -12,7 +12,7 @@ review: {status: pending, approved_by: null, approved_at: null}
 tags: [adr, research, swarm, stage-2]
 ---
 
-# ADR 0019 — Phase 1 uses a research swarm with a checked handoff
+# ADR 0020 — Phase 1 uses a research swarm with a checked handoff
 
 * Status: accepted by the merge of the pull request that carries this file.
   Until then, open is proposed and closed is rejected. Amends the phase-1

@@ -77,7 +77,7 @@ handover to the next phase — not the chat history.**
 
 | # | Phase | Artefact | Gate | Prompt |
 |---|---|---|---|---|
-| 1 | Explore *(by class, ADR 0019)* | `plans/changes/<name>/research.md` — six reconciled topics for a `feature` or `architectural` change, one report otherwise | — | [`prompts/01-explore.md`](../prompts/01-explore.md) |
+| 1 | Explore *(by class, ADR 0020)* | `plans/changes/<name>/research.md` — six reconciled topics for a `feature` or `architectural` change, one report otherwise | — | [`prompts/01-explore.md`](../prompts/01-explore.md) |
 | 1a | Interview | `plans/changes/<name>/decisions.md` | the `interview-minimums` check — the class minimums met, or a skip record with a reason | [`01a-interview.md`](../prompts/01a-interview.md) |
 | 2 | Spec | `plans/changes/<name>/spec.md` | validator green, no open `[DECISION]` | [`02-spec.md`](../prompts/02-spec.md) |
 | 2a | Spec review | rows for `findings.md`, dimension `SPEC`; then the revised `spec.md` | every row worked into the spec or rejected with a reason; no open `[AMBIGUITY]` | [`02a-spec-review.md`](../prompts/02a-spec-review.md) |
@@ -457,7 +457,7 @@ none, because the registry keeps counting it as protection.
 
 | Phase | Model | Why |
 |---|---|---|
-| 1 Explore | **Haiku 5.5** | much input, little output, no deep reasoning; where the runner starts the phase (§4), GLM 5.3 Flash explores a `bounded` change or a `spike` instead, and a `feature` or `architectural` change gets the swarm (ADR 0019) |
+| 1 Explore | **Haiku 5.5** | much input, little output, no deep reasoning; where the runner starts the phase (§4), GLM 5.3 Flash explores a `bounded` change or a `spike` instead, and a `feature` or `architectural` change gets the swarm (ADR 0020) |
 | 1a Interview | **Opus 5.5** | the questions are the work, and there are few of them |
 | 2 Spec | **Opus 5.5** | effort `xhigh`; the highest reasoning demand, little output; where the runner drafts (§4), `gpt-6.1-sol` at effort [`CODEX_EFFORTS["draft"]`](../scripts/stage2.py) writes it instead |
 | 2a Spec review | **Opus 5.5** | a fresh context that does not know the author's reasoning; where the runner starts it (§4), a headless Claude Code call |
@@ -707,7 +707,7 @@ and dropped (ADR 0007).
 This table routes the reviews. A `spike` or a one-sentence change gets no stage-2
 review and is reviewed by Opus 5.5 where §3 asks for a review. The draft and
 implement are not routed by class; phase 1 now is: a `feature` or
-`architectural` change explores through the research swarm (ADR 0019), a
+`architectural` change explores through the research swarm (ADR 0020), a
 `bounded` change or a `spike` through the single explorer of this section's
 routing table. The class is therefore needed before the spec exists: explore
 takes the class from the explicit `--class` argument and the headers of
@@ -729,8 +729,8 @@ list is a one-line pull request that touches nothing else.
 
 | Phase | Model | Why |
 |---|---|---|
-| 1 Explore | **GLM 5.3 Flash** | much input, little output, no deep reasoning; through Claude Code against Z.ai and the runner, for a `bounded` change or a `spike` (ADR 0019) |
-| 1 Explore swarm | **the research swarm** | for a `feature` or `architectural` change (ADR 0019): the declared free roster researches public practice from one filtered topic sentence, the declared Flash pair compares the repository on six topics, and one fresh Opus 5.5 context reconciles them; the runner dispatches every call through the declared endpoints, leak-checks each prompt, and an incomplete run exits 1 |
+| 1 Explore | **GLM 5.3 Flash** | much input, little output, no deep reasoning; through Claude Code against Z.ai and the runner, for a `bounded` change or a `spike` (ADR 0020) |
+| 1 Explore swarm | **the research swarm** | for a `feature` or `architectural` change (ADR 0020): the declared free roster researches public practice from one filtered topic sentence, the declared Flash pair compares the repository on six topics, and one fresh Opus 5.5 context reconciles them; the runner dispatches every call through the declared endpoints, leak-checks each prompt, and an incomplete run exits 1 |
 | 2 Spec | **gpt-6.1-sol** | effort [`CODEX_EFFORTS["draft"]`](../scripts/stage2.py), one call for 2, 2b and 3 through the Codex CLI and `draft`, writing in the CLI's workspace-write sandbox; `glm-5.3` drafts through Claude Code against Z.ai after two failed Codex attempts (ADR 0016) |
 | 2b Design | **gpt-6.1-sol** | effort [`CODEX_EFFORTS["draft"]`](../scripts/stage2.py), drafted in the same call as 2 and 3 |
 | 3 Plan | **gpt-6.1-sol** | effort [`CODEX_EFFORTS["draft"]`](../scripts/stage2.py), drafted in the same call as 2 and 2b |
@@ -783,7 +783,7 @@ A foreign model is started only through `python3 scripts/stage2.py <verb>
 into a shell. Ten verbs exist:
 
 - `explore` — GLM 5.3 Flash for a `bounded` change or a `spike`, the research
-  swarm for a `feature` or `architectural` change (ADR 0019), phase 1; the
+  swarm for a `feature` or `architectural` change (ADR 0020), phase 1; the
   class is read wherever stated in `--class` and the headers of `research.md`
   and `spec.md`; missing, invalid or disagreeing declarations refuse before any model call;
   `--stage2-off [REASON]` uses Haiku 5.5 and skips the class.

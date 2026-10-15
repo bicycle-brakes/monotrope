@@ -196,7 +196,8 @@ historical exploration or claiming that the amended swarm has run.
   newly closed spec-review findings (`findings.md`, Phase 6).
 - **ADR numbering and checks.** The highest existing ADR file is 0018;
   local HEAD removed the earlier 0019 draft specifically before redrafting.
-  Exactly one new 0019 draft is therefore due. The named
+  Exactly one new draft is therefore due, numbered 0020 since ADR 0019 went
+  to the pi-pin change (renumbered 2026-10-15). The named
   `scripts/validate_change_artefacts.py` remains absent. The registry's real
   tracker path calls `bead_render.render_pfad()`, which may resolve outside
   this worktree; the drafting call leaves that check and full verification

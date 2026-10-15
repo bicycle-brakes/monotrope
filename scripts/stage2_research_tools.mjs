@@ -1,4 +1,4 @@
-// The public research tools of the swarm's free researchers (ADR 0019 draft).
+// The public research tools of the swarm's free researchers (ADR 0020 draft).
 //
 // A free researcher runs in a fresh scratch context with every built-in local
 // tool and discovery surface disabled; the ONLY extension loaded is this file,

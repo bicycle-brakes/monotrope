@@ -15,7 +15,7 @@ review: {status: pending, approved_by: null, approved_at: null}
 tags: [spec, stage-2, research, swarm]
 class: architectural
 appetite: 12
-adr_files: [docs/adr/0019-phase-1-research-swarm.md]
+adr_files: [docs/adr/0020-phase-1-research-swarm.md]
 neighbours: [plans/changes/interview-context/spec.md, plans/changes/haiku-5-5/spec.md]
 ---
 
@@ -228,7 +228,7 @@ public-only input; they never receive neighbour identities to fill the field.
 
 - `make verify` and hosted CI are green with the new blocking handoff check.
 - The plan's named routing, prompt, schema, gate, kit and documentation paths
-  move with `docs/adr/0019-phase-1-research-swarm.md`; approvals remain pending.
+  move with `docs/adr/0020-phase-1-research-swarm.md`; approvals remain pending.
 - The offline capture on real pinned Pi with synthetic private canaries,
   outbound payloads, tool schemas and failure probes passes before merge;
   stand-ins alone do not qualify isolation. Open phase-6 finding F-1 remains

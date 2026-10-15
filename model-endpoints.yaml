@@ -35,7 +35,7 @@ datenklassen:
   public-web:
     was: "Oeffentlich zugaengliche Quellen: Suchergebnisse und abgerufene Webseiten"
     bemerkung: >-
-      Nur fuer die oeffentliche Forschungsstufe des Recherche-Scharms (ADR 0019
+      Nur fuer die oeffentliche Forschungsstufe des Recherche-Scharms (ADR 0020
       draft). Kein Repositorien-Inhalt und keine Kundenbezuege — zu einem Aufruf
       auf dieser Klasse verlaesst nur der gefilterte Ein-Satz-Themensatz die
       Grenze; die Antworten der Modelle sind Daten, kein Beweis fuer Lokales.
@@ -127,7 +127,7 @@ endpunkte:
       Anthropic-compatible endpoint (`https://api.z.ai/api/anthropic`), operated
       in China. No review phase routes to it since 2026-10-07 (ADR 0011): the
       review loop (phase 4b) moved to `opencode-go`. `glm-5.3-flash` explores
-      (phase 1) through `stage2.py explore` — since ADR 0019 only for a
+      (phase 1) through `stage2.py explore` — since ADR 0020 only for a
       `bounded` or `spike` change, while a `feature` or `architectural` change
       explores through the research swarm declared below — and implements
       (phase 4) through
@@ -174,7 +174,7 @@ endpunkte:
       - mimo-v2.6-pro
     bemerkung: >-
       The review loop (phase 4b), the interactive session verb (`stage2.py
-      session`, ADR 0012) and, since ADR 0019, the eleven Flash research calls
+      session`, ADR 0012) and, since ADR 0020, the eleven Flash research calls
       of the swarm declared below run here; the spec review (phase
       2a) runs on Opus 5.5 and the review (phase 6) on Codex — through
       `python3
@@ -213,7 +213,7 @@ endpunkte:
       - space-bunny-free
       - big-pickle
     bemerkung: >-
-      Public-only research endpoint of the swarm (ADR 0019 draft): the three
+      Public-only research endpoint of the swarm (ADR 0020 draft): the three
       free ids (Q-1, as amended 2026-10-15: `space-bunny` and `hy4-preview`
       are paid OpenCode Go models, so `space-bunny-free` and `big-pickle` take
       their seats) receive nothing but the filtered
@@ -231,10 +231,10 @@ endpunkte:
       check refuses this endpoint on the residency alone. `darf_sehen` grants
       only `public-web`; no repository content, no `framework` permission, no
       customer class. First contact happens only after the decision merge, on
-      the post-merge live qualification (ADR 0019, point 8).
+      the post-merge live qualification (ADR 0020, point 8).
 
 # ---------------------------------------------------------------------------
-# Der Recherche-Schwarm (ADR 0019 draft) — wer in welcher Rolle laeuft
+# Der Recherche-Schwarm (ADR 0020 draft) — wer in welcher Rolle laeuft
 # ---------------------------------------------------------------------------
 #
 # Die Rollen sind hier DEKLARIERT, nicht in einem Skript hardkodiert: der

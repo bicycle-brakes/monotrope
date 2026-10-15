@@ -202,7 +202,7 @@ persistence/diagnostic. No cache, extra database or resumable runtime is added.
 
 ## ADR draft
 
-The sole new draft is [ADR 0019 — Phase 1 research swarm](../../../docs/adr/0019-phase-1-research-swarm.md),
+The sole new draft is [ADR 0020 — Phase 1 research swarm](../../../docs/adr/0020-phase-1-research-swarm.md),
 numbered after the highest file present at baseline `6e80ded` (0018).
 It amends phase-1 routing under ADR 0007 and research purpose under ADR 0011,
 without superseding those whole ADRs or amending numbered D/O decisions.
