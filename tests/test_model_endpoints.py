@@ -26,7 +26,7 @@ WORKFLOW = REPO_ROOT / "docs" / "WORKFLOW.md"
 PROMPTS = REPO_ROOT / "prompts"
 
 RESIDENZEN = ("anbieter-erklaert", "region-waehlbar", "nicht-erklaert")
-# `free` ist der kostenlose Plan der Schwarm-Forscher (ADR 0018): keine
+# `free` ist der kostenlose Plan der Schwarm-Forscher (ADR 0019): keine
 # Abrechnungseinheit, aber eine Zusage, die eintraegig geprueft wird.
 ABRECHNUNGEN = ("token", "abonnement", "free")
 
@@ -459,7 +459,7 @@ def test_no_remark_routes_the_spec_review_to_codex() -> None:
 
 
 # ---------------------------------------------------------------------------
-# The research swarm declaration (research-swarm, ADR 0018 draft)
+# The research swarm declaration (research-swarm, ADR 0019 draft)
 # ---------------------------------------------------------------------------
 
 

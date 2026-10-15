@@ -1,5 +1,5 @@
 ---
-title: "ADR 0018 — Phase 1 separates public research from repository comparisons and reconciles six topics"
+title: "ADR 0019 — Phase 1 separates public research from repository comparisons and reconciles six topics"
 category: adr
 status: accepted
 created: 2026-10-14
@@ -12,7 +12,7 @@ review: {status: pending, approved_by: null, approved_at: null}
 tags: [adr, stage-2, research, swarm, public-boundary]
 ---
 
-# ADR 0018 — Phase 1 separates public research from repository comparisons and reconciles six topics
+# ADR 0019 — Phase 1 separates public research from repository comparisons and reconciles six topics
 
 * Status: accepted by the merge of the pull request that carries this file.
   Until that merge, open is proposed and closed is rejected. Amends only

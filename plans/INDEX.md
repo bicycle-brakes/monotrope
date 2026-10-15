@@ -128,6 +128,11 @@ typed: a hand-kept list of files ages exactly as fast as files are added.
 | [`changes/criterion-test-ledger/plan.md`](changes/criterion-test-ledger/plan.md) | draft | partial | 2026-10-11 | coding-harness-909 |
 | [`changes/criterion-test-ledger/research.md`](changes/criterion-test-ledger/research.md) | draft | partial | 2026-10-11 | coding-harness-909 |
 | [`changes/criterion-test-ledger/spec.md`](changes/criterion-test-ledger/spec.md) | draft | partial | 2026-10-11 | coding-harness-909 |
+| [`changes/haiku-5-5/decisions.md`](changes/haiku-5-5/decisions.md) | draft | none | 2026-10-14 | coding-harness-eao |
+| [`changes/haiku-5-5/findings.md`](changes/haiku-5-5/findings.md) | draft | none | 2026-10-14 | coding-harness-eao |
+| [`changes/haiku-5-5/plan.md`](changes/haiku-5-5/plan.md) | draft | none | 2026-10-14 | coding-harness-eao |
+| [`changes/haiku-5-5/research.md`](changes/haiku-5-5/research.md) | draft | none | 2026-10-14 | coding-harness-eao |
+| [`changes/haiku-5-5/spec.md`](changes/haiku-5-5/spec.md) | draft | none | 2026-10-14 | coding-harness-eao |
 | [`changes/harness-decide-adr/decisions.md`](changes/harness-decide-adr/decisions.md) | accepted | none | 2026-09-30 | coding-harness-3ar |
 | [`changes/harness-decide-adr/findings.md`](changes/harness-decide-adr/findings.md) | draft | partial | 2026-09-30 | coding-harness-3ar |
 | [`changes/harness-decide-adr/plan.md`](changes/harness-decide-adr/plan.md) | draft | partial | 2026-09-30 | coding-harness-3ar |
@@ -139,6 +144,12 @@ typed: a hand-kept list of files ages exactly as fast as files are added.
 | [`changes/hermes-runner/plan.md`](changes/hermes-runner/plan.md) | draft | partial | 2026-10-05 | coding-harness-i3y |
 | [`changes/hermes-runner/research.md`](changes/hermes-runner/research.md) | draft | none | 2026-10-05 | coding-harness-i3y |
 | [`changes/hermes-runner/spec.md`](changes/hermes-runner/spec.md) | draft | none | 2026-10-05 | coding-harness-i3y |
+| [`changes/interview-context/decisions.md`](changes/interview-context/decisions.md) | draft | partial | 2026-10-14 | coding-harness-zs7 |
+| [`changes/interview-context/design.md`](changes/interview-context/design.md) | draft | partial | 2026-10-14 | coding-harness-zs7 |
+| [`changes/interview-context/findings.md`](changes/interview-context/findings.md) | draft | partial | 2026-10-14 | coding-harness-zs7 |
+| [`changes/interview-context/plan.md`](changes/interview-context/plan.md) | draft | partial | 2026-10-14 | coding-harness-zs7 |
+| [`changes/interview-context/research.md`](changes/interview-context/research.md) | draft | partial | 2026-10-14 | coding-harness-zs7 |
+| [`changes/interview-context/spec.md`](changes/interview-context/spec.md) | draft | partial | 2026-10-14 | coding-harness-zs7 |
 | [`changes/provenance-location/decisions.md`](changes/provenance-location/decisions.md) | draft | partial | 2026-10-12 | coding-harness-3ar.1 |
 | [`changes/provenance-location/findings.md`](changes/provenance-location/findings.md) | draft | partial | 2026-10-12 | coding-harness-3ar.1 |
 | [`changes/provenance-location/plan.md`](changes/provenance-location/plan.md) | draft | partial | 2026-10-12 | coding-harness-3ar.1 |
@@ -155,6 +166,11 @@ typed: a hand-kept list of files ages exactly as fast as files are added.
 | [`changes/research-swarm/plan.md`](changes/research-swarm/plan.md) | draft | none | 2026-10-14 | coding-harness-icw |
 | [`changes/research-swarm/research.md`](changes/research-swarm/research.md) | draft | none | 2026-10-14 | coding-harness-icw |
 | [`changes/research-swarm/spec.md`](changes/research-swarm/spec.md) | draft | none | 2026-10-14 | coding-harness-icw |
+| [`changes/sol-effort/decisions.md`](changes/sol-effort/decisions.md) | draft | none | 2026-10-13 | coding-harness-yzk |
+| [`changes/sol-effort/findings.md`](changes/sol-effort/findings.md) | draft | none | 2026-10-14 | coding-harness-yzk |
+| [`changes/sol-effort/plan.md`](changes/sol-effort/plan.md) | draft | none | 2026-10-14 | coding-harness-yzk |
+| [`changes/sol-effort/research.md`](changes/sol-effort/research.md) | draft | none | 2026-10-14 | coding-harness-yzk |
+| [`changes/sol-effort/spec.md`](changes/sol-effort/spec.md) | draft | none | 2026-10-14 | coding-harness-yzk |
 | [`changes/stage2-format/decisions.md`](changes/stage2-format/decisions.md) | draft | none | 2026-10-12 | coding-harness-52r |
 | [`changes/stage2-format/findings.md`](changes/stage2-format/findings.md) | draft | none | 2026-10-12 | coding-harness-52r |
 | [`changes/stage2-format/plan.md`](changes/stage2-format/plan.md) | draft | none | 2026-10-12 | coding-harness-52r |

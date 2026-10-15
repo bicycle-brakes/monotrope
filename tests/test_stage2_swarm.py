@@ -1115,11 +1115,11 @@ def test_phase_one_doctrine_and_declarations_agree() -> None:
     roles = data["research_swarm"]
     assert roles["judge"] == roles["topic_author"] == "claude-opus-5-5"
     agents = (REPO_ROOT / "AGENTS.md").read_text(encoding="utf-8")
-    assert "so does phase 1 now (ADR 0018)" in agents
-    assert "the research swarm (ADR 0018" in agents
+    assert "so does phase 1 now (ADR 0019)" in agents
+    assert "the research swarm (ADR 0019" in agents
     workflow = (REPO_ROOT / "docs/WORKFLOW.md").read_text(encoding="utf-8")
     assert "| 1 Explore swarm |" in workflow and "| 1 Explore |" in workflow
     explore_prompt = (REPO_ROOT / "prompts/01-explore.md").read_text(encoding="utf-8")
-    assert "Routing by class (ADR 0018)." in explore_prompt
+    assert "Routing by class (ADR 0019)." in explore_prompt
     for free_id in roster:
         assert free_id not in workflow and free_id not in agents, "a free id stays out of the review-ladder doctrine"

@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""The research swarm: phase 1 of a `feature` or `architectural` change (ADR 0018 draft).
+"""The research swarm: phase 1 of a `feature` or `architectural` change (ADR 0019 draft).
 
 This is one phase-1 run the explore verb dispatches; it is not Stage 2 of the
 model routing. The runner module (`scripts/stage2.py`) is passed in as

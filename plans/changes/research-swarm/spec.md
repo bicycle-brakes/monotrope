@@ -15,7 +15,7 @@ review: {status: pending, approved_by: null, approved_at: null}
 tags: [spec, stage-2, research, swarm]
 class: architectural
 appetite: 12
-adr_files: [docs/adr/0018-phase-1-research-swarm.md]
+adr_files: [docs/adr/0019-phase-1-research-swarm.md]
 ---
 
 # Spec — research-swarm
@@ -205,7 +205,7 @@ Evidence was collected on 2026-10-14; the drafting baseline is `1e29f6e`.
 - `make verify` is green; interview minimums and the criterion ledger hold.
 - Routing moves together in `AGENTS.md`, `docs/WORKFLOW.md`,
   `prompts/01-explore.md`, `model-endpoints.yaml` and the new
-  `docs/adr/0018-phase-1-research-swarm.md`.
+  `docs/adr/0019-phase-1-research-swarm.md`.
 - An offline capture on pinned Pi proves the public boundary with synthetic
   private canaries before the first live free-model call; mock launch tests
   alone are not evidence of runtime isolation.

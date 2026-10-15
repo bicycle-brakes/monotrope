@@ -77,7 +77,7 @@ handover to the next phase — not the chat history.**
 
 | # | Phase | Artefact | Gate | Prompt |
 |---|---|---|---|---|
-| 1 | Explore *(by class, ADR 0018)* | `plans/changes/<name>/research.md` — six reconciled topics for a `feature` or `architectural` change, one report otherwise | — | [`prompts/01-explore.md`](../prompts/01-explore.md) |
+| 1 | Explore *(by class, ADR 0019)* | `plans/changes/<name>/research.md` — six reconciled topics for a `feature` or `architectural` change, one report otherwise | — | [`prompts/01-explore.md`](../prompts/01-explore.md) |
 | 1a | Interview | `plans/changes/<name>/decisions.md` | the `interview-minimums` check — the class minimums met, or a skip record with a reason | [`01a-interview.md`](../prompts/01a-interview.md) |
 | 2 | Spec | `plans/changes/<name>/spec.md` | validator green, no open `[DECISION]` | [`02-spec.md`](../prompts/02-spec.md) |
 | 2a | Spec review | rows for `findings.md`, dimension `SPEC`; then the revised `spec.md` | every row worked into the spec or rejected with a reason; no open `[AMBIGUITY]` | [`02a-spec-review.md`](../prompts/02a-spec-review.md) |
@@ -197,6 +197,28 @@ The form of a question to a person is set out in
 options as **consequences** rather than mechanisms, a recommendation with its
 reason, and what happens if the answer is "ok". That is the decision record
 (MADR) in the form of a question.
+
+**Every question carries its context** (ADR 0018). Before any options, the
+question shows five short parts in this order — Topic; Intention, including
+why it comes up now; Today; Repository change; Architecture change — and the
+question stands last on its own line. The form is written for a reader with
+ADHD, and that is the reason the rule holds for everyone, without a profile:
+every question an agent puts to a person, in every harness — interviews,
+spec decisions, review ambiguities, the plan card's presentation and
+ordinary conversation. Plain language; an identifier or technical term is
+explained at first use; an unchanged area says why it stays as it is. In
+conversation the five labels are translated; in a recorded answer the shown
+context is preserved faithfully in English, in the record's own `context`
+field. The gate `question-context`
+(`scripts/check_question_context.py`) holds every `status: answered` record
+recorded on or after the repository's adoption day
+(`decisions/adoption.yaml`, read through `scripts/adoption.py`) to one
+non-blank `context` text value — presence only, never a grade of wording —
+in live and archived changes, with or without a spec. The cut-off is each
+answer's own recording day, the one em-dash date (`— YYYY-MM-DD`) that ends
+its decision statement (a closing parenthetical remark may follow it); the adoption day itself is included, older answers
+stay exempt and unchanged, and evidence the gate cannot read is not measured
+(exit 3) instead of passing.
 
 **An ambiguity is not mechanics.** "The plan is the contract" governs departures
 from an *unambiguous* contract. Where the plan allows two readings, nothing is
@@ -404,6 +426,7 @@ What this does not do:
 | Enforcement | `decisions/gates.yaml` | **the one gate list** (D-10); `.github/workflows/ci.yml` is generated from it |
 | Decisions | `scripts/check_adr_answers.py`, `scripts/harness.py`, `.github/PULL_REQUEST_TEMPLATE/decision.md` | the gate `adr-answers`; `decide adr` records the maintainer's ADR answers; the decision pull request's block |
 | Interview | `scripts/check_interview_minimums.py` | the gate `interview-minimums`: counts counted interview records per class at the spec gate and in verify, sees ADR paths in every diff state, compares per context — first parent on the main line (a `main` checkout or the hosted main-line run), else the merge base; a detached HEAD at `origin/main` is not measured and exits 3 — attributes an ADR edit to the change that claims it under `adr_files` (ADR 0014) — subject after the adoption day of `decisions/adoption.yaml`, here 2026-10-08 |
+| Question context | `scripts/check_question_context.py` | the gate `question-context`: every `status: answered` record recorded on or after the adoption day keeps the context that was shown with it in its own `context` field — presence only, in live and archived `decisions.md`, with or without a spec; the cut-off is each answer's own recording day, read from the one em-dash date (`— YYYY-MM-DD`) that ends its decision statement (a closing parenthetical remark may follow); the adoption day itself is subject, older answers stay exempt, unreadable evidence exits 3 (ADR 0018) |
 | Criterion tests | `scripts/check_criterion_ledger.py` | the gate `criterion-ledger`: every test a plan's `## Criterion ledger` names is defined, every criterion of the spec has an entry, a not-yet-written entry stands only while the change is live; ledgers stay held after archiving, and archived plans dated before 2026-10-11 without one are exempt (ADR 0013); moving that cut-off date is a governance act — a decision pull request, never a drive-by edit of the gate |
 
 ### Verification runs through git and CI, not through the harness
@@ -434,16 +457,16 @@ none, because the registry keeps counting it as protection.
 
 | Phase | Model | Why |
 |---|---|---|
-| 1 Explore | **Haiku 4.5** | much input, little output, no deep reasoning; where the runner starts the phase (§4), GLM 5.3 Flash explores a `bounded` change or a `spike` instead, and a `feature` or `architectural` change gets the swarm (ADR 0018) |
+| 1 Explore | **Haiku 5.5** | much input, little output, no deep reasoning; where the runner starts the phase (§4), GLM 5.3 Flash explores a `bounded` change or a `spike` instead, and a `feature` or `architectural` change gets the swarm (ADR 0019) |
 | 1a Interview | **Opus 5.5** | the questions are the work, and there are few of them |
-| 2 Spec | **Opus 5.5** | effort `xhigh`; the highest reasoning demand, little output; where the runner drafts (§4), `gpt-6.1-sol` at effort `max` writes it instead |
+| 2 Spec | **Opus 5.5** | effort `xhigh`; the highest reasoning demand, little output; where the runner drafts (§4), `gpt-6.1-sol` at effort [`CODEX_EFFORTS["draft"]`](../scripts/stage2.py) writes it instead |
 | 2a Spec review | **Opus 5.5** | a fresh context that does not know the author's reasoning; where the runner starts it (§4), a headless Claude Code call |
-| 2b Design | **Opus 5.5** | effort `xhigh`; the same demand as spec and plan; where the runner drafts (§4), `gpt-6.1-sol` at effort `max` writes it instead |
-| 3 Plan | **Opus 5.5** | effort `xhigh`; an error here is the most expensive in the whole run; where the runner drafts (§4), `gpt-6.1-sol` at effort `max` writes it instead |
+| 2b Design | **Opus 5.5** | effort `xhigh`; the same demand as spec and plan; where the runner drafts (§4), `gpt-6.1-sol` at effort [`CODEX_EFFORTS["draft"]`](../scripts/stage2.py) writes it instead |
+| 3 Plan | **Opus 5.5** | effort `xhigh`; an error here is the most expensive in the whole run; where the runner drafts (§4), `gpt-6.1-sol` at effort [`CODEX_EFFORTS["draft"]`](../scripts/stage2.py) writes it instead |
 | 4 Implement | **Sonnet 5.5** | effort `medium`; a solid worker given a clear plan; where the runner starts the phase (§4), GLM 5.3 Flash builds instead |
 | 5 Verify | — | deterministic |
 | 6 Review | **Opus 5.5** | finds what Sonnet misses, and reads the code a change calls instead of trusting its docstring; a `bounded`, `feature` or `architectural` change goes to Codex (§4) |
-| 7 Commit | **Haiku 4.5** | cheap and sufficient |
+| 7 Commit | **Haiku 5.5** | cheap and sufficient |
 
 **No Fable** (maintainer, 2026-10-06): no phase runs on Fable 5.1; Opus 5.5
 takes its places — the interview, the escalation below and the fallback of
@@ -524,6 +547,21 @@ checkout — `git worktree list` gives the number, and it does not belong in a
 doctrine. A rule that forbids what the tool offers and the practice does daily
 is not followed — it is read past, and the rest of the paragraph with it.
 
+### Tracker commands
+
+Use `tools/bd` for every tracker command; house rules 2–4 in `AGENTS.md`
+govern tracker ownership and the order of tracker and git pushes.
+
+```bash
+tools/bd ready              # open, unblocked work
+tools/bd show <id>          # detail view
+tools/bd create "title" -d "description" -p 1
+tools/bd update <id> --claim
+tools/bd close <id> --reason="…"
+tools/bd prime              # full tracker context for a session
+tools/bd dolt push          # push tracker data to origin (refs/dolt/data)
+```
+
 ### Worktrees — one per change
 
 Written 2026-09-29 from D-5 (worktrees in the repository, through the tool's own
@@ -564,9 +602,10 @@ The same rule holds in `lakeswitch-ai`, with the differences its
    usable, except one that may send the task text to a routing judge
    (`sys_advise_models`), which the user is asked about each time
    (`permissions.ask`; decision of 2026-09-29). The one list, with a reason per
-   tool, is `scripts/omnigent_policy.py`.
-   An Omnigent default policy rendered from the same list (`tools/omnigent/`)
-   refuses the denied ones and asks about the asked one server-side for every Omnigent session on the machine. The
+   tool, is `scripts/omnigent_policy.py`. Read-only tools stay usable.
+   The default policy in `tools/omnigent/` is the second layer, rendered from
+   that same list. It refuses the denied ones and asks about the asked one
+   server-side for every Omnigent session on the machine. The
    maintainer installs it, and nothing here depends on it alone (ADR 0006); as of
    2026-09-29 it is built but not installed. Omnigent's bridge runs its own
    `sys_os_*` tools without any policy while its relay does not advertise them,
@@ -668,7 +707,7 @@ and dropped (ADR 0007).
 This table routes the reviews. A `spike` or a one-sentence change gets no stage-2
 review and is reviewed by Opus 5.5 where §3 asks for a review. The draft and
 implement are not routed by class; phase 1 now is: a `feature` or
-`architectural` change explores through the research swarm (ADR 0018), a
+`architectural` change explores through the research swarm (ADR 0019), a
 `bounded` change or a `spike` through the single explorer of this section's
 routing table. The class is therefore needed before the spec exists: explore
 takes the class from the explicit `--class` argument and the headers of
@@ -690,23 +729,26 @@ list is a one-line pull request that touches nothing else.
 
 | Phase | Model | Why |
 |---|---|---|
-| 1 Explore | **GLM 5.3 Flash** | much input, little output, no deep reasoning; through Claude Code against Z.ai and the runner, for a `bounded` change or a `spike` (ADR 0018) |
-| 1 Explore swarm | **the research swarm** | for a `feature` or `architectural` change (ADR 0018): the declared free roster researches public practice from one filtered topic sentence, the declared Flash pair compares the repository on six topics, and one fresh Opus 5.5 context reconciles them; the runner dispatches every call through the declared endpoints, leak-checks each prompt, and an incomplete run exits 1 |
-| 2 Spec | **gpt-6.1-sol** | effort `max`, one call for 2, 2b and 3 through the Codex CLI and `draft`, writing in the CLI's workspace-write sandbox; `glm-5.3` drafts through Claude Code against Z.ai after two failed Codex attempts (ADR 0016) |
-| 2b Design | **gpt-6.1-sol** | effort `max`, drafted in the same call as 2 and 3 |
-| 3 Plan | **gpt-6.1-sol** | effort `max`, drafted in the same call as 2 and 2b |
+| 1 Explore | **GLM 5.3 Flash** | much input, little output, no deep reasoning; through Claude Code against Z.ai and the runner, for a `bounded` change or a `spike` (ADR 0019) |
+| 1 Explore swarm | **the research swarm** | for a `feature` or `architectural` change (ADR 0019): the declared free roster researches public practice from one filtered topic sentence, the declared Flash pair compares the repository on six topics, and one fresh Opus 5.5 context reconciles them; the runner dispatches every call through the declared endpoints, leak-checks each prompt, and an incomplete run exits 1 |
+| 2 Spec | **gpt-6.1-sol** | effort [`CODEX_EFFORTS["draft"]`](../scripts/stage2.py), one call for 2, 2b and 3 through the Codex CLI and `draft`, writing in the CLI's workspace-write sandbox; `glm-5.3` drafts through Claude Code against Z.ai after two failed Codex attempts (ADR 0016) |
+| 2b Design | **gpt-6.1-sol** | effort [`CODEX_EFFORTS["draft"]`](../scripts/stage2.py), drafted in the same call as 2 and 3 |
+| 3 Plan | **gpt-6.1-sol** | effort [`CODEX_EFFORTS["draft"]`](../scripts/stage2.py), drafted in the same call as 2 and 2b |
 | 2a Spec review | **Opus 5.5** | effort `xhigh`, through Claude Code and `spec-review`, read-only tools |
 | 4 Implement | **GLM 5.3 Flash** | a worker given a clear plan; through Claude Code against Z.ai and the runner, for every change |
 | 4b Review loop | **the ladder** | the ordered `modelle` list of the `opencode-go` entry in `model-endpoints.yaml`: round *n* calls its *n*-th id (`modelle[n-1]`), through Pi, effort `max` (Pi clamps it to `high` for a rung that takes no `max`), round 3 only when round 2 wrote a taken row |
-| Repair after 4b and 6 | **gpt-6.1-sol** | a Codex attempt in the configured `workspace-write` sandbox, effort `max`; one fresh Codex attempt after a failed post-run check, and Sonnet 5.5 at effort `medium` after two failed ones; no GLM credential (`repair`, ADR 0017) |
-| 6 Review | **gpt-6.1-sol** | effort `max`, through the Codex CLI and `review`, a fresh Codex session |
+| Repair after 4b and 6 | **gpt-6.1-sol** | a Codex attempt in the configured `workspace-write` sandbox, effort [`CODEX_EFFORTS["repair"]`](../scripts/stage2.py); one fresh Codex attempt after a failed post-run check, and Sonnet 5.5 at effort `medium` after two failed ones; no GLM credential (`repair`, ADR 0017) |
+| 6 Review | **gpt-6.1-sol** | effort [`CODEX_EFFORTS["review"]`](../scripts/stage2.py), through the Codex CLI and `review`, a fresh Codex session |
+
+The effort text in ADR 0016 and ADR 0017 awaits its separately agreed
+amendments; the table above carries the live setting.
 
 **The two Flash rows are live through the runner.** `explore` starts phase 1
 on GLM 5.3 Flash with read/search tools; `implement` starts phase 4 with file
-read/search/edit/write tools but no shell. The runner runs `make verify`, not
-the implementation model; it checks for a measured line below `## Time used`
-and makes the local checkpoint commit. An explicit `--stage2-off [REASON]` uses
-§3's Haiku 4.5 or Sonnet 5.5 route and records why. A leak refusal always stops
+read/search/edit/write tools but no shell. The runner, not the implementation
+model, runs `make verify`, checks for a measured line below `## Time used` and
+makes the local checkpoint commit. An explicit `--stage2-off [REASON]` uses
+§3's Haiku 5.5 or Sonnet 5.5 route and records why. A leak refusal always stops
 the call; it never selects the fallback.
 If the model process itself fails, the runner restores the worktree to the
 baseline commit (every path except the change's `findings.md`), says what it
@@ -741,10 +783,10 @@ A foreign model is started only through `python3 scripts/stage2.py <verb>
 into a shell. Ten verbs exist:
 
 - `explore` — GLM 5.3 Flash for a `bounded` change or a `spike`, the research
-  swarm for a `feature` or `architectural` change (ADR 0018), phase 1; the
+  swarm for a `feature` or `architectural` change (ADR 0019), phase 1; the
   class is read wherever stated in `--class` and the headers of `research.md`
   and `spec.md`; missing, invalid or disagreeing declarations refuse before any model call;
-  `--stage2-off [REASON]` uses Haiku 4.5 and skips the class.
+  `--stage2-off [REASON]` uses Haiku 5.5 and skips the class.
 - `draft` — Codex, phases 2, 2b and 3 in one call; GLM 5.3 (`glm-5.3`) after
   two failed Codex attempts ("The draft" below).
 - `spec-review` — Opus 5.5, phase 2a, a headless call with read-only tools and
@@ -895,8 +937,8 @@ repository presents, not what else the disk holds.
 
 ### The draft (phases 2, 2b and 3)
 
-`python3 scripts/stage2.py draft <change>` has Codex (`gpt-6.1-sol`, effort
-`max`) write `spec.md`, `design.md` and `plan.md` in one call (ADR 0016). The
+`python3 scripts/stage2.py draft <change>` has Codex (`gpt-6.1-sol`, effort [`CODEX_EFFORTS["draft"]`](../scripts/stage2.py)) write
+`spec.md`, `design.md` and `plan.md` in one call (ADR 0016). The
 guards are `implement`'s: the preflight (a `research.md` with its bead, a
 `decisions.md`), the refusal of pre-existing changes outside the change's
 `findings.md`, the declaration and the leak check before each attempt's call,
@@ -1100,7 +1142,7 @@ test. **After the third run, a short evaluation is written under
 falls back to Opus 5.5 until the maintainer decides again** — a taken finding
 of a rung counts like a GLM finding counted before 2026-10-07, a Codex one
 still counts as ADR 0007 set it, and
-Opus 5.5 reviews every change, and phases 1 and 4 return to §3's Haiku 4.5 and
+Opus 5.5 reviews every change, and phases 1 and 4 return to §3's Haiku 5.5 and
 Sonnet 5.5. The rule is written, not counted by a script: a person reads the
 evaluation, and its pull request applies the fallback. This replaces the three measured runs that
 D-13 asked for before the first foreign call; what the replacement gives up is

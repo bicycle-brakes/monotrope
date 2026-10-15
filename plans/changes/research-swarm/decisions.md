@@ -144,6 +144,12 @@ asked: 2026-10-15
 answer: "ja, finder als schritt 0, ich möchte für jedes thema drei agenten, einmal deepseek, einmal mimo, einmal haiku, jeweils auch eigener blickwinkel, es soll immer einen template gefolgt werden. bei der online recherche möchte ich, dass alle verfügbaren freien modelle zu diesen thema recherchieren, also 1 bis x modelle"
 answered_by: maintainer
 status: answered
+context: |
+  Topic: how the research topics are cut and which agents work each.
+  Intention: walking through the six topics of Q-2 after the phase-6 repairs, the maintainer asked for smaller topics with one model each; an online search on multi-agent research design followed.
+  Today: six broad topics; topics 1 to 5 by a DeepSeek and a MiMo Flash pair, topic 6 by a free model and DeepSeek Flash; a fixed free roster with focuses; neighbouring specs found in passing in topics 2 and 6.
+  Repository change: a step 0 finder that maps files, ADRs, tests and neighbouring specs (`neighbours:` in the header of `research.md`); smaller topics, each with its own agents; spec, design, ADR draft, `model-endpoints.yaml`, runner and tests change; Q-1 and Q-2 are amended.
+  Architecture change: phase 1 gains a finder stage before the topic stage; the topic assignment becomes one brief per topic instead of two models sharing a broad topic.
 
 Asked after phase 6 and the F-2 to F-10 repairs, while walking through the
 six topics of Q-2. The maintainer first asked for smaller topics; the session

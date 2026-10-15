@@ -187,7 +187,7 @@ once it is spent, no further slot is gated, audited as clean or launched.
 ## ADR draft
 
 The sole draft is
-[`docs/adr/0018-phase-1-research-swarm.md`](../../../docs/adr/0018-phase-1-research-swarm.md),
+[`docs/adr/0019-phase-1-research-swarm.md`](../../../docs/adr/0019-phase-1-research-swarm.md),
 in the form of `templates/adr.md`. It amends phase-1 routing under ADR 0007
 and the permitted research purpose under ADR 0011, supersedes neither whole
 ADR, and leaves numbered D/O decisions and their continuity map unchanged.

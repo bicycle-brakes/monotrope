@@ -9,7 +9,7 @@ rounds); Codex drafts the spec, the design and the plan (2, 2b and 3; GLM 5.3
 after two failed Codex attempts) and reviews the change (6); Opus 5.5 reviews
 the spec (2a); GLM 5.3 Flash implements (phase 4) and explores (phase 1) a
 `bounded` change or a `spike`, while a `feature` or `architectural` change
-explores through the research swarm (ADR 0018 draft: free public researchers
+explores through the research swarm (ADR 0019 draft: free public researchers
 from one filtered topic sentence, a Flash pair on the repository, one fresh
 Opus 5.5 reconciliation). A declaration in `model-endpoints.yaml` stops nothing; this runner
 stands between the rule and the call.
@@ -29,7 +29,7 @@ Each loop round and the probe check `pi --version` against `PI_VERSION` first;
 any other answer refuses with exit 2 before the leak check and before any call.
 
 `explore`, `implement` and `repair` accept `--stage2-off [REASON]`: the declared
-Stage-1 route uses Haiku 4.5 or Sonnet 5.5. A leak refusal never falls back.
+Stage-1 route uses Haiku 5.5 or Sonnet 5.5. A leak refusal never falls back.
 Implement lets the model edit but not run commands; before `make verify` the
 runner applies ruff's safe fixes and its formatter to the changed Python files
 under `scripts/` and `tests/`, then runs `make verify`, checks the time log and
@@ -104,7 +104,7 @@ different route: fresh scratch working directory, home and agent directory,
 every discovery surface off, only the runner-owned research-tools extension
 loaded, and no repository path in play - the offline capture on the pinned Pi
 with synthetic private canaries, not this suite, is their isolation evidence
-(ADR 0018 draft).
+(ADR 0019 draft).
 
 **The loop record** lives outside the worktree
 (`${XDG_STATE_HOME:-~/.local/state}/coding-harness/stage2/<change>/loop.md`):
@@ -158,14 +158,21 @@ REPO_ROOT = Path(__file__).resolve().parent.parent
 GLM_FLASH = ("glm-coding-plan", "glm-5.3-flash", "max")
 # GLM 5.3, not Flash: the draft's fallback routes here (the repair did until ADR 0017), shared with stage2_runs.py.
 GLM = ("glm-coding-plan", "glm-5.3", "max")
-HAIKU = ("claude-code-plan", "claude-haiku-4-5", None)
+HAIKU = ("claude-code-plan", "claude-haiku-5-5", None)
 SONNET = ("claude-code-plan", "claude-sonnet-5-5", "medium")
-CODEX = ("openai-codex", "gpt-6.1-sol", "max")
+# Sol's reasoning effort, one entry per runner verb (bead coding-harness-yzk): the draft and the
+# review start at `high`, the repair at `medium`. This mapping is the one place a later adjustment
+# edits - the instructions link its entries and the tests read them. A call's verb selects the
+# entry, retries included: the `codex-repair` route label names a retry of draft and repair and
+# picks no policy of its own. `CODEX` keeps its endpoint identity with an empty effort slot;
+# `run_codex` takes the effort from the caller's verb instead.
+CODEX_EFFORTS = {"draft": "high", "repair": "medium", "review": "high"}
+CODEX = ("openai-codex", "gpt-6.1-sol", None)
 # Opus 5.5, the spec review (2a) since ADR 0016: the strongest review on the repository's highest-demand effort.
 OPUS = ("claude-code-plan", "claude-opus-5-5", "xhigh")
 # The change classes (check_interview_minimums.py's vocabulary). Explore routes on
 # one: the swarm for the two large classes, the single explorer for the two small
-# ones (ADR 0018 draft). Stated before the spec exists - explore-only `--class`
+# ones (ADR 0019 draft). Stated before the spec exists - explore-only `--class`
 # or the headers of `research.md` and `spec.md` - and every available statement must agree.
 CLASSES = ("spike", "bounded", "feature", "architectural")
 SWARM_CLASSES = ("feature", "architectural")
@@ -589,7 +596,7 @@ def declaration_problem(root: Path, endpoint: str, model: str) -> str | None:
 def public_declaration_problem(root: Path, endpoint: str, model: str) -> str | None:
     """Why the declaration does not clear this endpoint and model for public-web data, or None.
 
-    The swarm's free researchers are the only role on the public class (ADR 0018
+    The swarm's free researchers are the only role on the public class (ADR 0019
     draft): the endpoint must be cleared for `public-web` and nothing else, and
     the model must be listed. Unknown residency does not refuse here - it is
     what the declaration honestly records - while the framework check above
@@ -828,14 +835,22 @@ def thread_id(stdout: str) -> str | None:
     return None
 
 
-def run_codex(ctx: Context, prompt: str, resume: str | None = None, writable: bool = False) -> tuple[str, str]:
+def run_codex(
+    ctx: Context, prompt: str, resume: str | None = None, writable: bool = False, *, verb: str
+) -> tuple[str, str]:
     """One Codex call, first or resumed, pinned the same way. Returns (answer, thread id).
 
     A review reads in the CLI's `read-only` sandbox; a draft writes in
     `workspace-write`, and the runner puts back what lands outside the change
-    folder. No call takes a bypass flag (spec, criterion 1).
+    folder. No call takes a bypass flag (spec, criterion 1). The reasoning
+    effort is the caller verb's entry of `CODEX_EFFORTS`, passed explicitly on
+    every argv, a resumed call included; that a resumed thread actually runs at
+    that effort inside Codex is not asserted (bead coding-harness-yzk, Q-6).
+    Only the verbs `CODEX_EFFORTS` names (draft, repair, review) may carry a
+    Codex route; any other verb stops with a `KeyError` before the call.
     """
-    _, model, effort = CODEX
+    _, model, _ = CODEX
+    effort = CODEX_EFFORTS[verb]
     with tempfile.TemporaryDirectory(prefix="stage2-") as tmp:
         answer_file = Path(tmp) / "answer.md"
         command = ["codex", "exec"]
@@ -1113,7 +1128,7 @@ def review(root: Path, change: str) -> None:
         recorded = None
     prompt = phase_prompt(root, "06-review.md", change, "Write only your verdict now.")
     begin_call(ctx, "review", CODEX, prompt)
-    answer, thread = run_codex(ctx, prompt, resume=recorded)
+    answer, thread = run_codex(ctx, prompt, resume=recorded, verb="review")
     rows, _ = parse_rows(answer)
     block = "\n\n".join(
         [
@@ -1141,7 +1156,7 @@ def review(root: Path, change: str) -> None:
         [MARK_FORMAT, "Your verdict stands and is not changed.", f"The loop rows:\n{listing}", READ_REQUEST]
     )
     begin_call(ctx, "review (loop marks)", CODEX, marks_prompt)
-    answer, _ = run_codex(ctx, marks_prompt, resume=thread)
+    answer, _ = run_codex(ctx, marks_prompt, resume=thread, verb="review")
     marks = parse_marks(answer)
     fill_marks(ctx.findings, [r[0] for r in released], marks)
     print(f"review: {len(marks)} of {len(released)} loop rows marked")
@@ -2550,7 +2565,7 @@ def run_attempts(
         try:
             if endpoint == CODEX:
                 # A fresh writing Codex call, never resumed; its thread is not kept (ADR 0017).
-                answer, _ = run_codex(ctx, prompt, writable=True)
+                answer, _ = run_codex(ctx, prompt, writable=True, verb=verb)
                 if not answer.strip():
                     raise CallFailed("codex: the answer is empty")
             else:
@@ -2914,7 +2929,7 @@ def draft(root: Path, change: str) -> None:
         call_error: CallFailed | None = None
         try:
             if endpoint == CODEX:
-                run_codex(ctx, prompt, writable=True)
+                run_codex(ctx, prompt, writable=True, verb="draft")
             else:
                 run_work_model(ctx, prompt, endpoint, writable=True, key=key)
         except CallFailed as error:
