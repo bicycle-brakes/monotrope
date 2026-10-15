@@ -310,3 +310,14 @@ checks that no research `[DECISION]` is lost.
   places on the finder's map; name, do not design solutions; others'
   public failure reports belong to topic 11. Three agents on the same
   brief; evidence `path::symbol` plus the trigger (answer: "ja").
+- Topic 9, best practice (online) — input: only the Opus sentence and the
+  fixed guiding questions, nothing from the repository. Guiding questions:
+  which proven approaches exist for the problem, each with a source; which
+  reasons the sources give and under which conditions they hold; where the
+  sources disagree; what they explicitly advise against. Boundary: only
+  public pages the model actually retrieved (no retrieval, no claim —
+  F-3); ready-made tools belong to topic 10, failure reports to topic 11.
+  Source quality: search broad, then narrow; official documentation,
+  papers and known projects before SEO pages; each source with its date
+  where given. Every free model available at run time on the same brief;
+  evidence a URL with a retrieval receipt (answer: "ja").
