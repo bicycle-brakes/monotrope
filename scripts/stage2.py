@@ -3873,12 +3873,13 @@ def review_loop(root: Path, change: str) -> None:
     if findings_path.exists():
         findings_text = findings_path.read_text(encoding="utf-8")
     history = history_rounds(record, findings_text)
-    last = max(history, default=0)
+    # A round that found nothing has a heading but no row: it is counted by its heading.
+    last = max(max(history, default=0), rounds_run(record, findings_text))
     if last:
-        refusal = undecided_refusal(history[last], "decide them first")
+        refusal = undecided_refusal(history.get(last, []), "decide them first")
         if refusal:
             raise Refused(refusal)
-        if clean_round(history[last], last):
+        if clean_round(history.get(last, []), last):
             raise Refused(f"round {last} was clean: every row was decided and none accepted; the loop stops.")
         if last - 1 in history and fix_r_only(history[last], last) and fix_r_only(history[last - 1], last - 1):
             raise Refused(

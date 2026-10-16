@@ -83,6 +83,8 @@ alias = "pi" if name == "pin-pi" else name
 scenario = json.loads((here / "scenario.json").read_text())
 log = here / "calls.jsonl"
 previous = [json.loads(line) for line in log.read_text().splitlines()] if log.exists() else []
+# A new script starts its own count: only the calls made since it was written use its steps.
+previous = previous[scenario.get("_since", 0) :]
 steps = scenario.get(alias, [])
 # The discovery calls (catalog refresh and listing) carry a `kind` and consume
 # no step of their own, so the scripted reviewer steps stay where they were.
@@ -135,6 +137,7 @@ if alias == "pi" and "update" in argv and "--models" in argv:
                     "home": os.environ.get("HOME", ""),
                     "agent": os.environ.get("PI_CODING_AGENT_DIR", ""),
                     "cwd": os.getcwd(),
+                    "stdin": os.read(0, 100).decode(),
                 }
             )
             + "\\n"
@@ -156,6 +159,7 @@ if alias == "pi" and "--list-models" in argv:
                     "home": os.environ.get("HOME", ""),
                     "agent": os.environ.get("PI_CODING_AGENT_DIR", ""),
                     "cwd": os.getcwd(),
+                    "stdin": os.read(0, 100).decode(),
                 }
             )
             + "\\n"
@@ -206,10 +210,10 @@ if barrier:
     # The swarm check: every member of a round waits here until all members of
     # the round have arrived, so a serial runner holds the whole round past the
     # deadline and the test reads the elapsed time.
-    wait_dir = Path(scenario.get("barrier_dir", ".barrier"))
+    wait_dir = Path(step.get("barrier_dir", scenario.get("barrier_dir", ".barrier")))
     wait_dir.mkdir(exist_ok=True)
     (wait_dir / (str(os.getpid()) + "-" + str(time.time_ns()) + ".arrived")).write_text("")
-    deadline = time.time() + scenario.get("barrier_seconds", 30)
+    deadline = time.time() + step.get("barrier_seconds", scenario.get("barrier_seconds", 30))
     while len(list(wait_dir.glob("*.arrived"))) < barrier and time.time() < deadline:
         time.sleep(0.05)
 time.sleep(step.get("sleep", 0))
@@ -261,7 +265,9 @@ class World:
     state: Path
 
     def script(self, **steps: object) -> None:
-        (self.bin / "scenario.json").write_text(json.dumps(steps), encoding="utf-8")
+        log = self.bin / "calls.jsonl"
+        since = len(log.read_text(encoding="utf-8").splitlines()) if log.exists() else 0
+        (self.bin / "scenario.json").write_text(json.dumps({**steps, "_since": since}), encoding="utf-8")
 
     def calls(self, name: str | None = None) -> list[dict]:
         log = self.bin / "calls.jsonl"
@@ -368,6 +374,16 @@ TEST_LADDER = ("deepseek-v4.1-flash", "mimo-v2.6-flash", "mimo-v2.6-pro")
 TEST_FLASH = TEST_LADDER[:2]
 TEST_FREE = ("acme-v1-free", "beacon-2-free")
 TEST_RUNGS = ("mimo-v2.6-pro",)
+
+
+def grouped(called: list[str], *groups: tuple[str, ...]) -> bool:
+    """Whether the calls came as the given swarms, one after the other; inside a swarm the members run in parallel, so their order is free."""
+    start = 0
+    for group in groups:
+        if sorted(called[start : start + len(group)]) != sorted(group):
+            return False
+        start += len(group)
+    return start == len(called)
 
 
 def pin_entry(target: Path, ladder: tuple[str, ...], flash: tuple[str, ...] | None = None) -> None:
@@ -854,7 +870,7 @@ def test_no_call_carries_another_endpoints_key(world: World) -> None:
     assert world.run("explore") == 0
     _spec, loop, explorer = (
         world.calls("claude")[0]["env"],
-        world.calls("pi")[0]["env"],
+        world.reviews("pi")[0]["env"],
         world.calls("claude")[1]["env"],
     )
     assert all(value != KEY for value in loop.values()), "an OpenCode Go call carries the GLM key"
@@ -887,7 +903,7 @@ def test_the_opencode_key_never_leaves_the_runner(world: World, capsys: pytest.C
     assert first["agent_listing"] == ["settings.json"]
     for call in world.calls():
         assert not any(OKEY[i : i + 8] in " ".join(call["argv"]) for i in range(len(OKEY) - 7)), call["argv"]
-        seen_in_directory = " ".join(str(call[field]) for field in ("agent_settings", "home_listing", "agent_listing"))
+        seen_in_directory = " ".join(str(call.get(field)) for field in ("agent_settings", "home_listing", "agent_listing"))
         assert not any(OKEY[i : i + 8] in seen_in_directory for i in range(len(OKEY) - 7))
     kept = "".join(p.read_text(encoding="utf-8") for p in world.state.rglob("*") if p.is_file())
     shutil.rmtree(world.state)
@@ -3869,7 +3885,7 @@ def test_the_review_loop_launches_pi_isolated(world: World) -> None:
     """Criterion 8: one launch path for the loop's paid rounds - the rung under the provider, the measured flag set, a fresh home."""
     # The free stage is already consumed, so this run starts on the Flash swarm: two paid members, then the rung.
     world.write_record([("L1-1", "taken — test_a", "no")], state=loop_state(("free",)))
-    world.script(pi=[{"stdout": rows(1)}, {"stdout": rows(1)}])
+    world.script(pi=[{"stdout": rows(1)}, {"stdout": rows(1)}, {"stdout": rows(1)}])
     assert world.run("review-loop") == 0
     assert world.calls("codex") == [] and world.calls("claude") == []
     # The Flash swarm's two members start in either order; this test reads the DeepSeek one.
@@ -3947,6 +3963,8 @@ def test_loop_and_probe_use_repository_pi(world: World) -> None:
             {"stdout": "probe one"},
             {"stdout": "probe two"},
             {"stdout": "probe three"},
+            {"stdout": "probe four"},
+            {"stdout": "probe five"},
         ]
     )
     assert world.run("review-loop") == 0
@@ -4262,7 +4280,7 @@ def test_a_round_calls_its_rung_from_the_entry(world: World) -> None:
     decide_record(world)
     assert world.run("review-loop") == 0
     called = [rung_of(call) for call in world.reviews("pi")]
-    assert called == [*TEST_FREE, *TEST_FLASH, *TEST_RUNGS]
+    assert grouped(called, TEST_FREE, TEST_FLASH, TEST_RUNGS), called
     assert world.run("review-loop") == 2, "a consumed ladder called again"
     source = (REPO_ROOT / "scripts" / "stage2.py").read_text(encoding="utf-8")
     for rung in (*TEST_LADDER, *TEST_FREE):
@@ -4278,7 +4296,7 @@ def test_reordering_the_ladder_touches_no_code(world: World) -> None:
     decide_record(world)
     assert world.run("review-loop") == 0
     called = [rung_of(call) for call in world.reviews("pi")]
-    assert called == [*TEST_FREE, "mimo-v2.6-pro", "deepseek-v4.1-flash"]
+    assert grouped(called, TEST_FREE, ("mimo-v2.6-pro", "deepseek-v4.1-flash")), called
 
     shutil.rmtree(world.record().parent)
     pin_entry(endpoints, ("spike-a", "spike-b", "spike-c"))
@@ -4290,7 +4308,7 @@ def test_reordering_the_ladder_touches_no_code(world: World) -> None:
     decide_record(world)
     assert world.run("review-loop") == 0
     called = [rung_of(call) for call in world.reviews("pi")]
-    assert called == [*TEST_FREE, "spike-a", "spike-b", "spike-c"]
+    assert grouped(called, TEST_FREE, ("spike-a", "spike-b"), ("spike-c",)), called
 
 
 def test_the_reviewer_call_can_only_read_and_search(world: World) -> None:
@@ -4442,7 +4460,7 @@ def test_round_three_starts_only_after_a_taken_row(world: World, capsys: pytest.
     capsys.readouterr()
     assert world.run("review-loop") == 0, "a fixed round-2 row did not admit round 3"
     called = [rung_of(call) for call in world.reviews("pi")]
-    assert called == [*TEST_FLASH, *TEST_RUNGS]
+    assert grouped(called, TEST_FLASH, TEST_RUNGS), called
     assert "Round 3" in world.record().read_text(encoding="utf-8"), "the fixed row lost the run's count"
 
 
@@ -4463,6 +4481,7 @@ def test_a_call_over_the_time_limit_is_stopped(
 def test_a_refused_rung_stops_the_run_without_fallback(world: World, capsys: pytest.CaptureFixture[str]) -> None:
     """Criterion 9: an address that refuses the rung stops the run - no second launcher, no substitute, no other endpoint."""
     world.write_record([("L1-1", "taken — test_a", "no")], state=loop_state())
+    before = world.record().read_text(encoding="utf-8")
     world.script(
         pi=[
             {"model": "mimo-v2.6-pro", "stdout": "", "stderr": "404: unknown model", "exit": 1},
@@ -4476,7 +4495,7 @@ def test_a_refused_rung_stops_the_run_without_fallback(world: World, capsys: pyt
     assert len(world.reviews("pi")) == 1, "the refused rung was retried or substituted"
     argv = world.reviews("pi")[0]["argv"]
     assert argv[argv.index("--model") + 1] == "opencode-go/mimo-v2.6-pro"
-    assert not world.record().exists()
+    assert world.record().read_text(encoding="utf-8") == before, "the refused round wrote into the record"
     assert "pi call failed" in capsys.readouterr().err
 
 
