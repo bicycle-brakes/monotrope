@@ -903,7 +903,9 @@ def test_the_opencode_key_never_leaves_the_runner(world: World, capsys: pytest.C
     assert first["agent_listing"] == ["settings.json"]
     for call in world.calls():
         assert not any(OKEY[i : i + 8] in " ".join(call["argv"]) for i in range(len(OKEY) - 7)), call["argv"]
-        seen_in_directory = " ".join(str(call.get(field)) for field in ("agent_settings", "home_listing", "agent_listing"))
+        seen_in_directory = " ".join(
+            str(call.get(field)) for field in ("agent_settings", "home_listing", "agent_listing")
+        )
         assert not any(OKEY[i : i + 8] in seen_in_directory for i in range(len(OKEY) - 7))
     kept = "".join(p.read_text(encoding="utf-8") for p in world.state.rglob("*") if p.is_file())
     shutil.rmtree(world.state)
@@ -4664,7 +4666,7 @@ def test_free_discovery_admits_new_go_models_each_run(world: World, capsys: pyte
     assert world.run("review-loop") == 0
     called = [rung_of(call) for call in world.reviews("pi")][2:]  # after the failed attempt's two calls
     assert grouped(called, (*TEST_FREE, "zeta-9-free")), "the new Go id was omitted or the Zen id was called"
-    state = stage2.read_state("demo", world.record().read_text(encoding="utf-8"), "")
+    state = stage2.read_state(world.record().read_text(encoding="utf-8"), "")
     assert state["free"]["selected"] == [*TEST_FREE, "zeta-9-free"]
     assert "zen-free-mirror" not in state["free"]["selected"], "a Zen id entered the selection"
     assert {"provider": "opencode-go", "model": "zeta-9-free"} in state["free"]["catalog"]
@@ -6089,14 +6091,20 @@ def test_a_missing_glm_key_refuses_the_repair(world: World) -> None:
     assert len(world.calls("codex")) == 1
 
 
+def drop_declared_model(world: World, endpoint: str, model: str) -> None:
+    """Take one model out of an endpoint's `modelle` list in the world's declaration file."""
+    path = world.root / "model-endpoints.yaml"
+    data = yaml.safe_load(path.read_text(encoding="utf-8"))
+    entry = next(e for e in data["endpunkte"] if e["name"] == endpoint)
+    assert model in entry["modelle"], (endpoint, model)
+    entry["modelle"].remove(model)
+    path.write_text(yaml.safe_dump(data, allow_unicode=True), encoding="utf-8")
+
+
 def test_an_undeclared_glm_5_3_refuses_the_repair(world: World) -> None:
     """Stage2-repair criterion 10, replaced by ADR 0017. Planted fault: a repair that still checks `glm-5.3`."""
     repair_world(world)
-    path = world.root / "model-endpoints.yaml"
-    text = path.read_text(encoding="utf-8")
-    line = "      - glm-5.3\n"
-    assert line in text
-    path.write_text(text.replace(line, "", 1), encoding="utf-8")
+    drop_declared_model(world, "glm-coding-plan", "glm-5.3")
     git(world.root, "add", "-A")
     git(world.root, "commit", "--quiet", "-m", "drop glm-5.3")
     assert world.run("repair") == 0
@@ -6188,12 +6196,7 @@ def test_an_undeclared_repair_endpoint_refuses_before_call(
     """Criterion 9. Planted fault: no declaration check before a Codex or a Sonnet attempt."""
     repair_world(world)
     script_repair(world, [{"stdout": "first"}, {"stdout": "second"}, repair_step()], make=[{"stdout": "green\n"}] * 3)
-    path = world.root / "model-endpoints.yaml"
-    text = path.read_text(encoding="utf-8")
-    line = f"      - {missing}\n"
-    entry = text.index("  - name: claude-code-plan" if missing.startswith("claude") else "  - name: openai-codex")
-    start = text.index(line, entry)
-    path.write_text(text[:start] + text[start + len(line) :], encoding="utf-8")
+    drop_declared_model(world, "claude-code-plan" if missing.startswith("claude") else "openai-codex", missing)
     git(world.root, "add", "-A")
     git(world.root, "commit", "--quiet", "-m", "drop a declared model")
     assert world.run("repair", "demo", *options) == 2

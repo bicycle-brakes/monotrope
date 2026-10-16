@@ -1112,9 +1112,8 @@ def select_free(rule: dict, catalog: list[dict]) -> list[str]:
         model = row["model"]
         if model in excludes:
             continue
-        if model in includes or (suffix and model.endswith(suffix)):
-            if model not in chosen:
-                chosen.append(model)
+        if (model in includes or (suffix and model.endswith(suffix))) and model not in chosen:
+            chosen.append(model)
     return chosen
 
 
@@ -1972,7 +1971,7 @@ def write_state(change: str, state: dict) -> None:
     path.write_text(f"{RECORD_HEADING}{change}\n\n{RECORD_INTRO}\n{line}\n", encoding="utf-8")
 
 
-def read_state(change: str, record: str | None, findings_text: str) -> dict | None:
+def read_state(record: str | None, findings_text: str) -> dict | None:
     """The run's stage snapshot: the record's own line first, else the last release's.
 
     Only the runner's own lines are read - the released block is cut at
@@ -2086,7 +2085,7 @@ def release(root: Path, change: str) -> list[list[str]]:
     refusal = undecided_refusal(rows, "nothing is released")
     if refusal:
         raise Refused(refusal)
-    state = read_state(change, record, text)
+    state = read_state(record, text)
     block = [f"{RELEASE_HEADING} {today()}", render_table(RELEASED_COLUMNS, [[*row, "—"] for row in rows])]
     if not rows:
         block.append("No loop row was reported.")
@@ -3886,7 +3885,7 @@ def review_loop(root: Path, change: str) -> None:
                 f"rounds {last - 1} and {last} accepted only findings whose Origin begins `fix-r`; "
                 "the repair brake stops the loop; the maintainer decides what continues."
             )
-    state = read_state(change, record, findings_text)
+    state = read_state(record, findings_text)
     if record is None and state is None:
         # A fresh run: no record and no release carries a snapshot yet - or the
         # loop predates the swarms and starts over with the current discovery

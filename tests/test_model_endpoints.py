@@ -283,7 +283,7 @@ def test_every_model_in_the_routing_table_resolves() -> None:
     # Die Tabelle nennt Anzeigenamen ("Haiku 4.5"), die Erklaerung IDs.
     ids = zugelassene_modelle()
     for anzeige in tabelle:
-        if anzeige == "the ladder":
+        if anzeige in {"the ladder", "the swarms, then the ladder"}:
             continue  # no model id: the ids live in the `opencode-go` entry, checked by its own test
         assert _loest_auf(anzeige, ids), (
             f"docs/WORKFLOW.md routet auf '{anzeige}', das in keinem Endpunkt steht. "
