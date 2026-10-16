@@ -6453,7 +6453,7 @@ def test_red_first_scrubs_outcome_diagnostics(world: World, monkeypatch: pytest.
     (world.root / "tests" / "test_red.py").write_text(RED_ASSERT_TEST, encoding="utf-8")
     baseline = git(world.root, "rev-parse", "HEAD")
     original = stage2._red_report_bytes
-    secret = "credential-fragment-42"
+    secret = KEY
 
     def foreign(path: Path) -> bytes | None:
         record = original(path)
