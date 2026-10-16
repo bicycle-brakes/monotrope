@@ -1,0 +1,12 @@
+schema_version: 1
+change: pi-pin
+question: adr
+answer: 'yes'
+reason: The maintainer answered yes to the session's recommendation that the repository-owned
+  Pi pin amend ADR 0011 decision 6 and ADR 0012 through a new ADR.
+shown:
+  proposed: 'yes'
+  proposal_reason: A repeatable real-Pi suite and repository-owned launcher amend
+    the version-bound isolation rule of ADR 0011 and the Pi assumptions of ADR 0012.
+answered_by: framework-architect
+answered_at: 2026-10-15

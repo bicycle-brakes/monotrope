@@ -35,6 +35,14 @@ jobs:
       - name: Install the pinned toolchain
         id: setup-deps
         run: python3 -m pip install --require-hashes -r requirements-ci.txt
+      - name: Set up the declared Node runtime
+        id: setup-node
+        uses: actions/setup-node@v4
+        with:
+          node-version-file: tools/pi/.node-version
+      - name: Install the pinned Pi
+        id: setup-pi
+        run: bash tools/pi/install.sh
       - name: Hydrate the tracker (pinned bd, checksum-verified)
         id: setup-tracker
         run: |
@@ -57,6 +65,7 @@ jobs:
           globs: |
             **/*.md
             !docs/journal/**
+            !tools/pi/node_modules/**
         continue-on-error: true
       - name: External links resolve
         id: lychee
@@ -114,6 +123,10 @@ jobs:
         id: interview-minimums
         if: ${{ !cancelled() }}
         run: python3 scripts/check_interview_minimums.py
+      - name: Every new answered interview record keeps its context
+        id: question-context
+        if: ${{ !cancelled() }}
+        run: python3 scripts/check_question_context.py
       - name: Every test a plan names for an acceptance criterion still exists
         id: criterion-ledger
         if: ${{ !cancelled() }}
@@ -152,6 +165,14 @@ jobs:
       - name: Install the pinned toolchain
         id: setup-deps
         run: python3 -m pip install --require-hashes -r requirements-ci.txt
+      - name: Set up the declared Node runtime
+        id: setup-node
+        uses: actions/setup-node@v4
+        with:
+          node-version-file: tools/pi/.node-version
+      - name: Install the pinned Pi
+        id: setup-pi
+        run: bash tools/pi/install.sh
       - name: Hydrate the tracker (pinned bd, checksum-verified)
         id: setup-tracker
         run: |

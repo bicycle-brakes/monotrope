@@ -98,6 +98,7 @@ REIST_NICHT: dict[str, str] = {
     "tests.test_ci::test_the_makefile_runs_what_the_one_list_runs": "bestand-dieses-repos",
     "tests.test_ci::test_one_version_is_the_interpreter_floor": "braucht-die-vollstaendige-suite",
     "tests.test_ci::test_the_cloud_environment_builds_the_venv_with_the_floor": "braucht-die-vollstaendige-suite",
+    "tests.test_ci::test_real_pi_is_provisioned_before_contracts": "braucht-die-vollstaendige-suite",
     "tests.test_feedback_channel::test_journal_index_lists_every_open_project_handover": "bestand-dieses-repos",
     "tests.test_feedback_channel::test_the_field_checks_read_the_schema_instead_of_a_copy[GEMEINSAM-fehlende_gemeinsame]": "bestand-dieses-repos",
     "tests.test_feedback_channel::test_the_field_checks_read_the_schema_instead_of_a_copy[PROJEKT_PFLICHT-fehlende_kanalpflicht]": "bestand-dieses-repos",
@@ -118,7 +119,7 @@ REIST_NICHT: dict[str, str] = {
     "tests.test_model_endpoints::test_every_model_in_a_phase_prompt_resolves[03-plan.md-gpt-6.1-sol]": "bestand-dieses-repos",
     "tests.test_model_endpoints::test_every_model_in_a_phase_prompt_resolves[04-implement.md-GLM 5.3 Flash]": "bestand-dieses-repos",
     "tests.test_model_endpoints::test_every_model_in_a_phase_prompt_resolves[06-review.md-Opus 5.5]": "bestand-dieses-repos",
-    "tests.test_model_endpoints::test_every_model_in_a_phase_prompt_resolves[07-commit.md-Haiku 4.5]": "bestand-dieses-repos",
+    "tests.test_model_endpoints::test_every_model_in_a_phase_prompt_resolves[07-commit.md-Haiku 5.5]": "bestand-dieses-repos",
     "tests.test_model_endpoints::test_every_model_in_the_routing_table_resolves": "bestand-dieses-repos",
     "tests.test_model_endpoints::test_no_old_reviewer_remark_claims_a_review_phase": "bestand-dieses-repos",
     "tests.test_model_endpoints::test_no_remark_routes_the_spec_review_to_codex": "bestand-dieses-repos",
@@ -186,7 +187,10 @@ REIST_NICHT: dict[str, str] = {
 # came along. It reads `pyproject.toml`, a file the kit does not carry: the missing file maps to
 # `braucht-die-vollstaendige-suite`. 37 -> 38 on 2026-10-13: `tests.test_ci::test_the_cloud_environment_builds_the_venv_with_the_floor`
 # reads `tools/cloud-env/setup.sh`, also not carried — the same reason.
-DECKEL = 38  # raised on 2026-10-13 (36 -> 38); earlier: raised 2026-10-08 (33 -> 36), raised 2026-10-07 (32 -> 33), raised 2026-10-05 (31 -> 32), 2026-09-30 (31 -> 32), lowered 2026-09-30 (32 -> 31), raised 2026-09-29 (31 -> 32)
+# 38 -> 39 on 2026-10-15 (plans/changes/pi-pin): `tests.test_ci::test_real_pi_is_provisioned_before_contracts`
+# reads `tools/pi/.node-version`, a file the kit does not carry: the missing file maps to
+# `braucht-die-vollstaendige-suite`.
+DECKEL = 39  # raised on 2026-10-15 (38 -> 39); earlier: raised on 2026-10-13 (36 -> 38); raised 2026-10-08 (33 -> 36), raised 2026-10-07 (32 -> 33), raised 2026-10-05 (31 -> 32), 2026-09-30 (31 -> 32), lowered 2026-09-30 (32 -> 31), raised 2026-09-29 (31 -> 32)
 
 
 # ---------------------------------------------------------------------------

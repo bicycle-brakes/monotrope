@@ -11,9 +11,8 @@ kit scripts) migrates from `portfolio-agentic-engineering` in measured steps.
 The migration plan and current state live in the bootstrap handover:
 `docs/journal/handover/2026-09-16-coding-harness-bootstrap.md`.
 
-This is the only instruction file. There is no `CLAUDE.md` — Claude Code
-(≥ 2.1.277) reads `AGENTS.md` itself when none exists, and a `CLAUDE.md` beside
-it would silently replace it (`tests/test_entry_points.py`).
+This is the only instruction file: Claude Code (≥ 2.1.277) reads it itself, and
+a `CLAUDE.md` would silently replace it (`tests/test_entry_points.py`).
 
 ## The workflow in one screen
 
@@ -32,7 +31,7 @@ it would silently replace it (`tests/test_entry_points.py`).
 | 7 | Commit | pull request | CI green |
 
 **Stage 2** (framework content, ADR 0007 as amended by ADR 0011 and ADR 0016): a foreign model is started only through `python3 scripts/stage2.py`, which runs the leak check before every call. Codex drafts spec, design and plan (`draft <change>`; GLM 5.3 after two failed attempts) and reviews 6; Opus 5.5 reviews 2a (`spec-review <change>`); the review loop (4b) runs on OpenCode Go through Pi, on the ladder — the ordered `modelle` list of the `opencode-go` entry: round *n* of the loop calls its *n*-th id, at most three rounds, and round 3 only when round 2 wrote a taken row; a one-line pull request reorders it. GLM 5.3 Flash explores and implements, and Codex repairs the findings the orchestrator takes (`repair <change>`, ADR 0017: a fresh Codex attempt after a failed post-run check, then Sonnet 5.5; phase 6 re-checks in a fresh read-only Codex session — a reviewer's own session never repairs); `explore <change>`, `draft <change>`, `implement <change>` and `repair <change>` are live;
-`--stage2-off [REASON]` uses Haiku 4.5 or Sonnet 5.5 and records why when Stage 2 is off or Z.ai unavailable. A leak-check BLOCK stops without fallback. Reviews go by class; explore, draft, implement and repair do not.
+`--stage2-off [REASON]` uses Haiku 5.5 or Sonnet 5.5 and records why when Stage 2 is off or Z.ai unavailable. A leak-check BLOCK stops without fallback. Reviews go by class; explore, draft, implement and repair do not.
 
 Plus the session handover (the eighth movement — `docs/journal/handover/`,
 `direction: framework->framework`) and the question protocol:
@@ -106,27 +105,32 @@ Full doctrine: `docs/WORKFLOW.md`, in English since 2026-09-29.
 ## Communication and session continuity
 
 - Speak German with the maintainer; keep repository artifacts English.
-- Use short, plainly worded messages with clear headings. Lead with the main
+- Use short, plainly worded messages with clear headings. Explain technical
+  terms and identifiers at first use in every message. Lead with the main
   point and one concrete next action; show at most three immediate priorities.
-  Explain necessary technical terms and keep optional detail separate.
-- When describing changes, say what behavior changed and why it matters.
-  Distinguish proposed, implemented and tested work explicitly.
-- Ask one decision at a time when possible, with a recommendation and its
-  consequence. Do not ask again for settled decisions or existing permission.
+  Keep optional detail separate.
+- **Every question carries its context** (ADR 0018): before any options, short
+  Topic; Intention (why now); Today; Repository change; Architecture change,
+  in plain words, the question last on its own line. It covers every question
+  — interviews, spec decisions, review ambiguities, plan cards, conversation
+  — in every harness, for everyone; the reason is ADHD (`docs/WORKFLOW.md`,
+  "The question protocol").
+- Say what behavior changed and why it matters; mark proposed, implemented and
+  tested work apart. Ask one decision at a time, with a recommendation and its
+  consequence; do not re-ask settled decisions or existing permission.
 - An orchestrating session shows a sub-agent's plan card to the maintainer
   unchanged; the veto stays the maintainer's (`prompts/03-plan.md`).
 - At session start or after a break, read the latest relevant handover and its
   addenda; check the working tree and current PR state before acting. Begin
   with a short orientation: **Where we are / Next step / Needed from you**.
-  Say "nothing right now" when no answer is needed. Do not require the user
-  to reconstruct the previous chat or read the entire backlog.
+  Say "nothing right now" when no answer is needed; never make the user
+  rebuild the chat or read the whole backlog.
 - Before ending or handing over a session, maintain a dated file under
   `docs/journal/handover/`. Record the objective, completed work and evidence,
   decisions and preferences, unfinished work/blockers, branch/commit/PR,
-  parallel-session ownership constraints, and one concrete resumption action.
-  Preserve prior records with a dated addendum; task status stays in Beads.
-- Link the handover in the closing message. The next session must be able to
-  resume from that file without asking the maintainer to repeat the context.
+  parallel-session ownership, and one concrete resumption action. Preserve
+  prior records with a dated addendum; task status stays in Beads.
+- Link the handover in the closing message; the next session resumes from it.
 
 ## Tracker quick reference
 
@@ -146,46 +150,42 @@ tools/bd dolt push          # push tracker data to origin (refs/dolt/data)
   committing or switching the branch, and offer a worktree. House rule 4 holds
   for the tracker meanwhile.
 - **Worktrees: one change, one bead, one branch, one worktree, one session.**
-  A worktree lives under `.claude/worktrees/<name>` (ignored already, and
-  Claude Code's own place), is branched from a freshly fetched `origin/main`,
-  and is removed after the merge. Sibling directories are retired (D-5).
-  `tools/bd` finds the main checkout's tracker from there without any
-  variable, and concurrent writers lose nothing
+  A worktree lives under `.claude/worktrees/<name>`, is branched from a
+  freshly fetched `origin/main`, and is removed after the merge. Sibling
+  directories are retired (D-5). `tools/bd` finds the main checkout's tracker
+  from there, and concurrent writers lose nothing
   (`docs/research/2026-09-23-worktree-tracker-writes.md`); who may write is
-  still house rule 4, and a worker claims with `--actor <session>`.
-  Each new checkout or worktree runs `make venv` once before `make verify`;
-  the suite fails under an interpreter that does not match
-  `requirements-ci.txt` (bead coding-harness-ei0).
+  still house rule 4, and a worker claims with `--actor <session>`. Each new
+  checkout or worktree runs `make venv` once before `make verify`; the suite
+  fails under an interpreter that does not match `requirements-ci.txt`
+  (bead coding-harness-ei0).
 - **A text-only change (Markdown outside `scripts/`, `tests/`, `prompts/`,
-  `decisions/`) skips the local `make verify`;** the CI is its gate.
+  `decisions/`) skips the local `make verify`;** CI is its gate.
 - **Omnigent starts inside the worktree** (`omnigent claude
-  --use-native-config`, ADR 0006). Omnigent's own tools that write, run,
-  spawn or change state are denied by name in `.claude/settings.json`;
-  read-only ones stay usable, and the one that may send task text to a routing
-  judge (`sys_advise_models`) is asked about each time. The one list is `scripts/omnigent_policy.py`; the
-  Omnigent default policy from the same list (`tools/omnigent/`) is a second
-  layer the maintainer installs, and nothing depends on it alone. Details and
-  reasons: `docs/WORKFLOW.md` §3, "Worktrees".
-- **What could not be read is "not read", never "none".** A file that would
-  not open and a query that returned nothing say different things.
+  --use-native-config`, ADR 0006). Its tools that write, run, spawn or change
+  state are denied by name in `.claude/settings.json`; the one that may send
+  task text to a routing judge (`sys_advise_models`) is asked each time. Its
+  Omnigent default policy (`tools/omnigent/`) is a second layer the maintainer
+  installs; nothing depends on it alone. The one list and details:
+  `docs/WORKFLOW.md` §3, "Worktrees".
+- **What could not be read is "not read", never "none"** — an unopened file
+  and an empty query say different things.
 - **A standing rule belongs in the repository's `AGENTS.md`** — every harness
-  reads it; the chat, a memory and a harness's user file do not reach the next
-  one. Where an agent may not write that file (lakeswitch declares it
-  `human-decided`), propose the exact text instead.
-- **Research about this repository lives in `docs/research/`.** A note in
-  the maintainer's vault, a chat or a rendered page is a view of it: it names
-  the source path and commit, and a finding is never first written there.
-  Personal reasons to care stay outside the repository.
-- **The maintainer's Claude Code display** — status line, entry at session
-  start, handover safety net, parallel-session warning, `/handover` — lives in
-  `tools/claude-code/`; each line of the display is documented beside the tool.
-  Change it there and reinstall with `tools/claude-code/install.sh`, never
+  reads it; chat, memory and a user file do not reach the next one. Where an
+  agent may not write it (lakeswitch: `human-decided`), propose the text.
+- **Research about this repository lives in `docs/research/`.** A vault note,
+  chat or rendered page is a view of it: it names the source path and commit,
+  and a finding is never first written there. Personal reasons to care stay
+  outside the repository.
+- **The maintainer's Claude Code display** (status line, session entry,
+  handover safety net, `/handover`) lives, documented, in `tools/claude-code/`;
+  change it there and reinstall with `tools/claude-code/install.sh`, never
   only in `~/.claude`.
 - **Sub-agents survive a budget pause** (maintainer, 2026-10-06). Each commits
   and pushes after every green step and ends its report with a `Resume:` line;
   the orchestrator keeps a list (agent id, branch, last pushed commit, next
-  step) and, after the pause, resumes the agent or starts a fresh one there.
-  Work one change at a time, with few agents and a visible queue.
+  step) and resumes or restarts there. One change at a time, with few agents
+  and a visible queue.
 - **Findings returned as text** (when the harness refuses a reviewer's write)
   are committed unchanged by the orchestrator, which says so in the commit.
   MINOR rows on tests, security or false statements are repaired without

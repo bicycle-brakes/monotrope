@@ -1,9 +1,11 @@
 """The checked interactive session behind `stage2.py session` - and every boundary it refuses.
 
 Every case runs the verb in-process against a temporary repository with a real
-git worktree at `.claude/worktrees/demo`, and against four stand-ins: `codex`,
-`pi`, `opencode` and `osascript` record their call, print canned output and
-contact nothing. The `opencode` stand-in exists to prove it is never called. The `osascript` stand-in can execute the command it was handed through
+git worktree at `.claude/worktrees/demo`, and against five stand-ins: `codex`,
+`pi`, `opencode`, `osascript` and the repository wrapper stand-in `pin-pi`
+record their call, print canned output and contact nothing. The `pi` stand-in
+sits on PATH, where the runner may never reach Pi; the wrapper stand-in is what
+`runner.PI_WRAPPER` names. The `opencode` stand-in exists to prove it is never called. The `osascript` stand-in can execute the command it was handed through
 /bin/sh, so a test sees exactly what a Terminal would have run. No test opens a
 window, starts a real CLI or reaches a model endpoint; the platform check is
 stubbed, so the suite runs on a machine that has no Terminal at all.
@@ -53,6 +55,10 @@ from pathlib import Path
 
 here = Path(__file__).resolve().parent
 name = Path(sys.argv[0]).name
+# The repository wrapper stand-in (`pin-pi`) answers and records as `pi`, so the
+# scripted steps line up; the record's path is what says which program ran.
+if name == "pin-pi":
+    name = "pi"
 scenario = json.loads((here / "scenario.json").read_text())
 log = here / "calls.jsonl"
 previous = [json.loads(line) for line in log.read_text().splitlines()] if log.exists() else []
@@ -70,7 +76,7 @@ for relative in step.get("delete", []):
 if step.get("sleep"):
     time.sleep(step["sleep"])
 
-record = {"name": name, "argv": argv, "env": dict(os.environ), "cwd": os.getcwd()}
+record = {"name": name, "path": sys.argv[0], "argv": argv, "env": dict(os.environ), "cwd": os.getcwd()}
 with log.open("a") as handle:
     handle.write(json.dumps(record) + "\\n")
 
@@ -229,10 +235,13 @@ def world(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> World:
 
     bin_dir = tmp_path / "bin"
     bin_dir.mkdir()
-    for name in ("codex", "pi", "opencode", "osascript"):
+    for name in ("codex", "pi", "opencode", "osascript", "pin-pi"):
         program = bin_dir / name
         program.write_text(LAUNCH_STAND_IN.replace("@PYTHON@", sys.executable), encoding="utf-8")
         program.chmod(0o755)
+    # The runner's one path to Pi is patched to the wrapper stand-in; the `pi`
+    # stand-in stays on PATH, where nothing may call it.
+    monkeypatch.setattr(stage2, "PI_WRAPPER", bin_dir / "pin-pi")
     git_dir = tmp_path / "gitbin"
     git_dir.mkdir()
     (git_dir / "git").symlink_to(shutil.which("git"))
@@ -767,6 +776,22 @@ def test_pi_is_dispatched_interactively_with_the_policy_extension(world: World) 
     assert world.calls("opencode") == [], "the OpenCode CLI is never called"
 
 
+def test_all_session_pi_launches_use_repository_wrapper(world: World) -> None:
+    """Criterion 5: version check, confirm-load and the Terminal command all name the repository wrapper; the PATH pi stays unused."""
+    world.declare_go()
+    world.script(pi=pi_steps({}), osascript=[{"exec_command": True}])
+    assert world.run(model=GO_MODEL) == 0
+    wrapper = str(world.bin / "pin-pi")
+    version, readback, launch = world.calls("pi")
+    assert version["path"] == wrapper, "the pin check resolved Pi from PATH"
+    assert readback["path"] == wrapper, "the confirm-load bypassed the repository wrapper"
+    assert launch["path"] == wrapper, "the Terminal dispatch bypassed the repository wrapper"
+    assert wrapper in world.command(), "Terminal was not told the repository wrapper"
+    # the fault: the PATH pi stand-in exists, and nothing called it
+    assert (world.bin / "pi").is_file()
+    assert not [call for call in world.calls("pi") if call["path"] == str(world.bin / "pi")]
+
+
 def test_the_runners_own_pi_calls_read_nothing_of_the_maintainers(world: World) -> None:
     world.declare_go()
     world.script(pi=pi_steps({}), osascript=[{"exec_command": True}])
@@ -785,7 +810,7 @@ def test_the_runners_own_pi_calls_read_nothing_of_the_maintainers(world: World) 
 @pytest.mark.parametrize(
     ("version", "needle"),
     [
-        ({"stdout": "1.0.9\n"}, "not the pinned"),
+        ({"stdout": f"{stage2.PI_VERSION}rc1\n"}, "not the pinned"),
         ({"stdout": ""}, "printed nothing"),
         ({"exit": 3}, "ended 3"),
     ],

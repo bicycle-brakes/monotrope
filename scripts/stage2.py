@@ -21,11 +21,11 @@ stands between the rule and the call.
     python3 scripts/stage2.py probe        <change>   # one call per rung, no record written
     python3 scripts/stage2.py session      <change>   # interactive Codex/Pi, a Terminal window
 
-Each loop round and the probe check `pi --version` against `PI_VERSION` first;
+Each loop round and the probe check `tools/pi/pi --version` against `PI_VERSION` first;
 any other answer refuses with exit 2 before the leak check and before any call.
 
 `explore`, `implement` and `repair` accept `--stage2-off [REASON]`: the declared
-Stage-1 route uses Haiku 4.5 or Sonnet 5.5. A leak refusal never falls back.
+Stage-1 route uses Haiku 5.5 or Sonnet 5.5. A leak refusal never falls back.
 Implement lets the model edit but not run commands; before `make verify` the
 runner applies ruff's safe fixes and its formatter to the changed Python files
 under `scripts/` and `tests/`, then runs `make verify`, checks the time log and
@@ -149,9 +149,16 @@ REPO_ROOT = Path(__file__).resolve().parent.parent
 GLM_FLASH = ("glm-coding-plan", "glm-5.3-flash", "max")
 # GLM 5.3, not Flash: the draft's fallback routes here (the repair did until ADR 0017), shared with stage2_runs.py.
 GLM = ("glm-coding-plan", "glm-5.3", "max")
-HAIKU = ("claude-code-plan", "claude-haiku-4-5", None)
+HAIKU = ("claude-code-plan", "claude-haiku-5-5", None)
 SONNET = ("claude-code-plan", "claude-sonnet-5-5", "medium")
-CODEX = ("openai-codex", "gpt-6.1-sol", "max")
+# Sol's reasoning effort, one entry per runner verb (bead coding-harness-yzk): the draft and the
+# review start at `high`, the repair at `medium`. This mapping is the one place a later adjustment
+# edits - the instructions link its entries and the tests read them. A call's verb selects the
+# entry, retries included: the `codex-repair` route label names a retry of draft and repair and
+# picks no policy of its own. `CODEX` keeps its endpoint identity with an empty effort slot;
+# `run_codex` takes the effort from the caller's verb instead.
+CODEX_EFFORTS = {"draft": "high", "repair": "medium", "review": "high"}
+CODEX = ("openai-codex", "gpt-6.1-sol", None)
 # Opus 5.5, the spec review (2a) since ADR 0016: the strongest review on the repository's highest-demand effort.
 OPUS = ("claude-code-plan", "claude-opus-5-5", "xhigh")
 # A new ADR file of a draft: four digits, a slug of lowercase letters, digits and hyphens. Counted against the
@@ -163,8 +170,36 @@ CARD_LABELS = ("For you:", "Done when:", "Appetite:", "Not now:", "Pre-mortem:")
 DRAFT_PROMPTS = ("02-spec.md", "02b-design.md", "03-plan.md")
 GLM_BASE_URL = "https://api.z.ai/api/anthropic"
 OPENCODE = "opencode-go"
-# The one Pi the loop's isolation was measured on (research §L); any other prints a refusal.
-PI_VERSION = "1.1.0"
+# The runner's own Pi (bead coding-harness-agx, ADR 0019): one repository-local
+# install under `tools/pi/`, started only through its wrapper. The pin has one
+# source - the manifest the wrapper enforces - and is read from it, so a moved
+# pin cannot leave the runner checking a version it no longer ships. A missing
+# or floating pin stops the import: without it the runner has no pin to check.
+# The loop's isolation was first measured by hand on Pi 1.1.0 (research §L);
+# the offline contract suite now measures the pinned install itself.
+PI_TOOLS_DIR = REPO_ROOT / "tools" / "pi"
+PI_WRAPPER = PI_TOOLS_DIR / "pi"
+PI_MANIFEST = PI_TOOLS_DIR / "package.json"
+PI_PACKAGE = "@earendil-works/pi-coding-agent"
+
+
+def _pi_pin() -> str:
+    """The exact Pi version `tools/pi/package.json` pins - anything else stops the runner."""
+    try:
+        manifest = json.loads(PI_MANIFEST.read_text(encoding="utf-8"))
+        pin = manifest["dependencies"][PI_PACKAGE]
+        exact = isinstance(pin, str) and re.fullmatch(r"\d+\.\d+\.\d+", pin) is not None
+    except (OSError, UnicodeDecodeError, json.JSONDecodeError, KeyError, TypeError):
+        exact = False
+    if not exact:
+        raise SystemExit(
+            f"stage2: {PI_MANIFEST} does not pin an exact {PI_PACKAGE} version; "
+            "the runner has no pin to check (see tools/pi/README.md)."
+        )
+    return pin
+
+
+PI_VERSION = _pi_pin()
 PI_TOOLS = "read,grep,find,ls"
 # A reviewer call that has not ended after this many minutes is stopped (spec, criterion 15).
 REVIEWER_MINUTES = 30
@@ -784,14 +819,22 @@ def thread_id(stdout: str) -> str | None:
     return None
 
 
-def run_codex(ctx: Context, prompt: str, resume: str | None = None, writable: bool = False) -> tuple[str, str]:
+def run_codex(
+    ctx: Context, prompt: str, resume: str | None = None, writable: bool = False, *, verb: str
+) -> tuple[str, str]:
     """One Codex call, first or resumed, pinned the same way. Returns (answer, thread id).
 
     A review reads in the CLI's `read-only` sandbox; a draft writes in
     `workspace-write`, and the runner puts back what lands outside the change
-    folder. No call takes a bypass flag (spec, criterion 1).
+    folder. No call takes a bypass flag (spec, criterion 1). The reasoning
+    effort is the caller verb's entry of `CODEX_EFFORTS`, passed explicitly on
+    every argv, a resumed call included; that a resumed thread actually runs at
+    that effort inside Codex is not asserted (bead coding-harness-yzk, Q-6).
+    Only the verbs `CODEX_EFFORTS` names (draft, repair, review) may carry a
+    Codex route; any other verb stops with a `KeyError` before the call.
     """
-    _, model, effort = CODEX
+    _, model, _ = CODEX
+    effort = CODEX_EFFORTS[verb]
     with tempfile.TemporaryDirectory(prefix="stage2-") as tmp:
         answer_file = Path(tmp) / "answer.md"
         command = ["codex", "exec"]
@@ -827,17 +870,20 @@ def run_codex(ctx: Context, prompt: str, resume: str | None = None, writable: bo
 
 
 def require_pi() -> None:
-    """Refuse unless `pi --version` prints exactly the pinned version (spec, criterion 27).
+    """Refuse unless the repository wrapper prints exactly the pinned version (spec, criterion 27).
 
-    Runs before the prompt check, the call line and any call, in a scratch
-    directory with no key: a Pi off the pin sends nothing. The session verb
-    calls it after its argument and handover checks.
+    The wrapper is the one path to Pi (ADR 0019): it refuses a missing,
+    mismatched or unusable local install before any model request, and this
+    check ties its answer to the manifest pin. Runs before the prompt check,
+    the call line and any call, in a scratch directory with no key: a Pi off
+    the pin sends nothing. The session verb calls it after its argument and
+    handover checks.
     """
     with tempfile.TemporaryDirectory(prefix="stage2-") as tmp:
         env = foreign_env({"HOME": tmp, "PI_CODING_AGENT_DIR": tmp})
         try:
             done = launch(
-                ["pi", "--version"],
+                [str(PI_WRAPPER), "--version"],
                 Path(tmp),
                 env,
                 timeout=PI_VERSION_SECONDS,
@@ -845,11 +891,17 @@ def require_pi() -> None:
             )
         except CallFailed as error:
             raise Refused(
-                f"pi could not be checked ({error}); it is not the pinned {PI_VERSION}; no call starts."
+                f"{PI_WRAPPER} could not be checked ({error}); it is not the pinned {PI_VERSION}; no call starts."
             ) from None
     said = (done.stdout or "").strip()
     if done.returncode != 0:
-        raise Refused(f"pi --version ended {done.returncode}; it is not the pinned {PI_VERSION}; no call starts.")
+        # The wrapper's own refusal names the defect; its last lines travel with this one.
+        tail = "\n".join((done.stderr or "").splitlines()[-5:])
+        detail = f": {tail}" if tail else ""
+        raise Refused(
+            f"{PI_WRAPPER} --version ended {done.returncode}; it is not the pinned {PI_VERSION}; "
+            f"no call starts{detail}."
+        )
     if said != PI_VERSION:
         raise Refused(f"pi {said or 'printed nothing'} is not the pinned {PI_VERSION}; no call starts.")
 
@@ -857,13 +909,14 @@ def require_pi() -> None:
 def run_reviewer(ctx: Context, model: str, prompt: str, key: str) -> str:
     """One reviewer call of the loop: Pi against OpenCode Go's chat-completions address.
 
-    The launch is the measured set (spec, criterion 8): the rung's id under
-    the `opencode-go` provider, thinking `max` (Pi clamps it per model), the
-    read-only tools, every discovery switched off, no session, retries off.
-    Each call gets its own scratch directory: a `HOME`, an agent directory
-    whose only file is `settings.json`, and the prompt file. The key reaches
-    Pi as `OPENCODE_API_KEY` only. Returns the scrubbed answer. A call that
-    has not ended after `REVIEWER_MINUTES` is stopped (criterion 15).
+    The launch is the measured set (spec, criterion 8), started through the
+    repository wrapper (ADR 0019): the rung's id under the `opencode-go`
+    provider, thinking `max` (Pi clamps it per model), the read-only tools,
+    every discovery switched off, no session, retries off. Each call gets its
+    own scratch directory: a `HOME`, an agent directory whose only file is
+    `settings.json`, and the prompt file. The key reaches Pi as
+    `OPENCODE_API_KEY` only. Returns the scrubbed answer. A call that has not
+    ended after `REVIEWER_MINUTES` is stopped (criterion 15).
     """
     with tempfile.TemporaryDirectory(prefix="stage2-") as tmp:
         scratch = Path(tmp)
@@ -875,7 +928,7 @@ def run_reviewer(ctx: Context, model: str, prompt: str, key: str) -> str:
         prompt_file = scratch / "review-prompt.md"
         prompt_file.write_text(prompt, encoding="utf-8")
         command = [
-            "pi",
+            str(PI_WRAPPER),
             "--print",
             "--no-session",
             "--no-approve",
@@ -1069,7 +1122,7 @@ def review(root: Path, change: str) -> None:
         recorded = None
     prompt = phase_prompt(root, "06-review.md", change, "Write only your verdict now.")
     begin_call(ctx, "review", CODEX, prompt)
-    answer, thread = run_codex(ctx, prompt, resume=recorded)
+    answer, thread = run_codex(ctx, prompt, resume=recorded, verb="review")
     rows, _ = parse_rows(answer)
     block = "\n\n".join(
         [
@@ -1097,7 +1150,7 @@ def review(root: Path, change: str) -> None:
         [MARK_FORMAT, "Your verdict stands and is not changed.", f"The loop rows:\n{listing}", READ_REQUEST]
     )
     begin_call(ctx, "review (loop marks)", CODEX, marks_prompt)
-    answer, _ = run_codex(ctx, marks_prompt, resume=thread)
+    answer, _ = run_codex(ctx, marks_prompt, resume=thread, verb="review")
     marks = parse_marks(answer)
     fill_marks(ctx.findings, [r[0] for r in released], marks)
     print(f"review: {len(marks)} of {len(released)} loop rows marked")
@@ -2430,7 +2483,7 @@ def run_attempts(
         try:
             if endpoint == CODEX:
                 # A fresh writing Codex call, never resumed; its thread is not kept (ADR 0017).
-                answer, _ = run_codex(ctx, prompt, writable=True)
+                answer, _ = run_codex(ctx, prompt, writable=True, verb=verb)
                 if not answer.strip():
                     raise CallFailed("codex: the answer is empty")
             else:
@@ -2794,7 +2847,7 @@ def draft(root: Path, change: str) -> None:
         call_error: CallFailed | None = None
         try:
             if endpoint == CODEX:
-                run_codex(ctx, prompt, writable=True)
+                run_codex(ctx, prompt, writable=True, verb="draft")
             else:
                 run_work_model(ctx, prompt, endpoint, writable=True, key=key)
         except CallFailed as error:

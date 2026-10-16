@@ -160,6 +160,15 @@ gates:
     placement: both
     reason: A feature that merged without its maintainer's answers is the guess phase 1a exists to prevent (maintainer, 2026-10-08); the gate counts distinct answered records per class, sees ADR paths in every diff state, and holds the stock exempt before its cut-off.
 
+  - id: question-context
+    title: Every new answered interview record keeps its context
+    command: python3 scripts/check_question_context.py
+    job: verify
+    enforcement: block
+    floor: false
+    placement: both
+    reason: The interview showed each question's context and the record dropped it (maintainer, 2026-10-14, bead coding-harness-zs7); the gate holds every answered record from its own recording day on to one non-blank `context` value — presence only, older answers stay exempt (ADR 0018).
+
   - id: criterion-ledger
     title: Every test a plan names for an acceptance criterion still exists
     command: python3 scripts/check_criterion_ledger.py
@@ -212,6 +221,7 @@ gates:
       globs: |
         **/*.md
         !docs/journal/**
+        !tools/pi/node_modules/**
     job: verify
     enforcement: report
     floor: false

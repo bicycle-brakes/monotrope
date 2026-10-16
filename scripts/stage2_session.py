@@ -235,11 +235,23 @@ def handover_prompt(ctx, handover: str | None, runner) -> tuple[str, str]:
 
 
 def executables(transport: str, runner) -> tuple[str, str]:
-    """The resolved CLI and osascript. A missing executable refuses before any dispatch (exit 2)."""
-    name = "codex" if transport == "codex" else "pi"
-    cli = shutil.which(name)
-    if cli is None:
-        raise runner.Refused(f"the {name} CLI is not on PATH; a session cannot start.")
+    """The resolved CLI and osascript. A missing executable refuses before any dispatch (exit 2).
+
+    Pi comes only from the repository wrapper (ADR 0019): the runner's own
+    pinned install, checked against the manifest - never the `pi` on PATH.
+    Codex stays a PATH lookup, and osascript is the only way a window opens.
+    """
+    if transport == "pi":
+        cli = str(runner.PI_WRAPPER)
+        if not Path(cli).is_file():
+            raise runner.Refused(
+                f"the repository Pi wrapper {cli} is missing; a session cannot start. "
+                "Set the pinned install up with: bash tools/pi/install.sh (see tools/pi/README.md)."
+            )
+    else:
+        cli = shutil.which("codex")
+        if cli is None:
+            raise runner.Refused("the codex CLI is not on PATH; a session cannot start.")
     terminal = shutil.which("osascript")
     if terminal is None:
         raise runner.Refused("osascript is not on PATH; session dispatch needs macOS Terminal.")
