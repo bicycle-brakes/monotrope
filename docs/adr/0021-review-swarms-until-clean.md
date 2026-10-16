@@ -19,8 +19,9 @@ tags: [adr, stage-2, review-loop, opencode-go, swarm]
   is proposed, closed is rejected. Amends ADR 0011 decisions 3 and 8 and
   ADR 0017 decision 6; supersedes no ADR. Amends no D- or O-number.
 * Review: the maintainer chose the direction in Q-1 through Q-8 on
-  2026-10-14 and corrected free admission and the Flash round in Q-9/Q-10
-  on 2026-10-16 (`plans/changes/loop-until-clean/decisions.md`). Acceptance
+  2026-10-14 and corrected free admission, the Flash round, live refresh and
+  configurable selection in Q-9/Q-10 and the addenda of 2026-10-16
+  (`plans/changes/loop-until-clean/decisions.md`). Acceptance
   is the merge commit, recorded nowhere else; the header's review remains
   pending · Decider: maintainer · prepared by Codex through stage 2.
 * Date: 2026-10-16 · takes effect on merge.
@@ -42,12 +43,14 @@ draft's undeclared-free-model exclusion and sequential Flash interpretation.
 The existing ADR answer names this amendment as 0021.
 
 The repository-pinned Pi and its isolation remain ADR 0019's launch path.
-Source inspection of the installed Pi on 2026-10-16 shows a static Go model
-catalog behind `--list-models`: the Go provider imports catalog data and
-supplies no `fetchModels` callback (`pi-ai/dist/providers/opencode-go.js`;
-`pi-ai/dist/models.js`; `pi-coding-agent/dist/cli/list-models.js`). Therefore
-checking the installed list per run does not measure the vendor's live
-availability or whether a call is billed free.
+The final decisions addendum of 2026-10-16 (after `a0d5bc8`) records a
+corrected Pi 1.2.0 source reading: `core/remote-catalog-provider.js` obtains
+models from `pi.dev` and caches them for four hours;
+`package-manager-cli.js` forces refresh through `pi update models`.
+The maintainer requested live retrieval and retained Pi's catalog after
+its distinction from Go's own endpoint was explained. They also requested
+easy later changes to the free-model rule. Catalog membership still does
+not measure whether a model call is actually billed free.
 
 ## Decision Drivers
 
@@ -55,6 +58,8 @@ availability or whether a call is billed free.
 - Honor the free-first and parallel-three-Flash order the maintainer stated.
 - Bound paid review by declared models without repeating the final rung.
 - Admit unread terms only for the diff-confined discovered free class.
+- Refresh the catalog live before each fresh run and keep selection editable
+  through an ordinary configuration PR.
 - Escalate when repairs keep generating findings, and retain the existing
   declaration, leak, row-decision, verification and release guards.
 
@@ -82,12 +87,19 @@ the corrected order and automatic free admission.
    loop before any paid review. This amends ADR 0011 decision 3's compulsory
    second round, three-round cap and special round-3 admission rule.
 2. **Round 1 is the discovered free Go swarm.** Before each fresh loop run,
-   the runner checks the pinned Pi's `--list-models` table, selecting exact
-   provider `opencode-go` and ids ending in `-free`, never provider `opencode`
-   (Zen). All distinct matches enter automatically without individual YAML
-   entries. Record check date/time, source, Pi version and exact list in the
-   run record. A failed, unreadable or empty check refuses the run. State
-   the pin-limited freshness and unmeasured free billing explicitly.
+   the runner forces `tools/pi/pi update models` in its scratch agent
+   directory, then reads `tools/pi/pi --list-models` there. Failed/timed-out
+   refresh refuses before listing or model calls; no stale-cache fallback.
+   The YAML rule holds provider (initially `opencode-go`), id suffix
+   (initially `-free`), and include/exclude lists with date and reason per
+   entry. Include only ids present under the configured Go provider in that
+   catalog; exclusions win. Never admit provider `opencode` (Zen). All
+   selected ids enter without individual declarations; no free id/suffix
+   literal belongs in runner code. Invalid rules, unreadable/empty selection
+   or failed listing refuse the run. Record UTC check time, source `pi.dev`,
+   Pi version, rule, catalog and selected ids. Changes apply to fresh runs
+   through an ordinary YAML PR. State the live intermediary and unmeasured
+   free billing explicitly.
 3. **The free class is declared and confined.** The endpoint entry declares
    this class and the accepted unread retention/training terms (Q-8/Q-9).
    Admission requires membership in this run's discovery plus the free-only
@@ -146,14 +158,16 @@ the corrected order and automatic free admission.
   failed attempts, probes and subscription consumption remain visible.
 - The runner owns free discovery and history; the orchestrator owes paid
   terms readings, row decisions, green repair checks and skipped-model
-  handover notes. The installed catalog cannot promise the live free offer.
+  handover notes. The live Pi catalog is an intermediary rather than Go's
+  own endpoint, and cannot promise actual free billing. Rule changes remain
+  configuration edits; in-flight runs retain their original snapshot.
 - Live doctrine and tests move together. Older ADR bodies remain historical;
   their round-budget text is read with this amendment.
 
 ## Validation
 
 - The change's `plan.md` criterion ledger maps all 16 criteria to tests,
-  including concurrency, dynamic Go admission, real pinned-Pi loopback
+  including concurrency, forced live refresh, configurable Go admission, real pinned-Pi loopback
   confinement, terms exclusion, both swarms, stops and release continuity.
 - The verification commands in that plan and `make verify` must pass.
 - Phase 4 records terms readings/skips, compatibility-probe evidence and the

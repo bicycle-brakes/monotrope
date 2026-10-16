@@ -18,8 +18,8 @@ tags: [plan, stage2, review-loop, opencode-go, swarm]
 # Plan — `loop-until-clean`
 
 ```text
-For you:     The review loop stops when no finding is accepted: free Go models first, three Flash models together next, then one paid model per round, with the repair brake and ladder end preserved.
-Done when:   All 16 criteria have their evidence, free discovery and both swarms work, paid terms are read or models skipped, and make verify is green.
+For you:     The review loop stops when no finding is accepted: live-checked free Go models first, three Flash models together next, then one paid model per round; free selection stays editable in YAML.
+Done when:   All 16 criteria have their evidence, live refresh and configurable free selection work, both swarms and stop rules hold, paid terms are read or models skipped, and make verify is green.
 Appetite:    8 h of phase 4, repair rounds included; a stop, not an estimate.
 Not now:     Research swarm, structure-first review, live progress, different repair or phase-6 routing, and automatic provider fallbacks.
 Pre-mortem:  suppose it failed: most likely because release lost the stage history and let an already-used reviewer run again.
@@ -28,7 +28,8 @@ Starts unless you say stop.
 
 Implements `spec.md`; the design essentials phase 4 needs are carried below.
 Q-9 requires automatic free Go membership; Q-10 requires the separate paid
-Flash swarm. The ADR answer is already recorded; do not rewrite it.
+Flash swarm. The last decisions addendum requires forced live refresh and
+YAML selection. The ADR answer is already recorded; do not rewrite it.
 
 ## Steps and files
 
@@ -40,13 +41,17 @@ Flash swarm. The ADR answer is already recorded; do not rewrite it.
    or exhausted stages, naming the round or maintainer as appropriate.
    Treat `fixed` as accepted everywhere. Skip an empty paid Flash stage
    without inventing a round; no failed-only attempt consumes a stage.
-2. **`scripts/stage2.py` — free discovery and declaration.** Run the pinned
-   `tools/pi/pi --list-models` before round 1 with fresh isolated HOME/agent
-   directories, disabled loaders, timeout and environment-only credential.
-   Parse provider/model table columns; choose exact `opencode-go` and suffix
-   `-free`, deduplicate deterministically. Refuse failed/malformed/empty
-   output. Persist date/time, pin, source `pinned-pi-catalog` and exact list;
-   state that neither live availability nor free billing is measured. Add
+2. **`scripts/stage2.py` — free discovery and declaration.** Before round 1,
+   force `tools/pi/pi update models`, then run `tools/pi/pi --list-models`
+   in the same fresh isolated HOME/agent directories, with disabled loaders,
+   timeouts and environment-only credential. Never list/use cached models
+   after a failed/timed-out refresh. Parse provider/model table columns;
+   read provider, suffix, include and exclude from YAML without free ids or
+   suffix literals in code. Select catalog-present ids of the configured
+   provider matching suffix or include, remove exclusions, deduplicate in
+   catalog order; reject Zen, invalid rules and failed/malformed/empty output.
+   Persist UTC date/time, pin, source `pi.dev`, rule, catalog and selected list;
+   state that this live intermediary does not verify Go billing. Add
    call-scoped free-class admission requiring both discovery membership and
    confined free-review purpose; generic paid/session declaration stays strict.
 3. **`scripts/stage2.py` — payload and parallel execution.** Build the free
@@ -71,7 +76,8 @@ Flash swarm. The ADR answer is already recorded; do not rewrite it.
    on release; reconstruct history from every released block plus the active
    record, never from quoted reviewer text. Test clean zero-row rounds,
    split releases, the fix-r brake and configuration edits. Probe rediscovers
-   free members and checks every distinct free/eligible paid id once with
+   free members with a forced refresh followed by listing and checks every
+   distinct free/eligible paid id once with
    the matching call purpose/tools, declaration and leak checks. Update help,
    module text and the `taken_in_round` citation to ADR 0017 as amended by 0021.
 5. **`model-endpoints.yaml` — declarations and measured terms.** Keep existing
@@ -79,16 +85,24 @@ Flash swarm. The ADR answer is already recorded; do not rewrite it.
    `deepseek-v4.1-flash`, `mimo-v2.6-flash`, `longcat-2.0`,
    `glm-5.3-flash`, `qwen3.8-flash`, `gpt-6-luna`, `claude-haiku-5.5`,
    `minimax-m2.7`, `mimo-v2.6-pro`. Add `flash_swarm` for eligible first-three
-   members and `free_stage: {provider: opencode-go, id_suffix: "-free", input: implementation-diff}`;
-   never add discovered free ids by hand. Read actual Go data terms in phase 4,
+   members and `free_stage: {provider: opencode-go, id_suffix: "-free", include: [], exclude: [], input: implementation-diff}`.
+   Exceptions are `{id, date, reason}` records; require nonempty id/reason
+   and an ISO date. Includes select only catalog-present Go ids; excludes
+   win, including over includes. No individual declaration is required for
+   discovered matches. Future rule changes use an ordinary YAML PR and take
+   effect on fresh runs; active runs keep their snapshot. Read actual Go data terms in phase 4,
    cite dates/sources for retention and training in the remark, and exclude
    unread/retaining/training paid ids. Record skipped ids and reasons for the
    handover in **`plans/changes/loop-until-clean/findings.md`**; do not silently
    respell refused ids. Preserve sourced price/limit claims without inventing
-   new ones. State the diff-only unread-terms exception and pin limitation.
+   new ones. State the diff-only unread-terms exception, forced refresh and
+   the live Pi catalog's source/billing limitation.
 6. **`tests/test_stage2.py`** — implement the ledger's new tests with local
    stand-ins and barrier-controlled concurrent calls; adapt existing single
-   reviewer fixtures and doctrine guards. Preserve test names referenced by
+   reviewer fixtures and doctrine guards. Exercise refresh-before-list
+   ordering, stale-cache refusal, timeouts, changing provider/suffix/rules
+   without code edits, dated exception validation, exclusion precedence,
+   catalog-absent includes and Zen rejection. Preserve test names referenced by
    other live/archived ledgers, including the fixed-round-two test, while
    updating operative expectations for the amendment. Historical ADR 0011,
    ADR 0017 and archived-design assertions still test historical text.
@@ -106,7 +120,7 @@ Flash swarm. The ADR answer is already recorded; do not rewrite it.
    escalation, model table, verb list and review-loop/repair sections;
    **`prompts/02a-spec-review.md`** and **`prompts/06-review.md`** replace
    their round-limit descriptions; **`prompts/04b-review-loop.md`** describes
-   both swarms, class discovery, confinement and stops;
+   both swarms, live class discovery, configurable selection, confinement and stops;
    **`templates/findings.md`** generalizes the repair-brake consequence.
    **`ROADMAP.md`** updates the review-swarm/until-clean item without claiming
    other queued work. **`docs/adr/0021-review-swarms-until-clean.md`** remains
@@ -149,6 +163,13 @@ that file is absent in this worktree on 2026-10-16. Do not fabricate a passing
 result or add it as part of this change. The outer runner performs full
 verification and the sole commit; this drafting call does neither.
 
+Draft checks on 2026-10-16: interview minimums, ADR answers and criterion
+ledger passed; required frontmatter, opening card, empty time section and
+generated-index equality were checked locally. The full registry's tracker
+coupling was not measured: no in-worktree render is supplied, and this call
+may read only the worktree and repository git directory. The outer runner
+owns that check along with `make verify`.
+
 ## Criterion ledger
 
 - 1: not yet written tests/test_stage2.py::test_a_clean_round_ends_the_loop — an empty or all-rejected round admits another call before or after release
@@ -157,7 +178,10 @@ verification and the sole commit; this drafting call does neither.
 - 3: not yet written tests/test_pi_contract.py::test_real_free_reviewer_has_only_the_implementation_diff — the actual pinned Pi sends canaries, tools or a tool response to the loopback capture
 - 4: not yet written tests/test_stage2.py::test_a_failed_swarm_member_preserves_successful_answers — a failed/malformed member erases successful rows or an all-failed attempt consumes a round
 - 4: tests/test_stage2.py::test_a_call_without_an_answer_is_not_a_round — an empty answer completes a round
-- 5: not yet written tests/test_stage2.py::test_free_discovery_admits_new_go_models_each_run — an undeclared new free Go model is omitted, Zen is called, the check is cached, empty/malformed discovery launches a call, or date/list is absent
+- 5: not yet written tests/test_stage2.py::test_free_discovery_admits_new_go_models_each_run — an undeclared new matching Go model is omitted, Zen is called, empty/malformed discovery launches a call, or date/list is absent
+- 5: not yet written tests/test_stage2.py::test_free_discovery_forces_live_refresh_before_listing — listing runs first, refresh/list use different scratch directories, a four-hour cached list is reused after failed/timed-out refresh, or the source/time is missing
+- 5: not yet written tests/test_stage2.py::test_free_selection_changes_in_yaml_without_runner_edits — suffix/include/exclude edits do not change membership, an excluded or catalog-absent id is called, or provider selection admits Zen
+- 5: not yet written tests/test_model_endpoints.py::test_free_selection_exceptions_require_dates_and_reasons — malformed rules or undated/unreasoned exception entries pass validation
 - 6: not yet written tests/test_model_endpoints.py::test_every_new_paid_model_carries_its_terms_reading — a paid declaration lacks dated retention/training evidence or a skipped requested id is unnamed
 - 6: not yet written tests/test_stage2.py::test_ineligible_paid_models_are_skipped_and_named — a disallowed paid model is called or empty eligible Flash membership creates a fake round
 - 7: not yet written tests/test_stage2.py::test_free_class_admission_is_bound_to_discovery_and_purpose — a guessed free id, Zen id, paid call or interactive session gains the exception
@@ -170,8 +194,8 @@ verification and the sole commit; this drafting call does neither.
 - 11: tests/test_stage2.py::test_round_three_starts_after_a_fixed_round_two_row — repair makes the preceding round clean or loses its count
 - 12: tests/test_stage2.py::test_an_undecided_loop_row_holds_the_next_round_and_the_release — a pending/evidence-incomplete row admits review or release
 - 13: not yet written tests/test_stage2.py::test_round_history_survives_split_releases_and_config_edits — clean/brake state, multi-digit counts or consumed stages are lost across releases
-- 14: not yet written tests/test_stage2.py::test_the_probe_checks_discovered_and_paid_models_once — a member is missing/repeated or a per-call guard/payload boundary is bypassed
-- 15: not yet written tests/test_stage2.py::test_the_loop_doctrine_names_both_swarms_until_clean — live text keeps the old cap/order/declaration rule, lacks the freshness limit, cites ADR 0015 or exceeds the AGENTS.md cap
-- 16: not yet written tests/test_stage2.py::test_adr_0021_amends_the_round_budget — the new record omits Q-9/Q-10 or modifies historical ADR bodies
+- 14: not yet written tests/test_stage2.py::test_the_probe_checks_discovered_and_paid_models_once — a member is missing/repeated, discovery skips forced live refresh or configured selection, or a per-call guard/payload boundary is bypassed
+- 15: not yet written tests/test_stage2.py::test_the_loop_doctrine_names_both_swarms_until_clean — live text keeps the old cap/order/declaration rule, claims pin-limited freshness, lacks live-source/configuration limits, cites ADR 0015 or exceeds the AGENTS.md cap
+- 16: not yet written tests/test_stage2.py::test_adr_0021_amends_the_round_budget — the new record omits Q-9/Q-10 or the live/configurable-selection addendum, or modifies historical ADR bodies
 
 ## Time used

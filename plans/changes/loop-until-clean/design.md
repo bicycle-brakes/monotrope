@@ -20,8 +20,9 @@ tags: [design, stage2, review-loop, opencode-go, swarm]
 # Design — `loop-until-clean`
 
 This feature keeps the existing stage-2 runner and external loop record.
-It implements the spec from Q-1 through Q-10, including the two corrections
-of 2026-10-16. All choices below are proposals until merge.
+It implements the spec from Q-1 through Q-10 and both addenda of 2026-10-16,
+including live refresh and configurable free selection. All choices below
+are proposals until merge.
 
 ## Alternatives
 
@@ -41,29 +42,40 @@ MiMo Pro meets the decisions; those are not implementation alternatives.
 
 ## Interfaces
 
-- **Runner → pinned Pi discovery.** Use `tools/pi/pi --list-models` in the
+- **Runner → pinned Pi discovery.** Force `tools/pi/pi update models`, then
+  use `tools/pi/pi --list-models` in the
   same isolated configuration/environment as reviewer calls, with discovery
   loaders disabled and the Go credential supplied only in the environment.
   Parse its table by header columns, not JSON or fuzzy model matching;
-  select exact provider `opencode-go`, id suffix `-free`, deduplicate in
-  deterministic order. Nonzero exit, warning indicating broken configuration,
-  malformed output or no members refuses before any review call. Record UTC
-  date/time, Pi version, source `pinned-pi-catalog` and selected ids.
+  select the configured provider and suffix plus included ids present in
+  that provider's catalog, then remove exclusions and deduplicate in catalog
+  order. Exclusions override both suffix matches and includes. Nonzero exit,
+  timeout of either command, warning indicating broken configuration,
+  malformed output or no members refuses before any review call; never
+  list/use an older cache after a failed refresh. Record UTC date/time, Pi
+  version, source `pi.dev`, rule, provider catalog and selected ids.
   Recheck on each fresh run, including a retry that completed no round;
   later rounds resume the snapshot rather than rediscover midway.
-- **Discovery freshness boundary.** Source read on 2026-10-16 in the local
-  Pi install: `dist/cli/list-models.js` uses `getAvailable`; the Go provider
-  (`pi-ai/dist/providers/opencode-go.js`) supplies imported static models
-  without `fetchModels`, and `pi-ai/dist/models.js` returns provider models.
-  Thus the Go catalog is pin-limited; neither a live offer nor free billing
-  was measured. No network updater is added by this change.
+- **Discovery freshness boundary.** The source reading recorded in the
+  final decisions addendum (2026-10-16, after `a0d5bc8`) found Pi's remote
+  catalog on `pi.dev`, a four-hour default cache and a forced refresh through
+  `update models`. Use that existing command, not a new catalog client.
+  The maintainer retained this live intermediary instead of Go's own
+  endpoint; actual free billing remains unmeasured.
 - **Runner → endpoint declaration.** Keep `modelle` as the ordered paid
   list; add English `flash_swarm` for its first three members and
-  `free_stage: {provider: opencode-go, id_suffix: "-free", input: implementation-diff}`.
+  `free_stage: {provider: opencode-go, id_suffix: "-free", include: [], exclude: [], input: implementation-diff}`.
+  Each include/exclude item is `{id, date, reason}`; validate nonempty ids,
+  ISO dates and reasons, and reject malformed rules before calls. Read all
+  provider/match/exception values from YAML; no free id or suffix literal
+  belongs in the runner. The provider must be the declared Go endpoint,
+  so a configuration edit cannot route this exception to Zen.
   Free admission also requires membership of this invocation's discovery
   snapshot and free-purpose input confinement. It is never a global suffix
   bypass in `declaration_problem`; paid/session paths still require an
   explicit model entry. Endpoint framework/residency checks still apply.
+  Editing the rule is an ordinary configuration PR; an active run retains
+  its snapshot, so edits apply to the next fresh run.
 - **Runner → reviewer subprocess.** Free calls use `--no-tools`, no
   `--tools`, no context/resource loaders, a scratch cwd and a standalone
   free-review prompt built from static output instructions plus the filtered
@@ -91,10 +103,13 @@ MiMo Pro meets the decisions; those are not implementation alternatives.
   requested ids and reasons in the remark/findings. `flash_swarm` is the
   eligible intersection with the first three; reject other overlap, duplicate
   ids or inconsistent membership. The remark declares the free class's
-  accepted unread terms and discovery's pin limitation. Do not invent terms,
+  accepted unread terms and discovery's live intermediary/billing limits.
+  Store the editable provider/suffix and dated, reasoned include/exclude
+  lists in `free_stage`, initially with empty exception lists. Do not invent terms,
   prices, region claims or supported ids during drafting.
 - **Run snapshot:** runner-owned metadata in the existing external loop
-  record captures the discovery, free members, paid stages, terms skips and
+  record captures the successful forced refresh/listing, timestamp, source,
+  Pi version, selection rule, catalog, free members, paid stages, terms skips and
   consumed stage identifiers. Persist it with the first completed round;
   configuration edits cannot change an in-flight run's stage mapping.
   If all Flash candidates are ineligible, record the skipped stage and move
@@ -131,7 +146,8 @@ flowchart LR
     person["Person: maintainer"] --> orch["Container: orchestrating session"]
     orch --> runner["Container: scripts/stage2.py"]
     config["Component: model-endpoints.yaml"] --> runner
-    runner --> catalog["Component: pinned Pi model catalog"]
+    runner --> catalog["Component: pinned Pi forced catalog refresh and selection"]
+    catalog --> remote["System: live Pi catalog on pi.dev"]
     runner --> free["Component: free swarm, diff only, no tools"]
     runner --> flash["Component: paid Flash swarm, read tools"]
     runner --> single["Component: single paid rung, read tools"]
@@ -145,7 +161,8 @@ flowchart LR
 
 **Added**
 
-- Discovery-bound free admission and the two parallel swarms with one writer.
+- Live discovery and configurable free admission, plus the two parallel
+  swarms with one writer.
 - Run membership/stage snapshot and mechanical repair-brake refusal.
 
 **Changed**

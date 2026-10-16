@@ -27,8 +27,9 @@ accepted finding, starting with a free swarm, then a three-Flash swarm, then
 single-model rounds, bounded by the declared ladder and the repair brake
 (bead `coding-harness-4fk`, implementation review as a swarm).
 Research: [research.md](research.md). Decisions: [decisions.md](decisions.md),
-Q-1 through Q-10 and the details of 2026-10-16; Q-10 replaces Q-5's round
-number, and Q-9 replaces the earlier draft's per-free-model declaration.
+Q-1 through Q-10 and both addenda of 2026-10-16; Q-10 replaces Q-5's round
+number, Q-9 replaces per-free-model declarations, and the final addendum
+requires a forced live catalog refresh and a configurable free-selection rule.
 The proposal takes effect on merge; this draft implements nothing.
 
 ## Problem
@@ -45,23 +46,30 @@ Evidence in `research.md`, exploration of 2026-10-14 at `e0cea42`:
   named models; the doctrine and its tests repeat the three-round budget.
 - `taken_in_round` cites superseded ADR 0015 instead of ADR 0017 decision 6.
 
+The decisions addendum after `a0d5bc8` corrects that draft's catalog claim:
+the recorded Pi 1.2.0 source reading found a remote catalog on `pi.dev`,
+normally cached for four hours, with `pi update models` forcing a refresh.
+Merely listing installed models does not meet the live-check requirement.
+
 ## Terms
 
 - **Accepted finding** — a row whose Status begins `taken` or `fixed`;
   fixing a finding preserves the fact that the review accepted it.
 - **Clean round** — a completed round with all rows decided and no accepted
   finding; no rows or all rejected rows count as clean (Q-2).
-- **Free swarm** — round 1, all distinct `opencode-go` model ids ending in
-  `-free` returned by the pinned Pi's check for this run, reviewed in parallel.
+- **Free swarm** — round 1, all distinct models in this run's freshly
+  retrieved catalog selected by the configured free-stage rule, in parallel.
+  Initially the rule selects provider `opencode-go`, ids ending `-free`,
+  plus dated, reasoned inclusions, minus dated, reasoned exclusions; Zen
+  models remain excluded regardless of an inclusion.
 - **Flash swarm** — round 2, the eligible members of DeepSeek V4.1 Flash,
   MiMo-V2.6-Flash and LongCat-2.0 reviewed in parallel (Q-10).
 - **Ladder** — the nine named paid models of Q-1, the first three grouped
   into round 2; each remaining eligible model gets one later round in order.
-- **Free check** — invocation of the repository-pinned Pi's `--list-models`
-  before round 1, filtering exact provider `opencode-go` and suffix `-free`.
-  This checks the installed catalog afresh, not the vendor's live offer or
-  billing: its freshness is limited by the Pi pin. The list is not evidence
-  that the provider actually bills a call at zero cost.
+- **Free check** — a forced network refresh of Pi's catalog followed by
+  listing and selecting models for this run. The live source is `pi.dev`,
+  not OpenCode Go's own model endpoint; no stale-cache fallback is allowed.
+  Catalog membership is not a measurement of actual zero-cost billing.
 - **fix-r round** — a round with an accepted finding in which every accepted
   row's Origin begins `fix-r` (the repair that caused it).
 - **Implementation diff** — source-code and test changes against the merge
@@ -95,13 +103,15 @@ Evidence in `research.md`, exploration of 2026-10-14 at `e0cea42`:
    *Refuted by:* discarding successful members, inventing findings for failed
    members, or counting an all-failed round as clean.
 
-5. When round 1 of a review-loop run is admitted, the runner checks the
-   pinned Pi's free list before review calls and records its date and exact
-   member list, automatically admitting newly found free Go models without
-   per-model YAML entries.
-   *Refuted by:* reusing yesterday's list, excluding an undeclared matching
-   Go model, calling a Zen model, omitting the recorded date/list, or making
-   a model call after an empty, failed or unreadable check.
+5. When a fresh review-loop run is admitted, its free membership is selected
+   from a successfully forced live Pi catalog refresh by the YAML free-stage
+   rule, with the check time and exact resulting list recorded.
+   *Refuted by:* listing before refresh, reusing a four-hour cache after a
+   failed/timed-out refresh, excluding a newly matching Go id merely because
+   it has no individual declaration, calling Zen or an excluded/absent id,
+   omitting the check time/list, launching after an empty/unreadable check,
+   or needing a runner-code edit to change the provider/match/include/exclude
+   rule. Include/exclude entries without a date or reason also refute it.
 
 6. When a paid model is admitted to either paid stage, its declaration
    contains a dated reading of retention and training terms; unreadable or
@@ -152,7 +162,8 @@ Evidence in `research.md`, exploration of 2026-10-14 at `e0cea42`:
     or a free probe gaining repository tools or content beyond criterion 3.
 
 15. When live repository text describes phase 4b, it agrees on the two swarms,
-    automatic Go discovery with its pin limitation, clean stop, paid ladder
+    live Pi catalog discovery and its source limitation, the configurable
+    free-selection rule, clean stop, paid ladder
     bound and repair brake, with no operative three-round rule.
     *Refuted by:* a conflicting sentence in `AGENTS.md`, `docs/WORKFLOW.md`,
     `prompts/02a-spec-review.md`, `prompts/04b-review-loop.md`,
@@ -162,7 +173,7 @@ Evidence in `research.md`, exploration of 2026-10-14 at `e0cea42`:
 
 16. When this decision pull request carries ADR 0021, it amends ADR 0011
     decisions 3 and 8 and ADR 0017 decision 6 with the agreed two-swarm
-    structure, automatic free discovery, privacy exception, stops and call
+    structure, live free discovery and configurable selection, privacy exception, stops and call
     bound, preserving both older records' bodies.
     *Refuted by:* an omitted agreement, the old per-free-model admission
     rule, a sequential Flash round, or rewriting either historical body.
@@ -174,7 +185,8 @@ Evidence in `research.md`, exploration of 2026-10-14 at `e0cea42`:
 - Changing the phase-6 verdict-before-release order, row evidence ownership,
   the external location of the loop record, or stage 1 and interactive sessions.
 - An arbitrary round cap, repeated final models or automatic address/model
-  fallbacks; a vendor catalog updater or a billing-verification service.
+  fallbacks; replacing Pi's catalog with OpenCode Go's own endpoint or adding
+  a billing-verification service.
 - A free stage with full repository access or paid models using the free
   class exception; translating existing German configuration keys.
 
@@ -204,7 +216,8 @@ Evidence in `research.md`, exploration of 2026-10-14 at `e0cea42`:
 
 ## Open decisions
 
-None open. The maintainer's Q-9 and Q-10 settle discovery and the Flash round;
+None open. The maintainer's Q-9, Q-10 and final addendum settle live discovery,
+configurable selection and the Flash round;
 `decisions/answers/loop-until-clean/adr.yaml` already records the ADR answer
 on 2026-10-16 and is not changed here.
 
@@ -214,8 +227,15 @@ I decide the following reversible details and state their reasons:
   eight hours: this redraft corrects the recorded interpretation of the same
   runner change, without widening its budget or replacing a human answer.
 - `[DETAIL]` The entry declares the free stage as a class; a run-local
-  discovery snapshot supplies its members, so Q-9 requires no YAML edits.
-  An empty or failed discovery refuses rather than silently skipping stage 1.
+  snapshot supplies its members without individual declarations. Apply
+  includes only to ids present under the configured provider in that live
+  catalog; exclusions win over matches and includes. This makes exceptions
+  editable without guessing ids or admitting Zen. Invalid rules, an empty
+  selection or failed refresh/listing refuse rather than skipping stage 1.
+- `[DETAIL]` Force `tools/pi/pi update models` before `--list-models` in
+  one scratch agent directory per fresh run/probe, with a timeout. Record
+  UTC check time, source `pi.dev`, Pi version, rule, catalog and selected ids;
+  this proves the chosen source was refreshed, not actual free billing.
 - `[DETAIL]` Round 2 retains paid read tools. Only the free stage was limited
   to the implementation diff; Q-10 does not extend that exception.
 - `[DETAIL]` Partial swarm success remains a completed, visibly partial
