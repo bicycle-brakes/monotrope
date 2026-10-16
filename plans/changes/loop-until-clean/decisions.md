@@ -300,3 +300,53 @@ read, facing a longer ladder against a diff that could not be taken back, we
 decided to keep them off the ladder, to achieve that no reviewer keeps the
 change's code beyond 30 days or trains on it, accepting nine rungs as the
 ladder's length. — 2026-10-17
+
+## Q-13 · How the ladder is ordered, and what replaces a failed Flash member
+
+asked: 2026-10-17
+answer: "B, es werden immer wieder neue Modelle kommen, der Flash Schwarm wird aber Manuell festgelegt. Sollte ein Modell im Flash Schwarm ausfallen, automatisch ein günstiges nachziehen, was noch nicht dabei ist , und melden" — option B: the runner orders the ladder by a declared cost value; the Flash swarm stays a hand-kept list; a Flash member that fails is replaced automatically by a cheap admitted model not yet in the round, and the replacement is reported
+answered_by: maintainer
+status: answered
+context: |
+  Topic: the order of the review ladder by cost.
+  Intention: cheap models review first, expensive ones only when earlier rounds were not clean.
+  Today: the order is the hand-kept `modelle` list (ADR 0021, decision 4); by the Go page's "Estimated requests" table (Go plan, requests per 5 hours, read 2026-10-17) it is already in cost order except that `minimax-m3` (3,200) stands before `mimo-v2.6-pro` (3,250).
+  Repository change: Options: A — swap the two last rungs, one line; B — the runner reads a declared cost value per model and orders the ladder itself, new code and tests; C — change nothing. Recommendation was A.
+  Architecture change: B replaces ADR 0021 decision 4's hand-ordered list by a declared cost value the runner sorts by.
+
+In the context of a Go catalog that keeps gaining models, facing a hand-kept
+ladder order that drifts from cost, we decided that the runner orders the
+paid ladder by a declared, dated cost value, keeps the Flash swarm as a
+hand-kept list, and replaces a failed Flash member by the cheapest admitted
+model not yet in the round, reporting it, to achieve cheap-first rounds that
+stay complete when one member fails, accepting new runner code and a cost
+value that must be read and dated for every model. — 2026-10-17
+
+## Details the orchestrating session decides for Q-13, 2026-10-17
+
+- **Cost value:** each ladder model's `modelle_terms` record carries
+  `anfragen_5h` (the Go page's "Estimated requests", Go column, requests per
+  5 hours), with the reading date and source it already has. More requests
+  is cheaper; the ladder is ordered by `anfragen_5h` descending, ties by id.
+  A model without the value is not dropped silently: it goes after every
+  valued model and is named on stderr and in the loop record. Reason: the Go
+  page states the value per model and it folds token price and quota into
+  one number; a declared value keeps the run offline and testable.
+- **`modelle` becomes a set:** its order no longer counts. Flash-swarm
+  members are not ladder rungs while they are in the swarm.
+- **Replacement:** when a Flash member fails (nonzero exit, timeout, empty
+  answer), the runner calls the cheapest admitted ladder model that is not
+  in this round and not yet consumed, with the same paid-round prompt; if
+  that one fails too, the next, each model at most once, until one answers
+  or the ladder is spent. A replacement is consumed: it is no later rung.
+  Each failure and each replacement is written in the loop record
+  (`<model> failed: <reason>; replaced by <model>`) and printed on stderr.
+- **Failure reason:** every failed member names the last line of Pi's
+  standard error, scrubbed, beside its exit, e.g. "Model is unavailable".
+- **Free swarm from the fresh catalog only:** the free stage selects only
+  ids in Pi's freshly fetched `opencode-go` overlay; an id that only Pi's
+  shipped list carries is not selected (measured 2026-10-17: Pi's
+  `mergeModels(baseline, dynamic)` in `core/remote-catalog-provider.js`
+  keeps baseline ids that pi.dev no longer lists, which is how
+  `step-5-preview-free` reached round 1 and failed with "Model is
+  unavailable").
