@@ -54,7 +54,8 @@ completed rows and is the agreed form for both writers.
 - **Claimed fix:** a colon line whose right side is a fixed status
   (`fixed — …`), whatever the shape of its left side (loop round 3, row L3-1).
 - **Legacy completion marker:** `; fixed by`, `; fixed:` or `; repaired by` within a Status
-  beginning `taken — …`, compared without regard to case.
+  beginning `taken — …`, compared without regard to case; a marker inside a
+  backtick span is quoted text, not a marker (phase 6, row F-6).
 
 ## Acceptance criteria
 
@@ -88,8 +89,10 @@ completed rows and is the agreed form for both writers.
 7. When any active row carries a legacy completion marker, repair refuses
    before a model call or `make verify`, naming the row and both canonical
    fixed-status forms without rewriting the row.
-   *Refuted by:* any marker in any row location reaches an attempt, is
-   silently skipped, or yields a refusal without the corrective form.
+   *Refuted by:* any unquoted marker in any row location reaches an attempt,
+   including one beside a backtick span, is silently skipped, or yields a
+   refusal without the corrective form; or a marker quoted inside a backtick
+   span refuses the repair.
 8. When a fixed line survives identifier filtering, the existing test-reference,
    code-row eligibility and red-first proof requirements continue to apply.
    *Refuted by:* an undefined or escaping test reference, a code row answered

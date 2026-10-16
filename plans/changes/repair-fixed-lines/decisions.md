@@ -85,3 +85,15 @@ Detail 1 is revised again; the text above stays as it was written.
   the letters `L` always count; with phase-6 rows alone, `L-3: see below` is
   prose. Reason: the Terms tie letters-hyphen-digits ids to the change's own
   row ids.
+
+## Addendum 2026-10-16 — after phase 6, round 2
+
+Detail 2 is narrowed; the text above stays as it was written.
+
+- **A quoted marker is not a marker (row F-6).** A legacy marker inside a
+  backtick span does not refuse the repair; an unquoted one still does, also
+  beside a backtick span. Reason: the round-3 repair of this change was
+  refused because the orchestrator's own Status quoted the marker text it
+  asked the repair to document (phase 6, row F-2); a Status that discusses
+  the markers is not a hand repair. The shared answer prompt states the same
+  exception, so prompt, doctrine and code agree.

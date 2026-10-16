@@ -314,3 +314,82 @@ Resume: commit this review text unchanged as the phase-6 table in `findings.md`,
 Rounds run: 3
 
 Stage-2 call, 2026-10-16: repair · attempt 1 · route codex · endpoint openai-codex · model gpt-6.1-sol · leak check clean over 462 files, 1293 commits, 12 rules.
+
+## Phase 6 — round 2, Opus 5.5, 2026-10-16
+
+Orchestrator's decision (2026-10-16): the re-check of fcb77aa confirmed F-1 to F-4 fixed by planted faults. Its two new rows are taken: F-6 (DIVERGENT, counted as a BLOCKER) narrows the spec to the code's backtick exception, which the orchestrator records in `spec.md` and `decisions.md` itself; F-7 is a missing test. The review text is committed unchanged in the next section.
+
+| ID | Severity | Dimension | Origin | Where | Finding | Reviewer | Status | Broke a test |
+|---|---|---|---|---|---|---|---|---|
+| F-6 | DIVERGENT | SPEC | fix-r1 | `plans/changes/repair-fixed-lines/spec.md:56-57` (Terms, "Legacy completion marker") and `:88-92` (criterion 7) against `scripts/stage2.py:1078-1081` (`legacy_completed`), `docs/WORKFLOW.md:1113-1114`, `tests/test_stage2.py:5677` (`test_repair_accepts_quoted_legacy_markers`) and `plans/changes/repair-fixed-lines/plan.md:121` | The question is: does a taken Status that holds a legacy marker inside a backtick span refuse the repair? Two places give opposite answers. The spec says yes: the Term is "`; fixed by`, `; fixed:` or `; repaired by` within a Status beginning `taken — …`", and criterion 7 is refuted when "any marker in any row location reaches an attempt". Since the F-2 repair (71b5095), the code strips backtick spans before matching, and the workflow says "Backtick-quoted markers do not count". The new test asserts exactly the refuted case: an attempt runs and checkpoints for `taken — test_a — the docs must name \`; fixed by\` too`. The criterion ledger files that test under criterion 7 with a refuted-by that is the opposite of the criterion's own. The shared answer prompt (`scripts/stage2.py:230-232`) also still says a Status naming a marker "refuses the repair before any call", with no exception. Neither decisions addendum records the narrowing; the F-2 row only offered it as one of two repairs. The repair diff did not touch `spec.md` or `decisions.md`. Repair: amend the Term and criterion 7 so that markers inside a backtick span do not count, record the reason as a dated addendum in `decisions.md`, and add the same exception to `REPAIR_ANSWER` or leave it there on purpose with a reason. | Opus 5.5 | taken — criteria 7 and 9: spec Terms, criterion 7 and a decisions addendum narrowed by the orchestrator; the shared answer prompt `REPAIR_ANSWER` names the backtick exception, and `test_repair_instructions_describe_answer_filtering_and_hand_repairs` pins it | |
+| F-7 | MINOR | TEST | fix-r1 | `tests/test_stage2.py:4711-4745` (`test_repair_refuses_legacy_completed_taken_statuses_before_call`) and `:5677` (`test_repair_accepts_quoted_legacy_markers`), with `scripts/stage2.py:1080` | Since the backtick exception, no test holds an unquoted marker in a Status that also carries a backtick span. The refusal test's three markers carry no backtick, and the quoted test has no unquoted marker. Two faults planted in the scratch copy keep all 6 cases of both tests green: (a) `lowered = "" if "`" in status else status.lower()`, which skips any Status with a backtick; (b) a greedy `` `.*` `` strip, which removes everything from the first backtick to the last. Every merged legacy status the change exists for carries backtick spans: `haiku-5-5/findings.md:34`, `:35`, `:51` and `pi-pin/findings.md:468-476`, for example ``taken — criterion 2: `test_…`; fixed: …``. Under fault (a) every one of them would reach the model again. That is the failure the change exists to end, and criterion 7 is refuted when a marker "reaches an attempt". The code is correct today: a probe refuses all 10 real statuses. Repair: add a parameter case whose Status carries an unquoted marker beside a backtick span, such as ``taken — `test_a`; fixed by hand`` and ``taken — `a` text; fixed: `tests/x.py::t` ``, in each row location, and check that both faults turn it red. | Opus 5.5 | taken — criterion 7: `test_repair_refuses_legacy_completed_taken_statuses_before_call` gains cases whose Status carries an unquoted marker beside a backtick span in each row location; the two planted faults of the row (skip any Status with a backtick, greedy span strip) turn it red | |
+
+## Opus 5.5 re-check text, phase 6 round 2, 2026-10-16
+
+Review text as returned by the Opus 5.5 reviewer (committed unchanged; the harness's two-space indentation of the hand-back removed, nothing else changed). Its own table repeats the rows above with empty Status cells; the decided rows are the ones above.
+
+Open BLOCKER: yes — BLOCKER 0 · DIVERGENT 1 · MAJOR 0 · MINOR 1 · STYLE 0 (re-check of explore/repair-fixed-lines at fcb77aa, 2026-10-16)
+
+## Rows F-1 to F-4
+
+- **F-1: fixed.** I planted all three workflow faults the row lists in the scratch copy's `docs/WORKFLOW.md`. Each one turned `test_repair_instructions_describe_answer_filtering_and_hand_repairs` red: (a) the hand-repair sentence deleted, (b) "replace the finished row's" rewritten as "append to the finished row's", (c) "`Broke a test`" dropped from the mark. A fourth fault also went red: (d) the sentence rewritten to append `; fixed by …` to the `taken — …` status.
+- **F-2: fixed, both halves.**
+  - Code half: with backtick spans counted again in `legacy_completed`, `test_repair_accepts_quoted_legacy_markers` goes red ×3.
+  - Advice half, refusal: with the new refusal sentence removed, `test_repair_refuses_legacy_completed_taken_statuses_before_call` goes red ×3.
+  - Advice half, workflow: with the workflow sentence "if the row is not repaired yet, reword its reason…" removed, the instruction test goes red.
+  - Unquoted markers still refuse: a fault that hides every marker turns the legacy refusal test red ×3. A direct probe of the 10 merged legacy statuses in `haiku-5-5` and `pi-pin` refuses all 10.
+- **F-3: fixed.**
+  - With the decoration not stripped (`rest.startswith`), the test goes red: 6 cases of `test_repair_rejects_unknown_claimed_fixes` (bold-over-colon and backtick forms) plus all 3 cases of `test_repair_rejects_malformed_known_fixed_lines`.
+  - With only `*` stripped, the 3 backtick cases go red.
+- **F-4: fixed, all three parts.**
+  - (1) `ident not in active` removed: `test_repair_rejects_malformed_known_fixed_lines[free-text-no-fixed-status]` goes red.
+  - (2) The `LOOP_ID` clause removed: `test_repair_rejects_unknown_loop_id_without_loop_rows` goes red.
+  - (3) A stop-list that ignores `expected`: `test_repair_accepts_exact_free_text_identifiers[expected]` goes red.
+
+| ID | Severity | Dimension | Origin | Where | Finding | Reviewer | Status | Broke a test |
+|---|---|---|---|---|---|---|---|---|
+| F-6 | DIVERGENT | SPEC | fix-r1 | `plans/changes/repair-fixed-lines/spec.md:56-57` (Terms, "Legacy completion marker") and `:88-92` (criterion 7) against `scripts/stage2.py:1078-1081` (`legacy_completed`), `docs/WORKFLOW.md:1113-1114`, `tests/test_stage2.py:5677` (`test_repair_accepts_quoted_legacy_markers`) and `plans/changes/repair-fixed-lines/plan.md:121` | The question is: does a taken Status that holds a legacy marker inside a backtick span refuse the repair? Two places give opposite answers. The spec says yes: the Term is "`; fixed by`, `; fixed:` or `; repaired by` within a Status beginning `taken — …`", and criterion 7 is refuted when "any marker in any row location reaches an attempt". Since the F-2 repair (71b5095), the code strips backtick spans before matching, and the workflow says "Backtick-quoted markers do not count". The new test asserts exactly the refuted case: an attempt runs and checkpoints for `taken — test_a — the docs must name \`; fixed by\` too`. The criterion ledger files that test under criterion 7 with a refuted-by that is the opposite of the criterion's own. The shared answer prompt (`scripts/stage2.py:230-232`) also still says a Status naming a marker "refuses the repair before any call", with no exception. Neither decisions addendum records the narrowing; the F-2 row only offered it as one of two repairs. The repair diff did not touch `spec.md` or `decisions.md`. Repair: amend the Term and criterion 7 so that markers inside a backtick span do not count, record the reason as a dated addendum in `decisions.md`, and add the same exception to `REPAIR_ANSWER` or leave it there on purpose with a reason. | Opus 5.5 | | |
+| F-7 | MINOR | TEST | fix-r1 | `tests/test_stage2.py:4711-4745` (`test_repair_refuses_legacy_completed_taken_statuses_before_call`) and `:5677` (`test_repair_accepts_quoted_legacy_markers`), with `scripts/stage2.py:1080` | Since the backtick exception, no test holds an unquoted marker in a Status that also carries a backtick span. The refusal test's three markers carry no backtick, and the quoted test has no unquoted marker. Two faults planted in the scratch copy keep all 6 cases of both tests green: (a) `lowered = "" if "`" in status else status.lower()`, which skips any Status with a backtick; (b) a greedy `` `.*` `` strip, which removes everything from the first backtick to the last. Every merged legacy status the change exists for carries backtick spans: `haiku-5-5/findings.md:34`, `:35`, `:51` and `pi-pin/findings.md:468-476`, for example ``taken — criterion 2: `test_…`; fixed: …``. Under fault (a) every one of them would reach the model again. That is the failure the change exists to end, and criterion 7 is refuted when a marker "reaches an attempt". The code is correct today: a probe refuses all 10 real statuses. Repair: add a parameter case whose Status carries an unquoted marker beside a backtick span, such as ``taken — `test_a`; fixed by hand`` and ``taken — `a` text; fixed: `tests/x.py::t` ``, in each row location, and check that both faults turn it red. | Opus 5.5 | | |
+
+## Check — repair diff
+
+The diff `git diff b508152 71b5095` touches `scripts/stage2.py`, `tests/test_stage2.py`, `docs/WORKFLOW.md` and the time and ledger entries in `plan.md`. `fcb77aa` changes only the four `Broke a test` cells in `findings.md` to `no`.
+
+- **Code: two one-line changes.**
+  - `legacy_completed` strips `` `+[^`]*`+ `` spans.
+  - The claimed-fix clause uses `rest.lstrip("*` ")`. It only widens which lines reach validation, so it fails closed; `rest` itself is passed on unchanged.
+  - The refusal text gains the "reword its reason" clause. Behaviour beyond the rows: the backtick exception, filed as F-6.
+- **Tests: no new soft pass.**
+  - No `or` chain accepts a wrong outcome.
+  - One assertion changed in `test_repair_rejects_malformed_known_fixed_lines`: `"no taken row carries this id" not in prompt` became `"custm: no taken row carries this id" in prompt`, and `"no fixed line: "` became `"no fixed line"`. Both are stricter, and the first is meaningful because the input now plants a decorated unknown claim.
+  - The F-1 test now pins `hand_rule` with its exact line breaks, and its self-mutation (c) depends on the `\n` wrap. A rewrap of that paragraph will fail the test loudly, never silently. It is brittle but fails closed, so I filed no row.
+- **`Broke a test` = `no` is confirmed.** I ran the b508152 test file against the repaired code (selection `-k "repair or fixed_line or red_first or not_a_test"`): 158 passed. No existing test turned red.
+- **Status cells.**
+  - F-4 names only `test_repair_rejects_malformed_known_fixed_lines`. Its parts (2) and (3) are proved by `test_repair_rejects_unknown_loop_id_without_loop_rows` and `test_repair_accepts_exact_free_text_identifiers[expected]`, both in the ledger.
+  - F-2's advice half is proved by the legacy refusal test and the instruction test.
+- **Lint and ledger.** Ruff check and ruff format check pass on both files. `check_criterion_ledger.py` holds. The new workflow lines stay within 80 columns.
+
+## Check — criteria re-run
+
+Run in the scratch copy at fcb77aa content (2026-10-16):
+
+- Whole `tests/test_stage2.py`: **547 passed** in 305.66s.
+- The 18 ledger tests of criteria 1-9: 37 passed (parametrised cases included).
+- Criterion 7 holds except for the backtick narrowing (F-6) and the missing mixed case (F-7).
+
+## Check — scope and secrets
+
+- Branch against the merge base 135f029: `docs/WORKFLOW.md`, `plans/INDEX.md`, this change's folder, `scripts/stage2.py`, `tests/test_stage2.py`. No other change folder, ADR, `.beads/`, `.claude/settings.json`, gate, prompt or `AGENTS.md` is touched. The repair commit adds no path.
+- A grep of the b508152..fcb77aa diff for key, token, secret, bearer, password, `sk-`, `ghp_` and `auth.json` finds only the review text quoting the `read_secret` monkeypatch. No credential text.
+- I read no credential file and called no model. I did not run `scripts/stage2.py` against a state directory.
+- The worktree is clean at fcb77aa after the review. The scratch copy has its own git repository, so no git command reached the worktree's gitdir; read-only `git show`, `git diff` and `git status` ran in the worktree.
+
+## Not read
+
+- `make verify` was not run, per the brief. The suite outside `tests/test_stage2.py` was not run.
+- The REPAIR_ANSWER prompt half of criterion 9 was not mutation-tested again; round 1's planted faults there stand.
+- The b508152 test file was run only for the 158-test repair selection, not as a whole.
+- I did not fetch `origin`. The merge base was read locally (135f029).
+- The exact original round-3 Status of L3-2 was not read, as in round 1.
+
+Resume: commit this text unchanged under the phase-6 section of `findings.md`, take F-6 (DIVERGENT: amend spec Terms and criterion 7 plus a decisions addendum for the backtick exception, and align or justify `REPAIR_ANSWER`) and F-7 (MINOR test: add mixed unquoted-marker-plus-backtick cases and check that both planted faults go red), repair them, then run phase 6 again at the new head.
