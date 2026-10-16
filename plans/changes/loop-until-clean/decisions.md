@@ -4,7 +4,7 @@ status: draft
 implementation_status: none
 date: 2026-10-14
 last_reviewed: 2026-10-14
-updated: 2026-10-14
+updated: 2026-10-16
 supersedes: null
 superseded_by: null
 bead: coding-harness-4fk
@@ -137,3 +137,39 @@ first stage on the implementation only, we decided on the free first stage
 with a fresh list each run to achieve many cheap views before the ladder,
 accepting that part of the code reaches models without read terms. —
 2026-10-14
+
+## Addendum 2026-10-16 — the free stage's models
+
+Two statements of the maintainer in the conversation of 2026-10-16 (night
+run), added below the records above, which stay as written:
+
+- "Achte dafür darauf nur die freien Modelle aus opencode go und nicht von
+  Zen zu nehmen" — the free stage takes only OpenCode Go's free models,
+  never OpenCode Zen's. Measured the same night with the pinned Pi 1.2.0
+  (`tools/pi/pi --list-models`): under provider `opencode-go` the ids with
+  `-free` in their name were `cat-jam-free`, `longcat-2.5-preview-free` and
+  `step-5-preview-free`; `space-bunny-free` and `big-pickle` exist only under
+  provider `opencode` (Zen). Whether the `-free` ids are billed as free was
+  not measured.
+- "Es muss vor jeden Review lauf gecheckt werden welche aktuell die free
+  Models sind bei Open Code go" — restates Q-8's check, now for every review
+  run.
+
+## Q-9 · A free model the check finds that the entry does not declare
+
+asked: 2026-10-16
+answer: "Automatisch mitnehmen" — every model the check finds free under `opencode-go` runs in the free stage without a hand-written entry; the run records the check's date and the model list.
+answered_by: maintainer
+status: answered
+context: |
+  Topic: what the review run does with a free OpenCode Go model the check finds but `model-endpoints.yaml` does not list.
+  Intention: Q-8 said the first stage always uses all free models; the spec's criterion 5 (bde7a7e) names such a model and does not call it.
+  Today: the review loop is a ladder of three declared models; there is no free stage.
+  Repository change: Options: A — take it automatically, record date and list in the run's record; B — name it, call it only once declared with read data terms; C — automatically only for repositories whose content may be public. Criterion 5 of the spec changes with A.
+  Architecture change: part of this change's ADR (the review swarm); the free models see the implementation's diff, so repository content reaches models with unread data terms, as Q-8 accepted.
+
+In the context of a free-model offer that changes often, facing the choice
+between taking every model the check finds and calling only declared ones,
+we decided to take every free OpenCode Go model the check finds, to achieve
+a free stage that always uses all free models, accepting that a new model
+with unread data terms sees the implementation's diff at once. — 2026-10-16
