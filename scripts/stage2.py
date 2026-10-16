@@ -2241,8 +2241,9 @@ def check_repair_answer(
     per named test; every text is scrubbed with the key.
     """
     active = {row[0] for _, row in taken}
+    # Loop rows always establish L, including when only completed loop rows remain.
     # Include rejected and fixed findings: they establish the same vocabulary as active rows.
-    prefixes = {
+    prefixes = {"L"} | {
         match[1]
         for row in [*(row for _, row in taken), *before[0], *before[1]]
         if (match := FINDING_ID.fullmatch(row[0]))

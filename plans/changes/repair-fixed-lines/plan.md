@@ -138,3 +138,22 @@ Verification at repair baseline `8542e0611118cec8ab95c01c732353de6630416e` plus 
 - `.venv/bin/python3 -m pytest tests/test_stage2.py -q`: 530 passed. Ruff check and format check, interview minimums, criterion ledger, metadata assertions and `git diff --check` passed. All five implementation-status fields read `partial`; the index was regenerated.
 - `make verify`: exit 2, not green. Its main pytest run reported 14 failed, 2086 passed, 17 skipped and 15 errors. Failures include unavailable tracker access, forbidden local-server binds and signing failures in temporary fixture repositories. The kit probe also failed on fixture commits; the live ruleset check could not reach GitHub. The separate registry check could not measure tracker state. These are verification limits, not accepted passing evidence; no out-of-scope repairs or permission changes were made.
 - The findings body and all finding statuses remain unchanged; only its explicitly requested implementation-status metadata was updated. No repository commit was made; the runner owns status booking, full verification and the checkpoint.
+
+Verification evidence added on 2026-10-16 for the loop-round-1 runner
+checkpoint `cc424575f866593e7110e765053471a2ae6bdfd7`:
+
+- The runner's repair checkpoint `cc42457` records a green `make verify`.
+  This is the accepted full-verification evidence for the Definition of Done,
+  alongside the sandboxed red run above. The checkpoint exists only after
+  all post-run checks pass: `scripts/stage2.py` calls `checkpoint` in the
+  `if not problems` branch, after `make verify` has returned successfully.
+  Its commit subject records the repair of L1-1, L1-2 and L1-3; its body
+  records that runner formatting changed no file. The earlier sandboxed
+  failure remains a measured limit of that local run.
+
+2026-10-16 02:11:43–02:17:15 +0200, 5m 32s — Codex repair of loop-round-2 rows L2-1, L2-3 and L2-4; no break. Start and end read from `date`; earlier unmeasured spans remain unestimated.
+
+- Red first at baseline `9f494ef`: the extended unknown-identifier regression failed for `L-3` (1 failed, 2 passed); after the parser repair all three cases passed.
+- `.venv/bin/python3 -m pytest tests/test_stage2.py -q`: 531 passed in 283.83s (0:04:43).
+- Ruff check, Ruff format check, criterion ledger and `git diff --check` passed. Markdownlint reports no diagnostic on the rewrapped workflow lines; existing diagnostics elsewhere remain.
+- The runner checkpoint evidence is recorded above alongside the earlier sandboxed red run. This session did not run `make verify` or commit; the runner owns the full verification, row statuses and checkpoint. `findings.md` was not edited by this repair.

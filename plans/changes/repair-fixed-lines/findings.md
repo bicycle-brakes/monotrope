@@ -150,3 +150,5 @@ Stage-2 call, 2026-10-16: repair · attempt 1 · route codex · endpoint openai-
 Stage-2 call, 2026-10-16: review-loop · endpoint opencode-go · model mimo-v2.6-flash · leak check clean over 462 files, 1282 commits, 12 rules.
 
 Stage-2 call, 2026-10-16: review-loop · endpoint opencode-go · model mimo-v2.6-flash · leak check clean over 462 files, 1284 commits, 12 rules.
+
+Stage-2 call, 2026-10-16: repair · attempt 1 · route codex · endpoint openai-codex · model gpt-6.1-sol · leak check clean over 462 files, 1286 commits, 12 rules.

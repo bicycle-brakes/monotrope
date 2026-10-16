@@ -5607,19 +5607,22 @@ def test_repair_accepts_exact_free_text_identifiers(world: World) -> None:
     assert record["L1-1"] == "fixed — tests/test_fix.py::test_fix"
 
 
-@pytest.mark.parametrize("prefix", ["F", "QA"])
+@pytest.mark.parametrize("prefix", ["F", "QA", "L"])
 def test_repair_rejects_unknown_finding_shaped_identifiers(world: World, prefix: str) -> None:
     """Criterion 3. Planted fault: an unknown `L9-9` or `F-999` is ignored and checkpointed."""
     baseline = repair_world(world)
     # Rejected rows still establish the change's prefixes, though they are not repair targets.
-    world.write_findings(
-        VERDICT, phase6_block([phase6_cells(f"{prefix}-1", "rejected — out of scope", "phase finding")])
-    )
+    if prefix != "L":
+        world.write_findings(
+            VERDICT, phase6_block([phase6_cells(f"{prefix}-1", "rejected — out of scope", "phase finding")])
+        )
+    # L comes from the loop vocabulary alone, without a letters-hyphen-digits phase-6 row.
+    unknown = "L-3" if prefix == "L" else f"{prefix}-999"
     answer = "\n".join(
         [
             "L1-1: fixed — tests/test_fix.py::test_fix",
             "L9-9: fixed — tests/test_fix.py::test_fix",
-            f"{prefix}-999: fixed — not a test — nothing carries it",
+            f"{unknown}: fixed — not a test — nothing carries it",
         ]
     )
     prose_answer = "\n".join(
@@ -5640,7 +5643,7 @@ def test_repair_rejects_unknown_finding_shaped_identifiers(world: World, prefix:
     assert world.calls("claude") == []
     prompt = prompt_of(world.calls("codex")[1])
     assert "L9-9: no taken row carries this id" in prompt
-    assert f"{prefix}-999: no taken row carries this id" in prompt
+    assert f"{unknown}: no taken row carries this id" in prompt
     record = {row[0]: row[7] for row in stage2.record_rows(world.record().read_text(encoding="utf-8"))}
     assert record["L1-1"] == "fixed — tests/test_fix.py::test_fix"
     assert git(world.root, "rev-list", "--count", f"{baseline}..HEAD") == "1"
