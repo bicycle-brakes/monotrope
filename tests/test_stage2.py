@@ -4714,6 +4714,8 @@ def test_a_doubled_taken_id_refuses_the_repair(
         "; fixed by hand in the last session",
         "; fixed: tests/test_seed.py::test_seed",
         "; repaired by the orchestrating session",
+        " — `test_a`; fixed by hand",
+        " — `a` text; fixed: `tests/x.py::t`",
     ],
 )
 def test_repair_refuses_legacy_completed_taken_statuses_before_call(
@@ -5798,6 +5800,7 @@ def test_repair_instructions_describe_answer_filtering_and_hand_repairs() -> Non
         "; fixed by",
         "; fixed:",
         "; repaired by",
+        "Backtick-quoted markers do not count",
     ):
         assert needle in answer, needle
     assert "no other text" not in answer, "the prompt still forbids all incidental prose"

@@ -126,6 +126,10 @@ checks; this draft's local checks stay inside the worktree and git directory.
 - 8: tests/test_stage2.py::test_a_named_test_that_is_not_red_first_fails_the_attempt — a baseline-green test is accepted as evidence
 - 9: tests/test_stage2.py::test_repair_instructions_describe_answer_filtering_and_hand_repairs — prompt and workflow omit or contradict the filtering or hand-repair rule
 
+## Runner route — 2026-10-16
+
+Stage-1 route: repair · model claude-sonnet-5-5 · reason: two Codex post-run checks failed.
+
 ## Time used
 
 2026-10-16 — both phase-4 sessions so far (attempt 1, route flash, and this
@@ -169,6 +173,10 @@ checkpoint `cc424575f866593e7110e765053471a2ae6bdfd7`:
 - `.venv/bin/python3 -m pytest tests/test_stage2.py -q`: 535 passed in 288.19s. Ruff check, Ruff format check, criterion ledger and `git diff --check` passed. The ledger now names both new regression functions.
 - No `make verify` or repository commit was run by this repair session; the runner owns full verification, finding-status booking and the checkpoint. The pre-existing `findings.md` changes were not edited.
 
+
+2026-10-16 — file-tools repair of phase-6 rows F-6 and F-7 (round 2): this session has no command tool, so `date` could not be read and no span is claimed or estimated; the runner's clock measures it. Read only: the spec Term and criterion 7, the decisions addendum (`decisions.md:93`), `REPAIR_ANSWER` (`scripts/stage2.py:233`) and the three tests were already in the working tree; no file was edited by this session beyond this line.
+
+2026-10-16 about 12:00 +0200, not measured with `date` — hand completion of phase-6 rows F-6 and F-7 by the orchestrating session (maintainer's choice, 2026-10-16), after the runner's three attempts failed: attempt 1 (Codex) built both rows, and F-7 is a test-only fix that cannot be red on the baseline's code (bead coding-harness-0ho). Evidence in a scratch copy: F-6's instruction test fails on the baseline's `REPAIR_ANSWER` and passes on the repair; F-7's refusal test turns red under both planted faults of the row (skip any Status with a backtick: 2 failed; greedy span strip: 1 failed).
 
 2026-10-16 09:59:29–10:07:35 +0200, 8m 6s — Codex repair of phase-6 findings F-1 (hand-repair instruction regression), F-2 (quoted legacy markers and safe refusal guidance), F-3 (decorated unknown fix claims), and F-4 (exact-id and loop-shape regression coverage); no break. Start and end read from `date`; earlier unmeasured spans remain unestimated.
 

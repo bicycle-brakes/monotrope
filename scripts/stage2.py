@@ -229,7 +229,8 @@ REPAIR_ANSWER = (
     "baseline's code, which the runner runs; only a row taken as `taken — not a test — <reason>` may be\n"
     "answered `not a test`. Do not edit `findings.md`. A hand repair is booked in the row's own Status as\n"
     "one of the two fixed statuses above; a Status that still begins `taken` while naming a fix\n"
-    "(`; fixed by …`, `; fixed: …`, `; repaired by …`) refuses the repair before any call."
+    "(`; fixed by …`, `; fixed: …`, `; repaired by …`) refuses the repair before any call.\n"
+    "Backtick-quoted markers do not count; an unquoted marker beside a backtick span still refuses the repair."
 )
 # The Codex attempts (ADR 0017): Codex has command tools in its configured sandbox, so it is told what it may run.
 REPAIR_FORMAT = (
