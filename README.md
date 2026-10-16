@@ -72,6 +72,16 @@ from other vendors go through one runner, which checks for leaks before every
 call. An endpoint that is not listed is blocked. A leak stops the call, and the
 work does not move silently to another model.
 
+**7. Communication keeps you on track.**
+Nobody has to hold the thread in their head. Every session opens with an
+orientation: where we stand, the next step, and what is needed from you.
+Messages start with the result, use short paragraphs and clear headings, ask
+at most one question at a time with a recommendation, and end with one clear
+next step. Nothing important lives only in a chat: the files and the tracker
+hold the state, so no one gets lost in the work. The form is written for
+readers with ADHD, and it works for every reader, which is why the rule holds
+for everyone.
+
 ## Who it is for
 
 - **Teams and people who let agents write real changes** and must later answer:
@@ -320,6 +330,12 @@ To start a change, the bead must already exist:
   (ADR 0008).
 - **One change, one worktree.** Worktrees live under `.claude/worktrees/`.
 - **Language.** Repository artefacts are in English.
+- **Communication.** Every session opens with an orientation: where we stand,
+  the next step, and what is needed from you. Lead with the main point and one
+  concrete next action. Keep messages short, with clear headings. Ask one
+  decision at a time, with a recommendation and its consequence. Explain
+  technical terms and identifiers the first time they appear in a message.
+  This is the form for every message, from agents and people alike.
 
 ### Related repositories
 
