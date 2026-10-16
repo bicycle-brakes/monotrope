@@ -494,3 +494,74 @@ Stage-2 call, 2026-10-16: repair · attempt 3 · route stage-1 · endpoint claud
 > ```
 
 Stage-2 call, 2026-10-16: review-loop · endpoint opencode-go · model mimo-v2.6-flash · leak check clean over 468 files, 1342 commits, 12 rules.
+
+## Phase 6 — Opus 5.5, 2026-10-16
+
+Phase 6 verdict: Opus 5.5 sub-agent, 2026-10-16. 0 open BLOCKER.
+
+Orchestrator's decision on each row below (2026-10-16): F-1 is taken because it concerns a test; F-3 is taken because it is a false statement in the frontmatter; F-2 is rejected for this change — the refusal is fail-closed as criterion 4 is written, and whether a `pytest.raises` "DID NOT RAISE" or a missing new helper should count as red first is a question for the maintainer, raised as bead coding-harness-a7m. The review text itself is committed unchanged in the next section.
+
+| ID | Severity | Dimension | Origin | Where | Finding | Reviewer | Status | Broke a test |
+|---|---|---|---|---|---|---|---|---|
+| F-1 | MINOR | SPEC | impl | tests/test_stage2.py `test_red_first_refuses_setup_and_teardown_errors`; scripts/stage2.py `_red_record_fault` teardown check | Criterion 3's second refuted case has no test: a call that fails by ordinary assertion while its fixture's teardown raises. A regression that skips the teardown check only when the call failed keeps the suite green. | Opus 5.5 | taken — criterion 3: tests/test_stage2.py::test_red_first_refuses_setup_and_teardown_errors | |
+| F-2 | MINOR | MAINT | spec | spec.md, term "Assertion failure"; scripts/stage2.py probe `"assertion"` field | Only an AssertionError counts as red, so a `pytest.raises` test whose baseline does not raise, and a test calling a helper the repair adds, are refused on every attempt (fail-closed). | Opus 5.5 | rejected — fail-closed as criterion 4 is written; the maintainer's question is bead coding-harness-a7m | |
+| F-3 | MINOR | SPEC | impl | plans/changes/red-first-install/spec.md, plan.md, findings.md frontmatter | All three files still say `implementation_status: none`, though criteria 1–8 are built and tested. | Opus 5.5 | taken — false statement: implementation_status moves with the code (docs/WORKFLOW.md, "Artefact lifecycle") | |
+
+## Opus 5.5 review text, phase 6, 2026-10-16
+
+Review text as returned by the Opus 5.5 reviewer (committed unchanged; the harness's two-space indentation of the hand-back removed, nothing else changed). Its own table repeats the rows above with full evidence; the decided rows are the ones above.
+
+### Ergebnis: 0 offene BLOCKER, 3 MINOR-Befunde
+
+The phase-6 review of `red-first-install` (bead coding-harness-omp, a missing Pi install no longer counts as red first) finds no BLOCKER and no MAJOR. All 8 acceptance criteria are met in the code at fb4e403.
+
+I planted a fault for each of criteria 1, 2, 4, 6 and 7, and every named test went red. There are three MINOR findings:
+- one test gap on criterion 3
+- one spec-level consequence that refuses legitimate repairs (it fails closed)
+- one stale frontmatter field
+
+I did not edit, commit or write to the tracker. All plants ran in scratch copies.
+
+### Phase 6 table (Claude path; columns as for `findings.md`)
+
+| ID | Severity | Dimension | Origin | Where | Finding | Evidence |
+|---|---|---|---|---|---|---|
+| F-1 | MINOR | SPEC | impl | tests/test_stage2.py `test_red_first_refuses_setup_and_teardown_errors`; scripts/stage2.py `_red_record_fault` teardown check | Criterion 3's second refuted case has no test: a call that fails by ordinary assertion while its fixture's teardown raises. The test's teardown case pairs a teardown error with a *passing* call, so it would be refused anyway ("no selected call failed by assertion"). A regression that skips the teardown check only when the call failed would accept the case and still keep the suite green. The production code itself refuses the case correctly. (criterion 3) | Plant in a scratch copy: `if case["teardown"]["outcome"] != "passed" and case.get("call", {}).get("outcome") != "failed":`. Then `pytest -k "test_red_first_refuses_setup_and_teardown_errors or missing_pi or environment_only"` gives **4 passed**. An ad-hoc test (fixture yields, then raises RuntimeError; body `assert False`) gives `None` (accepted) under the plant. Unplanted, it gives "the teardown phase of `tests/test_both.py::test_both` ended failed; …". |
+| F-2 | MINOR | MAINT | spec | spec.md, term "Assertion failure"; scripts/stage2.py probe `"assertion"` field | Only an AssertionError counts as red, so two common red-first forms of a repair test now refuse on every attempt. Example 1: a test written `with pytest.raises(ValueError): …` whose baseline does not raise. pytest reports "DID NOT RAISE" through its `Failed` exception and the refusal reads "failed with Failed, not an AssertionError". Example 2: a test that calls a helper the repair adds; on the baseline it fails with AttributeError and is refused. Both are fail-closed, so no false proof results. But the repair verb, which accepted these before (exit 1 or 2), now ends such a repair as failed after all attempts. Research and spec never discuss `pytest.raises`. On 2026-10-16 at fb4e403, `tests/*.py` holds 23 `pytest.raises` uses among 1165 test functions. (criterion 4 as written; spec silent on `pytest.raises`) | An ad-hoc scratch test calling `stage2.red_first` on the unmodified code gives `…::test_raises: the call of … failed with Failed, not an AssertionError` and `…::test_new: the call of … failed with AttributeError, not an AssertionError`. |
+| F-3 | MINOR | SPEC | impl | plans/changes/red-first-install/spec.md, plan.md, findings.md frontmatter | All three files still say `implementation_status: none`, but criteria 1–8 are built and tested on this branch. The definition of done says the documents moved with the code, plan step "update implementation metadata when implementation progresses" asks the same, and docs/WORKFLOW.md "Artefact lifecycle" says `implementation_status` moves when the code moves. (Definition of Done) | `grep ^implementation_status plans/changes/red-first-install/*.md` gives `none` in each, at fb4e403. |
+
+Phase 6 verdict: claude-opus-5-5, 2026-10-16. 0 open BLOCKER.
+
+### Loop rows (read after the verdict; this is the Claude path, and I did not run `release-loop`)
+
+| Row | Phase 6 cell |
+|---|---|
+| L1-1: no test drives a skip beside an assertion | **agree.** Planting `continue` for a skipped call turned `[call-skip-beside-assertion]` red. Planting setup "== failed" (letting a skipped setup through) turned `[setup-skip-beside-assertion]` red. |
+| L1-2: the stand-in guard could not fail its test | **agree.** The guard now calls `pytest.exit(…, returncode=3)`, and the `[stand-in-present]` param asserts "pytest ended 3", which is distinct from the setup-failed refusal. |
+
+### Proof that each named test bites (planted in scratch copies; every plant was red)
+
+- **Criterion 1** (clean or mixed-parameter assertion is accepted): plant `if not red or len(selected) > 1` turned `test_red_first_accepts_only_clean_assertion_runs` red.
+- **Criterion 2** (missing install refuses): plant `fault = None` (exit-code-only classification) turned `test_red_first_refuses_a_missing_pi_install[missing-install]` and `test_repair_refuses_environment_only_red_first_evidence` red.
+- **Criterion 4** (non-assertion call failures refuse): plant `"assertion": bool(report.failed)` in the probe turned `test_red_first_refuses_non_assertion_call_failures` red.
+- **Criterion 6** (bad or missing record refuses): removing the token check, the selector check and the finished-session check, one at a time, turned `test_red_first_refuses_missing_or_invalid_evidence` red each time.
+- **Criterion 7** (diagnostic scrubbed): dropping `scrub()` on the fault turned `test_red_first_scrubs_outcome_diagnostics` red.
+- **Baseline:** the 27 targeted tests (`red_first`, environment_only, not_red_first, prose_alone_still, worktree/ref tests) passed on an unmodified copy of HEAD.
+
+### Checked, no finding
+
+- **xfail handling:** the probe's hookwrapper does see pytest's xfail conversion. Measured with pytest 8.3.4: an xfail-marked failing call and an imperative `pytest.xfail` both record outcome `skipped` and `expected: true`. The docstring's claim holds.
+- **Report path:** it sits in a fresh `mkdtemp` directory outside the copied `tests/`. The token is `os.urandom(16)` per run, and every quoted node id or selector passes `_one_line` and then `scrub(…, key)`.
+- **Forgery by a foreign test:** a test could forge the JSON record, because the token and report path are in its environment. That adds no attack beyond an unconditional `assert False`, and the spec lists sandboxing hostile tests as a non-goal. Not a finding.
+- **Repair verb:** `check_repair_answer` keeps its finding-id prefix and scrubs again. The updated expectation in `test_a_named_test_that_is_not_red_first_fails_the_attempt` matches the new diagnostic.
+- **Criterion 8:** the cleanup and ref-snapshot code is unchanged apart from the probe write before the snapshot. I did not plant a fault for it; its existing tests passed.
+
+### Not read or not run
+
+- The guard-test branch (bead coding-harness-0ho), so I could not check the coordination the plan names.
+- The full `make verify`; the orchestrator reports it green at 4819f03.
+- The rows of `findings.md` beyond its first 60 lines. It holds no phase-2a rows.
+
+Scratch copies are under `/private/tmp/claude-501/-Users-mikypiky-coding-harness/f3f1f2a8-3bee-45a3-88b9-9772a53278f7/scratchpad/omp-p6/` (base, p1–p7, p3, l1a, l1b, probe).
+
+Resume: commit the table and verdict above unchanged into `plans/changes/red-first-install/findings.md` (orchestrator), then run `python3 scripts/stage2.py release-loop red-first-install` and mark L1-1 and L1-2 `agree`. Repair F-1 (add a call-assert plus teardown-error case to the criterion-3 test) and F-3 (frontmatter) without asking, per the MINOR rule. Take F-2 to the maintainer as a question for a follow-up bead (should `pytest.raises` "DID NOT RAISE" count as red first?).
