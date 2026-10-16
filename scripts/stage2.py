@@ -282,7 +282,8 @@ GLM_MODEL_VARIABLES = (
     "CLAUDE_CODE_SUBAGENT_MODEL",
 )
 # Claude Code knows no GLM id, so it warns at every start and assumes a 200k context window
-# (bead coding-harness-6th). Naming the window ends the warning; it stays at the assumed 200k,
+# (bead coding-harness-6th). Per the Claude Code docs, naming the window ends the warning (not yet
+# seen in a live start); it stays at the assumed 200k,
 # because no Z.ai source read on 2026-10-16 states the Coding Plan's window, and a window set
 # above the real one would overflow instead of compacting.
 GLM_CONTEXT_TOKENS = "200000"
