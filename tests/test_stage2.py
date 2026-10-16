@@ -1246,6 +1246,34 @@ def test_a_failed_model_call_saves_the_attempt_before_restoring(
     assert git(world.root, "status", "--porcelain", "--", ".", ":(exclude)plans/changes/demo/findings.md") == ""
 
 
+def test_a_failed_call_that_wrote_the_key_saves_no_key_and_says_so(
+    world: World, capsys: pytest.CaptureFixture[str]
+) -> None:
+    # Bead coding-harness-znc, phase-6 F-1 and F-2. Planted faults: the scrub before the snapshot
+    # left out, so the ref holds the key; or the scrub's finding dropped, so nobody hears of the leak.
+    world.script(claude=[{"stderr": "boom", "exit": 1, "plant": {"src/half.py": "k = '@KEY@'\n"}}])
+    assert world.run("implement") == 1
+    err = capsys.readouterr().err
+    ref = git(world.root, "for-each-ref", "--format=%(refname)", "refs/stage2/attempts/demo/")
+    saved = git(world.root, "show", f"{ref}:src/half.py")
+    assert KEY not in saved and "[credential]" in saved
+    assert "the GLM credential occurred in changed files" in err and "src/half.py" in err
+
+
+def test_a_saved_attempt_keeps_a_file_tracked_although_ignored(world: World) -> None:
+    # Phase-6 F-3. Planted fault: an empty temporary index, which drops such a file from the ref.
+    (world.root / ".gitignore").write_text("kept.txt\n", encoding="utf-8")
+    (world.root / "kept.txt").write_text("tracked\n", encoding="utf-8")
+    git(world.root, "add", "-f", ".gitignore", "kept.txt")
+    git(world.root, "commit", "-qm", "tracked although ignored")
+    world.script(claude=[{"stderr": "boom", "exit": 1, "plant": {"src/half.py": "x = 1\n"}}])
+    assert world.run("implement") == 1
+    ref = git(world.root, "for-each-ref", "--format=%(refname)", "refs/stage2/attempts/demo/")
+    changed = git(world.root, "diff", "--name-only", f"{ref}^", ref).splitlines()
+    # The runner's own audit line in findings.md is in the tree too (phase-6 F-5); kept.txt is not.
+    assert "src/half.py" in changed and "kept.txt" not in changed
+
+
 def test_a_postcheck_failure_gets_one_flash_repair_with_its_diagnostic(world: World) -> None:
     world.script(
         claude=[
