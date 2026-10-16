@@ -105,3 +105,19 @@ The draft's put-back: `test_paths_outside_the_change_folder_are_put_back_and_nam
 ## Which files a change would have to touch
 
 `scripts/stage2.py` (the guard path in `repair`/`implement`/`run_attempts`, a prompt constant beside `REPAIR_FORMAT`/`DRAFT_RULES`, and `checkpoint` if the refusal stands before the commit); `prompts/04-implement.md` (the embedded contract); `docs/WORKFLOW.md` §4 (the two passages named above); `tests/test_stage2.py` (new tests beside the draft put-back and repair restore tests, using the file's existing `World` harness); possibly `AGENTS.md`, since its embedded rules are how the handover instruction reaches the model.
+
+## Draft-stage repository checks — 2026-10-16
+
+Read at `9943a25`: `codex_repair_doctrine_problems` and
+`test_codex_repair_doctrine_and_endpoint_remarks_agree` in
+`tests/test_stage2.py` explicitly pin the workflow sentence saying repair
+writes are committed "including changes outside the change folder". Updating
+the workflow therefore also requires updating that expectation and its planted
+counterexample to distinguish permitted outside-folder writes from denied
+writes; the routing, read-confinement and residual-risk assertions stay.
+`quote_block` already accepts `whole=put_back_lines(paths)` to preserve long
+and newline-containing path names. `scripts/validate_change_artefacts.py`
+is absent in this worktree; the interview and criterion-ledger check scripts
+are present. ADR 0017 explicitly retains ADR 0016's ignored-file, external-path
+and git-directory residual risks; this bounded correction does not replace
+those accepted limits with a sandbox guarantee.
