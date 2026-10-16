@@ -435,3 +435,64 @@ Stage-2 call, 2026-10-16: repair · attempt 3 · route stage-1 · endpoint claud
 > - Runner format before `make verify`: ruff changed no file.
 > - F-6: answered `not a test`, but the row is a code row; it needs a test that was red first
 > ```
+
+## Phase 6 — round 3, Opus 5.5, 2026-10-16
+
+Phase 6 round 3 (re-check of explore/repair-fixed-lines at cbadbcf, 2026-10-16): no new findings and no open BLOCKER. F-6 (the spec lacked the backtick exception) and F-7 (no test for an unquoted marker beside a backtick span) are both confirmed fixed.
+
+Open BLOCKER: no — BLOCKER 0 · DIVERGENT 0 · MAJOR 0 · MINOR 0 · STYLE 0 (re-check of explore/repair-fixed-lines at cbadbcf, 2026-10-16)
+
+| ID | Severity | Dimension | Origin | Where | Finding | Reviewer | Status | Broke a test |
+|---|---|---|---|---|---|---|---|---|
+
+No new findings at cbadbcf. I checked:
+- spec Term "Legacy completion marker" and criterion 7 against `legacy_completed`, `REPAIR_ANSWER`, the docstring of `repair()`, the `docs/WORKFLOW.md` repair section, the decisions addendum and the criterion-7 ledger lines;
+- the F-7 test, with five planted faults;
+- the red-first claim for F-6 and the `Broke a test: no` marks;
+- ruff, ruff format and the criterion ledger;
+- the time and evidence lines that cbadbcf added to `plan.md`;
+- that no taken Status is left in `findings.md`.
+
+Phase 6 round 3 verdict: Opus 5.5 sub-agent, 2026-10-16 — 0 BLOCKER open
+
+## Rows F-6 and F-7
+
+- **F-6: confirmed fixed.** Spec, decisions, prompt, workflow, code and ledger all give the same answer now: a marker inside a backtick span does not refuse the repair, and an unquoted marker still does, also beside a backtick span.
+  - Spec: the Term and criterion 7 carry the exception (f5783d9).
+  - `decisions.md`: the addendum "after phase 6, round 2" records it.
+  - Shared answer prompt: `REPAIR_ANSWER` (`scripts/stage2.py:233`, cbadbcf) now says "Backtick-quoted markers do not count; an unquoted marker beside a backtick span still refuses the repair."
+  - Workflow: `docs/WORKFLOW.md:1113` says the same.
+  - Code: `legacy_completed` strips `` `+[^`]*`+ `` spans before it matches.
+  - Ledger: `plan.md:121` (`test_repair_accepts_quoted_legacy_markers`, refuted when "quoted marker text refuses an unrepaired row") now matches the criterion's new refuted-by clause.
+  - Red first, measured in the scratch copy: I loaded f5783d9's `scripts/stage2.py` under the cbadbcf tests. `test_repair_instructions_describe_answer_filtering_and_hand_repairs` failed (1 failed, 11 passed in the legacy/quoted/instructions selection) and passes on cbadbcf.
+- **F-7: confirmed fixed.** The two new cases (`` — `test_a`; fixed by hand `` and `` — `a` text; fixed: `tests/x.py::t` ``) sit in all three row locations at once, and the test asserts each row id in the refusal. Planted faults, each run against the selection `-k "legacy or quoted"`:
+  - (a) any Status that holds a backtick is skipped: 2 failed (both new cases);
+  - (b) greedy `` `.*` `` strip: 1 failed (the two-span case);
+  - (c) no strip at all, the old wide match: 3 failed (`test_repair_accepts_quoted_legacy_markers`);
+  - (d) everything after the first backtick dropped: 2 failed;
+  - (e) the closing backtick made optional (`` `+[^`]*`* ``): 0 failed. This one is not filed; see "Checked, not filed".
+
+  The 2-failed and 1-failed counts match the claims in the cbadbcf commit message and on `plan.md:179`.
+- **`Broke a test: no` for both rows is confirmed.** I ran f5783d9's `tests/test_stage2.py` against the cbadbcf code, selection `-k "repair or fixed_line or red_first or not_a_test or legacy"`: 170 passed, none failed.
+
+## Checked, not filed
+
+- **Unclosed backtick.** A Status such as ``taken — `test_a; fixed by hand``, with a backtick that never closes, is refused correctly today: there is no span, so the marker is unquoted. No test holds this case, which is why fault (e) survives. I did not file it:
+  - none of the merged legacy statuses has an unclosed backtick (round 2 probed all 10 real statuses in `haiku-5-5` and `pi-pin`);
+  - cbadbcf did not touch `legacy_completed`;
+  - the planted fault is not a plausible way to write the code.
+- **Inner single backtick in a double-backtick span.** A Status like ``taken — ``a `; fixed by` b`` `` holds a marker that Markdown treats as quoted, yet the code refuses it (probe: True). Real double-backtick quotes in the style of F-7's own text do not refuse (4 probes, all False).
+  - Not filed: the case is contrived, the error fails closed (a refusal before any call), and the refusal text tells the operator to reword.
+  - A related edge, also not filed: `x;`y` fixed by` becomes `x; fixed by` after the strip and refuses, though the original text holds no marker.
+- **`repair()` docstring.** It states the pre-call refusal without the backtick exception. This is an internal docstring, it does not contradict the code, and the comment above `LEGACY_FIXED` states the exception. Not a finding.
+- **`plan.md:177`.** This line is attempt 3's (Sonnet) own record, kept in cbadbcf. It describes that session's reading accurately; its line references `decisions.md:93` and `scripts/stage2.py:233` are correct at cbadbcf. The time entries in `plan.md` are not in time order (the 12:00 entry stands before the 09:59 one). That is style, so not filed.
+- **Lint and ledger.** Ruff check passes on `scripts/stage2.py` and `tests/test_stage2.py` (the new prompt line stays within line-length 120), and ruff format check passes. `check_criterion_ledger.py` holds: 18 plans, 594 entries.
+- **Statuses in `findings.md`.** No row there is still taken; F-1 to F-4, F-6, F-7 and every L-row are fixed or rejected. So no taken Status can carry a legacy marker.
+- **Scope of cbadbcf.** It touches `findings.md`, `plan.md`, `scripts/stage2.py` (a single line of `REPAIR_ANSWER`, added and rewrapped: +2 -1) and `tests/test_stage2.py` (two parameter cases and one needle). It adds no path outside the change's scope.
+
+## Not read
+
+- `make verify` and the full suite: not run, per the brief. Only the targeted selections above ran.
+- The original round-3 Status of L3-2, which the decisions addendum cites as its reason, is still not read; it lives in the loop record outside the repository.
+- `origin` was not fetched; the merge base was read locally (135f029).
+- No credential file was read, no model was called, and the worktree is clean at cbadbcf. Mutations ran only in `/private/tmp/claude-501/-Users-mikypiky-coding-harness/f3f1f2a8-3bee-45a3-88b9-9772a53278f7/scratchpad/ugi-r3`, a copy with its own git repository. The mutation driver is `scratchpad/ugi-r3-mut.py`.
