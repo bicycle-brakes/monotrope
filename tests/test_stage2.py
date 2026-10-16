@@ -1240,6 +1240,10 @@ def test_a_failed_model_call_saves_the_attempt_before_restoring(
     assert git(world.root, "rev-parse", f"{refs[0]}^") == head
     assert git(world.root, "show", f"{refs[0]}:src/half.py") == "x = 1"
     assert git(world.root, "show", f"{refs[0]}:src/app.py").endswith("# edit")
+    # The snapshot carries the runner's identity, not the machine's: CI has no git user (PR #153).
+    assert git(world.root, "log", "-1", "--format=%an <%ae>|%cn <%ce>", refs[0]) == (
+        "stage2 runner <stage2@localhost>|stage2 runner <stage2@localhost>"
+    )
     # The restore still leaves the tree clean and HEAD and the real index untouched.
     assert not (world.root / "src/half.py").exists()
     assert git(world.root, "rev-parse", "HEAD") == head

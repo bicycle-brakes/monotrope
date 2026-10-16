@@ -1471,6 +1471,14 @@ def ignored_snapshot(root: Path) -> dict[Path, tuple[int, int]]:
     return snapshot
 
 
+SAVE_IDENTITY = {
+    "GIT_AUTHOR_NAME": "stage2 runner",
+    "GIT_AUTHOR_EMAIL": "stage2@localhost",
+    "GIT_COMMITTER_NAME": "stage2 runner",
+    "GIT_COMMITTER_EMAIL": "stage2@localhost",
+}
+
+
 def save_attempt(root: Path, baseline: str, change: str, label: str) -> str:
     """Save the worktree as it stands after a failed call on a local ref; say where, or why not.
 
@@ -1482,11 +1490,13 @@ def save_attempt(root: Path, baseline: str, change: str, label: str) -> str:
     shows everything the run left in the tree: this attempt, any earlier attempt of the run whose tree
     it started on, and the runner's own writes. The ref lives under `refs/stage2/attempts/`, which no
     branch push carries. A save that fails is named and never blocks the restore that follows.
+    The commit carries the runner's own identity, so a machine without a configured git user (a CI
+    runner) saves as well, and the ref says who wrote it.
     """
     stamp = dt.datetime.now(dt.UTC).strftime("%Y%m%dT%H%M%S%fZ")
     ref = f"refs/stage2/attempts/{change}/{label}-{stamp}"
     with tempfile.TemporaryDirectory(prefix="stage2-save-") as scratch:
-        env = {**os.environ, "GIT_INDEX_FILE": str(Path(scratch) / "index")}
+        env = {**os.environ, "GIT_INDEX_FILE": str(Path(scratch) / "index"), **SAVE_IDENTITY}
         try:
             _git_output(root, "read-tree", baseline, env=env)
             _git_output(root, "add", "-A", "--", ".", env=env)
