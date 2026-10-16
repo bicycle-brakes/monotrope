@@ -70,3 +70,18 @@ Two details above are revised; the text above stays as it was written.
   — …; repaired by the orchestrating session`; without the marker, that very
   row would still be sent to the model. The refusal only names the row and
   the canonical form, so a false match costs one rewrite, not a lost repair.
+
+## Addendum 2026-10-16 — after loop round 3
+
+Detail 1 is revised again; the text above stays as it was written.
+
+- **Claimed fixes always count (row L3-1).** A colon line whose right side is
+  a fixed status (`fixed — …`) is checked whatever its left side's shape, so
+  a mistyped free-text id (`custm:` beside `custom:`) fails with `no taken
+  row carries this id`. Reason: criterion 15 of `plans/changes/stage2-repair/spec.md`
+  requires an answered unknown id to fail; report prose never begins its
+  right side with a fixed status.
+- **`L` counts only beside a loop row (row L3-3).** Round 2 (row L2-3) made
+  the letters `L` always count; with phase-6 rows alone, `L-3: see below` is
+  prose. Reason: the Terms tie letters-hyphen-digits ids to the change's own
+  row ids.

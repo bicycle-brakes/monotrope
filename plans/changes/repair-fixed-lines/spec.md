@@ -49,7 +49,10 @@ completed rows and is the agreed form for both writers.
 - **Finding-shaped identifier:** a complete `L<digits>-<digits>` identifier,
   or ASCII letters, a hyphen and digits whose letters are the prefix of a row
   id in the change's loop record or findings tables, such as `F-12` where
-  phase-6 rows are `F-<n>` (loop round 1, row L1-3).
+  phase-6 rows are `F-<n>` (loop round 1, row L1-3); the letters `L` count
+  only when the change has a loop row (loop round 3, row L3-3).
+- **Claimed fix:** a colon line whose right side is a fixed status
+  (`fixed — …`), whatever the shape of its left side (loop round 3, row L3-1).
 - **Legacy completion marker:** `; fixed by`, `; fixed:` or `; repaired by` within a Status
   beginning `taken — …`, compared without regard to case.
 
@@ -67,8 +70,10 @@ completed rows and is the agreed form for both writers.
    *Refuted by:* a phase-6 row named `custom` or `expected` is ignored or
    reported missing despite a valid fixed line for that identifier.
 3. When a colon line names a finding-shaped identifier absent from the active
-   rows, the attempt fails with `<ID>: no taken row carries this id`.
-   *Refuted by:* an extra `L9-9:` or `F-999:` is ignored and checkpointed.
+   rows, or is a claimed fix whose identifier names no active row, the attempt
+   fails with `<ID>: no taken row carries this id`.
+   *Refuted by:* an extra `L9-9:` or `F-999:` is ignored and checkpointed, or
+   `custm: fixed — tests/…::test_…` beside a valid `custom:` line is.
 4. When an active row has zero or multiple answer entries, the attempt fails
    with that identifier and `no fixed line` or `several fixed lines`, respectively.
    *Refuted by:* prose alone succeeds or duplicated entries are accepted.
