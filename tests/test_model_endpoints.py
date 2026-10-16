@@ -353,7 +353,7 @@ def test_the_opencode_go_entry_is_declared() -> None:
         "qwen3.8-flash",
     ]
     # The paid Flash swarm (Q-10) and the free-stage rule (ADR 0021, decision 2).
-    assert entry["flash_swarm"] == ["deepseek-v4.1-flash", "mimo-v2.6-flash"]
+    assert entry["flash_swarm"] == ["deepseek-v4.1-flash", "mimo-v2.6-flash", "longcat-2.0"]
     free = entry["free_stage"]
     assert free["provider"] == "opencode-go"
     assert free["id_suffix"] == "-free"

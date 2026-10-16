@@ -217,6 +217,7 @@ endpunkte:
     flash_swarm:
       - deepseek-v4.1-flash
       - mimo-v2.6-flash
+      - longcat-2.0
     free_stage:
       provider: opencode-go
       id_suffix: "-free"
