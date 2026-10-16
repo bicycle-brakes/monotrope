@@ -109,3 +109,25 @@ A second, documented incident of the same class is in `docs/journal/handover/202
 - `tests/test_stage2.py` — the retry-with-fixture-key test follows the `world` fixture, the `make` stand-in scenario and the existing `LEAK`/`DENYLIST` pair; BLOCK simulation precedent exists.
 - `scripts/leakcheck.py` — not necessarily: for a runner-side redaction that reuses its API, nothing in the check changes; the standing rule „a leak-check BLOCK stops without fallback“ stays untouched.
 - `docs/WORKFLOW.md` — the stage-2 sections that name the runner's stop conditions, if the behaviour is to be stated there.
+
+## Draft inspection — 2026-10-16
+
+Read at `2cc2c81`: `draft` and `run_attempts` append the assembled `listing`
+directly to their retry-diagnostics lists before rendering `attempt_block`.
+Cleaning the block alone therefore leaves the prompt channel unprotected.
+`prepare_derived` reduces evidence before calling `scrub`; multiline secret
+matches need handling before that reduction as well as before verify tails.
+
+The shared `DENYLIST` in `tests/test_stage2.py` names its planted rule
+`planted`, without `secret:`. New redaction scenarios need an additional
+test-local secret rule; relabelling the shared rule would change existing
+refusal tests. `read_denylist` already exposes the compiled pattern and the
+secret flag, including a reason for missing, unreadable, invalid or empty
+rules. No scanner API change is required.
+
+There is no `templates/plan.md` or `scripts/validate_change_artefacts.py` at
+this baseline. The phase-3 prompt defines the plan form; the available
+interview and criterion-ledger gates can check the draft. The drafting call
+does not read the external session registry, tracker or hosting service;
+their current state is not read here, and the runner owns commit and full
+verification.
