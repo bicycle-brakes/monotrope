@@ -492,3 +492,5 @@ Stage-2 call, 2026-10-16: repair · attempt 3 · route stage-1 · endpoint claud
 > - Runner format before `make verify`: ruff changed no file.
 > - `plan.md` did not add a measured line below `## Time used`
 > ```
+
+Stage-2 call, 2026-10-16: review-loop · endpoint opencode-go · model mimo-v2.6-flash · leak check clean over 468 files, 1342 commits, 12 rules.
