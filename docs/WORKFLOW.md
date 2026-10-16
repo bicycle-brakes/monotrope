@@ -1100,8 +1100,11 @@ may be answered `not a test`. Headings, fences and report prose around the
 fixed lines are ignored; a colon line whose id looks like a finding id
 (`L1-2`, `F-12`) and names no taken row still fails the attempt. Loop ids
 always count; letters-hyphen-digits ids count only when their prefix occurs
-in the change's row ids, including rejected and fixed rows. Other prefixes
-(such as `ADR-0017:` or `UTF-8:`) remain report prose. A hand
+in the change's row ids, including rejected and fixed rows; `L` counts only
+when the change has a loop row. A colon line whose right side is a fixed
+status (`fixed — …`) also fails when its id names no taken row, whatever
+the id's shape. Other prefixes (such as `ADR-0017:` or `UTF-8:`) remain
+report prose when their right side is not a fixed status. A hand
 repair books itself in the row's Status alone: replace the finished row's
 `taken — …` with one of the two fixed statuses and set the loop row's
 `Broke a test` mark from the evidence. A Status that still begins `taken`

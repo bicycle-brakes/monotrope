@@ -223,7 +223,9 @@ REPAIR_ANSWER = (
     "`<ID>: fixed — not a test — <reason>`. Headings, fences and report prose around the fixed lines are\n"
     "ignored, but a colon line whose id looks like a finding id (`L1-2`, `F-12`) and names no taken row\n"
     "still fails. Letters-hyphen-digits ids count only for prefixes used by this change's row ids;\n"
-    "`L<digits>-<digits>` always counts. Write a `|` inside a reason as `\\|`. A code row needs a test that fails on the\n"
+    "`L<digits>-<digits>` always counts; the prefix `L` counts only when the change has a loop row.\n"
+    "A colon line whose right side is a fixed status (`fixed — …`) also fails when its id names no\n"
+    "taken row, whatever the id's shape. Write a `|` inside a reason as `\\|`. A code row needs a test that fails on the\n"
     "baseline's code, which the runner runs; only a row taken as `taken — not a test — <reason>` may be\n"
     "answered `not a test`. Do not edit `findings.md`. A hand repair is booked in the row's own Status as\n"
     "one of the two fixed statuses above; a Status that still begins `taken` while naming a fix\n"
@@ -2232,22 +2234,20 @@ def check_repair_answer(
     """Read an answer's fixed lines: the Status each taken row takes, or the problems that fail the attempt.
 
     Each problem names its ID. Lines without a colon, and colon lines whose left side names neither an
-    active row exactly nor a finding-shaped id, are the report's incidental prose and are ignored; a
-    finding-shaped id that names no taken row still fails. Every row of findings.md must also stand as
-    `before` holds it - the taken rows and the others alike, cell for cell: an edit outside the taken
+    active row exactly nor a finding-shaped id, are ignored unless their right side claims a fixed
+    status. A finding-shaped id or claimed fix that names no taken row still fails. Every row of
+    findings.md must also stand as `before` holds it - the taken rows and the others alike, cell for cell: an edit outside the taken
     rows' Status is named, not checkpointed (phase 6, F-3). The pre-call findings body also protects
     other phases and every earlier attempt's evidence; only the frontmatter is excluded, because the
     runner refreshes `updated:`. Only when no problem stands do the red-first runs start, one pytest run
     per named test; every text is scrubbed with the key.
     """
     active = {row[0] for _, row in taken}
-    # Loop rows always establish L, including when only completed loop rows remain.
     # Include rejected and fixed findings: they establish the same vocabulary as active rows.
-    prefixes = {"L"} | {
-        match[1]
-        for row in [*(row for _, row in taken), *before[0], *before[1]]
-        if (match := FINDING_ID.fullmatch(row[0]))
-    }
+    rows = [*(row for _, row in taken), *before[0], *before[1], *record_rows(read_record(ctx.change) or "")]
+    prefixes = {match[1] for row in rows if (match := FINDING_ID.fullmatch(row[0])) and match[1] != "L"}
+    if any(LOOP_ID.fullmatch(row[0]) for row in rows):
+        prefixes.add("L")
     problems: list[str] = []
     parsed: dict[str, list[str]] = {}
     for raw in answer.splitlines():
@@ -2263,7 +2263,12 @@ def check_repair_answer(
         if not sep or not ident:
             continue
         shape = FINDING_ID.fullmatch(ident)
-        if ident not in active and not LOOP_ID.fullmatch(ident) and not (shape and shape[1] in prefixes):
+        if (
+            ident not in active
+            and not LOOP_ID.fullmatch(ident)
+            and not (shape and shape[1] in prefixes)
+            and not rest.startswith("fixed — ")
+        ):
             continue
         parsed.setdefault(ident, []).append(rest)
     fixes: dict[str, str] = {}

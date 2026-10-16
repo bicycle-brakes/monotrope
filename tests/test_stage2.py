@@ -5622,7 +5622,7 @@ def test_repair_rejects_unknown_finding_shaped_identifiers(world: World, prefix:
         [
             "L1-1: fixed — tests/test_fix.py::test_fix",
             "L9-9: fixed — tests/test_fix.py::test_fix",
-            f"{unknown}: fixed — not a test — nothing carries it",
+            f"{unknown}: see below",
         ]
     )
     prose_answer = "\n".join(
@@ -5646,6 +5646,38 @@ def test_repair_rejects_unknown_finding_shaped_identifiers(world: World, prefix:
     assert f"{unknown}: no taken row carries this id" in prompt
     record = {row[0]: row[7] for row in stage2.record_rows(world.record().read_text(encoding="utf-8"))}
     assert record["L1-1"] == "fixed — tests/test_fix.py::test_fix"
+    assert git(world.root, "rev-list", "--count", f"{baseline}..HEAD") == "1"
+
+
+@pytest.mark.parametrize("unknown", ["custm", "expected", "ADR-0017"])
+def test_repair_rejects_unknown_claimed_fixes(world: World, unknown: str) -> None:
+    """Criterion 3. Planted fault: a claimed fix with an unknown free-text id checkpoints."""
+    seed_tests(world)
+    world.write_findings(VERDICT, phase6_block([phase6_cells("custom", "taken — prose id", "free-text id")]))
+    baseline = git(world.root, "rev-parse", "HEAD")
+    fixed = "custom: fixed — tests/test_fix.py::test_fix"
+    answer = f"{fixed}\n- **{unknown}**: fixed — tests/test_fix.py::test_fix"
+    script_repair(
+        world,
+        [repair_step(stdout=answer), repair_step(stdout=fixed)],
+        make=[{"stdout": "green\n"}] * 2,
+    )
+    assert world.run("repair") == 0
+    assert len(world.calls("codex")) == 2
+    prompt = prompt_of(world.calls("codex")[1])
+    assert f"{unknown}: no taken row carries this id" in prompt
+    assert git(world.root, "rev-list", "--count", f"{baseline}..HEAD") == "1"
+
+
+def test_repair_ignores_l_prefix_prose_without_loop_rows(world: World) -> None:
+    """Criterion 1. Planted fault: L-3 establishes a finding id without any loop row."""
+    seed_tests(world)
+    world.write_findings(VERDICT, phase6_block([phase6_cells("F-1", "taken — phase finding", "phase only")]))
+    baseline = git(world.root, "rev-parse", "HEAD")
+    answer = "F-1: fixed — tests/test_fix.py::test_fix\nL-3: see below\nexpected: one fixed line"
+    script_repair(world, [repair_step(stdout=answer)], make=[{"stdout": "green\n"}])
+    assert world.run("repair") == 0
+    assert len(world.calls("codex")) == 1
     assert git(world.root, "rev-list", "--count", f"{baseline}..HEAD") == "1"
 
 
@@ -5719,8 +5751,10 @@ def test_repair_instructions_describe_answer_filtering_and_hand_repairs() -> Non
         "fixed — not a test — <reason>",
         "ignored",
         "finding id",
+        "right side is a fixed status",
         "; fixed by",
         "; fixed:",
+        "; repaired by",
     ):
         assert needle in answer, needle
     assert "no other text" not in answer, "the prompt still forbids all incidental prose"
@@ -5731,6 +5765,7 @@ def test_repair_instructions_describe_answer_filtering_and_hand_repairs() -> Non
         "Broke a test",
         "; fixed by",
         "; fixed:",
+        "; repaired by",
     ):
         assert needle in workflow, needle
 
