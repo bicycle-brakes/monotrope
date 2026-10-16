@@ -222,3 +222,37 @@ decision of record.
    `glm-5.3-flash`, `qwen3.8-flash`, `gpt-6-luna`, `claude-haiku-5.5`,
    `minimax-m2.7`, `mimo-v2.6-pro`. Round 2 keeps the ladder's read tools;
    only the free stage is diff-only.
+
+## Addendum 2026-10-16 — after the redraft (a0d5bc8)
+
+Two statements of the maintainer in the conversation of 2026-10-16, after
+the redraft had started, and the reading behind the first. They revise the
+orchestrator's detail 1 of 2026-10-16 and add detail 4; the text above stays
+as it was written.
+
+- "Pi soll live abrufen" — the free check reads the model list live. Read in
+  the pinned Pi 1.2.0 source on 2026-10-16 (not run): the model list comes
+  from a remote catalog on `pi.dev` (`core/remote-catalog-provider.js`),
+  cached in the agent directory and refetched only after four hours;
+  `pi update models` forces a refresh over the network
+  (`package-manager-cli.js`, `refreshModelCatalogs`, `force: true`). The
+  installed package does not contain `cat-jam-free`, so the list measured at
+  01:50 already came from that catalog — the redraft's sentence "its
+  freshness is limited by the Pi pin" is wrong.
+  **Detail 1, revised:** before `--list-models`, the runner forces the
+  catalog refresh (`tools/pi/pi update models`) in the call's scratch agent
+  directory; a failed or timed-out refresh refuses the run instead of using
+  an older list. Known limit: the live source is Pi's catalog on `pi.dev`,
+  not OpenCode Go's own model endpoint (the maintainer kept Pi's catalog on
+  2026-10-16 after the trade-off was put to them).
+- "Das mit den free Modellen muss ich nachträglich leicht anpassen lassen,
+  da sich das immer wieder ändert" — the free-stage rule is configuration.
+  **Detail 4:** the rule lives in `model-endpoints.yaml`, not in
+  `scripts/stage2.py`: the provider (`opencode-go`), the match rule (ids
+  ending `-free`), an `include` list (ids treated as free though the rule
+  misses them) and an `exclude` list (ids never called), each entry with a
+  date and a reason. The runner and the tests read the rule from the yaml;
+  no free model id or suffix stands as a literal in the runner. Adjusting
+  the free models is a yaml edit carried by an ordinary pull request
+  (`model-endpoints.yaml` has no `human-decided` entry in `provenance.yaml`,
+  read 2026-10-16).
