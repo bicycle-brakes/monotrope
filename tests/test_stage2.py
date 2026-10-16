@@ -4737,6 +4737,7 @@ def test_repair_refuses_legacy_completed_taken_statuses_before_call(
     assert f"taken — test_c{marker}" in world.text()
     assert "fixed — tests/<path>::<function>" in error and "fixed — not a test — <reason>" in error
     assert "Broke a test" in error
+    assert "if the row is not repaired yet, reword its reason so it names no fix" in error
     assert f"taken — test_a{marker}" in world.record().read_text(encoding="utf-8")
     assert f"taken — crit 6{marker.upper()}" in world.text()
     # The control: a taken reason may name a fix and keep its semicolons, as long as it carries no
@@ -5589,20 +5590,21 @@ def test_repair_ignores_incidental_answer_prose(world: World) -> None:
     assert git(world.root, "rev-list", "--count", f"{baseline}..HEAD") == "1"
 
 
-def test_repair_accepts_exact_free_text_identifiers(world: World) -> None:
+@pytest.mark.parametrize("ident", ["custom", "expected"])
+def test_repair_accepts_exact_free_text_identifiers(world: World, ident: str) -> None:
     """Criterion 2. Planted fault: a phase-6 id without the finding shape is ignored despite its fixed line."""
     repair_world(world)
-    world.write_findings(VERDICT, phase6_block([phase6_cells("custom", "taken — prose id", "a free-text id")]))
+    world.write_findings(VERDICT, phase6_block([phase6_cells(ident, "taken — prose id", "a free-text id")]))
     answer = "\n".join(
         [
             "L1-1: fixed — tests/test_fix.py::test_fix",
-            "custom: fixed — tests/test_fix.py::test_fix",
+            f"{ident}: fixed — tests/test_fix.py::test_fix",
         ]
     )
     script_repair(world, [repair_step(stdout=answer)], make=[{"stdout": "green\n"}])
     assert world.run("repair") == 0
     _, phase6 = stage2.findings_rows(world.text())
-    assert {row[0]: row for row in phase6}["custom"][7] == "fixed — tests/test_fix.py::test_fix"
+    assert {row[0]: row for row in phase6}[ident][7] == "fixed — tests/test_fix.py::test_fix"
     record = {row[0]: row[7] for row in stage2.record_rows(world.record().read_text(encoding="utf-8"))}
     assert record["L1-1"] == "fixed — tests/test_fix.py::test_fix"
 
@@ -5650,13 +5652,15 @@ def test_repair_rejects_unknown_finding_shaped_identifiers(world: World, prefix:
 
 
 @pytest.mark.parametrize("unknown", ["custm", "expected", "ADR-0017"])
-def test_repair_rejects_unknown_claimed_fixes(world: World, unknown: str) -> None:
+@pytest.mark.parametrize("form", ["- **{id}**: {status}", "**{id}:** {status}", "{id}: `{status}`"])
+def test_repair_rejects_unknown_claimed_fixes(world: World, unknown: str, form: str) -> None:
     """Criterion 3. Planted fault: a claimed fix with an unknown free-text id checkpoints."""
     seed_tests(world)
     world.write_findings(VERDICT, phase6_block([phase6_cells("custom", "taken — prose id", "free-text id")]))
     baseline = git(world.root, "rev-parse", "HEAD")
     fixed = "custom: fixed — tests/test_fix.py::test_fix"
-    answer = f"{fixed}\n- **{unknown}**: fixed — tests/test_fix.py::test_fix"
+    extra = form.format(id=unknown, status="fixed — tests/test_fix.py::test_fix")
+    answer = f"{fixed}\n{extra}"
     script_repair(
         world,
         [repair_step(stdout=answer), repair_step(stdout=fixed)],
@@ -5666,6 +5670,33 @@ def test_repair_rejects_unknown_claimed_fixes(world: World, unknown: str) -> Non
     assert len(world.calls("codex")) == 2
     prompt = prompt_of(world.calls("codex")[1])
     assert f"{unknown}: no taken row carries this id" in prompt
+    assert git(world.root, "rev-list", "--count", f"{baseline}..HEAD") == "1"
+
+
+@pytest.mark.parametrize("marker", ["; fixed by", "; fixed:", "; repaired by"])
+def test_repair_accepts_quoted_legacy_markers(world: World, marker: str) -> None:
+    """Criterion 7. Planted fault: a backtick-quoted marker refuses an unrepaired row."""
+    baseline = repair_world(world, ("L1-1", f"taken — test_a — the docs must name `{marker}` too", "no"))
+    script_repair(world, [repair_step()], make=[{"stdout": "green\n"}])
+    assert world.run("repair") == 0
+    assert len(world.calls("codex")) == 1
+    assert git(world.root, "rev-list", "--count", f"{baseline}..HEAD") == "1"
+
+
+def test_repair_rejects_unknown_loop_id_without_loop_rows(world: World) -> None:
+    """Criterion 3. Planted fault: without loop rows, an unknown loop id is treated as prose."""
+    seed_tests(world)
+    world.write_findings(VERDICT, phase6_block([phase6_cells("F-1", "taken — phase finding", "phase only")]))
+    baseline = git(world.root, "rev-parse", "HEAD")
+    fixed = "F-1: fixed — tests/test_fix.py::test_fix"
+    script_repair(
+        world,
+        [repair_step(stdout=f"{fixed}\nL9-9: see below"), repair_step(stdout=fixed)],
+        make=[{"stdout": "green\n"}] * 2,
+    )
+    assert world.run("repair") == 0
+    assert len(world.calls("codex")) == 2
+    assert "L9-9: no taken row carries this id" in prompt_of(world.calls("codex")[1])
     assert git(world.root, "rev-list", "--count", f"{baseline}..HEAD") == "1"
 
 
@@ -5719,6 +5750,12 @@ def test_repair_prose_alone_still_needs_fixed_lines(world: World) -> None:
     ("bad", "problem"),
     [
         pytest.param(
+            "custom: done",
+            "custom: the line is neither `<ID>: fixed — tests/<path>::<function>` nor "
+            "`<ID>: fixed — not a test — <reason>`",
+            id="free-text-no-fixed-status",
+        ),
+        pytest.param(
             "L1-1: done",
             "L1-1: the line is neither `<ID>: fixed — tests/<path>::<function>` nor "
             "`<ID>: fixed — not a test — <reason>`",
@@ -5734,11 +5771,17 @@ def test_repair_prose_alone_still_needs_fixed_lines(world: World) -> None:
 def test_repair_rejects_malformed_known_fixed_lines(world: World, bad: str, problem: str) -> None:
     """Criterion 5. Planted fault: a known id's malformed fixed line is discarded as prose."""
     repair_world(world)
-    script_repair(world, [repair_step(stdout=bad), repair_step()], make=[{"stdout": "green\n"}] * 2)
+    world.write_findings(VERDICT, phase6_block([phase6_cells("custom", "taken — prose id", "free-text id")]))
+    valid = "L1-1: fixed — tests/test_fix.py::test_fix\ncustom: fixed — tests/test_fix.py::test_fix"
+    other = "L1-1" if bad.startswith("custom:") else "custom"
+    # Exercise malformed active ids beside an unknown decorated claim: neither may be filtered out.
+    first = f"{bad}\n{other}: fixed — tests/test_fix.py::test_fix\n**custm:** fixed — tests/test_fix.py::test_fix"
+    script_repair(world, [repair_step(stdout=first), repair_step(stdout=valid)], make=[{"stdout": "green\n"}] * 2)
     assert world.run("repair") == 0
     prompt = prompt_of(world.calls("codex")[1])
     assert problem in prompt, prompt
-    assert "no taken row carries this id" not in prompt and "no fixed line: " not in prompt
+    assert "custm: no taken row carries this id" in prompt
+    assert "no fixed line" not in prompt
     record = {row[0]: row[7] for row in stage2.record_rows(world.record().read_text(encoding="utf-8"))}
     assert record["L1-1"] == "fixed — tests/test_fix.py::test_fix"
 
@@ -5758,16 +5801,36 @@ def test_repair_instructions_describe_answer_filtering_and_hand_repairs() -> Non
     ):
         assert needle in answer, needle
     assert "no other text" not in answer, "the prompt still forbids all incidental prose"
-    workflow = flat(section(WORKFLOW.read_text(encoding="utf-8"), "### Repairing taken findings"))
-    for needle in (
-        "fixed — tests/<path>::<function>",
-        "fixed — not a test — <reason>",
-        "Broke a test",
-        "; fixed by",
-        "; fixed:",
-        "; repaired by",
+    workflow_text = section(WORKFLOW.read_text(encoding="utf-8"), "### Repairing taken findings")
+
+    def check_workflow(text: str) -> None:
+        workflow = flat(text)
+        for needle in (
+            "fixed — tests/<path>::<function>",
+            "fixed — not a test — <reason>",
+            "replace the finished row's `taken — …` with one of the two fixed statuses",
+            "set the loop row's `Broke a test` mark from the evidence",
+            "if the row is not repaired yet, reword its reason so it names no fix",
+            "; fixed by",
+            "; fixed:",
+            "; repaired by",
+        ):
+            assert needle in workflow, needle
+
+    check_workflow(workflow_text)
+    hand_rule = (
+        "A hand\nrepair books itself in the row's Status alone: replace the finished row's\n"
+        "`taken — …` with one of the two fixed statuses and set the loop row's\n"
+        "`Broke a test` mark from the evidence. "
+    )
+    assert hand_rule in workflow_text
+    for broken in (
+        workflow_text.replace(hand_rule, ""),
+        workflow_text.replace("replace the finished row's", "append to the finished row's"),
+        workflow_text.replace("set the loop row's\n`Broke a test` mark", "set the loop row's mark"),
     ):
-        assert needle in workflow, needle
+        with pytest.raises(AssertionError):
+            check_workflow(broken)
 
 
 def test_a_code_row_answered_not_a_test_fails_the_attempt(world: World) -> None:

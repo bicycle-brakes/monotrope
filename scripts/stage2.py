@@ -1069,15 +1069,15 @@ def repair_targets(ctx: Context, record: str | None) -> tuple[list[tuple[str, li
     return taken, waiting
 
 
-# A taken Status that names a fix in the hand-written form the runner never wrote: the row is done, and
-# an attempt would demand a fixed line for it in vain. All three markers are matched without regard to case,
+# A taken Status that names a fix in a legacy hand-written form needs clarification before repair.
+# Quoted marker examples are not completion claims. Match unquoted markers without regard to case,
 # as every Status read here is (bead coding-harness-ugi).
 LEGACY_FIXED = ("; fixed by", "; fixed:", "; repaired by")
 
 
 def legacy_completed(status: str) -> bool:
     """Whether a Status still begins `taken` while naming a fix in one of the three legacy forms."""
-    lowered = status.lower()
+    lowered = re.sub(r"`+[^`]*`+", "", status).lower()
     return any(marker in lowered for marker in LEGACY_FIXED)
 
 
@@ -2267,7 +2267,7 @@ def check_repair_answer(
             ident not in active
             and not LOOP_ID.fullmatch(ident)
             and not (shape and shape[1] in prefixes)
-            and not rest.startswith("fixed — ")
+            and not rest.lstrip("*` ").startswith("fixed — ")
         ):
             continue
         parsed.setdefault(ident, []).append(rest)
@@ -3029,13 +3029,14 @@ def repair(root: Path, change: str, stage2_off: str | None = None) -> None:
         raise Refused(f"several taken rows carry the same id ({', '.join(doubled)}); mend the rows first.")
     legacy = [row[0] for _, row in taken if legacy_completed(row[7])]
     if legacy:
-        # The row is done and only its Status is of the old hand-written form: no attempt can fill it,
-        # so the repair stops before a call and the row stands as it is (spec, criterion 7).
+        # A legacy marker may name a completed fix or merely occur in an unrepaired reason.
+        # Refuse without rewriting and explain both corrections (spec, criterion 7).
         raise Refused(
             f"rows carry a taken status that already names a fix ({', '.join(legacy)}); book the hand repair "
             "by replacing the Status with `fixed — tests/<path>::<function>` or "
             "`fixed — not a test — <reason>` and setting the loop row's `Broke a test` mark, then run "
-            "repair again."
+            "repair again; if the row is not repaired yet, reword its reason so it names no fix instead "
+            "of marking it fixed."
         )
     baseline = _git_output(root, "rev-parse", "HEAD").strip()
     time_log(ctx.plan)  # Require the initial time heading before a model call starts.

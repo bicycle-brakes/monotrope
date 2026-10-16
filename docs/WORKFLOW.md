@@ -1110,7 +1110,9 @@ repair books itself in the row's Status alone: replace the finished row's
 `Broke a test` mark from the evidence. A Status that still begins `taken`
 while naming a fix in the old form (`; fixed by …`, `; fixed: …`,
 `; repaired by …`) stops the repair before any call, and the row stands as it
-is. **Red first:** the runner proves each repair of code by running the named
+is. Backtick-quoted markers do not count; if the row is not repaired yet,
+reword its reason so it names no fix instead of marking it fixed.
+**Red first:** the runner proves each repair of code by running the named
 test alone against the baseline's code, in a
 temporary git worktree whose `tests/` is the attempt's, and accepts a test
 only when pytest exits 1 or 2 there. When every post-run check passes —

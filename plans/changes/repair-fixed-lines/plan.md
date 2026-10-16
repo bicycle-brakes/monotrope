@@ -111,12 +111,14 @@ checks; this draft's local checks stay inside the worktree and git directory.
 - 1: tests/test_stage2.py::test_repair_ignores_l_prefix_prose_without_loop_rows — L-3 report prose fails when only phase-6 rows exist
 - 2: tests/test_stage2.py::test_repair_accepts_exact_free_text_identifiers — a custom or report-like phase-6 identifier is filtered out
 - 3: tests/test_stage2.py::test_repair_rejects_unknown_finding_shaped_identifiers — an unknown loop or letters-hyphen-digits identifier is ignored
+- 3: tests/test_stage2.py::test_repair_rejects_unknown_loop_id_without_loop_rows — a loop-shaped prose line escapes without loop rows
 - 3: tests/test_stage2.py::test_repair_rejects_unknown_claimed_fixes — a claimed fix with an unknown free-text identifier checkpoints
 - 4: tests/test_stage2.py::test_each_taken_row_needs_exactly_one_fixed_line — a missing or doubled fixed line passes
 - 4: tests/test_stage2.py::test_repair_prose_alone_still_needs_fixed_lines — prose alone passes or duplicates separated by prose escape detection
 - 5: tests/test_stage2.py::test_repair_rejects_malformed_known_fixed_lines — a known identifier with an invalid status or empty reason is treated as prose
 - 6: tests/test_stage2.py::test_repair_lists_every_taken_row_and_no_rejected_or_fixed_one — a completed released or phase-6 row is sent again
 - 6: tests/test_stage2.py::test_repair_skips_canonical_hand_repairs_in_every_location — either canonical status is demanded again in any location, including fixed-only batches
+- 7: tests/test_stage2.py::test_repair_accepts_quoted_legacy_markers — quoted marker text refuses an unrepaired row
 - 7: tests/test_stage2.py::test_repair_refuses_legacy_completed_taken_statuses_before_call — a marker starts an attempt, rewrites a row or lacks corrective diagnostics
 - 8: tests/test_stage2.py::test_a_fixed_line_naming_an_undefined_test_fails_the_attempt — an undefined test is accepted
 - 8: tests/test_stage2.py::test_a_fixed_line_whose_test_path_climbs_out_of_tests_fails_the_attempt — an escaping test path is accepted
@@ -165,4 +167,14 @@ checkpoint `cc424575f866593e7110e765053471a2ae6bdfd7`:
 - Red first at baseline `599853e`: the new unknown-claimed-fix test failed in all three cases, and the phase-6-only L-prefix prose regression failed. After the repair the targeted selection passed all eight cases.
 - The instruction regression fails against the baseline shared answer prompt because it lacks the claimed-fix rule. Removing `; repaired by` from either the repaired shared prompt or the workflow independently also makes the regression fail; the unmutated instructions pass.
 - `.venv/bin/python3 -m pytest tests/test_stage2.py -q`: 535 passed in 288.19s. Ruff check, Ruff format check, criterion ledger and `git diff --check` passed. The ledger now names both new regression functions.
+- No `make verify` or repository commit was run by this repair session; the runner owns full verification, finding-status booking and the checkpoint. The pre-existing `findings.md` changes were not edited.
+
+
+2026-10-16 09:59:29–10:07:35 +0200, 8m 6s — Codex repair of phase-6 findings F-1 (hand-repair instruction regression), F-2 (quoted legacy markers and safe refusal guidance), F-3 (decorated unknown fix claims), and F-4 (exact-id and loop-shape regression coverage); no break. Start and end read from `date`; earlier unmeasured spans remain unestimated.
+
+- Red first at repair baseline `25669056a97c7245f0df6f7bfd3aa8fc45b44e5f`: the initial targeted selection produced 13 failures and 9 passing controls before the implementation changes. The extended malformed-known-line regression also failed in all three cases with the baseline parser loaded in memory.
+- After the repair, the initial targeted selection passed all 22 cases. The final `.venv/bin/python3 -m pytest tests/test_stage2.py -q` run passed all 547 cases in 306.36s.
+- The instruction regression now checks wording unique to replacing a completed taken status and setting the loop test mark. Its three planted workflow faults (remove the hand-repair sentence, replace “replace” with “append to”, omit the test mark) each raise an assertion.
+- Three independent in-memory parser mutations each turned the intended regression red: removing exact active-id collection failed `custom: done`; removing unconditional loop-id recognition failed the phase-6-only `L9-9: see below` case; ignoring `expected` failed its exact active-id case. No mutation was left in the worktree.
+- Ruff check, Ruff format check, criterion ledger, interview minimums and `git diff --check` passed. The ledger names both new regression functions.
 - No `make verify` or repository commit was run by this repair session; the runner owns full verification, finding-status booking and the checkpoint. The pre-existing `findings.md` changes were not edited.
