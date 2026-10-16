@@ -70,6 +70,8 @@ checkable.
 1. `stage2.py explore` dispatches features and architectural changes to the
    swarm, bounded/spike to GLM Flash; explicit Stage-1 fallback remains Haiku
    5.5 with its reason. Early research/spec/argument classes must agree.
+   Swarm research headers require an explicit neighbours list; [] is valid,
+   while a missing/null/non-list key refuses with exit 2 and a repair message.
 2. Finder step 0 uses independent DeepSeek Flash, MiMo Flash and Haiku 5.5
    locators; Opus 5.5 merges code, rules/ADRs, tests/gates and neighbour lists.
    The merged finder keys are their exact deduplicated category/reference
@@ -77,9 +79,19 @@ checkable.
    Runner resolution against scratch frozen bytes marks unresolved entries
    without granting topic scope, then inserts all given neighbours as given.
    Finder suggestions remain marked rather than silently accepted.
+   Resolved neighbour-category artifacts inside a change with a frozen spec
+   map to that spec path, retaining every finder key; others remain no-spec
+   map entries and named gaps without packet-neighbour status.
 3. Topics 1–8 cover code/reuse, callers/interfaces, rules/class, architecture,
    neighbours, history/volatility, tests/gates and risks; each uses the same
    repository trio on identical briefs, perspectives and report template.
+   After map merge the runner collects topic 6's local frozen-HEAD history:
+   up to ten most recent commits per resolved mapped path, with full hash,
+   UTC author date, subject, body capped at 4,000 characters with truncation
+   marked, and touched mapped paths. Older history is not read. Only topic 6
+   receives it; a full packet hash resolves to that record, but a reachable
+   hash outside the packet or PR/bead id alone is unsupported. No network or
+   tracker is read; collection failure prevents topics and exits 1 incomplete.
 4. Topics 9–11 cover best practice, existing tools/standards and public failure
    reports. Each uses DeepSeek Flash, MiMo Flash and Qwen 3.8 Flash through Pi
    with only the filtered Opus sentence, fixed questions and public sources.
@@ -98,6 +110,15 @@ checkable.
    models; Pi's absent capability field is expected, never a fallback trigger. These free
    seats are best-effort: failure is named, never hidden or substituted, and
    does not alone invalidate the 39 required fixed contributions.
+   Missing/non-object provider/models, non-object root, invalid JSON,
+   non-200/request failure or duplicate claimed ids are document-level
+   capability-unavailable. Other shape faults exclude only the candidate as
+   metadata-malformed (non-object entry, non-boolean present tool_call,
+   non-string present status, id/key mismatch), retaining raw values; missing
+   entries are metadata-missing, absent/false support is no-tool-support.
+   Other providers' entries are not inspected. Every fixed Go id must be
+   fresh-Pi text-input chat, else fixed-model-unavailable with its id exits 1
+   before any model; models.dev is not consulted for fixed roles.
 5. Reports hold at most seven identified claims with evidence, kind,
    confidence/basis, counter-evidence, unread sources, neighbour relation
    and typed questions with report-local ids and claim links. The runner
@@ -117,8 +138,14 @@ checkable.
    that refuse private/local sources and retain successful retrieval receipts.
    The accepted repository-Pi read risk is not called public-context isolation.
    Opus merge, topic author and judge have no tools and see only their packets.
-   The runner attaches bounded resolved claim excerpts for the judge, marking
-   truncation; a supported score means that evidence supports the claim and
+   The runner joins resolved source/packet-commit/receipt excerpts in citation
+   order and caps their total at 4,000 Unicode characters per claim, marking
+   truncation. One fixed whole-judge-packet character limit is derived in
+   phase 4 from pinned-Claude Opus capacity minus a fixed output reserve,
+   with capacity/conversion/source/date recorded. Above that limit, no judge
+   is called: retain all evidence, exit 1 incomplete as judge-packet-over-limit.
+   Exactly the limit allows dispatch; no further shortening, N reduction or
+   extra judge call. A supported score means that evidence supports the claim and
    no evidence-backed peer claim contradicts it.
 7. Research carries every accepted raw-report decision (even refuted or
    off-brief) and unresolved judge disagreement into an interview inventory
@@ -132,9 +159,12 @@ checkable.
    criteria. Direct claim bases must all be supported from complete runs;
    any other disposition needs an answered maintainer Q-record as the basis,
    even when mixed with supported claims. Neighbour parity is exact: confirmed
-   plus given plus linked maintainer additions minus linked maintainer drops
-   of given paths. Only a linked maintainer answer can drop a given neighbour;
-   proposed removal creates an obligation. Runtime instruction auto-loading
+   or given in any complete run plus linked maintainer additions minus linked
+   maintainer drops of given or confirmed paths. Confirmation/rejection
+   conflicts between complete runs and later omission of an earlier given
+   path derive neighbour DECISION items independently of the judge. The path
+   stays required until a linked human drop; an unanswered item fails even
+   when the header keeps the path. Runtime instruction auto-loading
    is disabled; finders/topic author share the frozen research/decisions/spec
    brief and repository seats receive identical embedded AGENTS.md.
 8. A blocking `research-handoff` gate checks v2 inventory coverage, answered
@@ -153,7 +183,11 @@ checkable.
    models before model calls; the budget is at most `39 + 3N` invocations. A
    bounded Go-only Pi catalog refresh must succeed each run; failures exit 1
    before models and never use cached/shipped rosters or Zen. Both catalog
-   reads share 60 seconds; models.dev receives no credentials/private data.
+   reads start together and share 60 seconds; abort unfinished requests at
+   the deadline. Unfinished Pi exits 1; successful Pi plus unfinished
+   models.dev records capability-unavailable/timeout and keeps fixed slots
+   unless an explicit include is unmet. No retries or extension; models.dev
+   receives no credentials/private data.
    Valid zero availability and capability-unavailable models.dev fallback keep
    the fixed 39 slots with distinct recorded reasons. Defaults select all eligible models; explicit include
    narrows and exclude wins. Record dated source, freshness, policy and roster;
@@ -207,6 +241,8 @@ checkable.
   actual-runtime qualification continues to use the real repository pin.
 * Handoff mutations delete decisions/answers/bases/neighbours, including class
   mismatches and neighbour contradictions; local and hosted checks must fail.
+  Cross-run confirmation/rejection and given-header omission fixtures require
+  linked human keep/drop answers and the corresponding exact header set.
 * `make verify`, generated CI and kit probe hold the same blocking contract.
 * Phase-6 review checks prose scope, comparison meaning, faithful dissent,
   volatile-fact classification and the relevance of resolved criterion bases.
@@ -218,6 +254,9 @@ checkable.
   in Pi never become zero availability or a fixed-roster fallback. Independent
   models.dev fixtures prove exact-id intersection, support/deprecation checks,
   and capability-unavailable fallback without credentials or private data.
+  They distinguish document/entry faults, shared-deadline outcomes, unavailable
+  fixed ids and exclusion provenance even when N is nonzero. Judge-packet
+  fixtures exercise the exact limit, one character over it and per-claim caps.
 * After merge, public-only live qualification records the refreshed catalog,
   actual Go Flash/free models and search/fetch outcomes. Until success no
   complete live swarm is claimed.

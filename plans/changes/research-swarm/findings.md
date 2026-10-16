@@ -1775,12 +1775,276 @@ Stage-2 call, 2026-10-17: spec-review · endpoint claude-code-plan · model clau
 
 | ID | Severity | Dimension | Origin | Where | Finding | Reviewer | Status | Broke a test |
 |---|---|---|---|---|---|---|---|---|
-| S-31 | MAJOR | SPEC | fix-r2 | `spec.md`, criteria 29, 30, 32; [DETAIL]s «Version manifests research-swarm/v2» and «exact neighbour parity» | [AMBIGUITY] Obligations carry across every complete v2 run, and the [DETAIL] names «confirmed by a new complete run» as a way to add a neighbour. So one change can hold several complete runs. Criterion 30 does not say which runs supply the «confirmed and given paths». Reading A (union of all complete runs): a path that run 1 confirmed stays required after run 2 rejects it. A given path removed from `research.md`'s header between the runs also stays required until a linked maintainer answer drops it. Reading B (latest complete run only): run 2's header and run 2's confirmations alone define the set, so that path must now be absent, and keeping it exits 1. Test case: run 1 confirms suggestion P and run 2 rejects it. A spec header that contains P passes under A and fails under B. A header without P fails under A and passes under B. | Opus | open | — |
-| S-32 | MAJOR | SPEC | base | `spec.md`, Topic contract row 6; Terms «Claim»; criterion 16; [DETAIL] «Opus map merge, topic author and judge have empty tool lists»; `decisions.md`, Q-7 topic 6 (evidence «commit hash, PR number, bead id or `path::section`») | [AMBIGUITY] Topic 6 is limited to «mapped history only», and Q-7 accepted commit hashes as its evidence. The spec resolves local evidence only as a path plus a symbol or section against frozen bytes, and the judge's excerpts are only «resolved symbol/section or receipt excerpts». Reading A: a claim that cites a commit has no resolvable local reference, so the runner marks it `unsupported`. A topic-6 report that backs its history claims (last change, reason, reversal) with commits alone then fails the one-evidence-backed-claim floor, and the run is incomplete. Reading B: a commit reachable from the frozen HEAD resolves, and the runner attaches its message as the excerpt. The spec also does not say how a repository seat gets history at all: no packet content and no tool for git data is named. PR numbers and bead ids cannot resolve under either reading, because the tracker is not read. Test case: a topic-6 report whose only evidence is a commit hash from frozen HEAD's ancestry is accepted under B and rejected under A. | Opus | open | — |
-| S-33 | MINOR | SPEC | fix-r2 | `spec.md`, Terms «Selected Go free models»; criterion 42; [DETAIL] «Preflight validates class and given neighbours» («malformed/unreachable metadata excludes all») | [AMBIGUITY] The [DETAIL] excludes single ids for «missing entries/absent or false tool_call/deprecated status». It excludes every candidate when the metadata is «malformed». Criterion 42 records a different reason for each case (measured-empty or capability-unavailable). The spec does not say where «malformed» starts. Reading A: only a document that does not parse is malformed. A missing `opencode-go` key, or a candidate whose `tool_call` is a string or null, excludes only the ids concerned, each with its own reason, and the other candidates stay eligible. Reading B: any part that departs from the expected shape makes the whole metadata malformed and excludes all candidates as capability-unavailable. That includes a candidate's non-boolean `tool_call`, a missing `opencode-go` key, or a malformed entry of an unrelated provider. Test case: candidate X has `tool_call: "true"` and candidate Y has `tool_call: true`. Under A, N is 1 and Y is selected. Under B, N is 0 with the reason capability-unavailable. | Opus | open | — |
-| S-34 | MINOR | SPEC | fix-r2 | `spec.md`, [DETAIL] «The budget is at most `39 + 3N` calls» («catalog 60 seconds»); criteria 41, 42; Terms «Selected Go free models» | [AMBIGUITY] The catalog stage has one 60-second deadline, but it now holds two reads with opposite failure rules. A Pi failure exits 1 (criterion 41). An unavailable models.dev gives N=0 and the fixed slots still run (criterion 42). Reading A: models.dev gets its own share of the stage, and a request still open when that share ends counts as «unavailable», so the run goes on with N=0. Reading B: the 60 seconds bound the whole stage, and a stage that overruns them is a catalog timeout under criterion 41, so preflight exits 1 before any model call. Test case: Pi refreshes in 5 seconds and the models.dev request does not answer within 60 seconds. Under A the run dispatches the 39 fixed slots; under B it exits 1 with none. | Opus | open | — |
-| S-35 | MINOR | SPEC | fix-r2 | `spec.md`, Topic contract (finder paragraph; topic-5 `neighbour_relations`); criteria 29, 30 | [AMBIGUITY] Finder entries are keyed by `path::symbol` or `path::section`. Topic 5 needs exactly one relation per packet neighbour «path». The spec does not say how a suggestion becomes a packet neighbour. Header-given neighbours must be existing `spec.md` paths (otherwise exit 2), but no such rule is stated for suggestions. Reading A: only resolved suggestions whose path is a `spec.md` count, merged to one neighbour per path. A suggestion such as `plans/changes/foo/design.md::Data model` stays a map entry without neighbour status. Reading B: the path of every resolved entry in the neighbour category is a packet neighbour. It then needs a relation, can be confirmed, and once confirmed must enter the spec's `neighbours:` header under criterion 30. Test case: a topic-5 report with no relation for that `design.md` path is accepted under A and rejected as a missing path under B. | Opus | open | — |
-| S-36 | MINOR | SPEC | fix-r1 | `spec.md`, criterion 4; [DETAIL] «Preflight validates class and given neighbours» | [AMBIGUITY] Criterion 4 refuses invalid given-neighbour headers with exit 2, and the [DETAIL] defines an invalid entry. Neither says what a missing `neighbours:` key or an empty list means. In this worktree, no template carries the key, and no change's `research.md` other than this one has it. Reading A: a missing key means no given neighbours, and the run goes on with finder suggestions only. Reading B: a missing header is invalid, like a missing class, and preflight exits 2. Test case: the first swarm run of any other feature change runs under A and exits 2 before any model call under B. | Opus | open | — |
-| S-37 | MINOR | SPEC | base | `spec.md`, Terms «Repository trio» and «Online researchers»; criteria 19, 37, 38, 41 | Missing: what preflight does when a fixed Go model (`deepseek-v4.1-flash`, `mimo-v2.6-flash` or `qwen3.8-flash`) is absent from this run's fresh `opencode-go` overlay, or present only in the shipped baseline. The spec checks only `-free` ids against the catalog. The implementer has to choose. Either preflight exits 1 before any call, as it does for a missing explicit include. Or the required slots are dispatched, fail at call time, and the run ends incomplete with exit 1 after up to 36 + 3N other calls. Test case: a fresh overlay without `qwen3.8-flash` has no expected call count under criterion 19 or 41. | Opus | open | — |
-| S-38 | MINOR | SPEC | fix-r2 | `spec.md`, criterion 14; [DETAIL] «Opus map merge, topic author and judge have empty tool lists» (4,000-character cap) | Missing: a limit on the size of the whole judge packet, and what happens when it exceeds what one Opus context accepts. The cap applies per cited source. A claim may cite several sources, and the number of reports grows with N. 33 required reports with seven claims and one full excerpt each already give 924,000 characters of excerpts, and each free model adds 84,000 more. Criterion 14 requires a single context and fails a judge that lacks any valid claim's excerpt. The implementer therefore has to choose between failing the judge, which makes the run incomplete, and shortening excerpts or limiting N, which the spec does not allow. Test case: a run with N=10 and full excerpts has no expected outcome (complete, incomplete, or shortened excerpts). | Opus | open | — |
-| S-39 | MINOR | SPEC | fix-r2 | `spec.md`, criteria 38, 39, 42; Terms «Selected Go free models»; [DETAIL] «retain source/time/digest and per-model reasons»; `decisions.md`, Q-11 | Cannot go red as specified. Q-11 says a model excluded through models.dev keeps its recorded reason, and the [DETAIL] requires the models.dev source, time and digest to be kept. Criterion 38 names only the Pi refresh («its freshly fetched overlay, source, UTC time and selection»). Criterion 42 checks the reason only when N=0, and criterion 39 checks only which models run. Refuting input: in models.dev, `longcat-2.5-preview-free` is eligible and `cat-jam-free` is deprecated. The manifest records N=1 but has neither the models.dev source, time and digest nor `cat-jam-free`'s reason «deprecated». No refutation names this run, unless criterion 38's «selection lacks dated provenance» is read as covering a second source the criterion does not name. | Opus | open | — |
+| S-31 | MAJOR | SPEC | fix-r2 | `spec.md`, criteria 29, 30, 32; [DETAIL]s «Version manifests research-swarm/v2» and «exact neighbour parity» | [AMBIGUITY] Obligations carry across every complete v2 run, and the [DETAIL] names «confirmed by a new complete run» as a way to add a neighbour. So one change can hold several complete runs. Criterion 30 does not say which runs supply the «confirmed and given paths». Reading A (union of all complete runs): a path that run 1 confirmed stays required after run 2 rejects it. A given path removed from `research.md`'s header between the runs also stays required until a linked maintainer answer drops it. Reading B (latest complete run only): run 2's header and run 2's confirmations alone define the set, so that path must now be absent, and keeping it exits 1. Test case: run 1 confirms suggestion P and run 2 rejects it. A spec header that contains P passes under A and fails under B. A header without P fails under A and passes under B. | Opus | in spec — criteria 29–32; Open decisions, complete-run union and parity (S-31) | — |
+| S-32 | MAJOR | SPEC | base | `spec.md`, Topic contract row 6; Terms «Claim»; criterion 16; [DETAIL] «Opus map merge, topic author and judge have empty tool lists»; `decisions.md`, Q-7 topic 6 (evidence «commit hash, PR number, bead id or `path::section`») | [AMBIGUITY] Topic 6 is limited to «mapped history only», and Q-7 accepted commit hashes as its evidence. The spec resolves local evidence only as a path plus a symbol or section against frozen bytes, and the judge's excerpts are only «resolved symbol/section or receipt excerpts». Reading A: a claim that cites a commit has no resolvable local reference, so the runner marks it `unsupported`. A topic-6 report that backs its history claims (last change, reason, reversal) with commits alone then fails the one-evidence-backed-claim floor, and the run is incomplete. Reading B: a commit reachable from the frozen HEAD resolves, and the runner attaches its message as the excerpt. The spec also does not say how a repository seat gets history at all: no packet content and no tool for git data is named. PR numbers and bead ids cannot resolve under either reading, because the tracker is not read. Test case: a topic-6 report whose only evidence is a commit hash from frozen HEAD's ancestry is accepted under B and rejected under A. | Opus | in spec — Terms Claim; Topic contract 6; criterion 16; Open decisions, bounded history (S-32) | — |
+| S-33 | MINOR | SPEC | fix-r2 | `spec.md`, Terms «Selected Go free models»; criterion 42; [DETAIL] «Preflight validates class and given neighbours» («malformed/unreachable metadata excludes all») | [AMBIGUITY] The [DETAIL] excludes single ids for «missing entries/absent or false tool_call/deprecated status». It excludes every candidate when the metadata is «malformed». Criterion 42 records a different reason for each case (measured-empty or capability-unavailable). The spec does not say where «malformed» starts. Reading A: only a document that does not parse is malformed. A missing `opencode-go` key, or a candidate whose `tool_call` is a string or null, excludes only the ids concerned, each with its own reason, and the other candidates stay eligible. Reading B: any part that departs from the expected shape makes the whole metadata malformed and excludes all candidates as capability-unavailable. That includes a candidate's non-boolean `tool_call`, a missing `opencode-go` key, or a malformed entry of an unrelated provider. Test case: candidate X has `tool_call: "true"` and candidate Y has `tool_call: true`. Under A, N is 1 and Y is selected. Under B, N is 0 with the reason capability-unavailable. | Opus | in spec — Terms Selected Go free models; criterion 42; Open decisions, metadata fault boundaries (S-33) | — |
+| S-34 | MINOR | SPEC | fix-r2 | `spec.md`, [DETAIL] «The budget is at most `39 + 3N` calls» («catalog 60 seconds»); criteria 41, 42; Terms «Selected Go free models» | [AMBIGUITY] The catalog stage has one 60-second deadline, but it now holds two reads with opposite failure rules. A Pi failure exits 1 (criterion 41). An unavailable models.dev gives N=0 and the fixed slots still run (criterion 42). Reading A: models.dev gets its own share of the stage, and a request still open when that share ends counts as «unavailable», so the run goes on with N=0. Reading B: the 60 seconds bound the whole stage, and a stage that overruns them is a catalog timeout under criterion 41, so preflight exits 1 before any model call. Test case: Pi refreshes in 5 seconds and the models.dev request does not answer within 60 seconds. Under A the run dispatches the 39 fixed slots; under B it exits 1 with none. | Opus | in spec — criteria 19, 41–42; Open decisions, shared catalog deadline (S-34) | — |
+| S-35 | MINOR | SPEC | fix-r2 | `spec.md`, Topic contract (finder paragraph; topic-5 `neighbour_relations`); criteria 29, 30 | [AMBIGUITY] Finder entries are keyed by `path::symbol` or `path::section`. Topic 5 needs exactly one relation per packet neighbour «path». The spec does not say how a suggestion becomes a packet neighbour. Header-given neighbours must be existing `spec.md` paths (otherwise exit 2), but no such rule is stated for suggestions. Reading A: only resolved suggestions whose path is a `spec.md` count, merged to one neighbour per path. A suggestion such as `plans/changes/foo/design.md::Data model` stays a map entry without neighbour status. Reading B: the path of every resolved entry in the neighbour category is a packet neighbour. It then needs a relation, can be confirmed, and once confirmed must enter the spec's `neighbours:` header under criterion 30. Test case: a topic-5 report with no relation for that `design.md` path is accepted under A and rejected as a missing path under B. | Opus | in spec — Topic contract finder mapping; criteria 27, 29; no-spec gaps (S-35) | — |
+| S-36 | MINOR | SPEC | fix-r1 | `spec.md`, criterion 4; [DETAIL] «Preflight validates class and given neighbours» | [AMBIGUITY] Criterion 4 refuses invalid given-neighbour headers with exit 2, and the [DETAIL] defines an invalid entry. Neither says what a missing `neighbours:` key or an empty list means. In this worktree, no template carries the key, and no change's `research.md` other than this one has it. Reading A: a missing key means no given neighbours, and the run goes on with finder suggestions only. Reading B: a missing header is invalid, like a missing class, and preflight exits 2. Test case: the first swarm run of any other feature change runs under A and exits 2 before any model call under B. | Opus | in spec — criterion 4; Open decisions, explicit neighbours list (S-36) | — |
+| S-37 | MINOR | SPEC | base | `spec.md`, Terms «Repository trio» and «Online researchers»; criteria 19, 37, 38, 41 | Missing: what preflight does when a fixed Go model (`deepseek-v4.1-flash`, `mimo-v2.6-flash` or `qwen3.8-flash`) is absent from this run's fresh `opencode-go` overlay, or present only in the shipped baseline. The spec checks only `-free` ids against the catalog. The implementer has to choose. Either preflight exits 1 before any call, as it does for a missing explicit include. Or the required slots are dispatched, fail at call time, and the run ends incomplete with exit 1 after up to 36 + 3N other calls. Test case: a fresh overlay without `qwen3.8-flash` has no expected call count under criterion 19 or 41. | Opus | in spec — criteria 38, 41; Open decisions, fixed-model-unavailable (S-37) | — |
+| S-38 | MINOR | SPEC | fix-r2 | `spec.md`, criterion 14; [DETAIL] «Opus map merge, topic author and judge have empty tool lists» (4,000-character cap) | Missing: a limit on the size of the whole judge packet, and what happens when it exceeds what one Opus context accepts. The cap applies per cited source. A claim may cite several sources, and the number of reports grows with N. 33 required reports with seven claims and one full excerpt each already give 924,000 characters of excerpts, and each free model adds 84,000 more. Criterion 14 requires a single context and fails a judge that lacks any valid claim's excerpt. The implementer therefore has to choose between failing the judge, which makes the run incomplete, and shortening excerpts or limiting N, which the spec does not allow. Test case: a run with N=10 and full excerpts has no expected outcome (complete, incomplete, or shortened excerpts). | Opus | in spec — criteria 14, 18; Open decisions, per-claim cap and whole-packet refusal (S-38) | — |
+| S-39 | MINOR | SPEC | fix-r2 | `spec.md`, criteria 38, 39, 42; Terms «Selected Go free models»; [DETAIL] «retain source/time/digest and per-model reasons»; `decisions.md`, Q-11 | Cannot go red as specified. Q-11 says a model excluded through models.dev keeps its recorded reason, and the [DETAIL] requires the models.dev source, time and digest to be kept. Criterion 38 names only the Pi refresh («its freshly fetched overlay, source, UTC time and selection»). Criterion 42 checks the reason only when N=0, and criterion 39 checks only which models run. Refuting input: in models.dev, `longcat-2.5-preview-free` is eligible and `cat-jam-free` is deprecated. The manifest records N=1 but has neither the models.dev source, time and digest nor `cat-jam-free`'s reason «deprecated». No refutation names this run, unless criterion 38's «selection lacks dated provenance» is read as covering a second source the criterion does not name. | Opus | in spec — criterion 38; Open decisions, both-source and per-candidate provenance at every N (S-39) | — |
+
+Stage-2 call, 2026-10-17: draft · attempt 1 · route codex · endpoint openai-codex · model gpt-6.1-sol · leak check clean over 484 files, 1372 commits, 12 rules.
+
+> Attempt 1 (codex): the runner put back what a draft may not change:
+> - `plans/changes/research-swarm/decisions.md`
+
+> Attempt 1 (codex) failed its post-run checks.
+>
+> Files the attempt changed (lines added, removed):
+> - `docs/adr/0020-phase-1-research-swarm.md` +45 -6
+> - `plans/changes/research-swarm/decisions.md` +1 -1
+> - `plans/changes/research-swarm/design.md` +79 -32
+> - `plans/changes/research-swarm/findings.md` +9 -9
+> - `plans/changes/research-swarm/plan.md` +133 -15
+> - `plans/changes/research-swarm/spec.md` +82 -30
+>
+> Diagnostics:
+> ````text
+> - `make verify` exited 2
+> The gates that blocked, each with its last lines:
+> ── [pytest] $ lauf_cmd
+> [… 1467 lines of this gate left out …]
+>
+> tests/test_stage2_swarm.py:1091: AssertionError
+> ----------------------------- Captured stdout call -----------------------------
+> INFO  (1):
+>   - leak check clean: 21 files, 1 commits, 1 rules, 1 prompt texts
+> ----------------------------- Captured stderr call -----------------------------
+> refused: /Users/mikypiky/coding-harness/.claude/worktrees/research-swarm/tools/pi/pi --version ended 1; it is not the pinned 1.2.0; no call starts: /Users/mikypiky/coding-harness/.claude/worktrees/research-swarm/tools/pi/pi: line 9: dirname: command not found
+> tools/pi/pi: the Node declaration .node-version is missing from /private/var/folders/44/yc0m3m456b51nyzwyfjptgm40000gn/T/stage2-phx4xli4.
+> tools/pi/pi: set the pinned install up with: bash tools/pi/install.sh (see tools/pi/README.md).
+> =========================== short test summary info ============================
+> FAILED tests/test_stage2_swarm.py::test_large_classes_dispatch_the_swarm[feature]
+> FAILED tests/test_stage2_swarm.py::test_large_classes_dispatch_the_swarm[architectural]
+> FAILED tests/test_stage2_swarm.py::test_explicit_class_explores_without_spec_or_plan
+> FAILED tests/test_stage2_swarm.py::test_all_free_roles_are_attempted_before_flash
+> FAILED tests/test_stage2_swarm.py::test_six_topics_have_independent_permitted_pairs
+> FAILED tests/test_stage2_swarm.py::test_declared_free_focuses_shape_research_and_topic_pairs[False]
+> FAILED tests/test_stage2_swarm.py::test_declared_free_focuses_shape_research_and_topic_pairs[True]
+> FAILED tests/test_stage2_swarm.py::test_declared_paid_endpoint_and_models_are_called
+> FAILED tests/test_stage2_swarm.py::test_fresh_opus_reconciles_all_six_topics
+> FAILED tests/test_stage2_swarm.py::test_research_carries_practice_architecture_and_adjacent_spec_comparisons
+> FAILED tests/test_stage2_swarm.py::test_public_requests_exclude_every_private_input
+> FAILED tests/test_stage2_swarm.py::test_public_claims_require_retrieved_source_receipts
+> FAILED tests/test_stage2_swarm.py::test_a_free_report_without_a_retrieved_page_is_no_contribution[receipts0]
+> FAILED tests/test_stage2_swarm.py::test_a_free_report_without_a_retrieved_page_is_no_contribution[receipts1]
+> FAILED tests/test_stage2_swarm.py::test_a_free_report_without_a_retrieved_page_is_no_contribution[receipts2]
+> FAILED tests/test_stage2_swarm.py::test_judge_public_citations_require_retrieved_receipts[invented-url]
+> FAILED tests/test_stage2_swarm.py::test_judge_public_citations_require_retrieved_receipts[search-snippet]
+> FAILED tests/test_stage2_swarm.py::test_redirect_receipts_back_requested_and_final_urls
+> FAILED tests/test_stage2_swarm.py::test_free_environment_excludes_identity_and_private_paths
+> FAILED tests/test_stage2_swarm.py::test_an_accepted_topic_is_recorded_and_reaches_the_free_calls
+> FAILED tests/test_stage2_swarm.py::test_every_call_is_checked_and_a_leak_block_stops_dispatch
+> FAILED tests/test_stage2_swarm.py::test_failed_pi_calls_preserve_partial_evidence[nonzero-public]
+> FAILED tests/test_stage2_swarm.py::test_failed_pi_calls_preserve_partial_evidence[nonzero-flash]
+> FAILED tests/test_stage2_swarm.py::test_failed_pi_calls_preserve_partial_evidence[empty-public]
+> FAILED tests/test_stage2_swarm.py::test_failed_pi_calls_preserve_partial_evidence[empty-flash]
+> FAILED tests/test_stage2_swarm.py::test_failed_pi_calls_preserve_partial_evidence[timeout-public]
+> FAILED tests/test_stage2_swarm.py::test_failed_pi_calls_preserve_partial_evidence[timeout-flash]
+> FAILED tests/test_stage2_swarm.py::test_every_attempt_has_identity_audit_and_outcome
+> FAILED tests/test_stage2_swarm.py::test_failures_preserve_evidence_and_never_report_complete[free-fails]
+> FAILED tests/test_stage2_swarm.py::test_failures_preserve_evidence_and_never_report_complete[flash-empty]
+> FAILED tests/test_stage2_swarm.py::test_failures_preserve_evidence_and_never_report_complete[judge-malformed]
+> FAILED tests/test_stage2_swarm.py::test_failures_preserve_evidence_and_never_report_complete[all-free-fail]
+> FAILED tests/test_stage2_swarm.py::test_failures_preserve_evidence_and_never_report_complete[unmapped-free-id]
+> FAILED tests/test_stage2_swarm.py::test_the_free_inventory_reads_what_the_pinned_pi_prints[pinned-registry]
+> FAILED tests/test_stage2_swarm.py::test_the_free_inventory_reads_what_the_pinned_pi_prints[ambiguous]
+> FAILED tests/test_stage2_swarm.py::test_the_free_inventory_reads_what_the_pinned_pi_prints[no-models]
+> FAILED tests/test_stage2_swarm.py::test_deadlines_and_role_counts_bound_the_run
+> FAILED tests/test_stage2_swarm.py::test_no_call_starts_once_the_run_deadline_is_spent
+> FAILED tests/test_stage2_swarm.py::test_a_run_across_midnight_keeps_its_frozen_research
+> FAILED tests/test_stage2_swarm.py::test_all_outputs_scrub_every_used_credential
+> FAILED tests/test_stage2_swarm.py::test_unresolved_dissent_and_human_questions_survive_reconciliation
+> FAILED tests/test_stage2_swarm.py::test_local_citations_bind_to_the_frozen_input_state
+> FAILED tests/test_stage2_swarm.py::test_local_citations_name_a_path_and_a_symbol[`src/app.py::no_such_symbol`-names no symbol of src/app.py]
+> FAILED tests/test_stage2_swarm.py::test_local_citations_name_a_path_and_a_symbol[`src/app.py:1`-gives line numbers only]
+> FAILED tests/test_stage2_swarm.py::test_local_citations_name_a_path_and_a_symbol[`src/app.py`-is a bare path]
+> FAILED tests/test_stage2_swarm.py::test_only_the_runner_appends_research - As...
+> 46 failed, 2254 passed, 16 skipped in 540.74s (0:09:00)
+> ── [pytest] RED (block) — der Lauf ist rot.
+> ── [frontmatter-current] $ lauf_cmd
+> plans/changes/research-swarm/decisions.md: stale — updated 2026-10-16 is older than its last change 2026-10-17 (63dd5d4)
+> fix: python3 scripts/check_frontmatter_current.py --stamp
+> ── [frontmatter-current] RED (block) — der Lauf ist rot.
+>
+> Standard error of the whole run, last lines:
+> [… 12577 earlier lines left out …]
+> templates/handover.md:48:81 error MD013/line-length Line length [Expected: 80; Actual: 88]
+> templates/spec.md:21 error MD041/first-line-heading/first-line-h1 First line in a file should be a top-level heading [Context: "```yaml"]
+> templates/spec.md:39:81 error MD013/line-length Line length [Expected: 80; Actual: 97]
+> templates/spec.md:40:81 error MD013/line-length Line length [Expected: 80; Actual: 95]
+> tools/claude-code/README.md:17:81 error MD013/line-length Line length [Expected: 80; Actual: 105]
+> tools/claude-code/README.md:18:81 error MD013/line-length Line length [Expected: 80; Actual: 109]
+> tools/claude-code/README.md:19:81 error MD013/line-length Line length [Expected: 80; Actual: 134]
+> tools/claude-code/README.md:23:1 error MD060/table-column-style Table column style [Table pipe is missing space to the right for style "compact"]
+> tools/claude-code/README.md:23:5 error MD060/table-column-style Table column style [Table pipe is missing space to the left for style "compact"]
+> tools/claude-code/README.md:23:5 error MD060/table-column-style Table column style [Table pipe is missing space to the right for style "compact"]
+> tools/claude-code/README.md:23:9 error MD060/table-column-style Table column style [Table pipe is missing space to the left for style "compact"]
+> tools/claude-code/README.md:23:9 error MD060/table-column-style Table column style [Table pipe is missing space to the right for style "compact"]
+> tools/claude-code/README.md:23:13 error MD060/table-column-style Table column style [Table pipe is missing space to the left for style "compact"]
+> tools/claude-code/README.md:24:81 error MD013/line-length Line length [Expected: 80; Actual: 272]
+> tools/claude-code/README.md:25:81 error MD013/line-length Line length [Expected: 80; Actual: 180]
+> tools/claude-code/README.md:26:81 error MD013/line-length Line length [Expected: 80; Actual: 115]
+> tools/claude-code/README.md:28:81 error MD013/line-length Line length [Expected: 80; Actual: 124]
+> tools/claude-code/README.md:29:81 error MD013/line-length Line length [Expected: 80; Actual: 106]
+> tools/claude-code/README.md:38:1 error MD060/table-column-style Table column style [Table pipe is missing space to the right for style "compact"]
+> tools/claude-code/README.md:38:5 error MD060/table-column-style Table column style [Table pipe is missing space to the left for style "compact"]
+> tools/claude-code/README.md:38:5 error MD060/table-column-style Table column style [Table pipe is missing space to the right for style "compact"]
+> tools/claude-code/README.md:38:9 error MD060/table-column-style Table column style [Table pipe is missing space to the left for style "compact"]
+> tools/claude-code/README.md:38:9 error MD060/table-column-style Table column style [Table pipe is missing space to the right for style "compact"]
+> tools/claude-code/README.md:38:13 error MD060/table-column-style Table column style [Table pipe is missing space to the left for style "compact"]
+> tools/claude-code/README.md:40:81 error MD013/line-length Line length [Expected: 80; Actual: 442]
+> tools/claude-code/README.md:41:81 error MD013/line-length Line length [Expected: 80; Actual: 163]
+> tools/claude-code/README.md:42:81 error MD013/line-length Line length [Expected: 80; Actual: 126]
+> tools/claude-code/README.md:43:81 error MD013/line-length Line length [Expected: 80; Actual: 96]
+> tools/claude-code/README.md:44:81 error MD013/line-length Line length [Expected: 80; Actual: 167]
+> tools/claude-code/README.md:72:1 error MD060/table-column-style Table column style [Table pipe is missing space to the right for style "compact"]
+> tools/claude-code/README.md:72:5 error MD060/table-column-style Table column style [Table pipe is missing space to the left for style "compact"]
+> tools/claude-code/README.md:72:5 error MD060/table-column-style Table column style [Table pipe is missing space to the right for style "compact"]
+> tools/claude-code/README.md:72:9 error MD060/table-column-style Table column style [Table pipe is missing space to the left for style "compact"]
+> tools/claude-code/README.md:72:9 error MD060/table-column-style Table column style [Table pipe is missing space to the right for style "compact"]
+> tools/claude-code/README.md:72:13 error MD060/table-column-style Table column style [Table pipe is missing space to the left for style "compact"]
+> tools/claude-code/README.md:73:81 error MD013/line-length Line length [Expected: 80; Actual: 112]
+> tools/claude-code/README.md:74:81 error MD013/line-length Line length [Expected: 80; Actual: 89]
+> tools/claude-code/README.md:75:81 error MD013/line-length Line length [Expected: 80; Actual: 88]
+> tools/pi/README.md:65:81 error MD013/line-length Line length [Expected: 80; Actual: 97]
+> make: *** [verify] Error 1
+> ````
+
+Stage-2 call, 2026-10-17: draft · attempt 2 · route codex-repair · endpoint openai-codex · model gpt-6.1-sol · reason the first draft attempt failed · leak check clean over 484 files, 1372 commits, 12 rules.
+
+> Attempt 2 (codex-repair): the runner put back what a draft may not change:
+> - `plans/changes/research-swarm/decisions.md`
+
+> Attempt 2 (codex-repair) failed its post-run checks.
+>
+> Files the attempt changed (lines added, removed):
+> - `plans/changes/research-swarm/decisions.md` +1 -1
+> - `plans/changes/research-swarm/plan.md` +17 -0
+>
+> Diagnostics:
+> ````text
+> - `make verify` exited 2
+> The gates that blocked, each with its last lines:
+> ── [pytest] $ lauf_cmd
+> [… 1467 lines of this gate left out …]
+>
+> tests/test_stage2_swarm.py:1091: AssertionError
+> ----------------------------- Captured stdout call -----------------------------
+> INFO  (1):
+>   - leak check clean: 21 files, 1 commits, 1 rules, 1 prompt texts
+> ----------------------------- Captured stderr call -----------------------------
+> refused: /Users/mikypiky/coding-harness/.claude/worktrees/research-swarm/tools/pi/pi --version ended 1; it is not the pinned 1.2.0; no call starts: /Users/mikypiky/coding-harness/.claude/worktrees/research-swarm/tools/pi/pi: line 9: dirname: command not found
+> tools/pi/pi: the Node declaration .node-version is missing from /private/var/folders/44/yc0m3m456b51nyzwyfjptgm40000gn/T/stage2-xtzjks2o.
+> tools/pi/pi: set the pinned install up with: bash tools/pi/install.sh (see tools/pi/README.md).
+> =========================== short test summary info ============================
+> FAILED tests/test_stage2_swarm.py::test_large_classes_dispatch_the_swarm[feature]
+> FAILED tests/test_stage2_swarm.py::test_large_classes_dispatch_the_swarm[architectural]
+> FAILED tests/test_stage2_swarm.py::test_explicit_class_explores_without_spec_or_plan
+> FAILED tests/test_stage2_swarm.py::test_all_free_roles_are_attempted_before_flash
+> FAILED tests/test_stage2_swarm.py::test_six_topics_have_independent_permitted_pairs
+> FAILED tests/test_stage2_swarm.py::test_declared_free_focuses_shape_research_and_topic_pairs[False]
+> FAILED tests/test_stage2_swarm.py::test_declared_free_focuses_shape_research_and_topic_pairs[True]
+> FAILED tests/test_stage2_swarm.py::test_declared_paid_endpoint_and_models_are_called
+> FAILED tests/test_stage2_swarm.py::test_fresh_opus_reconciles_all_six_topics
+> FAILED tests/test_stage2_swarm.py::test_research_carries_practice_architecture_and_adjacent_spec_comparisons
+> FAILED tests/test_stage2_swarm.py::test_public_requests_exclude_every_private_input
+> FAILED tests/test_stage2_swarm.py::test_public_claims_require_retrieved_source_receipts
+> FAILED tests/test_stage2_swarm.py::test_a_free_report_without_a_retrieved_page_is_no_contribution[receipts0]
+> FAILED tests/test_stage2_swarm.py::test_a_free_report_without_a_retrieved_page_is_no_contribution[receipts1]
+> FAILED tests/test_stage2_swarm.py::test_a_free_report_without_a_retrieved_page_is_no_contribution[receipts2]
+> FAILED tests/test_stage2_swarm.py::test_judge_public_citations_require_retrieved_receipts[invented-url]
+> FAILED tests/test_stage2_swarm.py::test_judge_public_citations_require_retrieved_receipts[search-snippet]
+> FAILED tests/test_stage2_swarm.py::test_redirect_receipts_back_requested_and_final_urls
+> FAILED tests/test_stage2_swarm.py::test_free_environment_excludes_identity_and_private_paths
+> FAILED tests/test_stage2_swarm.py::test_an_accepted_topic_is_recorded_and_reaches_the_free_calls
+> FAILED tests/test_stage2_swarm.py::test_every_call_is_checked_and_a_leak_block_stops_dispatch
+> FAILED tests/test_stage2_swarm.py::test_failed_pi_calls_preserve_partial_evidence[nonzero-public]
+> FAILED tests/test_stage2_swarm.py::test_failed_pi_calls_preserve_partial_evidence[nonzero-flash]
+> FAILED tests/test_stage2_swarm.py::test_failed_pi_calls_preserve_partial_evidence[empty-public]
+> FAILED tests/test_stage2_swarm.py::test_failed_pi_calls_preserve_partial_evidence[empty-flash]
+> FAILED tests/test_stage2_swarm.py::test_failed_pi_calls_preserve_partial_evidence[timeout-public]
+> FAILED tests/test_stage2_swarm.py::test_failed_pi_calls_preserve_partial_evidence[timeout-flash]
+> FAILED tests/test_stage2_swarm.py::test_every_attempt_has_identity_audit_and_outcome
+> FAILED tests/test_stage2_swarm.py::test_failures_preserve_evidence_and_never_report_complete[free-fails]
+> FAILED tests/test_stage2_swarm.py::test_failures_preserve_evidence_and_never_report_complete[flash-empty]
+> FAILED tests/test_stage2_swarm.py::test_failures_preserve_evidence_and_never_report_complete[judge-malformed]
+> FAILED tests/test_stage2_swarm.py::test_failures_preserve_evidence_and_never_report_complete[all-free-fail]
+> FAILED tests/test_stage2_swarm.py::test_failures_preserve_evidence_and_never_report_complete[unmapped-free-id]
+> FAILED tests/test_stage2_swarm.py::test_the_free_inventory_reads_what_the_pinned_pi_prints[pinned-registry]
+> FAILED tests/test_stage2_swarm.py::test_the_free_inventory_reads_what_the_pinned_pi_prints[ambiguous]
+> FAILED tests/test_stage2_swarm.py::test_the_free_inventory_reads_what_the_pinned_pi_prints[no-models]
+> FAILED tests/test_stage2_swarm.py::test_deadlines_and_role_counts_bound_the_run
+> FAILED tests/test_stage2_swarm.py::test_no_call_starts_once_the_run_deadline_is_spent
+> FAILED tests/test_stage2_swarm.py::test_a_run_across_midnight_keeps_its_frozen_research
+> FAILED tests/test_stage2_swarm.py::test_all_outputs_scrub_every_used_credential
+> FAILED tests/test_stage2_swarm.py::test_unresolved_dissent_and_human_questions_survive_reconciliation
+> FAILED tests/test_stage2_swarm.py::test_local_citations_bind_to_the_frozen_input_state
+> FAILED tests/test_stage2_swarm.py::test_local_citations_name_a_path_and_a_symbol[`src/app.py::no_such_symbol`-names no symbol of src/app.py]
+> FAILED tests/test_stage2_swarm.py::test_local_citations_name_a_path_and_a_symbol[`src/app.py:1`-gives line numbers only]
+> FAILED tests/test_stage2_swarm.py::test_local_citations_name_a_path_and_a_symbol[`src/app.py`-is a bare path]
+> FAILED tests/test_stage2_swarm.py::test_only_the_runner_appends_research - As...
+> 46 failed, 2254 passed, 16 skipped in 543.94s (0:09:03)
+> ── [pytest] RED (block) — der Lauf ist rot.
+> ── [frontmatter-current] $ lauf_cmd
+> plans/changes/research-swarm/decisions.md: stale — updated 2026-10-16 is older than its last change 2026-10-17 (63dd5d4)
+> fix: python3 scripts/check_frontmatter_current.py --stamp
+> ── [frontmatter-current] RED (block) — der Lauf ist rot.
+>
+> Standard error of the whole run, last lines:
+> [… 12626 earlier lines left out …]
+> templates/handover.md:48:81 error MD013/line-length Line length [Expected: 80; Actual: 88]
+> templates/spec.md:21 error MD041/first-line-heading/first-line-h1 First line in a file should be a top-level heading [Context: "```yaml"]
+> templates/spec.md:39:81 error MD013/line-length Line length [Expected: 80; Actual: 97]
+> templates/spec.md:40:81 error MD013/line-length Line length [Expected: 80; Actual: 95]
+> tools/claude-code/README.md:17:81 error MD013/line-length Line length [Expected: 80; Actual: 105]
+> tools/claude-code/README.md:18:81 error MD013/line-length Line length [Expected: 80; Actual: 109]
+> tools/claude-code/README.md:19:81 error MD013/line-length Line length [Expected: 80; Actual: 134]
+> tools/claude-code/README.md:23:1 error MD060/table-column-style Table column style [Table pipe is missing space to the right for style "compact"]
+> tools/claude-code/README.md:23:5 error MD060/table-column-style Table column style [Table pipe is missing space to the left for style "compact"]
+> tools/claude-code/README.md:23:5 error MD060/table-column-style Table column style [Table pipe is missing space to the right for style "compact"]
+> tools/claude-code/README.md:23:9 error MD060/table-column-style Table column style [Table pipe is missing space to the left for style "compact"]
+> tools/claude-code/README.md:23:9 error MD060/table-column-style Table column style [Table pipe is missing space to the right for style "compact"]
+> tools/claude-code/README.md:23:13 error MD060/table-column-style Table column style [Table pipe is missing space to the left for style "compact"]
+> tools/claude-code/README.md:24:81 error MD013/line-length Line length [Expected: 80; Actual: 272]
+> tools/claude-code/README.md:25:81 error MD013/line-length Line length [Expected: 80; Actual: 180]
+> tools/claude-code/README.md:26:81 error MD013/line-length Line length [Expected: 80; Actual: 115]
+> tools/claude-code/README.md:28:81 error MD013/line-length Line length [Expected: 80; Actual: 124]
+> tools/claude-code/README.md:29:81 error MD013/line-length Line length [Expected: 80; Actual: 106]
+> tools/claude-code/README.md:38:1 error MD060/table-column-style Table column style [Table pipe is missing space to the right for style "compact"]
+> tools/claude-code/README.md:38:5 error MD060/table-column-style Table column style [Table pipe is missing space to the left for style "compact"]
+> tools/claude-code/README.md:38:5 error MD060/table-column-style Table column style [Table pipe is missing space to the right for style "compact"]
+> tools/claude-code/README.md:38:9 error MD060/table-column-style Table column style [Table pipe is missing space to the left for style "compact"]
+> tools/claude-code/README.md:38:9 error MD060/table-column-style Table column style [Table pipe is missing space to the right for style "compact"]
+> tools/claude-code/README.md:38:13 error MD060/table-column-style Table column style [Table pipe is missing space to the left for style "compact"]
+> tools/claude-code/README.md:40:81 error MD013/line-length Line length [Expected: 80; Actual: 442]
+> tools/claude-code/README.md:41:81 error MD013/line-length Line length [Expected: 80; Actual: 163]
+> tools/claude-code/README.md:42:81 error MD013/line-length Line length [Expected: 80; Actual: 126]
+> tools/claude-code/README.md:43:81 error MD013/line-length Line length [Expected: 80; Actual: 96]
+> tools/claude-code/README.md:44:81 error MD013/line-length Line length [Expected: 80; Actual: 167]
+> tools/claude-code/README.md:72:1 error MD060/table-column-style Table column style [Table pipe is missing space to the right for style "compact"]
+> tools/claude-code/README.md:72:5 error MD060/table-column-style Table column style [Table pipe is missing space to the left for style "compact"]
+> tools/claude-code/README.md:72:5 error MD060/table-column-style Table column style [Table pipe is missing space to the right for style "compact"]
+> tools/claude-code/README.md:72:9 error MD060/table-column-style Table column style [Table pipe is missing space to the left for style "compact"]
+> tools/claude-code/README.md:72:9 error MD060/table-column-style Table column style [Table pipe is missing space to the right for style "compact"]
+> tools/claude-code/README.md:72:13 error MD060/table-column-style Table column style [Table pipe is missing space to the left for style "compact"]
+> tools/claude-code/README.md:73:81 error MD013/line-length Line length [Expected: 80; Actual: 112]
+> tools/claude-code/README.md:74:81 error MD013/line-length Line length [Expected: 80; Actual: 89]
+> tools/claude-code/README.md:75:81 error MD013/line-length Line length [Expected: 80; Actual: 88]
+> tools/pi/README.md:65:81 error MD013/line-length Line length [Expected: 80; Actual: 97]
+> make: *** [verify] Error 1
+> ````
+
+Stage-2 call, 2026-10-17: draft · attempt 3 · route glm · endpoint glm-coding-plan · model glm-5.3 · reason two Codex draft attempts failed · leak check clean over 484 files, 1374 commits, 12 rules.
+
+> Attempt 3 (glm) failed its call: claude call failed: exit 1
+>
+> the attempt is saved at refs/stage2/attempts/research-swarm/draft-attempt-3-20261016T233834915141Z (5b13c323c03d); `git diff 63dd5d4b2208 refs/stage2/attempts/research-swarm/draft-attempt-3-20261016T233834915141Z` shows it.
+>
+> The runner put back:
+> - `docs/adr/0020-phase-1-research-swarm.md`
+> - `plans/changes/research-swarm/design.md`
+> - `plans/changes/research-swarm/plan.md`
+> - `plans/changes/research-swarm/spec.md`
