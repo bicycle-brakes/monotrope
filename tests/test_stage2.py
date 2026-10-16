@@ -4740,7 +4740,9 @@ def test_free_selection_changes_in_yaml_without_runner_edits(world: World) -> No
     (world.bin / "calls.jsonl").unlink()
     world.script(pi=[{"stdout": rows(1)}] * 2, pi_catalog=catalog)
     assert world.run("review-loop") == 0
-    assert [rung_of(call) for call in world.reviews("pi")] == ["beacon-2-free", "experimental-9"], "a Zen id was called"
+    assert grouped([rung_of(call) for call in world.reviews("pi")], ("beacon-2-free", "experimental-9")), (
+        "a Zen id was called"
+    )
 
 
 def test_free_class_admission_is_bound_to_discovery_and_purpose(world: World) -> None:
