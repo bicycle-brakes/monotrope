@@ -53,7 +53,7 @@ failed is named beside their rows and its failure is no finding.
 
 **The evidence rule.** A finding of a member is taken only when a test
 demonstrates it or the spec supports it; otherwise it is rejected with its
-reason and stays in `findings.md` as a disagreement. This holds in every
+reason and stays in `findings.md` as a disagreement. This holds in every repair
 round, so a finding about something the spec does not cover needs a test or is
 rejected. A duplicate report keeps one row per member — reject the copies
 explicitly, do not delete them.
