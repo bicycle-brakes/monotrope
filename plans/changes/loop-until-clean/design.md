@@ -108,7 +108,7 @@ Five boundaries carry something across in this change.
   gains the free-stage round (parallel calls, merged rows, the failed-member
   note), the clean-round refusal, the ladder-end report and the fix-r brake;
   `taken_in_round` keeps its rule for every round number and its docstring
-  citation moves to ADR 0017 decision 6 as amended by ADR 0018; `ladder()`
+  citation moves to ADR 0017 decision 6 as amended by ADR 0021; `ladder()`
   returns the ordered `modelle`; a new `free_stage(root)` reads the `swarm`
   key; the declaration check reads `modelle` as today; `probe` walks
   `modelle`; the module docstring and help state the new rule.
@@ -120,11 +120,11 @@ Five boundaries carry something across in this change.
 
 ## ADR draft
 
-The text below is `docs/adr/0018-review-swarms-until-clean.md` in this
+The text below is `docs/adr/0021-review-swarms-until-clean.md` in this
 change's decision pull request, written by this phase, with its headings
-lowered two levels here. `0018` is the first free number on 2026-10-14.
+lowered two levels here. `0018` was the first free number on 2026-10-14; it went to ADR 0018 (every question carries its context, PR #148), 0019 to the pinned Pi (PR #149) and 0020 is claimed by the research swarm, so this record is 0021 (2026-10-16).
 
-### ADR 0018 — The review loop runs until a clean round: a free swarm first, then the ladder
+### ADR 0021 — The review loop runs until a clean round: a free swarm first, then the ladder
 
 * Status: accepted by the merge of the pull request that carries this file.
   Until that merge, the pull request's state is the decision's state: open

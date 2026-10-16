@@ -1,5 +1,5 @@
 ---
-title: "ADR 0018 — The review loop runs until a clean round: a free swarm first, then the ladder"
+title: "ADR 0021 — The review loop runs until a clean round: a free swarm first, then the ladder"
 category: adr
 status: accepted
 created: 2026-10-14
@@ -12,7 +12,7 @@ review: {status: pending, approved_by: null, approved_at: null}
 tags: [adr, stage-2, review-loop, opencode-go, swarm]
 ---
 
-# ADR 0018 — The review loop runs until a clean round: a free swarm first, then the ladder
+# ADR 0021 — The review loop runs until a clean round: a free swarm first, then the ladder
 
 * Status: accepted by the merge of the pull request that carries this file.
   Until that merge, the pull request's state is the decision's state: open
@@ -97,7 +97,7 @@ guard of the runner.
    "Rounds 1 and 2 both run" and "The loop runs at most three rounds", and
    generalizes its round-3 condition.
 2. **Round 1 is the free swarm.** Every model of the entry's free-stage list
-   reviews in parallel, each in the isolated Pi call of ADR 0011 decision 6,
+   reviews in parallel, each in the isolated Pi call of ADR 0011 decision 6 as amended by ADR 0019 (the repository-pinned Pi),
    and their findings merge into one round — one heading, one id series, each
    row carrying its model (Q-5). The free stage's calls carry the change's
    diff and the loop prompt and no repository read tools: the maintainer's

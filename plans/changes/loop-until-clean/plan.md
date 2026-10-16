@@ -42,7 +42,7 @@ interview answers stand; no ADR answer is recorded here.
    previous round, two consecutive fix-r rounds (all taken rows of both
    Origin `fix-r`), then the ladder's end reported to the maintainer with no
    repeated rung; `taken_in_round` keeps its rule at every round number and
-   its docstring cites ADR 0017 decision 6 as amended by ADR 0018; `probe`
+   its docstring cites ADR 0017 decision 6 as amended by ADR 0021; `probe`
    walks `modelle`; module docstring and help state the new rule.
 2. **`tests/test_stage2.py`** — write the ledger's new tests; adapt the
    existing loop tests to the new rule, keeping the names other live ledgers
@@ -77,7 +77,7 @@ interview answers stand; no ADR answer is recorded here.
    lines) and `templates/findings.md` (the Origin note's brake consequence)
    state the one rule: rounds until clean, free swarm first, ladder bound,
    fix-r brake, `make verify` green after each repair.
-5. **`docs/adr/0018-review-swarms-until-clean.md`** — written by phase 2b;
+5. **`docs/adr/0021-review-swarms-until-clean.md`** — written by phase 2b;
    phase 4 adjusts it only where a measurement contradicts it, and records no
    ADR answer: that is the maintainer's, stated in the conversation.
 6. **`ROADMAP.md`** — Now 3's bead line moves with the merge;
@@ -146,7 +146,7 @@ tree, and nothing was changed to compensate for its absence.
 - 13: not yet written tests/test_stage2.py::test_every_round_counts_after_release — a swarm heading the counter misreads, or a released round is lost from the count
 - 14: not yet written tests/test_stage2.py::test_the_probe_walks_every_declared_loop_model — a declared loop model the probe skips
 - 15: not yet written tests/test_stage2.py::test_the_loop_doctrine_names_rounds_until_clean — a live "at most three rounds", a round-3 condition, disagreeing texts, or the stale ADR-0015 citation
-- 16: not yet written tests/test_stage2.py::test_adr_0018_amends_the_round_budget — a rewritten body of ADR 0011 or 0017, or a point missing from ADR 0018
+- 16: not yet written tests/test_stage2.py::test_adr_0021_amends_the_round_budget — a rewritten body of ADR 0011 or 0017, or a point missing from ADR 0021
 
 ## Runner handoff — 2026-10-14
 

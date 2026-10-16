@@ -173,3 +173,23 @@ between taking every model the check finds and calling only declared ones,
 we decided to take every free OpenCode Go model the check finds, to achieve
 a free stage that always uses all free models, accepting that a new model
 with unread data terms sees the implementation's diff at once. — 2026-10-16
+
+## Q-10 · Where the three Flash models run beside the free swarm
+
+asked: 2026-10-16
+answer: "Erst frei, dann die drei Flash" — round 1 is the free swarm alone; round 2 is the three Flash models (DeepSeek V4.1 Flash, MiMo-V2.6-Flash, LongCat-2.0) in parallel; from round 3 on, one rung per round.
+answered_by: maintainer
+status: answered
+context: |
+  Topic: how Q-1 and Q-5 (three Flash models in parallel in round 1) fit with Q-8 (the free models first, as a swarm).
+  Intention: the spec drafted on 2026-10-14 (bde7a7e) made round 1 the free swarm alone and put the three Flash models on the ladder one per round, which departs from Q-5.
+  Today: the loop ends at the first clean round (Q-2), so whatever runs first can end the loop alone.
+  Repository change: Options: A — round 1 = the free swarm and the three Flash models together, in parallel; B — round 1 the free swarm, round 2 the three Flash models in parallel, then one rung per round; C — the spec as drafted. With B the spec, plan, design and ADR draft change their round structure.
+  Architecture change: part of this change's ADR (0021): the round structure of the review loop.
+
+In the context of a free swarm and three paid Flash models that the
+maintainer both placed at the start, facing the choice between one merged
+first round and two parallel rounds in sequence, we decided on the free swarm
+first and the three Flash models as a parallel round 2, to achieve the
+maintainer's order as stated, accepting that a clean free-swarm round ends
+the loop before any Flash model reviews. — 2026-10-16

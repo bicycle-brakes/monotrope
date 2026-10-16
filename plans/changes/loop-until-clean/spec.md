@@ -17,7 +17,7 @@ class: feature
 appetite: 8
 change: loop-until-clean
 adr_question: {proposed: "yes", reason: "It replaces the three-round budget of ADR 0011 (decisions 3 and 8) and ADR 0017 (decision 6) with rounds until a clean round on a free swarm and a named ladder, as the maintainer answered in Q-1 to Q-8."}
-adr_files: [docs/adr/0018-review-swarms-until-clean.md]
+adr_files: [docs/adr/0021-review-swarms-until-clean.md]
 ---
 
 # Spec — `loop-until-clean`
@@ -183,17 +183,17 @@ Read in this worktree on 2026-10-14; the research's statements stand against
     `prompts/06-review.md`, `templates/findings.md`'s Origin note, and the
     runner's module docstring and help; no live text says "at most three
     rounds" or a round-3 condition; and `taken_in_round`'s docstring cites
-    ADR 0017 decision 6 as amended by ADR 0018, not the superseded ADR 0015.
+    ADR 0017 decision 6 as amended by ADR 0021, not the superseded ADR 0015.
     *Refuted by:* a leftover "three rounds" or round-3 sentence, two
     disagreeing statements, or the stale citation.
 
-16. When the decision pull request carries ADR 0018, it amends ADR 0011's
+16. When the decision pull request carries ADR 0021, it amends ADR 0011's
     decisions 3 and 8 and ADR 0017's decision 6, states the clean stop, the
     free swarm with its diff-only confinement, the ladder with its terms rule,
     the fix-r brake and the new call bound, and changes neither amended
     record's body.
     *Refuted by:* a rewritten sentence in ADR 0011 or ADR 0017, or a point
-    missing from ADR 0018.
+    missing from ADR 0021.
 
 ## Non-goals
 
@@ -221,7 +221,7 @@ Read in this worktree on 2026-10-14; the research's statements stand against
   `.claude/settings.json`: the change uses the existing checks and permission
   policy.
 - The bodies of ADR 0011 and ADR 0017 (and every other record under
-  `docs/adr/`): the amendment is stated in ADR 0018 alone, and no D- or
+  `docs/adr/`): the amendment is stated in ADR 0021 alone, and no D- or
   O-number moves, so `scripts/check_decision_continuity.py`'s map changes
   nothing.
 - `model-endpoints.yaml`'s German keys, and the run-count schema, parser and
@@ -237,7 +237,7 @@ Read in this worktree on 2026-10-14; the research's statements stand against
   `tests/test_stage2.py`, `model-endpoints.yaml`,
   `prompts/02a-spec-review.md`, `prompts/04b-review-loop.md`,
   `prompts/06-review.md`, `docs/WORKFLOW.md`, `AGENTS.md`,
-  `templates/findings.md`, `docs/adr/0018-review-swarms-until-clean.md` and
+  `templates/findings.md`, `docs/adr/0021-review-swarms-until-clean.md` and
   `ROADMAP.md` — or the row that says why a file stayed.
 - The pull request's file list shows the protected areas untouched and the
   non-goals unbuilt.
@@ -277,8 +277,8 @@ I decided the following reversible details and recorded their reasons:
   `qwen3.8-flash`, `gpt-6-luna`, `claude-haiku-5.5`, `minimax-m2.7`,
   `longcat-2.0`); the probe measures each against the address, and a refused
   id stops the run (criterion 9) rather than moving the spelling silently.
-- `[DETAIL]` ADR 0018 amends ADR 0011 and ADR 0017 without touching their
+- `[DETAIL]` ADR 0021 amends ADR 0011 and ADR 0017 without touching their
   files, following the ADR 0007/0011 precedent; `adr_files` therefore lists
-  only the new record. 0018 is the first free number on 2026-10-14.
+  only the new record. 0018 was the first free number on 2026-10-14; 0018 to 0020 were taken or claimed by 2026-10-16, so the record is 0021.
 - `[DETAIL]` A free-stage round's heading joins its members comma-separated
   without spaces, so the round counter's heading regex reads it unchanged.
