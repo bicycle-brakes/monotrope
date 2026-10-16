@@ -3,14 +3,14 @@ title: "Spec — research-swarm"
 status: draft
 implementation_status: none
 date: 2026-10-14
-last_reviewed: 2026-10-15
-updated: 2026-10-15
+last_reviewed: 2026-10-16
+updated: 2026-10-16
 supersedes: null
 superseded_by: null
 bead: coding-harness-icw
 owner: framework-architect
 provenance: ai-drafted-reviewed
-produced_by: {kind: llm-session, name: codex, version: "2026-10-15"}
+produced_by: {kind: llm-session, name: codex, version: "2026-10-16"}
 review: {status: pending, approved_by: null, approved_at: null}
 tags: [spec, stage-2, research, swarm]
 class: architectural
@@ -23,14 +23,15 @@ neighbours: [plans/changes/interview-context/spec.md, plans/changes/haiku-5-5/sp
 
 Phase 1 maps the sources, compares independent topic research and carries its
 questions and evidence into the interview and spec (bead coding-harness-icw).
-Authority: [decisions.md](decisions.md), Q-1–Q-9; Q-7 amends the six-topic
-pairs, and Q-8/Q-9 replace free research with three OpenCode Go models.
+Authority: [decisions.md](decisions.md), Q-1–Q-10; Q-7 amends the six-topic
+pairs, Q-8/Q-9 select three Go Flash models, and Q-10 adds dynamically
+selected Go free models to online topics only, excluding Zen.
 This redraft specifies the amended behavior; existing code is an earlier slice.
 
 ## Problem
 
 Historical evidence is retained in [research.md](research.md); the redraft
-addendum records the working-tree baseline `6e80ded` on 2026-10-15.
+addenda record `6e80ded` on 2026-10-15 and `6146fde` on 2026-10-16.
 
 - The initial single explorer lacked independent views and assigned comparisons
   (research, original exploration, 2026-10-14 at `1e29f6e`).
@@ -39,6 +40,9 @@ addendum records the working-tree baseline `6e80ded` on 2026-10-15.
   redraft addendum; Q-7).
 - The free path in the earlier design is unusable through Pi according to the
   maintainer's observed 403; Q-8 chooses Go through Pi, Q-9 fixes the trio.
+  Q-10 distinguishes free models offered by Go from the refused Zen tier and
+  requires a fresh Pi catalog before each run; the fixed Zen roster in the
+  earlier code cannot meet that rule (research, 2026-10-16 addendum).
   This drafting call did not probe a provider.
 - Existing interview minimums count answers but cannot prove that research
   decisions survived; prompts do not yet carry a checked research-to-spec
@@ -48,8 +52,13 @@ addendum records the working-tree baseline `6e80ded` on 2026-10-15.
 
 - **Repository trio:** `deepseek-v4.1-flash` and `mimo-v2.6-flash` through
   OpenCode Go/Pi, plus `claude-haiku-5-5` through official Claude Code.
-- **Online trio:** `deepseek-v4.1-flash`, `mimo-v2.6-flash`, `qwen3.8-flash`
-  through OpenCode Go/Pi. Paid status does not relax their public-only context.
+- **Online researchers:** the fixed Flash trio `deepseek-v4.1-flash`,
+  `mimo-v2.6-flash`, `qwen3.8-flash`, plus all selected Go free models,
+  through OpenCode Go/Pi. Every seat is public-only, regardless of billing.
+- **Selected Go free models:** unique chat ids ending exactly `-free` from
+  the run's freshly refreshed Pi catalog for provider `opencode-go`, filtered
+  by the declaration's include/exclude lists. `N` is their frozen count;
+  catalog presence is eligibility, not proof a model call will succeed.
 - **Public topic:** one Opus-written sentence of at most 20 words; words contain
   letters and apostrophes only, with an optional final period. File, path,
   code, change and bead names, including hyphenated identifiers, are refused.
@@ -121,9 +130,9 @@ public-only input; they never receive neighbour identities to fill the field.
 10. When public evidence supports a claim, it has a successful page-retrieval receipt containing URL, title, retrieval date and excerpt or locator.
    *Refuted by:* A snippet, invented URL, search-only receipt or memory-only report counts as retrieved evidence.
    *Basis:* Q-7, topics 9–11; existing F-3 correction.
-11. If a role has an undeclared or incompatible endpoint, model or data permission, the runner refuses that call.
+11. If a role has no compatible static declaration or declared dynamic Go-free selection permission, the runner refuses that call.
    *Refuted by:* Online Qwen receives the framework packet or a model outside its declared role is launched.
-   *Basis:* Q-3, Q-8, Q-9.
+   *Basis:* Q-3, Q-8, Q-9, Q-10.
 12. If the exact-prompt leak check immediately before any model call is not clean, the run exits 2 and dispatches no further call.
    *Refuted by:* One scan covers several prompts, or queued work starts after a BLOCK.
    *Basis:* Q-7 concurrency answer; existing leak-check contract.
@@ -145,9 +154,9 @@ public-only input; they never receive neighbour identities to fill the field.
 18. If a required call, retrieval or structured result fails, the run preserves partial evidence and names every missing slot in an incomplete result with nonzero exit.
    *Refuted by:* Timeout receipts are discarded, a URL-free online report succeeds, or malformed output yields a complete run.
    *Basis:* Q-7; existing failure contract.
-19. When a swarm executes, it respects a recorded finite invocation budget and deadlines without retries or extra debate.
+19. When a swarm executes, it respects its recorded finite budget of `39 + 3N` model invocations and deadlines without retries or extra debate.
    *Refuted by:* An extra role, recursive delegation, retry or invocation after the total deadline occurs.
-   *Basis:* Q-7 concurrency answer; finite-budget detail below.
+   *Basis:* Q-7 concurrency answer; Q-10; finite-budget detail below.
 20. When exploration explicitly uses `--stage2-off [REASON]`, it keeps single Haiku 5.5 exploration and records route, model and reason for the plan.
    *Refuted by:* It runs a swarm, reads a foreign key, names Haiku 4.5 or loses the reason.
    *Basis:* Q-4; neighbouring haiku-5-5 spec, criterion 1.
@@ -155,15 +164,15 @@ public-only input; they never receive neighbour identities to fill the field.
    *Refuted by:* A planted fragment survives in an answer, receipt, concurrent log or error.
    *Basis:* Existing credential contract.
 22. When delivered, phase-1 doctrine, endpoint roles and exactly one new research-swarm ADR describe the same amended workflow.
-   *Refuted by:* Six-topic or free-through-Pi instructions remain operative, the review ladder changes, or an accepted ADR is edited.
-   *Basis:* Q-7, Q-8, Q-9.
+   *Refuted by:* Six-topic or Zen-free-through-Pi instructions remain operative, the review ladder changes, or an accepted ADR is edited.
+   *Basis:* Q-7, Q-8, Q-9, Q-10.
 23. Before any online research call, a fresh Opus 5.5 call supplies a recorded public topic that passes the single-sentence, at-most-20-word, no-file-or-code-name filter and leak check.
    *Refuted by:* An absent, rejected, hyphenated-identifier-bearing or privately augmented topic reaches an online model.
    *Basis:* Q-6, retained by Q-8.
 24. When finder step 0 runs, DeepSeek Flash, MiMo Flash and Haiku 5.5 independently locate the four agreed source categories for Opus 5.5 to merge.
    *Refuted by:* A finder judges the design, only one searches, or files/functions, rules/ADRs, tests/gates or neighbouring specs are missing without an unread marker.
    *Basis:* Q-7, topic 0, option A.
-25. When a researcher receives a topic, its questions and permitted evidence scope match that topic in the topic contract below.
+25. When a researcher receives a topic, its questions and permitted evidence scope match the Topic contract above.
    *Refuted by:* Code/reuse proposes new code, an online report judges local applicability, or a neighbour report inspects unrelated implementation.
    *Basis:* Q-7 topic walk-through.
 26. When models work the same topic, they receive identical task briefs, evidence packets, perspectives and report templates in fresh contexts without peer reports.
@@ -200,13 +209,30 @@ public-only input; they never receive neighbour identities to fill the field.
    *Refuted by:* A fifth OpenCode Go call starts across role groups, or queued work starts after a leak/declaration refusal.
    *Basis:* Q-7 concurrency option A.
 37. When online topics 9–11 run, each has independent DeepSeek Flash, MiMo Flash and Qwen 3.8 Flash contributions through Pi on the same public-only brief.
-   *Refuted by:* A free model, OpenCode CLI, Haiku or omitted vendor replaces one of the nine scheduled contributions.
+   *Refuted by:* A free model, OpenCode CLI, Haiku or omitted vendor replaces one of the nine mandatory Flash contributions; added free seats cannot replace them.
    *Basis:* Q-8, Q-9.
+38. Before any swarm model call, the runner obtains a successful live Pi catalog refresh for provider `opencode-go` and records the resulting selection with its source and UTC retrieval time.
+   *Refuted by:* A shipped or cached list substitutes for a fresh refresh, another provider supplies a seat, or the selection has no dated source.
+   *Basis:* Q-10.
+39. When a refreshed catalog and the declared include/exclude lists select `N` Go free models, each selected model independently works each of topics 9–11 on the same brief as the fixed Flash trio.
+   *Refuted by:* A selected model misses a topic, receives a different brief, or a non-selected model is dispatched.
+   *Basis:* Q-7 same-perspectives addendum; Q-10.
+40. While selected Go free models participate, they receive only the public-only role permissions and cannot fill a finder, repository, author, merge or judge seat.
+   *Refuted by:* A free seat inherits the Go endpoint's framework permission or receives a private packet, map or report.
+   *Basis:* Q-3; Q-10.
+41. If the live catalog cannot be measured reliably, the runner preserves the diagnostics and exits nonzero before any swarm model call instead of substituting a fixed roster or another provider.
+   *Refuted by:* A timeout, stale-only result, malformed or ambiguous catalog is treated as a valid zero-model selection or starts a Flash-only fallback.
+   *Basis:* Q-10; existing failure contract.
+42. When a valid catalog has no eligible free models after the declared filters, the run records that measured empty selection and keeps all 39 fixed model slots.
+   *Refuted by:* A measured empty selection fails solely because it is empty, silently revives a previous free roster or omits a fixed Flash slot.
+   *Basis:* Q-10's runtime availability rule; reversible zero-selection detail below.
 
 ## Non-goals
 
-- Free models or the OpenCode CLI: Q-8 defers that separately; no dynamic free
-  discovery, disguised client or automatic substitution is built here.
+- Zen free models, the OpenCode CLI, other providers and disguised clients:
+  Q-10 permits Go free models through Pi only; the deferred CLI route stays out.
+  No cost benchmark or claim that a selected model is live-qualified follows
+  from catalog discovery, and no research model changes the review ladder.
 - Per-model perspectives, debate, research-selected design or automatic class
   changes; evaluation evidence may motivate a later maintainer decision.
 - Changing interview minimum counts, inventing answers, automatic semantic
@@ -229,32 +255,44 @@ public-only input; they never receive neighbour identities to fill the field.
 - `make verify` and hosted CI are green with the new blocking handoff check.
 - The plan's named routing, prompt, schema, gate, kit and documentation paths
   move with `docs/adr/0020-phase-1-research-swarm.md`; approvals remain pending.
-- The offline capture on real pinned Pi with synthetic private canaries,
+- The offline capture on real pinned Pi (currently 1.2.0, read 2026-10-16)
+  with synthetic private canaries,
   outbound payloads, tool schemas and failure probes passes before merge;
   stand-ins alone do not qualify isolation. Open phase-6 finding F-1 remains
   open until this evidence exists; the maintainer attends that separate step.
-- After merge, a public-only live qualification records actual model and web
-  outcomes; until success no complete live swarm is claimed. This draft calls
-  no external model and does not claim runtime availability.
+- After merge, a public-only live qualification records catalog refresh,
+  actual Flash/free model and web outcomes; until success no complete live
+  swarm is claimed. This draft calls no external model and does not claim
+  runtime availability.
 - PR file review confirms protected areas/non-goals, names the bead, records
   test/capture commits and keeps final `Closes-Bead: coding-harness-icw`.
 
 ## Open decisions
 
-None open. The maintainer's Q-7–Q-9 explicitly amend the earlier topic/model
+None open. The maintainer's Q-7–Q-10 explicitly amend the earlier topic/model
 criteria; this redraft does not change them to pass a gate. I choose and
 record the following reversible details with their reasons.
 
 - [DETAIL] Keep `architectural`, the existing 12-hour phase-4 appetite and ADR
   claim; the new finder and handoff boundary strengthen the same subsystem.
   Earlier implementation time counts; a redraft does not reset that stop.
-- [DETAIL] Stages are finder trio, Opus map merge, Opus topic sentence, topic
-  research, Opus reconciliation. Repository and online topics may share the
-  topic stage because neither consumes the other's reports; the judge alone
+- [DETAIL] Keep prior phase-4 time evidence in the plan's historical section
+  and leave its new `Time used` section empty until amended implementation
+  starts. This preserves the spent appetite without claiming new execution.
+- [DETAIL] Separate runner tests with explicit injected Pi launchers from
+  actual pinned-runtime qualification. A test-double failure is neither an
+  isolation result nor grounds to relax the pin or acceptance criteria.
+- [DETAIL] A successful catalog preflight precedes the stages: finder trio,
+  Opus map merge, Opus topic sentence, topic research, Opus reconciliation.
+  Repository and online topics may share the topic stage because neither consumes the other's reports; the judge alone
   combines them. Same-topic peers see identical frozen inputs and no answers.
-- [DETAIL] The fixed run has 39 invocations: 3 finder, 1 map merge, 1 public
-  topic, 24 repository, 9 online and 1 judge (Q-7–Q-9, 2026-10-15). Provider
-  queues cap OpenCode Go and Claude separately at four, across all roles.
+- [DETAIL] Each run has 39 fixed invocations (3 finder, 1 map merge, 1 public
+  topic, 24 repository, 9 Flash online, 1 judge) plus 3 per selected free model:
+  `39 + 3N` (Q-7–Q-10, 2026-10-16). Freeze the catalog and roster once, so
+  additions/removals during a run affect only the next run. No silent truncation
+  makes a large roster fit: unfinished slots remain explicit and incomplete.
+  Provider queues cap OpenCode Go and Claude separately at four, including
+  all Flash/free roles on Go.
   Deadlines remain 5 minutes for topic author, 10 for finder/researcher/map
   merge, 15 for judge and 150 total, monotonically measured, no retries.
 - [DETAIL] The report template and identical perspectives above implement
@@ -276,3 +314,18 @@ record the following reversible details with their reasons.
 - [DETAIL] Online contexts retain scratch isolation and only public-web tools
   even though their Go endpoint also permits framework roles; permission is
   selected per role and never inferred from billing or discovery.
+
+- [DETAIL] Include/exclude are unique lists of exact model ids: empty include
+  selects every eligible Go `-free` chat model, nonempty include narrows that
+  set, and exclude wins. Defaults are both empty, preserving Q-10's all-model
+  intent without maintaining a roster. No list can admit Zen, a non-free id
+  or a private role. Malformed policy exits 2; an explicitly included id
+  missing from the fresh catalog makes selection incomplete (exit 1), rather
+  than silently shrinking a requested run. A valid empty result is measured
+  zero availability, not a refresh failure, and runs the fixed 39 slots.
+- [DETAIL] Catalog preflight has a 60-second allowance within the 150-minute
+  run and no runner retry; it sends provider/catalog metadata, no private
+  brief or model prompt. Its audit is separate from per-model leak checks.
+  Catalog-source failure exits 1 before models; permission refusal exits 2.
+  Selection failures never fall back to Zen, the shipped catalog or CLI.
+  This bounds metadata work without extending the existing run allowance.

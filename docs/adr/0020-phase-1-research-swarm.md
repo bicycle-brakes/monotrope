@@ -3,11 +3,11 @@ title: "ADR 0020 — Phase 1 uses a research swarm with a checked handoff"
 category: adr
 status: accepted
 created: 2026-10-15
-last_reviewed: 2026-10-15
-updated: 2026-10-15
+last_reviewed: 2026-10-16
+updated: 2026-10-16
 owner: framework-architect
 provenance: human-decided
-produced_by: {kind: llm-session, name: codex, version: "2026-10-15"}
+produced_by: {kind: llm-session, name: codex, version: "2026-10-16"}
 review: {status: pending, approved_by: null, approved_at: null}
 tags: [adr, research, swarm, stage-2]
 ---
@@ -19,7 +19,7 @@ tags: [adr, research, swarm, stage-2]
   routing of ADR 0007 and research purpose of ADR 0011; supersedes neither
   whole ADR and amends no numbered D/O decision.
 * Review: maintainer chose the amended direction in the research-swarm
-  interview on 2026-10-14/15, Q-1–Q-9; acceptance is the future merge, with
+  interview on 2026-10-14–16, Q-1–Q-10; acceptance is the future merge, with
   no agent-written approval. Decider: maintainer; prepared by Codex.
 * Date: 2026-10-15 · takes effect on merge.
 
@@ -34,8 +34,11 @@ Pi's free-model path was observed to return 403 FreeTierError by the
 maintainer; Q-8 replaces it with OpenCode Go through Pi, Q-9 selects DeepSeek,
 MiMo and Qwen Flash for online topics. This draft relies on that recorded
 observation, not a new live probe. Public-only context survives the provider
-change (Q-3, Q-6, Q-8). The current six-topic source and missing handoff links
-were read at `6e80ded` on 2026-10-15.
+change (Q-3, Q-6, Q-8). Q-10 adds free models offered by Go itself, selected
+from a fresh Pi catalog each run, only to online topics alongside the Flash
+trio; Zen stays excluded. The source was read at `6146fde` on 2026-10-16;
+this draft neither probes the catalog nor claims live availability. The
+repository runtime pin is now Pi 1.2.0 (ADR 0019).
 
 ## Decision Drivers
 
@@ -72,7 +75,11 @@ checkable.
 4. Topics 9–11 cover best practice, existing tools/standards and public failure
    reports. Each uses DeepSeek Flash, MiMo Flash and Qwen 3.8 Flash through Pi
    with only the filtered Opus sentence, fixed questions and public sources.
-   No free model or OpenCode CLI runs; that path is deferred by Q-8.
+   In addition, every eligible Go chat model ending `-free`, selected from a
+   live-refreshed Pi catalog with declared include/exclude lists, works each
+   online topic on the same brief. No Zen provider, OpenCode CLI, fixed free
+   roster or substitution for the mandatory Flash trio. Dynamic free
+   permission applies to public-only research, never private roles.
 5. Reports hold at most seven identified claims with evidence, kind,
    confidence/basis, counter-evidence, unread sources, neighbour relation
    and typed questions. Opus reconciles all topics and records per-model
@@ -95,9 +102,15 @@ checkable.
    success. The gate and tests travel with the kit. Review still checks
    semantic fidelity and source applicability.
 9. Queues permit at most four calls per provider across roles, and a security
-   refusal stops further dispatch with exit 2. The current graph has 39
-   invocations; finite per-role and 150-minute total deadlines, no retry,
-   recursive delegation or debate. Failed/incomplete runs retain evidence
+   refusal stops further dispatch with exit 2. Freeze `N` selected Go free
+   models before model calls; the graph has `39 + 3N` invocations. A bounded
+   Go-only catalog refresh must succeed each run; failures never fall back to
+   cached/shipped rosters or Zen, while valid zero availability keeps the
+   fixed 39 slots. Defaults select all eligible models; explicit include
+   narrows and exclude wins. Record dated source, freshness, policy and roster;
+   no silent truncation of models/reports to fit the deadline or judge context.
+   Finite per-role and 150-minute total deadlines include catalog preflight;
+   no retry, recursive delegation or debate. Failed/incomplete runs retain evidence
    and exit nonzero; only the runner appends research and writes audit records.
 10. Endpoint role lists are separate from the review ladder. Qwen is declared
     for research without changing that ladder. Every output is scrubbed of
@@ -107,7 +120,9 @@ checkable.
 
 * More calls and subscription/Claude quota buy independently comparable
   evidence; concurrency reduces waiting but no duration/cost saving is measured.
-* Finder, queue cancellation, templates, gate and kit integration add maintenance.
+* Finder, live catalog qualification, queue cancellation, templates, gate
+  and kit integration add maintenance; large free rosters may hit the unchanged
+  deadline and yield incomplete evidence rather than a silently reduced run.
 * Questions may exceed minimum counts; the gate cannot invent answers or
   establish that a recorded answer faithfully reflects a human conversation.
 * Same-brief scoring is evidence for later evaluation, not automatic model
@@ -121,11 +136,17 @@ checkable.
 
 * Runner tests plant wrong roles, early dispatch, unequal briefs, missing
   claims/receipts, frozen-state drift, expired budgets and queued leak refusals.
+  They explicitly inject the pinned-wrapper stand-in and trap bare-Pi launches;
+  actual-runtime qualification continues to use the real repository pin.
 * Handoff mutations delete decisions/answers/bases/neighbours, including class
   mismatches and neighbour contradictions; local and hosted checks must fail.
 * `make verify`, generated CI and kit probe hold the same blocking contract.
 * Before merge, the maintainer attends an offline real-pinned-Pi capture with
   synthetic canaries and a local mock model server; record version, source
   hashes, payload/tool-schema capture, attempted escapes and outcomes.
-* After merge, public-only live qualification records actual Go models and
-  search/fetch outcomes. Until success no complete live swarm is claimed.
+* Offline real-Pi catalog tests prove forced refresh despite fresh caches,
+  Go-only selection and removal of obsolete shipped ids; malformed/timeouts
+  never become zero availability or a fixed-roster fallback.
+* After merge, public-only live qualification records the refreshed catalog,
+  actual Go Flash/free models and search/fetch outcomes. Until success no
+  complete live swarm is claimed.

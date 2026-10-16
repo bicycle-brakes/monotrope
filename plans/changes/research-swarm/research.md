@@ -3,8 +3,8 @@ title: "Research — research-swarm"
 status: draft
 implementation_status: none
 date: 2026-10-14
-last_reviewed: 2026-10-15
-updated: 2026-10-15
+last_reviewed: 2026-10-16
+updated: 2026-10-16
 supersedes: null
 superseded_by: null
 bead: coding-harness-icw
@@ -209,3 +209,111 @@ invocations under Q-7–Q-9 (calculation, 2026-10-15). This is a planned graph,
 not a measured run duration, token count or cost saving. The contract and
 its test ledger live in the revised spec/design/plan; no v2 research reports,
 maintainer answers or runtime qualification evidence are fabricated here.
+
+
+## Go free-model redraft evidence — 2026-10-16
+
+Read only within this worktree at `6146fdea58194fbb358a69f91f5a275b5e72faee`.
+Earlier observations above remain historical, including the old 39-call graph.
+
+- **The new answer adds Go free models, not Zen.** Q-10 records the
+  maintainer's approval for online topics 9–11 only, in addition to Q-9's
+  fixed Flash trio. Its context requires a live Pi catalog before every run,
+  provider `opencode-go`, ids ending `-free`, and include/exclude declaration
+  lists. The recorded examples are observations dated 2026-10-16, not a
+  permanent roster or availability measured by this drafting call
+  (`decisions.md`, Q-10). No human answer is changed by this redraft.
+- **The code still rejects Go as a free provider.** `free_transport` removes
+  the paid provider from inventory candidates, while `swarm_roles` still
+  loads `free_roster` and `free_focuses`. The declaration retains the Zen
+  `opencode-free` entry. These cannot implement Q-10 simply by adding new
+  ids to the old list (`scripts/stage2_swarm.py`, `free_transport`,
+  `swarm_roles`; `model-endpoints.yaml`, `research_swarm`).
+- **The actual pin is now 1.2.0.** The repository package pins this exact
+  runtime; ADR 0019 and its real-Pi offline contracts are present. Historical
+  findings about 1.1.0 remain evidence of that version, not qualification of
+  the amended online/free path (`tools/pi/package.json`,
+  `docs/adr/0019-repository-pinned-pi-and-contract-tests.md`,
+  `tests/test_pi_contract.py`, module contract and `provider_data`).
+- **A listing is not proof of a live refresh.** The locally installed pinned
+  source exposes `ModelRuntime.refresh` with `allowNetwork`, `providers` and
+  `force`, and returns errors/abort state. Its remote catalog provider has a
+  four-hour freshness window, fetches a provider shard from Pi's catalog,
+  and merges the shipped baseline with a remote overlay. New selection must
+  distinguish fresh remote identities from stale shipped ones and inspect
+  the refresh outcome rather than assume a successful CLI exit proves it
+  (`tools/pi/node_modules/@earendil-works/pi-coding-agent/dist/core/`:
+  `model-runtime.js`, `ModelRuntime.create`/`refresh`;
+  `remote-catalog-provider.js`, `withRemoteCatalog`/`requestCatalog`;
+  `tools/pi/node_modules/@earendil-works/pi-ai/dist/models.d.ts`,
+  `ModelsRefreshOptions`). These installed-source paths are local evidence,
+  not files proposed for editing or shipping as new kit content.
+- **The sole ADR draft is already numbered correctly.** Read-only comparison
+  with the local `origin/main` reference shows only ADR 0020 added; ADR 0019
+  is present on the merged base. Updating the existing proposal preserves
+  the one-new-ADR rule. No fresh remote PR query was made under this call's
+  worktree-only read restriction.
+- **Review evidence remains open where appropriate.** No phase-2a rows with
+  open status exist in the read findings. Phase-6 F-1 still requires the
+  maintainer-attended real-Pi offline capture before merge; it is neither
+  waived nor marked fixed here (`findings.md`, Phase 6). The artifact
+  validator is still absent; the drafting call uses the existing interview
+  and ledger checks and leaves full verification to the runner.
+
+[DETAIL] With `N` selected Go free models frozen before model dispatch, the
+planned graph has `39 + 3N` invocations (calculation, 2026-10-16). Default
+include/exclude lists are empty, selecting all eligible Go free chat ids;
+filters, a measured zero and catalog failure have distinct outcomes in the
+spec. The earlier 12-hour implementation stop and 150-minute run deadline
+remain. No catalog request, external model invocation, offline canary capture,
+live availability measurement or cost measurement was performed here.
+
+## Draft retry evidence — 2026-10-16
+
+Read only this worktree at `6146fde`; no provider, user configuration or
+other checkout was read. The supplied first-attempt diagnostics report 46
+swarm-test failures before contribution dispatch: the real Pi wrapper cannot
+find `dirname` under the fixture's restricted PATH, then reports a missing
+Node declaration relative to scratch. This retry did not rerun that suite.
+
+- `scripts/stage2.py::require_pi` launches the absolute `PI_WRAPPER`, while
+  `tests/test_stage2_swarm.py::sworld` supplies only a PATH-based `pi` and
+  does not patch that constant. In contrast, `tests/test_stage2.py::world`
+  injects a separately named `pin-pi` wrapper. This explains why merely
+  putting a stand-in on PATH no longer intercepts the version check.
+- `scripts/stage2_swarm.py::free_transport`, `pi_public_call` and
+  `pi_repository_call` still construct bare-Pi commands. The amended plan
+  must align these with the repository pin and inject that same seam in
+  orchestration tests; adding system directories to the unit fixture's PATH
+  alone would conceal the mismatch rather than ensure a stand-in is used.
+- Real-runtime catalog tests and the attended isolation capture must retain
+  actual pinned Pi. A unit fixture repair cannot qualify either boundary.
+  The supplied diagnostics establish a red verifier for the earlier attempt,
+  not a reason to weaken any criterion, discard F-1 or claim this retry green.
+
+[GAP] Resolved from the sources above: the launcher mismatch belongs in the
+implementation sequence. No maintainer answer, criterion or runtime policy
+needs changing. The drafting scope permits no test or runner repair here.
+
+## Third draft attempt evidence — 2026-10-16
+
+The runner's third draft attempt (route glm, model glm-5.3) followed two
+failed Codex attempts. That session has no command tool: it ran no gate, no
+test and no git command, and read nothing outside this worktree (branch
+explore/research-swarm, latest listed commit `6146fde`).
+
+- Every criterion-ledger line of `plan.md` was checked against the test
+  files by reading them: each named test is defined in its file
+  (`tests/test_stage2_swarm.py`, `tests/test_stage2_research_tools.py`,
+  `tests/test_stage2.py`), each `not yet written` function is undefined,
+  and `tests/test_research_handoff.py` and
+  `tests/test_stage2_research_catalog.py` do not exist. The one ledger
+  section covers spec criteria 1–42 with no entry outside them.
+- `scripts/stage2.py:196` defines `PI_WRAPPER` as the absolute `tools/pi/pi`
+  path, confirming the diagnosis above: a PATH stand-in cannot intercept it,
+  and the 46 swarm-test faults stand until plan step 1 repairs the seam. A
+  drafting attempt cannot make that repair inside its scope.
+- The neighbour paths named in the headers of `research.md` and `spec.md`
+  exist in this worktree. No maintainer answer, criterion, class, appetite
+  or ADR claim changed in this attempt; ADR 0020 remains the sole claimed
+  ADR file and is unapproved.
