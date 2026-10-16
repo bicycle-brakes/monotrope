@@ -4,7 +4,7 @@ status: draft
 implementation_status: none
 date: 2026-10-14
 last_reviewed: 2026-10-14
-updated: 2026-10-15
+updated: 2026-10-16
 supersedes: null
 superseded_by: null
 bead: coding-harness-icw
@@ -403,3 +403,22 @@ choice between three cheap Go Flash models, the repository trio with Haiku
 and a hand-picked list, we decided on DeepSeek, MiMo and Qwen Flash through
 Pi, to achieve three comparable agents per topic with retrieval receipts at
 low quota, accepting a third vendor that sees only the Opus sentence. — 2026-10-15
+
+## Q-10 · Whether the free OpenCode Go models return to the online topics
+
+asked: 2026-10-16
+answer: "Ja, nur Online-Themen" — the free OpenCode Go models work the online topics 9 to 11 in addition to the three Flash models of Q-9; they see only the Opus sentence and the public web, never repository content (Q-3 stands).
+answered_by: maintainer
+status: answered
+context: |
+  Topic: whether the free models that OpenCode Go offers come back into the research swarm, beside the three Flash models.
+  Intention: Q-8 dropped the free models because OpenCode Zen's free tier refuses Pi (403); on 2026-10-16 the pinned Pi 1.2.0 listed free models under provider `opencode-go` itself (cat-jam-free, longcat-2.5-preview-free, step-5-preview-free), and the maintainer ruled the same night that the swarms take only Go's free models, never Zen's, checked before every run.
+  Today: the spec has the three Flash models alone on topics 9 to 11; the branch's code still carries the older Zen `opencode-free` path.
+  Repository change: Options: A — the free Go models join the online topics only; B — they join every topic, so models with unread data terms would see repository content, which Q-3 excluded; C — no change, three Flash models. With A the spec, the ADR 0020 draft and the code change, with the rule of coding-harness-4fk: Pi's catalog refreshed live before the run, provider `opencode-go`, ids ending `-free`, include and exclude lists in `model-endpoints.yaml`.
+  Architecture change: part of ADR 0020 (draft): which models work the online topics.
+
+In the context of free models offered by OpenCode Go itself, facing the
+choice between adding them to the online topics, adding them everywhere and
+leaving them out, we decided to add them to the online topics only, to
+achieve more independent public views at no cost, accepting more calls per
+run and more work for the judge. — 2026-10-16
