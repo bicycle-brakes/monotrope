@@ -2,7 +2,7 @@
 title: "Findings — red-first-install"
 category: findings
 status: draft
-implementation_status: none
+implementation_status: partial
 date: 2026-10-16
 created: 2026-10-16
 last_reviewed: 2026-10-16
@@ -497,19 +497,21 @@ Stage-2 call, 2026-10-16: review-loop · endpoint opencode-go · model mimo-v2.6
 
 ## Phase 6 — Opus 5.5, 2026-10-16
 
-Phase 6 verdict: Opus 5.5 sub-agent, 2026-10-16. 0 open BLOCKER.
+Phase 6 verdict: Opus 5.5 sub-agent, 2026-10-16
+
+0 open BLOCKER.
 
 Orchestrator's decision on each row below (2026-10-16): F-1 is taken because it concerns a test; F-3 is taken because it is a false statement in the frontmatter; F-2 is rejected for this change — the refusal is fail-closed as criterion 4 is written, and whether a `pytest.raises` "DID NOT RAISE" or a missing new helper should count as red first is a question for the maintainer, raised as bead coding-harness-a7m. The review text itself is committed unchanged in the next section.
 
 | ID | Severity | Dimension | Origin | Where | Finding | Reviewer | Status | Broke a test |
 |---|---|---|---|---|---|---|---|---|
-| F-1 | MINOR | SPEC | impl | tests/test_stage2.py `test_red_first_refuses_setup_and_teardown_errors`; scripts/stage2.py `_red_record_fault` teardown check | Criterion 3's second refuted case has no test: a call that fails by ordinary assertion while its fixture's teardown raises. A regression that skips the teardown check only when the call failed keeps the suite green. | Opus 5.5 | taken — criterion 3: tests/test_stage2.py::test_red_first_refuses_setup_and_teardown_errors | |
+| F-1 | MINOR | SPEC | impl | tests/test_stage2.py `test_red_first_refuses_setup_and_teardown_errors`; scripts/stage2.py `_red_record_fault` teardown check | Criterion 3's second refuted case has no test: a call that fails by ordinary assertion while its fixture's teardown raises. A regression that skips the teardown check only when the call failed keeps the suite green. | Opus 5.5 | fixed — tests/test_stage2.py::test_red_first_refuses_setup_and_teardown_errors | no |
 | F-2 | MINOR | MAINT | spec | spec.md, term "Assertion failure"; scripts/stage2.py probe `"assertion"` field | Only an AssertionError counts as red, so a `pytest.raises` test whose baseline does not raise, and a test calling a helper the repair adds, are refused on every attempt (fail-closed). | Opus 5.5 | rejected — fail-closed as criterion 4 is written; the maintainer's question is bead coding-harness-a7m | |
-| F-3 | MINOR | SPEC | impl | plans/changes/red-first-install/spec.md, plan.md, findings.md frontmatter | All three files still say `implementation_status: none`, though criteria 1–8 are built and tested. | Opus 5.5 | taken — false statement: implementation_status moves with the code (docs/WORKFLOW.md, "Artefact lifecycle") | |
+| F-3 | MINOR | SPEC | impl | plans/changes/red-first-install/spec.md, plan.md, findings.md frontmatter | All three files still say `implementation_status: none`, though criteria 1–8 are built and tested. | Opus 5.5 | fixed — not a test — frontmatter of spec.md, plan.md and findings.md now reads `implementation_status: partial`, as on merged changes, until the maintainer merges | no |
 
 ## Opus 5.5 review text, phase 6, 2026-10-16
 
-Review text as returned by the Opus 5.5 reviewer (committed unchanged; the harness's two-space indentation of the hand-back removed, nothing else changed). Its own table repeats the rows above with full evidence; the decided rows are the ones above.
+Review text as returned by the Opus 5.5 reviewer (committed unchanged; the harness's two-space indentation of the hand-back removed, its first heading lowered one level, and its own verdict line quoted with `>` so the runner reads only the verdict line above; nothing else changed). Its own table repeats the rows above with full evidence; the decided rows are the ones above.
 
 ### Ergebnis: 0 offene BLOCKER, 3 MINOR-Befunde
 
@@ -530,7 +532,7 @@ I did not edit, commit or write to the tracker. All plants ran in scratch copies
 | F-2 | MINOR | MAINT | spec | spec.md, term "Assertion failure"; scripts/stage2.py probe `"assertion"` field | Only an AssertionError counts as red, so two common red-first forms of a repair test now refuse on every attempt. Example 1: a test written `with pytest.raises(ValueError): …` whose baseline does not raise. pytest reports "DID NOT RAISE" through its `Failed` exception and the refusal reads "failed with Failed, not an AssertionError". Example 2: a test that calls a helper the repair adds; on the baseline it fails with AttributeError and is refused. Both are fail-closed, so no false proof results. But the repair verb, which accepted these before (exit 1 or 2), now ends such a repair as failed after all attempts. Research and spec never discuss `pytest.raises`. On 2026-10-16 at fb4e403, `tests/*.py` holds 23 `pytest.raises` uses among 1165 test functions. (criterion 4 as written; spec silent on `pytest.raises`) | An ad-hoc scratch test calling `stage2.red_first` on the unmodified code gives `…::test_raises: the call of … failed with Failed, not an AssertionError` and `…::test_new: the call of … failed with AttributeError, not an AssertionError`. |
 | F-3 | MINOR | SPEC | impl | plans/changes/red-first-install/spec.md, plan.md, findings.md frontmatter | All three files still say `implementation_status: none`, but criteria 1–8 are built and tested on this branch. The definition of done says the documents moved with the code, plan step "update implementation metadata when implementation progresses" asks the same, and docs/WORKFLOW.md "Artefact lifecycle" says `implementation_status` moves when the code moves. (Definition of Done) | `grep ^implementation_status plans/changes/red-first-install/*.md` gives `none` in each, at fb4e403. |
 
-Phase 6 verdict: claude-opus-5-5, 2026-10-16. 0 open BLOCKER.
+> Phase 6 verdict: claude-opus-5-5, 2026-10-16. 0 open BLOCKER.
 
 ### Loop rows (read after the verdict; this is the Claude path, and I did not run `release-loop`)
 
@@ -565,3 +567,12 @@ Phase 6 verdict: claude-opus-5-5, 2026-10-16. 0 open BLOCKER.
 Scratch copies are under `/private/tmp/claude-501/-Users-mikypiky-coding-harness/f3f1f2a8-3bee-45a3-88b9-9772a53278f7/scratchpad/omp-p6/` (base, p1–p7, p3, l1a, l1b, probe).
 
 Resume: commit the table and verdict above unchanged into `plans/changes/red-first-install/findings.md` (orchestrator), then run `python3 scripts/stage2.py release-loop red-first-install` and mark L1-1 and L1-2 `agree`. Repair F-1 (add a call-assert plus teardown-error case to the criterion-3 test) and F-3 (frontmatter) without asking, per the MINOR rule. Take F-2 to the maintainer as a question for a follow-up bead (should `pytest.raises` "DID NOT RAISE" count as red first?).
+
+## Phase 4b — loop rows, released 2026-10-16
+
+| ID | Severity | Dimension | Origin | Where | Finding | Reviewer | Status | Broke a test | Phase 6 |
+|---|---|---|---|---|---|---|---|---|---|
+| L1-1 | MINOR | MAINT | impl | tests/test_stage2.py:6295-6299, 6353; scripts/stage2.py:2289-2292, 2304-2316 | No test drives the classifier through a skip: the parametrized "skip" case plants a sole skipped test, so pytest exits 0 and `red_first` refuses at the exit-code check before `_red_record_fault` reads the record. The setup-skipped and call-skipped refusals under exit 1 — a skip beside another case's assertion failure, which criterion 5 names — are reachable but unexercised, so a regression that accepts a skipped selective case in an otherwise red run would keep the suite green. Plant a skipped parameter, or a body `pytest.skip()`, beside an assertion-failing case. | deepseek-v4.1-flash | taken — tests/test_stage2.py::test_red_first_refuses_non_proving_pytest_outcomes[setup-skip-beside-assertion], [call-skip-beside-assertion] | no | agree |
+| L1-2 | MINOR | MAINT | impl | tests/test_stage2.py:6149-6157, 6214-6222 | The missing-Pi fixture's stand-in guard cannot fail the test it guards: if the ignored stand-in ever reached the scratch checkout, its `assert not stand_in.exists()` would fail the setup with an AssertionError, and the classifier then returns the same "the setup phase ... ended failed" refusal the test asserts, so the test still passes while the scenario it exists for — a missing-install `pytest.fail` — is no longer exercised. Make the refusal's cause distinguishable, or check the scratch state before the run. | deepseek-v4.1-flash | taken — tests/test_stage2.py::test_red_first_refuses_a_missing_pi_install[stand-in-present] | no | agree |
+
+Rounds run: 1

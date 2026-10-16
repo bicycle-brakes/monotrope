@@ -6248,6 +6248,21 @@ def test_red_first_refuses_setup_and_teardown_errors(world: World) -> None:
         outcome is not None
         and "the teardown phase of `tests/test_leak.py::test_teardown_error` ended failed" in outcome
     ), outcome
+    # Phase 6, F-1: the call fails by ordinary assertion while the teardown raises. A check that
+    # reads the teardown only beside a passing call would accept this one as red.
+    both = (
+        "import pytest\n\n\n"
+        "@pytest.fixture\n"
+        "def leaky():\n"
+        "    yield\n"
+        '    raise RuntimeError("teardown fault")\n\n\n'
+        "def test_both(leaky):\n"
+        '    assert False, "ordinary assertion"\n'
+    )
+    outcome = red_first_planted(world, "test_both.py", both, "tests/test_both.py::test_both")
+    assert outcome is not None and "the teardown phase of `tests/test_both.py::test_both` ended failed" in outcome, (
+        outcome
+    )
 
 
 def test_red_first_refuses_non_assertion_call_failures(world: World) -> None:
