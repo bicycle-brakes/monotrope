@@ -165,8 +165,8 @@ endpunkte:
       - glm-5.3-flash
       - qwen3.8-flash
       - gpt-6-luna
-      - claude-haiku-5.5
-      - minimax-m2.7
+      - claude-haiku-5-5
+      - minimax-m3
       - mimo-v2.6-pro
     modelle_terms:
       deepseek-v4.1-flash:
@@ -185,23 +185,35 @@ endpunkte:
         aufbewahrung: "0 days"
         training: "Not used"
       longcat-2.0:
-        uebersprungen: "2026-10-16"
-        grund: "retention and training terms not read; skipped until a dated reading exists"
+        gelesen: "2026-10-17"
+        quelle: "privacy table of the Go page, https://opencode.ai/docs/go"
+        aufbewahrung: "0 days"
+        training: "Not used"
       glm-5.3-flash:
-        uebersprungen: "2026-10-16"
-        grund: "retention and training terms not read; skipped until a dated reading exists"
+        gelesen: "2026-10-17"
+        quelle: "privacy table of the Go page, https://opencode.ai/docs/go"
+        aufbewahrung: "0 days"
+        training: "Not used"
       qwen3.8-flash:
-        uebersprungen: "2026-10-16"
-        grund: "retention and training terms not read; skipped until a dated reading exists"
+        gelesen: "2026-10-17"
+        quelle: "privacy table of the Go page, https://opencode.ai/docs/go"
+        aufbewahrung: "0 days"
+        training: "Not used"
       gpt-6-luna:
-        uebersprungen: "2026-10-16"
-        grund: "retention and training terms not read; skipped until a dated reading exists"
-      claude-haiku-5.5:
-        uebersprungen: "2026-10-16"
-        grund: "retention and training terms not read; skipped until a dated reading exists"
-      minimax-m2.7:
-        uebersprungen: "2026-10-16"
-        grund: "retention and training terms not read; skipped until a dated reading exists"
+        gelesen: "2026-10-17"
+        quelle: "privacy table of the Go page, https://opencode.ai/docs/go"
+        aufbewahrung: "30 days"
+        training: "Not used"
+      claude-haiku-5-5:
+        gelesen: "2026-10-17"
+        quelle: "privacy table of the Go page, https://opencode.ai/docs/go"
+        aufbewahrung: "30 days"
+        training: "Not used"
+      minimax-m3:
+        gelesen: "2026-10-17"
+        quelle: "privacy table of the Go page, https://opencode.ai/docs/go"
+        aufbewahrung: "0 days"
+        training: "Not used"
     flash_swarm:
       - deepseek-v4.1-flash
       - mimo-v2.6-flash
@@ -261,10 +273,18 @@ endpunkte:
       not logged into the Services"; the maintainer accepted this residual
       risk on 2026-10-08. The six ids beyond the three measured ones
       (`longcat-2.0`, `glm-5.3-flash`, `qwen3.8-flash`, `gpt-6-luna`,
-      `claude-haiku-5.5`, `minimax-m2.7`) come from the maintainer's ladder
-      answer of 2026-10-14 without their own measurements: no price, limit or
-      terms reading is claimed for them, so `modelle_terms` skips each until
-      a dated reading exists. The free class accepts unread terms for the
+      `claude-haiku-5-5`, `minimax-m2.7`) came from the maintainer's ladder
+      answer of 2026-10-14 without their own measurements: no price or limit
+      is claimed for them. Privacy table of the Go page (read 2026-10-17):
+      `longcat-2.0`, `glm-5.3-flash` and `qwen3.8-flash` retain `0 days`,
+      `gpt-6-luna` (abuse-monitoring logs) and `claude-haiku-5-5` retain
+      `30 days`, and model training is "Not used" for all five; the
+      maintainer admitted all five on 2026-10-17, the 30-day ones included.
+      The Go page lists Claude Haiku 5.5 as `claude-haiku-5-5`, so the ladder
+      carries that id. `minimax-m2.7` is neither on the page nor in Pi's
+      live `opencode-go` catalog of 2026-10-16, which list `minimax-m3`
+      instead (`0 days`, "Not used"); the maintainer replaced it with
+      `minimax-m3` on 2026-10-17. The free class accepts unread terms for the
       implementation diff only: no tools and no other content, and no paid
       model, Zen id or interactive session on that acceptance (ADR 0021,
       decision 3).

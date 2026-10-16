@@ -256,3 +256,28 @@ as it was written.
   the free models is a yaml edit carried by an ordinary pull request
   (`model-endpoints.yaml` has no `human-decided` entry in `provenance.yaml`,
   read 2026-10-16).
+
+## Q-11 · Which ladder models with unread terms are admitted
+
+asked: 2026-10-17
+answer: "B" — the five ladder ids whose terms were unread get a dated reading and are admitted, the two that retain 30 days included; then "Passe minimax auf die neue Version an" — `minimax-m2.7` is replaced by `minimax-m3`
+answered_by: maintainer
+status: answered
+context: |
+  Topic: which of the six skipped paid ladder ids may review.
+  Intention: after the two swarms only `mimo-v2.6-pro` was admitted, so the ladder was spent after one rung and the loop stopped for the maintainer.
+  Today: `modelle_terms` skipped `longcat-2.0`, `glm-5.3-flash`, `qwen3.8-flash`, `gpt-6-luna`, `claude-haiku-5.5` and `minimax-m2.7` with the reason "terms not read". The Go page's privacy table, read 2026-10-17 (raw page, fetched 2026-10-16 23:24 GMT): the first three retain 0 days, `gpt-6-luna` (abuse-monitoring logs) and Claude Haiku 5.5 retain 30 days, training "Not used" for all five; the page lists Haiku as `claude-haiku-5-5` and has no `minimax-m2.7`, only `minimax-m3` (0 days, "Not used"). Pi's live `opencode-go` catalog of 2026-10-16 likewise holds `minimax-m3` and not `minimax-m2.7`.
+  Repository change: Options: A — admit the three 0-day ids, keep the 30-day ones skipped; B — admit all five; C — change nothing. Recommendation was A.
+  Architecture change: none; only which providers see the change's diff. The ladder grows from one admitted rung to all nine.
+
+In the context of a review ladder whose paid rungs were mostly skipped for
+unread terms, facing a loop that stopped after one paid rung, we decided to
+admit every rung with a dated reading of the Go page's privacy table, the
+30-day ones included, and to replace the retired `minimax-m2.7` by
+`minimax-m3`, to achieve a ladder long enough for an until-clean loop,
+accepting that `gpt-6-luna` and `claude-haiku-5-5` keep requests for up to
+30 days. — 2026-10-17
+
+The ladder id `claude-haiku-5.5` is corrected to `claude-haiku-5-5`, the id
+the Go page and Pi's catalog use; with the old spelling the rung could never
+have been called.

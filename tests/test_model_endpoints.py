@@ -342,14 +342,14 @@ def test_the_opencode_go_entry_is_declared() -> None:
     assert entry["darf_sehen"] == ["framework"]
     # The order is the maintainer's to change in this file alone; only the set and the count are pinned.
     assert sorted(entry["modelle"]) == [
-        "claude-haiku-5.5",
+        "claude-haiku-5-5",
         "deepseek-v4.1-flash",
         "glm-5.3-flash",
         "gpt-6-luna",
         "longcat-2.0",
         "mimo-v2.6-flash",
         "mimo-v2.6-pro",
-        "minimax-m2.7",
+        "minimax-m3",
         "qwen3.8-flash",
     ]
     # The paid Flash swarm (Q-10) and the free-stage rule (ADR 0021, decision 2).
@@ -439,17 +439,20 @@ def test_every_new_paid_model_carries_its_terms_reading() -> None:
         assert re.fullmatch(r"\d{4}-\d{2}-\d{2}", str(record["gelesen"]))
         assert record.get("quelle"), f"{model} names no source for its terms reading"
         admitted.append(model)
-    # The three measured ids stay admitted; the six without their own reading
-    # are skipped BY NAME - never silently.
-    assert admitted == ["deepseek-v4.1-flash", "mimo-v2.6-flash", "mimo-v2.6-pro"]
-    assert skipped == [
+    # Every ladder id carries its own dated reading (2026-10-07 and
+    # 2026-10-17); a skip would be named here BY NAME - never silently.
+    assert admitted == [
+        "deepseek-v4.1-flash",
+        "mimo-v2.6-flash",
         "longcat-2.0",
         "glm-5.3-flash",
         "qwen3.8-flash",
         "gpt-6-luna",
-        "claude-haiku-5.5",
-        "minimax-m2.7",
+        "claude-haiku-5-5",
+        "minimax-m3",
+        "mimo-v2.6-pro",
     ]
+    assert skipped == []
     # The Flash swarm takes eligible members only: a skipped id is not in it.
     assert not set(entry.get("flash_swarm") or []) & set(skipped)
 
