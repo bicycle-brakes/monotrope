@@ -4003,6 +4003,7 @@ def probe(root: Path, change: str) -> None:
     refused id stops the run and is reported (spec, criterion 17): no second
     address, no substituted model.
     """
+    folder_of(root, change)
     key = reviewer_key()
     problem = entry_problem(root, OPENCODE)
     if problem:

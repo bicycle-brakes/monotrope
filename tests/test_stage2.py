@@ -99,6 +99,7 @@ def fits(step_, a):
     return step_.get("model") is None or model_of(a) == step_["model"]
 
 
+argv = sys.argv[1:]
 assigned = []
 for call_ in previous:
     if call_["name"] != alias or call_.get("kind"):
@@ -112,7 +113,6 @@ for k in range(len(steps)):
     if k not in assigned and fits(steps[k], argv):
         step = steps[k]
         break
-argv = sys.argv[1:]
 if alias == "pi" and argv == ["--version"]:
     # The version check is answered from the scenario and kept out of the call
     # log; its own log says which path answered it.
@@ -511,9 +511,12 @@ def world(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> World:
     git(root, "add", "-A")
     git(root, "commit", "--quiet", "-m", "base")
     git(root, "update-ref", "refs/remotes/origin/main", "HEAD")
-    # An uncommitted code file of its own: the free stage reviews the
-    # implementation diff, and a world without one would refuse every round.
-    (root / "src" / "helper.py").write_text("VALUE = 2\n", encoding="utf-8")
+    # A committed code change of its own, ahead of origin/main: the free stage
+    # reviews the implementation diff, and a world without one would refuse
+    # every round; the tree stays clean, as the work verbs require.
+    (root / "scripts" / "helper.py").write_text("VALUE = 2\n", encoding="utf-8")
+    git(root, "add", "-A")
+    git(root, "commit", "--quiet", "-m", "code change")
     w = World(root, bin_dir, tmp_path / "state")
     w.script()
     return w
@@ -4558,7 +4561,7 @@ def test_both_swarms_run_in_parallel_as_one_round(world: World) -> None:
 
 def test_the_free_stage_reads_nothing_beyond_the_diff(world: World) -> None:
     """Criterion 3: a free member's only input is the diff - no prompt body, no read request, no canary; no tools."""
-    (world.root / "src" / "helper.py").write_text("VALUE = 2\nFREE-DIFF-CANARY = 'kept'\n", encoding="utf-8")
+    (world.root / "scripts" / "helper.py").write_text("VALUE = 2\nFREE-DIFF-CANARY = 'kept'\n", encoding="utf-8")
     (world.root / "plans" / "changes" / "demo" / "plan.md").write_text(
         "---\ntitle: Plan\nupdated: 2026-09-30\nbead: demo-1\n---\n\n# Plan\n\nPLAN-CANARY stays out.\n\n## Time used\n",
         encoding="utf-8",
