@@ -813,6 +813,9 @@ def test_explore_uses_flash_read_only_and_appends_research(world: World) -> None
     assert argv[argv.index("--permission-mode") + 1] == "dontAsk"
     assert call["env"]["ANTHROPIC_BASE_URL"] == stage2.GLM_BASE_URL
     assert call["env"]["ANTHROPIC_MODEL"] == "glm-5.3-flash"
+    # Bead coding-harness-6th. Planted fault: the GLM start names no window, so Claude Code warns
+    # that it does not know the model and guesses one.
+    assert call["env"]["CLAUDE_CODE_MAX_CONTEXT_TOKENS"] == "200000"
     assert (REPO_ROOT / "prompts" / "01-explore.md").read_text(encoding="utf-8").rstrip() in prompt
     assert "Stay inside the repository." in prompt and stage2.ANSWER_FORMAT not in prompt
     text = world.research.read_text(encoding="utf-8")
@@ -1319,6 +1322,9 @@ def test_two_failed_postchecks_route_once_to_sonnet(world: World) -> None:
     assert models == ["glm-5.3-flash", "glm-5.3-flash", "claude-sonnet-5-5"]
     assert calls[-1]["argv"][calls[-1]["argv"].index("--effort") + 1] == "medium"
     assert "ANTHROPIC_BASE_URL" not in calls[-1]["env"]
+    # The window belongs to the GLM start only; Sonnet's own window stays Claude Code's to know.
+    assert "CLAUDE_CODE_MAX_CONTEXT_TOKENS" in calls[0]["env"]
+    assert "CLAUDE_CODE_MAX_CONTEXT_TOKENS" not in calls[-1]["env"]
     assert len(world.calls("make")) == 3
     plan = world.plan.read_text(encoding="utf-8")
     assert "Stage-1 route: implement" in plan and "two Flash post-run checks failed" in plan
