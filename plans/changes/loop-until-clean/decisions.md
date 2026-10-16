@@ -193,3 +193,32 @@ first round and two parallel rounds in sequence, we decided on the free swarm
 first and the three Flash models as a parallel round 2, to achieve the
 maintainer's order as stated, accepting that a clean free-swarm round ends
 the loop before any Flash model reviews. — 2026-10-16
+
+## Details the orchestrating session decides, 2026-10-16
+
+These are `[DETAIL]` items that follow from Q-9 and Q-10; none changes a
+decision of record.
+
+1. **The runner makes the free check itself.** Q-9 calls every free model
+   the check finds, so the check cannot stay an orchestrator step that edits
+   the yaml before the run. Before round 1 of every review-loop run, the
+   runner reads the model list of the pinned Pi (`tools/pi/pi
+   --list-models`, ADR 0019), keeps the ids of provider `opencode-go` whose
+   id ends in `-free`, and never reads provider `opencode` (OpenCode Zen).
+   The round's block names the check's date and the list. An empty list
+   refuses the run by name. Reason: the maintainer's two statements of
+   2026-10-16 and Q-9. Known limit: whether `--list-models` reads the
+   network or only the pinned install's registry was not measured on
+   2026-10-16; if it reads only the registry, the list is as fresh as the
+   pin, and the spec must say so.
+2. **The entry declares the free stage as a class.** The `opencode-go` entry
+   of `model-endpoints.yaml` states that its `-free` models run in the free
+   stage with the diff only and unread terms accepted (Q-8, Q-9); the
+   declaration gate of ADR 0011 admits a model of that class without a
+   per-model line, and nothing outside that class. Reason: Q-9 removes the
+   per-model entry for the free stage, not the gate.
+3. **Round 2 is the three Flash models in parallel (Q-10).** Rounds 3 and
+   later call one rung each of the remaining ladder in Q-1's order:
+   `glm-5.3-flash`, `qwen3.8-flash`, `gpt-6-luna`, `claude-haiku-5.5`,
+   `minimax-m2.7`, `mimo-v2.6-pro`. Round 2 keeps the ladder's read tools;
+   only the free stage is diff-only.
