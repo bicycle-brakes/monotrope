@@ -281,6 +281,12 @@ GLM_MODEL_VARIABLES = (
     "ANTHROPIC_SMALL_FAST_MODEL",
     "CLAUDE_CODE_SUBAGENT_MODEL",
 )
+# Claude Code knows no GLM id, so it warns at every start and assumes a 200k context window
+# (bead coding-harness-6th). Per the Claude Code docs, naming the window ends the warning (not yet
+# seen in a live start); it stays at the assumed 200k,
+# because no Z.ai source read on 2026-10-16 states the Coding Plan's window, and a window set
+# above the real one would overflow instead of compacting.
+GLM_CONTEXT_TOKENS = "200000"
 
 MAX_ROUNDS = 3
 ROW_COLUMNS = ["ID", "Severity", "Dimension", "Origin", "Where", "Finding", "Reviewer", "Status", "Broke a test"]
@@ -512,6 +518,7 @@ def glm_env(key: str, config_dir: Path, model: str) -> dict[str, str]:
         "ANTHROPIC_API_KEY": key,
         "CLAUDE_CONFIG_DIR": str(config_dir),
         "CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC": "1",
+        "CLAUDE_CODE_MAX_CONTEXT_TOKENS": GLM_CONTEXT_TOKENS,
     }
     own.update({name: model for name in GLM_MODEL_VARIABLES})
     return foreign_env(own)
