@@ -219,10 +219,18 @@ ANSWER_FORMAT = (
 )
 MARK_FORMAT = "For each loop row answer one line and nothing else: `<ID>: agree` or `<ID>: disagree — <reason>`."
 REPAIR_ANSWER = (
-    "Answer with one fixed line per row and no other text: `<ID>: fixed — tests/<path>::<function>` or\n"
-    "`<ID>: fixed — not a test — <reason>`. Write a `|` inside a reason as `\\|`. A code row needs a test that\n"
-    "fails on the baseline's code, which the runner runs; only a row taken as `taken — not a test — <reason>`\n"
-    "may be answered `not a test`. Do not edit `findings.md`."
+    "Answer with one fixed line per taken row: `<ID>: fixed — tests/<path>::<function>` or\n"
+    "`<ID>: fixed — not a test — <reason>`. Headings, fences and report prose around the fixed lines are\n"
+    "ignored, but a colon line whose id looks like a finding id (`L1-2`, `F-12`) and names no taken row\n"
+    "still fails. Letters-hyphen-digits ids count only for prefixes used by this change's row ids;\n"
+    "`L<digits>-<digits>` always counts; the prefix `L` counts only when the change has a loop row.\n"
+    "A colon line whose right side is a fixed status (`fixed — …`) also fails when its id names no\n"
+    "taken row, whatever the id's shape. Write a `|` inside a reason as `\\|`. A code row needs a test that fails on the\n"
+    "baseline's code, which the runner runs; only a row taken as `taken — not a test — <reason>` may be\n"
+    "answered `not a test`. Do not edit `findings.md`. A hand repair is booked in the row's own Status as\n"
+    "one of the two fixed statuses above; a Status that still begins `taken` while naming a fix\n"
+    "(`; fixed by …`, `; fixed: …`, `; repaired by …`) refuses the repair before any call.\n"
+    "Backtick-quoted markers do not count; an unquoted marker beside a backtick span still refuses the repair."
 )
 # The Codex attempts (ADR 0017): Codex has command tools in its configured sandbox, so it is told what it may run.
 REPAIR_FORMAT = (
@@ -301,6 +309,9 @@ QUOTE_LINE_CHARS = 500
 # …and the file list keeps its first entries (spec, criteria 13 and 14).
 ATTEMPT_FILES = 40
 LOOP_ID = re.compile(r"L\d+-\d+")
+# Non-loop finding shapes count only for prefixes already used by the change's rows.
+# Loop identifiers always count; an unrelated colon label remains report prose.
+FINDING_ID = re.compile(r"([A-Za-z]+)-[0-9]+")
 NOT_ROWS_NOTE = "The answer was not only six-cell rows; what is not one is kept below as it came."
 # A fixed line's test, in the form of ADR 0013's criterion ledger: a file `tests/…/test_*.py`, a function
 # `test_…`. A `.` or `..` path segment would climb out of `tests/`; `fixed_status` refuses it as the
@@ -1059,6 +1070,18 @@ def repair_targets(ctx: Context, record: str | None) -> tuple[list[tuple[str, li
     return taken, waiting
 
 
+# A taken Status that names a fix in a legacy hand-written form needs clarification before repair.
+# Quoted marker examples are not completion claims. Match unquoted markers without regard to case,
+# as every Status read here is (bead coding-harness-ugi).
+LEGACY_FIXED = ("; fixed by", "; fixed:", "; repaired by")
+
+
+def legacy_completed(status: str) -> bool:
+    """Whether a Status still begins `taken` while naming a fix in one of the three legacy forms."""
+    lowered = re.sub(r"`+[^`]*`+", "", status).lower()
+    return any(marker in lowered for marker in LEGACY_FIXED)
+
+
 def spec_review(root: Path, change: str) -> None:
     """Phase 2a: Opus 5.5 in a fresh context reads the spec (ADR 0016).
 
@@ -1446,6 +1469,45 @@ def ignored_snapshot(root: Path) -> dict[Path, tuple[int, int]]:
             continue
         snapshot[Path(name)] = (info.st_mtime_ns, info.st_size)
     return snapshot
+
+
+SAVE_IDENTITY = {
+    "GIT_AUTHOR_NAME": "stage2 runner",
+    "GIT_AUTHOR_EMAIL": "stage2@localhost",
+    "GIT_COMMITTER_NAME": "stage2 runner",
+    "GIT_COMMITTER_EMAIL": "stage2@localhost",
+}
+
+
+def save_attempt(root: Path, baseline: str, change: str, label: str) -> str:
+    """Save the worktree as it stands after a failed call on a local ref; say where, or why not.
+
+    A failed call is not a worthless one: a run that hits a spent budget after hours of edits still
+    holds them (bead coding-harness-znc). The snapshot goes through a temporary index, so the real
+    index and the files stay untouched; tracked and untracked files go in, gitignored ones do not.
+    The temporary index is seeded with the baseline, as in `worktree_tree`, so a file tracked although
+    ignored stays in the snapshot. The commit's parent is the baseline, so `git diff <baseline> <ref>`
+    shows everything the run left in the tree: this attempt, any earlier attempt of the run whose tree
+    it started on, and the runner's own writes. The ref lives under `refs/stage2/attempts/`, which no
+    branch push carries. A save that fails is named and never blocks the restore that follows.
+    The commit carries the runner's own identity, so a machine without a configured git user (a CI
+    runner) saves as well, and the ref says who wrote it.
+    """
+    stamp = dt.datetime.now(dt.UTC).strftime("%Y%m%dT%H%M%S%fZ")
+    ref = f"refs/stage2/attempts/{change}/{label}-{stamp}"
+    with tempfile.TemporaryDirectory(prefix="stage2-save-") as scratch:
+        env = {**os.environ, "GIT_INDEX_FILE": str(Path(scratch) / "index"), **SAVE_IDENTITY}
+        try:
+            _git_output(root, "read-tree", baseline, env=env)
+            _git_output(root, "add", "-A", "--", ".", env=env)
+            tree = _git_output(root, "write-tree", env=env).strip()
+            commit = _git_output(
+                root, "commit-tree", tree, "-p", baseline, "-m", f"stage2: saved {label} of {change}", env=env
+            ).strip()
+            _git_output(root, "update-ref", ref, commit)
+        except (Refused, OSError) as error:
+            return f"saving the attempt failed ({error})"
+    return f"the attempt is saved at {ref} ({commit[:12]}); `git diff {baseline[:12]} {ref}` shows it"
 
 
 def restore_baseline(
@@ -2211,13 +2273,21 @@ def check_repair_answer(
 ) -> tuple[dict[str, str], list[str]]:
     """Read an answer's fixed lines: the Status each taken row takes, or the problems that fail the attempt.
 
-    Each problem names its ID. Every row of findings.md must also stand as `before` holds it - the taken
-    rows and the others alike, cell for cell: an edit outside the taken rows' Status is named, not
-    checkpointed (phase 6, F-3). The pre-call findings body also protects other phases and every earlier
-    attempt's evidence; only the frontmatter is excluded, because the runner refreshes `updated:`.
-    Only when no problem stands do the red-first runs start, one pytest run per named test; every
-    text is scrubbed with the key.
+    Each problem names its ID. Lines without a colon, and colon lines whose left side names neither an
+    active row exactly nor a finding-shaped id, are ignored unless their right side claims a fixed
+    status. A finding-shaped id or claimed fix that names no taken row still fails. Every row of
+    findings.md must also stand as `before` holds it - the taken rows and the others alike, cell for cell: an edit outside the taken
+    rows' Status is named, not checkpointed (phase 6, F-3). The pre-call findings body also protects
+    other phases and every earlier attempt's evidence; only the frontmatter is excluded, because the
+    runner refreshes `updated:`. Only when no problem stands do the red-first runs start, one pytest run
+    per named test; every text is scrubbed with the key.
     """
+    active = {row[0] for _, row in taken}
+    # Include rejected and fixed findings: they establish the same vocabulary as active rows.
+    rows = [*(row for _, row in taken), *before[0], *before[1], *record_rows(read_record(ctx.change) or "")]
+    prefixes = {match[1] for row in rows if (match := FINDING_ID.fullmatch(row[0])) and match[1] != "L"}
+    if any(LOOP_ID.fullmatch(row[0]) for row in rows):
+        prefixes.add("L")
     problems: list[str] = []
     parsed: dict[str, list[str]] = {}
     for raw in answer.splitlines():
@@ -2228,8 +2298,17 @@ def check_repair_answer(
         ident, sep, rest = line.partition(":")
         ident = ident.strip().strip("*`").strip()
         rest = rest.strip()
+        # An active row is matched exactly first: a phase-6 id is free text, so the finding shape alone
+        # cannot carry every real fixed line (spec, criterion 2).
         if not sep or not ident:
-            problems.append(f"the answer holds a line that is no fixed line: {line[:80]}")
+            continue
+        shape = FINDING_ID.fullmatch(ident)
+        if (
+            ident not in active
+            and not LOOP_ID.fullmatch(ident)
+            and not (shape and shape[1] in prefixes)
+            and not rest.lstrip("*` ").startswith("fixed — ")
+        ):
             continue
         parsed.setdefault(ident, []).append(rest)
     fixes: dict[str, str] = {}
@@ -2524,7 +2603,17 @@ def run_attempts(
             error = call_error
             if kept is not None:
                 restore_findings(kept)
-            raise CallFailed(f"{error}; {restore_baseline(root, baseline, allowed, ignored_before)}") from error
+            exposed = []
+            if key is not None:
+                # Scrub before the snapshot writes the changed files into the object store.
+                exposed = remove_changed_credential(root, key, ignored_before)
+            try:
+                saved = save_attempt(root, baseline, ctx.change, f"{verb}-attempt-{attempt}")
+            except OSError as save_error:
+                saved = f"saving the attempt failed ({save_error})"
+            restored = restore_baseline(root, baseline, allowed, ignored_before)
+            leaked = f"; {credential_message(exposed)}" if exposed else ""
+            raise CallFailed(f"{error}; {saved}; {restored}{leaked}") from error
         if key is not None:
             # Every route scans with the key read in this run - the Sonnet fallback included - before
             # the second snapshot can write the changed files into the object store (spec, criterion 9).
@@ -2873,10 +2962,11 @@ def draft(root: Path, change: str) -> None:
                 f"the draft call moved HEAD from {baseline[:12]} to {head_now[:12]}; nothing was put back or committed"
             )
         if call_error is not None:
+            saved = save_attempt(root, baseline, ctx.change, f"draft-attempt-{attempt}")
             put = put_back(root, baseline, allowed)
-            listing = f"- the call failed: {call_error}"
+            listing = f"- the call failed: {call_error}\n- {saved}"
             diagnostics.append(f"Attempt {attempt} ({route}):\n{listing}")
-            block = f"Attempt {attempt} ({route}) failed its call: {call_error}"
+            block = f"Attempt {attempt} ({route}) failed its call: {call_error}\n\n{saved}."
             if put:
                 block += "\n\nThe runner put back:\n" + "\n".join(put_back_lines(put))
             append(ctx.findings, quote_block(block, key, put_back_lines(put)))
@@ -2969,7 +3059,8 @@ def repair(root: Path, change: str, stage2_off: str | None = None) -> None:
     Sonnet 5.5 stage-1 fallback after two failed post-run checks; a failed call or a leak-check BLOCK
     stops without a fallback (ADR 0017). The orchestrator decides taken or rejected and re-checks with
     the loop's next round and `review`, a fresh read-only Codex session; the verb writes no
-    `Broke a test` and starts no review.
+    `Broke a test` and starts no review. A taken Status that already names a fix in the old hand-written
+    form (`; fixed by`, `; fixed:`, `; repaired by`) refuses before any call.
     """
     first = SONNET if stage2_off is not None else CODEX
     ctx = preflight(root, change, first, required=("plan.md",))
@@ -2987,6 +3078,17 @@ def repair(root: Path, change: str, stage2_off: str | None = None) -> None:
     doubled = sorted({ident for ident in ids if ids.count(ident) > 1})
     if doubled:
         raise Refused(f"several taken rows carry the same id ({', '.join(doubled)}); mend the rows first.")
+    legacy = [row[0] for _, row in taken if legacy_completed(row[7])]
+    if legacy:
+        # A legacy marker may name a completed fix or merely occur in an unrepaired reason.
+        # Refuse without rewriting and explain both corrections (spec, criterion 7).
+        raise Refused(
+            f"rows carry a taken status that already names a fix ({', '.join(legacy)}); book the hand repair "
+            "by replacing the Status with `fixed — tests/<path>::<function>` or "
+            "`fixed — not a test — <reason>` and setting the loop row's `Broke a test` mark, then run "
+            "repair again; if the row is not repaired yet, reword its reason so it names no fix instead "
+            "of marking it fixed."
+        )
     baseline = _git_output(root, "rev-parse", "HEAD").strip()
     time_log(ctx.plan)  # Require the initial time heading before a model call starts.
     ignored_before = ignored_snapshot(root)
