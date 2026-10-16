@@ -317,3 +317,49 @@ explore/research-swarm, latest listed commit `6146fde`).
   exist in this worktree. No maintainer answer, criterion, class, appetite
   or ADR claim changed in this attempt; ADR 0020 remains the sole claimed
   ADR file and is unapproved.
+
+## Phase-2a incorporation evidence — 2026-10-16
+
+Read in this worktree at e1b54de. The recorded S-1–S-20 rulings in decisions.md
+settle the phase-2a rows; earlier statements that no such open rows existed
+are historical, not the current review state.
+
+[GAP] Pinned Pi 1.2.0's local pi-ai/dist/types.d.ts defines chat as
+`type?: "chat"` (absent defaults to chat) and declares `input` modalities,
+but its Model interface has no dedicated tool-support boolean. The local
+remote-catalog-provider.js parseCatalog retains extra raw metadata and
+merges baseline/overlay; it does not qualify a raw capability field as proof
+of tool support. No remote catalog was read here. Phase 4 must qualify and
+record the raw capability mapping; absent/negative support excludes a free
+seat as no-tool-support rather than assuming chat implies tool support.
+This retains ruling S-3's explicit-support requirement without inventing a
+pinned API field or claiming live availability. All other edits implement
+the recorded rulings, not new maintainer answers or runtime measurements.
+
+## Incorporation-round attempt 3 evidence — 2026-10-16
+
+Read only this worktree (branch explore/research-swarm, latest listed commit
+e1b54de) and the uncommitted incorporation revisions under review; no
+provider, user configuration or other checkout was read. This session has no
+command tool: it ran no gate, no test and no git command.
+
+- The retained artifacts were reviewed against the recorded S-1–S-20 rulings
+  and kept: spec, design, plan and ADR 0020 wording agree, and no defect was
+  found that a drafting attempt may repair. One wording choice is recorded in
+  the spec's Open decisions instead of being reworded after the rulings.
+- Every criterion-ledger entry of `plan.md` was checked against the test tree
+  by reading it: all seventeen named tests are defined
+  (`tests/test_stage2_swarm.py`, `tests/test_stage2_research_tools.py`,
+  `tests/test_stage2.py`), every `not yet written` function is undefined
+  anywhere under `tests/`, and `tests/test_research_handoff.py` and
+  `tests/test_stage2_research_catalog.py` do not exist. The one ledger covers
+  spec criteria 1–42 with no entry outside them, in the three entry forms
+  `scripts/check_criterion_ledger.py` holds.
+- `scripts/stage2.py` still resolves `PI_WRAPPER` to the absolute
+  `tools/pi/pi` path while `tests/test_stage2_swarm.py::sworld` offers only a
+  PATH-based stand-in, so the 46 red swarm tests of the supplied diagnostics
+  remain the known seam fault; plan step 1 owns the repair, and a drafting
+  attempt still cannot make it inside its scope.
+- No maintainer answer, criterion, class, appetite or ADR claim changed in
+  this attempt; ADR 0020 remains the sole claimed ADR file and unapproved,
+  and findings rows S-1–S-20 stay `in spec`, none open.

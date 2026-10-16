@@ -53,24 +53,47 @@ addenda record `6e80ded` on 2026-10-15 and `6146fde` on 2026-10-16.
 - **Repository trio:** `deepseek-v4.1-flash` and `mimo-v2.6-flash` through
   OpenCode Go/Pi, plus `claude-haiku-5-5` through official Claude Code.
 - **Online researchers:** the fixed Flash trio `deepseek-v4.1-flash`,
-  `mimo-v2.6-flash`, `qwen3.8-flash`, plus all selected Go free models,
-  through OpenCode Go/Pi. Every seat is public-only, regardless of billing.
-- **Selected Go free models:** unique chat ids ending exactly `-free` from
-  the run's freshly refreshed Pi catalog for provider `opencode-go`, filtered
-  by the declaration's include/exclude lists. `N` is their frozen count;
-  catalog presence is eligibility, not proof a model call will succeed.
-- **Public topic:** one Opus-written sentence of at most 20 words; words contain
-  letters and apostrophes only, with an optional final period. File, path,
-  code, change and bead names, including hyphenated identifiers, are refused.
-- **Same perspectives:** existing state and supporting evidence, counter-evidence
-  and missing evidence, and effects on the topic's documented boundaries;
-  every model receives all three, with no per-model angle assignment.
-- **Complete:** every required contribution and structured reconciliation is
-  present and valid; unresolved human questions may still await phase 1a.
-- **Claim:** a uniquely identified statement with kind `fact`, `assumption` or
-  `judgement`, source, confidence and its basis; confidence is not proof.
-- **Handoff item:** an interview obligation derived from a research decision
-  or unresolved disagreement, linked to its originating claims.
+  `mimo-v2.6-flash`, `qwen3.8-flash`, plus selected Go free models, all through
+  OpenCode Go/Pi with public-only permissions regardless of billing.
+- **Selected Go free models:** unique `opencode-go` ids ending exactly `-free`
+  in this run's freshly fetched remote overlay, filtered by include/exclude.
+  They must be text-input chat models with explicit catalog tool-call support;
+  baseline-only ids, non-chat models and absent/negative tool support are
+  excluded with reasons. `N` is the frozen selected count, not live qualification.
+- **Required contribution:** one of the 39 fixed slots (3 finder, map merge,
+  public topic, 24 repository, 9 online Flash, judge). The additional `3N`
+  free slots are best-effort; each still requires a recorded terminal outcome.
+- **Complete:** all required contributions and reconciliation are valid and
+  frozen inputs unchanged; failed free seats are named but do not invalidate
+  completion. Human questions may await phase 1a. Only complete v2 runs can
+  supply phase 1a or phase 2; incomplete runs require a new complete run.
+- **Public topic:** one Opus sentence of at most 20 words and an optional final
+  period. Each word contains Unicode letters joined only by single internal
+  hyphens or apostrophes; lower-to-upper transitions inside a hyphen segment
+  and digits, underscores, slashes, backticks, colons or other dots are refused.
+  A whole-token, case-insensitive deny list also covers the change name, bead
+  id and every tracked path component/file stem containing a hyphen,
+  underscore, dot or digit in the frozen state. Letters-only symbol names are
+  not denied as ordinary words. The exact-prompt leak check is a second layer.
+- **Same perspectives:** existing state/evidence, counter-evidence/gaps, and
+  effects on documented boundaries; every peer receives all three.
+- **Claim:** a report-local `C1`–`C7` with statement, kind (`fact`, `assumption`,
+  `judgement`), evidence and confidence/basis. The runner forms its global id
+  `<run>/<topic>/<seat>/<local>`; seat identifies endpoint and model.
+- **Evidence status and disposition:** the runner marks a claim `valid` or
+  `unsupported`; unsupported claims remain visible but are never evidence.
+  Every valid claim gets exactly one judge disposition, with `off-brief`
+  taking precedence, otherwise `supported`, `refuted` or `unresolved`.
+  `unique` is a separate mark only for supported claims absent from topic peers.
+- **Handoff item:** `H-<n>`, unique within a run, linked to global source claim
+  ids. Q-record headers link run-qualified items with `research_items:` and
+  global claims with `research_claims:` beside their existing answer fields.
+  Item links are `<run>/H-<n>`; criterion Q-record bases use
+  `decisions.md#Q-<id>` within the owning change. Global question ids use the
+  same run/topic/seat namespace with local Q ids.
+- **Frozen input state:** HEAD plus a digest and retained copy of every tracked
+  file and every untracked non-ignored file under this change folder. Local
+  references resolve against those bytes, including uncommitted inputs.
 
 ## Topic contract
 
@@ -92,140 +115,148 @@ one sentence why. It locates and lists, without choosing a design.
 | 10 Tools and standards online | Existing tools/services/libraries, maturity/version/release/licence, standards/formats, cost and local/remote execution; retrieved project sources with dates, no adoption recommendation. |
 | 11 Failures online | Incidents and causes, vulnerabilities/advisories, traps and mitigations; retrieved issue trackers/vendor advisories/CVE records/postmortems with dates, no assertion about our code. |
 
-All topic reports use: at most seven key claims (id, one-sentence statement,
-evidence, kind, confidence with basis); counter-evidence; not read; relation
-to neighbouring specs; questions for the spec classified `[DECISION]`, `[GAP]`
-or `[DETAIL]`. Online reports mark the neighbour relation not assessable from
-public-only input; they never receive neighbour identities to fill the field.
+All topic reports use: at most seven key claims (`C1`–`C7`, statement,
+evidence, kind, confidence/basis); counter-evidence; not read; relation to
+neighbouring specs; questions (`Q1` onward, unique per report, classification
+`[DECISION]`, `[GAP]` or `[DETAIL]`, and a nonempty `claims:` list of local
+claim ids). Duplicate local ids or references outside that report fail the
+template. Online reports mark neighbour relations not assessable and receive
+no neighbour identities. Topic 3 additionally requires
+`class_assessment: {class, claims}`; the class is one of the four declared
+classes and claims is a nonempty local-id list. Topic 6 claims require a
+boolean `volatile`; each true value requires
+`governance: central|runtime|dated`. A valid report needs at least one
+evidence-backed claim. Other unsupported claims remain with that status;
+a failed individual fetch alone does not reject the report.
 
 ## Acceptance criteria
 
 1. When Stage 2 exploration selects `feature` or `architectural`, phase 1 uses the research swarm.
    *Refuted by:* Either class produces only the single GLM exploration report.
-   *Basis:* Q-4.
+   *Basis:* `decisions.md#Q-4`.
 2. When Stage 2 exploration selects `bounded` or `spike`, phase 1 retains single GLM 5.3 Flash exploration.
    *Refuted by:* Either class starts a finder or swarm researcher.
-   *Basis:* Q-4.
+   *Basis:* `decisions.md#Q-4`.
 3. When exploration precedes the spec, the research header or explore-only `--class` argument supplies the class without requiring a spec or plan.
    *Refuted by:* Valid early input is refused because a later artifact is absent.
-   *Basis:* Q-4; early-class evidence in research.md.
-4. If class declarations are missing, invalid or disagree between argument, research and spec, Stage 2 exploration refuses before a model call.
-   *Refuted by:* A malformed YAML header, empty class or conflicting declaration is silently overridden.
-   *Basis:* Q-4; existing class contract.
-5. When a swarm starts its topic research, a merged finder map precedes every topic researcher.
-   *Refuted by:* A topic starts before the three finder outcomes and the Opus map are recorded.
-   *Basis:* Q-7, topic 0.
+   *Basis:* `decisions.md#Q-4`; early-class evidence in research.md.
+4. If class declarations or given-neighbour headers are invalid, Stage 2 exploration refuses before a model call with exit 2.
+   *Refuted by:* Malformed, missing or disagreeing classes pass, or a duplicate, escaping, non-spec or missing frozen neighbour path starts a call.
+   *Basis:* `decisions.md#Q-4`; existing class contract.
+5. When topic research starts, all three finders and the Opus map merge have valid recorded results.
+   *Refuted by:* Any topic starts after a failed finder or merge, or before the merged map exists.
+   *Basis:* `decisions.md#Q-7`, topic 0.
 6. When repository topics 1–8 run, each has independent DeepSeek Flash, MiMo Flash and Haiku 5.5 contributions.
    *Refuted by:* A topic is omitted, a model substituted, or one session supplies two seats.
-   *Basis:* Q-7.
-7. When reconciled research is published, it compares public practice, the documented overall architecture and neighbouring specs, naming unread evidence as gaps.
-   *Refuted by:* Code summaries replace a comparison, or an unread neighbour is called absent.
-   *Basis:* Q-3; Q-7, topics 4, 5 and 9.
+   *Basis:* `decisions.md#Q-7`.
+7. When reconciled research is published, it contains public-practice, documented-architecture and neighbouring-spec comparison sections with named gaps for unread evidence.
+   *Refuted by:* A comparison section or an unread-neighbour gap entry is absent; semantic comparison quality is also checked in phase 6.
+   *Basis:* `decisions.md#Q-3`; `decisions.md#Q-7`, topics 4, 5 and 9.
 8. While an online researcher runs, no repository-derived content except the accepted public topic reaches its model or web requests.
    *Refuted by:* A canary from rules, paths, identifiers, finder output, history or private reports appears in an outbound payload or query.
-   *Basis:* Q-3, Q-6, Q-8.
+   *Basis:* `decisions.md#Q-3`, `decisions.md#Q-6`, `decisions.md#Q-8`.
 9. While an online researcher runs, no available tool or automatic context route can obtain repository files, git data or other private local content.
    *Refuted by:* A file or shell tool is available, ambient context is discovered, or fetching reaches local files or private network addresses.
-   *Basis:* Q-3, Q-8.
-10. When public evidence supports a claim, it has a successful page-retrieval receipt containing URL, title, retrieval date and excerpt or locator.
-   *Refuted by:* A snippet, invented URL, search-only receipt or memory-only report counts as retrieved evidence.
-   *Basis:* Q-7, topics 9–11; existing F-3 correction.
+   *Basis:* `decisions.md#Q-3`, `decisions.md#Q-8`.
+10. When a public claim counts as evidence, a successful page receipt binds its URL, title, retrieval date and excerpt or locator.
+   *Refuted by:* Search-only, snippet or invented receipts support a claim, or a receiptless claim is not retained as unsupported; a report with no evidence-backed claim is accepted.
+   *Basis:* `decisions.md#Q-7`, topics 9–11; existing F-3 correction.
 11. If a role has no compatible static declaration or declared dynamic Go-free selection permission, the runner refuses that call.
    *Refuted by:* Online Qwen receives the framework packet or a model outside its declared role is launched.
-   *Basis:* Q-3, Q-8, Q-9, Q-10.
-12. If the exact-prompt leak check immediately before any model call is not clean, the run exits 2 and dispatches no further call.
-   *Refuted by:* One scan covers several prompts, or queued work starts after a BLOCK.
-   *Basis:* Q-7 concurrency answer; existing leak-check contract.
+   *Basis:* `decisions.md#Q-3`, `decisions.md#Q-8`, `decisions.md#Q-9`, `decisions.md#Q-10`.
+12. If any immediately preceding exact-prompt leak check is not clean, dispatch stops and the run exits 2 after cancelling queues and stopping and reaping active children.
+   *Refuted by:* One scan covers multiple prompts, a queued call starts after BLOCK, a running child is awaited instead of stopped, available partial output is lost instead of retained as cancelled, or exit 1 overrides exit 2.
+   *Basis:* `decisions.md#Q-7` concurrency answer; existing leak-check contract.
 13. When any model invocation is attempted, its durable record identifies run, input state, role, topic, endpoint, model, individual leak check and outcome.
    *Refuted by:* Concurrent output cannot be assigned to a slot, or a failed slot is audited as successful.
-   *Basis:* Q-7 concurrency answer; existing audit contract.
+   *Basis:* `decisions.md#Q-7` concurrency answer; existing audit contract.
 14. When the research is reconciled, one fresh Opus 5.5 context covers topics 1–11 and the finder map.
    *Refuted by:* Another model judges, a peer session is resumed, or a required topic disappears.
-   *Basis:* Q-5, Q-7.
-15. When cited evidence leaves a disagreement unresolved, the reconciliation preserves the opposing claims and evidence as unresolved.
-   *Refuted by:* A majority erases a sourced objection or the judge writes a maintainer answer.
-   *Basis:* Q-5, Q-7 report and interview addenda.
-16. When local claims are published, their path and symbol or section references resolve against the recorded frozen input state.
-   *Refuted by:* Only line numbers, nonexistent symbols, a different source state or missing original reports support a claim.
-   *Basis:* Q-7 report template; existing source contract.
+   *Basis:* `decisions.md#Q-5`, `decisions.md#Q-7`.
+15. When sourced disagreement remains unresolved, reconciliation retains its opposing global claim ids and evidence without an answer field.
+   *Refuted by:* An unresolved disagreement loses an opposing claim id or evidence, or judge output contains a maintainer answer field; phase 6 also checks faithful treatment of dissent.
+   *Basis:* `decisions.md#Q-5`, `decisions.md#Q-7` report and interview addenda.
+16. When local claims count as evidence, their path and symbol or section resolve against the retained frozen input state.
+   *Refuted by:* Unresolvable or line-only references are supported instead of retained as unsupported, the retained bytes/reports are absent, or a changed frozen file still permits complete publication.
+   *Basis:* `decisions.md#Q-7` report template; existing source contract.
 17. While the swarm explores, only the runner appends research and pre-existing repository content outside that artifact remains unchanged.
    *Refuted by:* A participant edits a file, rewrites an answer, replaces earlier research or changes git or tracker state.
-   *Basis:* Q-7 finder and topic boundaries; existing writer contract.
-18. If a required call, retrieval or structured result fails, the run preserves partial evidence and names every missing slot in an incomplete result with nonzero exit.
-   *Refuted by:* Timeout receipts are discarded, a URL-free online report succeeds, or malformed output yields a complete run.
-   *Basis:* Q-7; existing failure contract.
-19. When a swarm executes, it respects its recorded finite budget of `39 + 3N` model invocations and deadlines without retries or extra debate.
-   *Refuted by:* An extra role, recursive delegation, retry or invocation after the total deadline occurs.
-   *Basis:* Q-7 concurrency answer; Q-10; finite-budget detail below.
+   *Basis:* `decisions.md#Q-7` finder and topic boundaries; existing writer contract.
+18. If a required contribution fails, the run retains partial evidence and all missing-slot outcomes and ends incomplete with exit 1 unless a security refusal requires exit 2.
+   *Refuted by:* A failed preparatory stage dispatches a later stage, missing required topic reports still reach the judge, a report with zero evidence-backed claims passes, or a failed free seat alone makes the run incomplete.
+   *Basis:* `decisions.md#Q-7`; existing failure contract.
+19. When a swarm executes, its maximum 39 + 3N invocations follow the finite deadlines, required-first dispatch and reserved 15-minute judge allowance without retries or debate.
+   *Refuted by:* An extra invocation or retry occurs, a free slot starts ahead of queued required slots, topic work consumes the judge reserve, or unlaunched slots lack not-started-deadline outcomes.
+   *Basis:* `decisions.md#Q-7` concurrency answer; `decisions.md#Q-10`; finite-budget detail below.
 20. When exploration explicitly uses `--stage2-off [REASON]`, it keeps single Haiku 5.5 exploration and records route, model and reason for the plan.
    *Refuted by:* It runs a swarm, reads a foreign key, names Haiku 4.5 or loses the reason.
-   *Basis:* Q-4; neighbouring haiku-5-5 spec, criterion 1.
+   *Basis:* `decisions.md#Q-4`; neighbouring haiku-5-5 spec, criterion 1.
 21. When outputs contain a used credential, durable records and diagnostics redact the whole credential and every fragment of eight or more characters.
    *Refuted by:* A planted fragment survives in an answer, receipt, concurrent log or error.
    *Basis:* Existing credential contract.
 22. When delivered, phase-1 doctrine, endpoint roles and exactly one new research-swarm ADR describe the same amended workflow.
    *Refuted by:* Six-topic or Zen-free-through-Pi instructions remain operative, the review ladder changes, or an accepted ADR is edited.
-   *Basis:* Q-7, Q-8, Q-9, Q-10.
-23. Before any online research call, a fresh Opus 5.5 call supplies a recorded public topic that passes the single-sentence, at-most-20-word, no-file-or-code-name filter and leak check.
-   *Refuted by:* An absent, rejected, hyphenated-identifier-bearing or privately augmented topic reaches an online model.
-   *Basis:* Q-6, retained by Q-8.
-24. When finder step 0 runs, DeepSeek Flash, MiMo Flash and Haiku 5.5 independently locate the four agreed source categories for Opus 5.5 to merge.
-   *Refuted by:* A finder judges the design, only one searches, or files/functions, rules/ADRs, tests/gates or neighbouring specs are missing without an unread marker.
-   *Basis:* Q-7, topic 0, option A.
-25. When a researcher receives a topic, its questions and permitted evidence scope match the Topic contract above.
-   *Refuted by:* Code/reuse proposes new code, an online report judges local applicability, or a neighbour report inspects unrelated implementation.
-   *Basis:* Q-7 topic walk-through.
-26. When models work the same topic, they receive identical task briefs, evidence packets, perspectives and report templates in fresh contexts without peer reports.
-   *Refuted by:* One model receives a critique-only angle, a different initial map or a peer answer.
-   *Basis:* Q-7 same-perspectives addendum.
-27. When a topic report is accepted, it uses the fixed template with at most seven identified key claims and all required evidence and uncertainty fields.
-   *Refuted by:* An eighth claim, duplicate id, missing confidence basis, omitted unread section or untyped question is accepted.
-   *Basis:* Q-7 template acceptance.
-28. When Opus reconciles topic reports, research retains per-topic, per-model supported, refuted, unique and off-brief scores traceable to claim ids.
-   *Refuted by:* Scores have no claim basis, omit a model, or turn agreement into proof without source evaluation.
-   *Basis:* Q-7 scoring acceptance.
-29. When finder or topic 5 proposes neighbours, research distinguishes header-given neighbours, suggestions, confirmations and rejected suggestions with reasons.
-   *Refuted by:* A finder suggestion silently becomes authoritative or a header-given neighbour is dropped.
-   *Basis:* Q-7 finder and topic 5.
-30. When phase 2 writes a spec from a completed swarm, its `neighbours:` header preserves the confirmed research neighbours as repository-relative spec paths.
-   *Refuted by:* A confirmed neighbour disappears, a path escapes the repository, duplicates remain or a suggestion is silently promoted.
-   *Basis:* Q-7 neighbours addendum.
-31. When a completed swarm hands off to the interview, every research `[DECISION]` and every unresolved model disagreement has an identified interview item with its source claim ids.
-   *Refuted by:* A class disagreement or neighbour contradiction is omitted, or a question loses its originating claims.
-   *Basis:* Q-7 interview and template addenda; topics 3 and 5.
-32. When verification checks a swarm handoff, each required interview item has a linked, answered maintainer record before the spec can pass.
-   *Refuted by:* Class minimums alone pass while a research decision is lost, an open or agent-written answer is accepted, or an agent waives a required question.
-   *Basis:* Q-7 lost-decision gate acceptance.
-33. If a handoff or its decision links cannot be read or have ambiguous identities, the handoff gate reports not measured with exit 3.
-   *Refuted by:* A malformed inventory, duplicate claim id, missing linked file or ambiguous answer silently passes.
-   *Basis:* Q-7 lost-decision gate; repository unmeasured convention.
-34. When phase 2 defines acceptance criteria from swarm research, each criterion names the supporting claims or answered interview records.
-   *Refuted by:* A criterion lacks an origin, refers to a missing claim or depends on an unanswered research decision.
-   *Basis:* Q-7 traceability acceptance.
-35. When topic 6 finds a stale fact that changes repeatedly, it proposes central declaration, runtime lookup or dated evidence with an age warning, for a maintainer decision.
-   *Refuted by:* A model id is silently replaced, a changing fact is treated as timeless, or a repository-wide policy is implemented without a human answer.
-   *Basis:* Q-7, topic 6 addendum.
-36. While a stage executes concurrently, at most four invocations per provider are in flight and new dispatch stops on a security refusal.
-   *Refuted by:* A fifth OpenCode Go call starts across role groups, or queued work starts after a leak/declaration refusal.
-   *Basis:* Q-7 concurrency option A.
+   *Basis:* `decisions.md#Q-7`, `decisions.md#Q-8`, `decisions.md#Q-9`, `decisions.md#Q-10`.
+23. Before any online call, fresh Opus supplies a recorded public topic passing the defined word and name filters and exact-prompt leak check.
+   *Refuted by:* An absent, rejected or privately augmented topic reaches an online seat, research-swarm or a bead id passes, or the Q-6 example Container-Isolation für KI-Agenten-Läufe is rejected by the character filter; filter rejection must end pre-topic dispatch with exit 1.
+   *Basis:* `decisions.md#Q-6`, retained by `decisions.md#Q-8`.
+24. When finder step 0 runs, the repository trio independently receives the same private change brief and four-list locator template for Opus to merge.
+   *Refuted by:* Only one finder runs, an output has fields beyond the four locator lists, or an empty category lacks an unread marker; prose design judgements are off-brief and reviewed in phase 6.
+   *Basis:* `decisions.md#Q-7`, topic 0, option A.
+25. When a researcher receives a topic, its packet matches the checked-in questions and permitted evidence scope of the Topic contract.
+   *Refuted by:* A packet differs from its topic prompt; report prose that proposes new code or local applicability outside that scope is scored off-brief and checked in phase 6.
+   *Basis:* `decisions.md#Q-7` topic walk-through.
+26. When models work the same topic, their fresh contexts contain identical task briefs, evidence packets, embedded instructions, perspectives and templates without peer reports or automatic instruction loading.
+   *Refuted by:* One model receives a different map, instruction file, angle or peer report, or its runtime auto-loads instructions.
+   *Basis:* `decisions.md#Q-7` same-perspectives addendum.
+27. When a topic report is accepted, its fixed template and report-local identities satisfy every required field and topic-specific field.
+   *Refuted by:* An eighth claim, duplicate local claim/question id, invalid question claim link, missing confidence basis or unread section, absent topic-3 class assessment, or ungoverned volatile topic-6 claim is accepted.
+   *Basis:* `decisions.md#Q-7` template acceptance.
+28. When Opus reconciles reports, per-topic per-model claim lists and counts distinguish supported, refuted, unique, off-brief, unresolved and unsupported claims.
+   *Refuted by:* A valid claim has two dispositions, a unique claim is not supported, an unsupported claim is supported, a score lacks claim ids, or a failed seat has no named outcome.
+   *Basis:* `decisions.md#Q-7` scoring acceptance.
+29. When neighbour relevance is reconciled, research preserves given paths and distinguishes suggestions, confirmations and rejected suggestions with reasons.
+   *Refuted by:* A suggestion becomes authoritative silently, a given neighbour disappears, or a proposed removal of a given neighbour has no human handoff item.
+   *Basis:* `decisions.md#Q-7` finder and topic 5.
+30. When a spec uses complete v2 research, the handoff gate requires its neighbours header to retain confirmed and given neighbours unless a linked maintainer answer drops a given neighbour.
+   *Refuted by:* A confirmed/given path disappears without the permitted answer, a path escapes, duplicates remain or an unconfirmed suggestion enters the header.
+   *Basis:* `decisions.md#Q-7` neighbours addendum.
+31. When a complete v2 run hands off, every accepted raw-report DECISION question, unresolved judge disagreement, class mismatch and neighbour contradiction or given-neighbour removal has a claim-linked inventory item.
+   *Refuted by:* A refuted/off-brief report decision is omitted, a differing class lacks an automatically derived item, or grouping duplicates loses a source question or claim id.
+   *Basis:* `decisions.md#Q-7` interview and template addenda; topics 3 and 5.
+32. When spec.md exists, the handoff gate requires coverage and linked answered maintainer records for every obligation of every complete v2 run in that change.
+   *Refuted by:* Class minimums hide a lost item, a later run erases an earlier obligation, an open/agent answer passes, no complete run exists despite v2 runs, or pending items turn a pre-spec change red.
+   *Basis:* `decisions.md#Q-7` lost-decision gate acceptance.
+33. If v2 evidence or its links are unreadable or identities ambiguous, the handoff gate reports not measured with exit 3.
+   *Refuted by:* Malformed manifests/inventories, duplicate global ids or report-local ids, missing linked files or ambiguous answers silently pass.
+   *Basis:* `decisions.md#Q-7` lost-decision gate; repository unmeasured convention.
+34. When a spec has complete v2 research, the handoff gate requires each criterion Basis to resolve to a global claim from a complete run or a maintainer-answered Q-record in that change.
+   *Refuted by:* A criterion lacks an origin, names a missing or incomplete-run claim, or relies on an unanswered record; semantic relevance of a resolved basis is checked in phase 6.
+   *Basis:* `decisions.md#Q-7` traceability acceptance.
+35. When topic 6 marks a claim volatile, the accepted report carries its central, runtime or dated governance proposal for a maintainer decision.
+   *Refuted by:* A volatile claim without governance passes validation or a proposal is implemented without a human answer; phase 6 also checks whether changing facts were correctly marked volatile.
+   *Basis:* `decisions.md#Q-7`, topic 6 addendum.
+36. While stages execute, provider-wide queues enforce four in-flight invocations and cancel and stop children on any security refusal.
+   *Refuted by:* A fifth Go call starts across roles, queued work survives a leak/declaration refusal, available cancelled output is discarded, or exit 1 overrides security exit 2.
+   *Basis:* `decisions.md#Q-7` concurrency option A.
 37. When online topics 9–11 run, each has independent DeepSeek Flash, MiMo Flash and Qwen 3.8 Flash contributions through Pi on the same public-only brief.
    *Refuted by:* A free model, OpenCode CLI, Haiku or omitted vendor replaces one of the nine mandatory Flash contributions; added free seats cannot replace them.
-   *Basis:* Q-8, Q-9.
-38. Before any swarm model call, the runner obtains a successful live Pi catalog refresh for provider `opencode-go` and records the resulting selection with its source and UTC retrieval time.
-   *Refuted by:* A shipped or cached list substitutes for a fresh refresh, another provider supplies a seat, or the selection has no dated source.
-   *Basis:* Q-10.
-39. When a refreshed catalog and the declared include/exclude lists select `N` Go free models, each selected model independently works each of topics 9–11 on the same brief as the fixed Flash trio.
-   *Refuted by:* A selected model misses a topic, receives a different brief, or a non-selected model is dispatched.
-   *Basis:* Q-7 same-perspectives addendum; Q-10.
+   *Basis:* `decisions.md#Q-8`, `decisions.md#Q-9`.
+38. Before any swarm model call, a successful live pinned-Pi Go catalog refresh records its freshly fetched overlay, source, UTC time and selection.
+   *Refuted by:* A cached/shipped list substitutes for refresh, a baseline-only free id is dispatched, another provider supplies a seat, or selection lacks dated provenance.
+   *Basis:* `decisions.md#Q-10`.
+39. When N Go free models are selected, each has an independent best-effort slot on topics 9–11 with the fixed Flash brief and a recorded terminal outcome.
+   *Refuted by:* A selected seat is silently omitted or failed as successful, a non-selected or no-tool-support model runs, peer briefs differ, or a missing explicit include starts any model instead of preflight exit 1.
+   *Basis:* `decisions.md#Q-7` same-perspectives addendum; `decisions.md#Q-10`.
 40. While selected Go free models participate, they receive only the public-only role permissions and cannot fill a finder, repository, author, merge or judge seat.
    *Refuted by:* A free seat inherits the Go endpoint's framework permission or receives a private packet, map or report.
-   *Basis:* Q-3; Q-10.
+   *Basis:* `decisions.md#Q-3`; `decisions.md#Q-10`.
 41. If the live catalog cannot be measured reliably, the runner preserves the diagnostics and exits nonzero before any swarm model call instead of substituting a fixed roster or another provider.
    *Refuted by:* A timeout, stale-only result, malformed or ambiguous catalog is treated as a valid zero-model selection or starts a Flash-only fallback.
-   *Basis:* Q-10; existing failure contract.
+   *Basis:* `decisions.md#Q-10`; existing failure contract.
 42. When a valid catalog has no eligible free models after the declared filters, the run records that measured empty selection and keeps all 39 fixed model slots.
    *Refuted by:* A measured empty selection fails solely because it is empty, silently revives a previous free roster or omits a fixed Flash slot.
-   *Basis:* Q-10's runtime availability rule; reversible zero-selection detail below.
+   *Basis:* `decisions.md#Q-10`'s runtime availability rule; reversible zero-selection detail below.
 
 ## Non-goals
 
@@ -260,6 +291,8 @@ public-only input; they never receive neighbour identities to fill the field.
   outbound payloads, tool schemas and failure probes passes before merge;
   stand-ins alone do not qualify isolation. Open phase-6 finding F-1 remains
   open until this evidence exists; the maintainer attends that separate step.
+- Phase-6 review records semantic comparison quality, faithful dissent and
+  answer/basis relevance, finder/topic scope, and volatile-fact classification.
 - After merge, a public-only live qualification records catalog refresh,
   actual Flash/free model and web outcomes; until success no complete live
   swarm is claimed. This draft calls no external model and does not claim
@@ -269,63 +302,81 @@ public-only input; they never receive neighbour identities to fill the field.
 
 ## Open decisions
 
-None open. The maintainer's Q-7–Q-10 explicitly amend the earlier topic/model
-criteria; this redraft does not change them to pass a gate. I choose and
-record the following reversible details with their reasons.
+None open. The recorded phase-2a rulings in decisions.md (S-1–S-20,
+2026-10-16) settle the review ambiguities within Q-1–Q-10. I carry those
+visible agent details into this spec; no maintainer answer is supplied here.
 
-- [DETAIL] Keep `architectural`, the existing 12-hour phase-4 appetite and ADR
-  claim; the new finder and handoff boundary strengthen the same subsystem.
-  Earlier implementation time counts; a redraft does not reset that stop.
-- [DETAIL] Keep prior phase-4 time evidence in the plan's historical section
-  and leave its new `Time used` section empty until amended implementation
-  starts. This preserves the spent appetite without claiming new execution.
-- [DETAIL] Separate runner tests with explicit injected Pi launchers from
-  actual pinned-runtime qualification. A test-double failure is neither an
-  isolation result nor grounds to relax the pin or acceptance criteria.
-- [DETAIL] A successful catalog preflight precedes the stages: finder trio,
-  Opus map merge, Opus topic sentence, topic research, Opus reconciliation.
-  Repository and online topics may share the topic stage because neither consumes the other's reports; the judge alone
-  combines them. Same-topic peers see identical frozen inputs and no answers.
-- [DETAIL] Each run has 39 fixed invocations (3 finder, 1 map merge, 1 public
-  topic, 24 repository, 9 Flash online, 1 judge) plus 3 per selected free model:
-  `39 + 3N` (Q-7–Q-10, 2026-10-16). Freeze the catalog and roster once, so
-  additions/removals during a run affect only the next run. No silent truncation
-  makes a large roster fit: unfinished slots remain explicit and incomplete.
-  Provider queues cap OpenCode Go and Claude separately at four, including
-  all Flash/free roles on Go.
-  Deadlines remain 5 minutes for topic author, 10 for finder/researcher/map
-  merge, 15 for judge and 150 total, monotonically measured, no retries.
-- [DETAIL] The report template and identical perspectives above implement
-  the comparison baseline the maintainer requested, without model ranking.
-  Finder output uses the four locator lists instead of the seven-claim cap.
-- [DETAIL] Use `neighbours:` as a unique YAML list of worktree-relative spec
-  paths; missing means no given neighbours, an unread/invalid path is a gap
-  that prevents a complete comparison. Suggestions remain separate until
-  topic 5 and the judge confirm them with evidence; no human choice is
-  inferred. The two header entries here were read locally for this redraft.
-- [DETAIL] Version new run manifests as `research-swarm/v2`. Retain all raw
-  claims and a distinct handoff inventory; the gate checks every such run
-  in live and archived change folders, leaving pre-schema evidence intact.
-  A required item links to an answered maintainer Q-record via claim/item
-  ids; an explicit human rejection can be that answer, an agent waiver cannot.
-- [DETAIL] Review checks the fidelity of a question/answer and criterion
-  rationale; the gate checks identities, coverage and answered status only.
-  Minimum counts stay minima: all derived obligations may need more questions.
-- [DETAIL] Online contexts retain scratch isolation and only public-web tools
-  even though their Go endpoint also permits framework roles; permission is
-  selected per role and never inferred from billing or discovery.
-
-- [DETAIL] Include/exclude are unique lists of exact model ids: empty include
-  selects every eligible Go `-free` chat model, nonempty include narrows that
-  set, and exclude wins. Defaults are both empty, preserving Q-10's all-model
-  intent without maintaining a roster. No list can admit Zen, a non-free id
-  or a private role. Malformed policy exits 2; an explicitly included id
-  missing from the fresh catalog makes selection incomplete (exit 1), rather
-  than silently shrinking a requested run. A valid empty result is measured
-  zero availability, not a refresh failure, and runs the fixed 39 slots.
-- [DETAIL] Catalog preflight has a 60-second allowance within the 150-minute
-  run and no runner retry; it sends provider/catalog metadata, no private
-  brief or model prompt. Its audit is separate from per-model leak checks.
-  Catalog-source failure exits 1 before models; permission refusal exits 2.
-  Selection failures never fall back to Zen, the shipped catalog or CLI.
-  This bounds metadata work without extending the existing run allowance.
+- [DETAIL] Criterion bases name the existing Q-records as
+  `decisions.md#Q-<id>` so the recorded origin is explicit; this
+  changes reference spelling only, not the criterion or its authority.
+- [DETAIL] Keep the architectural class, ADR 0020 and 12-hour phase-4 stop;
+  earlier implementation counts and its unmeasured span is not reset.
+- [DETAIL] Preflight validates class and given neighbours, then measures the
+  catalog before model dispatch. Invalid neighbour entries (not unique
+  repository-relative existing frozen `spec.md` paths) exit 2. Include/exclude
+  are unique exact-id lists: empty include selects all eligible ids, exclude
+  wins; malformed policy exits 2. Any explicit include missing from the fresh
+  eligible set exits 1 before models, even if also excluded. Valid `N=0`
+  retains 39 fixed slots. No Zen, baseline fallback or silent truncation.
+- [DETAIL] The private change brief is frozen research.md header/body plus
+  decisions.md and spec.md when present; the bead is id-only and its tracker
+  text is not read. Finders and public-topic author get that same brief.
+  Repository seats embed the same AGENTS.md. All runtimes disable automatic
+  instruction discovery. This fixes the common input without tracker access.
+- [DETAIL] Stages are catalog → finder trio → Opus map merge → Opus public
+  topic → topics → Opus judge. Any failed finder, merge or topic-author result,
+  including topic-filter rejection, prevents later stages and exits 1.
+  Required topic failures allow remaining topic siblings to finish but prevent
+  the judge; failed free slots are named and do not block it. A security
+  refusal always cancels queues, stops/reaps children, keeps available partial
+  output as cancelled and exits 2 in preference to exit 1.
+- [DETAIL] The budget is at most `39 + 3N` calls. Provider queues share four
+  permits per provider across roles. Deadlines: catalog 60 seconds, topic
+  author 5 minutes, finder/researcher/merge 10, judge 15, run 150 total,
+  monotonically measured with no retries. Required slots precede free seats:
+  repository topics 1–8 then online Flash 9–11, by topic then declared seat
+  order; free seats follow by topic then sorted id. The judge's 15 minutes
+  are reserved. A topic launches only with positive pre-reserve time left;
+  its allowance is the lesser of role limit and that remainder. Unlaunched
+  slots are not-started-deadline, incomplete only when required. No silent
+  roster truncation; large free rosters can leave named missing seats.
+- [DETAIL] Local references resolve against retained frozen bytes. Before
+  publication compare HEAD and the full digest; ignore only the runner's own
+  research appends and updated restamp. Other changes name paths and yield
+  incomplete exit 1 with outputs retained. This covers uncommitted inputs.
+- [DETAIL] Template breaches reject a report. Bad citations mark individual
+  claims unsupported; one evidence-backed claim is the report floor. An
+  online report thus needs one successful page retrieval, not success for
+  every attempted fetch. Partial receipts and unsupported claims remain.
+- [DETAIL] The runner assigns global claim/question ids using run, topic,
+  endpoint-qualified model seat and local id. Handoff items H-<n> link the
+  full global source ids. Q-record headers carry research_items and
+  research_claims lists. Duplicate decisions may share one item, preserving
+  every source question/claim, including decisions scored off-brief/refuted.
+  Class mismatches derive obligations independently of the judge; neighbour
+  contradictions and proposed removal of given neighbours also do so.
+- [DETAIL] Version manifests research-swarm/v2. Complete runs alone supply
+  phase 1a/2; incomplete runs require a new complete run and their claims
+  cannot support criteria. Every complete run keeps its obligations across
+  later runs and archival; one answered Q-record may link several runs.
+  Before spec.md exists, valid pending obligations are listed with exit 0.
+  Once it exists, missing answers or no complete v2 run exit 1. Malformed or
+  unreadable evidence exits 3 even before a spec. Legacy changes without v2
+  runs are a reported exemption, including this redraft.
+- [DETAIL] The gate derives coverage from accepted raw-report questions,
+  class/neighbor fields and unresolved judge disagreements, not the judge's
+  inventory alone. Once a spec exists it also resolves every criterion's
+  Basis and enforces neighbour parity, allowing only linked human decisions
+  to drop given neighbours. Review checks faithful questions/answers,
+  basis relevance, comparison quality and off-brief prose; structure checks
+  never claim to judge those meanings.
+- [DETAIL] Repository online roles keep scratch isolation and public tools
+  independent of Go's private-role permission. Wrapper stand-ins test runner
+  orchestration; real pinned-Pi offline capture still owes isolation evidence.
+  Historical phase-4 time stays in the plan, with Time used empty until the
+  amended implementation starts.
+- [DETAIL] Criteria 23 and 38 open with «Before any …»: each states a
+  precondition on dispatch order, a shape the When/While/If opening marks
+  elsewhere; the wording stands as reviewed in phase 2a instead of being
+  reworded after the rulings, and each refutation keeps the sentence
+  checkable.

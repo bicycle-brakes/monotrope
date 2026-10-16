@@ -76,14 +76,24 @@ checkable.
    reports. Each uses DeepSeek Flash, MiMo Flash and Qwen 3.8 Flash through Pi
    with only the filtered Opus sentence, fixed questions and public sources.
    In addition, every eligible Go chat model ending `-free`, selected from a
-   live-refreshed Pi catalog with declared include/exclude lists, works each
+   live-fetched Pi Go overlay with declared include/exclude lists, works each
    online topic on the same brief. No Zen provider, OpenCode CLI, fixed free
    roster or substitution for the mandatory Flash trio. Dynamic free
-   permission applies to public-only research, never private roles.
+   permission applies to public-only research, never private roles. Select only
+   text-input chat entries with explicit catalog tool-call support; record
+   absent/negative support, non-chat and baseline-only exclusions. These free
+   seats are best-effort: failure is named, never hidden or substituted, and
+   does not alone invalidate the 39 required fixed contributions.
 5. Reports hold at most seven identified claims with evidence, kind,
    confidence/basis, counter-evidence, unread sources, neighbour relation
-   and typed questions. Opus reconciles all topics and records per-model
-   supported/refuted/unique/off-brief scores grounded in claim ids. Every
+   and typed questions with report-local ids and claim links. The runner
+   namespaces identities by run/topic/endpoint-model seat. Topic 3 carries a
+   class assessment; topic 6 marks volatile facts and their central/runtime/
+   dated governance proposal. Opus reconciles all topics and records per-model
+   supported/refuted/unique/off-brief scores grounded in claim ids, plus
+   unresolved and unsupported. Valid claims have one disposition, off-brief
+   first; unique is an extra mark only for supported claims. Bad references
+   remain unsupported; a report needs at least one evidence-backed claim. Every
    model starts with the same perspectives; differing angles need a later
    maintainer decision.
 6. Independent topic reports stay buffered until their stage ends. Each role
@@ -91,38 +101,62 @@ checkable.
    Online Pi has scratch-only discovery-disabled context and public tools
    that refuse private/local sources and retain successful retrieval receipts.
    The accepted repository-Pi read risk is not called public-context isolation.
-7. Research carries all decisions and unresolved disagreements into an
-   interview inventory with claim links. Class mismatches and neighbour
+7. Research carries every accepted raw-report decision (even refuted or
+   off-brief) and unresolved judge disagreement into an interview inventory
+   with global claim/question links, grouping duplicates without source loss.
+   Class mismatches and neighbour
    contradictions are human decisions. Phase 1a may exceed class minima;
    only actual maintainer answers settle obligations. Phase 2 carries confirmed
-   neighbours in `neighbours:` and names claims/answers behind criteria.
+   and given neighbours in `neighbours:` and names claims/answers behind
+   criteria. Only a linked maintainer answer can drop a given neighbour;
+   proposed removal creates an obligation. Runtime instruction auto-loading
+   is disabled; finders/topic author share the frozen research/decisions/spec
+   brief and repository seats receive identical embedded AGENTS.md.
 8. A blocking `research-handoff` gate checks v2 inventory coverage, answered
    human links, neighbours and criterion bases in live/archive changes.
+   Only complete runs support interview/spec and carry obligations; prior
+   complete runs remain binding across reruns. Before a spec exists, valid
+   pending items are listed with exit 0; with a spec, missing answers or no
+   complete v2 run exit 1. Incomplete-run claims cannot support criteria.
    Older unstructured evidence is exempt; unread/ambiguous inputs are not
    success. The gate and tests travel with the kit. Review still checks
    semantic fidelity and source applicability.
 9. Queues permit at most four calls per provider across roles, and a security
-   refusal stops further dispatch with exit 2. Freeze `N` selected Go free
-   models before model calls; the graph has `39 + 3N` invocations. A bounded
+   refusal cancels queued work and stops/reaps active children, retaining
+   available partial evidence as cancelled; exit 2 takes precedence. Freeze `N`
+   selected Go free
+   models before model calls; the budget is at most `39 + 3N` invocations. A
+   bounded
    Go-only catalog refresh must succeed each run; failures never fall back to
    cached/shipped rosters or Zen, while valid zero availability keeps the
    fixed 39 slots. Defaults select all eligible models; explicit include
    narrows and exclude wins. Record dated source, freshness, policy and roster;
-   no silent truncation of models/reports to fit the deadline or judge context.
+   missing explicit includes exit 1 before models; no silent truncation of
+   models/reports to fit the deadline or judge context.
    Finite per-role and 150-minute total deadlines include catalog preflight;
-   no retry, recursive delegation or debate. Failed/incomplete runs retain evidence
+   no retry, recursive delegation or debate. Required topic slots precede free
+   slots, by topic and declared seat order (free ids sorted); reserve the
+   judge's 15 minutes. Every unlaunched slot has a deadline outcome. Failed
+   finder/merge/topic-author stages prevent later stages; filter rejection
+   exits 1. Topic siblings finish after ordinary failures, but the judge
+   requires all required reports. Failed/incomplete runs retain evidence
    and exit nonzero; only the runner appends research and writes audit records.
 10. Endpoint role lists are separate from the review ladder. Qwen is declared
     for research without changing that ladder. Every output is scrubbed of
-    used credentials; frozen-state changes invalidate complete publication.
+    used credentials; HEAD plus retained copies/digest of all tracked files
+    and untracked non-ignored change-folder inputs bind local evidence.
+    Changed inputs invalidate publication with named paths and exit 1; only
+    runner research appends/restamping are ignored. Invalid given neighbours
+    refuse preflight (exit 2); later unread evidence stays a named gap.
 
 ## Consequences
 
 * More calls and subscription/Claude quota buy independently comparable
   evidence; concurrency reduces waiting but no duration/cost saving is measured.
 * Finder, live catalog qualification, queue cancellation, templates, gate
-  and kit integration add maintenance; large free rosters may hit the unchanged
-  deadline and yield incomplete evidence rather than a silently reduced run.
+  and kit integration add maintenance. Large free rosters may leave named
+  best-effort slots unfinished at the deadline; that alone does not invalidate
+  completion. Missing required slots still do. No seat silently disappears.
 * Questions may exceed minimum counts; the gate cannot invent answers or
   establish that a recorded answer faithfully reflects a human conversation.
 * Same-brief scoring is evidence for later evaluation, not automatic model
@@ -141,6 +175,8 @@ checkable.
 * Handoff mutations delete decisions/answers/bases/neighbours, including class
   mismatches and neighbour contradictions; local and hosted checks must fail.
 * `make verify`, generated CI and kit probe hold the same blocking contract.
+* Phase-6 review checks prose scope, comparison meaning, faithful dissent,
+  volatile-fact classification and the relevance of resolved criterion bases.
 * Before merge, the maintainer attends an offline real-pinned-Pi capture with
   synthetic canaries and a local mock model server; record version, source
   hashes, payload/tool-schema capture, attempted escapes and outcomes.

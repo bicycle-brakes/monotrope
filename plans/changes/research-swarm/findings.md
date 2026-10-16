@@ -1014,23 +1014,385 @@ Stage-2 call, 2026-10-16: spec-review · endpoint claude-code-plan · model clau
 
 | ID | Severity | Dimension | Origin | Where | Finding | Reviewer | Status | Broke a test |
 |---|---|---|---|---|---|---|---|---|
-| S-1 | MAJOR | SPEC | base | `spec.md`, Terms «Complete» and «Selected Go free models»; criteria 18, 37, 39; [DETAIL] `39 + 3N` | [AMBIGUITY] It is unclear whether a selected Go free seat is a required contribution. Reading A: criterion 39, «every required contribution» and «unfinished slots remain explicit and incomplete» make all 3N free slots required. Then one free model that times out, is refused or returns no receipt makes the whole run incomplete with a nonzero exit, and the «completed swarm» of criteria 30–31 never happens. The free roster changes constantly, so many runs could end like this. Reading B: criterion 37 calls only the nine Flash contributions «mandatory», and the Terms say «catalog presence is eligibility, not proof a model call will succeed». Then free slots are best-effort, a failure is recorded, and the run can still be complete. The same run gets opposite exit codes under the two readings. | Opus | open | — |
-| S-2 | MAJOR | SPEC | base | `spec.md`, Terms «Selected Go free models»; criteria 38, 41; `research.md`, 2026-10-16 «A listing is not proof of a live refresh» | [AMBIGUITY] It is unclear which ids a successful refresh makes eligible. `research.md` records that pinned Pi merges the shipped baseline with the fetched remote overlay. Reading A: every `-free` id in the merged catalog is eligible. A baseline id that the fetched shard no longer lists is still selected and dispatched. Reading B: only ids in this run's fetched overlay are eligible, and baseline-only ids are dropped. Criterion 38 refutes a «shipped … list» used instead of a refresh. It does not say whether shipped entries inside a refreshed catalog count. So a test with a baseline-only `x-free` id has no defined expected selection. | Opus | open | — |
-| S-3 | MINOR | SPEC | base | `spec.md`, Terms «Selected Go free models»; criterion 10 | Missing: «chat ids» names no catalog property that separates chat from non-chat models. Nothing says whether an eligible model must support the tool calls that produce retrieval receipts. The implementer has to invent the eligibility test. A `-free` id without tool support would be selected and could only produce a report without receipts. | Opus | open | — |
-| S-4 | MAJOR | SPEC | base | `spec.md`, Terms «Public topic»; criterion 23; `decisions.md` Q-6 | [AMBIGUITY] The topic filter can be read two ways in two places. (1) «Words contain letters and apostrophes only» refuses every hyphen. That rejects ordinary compounds such as «multi-agent» and the maintainer's own Q-6 example «Container-Isolation für KI-Agenten-Läufe». The next sentence's «including hyphenated identifiers» reads as refusing only identifiers like `research-swarm`. The spec also does not say whether non-ASCII letters (für, Läufe) count as letters. (2) Refusing «code, change and bead names» can mean the character rule alone, so a letters-only symbol or change name such as `explore` passes. It can also mean matching against names from the frozen repository, which refuses ordinary words that are also symbol names and needs a name source the spec does not give. The same Opus sentence passes under one reading and is refused under the other. | Opus | open | — |
-| S-5 | MAJOR | SPEC | base | `spec.md`, criteria 5, 12, 18, 23, 36; [DETAIL] stage order | Missing: what the run does after a required slot fails in a stage that later stages depend on. There are no retries. A failed finder, a failed or timed-out map merge, or a topic sentence the filter rejects leaves later stages without input. The spec does not say whether the runner stops there or continues the stages that do not depend on the failure (for example topics 1–8 without the online topics). It also does not say whether a rejected topic counts as a «security refusal» or a failed structured result. A security refusal stops dispatch and exits 2 like a leak BLOCK (criterion 36). A failed result makes the run incomplete with exit 1 (criterion 18). The two choices dispatch different calls and exit differently on the same input. | Opus | open | — |
-| S-6 | MINOR | SPEC | base | `spec.md`, criteria 12, 18, 36 | Missing: what happens to calls already in flight when a leak check BLOCKs. Up to four per provider can be running, and each passed its own leak check. The spec only says no further call is dispatched. The implementer has to invent three things. Are in-flight calls killed or awaited? Are their answers kept as partial evidence? If slots are also missing, which exit code wins, 2 or 1? | Opus | open | — |
-| S-7 | MAJOR | SPEC | base | `spec.md`, criterion 19; [DETAIL] deadlines and provider queues | Missing: how the 150-minute total is split between the topic stage and the judge, and in what order queued slots are dispatched. Worst case, with every call using its full deadline: 26 minutes before the topic stage (catalog 1, finder 10, merge 10, topic 5). Then the Go queue takes ceil((25+3N)/4)×10 minutes, and the judge takes 15. At N=6 that is 151 minutes. If no time is reserved for the judge, it cannot start and the run ends without a reconciliation. The dispatch order (fixed slots first, or by topic and model) decides which slots stay unfinished. The spec states neither. | Opus | open | — |
-| S-8 | MAJOR | SPEC | base | `spec.md`, criteria 13, 16; [DETAIL] «Same-topic peers see identical frozen inputs» | Missing: what the «recorded frozen input state» is and what happens when it changes. It could be the HEAD commit. Then uncommitted worktree content, which the repository seats can read with their file tools, cannot resolve. It could also be a snapshot or hash of the working tree. The spec also does not say what happens when another session or worktree edits a mapped file during the run of up to 150 minutes: abort, incomplete result, or only a record. So criterion 16's refutation «a different source state» has no expected result. | Opus | open | — |
-| S-9 | MAJOR | SPEC | base | `spec.md`, criteria 10, 16, 18, 27 | [AMBIGUITY] It is unclear whether an evidence failure rejects one claim or the whole report. Criterion 27 makes a template violation reject the report. Criteria 10 and 16 only say that a claim without a receipt, or with an unresolved reference, is not evidence. Reading A: that claim is dropped or marked unsupported, and the report remains a valid contribution. Reading B: the report is malformed, its slot is missing and the run is incomplete under criterion 18. Criterion 18 also names a failed «required … retrieval» without saying which retrieval is required. Under one reading a single failed fetch among a model's retrievals fails the slot. Under the other only a report with no receipt-backed claim fails, as in «a URL-free online report». | Opus | open | — |
-| S-10 | MAJOR | SPEC | base | `spec.md`, Terms «Claim» and «Handoff item»; template under Topic contract; criteria 27, 31–34 | Missing: the identity scheme that the research-to-interview-to-spec chain depends on. Claims are «uniquely identified», but the scope is not given. If ids are unique per report, ids that isolated models write independently will collide across 33+3N reports, and the «duplicate claim id» case in criterion 33 has no defined meaning. If ids must be unique across the run, isolated models cannot coordinate them. The template's questions have no id and no link to the claims they come from. Yet criterion 31 requires items «with source claim ids» and refutes «a question loses its originating claims». The spec also does not say where in a `decisions.md` Q-record the item or claim link lives, although criterion 32 checks that link. | Opus | open | — |
-| S-11 | MAJOR | SPEC | base | `spec.md`, criteria 31, 32; [DETAIL] raw claims and handoff inventory; [DETAIL] the gate checks «coverage» | [AMBIGUITY] It is unclear what the lost-decision coverage is measured against. Reading A: every `[DECISION]` question in every retained raw report must map to a handoff item. Then duplicates from the three peers, and decisions in reports the judge scored off-brief or refuted, all become interview obligations. Reading B: coverage is measured against the judge's handoff inventory. Then a decision the judge drops is invisible to the gate, which is exactly the loss criterion 31 targets. The gate passes or fails on the same run depending on the reading. | Opus | open | — |
-| S-12 | MAJOR | SPEC | base | `spec.md`, criterion 32; Terms «Complete»; [DETAIL] the gate checks runs in live change folders; Definition of Done, `make verify` | [AMBIGUITY] It is unclear when the blocking handoff check applies. Reading A, from «before the spec can pass»: open items fail the check only once a spec exists. Reading B, from «checks every such run in live … change folders»: a complete run whose items still await phase 1a makes `make verify` and CI red from the end of phase 1 until the interview is answered. «Complete» explicitly allows that state. | Opus | open | — |
-| S-13 | MAJOR | SPEC | base | `spec.md`, criteria 18, 30, 31; [DETAIL] «the gate checks every such run» | [AMBIGUITY] It is unclear how incomplete and repeated runs are handled. Criteria 30–31 speak of a «completed swarm», while the gate checks «every such run». Reading A: only complete runs carry obligations. If phase 1a proceeds from an incomplete run, the `[DECISION]`s from its finished slots escape the gate. Reading B: every v2 run, including incomplete and superseded ones, must have all items answered. But an incomplete run without a judge has no inventory to check, and every re-run piles up obligations from earlier runs. The spec also does not say whether phase 1a or phase 2 may proceed from an incomplete run at all. | Opus | open | — |
-| S-14 | MAJOR | SPEC | base | `spec.md`, criteria 15, 28 | [AMBIGUITY] It is unclear whether supported, refuted, unique and off-brief are exclusive dispositions per claim or independent counts. If they are exclusive, every claim must fall into one of the four. A claim left in an unresolved disagreement (criterion 15) would then have to be scored supported or refuted, which criterion 15 forbids. If they are independent counts, one claim can be unique and supported at once, and the per-model totals mean something else. The comparison baseline the maintainer asked for in Q-7 gives different numbers under each reading. | Opus | open | — |
-| S-15 | MAJOR | SPEC | base | `spec.md`, criteria 30, 34; [DETAIL] «Review checks … criterion rationale; the gate checks identities, coverage and answered status only» | [AMBIGUITY] It is unclear whether a gate or only the review enforces criteria 30 and 34. Reading A: «identities» includes resolving each spec criterion's named claims or records, and the spec's `neighbours:` list, against the run. Then a criterion naming a missing claim fails `make verify`. Reading B: the gate reads only the handoff and the decisions. Criterion origins are «criterion rationale» left to review, and the neighbours rule lives only in the phase-2 prompt. Under Reading B neither criterion can go red in a test: a spec with a criterion lacking an origin, or with a confirmed neighbour dropped, passes every check. | Opus | open | — |
-| S-16 | MAJOR | SPEC | base | `spec.md`, template under Topic contract; criteria 31, 35; `decisions.md` Q-7, topics 3 and 6 | Cannot go red: the fixed template has no field for the class a topic-3 report holds right, or for topic 6's way of governing each changing fact. Two inputs show this. A topic-6 report that names a model id as stale but proposes no governance should refute criterion 35. A topic-3 report whose claims hold a declared `architectural` change to be `feature`, with no `[DECISION]` question, should show the omitted class disagreement of criterion 31. Both pass template validation, so no runner or gate check can tell them apart from a clean report. | Opus | open | — |
-| S-17 | MAJOR | SPEC | base | `spec.md`, criteria 7, 15, 24, 25 | Cannot go red as written. The refutations «code summaries replace a comparison», «a majority erases a sourced objection», «a finder judges the design», «code/reuse proposes new code» and «an online report judges local applicability» are about the meaning of model output. A stand-in test can only produce structure. The spec names no structural property of a report or reconciliation that these cases break, and no review step that would record them. Criterion 25's statement is about what a researcher receives, which is testable, but its refutations are about what the report says. | Opus | open | — |
-| S-18 | MINOR | SPEC | base | `spec.md`, criteria 7, 29, 30; [DETAIL] `neighbours:` | [AMBIGUITY] Two neighbour cases have two readings each. (1) «An unread/invalid path is a gap that prevents a complete comparison» can mean the run is incomplete with exit 1, which blocks the «completed swarm» of criteria 30–31 until the header is fixed. It can also mean the run is complete with the gap named, as in criterion 7. (2) Topic 5 and the judge may find a header-given neighbour unrelated. Criterion 29 forbids dropping it from the research, but criterion 30 carries only «confirmed» neighbours into the spec. So it is either carried anyway or dropped. | Opus | open | — |
-| S-19 | MINOR | SPEC | base | `spec.md`, criteria 23, 24, 26; [DETAIL] stage order | Missing: what the finder trio and the topic author receive as the description of the change in phase 1, before any spec exists. Candidates are the `research.md` body or header, the bead, the spec if present, or the merged map. This input is the only source of the public sentence (Q-6) and part of the «identical … evidence packets» of criterion 26. The spec also does not say whether instruction files a runtime can load on its own are given to all three repository seats or to none. The current explore embeds `AGENTS.md`. | Opus | open | — |
-| S-20 | MINOR | SPEC | base | `spec.md`, [DETAIL] include/exclude | [AMBIGUITY] The detail says «an explicitly included id missing from the fresh catalog makes selection incomplete (exit 1)». Reading A: the preflight exits 1 before any model call, like a catalog failure. Reading B: the run dispatches the 39 fixed slots and the other selected models, records the missing included id as a missing slot, and ends incomplete with exit 1. Reading B spends 39 or more invocations on a run already known to be incomplete before it starts. | Opus | open | — |
+| S-1 | MAJOR | SPEC | base | `spec.md`, Terms «Complete» and «Selected Go free models»; criteria 18, 37, 39; [DETAIL] `39 + 3N` | [AMBIGUITY] It is unclear whether a selected Go free seat is a required contribution. Reading A: criterion 39, «every required contribution» and «unfinished slots remain explicit and incomplete» make all 3N free slots required. Then one free model that times out, is refused or returns no receipt makes the whole run incomplete with a nonzero exit, and the «completed swarm» of criteria 30–31 never happens. The free roster changes constantly, so many runs could end like this. Reading B: criterion 37 calls only the nine Flash contributions «mandatory», and the Terms say «catalog presence is eligibility, not proof a model call will succeed». Then free slots are best-effort, a failure is recorded, and the run can still be complete. The same run gets opposite exit codes under the two readings. | Opus | in spec — Terms; criteria 18, 39; budget detail (ruling S-1, decisions.md, 2026-10-16) | — |
+| S-2 | MAJOR | SPEC | base | `spec.md`, Terms «Selected Go free models»; criteria 38, 41; `research.md`, 2026-10-16 «A listing is not proof of a live refresh» | [AMBIGUITY] It is unclear which ids a successful refresh makes eligible. `research.md` records that pinned Pi merges the shipped baseline with the fetched remote overlay. Reading A: every `-free` id in the merged catalog is eligible. A baseline id that the fetched shard no longer lists is still selected and dispatched. Reading B: only ids in this run's fetched overlay are eligible, and baseline-only ids are dropped. Criterion 38 refutes a «shipped … list» used instead of a refresh. It does not say whether shipped entries inside a refreshed catalog count. So a test with a baseline-only `x-free` id has no defined expected selection. | Opus | in spec — Terms; criterion 38 (ruling S-2, decisions.md, 2026-10-16) | — |
+| S-3 | MINOR | SPEC | base | `spec.md`, Terms «Selected Go free models»; criterion 10 | Missing: «chat ids» names no catalog property that separates chat from non-chat models. Nothing says whether an eligible model must support the tool calls that produce retrieval receipts. The implementer has to invent the eligibility test. A `-free` id without tool support would be selected and could only produce a report without receipts. | Opus | in spec — Terms; criterion 39 (ruling S-3, decisions.md, 2026-10-16) | — |
+| S-4 | MAJOR | SPEC | base | `spec.md`, Terms «Public topic»; criterion 23; `decisions.md` Q-6 | [AMBIGUITY] The topic filter can be read two ways in two places. (1) «Words contain letters and apostrophes only» refuses every hyphen. That rejects ordinary compounds such as «multi-agent» and the maintainer's own Q-6 example «Container-Isolation für KI-Agenten-Läufe». The next sentence's «including hyphenated identifiers» reads as refusing only identifiers like `research-swarm`. The spec also does not say whether non-ASCII letters (für, Läufe) count as letters. (2) Refusing «code, change and bead names» can mean the character rule alone, so a letters-only symbol or change name such as `explore` passes. It can also mean matching against names from the frozen repository, which refuses ordinary words that are also symbol names and needs a name source the spec does not give. The same Opus sentence passes under one reading and is refused under the other. | Opus | in spec — Public topic term; criterion 23 (ruling S-4, decisions.md, 2026-10-16) | — |
+| S-5 | MAJOR | SPEC | base | `spec.md`, criteria 5, 12, 18, 23, 36; [DETAIL] stage order | Missing: what the run does after a required slot fails in a stage that later stages depend on. There are no retries. A failed finder, a failed or timed-out map merge, or a topic sentence the filter rejects leaves later stages without input. The spec does not say whether the runner stops there or continues the stages that do not depend on the failure (for example topics 1–8 without the online topics). It also does not say whether a rejected topic counts as a «security refusal» or a failed structured result. A security refusal stops dispatch and exits 2 like a leak BLOCK (criterion 36). A failed result makes the run incomplete with exit 1 (criterion 18). The two choices dispatch different calls and exit differently on the same input. | Opus | in spec — criteria 5, 18, 23, 36; stage detail (ruling S-5, decisions.md, 2026-10-16) | — |
+| S-6 | MINOR | SPEC | base | `spec.md`, criteria 12, 18, 36 | Missing: what happens to calls already in flight when a leak check BLOCKs. Up to four per provider can be running, and each passed its own leak check. The spec only says no further call is dispatched. The implementer has to invent three things. Are in-flight calls killed or awaited? Are their answers kept as partial evidence? If slots are also missing, which exit code wins, 2 or 1? | Opus | in spec — criteria 12, 36; stage detail (ruling S-6, decisions.md, 2026-10-16) | — |
+| S-7 | MAJOR | SPEC | base | `spec.md`, criterion 19; [DETAIL] deadlines and provider queues | Missing: how the 150-minute total is split between the topic stage and the judge, and in what order queued slots are dispatched. Worst case, with every call using its full deadline: 26 minutes before the topic stage (catalog 1, finder 10, merge 10, topic 5). Then the Go queue takes ceil((25+3N)/4)×10 minutes, and the judge takes 15. At N=6 that is 151 minutes. If no time is reserved for the judge, it cannot start and the run ends without a reconciliation. The dispatch order (fixed slots first, or by topic and model) decides which slots stay unfinished. The spec states neither. | Opus | in spec — criterion 19; deadline detail (ruling S-7, decisions.md, 2026-10-16) | — |
+| S-8 | MAJOR | SPEC | base | `spec.md`, criteria 13, 16; [DETAIL] «Same-topic peers see identical frozen inputs» | Missing: what the «recorded frozen input state» is and what happens when it changes. It could be the HEAD commit. Then uncommitted worktree content, which the repository seats can read with their file tools, cannot resolve. It could also be a snapshot or hash of the working tree. The spec also does not say what happens when another session or worktree edits a mapped file during the run of up to 150 minutes: abort, incomplete result, or only a record. So criterion 16's refutation «a different source state» has no expected result. | Opus | in spec — Frozen input term; criterion 16; digest detail (ruling S-8, decisions.md, 2026-10-16) | — |
+| S-9 | MAJOR | SPEC | base | `spec.md`, criteria 10, 16, 18, 27 | [AMBIGUITY] It is unclear whether an evidence failure rejects one claim or the whole report. Criterion 27 makes a template violation reject the report. Criteria 10 and 16 only say that a claim without a receipt, or with an unresolved reference, is not evidence. Reading A: that claim is dropped or marked unsupported, and the report remains a valid contribution. Reading B: the report is malformed, its slot is missing and the run is incomplete under criterion 18. Criterion 18 also names a failed «required … retrieval» without saying which retrieval is required. Under one reading a single failed fetch among a model's retrievals fails the slot. Under the other only a report with no receipt-backed claim fails, as in «a URL-free online report». | Opus | in spec — criteria 10, 16, 18; evidence-floor detail (ruling S-9, decisions.md, 2026-10-16) | — |
+| S-10 | MAJOR | SPEC | base | `spec.md`, Terms «Claim» and «Handoff item»; template under Topic contract; criteria 27, 31–34 | Missing: the identity scheme that the research-to-interview-to-spec chain depends on. Claims are «uniquely identified», but the scope is not given. If ids are unique per report, ids that isolated models write independently will collide across 33+3N reports, and the «duplicate claim id» case in criterion 33 has no defined meaning. If ids must be unique across the run, isolated models cannot coordinate them. The template's questions have no id and no link to the claims they come from. Yet criterion 31 requires items «with source claim ids» and refutes «a question loses its originating claims». The spec also does not say where in a `decisions.md` Q-record the item or claim link lives, although criterion 32 checks that link. | Opus | in spec — Claim/Handoff terms; report template; criteria 27, 31, 33 (ruling S-10, decisions.md, 2026-10-16) | — |
+| S-11 | MAJOR | SPEC | base | `spec.md`, criteria 31, 32; [DETAIL] raw claims and handoff inventory; [DETAIL] the gate checks «coverage» | [AMBIGUITY] It is unclear what the lost-decision coverage is measured against. Reading A: every `[DECISION]` question in every retained raw report must map to a handoff item. Then duplicates from the three peers, and decisions in reports the judge scored off-brief or refuted, all become interview obligations. Reading B: coverage is measured against the judge's handoff inventory. Then a decision the judge drops is invisible to the gate, which is exactly the loss criterion 31 targets. The gate passes or fails on the same run depending on the reading. | Opus | in spec — criteria 31, 32; raw-coverage detail (ruling S-11, decisions.md, 2026-10-16) | — |
+| S-12 | MAJOR | SPEC | base | `spec.md`, criterion 32; Terms «Complete»; [DETAIL] the gate checks runs in live change folders; Definition of Done, `make verify` | [AMBIGUITY] It is unclear when the blocking handoff check applies. Reading A, from «before the spec can pass»: open items fail the check only once a spec exists. Reading B, from «checks every such run in live … change folders»: a complete run whose items still await phase 1a makes `make verify` and CI red from the end of phase 1 until the interview is answered. «Complete» explicitly allows that state. | Opus | in spec — criterion 32; pre-spec gate detail (ruling S-12, decisions.md, 2026-10-16) | — |
+| S-13 | MAJOR | SPEC | base | `spec.md`, criteria 18, 30, 31; [DETAIL] «the gate checks every such run» | [AMBIGUITY] It is unclear how incomplete and repeated runs are handled. Criteria 30–31 speak of a «completed swarm», while the gate checks «every such run». Reading A: only complete runs carry obligations. If phase 1a proceeds from an incomplete run, the `[DECISION]`s from its finished slots escape the gate. Reading B: every v2 run, including incomplete and superseded ones, must have all items answered. But an incomplete run without a judge has no inventory to check, and every re-run piles up obligations from earlier runs. The spec also does not say whether phase 1a or phase 2 may proceed from an incomplete run at all. | Opus | in spec — Complete term; criteria 30–32, 34; run-scope detail (ruling S-13, decisions.md, 2026-10-16) | — |
+| S-14 | MAJOR | SPEC | base | `spec.md`, criteria 15, 28 | [AMBIGUITY] It is unclear whether supported, refuted, unique and off-brief are exclusive dispositions per claim or independent counts. If they are exclusive, every claim must fall into one of the four. A claim left in an unresolved disagreement (criterion 15) would then have to be scored supported or refuted, which criterion 15 forbids. If they are independent counts, one claim can be unique and supported at once, and the per-model totals mean something else. The comparison baseline the maintainer asked for in Q-7 gives different numbers under each reading. | Opus | in spec — Evidence status/disposition term; criterion 28 (ruling S-14, decisions.md, 2026-10-16) | — |
+| S-15 | MAJOR | SPEC | base | `spec.md`, criteria 30, 34; [DETAIL] «Review checks … criterion rationale; the gate checks identities, coverage and answered status only» | [AMBIGUITY] It is unclear whether a gate or only the review enforces criteria 30 and 34. Reading A: «identities» includes resolving each spec criterion's named claims or records, and the spec's `neighbours:` list, against the run. Then a criterion naming a missing claim fails `make verify`. Reading B: the gate reads only the handoff and the decisions. Criterion origins are «criterion rationale» left to review, and the neighbours rule lives only in the phase-2 prompt. Under Reading B neither criterion can go red in a test: a spec with a criterion lacking an origin, or with a confirmed neighbour dropped, passes every check. | Opus | in spec — criteria 30, 34; gate/review detail (ruling S-15, decisions.md, 2026-10-16) | — |
+| S-16 | MAJOR | SPEC | base | `spec.md`, template under Topic contract; criteria 31, 35; `decisions.md` Q-7, topics 3 and 6 | Cannot go red: the fixed template has no field for the class a topic-3 report holds right, or for topic 6's way of governing each changing fact. Two inputs show this. A topic-6 report that names a model id as stale but proposes no governance should refute criterion 35. A topic-3 report whose claims hold a declared `architectural` change to be `feature`, with no `[DECISION]` question, should show the omitted class disagreement of criterion 31. Both pass template validation, so no runner or gate check can tell them apart from a clean report. | Opus | in spec — topic-specific template; criteria 27, 31, 35 (ruling S-16, decisions.md, 2026-10-16) | — |
+| S-17 | MAJOR | SPEC | base | `spec.md`, criteria 7, 15, 24, 25 | Cannot go red as written. The refutations «code summaries replace a comparison», «a majority erases a sourced objection», «a finder judges the design», «code/reuse proposes new code» and «an online report judges local applicability» are about the meaning of model output. A stand-in test can only produce structure. The spec names no structural property of a report or reconciliation that these cases break, and no review step that would record them. Criterion 25's statement is about what a researcher receives, which is testable, but its refutations are about what the report says. | Opus | in spec — criteria 7, 15, 24, 25; Definition of Done (ruling S-17, decisions.md, 2026-10-16) | — |
+| S-18 | MINOR | SPEC | base | `spec.md`, criteria 7, 29, 30; [DETAIL] `neighbours:` | [AMBIGUITY] Two neighbour cases have two readings each. (1) «An unread/invalid path is a gap that prevents a complete comparison» can mean the run is incomplete with exit 1, which blocks the «completed swarm» of criteria 30–31 until the header is fixed. It can also mean the run is complete with the gap named, as in criterion 7. (2) Topic 5 and the judge may find a header-given neighbour unrelated. Criterion 29 forbids dropping it from the research, but criterion 30 carries only «confirmed» neighbours into the spec. So it is either carried anyway or dropped. | Opus | in spec — criteria 4, 29, 30; neighbour preflight detail (ruling S-18, decisions.md, 2026-10-16) | — |
+| S-19 | MINOR | SPEC | base | `spec.md`, criteria 23, 24, 26; [DETAIL] stage order | Missing: what the finder trio and the topic author receive as the description of the change in phase 1, before any spec exists. Candidates are the `research.md` body or header, the bead, the spec if present, or the merged map. This input is the only source of the public sentence (Q-6) and part of the «identical … evidence packets» of criterion 26. The spec also does not say whether instruction files a runtime can load on its own are given to all three repository seats or to none. The current explore embeds `AGENTS.md`. | Opus | in spec — criteria 24, 26; private-brief detail (ruling S-19, decisions.md, 2026-10-16) | — |
+| S-20 | MINOR | SPEC | base | `spec.md`, [DETAIL] include/exclude | [AMBIGUITY] The detail says «an explicitly included id missing from the fresh catalog makes selection incomplete (exit 1)». Reading A: the preflight exits 1 before any model call, like a catalog failure. Reading B: the run dispatches the 39 fixed slots and the other selected models, records the missing included id as a missing slot, and ends incomplete with exit 1. Reading B spends 39 or more invocations on a run already known to be incomplete before it starts. | Opus | in spec — criterion 39; include/exclude preflight detail (ruling S-20, decisions.md, 2026-10-16) | — |
+
+Stage-2 call, 2026-10-16: draft · attempt 1 · route codex · endpoint openai-codex · model gpt-6.1-sol · leak check clean over 484 files, 1358 commits, 12 rules.
+
+Phase-2a incorporation — 2026-10-16: all S-1–S-20 rulings from decisions.md
+are in spec.md with matching design/plan and ADR 0020 wording. The original
+finding text is preserved above; no row is rejected and no human answer is
+invented. Historical phase-6 F-1 stays open until its separate attended
+real-Pi isolation capture provides measured evidence.
+
+> Attempt 1 (codex) failed its post-run checks.
+>
+> Files the attempt changed (lines added, removed):
+> - `docs/adr/0020-phase-1-research-swarm.md` +50 -14
+> - `plans/changes/research-swarm/design.md` +122 -46
+> - `plans/changes/research-swarm/findings.md` +26 -20
+> - `plans/changes/research-swarm/plan.md` +175 -123
+> - `plans/changes/research-swarm/research.md` +18 -0
+> - `plans/changes/research-swarm/spec.md` +175 -132
+>
+> Diagnostics:
+> ````text
+> - `make verify` exited 2
+> The gates that blocked, each with its last lines:
+> ── [pytest] $ lauf_cmd
+> [… 1467 lines of this gate left out …]
+>
+> tests/test_stage2_swarm.py:1091: AssertionError
+> ----------------------------- Captured stdout call -----------------------------
+> INFO  (1):
+>   - leak check clean: 21 files, 1 commits, 1 rules, 1 prompt texts
+> ----------------------------- Captured stderr call -----------------------------
+> refused: /Users/mikypiky/coding-harness/.claude/worktrees/research-swarm/tools/pi/pi --version ended 1; it is not the pinned 1.2.0; no call starts: /Users/mikypiky/coding-harness/.claude/worktrees/research-swarm/tools/pi/pi: line 9: dirname: command not found
+> tools/pi/pi: the Node declaration .node-version is missing from /private/var/folders/44/yc0m3m456b51nyzwyfjptgm40000gn/T/stage2-lhsiv8wi.
+> tools/pi/pi: set the pinned install up with: bash tools/pi/install.sh (see tools/pi/README.md).
+> =========================== short test summary info ============================
+> FAILED tests/test_stage2_swarm.py::test_large_classes_dispatch_the_swarm[feature]
+> FAILED tests/test_stage2_swarm.py::test_large_classes_dispatch_the_swarm[architectural]
+> FAILED tests/test_stage2_swarm.py::test_explicit_class_explores_without_spec_or_plan
+> FAILED tests/test_stage2_swarm.py::test_all_free_roles_are_attempted_before_flash
+> FAILED tests/test_stage2_swarm.py::test_six_topics_have_independent_permitted_pairs
+> FAILED tests/test_stage2_swarm.py::test_declared_free_focuses_shape_research_and_topic_pairs[False]
+> FAILED tests/test_stage2_swarm.py::test_declared_free_focuses_shape_research_and_topic_pairs[True]
+> FAILED tests/test_stage2_swarm.py::test_declared_paid_endpoint_and_models_are_called
+> FAILED tests/test_stage2_swarm.py::test_fresh_opus_reconciles_all_six_topics
+> FAILED tests/test_stage2_swarm.py::test_research_carries_practice_architecture_and_adjacent_spec_comparisons
+> FAILED tests/test_stage2_swarm.py::test_public_requests_exclude_every_private_input
+> FAILED tests/test_stage2_swarm.py::test_public_claims_require_retrieved_source_receipts
+> FAILED tests/test_stage2_swarm.py::test_a_free_report_without_a_retrieved_page_is_no_contribution[receipts0]
+> FAILED tests/test_stage2_swarm.py::test_a_free_report_without_a_retrieved_page_is_no_contribution[receipts1]
+> FAILED tests/test_stage2_swarm.py::test_a_free_report_without_a_retrieved_page_is_no_contribution[receipts2]
+> FAILED tests/test_stage2_swarm.py::test_judge_public_citations_require_retrieved_receipts[invented-url]
+> FAILED tests/test_stage2_swarm.py::test_judge_public_citations_require_retrieved_receipts[search-snippet]
+> FAILED tests/test_stage2_swarm.py::test_redirect_receipts_back_requested_and_final_urls
+> FAILED tests/test_stage2_swarm.py::test_free_environment_excludes_identity_and_private_paths
+> FAILED tests/test_stage2_swarm.py::test_an_accepted_topic_is_recorded_and_reaches_the_free_calls
+> FAILED tests/test_stage2_swarm.py::test_every_call_is_checked_and_a_leak_block_stops_dispatch
+> FAILED tests/test_stage2_swarm.py::test_failed_pi_calls_preserve_partial_evidence[nonzero-public]
+> FAILED tests/test_stage2_swarm.py::test_failed_pi_calls_preserve_partial_evidence[nonzero-flash]
+> FAILED tests/test_stage2_swarm.py::test_failed_pi_calls_preserve_partial_evidence[empty-public]
+> FAILED tests/test_stage2_swarm.py::test_failed_pi_calls_preserve_partial_evidence[empty-flash]
+> FAILED tests/test_stage2_swarm.py::test_failed_pi_calls_preserve_partial_evidence[timeout-public]
+> FAILED tests/test_stage2_swarm.py::test_failed_pi_calls_preserve_partial_evidence[timeout-flash]
+> FAILED tests/test_stage2_swarm.py::test_every_attempt_has_identity_audit_and_outcome
+> FAILED tests/test_stage2_swarm.py::test_failures_preserve_evidence_and_never_report_complete[free-fails]
+> FAILED tests/test_stage2_swarm.py::test_failures_preserve_evidence_and_never_report_complete[flash-empty]
+> FAILED tests/test_stage2_swarm.py::test_failures_preserve_evidence_and_never_report_complete[judge-malformed]
+> FAILED tests/test_stage2_swarm.py::test_failures_preserve_evidence_and_never_report_complete[all-free-fail]
+> FAILED tests/test_stage2_swarm.py::test_failures_preserve_evidence_and_never_report_complete[unmapped-free-id]
+> FAILED tests/test_stage2_swarm.py::test_the_free_inventory_reads_what_the_pinned_pi_prints[pinned-registry]
+> FAILED tests/test_stage2_swarm.py::test_the_free_inventory_reads_what_the_pinned_pi_prints[ambiguous]
+> FAILED tests/test_stage2_swarm.py::test_the_free_inventory_reads_what_the_pinned_pi_prints[no-models]
+> FAILED tests/test_stage2_swarm.py::test_deadlines_and_role_counts_bound_the_run
+> FAILED tests/test_stage2_swarm.py::test_no_call_starts_once_the_run_deadline_is_spent
+> FAILED tests/test_stage2_swarm.py::test_a_run_across_midnight_keeps_its_frozen_research
+> FAILED tests/test_stage2_swarm.py::test_all_outputs_scrub_every_used_credential
+> FAILED tests/test_stage2_swarm.py::test_unresolved_dissent_and_human_questions_survive_reconciliation
+> FAILED tests/test_stage2_swarm.py::test_local_citations_bind_to_the_frozen_input_state
+> FAILED tests/test_stage2_swarm.py::test_local_citations_name_a_path_and_a_symbol[`src/app.py::no_such_symbol`-names no symbol of src/app.py]
+> FAILED tests/test_stage2_swarm.py::test_local_citations_name_a_path_and_a_symbol[`src/app.py:1`-gives line numbers only]
+> FAILED tests/test_stage2_swarm.py::test_local_citations_name_a_path_and_a_symbol[`src/app.py`-is a bare path]
+> FAILED tests/test_stage2_swarm.py::test_only_the_runner_appends_research - As...
+> 46 failed, 2254 passed, 16 skipped in 579.84s (0:09:39)
+> ── [pytest] RED (block) — der Lauf ist rot.
+>
+> Standard error of the whole run, last lines:
+> [… 12175 earlier lines left out …]
+> templates/handover.md:48:81 error MD013/line-length Line length [Expected: 80; Actual: 88]
+> templates/spec.md:21 error MD041/first-line-heading/first-line-h1 First line in a file should be a top-level heading [Context: "```yaml"]
+> templates/spec.md:39:81 error MD013/line-length Line length [Expected: 80; Actual: 97]
+> templates/spec.md:40:81 error MD013/line-length Line length [Expected: 80; Actual: 95]
+> tools/claude-code/README.md:17:81 error MD013/line-length Line length [Expected: 80; Actual: 105]
+> tools/claude-code/README.md:18:81 error MD013/line-length Line length [Expected: 80; Actual: 109]
+> tools/claude-code/README.md:19:81 error MD013/line-length Line length [Expected: 80; Actual: 134]
+> tools/claude-code/README.md:23:1 error MD060/table-column-style Table column style [Table pipe is missing space to the right for style "compact"]
+> tools/claude-code/README.md:23:5 error MD060/table-column-style Table column style [Table pipe is missing space to the left for style "compact"]
+> tools/claude-code/README.md:23:5 error MD060/table-column-style Table column style [Table pipe is missing space to the right for style "compact"]
+> tools/claude-code/README.md:23:9 error MD060/table-column-style Table column style [Table pipe is missing space to the left for style "compact"]
+> tools/claude-code/README.md:23:9 error MD060/table-column-style Table column style [Table pipe is missing space to the right for style "compact"]
+> tools/claude-code/README.md:23:13 error MD060/table-column-style Table column style [Table pipe is missing space to the left for style "compact"]
+> tools/claude-code/README.md:24:81 error MD013/line-length Line length [Expected: 80; Actual: 272]
+> tools/claude-code/README.md:25:81 error MD013/line-length Line length [Expected: 80; Actual: 180]
+> tools/claude-code/README.md:26:81 error MD013/line-length Line length [Expected: 80; Actual: 115]
+> tools/claude-code/README.md:28:81 error MD013/line-length Line length [Expected: 80; Actual: 124]
+> tools/claude-code/README.md:29:81 error MD013/line-length Line length [Expected: 80; Actual: 106]
+> tools/claude-code/README.md:38:1 error MD060/table-column-style Table column style [Table pipe is missing space to the right for style "compact"]
+> tools/claude-code/README.md:38:5 error MD060/table-column-style Table column style [Table pipe is missing space to the left for style "compact"]
+> tools/claude-code/README.md:38:5 error MD060/table-column-style Table column style [Table pipe is missing space to the right for style "compact"]
+> tools/claude-code/README.md:38:9 error MD060/table-column-style Table column style [Table pipe is missing space to the left for style "compact"]
+> tools/claude-code/README.md:38:9 error MD060/table-column-style Table column style [Table pipe is missing space to the right for style "compact"]
+> tools/claude-code/README.md:38:13 error MD060/table-column-style Table column style [Table pipe is missing space to the left for style "compact"]
+> tools/claude-code/README.md:40:81 error MD013/line-length Line length [Expected: 80; Actual: 442]
+> tools/claude-code/README.md:41:81 error MD013/line-length Line length [Expected: 80; Actual: 163]
+> tools/claude-code/README.md:42:81 error MD013/line-length Line length [Expected: 80; Actual: 126]
+> tools/claude-code/README.md:43:81 error MD013/line-length Line length [Expected: 80; Actual: 96]
+> tools/claude-code/README.md:44:81 error MD013/line-length Line length [Expected: 80; Actual: 167]
+> tools/claude-code/README.md:72:1 error MD060/table-column-style Table column style [Table pipe is missing space to the right for style "compact"]
+> tools/claude-code/README.md:72:5 error MD060/table-column-style Table column style [Table pipe is missing space to the left for style "compact"]
+> tools/claude-code/README.md:72:5 error MD060/table-column-style Table column style [Table pipe is missing space to the right for style "compact"]
+> tools/claude-code/README.md:72:9 error MD060/table-column-style Table column style [Table pipe is missing space to the left for style "compact"]
+> tools/claude-code/README.md:72:9 error MD060/table-column-style Table column style [Table pipe is missing space to the right for style "compact"]
+> tools/claude-code/README.md:72:13 error MD060/table-column-style Table column style [Table pipe is missing space to the left for style "compact"]
+> tools/claude-code/README.md:73:81 error MD013/line-length Line length [Expected: 80; Actual: 112]
+> tools/claude-code/README.md:74:81 error MD013/line-length Line length [Expected: 80; Actual: 89]
+> tools/claude-code/README.md:75:81 error MD013/line-length Line length [Expected: 80; Actual: 88]
+> tools/pi/README.md:65:81 error MD013/line-length Line length [Expected: 80; Actual: 97]
+> make: *** [verify] Error 1
+> ````
+
+Stage-2 call, 2026-10-16: draft · attempt 2 · route codex-repair · endpoint openai-codex · model gpt-6.1-sol · reason the first draft attempt failed · leak check clean over 484 files, 1358 commits, 12 rules.
+
+> Attempt 2 (codex-repair) failed its post-run checks.
+>
+> Files the attempt changed (lines added, removed):
+> - `plans/changes/research-swarm/plan.md` +23 -0
+> - `plans/changes/research-swarm/spec.md` +44 -41
+>
+> Diagnostics:
+> ````text
+> - `make verify` exited 2
+> The gates that blocked, each with its last lines:
+> ── [pytest] $ lauf_cmd
+> [… 1467 lines of this gate left out …]
+>
+> tests/test_stage2_swarm.py:1091: AssertionError
+> ----------------------------- Captured stdout call -----------------------------
+> INFO  (1):
+>   - leak check clean: 21 files, 1 commits, 1 rules, 1 prompt texts
+> ----------------------------- Captured stderr call -----------------------------
+> refused: /Users/mikypiky/coding-harness/.claude/worktrees/research-swarm/tools/pi/pi --version ended 1; it is not the pinned 1.2.0; no call starts: /Users/mikypiky/coding-harness/.claude/worktrees/research-swarm/tools/pi/pi: line 9: dirname: command not found
+> tools/pi/pi: the Node declaration .node-version is missing from /private/var/folders/44/yc0m3m456b51nyzwyfjptgm40000gn/T/stage2-t1ov9qx0.
+> tools/pi/pi: set the pinned install up with: bash tools/pi/install.sh (see tools/pi/README.md).
+> =========================== short test summary info ============================
+> FAILED tests/test_stage2_swarm.py::test_large_classes_dispatch_the_swarm[feature]
+> FAILED tests/test_stage2_swarm.py::test_large_classes_dispatch_the_swarm[architectural]
+> FAILED tests/test_stage2_swarm.py::test_explicit_class_explores_without_spec_or_plan
+> FAILED tests/test_stage2_swarm.py::test_all_free_roles_are_attempted_before_flash
+> FAILED tests/test_stage2_swarm.py::test_six_topics_have_independent_permitted_pairs
+> FAILED tests/test_stage2_swarm.py::test_declared_free_focuses_shape_research_and_topic_pairs[False]
+> FAILED tests/test_stage2_swarm.py::test_declared_free_focuses_shape_research_and_topic_pairs[True]
+> FAILED tests/test_stage2_swarm.py::test_declared_paid_endpoint_and_models_are_called
+> FAILED tests/test_stage2_swarm.py::test_fresh_opus_reconciles_all_six_topics
+> FAILED tests/test_stage2_swarm.py::test_research_carries_practice_architecture_and_adjacent_spec_comparisons
+> FAILED tests/test_stage2_swarm.py::test_public_requests_exclude_every_private_input
+> FAILED tests/test_stage2_swarm.py::test_public_claims_require_retrieved_source_receipts
+> FAILED tests/test_stage2_swarm.py::test_a_free_report_without_a_retrieved_page_is_no_contribution[receipts0]
+> FAILED tests/test_stage2_swarm.py::test_a_free_report_without_a_retrieved_page_is_no_contribution[receipts1]
+> FAILED tests/test_stage2_swarm.py::test_a_free_report_without_a_retrieved_page_is_no_contribution[receipts2]
+> FAILED tests/test_stage2_swarm.py::test_judge_public_citations_require_retrieved_receipts[invented-url]
+> FAILED tests/test_stage2_swarm.py::test_judge_public_citations_require_retrieved_receipts[search-snippet]
+> FAILED tests/test_stage2_swarm.py::test_redirect_receipts_back_requested_and_final_urls
+> FAILED tests/test_stage2_swarm.py::test_free_environment_excludes_identity_and_private_paths
+> FAILED tests/test_stage2_swarm.py::test_an_accepted_topic_is_recorded_and_reaches_the_free_calls
+> FAILED tests/test_stage2_swarm.py::test_every_call_is_checked_and_a_leak_block_stops_dispatch
+> FAILED tests/test_stage2_swarm.py::test_failed_pi_calls_preserve_partial_evidence[nonzero-public]
+> FAILED tests/test_stage2_swarm.py::test_failed_pi_calls_preserve_partial_evidence[nonzero-flash]
+> FAILED tests/test_stage2_swarm.py::test_failed_pi_calls_preserve_partial_evidence[empty-public]
+> FAILED tests/test_stage2_swarm.py::test_failed_pi_calls_preserve_partial_evidence[empty-flash]
+> FAILED tests/test_stage2_swarm.py::test_failed_pi_calls_preserve_partial_evidence[timeout-public]
+> FAILED tests/test_stage2_swarm.py::test_failed_pi_calls_preserve_partial_evidence[timeout-flash]
+> FAILED tests/test_stage2_swarm.py::test_every_attempt_has_identity_audit_and_outcome
+> FAILED tests/test_stage2_swarm.py::test_failures_preserve_evidence_and_never_report_complete[free-fails]
+> FAILED tests/test_stage2_swarm.py::test_failures_preserve_evidence_and_never_report_complete[flash-empty]
+> FAILED tests/test_stage2_swarm.py::test_failures_preserve_evidence_and_never_report_complete[judge-malformed]
+> FAILED tests/test_stage2_swarm.py::test_failures_preserve_evidence_and_never_report_complete[all-free-fail]
+> FAILED tests/test_stage2_swarm.py::test_failures_preserve_evidence_and_never_report_complete[unmapped-free-id]
+> FAILED tests/test_stage2_swarm.py::test_the_free_inventory_reads_what_the_pinned_pi_prints[pinned-registry]
+> FAILED tests/test_stage2_swarm.py::test_the_free_inventory_reads_what_the_pinned_pi_prints[ambiguous]
+> FAILED tests/test_stage2_swarm.py::test_the_free_inventory_reads_what_the_pinned_pi_prints[no-models]
+> FAILED tests/test_stage2_swarm.py::test_deadlines_and_role_counts_bound_the_run
+> FAILED tests/test_stage2_swarm.py::test_no_call_starts_once_the_run_deadline_is_spent
+> FAILED tests/test_stage2_swarm.py::test_a_run_across_midnight_keeps_its_frozen_research
+> FAILED tests/test_stage2_swarm.py::test_all_outputs_scrub_every_used_credential
+> FAILED tests/test_stage2_swarm.py::test_unresolved_dissent_and_human_questions_survive_reconciliation
+> FAILED tests/test_stage2_swarm.py::test_local_citations_bind_to_the_frozen_input_state
+> FAILED tests/test_stage2_swarm.py::test_local_citations_name_a_path_and_a_symbol[`src/app.py::no_such_symbol`-names no symbol of src/app.py]
+> FAILED tests/test_stage2_swarm.py::test_local_citations_name_a_path_and_a_symbol[`src/app.py:1`-gives line numbers only]
+> FAILED tests/test_stage2_swarm.py::test_local_citations_name_a_path_and_a_symbol[`src/app.py`-is a bare path]
+> FAILED tests/test_stage2_swarm.py::test_only_the_runner_appends_research - As...
+> 46 failed, 2254 passed, 16 skipped in 622.63s (0:10:22)
+> ── [pytest] RED (block) — der Lauf ist rot.
+>
+> Standard error of the whole run, last lines:
+> [… 12224 earlier lines left out …]
+> templates/handover.md:48:81 error MD013/line-length Line length [Expected: 80; Actual: 88]
+> templates/spec.md:21 error MD041/first-line-heading/first-line-h1 First line in a file should be a top-level heading [Context: "```yaml"]
+> templates/spec.md:39:81 error MD013/line-length Line length [Expected: 80; Actual: 97]
+> templates/spec.md:40:81 error MD013/line-length Line length [Expected: 80; Actual: 95]
+> tools/claude-code/README.md:17:81 error MD013/line-length Line length [Expected: 80; Actual: 105]
+> tools/claude-code/README.md:18:81 error MD013/line-length Line length [Expected: 80; Actual: 109]
+> tools/claude-code/README.md:19:81 error MD013/line-length Line length [Expected: 80; Actual: 134]
+> tools/claude-code/README.md:23:1 error MD060/table-column-style Table column style [Table pipe is missing space to the right for style "compact"]
+> tools/claude-code/README.md:23:5 error MD060/table-column-style Table column style [Table pipe is missing space to the left for style "compact"]
+> tools/claude-code/README.md:23:5 error MD060/table-column-style Table column style [Table pipe is missing space to the right for style "compact"]
+> tools/claude-code/README.md:23:9 error MD060/table-column-style Table column style [Table pipe is missing space to the left for style "compact"]
+> tools/claude-code/README.md:23:9 error MD060/table-column-style Table column style [Table pipe is missing space to the right for style "compact"]
+> tools/claude-code/README.md:23:13 error MD060/table-column-style Table column style [Table pipe is missing space to the left for style "compact"]
+> tools/claude-code/README.md:24:81 error MD013/line-length Line length [Expected: 80; Actual: 272]
+> tools/claude-code/README.md:25:81 error MD013/line-length Line length [Expected: 80; Actual: 180]
+> tools/claude-code/README.md:26:81 error MD013/line-length Line length [Expected: 80; Actual: 115]
+> tools/claude-code/README.md:28:81 error MD013/line-length Line length [Expected: 80; Actual: 124]
+> tools/claude-code/README.md:29:81 error MD013/line-length Line length [Expected: 80; Actual: 106]
+> tools/claude-code/README.md:38:1 error MD060/table-column-style Table column style [Table pipe is missing space to the right for style "compact"]
+> tools/claude-code/README.md:38:5 error MD060/table-column-style Table column style [Table pipe is missing space to the left for style "compact"]
+> tools/claude-code/README.md:38:5 error MD060/table-column-style Table column style [Table pipe is missing space to the right for style "compact"]
+> tools/claude-code/README.md:38:9 error MD060/table-column-style Table column style [Table pipe is missing space to the left for style "compact"]
+> tools/claude-code/README.md:38:9 error MD060/table-column-style Table column style [Table pipe is missing space to the right for style "compact"]
+> tools/claude-code/README.md:38:13 error MD060/table-column-style Table column style [Table pipe is missing space to the left for style "compact"]
+> tools/claude-code/README.md:40:81 error MD013/line-length Line length [Expected: 80; Actual: 442]
+> tools/claude-code/README.md:41:81 error MD013/line-length Line length [Expected: 80; Actual: 163]
+> tools/claude-code/README.md:42:81 error MD013/line-length Line length [Expected: 80; Actual: 126]
+> tools/claude-code/README.md:43:81 error MD013/line-length Line length [Expected: 80; Actual: 96]
+> tools/claude-code/README.md:44:81 error MD013/line-length Line length [Expected: 80; Actual: 167]
+> tools/claude-code/README.md:72:1 error MD060/table-column-style Table column style [Table pipe is missing space to the right for style "compact"]
+> tools/claude-code/README.md:72:5 error MD060/table-column-style Table column style [Table pipe is missing space to the left for style "compact"]
+> tools/claude-code/README.md:72:5 error MD060/table-column-style Table column style [Table pipe is missing space to the right for style "compact"]
+> tools/claude-code/README.md:72:9 error MD060/table-column-style Table column style [Table pipe is missing space to the left for style "compact"]
+> tools/claude-code/README.md:72:9 error MD060/table-column-style Table column style [Table pipe is missing space to the right for style "compact"]
+> tools/claude-code/README.md:72:13 error MD060/table-column-style Table column style [Table pipe is missing space to the left for style "compact"]
+> tools/claude-code/README.md:73:81 error MD013/line-length Line length [Expected: 80; Actual: 112]
+> tools/claude-code/README.md:74:81 error MD013/line-length Line length [Expected: 80; Actual: 89]
+> tools/claude-code/README.md:75:81 error MD013/line-length Line length [Expected: 80; Actual: 88]
+> tools/pi/README.md:65:81 error MD013/line-length Line length [Expected: 80; Actual: 97]
+> make: *** [verify] Error 1
+> ````
+
+Stage-2 call, 2026-10-16: draft · attempt 3 · route glm · endpoint glm-coding-plan · model glm-5.3 · reason two Codex draft attempts failed · leak check clean over 484 files, 1358 commits, 12 rules.
+
+> Attempt 3 (glm) failed its post-run checks.
+>
+> Files the attempt changed (lines added, removed):
+> - `plans/changes/research-swarm/plan.md` +13 -0
+> - `plans/changes/research-swarm/research.md` +28 -0
+> - `plans/changes/research-swarm/spec.md` +5 -0
+>
+> Diagnostics:
+> ````text
+> - `make verify` exited 2
+> The gates that blocked, each with its last lines:
+> ── [pytest] $ lauf_cmd
+> [… 1467 lines of this gate left out …]
+>
+> tests/test_stage2_swarm.py:1091: AssertionError
+> ----------------------------- Captured stdout call -----------------------------
+> INFO  (1):
+>   - leak check clean: 21 files, 1 commits, 1 rules, 1 prompt texts
+> ----------------------------- Captured stderr call -----------------------------
+> refused: /Users/mikypiky/coding-harness/.claude/worktrees/research-swarm/tools/pi/pi --version ended 1; it is not the pinned 1.2.0; no call starts: /Users/mikypiky/coding-harness/.claude/worktrees/research-swarm/tools/pi/pi: line 9: dirname: command not found
+> tools/pi/pi: the Node declaration .node-version is missing from /private/var/folders/44/yc0m3m456b51nyzwyfjptgm40000gn/T/stage2-6x7siowf.
+> tools/pi/pi: set the pinned install up with: bash tools/pi/install.sh (see tools/pi/README.md).
+> =========================== short test summary info ============================
+> FAILED tests/test_stage2_swarm.py::test_large_classes_dispatch_the_swarm[feature]
+> FAILED tests/test_stage2_swarm.py::test_large_classes_dispatch_the_swarm[architectural]
+> FAILED tests/test_stage2_swarm.py::test_explicit_class_explores_without_spec_or_plan
+> FAILED tests/test_stage2_swarm.py::test_all_free_roles_are_attempted_before_flash
+> FAILED tests/test_stage2_swarm.py::test_six_topics_have_independent_permitted_pairs
+> FAILED tests/test_stage2_swarm.py::test_declared_free_focuses_shape_research_and_topic_pairs[False]
+> FAILED tests/test_stage2_swarm.py::test_declared_free_focuses_shape_research_and_topic_pairs[True]
+> FAILED tests/test_stage2_swarm.py::test_declared_paid_endpoint_and_models_are_called
+> FAILED tests/test_stage2_swarm.py::test_fresh_opus_reconciles_all_six_topics
+> FAILED tests/test_stage2_swarm.py::test_research_carries_practice_architecture_and_adjacent_spec_comparisons
+> FAILED tests/test_stage2_swarm.py::test_public_requests_exclude_every_private_input
+> FAILED tests/test_stage2_swarm.py::test_public_claims_require_retrieved_source_receipts
+> FAILED tests/test_stage2_swarm.py::test_a_free_report_without_a_retrieved_page_is_no_contribution[receipts0]
+> FAILED tests/test_stage2_swarm.py::test_a_free_report_without_a_retrieved_page_is_no_contribution[receipts1]
+> FAILED tests/test_stage2_swarm.py::test_a_free_report_without_a_retrieved_page_is_no_contribution[receipts2]
+> FAILED tests/test_stage2_swarm.py::test_judge_public_citations_require_retrieved_receipts[invented-url]
+> FAILED tests/test_stage2_swarm.py::test_judge_public_citations_require_retrieved_receipts[search-snippet]
+> FAILED tests/test_stage2_swarm.py::test_redirect_receipts_back_requested_and_final_urls
+> FAILED tests/test_stage2_swarm.py::test_free_environment_excludes_identity_and_private_paths
+> FAILED tests/test_stage2_swarm.py::test_an_accepted_topic_is_recorded_and_reaches_the_free_calls
+> FAILED tests/test_stage2_swarm.py::test_every_call_is_checked_and_a_leak_block_stops_dispatch
+> FAILED tests/test_stage2_swarm.py::test_failed_pi_calls_preserve_partial_evidence[nonzero-public]
+> FAILED tests/test_stage2_swarm.py::test_failed_pi_calls_preserve_partial_evidence[nonzero-flash]
+> FAILED tests/test_stage2_swarm.py::test_failed_pi_calls_preserve_partial_evidence[empty-public]
+> FAILED tests/test_stage2_swarm.py::test_failed_pi_calls_preserve_partial_evidence[empty-flash]
+> FAILED tests/test_stage2_swarm.py::test_failed_pi_calls_preserve_partial_evidence[timeout-public]
+> FAILED tests/test_stage2_swarm.py::test_failed_pi_calls_preserve_partial_evidence[timeout-flash]
+> FAILED tests/test_stage2_swarm.py::test_every_attempt_has_identity_audit_and_outcome
+> FAILED tests/test_stage2_swarm.py::test_failures_preserve_evidence_and_never_report_complete[free-fails]
+> FAILED tests/test_stage2_swarm.py::test_failures_preserve_evidence_and_never_report_complete[flash-empty]
+> FAILED tests/test_stage2_swarm.py::test_failures_preserve_evidence_and_never_report_complete[judge-malformed]
+> FAILED tests/test_stage2_swarm.py::test_failures_preserve_evidence_and_never_report_complete[all-free-fail]
+> FAILED tests/test_stage2_swarm.py::test_failures_preserve_evidence_and_never_report_complete[unmapped-free-id]
+> FAILED tests/test_stage2_swarm.py::test_the_free_inventory_reads_what_the_pinned_pi_prints[pinned-registry]
+> FAILED tests/test_stage2_swarm.py::test_the_free_inventory_reads_what_the_pinned_pi_prints[ambiguous]
+> FAILED tests/test_stage2_swarm.py::test_the_free_inventory_reads_what_the_pinned_pi_prints[no-models]
+> FAILED tests/test_stage2_swarm.py::test_deadlines_and_role_counts_bound_the_run
+> FAILED tests/test_stage2_swarm.py::test_no_call_starts_once_the_run_deadline_is_spent
+> FAILED tests/test_stage2_swarm.py::test_a_run_across_midnight_keeps_its_frozen_research
+> FAILED tests/test_stage2_swarm.py::test_all_outputs_scrub_every_used_credential
+> FAILED tests/test_stage2_swarm.py::test_unresolved_dissent_and_human_questions_survive_reconciliation
+> FAILED tests/test_stage2_swarm.py::test_local_citations_bind_to_the_frozen_input_state
+> FAILED tests/test_stage2_swarm.py::test_local_citations_name_a_path_and_a_symbol[`src/app.py::no_such_symbol`-names no symbol of src/app.py]
+> FAILED tests/test_stage2_swarm.py::test_local_citations_name_a_path_and_a_symbol[`src/app.py:1`-gives line numbers only]
+> FAILED tests/test_stage2_swarm.py::test_local_citations_name_a_path_and_a_symbol[`src/app.py`-is a bare path]
+> FAILED tests/test_stage2_swarm.py::test_only_the_runner_appends_research - As...
+> 46 failed, 2254 passed, 16 skipped in 578.87s (0:09:38)
+> ── [pytest] RED (block) — der Lauf ist rot.
+>
+> Standard error of the whole run, last lines:
+> [… 12270 earlier lines left out …]
+> templates/handover.md:48:81 error MD013/line-length Line length [Expected: 80; Actual: 88]
+> templates/spec.md:21 error MD041/first-line-heading/first-line-h1 First line in a file should be a top-level heading [Context: "```yaml"]
+> templates/spec.md:39:81 error MD013/line-length Line length [Expected: 80; Actual: 97]
+> templates/spec.md:40:81 error MD013/line-length Line length [Expected: 80; Actual: 95]
+> tools/claude-code/README.md:17:81 error MD013/line-length Line length [Expected: 80; Actual: 105]
+> tools/claude-code/README.md:18:81 error MD013/line-length Line length [Expected: 80; Actual: 109]
+> tools/claude-code/README.md:19:81 error MD013/line-length Line length [Expected: 80; Actual: 134]
+> tools/claude-code/README.md:23:1 error MD060/table-column-style Table column style [Table pipe is missing space to the right for style "compact"]
+> tools/claude-code/README.md:23:5 error MD060/table-column-style Table column style [Table pipe is missing space to the left for style "compact"]
+> tools/claude-code/README.md:23:5 error MD060/table-column-style Table column style [Table pipe is missing space to the right for style "compact"]
+> tools/claude-code/README.md:23:9 error MD060/table-column-style Table column style [Table pipe is missing space to the left for style "compact"]
+> tools/claude-code/README.md:23:9 error MD060/table-column-style Table column style [Table pipe is missing space to the right for style "compact"]
+> tools/claude-code/README.md:23:13 error MD060/table-column-style Table column style [Table pipe is missing space to the left for style "compact"]
+> tools/claude-code/README.md:24:81 error MD013/line-length Line length [Expected: 80; Actual: 272]
+> tools/claude-code/README.md:25:81 error MD013/line-length Line length [Expected: 80; Actual: 180]
+> tools/claude-code/README.md:26:81 error MD013/line-length Line length [Expected: 80; Actual: 115]
+> tools/claude-code/README.md:28:81 error MD013/line-length Line length [Expected: 80; Actual: 124]
+> tools/claude-code/README.md:29:81 error MD013/line-length Line length [Expected: 80; Actual: 106]
+> tools/claude-code/README.md:38:1 error MD060/table-column-style Table column style [Table pipe is missing space to the right for style "compact"]
+> tools/claude-code/README.md:38:5 error MD060/table-column-style Table column style [Table pipe is missing space to the left for style "compact"]
+> tools/claude-code/README.md:38:5 error MD060/table-column-style Table column style [Table pipe is missing space to the right for style "compact"]
+> tools/claude-code/README.md:38:9 error MD060/table-column-style Table column style [Table pipe is missing space to the left for style "compact"]
+> tools/claude-code/README.md:38:9 error MD060/table-column-style Table column style [Table pipe is missing space to the right for style "compact"]
+> tools/claude-code/README.md:38:13 error MD060/table-column-style Table column style [Table pipe is missing space to the left for style "compact"]
+> tools/claude-code/README.md:40:81 error MD013/line-length Line length [Expected: 80; Actual: 442]
+> tools/claude-code/README.md:41:81 error MD013/line-length Line length [Expected: 80; Actual: 163]
+> tools/claude-code/README.md:42:81 error MD013/line-length Line length [Expected: 80; Actual: 126]
+> tools/claude-code/README.md:43:81 error MD013/line-length Line length [Expected: 80; Actual: 96]
+> tools/claude-code/README.md:44:81 error MD013/line-length Line length [Expected: 80; Actual: 167]
+> tools/claude-code/README.md:72:1 error MD060/table-column-style Table column style [Table pipe is missing space to the right for style "compact"]
+> tools/claude-code/README.md:72:5 error MD060/table-column-style Table column style [Table pipe is missing space to the left for style "compact"]
+> tools/claude-code/README.md:72:5 error MD060/table-column-style Table column style [Table pipe is missing space to the right for style "compact"]
+> tools/claude-code/README.md:72:9 error MD060/table-column-style Table column style [Table pipe is missing space to the left for style "compact"]
+> tools/claude-code/README.md:72:9 error MD060/table-column-style Table column style [Table pipe is missing space to the right for style "compact"]
+> tools/claude-code/README.md:72:13 error MD060/table-column-style Table column style [Table pipe is missing space to the left for style "compact"]
+> tools/claude-code/README.md:73:81 error MD013/line-length Line length [Expected: 80; Actual: 112]
+> tools/claude-code/README.md:74:81 error MD013/line-length Line length [Expected: 80; Actual: 89]
+> tools/claude-code/README.md:75:81 error MD013/line-length Line length [Expected: 80; Actual: 88]
+> tools/pi/README.md:65:81 error MD013/line-length Line length [Expected: 80; Actual: 97]
+> make: *** [verify] Error 1
+> ````
