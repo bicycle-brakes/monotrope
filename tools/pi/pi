@@ -1,0 +1,57 @@
+#!/bin/sh
+# The one path to Pi in this repository (bead coding-harness-agx, ADR 0019):
+# starts the repository-local install under tools/pi/ with the declared Node
+# major, from any working directory, whatever a `pi` on PATH claims to be.
+# It never installs, never uses npx, never falls back to a global Pi, and it
+# changes neither the caller's working directory, environment nor arguments.
+set -eu
+
+dir=$(CDPATH='' cd -- "$(dirname -- "$0")" && pwd)
+pkg="@earendil-works/pi-coding-agent"
+
+say() {
+    echo "tools/pi/pi: $*" >&2
+    echo "tools/pi/pi: set the pinned install up with: bash tools/pi/install.sh (see tools/pi/README.md)" >&2
+    exit 1
+}
+
+node_version_file="$dir/.node-version"
+manifest="$dir/package.json"
+[ -f "$node_version_file" ] || say "the Node declaration .node-version is missing from $dir."
+[ -f "$manifest" ] || say "the pin manifest package.json is missing from $dir."
+command -v node >/dev/null 2>&1 ||
+    say "node is not on PATH; the pinned Pi needs Node $(cat "$node_version_file")."
+
+want_major=$(sed -n 's/^\([0-9][0-9]*\)\..*/\1/p' "$node_version_file")
+[ -n "$want_major" ] || say "the Node declaration .node-version holds no <major>.<minor>.<patch> version."
+have_major=$(node -p 'process.versions.node.split(".")[0]') || say "the Node on PATH could not be measured."
+[ "$have_major" = "$want_major" ] ||
+    say "Node $have_major is not the declared major $want_major (tools/pi/.node-version); an unmeasured toolchain starts no Pi."
+
+pin=$(sed -n 's/^[[:space:]]*"@earendil-works\/pi-coding-agent":[[:space:]]*"\([^"]*\)".*/\1/p' "$manifest" | head -n 1)
+[ -n "$pin" ] || say "the pin manifest package.json declares no $pkg dependency."
+printf '%s\n' "$pin" | grep -Eq '^[0-9]+\.[0-9]+\.[0-9]+$' ||
+    say "\"$pin\" is not an exact <major>.<minor>.<patch> version; a floating pin is no pin."
+
+installed="$dir/node_modules/$pkg/package.json"
+[ -f "$installed" ] || say "the pinned Pi ($pkg@$pin) is not installed under $dir/node_modules."
+
+version=$(node -e '/* pin-check:version */
+const fs = require("fs");
+const pkg = JSON.parse(fs.readFileSync(process.argv[1], "utf8"));
+process.stdout.write(typeof pkg.version === "string" ? pkg.version : "");
+' "$installed") || say "the installed package's version could not be read."
+[ "$version" = "$pin" ] ||
+    say "the installed Pi is ${version:-unknown}, not the pinned $pin; reinstall with bash tools/pi/install.sh."
+
+bin=$(node -e '/* pin-check:bin */
+const fs = require("fs");
+const pkg = JSON.parse(fs.readFileSync(process.argv[1], "utf8"));
+const bin = typeof pkg.bin === "string" ? pkg.bin : pkg.bin && pkg.bin.pi;
+process.stdout.write(typeof bin === "string" ? bin : "");
+' "$installed") || say "the installed package's bin entry could not be read."
+[ -n "$bin" ] || say "the installed Pi declares no pi bin entry."
+[ -f "$dir/node_modules/$pkg/$bin" ] ||
+    say "the Pi entry file $bin is missing from the install; reinstall with bash tools/pi/install.sh."
+
+exec node "$dir/node_modules/$pkg/$bin" "$@"

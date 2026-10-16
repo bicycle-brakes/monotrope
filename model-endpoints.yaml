@@ -167,7 +167,9 @@ endpunkte:
       session`, ADR 0012) run here — and nothing else; the spec review (phase
       2a) runs on Opus 5.5 and the review (phase 6) on Codex — through
       `python3
-      scripts/stage2.py` and Pi at the version the runner pins (1.1.0) only. The order of `modelle` is the loop's ladder: round n
+      scripts/stage2.py` and Pi at the version the runner pins — the exact
+      version `tools/pi/package.json` declares, the repository's own install
+      (ADR 0019) — only. The order of `modelle` is the loop's ladder: round n
       calls the n-th id, and a one-line pull request reorders it. Address:
       `https://opencode.ai/zen/go/v1/chat/completions`, under which the Go
       page (read 2026-10-07) lists the three ids; the Anthropic-compatible

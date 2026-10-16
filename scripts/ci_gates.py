@@ -433,14 +433,17 @@ def _checkout(job_gates: list[dict[str, Any]]) -> list[str]:
 
 
 def _toolchain(python_version: str) -> list[str]:
-    """The two steps that give a job its interpreter and its packages — in this order.
+    """The toolchain steps: Python everywhere, pinned Pi where tools/pi exists — in this order.
 
     `actions/setup-python` first: `python3` after it is the declared interpreter,
     and `INSTALL` then installs the hash-checked lock into exactly that one
-    (bead coding-harness-ei0). Like checkout, neither step carries the `if` of a
-    gate: without them no gate has a subject.
+    (bead coding-harness-ei0). `actions/setup-node` reads the exact runtime from
+    `tools/pi/.node-version`, and `tools/pi/install.sh` installs the locked Pi
+    that both jobs' pytest then runs the offline contracts against (ADR 0019).
+    Like checkout, none of these steps carries the `if` of a gate: without them
+    no gate has a subject.
     """
-    return [
+    steps = [
         "      - name: Set up the declared interpreter",
         "        id: setup-python",
         "        uses: actions/setup-python@v5",
@@ -449,6 +452,18 @@ def _toolchain(python_version: str) -> list[str]:
         "      - name: Install the pinned toolchain",
         "        id: setup-deps",
         f"        run: {INSTALL}",
+    ]
+    if not (REPO_ROOT / "tools" / "pi").is_dir():
+        return steps
+    return steps + [
+        "      - name: Set up the declared Node runtime",
+        "        id: setup-node",
+        "        uses: actions/setup-node@v4",
+        "        with:",
+        "          node-version-file: tools/pi/.node-version",
+        "      - name: Install the pinned Pi",
+        "        id: setup-pi",
+        "        run: bash tools/pi/install.sh",
     ]
 
 
