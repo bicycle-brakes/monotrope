@@ -5350,8 +5350,8 @@ def test_a_table_line_a_reviewer_wrote_with_a_loop_id_is_carried_not_refused(
     assert world.run(verb) == 0, capsys.readouterr().err
     if verb == "review-loop":
         assert "## Round 2 — deepseek-v4.1-flash, mimo-v2.6-flash, " in world.record().read_text(encoding="utf-8")
-        second = next(c for c in world.reviews("pi") if "This is round 2" in (c["prompt_file"] or ""))
-        assert "This is round 2; you are `deepseek-v4.1-flash`." in second["prompt_file"]
+        prompts = [c["prompt_file"] or "" for c in world.reviews("pi")]  # the Flash members start in either order
+        assert any("This is round 2; you are `deepseek-v4.1-flash`." in prompt for prompt in prompts)
         return
     text = world.text()
     assert "| L1-1 | still open from the last round |" in text.splitlines()
