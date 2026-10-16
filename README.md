@@ -1,76 +1,112 @@
 # coding-harness
 
-A workflow for building software with AI agents: **seven phases, three
-stages**. Every phase leaves an artefact in the repository. Gates decide
-whether a phase passes, and a person decides what cannot be undone.
+**A workflow for building software with AI agents that you can check afterwards.**
+Every step leaves a file. Every check gives a verdict. Every decision has an owner.
 
-This repository is the source of truth for that process: the doctrine, the
-phase prompts, the templates, the model routing and the research behind them.
-Other repositories run an instance of it.
+This repository holds the process itself: the rules, the phase prompts, the
+templates, the model routing and the research behind them. It is used on its
+own changes, one pull request at a time.
 
-## Principles
+## Why look at it
 
-1. **The file is the handover.** Each phase ends in a file under `plans/`. The
-   next session, human or agent, starts from that file, not from the chat.
-2. **Gates are verdicts.** A phase passes when a check says so, for example
-   `make verify` green or CI green. Between the artefacts stand gates that are
-   not negotiated with: a red result stops the work.
-3. **Decisions go to whoever owns them.** Intent belongs to the person.
-   Mechanics belong to the model, with the reason written down. Details belong
-   to the agent, with the reason in the artefact. Irreversible choices are
-   asked; reversible ones are decided, recorded, and can be vetoed.
-4. **Questions carry their context.** Before the options, a question to a
-   person names the topic, why it comes up now, the situation today, and the
-   change to the repository and to the architecture. The architecture decision
-   record (ADR) 0018 makes this a rule for every question.
-5. **Disagreements are kept, not netted.** When two reviewers disagree, both
-   views stay in `findings.md`. A finding is taken only when a test or the
-   spec supports it.
-6. **Data decides which model may look.** Stage 2 calls to foreign models go
-   only through `scripts/stage2.py`, which runs a leak check before every call.
-   An endpoint that is not listed in `model-endpoints.yaml` is blocked. A leak
-   finding stops the call; there is no fallback to another model.
-7. **Who runs which phase is written down.** `docs/WORKFLOW.md` names the model
-   for each phase. Reviews follow the change class; the other phases follow the
-   phase.
-8. **Process first, then model diversity, then orchestration.** The method
-   works with one model and one session before more models or parallel agents
-   are added on top of the artefacts.
-9. **The core travels.** The method lives in repository files: `AGENTS.md`,
-   `plans/`, `prompts/`, the `Makefile` and CI. The layer specific to one
-   harness (`.claude/`) is thin and can be replaced.
-10. **Texts carry their own meaning.** A reader without the session must
-    understand every sentence. Ids and file names go in parentheses, never as
-    the carrier of a sentence.
+AI agents write code quickly. Three things usually go wrong afterwards:
+
+- **The reasoning disappears.** It lived in a chat, and the chat is gone tomorrow.
+- **Decisions happen quietly.** Something chose a design, and nobody noticed.
+- **Nobody can say what was checked.** The model reviewed its own output, and
+  that was the only review.
+
+This repository is a set of rules, files and checks against those three
+problems.
+
+## What is different about it
+
+**1. A person decides only what is theirs.**
+Decisions come in three levels. *Intent* (what should happen, what cannot be
+undone, what carries a risk) belongs to the person. *Mechanics* (which library,
+which structure) belongs to the model, and the reason is written down. *Details*
+(names, order, format) belong to the agent, with the reason written down too.
+You are asked only about what is really open. Every reversible choice stands
+until you veto it.
+
+**2. Every question comes with its context.**
+Before the options, a question says what the topic is, why it comes up now, how
+things stand today, and what would change in the repository and in the
+architecture. The question itself comes last. The rule covers every question
+from every agent, and it is recorded as architecture decision 0018 (ADR 0018).
+
+**3. Files, not chats.**
+Each phase leaves a versioned file: the research, the interview answers, the
+spec, the plan, the code and its tests, the findings, the handover. Tomorrow's
+session, a colleague, or an agent that has never seen the change starts from
+those files. A chat is not a record.
+
+**4. The plan is a contract, and it starts unless you stop it.**
+Every plan opens with a card: *For you* (what changes for you), *Done when* (the
+evidence that it holds), *Appetite* (the time limit), *Not now* (what is left
+out) and a *Pre-mortem* (the most likely reason it would fail). Then the card
+ends with "Starts unless you say stop." If the work departs from the plan, the
+plan is revised in writing. It is never silently overwritten.
+
+**5. Checks decide, and disagreement stays visible.**
+A phase passes on a verdict: a test run, a CI run, a review with no open
+blocker. A red result stops the work. When two reviewers see the same change
+differently, both views stay in the findings table. They are not averaged into
+one verdict. A finding is acted on only with evidence: a failing test, or the
+spec.
+
+**6. Data goes only where it is allowed.**
+Every model endpoint is listed with the kind of data it may see. Calls to models
+from other vendors go through one runner, which checks for leaks before every
+call. An endpoint that is not listed is blocked. A leak stops the call, and the
+work does not move silently to another model.
+
+## Who it is for
+
+- **Teams and people who let agents write real changes** and must later answer:
+  who decided this, and what was checked?
+- **Anyone who must control which data a second model sees** before it sees it.
+- **Not for one-line fixes.** The method says so itself: never plan what one
+  sentence describes. A typo gets fixed, not planned.
+
+## What a change asks of you
+
+Three moments need a person:
+
+1. **Answer the questions.** A few, each with its context, only where the
+   answer is yours to give.
+2. **Read the plan card.** The work starts unless you say stop.
+3. **Merge the pull request.** A person merges, or explicitly asks an agent to.
+   Agents do not merge their own work on their own.
 
 ## The phases
 
-| # | Phase | Leaves behind |
-|---|---|---|
-| 1 | Explore | `plans/changes/<name>/research.md` |
-| 1a | Interview | `decisions.md` |
-| 2 | Spec | `spec.md` |
-| 2a | Spec review (optional) | review rows in `findings.md` |
-| 2b | Design, by change class | `design.md` |
-| 3 | Plan | `plan.md` |
-| 4 | Implement | code and tests; loop rows in stage 2 (4b) |
-| 5 | Verify | test output as evidence |
-| 6 | Review | `findings.md` |
-| 7 | Commit | a pull request, with CI green |
+| # | Phase | What it leaves | The question it answers |
+|---|---|---|---|
+| 1 | Explore | `research.md` | What is the situation? |
+| 1a | Interview | `decisions.md` | What must a person decide? |
+| 2 | Spec | `spec.md` | What exactly should change? |
+| 2a | Spec review (optional) | rows in `findings.md` | Does the spec hold up? |
+| 2b | Design (when the change needs one) | `design.md` | How is it built? |
+| 3 | Plan | `plan.md` | In which steps, and when is it done? |
+| 4 | Implement | code and tests | Does it work? |
+| 5 | Verify | test output | Can we show it? |
+| 6 | Review | `findings.md` | Does it match the spec? |
+| 7 | Commit | a pull request | Does CI agree? |
 
-Across all phases runs the **session handover**: at the end of a session,
-a file under `docs/journal/handover/`. The gate for each phase is in
-`docs/WORKFLOW.md`, section 2.
+At the end of any session, a handover file records where the work stands. The
+gate for each phase is in `docs/WORKFLOW.md`, section 2.
 
-## The three stages
+## Three stages
 
-- **Stage 1 — Claude Code only.** All seven phases run in Claude Code with
-  Anthropic models. This is the binding baseline.
-- **Stage 2 — other vendors for framework content.** Models from other vendors
+- **Stage 1 — Claude Code only.** All seven phases run with Anthropic models.
+  This is the binding baseline, and the place to start.
+- **Stage 2 — a second vendor as an extra check.** Models from other vendors
   draft, review and repair this repository's own content. The calls go only
-  through `scripts/stage2.py`. The scope is framework content only (ADR 0007,
-  amended since). The routing is in `docs/WORKFLOW.md`, section 4.
-- **Stage 3 — meta-harness.** Agents as YAML files, parallel worktrees and
+  through `scripts/stage2.py`, and the scope is framework content (ADR 0007,
+  amended since). Whether the second check finds more errors is being measured,
+  not assumed.
+- **Stage 3 — orchestration.** Agents as YAML files, parallel worktrees and
   automatic routing. This stage is evaluative and not in production.
 
 ## Status
@@ -96,25 +132,9 @@ History: the bootstrap handover is
 `docs/journal/handover/2026-09-16-coding-harness-bootstrap.md`; the 2026-09-17
 targets are in `docs/architecture/`.
 
-## Repository layout
+## For contributors
 
-| Path | What it holds |
-|---|---|
-| `AGENTS.md` | Instructions that every agent harness reads |
-| `docs/WORKFLOW.md` | The doctrine: phases, routing, rules |
-| `prompts/` | One prompt per phase |
-| `templates/` | Artefact templates, for example findings and handover |
-| `plans/` | Changes in flight, archived changes and living specs |
-| `decisions/` | The gate list (`gates.yaml`), the adoption record and recorded answers |
-| `docs/adr/` | Architecture decision records (append-only) |
-| `docs/journal/handover/` | Session handovers |
-| `docs/research/` | Research notes |
-| `model-endpoints.yaml` | Allowed model endpoints and the data classes they may see |
-| `scripts/` | Gates, the stage-2 runner (`stage2.py`) and kit tooling |
-| `tools/` | Tracker wrapper (`bd`), the pinned Pi install and Claude Code display |
-| `tests/` | The test suite |
-
-## Quick start
+### Quick start
 
 ```bash
 git clone https://github.com/MPAdesso/coding-harness.git
@@ -130,7 +150,25 @@ To start a change, the bead must already exist:
 `python3 scripts/new_change.py <name> --bead <id>`. Then read
 `docs/WORKFLOW.md` and work at phase 1.
 
-## Working in this repository
+### Repository map
+
+| Path | What it holds |
+|---|---|
+| `AGENTS.md` | Instructions that every agent harness reads |
+| `docs/WORKFLOW.md` | The doctrine: phases, routing, rules |
+| `prompts/` | One prompt per phase |
+| `templates/` | Artefact templates, for example findings and handover |
+| `plans/` | Changes in flight, archived changes and living specs |
+| `decisions/` | The gate list (`gates.yaml`), the adoption record and recorded answers |
+| `docs/adr/` | Architecture decision records (append-only) |
+| `docs/journal/handover/` | Session handovers |
+| `docs/research/` | Research notes |
+| `model-endpoints.yaml` | Allowed model endpoints and the data they may see |
+| `scripts/` | Gates, the stage-2 runner (`stage2.py`) and kit tooling |
+| `tools/` | Tracker wrapper (`bd`), the pinned Pi install and the Claude Code display |
+| `tests/` | The test suite |
+
+### Working rules
 
 - **Tracker.** Beads with the `coding-harness-` prefix. Read and write them
   only through `tools/bd`. The tracker moves through `refs/dolt/data` on
@@ -142,7 +180,7 @@ To start a change, the bead must already exist:
 - **One change, one worktree.** Worktrees live under `.claude/worktrees/`.
 - **Language.** Repository artefacts are in English.
 
-## Related repositories
+### Related repositories
 
 | Repository | Role |
 |---|---|
