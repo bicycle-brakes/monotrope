@@ -4,7 +4,7 @@ status: draft
 implementation_status: none
 date: 2026-10-15
 last_reviewed: 2026-10-15
-updated: 2026-10-15
+updated: 2026-10-16
 supersedes: null
 superseded_by: null
 bead: coding-harness-0ho
@@ -160,3 +160,41 @@ other sessions were not read; this runner task changes no tracker state.
   its tracker renderer can read the main checkout outside this task's read
   boundary. The absent change-artifact validator was not run. Full
   `make verify`, derived-file refresh and the commit belong to the runner.
+
+
+## Redraft gap checks — 2026-10-16
+
+Checked at `a2a58e82404634dd9fddbd54e99208ef45fcaf18`, before implementation:
+
+- Five answered human records now stand in `decisions.md`. The earlier
+  interview debt is discharged: `_counted(_parse_records(...)[0])` returns
+  5 and the change-specific interview check exits 0. The gate must still
+  run with the planned ADR edit present. The new answers require explicit
+  orchestrator authorisation, review of every guard test, repair-only scope
+  and retained planting branches guarded by verification.
+- `phase_prompt` appends the shared rows-only `ANSWER_FORMAT` after the
+  phase-6 prompt. Changing only `prompts/06-review.md` would therefore leave
+  conflicting instructions. A phase-6-specific allowance for guard
+  evidence lines is needed in `scripts/stage2.py`; `parse_rows`,
+  `answer_parts` and `answer_block` already retain non-row text verbatim
+  under `NOT_ROWS_NOTE`. No new findings-table schema is needed. The
+  pre-verdict review must identify tests from their code without reading
+  the private loop rows (`review`, `prompts/06-review.md`).
+- Both local verification and generated CI consume `decisions/gates.yaml`;
+  `scripts/verify_all.sh` runs blocking local commands and
+  `scripts/ci_gates.py --generate-ci` emits the hosted workflow. A new
+  blocking gate with placement `both` needs no Makefile or runner change.
+  The generated workflow is `.github/workflows/ci.yml`, and generation
+  prints to stdout. `tests/test_ci.py` requires mutation evidence for a
+  new gate, including a recognised seeded-red test name.
+- No phase-2a rows stand in the existing `findings.md`; its two audit lines
+  are preserved. No design is due for `bounded`, and no new ADR is due.
+- The change-artifact validator and plan template are still absent.
+  Full registry/verification checks are left to the orchestrator because
+  their tracker render can resolve to the main checkout outside this
+  task's read boundary. Live PR state and parallel-session state were not
+  read; this runner task makes no tracker write or git mutation.
+
+Draft validation on 2026-10-16: the interview check and criterion ledger
+exit 0, required frontmatter parses with nonempty fields, and
+`git diff --check` exits 0. These validate the draft, not implementation.

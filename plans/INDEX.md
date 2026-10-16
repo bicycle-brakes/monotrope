@@ -130,9 +130,9 @@ typed: a hand-kept list of files ages exactly as fast as files are added.
 | [`changes/criterion-test-ledger/spec.md`](changes/criterion-test-ledger/spec.md) | draft | partial | 2026-10-11 | coding-harness-909 |
 | [`changes/guard-test/decisions.md`](changes/guard-test/decisions.md) | draft | none | 2026-10-15 | coding-harness-0ho |
 | [`changes/guard-test/findings.md`](changes/guard-test/findings.md) | draft | none | 2026-10-15 | coding-harness-0ho |
-| [`changes/guard-test/plan.md`](changes/guard-test/plan.md) | draft | none | 2026-10-15 | coding-harness-0ho |
+| [`changes/guard-test/plan.md`](changes/guard-test/plan.md) | draft | none | 2026-10-16 | coding-harness-0ho |
 | [`changes/guard-test/research.md`](changes/guard-test/research.md) | draft | none | 2026-10-15 | coding-harness-0ho |
-| [`changes/guard-test/spec.md`](changes/guard-test/spec.md) | draft | none | 2026-10-15 | coding-harness-0ho |
+| [`changes/guard-test/spec.md`](changes/guard-test/spec.md) | draft | none | 2026-10-16 | coding-harness-0ho |
 | [`changes/haiku-5-5/decisions.md`](changes/haiku-5-5/decisions.md) | draft | none | 2026-10-14 | coding-harness-eao |
 | [`changes/haiku-5-5/findings.md`](changes/haiku-5-5/findings.md) | draft | none | 2026-10-14 | coding-harness-eao |
 | [`changes/haiku-5-5/plan.md`](changes/haiku-5-5/plan.md) | draft | none | 2026-10-14 | coding-harness-eao |

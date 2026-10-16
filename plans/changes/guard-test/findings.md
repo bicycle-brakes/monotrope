@@ -6,7 +6,7 @@ implementation_status: none
 date: 2026-10-15
 created: 2026-10-15
 last_reviewed: 2026-10-15
-updated: 2026-10-15
+updated: 2026-10-16
 supersedes: null
 superseded_by: null
 bead: coding-harness-0ho
@@ -20,3 +20,5 @@ tags: [findings, stage-2]
 # Findings — guard-test
 
 Stage-2 call, 2026-10-15: draft · attempt 1 · route codex · endpoint openai-codex · model gpt-6.1-sol · leak check clean over 441 files, 1260 commits, 12 rules.
+
+Stage-2 call, 2026-10-16: draft · attempt 1 · route codex · endpoint openai-codex · model gpt-6.1-sol · leak check clean over 462 files, 1310 commits, 12 rules.

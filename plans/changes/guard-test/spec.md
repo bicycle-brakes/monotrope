@@ -3,8 +3,8 @@ title: "Spec — guard-test"
 status: draft
 implementation_status: none
 date: 2026-10-15
-last_reviewed: 2026-10-15
-updated: 2026-10-15
+last_reviewed: 2026-10-16
+updated: 2026-10-16
 supersedes: null
 superseded_by: null
 bead: coding-harness-0ho
@@ -23,7 +23,7 @@ adr_files: [docs/adr/0017-codex-repairs-taken-findings.md]
 Test-only repairs over correct production code can carry a runner-executed
 guard proof instead of failing the ordinary baseline-red requirement
 (bead `coding-harness-0ho` — guard-test evidence for test-only repairs).
-Research: `research.md`. Human answer: `decisions.md`, Q-1.
+Research: `research.md`. Human answers: `decisions.md`, Q-1 through Q-5 (2026-10-15/16).
 
 ## Problem
 
@@ -46,7 +46,7 @@ read today" and "How the red-first proof runs today", checked at
 
 ## Acceptance criteria
 
-1. When a taken row is answered `<ID>: fixed — guard test — tests/<path>::<function>`, the runner recognises a guard proof for that row.
+1. When a row taken as `taken — guard test — <reason>` is answered `<ID>: fixed — guard test — tests/<path>::<function>`, the runner recognises a guard proof for that row.
    *Refuted by:* a valid guard answer is rejected as an unknown fixed form or sent through ordinary baseline-red proof.
 2. If a guard answer does not name a defined top-level `test_…` in a `tests/…/test_*.py` file, or that function's source does not contain `STAGE2_PLANT_FAULT`, the attempt fails with the row identified.
    *Refuted by:* an undefined function, a climbing path, or a switch present only in a different function is accepted.
@@ -62,14 +62,22 @@ read today" and "How the red-first proof runs today", checked at
    *Refuted by:* the mark is lost, an unrelated cell changes, a failed attempt marks a row fixed, or an already fixed guard row is selected again for repair.
 8. When an answer uses an existing ordinary-test or `not a test` form, the existing evidence rules continue to apply.
    *Refuted by:* an unmarked baseline-green test passes, ordinary proof stops accepting exit 1 or 2, or a code row gains the unauthorised `not a test` escape.
-9. While guard proofs are available, the repair instructions, findings vocabulary and operative repair doctrine state the guard spelling, both switch-controlled runs and the limit that phase 6 must check the planted fault is real.
+9. While guard proofs are available, the repair instructions, findings vocabulary and operative repair doctrine state both guard status forms, orchestrator authorisation, both switch-controlled runs and the mandatory phase-6 check of every planted fault.
    *Refuted by:* either repair route omits the guard form, operative documentation demands baseline red for every code row without the guard alternative, or it claims the runner proves fault semantics.
+10. If a row was not taken as `taken — guard test — <reason>` with a nonempty reason, a guard answer fails with the row identified.
+   *Refuted by:* an ordinary taken row, a `not a test` row or a guard mark without a reason is accepted with the guard proof.
+11. When phase 6 reviews guard repairs, it records one line per named guard test identifying the planted fault and whether the test would catch that fault in real code without the switch.
+   *Refuted by:* a guard test is omitted or only sampled, its fault or detection assessment is missing, or a bare switch-conditional failure receives no BLOCKER.
+12. If `STAGE2_PLANT_FAULT` is present in the verification environment, `make verify` and the hosted verify job fail through a blocking gate that names the switch.
+   *Refuted by:* the gate is absent from either run, is nonblocking, or accepts a present value including an empty string or `0`; absence of the variable must pass this gate.
+13. When a guard repair is checkpointed, its test retains the conditional fault-planting branch so the two-run proof can be repeated.
+   *Refuted by:* the repair removes the planting branch after proving it or the checkpointed test can no longer reproduce the planted failure.
 
 ## Non-goals
 
 - No runner-generated mutation, guarded-function naming interface, or proof-free exception.
 - No attempt to establish automatically that the switch plants a meaningful fault; phase 6 inspects that, including rejection of a bare conditional failure.
-- No migration of old findings, guard tests or criterion-ledger syntax.
+- No migration of old findings or guard tests; phase 4 evidence and criterion-ledger syntax stay unchanged (Q-4).
 - No routing, review-round, checkpoint or model-effort changes, and no new ADR.
 - No design artifact: phase 2b does not run for the recorded `bounded` class.
 
@@ -83,26 +91,23 @@ read today" and "How the red-first proof runs today", checked at
 ## Definition of Done
 
 - `make verify` green, with the criterion ledger's new tests executed and their refuting faults demonstrated.
-- Updated with the code: `templates/findings.md`, `prompts/04-implement.md`, `docs/WORKFLOW.md`, and a dated detail addendum to `docs/adr/0017-codex-repairs-taken-findings.md`.
+- Updated with the code: `templates/findings.md`, `prompts/04-implement.md`, `prompts/04b-review-loop.md`, `prompts/06-review.md`, `docs/WORKFLOW.md`, the gate declaration in `decisions/gates.yaml` with regenerated `.github/workflows/ci.yml`, and a dated detail addendum to `docs/adr/0017-codex-repairs-taken-findings.md`.
 - The PR file list confirms protected areas and non-goals; the ADR touch makes this a decision PR, whose merge remains the maintainer's confirmation.
 - The implementation PR closes the guard-test evidence task and its final commit carries `Closes-Bead: coding-harness-0ho`.
 - Special runs: none; stand-in runner tests and real local pytest proof runs do not claim a live model repair.
-- Phase 1a is complete for the planned ADR edit before phase 4 starts: five human answer records are required, and only one is currently recorded (2026-10-15).
+- The interview gate passes before phase 4 and again with the ADR edit present; five human answers are recorded as of 2026-10-16.
 
 ## Open decisions
 
-None open about the requested behavior; Q-1 fixes the switch and the proof form.
-
-**Interview prerequisite, still unmet:** the agreed ADR 0017 note requires
-four further substantive human answers before implementation. Phase 2 does
-not conduct that interview. A draft-only green interview check, before the
-ADR file changes, is insufficient evidence for the implementation gate.
+None open. Q-1 through Q-5 settle the switch, row authorisation, mandatory review, repair-only scope and retained planting branch with the verification gate.
 
 - [DETAIL] The guard's planted run requires exit 1; collection/interruption exit 2 is not a guard failure demonstration. The ordinary path retains its existing exits 1 or 2.
 - [DETAIL] Check the literal switch in the named function's source, without inferring its semantics; this makes the recorded minimal source check local to the evidence actually named.
 - [DETAIL] Reuse the isolated baseline proof checkout for the two successive runs, with a fresh controlled environment per process; this extends the existing proof boundary without a new mutation mechanism.
-- [DETAIL] Phase-4 appetite is two hours including repairs, with a stop at the limit; no earlier appetite was recorded.
-- [DETAIL] Keep the bounded class and claim the agreed existing ADR file honestly; the additional interview debt is reported rather than evaded by deleting that scope.
+- [DETAIL] Retain the existing two-hour phase-4 appetite including repairs, with a stop at the limit; the five answers add no larger allowance.
+- [DETAIL] Keep the bounded class and claim the agreed existing ADR file; the five recorded human answers cover the planned addendum without a new ADR.
+- [DETAIL] Per-test review evidence uses `Guard test: <test> — fault: <fault> — detects without switch: <yes/no and reason>` lines; this keeps successful inspection separate from findings while the existing review writer preserves it.
+- [DETAIL] A set switch means presence, even with an empty value or `0`; this makes the verification gate fail closed without depending on shell truthiness.
 
-These reversible details are proposed here with their reasons; no human
+I chose these reversible details and recorded their reasons here; no human
 answer or architecture-decision answer is recorded by this draft.
