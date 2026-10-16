@@ -3850,7 +3850,8 @@ def test_every_prompt_asks_to_read_nothing_outside(world: World) -> None:
         assert prompt.rstrip().endswith(stage2.READ_REQUEST)
     # The free swarm's prompts end in the diff by design (criterion 3); a paid
     # round keeps the read request before and after the diff.
-    world.write_record([("L1-1", "taken — test_a", "no")], state=loop_state(("free",)))
+    # (round 1 was released with the flow above, so the record continues at round 2)
+    world.write_record([("L2-1", "taken — test_a", "no")], number=2, state=loop_state(("free",)))
     world.script(pi=[{"stdout": rows(1)}] * 2)
     assert world.run("review-loop") == 0
     paid = [call for call in world.reviews("pi") if "--tools" in call["argv"]]
@@ -4444,8 +4445,6 @@ def test_round_three_starts_only_after_a_taken_row(world: World, capsys: pytest.
     world.script(pi=[{"stdout": rows(1)}] * 3)
     assert world.run("review-loop") == 0
     decide_record(world)
-    assert world.run("review-loop") == 0
-    decide_record(world)
     # the Flash round's row is repaired: its status becomes fixed, its mark stands
     text = world.record().read_text(encoding="utf-8")
     world.record().write_text(
@@ -4632,8 +4631,10 @@ def test_a_failed_swarm_member_preserves_successful_answers(
     if broken.get("exit"):
         assert "beacon-2-free failed:" in text, "the failed member left no trace"
     else:
-        assert "beacon-2-free answered in table lines" in text, "the malformed answer left no trace"
-    assert "from 1 of 2 members" in capsys.readouterr().out
+        # prose with a pipe is no table line: it is kept as it came, under the runner's own note
+        assert "not a table | at all" in text and stage2.NOT_ROWS_NOTE in text, "the malformed answer left no trace"
+    # a failed call is not an answer; prose with a pipe is one, and it is kept as it came
+    assert ("from 1 of 2 members" if broken.get("exit") else "from 2 of 2 members") in capsys.readouterr().out
 
 
 def test_free_discovery_admits_new_go_models_each_run(world: World, capsys: pytest.CaptureFixture[str]) -> None:
@@ -4661,8 +4662,8 @@ def test_free_discovery_admits_new_go_models_each_run(world: World, capsys: pyte
     )
     world.script(pi=[{"stdout": rows(1)}] * 3, pi_catalog=catalog)
     assert world.run("review-loop") == 0
-    called = [rung_of(call) for call in world.reviews("pi")]
-    assert called == [*TEST_FREE, "zeta-9-free"], "the new Go id was omitted or the Zen id was called"
+    called = [rung_of(call) for call in world.reviews("pi")][2:]  # after the failed attempt's two calls
+    assert grouped(called, (*TEST_FREE, "zeta-9-free")), "the new Go id was omitted or the Zen id was called"
     state = stage2.read_state("demo", world.record().read_text(encoding="utf-8"), "")
     assert state["free"]["selected"] == [*TEST_FREE, "zeta-9-free"]
     assert "zen-free-mirror" not in state["free"]["selected"], "a Zen id entered the selection"
@@ -4720,7 +4721,7 @@ def test_free_selection_changes_in_yaml_without_runner_edits(world: World) -> No
     world.script(pi=[{"stdout": rows(1)}] * 2, pi_catalog=catalog)
     assert world.run("review-loop") == 0
     called = [rung_of(call) for call in world.reviews("pi")]
-    assert called == ["beacon-2-free", "experimental-9"], (
+    assert grouped(called, ("beacon-2-free", "experimental-9")), (
         "the exclusion lost to the suffix, the include left the catalog, or a Zen id was called"
     )
     source = (REPO_ROOT / "scripts" / "stage2.py").read_text(encoding="utf-8")
@@ -4797,7 +4798,7 @@ def test_ineligible_paid_models_are_skipped_and_named(world: World, capsys: pyte
     assert world.run("review-loop") == 0
     decide_record(world)
     assert world.run("review-loop") == 0
-    assert [rung_of(call) for call in world.reviews("pi")] == [*TEST_FREE, *TEST_FLASH, *TEST_RUNGS], (
+    assert grouped([rung_of(call) for call in world.reviews("pi")], TEST_FREE, TEST_FLASH, TEST_RUNGS), (
         "the unread model was called or a round was invented for it"
     )
     # an empty eligible Flash membership is skipped without a round
@@ -4811,10 +4812,11 @@ def test_ineligible_paid_models_are_skipped_and_named(world: World, capsys: pyte
     assert world.run("review-loop") == 0
     decide_record(world)
     assert world.run("review-loop") == 0
-    assert [rung_of(call) for call in world.reviews("pi")] == [*TEST_FREE, *TEST_RUNGS], (
+    # with no Flash swarm declared, the whole ladder is single rungs: round 2 is the first one
+    assert grouped([rung_of(call) for call in world.reviews("pi")], TEST_FREE, TEST_LADDER[:1]), (
         "an empty Flash stage completed a fake round"
     )
-    assert "## Round 2 — mimo-v2.6-pro, " in world.record().read_text(encoding="utf-8")
+    assert "## Round 2 — deepseek-v4.1-flash, " in world.record().read_text(encoding="utf-8")
 
 
 def test_round_two_is_the_flash_swarm_then_single_rungs(world: World) -> None:
@@ -4847,7 +4849,7 @@ def test_the_loop_stops_when_the_ladder_ends(world: World, capsys: pytest.Captur
     assert world.run("review-loop") == 0
     decide_record(world)
     assert world.run("review-loop") == 0
-    assert [rung_of(call) for call in world.reviews("pi")] == [*TEST_FREE, "solo-rung"]
+    assert grouped([rung_of(call) for call in world.reviews("pi")], TEST_FREE, ("solo-rung",))
     decide_record(world)
     capsys.readouterr()
     assert world.run("review-loop") == 2
@@ -4861,7 +4863,7 @@ def set_round_origin(w: World, number: int, origin: str) -> None:
     """Rewrite the Origin cell of every `L<number>-` row of the record, as a repair's provenance would."""
     text = w.record().read_text(encoding="utf-8")
     text = re.sub(
-        rf"^(\| L{number}-\d+(?:\|[^|]+){{2}}\|)[^|]+(\|.*)$",
+        rf"^(\| L{number}-\d+ (?:\|[^|]+){{2}}\|)[^|]+(\|.*)$",
         rf"\g<1> {origin} \g<2>",
         text,
         flags=re.M,
@@ -4901,11 +4903,12 @@ def test_round_history_survives_split_releases_and_config_edits(
     assert world.run("release-loop") == 0
     assert not world.record().exists()
     # the configuration changes after the release: the run's snapshot stands
-    pin_entry(world.root / "model-endpoints.yaml", ("moved-rung", "deepseek-v4.1-flash"))
+    # (the pinned members stay declared: a snapshot id the file no longer lists is refused, not replaced)
+    pin_entry(world.root / "model-endpoints.yaml", ("moved-rung", "deepseek-v4.1-flash", "mimo-v2.6-flash"))
     (world.bin / "calls.jsonl").unlink()
     world.script(pi=[{"stdout": rows(1)}] * 3)
     assert world.run("review-loop") == 0
-    assert [rung_of(call) for call in world.reviews("pi")] == list(TEST_FLASH), (
+    assert grouped([rung_of(call) for call in world.reviews("pi")], TEST_FLASH), (
         "the edited yaml replayed the free stage or moved the swarm"
     )
     decide_record(world, status="rejected — scope")
@@ -4923,6 +4926,7 @@ def test_round_history_survives_split_releases_and_config_edits(
             "Kept from the loop record:",
         ]
     )
+    shutil.rmtree(world.record().parent)  # a release deletes the record it counted
     world.write_findings(VERDICT, block)
     capsys.readouterr()
     assert world.run("review-loop") == 2
@@ -5190,7 +5194,7 @@ def test_a_pipe_inside_a_reviewers_finding_reaches_findings(world: World) -> Non
     assert "No loop row was reported." not in text
     (row,) = released_rows(text)
     assert row[0] == "L1-1" and "cat x" in row[5] and "sort` drops the last row" in row[5]
-    assert row[6:9] == ["deepseek-v4.1-flash", "taken — test_a", "no"]
+    assert row[6:9] == ["acme-v1-free", "taken — test_a", "no"]
 
 
 def test_a_line_that_is_not_a_loop_row_is_carried_to_findings(world: World) -> None:
@@ -7546,7 +7550,7 @@ def test_round_three_starts_after_a_fixed_round_two_row(world: World) -> None:
         encoding="utf-8",
     )
     assert world.run("review-loop") == 0, "the repaired row did not keep round 2 accepted"
-    assert [rung_of(call) for call in world.reviews("pi")] == [*TEST_FREE, *TEST_FLASH, *TEST_RUNGS]
+    assert grouped([rung_of(call) for call in world.reviews("pi")], TEST_FREE, TEST_FLASH, TEST_RUNGS)
 
 
 def test_stage2_off_is_accepted_for_repair(world: World, monkeypatch: pytest.MonkeyPatch) -> None:

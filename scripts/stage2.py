@@ -3964,8 +3964,10 @@ def review_loop(root: Path, change: str) -> None:
             )
         else:
             statements.append(f"{member} reported no finding.")
-        if rest.strip():
-            reviewer_blocks.append(rest.strip())
+        # An answer with no row is kept whole, blank lines included; beside rows, what is not a row.
+        kept = rest if rows else outcome
+        if kept.strip():
+            reviewer_blocks.append(kept.strip())
     parts = [f"## Round {round_number} — {', '.join(members)}, {today()}", *statements]
     for block in reviewer_blocks:
         parts.append(f"{NOT_ROWS_NOTE}\n\n{block}")
