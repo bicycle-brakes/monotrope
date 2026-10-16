@@ -3,14 +3,14 @@ title: "Spec — loop-until-clean"
 status: draft
 implementation_status: none
 date: 2026-10-14
-last_reviewed: 2026-10-14
-updated: 2026-10-14
+last_reviewed: 2026-10-16
+updated: 2026-10-16
 supersedes: null
 superseded_by: null
 bead: coding-harness-4fk
 owner: framework-architect
 provenance: ai-drafted-reviewed
-produced_by: {kind: llm-session, name: glm, version: "2026-10-14"}
+produced_by: {kind: llm-session, name: codex, version: "2026-10-16"}
 review: {status: pending, approved_by: null, approved_at: null}
 tags: [spec, stage2, review-loop, opencode-go, swarm]
 class: feature
@@ -22,263 +22,209 @@ adr_files: [docs/adr/0021-review-swarms-until-clean.md]
 
 # Spec — `loop-until-clean`
 
-The goal in one sentence: after this change the review loop (phase 4b) runs
-rounds until a round is clean — round 1 a parallel swarm of the OpenCode Go
-models currently offered free over the implementation's diff alone, then one
-rung of a named ladder per round — with the repair brake and the ladder's end
-as the only stops (bead `coding-harness-4fk`, which took over
-`coding-harness-dx0` by Q-4). Research: [research.md](research.md). Decisions:
-[decisions.md](decisions.md), Q-1 to Q-8, answered by the maintainer on
-2026-10-14. The ADR proposal takes effect only on merge.
+The goal in one sentence: phase 4b reviews until a decided round leaves no
+accepted finding, starting with a free swarm, then a three-Flash swarm, then
+single-model rounds, bounded by the declared ladder and the repair brake
+(bead `coding-harness-4fk`, implementation review as a swarm).
+Research: [research.md](research.md). Decisions: [decisions.md](decisions.md),
+Q-1 through Q-10 and the details of 2026-10-16; Q-10 replaces Q-5's round
+number, and Q-9 replaces the earlier draft's per-free-model declaration.
+The proposal takes effect on merge; this draft implements nothing.
 
 ## Problem
 
-Read in this worktree on 2026-10-14; the research's statements stand against
-`main` at `e0cea42` (research, "Runner exploration").
+Evidence in `research.md`, exploration of 2026-10-14 at `e0cea42`:
 
-- **The loop stops at three rounds while the goal is a clean round.** The
-  runner refuses a fourth round (`MAX_ROUNDS = 3`, `scripts/stage2.py`,
-  `review_loop`), and the first night run hit exactly that: "Round 4 of the
-  review loop was not possible: the runner stops at three rounds"
-  (`docs/journal/handover/2026-10-12-night-run-first-rehearsal.md`, §4; bead
-  coding-harness-dx0, ROADMAP.md Now 3: "review rounds until one finds
-  nothing").
-- **A clean round does not end the loop — it extends it.** Round 2 runs
-  unconditionally after a finding-less round 1, and two clean rounds stop the
-  loop with a refusal (`test_a_round_without_a_finding_still_counts`;
-  ADR 0011 decision 3, "Rounds 1 and 2 both run"). That is the opposite of
-  rounds until clean.
-- **Round 1 runs one model, not a swarm.** The maintainer's swarm decision —
-  the free models first, in parallel, on the implementation's code (Q-5, Q-8;
-  handover 2026-10-14-night-run-third, "first stage all free models") — has no
-  form in the runner: one call per round, one model per call.
-- **The ladder holds three rungs of nine.** Six of the models the maintainer
-  ordered (Q-1) are not declared anywhere, and a round past the third is
-  refused because the ladder has no rung for it (`round_number > len(models)`,
-  `scripts/stage2.py`).
-- **Every statement of the round rule is written for three rounds.** The
-  round-3 condition, the "at most three rounds" gate line and the
-  "at most three calls per change" terms reasoning stand in eight files
-  (research, "Where it lives"), and the fix-r escalation reads "not a third
-  round" (`docs/WORKFLOW.md` §2; `templates/findings.md`) — a wording with no
-  meaning in an unbounded loop.
-- **A stale citation.** `taken_in_round`'s docstring cites "ADR 0015,
-  decision 5", superseded by ADR 0017 on 2026-10-13 (research, "What is
-  unclear").
+- The runner refuses round 4 even with accepted findings: `MAX_ROUNDS = 3`
+  in `scripts/stage2.py`, encountered in the first night run's handover of
+  2026-10-12, section 4.
+- A finding-less first round still admits round 2; the existing test
+  `test_a_round_without_a_finding_still_counts` pins this behavior.
+- Every round makes one reviewer call; neither parallel swarm exists.
+- The configured ladder has three models, against the maintainer's nine
+  named models; the doctrine and its tests repeat the three-round budget.
+- `taken_in_round` cites superseded ADR 0015 instead of ADR 0017 decision 6.
 
 ## Terms
 
-- **Free stage (the swarm)** — the models the `opencode-go` entry's free-stage
-  list names: OpenCode Go models currently offered free, determined by a check
-  before the stage runs; they review round 1 in parallel, and only the
-  implementation's diff reaches them.
-- **Ladder** — the entry's model list in order, after the free stage's
-  members; one rung per round from round 2 on. **Rung** — one model of it.
-- **Clean round** — a round none of whose rows has a Status beginning `taken`
-  or `fixed`; a round that wrote no row is clean.
-- **fix-r round** — a round with at least one taken row in which every taken
-  row's Origin begins `fix-r`.
-- **Fresh free check** — reading which models OpenCode Go currently offers
-  free, before the free stage runs, and bringing the entry's free-stage list
-  up to date.
+- **Accepted finding** — a row whose Status begins `taken` or `fixed`;
+  fixing a finding preserves the fact that the review accepted it.
+- **Clean round** — a completed round with all rows decided and no accepted
+  finding; no rows or all rejected rows count as clean (Q-2).
+- **Free swarm** — round 1, all distinct `opencode-go` model ids ending in
+  `-free` returned by the pinned Pi's check for this run, reviewed in parallel.
+- **Flash swarm** — round 2, the eligible members of DeepSeek V4.1 Flash,
+  MiMo-V2.6-Flash and LongCat-2.0 reviewed in parallel (Q-10).
+- **Ladder** — the nine named paid models of Q-1, the first three grouped
+  into round 2; each remaining eligible model gets one later round in order.
+- **Free check** — invocation of the repository-pinned Pi's `--list-models`
+  before round 1, filtering exact provider `opencode-go` and suffix `-free`.
+  This checks the installed catalog afresh, not the vendor's live offer or
+  billing: its freshness is limited by the Pi pin. The list is not evidence
+  that the provider actually bills a call at zero cost.
+- **fix-r round** — a round with an accepted finding in which every accepted
+  row's Origin begins `fix-r` (the repair that caused it).
+- **Implementation diff** — source-code and test changes against the merge
+  base with `origin/main`, including staged, unstaged and untracked code,
+  with only bounded hunk context; no plans, decisions, documentation,
+  endpoint declarations, unrelated files or added repository-reading instructions
+  outside the quoted source hunks.
 
 ## Acceptance criteria
 
-1. When a round's decided rows contain no row whose Status begins `taken` or
-   `fixed`, the loop is clean and the next `review-loop` call is refused with
-   a refusal that names the clean round — after round 1 as after any later
-   round.
-   *Refuted by:* a second round that starts after a clean round 1, or a
-   refusal that names a round cap instead of the round's cleanliness (today's
-   behavior at round 2).
+1. When a completed round is clean, the next `review-loop` call refuses
+   further review and names the clean round, including after round 1.
+   *Refuted by:* another reviewer call after a clean round, including a
+   round containing only rejected findings.
 
-2. When the first round starts, the runner calls every model of the entry's
-   free-stage list in parallel — each an isolated reviewer call of today's
-   shape — and writes all their rows as one round: one heading, one id series
-   `L1-<k>`, each row carrying its model in the Reviewer cell.
-   *Refuted by:* a first round with one model, member calls run one after
-   another, rows under two headings, or a row attributed to a model that did
-   not write it.
+2. When a swarm round starts, every eligible member is called in parallel
+   and its findings form one round with unique `L<n>-<k>` ids and the actual
+   model in each row's Reviewer cell.
+   *Refuted by:* serial member calls, missing or misattributed rows, colliding
+   ids, or more than one heading for round 1 or round 2.
 
-3. While the free stage reviews, its calls carry the change's diff and the
-   loop prompt and no repository read tools; the ladder's rounds keep the four
-   read tools of today.
-   *Refuted by:* a free-stage call with `read`, or a ladder round that loses
-   its tools.
+3. While the free swarm reviews, its only repository content is the
+   implementation diff and it has no tools; paid rounds retain today's
+   `read,grep,find,ls` tools.
+   *Refuted by:* a free call receiving plan/documentation canaries, a whole
+   source file outside hunk context, an added repository-reading instruction
+   outside quoted source hunks or a tool, or round 2 losing the paid reviewers' tools.
 
-4. When a free-stage member's call fails, the round still stands with the rows
-   of the members that answered and names the failed member in the round's
-   block; a round in which no member answered writes nothing.
-   *Refuted by:* a whole round discarded over one member, rows written from a
-   failed call, or a round written from no answer at all.
+4. When a swarm member fails, the round records the failure beside the
+   answering members' rows, but no round is completed if every member fails.
+   *Refuted by:* discarding successful members, inventing findings for failed
+   members, or counting an all-failed round as clean.
 
-5. Before the free stage runs, the fresh free check is made and the entry's
-   free-stage list brought up to date, with the check's date in the entry's
-   remark; a free model the entry does not declare is named — in the run's
-   record or handover — and not called.
-   *Refuted by:* a swarm calling a model the entry does not list, or the loop
-   prompt, `docs/WORKFLOW.md` §4 and the entry's remark stating no check.
+5. When round 1 of a review-loop run is admitted, the runner checks the
+   pinned Pi's free list before review calls and records its date and exact
+   member list, automatically admitting newly found free Go models without
+   per-model YAML entries.
+   *Refuted by:* reusing yesterday's list, excluding an undeclared matching
+   Go model, calling a Zen model, omitting the recorded date/list, or making
+   a model call after an empty, failed or unreadable check.
 
-6. When a model joins the ladder, the entry's remark carries the reading of
-   its data terms — retention and training — with the date it was read; a
-   model whose terms show retention or training, or cannot be read, is not on
-   the ladder and is named in the change's findings.
-   *Refuted by:* a new ladder model without a dated terms reading, or one with
-   retention or training on the ladder.
+6. When a paid model is admitted to either paid stage, its declaration
+   contains a dated reading of retention and training terms; unreadable or
+   retaining/training models are skipped and named for the handover.
+   *Refuted by:* a paid call without that reading or a silently omitted
+   ineligible model.
 
-7. While the free stage's models may run with unread data terms — the
-   acceptance recorded in the entry's remark, because only the implementation's
-   diff reaches them — no ladder model runs on unread terms.
-   *Refuted by:* a ladder model without a terms reading riding the free
-   stage's acceptance, or the acceptance absent from the remark.
+7. While unread terms are accepted for the free stage, that permission is
+   declared as a class confined to discovered free Go models on the diff.
+   *Refuted by:* a paid or Zen call admitted under that class, a guessed
+   `-free` id not in this run's discovery, or no declared acceptance.
 
-8. When round *n* (n ≥ 2) starts, it calls the (n−1)-th rung of the entry's
-   ladder in the entry's order, and no model id stands as a literal in the
-   runner.
-   *Refuted by:* a skipped or repeated rung, or an id literal in
-   `scripts/stage2.py`.
+8. When a paid round is admitted, round 2 calls the eligible first three
+   models together and subsequent rounds call one remaining eligible rung
+   each in Q-1 order, with model ids held in configuration rather than code.
+   *Refuted by:* treating the first three as three sequential rounds,
+   interleaving a later rung, repeating a consumed rung, or hardcoding ids.
 
-9. When the last rung's round has left a taken row, the next `review-loop`
-   call is refused with a report that names the maintainer; the last rung is
-   not repeated, and no model is substituted for a rung the address refuses.
-   *Refuted by:* a round past the ladder's last rung, a repeated last rung, or
-   a fallback model after a refused id.
+9. When no eligible paid stage remains after a non-clean round, the loop
+   stops with a report to the maintainer and substitutes no model.
+   *Refuted by:* repeating the final rung, another address/model after a
+   refused id, or reporting exhaustion as a clean result.
 
-10. When each of two consecutive rounds left at least one taken row and every
-    taken row of both has Origin `fix-r`, the next round is refused with a
-    report that names the maintainer — at any round number, before the ladder
-    ends.
-    *Refuted by:* a round that starts after two fix-r rounds, or a brake that
-    fires while a taken row of Origin `base` stands in either round.
+10. When the last two consecutive rounds are fix-r rounds, the next round
+    refuses and reports to the maintainer, regardless of its round number.
+    *Refuted by:* a further call after two such rounds, or a brake firing
+    when either round has an accepted `base` finding.
 
-11. When a round's taken row is repaired to `fixed`, it still counts as taken
-    for the next round's admission and for the run count.
-    *Refuted by:* a repaired row cancelling the next round or shrinking the
-    count.
+11. When an accepted row becomes `fixed`, it remains accepted for admitting
+    the next round and counting the run.
+    *Refuted by:* a repair turning the preceding round clean or reducing
+    the recorded round count.
 
-12. When a row of the record stands undecided, the next round and the release
-    are still refused.
-    *Refuted by:* a round starting over an undecided row, or a release with
-    one.
+12. When a record has an undecided row, the next round and release remain
+    refused under today's row-decision and `Broke a test` rules.
+    *Refuted by:* a reviewer call or release over an undecided row or a fixed
+    row missing its required evidence mark.
 
-13. When rounds are released into `findings.md`, the `Rounds run:` line and
-    the next `review-loop` call still count every round — a free-stage round's
-    heading included — at any round number.
-    *Refuted by:* a round heading the counter cannot read, or a round lost
-    from the count after its release.
+13. When rounds are released into `findings.md`, every completed round and
+    its admission state remain recoverable for subsequent calls.
+    *Refuted by:* lost swarm counts, a clean/brake/exhaustion stop bypassed
+    after release, or replaying a consumed model after configuration changes.
 
-14. When `probe` runs, it makes one call per model the entry lists for the
-    loop — free stage and ladder alike — with the declaration and the leak
-    check in front of each.
-    *Refuted by:* a declared loop model the probe skips, or a probe call
-    without its checks.
+14. When `probe` runs, it checks each distinct discovered free model and
+    eligible declared paid model once, with declaration and leak checks
+    before every model call.
+    *Refuted by:* a missing member, repeated probe call, an unchecked call
+    or a free probe gaining repository tools or content beyond criterion 3.
 
-15. When the loop's rule is stated in the repository, every statement agrees:
-    rounds run until a clean round, round 1 is the free swarm on the diff
-    alone, the ladder bounds the loop, two fix-r rounds stop it — in
-    `AGENTS.md` (the 4b row and the Stage-2 paragraph, within its 200-line
-    cap), `docs/WORKFLOW.md` (the phase table, §2's escalation sentence, the
-    model table, the verb list, §4's loop and repair sections),
+15. When live repository text describes phase 4b, it agrees on the two swarms,
+    automatic Go discovery with its pin limitation, clean stop, paid ladder
+    bound and repair brake, with no operative three-round rule.
+    *Refuted by:* a conflicting sentence in `AGENTS.md`, `docs/WORKFLOW.md`,
     `prompts/02a-spec-review.md`, `prompts/04b-review-loop.md`,
-    `prompts/06-review.md`, `templates/findings.md`'s Origin note, and the
-    runner's module docstring and help; no live text says "at most three
-    rounds" or a round-3 condition; and `taken_in_round`'s docstring cites
-    ADR 0017 decision 6 as amended by ADR 0021, not the superseded ADR 0015.
-    *Refuted by:* a leftover "three rounds" or round-3 sentence, two
-    disagreeing statements, or the stale citation.
+    `prompts/06-review.md`, `templates/findings.md`, the endpoint remark or
+    runner help/docstrings, an obsolete ADR 0015 citation, or AGENTS.md
+    exceeding its existing 200-line limit.
 
-16. When the decision pull request carries ADR 0021, it amends ADR 0011's
-    decisions 3 and 8 and ADR 0017's decision 6, states the clean stop, the
-    free swarm with its diff-only confinement, the ladder with its terms rule,
-    the fix-r brake and the new call bound, and changes neither amended
-    record's body.
-    *Refuted by:* a rewritten sentence in ADR 0011 or ADR 0017, or a point
-    missing from ADR 0021.
+16. When this decision pull request carries ADR 0021, it amends ADR 0011
+    decisions 3 and 8 and ADR 0017 decision 6 with the agreed two-swarm
+    structure, automatic free discovery, privacy exception, stops and call
+    bound, preserving both older records' bodies.
+    *Refuted by:* an omitted agreement, the old per-free-model admission
+    rule, a sequential Flash round, or rewriting either historical body.
 
 ## Non-goals
 
-- The research swarm (bead coding-harness-icw): phase 1 keeps GLM 5.3 Flash;
-  Q-8's narrowing of the free-models rule is recorded here for that change to
-  read, not built.
-- Round 1 reading the code's structure first (coding-harness-mvk), the live
-  view of a round (coding-harness-uco) and the diagnostics of failed attempts
-  (coding-harness-cit): separate beads, untouched.
-- The phase-6 reviewer (Codex), the spec review (2a, Opus 5.5), the repair
-  routing of ADR 0017, the evidence rule, `Broke a test` ownership, the loop
-  record's place outside the worktree, and the verdict-before-release order.
-- A numeric round cap of any height, a repeat of the last rung, or an
-  automatic model substitution after a refused id.
-- The runner fetching the vendor's free list or terms pages itself: the fresh
-  free check and the terms readings are the orchestrator's steps; the runner
-  stays offline and calls what the entry declares.
-- The German keys of `model-endpoints.yaml` and any translation of them, and
-  anything of stage 1 or the interactive `session` verb beyond the
-  declaration's reading of the entry.
+- Research swarm, structure-first review, live progress display and failure
+  diagnostics; spec-review and phase-6 model routing; repair routing.
+- Changing the phase-6 verdict-before-release order, row evidence ownership,
+  the external location of the loop record, or stage 1 and interactive sessions.
+- An arbitrary round cap, repeated final models or automatic address/model
+  fallbacks; a vendor catalog updater or a billing-verification service.
+- A free stage with full repository access or paid models using the free
+  class exception; translating existing German configuration keys.
 
 ## Protected areas
 
-- `scripts/leakcheck.py`, `provenance.yaml`, `decisions/gates.yaml` and
-  `.claude/settings.json`: the change uses the existing checks and permission
-  policy.
-- The bodies of ADR 0011 and ADR 0017 (and every other record under
-  `docs/adr/`): the amendment is stated in ADR 0021 alone, and no D- or
-  O-number moves, so `scripts/check_decision_continuity.py`'s map changes
-  nothing.
-- `model-endpoints.yaml`'s German keys, and the run-count schema, parser and
-  probe of `scripts/stage2_runs.py` beyond a stale comment.
-- `AGENTS.md`'s 200-line cap.
-- Customer instances and everything outside this worktree.
+- `scripts/leakcheck.py`, `provenance.yaml`, `decisions/gates.yaml`,
+  `.claude/settings.json`: retain the existing security and permission policy.
+- Existing ADR bodies and `scripts/check_decision_continuity.py`: the new
+  record amends ADRs without changing a D- or O-number or its continuity map.
+- `scripts/handover_schema.py` and `scripts/stage2_runs.py`: current numeric
+  fields already allow more than three rounds; preserve their schema.
+- Customer instances and paths outside this worktree; AGENTS.md's line cap.
 
 ## Definition of Done
 
-- `verify` green once the maintainer's stated ADR answer is recorded; every
-  criterion has its ledger evidence.
-- Moved in the same pull request: `scripts/stage2.py`,
-  `tests/test_stage2.py`, `model-endpoints.yaml`,
-  `prompts/02a-spec-review.md`, `prompts/04b-review-loop.md`,
-  `prompts/06-review.md`, `docs/WORKFLOW.md`, `AGENTS.md`,
-  `templates/findings.md`, `docs/adr/0021-review-swarms-until-clean.md` and
-  `ROADMAP.md` — or the row that says why a file stayed.
-- The pull request's file list shows the protected areas untouched and the
-  non-goals unbuilt.
-- Bead: the pull request closes `coding-harness-4fk`, and its last commit
-  carries the trailer `Closes-Bead: coding-harness-4fk`.
-- Special runs: the compatibility probe over every newly declared id — one
-  call each, the id and the first line of its answer in the pull request
-  body — and this change's own review loop running under the new code.
+- All ledger evidence passes and `make verify` is green.
+- The same pull request carries the runner, its tests, the endpoint entry,
+  doctrine paths in criterion 15, `ROADMAP.md`, the runner-generated
+  `plans/INDEX.md` and `docs/adr/0021-review-swarms-until-clean.md`.
+- The file list leaves protected areas and non-goals untouched.
+- The pull request closes the implementation-review swarm work item
+  (`coding-harness-4fk`); its final commit has `Closes-Bead: coding-harness-4fk`.
+- Phase 4 records dated paid-terms sources and skipped ids for the handover;
+  the compatibility probe and this change's own new loop have evidence with
+  their commits in the decision pull request. No live provider call is made
+  merely to draft these files.
 
 ## Open decisions
 
-None open. Q-1 to Q-8 settle the ladder and its order, the meaning of clean,
-the brake, the merge with the swarm bead, the parallel first round, the
-ladder's end, the terms rule and the free first stage; the ADR-question answer
-is still owed to the orchestrating session and is not recorded by this draft.
+None open. The maintainer's Q-9 and Q-10 settle discovery and the Flash round;
+`decisions/answers/loop-until-clean/adr.yaml` already records the ADR answer
+on 2026-10-16 and is not changed here.
 
-I decided the following reversible details and recorded their reasons:
+I decide the following reversible details and state their reasons:
 
-- `[DETAIL]` Class `feature`, ADR question proposed "yes": the change replaces
-  the round budget inside the existing runner and adds a stage to an existing
-  loop — no new subsystem — while its subject is an ADR-level decision.
-- `[DETAIL]` Appetite 8 hours of phase 4, repair rounds included, as a stop;
-  the runner work, six declarations with live terms readings and the doctrine
-  sweep are each bounded and known from research.
-- `[DETAIL]` The free stage's membership is the entry's free-stage list, and
-  the fresh free check updates that list before the stage runs: the yaml
-  stays what the runner calls, so Q-7's declaration rule and Q-8's fresh check
-  hold without giving the runner a network call. A free model found but not
-  declared is named, not called.
-- `[DETAIL]` The free stage's calls carry no repository read tools (Pi's
-  measured `--no-tools`): the maintainer's condition "only the implementation's
-  code is read" is a lock there or not at all — Pi confines nothing
-  (ADR 0011 decision 4).
-- `[DETAIL]` An empty free-stage list refuses the run and names it, because a
-  silent re-route onto the ladder would blur which stage a round belongs to.
-- `[DETAIL]` The ids take the entry's lowercase form (`glm-5.3-flash`,
-  `qwen3.8-flash`, `gpt-6-luna`, `claude-haiku-5.5`, `minimax-m2.7`,
-  `longcat-2.0`); the probe measures each against the address, and a refused
-  id stops the run (criterion 9) rather than moving the spelling silently.
-- `[DETAIL]` ADR 0021 amends ADR 0011 and ADR 0017 without touching their
-  files, following the ADR 0007/0011 precedent; `adr_files` therefore lists
-  only the new record. 0018 was the first free number on 2026-10-14; 0018 to 0020 were taken or claimed by 2026-10-16, so the record is 0021.
-- `[DETAIL]` A free-stage round's heading joins its members comma-separated
-  without spaces, so the round counter's heading regex reads it unchanged.
+- `[DETAIL]` Keep class `feature`, the existing ADR proposal and appetite
+  eight hours: this redraft corrects the recorded interpretation of the same
+  runner change, without widening its budget or replacing a human answer.
+- `[DETAIL]` The entry declares the free stage as a class; a run-local
+  discovery snapshot supplies its members, so Q-9 requires no YAML edits.
+  An empty or failed discovery refuses rather than silently skipping stage 1.
+- `[DETAIL]` Round 2 retains paid read tools. Only the free stage was limited
+  to the implementation diff; Q-10 does not extend that exception.
+- `[DETAIL]` Partial swarm success remains a completed, visibly partial
+  round under criterion 4; its successful rows decide clean under Q-2.
+  An empty or unparseable answer is failure, not proof of no finding.
+- `[DETAIL]` Pin the paid stage membership and skipped ids for the run,
+  retaining stage consumption through release: an edited YAML must not replay
+  already-used reviewers. Failure before a completed round consumes no stage.
+- `[DETAIL]` Preserve duplicate reports with separate ids and reviewers;
+  the orchestrator rejects duplicates explicitly, avoiding silent loss.
+- `[DETAIL]` ADR 0021 is the existing unmerged draft for this change, already
+  named by the maintainer's ADR answer; update it rather than create 0022.
