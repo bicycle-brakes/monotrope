@@ -485,6 +485,93 @@ def test_real_reviewer_tool_contract(project: Path, transport) -> None:
     assert call["env"]["OPENCODE_API_KEY"] == SYNTHETIC_KEY
 
 
+def _git(project: Path, *args: str) -> None:
+    run = subprocess.run(
+        [
+            shutil.which("git"),
+            "-C",
+            str(project),
+            "-c",
+            "user.name=t",
+            "-c",
+            "user.email=t@example.invalid",
+            "-c",
+            "commit.gpgsign=false",
+            *args,
+        ],
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+    assert run.returncode == 0, run.stderr
+
+
+@pytest.mark.usefixtures("installed_pi")
+def test_real_free_reviewer_has_only_the_implementation_diff(transport, tmp_path: Path) -> None:
+    """Criterion 3: the real free launch declares no tools and its only content is the bounded diff."""
+    root = tmp_path / "free-project"
+    for relative, text in {
+        "scripts/helpers.py": "value = 1\n",
+        "docs/note.md": "DOC-CANARY-free-contract\n",
+        "plans/changes/demo/plan.md": "PLAN-CANARY-free-contract\n",
+        "AGENTS.md": "CONTEXT-CANARY-free-contract\n",
+    }.items():
+        path = root / relative
+        path.parent.mkdir(parents=True, exist_ok=True)
+        path.write_text(text, encoding="utf-8")
+    _git(root, "init", "--quiet", "--initial-branch=main")
+    _git(root, "add", "-A")
+    _git(root, "commit", "--quiet", "-m", "base")
+    _git(root, "update-ref", "refs/remotes/origin/main", "HEAD")
+    # the working tree changes: one candidate source file, canaries it must not carry
+    (root / "scripts" / "helpers.py").write_text("value = 2\nDIFF-CANARY-free-contract = True\n", encoding="utf-8")
+    (root / "docs" / "note.md").write_text(
+        "DOC-CANARY-free-contract\nDOC-CANARY-CHANGED-free-contract\n", encoding="utf-8"
+    )
+    (root / "AGENTS.md").write_text(
+        "CONTEXT-CANARY-free-contract\nCONTEXT-CANARY-CHANGED-free-contract\n", encoding="utf-8"
+    )
+    (root / "tests").mkdir()
+    (root / "tests" / "test_new.py").write_text("UNTRACKED-CANARY-free-contract = True\n", encoding="utf-8")
+    # the prompt as the loop composes it: the free body, the round head, the answer format, the diff
+    prompt = "\n\n".join(
+        [
+            stage2.FREE_REVIEW_BODY,
+            "This is round 1; you are `acme-1-free`.",
+            stage2.ANSWER_FORMAT,
+            f"## The implementation diff\n\n{stage2.free_diff(root)}",
+        ]
+    )
+    standin = StandIn([{"content": "No finding."}])
+    transport.providers["opencode-go"] = {"baseUrl": standin.url}
+    try:
+        answer = stage2.run_reviewer(
+            types.SimpleNamespace(change="demo", root=root), "acme-1-free", prompt, SYNTHETIC_KEY, free=True
+        )
+        assert "No finding." in answer, "the scripted stop never reached the runner"
+    finally:
+        standin.close()
+    (call,) = transport.calls
+    argv = call["argv"]
+    assert "--no-tools" in argv and "--tools" not in argv, "the free launch declared tools"
+    assert not Path(call["cwd"]).is_relative_to(root), "the free member started in the worktree"
+    (exchange,) = standin.requests
+    assert tool_names(exchange) == set(), "the model was offered a tool schema"
+    one = message_text(exchange)
+    for canary in ("DIFF-CANARY-free-contract", "UNTRACKED-CANARY-free-contract"):
+        assert canary in one, f"the diff hunk holding {canary} did not travel"
+    for canary in (
+        "DOC-CANARY-free-contract",
+        "DOC-CANARY-CHANGED-free-contract",
+        "PLAN-CANARY-free-contract",
+        "CONTEXT-CANARY-free-contract",
+        stage2.READ_REQUEST,
+    ):
+        assert canary not in one, f"a free payload carries {canary}"
+    for message in exchange.body.get("messages", []):
+        assert message.get("role") != "tool" and not message.get("tool_calls"), "a tool result travelled"
+
+
 # ---------------------------------------------------------------------------
 # Criterion 7: discovery and configuration traps stay off
 # ---------------------------------------------------------------------------

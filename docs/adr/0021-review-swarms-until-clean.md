@@ -46,7 +46,8 @@ The repository-pinned Pi and its isolation remain ADR 0019's launch path.
 The final decisions addendum of 2026-10-16 (after `a0d5bc8`) records a
 corrected Pi 1.2.0 source reading: `core/remote-catalog-provider.js` obtains
 models from `pi.dev` and caches them for four hours;
-`package-manager-cli.js` forces refresh through `pi update models`.
+`package-manager-cli.js` forces refresh through `pi update --models` (the
+flag spelling the pinned CLI measures in phase 4).
 The maintainer requested live retrieval and retained Pi's catalog after
 its distinction from Go's own endpoint was explained. They also requested
 easy later changes to the free-model rule. Catalog membership still does
@@ -87,7 +88,7 @@ the corrected order and automatic free admission.
    loop before any paid review. This amends ADR 0011 decision 3's compulsory
    second round, three-round cap and special round-3 admission rule.
 2. **Round 1 is the discovered free Go swarm.** Before each fresh loop run,
-   the runner forces `tools/pi/pi update models` in its scratch agent
+   the runner forces `tools/pi/pi update --models` in its scratch agent
    directory, then reads `tools/pi/pi --list-models` there. Failed/timed-out
    refresh refuses before listing or model calls; no stale-cache fallback.
    The YAML rule holds provider (initially `opencode-go`), id suffix

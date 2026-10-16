@@ -172,30 +172,36 @@ owns that check along with `make verify`.
 
 ## Criterion ledger
 
-- 1: not yet written tests/test_stage2.py::test_a_clean_round_ends_the_loop — an empty or all-rejected round admits another call before or after release
-- 2: not yet written tests/test_stage2.py::test_both_swarms_run_in_parallel_as_one_round — a barrier detects serialization, member omission, duplicate ids or wrong Reviewer cells
-- 3: not yet written tests/test_stage2.py::test_the_free_stage_reads_nothing_beyond_the_diff — doc/plan/unrelated-file canaries or an added READ_REQUEST outside the quoted diff reach a free call, or paid tools disappear
-- 3: not yet written tests/test_pi_contract.py::test_real_free_reviewer_has_only_the_implementation_diff — the actual pinned Pi sends canaries, tools or a tool response to the loopback capture
-- 4: not yet written tests/test_stage2.py::test_a_failed_swarm_member_preserves_successful_answers — a failed/malformed member erases successful rows or an all-failed attempt consumes a round
+- 1: tests/test_stage2.py::test_a_clean_round_ends_the_loop — an empty or all-rejected round admits another call before or after release
+- 2: tests/test_stage2.py::test_both_swarms_run_in_parallel_as_one_round — a barrier detects serialization, member omission, duplicate ids or wrong Reviewer cells
+- 3: tests/test_stage2.py::test_the_free_stage_reads_nothing_beyond_the_diff — doc/plan/unrelated-file canaries or an added READ_REQUEST outside the quoted diff reach a free call, or paid tools disappear
+- 3: tests/test_pi_contract.py::test_real_free_reviewer_has_only_the_implementation_diff — the actual pinned Pi sends canaries, tools or a tool response to the loopback capture
+- 4: tests/test_stage2.py::test_a_failed_swarm_member_preserves_successful_answers — a failed/malformed member erases successful rows or an all-failed attempt consumes a round
 - 4: tests/test_stage2.py::test_a_call_without_an_answer_is_not_a_round — an empty answer completes a round
-- 5: not yet written tests/test_stage2.py::test_free_discovery_admits_new_go_models_each_run — an undeclared new matching Go model is omitted, Zen is called, empty/malformed discovery launches a call, or date/list is absent
-- 5: not yet written tests/test_stage2.py::test_free_discovery_forces_live_refresh_before_listing — listing runs first, refresh/list use different scratch directories, a four-hour cached list is reused after failed/timed-out refresh, or the source/time is missing
-- 5: not yet written tests/test_stage2.py::test_free_selection_changes_in_yaml_without_runner_edits — suffix/include/exclude edits do not change membership, an excluded or catalog-absent id is called, or provider selection admits Zen
-- 5: not yet written tests/test_model_endpoints.py::test_free_selection_exceptions_require_dates_and_reasons — malformed rules or undated/unreasoned exception entries pass validation
-- 6: not yet written tests/test_model_endpoints.py::test_every_new_paid_model_carries_its_terms_reading — a paid declaration lacks dated retention/training evidence or a skipped requested id is unnamed
-- 6: not yet written tests/test_stage2.py::test_ineligible_paid_models_are_skipped_and_named — a disallowed paid model is called or empty eligible Flash membership creates a fake round
-- 7: not yet written tests/test_stage2.py::test_free_class_admission_is_bound_to_discovery_and_purpose — a guessed free id, Zen id, paid call or interactive session gains the exception
-- 7: not yet written tests/test_model_endpoints.py::test_unread_terms_reach_the_free_stage_alone — the entry omits or broadens the diff-only acceptance
+- 5: tests/test_stage2.py::test_free_discovery_admits_new_go_models_each_run — an undeclared new matching Go model is omitted, Zen is called, empty/malformed discovery launches a call, or date/list is absent
+- 5: tests/test_stage2.py::test_free_discovery_forces_live_refresh_before_listing — listing runs first, refresh/list use different scratch directories, a four-hour cached list is reused after failed/timed-out refresh, or the source/time is missing
+- 5: tests/test_stage2.py::test_free_selection_changes_in_yaml_without_runner_edits — suffix/include/exclude edits do not change membership, an excluded or catalog-absent id is called, or provider selection admits Zen
+- 5: tests/test_model_endpoints.py::test_free_selection_exceptions_require_dates_and_reasons — malformed rules or undated/unreasoned exception entries pass validation
+- 6: tests/test_model_endpoints.py::test_every_new_paid_model_carries_its_terms_reading — a paid declaration lacks dated retention/training evidence or a skipped requested id is unnamed
+- 6: tests/test_stage2.py::test_ineligible_paid_models_are_skipped_and_named — a disallowed paid model is called or empty eligible Flash membership creates a fake round
+- 7: tests/test_stage2.py::test_free_class_admission_is_bound_to_discovery_and_purpose — a guessed free id, Zen id, paid call or interactive session gains the exception
+- 7: tests/test_model_endpoints.py::test_unread_terms_reach_the_free_stage_alone — the entry omits or broadens the diff-only acceptance
 - 8: tests/test_stage2.py::test_a_round_calls_its_rung_from_the_entry — paid stages execute out of configured order
 - 8: tests/test_stage2.py::test_reordering_the_ladder_touches_no_code — changing the eligible configured order requires model literals in code
-- 8: not yet written tests/test_stage2.py::test_round_two_is_the_flash_swarm_then_single_rungs — first-three reviewers run as sequential rounds or a later rung joins the swarm
-- 9: not yet written tests/test_stage2.py::test_the_loop_stops_when_the_ladder_ends — the last model repeats, a refused id gets a substitute, or exhaustion is called clean
-- 10: not yet written tests/test_stage2.py::test_two_fix_r_rounds_stop_the_loop — accepted fixed rows fail to trigger the brake or a base row does not prevent it
+- 8: tests/test_stage2.py::test_round_two_is_the_flash_swarm_then_single_rungs — first-three reviewers run as sequential rounds or a later rung joins the swarm
+- 9: tests/test_stage2.py::test_the_loop_stops_when_the_ladder_ends — the last model repeats, a refused id gets a substitute, or exhaustion is called clean
+- 10: tests/test_stage2.py::test_two_fix_r_rounds_stop_the_loop — accepted fixed rows fail to trigger the brake or a base row does not prevent it
 - 11: tests/test_stage2.py::test_round_three_starts_after_a_fixed_round_two_row — repair makes the preceding round clean or loses its count
 - 12: tests/test_stage2.py::test_an_undecided_loop_row_holds_the_next_round_and_the_release — a pending/evidence-incomplete row admits review or release
-- 13: not yet written tests/test_stage2.py::test_round_history_survives_split_releases_and_config_edits — clean/brake state, multi-digit counts or consumed stages are lost across releases
-- 14: not yet written tests/test_stage2.py::test_the_probe_checks_discovered_and_paid_models_once — a member is missing/repeated, discovery skips forced live refresh or configured selection, or a per-call guard/payload boundary is bypassed
-- 15: not yet written tests/test_stage2.py::test_the_loop_doctrine_names_both_swarms_until_clean — live text keeps the old cap/order/declaration rule, claims pin-limited freshness, lacks live-source/configuration limits, cites ADR 0015 or exceeds the AGENTS.md cap
-- 16: not yet written tests/test_stage2.py::test_adr_0021_amends_the_round_budget — the new record omits Q-9/Q-10 or the live/configurable-selection addendum, or modifies historical ADR bodies
+- 13: tests/test_stage2.py::test_round_history_survives_split_releases_and_config_edits — clean/brake state, multi-digit counts or consumed stages are lost across releases
+- 14: tests/test_stage2.py::test_the_probe_checks_discovered_and_paid_models_once — a member is missing/repeated, discovery skips forced live refresh or configured selection, or a per-call guard/payload boundary is bypassed
+- 15: tests/test_stage2.py::test_the_loop_doctrine_names_both_swarms_until_clean — live text keeps the old cap/order/declaration rule, claims pin-limited freshness, lacks live-source/configuration limits, cites ADR 0015 or exceeds the AGENTS.md cap
+- 16: tests/test_stage2.py::test_adr_0021_amends_the_round_budget — the new record omits Q-9/Q-10 or the live/configurable-selection addendum, or modifies historical ADR bodies
+
+## Runner route — 2026-10-16
+
+Stage-1 route: implement · model claude-sonnet-5-5 · reason: two Flash post-run checks failed.
 
 ## Time used
+
+2026-10-16 span not measured: this Stage-1 repair session had file tools only and could not read `date`; no estimate is recorded.

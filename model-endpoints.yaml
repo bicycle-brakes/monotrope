@@ -161,7 +161,64 @@ endpunkte:
     modelle:
       - deepseek-v4.1-flash
       - mimo-v2.6-flash
+      - longcat-2.0
+      - glm-5.3-flash
+      - qwen3.8-flash
+      - gpt-6-luna
+      - claude-haiku-5.5
+      - minimax-m2.7
       - mimo-v2.6-pro
+    modelle_terms:
+      deepseek-v4.1-flash:
+        gelesen: "2026-10-07"
+        quelle: "privacy table of the Go page, https://opencode.ai/docs/go"
+        aufbewahrung: "0 days"
+        training: "Not used"
+      mimo-v2.6-flash:
+        gelesen: "2026-10-07"
+        quelle: "privacy table of the Go page, https://opencode.ai/docs/go"
+        aufbewahrung: "0 days"
+        training: "Not used"
+      mimo-v2.6-pro:
+        gelesen: "2026-10-07"
+        quelle: "privacy table of the Go page, https://opencode.ai/docs/go"
+        aufbewahrung: "0 days"
+        training: "Not used"
+      longcat-2.0:
+        uebersprungen: "2026-10-16"
+        grund: "retention and training terms not read; skipped until a dated reading exists"
+      glm-5.3-flash:
+        uebersprungen: "2026-10-16"
+        grund: "retention and training terms not read; skipped until a dated reading exists"
+      qwen3.8-flash:
+        uebersprungen: "2026-10-16"
+        grund: "retention and training terms not read; skipped until a dated reading exists"
+      gpt-6-luna:
+        uebersprungen: "2026-10-16"
+        grund: "retention and training terms not read; skipped until a dated reading exists"
+      claude-haiku-5.5:
+        uebersprungen: "2026-10-16"
+        grund: "retention and training terms not read; skipped until a dated reading exists"
+      minimax-m2.7:
+        uebersprungen: "2026-10-16"
+        grund: "retention and training terms not read; skipped until a dated reading exists"
+    flash_swarm:
+      - deepseek-v4.1-flash
+      - mimo-v2.6-flash
+    free_stage:
+      provider: opencode-go
+      id_suffix: "-free"
+      include: []
+      exclude: []
+      input: implementation-diff
+      hinweis: >-
+        Class admission instead of individual declarations: every id this
+        run's forced live catalog refresh finds under the provider, matching
+        the suffix or an include, reviews the implementation diff with no
+        tools (ADR 0021, decision 3). The retention and training terms of
+        these ids are NOT read; this acceptance covers the diff-only review
+        purpose alone — no paid model, no Zen id and no interactive session
+        runs on it.
     bemerkung: >-
       The review loop (phase 4b) and the interactive session verb (`stage2.py
       session`, ADR 0012) run here — and nothing else; the spec review (phase
@@ -169,10 +226,20 @@ endpunkte:
       `python3
       scripts/stage2.py` and Pi at the version the runner pins — the exact
       version `tools/pi/package.json` declares, the repository's own install
-      (ADR 0019) — only. The order of `modelle` is the loop's ladder: round n
-      calls the n-th id, and a one-line pull request reorders it. Address:
+      (ADR 0019) — only. The loop runs until a round is clean (ADR 0021):
+      round 1 is the discovered free-model swarm, round 2 the parallel
+      `flash_swarm`, then one eligible `modelle` id per round in declared
+      order, and a one-line pull request reorders them. Free membership is
+      selected fresh for every run by the `free_stage` rule from a forced
+      live catalog refresh (`pi update --models`) before `pi --list-models`;
+      the catalog's source is `pi.dev`, which Pi caches for four hours — the
+      forced refresh skips that cache — and being an intermediary it does not
+      measure what Go actually bills. A paid model enters only with a dated
+      reading of its retention and training terms in `modelle_terms`; a model
+      without one is skipped and named for the handover. Address:
       `https://opencode.ai/zen/go/v1/chat/completions`, under which the Go
-      page (read 2026-10-07) lists the three ids; the Anthropic-compatible
+      page (read 2026-10-07) listed the three measured ids; the
+      Anthropic-compatible
       `https://opencode.ai/zen/go/v1/messages` is not used — three calls
       there were refused on 2026-10-08. The Go page lists Pi among its
       validated clients (read 2026-10-08), and Pi sends the
@@ -192,7 +259,15 @@ endpunkte:
       no third-party client and forbid processes that "automatically or
       programmatically extracts data or Output" and that run "while you are
       not logged into the Services"; the maintainer accepted this residual
-      risk on 2026-10-08.
+      risk on 2026-10-08. The six ids beyond the three measured ones
+      (`longcat-2.0`, `glm-5.3-flash`, `qwen3.8-flash`, `gpt-6-luna`,
+      `claude-haiku-5.5`, `minimax-m2.7`) come from the maintainer's ladder
+      answer of 2026-10-14 without their own measurements: no price, limit or
+      terms reading is claimed for them, so `modelle_terms` skips each until
+      a dated reading exists. The free class accepts unread terms for the
+      implementation diff only: no tools and no other content, and no paid
+      model, Zen id or interactive session on that acceptance (ADR 0021,
+      decision 3).
 
 # ---------------------------------------------------------------------------
 # Nutzungszweck — die Auflage, die kein technisches Gate prueft

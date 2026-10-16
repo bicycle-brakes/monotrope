@@ -341,7 +341,133 @@ def test_the_opencode_go_entry_is_declared() -> None:
     assert entry["abrechnung"] == "abonnement"
     assert entry["darf_sehen"] == ["framework"]
     # The order is the maintainer's to change in this file alone; only the set and the count are pinned.
-    assert sorted(entry["modelle"]) == ["deepseek-v4.1-flash", "mimo-v2.6-flash", "mimo-v2.6-pro"]
+    assert sorted(entry["modelle"]) == [
+        "claude-haiku-5.5",
+        "deepseek-v4.1-flash",
+        "glm-5.3-flash",
+        "gpt-6-luna",
+        "longcat-2.0",
+        "mimo-v2.6-flash",
+        "mimo-v2.6-pro",
+        "minimax-m2.7",
+        "qwen3.8-flash",
+    ]
+    # The paid Flash swarm (Q-10) and the free-stage rule (ADR 0021, decision 2).
+    assert entry["flash_swarm"] == ["deepseek-v4.1-flash", "mimo-v2.6-flash"]
+    free = entry["free_stage"]
+    assert free["provider"] == "opencode-go"
+    assert free["id_suffix"] == "-free"
+    assert free["include"] == []
+    assert free["exclude"] == []
+    assert free["input"] == "implementation-diff"
+
+
+def _stage2():
+    """The runner module, or None where the kit does not carry it.
+
+    Lazy import, and never at collection time: `scripts/stage2.py` is not in
+    the kit's `mechanismus`, and a module-level import would kill this whole
+    file's collection in the throwaway repo - every declared red case in it
+    would lose its explanation at once.
+    """
+    import sys
+
+    root = Path(__file__).resolve().parent.parent
+    if not (root / "scripts" / "stage2.py").is_file():
+        return None
+    sys.path.insert(0, str(root / "scripts"))
+    try:
+        import stage2
+    except ImportError:
+        return None
+    return stage2
+
+
+def test_free_selection_exceptions_require_dates_and_reasons() -> None:
+    """Criterion 5: a free-rule exception without its date or reason does not pass validation.
+
+    The validator is the runner's `free_rule_problems`, shared with every call
+    that reads the rule; here it is held against planted mutants of the real
+    entry, so a looser validator fails this file.
+    """
+    entry = dict(_endpunkt("opencode-go"))
+    assert entry.get("free_stage", {}).get("provider") == "opencode-go"
+    runner = _stage2()
+    if runner is None:
+        pytest.fail("the kit does not carry scripts/stage2.py; the rule validator cannot run here")
+    assert runner.free_rule_problems(entry) == []
+    rule = entry["free_stage"]
+    dated = {"id": "extra-free", "date": "2026-10-16", "reason": "measured in the catalog"}
+    # An exclude wins over matches - and so its record needs all three fields.
+    for field in ("id", "date", "reason"):
+        broken = {**entry, "free_stage": {**rule, "exclude": [{**dated, field: ""}]}}
+        problems = runner.free_rule_problems(broken)
+        assert problems and field in str(problems), f"an exclude without {field} passed validation"
+    broken = {**entry, "free_stage": {**rule, "include": [{"id": "x-free", "date": "2026-13-45", "reason": "r"}]}}
+    assert runner.free_rule_problems(broken), "an impossible date passed validation"
+    broken = {**entry, "free_stage": {**rule, "exclude": ["ad-hoc-free"]}}
+    assert runner.free_rule_problems(broken), "a bare string passed as an exception record"
+    # The Zen provider never enters the rule, and the input stays the diff.
+    broken = {**entry, "free_stage": {**rule, "provider": "opencode"}}
+    assert any("Zen" in problem for problem in runner.free_rule_problems(broken))
+    broken = {**entry, "free_stage": {**rule, "input": "full-repository"}}
+    assert runner.free_rule_problems(broken), "a broader input than the implementation diff passed"
+    broken = {**entry, "free_stage": {**rule, "id_suffix": "", "include": []}}
+    assert runner.free_rule_problems(broken), "a rule that selects nothing passed"
+
+
+def test_every_new_paid_model_carries_its_terms_reading() -> None:
+    """Criterion 6: a paid model is admitted only with a dated terms reading or a dated skip.
+
+    Every `modelle` id holds a `modelle_terms` record; an admitted one carries
+    the date and the source of the retention/training reading, a skipped one
+    its date and reason - so no paid model is silently omitted.
+    """
+    entry = _endpunkt("opencode-go")
+    modelle = entry.get("modelle") or []
+    assert len(modelle) == 9
+    terms = entry.get("modelle_terms") or {}
+    admitted, skipped = [], []
+    for model in modelle:
+        record = terms.get(model) or {}
+        if record.get("uebersprungen"):
+            assert record.get("grund"), f"{model} is skipped without its reason"
+            assert re.fullmatch(r"\d{4}-\d{2}-\d{2}", str(record["uebersprungen"]))
+            skipped.append(model)
+            continue
+        assert record.get("gelesen"), f"{model} has no dated terms reading and no skip"
+        assert re.fullmatch(r"\d{4}-\d{2}-\d{2}", str(record["gelesen"]))
+        assert record.get("quelle"), f"{model} names no source for its terms reading"
+        admitted.append(model)
+    # The three measured ids stay admitted; the six without their own reading
+    # are skipped BY NAME - never silently.
+    assert admitted == ["deepseek-v4.1-flash", "mimo-v2.6-flash", "mimo-v2.6-pro"]
+    assert skipped == [
+        "longcat-2.0",
+        "glm-5.3-flash",
+        "qwen3.8-flash",
+        "gpt-6-luna",
+        "claude-haiku-5.5",
+        "minimax-m2.7",
+    ]
+    # The Flash swarm takes eligible members only: a skipped id is not in it.
+    assert not set(entry.get("flash_swarm") or []) & set(skipped)
+
+
+def test_unread_terms_reach_the_free_stage_alone() -> None:
+    """Criterion 7: the unread-terms acceptance is declared for the free class and bounded by it."""
+    entry = _endpunkt("opencode-go")
+    free = entry.get("free_stage") or {}
+    # The diff-only purpose is a declared field, not prose alone ...
+    assert free.get("input") == "implementation-diff"
+    # ... and the acceptance names its own bounds: unread terms, no tools,
+    # and no paid, Zen or interactive use of the exception.
+    hinweis = free.get("hinweis", "")
+    one = " ".join(hinweis.split())
+    assert "NOT read" in one, "the acceptance does not state that the terms are unread"
+    assert "no" in one and "tools" in one, "the acceptance does not state the tool-free confinement"
+    for forbidden in ("paid model", "Zen", "interactive session"):
+        assert forbidden in one, f"the acceptance does not name what it does not cover: {forbidden}"
 
 
 def opencode_remark_problems(remark: str) -> list[str]:
