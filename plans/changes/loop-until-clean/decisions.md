@@ -281,3 +281,22 @@ accepting that `gpt-6-luna` and `claude-haiku-5-5` keep requests for up to
 The ladder id `claude-haiku-5.5` is corrected to `claude-haiku-5-5`, the id
 the Go page and Pi's catalog use; with the old spelling the rung could never
 have been called.
+
+## Q-12 · Whether models that train on the data may review
+
+asked: 2026-10-17
+answer: "Lasse a" — option A: the three Go models that train on prompts stay out of the ladder
+answered_by: maintainer
+status: answered
+context: |
+  Topic: whether Gemini 4 Argon Contributor, Muse Spark 1.3 Contributor and Muse Spark 1.2 Contributor may review.
+  Intention: more ladder rungs give more distinct readers of a change.
+  Today: none of the three is on the ladder. The Go page's privacy table, read 2026-10-17, marks all three "Yes" for training (future Google or Meta models) and "Not ZDR" with no period; the Muse Spark rows are discounted for that permission and limited to some regions.
+  Repository change: Options: A — change nothing, the three stay out; B — add them at the end of the ladder, dated and marked as training. Recommendation was A.
+  Architecture change: B would let a model that trains on prompts see code for the first time, a new data boundary in ADR 0021.
+
+In the context of three Go models that may train future models on what they
+read, facing a longer ladder against a diff that could not be taken back, we
+decided to keep them off the ladder, to achieve that no reviewer keeps the
+change's code beyond 30 days or trains on it, accepting nine rungs as the
+ladder's length. — 2026-10-17
