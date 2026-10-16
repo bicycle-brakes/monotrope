@@ -6145,13 +6145,16 @@ RED_SELECTOR = "tests/test_red.py::test_red"
 # The missing-install case of criterion 2: the fixture keeps the shape of the real
 # `require_installed_pi` (a `pytest.fail`, never a skip), and asserts first that the ignored
 # stand-in dependency did not reach the scratch checkout - worktree adds carry committed files
-# only, so the stand-in planted in the source worktree is absent there.
+# only, so the stand-in planted in the source worktree is absent there. A leaked stand-in
+# aborts with exit 3, distinguishable from the missing-install setup failure at exit 1.
 MISSING_PI_TEST = (
     "from pathlib import Path\n\n"
     "import pytest\n\n\n"
     "@pytest.fixture\n"
     "def require_installed_pi():\n"
     '    stand_in = Path(__file__).resolve().parent.parent / "pi-stand-in" / "wrapper"\n'
+    "    if stand_in.exists():\n"
+    '        pytest.exit("the stand-in Pi reached the scratch checkout", returncode=3)\n'
     '    assert not stand_in.exists(), "the stand-in Pi reached the scratch checkout"\n'
     '    pytest.fail("the pinned Pi is not installed; run bash tools/pi/install.sh")\n\n\n'
     "def test_pi_contract(require_installed_pi):\n"
@@ -6212,14 +6215,25 @@ def test_red_first_accepts_only_clean_assertion_runs(world: World) -> None:
     assert len(git(world.root, "worktree", "list").splitlines()) == 1
 
 
-def test_red_first_refuses_a_missing_pi_install(world: World) -> None:
+@pytest.mark.parametrize("plant_guard_fault", [False, True], ids=["missing-install", "stand-in-present"])
+def test_red_first_refuses_a_missing_pi_install(world: World, plant_guard_fault: bool) -> None:
     """Criterion 2. Planted fault: the absent ignored installation produces accepted fixture-error evidence."""
     repair_world(world)
     plant_ignored_pi_stand_in(world)
-    outcome = red_first_planted(world, "test_pi_env.py", MISSING_PI_TEST, "tests/test_pi_env.py::test_pi_contract")
-    assert (
-        outcome is not None and "the setup phase of `tests/test_pi_env.py::test_pi_contract` ended failed" in outcome
-    ), outcome
+    source = MISSING_PI_TEST
+    if plant_guard_fault:
+        # A copied file always exists in the scratch checkout: simulate a leaked stand-in.
+        source = source.replace(
+            'Path(__file__).resolve().parent.parent / "pi-stand-in" / "wrapper"',
+            "Path(__file__)",
+        )
+    outcome = red_first_planted(world, "test_pi_env.py", source, "tests/test_pi_env.py::test_pi_contract")
+    cause = (
+        "pytest ended 3"
+        if plant_guard_fault
+        else "the setup phase of `tests/test_pi_env.py::test_pi_contract` ended failed"
+    )
+    assert outcome is not None and cause in outcome, outcome
 
 
 def test_red_first_refuses_setup_and_teardown_errors(world: World) -> None:
@@ -6297,6 +6311,34 @@ def test_red_first_refuses_non_assertion_call_failures(world: World) -> None:
             "tests/test_out.py::test_out",
             "pytest ended",
             id="skip",
+        ),
+        pytest.param(
+            {
+                "tests/test_out.py": (
+                    "import pytest\n\n\n"
+                    '@pytest.mark.parametrize("case", [pytest.param(1, marks=pytest.mark.skip), 2])\n'
+                    "def test_out(case):\n"
+                    '    assert False, "ordinary assertion beside setup skip"\n'
+                )
+            },
+            "tests/test_out.py::test_out",
+            "the setup phase of `tests/test_out.py::test_out[1]` ended skipped",
+            id="setup-skip-beside-assertion",
+        ),
+        pytest.param(
+            {
+                "tests/test_out.py": (
+                    "import pytest\n\n\n"
+                    '@pytest.mark.parametrize("case", [1, 2])\n'
+                    "def test_out(case):\n"
+                    "    if case == 1:\n"
+                    '        pytest.skip("call skip")\n'
+                    '    assert False, "ordinary assertion beside call skip"\n'
+                )
+            },
+            "tests/test_out.py::test_out",
+            "the call of `tests/test_out.py::test_out[1]` was skipped",
+            id="call-skip-beside-assertion",
         ),
         pytest.param(
             {

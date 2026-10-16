@@ -139,6 +139,12 @@ Implementation tests and `make verify` remain the runner's next checks.
 
 Stage-1 route: implement · model claude-sonnet-5-5 · reason: two Flash post-run checks failed.
 
+## Runner route — 2026-10-16
+
+Stage-1 route: repair · model claude-sonnet-5-5 · reason: two Codex post-run checks failed.
+
 ## Time used
 
 2026-10-16 span not measured: this session had no command tool, so `date` could not be read and no span is estimated.
+
+2026-10-16, review-loop round 1 repair: three runner attempts (Codex, Codex, Sonnet) failed the post-run checks because a test-strength finding has no red-first form (bead coding-harness-y17); the orchestrator kept attempt 1's tests, checked each against its planted fault and completed the repair by hand, about 20 minutes (20:05-20:25).

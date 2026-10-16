@@ -449,3 +449,46 @@ Stage-2 call, 2026-10-16: implement · attempt 3 · route stage-1 · endpoint cl
 > tools/pi/README.md:65:81 error MD013/line-length Line length [Expected: 80; Actual: 97]
 > make: *** [verify] Error 1
 > ````
+
+Stage-2 call, 2026-10-16: review-loop · endpoint opencode-go · model deepseek-v4.1-flash · leak check clean over 468 files, 1341 commits, 12 rules.
+
+Stage-2 call, 2026-10-16: repair · attempt 1 · route codex · endpoint openai-codex · model gpt-6.1-sol · leak check clean over 468 files, 1341 commits, 12 rules.
+
+> Attempt 1 (codex) failed its post-run checks.
+>
+> Files the attempt changed (lines added, removed):
+> - `plans/changes/red-first-install/plan.md` +3 -0
+> - `tests/test_stage2.py` +48 -6
+>
+> Diagnostics:
+> ```text
+> - Runner format before `make verify`: ruff changed no file.
+> - L1-1: tests/test_stage2.py::test_red_first_refuses_non_proving_pytest_outcomes: pytest ended 0 on the baseline's code; red first needs exit 1 with an assertion failure
+> - L1-2: tests/test_stage2.py::test_red_first_refuses_a_missing_pi_install: pytest ended 0 on the baseline's code; red first needs exit 1 with an assertion failure
+> ```
+
+Stage-2 call, 2026-10-16: repair · attempt 2 · route codex-repair · endpoint openai-codex · model gpt-6.1-sol · reason first Codex post-run check failed · leak check clean over 468 files, 1341 commits, 12 rules.
+
+> Attempt 2 (codex-repair) failed its post-run checks.
+>
+> Files the attempt changed (lines added, removed):
+> - `plans/changes/red-first-install/plan.md` +2 -0
+>
+> Diagnostics:
+> ```text
+> - Runner format before `make verify`: ruff changed no file.
+> - L1-1: no fixed line
+> - L1-2: no fixed line
+> ```
+
+Stage-2 call, 2026-10-16: repair · attempt 3 · route stage-1 · endpoint claude-code-plan · model claude-sonnet-5-5 · reason two Codex post-run checks failed · leak check clean over 468 files, 1341 commits, 12 rules.
+
+> Attempt 3 (stage-1) failed its post-run checks.
+>
+> Files the attempt changed: none.
+>
+> Diagnostics:
+> ```text
+> - Runner format before `make verify`: ruff changed no file.
+> - `plan.md` did not add a measured line below `## Time used`
+> ```
