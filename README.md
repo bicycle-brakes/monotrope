@@ -121,6 +121,32 @@ flowchart LR
 At the end of any session, a handover file records where the work stands. The
 gate for each phase is in `docs/WORKFLOW.md`, section 2.
 
+## Two kinds of class
+
+**Change classes** say how big a change is and what kind it is. Every spec
+declares one, and the class sets how much process it gets:
+
+| Class | What it is | Interview | Design phase | Stage-2 review |
+|---|---|---|---|---|
+| `spike` | answers a question; the output is a recommendation | three topics, or a reasoned skip | no | none |
+| `bounded` | changes an existing, readable flow without deciding anything new | one answered question, or a reasoned skip | no | review loop and final review; spec review where held |
+| `feature` | a self-contained deliverable | at least three substantive questions | yes, or a sentence why not | spec review, review loop and final review |
+| `architectural` | a new subsystem or a break of an interface; it comes with its decision record | none, or five if it changes its ADR | always | spec review, review loop and final review |
+
+Only a `feature` answers the question whether it needs an architecture decision
+record (ADR). An ADR file is edited by the one change that claims it in its
+spec header.
+
+**Data classes** say what a model may see:
+
+- **Framework content:** this repository's rules, prompts, templates and tests.
+  Calls to other vendors in stage 2 cover this class only.
+- **Customer code:** source code and database structure from a customer project.
+  Only endpoints that declare where they process data may see it.
+- **Customer data:** rows from source or target systems. No model endpoint may
+  see it; checks between systems run where the data already lives, not in a
+  model.
+
 ## Three stages
 
 - **Stage 1 — Claude Code only.** All seven phases run with Anthropic models.
