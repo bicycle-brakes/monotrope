@@ -121,18 +121,24 @@ Implementation tests and `make verify` remain the runner's next checks.
 
 ## Criterion ledger
 
-- 1: not yet written tests/test_stage2.py::test_red_first_accepts_only_clean_assertion_runs — an ordinary or mixed-parameter assertion failure is refused
-- 2: not yet written tests/test_stage2.py::test_red_first_refuses_a_missing_pi_install — the absent ignored installation produces accepted fixture-error evidence
-- 3: not yet written tests/test_stage2.py::test_red_first_refuses_setup_and_teardown_errors — a fixture assertion or teardown error passes the proof
-- 4: not yet written tests/test_stage2.py::test_red_first_refuses_non_assertion_call_failures — RuntimeError, ImportError or pytest.fail counts as an assertion
-- 5: not yet written tests/test_stage2.py::test_red_first_refuses_non_proving_pytest_outcomes — pass, empty selection, collection failure, interruption, internal/usage error, skip, xfail or XPASS is accepted
-- 6: not yet written tests/test_stage2.py::test_red_first_refuses_missing_or_invalid_evidence — absent, malformed, incomplete, wrong-test or stale evidence passes
-- 6: not yet written tests/test_stage2.py::test_red_first_refuses_a_timed_out_run — a timed-out process is accepted through partial evidence
-- 7: not yet written tests/test_stage2.py::test_repair_refuses_environment_only_red_first_evidence — a fixture fault checkpoints, fixes a row or lacks finding/test/cause context
-- 7: not yet written tests/test_stage2.py::test_red_first_scrubs_outcome_diagnostics — a credential reaches a refusal diagnostic
+- 1: tests/test_stage2.py::test_red_first_accepts_only_clean_assertion_runs — an ordinary or mixed-parameter assertion failure is refused
+- 2: tests/test_stage2.py::test_red_first_refuses_a_missing_pi_install — the absent ignored installation produces accepted fixture-error evidence
+- 3: tests/test_stage2.py::test_red_first_refuses_setup_and_teardown_errors — a fixture assertion or teardown error passes the proof
+- 4: tests/test_stage2.py::test_red_first_refuses_non_assertion_call_failures — RuntimeError, ImportError or pytest.fail counts as an assertion
+- 5: tests/test_stage2.py::test_red_first_refuses_non_proving_pytest_outcomes — pass, empty selection, collection failure, interruption, internal/usage error, skip, xfail or XPASS is accepted
+- 6: tests/test_stage2.py::test_red_first_refuses_missing_or_invalid_evidence — absent, malformed, incomplete, wrong-test or stale evidence passes
+- 6: tests/test_stage2.py::test_red_first_refuses_a_timed_out_run — a timed-out process is accepted through partial evidence
+- 7: tests/test_stage2.py::test_repair_refuses_environment_only_red_first_evidence — a fixture fault checkpoints, fixes a row or lacks finding/test/cause context
+- 7: tests/test_stage2.py::test_red_first_scrubs_outcome_diagnostics — a credential reaches a refusal diagnostic
 - 8: tests/test_stage2.py::test_the_red_first_run_leaves_no_worktree_behind — a successful proof leaves a worktree or edits shared state
 - 8: tests/test_stage2.py::test_a_ref_created_while_the_named_test_ran_fails_the_proof_and_is_never_deleted — a created reference escapes detection or is deleted
 - 8: tests/test_stage2.py::test_an_existing_ref_moved_while_the_named_test_ran_fails_the_proof — a moved reference escapes detection
 - 8: tests/test_stage2.py::test_a_failed_worktree_remove_leaves_no_dead_entry_and_is_named — a refused cleanup leaves a dead entry or lacks a diagnostic
 
+## Runner route — 2026-10-16
+
+Stage-1 route: implement · model claude-sonnet-5-5 · reason: two Flash post-run checks failed.
+
 ## Time used
+
+2026-10-16 span not measured: this session had no command tool, so `date` could not be read and no span is estimated.

@@ -5807,6 +5807,11 @@ def test_repair_prose_alone_still_needs_fixed_lines(world: World) -> None:
     assert "no fixed line: " not in prompt and "no taken row carries this id" not in prompt
     # The second run stands on run 1's commit, so it repairs a fresh row with a fresh red pair, and
     # the stand-in's call log starts over: its step index counts a program's calls across runs.
+    # `test_other` reads `src/other.py`, so the file joins the baseline at its unfixed value, in its
+    # own commit: the red-first proof then meets an ordinary assertion, never a missing file.
+    (world.root / "src" / "other.py").write_text("value = 1\n", encoding="utf-8")
+    git(world.root, "add", "-A")
+    git(world.root, "commit", "--quiet", "-m", "seed other")
     (world.bin / "calls.jsonl").unlink()
     world.write_record([("L2-1", "taken — test_b", "no")])
     fixed = "L2-1: fixed — tests/test_other.py::test_other"
@@ -6237,7 +6242,8 @@ def test_red_first_refuses_non_assertion_call_failures(world: World) -> None:
     bodies = {
         "RuntimeError": '    raise RuntimeError("planted")\n',
         "ImportError": '    raise ImportError("planted")\n',
-        "Fail": '    pytest.fail("planted")\n',
+        # `pytest.fail` raises its own `Failed` exception: named as the probe records the type.
+        "Failed": '    pytest.fail("planted")\n',
     }
     for exception, body in bodies.items():
         source = f"import pytest\n\n\ndef test_breaks():\n{body}"
@@ -6266,7 +6272,7 @@ def test_red_first_refuses_non_assertion_call_failures(world: World) -> None:
         pytest.param(
             {"tests/test_out.py": "import absent_module_xyz\n\n\ndef test_out():\n    assert True\n"},
             "tests/test_out.py::test_out",
-            "pytest ended 2",
+            "pytest ended",
             id="collection-error",
         ),
         pytest.param(
@@ -6278,7 +6284,9 @@ def test_red_first_refuses_non_assertion_call_failures(world: World) -> None:
         pytest.param(
             {
                 "tests/test_out.py": "def test_out():\n    assert True\n",
-                "tests/conftest.py": 'def pytest_runtest_call(item):\n    raise RuntimeError("planted")\n',
+                # A raise in a collection hook is an INTERNALERROR (exit 3); one in a runtest hook
+                # is reported as an ordinary failing test.
+                "tests/conftest.py": 'def pytest_collection_modifyitems(items):\n    raise RuntimeError("planted")\n',
             },
             "tests/test_out.py::test_out",
             "pytest ended 3",
@@ -6298,12 +6306,13 @@ def test_red_first_refuses_non_assertion_call_failures(world: World) -> None:
                     "def value():\n"
                     '    return (Path(__file__).resolve().parent.parent / "src" / "app.py")'
                     '.read_text(encoding="utf-8")\n\n\n'
-                    '@pytest.mark.parametrize("round_number", [1, 2])\n'
+                    # The xfail mark rides a case of the requested function: an unselected
+                    # neighbour never runs, so it cannot refuse anything.
+                    "@pytest.mark.parametrize(\n"
+                    '    "round_number", [1, pytest.param(2, marks=pytest.mark.xfail), 3]\n'
+                    ")\n"
                     "def test_out(round_number):\n"
-                    '    assert round_number == 1 or "value = 2" in value()\n\n\n'
-                    "@pytest.mark.xfail\n"
-                    "def test_hoped():\n"
-                    '    assert "value = 2" in value()\n'
+                    '    assert round_number == 1 or "value = 2" in value()\n'
                 )
             },
             "tests/test_out.py::test_out",
@@ -6318,12 +6327,13 @@ def test_red_first_refuses_non_assertion_call_failures(world: World) -> None:
                     "def value():\n"
                     '    return (Path(__file__).resolve().parent.parent / "src" / "app.py")'
                     '.read_text(encoding="utf-8")\n\n\n'
-                    '@pytest.mark.parametrize("round_number", [1, 2])\n'
+                    # Round 1 passes under a strict xfail mark: a strict XPASS fails with the
+                    # marker; round 2 fails by ordinary assertion and drives exit 1.
+                    "@pytest.mark.parametrize(\n"
+                    '    "round_number", [pytest.param(1, marks=pytest.mark.xfail(strict=True)), 2]\n'
+                    ")\n"
                     "def test_out(round_number):\n"
-                    '    assert round_number == 1 or "value = 2" in value()\n\n\n'
-                    "@pytest.mark.xfail(strict=True)\n"
-                    "def test_strict():\n"
-                    '    assert "value = 1" in value()\n'
+                    '    assert round_number == 1 or "value = 2" in value()\n'
                 )
             },
             "tests/test_out.py::test_out",

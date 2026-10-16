@@ -2281,15 +2281,25 @@ def _red_record_fault(record: bytes | None, token: str, selector: str) -> str | 
         case = by_case.get(nodeid)
         if case is None:
             return f"the outcome record holds no phases for `{_one_line(nodeid)}`"
-        for name in ("setup", "call", "teardown"):
-            if name not in case:
-                return f"the outcome record holds no {name} phase for `{_one_line(nodeid)}`"
-        for name in ("setup", "teardown"):
-            if case[name]["outcome"] != "passed":
-                return (
-                    f"the {name} phase of `{_one_line(nodeid)}` ended {case[name]['outcome']}; "
-                    "red first needs passing setup and teardown"
-                )
+        # A failed setup records no call phase, so the setup and teardown verdicts come before the
+        # presence of the other phases: the refusal must name the failure, not the phase the
+        # failure removed (a missing dependency's fixture error, bead coding-harness-omp).
+        if "setup" not in case:
+            return f"the outcome record holds no setup phase for `{_one_line(nodeid)}`"
+        if case["setup"]["outcome"] != "passed":
+            return (
+                f"the setup phase of `{_one_line(nodeid)}` ended {case['setup']['outcome']}; "
+                "red first needs passing setup and teardown"
+            )
+        if "teardown" not in case:
+            return f"the outcome record holds no teardown phase for `{_one_line(nodeid)}`"
+        if case["teardown"]["outcome"] != "passed":
+            return (
+                f"the teardown phase of `{_one_line(nodeid)}` ended {case['teardown']['outcome']}; "
+                "red first needs passing setup and teardown"
+            )
+        if "call" not in case:
+            return f"the outcome record holds no call phase for `{_one_line(nodeid)}`"
         call = case["call"]
         if call["expected"]:
             return f"the call of `{_one_line(nodeid)}` is marked expected-failing or unexpectedly passed"
