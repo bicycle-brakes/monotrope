@@ -1216,6 +1216,36 @@ def test_a_failed_model_call_names_what_was_restored(world: World, capsys: pytes
     assert "restored the worktree" in err and "src/half.py" in err
 
 
+def test_a_failed_model_call_saves_the_attempt_before_restoring(
+    world: World, capsys: pytest.CaptureFixture[str]
+) -> None:
+    # Bead coding-harness-znc. Planted fault: the restore runs without the snapshot, and an
+    # attempt's edits - hours of them when a budget runs out - are gone with it.
+    head = git(world.root, "rev-parse", "HEAD")
+    world.script(
+        claude=[
+            {
+                "stderr": "budget spent",
+                "exit": 1,
+                "plant": {"src/half.py": "x = 1\n"},
+                "append": {"src/app.py": "# edit\n"},
+            }
+        ]
+    )
+    assert world.run("implement") == 1
+    err = capsys.readouterr().err
+    refs = git(world.root, "for-each-ref", "--format=%(refname)", "refs/stage2/attempts/demo/").splitlines()
+    assert len(refs) == 1 and refs[0].startswith("refs/stage2/attempts/demo/implement-attempt-1-")
+    assert refs[0] in err and "restored the worktree" in err
+    assert git(world.root, "rev-parse", f"{refs[0]}^") == head
+    assert git(world.root, "show", f"{refs[0]}:src/half.py") == "x = 1"
+    assert git(world.root, "show", f"{refs[0]}:src/app.py").endswith("# edit")
+    # The restore still leaves the tree clean and HEAD and the real index untouched.
+    assert not (world.root / "src/half.py").exists()
+    assert git(world.root, "rev-parse", "HEAD") == head
+    assert git(world.root, "status", "--porcelain", "--", ".", ":(exclude)plans/changes/demo/findings.md") == ""
+
+
 def test_a_postcheck_failure_gets_one_flash_repair_with_its_diagnostic(world: World) -> None:
     world.script(
         claude=[
@@ -2500,6 +2530,19 @@ def test_a_failed_draft_call_is_put_back_and_recorded(world: World) -> None:
     committed = git(world.root, "show", "--name-only", "--pretty=format:", "HEAD").splitlines()
     assert "plans/changes/demo/spec.md" in committed
     assert "half-written" not in (world.root / "plans/changes/demo/spec.md").read_text(encoding="utf-8")
+
+
+def test_a_failed_draft_call_saves_the_attempt_before_putting_back(world: World) -> None:
+    # Bead coding-harness-znc. Planted fault: the put-back runs without the snapshot.
+    draft_world(world)
+    head = git(world.root, "rev-parse", "HEAD")
+    world.script(codex=[{"stdout": "", "exit": 1, "plant": {"plans/changes/demo/spec.md": "# half-written spec\n"}}])
+    world.run("draft")
+    refs = git(world.root, "for-each-ref", "--format=%(refname)", "refs/stage2/attempts/demo/").splitlines()
+    assert refs and refs[0].startswith("refs/stage2/attempts/demo/draft-attempt-1-")
+    assert git(world.root, "rev-parse", f"{refs[0]}^") == head
+    assert "half-written" in git(world.root, "show", f"{refs[0]}:plans/changes/demo/spec.md")
+    assert refs[0] in world.text()
 
 
 def test_a_failed_draft_check_leaves_its_block_and_its_tree(world: World) -> None:
