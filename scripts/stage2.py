@@ -1471,6 +1471,45 @@ def ignored_snapshot(root: Path) -> dict[Path, tuple[int, int]]:
     return snapshot
 
 
+SAVE_IDENTITY = {
+    "GIT_AUTHOR_NAME": "stage2 runner",
+    "GIT_AUTHOR_EMAIL": "stage2@localhost",
+    "GIT_COMMITTER_NAME": "stage2 runner",
+    "GIT_COMMITTER_EMAIL": "stage2@localhost",
+}
+
+
+def save_attempt(root: Path, baseline: str, change: str, label: str) -> str:
+    """Save the worktree as it stands after a failed call on a local ref; say where, or why not.
+
+    A failed call is not a worthless one: a run that hits a spent budget after hours of edits still
+    holds them (bead coding-harness-znc). The snapshot goes through a temporary index, so the real
+    index and the files stay untouched; tracked and untracked files go in, gitignored ones do not.
+    The temporary index is seeded with the baseline, as in `worktree_tree`, so a file tracked although
+    ignored stays in the snapshot. The commit's parent is the baseline, so `git diff <baseline> <ref>`
+    shows everything the run left in the tree: this attempt, any earlier attempt of the run whose tree
+    it started on, and the runner's own writes. The ref lives under `refs/stage2/attempts/`, which no
+    branch push carries. A save that fails is named and never blocks the restore that follows.
+    The commit carries the runner's own identity, so a machine without a configured git user (a CI
+    runner) saves as well, and the ref says who wrote it.
+    """
+    stamp = dt.datetime.now(dt.UTC).strftime("%Y%m%dT%H%M%S%fZ")
+    ref = f"refs/stage2/attempts/{change}/{label}-{stamp}"
+    with tempfile.TemporaryDirectory(prefix="stage2-save-") as scratch:
+        env = {**os.environ, "GIT_INDEX_FILE": str(Path(scratch) / "index"), **SAVE_IDENTITY}
+        try:
+            _git_output(root, "read-tree", baseline, env=env)
+            _git_output(root, "add", "-A", "--", ".", env=env)
+            tree = _git_output(root, "write-tree", env=env).strip()
+            commit = _git_output(
+                root, "commit-tree", tree, "-p", baseline, "-m", f"stage2: saved {label} of {change}", env=env
+            ).strip()
+            _git_output(root, "update-ref", ref, commit)
+        except (Refused, OSError) as error:
+            return f"saving the attempt failed ({error})"
+    return f"the attempt is saved at {ref} ({commit[:12]}); `git diff {baseline[:12]} {ref}` shows it"
+
+
 def restore_baseline(
     root: Path, baseline: str, keep: set[Path], ignored_before: dict[Path, tuple[int, int]] | None = None
 ) -> str:
@@ -2564,7 +2603,17 @@ def run_attempts(
             error = call_error
             if kept is not None:
                 restore_findings(kept)
-            raise CallFailed(f"{error}; {restore_baseline(root, baseline, allowed, ignored_before)}") from error
+            exposed = []
+            if key is not None:
+                # Scrub before the snapshot writes the changed files into the object store.
+                exposed = remove_changed_credential(root, key, ignored_before)
+            try:
+                saved = save_attempt(root, baseline, ctx.change, f"{verb}-attempt-{attempt}")
+            except OSError as save_error:
+                saved = f"saving the attempt failed ({save_error})"
+            restored = restore_baseline(root, baseline, allowed, ignored_before)
+            leaked = f"; {credential_message(exposed)}" if exposed else ""
+            raise CallFailed(f"{error}; {saved}; {restored}{leaked}") from error
         if key is not None:
             # Every route scans with the key read in this run - the Sonnet fallback included - before
             # the second snapshot can write the changed files into the object store (spec, criterion 9).
@@ -2913,10 +2962,11 @@ def draft(root: Path, change: str) -> None:
                 f"the draft call moved HEAD from {baseline[:12]} to {head_now[:12]}; nothing was put back or committed"
             )
         if call_error is not None:
+            saved = save_attempt(root, baseline, ctx.change, f"draft-attempt-{attempt}")
             put = put_back(root, baseline, allowed)
-            listing = f"- the call failed: {call_error}"
+            listing = f"- the call failed: {call_error}\n- {saved}"
             diagnostics.append(f"Attempt {attempt} ({route}):\n{listing}")
-            block = f"Attempt {attempt} ({route}) failed its call: {call_error}"
+            block = f"Attempt {attempt} ({route}) failed its call: {call_error}\n\n{saved}."
             if put:
                 block += "\n\nThe runner put back:\n" + "\n".join(put_back_lines(put))
             append(ctx.findings, quote_block(block, key, put_back_lines(put)))
