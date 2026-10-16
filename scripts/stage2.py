@@ -234,10 +234,18 @@ ANSWER_FORMAT = (
 )
 MARK_FORMAT = "For each loop row answer one line and nothing else: `<ID>: agree` or `<ID>: disagree — <reason>`."
 REPAIR_ANSWER = (
-    "Answer with one fixed line per row and no other text: `<ID>: fixed — tests/<path>::<function>` or\n"
-    "`<ID>: fixed — not a test — <reason>`. Write a `|` inside a reason as `\\|`. A code row needs a test that\n"
-    "fails on the baseline's code, which the runner runs; only a row taken as `taken — not a test — <reason>`\n"
-    "may be answered `not a test`. Do not edit `findings.md`."
+    "Answer with one fixed line per taken row: `<ID>: fixed — tests/<path>::<function>` or\n"
+    "`<ID>: fixed — not a test — <reason>`. Headings, fences and report prose around the fixed lines are\n"
+    "ignored, but a colon line whose id looks like a finding id (`L1-2`, `F-12`) and names no taken row\n"
+    "still fails. Letters-hyphen-digits ids count only for prefixes used by this change's row ids;\n"
+    "`L<digits>-<digits>` always counts; the prefix `L` counts only when the change has a loop row.\n"
+    "A colon line whose right side is a fixed status (`fixed — …`) also fails when its id names no\n"
+    "taken row, whatever the id's shape. Write a `|` inside a reason as `\\|`. A code row needs a test that fails on the\n"
+    "baseline's code, which the runner runs; only a row taken as `taken — not a test — <reason>` may be\n"
+    "answered `not a test`. Do not edit `findings.md`. A hand repair is booked in the row's own Status as\n"
+    "one of the two fixed statuses above; a Status that still begins `taken` while naming a fix\n"
+    "(`; fixed by …`, `; fixed: …`, `; repaired by …`) refuses the repair before any call.\n"
+    "Backtick-quoted markers do not count; an unquoted marker beside a backtick span still refuses the repair."
 )
 # The Codex attempts (ADR 0017): Codex has command tools in its configured sandbox, so it is told what it may run.
 REPAIR_FORMAT = (
@@ -288,6 +296,12 @@ GLM_MODEL_VARIABLES = (
     "ANTHROPIC_SMALL_FAST_MODEL",
     "CLAUDE_CODE_SUBAGENT_MODEL",
 )
+# Claude Code knows no GLM id, so it warns at every start and assumes a 200k context window
+# (bead coding-harness-6th). Per the Claude Code docs, naming the window ends the warning (not yet
+# seen in a live start); it stays at the assumed 200k,
+# because no Z.ai source read on 2026-10-16 states the Coding Plan's window, and a window set
+# above the real one would overflow instead of compacting.
+GLM_CONTEXT_TOKENS = "200000"
 
 MAX_ROUNDS = 3
 ROW_COLUMNS = ["ID", "Severity", "Dimension", "Origin", "Where", "Finding", "Reviewer", "Status", "Broke a test"]
@@ -316,6 +330,9 @@ QUOTE_LINE_CHARS = 500
 # …and the file list keeps its first entries (spec, criteria 13 and 14).
 ATTEMPT_FILES = 40
 LOOP_ID = re.compile(r"L\d+-\d+")
+# Non-loop finding shapes count only for prefixes already used by the change's rows.
+# Loop identifiers always count; an unrelated colon label remains report prose.
+FINDING_ID = re.compile(r"([A-Za-z]+)-[0-9]+")
 NOT_ROWS_NOTE = "The answer was not only six-cell rows; what is not one is kept below as it came."
 # A fixed line's test, in the form of ADR 0013's criterion ledger: a file `tests/…/test_*.py`, a function
 # `test_…`. A `.` or `..` path segment would climb out of `tests/`; `fixed_status` refuses it as the
@@ -323,6 +340,85 @@ NOT_ROWS_NOTE = "The answer was not only six-cell rows; what is not one is kept 
 FIXED_TEST = re.compile(r"^tests/(?P<file>[^|\s]+\.py)::(?P<function>test_\w+)$")
 # A red-first pytest run that has not ended after this many minutes is stopped (spec, criterion 18).
 RED_FIRST_MINUTES = 10
+# The runner-owned probe of a red-first run: written into the temporary checkout as a file and
+# loaded with `-p`, never installed and never part of the attempted tests. It records what pytest
+# actually did, so an exit code alone can no longer read a missing dependency's fixture error as a
+# test failure (bead coding-harness-omp).
+RED_PROBE_NAME = "stage2_red_probe"
+RED_PROBE_SOURCE = '''"""The red-first outcome probe of scripts/stage2.py: it records what pytest actually did.
+
+Loaded with `-p`, it writes one JSON record the runner reads back. The environment names the private
+report path, the fresh invocation token and the requested selector. The record holds the selected
+node ids, one entry per setup, call and teardown phase - the final outcome after pytest's own
+wrappers, the expected-result markers and whether a failing call raised an AssertionError -, the
+collection failures and the session's completion and exit status.
+"""
+
+import json
+import os
+
+import pytest
+
+_REPORT = os.environ.get("STAGE2_RED_REPORT", "")
+_TOKEN = os.environ.get("STAGE2_RED_TOKEN", "")
+_SELECTOR = os.environ.get("STAGE2_RED_SELECTOR", "")
+_RECORD = {
+    "schema": 1,
+    "token": _TOKEN,
+    "selector": _SELECTOR,
+    "collection_errors": [],
+    "selected": [],
+    "phases": [],
+    "session": None,
+}
+
+
+def _write() -> None:
+    """The record so far, rewritten in place; a killed run leaves the phases it reached."""
+    if not _REPORT:
+        return
+    try:
+        with open(_REPORT, "w", encoding="utf-8") as handle:
+            json.dump(_RECORD, handle)
+    except OSError:
+        pass
+
+
+def pytest_collectreport(report):
+    if report.failed:
+        _RECORD["collection_errors"].append(report.nodeid)
+
+
+def pytest_collection_finish(session):
+    _RECORD["selected"] = [item.nodeid for item in session.items]
+    _write()
+
+
+@pytest.hookimpl(hookwrapper=True)
+def pytest_runtest_makereport(item, call):
+    """One phase outcome, read after pytest's own wrappers so the xfail conversion is visible."""
+    outcome = yield
+    report = outcome.get_result()
+    raised = getattr(call.excinfo, "value", None)
+    _RECORD["phases"].append(
+        {
+            "nodeid": item.nodeid,
+            "phase": report.when,
+            "outcome": report.outcome,
+            "assertion": bool(report.failed and isinstance(raised, AssertionError)),
+            "exception": type(raised).__name__ if raised is not None else None,
+            "expected": bool(item.get_closest_marker("xfail"))
+            or bool(getattr(report, "wasxfail", False))
+            or bool(getattr(report, "skipped_by_mark", False)),
+        }
+    )
+    _write()
+
+
+def pytest_sessionfinish(session, exitstatus):
+    _RECORD["session"] = {"finished": True, "exitstatus": int(exitstatus)}
+    _write()
+'''
 
 RECORD_HEADING = "# Loop record — "
 RECORD_INTRO = (
@@ -442,6 +538,7 @@ def glm_env(key: str, config_dir: Path, model: str) -> dict[str, str]:
         "ANTHROPIC_API_KEY": key,
         "CLAUDE_CONFIG_DIR": str(config_dir),
         "CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC": "1",
+        "CLAUDE_CODE_MAX_CONTEXT_TOKENS": GLM_CONTEXT_TOKENS,
     }
     own.update({name: model for name in GLM_MODEL_VARIABLES})
     return foreign_env(own)
@@ -1103,6 +1200,18 @@ def repair_targets(ctx: Context, record: str | None) -> tuple[list[tuple[str, li
     return taken, waiting
 
 
+# A taken Status that names a fix in a legacy hand-written form needs clarification before repair.
+# Quoted marker examples are not completion claims. Match unquoted markers without regard to case,
+# as every Status read here is (bead coding-harness-ugi).
+LEGACY_FIXED = ("; fixed by", "; fixed:", "; repaired by")
+
+
+def legacy_completed(status: str) -> bool:
+    """Whether a Status still begins `taken` while naming a fix in one of the three legacy forms."""
+    lowered = re.sub(r"`+[^`]*`+", "", status).lower()
+    return any(marker in lowered for marker in LEGACY_FIXED)
+
+
 def spec_review(root: Path, change: str) -> None:
     """Phase 2a: Opus 5.5 in a fresh context reads the spec (ADR 0016).
 
@@ -1490,6 +1599,45 @@ def ignored_snapshot(root: Path) -> dict[Path, tuple[int, int]]:
             continue
         snapshot[Path(name)] = (info.st_mtime_ns, info.st_size)
     return snapshot
+
+
+SAVE_IDENTITY = {
+    "GIT_AUTHOR_NAME": "stage2 runner",
+    "GIT_AUTHOR_EMAIL": "stage2@localhost",
+    "GIT_COMMITTER_NAME": "stage2 runner",
+    "GIT_COMMITTER_EMAIL": "stage2@localhost",
+}
+
+
+def save_attempt(root: Path, baseline: str, change: str, label: str) -> str:
+    """Save the worktree as it stands after a failed call on a local ref; say where, or why not.
+
+    A failed call is not a worthless one: a run that hits a spent budget after hours of edits still
+    holds them (bead coding-harness-znc). The snapshot goes through a temporary index, so the real
+    index and the files stay untouched; tracked and untracked files go in, gitignored ones do not.
+    The temporary index is seeded with the baseline, as in `worktree_tree`, so a file tracked although
+    ignored stays in the snapshot. The commit's parent is the baseline, so `git diff <baseline> <ref>`
+    shows everything the run left in the tree: this attempt, any earlier attempt of the run whose tree
+    it started on, and the runner's own writes. The ref lives under `refs/stage2/attempts/`, which no
+    branch push carries. A save that fails is named and never blocks the restore that follows.
+    The commit carries the runner's own identity, so a machine without a configured git user (a CI
+    runner) saves as well, and the ref says who wrote it.
+    """
+    stamp = dt.datetime.now(dt.UTC).strftime("%Y%m%dT%H%M%S%fZ")
+    ref = f"refs/stage2/attempts/{change}/{label}-{stamp}"
+    with tempfile.TemporaryDirectory(prefix="stage2-save-") as scratch:
+        env = {**os.environ, "GIT_INDEX_FILE": str(Path(scratch) / "index"), **SAVE_IDENTITY}
+        try:
+            _git_output(root, "read-tree", baseline, env=env)
+            _git_output(root, "add", "-A", "--", ".", env=env)
+            tree = _git_output(root, "write-tree", env=env).strip()
+            commit = _git_output(
+                root, "commit-tree", tree, "-p", baseline, "-m", f"stage2: saved {label} of {change}", env=env
+            ).strip()
+            _git_output(root, "update-ref", ref, commit)
+        except (Refused, OSError) as error:
+            return f"saving the attempt failed ({error})"
+    return f"the attempt is saved at {ref} ({commit[:12]}); `git diff {baseline[:12]} {ref}` shows it"
 
 
 def restore_baseline(
@@ -2109,6 +2257,121 @@ def _ref_targets(root: Path) -> dict[str, str]:
     return {name: target for name, _, target in (line.partition(" ") for line in listing.splitlines() if line)}
 
 
+def _red_report_bytes(path: Path) -> bytes | None:
+    """The outcome record's bytes, or None when it cannot be read."""
+    try:
+        return path.read_bytes()
+    except OSError:
+        return None
+
+
+def _red_own_selector(nodeid: str, selector: str) -> bool:
+    """Whether a recorded node id is the requested test or one of its parameterized cases."""
+    return nodeid == selector or nodeid.startswith(selector + "[")
+
+
+def _red_record_fault(record: bytes | None, token: str, selector: str) -> str | None:
+    """Why the outcome record cannot prove this invocation red first, or None when it can.
+
+    The record must be this selector's and this invocation's (a fresh token binds it to one run),
+    show a finished session that pytest ended as a failing run, and hold phases that prove at least
+    one ordinary assertion-failing call of the requested test, passing setup and teardown for every
+    selected case and no other outcome among the calls. Text quoted from the record - a foreign
+    selector, a node id - is the caller's to scrub before it reaches a diagnostic.
+    """
+    if record is None:
+        return "the outcome record is missing; the named test's outcome cannot be proven"
+    try:
+        parsed = json.loads(record.decode("utf-8"))
+    except (UnicodeDecodeError, ValueError):
+        return "the outcome record is not readable JSON"
+    if not isinstance(parsed, dict):
+        return "the outcome record is not a JSON object"
+    if parsed.get("schema") != 1:
+        return f"the outcome record has schema {parsed.get('schema')!r}, not 1"
+    named = parsed.get("selector")
+    if named != selector:
+        return f"the outcome record names `{_one_line(str(named))}`, not the requested test"
+    if parsed.get("token") != token:
+        return "the outcome record is not this invocation's (a stale or foreign token)"
+    session = parsed.get("session")
+    if not isinstance(session, dict) or session.get("finished") is not True:
+        return "the outcome record shows no finished session; the run's outcome cannot be proven"
+    if session.get("exitstatus") != 1:
+        return f"the session ended {session.get('exitstatus')!r}, not as a failing run"
+    errors, selected, phases = (parsed.get("collection_errors"), parsed.get("selected"), parsed.get("phases"))
+    if not isinstance(errors, list) or not isinstance(selected, list) or not isinstance(phases, list):
+        return "the outcome record does not hold the collection errors, the selection and the phases"
+    if errors:
+        return "collection failed before any selected test ran: " + ", ".join(
+            f"`{_one_line(str(nodeid))}`" for nodeid in errors
+        )
+    if not selected:
+        return "no test was selected; the named test did not run"
+    for nodeid in (*selected, *(phase.get("nodeid") for phase in phases if isinstance(phase, dict))):
+        if not isinstance(nodeid, str) or not _red_own_selector(nodeid, selector):
+            return f"the outcome record names `{_one_line(str(nodeid))}`, not the requested test"
+    by_case: dict[str, dict[str, dict]] = {}
+    for phase in phases:
+        if not isinstance(phase, dict):
+            return "the outcome record holds a phase that is not an object"
+        nodeid, name, recorded = phase.get("nodeid"), phase.get("phase"), phase.get("outcome")
+        if (
+            not isinstance(nodeid, str)
+            or name not in ("setup", "call", "teardown")
+            or recorded not in ("passed", "failed", "skipped")
+            or not isinstance(phase.get("assertion"), bool)
+            or not isinstance(phase.get("expected"), bool)
+            or not (phase.get("exception") is None or isinstance(phase.get("exception"), str))
+        ):
+            return "the outcome record holds a phase of an invalid form"
+        case = by_case.setdefault(nodeid, {})
+        if name in case:
+            return f"the outcome record holds two {name} phases for `{_one_line(nodeid)}`"
+        case[name] = phase
+    red = False
+    for nodeid in selected:
+        case = by_case.get(nodeid)
+        if case is None:
+            return f"the outcome record holds no phases for `{_one_line(nodeid)}`"
+        # A failed setup records no call phase, so the setup and teardown verdicts come before the
+        # presence of the other phases: the refusal must name the failure, not the phase the
+        # failure removed (a missing dependency's fixture error, bead coding-harness-omp).
+        if "setup" not in case:
+            return f"the outcome record holds no setup phase for `{_one_line(nodeid)}`"
+        if case["setup"]["outcome"] != "passed":
+            return (
+                f"the setup phase of `{_one_line(nodeid)}` ended {case['setup']['outcome']}; "
+                "red first needs passing setup and teardown"
+            )
+        if "teardown" not in case:
+            return f"the outcome record holds no teardown phase for `{_one_line(nodeid)}`"
+        if case["teardown"]["outcome"] != "passed":
+            return (
+                f"the teardown phase of `{_one_line(nodeid)}` ended {case['teardown']['outcome']}; "
+                "red first needs passing setup and teardown"
+            )
+        if "call" not in case:
+            return f"the outcome record holds no call phase for `{_one_line(nodeid)}`"
+        call = case["call"]
+        if call["expected"]:
+            return f"the call of `{_one_line(nodeid)}` is marked expected-failing or unexpectedly passed"
+        if call["outcome"] == "skipped":
+            return f"the call of `{_one_line(nodeid)}` was skipped"
+        if call["outcome"] == "failed":
+            if not call["assertion"]:
+                return (
+                    f"the call of `{_one_line(nodeid)}` failed with {call['exception'] or 'an exception'}, "
+                    "not an AssertionError"
+                )
+            red = True
+        elif call["outcome"] != "passed":
+            return f"the call of `{_one_line(nodeid)}` ended {call['outcome']!r}"
+    if not red:
+        return "no selected call failed by assertion; the run is green for the requested test"
+    return None
+
+
 def red_first(root: Path, baseline: str, test: str, key: str | None) -> str | None:
     """Run one named test against the baseline's code in a temporary git worktree; None when it was red.
 
@@ -2116,13 +2379,22 @@ def red_first(root: Path, baseline: str, test: str, key: str | None) -> str | No
     new tests against the old code is what "red first" means, and a real git checkout keeps tests that
     call git honest. The interpreter must start pytest first: a `No module named pytest` startup failure
     exits 1 too, and reading it as red would accept a run in which the named test never ran (phase 6,
-    F-1). Exit 1 or 2 is red. The clean-up deletes the temporary directory before it prunes, so a
-    failed `git worktree remove` leaves no dead entry behind, and a failed removal is named in the
-    returned problem. Every ref's name and target is compared before and after: a difference fails the
-    proof with the refs named and nothing is deleted, so another session's branch is never touched
-    (phase 6, F-6 and F-7).
+    F-1). Exit 1 alone proves nothing either: the runner-owned probe (`RED_PROBE_SOURCE`) travels into
+    the temporary checkout and records, in a private JSON report outside the copied tests, which cases
+    pytest selected and how every setup, call and teardown phase ended. The proof holds only when the
+    report is this invocation's, the session finished as exit 1, at least one selected call of the
+    requested test failed on an ordinary assertion, every setup and teardown passed and no skip, xfail,
+    XPASS, collection error or non-assertion failure stands among them - so a missing dependency
+    failing its fixture refuses instead of certifying the repair (bead coding-harness-omp). Never is a
+    success inferred from terminal output or the exit code alone. Every ref's name and target is
+    compared before and after: a difference fails the proof with the refs named and nothing is deleted,
+    so another session's branch is never touched (phase 6, F-6 and F-7). The clean-up deletes the
+    temporary directory before it prunes, so a failed `git worktree remove` leaves no dead entry
+    behind, and a failed removal is named in the returned problem.
     """
     file, _, function = test.partition("::")
+    selector = f"{file}::{function}"
+    token = os.urandom(16).hex()
     tree = None
     tmp = None
     outcome = None
@@ -2133,6 +2405,7 @@ def red_first(root: Path, baseline: str, test: str, key: str | None) -> str | No
     try:
         tmp = tempfile.mkdtemp(prefix="stage2-red-")
         tree = Path(tmp) / "tree"
+        report = Path(tmp) / "red-outcome.json"
         try:
             _git_output(root, "worktree", "add", "--detach", str(tree), baseline)
         except Refused as error:
@@ -2149,6 +2422,11 @@ def red_first(root: Path, baseline: str, test: str, key: str | None) -> str | No
                 outcome = (
                     f"{test}: the red-first checkout could not take the attempt's tests ({scrub(str(error), key)})"
                 )
+        if outcome is None:
+            try:
+                (tree / f"{RED_PROBE_NAME}.py").write_text(RED_PROBE_SOURCE, encoding="utf-8")
+            except OSError as error:
+                outcome = f"{test}: the red-first outcome probe could not be written ({scrub(str(error), key)})"
         if outcome is None:
             # Branches are shared with the temporary checkout; a failed snapshot fails the attempt,
             # because branch state could not be proven preserved.
@@ -2177,9 +2455,26 @@ def red_first(root: Path, baseline: str, test: str, key: str | None) -> str | No
         if outcome is None:
             try:
                 done = launch(
-                    [red_first_python(root), "-m", "pytest", "-q", "-p", "no:cacheprovider", f"{file}::{function}"],
+                    [
+                        red_first_python(root),
+                        "-m",
+                        "pytest",
+                        "-q",
+                        "-p",
+                        "no:cacheprovider",
+                        "-p",
+                        RED_PROBE_NAME,
+                        selector,
+                    ],
                     tree,
-                    foreign_env({"PYTHONDONTWRITEBYTECODE": "1"}),
+                    foreign_env(
+                        {
+                            "PYTHONDONTWRITEBYTECODE": "1",
+                            "STAGE2_RED_REPORT": str(report),
+                            "STAGE2_RED_TOKEN": token,
+                            "STAGE2_RED_SELECTOR": selector,
+                        }
+                    ),
                     key,
                     timeout=RED_FIRST_MINUTES * 60,
                     limit="the red-first time limit",
@@ -2187,8 +2482,15 @@ def red_first(root: Path, baseline: str, test: str, key: str | None) -> str | No
             except CallFailed as error:
                 outcome = f"{test}: {scrub(str(error), key)}"
             else:
-                if done.returncode not in (1, 2):
-                    outcome = f"{test}: pytest ended {done.returncode} on the baseline's code; red first is exit 1 or 2"
+                if done.returncode != 1:
+                    outcome = (
+                        f"{test}: pytest ended {done.returncode} on the baseline's code; "
+                        "red first needs exit 1 with an assertion failure"
+                    )
+                else:
+                    fault = _red_record_fault(_red_report_bytes(report), token, selector)
+                    if fault is not None:
+                        outcome = f"{test}: {scrub(fault, key)}"
     finally:
         if tree is not None:
             done = subprocess.run(
@@ -2257,13 +2559,21 @@ def check_repair_answer(
 ) -> tuple[dict[str, str], list[str]]:
     """Read an answer's fixed lines: the Status each taken row takes, or the problems that fail the attempt.
 
-    Each problem names its ID. Every row of findings.md must also stand as `before` holds it - the taken
-    rows and the others alike, cell for cell: an edit outside the taken rows' Status is named, not
-    checkpointed (phase 6, F-3). The pre-call findings body also protects other phases and every earlier
-    attempt's evidence; only the frontmatter is excluded, because the runner refreshes `updated:`.
-    Only when no problem stands do the red-first runs start, one pytest run per named test; every
-    text is scrubbed with the key.
+    Each problem names its ID. Lines without a colon, and colon lines whose left side names neither an
+    active row exactly nor a finding-shaped id, are ignored unless their right side claims a fixed
+    status. A finding-shaped id or claimed fix that names no taken row still fails. Every row of
+    findings.md must also stand as `before` holds it - the taken rows and the others alike, cell for cell: an edit outside the taken
+    rows' Status is named, not checkpointed (phase 6, F-3). The pre-call findings body also protects
+    other phases and every earlier attempt's evidence; only the frontmatter is excluded, because the
+    runner refreshes `updated:`. Only when no problem stands do the red-first runs start, one pytest run
+    per named test; every text is scrubbed with the key.
     """
+    active = {row[0] for _, row in taken}
+    # Include rejected and fixed findings: they establish the same vocabulary as active rows.
+    rows = [*(row for _, row in taken), *before[0], *before[1], *record_rows(read_record(ctx.change) or "")]
+    prefixes = {match[1] for row in rows if (match := FINDING_ID.fullmatch(row[0])) and match[1] != "L"}
+    if any(LOOP_ID.fullmatch(row[0]) for row in rows):
+        prefixes.add("L")
     problems: list[str] = []
     parsed: dict[str, list[str]] = {}
     for raw in answer.splitlines():
@@ -2274,8 +2584,17 @@ def check_repair_answer(
         ident, sep, rest = line.partition(":")
         ident = ident.strip().strip("*`").strip()
         rest = rest.strip()
+        # An active row is matched exactly first: a phase-6 id is free text, so the finding shape alone
+        # cannot carry every real fixed line (spec, criterion 2).
         if not sep or not ident:
-            problems.append(f"the answer holds a line that is no fixed line: {line[:80]}")
+            continue
+        shape = FINDING_ID.fullmatch(ident)
+        if (
+            ident not in active
+            and not LOOP_ID.fullmatch(ident)
+            and not (shape and shape[1] in prefixes)
+            and not rest.lstrip("*` ").startswith("fixed — ")
+        ):
             continue
         parsed.setdefault(ident, []).append(rest)
     fixes: dict[str, str] = {}
@@ -2644,7 +2963,17 @@ def run_attempts(
             error = call_error
             if kept is not None:
                 restore_findings(kept)
-            raise CallFailed(f"{error}; {restore_baseline(root, baseline, allowed, ignored_before)}") from error
+            exposed = []
+            if key is not None:
+                # Scrub before the snapshot writes the changed files into the object store.
+                exposed = remove_changed_credential(root, key, ignored_before)
+            try:
+                saved = save_attempt(root, baseline, ctx.change, f"{verb}-attempt-{attempt}")
+            except OSError as save_error:
+                saved = f"saving the attempt failed ({save_error})"
+            restored = restore_baseline(root, baseline, allowed, ignored_before)
+            leaked = f"; {credential_message(exposed)}" if exposed else ""
+            raise CallFailed(f"{error}; {saved}; {restored}{leaked}") from error
         if key is not None:
             # Every route scans with the key read in this run - the Sonnet fallback included - before
             # the second snapshot can write the changed files into the object store (spec, criterion 9).
@@ -2993,10 +3322,11 @@ def draft(root: Path, change: str) -> None:
                 f"the draft call moved HEAD from {baseline[:12]} to {head_now[:12]}; nothing was put back or committed"
             )
         if call_error is not None:
+            saved = save_attempt(root, baseline, ctx.change, f"draft-attempt-{attempt}")
             put = put_back(root, baseline, allowed)
-            listing = f"- the call failed: {call_error}"
+            listing = f"- the call failed: {call_error}\n- {saved}"
             diagnostics.append(f"Attempt {attempt} ({route}):\n{listing}")
-            block = f"Attempt {attempt} ({route}) failed its call: {call_error}"
+            block = f"Attempt {attempt} ({route}) failed its call: {call_error}\n\n{saved}."
             if put:
                 block += "\n\nThe runner put back:\n" + "\n".join(put_back_lines(put))
             append(ctx.findings, quote_block(block, key, put_back_lines(put)))
@@ -3089,7 +3419,8 @@ def repair(root: Path, change: str, stage2_off: str | None = None) -> None:
     Sonnet 5.5 stage-1 fallback after two failed post-run checks; a failed call or a leak-check BLOCK
     stops without a fallback (ADR 0017). The orchestrator decides taken or rejected and re-checks with
     the loop's next round and `review`, a fresh read-only Codex session; the verb writes no
-    `Broke a test` and starts no review.
+    `Broke a test` and starts no review. A taken Status that already names a fix in the old hand-written
+    form (`; fixed by`, `; fixed:`, `; repaired by`) refuses before any call.
     """
     first = SONNET if stage2_off is not None else CODEX
     ctx = preflight(root, change, first, required=("plan.md",))
@@ -3107,6 +3438,17 @@ def repair(root: Path, change: str, stage2_off: str | None = None) -> None:
     doubled = sorted({ident for ident in ids if ids.count(ident) > 1})
     if doubled:
         raise Refused(f"several taken rows carry the same id ({', '.join(doubled)}); mend the rows first.")
+    legacy = [row[0] for _, row in taken if legacy_completed(row[7])]
+    if legacy:
+        # A legacy marker may name a completed fix or merely occur in an unrepaired reason.
+        # Refuse without rewriting and explain both corrections (spec, criterion 7).
+        raise Refused(
+            f"rows carry a taken status that already names a fix ({', '.join(legacy)}); book the hand repair "
+            "by replacing the Status with `fixed — tests/<path>::<function>` or "
+            "`fixed — not a test — <reason>` and setting the loop row's `Broke a test` mark, then run "
+            "repair again; if the row is not repaired yet, reword its reason so it names no fix instead "
+            "of marking it fixed."
+        )
     baseline = _git_output(root, "rev-parse", "HEAD").strip()
     time_log(ctx.plan)  # Require the initial time heading before a model call starts.
     ignored_before = ignored_snapshot(root)
