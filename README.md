@@ -121,6 +121,82 @@ flowchart LR
 At the end of any session, a handover file records where the work stands. The
 gate for each phase is in `docs/WORKFLOW.md`, section 2.
 
+## Who does what
+
+**Claude is the orchestrator.** The Claude Code session runs each phase, calls
+the runner, reads every result, decides on each finding, and writes the
+handover. Other models do work inside a phase. They do not decide what happens
+next.
+
+Stage 2 hands some jobs to other models, and only framework content goes to
+them:
+
+| Job | Who does it | On main? |
+|---|---|---|
+| Orchestrate: run phases, decide findings, write the handover | Claude Code session | yes |
+| Explore (phase 1) | GLM 5.3 Flash (Z.ai) | yes |
+| Draft spec, design and plan (2, 2b, 3) | Codex, OpenAI | yes |
+| Review the spec (2a) | Opus 5.5 (Anthropic) | yes |
+| Review loop (4b) | Pi, running models from OpenCode Go, one model per round | yes, at most three rounds |
+| Implement (4) | GLM 5.3 Flash | yes |
+| Repair the findings the orchestrator takes | Codex; Sonnet 5.5 after two failed checks | yes |
+| Final review (6) | Codex, in a fresh read-only session | yes |
+
+- **Codex** is OpenAI's coding model. The runner calls it.
+- **Pi** is the agent program the repository pins for the review loop
+  (ADR 0019). It sends the calls to **OpenCode Go**, which offers several open
+  models, so no single model reviews the change alone.
+
+The models behind each job are listed in `model-endpoints.yaml` and in
+`docs/WORKFLOW.md`, section 4. This table can lag behind them.
+
+Each provider needs your own access, set up on your machine. The repository
+tracks no credentials.
+
+## Swarms (in progress, not merged)
+
+Two swarms are being built. Neither is on main yet, so the table above does
+not list them.
+
+### Review swarm — bead `coding-harness-4fk`
+
+Today the review loop calls one model per round. The planned change works in
+stages, until a round leaves no accepted finding:
+
+1. a swarm of all free models, in parallel;
+2. three Flash models, in parallel;
+3. then one model per round, from the ladder in `model-endpoints.yaml`.
+
+```mermaid
+flowchart LR
+    A[Swarm of all free models] --> B[Three Flash models in parallel]
+    B --> C[One model per round, from the ladder]
+    C -->|accepted findings| RP[Repair] --> C
+    C -->|clean round| DN[Done]
+```
+
+The design waits for a decision pull request (ADR 0021). Only the maintainer
+merges that.
+
+### Research swarm — bead `coding-harness-icw`
+
+Phase 1 would run three independent researchers: one on the existing system,
+one on outside practice, one on how the change fits the rest. Then one round
+of critique, and a fresh judge settles the result, which becomes
+`research.md`. All calls go through the runner, behind the leak check. The proposal is a draft on main
+(`docs/research/2026-10-08-explore-swarm-proposal.md`). Its implementation is
+a draft branch, not merged.
+
+```mermaid
+flowchart LR
+    Q[Question for phase 1] --> R1[Researcher: existing system]
+    Q --> R2[Researcher: outside practice]
+    Q --> R3[Researcher: integration]
+    R1 & R2 & R3 --> CR[One critique round]
+    CR --> J[Fresh judge]
+    J --> OUT[research.md]
+```
+
 ## Two kinds of class
 
 **Change classes** say how big a change is and what kind it is. Every spec
@@ -189,6 +265,9 @@ doctrine names are **not in this repository yet**:
 
 Where the doctrine describes one of them, it describes the target, not the
 current tree. The status note at the top of `docs/WORKFLOW.md` has the details.
+
+The review swarm and the research swarm are in progress or proposed, not
+merged. See "Swarms" above.
 
 History: the bootstrap handover is
 `docs/journal/handover/2026-09-16-coding-harness-bootstrap.md`; the 2026-09-17
