@@ -29,6 +29,17 @@ which structure) belongs to the model, and the reason is written down. *Details*
 You are asked only about what is really open. Every reversible choice stands
 until you veto it.
 
+```mermaid
+flowchart TD
+    Q[Open point] --> K{What kind of point?}
+    K -->|Intent: irreversible, risky, external| P[Person decides]
+    K -->|Mechanics: library, structure| M[Model decides, reason written down]
+    K -->|Detail: names, order, format| A[Agent decides, reason written down]
+    P --> F[Recorded in the change's files]
+    M --> F
+    A --> F
+```
+
 **2. Every question comes with its context.**
 Before the options, a question says what the topic is, why it comes up now, how
 things stand today, and what would change in the repository and in the
@@ -79,6 +90,19 @@ Three moments need a person:
 3. **Merge the pull request.** A person merges, or explicitly asks an agent to.
    Agents do not merge their own work on their own.
 
+```mermaid
+flowchart LR
+    E[Explore] --> I[Interview]
+    I -->|you answer| S[Spec]
+    S --> PL[Plan]
+    PL -->|you read the card| IM[Implement]
+    IM --> V[Verify]
+    V -->|red: back to implementing| IM
+    V -->|green| R[Review]
+    R --> C[Commit]
+    C -->|you merge| D[Merged]
+```
+
 ## The phases
 
 | # | Phase | What it leaves | The question it answers |
@@ -108,6 +132,18 @@ gate for each phase is in `docs/WORKFLOW.md`, section 2.
   not assumed.
 - **Stage 3 — orchestration.** Agents as YAML files, parallel worktrees and
   automatic routing. This stage is evaluative and not in production.
+
+How a call to a second vendor is allowed to happen in stage 2:
+
+```mermaid
+flowchart LR
+    C[Content to send] --> D{Endpoint allowed for this data?}
+    D -->|no| B[Blocked]
+    D -->|yes| L{Leak check clean?}
+    L -->|no| S[Stop, no fallback to another model]
+    L -->|yes| CALL[Call the model]
+    CALL --> O[Result recorded in the change's files]
+```
 
 ## Status
 
