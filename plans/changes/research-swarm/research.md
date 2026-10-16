@@ -3,8 +3,8 @@ title: "Research — research-swarm"
 status: draft
 implementation_status: none
 date: 2026-10-14
-last_reviewed: 2026-10-16
-updated: 2026-10-16
+last_reviewed: 2026-10-17
+updated: 2026-10-17
 supersedes: null
 superseded_by: null
 bead: coding-harness-icw
@@ -363,3 +363,45 @@ command tool: it ran no gate, no test and no git command.
 - No maintainer answer, criterion, class, appetite or ADR claim changed in
   this attempt; ADR 0020 remains the sole claimed ADR file and unapproved,
   and findings rows S-1–S-20 stay `in spec`, none open.
+
+## Second phase-2a incorporation evidence — 2026-10-17
+
+Read only this worktree and read-only git metadata at `9beb00d` on
+`explore/research-swarm`. The existing uncommitted findings change was a
+runner draft audit line and date stamp; it is retained. Historical statements
+above about capability mapping and review status describe earlier drafts.
+
+- Recorded rulings S-21–S-30 in decisions.md settle exact finder union,
+  transient scratch snapshots, supported-only criterion bases, structured
+  topic-5 relations, punctuation, neighbour parity, failure exit 1, packet-only
+  Opus roles/excerpts, and accounting for historical implementation time.
+  This redraft incorporates those rulings, retaining criterion numbers and
+  class, without supplying a new human answer.
+- Q-11 (maintainer, 2026-10-17) replaces the single-Pi-field interpretation
+  of S-21. Its recorded public GET observations say Pi's live Go catalog lacks
+  tool support while models.dev supplies tool_call and deprecated status.
+  The answer selects their intersection by exact Go id and capability-source
+  fallback excluding free seats but retaining fixed ones. This call did not
+  repeat those GETs, inspect remote content or measure current availability;
+  the example free ids/counts remain observations dated by Q-11. The design
+  chooses exact lookup under opencode-go.models as an implementation detail;
+  phase 4 must fixture and qualify the response mapping, not infer capability
+  from Pi chat type or compat flags.
+- The sole added ADR relative to the local origin/main reference is still
+  docs/adr/0020-phase-1-research-swarm.md (read-only git comparison). It is
+  updated as the existing proposal, with no second ADR, approval or ADR answer.
+- prompts/04-implement.md defines time used as measured session spans. The
+  existing plan retains three recorded spans (about 78 minutes combined,
+  recorded at 42e5975 on 2026-10-16) and an unmeasured repair-attempt-3 span.
+  No exact remaining appetite can be inferred. Phase 4 must establish that
+  span from audit times or commit timestamps, or stop immediately for the
+  maintainer's continue/new total; phases 2/3 do not reset or consume it.
+- scripts/validate_change_artefacts.py is absent on 2026-10-17. The existing
+  interview and criterion-ledger checks can validate this artifact update;
+  full verification and registry generation belong to the runner. The known
+  pinned-wrapper fixture mismatch remains planned code work, and phase-6 F-1
+  remains open for a separately attended real-Pi offline capture.
+
+No external reads, model calls, tracker access, code/test edit, commit or git
+mutation occurred in this redraft. Hosted PR state and current cross-checkout
+session ownership were not read under the worktree-only restriction.

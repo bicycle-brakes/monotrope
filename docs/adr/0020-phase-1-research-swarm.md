@@ -3,11 +3,11 @@ title: "ADR 0020 — Phase 1 uses a research swarm with a checked handoff"
 category: adr
 status: accepted
 created: 2026-10-15
-last_reviewed: 2026-10-16
-updated: 2026-10-16
+last_reviewed: 2026-10-17
+updated: 2026-10-17
 owner: framework-architect
 provenance: human-decided
-produced_by: {kind: llm-session, name: codex, version: "2026-10-16"}
+produced_by: {kind: llm-session, name: codex, version: "2026-10-17"}
 review: {status: pending, approved_by: null, approved_at: null}
 tags: [adr, research, swarm, stage-2]
 ---
@@ -19,7 +19,7 @@ tags: [adr, research, swarm, stage-2]
   routing of ADR 0007 and research purpose of ADR 0011; supersedes neither
   whole ADR and amends no numbered D/O decision.
 * Review: maintainer chose the amended direction in the research-swarm
-  interview on 2026-10-14–16, Q-1–Q-10; acceptance is the future merge, with
+  interview on 2026-10-14–17, Q-1–Q-11; acceptance is the future merge, with
   no agent-written approval. Decider: maintainer; prepared by Codex.
 * Date: 2026-10-15 · takes effect on merge.
 
@@ -38,7 +38,11 @@ change (Q-3, Q-6, Q-8). Q-10 adds free models offered by Go itself, selected
 from a fresh Pi catalog each run, only to online topics alongside the Flash
 trio; Zen stays excluded. The source was read at `6146fde` on 2026-10-16;
 this draft neither probes the catalog nor claims live availability. The
-repository runtime pin is now Pi 1.2.0 (ADR 0019).
+repository runtime pin is now Pi 1.2.0 (ADR 0019). Q-11 (2026-10-17)
+records that Pi's fresh catalog has no tool-support field and selects a second
+public source, models.dev, for tool_call and deprecated status. These dated
+observations are the maintainer's recorded evidence, not measurements by this
+drafting call; models.dev failure excludes free seats but retains fixed ones.
 
 ## Decision Drivers
 
@@ -68,6 +72,10 @@ checkable.
    5.5 with its reason. Early research/spec/argument classes must agree.
 2. Finder step 0 uses independent DeepSeek Flash, MiMo Flash and Haiku 5.5
    locators; Opus 5.5 merges code, rules/ADRs, tests/gates and neighbour lists.
+   The merged finder keys are their exact deduplicated category/reference
+   union with all origins/reasons; extra or missing keys fail preparation.
+   Runner resolution against scratch frozen bytes marks unresolved entries
+   without granting topic scope, then inserts all given neighbours as given.
    Finder suggestions remain marked rather than silently accepted.
 3. Topics 1–8 cover code/reuse, callers/interfaces, rules/class, architecture,
    neighbours, history/volatility, tests/gates and risks; each uses the same
@@ -80,15 +88,22 @@ checkable.
    online topic on the same brief. No Zen provider, OpenCode CLI, fixed free
    roster or substitution for the mandatory Flash trio. Dynamic free
    permission applies to public-only research, never private roles. Select only
-   text-input chat entries with explicit catalog tool-call support; record
-   absent/negative support, non-chat and baseline-only exclusions. These free
+   fresh-Pi text-input chat entries with exact matching models.dev
+   opencode-go.models ids, boolean tool_call true and status not deprecated.
+   Missing/negative support, missing metadata, deprecated, non-chat and
+   baseline-only entries are excluded with reasons. Unavailable/unreadable
+   models.dev excludes all free candidates as capability-unavailable N=0,
+   retaining fixed slots; this is distinct from a measured empty eligible set.
+   Both sources are dated/digested. Pi refresh failure exits 1 before all
+   models; Pi's absent capability field is expected, never a fallback trigger. These free
    seats are best-effort: failure is named, never hidden or substituted, and
    does not alone invalidate the 39 required fixed contributions.
 5. Reports hold at most seven identified claims with evidence, kind,
    confidence/basis, counter-evidence, unread sources, neighbour relation
    and typed questions with report-local ids and claim links. The runner
    namespaces identities by run/topic/endpoint-model seat. Topic 3 carries a
-   class assessment; topic 6 marks volatile facts and their central/runtime/
+   class assessment; topic 5 requires exactly one path/relation/nonempty
+   local claims list per packet neighbour; topic 6 marks volatile facts and their central/runtime/
    dated governance proposal. Opus reconciles all topics and records per-model
    supported/refuted/unique/off-brief scores grounded in claim ids, plus
    unresolved and unsupported. Valid claims have one disposition, off-brief
@@ -101,14 +116,24 @@ checkable.
    Online Pi has scratch-only discovery-disabled context and public tools
    that refuse private/local sources and retain successful retrieval receipts.
    The accepted repository-Pi read risk is not called public-context isolation.
+   Opus merge, topic author and judge have no tools and see only their packets.
+   The runner attaches bounded resolved claim excerpts for the judge, marking
+   truncation; a supported score means that evidence supports the claim and
+   no evidence-backed peer claim contradicts it.
 7. Research carries every accepted raw-report decision (even refuted or
    off-brief) and unresolved judge disagreement into an interview inventory
    with global claim/question links, grouping duplicates without source loss.
    Class mismatches and neighbour
-   contradictions are human decisions. Phase 1a may exceed class minima;
+   contradictions are human decisions. Topic-5 contradicts and
+   unrelated-given fields derive obligations independently of Opus; structured
+   judge findings can add but never waive them. Phase 1a may exceed class minima;
    only actual maintainer answers settle obligations. Phase 2 carries confirmed
    and given neighbours in `neighbours:` and names claims/answers behind
-   criteria. Only a linked maintainer answer can drop a given neighbour;
+   criteria. Direct claim bases must all be supported from complete runs;
+   any other disposition needs an answered maintainer Q-record as the basis,
+   even when mixed with supported claims. Neighbour parity is exact: confirmed
+   plus given plus linked maintainer additions minus linked maintainer drops
+   of given paths. Only a linked maintainer answer can drop a given neighbour;
    proposed removal creates an obligation. Runtime instruction auto-loading
    is disabled; finders/topic author share the frozen research/decisions/spec
    brief and repository seats receive identical embedded AGENTS.md.
@@ -126,10 +151,11 @@ checkable.
    available partial evidence as cancelled; exit 2 takes precedence. Freeze `N`
    selected Go free
    models before model calls; the budget is at most `39 + 3N` invocations. A
-   bounded
-   Go-only catalog refresh must succeed each run; failures never fall back to
-   cached/shipped rosters or Zen, while valid zero availability keeps the
-   fixed 39 slots. Defaults select all eligible models; explicit include
+   bounded Go-only Pi catalog refresh must succeed each run; failures exit 1
+   before models and never use cached/shipped rosters or Zen. Both catalog
+   reads share 60 seconds; models.dev receives no credentials/private data.
+   Valid zero availability and capability-unavailable models.dev fallback keep
+   the fixed 39 slots with distinct recorded reasons. Defaults select all eligible models; explicit include
    narrows and exclude wins. Record dated source, freshness, policy and roster;
    missing explicit includes exit 1 before models; no silent truncation of
    models/reports to fit the deadline or judge context.
@@ -143,8 +169,12 @@ checkable.
    and exit nonzero; only the runner appends research and writes audit records.
 10. Endpoint role lists are separate from the review ladder. Qwen is declared
     for research without changing that ladder. Every output is scrubbed of
-    used credentials; HEAD plus retained copies/digest of all tracked files
-    and untracked non-ignored change-folder inputs bind local evidence.
+    used credentials; HEAD plus a full digest of all tracked files and
+    untracked non-ignored change-folder inputs bind local evidence. Copies
+    exist only in run scratch outside the repository and are deleted after
+    publication/abort; failed freezing exits 1 before models. Persist HEAD,
+    full/untracked-per-path digests and reports/excerpts, never frozen-file
+    snapshots in research or briefs.
     Changed inputs invalidate publication with named paths and exit 1; only
     runner research appends/restamping are ignored. Invalid given neighbours
     refuse preflight (exit 2); later unread evidence stays a named gap.
@@ -153,10 +183,13 @@ checkable.
 
 * More calls and subscription/Claude quota buy independently comparable
   evidence; concurrency reduces waiting but no duration/cost saving is measured.
-* Finder, live catalog qualification, queue cancellation, templates, gate
+* Finder, two-source catalog qualification, queue cancellation, templates, gate
   and kit integration add maintenance. Large free rosters may leave named
   best-effort slots unfinished at the deadline; that alone does not invalidate
   completion. Missing required slots still do. No seat silently disappears.
+* Pi refresh failure exits 1 before any model call. models.dev failure instead
+  excludes free candidates and retains fixed slots with a recorded reason;
+  explicit includes remain hard requirements and exit 1 if ineligible.
 * Questions may exceed minimum counts; the gate cannot invent answers or
   establish that a recorded answer faithfully reflects a human conversation.
 * Same-brief scoring is evidence for later evaluation, not automatic model
@@ -182,7 +215,9 @@ checkable.
   hashes, payload/tool-schema capture, attempted escapes and outcomes.
 * Offline real-Pi catalog tests prove forced refresh despite fresh caches,
   Go-only selection and removal of obsolete shipped ids; malformed/timeouts
-  never become zero availability or a fixed-roster fallback.
+  in Pi never become zero availability or a fixed-roster fallback. Independent
+  models.dev fixtures prove exact-id intersection, support/deprecation checks,
+  and capability-unavailable fallback without credentials or private data.
 * After merge, public-only live qualification records the refreshed catalog,
   actual Go Flash/free models and search/fetch outcomes. Until success no
   complete live swarm is claimed.

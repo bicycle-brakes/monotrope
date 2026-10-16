@@ -3,14 +3,14 @@ title: "Plan — research-swarm"
 status: draft
 implementation_status: none
 date: 2026-10-14
-last_reviewed: 2026-10-16
-updated: 2026-10-16
+last_reviewed: 2026-10-17
+updated: 2026-10-17
 supersedes: null
 superseded_by: null
 bead: coding-harness-icw
 owner: framework-architect
 provenance: ai-drafted-reviewed
-produced_by: {kind: llm-session, name: codex, version: "2026-10-16"}
+produced_by: {kind: llm-session, name: codex, version: "2026-10-17"}
 review: {status: pending, approved_by: null, approved_at: null}
 tags: [plan, stage-2, research, swarm]
 ---
@@ -35,7 +35,7 @@ not recreated. No file is deleted. Only the ADR is new under `docs/adr/`.
 |---|---|
 | `scripts/stage2.py` | Preserve early-class/fallback routing; expose checked, cancellable read-only launches for Pi and official Claude. |
 | `scripts/stage2_swarm.py` | Replace six pairs/Zen discovery with finder, fresh Go selection, provider queues, `33 + 3N` topic slots, typed reports, scores, handoff and frozen-state validation. |
-| `scripts/stage2_research_catalog.mjs` (new) | Use pinned Pi to force a bounded Go-only refresh and return a structured, dated fresh snapshot without shipped-roster fallback. |
+| `scripts/stage2_research_catalog.mjs` (new) | Use pinned Pi to force a bounded Go-only refresh and return a dated fresh snapshot cross-checked against credential-free models.dev tool_call/status metadata, with explicit capability-unavailable fallback. |
 | `scripts/stage2_research_tools.mjs` | Retain public-only tools and receipts; verify cancellation and isolated concurrent receipt paths. |
 | `scripts/check_research_handoff.py` (new) | Check v2 decision coverage, answered human links, neighbours and criterion bases; exit 0/1/3. |
 | `model-endpoints.yaml` | Replace Zen endpoint/roles with explicit research roles and dynamic Go-only `online_free` policy/include/exclude; add Qwen research-only without changing the review ladder. |
@@ -43,11 +43,11 @@ not recreated. No file is deleted. Only the ADR is new under `docs/adr/`.
 | `prompts/01a-interview.md` | Derive linked questions from decisions/disagreements; explain that minimums are no ceiling. |
 | `prompts/02-spec.md` | Require confirmed neighbours and claim/answer basis for criteria from v2 research. |
 | `prompts/research-swarm/finder.md` (new) | Four locator lists, same input for the trio, no design judgement. |
-| `prompts/research-swarm/finder-merge.md` (new) | Opus merges sourced lists without accepting neighbour suggestions. |
+| `prompts/research-swarm/finder-merge.md` (new) | Tool-free Opus returns the exact finder-key union with every source/reason; runner resolves refs and inserts given neighbours. |
 | `prompts/research-swarm/public-topic.md` (new) | Opus writes only the mechanically filtered public sentence. |
 | `prompts/research-swarm/public.md` | Topics 9–11 and source priorities, fixed report contract, no private context. |
 | `prompts/research-swarm/repository.md` | Topics 1–8, their exact questions/boundaries, same perspectives and template. |
-| `prompts/research-swarm/report.md` (new) | Common structured template: local claim/question ids and links, evidence floor, topic-3 class assessment and topic-6 volatile/governance fields. |
+| `prompts/research-swarm/report.md` (new) | Common structured template: local claim/question ids and links, evidence floor, topic-3 class assessment, per-packet-neighbour topic-5 relations and topic-6 volatile/governance fields. |
 | `prompts/research-swarm/judge.md` | All topics, source checks, per-model scoring and complete interview-obligation inventory. |
 | `templates/spec.md` | Document optional given/confirmed `neighbours:` and v2 criterion-basis form. |
 | `AGENTS.md` | Replace obsolete free/six-pair routing and add the handoff rule within the existing size limit. |
@@ -57,7 +57,7 @@ not recreated. No file is deleted. Only the ADR is new under `docs/adr/`.
 | `scripts/kit/manifest.yaml` | Carry the new checker and its tests as mechanism; existing prompt-prefix coverage stays. |
 | `scripts/kit/probe.py` | Update affected model-resolution case ids only if needed, retaining exception reasons/count/cap. |
 | `tests/test_stage2_swarm.py` | Inject the pinned-wrapper stand-in explicitly, trap bare-Pi escapes, replace obsolete free/pair expectations and add finder/trio/same-brief/report/queue/failure mutations. |
-| `tests/test_stage2_research_catalog.py` (new) | Offline real-pinned-Pi catalog fixtures: forced refresh, provider filtering, shipped-cache contamination, malformed/empty/error outcomes and source audit. |
+| `tests/test_stage2_research_catalog.py` (new) | Offline real-pinned-Pi catalog fixtures: forced refresh, provider filtering, shipped-cache contamination, malformed/empty/error outcomes, models.dev intersection/deprecation/failure, and both sources’ audit. |
 | `tests/test_stage2_research_tools.py` | Keep real tool-call shape, destination/receipt faults and concurrent scratch separation checks. |
 | `tests/test_stage2.py` | Retain small-class, Haiku 5.5, other-verb and exact-check regression coverage. |
 | `tests/test_model_endpoints.py` | Resolve static research roles and dynamic public-only Go free permission; validate selection policy; remove Zen free-billing expectations. |
@@ -75,6 +75,12 @@ not recreated. No file is deleted. Only the ADR is new under `docs/adr/`.
 
 ## Build sequence
 
+0. Before phase-4 code or tests, establish the unmeasured historical repair
+   span as specified under Earlier implementation time below; add measured
+   spans there and under Time used to determine the remainder of 12 hours.
+   If no record bounds it, raise the appetite stop immediately, build nothing
+   further, and wait for the maintainer's continue with a new total. Drafting
+   phases 2/3 consume no phase-4 time.
 1. Write red-first fixtures for the amended graph: `39 + 3N` slots, finder
    barrier, 24 repository and `9 + 3N` online calls, identical topic task hashes
    and exact model roles. Include `N=0`, a changed catalog on the next run and
@@ -111,23 +117,47 @@ not recreated. No file is deleted. Only the ADR is new under `docs/adr/`.
    models or a successful `--list-models` exit. Only freshly fetched overlay
    ids are eligible. For pinned Pi 1.2.0 use `isModelType(model, "chat")`
    (absent type means chat) and `input` containing `text`. The typed interface
-   has no dedicated tool-support boolean: qualify the raw catalog capability
-   field before using it and record field/value/source as proof; do not infer
-   it from chat type or invent an API field. Absent/false support excludes
-   `no-tool-support`; non-chat/text excludes `not-chat`; shipped-only excludes
-   `baseline-only`. A valid response with no proven eligible models is N=0.
-   Validate Go origin, provider and identities before selection. Record version/source/time/digest,
+   has no dedicated tool-support boolean. Q-11 instead requires an independent
+   credential-free GET of https://models.dev/api.json and exact lookup under
+   opencode-go.models: boolean tool_call true and status not deprecated.
+   Intersect with fresh Pi text-chat -free ids, never union in models.dev-only
+   ids; never infer support from Pi compat flags. Record metadata-missing,
+   no-tool-support, deprecated, not-chat and baseline-only exclusions. If
+   models.dev is unreachable/malformed/ambiguous, exclude all free candidates
+   as capability-unavailable and keep 39 fixed slots with N=0; distinguish that
+   source failure from a measured eligible-empty result. An explicit include
+   is still required and exits 1 if ineligible. Both reads share the preflight
+   60-second total; the models.dev request has no Go key or private data.
+   Validate Go origin, provider and identities before selection. Record version,
+   both sources’ retrieval time/digest/outcome, exact tool_call/status evidence,
    eligible/policy/selected/excluded ids and reasons; freeze `N` and slots.
-   Refresh failure or ambiguity exits 1 before models, never Flash-only or Zen
-   fallback. Valid empty selection records `N=0` and retains 39 fixed calls.
+   Pi refresh failure/timeout/stale-only/malformed/ambiguous data exits exactly
+   1 before models, never 0/2/3 or Flash-only/Zen fallback. The absence of a Pi
+   tool-support field is expected under Q-11, not a Pi refresh failure.
+   Valid empty selection records `N=0` and retains 39 fixed calls.
    Test with a local catalog server and actual pinned Pi refresh implementation;
    force a request despite a fresh cache and reject removed shipped free ids.
+   Fixtures join Pi and models.dev by exact provider/id, covering true/false/
+   absent tool_call, missing entry/provider, deprecated and non-deprecated
+   status, models.dev-only ids, malformed/unreachable metadata and explicit
+   includes during capability-unavailable fallback. Failure fixtures assert
+   the fixed-slot graph as well as the exact exit, not just selection output.
    This drafting phase performs no network refresh; live qualification is later.
 3. Implement frozen packets and stages: finder trio → Opus merge → Opus
    sentence → all topic research → Opus judge. Finder map has code, rules,
    tests and neighbours with path/symbol/section, reason and provenance.
    Freeze HEAD plus copies/digest of every tracked file and every untracked
-   non-ignored file inside the change folder. Given neighbours must be unique
+   non-ignored file inside the change folder. Keep copies in run scratch
+   outside the repository until publication/abort, then delete them; failed
+   freezing exits 1 before models. Persist full and untracked-per-path digests,
+   never whole-file snapshots in research, briefs or the change folder.
+   Validate the Opus merge as the exact category/reference key union of all
+   finder entries, with every finder/reason retained and no duplicates.
+   Dropped/added keys fail preparation (exit 1). Resolve entries using frozen
+   bytes; retain unresolved marks but exclude them from topic scope. Insert
+   every header-given neighbour as given even if omitted by all finders or
+   labelled suggested. Runner insertions are separate from the union check.
+   Given neighbours must be unique
    repository-relative spec.md paths present in that frozen state, otherwise
    preflight exit 2 before models. Suggestions remain marked; failed reads
    after valid preflight remain gaps without failing the run by themselves.
@@ -165,12 +195,20 @@ not recreated. No file is deleted. Only the ADR is new under `docs/adr/`.
    aborts so peers cannot read answers from appended research. Online gets
    only the filtered Opus sentence plus fixed topic/template/public data;
    its <=20 words use Unicode letters and single internal hyphens/apostrophes,
-   optional final period, no identifier punctuation/digits or lower-to-upper
-   transition inside a hyphen segment. Reject whole case-insensitive tokens
+   allow whitespace, comma/semicolon/parentheses, double quotes/guillemets,
+   word-edge apostrophes as quotes, spaced en/em dashes and one final period
+   or question mark. Internal straight/typographic apostrophes require letters
+   on both sides. Count words after separators, preserving internal joins;
+   reject every other character and lower-to-upper transition inside a
+   hyphen segment, as spec’s allow-list requires. Reject whole case-insensitive
+   tokens
    matching the frozen change/bead names or tracked path components/stems
    containing hyphen/underscore/dot/digit. Do not deny ordinary letters-only
    symbol words. Test Q-6's German example and multi-agent as accepted by the
-   character rule, research-swarm/bead names as rejected; leak check remains
+   character rule, plus Isolation, Prüfung und Wiederherstellung für
+   Agentenläufe, word-edge quotes and typographic apostrophes; reject digits,
+   research-swarm/bead names and unsupported punctuation such as [, {, @, =.
+   Leak check remains
    independent. Filter rejection prevents the whole topic stage (exit 1);
    repository peers get the same private packet/map. No public report enters
    private peers' initial briefs; the judge combines both sides later.
@@ -188,14 +226,23 @@ not recreated. No file is deleted. Only the ADR is new under `docs/adr/`.
 7. Validate topic reports before judge: C1–C7 and Q1… ids unique within
    each report, questions with classification and nonempty local claims list,
    confidence basis/counter-evidence/not-read/neighbour fields, topic-3
-   class_assessment {class, claims}, topic-6 volatile boolean and governance
+   class_assessment {class, claims}, topic-5 neighbour_relations (exactly one
+   path/relation/nonempty local claims list per packet neighbour; reject
+   missing/extra/duplicate paths or bad links), topic-6 volatile and governance
    central|runtime|dated when true. Template violations fail the slot; bad
    citations mark claims unsupported without dropping them. Require one
    evidence-backed claim per report (one successful page-backed claim online),
    not success for every fetch. Runner namespaces claims/questions as
    <run>/<topic>/<endpoint-qualified-model-seat>/<local>.
-   Judge sees required valid reports and all free outcomes, the map and
-   receipts; one exclusive disposition per valid claim (off-brief precedes
+   Launch all Opus roles (merge, author, judge) with --tools "", restricted,
+   safe-mode and strict MCP settings; assert no file/shell/web/MCP tool or
+   ambient discovery in their launches. Judge sees only its packet: required
+   valid reports/all free outcomes/map and runner-resolved evidence excerpts
+   per valid claim (frozen symbol/section or receipt), capped at 4,000 Unicode
+   characters per source with explicit truncation flags. Persist bounded
+   excerpts, not whole-file snapshots. Supported means that evidence supports
+   the claim and no evidence-backed peer claim contradicts it; one exclusive
+   disposition per valid claim (off-brief precedes
    supported/refuted/unresolved), unique only as a supported subset, and
    unsupported separately. Keep counts and global-id lists per model/topic,
    opposing ids/evidence for disagreements, three comparison sections and gaps;
@@ -207,10 +254,13 @@ not recreated. No file is deleted. Only the ADR is new under `docs/adr/`.
    fixed 39 slots required and free slots best-effort, each with one terminal
    outcome. Compare HEAD and full frozen digest before publication, excluding
    only runner-owned research appends/updated restamp. Other drift names
-   changed paths and exits incomplete 1, preserving outputs and frozen copies.
+   changed paths and exits incomplete 1, preserving reports/excerpts/digests
+   while deleting scratch frozen copies after publication or abort.
    Derive obligations from every accepted raw DECISION question (even scored
    off-brief/refuted), unresolved judge disagreements, runner-detected class
-   mismatches, neighbour contradictions and proposed given-neighbour removals.
+   mismatches, and topic-5 neighbour_relations: every contradicts and every
+   unrelated given path derives an item even without a DECISION question or
+   judge mention. Judge findings may add but cannot remove obligations.
    Group duplicates into H-<n> but preserve all global question/claim sources.
 9. Implement check_research_handoff.py [--root DIR] [--change NAME] over live
    and archive folders with no tracker/network/model dependency. Parse all v2
@@ -224,10 +274,15 @@ not recreated. No file is deleted. Only the ADR is new under `docs/adr/`.
    counts, no agent waiver does. Valid pending items before spec.md exists
    are listed with exit 0; once it exists missing answers or v2 runs with none
    complete exit 1. Legacy without v2 is an explicit exemption. With a spec,
-   resolve each criterion Basis to complete-run global claims or answered
-   decisions.md Q-records, and enforce given/confirmed neighbour parity with
-   no unconfirmed suggestions; a linked human answer alone can drop a given
-   path. Review judges relevance and fidelity, the gate checks identities.
+   resolve each Basis to supported complete-run claims or maintainer-answered
+   decisions.md Q-records. Every direct claim must be supported; a mixed Basis
+   still exits 1 if any named claim is unsupported/refuted/off-brief/unresolved.
+   Those claims need an answered Q-record basis, optionally linked through
+   research_claims. Enforce exact neighbour parity: confirmed + given + linked
+   maintainer additions - linked maintainer drops of given paths. Arbitrary
+   drafting additions, even never suggested, exit 1 unless human-answered or
+   confirmed by a new complete run; use research_items for linked additions.
+   Review judges relevance and fidelity, the gate checks identities.
 10. Carry the interview/spec instructions, spec template, doctrine, gate and
     kit classification together; derive CI with `ci_gates.py`. Run commands
     below, obtain spec/phase-6 reviews and repair findings within the remaining
@@ -266,7 +321,7 @@ the existing gates and let the runner own registry regeneration/full verify.
 - 2: tests/test_stage2_swarm.py::test_small_classes_keep_the_single_explorer — Either class starts a finder or swarm researcher.
 - 3: tests/test_stage2_swarm.py::test_explicit_class_explores_without_spec_or_plan — Valid early input is refused because a later artifact is absent.
 - 4: tests/test_stage2_swarm.py::test_missing_invalid_or_conflicting_class_refuses — Malformed, missing or disagreeing classes pass, or a duplicate, escaping, non-spec or missing frozen neighbour path starts a call.
-- 5: not yet written tests/test_stage2_swarm.py::test_finder_merge_precedes_every_topic — A topic starts before the three finder outcomes and the Opus map are recorded.
+- 5: not yet written tests/test_stage2_swarm.py::test_finder_merge_precedes_every_topic — A topic starts before three valid finder results and a validated exact-union Opus map.
 - 6: not yet written tests/test_stage2_swarm.py::test_repository_topics_have_three_independent_models — A topic is omitted, a model substituted, or one session supplies two seats.
 - 7: tests/test_stage2_swarm.py::test_research_carries_practice_architecture_and_adjacent_spec_comparisons — A comparison section or an unread-neighbour gap entry is absent; semantic comparison quality is also checked in phase 6.
 - 8: not yet written tests/test_stage2_swarm.py::test_online_requests_exclude_private_inputs_and_ambient_paths — A canary from rules, paths, identifiers, finder output, history or private reports appears in an outbound payload or query.
@@ -275,27 +330,27 @@ the existing gates and let the runner own registry regeneration/full verify.
 - 11: not yet written tests/test_stage2_swarm.py::test_role_permissions_do_not_follow_endpoint_privileges — Online Qwen receives the framework packet or a model outside its declared role is launched.
 - 12: not yet written tests/test_stage2_swarm.py::test_leak_block_cancels_queued_dispatch — One scan covers multiple prompts, a queued call starts after BLOCK, a running child is awaited instead of stopped, available partial output is lost instead of retained as cancelled, or exit 1 overrides exit 2.
 - 13: not yet written tests/test_stage2_swarm.py::test_concurrent_slots_keep_distinct_audits_and_outcomes — Concurrent output cannot be assigned to a slot, or a failed slot is audited as successful.
-- 14: not yet written tests/test_stage2_swarm.py::test_fresh_opus_reconciles_eleven_topics_and_map — Another model judges, a peer session is resumed, or a required topic disappears.
+- 14: not yet written tests/test_stage2_swarm.py::test_fresh_opus_reconciles_eleven_topics_and_map — Another model judges, a peer session resumes, a required topic disappears or Opus has any tool.
 - 15: tests/test_stage2_swarm.py::test_unresolved_dissent_and_human_questions_survive_reconciliation — An unresolved disagreement loses an opposing claim id or evidence, or judge output contains a maintainer answer field; phase 6 also checks faithful treatment of dissent.
-- 16: tests/test_stage2_swarm.py::test_local_citations_name_a_path_and_a_symbol — Unresolvable or line-only references are supported instead of retained as unsupported, the retained bytes/reports are absent, or a changed frozen file still permits complete publication.
+- 16: tests/test_stage2_swarm.py::test_local_citations_name_a_path_and_a_symbol — Unresolvable or line-only references become supported rather than unsupported.
 - 17: tests/test_stage2_swarm.py::test_only_the_runner_appends_research — A participant edits a file, rewrites an answer, replaces earlier research or changes git or tracker state.
 - 18: tests/test_stage2_swarm.py::test_failed_pi_calls_preserve_partial_evidence — A failed preparatory stage dispatches a later stage, missing required topic reports still reach the judge, a report with zero evidence-backed claims passes, or a failed free seat alone makes the run incomplete.
 - 19: not yet written tests/test_stage2_swarm.py::test_amended_graph_and_deadlines_bound_every_launch — An extra invocation or retry occurs, a free slot starts ahead of queued required slots, topic work consumes the judge reserve, or unlaunched slots lack not-started-deadline outcomes.
 - 20: tests/test_stage2.py::test_explore_stage2_off_uses_haiku_without_reading_the_glm_key — It runs a swarm, reads a foreign key, names Haiku 4.5 or loses the reason.
 - 21: tests/test_stage2_swarm.py::test_all_outputs_scrub_every_used_credential — A planted fragment survives in an answer, receipt, concurrent log or error.
 - 22: not yet written tests/test_stage2_swarm.py::test_amended_doctrine_and_research_roles_agree — Six-topic or Zen-free-through-Pi instructions remain operative, the review ladder changes, or an accepted ADR is edited.
-- 23: not yet written tests/test_stage2_swarm.py::test_public_topic_is_filtered_before_online_calls — An absent, rejected or privately augmented topic reaches an online seat, research-swarm or a bead id passes, or the Q-6 example Container-Isolation für KI-Agenten-Läufe is rejected by the character filter; filter rejection must end pre-topic dispatch with exit 1.
-- 24: not yet written tests/test_stage2_swarm.py::test_finder_trio_locates_four_categories_without_judging — Only one finder runs, an output has fields beyond the four locator lists, or an empty category lacks an unread marker; prose design judgements are off-brief and reviewed in phase 6.
+- 23: not yet written tests/test_stage2_swarm.py::test_public_topic_is_filtered_before_online_calls — Invalid/missing/private topics or forbidden punctuation pass; allowed German examples or separators fail; rejection fails to stop topics with exit 1.
+- 24: not yet written tests/test_stage2_swarm.py::test_finder_trio_locates_four_categories_without_judging — Only one finder runs, a fifth locator field passes, or an empty category lacks an unread marker.
 - 25: not yet written tests/test_stage2_swarm.py::test_each_topic_uses_its_agreed_questions_and_scope — A packet differs from its topic prompt; report prose that proposes new code or local applicability outside that scope is scored off-brief and checked in phase 6.
 - 26: not yet written tests/test_stage2_swarm.py::test_peers_receive_identical_frozen_briefs_without_reports — One model receives a different map, instruction file, angle or peer report, or its runtime auto-loads instructions.
-- 27: not yet written tests/test_stage2_swarm.py::test_report_template_refuses_missing_fields_and_eighth_claim — An eighth claim, duplicate local claim/question id, invalid question claim link, missing confidence basis or unread section, absent topic-3 class assessment, or ungoverned volatile topic-6 claim is accepted.
+- 27: not yet written tests/test_stage2_swarm.py::test_report_template_refuses_missing_fields_and_eighth_claim — Required fields, topic-5 per-neighbour relations or confidence basis are missing, or an eighth claim passes.
 - 28: not yet written tests/test_stage2_swarm.py::test_model_scores_name_the_claims_they_count — A valid claim has two dispositions, a unique claim is not supported, an unsupported claim is supported, a score lacks claim ids, or a failed seat has no named outcome.
-- 29: not yet written tests/test_stage2_swarm.py::test_given_and_suggested_neighbours_keep_their_provenance — A suggestion becomes authoritative silently, a given neighbour disappears, or a proposed removal of a given neighbour has no human handoff item.
-- 30: not yet written tests/test_research_handoff.py::test_spec_neighbours_match_confirmed_research_paths — A confirmed/given path disappears without the permitted answer, a path escapes, duplicates remain or an unconfirmed suggestion enters the header.
+- 29: not yet written tests/test_stage2_swarm.py::test_given_and_suggested_neighbours_keep_their_provenance — A suggestion becomes authoritative, a given path vanishes or its proposed removal loses the human item.
+- 30: not yet written tests/test_research_handoff.py::test_spec_neighbours_match_confirmed_research_paths — A required path disappears or an extra path outside confirmed/given/linked-human sets passes.
 - 31: not yet written tests/test_stage2_swarm.py::test_decisions_and_dissent_enter_the_interview_inventory — A refuted/off-brief report decision is omitted, a differing class lacks an automatically derived item, or grouping duplicates loses a source question or claim id.
 - 32: not yet written tests/test_research_handoff.py::test_a_lost_research_decision_turns_the_gate_red — Class minimums hide a lost item, a later run erases an earlier obligation, an open/agent answer passes, no complete run exists despite v2 runs, or pending items turn a pre-spec change red.
 - 33: not yet written tests/test_research_handoff.py::test_unread_or_ambiguous_handoff_is_not_measured — Malformed manifests/inventories, duplicate global ids or report-local ids, missing linked files or ambiguous answers silently pass.
-- 34: not yet written tests/test_research_handoff.py::test_every_criterion_names_existing_claims_or_answers — A criterion lacks an origin, names a missing or incomplete-run claim, or relies on an unanswered record; semantic relevance of a resolved basis is checked in phase 6.
+- 34: not yet written tests/test_research_handoff.py::test_every_criterion_names_existing_claims_or_answers — Missing/incomplete/non-supported claim ids or unanswered Q-records pass, including mixed direct bases.
 - 35: not yet written tests/test_stage2_swarm.py::test_volatile_fact_governance_remains_a_human_proposal — A volatile claim without governance passes validation or a proposal is implemented without a human answer; phase 6 also checks whether changing facts were correctly marked volatile.
 - 36: not yet written tests/test_stage2_swarm.py::test_provider_limit_is_shared_across_topics_and_roles — A fifth Go call starts across roles, queued work survives a leak/declaration refusal, available cancelled output is discarded, or exit 1 overrides security exit 2.
 - 37: not yet written tests/test_stage2_swarm.py::test_online_topics_use_the_three_declared_go_models — A free or other model replaces one of the nine mandatory Flash contributions.
@@ -304,15 +359,15 @@ the existing gates and let the runner own registry regeneration/full verify.
 - 39: not yet written tests/test_stage2_swarm.py::test_selected_free_models_cover_all_online_topics_on_identical_briefs — A selected seat is silently omitted or failed as successful, a non-selected or no-tool-support model runs, peer briefs differ, or a missing explicit include starts any model instead of preflight exit 1.
 - 39: not yet written tests/test_stage2_swarm.py::test_go_free_policy_filters_and_freezes_each_run — A selected seat is silently omitted or failed as successful, a non-selected or no-tool-support model runs, peer briefs differ, or a missing explicit include starts any model instead of preflight exit 1.
 - 40: not yet written tests/test_stage2_swarm.py::test_dynamic_free_permission_is_public_only — A Go free model fills a private role or receives private context through the endpoint's framework permission.
-- 41: not yet written tests/test_stage2_research_catalog.py::test_unmeasured_catalog_never_becomes_zero_availability — Timeout, malformed data, refresh errors or stale-only responses become success.
-- 41: not yet written tests/test_stage2_swarm.py::test_catalog_failure_stops_before_all_model_calls — Catalog failure starts any model or falls back to a fixed/Zen roster.
+- 41: not yet written tests/test_stage2_research_catalog.py::test_unmeasured_catalog_never_becomes_zero_availability — A Pi refresh timeout, stale-only, malformed or ambiguous result becomes N=0 or exits other than 1.
+- 41: not yet written tests/test_stage2_swarm.py::test_catalog_failure_stops_before_all_model_calls — Pi catalog failure starts models, uses a cached/Zen roster or exits 0/2/3 instead of 1.
 - 42: not yet written tests/test_stage2_swarm.py::test_measured_empty_catalog_keeps_all_fixed_slots — Valid zero selection is refused or drops one of the 39 fixed slots.
 - 4: tests/test_stage2_swarm.py::test_an_unreadable_header_or_empty_class_refuses — Malformed, missing or disagreeing classes pass, or a duplicate, escaping, non-spec or missing frozen neighbour path starts a call.
 - 8: not a test — step 6 real-Pi offline capture; a private canary in an outbound request refutes isolation.
 - 9: not a test — step 6 real-Pi offline capture; any available local tool or discovered private context refutes isolation.
 - 9: tests/test_stage2_research_tools.py::test_the_tools_run_as_pi_calls_them — the actual tool signature loses parameters or yields an invalid result.
 - 10: tests/test_stage2_research_tools.py::test_search_results_carry_the_decoded_destination — Search-only, snippet or invented receipts support a claim, or a receiptless claim is not retained as unsupported; a report with no evidence-backed claim is accepted.
-- 16: tests/test_stage2_swarm.py::test_local_citations_bind_to_the_frozen_input_state — Unresolvable or line-only references are supported instead of retained as unsupported, the retained bytes/reports are absent, or a changed frozen file still permits complete publication.
+- 16: tests/test_stage2_swarm.py::test_local_citations_bind_to_the_frozen_input_state — Citations resolve against live instead of frozen bytes, or mid-run edits still allow complete publication.
 - 18: not yet written tests/test_stage2_swarm.py::test_every_failed_slot_keeps_partial_output_before_cleanup — A failed preparatory stage dispatches a later stage, missing required topic reports still reach the judge, a report with zero evidence-backed claims passes, or a failed free seat alone makes the run incomplete.
 - 19: tests/test_stage2_swarm.py::test_no_call_starts_once_the_run_deadline_is_spent — An extra invocation or retry occurs, a free slot starts ahead of queued required slots, topic work consumes the judge reserve, or unlaunched slots lack not-started-deadline outcomes.
 - 22: not a test — phase-6 review and PR file list; an accepted ADR edit or second new ADR refutes the delivery contract.
@@ -334,7 +389,7 @@ the existing gates and let the runner own registry regeneration/full verify.
 - 28: not yet written tests/test_stage2_swarm.py::test_dispositions_are_exclusive_and_unique_is_supported_subset — Unresolved evidence is forced supported/refuted, or unique marks unsupported claims.
 - 35: not yet written tests/test_stage2_swarm.py::test_topic_specific_class_and_volatile_fields_are_required — Topic 3 omits its class or a volatile topic-6 claim omits governance.
 - 29: not yet written tests/test_research_handoff.py::test_given_neighbour_drop_requires_linked_human_answer — A judge rejection removes a given neighbour without an answered item.
-- 39: not yet written tests/test_stage2_research_catalog.py::test_free_eligibility_requires_text_chat_and_explicit_tools — Non-chat, baseline-only or absent/false tool support yields a selected seat.
+- 39: not yet written tests/test_stage2_research_catalog.py::test_free_eligibility_requires_text_chat_and_explicit_tools — Non-chat, baseline-only, missing/false models.dev tool_call or deprecated entries yield a selected seat.
 - 39: not yet written tests/test_stage2_swarm.py::test_missing_explicit_include_stops_before_models — Missing included id starts fixed slots instead of preflight exit 1.
 - 7: not a test — phase-6 review checks comparison meaning; code summaries presented as comparisons refute it.
 - 15: not a test — phase-6 review checks faithful dissent; a majority erasing a sourced objection refutes it.
@@ -342,6 +397,21 @@ the existing gates and let the runner own registry regeneration/full verify.
 - 25: not a test — phase-6 review checks topic scope; new-code proposals or local online applicability refute it.
 - 34: not a test — phase-6 review checks that resolved criterion bases actually support the criterion.
 - 35: not a test — phase-6 review checks volatile classification; repeatedly changing facts treated as timeless refute it.
+
+- 5: not yet written tests/test_stage2_swarm.py::test_merge_is_exact_finder_union_with_all_origins — A dropped, added or duplicate key dispatches topics, or deduplication loses a finder/reason.
+- 24: not yet written tests/test_stage2_swarm.py::test_map_resolution_excludes_unresolved_and_inserts_given_neighbours — Live-tree resolution grants scope, or a given neighbour omitted by finders vanishes.
+- 16: not yet written tests/test_stage2_swarm.py::test_frozen_copies_are_scratch_only_and_removed_after_run — Success or abort retains copies, whole-file snapshots enter research/briefs, or copy failure launches models.
+- 27: not yet written tests/test_stage2_swarm.py::test_topic_five_relations_cover_exact_packet_neighbours — Missing, extra or duplicate paths or empty/dangling local claims pass.
+- 31: not yet written tests/test_stage2_swarm.py::test_neighbour_relations_derive_items_without_judge_or_question — A contradicts or unrelated-given field loses its obligation when Opus omits it.
+- 34: not yet written tests/test_research_handoff.py::test_every_direct_basis_claim_must_be_supported — Any non-supported disposition passes, including alongside a supported claim; answered Q-record mediation fails.
+- 30: not yet written tests/test_research_handoff.py::test_neighbour_parity_allows_only_linked_additions_and_given_drops — Arbitrary extra paths pass, or linked maintainer additions fail.
+- 5: not yet written tests/test_stage2_swarm.py::test_all_opus_roles_have_empty_tools_and_packet_only_context — Merge has file, shell, web or MCP access.
+- 14: not yet written tests/test_stage2_swarm.py::test_all_opus_roles_have_empty_tools_and_packet_only_context — Judge has file, shell, web or MCP access.
+- 23: not yet written tests/test_stage2_swarm.py::test_all_opus_roles_have_empty_tools_and_packet_only_context — Public-topic author reads beyond its private packet.
+- 28: not yet written tests/test_stage2_swarm.py::test_judge_gets_resolved_excerpts_with_bounded_truncation — Valid claims lack evidence excerpts, excerpt source mismatches or cap/truncation flags fail.
+- 39: not yet written tests/test_stage2_research_catalog.py::test_models_dev_capabilities_intersect_only_fresh_pi_ids — Missing/false tool_call, deprecated status, wrong provider or models.dev-only ids are selected.
+- 42: not yet written tests/test_stage2_research_catalog.py::test_models_dev_failure_excludes_free_and_keeps_fixed_slots — Source failure launches free models, aborts fixed slots or masquerades as measured empty metadata.
+- 42: not yet written tests/test_stage2_swarm.py::test_capability_unavailable_keeps_fixed_slots_unless_include_is_required — Default fallback blocks fixed slots, or an ineligible explicit include starts models.
 
 ## Not touched
 
@@ -361,7 +431,100 @@ fallback as dated evidence: Stage-1 `implement`, `claude-sonnet-5-5`, reason
 new exploration route. Future explicit exploration fallbacks carry route,
 model and reason into their plan.
 
-## Draft handoff — 2026-10-16, after phase 2a
+## Draft handoff — 2026-10-17, second phase-2a incorporation
+
+Baseline 9beb00d, branch explore/research-swarm. Spec, design and this plan
+incorporate recorded rulings S-21–S-30 and maintainer answer Q-11, preserving
+class, 42 criterion numbers, appetite and all human answers. ADR 0020 remains
+the single new ADR relative to the local origin/main reference. Its two-source
+selection, scratch lifetime and handoff terms move with this redraft; no
+second ADR or approval is created. Findings statuses point to spec locations.
+
+The runner owns full verification, registry regeneration and the commit.
+Hosted PR state and current parallel-session ownership were not read under
+the worktree-only restriction. No tracker access, external catalog/model call
+or offline capture occurs here. Phase-6 F-1 still requires the separately
+scheduled maintainer-attended capture. Before code resumes, establish historical
+time or raise the appetite stop; then repair the pinned-wrapper seam and
+implement the amended graph within the measured remaining appetite.
+
+Artifact validation on 2026-10-17 at baseline 9beb00d passed:
+
+```sh
+PYTHONDONTWRITEBYTECODE=1 .venv/bin/python scripts/check_interview_minimums.py --change research-swarm
+PYTHONDONTWRITEBYTECODE=1 .venv/bin/python scripts/check_criterion_ledger.py
+git diff --check
+```
+
+Read-only structural checks also passed for all 42 criterion/refutation/basis
+triples, S-21–S-30 incorporation with original finding text preserved, unchanged
+F-1 and human answers, fixed class/appetite/ADR claim/neighbours, opening card,
+single ledger, empty Time used, metadata/design sections, local links and
+permitted paths. These are artifact checks, not runtime qualification. The
+named validate_change_artefacts.py is absent; no full suite or registry gate
+is claimed here.
+
+## Draft retry — 2026-10-17
+
+Rechecked the retained redraft at baseline `9beb00d` after the supplied
+attempt-1 diagnostics. Updated only the stale `updated:` date in decisions.md
+to 2026-10-17; its human answers and recorded rulings are byte-for-byte
+unchanged. Spec, design and ADR 0020 retain the incorporated S-21–S-30 rulings
+and Q-11 answer. No criterion, class, appetite or ADR claim changes for a gate.
+
+Artifact checks passed on 2026-10-17:
+
+```sh
+PYTHONDONTWRITEBYTECODE=1 .venv/bin/python scripts/check_interview_minimums.py --change research-swarm
+PYTHONDONTWRITEBYTECODE=1 .venv/bin/python scripts/check_criterion_ledger.py
+PYTHONDONTWRITEBYTECODE=1 .venv/bin/python scripts/check_frontmatter_current.py
+git diff --check
+```
+
+Read-only structural checks confirmed 42 criterion/refutation/basis triples,
+all 30 phase-2a statuses `in spec` with original finding text preserved,
+unchanged human answers and open phase-6 F-1, the sole new ADR 0020 relative
+to local origin/main, required metadata/design sections, the opening card,
+one ledger, empty Time used and valid local links.
+
+The supplied full-run result remains red on 46 swarm tests. Reading
+tests/test_stage2_swarm.py::sworld and scripts/stage2.py::require_pi confirms
+the fixture provides a PATH stand-in while the version check invokes the
+absolute PI_WRAPPER. Build steps 1–2 already own that code/test repair;
+drafting cannot perform it. This retry ran no runtime tests, full verifier,
+tracker-backed registry check, provider query or model call. The artifact
+validator is absent. The runner owns registry generation, full verification
+and the commit; no git mutation or new handover file occurs in this bounded
+draft call.
+
+## Draft attempt 3 — 2026-10-17
+
+Third attempt of this round (route glm), after two failed Codex post-run
+checks. The retained redraft was reviewed against the recorded S-21–S-30
+rulings, the Q-11 answer and the phase-2/2b/3 prompts, and kept: no
+criterion, class, appetite, ADR claim, neighbour or human answer changes.
+The ledger was re-verified statically: all seventeen named tests are defined
+(`test_stage2_swarm.py`, `test_stage2_research_tools.py`, `test_stage2.py`),
+every `not yet written` function is undefined under `tests/`, and the two
+new test files (`tests/test_research_handoff.py`,
+`tests/test_stage2_research_catalog.py`) do not yet exist. The stale
+`updated:` stamp in `decisions.md` was set to 2026-10-17, the one line the
+frontmatter gate measures; the recorded answers are byte-for-byte unchanged.
+
+The supplied full-run result remains red on 46 swarm tests. The cause sits
+in the committed code/test seam, outside this change folder:
+`scripts/stage2.py::require_pi` (from line 1013) launches the absolute
+`tools/pi/pi` wrapper (line 1027), whose shell needs `dirname`, `sed` and
+`node`, while
+`tests/test_stage2_swarm.py::sworld` narrows `PATH` to its stand-ins and
+git — so the version check refuses and every swarm test that reaches it
+fails. Build step 1 of this plan owns that repair (inject
+`stage2.PI_WRAPPER` as a stand-in, as `tests/test_stage2.py::world` does);
+drafting cannot perform it. This attempt ran no tests, no tracker access,
+no model call and no git mutation; the runner owns `make verify` and the
+checkpoint commit.
+
+## Draft handoff — 2026-10-16, after phase 2a (historical)
 
 Baseline e1b54de, branch explore/research-swarm. Apply all 20 phase-2a rulings
 from decisions.md into spec, design and this plan; findings statuses name their
@@ -434,6 +597,16 @@ Evidence: research.md, "Incorporation-round attempt 3 evidence — 2026-10-16".
 Historical phase-4 entries are retained below; this redraft adds no phase-4
 time and does not reset the 12-hour stop. The unmeasured span prevents a
 claim about the exact remaining appetite; establish it before resuming.
+Before any phase-4 work, read the attempt-3 runner audit start/end; if absent,
+try that attempt’s commit timestamps. Append the bounded span and exact source
+as a new historical line; retain the unmeasured entry below as history. Sum
+all established historical spans and every later Time used span; do not count
+phases 2/3 or time between sessions. If no record bounds attempt 3, stop at once
+using prompts/04-implement.md’s expected/found/relevant/proposal block with
+found: time used not measurable. Build no code/tests while it waits; only a
+maintainer continue with a new total permits more phase 4. The known entries
+below are about 78 minutes in total (recorded 2026-10-16, plan at 42e5975),
+not evidence that the unmeasured span was zero.
 
 2026-10-15 repair attempt 3, span not measured: this session had no command tool to read `date`.
 2026-10-15 completion (Opus 5.5): 05:15–05:31 CEST, about 16 minutes including one `make verify` run (05:20:38–05:30:25, green: 2038 passed, 16 skipped).
