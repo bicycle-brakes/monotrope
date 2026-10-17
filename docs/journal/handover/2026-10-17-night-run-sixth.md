@@ -596,3 +596,65 @@ clarification, was pushed before Git. The night plan is PR #162. No code
 repair or new model call was started during the quota reserve. At 13:43 UTC
 the meter showed 96 percent used; the remaining allowance was used for this
 requested handover and publication, not another implementation attempt.
+
+## Addendum — 2026-10-17, continuation after observed allowance reset
+
+### Where we are
+
+The maintainer said "mach weiter" and asked for status. At 14:06:10 UTC the
+local usage event reported zero percent used in the new 300-minute window;
+the announced reset was actually observed. The targeted P6-14 repair is now
+running through stage2.py with a fresh Sol context in the review worktree.
+The earlier reserve checkpoint remains historical, not a current stop.
+
+### Next step
+
+Inspect the existing running repair's result in
+`/tmp/coding-harness-pr157-p614-repair.log` before starting another model
+call; after a green checkpoint, push tracker/Git and run a fresh independent
+read-only phase-6 verdict. Do not launch a duplicate repair or reset the
+spent phase-4b run.
+
+### Needed from the maintainer
+
+Nothing right now.
+
+### Decisions and preferences
+
+Continue the approved queue after the observed reset. The five-percent
+reserve applies to the new allowance window; the existing per-change
+appetites and human merge boundary remain binding. The night plan proposes
+an operational envelope, not a new architecture or routine unattended runtime.
+Claude budget remains exhausted; the temporary local Claude-command guard
+is still active around the Sol repair, and no GLM call is permitted before
+the previously recorded cutoff.
+
+### Open work and blockers
+
+The remaining protocol-activation fault is still taken pending the runner
+result (coding-harness-4fk). The amended research swarm remains next
+(coding-harness-icw). Both new research reports remain proposals; feedback
+collection is open under coding-harness-0kw and research currency keeps its
+existing deferred status under coding-harness-pu9. Task state stays in Beads.
+
+### Working state and parallel-session boundary
+
+At resumption, the review branch was clean and pushed at `bb8b5e1`, PR #157
+open/draft. The running repair now owns changes to stage2.py, its tests and
+the change's plan/findings; it makes its own checkpoint only after checks.
+Its outer tool session is 78620 in this conversation; the log above is the
+filesystem resumption reference. The parent owns this separate handover
+worktree, and no other interactive writer was detected by the configured scan.
+All three requested native research subagents are finished and read-only.
+Main remains at `6029bbf`; fetched origin/main remains `6477d04`.
+
+### Validation
+
+At the post-reset remote check, PR #157 at `bb8b5e1`, handover #161 at
+`14f5e86`, night plan #162 at `045210f`, feedback research #163 at `b41fefd`
+and research currency #164 at `7b83f3f` all had hosted verification green.
+The new P6-14 repair is not yet reported green here. Its current diff adds
+real-pinned-Pi resolution tests and explicit model configuration while
+retaining source retrieval dates. No live provider qualification, GLM/Claude
+model call or merge ran. Read-only preparation of the research-swarm spec,
+design and plan continued; no phase-4 work on that change started after reset.
