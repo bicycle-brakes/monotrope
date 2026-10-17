@@ -3,8 +3,8 @@ title: "Plan — research-swarm"
 status: draft
 implementation_status: partial
 date: 2026-10-14
-last_reviewed: 2026-10-17
-updated: 2026-10-17
+last_reviewed: 2026-10-18
+updated: 2026-10-18
 supersedes: null
 superseded_by: null
 bead: coding-harness-icw
@@ -36,6 +36,8 @@ not recreated. No file is deleted. Only the ADR is new under `docs/adr/`.
 | `scripts/stage2.py` | Preserve early-class/fallback routing; expose checked, cancellable read-only launches for Pi and official Claude. |
 | `scripts/stage2_swarm.py` | Replace six pairs/Zen discovery with finder, fresh Go selection, provider queues, `33 + 3N` topic slots, typed reports, scores, handoff and frozen-state validation. |
 | `scripts/stage2_research_catalog.mjs` (new) | Use pinned Pi to force a bounded Go-only refresh and return a dated fresh snapshot cross-checked against credential-free models.dev tool_call/status metadata, with explicit capability-unavailable fallback. |
+| `scripts/stage2_research_map.py` (new) | Validate the exact finder/merge union, explicit unread provenance, frozen references and given/suggested/self/no-spec neighbour derivation; no model dispatch or file access. |
+| `scripts/stage2_research_refs.py` (new) | Pure frozen-byte structural Markdown/Python and canonical YAML/JSON reference resolution, shared per-claim excerpt cap; later map/report integration consumes it. |
 | `scripts/stage2_research_tools.mjs` | Retain public-only tools and receipts; verify cancellation and isolated concurrent receipt paths. |
 | `scripts/check_research_handoff.py` (new) | Check v2 decision coverage, answered human links, neighbours and criterion bases; exit 0/1/3. |
 | `model-endpoints.yaml` | Replace Zen endpoint/roles with explicit research roles and dynamic Go-only `online_free` policy/include/exclude; add Qwen research-only without changing the review ladder. |
@@ -57,6 +59,8 @@ not recreated. No file is deleted. Only the ADR is new under `docs/adr/`.
 | `scripts/kit/manifest.yaml` | Carry the new checker and its tests as mechanism; existing prompt-prefix coverage stays. |
 | `scripts/kit/probe.py` | Update affected model-resolution case ids only if needed, retaining exception reasons/count/cap. |
 | `tests/test_stage2_swarm.py` | Inject the pinned-wrapper stand-in explicitly, trap bare-Pi escapes, replace obsolete free/pair expectations and add finder/trio/same-brief/report/queue/failure mutations. |
+| `tests/test_stage2_research_map.py` (new) | Standalone finder union, missing/unread categories, provenance corruption, exact neighbour forms and frozen artifact-to-spec counterexamples. |
+| `tests/test_stage2_research_refs.py` (new) and `tests/fixtures/research_refs/plan-prompt-d862bc2.md` (new) | Structural-reference counterexamples and the verbatim historical prompt used by ruling S-47; no Git history or live-file lookup in the resolver. |
 | `tests/test_stage2_research_catalog.py` (new) | Offline real-pinned-Pi catalog fixtures: forced refresh, provider filtering, shipped-cache contamination, malformed/empty/error outcomes, models.dev intersection/deprecation/failure, and both sources’ audit. |
 | `tests/test_stage2_research_tools.py` | Keep real tool-call shape, destination/receipt faults and concurrent scratch separation checks. |
 | `tests/test_stage2.py` | Retain small-class, Haiku 5.5, other-verb and exact-check regression coverage. |
@@ -502,6 +506,40 @@ unknown. The absent `scripts/validate_change_artefacts.py` cannot be run; use
 the existing gates and let the runner own registry regeneration/full verify.
 
 ## Criterion ledger
+
+- 5: tests/test_stage2_research_map.py::test_map_merge_cannot_change_keys_or_finder_evidence — Standalone preparation accepts added/dropped/duplicate keys or changed/missing finder reasons; actual dispatch-barrier integration remains pending.
+- 24: tests/test_stage2_research_map.py::test_map_exact_union_retains_all_origins_without_persisting_frozen_snapshots — Exact overlapping origins disappear or source snapshots enter the audit map.
+- 24: tests/test_stage2_research_map.py::test_map_unresolved_locator_stays_visible_but_grants_no_scope_or_neighbour — A nonresolving locator grants a mapped region or neighbour relation.
+- 24: tests/test_stage2_research_map.py::test_map_given_neighbour_is_inserted_even_when_all_finders_omit_it — The runner's given neighbour disappears because finders omitted it.
+- 24: tests/test_stage2_research_map.py::test_map_empty_categories_keep_explicit_unread_provenance — An empty category, blank unread marker or lost/changed unread origin is accepted.
+- 24: tests/test_stage2_research_map.py::test_map_unread_categories_preserve_each_finder_reason — Unread reasons lose their originating seat in the prepared map.
+- 24: tests/test_stage2_research_map.py::test_map_locator_schema_accepts_only_locators_and_meaningful_reasons — Extra decision fields or whitespace reasons enter the structural locator protocol.
+- 24: tests/test_stage2_research_map.py::test_map_resolved_neighbour_artifact_maps_to_frozen_sibling_spec — A resolved active/archive/living artifact loses its frozen neighbouring specification.
+- 24: tests/test_stage2_research_map.py::test_map_own_and_spec_less_artifacts_do_not_gain_neighbour_status — Own or spec-less artifacts acquire a neighbouring specification or the wrong comparison gap.
+- 4: tests/test_stage2_research_map.py::test_map_given_neighbour_header_missing_and_empty_are_distinct — Standalone header validation accepts missing/null values or rejects explicit empty neighbours.
+- 4: tests/test_stage2_research_map.py::test_map_given_neighbours_refuse_own_missing_escape_and_non_spec_forms — Own, absent, escaping or non-spec given paths pass standalone validation.
+- 16: tests/test_stage2_research_refs.py::test_reference_assignment_reads_do_not_define_module_variables — An attribute/subscript read is mistaken for a module variable definition.
+- 16: tests/test_stage2_research_refs.py::test_reference_augmented_assignment_counts_as_an_ambiguous_rebinding — A later augmented assignment silently leaves the original definition unambiguous.
+- 16: tests/test_stage2_research_refs.py::test_reference_python_type_alias_has_its_module_assignment_extent — A Python 3.12 type alias lacks its exact assignment extent or duplicate aliases become unambiguous.
+- 38: tests/test_stage2_research_catalog.py::test_preflight_free_definition_cannot_redirect_its_declared_go_origin — A free definition changes provider/origin instead of being excluded with raw evidence.
+- 41: tests/test_stage2_research_catalog.py::test_preflight_fixed_definition_cannot_redirect_its_declared_go_origin — A required fixed definition redirects its declared Go origin without fixed-model-unavailable.
+
+
+- 16: tests/test_stage2_research_refs.py::test_reference_markdown_rejects_nonstructural_or_ambiguous_heading — Standalone resolution treats prose, frontmatter, fences, Setext or duplicate titles as an exact ATX heading.
+- 16: tests/test_stage2_research_refs.py::test_reference_markdown_extent_ignores_frontmatter_fences_and_lower_headings — Structural extent stops on a fenced heading or excludes a child section.
+- 16: tests/test_stage2_research_refs.py::test_reference_criterion_selects_one_item_and_ignores_fenced_items — A fenced/duplicate item resolves or the excerpt crosses its next structural boundary.
+- 16: tests/test_stage2_research_refs.py::test_reference_recorded_plan_prompt_extent_uses_exact_structural_title — The historical S-47 title resolves to the fenced example or a different extent than lines 65–94.
+- 16: tests/test_stage2_research_refs.py::test_reference_python_uses_ast_definition_extent — A nested Python symbol resolves outside its exact AST extent.
+- 16: tests/test_stage2_research_refs.py::test_reference_python_never_falls_back_to_word_search — Prose or an ambiguous/invalid Python definition is accepted as a symbol.
+- 16: tests/test_stage2_research_refs.py::test_reference_mapping_has_exact_canonical_json — A YAML date, Unicode mapping or selected value has a noncanonical excerpt.
+- 16: tests/test_stage2_research_refs.py::test_reference_mapping_rejects_ambiguous_or_uncitable_values — Dotted keys, indices, duplicate keys, unsafe YAML values or non-finite JSON resolve.
+- 16: tests/test_stage2_research_refs.py::test_reference_claim_has_one_shared_unicode_budget_and_no_partial_support — Standalone claim assembly exceeds 4000 Unicode characters or retains an excerpt after any unresolved reference.
+- 16: tests/test_stage2_research_refs.py::test_reference_reads_only_frozen_bytes_and_refuses_escape — The resolver reads live bytes or accepts a path escaping the frozen packet.
+- 42: tests/test_stage2_research_catalog.py::test_preflight_duplicate_unrelated_metadata_fields_do_not_disable_go — A duplicate foreign-provider/property key disables an otherwise valid Go intersection.
+- 42: tests/test_stage2_research_catalog.py::test_preflight_raw_duplicate_keys_inside_models_are_document_ambiguity — A repeated raw key within Go models leaves a free identity eligible instead of duplicate-id capability-unavailable.
+- 42: tests/test_stage2_research_catalog.py::test_preflight_non_model_pi_entries_are_not_candidate_faults — An unrelated ignored Pi entry excludes valid free peers.
+- 42: tests/test_stage2_research_catalog.py::test_preflight_non_object_capability_keeps_raw_value_evidence — A local malformed entry loses its exact source value.
+
 
 - 38: tests/test_stage2_research_catalog.py::test_preflight_uses_fresh_pinned_go_snapshot_without_cache_date — Standalone preflight substitutes a shipped list or fabricates Last-Modified; this is not dispatcher integration evidence.
 - 38: tests/test_stage2_research_catalog.py::test_preflight_refreshes_despite_fresh_store_and_never_revives_cached_ids — A current cache prevents the forced refresh or revives removed identities in standalone selection.
@@ -1140,3 +1178,98 @@ unrelated metadata provider, then scope identity ambiguity checks accordingly;
 implement and test the structural frozen-source resolver. These are pending,
 not qualified by this checkpoint. No GLM/Claude model call or live provider
 qualification ran. Attended F-1 capture remains open; PR #158 stays draft.
+
+
+### Structural-reference foundation order — 2026-10-17
+
+[DETAIL] Put the new pure frozen-byte resolver in stage2_research_refs.py,
+separate from model transport and scheduling. It parses the selected file
+type, returns complete extents, and assembles claim excerpts only after
+every citation resolves. This is a new responsibility, not the queued
+general runner refactor. Its standalone tests and historical S-47 fixture
+are framework content. The later amended map/report validator must consume
+this helper; the legacy substring citation path remains until that
+dispatcher/report replacement. Keep those integration ledger rows pending.
+No standalone result proves the full research evidence/handoff pipeline.
+
+
+### Finder-map protocol and intermediate verification — 2026-10-17
+
+[DETAIL] The pure stage2_research_map.py helper consumes four JSON lists
+(code, rules, tests, neighbours). A finder locator has exactly path,
+reference and reason. A merge locator has path, reference and origins,
+each origin holding finder and reason. An unread marker is a singleton
+object with not_read: a reason in finder output, the exact originating
+finder/reason list in merge output. Empty lists are invalid; locators and
+unread markers may coexist to retain partial coverage. Raw JSON uses
+duplicate-key and non-finite-value refusal. The caller supplies the trusted
+three finder identities. The runner validates the exact locator/unread
+union, then resolves frozen references and independently inserts given
+neighbours. It returns scope, extents/digests, neighbour membership,
+comparison gaps and source unread reasons, never whole source snapshots.
+The amended scheduler and prompts must consume this protocol later.
+
+The first full check of the reference slice was RED: 2414 passed, 16
+skipped, two CI registration tests failed in 745.38 seconds. The helper
+needed a documented non-CLI caller and a direct test import detectable by
+the existing AST-based check. Those registrations/imports are fixed; all
+five relevant CI ratchet tests pass. A progress message briefly claimed the
+suite green from its transition into later gates; this was corrected
+immediately after inspecting the actual result. No source checkpoint was
+published from that red run. Six additional red-first Python assignment
+cases fixed attribute/subscript false definitions, augmented rebinding
+and type-alias extents. The finder-map fixture schema now preserves the
+required unread markers and origins, with red-first loss/change cases.
+
+Go catalog origin/provider checks are candidate-local: a malformed free
+definition is excluded as pi-malformed with raw field evidence, while a
+malformed required fixed definition fails preflight. No catalog field
+authorizes a different endpoint. Store definitions remain retrieval
+evidence; later Pi config activation must retain literal header values
+as established by the implementation-review safety repair, not interpret
+retrieval metadata as executable configuration. Actual amended dispatch,
+frozen snapshot/history construction, model isolation qualification and
+handoff remain pending. Keep integration ledger rows pending.
+
+
+### Boundary foundations verified — 2026-10-18 Europe/Berlin
+
+Measured phase-4 interval: 2026-10-17 21:41:24–22:22:15 UTC,
+40 minutes 51 seconds, including the intermediate red full run,
+all repairs, preparation of the next history slice and the final full
+verification wait. Count this once after the earlier 24m56s, 38m37s and
+retained measured history. Total appetite remains 13h20m; the named older
+unmeasured span is preserved and excluded by the maintainer's continuation.
+
+Implemented and tested standalone typed frozen references, exact finder
+union with unread provenance and neighbour derivation, scoped metadata
+ambiguity/raw-value evidence, and declared Go origin/provider binding.
+The helpers perform no model call. Actual amended dispatch, frozen-copy/
+history construction, prompt replacement, report/judge/handoff integration
+and attended isolation capture remain unfinished; PR #158 stays draft.
+
+Red-first evidence: six Python assignment counterexamples; 34 initially
+missing map cases; four ingestion/schema failures beside two passing
+duplicate guards; four invalid own-context cases; twelve failures when the
+required unread-marker schema was introduced; five origin/provider
+counterexamples. Final focused boundary set: 175 passed in 22.83 seconds.
+The five caller/test-registration ratchet checks pass. Full make verify
+GREEN: 2476 passed, 16 skipped in 749.26 seconds, then every blocking gate
+green. Ruff checks/format (76 files), generated-CI check, frontmatter and
+criterion ledger passed; documentation/Markdown findings remain report-only.
+Source stayed fixed throughout the final verification. Process-local
+commit.gpgsign=false and local loopback servers were enabled. No GLM/Claude
+call, live provider qualification, credential-file read or merge occurred.
+
+Next prepared, not implemented: a bounded local frozen-HEAD history helper
+and disposable-Git fixtures, drafted outside the repository during the
+verification wait. Its preparation time is already included in this span.
+It must first get red tests in this worktree, caller/test registration and
+full qualification before any completion claim. Git's official environment
+and pretty-format references were checked on 2026-10-18 local:
+https://git-scm.com/docs/git and https://git-scm.com/docs/pretty-formats.
+The measured local Git version is 2.56.0. The intended history policy is
+local-only, literal mapped paths, frozen full commit identity, at most ten
+records per path, author UTC, body cap 4000 Unicode characters, no retry and
+the run's shared monotonic deadline. No history implementation was qualified
+by the preceding boundary test result.

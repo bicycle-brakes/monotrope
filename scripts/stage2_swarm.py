@@ -44,6 +44,7 @@ import tempfile
 import time
 import uuid
 from pathlib import Path
+from urllib.parse import urlsplit
 
 import yaml
 
@@ -109,7 +110,13 @@ def validate_research_free_policy(policy: dict) -> None:
 class _CatalogObject(dict):
     def __init__(self, pairs):
         super().__init__(pairs)
-        self.duplicates = len(pairs) != len(self)
+        seen = set()
+        self.duplicate_keys = set()
+        for key, _ in pairs:
+            if key in seen:
+                self.duplicate_keys.add(key)
+            seen.add(key)
+        self.duplicates = bool(self.duplicate_keys)
 
 
 def _catalog_json(body):
@@ -159,7 +166,9 @@ def select_research_catalog(bridge, policy, fixed_ids, *, expected_version):
     models = {}
     for item in raw:
         if not isinstance(item, dict) or not isinstance(item.get("id"), str) or not item["id"]:
-            raise ResearchCatalogError("pi-malformed identity")
+            # The pinned parser ignores non-model entries. Only fixed/free
+            # identities need candidate validation; other entries grant no seat.
+            continue
         if item["id"] in models:
             raise ResearchCatalogError("duplicate Pi identity")
         models[item["id"]] = item
@@ -175,6 +184,24 @@ def select_research_catalog(bridge, policy, fixed_ids, *, expected_version):
             return "pi-malformed"
         if kind != "chat" or "text" not in inputs:
             return "not-chat"
+        if item.get("provider", provider) != provider:
+            return "pi-malformed"
+        try:
+            target = urlsplit(item.get("baseUrl", "https://opencode.ai/zen/go/v1"))
+            safe_origin = (
+                target.scheme == "https"
+                and target.hostname == "opencode.ai"
+                and target.port in (None, 443)
+                and target.username is None
+                and target.password is None
+                and target.path in ("/zen/go/v1", "/zen/go/v1/")
+                and not target.query
+                and not target.fragment
+            )
+        except (TypeError, ValueError, AttributeError):
+            safe_origin = False
+        if not safe_origin:
+            return "pi-malformed"
         return None
 
     for ident in fixed_ids:
@@ -194,9 +221,9 @@ def select_research_catalog(bridge, policy, fixed_ids, *, expected_version):
                 capability_reason = "malformed"
                 capabilities = {}
             elif (
-                getattr(document, "duplicates", False)
-                or getattr(block, "duplicates", False)
-                or getattr(capabilities, "duplicates", False)
+                provider in getattr(document, "duplicate_keys", set())
+                or "models" in getattr(block, "duplicate_keys", set())
+                or _catalog_duplicates(capabilities)
             ):
                 capability_reason = "duplicate-id"
             else:
@@ -225,9 +252,10 @@ def select_research_catalog(bridge, policy, fixed_ids, *, expected_version):
             else {"present": False}
             for key in ("id", "tool_call", "status")
         }
+        evidence["entry"] = {"present": True, "value": entry} if ident in capabilities else {"present": False}
         evidence["pi"] = {
             key: {"present": True, "value": item[key]} if isinstance(item, dict) and key in item else {"present": False}
-            for key in ("type", "input")
+            for key in ("type", "input", "provider", "baseUrl")
         }
         reason = "not-in-fresh-pi" if item is None else pi_reason(item)
         if reason is None:

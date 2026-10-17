@@ -3,8 +3,8 @@ title: "Design — research-swarm"
 status: draft
 implementation_status: partial
 date: 2026-10-14
-last_reviewed: 2026-10-17
-updated: 2026-10-17
+last_reviewed: 2026-10-18
+updated: 2026-10-18
 supersedes: null
 superseded_by: null
 bead: coding-harness-icw
@@ -188,7 +188,12 @@ fields, eligible ids, policy and selected/excluded ids with reasons. An offline 
 prove forced network refresh and failure handling against real pinned Pi,
 including its static-catalog union and non-throwing error behavior.
 
-**Finder → map.** Freeze HEAD and copies/digests of every tracked file and every
+**Finder → map.** The pure Python helper stage2_research_map.py validates
+the exact union and derives neighbours from supplied frozen sources, with
+no model or file operation. Four-list JSON uses explicit unread markers:
+finder not_read reasons become merge not_read origin/reason lists, so
+empty or partially unread categories retain every source. Locator entries
+carry exact path/reference and reason or merged origins. Freeze HEAD and copies/digests of every tracked file and every
 untracked non-ignored file under the change folder before dispatch. Copies live in run scratch outside the repository;
 a failed copy exits 1 before model calls. Keep them until publication or abort,
 then delete them. Persist HEAD, the full digest and per-path digests of
@@ -336,7 +341,10 @@ statement and no evidence-backed peer claim contradicts it; review checks
 this meaning. Validation retains malformed/failed output as partial evidence;
 it cannot label it a complete contribution. Check local symbols/sections in
 frozen bytes, public citations against successful fetch receipts, and source
-identity in every judgement. Resolve `path::X` by frozen file type:
+identity in every judgement. The pure Python helper `scripts/stage2_research_refs.py` resolves references
+from supplied frozen bytes and assembles the shared per-claim excerpt cap;
+it performs no file access or model operation. Map and report validation
+consume the same helper. Resolve `path::X` by frozen file type:
 Markdown uses one scan for headings, uniqueness, excerpt ends and criterion
 items: skip first-line --- front matter through its next --- line; exclude
 fences opened by at least three backticks/tildes indented at most three

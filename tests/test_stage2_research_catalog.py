@@ -425,3 +425,66 @@ def test_preflight_zero_selection_retains_policy_and_measured_outcome(tmp_path, 
     assert result["selection_outcome"] == "measured-empty"
     assert result["policy"] == POLICY
     assert result["raw_pi_ids"] == sorted(FIXED)
+
+
+@pytest.mark.parametrize(
+    "body",
+    [
+        '{"unrelated":1,"unrelated":2,"opencode-go":{"models":{"alpha-free":{"id":"alpha-free","tool_call":true},"beta-free":{"id":"beta-free","tool_call":true}}}}',
+        '{"opencode-go":{"unrelated":1,"unrelated":2,"models":{"alpha-free":{"id":"alpha-free","tool_call":true},"beta-free":{"id":"beta-free","tool_call":true}}}}',
+    ],
+)
+def test_preflight_duplicate_unrelated_metadata_fields_do_not_disable_go(tmp_path, sources, body):
+    sources.metadata_body = body
+    assert select(collect(tmp_path, sources))["selected"] == ["alpha-free", "beta-free"]
+
+
+def test_preflight_non_model_pi_entries_are_not_candidate_faults(tmp_path, sources):
+    sources.pi_models.extend([{"name": "not-a-model", "input": 0}, model("unrelated-paid", input=None, type="unknown")])
+    assert select(collect(tmp_path, sources))["selected"] == ["alpha-free", "beta-free"]
+
+
+def test_preflight_non_object_capability_keeps_raw_value_evidence(tmp_path, sources):
+    sources.metadata[GO]["models"]["alpha-free"] = 5
+    result = select(collect(tmp_path, sources))
+    assert result["selected"] == ["beta-free"]
+    candidate = next(item for item in result["candidates"] if item["id"] == "alpha-free")
+    assert candidate["reason"] == "metadata-malformed"
+    assert candidate["evidence"]["entry"] == {"present": True, "value": 5}
+
+
+@pytest.mark.parametrize("field", ["id", "tool_call"])
+def test_preflight_raw_duplicate_keys_inside_models_are_document_ambiguity(tmp_path, sources, field):
+    entry = '"id":"alpha-free","tool_call":true,' + ('"id":"alpha-free"' if field == "id" else '"tool_call":true')
+    sources.metadata_body = (
+        '{"opencode-go":{"models":{"alpha-free":{' + entry + '},"beta-free":{"id":"beta-free","tool_call":true}}}}'
+    )
+    result = select(collect(tmp_path, sources))
+    assert result["selected"] == []
+    assert result["fixed"] == FIXED
+    assert result["capability_reason"] == "duplicate-id"
+
+
+@pytest.mark.parametrize(
+    "change",
+    [
+        {"provider": "opencode"},
+        {"baseUrl": "https://example.invalid/zen/go/v1"},
+        {"baseUrl": "https://opencode.ai@other.invalid/zen/go/v1"},
+        {"baseUrl": "http://opencode.ai/zen/go/v1"},
+    ],
+)
+def test_preflight_free_definition_cannot_redirect_its_declared_go_origin(tmp_path, sources, change):
+    sources.pi_models[3].update(change)
+    result = select(collect(tmp_path, sources))
+    assert result["selected"] == ["beta-free"]
+    item = next(item for item in result["candidates"] if item["id"] == "alpha-free")
+    assert item["reason"] == "pi-malformed"
+    for field, value in change.items():
+        assert item["evidence"]["pi"][field] == {"present": True, "value": value}
+
+
+def test_preflight_fixed_definition_cannot_redirect_its_declared_go_origin(tmp_path, sources):
+    sources.pi_models[0]["baseUrl"] = "https://example.invalid/api"
+    with pytest.raises(swarm.ResearchCatalogError, match="fixed-model-unavailable"):
+        select(collect(tmp_path, sources))

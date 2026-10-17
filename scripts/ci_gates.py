@@ -109,6 +109,16 @@ OHNE_AUFRUFER: dict[str, str] = {
         "Helper of scripts/stage2.py session, never an entry point of its own — it opens a macOS Terminal "
         "window for an interactive model session; tests/test_stage2_session.py runs it against stand-ins"
     ),
+    "stage2_research_refs.py": (
+        "Pure frozen-reference library, not a CLI gate; the amended research map/report pipeline consumes it. "
+        "Direct structural and claim-cap contracts live in tests/test_stage2_research_refs.py; "
+        "legacy dispatcher integration remains pending during the research-swarm implementation."
+    ),
+    "stage2_research_map.py": (
+        "Pure finder-union and neighbour preparation library, not a CLI gate; the amended explore pipeline "
+        "consumes it. tests/test_stage2_research_map.py exercises exact union and frozen neighbour boundaries; "
+        "actual scheduler integration remains pending."
+    ),
     "stage2_swarm.py": (
         "Helper of scripts/stage2.py explore, never an entry point of its own — it runs the phase-1 "
         "research swarm only through the runner; tests/test_stage2_swarm.py runs it against stand-ins"
