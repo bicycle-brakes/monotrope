@@ -782,3 +782,16 @@ Both new findings are taken. Static inspection of pinned Pi 1.2.0 confirms that 
 run_swarm currently rejects an unreadable pipe-delimited table but accepts any other nonempty prose with zero parsed rows. That contradicts the design's validated no-finding requirement. Define and document an explicit no-finding answer, reject inability/error/empty/malformed output as a member failure, retain valid findings with commentary, and preserve the no-successful-member/no-round rule. These are repairs to existing accepted criteria, not a new model-admission decision. The independent reviewer remains read-only and does not repair its own findings.
 
 Stage-2 call, 2026-10-17: repair · attempt 1 · route codex · endpoint openai-codex · model gpt-6.1-sol · leak check clean over 480 files, 1427 commits, 12 rules.
+
+Stage-2 call, 2026-10-17: review · endpoint openai-codex · model gpt-6.1-sol · leak check clean over 480 files, 1431 commits, 12 rules.
+
+## Phase 6 — Codex, 2026-10-17
+
+Codex reported no finding.
+
+The answer was not only six-cell rows; what is not one is kept below as it came.
+
+No finding.
+
+Phase 6 verdict: codex 01a14bab-758c-7092-bd54-81d6bdeeb919, 2026-10-17
+Reviewer session: codex 01a14bab-758c-7092-bd54-81d6bdeeb919 — a fresh session reviewed: an earlier ## Phase 6 block makes this a re-check
