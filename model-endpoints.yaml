@@ -252,6 +252,15 @@ endpunkte:
         anfragen_5h: 3200
         anfragen_gelesen: "2026-10-17"
         anfragen_quelle: "estimated requests table of the Go page, https://opencode.ai/docs/go"
+    # Legacy membership for declarations without availability_preflight.
+    # Fresh runs of this declaration select the cheapest reachable members.
+    availability_preflight:
+      flash_size: 3
+      max_age_seconds: 900
+      exclude_until:
+        - model_prefix: glm
+          until: "2026-10-21T20:34:00+08:00"
+          reason: "Maintainer-declared GLM outage; do not probe before this deadline."
     flash_swarm:
       - deepseek-v4.1-flash
       - mimo-v2.6-flash
@@ -291,8 +300,15 @@ endpunkte:
       model without the value last and named. A Flash member that fails is
       replaced by the cheapest admitted model not in the round and not yet
       consumed, each model at most once; the swap is recorded and printed.
-      The `flash_swarm` list stays hand-kept; when it is not the three
-      admitted models with the highest `anfragen_5h`, the runner notices it.
+      Fresh runs require availability_preflight: prepare-loop checks actual
+      reachability without tools or repository content, then the main Claude
+      Code or Codex conversation reports the selected stages before
+      review-loop --availability-reported consumes its input-bound receipt.
+      The receipt expires after 900 seconds. Up to three cheapest reachable
+      admitted paid models form the Flash swarm; remaining reachable models
+      form the ladder. The flash_swarm list is legacy configuration only.
+      Timed exclusions are skipped without probing. Existing runs retain
+      their snapshots; availability preparation cannot reset consumed stages.
       A one-line pull request changes the set or a value. Free membership is
       selected fresh for every run by the `free_stage` rule from a forced
       live catalog refresh (`pi update --models`) before `pi --list-models`;

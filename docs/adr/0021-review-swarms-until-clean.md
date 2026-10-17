@@ -197,3 +197,41 @@ the corrected order and automatic free admission.
   change's own new review-loop result with their commits in the decision PR.
 - Merge, not this draft or its pending review header, makes the amendment
   effective; no maintainer answer is written by the drafting agent.
+
+## Q-16 amendment — availability before a fresh run, 2026-10-17
+
+The maintainer answered "ja" to general availability preflight on this
+decision PR, deferring the individual MiMo replacement (decisions.md Q-16).
+For new runs whose endpoint enables `availability_preflight`, this replaces
+decision 4's hand-kept Flash membership and extends decision 9's snapshot.
+
+Before review, the runner refreshes Pi's catalog and makes actual tool-free
+probes of admitted candidate models. The orchestrating Claude Code or Codex
+session reports the timestamp, failures/skips and selected ladder in its
+main conversation before acknowledging the report id to the review command.
+The runner checks acknowledgment and input-bound freshness; it cannot verify
+the UI display. The selection uses reachable admitted models only: up to
+three cheapest paid models form the Flash swarm, then the remaining paid
+models review one per round. Unknown terms or costs confer no admission;
+the free Go class retains its existing diff-only exception. Provider addresses
+and existing wire-API skips remain unchanged.
+
+Preparation has no repository input and no tools, runs the normal per-call
+declaration/leak checks, and is audited. Each probe is bounded to 60 seconds;
+ordinary call failures are reported without suppressing later checks.
+A leak BLOCK stops the preparation. Respect declared temporary exclusions
+without probing; GLM stays excluded until 2026-10-21T20:34+08:00.
+
+The external preparation receipt is valid for 900 seconds and bound to the
+worktree, configuration and diff. Changed inputs, expiry or a failed new
+preparation invalidate it. No reachable candidate means refusal, never a
+clean round. Existing or released runs cannot be prepared again: their
+snapshot, clean stop, repair brake and consumed stages stay binding.
+Declarations without the new rule retain legacy compatibility.
+
+Cost consequence: preparation adds one actual request per tested candidate,
+even when the first review round will be clean. A successful probe proves
+point-in-time reachability only; it does not prove review quality, free
+billing or later availability. Selection and failed/skipped probes are
+preserved in the run snapshot. This expansion requires renewed validation
+and independent review; the earlier phase-6 verdict covers the old scope.

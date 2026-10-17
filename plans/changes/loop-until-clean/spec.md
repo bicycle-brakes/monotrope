@@ -23,7 +23,7 @@ adr_files: [docs/adr/0021-review-swarms-until-clean.md]
 # Spec — `loop-until-clean`
 
 The goal in one sentence: phase 4b reviews until a decided round leaves no
-accepted finding, starting with a free swarm, then a three-Flash swarm, then
+accepted finding, starting with a free swarm, then up to three reachable paid reviewers together, then
 single-model rounds, bounded by the declared ladder and the repair brake
 (bead `coding-harness-4fk`, implementation review as a swarm).
 Research: [research.md](research.md). Decisions: [decisions.md](decisions.md),
@@ -62,10 +62,12 @@ Merely listing installed models does not meet the live-check requirement.
   Initially the rule selects provider `opencode-go`, ids ending `-free`,
   plus dated, reasoned inclusions, minus dated, reasoned exclusions; Zen
   models remain excluded regardless of an inclusion.
-- **Flash swarm** — round 2, the eligible members of DeepSeek V4.1 Flash,
-  MiMo-V2.6-Flash and LongCat-2.0 reviewed in parallel (Q-10).
-- **Ladder** — the nine named paid models of Q-1, the first three grouped
-  into round 2; each remaining eligible model gets one later round in order.
+- **Flash swarm** — for availability-enabled fresh runs, up to three cheapest
+  reachable admitted paid candidates in parallel (Q-16); legacy declarations
+  retain their eligible hand-kept membership (Q-10/Q-13).
+- **Ladder** — the admitted paid candidate pool; reachability preparation
+  selects and snapshots new runs under Q-16, grouping up to three cheapest
+  members before single-model rounds. Existing snapshots remain fixed.
 - **Free check** — a forced network refresh of Pi's catalog followed by
   listing and selecting models for this run. The live source is `pi.dev`,
   not OpenCode Go's own model endpoint; no stale-cache fallback is allowed.
@@ -111,13 +113,15 @@ Merely listing installed models does not meet the live-check requirement.
    *Also refuted by:* a failed Flash member left unreplaced while an
    unconsumed rung exists, a replacement called twice or left as a later
    rung, a swap neither recorded nor printed, a reason without Pi's last
-   error line, or a changed `flash_swarm` list (it stays hand-kept; a
+   error line, or a changed legacy `flash_swarm` list (without availability
+   preflight it stays hand-kept; a
    differing set from the three cheapest gets a notice and a record line,
    never a refusal).
 
 5. When a fresh review-loop run is admitted, its free membership is selected
    from a successfully forced live Pi catalog refresh by the YAML free-stage
-   rule, with the check time and exact resulting list recorded.
+   rule, filtered by actual availability under criterion 17 for enabled runs,
+   with the check time and exact resulting list recorded.
    *Refuted by:* listing before refresh, reusing a four-hour cache after a
    failed/timed-out refresh, excluding a newly matching Go id merely because
    it has no individual declaration, calling Zen or an excluded/absent id,
@@ -207,6 +211,27 @@ Merely listing installed models does not meet the live-check requirement.
     *Refuted by:* an omitted agreement, the old per-free-model admission
     rule, a sequential Flash round, or rewriting either historical body.
 
+17. When the endpoint enables availability preflight, every fresh run starts
+    with actual static, tool-free probes of admitted candidates in the fresh
+    catalog. Skip timed exclusions without a call and require known paid cost.
+    The reachable free members form the free swarm; up to three cheapest
+    reachable paid models form the Flash swarm, followed by the remaining
+    paid ladder. This supersedes manual Flash membership in criteria 4/8
+    for these fresh runs; legacy declarations and existing snapshots remain
+    compatible. Print reachable/failed/skipped ids and the selected stages.
+    The orchestrator reports them in the main Claude Code or Codex conversation
+    before passing the report id to review-loop. Preparation alone is no round.
+    The external receipt binds the worktree, configuration and diff and expires
+    after 900 seconds. All-failed preparation refuses and invalidates older
+    preparation; changed inputs, invalid rules, leak BLOCK, missing/incorrect
+    acknowledgment or expired/corrupt receipt permit no review call.
+    Existing or released history cannot be reset by preparation (Q-16).
+    *Refuted by:* a failed candidate being selected, catalog presence treated
+    as reachability, fixed Flash ids overriding the reachable cheap-first set,
+    repository content/tools in a probe, a GLM call before the declared cutoff,
+    an unchecked call, silent stage selection, accepting stale/transplanted
+    preparation, treating all failures as clean, or replaying a spent stage.
+
 ## Non-goals
 
 - Research swarm, structure-first review, live progress display and failure
@@ -214,7 +239,7 @@ Merely listing installed models does not meet the live-check requirement.
 - Changing the phase-6 verdict-before-release order, row evidence ownership,
   the external location of the loop record, or stage 1 and interactive sessions.
 - An arbitrary round cap, repeated final models or automatic address/model
-  fallbacks; replacing Pi's catalog with OpenCode Go's own endpoint or adding
+  fallbacks outside the admitted run snapshot; replacing Pi's catalog with OpenCode Go's own endpoint or adding
   a billing-verification service.
 - A free stage with full repository access or paid models using the free
   class exception; translating existing German configuration keys.
@@ -259,8 +284,9 @@ I decide the following reversible details and state their reasons:
   snapshot supplies its members without individual declarations. Apply
   includes only to ids present under the configured provider in that live
   catalog; exclusions win over matches and includes. This makes exceptions
-  editable without guessing ids or admitting Zen. Invalid rules, an empty
-  selection or failed refresh/listing refuse rather than skipping stage 1.
+  editable without guessing ids or admitting Zen. Invalid rules or failed
+  refresh/listing always refuse. For Q-16 runs, an empty reachable free
+  selection permits paid stages if admitted reachable candidates remain.
 - `[DETAIL]` Force `tools/pi/pi update models` before `--list-models` in
   one scratch agent directory per fresh run/probe, with a timeout. Record
   UTC check time, source `pi.dev`, Pi version, rule, catalog and selected ids;

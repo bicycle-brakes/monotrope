@@ -6,8 +6,9 @@ The loop runs until a round is clean (ADR 0021): round 1 is the **free
 swarm** — every model a forced live catalog refresh (`pi update --models`
 before `pi --list-models`) finds under the `opencode-go` provider that the
 `free_stage` rule in `model-endpoints.yaml` selects, called in parallel; round
-2 is the **Flash swarm** — the entry's eligible `flash_swarm` members, in
-parallel; every later round calls one eligible rung of the `modelle` ladder,
+2 is the **Flash swarm** — up to three cheapest reachable admitted paid
+members for fresh availability-enabled runs; legacy declarations use the
+entry's eligible `flash_swarm` members, in parallel; every later round calls one eligible rung of the `modelle` ladder,
 cheapest first: the runner orders the set by the declared cost value
 `anfragen_5h`, never by list position. A Flash member that fails is replaced
 in its round by the cheapest eligible rung not yet used, each model at most
@@ -17,7 +18,8 @@ model. A round whose every row
 is decided and none accepted ends the loop; two consecutive rounds whose only
 accepted findings came from the repair trip the brake; a spent ladder stops
 the loop for the maintainer — no model is substituted for a spent ladder's
-last rung, and no model is called twice.
+last rung, and no model reviews twice in the completed run. Availability
+probes are additional audited calls, not reviews.
 **Input:** a paid round reads the change's diff against its merge base with
 `origin/main`, uncommitted changes included, and this text. A free round is
 confined to the implementation diff alone — source and test code in bounded
@@ -51,6 +53,20 @@ Finding |` — six cells, one row per finding, no header; write a `|` inside a
 cell as `\|`. When you find nothing, answer in one sentence.
 
 ## For the orchestrator
+
+Before a fresh run with `availability_preflight`, invoke
+`python3 scripts/stage2.py prepare-loop <change>`. Report the timestamp,
+reachable and failed/skipped models and the resulting stages in the main
+Claude Code or Codex conversation. Then pass the printed report id to
+`review-loop <change> --availability-reported <id>`. The runner checks
+acknowledgment, not the UI display. Probes consume requests but are no review
+round; their static input has no code or tools. The receipt expires after
+900 seconds and changes to the worktree, configuration or diff invalidate it.
+Up to three cheapest reachable admitted paid models form the Flash swarm;
+remaining reachable models form the ladder. This supersedes the manual
+membership described above for new availability-enabled runs. Old snapshots
+stay fixed; preparing cannot restart a spent or released run. Honor temporary
+exclusions without probing. New catalog ids still need the existing admission.
 
 The rows are in the loop record, outside the worktree. Never copy them into it.
 A swarm round carries one row series for all answering members; a member that

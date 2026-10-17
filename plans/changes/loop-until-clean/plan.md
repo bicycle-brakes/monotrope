@@ -19,7 +19,7 @@ tags: [plan, stage2, review-loop, opencode-go, swarm]
 
 ```text
 For you:     The review loop stops when no finding is accepted: live-checked free Go models first, three Flash models together next, then one paid model per round; free selection stays editable in YAML.
-Done when:   All 16 criteria have their evidence, live refresh and configurable free selection work, both swarms and stop rules hold, paid terms are read or models skipped, and make verify is green.
+Done when:   All 17 criteria have their evidence, live refresh and configurable free selection work, both swarms and stop rules hold, paid terms are read or models skipped, and make verify is green.
 Appetite:    8 h of phase 4, repair rounds included; a stop, not an estimate.
 Not now:     Research swarm, structure-first review, live progress, different repair or phase-6 routing, and automatic provider fallbacks.
 Pre-mortem:  suppose it failed: most likely because release lost the stage history and let an already-used reviewer run again.
@@ -207,6 +207,22 @@ owns that check along with `make verify`.
 - 7: tests/test_stage2.py::test_released_reviewer_words_cannot_supply_a_snapshot — kept reviewer words inject a released heading, snapshot or row
 - 8: tests/test_stage2.py::test_first_paid_rung_names_missing_cost_when_flash_is_skipped — an empty Flash stage silences the first paid round's missing-cost notice
 
+- 17: tests/test_stage2_availability.py::test_preparation_filters_failures_and_requires_main_chat_report — a catalog-listed failed model stays in the stages, fixed Flash ids win, or review starts without acknowledgment
+- 17: tests/test_stage2_availability.py::test_preparation_calls_only_static_toolless_probes — source input, tools, bare Pi or missing call audit reaches a probe
+- 17: tests/test_stage2_availability.py::test_prepared_selection_is_bound_to_inputs_and_freshness — stale, changed-input, corrupted or transplanted preparation launches review
+- 17: tests/test_stage2_availability.py::test_all_failed_preparation_never_creates_a_clean_round_or_reuses_receipt — all failures become clean or preserve an old usable receipt
+- 17: tests/test_stage2_availability.py::test_timed_exclusion_prevents_even_the_probe — an excluded model is probed before its deadline
+- 17: tests/test_stage2_availability.py::test_preparation_cannot_reset_a_started_or_released_run — preparation resets consumed stages or stop history
+- 17: tests/test_stage2_availability.py::test_invalid_availability_rule_or_leak_stops_before_model_calls — invalid configuration or leak BLOCK is handled as ordinary unavailability
+
+- 17: tests/test_stage2_availability.py::test_paid_review_can_start_without_a_free_candidate — an empty free stage suppresses reachable paid review
+- 17: tests/test_stage2_availability.py::test_deadline_expiry_permits_a_new_probe_instead_of_assuming_success — expiry admits a model without a new successful probe
+- 17: tests/test_stage2_availability.py::test_repository_declaration_requires_preflight_and_the_glm_outage — production drops preparation or the exact GLM cutoff
+- 17: tests/test_stage2_availability.py::test_catalog_presence_does_not_admit_unread_or_unpriced_paid_models — catalog presence bypasses terms or cost admission
+- 17: tests/test_stage2_availability.py::test_invalid_freshness_rule_never_calls_a_model — malformed freshness falls back to unprepared review
+- 17: tests/test_stage2_availability.py::test_null_preflight_rule_never_silently_enables_legacy_review — a present null rule silently bypasses preparation
+- 17: tests/test_stage2_availability.py::test_timed_family_exclusion_also_covers_namespaced_catalog_ids — an id namespace bypasses the temporary model-family exclusion
+
 ## Runner route — 2026-10-16
 
 Stage-1 route: implement · model claude-sonnet-5-5 · reason: two Flash post-run checks failed.
@@ -230,3 +246,31 @@ Repair evidence (2026-10-17): reworded both review-loop skip notices and the pro
 2026-10-17 11:08:03–11:15:05, 00:07:02 — repair of taken phase-6 row P6-9, including verification waits (Europe/Berlin).
 
 Repair evidence (2026-10-17): all six new regression cases failed before the code repair: unavailable models and empty answers at the first free, first paid and last paid positions. After the repair, all 26 probe-related cases passed and the full `tests/test_stage2.py` suite passed all 640 cases. The probe now reports each call failure, continues checking later members, lists answered and failed ids at the end and exits nonzero if any member failed. Declaration and leak checks remain outside the call-failure handler. Ruff check, format check, the criterion ledger and git diff whitespace checks passed. This call did not edit `findings.md`, make a provider call or commit; the outer runner owns full `make verify` and the checkpoint.
+
+2026-10-17 11:35:25–12:57:23 UTC, 01:21:58 — Q-16 implementation and validation, including verification waits. The maintainer explicitly requested this expanded scope and continued work toward the session limit; the historical appetite is preserved rather than silently re-estimated.
+
+Q-16 evidence (2026-10-17): the initial preparation test failed before the new verb existed, and the namespaced exclusion regression failed before the family matching repair. All 24 synthetic availability cases passed. The first full verification found two integration faults (helper registration and an overbroad client-attribution assertion); both were repaired and their focused checks passed. The final full make verify passed: 2259 tests passed, 16 skipped (885.03 seconds), with every blocking local gate green, including the kit probe. Documentation-link and Markdown-format checks remain report-only. Tests used local stand-ins; no live provider probe or GLM call ran. The earlier phase-6 verdict does not cover Q-16; a fresh independent read-only review is next. This evidence append changes only plan prose after the green run.
+
+## Q-16 implementation amendment — 2026-10-17
+
+The maintainer approved actual availability preflight on PR #157 in the
+conversation. This widens the reviewed scope: the prior phase-6 verdict
+covers the old head only, and the PR is a draft until renewed checks/review.
+No spent loop run is reset. The historical eight-hour appetite is not
+re-estimated; the maintainer explicitly requested continued work until the
+session limit approaches and a handover.
+
+1. Add a bounded `scripts/stage2_availability.py` helper and two-step
+   prepare/report/consume integration in `scripts/stage2.py`.
+2. Add production `availability_preflight` configuration, dynamic Flash
+   sizing and the temporary GLM exclusion. Existing synthetic legacy-world
+   tests explicitly omit that rule; new integration tests enable it.
+3. Use actual synthetic endpoint failures to prove filtering, required main
+   conversation acknowledgment, freshness/input binding, tool-free probes,
+   leak refusal, timed exclusions and no spent-run reset.
+4. Update the spec, design, ADR, live doctrine and PR decision block.
+   Register the helper as an imported library in scripts/ci_gates.py; update
+   the command-count and source-attribution assertions without weakening
+   transport or model-admission checks.
+   Run affected suites and full verification; renewed independent reviews
+   remain required before this expanded PR can be ready for merge.

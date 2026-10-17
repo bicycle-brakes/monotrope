@@ -17,6 +17,7 @@ stands between the rule and the call.
     python3 scripts/stage2.py spec-review  <change>   # Opus 5.5, phase 2a
     python3 scripts/stage2.py implement    <change>   # GLM Flash, phase 4
     python3 scripts/stage2.py repair       <change>   # Codex, the taken findings; Sonnet 5.5 after two failed checks
+    python3 scripts/stage2.py prepare-loop <change>   # availability report before a fresh phase-4b run
     python3 scripts/stage2.py review-loop  <change>   # one round of phase 4b, until a round is clean
     python3 scripts/stage2.py release-loop <change>   # loop rows into findings.md
     python3 scripts/stage2.py review       <change>   # Codex, phase 6; a re-check is a fresh read-only session
@@ -1320,7 +1321,7 @@ def overlay_ids(agent: Path, provider: str) -> set[str]:
     return {str(model["id"]) for model in models if isinstance(model, dict) and model.get("id")}
 
 
-def discover_free(root: Path) -> dict:
+def discover_free(root: Path, *, allow_empty: bool = False) -> dict:
     """The free stage's members, from a forced live catalog refresh this run owns.
 
     One fresh scratch HOME and agent directory serve both commands: first the
@@ -1370,7 +1371,7 @@ def discover_free(root: Path) -> dict:
     catalog = parse_catalog(listing.stdout or "")
     # Only ids the fresh overlay carries: an id that only Pi's shipped list holds is not selected (Q-13).
     selected = [model for model in select_free(rule, catalog) if model in fresh]
-    if not selected:
+    if not selected and not allow_empty:
         raise Refused("the live catalog holds no free model for the configured rule; the free stage is not entered.")
     return {
         "checked_at": dt.datetime.now(dt.UTC).isoformat(timespec="seconds"),
@@ -1625,7 +1626,16 @@ def require_pi() -> None:
         raise Refused(f"pi {said or 'printed nothing'} is not the pinned {PI_VERSION}; no call starts.")
 
 
-def run_reviewer(ctx: Context, model: str, prompt: str, key: str, *, free: bool = False) -> str:
+def run_reviewer(
+    ctx: Context,
+    model: str,
+    prompt: str,
+    key: str,
+    *,
+    free: bool = False,
+    timeout_seconds: int | None = None,
+    task: str | None = None,
+) -> str:
     """One reviewer call of the loop: Pi against OpenCode Go's chat-completions address.
 
     The launch is the measured set (spec, criterion 8), started through the
@@ -1669,10 +1679,17 @@ def run_reviewer(ctx: Context, model: str, prompt: str, key: str, *, free: bool 
             f"{OPENCODE}/{model}",
             "--append-system-prompt",
             str(prompt_file),
-            f"Review the change {ctx.change} as the appended instructions say.",
+            task or f"Review the change {ctx.change} as the appended instructions say.",
         ]
         env = foreign_env({"HOME": str(home), "PI_CODING_AGENT_DIR": str(agent), "OPENCODE_API_KEY": key})
-        done = launch(command, scratch if free else ctx.root, env, key, timeout=REVIEWER_MINUTES * 60)
+        done = launch(
+            command,
+            scratch if free else ctx.root,
+            env,
+            key,
+            timeout=timeout_seconds or REVIEWER_MINUTES * 60,
+            limit=f"the availability probe limit of {timeout_seconds} seconds" if timeout_seconds else None,
+        )
         if done.returncode != 0:
             raise fail("pi", done, f"exit {done.returncode}", key, model)
         answer = scrub(done.stdout or "", key)
@@ -4234,7 +4251,14 @@ def repair(root: Path, change: str, stage2_off: str | None = None) -> None:
     )
 
 
-def review_loop(root: Path, change: str) -> None:
+def prepare_loop(root: Path, change: str) -> None:
+    """Check reachable admitted reviewers and return the main-conversation report."""
+    import stage2_availability
+
+    stage2_availability.prepare(root, change, sys.modules[__name__])
+
+
+def review_loop(root: Path, change: str, availability_reported: str | None = None) -> None:
     """One round of phase 4b, until a round is clean (ADR 0021).
 
     A fresh run discovers its free members through a forced live refresh and
@@ -4278,8 +4302,14 @@ def review_loop(root: Path, change: str) -> None:
         problem = entry_problem(root, OPENCODE)
         if problem:
             raise Refused(problem)
-        require_pi()
-        state = new_state(root, discover_free(root))
+        import stage2_availability
+
+        if stage2_availability.settings(root, sys.modules[__name__]) is not None:
+            state = stage2_availability.consume(root, change, availability_reported, sys.modules[__name__])
+            require_pi()
+        else:
+            require_pi()
+            state = new_state(root, discover_free(root))
         skipped = skipped_models(root)
         if skipped:
             print(f"review-loop: paid models skipped: {'; '.join(skipped)}")
@@ -4553,6 +4583,7 @@ VERBS = {
     "release-loop": release_loop,
     "review": review,
     "probe": probe,
+    "prepare-loop": prepare_loop,
 }
 
 
@@ -4583,6 +4614,11 @@ def main(argv: list[str] | None = None) -> int:
         help="session only: a handover file inside the worktree (default: the change's handover.md)",
     )
     parser.add_argument("--root", default=str(REPO_ROOT), help=argparse.SUPPRESS)
+    parser.add_argument(
+        "--availability-reported",
+        default=None,
+        help="review-loop only: report id printed by prepare-loop after its selection was shown in the main conversation",
+    )
     args = parser.parse_args(argv)
     try:
         if (
@@ -4596,6 +4632,8 @@ def main(argv: list[str] | None = None) -> int:
             )
         if args.stage2_off is not None and args.verb not in {"explore", "implement", "repair"}:
             raise Refused("--stage2-off applies only to explore, implement and repair.")
+        if args.availability_reported is not None and args.verb != "review-loop":
+            raise Refused("--availability-reported belongs to review-loop alone.")
         if args.verb == "session":
             if not args.model:
                 raise Refused("session needs --model <id>: name the model exactly as model-endpoints.yaml lists it.")
@@ -4605,6 +4643,8 @@ def main(argv: list[str] | None = None) -> int:
             VERBS[args.verb](Path(args.root), args.change, args.stage2_off)
         elif args.verb == "session":
             session(Path(args.root), args.change, args.model, args.handover)
+        elif args.verb == "review-loop":
+            review_loop(Path(args.root), args.change, args.availability_reported)
         else:
             VERBS[args.verb](Path(args.root), args.change)
     except Refused as error:

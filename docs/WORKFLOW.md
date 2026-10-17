@@ -667,7 +667,7 @@ Go (`opencode-go` in `model-endpoints.yaml`) through Pi — **since ADR 0019
 (2026-10-15)** the repository's own pinned install under `tools/pi/`, whose
 exact version `tools/pi/package.json` pins — calling OpenCode Go's
 chat-completions address, and which
-model answers a round follows the free swarm, the eligible `flash_swarm`,
+model answers a round follows the free swarm, the selected paid Flash swarm,
 then the `modelle` set ordered by `anfragen_5h` descending (ties by id;
 missing values last), the paid ladder. The maintainer put the ladder to the
 loop alone on 2026-10-08 — after
@@ -722,9 +722,10 @@ its row allows.
 
 ### The routing
 
-The rows are in the form of §3's table. Which model the review loop calls is
-the ladder's order in `model-endpoints.yaml`, not a line here: reordering that
-list is a one-line pull request that touches nothing else.
+The rows are in the form of §3's table. For fresh availability-enabled runs,
+reachable admitted models form the ladder, ordered by declared cost; the
+preparation report and run snapshot name the actual reviewers. Candidate
+admission and cost values live in `model-endpoints.yaml`.
 
 | Phase | Model | Why |
 |---|---|---|
@@ -734,7 +735,7 @@ list is a one-line pull request that touches nothing else.
 | 3 Plan | **gpt-6.1-sol** | effort [`CODEX_EFFORTS["draft"]`](../scripts/stage2.py), drafted in the same call as 2 and 2b |
 | 2a Spec review | **Opus 5.5** | effort `xhigh`, through Claude Code and `spec-review`, read-only tools |
 | 4 Implement | **GLM 5.3 Flash** | a worker given a clear plan; through Claude Code against Z.ai and the runner, for every change |
-| 4b Review loop | **the swarms, then the ladder** | round 1: every model the `free_stage` rule selects from a forced live Pi catalog refresh of the `opencode-go` provider, in parallel, on the implementation diff alone with no tools; round 2: the eligible `flash_swarm` members in parallel; then one eligible `modelle` id per round by `anfragen_5h` descending (ties by id, missing values last) — through Pi, effort `max` (Pi clamps it to `high` for a rung that takes no `max`) |
+| 4b Review loop | **the swarms, then the ladder** | round 1: every model the `free_stage` rule selects from a forced live Pi catalog refresh of the `opencode-go` provider, in parallel, on the implementation diff alone with no tools; round 2: up to three cheapest reachable admitted paid members in parallel for availability-enabled runs (legacy declarations use `flash_swarm`); then one eligible `modelle` id per round by `anfragen_5h` descending (ties by id, missing values last) — through Pi, effort `max` (Pi clamps it to `high` for a rung that takes no `max`) |
 | Repair after 4b and 6 | **gpt-6.1-sol** | a Codex attempt in the configured `workspace-write` sandbox, effort [`CODEX_EFFORTS["repair"]`](../scripts/stage2.py); one fresh Codex attempt after a failed post-run check, and Sonnet 5.5 at effort `medium` after two failed ones; no GLM credential (`repair`, ADR 0017) |
 | 6 Review | **gpt-6.1-sol** | effort [`CODEX_EFFORTS["review"]`](../scripts/stage2.py), through the Codex CLI and `review`, a fresh Codex session |
 
@@ -765,7 +766,7 @@ cannot run or leaves findings leaves the verdict to `make verify`.
 
 A foreign model is started only through `python3 scripts/stage2.py <verb>
 <change>`, never by typing `codex`, `pi`, or `claude` against another endpoint,
-into a shell. Ten verbs exist:
+into a shell. Eleven verbs exist:
 
 - `explore` — GLM 5.3 Flash, phase 1; `--stage2-off [REASON]` uses Haiku 5.5.
 - `draft` — Codex, phases 2, 2b and 3 in one call; GLM 5.3 (`glm-5.3`) after
@@ -777,6 +778,12 @@ into a shell. Ten verbs exist:
 - `repair` — Codex, every taken finding of the loop record, the released
   blocks and the phase-6 tables in one call; `--stage2-off [REASON]` uses
   Sonnet 5.5 at effort `medium` ("Repairing taken findings" below).
+- `prepare-loop` — actual tool-free reachability probes for an availability-enabled
+  fresh run, a timestamped report and an external input-bound receipt; report
+  the selection in the main Claude Code or Codex conversation before using its
+  id with `review-loop --availability-reported <id>`. Each probe consumes a
+  request, times out after 60 seconds and preserves per-call leak/admission
+  checks. No repository content is supplied and no review round is counted.
 - `review-loop` — one round of phase 4b, started through Pi; round 1 the
   free swarm the `free_stage` rule selects live, round 2 the `flash_swarm`,
   then one eligible ladder rung each, until a round is clean (ADR 0021).
@@ -1060,6 +1067,23 @@ changes which reviewer sees what: the review order is not this verb's business.
 Its decision record is ADR 0012.
 
 ### The review loop (phase 4b)
+
+**Fresh availability-enabled runs (Q-16, ADR 0021):** first run
+`python3 scripts/stage2.py prepare-loop <change>`. The runner refreshes Pi's
+catalog and probes admitted candidates with static input and no tools.
+Timed exclusions (including the declared GLM outage) are skipped without a
+call. Paid candidates require known cost, admitted terms and catalog presence.
+Report its timestamped reachable/failed/skipped list and selected stages in
+the main Claude Code or Codex conversation, then invoke `review-loop <change>
+--availability-reported <id>` with the printed report id. This acknowledges
+the report; the runner cannot inspect the conversation UI. The external
+receipt is bound to the worktree, configuration and diff and expires after
+900 seconds. Changed inputs or failed preparation invalidate it. Preparation
+adds one actual call per tested candidate and is no review-quality or billing
+measurement. Up to three cheapest reachable paid candidates dynamically fill
+the Flash swarm; the remaining reachable paid candidates form the ladder.
+Existing snapshots and legacy declarations without the rule retain the
+behavior below. A run with history cannot be reset by preparation.
 
 After implementation and before phase 6, `review-loop` runs one round per
 call, and the loop runs **until a round is clean — every row of a round

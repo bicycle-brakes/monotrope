@@ -20,8 +20,9 @@ tags: [design, stage2, review-loop, opencode-go, swarm]
 # Design — `loop-until-clean`
 
 This feature keeps the existing stage-2 runner and external loop record.
-It implements the spec from Q-1 through Q-10 and both addenda of 2026-10-16,
-including live refresh and configurable free selection. All choices below
+It implements the spec through Q-16, including forced live refresh,
+configurable admission and actual reachability preparation. The Q-16
+amendment below replaces the historical manual Flash membership on new runs. All choices below
 are proposals until merge.
 
 ## Alternatives
@@ -148,6 +149,9 @@ flowchart LR
     orch --> runner["Container: scripts/stage2.py"]
     config["Component: model-endpoints.yaml"] --> runner
     runner --> catalog["Component: pinned Pi forced catalog refresh and selection"]
+    runner --> prep["Component: availability helper, static probes and receipt"]
+    prep --> go
+    prep --> orch
     catalog --> remote["System: live Pi catalog on pi.dev"]
     runner --> free["Component: free swarm, diff only, no tools"]
     runner --> flash["Component: paid Flash swarm, read tools"]
@@ -175,3 +179,33 @@ flowchart LR
 **Removed**
 
 - `MAX_ROUNDS`, unconditional round 2 and the special round-3 admission rule.
+
+## Q-16 amendment — availability preparation, 2026-10-17
+
+For fresh availability-enabled runs, this amendment supersedes the manual
+Flash membership and direct-discovery start described above. The existing
+snapshot reader and consumed-stage rules continue unchanged.
+
+1. `stage2.py prepare-loop <change>` calls the bounded helper in
+   `scripts/stage2_availability.py`. The helper delegates every provider call
+   to the runner, using static input, scratch directories, no tools and a
+   60-second timeout. Discovery remains a forced Pi catalog refresh.
+2. Filter the admitted pool by fresh catalog membership, timed exclusions,
+   known cost and successful actual probes. Free admission remains the
+   existing Go-only class exception. Fill up to three cheap paid positions
+   dynamically and put the remaining paid models on the ladder.
+3. Print a timestamped availability report and write an external atomic
+   `availability.json` receipt. It contains the selected state, failures,
+   skips, input/configuration hashes, worktree identity and report id.
+   Do not store credentials, raw model answers or code in it.
+4. The orchestrator reports the selection in the main conversation before
+   invoking `review-loop --availability-reported <id>`. Validate the receipt
+   and its 900-second freshness before launching any review. This explicitly
+   checks caller acknowledgment; it cannot inspect the conversation UI.
+5. The first completed round persists that selection through the existing
+   Loop state/release path. Later rounds keep it. A fresh preparation is
+   refused for a run with history, including an exhausted snapshot.
+6. An absent configuration rule retains legacy-declaration compatibility.
+   This repository enables the rule; its dedicated integration tests assert
+   that production binding. Structural runner extraction stays a separate
+   task; no repair, phase-6 or provider routing changes are included.

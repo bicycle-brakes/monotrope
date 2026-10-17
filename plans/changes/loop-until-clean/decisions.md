@@ -392,3 +392,58 @@ probe that stopped at the first unreachable member, we decided to let the
 probe name every failure and go on, to achieve one complete reachability
 list per run, accepting that a probe with failures exits nonzero only after
 all members were called. — 2026-10-17
+
+## Q-16 · Reachability before each fresh review run
+
+asked: 2026-10-17
+answer: "ja" — direct PR #157 toward general availability preflight and defer the individual MiMo replacement
+answered_by: maintainer
+status: answered
+context: |
+  Topic: dynamic availability checking for the review loop.
+  Intention: detect failures such as MiMo Flash before starting the review ladder.
+  Today: the free catalog is refreshed live; paid membership remains configured. Actual reachability probes consume additional requests.
+  Repository change: PR #157 selects reachable, already admitted models, reports the selection and pins it for the run.
+  Architecture change: yes, stage2.py changes its review behavior; data-terms and cost admission remain.
+  Recommendation: yes, a general availability check instead of a single MiMo exception.
+  Question: Should PR #157 implement that general check and defer the individual MiMo replacement?
+stated_in: "Codex conversation, 2026-10-17; maintainer answered ja immediately after this question"
+
+In the context of models listed but not served, facing a ladder that can
+start with unreachable reviewers, we decided to check the actual availability
+of admitted candidates before every fresh review run and report the resulting
+selection in the main Claude Code or Codex conversation, to achieve a ladder
+built from reachable models, accepting additional probe calls and a pinned
+point-in-time selection rather than a promise of continuing availability.
+— 2026-10-17
+
+### Implementation details for Q-16
+
+- A separate `prepare-loop` invocation performs static, tool-free probes
+  through the existing runner and pinned Pi. It sends no repository content;
+  declaration and leak checks still run before each call. Each probe has
+  a 60-second timeout. Only ordinary call failures permit continuing.
+- The paid pool remains the declared, terms-admitted set. Require a known
+  cost value and presence in the fresh provider overlay. Select up to three
+  cheapest reachable paid models for the Flash swarm; the rest form the
+  cheap-first ladder. This supersedes Q-13's hand-kept Flash membership for
+  new availability-enabled runs. Old snapshots are preserved.
+- Print reachable, failed and skipped ids and the resulting stages. The
+  orchestrator relays that report in the main conversation, then supplies
+  its report id to `review-loop --availability-reported <id>`. This is an
+  orchestration acknowledgment, not a measurement of what the UI displayed.
+- Store the preparation receipt outside the repository. Bind it to the
+  worktree, endpoint configuration and diff; reject it after 15 minutes or
+  any input change. Preparing never resets existing or released run history.
+  Failed preparation invalidates an older receipt. No answering candidate
+  means refusal, never a clean review result.
+- Production configuration enables this protocol. A declaration without
+  the new rule retains legacy behavior for compatibility; the repository's
+  declaration and its tests require the new rule.
+- Honor the maintainer-declared GLM outage without probing GLM before
+  2026-10-21T20:34+08:00. Expiry permits a check, not automatic admission.
+  Timed model-family prefixes match both the full id and its final component,
+  so an id namespace cannot bypass the exclusion.
+- The runner refactor is independent work (coding-harness-vg9, split the
+  runner into cohesive modules); this change introduces only its bounded
+  availability helper. The old MiMo-only configuration question is deferred.

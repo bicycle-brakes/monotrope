@@ -530,7 +530,7 @@ def test_the_opencode_go_remark_names_every_source() -> None:
     assert opencode_remark_problems(planted)
     planted = remark.replace("accepted this residual risk on 2026-10-08", "saw no risk")
     assert opencode_remark_problems(planted)
-    assert "Claude Code" not in remark and "native session header" not in remark
+    assert "lists Claude Code" not in remark and "native session header" not in remark
 
 
 def _remark_problems(codex: str, glm: str) -> list[str]:
