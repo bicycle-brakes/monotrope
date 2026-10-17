@@ -514,3 +514,76 @@ tracker writer. The earlier Leantime subagent has finished without writes.
   2026-10-17 (55 passed, 13 skipped), using the existing locked research-swarm
   Python environment explicitly. Frontmatter-current and whitespace checks
   passed, and an exact byte-prefix check preserved the earlier handover.
+
+## Addendum — 2026-10-17, quota reserve and native feedback research
+
+### Where we are
+
+The fresh independent review returned three major findings. A fresh Sol
+repair passed full verification and committed them at `20f976e`. The
+orchestrator then reproduced a remaining Pi restoration fault without a
+network/model call: a copied model store with a missing server modification
+date is ignored. Evidence and taken follow-up P6-14 are pushed at `bb8b5e1`
+on PR #157, still draft. No further repair was started as quota approached
+the requested reserve.
+
+### Next step
+
+After observing the actual allowance reset, repair P6-14 through stage2.py
+in the review worktree, then obtain a fresh independent read-only verdict.
+
+### Needed from the maintainer
+
+Nothing right now. A reset was announced for about half an hour after
+13:29 UTC, but has not been observed at this checkpoint. Preserve the
+five-percent reserve until it actually occurs.
+
+### Decisions and preferences
+
+The maintainer requested an eighteen-hour night-run plan, then two native
+Sol research subagents: recurring PR/chat/review feedback, and keeping
+research current. They prefer a harness-native approach over Hermes.
+These are research proposals, not authorization for silent runner/skill,
+ADR, scheduling or model-admission changes. Claude remains exhausted and
+the exact GLM cutoff above remains binding. No merge was requested.
+
+### Open work and blockers
+
+The proposed night plan is pushed at `045210f`, PR #162; preparation is
+tracked as coding-harness-yuw.1. It preserves existing appetites and scopes.
+The first research created coding-harness-0kw, Native feedback evidence loop:
+correlate PR feedback, repairs and later verdicts. The second updates the
+existing deferred research-currency task, coding-harness-pu9, preserving
+its status. All research subagents have finished read-only; none owns tracker
+writes. The tracker contains sourced scope, acceptance criteria and limits.
+
+### Working state and parallel-session boundary
+
+Review branch `explore/loop-until-clean` is pushed at `bb8b5e1`; its two
+latest commits include the green source repair and documented residual.
+Night plan branch `docs/night-run-plan-2026-10-17` is pushed at `045210f`.
+Two own research worktrees hold the English source notes:
+`review-feedback-research-2026-10-17` and `research-currency-2026-10-17`,
+with matching docs branches. Check their Git status/upstream before resuming:
+publication is being completed during this handover reserve. Main remains
+untouched, origin/main is `6477d04`. Last configured scan found no other
+interactive writer; this parent alone wrote the tracker.
+
+### Validation
+
+The repair runner reported full verification green, first Codex attempt,
+and committed `20f976e`; its successful output did not retain a new pytest
+count. Its plan records six baseline-red regressions, successful affected
+reruns and 12 real-Pi contracts. Do not reuse the older 2259 count as the
+new repair count. The offline residual reproducer, hashes and controls are
+in docs/research/2026-10-17-pi-overlay-resolution.md on PR #157.
+The night plan passed frontmatter/whitespace checks; CI was pending when
+published. The earlier handover checkpoint `6c17cc8` has hosted CI green.
+Research-current measurement: 29 notes, zero age-due on 2026-10-17; this
+does not prove semantic freshness. A partial recheck can renew a whole note,
+which motivates per-claim evidence. Online sources and limitations are in
+the new research notes and Beads. No research implementation, credentials,
+customer access, GLM/Claude model call or merge occurred.
+
+Resume: verify the quota reset and finish any research-document publication,
+then return to P6-14; the research-swarm implementation remains next in queue.
