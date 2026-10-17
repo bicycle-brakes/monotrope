@@ -692,3 +692,11 @@ Kept from the loop record:
 > step-5-preview-free failed: pi call failed: exit 1
 > Notice: flash_swarm [deepseek-v4.1-flash, mimo-v2.6-flash] differs from the three cheapest admitted models [deepseek-v4.1-flash, mimo-v2.6-flash, mimo-v2.6-pro] by anfragen_5h; the list stays as declared.
 > mimo-v2.6-flash failed: pi call failed: exit 1 (400: {"param":"model","type":"invalid_request_error","message":"Upstream request failed: [model_coming_soon] This model is coming soon."}); replaced by mimo-v2.6-pro
+
+Stage-2 call, 2026-10-17: probe · endpoint opencode-go · model cat-jam-free · leak check clean over 477 files, 1401 commits, 12 rules.
+
+Stage-2 call, 2026-10-17: probe · endpoint opencode-go · model longcat-2.5-preview-free · leak check clean over 477 files, 1401 commits, 12 rules.
+
+Stage-2 call, 2026-10-17: probe · endpoint opencode-go · model step-5-preview-free · leak check clean over 477 files, 1401 commits, 12 rules.
+
+Stage-2 call, 2026-10-17: probe · endpoint opencode-go · model cat-jam-free · leak check clean over 477 files, 1401 commits, 12 rules.

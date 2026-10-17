@@ -354,7 +354,9 @@ def test_the_opencode_go_entry_is_declared() -> None:
     assert free["provider"] == "opencode-go"
     assert free["id_suffix"] == "-free"
     assert free["include"] == []
-    assert free["exclude"] == []
+    # Each exclusion is a dated decision; its record shape is validated below
+    # through the runner's own `free_rule_problems`.
+    assert [record["id"] for record in free["exclude"]] == ["step-5-preview-free"]
     assert free["input"] == "implementation-diff"
 
 
