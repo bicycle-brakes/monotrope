@@ -715,3 +715,11 @@ Stage-2 call, 2026-10-17: probe · endpoint opencode-go · model deepseek-v4.1-f
 ### Phase 6 re-check of P6-9 (claude-opus-5-5, 2026-10-17, read-only, returned as text and committed unchanged by the orchestrator)
 
 **P6-9: confirmed.** Only `CallFailed` is caught, inside `check_member` in `probe`; `Refused` (declaration, admission and leak checks in `preflight`, `checked_prompt`, `begin_call`) runs outside the handler and still stops the probe. Each failure prints `probe: <id> failed: <reason>`, the end prints the answered and failed ids, and any failure raises `CallFailed` (exit 1). No retry, second address or substituted model. `test_the_probe_continues_after_member_failures` (6 cases) would fail on the old code. `.venv/bin/python -m pytest tests/test_stage2.py -q -k probe`: 26 passed on 3a10892. Test gap, not a finding: no test raises a `Refused` in the middle of a probe run; by reading, those checks sit outside the handler. One stale text found: P6-10.
+
+Stage-2 call, 2026-10-17: probe · endpoint opencode-go · model mimo-v2.6-flash · leak check clean over 477 files, 1405 commits, 12 rules.
+
+Stage-2 call, 2026-10-17: probe · endpoint opencode-go · model longcat-2.0 · leak check clean over 477 files, 1405 commits, 12 rules.
+
+Stage-2 call, 2026-10-17: probe · endpoint opencode-go · model glm-5.3-flash · leak check clean over 477 files, 1405 commits, 12 rules.
+
+Stage-2 call, 2026-10-17: probe · endpoint opencode-go · model mimo-v2.6-pro · leak check clean over 477 files, 1405 commits, 12 rules.
