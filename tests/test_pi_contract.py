@@ -867,7 +867,9 @@ def test_real_opencode_provider_contracts(tmp_path: Path) -> None:
     # run through the fresh pi.dev overlay, which this offline test cannot read. The baseline must still
     # carry the ladder's long-standing models, and every id it does carry keeps the native address.
     carried = [rung for rung in stage2.ladder(REPO_ROOT) if rung in catalog]
-    assert {"deepseek-v4.1-flash", "mimo-v2.6-flash"} <= set(carried), "a Flash member moved outside the checked wire API"
+    assert {"deepseek-v4.1-flash", "mimo-v2.6-flash"} <= set(carried), (
+        "a Flash member moved outside the checked wire API"
+    )
     for rung in carried:
         assert catalog[rung]["baseUrl"] == GO_NATIVE
     scratch = scratch_of(tmp_path)

@@ -456,15 +456,12 @@ def test_every_new_paid_model_carries_its_terms_reading() -> None:
     # The Flash swarm takes eligible members only: a skipped id is not in it.
     assert not set(entry.get("flash_swarm") or []) & set(skipped)
 
-
-def test_every_ladder_model_declares_its_dated_cost_value() -> None:
-    """Q-13: `anfragen_5h` per model with its reading date and source; the runner's ladder follows it, cheapest first."""
     import sys
 
     sys.path.insert(0, str(Path(__file__).resolve().parent.parent / "scripts"))
     import stage2
 
-    entry = _endpunkt("opencode-go")
+    # Q-13: every ladder model declares its dated cost value; the runner's ladder follows it, cheapest first.
     terms = entry["modelle_terms"]
     for model in entry["modelle"]:
         record = terms[model]

@@ -9278,11 +9278,15 @@ def test_a_failed_flash_member_is_replaced_by_the_cheapest_unconsumed_rung(
     assert "every stage of this run is consumed" in capsys.readouterr().err
 
 
-def test_replacements_run_down_the_ladder_each_model_once(world: World, capsys: pytest.CaptureFixture[str]) -> None:
+def test_replacements_run_down_the_ladder_each_model_once(world: World) -> None:
     """Q-13: a failing replacement is followed by the next; a spent ladder names it, and the round still stands."""
     pin_entry(world.root / "model-endpoints.yaml", (*TEST_LADDER, "spike-a"))
     state = loop_state(("free",))
-    state["paid"] = {"ladder": [*TEST_LADDER, "spike-a"], "flash": list(TEST_FLASH), "rungs": ["mimo-v2.6-pro", "spike-a"]}
+    state["paid"] = {
+        "ladder": [*TEST_LADDER, "spike-a"],
+        "flash": list(TEST_FLASH),
+        "rungs": ["mimo-v2.6-pro", "spike-a"],
+    }
     world.write_record([("L1-1", "taken — test_a", "no")], state=state)
     world.script(
         pi=[
@@ -9294,9 +9298,11 @@ def test_replacements_run_down_the_ladder_each_model_once(world: World, capsys: 
     )
     assert world.run("review-loop") == 0
     text = world.record().read_text(encoding="utf-8")
-    assert "deepseek-v4.1-flash failed: pi call failed: exit 1 (Model is unavailable); replaced by mimo-v2.6-pro" in text
+    assert (
+        "deepseek-v4.1-flash failed: pi call failed: exit 1 (Model is unavailable); replaced by mimo-v2.6-pro" in text
+    )
     assert "mimo-v2.6-pro failed: pi call failed: exit 1 (Rate limited); replaced by spike-a" in text
-    assert [call for call in map(rung_of, world.reviews("pi"))].count("mimo-v2.6-pro") == 1
+    assert list(map(rung_of, world.reviews("pi"))).count("mimo-v2.6-pro") == 1
     consumed = stage2.read_state(text, "")["consumed"]
     assert "rung:mimo-v2.6-pro" in consumed and "rung:spike-a" in consumed
 
@@ -9366,9 +9372,7 @@ def test_overlay_ids_without_a_terms_reading_are_named_never_admitted(
 ) -> None:
     """Q-13 addition: a non-free overlay id with no `modelle_terms` record is named; it is called nowhere."""
     catalog = (
-        "provider model context input output\n"
-        "opencode-go acme-v1-free 128000 0 0\n"
-        "opencode-go stray-model 128000 1 2\n"
+        "provider model context input output\nopencode-go acme-v1-free 128000 0 0\nopencode-go stray-model 128000 1 2\n"
     )
     world.script(pi=[{"stdout": rows(1)}] * 2, pi_catalog=catalog)
     assert world.run("review-loop") == 0

@@ -954,7 +954,7 @@ def terms_problem(entry: dict, model: str) -> str | None:
 def request_value(entry: dict, model: str) -> float | None:
     """The model's declared cost value `anfragen_5h` (requests per 5 hours, more is cheaper), or None when absent or unusable."""
     value = _terms(entry, model).get("anfragen_5h")
-    if isinstance(value, bool) or not isinstance(value, (int, float)) or value <= 0:
+    if isinstance(value, bool) or not isinstance(value, int | float) or value <= 0:
         return None
     return float(value)
 
@@ -4035,9 +4035,7 @@ def review_loop(root: Path, change: str) -> None:
         if free:
             return "\n\n".join([FREE_REVIEW_BODY, head, ANSWER_FORMAT, f"## The implementation diff\n\n{diff}"])
         # The request comes before the diff and again after it: a long diff would bury it.
-        return "\n\n".join(
-            [body.rstrip(), head, ANSWER_FORMAT, READ_REQUEST, f"## The diff\n\n{diff}", READ_REQUEST]
-        )
+        return "\n\n".join([body.rstrip(), head, ANSWER_FORMAT, READ_REQUEST, f"## The diff\n\n{diff}", READ_REQUEST])
 
     for member in members:
         endpoints[member] = (OPENCODE, member, "max")
