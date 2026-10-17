@@ -20,7 +20,7 @@ tags: [plan, stage-2, research, swarm]
 ```text
 For you:     Larger changes get mapped sources, three repository views per topic, Flash and live-selected Go free online views, and traceable questions and spec criteria.
 Done when:   Fresh Go-only selection, topic coverage, offline isolation capture and research-to-interview-to-spec checks hold, and make verify is green.
-Appetite:    12 hours of phase 4 including earlier implementation and repairs; stop at the limit.
+Appetite:    13 hours 20 minutes of phase 4 in total (maintainer, 2026-10-17), including earlier implementation and repairs; stop at the limit.
 Not now:     Zen or OpenCode CLI models, model-specific perspectives, the implementation-review swarm or sibling checkouts.
 Pre-mortem:  suppose it failed: most likely because an online context inherited private repository information.
 Starts unless you say stop.
@@ -1045,3 +1045,5 @@ not evidence that the unmeasured span was zero.
 The earlier plan cited `docs/journal/handover/2026-10-15-research-swarm-loop-one-repair.md`; that file is not present in this worktree and was not read by this redraft.
 
 ## Time used
+
+2026-10-17, appetite stop answered: the span of the three implement attempts of 2026-10-15 (ended 04:53:50, `cf848ee`) has no start record, so time used was not measurable (78 minutes measured). Maintainer, 2026-10-17: "Ja, halt die zeitgrenze fest" — **continue** with a new appetite of 13 hours 20 minutes in total (the measured 78 minutes plus 12 hours); the unmeasured span stays named, not counted. This replaces the card's `Appetite:` line.
