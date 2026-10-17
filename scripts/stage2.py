@@ -717,6 +717,7 @@ class Context:
     change: str
     folder: Path
     bead: str
+    models_store: dict | None = None
 
     @property
     def findings(self) -> Path:
@@ -1180,7 +1181,7 @@ def _exception_problem(kind: str, record) -> str | None:
 def free_rule_problems(entry: dict) -> list[str]:
     """Everything that makes the entry's `free_stage` rule unusable; shared with the declaration test.
 
-    The provider must be declared and must not be the Zen provider: the free
+    The provider must equal the Go launch provider and must not be Zen: the free
     class never reaches a Zen id, whatever a rule says. The rule needs a suffix
     or an include list to select from, exceptions carry id, date and reason,
     and the input is the implementation diff and nothing else.
@@ -1194,6 +1195,8 @@ def free_rule_problems(entry: dict) -> list[str]:
         problems.append("the free rule names no provider")
     elif provider == ZEN:
         problems.append("the free rule may not select the Zen provider")
+    elif provider != OPENCODE:
+        problems.append(f"the free rule provider must equal the launch provider {OPENCODE}")
     suffix = rule.get("id_suffix", "")
     if not isinstance(suffix, str):
         problems.append("the free rule's id_suffix is no string")
@@ -1296,8 +1299,8 @@ def select_free(rule: dict, catalog: list[dict]) -> list[str]:
     return chosen
 
 
-def overlay_ids(agent: Path, provider: str) -> set[str]:
-    """The ids of the provider's freshly fetched overlay, read from the agent directory's `models-store.json`.
+def overlay_store(agent: Path, provider: str) -> dict:
+    """The provider's complete refreshed definitions, in Pi's `models-store.json` format.
 
     Pi 1.2.0 (`core/remote-catalog-provider.js`, `core/models-store.js`)
     persists the forced refresh's pi.dev catalog there under the provider id,
@@ -1318,7 +1321,16 @@ def overlay_ids(agent: Path, provider: str) -> set[str]:
     models = entry.get("models") if isinstance(entry, dict) else None
     if not isinstance(models, list):
         raise Refused(f"the refreshed {path.name} holds no catalog for {provider}; the free stage is not entered.")
-    return {str(model["id"]) for model in models if isinstance(model, dict) and model.get("id")}
+    return {provider: entry}
+
+
+def overlay_ids(agent: Path, provider: str) -> set[str]:
+    """Ids in the refreshed provider overlay; definitions are retained by discovery."""
+    return {
+        str(model["id"])
+        for model in overlay_store(agent, provider)[provider]["models"]
+        if isinstance(model, dict) and model.get("id")
+    }
 
 
 def discover_free(root: Path, *, allow_empty: bool = False) -> dict:
@@ -1365,7 +1377,12 @@ def discover_free(root: Path, *, allow_empty: bool = False) -> dict:
             raise Refused(
                 f"the model listing did not end within {PI_DISCOVERY_SECONDS} seconds; the free stage is not entered. ({error})"
             ) from None
-        fresh = overlay_ids(agent, rule["provider"]) if refresh.returncode == 0 and listing.returncode == 0 else set()
+        store = overlay_store(agent, rule["provider"]) if listing.returncode == 0 else {}
+        fresh = {
+            str(model["id"])
+            for model in store.get(rule["provider"], {}).get("models", [])
+            if isinstance(model, dict) and model.get("id")
+        }
     if listing.returncode != 0:
         raise Refused(f"`{PI_WRAPPER} --list-models` ended {listing.returncode}; the free stage stays unentered.")
     catalog = parse_catalog(listing.stdout or "")
@@ -1381,6 +1398,7 @@ def discover_free(root: Path, *, allow_empty: bool = False) -> dict:
         "catalog": catalog,
         "selected": selected,
         "overlay": sorted(fresh),
+        "models_store": store,
         "billing": "not measured: pi.dev is a live catalog, not a billing statement",
     }
 
@@ -1636,14 +1654,14 @@ def run_reviewer(
     timeout_seconds: int | None = None,
     task: str | None = None,
 ) -> str:
-    """One reviewer call of the loop: Pi against OpenCode Go's chat-completions address.
+    """One reviewer call through Pi with this run's refreshed OpenCode Go definitions.
 
     The launch is the measured set (spec, criterion 8), started through the
     repository wrapper (ADR 0019): the rung's id under the `opencode-go`
     provider, thinking `max` (Pi clamps it per model), the read-only tools,
     every discovery switched off, no session, retries off. Each call gets its
-    own scratch directory: a `HOME`, an agent directory whose only file is
-    `settings.json`, and the prompt file. The key reaches Pi as
+    own scratch directory: a `HOME`, an agent directory with retry settings
+    and the run's refreshed provider definitions, and the prompt file. The key reaches Pi as
     `OPENCODE_API_KEY` only. Returns the scrubbed answer. A call that has not
     ended after `REVIEWER_MINUTES` is stopped (criterion 15).
 
@@ -1656,6 +1674,9 @@ def run_reviewer(
         agent = scratch / "agent"
         agent.mkdir()
         (agent / "settings.json").write_text(json.dumps({"retry": {"enabled": False}}), encoding="utf-8")
+        store = getattr(ctx, "models_store", None)
+        if store is not None:
+            (agent / "models-store.json").write_text(json.dumps(store), encoding="utf-8")
         home = scratch / "home"
         home.mkdir()
         prompt_file = scratch / "review-prompt.md"
@@ -1707,12 +1728,19 @@ def run_swarm(
     The answers come back per member: the scrubbed answer, or the exception
     that failed the member (a nonzero exit, a timeout, an empty answer). A
     member's failure never discards another member's answer (criterion 4).
+    An unparseable table with no finding rows is also a member failure.
     """
     answers: dict[str, str | Exception] = {}
 
     def one(member: str) -> None:
         try:
-            answers[member] = run_reviewer(ctx, member, prompts[member], key, free=free)
+            answer = run_reviewer(ctx, member, prompts[member], key, free=free)
+            rows, _rest = parse_rows(answer)
+            # An unreadable table cannot certify a clean round. Commentary
+            # beside parsed findings still travels with those findings.
+            if not answer.strip() or (not rows and any(split_row(line) is not None for line in answer.splitlines())):
+                raise CallFailed("malformed finding output: expected six-cell findings or a no-finding sentence")
+            answers[member] = answer
         except Exception as error:  # noqa: BLE001 - a member's failure is recorded, not raised, here
             answers[member] = error
 
@@ -4347,6 +4375,7 @@ def review_loop(root: Path, change: str, availability_reported: str | None = Non
         endpoints[member] = (OPENCODE, member, "max")
         prompts[member] = prompt_for(member)
     ctx = preflight(root, change, endpoints[members[0]], admission_problem=_free_admission(free, state))
+    ctx.models_store = state["free"].get("models_store")
     # Every member is checked in the parent before any starts; one BLOCK aborts
     # the round without a fallback (criterion 3).
     checked = {
@@ -4490,6 +4519,7 @@ def probe(root: Path, change: str) -> None:
         raise Refused(problem)
     require_pi()
     free = discover_free(root)
+    discovery = free
     diff = free_diff(root)
     answered: list[str] = []
     failed: list[str] = []
@@ -4497,6 +4527,7 @@ def probe(root: Path, change: str) -> None:
     def check_member(ctx: Context, model: str, prompt: str, *, free: bool = False) -> None:
         # Declaration and leak checks stay outside this handler: only a model
         # call failure permits continuing, never a failed admission check.
+        ctx.models_store = discovery.get("models_store")
         try:
             answer = run_reviewer(ctx, model, prompt, key, free=free)
         except CallFailed as error:

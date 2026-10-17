@@ -132,6 +132,7 @@ def prepare(root: Path, change: str, runner) -> None:
         admission = runner._free_admission(model in free["selected"], {"free": free})
         endpoint = (runner.OPENCODE, model, "max")
         ctx = runner.preflight(root, change, endpoint, admission_problem=admission)
+        ctx.models_store = free.get("models_store")
         result = runner.checked_prompt(ctx, endpoint, prompt, admission)
         if not findings.exists():
             findings.write_text(runner.findings_header(ctx, runner.producer_for(endpoint)), encoding="utf-8")

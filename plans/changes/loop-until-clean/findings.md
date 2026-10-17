@@ -723,3 +723,18 @@ Stage-2 call, 2026-10-17: probe · endpoint opencode-go · model longcat-2.0 · 
 Stage-2 call, 2026-10-17: probe · endpoint opencode-go · model glm-5.3-flash · leak check clean over 477 files, 1405 commits, 12 rules.
 
 Stage-2 call, 2026-10-17: probe · endpoint opencode-go · model mimo-v2.6-pro · leak check clean over 477 files, 1405 commits, 12 rules.
+
+Stage-2 call, 2026-10-17: review · endpoint openai-codex · model gpt-6.1-sol · leak check clean over 479 files, 1413 commits, 12 rules.
+
+## Phase 6 — Codex, 2026-10-17
+
+| ID | Severity | Dimension | Origin | Where | Finding | Reviewer | Status | Broke a test |
+|---|---|---|---|---|---|---|---|---|
+| P6-11 | MAJOR | SPEC | base | `scripts/stage2.py:4420–4456`, `review_loop` | A member returning a five-cell finding table counts as successful despite producing no parseable rows. Reproduced in memory: the runner completed round 1 with zero rows, consumed the free stage, then refused another review because “round 1 was clean”. Malformed answers must count as member failures; when every answer is malformed, no round may complete. [criterion 4; design: malformed finding output fails that member] | Codex | fixed — tests/test_stage2.py::test_malformed_finding_tables_fail_the_member | — |
+| P6-12 | MAJOR | MAINT | base | `scripts/stage2.py:1324–1387,1654–1684`, discovery and reviewer launch | Discovery deletes its refreshed catalog, retains only model ids, and launches each probe/reviewer offline with an empty agent directory. A newly discovered model therefore loses its actual API configuration. Using the installed Pi resolver, a synthetic new free model declared as `anthropic-messages` resolved instead to a guessed `openai-completions` model without the overlay. Preparation can consequently report a reachable model as unavailable because it tested the wrong protocol. Preserve the refreshed definitions for subsequent calls. [criteria 5, 17] | Codex | fixed — tests/test_stage2.py::test_refreshed_model_definitions_reach_each_launch | — |
+| P6-13 | MAJOR | SPEC | base | `scripts/stage2.py:1180–1249,1678–1679`, free admission and launch | Setting `free_stage.provider` to another provider passes validation. An id discovered only under that provider then passes free admission, but the launch still requests `opencode-go/<id>`. Reproduced locally: the rule reported no problems and admission returned no refusal for this case. The discovery provider must match the permitted Go launch provider; otherwise an undiscovered Go id receives the unread-terms exception. [criteria 5, 7] | Codex | fixed — tests/test_stage2.py::test_free_admission_requires_the_launch_provider | — |
+
+Phase 6 verdict: codex 01a149f1-b5b0-7813-a9bd-b77afc6bf6a7, 2026-10-17
+Reviewer session: codex 01a149f1-b5b0-7813-a9bd-b77afc6bf6a7 — a fresh session reviewed: an earlier ## Phase 6 block makes this a re-check
+
+Stage-2 call, 2026-10-17: repair · attempt 1 · route codex · endpoint openai-codex · model gpt-6.1-sol · leak check clean over 479 files, 1414 commits, 12 rules.

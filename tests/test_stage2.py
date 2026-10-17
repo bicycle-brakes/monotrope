@@ -719,15 +719,15 @@ def test_parse_rows_folds_a_pipe_inside_the_finding_into_it() -> None:
     ids=["three-cells", "five-cells", "short-table"],
 )
 def test_table_lines_that_are_not_rows_are_never_reported_as_no_finding(world: World, answer: str) -> None:
-    """Repair round 1, F-3: a table the parser cannot read is passed through, under a head that is true."""
+    """Malformed spec tables stay visible; malformed loop answers fail without a clean round."""
     world.script(claude=[{"stdout": answer}], pi=[{"stdout": answer}])
     assert world.run("spec-review") == 0
-    assert world.run("review-loop") == 0
-    kept = world.record().read_text(encoding="utf-8")
-    for text in (world.text(), kept):
-        assert "reported no finding" not in text
-        assert "not six-cell rows" in text and stage2.NOT_ROWS_NOTE in text
-    assert answer.splitlines()[-1] in world.text() and answer.splitlines()[-1] in kept
+    assert world.run("review-loop") == 1
+    assert not world.record().exists()
+    text = world.text()
+    assert "reported no finding" not in text
+    assert "not six-cell rows" in text and stage2.NOT_ROWS_NOTE in text
+    assert answer.splitlines()[-1] in text
 
 
 def test_the_review_prompt_and_the_runner_ask_for_the_same_cells() -> None:
@@ -919,7 +919,7 @@ def test_the_opencode_key_never_leaves_the_runner(world: World, capsys: pytest.C
     assert first["env"]["OPENCODE_API_KEY"] == OKEY
     assert "--api-key" not in first["argv"]
     assert [name for name, value in first["env"].items() if OKEY in value] == ["OPENCODE_API_KEY"]
-    assert first["agent_listing"] == ["settings.json"]
+    assert first["agent_listing"] == ["models-store.json", "settings.json"]
     for call in world.calls():
         assert not any(OKEY[i : i + 8] in " ".join(call["argv"]) for i in range(len(OKEY) - 7)), call["argv"]
         seen_in_directory = " ".join(
@@ -10089,3 +10089,85 @@ def test_paid_terms_doctrine_records_the_retention_decision() -> None:
     # Q-11 admits retention; the separate wire-API skip must not undo that rule.
     record = {"gelesen": "2026-10-17", "quelle": "src", "aufbewahrung": "30 days", "training": "Not used"}
     assert stage2.terms_problem({"modelle_terms": {"reader": record}}, "reader") is None
+
+
+@pytest.mark.parametrize("partial", [False, True])
+def test_malformed_finding_tables_fail_the_member(world: World, capsys, partial: bool) -> None:
+    """Criterion 4: five-cell findings cannot certify a clean round or hide a failed member."""
+    malformed = "| F-1 | MAJOR | CODE | scripts/helper.py | A defect |"
+    world.script(
+        pi=[
+            {"model": TEST_FREE[0], "stdout": rows(1) if partial else malformed},
+            {"model": TEST_FREE[1], "stdout": malformed},
+        ]
+    )
+    assert world.run("review-loop") == (0 if partial else 1)
+    if partial:
+        text = world.record().read_text()
+        assert f"{TEST_FREE[1]} failed:" in text
+        assert len(stage2.record_rows(text)) == 1
+        assert "from 1 of 2 members" in capsys.readouterr().out
+    else:
+        assert not world.record().exists(), "malformed answers consumed the free stage"
+        world.script(pi=[{"stdout": "No finding."}] * 2)
+        assert world.run("review-loop") == 0
+        assert "## Round 1" in world.record().read_text()
+
+
+@pytest.mark.parametrize("verb", ["review-loop", "probe", "prepare-loop"])
+def test_refreshed_model_definitions_reach_each_launch(world: World, monkeypatch, verb: str) -> None:
+    """Criteria 5/17: offline calls need the fresh model's real protocol, including after preparation."""
+    if verb == "prepare-loop":
+        from test_stage2_availability import enable
+
+        enable(world)
+    world.script(pi=[{"stdout": rows(1)}] * 12)
+    launch = stage2.launch
+    stores = []
+    expected = {
+        "id": TEST_FREE[0],
+        "provider": stage2.OPENCODE,
+        "api": "anthropic-messages",
+        "baseUrl": "https://catalog.example.invalid/messages",
+        "contextWindow": 123456,
+    }
+
+    def capture(command, cwd, env, *args, **kwargs):
+        agent = Path(env["PI_CODING_AGENT_DIR"])
+        if "--print" in command:
+            path = agent / "models-store.json"
+            stores.append(json.loads(path.read_text()) if path.exists() else {})
+        result = launch(command, cwd, env, *args, **kwargs)
+        if "update" in command:
+            path = agent / "models-store.json"
+            store = json.loads(path.read_text())
+            store[stage2.OPENCODE]["models"] = [
+                expected if model["id"] == expected["id"] else model for model in store[stage2.OPENCODE]["models"]
+            ]
+            path.write_text(json.dumps(store))
+        return result
+
+    monkeypatch.setattr(stage2, "launch", capture)
+    assert world.run(verb) == 0
+    if verb == "prepare-loop":
+        prepared = json.loads(world.record().with_name("availability.json").read_text())
+        assert world.run("review-loop", "demo", "--availability-reported", prepared["report_id"]) == 0
+    if verb != "probe":
+        decide_record(world)
+        assert world.run("review-loop") == 0, "the persisted definitions must reach later paid rounds"
+    assert stores
+    for store in stores:
+        assert expected in store.get(stage2.OPENCODE, {}).get("models", []), "fresh protocol definition was lost"
+
+
+def test_free_admission_requires_the_launch_provider(world: World) -> None:
+    """Criteria 5/7: discovery under another provider never authorizes a Go call."""
+    path = world.root / "model-endpoints.yaml"
+    data = yaml.safe_load(path.read_text())
+    entry = next(item for item in data["endpunkte"] if item["name"] == stage2.OPENCODE)
+    entry["free_stage"]["provider"] = "other-provider"
+    path.write_text(yaml.safe_dump(data))
+    assert stage2.free_rule_problems(entry), "a different discovery provider passed validation"
+    assert stage2.free_admission_problem(world.root, "new-free", ["new-free"]) is not None
+    assert world.run("review-loop") == 2
+    assert world.calls("pi") == [], "invalid discovery provider launched Pi"
