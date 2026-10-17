@@ -196,3 +196,65 @@ origin/main) or amend decision 9.
 
 - Maintainer, 2026-10-17: "mach a" — #157 is finished as it stands (recorded as Q-14, `45f6360`) and marked ready for review; CI was not yet reported when this line was written. The research-swarm appetite question stays open.
 - Maintainer, 2026-10-17: "Ja, halt die zeitgrenze fest" — the research swarm continues with an appetite of 13 hours 20 minutes in total (`plan.md`, card and "Time used"). Next for it: phase 4, starting with the repair of the 46 red swarm Pi-start tests.
+
+## Addendum — 2026-10-17, model reachability through Pi
+
+**Where we are.** The maintainer asked which models Pi reaches. The
+runner's probe (`stage2.py probe loop-until-clean`) stopped at the first
+failed member twice, so it was repaired to name each failure and go on
+(maintainer answer Q-15, "Ja"; finding P6-9, repaired by Codex through the
+runner in `3a10892`, re-checked and confirmed read-only by Opus 5.5; the
+stale exclusion reason it found, P6-10, fixed by the orchestrator). All on
+PR #157 (review swarm, bead coding-harness-4fk), last commit `51fcc59`;
+CI green on #157 when this addendum was written.
+
+**Measured 2026-10-17 (full probe on `3a10892`):**
+
+- Answered: `cat-jam-free`, `longcat-2.5-preview-free` (free);
+  `deepseek-v4.1-flash`, `longcat-2.0`, `glm-5.3-flash`, `mimo-v2.6-pro`
+  (paid). `deepseek-v4.1-flash` and `mimo-v2.6-pro` named themselves
+  "Claude"; the probe measures that a call passes, not which model answers.
+- Failed: `mimo-v2.6-flash` ("[model_coming_soon]"). The maintainer
+  measured the same answer through OpenCode itself, so the model is not yet
+  served on Go; Pi is not the cause.
+- Excluded from the free stage (`model-endpoints.yaml`, `free_stage.exclude`,
+  `48ba7d6`): `step-5-preview-free` ("Model is unavailable"). It and
+  `cat-jam-free` appear only in Pi's pi.dev catalog, not in OpenCode's
+  models.dev catalog; `cat-jam-free` once answered empty and once answered.
+- Not called: `qwen3.8-flash`, `gpt-6-luna`, `claude-haiku-5-5`,
+  `minimax-m3` (skipped, wire API not measured). OpenCode's own catalog
+  routes them through the same Anthropic-messages and OpenAI-responses
+  interfaces Pi does, so the skip is the runner's guard, not a Go failure
+  (bead coding-harness-mkg).
+
+**What the maintainer saw working in OpenCode** were the Zen free variants
+(provider `opencode`, e.g. "MiMo-V2.6-Flash Free"), not the Go models.
+ADR 0021 decision 2 excludes Zen. The Zen page (https://opencode.ai/docs/zen,
+read 2026-10-17) lists the free models' terms: no training and no
+retention for GLM-5.3-Flash Free, DeepSeek V4.1 Flash Free, LongCat 2.5
+Preview Free and Space Bunny Free; no training and 30 days retention for
+Beam Free; data may be used for training for Big Pickle, LL Alpha Free, Exo
+Free, MiMo-V2.6-Flash Free, MiMo-V2.5 Free, the three Nemotron models and
+Muse Spark 1.3 Contributor Free; no terms for Jev 1.13 Free. All are free
+"for a limited time". Whether Pi can call provider `opencode` with the
+existing access is not measured.
+
+**Needed from the maintainer (two questions, one at a time):**
+
+1. Whether `mimo-v2.6-pro` replaces `mimo-v2.6-flash` in `flash_swarm` until
+   Go serves the Flash model. Recommendation: yes — today it steps in as the
+   replacement on every run; one YAML line on #157, reverted by one line.
+2. Whether the Zen free models with readable non-training terms join the
+   free stage as a new change (hand-kept allow list with dated terms per
+   model, an amendment of ADR 0021, decision pull request). Recommendation:
+   yes, after #157 is merged. Its bead is not created yet: an OpenCode
+   session was open on #157 and #158, and the tracker stays untouched while
+   another session may write.
+
+**Next step, replacing the one above:** ask question 1; then merge-ready
+#157 waits for the maintainer.
+
+**Validation of this addendum's work:** probe, endpoint and Pi-contract
+tests green (`tests/test_stage2.py -k probe` 26 passed on `3a10892`;
+`tests/test_model_endpoints.py` 43 passed after P6-10). Not run locally:
+`make verify` after `3a10892`.
