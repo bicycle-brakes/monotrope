@@ -3,7 +3,7 @@
 `scripts/stage2_swarm.py` runs only through the explore verb of the runner when
 the change's class is `feature` or `architectural`. Every case here runs that
 verb in-process against a temporary repository and two stand-ins: programs
-named `pi` and `claude` that record their arguments, environment and prompt,
+named `pin-pi` and `claude` that record their arguments, environment and prompt,
 print canned output and contact nothing. No test starts a real Pi, a real
 Claude Code against a model endpoint, or reads the maintainer's real denylist
 or secrets.
@@ -112,16 +112,23 @@ from pathlib import Path
 
 here = Path(__file__).resolve().parent
 name = Path(sys.argv[0]).name
+program_path = sys.argv[0]
+if name == "pin-pi":
+    name = "pi"
 scenario = json.loads((here / "scenario.json").read_text())
 log = here / "calls.jsonl"
 previous = [json.loads(line) for line in log.read_text().splitlines()] if log.exists() else []
 argv = sys.argv[1:]
 if name == "pi" and argv == ["--version"]:
-    # The version check is answered from the scenario and not recorded: it is no call.
+    # Infrastructure has a separate path log; no model call is counted.
+    with (here / "infrastructure.jsonl").open("a") as handle:
+        handle.write(json.dumps({"path": program_path, "argv": argv}) + "\\n")
     sys.stdout.write(scenario.get("pi_version", "@PI@") + "\\n")
     raise SystemExit(0)
 if name == "pi" and argv == ["--list-models"]:
-    # The model inventory is infrastructure, not a call: answered, not recorded.
+    # Infrastructure has a separate path log; no model call is counted.
+    with (here / "infrastructure.jsonl").open("a") as handle:
+        handle.write(json.dumps({"path": program_path, "argv": argv}) + "\\n")
     for line in scenario.get("pi_models", []):
         sys.stdout.write(line + "\\n")
     raise SystemExit(scenario.get("pi_models_exit", 0))
@@ -150,6 +157,7 @@ index = sum(1 for call in previous if call.get("kind") == kind)
 step = steps[index] if index < len(steps) else {}
 record = {
     "name": name,
+    "program_path": program_path,
     "kind": kind,
     "argv": argv,
     "env": dict(os.environ),
@@ -261,12 +269,20 @@ def sworld(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> SwarmWorld:
     home.mkdir()
     bin_dir = tmp_path / "bin"
     bin_dir.mkdir()
-    for name in ("claude", "pi"):
+    for name in ("claude", "pin-pi"):
         program = bin_dir / name
         program.write_text(
             STAND_IN.replace("@PYTHON@", sys.executable).replace("@PI@", stage2.PI_VERSION), encoding="utf-8"
         )
         program.chmod(0o755)
+    # A bare executable is a trap: every production launch must use the pin.
+    bare_pi = bin_dir / "pi"
+    bare_pi.write_text(
+        f"#!{sys.executable}\nraise SystemExit('bare pi bypassed the pinned wrapper')\n",
+        encoding="utf-8",
+    )
+    bare_pi.chmod(0o755)
+    monkeypatch.setattr(stage2, "PI_WRAPPER", bin_dir / "pin-pi")
     git_dir = tmp_path / "gitbin"
     git_dir.mkdir()
     (git_dir / "git").symlink_to(GIT)
@@ -338,6 +354,22 @@ def test_large_classes_dispatch_the_swarm(sworld: SwarmWorld, klass: str) -> Non
     text = sworld.research.read_text(encoding="utf-8")
     assert "## Research swarm" in text and "seed fact" in text
     assert "## Runner exploration" not in text
+
+
+def test_all_swarm_pi_launches_use_pinned_wrapper(sworld: SwarmWorld) -> None:
+    """The bare-Pi trap refutes any catalog, public or repository escape."""
+    sworld.complete()
+    assert sworld.run() == 0
+    pinned = str(sworld.bin / "pin-pi")
+    infrastructure = [json.loads(line) for line in (sworld.bin / "infrastructure.jsonl").read_text().splitlines()]
+    assert {tuple(call["argv"]) for call in infrastructure} == {
+        ("--version",),
+        ("--list-models",),
+    }
+    assert all(call["path"] == pinned for call in infrastructure)
+    calls = [call for call in sworld.calls() if call["name"] == "pi"]
+    assert {call["kind"] for call in calls} == {"public", "flash"}
+    assert all(call["program_path"] == pinned for call in calls)
 
 
 @pytest.mark.parametrize("klass", ["bounded", "spike"])
@@ -656,7 +688,7 @@ def test_free_environment_excludes_identity_and_private_paths(
     launch = stage2.launch
 
     def capture(command, root, env, *args, **kwargs):
-        if "STAGE2_PUBLIC_RECEIPTS" in env or command == ["pi", "--list-models"]:
+        if "STAGE2_PUBLIC_RECEIPTS" in env or command == [str(stage2.PI_WRAPPER), "--list-models"]:
             captured.append(dict(env))
         return launch(command, root, env, *args, **kwargs)
 
@@ -795,7 +827,7 @@ def test_failed_pi_calls_preserve_partial_evidence(
 
         def short_launch(command, root, env, *args, **kwargs):
             is_public = "STAGE2_PUBLIC_RECEIPTS" in env
-            if command[0] == "pi" and "--print" in command and is_public == (kind == "public"):
+            if command[0] == str(stage2.PI_WRAPPER) and "--print" in command and is_public == (kind == "public"):
                 kwargs["timeout"] = 1.0
             return launch(command, root, env, *args, **kwargs)
 
@@ -1090,7 +1122,10 @@ def test_only_the_runner_appends_research(sworld: SwarmWorld) -> None:
     sworld.complete()
     assert sworld.run() == 0
     now = sworld.research.read_text(encoding="utf-8")
-    assert now.startswith(seed), "the run appends; it never replaces earlier research"
+    # The runner may refresh this one metadata line while appending. Every
+    # other byte of the earlier header and body must stay unchanged.
+    stamped_seed = re.sub(r"^updated: .*?$", f"updated: {stage2.today()}", seed, count=1, flags=re.M)
+    assert now.startswith(stamped_seed), "only the updated date may change before the append"
     done = subprocess.run([GIT, "status", "--porcelain"], cwd=sworld.root, capture_output=True, text=True, check=True)
     assert [line for line in done.stdout.splitlines() if line.strip()] == [" M plans/changes/demo/research.md"], (
         "no repository file outside the research artefact changed"

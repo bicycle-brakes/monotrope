@@ -1047,3 +1047,34 @@ The earlier plan cited `docs/journal/handover/2026-10-15-research-swarm-loop-one
 ## Time used
 
 2026-10-17, appetite stop answered: the span of the three implement attempts of 2026-10-15 (ended 04:53:50, `cf848ee`) has no start record, so time used was not measurable (78 minutes measured). Maintainer, 2026-10-17: "Ja, halt die zeitgrenze fest" — **continue** with a new appetite of 13 hours 20 minutes in total (the measured 78 minutes plus 12 hours); the unmeasured span stays named, not counted. This replaces the card's `Appetite:` line.
+
+
+### Initial pinned-wrapper checkpoint — 2026-10-17
+
+Codex took over the previous Claude tasks at the maintainer's request.
+The sworld fixture now injects a separately named pinned-wrapper double
+and traps bare Pi. Inventory, public and repository launches all use
+runner.PI_WRAPPER. The regression checks infrastructure and model paths;
+existing timeout/environment interceptors follow that same path. The
+append-only check permits only the required updated-date restamp.
+
+Red-first evidence: the first class-routing test failed on the original
+fixture; after injecting the pin it still failed at the bare inventory
+launch, before the production fix. The nine affected cases then passed.
+Full make verify passed on 2026-10-17: 2301 passed, 16 skipped; every
+blocking local gate green. The final command used process-local
+GIT_CONFIG_COUNT=1, GIT_CONFIG_KEY_0=commit.gpgsign and
+GIT_CONFIG_VALUE_0=false, with local test servers permitted. Earlier
+runs hit sandbox socket restrictions and inherited SSH-signing setup
+errors; the affected Git fixtures passed separately (13 and 5 tests).
+No global Git setting was changed. Markdownlint remains report-only.
+
+This checkpoint repairs the initial fixture/pin seam. The amended
+39 + 3N graph, its new catalog and handoff checks, and the attended
+F-1 capture remain unfinished. No criterion-ledger entry is promoted
+from not-yet-written by this checkpoint.
+
+2026-10-17 10:33:55–11:12:32 UTC, 0:38:37, break counted
+(requested availability instructions and research delegation during
+verification). Add this measured span to the historical measured time;
+the total appetite remains 13 hours 20 minutes.

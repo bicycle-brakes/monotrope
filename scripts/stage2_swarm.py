@@ -508,7 +508,7 @@ def free_transport(runner, roles: dict, key: str) -> dict[str, str]:
     with tempfile.TemporaryDirectory(prefix="stage2-swarm-") as tmp:
         env = public_env({"HOME": tmp, "PI_CODING_AGENT_DIR": tmp, "OPENCODE_API_KEY": key})
         done = runner.launch(
-            ["pi", "--list-models"],
+            [str(runner.PI_WRAPPER), "--list-models"],
             Path(tmp),
             env,
             key,
@@ -571,7 +571,7 @@ def pi_public_call(runner, prompt_text: str, model_id: str, key: str, seconds: f
         prompt_file.write_text(prompt_text, encoding="utf-8")
         receipts = research / "receipts.jsonl"
         command = [
-            "pi",
+            str(runner.PI_WRAPPER),
             "--print",
             "--no-session",
             "--no-approve",
@@ -614,7 +614,7 @@ def pi_repository_call(runner, ctx, prompt: str, model: str, key: str, seconds: 
         prompt_file = scratch / "research-prompt.md"
         prompt_file.write_text(prompt, encoding="utf-8")
         command = [
-            "pi",
+            str(runner.PI_WRAPPER),
             "--print",
             "--no-session",
             "--no-approve",
