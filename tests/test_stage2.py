@@ -4986,6 +4986,31 @@ def test_the_probe_checks_discovered_and_paid_models_once(world: World) -> None:
     assert len(lines) == 5, "a member call ran without its own declaration and leak check"
 
 
+@pytest.mark.parametrize("failed_index", [0, 2, 4], ids=["first-free", "first-paid", "last-paid"])
+@pytest.mark.parametrize("empty", [False, True], ids=["unavailable", "empty-answer"])
+def test_the_probe_continues_after_member_failures(
+    world: World, capsys: pytest.CaptureFixture[str], failed_index: int, empty: bool
+) -> None:
+    """Criterion 14: a failed member leaves every other check and the final inventory intact."""
+    members = [*TEST_FREE, *TEST_LADDER]
+    steps = [{"stdout": "probe answer"} for _ in members]
+    steps[failed_index] = {"stdout": ""} if empty else {"exit": 1, "stderr": "Model is unavailable"}
+    world.script(pi=steps)
+
+    assert world.run("probe") == 1
+    assert [rung_of(call) for call in world.reviews()] == members
+    output = capsys.readouterr()
+    failed = members[failed_index]
+    reason = "the answer is empty" if empty else "Model is unavailable"
+    assert f"probe: {failed} failed:" in output.out and reason in output.out
+    answered = [member for member in members if member != failed]
+    assert f"probe: 4 members answered: {', '.join(answered)}" in output.out
+    assert f"probe: 1 members failed: {failed}" in output.out
+    assert "failed:" in output.err
+    lines = [line for line in world.text().splitlines() if line.startswith("Stage-2 call,")]
+    assert len(lines) == len(members), "continuation bypassed a member's declaration/leak check"
+
+
 def loop_doctrine_problems(workflow: str, runner: str, template: str, agents: str) -> list[str]:
     """Criterion 15: the live loop doctrine names the swarms, the live discovery and its limits."""
     one = flat(workflow)

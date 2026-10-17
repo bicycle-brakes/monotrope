@@ -4449,8 +4449,9 @@ def probe(root: Path, change: str) -> None:
     implementation diff as its only content - while every paid call keeps the
     read tools. No record is written; each id and the answer's first line are
     printed for the pull request body, and skipped paid models are named. A
-    refused id stops the run and is reported (spec, criterion 17): no second
-    address, no substituted model.
+    failed member is reported without stopping later checks; the final summary
+    lists answered and failed members and any failure makes the probe exit
+    nonzero (spec, criterion 14). No second address, no substituted model.
     """
     folder_of(root, change)
     key = reviewer_key()
@@ -4460,7 +4461,22 @@ def probe(root: Path, change: str) -> None:
     require_pi()
     free = discover_free(root)
     diff = free_diff(root)
-    answered = 0
+    answered: list[str] = []
+    failed: list[str] = []
+
+    def check_member(ctx: Context, model: str, prompt: str, *, free: bool = False) -> None:
+        # Declaration and leak checks stay outside this handler: only a model
+        # call failure permits continuing, never a failed admission check.
+        try:
+            answer = run_reviewer(ctx, model, prompt, key, free=free)
+        except CallFailed as error:
+            print(f"probe: {model} failed: {scrub(str(error), key)}")
+            failed.append(model)
+            return
+        first = answer.strip().splitlines()[0]
+        print(f"probe: {model} · {scrub(first, key)}")
+        answered.append(model)
+
     if not diff.strip():
         print("probe: free stage skipped: no implementation source diff")
     for model in free["selected"] if diff.strip() else []:
@@ -4479,10 +4495,7 @@ def probe(root: Path, change: str) -> None:
         if not ctx.findings.exists():
             ctx.findings.write_text(findings_header(ctx, producer_for(endpoint)), encoding="utf-8")
         append(ctx.findings, call_line("probe", endpoint, result))
-        answer = run_reviewer(ctx, model, prompt, key, free=True)
-        first = answer.strip().splitlines()[0]
-        print(f"probe: {model} · {scrub(first, key)}")
-        answered += 1
+        check_member(ctx, model, prompt, free=True)
     for model in ladder(root):
         endpoint = (OPENCODE, model, "max")
         ctx = preflight(root, change, endpoint)
@@ -4494,14 +4507,14 @@ def probe(root: Path, change: str) -> None:
             ]
         )
         begin_call(ctx, "probe", endpoint, prompt)
-        answer = run_reviewer(ctx, model, prompt, key)
-        first = answer.strip().splitlines()[0]
-        print(f"probe: {model} · {scrub(first, key)}")
-        answered += 1
+        check_member(ctx, model, prompt)
     skipped = skipped_models(root)
     if skipped:
         print(f"probe: paid models skipped: {'; '.join(skipped)}")
-    print(f"probe: {answered} members answered")
+    print(f"probe: {len(answered)} members answered: {', '.join(answered) or 'none'}")
+    print(f"probe: {len(failed)} members failed: {', '.join(failed) or 'none'}")
+    if failed:
+        raise CallFailed(f"probe: {len(failed)} members failed: {', '.join(failed)}")
 
 
 # ---------------------------------------------------------------------------

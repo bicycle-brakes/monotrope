@@ -196,6 +196,7 @@ owns that check along with `make verify`.
 - 12: tests/test_stage2.py::test_an_undecided_loop_row_holds_the_next_round_and_the_release — a pending/evidence-incomplete row admits review or release
 - 13: tests/test_stage2.py::test_round_history_survives_split_releases_and_config_edits — clean/brake state, multi-digit counts or consumed stages are lost across releases
 - 14: tests/test_stage2.py::test_the_probe_checks_discovered_and_paid_models_once — a member is missing/repeated, discovery skips forced live refresh or configured selection, or a per-call guard/payload boundary is bypassed
+- 14: tests/test_stage2.py::test_the_probe_continues_after_member_failures — a failed free or paid call prevents later checks, loses the final answered/failed inventory or exits successfully
 - 15: tests/test_stage2.py::test_the_loop_doctrine_names_both_swarms_until_clean — live text keeps the old cap/order/declaration rule, claims pin-limited freshness, lacks live-source/configuration limits, cites ADR 0015 or exceeds the AGENTS.md cap
 - 16: tests/test_stage2.py::test_adr_0021_amends_the_round_budget — the new record omits Q-9/Q-10 or the live/configurable-selection addendum, or modifies historical ADR bodies
 
@@ -225,3 +226,7 @@ Repair evidence (2026-10-17): all ten new regression cases failed against the re
 2026-10-17 09:55:56–09:56:21, 0:00:25 — repair of taken phase-6 row P6-8, including verification waits (Europe/Berlin).
 
 Repair evidence (2026-10-17): reworded both review-loop skip notices and the probe notice to "paid models skipped:", preserving each model's reason without claiming a terms problem. Updated the existing notice assertion; the focused skip/probe run passed both tests. The git diff whitespace check passed. This call did not edit findings.md, make a provider call or commit; the outer runner owns full make verify and the checkpoint.
+
+2026-10-17 11:08:03–11:15:05, 00:07:02 — repair of taken phase-6 row P6-9, including verification waits (Europe/Berlin).
+
+Repair evidence (2026-10-17): all six new regression cases failed before the code repair: unavailable models and empty answers at the first free, first paid and last paid positions. After the repair, all 26 probe-related cases passed and the full `tests/test_stage2.py` suite passed all 640 cases. The probe now reports each call failure, continues checking later members, lists answered and failed ids at the end and exits nonzero if any member failed. Declaration and leak checks remain outside the call-failure handler. Ruff check, format check, the criterion ledger and git diff whitespace checks passed. This call did not edit `findings.md`, make a provider call or commit; the outer runner owns full `make verify` and the checkpoint.
