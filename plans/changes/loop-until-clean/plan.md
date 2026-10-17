@@ -225,6 +225,7 @@ owns that check along with `make verify`.
 
 - 4: tests/test_stage2.py::test_malformed_finding_tables_fail_the_member — malformed-only answers complete a clean round or a failed peer disappears
 - 5: tests/test_stage2.py::test_refreshed_model_definitions_reach_each_launch — discovery loses the refreshed API definitions before later launches
+- 5: tests/test_pi_contract.py::test_real_refreshed_definition_resolves_without_newer_server_date — the pinned offline runtime fails to resolve the fresh API or endpoint for missing or older server dates
 - 7: tests/test_stage2.py::test_free_admission_requires_the_launch_provider — a different discovery provider grants Go admission
 - 17: tests/test_stage2.py::test_refreshed_model_definitions_reach_each_launch — preparation loses definitions before probes or selected stages
 
@@ -259,6 +260,11 @@ Q-16 evidence (2026-10-17): the initial preparation test failed before the new v
 2026-10-17 15:04:09–15:15:48, 00:11:39 — repair of taken phase-6 rows P6-11 through P6-13, including verification waits (Europe/Berlin).
 
 Repair evidence (2026-10-17): all six new regression cases failed on the unchanged repair baseline `8ad049d` before the code repair. They cover malformed-only and partially successful swarms, complete protocol definitions reaching review/probe/preparation and later paid rounds, and discovery-provider admission. The broad affected-suite run (`tests/test_stage2.py`, `tests/test_stage2_availability.py`, `tests/test_model_endpoints.py`) reported 708 passed and nine failures while the repair was in progress; all nine failed cases passed in the final-source rerun. The final targeted regression/preservation run passed seven cases. Existing tests retain quoted commentary beside valid findings; an unreadable table with no parsed finding now fails its member and cannot certify a clean round. All 12 real-Pi contracts passed with local loopback access after the sandbox initially refused their local servers. Ruff check, format check, interview minimums, ADR answers, the criterion ledger and git diff whitespace checks passed. This call did not edit `findings.md`, access the tracker, make a live provider call or commit. The outer runner owns complete `make verify` and the checkpoint.
+
+
+2026-10-17 16:30:23–16:39:47, 0:09:24 — repair of taken phase-6 row P6-14, including verification waits (Europe/Berlin).
+
+Repair evidence (2026-10-17): retained explicit models.json activation for the freshly retrieved definitions before listing and each offline launch, preserving the original models-store.json server-date evidence. Strengthened the launch regression with absent/invalid-date representation zero and an older server date across review-loop, probe and prepare-loop. All six cases failed with ordinary assertion failures against baseline bb8b5e1902a2f01be4ed76268b9aba5928b53ed9 in a temporary archive with the current tests; their setup and teardown completed. This regression requires no pinned Pi installation in the runner's baseline checkout, avoiding the previous attempt's setup failure. The real pinned-runtime regression separately passed all four cases, asserting resolved API, endpoint, context, token limit, input and reasoning for new and existing model ids at both server dates. The full affected suite passed 720 tests; all 16 real-Pi contracts passed with local loopback access after the sandbox initially blocked eleven server-based cases. Ruff check, format check, interview minimums, ADR answers, criterion ledger and git diff whitespace checks passed. This call did not edit findings.md, access the tracker, make a live provider call or commit. The outer runner owns complete make verify and the checkpoint.
 
 ## Q-16 implementation amendment — 2026-10-17
 

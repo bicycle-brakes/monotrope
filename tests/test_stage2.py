@@ -919,7 +919,7 @@ def test_the_opencode_key_never_leaves_the_runner(world: World, capsys: pytest.C
     assert first["env"]["OPENCODE_API_KEY"] == OKEY
     assert "--api-key" not in first["argv"]
     assert [name for name, value in first["env"].items() if OKEY in value] == ["OPENCODE_API_KEY"]
-    assert first["agent_listing"] == ["models-store.json", "settings.json"]
+    assert first["agent_listing"] == ["models-store.json", "models.json", "settings.json"]
     for call in world.calls():
         assert not any(OKEY[i : i + 8] in " ".join(call["argv"]) for i in range(len(OKEY) - 7)), call["argv"]
         seen_in_directory = " ".join(
@@ -10114,8 +10114,11 @@ def test_malformed_finding_tables_fail_the_member(world: World, capsys, partial:
         assert "## Round 1" in world.record().read_text()
 
 
+@pytest.mark.parametrize("last_modified", [0, 946684800000])
 @pytest.mark.parametrize("verb", ["review-loop", "probe", "prepare-loop"])
-def test_refreshed_model_definitions_reach_each_launch(world: World, monkeypatch, verb: str) -> None:
+def test_refreshed_model_definitions_reach_each_launch(
+    world: World, monkeypatch, verb: str, last_modified: int
+) -> None:
     """Criteria 5/17: offline calls need the fresh model's real protocol, including after preparation."""
     if verb == "prepare-loop":
         from test_stage2_availability import enable
@@ -10134,13 +10137,19 @@ def test_refreshed_model_definitions_reach_each_launch(world: World, monkeypatch
 
     def capture(command, cwd, env, *args, **kwargs):
         agent = Path(env["PI_CODING_AGENT_DIR"])
-        if "--print" in command:
+        if "--print" in command or "--list-models" in command:
             path = agent / "models-store.json"
-            stores.append(json.loads(path.read_text()) if path.exists() else {})
+            store = json.loads(path.read_text()) if path.exists() else {}
+            stores.append(store)
+            assert store[stage2.OPENCODE]["lastModified"] == last_modified, "server evidence was rewritten"
+            assert (agent / "models.json").is_file(), "the refreshed catalog has no active model configuration"
+            active = json.loads((agent / "models.json").read_text())
+            assert active == {"providers": {stage2.OPENCODE: {"models": store[stage2.OPENCODE]["models"]}}}
         result = launch(command, cwd, env, *args, **kwargs)
         if "update" in command:
             path = agent / "models-store.json"
             store = json.loads(path.read_text())
+            store[stage2.OPENCODE]["lastModified"] = last_modified
             store[stage2.OPENCODE]["models"] = [
                 expected if model["id"] == expected["id"] else model for model in store[stage2.OPENCODE]["models"]
             ]

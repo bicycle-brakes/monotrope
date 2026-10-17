@@ -1333,6 +1333,19 @@ def overlay_ids(agent: Path, provider: str) -> set[str]:
     }
 
 
+def activate_overlay(agent: Path, store: dict) -> None:
+    """Activate fetched definitions through Pi's explicit model configuration.
+
+    Pi 1.2.0 restores its remote cache only for server dates newer than its
+    shipped catalog. A successful fresh retrieval need not carry such a date.
+    Keep models-store.json as retrieval evidence and use models.json's model
+    definitions to activate that exact catalog independently of cache age.
+    Only model definitions cross here, never provider auth configuration.
+    """
+    providers = {provider: {"models": entry["models"]} for provider, entry in store.items() if entry.get("models")}
+    (agent / "models.json").write_text(json.dumps({"providers": providers}), encoding="utf-8")
+
+
 def discover_free(root: Path, *, allow_empty: bool = False) -> dict:
     """The free stage's members, from a forced live catalog refresh this run owns.
 
@@ -1369,6 +1382,8 @@ def discover_free(root: Path, *, allow_empty: bool = False) -> dict:
                 f"`{PI_WRAPPER} update --models` ended {refresh.returncode}; the free stage is not filled "
                 "from a stale cache."
             )
+        store = overlay_store(agent, rule["provider"])
+        activate_overlay(agent, store)
         try:
             listing = launch(
                 [str(PI_WRAPPER), "--list-models"], scratch, env, timeout=PI_DISCOVERY_SECONDS, limit=limit
@@ -1377,7 +1392,6 @@ def discover_free(root: Path, *, allow_empty: bool = False) -> dict:
             raise Refused(
                 f"the model listing did not end within {PI_DISCOVERY_SECONDS} seconds; the free stage is not entered. ({error})"
             ) from None
-        store = overlay_store(agent, rule["provider"]) if listing.returncode == 0 else {}
         fresh = {
             str(model["id"])
             for model in store.get(rule["provider"], {}).get("models", [])
@@ -1677,6 +1691,7 @@ def run_reviewer(
         store = getattr(ctx, "models_store", None)
         if store is not None:
             (agent / "models-store.json").write_text(json.dumps(store), encoding="utf-8")
+            activate_overlay(agent, store)
         home = scratch / "home"
         home.mkdir()
         prompt_file = scratch / "review-prompt.md"

@@ -417,6 +417,77 @@ def native_base_urls(provider: str, api: str) -> set[str]:
     return {model.get("baseUrl") for model in section.values() if isinstance(model, dict)}
 
 
+@pytest.mark.usefixtures("installed_pi")
+@pytest.mark.parametrize("last_modified", [0, 946684800000])
+@pytest.mark.parametrize("model_id", ["synthetic-protocol-check-free", "deepseek-v4.1-flash"])
+def test_real_refreshed_definition_resolves_without_newer_server_date(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, last_modified: int, model_id: str
+) -> None:
+    """P6-14: production scratch config activates new and replaced APIs without forged cache dates."""
+    definition = {
+        "id": model_id,
+        "provider": "opencode-go",
+        "api": "anthropic-messages",
+        "baseUrl": "https://catalog.example.invalid/fresh-endpoint",
+        "contextWindow": 123456,
+        "maxTokens": 1234,
+        "reasoning": False,
+        "input": ["text"],
+    }
+    store = {"opencode-go": {"models": [definition], "lastModified": last_modified, "checkedAt": 1234567890}}
+    runtime = REPO_ROOT / "tools/pi/node_modules" / PKG / "dist/core/model-runtime.js"
+    script = """
+const { ModelRuntime } = await import(process.argv[1]);
+globalThis.fetch = async () => { throw new Error('network forbidden'); };
+const runtime = await ModelRuntime.create({
+  credentials: { async read() {}, async list() { return []; } },
+  modelsPath: process.argv[2], refreshOnCreate: false,
+});
+const result = await runtime.refresh({ providers: ['opencode-go'], allowNetwork: false });
+if (runtime.getError() || result.errors.size) throw new Error(runtime.getError() || 'refresh failed');
+console.log(JSON.stringify(runtime.getModel('opencode-go', process.argv[3]) ?? null));
+"""
+    observed = []
+
+    def resolve_launch(command, cwd, env, *_args, **_kwargs):
+        agent = Path(env["PI_CODING_AGENT_DIR"])
+        if "update" in command:
+            (agent / "models-store.json").write_text(json.dumps(store))
+            return subprocess.CompletedProcess(command, 0, "refreshed", "")
+        assert json.loads((agent / "models-store.json").read_text()) == store, "server evidence was rewritten"
+        done = subprocess.run(
+            ["node", "--input-type=module", "-e", script, runtime.as_uri(), str(agent / "models.json"), model_id],
+            cwd=cwd,
+            env={**contract_environment(), "PI_OFFLINE": "1", "HOME": env["HOME"]},
+            capture_output=True,
+            text=True,
+            timeout=120,
+            check=False,
+        )
+        assert done.returncode == 0, done.stderr
+        resolved = json.loads(done.stdout)
+        assert resolved is not None, "the fresh model was not activated"
+        for field in ("api", "baseUrl", "contextWindow", "maxTokens", "input", "reasoning"):
+            assert resolved[field] == definition[field], f"fresh {field} was not activated"
+        observed.append(resolved)
+        if "--list-models" in command:
+            return subprocess.CompletedProcess(command, 0, f"provider model\nopencode-go {model_id}\n", "")
+        return subprocess.CompletedProcess(command, 0, "No finding.", "")
+
+    monkeypatch.setattr(stage2, "launch", resolve_launch)
+    monkeypatch.setattr(stage2, "reviewer_key", lambda: SYNTHETIC_KEY)
+    monkeypatch.setattr(
+        stage2, "free_rule", lambda _root: {"provider": "opencode-go", "id_suffix": "", "include": [{"id": model_id}]}
+    )
+    discovery = stage2.discover_free(tmp_path)
+    assert discovery["selected"] == [model_id]
+    assert discovery["models_store"] == store
+    ctx = types.SimpleNamespace(change="demo", root=tmp_path, models_store=discovery["models_store"])
+    for free in (True, False):
+        stage2.run_reviewer(ctx, model_id, "Review demo.", SYNTHETIC_KEY, free=free)
+    assert len(observed) == 3
+
+
 def contract_environment() -> dict[str, str]:
     """Only runtime search and locale cross from the parent; credentials never do."""
     return {name: value for name, value in os.environ.items() if name in {"PATH", "LANG", "LC_ALL", "LC_CTYPE", "TZ"}}

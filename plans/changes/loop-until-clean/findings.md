@@ -743,4 +743,22 @@ Stage-2 call, 2026-10-17: repair · attempt 1 · route codex · endpoint openai-
 
 | ID | Severity | Dimension | Origin | Where | Finding | Reviewer | Status | Broke a test |
 |---|---|---|---|---|---|---|---|---|
-| P6-14 | MAJOR | MAINT | fix-r | `scripts/stage2.py`, `overlay_store` / `run_reviewer` | Protocol preservation is incomplete after 20f976e: Pi restores a saved catalog only when its server modification date is newer than its shipped model data. A freshly retrieved model whose HTTP Last-Modified is absent/invalid is saved with lastModified=0; copying that store into the offline launch still leaves the model unresolved. Reproduced against pinned Pi 1.2.0 with in-memory stores, no networking or credentials: the synthetic anthropic-messages model was absent at date 0 and resolved with the identical definition at a synthetic 2099 control date, while both refreshes returned no errors. Preserve and activate the admitted fresh definition without inventing server-date evidence; verify actual API/endpoint resolution for missing and older dates. Source, hashes and reproducer: docs/research/2026-10-17-pi-overlay-resolution.md. This reopens P6-12 with new evidence. [criteria 5, 17] | Codex (orchestrator, offline resolver check) | taken — fresh definition activation must not depend on a server cache date | no |
+| P6-14 | MAJOR | MAINT | fix-r | `scripts/stage2.py`, `overlay_store` / `run_reviewer` | Protocol preservation is incomplete after 20f976e: Pi restores a saved catalog only when its server modification date is newer than its shipped model data. A freshly retrieved model whose HTTP Last-Modified is absent/invalid is saved with lastModified=0; copying that store into the offline launch still leaves the model unresolved. Reproduced against pinned Pi 1.2.0 with in-memory stores, no networking or credentials: the synthetic anthropic-messages model was absent at date 0 and resolved with the identical definition at a synthetic 2099 control date, while both refreshes returned no errors. Preserve and activate the admitted fresh definition without inventing server-date evidence; verify actual API/endpoint resolution for missing and older dates. Source, hashes and reproducer: docs/research/2026-10-17-pi-overlay-resolution.md. This reopens P6-12 with new evidence. [criteria 5, 17] | Codex (orchestrator, offline resolver check) | fixed — tests/test_stage2.py::test_refreshed_model_definitions_reach_each_launch | no |
+
+Stage-2 call, 2026-10-17: repair · attempt 1 · route codex · endpoint openai-codex · model gpt-6.1-sol · leak check clean over 480 files, 1421 commits, 12 rules.
+
+> Attempt 1 (codex) failed its post-run checks.
+>
+> Files the attempt changed (lines added, removed):
+> - `plans/changes/loop-until-clean/plan.md` +6 -0
+> - `scripts/stage2.py` +16 -1
+> - `tests/test_pi_contract.py` +71 -0
+> - `tests/test_stage2.py` +6 -3
+>
+> Diagnostics:
+> ```text
+> - Runner format before `make verify`: ruff changed no file.
+> - P6-14: tests/test_pi_contract.py::test_real_refreshed_definition_resolves_without_newer_server_date: the setup phase of `tests/test_pi_contract.py::test_real_refreshed_definition_resolves_without_newer_server_date[synthetic-protocol-check-free-0]` ended failed; red first needs passing setup and teardown
+> ```
+
+Stage-2 call, 2026-10-17: repair · attempt 2 · route codex-repair · endpoint openai-codex · model gpt-6.1-sol · reason first Codex post-run check failed · leak check clean over 480 files, 1422 commits, 12 rules.
