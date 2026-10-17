@@ -614,3 +614,42 @@ Phase 6 verdict: claude-opus-5-5, 2026-10-17
 - Not measured: whether `/v1/messages` and `/v1/responses` work today for the four rungs.
 
 Stage-2 call, 2026-10-17: repair · attempt 1 · route codex · endpoint openai-codex · model gpt-6.1-sol · leak check clean over 472 files, 1388 commits, 12 rules.
+
+## Phase 6 — round 2, on commit `e6195de`, 2026-10-17
+
+Re-checked by Opus 5.5 (Claude path, fresh read-only sub-agent, no Codex session). I read each P6 row against the repair `7aeb54b` and ran each named test. On `e6195de`, `.venv/bin/python3 -m pytest tests/test_stage2.py tests/test_model_endpoints.py tests/test_pi_contract.py tests/test_stage2_session.py tests/test_templates.py` gave 867 passed. The six named regression tests (11 cases) passed, and the real-Pi contract ran rather than being skipped.
+
+**P6-1: confirmed.** `test_real_opencode_provider_contracts` asserts again that every `stage2.ladder()` rung sits in Pi's shipped `openai-completions` catalog at `https://opencode.ai/zen/go/v1`. `qwen3.8-flash`, `gpt-6-luna`, `claude-haiku-5-5` and `minimax-m3` each carry `uebersprungen: "2026-10-17"` and `grund: "wire API not measured"`. Their `gelesen`, `quelle`, `aufbewahrung` and `training` readings are kept unchanged. The live ladder is `deepseek-v4.1-flash, mimo-v2.6-flash, longcat-2.0, glm-5.3-flash, mimo-v2.6-pro`, all on the native address. I checked that the test bites with a scratch script: the same YAML without the four skip markers gives a nine-rung ladder, and exactly those four fail the catalog check. `skipped_models` names all four with the dated reason. The endpoint remark states their wire APIs and the skip.
+
+**P6-2: confirmed.** Spec criterion 6 and ADR 0021 decision 5 now state the Q-11 rule: retention is read and recorded, training must be "Not used", and the 30-day readers were admitted on 2026-10-17. The ADR's Review bullet cites Q-11 to Q-13. The old wordings are gone, and `test_paid_terms_doctrine_records_the_retention_decision` pins both texts.
+
+**P6-3: confirmed.** In new records, `review_loop` writes the reviewer's non-row words through `quote_reviewer`, so a `## Round …` line becomes `> ## Round …`. `ROUND_HEADING` (anchored `^`) does not match it. `rounds_run` now sums `Rounds run:` only inside a runner `RELEASE_HEADING` section, up to `Kept from the loop record:`. Both cases of `test_reviewer_words_cannot_count_as_rounds` pass and reach a real round 2.
+
+**P6-4: confirmed.** `release` quotes every kept line. `_last_release` (`^`-anchored `RELEASE_LINE`), `findings_rows` and `released_rows` therefore cannot read a heading, a state line or a ten-cell row from the kept words. The test seeds an old-style unquoted record with a fake release heading, a `Loop state:` holding `gemini-4-argon-contributor`, `Rounds run: 5` and a ten-cell `L8-1` row. After release, the snapshot equals the real one, only `L1-1` is a row, and `rounds_run` is 1.
+
+**P6-5: confirmed.** `terms_problem` refuses a record whose `aufbewahrung` is missing, empty, blank or not text. That check runs before the training check. `test_paid_terms_require_a_retention_reading` covers five variants.
+
+**P6-6: confirmed.** The notice block now runs on the first non-free round of a run, whatever the stage: no `flash` and no `rung:` key is consumed yet. `cheapest_notice` stays limited to the Flash swarm. `test_first_paid_rung_names_missing_cost_when_flash_is_skipped` skips every Flash member and checks the notice on stderr and in the record.
+
+**P6-7: confirmed (not a test).** The remark now gives the dated `anfragen_5h` values (Go page, read 2026-10-17) for the six ids and says only that no token price is claimed.
+
+| ID | Severity | Dimension | Origin | Where | Finding | Reviewer | Status | Broke a test |
+|---|---|---|---|---|---|---|---|---|
+| P6-8 | MINOR | MAINT | fix-r | `scripts/stage2.py` `review_loop` (stdout line and first-round `Notice:`), `probe` (the notice text "paid models skipped for unread or refusing terms") | False statement in the handover record. The P6-1 repair routes the wire-API skip through the terms channel (`uebersprungen` in `modelle_terms`). With today's configuration, the first round's notice reads "paid models skipped for unread or refusing terms: qwen3.8-flash (… skipped on 2026-10-17: wire API not measured); gpt-6-luna …; claude-haiku-5-5 …; minimax-m3 …". This was measured with `skipped_models` on `e6195de`. The terms of these four were read, and Q-11 admitted them, as the endpoint remark says ("Their data-terms admission under Q-11 stands"). The record therefore gives the handover a wrong reason for four skips. What should hold: the notice names skipped paid models without claiming a terms problem for a skip whose reason is not one, for example "paid models skipped: …" with the per-model reason. (criterion 6; ADR 0021 decision 5) | claude-opus-5-5 | taken — not a test — false statement: the skip notice names a terms problem for four skips whose reason is the wire API; reword to "paid models skipped:" with the per-model reason |  |
+
+Phase 6 verdict: claude-opus-5-5, 2026-10-17
+
+### Checked without a finding
+
+- The live loop record (`~/.local/state/coding-harness/stage2/loop-until-clean/loop.md`, read for headings and counts only). It has two runner round headings and no `NOT_ROWS_NOTE` block, so no old unquoted reviewer words are present.
+- Residual limit, not a finding. `release` still counts `Rounds run:` with `ROUND_HEADING.findall(record)`, and `_record_lines` ends a reviewer section at any `## Round` line. Only a record written before `7aeb54b` with an unquoted reviewer round heading could miscount. The only such record holds none.
+- `findings.md` on `e6195de` has no released block yet. `rounds_run` is 0, `findings_rows` returns 7 phase-6 rows, and `read_state` returns None.
+- No contradiction with the skips in `docs/WORKFLOW.md` (§4 ladder paragraph, "chat-completions address") or in `prompts/04b-review-loop.md`.
+- Quoting also turns the runner's own kept statements into `> ` lines in `findings.md`. Nothing reads them back.
+
+### Read / not read
+
+- Read: `prompts/06-review.md`, the P6 block of `findings.md`, `git show 7aeb54b` in full, the `opencode-go` entry of `model-endpoints.yaml`, spec criterion 6, ADR 0021 decisions 4 and 5 and its Review bullet, and the runner functions named above. Of `docs/WORKFLOW.md`, only the §4 ladder lines and a grep.
+- Not read: `design.md` beyond the data-model and release lines, `research.md`, and `decisions.md` beyond the Q-11 heading.
+  - `design.md` line 100 still lists `claude-haiku-5.5` and `minimax-m2.7`. That predates the repair, and I did not judge it.
+- Not run: `make verify`, any live Pi or provider call.

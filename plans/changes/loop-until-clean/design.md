@@ -2,7 +2,7 @@
 title: "Design — loop-until-clean"
 category: design
 created: 2026-10-14
-updated: 2026-10-16
+updated: 2026-10-17
 status: draft
 implementation_status: none
 date: 2026-10-14
@@ -96,9 +96,10 @@ MiMo Pro meets the decisions; those are not implementation alternatives.
 
 ## Data model
 
-- **Endpoint configuration:** `modelle` starts with `deepseek-v4.1-flash`,
-  `mimo-v2.6-flash`, `longcat-2.0`, then `glm-5.3-flash`, `qwen3.8-flash`,
-  `gpt-6-luna`, `claude-haiku-5.5`, `minimax-m2.7`, `mimo-v2.6-pro`, subject
+- **Endpoint configuration:** `modelle` is a set (Q-13): `deepseek-v4.1-flash`,
+  `mimo-v2.6-flash`, `longcat-2.0`, `glm-5.3-flash`, `qwen3.8-flash`,
+  `gpt-6-luna`, `claude-haiku-5-5`, `minimax-m3` (replacing `minimax-m2.7`,
+  Q-11) and `mimo-v2.6-pro`, ordered by the declared `anfragen_5h`, subject
   to dated eligible terms. Store only eligible paid entries; record skipped
   requested ids and reasons in the remark/findings. `flash_swarm` is the
   eligible intersection with the first three; reject other overlap, duplicate
