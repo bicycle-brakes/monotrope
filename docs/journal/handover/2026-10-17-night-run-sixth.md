@@ -816,3 +816,63 @@ The earlier handover at e36154e has hosted verification green. Newest PR
 #157 CI and the independent verdict are pending here. No live model
 qualification, credential-file read, customer access, GLM/Claude call or
 merge occurred in this continuation.
+
+## Addendum — 2026-10-17, new independent verdict and fresh safety repair
+
+### Where we are
+
+The fresh independent Sol review of 80be40f finished with two new findings:
+P6-15 BLOCKER, catalog model headers copied into models.json can invoke Pi's
+command/environment-template configuration resolver; P6-16 MAJOR, arbitrary
+inability/error prose with no table rows can certify a false clean round.
+The orchestrator confirmed both by static source inspection and took them
+at pushed 8986d9e on draft PR #157. The earlier green repair at 79a73a8
+remains valid test evidence, not a clean final verdict.
+
+A separate fresh Sol repair is now active through stage2.py, started around
+15:01 UTC with the Claude-command guard still in force. The read-only
+reviewer did not repair its own findings. The exact latest reviewer session
+is 01a14a5c-e94b-7650-8c28-d0c7843dcb27; its verdict is in findings.md.
+
+### Next step
+
+Inspect the existing repair at /tmp/coding-harness-pr157-p61516-repair.log
+and tool session 80267 before starting any other model call. On success,
+check its clean checkpoint and regression evidence, push tracker before
+Git, and obtain a new independent read-only phase-6 re-check. On failure,
+read its preserved diagnostics; do not call Claude or waive a failed proof.
+Do not resume the completed review process 19575 or prior repair 78620.
+
+### Needed from the maintainer
+
+Nothing right now. No merge was requested.
+
+### Decisions and preferences
+
+These are repairs under existing accepted criteria: preserve catalog
+headers as literal values, including command-shaped and environment-shaped
+strings, while keeping raw retrieval evidence; validate explicit no-finding
+answers and treat failed review prose as a member failure. No new model,
+provider, interface or language policy is being decided. The interactive
+Pi selection and interface wishes remain captured in coding-harness-ylu
+and coding-harness-25h.1 respectively, with implementation still future.
+
+### Open work and working state
+
+The implementation-review task remains in progress (coding-harness-4fk).
+The repair owns the review worktree, branch explore/loop-until-clean,
+baseline 8986d9e; do not edit its files while it works. This parent owns the
+separate handover worktree and is the sole tracker writer. The latest
+configured scan found no other interactive writer. Research-swarm remains
+next with no new phase-4 work after reset; its old capture blocker remains.
+The night-plan preparation is closed as delivered, with the epic open.
+
+### Validation
+
+The new findings' disposition passed frontmatter-current (295 documents)
+and whitespace checks before commit. The source check read pinned Pi's
+provider-composer.js and resolve-config-value.js, plus run_swarm; it ran no
+catalog-controlled command and read no credential file. The new repair has
+not yet reported green. PR #157's body names both taken findings and the
+running repair. No live provider qualification, customer access, GLM/Claude
+call or merge occurred.
