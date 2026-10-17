@@ -223,6 +223,11 @@ owns that check along with `make verify`.
 - 17: tests/test_stage2_availability.py::test_null_preflight_rule_never_silently_enables_legacy_review — a present null rule silently bypasses preparation
 - 17: tests/test_stage2_availability.py::test_timed_family_exclusion_also_covers_namespaced_catalog_ids — an id namespace bypasses the temporary model-family exclusion
 
+- 4: tests/test_stage2.py::test_malformed_finding_tables_fail_the_member — malformed-only answers complete a clean round or a failed peer disappears
+- 5: tests/test_stage2.py::test_refreshed_model_definitions_reach_each_launch — discovery loses the refreshed API definitions before later launches
+- 7: tests/test_stage2.py::test_free_admission_requires_the_launch_provider — a different discovery provider grants Go admission
+- 17: tests/test_stage2.py::test_refreshed_model_definitions_reach_each_launch — preparation loses definitions before probes or selected stages
+
 ## Runner route — 2026-10-16
 
 Stage-1 route: implement · model claude-sonnet-5-5 · reason: two Flash post-run checks failed.
