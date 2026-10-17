@@ -81,6 +81,253 @@ URL = re.compile(r"""https?://[^\s)>"'\\]+""")
 PUBLIC_TOOLS = "public_search,public_fetch"
 
 
+class ResearchCatalogError(ValueError):
+    """A failed preflight (1) or invalid declaration (2), before model calls."""
+
+    def __init__(self, message: str, exit_code: int = 1):
+        super().__init__(message)
+        self.exit_code = exit_code
+
+
+def validate_research_free_policy(policy: dict) -> None:
+    """Validate the entire selection policy before reading network sources."""
+    keys = {"provider", "suffix", "include", "exclude"}
+    if not isinstance(policy, dict) or set(policy) != keys:
+        raise ResearchCatalogError("invalid free selection policy keys", 2)
+    if policy["provider"] != "opencode-go" or policy["suffix"] != "-free":
+        raise ResearchCatalogError("invalid free provider or suffix", 2)
+    for key in ("include", "exclude"):
+        values = policy[key]
+        if (
+            not isinstance(values, list)
+            or any(not isinstance(item, str) or not item.endswith("-free") or item == "-free" for item in values)
+            or len(set(values)) != len(values)
+        ):
+            raise ResearchCatalogError(f"invalid free selection {key}", 2)
+
+
+class _CatalogObject(dict):
+    def __init__(self, pairs):
+        super().__init__(pairs)
+        self.duplicates = len(pairs) != len(self)
+
+
+def _catalog_json(body):
+    def reject(value):
+        raise ValueError(f"non-finite JSON value: {value}")
+
+    return json.loads(body, object_pairs_hook=_CatalogObject, parse_constant=reject)
+
+
+def _catalog_duplicates(value):
+    if isinstance(value, dict):
+        return getattr(value, "duplicates", False) or any(_catalog_duplicates(item) for item in value.values())
+    return isinstance(value, list) and any(_catalog_duplicates(item) for item in value)
+
+
+def select_research_catalog(bridge, policy, fixed_ids, *, expected_version):
+    """Intersect a fresh pinned Pi response with capability evidence, never a cache union.
+
+    The bridge transports raw source bodies. Python retains duplicate identity and
+    malformed-field evidence that the runtime's permissive parser would discard.
+    This selects a roster only; it does not authorize or dispatch any model.
+    """
+    validate_research_free_policy(policy)
+    provider = policy["provider"]
+    sources = bridge.get("sources", {})
+    pi = sources.get("pi", {})
+    runtime = bridge.get("pi_runtime", {})
+    if (
+        bridge.get("exit_code") != 0
+        or bridge.get("pi_version") != expected_version
+        or pi.get("status") != 200
+        or runtime.get("aborted")
+        or runtime.get("errors")
+        or provider not in bridge.get("models_store", {})
+    ):
+        raise ResearchCatalogError(bridge.get("reason") or "pi-refresh-failed")
+    try:
+        raw = _catalog_json(pi["body"])
+    except (KeyError, TypeError, ValueError) as error:
+        raise ResearchCatalogError("pi-malformed") from error
+    if _catalog_duplicates(raw):
+        raise ResearchCatalogError("duplicate Pi identity or key")
+    if isinstance(raw, dict):
+        raw = raw["models"] if isinstance(raw.get("models"), list) else list(raw.values())
+    if not isinstance(raw, list):
+        raise ResearchCatalogError("pi-malformed")
+    models = {}
+    for item in raw:
+        if not isinstance(item, dict) or not isinstance(item.get("id"), str) or not item["id"]:
+            raise ResearchCatalogError("pi-malformed identity")
+        if item["id"] in models:
+            raise ResearchCatalogError("duplicate Pi identity")
+        models[item["id"]] = item
+
+    def pi_reason(item):
+        kind = item.get("type", "chat")
+        inputs = item.get("input")
+        if (
+            kind not in ("chat", "image", "classifier")
+            or not isinstance(inputs, list)
+            or any(not isinstance(x, str) for x in inputs)
+        ):
+            return "pi-malformed"
+        if kind != "chat" or "text" not in inputs:
+            return "not-chat"
+        return None
+
+    for ident in fixed_ids:
+        if ident not in models or pi_reason(models[ident]):
+            raise ResearchCatalogError(f"fixed-model-unavailable: {ident}; raw={models.get(ident)!r}")
+    metadata = sources.get("models_dev", {})
+    capability_reason = None
+    capabilities = {}
+    if metadata.get("status") != 200 or metadata.get("outcome") != "ok":
+        capability_reason = metadata.get("outcome") or "unavailable"
+    else:
+        try:
+            document = _catalog_json(metadata["body"])
+            block = document.get(provider) if isinstance(document, dict) else None
+            capabilities = block.get("models") if isinstance(block, dict) else None
+            if not isinstance(capabilities, dict):
+                capability_reason = "malformed"
+                capabilities = {}
+            elif (
+                getattr(document, "duplicates", False)
+                or getattr(block, "duplicates", False)
+                or getattr(capabilities, "duplicates", False)
+            ):
+                capability_reason = "duplicate-id"
+            else:
+                identities = [
+                    entry.get("id")
+                    for entry in capabilities.values()
+                    if isinstance(entry, dict) and isinstance(entry.get("id"), str)
+                ]
+                if len(identities) != len(set(identities)):
+                    capability_reason = "duplicate-id"
+        except (KeyError, TypeError, ValueError):
+            capability_reason = "malformed"
+            capabilities = {}
+    candidates = []
+    eligible = set()
+    ids = sorted(
+        {ident for ident in models if ident.endswith("-free")}
+        | {ident for ident in bridge.get("baseline", []) if ident.endswith("-free")}
+    )
+    for ident in ids:
+        item = models.get(ident)
+        entry = capabilities.get(ident)
+        evidence = {
+            key: {"present": True, "value": entry[key]}
+            if isinstance(entry, dict) and key in entry
+            else {"present": False}
+            for key in ("id", "tool_call", "status")
+        }
+        evidence["pi"] = {
+            key: {"present": True, "value": item[key]} if isinstance(item, dict) and key in item else {"present": False}
+            for key in ("type", "input")
+        }
+        reason = "not-in-fresh-pi" if item is None else pi_reason(item)
+        if reason is None:
+            if capability_reason:
+                reason = "capability-unavailable"
+            elif ident not in capabilities:
+                reason = "metadata-missing"
+            elif (
+                not isinstance(entry, dict)
+                or getattr(entry, "duplicates", False)
+                or entry.get("id") != ident
+                or "tool_call" in entry
+                and type(entry["tool_call"]) is not bool
+                or "status" in entry
+                and not isinstance(entry["status"], str)
+            ):
+                reason = "metadata-malformed"
+            elif not entry.get("tool_call", False):
+                reason = "no-tool-support"
+            elif entry.get("status") == "deprecated":
+                reason = "deprecated"
+        if reason is None:
+            eligible.add(ident)
+        candidates.append({"id": ident, "reason": reason, "evidence": evidence})
+    for ident in policy["include"]:
+        if ident not in eligible:
+            raise ResearchCatalogError(f"explicit free include is ineligible: {ident}")
+    selected = eligible & set(policy["include"]) if policy["include"] else eligible
+    selected -= set(policy["exclude"])
+    for candidate in candidates:
+        if candidate["reason"] is None and candidate["id"] not in selected:
+            candidate["reason"] = "excluded" if candidate["id"] in policy["exclude"] else "not-included"
+    return {
+        "selected": sorted(selected),
+        "N": len(selected),
+        "policy": {**policy, "include": list(policy["include"]), "exclude": list(policy["exclude"])},
+        "pi_version": bridge["pi_version"],
+        "raw_pi_ids": sorted(models),
+        "selection_outcome": "selected"
+        if selected
+        else ("capability-unavailable" if capability_reason else "measured-empty"),
+        "fixed": list(fixed_ids),
+        "models_store": bridge["models_store"],
+        "sources": {
+            name: {key: value for key, value in source.items() if key != "body"} for name, source in sources.items()
+        },
+        "candidates": candidates,
+        "capability_status": "capability-unavailable" if capability_reason else "available",
+        "capability_reason": capability_reason,
+    }
+
+
+def research_slot_plan(roles, selected_free):
+    """Describe the amended graph; dispatch and runtime barriers are separate gates."""
+    validate_research_free_policy(
+        {"provider": "opencode-go", "suffix": "-free", "include": selected_free, "exclude": []}
+    )
+    if not isinstance(roles, dict):
+        raise ResearchCatalogError("invalid research role declaration", 2)
+    for name in ("finder_agents", "repository_agents", "online_agents"):
+        seats = roles.get(name)
+        if not isinstance(seats, list) or len(seats) != 3:
+            raise ResearchCatalogError(f"{name} must declare three required seats", 2)
+    all_roles = [seat for name in ("finder_agents", "repository_agents", "online_agents") for seat in roles[name]] + [
+        roles.get(name) for name in ("finder_merge", "topic_author", "judge")
+    ]
+    for role in all_roles:
+        if not isinstance(role, dict) or any(
+            not isinstance(role.get(key), str) or not role[key] for key in ("endpoint", "model")
+        ):
+            raise ResearchCatalogError("invalid research role identity", 2)
+        if role["model"].endswith("-free"):
+            raise ResearchCatalogError("free seats belong only to the dynamic online roster", 2)
+    graph = []
+
+    def add(stage, role, topic=None, required=True):
+        graph.append(
+            {
+                **role,
+                "id": f"{stage}-{topic or 0}-{len(graph) + 1}",
+                "stage": stage,
+                "topic": topic,
+                "required": required,
+            }
+        )
+
+    for role in roles["finder_agents"]:
+        add("finders", role)
+    add("merge", roles["finder_merge"])
+    add("sentence", roles["topic_author"])
+    for topic in range(1, 12):
+        for role in roles["repository_agents"] if topic <= 8 else roles["online_agents"]:
+            add("topics", role, topic)
+    for topic in range(9, 12):
+        for ident in selected_free:
+            add("topics", {"endpoint": "opencode-go", "model": ident}, topic, False)
+    add("judge", roles["judge"])
+    return graph
+
+
 def allowance(elapsed: float, role_minutes: float) -> float:
     """The seconds this launch may take: the smaller of its deadline and the run's rest."""
     return min(role_minutes * 60.0, max(RUN_MINUTES * 60.0 - elapsed, 0.0))

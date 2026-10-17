@@ -1,7 +1,7 @@
 ---
 title: "Design — research-swarm"
 status: draft
-implementation_status: none
+implementation_status: partial
 date: 2026-10-14
 last_reviewed: 2026-10-17
 updated: 2026-10-17
@@ -87,7 +87,12 @@ catalog and isolation checks retain the real wrapper and pin. A restricted
 test PATH must not accidentally execute the production wrapper. This repairs
 the observed fixture mismatch without widening production discovery or tools.
 
-**Catalog → frozen seats.** Before any swarm model call, a bounded helper
+**Catalog → frozen seats.** The Node helper is the pinned-runtime transport
+bridge: it retains raw Pi/models.dev bodies, source digests/outcomes and the
+fresh model store. Python validates duplicate identities and the two-source
+intersection before building the planned seats. Neither component launches a
+model during this preflight; the later dispatcher consumes its checked result.
+Before any swarm model call, a bounded helper
 using the repository's pinned Pi runtime refreshes only `opencode-go` with
 network allowed and force enabled in fresh scratch configuration. Do not
 update Pi, install a client, read user caches or invoke Zen. Pi 1.2.0's

@@ -1,7 +1,7 @@
 ---
 title: "Spec — research-swarm"
 status: draft
-implementation_status: none
+implementation_status: partial
 date: 2026-10-14
 last_reviewed: 2026-10-17
 updated: 2026-10-17
@@ -14,7 +14,7 @@ produced_by: {kind: llm-session, name: codex, version: "2026-10-17"}
 review: {status: pending, approved_by: null, approved_at: null}
 tags: [spec, stage-2, research, swarm]
 class: architectural
-appetite: 12
+appetite: 13.333333333333334  # hours; exact operational total: 13 hours 20 minutes
 adr_files: [docs/adr/0020-phase-1-research-swarm.md]
 neighbours: [plans/changes/interview-context/spec.md, plans/changes/haiku-5-5/spec.md]
 ---
@@ -434,16 +434,16 @@ visible details into this spec; no maintainer answer is supplied here.
 - [DETAIL] Criterion bases name the existing Q-records as
   `decisions.md#Q-<id>` so the recorded origin is explicit; this
   changes reference spelling only, not the criterion or its authority.
-- [DETAIL] Keep the architectural class, ADR 0020 and 12-hour phase-4 stop;
-  sum measured historical spans in plan.md's Earlier implementation time and
-  later Time used spans as prompts/04-implement.md defines them. Before any
-  phase-4 work, establish the unmeasured repair-attempt-3 span from its runner
-  audit start/end, otherwise its commit timestamps, and append source/result.
-  If neither bounds it, raise the appetite stop immediately with `found:`
-  "time used not measurable"; only the maintainer's continue with a new total
-  permits more phase 4. Earlier time is never zeroed or reset, and drafting
-  time in phases 2/3 does not count. This prevents an unknowable remainder
-  silently extending the stop (S-30).
+- [DETAIL] Keep the architectural class and ADR 0020. The current phase-4
+  stop is the maintainer-approved total of 13 hours 20 minutes, recorded in
+  plan.md's card and Time used on 2026-10-17. Sum retained measured historical
+  spans and later Time used spans as prompts/04-implement.md defines them.
+  The earlier unmeasured repair-attempt-3 span remains named, not counted;
+  the maintainer answered that stop with continue and this new total.
+  Preserve ruling S-30 as historical evidence rather than asking the settled
+  question again. Any new unbounded phase-4 span still raises the appetite
+  stop; earlier time is never zeroed or reset, and drafting phases 2/3 do not
+  count.
 - [DETAIL] Without `--stage2-off`, preflight validates class and given
   neighbours, then measures the catalog before swarm model dispatch. Explicit
   `--stage2-off [REASON]` skips class derivation and every class and neighbour

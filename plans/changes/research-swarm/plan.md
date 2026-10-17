@@ -1,7 +1,7 @@
 ---
 title: "Plan — research-swarm"
 status: draft
-implementation_status: none
+implementation_status: partial
 date: 2026-10-14
 last_reviewed: 2026-10-17
 updated: 2026-10-17
@@ -75,12 +75,12 @@ not recreated. No file is deleted. Only the ADR is new under `docs/adr/`.
 
 ## Build sequence
 
-0. Before phase-4 code or tests, establish the unmeasured historical repair
-   span as specified under Earlier implementation time below; add measured
-   spans there and under Time used to determine the remainder of 12 hours.
-   If no record bounds it, raise the appetite stop immediately, build nothing
-   further, and wait for the maintainer's continue with a new total. Drafting
-   phases 2/3 consume no phase-4 time.
+0. Before phase-4 code or tests, read the maintainer's answered appetite
+   stop under Time used: continue with 13 hours 20 minutes in total.
+   Preserve the named unmeasured historical span without counting it;
+   sum measured historical and later Time used spans, adding each new span.
+   Do not re-ask that settled stop or reset earlier time. A new unbounded
+   span raises the appetite stop. Drafting phases 2/3 do not count.
 1. Write red-first fixtures for the amended graph: `39 + 3N` slots, finder
    barrier, 24 repository and `9 + 3N` online calls, identical topic task hashes
    and exact model roles. Include `N=0`, a changed catalog on the next run and
@@ -502,6 +502,21 @@ unknown. The absent `scripts/validate_change_artefacts.py` cannot be run; use
 the existing gates and let the runner own registry regeneration/full verify.
 
 ## Criterion ledger
+
+- 38: tests/test_stage2_research_catalog.py::test_preflight_uses_fresh_pinned_go_snapshot_without_cache_date — Standalone preflight substitutes a shipped list or fabricates Last-Modified; this is not dispatcher integration evidence.
+- 38: tests/test_stage2_research_catalog.py::test_preflight_refreshes_despite_fresh_store_and_never_revives_cached_ids — A current cache prevents the forced refresh or revives removed identities in standalone selection.
+- 39: tests/test_stage2_research_catalog.py::test_preflight_candidate_fault_does_not_exclude_a_valid_peer — A malformed capability field selects a candidate or removes its valid peer.
+- 39: tests/test_stage2_research_catalog.py::test_preflight_missing_metadata_field_is_local_and_explicit — Missing identity or tool support is silently accepted or loses its absence marker.
+- 39: tests/test_stage2_research_catalog.py::test_preflight_ignores_unrelated_provider_and_never_adds_metadata_only_ids — Metadata outside the fresh Go intersection selects a free identity.
+- 39: tests/test_stage2_research_catalog.py::test_preflight_include_is_checked_before_exclude_and_both_are_audited — Exclude hides an unmet explicit include or selection loses policy dispositions.
+- 41: tests/test_stage2_research_catalog.py::test_preflight_fixed_or_duplicate_pi_fault_is_hard_failure — Standalone selection accepts a missing/non-chat fixed identity or duplicate raw Pi identity.
+- 41: tests/test_stage2_research_catalog.py::test_preflight_unsuccessful_pi_response_is_not_measured_empty_or_retried — An unsuccessful public Pi GET becomes an empty roster or performs a second network attempt.
+- 41: tests/test_stage2_research_catalog.py::test_preflight_rejects_raw_pi_duplicate_identity_before_selection — Raw repeated Pi keys or equal identities survive permissive runtime parsing.
+- 42: tests/test_stage2_research_catalog.py::test_preflight_shared_deadline_has_asymmetric_failure_rules — The local-source reads use independent deadlines or metadata timeout blocks fixed eligibility.
+- 42: tests/test_stage2_research_catalog.py::test_preflight_duplicate_metadata_identity_disables_all_free_candidates — Duplicate models.dev identity leaves a free candidate eligible.
+- 42: tests/test_stage2_research_catalog.py::test_preflight_unavailable_capabilities_preserve_fixed_model_eligibility — Document-level capability failure removes fixed eligibility or hides an unmet include.
+- 42: tests/test_stage2_research_catalog.py::test_preflight_zero_selection_retains_policy_and_measured_outcome — A measured-empty standalone selection loses its policy, zero count or fresh identity record.
+
 
 - 1: tests/test_stage2_swarm.py::test_large_classes_dispatch_the_swarm — Either class produces only the single GLM exploration report.
 - 1: not yet written tests/test_stage2_swarm.py::test_swarm_uses_only_the_injected_pi_wrapper — A version or model call bypasses the wrapper, executes the real install in a unit test or resolves bare Pi from PATH.
@@ -1021,19 +1036,14 @@ Evidence: research.md, "Incorporation-round attempt 3 evidence — 2026-10-16".
 
 ## Earlier implementation time
 
-Historical phase-4 entries are retained below; this redraft adds no phase-4
-time and does not reset the 12-hour stop. The unmeasured span prevents a
-claim about the exact remaining appetite; establish it before resuming.
-Before any phase-4 work, read the attempt-3 runner audit start/end; if absent,
-try that attempt’s commit timestamps. Append the bounded span and exact source
-as a new historical line; retain the unmeasured entry below as history. Sum
-all established historical spans and every later Time used span; do not count
-phases 2/3 or time between sessions. If no record bounds attempt 3, stop at once
-using prompts/04-implement.md’s expected/found/relevant/proposal block with
-found: time used not measurable. Build no code/tests while it waits; only a
-maintainer continue with a new total permits more phase 4. The known entries
-below are about 78 minutes in total (recorded 2026-10-16, plan at 42e5975),
-not evidence that the unmeasured span was zero.
+Historical phase-4 entries remain below. The maintainer answered the
+unmeasured-time stop on 2026-10-17 with continue and a new total of 13 hours
+20 minutes, recorded under Time used. The old span stays named and is not
+counted; it is not measured zero. Count retained measured history and each
+new phase-4 span against that current total, without counting phases 2/3 or
+time between sessions. The three recorded historical entries total about
+78 minutes (as recorded on 2026-10-16 at 42e5975). Their dated evidence is
+preserved verbatim. Any new unbounded implementation span raises a new stop.
 
 2026-10-15 repair attempt 3, span not measured: this session had no command tool to read `date`.
 2026-10-15 completion (Opus 5.5): 05:15–05:31 CEST, about 16 minutes including one `make verify` run (05:20:38–05:30:25, green: 2038 passed, 16 skipped).
@@ -1078,3 +1088,55 @@ from not-yet-written by this checkpoint.
 (requested availability instructions and research delegation during
 verification). Add this measured span to the historical measured time;
 the total appetite remains 13 hours 20 minutes.
+
+
+### Night implementation order — 2026-10-17
+
+[DETAIL] The first amended slice builds the catalog boundary and immutable
+planned-seat description, tested through the real pinned Pi against local
+catalog/metadata servers. Node owns only the Pi runtime bridge and the shared
+fetch deadline; Python validates duplicate identities, policy, capability
+intersection and the planned graph. It does not dispatch models. This keeps
+raw response evidence available to Python's duplicate-aware JSON reader and
+keeps selection policy in the existing Python runner. The later scheduler
+must consume the checked graph; passing preflight/graph tests alone never
+proves the actual 39 + 3N dispatch, barriers, isolation or handoff complete.
+Keep the old end-to-end tests until the dispatcher is replaced, and leave
+pending integration ledger entries pending. No live provider qualification
+or change to fixed role identities is part of this slice.
+
+
+### Fresh-catalog foundation — 2026-10-17
+
+Measured phase-4 span: 21:15:16–21:40:12 UTC, 24 minutes
+56 seconds, including implementation, local contract checks and the
+full verification wait. Baseline e9ec953. Add this to the retained measured
+history and earlier 38 minutes 37 seconds; the total appetite stays 13 hours
+20 minutes. The old named unmeasured span remains excluded by the recorded
+maintainer continuation, not measured zero.
+
+Implemented standalone catalog selection and a planned 39 + 3N seat graph.
+The real pinned Pi management runtime is exercised against local HTTP
+fixtures; it uses an in-memory catalog-only sentinel to enter its configured
+refresh branch without a credential file or an authenticated request. Both
+public reads share one deadline; raw bodies retain duplicate-key evidence.
+Python distinguishes hard Pi/fixed-model failure, capability-unavailable,
+candidate-local exclusion, explicit-include failure and measured-empty.
+No model is invoked. The legacy dispatcher remains unchanged; none of this
+claims the amended graph, runtime barriers or handoff complete.
+
+Evidence at the staged source checkpoint: initial missing-API tests 9 failed;
+first working catalog set 43 passed; expanded set 56 passed in 20.60 seconds;
+earlier combined catalog/legacy-swarm check 122 passed in 123.48 seconds.
+Full make verify GREEN: 2357 passed, 16 skipped in 756.26 seconds, followed by
+all blocking gates green. Process-local commit.gpgsign=false and local test
+servers were enabled. A separately launched kit probe without that signing
+override failed 17 Git fixtures; the complete correctly configured run
+passed its kit gate. Documentation/Markdown findings remain report-only.
+Ruff check/format, Node syntax, frontmatter and criterion ledger passed.
+
+Next: add the narrow counterexample for duplicate keys belonging to an
+unrelated metadata provider, then scope identity ambiguity checks accordingly;
+implement and test the structural frozen-source resolver. These are pending,
+not qualified by this checkpoint. No GLM/Claude model call or live provider
+qualification ran. Attended F-1 capture remains open; PR #158 stays draft.
