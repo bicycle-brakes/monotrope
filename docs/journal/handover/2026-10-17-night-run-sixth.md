@@ -258,3 +258,149 @@ existing access is not measured.
 tests green (`tests/test_stage2.py -k probe` 26 passed on `3a10892`;
 `tests/test_model_endpoints.py` 43 passed after P6-10). Not run locally:
 `make verify` after `3a10892`.
+
+
+## Addendum — 2026-10-17, Codex takeover, first repair and Leantime
+
+### Where we are
+
+Codex read the full instructions and every earlier addendum, fetched origin
+and checked the three requested pull requests and worktrees. At entry all
+three worktrees were clean at the supplied commits. The first research-swarm
+wrapper/fixture repair is now verified and pushed; the full amended research
+graph is still unfinished. The maintainer also requested a Leantime subagent
+assessment and then its follow-up task.
+
+Remote state checked on 2026-10-17:
+
+| PR | State and head | Meaning |
+|---|---|---|
+| #156 | Merged, `3f6d467`; main merge `6477d04` | The original handover merged outside this session. |
+| #157 | Open, not draft, `51fcc59`, CI green | Review swarm; first model question below still awaits an answer. |
+| #158 | Draft, `e9ec953`, hosted CI running | Initial wrapper repair locally green; amended subsystem incomplete. |
+| #159 | Open, `3e03dca`, CI green | Confirmed temporary GLM availability instruction. |
+| #160 | Open, `dcae6d5` | Leantime feasibility research; no integration adopted. |
+
+The descriptions of #157 and #158 were refreshed: the spent-loop decision
+and research-swarm appetite are already settled, not pending stops.
+
+### Next step
+
+Obtain the maintainer's answer to the first MiMo question already sent in
+this resumption. Do not interpret the later "ja" about the outage date as
+an answer to this separate question.
+
+### Needed from the maintainer
+
+First question's context, for the next session to present in German:
+
+- Topic: temporary membership of the paid Flash swarm on PR #157.
+- Intention: avoid the known unavailable member on every new run.
+- Today: the 2026-10-17 probe found MiMo Flash returning model_coming_soon,
+  while MiMo Pro answered and already steps in as its automatic replacement.
+- Repository change: replace only the Flash-swarm MiMo entry in
+  model-endpoints.yaml; retain a one-line reversal when Go serves Flash.
+- Architecture change: none. Recommendation: yes.
+
+Should mimo-v2.6-pro temporarily replace mimo-v2.6-flash in flash_swarm?
+
+Only after that answer, ask whether Zen free models with dated non-training
+terms should join the review free stage through a new change amending
+ADR 0021, after #157 merges. Recommendation remains yes; no task for that
+specific change was created. The existing deferred research-swarm Zen task
+is a different OpenCode-CLI path (coding-harness-fkt); inspect its scope before
+creating related work. No new reachability or terms probe ran here.
+
+### Decisions and preferences
+
+- Maintainer: "ich habe kein claude budget mehr, bitte übernehme alle claude
+  aufgaben". Codex takes over the previous Claude duties; no further Claude
+  model call was made. Permanent role assignments were not silently changed.
+- The maintainer confirmed the GLM outage cutoff as **2026-10-21 20:34
+  Asia/Singapore**, equal to **12:34 UTC** and **14:34 Europe/Berlin**.
+  Before that cutoff use Sol 6.1 or Sonnet for implementation; use Sol while
+  Claude budget remains exhausted. The "ja" confirmed this date/time only.
+- The rule is saved and reread in both personal instruction files
+  (`~/.codex/AGENTS.md`, `~/.claude/CLAUDE.md`). The English repository rule
+  is proposed in #159. Future GLM reachability is not measured by that rule.
+- The earlier 13-hour-20-minute appetite and decision to finish the review
+  swarm as it stands remain settled. No pull request was merged by Codex.
+
+### Open work and blockers
+
+- Research swarm (coding-harness-icw): inventory, public and repository Pi
+  launches now use PI_WRAPPER. The fixture injects a named pin double and
+  traps bare Pi; its path regression covers infrastructure and model calls.
+  Timeout/environment interceptors follow the pin, and the append-only test
+  allows only the required updated-date stamp. The amended 39 + 3N graph,
+  catalog/handoff checks and attended F-1 isolation capture remain unfinished.
+  Next code action: write the plan's red-first catalog/graph fixtures.
+- The measured phase-4 span is 2026-10-17 **10:33:55–11:12:32 UTC,
+  38 minutes 37 seconds**, with breaks counted, recorded in plan.md. Add it
+  to historical measured time; the total appetite stays 13 hours 20 minutes.
+- Review swarm (coding-harness-4fk): configuration answer pending; wire-API
+  qualification remains with the existing model-reachability follow-up
+  (coding-harness-mkg).
+- Leantime qualification (coding-harness-al8), requested by the maintainer:
+  open task, priority 2. The read-only subagent recommends only a small
+  additional human planning view, with Beads/Dolt and repository artifacts
+  authoritative. A synthetic pilot is proposed, not started. API mapping,
+  permissions, usability, operation and full plugin terms remain untested or
+  not read. Sources and limits are in
+  docs/research/2026-10-17-leantime-fit.md at dcae6d5 (#160).
+
+### Working state and parallel-session boundary
+
+All work was done in worktrees; the main checkout remains at `6029bbf` with
+its pre-existing untracked `.codex/agents/` untouched. Fetched origin/main is
+`6477d04`. The original handover worktree remains at `3f6d467`; the review
+swarm remains at `51fcc59`; the research swarm is clean and pushed at
+`e9ec953`. New instruction and research branches are clean and pushed:
+`docs/glm-availability-2026-10-21` at `3e03dca` and
+`docs/leantime-assessment-2026-10-17` at `dcae6d5`.
+
+This addendum uses worktree `.claude/worktrees/resume-2026-10-17-models`,
+branch `docs/resume-2026-10-17-models`. It initially fast-forwarded the
+original handover, then fast-forwarded to origin/main after #156 merged;
+its pull request targets main. All earlier records are preserved byte for
+byte.
+
+The startup hook reported coding-harness-b7 as waiting. Initial tracker
+writes were held. At the maintainer's explicit request for a Leantime task,
+the configured session scan was rerun with process access and returned no
+other interactive session; a Leantime search found no existing task.
+The read-only subagent /root/leantime_fit had finished without writes.
+The parent then created the Leantime task, appended its research commit and
+the research-swarm checkpoint to their task notes, and successfully pushed
+Dolt before the subsequent research git push. No task was closed.
+
+### Validation
+
+- Source checkpoint e9ec953: full make verify GREEN on 2026-10-17;
+  **2301 passed, 16 skipped** (pytest 828.98 seconds), all blocking local
+  gates green. Markdownlint is report-only and still reports warnings.
+- Final verification command used process-local GIT_CONFIG_COUNT=1,
+  GIT_CONFIG_KEY_0=commit.gpgsign, GIT_CONFIG_VALUE_0=false and permission for
+  local test servers. Earlier runs hit sandbox socket denial and inherited
+  SSH-signing setup errors (2286 passed, 16 skipped, 15 setup errors);
+  affected Git-fixture groups then passed separately (13 and 5 tests).
+  Those already-invalid runs were stopped. No global Git setting changed.
+- Pin repair red-first: original fixture failed; injecting the pin exposed
+  the bare inventory launch before production was fixed. Nine affected
+  cases passed; all 70 swarm cases passed in the complete pytest sweep.
+  After the time-log append, criterion-ledger, frontmatter and whitespace
+  checks passed; the generated plans index had no diff.
+- Instruction #159: three entry-point tests passed, AGENTS.md is within its
+  200-line budget at 198 lines, timezone conversion checked with zoneinfo,
+  hosted CI green at 3e03dca. SSH signing was bypassed per-command under the
+  repository's explicit no-signing convention, not by unlocking a key.
+- Research #160: primary-source read-only assessment, current frontmatter and
+  clean whitespace. No installation, live API test, deployment or adoption.
+- Handover: feedback-channel checks passed (49 passed, 13 skipped) using the
+  existing locked Python 3.12 environment. Building a new handover venv was
+  attempted but its package index could not supply a locked dependency;
+  existing environment used explicitly. Text-only PRs skip local make verify
+  under the repository rule; hosted CI is their gate.
+- Credential contents were not inspected or printed. No customer repository
+  was read, and no real foreign-model call was made. Pi contract tests used local model
+  doubles. The earlier live reachability evidence remains dated 2026-10-17.
