@@ -354,3 +354,22 @@ value that must be read and dated for every model. — 2026-10-17
 - **[DETAIL] Overlay read, 2026-10-17 (implementation session):** read Pi 1.2.0 `core/remote-catalog-provider.js` (`withRemoteCatalog.refreshModels` persists the fetched pi.dev entry `{models, lastModified, etag, checkedAt}` through `context.publish({persist})`), `core/models-store.js` (`FileModelsStore` writes it under the provider id into `models-store.json` beside `models.json`, i.e. in `PI_CODING_AGENT_DIR`) and `core/model-runtime.js` (the path). `pi --list-models` shows `mergeModels(baseline, overlay)`. Chosen: after the forced refresh the runner reads `<scratch agent dir>/models-store.json`, takes `opencode-go.models[].id` as the overlay, and selects only free ids in both the listing and the overlay; a missing or unreadable store refuses the free stage. The overlay ids are pinned in the run state (`free.overlay`). Not measured against the live network (no real Pi call was made).
 - **[DETAIL] Unread catalog ids, 2026-10-17 (maintainer addition):** when the run's overlay holds a non-free id with no `modelle_terms` record, the runner names it on stderr and in one record line ("in the live catalog without a terms reading: …") at the run's first round. It never admits it: a paid model still needs a dated terms reading and `anfragen_5h`.
 - **[DETAIL] Replacement details, 2026-10-17 (implementation session):** a failed replacement is consumed too (each model at most once per run); replacements are chosen per failed member in member order; the replacement's name joins the round heading and its rows; with no replacement left the failure is named ("no replacement is left on the ladder"); the swap statements replace the plain "failed:" line for a replaced member; the failure reason ends with the last scrubbed Pi stderr line in parentheses, and a swarm member's printed stderr tail is prefixed `<model>: `. `anfragen_gelesen` and `anfragen_quelle` sit beside `anfragen_5h` in each terms record.
+
+## Q-14 · How the change goes on after its loop is spent
+
+asked: 2026-10-17
+answer: "mach a" — option A: the pull request is finished as it stands; the five-rung ladder runs first on the next change
+answered_by: maintainer
+status: answered
+context: |
+  Topic: the review-swarm change after its loop run could not start again.
+  Intention: the maintainer had chosen (answer "B", 2026-10-17) a fresh loop run with the current ladder before the pull request.
+  Today: the release refused nothing, but the next `review-loop` call refused ("every stage of this run is consumed"); ADR 0021 decision 9 keeps consumed stages across a release, so no fresh run exists for this change. Phase 6 has no open BLOCKER.
+  Repository change: Options: A — finish the pull request as it stands; B — amend decision 9 so the maintainer can order a fresh run, then run it here. Recommendation was A.
+  Architecture change: none for A; B would change ADR 0021 decision 9.
+
+In the context of a loop run whose snapshot predates the admission of more
+paid models, facing a design that keeps consumed stages across a release,
+we decided to finish the change as it stands, to achieve a reviewed change
+without growing it further, accepting that the full ladder is first
+measured on the next change. — 2026-10-17
