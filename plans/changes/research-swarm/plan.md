@@ -123,8 +123,9 @@ not recreated. No file is deleted. Only the ADR is new under `docs/adr/`.
    Intersect with fresh Pi text-chat -free ids, never union in models.dev-only
    ids; never infer support from Pi compat flags. Require fixed Go
    DeepSeek/MiMo/Qwen ids as text-input chat in the fresh overlay: absent,
-   baseline-only or non-chat exits 1 before any model as fixed-model-unavailable,
-   naming the id. Do not consult models.dev for fixed models or Claude Haiku.
+   baseline-only, non-chat or malformed typed entry exits 1 before any model
+   as fixed-model-unavailable, naming the id and any raw malformed value.
+   Do not consult models.dev for fixed models or Claude Haiku.
    For models.dev, request failure/timeout, non-200, non-JSON/non-object root,
    absent/non-object opencode-go or models, and duplicate claimed model ids
    are document-level capability-unavailable: exclude all free candidates,
@@ -146,6 +147,18 @@ not recreated. No file is deleted. Only the ADR is new under `docs/adr/`.
    Pi refresh failure/timeout/stale-only/malformed/ambiguous data exits exactly
    1 before models, never 0/2/3 or Flash-only/Zen fallback. The absence of a Pi
    tool-support field is expected under Q-11, not a Pi refresh failure.
+   Distinguish Pi document faults from candidate faults: failed/timed-out
+   refresh, Pi-rejected response, unparseable body or repeated overlay id
+   (raw repeated key or one id under two entries) exits 1 before any model.
+   Otherwise malformed typed input/type excludes just that -free entry as
+   pi-malformed, recording raw value; malformed fixed entries fail as
+   fixed-model-unavailable with id/value. Other entries are inspected only
+   for repeated ids. Do not merge duplicate catalog entries during selection.
+   Fixture cat-jam-free with input: "text": exclude it as pi-malformed,
+   retain valid peers and all 39 fixed slots. Repeated longcat-2.5-preview-free
+   entries start no model and exit 1. Fixed qwen3.8-flash with string input
+   exits 1 as fixed-model-unavailable with its id/raw value. A Pi runtime
+   rejection remains document-level even when triggered by one entry (S-50).
    Valid empty selection records `N=0` and retains 39 fixed calls.
    Test with a local catalog server and actual pinned Pi refresh implementation;
    force a request despite a fresh cache and reject removed shipped free ids.
@@ -201,23 +214,55 @@ not recreated. No file is deleted. Only the ADR is new under `docs/adr/`.
    archived plan and a living spec; all valid spec-backed entries must yield
    packet neighbours and relations, while own-change design.md is self.
    Resolve citations and map entries with one type-specific resolver:
-   .md requires one exact case-sensitive heading (strip leading # and outer
-   whitespace only, retain inline formatting), excerpt until next same/higher
-   heading or EOF. criterion <n> selects its numbered item under the one
+   .md uses one structural scan: skip first-line --- front matter through
+   the next ---; fences open with at least three backticks/tildes indented
+   at most three spaces and close with the same character at least as long,
+   or continue through EOF. ATX headings outside these blocks have at most
+   three leading spaces, one to six # marks, then space/tab/end; strip
+   opening marks, optional closing # run and outer whitespace, retaining case
+   and inline formatting. Setext/HTML forms are unrecognised. Require one
+   exact heading and end its excerpt before the next same/higher scanned
+   heading or EOF; the same scan decides uniqueness and criterion items.
+   criterion <n> selects its numbered item under the one
    ## Acceptance criteria heading until the next item/heading. .py uses AST
    def/async def/class/module-level assignment, dotted nested definitions,
-   excerpt the node's lines. .yaml/.yml/.json uses parsed dotted keys, excerpt
-   canonical JSON value. Duplicate matching headings/criterion items/definitions/keys are
+   excerpt the node's lines. .yaml/.yml uses safe duplicate-reporting loading;
+   JSON reports duplicate keys and refuses NaN/infinity. Split every path dot
+   into exact string mapping keys: literal dotted keys/list indices are
+   unsupported, so cite the nearest citable parent. Convert dates/timestamps
+   to ISO 8601 text; reject binary, sets, non-finite values and non-string
+   keys anywhere in the value. Canonical JSON sorts keys, keeps non-ASCII
+   unescaped, uses two-space indentation, comma/colon-space separators and
+   no trailing newline before the per-claim cap. Duplicate matching headings,
+   criterion items, definitions or keys are
    unsupported; parse failures do not fall back to word search. Other files
    use a whole-word match, from first matching line to EOF before the common
    4,000-character per-claim cap. Replace the earlier symbol_problem substring
    check. Fixtures reject prose-only Markdown/Python and duplicate targets;
    verify nested methods, assignments, formatted headings, criterion extents,
    YAML/JSON key/value excerpts, shell/Makefile/JS/TOML first-word excerpts
-   and frozen rather than live resolution. A swarm research header must explicitly
+   and frozen rather than live resolution. Add S-47 fixtures: at baseline
+   d862bc2, prompts/03-plan.md::The criterion ledger yields lines 65–94,
+   while ::Criterion ledger is unsupported; real ## X plus fenced ## X
+   resolves only the real heading; fenced-only ## Acceptance criteria cannot
+   supply criterion 1; a front-matter # comment is not a heading. Add S-48
+   fixtures: research_swarm.free_focuses.longcat-2.5-preview-free cannot
+   address that literal dotted key but its free_focuses parent resolves;
+   decisions/adoption.yaml::adopted.interview-minimums yields the JSON
+   string "2026-10-08"; a.0 on a list and duplicate YAML keys are unsupported;
+   JSON produces byte-exact canonical text. Retain the baseline mapping in
+   a fixture because implementation replaces free_focuses. A swarm research
+   header must explicitly
    hold neighbours: [] or a valid list; missing/null/non-list refuses with
    exit 2 and a message naming those repairs. Test missing versus empty list:
-   no call versus normal finder dispatch. Single-explorer routes are unchanged.
+   no call versus normal finder dispatch. Without --stage2-off retain class
+   checks for bounded/spike too. Explicit --stage2-off skips class derivation
+   and all class/neighbour header checks, making one Haiku 5.5 call and
+   recording route/model/reason. Beside it, --class exits 2 before any call
+   with a message that class has no effect on this route. Fixture a bead-only
+   research header with no class/neighbours, plus invalid/conflicting class
+   and neighbour headers: fallback still runs. --class bounded beside
+   --stage2-off "quota" with feature in the header must refuse (S-52).
    Suggestions remain marked; failed reads
    after valid preflight remain gaps without failing the run by themselves.
    Private brief for finders/topic author: frozen research header/body plus
@@ -297,7 +342,14 @@ not recreated. No file is deleted. Only the ADR is new under `docs/adr/`.
    path/relation/nonempty local claims list per packet neighbour; reject
    missing/extra/duplicate paths or bad links), topic-6 volatile and governance
    central|runtime|dated when true. Template violations fail the slot; bad
-   citations mark claims unsupported without dropping them. Require one
+   citations make the whole claim unsupported without dropping it: all its
+   citations must resolve locally or have successful online page receipts
+   before any excerpt, disposition or criterion Basis is allowed. Fixture a
+   claim with scripts/stage2.py::explore and ::no_such_symbol: unsupported,
+   no excerpt; as the only claim it fails the evidence floor, while another
+   valid claim lets the report pass. One receipted plus one unreceipted URL
+   also makes the entire online claim unsupported. Only valid claims join
+   all resolved sources in citation order for excerpts (S-49). Require one
    evidence-backed claim per report (one successful page-backed claim online),
    not success for every fetch. Only when topic 5 has no packet neighbour,
    still run its three required seats with identical "no packet neighbour"
@@ -345,8 +397,12 @@ not recreated. No file is deleted. Only the ADR is new under `docs/adr/`.
    mismatches, and topic-5 neighbour_relations: every contradicts and every
    unrelated given path derives an item even without a DECISION question or
    judge mention. For each suggested neighbour, runner alone derives status
-   from all three topic-5 relations: every seat related/contradicts means
-   confirmed, all unrelated means rejected, otherwise split. Contradicts
+   from runner-valid evidence: a relation counts only when at least one
+   listed claim is valid; three counting related/contradicts means confirmed,
+   three counting unrelated means rejected, otherwise split, including fewer
+   than three counting relations. Every contradicts and unrelated-given
+   relation retains its human item even with only unsupported claims; judge
+   dispositions never affect this calculation (S-51). Contradicts
    still derives its own item; every split derives a neighbour DECISION item
    with kind split, path and source claims, regardless of judge prose. Given
    remains given. The judge may add obligations but cannot set/change status
@@ -370,7 +426,9 @@ not recreated. No file is deleted. Only the ADR is new under `docs/adr/`.
    still exits 1 if any named claim is unsupported/refuted/off-brief/unresolved.
    Those claims need an answered Q-record basis, optionally linked through
    research_claims. Recompute each suggested status from the three raw
-   topic-5 relation fields, never the judge's verdict. Enforce exact parity:
+   topic-5 relation fields and runner validity marks, never judge dispositions:
+   only relations with a valid listed claim count; fewer than three means
+   split, without filtering contradicts/unrelated-given human items. Enforce exact parity:
    (union of confirmed/given paths from every complete run + keep + add) - drop,
    taking keep/add/drop only from maintainer-answered Q-records'
    research_neighbours. The recording session writes up to three path lists
@@ -399,7 +457,13 @@ not recreated. No file is deleted. Only the ADR is new under `docs/adr/`.
    related plus a judge-confirmed verdict remains split and fails either
    header unanswered; keep passes only with the path, drop only without it.
    Test all-related, all-unrelated, and mixed related/contradicts confirmation
-   with its separate contradiction item. A linked prose-only "keep P" leaves
+   with its separate contradiction item. Also fixture three related for P
+   with one seat citing only an unresolved claim: split plus an open item,
+   exit 1 once spec exists until item-linked structured keep/drop. Three
+   unrelated with one unsupported-only relation is also split, not rejected;
+   an unsupported-only unrelated-given relation still derives its item. The
+   fixture seat needs another valid claim so it passes the report floor.
+   A judge-supported mark cannot rescue invalid evidence. A linked prose-only "keep P" leaves
    the item open; keep:[P] and drop:[P] enforce opposite headers. An answered
    add:[X] passes without an item link; prose-only addition fails. Keep+drop in
    one record or conflicting answered records exits 3. Invalid path forms
@@ -564,7 +628,7 @@ the existing gates and let the runner own registry regeneration/full verify.
 - 16: not yet written tests/test_stage2_swarm.py::test_type_specific_references_resolve_exact_frozen_extents — Prose-only or duplicate targets resolve, or Markdown/criterion/Python/YAML/JSON/other-file excerpts have the wrong extent.
 - 24: not yet written tests/test_stage2_swarm.py::test_neighbour_packet_matches_independently_derived_spec_paths — Packet or manifest omits an eligible spec-backed entry even though it lists a gap.
 - 29: not yet written tests/test_stage2_swarm.py::test_neighbour_packet_matches_independently_derived_spec_paths — A living spec or archived artifact is no-spec, or own-change self is mistaken for a neighbour/gap.
-- 29: not yet written tests/test_stage2_swarm.py::test_neighbour_status_uses_three_relations_and_never_judge_verdict — Any unrelated seat permits confirmation, all-unrelated is not rejected, or Opus overrides runner status.
+- 29: not yet written tests/test_stage2_swarm.py::test_neighbour_status_uses_three_relations_and_never_judge_verdict — Any unrelated seat permits confirmation, three counting unrelated relations are not rejected, or Opus overrides runner status.
 - 31: not yet written tests/test_stage2_swarm.py::test_neighbour_status_uses_three_relations_and_never_judge_verdict — A split or contradicts entry loses its independent human item.
 - 30: not yet written tests/test_research_handoff.py::test_structured_neighbour_answers_enforce_keep_drop_and_unlinked_add — Prose-only or path-free linked answers close items, keep/drop allow the wrong header, or an answered add requires a fabricated item link.
 - 32: not yet written tests/test_research_handoff.py::test_split_neighbours_need_item_link_and_structured_keep_or_drop — An unanswered split passes either header or a judge confirmation substitutes for the maintainer.
@@ -575,6 +639,21 @@ the existing gates and let the runner own registry regeneration/full verify.
 - 7: not yet written tests/test_stage2_swarm.py::test_empty_neighbour_topic_runs_three_seats_without_invented_evidence — An empty packet lacks the named no-neighbour comparison gap.
 - 18: not yet written tests/test_stage2_swarm.py::test_empty_neighbour_topic_runs_three_seats_without_invented_evidence — Empty-neighbour topic 5 prevents completion or changes the 39 fixed slots.
 - 27: not yet written tests/test_stage2_swarm.py::test_empty_neighbour_topic_runs_three_seats_without_invented_evidence — Empty-packet relations or missing not-read pass, or a nonempty packet waives the evidence floor.
+
+- 16: not yet written tests/test_stage2_swarm.py::test_markdown_resolver_ignores_frontmatter_and_fences — A quoted heading becomes structure, changes uniqueness/extent or supplies a criterion; the five S-47 cases resolve wrongly.
+- 16: not yet written tests/test_stage2_swarm.py::test_structured_references_require_exact_keys_and_canonical_json — Dotted keys/list indices or duplicate/non-JSON values resolve, dates lose ISO text, or canonical bytes differ.
+- 10: not yet written tests/test_stage2_swarm.py::test_claim_requires_every_citation_before_excerpts_or_scoring — One successful page receipt hides another unreceipted URL in the same claim.
+- 16: not yet written tests/test_stage2_swarm.py::test_claim_requires_every_citation_before_excerpts_or_scoring — One resolving citation hides an unresolved citation, grants an excerpt or satisfies the report floor.
+- 28: not yet written tests/test_stage2_swarm.py::test_claim_requires_every_citation_before_excerpts_or_scoring — An unsupported mixed-citation claim gets an excerpt or disposition.
+- 38: not yet written tests/test_stage2_research_catalog.py::test_pi_overlay_duplicates_block_but_malformed_candidates_are_local — A malformed fixed Go entry passes instead of fixed-model-unavailable with id/raw value.
+- 41: not yet written tests/test_stage2_research_catalog.py::test_pi_overlay_duplicates_block_but_malformed_candidates_are_local — A repeated overlay id starts any model or is silently merged.
+- 42: not yet written tests/test_stage2_research_catalog.py::test_pi_overlay_duplicates_block_but_malformed_candidates_are_local — One bad Pi candidate blocks 39 fixed slots, excludes valid peers or loses pi-malformed/raw value.
+- 29: not yet written tests/test_stage2_swarm.py::test_neighbour_status_ignores_relations_without_valid_claims — Unsupported-only evidence confirms/rejects a path instead of split, or judge disposition changes runner validity.
+- 31: not yet written tests/test_stage2_swarm.py::test_neighbour_status_ignores_relations_without_valid_claims — Unsupported-only contradicts or unrelated-given fields lose human items.
+- 30: not yet written tests/test_research_handoff.py::test_neighbour_evidence_gap_requires_structured_answer — An evidence-gap split joins the required header without structured keep or passes an incompatible header after keep/drop.
+- 32: not yet written tests/test_research_handoff.py::test_neighbour_evidence_gap_requires_structured_answer — Once a spec exists, an unsupported-relation split passes without an item-linked maintainer keep/drop.
+- 4: not yet written tests/test_stage2.py::test_stage2_off_skips_class_and_neighbours_but_refuses_class_argument — Class checks leak into explicit fallback or an ineffective --class is accepted beside it.
+- 20: not yet written tests/test_stage2.py::test_stage2_off_skips_class_and_neighbours_but_refuses_class_argument — Bead-only or invalid class/neighbour headers block fallback, route/model/reason disappear, or --class permits any call.
 
 ## Not touched
 
@@ -593,6 +672,66 @@ fallback as dated evidence: Stage-1 `implement`, `claude-sonnet-5-5`, reason
 "two Flash post-run checks failed" (runner route, 2026-10-15). It is not the
 new exploration route. Future explicit exploration fallbacks carry route,
 model and reason into their plan.
+
+## Draft handoff — 2026-10-17, fifth phase-2a incorporation
+
+Baseline `769b1b8`, branch `explore/research-swarm`. Incorporated recorded
+rulings S-47–S-52 into spec, design and this plan: structural Markdown and
+canonical structured-data resolution, all-citation claim validity, Pi catalog
+fault boundaries, evidence-backed neighbour status and explicit fallback
+preflight. Findings retain their original text; only the six Status and
+repair-location cells change. ADR 0020 and decisions.md remain unchanged.
+The runner's pre-existing draft audit line remains. The 42 criterion numbers,
+bases, architectural class, card, 12-hour appetite and empty Time used remain.
+These are proposed artifacts, not implemented behavior or runtime evidence.
+
+Artifact checks passed on 2026-10-17 against that baseline:
+
+```sh
+PYTHONDONTWRITEBYTECODE=1 .venv/bin/python scripts/check_interview_minimums.py --change research-swarm
+PYTHONDONTWRITEBYTECODE=1 .venv/bin/python scripts/check_criterion_ledger.py
+PYTHONDONTWRITEBYTECODE=1 .venv/bin/python scripts/check_frontmatter_current.py
+git diff --check
+```
+
+Structural checks confirmed all 42 criterion/refutation/basis triples, fixed
+class/appetite/card, one ledger, empty Time used, unchanged earlier findings
+and four changed paths inside this change folder. ADR 0020 remains the sole
+added ADR relative to local origin/main; no new ADR is due for these details.
+The artifact-validator script is absent. The tracker-backed registry, hosted
+PR state and current cross-checkout session ownership were not read. No
+runtime tests, full verifier, provider call, tracker access, commit or git
+mutation occurred; earlier runner-reported red checks remain historical,
+not a green implementation verdict. The runner owns verification, generated
+files and the commit. Phase-6 F-1 remains open for attended real-Pi isolation
+capture before merge.
+
+Resume phase 4 by establishing the historical unmeasured time span or raising
+the appetite stop; then repair the pinned-wrapper fixture seam and implement
+this plan within the measured remainder. No phase-4 work starts in this draft.
+
+## Draft retry — 2026-10-17, fifth phase-2a incorporation
+
+Rechecked the retained draft at `769b1b8` against the recorded S-47–S-52
+rulings. Criteria 23 and 38 now open with When instead of Before, retaining
+the same prerequisites before dispatch, refutations and bases. No requirement,
+criterion number, class, human answer, appetite or ADR claim changes in this
+retry. The sole added ADR relative to the local
+`origin/main` reference remains ADR 0020; this round requires no second draft.
+
+The supplied runner diagnostics report 46 failing swarm tests in attempt 1:
+the fixture does not intercept the absolute pinned Pi wrapper, which then
+fails under its restricted PATH. Source inspection confirms that
+`sworld` lacks the `PI_WRAPPER` injection used by `tests/test_stage2.py`.
+Build steps 1–2 already own that repair and the remaining bare-Pi launches.
+This artifact-only retry cannot change those files or qualify the runtime.
+
+On 2026-10-17, the interview-minimums, criterion-ledger and
+frontmatter-current commands listed above passed again, as did
+`git diff --check`. No runtime test or full verifier was rerun; the supplied
+red result is not superseded. The runner still owns full verification,
+derived files and the commit. Time used stays empty until phase 4; the
+historical-time stop and attended isolation capture remain required.
 
 ## Draft handoff — 2026-10-17, fourth phase-2a incorporation
 

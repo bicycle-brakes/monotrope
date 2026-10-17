@@ -19,7 +19,7 @@ created: 2026-10-14
 
 # Design — research-swarm
 
-Proposed shape for [spec.md](spec.md), based on the amended interview Q-7–Q-11 and recorded phase-2a rulings S-1–S-46.
+Proposed shape for [spec.md](spec.md), based on the amended interview Q-7–Q-11 and recorded phase-2a rulings S-1–S-52.
 This replaces the earlier six-topic/free-stage design; the merge decides it.
 
 ## Alternatives
@@ -40,8 +40,8 @@ source provenance and publication rules.
 ## Interfaces
 
 **Caller → router.** Keep `stage2.py explore <change>` and explore-only
-`--class`; all stated research/spec/argument classes must agree. Invalid YAML,
-empty/unknown class and conflicts exit 2 before any call. Validate given
+`--class`; without `--stage2-off`, all stated research/spec/argument classes
+must agree. Invalid YAML, empty/unknown class and conflicts exit 2 before any call. Validate given
 neighbours as unique repository-relative spec paths present in frozen bytes:
 `plans/changes/<name>/spec.md` (one segment other than `archive`),
 `plans/changes/archive/<YYYY-MM-DD-name>/spec.md`, or
@@ -52,8 +52,11 @@ For swarm classes research.md must explicitly carry a list-valued
 invalid entry exits 2 before models with a message to add `neighbours: []`
 or a spec list. No spec or plan is
 required when research or the argument supplies a valid class. Explicit
-`--stage2-off [REASON]` keeps single Haiku 5.5 and its route record; bounded
-and spike keep single GLM Flash. Other verbs keep their contracts.
+`--stage2-off [REASON]` skips class derivation and all class/neighbour header
+checks, keeps single Haiku 5.5 and records route/model/reason. Combining it
+with `--class` exits 2 before any call with a message that class has no effect
+on that route. Bounded and spike without fallback keep single GLM Flash.
+Other verbs keep their contracts.
 
 **Declaration → roles.** Replace `research_swarm`'s `free_endpoint`,
 `free_roster`, `free_focuses`, `topic6_free` and `flash_pair` with role lists:
@@ -97,8 +100,9 @@ identities, provider and declared Go transport origin.
 Eligibility uses the freshly fetched overlay, not the merged effective list.
 Require all three fixed Go ids (`deepseek-v4.1-flash`, `mimo-v2.6-flash`,
 `qwen3.8-flash`) there as text-input chat before any model call; absent,
-baseline-only or non-chat ids exit 1 as `fixed-model-unavailable`, keeping
-diagnostics and the id. This check consults no models.dev metadata; Haiku
+baseline-only, non-chat or malformed typed entries exit 1 as
+`fixed-model-unavailable`, keeping diagnostics, id and any raw malformed
+value. This check consults no models.dev metadata; Haiku
 on Claude Code is outside it.
 In pinned Pi 1.2.0, `isModelType(model, "chat")` treats absent `type` as chat,
 and `input` must include `text` (`pi-ai/dist/types.d.ts`, read 2026-10-16).
@@ -112,7 +116,7 @@ text-chat id ending `-free` is eligible only when that entry has boolean
 `deprecated`. Pi `compat.supportsAdditionalTools` and
 `supportsMidConvoToolAdditions` are not capability evidence. Keep the two
 sources separate: models.dev cannot introduce an id absent from fresh Pi.
-Record exclusions as `baseline-only`, `not-chat`, `metadata-missing`,
+Record exclusions as `baseline-only`, `not-chat`, `pi-malformed`, `metadata-missing`,
 `metadata-malformed`, `no-tool-support`, `deprecated`, or
 `capability-unavailable`, with the source field/value. Document-level faults
 are request failure/timeout, non-200 HTTP, invalid JSON/non-object root,
@@ -133,14 +137,22 @@ refresh instead exits 1 before all models. Neither case uses stale metadata.
 The maintainer's 2026-10-17 source observations in Q-11 are dated evidence,
 not a hardcoded list. No additional model probe fits the budget.
 Untrusted catalog metadata cannot redirect an invocation to a new endpoint.
-A missing shard, failed refresh, malformed result, ambiguous duplicate or
-unconfirmed stale-only response fails before model dispatch (exit 1).
+A missing shard, failed/timed-out refresh, Pi-rejected response, unparseable
+body, repeated overlay id (raw repeated key or one id under two entries), or
+unconfirmed stale-only response exits 1 before any model call, keeping
+diagnostics. Otherwise validate entries separately: malformed typed input/type
+on a -free candidate yields pi-malformed with raw value and never excludes
+a valid peer or blocks fixed slots. A malformed fixed Go entry yields
+fixed-model-unavailable with id and raw value; other entries are inspected
+only for repeated ids. Pi itself rejecting an entry is a response-level
+failure, not a per-candidate exclusion.
 
 Select exact `-free` ids, apply include (empty means all) then exclude;
 exclude wins. Invalid policy or role permission exits 2. Every explicit
 include must occur in the fresh eligible snapshot, otherwise exit 1 before any
 model call, even if excluded. Sort
-and deduplicate selected identities; freeze `N`, expected slots and budget.
+selected identities after rejecting duplicate overlay entries; never merge
+two catalog entries. Freeze `N`, expected slots and budget.
 A valid empty snapshot/filtered set is recorded as measured `N=0`, retaining
 the fixed Flash trio; models.dev failure is recorded separately as
 capability-unavailable N=0. An explicit include remains mandatory and exits 1
@@ -306,7 +318,10 @@ recursive delegation, unbounded subprocess or zero-timeout launch.
 **Reports → judge.** Validate the fixed report template and claims before a
 fresh Opus 5.5 (`xhigh`) reconciles topics 1–11 with the map, original reports
 and receipts. All three Opus roles launch without tools; the judge sees only
-its listed packet. For each valid claim, join its resolved frozen
+its listed packet. A claim is valid only if every citation resolves locally
+or has a successful page receipt online; any failure makes the whole claim
+unsupported with no excerpt, disposition or criterion Basis. For each valid
+claim, join its resolved frozen
 symbol/section text, topic-6 packet commit records or successful receipt
 excerpts in citation order and cap the combined text at 4,000 Unicode
 characters per claim, with source identities and an explicit truncated
@@ -317,19 +332,33 @@ this meaning. Validation retains malformed/failed output as partial evidence;
 it cannot label it a complete contribution. Check local symbols/sections in
 frozen bytes, public citations against successful fetch receipts, and source
 identity in every judgement. Resolve `path::X` by frozen file type:
-Markdown requires one exact case-sensitive heading text (leading `#` and
-outer whitespace removed, inline formatting kept); excerpt through the line
-before the next same/higher heading or EOF. `criterion <n>` selects the
+Markdown uses one scan for headings, uniqueness, excerpt ends and criterion
+items: skip first-line --- front matter through its next --- line; exclude
+fences opened by at least three backticks/tildes indented at most three
+spaces, closed by the same character at least as long, or ending at EOF.
+ATX headings outside these blocks have at most three leading spaces, one to
+six # marks, then space/tab/end. Strip opening marks, optional closing # run
+and outer whitespace, retaining inline formatting and case. Setext and HTML
+forms are unrecognised. Require exactly one matching heading; excerpt ends
+before the next same/higher scanned heading or EOF. `criterion <n>` selects the
 numbered item under the one `## Acceptance criteria` heading, through before
 the next item/heading. Python uses AST def/async def/class or module-level
 assignment targets, with dotted nested definitions; excerpt is that node's
-lines. YAML/JSON uses parsed dotted keys and canonical JSON value excerpts.
+lines. YAML uses a safe duplicate-reporting loader; JSON reports duplicate
+keys and rejects NaN/infinity. Split the path at every dot; segments must
+exactly match string keys in mappings, never list indices or literal dotted
+keys (cite their nearest citable parent). Convert dates/timestamps to ISO
+8601 text; binary, sets, non-finite values or non-string keys anywhere in the
+value make it unsupported. Canonical JSON uses sorted keys, unescaped
+non-ASCII, two-space indentation, comma and colon-space separators, and no
+trailing newline, before the per-claim cap.
 Duplicate matching headings/criterion items/definitions/keys are unsupported. Other files use
 a whole-word match, excerpt from its first matching line to EOF before the
 per-claim cap. Unparseable or missing references stay unsupported. Use this
 same resolver for map scope and claims, replacing `symbol_problem`'s earlier
 substring/word-parts check. Template violations fail a slot. A bad reference
-marks that claim `unsupported`, retains it, and prevents a supported score;
+marks the whole claim `unsupported`, retains it without an excerpt or
+disposition, and prevents any criterion Basis;
 only absence of all evidence-backed claims fails an otherwise valid report,
 except the specified empty-neighbour topic-5 report. Judge output separates
 supported facts,
@@ -366,10 +395,13 @@ neighbour_relations, exactly one path/relation/nonempty local claims list per
 packet neighbour. Missing, duplicate or extra paths and dangling/empty claim
 links fail the template. Every contradicts entry, and unrelated entry for a
 given path, creates an obligation without consulting the judge. The runner
-also computes suggested statuses: all three related/contradicts means
-confirmed; all three unrelated means rejected; every other combination is
-split and derives a neighbour DECISION item of kind split. A contradicts
-still creates its own obligation. Given stays given; Opus cannot set/change
+also computes suggested statuses using only relations backed by at least one
+runner-valid listed claim: three counting related/contradicts means confirmed;
+three counting unrelated means rejected; every other case, including fewer
+than three counting relations, is split and derives a neighbour DECISION item
+of kind split. Every contradicts and unrelated-given relation still derives
+its human item even with only unsupported claims. Judge dispositions never
+affect this runner-only calculation. Given stays given; Opus cannot set/change
 any status. A split path is excluded from the required header until a
 structured maintainer keep. Structured judge findings can add obligations but
 cannot remove any. Topic 6's `volatile` and
@@ -408,7 +440,10 @@ refuted, off-brief or unresolved fails with exit 1. Such claims can instead
 be linked through research_claims on a maintainer-answered Q-record used as
 the criterion's basis. Neighbour parity uses the union over every complete
 run, recomputing suggested statuses from the three topic-5 relations,
-never the judge's verdict. Apply answered Q-record research_neighbours keep
+never the judge's verdict: count only relations with a runner-valid listed
+claim and make fewer than three counting relations split. Do not filter
+contradicts or unrelated-given human items by evidence validity. Apply
+answered Q-record research_neighbours keep
 and add as inclusion, drop as omission. Closing any neighbour item requires
 both research_items linking it and keep/drop naming its path, including a
 split. An add needs a maintainer answer but no item link. Check all field
