@@ -373,3 +373,22 @@ paid models, facing a design that keeps consumed stages across a release,
 we decided to finish the change as it stands, to achieve a reviewed change
 without growing it further, accepting that the full ladder is first
 measured on the next change. — 2026-10-17
+
+## Q-15 · Whether the probe goes on after a failed member
+
+asked: 2026-10-17
+answer: "Ja" — the probe names a failed member and goes on to the next; it never substitutes a model
+answered_by: maintainer
+status: answered
+context: |
+  Topic: the compatibility probe (`stage2.py probe`) of the review loop.
+  Intention: the maintainer asked which models are reachable through Pi; two probe runs on 2026-10-17 each stopped at their first failed free member (`step-5-preview-free` "Model is unavailable", then `cat-jam-free` with an empty answer), so no paid model was measured.
+  Today: the first failed call ends the probe; spec criterion 14 asks for every discovered free and eligible paid member to be checked once.
+  Repository change: Recommendation was yes — each failure is printed with its reason, the probe continues, and ends with a list of answered and failed members; no second address and no substituted model.
+  Architecture change: none; ADR 0021 is unchanged.
+
+In the context of a live free catalog that changes within the hour, facing a
+probe that stopped at the first unreachable member, we decided to let the
+probe name every failure and go on, to achieve one complete reachability
+list per run, accepting that a probe with failures exits nonzero only after
+all members were called. — 2026-10-17
