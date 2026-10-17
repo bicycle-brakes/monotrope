@@ -587,3 +587,12 @@ customer access, GLM/Claude model call or merge occurred.
 
 Resume: verify the quota reset and finish any research-document publication,
 then return to P6-14; the research-swarm implementation remains next in queue.
+
+Publication completion, 2026-10-17: the feedback research is clean/pushed at
+`b41fefd`, PR #163; research currency is clean/pushed at `7b83f3f`, PR #164.
+Both source notes passed frontmatter-current and staged whitespace checks;
+hosted CI is pending. The tracker, including the research-currency wording
+clarification, was pushed before Git. The night plan is PR #162. No code
+repair or new model call was started during the quota reserve. At 13:43 UTC
+the meter showed 96 percent used; the remaining allowance was used for this
+requested handover and publication, not another implementation attempt.
