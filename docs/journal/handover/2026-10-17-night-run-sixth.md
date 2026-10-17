@@ -167,3 +167,29 @@ Task status is in Beads; these are pointers.
   green on `e14ed63`.
 - This handover: `python3 -m pytest tests/test_feedback_channel.py -q` (see
   the pull request).
+
+## Addendum — 2026-10-17, after the release
+
+- The P6-8 repair ended verified and committed (`b00f5b9`); the loop rows of
+  rounds 1 and 2 are released into `findings.md` with the phase-6 column
+  "agree" (`5856630`).
+- **The fresh loop run the maintainer chose (answer B) is not possible on
+  this change.** `review-loop` refused again: "every stage of this run is
+  consumed and the last round was not clean". ADR 0021 decision 9, part of
+  this very change, keeps the snapshot and the consumed stages across a
+  release ("Neither release nor edited configuration resets … consumed
+  stages"). The orchestrator had assumed a release starts a fresh snapshot;
+  that was wrong. The question is back with the maintainer (see below).
+- Both changes are open as draft decision pull requests at the maintainer's
+  request ("Bitte Committe alle Zwischenstände in prs"): #157 (review swarm,
+  origin/main merged in) and #158 (research swarm).
+
+**Needed from the maintainer, added:** how the review-swarm change goes on
+now that its loop cannot run again. Recommendation: open the pull request
+for review as it stands (phase 6 has no open BLOCKER) and measure the
+five-rung ladder on the next change; the alternative is a design change to
+ADR 0021 decision 9 that lets the maintainer order a fresh run.
+
+**Next step, replacing the one above:** wait for the maintainer's answer on
+the review swarm; then either mark #157 ready (CI green after the merge of
+origin/main) or amend decision 9.
