@@ -1,10 +1,6 @@
 # coding-harness — Agent Instructions
 
-The home of the coding workflow: **seven phases, three stages**, the session
-handover, the kit that carries the process into new repositories, and the
-research corpus behind it. This repository is the source of truth for the
-process; `portfolio-agentic-engineering` and `lakeswitch-ai` run instances
-of it.
+The home of the coding workflow: **seven phases, three stages**, the session handover, the kit that carries the process into new repositories, and the research corpus behind it. This repository is the source of truth for the process; `portfolio-agentic-engineering` and `lakeswitch-ai` run instances of it.
 
 **Status: bootstrapping.** The mechanism (WORKFLOW.md, prompts, templates,
 kit scripts) migrates from `portfolio-agentic-engineering` in measured steps.
@@ -32,6 +28,8 @@ a `CLAUDE.md` would silently replace it (`tests/test_entry_points.py`).
 
 **Stage 2** (framework content, ADR 0007 as amended by ADR 0011 and ADR 0016): a foreign model is started only through `python3 scripts/stage2.py`, which runs the leak check before every call. Codex drafts spec, design and plan (`draft <change>`; GLM 5.3 after two failed attempts) and reviews 6; Opus 5.5 reviews 2a (`spec-review <change>`); the review loop (4b) runs on OpenCode Go through Pi, on the ladder — the ordered `modelle` list of the `opencode-go` entry: round *n* of the loop calls its *n*-th id, at most three rounds, and round 3 only when round 2 wrote a taken row; a one-line pull request reorders it. GLM 5.3 Flash explores and implements, and Codex repairs the findings the orchestrator takes (`repair <change>`, ADR 0017: a fresh Codex attempt after a failed post-run check, then Sonnet 5.5; phase 6 re-checks in a fresh read-only Codex session — a reviewer's own session never repairs); `explore <change>`, `draft <change>`, `implement <change>` and `repair <change>` are live;
 `--stage2-off [REASON]` uses Haiku 5.5 or Sonnet 5.5 and records why when Stage 2 is off or Z.ai unavailable. A leak-check BLOCK stops without fallback. Reviews go by class; explore, draft, implement and repair do not.
+
+**Temporary GLM availability override (maintainer, 2026-10-17):** GLM is unavailable until **2026-10-21 20:34 Asia/Singapore** (12:34 UTC; 14:34 Europe/Berlin). Before that cutoff, do not launch GLM; implement with **Sol 6.1 (`gpt-6.1-sol`) or Sonnet 5.5** instead. The maintainer's Claude budget is currently exhausted, so use the active Sol session for implementation. When Claude budget is available, the Sonnet route is `stage2.py implement <change> --stage2-off "GLM unavailable until 2026-10-21T20:34+08:00"`. This temporary instruction applies to Codex and Claude Code alike; it does not change permanent model assignments or the foreign-call leak checks. After the cutoff, normal routing applies; future GLM reachability is not measured by this instruction.
 
 Plus the session handover (the eighth movement — `docs/journal/handover/`,
 `direction: framework->framework`) and the question protocol:
