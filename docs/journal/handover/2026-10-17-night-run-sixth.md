@@ -195,3 +195,4 @@ the review swarm; then either mark #157 ready (CI green after the merge of
 origin/main) or amend decision 9.
 
 - Maintainer, 2026-10-17: "mach a" — #157 is finished as it stands (recorded as Q-14, `45f6360`) and marked ready for review; CI was not yet reported when this line was written. The research-swarm appetite question stays open.
+- Maintainer, 2026-10-17: "Ja, halt die zeitgrenze fest" — the research swarm continues with an appetite of 13 hours 20 minutes in total (`plan.md`, card and "Time used"). Next for it: phase 4, starting with the repair of the 46 red swarm Pi-start tests.
