@@ -494,12 +494,37 @@ def launch(
         raise CallFailed(f"{command[0]} could not be started: {scrub(str(error), secret)}") from error
 
 
-def fail(program: str, done: subprocess.CompletedProcess, reason: str, secret: str | None = None) -> CallFailed:
-    """Print the last lines of the program's standard error, scrubbed; return the exception to raise."""
+def last_error_line(done: subprocess.CompletedProcess, secret: str | None = None) -> str:
+    """The last non-empty line of the program's standard error, scrubbed and bounded; empty when there is none."""
+    lines = [line.strip() for line in (done.stderr or "").splitlines() if line.strip()]
+    if not lines:
+        return ""
+    return scrub(lines[-1], secret)[:200]
+
+
+def fail(
+    program: str,
+    done: subprocess.CompletedProcess,
+    reason: str,
+    secret: str | None = None,
+    label: str | None = None,
+) -> CallFailed:
+    """Print the last lines of the program's standard error, scrubbed; return the exception to raise.
+
+    The reason names the last line of the standard error beside the exit
+    ("Model is unavailable"), so a failed swarm member says why in the loop
+    record. A `label` (a swarm member's model id) prefixes every printed line,
+    because the members' tails interleave on one stream (Q-13).
+    """
     tail = "\n".join((done.stderr or "").splitlines()[-40:])
     if tail:
-        print(scrub(tail, secret), file=sys.stderr)
-    return CallFailed(f"{program} call failed: {reason}")
+        printed = scrub(tail, secret)
+        if label:
+            printed = "\n".join(f"{label}: {line}" for line in printed.splitlines())
+        print(printed, file=sys.stderr)
+    last = last_error_line(done, secret)
+    detail = f" ({last})" if last else ""
+    return CallFailed(f"{program} call failed: {reason}{detail}")
 
 
 # ---------------------------------------------------------------------------
@@ -916,16 +941,79 @@ def terms_problem(entry: dict, model: str) -> str | None:
     if record.get("uebersprungen"):
         reason = record.get("grund") or "reason not stated"
         return f"the model {model} was skipped on {record.get('uebersprungen')}: {reason}"
-    if not record.get("gelesen") or not record.get("quelle"):
+    # Fail closed: an empty skip marker counts as absent only beside a valid
+    # reading date, and `gelesen` must be an ISO date, not any truthy value.
+    gelesen = record.get("gelesen")
+    if not isinstance(gelesen, str) or not DATE_ONLY.fullmatch(gelesen) or not _valid_date(gelesen):
+        return f"the model {model} has no dated reading of its data terms (gelesen is not an ISO date YYYY-MM-DD)"
+    if not record.get("quelle"):
         return f"the model {model} has no dated reading of its data terms (gelesen/quelle missing)"
     return None
 
 
-def ladder(root: Path) -> list[str]:
-    """The eligible paid models of the `opencode-go` entry, in declared order: each is one later round.
+def request_value(entry: dict, model: str) -> float | None:
+    """The model's declared cost value `anfragen_5h` (requests per 5 hours, more is cheaper), or None when absent or unusable."""
+    value = _terms(entry, model).get("anfragen_5h")
+    if isinstance(value, bool) or not isinstance(value, (int, float)) or value <= 0:
+        return None
+    return float(value)
 
-    A rung the list does not hold is no model id in the code: reordering the
-    ladder or replacing its ids is a one-line pull request that touches
+
+def ordered_models(entry: dict, models: list[str]) -> list[str]:
+    """The models cheapest first: `anfragen_5h` descending, ties by id, a model without the value last (Q-13).
+
+    `modelle` is a set: its declared order does not count.
+    """
+    return sorted(
+        set(models),
+        key=lambda model: (request_value(entry, model) is None, -(request_value(entry, model) or 0.0), model),
+    )
+
+
+def unvalued_models(entry: dict, models: list[str]) -> list[str]:
+    """The models that declare no usable `anfragen_5h`; they order last and are named, never dropped silently."""
+    return [model for model in ordered_models(entry, models) if request_value(entry, model) is None]
+
+
+def unread_catalog_ids(entry: dict, free_state: dict) -> list[str]:
+    """Non-free ids of the run's fresh overlay that have no `modelle_terms` record, sorted.
+
+    A notice only: such an id is never admitted. A paid model still needs a
+    dated terms reading and an `anfragen_5h` in the declaration (Q-13).
+    """
+    rule = free_state.get("rule") or {}
+    suffix = rule.get("id_suffix") or ""
+    terms = entry.get("modelle_terms")
+    terms = terms if isinstance(terms, dict) else {}
+    free = set(free_state.get("selected") or [])
+    return sorted(
+        model
+        for model in free_state.get("overlay") or []
+        if model not in free and not (suffix and model.endswith(suffix)) and model not in terms
+    )
+
+
+def cheapest_notice(entry: dict, ladder_ids: list[str], flash: list[str]) -> str | None:
+    """A notice when the hand-kept Flash swarm is not the three admitted models with the highest `anfragen_5h`, else None.
+
+    A notice, not a refusal: the maintainer keeps the list (Q-13), and the
+    runner never changes it.
+    """
+    cheapest = [model for model in ladder_ids if request_value(entry, model) is not None][:3]
+    if set(flash) == set(cheapest):
+        return None
+    return (
+        f"flash_swarm [{', '.join(flash)}] differs from the three cheapest admitted models "
+        f"[{', '.join(cheapest)}] by anfragen_5h; the list stays as declared"
+    )
+
+
+def ladder(root: Path) -> list[str]:
+    """The eligible paid models of the `opencode-go` entry, cheapest first: each is one later round.
+
+    The order is the runner's: `anfragen_5h` descending, ties by id, a model
+    without the value last (Q-13). A model the list does not hold is no id in
+    the code: adding or replacing one is a pull request that touches
     `model-endpoints.yaml` and nothing else (spec, criterion 5). A model whose
     data terms were not read is not eligible: it is skipped, and the skip is
     named (ADR 0021, decision 5).
@@ -937,7 +1025,7 @@ def ladder(root: Path) -> list[str]:
     eligible = [model for model in models if terms_problem(entry, model) is None]
     if not eligible:
         raise Refused(f"no model of {OPENCODE} has its data terms read; no paid stage can be filled.")
-    return eligible
+    return ordered_models(entry, eligible)
 
 
 def skipped_models(root: Path) -> list[str]:
@@ -1117,6 +1205,31 @@ def select_free(rule: dict, catalog: list[dict]) -> list[str]:
     return chosen
 
 
+def overlay_ids(agent: Path, provider: str) -> set[str]:
+    """The ids of the provider's freshly fetched overlay, read from the agent directory's `models-store.json`.
+
+    Pi 1.2.0 (`core/remote-catalog-provider.js`, `core/models-store.js`)
+    persists the forced refresh's pi.dev catalog there under the provider id,
+    as `{models, lastModified, etag, checkedAt}`. `pi --list-models` lists the
+    overlay merged with Pi's shipped baseline (`mergeModels`), which keeps
+    baseline ids that pi.dev no longer lists; only the persisted overlay says
+    what the fresh catalog holds (Q-13). A missing or unreadable store refuses.
+    """
+    path = agent / "models-store.json"
+    try:
+        data = json.loads(path.read_text(encoding="utf-8"))
+    except (OSError, UnicodeDecodeError, ValueError):
+        raise Refused(
+            f"the forced catalog refresh left no readable {path.name}; the fresh overlay cannot be told "
+            "from Pi's shipped list, so the free stage is not entered."
+        ) from None
+    entry = data.get(provider) if isinstance(data, dict) else None
+    models = entry.get("models") if isinstance(entry, dict) else None
+    if not isinstance(models, list):
+        raise Refused(f"the refreshed {path.name} holds no catalog for {provider}; the free stage is not entered.")
+    return {str(model["id"]) for model in models if isinstance(model, dict) and model.get("id")}
+
+
 def discover_free(root: Path) -> dict:
     """The free stage's members, from a forced live catalog refresh this run owns.
 
@@ -1161,10 +1274,12 @@ def discover_free(root: Path) -> dict:
             raise Refused(
                 f"the model listing did not end within {PI_DISCOVERY_SECONDS} seconds; the free stage is not entered. ({error})"
             ) from None
+        fresh = overlay_ids(agent, rule["provider"]) if refresh.returncode == 0 and listing.returncode == 0 else set()
     if listing.returncode != 0:
         raise Refused(f"`{PI_WRAPPER} --list-models` ended {listing.returncode}; the free stage stays unentered.")
     catalog = parse_catalog(listing.stdout or "")
-    selected = select_free(rule, catalog)
+    # Only ids the fresh overlay carries: an id that only Pi's shipped list holds is not selected (Q-13).
+    selected = [model for model in select_free(rule, catalog) if model in fresh]
     if not selected:
         raise Refused("the live catalog holds no free model for the configured rule; the free stage is not entered.")
     return {
@@ -1174,6 +1289,7 @@ def discover_free(root: Path) -> dict:
         "rule": json.loads(json.dumps(rule)),
         "catalog": catalog,
         "selected": selected,
+        "overlay": sorted(fresh),
         "billing": "not measured: pi.dev is a live catalog, not a billing statement",
     }
 
@@ -1456,11 +1572,11 @@ def run_reviewer(ctx: Context, model: str, prompt: str, key: str, *, free: bool 
         env = foreign_env({"HOME": str(home), "PI_CODING_AGENT_DIR": str(agent), "OPENCODE_API_KEY": key})
         done = launch(command, scratch if free else ctx.root, env, key, timeout=REVIEWER_MINUTES * 60)
         if done.returncode != 0:
-            raise fail("pi", done, f"exit {done.returncode}", key)
+            raise fail("pi", done, f"exit {done.returncode}", key, model)
         answer = scrub(done.stdout or "", key)
         if not answer.strip():
             # "No finding" is an answer; nothing at all is a call that failed.
-            raise fail("pi", done, "the answer is empty", key)
+            raise fail("pi", done, "the answer is empty", key, model)
     return answer
 
 
@@ -3913,18 +4029,19 @@ def review_loop(root: Path, change: str) -> None:
     body = "" if free else (root / "prompts" / "04b-review-loop.md").read_text(encoding="utf-8")
     prompts: dict[str, str] = {}
     endpoints: dict[str, tuple[str, str, str]] = {}
-    for member in members:
-        endpoints[member] = (OPENCODE, member, "max")
+
+    def prompt_for(member: str) -> str:
         head = f"This is round {round_number}; you are `{member}`."
         if free:
-            prompts[member] = "\n\n".join(
-                [FREE_REVIEW_BODY, head, ANSWER_FORMAT, f"## The implementation diff\n\n{diff}"]
-            )
-        else:
-            # The request comes before the diff and again after it: a long diff would bury it.
-            prompts[member] = "\n\n".join(
-                [body.rstrip(), head, ANSWER_FORMAT, READ_REQUEST, f"## The diff\n\n{diff}", READ_REQUEST]
-            )
+            return "\n\n".join([FREE_REVIEW_BODY, head, ANSWER_FORMAT, f"## The implementation diff\n\n{diff}"])
+        # The request comes before the diff and again after it: a long diff would bury it.
+        return "\n\n".join(
+            [body.rstrip(), head, ANSWER_FORMAT, READ_REQUEST, f"## The diff\n\n{diff}", READ_REQUEST]
+        )
+
+    for member in members:
+        endpoints[member] = (OPENCODE, member, "max")
+        prompts[member] = prompt_for(member)
     ctx = preflight(root, change, endpoints[members[0]], admission_problem=_free_admission(free, state))
     # Every member is checked in the parent before any starts; one BLOCK aborts
     # the round without a fallback (criterion 3).
@@ -3937,7 +4054,52 @@ def review_loop(root: Path, change: str) -> None:
     for member in members:
         append(ctx.findings, call_line("review-loop", endpoints[member], checked[member]))
     key = reviewer_key()
+    notes: list[str] = []
+    if not state["consumed"]:
+        gap = unread_catalog_ids(endpoint_entry(root), state["free"])
+        if gap:
+            notes.append(f"Notice: in the live catalog without a terms reading: {', '.join(gap)}.")
+            print(f"review-loop: {notes[-1]}", file=sys.stderr)
+    if stage["kind"] == "paid-swarm":
+        entry = endpoint_entry(root)
+        notice = cheapest_notice(entry, state["paid"]["ladder"], members)
+        if notice:
+            notes.append(f"Notice: {notice}.")
+        missing = unvalued_models(entry, state["paid"]["ladder"])
+        if missing:
+            notes.append(f"Notice: no anfragen_5h declared, ordered last: {', '.join(missing)}.")
+        for note in notes:
+            print(f"review-loop: {note}", file=sys.stderr)
     answers = run_swarm(ctx, members, prompts, key, free=free)
+    replaced: list[str] = []
+    if stage["kind"] == "paid-swarm":
+        # A failed Flash member is replaced by the cheapest admitted ladder model
+        # not in this round and not consumed, on the same paid prompt; each model
+        # at most once, until one answers or the ladder is spent (Q-13).
+        used = set(members)
+        spent = {key_[len("rung:") :] for key_ in state["consumed"] if key_.startswith("rung:")}
+        reasons: dict[str, str] = {}
+        for member in list(members):
+            current = member
+            while isinstance(answers[current], BaseException):
+                reasons[current] = str(answers[current])
+                options = [m for m in state["paid"]["rungs"] if m not in used and m not in spent]
+                if not options:
+                    notes.append(f"{current} failed: {reasons[current]}; no replacement is left on the ladder")
+                    print(f"review-loop: {notes[-1]}", file=sys.stderr)
+                    break
+                nxt = options[0]
+                used.add(nxt)
+                notes.append(f"{current} failed: {reasons[current]}; replaced by {nxt}")
+                print(f"review-loop: {notes[-1]}", file=sys.stderr)
+                endpoints[nxt] = (OPENCODE, nxt, "max")
+                prompts[nxt] = prompt_for(nxt)
+                checked[nxt] = checked_prompt(ctx, endpoints[nxt], prompts[nxt], None)
+                append(ctx.findings, call_line("review-loop", endpoints[nxt], checked[nxt]))
+                answers.update(run_swarm(ctx, [nxt], prompts, key, free=False))
+                replaced.append(nxt)
+                current = nxt
+        members = [*members, *replaced]
     succeeded = [member for member in members if not isinstance(answers[member], BaseException)]
     if not succeeded:
         raise CallFailed("; ".join(f"{member} failed: {answers[member]}" for member in members))
@@ -3947,7 +4109,9 @@ def review_loop(root: Path, change: str) -> None:
     for member in members:
         outcome = answers[member]
         if isinstance(outcome, BaseException):
-            statements.append(f"{member} failed: {outcome}")
+            # A replaced member's failure is already stated with its replacement.
+            if stage["kind"] != "paid-swarm":
+                statements.append(f"{member} failed: {outcome}")
             continue
         rows, rest = parse_rows(outcome)
         member_rows = []
@@ -3967,7 +4131,7 @@ def review_loop(root: Path, change: str) -> None:
         kept = rest if rows else outcome
         if kept.strip():
             reviewer_blocks.append(kept.strip())
-    parts = [f"## Round {round_number} — {', '.join(members)}, {today()}", *statements]
+    parts = [f"## Round {round_number} — {', '.join(members)}, {today()}", *notes, *statements]
     for block in reviewer_blocks:
         parts.append(f"{NOT_ROWS_NOTE}\n\n{block}")
     path = record_dir(change) / "loop.md"
@@ -3976,6 +4140,9 @@ def review_loop(root: Path, change: str) -> None:
         # puts the run's snapshot line into it before the rounds.
         write_state(change, state)
     append(path, "\n\n".join(parts))
+    for model in replaced:
+        # A replacement is consumed: it is no later rung.
+        mark_consumed(change, state, f"rung:{model}")
     mark_consumed(change, state, stage["key"])
     print(
         f"review-loop: round {round_number} written to {path}: {len(numbered)} rows "

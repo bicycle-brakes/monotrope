@@ -143,6 +143,20 @@ if alias == "pi" and "update" in argv and "--models" in argv:
             + "\\n"
         )
     time.sleep(scenario.get("pi_refresh_sleep", 0))
+    # Pi persists the fetched overlay in the agent directory's models-store.json
+    # (core/models-store.js); the stand-in plants the catalog's opencode-go ids
+    # unless the scenario names the overlay itself or asks for no store.
+    agent_dir = os.environ.get("PI_CODING_AGENT_DIR", "")
+    if agent_dir and not scenario.get("pi_no_store"):
+        listed = [
+            row.split()[1]
+            for row in scenario.get("pi_catalog", CATALOG).splitlines()[1:]
+            if row.split() and row.split()[0] == "opencode-go"
+        ]
+        ids = scenario.get("pi_overlay", listed)
+        Path(agent_dir, "models-store.json").write_text(
+            json.dumps({"opencode-go": {"models": [{"id": i, "provider": "opencode-go"} for i in ids], "checkedAt": 1}})
+        )
     sys.stdout.write(scenario.get("pi_refresh_stdout", ""))
     raise SystemExit(scenario.get("pi_refresh_exit", 0))
 if alias == "pi" and "--list-models" in argv:
@@ -338,7 +352,7 @@ class World:
         ]
         directory = self.record().parent
         directory.mkdir(parents=True, exist_ok=True)
-        snapshot = "" if state is None else f"\n\n{stage2.STATE_KEY}{json.dumps(state, sort_keys=True)}"
+        snapshot = f"\n\n{stage2.STATE_KEY}{json.dumps(state, sort_keys=True)}"
         self.record().write_text(
             f"# Loop record — demo\n\n{stage2.RECORD_INTRO}{snapshot}\n\n"
             f"## Round {number} — {', '.join(members or [reviewer])}, 2026-09-30\n\n"
@@ -397,8 +411,9 @@ def pin_entry(target: Path, ladder: tuple[str, ...], flash: tuple[str, ...] | No
             "quelle": "privacy table of the Go page, https://opencode.ai/docs/go",
             "aufbewahrung": "0 days",
             "training": "Not used",
+            "anfragen_5h": 10000 - 100 * position,
         }
-        for model in ladder
+        for position, model in enumerate(ladder)
     }
     entry["flash_swarm"] = list(flash or ladder[:2])
     target.write_text(yaml.safe_dump(data, allow_unicode=True), encoding="utf-8")
@@ -420,8 +435,9 @@ def pin_the_ladder(target: Path) -> None:
             "quelle": "privacy table of the Go page, https://opencode.ai/docs/go",
             "aufbewahrung": "0 days",
             "training": "Not used",
+            "anfragen_5h": 10000 - 100 * position,
         }
-        for model in TEST_LADDER
+        for position, model in enumerate(TEST_LADDER)
     }
     entry["flash_swarm"] = list(TEST_FLASH)
     entry["free_stage"] = {
@@ -9180,3 +9196,203 @@ def test_codex_repair_doctrine_and_endpoint_remarks_agree() -> None:
 def test_pi_wrapper_is_repository_local() -> None:
     """Criterion 2: the production runner never selects a global Pi, even at the same version."""
     assert stage2.PI_WRAPPER == REPO_ROOT / "tools" / "pi" / "pi"
+
+
+# ---------------------------------------------------------------------------
+# Q-13: the ladder is ordered by a declared cost value; a failed Flash member is replaced
+# ---------------------------------------------------------------------------
+
+
+def _entry_of(target: Path) -> dict:
+    data = yaml.safe_load(target.read_text(encoding="utf-8"))
+    return next(e for e in data["endpunkte"] if e["name"] == "opencode-go")
+
+
+def _set_values(target: Path, values: dict[str, int | None]) -> None:
+    """Rewrite the world's `anfragen_5h` values; None removes the value."""
+    data = yaml.safe_load(target.read_text(encoding="utf-8"))
+    entry = next(e for e in data["endpunkte"] if e["name"] == "opencode-go")
+    for model, value in values.items():
+        if value is None:
+            entry["modelle_terms"][model].pop("anfragen_5h", None)
+        else:
+            entry["modelle_terms"][model]["anfragen_5h"] = value
+    target.write_text(yaml.safe_dump(data, allow_unicode=True), encoding="utf-8")
+
+
+def test_the_ladder_is_ordered_by_the_declared_cost_value(world: World) -> None:
+    """Q-13: `anfragen_5h` descending, ties by id, a model without the value last; the declared order does not count."""
+    target = world.root / "model-endpoints.yaml"
+    _set_values(target, {"deepseek-v4.1-flash": 100, "mimo-v2.6-flash": 300, "mimo-v2.6-pro": 100})
+    assert stage2.ladder(world.root) == ["mimo-v2.6-flash", "deepseek-v4.1-flash", "mimo-v2.6-pro"]
+    _set_values(target, {"mimo-v2.6-flash": None})
+    assert stage2.ladder(world.root) == ["deepseek-v4.1-flash", "mimo-v2.6-pro", "mimo-v2.6-flash"]
+    entry = _entry_of(target)
+    assert stage2.unvalued_models(entry, list(entry["modelle"])) == ["mimo-v2.6-flash"]
+    assert stage2.ordered_models(entry, list(reversed(entry["modelle"]))) == stage2.ladder(world.root)
+
+
+def test_a_model_without_the_cost_value_is_named_in_the_record_and_on_stderr(
+    world: World, capsys: pytest.CaptureFixture[str]
+) -> None:
+    """Q-13: an unvalued model orders last and is named, never dropped silently."""
+    _set_values(world.root / "model-endpoints.yaml", {"mimo-v2.6-pro": None})
+    _flash_round_world(world)
+    world.script(pi=[{"stdout": rows(1)}] * 2)
+    assert world.run("review-loop") == 0
+    assert "no anfragen_5h declared, ordered last: mimo-v2.6-pro" in capsys.readouterr().err
+    assert "no anfragen_5h declared, ordered last: mimo-v2.6-pro" in world.record().read_text(encoding="utf-8")
+
+
+def _flash_round_world(world: World) -> None:
+    world.write_record([("L1-1", "taken — test_a", "no")], state=loop_state(("free",)))
+
+
+def test_a_failed_flash_member_is_replaced_by_the_cheapest_unconsumed_rung(
+    world: World, capsys: pytest.CaptureFixture[str]
+) -> None:
+    """Q-13: the replacement answers on the same prompt, is consumed, and the swap is recorded and printed."""
+    _flash_round_world(world)
+    world.script(
+        pi=[
+            {"model": "deepseek-v4.1-flash", "exit": 1, "stderr": "boot\nModel is unavailable\n"},
+            {"model": "mimo-v2.6-flash", "stdout": rows(1, "M")},
+            {"model": "mimo-v2.6-pro", "stdout": rows(1, "P")},
+        ]
+    )
+    assert world.run("review-loop") == 0
+    err = capsys.readouterr().err
+    said = "deepseek-v4.1-flash failed: pi call failed: exit 1 (Model is unavailable); replaced by mimo-v2.6-pro"
+    assert said in err and said in world.record().read_text(encoding="utf-8")
+    assert "deepseek-v4.1-flash: Model is unavailable" in err, "the stderr tail is not prefixed with the model id"
+    calls = {rung_of(call): call for call in world.reviews("pi")}
+    assert set(calls) == {"deepseek-v4.1-flash", "mimo-v2.6-flash", "mimo-v2.6-pro"}
+    assert "This is round 2; you are `mimo-v2.6-pro`" in calls["mimo-v2.6-pro"]["prompt_file"]
+    text = world.record().read_text(encoding="utf-8")
+    assert "## Round 2 — deepseek-v4.1-flash, mimo-v2.6-flash, mimo-v2.6-pro, " in text
+    state = stage2.read_state(text, "")
+    assert "rung:mimo-v2.6-pro" in state["consumed"] and "flash" in state["consumed"]
+    decide_record(world)
+    capsys.readouterr()
+    assert world.run("review-loop") == 2, "the consumed replacement was called again as a later rung"
+    assert "every stage of this run is consumed" in capsys.readouterr().err
+
+
+def test_replacements_run_down_the_ladder_each_model_once(world: World, capsys: pytest.CaptureFixture[str]) -> None:
+    """Q-13: a failing replacement is followed by the next; a spent ladder names it, and the round still stands."""
+    pin_entry(world.root / "model-endpoints.yaml", (*TEST_LADDER, "spike-a"))
+    state = loop_state(("free",))
+    state["paid"] = {"ladder": [*TEST_LADDER, "spike-a"], "flash": list(TEST_FLASH), "rungs": ["mimo-v2.6-pro", "spike-a"]}
+    world.write_record([("L1-1", "taken — test_a", "no")], state=state)
+    world.script(
+        pi=[
+            {"model": "deepseek-v4.1-flash", "exit": 1, "stderr": "Model is unavailable"},
+            {"model": "mimo-v2.6-flash", "stdout": rows(1, "M")},
+            {"model": "mimo-v2.6-pro", "exit": 1, "stderr": "Rate limited"},
+            {"model": "spike-a", "stdout": rows(1, "S")},
+        ]
+    )
+    assert world.run("review-loop") == 0
+    text = world.record().read_text(encoding="utf-8")
+    assert "deepseek-v4.1-flash failed: pi call failed: exit 1 (Model is unavailable); replaced by mimo-v2.6-pro" in text
+    assert "mimo-v2.6-pro failed: pi call failed: exit 1 (Rate limited); replaced by spike-a" in text
+    assert [call for call in map(rung_of, world.reviews("pi"))].count("mimo-v2.6-pro") == 1
+    consumed = stage2.read_state(text, "")["consumed"]
+    assert "rung:mimo-v2.6-pro" in consumed and "rung:spike-a" in consumed
+
+
+def test_a_spent_ladder_leaves_the_failed_member_named(world: World, capsys: pytest.CaptureFixture[str]) -> None:
+    """Q-13: no replacement left - the failure is named; with every call failed no round completes."""
+    _flash_round_world(world)
+    world.script(
+        pi=[
+            {"model": "deepseek-v4.1-flash", "exit": 1, "stderr": "Model is unavailable"},
+            {"model": "mimo-v2.6-flash", "exit": 1, "stderr": "Model is unavailable"},
+            {"model": "mimo-v2.6-pro", "exit": 1, "stderr": "Model is unavailable"},
+        ]
+    )
+    assert world.run("review-loop") == 1
+    assert "no replacement is left on the ladder" in capsys.readouterr().err
+    assert "## Round 2" not in world.record().read_text(encoding="utf-8")
+
+
+def test_the_free_stage_selects_only_ids_of_the_fresh_overlay(world: World) -> None:
+    """Q-13: an id only Pi's shipped list carries is listed but not selected; no overlay store refuses."""
+    world.script(pi=[{"stdout": rows(1)}] * 2, pi_overlay=["acme-v1-free"])
+    assert world.run("review-loop") == 0
+    state = stage2.read_state(world.record().read_text(encoding="utf-8"), "")
+    assert state["free"]["selected"] == ["acme-v1-free"], state["free"]["selected"]
+    assert {"provider": "opencode-go", "model": "beacon-2-free"} in state["free"]["catalog"]
+    assert [rung_of(call) for call in world.reviews("pi")] == ["acme-v1-free"]
+
+
+def test_a_refresh_that_leaves_no_overlay_store_refuses(world: World, capsys: pytest.CaptureFixture[str]) -> None:
+    world.script(pi=[{"stdout": rows(1)}] * 2, pi_no_store=True)
+    assert world.run("review-loop") == 2
+    assert "models-store.json" in capsys.readouterr().err
+    assert world.reviews("pi") == []
+
+
+def test_a_flash_swarm_that_is_not_the_three_cheapest_gets_a_notice(
+    world: World, capsys: pytest.CaptureFixture[str]
+) -> None:
+    """Q-13 addition: the hand-kept list stays; a differing set is noticed on stderr and in the record, exit unchanged."""
+    entry = _entry_of(world.root / "model-endpoints.yaml")
+    ids = stage2.ladder(world.root)
+    assert stage2.cheapest_notice(entry, ids, list(reversed(ids))) is None, "the same set got a notice"
+    notice = stage2.cheapest_notice(entry, [*ids, "x-extra"], ["deepseek-v4.1-flash", "mimo-v2.6-pro"])
+    assert notice and "deepseek-v4.1-flash, mimo-v2.6-pro" in notice and "differs from the three cheapest" in notice
+    # the swarm is the three cheapest: no notice
+    state = loop_state(("free",))
+    state["paid"] = {"ladder": list(ids), "flash": list(ids), "rungs": []}
+    world.write_record([("L1-1", "taken — test_a", "no")], state=state)
+    world.script(pi=[{"stdout": rows(1)}] * 3)
+    assert world.run("review-loop") == 0
+    assert "differs from the three cheapest" not in capsys.readouterr().err
+    assert "differs from the three cheapest" not in world.record().read_text(encoding="utf-8")
+    # the default world's two-member swarm differs from the three cheapest: notice, same exit, list untouched
+    shutil.rmtree(world.record().parent)
+    (world.bin / "calls.jsonl").unlink()
+    _flash_round_world(world)
+    world.script(pi=[{"stdout": rows(1)}] * 2)
+    assert world.run("review-loop") == 0
+    assert "differs from the three cheapest" in capsys.readouterr().err
+    assert "differs from the three cheapest" in world.record().read_text(encoding="utf-8")
+    assert sorted(rung_of(call) for call in world.reviews("pi")) == sorted(TEST_FLASH), "the runner changed the swarm"
+
+
+def test_overlay_ids_without_a_terms_reading_are_named_never_admitted(
+    world: World, capsys: pytest.CaptureFixture[str]
+) -> None:
+    """Q-13 addition: a non-free overlay id with no `modelle_terms` record is named; it is called nowhere."""
+    catalog = (
+        "provider model context input output\n"
+        "opencode-go acme-v1-free 128000 0 0\n"
+        "opencode-go stray-model 128000 1 2\n"
+    )
+    world.script(pi=[{"stdout": rows(1)}] * 2, pi_catalog=catalog)
+    assert world.run("review-loop") == 0
+    said = "in the live catalog without a terms reading: stray-model"
+    assert said in capsys.readouterr().err and said in world.record().read_text(encoding="utf-8")
+    assert [rung_of(call) for call in world.reviews("pi")] == ["acme-v1-free"]
+    state = stage2.read_state(world.record().read_text(encoding="utf-8"), "")
+    assert "stray-model" not in state["paid"]["ladder"]
+
+
+@pytest.mark.parametrize(
+    ("record", "admitted"),
+    [
+        ({"gelesen": "2026-10-07", "quelle": "src"}, True),
+        ({"gelesen": "2026-10-07", "quelle": "src", "uebersprungen": ""}, True),
+        ({"gelesen": "soon", "quelle": "src"}, False),
+        ({"gelesen": True, "quelle": "src"}, False),
+        ({"gelesen": "2026-13-45", "quelle": "src"}, False),
+        ({"quelle": "src", "uebersprungen": ""}, False),
+        ({"gelesen": "", "quelle": "src", "uebersprungen": None}, False),
+        ({"gelesen": "2026-10-07", "quelle": "src", "uebersprungen": "2026-10-08", "grund": "trains"}, False),
+    ],
+)
+def test_terms_problem_requires_an_iso_reading_date(record: dict, admitted: bool) -> None:
+    """L1-1: `gelesen` must be an ISO date; an empty skip marker is "absent" only beside a valid one - fail closed."""
+    problem = stage2.terms_problem({"modelle_terms": {"m": record}}, "m")
+    assert (problem is None) is admitted, problem

@@ -158,6 +158,9 @@ endpunkte:
     residenz: anbieter-erklaert
     abrechnung: abonnement
     darf_sehen: [framework]
+    # A set: the order here does not count. The runner orders the paid ladder
+    # by `anfragen_5h` in `modelle_terms` (Go page, "Estimated requests", Go
+    # column, requests per 5 hours; more is cheaper), descending, ties by id.
     modelle:
       - deepseek-v4.1-flash
       - mimo-v2.6-flash
@@ -174,46 +177,73 @@ endpunkte:
         quelle: "privacy table of the Go page, https://opencode.ai/docs/go"
         aufbewahrung: "0 days"
         training: "Not used"
+        anfragen_5h: 34670
+        anfragen_gelesen: "2026-10-17"
+        anfragen_quelle: "estimated requests table of the Go page, https://opencode.ai/docs/go"
       mimo-v2.6-flash:
         gelesen: "2026-10-07"
         quelle: "privacy table of the Go page, https://opencode.ai/docs/go"
         aufbewahrung: "0 days"
         training: "Not used"
+        anfragen_5h: 30100
+        anfragen_gelesen: "2026-10-17"
+        anfragen_quelle: "estimated requests table of the Go page, https://opencode.ai/docs/go"
       mimo-v2.6-pro:
         gelesen: "2026-10-07"
         quelle: "privacy table of the Go page, https://opencode.ai/docs/go"
         aufbewahrung: "0 days"
         training: "Not used"
+        anfragen_5h: 3250
+        anfragen_gelesen: "2026-10-17"
+        anfragen_quelle: "estimated requests table of the Go page, https://opencode.ai/docs/go"
       longcat-2.0:
         gelesen: "2026-10-17"
         quelle: "privacy table of the Go page, https://opencode.ai/docs/go"
         aufbewahrung: "0 days"
         training: "Not used"
+        anfragen_5h: 11400
+        anfragen_gelesen: "2026-10-17"
+        anfragen_quelle: "estimated requests table of the Go page, https://opencode.ai/docs/go"
       glm-5.3-flash:
         gelesen: "2026-10-17"
         quelle: "privacy table of the Go page, https://opencode.ai/docs/go"
         aufbewahrung: "0 days"
         training: "Not used"
+        anfragen_5h: 6320
+        anfragen_gelesen: "2026-10-17"
+        anfragen_quelle: "estimated requests table of the Go page, https://opencode.ai/docs/go"
       qwen3.8-flash:
         gelesen: "2026-10-17"
         quelle: "privacy table of the Go page, https://opencode.ai/docs/go"
         aufbewahrung: "0 days"
         training: "Not used"
+        anfragen_5h: 5400
+        anfragen_gelesen: "2026-10-17"
+        anfragen_quelle: "estimated requests table of the Go page, https://opencode.ai/docs/go"
       gpt-6-luna:
         gelesen: "2026-10-17"
         quelle: "privacy table of the Go page, https://opencode.ai/docs/go"
         aufbewahrung: "30 days"
         training: "Not used"
+        anfragen_5h: 4230
+        anfragen_gelesen: "2026-10-17"
+        anfragen_quelle: "estimated requests table of the Go page, https://opencode.ai/docs/go"
       claude-haiku-5-5:
         gelesen: "2026-10-17"
         quelle: "privacy table of the Go page, https://opencode.ai/docs/go"
         aufbewahrung: "30 days"
         training: "Not used"
+        anfragen_5h: 3850
+        anfragen_gelesen: "2026-10-17"
+        anfragen_quelle: "estimated requests table of the Go page, https://opencode.ai/docs/go"
       minimax-m3:
         gelesen: "2026-10-17"
         quelle: "privacy table of the Go page, https://opencode.ai/docs/go"
         aufbewahrung: "0 days"
         training: "Not used"
+        anfragen_5h: 3200
+        anfragen_gelesen: "2026-10-17"
+        anfragen_quelle: "estimated requests table of the Go page, https://opencode.ai/docs/go"
     flash_swarm:
       - deepseek-v4.1-flash
       - mimo-v2.6-flash
@@ -241,8 +271,14 @@ endpunkte:
       version `tools/pi/package.json` declares, the repository's own install
       (ADR 0019) — only. The loop runs until a round is clean (ADR 0021):
       round 1 is the discovered free-model swarm, round 2 the parallel
-      `flash_swarm`, then one eligible `modelle` id per round in declared
-      order, and a one-line pull request reorders them. Free membership is
+      `flash_swarm`, then one eligible `modelle` id per round, cheapest first:
+      the runner orders the set by `anfragen_5h` descending, ties by id, a
+      model without the value last and named. A Flash member that fails is
+      replaced by the cheapest admitted model not in the round and not yet
+      consumed, each model at most once; the swap is recorded and printed.
+      The `flash_swarm` list stays hand-kept; when it is not the three
+      admitted models with the highest `anfragen_5h`, the runner notices it.
+      A one-line pull request changes the set or a value. Free membership is
       selected fresh for every run by the `free_stage` rule from a forced
       live catalog refresh (`pi update --models`) before `pi --list-models`;
       the catalog's source is `pi.dev`, which Pi caches for four hours — the

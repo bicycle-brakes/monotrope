@@ -7,12 +7,17 @@ swarm** — every model a forced live catalog refresh (`pi update --models`
 before `pi --list-models`) finds under the `opencode-go` provider that the
 `free_stage` rule in `model-endpoints.yaml` selects, called in parallel; round
 2 is the **Flash swarm** — the entry's eligible `flash_swarm` members, in
-parallel; every later round calls one eligible rung of the `modelle` ladder in
-declared order. The rule and the ladder's order are data: a one-line pull
-request changes either, and this text names no model. A round whose every row
+parallel; every later round calls one eligible rung of the `modelle` ladder,
+cheapest first: the runner orders the set by the declared cost value
+`anfragen_5h`, never by list position. A Flash member that fails is replaced
+in its round by the cheapest eligible rung not yet used, each model at most
+once, and the swap is recorded. The rule, the set and the cost values are
+data: a one-line pull request changes any of them, and this text names no
+model. A round whose every row
 is decided and none accepted ends the loop; two consecutive rounds whose only
 accepted findings came from the repair trip the brake; a spent ladder stops
-the loop for the maintainer — no model is substituted.
+the loop for the maintainer — no model is substituted for a spent ladder's
+last rung, and no model is called twice.
 **Input:** a paid round reads the change's diff against its merge base with
 `origin/main`, uncommitted changes included, and this text. A free round is
 confined to the implementation diff alone — source and test code in bounded

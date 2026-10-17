@@ -4,7 +4,7 @@ category: adr
 status: accepted
 created: 2026-10-14
 last_reviewed: 2026-10-16
-updated: 2026-10-16
+updated: 2026-10-17
 owner: framework-architect
 provenance: human-decided
 produced_by: {kind: llm-session, name: codex, version: "2026-10-16"}
@@ -108,12 +108,29 @@ the corrected order and automatic free admission.
    Only implementation source/test diff hunks reach these calls, with no
    repository-reading instructions, tools, context loaders or whole-worktree
    prompt. Existing per-call declaration and leak checks remain mandatory.
-4. **Round 2 is the parallel paid Flash swarm.** Its eligible members are
-   DeepSeek V4.1 Flash, MiMo-V2.6-Flash and LongCat-2.0. Later rounds take
-   one eligible model at a time in Q-1 order: GLM-5.3-Flash, Qwen3.8 Flash,
-   GPT 6 Luna, Claude Haiku 5.5, MiniMax M2.7, MiMo-V2.6-Pro. The configuration
-   holds ids/order; all paid calls retain the existing read tools. Q-10
-   replaces Q-5's round number without changing parallel Flash review.
+4. **Round 2 is the parallel paid Flash swarm; later rounds go cheapest first.**
+   The Flash swarm is a hand-kept list (`flash_swarm`) of eligible paid
+   models; the runner never changes it, and prints a notice (and writes one
+   record line) when it is not the three admitted models with the highest
+   `anfragen_5h`. The paid ladder is a set (`modelle`): the runner orders it by
+   a declared cost value, `anfragen_5h` in each model's `modelle_terms` record
+   (the Go page's "Estimated requests", Go column, requests per 5 hours, with
+   its reading date and source), descending, ties by id; a model without the
+   value goes last and is named on stderr and in the record (maintainer,
+   2026-10-17, Q-13, replacing the hand-ordered list). Later rounds take one
+   eligible model at a time in that order, Flash members excluded while they
+   are in the swarm. When a Flash member fails (nonzero exit, timeout, empty
+   answer), the runner calls the cheapest admitted ladder model that is not in
+   the round and not consumed, on the same paid prompt; if that one fails,
+   the next, each model at most once, until one answers or the ladder is
+   spent. A replacement is consumed: it is no later rung. Each swap is written
+   `<model> failed: <reason>; replaced by <model>` in the loop record and
+   printed on stderr; the reason carries the last line of Pi's standard
+   error. The configuration holds ids and cost values; all paid calls retain
+   the existing read tools. Q-10 replaces Q-5's round number without changing
+   parallel Flash review. The free stage selects only ids in the freshly
+   fetched `opencode-go` overlay of the forced refresh, not ids only Pi's
+   shipped list carries.
 5. **Paid terms are read before admission.** Record dated retention/training
    readings for paid models; skip and name in the handover any whose terms
    retain/train or cannot be read (Q-7). No address/model substitution follows

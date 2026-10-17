@@ -102,6 +102,18 @@ Merely listing installed models does not meet the live-check requirement.
    answering members' rows, but no round is completed if every member fails.
    *Refuted by:* discarding successful members, inventing findings for failed
    members, or counting an all-failed round as clean.
+   Q-13: a failed Flash member is replaced by the cheapest admitted model not
+   in the round and not consumed, on the same paid prompt, then by the next,
+   each model at most once, until one answers or the ladder is spent; each
+   swap is recorded as `<model> failed: <reason>; replaced by <model>` and
+   printed, the reason naming the last scrubbed line of Pi's standard error,
+   and a printed stderr tail carries the member's model id.
+   *Also refuted by:* a failed Flash member left unreplaced while an
+   unconsumed rung exists, a replacement called twice or left as a later
+   rung, a swap neither recorded nor printed, a reason without Pi's last
+   error line, or a changed `flash_swarm` list (it stays hand-kept; a
+   differing set from the three cheapest gets a notice and a record line,
+   never a refusal).
 
 5. When a fresh review-loop run is admitted, its free membership is selected
    from a successfully forced live Pi catalog refresh by the YAML free-stage
@@ -112,12 +124,21 @@ Merely listing installed models does not meet the live-check requirement.
    omitting the check time/list, launching after an empty/unreadable check,
    or needing a runner-code edit to change the provider/match/include/exclude
    rule. Include/exclude entries without a date or reason also refute it.
+   Q-13: only ids in the freshly fetched overlay that the refresh persisted
+   are selected; an id only Pi's shipped list carries is not. *Also refuted
+   by:* selecting such an id, or a refresh that left no readable overlay
+   still starting the free stage. A non-free overlay id without a
+   `modelle_terms` record is named (stderr, one record line) and never
+   admitted.
 
 6. When a paid model is admitted to either paid stage, its declaration
    contains a dated reading of retention and training terms; unreadable or
    retaining/training models are skipped and named for the handover.
    *Refuted by:* a paid call without that reading or a silently omitted
-   ineligible model.
+   ineligible model. Fail closed: `gelesen` must be an ISO date
+   (YYYY-MM-DD) and an empty `uebersprungen` counts as absent only beside a
+   valid `gelesen`; a non-date, a bare boolean or a missing date admits
+   nothing.
 
 7. While unread terms are accepted for the free stage, that permission is
    declared as a class confined to discovered free Go models on the diff.
@@ -126,9 +147,14 @@ Merely listing installed models does not meet the live-check requirement.
 
 8. When a paid round is admitted, round 2 calls the eligible first three
    models together and subsequent rounds call one remaining eligible rung
-   each in Q-1 order, with model ids held in configuration rather than code.
+   each cheapest first (Q-13: the runner orders the `modelle` set by the
+   declared `anfragen_5h`, descending, ties by id, a model without the value
+   last and named), with model ids and cost values held in configuration
+   rather than code.
    *Refuted by:* treating the first three as three sequential rounds,
-   interleaving a later rung, repeating a consumed rung, or hardcoding ids.
+   interleaving a later rung, repeating a consumed rung, hardcoding ids, an
+   order that follows list position instead of `anfragen_5h`, or a model
+   without the value dropped silently instead of ordered last and named.
 
 9. When no eligible paid stage remains after a non-clean round, the loop
    stops with a report to the maintainer and substitutes no model.

@@ -340,7 +340,7 @@ def test_the_opencode_go_entry_is_declared() -> None:
     assert entry["residenz"] == "anbieter-erklaert"
     assert entry["abrechnung"] == "abonnement"
     assert entry["darf_sehen"] == ["framework"]
-    # The order is the maintainer's to change in this file alone; only the set and the count are pinned.
+    # `modelle` is a set (Q-13): the runner orders it by `anfragen_5h`; only the set and the count are pinned.
     assert sorted(entry["modelle"]) == [
         "claude-haiku-5-5",
         "deepseek-v4.1-flash",
@@ -455,6 +455,29 @@ def test_every_new_paid_model_carries_its_terms_reading() -> None:
     assert skipped == []
     # The Flash swarm takes eligible members only: a skipped id is not in it.
     assert not set(entry.get("flash_swarm") or []) & set(skipped)
+
+
+def test_every_ladder_model_declares_its_dated_cost_value() -> None:
+    """Q-13: `anfragen_5h` per model with its reading date and source; the runner's ladder follows it, cheapest first."""
+    import sys
+
+    sys.path.insert(0, str(Path(__file__).resolve().parent.parent / "scripts"))
+    import stage2
+
+    entry = _endpunkt("opencode-go")
+    terms = entry["modelle_terms"]
+    for model in entry["modelle"]:
+        record = terms[model]
+        value = record.get("anfragen_5h")
+        assert isinstance(value, int) and not isinstance(value, bool) and value > 0, f"{model}: no cost value"
+        assert re.fullmatch(r"\d{4}-\d{2}-\d{2}", str(record.get("anfragen_gelesen"))), f"{model}: no reading date"
+        assert "opencode.ai/docs/go" in str(record.get("anfragen_quelle")), f"{model}: no source"
+    order = stage2.ladder(Path(__file__).resolve().parent.parent)
+    values = [terms[model]["anfragen_5h"] for model in order]
+    assert values == sorted(values, reverse=True), "the ladder is not cheapest first"
+    assert set(order) == set(entry["modelle"])
+    # Today the hand-kept Flash swarm is the three cheapest (maintainer, 2026-10-17); the runner only notices drift.
+    assert stage2.cheapest_notice(entry, order, entry["flash_swarm"]) is None
 
 
 def test_unread_terms_reach_the_free_stage_alone() -> None:
