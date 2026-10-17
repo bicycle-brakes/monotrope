@@ -4812,7 +4812,7 @@ def test_ineligible_paid_models_are_skipped_and_named(world: World, capsys: pyte
     capsys.readouterr()
     assert world.run("review-loop") == 0
     out = capsys.readouterr().out
-    assert "paid models skipped for unread or refusing terms" in out
+    assert "paid models skipped:" in out
     assert "unread-model" in out, "the skipped model was not named"
     assert stage2.ladder(world.root) == list(TEST_LADDER)
     decide_record(world)

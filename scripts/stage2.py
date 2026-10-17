@@ -4042,7 +4042,7 @@ def review_loop(root: Path, change: str) -> None:
         state = new_state(root, discover_free(root))
         skipped = skipped_models(root)
         if skipped:
-            print(f"review-loop: paid models skipped for unread or refusing terms: {'; '.join(skipped)}")
+            print(f"review-loop: paid models skipped: {'; '.join(skipped)}")
         # The snapshot is written only with the first completed round: a failed
         # attempt consumes no stage and leaves no record (ADR 0021, decision 6).
     stage = next_stage(state)
@@ -4094,7 +4094,7 @@ def review_loop(root: Path, change: str) -> None:
             notes.append(f"Notice: {state['free']['skipped']}.")
         skipped = skipped_models(root)
         if skipped:
-            notes.append(f"Notice: paid models skipped for unread or refusing terms: {'; '.join(skipped)}.")
+            notes.append(f"Notice: paid models skipped: {'; '.join(skipped)}.")
         gap = unread_catalog_ids(endpoint_entry(root), state["free"])
         if gap:
             notes.append(f"Notice: in the live catalog without a terms reading: {', '.join(gap)}.")
@@ -4260,7 +4260,7 @@ def probe(root: Path, change: str) -> None:
         answered += 1
     skipped = skipped_models(root)
     if skipped:
-        print(f"probe: paid models skipped for unread or refusing terms: {'; '.join(skipped)}")
+        print(f"probe: paid models skipped: {'; '.join(skipped)}")
     print(f"probe: {answered} members answered")
 
 
