@@ -1012,3 +1012,103 @@ was green at ab5e688. Tracker comment was pushed before Git. No live provider
 qualification, credential-file read, customer access, GLM/Claude call or
 merge occurred in this resumption. Latest verdict and new handover CI are
 pending at publication.
+
+
+## Addendum — 2026-10-17, research catalog foundation and typed references
+
+### Where we are
+
+At 21:14 UTC PR #157's final independent-verdict commit 0c03ec0 had hosted
+verification green and was marked ready for the maintainer. Its fresh
+read-only Sol re-check returned exactly "No finding." No merge occurred.
+The implementation-review task remains open until its intended merge
+boundary (coding-harness-4fk).
+
+Research-swarm PR #158 remains a draft. Its next green source checkpoint is
+379ed2838fd3c2d66286a59e11436957e1197e45, pushed after the tracker. It adds
+a standalone pinned-Pi public-catalog bridge, duplicate-aware two-source
+selection and an immutable planned 39 + 3N seat description. This does not
+activate the amended dispatcher. Updated the existing Phase-1 research-swarm
+task (coding-harness-icw); no task opened or closed. Its status stays
+in progress. Spec/design/plan now explicitly say implementation partial.
+
+### Completed work and evidence
+
+The catalog tests exercise the real pinned Pi against local HTTP servers.
+An in-memory catalog-only sentinel enables Pi's configured refresh branch;
+no credential file or authentication header is used, and no model is called.
+The bridge forces a fresh Go-only read alongside credential-free models.dev
+with one deadline. Python retains raw duplicate identity evidence, source
+UTC/digests, fixed-model checks, per-candidate reasons, mandatory explicit
+includes and distinct measured-empty/capability-unavailable outcomes.
+
+At 379ed28 the new catalog set passed 56 tests; full make verify GREEN
+included 2357 passed and 16 skipped in 756.26 seconds, then every blocking
+gate green. Process-local commit.gpgsign=false and local test servers were
+enabled. A standalone kit command omitted that signing override and failed
+17 Git fixtures; the complete correctly configured run passed its kit gate.
+Documentation/Markdown findings remain report-only. Later accounting/status/
+index changes passed frontmatter, criterion ledger and whitespace checks.
+Measured phase-4 span 21:15:16–21:40:12 UTC, 24m56s, is appended in plan.md;
+add it to retained history and the earlier 38m37s under the approved total
+of 13h20m. Historical unmeasured time is still named and excluded by the
+recorded maintainer continuation, never treated as zero.
+
+### Current work and next step
+
+A second phase-4 interval began at 21:41:24 UTC. Four red-first catalog
+counterexamples found overbroad duplicate checks, an unrelated Pi-entry
+failure and missing raw evidence. Two further red-first cases establish
+that repeated keys inside Go models make the entire free capability result
+ambiguous. Those fixes are implemented, not yet fully verified. Foreign
+provider/property duplicates are ignored; raw keys inside Go models are
+checked recursively. The follow-up catalog set passed 62 cases.
+
+The new pure stage2_research_refs.py resolves frozen-byte structural
+Markdown sections/criteria, Python AST definitions/module assignments and
+canonical safe YAML/JSON key paths; other files use first whole-word matches.
+One 4000-Unicode-character budget is shared per claim; any unresolved
+citation removes every excerpt from that claim. The historical S-47 prompt
+blob is a committed test fixture, requiring no live prompt or Git history.
+This helper is not wired to the legacy substring citation path yet; amended
+map/report integration remains pending. Initial missing-module tests failed
+41 cases; the implemented helper passed 41, followed by 9 failures and one
+passing added edge case, then 51 green. The baseline fixture made 52; a
+red-first lone-surrogate case now makes 53 green. A combined boundary run
+before that final Unicode case passed 114 tests in 20.98 seconds.
+
+Full verification of these current staged changes is running at publication:
+exec session 25323, log /tmp/coding-harness-research-refs-verify.log. Do not
+change those source bytes until it ends. Then inspect the actual result,
+repair if needed, append the measured second span, commit, push the tracker
+before Git and update PR #158. The previous full log is
+/tmp/coding-harness-research-catalog-verify.log. Planned integration ledger
+entries remain pending; standalone tests do not prove actual 39 + 3N calls,
+barriers, isolation or research-to-interview-to-spec handoff.
+
+### Decisions, ownership and remaining limits
+
+Continue to the reported deadline 2026-10-18 10:00 Asia/Singapore / 02:00 UTC,
+or the actual allowance/hard stop first; retain the five-percent reserve.
+At 21:35 UTC the local allowance event measured 47 percent primary and
+7 percent weekly use. Re-measure before a long call or stopping decision.
+Claude budget remains exhausted, and GLM remains forbidden until
+2026-10-21 20:34 Asia/Singapore. No GLM/Claude call, provider admission,
+customer access, credential-file read, language rewrite or merge occurred.
+The attended F-1 isolation capture remains open and cannot be replaced by
+offline unit tests or waived during this night continuation.
+
+Parent is the only tracker writer; the configured scan was empty before the
+checkpoint comment. The three earlier requested native research agents are
+finished read-only. Main is unchanged at 6029bbf. Research worktree branch
+explore/research-swarm has HEAD 379ed28 plus the staged second slice; do not
+reset or discard it. Handover branch docs/resume-2026-10-17-models stays in
+its own worktree and PR #161. Nothing is required from the maintainer now.
+
+### Validation of this addendum
+
+Preserve all prior handover bytes. The prior handover checkpoint 487a500 has
+hosted gates/verify green. This text-only addendum skips local make verify
+under the repository rule; its frontmatter/whitespace checks and hosted CI
+are the applicable gate. The next session starts by reading the final log
+above and the current PR heads, rather than restarting any old runner.
