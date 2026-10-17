@@ -50,7 +50,7 @@ outward, security). Use the dimensions `SPEC` and `MAINT`, and the severities
 
 Answer with table rows only: `| ID | Severity | Dimension | Origin | Where |
 Finding |` — six cells, one row per finding, no header; write a `|` inside a
-cell as `\|`. When you find nothing, answer in one sentence.
+cell as `\|`. When you find nothing, answer exactly: `No finding.`
 
 ## For the orchestrator
 

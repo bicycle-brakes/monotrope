@@ -4405,7 +4405,7 @@ def test_a_round_that_did_not_review_writes_nothing(world: World, capsys: pytest
 
 def test_a_round_without_a_finding_still_counts(world: World, capsys: pytest.CaptureFixture[str]) -> None:
     """Criterion 1: a round whose every row is decided and none accepted is clean - the first one included."""
-    world.script(pi=[{"stdout": "Nothing to report."}, {"stdout": "Still nothing."}])
+    world.script(pi=[{"stdout": "No finding."}, {"stdout": "No finding."}])
     assert world.run("review-loop") == 0
     record = world.record().read_text(encoding="utf-8")
     assert "## Round 1 — acme-v1-free, beacon-2-free, " in record
@@ -4655,13 +4655,10 @@ def test_a_failed_swarm_member_preserves_successful_answers(
     rows_ = stage2.record_rows(text)
     assert [cells[0] for cells in rows_] == ["L1-1", "L1-2"], "the successful rows were lost or renumbered"
     assert all(cells[6] == "acme-v1-free" for cells in rows_), "a failed member's name took a row"
-    if broken.get("exit"):
-        assert "beacon-2-free failed:" in text, "the failed member left no trace"
-    else:
-        # prose with a pipe is no table line: it is kept as it came, under the runner's own note
-        assert "not a table | at all" in text and stage2.NOT_ROWS_NOTE in text, "the malformed answer left no trace"
-    # a failed call is not an answer; prose with a pipe is one, and it is kept as it came
-    assert ("from 1 of 2 members" if broken.get("exit") else "from 2 of 2 members") in capsys.readouterr().out
+    assert "beacon-2-free failed:" in text, "the failed member left no trace"
+    if not broken.get("exit"):
+        assert "malformed finding output" in text
+    assert "from 1 of 2 members" in capsys.readouterr().out
 
 
 def test_free_discovery_admits_new_go_models_each_run(world: World, capsys: pytest.CaptureFixture[str]) -> None:
@@ -5323,20 +5320,18 @@ def test_every_line_of_a_reviewers_answer_reaches_findings_even_one_that_starts_
 
 
 def test_an_answer_without_rows_reaches_findings_as_it_came(world: World) -> None:
-    """Repair round 2, F-10: the blank lines and the `#` lines of an answer with no row are kept as they stand."""
+    """P6-16 supersedes F-10: arbitrary rowless commentary is failure, never a clean review."""
     answer = "## Notes\n\nFirst paragraph.\n\n# a comment line\n\nLast."
     world.script(pi=[{"model": "acme-v1-free", "stdout": answer}])
-    assert world.run("review-loop") == 0
-    world.write_findings(VERDICT)
-    assert world.run("release-loop") == 0
-    assert "\n".join("> " + line for line in answer.splitlines()) in world.text()
-    assert "# Loop record" not in world.text() and "## Round 1 — deepseek" not in world.text()
+    assert world.run("review-loop") == 1
+    assert not world.record().exists()
 
 
 def test_a_reviewers_lines_that_look_like_the_records_own_text_are_carried(world: World) -> None:
     """Repair round 2, F-10: the intro sentences are the runner's only where the runner wrote them."""
-    world.script(pi=[{"model": "acme-v1-free", "stdout": stage2.RECORD_INTRO}])
+    world.script(pi=[{"model": "acme-v1-free", "stdout": rows(1) + "\n" + stage2.RECORD_INTRO}])
     assert world.run("review-loop") == 0
+    decide_record(world)
     world.write_findings(VERDICT)
     assert world.run("release-loop") == 0
     lines = world.text().splitlines()
@@ -5388,7 +5383,7 @@ def test_a_table_line_a_reviewer_wrote_with_a_loop_id_is_carried_not_refused(
         world.script(
             pi=[
                 {"model": "acme-v1-free", "stdout": said},
-                {"model": "deepseek-v4.1-flash", "stdout": "Nothing to report."},
+                {"model": "deepseek-v4.1-flash", "stdout": "No finding."},
             ]
         )
     else:
@@ -10180,3 +10175,62 @@ def test_free_admission_requires_the_launch_provider(world: World) -> None:
     assert stage2.free_admission_problem(world.root, "new-free", ["new-free"]) is not None
     assert world.run("review-loop") == 2
     assert world.calls("pi") == [], "invalid discovery provider launched Pi"
+
+
+def test_catalog_headers_are_activated_as_literal_data(tmp_path: Path) -> None:
+    """P6-15: only active config escapes Pi expressions; retrieval evidence stays exact."""
+    headers = {
+        "X-Command": "!printf catalog-command-ran",
+        "X-Env": "$CATALOG_SECRET/${CATALOG_SECRET}",
+        "X-Escapes": "$$ $! ! trailing$",
+        "X-Plain": "catalog-value",
+    }
+    store = {stage2.OPENCODE: {"models": [{"id": "synthetic-free", "headers": headers}], "lastModified": 0}}
+    original = copy.deepcopy(store)
+    stage2.activate_overlay(tmp_path, store)
+    active = json.loads((tmp_path / "models.json").read_text())
+    encoded = active["providers"][stage2.OPENCODE]["models"][0]["headers"]
+    assert encoded == {
+        "X-Command": "$!printf catalog-command-ran",
+        "X-Env": "$$CATALOG_SECRET/$${CATALOG_SECRET}",
+        "X-Escapes": "$$$$ $$! ! trailing$$",
+        "X-Plain": "catalog-value",
+    }
+    assert store == original, "activation modified the retrieved catalog"
+
+
+def test_swarm_prompt_requires_the_validated_no_finding_response() -> None:
+    """P6-16: both paid and free instructions name the exact accepted response."""
+    assert "answer exactly: No finding." in stage2.ANSWER_FORMAT
+    prompt = (REPO_ROOT / "prompts/04b-review-loop.md").read_text()
+    assert "answer exactly: `No finding.`" in prompt
+
+
+@pytest.mark.parametrize("partial", [False, True])
+@pytest.mark.parametrize(
+    "answer",
+    [
+        "I could not review because the context is too long.",
+        "The review failed.",
+        "No finding.\nI could not complete the review.",
+        "| ID | Severity | Dimension | Origin | Where | Finding |\nNo finding.",
+    ],
+)
+def test_unsuccessful_review_prose_cannot_certify_a_clean_round(world: World, partial: bool, answer: str) -> None:
+    """P6-16: failure prose is a failed member, with no stage consumed when all fail."""
+    world.script(
+        pi=[
+            {"model": TEST_FREE[0], "stdout": rows(1) if partial else answer},
+            {"model": TEST_FREE[1], "stdout": answer},
+        ]
+    )
+    assert world.run("review-loop") == (0 if partial else 1)
+    if partial:
+        text = world.record().read_text()
+        assert f"{TEST_FREE[1]} failed:" in text
+        assert len(stage2.record_rows(text)) == 1
+    else:
+        assert not world.record().exists()
+        world.script(pi=[{"stdout": "No finding."}] * 2)
+        assert world.run("review-loop") == 0
+        assert "## Round 1" in world.record().read_text()

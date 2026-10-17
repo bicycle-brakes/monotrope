@@ -1118,3 +1118,38 @@ def test_contract_environment_excludes_parent_provider_keys(
         assert child["OPENCODE_API_KEY"] == SYNTHETIC_KEY
     finally:
         standin.close()
+
+
+@pytest.mark.usefixtures("installed_pi")
+def test_real_catalog_headers_remain_literal(tmp_path: Path) -> None:
+    """P6-15: pinned Pi's real composer preserves catalog strings without executing them."""
+    headers = {
+        "X-Command": "!printf catalog-command-ran",
+        "X-Env": "$CATALOG_SECRET/${CATALOG_SECRET}",
+        "X-Escapes": "$$ $! ! trailing$",
+        "X-Plain": "catalog-value",
+    }
+    store = {stage2.OPENCODE: {"models": [{"id": "synthetic-free", "headers": headers}], "lastModified": 0}}
+    evidence = json.dumps(store)
+    stage2.activate_overlay(tmp_path, store)
+    composer = REPO_ROOT / "tools/pi/node_modules" / PKG / "dist/core/provider-composer.js"
+    script = """
+import fs from 'node:fs';
+const { resolveConfiguredModelHeaders } = await import(process.argv[1]);
+const config = JSON.parse(fs.readFileSync(process.argv[2], 'utf8')).providers['opencode-go'];
+const model = { id: 'synthetic-free', provider: 'opencode-go', type: 'chat' };
+console.log(JSON.stringify(resolveConfiguredModelHeaders(model, config, undefined,
+  { CATALOG_SECRET: 'environment-must-not-be-read' })));
+"""
+    done = subprocess.run(
+        ["node", "--input-type=module", "-e", script, composer.as_uri(), str(tmp_path / "models.json")],
+        cwd=tmp_path,
+        env=contract_environment(),
+        capture_output=True,
+        text=True,
+        timeout=30,
+        check=False,
+    )
+    assert done.returncode == 0, done.stderr
+    assert json.loads(done.stdout) == headers, "Pi evaluated a catalog header instead of preserving its literal value"
+    assert json.dumps(store) == evidence

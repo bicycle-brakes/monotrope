@@ -229,7 +229,7 @@ READ_REQUEST = "Read nothing outside this worktree and the repository's git dire
 ANSWER_FORMAT = (
     "Answer with table rows only: one row per finding, exactly six cells, no header and no other text -\n"
     "`| ID | Severity | Dimension | Origin | Where | Finding |`. Write a `|` inside a cell as `\\|`.\n"
-    "The runner adds the reviewer, the status and the test mark. When there is no finding, answer in one sentence."
+    "The runner adds the reviewer, the status and the test mark. When there is no finding, answer exactly: No finding."
 )
 MARK_FORMAT = "For each loop row answer one line and nothing else: `<ID>: agree` or `<ID>: disagree — <reason>`."
 REPAIR_ANSWER = (
@@ -1342,7 +1342,23 @@ def activate_overlay(agent: Path, store: dict) -> None:
     definitions to activate that exact catalog independently of cache age.
     Only model definitions cross here, never provider auth configuration.
     """
-    providers = {provider: {"models": entry["models"]} for provider, entry in store.items() if entry.get("models")}
+    # Pi resolves explicit-config headers as shell commands / environment
+    # templates. Escape catalog literals at this boundary only: never mutate
+    # the fetched store (the retrieval evidence and persisted run snapshot).
+    providers = {}
+    for provider, entry in store.items():
+        models = []
+        for definition in entry.get("models", []):
+            model = dict(definition)
+            if "headers" in model:
+                headers = {}
+                for name, value in model["headers"].items():
+                    literal = value.replace("$", "$$")
+                    headers[name] = "$" + literal if literal.startswith("!") else literal
+                model["headers"] = headers
+            models.append(model)
+        if models:
+            providers[provider] = {"models": models}
     (agent / "models.json").write_text(json.dumps({"providers": providers}), encoding="utf-8")
 
 
@@ -1743,7 +1759,7 @@ def run_swarm(
     The answers come back per member: the scrubbed answer, or the exception
     that failed the member (a nonzero exit, a timeout, an empty answer). A
     member's failure never discards another member's answer (criterion 4).
-    An unparseable table with no finding rows is also a member failure.
+    Without parsed findings, only the explicit no-finding response succeeds.
     """
     answers: dict[str, str | Exception] = {}
 
@@ -1751,10 +1767,10 @@ def run_swarm(
         try:
             answer = run_reviewer(ctx, member, prompts[member], key, free=free)
             rows, _rest = parse_rows(answer)
-            # An unreadable table cannot certify a clean round. Commentary
-            # beside parsed findings still travels with those findings.
-            if not answer.strip() or (not rows and any(split_row(line) is not None for line in answer.splitlines())):
-                raise CallFailed("malformed finding output: expected six-cell findings or a no-finding sentence")
+            # No arbitrary prose (including a refusal or context-limit error)
+            # can certify a clean round. Commentary beside findings is kept.
+            if not rows and answer.strip() != "No finding.":
+                raise CallFailed("malformed finding output: expected six-cell findings or exactly 'No finding.'")
             answers[member] = answer
         except Exception as error:  # noqa: BLE001 - a member's failure is recorded, not raised, here
             answers[member] = error

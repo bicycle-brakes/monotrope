@@ -229,6 +229,10 @@ owns that check along with `make verify`.
 - 7: tests/test_stage2.py::test_free_admission_requires_the_launch_provider — a different discovery provider grants Go admission
 - 17: tests/test_stage2.py::test_refreshed_model_definitions_reach_each_launch — preparation loses definitions before probes or selected stages
 
+- 3: tests/test_stage2.py::test_catalog_headers_are_activated_as_literal_data — fetched header expressions reach active configuration unescaped or activation mutates retrieval evidence
+- 3: tests/test_pi_contract.py::test_real_catalog_headers_remain_literal — pinned Pi executes or interpolates fetched headers instead of preserving their literal values
+- 4: tests/test_stage2.py::test_unsuccessful_review_prose_cannot_certify_a_clean_round — refusal prose certifies a clean member, hides partial failure or consumes an all-failed stage
+
 ## Runner route — 2026-10-16
 
 Stage-1 route: implement · model claude-sonnet-5-5 · reason: two Flash post-run checks failed.
@@ -271,6 +275,10 @@ Repair evidence (2026-10-17): retained explicit models.json activation for the f
 2026-10-17 14:39:47–14:53:57 UTC, 0:14:10 — second attempt's outer full verification, baseline regression check and checkpoint through observed completion. Its model-side 0:09:24 is already recorded above. These three non-overlapping spans total 0:46:19 for the measured P6-14 repair interval; any earlier startup before the first recorded bound is not measured.
 
 The outer runner reported `repair: verified and committed · route codex-repair · attempt 2` and left a clean tree at `79a73a8` on 2026-10-17. Complete make verify and all repair postconditions passed; its successful output does not retain a new full-suite pytest count. The orchestrator marked P6-14's Broke a test as yes because the existing agent-directory assertion changed to include the explicit model configuration, alongside the strengthened existing launch regression. The failed first attempt and its setup diagnostic remain in findings.md. No live provider or GLM/Claude call was made for this repair.
+
+2026-10-17 17:01:53–17:11:09, 0:09:16 — repair of taken phase-6 rows P6-15 and P6-16, including verification waits (Europe/Berlin).
+
+Repair evidence (2026-10-17): active models.json now escapes fetched header command and environment syntax without modifying the retrieved models-store data. The real pinned Pi composer confirms literal command, variable and escape values. Review members without parsed findings must answer exactly "No finding."; arbitrary refusal/error prose fails the member, preserves successful peers and consumes no all-failed round. The paid prompt and shared response instructions name that exact response. Loading activate_overlay and run_swarm from baseline 8986d9ec194add2984ddf829c918483d8b186af2 into the current test process produced eight assertion failures (including the real-Pi header test) and two already-protected malformed-table cases passed. The broad affected-suite run reported 726 passed and three obsolete commentary expectations; all three passed in the final-source rerun (four cases including the failed-call control). The focused regression, prompt, discovery and doctrine run passed 18 cases. All 17 real-Pi contracts passed with local loopback access after the sandbox initially refused eleven local-server cases. Ruff check and format check, interview minimums, ADR answers, criterion ledger and git diff whitespace checks passed. This call did not edit findings.md, access the tracker, make a live provider call or commit. The outer runner owns complete make verify and the checkpoint.
 
 ## Q-16 implementation amendment — 2026-10-17
 
