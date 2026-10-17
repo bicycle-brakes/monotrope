@@ -2,7 +2,7 @@
 title: "Session handover — sixth night run, as of 2026-10-17"
 category: handover
 created: 2026-10-17
-updated: 2026-10-17
+updated: 2026-10-18
 direction: framework->framework
 provenance: ai-drafted-reviewed
 produced_by:
@@ -1112,3 +1112,143 @@ hosted gates/verify green. This text-only addendum skips local make verify
 under the repository rule; its frontmatter/whitespace checks and hosted CI
 are the applicable gate. The next session starts by reading the final log
 above and the current PR heads, rather than restarting any old runner.
+
+
+## Addendum — 2026-10-18 Europe/Berlin, verified boundaries and allowance reserve
+
+### Objective and stopping boundary
+
+Continue the maintainer's night work until 2026-10-18 10:00 Asia/Singapore
+(02:00 UTC, 04:00 Europe/Berlin), or the earlier actual allowance/hard stop.
+The previously requested five-percent reserve remains binding. At
+2026-10-17 22:24:37 UTC the local usage event measured 91 percent primary
+use in the 300-minute window and 14 percent weekly use. New implementation
+has stopped while publication and this handover are completed. Do not
+start another code slice without allowance for its complete verification
+and handover. No background or scheduled continuation service exists.
+
+### Completed work and evidence
+
+Research-swarm checkpoint 9514f1ff159bc9a187714da678e0c70a49d63165 is pushed
+to the existing draft PR #158 after its tracker comment and Dolt push.
+It follows the green catalog foundation 379ed28. Implemented and tested:
+
+- Structural frozen-byte references: exact Markdown heading/criterion
+  extents ignoring frontmatter/fences; Python AST definitions and module
+  assignments; canonical safe YAML/JSON values; other-file whole-word
+  extents; all-or-nothing claim evidence with one 4000-Unicode-character
+  budget. Attribute/subscript reads do not declare module variables;
+  augmented assignments and type aliases retain their proper extents.
+- Exact finder-map union with all source origins/reasons, explicit unread
+  provenance and strict raw JSON/schema handling. Empty categories need
+  unread markers. Unresolved references stay visible without scope.
+  Given specs are inserted independently; active/archive/living artifacts
+  map to frozen sibling specs, with self/no-spec/unresolved distinctions.
+- Candidate-local catalog fault evidence and declared Go origin/provider
+  binding. Other providers' duplicate properties do not disable Go;
+  repeated raw keys inside Go models make capability evidence ambiguous.
+  Malformed free definitions lose only that candidate; malformed required
+  fixed definitions stop preflight. No model is called by these helpers.
+
+Final focused contracts: 175 passed in 22.83 seconds. Five caller/test
+registration checks pass. Complete make verify GREEN: 2476 passed,
+16 skipped in 749.26 seconds, then every blocking gate green. Source bytes
+were fixed during the final run. Process-local commit.gpgsign=false and
+loopback test servers were enabled. Ruff check/format (76 files), generated
+CI, frontmatter and criterion ledger pass. Documentation/Markdown findings
+remain report-only. Final log:
+/tmp/coding-harness-research-map-final-verify.log (exec session 6495,
+finished successfully; do not restart it).
+
+The earlier full reference run was RED: two missing caller/test registrations,
+2414 passed and 16 skipped. The progress message that inferred success from
+the move into later gates was explicitly corrected. Both registration
+failures were repaired, additional assignment/map/unread/origin cases went
+red first, and the final complete run above passed. Read actual pytest
+summaries, blocking-gate outcomes and process exit status before reporting
+green; the verify runner deliberately continues collecting later gates.
+Old session 25323 is finished RED, not an active or resumable process.
+
+Measured second phase-4 interval: 2026-10-17 21:41:24–22:22:15 UTC,
+40m51s, including the red run, repairs, next-slice draft preparation and
+final verification waits. This is appended in plan.md after the earlier
+24m56s and 38m37s and retained measured history. The total appetite stays
+13h20m. Approximate historical spans stay approximate; the old named
+unmeasured span remains excluded by the recorded human continuation,
+not measured zero. No implementation time is reset.
+
+### Working state and ownership
+
+At the 22:25 UTC check:
+
+- PR #156 remains merged at 3f6d467. PR #157 remains OPEN and ready at
+  0c03ec0, with its prior hosted CI green and independent Sol verdict
+  exactly "No finding." No merge was performed.
+- PR #158 remains OPEN/DRAFT at 9514f1f. Its local full verification is
+  green; the new head's hosted checks are pending at publication. Earlier
+  checkpoint 379ed28 has hosted gates/verify green. Worktree
+  .claude/worktrees/research-swarm is clean, branch explore/research-swarm.
+- Handover PR #161 remains open on docs/resume-2026-10-17-models in its own
+  worktree. Prior checkpoint 8982621 has hosted CI green. Its old Python
+  3.9 environment was rebuilt with Python 3.12.15 and locked dependencies;
+  frontmatter validation now passes locally. This new text-only addendum
+  skips local full make verify under the repository rule; hosted CI is
+  pending at publication.
+- A fresh fetch leaves origin/main at 6477d04. Main checkout remains
+  6029bbf with its pre-existing untracked .codex/agents/ untouched. All
+  source/document changes stayed in worktrees. No stash, amend, force
+  push or merge occurred.
+
+Only the existing bounded-research-swarm task was updated by this checkpoint
+(coding-harness-icw), still in progress. Tracker push preceded Git push.
+The configured session scan was empty before writing; this parent is the
+sole tracker writer. All three previously requested research subagents are
+finished read-only; no model process remains active. Their published
+research/idea-capture tasks remain as recorded in earlier addenda, including
+the deferred research-currency task and open interface/model-choice ideas.
+
+### Remaining work and concrete resumption
+
+This is partial implementation. The old dispatcher still runs its earlier
+shape until the amended pipeline replaces it. The standalone graph, catalog,
+reference and map checks do not prove actual 39 + 3N calls, barriers,
+isolated briefs, report/judge reconciliation or handoff. Frozen-copy
+construction, bounded local history, role prompts, new scheduling and
+report/judge/handoff integration are unfinished. The attended F-1 isolation
+capture and later fresh phase-6 review remain required; do not waive them
+or mark the decision PR ready from these unit results.
+
+One concrete next action: read the existing research-swarm plan at 9514f1f,
+then write red tests for its bounded frozen-HEAD history packet in the same
+worktree. Prepared, UNTESTED drafts are only conveniences:
+/tmp/coding-harness-research-history-draft.py and
+/tmp/coding-harness-research-history-tests-draft.py. They are not repository
+artifacts or qualified code; regenerate from plan.md if missing, and inspect
+before using. The draft intends local Git only, frozen full hashes, literal
+mapped paths, ten retained commits per path, author UTC, body cap 4000
+Unicode characters, mapped touched paths, older-history/not-read markers,
+one caller-supplied monotonic deadline and no retry. It disables lazy fetch,
+transports, replacement objects and ambient repository overrides. Official
+Git references and measured Git 2.56.0 are recorded in plan.md. Add caller/
+test registration, exact evidence and full qualification before publishing.
+Its earlier preparation time is already included in the 40m51s span; count
+only later implementation/verification in the next interval.
+
+The original MiMo choice was superseded by the recorded general review
+availability decision. Zen non-training free admission remains a separate
+question/change only after PR #157 merges; it has not been accepted here.
+No GLM call before 2026-10-21 20:34 Asia/Singapore. Claude budget remains
+exhausted; use Sol 6.1 for implementation. Foreign calls go only through the
+worktree's locked Python and scripts/stage2.py. No credential-file read,
+customer access, live provider qualification, new model admission, interface
+implementation or language rewrite occurred. Nothing is needed from the
+maintainer for the recorded resumption; merges remain their decision.
+
+### Preservation and validation
+
+All prior handover body records remain byte-for-byte unchanged. Only the
+shared updated frontmatter stamp advances to 2026-10-18 for the local date;
+this addendum is appended. Applicable local checks are frontmatter-current
+and whitespace; task status remains in Beads. The PR body carries the
+published source heads, remaining scope and the earlier full tracker-change
+list. Inspect current hosted CI and actual allowance before resuming work.
