@@ -946,3 +946,69 @@ text-only addendum have hosted CI pending at publication; local full verify
 is skipped for this handover under the text-only rule. No live provider
 qualification, credential-file read, customer access, GLM/Claude call or
 merge occurred. All earlier handover bytes remain unchanged.
+
+## Addendum — 2026-10-17, night continuation and clean independent re-check
+
+### Where we are
+
+The maintainer requested "mach weiter bis morgen im 10". Continuation
+started after the full handover and instructions were reread, worktrees
+and PRs checked, and a new fetch completed. The local usage event at
+21:00:42 UTC measured zero percent used in the new five-hour window.
+At entry PR #157 (ab5e688), #158 (e9ec953) and this handover (2818e2d)
+had hosted verification green. Original handover PR #156 remains merged.
+
+A fresh independent read-only Sol review of ab5e688 finished with exactly
+"No finding.", session 01a14bab-758c-7092-bd54-81d6bdeeb919. The runner's
+verdict was committed unchanged at 0c03ec0, with no source change after the
+fully verified safety repair. It is pushed to PR #157, still draft while
+the latest verdict commit's hosted checks run. No model process is active.
+
+### Next step
+
+Check hosted CI for PR #157 at 0c03ec0. When green, mark it ready for the
+maintainer's review without merging, then resume research-swarm under its
+existing plan and measured remaining appetite. Keep the implementation
+bead open until its intended merge boundary.
+
+### Needed from the maintainer
+
+Nothing right now. The reported interpretation of the requested deadline
+is 2026-10-18 10:00 Asia/Singapore, equivalent to 02:00 UTC and 04:00
+Europe/Berlin. This active session continues until that boundary or its
+actual allowance/other hard stop, whichever comes first; uninterrupted
+runtime was not promised. No scheduled or unattended service is created.
+
+### Decisions and preferences
+
+Preserve the earlier five-percent allowance reserve and individual change
+appetites. The eighteen-hour plan remains a proposal; this continuation's
+operational endpoint is the deadline above, not a fresh eighteen hours.
+One code change and one foreign call at a time; the exhausted Claude budget
+and exact GLM cutoff remain in force. The local Claude-command guard is
+present and was used for the re-check. No merge, new provider admission,
+interface implementation or language rewrite was authorized here.
+
+### Open work and working state
+
+Review worktree branch explore/loop-until-clean is clean at 0c03ec0.
+Research-swarm stays at e9ec953 and requires the amended graph/catalog/
+handoff implementation and the attended isolation capture. The stale active
+12-hour wording must follow the already approved 13-hour 20-minute total
+before new phase-4 work; historical records remain unchanged. The finished
+re-check log is /tmp/coding-harness-pr157-night-recheck.log. Do not resume
+the earlier review/repair sessions. The configured scan found no other
+interactive writer; this parent remains the sole tracker writer, and all
+three earlier native research subagents are finished read-only. Main was
+not edited and remains at 6029bbf; existing worktree ancestry is retained.
+
+### Validation
+
+All previous handover bytes remain unchanged. Fresh review completed through
+the worktree's locked Python and stage2.py with a clean pre-call leak check.
+The verdict-only change passed frontmatter-current (295 documents) and
+whitespace checks; source full verification stays at 1423849 and hosted CI
+was green at ab5e688. Tracker comment was pushed before Git. No live provider
+qualification, credential-file read, customer access, GLM/Claude call or
+merge occurred in this resumption. Latest verdict and new handover CI are
+pending at publication.
