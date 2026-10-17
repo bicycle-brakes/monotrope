@@ -4,7 +4,7 @@ status: draft
 implementation_status: none
 date: 2026-10-14
 last_reviewed: 2026-10-16
-updated: 2026-10-16
+updated: 2026-10-17
 supersedes: null
 superseded_by: null
 bead: coding-harness-4fk
@@ -205,3 +205,7 @@ Stage-1 route: implement · model claude-sonnet-5-5 · reason: two Flash post-ru
 ## Time used
 
 2026-10-16 span not measured: this Stage-1 repair session had file tools only and could not read `date`; no estimate is recorded.
+
+2026-10-17 02:57:40–03:14:12, 00:16:32 — repair of the taken second-round findings, including verification waits.
+
+Repair evidence: new regression tests failed against the repair baseline `2bea51c`. The affected-suite run finished with 727 passed, 13 skipped and one obsolete lineage-text assertion; after correcting that assertion, the focused documentation and regression rerun passed all 36 tests. The 12 real Pi contracts passed with local loopback access. Ruff check, format check, interview minimums, ADR answers and the criterion ledger passed. The exploratory `make verify` runs were interrupted: the sandbox denied loopback servers and the shared tracker is outside this repair call's read scope. The separate registry check reported tracker state not measurable. The outer runner owns the final complete `make verify` and checkpoint; this call made no commit and did not edit `findings.md`.

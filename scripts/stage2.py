@@ -23,7 +23,7 @@ stands between the rule and the call.
     python3 scripts/stage2.py probe        <change>   # one call per free and paid member, no record written
     python3 scripts/stage2.py session      <change>   # interactive Codex/Pi, a Terminal window
 
-Each loop round and the probe check `tools/pi/pi --version` against `PI_VERSION` first;
+A fresh loop run and the probe check `tools/pi/pi --version` against `PI_VERSION` first;
 any other answer refuses with exit 2 before the leak check and before any call.
 A fresh loop run forces a live catalog refresh (`pi update --models`) before it
 lists the models (`pi --list-models`) in the same fresh scratch directories; a
@@ -932,8 +932,7 @@ def _terms(entry: dict, model: str) -> dict:
 def terms_problem(entry: dict, model: str) -> str | None:
     """Why the paid model's data terms are not read (yet), or None when it is admitted.
 
-    A record with a date and a source admits (the declaration claims what was
-    read; `tests/test_model_endpoints.py` checks those claims). A dated skip
+    A dated, sourced reading must explicitly rule out training. A dated skip
     keeps the model out and names its reason for the handover (ADR 0021,
     decision 5).
     """
@@ -948,6 +947,8 @@ def terms_problem(entry: dict, model: str) -> str | None:
         return f"the model {model} has no dated reading of its data terms (gelesen is not an ISO date YYYY-MM-DD)"
     if not record.get("quelle"):
         return f"the model {model} has no dated reading of its data terms (gelesen/quelle missing)"
+    if record.get("training") != "Not used":
+        return f"the model {model} has disallowed or unread training terms (training must be Not used)"
     return None
 
 
@@ -1020,11 +1021,7 @@ def ladder(root: Path) -> list[str]:
     """
     entry = endpoint_entry(root)
     models = [str(model) for model in entry.get("modelle") or []]
-    if not models:
-        raise Refused(f"the endpoint {OPENCODE} lists no model")
     eligible = [model for model in models if terms_problem(entry, model) is None]
-    if not eligible:
-        raise Refused(f"no model of {OPENCODE} has its data terms read; no paid stage can be filled.")
     return ordered_models(entry, eligible)
 
 
@@ -1032,14 +1029,15 @@ def skipped_models(root: Path) -> list[str]:
     """The declared paid models that are not eligible, each named with its reason (ADR 0021, decision 5)."""
     entry = endpoint_entry(root)
     named = []
-    for model in [str(model) for model in entry.get("modelle") or []]:
-        problem = terms_problem(entry, model)
+    declared = [str(model) for model in entry.get("modelle") or []]
+    for model in dict.fromkeys([*declared, *(entry.get("flash_swarm") or [])]):
+        problem = terms_problem(entry, model) if model in declared else "not a declared paid model"
         if problem is not None:
             named.append(f"{model} ({problem})")
     return named
 
 
-def flash_problem(entry: dict, ladder_ids: list[str]) -> str | None:
+def flash_problem(entry: dict) -> str | None:
     """Why the entry's `flash_swarm` cannot be the second round's membership, or None.
 
     The swarm is a subset of the eligible paid models, each named once (spec,
@@ -1052,9 +1050,6 @@ def flash_problem(entry: dict, ladder_ids: list[str]) -> str | None:
         return "flash_swarm must be a list of model ids"
     if len(set(flash)) != len(flash):
         return "flash_swarm names a model twice"
-    unknown = [model for model in flash if model not in ladder_ids]
-    if unknown:
-        return f"flash_swarm names models that are not eligible paid models: {', '.join(unknown)}"
     return None
 
 
@@ -1172,14 +1167,20 @@ def parse_catalog(output: str) -> list[dict]:
     refuses - it never becomes an empty selection that launches a call
     (spec, criterion 5).
     """
+    lines = [line.split() for line in output.splitlines() if line.strip()]
+    if not lines or "provider" not in lines[0] or "model" not in lines[0]:
+        raise Refused("`pi --list-models` printed no model table header; catalog parse failed.")
+    header = lines[0]
+    if len(set(header)) != len(header):
+        raise Refused("`pi --list-models` model table has duplicate columns; catalog parse failed.")
+    provider, model = header.index("provider"), header.index("model")
     rows = []
-    for line in output.splitlines():
-        parts = line.split()
-        if len(parts) < 2 or parts[0] == "provider":
-            continue
-        rows.append({"provider": parts[0], "model": parts[1]})
+    for number, parts in enumerate(lines[1:], 2):
+        if len(parts) != len(header):
+            raise Refused(f"`pi --list-models` model table parse failed at line {number}: wrong column count.")
+        rows.append({"provider": parts[provider], "model": parts[model]})
     if not rows:
-        raise Refused("`pi --list-models` printed no model table; the free stage cannot be filled.")
+        raise Refused("`pi --list-models` printed no model table rows; the free stage cannot be filled.")
     return rows
 
 
@@ -1308,7 +1309,7 @@ def _looks_binary(path: Path) -> bool:
         return True
 
 
-def _free_candidate(root: Path, rel: str) -> bool:
+def _free_candidate(root: Path, rel: str, base: str | None = None) -> bool:
     """Whether a changed file may enter the free diff: source and test code only.
 
     Python in `scripts/` and `tests/`, and executable source under `tools/`.
@@ -1317,20 +1318,35 @@ def _free_candidate(root: Path, rel: str) -> bool:
     """
     path = Path(rel)
     parts = path.parts
-    if not parts or path.is_symlink():
+    if not parts or path.is_absolute() or ".." in parts:
         return False
     if any(part in FREE_DIFF_SKIP_PARTS for part in parts):
         return False
     full = root / path
-    if not full.is_file() or _looks_binary(full):
+    if any((root / parent).is_symlink() for parent in [path, *path.parents]):
         return False
+    executable = os.access(full, os.X_OK)
+    if full.exists():
+        if not full.is_file() or _looks_binary(full):
+            return False
+    else:
+        if base is None:
+            return False
+        # Deleted source is classified by its merge-base blob and mode.
+        tree = _git_output(root, "ls-tree", base, "--", rel)
+        if not tree or tree.split()[0] not in {"100644", "100755"}:
+            return False
+        blob = subprocess.run(["git", "-C", str(root), "show", f"{base}:{rel}"], capture_output=True, check=False)
+        if blob.returncode or b"\0" in blob.stdout:
+            return False
+        executable = tree.split()[0] == "100755"
     if parts[0] == "scripts":
-        return len(parts) == 2 and path.suffix == ".py"
+        return path.suffix == ".py"
     if parts[0] == "tests":
         return path.suffix == ".py"
     if parts[0] == "tools":
         try:
-            return os.access(full, os.X_OK) and path.suffix not in FREE_DIFF_TEXT_SUFFIXES
+            return executable and path.suffix not in FREE_DIFF_TEXT_SUFFIXES
         except OSError:
             return False
     return False
@@ -1375,13 +1391,13 @@ def free_diff(root: Path) -> str:
     for rel in [*changed, *untracked]:
         if rel not in seen:
             seen.add(rel)
-            if _free_candidate(root, rel):
+            if _free_candidate(root, rel, base):
                 names.append(rel)
     parts: list[str] = []
     total = 0
     for rel in names:
         if rel in untracked_set:
-            piece = _git_output(root, "diff", *flags, "--no-index", "--", "/dev/null", str(root / rel), allow=(0, 1))
+            piece = _git_output(root, "diff", *flags, "--no-index", "--", "/dev/null", rel, allow=(0, 1))
         else:
             piece = _git_output(root, "diff", *flags, base, "--", rel)
         bounded = _bound_hunks(rel, piece)
@@ -1394,10 +1410,7 @@ def free_diff(root: Path) -> str:
                 f"(the implementation diff was cut at {FREE_DIFF_MAX_TOTAL} lines; later files are not carried)"
             )
             break
-    diff = "\n".join(parts)
-    if not diff.strip():
-        raise Refused("the implementation diff is empty; the free stage has nothing to review.")
-    return diff
+    return "\n".join(parts)
 
 
 # The free reviewer's static instructions: what it reviews and how it answers.
@@ -2017,10 +2030,10 @@ def new_state(root: Path, free: dict) -> dict:
     """
     entry = endpoint_entry(root)
     ladder_ids = ladder(root)
-    problem = flash_problem(entry, ladder_ids)
+    problem = flash_problem(entry)
     if problem:
         raise Refused(f"{problem}.")
-    flash = [str(model) for model in entry.get("flash_swarm") or []]
+    flash = [model for model in entry.get("flash_swarm") or [] if model in ladder_ids]
     return {
         "free": free,
         "paid": {
@@ -2035,7 +2048,7 @@ def new_state(root: Path, free: dict) -> dict:
 def stages_of(state: dict) -> list[dict]:
     """The run's stages in order: the free swarm, the Flash swarm, one per remaining rung."""
     stages: list[dict] = []
-    if state["free"]["selected"]:
+    if state["free"]["selected"] and not state["free"].get("skipped"):
         stages.append({"key": "free", "kind": "free", "members": list(state["free"]["selected"])})
     flash = list(state["paid"]["flash"])
     if flash:
@@ -4003,9 +4016,8 @@ def review_loop(root: Path, change: str) -> None:
             )
     state = read_state(record, findings_text)
     if record is None and state is None:
-        # A fresh run: no record and no release carries a snapshot yet - or the
-        # loop predates the swarms and starts over with the current discovery
-        # and configuration (its history and stops still hold).
+        # A fresh run has neither a record nor a released snapshot. read_state
+        # refuses a pre-swarm record without its Loop state line.
         problem = entry_problem(root, OPENCODE)
         if problem:
             raise Refused(problem)
@@ -4017,6 +4029,13 @@ def review_loop(root: Path, change: str) -> None:
         # The snapshot is written only with the first completed round: a failed
         # attempt consumes no stage and leaves no record (ADR 0021, decision 6).
     stage = next_stage(state)
+    free_input = None
+    if stage is not None and stage["kind"] == "free":
+        free_input = free_diff(root)
+        if not free_input.strip():
+            state["free"]["skipped"] = "free stage skipped: no implementation source diff"
+            print(f"review-loop: {state['free']['skipped']}")
+            stage = next_stage(state)
     if stage is None:
         raise Refused(
             "every stage of this run is consumed and the last round was not clean; the loop stops and "
@@ -4025,7 +4044,7 @@ def review_loop(root: Path, change: str) -> None:
     round_number = rounds_run(record, findings_text) + 1
     members: list[str] = stage["members"]
     free = stage["kind"] == "free"
-    diff = free_diff(root) if free else change_diff(root)
+    diff = free_input if free else change_diff(root)
     body = "" if free else (root / "prompts" / "04b-review-loop.md").read_text(encoding="utf-8")
     prompts: dict[str, str] = {}
     endpoints: dict[str, tuple[str, str, str]] = {}
@@ -4054,6 +4073,11 @@ def review_loop(root: Path, change: str) -> None:
     key = reviewer_key()
     notes: list[str] = []
     if not state["consumed"]:
+        if state["free"].get("skipped"):
+            notes.append(f"Notice: {state['free']['skipped']}.")
+        skipped = skipped_models(root)
+        if skipped:
+            notes.append(f"Notice: paid models skipped for unread or refusing terms: {'; '.join(skipped)}.")
         gap = unread_catalog_ids(endpoint_entry(root), state["free"])
         if gap:
             notes.append(f"Notice: in the live catalog without a terms reading: {', '.join(gap)}.")
@@ -4179,7 +4203,9 @@ def probe(root: Path, change: str) -> None:
     free = discover_free(root)
     diff = free_diff(root)
     answered = 0
-    for model in free["selected"]:
+    if not diff.strip():
+        print("probe: free stage skipped: no implementation source diff")
+    for model in free["selected"] if diff.strip() else []:
         endpoint = (OPENCODE, model, "max")
         ctx = preflight(root, change, endpoint, admission_problem=_free_admission(True, {"free": free}))
         prompt = "\n\n".join(

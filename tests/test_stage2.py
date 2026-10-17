@@ -4798,11 +4798,12 @@ def test_ineligible_paid_models_are_skipped_and_named(world: World, capsys: pyte
     endpoints.write_text(yaml.safe_dump(data, allow_unicode=True), encoding="utf-8")
     world.script(pi=[{"stdout": rows(1)}])
     capsys.readouterr()
-    assert world.run("review-loop") == 2
-    assert "flash_swarm names models that are not eligible paid models: unread-model" in capsys.readouterr().err, (
-        "an unread model filled the Flash stage"
-    )
-    assert world.reviews("pi") == [] and not world.record().exists()
+    assert world.run("review-loop") == 0
+    assert "unread-model" in capsys.readouterr().out
+    assert "unread-model" in world.record().read_text(encoding="utf-8")
+    assert all(rung_of(call) in TEST_FREE for call in world.reviews("pi"))
+    shutil.rmtree(world.record().parent)
+    (world.bin / "calls.jsonl").unlink()
     data = yaml.safe_load(endpoints.read_text(encoding="utf-8"))
     entry = next(e for e in data["endpunkte"] if e["name"] == "opencode-go")
     entry["flash_swarm"] = list(TEST_FLASH)
@@ -7893,7 +7894,7 @@ def test_workflow_section_4_routes_the_three_reviews() -> None:
     assert routing_problems(text) == []
     assert class_table_problems(text) == []
     four = routing_rows(section(text, "## 4 · "))
-    for needle in ("free_stage", "flash_swarm", "`modelle`", "declared order"):
+    for needle in ("free_stage", "flash_swarm", "`modelle`", "anfragen_5h", "descending"):
         assert needle in four["4b Review loop"][1], needle
     assert four["2a Spec review"][0] == "Opus 5.5"
     for phase in ("2 Spec", "2b Design", "3 Plan", "6 Review"):
@@ -8540,14 +8541,14 @@ def test_agents_md_names_the_loop_and_the_runner() -> None:
 
 
 def test_workflow_section_4_keeps_the_lineage_argument() -> None:
-    """Criterion 22: the why stands and names the rungs' lineages instead of two reviewers of one round."""
+    """Criterion 22: preserve the diversity argument while model membership stays in configuration."""
     four = flat(section(WORKFLOW.read_text(encoding="utf-8"), "## 4 · "))
     for phrase in (
         "blind spots",
         "Disagreements are recorded, not resolved automatically",
         "is the information",
-        "DeepSeek",
-        "MiMo",
+        "training lineages configured in",
+        "`model-endpoints.yaml`",
         "Rung 1 flagged it, rung 2 did not",
     ):
         assert phrase in four, phrase
@@ -8672,7 +8673,7 @@ def test_no_doctrine_text_repeats_the_ladder_order() -> None:
     """The ladder is data: a reorder of the list in model-endpoints.yaml leaves every doctrine text true."""
     ladder = yaml.safe_load((REPO_ROOT / "model-endpoints.yaml").read_text(encoding="utf-8"))["endpunkte"]
     ids = next(e for e in ladder if e["name"] == "opencode-go")["modelle"]
-    assert len(ids) == 9
+    assert ids and len(ids) == len(set(ids))
     # an id another endpoint declares too (the Z.ai Flash model) is that endpoint's name in the doctrine
     elsewhere = {m for e in ladder if e["name"] != "opencode-go" for m in e.get("modelle") or []}
     for path in ("AGENTS.md", "docs/WORKFLOW.md", "prompts/04b-review-loop.md"):
@@ -9398,5 +9399,168 @@ def test_overlay_ids_without_a_terms_reading_are_named_never_admitted(
 )
 def test_terms_problem_requires_an_iso_reading_date(record: dict, admitted: bool) -> None:
     """L1-1: `gelesen` must be an ISO date; an empty skip marker is "absent" only beside a valid one - fail closed."""
+    record = {"training": "Not used", "aufbewahrung": "0 days", **record}
     problem = stage2.terms_problem({"modelle_terms": {"m": record}}, "m")
     assert (problem is None) is admitted, problem
+
+
+@pytest.mark.parametrize("deleted", [False, True])
+def test_free_diff_includes_nested_and_deleted_source(world: World, deleted: bool) -> None:
+    path = world.root / "scripts" / "kit" / "probe.py"
+    path.parent.mkdir()
+    path.write_text("NESTED_SOURCE = 1\n", encoding="utf-8")
+    if deleted:
+        git(world.root, "add", str(path.relative_to(world.root)))
+        git(world.root, "commit", "-qm", "source before deletion")
+        git(world.root, "update-ref", "refs/remotes/origin/main", "HEAD")
+        path.unlink()
+    # Nested admission must keep binary, symlink and generated-tree exclusions.
+    (path.parent / "binary.py").write_bytes(b"\0EXCLUDED_BINARY")
+    (path.parent / "link.py").symlink_to(world.root / "AGENTS.md")
+    generated = path.parent / "build"
+    generated.mkdir()
+    (generated / "generated.py").write_text("EXCLUDED_GENERATED = 1\n", encoding="utf-8")
+    diff = stage2.free_diff(world.root)
+    assert "scripts/kit/binary.py" not in diff
+    assert "scripts/kit/link.py" not in diff
+    assert "EXCLUDED_GENERATED" not in diff
+    assert "scripts/kit/probe.py" in diff
+    assert ("-NESTED_SOURCE = 1" if deleted else "+NESTED_SOURCE = 1") in diff
+
+
+def test_free_diff_untracked_headers_are_relative(world: World) -> None:
+    (world.root / "scripts" / "new.py").write_text("NEW_SOURCE = 1\n", encoding="utf-8")
+    diff = stage2.free_diff(world.root)
+    assert "scripts/new.py" in diff
+    assert str(world.root) not in diff
+
+
+@pytest.mark.parametrize("field,value", [("training", "Yes"), ("training", None)])
+def test_paid_terms_reject_training(world: World, field: str, value: str | None) -> None:
+    path = world.root / "model-endpoints.yaml"
+    data = yaml.safe_load(path.read_text())
+    entry = next(e for e in data["endpunkte"] if e["name"] == "opencode-go")
+    model = TEST_LADDER[0]
+    entry["modelle_terms"][model][field] = value
+    path.write_text(yaml.safe_dump(data), encoding="utf-8")
+    assert model not in stage2.ladder(world.root)
+    assert any(model in reason and field in reason for reason in stage2.skipped_models(world.root))
+
+
+@pytest.mark.parametrize("command", ["review-loop", "probe"])
+def test_empty_free_diff_skips_to_paid_models(world: World, capsys: pytest.CaptureFixture[str], command: str) -> None:
+    git(world.root, "add", "-A")
+    git(world.root, "update-ref", "refs/remotes/origin/main", "HEAD")
+    (world.root / "AGENTS.md").write_text("# Documentation only\n", encoding="utf-8")
+    world.script(pi=[{"stdout": rows(1)}] * len(TEST_LADDER))
+    assert world.run(command) == 0
+    output = capsys.readouterr()
+    assert "free stage skipped" in output.out + output.err
+    calls = world.reviews("pi")
+    assert calls and all("--no-tools" not in call["argv"] for call in calls)
+    if command == "review-loop":
+        text = world.record().read_text()
+        assert "free stage skipped" in text
+        assert "## Round 1" in text and "## Round 2" not in text
+        assert {rung_of(call) for call in calls} == set(TEST_FLASH)
+        decide_record(world)
+        assert world.run(command) == 0
+        assert len(world.reviews("pi")) == len(TEST_FLASH) + 1
+    else:
+        assert {rung_of(call) for call in calls} == set(TEST_LADDER)
+
+
+def test_free_round_needs_no_eligible_paid_ladder(world: World, capsys: pytest.CaptureFixture[str]) -> None:
+    path = world.root / "model-endpoints.yaml"
+    data = yaml.safe_load(path.read_text())
+    entry = next(e for e in data["endpunkte"] if e["name"] == "opencode-go")
+    entry["modelle_terms"] = {}
+    world.script(pi=[{"stdout": rows(1)}] * 2)
+    path.write_text(yaml.safe_dump(data), encoding="utf-8")
+    assert world.run("review-loop") == 0
+    assert {rung_of(call) for call in world.reviews("pi")} == set(TEST_FREE)
+    assert "skipped" in capsys.readouterr().out
+    decide_record(world)
+    assert world.run("review-loop") == 2
+    assert "every stage" in capsys.readouterr().err
+
+
+@pytest.mark.parametrize("member", [TEST_FLASH[0], "undeclared-paid"])
+def test_ineligible_flash_member_is_named_and_skipped(
+    world: World, capsys: pytest.CaptureFixture[str], member: str
+) -> None:
+    path = world.root / "model-endpoints.yaml"
+    data = yaml.safe_load(path.read_text())
+    entry = next(e for e in data["endpunkte"] if e["name"] == "opencode-go")
+    entry["flash_swarm"] = [member, TEST_FLASH[1]]
+    entry["modelle_terms"].pop(member, None)
+    path.write_text(yaml.safe_dump(data), encoding="utf-8")
+    world.script(pi=[{"stdout": rows(1)}] * 3)
+    assert world.run("review-loop") == 0
+    assert member in capsys.readouterr().out
+    assert member in world.record().read_text()
+    decide_record(world)
+    assert world.run("review-loop") == 0
+    assert [rung_of(call) for call in world.reviews("pi")][-1] == TEST_FLASH[1]
+    assert member not in [rung_of(call) for call in world.reviews("pi")]
+
+
+@pytest.mark.parametrize(
+    "table",
+    [
+        "model context provider\nnew-free 100 opencode-go\n",
+        "provider model context\nopencode-go new-free 100\n",
+    ],
+)
+def test_catalog_parser_uses_header_columns(table: str) -> None:
+    assert stage2.parse_catalog(table) == [{"provider": "opencode-go", "model": "new-free"}]
+
+
+@pytest.mark.parametrize(
+    "table",
+    [
+        "opencode-go new-free\n",
+        "provider model context\nstray line\n",
+        "provider context\nopencode-go 100\n",
+        "provider model\nopencode-go new-free\nunexpected stray output\n",
+    ],
+)
+def test_catalog_parser_names_malformed_tables(table: str) -> None:
+    with pytest.raises(stage2.Refused, match="model table"):
+        stage2.parse_catalog(table)
+
+
+def test_workflow_describes_cost_order() -> None:
+    text = flat(WORKFLOW.read_text(encoding="utf-8"))
+    assert "in declared order" not in text
+    assert "entry's ordered `modelle` list" not in text
+    assert "rungs are three lineages" not in text
+    assert "anfragen_5h" in text and "descending" in text
+
+
+def test_adding_a_paid_model_requires_only_configuration(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    import test_model_endpoints
+
+    data = yaml.safe_load((REPO_ROOT / "model-endpoints.yaml").read_text())
+    entry = next(e for e in data["endpunkte"] if e["name"] == "opencode-go")
+    entry["modelle"].append("future-paid-model")
+    entry["modelle_terms"]["future-paid-model"] = copy.deepcopy(entry["modelle_terms"][entry["modelle"][0]])
+    # Run the declaration and doctrine contracts with only the YAML changed.
+    for rel in ("AGENTS.md", "docs/WORKFLOW.md", "prompts/04b-review-loop.md"):
+        target = tmp_path / rel
+        target.parent.mkdir(parents=True, exist_ok=True)
+        target.write_text((REPO_ROOT / rel).read_text(), encoding="utf-8")
+    (tmp_path / "model-endpoints.yaml").write_text(yaml.safe_dump(data), encoding="utf-8")
+    monkeypatch.setattr(
+        test_model_endpoints, "_endpunkt", lambda name: next(e for e in data["endpunkte"] if e["name"] == name)
+    )
+    test_model_endpoints.test_the_opencode_go_entry_is_declared()
+    test_model_endpoints.test_every_new_paid_model_carries_its_terms_reading()
+    monkeypatch.setattr(sys.modules[__name__], "REPO_ROOT", tmp_path)
+    test_no_doctrine_text_repeats_the_ladder_order()
+    assert "future-paid-model" in stage2.ladder(tmp_path)
+    # A YAML-only addition must still obey runtime admission, including new ids.
+    entry["modelle_terms"]["future-paid-model"]["training"] = "Yes"
+    (tmp_path / "model-endpoints.yaml").write_text(yaml.safe_dump(data), encoding="utf-8")
+    assert "future-paid-model" not in stage2.ladder(tmp_path)
+    assert any("future-paid-model" in reason for reason in stage2.skipped_models(tmp_path))

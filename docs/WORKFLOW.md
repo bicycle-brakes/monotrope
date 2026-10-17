@@ -4,7 +4,7 @@ category: governance
 status: current
 created: 2026-09-05
 last_reviewed: 2026-09-29
-updated: 2026-10-16
+updated: 2026-10-17
 owner: Data Architect
 provenance: ai-drafted-reviewed
 produced_by:
@@ -667,8 +667,10 @@ Go (`opencode-go` in `model-endpoints.yaml`) through Pi — **since ADR 0019
 (2026-10-15)** the repository's own pinned install under `tools/pi/`, whose
 exact version `tools/pi/package.json` pins — calling OpenCode Go's
 chat-completions address, and which
-model answers a round comes from the entry's ordered `modelle` list, the
-ladder. The maintainer put the ladder to the loop alone on 2026-10-08 — after
+model answers a round follows the free swarm, the eligible `flash_swarm`,
+then the `modelle` set ordered by `anfragen_5h` descending (ties by id;
+missing values last), the paid ladder. The maintainer put the ladder to the
+loop alone on 2026-10-08 — after
 Codex's phase 6 found two real BLOCKERs in a change the loop had passed, as on
 every change of the night run — so GLM has left the reviewer roles.
 **Since 2026-10-06** (maintainer) GLM 5.3 Flash
@@ -693,8 +695,8 @@ the first call are replaced by the measurement at the end of this section.
 that do not overlap. Separating the context already finds measurably more
 errors; vendor diversity adds to it. A model rates its own output too kindly —
 a reviewer from another house does not know, by construction, that it is
-checking itself. The ladder's rungs are three lineages — DeepSeek, and
-Xiaomi's MiMo in two sizes — so a round sees what the round before it did not.
+checking itself. The ladder draws on the training lineages configured in
+`model-endpoints.yaml`, so a round can see what the round before it did not.
 **Disagreements are recorded, not resolved automatically.**
 "Rung 1 flagged it, rung 2 did not" is the information. Kimi was considered
 and dropped (ADR 0007).
@@ -732,7 +734,7 @@ list is a one-line pull request that touches nothing else.
 | 3 Plan | **gpt-6.1-sol** | effort [`CODEX_EFFORTS["draft"]`](../scripts/stage2.py), drafted in the same call as 2 and 2b |
 | 2a Spec review | **Opus 5.5** | effort `xhigh`, through Claude Code and `spec-review`, read-only tools |
 | 4 Implement | **GLM 5.3 Flash** | a worker given a clear plan; through Claude Code against Z.ai and the runner, for every change |
-| 4b Review loop | **the swarms, then the ladder** | round 1: every model the `free_stage` rule selects from a forced live Pi catalog refresh of the `opencode-go` provider, in parallel, on the implementation diff alone with no tools; round 2: the eligible `flash_swarm` members in parallel; then one eligible `modelle` id per round in declared order — through Pi, effort `max` (Pi clamps it to `high` for a rung that takes no `max`) |
+| 4b Review loop | **the swarms, then the ladder** | round 1: every model the `free_stage` rule selects from a forced live Pi catalog refresh of the `opencode-go` provider, in parallel, on the implementation diff alone with no tools; round 2: the eligible `flash_swarm` members in parallel; then one eligible `modelle` id per round by `anfragen_5h` descending (ties by id, missing values last) — through Pi, effort `max` (Pi clamps it to `high` for a rung that takes no `max`) |
 | Repair after 4b and 6 | **gpt-6.1-sol** | a Codex attempt in the configured `workspace-write` sandbox, effort [`CODEX_EFFORTS["repair"]`](../scripts/stage2.py); one fresh Codex attempt after a failed post-run check, and Sonnet 5.5 at effort `medium` after two failed ones; no GLM credential (`repair`, ADR 0017) |
 | 6 Review | **gpt-6.1-sol** | effort [`CODEX_EFFORTS["review"]`](../scripts/stage2.py), through the Codex CLI and `review`, a fresh Codex session |
 
@@ -1073,8 +1075,8 @@ is a live intermediary (`pi.dev`): the check proves which catalog was read,
 not what OpenCode Go bills. Round 2 is the **Flash swarm**: the entry's
 eligible `flash_swarm` members in parallel, with the paid rounds' read-only
 tools and the full diff. Every later round calls one eligible rung of the
-`modelle` ladder in declared order. A member that fails is named beside its
-round's rows; a round completes when at least one member answered, and an
+`modelle` ladder by `anfragen_5h` descending (ties by id, missing values last).
+A member that fails is named beside its round's rows; a round completes when at least one member answered, and an
 attempt whose every member failed completes no round and consumes no stage.
 When every stage of a run is consumed and the last round was not clean, the
 loop stops and reports to the maintainer — no model is substituted. The rows

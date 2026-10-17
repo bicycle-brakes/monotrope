@@ -6,7 +6,7 @@ implementation_status: none
 date: 2026-10-14
 created: 2026-10-14
 last_reviewed: 2026-10-14
-updated: 2026-10-16
+updated: 2026-10-17
 supersedes: null
 superseded_by: null
 bead: coding-harness-4fk
@@ -556,3 +556,17 @@ Stage-2 call, 2026-10-16: implement · attempt 3 · route stage-1 · endpoint cl
 > tools/pi/README.md:65:81 error MD013/line-length Line length [Expected: 80; Actual: 97]
 > make: *** [verify] Error 1
 > ````
+
+Stage-2 call, 2026-10-17: review-loop · endpoint opencode-go · model cat-jam-free · leak check clean over 472 files, 1370 commits, 12 rules.
+
+Stage-2 call, 2026-10-17: review-loop · endpoint opencode-go · model longcat-2.5-preview-free · leak check clean over 472 files, 1370 commits, 12 rules.
+
+Stage-2 call, 2026-10-17: review-loop · endpoint opencode-go · model step-5-preview-free · leak check clean over 472 files, 1370 commits, 12 rules.
+
+Stage-2 call, 2026-10-17: review-loop · endpoint opencode-go · model deepseek-v4.1-flash · leak check clean over 472 files, 1382 commits, 12 rules.
+
+Stage-2 call, 2026-10-17: review-loop · endpoint opencode-go · model mimo-v2.6-flash · leak check clean over 472 files, 1382 commits, 12 rules.
+
+Stage-2 call, 2026-10-17: review-loop · endpoint opencode-go · model mimo-v2.6-pro · leak check clean over 472 files, 1384 commits, 12 rules.
+
+Stage-2 call, 2026-10-17: repair · attempt 1 · route codex · endpoint openai-codex · model gpt-6.1-sol · leak check clean over 472 files, 1384 commits, 12 rules.
