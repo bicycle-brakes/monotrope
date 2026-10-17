@@ -79,9 +79,15 @@ checkable.
    Runner resolution against scratch frozen bytes marks unresolved entries
    without granting topic scope, then inserts all given neighbours as given.
    Finder suggestions remain marked rather than silently accepted.
-   Resolved neighbour-category artifacts inside a change with a frozen spec
-   map to that spec path, retaining every finder key; others remain no-spec
-   map entries and named gaps without packet-neighbour status.
+   Eligible neighbour specs have three forms: plans/changes/<name>/spec.md
+   (one segment other than archive),
+   plans/changes/archive/<YYYY-MM-DD-name>/spec.md, and
+   plans/specs/<capability>/spec.md, excluding the change's own spec. Resolved
+   neighbour-category artifacts inside those folders map to the frozen spec
+   if present, retaining every finder key. Own-change entries are self with
+   no relation/gap; other resolved entries are no-spec with named gaps.
+   Given paths outside those forms or the own spec refuse with exit 2;
+   eligible given paths must exist in frozen bytes.
 3. Topics 1–8 cover code/reuse, callers/interfaces, rules/class, architecture,
    neighbours, history/volatility, tests/gates and risks; each uses the same
    repository trio on identical briefs, perspectives and report template.
@@ -101,7 +107,8 @@ checkable.
    roster or substitution for the mandatory Flash trio. Dynamic free
    permission applies to public-only research, never private roles. Select only
    fresh-Pi text-input chat entries with exact matching models.dev
-   opencode-go.models ids, boolean tool_call true and status not deprecated.
+   opencode-go.models keys, with a present id field equal to the key,
+   boolean tool_call true and status not deprecated.
    Missing/negative support, missing metadata, deprecated, non-chat and
    baseline-only entries are excluded with reasons. Unavailable/unreadable
    models.dev excludes all free candidates as capability-unavailable N=0,
@@ -112,9 +119,13 @@ checkable.
    does not alone invalidate the 39 required fixed contributions.
    Missing/non-object provider/models, non-object root, invalid JSON,
    non-200/request failure or duplicate claimed ids are document-level
-   capability-unavailable. Other shape faults exclude only the candidate as
+   capability-unavailable. Duplicate ids mean repeated raw keys under that
+   models object or equal id fields under different keys; either excludes
+   all free candidates with reason duplicate-id, using duplicate-key-aware
+   parsing. Other shape faults exclude only the candidate as
    metadata-malformed (non-object entry, non-boolean present tool_call,
-   non-string present status, id/key mismatch), retaining raw values; missing
+   non-string present status, missing id or id/key mismatch), retaining raw
+   values including an absent-id marker; missing
    entries are metadata-missing, absent/false support is no-tool-support.
    Other providers' entries are not inspected. Every fixed Go id must be
    fresh-Pi text-input chat, else fixed-model-unavailable with its id exits 1
@@ -129,7 +140,12 @@ checkable.
    supported/refuted/unique/off-brief scores grounded in claim ids, plus
    unresolved and unsupported. Valid claims have one disposition, off-brief
    first; unique is an extra mark only for supported claims. Bad references
-   remain unsupported; a report needs at least one evidence-backed claim. Every
+   remain unsupported; a report needs at least one evidence-backed claim,
+   except topic 5 with no packet neighbour. All three seats still run with
+   identical empty-neighbour packets, empty neighbour_relations and a not-read
+   entry naming the empty packet; any claims are checked/scored normally.
+   Extra relations fail, and a nonempty packet keeps the evidence floor.
+   Reconciliation records no neighbour given or found as a named gap. Every
    model starts with the same perspectives; differing angles need a later
    maintainer decision.
 6. Independent topic reports stay buffered until their stage ends. Each role
@@ -140,7 +156,13 @@ checkable.
    Opus merge, topic author and judge have no tools and see only their packets.
    The runner joins resolved source/packet-commit/receipt excerpts in citation
    order and caps their total at 4,000 Unicode characters per claim, marking
-   truncation. One fixed whole-judge-packet character limit is derived in
+   truncation. Local resolution is file-type-specific: exact unique Markdown
+   heading sections or numbered criteria; Python AST definitions/module-level
+   assignments with dotted nested names; YAML/JSON dotted keys as canonical
+   JSON values; other files' whole-word first-match tails. Missing, ambiguous
+   or unparseable references remain unsupported. The same rules govern map
+   scope and evidence floors; prose-only matches in Markdown/Python do not
+   resolve. One fixed whole-judge-packet character limit is derived in
    phase 4 from pinned-Claude Opus capacity minus a fixed output reserve,
    with capacity/conversion/source/date recorded. Above that limit, no judge
    is called: retain all evidence, exit 1 incomplete as judge-packet-over-limit.
@@ -152,18 +174,32 @@ checkable.
    with global claim/question links, grouping duplicates without source loss.
    Class mismatches and neighbour
    contradictions are human decisions. Topic-5 contradicts and
-   unrelated-given fields derive obligations independently of Opus; structured
-   judge findings can add but never waive them. Phase 1a may exceed class minima;
+   unrelated-given fields derive obligations independently of Opus. The
+   runner alone derives suggested status from the three topic-5 relations:
+   every seat related/contradicts means confirmed, all unrelated means
+   rejected, otherwise split. Every split creates a neighbour decision item;
+   contradicts still creates its own item, and given paths stay given. The
+   judge cannot set/change status; structured findings can add but never
+   waive obligations. Phase 1a may exceed class minima;
    only actual maintainer answers settle obligations. Phase 2 carries confirmed
    and given neighbours in `neighbours:` and names claims/answers behind
    criteria. Direct claim bases must all be supported from complete runs;
    any other disposition needs an answered maintainer Q-record as the basis,
    even when mixed with supported claims. Neighbour parity is exact: confirmed
-   or given in any complete run plus linked maintainer additions minus linked
-   maintainer drops of given or confirmed paths. Confirmation/rejection
+   or given in any complete run plus keep/add paths minus drop paths from
+   maintainer-answered Q-records' research_neighbours fields. The recording
+   session writes these lists from the stated answer; no answer prose is
+   semantically graded. A neighbour item closes only with an item link AND
+   its path in keep/drop. Split paths need human keep to enter the header.
+   Add needs no item link, allowing drafting discoveries. Paths outside the
+   three permitted forms exit 1; later existence is not checked, preserving
+   historical answers after archival. A path in two lists of one record or
+   incompatible inclusion/drop directives across answered records exits 3.
+   Confirmation/rejection
    conflicts between complete runs and later omission of an earlier given
    path derive neighbour DECISION items independently of the judge. The path
-   stays required until a linked human drop; an unanswered item fails even
+   stays required until an item-linked structured human drop; an unanswered
+   item fails even
    when the header keeps the path. Runtime instruction auto-loading
    is disabled; finders/topic author share the frozen research/decisions/spec
    brief and repository seats receive identical embedded AGENTS.md.
@@ -242,7 +278,10 @@ checkable.
 * Handoff mutations delete decisions/answers/bases/neighbours, including class
   mismatches and neighbour contradictions; local and hosted checks must fail.
   Cross-run confirmation/rejection and given-header omission fixtures require
-  linked human keep/drop answers and the corresponding exact header set.
+  linked structured human keep/drop answers and the corresponding exact
+  header set. Split-status fixtures ignore judge confirmations; prose-only
+  answers cannot close neighbour items, answered add needs no item link,
+  conflicting directives exit 3, and valid historical forms survive archival.
 * `make verify`, generated CI and kit probe hold the same blocking contract.
 * Phase-6 review checks prose scope, comparison meaning, faithful dissent,
   volatile-fact classification and the relevance of resolved criterion bases.
@@ -255,8 +294,13 @@ checkable.
   models.dev fixtures prove exact-id intersection, support/deprecation checks,
   and capability-unavailable fallback without credentials or private data.
   They distinguish document/entry faults, shared-deadline outcomes, unavailable
-  fixed ids and exclusion provenance even when N is nonzero. Judge-packet
-  fixtures exercise the exact limit, one character over it and per-claim caps.
+  fixed ids and exclusion provenance even when N is nonzero. Raw duplicate
+  keys/equal claimed ids exclude all candidates; missing id excludes only
+  its candidate. Independent map-to-neighbour fixtures cover active/archive/
+  living specs, self entries and spec-backed entries wrongly labelled gaps;
+  empty-topic-5 fixtures retain all 39 required slots. Type-specific resolver
+  fixtures hold exact excerpts and refuse ambiguous or prose-only evidence.
+  Judge-packet fixtures exercise the exact limit, one character over it and per-claim caps.
 * After merge, public-only live qualification records the refreshed catalog,
   actual Go Flash/free models and search/fetch outcomes. Until success no
   complete live swarm is claimed.

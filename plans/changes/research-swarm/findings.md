@@ -5,7 +5,7 @@ status: draft
 implementation_status: none
 date: 2026-10-14
 created: 2026-10-14
-last_reviewed: 2026-10-14
+last_reviewed: 2026-10-17
 updated: 2026-10-17
 supersedes: null
 superseded_by: null
@@ -2055,10 +2055,262 @@ Stage-2 call, 2026-10-17: spec-review · endpoint claude-code-plan · model clau
 
 | ID | Severity | Dimension | Origin | Where | Finding | Reviewer | Status | Broke a test |
 |---|---|---|---|---|---|---|---|---|
-| S-40 | MAJOR | SPEC | base | `spec.md`, criteria 29–31; Topic contract, topic-5 `neighbour_relations`; [DETAIL]s «Version manifests research-swarm/v2» and «exact neighbour parity»; `decisions.md`, Q-7 topic 5 | [AMBIGUITY] The gate's required neighbour set and both kinds of cross-run item depend on whether a run «confirmed» or «rejected» a suggested path. The spec never says what makes either happen. Topic 5 gives three relations, one per seat (`related`, `unrelated`, `contradicts`), and no field holds a confirmation. Reading A: the judge's reconciliation confirms or rejects each suggestion, and the gate reads that verdict. Reading B: the runner derives the status from the three relations. For example, any `related` or `contradicts` confirms, or only agreement of all three seats does. The spec also does not say whether a `contradicts` suggestion counts as confirmed, or what a suggestion is when the seats split and the judge does not mention it. Test case: suggestion P gets `related`, `unrelated`, `related`, and the judge confirms P. A spec header with P passes under A and under B with «any seat». It fails as an unconfirmed suggestion under B with «all seats». | Opus | open | — |
-| S-41 | MAJOR | SPEC | fix-r1 | `spec.md`, criterion 30; Terms «Handoff item»; [DETAIL]s «Version manifests research-swarm/v2» and «exact neighbour parity»; Non-goals («automatic semantic grading of human answers») | [AMBIGUITY] Criterion 30 adds «linked maintainer additions» and subtracts «linked maintainer drops». A Q-record carries only `research_items:`, `research_claims:` and its free-text answer. Nothing says how the gate learns whether a linked answer keeps, drops or adds a path. Reading A: the gate reads the decision from the answer text. That comes close to the automatic grading of human answers that the Non-goals exclude, and the spec gives no vocabulary for it. Reading B: any linked, answered record closes the neighbour item, and the header may then keep or omit the path. Test case: topic 5 calls header-given P `unrelated`, and a maintainer record links that item with the answer «P bleibt Nachbar». A spec header without P exits 1 under A and 0 under B. Additions have a further gap. A path found while drafting has no handoff item in any run, so `research_items:` has nothing to link, and no named field carries the added path. Under either reading the gate cannot accept it. | Opus | open | — |
-| S-42 | MAJOR | SPEC | base | `spec.md`, Terms «Claim»; criterion 16; Topic contract, map resolution and topic scope; [DETAIL] «Opus map merge, topic author and judge have empty tool lists» («resolved symbol/section») | Missing: what «resolves» means for `path::symbol` and `path::section`, and which text becomes the excerpt. Reading A is what the earlier slice does (`scripts/stage2_swarm.py::symbol_problem`): a symbol resolves when its text, or each of its dotted parts as a word, occurs anywhere in the file. That leaves the 4,000-character excerpt with no defined extent. Reading B: the reference must name a definition (a Python def, class or assignment, a YAML key path, a Markdown heading), and the excerpt is that definition or section. That needs rules the spec does not give: for YAML, JavaScript, shell and nested methods, for headings with formatting or duplicates, and for where a section ends. Test case: a claim cites `docs/WORKFLOW.md::routing table`, and those words occur only in prose. The claim is valid under A and unsupported under B. The same choice decides which map entries grant topic scope, whether a report meets the evidence floor, and which claims a criterion Basis may name. | Opus | open | — |
-| S-43 | MINOR | SPEC | fix-r3 | `spec.md`, Topic contract, finder paragraph; criterion 4; [DETAIL] «Preflight validates class and given neighbours» | [AMBIGUITY] The repository keeps living specs at `plans/specs/<capability>/spec.md` and closed changes at `plans/changes/archive/YYYY-MM-DD-<name>/` (`docs/WORKFLOW.md`, «Artefact lifecycle»). A header-given neighbour is valid as any existing frozen `spec.md` path. A finder suggestion becomes a packet neighbour only «inside `plans/changes/<name>/`». Reading A (literal): a neighbour entry `plans/specs/implementation-verification/spec.md::…`, or one in an archived change's `design.md`, is `no-spec`. It needs no topic-5 relation and can never be confirmed. Reading B: any folder that holds a frozen `spec.md` yields a packet neighbour, including archive folders and a directly cited living spec. Test case: a topic-5 report with a relation for that living spec is rejected as an extra path under A and accepted under B. A report without that relation is accepted under A and rejected under B. Given paths have a parallel gap: `templates/spec.md` could be a valid given neighbour or a non-spec path that exits 2. | Opus | open | — |
-| S-44 | MINOR | SPEC | fix-r3 | `spec.md`, Terms «Selected Go free models» («matching exact id»); [DETAIL] «Preflight validates class and given neighbours» («duplicate claimed ids», «an id different from its key»); criterion 42 | [AMBIGUITY] The spec does not say what identifies a candidate under `opencode-go.models`: the object key or the entry's `id` field. Reading A (key): keys are the identities. An entry whose `id` differs from its key is `metadata-malformed`, and only repeated raw JSON keys count as «duplicate claimed ids». A default JSON parser drops repeated keys without notice. Reading B (`id` field): two entries under different keys with the same `id` are duplicate claimed ids, and every candidate is excluded as capability-unavailable. The spec also does not say whether an entry with no `id` field has «an id different from its key». Test case: Pi lists `a-free` and `b-free`, and models.dev has both keys, each with `id: "a-free"` and `tool_call: true`. Under A, N=1: `a-free` is selected and `b-free` is `metadata-malformed`. Under B, N=0 with the reason capability-unavailable. Second case: an entry `x-free` with `tool_call: true` and no `id` is selected under one reading of the absent field and `metadata-malformed` under the other. | Opus | open | — |
-| S-45 | MINOR | SPEC | fix-r1 | `spec.md`, Topic contract, topic-5 row and the one-evidence-backed-claim floor; criteria 4, 18, 27 | Missing: what topic 5 does when its packet holds no neighbour. `neighbours: []` is valid (criterion 4), and the finders may suggest none, or only `no-spec` entries. Topic 5 may only use the neighbours' spec, design, plan and decisions as evidence. Yet each of its three required seats must return at least one evidence-backed claim. A seat that stays inside that scope has nothing to cite. Its report fails the floor, and the run ends incomplete with exit 1. A seat that cites something outside the scope passes the floor and is only scored off-brief. The implementer has to choose: skip topic 5 (which changes the 39 required slots), exempt it from the floor, or let it fail. Test case: a feature change with `neighbours: []` and no neighbour-category finder entry. Whether the run ends complete or incomplete depends only on whether the seats leave their scope. | Opus | open | — |
-| S-46 | MINOR | SPEC | fix-r3 | `spec.md`, criterion 29; Topic contract, finder paragraph | Cannot go red for one case the Topic contract fixes. A resolved neighbour-category entry inside a change folder whose `spec.md` exists must become a packet neighbour. Criterion 29 refutes only a spec-backed suggestion «dropped without a gap entry». Refuting input: an entry `plans/changes/foo/design.md::Data model` with `foo/spec.md` present in the frozen state. The runner lists it as a `no-spec` gap and gives topic 5 no packet neighbour for it. Criterion 29 passes because a gap entry exists. Criterion 27 passes because relations are checked against the runner's own packet. Criterion 24 names only unresolved scope and given neighbours. | Opus | open | — |
+| S-40 | MAJOR | SPEC | base | `spec.md`, criteria 29–31; Topic contract, topic-5 `neighbour_relations`; [DETAIL]s «Version manifests research-swarm/v2» and «exact neighbour parity»; `decisions.md`, Q-7 topic 5 | [AMBIGUITY] The gate's required neighbour set and both kinds of cross-run item depend on whether a run «confirmed» or «rejected» a suggested path. The spec never says what makes either happen. Topic 5 gives three relations, one per seat (`related`, `unrelated`, `contradicts`), and no field holds a confirmation. Reading A: the judge's reconciliation confirms or rejects each suggestion, and the gate reads that verdict. Reading B: the runner derives the status from the three relations. For example, any `related` or `contradicts` confirms, or only agreement of all three seats does. The spec also does not say whether a `contradicts` suggestion counts as confirmed, or what a suggestion is when the seats split and the judge does not mention it. Test case: suggestion P gets `related`, `unrelated`, `related`, and the judge confirms P. A spec header with P passes under A and under B with «any seat». It fails as an unconfirmed suggestion under B with «all seats». | Opus | in spec — Terms Neighbour status; Topic contract; criteria 29–31; Open decisions runner-derived status and parity | — |
+| S-41 | MAJOR | SPEC | fix-r1 | `spec.md`, criterion 30; Terms «Handoff item»; [DETAIL]s «Version manifests research-swarm/v2» and «exact neighbour parity»; Non-goals («automatic semantic grading of human answers») | [AMBIGUITY] Criterion 30 adds «linked maintainer additions» and subtracts «linked maintainer drops». A Q-record carries only `research_items:`, `research_claims:` and its free-text answer. Nothing says how the gate learns whether a linked answer keeps, drops or adds a path. Reading A: the gate reads the decision from the answer text. That comes close to the automatic grading of human answers that the Non-goals exclude, and the spec gives no vocabulary for it. Reading B: any linked, answered record closes the neighbour item, and the header may then keep or omit the path. Test case: topic 5 calls header-given P `unrelated`, and a maintainer record links that item with the answer «P bleibt Nachbar». A spec header without P exits 1 under A and 0 under B. Additions have a further gap. A path found while drafting has no handoff item in any run, so `research_items:` has nothing to link, and no named field carries the added path. Under either reading the gate cannot accept it. | Opus | in spec — Terms Handoff item; criteria 30, 33; Open decisions structured keep/drop/add parity | — |
+| S-42 | MAJOR | SPEC | base | `spec.md`, Terms «Claim»; criterion 16; Topic contract, map resolution and topic scope; [DETAIL] «Opus map merge, topic author and judge have empty tool lists» («resolved symbol/section») | Missing: what «resolves» means for `path::symbol` and `path::section`, and which text becomes the excerpt. Reading A is what the earlier slice does (`scripts/stage2_swarm.py::symbol_problem`): a symbol resolves when its text, or each of its dotted parts as a word, occurs anywhere in the file. That leaves the 4,000-character excerpt with no defined extent. Reading B: the reference must name a definition (a Python def, class or assignment, a YAML key path, a Markdown heading), and the excerpt is that definition or section. That needs rules the spec does not give: for YAML, JavaScript, shell and nested methods, for headings with formatting or duplicates, and for where a section ends. Test case: a claim cites `docs/WORKFLOW.md::routing table`, and those words occur only in prose. The claim is valid under A and unsupported under B. The same choice decides which map entries grant topic scope, whether a report meets the evidence floor, and which claims a criterion Basis may name. | Opus | in spec — Terms Resolves; criterion 16; Open decisions frozen references | — |
+| S-43 | MINOR | SPEC | fix-r3 | `spec.md`, Topic contract, finder paragraph; criterion 4; [DETAIL] «Preflight validates class and given neighbours» | [AMBIGUITY] The repository keeps living specs at `plans/specs/<capability>/spec.md` and closed changes at `plans/changes/archive/YYYY-MM-DD-<name>/` (`docs/WORKFLOW.md`, «Artefact lifecycle»). A header-given neighbour is valid as any existing frozen `spec.md` path. A finder suggestion becomes a packet neighbour only «inside `plans/changes/<name>/`». Reading A (literal): a neighbour entry `plans/specs/implementation-verification/spec.md::…`, or one in an archived change's `design.md`, is `no-spec`. It needs no topic-5 relation and can never be confirmed. Reading B: any folder that holds a frozen `spec.md` yields a packet neighbour, including archive folders and a directly cited living spec. Test case: a topic-5 report with a relation for that living spec is rejected as an extra path under A and accepted under B. A report without that relation is accepted under A and rejected under B. Given paths have a parallel gap: `templates/spec.md` could be a valid given neighbour or a non-spec path that exits 2. | Opus | in spec — Terms Neighbour spec; Topic contract; criterion 4; Open decisions neighbour preflight | — |
+| S-44 | MINOR | SPEC | fix-r3 | `spec.md`, Terms «Selected Go free models» («matching exact id»); [DETAIL] «Preflight validates class and given neighbours» («duplicate claimed ids», «an id different from its key»); criterion 42 | [AMBIGUITY] The spec does not say what identifies a candidate under `opencode-go.models`: the object key or the entry's `id` field. Reading A (key): keys are the identities. An entry whose `id` differs from its key is `metadata-malformed`, and only repeated raw JSON keys count as «duplicate claimed ids». A default JSON parser drops repeated keys without notice. Reading B (`id` field): two entries under different keys with the same `id` are duplicate claimed ids, and every candidate is excluded as capability-unavailable. The spec also does not say whether an entry with no `id` field has «an id different from its key». Test case: Pi lists `a-free` and `b-free`, and models.dev has both keys, each with `id: "a-free"` and `tool_call: true`. Under A, N=1: `a-free` is selected and `b-free` is `metadata-malformed`. Under B, N=0 with the reason capability-unavailable. Second case: an entry `x-free` with `tool_call: true` and no `id` is selected under one reading of the absent field and `metadata-malformed` under the other. | Opus | in spec — Terms Selected Go free models; criterion 42; Open decisions catalog identity and duplicate-id | — |
+| S-45 | MINOR | SPEC | fix-r1 | `spec.md`, Topic contract, topic-5 row and the one-evidence-backed-claim floor; criteria 4, 18, 27 | Missing: what topic 5 does when its packet holds no neighbour. `neighbours: []` is valid (criterion 4), and the finders may suggest none, or only `no-spec` entries. Topic 5 may only use the neighbours' spec, design, plan and decisions as evidence. Yet each of its three required seats must return at least one evidence-backed claim. A seat that stays inside that scope has nothing to cite. Its report fails the floor, and the run ends incomplete with exit 1. A seat that cites something outside the scope passes the floor and is only scored off-brief. The implementer has to choose: skip topic 5 (which changes the 39 required slots), exempt it from the floor, or let it fail. Test case: a feature change with `neighbours: []` and no neighbour-category finder entry. Whether the run ends complete or incomplete depends only on whether the seats leave their scope. | Opus | in spec — Topic contract empty-neighbour exception; criteria 7, 18, 27; Open decisions report floor | — |
+| S-46 | MINOR | SPEC | fix-r3 | `spec.md`, criterion 29; Topic contract, finder paragraph | Cannot go red for one case the Topic contract fixes. A resolved neighbour-category entry inside a change folder whose `spec.md` exists must become a packet neighbour. Criterion 29 refutes only a spec-backed suggestion «dropped without a gap entry». Refuting input: an entry `plans/changes/foo/design.md::Data model` with `foo/spec.md` present in the frozen state. The runner lists it as a `no-spec` gap and gives topic 5 no packet neighbour for it. Criterion 29 passes because a gap entry exists. Criterion 27 passes because relations are checked against the runner's own packet. Criterion 24 names only unresolved scope and given neighbours. | Opus | in spec — Topic contract independent packet derivation; criteria 24, 29 | — |
+
+Stage-2 call, 2026-10-17: draft · attempt 1 · route codex · endpoint openai-codex · model gpt-6.1-sol · leak check clean over 484 files, 1379 commits, 12 rules.
+
+> Attempt 1 (codex) failed its post-run checks.
+>
+> Files the attempt changed (lines added, removed):
+> - `docs/adr/0020-phase-1-research-swarm.md` +60 -16
+> - `plans/changes/research-swarm/design.md` +87 -29
+> - `plans/changes/research-swarm/findings.md` +8 -8
+> - `plans/changes/research-swarm/plan.md` +149 -29
+> - `plans/changes/research-swarm/spec.md` +126 -44
+>
+> Diagnostics:
+> ````text
+> - `make verify` exited 2
+> The gates that blocked, each with its last lines:
+> ── [pytest] $ lauf_cmd
+> [… 1467 lines of this gate left out …]
+>
+> tests/test_stage2_swarm.py:1091: AssertionError
+> ----------------------------- Captured stdout call -----------------------------
+> INFO  (1):
+>   - leak check clean: 21 files, 1 commits, 1 rules, 1 prompt texts
+> ----------------------------- Captured stderr call -----------------------------
+> refused: /Users/mikypiky/coding-harness/.claude/worktrees/research-swarm/tools/pi/pi --version ended 1; it is not the pinned 1.2.0; no call starts: /Users/mikypiky/coding-harness/.claude/worktrees/research-swarm/tools/pi/pi: line 9: dirname: command not found
+> tools/pi/pi: the Node declaration .node-version is missing from /private/var/folders/44/yc0m3m456b51nyzwyfjptgm40000gn/T/stage2-vx575csg.
+> tools/pi/pi: set the pinned install up with: bash tools/pi/install.sh (see tools/pi/README.md).
+> =========================== short test summary info ============================
+> FAILED tests/test_stage2_swarm.py::test_large_classes_dispatch_the_swarm[feature]
+> FAILED tests/test_stage2_swarm.py::test_large_classes_dispatch_the_swarm[architectural]
+> FAILED tests/test_stage2_swarm.py::test_explicit_class_explores_without_spec_or_plan
+> FAILED tests/test_stage2_swarm.py::test_all_free_roles_are_attempted_before_flash
+> FAILED tests/test_stage2_swarm.py::test_six_topics_have_independent_permitted_pairs
+> FAILED tests/test_stage2_swarm.py::test_declared_free_focuses_shape_research_and_topic_pairs[False]
+> FAILED tests/test_stage2_swarm.py::test_declared_free_focuses_shape_research_and_topic_pairs[True]
+> FAILED tests/test_stage2_swarm.py::test_declared_paid_endpoint_and_models_are_called
+> FAILED tests/test_stage2_swarm.py::test_fresh_opus_reconciles_all_six_topics
+> FAILED tests/test_stage2_swarm.py::test_research_carries_practice_architecture_and_adjacent_spec_comparisons
+> FAILED tests/test_stage2_swarm.py::test_public_requests_exclude_every_private_input
+> FAILED tests/test_stage2_swarm.py::test_public_claims_require_retrieved_source_receipts
+> FAILED tests/test_stage2_swarm.py::test_a_free_report_without_a_retrieved_page_is_no_contribution[receipts0]
+> FAILED tests/test_stage2_swarm.py::test_a_free_report_without_a_retrieved_page_is_no_contribution[receipts1]
+> FAILED tests/test_stage2_swarm.py::test_a_free_report_without_a_retrieved_page_is_no_contribution[receipts2]
+> FAILED tests/test_stage2_swarm.py::test_judge_public_citations_require_retrieved_receipts[invented-url]
+> FAILED tests/test_stage2_swarm.py::test_judge_public_citations_require_retrieved_receipts[search-snippet]
+> FAILED tests/test_stage2_swarm.py::test_redirect_receipts_back_requested_and_final_urls
+> FAILED tests/test_stage2_swarm.py::test_free_environment_excludes_identity_and_private_paths
+> FAILED tests/test_stage2_swarm.py::test_an_accepted_topic_is_recorded_and_reaches_the_free_calls
+> FAILED tests/test_stage2_swarm.py::test_every_call_is_checked_and_a_leak_block_stops_dispatch
+> FAILED tests/test_stage2_swarm.py::test_failed_pi_calls_preserve_partial_evidence[nonzero-public]
+> FAILED tests/test_stage2_swarm.py::test_failed_pi_calls_preserve_partial_evidence[nonzero-flash]
+> FAILED tests/test_stage2_swarm.py::test_failed_pi_calls_preserve_partial_evidence[empty-public]
+> FAILED tests/test_stage2_swarm.py::test_failed_pi_calls_preserve_partial_evidence[empty-flash]
+> FAILED tests/test_stage2_swarm.py::test_failed_pi_calls_preserve_partial_evidence[timeout-public]
+> FAILED tests/test_stage2_swarm.py::test_failed_pi_calls_preserve_partial_evidence[timeout-flash]
+> FAILED tests/test_stage2_swarm.py::test_every_attempt_has_identity_audit_and_outcome
+> FAILED tests/test_stage2_swarm.py::test_failures_preserve_evidence_and_never_report_complete[free-fails]
+> FAILED tests/test_stage2_swarm.py::test_failures_preserve_evidence_and_never_report_complete[flash-empty]
+> FAILED tests/test_stage2_swarm.py::test_failures_preserve_evidence_and_never_report_complete[judge-malformed]
+> FAILED tests/test_stage2_swarm.py::test_failures_preserve_evidence_and_never_report_complete[all-free-fail]
+> FAILED tests/test_stage2_swarm.py::test_failures_preserve_evidence_and_never_report_complete[unmapped-free-id]
+> FAILED tests/test_stage2_swarm.py::test_the_free_inventory_reads_what_the_pinned_pi_prints[pinned-registry]
+> FAILED tests/test_stage2_swarm.py::test_the_free_inventory_reads_what_the_pinned_pi_prints[ambiguous]
+> FAILED tests/test_stage2_swarm.py::test_the_free_inventory_reads_what_the_pinned_pi_prints[no-models]
+> FAILED tests/test_stage2_swarm.py::test_deadlines_and_role_counts_bound_the_run
+> FAILED tests/test_stage2_swarm.py::test_no_call_starts_once_the_run_deadline_is_spent
+> FAILED tests/test_stage2_swarm.py::test_a_run_across_midnight_keeps_its_frozen_research
+> FAILED tests/test_stage2_swarm.py::test_all_outputs_scrub_every_used_credential
+> FAILED tests/test_stage2_swarm.py::test_unresolved_dissent_and_human_questions_survive_reconciliation
+> FAILED tests/test_stage2_swarm.py::test_local_citations_bind_to_the_frozen_input_state
+> FAILED tests/test_stage2_swarm.py::test_local_citations_name_a_path_and_a_symbol[`src/app.py::no_such_symbol`-names no symbol of src/app.py]
+> FAILED tests/test_stage2_swarm.py::test_local_citations_name_a_path_and_a_symbol[`src/app.py:1`-gives line numbers only]
+> FAILED tests/test_stage2_swarm.py::test_local_citations_name_a_path_and_a_symbol[`src/app.py`-is a bare path]
+> FAILED tests/test_stage2_swarm.py::test_only_the_runner_appends_research - As...
+> 46 failed, 2254 passed, 16 skipped in 550.93s (0:09:10)
+> ── [pytest] RED (block) — der Lauf ist rot.
+>
+> Standard error of the whole run, last lines:
+> [… 12746 earlier lines left out …]
+> templates/handover.md:48:81 error MD013/line-length Line length [Expected: 80; Actual: 88]
+> templates/spec.md:21 error MD041/first-line-heading/first-line-h1 First line in a file should be a top-level heading [Context: "```yaml"]
+> templates/spec.md:39:81 error MD013/line-length Line length [Expected: 80; Actual: 97]
+> templates/spec.md:40:81 error MD013/line-length Line length [Expected: 80; Actual: 95]
+> tools/claude-code/README.md:17:81 error MD013/line-length Line length [Expected: 80; Actual: 105]
+> tools/claude-code/README.md:18:81 error MD013/line-length Line length [Expected: 80; Actual: 109]
+> tools/claude-code/README.md:19:81 error MD013/line-length Line length [Expected: 80; Actual: 134]
+> tools/claude-code/README.md:23:1 error MD060/table-column-style Table column style [Table pipe is missing space to the right for style "compact"]
+> tools/claude-code/README.md:23:5 error MD060/table-column-style Table column style [Table pipe is missing space to the left for style "compact"]
+> tools/claude-code/README.md:23:5 error MD060/table-column-style Table column style [Table pipe is missing space to the right for style "compact"]
+> tools/claude-code/README.md:23:9 error MD060/table-column-style Table column style [Table pipe is missing space to the left for style "compact"]
+> tools/claude-code/README.md:23:9 error MD060/table-column-style Table column style [Table pipe is missing space to the right for style "compact"]
+> tools/claude-code/README.md:23:13 error MD060/table-column-style Table column style [Table pipe is missing space to the left for style "compact"]
+> tools/claude-code/README.md:24:81 error MD013/line-length Line length [Expected: 80; Actual: 272]
+> tools/claude-code/README.md:25:81 error MD013/line-length Line length [Expected: 80; Actual: 180]
+> tools/claude-code/README.md:26:81 error MD013/line-length Line length [Expected: 80; Actual: 115]
+> tools/claude-code/README.md:28:81 error MD013/line-length Line length [Expected: 80; Actual: 124]
+> tools/claude-code/README.md:29:81 error MD013/line-length Line length [Expected: 80; Actual: 106]
+> tools/claude-code/README.md:38:1 error MD060/table-column-style Table column style [Table pipe is missing space to the right for style "compact"]
+> tools/claude-code/README.md:38:5 error MD060/table-column-style Table column style [Table pipe is missing space to the left for style "compact"]
+> tools/claude-code/README.md:38:5 error MD060/table-column-style Table column style [Table pipe is missing space to the right for style "compact"]
+> tools/claude-code/README.md:38:9 error MD060/table-column-style Table column style [Table pipe is missing space to the left for style "compact"]
+> tools/claude-code/README.md:38:9 error MD060/table-column-style Table column style [Table pipe is missing space to the right for style "compact"]
+> tools/claude-code/README.md:38:13 error MD060/table-column-style Table column style [Table pipe is missing space to the left for style "compact"]
+> tools/claude-code/README.md:40:81 error MD013/line-length Line length [Expected: 80; Actual: 442]
+> tools/claude-code/README.md:41:81 error MD013/line-length Line length [Expected: 80; Actual: 163]
+> tools/claude-code/README.md:42:81 error MD013/line-length Line length [Expected: 80; Actual: 126]
+> tools/claude-code/README.md:43:81 error MD013/line-length Line length [Expected: 80; Actual: 96]
+> tools/claude-code/README.md:44:81 error MD013/line-length Line length [Expected: 80; Actual: 167]
+> tools/claude-code/README.md:72:1 error MD060/table-column-style Table column style [Table pipe is missing space to the right for style "compact"]
+> tools/claude-code/README.md:72:5 error MD060/table-column-style Table column style [Table pipe is missing space to the left for style "compact"]
+> tools/claude-code/README.md:72:5 error MD060/table-column-style Table column style [Table pipe is missing space to the right for style "compact"]
+> tools/claude-code/README.md:72:9 error MD060/table-column-style Table column style [Table pipe is missing space to the left for style "compact"]
+> tools/claude-code/README.md:72:9 error MD060/table-column-style Table column style [Table pipe is missing space to the right for style "compact"]
+> tools/claude-code/README.md:72:13 error MD060/table-column-style Table column style [Table pipe is missing space to the left for style "compact"]
+> tools/claude-code/README.md:73:81 error MD013/line-length Line length [Expected: 80; Actual: 112]
+> tools/claude-code/README.md:74:81 error MD013/line-length Line length [Expected: 80; Actual: 89]
+> tools/claude-code/README.md:75:81 error MD013/line-length Line length [Expected: 80; Actual: 88]
+> tools/pi/README.md:65:81 error MD013/line-length Line length [Expected: 80; Actual: 97]
+> make: *** [verify] Error 1
+> ````
+
+Stage-2 call, 2026-10-17: draft · attempt 2 · route codex-repair · endpoint openai-codex · model gpt-6.1-sol · reason the first draft attempt failed · leak check clean over 484 files, 1380 commits, 12 rules.
+
+> Attempt 2 (codex-repair): the runner put back what a draft may not change:
+> - `plans/INDEX.md`
+
+> Attempt 2 (codex-repair) failed its post-run checks.
+>
+> Files the attempt changed (lines added, removed):
+> - `plans/changes/research-swarm/plan.md` +33 -0
+>
+> Diagnostics:
+> ````text
+> - `make verify` exited 2
+> The gates that blocked, each with its last lines:
+> ── [pytest] $ lauf_cmd
+> [… 1467 lines of this gate left out …]
+>
+> tests/test_stage2_swarm.py:1091: AssertionError
+> ----------------------------- Captured stdout call -----------------------------
+> INFO  (1):
+>   - leak check clean: 21 files, 1 commits, 1 rules, 1 prompt texts
+> ----------------------------- Captured stderr call -----------------------------
+> refused: /Users/mikypiky/coding-harness/.claude/worktrees/research-swarm/tools/pi/pi --version ended 1; it is not the pinned 1.2.0; no call starts: /Users/mikypiky/coding-harness/.claude/worktrees/research-swarm/tools/pi/pi: line 9: dirname: command not found
+> tools/pi/pi: the Node declaration .node-version is missing from /private/var/folders/44/yc0m3m456b51nyzwyfjptgm40000gn/T/stage2-j6k07shs.
+> tools/pi/pi: set the pinned install up with: bash tools/pi/install.sh (see tools/pi/README.md).
+> =========================== short test summary info ============================
+> FAILED tests/test_stage2_swarm.py::test_large_classes_dispatch_the_swarm[feature]
+> FAILED tests/test_stage2_swarm.py::test_large_classes_dispatch_the_swarm[architectural]
+> FAILED tests/test_stage2_swarm.py::test_explicit_class_explores_without_spec_or_plan
+> FAILED tests/test_stage2_swarm.py::test_all_free_roles_are_attempted_before_flash
+> FAILED tests/test_stage2_swarm.py::test_six_topics_have_independent_permitted_pairs
+> FAILED tests/test_stage2_swarm.py::test_declared_free_focuses_shape_research_and_topic_pairs[False]
+> FAILED tests/test_stage2_swarm.py::test_declared_free_focuses_shape_research_and_topic_pairs[True]
+> FAILED tests/test_stage2_swarm.py::test_declared_paid_endpoint_and_models_are_called
+> FAILED tests/test_stage2_swarm.py::test_fresh_opus_reconciles_all_six_topics
+> FAILED tests/test_stage2_swarm.py::test_research_carries_practice_architecture_and_adjacent_spec_comparisons
+> FAILED tests/test_stage2_swarm.py::test_public_requests_exclude_every_private_input
+> FAILED tests/test_stage2_swarm.py::test_public_claims_require_retrieved_source_receipts
+> FAILED tests/test_stage2_swarm.py::test_a_free_report_without_a_retrieved_page_is_no_contribution[receipts0]
+> FAILED tests/test_stage2_swarm.py::test_a_free_report_without_a_retrieved_page_is_no_contribution[receipts1]
+> FAILED tests/test_stage2_swarm.py::test_a_free_report_without_a_retrieved_page_is_no_contribution[receipts2]
+> FAILED tests/test_stage2_swarm.py::test_judge_public_citations_require_retrieved_receipts[invented-url]
+> FAILED tests/test_stage2_swarm.py::test_judge_public_citations_require_retrieved_receipts[search-snippet]
+> FAILED tests/test_stage2_swarm.py::test_redirect_receipts_back_requested_and_final_urls
+> FAILED tests/test_stage2_swarm.py::test_free_environment_excludes_identity_and_private_paths
+> FAILED tests/test_stage2_swarm.py::test_an_accepted_topic_is_recorded_and_reaches_the_free_calls
+> FAILED tests/test_stage2_swarm.py::test_every_call_is_checked_and_a_leak_block_stops_dispatch
+> FAILED tests/test_stage2_swarm.py::test_failed_pi_calls_preserve_partial_evidence[nonzero-public]
+> FAILED tests/test_stage2_swarm.py::test_failed_pi_calls_preserve_partial_evidence[nonzero-flash]
+> FAILED tests/test_stage2_swarm.py::test_failed_pi_calls_preserve_partial_evidence[empty-public]
+> FAILED tests/test_stage2_swarm.py::test_failed_pi_calls_preserve_partial_evidence[empty-flash]
+> FAILED tests/test_stage2_swarm.py::test_failed_pi_calls_preserve_partial_evidence[timeout-public]
+> FAILED tests/test_stage2_swarm.py::test_failed_pi_calls_preserve_partial_evidence[timeout-flash]
+> FAILED tests/test_stage2_swarm.py::test_every_attempt_has_identity_audit_and_outcome
+> FAILED tests/test_stage2_swarm.py::test_failures_preserve_evidence_and_never_report_complete[free-fails]
+> FAILED tests/test_stage2_swarm.py::test_failures_preserve_evidence_and_never_report_complete[flash-empty]
+> FAILED tests/test_stage2_swarm.py::test_failures_preserve_evidence_and_never_report_complete[judge-malformed]
+> FAILED tests/test_stage2_swarm.py::test_failures_preserve_evidence_and_never_report_complete[all-free-fail]
+> FAILED tests/test_stage2_swarm.py::test_failures_preserve_evidence_and_never_report_complete[unmapped-free-id]
+> FAILED tests/test_stage2_swarm.py::test_the_free_inventory_reads_what_the_pinned_pi_prints[pinned-registry]
+> FAILED tests/test_stage2_swarm.py::test_the_free_inventory_reads_what_the_pinned_pi_prints[ambiguous]
+> FAILED tests/test_stage2_swarm.py::test_the_free_inventory_reads_what_the_pinned_pi_prints[no-models]
+> FAILED tests/test_stage2_swarm.py::test_deadlines_and_role_counts_bound_the_run
+> FAILED tests/test_stage2_swarm.py::test_no_call_starts_once_the_run_deadline_is_spent
+> FAILED tests/test_stage2_swarm.py::test_a_run_across_midnight_keeps_its_frozen_research
+> FAILED tests/test_stage2_swarm.py::test_all_outputs_scrub_every_used_credential
+> FAILED tests/test_stage2_swarm.py::test_unresolved_dissent_and_human_questions_survive_reconciliation
+> FAILED tests/test_stage2_swarm.py::test_local_citations_bind_to_the_frozen_input_state
+> FAILED tests/test_stage2_swarm.py::test_local_citations_name_a_path_and_a_symbol[`src/app.py::no_such_symbol`-names no symbol of src/app.py]
+> FAILED tests/test_stage2_swarm.py::test_local_citations_name_a_path_and_a_symbol[`src/app.py:1`-gives line numbers only]
+> FAILED tests/test_stage2_swarm.py::test_local_citations_name_a_path_and_a_symbol[`src/app.py`-is a bare path]
+> FAILED tests/test_stage2_swarm.py::test_only_the_runner_appends_research - As...
+> 46 failed, 2254 passed, 16 skipped in 555.14s (0:09:15)
+> ── [pytest] RED (block) — der Lauf ist rot.
+>
+> Standard error of the whole run, last lines:
+> [… 12793 earlier lines left out …]
+> templates/handover.md:48:81 error MD013/line-length Line length [Expected: 80; Actual: 88]
+> templates/spec.md:21 error MD041/first-line-heading/first-line-h1 First line in a file should be a top-level heading [Context: "```yaml"]
+> templates/spec.md:39:81 error MD013/line-length Line length [Expected: 80; Actual: 97]
+> templates/spec.md:40:81 error MD013/line-length Line length [Expected: 80; Actual: 95]
+> tools/claude-code/README.md:17:81 error MD013/line-length Line length [Expected: 80; Actual: 105]
+> tools/claude-code/README.md:18:81 error MD013/line-length Line length [Expected: 80; Actual: 109]
+> tools/claude-code/README.md:19:81 error MD013/line-length Line length [Expected: 80; Actual: 134]
+> tools/claude-code/README.md:23:1 error MD060/table-column-style Table column style [Table pipe is missing space to the right for style "compact"]
+> tools/claude-code/README.md:23:5 error MD060/table-column-style Table column style [Table pipe is missing space to the left for style "compact"]
+> tools/claude-code/README.md:23:5 error MD060/table-column-style Table column style [Table pipe is missing space to the right for style "compact"]
+> tools/claude-code/README.md:23:9 error MD060/table-column-style Table column style [Table pipe is missing space to the left for style "compact"]
+> tools/claude-code/README.md:23:9 error MD060/table-column-style Table column style [Table pipe is missing space to the right for style "compact"]
+> tools/claude-code/README.md:23:13 error MD060/table-column-style Table column style [Table pipe is missing space to the left for style "compact"]
+> tools/claude-code/README.md:24:81 error MD013/line-length Line length [Expected: 80; Actual: 272]
+> tools/claude-code/README.md:25:81 error MD013/line-length Line length [Expected: 80; Actual: 180]
+> tools/claude-code/README.md:26:81 error MD013/line-length Line length [Expected: 80; Actual: 115]
+> tools/claude-code/README.md:28:81 error MD013/line-length Line length [Expected: 80; Actual: 124]
+> tools/claude-code/README.md:29:81 error MD013/line-length Line length [Expected: 80; Actual: 106]
+> tools/claude-code/README.md:38:1 error MD060/table-column-style Table column style [Table pipe is missing space to the right for style "compact"]
+> tools/claude-code/README.md:38:5 error MD060/table-column-style Table column style [Table pipe is missing space to the left for style "compact"]
+> tools/claude-code/README.md:38:5 error MD060/table-column-style Table column style [Table pipe is missing space to the right for style "compact"]
+> tools/claude-code/README.md:38:9 error MD060/table-column-style Table column style [Table pipe is missing space to the left for style "compact"]
+> tools/claude-code/README.md:38:9 error MD060/table-column-style Table column style [Table pipe is missing space to the right for style "compact"]
+> tools/claude-code/README.md:38:13 error MD060/table-column-style Table column style [Table pipe is missing space to the left for style "compact"]
+> tools/claude-code/README.md:40:81 error MD013/line-length Line length [Expected: 80; Actual: 442]
+> tools/claude-code/README.md:41:81 error MD013/line-length Line length [Expected: 80; Actual: 163]
+> tools/claude-code/README.md:42:81 error MD013/line-length Line length [Expected: 80; Actual: 126]
+> tools/claude-code/README.md:43:81 error MD013/line-length Line length [Expected: 80; Actual: 96]
+> tools/claude-code/README.md:44:81 error MD013/line-length Line length [Expected: 80; Actual: 167]
+> tools/claude-code/README.md:72:1 error MD060/table-column-style Table column style [Table pipe is missing space to the right for style "compact"]
+> tools/claude-code/README.md:72:5 error MD060/table-column-style Table column style [Table pipe is missing space to the left for style "compact"]
+> tools/claude-code/README.md:72:5 error MD060/table-column-style Table column style [Table pipe is missing space to the right for style "compact"]
+> tools/claude-code/README.md:72:9 error MD060/table-column-style Table column style [Table pipe is missing space to the left for style "compact"]
+> tools/claude-code/README.md:72:9 error MD060/table-column-style Table column style [Table pipe is missing space to the right for style "compact"]
+> tools/claude-code/README.md:72:13 error MD060/table-column-style Table column style [Table pipe is missing space to the left for style "compact"]
+> tools/claude-code/README.md:73:81 error MD013/line-length Line length [Expected: 80; Actual: 112]
+> tools/claude-code/README.md:74:81 error MD013/line-length Line length [Expected: 80; Actual: 89]
+> tools/claude-code/README.md:75:81 error MD013/line-length Line length [Expected: 80; Actual: 88]
+> tools/pi/README.md:65:81 error MD013/line-length Line length [Expected: 80; Actual: 97]
+> make: *** [verify] Error 1
+> ````
+
+Stage-2 call, 2026-10-17: draft · attempt 3 · route glm · endpoint glm-coding-plan · model glm-5.3 · reason two Codex draft attempts failed · leak check clean over 484 files, 1380 commits, 12 rules.
+
+> Attempt 3 (glm) failed its call: claude call failed: exit 1
+>
+> the attempt is saved at refs/stage2/attempts/research-swarm/draft-attempt-3-20261017T002930167611Z (3aacaae6abb7); `git diff a68bbd02c258 refs/stage2/attempts/research-swarm/draft-attempt-3-20261017T002930167611Z` shows it.
+>
+> The runner put back:
+> - `docs/adr/0020-phase-1-research-swarm.md`
+> - `plans/INDEX.md`
+> - `plans/changes/research-swarm/design.md`
+> - `plans/changes/research-swarm/plan.md`
+> - `plans/changes/research-swarm/spec.md`

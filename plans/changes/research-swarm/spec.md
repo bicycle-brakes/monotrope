@@ -62,8 +62,10 @@ addenda record `6e80ded` on 2026-10-15 and `6146fde` on 2026-10-16.
   OpenCode Go/Pi with public-only permissions regardless of billing.
 - **Selected Go free models:** unique `opencode-go` ids ending exactly `-free`
   in this run's freshly fetched remote overlay, filtered by include/exclude.
-  They must be text-input chat models in fresh Pi and have a matching exact id
-  under models.dev's `opencode-go.models` with `tool_call: true` and without
+  They must be text-input chat models in fresh Pi and have an entry keyed by
+  the exact Pi id
+  under models.dev's `opencode-go.models`, with a present `id` equal to its
+  key, `tool_call: true` and without
   `status: deprecated`. Baseline-only ids, non-chat models, missing metadata,
   absent/negative support and deprecated models are excluded with reasons.
   A malformed candidate entry is excluded as `metadata-malformed`; the
@@ -101,6 +103,40 @@ addenda record `6e80ded` on 2026-10-15 and `6146fde` on 2026-10-16.
   Evidence forms are `path::symbol`, `path::section`, a full commit hash in
   topic 6's runner-collected history packet, or a receipt-backed public URL.
   A PR number or bead id alone is unsupported, since neither service is read.
+- **Resolves:** `path::X` uses the frozen file's type, with exact,
+  case-sensitive identities. In Markdown (`.md`), X equals exactly one
+  heading's text after removing leading `#` marks and outer whitespace;
+  inline formatting remains literal. Its excerpt ends before the next heading
+  of the same or higher level, or at EOF. `criterion <n>` also resolves to
+  numbered item `<n>.` under the file's one `## Acceptance criteria` heading,
+  ending before the next numbered item or heading. In Python (`.py`), X names
+  an AST `def`, `async def`, `class` or module-level assignment target; dotted
+  names select nested definitions such as `Class.method`. Its excerpt is the
+  node's lines. In YAML (`.yaml`, `.yml`) and JSON (`.json`), X is a parsed
+  dotted key path; the excerpt is its value as canonical JSON. Duplicate
+  matching headings, criterion items, definitions or key paths are ambiguous
+  and unsupported.
+  For other files, including shell, Makefile, JavaScript and TOML, X must
+  occur as a whole word; the excerpt starts at the first matching line and
+  runs to EOF before applying the claim cap. Missing, unparseable or otherwise
+  unsupported references confer no evidence or map scope. All excerpts share
+  the 4,000-character per-claim cap and truncation flag. These same rules
+  govern finder resolution, topic scope, report evidence floors and bases.
+- **Neighbour spec:** exactly `plans/changes/<name>/spec.md` (one segment,
+  excluding `archive`), `plans/changes/archive/<YYYY-MM-DD-name>/spec.md`,
+  or `plans/specs/<capability>/spec.md`. The change's own spec is excluded.
+  Given paths must also exist in frozen bytes; handoff paths are checked for
+  form without a later existence requirement, so archival does not invalidate
+  historical answers.
+- **Neighbour status:** the runner alone derives each suggested packet
+  neighbour's status from all three topic-5 relations in a complete run:
+  `confirmed` when every seat says `related` or `contradicts`, `rejected`
+  when every seat says `unrelated`, otherwise `split`. Each split derives a
+  human neighbour item independently of the judge. A `contradicts` counts
+  toward confirmation and still derives its own item. Given paths remain
+  `given`; their relations derive obligations without changing that status.
+  The judge describes relevance but cannot set or change status. A split
+  enters the spec header only through a maintainer's structured keep answer.
 - **Evidence status and disposition:** the runner marks a claim `valid` or
   `unsupported`; unsupported claims remain visible but are never evidence.
   Every valid claim gets exactly one judge disposition, with `off-brief`
@@ -114,7 +150,17 @@ addenda record `6e80ded` on 2026-10-15 and `6146fde` on 2026-10-16.
   global claims with `research_claims:` beside their existing answer fields.
   Item links are `<run>/H-<n>`; criterion Q-record bases use
   `decisions.md#Q-<id>` within the owning change. Global question ids use the
-  same run/topic/seat namespace with local Q ids.
+  same run/topic/seat namespace with local Q ids. A neighbour answer also
+  carries `research_neighbours:` with up to three spec-path lists, `keep`,
+  `drop` and `add`, beside the free-text answer. The recording session copies
+  the maintainer's stated choice into these fields; the gate never infers it
+  from answer prose. Each neighbour item closes only when a maintainer-answered
+  Q-record links the item and names its path in `keep` or `drop`. `keep` and
+  `add` require inclusion; `drop` requires omission, including for split paths.
+  An `add` needs no item link, allowing drafting discoveries. A path in two
+  lists of one record, or conflicting inclusion/drop directives across
+  answered records, is ambiguous (exit 3). Paths outside the three neighbour
+  forms fail with exit 1; form checking does not require later existence.
 - **Frozen input state:** HEAD plus a digest of every tracked file and every
   untracked non-ignored file under this change folder. Copies live only in
   run scratch outside the repository, including uncommitted input bytes;
@@ -136,13 +182,15 @@ drop nor add keys. The runner resolves entries against frozen bytes; unresolved
 entries stay marked `unresolved` but confer no topic scope. It inserts every
 header-given neighbour as `given`, overriding any suggested label for that
 path. These insertions are separate from the checked union of finder keys.
-Resolved neighbour-category entries inside `plans/changes/<name>/` suggest
-that change's `spec.md` when it exists in frozen bytes. Entries for any of
-its artifacts merge into one packet neighbour identified by that spec path,
-retaining all map keys. Entries outside a change folder or without its spec
-stay in the map marked `no-spec` and in the neighbour comparison as gaps;
-unresolved entries grant no neighbour status. Topic 5 covers exactly these
-packet neighbours plus the header-given paths.
+Resolved neighbour-category entries inside an active change, archived change
+or living-spec folder of the three Neighbour spec forms suggest that folder's
+`spec.md` when it exists in frozen bytes. Entries for any of its artifacts
+merge into one packet neighbour identified by that spec path, retaining all
+map keys. Entries in this change's own folder are marked `self`, without
+neighbour status, relation or gap. Other resolved entries outside those forms
+or without a spec stay `no-spec` with a neighbour-comparison gap. Unresolved
+entries grant no neighbour status. Topic 5 covers exactly the independently
+derived union of these packet neighbours and header-given paths.
 
 | Topic | Questions and evidence boundary |
 |---|---|
@@ -150,7 +198,7 @@ packet neighbours plus the header-given paths.
 | 2 Callers and interfaces | Callers across code/tests/commands/CI/hooks/prompts, signatures/options/formats/configuration, readers versus changing callers, kit/instance consumers; connections to the map, with caller and callee cited. |
 | 3 Rules and ADRs | Exact obligations, human-owned paths, required ADR changes and next number, conflicting rules, whether the declared class fits; repository rules only, no new rules; a class disagreement is a human decision. |
 | 4 Architecture fit | Documented layer, prescribed runner/tracker/gate routes, framework/kit/instance responsibility and invalidated architecture statements; mapped code and documented architecture only, no target design. |
-| 5 Neighbouring specs | Constraints, contradictions, overlap/order, shared resources and suggested-neighbour relevance; neighbours' spec/design/plan/decisions only; contradictions become human decisions. |
+| 5 Neighbouring specs | Constraints, contradictions, overlap/order, shared resources and suggested-neighbour relevance; neighbours' spec/design/plan/decisions only; contradictions become human decisions; an empty packet still gets all three seats, with empty relations and an empty-packet not-read entry. |
 | 6 History and stale assumptions | Last change and reason, reversals/supersession, stale facts, recorded rationale, governance of repeatedly changing facts; runner-collected mapped history only, cited by full packet commit hash or frozen `path::section`; proposals await the maintainer. |
 | 7 Tests and gates | Existing checks, uncovered behavior, stand-in-only evidence, checks the change breaks, red-first possibilities and limits; mapped tests/gates only, no test writing or verify run. |
 | 8 Risks and edge cases | Failure paths, unusual input, security boundaries, recovery and concurrent sessions; mapped places only, name risks without designing repairs. |
@@ -174,9 +222,17 @@ neighbour, given or suggested; relation is `related|unrelated|contradicts`,
 and claims is a nonempty local-id list. Missing, extra or duplicate paths fail
 the template. Every `contradicts`, and every `unrelated` header-given path,
 derives a claim-linked human obligation independently of the judge; the judge
-can add obligations but cannot remove them. A valid report needs at least one
-evidence-backed claim. Other unsupported claims remain with that status;
-a failed individual fetch alone does not reject the report.
+can add obligations but cannot remove them. Suggested-neighbour statuses
+follow the runner's Neighbour status rule, including a human item for each
+split. A valid report needs at least one evidence-backed claim, except topic 5
+when its packet holds no neighbour: all three seats still run with the same
+"no packet neighbour" packet, `neighbour_relations: []` and a `not read` entry
+naming that empty packet. Any claims remain checked and scored, including
+off-brief claims; a nonempty relation list still fails the template. With any
+packet neighbour, the evidence floor applies unchanged. Reconciliation records
+"no neighbour given or found" as a named gap for the empty case. Other
+unsupported claims remain with that status; a failed individual fetch alone
+does not reject the report.
 
 ## Acceptance criteria
 
@@ -190,7 +246,7 @@ a failed individual fetch alone does not reject the report.
    *Refuted by:* Valid early input is refused because a later artifact is absent.
    *Basis:* `decisions.md#Q-4`; early-class evidence in research.md.
 4. If class declarations or a swarm's given-neighbour header are invalid, including a missing or non-list `neighbours:` key in research.md, Stage 2 exploration refuses before a model call with exit 2 and a header-repair message.
-   *Refuted by:* Malformed, missing or disagreeing classes pass, a missing/null/non-list neighbour key or duplicate, escaping, non-spec or missing frozen neighbour path starts a call, the message omits adding `neighbours: []` or a list of specs, or explicit `neighbours: []` is refused.
+   *Refuted by:* Malformed, missing or disagreeing classes pass, a missing/null/non-list neighbour key or duplicate, escaping, non-spec or missing frozen neighbour path starts a call, a given path outside the three Neighbour spec forms or this change's own spec starts a call, the message omits adding `neighbours: []` or a list of specs, or explicit `neighbours: []` is refused.
    *Basis:* `decisions.md#Q-4`; existing class contract.
 5. When topic research starts, all three finders and the tool-free Opus map merge have valid recorded results whose finder keys form the exact union defined in the Topic contract.
    *Refuted by:* A failed finder/merge, missing map, dropped or added finder key, or duplicate key still lets a topic start; an Opus merge launches with any tool.
@@ -199,7 +255,7 @@ a failed individual fetch alone does not reject the report.
    *Refuted by:* A topic is omitted, a model substituted, or one session supplies two seats.
    *Basis:* `decisions.md#Q-7`.
 7. When reconciled research is published, it contains public-practice, documented-architecture and neighbouring-spec comparison sections with named gaps for unread evidence.
-   *Refuted by:* A comparison section or an unread-neighbour gap entry is absent; semantic comparison quality is also checked in phase 6.
+   *Refuted by:* A comparison section or an unread-neighbour gap entry is absent, or an empty topic-5 packet lacks the named "no neighbour given or found" gap; semantic comparison quality is also checked in phase 6.
    *Basis:* `decisions.md#Q-3`; `decisions.md#Q-7`, topics 4, 5 and 9.
 8. While an online researcher runs, no repository-derived content except the accepted public topic reaches its model or web requests.
    *Refuted by:* A canary from rules, paths, identifiers, finder output, history or private reports appears in an outbound payload or query.
@@ -226,13 +282,13 @@ a failed individual fetch alone does not reject the report.
    *Refuted by:* An unresolved disagreement loses an opposing claim id or evidence, or judge output contains a maintainer answer field; phase 6 also checks faithful treatment of dissent.
    *Basis:* `decisions.md#Q-5`, `decisions.md#Q-7` report and interview addenda.
 16. When local claims count as evidence, their path-qualified symbol or section resolves against the retained frozen bytes, or a topic-6 full commit hash resolves in that seat's bounded frozen-HEAD history packet.
-   *Refuted by:* Unresolvable or line-only references, a hash absent from the topic-6 packet, or a PR number or bead id alone is valid evidence, history collection failure lets a topic start, a reference resolves against the live tree instead of scratch bytes, a report is absent, a changed frozen file permits complete publication, or a frozen-file copy is persisted in research or the change folder.
+   *Refuted by:* Unresolvable or line-only references, a hash absent from the topic-6 packet, or a PR number or bead id alone is valid evidence, a prose-only match in Markdown or Python or an ambiguous heading/definition/key path resolves, the excerpt differs from the type-specific extent, history collection failure lets a topic start, a reference resolves against the live tree instead of scratch bytes, a report is absent, a changed frozen file permits complete publication, or a frozen-file copy is persisted in research or the change folder.
    *Basis:* `decisions.md#Q-7` report template; existing source contract.
 17. While the swarm explores, only the runner appends research and pre-existing repository content outside that artifact remains unchanged.
    *Refuted by:* A participant edits a file, rewrites an answer, replaces earlier research or changes git or tracker state.
    *Basis:* `decisions.md#Q-7` finder and topic boundaries; existing writer contract.
 18. If a required contribution fails, the run retains partial evidence and all missing-slot outcomes and ends incomplete with exit 1 unless a security refusal requires exit 2.
-   *Refuted by:* A failed preparatory stage dispatches a later stage, missing required topic reports still reach the judge, a report with zero evidence-backed claims passes, a failed free seat alone makes the run incomplete, or an oversized judge packet loses evidence or fails to end incomplete with `judge-packet-over-limit` and no judge call.
+   *Refuted by:* A failed preparatory stage dispatches a later stage, missing required topic reports still reach the judge, a report with zero evidence-backed claims passes except a topic-5 report whose packet holds no neighbour, a failed free seat alone makes the run incomplete, or an oversized judge packet loses evidence or fails to end incomplete with `judge-packet-over-limit` and no judge call.
    *Basis:* `decisions.md#Q-7`; existing failure contract.
 19. When a swarm executes, its maximum 39 + 3N invocations follow the finite deadlines, required-first dispatch and reserved 15-minute judge allowance without retries or debate.
    *Refuted by:* An extra invocation or retry occurs, a free slot starts ahead of queued required slots, topic work consumes the judge reserve, or unlaunched slots lack not-started-deadline outcomes.
@@ -250,7 +306,7 @@ a failed individual fetch alone does not reject the report.
    *Refuted by:* An absent, rejected or privately augmented topic reaches an online seat; the author has any tool; research-swarm, a bead id or a sentence with `[`, `{`, `@`, `=` or a digit passes; Container-Isolation für KI-Agenten-Läufe or Isolation, Prüfung und Wiederherstellung für Agentenläufe fails the character rule; rejection fails to stop pre-topic dispatch with exit 1.
    *Basis:* `decisions.md#Q-6`, retained by `decisions.md#Q-8`.
 24. When finder step 0 runs, the repository trio independently receives the same private change brief and four-list locator template for Opus to merge.
-   *Refuted by:* Only one finder runs, an output has fields beyond the four locator lists, an empty category lacks an unread marker, an unresolved map entry grants topic scope, or a given neighbour is missing from the runner's map; prose design judgements are off-brief and reviewed in phase 6.
+   *Refuted by:* Only one finder runs, an output has fields beyond the four locator lists, an empty category lacks an unread marker, an unresolved map entry grants topic scope, a given neighbour is missing from the runner's map, or topic 5's packet-neighbour list differs from an independent derivation from the resolved map and given header; prose design judgements are off-brief and reviewed in phase 6.
    *Basis:* `decisions.md#Q-7`, topic 0, option A.
 25. When a researcher receives a topic, its packet matches the checked-in questions and permitted evidence scope of the Topic contract.
    *Refuted by:* A packet differs from its topic prompt; report prose that proposes new code or local applicability outside that scope is scored off-brief and checked in phase 6.
@@ -259,25 +315,25 @@ a failed individual fetch alone does not reject the report.
    *Refuted by:* One model receives a different map, instruction file, angle or peer report, or its runtime auto-loads instructions.
    *Basis:* `decisions.md#Q-7` same-perspectives addendum.
 27. When a topic report is accepted, its fixed template and report-local identities satisfy every required field and topic-specific field.
-   *Refuted by:* An eighth claim, duplicate local claim/question id, invalid question claim link, missing confidence basis or unread section, absent topic-3 class assessment, incomplete/duplicate/extra topic-5 neighbour relation or empty relation claims, or ungoverned volatile topic-6 claim is accepted.
+   *Refuted by:* An eighth claim, duplicate local claim/question id, invalid question claim link, missing confidence basis or unread section, absent topic-3 class assessment, incomplete/duplicate/extra topic-5 neighbour relation or empty relation claims, a topic-5 empty packet with any relation or without its empty-packet not-read entry, a nonempty topic-5 packet with no evidence-backed claim, or ungoverned volatile topic-6 claim is accepted.
    *Basis:* `decisions.md#Q-7` template acceptance.
 28. When Opus reconciles reports, per-topic per-model claim lists and counts distinguish supported, refuted, unique, off-brief, unresolved and unsupported claims.
    *Refuted by:* A valid claim has two dispositions, a unique claim is not supported, an unsupported claim is supported, a score lacks claim ids, a valid claim lacks its resolved evidence excerpt with truncation marked where needed, or a failed seat has no named outcome.
    *Basis:* `decisions.md#Q-7` scoring acceptance.
-29. When neighbour relevance is reconciled, research preserves given paths and distinguishes suggestions, confirmations and rejected suggestions with reasons.
-   *Refuted by:* A suggestion becomes authoritative silently, a given neighbour disappears, a topic-5 contradicts or unrelated-given entry has no human item, a cross-run confirmation/rejection conflict or later omission of a given path yields no human item, a suggestion without a change spec becomes a packet neighbour, or one with a spec is dropped without a gap entry.
+29. When neighbour relevance is reconciled, research preserves given paths and distinguishes suggested neighbours as runner-derived confirmed, rejected or split statuses with reasons.
+   *Refuted by:* A suggestion with any unrelated seat is confirmed, an all-unrelated suggestion is not rejected, a split lacks a human item, a judge verdict sets or changes status, a given neighbour disappears, a topic-5 contradicts or unrelated-given entry has no human item, a cross-run confirmation/rejection conflict or later omission of a given path yields no human item, an ineligible suggestion becomes a packet neighbour, or a resolved eligible-folder entry with a frozen spec is wrongly marked no-spec/self or yields no packet neighbour even when a gap is listed.
    *Basis:* `decisions.md#Q-7` finder and topic 5.
-30. When a spec uses complete v2 research, the handoff gate requires its neighbours header to equal paths confirmed or given in any complete run, plus linked maintainer additions, minus linked maintainer drops of given or confirmed paths.
-   *Refuted by:* A required path disappears, an escaping/duplicate path or unconfirmed suggestion enters, a path outside those sets passes, an earlier confirmation rejected later yields no handoff item, or a given path omitted from a later run's header leaves the required set without a linked human drop; such findings exit 1.
+30. When a spec uses complete v2 research, the handoff gate requires its neighbours header to equal paths confirmed or given in any complete run, plus keep and add paths, minus drop paths, in maintainer-answered Q-records' research_neighbours fields.
+   *Refuted by:* A required path disappears, an escaping/duplicate path or unkept split/unconfirmed suggestion enters, a path outside those sets passes, a linked neighbour item closes without its path in keep/drop, a prose-only addition passes, an add without an item link is refused, an earlier confirmation rejected later yields no handoff item, or a prior given path leaves the required set without a structured human drop; such findings exit 1, while conflicting inclusion/drop directives must exit 3.
    *Basis:* `decisions.md#Q-7` neighbours addendum.
-31. When complete v2 research hands off, every accepted raw-report DECISION question, unresolved judge disagreement, class mismatch, neighbour contradiction, cross-run confirmation/rejection conflict or omission of an earlier given neighbour has a claim-linked inventory item.
-   *Refuted by:* A refuted/off-brief report decision is omitted, a differing class, topic-5 contradicts/unrelated-given field or either cross-run neighbour conflict lacks an independently derived item, or grouping duplicates loses a source question or claim id.
+31. When complete v2 research hands off, every accepted raw-report DECISION question, unresolved judge disagreement, class mismatch, neighbour contradiction or split, cross-run confirmation/rejection conflict or omission of an earlier given neighbour has a claim-linked inventory item.
+   *Refuted by:* A refuted/off-brief report decision is omitted, a differing class, topic-5 contradicts/unrelated-given field, split or either cross-run neighbour conflict lacks an independently derived item, or grouping duplicates loses a source question or claim id.
    *Basis:* `decisions.md#Q-7` interview and template addenda; topics 3 and 5.
 32. When spec.md exists, the handoff gate requires coverage and linked answered maintainer records for every obligation of every complete v2 run in that change.
    *Refuted by:* Class minimums hide a lost item, a later run erases an earlier obligation, an open/agent answer passes, no complete run exists despite v2 runs, or pending items turn a pre-spec change red.
    *Basis:* `decisions.md#Q-7` lost-decision gate acceptance.
 33. If v2 evidence or its links are unreadable or identities ambiguous, the handoff gate reports not measured with exit 3.
-   *Refuted by:* Malformed manifests/inventories, duplicate global ids or report-local ids, missing linked files or ambiguous answers silently pass.
+   *Refuted by:* Malformed manifests/inventories, duplicate global ids or report-local ids, missing linked files, ambiguous answers, a neighbour path in two lists of one Q-record or conflicting inclusion/drop directives across answered records silently pass.
    *Basis:* `decisions.md#Q-7` lost-decision gate; repository unmeasured convention.
 34. When a spec has complete v2 research, the handoff gate requires each criterion Basis to name only supported global claims from complete runs and/or maintainer-answered Q-records in that change.
    *Refuted by:* A criterion lacks an origin, any named claim is missing, incomplete-run, unsupported, refuted, off-brief or unresolved even alongside supported claims, or a record is unanswered; these findings exit 1, while semantic relevance is checked in phase 6.
@@ -304,7 +360,7 @@ a failed individual fetch alone does not reject the report.
    *Refuted by:* A Pi timeout, stale-only, malformed or ambiguous result or unavailable fixed model becomes valid zero availability or Flash-only fallback, the failure exits 0, 2 or 3, or a successful Pi refresh with only an unfinished models.dev read exits 1; absence of a tool-support field in Pi is not a Pi failure under Q-11.
    *Basis:* `decisions.md#Q-10`; existing failure contract.
 42. When fresh Pi yields an empty free selection after capability checks and policy with no unmet explicit include, including models.dev absence or failure, the run records N=0 and its measured-empty or capability-unavailable reason and keeps all 39 fixed model slots.
-   *Refuted by:* A missing models.dev model, absent/false/non-boolean tool_call or deprecated status admits a free seat, one malformed candidate excludes a valid candidate, document-level metadata failure is recorded as measured absence, models.dev failure alone blocks fixed slots, its timeout delays them beyond catalog's 60 seconds or exits nonzero by itself, or N=0 revives a prior roster or omits a fixed slot.
+   *Refuted by:* A missing models.dev model, missing/mismatched id, absent/false/non-boolean tool_call or deprecated status admits a free seat, one malformed candidate excludes a valid candidate, a repeated raw key or equal id under different keys leaves any candidate selectable instead of capability-unavailable/duplicate-id, document-level metadata failure is recorded as measured absence, models.dev failure alone blocks fixed slots, its timeout delays them beyond catalog's 60 seconds or exits nonzero by itself, or N=0 revives a prior roster or omits a fixed slot.
    *Basis:* `decisions.md#Q-10`; `decisions.md#Q-11`.
 
 ## Non-goals
@@ -351,7 +407,7 @@ a failed individual fetch alone does not reject the report.
 
 ## Open decisions
 
-None open. The recorded phase-2a rulings in decisions.md (S-1–S-39,
+None open. The recorded phase-2a rulings in decisions.md (S-1–S-46,
 2026-10-16–17) and the maintainer's Q-11 answer (2026-10-17) settle the review
 ambiguities; Q-11 replaces S-21's Pi-only capability rule. I carry those
 visible details into this spec; no maintainer answer is supplied here.
@@ -371,7 +427,9 @@ visible details into this spec; no maintainer answer is supplied here.
   silently extending the stop (S-30).
 - [DETAIL] Preflight validates class and given neighbours, then measures the
   catalog before model dispatch. Invalid neighbour entries (not unique
-  repository-relative existing frozen `spec.md` paths) exit 2. For a swarm,
+  repository-relative existing frozen Neighbour spec paths in the three
+  permitted forms, excluding this change's own spec) exit 2. Thus
+  `templates/spec.md` and the change's own spec refuse before models. For a swarm,
   research.md must have a list-valued `neighbours:` key; missing, null or
   non-list values exit 2 with a message to add `neighbours: []` or a spec list.
   The explicit empty list is valid. Include/exclude
@@ -385,11 +443,17 @@ visible details into this spec; no maintainer answer is supplied here.
   source/time/digest and per-model reasons at every N. Document-level
   capability-unavailable means request failure/timeout, non-200 response,
   invalid JSON/non-object root, absent/non-object opencode-go or its models,
-  or duplicate claimed ids under that models object. Only these exclude all.
+  or duplicate claimed ids under that models object. Duplicates mean either
+  repeated keys in its raw JSON or equal `id` fields under different keys;
+  parse with duplicate-key reporting rather than silently keeping one. Either
+  excludes all candidates as capability-unavailable with reason `duplicate-id`.
+  Only these document-level faults exclude all.
   Per candidate: a missing entry is metadata-missing; a non-object entry,
   non-boolean present tool_call, non-string present status or an id different
   from its key is metadata-malformed, recording the raw value. Absent tool_call
   or boolean false is no-tool-support; status deprecated is deprecated.
+  The exact object key is the identity; an absent `id` is metadata-malformed,
+  just like an id/key mismatch, with the raw value recorded as absent.
   Other providers' entries are not inspected. Every fixed Go role model
   must independently be fresh-Pi text-input chat, else preflight exit 1 with
   fixed-model-unavailable and the id; models.dev is not consulted for fixed
@@ -423,7 +487,9 @@ visible details into this spec; no maintainer answer is supplied here.
   its allowance is the lesser of role limit and that remainder. Unlaunched
   slots are not-started-deadline, incomplete only when required. No silent
   roster truncation; large free rosters can leave named missing seats.
-- [DETAIL] Local references resolve against retained frozen bytes. Before
+- [DETAIL] Local references use the type-specific Resolves rules against
+  retained frozen bytes, replacing the earlier whole-file substring check;
+  explicit extents give the tool-free judge reproducible evidence. Before
   publication compare HEAD and the full digest; ignore only the runner's own
   research appends and updated restamp. Other changes name paths and yield
   incomplete exit 1 with outputs retained. Copies stay outside the repository
@@ -453,28 +519,36 @@ visible details into this spec; no maintainer answer is supplied here.
   permits dispatch subject to the other preconditions. No further shortening,
   N reduction or extra judge call fits this rule (S-29, S-38).
 - [DETAIL] Template breaches reject a report. Bad citations mark individual
-  claims unsupported; one evidence-backed claim is the report floor. An
-  online report thus needs one successful page retrieval, not success for
+  claims unsupported; one evidence-backed claim is the report floor, except
+  the specified empty topic-5 packet. The exception retains all three seats
+  and a not-read record without inventing evidence. An online report thus needs one successful page retrieval, not success for
   every attempted fetch. Partial receipts and unsupported claims remain.
 - [DETAIL] The runner assigns global claim/question ids using run, topic,
   endpoint-qualified model seat and local id. Handoff items H-<n> link the
   full global source ids. Q-record headers carry research_items and
-  research_claims lists. Duplicate decisions may share one item, preserving
+  research_claims lists; neighbour answers additionally carry
+  research_neighbours keep/drop/add lists, never inferred from answer prose.
+  Duplicate decisions may share one item, preserving
   every source question/claim, including decisions scored off-brief/refuted.
   Class mismatches derive obligations independently of the judge; neighbour
   contradictions and proposed removal of given neighbours derive directly
   from topic-5 neighbour_relations, even with no explicit DECISION question;
-  judge findings may add items but cannot waive them (S-24).
+  suggested statuses use the runner's unanimity rule, and every split derives
+  a neighbour item with kind `split`. The judge cannot set or change status.
+  This preserves peer disagreement rather than letting one verdict accept a
+  path. Judge findings may add items but cannot waive them (S-24).
 - [DETAIL] Version manifests research-swarm/v2. Complete runs alone supply
   phase 1a/2; incomplete runs require a new complete run and their claims
   cannot support criteria. Every complete run keeps its obligations across
   later runs and archival; one answered Q-record may link several runs.
   Before spec.md exists, valid pending obligations are listed with exit 0.
-  Neighbours use the union across all complete runs: a confirmation versus
+  Neighbours use runner-derived statuses and the union across all complete
+  runs; split paths are not required absent a structured keep answer. A
+  confirmation versus
   rejection between runs, or omission of an earlier given path from a later
   run's header, derives a neighbour DECISION item independently of the judge.
-  The path stays required until a linked maintainer answer drops it, whether
-  originally given or confirmed (S-31).
+  The path stays required until an item-linked maintainer answer names it in
+  research_neighbours.drop, whether originally given or confirmed (S-31).
   Once it exists, missing answers or no complete v2 run exit 1. Malformed or
   unreadable evidence exits 3 even before a spec. Legacy changes without v2
   runs are a reported exemption, including this redraft.
@@ -484,11 +558,19 @@ visible details into this spec; no maintainer answer is supplied here.
   Basis: every named direct claim must be supported and complete-run, even in
   a mixed list; other dispositions require a maintainer-answered Q-record
   basis (which may link the original claim in research_claims). It enforces
-  exact neighbour parity: confirmed or given in any complete run plus linked
-  maintainer additions minus linked maintainer drops of given or confirmed
-  paths; unresolved cross-run items fail with exit 1 even if the header keeps
-  the path. Arbitrary phase-2 additions
-  fail unless human-answered or confirmed by a new complete run (S-23, S-27).
+  exact neighbour parity: (confirmed or given in any complete run plus
+  research_neighbours.keep and .add from maintainer-answered Q-records) minus
+  their .drop paths. A neighbour item closes only with research_items linking
+  it and keep/drop naming its path; an answered record without that field
+  leaves it open (exit 1). An add needs no item link, but does need an actual
+  maintainer answer. Check path form without current existence so historical
+  records survive archival; paths outside the three forms exit 1. A path in
+  two lists of one record or conflicting inclusion/drop directives across
+  answered records exits 3. Unresolved split/cross-run items fail with exit 1
+  even if the header keeps the path. Arbitrary phase-2 additions fail unless
+  structurally human-added or confirmed by a new complete run. Phase-6 review
+  checks that structured keep/drop/add matches the maintainer's answer;
+  this prevents automatic semantic grading of prose (S-40, S-41).
   Review checks faithful questions/answers,
   basis relevance, comparison quality and off-brief prose; structure checks
   never claim to judge those meanings.
