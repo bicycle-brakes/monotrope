@@ -1030,6 +1030,9 @@ def test_explore_uses_flash_read_only_and_appends_research(world: World) -> None
     assert argv[argv.index("--permission-mode") + 1] == "dontAsk"
     assert call["env"]["ANTHROPIC_BASE_URL"] == stage2.GLM_BASE_URL
     assert call["env"]["ANTHROPIC_MODEL"] == "glm-5.3-flash"
+    # Bead coding-harness-6th. Planted fault: the GLM start names no window, so Claude Code warns
+    # that it does not know the model and guesses one.
+    assert call["env"]["CLAUDE_CODE_MAX_CONTEXT_TOKENS"] == "200000"
     assert (REPO_ROOT / "prompts" / "01-explore.md").read_text(encoding="utf-8").rstrip() in prompt
     assert "Stay inside the repository." in prompt and stage2.ANSWER_FORMAT not in prompt
     text = world.research.read_text(encoding="utf-8")
@@ -1536,6 +1539,9 @@ def test_two_failed_postchecks_route_once_to_sonnet(world: World) -> None:
     assert models == ["glm-5.3-flash", "glm-5.3-flash", "claude-sonnet-5-5"]
     assert calls[-1]["argv"][calls[-1]["argv"].index("--effort") + 1] == "medium"
     assert "ANTHROPIC_BASE_URL" not in calls[-1]["env"]
+    # The window belongs to the GLM start only; Sonnet's own window stays Claude Code's to know.
+    assert "CLAUDE_CODE_MAX_CONTEXT_TOKENS" in calls[0]["env"]
+    assert "CLAUDE_CODE_MAX_CONTEXT_TOKENS" not in calls[-1]["env"]
     assert len(world.calls("make")) == 3
     plan = world.plan.read_text(encoding="utf-8")
     assert "Stage-1 route: implement" in plan and "two Flash post-run checks failed" in plan
@@ -6649,6 +6655,11 @@ def test_repair_prose_alone_still_needs_fixed_lines(world: World) -> None:
     assert "no fixed line: " not in prompt and "no taken row carries this id" not in prompt
     # The second run stands on run 1's commit, so it repairs a fresh row with a fresh red pair, and
     # the stand-in's call log starts over: its step index counts a program's calls across runs.
+    # `test_other` reads `src/other.py`, so the file joins the baseline at its unfixed value, in its
+    # own commit: the red-first proof then meets an ordinary assertion, never a missing file.
+    (world.root / "src" / "other.py").write_text("value = 1\n", encoding="utf-8")
+    git(world.root, "add", "-A")
+    git(world.root, "commit", "--quiet", "-m", "seed other")
     (world.bin / "calls.jsonl").unlink()
     world.write_record([("L2-1", "taken — test_b", "no")])
     fixed = "L2-1: fixed — tests/test_other.py::test_other"
@@ -6858,7 +6869,8 @@ def test_a_named_test_that_is_not_red_first_fails_the_attempt(world: World) -> N
     assert world.run("repair") == 0
     prompt = prompt_of(world.calls("codex")[1])
     assert (
-        "L1-1: tests/test_notred.py::test_not_red: pytest ended 0 on the baseline's code; red first is exit 1 or 2"
+        "L1-1: tests/test_notred.py::test_not_red: pytest ended 0 on the baseline's code; "
+        "red first needs exit 1 with an assertion failure"
     ) in prompt
 
 
@@ -6965,6 +6977,399 @@ def test_a_failed_worktree_remove_leaves_no_dead_entry_and_is_named(
     listed = git(world.root, "worktree", "list")
     assert "stage2-red-" not in listed, listed
     assert outcome is not None and "`git worktree remove` ended 128" in outcome, outcome
+
+
+# ---------------------------------------------------------------------------
+# The red-first outcome classification (bead coding-harness-omp)
+# ---------------------------------------------------------------------------
+
+RED_ASSERT_TEST = (
+    "from pathlib import Path\n\n\ndef test_red():\n"
+    '    value = (Path(__file__).resolve().parent.parent / "src" / "app.py").read_text(encoding="utf-8")\n'
+    '    assert "value = 2" in value\n'
+)
+RED_SELECTOR = "tests/test_red.py::test_red"
+
+# The missing-install case of criterion 2: the fixture keeps the shape of the real
+# `require_installed_pi` (a `pytest.fail`, never a skip), and asserts first that the ignored
+# stand-in dependency did not reach the scratch checkout - worktree adds carry committed files
+# only, so the stand-in planted in the source worktree is absent there. A leaked stand-in
+# aborts with exit 3, distinguishable from the missing-install setup failure at exit 1.
+MISSING_PI_TEST = (
+    "from pathlib import Path\n\n"
+    "import pytest\n\n\n"
+    "@pytest.fixture\n"
+    "def require_installed_pi():\n"
+    '    stand_in = Path(__file__).resolve().parent.parent / "pi-stand-in" / "wrapper"\n'
+    "    if stand_in.exists():\n"
+    '        pytest.exit("the stand-in Pi reached the scratch checkout", returncode=3)\n'
+    '    assert not stand_in.exists(), "the stand-in Pi reached the scratch checkout"\n'
+    '    pytest.fail("the pinned Pi is not installed; run bash tools/pi/install.sh")\n\n\n'
+    "def test_pi_contract(require_installed_pi):\n"
+    "    assert True\n"
+)
+
+FIXTURE_ASSERT_TEST = (
+    "import pytest\n\n\n"
+    "@pytest.fixture\n"
+    "def broken():\n"
+    '    assert False, "the fixture asserts"\n\n\n'
+    "def test_fixture_assert(broken):\n"
+    "    assert True\n"
+)
+
+TEARDOWN_ERROR_TEST = (
+    "import pytest\n\n\n"
+    "@pytest.fixture\n"
+    "def leaking():\n"
+    "    yield\n"
+    '    raise RuntimeError("the teardown broke")\n\n\n'
+    "def test_teardown_error(leaking):\n"
+    "    assert True\n"
+)
+
+
+def red_first_planted(world: World, name: str, source: str, selector: str) -> str | None:
+    """Plant one test file in the world's `tests/` and check `selector` red-first against HEAD."""
+    (world.root / "tests" / name).write_text(source, encoding="utf-8")
+    return stage2.red_first(world.root, git(world.root, "rev-parse", "HEAD"), selector, None)
+
+
+def plant_ignored_pi_stand_in(world: World) -> None:
+    """The stand-in dependency the scratch checkout must lack: ignored, in the source worktree only."""
+    (world.root / ".gitignore").write_text("pi-stand-in/\n", encoding="utf-8")
+    git(world.root, "add", "-A")
+    git(world.root, "commit", "--quiet", "-m", "ignore the Pi stand-in")
+    stand_in = world.root / "pi-stand-in"
+    stand_in.mkdir()
+    (stand_in / "wrapper").write_text("#!/bin/sh\n", encoding="utf-8")
+
+
+def test_red_first_accepts_only_clean_assertion_runs(world: World) -> None:
+    """Criterion 1. Planted fault: a clean or mixed-parameter assertion failure is refused."""
+    repair_world(world)
+    outcome = red_first_planted(world, "test_red.py", RED_ASSERT_TEST, RED_SELECTOR)
+    assert outcome is None, outcome
+    mixed = (
+        "from pathlib import Path\n\n"
+        "import pytest\n\n\n"
+        '@pytest.mark.parametrize("round_number", [1, 2, 3])\n'
+        "def test_mixed(round_number):\n"
+        '    value = (Path(__file__).resolve().parent.parent / "src" / "app.py").read_text(encoding="utf-8")\n'
+        '    assert round_number == 1 or "value = 2" in value\n'
+    )
+    outcome = red_first_planted(world, "test_mixed.py", mixed, "tests/test_mixed.py::test_mixed")
+    assert outcome is None, outcome
+    assert len(git(world.root, "worktree", "list").splitlines()) == 1
+
+
+@pytest.mark.parametrize("plant_guard_fault", [False, True], ids=["missing-install", "stand-in-present"])
+def test_red_first_refuses_a_missing_pi_install(world: World, plant_guard_fault: bool) -> None:
+    """Criterion 2. Planted fault: the absent ignored installation produces accepted fixture-error evidence."""
+    repair_world(world)
+    plant_ignored_pi_stand_in(world)
+    source = MISSING_PI_TEST
+    if plant_guard_fault:
+        # A copied file always exists in the scratch checkout: simulate a leaked stand-in.
+        source = source.replace(
+            'Path(__file__).resolve().parent.parent / "pi-stand-in" / "wrapper"',
+            "Path(__file__)",
+        )
+    outcome = red_first_planted(world, "test_pi_env.py", source, "tests/test_pi_env.py::test_pi_contract")
+    cause = (
+        "pytest ended 3"
+        if plant_guard_fault
+        else "the setup phase of `tests/test_pi_env.py::test_pi_contract` ended failed"
+    )
+    assert outcome is not None and cause in outcome, outcome
+
+
+def test_red_first_refuses_setup_and_teardown_errors(world: World) -> None:
+    """Criterion 3. Planted fault: a fixture assertion or teardown error passes the proof."""
+    repair_world(world)
+    outcome = red_first_planted(
+        world, "test_broken.py", FIXTURE_ASSERT_TEST, "tests/test_broken.py::test_fixture_assert"
+    )
+    assert outcome is not None and "the setup phase of `tests/test_broken.py::test_fixture_assert`" in outcome, outcome
+    outcome = red_first_planted(world, "test_leak.py", TEARDOWN_ERROR_TEST, "tests/test_leak.py::test_teardown_error")
+    assert (
+        outcome is not None
+        and "the teardown phase of `tests/test_leak.py::test_teardown_error` ended failed" in outcome
+    ), outcome
+    # Phase 6, F-1: the call fails by ordinary assertion while the teardown raises. A check that
+    # reads the teardown only beside a passing call would accept this one as red.
+    both = (
+        "import pytest\n\n\n"
+        "@pytest.fixture\n"
+        "def leaky():\n"
+        "    yield\n"
+        '    raise RuntimeError("teardown fault")\n\n\n'
+        "def test_both(leaky):\n"
+        '    assert False, "ordinary assertion"\n'
+    )
+    outcome = red_first_planted(world, "test_both.py", both, "tests/test_both.py::test_both")
+    assert outcome is not None and "the teardown phase of `tests/test_both.py::test_both` ended failed" in outcome, (
+        outcome
+    )
+
+
+def test_red_first_refuses_non_assertion_call_failures(world: World) -> None:
+    """Criterion 4. Planted fault: RuntimeError, ImportError or pytest.fail counts as an assertion."""
+    repair_world(world)
+    bodies = {
+        "RuntimeError": '    raise RuntimeError("planted")\n',
+        "ImportError": '    raise ImportError("planted")\n',
+        # `pytest.fail` raises its own `Failed` exception: named as the probe records the type.
+        "Failed": '    pytest.fail("planted")\n',
+    }
+    for exception, body in bodies.items():
+        source = f"import pytest\n\n\ndef test_breaks():\n{body}"
+        outcome = red_first_planted(world, "test_breaks.py", source, "tests/test_breaks.py::test_breaks")
+        assert outcome is not None and f"failed with {exception}, not an AssertionError" in outcome, (
+            exception,
+            outcome,
+        )
+
+
+@pytest.mark.parametrize(
+    ("plants", "selector", "cause"),
+    [
+        pytest.param(
+            {"tests/test_out.py": "def test_out():\n    assert True\n"},
+            "tests/test_out.py::test_out",
+            "pytest ended 0",
+            id="pass",
+        ),
+        pytest.param(
+            {"tests/test_out.py": "def test_out():\n    assert True\n"},
+            "tests/test_out.py::test_absent",
+            "pytest ended",
+            id="no-selection",
+        ),
+        pytest.param(
+            {"tests/test_out.py": "import absent_module_xyz\n\n\ndef test_out():\n    assert True\n"},
+            "tests/test_out.py::test_out",
+            "pytest ended",
+            id="collection-error",
+        ),
+        pytest.param(
+            {"tests/test_out.py": "def test_out():\n    raise KeyboardInterrupt\n"},
+            "tests/test_out.py::test_out",
+            "pytest ended 2",
+            id="interrupted",
+        ),
+        pytest.param(
+            {
+                "tests/test_out.py": "def test_out():\n    assert True\n",
+                # A raise in a collection hook is an INTERNALERROR (exit 3); one in a runtest hook
+                # is reported as an ordinary failing test.
+                "tests/conftest.py": 'def pytest_collection_modifyitems(items):\n    raise RuntimeError("planted")\n',
+            },
+            "tests/test_out.py::test_out",
+            "pytest ended 3",
+            id="internal-error",
+        ),
+        pytest.param(
+            {"tests/test_out.py": "import pytest\n\n\n@pytest.mark.skip\ndef test_out():\n    assert True\n"},
+            "tests/test_out.py::test_out",
+            "pytest ended",
+            id="skip",
+        ),
+        pytest.param(
+            {
+                "tests/test_out.py": (
+                    "import pytest\n\n\n"
+                    '@pytest.mark.parametrize("case", [pytest.param(1, marks=pytest.mark.skip), 2])\n'
+                    "def test_out(case):\n"
+                    '    assert False, "ordinary assertion beside setup skip"\n'
+                )
+            },
+            "tests/test_out.py::test_out",
+            "the setup phase of `tests/test_out.py::test_out[1]` ended skipped",
+            id="setup-skip-beside-assertion",
+        ),
+        pytest.param(
+            {
+                "tests/test_out.py": (
+                    "import pytest\n\n\n"
+                    '@pytest.mark.parametrize("case", [1, 2])\n'
+                    "def test_out(case):\n"
+                    "    if case == 1:\n"
+                    '        pytest.skip("call skip")\n'
+                    '    assert False, "ordinary assertion beside call skip"\n'
+                )
+            },
+            "tests/test_out.py::test_out",
+            "the call of `tests/test_out.py::test_out[1]` was skipped",
+            id="call-skip-beside-assertion",
+        ),
+        pytest.param(
+            {
+                "tests/test_out.py": (
+                    "from pathlib import Path\n\n"
+                    "import pytest\n\n\n"
+                    "def value():\n"
+                    '    return (Path(__file__).resolve().parent.parent / "src" / "app.py")'
+                    '.read_text(encoding="utf-8")\n\n\n'
+                    # The xfail mark rides a case of the requested function: an unselected
+                    # neighbour never runs, so it cannot refuse anything.
+                    "@pytest.mark.parametrize(\n"
+                    '    "round_number", [1, pytest.param(2, marks=pytest.mark.xfail), 3]\n'
+                    ")\n"
+                    "def test_out(round_number):\n"
+                    '    assert round_number == 1 or "value = 2" in value()\n'
+                )
+            },
+            "tests/test_out.py::test_out",
+            "is marked expected-failing or unexpectedly passed",
+            id="xfail-beside-assertion",
+        ),
+        pytest.param(
+            {
+                "tests/test_out.py": (
+                    "from pathlib import Path\n\n"
+                    "import pytest\n\n\n"
+                    "def value():\n"
+                    '    return (Path(__file__).resolve().parent.parent / "src" / "app.py")'
+                    '.read_text(encoding="utf-8")\n\n\n'
+                    # Round 1 passes under a strict xfail mark: a strict XPASS fails with the
+                    # marker; round 2 fails by ordinary assertion and drives exit 1.
+                    "@pytest.mark.parametrize(\n"
+                    '    "round_number", [pytest.param(1, marks=pytest.mark.xfail(strict=True)), 2]\n'
+                    ")\n"
+                    "def test_out(round_number):\n"
+                    '    assert round_number == 1 or "value = 2" in value()\n'
+                )
+            },
+            "tests/test_out.py::test_out",
+            "is marked expected-failing or unexpectedly passed",
+            id="strict-xpass-beside-assertion",
+        ),
+    ],
+)
+def test_red_first_refuses_non_proving_pytest_outcomes(world: World, plants: dict, selector: str, cause: str) -> None:
+    """Criterion 5. Planted fault: pass, empty selection, collection failure, interruption, internal or
+    usage error, skip, xfail or XPASS is accepted."""
+    repair_world(world)
+    for name, source in plants.items():
+        (world.root / name).write_text(source, encoding="utf-8")
+    baseline = git(world.root, "rev-parse", "HEAD")
+    outcome = stage2.red_first(world.root, baseline, selector, None)
+    assert outcome is not None and cause in outcome, outcome
+
+
+def test_red_first_refuses_missing_or_invalid_evidence(world: World, monkeypatch: pytest.MonkeyPatch) -> None:
+    """Criterion 6. Planted fault: absent, malformed, incomplete, wrong-test or stale evidence passes."""
+    repair_world(world)
+    (world.root / "tests" / "test_red.py").write_text(RED_ASSERT_TEST, encoding="utf-8")
+    baseline = git(world.root, "rev-parse", "HEAD")
+    original = stage2._red_report_bytes
+
+    def tampered(mutate):
+        def reader(path: Path) -> bytes | None:
+            record = original(path)
+            assert record is not None, "the red-first run left no outcome record to tamper with"
+            return json.dumps(mutate(json.loads(record))).encode("utf-8")
+
+        return reader
+
+    faults = {
+        "absent": lambda _path: None,
+        "malformed": lambda _path: b"{ not json",
+        "incomplete": tampered(lambda record: {**record, "session": None}),
+        "wrong-test": tampered(lambda record: {**record, "selector": "tests/test_red.py::test_other"}),
+        "stale": tampered(lambda record: {**record, "token": "0" * 32}),
+    }
+    for name, fault in faults.items():
+        monkeypatch.setattr(stage2, "_red_report_bytes", fault)
+        outcome = stage2.red_first(world.root, baseline, RED_SELECTOR, None)
+        assert outcome is not None and "outcome record" in outcome, (name, outcome)
+
+
+def test_red_first_refuses_a_timed_out_run(world: World, monkeypatch: pytest.MonkeyPatch) -> None:
+    """Criterion 6. Planted fault: a timed-out process is accepted through partial evidence."""
+    repair_world(world)
+    (world.root / "tests" / "test_red.py").write_text(RED_ASSERT_TEST, encoding="utf-8")
+    baseline = git(world.root, "rev-parse", "HEAD")
+    original_run = stage2.subprocess.run
+
+    def stopping(command, *args, **kwargs):
+        """The pytest process dies at the limit after writing the phases it reached."""
+        if "-m" in command and "pytest" in command:
+            env = kwargs["env"]
+            record = {
+                "schema": 1,
+                "token": env["STAGE2_RED_TOKEN"],
+                "selector": env["STAGE2_RED_SELECTOR"],
+                "collection_errors": [],
+                "selected": [env["STAGE2_RED_SELECTOR"]],
+                "phases": [
+                    {
+                        "nodeid": env["STAGE2_RED_SELECTOR"],
+                        "phase": "setup",
+                        "outcome": "passed",
+                        "assertion": False,
+                        "exception": None,
+                        "expected": False,
+                    },
+                    {
+                        "nodeid": env["STAGE2_RED_SELECTOR"],
+                        "phase": "call",
+                        "outcome": "failed",
+                        "assertion": True,
+                        "exception": "AssertionError",
+                        "expected": False,
+                    },
+                ],
+                "session": None,
+            }
+            Path(kwargs["env"]["STAGE2_RED_REPORT"]).write_text(json.dumps(record), encoding="utf-8")
+            raise subprocess.TimeoutExpired(command, stage2.RED_FIRST_MINUTES * 60)
+        return original_run(command, *args, **kwargs)
+
+    monkeypatch.setattr(stage2.subprocess, "run", stopping)
+    outcome = stage2.red_first(world.root, baseline, RED_SELECTOR, None)
+    assert outcome is not None and "stopped by the red-first time limit" in outcome, outcome
+
+
+def test_repair_refuses_environment_only_red_first_evidence(world: World) -> None:
+    """Criterion 7. Planted fault: a fixture fault checkpoints or marks the row fixed without context."""
+    repair_world(world)
+    plant_ignored_pi_stand_in(world)
+    head = git(world.root, "rev-parse", "HEAD")
+    env_step = repair_step(
+        stdout="L1-1: fixed — tests/test_pi_env.py::test_pi_contract",
+        plant={"tests/test_pi_env.py": MISSING_PI_TEST},
+    )
+    script_repair(world, [env_step, env_step, env_step], make=[{"stdout": "green\n"}] * 3)
+    assert world.run("repair") == 1
+    assert git(world.root, "rev-parse", "HEAD") == head, "a checkpoint landed on environment-only evidence"
+    assert "taken — test_a" in world.record().read_text(encoding="utf-8")
+    prompt = prompt_of(world.calls("codex")[1])
+    assert (
+        "L1-1: tests/test_pi_env.py::test_pi_contract: the setup phase of "
+        "`tests/test_pi_env.py::test_pi_contract` ended failed; red first needs passing setup and teardown"
+    ) in prompt, prompt
+
+
+def test_red_first_scrubs_outcome_diagnostics(world: World, monkeypatch: pytest.MonkeyPatch) -> None:
+    """Criterion 7. Planted fault: a credential reaches a refusal diagnostic."""
+    repair_world(world)
+    (world.root / "tests" / "test_red.py").write_text(RED_ASSERT_TEST, encoding="utf-8")
+    baseline = git(world.root, "rev-parse", "HEAD")
+    original = stage2._red_report_bytes
+    secret = KEY
+
+    def foreign(path: Path) -> bytes | None:
+        record = original(path)
+        assert record is not None, "the red-first run left no outcome record"
+        return json.dumps({**json.loads(record), "selector": f"tests/elsewhere.py::test_{secret}"}).encode("utf-8")
+
+    monkeypatch.setattr(stage2, "_red_report_bytes", foreign)
+    outcome = stage2.red_first(world.root, baseline, RED_SELECTOR, secret)
+    assert outcome is not None, outcome
+    assert secret not in outcome and "[credential]" in outcome, outcome
+    assert RED_SELECTOR in outcome, outcome
 
 
 def test_a_failed_repair_process_restores_the_baseline_without_a_further_attempt(world: World) -> None:
