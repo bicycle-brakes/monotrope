@@ -213,6 +213,8 @@ endpunkte:
         anfragen_gelesen: "2026-10-17"
         anfragen_quelle: "estimated requests table of the Go page, https://opencode.ai/docs/go"
       qwen3.8-flash:
+        uebersprungen: "2026-10-17"
+        grund: "wire API not measured"
         gelesen: "2026-10-17"
         quelle: "privacy table of the Go page, https://opencode.ai/docs/go"
         aufbewahrung: "0 days"
@@ -221,6 +223,8 @@ endpunkte:
         anfragen_gelesen: "2026-10-17"
         anfragen_quelle: "estimated requests table of the Go page, https://opencode.ai/docs/go"
       gpt-6-luna:
+        uebersprungen: "2026-10-17"
+        grund: "wire API not measured"
         gelesen: "2026-10-17"
         quelle: "privacy table of the Go page, https://opencode.ai/docs/go"
         aufbewahrung: "30 days"
@@ -229,6 +233,8 @@ endpunkte:
         anfragen_gelesen: "2026-10-17"
         anfragen_quelle: "estimated requests table of the Go page, https://opencode.ai/docs/go"
       claude-haiku-5-5:
+        uebersprungen: "2026-10-17"
+        grund: "wire API not measured"
         gelesen: "2026-10-17"
         quelle: "privacy table of the Go page, https://opencode.ai/docs/go"
         aufbewahrung: "30 days"
@@ -237,6 +243,8 @@ endpunkte:
         anfragen_gelesen: "2026-10-17"
         anfragen_quelle: "estimated requests table of the Go page, https://opencode.ai/docs/go"
       minimax-m3:
+        uebersprungen: "2026-10-17"
+        grund: "wire API not measured"
         gelesen: "2026-10-17"
         quelle: "privacy table of the Go page, https://opencode.ai/docs/go"
         aufbewahrung: "0 days"
@@ -290,7 +298,12 @@ endpunkte:
       page (read 2026-10-07) listed the three measured ids; the
       Anthropic-compatible
       `https://opencode.ai/zen/go/v1/messages` is not used — three calls
-      there were refused on 2026-10-08. The Go page lists Pi among its
+      there were refused on 2026-10-08. As of 2026-10-17, `qwen3.8-flash`,
+      `claude-haiku-5-5` and `minimax-m3` use anthropic-messages in Pi's
+      shipped catalog; `gpt-6-luna` uses openai-responses. All four are
+      skipped: wire API not measured. Their data-terms admission under Q-11
+      stands; a probe must measure their real address before use.
+      The Go page lists Pi among its
       validated clients (read 2026-10-08), and Pi sends the
       `x-opencode-session` header the page asks for.
       Subscription: the Go plan at USD 10 a month. Prices per million
@@ -311,8 +324,12 @@ endpunkte:
       risk on 2026-10-08. The six ids beyond the three measured ones
       (`longcat-2.0`, `glm-5.3-flash`, `qwen3.8-flash`, `gpt-6-luna`,
       `claude-haiku-5-5`, `minimax-m2.7`) came from the maintainer's ladder
-      answer of 2026-10-14 without their own measurements: no price or limit
-      is claimed for them. Privacy table of the Go page (read 2026-10-17):
+      answer of 2026-10-14 without their own wire measurements. The estimated
+      requests per five hours (`anfragen_5h`, Go page read 2026-10-17) are
+      `longcat-2.0` 11400, `glm-5.3-flash` 6320, `qwen3.8-flash` 5400,
+      `gpt-6-luna` 4230, `claude-haiku-5-5` 3850 and the replacement
+      `minimax-m3` 3200. No token price is claimed for these six.
+      Privacy table of the Go page (read 2026-10-17):
       `longcat-2.0`, `glm-5.3-flash` and `qwen3.8-flash` retain `0 days`,
       `gpt-6-luna` (abuse-monitoring logs) and `claude-haiku-5-5` retain
       `30 days`, and model training is "Not used" for all five; the

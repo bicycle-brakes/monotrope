@@ -21,7 +21,8 @@ tags: [adr, stage-2, review-loop, opencode-go, swarm]
 * Review: the maintainer chose the direction in Q-1 through Q-8 on
   2026-10-14 and corrected free admission, the Flash round, live refresh and
   configurable selection in Q-9/Q-10 and the addenda of 2026-10-16
-  (`plans/changes/loop-until-clean/decisions.md`). Acceptance
+  and paid retention, free exclusions and replacement routing in Q-11 to Q-13
+  on 2026-10-17 (`plans/changes/loop-until-clean/decisions.md`). Acceptance
   is the merge commit, recorded nowhere else; the header's review remains
   pending · Decider: maintainer · prepared by Codex through stage 2.
 * Date: 2026-10-16 · takes effect on merge.
@@ -132,8 +133,12 @@ the corrected order and automatic free admission.
    fetched `opencode-go` overlay of the forced refresh, not ids only Pi's
    shipped list carries.
 5. **Paid terms are read before admission.** Record dated retention/training
-   readings for paid models; skip and name in the handover any whose terms
-   retain/train or cannot be read (Q-7). No address/model substitution follows
+   readings for paid models. Retention is read and recorded;
+   training must be "Not used".
+   Skip and name in the handover any whose terms cannot be read or permit
+   training. Q-11 admits the 30-day readers by the maintainer's decision of
+   2026-10-17; retention alone does not exclude them (amending Q-7).
+   No address/model substitution follows
    a refused id. An empty eligible Flash stage is named and skipped without
    completing an empty review round.
 6. **Each swarm produces one decided round and one repair batch.** Calls

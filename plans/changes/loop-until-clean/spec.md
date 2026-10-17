@@ -132,8 +132,11 @@ Merely listing installed models does not meet the live-check requirement.
    admitted.
 
 6. When a paid model is admitted to either paid stage, its declaration
-   contains a dated reading of retention and training terms; unreadable or
-   retaining/training models are skipped and named for the handover.
+   contains a dated reading of retention and training terms. Retention is
+   read and recorded; training must be "Not used".
+   Models whose terms are unreadable or permit training are skipped and named for the
+   handover. Q-11 admits the 30-day readers by the maintainer's decision of
+   2026-10-17; retention alone does not exclude them.
    *Refuted by:* a paid call without that reading or a silently omitted
    ineligible model. Fail closed: `gelesen` must be an ISO date
    (YYYY-MM-DD) and an empty `uebersprungen` counts as absent only beside a

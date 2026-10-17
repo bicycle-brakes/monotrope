@@ -947,6 +947,9 @@ def terms_problem(entry: dict, model: str) -> str | None:
         return f"the model {model} has no dated reading of its data terms (gelesen is not an ISO date YYYY-MM-DD)"
     if not record.get("quelle"):
         return f"the model {model} has no dated reading of its data terms (gelesen/quelle missing)"
+    retention = record.get("aufbewahrung")
+    if not isinstance(retention, str) or not retention.strip():
+        return f"the model {model} has no retention reading (aufbewahrung missing or unreadable)"
     if record.get("training") != "Not used":
         return f"the model {model} has disallowed or unread training terms (training must be Not used)"
     return None
@@ -1883,7 +1886,7 @@ def _record_lines(record: str) -> list[tuple[str, bool]]:
     The runner writes a round as its heading, then a table or one statement and, when the answer was not
     only six-cell rows, the note `NOT_ROWS_NOTE` and the rest of the answer as it came. The lines after the
     note, up to the next round heading, are the reviewer's; every other line is the record's own. A line
-    of the reviewer's that has the form of a round heading cannot be told from one.
+    of the reviewer is quoted when written, so it cannot become a round heading.
     """
     lines = []
     reviewer = False
@@ -2145,10 +2148,24 @@ def read_state(record: str | None, findings_text: str) -> dict | None:
     return state
 
 
+def quote_reviewer(text: str) -> str:
+    """Preserve reviewer words as Markdown quotes, never as control lines."""
+    return "\n".join(line if line.startswith("> ") else "> " + line for line in text.splitlines())
+
+
 def rounds_run(record: str | None, findings_text: str) -> int:
     """A round is counted by its block in the record, and by every count left behind by a release."""
     in_record = len(ROUND_HEADING.findall(record)) if record else 0
-    return in_record + sum(int(n) for n in ROUNDS_LINE.findall(findings_text))
+    released = 0
+    own = False
+    for line in findings_text.splitlines():
+        if line.startswith("## "):
+            own = line.startswith(RELEASE_HEADING)
+        elif line.startswith("Kept from the loop record:"):
+            own = False
+        elif own and (match := ROUNDS_LINE.fullmatch(line)):
+            released += int(match.group(1))
+    return in_record + released
 
 
 def kept_lines(record: str) -> str:
@@ -2226,7 +2243,7 @@ def release(root: Path, change: str) -> list[list[str]]:
         block.append(f"{STATE_KEY}{json.dumps(state, sort_keys=True)}")
     kept = kept_lines(record)
     if kept:
-        block.append(f"Kept from the loop record:\n\n{kept}")
+        block.append(f"Kept from the loop record:\n\n{quote_reviewer(kept)}")
     append(findings, "\n\n".join(block))
     shutil.rmtree(record_dir(change))
     print(f"release-loop: {len(rows)} loop rows appended to {findings.relative_to(root)}")
@@ -4082,11 +4099,12 @@ def review_loop(root: Path, change: str) -> None:
         if gap:
             notes.append(f"Notice: in the live catalog without a terms reading: {', '.join(gap)}.")
             print(f"review-loop: {notes[-1]}", file=sys.stderr)
-    if stage["kind"] == "paid-swarm":
+    if not free and not any(key == "flash" or key.startswith("rung:") for key in state["consumed"]):
         entry = endpoint_entry(root)
-        notice = cheapest_notice(entry, state["paid"]["ladder"], members)
-        if notice:
-            notes.append(f"Notice: {notice}.")
+        if stage["kind"] == "paid-swarm":
+            notice = cheapest_notice(entry, state["paid"]["ladder"], members)
+            if notice:
+                notes.append(f"Notice: {notice}.")
         missing = unvalued_models(entry, state["paid"]["ladder"])
         if missing:
             notes.append(f"Notice: no anfragen_5h declared, ordered last: {', '.join(missing)}.")
@@ -4155,7 +4173,7 @@ def review_loop(root: Path, change: str) -> None:
             reviewer_blocks.append(kept.strip())
     parts = [f"## Round {round_number} — {', '.join(members)}, {today()}", *notes, *statements]
     for block in reviewer_blocks:
-        parts.append(f"{NOT_ROWS_NOTE}\n\n{block}")
+        parts.append(f"{NOT_ROWS_NOTE}\n\n{quote_reviewer(block)}")
     path = record_dir(change) / "loop.md"
     if record is None:
         # A continued run after a release starts a fresh record; write_state

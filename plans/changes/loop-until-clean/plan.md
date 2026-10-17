@@ -92,7 +92,8 @@ YAML selection. The ADR answer is already recorded; do not rewrite it.
    discovered matches. Future rule changes use an ordinary YAML PR and take
    effect on fresh runs; active runs keep their snapshot. Read actual Go data terms in phase 4,
    cite dates/sources for retention and training in the remark, and exclude
-   unread/retaining/training paid ids. Record skipped ids and reasons for the
+   paid ids with unread terms or permitted training (Q-11: read and record
+   retention; the maintainer admitted 30-day readers on 2026-10-17). Record skipped ids and reasons for the
    handover in **`plans/changes/loop-until-clean/findings.md`**; do not silently
    respell refused ids. Preserve sourced price/limit claims without inventing
    new ones. State the diff-only unread-terms exception, forced refresh and
@@ -198,6 +199,13 @@ owns that check along with `make verify`.
 - 15: tests/test_stage2.py::test_the_loop_doctrine_names_both_swarms_until_clean — live text keeps the old cap/order/declaration rule, claims pin-limited freshness, lacks live-source/configuration limits, cites ADR 0015 or exceeds the AGENTS.md cap
 - 16: tests/test_stage2.py::test_adr_0021_amends_the_round_budget — the new record omits Q-9/Q-10 or the live/configurable-selection addendum, or modifies historical ADR bodies
 
+- 13: tests/test_stage2.py::test_reviewer_words_cannot_count_as_rounds — reviewer headings or count lines create a false clean round before or after release
+- 6: tests/test_pi_contract.py::test_real_opencode_provider_contracts — an admitted rung leaves the measured wire API or address without being skipped
+- 16: tests/test_stage2.py::test_paid_terms_doctrine_records_the_retention_decision — the spec or ADR omits Q-11's dated retention admission or the ADR's Q-11 to Q-13 review lineage
+- 6: tests/test_stage2.py::test_paid_terms_require_a_retention_reading — missing, blank or non-text retention readings admit a paid model
+- 7: tests/test_stage2.py::test_released_reviewer_words_cannot_supply_a_snapshot — kept reviewer words inject a released heading, snapshot or row
+- 8: tests/test_stage2.py::test_first_paid_rung_names_missing_cost_when_flash_is_skipped — an empty Flash stage silences the first paid round's missing-cost notice
+
 ## Runner route — 2026-10-16
 
 Stage-1 route: implement · model claude-sonnet-5-5 · reason: two Flash post-run checks failed.
@@ -209,3 +217,7 @@ Stage-1 route: implement · model claude-sonnet-5-5 · reason: two Flash post-ru
 2026-10-17 02:57:40–03:14:12, 00:16:32 — repair of the taken second-round findings, including verification waits.
 
 Repair evidence: new regression tests failed against the repair baseline `2bea51c`. The affected-suite run finished with 727 passed, 13 skipped and one obsolete lineage-text assertion; after correcting that assertion, the focused documentation and regression rerun passed all 36 tests. The 12 real Pi contracts passed with local loopback access. Ruff check, format check, interview minimums, ADR answers and the criterion ledger passed. The exploratory `make verify` runs were interrupted: the sandbox denied loopback servers and the shared tracker is outside this repair call's read scope. The separate registry check reported tracker state not measurable. The outer runner owns the final complete `make verify` and checkpoint; this call made no commit and did not edit `findings.md`.
+
+2026-10-17 09:19:52–09:28:29, 00:08:37 — repair of taken phase-6 rows P6-1 through P6-7, including verification waits (Europe/Berlin).
+
+Repair evidence (2026-10-17): all ten new regression cases failed against the repair baseline `d0bc4e8` in a temporary archive; the restored real-Pi per-rung contract also failed on that baseline configuration before the wire-API skips. The affected-suite run reported 653 passed and 17 failed: six cases used the earlier text expectations/test setup, and eleven Pi cases were refused loopback access by the sandbox. After correcting the text expectations and the injection fixture, the exact 17 failures passed with local loopback access. The focused final regression/text run passed 17 cases; the real-Pi contract suite passed all 12 cases. Run-log and feedback tests passed 68 cases with 13 skips. Ruff check, format check, interview minimums, ADR answers, the criterion ledger and git diff whitespace checks passed. The four unmeasured wire-API models remain named and skipped in the endpoint declaration; their Q-11 data-terms admission stands. This call did not edit `findings.md`, run a provider call or make a commit. The outer runner owns full `make verify` (including the shared tracker outside this call's read scope) and the checkpoint.

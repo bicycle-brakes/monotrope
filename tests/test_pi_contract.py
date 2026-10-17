@@ -863,14 +863,10 @@ def test_real_opencode_provider_contracts(tmp_path: Path) -> None:
         "the installed opencode (Zen) catalog lost its native address"
     )
     catalog = {model["id"]: model for model in provider_data("opencode-go")["openai-completions"].values()}
-    # Models admitted after Pi 1.2.0 shipped (2026-10-17: four of nine) are not in its baseline; they reach a
-    # run through the fresh pi.dev overlay, which this offline test cannot read. The baseline must still
-    # carry the ladder's long-standing models, and every id it does carry keeps the native address.
-    carried = [rung for rung in stage2.ladder(REPO_ROOT) if rung in catalog]
-    assert {"deepseek-v4.1-flash", "mimo-v2.6-flash"} <= set(carried), (
-        "a Flash member moved outside the checked wire API"
-    )
-    for rung in carried:
+    # Every admitted rung must use the measured wire API, including ids carried
+    # under another API in Pi's shipped catalog. Missing ids fail closed too.
+    for rung in stage2.ladder(REPO_ROOT):
+        assert rung in catalog, f"{rung}: wire API not measured as openai-completions"
         assert catalog[rung]["baseUrl"] == GO_NATIVE
     scratch = scratch_of(tmp_path)
     for provider, model in (("opencode-go", "contract-go-model"), ("opencode", "contract-zen-model")):
