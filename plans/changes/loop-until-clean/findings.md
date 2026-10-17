@@ -637,6 +637,7 @@ Re-checked by Opus 5.5 (Claude path, fresh read-only sub-agent, no Codex session
 |---|---|---|---|---|---|---|---|---|
 | P6-8 | MINOR | MAINT | fix-r | `scripts/stage2.py` `review_loop` (stdout line and first-round `Notice:`), `probe` (the notice text "paid models skipped for unread or refusing terms") | False statement in the handover record. The P6-1 repair routes the wire-API skip through the terms channel (`uebersprungen` in `modelle_terms`). With today's configuration, the first round's notice reads "paid models skipped for unread or refusing terms: qwen3.8-flash (… skipped on 2026-10-17: wire API not measured); gpt-6-luna …; claude-haiku-5-5 …; minimax-m3 …". This was measured with `skipped_models` on `e6195de`. The terms of these four were read, and Q-11 admitted them, as the endpoint remark says ("Their data-terms admission under Q-11 stands"). The record therefore gives the handover a wrong reason for four skips. What should hold: the notice names skipped paid models without claiming a terms problem for a skip whose reason is not one, for example "paid models skipped: …" with the per-model reason. (criterion 6; ADR 0021 decision 5) | claude-opus-5-5 | fixed — not a test — reworded all three notices to "paid models skipped:", preserving each model's reason. | yes |
 | P6-9 | MINOR | SPEC | base | `scripts/stage2.py` `probe` | The probe stops at the first member whose call fails, so every later free and paid member goes unchecked. Measured twice on 2026-10-17: `step-5-preview-free` ("Model is unavailable") and, after its exclusion, `cat-jam-free` (empty answer) each ended the run before any paid model was called. What should hold: a failed member is printed with its reason and the probe goes on; at the end it lists the answered and failed members and exits nonzero when one failed. No second address, no substituted model (maintainer, Q-15). (criterion 14) | claude-opus-5-5 (orchestrator) | fixed — tests/test_stage2.py::test_the_probe_continues_after_member_failures | no |
+| P6-10 | MINOR | MAINT | fix-r | `model-endpoints.yaml` `free_stage.exclude` entry `step-5-preview-free`, `reason` | False statement after the P6-9 repair. The exclusion reason says "the probe stops at the first refused id, so the other members stay unmeasured while it is listed". Since 3a10892 the probe names a failed member and goes on to the next one (Q-15). What should hold: the reason gives only the measured failure and does not claim that the probe stops; if the exclusion stays, it says why on its own terms, for example that it saves a call that fails every time. (criterion 14) | claude-opus-5-5 | fixed — not a test — the reason now names the measured failure and the saved call | no |
 
 Phase 6 verdict: claude-opus-5-5, 2026-10-17
 
@@ -703,3 +704,14 @@ Stage-2 call, 2026-10-17: probe · endpoint opencode-go · model step-5-preview-
 Stage-2 call, 2026-10-17: probe · endpoint opencode-go · model cat-jam-free · leak check clean over 477 files, 1401 commits, 12 rules.
 
 Stage-2 call, 2026-10-17: repair · attempt 1 · route codex · endpoint openai-codex · model gpt-6.1-sol · leak check clean over 477 files, 1403 commits, 12 rules.
+
+Stage-2 call, 2026-10-17: probe · endpoint opencode-go · model cat-jam-free · leak check clean over 477 files, 1404 commits, 12 rules.
+
+Stage-2 call, 2026-10-17: probe · endpoint opencode-go · model longcat-2.5-preview-free · leak check clean over 477 files, 1404 commits, 12 rules.
+
+Stage-2 call, 2026-10-17: probe · endpoint opencode-go · model deepseek-v4.1-flash · leak check clean over 477 files, 1404 commits, 12 rules.
+
+
+### Phase 6 re-check of P6-9 (claude-opus-5-5, 2026-10-17, read-only, returned as text and committed unchanged by the orchestrator)
+
+**P6-9: confirmed.** Only `CallFailed` is caught, inside `check_member` in `probe`; `Refused` (declaration, admission and leak checks in `preflight`, `checked_prompt`, `begin_call`) runs outside the handler and still stops the probe. Each failure prints `probe: <id> failed: <reason>`, the end prints the answered and failed ids, and any failure raises `CallFailed` (exit 1). No retry, second address or substituted model. `test_the_probe_continues_after_member_failures` (6 cases) would fail on the old code. `.venv/bin/python -m pytest tests/test_stage2.py -q -k probe`: 26 passed on 3a10892. Test gap, not a finding: no test raises a `Refused` in the middle of a probe run; by reading, those checks sit outside the handler. One stale text found: P6-10.

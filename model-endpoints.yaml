@@ -266,9 +266,8 @@ endpunkte:
           reason: >-
             In the freshly fetched opencode-go overlay, but every call fails
             with "Upstream request failed: Model is unavailable" (loop round 1
-            and the runner's probe, both 2026-10-17); the probe stops at the
-            first refused id, so the other members stay unmeasured while it
-            is listed.
+            and the runner's probe, both 2026-10-17); excluding it saves a
+            call that fails every time until the model is served.
       input: implementation-diff
       hinweis: >-
         Class admission instead of individual declarations: every id this
