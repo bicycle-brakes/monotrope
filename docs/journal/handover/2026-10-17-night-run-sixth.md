@@ -658,3 +658,65 @@ real-pinned-Pi resolution tests and explicit model configuration while
 retaining source retrieval dates. No live provider qualification, GLM/Claude
 model call or merge ran. Read-only preparation of the research-swarm spec,
 design and plan continued; no phase-4 work on that change started after reset.
+
+## Addendum — 2026-10-17, visible agent activity and editor interface idea
+
+### Where we are
+
+The maintainer asked whether active Codex, Pi and Claude jobs could open
+visible terminals in VS Code, whether the harness could become an extension,
+and whether TypeScript or Rust would justify rewriting it. They then asked
+for a bead and for alternatives to an extension. The requested idea is now
+recorded as an open child of the existing cross-harness extension vision:
+qualify a VS Code interface with live agent terminals and compare
+editor-independent alternatives (coding-harness-25h.1; parent
+coding-harness-25h). The tracker push completed on 2026-10-17.
+
+### Next step
+
+Inspect the existing second Sol repair attempt for the Pi activation fault
+before starting another model call; the active outer process is still 78620
+and its log remains /tmp/coding-harness-pr157-p614-repair.log.
+
+### Needed from the maintainer
+
+Nothing right now. No interface or language choice was accepted.
+
+### Decisions and preferences
+
+The interface bead captures exploration, not implementation authority. The
+proposed sequence is to expose shared, versioned runner progress first, then
+compare a thin TypeScript VS Code extension, a local web dashboard and a
+terminal interface. Keeping the existing Python core and splitting its
+responsibilities is a recommendation, not a language decision or a measured
+performance result. Named per-job terminals should expose actual emitted
+activity, waiting and checking states without inventing progress from silence.
+Official VS Code extension/task documentation was checked; it does not prove
+an integration exists in this repository.
+
+### Open work and blockers
+
+The interface exploration is open under coding-harness-25h.1; task status
+stays in Beads. The review runner's first P6-14 repair attempt failed its
+red-first evidence gate because the regression's setup failed against the
+baseline. Its diagnostic block is preserved in findings.md. The runner has
+started its allowed fresh Sol repair attempt with that diagnostic; no Claude
+fallback or GLM call has been made. Do not report the overall repair green
+until its postconditions and checkpoint succeed.
+
+### Working state and parallel-session boundary
+
+PR #157 remains draft at pushed bb8b5e1, with repair-owned uncommitted
+changes in the review worktree. This separate handover worktree alone owns
+this addendum. The configured session scan returned no other interactive
+writing session immediately before creating the interface bead; this parent
+remains the sole tracker writer. Earlier read-only research agents are done.
+
+### Validation
+
+The existing extension vision was read before creating its more specific
+child. The new bead was read from the create result and pushed; no UI code,
+prototype, language migration or UI test was produced. The source proposal
+and five acceptance criteria are in the tracker. The current repair's last
+measured phase transition is a failed first post-run check followed by a
+fresh Sol attempt; full success is pending. No merge was requested or run.
