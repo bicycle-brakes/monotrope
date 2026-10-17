@@ -876,3 +876,73 @@ catalog-controlled command and read no credential file. The new repair has
 not yet reported green. PR #157's body names both taken findings and the
 running repair. No live provider qualification, customer access, GLM/Claude
 call or merge occurred.
+
+## Addendum — 2026-10-17, safety repair verified and quota handover
+
+### Where we are
+
+P6-15 and P6-16 are repaired at 142384902074a196f66944112e520ca35ec144b4.
+The runner returned "repair: verified and committed · route codex · attempt
+1", with complete make verify and all repair postconditions green, leaving
+a clean checkpoint. Orchestrator evidence is committed at ab5e688 and
+published on draft PR #157. All taken findings through P6-16 are repaired;
+a fresh independent phase-6 re-check of this latest source remains pending.
+No clean final verdict or merge is claimed.
+
+### Next step
+
+In .claude/worktrees/loop-until-clean, check Git/PR state, then run a fresh
+`.venv/bin/python scripts/stage2.py review loop-until-clean` through Sol.
+Retain the local Claude-command guard while its budget remains exhausted.
+Inspect the new verdict, then commit and push its evidence; do not resume
+an earlier reviewer or reset the spent phase-4b run. Only after this review
+is safely checkpointed should research-swarm resume.
+
+### Needed from the maintainer
+
+Nothing to answer now. Continuation needs sufficient session allowance.
+At 15:27:03 UTC the local meter recorded 94 percent used in the current
+five-hour window; this final publication uses the remaining handover reserve
+before the requested five-percent stop. No further model call was started.
+
+### Decisions and preferences
+
+The VS Code/live-terminal interface versus browser/terminal alternatives is
+recorded as coding-harness-25h.1. Interactive use of more Pi providers/models
+in both swarms is recorded under coding-harness-ylu and linked to that child.
+These are future requirements, not implemented UI, language migration or
+new provider admission. Night-plan preparation coding-harness-yuw.1 is
+closed as delivered; its epic stays open. The exact GLM cutoff and exhausted
+Claude-budget rule remain binding. No merge was requested.
+
+### Open work and working state
+
+Review worktree branch explore/loop-until-clean is clean at pushed ab5e688;
+PR #157 remains draft awaiting independent re-check and current hosted CI.
+Research-swarm remains at e9ec953 on PR #158, with no new phase-4 work after
+reset, its approved 13-hour 20-minute total and attended capture requirement
+preserved. Align its stale active 12-hour wording before implementation.
+The latest repair process 80267 has finished successfully; its log is
+/tmp/coding-harness-pr157-p61516-repair.log. All earlier repair/review
+processes have ended. This parent alone wrote the tracker; the last
+configured scan found no other interactive writer, and the three requested
+research subagents are finished read-only. Main was not edited.
+
+### Validation
+
+The repair plan records eight baseline assertion failures, 18 focused
+passes, a broad run with 726 passes followed by passing corrected cases,
+and all 17 actual pinned-Pi contracts passing. Successful outer verification
+retains no new full-suite pytest count. Catalog headers stay literal through
+Pi's actual composer without changing retrieval evidence; arbitrary failure
+prose cannot certify a clean review member. The measured interval is
+15:01:41–15:25:31 UTC, 0:23:50, including model and outer checks without
+overlap. P6-15's existing-test mark is no; P6-16's is yes. The final
+source-evidence update passed frontmatter-current (295 documents), criterion
+ledger (661 entries) and whitespace. Tracker was pushed before Git.
+
+Earlier handover 97f3bf9 has hosted CI green. Newest repair/evidence and this
+text-only addendum have hosted CI pending at publication; local full verify
+is skipped for this handover under the text-only rule. No live provider
+qualification, credential-file read, customer access, GLM/Claude call or
+merge occurred. All earlier handover bytes remain unchanged.
