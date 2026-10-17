@@ -193,3 +193,5 @@ ADR 0021 decision 9 that lets the maintainer order a fresh run.
 **Next step, replacing the one above:** wait for the maintainer's answer on
 the review swarm; then either mark #157 ready (CI green after the merge of
 origin/main) or amend decision 9.
+
+- Maintainer, 2026-10-17: "mach a" — #157 is finished as it stands (recorded as Q-14, `45f6360`) and marked ready for review; CI was not yet reported when this line was written. The research-swarm appetite question stays open.
