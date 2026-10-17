@@ -404,3 +404,113 @@ Dolt before the subsequent research git push. No task was closed.
 - Credential contents were not inspected or printed. No customer repository
   was read, and no real foreign-model call was made. Pi contract tests used local model
   doubles. The earlier live reachability evidence remains dated 2026-10-17.
+
+## Addendum — 2026-10-17, reachable review ladder checkpoint (12:59 UTC)
+
+### Where we are
+
+The maintainer approved general availability preparation for the review
+ladder on PR #157 (Q-16), replacing the need for a temporary individual
+MiMo substitution. The implementation is committed and pushed at `8ad049d`;
+full local verification is green. PR #157 is deliberately a draft again:
+the historical phase-6 verdict covers the old scope only, and a fresh
+independent read-only Sol 6.1 review is running. This addendum is an interim
+checkpoint during continued work, not a claim that the session is complete.
+
+### Next step
+
+Inspect the fresh phase-6 result for the reachable-reviewer implementation
+on PR #157 and triage its findings before starting another code change.
+The runner was started through the loop-until-clean worktree's
+`.venv/bin/python scripts/stage2.py review loop-until-clean`; its output is
+in `/tmp/coding-harness-pr157-q16-phase6.log`. At this checkpoint no verdict
+has returned. Do not reset or replay the spent phase-4b run.
+
+### Needed from the maintainer
+
+Nothing right now. The previous addendum's first MiMo question is superseded
+by the approved general preparation. The separate proposal to admit Zen free
+models with dated non-training terms remains a later decision, after #157
+merges; no bead for that specific proposal has been created. The existing
+deferred Zen-through-OpenCode-CLI task is a different scope.
+
+### Decisions and preferences
+
+- The maintainer requested actual availability checks before review, a report
+  in the main Claude Code or Codex conversation, and selection from available
+  models. They answered "ja" to implementing that general mechanism on
+  PR #157 (recorded as Q-16); the one-off MiMo replacement is deferred.
+- The maintainer requested the structural runner refactor to be recorded.
+  It is separate work, not silently bundled with availability behavior.
+- The maintainer requested autonomous continuation until only five percent
+  of the five-hour Codex allowance remains, followed by a handover PR.
+  They subsequently said "mach weiter". A safe local usage-event reading
+  measured 40 percent used in the 300-minute window at
+  2026-10-17 12:59:12 UTC; this is a dated observation, not a fixed budget.
+  It reads usage fields only, never credentials. Continue useful work and
+  reserve enough allowance to write and push the final handover.
+- Claude budget remains exhausted; implementation and the fresh independent
+  review use Sol 6.1. No GLM call is allowed before the exact cutoff already
+  recorded above: 2026-10-21 20:34 Asia/Singapore. No merge was requested.
+
+### Open work and blockers
+
+The tracker owns task status. The implementation-review swarm remains in
+progress pending fresh independent review and the maintainer's decision
+merge (coding-harness-4fk). Runner modularization is a newly recorded open
+follow-up, priority 2 (coding-harness-vg9, Refactor stage2.py into cohesive
+runner modules). Its scope preserves routing, admission, leak checks,
+snapshots and evidence behavior while reducing runner responsibilities.
+Measured before this implementation, stage2.py had 3570 lines at main
+`6477d04`, and 4622 lines at the review branch's `51fcc59`; these are
+historical counts, not the current file size.
+
+The approved research-swarm graph remains unfinished at its earlier green
+checkpoint (coding-harness-icw, PR #158, `e9ec953`). It is the next code
+change after PR #157's review is handled. Leantime qualification remains
+an open, unstarted pilot (coding-harness-al8, research PR #160, `dcae6d5`).
+No task was closed. Tracker comments and Q-16/refactor notes were pushed
+before the subsequent Git push.
+
+### Working state and parallel-session boundary
+
+At this checkpoint the review worktree is
+`.claude/worktrees/loop-until-clean`, branch `explore/loop-until-clean`,
+pushed at `8ad049d`. The running stage2 review has appended its call audit
+to `plans/changes/loop-until-clean/findings.md`; that file is intentionally
+uncommitted until the result is triaged. No source change is pending.
+PR #157 remains a decision draft. The handover stays on its own branch
+`docs/resume-2026-10-17-models`, PR #161, with the earlier handover preserved.
+The main checkout and other worktrees were not changed by this implementation.
+
+The configured session scan returned no other interactive writing session
+at 12:59 UTC. This measures that hook's scope, not every possible process.
+The external read-only Sol review is this session's child, not another
+tracker writer. The earlier Leantime subagent has finished without writes.
+
+### Validation
+
+- At `8ad049d`, final full make verify GREEN on 2026-10-17:
+  **2259 passed, 16 skipped** (pytest 885.03 seconds), every blocking local
+  gate green, including the kit probe. Documentation-link and Markdown-format
+  checks report findings but do not block under the declared gate policy.
+- All 24 new synthetic availability cases passed. The initial preparation
+  test failed before the verb existed; the namespaced exclusion regression
+  failed before the matching fix. The first full verification found two
+  integration faults, helper registration and an overbroad client-attribution
+  assertion; both were repaired before the final full green run.
+- After the plan's evidence/time append, frontmatter-current, the criterion
+  ledger and whitespace checks passed; plans index regeneration had no diff.
+  Measured phase-4 span: 11:35:25–12:57:23 UTC, 01:21:58 including waits.
+- Availability tests use local stand-ins, not live providers. Preparation
+  probes contain no repository content and expose no tools. No actual GLM
+  or Claude call was made. The fresh Sol review is still pending here.
+- Preparation expires after 900 seconds and binds the worktree, endpoint
+  declaration and diff. The caller acknowledges reporting in the main
+  conversation; the runner cannot verify what a user interface displayed.
+  Existing snapshots remain frozen, and all-failed preparation is no clean
+  result. Future catalog entries still require their existing admission.
+- This interim handover's feedback and session-entry checks passed on
+  2026-10-17 (55 passed, 13 skipped), using the existing locked research-swarm
+  Python environment explicitly. Frontmatter-current and whitespace checks
+  passed, and an exact byte-prefix check preserved the earlier handover.
