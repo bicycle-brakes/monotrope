@@ -720,3 +720,99 @@ prototype, language migration or UI test was produced. The source proposal
 and five acceptance criteria are in the tracker. The current repair's last
 measured phase transition is a failed first post-run check followed by a
 fresh Sol attempt; full success is pending. No merge was requested or run.
+
+## Addendum — 2026-10-17, Pi activation repair green and fresh review running
+
+### Where we are
+
+The second fresh Sol repair passed the outer runner's complete make verify
+and every repair postcondition. Source checkpoint 79a73a8 fixes P6-14;
+orchestrator evidence commit 80be40f is clean and pushed on PR #157.
+The runner returned "repair: verified and committed · route codex-repair ·
+attempt 2". A new independent read-only Sol phase-6 review is now running
+against 80be40f through stage2.py. The PR remains draft until its renewed
+verdict and hosted checks are assessed.
+
+### Next step
+
+Inspect the existing review at
+/tmp/coding-harness-pr157-after-p614-review.log and tool session 19575;
+collect its verdict before starting another model call or changing the
+review source. Triage new findings under the evidence rule, or checkpoint
+and publish a clean verdict before moving to the research swarm.
+
+### Needed from the maintainer
+
+Nothing right now. No merge was requested.
+
+### Decisions and preferences
+
+The maintainer additionally wants more of Pi's provider APIs/models usable
+in both swarms, with interactive choice of participating models. This
+requirement is appended to the existing central model/effort configuration
+task (coding-harness-ylu) and linked from the new interface exploration
+(coding-harness-25h.1). Pi 1.2.0's installed usage/RPC/SDK documentation and
+ModelRuntime declarations were read statically: it has a model selector,
+language-independent command/event transport and TypeScript session APIs.
+This was no credential inspection or live availability measurement. The
+proposed selector distinguishes catalog presence, role eligibility, data
+admission, cost information and actual reachability, then freezes a roster.
+No policy, provider admission, implementation or language migration was
+accepted through this idea capture.
+
+The existing night-run epic's two-week restraint on dashboards is named in
+the interface bead for evaluation; the future wish does not silently waive
+it. The bounded night-plan preparation task is now closed as delivered
+(coding-harness-yuw.1); its open PR #162 and hosted verification are green
+at 045210f. The night-run epic itself stays open. Both tracker updates were
+pushed, and PR #162 names the closed preparation task.
+
+### Open work and blockers
+
+The renewed phase-6 verdict is pending (coding-harness-4fk). The research
+swarm remains next (coding-harness-icw), with its existing attended offline
+capture still required and real Claude qualification unavailable while the
+maintainer's budget is exhausted. Read-only preparation found stale active
+12-hour appetite wording in spec/plan beside the already approved 13-hour
+20-minute total in the card and Time used. Align active wording to that
+recorded answer before the next implementation; preserve historical text
+and the named unmeasured old span. No phase-4 work on research-swarm began
+after the allowance reset. New catalog/helper/handoff work is still pending.
+
+### Working state and parallel-session boundary
+
+Review worktree: .claude/worktrees/loop-until-clean, branch
+explore/loop-until-clean, pushed 80be40f. The sole active foreign-model child
+is the fresh read-only Sol reviewer; this parent alone writes the tracker
+and this separate handover branch. The last configured session scan found
+no other interactive writer. Main remains untouched at 6029bbf; a new fetch
+did not change origin/main from 6477d04. GLM's exact cutoff and the local
+Claude-command guard remain in force. The previous repair process 78620 has
+finished successfully; do not resume or duplicate it.
+
+### Validation
+
+The source repair passed complete make verify and the baseline assertion
+proof on its second Sol attempt, leaving a clean worktree at 79a73a8.
+The first attempt's setup failure remains in findings.md; it was not
+accepted as red-first evidence. The strengthened dependency-free launch
+regression gives six baseline assertion failures with passing setup and
+teardown. Four additional actual pinned-Pi resolver cases check new and
+existing model API, endpoint, context and limits at missing/invalid-date
+representation zero and older server dates. The repair plan records 720
+affected-suite passes and 16 real-Pi contracts. The successful outer runner
+does not retain a new full-suite pytest count; 2259 remains older evidence.
+
+Models-store keeps retrieval/server-date evidence unchanged. Scratch
+models.json activates the fetched definitions before listing and offline
+launch, independently of Pi's cache-age filter. The orchestrator recorded
+the measured repair interval 14:07:38–14:53:57 UTC, 0:46:19, including both
+attempts and outer verification, without double counting. It marked the
+changed existing test explicitly. Frontmatter-current (295 held documents),
+criterion ledger and whitespace passed after that evidence-only update;
+source code did not change after its complete green verification.
+
+The earlier handover at e36154e has hosted verification green. Newest PR
+#157 CI and the independent verdict are pending here. No live model
+qualification, credential-file read, customer access, GLM/Claude call or
+merge occurred in this continuation.
