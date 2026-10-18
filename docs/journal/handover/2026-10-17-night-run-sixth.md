@@ -1252,3 +1252,117 @@ this addendum is appended. Applicable local checks are frontmatter-current
 and whitespace; task status remains in Beads. The PR body carries the
 published source heads, remaining scope and the earlier full tracker-change
 list. Inspect current hosted CI and actual allowance before resuming work.
+
+
+## Addendum — 2026-10-18, manual resumption and bounded local history
+
+### Where we are
+
+The maintainer asked to resume shortly after 04:00 Europe/Berlin. No timed
+chat continuation was available or configured; the assistant stated that
+limitation. The actual continuation started on the maintainer's later
+"mach weiter / was sind die nächsten schritte" at about 09:26 UTC
+(11:26 Europe/Berlin). This later instruction supersedes the old 02:00 UTC
+night endpoint; it does not reset either the per-change appetite or the
+five-percent allowance reserve. The local usage event at 09:26:30 UTC
+measured 2 percent primary use, and at 09:51:01 measured 27 percent.
+
+The full handover and instructions were reread, origin fetched and actual
+worktrees/PRs checked. PR #156 remains merged. PR #157 is ready at 0c03ec0
+with hosted CI green; its independent Sol verdict remains "No finding."
+PR #158's earlier 9514f1f and handover #161's 7aaab77 both have hosted
+verification green. No PR was merged. The parent resumed research-swarm.
+
+### Next step
+
+Inspect the already running complete snapshot verification before changing
+its source bytes: /tmp/coding-harness-research-snapshot-full-verify.log,
+exec session 96564. Its result is pending here. Read the actual pytest
+summary, every blocking gate and process exit; later gates run even after
+a failure. Repair if needed, close the measured interval, checkpoint and
+push tracker before Git, then connect the amended pipeline. Do not rerun
+or resume the finished history verification, session 28276.
+
+### Needed from the maintainer
+
+Nothing right now. The eventual attended F-1 isolation capture is still a
+separate requirement and cannot be waived by unit tests. Zen non-training
+free-model admission remains a later question only after PR #157 merges.
+No merge, new model admission or permanent role reassignment is authorized.
+
+### Completed work and evidence
+
+The bounded local-history foundation is implemented and pushed at
+ebfac2716d15281a2605c8bea3cc680eb6aba406 on draft PR #158. It collects
+against a full frozen commit hash, treats mapped paths literally, retains
+ten commits per path with shared-record deduplication, author UTC, body cap
+4000 Unicode characters and explicit truncation. Older and shallow history
+remain unread; missing local objects/timeouts fail without retries. The
+local Git transport disables lazy fetch, transports, replacement objects,
+global/system config and ambient repository/credential variables, using
+one finite caller-supplied deadline. No model is dispatched by the helper.
+
+Red first: 18 missing-module failures, then six assertion failures for
+invalid deadlines and repository-wide dot scope. History/CI checks passed
+106 tests, 2 skipped. Complete make verify GREEN: 2505 passed, 16 skipped
+in 895.87 seconds, then every blocking gate including kit green. Source
+bytes stayed fixed during the run; accounting/frontmatter/criterion checks
+passed afterward. Documentation/Markdown findings remain report-only.
+Log: /tmp/coding-harness-research-history-full-verify.log.
+
+Measured phase-4 span 09:27:02–09:46:10 UTC, 19m08s, is appended once in
+plan.md after retained earlier intervals under the unchanged 13h20m total.
+It includes preparation of the next frozen-copy prototype outside the repo;
+do not count that preparation again. Existing tests were not changed.
+The existing bounded research-swarm task remains in progress
+(coding-harness-icw); its checkpoint comment was pushed before Git. No
+task was opened or closed. The PR body carries the generated touch map,
+the verified checkpoint and its still-unfinished scope.
+
+### Current work and working state
+
+A new phase-4 interval began at 09:48:20 UTC and remains OPEN while session
+96564 verifies. The snapshot helper and its tests were adopted only after
+23 missing-module failures in this repository. The helper keeps transient
+copies outside the repo, freezes current tracked and non-ignored untracked
+change inputs, stores digests rather than source snapshots in its manifest,
+detects changed input sets/bytes/HEAD, refuses symlink file/parent traversal,
+and deletes copies on exit or failed preparation. Only an exact
+runner-owned research append/restamp may be exempt; arbitrary appends or
+rewriting its frozen body still invalidate publication. Shared history Git
+transport stays local-only. Actual scheduler consumption is still pending.
+
+The final focused snapshot/history set passed 52 tests; the six relevant
+CI registration checks passed. An earlier focused combined run was red on
+one missing non-CLI registration (128 passed, 2 skipped); the documented
+library reason was restored rather than weakening the gate. A parent
+symlink fixture was strengthened before the complete run. Ruff check and
+format, criterion ledger and schema references pass. These results do not
+yet certify the complete snapshot run or amended research dispatcher.
+
+Research worktree remains on explore/research-swarm, HEAD ebfac27, with
+six staged owned files: new snapshot source/tests plus history module
+documentation, CI registrations, design and plan. Do not discard or edit
+them while verification runs. Hosted checks for ebfac27 are IN_PROGRESS
+at this interim checkpoint. Handover stays on its own branch/worktree
+docs/resume-2026-10-17-models, PR #161; this is an interim checkpoint during
+continued work. Main remains 6029bbf with its existing .codex/agents/
+untracked directory untouched; origin/main is 6477d04.
+
+The configured session scan was empty immediately before the tracker write;
+parent remains the sole tracker writer. The three earlier requested
+research subagents are finished read-only; no new agent or model call was
+started. No credential-file read, customer-instance access, live provider
+qualification, GLM/Claude call, stash, amend, force push or merge occurred.
+GLM remains forbidden until 2026-10-21 20:34 Asia/Singapore, and Claude
+budget remains exhausted. Continue implementation with Sol 6.1; foreign
+calls remain restricted to each worktree's locked Python and stage2.py.
+
+### Validation of this addendum
+
+All prior handover bytes remain unchanged; this section is appended.
+Applicable local handover checks are feedback-channel, frontmatter-current
+and whitespace. Text-only handover changes skip full local make verify;
+hosted CI remains their gate. Task state stays in Beads. Actual amended
+scheduling, role prompts, report/judge/handoff integration, attended capture
+and final independent phase-6 review remain unfinished.
