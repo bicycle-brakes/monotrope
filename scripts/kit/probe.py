@@ -126,6 +126,9 @@ REIST_NICHT: dict[str, str] = {
     "tests.test_model_endpoints::test_the_declaration_is_not_empty": "bestand-dieses-repos",
     "tests.test_model_endpoints::test_the_opencode_go_entry_is_declared": "bestand-dieses-repos",
     "tests.test_model_endpoints::test_the_opencode_go_remark_names_every_source": "bestand-dieses-repos",
+    "tests.test_model_endpoints::test_free_selection_exceptions_require_dates_and_reasons": "bestand-dieses-repos",
+    "tests.test_model_endpoints::test_every_new_paid_model_carries_its_terms_reading": "bestand-dieses-repos",
+    "tests.test_model_endpoints::test_unread_terms_reach_the_free_stage_alone": "bestand-dieses-repos",
     "tests.test_regelwerk::test_rules_at_level_three_or_higher_name_an_existing_enforcer[RB-G7]": "braucht-ein-gate-das-hier-lebt",
     "tests.test_regelwerk::test_rules_at_level_three_or_higher_name_an_existing_enforcer[RB-P5]": "braucht-ein-gate-das-hier-lebt",
     "tests.test_regelwerk::test_rules_at_level_three_or_higher_name_an_existing_enforcer[RB-S1]": "braucht-ein-gate-das-hier-lebt",
@@ -190,7 +193,12 @@ REIST_NICHT: dict[str, str] = {
 # 38 -> 39 on 2026-10-15 (plans/changes/pi-pin): `tests.test_ci::test_real_pi_is_provisioned_before_contracts`
 # reads `tools/pi/.node-version`, a file the kit does not carry: the missing file maps to
 # `braucht-die-vollstaendige-suite`.
-DECKEL = 39  # raised on 2026-10-15 (38 -> 39); earlier: raised on 2026-10-13 (36 -> 38); raised 2026-10-08 (33 -> 36), raised 2026-10-07 (32 -> 33), raised 2026-10-05 (31 -> 32), 2026-09-30 (31 -> 32), lowered 2026-09-30 (32 -> 31), raised 2026-09-29 (31 -> 32)
+# 39 -> 42 on 2026-10-16 (plans/changes/loop-until-clean): the free-stage rule, the paid terms
+# records and the class acceptance each got a test, and all three read
+# `model-endpoints.yaml` (and `tests.test_model_endpoints::test_free_selection_exceptions_require_dates_and_reasons`
+# also `scripts/stage2.py`), which the kit leaves home — `bestand-dieses-repos`, the same reason
+# as the entry's older cases.
+DECKEL = 42  # raised on 2026-10-16 (39 -> 42); earlier: raised on 2026-10-15 (38 -> 39); raised on 2026-10-13 (36 -> 38); raised 2026-10-08 (33 -> 36), raised 2026-10-07 (32 -> 33), raised 2026-10-05 (31 -> 32), 2026-09-30 (31 -> 32), lowered 2026-09-30 (32 -> 31), raised 2026-09-29 (31 -> 32)
 
 
 # ---------------------------------------------------------------------------

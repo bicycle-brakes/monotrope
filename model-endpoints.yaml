@@ -158,10 +158,134 @@ endpunkte:
     residenz: anbieter-erklaert
     abrechnung: abonnement
     darf_sehen: [framework]
+    # A set: the order here does not count. The runner orders the paid ladder
+    # by `anfragen_5h` in `modelle_terms` (Go page, "Estimated requests", Go
+    # column, requests per 5 hours; more is cheaper), descending, ties by id.
     modelle:
       - deepseek-v4.1-flash
       - mimo-v2.6-flash
+      - longcat-2.0
+      - glm-5.3-flash
+      - qwen3.8-flash
+      - gpt-6-luna
+      - claude-haiku-5-5
+      - minimax-m3
       - mimo-v2.6-pro
+    modelle_terms:
+      deepseek-v4.1-flash:
+        gelesen: "2026-10-07"
+        quelle: "privacy table of the Go page, https://opencode.ai/docs/go"
+        aufbewahrung: "0 days"
+        training: "Not used"
+        anfragen_5h: 34670
+        anfragen_gelesen: "2026-10-17"
+        anfragen_quelle: "estimated requests table of the Go page, https://opencode.ai/docs/go"
+      mimo-v2.6-flash:
+        gelesen: "2026-10-07"
+        quelle: "privacy table of the Go page, https://opencode.ai/docs/go"
+        aufbewahrung: "0 days"
+        training: "Not used"
+        anfragen_5h: 30100
+        anfragen_gelesen: "2026-10-17"
+        anfragen_quelle: "estimated requests table of the Go page, https://opencode.ai/docs/go"
+      mimo-v2.6-pro:
+        gelesen: "2026-10-07"
+        quelle: "privacy table of the Go page, https://opencode.ai/docs/go"
+        aufbewahrung: "0 days"
+        training: "Not used"
+        anfragen_5h: 3250
+        anfragen_gelesen: "2026-10-17"
+        anfragen_quelle: "estimated requests table of the Go page, https://opencode.ai/docs/go"
+      longcat-2.0:
+        gelesen: "2026-10-17"
+        quelle: "privacy table of the Go page, https://opencode.ai/docs/go"
+        aufbewahrung: "0 days"
+        training: "Not used"
+        anfragen_5h: 11400
+        anfragen_gelesen: "2026-10-17"
+        anfragen_quelle: "estimated requests table of the Go page, https://opencode.ai/docs/go"
+      glm-5.3-flash:
+        gelesen: "2026-10-17"
+        quelle: "privacy table of the Go page, https://opencode.ai/docs/go"
+        aufbewahrung: "0 days"
+        training: "Not used"
+        anfragen_5h: 6320
+        anfragen_gelesen: "2026-10-17"
+        anfragen_quelle: "estimated requests table of the Go page, https://opencode.ai/docs/go"
+      qwen3.8-flash:
+        uebersprungen: "2026-10-17"
+        grund: "wire API not measured"
+        gelesen: "2026-10-17"
+        quelle: "privacy table of the Go page, https://opencode.ai/docs/go"
+        aufbewahrung: "0 days"
+        training: "Not used"
+        anfragen_5h: 5400
+        anfragen_gelesen: "2026-10-17"
+        anfragen_quelle: "estimated requests table of the Go page, https://opencode.ai/docs/go"
+      gpt-6-luna:
+        uebersprungen: "2026-10-17"
+        grund: "wire API not measured"
+        gelesen: "2026-10-17"
+        quelle: "privacy table of the Go page, https://opencode.ai/docs/go"
+        aufbewahrung: "30 days"
+        training: "Not used"
+        anfragen_5h: 4230
+        anfragen_gelesen: "2026-10-17"
+        anfragen_quelle: "estimated requests table of the Go page, https://opencode.ai/docs/go"
+      claude-haiku-5-5:
+        uebersprungen: "2026-10-17"
+        grund: "wire API not measured"
+        gelesen: "2026-10-17"
+        quelle: "privacy table of the Go page, https://opencode.ai/docs/go"
+        aufbewahrung: "30 days"
+        training: "Not used"
+        anfragen_5h: 3850
+        anfragen_gelesen: "2026-10-17"
+        anfragen_quelle: "estimated requests table of the Go page, https://opencode.ai/docs/go"
+      minimax-m3:
+        uebersprungen: "2026-10-17"
+        grund: "wire API not measured"
+        gelesen: "2026-10-17"
+        quelle: "privacy table of the Go page, https://opencode.ai/docs/go"
+        aufbewahrung: "0 days"
+        training: "Not used"
+        anfragen_5h: 3200
+        anfragen_gelesen: "2026-10-17"
+        anfragen_quelle: "estimated requests table of the Go page, https://opencode.ai/docs/go"
+    # Legacy membership for declarations without availability_preflight.
+    # Fresh runs of this declaration select the cheapest reachable members.
+    availability_preflight:
+      flash_size: 3
+      max_age_seconds: 900
+      exclude_until:
+        - model_prefix: glm
+          until: "2026-10-21T20:34:00+08:00"
+          reason: "Maintainer-declared GLM outage; do not probe before this deadline."
+    flash_swarm:
+      - deepseek-v4.1-flash
+      - mimo-v2.6-flash
+      - longcat-2.0
+    free_stage:
+      provider: opencode-go
+      id_suffix: "-free"
+      include: []
+      exclude:
+        - id: step-5-preview-free
+          date: "2026-10-17"
+          reason: >-
+            In the freshly fetched opencode-go overlay, but every call fails
+            with "Upstream request failed: Model is unavailable" (loop round 1
+            and the runner's probe, both 2026-10-17); excluding it saves a
+            call that fails every time until the model is served.
+      input: implementation-diff
+      hinweis: >-
+        Class admission instead of individual declarations: every id this
+        run's forced live catalog refresh finds under the provider, matching
+        the suffix or an include, reviews the implementation diff with no
+        tools (ADR 0021, decision 3). The retention and training terms of
+        these ids are NOT read; this acceptance covers the diff-only review
+        purpose alone — no paid model, no Zen id and no interactive session
+        runs on it.
     bemerkung: >-
       The review loop (phase 4b) and the interactive session verb (`stage2.py
       session`, ADR 0012) run here — and nothing else; the spec review (phase
@@ -169,12 +293,40 @@ endpunkte:
       `python3
       scripts/stage2.py` and Pi at the version the runner pins — the exact
       version `tools/pi/package.json` declares, the repository's own install
-      (ADR 0019) — only. The order of `modelle` is the loop's ladder: round n
-      calls the n-th id, and a one-line pull request reorders it. Address:
+      (ADR 0019) — only. The loop runs until a round is clean (ADR 0021):
+      round 1 is the discovered free-model swarm, round 2 the parallel
+      `flash_swarm`, then one eligible `modelle` id per round, cheapest first:
+      the runner orders the set by `anfragen_5h` descending, ties by id, a
+      model without the value last and named. A Flash member that fails is
+      replaced by the cheapest admitted model not in the round and not yet
+      consumed, each model at most once; the swap is recorded and printed.
+      Fresh runs require availability_preflight: prepare-loop checks actual
+      reachability without tools or repository content, then the main Claude
+      Code or Codex conversation reports the selected stages before
+      review-loop --availability-reported consumes its input-bound receipt.
+      The receipt expires after 900 seconds. Up to three cheapest reachable
+      admitted paid models form the Flash swarm; remaining reachable models
+      form the ladder. The flash_swarm list is legacy configuration only.
+      Timed exclusions are skipped without probing. Existing runs retain
+      their snapshots; availability preparation cannot reset consumed stages.
+      A one-line pull request changes the set or a value. Free membership is
+      selected fresh for every run by the `free_stage` rule from a forced
+      live catalog refresh (`pi update --models`) before `pi --list-models`;
+      the catalog's source is `pi.dev`, which Pi caches for four hours — the
+      forced refresh skips that cache — and being an intermediary it does not
+      measure what Go actually bills. A paid model enters only with a dated
+      reading of its retention and training terms in `modelle_terms`; a model
+      without one is skipped and named for the handover. Address:
       `https://opencode.ai/zen/go/v1/chat/completions`, under which the Go
-      page (read 2026-10-07) lists the three ids; the Anthropic-compatible
+      page (read 2026-10-07) listed the three measured ids; the
+      Anthropic-compatible
       `https://opencode.ai/zen/go/v1/messages` is not used — three calls
-      there were refused on 2026-10-08. The Go page lists Pi among its
+      there were refused on 2026-10-08. As of 2026-10-17, `qwen3.8-flash`,
+      `claude-haiku-5-5` and `minimax-m3` use anthropic-messages in Pi's
+      shipped catalog; `gpt-6-luna` uses openai-responses. All four are
+      skipped: wire API not measured. Their data-terms admission under Q-11
+      stands; a probe must measure their real address before use.
+      The Go page lists Pi among its
       validated clients (read 2026-10-08), and Pi sends the
       `x-opencode-session` header the page asks for.
       Subscription: the Go plan at USD 10 a month. Prices per million
@@ -192,7 +344,27 @@ endpunkte:
       no third-party client and forbid processes that "automatically or
       programmatically extracts data or Output" and that run "while you are
       not logged into the Services"; the maintainer accepted this residual
-      risk on 2026-10-08.
+      risk on 2026-10-08. The six ids beyond the three measured ones
+      (`longcat-2.0`, `glm-5.3-flash`, `qwen3.8-flash`, `gpt-6-luna`,
+      `claude-haiku-5-5`, `minimax-m2.7`) came from the maintainer's ladder
+      answer of 2026-10-14 without their own wire measurements. The estimated
+      requests per five hours (`anfragen_5h`, Go page read 2026-10-17) are
+      `longcat-2.0` 11400, `glm-5.3-flash` 6320, `qwen3.8-flash` 5400,
+      `gpt-6-luna` 4230, `claude-haiku-5-5` 3850 and the replacement
+      `minimax-m3` 3200. No token price is claimed for these six.
+      Privacy table of the Go page (read 2026-10-17):
+      `longcat-2.0`, `glm-5.3-flash` and `qwen3.8-flash` retain `0 days`,
+      `gpt-6-luna` (abuse-monitoring logs) and `claude-haiku-5-5` retain
+      `30 days`, and model training is "Not used" for all five; the
+      maintainer admitted all five on 2026-10-17, the 30-day ones included.
+      The Go page lists Claude Haiku 5.5 as `claude-haiku-5-5`, so the ladder
+      carries that id. `minimax-m2.7` is neither on the page nor in Pi's
+      live `opencode-go` catalog of 2026-10-16, which list `minimax-m3`
+      instead (`0 days`, "Not used"); the maintainer replaced it with
+      `minimax-m3` on 2026-10-17. The free class accepts unread terms for the
+      implementation diff only: no tools and no other content, and no paid
+      model, Zen id or interactive session on that acceptance (ADR 0021,
+      decision 3).
 
 # ---------------------------------------------------------------------------
 # Nutzungszweck — die Auflage, die kein technisches Gate prueft

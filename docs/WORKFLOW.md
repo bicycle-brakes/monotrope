@@ -4,7 +4,7 @@ category: governance
 status: current
 created: 2026-09-05
 last_reviewed: 2026-09-29
-updated: 2026-10-16
+updated: 2026-10-17
 owner: Data Architect
 provenance: ai-drafted-reviewed
 produced_by:
@@ -84,7 +84,7 @@ handover to the next phase — not the chat history.**
 | 2b | Design *(by class)* | `plans/changes/<name>/design.md` | validator green; for an `architectural` change, an ADR draft in it | [`02b-design.md`](../prompts/02b-design.md) |
 | 3 | Plan | `plans/changes/<name>/plan.md` | validator green | [`03-plan.md`](../prompts/03-plan.md) |
 | 4 | Implement | code + tests | `make verify` green | [`04-implement.md`](../prompts/04-implement.md) |
-| 4b | Review loop *(stage 2)* | the loop rows — outside the repository until the phase-6 verdict, then in `findings.md` (`release-loop`) | at most three rounds — round 3 only when round 2 wrote a taken row; `make verify` green after each repair | [`04b-review-loop.md`](../prompts/04b-review-loop.md) |
+| 4b | Review loop *(stage 2)* | the loop rows — outside the repository until the phase-6 verdict, then in `findings.md` (`release-loop`) | rounds until a clean round — the free swarm, the Flash swarm, then the paid ladder (ADR 0021); `make verify` green after each repair | [`04b-review-loop.md`](../prompts/04b-review-loop.md) |
 | 5 | Verify | test output as evidence | the stop hook blocks on a red tree | [`05-verify.md`](../prompts/05-verify.md) |
 | 6 | Review | `plans/changes/<name>/findings.md` | no open `[AMBIGUITY]`, no open BLOCKER — `[DIVERGENT]` counts as a BLOCKER | [`06-review.md`](../prompts/06-review.md) |
 | 7 | Commit | pull request | CI green | [`07-commit.md`](../prompts/07-commit.md) |
@@ -158,8 +158,9 @@ Two columns carry more than they seem to. **Dimension** separates `SPEC`
 (measured against the spec) from `MAINT` (a stranger's view of error handling,
 edge cases and external contracts) — a spec does not see its own gaps.
 **Origin** records whether a finding existed before (`base`) or was produced by a
-repair round (`fix-r<N>`); two consecutive rounds of `fix-r` origin are an
-escalation, not a third round. That is the mechanical form of what four repair
+repair round (`fix-r<N>`); two consecutive rounds whose only accepted findings
+begin `fix-r` trip the review loop's repair brake and stop it for the
+maintainer (ADR 0021). That is the mechanical form of what four repair
 rounds showed: every defect of rounds two to four came from a rebuild, none from
 a small change.
 
@@ -666,8 +667,10 @@ Go (`opencode-go` in `model-endpoints.yaml`) through Pi — **since ADR 0019
 (2026-10-15)** the repository's own pinned install under `tools/pi/`, whose
 exact version `tools/pi/package.json` pins — calling OpenCode Go's
 chat-completions address, and which
-model answers a round comes from the entry's ordered `modelle` list, the
-ladder. The maintainer put the ladder to the loop alone on 2026-10-08 — after
+model answers a round follows the free swarm, the selected paid Flash swarm,
+then the `modelle` set ordered by `anfragen_5h` descending (ties by id;
+missing values last), the paid ladder. The maintainer put the ladder to the
+loop alone on 2026-10-08 — after
 Codex's phase 6 found two real BLOCKERs in a change the loop had passed, as on
 every change of the night run — so GLM has left the reviewer roles.
 **Since 2026-10-06** (maintainer) GLM 5.3 Flash
@@ -692,8 +695,8 @@ the first call are replaced by the measurement at the end of this section.
 that do not overlap. Separating the context already finds measurably more
 errors; vendor diversity adds to it. A model rates its own output too kindly —
 a reviewer from another house does not know, by construction, that it is
-checking itself. The ladder's rungs are three lineages — DeepSeek, and
-Xiaomi's MiMo in two sizes — so a round sees what the round before it did not.
+checking itself. The ladder draws on the training lineages configured in
+`model-endpoints.yaml`, so a round can see what the round before it did not.
 **Disagreements are recorded, not resolved automatically.**
 "Rung 1 flagged it, rung 2 did not" is the information. Kimi was considered
 and dropped (ADR 0007).
@@ -719,9 +722,10 @@ its row allows.
 
 ### The routing
 
-The rows are in the form of §3's table. Which model the review loop calls is
-the ladder's order in `model-endpoints.yaml`, not a line here: reordering that
-list is a one-line pull request that touches nothing else.
+The rows are in the form of §3's table. For fresh availability-enabled runs,
+reachable admitted models form the ladder, ordered by declared cost; the
+preparation report and run snapshot name the actual reviewers. Candidate
+admission and cost values live in `model-endpoints.yaml`.
 
 | Phase | Model | Why |
 |---|---|---|
@@ -731,7 +735,7 @@ list is a one-line pull request that touches nothing else.
 | 3 Plan | **gpt-6.1-sol** | effort [`CODEX_EFFORTS["draft"]`](../scripts/stage2.py), drafted in the same call as 2 and 2b |
 | 2a Spec review | **Opus 5.5** | effort `xhigh`, through Claude Code and `spec-review`, read-only tools |
 | 4 Implement | **GLM 5.3 Flash** | a worker given a clear plan; through Claude Code against Z.ai and the runner, for every change |
-| 4b Review loop | **the ladder** | the ordered `modelle` list of the `opencode-go` entry in `model-endpoints.yaml`: round *n* calls its *n*-th id (`modelle[n-1]`), through Pi, effort `max` (Pi clamps it to `high` for a rung that takes no `max`), round 3 only when round 2 wrote a taken row |
+| 4b Review loop | **the swarms, then the ladder** | round 1: every model the `free_stage` rule selects from a forced live Pi catalog refresh of the `opencode-go` provider, in parallel, on the implementation diff alone with no tools; round 2: up to three cheapest reachable admitted paid members in parallel for availability-enabled runs (legacy declarations use `flash_swarm`); then one eligible `modelle` id per round by `anfragen_5h` descending (ties by id, missing values last) — through Pi, effort `max` (Pi clamps it to `high` for a rung that takes no `max`) |
 | Repair after 4b and 6 | **gpt-6.1-sol** | a Codex attempt in the configured `workspace-write` sandbox, effort [`CODEX_EFFORTS["repair"]`](../scripts/stage2.py); one fresh Codex attempt after a failed post-run check, and Sonnet 5.5 at effort `medium` after two failed ones; no GLM credential (`repair`, ADR 0017) |
 | 6 Review | **gpt-6.1-sol** | effort [`CODEX_EFFORTS["review"]`](../scripts/stage2.py), through the Codex CLI and `review`, a fresh Codex session |
 
@@ -762,7 +766,7 @@ cannot run or leaves findings leaves the verdict to `make verify`.
 
 A foreign model is started only through `python3 scripts/stage2.py <verb>
 <change>`, never by typing `codex`, `pi`, or `claude` against another endpoint,
-into a shell. Ten verbs exist:
+into a shell. Eleven verbs exist:
 
 - `explore` — GLM 5.3 Flash, phase 1; `--stage2-off [REASON]` uses Haiku 5.5.
 - `draft` — Codex, phases 2, 2b and 3 in one call; GLM 5.3 (`glm-5.3`) after
@@ -774,18 +778,26 @@ into a shell. Ten verbs exist:
 - `repair` — Codex, every taken finding of the loop record, the released
   blocks and the phase-6 tables in one call; `--stage2-off [REASON]` uses
   Sonnet 5.5 at effort `medium` ("Repairing taken findings" below).
-- `review-loop` — one round of phase 4b, started through Pi; round *n* goes
-  to the ladder's *n*-th rung.
+- `prepare-loop` — actual tool-free reachability probes for an availability-enabled
+  fresh run, a timestamped report and an external input-bound receipt; report
+  the selection in the main Claude Code or Codex conversation before using its
+  id with `review-loop --availability-reported <id>`. Each probe consumes a
+  request, times out after 60 seconds and preserves per-call leak/admission
+  checks. No repository content is supplied and no review round is counted.
+- `review-loop` — one round of phase 4b, started through Pi; round 1 the
+  free swarm the `free_stage` rule selects live, round 2 the `flash_swarm`,
+  then one eligible ladder rung each, until a round is clean (ADR 0021).
 - `release-loop` — the loop rows into `findings.md`, after the phase-6 verdict.
 - `review` — Codex, phase 6. A re-check after an earlier `## Phase 6` block
   in `findings.md` starts a fresh read-only Codex session. The first phase-6
   review resumes a recorded Codex phase-2a session with `codex exec resume`;
   otherwise it starts fresh. It then releases the loop rows and has Codex
   mark each one.
-- `probe` — one call per rung of the ladder through Pi, the pinned version
-  checked once first, the declaration and the leak check in front of each
-  call; measures the address, writes no loop record (its call lines go to
-  `findings.md` like any call; a change's declared special run).
+- `probe` — one call per discovered free model and per eligible rung of the
+  ladder through Pi, the pinned version checked once first, the declaration
+  and the leak check in front of each call; measures the address, writes no
+  loop record (its call lines go to `findings.md` like any call; a change's
+  declared special run).
 - `session` — one interactive Pi or Codex session in a new Terminal window; a
   Go model (`opencode-go/<model>`) starts the pinned Pi, never the OpenCode CLI
   ("The interactive session" below).
@@ -1056,23 +1068,61 @@ Its decision record is ADR 0012.
 
 ### The review loop (phase 4b)
 
-After implementation and before phase 6, `review-loop` runs one round: the
-round's rung reads the change's diff against its merge base with `origin/main`,
-uncommitted changes included, and answers in table rows. **At most three
-rounds, and round 3 only when round 2 wrote at least one taken row.** The rows
+**Fresh availability-enabled runs (Q-16, ADR 0021):** first run
+`python3 scripts/stage2.py prepare-loop <change>`. The runner refreshes Pi's
+catalog and probes admitted candidates with static input and no tools.
+Timed exclusions (including the declared GLM outage) are skipped without a
+call. Paid candidates require known cost, admitted terms and catalog presence.
+Report its timestamped reachable/failed/skipped list and selected stages in
+the main Claude Code or Codex conversation, then invoke `review-loop <change>
+--availability-reported <id>` with the printed report id. This acknowledges
+the report; the runner cannot inspect the conversation UI. The external
+receipt is bound to the worktree, configuration and diff and expires after
+900 seconds. Changed inputs or failed preparation invalidate it. Preparation
+adds one actual call per tested candidate and is no review-quality or billing
+measurement. Up to three cheapest reachable paid candidates dynamically fill
+the Flash swarm; the remaining reachable paid candidates form the ladder.
+Existing snapshots and legacy declarations without the rule retain the
+behavior below. A run with history cannot be reset by preparation.
+
+After implementation and before phase 6, `review-loop` runs one round per
+call, and the loop runs **until a round is clean — every row of a round
+decided and none accepted (ADR 0021).** Round 1 is the **free swarm**: a
+forced live catalog refresh (`pi update --models` before `pi --list-models`,
+no stale cache listed) discovers the models the `opencode-go` provider offers,
+and the `free_stage` rule in `model-endpoints.yaml` — provider, id suffix,
+includes, excludes — selects the members; they review in parallel, each with
+no tools, from a scratch directory, and their only input is the
+implementation diff: bounded hunks of source and test code against the merge
+base with `origin/main`, uncommitted and untracked code included. The catalog
+is a live intermediary (`pi.dev`): the check proves which catalog was read,
+not what OpenCode Go bills. Round 2 is the **Flash swarm**: the entry's
+eligible `flash_swarm` members in parallel, with the paid rounds' read-only
+tools and the full diff. Every later round calls one eligible rung of the
+`modelle` ladder by `anfragen_5h` descending (ties by id, missing values last).
+A member that fails is named beside its round's rows; a round completes when at least one member answered, and an
+attempt whose every member failed completes no round and consumes no stage.
+When every stage of a run is consumed and the last round was not clean, the
+loop stops and reports to the maintainer — no model is substituted. The rows
 go into a **loop record** outside the worktree and outside the git directory
 (`${XDG_STATE_HOME:-~/.local/state}/coding-harness/stage2/<change>/loop.md`),
 not into the repository: the phase-6 reviewer writes its verdict before it
-reads any loop row.
+reads any loop row. The record carries the run's snapshot — the discovery
+check, the stage membership and what is consumed — and neither a release nor
+an edited configuration resets a stop or replays a consumed stage.
 
 The orchestrator writes beside each row its `Status` — `taken — <test or
 criterion>`, `taken — not a test — <reason>` for a finding no test can show,
-or `rejected — <reason>` — and, for a taken row, `Broke a test`. The runner's
+or `rejected — <reason>` — and, for a taken row, `Broke a test`. A round whose
+rows are all rejected, or that reports no finding at all, is clean: the loop
+ends there, after the first round included. The runner's
 `repair` verb repairs the taken rows ("Repairing taken findings" below) and
 runs `make verify`, which must be green before the next round starts. **The
 evidence rule of §2 holds here:** a finding is taken
 only when a test demonstrates it or the spec supports it. A row left
-undecided holds the next round and the release.
+undecided holds the next round and the release. Two consecutive rounds whose
+only accepted findings begin `fix-r` trip the **repair brake**: the next
+round is refused and the maintainer decides what continues.
 
 The phase-6 reviewer writes its verdict first: the table, and under it the line
 `Phase 6 verdict: <reviewer> <session>, <date>` (the runner writes it for the
@@ -1124,8 +1174,8 @@ with the first one's diagnostics, and Sonnet 5.5 at effort `medium`, the last
 only after two failed post-run checks; a failed call stops the run without a
 fallback and `--stage2-off [REASON]` runs Sonnet 5.5 alone and records why. A
 leak-check BLOCK stops without a fallback, and a Codex call that moves HEAD
-stops the run unrewritten. A fixed row counts as a taken one for round 3
-and for the run count; **`Broke a test` stays the orchestrator's mark**,
+stops the run unrewritten. A fixed row counts as a taken one for the next
+round and for the run count; **`Broke a test` stays the orchestrator's mark**,
 written from the run's evidence before the next round or the release. The
 rungs keep their read-only tools. **The exception (ADR 0017):** Codex, which
 reviews phase 6, also repairs; its own session never does both — a phase-6
