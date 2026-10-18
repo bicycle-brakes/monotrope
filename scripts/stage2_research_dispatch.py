@@ -66,6 +66,8 @@ class DispatchResult:
     audit_records: tuple
     exit_code: int
     stopped: bool = field(default=False)
+    reason: str | None = field(default=None)
+    detail: str | None = field(default=None)
 
 
 def _own_group(proc):
@@ -115,6 +117,7 @@ def dispatch(
     gate: Callable[[Slot], GateVerdict],
     launcher: Callable[[Slot, float], Any],
     audit: Callable[[Slot, GateVerdict], None] | None = None,
+    on_terminal: Callable[[Slot, SlotResult], None] | None = None,
     stop: threading.Event | None = None,
     deadline: float | None = None,
     reserve: float = 0.0,
@@ -122,7 +125,16 @@ def dispatch(
     per_provider_limit: int = PER_PROVIDER_LIMIT,
     grace: float = 2.0,
 ) -> DispatchResult:
-    """Run one stage. Each slot ends with exactly one terminal outcome."""
+    """Run one stage. Each slot ends with exactly one terminal outcome.
+
+    ``on_terminal(slot, result)`` is called once per slot, in the thread that set the outcome and
+    before that thread takes its next slot (launched, cancelled, refused and not-started slots
+    alike). An exception from it, or from ``audit`` carrying a ``stage_stop_reason`` attribute,
+    is a stage stop without a security refusal: queued slots are cancelled, running children
+    are stopped and reaped with their output kept, no further callback runs (the store it
+    writes to is the thing that failed) and the exit code is 1 unless a security refusal makes
+    it 2. The dispatcher knows nothing about what the callbacks write.
+    """
     stop = stop if stop is not None else threading.Event()
     ordered = sorted(slots, key=lambda s: (not s.required, s.order))
     queues: dict[str, deque] = {}
@@ -132,11 +144,40 @@ def dispatch(
     results: dict[str, SlotResult] = {}
     sequence: list[str] = []
     security = threading.Event()
+    failure: list = []  # the first (reason, detail) of a failed callback
+    pending = threading.local()
 
     def finish(slot, outcome, *, started=False, rc=None, out="", err="", record=None, allowance=None):
         results[slot.slot_id] = SlotResult(
             slot.slot_id, dict(slot.identity), slot.required, outcome, started, rc, out, err, record, allowance
         )
+        if not hasattr(pending, "slots"):
+            pending.slots = []
+        pending.slots.append(slot)
+
+    failure_lock = threading.Lock()
+    reported: set[str] = set()
+
+    def stage_stop(exc):
+        with failure_lock:
+            if not failure:
+                reason = getattr(exc, "stage_stop_reason", None) or "state-store-unwritable"
+                failure.append((reason, f"{type(exc).__name__}: {exc}"))
+        stop.set()
+
+    def report_terminal():
+        """Run the callback for each outcome this thread just set, before it takes another slot."""
+        slots, pending.slots = getattr(pending, "slots", []), []
+        for slot in slots:
+            if slot.slot_id in reported:
+                continue
+            reported.add(slot.slot_id)
+            if on_terminal is None or failure:
+                continue
+            try:
+                on_terminal(slot, results[slot.slot_id])
+            except Exception as exc:
+                stage_stop(exc)
 
     def remaining():
         return None if deadline is None else deadline - reserve - clock()
@@ -171,6 +212,10 @@ def dispatch(
                 try:
                     audit(slot, verdict)
                 except Exception as exc:  # an unauditable call must not start
+                    if getattr(exc, "stage_stop_reason", None):  # the state store, not a security refusal
+                        stage_stop(exc)
+                        finish(slot, "cancelled", record=verdict.record)
+                        return None
                     security.set()
                     stop.set()
                     finish(slot, "refused", record={"audit_error": f"{type(exc).__name__}: {exc}"})
@@ -227,11 +272,13 @@ def dispatch(
     def worker(queue):
         while True:
             launched = launch_next(queue)
+            report_terminal()
             if launched == "done":
                 return
             if launched is not None:
                 try:
                     supervise(*launched)
+                    report_terminal()
                 except Exception as exc:
                     slot, proc, allowance, record = launched
                     out, err = _stop_and_reap(proc, grace)
@@ -245,6 +292,7 @@ def dispatch(
                         record=record,
                         allowance=allowance,
                     )
+                    report_terminal()
 
     threads = []
     for queue in queues.values():
@@ -264,6 +312,7 @@ def dispatch(
     for slot in ordered:
         if slot.slot_id not in sequence:
             sequence.append(slot.slot_id)
+    report_terminal()
     ordered_results = tuple(results[sid] for sid in sequence)
     records = tuple(
         {
@@ -279,8 +328,9 @@ def dispatch(
     )
     if security.is_set():
         code = 2
-    elif any(r.required and r.outcome != "ok" for r in ordered_results):
+    elif failure or any(r.required and r.outcome != "ok" for r in ordered_results):
         code = 1
     else:
         code = 0
-    return DispatchResult(ordered_results, records, code, stop.is_set())
+    reason, detail = failure[0] if failure else (None, None)
+    return DispatchResult(ordered_results, records, code, stop.is_set(), reason, detail)

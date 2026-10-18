@@ -187,3 +187,60 @@ def freeze_research_state(root, change, *, deadline, scratch_parent=None):
         if isinstance(error, OSError | ValueError):
             raise ResearchSnapshotError("cannot freeze research inputs") from error
         raise
+
+
+def _sha256(data):
+    return hashlib.sha256(data).hexdigest()
+
+
+def stored_binding(manifest, research_path, research_bytes, *, append=None):
+    """The resume binding of one frozen state, in the shape the state store keeps (Q-13).
+
+    ``research_bytes`` are the frozen bytes of ``research_path``; ``append`` are the exact bytes
+    the runner will add to it, recorded before the write so a crash between the two is covered.
+    """
+    paths = dict(manifest["paths"])
+    if research_path not in paths or paths[research_path] != _sha256(research_bytes):
+        raise ResearchSnapshotError("research bytes do not belong to the frozen state")
+    binding = {
+        "paths": paths,
+        "research": research_path,
+        "research_normalised_sha256": _sha256(_without_updated(research_bytes)),
+    }
+    if append is not None:
+        if not isinstance(append, bytes):
+            raise ResearchSnapshotError("invalid runner-owned research bytes")
+        binding["append"] = {"sha256": _sha256(append), "length": len(append)}
+    return binding
+
+
+def changed_against_stored(manifest, research_path, research_bytes, stored):
+    """Paths whose bytes differ from a stored binding; empty means the binding holds.
+
+    HEAD is not compared. ``research.md`` is compared without the stored run's own appended tail
+    (its length and digest must both match) and without the ``updated:`` restamp.
+    """
+    try:
+        research = stored["research"]
+        stored_paths = stored["paths"]
+        normalised = stored["research_normalised_sha256"]
+        append = stored.get("append")
+    except (KeyError, TypeError) as error:
+        raise ResearchSnapshotError("malformed stored binding") from error
+    if research != research_path:
+        raise ResearchSnapshotError("stored binding names another research path")
+    current = manifest["paths"]
+    changed = {
+        path
+        for path in set(current) | set(stored_paths)
+        if path != research and current.get(path) != stored_paths.get(path)
+    }
+    candidates = [research_bytes]  # the append was recorded but never written, or there was none
+    if append is not None and 0 < append["length"] <= len(research_bytes):
+        cut = len(research_bytes) - append["length"]
+        if _sha256(research_bytes[cut:]) == append["sha256"]:
+            candidates.append(research_bytes[:cut])
+    present = research in current and research in stored_paths
+    if not present or all(_sha256(_without_updated(body)) != normalised for body in candidates):
+        changed.add(research)
+    return sorted(changed)

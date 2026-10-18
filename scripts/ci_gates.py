@@ -151,6 +151,12 @@ OHNE_AUFRUFER: dict[str, str] = {
         "tests/test_stage2_research_dispatch.py exercises provider queues, ordering, gate serialization, "
         "deadlines and cancel/reap with real child processes; scheduler integration remains pending."
     ),
+    "stage2_research_store.py": (
+        "Pure resumable-state library, not a CLI gate; the amended swarm runner will consume it (Q-13). "
+        "tests/test_stage2_research_store.py exercises durable atomic records, SIGKILL survival, owner-only "
+        "placement, exact-binding reuse, refused runs, scrubbing and the per-change lock with real files "
+        "and subprocesses; the run wiring (lookup, copy-forward, marking) remains pending."
+    ),
     "stage2_swarm.py": (
         "Helper of scripts/stage2.py explore, never an entry point of its own — it runs the phase-1 "
         "research swarm only through the runner; tests/test_stage2_swarm.py runs it against stand-ins"

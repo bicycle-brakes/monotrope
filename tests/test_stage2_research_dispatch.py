@@ -513,3 +513,118 @@ def test_reap_does_not_hang_without_new_session_and_ignored_sigterm():
     assert time.monotonic() - t0 < 10
     assert by_id(result)["a"].outcome == "timed-out"
     assert procs["a"].poll() is not None
+
+
+# --- Q-13: the on_terminal callback and a failed state-store write ---------------------------------
+
+
+def test_terminal_callback_precedes_the_workers_next_launch():
+    """One worker: each slot's callback has returned before the next slot is launched."""
+    h = Harness()
+    events = []
+    lock = threading.Lock()
+    real_launcher = h.launcher
+
+    def launcher(slot, allowance):
+        with lock:
+            events.append(("launch", slot.slot_id))
+        return real_launcher(slot, allowance)
+
+    def on_terminal(slot, _result):
+        with lock:
+            events.append(("terminal-start", slot.slot_id))
+        time.sleep(0.2)  # a blocking callback holds the worker back
+        with lock:
+            events.append(("terminal-end", slot.slot_id))
+
+    m = module()
+    slots = [make_slot(f"s{i}", order=(i,)) for i in range(3)]
+    result = m.dispatch(slots, gate=h.gate, launcher=launcher, on_terminal=on_terminal, per_provider_limit=1)
+    assert result.exit_code == 0
+    assert events == [
+        step for i in range(3) for step in (("launch", f"s{i}"), ("terminal-start", f"s{i}"), ("terminal-end", f"s{i}"))
+    ]
+
+
+def test_terminal_callback_covers_cancelled_refused_and_not_started_slots():
+    h = Harness()
+    seen = {}
+    m = module()
+
+    def gate(slot):
+        return m.GateVerdict(blocked=slot.slot_id == "bad", record={"leak": "x"})
+
+    slots = [make_slot("ok1", order=(1,)), make_slot("bad", order=(2,)), make_slot("after", order=(3,))]
+    result = m.dispatch(
+        slots,
+        gate=gate,
+        launcher=h.launcher,
+        on_terminal=lambda slot, r: seen.setdefault(slot.slot_id, r.outcome),
+        per_provider_limit=1,
+    )
+    assert seen == {"ok1": "ok", "bad": "refused", "after": "cancelled"}
+    assert result.exit_code == 2
+
+
+def test_failed_terminal_write_stops_the_stage_with_exit_one():
+    h = Harness()
+    m = module()
+    calls = []
+
+    def on_terminal(slot, _result):
+        calls.append(slot.slot_id)
+        if slot.slot_id == "s0":
+            error = OSError("disk full")
+            error.stage_stop_reason = "state-store-unwritable"
+            raise error
+
+    slots = [
+        make_slot("s0", order=(0,), script=sleeper(0.05)),
+        make_slot("long", provider="claude", order=(0,), script=sleeper(30)),
+        make_slot("s1", order=(1,)),
+        make_slot("s2", order=(2,)),
+    ]
+    started = time.monotonic()
+    result = m.dispatch(slots, gate=h.gate, launcher=h.launcher, on_terminal=on_terminal, per_provider_limit=1)
+    assert time.monotonic() - started < 15  # the running child was stopped and reaped, not waited for
+    assert result.exit_code == 1
+    assert result.reason == "state-store-unwritable"
+    assert "disk full" in result.detail
+    got = by_id(result)
+    assert got["s1"].outcome == "cancelled" and got["s2"].outcome == "cancelled"
+    assert "s1" not in h.launched and "s2" not in h.launched
+    assert got["long"].outcome == "cancelled" and got["long"].started
+    assert "start" in got["long"].stdout  # partial output kept
+    assert calls == ["s0"]  # nothing is written after the store failed
+
+
+def test_a_failed_launch_record_write_stops_without_launching_that_slot():
+    h = Harness()
+    m = module()
+
+    def audit(slot, _verdict):
+        if slot.slot_id == "s1":
+            error = OSError("disk full")
+            error.stage_stop_reason = "state-store-unwritable"
+            raise error
+
+    slots = [make_slot("s0", order=(0,)), make_slot("s1", order=(1,)), make_slot("s2", order=(2,))]
+    result = m.dispatch(slots, gate=h.gate, launcher=h.launcher, audit=audit, per_provider_limit=1)
+    assert result.exit_code == 1 and result.reason == "state-store-unwritable"
+    assert "s1" not in h.launched and "s2" not in h.launched
+    assert by_id(result)["s1"].outcome == "cancelled"
+
+
+def test_a_raising_terminal_callback_with_a_security_refusal_exits_two():
+    h = Harness()
+    m = module()
+
+    def on_terminal(_slot, _result):
+        raise OSError("disk full")
+
+    def gate(slot):
+        return m.GateVerdict(blocked=slot.slot_id == "bad", record={})
+
+    slots = [make_slot("bad", provider="claude", order=(0,)), make_slot("s0", order=(0,), script=sleeper(0.3))]
+    result = m.dispatch(slots, gate=gate, launcher=h.launcher, on_terminal=on_terminal)
+    assert result.exit_code == 2
