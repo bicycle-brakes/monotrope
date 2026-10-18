@@ -183,12 +183,15 @@ def test_deadline_expiry_permits_a_new_probe_instead_of_assuming_success(world: 
     assert state["paid"]["flash"] == ["deepseek-v4.1-flash"]
 
 
-def test_repository_declaration_requires_preflight_and_the_glm_outage() -> None:
-    """Criterion 17: removing production enablement or the GLM cutoff defeats this rule."""
+def test_repository_declaration_requires_preflight_and_keeps_go_glm_probed() -> None:
+    """Criterion 17: removing production enablement defeats this rule; GLM through Go is not excluded.
+
+    The maintainer narrowed the GLM outage to the Z.ai route on 2026-10-18; this
+    OpenCode Go preparation must keep probing GLM models.
+    """
     rule = availability.settings(REPO_ROOT, stage2)
     assert rule is not None and rule["flash_size"] == 3 and rule["max_age_seconds"] == 900
-    exclusion = next(item for item in rule["exclude_until"] if item["model_prefix"] == "glm")
-    assert dt.datetime.fromisoformat(exclusion["until"]) == dt.datetime(2026, 10, 21, 12, 34, tzinfo=dt.UTC)
+    assert not any(str(item["model_prefix"]).startswith("glm") for item in rule["exclude_until"])
 
 
 def test_catalog_presence_does_not_admit_unread_or_unpriced_paid_models(world: World) -> None:
