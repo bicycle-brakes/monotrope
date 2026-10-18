@@ -3,11 +3,13 @@
 
 **What this is.** Stage 2 lets a reviewer from another vendor read framework
 content: the review loop (4b) runs on OpenCode Go through Pi at
-`https://opencode.ai/zen/go/v1/chat/completions`, round n on the n-th id of the
-`opencode-go` entry's ordered `modelle` list (the ladder, at most three
-rounds); Codex drafts the spec, the design and the plan (2, 2b and 3; GLM 5.3
-after two failed Codex attempts) and reviews the change (6); Opus 5.5 reviews
-the spec (2a); GLM 5.3 Flash explores (phase 1) and implements (phase 4). A declaration in `model-endpoints.yaml` stops nothing; this runner
+`https://opencode.ai/zen/go/v1/chat/completions` until a round is clean - a
+discovered free-model swarm first, the declared Flash swarm next, then one
+declared paid model per round (ADR 0021); Codex drafts the spec, the design
+and the plan (2, 2b and 3; GLM 5.3 after two failed Codex attempts) and
+reviews the change (6); Opus 5.5 reviews the spec (2a); GLM 5.3 Flash
+explores (phase 1) and implements (phase 4). A declaration in
+`model-endpoints.yaml` stops nothing; this runner
 stands between the rule and the call.
 
     python3 scripts/stage2.py explore      <change>   # GLM Flash, phase 1
@@ -15,14 +17,18 @@ stands between the rule and the call.
     python3 scripts/stage2.py spec-review  <change>   # Opus 5.5, phase 2a
     python3 scripts/stage2.py implement    <change>   # GLM Flash, phase 4
     python3 scripts/stage2.py repair       <change>   # Codex, the taken findings; Sonnet 5.5 after two failed checks
-    python3 scripts/stage2.py review-loop  <change>   # one round of phase 4b: round n on rung n
+    python3 scripts/stage2.py prepare-loop <change>   # availability report before a fresh phase-4b run
+    python3 scripts/stage2.py review-loop  <change>   # one round of phase 4b, until a round is clean
     python3 scripts/stage2.py release-loop <change>   # loop rows into findings.md
     python3 scripts/stage2.py review       <change>   # Codex, phase 6; a re-check is a fresh read-only session
-    python3 scripts/stage2.py probe        <change>   # one call per rung, no record written
+    python3 scripts/stage2.py probe        <change>   # one call per free and paid member, no record written
     python3 scripts/stage2.py session      <change>   # interactive Codex/Pi, a Terminal window
 
-Each loop round and the probe check `tools/pi/pi --version` against `PI_VERSION` first;
+A fresh loop run and the probe check `tools/pi/pi --version` against `PI_VERSION` first;
 any other answer refuses with exit 2 before the leak check and before any call.
+A fresh loop run forces a live catalog refresh (`pi update --models`) before it
+lists the models (`pi --list-models`) in the same fresh scratch directories; a
+failed or timed-out refresh refuses instead of listing a stale cache.
 
 `explore`, `implement` and `repair` accept `--stage2-off [REASON]`: the declared
 Stage-1 route uses Haiku 5.5 or Sonnet 5.5. A leak refusal never falls back.
@@ -81,14 +87,18 @@ repair attempts have command tools in the configured `workspace-write`
 sandbox; a repair may run tests and `make verify` but must not commit or run
 git commands that change the repository. Codex's review, draft and repair
 calls are not confined in their reads: only the prompt's request bounds them
-to the worktree and the repository's git directory. **The review
+to the worktree and the repository's git directory. **The paid review
 loop's Pi calls are not among them, and they are not confined:** a round's
 `read` reaches files outside the worktree (measured with Pi 1.1.0, research
 §L), and the secrets file is among them; only the prompt's request bounds it -
 to read nothing outside the worktree and the repository's git directory, a
 request and not a lock. That
 is the residual risk ADR 0007 accepted for its reviewers on 2026-09-30, which
-ADR 0011 extends to the rungs. The loop's isolation flags (no extensions, MCP
+ADR 0011 extends to the rungs. **The free swarm's calls are the exception:**
+they get no tools at all (`--no-tools`, a scratch working directory) and their
+prompt carries nothing but static instructions and bounded hunks of the
+implementation diff (ADR 0021, decision 3). The loop's isolation flags (no
+extensions, MCP
 servers, skills, context files, prompt templates or themes; no approval; a
 fresh agent directory and home per call) are configured on every call and
 were measured once by hand on the pinned version; the suite starts no real
@@ -99,7 +109,8 @@ outside the change folder.
 
 **The loop record** lives outside the worktree
 (`${XDG_STATE_HOME:-~/.local/state}/coding-harness/stage2/<change>/loop.md`):
-the rounds' rows and the orchestrator's decision on each, until the phase-6
+the rounds' rows, the run's stage snapshot (`Loop state:`, the runner's own
+line), and the orchestrator's decision on each row, until the phase-6
 verdict is written and `release-loop` carries them into `findings.md`. The
 release is the only thing that deletes the record, and it deletes nothing that
 has not arrived: every loop row, and every other line of the record as it
@@ -109,9 +120,10 @@ separator, and the blank lines outside the reviewer's words. The reviewer's
 words are carried exactly as they came - a heading, a code comment or a table
 line with a loop id included; only a line of the round tables the runner wrote
 that carries a loop id and cannot be read as a row refuses the release,
-because the orchestrator has to decide that row. A call counts as a round when
-it succeeded and answered - with rows or with "no finding"; a failed call, an
-empty answer or a call stopped by the reviewer time limit is no round.
+because the orchestrator has to decide that row. A round counts as completed
+when at least one of its members succeeded and answered - with rows or with
+"no finding"; an attempt in which every member failed is no round, consumes no
+stage and is refused as a failed call.
 
 Exit: 0 done, 1 a call or implementation post-check failed, 2 refused.
 """
@@ -128,7 +140,9 @@ import shutil
 import subprocess
 import sys
 import tempfile
+import threading
 from collections import Counter
+from collections.abc import Callable
 from dataclasses import dataclass
 from pathlib import Path
 
@@ -215,7 +229,7 @@ READ_REQUEST = "Read nothing outside this worktree and the repository's git dire
 ANSWER_FORMAT = (
     "Answer with table rows only: one row per finding, exactly six cells, no header and no other text -\n"
     "`| ID | Severity | Dimension | Origin | Where | Finding |`. Write a `|` inside a cell as `\\|`.\n"
-    "The runner adds the reviewer, the status and the test mark. When there is no finding, answer in one sentence."
+    "The runner adds the reviewer, the status and the test mark. When there is no finding, answer exactly: No finding."
 )
 MARK_FORMAT = "For each loop row answer one line and nothing else: `<ID>: agree` or `<ID>: disagree — <reason>`."
 REPAIR_ANSWER = (
@@ -288,9 +302,24 @@ GLM_MODEL_VARIABLES = (
 # above the real one would overflow instead of compacting.
 GLM_CONTEXT_TOKENS = "200000"
 
-MAX_ROUNDS = 3
 ROW_COLUMNS = ["ID", "Severity", "Dimension", "Origin", "Where", "Finding", "Reviewer", "Status", "Broke a test"]
 RELEASED_COLUMNS = [*ROW_COLUMNS, "Phase 6"]
+
+# The loop ends on a clean round, on the repair brake or on spent stages - never
+# on a round count (ADR 0021). The run's stage snapshot travels as the record's
+# own `Loop state:` line and, after a release, as the released block's own line;
+# it is never read from the reviewers' words.
+STATE_KEY = "Loop state: "
+STATE_LINE = re.compile(r"^Loop state: (\{.*\})[ \t]*$", re.M)
+# The Zen provider, which the free rule may never select.
+ZEN = "opencode"
+# `pi update --models` and `--list-models` share one fresh scratch directory and
+# this timeout; a refresh that has not ended inside it refuses the run (criterion 5).
+PI_DISCOVERY_SECONDS = 120
+# Bounds of the implementation diff a free call may see: per file and in total,
+# so no whole source file travels (criterion 3).
+FREE_DIFF_MAX_LINES = 400
+FREE_DIFF_MAX_TOTAL = 2000
 
 SEVERITIES = {"BLOCKER", "MAJOR", "MINOR"}
 
@@ -552,12 +581,37 @@ def launch(
         raise CallFailed(f"{command[0]} could not be started: {scrub(str(error), secret)}") from error
 
 
-def fail(program: str, done: subprocess.CompletedProcess, reason: str, secret: str | None = None) -> CallFailed:
-    """Print the last lines of the program's standard error, scrubbed; return the exception to raise."""
+def last_error_line(done: subprocess.CompletedProcess, secret: str | None = None) -> str:
+    """The last non-empty line of the program's standard error, scrubbed and bounded; empty when there is none."""
+    lines = [line.strip() for line in (done.stderr or "").splitlines() if line.strip()]
+    if not lines:
+        return ""
+    return scrub(lines[-1], secret)[:200]
+
+
+def fail(
+    program: str,
+    done: subprocess.CompletedProcess,
+    reason: str,
+    secret: str | None = None,
+    label: str | None = None,
+) -> CallFailed:
+    """Print the last lines of the program's standard error, scrubbed; return the exception to raise.
+
+    The reason names the last line of the standard error beside the exit
+    ("Model is unavailable"), so a failed swarm member says why in the loop
+    record. A `label` (a swarm member's model id) prefixes every printed line,
+    because the members' tails interleave on one stream (Q-13).
+    """
     tail = "\n".join((done.stderr or "").splitlines()[-40:])
     if tail:
-        print(scrub(tail, secret), file=sys.stderr)
-    return CallFailed(f"{program} call failed: {reason}")
+        printed = scrub(tail, secret)
+        if label:
+            printed = "\n".join(f"{label}: {line}" for line in printed.splitlines())
+        print(printed, file=sys.stderr)
+    last = last_error_line(done, secret)
+    detail = f" ({last})" if last else ""
+    return CallFailed(f"{program} call failed: {reason}{detail}")
 
 
 # ---------------------------------------------------------------------------
@@ -663,6 +717,7 @@ class Context:
     change: str
     folder: Path
     bead: str
+    models_store: dict | None = None
 
     @property
     def findings(self) -> Path:
@@ -677,8 +732,38 @@ class Context:
         return self.folder / "plan.md"
 
 
+def entry_problem(root: Path, endpoint: str) -> str | None:
+    """Why the declaration does not clear this endpoint for any model, or None.
+
+    The entry-level half of `declaration_problem`, checked before the free
+    discovery starts: a broken declaration starts no foreign program, the
+    catalog calls included.
+    """
+    try:
+        data = yaml.safe_load((root / "model-endpoints.yaml").read_text(encoding="utf-8")) or {}
+    except (OSError, UnicodeDecodeError, yaml.YAMLError):
+        return "model-endpoints.yaml cannot be read"
+    found = next((e for e in data.get("endpunkte") or [] if isinstance(e, dict) and e.get("name") == endpoint), None)
+    if found is None:
+        return f"model-endpoints.yaml declares no endpoint {endpoint}"
+    if not isinstance(found.get("modelle"), list) or not found["modelle"]:
+        return f"the endpoint {endpoint} lists no model"
+    allowed = found.get("darf_sehen")
+    if not isinstance(allowed, list) or "framework" not in allowed:
+        return f"the endpoint {endpoint} may not see framework content"
+    residency = found.get("residenz")
+    if not isinstance(residency, str) or not residency.strip() or residency == "nicht-erklaert":
+        return f"the endpoint {endpoint} states no data residency"
+    return None
+
+
 def declaration_problem(root: Path, endpoint: str, model: str) -> str | None:
-    """Why the declaration does not clear this endpoint and model for framework content, or None."""
+    """Why the declaration does not clear this endpoint and model for framework content, or None.
+
+    For the `opencode-go` endpoint a model is also refused while its data terms
+    are unread or its declaration records a dated skip (ADR 0021, decision 5):
+    no paid or interactive call runs on unread terms.
+    """
     try:
         data = yaml.safe_load((root / "model-endpoints.yaml").read_text(encoding="utf-8")) or {}
     except (OSError, UnicodeDecodeError, yaml.YAMLError):
@@ -688,6 +773,10 @@ def declaration_problem(root: Path, endpoint: str, model: str) -> str | None:
         return f"model-endpoints.yaml declares no endpoint {endpoint}"
     if model not in (found.get("modelle") or []):
         return f"the endpoint {endpoint} does not list the model {model}"
+    if endpoint == OPENCODE:
+        problem = terms_problem(found, model)
+        if problem:
+            return problem
     allowed = found.get("darf_sehen")
     # A list, not a string: `"framework" in "not-framework"` would be true (phase 6 of stage2-session, F-4).
     if not isinstance(allowed, list) or "framework" not in allowed:
@@ -735,8 +824,14 @@ def preflight(
     endpoint: tuple[str, str, str | None],
     bead_file: str = "spec.md",
     required: tuple[str, ...] = (),
+    admission_problem: Callable[[Path, str], str | None] | None = None,
 ) -> Context:
-    """The refusals that precede everything else: change, artefacts and declaration."""
+    """The refusals that precede everything else: change, artefacts and declaration.
+
+    `admission_problem` replaces the individual declaration for the free class:
+    it receives the root and the model id and returns a problem or None (ADR
+    0021, decision 3). Every other call keeps the strict declaration.
+    """
     folder = folder_of(root, change)
     bead = _artefact_bead(folder / bead_file)
     if bead is None:
@@ -747,7 +842,11 @@ def preflight(
             path.read_text(encoding="utf-8")
         except (OSError, UnicodeDecodeError) as error:
             raise Refused(f"plans/changes/{change}/{name} cannot be read.") from error
-    problem = declaration_problem(root, endpoint[0], endpoint[1])
+    problem = (
+        admission_problem(root, endpoint[1])
+        if admission_problem is not None
+        else declaration_problem(root, endpoint[0], endpoint[1])
+    )
     if problem:
         raise Refused(problem)
     return Context(root, change, folder, bead)
@@ -788,9 +887,22 @@ def producer_for(endpoint: tuple[str, str, str | None]) -> str:
     return producers.get(endpoint[0], "pi")
 
 
-def checked_prompt(ctx: Context, endpoint: tuple[str, str, str | None], prompt: str):
-    """Check the declaration and exact prompt immediately before one call."""
-    problem = declaration_problem(ctx.root, endpoint[0], endpoint[1])
+def checked_prompt(
+    ctx: Context,
+    endpoint: tuple[str, str, str | None],
+    prompt: str,
+    admission_problem: Callable[[Path, str], str | None] | None = None,
+):
+    """Check the admission and exact prompt immediately before one call.
+
+    `admission_problem`, when given, replaces the individual declaration (the
+    free class, ADR 0021 decision 3); the leak check is mandatory either way.
+    """
+    problem = (
+        admission_problem(ctx.root, endpoint[1])
+        if admission_problem is not None
+        else declaration_problem(ctx.root, endpoint[0], endpoint[1])
+    )
     if problem:
         raise Refused(problem)
     result = leakcheck.check(ctx.change, leakcheck.default_denylist(), ctx.root, [("prompt", prompt)])
@@ -800,16 +912,26 @@ def checked_prompt(ctx: Context, endpoint: tuple[str, str, str | None], prompt: 
     return result
 
 
-def begin_call(ctx: Context, verb: str, endpoint: tuple[str, str, str | None], prompt: str) -> None:
-    """The declaration, the leak check and the call line - for this one call, immediately before it."""
-    result = checked_prompt(ctx, endpoint, prompt)
+def call_line(verb: str, endpoint: tuple[str, str, str | None], result) -> str:
+    """The one audit line of one checked call."""
+    return (
+        f"Stage-2 call, {today()}: {verb} · endpoint {endpoint[0]} · model {endpoint[1]} · "
+        f"leak check clean over {result.files} files, {result.commits} commits, {result.rules} rules."
+    )
+
+
+def begin_call(
+    ctx: Context,
+    verb: str,
+    endpoint: tuple[str, str, str | None],
+    prompt: str,
+    admission_problem: Callable[[Path, str], str | None] | None = None,
+) -> None:
+    """The admission, the leak check and the call line - for this one call, immediately before it."""
+    result = checked_prompt(ctx, endpoint, prompt, admission_problem)
     if not ctx.findings.exists():
         ctx.findings.write_text(findings_header(ctx, producer_for(endpoint)), encoding="utf-8")
-    append(
-        ctx.findings,
-        f"Stage-2 call, {today()}: {verb} · endpoint {endpoint[0]} · model {endpoint[1]} · "
-        f"leak check clean over {result.files} files, {result.commits} commits, {result.rules} rules.",
-    )
+    append(ctx.findings, call_line(verb, endpoint, result))
 
 
 def begin_work_call(
@@ -876,13 +998,8 @@ def work_prompt(
 # ---------------------------------------------------------------------------
 
 
-def ladder(root: Path) -> list[str]:
-    """The `modelle` of the `opencode-go` entry, in order: position is the round (spec, criterion 4).
-
-    A rung the list does not hold is no model id in the code: reordering the
-    ladder or replacing its ids is a one-line pull request that touches
-    `model-endpoints.yaml` and nothing else (spec, criterion 5).
-    """
+def endpoint_entry(root: Path) -> dict:
+    """The `opencode-go` entry of `model-endpoints.yaml`, read fresh at call time."""
     try:
         data = yaml.safe_load((root / "model-endpoints.yaml").read_text(encoding="utf-8")) or {}
     except (OSError, UnicodeDecodeError, yaml.YAMLError):
@@ -890,10 +1007,564 @@ def ladder(root: Path) -> list[str]:
     entry = next((e for e in data.get("endpunkte") or [] if isinstance(e, dict) and e.get("name") == OPENCODE), None)
     if entry is None:
         raise Refused(f"model-endpoints.yaml declares no endpoint {OPENCODE}")
+    return entry
+
+
+def _terms(entry: dict, model: str) -> dict:
+    """The model's record in `modelle_terms`, or an empty dict without one."""
+    terms = entry.get("modelle_terms")
+    record = terms.get(model) if isinstance(terms, dict) else None
+    return record if isinstance(record, dict) else {}
+
+
+def terms_problem(entry: dict, model: str) -> str | None:
+    """Why the paid model's data terms are not read (yet), or None when it is admitted.
+
+    A dated, sourced reading must explicitly rule out training. A dated skip
+    keeps the model out and names its reason for the handover (ADR 0021,
+    decision 5).
+    """
+    record = _terms(entry, model)
+    if record.get("uebersprungen"):
+        reason = record.get("grund") or "reason not stated"
+        return f"the model {model} was skipped on {record.get('uebersprungen')}: {reason}"
+    # Fail closed: an empty skip marker counts as absent only beside a valid
+    # reading date, and `gelesen` must be an ISO date, not any truthy value.
+    gelesen = record.get("gelesen")
+    if not isinstance(gelesen, str) or not DATE_ONLY.fullmatch(gelesen) or not _valid_date(gelesen):
+        return f"the model {model} has no dated reading of its data terms (gelesen is not an ISO date YYYY-MM-DD)"
+    if not record.get("quelle"):
+        return f"the model {model} has no dated reading of its data terms (gelesen/quelle missing)"
+    retention = record.get("aufbewahrung")
+    if not isinstance(retention, str) or not retention.strip():
+        return f"the model {model} has no retention reading (aufbewahrung missing or unreadable)"
+    if record.get("training") != "Not used":
+        return f"the model {model} has disallowed or unread training terms (training must be Not used)"
+    return None
+
+
+def request_value(entry: dict, model: str) -> float | None:
+    """The model's declared cost value `anfragen_5h` (requests per 5 hours, more is cheaper), or None when absent or unusable."""
+    value = _terms(entry, model).get("anfragen_5h")
+    if isinstance(value, bool) or not isinstance(value, int | float) or value <= 0:
+        return None
+    return float(value)
+
+
+def ordered_models(entry: dict, models: list[str]) -> list[str]:
+    """The models cheapest first: `anfragen_5h` descending, ties by id, a model without the value last (Q-13).
+
+    `modelle` is a set: its declared order does not count.
+    """
+    return sorted(
+        set(models),
+        key=lambda model: (request_value(entry, model) is None, -(request_value(entry, model) or 0.0), model),
+    )
+
+
+def unvalued_models(entry: dict, models: list[str]) -> list[str]:
+    """The models that declare no usable `anfragen_5h`; they order last and are named, never dropped silently."""
+    return [model for model in ordered_models(entry, models) if request_value(entry, model) is None]
+
+
+def unread_catalog_ids(entry: dict, free_state: dict) -> list[str]:
+    """Non-free ids of the run's fresh overlay that have no `modelle_terms` record, sorted.
+
+    A notice only: such an id is never admitted. A paid model still needs a
+    dated terms reading and an `anfragen_5h` in the declaration (Q-13).
+    """
+    rule = free_state.get("rule") or {}
+    suffix = rule.get("id_suffix") or ""
+    terms = entry.get("modelle_terms")
+    terms = terms if isinstance(terms, dict) else {}
+    free = set(free_state.get("selected") or [])
+    return sorted(
+        model
+        for model in free_state.get("overlay") or []
+        if model not in free and not (suffix and model.endswith(suffix)) and model not in terms
+    )
+
+
+def cheapest_notice(entry: dict, ladder_ids: list[str], flash: list[str]) -> str | None:
+    """A notice when the hand-kept Flash swarm is not the three admitted models with the highest `anfragen_5h`, else None.
+
+    A notice, not a refusal: the maintainer keeps the list (Q-13), and the
+    runner never changes it.
+    """
+    cheapest = [model for model in ladder_ids if request_value(entry, model) is not None][:3]
+    if set(flash) == set(cheapest):
+        return None
+    return (
+        f"flash_swarm [{', '.join(flash)}] differs from the three cheapest admitted models "
+        f"[{', '.join(cheapest)}] by anfragen_5h; the list stays as declared"
+    )
+
+
+def ladder(root: Path) -> list[str]:
+    """The eligible paid models of the `opencode-go` entry, cheapest first: each is one later round.
+
+    The order is the runner's: `anfragen_5h` descending, ties by id, a model
+    without the value last (Q-13). A model the list does not hold is no id in
+    the code: adding or replacing one is a pull request that touches
+    `model-endpoints.yaml` and nothing else (spec, criterion 5). A model whose
+    data terms were not read is not eligible: it is skipped, and the skip is
+    named (ADR 0021, decision 5).
+    """
+    entry = endpoint_entry(root)
     models = [str(model) for model in entry.get("modelle") or []]
-    if not models:
-        raise Refused(f"the endpoint {OPENCODE} lists no model")
-    return models
+    eligible = [model for model in models if terms_problem(entry, model) is None]
+    return ordered_models(entry, eligible)
+
+
+def skipped_models(root: Path) -> list[str]:
+    """The declared paid models that are not eligible, each named with its reason (ADR 0021, decision 5)."""
+    entry = endpoint_entry(root)
+    named = []
+    declared = [str(model) for model in entry.get("modelle") or []]
+    for model in dict.fromkeys([*declared, *(entry.get("flash_swarm") or [])]):
+        problem = terms_problem(entry, model) if model in declared else "not a declared paid model"
+        if problem is not None:
+            named.append(f"{model} ({problem})")
+    return named
+
+
+def flash_problem(entry: dict) -> str | None:
+    """Why the entry's `flash_swarm` cannot be the second round's membership, or None.
+
+    The swarm is a subset of the eligible paid models, each named once (spec,
+    criterion 8): a model that is skipped or undeclared cannot review in it.
+    """
+    flash = entry.get("flash_swarm")
+    if flash is None:
+        return "the endpoint declares no flash_swarm"
+    if not isinstance(flash, list) or not all(isinstance(model, str) and model for model in flash):
+        return "flash_swarm must be a list of model ids"
+    if len(set(flash)) != len(flash):
+        return "flash_swarm names a model twice"
+    return None
+
+
+# ---------------------------------------------------------------------------
+# The free stage: rule, admission, live discovery, the bounded diff
+# ---------------------------------------------------------------------------
+
+
+DATE_ONLY = re.compile(r"\d{4}-\d{2}-\d{2}")
+
+
+def _valid_date(text: str) -> bool:
+    try:
+        dt.date.fromisoformat(text)
+    except ValueError:
+        return False
+    return True
+
+
+def _exception_problem(kind: str, record) -> str | None:
+    """Why one include/exclude record of the free rule is not usable, or None.
+
+    An exception is a decision: it carries the id, the date it was made and the
+    reason. An entry without one of the three is not an intentional exclusion
+    or inclusion (spec, criterion 5).
+    """
+    if not isinstance(record, dict):
+        return f"an entry of the free rule's {kind} list must be a record with id, date and reason"
+    for field in ("id", "date", "reason"):
+        value = record.get(field)
+        if not isinstance(value, str) or not value.strip():
+            return f"an entry of the free rule's {kind} list has no {field}"
+    if not DATE_ONLY.fullmatch(record["date"]) or not _valid_date(record["date"]):
+        return f"the free rule's {kind} entry for {record['id']} has no ISO date (YYYY-MM-DD)"
+    return None
+
+
+def free_rule_problems(entry: dict) -> list[str]:
+    """Everything that makes the entry's `free_stage` rule unusable; shared with the declaration test.
+
+    The provider must equal the Go launch provider and must not be Zen: the free
+    class never reaches a Zen id, whatever a rule says. The rule needs a suffix
+    or an include list to select from, exceptions carry id, date and reason,
+    and the input is the implementation diff and nothing else.
+    """
+    rule = entry.get("free_stage")
+    if not isinstance(rule, dict):
+        return ["the endpoint declares no usable free_stage rule"]
+    problems = []
+    provider = rule.get("provider")
+    if not isinstance(provider, str) or not provider.strip():
+        problems.append("the free rule names no provider")
+    elif provider == ZEN:
+        problems.append("the free rule may not select the Zen provider")
+    elif provider != OPENCODE:
+        problems.append(f"the free rule provider must equal the launch provider {OPENCODE}")
+    suffix = rule.get("id_suffix", "")
+    if not isinstance(suffix, str):
+        problems.append("the free rule's id_suffix is no string")
+    includes = rule.get("include") or []
+    if not suffix and not includes:
+        problems.append("the free rule would select nothing: give an id_suffix or an include list")
+    for kind in ("include", "exclude"):
+        entries = rule.get(kind) or []
+        if not isinstance(entries, list):
+            problems.append(f"the free rule's {kind} list is no list")
+            continue
+        for record in entries:
+            problem = _exception_problem(kind, record)
+            if problem:
+                problems.append(problem)
+    if rule.get("input") != "implementation-diff":
+        problems.append("the free rule's input must be implementation-diff")
+    return problems
+
+
+def free_rule(root: Path) -> dict:
+    """The `free_stage` rule of the declaration, refused when it is not usable."""
+    entry = endpoint_entry(root)
+    problems = free_rule_problems(entry)
+    if problems:
+        raise Refused("; ".join(problems) + ".")
+    return entry["free_stage"]
+
+
+def free_admission_problem(root: Path, model: str, selected: list[str]) -> str | None:
+    """Why the free class does not admit this call, or None (spec, criterion 7).
+
+    The class is bound to this run's live discovery: the id must be in the
+    selection the forced refresh produced, under the configured provider. A
+    paid model is refused by name, a Zen or guessed id by absence. The paid and
+    session paths keep the strict individual declaration; the endpoint must
+    itself stay clearable (framework, residency).
+    """
+    entry = endpoint_entry(root)
+    problems = free_rule_problems(entry)
+    if problems:
+        return "; ".join(problems)
+    allowed = entry.get("darf_sehen")
+    if not isinstance(allowed, list) or "framework" not in allowed:
+        return f"the endpoint {OPENCODE} may not see framework content"
+    residency = entry.get("residenz")
+    if not isinstance(residency, str) or not residency.strip() or residency == "nicht-erklaert":
+        return f"the endpoint {OPENCODE} states no data residency"
+    if model in [str(item) for item in entry.get("modelle") or []]:
+        return f"the model {model} is a paid model; the free class does not admit it"
+    if model not in selected:
+        return f"the model {model} is not in this run's discovered free selection"
+    return None
+
+
+def parse_catalog(output: str) -> list[dict]:
+    """The provider/model rows of `pi --list-models`, in catalog order.
+
+    The table's columns are whitespace-separated and the ids hold no space; the
+    header row is dropped. Output without one model row is malformed and
+    refuses - it never becomes an empty selection that launches a call
+    (spec, criterion 5).
+    """
+    lines = [line.split() for line in output.splitlines() if line.strip()]
+    if not lines or "provider" not in lines[0] or "model" not in lines[0]:
+        raise Refused("`pi --list-models` printed no model table header; catalog parse failed.")
+    header = lines[0]
+    if len(set(header)) != len(header):
+        raise Refused("`pi --list-models` model table has duplicate columns; catalog parse failed.")
+    provider, model = header.index("provider"), header.index("model")
+    rows = []
+    for number, parts in enumerate(lines[1:], 2):
+        if len(parts) != len(header):
+            raise Refused(f"`pi --list-models` model table parse failed at line {number}: wrong column count.")
+        rows.append({"provider": parts[provider], "model": parts[model]})
+    if not rows:
+        raise Refused("`pi --list-models` printed no model table rows; the free stage cannot be filled.")
+    return rows
+
+
+def select_free(rule: dict, catalog: list[dict]) -> list[str]:
+    """The catalog ids of the rule's provider matching suffix or include, minus excludes, in catalog order.
+
+    Exclusions win, also over an include; a Zen id cannot pass, because only
+    the configured provider's rows are read; an include for an id the catalog
+    does not hold selects nothing (spec, criterion 5).
+    """
+    suffix = rule.get("id_suffix", "")
+    includes = {str(record["id"]) for record in rule.get("include") or []}
+    excludes = {str(record["id"]) for record in rule.get("exclude") or []}
+    chosen: list[str] = []
+    for row in catalog:
+        if row["provider"] != rule["provider"]:
+            continue
+        model = row["model"]
+        if model in excludes:
+            continue
+        if (model in includes or (suffix and model.endswith(suffix))) and model not in chosen:
+            chosen.append(model)
+    return chosen
+
+
+def overlay_store(agent: Path, provider: str) -> dict:
+    """The provider's complete refreshed definitions, in Pi's `models-store.json` format.
+
+    Pi 1.2.0 (`core/remote-catalog-provider.js`, `core/models-store.js`)
+    persists the forced refresh's pi.dev catalog there under the provider id,
+    as `{models, lastModified, etag, checkedAt}`. `pi --list-models` lists the
+    overlay merged with Pi's shipped baseline (`mergeModels`), which keeps
+    baseline ids that pi.dev no longer lists; only the persisted overlay says
+    what the fresh catalog holds (Q-13). A missing or unreadable store refuses.
+    """
+    path = agent / "models-store.json"
+    try:
+        data = json.loads(path.read_text(encoding="utf-8"))
+    except (OSError, UnicodeDecodeError, ValueError):
+        raise Refused(
+            f"the forced catalog refresh left no readable {path.name}; the fresh overlay cannot be told "
+            "from Pi's shipped list, so the free stage is not entered."
+        ) from None
+    entry = data.get(provider) if isinstance(data, dict) else None
+    models = entry.get("models") if isinstance(entry, dict) else None
+    if not isinstance(models, list):
+        raise Refused(f"the refreshed {path.name} holds no catalog for {provider}; the free stage is not entered.")
+    return {provider: entry}
+
+
+def overlay_ids(agent: Path, provider: str) -> set[str]:
+    """Ids in the refreshed provider overlay; definitions are retained by discovery."""
+    return {
+        str(model["id"])
+        for model in overlay_store(agent, provider)[provider]["models"]
+        if isinstance(model, dict) and model.get("id")
+    }
+
+
+def activate_overlay(agent: Path, store: dict) -> None:
+    """Activate fetched definitions through Pi's explicit model configuration.
+
+    Pi 1.2.0 restores its remote cache only for server dates newer than its
+    shipped catalog. A successful fresh retrieval need not carry such a date.
+    Keep models-store.json as retrieval evidence and use models.json's model
+    definitions to activate that exact catalog independently of cache age.
+    Only model definitions cross here, never provider auth configuration.
+    """
+    # Pi resolves explicit-config headers as shell commands / environment
+    # templates. Escape catalog literals at this boundary only: never mutate
+    # the fetched store (the retrieval evidence and persisted run snapshot).
+    providers = {}
+    for provider, entry in store.items():
+        models = []
+        for definition in entry.get("models", []):
+            model = dict(definition)
+            if "headers" in model:
+                headers = {}
+                for name, value in model["headers"].items():
+                    literal = value.replace("$", "$$")
+                    headers[name] = "$" + literal if literal.startswith("!") else literal
+                model["headers"] = headers
+            models.append(model)
+        if models:
+            providers[provider] = {"models": models}
+    (agent / "models.json").write_text(json.dumps({"providers": providers}), encoding="utf-8")
+
+
+def discover_free(root: Path, *, allow_empty: bool = False) -> dict:
+    """The free stage's members, from a forced live catalog refresh this run owns.
+
+    One fresh scratch HOME and agent directory serve both commands: first the
+    forced refresh (`pi update --models`), then the listing there. When the
+    refresh fails or runs over its limit, the run refuses - a cached catalog is
+    never listed (spec, criterion 5). The check time, the source, the Pi
+    version, the rule and both lists are pinned into the run state. The
+    catalog is a live intermediary: this proves which catalog was read, not
+    what OpenCode Go actually bills for the call.
+    """
+    rule = free_rule(root)
+    key = reviewer_key()
+    with tempfile.TemporaryDirectory(prefix="stage2-free-") as tmp:
+        scratch = Path(tmp)
+        agent = scratch / "agent"
+        agent.mkdir()
+        (agent / "settings.json").write_text(json.dumps({"retry": {"enabled": False}}), encoding="utf-8")
+        home = scratch / "home"
+        home.mkdir()
+        env = foreign_env({"HOME": str(home), "PI_CODING_AGENT_DIR": str(agent), "OPENCODE_API_KEY": key})
+        limit = f"the catalog refresh's limit of {PI_DISCOVERY_SECONDS} seconds"
+        try:
+            refresh = launch(
+                [str(PI_WRAPPER), "update", "--models"], scratch, env, timeout=PI_DISCOVERY_SECONDS, limit=limit
+            )
+        except CallFailed as error:
+            raise Refused(
+                f"the live catalog refresh did not end within {PI_DISCOVERY_SECONDS} seconds; "
+                f"no stale cache is listed. ({error})"
+            ) from None
+        if refresh.returncode != 0:
+            raise Refused(
+                f"`{PI_WRAPPER} update --models` ended {refresh.returncode}; the free stage is not filled "
+                "from a stale cache."
+            )
+        store = overlay_store(agent, rule["provider"])
+        activate_overlay(agent, store)
+        try:
+            listing = launch(
+                [str(PI_WRAPPER), "--list-models"], scratch, env, timeout=PI_DISCOVERY_SECONDS, limit=limit
+            )
+        except CallFailed as error:
+            raise Refused(
+                f"the model listing did not end within {PI_DISCOVERY_SECONDS} seconds; the free stage is not entered. ({error})"
+            ) from None
+        fresh = {
+            str(model["id"])
+            for model in store.get(rule["provider"], {}).get("models", [])
+            if isinstance(model, dict) and model.get("id")
+        }
+    if listing.returncode != 0:
+        raise Refused(f"`{PI_WRAPPER} --list-models` ended {listing.returncode}; the free stage stays unentered.")
+    catalog = parse_catalog(listing.stdout or "")
+    # Only ids the fresh overlay carries: an id that only Pi's shipped list holds is not selected (Q-13).
+    selected = [model for model in select_free(rule, catalog) if model in fresh]
+    if not selected and not allow_empty:
+        raise Refused("the live catalog holds no free model for the configured rule; the free stage is not entered.")
+    return {
+        "checked_at": dt.datetime.now(dt.UTC).isoformat(timespec="seconds"),
+        "source": "pi.dev",
+        "pi_version": PI_VERSION,
+        "rule": json.loads(json.dumps(rule)),
+        "catalog": catalog,
+        "selected": selected,
+        "overlay": sorted(fresh),
+        "models_store": store,
+        "billing": "not measured: pi.dev is a live catalog, not a billing statement",
+    }
+
+
+# The free diff sees source and test code only, never dependency or generated
+# trees, binary files, documentation, plans, declarations or locks (criterion 3).
+FREE_DIFF_SKIP_PARTS = {"node_modules", ".venv", "venv", "dist", "build", "__pycache__", ".git", ".beads"}
+FREE_DIFF_TEXT_SUFFIXES = {".md", ".json", ".yaml", ".yml", ".lock", ".txt", ".cfg", ".ini", ".toml"}
+
+
+def _looks_binary(path: Path) -> bool:
+    try:
+        with path.open("rb") as handle:
+            return b"\0" in handle.read(8192)
+    except OSError:
+        return True
+
+
+def _free_candidate(root: Path, rel: str, base: str | None = None) -> bool:
+    """Whether a changed file may enter the free diff: source and test code only.
+
+    Python in `scripts/` and `tests/`, and executable source under `tools/`.
+    Symlinks, dependency and generated trees, binary files, documentation,
+    plans, declarations and locks never pass (criterion 3).
+    """
+    path = Path(rel)
+    parts = path.parts
+    if not parts or path.is_absolute() or ".." in parts:
+        return False
+    if any(part in FREE_DIFF_SKIP_PARTS for part in parts):
+        return False
+    full = root / path
+    if any((root / parent).is_symlink() for parent in [path, *path.parents]):
+        return False
+    executable = os.access(full, os.X_OK)
+    if full.exists():
+        if not full.is_file() or _looks_binary(full):
+            return False
+    else:
+        if base is None:
+            return False
+        # Deleted source is classified by its merge-base blob and mode.
+        tree = _git_output(root, "ls-tree", base, "--", rel)
+        if not tree or tree.split()[0] not in {"100644", "100755"}:
+            return False
+        blob = subprocess.run(["git", "-C", str(root), "show", f"{base}:{rel}"], capture_output=True, check=False)
+        if blob.returncode or b"\0" in blob.stdout:
+            return False
+        executable = tree.split()[0] == "100755"
+    if parts[0] == "scripts":
+        return path.suffix == ".py"
+    if parts[0] == "tests":
+        return path.suffix == ".py"
+    if parts[0] == "tools":
+        try:
+            return executable and path.suffix not in FREE_DIFF_TEXT_SUFFIXES
+        except OSError:
+            return False
+    return False
+
+
+def _merge_base(root: Path) -> str:
+    """The merge base with origin/main, refused when there is none."""
+    done = subprocess.run(
+        ["git", "-C", str(root), "merge-base", "HEAD", "origin/main"], capture_output=True, text=True, check=False
+    )
+    base = done.stdout.strip()
+    if done.returncode != 0 or not base:
+        raise Refused("there is no merge base with origin/main; the diff cannot be built.")
+    return base
+
+
+def _bound_hunks(rel: str, piece: str) -> str:
+    """One file's diff, cut at the per-file bound with a naming marker."""
+    lines = piece.splitlines()
+    if len(lines) <= FREE_DIFF_MAX_LINES:
+        return "\n".join(lines)
+    kept = "\n".join(lines[:FREE_DIFF_MAX_LINES])
+    return f"{kept}\n## (the diff of {rel} was cut at {FREE_DIFF_MAX_LINES} lines)"
+
+
+def free_diff(root: Path) -> str:
+    """The implementation diff the free swarm reviews: bounded hunks of source and test code only.
+
+    The same merge base as `change_diff`, uncommitted and untracked files
+    included (criterion 3). Every file passes `_free_candidate`; each file's
+    hunks are bounded and the whole diff is, so no whole source file travels.
+    """
+    base = _merge_base(root)
+    flags = ["--no-color", "--no-ext-diff", "--no-textconv"]
+    changed = [name for name in _git_output(root, "diff", "--name-only", "-z", base).split("\0") if name]
+    untracked = [
+        name for name in _git_output(root, "ls-files", "-z", "--others", "--exclude-standard").split("\0") if name
+    ]
+    untracked_set = set(untracked)
+    names: list[str] = []
+    seen: set[str] = set()
+    for rel in [*changed, *untracked]:
+        if rel not in seen:
+            seen.add(rel)
+            if _free_candidate(root, rel, base):
+                names.append(rel)
+    parts: list[str] = []
+    total = 0
+    for rel in names:
+        if rel in untracked_set:
+            piece = _git_output(root, "diff", *flags, "--no-index", "--", "/dev/null", rel, allow=(0, 1))
+        else:
+            piece = _git_output(root, "diff", *flags, base, "--", rel)
+        bounded = _bound_hunks(rel, piece)
+        if not bounded.strip():
+            continue
+        parts.append(bounded)
+        total += bounded.count("\n")
+        if total >= FREE_DIFF_MAX_TOTAL:
+            parts.append(
+                f"(the implementation diff was cut at {FREE_DIFF_MAX_TOTAL} lines; later files are not carried)"
+            )
+            break
+    return "\n".join(parts)
+
+
+# The free reviewer's static instructions: what it reviews and how it answers.
+# Deliberately no READ_REQUEST and no repository-reading sentence - the call has
+# no tools and its only input is the diff below (criterion 3).
+FREE_REVIEW_BODY = (
+    "You are one member of a parallel reviewer swarm; the round's other members review the same diff.\n"
+    "Your only input is the implementation diff below. You have no tools and read nothing else: do not ask\n"
+    "for files, context or the repository - answer from the diff alone.\n"
+    "\n"
+    "Report findings a reader of the diff alone can support:\n"
+    "- a defect the change would put into the tree (correctness, security, credential exposure);\n"
+    "- a test the change breaks, or a behavior change without the test that holds it;\n"
+    "- a contradiction between the changed lines themselves.\n"
+    "Report nothing you would need the rest of the repository to confirm."
+)
 
 
 def reviewer_key() -> str:
@@ -1003,23 +1674,40 @@ def require_pi() -> None:
         raise Refused(f"pi {said or 'printed nothing'} is not the pinned {PI_VERSION}; no call starts.")
 
 
-def run_reviewer(ctx: Context, model: str, prompt: str, key: str) -> str:
-    """One reviewer call of the loop: Pi against OpenCode Go's chat-completions address.
+def run_reviewer(
+    ctx: Context,
+    model: str,
+    prompt: str,
+    key: str,
+    *,
+    free: bool = False,
+    timeout_seconds: int | None = None,
+    task: str | None = None,
+) -> str:
+    """One reviewer call through Pi with this run's refreshed OpenCode Go definitions.
 
     The launch is the measured set (spec, criterion 8), started through the
     repository wrapper (ADR 0019): the rung's id under the `opencode-go`
     provider, thinking `max` (Pi clamps it per model), the read-only tools,
     every discovery switched off, no session, retries off. Each call gets its
-    own scratch directory: a `HOME`, an agent directory whose only file is
-    `settings.json`, and the prompt file. The key reaches Pi as
+    own scratch directory: a `HOME`, an agent directory with retry settings
+    and the run's refreshed provider definitions, and the prompt file. The key reaches Pi as
     `OPENCODE_API_KEY` only. Returns the scrubbed answer. A call that has not
     ended after `REVIEWER_MINUTES` is stopped (criterion 15).
+
+    A free call (`free=True`, ADR 0021 decision 3) gets `--no-tools` instead of
+    the read tools and starts in its scratch directory, not the worktree: its
+    only input is the prompt it is given.
     """
     with tempfile.TemporaryDirectory(prefix="stage2-") as tmp:
         scratch = Path(tmp)
         agent = scratch / "agent"
         agent.mkdir()
         (agent / "settings.json").write_text(json.dumps({"retry": {"enabled": False}}), encoding="utf-8")
+        store = getattr(ctx, "models_store", None)
+        if store is not None:
+            (agent / "models-store.json").write_text(json.dumps(store), encoding="utf-8")
+            activate_overlay(agent, store)
         home = scratch / "home"
         home.mkdir()
         prompt_file = scratch / "review-prompt.md"
@@ -1036,32 +1724,72 @@ def run_reviewer(ctx: Context, model: str, prompt: str, key: str) -> str:
             "--no-prompt-templates",
             "--no-themes",
             "--offline",
-            "--tools",
-            PI_TOOLS,
+            *(["--no-tools"] if free else ["--tools", PI_TOOLS]),
             "--thinking",
             "max",
             "--model",
             f"{OPENCODE}/{model}",
             "--append-system-prompt",
             str(prompt_file),
-            f"Review the change {ctx.change} as the appended instructions say.",
+            task or f"Review the change {ctx.change} as the appended instructions say.",
         ]
         env = foreign_env({"HOME": str(home), "PI_CODING_AGENT_DIR": str(agent), "OPENCODE_API_KEY": key})
-        done = launch(command, ctx.root, env, key, timeout=REVIEWER_MINUTES * 60)
+        done = launch(
+            command,
+            scratch if free else ctx.root,
+            env,
+            key,
+            timeout=timeout_seconds or REVIEWER_MINUTES * 60,
+            limit=f"the availability probe limit of {timeout_seconds} seconds" if timeout_seconds else None,
+        )
         if done.returncode != 0:
-            raise fail("pi", done, f"exit {done.returncode}", key)
+            raise fail("pi", done, f"exit {done.returncode}", key, model)
         answer = scrub(done.stdout or "", key)
         if not answer.strip():
             # "No finding" is an answer; nothing at all is a call that failed.
-            raise fail("pi", done, "the answer is empty", key)
+            raise fail("pi", done, "the answer is empty", key, model)
     return answer
 
 
-def taken_in_round(rows: list[list[str]], round_number: int) -> bool:
-    """Whether the round wrote at least one row whose Status begins `taken` or `fixed` (spec, criterion 7).
+def run_swarm(
+    ctx: Context, members: list[str], prompts: dict[str, str], key: str, *, free: bool
+) -> dict[str, str | Exception]:
+    """Every member called concurrently, each in its own scratch directories; only the parent writes.
 
-    A row the repair has marked `fixed` counts like the taken one it was, so repairing round 2's row
-    does not cancel round 3 (ADR 0015, decision 5).
+    The answers come back per member: the scrubbed answer, or the exception
+    that failed the member (a nonzero exit, a timeout, an empty answer). A
+    member's failure never discards another member's answer (criterion 4).
+    Without parsed findings, only the explicit no-finding response succeeds.
+    """
+    answers: dict[str, str | Exception] = {}
+
+    def one(member: str) -> None:
+        try:
+            answer = run_reviewer(ctx, member, prompts[member], key, free=free)
+            rows, _rest = parse_rows(answer)
+            # No arbitrary prose (including a refusal or context-limit error)
+            # can certify a clean round. Commentary beside findings is kept.
+            if not rows and answer.strip() != "No finding.":
+                raise CallFailed("malformed finding output: expected six-cell findings or exactly 'No finding.'")
+            answers[member] = answer
+        except Exception as error:  # noqa: BLE001 - a member's failure is recorded, not raised, here
+            answers[member] = error
+
+    threads = [threading.Thread(target=one, args=(member,), name=f"stage2-swarm-{member}") for member in members]
+    for thread in threads:
+        thread.start()
+    for thread in threads:
+        thread.join()
+    return answers
+
+
+def taken_in_round(rows: list[list[str]], round_number: int) -> bool:
+    """Whether the round wrote at least one row whose Status begins `taken` or `fixed`.
+
+    A row the repair has marked `fixed` counts like the taken one it was, so
+    repairing a round's row neither cleans that round nor cancels the next one
+    (ADR 0017 decision 6, as amended by ADR 0021 decision 7; ADR 0015's
+    three-round reading is superseded).
     """
     prefix = f"L{round_number}-"
     return any(row[0].startswith(prefix) and row[7].lower().startswith(("taken", "fixed")) for row in rows)
@@ -1320,7 +2048,7 @@ def _record_lines(record: str) -> list[tuple[str, bool]]:
     The runner writes a round as its heading, then a table or one statement and, when the answer was not
     only six-cell rows, the note `NOT_ROWS_NOTE` and the rest of the answer as it came. The lines after the
     note, up to the next round heading, are the reviewer's; every other line is the record's own. A line
-    of the reviewer's that has the form of a round heading cannot be told from one.
+    of the reviewer is quoted when written, so it cannot become a round heading.
     """
     lines = []
     reviewer = False
@@ -1400,16 +2128,213 @@ def undecided_refusal(rows: list[list[str]], consequence: str) -> str | None:
     return "; ".join(parts) + "."
 
 
+# ---------------------------------------------------------------------------
+# Rounds, stops and the run's stage snapshot
+# ---------------------------------------------------------------------------
+
+
+ROUND_ID = re.compile(r"L(\d+)-\d+")
+
+
+def round_rows(rows: list[list[str]], round_number: int) -> list[list[str]]:
+    """The rows of one round, by their `L<n>-` id prefix."""
+    prefix = f"L{round_number}-"
+    return [row for row in rows if row[0].startswith(prefix)]
+
+
+def accepted_row(row: list[str]) -> bool:
+    """`taken` or `fixed`: a repair preserves the fact that the review accepted the finding (criterion 11)."""
+    return row[7].lower().startswith(("taken", "fixed"))
+
+
+def clean_round(rows: list[list[str]], round_number: int) -> bool:
+    """A completed round is clean when every row is decided and none is accepted (ADR 0021, decision 1).
+
+    No row at all is clean: the swarm answered and nothing was accepted; so is
+    a round whose rows were all rejected. A row the repair marked `fixed` keeps
+    the round not clean (criterion 11).
+    """
+    members = round_rows(rows, round_number)
+    return not any(accepted_row(row) for row in members) and not undecided(members)
+
+
+def fix_r_only(rows: list[list[str]], round_number: int) -> bool:
+    """Whether the round has an accepted finding and every accepted row's Origin begins `fix-r` (criterion 10)."""
+    members = round_rows(rows, round_number)
+    took = [row for row in members if accepted_row(row)]
+    return bool(took) and all(row[3].startswith("fix-r") for row in took)
+
+
+def history_rounds(record: str | None, findings_text: str) -> dict[int, list[list[str]]]:
+    """Every round's rows, from the record and from every released block (criterion 13).
+
+    The record's rows are read through `record_rows` - the reviewers' words are
+    not rows; a release contributes the rows of its block, decided statuses
+    included. Round numbers never repeat between record and releases (a release
+    deletes the record it counted), so rows merge by their `L<n>-` ids.
+    """
+    merged: dict[int, list[list[str]]] = {}
+    for rows in (
+        record_rows(record) if record is not None else [],
+        findings_rows(findings_text)[0],
+    ):
+        for row in rows:
+            match = ROUND_ID.fullmatch(row[0])
+            if match:
+                merged.setdefault(int(match.group(1)), []).append(row)
+    return merged
+
+
+def new_state(root: Path, free: dict) -> dict:
+    """The stage snapshot of a fresh run: free selection, Flash swarm, ladder rungs.
+
+    The snapshot pins the run's membership (ADR 0021, decision 9): an edited
+    YAML takes effect on fresh runs, never inside this one. The Flash stage
+    exists only when it has eligible members - an empty one is skipped without
+    a round (decision 5).
+    """
+    entry = endpoint_entry(root)
+    ladder_ids = ladder(root)
+    problem = flash_problem(entry)
+    if problem:
+        raise Refused(f"{problem}.")
+    flash = [model for model in entry.get("flash_swarm") or [] if model in ladder_ids]
+    return {
+        "free": free,
+        "paid": {
+            "ladder": ladder_ids,
+            "flash": flash,
+            "rungs": [model for model in ladder_ids if model not in flash],
+        },
+        "consumed": [],
+    }
+
+
+def stages_of(state: dict) -> list[dict]:
+    """The run's stages in order: the free swarm, the Flash swarm, one per remaining rung."""
+    stages: list[dict] = []
+    if state["free"]["selected"] and not state["free"].get("skipped"):
+        stages.append({"key": "free", "kind": "free", "members": list(state["free"]["selected"])})
+    flash = list(state["paid"]["flash"])
+    if flash:
+        stages.append({"key": "flash", "kind": "paid-swarm", "members": flash})
+    for model in state["paid"]["rungs"]:
+        stages.append({"key": f"rung:{model}", "kind": "paid", "members": [model]})
+    return stages
+
+
+def next_stage(state: dict) -> dict | None:
+    """The first stage the run has not consumed, or None when the stages are spent."""
+    consumed = set(state["consumed"])
+    for stage in stages_of(state):
+        if stage["key"] not in consumed:
+            return stage
+    return None
+
+
+def mark_consumed(change: str, state: dict, key: str) -> None:
+    """Pin that the stage has completed a round: a failed attempt consumes nothing (criterion 13)."""
+    state["consumed"] = [*state["consumed"], key]
+    write_state(change, state)
+
+
+def write_state(change: str, state: dict) -> None:
+    """The run's stage snapshot into the record, as the record's own line.
+
+    The line sits before the first round heading; the runner owns it, never the
+    reviewer's words. `kept_lines` leaves it out - the release carries the line
+    itself, so a continued run reads its snapshot from findings.md (criterion
+    13).
+    """
+    line = f"{STATE_KEY}{json.dumps(state, sort_keys=True)}"
+    directory = record_dir(change)
+    directory.mkdir(parents=True, exist_ok=True)
+    path = directory / "loop.md"
+    if path.exists():
+        text = path.read_text(encoding="utf-8")
+        if STATE_LINE.search(text):
+            path.write_text(STATE_LINE.sub(lambda _match: line, text, count=1), encoding="utf-8")
+            return
+        match = ROUND_HEADING.search(text)
+        if match:
+            text = text[: match.start()] + line + "\n\n" + text[match.start() :]
+        else:
+            text = text.rstrip("\n") + "\n\n" + line + "\n"
+        path.write_text(text, encoding="utf-8")
+        return
+    path.write_text(f"{RECORD_HEADING}{change}\n\n{RECORD_INTRO}\n{line}\n", encoding="utf-8")
+
+
+def read_state(record: str | None, findings_text: str) -> dict | None:
+    """The run's stage snapshot: the record's own line first, else the last release's.
+
+    Only the runner's own lines are read - the released block is cut at
+    `Kept from the loop record:`, so the reviewers' words are never a snapshot
+    (criterion 13). A record without its state line predates the swarms and is
+    refused instead of continued with invented stages.
+    """
+    line: str | None = None
+    if record is not None:
+        for text, reviewer in _record_lines(record):
+            if reviewer:
+                continue
+            match = STATE_LINE.match(text)
+            if match:
+                line = match.group(1)
+                break
+        if line is None:
+            raise Refused("the loop record has no Loop state line; it predates the swarms and cannot be continued.")
+    else:
+        start = _last_release(findings_text)
+        if start >= 0:
+            block = findings_text[start:]
+            kept = block.find("Kept from the loop record:")
+            if kept >= 0:
+                block = block[:kept]
+            match = STATE_LINE.search(block)
+            if match:
+                line = match.group(1)
+    if line is None:
+        return None
+    try:
+        state = json.loads(line)
+    except ValueError as error:
+        raise Refused(f"the run's Loop state line is not readable JSON: {error}") from None
+    if (
+        not isinstance(state, dict)
+        or not isinstance(state.get("free"), dict)
+        or not isinstance(state.get("paid"), dict)
+        or not isinstance(state.get("consumed"), list)
+    ):
+        raise Refused("the run's Loop state line does not hold the expected stage snapshot.")
+    return state
+
+
+def quote_reviewer(text: str) -> str:
+    """Preserve reviewer words as Markdown quotes, never as control lines."""
+    return "\n".join(line if line.startswith("> ") else "> " + line for line in text.splitlines())
+
+
 def rounds_run(record: str | None, findings_text: str) -> int:
     """A round is counted by its block in the record, and by every count left behind by a release."""
     in_record = len(ROUND_HEADING.findall(record)) if record else 0
-    return in_record + sum(int(n) for n in ROUNDS_LINE.findall(findings_text))
+    released = 0
+    own = False
+    for line in findings_text.splitlines():
+        if line.startswith("## "):
+            own = line.startswith(RELEASE_HEADING)
+        elif line.startswith("Kept from the loop record:"):
+            own = False
+        elif own and (match := ROUNDS_LINE.fullmatch(line)):
+            released += int(match.group(1))
+    return in_record + released
 
 
 def kept_lines(record: str) -> str:
     """Everything the record holds that the release does not carry as a row, exactly as it stands.
 
-    Left out: the record's own furniture - its heading, its intro, the round headings, the tables' header and
+    Left out: the record's own furniture - its heading, its intro, the round headings, the `Loop state:` line
+    (the release carries the snapshot itself, before the kept marker), the tables' header and
     separator - and the loop rows (`record_rows` has them). What is left goes to `findings.md`, because the
     record is deleted afterwards and is the only copy: the runner's own statements, and the reviewer's words
     line by line as they came, blank lines between them included (a heading or a comment that starts with `#`,
@@ -1426,6 +2351,7 @@ def kept_lines(record: str) -> str:
                 or line in intro
                 or line.strip() in furniture
                 or ROUND_HEADING.match(line)
+                or STATE_LINE.match(line)
                 or (number == 0 and line.startswith(RECORD_HEADING))
                 or (cells and LOOP_ID.fullmatch(cells[0]))
             ):
@@ -1467,13 +2393,19 @@ def release(root: Path, change: str) -> list[list[str]]:
     refusal = undecided_refusal(rows, "nothing is released")
     if refusal:
         raise Refused(refusal)
+    state = read_state(record, text)
     block = [f"{RELEASE_HEADING} {today()}", render_table(RELEASED_COLUMNS, [[*row, "—"] for row in rows])]
     if not rows:
         block.append("No loop row was reported.")
     block.append(f"Rounds run: {len(ROUND_HEADING.findall(record))}")
+    if state is not None:
+        # The snapshot travels as the block's own line, before the kept words:
+        # a continued run reads its stages from here, never from the reviewers'
+        # text (criterion 13).
+        block.append(f"{STATE_KEY}{json.dumps(state, sort_keys=True)}")
     kept = kept_lines(record)
     if kept:
-        block.append(f"Kept from the loop record:\n\n{kept}")
+        block.append(f"Kept from the loop record:\n\n{quote_reviewer(kept)}")
     append(findings, "\n\n".join(block))
     shutil.rmtree(record_dir(change))
     print(f"release-loop: {len(rows)} loop rows appended to {findings.relative_to(root)}")
@@ -1495,12 +2427,7 @@ def _git_output(root: Path, *args: str, allow: tuple[int, ...] = (0,), env: dict
 
 def change_diff(root: Path) -> str:
     """The diff against the merge base with origin/main, uncommitted and untracked files included."""
-    done = subprocess.run(
-        ["git", "-C", str(root), "merge-base", "HEAD", "origin/main"], capture_output=True, text=True, check=False
-    )
-    base = done.stdout.strip()
-    if done.returncode != 0 or not base:
-        raise Refused("there is no merge base with origin/main; the diff cannot be built.")
+    base = _merge_base(root)
     flags = ["--no-color", "--no-ext-diff", "--no-textconv"]
     parts = [_git_output(root, "diff", *flags, base)]
     untracked = _git_output(root, "ls-files", "-z", "--others", "--exclude-standard").split("\0")
@@ -3383,71 +4310,284 @@ def repair(root: Path, change: str, stage2_off: str | None = None) -> None:
     )
 
 
-def review_loop(root: Path, change: str) -> None:
-    """One round of phase 4b: round *n* goes to the ladder's *n*-th rung, through Pi at OpenCode Go."""
-    models = ladder(root)
-    endpoint = (OPENCODE, models[0], "max")
-    ctx = preflight(root, change, endpoint)
+def prepare_loop(root: Path, change: str) -> None:
+    """Check reachable admitted reviewers and return the main-conversation report."""
+    import stage2_availability
+
+    stage2_availability.prepare(root, change, sys.modules[__name__])
+
+
+def review_loop(root: Path, change: str, availability_reported: str | None = None) -> None:
+    """One round of phase 4b, until a round is clean (ADR 0021).
+
+    A fresh run discovers its free members through a forced live refresh and
+    pins the stage snapshot; every later call takes the run's next unconsumed
+    stage. The stops come before any stage: undecided or evidence-incomplete
+    rows first, then a clean previous round, then the repair brake (two
+    consecutive rounds whose accepted findings all begin `fix-r`), then spent
+    stages - each naming the round or the maintainer, and none reset by a
+    release or an edited configuration (ADR 0021, decision 9). One call
+    completes one round; a swarm's members run concurrently and merge into one
+    heading and one id series; an attempt whose every member failed completes
+    no round and consumes no stage.
+    """
     record = read_record(change)
-    findings_text = ctx.findings.read_text(encoding="utf-8") if ctx.findings.exists() else ""
-    done_rounds = rounds_run(record, findings_text)
-    if done_rounds >= MAX_ROUNDS:
-        raise Refused(f"{done_rounds} rounds have run; the loop stops at {MAX_ROUNDS}.")
     if record is not None:
         refusal = undecided_refusal(record_rows(record), "decide them first")
         if refusal:
             raise Refused(refusal)
-    round_number = done_rounds + 1
-    if round_number == MAX_ROUNDS and not taken_in_round(
-        record_rows(record) if record is not None else released_rows(findings_text), done_rounds
-    ):
-        raise Refused(f"round {done_rounds} wrote no taken row; the loop stops at {done_rounds}.")
-    if round_number > len(models):
-        raise Refused(f"the ladder of {OPENCODE} has {len(models)} rungs; round {round_number} has none.")
-    model = models[round_number - 1]
+    findings_text = ""
+    findings_path = folder_of(root, change) / "findings.md"
+    if findings_path.exists():
+        findings_text = findings_path.read_text(encoding="utf-8")
+    history = history_rounds(record, findings_text)
+    # A round that found nothing has a heading but no row: it is counted by its heading.
+    last = max(max(history, default=0), rounds_run(record, findings_text))
+    if last:
+        refusal = undecided_refusal(history.get(last, []), "decide them first")
+        if refusal:
+            raise Refused(refusal)
+        if clean_round(history.get(last, []), last):
+            raise Refused(f"round {last} was clean: every row was decided and none accepted; the loop stops.")
+        if last - 1 in history and fix_r_only(history[last], last) and fix_r_only(history[last - 1], last - 1):
+            raise Refused(
+                f"rounds {last - 1} and {last} accepted only findings whose Origin begins `fix-r`; "
+                "the repair brake stops the loop; the maintainer decides what continues."
+            )
+    state = read_state(record, findings_text)
+    if record is None and state is None:
+        # A fresh run has neither a record nor a released snapshot. read_state
+        # refuses a pre-swarm record without its Loop state line.
+        problem = entry_problem(root, OPENCODE)
+        if problem:
+            raise Refused(problem)
+        import stage2_availability
+
+        if stage2_availability.settings(root, sys.modules[__name__]) is not None:
+            state = stage2_availability.consume(root, change, availability_reported, sys.modules[__name__])
+            require_pi()
+        else:
+            require_pi()
+            state = new_state(root, discover_free(root))
+        skipped = skipped_models(root)
+        if skipped:
+            print(f"review-loop: paid models skipped: {'; '.join(skipped)}")
+        # The snapshot is written only with the first completed round: a failed
+        # attempt consumes no stage and leaves no record (ADR 0021, decision 6).
+    stage = next_stage(state)
+    free_input = None
+    if stage is not None and stage["kind"] == "free":
+        free_input = free_diff(root)
+        if not free_input.strip():
+            state["free"]["skipped"] = "free stage skipped: no implementation source diff"
+            print(f"review-loop: {state['free']['skipped']}")
+            stage = next_stage(state)
+    if stage is None:
+        raise Refused(
+            "every stage of this run is consumed and the last round was not clean; the loop stops and "
+            "reports to the maintainer. No model is substituted."
+        )
+    round_number = rounds_run(record, findings_text) + 1
+    members: list[str] = stage["members"]
+    free = stage["kind"] == "free"
+    diff = free_input if free else change_diff(root)
+    body = "" if free else (root / "prompts" / "04b-review-loop.md").read_text(encoding="utf-8")
+    prompts: dict[str, str] = {}
+    endpoints: dict[str, tuple[str, str, str]] = {}
+
+    def prompt_for(member: str) -> str:
+        head = f"This is round {round_number}; you are `{member}`."
+        if free:
+            return "\n\n".join([FREE_REVIEW_BODY, head, ANSWER_FORMAT, f"## The implementation diff\n\n{diff}"])
+        # The request comes before the diff and again after it: a long diff would bury it.
+        return "\n\n".join([body.rstrip(), head, ANSWER_FORMAT, READ_REQUEST, f"## The diff\n\n{diff}", READ_REQUEST])
+
+    for member in members:
+        endpoints[member] = (OPENCODE, member, "max")
+        prompts[member] = prompt_for(member)
+    ctx = preflight(root, change, endpoints[members[0]], admission_problem=_free_admission(free, state))
+    ctx.models_store = state["free"].get("models_store")
+    # Every member is checked in the parent before any starts; one BLOCK aborts
+    # the round without a fallback (criterion 3).
+    checked = {
+        member: checked_prompt(ctx, endpoints[member], prompts[member], _free_admission(free, state))
+        for member in members
+    }
+    if not ctx.findings.exists():
+        ctx.findings.write_text(findings_header(ctx, producer_for(endpoints[members[0]])), encoding="utf-8")
+    for member in members:
+        append(ctx.findings, call_line("review-loop", endpoints[member], checked[member]))
     key = reviewer_key()
-    require_pi()
-    diff = change_diff(root)
-    body = (root / "prompts" / "04b-review-loop.md").read_text(encoding="utf-8")
-    # The request comes before the diff and again after it: a long diff would bury it.
-    prompt = "\n\n".join(
-        [
-            body.rstrip(),
-            f"This is round {round_number}; you are `{model}`.",
-            ANSWER_FORMAT,
-            READ_REQUEST,
-            f"## The diff\n\n{diff}",
-            READ_REQUEST,
-        ]
-    )
-    begin_call(ctx, "review-loop", (OPENCODE, model, "max"), prompt)
-    answer = run_reviewer(ctx, model, prompt, key)
-    rows, _ = parse_rows(answer)
-    numbered = [[f"L{round_number}-{k}", *row[1:], model, "", ""] for k, row in enumerate(rows, 1)]
-    parts = [f"## Round {round_number} — {model}, {today()}"]
-    parts += answer_parts(rows, answer, model, render_table(ROW_COLUMNS, numbered))
-    directory = record_dir(change)
-    directory.mkdir(parents=True, exist_ok=True)
-    path = directory / "loop.md"
+    notes: list[str] = []
+    if not state["consumed"]:
+        if state["free"].get("skipped"):
+            notes.append(f"Notice: {state['free']['skipped']}.")
+        skipped = skipped_models(root)
+        if skipped:
+            notes.append(f"Notice: paid models skipped: {'; '.join(skipped)}.")
+        gap = unread_catalog_ids(endpoint_entry(root), state["free"])
+        if gap:
+            notes.append(f"Notice: in the live catalog without a terms reading: {', '.join(gap)}.")
+            print(f"review-loop: {notes[-1]}", file=sys.stderr)
+    if not free and not any(key == "flash" or key.startswith("rung:") for key in state["consumed"]):
+        entry = endpoint_entry(root)
+        if stage["kind"] == "paid-swarm":
+            notice = cheapest_notice(entry, state["paid"]["ladder"], members)
+            if notice:
+                notes.append(f"Notice: {notice}.")
+        missing = unvalued_models(entry, state["paid"]["ladder"])
+        if missing:
+            notes.append(f"Notice: no anfragen_5h declared, ordered last: {', '.join(missing)}.")
+        for note in notes:
+            print(f"review-loop: {note}", file=sys.stderr)
+    answers = run_swarm(ctx, members, prompts, key, free=free)
+    replaced: list[str] = []
+    if stage["kind"] == "paid-swarm":
+        # A failed Flash member is replaced by the cheapest admitted ladder model
+        # not in this round and not consumed, on the same paid prompt; each model
+        # at most once, until one answers or the ladder is spent (Q-13).
+        used = set(members)
+        spent = {key_[len("rung:") :] for key_ in state["consumed"] if key_.startswith("rung:")}
+        reasons: dict[str, str] = {}
+        for member in list(members):
+            current = member
+            while isinstance(answers[current], BaseException):
+                reasons[current] = str(answers[current])
+                options = [m for m in state["paid"]["rungs"] if m not in used and m not in spent]
+                if not options:
+                    notes.append(f"{current} failed: {reasons[current]}; no replacement is left on the ladder")
+                    print(f"review-loop: {notes[-1]}", file=sys.stderr)
+                    break
+                nxt = options[0]
+                used.add(nxt)
+                notes.append(f"{current} failed: {reasons[current]}; replaced by {nxt}")
+                print(f"review-loop: {notes[-1]}", file=sys.stderr)
+                endpoints[nxt] = (OPENCODE, nxt, "max")
+                prompts[nxt] = prompt_for(nxt)
+                checked[nxt] = checked_prompt(ctx, endpoints[nxt], prompts[nxt], None)
+                append(ctx.findings, call_line("review-loop", endpoints[nxt], checked[nxt]))
+                answers.update(run_swarm(ctx, [nxt], prompts, key, free=False))
+                replaced.append(nxt)
+                current = nxt
+        members = [*members, *replaced]
+    succeeded = [member for member in members if not isinstance(answers[member], BaseException)]
+    if not succeeded:
+        raise CallFailed("; ".join(f"{member} failed: {answers[member]}" for member in members))
+    numbered: list[list[str]] = []
+    statements: list[str] = []
+    reviewer_blocks: list[str] = []
+    for member in members:
+        outcome = answers[member]
+        if isinstance(outcome, BaseException):
+            # A replaced member's failure is already stated with its replacement.
+            if stage["kind"] != "paid-swarm":
+                statements.append(f"{member} failed: {outcome}")
+            continue
+        rows, rest = parse_rows(outcome)
+        member_rows = []
+        for row in rows:
+            ident = f"L{round_number}-{len(numbered) + 1}"
+            numbered.append([ident, *row[1:], member, "", ""])
+            member_rows.append(numbered[-1])
+        if rows:
+            statements.append(render_table(ROW_COLUMNS, member_rows))
+        elif any(split_row(line) is not None for line in rest.splitlines()):
+            statements.append(
+                f"{member} answered in table lines that are not six-cell rows; they are kept as they came."
+            )
+        else:
+            statements.append(f"{member} reported no finding.")
+        # An answer with no row is kept whole, blank lines included; beside rows, what is not a row.
+        kept = rest if rows else outcome
+        if kept.strip():
+            reviewer_blocks.append(kept.strip())
+    parts = [f"## Round {round_number} — {', '.join(members)}, {today()}", *notes, *statements]
+    for block in reviewer_blocks:
+        parts.append(f"{NOT_ROWS_NOTE}\n\n{quote_reviewer(block)}")
+    path = record_dir(change) / "loop.md"
     if record is None:
-        path.write_text(f"{RECORD_HEADING}{change}\n\n{RECORD_INTRO}\n", encoding="utf-8")
+        # A continued run after a release starts a fresh record; write_state
+        # puts the run's snapshot line into it before the rounds.
+        write_state(change, state)
     append(path, "\n\n".join(parts))
-    print(f"review-loop: round {round_number} written to {path}: {len(numbered)} rows")
+    for model in replaced:
+        # A replacement is consumed: it is no later rung.
+        mark_consumed(change, state, f"rung:{model}")
+    mark_consumed(change, state, stage["key"])
+    print(
+        f"review-loop: round {round_number} written to {path}: {len(numbered)} rows "
+        f"from {len(succeeded)} of {len(members)} members"
+    )
+
+
+def _free_admission(free: bool, state: dict) -> Callable[[Path, str], str | None] | None:
+    """The free class's admission check, or None for the paid stages' strict declaration."""
+    if not free:
+        return None
+    return lambda root_, model: free_admission_problem(root_, model, state["free"]["selected"])
 
 
 def probe(root: Path, change: str) -> None:
-    """The compatibility probe: one call per rung, the declaration and the leak check in front of each.
+    """The compatibility probe: every discovered free member and every eligible paid model, once each.
 
-    Declared special run of phase 4 (the Definition of Done): the three calls
-    measure whether OpenCode Go's chat-completions address
+    Declared special run of phase 4 (the Definition of Done): the calls measure
+    whether OpenCode Go's chat-completions address
     (`https://opencode.ai/zen/go/v1/chat/completions`, the one Pi's built-in
-    provider calls) accepts the ladder's ids. The pinned Pi is checked once
-    before the first call. No record is written; the rung's id and the answer's
-    first line are printed for the pull request body. A refused rung stops the run and is reported (spec,
-    criterion 17): no second address, no substituted model.
+    provider calls) accepts the ids. The pinned Pi is checked once before the
+    first call; the free members come from a forced live refresh and its
+    listing, and each free call runs through the free path - no tools, the
+    implementation diff as its only content - while every paid call keeps the
+    read tools. No record is written; each id and the answer's first line are
+    printed for the pull request body, and skipped paid models are named. A
+    failed member is reported without stopping later checks; the final summary
+    lists answered and failed members and any failure makes the probe exit
+    nonzero (spec, criterion 14). No second address, no substituted model.
     """
+    folder_of(root, change)
     key = reviewer_key()
+    problem = entry_problem(root, OPENCODE)
+    if problem:
+        raise Refused(problem)
     require_pi()
+    free = discover_free(root)
+    discovery = free
+    diff = free_diff(root)
+    answered: list[str] = []
+    failed: list[str] = []
+
+    def check_member(ctx: Context, model: str, prompt: str, *, free: bool = False) -> None:
+        # Declaration and leak checks stay outside this handler: only a model
+        # call failure permits continuing, never a failed admission check.
+        ctx.models_store = discovery.get("models_store")
+        try:
+            answer = run_reviewer(ctx, model, prompt, key, free=free)
+        except CallFailed as error:
+            print(f"probe: {model} failed: {scrub(str(error), key)}")
+            failed.append(model)
+            return
+        first = answer.strip().splitlines()[0]
+        print(f"probe: {model} · {scrub(first, key)}")
+        answered.append(model)
+
+    if not diff.strip():
+        print("probe: free stage skipped: no implementation source diff")
+    for model in free["selected"] if diff.strip() else []:
+        endpoint = (OPENCODE, model, "max")
+        ctx = preflight(root, change, endpoint, admission_problem=_free_admission(True, {"free": free}))
+        prompt = "\n\n".join(
+            [
+                "Compatibility probe of this repository's stage-2 runner, free class. Answer in one short "
+                "line: name the model id you answer as.",
+                f"You are `{model}`.",
+                ANSWER_FORMAT,
+                f"## The implementation diff\n\n{diff}",
+            ]
+        )
+        result = checked_prompt(ctx, endpoint, prompt, _free_admission(True, {"free": free}))
+        if not ctx.findings.exists():
+            ctx.findings.write_text(findings_header(ctx, producer_for(endpoint)), encoding="utf-8")
+        append(ctx.findings, call_line("probe", endpoint, result))
+        check_member(ctx, model, prompt, free=True)
     for model in ladder(root):
         endpoint = (OPENCODE, model, "max")
         ctx = preflight(root, change, endpoint)
@@ -3459,10 +4599,14 @@ def probe(root: Path, change: str) -> None:
             ]
         )
         begin_call(ctx, "probe", endpoint, prompt)
-        answer = run_reviewer(ctx, model, prompt, key)
-        first = answer.strip().splitlines()[0]
-        print(f"probe: {model} · {scrub(first, key)}")
-    print(f"probe: {len(ladder(root))} rungs answered")
+        check_member(ctx, model, prompt)
+    skipped = skipped_models(root)
+    if skipped:
+        print(f"probe: paid models skipped: {'; '.join(skipped)}")
+    print(f"probe: {len(answered)} members answered: {', '.join(answered) or 'none'}")
+    print(f"probe: {len(failed)} members failed: {', '.join(failed) or 'none'}")
+    if failed:
+        raise CallFailed(f"probe: {len(failed)} members failed: {', '.join(failed)}")
 
 
 # ---------------------------------------------------------------------------
@@ -3501,6 +4645,7 @@ VERBS = {
     "release-loop": release_loop,
     "review": review,
     "probe": probe,
+    "prepare-loop": prepare_loop,
 }
 
 
@@ -3531,6 +4676,11 @@ def main(argv: list[str] | None = None) -> int:
         help="session only: a handover file inside the worktree (default: the change's handover.md)",
     )
     parser.add_argument("--root", default=str(REPO_ROOT), help=argparse.SUPPRESS)
+    parser.add_argument(
+        "--availability-reported",
+        default=None,
+        help="review-loop only: report id printed by prepare-loop after its selection was shown in the main conversation",
+    )
     args = parser.parse_args(argv)
     try:
         if (
@@ -3544,6 +4694,8 @@ def main(argv: list[str] | None = None) -> int:
             )
         if args.stage2_off is not None and args.verb not in {"explore", "implement", "repair"}:
             raise Refused("--stage2-off applies only to explore, implement and repair.")
+        if args.availability_reported is not None and args.verb != "review-loop":
+            raise Refused("--availability-reported belongs to review-loop alone.")
         if args.verb == "session":
             if not args.model:
                 raise Refused("session needs --model <id>: name the model exactly as model-endpoints.yaml lists it.")
@@ -3553,6 +4705,8 @@ def main(argv: list[str] | None = None) -> int:
             VERBS[args.verb](Path(args.root), args.change, args.stage2_off)
         elif args.verb == "session":
             session(Path(args.root), args.change, args.model, args.handover)
+        elif args.verb == "review-loop":
+            review_loop(Path(args.root), args.change, args.availability_reported)
         else:
             VERBS[args.verb](Path(args.root), args.change)
     except Refused as error:

@@ -4,7 +4,7 @@ category: architecture
 status: proposed
 created: 2026-10-16
 last_reviewed: 2026-10-16
-updated: 2026-10-16
+updated: 2026-10-17
 owner: framework-architect
 provenance: ai-drafted-reviewed
 produced_by: {kind: llm-session, name: claude-code, version: "2026-10-16"}
@@ -15,8 +15,8 @@ tags: [overview, phases, model-routing, classes, swarms]
 # How the workflow works
 
 The reference behind the [README](../README.md): the phases, who does which
-job, the two kinds of class, the planned swarms and the three stages. The full
-doctrine is [`WORKFLOW.md`](WORKFLOW.md); where this page and the doctrine
+job, the two kinds of class, the review and research swarms and the three
+stages. The full doctrine is [`WORKFLOW.md`](WORKFLOW.md); where this page and the doctrine
 disagree, the doctrine holds.
 
 ## The phases
@@ -53,7 +53,7 @@ them:
 | Explore (phase 1) | GLM 5.3 Flash (Z.ai) | yes |
 | Draft spec, design and plan (2, 2b, 3) | Codex, OpenAI | yes |
 | Review the spec (2a) | Opus 5.5 (Anthropic) | yes |
-| Review loop (4b) | Pi, running models from OpenCode Go, one model per round | yes, at most three rounds |
+| Review loop (4b) | Pi, running two OpenCode Go swarms, then one paid model per round | yes, until a clean round or a stop |
 | Implement (4) | GLM 5.3 Flash | yes |
 | Repair the findings the orchestrator takes | Codex; Sonnet 5.5 after two failed checks | yes |
 | Final review (6) | Codex, in a fresh read-only session | yes |
@@ -69,19 +69,20 @@ The models behind each job are listed in `model-endpoints.yaml` and in
 Each provider needs your own access, set up on your machine. The repository
 tracks no credentials.
 
-## Swarms (in progress, not merged)
+## Review and research swarms
 
-Two swarms are being built. Neither is on main yet, so the table above does
-not list them.
+The review loop uses swarms. The research swarm remains a proposal.
 
 ### Review swarm — bead `coding-harness-4fk`
 
-Today the review loop calls one model per round. The planned change works in
-stages, until a round leaves no accepted finding:
+The review loop works in stages, until a decided round leaves no accepted
+finding:
 
-1. a swarm of all free models, in parallel;
+1. a swarm selected by the YAML `free_stage` rule from a forced live Pi
+   catalog refresh, in parallel, on source and test diff hunks with no tools;
 2. three Flash models, in parallel;
-3. then one model per round, from the ladder in `model-endpoints.yaml`.
+3. then one eligible paid model per round, cheapest first by `anfragen_5h`
+   descending in `model-endpoints.yaml` (ties by id, missing values last).
 
 ```mermaid
 flowchart LR
@@ -91,8 +92,12 @@ flowchart LR
     C -->|clean round| DN[Done]
 ```
 
-The design waits for a decision pull request (ADR 0021). Only the maintainer
-merges that.
+ADR 0021 defines this loop. The refreshed catalog comes from Pi’s intermediary
+`pi.dev`; membership does not measure actual free billing. Paid models require
+a dated retention reading and terms excluding training; ineligible members
+are skipped and named. A change without source hunks skips the free stage.
+The loop stops when clean, when the paid ladder is exhausted, or after two
+consecutive rounds accepting only findings caused by the preceding repairs.
 
 ### Research swarm — bead `coding-harness-icw`
 

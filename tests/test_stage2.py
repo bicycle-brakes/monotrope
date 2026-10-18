@@ -65,6 +65,16 @@ import sys
 import time
 from pathlib import Path
 
+CATALOG = (
+    "provider model context input output\\n"
+    "opencode-go deepseek-v4.1-flash 128000 0.15 0.60\\n"
+    "opencode-go mimo-v2.6-flash 128000 0.14 0.28\\n"
+    "opencode-go mimo-v2.6-pro 128000 0.435 0.87\\n"
+    "opencode-go acme-v1-free 128000 0 0\\n"
+    "opencode-go beacon-2-free 128000 0 0\\n"
+    "opencode gpt-6.1-sol 400000 2 8\\n"
+)
+
 here = Path(__file__).resolve().parent
 name = Path(sys.argv[0]).name
 # The repository wrapper stand-in (`pin-pi`) answers and records as `pi`, so the
@@ -73,10 +83,38 @@ alias = "pi" if name == "pin-pi" else name
 scenario = json.loads((here / "scenario.json").read_text())
 log = here / "calls.jsonl"
 previous = [json.loads(line) for line in log.read_text().splitlines()] if log.exists() else []
+# A new script starts its own count: only the calls made since it was written use its steps.
+previous = previous[scenario.get("_since", 0) :]
 steps = scenario.get(alias, [])
-index = sum(1 for call in previous if call["name"] == alias)
-step = steps[index] if index < len(steps) else {}
+# The discovery calls (catalog refresh and listing) carry a `kind` and consume
+# no step of their own, so the scripted reviewer steps stay where they were.
+# A step that names a `model` is kept for the call that asks for that model, so
+# the members of a swarm get their own steps however their threads interleave;
+# unnamed steps are consumed in arrival order, as before.
+
+
+def model_of(a):
+    return a[a.index("--model") + 1].split("/")[-1] if "--model" in a else None
+
+
+def fits(step_, a):
+    return step_.get("model") is None or model_of(a) == step_["model"]
+
+
 argv = sys.argv[1:]
+assigned = []
+for call_ in previous:
+    if call_["name"] != alias or call_.get("kind"):
+        continue
+    for k in range(len(steps)):
+        if k not in assigned and fits(steps[k], call_["argv"]):
+            assigned.append(k)
+            break
+step = {}
+for k in range(len(steps)):
+    if k not in assigned and fits(steps[k], argv):
+        step = steps[k]
+        break
 if alias == "pi" and argv == ["--version"]:
     # The version check is answered from the scenario and kept out of the call
     # log; its own log says which path answered it.
@@ -85,6 +123,63 @@ if alias == "pi" and argv == ["--version"]:
     with (here / "versions.jsonl").open("a") as handle:
         handle.write(json.dumps({"name": name, "path": sys.argv[0], "cwd": os.getcwd()}) + "\\n")
     raise SystemExit(scenario.get("pi_version_exit", 0))
+if alias == "pi" and "update" in argv and "--models" in argv:
+    # The forced catalog refresh: logged with its scratch environment, never a
+    # scripted step.
+    with log.open("a") as handle:
+        handle.write(
+            json.dumps(
+                {
+                    "name": alias,
+                    "kind": "refresh",
+                    "path": sys.argv[0],
+                    "argv": argv,
+                    "home": os.environ.get("HOME", ""),
+                    "agent": os.environ.get("PI_CODING_AGENT_DIR", ""),
+                    "cwd": os.getcwd(),
+                    "stdin": os.read(0, 100).decode(),
+                }
+            )
+            + "\\n"
+        )
+    time.sleep(scenario.get("pi_refresh_sleep", 0))
+    # Pi persists the fetched overlay in the agent directory's models-store.json
+    # (core/models-store.js); the stand-in plants the catalog's opencode-go ids
+    # unless the scenario names the overlay itself or asks for no store.
+    agent_dir = os.environ.get("PI_CODING_AGENT_DIR", "")
+    if agent_dir and not scenario.get("pi_no_store"):
+        listed = [
+            row.split()[1]
+            for row in scenario.get("pi_catalog", CATALOG).splitlines()[1:]
+            if row.split() and row.split()[0] == "opencode-go"
+        ]
+        ids = scenario.get("pi_overlay", listed)
+        Path(agent_dir, "models-store.json").write_text(
+            json.dumps({"opencode-go": {"models": [{"id": i, "provider": "opencode-go"} for i in ids], "checkedAt": 1}})
+        )
+    sys.stdout.write(scenario.get("pi_refresh_stdout", ""))
+    raise SystemExit(scenario.get("pi_refresh_exit", 0))
+if alias == "pi" and "--list-models" in argv:
+    # The catalog listing: logged like the refresh, fed from the scenario's
+    # catalog so a test can plant a new model or a different provider.
+    with log.open("a") as handle:
+        handle.write(
+            json.dumps(
+                {
+                    "name": alias,
+                    "kind": "list",
+                    "path": sys.argv[0],
+                    "argv": argv,
+                    "home": os.environ.get("HOME", ""),
+                    "agent": os.environ.get("PI_CODING_AGENT_DIR", ""),
+                    "cwd": os.getcwd(),
+                    "stdin": os.read(0, 100).decode(),
+                }
+            )
+            + "\\n"
+        )
+    sys.stdout.write(scenario.get("pi_catalog", CATALOG))
+    raise SystemExit(scenario.get("pi_list_exit", 0))
 
 
 def option(flag):
@@ -124,6 +219,17 @@ record = {
 }
 with log.open("a") as handle:
     handle.write(json.dumps(record) + "\\n")
+barrier = step.get("barrier")
+if barrier:
+    # The swarm check: every member of a round waits here until all members of
+    # the round have arrived, so a serial runner holds the whole round past the
+    # deadline and the test reads the elapsed time.
+    wait_dir = Path(step.get("barrier_dir", scenario.get("barrier_dir", ".barrier")))
+    wait_dir.mkdir(exist_ok=True)
+    (wait_dir / (str(os.getpid()) + "-" + str(time.time_ns()) + ".arrived")).write_text("")
+    deadline = time.time() + step.get("barrier_seconds", scenario.get("barrier_seconds", 30))
+    while len(list(wait_dir.glob("*.arrived"))) < barrier and time.time() < deadline:
+        time.sleep(0.05)
 time.sleep(step.get("sleep", 0))
 key = os.environ.get("ANTHROPIC_AUTH_TOKEN") or os.environ.get("OPENCODE_API_KEY", "")
 for relative, text in step.get("plant", {}).items():
@@ -173,12 +279,18 @@ class World:
     state: Path
 
     def script(self, **steps: object) -> None:
-        (self.bin / "scenario.json").write_text(json.dumps(steps), encoding="utf-8")
+        log = self.bin / "calls.jsonl"
+        since = len(log.read_text(encoding="utf-8").splitlines()) if log.exists() else 0
+        (self.bin / "scenario.json").write_text(json.dumps({**steps, "_since": since}), encoding="utf-8")
 
     def calls(self, name: str | None = None) -> list[dict]:
         log = self.bin / "calls.jsonl"
         found = [json.loads(line) for line in log.read_text(encoding="utf-8").splitlines()] if log.exists() else []
         return [call for call in found if name is None or call["name"] == name]
+
+    def reviews(self, name: str = "pi") -> list[dict]:
+        """The reviewer calls: the catalog refresh and listing stay out (they carry a `kind`)."""
+        return [call for call in self.calls(name) if not call.get("kind")]
 
     def versions(self) -> list[dict]:
         """The `pi --version` checks: which path answered them (the wrapper, or a PATH pi that must stay silent)."""
@@ -208,9 +320,22 @@ class World:
         return self.state / "coding-harness" / "stage2" / "demo" / "loop.md"
 
     def write_record(
-        self, decided: list[tuple[str, str, str]], finding: str = "", reviewer: str = "deepseek-v4.1-flash"
+        self,
+        decided: list[tuple[str, str, str]],
+        finding: str = "",
+        reviewer: str = "deepseek-v4.1-flash",
+        number: int = 1,
+        members: list[str] | None = None,
+        state: dict | None = None,
     ) -> None:
-        """A loop record of one round whose rows carry the given (id, status, broke a test)."""
+        """A loop record of one round whose rows carry the given (id, status, broke a test).
+
+        `members` names the round's reviewers in its heading; `state` writes the
+        run snapshot line the next call reads its stages from - a seeded record
+        carries the run's default snapshot unless the test passes its own.
+        """
+        if state is None:
+            state = loop_state()
         rows_ = [
             [
                 ident,
@@ -219,16 +344,18 @@ class World:
                 "impl",
                 "src/app.py:1",
                 f"finding of {ident} {finding}".strip(),
-                reviewer,
+                (members or [reviewer])[index % len(members or [reviewer])],
                 status,
                 broke,
             ]
-            for ident, status, broke in decided
+            for index, (ident, status, broke) in enumerate(decided)
         ]
         directory = self.record().parent
         directory.mkdir(parents=True, exist_ok=True)
+        snapshot = f"\n\n{stage2.STATE_KEY}{json.dumps(state, sort_keys=True)}"
         self.record().write_text(
-            f"# Loop record — demo\n\n{stage2.RECORD_INTRO}\n\n## Round 1 — {reviewer}, 2026-09-30\n\n"
+            f"# Loop record — demo\n\n{stage2.RECORD_INTRO}{snapshot}\n\n"
+            f"## Round {number} — {', '.join(members or [reviewer])}, 2026-09-30\n\n"
             f"{stage2.render_table(stage2.ROW_COLUMNS, rows_)}\n",
             encoding="utf-8",
         )
@@ -258,20 +385,95 @@ def render_row(cells: list[str]) -> str:
 
 
 TEST_LADDER = ("deepseek-v4.1-flash", "mimo-v2.6-flash", "mimo-v2.6-pro")
+TEST_FLASH = TEST_LADDER[:2]
+TEST_FREE = ("acme-v1-free", "beacon-2-free")
+TEST_RUNGS = ("mimo-v2.6-pro",)
+
+
+def grouped(called: list[str], *groups: tuple[str, ...]) -> bool:
+    """Whether the calls came as the given swarms, one after the other; inside a swarm the members run in parallel, so their order is free."""
+    start = 0
+    for group in groups:
+        if sorted(called[start : start + len(group)]) != sorted(group):
+            return False
+        start += len(group)
+    return start == len(called)
+
+
+def pin_entry(target: Path, ladder: tuple[str, ...], flash: tuple[str, ...] | None = None) -> None:
+    """Rewrite a test world's `opencode-go` entry: the given ladder in order, terms for all, the Flash swarm first."""
+    data = yaml.safe_load(target.read_text(encoding="utf-8"))
+    entry = next(e for e in data["endpunkte"] if e["name"] == "opencode-go")
+    entry["modelle"] = list(ladder)
+    entry["modelle_terms"] = {
+        model: {
+            "gelesen": "2026-10-07",
+            "quelle": "privacy table of the Go page, https://opencode.ai/docs/go",
+            "aufbewahrung": "0 days",
+            "training": "Not used",
+            "anfragen_5h": 10000 - 100 * position,
+        }
+        for position, model in enumerate(ladder)
+    }
+    entry["flash_swarm"] = list(flash or ladder[:2])
+    target.write_text(yaml.safe_dump(data, allow_unicode=True), encoding="utf-8")
 
 
 def pin_the_ladder(target: Path) -> None:
-    """Copy the real declaration into a test world with the ladder in the tests' own order.
+    """Write the test world's own `opencode-go` entry: ladder, terms, flash swarm, free rule.
 
-    The real order is the maintainer's to change in `model-endpoints.yaml` alone; the tests that follow a round
-    to its model must not break when it changes, so they run on this order.
+    The real order and the real terms are the maintainer's to change in
+    `model-endpoints.yaml`; the tests that follow a round to its model must not
+    break when it changes, so they run on this order and these terms.
     """
-    text = (REPO_ROOT / "model-endpoints.yaml").read_text(encoding="utf-8")
-    real = next(e for e in yaml.safe_load(text)["endpunkte"] if e["name"] == "opencode-go")["modelle"]
-    assert sorted(real) == sorted(TEST_LADDER), "the real ladder holds other models; update TEST_LADDER"
-    block = "".join(f"      - {m}\n" for m in real)
-    assert block in text
-    target.write_text(text.replace(block, "".join(f"      - {m}\n" for m in TEST_LADDER), 1), encoding="utf-8")
+    data = yaml.safe_load((REPO_ROOT / "model-endpoints.yaml").read_text(encoding="utf-8"))
+    entry = next(e for e in data["endpunkte"] if e["name"] == "opencode-go")
+    # This fixture exercises legacy declarations and frozen run histories.
+    # Availability-enabled fresh runs have their own integration suite.
+    entry.pop("availability_preflight", None)
+    entry["modelle"] = list(TEST_LADDER)
+    entry["modelle_terms"] = {
+        model: {
+            "gelesen": "2026-10-07",
+            "quelle": "privacy table of the Go page, https://opencode.ai/docs/go",
+            "aufbewahrung": "0 days",
+            "training": "Not used",
+            "anfragen_5h": 10000 - 100 * position,
+        }
+        for position, model in enumerate(TEST_LADDER)
+    }
+    entry["flash_swarm"] = list(TEST_FLASH)
+    entry["free_stage"] = {
+        "provider": "opencode-go",
+        "id_suffix": "-free",
+        "include": [],
+        "exclude": [],
+        "input": "implementation-diff",
+    }
+    target.write_text(yaml.safe_dump(data, allow_unicode=True), encoding="utf-8")
+
+
+def loop_state(consumed: tuple[str, ...] = ("free", "flash")) -> dict:
+    """The run snapshot a seeded record carries, as `discover_free` and `new_state` shape it."""
+    return {
+        "free": {
+            "checked_at": "2026-10-16T08:00:00+00:00",
+            "source": "pi.dev",
+            "pi_version": stage2.PI_VERSION,
+            "rule": {
+                "provider": "opencode-go",
+                "id_suffix": "-free",
+                "include": [],
+                "exclude": [],
+                "input": "implementation-diff",
+            },
+            "catalog": list(TEST_FREE),
+            "selected": list(TEST_FREE),
+            "billing": "not measured; pi.dev is an intermediary",
+        },
+        "paid": {"ladder": list(TEST_LADDER), "flash": list(TEST_FLASH), "rungs": list(TEST_RUNGS)},
+        "consumed": list(consumed),
+    }
 
 
 @pytest.fixture
@@ -344,6 +546,12 @@ def world(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> World:
     git(root, "add", "-A")
     git(root, "commit", "--quiet", "-m", "base")
     git(root, "update-ref", "refs/remotes/origin/main", "HEAD")
+    # A committed code change of its own, ahead of origin/main: the free stage
+    # reviews the implementation diff, and a world without one would refuse
+    # every round; the tree stays clean, as the work verbs require.
+    (root / "scripts" / "helper.py").write_text("VALUE = 2\n", encoding="utf-8")
+    git(root, "add", "-A")
+    git(root, "commit", "--quiet", "-m", "code change")
     w = World(root, bin_dir, tmp_path / "state")
     w.script()
     return w
@@ -384,7 +592,7 @@ def full_flow(w: World) -> None:
             codex_ok("T1", rows(1)),
             codex_ok("T1", "L1-1: agree\nL1-2: disagree — no test shows it"),
         ],
-        pi=[{"stdout": rows(2)}],
+        pi=[{"stdout": rows(2)}, {"stdout": rows(2)}],
     )
     assert w.run("spec-review") == 0
     assert w.run("review-loop") == 0
@@ -511,15 +719,15 @@ def test_parse_rows_folds_a_pipe_inside_the_finding_into_it() -> None:
     ids=["three-cells", "five-cells", "short-table"],
 )
 def test_table_lines_that_are_not_rows_are_never_reported_as_no_finding(world: World, answer: str) -> None:
-    """Repair round 1, F-3: a table the parser cannot read is passed through, under a head that is true."""
+    """Malformed spec tables stay visible; malformed loop answers fail without a clean round."""
     world.script(claude=[{"stdout": answer}], pi=[{"stdout": answer}])
     assert world.run("spec-review") == 0
-    assert world.run("review-loop") == 0
-    kept = world.record().read_text(encoding="utf-8")
-    for text in (world.text(), kept):
-        assert "reported no finding" not in text
-        assert "not six-cell rows" in text and stage2.NOT_ROWS_NOTE in text
-    assert answer.splitlines()[-1] in world.text() and answer.splitlines()[-1] in kept
+    assert world.run("review-loop") == 1
+    assert not world.record().exists()
+    text = world.text()
+    assert "reported no finding" not in text
+    assert "not six-cell rows" in text and stage2.NOT_ROWS_NOTE in text
+    assert answer.splitlines()[-1] in text
 
 
 def test_the_review_prompt_and_the_runner_ask_for_the_same_cells() -> None:
@@ -551,7 +759,10 @@ def test_a_leak_refuses_the_call(world: World) -> None:
     (world.root / "src" / "leak.txt").write_text(LEAK, encoding="utf-8")
     for verb in ("spec-review", "review", "review-loop", "probe"):
         assert world.run(verb) == 2
-    assert world.calls() == []
+    # The loop's and probe's catalog discovery carries nothing of the tree; no
+    # call that carries content starts.
+    assert world.calls("claude") == [] and world.calls("codex") == []
+    assert world.reviews("pi") == [], "a reviewer call started despite the leak"
     assert not world.findings.exists()
 
 
@@ -652,7 +863,7 @@ def test_the_foreign_environment_is_the_runners(world: World) -> None:
     assert world.run("explore") == 0
     spec, loop, explorer = (
         world.calls("claude")[0]["env"],
-        world.calls("pi")[0]["env"],
+        world.reviews("pi")[0]["env"],
         world.calls("claude")[1]["env"],
     )
     for env in (spec, loop, explorer):
@@ -678,7 +889,7 @@ def test_no_call_carries_another_endpoints_key(world: World) -> None:
     assert world.run("explore") == 0
     _spec, loop, explorer = (
         world.calls("claude")[0]["env"],
-        world.calls("pi")[0]["env"],
+        world.reviews("pi")[0]["env"],
         world.calls("claude")[1]["env"],
     )
     assert all(value != KEY for value in loop.values()), "an OpenCode Go call carries the GLM key"
@@ -690,26 +901,34 @@ def test_every_call_gets_an_empty_standard_input(world: World) -> None:
     world.script(claude=[{"stdout": rows(1)}], pi=[{"stdout": rows(1)}])
     assert world.run("spec-review") == 0
     assert world.run("review-loop") == 0
-    assert [call["stdin"] for call in world.calls()] == ["", ""]
+    assert len(world.calls()) == 5, "the spec review, the discovery and the free round's members were expected"
+    assert all(call["stdin"] == "" for call in world.calls())
 
 
 def test_the_opencode_key_never_leaves_the_runner(world: World, capsys: pytest.CaptureFixture[str]) -> None:
     """Criteria 11 and 12: the key rides in the environment only - no argv, no stream, no record carries it."""
     said = "| X1 | MAJOR | SPEC | a | b | saw @KEY@ |\n"
-    world.script(pi=[{"stdout": said, "stderr": "@KEY@", "exit": 0}, {"stdout": said, "stderr": "@KEY@", "exit": 1}])
+    world.script(
+        pi=[
+            {"model": "acme-v1-free", "stdout": said, "stderr": "@KEY@", "exit": 0},
+            {"model": "beacon-2-free", "stdout": said, "stderr": "@KEY@", "exit": 1},
+        ]
+    )
     assert world.run("review-loop") == 0
-    first = world.calls("pi")[0]
+    first = world.reviews("pi")[0]
     assert first["env"]["OPENCODE_API_KEY"] == OKEY
     assert "--api-key" not in first["argv"]
     assert [name for name, value in first["env"].items() if OKEY in value] == ["OPENCODE_API_KEY"]
-    assert first["agent_listing"] == ["settings.json"]
+    assert first["agent_listing"] == ["models-store.json", "models.json", "settings.json"]
     for call in world.calls():
         assert not any(OKEY[i : i + 8] in " ".join(call["argv"]) for i in range(len(OKEY) - 7)), call["argv"]
-        seen_in_directory = " ".join(str(call[field]) for field in ("agent_settings", "home_listing", "agent_listing"))
+        seen_in_directory = " ".join(
+            str(call.get(field)) for field in ("agent_settings", "home_listing", "agent_listing")
+        )
         assert not any(OKEY[i : i + 8] in seen_in_directory for i in range(len(OKEY) - 7))
     kept = "".join(p.read_text(encoding="utf-8") for p in world.state.rglob("*") if p.is_file())
     shutil.rmtree(world.state)
-    assert world.run("review-loop") == 1
+    assert world.run("review-loop") == 1, "the rerun without its state did not start over and fail without steps"
     seen = capsys.readouterr()
     everything = seen.out + seen.err + world.text() + kept
     assert "[credential]" in kept
@@ -717,7 +936,7 @@ def test_the_opencode_key_never_leaves_the_runner(world: World, capsys: pytest.C
 
 
 def test_every_call_leaves_its_line_in_findings(world: World) -> None:
-    world.script(claude=[{"stdout": rows(1)}], pi=[{"stdout": rows(1)}])
+    world.script(pi=[{"stdout": rows(1)}], claude=[{"stdout": rows(1)}])
     assert world.run("spec-review") == 0
     assert world.run("review-loop") == 0
     text = world.text()
@@ -729,12 +948,13 @@ def test_every_call_leaves_its_line_in_findings(world: World) -> None:
         text,
         re.M,
     )
-    assert re.search(
-        rf"^Stage-2 call, {day}: review-loop · endpoint opencode-go · model deepseek-v4.1-flash · "
-        rf"leak check clean over {count}\.$",
-        text,
-        re.M,
-    )
+    for member in TEST_FREE:
+        assert re.search(
+            rf"^Stage-2 call, {day}: review-loop · endpoint opencode-go · model {re.escape(member)} · "
+            rf"leak check clean over {count}\.$",
+            text,
+            re.M,
+        ), f"the free member {member} left no call line"
 
 
 def test_a_findings_file_the_runner_creates_has_a_registry_header(world: World) -> None:
@@ -3652,10 +3872,17 @@ def test_every_prompt_asks_to_read_nothing_outside(world: World) -> None:
     full_flow(world)
     codex_prompts = [call["argv"][-1] for call in world.calls("codex")]
     assert len(codex_prompts) == 2
-    loop_prompts = [call["prompt_file"] for call in world.calls("pi")]
     spec_prompt = world.calls("claude")[0]["prompt_file"]
-    for prompt in [*codex_prompts, *loop_prompts, spec_prompt]:
+    for prompt in [*codex_prompts, spec_prompt]:
         assert prompt.rstrip().endswith(stage2.READ_REQUEST)
+    # The free swarm's prompts end in the diff by design (criterion 3); a paid
+    # round keeps the read request before and after the diff.
+    # (round 1 was released with the flow above, so the record continues at round 2)
+    world.write_record([("L2-1", "taken — test_a", "no")], number=2, state=loop_state(("free",)))
+    world.script(pi=[{"stdout": rows(1)}] * 2)
+    assert world.run("review-loop") == 0
+    paid = [call for call in world.reviews("pi") if "--tools" in call["argv"]]
+    assert paid and all(call["prompt_file"].rstrip().endswith(stage2.READ_REQUEST) for call in paid)
 
 
 # ---------------------------------------------------------------------------
@@ -3683,11 +3910,16 @@ PI_FLAGS = [
 
 
 def test_the_review_loop_launches_pi_isolated(world: World) -> None:
-    """Criterion 8: one launch path for the loop's rounds - the rung under the provider, the measured flag set, a fresh home."""
-    world.script(pi=[{"stdout": rows(1)}, {"stdout": rows(1)}])
+    """Criterion 8: one launch path for the loop's paid rounds - the rung under the provider, the measured flag set, a fresh home."""
+    # The free stage is already consumed, so this run starts on the Flash swarm: two paid members, then the rung.
+    world.write_record([("L1-1", "taken — test_a", "no")], state=loop_state(("free",)))
+    world.script(pi=[{"stdout": rows(1)}, {"stdout": rows(1)}, {"stdout": rows(1)}])
     assert world.run("review-loop") == 0
     assert world.calls("codex") == [] and world.calls("claude") == []
-    call = world.calls("pi")[0]
+    # The Flash swarm's two members start in either order; this test reads the DeepSeek one.
+    call = next(
+        c for c in world.reviews("pi") if c["argv"][c["argv"].index("--model") + 1].endswith("deepseek-v4.1-flash")
+    )
     argv = call["argv"]
     options = [a for a in argv if a.startswith("--") and a not in {"--tools", "--thinking", "--model"}]
     assert options == [*PI_FLAGS, "--append-system-prompt"], "a flag is missing, added or reordered"
@@ -3695,7 +3927,7 @@ def test_the_review_loop_launches_pi_isolated(world: World) -> None:
     assert argv[argv.index("--thinking") + 1] == "max"
     assert argv[argv.index("--model") + 1] == "opencode-go/deepseek-v4.1-flash"
     assert argv[-1] == "Review the change demo as the appended instructions say."
-    for refused in ("--mode", "--api-key", "--approve", "--no-tools", "-p", "--resume", "--restricted"):
+    for refused in ("--mode", "--api-key", "--approve", "-p", "--resume", "--restricted"):
         assert refused not in argv
     assert Path(argv[argv.index("--append-system-prompt") + 1]).name == "review-prompt.md"
     assert call["prompt_file"].rstrip().endswith(stage2.READ_REQUEST)
@@ -3711,7 +3943,7 @@ def test_the_review_loop_launches_pi_isolated(world: World) -> None:
     assert argv[0] not in {"claude", "codex"} and "claude" not in call["name"]
     decide_record(world)
     assert world.run("review-loop") == 0
-    second = world.calls("pi")[1]["env"]
+    second = world.reviews("pi")[2]["env"]
     assert second["PI_CODING_AGENT_DIR"] != env["PI_CODING_AGENT_DIR"] and second["HOME"] != env["HOME"]
 
 
@@ -3752,11 +3984,23 @@ def test_a_pi_off_the_pin_is_refused(
 
 def test_loop_and_probe_use_repository_pi(world: World) -> None:
     """Criterion 5: the preflight and every loop/probe launch go through the repository wrapper; the PATH pi stays unused."""
-    world.script(pi=[{"stdout": rows(1)}, {"stdout": "probe one"}, {"stdout": "probe two"}, {"stdout": "probe three"}])
+    world.script(
+        pi=[
+            {"stdout": rows(1)},
+            {"stdout": rows(1)},
+            {"stdout": "probe one"},
+            {"stdout": "probe two"},
+            {"stdout": "probe three"},
+            {"stdout": "probe four"},
+            {"stdout": "probe five"},
+        ]
+    )
     assert world.run("review-loop") == 0
     assert world.run("probe") == 0
     wrapper = str(world.bin / "pin-pi")
-    assert len(world.calls("pi")) == 4, "one loop round and three probe rungs were expected"
+    # the loop's fresh run: one refresh and one listing, then the free swarm's two members;
+    # the probe rediscovers (refresh, listing) and checks the two free and three paid ids.
+    assert len(world.calls("pi")) == 11, "one discovery, one free round and a five-member probe were expected"
     for call in world.calls("pi"):
         assert call["path"] == wrapper, f"a launch left the repository wrapper: {call['path']}"
     assert [entry["path"] for entry in world.versions()] == [wrapper, wrapper], (
@@ -3770,27 +4014,30 @@ def test_loop_and_probe_use_repository_pi(world: World) -> None:
 
 def test_truncated_pi_print_failure_is_refused(world: World) -> None:
     """Criterion 13 unit guard: a stand-in nonzero truncated print is never read as a review."""
-    world.script(
-        pi=[
-            {
-                "stdout": rows(1),
-                "stderr": "warning: the answer was cut off at the output token limit",
-                "exit": 1,
-            }
-        ]
-    )
+    truncated = {"stdout": rows(1), "stderr": "warning: the answer was cut off at the output token limit", "exit": 1}
+    world.script(pi=[truncated, truncated])
     assert world.run("review-loop") != 0, "a non-zero truncated print passed as a review"
-    assert len(world.calls("pi")) == 1, "the truncated call was retried as if it had succeeded"
-    assert not world.record().exists()
+    # the fresh run discovered the free members first (one refresh, one listing)
+    # and called both; neither answer was retried as if it had succeeded
+    assert len(world.calls("pi")) == 4 and len(world.reviews("pi")) == 2
+    assert not world.record().exists(), "a failed attempt wrote the record and its snapshot"
     text = world.text() if world.findings.exists() else ""
     assert "X1" not in text, "the truncated answer was read as rows"
 
 
 def test_the_pinned_pi_runs_the_probe_on_every_rung(world: World) -> None:
-    """Criterion 27, the other side: the exact pin starts the run and the probe reaches every rung."""
-    world.script(pi=[{"stdout": "rung one"}, {"stdout": "rung two"}, {"stdout": "rung three"}])
+    """Criterion 27, the other side: the exact pin starts the run and the probe reaches every member."""
+    world.script(
+        pi=[
+            {"stdout": "free one"},
+            {"stdout": "free two"},
+            {"stdout": "rung one"},
+            {"stdout": "rung two"},
+            {"stdout": "rung three"},
+        ]
+    )
     assert world.run("probe") == 0
-    assert len(world.calls("pi")) == 3
+    assert len(world.calls("pi")) == 7, "one discovery plus two free and three paid members were expected"
 
 
 def test_an_answer_that_is_not_rows_is_kept(world: World) -> None:
@@ -4053,88 +4300,94 @@ def test_the_review_prompts_give_both_paths() -> None:
 
 
 def test_a_round_calls_its_rung_from_the_entry(world: World) -> None:
-    """Criterion 4: round n calls modelle[n-1]; no rung of the ladder stands as a literal in the runner."""
-    world.script(pi=[{"stdout": rows(1)}, {"stdout": rows(1)}, {"stdout": rows(1)}])
+    """Criterion 8: the free swarm first, the Flash swarm next, then one rung each - no id stands as a literal in the runner."""
+    world.script(pi=[{"stdout": rows(1)}] * 5)
     assert world.run("review-loop") == 0
     decide_record(world)
     assert world.run("review-loop") == 0
     decide_record(world)
     assert world.run("review-loop") == 0
-    called = [rung_of(call) for call in world.calls("pi")]
-    assert called == stage2.ladder(world.root)
+    called = [rung_of(call) for call in world.reviews("pi")]
+    assert grouped(called, TEST_FREE, TEST_FLASH, TEST_RUNGS), called
+    assert world.run("review-loop") == 2, "a consumed ladder called again"
     source = (REPO_ROOT / "scripts" / "stage2.py").read_text(encoding="utf-8")
-    for rung in stage2.ladder(world.root):
+    for rung in (*TEST_LADDER, *TEST_FREE):
         assert rung not in source, f"{rung} stands as a literal in scripts/stage2.py"
 
 
 def test_reordering_the_ladder_touches_no_code(world: World) -> None:
-    """Criterion 5: the rounds call what the reordered list gives - the yaml changes, the runner does not."""
+    """Criterion 8: the rounds call what the reordered list gives - the yaml changes, the runner does not."""
     endpoints = world.root / "model-endpoints.yaml"
-    text = endpoints.read_text(encoding="utf-8")
-    reordered = text.replace(
-        "      - deepseek-v4.1-flash\n      - mimo-v2.6-flash\n      - mimo-v2.6-pro\n",
-        "      - mimo-v2.6-pro\n      - deepseek-v4.1-flash\n",
-    )
-    assert reordered != text
-    endpoints.write_text(reordered, encoding="utf-8")
-    world.script(pi=[{"stdout": rows(1)}, {"stdout": rows(1)}])
+    pin_entry(endpoints, ("mimo-v2.6-pro", "deepseek-v4.1-flash"))
+    world.script(pi=[{"stdout": rows(1)}] * 4)
     assert world.run("review-loop") == 0
     decide_record(world)
     assert world.run("review-loop") == 0
-    called = [rung_of(call) for call in world.calls("pi")]
-    assert called == ["mimo-v2.6-pro", "deepseek-v4.1-flash"]
+    called = [rung_of(call) for call in world.reviews("pi")]
+    assert grouped(called, TEST_FREE, ("mimo-v2.6-pro", "deepseek-v4.1-flash")), called
 
     shutil.rmtree(world.record().parent)
-    endpoints.write_text(
-        reordered.replace(
-            "      - mimo-v2.6-pro\n      - deepseek-v4.1-flash\n",
-            "      - spike-a\n      - spike-b\n      - spike-c\n",
-        ),
-        encoding="utf-8",
-    )
+    pin_entry(endpoints, ("spike-a", "spike-b", "spike-c"))
     (world.bin / "calls.jsonl").unlink()
-    world.script(pi=[{"stdout": rows(1)}, {"stdout": rows(1)}, {"stdout": rows(1)}])
+    world.script(pi=[{"stdout": rows(1)}] * 5)
     assert world.run("review-loop") == 0
     decide_record(world)
     assert world.run("review-loop") == 0
     decide_record(world)
     assert world.run("review-loop") == 0
-    called = [rung_of(call) for call in world.calls("pi")]
-    assert called == ["spike-a", "spike-b", "spike-c"]
+    called = [rung_of(call) for call in world.reviews("pi")]
+    assert grouped(called, TEST_FREE, ("spike-a", "spike-b"), ("spike-c",)), called
 
 
 def test_the_reviewer_call_can_only_read_and_search(world: World) -> None:
+    """A paid round keeps the read-only tools; the free stage's --no-tools is criterion 3's own test."""
+    world.write_record([("L1-1", "taken — test_a", "no")], state=loop_state(("free",)))
     world.script(pi=[{"stdout": rows(1)}])
     assert world.run("review-loop") == 0
-    argv = world.calls("pi")[0]["argv"]
+    argv = next(
+        c for c in world.reviews("pi") if c["argv"][c["argv"].index("--model") + 1].endswith("deepseek-v4.1-flash")
+    )["argv"]
     assert set(argv[argv.index("--tools") + 1].split(",")) == {"read", "grep", "find", "ls"}
     assert "--approve" not in argv and "--no-approve" in argv
 
 
 def test_the_reviewer_prompt_carries_the_loop_prompt_and_the_uncommitted_diff(world: World) -> None:
+    """A paid round's prompt: the 04b body, the uncommitted and untracked diff, the member named."""
     (world.root / "src" / "app.py").write_text("value = 2\n", encoding="utf-8")
     (world.root / "src" / "new.py").write_text("fresh = 'untracked-content'\n", encoding="utf-8")
+    world.write_record([("L1-1", "taken — test_a", "no")], state=loop_state())
     world.script(pi=[{"stdout": rows(1)}])
     assert world.run("review-loop") == 0
-    prompt = world.calls("pi")[0]["prompt_file"]
+    prompt = world.reviews("pi")[0]["prompt_file"]
     assert (REPO_ROOT / "prompts" / "04b-review-loop.md").read_text(encoding="utf-8").rstrip() in prompt
     assert "+value = 2" in prompt and "-value = 1" in prompt
     assert "src/new.py" in prompt and "untracked-content" in prompt
-    assert "This is round 1; you are `deepseek-v4.1-flash`." in prompt
+    assert "This is round 2; you are `mimo-v2.6-pro`." in prompt
+    assert prompt.rstrip().endswith(stage2.READ_REQUEST)
 
 
 def test_a_round_is_written_as_its_rung(world: World) -> None:
-    """Criterion 18: the heading, the Reviewer cell and the record's place carry the rung, outside the worktree."""
-    world.script(pi=[{"stdout": rows(2)}])
+    """Criterion 2: the swarm round is one heading, its ids one series, each row's Reviewer cell its member's."""
+    world.write_record([("L1-1", "taken — test_a", "no")], state=loop_state(("free",)))
+    world.script(
+        pi=[
+            {"model": "deepseek-v4.1-flash", "stdout": rows(2, "D")},
+            {"model": "mimo-v2.6-flash", "stdout": rows(2, "M")},
+        ]
+    )
     assert world.run("review-loop") == 0
     expected = Path(os.environ["XDG_STATE_HOME"]) / "coding-harness" / "stage2" / "demo" / "loop.md"
     text = expected.read_text(encoding="utf-8")
-    assert "## Round 1 — deepseek-v4.1-flash, " in text
-    ids = [
-        cells[0] for cells in (stage2.split_row(line) for line in text.splitlines()) if cells and cells[0][:1] == "L"
-    ]
-    assert ids == ["L1-1", "L1-2"]
-    assert all(cells[6] == "deepseek-v4.1-flash" for cells in stage2.record_rows(text))
+    assert "## Round 2 — deepseek-v4.1-flash, mimo-v2.6-flash, " in text
+    assert text.count("## Round 2") == 1, "the swarm round got more than one heading"
+    rows_ = [cells for cells in stage2.record_rows(text) if cells[0].startswith("L2-")]
+    assert [cells[0] for cells in rows_] == ["L2-1", "L2-2", "L2-3", "L2-4"]
+    assert [cells[6] for cells in rows_] == [
+        "deepseek-v4.1-flash",
+        "deepseek-v4.1-flash",
+        "mimo-v2.6-flash",
+        "mimo-v2.6-flash",
+    ], "the rows did not merge in membership order under their own reviewers"
     for path in world.root.rglob("*"):
         if path.is_file() and ".git" not in path.parts:
             assert "FB1-unique-body" not in path.read_text(encoding="utf-8", errors="replace"), path
@@ -4143,26 +4396,24 @@ def test_a_round_is_written_as_its_rung(world: World) -> None:
 
 
 def test_a_round_that_did_not_review_writes_nothing(world: World, capsys: pytest.CaptureFixture[str]) -> None:
-    """Criterion 14: no block, exit 1, and the cause named on standard error."""
-    world.script(pi=[{"stdout": rows(1), "stderr": "boom", "exit": 1}])
+    """Criterion 4: a fresh attempt whose every member failed writes no record and no snapshot (ADR 0021, decision 6)."""
+    world.script(pi=[{"stdout": rows(1), "stderr": "boom", "exit": 1}] * 2)
     assert world.run("review-loop") == 1
     assert not world.record().exists()
     assert "pi call failed" in capsys.readouterr().err
 
 
 def test_a_round_without_a_finding_still_counts(world: World, capsys: pytest.CaptureFixture[str]) -> None:
-    """A round that reports no finding is a round; two of them stop the loop before round 3 (criterion 7)."""
-    world.script(pi=[{"stdout": "Nothing to report."}, {"stdout": "Still nothing."}])
+    """Criterion 1: a round whose every row is decided and none accepted is clean - the first one included."""
+    world.script(pi=[{"stdout": "No finding."}, {"stdout": "No finding."}])
     assert world.run("review-loop") == 0
     record = world.record().read_text(encoding="utf-8")
-    assert "deepseek-v4.1-flash reported no finding." in record
-    assert world.run("review-loop") == 0
-    record = world.record().read_text(encoding="utf-8")
-    assert "mimo-v2.6-flash reported no finding." in record
+    assert "## Round 1 — acme-v1-free, beacon-2-free, " in record
+    assert "acme-v1-free reported no finding." in record and "beacon-2-free reported no finding." in record
     capsys.readouterr()
     assert world.run("review-loop") == 2
-    assert "round 2 wrote no taken row; the loop stops at 2." in capsys.readouterr().err
-    assert len(world.calls("pi")) == 2
+    assert "round 1 was clean" in capsys.readouterr().err
+    assert len(world.reviews("pi")) == 2
 
 
 @pytest.mark.parametrize(
@@ -4171,18 +4422,17 @@ def test_a_round_without_a_finding_still_counts(world: World, capsys: pytest.Cap
     ids=["non-zero-exit", "empty-answer"],
 )
 def test_a_call_without_an_answer_is_not_a_round(world: World, step: dict) -> None:
-    """Criterion 14: a failed call, or one with no answer at all, writes no round; the loop itself still runs to three."""
-    world.script(pi=[step, step, {"stdout": rows(1)}, {"stdout": rows(1)}, {"stdout": rows(1)}])
-    assert world.run("review-loop") == 1
+    """Criterion 4: a failed call, or one with no answer at all, completes no round and consumes no stage."""
+    world.script(pi=[step, step] + [{"stdout": rows(1)}] * 5)
     assert world.run("review-loop") == 1
     assert not world.record().exists()
-    assert world.run("review-loop") == 0
+    assert world.run("review-loop") == 0, "the retry after a failed attempt did not run the free stage again"
     decide_record(world)
     assert world.run("review-loop") == 0
+    assert len(world.reviews("pi")) == 6, "two free attempts and one Flash round were expected"
     decide_record(world)
     assert world.run("review-loop") == 0
-    assert world.run("review-loop") == 2
-    assert len(world.calls("pi")) == 5
+    assert len(world.reviews("pi")) == 7
 
 
 @pytest.mark.parametrize("verb", ["review-loop", "probe"])
@@ -4193,60 +4443,60 @@ def test_the_loop_refuses_without_the_key(world: World, verb: str) -> None:
 
 
 def test_the_loop_stops_at_three_rounds(world: World, capsys: pytest.CaptureFixture[str]) -> None:
-    """Criterion 6: three rounds run; the fourth is refused, also after the release."""
-    world.script(pi=[{"stdout": rows(1)}, {"stdout": rows(1)}, {"stdout": rows(1)}])
+    """Criterion 9: the ladder's stages are the bound - once every stage is consumed, the loop stops and names the maintainer, also after the release."""
+    world.script(pi=[{"stdout": rows(1)}] * 5)
     assert world.run("review-loop") == 0
     decide_record(world)
     assert world.run("review-loop") == 0
     decide_record(world)
     assert world.run("review-loop") == 0
-    assert len(world.calls("pi")) == 3
+    assert len(world.reviews("pi")) == 5
     decide_record(world)
     capsys.readouterr()
     assert world.run("review-loop") == 2
-    assert "3 rounds have run; the loop stops at 3." in capsys.readouterr().err
-    assert len(world.calls("pi")) == 3
-    # also after the release: the rounds stay counted
+    refused = capsys.readouterr().err
+    assert "every stage of this run is consumed" in refused
+    assert "No model is substituted" in refused
+    assert len(world.reviews("pi")) == 5
+    # also after the release: the consumed stages stay consumed
     world.write_findings(VERDICT)
     assert world.run("release-loop") == 0
     assert not world.record().exists()
     assert world.run("review-loop") == 2
-    assert len(world.calls("pi")) == 3
+    assert len(world.reviews("pi")) == 5
 
 
 def test_round_three_starts_only_after_a_taken_row(world: World, capsys: pytest.CaptureFixture[str]) -> None:
-    """Criterion 7: rounds 1 and 2 run as today; round 3 only when round 2 wrote at least one taken row."""
-    world.script(pi=[{"stdout": rows(1)}, {"stdout": rows(1)}, {"stdout": rows(1)}])
+    """Criterion 11: a round whose accepted row is fixed still admits the next round and keeps the run counted."""
+    world.write_record([("L1-1", "taken — test_a", "no")], state=loop_state(("free",)))
+    world.script(pi=[{"stdout": rows(1)}] * 3)
     assert world.run("review-loop") == 0
-    decide_record(world, status="rejected — out of scope")
-    assert world.run("review-loop") == 0
-    decide_record(world, status="rejected — no evidence")
-    capsys.readouterr()
-    assert world.run("review-loop") == 2
-    assert "round 2 wrote no taken row; the loop stops at 2." in capsys.readouterr().err
-    assert len(world.calls("pi")) == 2
+    decide_record(world)
+    # the Flash round's row is repaired: its status becomes fixed, its mark stands
     text = world.record().read_text(encoding="utf-8")
     world.record().write_text(
         re.sub(
-            r"^(\| L2-1 \|.*\|) rejected — no evidence \| no \|$",
-            r"\1 taken — test_b | yes |",
+            r"^(\| L2-1 \|.*\|) taken — test_a \| no \|$",
+            r"\1 fixed — tests/test_x.py::test_y | yes |",
             text,
             flags=re.M,
         ),
         encoding="utf-8",
     )
-    assert world.run("review-loop") == 0
-    called = [rung_of(call) for call in world.calls("pi")]
-    assert called == ["deepseek-v4.1-flash", "mimo-v2.6-flash", "mimo-v2.6-pro"]
+    capsys.readouterr()
+    assert world.run("review-loop") == 0, "a fixed round-2 row did not admit round 3"
+    called = [rung_of(call) for call in world.reviews("pi")]
+    assert grouped(called, TEST_FLASH, TEST_RUNGS), called
+    assert "Round 3" in world.record().read_text(encoding="utf-8"), "the fixed row lost the run's count"
 
 
 def test_a_call_over_the_time_limit_is_stopped(
     world: World, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
 ) -> None:
-    """Criterion 15: a call that outlasts the limit is stopped, and stopping is one of criterion 14's causes."""
+    """Criterion 4/15: a member that outlasts the limit is stopped; stopping every member fails the attempt."""
     assert stage2.REVIEWER_MINUTES == 30
     monkeypatch.setattr(stage2, "REVIEWER_MINUTES", 0.03)
-    world.script(pi=[{"stdout": "too late", "sleep": 30}])
+    world.script(pi=[{"stdout": "too late", "sleep": 30}, {"stdout": "too late", "sleep": 30}])
     started = time.monotonic()
     assert world.run("review-loop") == 1
     assert time.monotonic() - started < 15
@@ -4255,18 +4505,620 @@ def test_a_call_over_the_time_limit_is_stopped(
 
 
 def test_a_refused_rung_stops_the_run_without_fallback(world: World, capsys: pytest.CaptureFixture[str]) -> None:
-    """Criterion 17: an address that refuses a rung stops the run - no second launcher, no other rung, no other endpoint."""
+    """Criterion 9: an address that refuses the rung stops the run - no second launcher, no substitute, no other endpoint."""
+    world.write_record([("L1-1", "taken — test_a", "no")], state=loop_state())
+    before = world.record().read_text(encoding="utf-8")
     world.script(
-        pi=[{"stdout": "", "stderr": "404: unknown model", "exit": 1}, {"stdout": "must not run"}],
+        pi=[
+            {"model": "mimo-v2.6-pro", "stdout": "", "stderr": "404: unknown model", "exit": 1},
+            {"model": "mimo-v2.6-pro", "stdout": "must not run"},
+        ],
         claude=[{"stdout": "must not run"}],
         codex=[codex_ok("T1", "must not run")],
     )
     assert world.run("review-loop") == 1
     assert [call["name"] for call in world.calls()] == ["pi"]
-    argv = world.calls("pi")[0]["argv"]
-    assert argv[argv.index("--model") + 1] == "opencode-go/deepseek-v4.1-flash"
-    assert not world.record().exists()
+    assert len(world.reviews("pi")) == 1, "the refused rung was retried or substituted"
+    argv = world.reviews("pi")[0]["argv"]
+    assert argv[argv.index("--model") + 1] == "opencode-go/mimo-v2.6-pro"
+    assert world.record().read_text(encoding="utf-8") == before, "the refused round wrote into the record"
     assert "pi call failed" in capsys.readouterr().err
+
+
+def test_a_clean_round_ends_the_loop(world: World, capsys: pytest.CaptureFixture[str]) -> None:
+    """Criterion 1: a round whose rows are all rejected is clean - the next call refuses, before and after a release."""
+    world.script(pi=[{"stdout": rows(1)}] * 2)
+    assert world.run("review-loop") == 0
+    decide_record(world, status="rejected — out of scope")
+    capsys.readouterr()
+    assert world.run("review-loop") == 2
+    assert "round 1 was clean" in capsys.readouterr().err
+    assert len(world.reviews("pi")) == 2, "a clean round called again"
+    # the stop survives the release: the released block still says round 1 was clean
+    world.write_findings(VERDICT)
+    assert world.run("release-loop") == 0
+    assert not world.record().exists()
+    capsys.readouterr()
+    assert world.run("review-loop") == 2
+    assert "round 1 was clean" in capsys.readouterr().err
+    assert len(world.reviews("pi")) == 2
+
+
+def test_both_swarms_run_in_parallel_as_one_round(world: World) -> None:
+    """Criterion 2: each swarm's members start together and merge into one round with one id series."""
+    barrier = str(world.root / ".barrier")
+    world.script(
+        pi=[
+            {
+                "model": "acme-v1-free",
+                "stdout": rows(1, "A"),
+                "barrier": 2,
+                "barrier_dir": barrier,
+                "barrier_seconds": 20,
+            },
+            {
+                "model": "beacon-2-free",
+                "stdout": rows(1, "B"),
+                "barrier": 2,
+                "barrier_dir": barrier,
+                "barrier_seconds": 20,
+            },
+        ]
+    )
+    started = time.monotonic()
+    assert world.run("review-loop") == 0
+    assert time.monotonic() - started < 15, "the free swarm ran its members one after the other"
+    text = world.record().read_text(encoding="utf-8")
+    assert text.count("## Round 1") == 1, "the swarm round got more than one heading"
+    assert "## Round 1 — acme-v1-free, beacon-2-free, " in text
+    rows_ = stage2.record_rows(text)
+    assert [cells[0] for cells in rows_] == ["L1-1", "L1-2"], "the id series collided or skipped a member"
+    assert [cells[6] for cells in rows_] == list(TEST_FREE), "a row carries the wrong member"
+    decide_record(world)
+    shutil.rmtree(world.root / ".barrier")
+    (world.bin / "calls.jsonl").unlink()
+    world.script(
+        pi=[
+            {
+                "model": "deepseek-v4.1-flash",
+                "stdout": rows(1, "D"),
+                "barrier": 2,
+                "barrier_dir": barrier,
+                "barrier_seconds": 20,
+            },
+            {
+                "model": "mimo-v2.6-flash",
+                "stdout": rows(1, "M"),
+                "barrier": 2,
+                "barrier_dir": barrier,
+                "barrier_seconds": 20,
+            },
+        ]
+    )
+    started = time.monotonic()
+    assert world.run("review-loop") == 0
+    assert time.monotonic() - started < 15, "the Flash swarm ran its members one after the other"
+    text = world.record().read_text(encoding="utf-8")
+    assert text.count("## Round 2") == 1, "the Flash swarm ran as sequential rounds"
+    assert "## Round 2 — deepseek-v4.1-flash, mimo-v2.6-flash, " in text
+    assert [cells[0] for cells in stage2.record_rows(text) if cells[0].startswith("L2-")] == ["L2-1", "L2-2"]
+
+
+def test_the_free_stage_reads_nothing_beyond_the_diff(world: World) -> None:
+    """Criterion 3: a free member's only input is the diff - no prompt body, no read request, no canary; no tools."""
+    (world.root / "scripts" / "helper.py").write_text("VALUE = 2\nFREE-DIFF-CANARY = 'kept'\n", encoding="utf-8")
+    (world.root / "plans" / "changes" / "demo" / "plan.md").write_text(
+        "---\ntitle: Plan\nupdated: 2026-09-30\nbead: demo-1\n---\n\n# Plan\n\nPLAN-CANARY stays out.\n\n## Time used\n",
+        encoding="utf-8",
+    )
+    (world.root / "AGENTS.md").write_text("# Agent rules\n\nDOC-CANARY stays out.\n", encoding="utf-8")
+    world.script(pi=[{"stdout": rows(1)}] * 2)
+    assert world.run("review-loop") == 0
+    free = [call for call in world.reviews("pi") if "--no-tools" in call["argv"]]
+    assert len(free) == 2 and all("--tools" not in call["argv"] for call in free)
+    for call in free:
+        assert not Path(call["cwd"]).is_relative_to(world.root), "the free member started in the worktree"
+        prompt = call["prompt_file"]
+        assert "## The implementation diff" in prompt
+        assert "FREE-DIFF-CANARY" in prompt, "the changed source hunk did not travel"
+        for canary in ("PLAN-CANARY", "DOC-CANARY", stage2.READ_REQUEST):
+            assert canary not in prompt, f"a free prompt carries {canary}"
+        body = (REPO_ROOT / "prompts" / "04b-review-loop.md").read_text(encoding="utf-8").rstrip()
+        assert body not in prompt, "the paid loop prompt reached the free stage"
+    decide_record(world)
+    world.script(pi=[{"stdout": rows(1)}] * 2)
+    assert world.run("review-loop") == 0
+    paid = [call for call in world.reviews("pi") if "--tools" in call["argv"]]
+    assert len(paid) == 2, "the paid round lost its members"
+    for call in paid:
+        argv = call["argv"]
+        assert argv[argv.index("--tools") + 1] == "read,grep,find,ls", "the paid round lost the read tools"
+        assert call["prompt_file"].rstrip().endswith(stage2.READ_REQUEST)
+
+
+@pytest.mark.parametrize(
+    "broken",
+    [
+        {"model": "beacon-2-free", "stdout": "", "stderr": "boom", "exit": 1},
+        {"model": "beacon-2-free", "stdout": "not a table | at all"},
+    ],
+    ids=["failed-call", "malformed-answer"],
+)
+def test_a_failed_swarm_member_preserves_successful_answers(
+    world: World, capsys: pytest.CaptureFixture[str], broken: dict
+) -> None:
+    """Criterion 4: one member's failure is named beside the others' rows; the round still stands."""
+    world.script(pi=[{"model": "acme-v1-free", "stdout": rows(2, "A")}, broken])
+    assert world.run("review-loop") == 0
+    text = world.record().read_text(encoding="utf-8")
+    assert "## Round 1 — acme-v1-free, beacon-2-free, " in text
+    rows_ = stage2.record_rows(text)
+    assert [cells[0] for cells in rows_] == ["L1-1", "L1-2"], "the successful rows were lost or renumbered"
+    assert all(cells[6] == "acme-v1-free" for cells in rows_), "a failed member's name took a row"
+    assert "beacon-2-free failed:" in text, "the failed member left no trace"
+    if not broken.get("exit"):
+        assert "malformed finding output" in text
+    assert "from 1 of 2 members" in capsys.readouterr().out
+
+
+def test_free_discovery_admits_new_go_models_each_run(world: World, capsys: pytest.CaptureFixture[str]) -> None:
+    """Criterion 5: a fresh run's members come from that run's live catalog - a new matching id joins, Zen never does."""
+    world.script(pi=[{"stdout": rows(1)}], pi_catalog="provider model context input output\n")
+    capsys.readouterr()
+    assert world.run("review-loop") == 2
+    assert "printed no model table" in capsys.readouterr().err
+    assert world.reviews("pi") == [] and not world.record().exists()
+    world.script(
+        pi=[{"stdout": rows(1)}], pi_catalog="provider model context input output\nopencode-go paid-one 128000 1 2\n"
+    )
+    capsys.readouterr()
+    assert world.run("review-loop") == 2
+    assert "holds no free model" in capsys.readouterr().err, "an empty selection launched a call"
+    world.script(pi=[{"stdout": "", "stderr": "down", "exit": 1}] * 2)
+    assert world.run("review-loop") == 1, "the failed attempt must not pin a membership"
+    assert not world.record().exists()
+    catalog = (
+        "provider model context input output\n"
+        "opencode-go acme-v1-free 128000 0 0\n"
+        "opencode-go beacon-2-free 128000 0 0\n"
+        "opencode-go zeta-9-free 128000 0 0\n"
+        "opencode zen-free-mirror 128000 0 0\n"
+    )
+    world.script(pi=[{"stdout": rows(1)}] * 3, pi_catalog=catalog)
+    assert world.run("review-loop") == 0
+    called = [rung_of(call) for call in world.reviews("pi")][2:]  # after the failed attempt's two calls
+    assert grouped(called, (*TEST_FREE, "zeta-9-free")), "the new Go id was omitted or the Zen id was called"
+    state = stage2.read_state(world.record().read_text(encoding="utf-8"), "")
+    assert state["free"]["selected"] == [*TEST_FREE, "zeta-9-free"]
+    assert "zen-free-mirror" not in state["free"]["selected"], "a Zen id entered the selection"
+    assert {"provider": "opencode-go", "model": "zeta-9-free"} in state["free"]["catalog"]
+    assert state["free"]["checked_at"] and "T" in state["free"]["checked_at"], "the check time is missing"
+    assert state["free"]["source"] == "pi.dev"
+
+
+def test_free_discovery_forces_live_refresh_before_listing(
+    world: World, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+) -> None:
+    """Criterion 5: the listing runs after a forced refresh in the same fresh scratch - never from a stale cache."""
+    world.script(pi=[{"stdout": rows(1)}] * 2)
+    assert world.run("review-loop") == 0
+    refresh, listing = world.calls("pi")[:2]
+    assert refresh.get("kind") == "refresh" and listing.get("kind") == "list", "the listing did not run second"
+    assert refresh["path"] == str(stage2.PI_WRAPPER) and refresh["argv"] == ["update", "--models"]
+    assert listing["path"] == str(stage2.PI_WRAPPER) and "--list-models" in listing["argv"]
+    assert refresh["home"] == listing["home"] and refresh["agent"] == listing["agent"], (
+        "the refresh and the listing used different scratch directories"
+    )
+    assert not Path(refresh["home"]).is_relative_to(world.root)
+    shutil.rmtree(world.record().parent)
+    (world.bin / "calls.jsonl").unlink()
+    world.script(pi=[{"stdout": rows(1)}] * 2, pi_refresh_exit=1)
+    capsys.readouterr()
+    assert world.run("review-loop") == 2
+    assert "not filled" in capsys.readouterr().err
+    assert [call.get("kind") for call in world.calls("pi")] == ["refresh"], "the listing ran after a failed refresh"
+    assert world.reviews("pi") == [] and not world.record().exists()
+    monkeypatch.setattr(stage2, "PI_DISCOVERY_SECONDS", 0.4)
+    (world.bin / "calls.jsonl").unlink()
+    world.script(pi=[{"stdout": rows(1)}] * 2, pi_refresh_sleep=30)
+    capsys.readouterr()
+    assert world.run("review-loop") == 2
+    assert "no stale cache is listed" in capsys.readouterr().err
+    assert [call.get("kind") for call in world.calls("pi")] == ["refresh"]
+    assert world.reviews("pi") == []
+
+
+def test_free_selection_changes_in_yaml_without_runner_edits(world: World) -> None:
+    """Criterion 5: include and exclude edit the discovered membership - no runner edit, exclusions win."""
+    entry_path = world.root / "model-endpoints.yaml"
+    data = yaml.safe_load(entry_path.read_text(encoding="utf-8"))
+    entry = next(e for e in data["endpunkte"] if e["name"] == "opencode-go")
+    entry["free_stage"]["exclude"] = [{"id": "acme-v1-free", "date": "2026-10-16", "reason": "flaky in rehearsal"}]
+    entry["free_stage"]["include"] = [
+        {"id": "experimental-9", "date": "2026-10-16", "reason": "rehearse a paid-shaped id"}
+    ]
+    entry_path.write_text(yaml.safe_dump(data, allow_unicode=True), encoding="utf-8")
+    catalog = "provider model context input output\n"
+    for name in ("deepseek-v4.1-flash", "mimo-v2.6-flash", "mimo-v2.6-pro", "acme-v1-free", "beacon-2-free"):
+        catalog += f"opencode-go {name} 128000 0 0\n"
+    catalog += "opencode-go experimental-9 128000 0.2 0.4\nopencode gpt-6.1-sol 400000 2 8\n"
+    world.script(pi=[{"stdout": rows(1)}] * 2, pi_catalog=catalog)
+    assert world.run("review-loop") == 0
+    called = [rung_of(call) for call in world.reviews("pi")]
+    assert grouped(called, ("beacon-2-free", "experimental-9")), (
+        "the exclusion lost to the suffix, the include left the catalog, or a Zen id was called"
+    )
+    source = (REPO_ROOT / "scripts" / "stage2.py").read_text(encoding="utf-8")
+    for ident in ("acme-v1-free", "beacon-2-free", "experimental-9"):
+        assert ident not in source, f"{ident} stands as a literal in scripts/stage2.py"
+    # an include for a Zen provider id still selects nothing: only the configured provider's rows are read
+    data = yaml.safe_load(entry_path.read_text(encoding="utf-8"))
+    entry = next(e for e in data["endpunkte"] if e["name"] == "opencode-go")
+    entry["free_stage"]["include"].append(
+        {"id": "gpt-6.1-sol", "date": "2026-10-16", "reason": "must stay out: Zen provider"}
+    )
+    entry_path.write_text(yaml.safe_dump(data, allow_unicode=True), encoding="utf-8")
+    shutil.rmtree(world.record().parent)
+    (world.bin / "calls.jsonl").unlink()
+    world.script(pi=[{"stdout": rows(1)}] * 2, pi_catalog=catalog)
+    assert world.run("review-loop") == 0
+    assert grouped([rung_of(call) for call in world.reviews("pi")], ("beacon-2-free", "experimental-9")), (
+        "a Zen id was called"
+    )
+
+
+def test_free_class_admission_is_bound_to_discovery_and_purpose(world: World) -> None:
+    """Criterion 7: the free class admits only this run's discovered ids - a paid, Zen or guessed id stays out."""
+    selected = list(TEST_FREE)
+    assert stage2.free_admission_problem(world.root, "acme-v1-free", selected) is None
+    assert "paid model" in stage2.free_admission_problem(world.root, "deepseek-v4.1-flash", selected)
+    assert "not in this run's discovered free selection" in stage2.free_admission_problem(
+        world.root, "guessed-v3-free", selected
+    )
+    assert "not in this run's discovered free selection" in stage2.free_admission_problem(
+        world.root, "gpt-6.1-sol", selected
+    ), "a Zen id passed the free class"
+    assert stage2._free_admission(False, {"free": {"selected": selected}}) is None, "the paid path gained the class"
+    assert stage2.declaration_problem(world.root, stage2.OPENCODE, "deepseek-v4.1-flash") is None
+    assert stage2.declaration_problem(world.root, stage2.OPENCODE, "acme-v1-free") is not None, (
+        "a discovered free id passed the paid declaration"
+    )
+    entry_path = world.root / "model-endpoints.yaml"
+    data = yaml.safe_load(entry_path.read_text(encoding="utf-8"))
+    entry = next(e for e in data["endpunkte"] if e["name"] == "opencode-go")
+    del entry["free_stage"]
+    entry_path.write_text(yaml.safe_dump(data, allow_unicode=True), encoding="utf-8")
+    assert "free_stage" in stage2.free_admission_problem(world.root, "acme-v1-free", selected), (
+        "the class outlived its rule"
+    )
+
+
+def test_ineligible_paid_models_are_skipped_and_named(world: World, capsys: pytest.CaptureFixture[str]) -> None:
+    """Criterion 6: a paid model without its terms reading is skipped and named - and fills no Flash round."""
+    endpoints = world.root / "model-endpoints.yaml"
+    pin_entry(endpoints, (*TEST_LADDER, "unread-model"))
+    data = yaml.safe_load(endpoints.read_text(encoding="utf-8"))
+    entry = next(e for e in data["endpunkte"] if e["name"] == "opencode-go")
+    del entry["modelle_terms"]["unread-model"]
+    entry["flash_swarm"] = ["unread-model"]
+    endpoints.write_text(yaml.safe_dump(data, allow_unicode=True), encoding="utf-8")
+    world.script(pi=[{"stdout": rows(1)}])
+    capsys.readouterr()
+    assert world.run("review-loop") == 0
+    assert "unread-model" in capsys.readouterr().out
+    assert "unread-model" in world.record().read_text(encoding="utf-8")
+    assert all(rung_of(call) in TEST_FREE for call in world.reviews("pi"))
+    shutil.rmtree(world.record().parent)
+    (world.bin / "calls.jsonl").unlink()
+    data = yaml.safe_load(endpoints.read_text(encoding="utf-8"))
+    entry = next(e for e in data["endpunkte"] if e["name"] == "opencode-go")
+    entry["flash_swarm"] = list(TEST_FLASH)
+    endpoints.write_text(yaml.safe_dump(data, allow_unicode=True), encoding="utf-8")
+    world.script(pi=[{"stdout": rows(1)}] * 5)
+    capsys.readouterr()
+    assert world.run("review-loop") == 0
+    out = capsys.readouterr().out
+    assert "paid models skipped:" in out
+    assert "unread-model" in out, "the skipped model was not named"
+    assert stage2.ladder(world.root) == list(TEST_LADDER)
+    decide_record(world)
+    assert world.run("review-loop") == 0
+    decide_record(world)
+    assert world.run("review-loop") == 0
+    assert grouped([rung_of(call) for call in world.reviews("pi")], TEST_FREE, TEST_FLASH, TEST_RUNGS), (
+        "the unread model was called or a round was invented for it"
+    )
+    # an empty eligible Flash membership is skipped without a round
+    shutil.rmtree(world.record().parent)
+    (world.bin / "calls.jsonl").unlink()
+    data = yaml.safe_load(endpoints.read_text(encoding="utf-8"))
+    entry = next(e for e in data["endpunkte"] if e["name"] == "opencode-go")
+    entry["flash_swarm"] = []
+    endpoints.write_text(yaml.safe_dump(data, allow_unicode=True), encoding="utf-8")
+    world.script(pi=[{"stdout": rows(1)}] * 3)
+    assert world.run("review-loop") == 0
+    decide_record(world)
+    assert world.run("review-loop") == 0
+    # with no Flash swarm declared, the whole ladder is single rungs: round 2 is the first one
+    assert grouped([rung_of(call) for call in world.reviews("pi")], TEST_FREE, TEST_LADDER[:1]), (
+        "an empty Flash stage completed a fake round"
+    )
+    assert "## Round 2 — deepseek-v4.1-flash, " in world.record().read_text(encoding="utf-8")
+
+
+def test_round_two_is_the_flash_swarm_then_single_rungs(world: World) -> None:
+    """Criterion 8: round 2 is one parallel Flash round, round 3 one rung - never three sequential rounds."""
+    world.script(pi=[{"stdout": rows(1)}] * 5)
+    assert world.run("review-loop") == 0
+    decide_record(world)
+    assert world.run("review-loop") == 0
+    decide_record(world)
+    assert world.run("review-loop") == 0
+    text = world.record().read_text(encoding="utf-8")
+    assert text.count("## Round 2") == 1, "the Flash swarm ran as sequential rounds"
+    assert "## Round 2 — deepseek-v4.1-flash, mimo-v2.6-flash, " in text
+    assert "## Round 3 — mimo-v2.6-pro, " in text
+    round2 = [call for call in world.reviews("pi") if "This is round 2" in call["prompt_file"]]
+    round3 = [call for call in world.reviews("pi") if "This is round 3" in call["prompt_file"]]
+    assert sorted(rung_of(call) for call in round2) == sorted(TEST_FLASH), "a later rung joined the swarm"
+    assert [rung_of(call) for call in round3] == list(TEST_RUNGS)
+
+
+def test_the_loop_stops_when_the_ladder_ends(world: World, capsys: pytest.CaptureFixture[str]) -> None:
+    """Criterion 9: the last rung is not repeated and no model is substituted - the stop names the maintainer."""
+    endpoints = world.root / "model-endpoints.yaml"
+    pin_entry(endpoints, ("solo-rung",))
+    data = yaml.safe_load(endpoints.read_text(encoding="utf-8"))
+    entry = next(e for e in data["endpunkte"] if e["name"] == "opencode-go")
+    entry["flash_swarm"] = []
+    endpoints.write_text(yaml.safe_dump(data, allow_unicode=True), encoding="utf-8")
+    world.script(pi=[{"stdout": rows(1)}] * 3)
+    assert world.run("review-loop") == 0
+    decide_record(world)
+    assert world.run("review-loop") == 0
+    assert grouped([rung_of(call) for call in world.reviews("pi")], TEST_FREE, ("solo-rung",))
+    decide_record(world)
+    capsys.readouterr()
+    assert world.run("review-loop") == 2
+    refused = capsys.readouterr().err
+    assert "every stage of this run is consumed and the last round was not clean" in refused
+    assert "No model is substituted" in refused
+    assert len(world.reviews("pi")) == 3, "the final rung was repeated or a substitute answered"
+
+
+def set_round_origin(w: World, number: int, origin: str) -> None:
+    """Rewrite the Origin cell of every `L<number>-` row of the record, as a repair's provenance would."""
+    text = w.record().read_text(encoding="utf-8")
+    text = re.sub(
+        rf"^(\| L{number}-\d+ (?:\|[^|]+){{2}}\|)[^|]+(\|.*)$",
+        rf"\g<1> {origin} \g<2>",
+        text,
+        flags=re.M,
+    )
+    w.record().write_text(text, encoding="utf-8")
+
+
+def test_two_fix_r_rounds_stop_the_loop(world: World, capsys: pytest.CaptureFixture[str]) -> None:
+    """Criterion 10: two consecutive rounds whose accepted rows all begin fix-r stop the loop for the maintainer."""
+    world.script(pi=[{"stdout": rows(1)}] * 5)
+    assert world.run("review-loop") == 0
+    decide_record(world)
+    set_round_origin(world, 1, "fix-r1")
+    assert world.run("review-loop") == 0
+    decide_record(world)
+    set_round_origin(world, 2, "fix-r2")
+    capsys.readouterr()
+    assert world.run("review-loop") == 2
+    refused = capsys.readouterr().err
+    assert "repair brake" in refused and "maintainer" in refused
+    assert len(world.reviews("pi")) == 4, "the loop ran on past the brake"
+    # a base finding in either round keeps the brake quiet: round 3 runs
+    set_round_origin(world, 1, "base")
+    assert world.run("review-loop") == 0
+    assert len(world.reviews("pi")) == 5
+    assert "## Round 3 — mimo-v2.6-pro, " in world.record().read_text(encoding="utf-8")
+
+
+def test_round_history_survives_split_releases_and_config_edits(
+    world: World, capsys: pytest.CaptureFixture[str]
+) -> None:
+    """Criterion 13: a release and an edited rule neither reset a stop nor replay a consumed stage."""
+    world.script(pi=[{"stdout": rows(1)}] * 2)
+    assert world.run("review-loop") == 0
+    decide_record(world)
+    world.write_findings(VERDICT)
+    assert world.run("release-loop") == 0
+    assert not world.record().exists()
+    # the configuration changes after the release: the run's snapshot stands
+    # (the pinned members stay declared: a snapshot id the file no longer lists is refused, not replaced)
+    pin_entry(world.root / "model-endpoints.yaml", ("moved-rung", "deepseek-v4.1-flash", "mimo-v2.6-flash"))
+    (world.bin / "calls.jsonl").unlink()
+    world.script(pi=[{"stdout": rows(1)}] * 3)
+    assert world.run("review-loop") == 0
+    assert grouped([rung_of(call) for call in world.reviews("pi")], TEST_FLASH), (
+        "the edited yaml replayed the free stage or moved the swarm"
+    )
+    decide_record(world, status="rejected — scope")
+    capsys.readouterr()
+    assert world.run("review-loop") == 2, "a clean round after the release admitted another call"
+    assert "round 2 was clean" in capsys.readouterr().err
+    # a multi-digit count and a spent snapshot survive a release of their own
+    spent = loop_state(("free", "flash", f"rung:{TEST_RUNGS[0]}"))
+    block = "\n\n".join(
+        [
+            f"{stage2.RELEASE_HEADING} 2026-10-16",
+            render_row(["L12-1", "MAJOR", "MAINT", "base", "x.py:1", "f", "mimo-v2.6-pro", "taken — t", "no", "—"]),
+            "Rounds run: 12",
+            f"{stage2.STATE_KEY}{json.dumps(spent, sort_keys=True)}",
+            "Kept from the loop record:",
+        ]
+    )
+    shutil.rmtree(world.record().parent)  # a release deletes the record it counted
+    world.write_findings(VERDICT, block)
+    capsys.readouterr()
+    assert world.run("review-loop") == 2
+    assert "every stage of this run is consumed" in capsys.readouterr().err, "a spent snapshot admitted a round"
+
+
+def test_the_probe_checks_discovered_and_paid_models_once(world: World) -> None:
+    """Criterion 14: the probe checks each discovered free member and each eligible paid model once, guarded."""
+    world.script(pi=[{"stdout": "probe answer"}] * 5)
+    assert world.run("probe") == 0
+    kinds = [call.get("kind") for call in world.calls("pi")]
+    assert kinds[:2] == ["refresh", "list"], "the probe skipped the forced live refresh"
+    reviews = world.reviews("pi")
+    assert [rung_of(call) for call in reviews] == [*TEST_FREE, *TEST_LADDER], (
+        "a member was skipped, repeated or reordered"
+    )
+    free_calls = [call for call in reviews if "--no-tools" in call["argv"]]
+    paid_calls = [call for call in reviews if "--tools" in call["argv"]]
+    assert [rung_of(call) for call in free_calls] == list(TEST_FREE)
+    for call in free_calls:
+        prompt = call["prompt_file"]
+        assert "## The implementation diff" in prompt and stage2.READ_REQUEST not in prompt
+        assert not Path(call["cwd"]).is_relative_to(world.root)
+    for call in paid_calls:
+        argv = call["argv"]
+        assert argv[argv.index("--tools") + 1] == "read,grep,find,ls"
+        assert stage2.READ_REQUEST in call["prompt_file"]
+    assert [rung_of(call) for call in paid_calls] == list(TEST_LADDER)
+    lines = [line for line in world.text().splitlines() if line.startswith("Stage-2 call,")]
+    assert len(lines) == 5, "a member call ran without its own declaration and leak check"
+
+
+@pytest.mark.parametrize("failed_index", [0, 2, 4], ids=["first-free", "first-paid", "last-paid"])
+@pytest.mark.parametrize("empty", [False, True], ids=["unavailable", "empty-answer"])
+def test_the_probe_continues_after_member_failures(
+    world: World, capsys: pytest.CaptureFixture[str], failed_index: int, empty: bool
+) -> None:
+    """Criterion 14: a failed member leaves every other check and the final inventory intact."""
+    members = [*TEST_FREE, *TEST_LADDER]
+    steps = [{"stdout": "probe answer"} for _ in members]
+    steps[failed_index] = {"stdout": ""} if empty else {"exit": 1, "stderr": "Model is unavailable"}
+    world.script(pi=steps)
+
+    assert world.run("probe") == 1
+    assert [rung_of(call) for call in world.reviews()] == members
+    output = capsys.readouterr()
+    failed = members[failed_index]
+    reason = "the answer is empty" if empty else "Model is unavailable"
+    assert f"probe: {failed} failed:" in output.out and reason in output.out
+    answered = [member for member in members if member != failed]
+    assert f"probe: 4 members answered: {', '.join(answered)}" in output.out
+    assert f"probe: 1 members failed: {failed}" in output.out
+    assert "failed:" in output.err
+    lines = [line for line in world.text().splitlines() if line.startswith("Stage-2 call,")]
+    assert len(lines) == len(members), "continuation bypassed a member's declaration/leak check"
+
+
+def loop_doctrine_problems(workflow: str, runner: str, template: str, agents: str) -> list[str]:
+    """Criterion 15: the live loop doctrine names the swarms, the live discovery and its limits."""
+    one = flat(workflow)
+    found = []
+    for needle in (
+        "until a round is clean",
+        "free swarm",
+        "Flash swarm",
+        "pi update --models",
+        "free_stage",
+        "flash_swarm",
+        "modelle",
+        "no stale cache listed",
+        "pi.dev",
+        "not what OpenCode Go bills",
+        "no model is substituted",
+        "repair brake",
+        "implementation diff",
+        "resets a stop or replays a consumed stage",
+    ):
+        if needle not in one:
+            found.append(f"the workflow's loop section lacks {needle}")
+    for stale in ("at most three rounds", "MAX_ROUNDS", "pinned catalog"):
+        if stale in one:
+            found.append(f"the workflow's loop section still says {stale}")
+    docstring = runner.split('"""')[1]
+    if "MAX_ROUNDS" in runner:
+        found.append("the runner still holds a MAX_ROUNDS constant")
+    if "until a round is clean" not in flat(docstring):
+        found.append("the runner docstring keeps no until-clean rule")
+    if "pi update --models" not in flat(docstring) or "listing a stale cache" not in flat(docstring):
+        found.append("the runner docstring claims freshness without the forced live refresh")
+    if not re.search(r"ADR 0015.{0,200}superseded", runner, re.S):
+        found.append("the runner cites ADR 0015 without its supersession")
+    if "trip the review loop's repair brake" not in flat(template):
+        found.append("the findings template keeps the old brake consequence")
+    if agents.count("\n") > 200:
+        found.append("AGENTS.md exceeds its 200-line cap")
+    return found
+
+
+def test_the_loop_doctrine_names_both_swarms_until_clean() -> None:
+    """Criterion 15: the live text agrees on both swarms, live discovery, the stops and the brake - no old cap."""
+    texts = {
+        "workflow": section(WORKFLOW.read_text(encoding="utf-8"), "### The review loop (phase 4b)"),
+        "runner": (REPO_ROOT / "scripts" / "stage2.py").read_text(encoding="utf-8"),
+        "template": (REPO_ROOT / "templates" / "findings.md").read_text(encoding="utf-8"),
+        "agents": (REPO_ROOT / "AGENTS.md").read_text(encoding="utf-8"),
+    }
+    assert loop_doctrine_problems(**texts) == []
+    planted = texts["workflow"].replace("until a round is clean", "at most three rounds", 1)
+    assert loop_doctrine_problems(planted, **{k: v for k, v in texts.items() if k != "workflow"})
+    planted = texts["runner"] + "\nMAX_ROUNDS = 3\n"
+    assert loop_doctrine_problems(**{**texts, "runner": planted})
+    planted = texts["runner"].replace("three-round reading is superseded", "three-round reading stands")
+    assert loop_doctrine_problems(**{**texts, "runner": planted})
+    planted = texts["template"].replace("trip the review loop's repair brake", "caps the loop at three rounds")
+    assert loop_doctrine_problems(**{**texts, "template": planted})
+    # the endpoint remark states the forced refresh, the live source and its billing limitation
+    remark = " ".join(endpoints()["opencode-go"]["bemerkung"].split())
+    for needle in ("pi update --models", "pi.dev", "implementation diff", "flash_swarm", "free_stage"):
+        assert needle in remark, ("remark", needle)
+
+
+def adr_0021_problems(text: str) -> list[str]:
+    """Criterion 16: the record carries the agreement - the amendment, both swarms and the stops."""
+    one = flat(text)
+    return [
+        needle
+        for needle in (
+            "Amends ADR 0011 decisions 3 and 8",
+            "ADR 0017 decision 6",
+            "Q-9/Q-10",
+            "addenda of 2026-10-16",
+            "pi update --models",
+            "no stale-cache fallback",
+            "include/exclude lists with date and reason",
+            "Never admit provider `opencode` (Zen)",
+            "unread retention/training terms",
+            "parallel paid Flash swarm",
+            "repair brake",
+            "no final-model repeat follows",
+            "at most one review call per discovered free member",
+            "pi.dev",
+        )
+        if needle not in one
+    ]
+
+
+def test_adr_0021_amends_the_round_budget() -> None:
+    """Criterion 16: ADR 0021 carries the agreement and the historical bodies it amends stand unchanged."""
+    text = (REPO_ROOT / "docs" / "adr" / "0021-review-swarms-until-clean.md").read_text(encoding="utf-8")
+    assert adr_0021_problems(text) == []
+    for planted in (
+        text.replace("Amends ADR 0011 decisions 3 and 8", "Amends ADR 0011 decision 3", 1),
+        text.replace("Q-9/Q-10", "Q-10", 1),
+        text.replace("parallel paid Flash swarm", "sequential paid Flash swarm", 1),
+        text.replace("no stale-cache fallback", "falls back to the cached catalog", 1),
+    ):
+        assert adr_0021_problems(planted), planted[:80]
+    # the amendment, not a rewrite: the amended decisions' original sentences stand
+    older = flat(
+        (REPO_ROOT / "docs" / "adr" / "0011-stage-2-reviews-through-opencode-go.md").read_text(encoding="utf-8")
+    )
+    assert "The loop runs at most three rounds." in older
+    assert "the loop makes at most three calls per change." in older
+    seventeen = flat((REPO_ROOT / "docs" / "adr" / "0017-codex-repairs-taken-findings.md").read_text(encoding="utf-8"))
+    assert "round 3 requires a taken or fixed row in round 2, and the maximum stays three rounds." in seventeen
 
 
 # ---------------------------------------------------------------------------
@@ -4383,7 +5235,7 @@ def released_rows(text: str) -> list[list[str]]:
 def test_a_pipe_inside_a_reviewers_finding_reaches_findings(world: World) -> None:
     """Repair round 1, F-2 (a): a shell pipe in a finding is part of the finding, not a seventh cell."""
     said = "| X1 | MAJOR | SPEC | a | src/app.py:1 | the filter `cat x | sort` drops the last row |"
-    world.script(pi=[{"stdout": said}])
+    world.script(pi=[{"model": "acme-v1-free", "stdout": said}])
     assert world.run("review-loop") == 0
     record = world.record().read_text(encoding="utf-8")
     assert [row[0] for row in stage2.record_rows(record)] == ["L1-1"]
@@ -4394,13 +5246,13 @@ def test_a_pipe_inside_a_reviewers_finding_reaches_findings(world: World) -> Non
     assert "No loop row was reported." not in text
     (row,) = released_rows(text)
     assert row[0] == "L1-1" and "cat x" in row[5] and "sort` drops the last row" in row[5]
-    assert row[6:9] == ["deepseek-v4.1-flash", "taken — test_a", "no"]
+    assert row[6:9] == ["acme-v1-free", "taken — test_a", "no"]
 
 
 def test_a_line_that_is_not_a_loop_row_is_carried_to_findings(world: World) -> None:
     """Repair round 1, F-2 (a): what the release cannot read as a row arrives as it stands, and the record goes last."""
     answer = rows(1) + "\n| half | a row |\nA remark.\n"
-    world.script(pi=[{"stdout": answer}])
+    world.script(pi=[{"model": "acme-v1-free", "stdout": answer}])
     assert world.run("review-loop") == 0
     decide_record(world)
     world.write_findings(VERDICT)
@@ -4454,7 +5306,7 @@ REVIEWER_PROSE = ["## Why this matters", "A remark.", "```sh", "# run: grep foo 
 
 def test_every_line_of_a_reviewers_answer_reaches_findings_even_one_that_starts_with_a_hash(world: World) -> None:
     """Repair round 2, F-10: a heading or a code comment of the reviewer is not one of the record's own headings."""
-    world.script(pi=[{"stdout": rows(1) + "\n" + "\n".join(REVIEWER_PROSE) + "\n"}])
+    world.script(pi=[{"model": "acme-v1-free", "stdout": rows(1) + "\n" + "\n".join(REVIEWER_PROSE) + "\n"}])
     assert world.run("review-loop") == 0
     decide_record(world)
     world.write_findings(VERDICT)
@@ -4462,36 +5314,34 @@ def test_every_line_of_a_reviewers_answer_reaches_findings_even_one_that_starts_
     text = world.text()
     lines = text.splitlines()
     for line in REVIEWER_PROSE:
-        assert line in lines, line
+        assert f"> {line}" in lines, line
     assert "# Loop record" not in text and "## Round 1 — deepseek" not in text, "the record's own headings were carried"
     assert not world.record().exists()
 
 
 def test_an_answer_without_rows_reaches_findings_as_it_came(world: World) -> None:
-    """Repair round 2, F-10: the blank lines and the `#` lines of an answer with no row are kept as they stand."""
+    """P6-16 supersedes F-10: arbitrary rowless commentary is failure, never a clean review."""
     answer = "## Notes\n\nFirst paragraph.\n\n# a comment line\n\nLast."
-    world.script(pi=[{"stdout": answer}])
-    assert world.run("review-loop") == 0
-    world.write_findings(VERDICT)
-    assert world.run("release-loop") == 0
-    assert answer in world.text()
-    assert "# Loop record" not in world.text() and "## Round 1 — deepseek" not in world.text()
+    world.script(pi=[{"model": "acme-v1-free", "stdout": answer}])
+    assert world.run("review-loop") == 1
+    assert not world.record().exists()
 
 
 def test_a_reviewers_lines_that_look_like_the_records_own_text_are_carried(world: World) -> None:
     """Repair round 2, F-10: the intro sentences are the runner's only where the runner wrote them."""
-    world.script(pi=[{"stdout": stage2.RECORD_INTRO}])
+    world.script(pi=[{"model": "acme-v1-free", "stdout": rows(1) + "\n" + stage2.RECORD_INTRO}])
     assert world.run("review-loop") == 0
+    decide_record(world)
     world.write_findings(VERDICT)
     assert world.run("release-loop") == 0
     lines = world.text().splitlines()
     for line in stage2.RECORD_INTRO.splitlines():
-        assert line in lines, line
+        assert f"> {line}" in lines, line
 
 
 def test_a_new_records_intro_names_the_not_a_test_status_and_the_fixed_mark(world: World) -> None:
     """Repair round 1, L1-2. Planted fault: the intro a new record gets names only the two old Status words."""
-    world.script(pi=[{"stdout": rows(1)}])
+    world.script(pi=[{"model": "acme-v1-free", "stdout": rows(1)}])
     assert world.run("review-loop") == 0
     record = world.record().read_text(encoding="utf-8")
     assert "taken — not a test — <reason>" in record
@@ -4500,7 +5350,12 @@ def test_a_new_records_intro_names_the_not_a_test_status_and_the_fixed_mark(worl
 
 def test_a_rounds_words_do_not_swallow_the_rows_of_the_next(world: World) -> None:
     """Repair round 2: one round's words end at the next round heading; round 2's rows are read, round 1's words carried."""
-    world.script(pi=[{"stdout": rows(1) + "\nA remark of round 1."}, {"stdout": rows(1) + "\nA remark of round 2."}])
+    world.script(
+        pi=[
+            {"model": "acme-v1-free", "stdout": rows(1) + "\nA remark of round 1."},
+            {"model": "deepseek-v4.1-flash", "stdout": rows(1) + "\nA remark of round 2."},
+        ]
+    )
     assert world.run("review-loop") == 0
     decide_record(world)
     assert world.run("review-loop") == 0
@@ -4520,11 +5375,19 @@ def test_a_table_line_a_reviewer_wrote_with_a_loop_id_is_carried_not_refused(
     """Repair round 2, F-11: the refusal is for the rows the implementer must decide, not the reviewer's own words."""
     said = rows(1) + "\n| L1-1 | still open from the last round |\n"
     if verb == "review":
-        world.script(codex=[codex_ok("T1", rows(1)), codex_ok("T1", "L1-1: agree")], pi=[{"stdout": said}])
+        world.script(
+            codex=[codex_ok("T1", rows(1)), codex_ok("T1", "L1-1: agree")],
+            pi=[{"model": "acme-v1-free", "stdout": said}],
+        )
     elif verb == "review-loop":
-        world.script(pi=[{"stdout": said}, {"stdout": "Nothing to report."}])
+        world.script(
+            pi=[
+                {"model": "acme-v1-free", "stdout": said},
+                {"model": "deepseek-v4.1-flash", "stdout": "No finding."},
+            ]
+        )
     else:
-        world.script(pi=[{"stdout": said}])
+        world.script(pi=[{"model": "acme-v1-free", "stdout": said}])
     assert world.run("review-loop") == 0
     decide_record(world)
     if verb == "release-loop":
@@ -4532,11 +5395,12 @@ def test_a_table_line_a_reviewer_wrote_with_a_loop_id_is_carried_not_refused(
     capsys.readouterr()
     assert world.run(verb) == 0, capsys.readouterr().err
     if verb == "review-loop":
-        assert "## Round 2 — mimo-v2.6-flash, " in world.record().read_text(encoding="utf-8")
-        assert "This is round 2; you are `mimo-v2.6-flash`." in world.calls("pi")[-1]["prompt_file"]
+        assert "## Round 2 — deepseek-v4.1-flash, mimo-v2.6-flash, " in world.record().read_text(encoding="utf-8")
+        prompts = [c["prompt_file"] or "" for c in world.reviews("pi")]  # the Flash members start in either order
+        assert any("This is round 2; you are `deepseek-v4.1-flash`." in prompt for prompt in prompts)
         return
     text = world.text()
-    assert "| L1-1 | still open from the last round |" in text.splitlines()
+    assert "> | L1-1 | still open from the last round |" in text.splitlines()
     assert [r[0] for r in released_rows(text) if len(r) == 10] == ["L1-1"]
     assert not world.record().exists()
 
@@ -4545,7 +5409,7 @@ def test_a_damaged_row_of_the_record_still_refuses_beside_reviewer_text(
     world: World, capsys: pytest.CaptureFixture[str]
 ) -> None:
     """Repair round 2, F-11: the record's own rows are held to the rule even when the reviewer's text stands below them."""
-    world.script(pi=[{"stdout": rows(2) + "\n| L1-1 | still open |\n"}])
+    world.script(pi=[{"model": "acme-v1-free", "stdout": rows(2) + "\n| L1-1 | still open |\n"}])
     assert world.run("review-loop") == 0
     record = world.record().read_text(encoding="utf-8")
     world.record().write_text(re.sub(r"^\| L1-2 \|.*$", "| L1-2 | MAJOR |", record, flags=re.M), encoding="utf-8")
@@ -5275,14 +6139,20 @@ def test_a_missing_glm_key_refuses_the_repair(world: World) -> None:
     assert len(world.calls("codex")) == 1
 
 
+def drop_declared_model(world: World, endpoint: str, model: str) -> None:
+    """Take one model out of an endpoint's `modelle` list in the world's declaration file."""
+    path = world.root / "model-endpoints.yaml"
+    data = yaml.safe_load(path.read_text(encoding="utf-8"))
+    entry = next(e for e in data["endpunkte"] if e["name"] == endpoint)
+    assert model in entry["modelle"], (endpoint, model)
+    entry["modelle"].remove(model)
+    path.write_text(yaml.safe_dump(data, allow_unicode=True), encoding="utf-8")
+
+
 def test_an_undeclared_glm_5_3_refuses_the_repair(world: World) -> None:
     """Stage2-repair criterion 10, replaced by ADR 0017. Planted fault: a repair that still checks `glm-5.3`."""
     repair_world(world)
-    path = world.root / "model-endpoints.yaml"
-    text = path.read_text(encoding="utf-8")
-    line = "      - glm-5.3\n"
-    assert line in text
-    path.write_text(text.replace(line, "", 1), encoding="utf-8")
+    drop_declared_model(world, "glm-coding-plan", "glm-5.3")
     git(world.root, "add", "-A")
     git(world.root, "commit", "--quiet", "-m", "drop glm-5.3")
     assert world.run("repair") == 0
@@ -5374,12 +6244,7 @@ def test_an_undeclared_repair_endpoint_refuses_before_call(
     """Criterion 9. Planted fault: no declaration check before a Codex or a Sonnet attempt."""
     repair_world(world)
     script_repair(world, [{"stdout": "first"}, {"stdout": "second"}, repair_step()], make=[{"stdout": "green\n"}] * 3)
-    path = world.root / "model-endpoints.yaml"
-    text = path.read_text(encoding="utf-8")
-    line = f"      - {missing}\n"
-    entry = text.index("  - name: claude-code-plan" if missing.startswith("claude") else "  - name: openai-codex")
-    start = text.index(line, entry)
-    path.write_text(text[:start] + text[start + len(line) :], encoding="utf-8")
+    drop_declared_model(world, "claude-code-plan" if missing.startswith("claude") else "openai-codex", missing)
     git(world.root, "add", "-A")
     git(world.root, "commit", "--quiet", "-m", "drop a declared model")
     assert world.run("repair", "demo", *options) == 2
@@ -7119,27 +7984,23 @@ def test_round_three_starts_after_a_fixed_round_two_row(world: World) -> None:
     ]
     assert stage2.taken_in_round([row], 2)
     assert not stage2.taken_in_round([[*row[:7], "rejected — r", ""]], 2)
-    world.script(pi=[{"stdout": rows(1)}] * 3)
+    world.script(pi=[{"stdout": rows(1)}] * 5)
     assert world.run("review-loop") == 0
-    decide_record(world, status="rejected — out of scope")
+    decide_record(world)
     assert world.run("review-loop") == 0
-    decide_record(world, status="rejected — out of scope")
+    decide_record(world)
     record = world.record().read_text(encoding="utf-8")
     world.record().write_text(
         re.sub(
-            r"^(\| L2-1 \|.*\|) rejected — out of scope \| no \|$",
+            r"^(\| L2-1 \|.*\|) taken — test_a \| no \|$",
             r"\1 fixed — tests/test_seed.py::test_seed | no |",
             record,
             flags=re.M,
         ),
         encoding="utf-8",
     )
-    assert world.run("review-loop") == 0
-    assert [rung_of(call) for call in world.calls("pi")] == [
-        "deepseek-v4.1-flash",
-        "mimo-v2.6-flash",
-        "mimo-v2.6-pro",
-    ]
+    assert world.run("review-loop") == 0, "the repaired row did not keep round 2 accepted"
+    assert grouped([rung_of(call) for call in world.reviews("pi")], TEST_FREE, TEST_FLASH, TEST_RUNGS)
 
 
 def test_stage2_off_is_accepted_for_repair(world: World, monkeypatch: pytest.MonkeyPatch) -> None:
@@ -7236,7 +8097,7 @@ STAGE2_ROUTING = {
     "2a Spec review": "Opus 5.5",
     "3 Plan": "gpt-6.1-sol",
     "4 Implement": "GLM 5.3 Flash",
-    "4b Review loop": "the ladder",
+    "4b Review loop": "the swarms, then the ladder",
     "6 Review": "gpt-6.1-sol",
 }
 
@@ -7461,14 +8322,14 @@ def test_workflow_section_4_routes_the_three_reviews() -> None:
     assert routing_problems(text) == []
     assert class_table_problems(text) == []
     four = routing_rows(section(text, "## 4 · "))
-    for needle in ("model-endpoints.yaml", "modelle[n-1]", "round 3 only when round 2 wrote a taken row"):
+    for needle in ("free_stage", "flash_swarm", "`modelle`", "anfragen_5h", "descending"):
         assert needle in four["4b Review loop"][1], needle
     assert four["2a Spec review"][0] == "Opus 5.5"
     for phase in ("2 Spec", "2b Design", "3 Plan", "6 Review"):
         assert four[phase][0] == "gpt-6.1-sol", phase
     for old, new in (
         ("| 2a Spec review | **Opus 5.5** |", "| 2a Spec review | **gpt-6.1-sol** |"),
-        ("| 4b Review loop | **the ladder** |", "| 4b Review loop | **GLM 5.3** |"),
+        ("| 4b Review loop | **the swarms, then the ladder** |", "| 4b Review loop | **GLM 5.3** |"),
         ("| 6 Review | **gpt-6.1-sol** |", "| 6 Review | **Opus 5.5** |"),
         (
             f"| 2 Spec | **gpt-6.1-sol** | effort {effort_reference('draft')}, one call",
@@ -7727,10 +8588,10 @@ def phase_table_problems(workflow: str) -> list[str]:
         return [f"the 4b row has {len(cells)} cells, not 5"]
     if "findings.md" not in cells[2] or "release-loop" not in cells[2]:
         found.append("the 4b artefact is not the loop rows in findings.md after release-loop")
-    if "at most three rounds" not in cells[3] or "make verify" not in cells[3]:
-        found.append("the 4b gate is not at most three rounds with make verify after each repair")
-    if "round 3 only when round 2 wrote a taken row" not in cells[3]:
-        found.append("the 4b gate does not condition round 3 on round 2's taken row")
+    if "until a clean round" not in cells[3] or "make verify" not in cells[3]:
+        found.append("the 4b gate is not rounds until a clean round with make verify after each repair")
+    if "free swarm" not in cells[3] or "Flash swarm" not in cells[3] or "ladder" not in cells[3]:
+        found.append("the 4b gate does not name the two swarms and the ladder bound")
     if "04b-review-loop.md" not in cells[4] or not (PROMPTS / "04b-review-loop.md").is_file():
         found.append("the 4b row does not link an existing prompt")
     return found
@@ -7741,8 +8602,9 @@ def test_the_phase_table_has_the_review_loop() -> None:
     assert phase_table_problems(text) == []
     row = next(line for line in text.splitlines() if line.startswith("| 4b |"))
     assert phase_table_problems(text.replace(row + "\n", "")), "the row removed"
-    assert phase_table_problems(text.replace("at most three rounds", "rounds", 1))
-    assert phase_table_problems(text.replace("round 3 only when round 2 wrote a taken row", "round 3 when needed", 1))
+    assert phase_table_problems(text.replace("until a clean round", "at most three rounds", 1))
+    assert phase_table_problems(text.replace("free swarm", "first model", 1))
+    assert phase_table_problems(text.replace("Flash swarm", "second model", 1))
     assert phase_table_problems(text.replace("(`release-loop`)", "", 1))
     assert phase_table_problems(text.replace("04b-review-loop.md", "04c-review-loop.md"))
 
@@ -8066,12 +8928,14 @@ def test_the_spec_prompt_asks_one_condition_and_a_refutation() -> None:
 
 def agents_md_problems(text: str) -> list[str]:
     found = []
-    if not re.search(r"^\| 4b \| Review loop \*\(stage 2\)\* \|.*three rounds.*\|$", text, re.M):
-        found.append("AGENTS.md has no 4b row with its gate")
+    if not re.search(r"^\| 4b \| Review loop \*\(stage 2\)\* \|.*until a clean round.*\|$", text, re.M):
+        found.append("AGENTS.md has no 4b row with its until-clean gate")
     row = next((line for line in text.splitlines() if line.startswith("| 4b |")), "")
-    if "round 3 only when round 2 wrote a taken row" not in row:
-        found.append("AGENTS.md has no 4b row with the round-3 condition")
+    if "free swarm" not in row or "Flash swarm" not in row or "paid ladder" not in row:
+        found.append("AGENTS.md's 4b row does not name the two swarms and the paid ladder")
     one = flat(text)
+    if "at most three rounds" in one:
+        found.append("AGENTS.md still caps the loop at three rounds")
     if (
         "is started only through `python3 scripts/stage2.py`" not in one
         or "runs the leak check before every call" not in one
@@ -8097,21 +8961,22 @@ def test_agents_md_names_the_loop_and_the_runner() -> None:
     row = next(line for line in text.splitlines() if line.startswith("| 4b |"))
     assert agents_md_problems(text.replace(row + "\n", ""))
     assert agents_md_problems(text.replace("only through", "also through"))
-    assert agents_md_problems(text.replace("round 3 only when round 2 wrote a taken row", "round 3 as needed"))
+    assert agents_md_problems(text.replace("until a clean round", "at most three rounds", 1))
+    assert agents_md_problems(text.replace("free swarm", "first reviewer", 1))
     assert agents_md_problems(text.replace("Codex drafts spec, design and plan", "Codex reviews spec, design", 1))
     assert agents_md_problems(text.replace("Opus 5.5 reviews 2a", "Codex reviews 2a", 1))
     assert agents_md_problems(text.replace("GLM 5.3 after two failed attempts", "GLM 5.3 when asked", 1))
 
 
 def test_workflow_section_4_keeps_the_lineage_argument() -> None:
-    """Criterion 22: the why stands and names the rungs' lineages instead of two reviewers of one round."""
+    """Criterion 22: preserve the diversity argument while model membership stays in configuration."""
     four = flat(section(WORKFLOW.read_text(encoding="utf-8"), "## 4 · "))
     for phrase in (
         "blind spots",
         "Disagreements are recorded, not resolved automatically",
         "is the information",
-        "DeepSeek",
-        "MiMo",
+        "training lineages configured in",
+        "`model-endpoints.yaml`",
         "Rung 1 flagged it, rung 2 did not",
     ):
         assert phrase in four, phrase
@@ -8119,7 +8984,7 @@ def test_workflow_section_4_keeps_the_lineage_argument() -> None:
 
 
 def test_the_prompts_name_the_ladder_and_the_limit() -> None:
-    """Criterion 23: the loop text names the ladder and the three rounds; 2a and 6 name Codex and the limit; Flash stays."""
+    """Criterion 15: the loop text names both swarms, live discovery and the until-clean stop; no round cap stands anywhere."""
     texts = {
         "02a": (PROMPTS / "02a-spec-review.md").read_text(encoding="utf-8"),
         "04b": (PROMPTS / "04b-review-loop.md").read_text(encoding="utf-8"),
@@ -8127,15 +8992,26 @@ def test_the_prompts_name_the_ladder_and_the_limit() -> None:
         "agents": (REPO_ROOT / "AGENTS.md").read_text(encoding="utf-8"),
     }
     one = flat(texts["04b"])
-    for needle in ("ladder", "opencode-go", "three rounds", "round 3 only when round 2 wrote", "taken"):
+    for needle in (
+        "ladder",
+        "opencode-go",
+        "until a round is clean",
+        "free swarm",
+        "Flash swarm",
+        "pi update --models",
+        "taken",
+    ):
         assert needle in one, ("04b", needle)
+    assert "at most three rounds" not in one and "round 3" not in one, "04b keeps the old cap"
+    assert "free_stage" in one and "flash_swarm" in one, "04b does not name the configurable rule"
     for name in ("02a", "06"):
         one = flat(texts[name])
         assert "gpt-6.1-sol" in one, name
-        assert "three rounds" in one and "round 3 only when round 2 wrote" in one, name
+        assert "until a round is clean" in one, name
+        assert "three rounds" not in one and "round 3 only when round 2 wrote" not in one, name
         assert "deepseek-v4.1-flash" not in one and "mimo-v2.6" not in one, name
     agents = flat(texts["agents"])
-    for needle in ("ladder", "opencode-go", "three rounds", "round 3 only when round 2 wrote"):
+    for needle in ("ladder", "opencode-go", "until a clean round", "free swarm", "Flash swarm"):
         assert needle in agents, ("agents", needle)
     for name in ("01-explore.md", "04-implement.md"):
         assert "GLM 5.3 Flash" in (PROMPTS / name).read_text(encoding="utf-8"), name
@@ -8225,10 +9101,12 @@ def test_no_doctrine_text_repeats_the_ladder_order() -> None:
     """The ladder is data: a reorder of the list in model-endpoints.yaml leaves every doctrine text true."""
     ladder = yaml.safe_load((REPO_ROOT / "model-endpoints.yaml").read_text(encoding="utf-8"))["endpunkte"]
     ids = next(e for e in ladder if e["name"] == "opencode-go")["modelle"]
-    assert len(ids) == 3
+    assert ids and len(ids) == len(set(ids))
+    # an id another endpoint declares too (the Z.ai Flash model) is that endpoint's name in the doctrine
+    elsewhere = {m for e in ladder if e["name"] != "opencode-go" for m in e.get("modelle") or []}
     for path in ("AGENTS.md", "docs/WORKFLOW.md", "prompts/04b-review-loop.md"):
         text = (REPO_ROOT / path).read_text(encoding="utf-8")
-        for model in ids:
+        for model in (m for m in ids if m not in elsewhere):
             assert model not in text, f"{path} names {model}; the ladder lives in model-endpoints.yaml only"
 
 
@@ -8398,8 +9276,8 @@ def repair_doctrine_problems(workflow: str, agents: str) -> list[str]:
     """Criterion 30: the doctrine names the verb, routes the repair, and gives the Status to the orchestrator."""
     found = []
     four = flat(section(workflow, "## 4 · "))
-    if "Nine verbs exist" in four or "Ten verbs exist" not in four:
-        found.append("section 4 does not say ten verbs")
+    if "Ten verbs exist" in four or "Eleven verbs exist" not in four:
+        found.append("section 4 does not say eleven verbs")
     if "- `repair` — Codex, every taken finding" not in workflow:
         found.append("the verb list has no repair bullet")
     if "| Repair after 4b and 6 | **gpt-6.1-sol** |" not in workflow:
@@ -8426,7 +9304,7 @@ def test_the_doctrine_names_the_repair_verb() -> None:
     workflow = WORKFLOW.read_text(encoding="utf-8")
     agents = (REPO_ROOT / "AGENTS.md").read_text(encoding="utf-8")
     assert repair_doctrine_problems(workflow, agents) == []
-    assert repair_doctrine_problems(workflow.replace("Ten verbs exist", "Nine verbs exist", 1), agents)
+    assert repair_doctrine_problems(workflow.replace("Eleven verbs exist", "Ten verbs exist", 1), agents)
     assert repair_doctrine_problems(
         workflow.replace("- `repair` — Codex, every taken finding", "- `repair` — GLM 5.3 Flash, taken findings", 1),
         agents,
@@ -8747,3 +9625,612 @@ def test_codex_repair_doctrine_and_endpoint_remarks_agree() -> None:
 def test_pi_wrapper_is_repository_local() -> None:
     """Criterion 2: the production runner never selects a global Pi, even at the same version."""
     assert stage2.PI_WRAPPER == REPO_ROOT / "tools" / "pi" / "pi"
+
+
+# ---------------------------------------------------------------------------
+# Q-13: the ladder is ordered by a declared cost value; a failed Flash member is replaced
+# ---------------------------------------------------------------------------
+
+
+def _entry_of(target: Path) -> dict:
+    data = yaml.safe_load(target.read_text(encoding="utf-8"))
+    return next(e for e in data["endpunkte"] if e["name"] == "opencode-go")
+
+
+def _set_values(target: Path, values: dict[str, int | None]) -> None:
+    """Rewrite the world's `anfragen_5h` values; None removes the value."""
+    data = yaml.safe_load(target.read_text(encoding="utf-8"))
+    entry = next(e for e in data["endpunkte"] if e["name"] == "opencode-go")
+    for model, value in values.items():
+        if value is None:
+            entry["modelle_terms"][model].pop("anfragen_5h", None)
+        else:
+            entry["modelle_terms"][model]["anfragen_5h"] = value
+    target.write_text(yaml.safe_dump(data, allow_unicode=True), encoding="utf-8")
+
+
+def test_the_ladder_is_ordered_by_the_declared_cost_value(world: World) -> None:
+    """Q-13: `anfragen_5h` descending, ties by id, a model without the value last; the declared order does not count."""
+    target = world.root / "model-endpoints.yaml"
+    _set_values(target, {"deepseek-v4.1-flash": 100, "mimo-v2.6-flash": 300, "mimo-v2.6-pro": 100})
+    assert stage2.ladder(world.root) == ["mimo-v2.6-flash", "deepseek-v4.1-flash", "mimo-v2.6-pro"]
+    _set_values(target, {"mimo-v2.6-flash": None})
+    assert stage2.ladder(world.root) == ["deepseek-v4.1-flash", "mimo-v2.6-pro", "mimo-v2.6-flash"]
+    entry = _entry_of(target)
+    assert stage2.unvalued_models(entry, list(entry["modelle"])) == ["mimo-v2.6-flash"]
+    assert stage2.ordered_models(entry, list(reversed(entry["modelle"]))) == stage2.ladder(world.root)
+
+
+def test_a_model_without_the_cost_value_is_named_in_the_record_and_on_stderr(
+    world: World, capsys: pytest.CaptureFixture[str]
+) -> None:
+    """Q-13: an unvalued model orders last and is named, never dropped silently."""
+    _set_values(world.root / "model-endpoints.yaml", {"mimo-v2.6-pro": None})
+    _flash_round_world(world)
+    world.script(pi=[{"stdout": rows(1)}] * 2)
+    assert world.run("review-loop") == 0
+    assert "no anfragen_5h declared, ordered last: mimo-v2.6-pro" in capsys.readouterr().err
+    assert "no anfragen_5h declared, ordered last: mimo-v2.6-pro" in world.record().read_text(encoding="utf-8")
+
+
+def _flash_round_world(world: World) -> None:
+    world.write_record([("L1-1", "taken — test_a", "no")], state=loop_state(("free",)))
+
+
+def test_a_failed_flash_member_is_replaced_by_the_cheapest_unconsumed_rung(
+    world: World, capsys: pytest.CaptureFixture[str]
+) -> None:
+    """Q-13: the replacement answers on the same prompt, is consumed, and the swap is recorded and printed."""
+    _flash_round_world(world)
+    world.script(
+        pi=[
+            {"model": "deepseek-v4.1-flash", "exit": 1, "stderr": "boot\nModel is unavailable\n"},
+            {"model": "mimo-v2.6-flash", "stdout": rows(1, "M")},
+            {"model": "mimo-v2.6-pro", "stdout": rows(1, "P")},
+        ]
+    )
+    assert world.run("review-loop") == 0
+    err = capsys.readouterr().err
+    said = "deepseek-v4.1-flash failed: pi call failed: exit 1 (Model is unavailable); replaced by mimo-v2.6-pro"
+    assert said in err and said in world.record().read_text(encoding="utf-8")
+    assert "deepseek-v4.1-flash: Model is unavailable" in err, "the stderr tail is not prefixed with the model id"
+    calls = {rung_of(call): call for call in world.reviews("pi")}
+    assert set(calls) == {"deepseek-v4.1-flash", "mimo-v2.6-flash", "mimo-v2.6-pro"}
+    assert "This is round 2; you are `mimo-v2.6-pro`" in calls["mimo-v2.6-pro"]["prompt_file"]
+    text = world.record().read_text(encoding="utf-8")
+    assert "## Round 2 — deepseek-v4.1-flash, mimo-v2.6-flash, mimo-v2.6-pro, " in text
+    state = stage2.read_state(text, "")
+    assert "rung:mimo-v2.6-pro" in state["consumed"] and "flash" in state["consumed"]
+    decide_record(world)
+    capsys.readouterr()
+    assert world.run("review-loop") == 2, "the consumed replacement was called again as a later rung"
+    assert "every stage of this run is consumed" in capsys.readouterr().err
+
+
+def test_replacements_run_down_the_ladder_each_model_once(world: World) -> None:
+    """Q-13: a failing replacement is followed by the next; a spent ladder names it, and the round still stands."""
+    pin_entry(world.root / "model-endpoints.yaml", (*TEST_LADDER, "spike-a"))
+    state = loop_state(("free",))
+    state["paid"] = {
+        "ladder": [*TEST_LADDER, "spike-a"],
+        "flash": list(TEST_FLASH),
+        "rungs": ["mimo-v2.6-pro", "spike-a"],
+    }
+    world.write_record([("L1-1", "taken — test_a", "no")], state=state)
+    world.script(
+        pi=[
+            {"model": "deepseek-v4.1-flash", "exit": 1, "stderr": "Model is unavailable"},
+            {"model": "mimo-v2.6-flash", "stdout": rows(1, "M")},
+            {"model": "mimo-v2.6-pro", "exit": 1, "stderr": "Rate limited"},
+            {"model": "spike-a", "stdout": rows(1, "S")},
+        ]
+    )
+    assert world.run("review-loop") == 0
+    text = world.record().read_text(encoding="utf-8")
+    assert (
+        "deepseek-v4.1-flash failed: pi call failed: exit 1 (Model is unavailable); replaced by mimo-v2.6-pro" in text
+    )
+    assert "mimo-v2.6-pro failed: pi call failed: exit 1 (Rate limited); replaced by spike-a" in text
+    assert list(map(rung_of, world.reviews("pi"))).count("mimo-v2.6-pro") == 1
+    consumed = stage2.read_state(text, "")["consumed"]
+    assert "rung:mimo-v2.6-pro" in consumed and "rung:spike-a" in consumed
+
+
+def test_a_spent_ladder_leaves_the_failed_member_named(world: World, capsys: pytest.CaptureFixture[str]) -> None:
+    """Q-13: no replacement left - the failure is named; with every call failed no round completes."""
+    _flash_round_world(world)
+    world.script(
+        pi=[
+            {"model": "deepseek-v4.1-flash", "exit": 1, "stderr": "Model is unavailable"},
+            {"model": "mimo-v2.6-flash", "exit": 1, "stderr": "Model is unavailable"},
+            {"model": "mimo-v2.6-pro", "exit": 1, "stderr": "Model is unavailable"},
+        ]
+    )
+    assert world.run("review-loop") == 1
+    assert "no replacement is left on the ladder" in capsys.readouterr().err
+    assert "## Round 2" not in world.record().read_text(encoding="utf-8")
+
+
+def test_the_free_stage_selects_only_ids_of_the_fresh_overlay(world: World) -> None:
+    """Q-13: an id only Pi's shipped list carries is listed but not selected; no overlay store refuses."""
+    world.script(pi=[{"stdout": rows(1)}] * 2, pi_overlay=["acme-v1-free"])
+    assert world.run("review-loop") == 0
+    state = stage2.read_state(world.record().read_text(encoding="utf-8"), "")
+    assert state["free"]["selected"] == ["acme-v1-free"], state["free"]["selected"]
+    assert {"provider": "opencode-go", "model": "beacon-2-free"} in state["free"]["catalog"]
+    assert [rung_of(call) for call in world.reviews("pi")] == ["acme-v1-free"]
+
+
+def test_a_refresh_that_leaves_no_overlay_store_refuses(world: World, capsys: pytest.CaptureFixture[str]) -> None:
+    world.script(pi=[{"stdout": rows(1)}] * 2, pi_no_store=True)
+    assert world.run("review-loop") == 2
+    assert "models-store.json" in capsys.readouterr().err
+    assert world.reviews("pi") == []
+
+
+def test_a_flash_swarm_that_is_not_the_three_cheapest_gets_a_notice(
+    world: World, capsys: pytest.CaptureFixture[str]
+) -> None:
+    """Q-13 addition: the hand-kept list stays; a differing set is noticed on stderr and in the record, exit unchanged."""
+    entry = _entry_of(world.root / "model-endpoints.yaml")
+    ids = stage2.ladder(world.root)
+    assert stage2.cheapest_notice(entry, ids, list(reversed(ids))) is None, "the same set got a notice"
+    notice = stage2.cheapest_notice(entry, [*ids, "x-extra"], ["deepseek-v4.1-flash", "mimo-v2.6-pro"])
+    assert notice and "deepseek-v4.1-flash, mimo-v2.6-pro" in notice and "differs from the three cheapest" in notice
+    # the swarm is the three cheapest: no notice
+    state = loop_state(("free",))
+    state["paid"] = {"ladder": list(ids), "flash": list(ids), "rungs": []}
+    world.write_record([("L1-1", "taken — test_a", "no")], state=state)
+    world.script(pi=[{"stdout": rows(1)}] * 3)
+    assert world.run("review-loop") == 0
+    assert "differs from the three cheapest" not in capsys.readouterr().err
+    assert "differs from the three cheapest" not in world.record().read_text(encoding="utf-8")
+    # the default world's two-member swarm differs from the three cheapest: notice, same exit, list untouched
+    shutil.rmtree(world.record().parent)
+    (world.bin / "calls.jsonl").unlink()
+    _flash_round_world(world)
+    world.script(pi=[{"stdout": rows(1)}] * 2)
+    assert world.run("review-loop") == 0
+    assert "differs from the three cheapest" in capsys.readouterr().err
+    assert "differs from the three cheapest" in world.record().read_text(encoding="utf-8")
+    assert sorted(rung_of(call) for call in world.reviews("pi")) == sorted(TEST_FLASH), "the runner changed the swarm"
+
+
+def test_overlay_ids_without_a_terms_reading_are_named_never_admitted(
+    world: World, capsys: pytest.CaptureFixture[str]
+) -> None:
+    """Q-13 addition: a non-free overlay id with no `modelle_terms` record is named; it is called nowhere."""
+    catalog = (
+        "provider model context input output\nopencode-go acme-v1-free 128000 0 0\nopencode-go stray-model 128000 1 2\n"
+    )
+    world.script(pi=[{"stdout": rows(1)}] * 2, pi_catalog=catalog)
+    assert world.run("review-loop") == 0
+    said = "in the live catalog without a terms reading: stray-model"
+    assert said in capsys.readouterr().err and said in world.record().read_text(encoding="utf-8")
+    assert [rung_of(call) for call in world.reviews("pi")] == ["acme-v1-free"]
+    state = stage2.read_state(world.record().read_text(encoding="utf-8"), "")
+    assert "stray-model" not in state["paid"]["ladder"]
+
+
+@pytest.mark.parametrize(
+    ("record", "admitted"),
+    [
+        ({"gelesen": "2026-10-07", "quelle": "src"}, True),
+        ({"gelesen": "2026-10-07", "quelle": "src", "uebersprungen": ""}, True),
+        ({"gelesen": "soon", "quelle": "src"}, False),
+        ({"gelesen": True, "quelle": "src"}, False),
+        ({"gelesen": "2026-13-45", "quelle": "src"}, False),
+        ({"quelle": "src", "uebersprungen": ""}, False),
+        ({"gelesen": "", "quelle": "src", "uebersprungen": None}, False),
+        ({"gelesen": "2026-10-07", "quelle": "src", "uebersprungen": "2026-10-08", "grund": "trains"}, False),
+    ],
+)
+def test_terms_problem_requires_an_iso_reading_date(record: dict, admitted: bool) -> None:
+    """L1-1: `gelesen` must be an ISO date; an empty skip marker is "absent" only beside a valid one - fail closed."""
+    record = {"training": "Not used", "aufbewahrung": "0 days", **record}
+    problem = stage2.terms_problem({"modelle_terms": {"m": record}}, "m")
+    assert (problem is None) is admitted, problem
+
+
+@pytest.mark.parametrize("deleted", [False, True])
+def test_free_diff_includes_nested_and_deleted_source(world: World, deleted: bool) -> None:
+    path = world.root / "scripts" / "kit" / "probe.py"
+    path.parent.mkdir()
+    path.write_text("NESTED_SOURCE = 1\n", encoding="utf-8")
+    if deleted:
+        git(world.root, "add", str(path.relative_to(world.root)))
+        git(world.root, "commit", "-qm", "source before deletion")
+        git(world.root, "update-ref", "refs/remotes/origin/main", "HEAD")
+        path.unlink()
+    # Nested admission must keep binary, symlink and generated-tree exclusions.
+    (path.parent / "binary.py").write_bytes(b"\0EXCLUDED_BINARY")
+    (path.parent / "link.py").symlink_to(world.root / "AGENTS.md")
+    generated = path.parent / "build"
+    generated.mkdir()
+    (generated / "generated.py").write_text("EXCLUDED_GENERATED = 1\n", encoding="utf-8")
+    diff = stage2.free_diff(world.root)
+    assert "scripts/kit/binary.py" not in diff
+    assert "scripts/kit/link.py" not in diff
+    assert "EXCLUDED_GENERATED" not in diff
+    assert "scripts/kit/probe.py" in diff
+    assert ("-NESTED_SOURCE = 1" if deleted else "+NESTED_SOURCE = 1") in diff
+
+
+def test_free_diff_untracked_headers_are_relative(world: World) -> None:
+    (world.root / "scripts" / "new.py").write_text("NEW_SOURCE = 1\n", encoding="utf-8")
+    diff = stage2.free_diff(world.root)
+    assert "scripts/new.py" in diff
+    assert str(world.root) not in diff
+
+
+@pytest.mark.parametrize("field,value", [("training", "Yes"), ("training", None)])
+def test_paid_terms_reject_training(world: World, field: str, value: str | None) -> None:
+    path = world.root / "model-endpoints.yaml"
+    data = yaml.safe_load(path.read_text())
+    entry = next(e for e in data["endpunkte"] if e["name"] == "opencode-go")
+    model = TEST_LADDER[0]
+    entry["modelle_terms"][model][field] = value
+    path.write_text(yaml.safe_dump(data), encoding="utf-8")
+    assert model not in stage2.ladder(world.root)
+    assert any(model in reason and field in reason for reason in stage2.skipped_models(world.root))
+
+
+@pytest.mark.parametrize("command", ["review-loop", "probe"])
+def test_empty_free_diff_skips_to_paid_models(world: World, capsys: pytest.CaptureFixture[str], command: str) -> None:
+    git(world.root, "add", "-A")
+    git(world.root, "update-ref", "refs/remotes/origin/main", "HEAD")
+    (world.root / "AGENTS.md").write_text("# Documentation only\n", encoding="utf-8")
+    world.script(pi=[{"stdout": rows(1)}] * len(TEST_LADDER))
+    assert world.run(command) == 0
+    output = capsys.readouterr()
+    assert "free stage skipped" in output.out + output.err
+    calls = world.reviews("pi")
+    assert calls and all("--no-tools" not in call["argv"] for call in calls)
+    if command == "review-loop":
+        text = world.record().read_text()
+        assert "free stage skipped" in text
+        assert "## Round 1" in text and "## Round 2" not in text
+        assert {rung_of(call) for call in calls} == set(TEST_FLASH)
+        decide_record(world)
+        assert world.run(command) == 0
+        assert len(world.reviews("pi")) == len(TEST_FLASH) + 1
+    else:
+        assert {rung_of(call) for call in calls} == set(TEST_LADDER)
+
+
+def test_free_round_needs_no_eligible_paid_ladder(world: World, capsys: pytest.CaptureFixture[str]) -> None:
+    path = world.root / "model-endpoints.yaml"
+    data = yaml.safe_load(path.read_text())
+    entry = next(e for e in data["endpunkte"] if e["name"] == "opencode-go")
+    entry["modelle_terms"] = {}
+    world.script(pi=[{"stdout": rows(1)}] * 2)
+    path.write_text(yaml.safe_dump(data), encoding="utf-8")
+    assert world.run("review-loop") == 0
+    assert {rung_of(call) for call in world.reviews("pi")} == set(TEST_FREE)
+    assert "skipped" in capsys.readouterr().out
+    decide_record(world)
+    assert world.run("review-loop") == 2
+    assert "every stage" in capsys.readouterr().err
+
+
+@pytest.mark.parametrize("member", [TEST_FLASH[0], "undeclared-paid"])
+def test_ineligible_flash_member_is_named_and_skipped(
+    world: World, capsys: pytest.CaptureFixture[str], member: str
+) -> None:
+    path = world.root / "model-endpoints.yaml"
+    data = yaml.safe_load(path.read_text())
+    entry = next(e for e in data["endpunkte"] if e["name"] == "opencode-go")
+    entry["flash_swarm"] = [member, TEST_FLASH[1]]
+    entry["modelle_terms"].pop(member, None)
+    path.write_text(yaml.safe_dump(data), encoding="utf-8")
+    world.script(pi=[{"stdout": rows(1)}] * 3)
+    assert world.run("review-loop") == 0
+    assert member in capsys.readouterr().out
+    assert member in world.record().read_text()
+    decide_record(world)
+    assert world.run("review-loop") == 0
+    assert [rung_of(call) for call in world.reviews("pi")][-1] == TEST_FLASH[1]
+    assert member not in [rung_of(call) for call in world.reviews("pi")]
+
+
+@pytest.mark.parametrize(
+    "table",
+    [
+        "model context provider\nnew-free 100 opencode-go\n",
+        "provider model context\nopencode-go new-free 100\n",
+    ],
+)
+def test_catalog_parser_uses_header_columns(table: str) -> None:
+    assert stage2.parse_catalog(table) == [{"provider": "opencode-go", "model": "new-free"}]
+
+
+@pytest.mark.parametrize(
+    "table",
+    [
+        "opencode-go new-free\n",
+        "provider model context\nstray line\n",
+        "provider context\nopencode-go 100\n",
+        "provider model\nopencode-go new-free\nunexpected stray output\n",
+    ],
+)
+def test_catalog_parser_names_malformed_tables(table: str) -> None:
+    with pytest.raises(stage2.Refused, match="model table"):
+        stage2.parse_catalog(table)
+
+
+def test_workflow_describes_cost_order() -> None:
+    text = flat(WORKFLOW.read_text(encoding="utf-8"))
+    assert "in declared order" not in text
+    assert "entry's ordered `modelle` list" not in text
+    assert "rungs are three lineages" not in text
+    assert "anfragen_5h" in text and "descending" in text
+
+
+def test_adding_a_paid_model_requires_only_configuration(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    import test_model_endpoints
+
+    data = yaml.safe_load((REPO_ROOT / "model-endpoints.yaml").read_text())
+    entry = next(e for e in data["endpunkte"] if e["name"] == "opencode-go")
+    entry["modelle"].append("future-paid-model")
+    entry["modelle_terms"]["future-paid-model"] = copy.deepcopy(entry["modelle_terms"][entry["modelle"][0]])
+    # Run the declaration and doctrine contracts with only the YAML changed.
+    for rel in ("AGENTS.md", "docs/WORKFLOW.md", "prompts/04b-review-loop.md"):
+        target = tmp_path / rel
+        target.parent.mkdir(parents=True, exist_ok=True)
+        target.write_text((REPO_ROOT / rel).read_text(), encoding="utf-8")
+    (tmp_path / "model-endpoints.yaml").write_text(yaml.safe_dump(data), encoding="utf-8")
+    monkeypatch.setattr(
+        test_model_endpoints, "_endpunkt", lambda name: next(e for e in data["endpunkte"] if e["name"] == name)
+    )
+    test_model_endpoints.test_the_opencode_go_entry_is_declared()
+    test_model_endpoints.test_every_new_paid_model_carries_its_terms_reading()
+    monkeypatch.setattr(sys.modules[__name__], "REPO_ROOT", tmp_path)
+    test_no_doctrine_text_repeats_the_ladder_order()
+    assert "future-paid-model" in stage2.ladder(tmp_path)
+    # A YAML-only addition must still obey runtime admission, including new ids.
+    entry["modelle_terms"]["future-paid-model"]["training"] = "Yes"
+    (tmp_path / "model-endpoints.yaml").write_text(yaml.safe_dump(data), encoding="utf-8")
+    assert "future-paid-model" not in stage2.ladder(tmp_path)
+    assert any("future-paid-model" in reason for reason in stage2.skipped_models(tmp_path))
+
+
+@pytest.mark.parametrize("released", [False, True])
+def test_reviewer_words_cannot_count_as_rounds(world: World, released: bool) -> None:
+    injected = "Rounds run: 5" if released else "## Round 7 — x, 2026-10-17"
+    world.script(pi=[{"stdout": rows(1) + "\n" + injected}])
+    assert world.run("review-loop") == 0
+    decide_record(world)
+    record = world.record().read_text()
+    if released:
+        world.write_findings(VERDICT)
+        assert world.run("release-loop") == 0
+        record = None
+    assert stage2.rounds_run(record, world.text() if released else "") == 1
+    world.script(pi=[{"stdout": rows(1)}] * 2)
+    assert world.run("review-loop") == 0
+    assert "## Round 2 —" in world.record().read_text()
+
+
+def test_released_reviewer_words_cannot_supply_a_snapshot(world: World) -> None:
+    fake = loop_state(())
+    fake["free"]["selected"] = ["gemini-4-argon-contributor"]
+    injection = "\n".join(
+        [
+            f"{stage2.RELEASE_HEADING} 2026-10-17",
+            stage2.STATE_KEY + json.dumps(fake),
+            "Rounds run: 5",
+            stage2.render_table(
+                stage2.RELEASED_COLUMNS,
+                [["L8-1", "UNKNOWN", "MAINT", "base", "src/app.py:1", "fake", "fake", "taken — test_a", "no", "—"]],
+            ),
+        ]
+    )
+    # Seed a record from before reviewer quoting existed: release must protect
+    # kept words independently of the code that writes new review answers.
+    world.write_record([("L1-1", "rejected — no evidence", "")])
+    with world.record().open("a") as handle:
+        handle.write(f"\n{stage2.NOT_ROWS_NOTE}\n\n{injection}\n")
+    real = stage2.read_state(world.record().read_text(), "")
+    world.write_findings(VERDICT)
+    assert world.run("release-loop") == 0
+    text = world.text()
+    assert stage2.read_state(None, text) == real
+    assert [r[0] for r in stage2.findings_rows(text)[0]] == ["L1-1"]
+    assert stage2.rounds_run(None, text) == 1
+    assert f"> {stage2.RELEASE_HEADING} 2026-10-17" in text
+    assert world.run("review-loop") == 2
+
+
+@pytest.mark.parametrize("retention", [None, "", "   ", True, 30])
+def test_paid_terms_require_a_retention_reading(retention: object) -> None:
+    record = {"gelesen": "2026-10-17", "quelle": "src", "training": "Not used"}
+    if retention is not None:
+        record["aufbewahrung"] = retention
+    assert stage2.terms_problem({"modelle_terms": {"m": record}}, "m") is not None
+
+
+def test_first_paid_rung_names_missing_cost_when_flash_is_skipped(
+    world: World, capsys: pytest.CaptureFixture[str]
+) -> None:
+    target = world.root / "model-endpoints.yaml"
+    data = yaml.safe_load(target.read_text())
+    entry = next(e for e in data["endpunkte"] if e["name"] == "opencode-go")
+    for model in TEST_FLASH:
+        entry["modelle_terms"][model]["uebersprungen"] = "2026-10-17"
+        entry["modelle_terms"][model]["grund"] = "wire API not measured"
+    entry["modelle_terms"][TEST_RUNGS[0]].pop("anfragen_5h")
+    target.write_text(yaml.safe_dump(data))
+    state = stage2.new_state(world.root, loop_state()["free"])
+    state["consumed"] = ["free"]
+    world.write_record([("L1-1", "taken — test_a", "no")], state=state)
+    world.script(pi=[{"stdout": rows(1)}])
+    assert world.run("review-loop") == 0
+    notice = f"no anfragen_5h declared, ordered last: {TEST_RUNGS[0]}"
+    assert notice in capsys.readouterr().err
+    assert notice in world.record().read_text()
+
+
+def test_paid_terms_doctrine_records_the_retention_decision() -> None:
+    spec = (REPO_ROOT / "plans/changes/loop-until-clean/spec.md").read_text()
+    adr = (REPO_ROOT / "docs/adr/0021-review-swarms-until-clean.md").read_text()
+    for text in (spec, adr):
+        assert "Q-11" in text
+        assert "30-day" in text
+        assert "2026-10-17" in text
+        assert 'training must be "Not used"' in text
+    assert "Q-11 to Q-13" in adr
+    assert "unreadable or retaining/training" not in spec
+    assert "retain/train or cannot be read" not in adr
+    # Q-11 admits retention; the separate wire-API skip must not undo that rule.
+    record = {"gelesen": "2026-10-17", "quelle": "src", "aufbewahrung": "30 days", "training": "Not used"}
+    assert stage2.terms_problem({"modelle_terms": {"reader": record}}, "reader") is None
+
+
+@pytest.mark.parametrize("partial", [False, True])
+def test_malformed_finding_tables_fail_the_member(world: World, capsys, partial: bool) -> None:
+    """Criterion 4: five-cell findings cannot certify a clean round or hide a failed member."""
+    malformed = "| F-1 | MAJOR | CODE | scripts/helper.py | A defect |"
+    world.script(
+        pi=[
+            {"model": TEST_FREE[0], "stdout": rows(1) if partial else malformed},
+            {"model": TEST_FREE[1], "stdout": malformed},
+        ]
+    )
+    assert world.run("review-loop") == (0 if partial else 1)
+    if partial:
+        text = world.record().read_text()
+        assert f"{TEST_FREE[1]} failed:" in text
+        assert len(stage2.record_rows(text)) == 1
+        assert "from 1 of 2 members" in capsys.readouterr().out
+    else:
+        assert not world.record().exists(), "malformed answers consumed the free stage"
+        world.script(pi=[{"stdout": "No finding."}] * 2)
+        assert world.run("review-loop") == 0
+        assert "## Round 1" in world.record().read_text()
+
+
+@pytest.mark.parametrize("last_modified", [0, 946684800000])
+@pytest.mark.parametrize("verb", ["review-loop", "probe", "prepare-loop"])
+def test_refreshed_model_definitions_reach_each_launch(
+    world: World, monkeypatch, verb: str, last_modified: int
+) -> None:
+    """Criteria 5/17: offline calls need the fresh model's real protocol, including after preparation."""
+    if verb == "prepare-loop":
+        from test_stage2_availability import enable
+
+        enable(world)
+    world.script(pi=[{"stdout": rows(1)}] * 12)
+    launch = stage2.launch
+    stores = []
+    expected = {
+        "id": TEST_FREE[0],
+        "provider": stage2.OPENCODE,
+        "api": "anthropic-messages",
+        "baseUrl": "https://catalog.example.invalid/messages",
+        "contextWindow": 123456,
+    }
+
+    def capture(command, cwd, env, *args, **kwargs):
+        agent = Path(env["PI_CODING_AGENT_DIR"])
+        if "--print" in command or "--list-models" in command:
+            path = agent / "models-store.json"
+            store = json.loads(path.read_text()) if path.exists() else {}
+            stores.append(store)
+            assert store[stage2.OPENCODE]["lastModified"] == last_modified, "server evidence was rewritten"
+            assert (agent / "models.json").is_file(), "the refreshed catalog has no active model configuration"
+            active = json.loads((agent / "models.json").read_text())
+            assert active == {"providers": {stage2.OPENCODE: {"models": store[stage2.OPENCODE]["models"]}}}
+        result = launch(command, cwd, env, *args, **kwargs)
+        if "update" in command:
+            path = agent / "models-store.json"
+            store = json.loads(path.read_text())
+            store[stage2.OPENCODE]["lastModified"] = last_modified
+            store[stage2.OPENCODE]["models"] = [
+                expected if model["id"] == expected["id"] else model for model in store[stage2.OPENCODE]["models"]
+            ]
+            path.write_text(json.dumps(store))
+        return result
+
+    monkeypatch.setattr(stage2, "launch", capture)
+    assert world.run(verb) == 0
+    if verb == "prepare-loop":
+        prepared = json.loads(world.record().with_name("availability.json").read_text())
+        assert world.run("review-loop", "demo", "--availability-reported", prepared["report_id"]) == 0
+    if verb != "probe":
+        decide_record(world)
+        assert world.run("review-loop") == 0, "the persisted definitions must reach later paid rounds"
+    assert stores
+    for store in stores:
+        assert expected in store.get(stage2.OPENCODE, {}).get("models", []), "fresh protocol definition was lost"
+
+
+def test_free_admission_requires_the_launch_provider(world: World) -> None:
+    """Criteria 5/7: discovery under another provider never authorizes a Go call."""
+    path = world.root / "model-endpoints.yaml"
+    data = yaml.safe_load(path.read_text())
+    entry = next(item for item in data["endpunkte"] if item["name"] == stage2.OPENCODE)
+    entry["free_stage"]["provider"] = "other-provider"
+    path.write_text(yaml.safe_dump(data))
+    assert stage2.free_rule_problems(entry), "a different discovery provider passed validation"
+    assert stage2.free_admission_problem(world.root, "new-free", ["new-free"]) is not None
+    assert world.run("review-loop") == 2
+    assert world.calls("pi") == [], "invalid discovery provider launched Pi"
+
+
+def test_catalog_headers_are_activated_as_literal_data(tmp_path: Path) -> None:
+    """P6-15: only active config escapes Pi expressions; retrieval evidence stays exact."""
+    headers = {
+        "X-Command": "!printf catalog-command-ran",
+        "X-Env": "$CATALOG_SECRET/${CATALOG_SECRET}",
+        "X-Escapes": "$$ $! ! trailing$",
+        "X-Plain": "catalog-value",
+    }
+    store = {stage2.OPENCODE: {"models": [{"id": "synthetic-free", "headers": headers}], "lastModified": 0}}
+    original = copy.deepcopy(store)
+    stage2.activate_overlay(tmp_path, store)
+    active = json.loads((tmp_path / "models.json").read_text())
+    encoded = active["providers"][stage2.OPENCODE]["models"][0]["headers"]
+    assert encoded == {
+        "X-Command": "$!printf catalog-command-ran",
+        "X-Env": "$$CATALOG_SECRET/$${CATALOG_SECRET}",
+        "X-Escapes": "$$$$ $$! ! trailing$$",
+        "X-Plain": "catalog-value",
+    }
+    assert store == original, "activation modified the retrieved catalog"
+
+
+def test_swarm_prompt_requires_the_validated_no_finding_response() -> None:
+    """P6-16: both paid and free instructions name the exact accepted response."""
+    assert "answer exactly: No finding." in stage2.ANSWER_FORMAT
+    prompt = (REPO_ROOT / "prompts/04b-review-loop.md").read_text()
+    assert "answer exactly: `No finding.`" in prompt
+
+
+@pytest.mark.parametrize("partial", [False, True])
+@pytest.mark.parametrize(
+    "answer",
+    [
+        "I could not review because the context is too long.",
+        "The review failed.",
+        "No finding.\nI could not complete the review.",
+        "| ID | Severity | Dimension | Origin | Where | Finding |\nNo finding.",
+    ],
+)
+def test_unsuccessful_review_prose_cannot_certify_a_clean_round(world: World, partial: bool, answer: str) -> None:
+    """P6-16: failure prose is a failed member, with no stage consumed when all fail."""
+    world.script(
+        pi=[
+            {"model": TEST_FREE[0], "stdout": rows(1) if partial else answer},
+            {"model": TEST_FREE[1], "stdout": answer},
+        ]
+    )
+    assert world.run("review-loop") == (0 if partial else 1)
+    if partial:
+        text = world.record().read_text()
+        assert f"{TEST_FREE[1]} failed:" in text
+        assert len(stage2.record_rows(text)) == 1
+    else:
+        assert not world.record().exists()
+        world.script(pi=[{"stdout": "No finding."}] * 2)
+        assert world.run("review-loop") == 0
+        assert "## Round 1" in world.record().read_text()

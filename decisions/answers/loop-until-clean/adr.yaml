@@ -1,0 +1,14 @@
+schema_version: 1
+change: loop-until-clean
+question: adr
+answer: 'yes'
+reason: The review swarm and the loop until a clean round replace the round budget
+  of ADR 0011 and ADR 0017 decision 6, so they get an ADR of their own, numbered 0021,
+  that amends both without rewriting them.
+shown:
+  proposed: 'yes'
+  proposal_reason: It replaces the three-round budget of ADR 0011 (decisions 3 and
+    8) and ADR 0017 (decision 6) with rounds until a clean round on a free swarm and
+    a named ladder, as the maintainer answered in Q-1 to Q-8.
+answered_by: framework-architect
+answered_at: 2026-10-16
