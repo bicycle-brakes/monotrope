@@ -1872,7 +1872,7 @@ no break), counted against the 17 h 20 min appetite. Plan step 11 only.
 
 ### Run wiring step 2 verified — 2026-10-18 (partial: sub-boundary)
 
-SPAN_PLACEHOLDER
+Span (measured, `date -u`): 2026-10-18T21:31:06Z to 2026-10-18T21:52:03Z, about 21 min (including one full make verify of 13 min 14 s), counted against the 17 h 20 min appetite. Code commit `d9965ba`. Full make verify at `d9965ba`: 2859 passed, 16 skipped, VERIFY GREEN (markdownlint report-only as before).
 
 - Scope done: plan step 1 for the identity and permission graph, and the
   per-invocation part of step 2. Not done (needs the new run of steps 3-8):
