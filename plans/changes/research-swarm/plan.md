@@ -38,6 +38,7 @@ not recreated. No file is deleted. Only the ADR is new under `docs/adr/`.
 | `scripts/stage2_research_catalog.mjs` (new) | Use pinned Pi to force a bounded Go-only refresh and return a dated fresh snapshot cross-checked against credential-free models.dev tool_call/status metadata, with explicit capability-unavailable fallback. |
 | `scripts/stage2_research_map.py` (new) | Validate the exact finder/merge union, explicit unread provenance, frozen references and given/suggested/self/no-spec neighbour derivation; no model dispatch or file access. |
 | `scripts/stage2_research_refs.py` (new) | Pure frozen-byte structural Markdown/Python and canonical YAML/JSON reference resolution, shared per-claim excerpt cap; later map/report integration consumes it. |
+| `scripts/stage2_research_history.py` (new) | Local-only frozen-HEAD history packet with ten commits per mapped path, bounded Unicode bodies, explicit unread history and a shared caller deadline; no model dispatch. |
 | `scripts/stage2_research_tools.mjs` | Retain public-only tools and receipts; verify cancellation and isolated concurrent receipt paths. |
 | `scripts/check_research_handoff.py` (new) | Check v2 decision coverage, answered human links, neighbours and criterion bases; exit 0/1/3. |
 | `model-endpoints.yaml` | Replace Zen endpoint/roles with explicit research roles and dynamic Go-only `online_free` policy/include/exclude; add Qwen research-only without changing the review ladder. |
@@ -60,6 +61,7 @@ not recreated. No file is deleted. Only the ADR is new under `docs/adr/`.
 | `scripts/kit/probe.py` | Update affected model-resolution case ids only if needed, retaining exception reasons/count/cap. |
 | `tests/test_stage2_swarm.py` | Inject the pinned-wrapper stand-in explicitly, trap bare-Pi escapes, replace obsolete free/pair expectations and add finder/trio/same-brief/report/queue/failure mutations. |
 | `tests/test_stage2_research_map.py` (new) | Standalone finder union, missing/unread categories, provenance corruption, exact neighbour forms and frozen artifact-to-spec counterexamples. |
+| `tests/test_stage2_research_history.py` (new) | Disposable Git fixtures for frozen identity, path/body limits, shallow history, replacements, missing local objects and shared-deadline failures. |
 | `tests/test_stage2_research_refs.py` (new) and `tests/fixtures/research_refs/plan-prompt-d862bc2.md` (new) | Structural-reference counterexamples and the verbatim historical prompt used by ruling S-47; no Git history or live-file lookup in the resolver. |
 | `tests/test_stage2_research_catalog.py` (new) | Offline real-pinned-Pi catalog fixtures: forced refresh, provider filtering, shipped-cache contamination, malformed/empty/error outcomes, models.dev intersection/deprecation/failure, and both sources’ audit. |
 | `tests/test_stage2_research_tools.py` | Keep real tool-call shape, destination/receipt faults and concurrent scratch separation checks. |
@@ -67,6 +69,7 @@ not recreated. No file is deleted. Only the ADR is new under `docs/adr/`.
 | `tests/test_model_endpoints.py` | Resolve static research roles and dynamic public-only Go free permission; validate selection policy; remove Zen free-billing expectations. |
 | `tests/test_research_handoff.py` (new) | Fixture-based gate tests, including lost-decision mutation, archive, neighbour/basis and unmeasured cases. |
 | `tests/test_ci.py` | Verify new gate registration and generated-CI coverage without weakening existing ratchets. |
+| `scripts/ci_gates.py` | Document non-CLI research helper consumers while scheduler integration is pending; retain direct test-import coverage and the existing test-exemption floor. |
 | `tests/test_kit.py` | Prove the checker and tests travel without corpus or missing imports. |
 | `plans/changes/research-swarm/spec.md` | Hold the amended contract and neighbour/basis references. |
 | `plans/changes/research-swarm/design.md` | Keep the shaped boundaries consistent with the implementation. |
@@ -507,6 +510,19 @@ the existing gates and let the runner own registry regeneration/full verify.
 
 ## Criterion ledger
 
+- 16: tests/test_stage2_research_history.py::test_history_uses_frozen_head_and_never_current_working_bytes — A standalone history packet includes commits after frozen HEAD or uncommitted bytes; topic integration remains pending.
+- 16: tests/test_stage2_research_history.py::test_history_ten_per_path_and_shared_commits_preserve_all_mapped_touches — More than ten commits per path are retained, shared records duplicate or mapped touches disappear.
+- 16: tests/test_stage2_research_history.py::test_history_author_date_is_utc_and_body_cap_counts_unicode — Author dates retain a non-UTC offset or the body exceeds 4000 Unicode characters without a truncation flag.
+- 16: tests/test_stage2_research_history.py::test_history_pathspec_magic_is_a_literal_filename — A mapped filename is interpreted as a Git pathspec expression.
+- 16: tests/test_stage2_research_history.py::test_history_untracked_mapped_file_has_measured_empty_history — A complete local read with no committed path history loses its measured-empty distinction.
+- 16: tests/test_stage2_research_history.py::test_history_shallow_boundary_is_not_complete_or_measured_empty — A shallow boundary is reported as complete or as proven empty history.
+- 16: tests/test_stage2_research_history.py::test_history_replace_objects_cannot_change_frozen_commit_evidence — A local replacement object changes evidence associated with a frozen commit identity.
+- 16: tests/test_stage2_research_history.py::test_history_all_commands_are_local_and_ignore_ambient_repository_overrides — History inherits a different Git repository, ambient credentials or fetch/config overrides.
+- 16: tests/test_stage2_research_history.py::test_history_missing_objects_cannot_invoke_a_promisor_remote — An absent frozen object invokes a configured transport instead of failing locally.
+- 16: tests/test_stage2_research_history.py::test_history_rechecks_shared_deadline_before_every_command — Later commands receive fresh time instead of stopping at the caller's deadline.
+- 16: tests/test_stage2_research_history.py::test_history_timeout_is_one_failure_without_retry — A history command timeout is retried or treated as empty successful evidence.
+- 16: tests/test_stage2_research_history.py::test_history_deadline_must_be_a_finite_number_before_git — An invalid or unbounded deadline reaches Git instead of refusing preparation.
+- 16: tests/test_stage2_research_history.py::test_history_repository_wide_dot_is_not_a_mapped_file — A repository-wide dot expands scope beyond resolved mapped files.
 - 5: tests/test_stage2_research_map.py::test_map_merge_cannot_change_keys_or_finder_evidence — Standalone preparation accepts added/dropped/duplicate keys or changed/missing finder reasons; actual dispatch-barrier integration remains pending.
 - 24: tests/test_stage2_research_map.py::test_map_exact_union_retains_all_origins_without_persisting_frozen_snapshots — Exact overlapping origins disappear or source snapshots enter the audit map.
 - 24: tests/test_stage2_research_map.py::test_map_unresolved_locator_stays_visible_but_grants_no_scope_or_neighbour — A nonresolving locator grants a mapped region or neighbour relation.
@@ -1273,3 +1289,42 @@ local-only, literal mapped paths, frozen full commit identity, at most ten
 records per path, author UTC, body cap 4000 Unicode characters, no retry and
 the run's shared monotonic deadline. No history implementation was qualified
 by the preceding boundary test result.
+
+
+### Bounded local history verified — 2026-10-18
+
+Measured phase-4 span: 09:27:02–09:46:10 UTC, 19 minutes 8 seconds,
+including red-first implementation, full verification waits and preparation
+of the next frozen-copy prototype outside the repository. Count this once
+after the retained history and earlier spans; the approved total stays
+13h20m. Preparation of that next prototype must not be counted again.
+
+Implemented standalone stage2_research_history.py. It binds records to a
+full frozen commit identity and literal mapped paths, retains ten commits
+per path, deduplicates shared records, normalizes author UTC and caps bodies
+at 4000 Unicode characters with explicit truncation. An eleventh identity
+marks unread older history without retaining its body. Shallow repositories
+never certify complete or measured-empty history. All Git commands share
+the caller's finite monotonic deadline; ambient repository/auth/config
+overrides, replacement objects, transports and lazy fetch are disabled.
+Missing objects/timeouts fail preparation without a retry. The amended
+topic dispatcher still needs to consume this packet; its integration
+ledger entries remain pending. No existing test was changed.
+
+Red-first evidence: 18 missing-module failures, followed by 18 passes;
+six added assertion failures exposed invalid/unbounded deadlines and the
+repository-wide dot path. After repair, history plus CI contracts passed
+106 tests with 2 skipped. Full make verify GREEN: 2505 passed, 16 skipped
+in 895.87 seconds, then every blocking gate green, including the kit probe.
+Ruff check/format, generated CI and criterion ledger passed. Process-local
+commit.gpgsign=false and local test servers were enabled. Source bytes
+stayed fixed during full verification. Documentation/Markdown findings
+remain report-only. No credential file, tracker history, live provider,
+GLM/Claude call or customer instance was read/called; no merge occurred.
+
+Next prepared, not yet implemented in the repository: a transient frozen
+input-state helper and disposable-Git fixtures. Its separate temporary
+prototype passed 23 tests; this is not repository integration or full
+qualification. It must get red tests here before source adoption. Actual
+amended scheduling, prompts, reports/judge/handoff, attended F-1 capture
+and fresh phase-6 review remain unfinished; PR #158 stays draft.

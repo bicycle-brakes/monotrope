@@ -119,6 +119,11 @@ OHNE_AUFRUFER: dict[str, str] = {
         "consumes it. tests/test_stage2_research_map.py exercises exact union and frozen neighbour boundaries; "
         "actual scheduler integration remains pending."
     ),
+    "stage2_research_history.py": (
+        "Local-only frozen-HEAD history library, not a CLI gate; the amended topic-6 packet builder "
+        "will consume it. tests/test_stage2_research_history.py exercises disposable Git repositories, "
+        "path/body bounds and no-fetch/deadline failures. Actual scheduler integration remains pending."
+    ),
     "stage2_swarm.py": (
         "Helper of scripts/stage2.py explore, never an entry point of its own — it runs the phase-1 "
         "research swarm only through the runner; tests/test_stage2_swarm.py runs it against stand-ins"
