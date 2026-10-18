@@ -19,7 +19,7 @@ created: 2026-10-14
 
 # Design — research-swarm
 
-Proposed shape for [spec.md](spec.md), based on the amended interview Q-7–Q-13 and recorded phase-2a rulings S-1–S-52.
+Proposed shape for [spec.md](spec.md), based on the amended interview Q-7–Q-14 and recorded phase-2a rulings S-1–S-52.
 This replaces the earlier six-topic/free-stage design; the merge decides it.
 
 ## Alternatives
@@ -60,33 +60,41 @@ Other verbs keep their contracts.
 
 **Declaration → seats.** Replace `research_swarm`'s `free_endpoint`,
 `free_roster`, `free_focuses`, `topic6_free` and `flash_pair` with six seats
-(Q-12): `repository_seats` and `online_seats`, each three ordered lists of
-`{endpoint, model}` candidates. The finders use the repository seats'
-selections; `finder_merge`, `topic_author` and `judge` each declare
-endpoint/model/effort and stay Opus 5.5. Beside them,
-`availability_preflight: {max_age_seconds: 900, exclude_until: []}` has the
-review swarm's field names and validation, without its `flash_size`.
-Resolve each call from the run's frozen selection, never from a hardcoded
-tuple. Proposed initial lists, first entry being the Q-7/Q-9 member so that
-nothing changes while it is reachable; the fallbacks answered on 2026-10-18
-(Q-12) and carry dated 0-day, no-training terms:
+(Q-12, Q-14): `repository_seats` and `online_seats`, each exactly three
+preferred `{endpoint, model}` pairs and no fallback list. The finders use
+the repository seats' selections; `finder_merge`, `topic_author` and `judge`
+each declare endpoint/model/effort and stay Opus 5.5. Beside them,
+`availability_preflight: {max_age_seconds: 900, exclude_until: [],
+measured_wire_apis: [openai-completions]}` has the review swarm's field
+names and validation for the first two, without its `flash_size`. Resolve
+each call from the run's frozen selection, never from a hardcoded tuple.
+Proposed preferred models, the Q-7/Q-9 members, so nothing changes while
+they are reachable:
 
-| Seat | Candidates in order |
+| Seat | Preferred model |
 |---|---|
-| repository 1 | `opencode-go/deepseek-v4.1-flash`, `opencode-go/longcat-2.0` |
-| repository 2 | `opencode-go/mimo-v2.6-flash`, `opencode-go/mimo-v2.6-pro` |
+| repository 1 | `opencode-go/deepseek-v4.1-flash` |
+| repository 2 | `opencode-go/mimo-v2.6-flash` |
 | repository 3 | `claude-code-plan/claude-haiku-5-5` |
-| online 1 | `opencode-go/deepseek-v4.1-flash`, `opencode-go/longcat-2.0` |
-| online 2 | `opencode-go/mimo-v2.6-flash`, `opencode-go/mimo-v2.6-pro` |
-| online 3 | `opencode-go/qwen3.8-flash`, `opencode-go/glm-5.3-flash` |
+| online 1 | `opencode-go/deepseek-v4.1-flash` |
+| online 2 | `opencode-go/mimo-v2.6-flash` |
+| online 3 | `opencode-go/qwen3.8-flash` |
 
-Qwen's wire API was not measured on 2026-10-18, so while its terms carry a
-skip mark the third online seat takes GLM 5.3 Flash through Go, which works;
-only GLM through Z.ai is unavailable until 2026-10-21. A research-only
-candidate goes under a separate `research_modelle` list on its endpoint, so
-the `modelle` review ladder never changes; with the review swarm's pull
-request merged, every proposed candidate already stands in `modelle`. Model
-resolution accepts the union for declared research purposes only.
+Substitutes are not declared (Q-14). They come from the substitute pool:
+every admitted Go model of the fresh catalog, cheapest first. With #157's
+`modelle_terms` as read on 2026-10-17, the pool order by `anfragen_5h`
+would be LongCat 2.0 (11,400), GLM 5.3 Flash (6,320) and MiMo Pro (3,250),
+after DeepSeek Flash and MiMo Flash, which are preferred elsewhere. All
+five use `openai-completions` in Pi's shipped catalog; their models.dev
+tool support was not read for this draft. Those
+are the three fallbacks the maintainer named, now in cost order and no
+longer fixed; a newly admitted model joins them by itself. Qwen 3.8 Flash
+carries a skip mark and uses `anthropic-messages` in Pi's catalog, so until
+its route is measured the third online seat takes a substitute. A
+`modelle_terms` record alone admits a Go model for research; it need not
+stand in `modelle`, so the review ladder never changes. Model resolution
+accepts `modelle` plus admitted terms records for declared research purposes
+only.
 Remove the unused Zen `opencode-free` endpoint, its fixed roster/focuses
 and endpoint-level free billing category; keep `public-web` as a role data
 class. Add `research_swarm.online_free: {provider: opencode-go,
@@ -120,12 +128,19 @@ successful fresh provider snapshot as well as runtime availability; never
 reintroduce a removed free id from the shipped baseline. Validate unique
 identities, provider and declared Go transport origin.
 Eligibility uses the freshly fetched overlay, not the merged effective list.
-Classify every Go seat candidate there (Q-12): a text-input chat entry with
-the Go origin is catalog-admitted; an absent, baseline-only, non-chat or
-malformed typed entry is skipped with its reason and raw value and is never
-probed. The existing standalone helper's `fixed_ids` hard failure becomes
-this per-candidate outcome. This check consults no models.dev metadata;
-Claude Code candidates are outside it.
+Classify every preferred Go model and every paid Go model of the overlay
+there (Q-12, Q-14): a text-input chat entry with the Go origin and an `api`
+listed in `measured_wire_apis` is catalog-admitted. An absent,
+baseline-only, non-chat or malformed typed entry is skipped with its reason
+and raw value, and so is one with another `api` (`wire-api-not-measured`).
+None of these is probed. Pinned Pi 1.2.0's shipped Go catalog, read
+2026-10-18, has 20 `openai-completions` entries at `/zen/go/v1`, 5
+`anthropic-messages` entries at `/zen/go` and 6 `openai-responses` entries
+at `/zen/go/v1`. The existing standalone helper's `fixed_ids` hard failure becomes
+this per-model outcome. For preferred models this check consults no
+models.dev metadata; pool models also need models.dev `tool_call: true`
+without `status: deprecated`, read from the same document as the free
+models. Claude Code models are outside it.
 In pinned Pi 1.2.0, `isModelType(model, "chat")` treats absent `type` as chat,
 and `input` must include `text` (`pi-ai/dist/types.d.ts`, read 2026-10-16).
 The typed chat interface has no dedicated tool-support field. Q-11 replaces
@@ -204,7 +219,7 @@ fields, eligible ids, policy and selected/excluded ids with reasons. An offline 
 prove forced network refresh and failure handling against real pinned Pi,
 including its static-catalog union and non-throwing error behavior.
 
-**Preparation → selection → receipt (Q-12).** A swarm run takes two steps,
+**Preparation → selection → receipt (Q-12, Q-14).** A swarm run takes two steps,
 the form of the review swarm's `prepare-loop` and `review-loop
 --availability-reported` (pull request #157 at `0c03ec0`):
 
@@ -212,20 +227,26 @@ the form of the review swarm's `prepare-loop` and `review-loop
    receipt, validates class, neighbours, seat lists and the availability
    rule (exit 2), and runs the two-source catalog read above. A Pi failure
    exits 1 before any probe.
-2. It admits candidates. An `opencode-go` candidate needs its endpoint's
-   `modelle` or `research_modelle` entry, a dated `modelle_terms` reading
-   without an `uebersprungen` mark (judged by #157's `terms_problem`, the
-   same function its ladder uses), and the fresh-overlay classification
-   above. A `claude-code-plan` candidate needs its endpoint entry. Repository
-   seats also need `framework` on the endpoint; online seats need
-   `opencode-go`. A timed exclusion matches the review swarm's way, by
-   `model_prefix` on the id or its last path segment, while `until` lies
-   ahead; an excluded candidate is never probed.
-3. It walks the repository trio, then the online trio, seat by seat and
-   candidate by candidate. The first admitted, unexcluded, unused candidate
-   is probed unless an earlier seat already probed it. A reachable one
-   fills the seat and the next seat begins; an unreachable one moves on to
-   the next candidate. A Go probe is the review swarm's: pinned Pi wrapper,
+2. It admits Go models. A model needs a `modelle_terms` record that passes
+   #157's `terms_problem` (the check its ladder uses), a positive cost value
+   from `request_value`, no `-free` suffix, and the fresh-overlay
+   classification above. A `claude-code-plan` preferred model needs its
+   endpoint entry. Repository seats also need `framework` on the endpoint,
+   and online seats need `opencode-go`. The substitute pool is every
+   admitted Go model with models.dev tool support, ordered by #157's
+   `ordered_models`: `anfragen_5h` descending, ties by id. A timed
+   exclusion matches the review swarm's way, by `model_prefix` on the id or
+   its last path segment, while `until` lies ahead; an excluded model is
+   never probed.
+3. It handles the repository trio, then the online trio. Within a trio it
+   first probes each seat's preferred model in seat order, unless it is
+   unadmitted or excluded. A reachable preferred model fills its seat.
+   Then each seat still empty, in seat order, walks the pool, skipping
+   models already selected in the trio or known unreachable. It probes the
+   first model not yet probed and takes the first reachable one, marked
+   "substitute for <seat>". Each distinct model is probed at most once per
+   preparation, and a result is shared across seats and trios. A Go probe
+   is the review swarm's: pinned Pi wrapper,
    `--no-tools`, scratch working directory, home and agent directory,
    discovery off, the fixed text "Availability probe only. Reply with OK. Do
    not review code or request tools.", 60 seconds, after declaration check,
@@ -234,10 +255,11 @@ the form of the review swarm's `prepare-loop` and `review-loop
    `--safe-mode`, `--strict-mcp-config`, `--permission-prompts none` and no
    session persistence. Go free models and Opus roles are not probed.
 4. Any unfilled seat: print the report with `seat-unavailable` and every
-   candidate's reason, write no receipt, exit 1. Otherwise print the report
-   (UTC check time; per seat the selection; per candidate selected,
-   skipped with reason, excluded until, unreachable with scrubbed error, or
-   not probed; the free selection) and seal `{version: 1, binding, state}`
+   model's reason, write no receipt, exit 1. Otherwise print the report
+   (UTC check time; per seat the selection, preferred or "substitute for
+   <seat>"; the pool in cost order; per model selected, skipped with reason,
+   excluded until, unreachable with scrubbed error, or not probed; overlay
+   models without terms named as unread; the free selection) and seal `{version: 1, binding, state}`
    with `report_id` = SHA-256 over its canonical JSON. Write it atomically
    to `record_dir(change)/research-availability.json` and print "Report
    this selection in the main conversation, then run explore <change>
@@ -262,8 +284,11 @@ behaviour; `prepare_research`/`consume_research` call them too. Without
 #157 on main, the same file name holds the shared functions and the research
 entry points, written to #157's contract; the pull request that merges
 second resolves the add/add conflict to one copy and runs both test files.
-Selection itself (seats, admission, double-fill) stays research-only: the
-review ladder has no seats.
+Selection itself (seats, pool, double-fill) stays research-only, because
+the review ladder has no seats. The admission check and the cost order
+reuse #157's `terms_problem`, `request_value` and `ordered_models` from
+`scripts/stage2.py`, under the same placement rule as the availability
+helpers.
 
 **Finder → map.** The pure Python helper stage2_research_map.py validates
 the exact union and derives neighbours from supplied frozen sources, with
@@ -648,9 +673,9 @@ Only the runner persists exploration output, append-only inside `research.md`:
 
 | Record | Required fields |
 |---|---|
-| Run manifest | schema `research-swarm/v2`, opaque run id, UTC date, HEAD, full frozen-byte digest, per-path digests of untracked non-ignored change inputs (copies only in transient run scratch), class/source, exactly `39 + 3N` expected slot identities with required flag, budgets, given neighbours, judge packet size and fixed character limit with capacity/output-reserve/conversion/source/date, consumed selection receipt id and check time with per-seat selection and every candidate's outcome/reason and probe audit lines, resume source run id or the reason none was used, reused and interrupted slots, status/reason |
+| Run manifest | schema `research-swarm/v2`, opaque run id, UTC date, HEAD, full frozen-byte digest, per-path digests of untracked non-ignored change inputs (copies only in transient run scratch), class/source, exactly `39 + 3N` expected slot identities with required flag, budgets, given neighbours, judge packet size and fixed character limit with capacity/output-reserve/conversion/source/date, consumed selection receipt id and check time with per-seat selection marked preferred or substitute, the pool in cost order, every model's outcome/reason and probe audit lines, resume source run id or the reason none was used, reused and interrupted slots, status/reason |
 | Catalog selection | pinned Pi version, Pi provider/source/UTC/digest/freshness, models.dev source/UTC/digest or failure, exact tool_call/status evidence per id, eligible ids, include/exclude, selected ids and `N`, measured-empty versus capability-unavailable outcome, exclusions/reasons or Pi failure, each Go seat candidate's catalog outcome; taken in preparation and carried by the receipt |
-| Selection receipt | outside the worktree, single-use: version, binding (root, change, endpoint-configuration digest, class, given neighbours), UTC check time, catalog selection, per-seat selection, per-candidate outcome (selected, skipped/reason, excluded until, unreachable/scrubbed error, not probed), probe audit lines, `report_id` |
+| Selection receipt | outside the worktree, single-use: version, binding (root, change, endpoint-configuration digest, class, given neighbours), UTC check time, catalog selection, per-seat selection marked preferred or substitute, the substitute pool in cost order with each model's cost value, per-model outcome (selected, skipped/reason, excluded until, unreachable/scrubbed error, not probed), probe audit lines, `report_id` |
 | State-store record | outside the worktree: run record (run id, change, start, receipt id, frozen per-path digests, own research-append digest/length, end state) and per-slot launch and result records (slot identity, seat, endpoint/model, prompt SHA-256, leak audit, UTC start/end, outcome, scrubbed report or partial output, receipts, record digest; `reused_from` with original times when copied) |
 | Map | four locator lists keyed by category and exact ref, all finder origins/reasons, resolved/unresolved mark, artifact-to-spec neighbour mapping with retained keys, no-spec mark/gap or self mark without gap, runner-inserted given neighbours and suggestions in the three permitted folder forms, missing/unread categories |
 | Topic-6 history | frozen HEAD, per mapped path up to ten commits with full hash, UTC author date, subject, body capped at 4,000 characters and truncation flag, touched mapped paths, older-history not-read marker |
@@ -756,8 +781,9 @@ flowchart LR
 
 - Finder trio, Opus map merge, provider queues, claim evaluation and handoff
 gate.
-- Six seats with ordered candidate lists, a tool-free reachability
-  preparation with a reported single-use receipt (Q-12), shared with the
+- Six seats, each with one preferred model and a live substitute from the
+  admitted Go models, cheapest first (Q-12, Q-14). A tool-free reachability
+  preparation produces a reported single-use receipt, shared with the
   review swarm's availability preparation.
 - A runner-owned state store that keeps every finished slot at once and lets
   a later run with the same inputs reuse it (Q-13).
