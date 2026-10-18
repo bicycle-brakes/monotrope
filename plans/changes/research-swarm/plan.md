@@ -1900,7 +1900,7 @@ Step 12 (Q-13): durable slot results and resume, built and verified.
 - Red first: before any source existed, `tests/test_stage2_research_store.py`
   and the five new dispatch tests failed (17 failed, 21 errors from the
   fixture's missing module, 22 existing dispatch tests passed). Then green:
-  focused set 294 passed, 2 skipped; full make verify at : 2841 passed, 16 skipped, VERIFY GREEN (markdownlint report-only, as before).
+  focused set 294 passed, 2 skipped; full make verify at `35cff56`: 2841 passed, 16 skipped, VERIFY GREEN (markdownlint report-only, as before).
 - Files: `scripts/stage2_research_store.py` (new; registered in
   `scripts/ci_gates.py`), `scripts/stage2_research_dispatch.py`
   (`on_terminal`, `DispatchResult.reason`/`detail`),
