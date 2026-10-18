@@ -574,3 +574,22 @@ reachability check before each run, for the repository and the online
 trio alike, to achieve model changes by a one-line edit and runs that
 survive a single unavailable model, accepting one more preflight step and
 a selection that is reported rather than fixed in the spec. — 2026-10-18
+
+## Q-13 · Research results survive an aborted run
+
+asked: 2026-10-18
+answer: "bitte achte darauf, dass die zwischenergebnisse der recherche agenten gespeichert werden, damit bei abbruch wegen token limits nicht verloren geht" — every finished research contribution is stored durably as soon as it ends, so a run cut off by a token or quota limit loses no finished work.
+answered_by: maintainer
+status: answered
+context: |
+  Topic: what happens to finished research contributions when a run stops early.
+  Intention: model quotas and token limits are tight (Codex, Claude and Z.ai budgets were all short on 2026-10-17/18); a run that dies after 30 of 42 calls should not have to pay for those 30 again.
+  Today: the design buffers reports until a stage ends or aborts and appends research only at barriers; there is no resume, so an aborted run starts from zero.
+  Repository change: each slot's terminal result (report, receipts, audit record) is written durably when it ends, into runner-owned state outside the repository bound to the frozen input digest; a later run with the same frozen input state reuses finished slots and launches only the missing ones, after the same preflight and leak checks.
+  Architecture change: yes — a resumable run state beside the existing frozen-input snapshot; the research artifact is still written only by the runner, peers still cannot read each other's answers during a stage, and no slot is retried within a run.
+
+In the context of tight model quotas, facing runs that lose every finished
+contribution when a token limit stops them, we decided to store each
+finished contribution durably at once and let a later run with the same
+frozen input reuse it, to achieve no repeated spend on finished work,
+accepting a runner-owned state store and an input-binding check on resume. — 2026-10-18
