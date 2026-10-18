@@ -10,7 +10,7 @@ superseded_by: null
 bead: coding-harness-icw
 owner: framework-architect
 provenance: ai-drafted-reviewed
-produced_by: {kind: llm-session, name: codex, version: "2026-10-17"}
+produced_by: {kind: llm-session, name: claude-code, version: "2026-10-18"}
 review: {status: pending, approved_by: null, approved_at: null}
 tags: [design, stage-2, research, swarm]
 category: design
@@ -19,7 +19,7 @@ created: 2026-10-14
 
 # Design — research-swarm
 
-Proposed shape for [spec.md](spec.md), based on the amended interview Q-7–Q-11 and recorded phase-2a rulings S-1–S-52.
+Proposed shape for [spec.md](spec.md), based on the amended interview Q-7–Q-13 and recorded phase-2a rulings S-1–S-52.
 This replaces the earlier six-topic/free-stage design; the merge decides it.
 
 ## Alternatives
@@ -58,19 +58,36 @@ with `--class` exits 2 before any call with a message that class has no effect
 on that route. Bounded and spike without fallback keep single GLM Flash.
 Other verbs keep their contracts.
 
-**Declaration → roles.** Replace `research_swarm`'s `free_endpoint`,
-`free_roster`, `free_focuses`, `topic6_free` and `flash_pair` with role lists:
-`repository_agents` and fixed `online_agents`, each a list of `{endpoint,
-model}`;
-`finder_agents` equals the repository trio; `finder_merge`, `topic_author`
-and `judge` each declare endpoint/model/effort. Resolve the actual declaration
-for every call, rather than validating it then using a hardcoded tuple.
-Repository/finder roles use DeepSeek Flash and MiMo Flash on `opencode-go`
-and Haiku 5.5 on `claude-code-plan`; online roles use DeepSeek Flash, MiMo
-Flash and Qwen 3.8 Flash on `opencode-go`. Add Qwen under a separate
-`research_modelle` list on that endpoint; leave its `modelle` review ladder
-unchanged. Model resolution accepts the union for declared research purposes
-only. Remove the unused Zen `opencode-free` endpoint, its fixed roster/focuses
+**Declaration → seats.** Replace `research_swarm`'s `free_endpoint`,
+`free_roster`, `free_focuses`, `topic6_free` and `flash_pair` with six seats
+(Q-12): `repository_seats` and `online_seats`, each three ordered lists of
+`{endpoint, model}` candidates. The finders use the repository seats'
+selections; `finder_merge`, `topic_author` and `judge` each declare
+endpoint/model/effort and stay Opus 5.5. Beside them,
+`availability_preflight: {max_age_seconds: 900, exclude_until: []}` has the
+review swarm's field names and validation, without its `flash_size`.
+Resolve each call from the run's frozen selection, never from a hardcoded
+tuple. Proposed initial lists, first entry being the Q-7/Q-9 member so that
+nothing changes while it is reachable; the fallbacks answered on 2026-10-18
+(Q-12) and carry dated 0-day, no-training terms:
+
+| Seat | Candidates in order |
+|---|---|
+| repository 1 | `opencode-go/deepseek-v4.1-flash`, `opencode-go/longcat-2.0` |
+| repository 2 | `opencode-go/mimo-v2.6-flash`, `opencode-go/mimo-v2.6-pro` |
+| repository 3 | `claude-code-plan/claude-haiku-5-5` |
+| online 1 | `opencode-go/deepseek-v4.1-flash`, `opencode-go/longcat-2.0` |
+| online 2 | `opencode-go/mimo-v2.6-flash`, `opencode-go/mimo-v2.6-pro` |
+| online 3 | `opencode-go/qwen3.8-flash`, `opencode-go/glm-5.3-flash` |
+
+Qwen's wire API was not measured on 2026-10-18, so while its terms carry a
+skip mark the third online seat takes GLM 5.3 Flash through Go, which works;
+only GLM through Z.ai is unavailable until 2026-10-21. A research-only
+candidate goes under a separate `research_modelle` list on its endpoint, so
+the `modelle` review ladder never changes; with the review swarm's pull
+request merged, every proposed candidate already stands in `modelle`. Model
+resolution accepts the union for declared research purposes only.
+Remove the unused Zen `opencode-free` endpoint, its fixed roster/focuses
 and endpoint-level free billing category; keep `public-web` as a role data
 class. Add `research_swarm.online_free: {provider: opencode-go,
 suffix: "-free", include: [], exclude: []}` as an explicit dynamic permission
@@ -103,12 +120,12 @@ successful fresh provider snapshot as well as runtime availability; never
 reintroduce a removed free id from the shipped baseline. Validate unique
 identities, provider and declared Go transport origin.
 Eligibility uses the freshly fetched overlay, not the merged effective list.
-Require all three fixed Go ids (`deepseek-v4.1-flash`, `mimo-v2.6-flash`,
-`qwen3.8-flash`) there as text-input chat before any model call; absent,
-baseline-only, non-chat or malformed typed entries exit 1 as
-`fixed-model-unavailable`, keeping diagnostics, id and any raw malformed
-value. This check consults no models.dev metadata; Haiku
-on Claude Code is outside it.
+Classify every Go seat candidate there (Q-12): a text-input chat entry with
+the Go origin is catalog-admitted; an absent, baseline-only, non-chat or
+malformed typed entry is skipped with its reason and raw value and is never
+probed. The existing standalone helper's `fixed_ids` hard failure becomes
+this per-candidate outcome. This check consults no models.dev metadata;
+Claude Code candidates are outside it.
 In pinned Pi 1.2.0, `isModelType(model, "chat")` treats absent `type` as chat,
 and `input` must include `text` (`pi-ai/dist/types.d.ts`, read 2026-10-16).
 The typed chat interface has no dedicated tool-support field. Q-11 replaces
@@ -136,7 +153,7 @@ present non-string status or a missing/different entry id is
 metadata-malformed with raw value recorded, including an absent-id marker.
 Absent or false tool_call is
 no-tool-support; deprecated status is deprecated. Ignore other providers'
-entries; a malformed candidate never excludes a valid peer. Keep the 39 fixed slots and
+entries; a malformed candidate never excludes a valid peer. Keep the 39 required slots and
 record N=0, distinct from a measured eligible-empty result. A failed Pi
 refresh instead exits 1 before all models. Neither case uses stale metadata.
 The maintainer's 2026-10-17 source observations in Q-11 are dated evidence,
@@ -147,9 +164,8 @@ body, repeated overlay id (raw repeated key or one id under two entries), or
 unconfirmed stale-only response exits 1 before any model call, keeping
 diagnostics. Otherwise validate entries separately: malformed typed input/type
 on a -free candidate yields pi-malformed with raw value and never excludes
-a valid peer or blocks fixed slots. A malformed fixed Go entry yields
-fixed-model-unavailable with id and raw value; other entries are inspected
-only for repeated ids. Pi itself rejecting an entry is a response-level
+a valid peer or blocks required slots. A malformed Go seat candidate is
+skipped the same way; other entries are inspected only for repeated ids. Pi itself rejecting an entry is a response-level
 failure, not a per-candidate exclusion.
 
 Select exact `-free` ids, apply include (empty means all) then exclude;
@@ -159,7 +175,7 @@ model call, even if excluded. Sort
 selected identities after rejecting duplicate overlay entries; never merge
 two catalog entries. Freeze `N`, expected slots and budget.
 A valid empty snapshot/filtered set is recorded as measured `N=0`, retaining
-the fixed Flash trio; models.dev failure is recorded separately as
+the online seats; models.dev failure is recorded separately as
 capability-unavailable N=0. An explicit include remains mandatory and exits 1
 if ineligible, including when capability metadata is unavailable. Pi refresh
 failure never becomes either kind of zero selection. Record successful
@@ -168,17 +184,17 @@ from a cached roster. Defaults add every eligible model; no arbitrary count
 cap silently drops seats. Runtime removals fail their best-effort slots, without
 roster
 mutation or substitution; these are named to the judge but do not by themselves
-make the run incomplete. The 39 fixed contributions alone are required. All
+make the run incomplete. The 39 required contributions alone are required. All
 selected free seats use the same isolated Pi
-public path, tool allow-list and receipt validation as the fixed online trio.
+public path, tool allow-list and receipt validation as the online seats.
 
-The two-source preflight is metadata work, not a model invocation: start both
-reads together at catalog preflight with one 60-second deadline inside the
-run's 150 minutes. Abort unfinished reads at the deadline without retry.
+The two-source preflight is metadata work, not a model invocation. It runs in
+preparation, before the run's 150 minutes: start both reads together with one
+60-second deadline. Abort unfinished reads at the deadline without retry.
 Unfinished/failed Pi exits 1 regardless of models.dev. If Pi succeeded but
 models.dev is unfinished, record capability-unavailable/timeout and N=0,
-keeping all fixed slots unless an explicit include is unmet. A models.dev
-timeout alone neither extends preflight nor aborts fixed work. Keep a minimal environment; only Pi receives the Go credential where
+keeping all required slots unless an explicit include is unmet. A models.dev
+timeout alone neither extends preflight nor aborts required work. Keep a minimal environment; only Pi receives the Go credential where
 required. The models.dev request receives no credential and sends only the
 fixed public URL; its failure cannot prevent collection of a valid Pi result. No private packet,
 repository path or change identity goes to the catalog service. Record Pi
@@ -187,6 +203,66 @@ raw Pi ids, models.dev source/time/digest or failure, exact capability/status
 fields, eligible ids, policy and selected/excluded ids with reasons. An offline fixture must
 prove forced network refresh and failure handling against real pinned Pi,
 including its static-catalog union and non-throwing error behavior.
+
+**Preparation → selection → receipt (Q-12).** A swarm run takes two steps,
+the form of the review swarm's `prepare-loop` and `review-loop
+--availability-reported` (pull request #157 at `0c03ec0`):
+
+1. `stage2.py prepare-explore <change> [--class CLASS]` deletes any earlier
+   receipt, validates class, neighbours, seat lists and the availability
+   rule (exit 2), and runs the two-source catalog read above. A Pi failure
+   exits 1 before any probe.
+2. It admits candidates. An `opencode-go` candidate needs its endpoint's
+   `modelle` or `research_modelle` entry, a dated `modelle_terms` reading
+   without an `uebersprungen` mark, and the fresh-overlay classification
+   above. A `claude-code-plan` candidate needs its endpoint entry. Repository
+   seats also need `framework` on the endpoint; online seats need
+   `opencode-go`. A timed exclusion matches the review swarm's way, by
+   `model_prefix` on the id or its last path segment, while `until` lies
+   ahead; an excluded candidate is never probed.
+3. It walks the repository trio, then the online trio, seat by seat and
+   candidate by candidate. The first admitted, unexcluded, unused candidate
+   is probed unless an earlier seat already probed it. A reachable one
+   fills the seat and the next seat begins; an unreachable one moves on to
+   the next candidate. A Go probe is the review swarm's: pinned Pi wrapper,
+   `--no-tools`, scratch working directory, home and agent directory,
+   discovery off, the fixed text "Availability probe only. Reply with OK. Do
+   not review code or request tools.", 60 seconds, after declaration check,
+   exact-prompt leak check and audit. A Claude Code probe sends the same
+   text through `claude -p` with `--tools ""`, `--restricted`,
+   `--safe-mode`, `--strict-mcp-config`, `--permission-prompts none` and no
+   session persistence. Go free models and Opus roles are not probed.
+4. Any unfilled seat: print the report with `seat-unavailable` and every
+   candidate's reason, write no receipt, exit 1. Otherwise print the report
+   (UTC check time; per seat the selection; per candidate selected,
+   skipped with reason, excluded until, unreachable with scrubbed error, or
+   not probed; the free selection) and seal `{version: 1, binding, state}`
+   with `report_id` = SHA-256 over its canonical JSON. Write it atomically
+   to `record_dir(change)/research-availability.json` and print "Report
+   this selection in the main conversation, then run explore <change>
+   --availability-reported <id>". The binding is the resolved worktree root,
+   change, digest of `model-endpoints.yaml`, resolved class and given
+   neighbours. Probe audit lines stay in the state directory beside the
+   receipt and enter the run manifest on consumption; preparation writes
+   nothing in the worktree.
+5. `explore <change> --availability-reported <id>` for a swarm class
+   re-derives class and neighbours, loads the receipt, checks version, id
+   (recomputed and equal to the argument), binding, timezone-aware time
+   and age ≤ `max_age_seconds`, then deletes the receipt before any model
+   call. Any fault refuses with exit 2. The run uses the receipt's catalog
+   record, free selection and seat selection; it never refreshes or probes
+   again, swaps a seat or retries.
+
+Placement (one implementation, spec criterion 50): with #157 on
+`origin/main`, the rule validation, timed-exclusion test, tool-free Go probe
+and receipt seal/verify of `scripts/stage2_availability.py` become shared
+functions. `prepare`/`consume` of the review swarm call them unchanged in
+behaviour; `prepare_research`/`consume_research` call them too. Without
+#157 on main, the same file name holds the shared functions and the research
+entry points, written to #157's contract; the pull request that merges
+second resolves the add/add conflict to one copy and runs both test files.
+Selection itself (seats, admission, double-fill) stays research-only: the
+review ladder has no seats.
 
 **Finder → map.** The pure Python helper stage2_research_map.py validates
 the exact union and derives neighbours from supplied frozen sources, with
@@ -227,7 +303,7 @@ class change or neighbour acceptance happens at this locator stage.
 **Map → topic contexts.** Expand the fixed topic contract in spec into
 checked-in repository/public prompts, one topic per invocation. Each topic
 has the same brief, all three perspectives and report template for every
-seat (three repository models or three Flash plus `N` Go free online models).
+seat (the three repository seats, or the three online seats plus `N` Go free models).
 Hash the task payload separately from transport envelopes so different CLI
 wrappers cannot conceal a different brief. Give repository
 peers the same map, private input and topic-scoped evidence. Buffer all peer
@@ -271,7 +347,7 @@ copied extension paths disable discovery, sessions, ambient extensions,
 skills and local tools. Allow only `public_search,public_fetch`, with the
 extension gate as a second layer and a minimal environment containing runtime
 settings and that transport's credential, not user identity/private paths.
-The same topic brief is sent independently to all three Flash models and
+The same topic brief is sent independently to the three online seats and
 every selected Go free model; runner-owned seat ids never enter that brief.
 
 Public tools use the repository pin (currently Pi 1.2.0, read 2026-10-16),
@@ -292,8 +368,9 @@ never instructions.
 
 **Queue → invocation.** One provider-wide semaphore for all Go roles, one for
 Claude; maximum four each, not four per topic/endpoint alias. Stages are
-catalog preflight → finder trio → Opus merge → Opus public sentence →
-`33 + 3N` topic calls → Opus judge. Within each stage dispatch ready slots
+receipt consumption → frozen inputs and resume lookup → finder trio → Opus
+merge → Opus public sentence → `33 + 3N` topic calls → Opus judge; the
+catalog and probes ran in preparation. Within each stage dispatch ready slots
 concurrently. Fail fast between preparatory stages: a failed finder, map or
 sentence (including filter rejection, exit 1) prevents every later stage.
 Within the topic stage ordinary failures allow siblings to finish; call the
@@ -309,21 +386,85 @@ as unstarted. Preserve available partial output/receipts with outcome
 exit 2 overrides incomplete exit 1. No worker writes research:
 workers return immutable results to the writer, which appends serialized audit
 lines and flushes buffered reports at barriers or abort. Each slot has one
-identity and one terminal outcome even on timeout/cancellation.
+identity and one terminal outcome even on timeout/cancellation. Since Q-13
+the pre-launch `audit` callback also writes the slot's durable launch record,
+and a new `on_terminal` callback writes its terminal record (next section).
 
 The frozen budget is `39 + 3N`: finder 3 + merge 1 + sentence 1 + repository
-24 + Flash online 9 + free online `3N` + judge 1 (Q-7–Q-10, 2026-10-16).
-Catalog preflight takes at most 60 seconds within the run. Deadlines:
+seats 24 + online seats 9 + free online `3N` + judge 1 (Q-7–Q-10,
+2026-10-16; Q-12 keeps it). Reused slots (Q-13) fill their places without a
+call. Preparation (catalog 60 seconds, each probe 60 seconds) comes before
+the run and counts neither as invocations nor against its time. Deadlines:
 sentence 5 minutes, finder/researcher/map merge 10 each, judge 15, whole run
 150. Queue wait counts
 against the total, not a child's allowance. Reserve 15 minutes for the judge.
-Dispatch all required topic slots before free seats: repository 1–8, Flash
-online 9–11, topic then declared seat order; free slots follow by topic then
+Dispatch all required topic slots before free seats: repository 1–8, online
+seats 9–11, topic then declared seat order; free slots follow by topic then
 sorted id. Topic launch uses the lesser of its role limit and positive
 remaining run time minus the reserve. Unlaunched slots are
 `not-started-deadline`; they invalidate completion only when required. Recheck
 after a long leak scan. No retries,
 recursive delegation, unbounded subprocess or zero-timeout launch.
+
+**Slot results → state store → resume (Q-13).** A new pure-ish module
+`scripts/stage2_research_store.py` owns `record_dir(change)/research/`, the
+runner-owned state directory beside the review loop record
+(`${XDG_STATE_HOME:-~/.local/state}/coding-harness/stage2/<change>/`).
+
+- *Layout.* One directory per run, named by its random 128-bit run id;
+  directories 0700, files 0600. Per run: `run.json` (run id, change, start
+  UTC, consumed receipt id, frozen per-path digests, research append digest
+  and length once published, end state), and per slot `<slot>.launch.json`
+  and `<slot>.result.json`. A record is scrubbed of every used credential,
+  written to a temporary name, flushed with `fsync`, renamed into place,
+  and the directory is flushed. A reader ignores temporary names and refuses
+  a record that fails to parse or lacks its own SHA-256 field; such a slot
+  counts as interrupted, never as finished.
+- *Dispatcher hook.* `dispatch(..., on_terminal=...)` calls the callback
+  once per slot, in the thread that set the outcome and before that thread
+  takes its next slot. That covers launched slots and those cancelled or
+  not started. The existing `audit` callback, called under the gate lock
+  just before launch, writes the launch record. A raising callback sets
+  stop, as a security refusal does, but without the security flag. Queued
+  slots are cancelled, running children are stopped and reaped with their
+  output kept in memory, and the runner ends incomplete with exit 1,
+  `state-store-unwritable`. The dispatcher stays free of storage and model
+  knowledge.
+- *Lock.* The runner takes `fcntl.flock(LOCK_EX | LOCK_NB)` on
+  `research/.lock` before freezing inputs and holds it to the end. A held
+  lock refuses with exit 2; the OS drops it when the process dies.
+- *Resume lookup.* After freezing inputs and before the finders, under the
+  lock and before any model call, the runner reads the latest stored run
+  (latest start time) and nothing older. It is no source if it recorded a
+  `refused` slot (named, criterion 56) or was published complete (the store
+  is cleared after a complete publication). Its binding matches when every
+  current per-path digest equals the stored one. The exception is
+  `research.md`: its current bytes, with the stored append tail of the given
+  length and digest removed and the `updated:` line normalised as the
+  snapshot module's `_without_updated` does, must hash to the stored frozen
+  digest. HEAD is not compared. A mismatch names the changed paths and
+  reuses nothing.
+- *Per slot.* When a stage's slots are planned and their exact prompts
+  frozen, a slot is reused when the source holds a `result` record with the
+  same stage, topic, seat index, endpoint, model and prompt SHA-256 and
+  outcome `ok`, and its report passes this run's validation. Reused slots
+  are not passed to `dispatch`. The runner copies their records into the
+  new run's directory with `reused_from` and the original times, and merges
+  them into the stage's results. Every stored result not reused is named
+  with its reason: binding, prompt, model, outcome, validation or refused
+  source. Source slots with a launch record and no result are listed as
+  interrupted. Later stages see reused reports only at the same barrier as
+  launched ones.
+- *Isolation.* No store path, run id or stored result enters a model's
+  prompt, argv, environment or working directory before its barrier.
+  Repository seats keep the worktree as working directory, and probes and
+  online seats have no file tools. A seat that deliberately reads an
+  absolute path elsewhere is the residual paid-Pi read risk recorded below,
+  now covering the store too.
+- *Snapshot.* `stage2_research_snapshot.py` already yields per-path
+  digests and the exact runner-owned append exemption. The binding reuses
+  them, adding one function that compares against stored digests instead
+  of live copies, because the earlier run's copies are gone.
 
 **Reports → judge.** Validate the fixed report template and claims before a
 fresh Opus 5.5 (`xhigh`) reconciles topics 1–11 with the map, original reports
@@ -393,7 +534,7 @@ claims absent from peers. Unresolved disagreement lists both opposing ids
 and evidence; judge schema permits no answer field. Reconciliation requires
 public-practice, architecture and neighbour comparison sections and gaps.
 Phase 6 assesses prose meaning, off-brief scope and faithful dissent; schema
-validation does not claim semantic authority. Include every selected Flash/free
+validation does not claim semantic authority. Include every selected online-seat/free
 seat in scoring and named
 missing outcomes; increasing `N` never silently drops a report from the judge.
 One fixed whole-packet limit `J` counts Unicode characters, including the
@@ -506,11 +647,13 @@ Only the runner persists exploration output, append-only inside `research.md`:
 
 | Record | Required fields |
 |---|---|
-| Run manifest | schema `research-swarm/v2`, opaque run id, UTC date, HEAD, full frozen-byte digest, per-path digests of untracked non-ignored change inputs (copies only in transient run scratch), class/source, exactly `39 + 3N` expected slot identities with required flag, budgets, given neighbours, judge packet size and fixed character limit with capacity/output-reserve/conversion/source/date, status/reason |
-| Catalog selection | pinned Pi version, Pi provider/source/UTC/digest/freshness, models.dev source/UTC/digest or failure, exact tool_call/status evidence per id, eligible ids, include/exclude, selected ids and `N`, measured-empty versus capability-unavailable outcome, exclusions/reasons or Pi failure |
+| Run manifest | schema `research-swarm/v2`, opaque run id, UTC date, HEAD, full frozen-byte digest, per-path digests of untracked non-ignored change inputs (copies only in transient run scratch), class/source, exactly `39 + 3N` expected slot identities with required flag, budgets, given neighbours, judge packet size and fixed character limit with capacity/output-reserve/conversion/source/date, consumed selection receipt id and check time with per-seat selection and every candidate's outcome/reason and probe audit lines, resume source run id or the reason none was used, reused and interrupted slots, status/reason |
+| Catalog selection | pinned Pi version, Pi provider/source/UTC/digest/freshness, models.dev source/UTC/digest or failure, exact tool_call/status evidence per id, eligible ids, include/exclude, selected ids and `N`, measured-empty versus capability-unavailable outcome, exclusions/reasons or Pi failure, each Go seat candidate's catalog outcome; taken in preparation and carried by the receipt |
+| Selection receipt | outside the worktree, single-use: version, binding (root, change, endpoint-configuration digest, class, given neighbours), UTC check time, catalog selection, per-seat selection, per-candidate outcome (selected, skipped/reason, excluded until, unreachable/scrubbed error, not probed), probe audit lines, `report_id` |
+| State-store record | outside the worktree: run record (run id, change, start, receipt id, frozen per-path digests, own research-append digest/length, end state) and per-slot launch and result records (slot identity, seat, endpoint/model, prompt SHA-256, leak audit, UTC start/end, outcome, scrubbed report or partial output, receipts, record digest; `reused_from` with original times when copied) |
 | Map | four locator lists keyed by category and exact ref, all finder origins/reasons, resolved/unresolved mark, artifact-to-spec neighbour mapping with retained keys, no-spec mark/gap or self mark without gap, runner-inserted given neighbours and suggestions in the three permitted folder forms, missing/unread categories |
 | Topic-6 history | frozen HEAD, per mapped path up to ten commits with full hash, UTC author date, subject, body capped at 4,000 characters and truncation flag, touched mapped paths, older-history not-read marker |
-| Slot | role/topic/endpoint/model, task-payload hash, individual leak audit, start/end/elapsed/outcome, report or partial output, source receipts |
+| Slot | role/topic/seat/endpoint/model, task-payload hash, individual leak audit, start/end/elapsed/outcome, report or partial output, source receipts, reused-from run with original start/end when reused |
 | Claim | global `<run>/<topic>/<seat>/<C1–C7>` id, endpoint/model seat, statement, evidence, kind, confidence/basis, valid/unsupported, resolved excerpts joined in citation order and capped at 4,000 characters per claim with truncation flags; topic 6 packet commit evidence, volatile and required governance when true |
 | Topic report | claims, counter-evidence, not read, neighbour relation; local Q1… questions with classification and nonempty local claims list; topic 3 class_assessment with class and claims; topic 5 neighbour_relations with path, relation and local claims |
 | Reconciliation | all topic sections and three comparisons, exclusive valid-claim dispositions, unique supported subset, unsupported claims, per-model counts/ids, disagreements/opposing ids, gaps, interview items; no answer field |
@@ -543,7 +686,8 @@ state. Reports remain available for
 citation even when their producer failed. Scratch files are cleaned after
 collecting partial stdout/stderr/receipts and publication or abort, deleting
 the frozen copies too; scrub every used secret before any
-persistence/diagnostic. No cache, extra database or resumable runtime is added.
+persistence/diagnostic. No cache or extra database is added; the only
+resumable state is the Q-13 state store, outside the repository.
 
 The standalone frozen-state helper keeps copies in an owner-only temporary
 directory outside the repository and exposes only digests in its manifest.
@@ -574,17 +718,24 @@ flowchart LR
     m["Person: maintainer"] --> r["Container: stage2.py runner"]
     r --> c["Component: explore class router"]
     c --> s["Component: single explorer"]
-    c --> cat["Component: fresh Go catalog and public-only selection"]
-    cat --> q["Component: provider queues and research stages"]
+    m --> prep["Component: research preparation (prepare-explore)"]
+    prep --> cat["Component: fresh Go catalog and public-only selection"]
+    prep --> sel["Component: seat candidates, probes and selection report"]
+    sel --> rcpt["Component: single-use selection receipt"]
+    sel --> go
+    sel --> claude
+    c --> rcpt
+    rcpt --> q["Component: provider queues and research stages"]
     cat --> picat["System: fresh Pi Go catalog"]
     cat --> caps["System: models.dev tool support and deprecation"]
+    q <--> store["Component: run state store (outside the repository)"]
     q --> f["Component: repository finder trio"]
     f --> merge["System: Opus map merge via Claude Code"]
     merge --> q
     q --> topic["System: Opus public topic via Claude Code"]
     topic --> q
-    q --> local["Component: repository topic trio"]
-    q --> online["Component: isolated public Pi Flash and Go free researchers"]
+    q --> local["Component: repository seats"]
+    q --> online["Component: isolated public Pi online seats and Go free researchers"]
     online --> web["System: public web"]
     online --> go["System: OpenCode Go"]
     local --> go
@@ -604,16 +755,25 @@ flowchart LR
 
 - Finder trio, Opus map merge, provider queues, claim evaluation and handoff
 gate.
-- Declared online Flash trio plus two-source live-selected Go free seats, same-brief
-  report contract and neighbours.
+- Six seats with ordered candidate lists, a tool-free reachability
+  preparation with a reported single-use receipt (Q-12), shared with the
+  review swarm's availability preparation.
+- A runner-owned state store that keeps every finished slot at once and lets
+  a later run with the same inputs reuse it (Q-13).
+- Two-source live-selected Go free seats, same-brief report contract and
+  neighbours.
 
 **Changed**
 
 - Larger changes move from six pairs to eight repository and three online
 topics.
 - Research obligations and evidence are checked through interview and spec.
+- Catalog refresh moves from the run into its preparation; the run consumes
+  the frozen result.
 
 **Removed**
 
-- The unused Zen free endpoint, fixed free roster/focuses and free/Flash
-  pair assignments; the existing small-change route stays available.
+- The unused Zen free endpoint, fixed free roster/focuses, free/Flash pair
+  assignments and the fixed repository and online trios with their
+  `fixed-model-unavailable` stop; the existing small-change route stays
+  available.
