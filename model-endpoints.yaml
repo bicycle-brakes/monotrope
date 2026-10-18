@@ -260,6 +260,27 @@ research_swarm:
   paid_endpoint: claude-code-plan
   topic_author: claude-opus-5-5
   judge: claude-opus-5-5
+  # Six seats (Q-12, Q-14): each has ONE preferred model and no fallback list. At
+  # preparation (`stage2.py prepare-explore`) an unreachable preferred model is
+  # replaced by the cheapest reachable admitted Go model from the substitute pool
+  # (`anfragen_5h` descending, ties by id) and the substitution is reported before
+  # any research call. A `modelle_terms` record alone admits a Go model for
+  # research; `opencode-go.modelle` stays the review ladder. Until the review
+  # swarm's records (#157) are on main, no Go model here has a terms record, so
+  # preparation reports every Go seat model as unadmitted rather than guessing.
+  repository_seats:
+    - {endpoint: opencode-go, model: deepseek-v4.1-flash}
+    - {endpoint: opencode-go, model: mimo-v2.6-flash}
+    - {endpoint: claude-code-plan, model: claude-haiku-5-5}
+  online_seats:
+    - {endpoint: opencode-go, model: deepseek-v4.1-flash}
+    - {endpoint: opencode-go, model: mimo-v2.6-flash}
+    - {endpoint: opencode-go, model: qwen3.8-flash}
+  availability_preflight:
+    max_age_seconds: 900
+    exclude_until: []
+    measured_wire_apis: [openai-completions]
+  online_free: {provider: opencode-go, suffix: "-free", include: [], exclude: []}
 
 # ---------------------------------------------------------------------------
 # Nutzungszweck — die Auflage, die kein technisches Gate prueft

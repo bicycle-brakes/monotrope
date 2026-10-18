@@ -31,6 +31,7 @@ REPO_ROOT = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(REPO_ROOT / "scripts"))
 
 import stage2  # noqa: E402
+import stage2_availability  # noqa: E402
 import stage2_swarm  # noqa: E402
 
 GIT = shutil.which("git")  # resolved before any test narrows the PATH
@@ -321,6 +322,9 @@ def sworld(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> SwarmWorld:
         check=True,
         capture_output=True,
     )
+    # Until the run consumes its frozen seat selection (plan steps 2-8), the old run needs no receipt: the
+    # receipt's own contract is tested in test_stage2_research_availability.py.
+    monkeypatch.setattr(stage2_availability, "consume_research", lambda *_args, **_kwargs: {"seats": {}})
     w = SwarmWorld(root, bin_dir)
     w.script()
     return w

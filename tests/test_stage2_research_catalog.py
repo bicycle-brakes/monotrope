@@ -148,8 +148,10 @@ console.log(JSON.stringify(result));
     return result
 
 
-def select(bridge: dict, policy: dict | None = None) -> dict:
-    return swarm.select_research_catalog(bridge, POLICY if policy is None else policy, FIXED, expected_version=PIN)
+def select(bridge: dict, policy: dict | None = None, ids: list[str] | None = None) -> dict:
+    return swarm.select_research_catalog(
+        bridge, POLICY if policy is None else policy, FIXED if ids is None else ids, expected_version=PIN
+    )
 
 
 def test_preflight_uses_fresh_pinned_go_snapshot_without_cache_date(tmp_path, sources):
@@ -255,8 +257,28 @@ def test_preflight_malformed_pi_candidate_is_local(tmp_path, sources, change):
     assert next(item for item in result["candidates"] if item["id"] == "alpha-free")["reason"] == "pi-malformed"
 
 
-@pytest.mark.parametrize("fault", ["missing", "input", "not-chat", "duplicate"])
-def test_preflight_fixed_or_duplicate_pi_fault_is_hard_failure(tmp_path, sources, fault):
+def outcome(result: dict, ident: str) -> dict:
+    return next(item for item in result["models"] if item["id"] == ident)
+
+
+def test_preflight_duplicate_pi_identity_is_still_a_hard_failure(tmp_path, sources):
+    sources.pi_models.append(copy.deepcopy(sources.pi_models[3]))
+    with pytest.raises(swarm.ResearchCatalogError) as failure:
+        select(collect(tmp_path, sources))
+    assert failure.value.exit_code == 1
+    assert "duplicate" in str(failure.value)
+
+
+@pytest.mark.parametrize(
+    "fault,reason",
+    [
+        ("missing", "not-in-fresh-pi"),
+        ("input", "pi-malformed"),
+        ("not-chat", "not-chat"),
+        ("other-wire-api", "wire-api-not-measured"),
+    ],
+)
+def test_preflight_missing_or_non_chat_seat_candidate_is_skipped(tmp_path, sources, fault, reason):
     if fault == "missing":
         sources.pi_models = [item for item in sources.pi_models if item["id"] != FIXED[2]]
     elif fault == "input":
@@ -264,11 +286,56 @@ def test_preflight_fixed_or_duplicate_pi_fault_is_hard_failure(tmp_path, sources
     elif fault == "not-chat":
         sources.pi_models[2]["type"] = "image"
     else:
-        sources.pi_models.append(copy.deepcopy(sources.pi_models[3]))
-    with pytest.raises(swarm.ResearchCatalogError) as failure:
+        sources.pi_models[2]["api"] = "anthropic-messages"
+    bridge = collect(tmp_path, sources)
+    result = select(bridge)
+    skipped = outcome(result, FIXED[2])
+    if fault == "missing":
+        # The pinned install may still ship the id: then it is baseline-only, never a fresh entry.
+        reason = "baseline-only" if FIXED[2] in bridge["baseline"] else "not-in-fresh-pi"
+    assert skipped["reason"] == reason
+    assert skipped["evidence"], "the raw value behind the skip is not kept"
+    assert result["selected"] == ["alpha-free", "beta-free"], "one seat candidate failed the whole preflight"
+    assert outcome(result, FIXED[0])["reason"] is None and outcome(result, FIXED[1])["reason"] is None
+
+
+def test_go_seat_candidates_require_fresh_text_chat_entries(tmp_path, sources):
+    sources.pi_models.append(model("paid-extra"))
+    for ident in [*FIXED, "paid-extra"]:
+        sources.metadata[GO]["models"][ident] = capability(ident)
+    bridge = collect(tmp_path, sources)
+    bridge["baseline"] = [*bridge["baseline"], "baseline-only-id"]
+    result = select(bridge, ids=[*FIXED, "baseline-only-id", "absent-id"])
+    assert outcome(result, "baseline-only-id")["reason"] == "baseline-only"
+    assert outcome(result, "absent-id")["reason"] == "not-in-fresh-pi"
+    assert outcome(result, "paid-extra")["reason"] is None, "a fresh paid overlay model is not classified"
+    # models.dev never decides a seat's preferred model, only the substitute pool.
+    sources.metadata[GO]["models"][FIXED[0]]["tool_call"] = False
+    result = select(collect(tmp_path, sources))
+    assert outcome(result, FIXED[0])["reason"] is None
+    assert outcome(result, FIXED[0])["tool_support"] == "no-tool-support"
+    assert outcome(result, FIXED[1])["tool_support"] is None
+
+
+@pytest.mark.parametrize(
+    "body,reason",
+    [("[]", "capability-unavailable"), ("{broken", "capability-unavailable")],
+)
+def test_preflight_pool_candidates_need_models_dev_tool_support(tmp_path, sources, body, reason):
+    sources.metadata_body = body
+    result = select(collect(tmp_path, sources))
+    assert outcome(result, FIXED[0])["reason"] is None
+    assert outcome(result, FIXED[0])["tool_support"] == reason
+
+
+def test_pi_overlay_duplicates_block_but_malformed_candidates_are_local(tmp_path, sources):
+    sources.pi_models[1]["input"] = None
+    result = select(collect(tmp_path, sources))
+    assert outcome(result, FIXED[1])["reason"] == "pi-malformed"
+    assert outcome(result, FIXED[0])["reason"] is None
+    sources.pi_models.append(copy.deepcopy(sources.pi_models[0]))
+    with pytest.raises(swarm.ResearchCatalogError, match="duplicate"):
         select(collect(tmp_path, sources))
-    assert failure.value.exit_code == 1
-    assert ("duplicate" if fault == "duplicate" else "fixed-model-unavailable") in str(failure.value)
 
 
 @pytest.mark.parametrize("status", [304, 404, 429, 500])
@@ -484,7 +551,19 @@ def test_preflight_free_definition_cannot_redirect_its_declared_go_origin(tmp_pa
         assert item["evidence"]["pi"][field] == {"present": True, "value": value}
 
 
-def test_preflight_fixed_definition_cannot_redirect_its_declared_go_origin(tmp_path, sources):
-    sources.pi_models[0]["baseUrl"] = "https://example.invalid/api"
-    with pytest.raises(swarm.ResearchCatalogError, match="fixed-model-unavailable"):
-        select(collect(tmp_path, sources))
+@pytest.mark.parametrize(
+    "change",
+    [
+        {"provider": "opencode"},
+        {"baseUrl": "https://example.invalid/api"},
+        {"baseUrl": "https://opencode.ai@other.invalid/zen/go/v1"},
+    ],
+)
+def test_preflight_seat_candidate_definition_cannot_redirect_its_go_origin(tmp_path, sources, change):
+    sources.pi_models[0].update(change)
+    result = select(collect(tmp_path, sources))
+    skipped = outcome(result, FIXED[0])
+    assert skipped["reason"] == "pi-malformed"
+    for field, value in change.items():
+        assert skipped["evidence"]["pi"][field] == {"present": True, "value": value}
+    assert outcome(result, FIXED[1])["reason"] is None

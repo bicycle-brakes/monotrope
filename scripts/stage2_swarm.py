@@ -132,12 +132,16 @@ def _catalog_duplicates(value):
     return isinstance(value, list) and any(_catalog_duplicates(item) for item in value)
 
 
-def select_research_catalog(bridge, policy, fixed_ids, *, expected_version):
+def select_research_catalog(bridge, policy, fixed_ids, *, expected_version, measured_wire_apis=("openai-completions",)):
     """Intersect a fresh pinned Pi response with capability evidence, never a cache union.
 
     The bridge transports raw source bodies. Python retains duplicate identity and
     malformed-field evidence that the runtime's permissive parser would discard.
-    This selects a roster only; it does not authorize or dispatch any model.
+    This selects a roster and classifies every seat candidate (`fixed_ids`, the
+    preferred models) and every paid model of the fresh overlay; it does not
+    authorize or dispatch any model. A candidate that is absent, baseline-only,
+    non-chat, malformed or on an unmeasured wire API is skipped with its raw
+    evidence, never a failure of the whole preflight (Q-12, Q-14).
     """
     validate_research_free_policy(policy)
     provider = policy["provider"]
@@ -204,9 +208,18 @@ def select_research_catalog(bridge, policy, fixed_ids, *, expected_version):
             return "pi-malformed"
         return None
 
-    for ident in fixed_ids:
-        if ident not in models or pi_reason(models[ident]):
-            raise ResearchCatalogError(f"fixed-model-unavailable: {ident}; raw={models.get(ident)!r}")
+    baseline = set(bridge.get("baseline", []))
+    wire_apis = list(measured_wire_apis)
+
+    def seat_reason(ident):
+        item = models.get(ident)
+        if item is None:
+            return "baseline-only" if ident in baseline else "not-in-fresh-pi"
+        reason = pi_reason(item)
+        if reason:
+            return reason
+        return None if item.get("api") in wire_apis else "wire-api-not-measured"
+
     metadata = sources.get("models_dev", {})
     capability_reason = None
     capabilities = {}
@@ -237,13 +250,8 @@ def select_research_catalog(bridge, policy, fixed_ids, *, expected_version):
         except (KeyError, TypeError, ValueError):
             capability_reason = "malformed"
             capabilities = {}
-    candidates = []
-    eligible = set()
-    ids = sorted(
-        {ident for ident in models if ident.endswith("-free")}
-        | {ident for ident in bridge.get("baseline", []) if ident.endswith("-free")}
-    )
-    for ident in ids:
+
+    def evidence_of(ident, pi_keys=("type", "input", "provider", "baseUrl")):
         item = models.get(ident)
         entry = capabilities.get(ident)
         evidence = {
@@ -255,31 +263,59 @@ def select_research_catalog(bridge, policy, fixed_ids, *, expected_version):
         evidence["entry"] = {"present": True, "value": entry} if ident in capabilities else {"present": False}
         evidence["pi"] = {
             key: {"present": True, "value": item[key]} if isinstance(item, dict) and key in item else {"present": False}
-            for key in ("type", "input", "provider", "baseUrl")
+            for key in pi_keys
         }
+        return evidence
+
+    def metadata_reason(ident):
+        """Why models.dev does not show tool support for the id, or None when it does."""
+        entry = capabilities.get(ident)
+        if capability_reason:
+            return "capability-unavailable"
+        if ident not in capabilities:
+            return "metadata-missing"
+        if (
+            not isinstance(entry, dict)
+            or getattr(entry, "duplicates", False)
+            or entry.get("id") != ident
+            or "tool_call" in entry
+            and type(entry["tool_call"]) is not bool
+            or "status" in entry
+            and not isinstance(entry["status"], str)
+        ):
+            return "metadata-malformed"
+        if not entry.get("tool_call", False):
+            return "no-tool-support"
+        if entry.get("status") == "deprecated":
+            return "deprecated"
+        return None
+
+    candidates = []
+    eligible = set()
+    ids = sorted(
+        {ident for ident in models if ident.endswith("-free")}
+        | {ident for ident in bridge.get("baseline", []) if ident.endswith("-free")}
+    )
+    for ident in ids:
+        item = models.get(ident)
+        evidence = evidence_of(ident)
         reason = "not-in-fresh-pi" if item is None else pi_reason(item)
         if reason is None:
-            if capability_reason:
-                reason = "capability-unavailable"
-            elif ident not in capabilities:
-                reason = "metadata-missing"
-            elif (
-                not isinstance(entry, dict)
-                or getattr(entry, "duplicates", False)
-                or entry.get("id") != ident
-                or "tool_call" in entry
-                and type(entry["tool_call"]) is not bool
-                or "status" in entry
-                and not isinstance(entry["status"], str)
-            ):
-                reason = "metadata-malformed"
-            elif not entry.get("tool_call", False):
-                reason = "no-tool-support"
-            elif entry.get("status") == "deprecated":
-                reason = "deprecated"
+            reason = metadata_reason(ident)
         if reason is None:
             eligible.add(ident)
         candidates.append({"id": ident, "reason": reason, "evidence": evidence})
+    seat_models = []
+    for ident in sorted({*fixed_ids, *(name for name in models if not name.endswith("-free"))}):
+        reason = seat_reason(ident)
+        seat_models.append(
+            {
+                "id": ident,
+                "reason": reason,
+                "evidence": evidence_of(ident, ("type", "input", "provider", "baseUrl", "api")),
+                "tool_support": metadata_reason(ident) if reason is None else "not-assessed",
+            }
+        )
     for ident in policy["include"]:
         if ident not in eligible:
             raise ResearchCatalogError(f"explicit free include is ineligible: {ident}")
@@ -303,6 +339,8 @@ def select_research_catalog(bridge, policy, fixed_ids, *, expected_version):
             name: {key: value for key, value in source.items() if key != "body"} for name, source in sources.items()
         },
         "candidates": candidates,
+        "models": seat_models,
+        "measured_wire_apis": wire_apis,
         "capability_status": "capability-unavailable" if capability_reason else "available",
         "capability_reason": capability_reason,
     }
@@ -427,6 +465,70 @@ def swarm_problems(data: dict) -> list[str]:
         problems.append("topic6_free is not a roster id")
     elif with_six != [block.get("topic6_free")]:
         problems.append("topic6_free does not match the topic-6 focus")
+    return problems
+
+
+SEAT_KEYS = {"endpoint", "model"}
+
+
+def seat_problems(data: dict) -> list[str]:
+    """What the six research seats and the availability rule require, as the problems found (Q-12, Q-14).
+
+    Each trio is exactly three seats with one preferred `{endpoint, model}` each and no fallback list.
+    A model is declared by its endpoint's `modelle` or, for research only, by a `modelle_terms` record,
+    so a record alone admits it and the review ladder never changes. A `-free` id never fills a seat,
+    online seats run on `opencode-go`, and repository seats need an endpoint cleared for `framework`
+    with a stated residency. One model fills at most one seat of a trio.
+    """
+    from stage2_availability import rule_problem
+
+    block = data.get("research_swarm")
+    if not isinstance(block, dict):
+        return ["no research_swarm block"]
+    problems: list[str] = []
+
+    def endpoint(name: object) -> dict:
+        for candidate in data.get("endpunkte") or []:
+            if isinstance(candidate, dict) and candidate.get("name") == name:
+                return candidate
+        return {}
+
+    for key, label in (("repository_seats", "repository"), ("online_seats", "online")):
+        seats = block.get(key)
+        if not isinstance(seats, list) or len(seats) != 3:
+            problems.append(f"{key} must list exactly three seats")
+            continue
+        seen: set[tuple[str, str]] = set()
+        for number, seat in enumerate(seats, 1):
+            where = f"{label} seat {number}"
+            if not isinstance(seat, dict) or set(seat) != SEAT_KEYS:
+                problems.append(f"{where} needs exactly endpoint and model: one preferred model, no fallback list")
+                continue
+            name, model = seat["endpoint"], seat["model"]
+            if not all(isinstance(value, str) and value for value in (name, model)):
+                problems.append(f"{where} needs one endpoint name and one model id")
+                continue
+            entry = endpoint(name)
+            terms = entry.get("modelle_terms")
+            if not entry:
+                problems.append(f"{where}: endpoint {name} is not declared")
+            elif model not in (entry.get("modelle") or []) and not (isinstance(terms, dict) and model in terms):
+                problems.append(f"{where}: {name}/{model} is not declared")
+            if model.endswith("-free"):
+                problems.append(f"{where}: a -free model never fills a seat")
+            if label == "online" and name != "opencode-go":
+                problems.append(f"{where}: online seats run on opencode-go")
+            if label == "repository" and entry:
+                allowed = entry.get("darf_sehen")
+                residency = entry.get("residenz")
+                if not isinstance(allowed, list) or "framework" not in allowed:
+                    problems.append(f"{where}: endpoint {name} may not see framework content")
+                if not isinstance(residency, str) or not residency.strip() or residency == "nicht-erklaert":
+                    problems.append(f"{where}: endpoint {name} states no data residency")
+            if (name, model) in seen:
+                problems.append(f"{where}: {name}/{model} already fills another seat of the trio")
+            seen.add((name, model))
+    problems.extend(rule_problem(block.get("availability_preflight"), wire_apis=True))
     return problems
 
 
@@ -1094,8 +1196,8 @@ def judge_problems(answer: str, sources: dict[str, bytes]) -> list[str]:
 # ---------------------------------------------------------------------------
 
 
-def run(root: Path, change: str, runner, klass: str) -> None:
-    """The whole phase-1 swarm; raises the runner's Refused (exit 2) or CallFailed (exit 1)."""
+def run(root: Path, change: str, runner, klass: str, selection: dict | None = None) -> None:  # noqa: ARG001
+    """The whole phase-1 swarm (`selection` is the consumed seat receipt; the run does not read it yet); raises the runner's Refused (exit 2) or CallFailed (exit 1)."""
     started = time.monotonic()
     try:
         data = yaml.safe_load((root / "model-endpoints.yaml").read_text(encoding="utf-8")) or {}

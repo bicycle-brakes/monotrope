@@ -2795,18 +2795,44 @@ def declared_class(root: Path, change: str, klass: str | None) -> str:
     )
 
 
-def explore(root: Path, change: str, stage2_off: str | None = None, klass: str | None = None) -> None:
+def prepare_explore(root: Path, change: str, klass: str | None = None) -> None:
+    """Phase 1, step one for a swarm class: select and probe the six seats and print the report.
+
+    Writes a single-use receipt outside the worktree; `explore <change> --availability-reported <id>`
+    consumes it once the selection has been reported in the main conversation.
+    """
+    import stage2_availability
+
+    stage2_availability.prepare_research(root, change, sys.modules[__name__], klass)
+
+
+def explore(
+    root: Path,
+    change: str,
+    stage2_off: str | None = None,
+    klass: str | None = None,
+    availability_reported: str | None = None,
+) -> None:
     """Phase 1: the swarm for a feature or architectural change, GLM Flash for a bounded
     change or a spike, or the explicit Haiku fallback - the answer lands in research.md."""
     if stage2_off is None:
         klass = declared_class(root, change, klass)
         if klass in SWARM_CLASSES:
+            import stage2_availability
             import stage2_swarm
 
-            stage2_swarm.run(root, change, sys.modules[__name__], klass)
+            # The reported receipt comes first: no research call, probe or catalog read starts without it.
+            selection = stage2_availability.consume_research(
+                root, change, availability_reported, sys.modules[__name__], klass
+            )
+            stage2_swarm.run(root, change, sys.modules[__name__], klass, selection=selection)
             return
+        if availability_reported is not None:
+            raise Refused(f"--availability-reported belongs to a swarm class; this change is {klass}.")
         endpoint = GLM_FLASH
     else:
+        if availability_reported is not None or klass is not None:
+            raise Refused("--stage2-off explores without a class or a selection receipt.")
         # The explicit Stage-1 route skips the class entirely: Haiku explores,
         # and only the reason is carried for the later plan (spec, criterion 20).
         endpoint = HAIKU
@@ -3630,7 +3656,7 @@ def main(argv: list[str] | None = None) -> int:
         formatter_class=argparse.RawDescriptionHelpFormatter,
         allow_abbrev=False,
     )
-    parser.add_argument("verb", choices=sorted([*VERBS, "session"]))
+    parser.add_argument("verb", choices=sorted([*VERBS, "session", "prepare-explore"]))
     parser.add_argument("change", nargs="?", default="", help="folder name under plans/changes/")
     parser.add_argument(
         "--stage2-off",
@@ -3653,6 +3679,13 @@ def main(argv: list[str] | None = None) -> int:
         help="explore only: the change class before a spec exists, agreeing with every stated one",
     )
     parser.add_argument(
+        "--availability-reported",
+        dest="availability_reported",
+        default=None,
+        metavar="ID",
+        help="explore only, swarm classes: the id of the prepared selection after it was reported to the maintainer",
+    )
+    parser.add_argument(
         "--handover",
         default=None,
         help="session only: a handover file inside the worktree (default: the change's handover.md)",
@@ -3671,15 +3704,19 @@ def main(argv: list[str] | None = None) -> int:
             )
         if args.stage2_off is not None and args.verb not in {"explore", "implement", "repair"}:
             raise Refused("--stage2-off applies only to explore, implement and repair.")
-        if args.klass is not None and args.verb != "explore":
-            raise Refused("--class belongs to the explore verb alone.")
+        if args.klass is not None and args.verb not in {"explore", "prepare-explore"}:
+            raise Refused("--class belongs to the explore and prepare-explore verbs alone.")
+        if args.availability_reported is not None and args.verb != "explore":
+            raise Refused("--availability-reported belongs to the explore verb alone.")
         if args.verb == "session":
             if not args.model:
                 raise Refused("session needs --model <id>: name the model exactly as model-endpoints.yaml lists it.")
         elif args.model is not None or args.handover is not None:
             raise Refused("--model and --handover belong to the session verb alone.")
-        if args.verb == "explore":
-            explore(Path(args.root), args.change, args.stage2_off, args.klass)
+        if args.verb == "prepare-explore":
+            prepare_explore(Path(args.root), args.change, args.klass)
+        elif args.verb == "explore":
+            explore(Path(args.root), args.change, args.stage2_off, args.klass, args.availability_reported)
         elif args.verb in {"implement", "repair"}:
             VERBS[args.verb](Path(args.root), args.change, args.stage2_off)
         elif args.verb == "session":

@@ -8755,3 +8755,36 @@ def test_codex_repair_doctrine_and_endpoint_remarks_agree() -> None:
 def test_pi_wrapper_is_repository_local() -> None:
     """Criterion 2: the production runner never selects a global Pi, even at the same version."""
     assert stage2.PI_WRAPPER == REPO_ROOT / "tools" / "pi" / "pi"
+
+
+# ---------------------------------------------------------------------------
+# Seat selection receipt: where no swarm runs (research-swarm, criteria 20 and 44)
+# ---------------------------------------------------------------------------
+
+RECEIPT_ID = "a" * 64
+
+
+@pytest.mark.parametrize("klass", ["bounded", "spike"])
+def test_receipt_id_is_refused_where_no_swarm_runs(world: World, klass: str) -> None:
+    text = world.research.read_text(encoding="utf-8").replace("class: bounded", f"class: {klass}")
+    world.research.write_text(text, encoding="utf-8")
+    world.script(claude=[{"stdout": "must not run"}])
+    assert world.run("explore", "demo", "--availability-reported", RECEIPT_ID) == 2
+    assert world.run("prepare-explore") == 2, "preparation ran where no swarm runs"
+    assert world.run("explore", "demo", "--stage2-off", "r", "--availability-reported", RECEIPT_ID) == 2
+    assert world.run("implement", "demo", "--availability-reported", RECEIPT_ID) == 2
+    assert world.calls() == []
+    assert world.run("explore") == 0, "the bounded or spike route itself still works without a receipt"
+
+
+def test_stage2_off_skips_class_and_neighbours_but_refuses_class_argument(world: World) -> None:
+    text = world.research.read_text(encoding="utf-8").replace("class: bounded", "class: nonsense\nneighbours: nope")
+    world.research.write_text(text, encoding="utf-8")
+    world.script(claude=[{"stdout": "Fallback fact."}])
+    assert world.run("explore", "demo", "--stage2-off", "Z.ai unavailable") == 0
+    call = world.calls("claude")[0]
+    assert call["argv"][call["argv"].index("--model") + 1] == "claude-haiku-5-5"
+    note = world.research.read_text(encoding="utf-8")
+    assert "route stage-1" in note and "reason Z.ai unavailable" in note
+    assert world.run("explore", "demo", "--stage2-off", "r", "--class", "feature") == 2
+    assert len(world.calls("claude")) == 1, "--class permitted a call beside --stage2-off"

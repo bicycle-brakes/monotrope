@@ -633,3 +633,111 @@ def test_the_declaration_carries_the_swarm_block() -> None:
     if not geladen.get("research_swarm"):
         pytest.skip("no research_swarm block in this declaration (the kit's stub is empty)")
     assert swarm_block_problems(geladen) == []
+
+
+# ---------------------------------------------------------------------------
+# Research seats and the availability rule (research-swarm, Q-12 and Q-14)
+# ---------------------------------------------------------------------------
+
+
+def _seat_fixture() -> dict:
+    """A complete seat declaration: three repository and three online seats, one preferred model each."""
+    go = {"name": "opencode-go", "darf_sehen": ["framework"], "residenz": "anbieter-erklaert"}
+    go["modelle"] = ["d-flash", "m-flash"]
+    go["modelle_terms"] = {"q-flash": {"gelesen": "2026-10-17", "anfragen_5h": 5400}}
+    claude = {"name": "claude-code-plan", "darf_sehen": ["framework"], "residenz": "anbieter-erklaert"}
+    claude["modelle"] = ["haiku", "opus"]
+    return {
+        "datenklassen": {"framework": {}, "public-web": {}},
+        "endpunkte": [go, claude],
+        "research_swarm": {
+            "repository_seats": [
+                {"endpoint": "opencode-go", "model": "d-flash"},
+                {"endpoint": "opencode-go", "model": "m-flash"},
+                {"endpoint": "claude-code-plan", "model": "haiku"},
+            ],
+            "online_seats": [
+                {"endpoint": "opencode-go", "model": "d-flash"},
+                {"endpoint": "opencode-go", "model": "m-flash"},
+                {"endpoint": "opencode-go", "model": "q-flash"},
+            ],
+            "availability_preflight": {
+                "max_age_seconds": 900,
+                "exclude_until": [],
+                "measured_wire_apis": ["openai-completions"],
+            },
+        },
+    }
+
+
+SEAT_FAULTS = {
+    "no-preferred-model": lambda d: d["research_swarm"]["repository_seats"].pop(),
+    "second-model": lambda d: d["research_swarm"]["online_seats"][0].update(model=["d-flash", "m-flash"]),
+    "fallback-list": lambda d: d["research_swarm"]["repository_seats"][0].update(fallback=["m-flash"]),
+    "undeclared": lambda d: d["research_swarm"]["repository_seats"][0].update(model="ghost"),
+    "free-preferred": lambda d: d["research_swarm"]["online_seats"][0].update(model="x-free"),
+    "online-off-go": lambda d: d["research_swarm"]["online_seats"][0].update(
+        endpoint="claude-code-plan", model="haiku"
+    ),
+    "repository-no-framework": lambda d: d["endpunkte"][0].update(darf_sehen=["public-web"]),
+    "one-model-two-seats": lambda d: d["research_swarm"]["repository_seats"][1].update(model="d-flash"),
+    "age-bool": lambda d: d["research_swarm"]["availability_preflight"].update(max_age_seconds=True),
+    "age-string": lambda d: d["research_swarm"]["availability_preflight"].update(max_age_seconds="900"),
+    "age-range": lambda d: d["research_swarm"]["availability_preflight"].update(max_age_seconds=3601),
+    "wire-apis-empty": lambda d: d["research_swarm"]["availability_preflight"].update(measured_wire_apis=[]),
+    "wire-apis-text": lambda d: d["research_swarm"]["availability_preflight"].update(
+        measured_wire_apis="openai-completions"
+    ),
+    "exclusion-date": lambda d: d["research_swarm"]["availability_preflight"].update(
+        exclude_until=[{"model_prefix": "x", "until": "soon", "reason": "r"}]
+    ),
+    "exclusion-no-zone": lambda d: d["research_swarm"]["availability_preflight"].update(
+        exclude_until=[{"model_prefix": "x", "until": "2026-10-21T20:34:00", "reason": "r"}]
+    ),
+    "unknown-rule-key": lambda d: d["research_swarm"]["availability_preflight"].update(flash_size=3),
+    "rule-missing": lambda d: d["research_swarm"].pop("availability_preflight"),
+}
+
+
+def test_seat_candidate_lists_and_availability_rule_are_validated() -> None:
+    import sys
+
+    sys.path.insert(0, str(REPO_ROOT / "scripts"))
+    import stage2_swarm
+
+    assert stage2_swarm.seat_problems(_seat_fixture()) == []
+    for name, fault in SEAT_FAULTS.items():
+        data = _seat_fixture()
+        fault(data)
+        assert stage2_swarm.seat_problems(data), f"{name}: the fault passed declaration validation"
+    # A terms record alone declares a research model; the review ladder `modelle` is untouched.
+    data = _seat_fixture()
+    assert "q-flash" not in data["endpunkte"][0]["modelle"]
+    assert not any("q-flash" in problem for problem in stage2_swarm.seat_problems(data))
+
+
+def test_the_repository_declaration_carries_six_seats_and_the_rule() -> None:
+    import sys
+
+    sys.path.insert(0, str(REPO_ROOT / "scripts"))
+    import stage2_swarm
+
+    geladen = yaml.safe_load(ENDPUNKTE.read_text(encoding="utf-8"))
+    block = geladen["research_swarm"]
+    assert [seat["model"] for seat in block["repository_seats"]] == [
+        "deepseek-v4.1-flash",
+        "mimo-v2.6-flash",
+        "claude-haiku-5-5",
+    ]
+    assert [seat["model"] for seat in block["online_seats"]] == [
+        "deepseek-v4.1-flash",
+        "mimo-v2.6-flash",
+        "qwen3.8-flash",
+    ]
+    rule = block["availability_preflight"]
+    assert rule["max_age_seconds"] == 900 and rule["measured_wire_apis"] == ["openai-completions"]
+    assert block["online_free"] == {"provider": "opencode-go", "suffix": "-free", "include": [], "exclude": []}
+    # A model's data-terms record belongs to the review swarm's declaration (#157); until that merges,
+    # only "not declared" may remain open here, never a shape or permission fault.
+    open_problems = [p for p in stage2_swarm.seat_problems(geladen) if "is not declared" not in p]
+    assert open_problems == []
