@@ -180,7 +180,7 @@ typed: a hand-kept list of files ages exactly as fast as files are added.
 | [`changes/research-swarm/design.md`](changes/research-swarm/design.md) | draft | partial | 2026-10-18 | coding-harness-icw |
 | [`changes/research-swarm/findings.md`](changes/research-swarm/findings.md) | draft | none | 2026-10-17 | coding-harness-icw |
 | [`changes/research-swarm/plan.md`](changes/research-swarm/plan.md) | draft | partial | 2026-10-18 | coding-harness-icw |
-| [`changes/research-swarm/research.md`](changes/research-swarm/research.md) | draft | none | 2026-10-17 | coding-harness-icw |
+| [`changes/research-swarm/research.md`](changes/research-swarm/research.md) | draft | none | 2026-10-18 | coding-harness-icw |
 | [`changes/research-swarm/spec.md`](changes/research-swarm/spec.md) | draft | partial | 2026-10-18 | coding-harness-icw |
 | [`changes/sol-effort/decisions.md`](changes/sol-effort/decisions.md) | draft | none | 2026-10-13 | coding-harness-yzk |
 | [`changes/sol-effort/findings.md`](changes/sol-effort/findings.md) | draft | none | 2026-10-14 | coding-harness-yzk |

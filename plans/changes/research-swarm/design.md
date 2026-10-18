@@ -214,7 +214,8 @@ the form of the review swarm's `prepare-loop` and `review-loop
    exits 1 before any probe.
 2. It admits candidates. An `opencode-go` candidate needs its endpoint's
    `modelle` or `research_modelle` entry, a dated `modelle_terms` reading
-   without an `uebersprungen` mark, and the fresh-overlay classification
+   without an `uebersprungen` mark (judged by #157's `terms_problem`, the
+   same function its ladder uses), and the fresh-overlay classification
    above. A `claude-code-plan` candidate needs its endpoint entry. Repository
    seats also need `framework` on the endpoint; online seats need
    `opencode-go`. A timed exclusion matches the review swarm's way, by

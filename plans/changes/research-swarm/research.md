@@ -3,8 +3,8 @@ title: "Research — research-swarm"
 status: draft
 implementation_status: none
 date: 2026-10-14
-last_reviewed: 2026-10-17
-updated: 2026-10-17
+last_reviewed: 2026-10-18
+updated: 2026-10-18
 supersedes: null
 superseded_by: null
 bead: coding-harness-icw
@@ -405,3 +405,53 @@ above about capability mapping and review status describe earlier drafts.
 No external reads, model calls, tracker access, code/test edit, commit or git
 mutation occurred in this redraft. Hosted PR state and current cross-checkout
 session ownership were not read under the worktree-only restriction.
+
+## Q-12 and Q-13 redraft evidence — 2026-10-18
+
+Read in this worktree at `4d11136` and, read-only through `git show`, on
+`origin/explore/loop-until-clean` at `0c03ec0` (the review swarm, pull
+request #157, not merged). Both branches fork from `76b90a8`; `origin/main`
+at `6477d04` holds neither `scripts/stage2_availability.py` nor
+`modelle_terms`, `availability_preflight` or `free_stage` in
+`model-endpoints.yaml`.
+
+- #157's `scripts/stage2_availability.py` (211 lines) validates
+  `availability_preflight` (`flash_size` 1–3, `max_age_seconds` 1–3600,
+  `exclude_until` entries with a non-empty `model_prefix` and `reason` and a
+  timezone-aware `until`). `prepare` deletes the earlier receipt and takes
+  its paid candidates from `ladder` in `scripts/stage2.py`, which admits a
+  declared model only when `terms_problem` finds no fault in its
+  `modelle_terms`. Of those it keeps models present in the fresh overlay with
+  a request value, skips timed exclusions without probing, and probes each
+  candidate once. The probe uses
+  `--no-tools`, a scratch working directory, the static prompt
+  "Availability probe only. Reply with OK. Do not review code or request
+  tools.", 60 seconds, `preflight` and `checked_prompt`, and writes a call
+  line into `findings.md`. It prints a report and seals `{version: 1,
+  binding: {root, configuration digest, diff digest}, state}` with a SHA-256
+  `report_id` into `record_dir(change)/availability.json`; with nothing
+  reachable it raises `Refused` (exit 2). `consume` checks id, binding, age
+  and an empty `consumed` list, and refuses otherwise.
+  `tests/test_stage2_availability.py` holds 14 test functions for it.
+- #157's `opencode-go` entry lists `modelle_terms` per paid model (read
+  date, source, retention, training, requests per five hours). On
+  2026-10-17 `qwen3.8-flash`, `gpt-6-luna`, `claude-haiku-5-5` (on Go) and
+  `minimax-m3` carry `uebersprungen: "2026-10-17"` with `grund: "wire API not
+  measured"`. `glm-5.3-flash`, `longcat-2.0` and `mimo-v2.6-pro` carry 0-day
+  retention without a skip mark. Its timed exclusion covers prefix `glm`
+  until `2026-10-21T20:34:00+08:00`; Q-12's context limits the outage to
+  GLM through Z.ai.
+- This branch: `record_dir(change)` in `scripts/stage2.py` resolves to
+  `${XDG_STATE_HOME:-~/.local/state}/coding-harness/stage2/<change>`.
+  `select_research_catalog` in `scripts/stage2_swarm.py` raises
+  `fixed-model-unavailable` for any fixed id absent or malformed in the fresh
+  overlay. `research_slot_plan` builds the 39 + 3N graph from fixed role
+  lists. `scripts/stage2_research_dispatch.py` offers `gate`, `launcher` and
+  a pre-launch `audit` callback, returns results only at the end, and has no
+  terminal callback. `scripts/stage2_research_snapshot.py` yields per-path
+  digests and an exact runner-owned append exemption against live copies
+  that are deleted at exit. Repository Pi seats run with the worktree as
+  working directory and `PI_TOOLS`, with a scratch `HOME`.
+
+No model, catalog, tracker or credential file was read or called for this
+addendum.
