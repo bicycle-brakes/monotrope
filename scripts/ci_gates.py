@@ -110,9 +110,11 @@ OHNE_AUFRUFER: dict[str, str] = {
         "window for an interactive model session; tests/test_stage2_session.py runs it against stand-ins"
     ),
     "stage2_availability.py": (
-        "Helper of scripts/stage2.py (prepare-explore, explore --availability-reported), never an entry point of "
-        "its own; it probes models through the runner's stand-in-testable launch path. "
-        "tests/test_stage2_research_availability.py runs it against stand-ins and a fixture catalog"
+        "Helper of scripts/stage2.py (prepare-loop and review-loop; prepare-explore and explore "
+        "--availability-reported), never an entry point of its own; it probes models through the runner's "
+        "stand-in-testable launch path. tests/test_stage2_availability.py exercises the review loop's preparation "
+        "and consumption against synthetic models, tests/test_stage2_research_availability.py the research "
+        "swarm's against stand-ins and a fixture catalog"
     ),
     "stage2_research_refs.py": (
         "Pure frozen-reference library, not a CLI gate; the amended research map/report pipeline consumes it. "

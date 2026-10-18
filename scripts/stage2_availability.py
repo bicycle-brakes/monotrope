@@ -1,22 +1,22 @@
 """Prepare reachable models before a swarm run; stage2 owns every foreign-model call.
 
-One implementation for both swarms (research-swarm spec, criterion 50). The
-swarm-independent parts live here as shared functions: rule validation
+One module for both swarms (research-swarm spec, criterion 50). The
+swarm-independent parts are shared functions: rule validation
 (`rule_problem`), timed-exclusion matching (`excluded_reason`), the tool-free
-probes (`probe_go`, `probe_claude`), the data-terms and cost helpers
-(`terms_problem`, `request_value`, `ordered_models`) and receipt sealing and
-verification (`seal`, `verify`). The research entry points `prepare_research`
-and `consume_research` sit beside them.
+probes (`probe_go`, `probe_claude`) and receipt sealing, verification and
+writing (`seal`, `verify`, `write_receipt`). The data-terms and cost helpers
+(`terms_problem`, `request_value`, `ordered_models`) belong to the runner,
+`scripts/stage2.py`, which both swarms reach through the `runner` argument.
 
-This file follows the contract of the review swarm's availability preparation
-(pull request #157 at `0c03ec0`): the same helper names, the same
-`now`/`digest`/`binding` shape and the same receipt idea. Selection itself
-(six seats, the substitute pool, the double-fill rule) is research-only,
-because the review ladder has no seats.
+Two entry-point pairs sit beside the shared part. The review loop's
+`prepare` and `consume` (pull request #157, ADR 0021) probe the free swarm,
+the Flash swarm and the paid ladder. The research swarm's `prepare_research`
+and `consume_research` select six seats; selection (the substitute pool, the
+double-fill rule) is research-only, because the review ladder has no seats.
 
 The separate preparation and consumption steps give the orchestrator a chance
-to report the selection in the main conversation before any research call is
-launched. The receipt is external state, never an artifact a model can edit.
+to report the selection in the main conversation before any call is launched.
+The receipt is external state, never an artifact a model can edit.
 """
 
 from __future__ import annotations
@@ -40,7 +40,6 @@ GO = "opencode-go"
 PROBE_TEXT = "Availability probe only. Reply with OK. Do not review code or request tools."
 PROBE_SECONDS = 60
 CATALOG_SECONDS = 70
-DATE_ONLY = re.compile(r"\d{4}-\d{2}-\d{2}")
 STATE_LABELS = {
     "selected": "selected",
     "skipped": "skipped",
@@ -142,62 +141,6 @@ def write_receipt(path: Path, receipt: dict) -> None:
         handle.flush()
         os.fsync(handle.fileno())
     temporary.replace(path)
-
-
-# ---------------------------------------------------------------------------
-# Shared: data terms and cost values of the `opencode-go` declaration
-# ---------------------------------------------------------------------------
-
-
-def _valid_date(text: str) -> bool:
-    try:
-        dt.date.fromisoformat(text)
-    except ValueError:
-        return False
-    return True
-
-
-def _terms(entry: dict, model: str) -> dict:
-    terms = entry.get("modelle_terms")
-    record = terms.get(model) if isinstance(terms, dict) else None
-    return record if isinstance(record, dict) else {}
-
-
-def terms_problem(entry: dict, model: str) -> str | None:
-    """Why the model's data terms are not read (yet), or None when its record admits it.
-
-    A dated, sourced reading must explicitly rule out training; a dated skip keeps the model out.
-    """
-    record = _terms(entry, model)
-    if record.get("uebersprungen"):
-        return f"the model {model} was skipped on {record.get('uebersprungen')}: {record.get('grund') or 'no reason'}"
-    gelesen = record.get("gelesen")
-    if not isinstance(gelesen, str) or not DATE_ONLY.fullmatch(gelesen) or not _valid_date(gelesen):
-        return f"the model {model} has no dated reading of its data terms (gelesen is not an ISO date)"
-    if not record.get("quelle"):
-        return f"the model {model} has no dated reading of its data terms (gelesen/quelle missing)"
-    retention = record.get("aufbewahrung")
-    if not isinstance(retention, str) or not retention.strip():
-        return f"the model {model} has no retention reading (aufbewahrung missing or unreadable)"
-    if record.get("training") != "Not used":
-        return f"the model {model} has disallowed or unread training terms (training must be Not used)"
-    return None
-
-
-def request_value(entry: dict, model: str) -> float | None:
-    """The declared cost value `anfragen_5h` (requests per 5 hours; more is cheaper), or None when unusable."""
-    value = _terms(entry, model).get("anfragen_5h")
-    if isinstance(value, bool) or not isinstance(value, int | float) or value <= 0:
-        return None
-    return float(value)
-
-
-def ordered_models(entry: dict, models: list[str]) -> list[str]:
-    """The models cheapest first: `anfragen_5h` descending, ties by id, a model without the value last."""
-    return sorted(
-        set(models),
-        key=lambda model: (request_value(entry, model) is None, -(request_value(entry, model) or 0.0), model),
-    )
 
 
 # ---------------------------------------------------------------------------
@@ -380,7 +323,7 @@ def given_neighbours(root: Path, change: str, runner) -> list[str]:
         raise runner.Refused(str(error)) from error
 
 
-def binding(root: Path, change: str, klass: str, neighbours: list[str]) -> dict:
+def research_binding(root: Path, change: str, klass: str, neighbours: list[str]) -> dict:
     return {
         "root": str(root.resolve()),
         "change": change,
@@ -454,8 +397,8 @@ class _Selection:
                 if seat["endpoint"] != GO:
                     self.models.setdefault(f"{seat['endpoint']}/{seat['model']}", self._claude_outcome(seat))
         self.pool = [
-            {"model": model, "anfragen_5h": request_value(self.go, model)}
-            for model in ordered_models(self.go, self._admitted_pool())
+            {"model": model, "anfragen_5h": self.runner.request_value(self.go, model)}
+            for model in self.runner.ordered_models(self.go, self._admitted_pool())
         ]
 
     def _admitted_pool(self) -> list[str]:
@@ -466,10 +409,10 @@ class _Selection:
         ]
 
     def _go_outcome(self, model: str) -> dict:
-        problem = terms_problem(self.go, model)
+        problem = self.runner.terms_problem(self.go, model)
         if problem:
             return {"state": "skipped", "reason": problem}
-        if request_value(self.go, model) is None:
+        if self.runner.request_value(self.go, model) is None:
             return {"state": "skipped", "reason": "no admitted cost value (anfragen_5h missing or not positive)"}
         found = self.catalog.get(model)
         reason = found["reason"] if found else "not-in-fresh-pi"
@@ -556,7 +499,7 @@ def _free_text(values: list[str]) -> str:
     return ", ".join(values) or "none"
 
 
-def report(state: dict) -> str:
+def research_report(state: dict) -> str:
     lines = [f"Availability checked: {state['checked_at']}"]
     for label in ("repository", "online"):
         for item in state["seats"][label]:
@@ -646,7 +589,7 @@ def prepare_research(root: Path, change: str, runner, klass: str | None = None) 
         ),
         "audit": selection.audit,
     }
-    print(report(state))
+    print(research_report(state))
     missing = [(label, number) for label, numbers in state["unfilled"].items() for number in numbers]
     if missing:
         names = ", ".join(f"{label} seat {number}" for label, number in missing)
@@ -655,7 +598,7 @@ def prepare_research(root: Path, change: str, runner, klass: str | None = None) 
         )
     receipt = {
         "version": 1,
-        "binding": binding(root, change, klass, neighbours),
+        "binding": research_binding(root, change, klass, neighbours),
         "state": state,
     }
     receipt["report_id"] = seal(receipt)
@@ -680,7 +623,7 @@ def consume_research(root: Path, change: str, token: str | None, runner, klass: 
         valid = (
             receipt["version"] == 1
             and verify(receipt, token)
-            and receipt["binding"] == binding(root, change, klass, neighbours)
+            and receipt["binding"] == research_binding(root, change, klass, neighbours)
             and checked.tzinfo is not None
             and 0 <= age <= rule["max_age_seconds"]
         )
@@ -710,3 +653,178 @@ def research_roles(state: dict, data: dict) -> dict:
         "topic_author": {**opus, "model": block["topic_author"], "effort": "high"},
         "judge": opus,
     }
+
+
+# ---------------------------------------------------------------------------
+# Review loop: preparation and consumption (ADR 0021, pull request #157)
+# ---------------------------------------------------------------------------
+
+
+def settings(root: Path, runner) -> dict | None:
+    """An absent rule preserves legacy declarations; a present rule fails closed."""
+    entry = runner.endpoint_entry(root)
+    if "availability_preflight" not in entry:
+        return None
+    value = entry["availability_preflight"]
+    if (
+        not isinstance(value, dict)
+        or type(value.get("flash_size")) is not int
+        or not 1 <= value["flash_size"] <= 3
+        or type(value.get("max_age_seconds")) is not int
+        or not 1 <= value["max_age_seconds"] <= 3600
+        or not isinstance(value.get("exclude_until", []), list)
+    ):
+        raise runner.Refused(
+            "availability_preflight needs flash_size (1..3), max_age_seconds (1..3600) and dated exclusions."
+        )
+    if any(_exclusion_problem(item) for item in value.get("exclude_until", [])):
+        raise runner.Refused("availability_preflight has an invalid timed exclusion.")
+    return value
+
+
+def binding(root: Path, runner) -> dict:
+    return {
+        "root": str(root.resolve()),
+        "configuration": digest((root / "model-endpoints.yaml").read_text(encoding="utf-8")),
+        "diff": digest(runner.change_diff(root)),
+    }
+
+
+def receipt_path(change: str, runner) -> Path:
+    return runner.record_dir(change) / "availability.json"
+
+
+def report(state: dict) -> str:
+    available = state["availability"]
+    lines = [
+        f"Availability checked: {available['checked_at']}",
+        f"Reachable: {', '.join(available['reachable']) or 'none'}",
+        f"Free swarm: {', '.join(state['free']['selected']) or 'none'}",
+        f"Flash swarm: {', '.join(state['paid']['flash']) or 'none'}",
+        f"Paid ladder: {', '.join(state['paid']['rungs']) or 'none'}",
+    ]
+    lines.extend(f"Unavailable: {model}: {reason}" for model, reason in available["failed"].items())
+    lines.extend(f"Skipped: {model}: {reason}" for model, reason in available["skipped"].items())
+    lines.append("Reachability is a point-in-time result, not a billing or review-quality measurement.")
+    return "\n".join(lines)
+
+
+def prepare(root: Path, change: str, runner) -> None:
+    """Probe candidates without source input or tools, then publish a report receipt."""
+    folder = runner.folder_of(root, change)
+    rule = settings(root, runner)
+    if rule is None:
+        raise runner.Refused("this endpoint declares no availability_preflight rule.")
+    path = receipt_path(change, runner)
+    # A failed refresh/probe attempt must never leave an earlier receipt usable.
+    path.unlink(missing_ok=True)
+    findings = folder / "findings.md"
+    text = findings.read_text(encoding="utf-8") if findings.exists() else ""
+    record = runner.read_record(change)
+    if runner.read_state(record, text) is not None or runner.rounds_run(record, text):
+        raise runner.Refused("this review run already has history; preparation cannot reset its snapshot or stops.")
+    problem = runner.entry_problem(root, runner.OPENCODE)
+    if problem:
+        raise runner.Refused(problem)
+    runner.require_pi()
+    free = runner.discover_free(root, allow_empty=True)
+    entry = runner.endpoint_entry(root)
+    paid = runner.ladder(root)
+    skipped = {model: "not admitted; data terms have not been read" for model in runner.unread_catalog_ids(entry, free)}
+    candidates = list(free["selected"])
+    if not runner.free_diff(root).strip():
+        free["skipped"] = "free stage skipped: no implementation source diff"
+        skipped.update({model: free["skipped"] for model in candidates})
+        candidates = []
+    for model in paid:
+        if model not in free["overlay"]:
+            skipped[model] = "absent from the fresh provider catalog"
+        elif runner.request_value(entry, model) is None:
+            skipped[model] = "no admitted cost value"
+        else:
+            candidates.append(model)
+    reachable = []
+    failed = {}
+    key = runner.reviewer_key()
+    prompt = PROBE_TEXT
+    for model in dict.fromkeys(candidates):
+        excluded = excluded_reason(rule, model)
+        if excluded is not None:
+            skipped[model] = excluded
+        if model in skipped:
+            continue
+        admission = runner._free_admission(model in free["selected"], {"free": free})
+        endpoint = (runner.OPENCODE, model, "max")
+        ctx = runner.preflight(root, change, endpoint, admission_problem=admission)
+        ctx.models_store = free.get("models_store")
+        result = runner.checked_prompt(ctx, endpoint, prompt, admission)
+        if not findings.exists():
+            findings.write_text(runner.findings_header(ctx, runner.producer_for(endpoint)), encoding="utf-8")
+        runner.append(findings, runner.call_line("prepare-loop", endpoint, result))
+        try:
+            # All probes, including paid ones, have no repository input or tools.
+            runner.run_reviewer(
+                ctx,
+                model,
+                prompt,
+                key,
+                free=True,
+                timeout_seconds=PROBE_SECONDS,
+                task="Follow the appended availability instructions.",
+            )
+        except runner.CallFailed as error:
+            failed[model] = runner.scrub(str(error), key)
+        else:
+            reachable.append(model)
+    state = {"free": free, "paid": {}, "consumed": []}
+    state["free"]["selected"] = [model for model in free["selected"] if model in reachable]
+    admitted = [model for model in paid if model in reachable]
+    flash = admitted[: rule["flash_size"]]
+    state["paid"] = {"ladder": admitted, "flash": flash, "rungs": admitted[len(flash) :]}
+    state["availability"] = {
+        "checked_at": now().isoformat(timespec="seconds"),
+        "reachable": reachable,
+        "failed": failed,
+        "skipped": skipped,
+        "terms_skipped": runner.skipped_models(root),
+    }
+    print(report(state))
+    for reason in state["availability"]["terms_skipped"]:
+        print(f"Paid admission skipped: {reason}")
+    if not runner.stages_of(state):
+        raise runner.Refused("no reachable admitted reviewer remains; no review round or clean result was produced.")
+    receipt = {"version": 1, "binding": binding(root, runner), "state": state}
+    token = seal(receipt)
+    receipt["report_id"] = token
+    write_receipt(path, receipt)
+    print(
+        f"Report this selection in the main conversation, then run review-loop {change} --availability-reported {token}"
+    )
+
+
+def consume(root: Path, change: str, token: str | None, runner) -> dict:
+    """Validate acknowledgment, freshness and input identity before any review call."""
+    rule = settings(root, runner)
+    path = receipt_path(change, runner)
+    try:
+        receipt = json.loads(path.read_text(encoding="utf-8"))
+        state = receipt["state"]
+        checked = dt.datetime.fromisoformat(state["availability"]["checked_at"])
+        age = (now() - checked).total_seconds()
+        valid = (
+            rule is not None
+            and receipt["version"] == 1
+            and verify(receipt, token)
+            and receipt["binding"] == binding(root, runner)
+            and checked.tzinfo is not None
+            and 0 <= age <= rule["max_age_seconds"]
+            and state["consumed"] == []
+            and bool(runner.stages_of(state))
+        )
+    except (OSError, ValueError, KeyError, TypeError, AttributeError):
+        valid = False
+    if not valid:
+        raise runner.Refused(
+            "run prepare-loop and report its fresh selection in the main conversation; pass its --availability-reported id."
+        )
+    return state

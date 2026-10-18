@@ -771,7 +771,7 @@ def test_declarations_clear_only_the_role_data_class(sworld: SwarmWorld, mutate:
     elif mutate == "pair-off-endpoint":
         text = text.replace(
             "  flash_pair: [deepseek-v4.1-flash, mimo-v2.6-flash]",
-            "  flash_pair: [deepseek-v4.1-flash, glm-5.3-flash]",
+            "  flash_pair: [deepseek-v4.1-flash, undeclared-flash-9]",
         )
     elif mutate == "judge-off-endpoint":
         text = text.replace("  judge: claude-opus-5-5", "  judge: mimo-v2.6-pro")
@@ -1146,8 +1146,10 @@ def test_phase_one_doctrine_and_declarations_agree() -> None:
     data = yaml.safe_load((REPO_ROOT / "model-endpoints.yaml").read_text(encoding="utf-8"))
     assert stage2_swarm.swarm_problems(data) == [], "the declared swarm block must resolve"
     go = next(entry for entry in data["endpunkte"] if entry["name"] == "opencode-go")
-    assert go["modelle"] == ["deepseek-v4.1-flash", "mimo-v2.6-flash", "mimo-v2.6-pro"], (
-        "the review ladder keeps its order; the swarm block changes it in no way"
+    # After the main sync (#157, ADR 0021) `modelle` is a set the runner orders by `anfragen_5h`, no longer a
+    # three-id list: the original three stay in it, and the swarm block adds nothing to it.
+    assert {"deepseek-v4.1-flash", "mimo-v2.6-flash", "mimo-v2.6-pro"} <= set(go["modelle"]), (
+        "the review ladder lost a member; the swarm block changes it in no way"
     )
     roster = set(data["research_swarm"]["free_roster"])
     assert roster.isdisjoint(go["modelle"]), "no free id joined the Go ladder"

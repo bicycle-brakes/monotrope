@@ -1,10 +1,6 @@
 # coding-harness — Agent Instructions
 
-The home of the coding workflow: **seven phases, three stages**, the session
-handover, the kit that carries the process into new repositories, and the
-research corpus behind it. This repository is the source of truth for the
-process; `portfolio-agentic-engineering` and `lakeswitch-ai` run instances
-of it.
+The home of the coding workflow: **seven phases, three stages**, the session handover, the kit that carries the process into new repositories, and the research corpus behind it. This repository is the source of truth for the process; `portfolio-agentic-engineering` and `lakeswitch-ai` run instances of it.
 
 **Status: bootstrapping.** The mechanism (WORKFLOW.md, prompts, templates,
 kit scripts) migrates from `portfolio-agentic-engineering` in measured steps.
@@ -25,18 +21,22 @@ a `CLAUDE.md` would silently replace it (`tests/test_entry_points.py`).
 | 2b | Design *(by class)* | `design.md` | validator green; an ADR draft when `architectural` |
 | 3 | Plan | `plan.md` | validator green |
 | 4 | Implement | code + tests | `make verify` green |
-| 4b | Review loop *(stage 2)* | loop rows, into `findings.md` after the phase-6 verdict | at most three rounds — round 3 only when round 2 wrote a taken row; `make verify` green after each repair |
+| 4b | Review loop *(stage 2)* | loop rows, into `findings.md` after the phase-6 verdict | rounds until a clean round — the free swarm, the Flash swarm, then the paid ladder (ADR 0021); `make verify` green after each repair |
 | 5 | Verify | test output as evidence | stop-hook blocks on a red tree |
 | 6 | Review | `findings.md` | no open BLOCKER — `[DIVERGENT]` counts as BLOCKER |
 | 7 | Commit | pull request | CI green |
 
-**Stage 2** (framework content, ADR 0007 as amended by ADR 0011 and ADR 0016): a foreign model is started only through `python3 scripts/stage2.py`, which runs the leak check before every call. Codex drafts spec, design and plan (`draft <change>`; GLM 5.3 after two failed attempts) and reviews 6; Opus 5.5 reviews 2a (`spec-review <change>`); the review loop (4b) runs on OpenCode Go through Pi, on the ladder — the ordered `modelle` list of the `opencode-go` entry: round *n* of the loop calls its *n*-th id, at most three rounds, and round 3 only when round 2 wrote a taken row; a one-line pull request reorders it. GLM 5.3 Flash explores and implements, and Codex repairs the findings the orchestrator takes (`repair <change>`, ADR 0017: a fresh Codex attempt after a failed post-run check, then Sonnet 5.5; phase 6 re-checks in a fresh read-only Codex session — a reviewer's own session never repairs); `explore <change>`, `draft <change>`, `implement <change>` and `repair <change>` are live;
+**Stage 2** (framework content, ADR 0007 as amended by ADR 0011 and ADR 0016): a foreign model is started only through `python3 scripts/stage2.py`, which runs the leak check before every call. Codex drafts spec, design and plan (`draft <change>`; GLM 5.3 after two failed attempts) and reviews 6; Opus 5.5 reviews 2a (`spec-review <change>`); the review loop (4b) runs on OpenCode Go through Pi until a clean round (ADR 0021): round 1 is the free swarm, the models the `free_stage` rule selects from a forced live catalog refresh, on the implementation diff alone with no tools; round 2 is the Flash swarm, up to three cheapest reachable admitted paid models in parallel; then one id of the `opencode-go` entry's `modelle` set per round, cheapest first: the runner orders it by the declared `anfragen_5h` (requests per 5 hours, more is cheaper); a failed Flash member is replaced by the cheapest unconsumed one. GLM 5.3 Flash explores and implements, and Codex repairs the findings the orchestrator takes (`repair <change>`, ADR 0017: a fresh Codex attempt after a failed post-run check, then Sonnet 5.5; phase 6 re-checks in a fresh read-only Codex session — a reviewer's own session never repairs); `explore <change>`, `draft <change>`, `implement <change>` and `repair <change>` are live;
 `--stage2-off [REASON]` uses Haiku 5.5 or Sonnet 5.5 and records why when Stage 2 is off or Z.ai unavailable. A leak-check BLOCK stops without fallback. Reviews go by class, and so does phase 1 now (ADR 0020): a `feature` or `architectural` change explores through the research swarm (ADR 0020; free models on public sources only, a Flash pair on the repository, Opus 5.5 reconciling), a `bounded` change or a `spike` through GLM 5.3 Flash; `explore` reads the class from `--class` and the headers of `research.md` and `spec.md`, wherever stated, and refuses missing, invalid or disagreeing declarations (`docs/WORKFLOW.md` §4). Beyond that, explore, draft, implement and repair do not.
+
+**Temporary GLM availability override (maintainer, 2026-10-17):** GLM through **Z.ai** (the Z.ai API and GLM inside Claude Code) is unavailable until **2026-10-21 20:34 Asia/Singapore** (12:34 UTC; 14:34 Europe/Berlin); GLM through **OpenCode Go** (Pi) works and is not affected (maintainer, 2026-10-18). Before that cutoff, do not launch GLM through Z.ai; implement with **Sol 6.1 (`gpt-6.1-sol`) or Sonnet 5.5** instead. The maintainer's Claude budget is currently exhausted, so use the active Sol session for implementation. When Claude budget is available, the Sonnet route is `stage2.py implement <change> --stage2-off "GLM unavailable until 2026-10-21T20:34+08:00"`. This temporary instruction applies to Codex and Claude Code alike; it does not change permanent model assignments or the foreign-call leak checks. After the cutoff, normal routing applies; future GLM reachability is not measured by this instruction.
 
 Plus the session handover (the eighth movement — `docs/journal/handover/`,
 `direction: framework->framework`) and the question protocol:
 `[DECISION]` → human · `[GAP]` → explore, don't ask · `[DETAIL]` → agent
 decides, reason into the artifact.
+
+Before each fresh availability-enabled run, `prepare-loop` checks actual reachability with static, tool-free probes. Report its selected stages and failures in the main Claude Code or Codex conversation, then use `review-loop --availability-reported <id>`; the input-bound receipt expires after 900 seconds. Existing snapshots retain their membership.
 
 Full doctrine: `docs/WORKFLOW.md`, in English since 2026-09-29.
 
