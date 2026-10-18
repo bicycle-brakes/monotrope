@@ -1,21 +1,17 @@
-"""The phase-1 research swarm and its boundary - routing, packets, pairs, judge and limits.
+"""The phase-1 research swarm and its boundary - routing, frozen packets, topics, judge and limits.
 
-`scripts/stage2_swarm.py` runs only through the explore verb of the runner when
-the change's class is `feature` or `architectural`. Every case here runs that
-verb in-process against a temporary repository and two stand-ins: programs
-named `pin-pi` and `claude` that record their arguments, environment and prompt,
-print canned output and contact nothing. No test starts a real Pi, a real
-Claude Code against a model endpoint, or reads the maintainer's real denylist
-or secrets.
+`scripts/stage2_research_run.py` runs only through the explore verb of the runner when the
+change's class is `feature` or `architectural`. Every case here runs that verb in-process against
+a temporary repository and two stand-ins: programs named `pin-pi` and `claude` that record their
+arguments, environment and prompt, print canned output and contact nothing. No test starts a real
+Pi, a real Claude Code against a model endpoint, or reads the maintainer's real denylist or secrets.
 
-Each test comes with its fault: the planted mutation is named in the comment
-and turned the test red before it was kept. The doctrine test at the end reads
-the repository's own declaration and documents.
+Each test comes with its fault: the planted mutation is named in the comment. The doctrine test at
+the end reads the repository's own declaration and documents.
 """
 
 from __future__ import annotations
 
-import datetime
 import json
 import re
 import shutil
@@ -32,6 +28,8 @@ sys.path.insert(0, str(REPO_ROOT / "scripts"))
 
 import stage2  # noqa: E402
 import stage2_availability  # noqa: E402
+import stage2_research_run  # noqa: E402
+import stage2_research_store  # noqa: E402
 import stage2_swarm  # noqa: E402
 
 GIT = shutil.which("git")  # resolved before any test narrows the PATH
@@ -44,69 +42,119 @@ LEAK = "LEAKMARK-123456"
 DENYLIST = "planted = LEAKMARK-[0-9]{6}\n"
 
 TOPIC_OK = "container isolation for AI agent runs"
-PUBLIC_REPORT = "Public practice: [the pattern](https://example.com/pattern) matches this change's problem."
 RECEIPT = {
     "kind": "fetch",
     "url": "https://example.com/pattern",
     "final_url": "https://example.com/pattern",
     "status": 200,
     "title": "The pattern",
-    "retrieved": "2026-10-15",
+    "retrieved": "2026-10-15T10:00:00+00:00",
     "excerpt": "public practice text",
     "bytes": 20,
 }
 
-
-def pi_table(rows: list[tuple[str, str]]) -> list[str]:
-    """`pi --list-models` as Pi 1.1.0 prints it (`dist/cli/list-models.js`): a padded table, provider first."""
-    header = ("provider", "model", "context", "max-out", "thinking", "images")
-    cells = [header] + [(provider, model, "256K", "128K", "yes", "no") for provider, model in sorted(rows)]
-    widths = [max(len(row[n]) for row in cells) for n in range(6)]
-    return ["  ".join(cell.ljust(width) for cell, width in zip(row, widths, strict=True)) for row in cells]
-
-
-# The test inventory: the roster on the free provider beside rows the pinned
-# Pi also lists for the same credential - the paid Go provider's ids, one of
-# them a free id's namesake. The Flash endpoint's provider never carries a free call.
-PI_MODELS = pi_table(
-    [
-        ("opencode", "longcat-2.5-preview-free"),
-        ("opencode", "space-bunny-free"),
-        ("opencode", "big-pickle"),
-        ("opencode-go", "longcat-2.5-preview-free"),
-        ("opencode-go", "deepseek-v4.1-flash"),
-        ("opencode-go", "mimo-v2.6-flash"),
-    ]
+SEED = (
+    "---\ntitle: Research\nupdated: 2026-10-15\nbead: demo-1\nclass: feature\nneighbours: []\n---\n\n"
+    "# Research\n\nseed fact\n"
 )
-FREE_IDS = ("longcat-2.5-preview-free", "space-bunny-free", "big-pickle")
 
-SEED = "---\ntitle: Research\nupdated: 2026-10-15\nbead: demo-1\nclass: feature\n---\n\n# Research\n\nseed fact\n"
-
-
-def judge_ok() -> str:
-    """A judge answer the runner must accept: six sections, six labelled fields, one tracked citation."""
-    sections = []
-    for number in range(1, 7):
-        sections.append(
-            f"### Topic {number}\n\n"
-            f"**Supported facts:** topic {number} holds at `src/app.py::value`.\n\n"
-            "**Practice comparison:**\n\n"
-            "**Architecture comparison:**\n\n"
-            "**Adjacent-spec comparison:**\n\n"
-            "**Disagreement:**\n\n"
-            "**Gaps:**\n\n"
-            "**Human questions:**\n"
-        )
-    return "\n".join(sections)
+REPOSITORY_SEATS = [
+    {"endpoint": "opencode-go", "model": "deepseek-v4.1-flash"},
+    {"endpoint": "opencode-go", "model": "mimo-v2.6-flash"},
+    {"endpoint": "claude-code-plan", "model": "claude-haiku-5-5"},
+]
+ONLINE_SEATS = [
+    {"endpoint": "opencode-go", "model": "deepseek-v4.1-flash"},
+    {"endpoint": "opencode-go", "model": "mimo-v2.6-flash"},
+    {"endpoint": "opencode-go", "model": "qwen3.8-flash"},
+]
 
 
-# A stand-in: the standard library only. The `kind` of a call decides which
-# scenario list serves it, so a test addresses the topic author, the free
-# researchers, the Flash pair and the judge separately.
+def seat_id(seat: dict) -> str:
+    from stage2_research_report import research_seat_id
+
+    return research_seat_id(seat["endpoint"], seat["model"])
+
+
+def selection_for(free: list[str] | None = None, online: list[dict] | None = None) -> dict:
+    """A consumed seat selection as the receipt holds it (the receipt's own contract is tested elsewhere)."""
+    return {
+        "seats": {
+            "repository": [dict(s) for s in REPOSITORY_SEATS],
+            "online": [dict(s) for s in online or ONLINE_SEATS],
+        },
+        "free": {"selected": list(free or []), "policy": {}},
+        "catalog": {"pi_version": "test"},
+        "report_id": "r" * 64,
+    }
+
+
+def locator_report(reason: str = "holds the value") -> str:
+    return json.dumps(
+        {
+            "code": [{"path": "src/app.py", "reference": "value", "reason": reason}],
+            "rules": [{"path": "AGENTS.md", "reference": "Agent rules", "reason": "the rules"}],
+            "tests": [{"not_read": "the fixture has no tests"}],
+            "neighbours": [{"not_read": "no neighbour was found"}],
+        }
+    )
+
+
+def repository_report(topic: int, neighbours: list[str] | None = None) -> str:
+    report: dict = {
+        "claims": [
+            {
+                "id": "C1",
+                "statement": "value is a module-level assignment",
+                "kind": "fact",
+                "evidence": ["src/app.py::value"],
+                "confidence": "high",
+                "basis": "the assignment exists in the frozen file",
+                **({"volatile": False} if topic == 6 else {}),
+            }
+        ],
+        "counter_evidence": ["nothing contradicts it"],
+        "not_read": ["tests"] + (["no packet neighbour"] if topic == 5 and not neighbours else []),
+        "neighbour_relation": "no neighbour was assessed",
+        "questions": [{"id": "Q1", "question": "What reads value?", "classification": "[GAP]", "claims": ["C1"]}],
+    }
+    if topic == 3:
+        report["class_assessment"] = {"class": "feature", "claims": ["C1"]}
+    if topic == 5:
+        report["neighbour_relations"] = [
+            {"path": path, "relation": "related", "claims": ["C1"]} for path in neighbours or []
+        ]
+    return json.dumps(report)
+
+
+def online_report() -> str:
+    return json.dumps(
+        {
+            "claims": [
+                {
+                    "id": "C1",
+                    "statement": "the pattern is documented",
+                    "kind": "fact",
+                    "evidence": ["https://example.com/pattern"],
+                    "confidence": "medium",
+                    "basis": "the retrieved page states it",
+                }
+            ],
+            "counter_evidence": ["no counter-source found"],
+            "not_read": ["further pages"],
+            "neighbour_relation": "not-assessable",
+            "questions": [],
+        }
+    )
+
+
+# A stand-in: the standard library only. The `kind` of a call is read from its prompt; the scenario
+# addresses a step by `kind:topic:model`, `kind:topic` or `kind`, the first key present.
 STAND_IN = """#!@PYTHON@
 # stage2-swarm-stand-in: records its call, prints canned output, contacts nothing.
 import json
 import os
+import re
 import sys
 import time
 from pathlib import Path
@@ -121,18 +169,10 @@ log = here / "calls.jsonl"
 previous = [json.loads(line) for line in log.read_text().splitlines()] if log.exists() else []
 argv = sys.argv[1:]
 if name == "pi" and argv == ["--version"]:
-    # Infrastructure has a separate path log; no model call is counted.
     with (here / "infrastructure.jsonl").open("a") as handle:
         handle.write(json.dumps({"path": program_path, "argv": argv}) + "\\n")
     sys.stdout.write(scenario.get("pi_version", "@PI@") + "\\n")
     raise SystemExit(0)
-if name == "pi" and argv == ["--list-models"]:
-    # Infrastructure has a separate path log; no model call is counted.
-    with (here / "infrastructure.jsonl").open("a") as handle:
-        handle.write(json.dumps({"path": program_path, "argv": argv}) + "\\n")
-    for line in scenario.get("pi_models", []):
-        sys.stdout.write(line + "\\n")
-    raise SystemExit(scenario.get("pi_models_exit", 0))
 
 
 def option(flag):
@@ -142,35 +182,47 @@ def option(flag):
 prompt_file = option("--append-system-prompt-file") or option("--append-system-prompt")
 prompt = Path(prompt_file).read_text() if prompt_file else ""
 agent = os.environ.get("PI_CODING_AGENT_DIR")
-if name == "claude":
-    if "one-sentence public topic" in prompt:
-        kind = "topic"
-    elif "# The six pairs" in prompt:
-        kind = "judge"
-    else:
-        kind = "work"
+model = option("--model") or ""
+topic_match = re.search(r"(?:Public topic|Topic) (\\d+) of 11", prompt)
+topic = int(topic_match.group(1)) if topic_match else None
+if "one-sentence public topic" in prompt:
+    kind = "sentence"
+elif "# Finder map merge" in prompt:
+    kind = "merge"
+elif "# Reconciliation task" in prompt:
+    kind = "judge"
+elif "# Finder task" in prompt:
+    kind = "finder"
+elif "# Repository research task" in prompt:
+    kind = "repository"
 elif "STAGE2_PUBLIC_RECEIPTS" in os.environ:
-    kind = "public"
+    kind = "online"
+elif name == "claude":
+    kind = "work"
 else:
-    kind = "flash"
-steps = scenario.get(kind, [])
-index = sum(1 for call in previous if call.get("kind") == kind)
-step = steps[index] if index < len(steps) else {}
+    kind = "other"
+candidates = [f"{kind}:{topic}:{model.split('/')[-1]}", f"{kind}:{topic}", kind]
+used = next((key for key in candidates if key in scenario), candidates[-1])
+steps = scenario.get(used, [])
+index = sum(1 for call in previous if call.get("key") == used)
+step = steps[index] if index < len(steps) else (steps[-1] if steps and scenario.get("repeat_last") else {})
 record = {
     "name": name,
     "program_path": program_path,
     "kind": kind,
+    "key": used,
+    "topic": topic,
+    "model": model.split("/")[-1],
     "argv": argv,
     "env": dict(os.environ),
     "cwd": os.getcwd(),
+    "t0": time.time(),
+    "sleep": step.get("sleep", 0),
     "stdin": os.read(0, 100).decode(),
     "prompt": prompt,
     "prompt_path": str(prompt_file) if prompt_file else None,
     "agent_dir": agent,
     "agent_listing": sorted(os.listdir(agent)) if agent and os.path.isdir(agent) else None,
-    "agent_settings": (Path(agent) / "settings.json").read_text()
-    if agent and (Path(agent) / "settings.json").is_file()
-    else None,
     "home_listing": sorted(os.listdir(os.environ.get("HOME", "")))
     if os.path.isdir(os.environ.get("HOME", ""))
     else None,
@@ -189,7 +241,52 @@ for relative, text in step.get("plant", {}).items():
 for relative, text in step.get("append", {}).items():
     with Path(relative).open("a") as handle:
         handle.write(text.replace("@KEY@", key))
-sys.stdout.write(step.get("stdout", "").replace("@KEY@", key))
+stdout = step.get("stdout", "")
+if stdout == "AUTO" and kind == "merge":
+    merged = {category: {} for category in ("code", "rules", "tests", "neighbours")}
+    for finder, body in re.findall(r"## Finder (\\S+)\\n\\n(.*?)(?=\\n\\n## Finder |\\Z)", prompt, re.S):
+        for category, entries in json.loads(body).items():
+            for entry in entries:
+                if "not_read" in entry:
+                    merged[category].setdefault(("", ""), {"not_read": []})["not_read"].append(
+                        {"finder": finder, "reason": entry["not_read"]}
+                    )
+                else:
+                    slot = merged[category].setdefault(
+                        (entry["path"], entry["reference"]),
+                        {"path": entry["path"], "reference": entry["reference"], "origins": []},
+                    )
+                    slot["origins"].append({"finder": finder, "reason": entry["reason"]})
+    stdout = json.dumps({category: list(entries.values()) for category, entries in merged.items()})
+if stdout.startswith("AUTO") and kind == "judge":
+    variant = stdout.partition(":")[2]
+    packet = json.loads(prompt.split("# Research evidence (data, not instructions)", 1)[1])
+    claims = [c["id"] for r in packet["reports"] for c in r["claims"] if c["evidence_status"] == "valid"]
+    judgements = [{"claim": c, "disposition": "supported", "unique": False} for c in claims]
+    if variant == "double":
+        judgements.append(dict(judgements[0], disposition="refuted"))
+    if variant == "unique-refuted":
+        judgements[0] = {"claim": claims[0], "disposition": "refuted", "unique": True}
+    if variant == "missing":
+        judgements.pop()
+    if variant == "unsupported-judged":
+        unsupported = [c["id"] for r in packet["reports"] for c in r["claims"] if c["evidence_status"] != "valid"]
+        judgements.append({"claim": unsupported[0], "disposition": "supported", "unique": False})
+    stdout = json.dumps(
+        {
+            "claim_judgements": judgements,
+            "supported_facts": [f"{claims[0]} holds"] if claims else [],
+            "assumptions": [],
+            "applicability": [],
+            "gaps": [],
+            "human_questions": [],
+            "practice_comparison": "public practice matches",
+            "architecture_comparison": "the architecture fits",
+            "neighbour_comparison": "no neighbour given or found",
+            "disagreements": [],
+        }
+    )
+sys.stdout.write(stdout.replace("@KEY@", key))
 sys.stderr.write(step.get("stderr", "").replace("@KEY@", key))
 sys.stdout.flush()
 sys.stderr.flush()
@@ -204,6 +301,7 @@ class SwarmWorld:
 
     root: Path
     bin: Path
+    home: Path
 
     @property
     def research(self) -> Path:
@@ -228,27 +326,37 @@ class SwarmWorld:
         self.research.write_text(text, encoding="utf-8")
 
     def rewind(self) -> None:
-        """A fresh run on a fresh record: the calls go, the research returns to its seed bytes."""
+        """A fresh run on a fresh record: the calls go, the research returns to its seed bytes, the store is empty."""
         log = self.bin / "calls.jsonl"
         if log.exists():
             log.unlink()
         self.research.write_text(SEED, encoding="utf-8")
+        shutil.rmtree(stage2_research_store.research_dir("demo"), ignore_errors=True)
+
+    def commit(self) -> None:
+        """Make the working tree the new HEAD, so the next run freezes an unchanged tree."""
+        subprocess.run(["git", "add", "-A"], cwd=self.root, check=True, capture_output=True)
+        subprocess.run(
+            ["git", "-c", "user.name=t", "-c", "user.email=t@example.invalid", "-c", "commit.gpgsign=false",
+             "commit", "--quiet", "-m", "step"],
+            cwd=self.root, check=True, capture_output=True,
+        )  # fmt: skip
 
     def complete(self, **overrides: object) -> None:
-        """The scenario of a run in which every scheduled role succeeds; overrides win, other keys survive."""
+        """The scenario of a run in which every scheduled role succeeds; overrides win."""
         steps: dict[str, object] = {
-            "topic": [{"stdout": TOPIC_OK}],
-            "public": [{"stdout": PUBLIC_REPORT, "receipts": [RECEIPT]}] * 3,
-            "flash": [{"stdout": f"FLASH-{n} on `src/app.py::value`"} for n in range(11)],
-            "judge": [{"stdout": judge_ok()}],
+            "finder": [{"stdout": locator_report()}],
+            "merge": [{"stdout": "AUTO"}],
+            "sentence": [{"stdout": TOPIC_OK}],
+            "online": [{"stdout": online_report(), "receipts": [RECEIPT]}],
+            "judge": [{"stdout": "AUTO"}],
+            "repeat_last": True,
         }
-        scenario: dict[str, object] = json.loads((self.bin / "scenario.json").read_text(encoding="utf-8"))
-        scenario.setdefault("pi_models", list(PI_MODELS))
-        scenario.update(steps)
-        scenario.update(overrides)
-        # One step per call: a bare object stands for the first call of its kind.
-        scenario = {key: [value] if isinstance(value, dict) else value for key, value in scenario.items()}
-        self.script(**scenario)
+        for topic in range(1, 9):
+            steps[f"repository:{topic}"] = [{"stdout": repository_report(topic)}]
+        steps.update(overrides)
+        steps = {key: [value] if isinstance(value, dict) else value for key, value in steps.items()}
+        self.script(**steps)
 
 
 @pytest.fixture
@@ -294,6 +402,7 @@ def sworld(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> SwarmWorld:
     for name, value in {
         "PATH": f"{bin_dir}:{git_dir}",
         "HOME": str(home),
+        "XDG_STATE_HOME": str(tmp_path / "state"),
         "CC_SECRETS": str(tmp_path / "secrets.env"),
         "LEAKCHECK_DENYLIST": str(tmp_path / "denylist.txt"),
         "GIT_CONFIG_GLOBAL": "/dev/null",
@@ -303,29 +412,12 @@ def sworld(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> SwarmWorld:
         monkeypatch.setenv(name, value)
 
     subprocess.run(["git", "init", "--quiet", "--initial-branch=main"], cwd=root, check=True, capture_output=True)
-    subprocess.run(["git", "add", "-A"], cwd=root, check=True, capture_output=True)
-    subprocess.run(
-        [
-            "git",
-            "-c",
-            "user.name=t",
-            "-c",
-            "user.email=t@example.invalid",
-            "-c",
-            "commit.gpgsign=false",
-            "commit",
-            "--quiet",
-            "-m",
-            "base",
-        ],
-        cwd=root,
-        check=True,
-        capture_output=True,
-    )
-    # Until the run consumes its frozen seat selection (plan steps 2-8), the old run needs no receipt: the
-    # receipt's own contract is tested in test_stage2_research_availability.py.
-    monkeypatch.setattr(stage2_availability, "consume_research", lambda *_args, **_kwargs: {"seats": {}})
-    w = SwarmWorld(root, bin_dir)
+    w = SwarmWorld(root, bin_dir, home)
+    w.commit()
+    # The consumed receipt's own contract is tested in test_stage2_research_availability.py; the run takes
+    # the selection it returns. `w.selection` may be replaced per test.
+    w.selection = selection_for()  # type: ignore[attr-defined]
+    monkeypatch.setattr(stage2_availability, "consume_research", lambda *_args, **_kwargs: w.selection)  # type: ignore[attr-defined]
     w.script()
     return w
 
@@ -335,9 +427,17 @@ def model_of(call: dict) -> str:
 
 
 def status_line(text: str) -> str:
-    found = re.search(r"^run swarm-[0-9a-f]{8} status: .*$", text, re.M)
+    found = re.search(r"^run [0-9a-f]{32} status: .*$", text, re.M)
     assert found, text[-2000:]
     return found.group(0)
+
+
+def kinds(world: SwarmWorld) -> list[str]:
+    return [call["kind"] for call in world.calls()]
+
+
+def models(world: SwarmWorld, kind: str, topic: int | None = None) -> list[str]:
+    return [c["model"] for c in world.calls(kind) if topic is None or c["topic"] == topic]
 
 
 # ---------------------------------------------------------------------------
@@ -351,13 +451,13 @@ def test_large_classes_dispatch_the_swarm(sworld: SwarmWorld, klass: str) -> Non
     sworld.research_class(klass)
     sworld.complete()
     assert sworld.run() == 0
-    assert [call["kind"] for call in sworld.calls()] == (["topic"] + ["public"] * 3 + ["flash"] * 11 + ["judge"])
-    for call in sworld.calls("claude"):
+    assert kinds(sworld) == ["finder"] * 3 + ["merge", "sentence"] + ["repository"] * 24 + ["online"] * 9 + ["judge"]
+    for call in sworld.calls("work"):
         assert "glm-5.3-flash" not in call["argv"], "a large change never rides the single explorer"
-        assert call["env"].get("ANTHROPIC_BASE_URL") != stage2.GLM_BASE_URL
     text = sworld.research.read_text(encoding="utf-8")
     assert "## Research swarm" in text and "seed fact" in text
     assert "## Runner exploration" not in text
+    assert status_line(text).endswith("status: complete.")
 
 
 def test_swarm_uses_only_the_injected_pi_wrapper(sworld: SwarmWorld) -> None:
@@ -375,29 +475,24 @@ def test_swarm_uses_only_the_injected_pi_wrapper(sworld: SwarmWorld) -> None:
     assert sworld.run() == 0
     pinned = str(sworld.bin / "pin-pi")
     infrastructure = [json.loads(line) for line in (sworld.bin / "infrastructure.jsonl").read_text().splitlines()]
-    assert {tuple(call["argv"]) for call in infrastructure} == {
-        ("--version",),
-        ("--list-models",),
-    }
+    assert {tuple(call["argv"]) for call in infrastructure} == {("--version",)}
     assert all(call["path"] == pinned for call in infrastructure)
     calls = [call for call in sworld.calls() if call["name"] == "pi"]
-    assert {call["kind"] for call in calls} == {"public", "flash"}
+    assert {call["kind"] for call in calls} == {"finder", "repository", "online"}
     assert all(call["program_path"] == pinned for call in calls)
 
 
 @pytest.mark.parametrize("klass", ["bounded", "spike"])
 def test_small_classes_keep_the_single_explorer(sworld: SwarmWorld, klass: str) -> None:
-    # Criterion 2. Planted fault: a small change starts a free researcher or the swarm judge.
+    # Criterion 2. Planted fault: a small change starts a finder or the swarm judge.
     sworld.research_class(klass)
     sworld.script(
         work=[{"stdout": "A fact from `src/app.py::value`."}],
-        topic=[{"stdout": "must not run"}],
-        public=[{"stdout": "must not run"}],
-        flash=[{"stdout": "must not run"}],
+        finder=[{"stdout": "must not run"}],
         judge=[{"stdout": "must not run"}],
     )
     assert sworld.run() == 0
-    assert [call["kind"] for call in sworld.calls()] == ["work"]
+    assert kinds(sworld) == ["work"]
     explorer = sworld.calls()[0]
     assert model_of(explorer) == "glm-5.3-flash"
     assert explorer["env"]["ANTHROPIC_BASE_URL"] == stage2.GLM_BASE_URL
@@ -409,15 +504,16 @@ def test_explicit_class_explores_without_spec_or_plan(sworld: SwarmWorld) -> Non
     # Criterion 3. Planted fault: early exploration refuses although the class is stated.
     (sworld.root / "plans/changes/demo/spec.md").unlink()
     (sworld.root / "plans/changes/demo/plan.md").unlink(missing_ok=True)
+    sworld.commit()
     sworld.complete()
     assert sworld.run() == 0, "the header's class routes before a spec exists"
-    assert sworld.calls()[0]["kind"] == "topic"
+    assert sworld.calls()[0]["kind"] == "finder"
 
     sworld.rewind()
     sworld.research_class(None)
     sworld.script(work=[{"stdout": "A fact."}])
     assert sworld.run("--class", "bounded") == 0, "the explicit argument routes a headerless change"
-    assert [call["kind"] for call in sworld.calls()] == ["work"]
+    assert kinds(sworld) == ["work"]
 
 
 def test_missing_invalid_or_conflicting_class_refuses(sworld: SwarmWorld) -> None:
@@ -445,7 +541,6 @@ def test_an_unreadable_header_or_empty_class_refuses(sworld: SwarmWorld, header:
     # F-9. Planted fault: a header that does not parse, or an empty `class:`, reads as "no class stated".
     sworld.complete()
     if header == "unreadable":
-        # In spec.md: the research header carries the bead, so preflight would refuse an unreadable one anyway.
         (sworld.root / "plans/changes/demo/spec.md").write_text(
             "---\ntitle: [unclosed\nbead: demo-1\nclass: bounded\n---\n\n# Spec\n", encoding="utf-8"
         )
@@ -457,692 +552,1101 @@ def test_an_unreadable_header_or_empty_class_refuses(sworld: SwarmWorld, header:
 
 
 # ---------------------------------------------------------------------------
-# The run's shape (spec, criteria 5, 6, 14)
+# Frozen packets, finders, map and sentence (plan step 3; spec criteria 5, 6, 14, 23, 24, 43)
 # ---------------------------------------------------------------------------
 
 
-def test_all_free_roles_are_attempted_before_flash(sworld: SwarmWorld) -> None:
-    # Criterion 5. Planted fault: a roster member is skipped or Flash starts during the free stage.
+def test_finders_use_the_repository_seat_selection(sworld: SwarmWorld) -> None:
+    # Criteria 6 and 43. Planted fault: a finder runs a model other than its repository seat's selection.
+    sworld.selection = selection_for()
+    sworld.selection["seats"]["repository"][1] = {"endpoint": "opencode-go", "model": "longcat-2.0"}
     sworld.complete()
     assert sworld.run() == 0
-    assert [(call["name"], call["kind"]) for call in sworld.calls()] == (
-        [("claude", "topic")] + [("pi", "public")] * 3 + [("pi", "flash")] * 11 + [("claude", "judge")]
+    finders = sworld.calls("finder")
+    assert sorted(c["model"] for c in finders) == sorted(["deepseek-v4.1-flash", "longcat-2.0", "claude-haiku-5-5"])
+    assert {c["name"] for c in finders} == {"pi", "claude"}
+    assert len({c["prompt"] for c in finders}) == 1, "the trio receives the same packet and template"
+
+
+def test_finder_merge_precedes_every_topic(sworld: SwarmWorld) -> None:
+    # Criterion 5. Planted fault: a topic starts before three valid finder results and a validated map.
+    sworld.complete()
+    assert sworld.run() == 0
+    order = kinds(sworld)
+    assert order[:5] == ["finder"] * 3 + ["merge", "sentence"]
+    assert "repository" not in order[:5] and "online" not in order[:5]
+    merge = sworld.calls("merge")[0]
+    for seat in REPOSITORY_SEATS:
+        assert f"## Finder {seat_id(seat)}" in merge["prompt"]
+
+
+def test_merge_is_exact_finder_union_with_all_origins(sworld: SwarmWorld) -> None:
+    # Criterion 5. Planted fault: a dropped, added or duplicate key dispatches topics, or deduplication
+    # loses a finder or reason.
+    finders = [seat_id(s) for s in REPOSITORY_SEATS]
+    origins = [{"finder": f, "reason": "holds the value"} for f in finders]
+    good = {
+        "code": [{"path": "src/app.py", "reference": "value", "origins": origins}],
+        "rules": [{"path": "AGENTS.md", "reference": "Agent rules", "origins": [dict(o, reason="the rules") for o in origins]}],
+        "tests": [{"not_read": [dict(o, reason="the fixture has no tests") for o in origins]}],
+        "neighbours": [{"not_read": [dict(o, reason="no neighbour was found") for o in origins]}],
+    }  # fmt: skip
+    dropped = dict(good, code=[{"not_read": [dict(o, reason="gone") for o in origins]}])
+    added = dict(good, code=[*good["code"], {"path": "src/other.py", "reference": "x", "origins": origins}])
+    lost_origin = dict(good, code=[{**good["code"][0], "origins": origins[:2]}])
+    for bad in (dropped, added, lost_origin):
+        sworld.rewind()
+        sworld.complete(merge=[{"stdout": json.dumps(bad)}])
+        assert sworld.run() == 1
+        assert kinds(sworld) == ["finder"] * 3 + ["merge"], "no sentence or topic starts after a bad merge"
+        assert "incomplete" in status_line(sworld.research.read_text(encoding="utf-8"))
+    sworld.rewind()
+    sworld.complete(merge=[{"stdout": json.dumps(good)}])
+    assert sworld.run() == 0
+
+
+@pytest.mark.parametrize("fault", ["finder-exit", "finder-bad-json", "merge-exit", "sentence-exit"])
+def test_preparatory_failure_prevents_dependent_stages(sworld: SwarmWorld, fault: str) -> None:
+    # Criterion 18. Planted fault: a failed finder, merge or sentence still dispatches a later stage.
+    steps = {
+        "finder-exit": {"finder:None:mimo-v2.6-flash": [{"exit": 3, "stderr": "boom"}]},
+        "finder-bad-json": {"finder:None:claude-haiku-5-5": [{"stdout": "not a locator list"}]},
+        "merge-exit": {"merge": [{"exit": 1}]},
+        "sentence-exit": {"sentence": [{"exit": 1}]},
+    }[fault]
+    sworld.complete(**steps)
+    assert sworld.run() == 1
+    seen = kinds(sworld)
+    cut = {
+        "finder-exit": ["finder"] * 3,
+        "finder-bad-json": ["finder"] * 3,
+        "merge-exit": ["finder"] * 3 + ["merge"],
+        "sentence-exit": ["finder"] * 3 + ["merge", "sentence"],
+    }[fault]
+    assert seen == cut
+    text = sworld.research.read_text(encoding="utf-8")
+    assert "incomplete" in status_line(text) and "Audit" in text, "partial evidence stays in research.md"
+
+
+def test_all_opus_roles_have_empty_tools_and_packet_only_context(sworld: SwarmWorld) -> None:
+    # Criteria 5, 14, 23. Planted fault: the merge, the sentence author or the judge has any tool.
+    sworld.complete()
+    assert sworld.run() == 0
+    expected = {"merge": "xhigh", "sentence": "high", "judge": "xhigh"}
+    for kind, effort in expected.items():
+        (call,) = sworld.calls(kind)
+        argv = call["argv"]
+        assert argv[argv.index("--tools") + 1] == "", f"{kind} has a tool list"
+        assert {"--restricted", "--safe-mode", "--strict-mcp-config"} <= set(argv)
+        assert argv[argv.index("--model") + 1] == "claude-opus-5-5"
+        assert argv[argv.index("--effort") + 1] == effort
+        assert Path(call["cwd"]) != sworld.root, f"{kind} starts inside the repository"
+
+
+@pytest.mark.parametrize(
+    "sentence",
+    [
+        TOPIC_OK,
+        "KI-Agenten-Läufe in isolierten Umgebungen",
+        "Isolation, Prüfung und Wiederherstellung für Agentenläufe.",
+        "multi-agent isolation – a practice (with “quotes”) and «guillemets»?",
+        "teams' own isolation and don’t forget recovery",
+    ],
+)
+def test_public_sentence_allow_list_accepts(sentence: str) -> None:
+    # Criterion 23. Planted fault: the allowed German examples or separators are refused.
+    assert stage2_research_run.public_sentence_problems(sentence, "demo", "demo-1", {"src/app.py"}) == []
+
+
+@pytest.mark.parametrize(
+    "sentence",
+    [
+        "",
+        "see src/app.py for the isolation",
+        "isolation for demo-1 runs",
+        "the research-swarm project",
+        "isolation [of] runs",
+        "runs {x}",
+        "mail me @ home",
+        "a = b",
+        "isolation 2 runs",
+        "snake_case runs",
+        "one sentence. and another",
+        "stand - alone hyphen",
+        "double--hyphen runs",
+        "a dash—without spaces",
+        "mixedCase inside a word",
+        "one two three four five six seven eight nine ten eleven twelve thirteen fourteen fifteen sixteen "
+        "seventeen eighteen nineteen twenty twentyone",
+        "colon: here",
+        "`ticks`",
+    ],
+)
+def test_public_sentence_allow_list_refuses(sentence: str) -> None:
+    # Criterion 23. Planted fault: digits, paths, brackets, change or bead names, or loose punctuation pass.
+    found = stage2_research_run.public_sentence_problems(
+        sentence, "research-swarm", "demo-1", {"src/app.py", "plans/changes/research-swarm/spec.md"}
     )
-    assert [model_of(call) for call in sworld.calls("public")] == [
-        "opencode/longcat-2.5-preview-free",
-        "opencode/space-bunny-free",
-        "opencode/big-pickle",
-    ], "every declared roster member rides the mapped inventory id, none skipped"
+    assert found, f"{sentence!r} must be refused"
 
 
-def test_six_topics_have_independent_permitted_pairs(sworld: SwarmWorld) -> None:
-    # Criterion 6. Planted fault: a local topic rides a free seat, a duplicate report or a shared session.
-    sworld.complete()
-    assert sworld.run() == 0
-    flash = sworld.calls("flash")
-    assert len(flash) == 11
-    seen: dict[int, list[str]] = {}
-    for call in flash:
-        model = model_of(call)
-        assert model.startswith("opencode-go/"), "a Flash seat rides the Go endpoint"
-        assert not any(free in model for free in FREE_IDS), "a free model never inspects the repository"
-        match = re.search(r"Topic (\d) of 6", call["prompt"])
-        assert match, call["prompt"][:200]
-        seen.setdefault(int(match.group(1)), []).append(model.split("/", 1)[1])
-    assert {topic: sorted(models) for topic, models in seen.items()} == {
-        1: ["deepseek-v4.1-flash", "mimo-v2.6-flash"],
-        2: ["deepseek-v4.1-flash", "mimo-v2.6-flash"],
-        3: ["deepseek-v4.1-flash", "mimo-v2.6-flash"],
-        4: ["deepseek-v4.1-flash", "mimo-v2.6-flash"],
-        5: ["deepseek-v4.1-flash", "mimo-v2.6-flash"],
-        6: ["deepseek-v4.1-flash"],
+def test_public_topic_is_filtered_before_online_calls(sworld: SwarmWorld) -> None:
+    # Criterion 23. Planted fault: a rejected sentence still dispatches topics, or exits other than 1.
+    sworld.complete(sentence=[{"stdout": "see src/app.py for runs"}])
+    assert sworld.run() == 1
+    assert kinds(sworld) == ["finder"] * 3 + ["merge", "sentence"]
+    assert "rejected" in sworld.research.read_text(encoding="utf-8")
+
+
+def test_map_resolution_excludes_unresolved_and_inserts_given_neighbours(sworld: SwarmWorld) -> None:
+    # Criteria 24, 29. Planted fault: live-tree resolution grants scope, a given neighbour vanishes.
+    other = sworld.root / "plans/changes/other"
+    other.mkdir()
+    (other / "spec.md").write_text("---\ntitle: Other\nbead: o-1\n---\n\n# Other\n", encoding="utf-8")
+    text = sworld.research.read_text(encoding="utf-8").replace(
+        "neighbours: []", "neighbours: [plans/changes/other/spec.md]"
+    )
+    sworld.research.write_text(text, encoding="utf-8")
+    sworld.commit()
+    rel = "plans/changes/other/spec.md"
+    entries = {
+        "code": [{"path": "src/app.py", "reference": "no_such_symbol", "reason": "a guess"}],
+        "rules": [{"path": "AGENTS.md", "reference": "Agent rules", "reason": "the rules"}],
+        "tests": [{"not_read": "none"}],
+        "neighbours": [{"not_read": "none"}],
     }
-    assert len({call["prompt"] for call in flash}) == 11, "no two seats share one report"
-    assert len({call["agent_dir"] for call in flash}) == 11, "no two seats share one session"
-    assert not any("FLASH-" in call["prompt"] for call in flash), "a peer's answer never enters another's prompt"
-    judge_prompt = sworld.calls("judge")[0]["prompt"]
-    assert all(f"FLASH-{n}" in judge_prompt for n in range(11)), "the judge receives every pair"
-
-
-@pytest.mark.parametrize("swap", [False, True])
-def test_declared_free_focuses_shape_research_and_topic_pairs(sworld: SwarmWorld, swap: bool) -> None:
-    # L1-2: swap two public assignments, including the declared topic-6 seat.
-    declaration = sworld.root / "model-endpoints.yaml"
-    data = yaml.safe_load(declaration.read_text(encoding="utf-8"))
-    roles = data["research_swarm"]
-    if swap:
-        first, last = FREE_IDS[0], FREE_IDS[2]
-        roles["free_focuses"][first], roles["free_focuses"][last] = (
-            roles["free_focuses"][last],
-            roles["free_focuses"][first],
-        )
-        roles["topic6_free"] = first
-        declaration.write_text(yaml.safe_dump(data), encoding="utf-8")
-    sworld.complete(public=[{"stdout": f"PUBLIC-SEAT-{n}", "receipts": [RECEIPT]} for n in range(3)])
-    assert sworld.run() == 0
-    for member, call in zip(FREE_IDS, sworld.calls("public"), strict=True):
-        assert "## Your assigned focus\n" in call["prompt"], "the model must receive its declared assignment"
-        focus = call["prompt"].split("## Your assigned focus\n", 1)[1].split("\n## ", 1)[0]
-        assert re.findall(r"Topic (\d):", focus) == [str(n) for n in roles["free_focuses"][member]]
-        assert "Answer only your assigned questions" in call["prompt"]
-    pairs = sworld.calls("judge")[0]["prompt"].split("# The six pairs\n", 1)[1].split("# Public source receipts", 1)[0]
-    for topic in range(1, 7):
-        section = pairs.split(f"## Topic {topic}:", 1)[1].split("\n## Topic ", 1)[0]
-        for n, member in enumerate(FREE_IDS):
-            assert (f"PUBLIC-SEAT-{n}" in section) == (topic in roles["free_focuses"][member])
-        expected_flash = [2 * (topic - 1), 2 * (topic - 1) + 1] if topic <= 5 else [10]
-        assert [int(n) for n in re.findall(r"FLASH-(\d+)", section)] == expected_flash
-    assert f"Free seat: {roles['topic6_free']}" in pairs.split("## Topic 6:", 1)[1]
-
-
-def test_declared_paid_endpoint_and_models_are_called(sworld: SwarmWorld) -> None:
-    # L1-3: remove the old paid endpoint so even preflight must use the declaration.
-    declaration = sworld.root / "model-endpoints.yaml"
-    data = yaml.safe_load(declaration.read_text(encoding="utf-8"))
-    roles = data["research_swarm"]
-    paid = next(entry for entry in data["endpunkte"] if entry["name"] == roles["paid_endpoint"])
-    paid["name"] = roles["paid_endpoint"] = "declared-paid-route"
-    roles["topic_author"] = "claude-sonnet-5-5"
-    roles["judge"] = "claude-haiku-4-5"
-    paid["modelle"] = [roles["topic_author"], roles["judge"]]
-    declaration.write_text(yaml.safe_dump(data), encoding="utf-8")
-    sworld.complete()
-    assert sworld.run() == 0
-    assert model_of(sworld.calls("topic")[0]) == roles["topic_author"]
-    assert model_of(sworld.calls("judge")[0]) == roles["judge"]
-    record = sworld.research.read_text(encoding="utf-8")
-    for model in (roles["topic_author"], roles["judge"]):
-        assert f"endpoint declared-paid-route · model {model} · leak check clean" in record
-
-
-def test_fresh_opus_reconciles_all_six_topics(sworld: SwarmWorld, capsys: pytest.CaptureFixture[str]) -> None:
-    # Criterion 14. Planted fault: another model judges, a context is resumed, or a topic is missing.
-    sworld.complete()
-    assert sworld.run() == 0
-    judge = sworld.calls("judge")[0]
-    assert model_of(judge) == "claude-opus-5-5"
-    assert judge["argv"][judge["argv"].index("--effort") + 1] == "xhigh"
-    assert not any(flag in judge["argv"] for flag in ("--resume", "--continue", "-c"))
-    topic = sworld.calls("topic")[0]
-    assert model_of(topic) == "claude-opus-5-5"
-    assert topic["argv"][topic["argv"].index("--effort") + 1] == "high"
-    text = sworld.research.read_text(encoding="utf-8")
-    assert "### Reconciliation" in text
-    for number in range(1, 7):
-        assert f"### Topic {number}" in text
-    sworld.rewind()
-    sworld.complete(judge={"stdout": judge_ok().replace("### Topic 3\n\n", "### Dropped\n\n", 1)})
-    assert sworld.run() == 1
-    assert "not 1-6 once each" in capsys.readouterr().err
-
-
-# ---------------------------------------------------------------------------
-# The comparisons, the evidence and the boundary (spec, criteria 7-10, 23)
-# ---------------------------------------------------------------------------
-
-
-def test_research_carries_practice_architecture_and_adjacent_spec_comparisons(
-    sworld: SwarmWorld, capsys: pytest.CaptureFixture[str]
-) -> None:
-    # Criterion 7. Planted fault: a comparison field disappears or unread neighbours are labelled absent.
-    sworld.complete()
-    assert sworld.run() == 0
-    text = sworld.research.read_text(encoding="utf-8")
-    for field in ("Practice comparison:", "Architecture comparison:", "Adjacent-spec comparison:"):
-        assert text.count(field) == 6, field
-    sworld.rewind()
-    dropped = judge_ok().replace("**Architecture comparison:**", "**Skipped:**", 1)
-    sworld.complete(judge={"stdout": dropped})
-    assert sworld.run() == 1
-    assert "topic 1 lacks 'Architecture comparison:'" in capsys.readouterr().err
-
-
-def test_public_requests_exclude_every_private_input(sworld: SwarmWorld) -> None:
-    # Criterion 8. Planted fault: a repository canary reaches a public model or web request.
-    canary = "PRIVATE-CANARY-42"
-    for name in ("spec.md", "plan.md"):
-        path = sworld.root / "plans/changes/demo" / name
-        path.write_text(path.read_text(encoding="utf-8") + f"\ncanary: {canary}\n", encoding="utf-8")
-    agents = sworld.root / "AGENTS.md"
-    agents.write_text(agents.read_text(encoding="utf-8") + f"\nRule: {canary}\n", encoding="utf-8")
-    sworld.complete()
-    assert sworld.run() == 0
-    for call in sworld.calls("public"):
-        joined = " ".join(call["argv"])
-        for blob in (call["prompt"], joined, json.dumps(call["env"])):
-            assert canary not in blob, "repository content reached a free researcher"
-            assert "demo" not in blob, "the change name reached a free researcher"
-        assert str(sworld.root) not in call["cwd"]
-        assert str(sworld.root) not in (call["prompt_path"] or "")
-        assert Path(call["prompt_path"]).name == "public-prompt.md", "the prompt travels under a generic name"
-        extension = call["argv"][call["argv"].index("-e") + 1]
-        assert Path(extension).name == "research-tools.mjs" and str(sworld.root) not in extension
-        assert str(sworld.root) not in call["env"]["STAGE2_PUBLIC_RECEIPTS"]
-        assert "--no-extensions" in call["argv"], "the built-in tool surface stays off"
-        # F-5. Planted fault: no `--tools` allow-list, so Pi declares its built-in tools to the free model.
-        assert call["argv"][call["argv"].index("--tools") + 1] == "public_search,public_fetch"
-    text = sworld.research.read_text(encoding="utf-8")
-    assert canary not in text, "nothing private is published"
-    assert "### Public source receipts" in text
-
-
-def test_public_claims_require_retrieved_source_receipts(
-    sworld: SwarmWorld, capsys: pytest.CaptureFixture[str]
-) -> None:
-    # Criterion 10. Planted fault: an unfetched URL or a bare search snippet stands as page evidence.
-    sworld.complete()
-    assert sworld.run() == 0
-    sworld.rewind()
-    unbacked = PUBLIC_REPORT.replace("example.com/pattern", "example.com/unfetched")
-    sworld.complete(public=[{"stdout": unbacked, "receipts": [RECEIPT]}] * 3)
-    assert sworld.run() == 1
-    assert "citations no receipt backs" in capsys.readouterr().err
-    text = sworld.research.read_text(encoding="utf-8")
-    assert "citations without receipts" in text, "the unbacked report is published as failed, not dropped"
-
-
-@pytest.mark.parametrize("receipts", [[], [dict(RECEIPT, kind="search")], [dict(RECEIPT, status=404)]])
-def test_a_free_report_without_a_retrieved_page_is_no_contribution(sworld: SwarmWorld, receipts: list) -> None:
-    # F-3. Planted fault: a report from memory, with no URL and no page retrieved, passes as public evidence.
     sworld.complete(
-        public=[
-            {"stdout": PUBLIC_REPORT, "receipts": [RECEIPT]},
-            {"stdout": "From memory: teams usually isolate such runs.", "receipts": receipts},
-            {"stdout": PUBLIC_REPORT, "receipts": [RECEIPT]},
-        ]
-    )
-    assert sworld.run() == 1, "a run cannot end complete on a contribution that retrieved no page"
-    record = sworld.research.read_text(encoding="utf-8")
-    assert "free researcher space-bunny-free: retrieved no public page" in status_line(record)
-    assert "### Free researcher space-bunny-free (no retrieved page)" in record, "the report is kept, marked"
-    assert len(sworld.calls("flash")) == 11 and sworld.calls("judge"), "the remaining roles still run"
-
-
-@pytest.mark.parametrize("fault", ["invented-url", "search-snippet"])
-def test_judge_public_citations_require_retrieved_receipts(sworld: SwarmWorld, fault: str) -> None:
-    # L1-4: a judge cannot promote its own invented URL or a search-only receipt to fact.
-    supported = judge_ok().replace("topic 1 holds", PUBLIC_REPORT + " topic 1 holds", 1)
-    sworld.complete(judge={"stdout": supported})
-    assert sworld.run() == 0, "a retrieved public page can support the reconciliation"
-    sworld.rewind()
-    if fault == "invented-url":
-        sworld.complete(judge={"stdout": supported.replace("example.com/pattern", "example.com/invented")})
-    else:
-        sworld.complete(
-            public=[{"stdout": "No public facts established.", "receipts": [dict(RECEIPT, kind="search")]}] * 3,
-            judge={"stdout": supported},
-        )
-    assert sworld.run() == 1
-    record = sworld.research.read_text(encoding="utf-8")
-    assert "judge: public citations no receipt backs" in status_line(record)
-    assert "### Reconciliation (failed validation" in record
-
-
-def test_redirect_receipts_back_requested_and_final_urls(sworld: SwarmWorld) -> None:
-    # L1-7: citing either side of a successful redirect is backed by the same retrieval.
-    redirected = dict(RECEIPT, final_url="https://example.com/final-pattern")
-    sworld.complete(
-        public=[{"stdout": PUBLIC_REPORT, "receipts": [redirected]}] * 3,
-        judge={"stdout": judge_ok() + "\n" + PUBLIC_REPORT.replace("/pattern", "/final-pattern")},
+        finder=[{"stdout": json.dumps(entries)}],
+        **{"repository:5": [{"stdout": repository_report(5, [rel])}]},
     )
     assert sworld.run() == 0
-    assert "status: complete" in status_line(sworld.research.read_text(encoding="utf-8"))
-    assert stage2_swarm.receipt_problems(PUBLIC_REPORT, [dict(redirected, status=503)])
+    block = sworld.research.read_text(encoding="utf-8")
+    found = re.search(r"```research-swarm/v2 map\n(.*?)\n```", block, re.S)
+    assert found
+    packet = json.loads(found.group(1))
+    unresolved = [e for e in packet["entries"] if e["status"] == "unresolved"]
+    assert [e["reference"] for e in unresolved] == ["no_such_symbol"]
+    assert ["code", "src/app.py", "no_such_symbol"] not in packet["scope"], "an unresolved locator grants no scope"
+    assert packet["neighbours"] == [{"path": rel, "status": "given", "map_keys": []}]
+    topic5 = sworld.calls("repository")
+    topic5 = [c for c in topic5 if c["topic"] == 5]
+    assert len(topic5) == 3 and all(rel in c["prompt"] for c in topic5), "the packet carries the given neighbour"
 
 
-def test_free_environment_excludes_identity_and_private_paths(
+def test_history_collection_failure_prevents_all_topics(sworld: SwarmWorld, monkeypatch: pytest.MonkeyPatch) -> None:
+    # Criterion 18. Planted fault: failed read-only git collection starts a topic.
+    def fail(*_a, **_k):
+        raise stage2_research_run.ResearchHistoryError("git said no")
+
+    monkeypatch.setattr(stage2_research_run, "build_research_history", fail)
+    sworld.complete()
+    assert sworld.run() == 1
+    assert kinds(sworld) == ["finder"] * 3 + ["merge", "sentence"]
+    assert "git said no" in sworld.research.read_text(encoding="utf-8")
+
+
+def test_frozen_copies_are_scratch_only_and_removed_after_run(
     sworld: SwarmWorld, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    # L1-5: plant ambient identity, configuration, temp paths and every locale variable.
-    forbidden = ("USER", "LOGNAME", "SHELL", "TMPDIR", "LANG", "LC_ALL", "LC_CTYPE", "LC_MESSAGES", "CODEX_HOME")
-    for name in forbidden:
-        monkeypatch.setenv(name, "/private-identity/ambient")
-    captured: list[dict] = []
-    launch = stage2.launch
+    # Criterion 16. Planted fault: success or abort retains the copies, or copying fails yet models launch.
+    seen: list[Path] = []
+    real = stage2_research_run.freeze_research_state
 
-    def capture(command, root, env, *args, **kwargs):
-        if "STAGE2_PUBLIC_RECEIPTS" in env or command == [str(stage2.PI_WRAPPER), "--list-models"]:
-            captured.append(dict(env))
-        return launch(command, root, env, *args, **kwargs)
+    def spy(*args, **kwargs):
+        state = real(*args, **kwargs)
+        seen.append(state.directory)
+        assert not state.directory.resolve().is_relative_to(sworld.root), "copies stay outside the repository"
+        return state
 
-    monkeypatch.setattr(stage2, "launch", capture)
+    monkeypatch.setattr(stage2_research_run, "freeze_research_state", spy)
     sworld.complete()
     assert sworld.run() == 0
-    assert len(captured) == 4
-    assert captured[0]["OPENCODE_API_KEY"] == OKEY, "the inventory runs with the free call's own credential"
-    for env in captured:
-        assert not set(forbidden) & env.keys(), env
-        assert "PATH" in env and "HOME" in env and "PI_CODING_AGENT_DIR" in env
-        assert "/private-identity/ambient" not in json.dumps(env)
-        assert set(env) <= {"PATH", "HOME", "PI_CODING_AGENT_DIR", "OPENCODE_API_KEY", "STAGE2_PUBLIC_RECEIPTS"}
-
-
-@pytest.mark.parametrize(
-    "answer",
-    [
-        "Two sentences. Here is the second one.",
-        "a " + "word " * 20 + "long",
-        "isolation for src/app.py runs",
-        "isolation for myValue runs",
-        "the demo change's isolation",
-        "isolation for the demo-1 tracker work",
-        # F-4. Planted fault: a hyphenated identifier without a digit passes as a plain word.
-        "isolation for the coding-harness-yim tracker work",
-        "container isolation in the coding-harness repository",
-        "routing research through claude-code-plan",
-        "public research on the opencode-free endpoint",
-        "exploration in the style of research-swarm",
-    ],
-)
-def test_public_topic_is_filtered_before_free_calls(sworld: SwarmWorld, answer: str) -> None:
-    # Criterion 23. Planted fault: a rejected topic still reaches the free researchers.
-    sworld.complete(topic={"stdout": answer})
+    assert len(seen) == 1 and not seen[0].exists()
+    sworld.rewind()
+    sworld.complete(merge=[{"exit": 1}])
     assert sworld.run() == 1
-    assert sworld.calls("public") == [] and sworld.calls("flash") == [] and sworld.calls("judge") == []
+    assert len(seen) == 2 and not seen[1].exists()
+    sworld.rewind()
+
+    def broken(*_a, **_k):
+        raise stage2_research_run.ResearchSnapshotError("cannot copy")
+
+    monkeypatch.setattr(stage2_research_run, "freeze_research_state", broken)
+    assert sworld.run() == 1
+    assert kinds(sworld) == [], "a failed freeze launches no model"
+
+
+# ---------------------------------------------------------------------------
+# Topics, free seats and the judge (plan steps 3, 4, 5; spec criteria 6, 7, 10, 14, 19, 26, 28, 37, 39)
+# ---------------------------------------------------------------------------
+
+FREE = ["alpha-free", "beta-free"]
+
+
+def test_selected_free_models_cover_all_online_topics_on_identical_briefs(sworld: SwarmWorld) -> None:
+    # Criteria 19, 26, 39. Planted fault: an extra invocation or retry, differing peer briefs, a missing free seat.
+    sworld.selection = selection_for(free=FREE)
+    sworld.complete()
+    assert sworld.run() == 0
+    assert len(sworld.calls()) == 39 + 3 * len(FREE)
+    for topic in range(1, 12):
+        calls = [c for c in sworld.calls() if c["topic"] == topic and c["kind"] in ("repository", "online")]
+        assert len({c["prompt"] for c in calls}) == 1, f"topic {topic} peers received different briefs"
+        assert len(calls) == (3 if topic <= 8 else 5)
+    free = [c for c in sworld.calls("online") if c["model"] in FREE]
+    assert sorted((c["topic"], c["model"]) for c in free) == sorted((t, m) for t in (9, 10, 11) for m in FREE)
+
+
+def test_repository_topics_have_three_independent_models(sworld: SwarmWorld) -> None:
+    # Criteria 6, 37. Planted fault: a seat runs another model, one session supplies two seats.
+    sworld.complete()
+    assert sworld.run() == 0
+    for topic in range(1, 9):
+        assert sorted(models(sworld, "repository", topic)) == sorted(s["model"] for s in REPOSITORY_SEATS)
+    for topic in (9, 10, 11):
+        assert sorted(models(sworld, "online", topic)) == sorted(s["model"] for s in ONLINE_SEATS)
+    assert all(c["name"] == "pi" for c in sworld.calls("online")), "online seats ride Pi, never Claude Code"
+
+
+def test_free_seats_are_forbidden_in_every_private_role(sworld: SwarmWorld) -> None:
+    # Criterion 11. Planted fault: a free model fills a finder, repository, merge, sentence or judge role.
+    sworld.selection = selection_for(free=FREE)
+    sworld.complete()
+    assert sworld.run() == 0
+    for call in sworld.calls():
+        if call["kind"] != "online":
+            assert call["model"] not in FREE
+
+
+def test_measured_empty_catalog_keeps_all_required_slots(sworld: SwarmWorld) -> None:
+    # Criteria 39, 42. Planted fault: a valid zero selection is refused or drops a required slot.
+    sworld.selection = selection_for(free=[])
+    sworld.complete()
+    assert sworld.run() == 0
+    assert len(sworld.calls()) == 39
+
+
+def test_the_next_run_uses_its_own_frozen_free_selection(sworld: SwarmWorld) -> None:
+    # Criterion 38. Planted fault: the first run's roster survives into the next run.
+    sworld.selection = selection_for(free=FREE)
+    sworld.complete()
+    assert sworld.run() == 0
+    assert len(sworld.calls()) == 45
+    sworld.rewind()
+    sworld.selection = selection_for(free=["gamma-free"])
+    assert sworld.run() == 0
+    assert len(sworld.calls()) == 42
+    assert {c["model"] for c in sworld.calls("online")} >= {"gamma-free"}
+    assert not ({"alpha-free", "beta-free"} & {c["model"] for c in sworld.calls()})
+
+
+def test_online_requests_exclude_private_inputs_and_ambient_paths(sworld: SwarmWorld) -> None:
+    # Criterion 8. Planted fault: a canary from rules, paths, identifiers, finder output, history or private
+    # reports appears in an online payload; the call starts in the repository or carries identity.
+    (sworld.root / "AGENTS.md").write_text("# Agent rules\n\nCANARY-RULE-TEXT stays private.\n", encoding="utf-8")
+    sworld.commit()
+    sworld.selection = selection_for(free=FREE)
+    sworld.complete()
+    assert sworld.run() == 0
+    online = sworld.calls("online")
+    assert len(online) == 15
+    for call in online:
+        blob = call["prompt"] + " ".join(call["argv"]) + json.dumps(call["env"])
+        for canary in (
+            "CANARY-RULE-TEXT",
+            "seed fact",
+            "src/app.py",
+            "AGENTS.md",
+            "demo-1",
+            "plans/changes",
+            str(sworld.root),
+        ):
+            assert canary not in blob, f"{canary!r} reached an online seat"
+        assert TOPIC_OK in call["prompt"]
+        assert call["cwd"] != str(sworld.root)
+        assert (
+            "--tools" in call["argv"]
+            and call["argv"][call["argv"].index("--tools") + 1] == "public_search,public_fetch"
+        )
+        assert call["env"].get("OPENCODE_API_KEY") == OKEY
+        assert not {"USER", "LOGNAME", "SHELL"} & set(call["env"]), "no user identity reaches an online seat"
+    for call in sworld.calls("repository") + sworld.calls("finder"):
+        assert "CANARY-RULE-TEXT" in call["prompt"], "repository seats embed the identical rules file"
+
+
+def test_peers_receive_identical_frozen_briefs_without_reports(sworld: SwarmWorld) -> None:
+    # Criterion 26. Planted fault: a topic prompt carries a peer's or an earlier topic's report text.
+    marker = "PEER-REPORT-MARKER"
+    report = json.loads(repository_report(1))
+    report["claims"][0]["statement"] = marker
+    sworld.complete(**{"repository:1": [{"stdout": json.dumps(report)}]})
+    assert sworld.run() == 0
+    for call in sworld.calls():
+        if call["kind"] != "judge":
+            assert marker not in call["prompt"], f"{call['kind']} read a report early"
+    assert marker in sworld.calls("judge")[0]["prompt"]
+
+
+def test_online_claims_require_successful_page_receipts(sworld: SwarmWorld) -> None:
+    # Criterion 10. Planted fault: a search-only or snippet receipt supports a claim, or a receiptless
+    # report is accepted.
+    for receipts in ([], [dict(RECEIPT, kind="search")], [dict(RECEIPT, status=404)]):
+        sworld.rewind()
+        sworld.complete(online=[{"stdout": online_report(), "receipts": receipts}])
+        assert sworld.run() == 1, f"receipts {receipts} must not back the claim"
+        assert "judge" not in kinds(sworld)
+
+
+def test_unsupported_claims_are_retained_and_report_requires_evidence(sworld: SwarmWorld) -> None:
+    # Criterion 10. Planted fault: one bad claim fails a valid report, or an unsupported claim is promoted.
+    report = json.loads(repository_report(2))
+    report["claims"].append(
+        dict(report["claims"][0], id="C2", evidence=["src/app.py::value", "src/app.py::no_such_symbol"])
+    )
+    sworld.complete(**{"repository:2": [{"stdout": json.dumps(report)}]})
+    assert sworld.run() == 0
     text = sworld.research.read_text(encoding="utf-8")
-    assert "public topic rejected" in text and "No free call starts" in text
-    assert f"public topic: {answer}" not in text
+    assert '"evidence_status": "unsupported"' in text
+    judge = sworld.calls("judge")[0]["prompt"]
+    assert judge.count('"evidence_status": "unsupported"') == 3, "the unsupported claim of each of the 3 seats stays"
+    only = json.loads(repository_report(2))
+    only["claims"][0]["evidence"] = ["src/app.py::no_such_symbol"]
+    sworld.rewind()
+    sworld.complete(**{"repository:2": [{"stdout": json.dumps(only)}]})
+    assert sworld.run() == 1, "a report whose only claim is unsupported fails the evidence floor"
+    assert "judge" not in kinds(sworld)
 
 
-def test_an_accepted_topic_is_recorded_and_reaches_the_free_calls(
-    sworld: SwarmWorld, capsys: pytest.CaptureFixture[str]
+def test_report_template_refuses_missing_fields_and_eighth_claim(sworld: SwarmWorld) -> None:
+    # Criterion 27. Planted fault: required fields are missing or an eighth claim passes.
+    base = json.loads(repository_report(4))
+    missing = {k: v for k, v in base.items() if k != "counter_evidence"}
+    many = dict(base, claims=[dict(base["claims"][0], id=f"C{n}") for n in range(1, 9)])
+    for bad in (missing, many):
+        sworld.rewind()
+        sworld.complete(**{"repository:4:mimo-v2.6-flash": [{"stdout": json.dumps(bad)}]})
+        assert sworld.run() == 1
+        assert "judge" not in kinds(sworld)
+        assert "invalid-report" in sworld.research.read_text(encoding="utf-8")
+
+
+def test_topic_specific_class_and_volatile_fields_are_required(sworld: SwarmWorld) -> None:
+    # Criterion 35. Planted fault: topic 3 omits its class, or a volatile topic-6 claim omits governance.
+    t3 = json.loads(repository_report(3))
+    del t3["class_assessment"]
+    t6 = json.loads(repository_report(6))
+    t6["claims"][0]["volatile"] = True
+    for key, bad in (("repository:3", t3), ("repository:6", t6)):
+        sworld.rewind()
+        sworld.complete(**{key: [{"stdout": json.dumps(bad)}]})
+        assert sworld.run() == 1
+
+
+def given_neighbour(world: SwarmWorld) -> str:
+    other = world.root / "plans/changes/other"
+    other.mkdir(exist_ok=True)
+    (other / "spec.md").write_text("---\ntitle: Other\nbead: o-1\n---\n\n# Other\n", encoding="utf-8")
+    rel = "plans/changes/other/spec.md"
+    text = world.research.read_text(encoding="utf-8").replace("neighbours: []", f"neighbours: [{rel}]")
+    world.research.write_text(text, encoding="utf-8")
+    world.commit()
+    return rel
+
+
+def test_topic_five_relations_cover_exact_packet_neighbours(sworld: SwarmWorld) -> None:
+    # Criterion 27. Planted fault: missing, extra or duplicate relation paths, or dangling claims, pass.
+    rel = given_neighbour(sworld)
+    good = json.loads(repository_report(5, [rel]))
+    for bad_relations in [
+        [],  # the packet neighbour has no relation
+        [{"path": rel, "relation": "related", "claims": ["C1"]}, {"path": rel, "relation": "unrelated", "claims": ["C1"]}],
+        [{"path": rel, "relation": "related", "claims": ["C1"]}, {"path": "plans/changes/x/spec.md", "relation": "related", "claims": ["C1"]}],
+        [{"path": rel, "relation": "related", "claims": ["C9"]}],
+    ]:  # fmt: skip
+        sworld.rewind()
+        sworld.research.write_text(
+            sworld.research.read_text(encoding="utf-8").replace("neighbours: []", f"neighbours: [{rel}]"),
+            encoding="utf-8",
+        )
+        sworld.complete(**{"repository:5": [{"stdout": json.dumps(dict(good, neighbour_relations=bad_relations))}]})
+        assert sworld.run() == 1
+        assert "judge" not in kinds(sworld)
+    sworld.rewind()
+    sworld.research.write_text(
+        sworld.research.read_text(encoding="utf-8").replace("neighbours: []", f"neighbours: [{rel}]"), encoding="utf-8"
+    )
+    sworld.complete(**{"repository:5": [{"stdout": json.dumps(good)}]})
+    assert sworld.run() == 0
+
+
+def test_empty_neighbour_topic_runs_three_seats_without_invented_evidence(sworld: SwarmWorld) -> None:
+    # Criteria 7, 18, 27. Planted fault: an empty packet lacks its marker or comparison gap, admits relations,
+    # or prevents completion.
+    sworld.complete(**{"repository:5": [{"stdout": repository_report(5, ["plans/changes/other/spec.md"])}]})
+    assert sworld.run() == 1, "a relation for a path outside the empty packet is an extra path"
+    sworld.rewind()
+    report = json.loads(repository_report(5))
+    report["not_read"] = ["tests"]
+    sworld.complete(**{"repository:5": [{"stdout": json.dumps(report)}]})
+    assert sworld.run() == 1, "an empty packet needs its exact not-read marker"
+    sworld.rewind()
+    noclaims = json.loads(repository_report(5))
+    noclaims["claims"], noclaims["questions"] = [], []
+    sworld.complete(**{"repository:5": [{"stdout": json.dumps(noclaims)}]})
+    assert sworld.run() == 0, "the empty packet waives the evidence floor"
+    topic5 = [c for c in sworld.calls("repository") if c["topic"] == 5]
+    assert len(topic5) == 3 and all("no packet neighbour" in c["prompt"] for c in topic5)
+    assert len(sworld.calls("repository")) == 24, "the 39 fixed slots stay"
+
+
+def test_every_failed_slot_keeps_partial_output_before_cleanup(sworld: SwarmWorld) -> None:
+    # Criteria 14, 18. Planted fault: missing required reports still reach the judge.
+    sworld.complete(**{"repository:4:mimo-v2.6-flash": [{"exit": 2, "stderr": "provider down", "stdout": "half"}]})
+    assert sworld.run() == 1
+    assert "judge" not in kinds(sworld)
+    assert len(sworld.calls()) == 39 - 1, "siblings finish; only the judge is withheld"
+    text = sworld.research.read_text(encoding="utf-8")
+    assert "topic 4" in text and "failed" in text
+    partial = re.findall(r"```research-swarm/v2 partial\n(.*?)\n```", text, re.S)
+    assert any("half" in item and "provider down" in item for item in map(str, partial)), "partial output is kept"
+
+
+def test_failed_free_seat_is_named_without_failing_completion(sworld: SwarmWorld) -> None:
+    # Criterion 18. Planted fault: a free failure vanishes or fails an otherwise valid run.
+    sworld.selection = selection_for(free=FREE)
+    sworld.complete(**{"online:10:beta-free": [{"exit": 1}]})
+    assert sworld.run() == 0
+    text = sworld.research.read_text(encoding="utf-8")
+    assert "best-effort free seats did not finish" in text and "topics-10-free-beta-free" in text
+    assert "judge" in kinds(sworld)
+    packet = sworld.calls("judge")[0]["prompt"]
+    assert "beta-free" in packet, "the failed free seat is named to the judge"
+
+
+def test_fresh_opus_reconciles_eleven_topics_and_map(sworld: SwarmWorld) -> None:
+    # Criteria 14, 28. Planted fault: another model judges, a valid claim lacks its exclusive disposition.
+    sworld.complete()
+    assert sworld.run() == 0
+    (judge,) = sworld.calls("judge")
+    assert model_of(judge) == "claude-opus-5-5"
+    for topic in range(1, 12):
+        assert f'"topic": {topic}' in judge["prompt"]
+    sworld.rewind()
+    sworld.complete(judge=[{"stdout": json.dumps({"claim_judgements": []})}])
+    assert sworld.run() == 1, "an answer without the closed fields or any judgement is refused"
+    assert "failed validation" in sworld.research.read_text(encoding="utf-8")
+
+
+def test_judge_packet_limit_refuses_before_launch_without_shortening(
+    sworld: SwarmWorld, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    # Criterion 23's accepted side: the topic is recorded and is the only change text the free calls carry.
+    # Criteria 14, 18. Planted fault: J+1 reaches the judge, or a second call/N reduction occurs.
+    import stage2_research_judge
+
+    policy = stage2_research_judge.research_judge_capacity_policy()
+    monkeypatch.setattr(
+        stage2_research_judge, "research_judge_capacity_policy", lambda: dict(policy, limit_characters=10)
+    )
     sworld.complete()
-    assert sworld.run() == 0
-    text = sworld.research.read_text(encoding="utf-8")
-    assert "public topic: container isolation for AI agent runs" in text
-    assert TOPIC_OK in sworld.calls("public")[0]["prompt"]
-    sworld.rewind()
-    sworld.complete(topic={"stdout": "   "})
     assert sworld.run() == 1
-    assert not sworld.calls("public")
-    assert "the public topic call failed" in capsys.readouterr().err
+    assert "judge" not in kinds(sworld) and len(sworld.calls()) == 39 - 1
+    assert "judge-packet-over-limit" in sworld.research.read_text(encoding="utf-8")
 
 
 # ---------------------------------------------------------------------------
-# The declaration and the leak check (spec, criteria 11, 12)
+# Dispatch behaviour inside the run (plan step 4; spec criteria 12, 13, 19, 36)
 # ---------------------------------------------------------------------------
 
 
-@pytest.mark.parametrize(
-    "mutate",
-    ["free-sees-framework", "roster-off-endpoint", "pair-off-endpoint", "judge-off-endpoint", "topic6-wrong-focus"],
-)
-def test_declarations_clear_only_the_role_data_class(sworld: SwarmWorld, mutate: str) -> None:
-    # Criterion 11. Planted fault: an undeclared model is called or a public endpoint reads framework content.
+def test_a_leak_in_the_first_prompt_starts_no_model(sworld: SwarmWorld) -> None:
+    # Criterion 12. Planted fault: a blocked prompt still starts a model, or the secret reaches research.md.
+    sworld.research.write_text(SEED + f"\nAn accident: {LEAK}.\n", encoding="utf-8")
     sworld.complete()
-    text = (sworld.root / "model-endpoints.yaml").read_text(encoding="utf-8")
-    if mutate == "free-sees-framework":
-        text = text.replace("    darf_sehen: [public-web]\n", "    darf_sehen: [public-web, framework]\n", 1)
-    elif mutate == "roster-off-endpoint":
-        text = text.replace("      - space-bunny-free\n", "", 1)
-    elif mutate == "pair-off-endpoint":
-        text = text.replace(
-            "  flash_pair: [deepseek-v4.1-flash, mimo-v2.6-flash]",
-            "  flash_pair: [deepseek-v4.1-flash, undeclared-flash-9]",
-        )
-    elif mutate == "judge-off-endpoint":
-        text = text.replace("  judge: claude-opus-5-5", "  judge: mimo-v2.6-pro")
-    else:
-        text = text.replace("  topic6_free: big-pickle", "  topic6_free: longcat-2.5-preview-free")
-    (sworld.root / "model-endpoints.yaml").write_text(text, encoding="utf-8")
     assert sworld.run() == 2
-    assert sworld.calls() == [], "a declaration fault refuses before any model call"
-
-
-def test_the_public_endpoint_stays_out_of_the_framework_check(sworld: SwarmWorld) -> None:
-    # Criterion 11's scoped checks: the public check alone clears the roster; the framework check refuses it.
-    for member in FREE_IDS:
-        assert stage2.public_declaration_problem(sworld.root, "opencode-free", member) is None
-        assert stage2.declaration_problem(sworld.root, "opencode-free", member) is not None, (
-            "unknown residency and no framework permission stay refused for repository content"
-        )
-    assert stage2.public_declaration_problem(sworld.root, "opencode-free", "mimo-v2.6-pro") is not None
-
-
-def test_every_call_is_checked_and_a_leak_block_stops_dispatch(sworld: SwarmWorld) -> None:
-    # Criterion 12. Planted fault: one scan covers all calls, or a call follows a BLOCK.
-    sworld.complete()
-    assert sworld.run() == 0
+    assert sworld.calls() == [], "a blocked prompt starts no model"
     text = sworld.research.read_text(encoding="utf-8")
-    assert text.count("leak check clean over") == 16, "every call carries its own check"
-    sworld.rewind()
-    (sworld.root / "src" / "leak.txt").write_text(f"planted = {LEAK}\n", encoding="utf-8")
-    assert sworld.run() == 2
-    assert sworld.calls() == [], "no call starts after a BLOCK, and no fallback follows it"
-    text = sworld.research.read_text(encoding="utf-8")
-    assert "refused - the leak check is not clean" in text
-    assert "leak check clean" not in text, "a blocked slot is never claimed as clean"
+    assert "refused" in text and LEAK not in text.split("## Research swarm")[1]
 
 
-# ---------------------------------------------------------------------------
-# The audit, the failures and the budgets (spec, criteria 13, 18, 19, 21)
-# ---------------------------------------------------------------------------
-
-
-@pytest.mark.parametrize("kind", ["public", "flash"])
-@pytest.mark.parametrize("fault", ["nonzero", "empty", "timeout"])
-def test_failed_pi_calls_preserve_partial_evidence(
-    sworld: SwarmWorld, monkeypatch: pytest.MonkeyPatch, kind: str, fault: str
-) -> None:
-    # L1-1: retrieve a page and emit partial output before failure or the actual subprocess timeout.
-    partial = f"PARTIAL-{kind} @KEY@"
-    step = {
-        "stdout": "" if fault == "empty" else partial,
-        "receipts": [dict(RECEIPT, excerpt="page @KEY@")],
-        "exit": 7 if fault == "nonzero" else 0,
-        "sleep": 5 if fault == "timeout" else 0,
-    }
-    sworld.complete(**{kind: [step]})
-    if fault == "timeout":
-        launch = stage2.launch
-
-        def short_launch(command, root, env, *args, **kwargs):
-            is_public = "STAGE2_PUBLIC_RECEIPTS" in env
-            if command[0] == str(stage2.PI_WRAPPER) and "--print" in command and is_public == (kind == "public"):
-                kwargs["timeout"] = 1.0
-            return launch(command, root, env, *args, **kwargs)
-
-        monkeypatch.setattr(stage2, "launch", short_launch)
-    assert sworld.run() == 1
-    record = sworld.research.read_text(encoding="utf-8")
-    assert "status: incomplete" in status_line(record)
-    assert "failed" in record
-    if fault != "empty":
-        assert f"PARTIAL-{kind} [credential]" in record, "failed stdout is durable and scrubbed"
-        assert f"PARTIAL-{kind} [credential]" in sworld.calls("judge")[0]["prompt"]
-    if kind == "public":
-        assert '"excerpt": "page [credential]"' in record, "receipts survive scratch cleanup on every failure"
-        assert '"excerpt": "page [credential]"' in sworld.calls("judge")[0]["prompt"]
-        assert len(sworld.calls("public")) == 3
-    assert len(sworld.calls("flash")) == 11
-    assert not any(OKEY[n : n + 8] in record for n in range(len(OKEY) - 7))
-
-
-def test_every_attempt_has_identity_audit_and_outcome(sworld: SwarmWorld) -> None:
-    # Criterion 13. Planted fault: a failed slot is silent, or the judge has no audit of its own.
-    sworld.complete()
-    assert sworld.run() == 0
-    text = sworld.research.read_text(encoding="utf-8")
-    day = r"\d{4}-\d{2}-\d{2}"
-    run_id = re.search(r"run (swarm-[0-9a-f]{8})", text).group(1)
-    clean = re.findall(
-        rf"^Stage-2 call, {day}: swarm .+ · run {run_id} · endpoint \S+ · model \S+ · "
-        rf"leak check clean over \d+ files, \d+ commits, \d+ rules\.$",
-        text,
-        re.M,
-    )
-    assert len(clean) == 16
-    assert re.search(
-        rf"^Stage-2 call, {day}: swarm judge · run {run_id} · endpoint claude-code-plan · "
-        rf"model claude-opus-5-5 · leak check clean over \d+ files",
-        text,
-        re.M,
-    )
-    outcomes = re.findall(rf"^Swarm outcome, {day}: swarm .+ · run {run_id} · model \S+ · ok \(\d+s\)\.$", text, re.M)
-    assert len(outcomes) == 16
-    sworld.rewind()
-    flash = [{"stdout": f"FLASH-{n}"} for n in range(11)]
-    flash[4] = {"stdout": "broken", "exit": 1}
-    sworld.complete(flash=flash)
-    assert sworld.run() == 1
-    text = sworld.research.read_text(encoding="utf-8")
-    second = re.search(r"run (swarm-[0-9a-f]{8})", text).group(1)
-    assert re.search(
-        rf"^Swarm outcome, {day}: swarm flash researcher · topic 3 · run {second} · "
-        rf"model deepseek-v4\.1-flash · failed - pi \(deepseek-v4\.1-flash\) ended 1 \(\d+s\)\.$",
-        text,
-        re.M,
-    ), "the failed slot keeps its durable audit"
-
-
-@pytest.mark.parametrize(
-    "fault",
-    ["free-fails", "flash-empty", "judge-malformed", "all-free-fail", "unmapped-free-id"],
-)
-def test_failures_preserve_evidence_and_never_report_complete(sworld: SwarmWorld, fault: str) -> None:
-    # Criterion 18. Planted fault: a broken run exits 0 or claims a complete result.
-    if fault == "free-fails":
-        sworld.complete(
-            public=[
-                {"stdout": PUBLIC_REPORT, "receipts": [RECEIPT]},
-                {"stdout": "stalled", "exit": 1},
-                {"stdout": PUBLIC_REPORT, "receipts": [RECEIPT]},
-            ]
-        )
-    elif fault == "flash-empty":
-        flash = [{"stdout": f"FLASH-{n}"} for n in range(11)]
-        flash[2] = {"stdout": "   "}
-        sworld.complete(flash=flash)
-    elif fault == "judge-malformed":
-        sworld.complete(judge={"stdout": "I could not reconcile everything, sorry."})
-    elif fault == "all-free-fail":
-        sworld.complete(public=[{"stdout": "", "exit": 1}] * 3)
-    else:
-        sworld.script(pi_models=pi_table([("opencode", "longcat-2.5-preview-free")]))
-        sworld.complete()
-    assert sworld.run() == 1
-    text = sworld.research.read_text(encoding="utf-8")
-    if fault == "unmapped-free-id":
-        assert "does not map the free id(s) space-bunny-free, big-pickle" in text
-        assert "status:" not in text and not sworld.calls("public")
-        return
-    assert "status: complete" not in text
-    assert re.search(r"^run swarm-[0-9a-f]{8} status: incomplete - ", text, re.M)
-    if fault == "free-fails":
-        assert "flash researcher · topic 1" in text and "### Reconciliation" in text
-    if fault == "flash-empty":
-        assert "answered nothing" in text and "### Repository reports" in text
-    if fault == "judge-malformed":
-        assert "the judge wrote topic sections [], not 1-6 once each" in text
-        assert "### Reconciliation" in text
-    if fault == "all-free-fail":
-        assert "(none succeeded)" in text and "flash researcher · topic 1" in text
-
-
-@pytest.mark.parametrize("inventory", ["pinned-registry", "ambiguous", "no-models"])
-def test_the_free_inventory_reads_what_the_pinned_pi_prints(sworld: SwarmWorld, inventory: str) -> None:
-    # F-2(b). Planted fault: the inventory parses only JSON lines, or takes whichever provider is listed last.
-    if inventory == "pinned-registry":
-        # Pi 1.1.0's registry (read, not run) listed the first roster's `space-bunny` and `hy4-preview`
-        # only under the paid Go provider; here a roster id stands only there.
-        listing = pi_table(
-            [
-                ("opencode", "longcat-2.5-preview-free"),
-                ("opencode", "space-bunny-free"),
-                ("opencode-go", "big-pickle"),
-                ("opencode-go", "longcat-2.5-preview-free"),
-                ("opencode-go", "space-bunny"),
-            ]
-        )
-        expected = "does not map the free id(s) big-pickle to a provider other than the paid opencode-go"
-    elif inventory == "ambiguous":
-        listing = pi_table([*(("opencode", member) for member in FREE_IDS), ("mirror", "space-bunny-free")])
-        expected = "lists the free id(s) space-bunny-free (mirror, opencode) under more than one provider"
-    else:
-        listing = ["No models available. Set an API key or log in."]
-        expected = "does not map the free id(s) longcat-2.5-preview-free, space-bunny-free, big-pickle"
-    sworld.script(pi_models=listing)
-    sworld.complete()
-    assert sworld.run() == 1
-    text = sworld.research.read_text(encoding="utf-8")
-    assert expected in text, text[-800:]
-    assert not sworld.calls("public") and not sworld.calls("flash") and not sworld.calls("judge")
-    sworld.rewind()
-    sworld.script(pi_models=PI_MODELS)
-    sworld.complete()
-    assert sworld.run() == 0
-    assert "free transport: longcat-2.5-preview-free rides opencode/longcat-2.5-preview-free;" in (
-        sworld.research.read_text(encoding="utf-8")
-    ), "the free provider wins over the paid namesake"
-
-
-def test_deadlines_and_role_counts_bound_the_run(sworld: SwarmWorld) -> None:
-    # Criterion 19. Planted fault: a role is retried, or a launch outruns its remaining allowance.
-    assert stage2_swarm.allowance(0.0, stage2_swarm.TOPIC_MINUTES) == 300.0
-    assert stage2_swarm.allowance(0.0, stage2_swarm.RESEARCHER_MINUTES) == 600.0
-    assert stage2_swarm.allowance(0.0, stage2_swarm.JUDGE_MINUTES) == 900.0
-    assert stage2_swarm.allowance(30.0, stage2_swarm.RESEARCHER_MINUTES) == 600.0
-    assert stage2_swarm.allowance(149 * 60.0, stage2_swarm.RESEARCHER_MINUTES) == 60.0, (
-        "a launch takes the run's remaining allowance when the role deadline is longer"
-    )
-    assert stage2_swarm.allowance(200 * 60.0, stage2_swarm.RESEARCHER_MINUTES) == 0.0, (
-        "nothing starts after the whole-run deadline"
-    )
-    sworld.complete()
-    assert sworld.run() == 0
-    assert len(sworld.calls()) == 16, "one topic call, three free researchers, eleven Flash calls, one judge"
-    sworld.rewind()
-    flash = [{"stdout": f"FLASH-{n}"} for n in range(11)]
-    flash[3] = {"stdout": "", "exit": 1}
-    sworld.complete(flash=flash)
-    assert sworld.run() == 1
-    flash_calls = sworld.calls("flash")
-    assert len(flash_calls) == 11, "a failed seat is attempted once, never retried"
-    models = [model_of(call) for call in flash_calls]
-    assert models.count("opencode-go/mimo-v2.6-flash") == 5
-    assert models.count("opencode-go/deepseek-v4.1-flash") == 6
-
-
-def test_no_call_starts_once_the_run_deadline_is_spent(sworld: SwarmWorld, monkeypatch: pytest.MonkeyPatch) -> None:
-    # F-6. Planted fault: a spent deadline still gates, audits as clean and launches with timeout 0.
-    launch = stage2.launch
-
-    def spend_after_the_free_stage(command, root, env, *args, **kwargs):
-        done = launch(command, root, env, *args, **kwargs)
-        if "STAGE2_PUBLIC_RECEIPTS" in env and len(sworld.calls("public")) == 3:
-            monkeypatch.setattr(stage2_swarm, "RUN_MINUTES", 0.0)
-        return done
-
-    monkeypatch.setattr(stage2, "launch", spend_after_the_free_stage)
-    sworld.complete()
-    assert sworld.run() == 1
-    assert [call["kind"] for call in sworld.calls()] == ["topic"] + ["public"] * 3, "no process after the deadline"
-    record = sworld.research.read_text(encoding="utf-8")
-    assert record.count("leak check clean over") == 4, "no gate and no clean claim for an unstarted slot"
-    assert record.count("not started - the whole-run deadline is spent") == 12, "every unfinished slot is recorded"
-    assert "judge: not started - the whole-run deadline of 0 minutes is spent" in status_line(record)
-
-
-def test_a_run_across_midnight_keeps_its_frozen_research(sworld: SwarmWorld, monkeypatch: pytest.MonkeyPatch) -> None:
-    # F-7. Planted fault: the runner's own `updated:` re-stamp counts as a changed input.
-    day = [datetime.date(2026, 10, 15)]
-    stamp = stage2.check_frontmatter_current.stamp
-    monkeypatch.setattr(stage2.check_frontmatter_current, "stamp", lambda path, _today: stamp(path, day[0]))
-    launch = stage2.launch
-
-    def midnight(command, root, env, *args, **kwargs):
-        if "STAGE2_PUBLIC_RECEIPTS" in env:
-            day[0] = datetime.date(2026, 10, 16)
-        return launch(command, root, env, *args, **kwargs)
-
-    monkeypatch.setattr(stage2, "launch", midnight)
-    sworld.complete()
-    assert sworld.run() == 0
-    text = sworld.research.read_text(encoding="utf-8")
-    assert "\nupdated: 2026-10-16\n" in text.split("\n---\n", 1)[0], "the date did cross during the run"
-    assert "status: complete" in status_line(text)
-    assert stage2_swarm.without_updated(b"---\ntitle: A\nupdated: 2026-10-16\n---\nbody updated: x\n") == (
-        b"---\ntitle: A\nupdated:\n---\nbody updated: x\n"
-    ), "only the header's stamp is left out; the body and other fields still compare"
-
-
-def test_all_outputs_scrub_every_used_credential(sworld: SwarmWorld, capsys: pytest.CaptureFixture[str]) -> None:
-    # Criterion 21. Planted fault: an eight-character fragment of the used credential survives anywhere.
-    receipt = dict(RECEIPT, excerpt="bytes @KEY@ here")
+def test_leak_block_cancels_queued_dispatch(sworld: SwarmWorld) -> None:
+    # Criteria 12, 36. Planted fault: a queued call starts after BLOCK, a running child is awaited instead of
+    # stopped, partial output is lost instead of kept as cancelled, or exit 1 overrides exit 2.
+    sleeper = {"stdout": repository_report(1), "sleep": 20}
+    planter = {"stdout": repository_report(1), "sleep": 20, "plant": {"leak.txt": f"{LEAK}\n"}}
     sworld.complete(
-        public=[{"stdout": "public saw @KEY@", "receipts": [receipt]}] * 3,
-        flash=[{"stdout": "flash saw @KEY@", "stderr": "@KEY@", "exit": 1}]
-        + [{"stdout": f"FLASH-{n}"} for n in range(1, 11)],
+        repository=[sleeper],
+        **{"repository:1:deepseek-v4.1-flash": [planter]},
     )
-    assert sworld.run() == 1
+    assert sworld.run() == 2
+    started = sworld.calls("repository")
+    assert 1 <= len(started) < 24, "queued topic slots never started"
     text = sworld.research.read_text(encoding="utf-8")
-    seen = capsys.readouterr()
-    assert "[credential]" in text, "the report text is scrubbed"
-    assert "[credential]" in text.split("```jsonl")[1], "the receipts are scrubbed"
-    assert "[credential]" in seen.err, "the failed call's relayed stderr is scrubbed"
-    for blob in (text, seen.out + seen.err):
-        assert not any(OKEY[i : i + 8] in blob for i in range(len(OKEY) - 7)), blob
+    assert "refused" in text and "cancelled" in text
+    assert "judge" not in kinds(sworld)
 
 
-# ---------------------------------------------------------------------------
-# The frozen input state and the append-only research (spec, criteria 15-17)
-# ---------------------------------------------------------------------------
+def test_concurrent_slots_keep_distinct_audits_and_outcomes(sworld: SwarmWorld) -> None:
+    # Criteria 13, 36. Planted fault: output cannot be assigned to a slot; a fifth Go call runs at once.
+    sworld.complete(
+        online=[{"stdout": online_report(), "receipts": [RECEIPT], "sleep": 0.4}],
+        repository=[{"stdout": repository_report(1), "sleep": 0.2}],
+        **{f"repository:{n}": [{"stdout": repository_report(n), "sleep": 0.2}] for n in range(1, 9)},
+    )
+    sworld.selection = selection_for(free=FREE)
+    assert sworld.run() == 0
+    text = sworld.research.read_text(encoding="utf-8")
+    audit = [line for line in text.splitlines() if line.startswith("- Stage-2 call")]
+    assert len(audit) == len(sworld.calls())
+    keys = {
+        (re.search(r"swarm (\w+)", line).group(1), line.split(" · ")[1], re.search(r"model (\S+)", line).group(1))
+        for line in audit
+    }
+    assert len(keys) == len(audit), "each audit line names its own slot"  # noqa: E501
+    outcomes = [line for line in text.splitlines() if line.startswith("- Swarm outcome")]
+    assert len(outcomes) == len(audit)
+    go = [c for c in sworld.calls() if c["name"] == "pi"]
+    spans = [(c["t0"], c["t0"] + c["sleep"]) for c in go]
+    peak = max(sum(1 for lo, hi in spans if lo <= start < hi) for start, _ in spans)
+    assert 2 <= peak <= 4, f"Go calls overlapped {peak} at a time"
 
 
-def test_unresolved_dissent_and_human_questions_survive_reconciliation(
-    sworld: SwarmWorld, capsys: pytest.CaptureFixture[str]
+def test_required_slots_precede_free_and_reserve_judge_time(
+    sworld: SwarmWorld, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    # Criterion 15. Planted fault: sourced dissent is erased or a preference becomes a human answer.
-    dissent = "the free source says sandboxing suffices; `src/app.py::value` shows the worktree is the boundary"
-    question = "should the swarm also cover the review loop?"
-    answer = (
-        judge_ok()
-        .replace("**Disagreement:**\n\n**Gaps:**", f"**Disagreement:** {dissent}\n\n**Gaps:**", 1)
-        .replace("**Human questions:**\n", f"**Human questions:** {question}\n", 1)
-    )
-    sworld.complete(judge={"stdout": answer})
-    assert sworld.run() == 0, "dissent does not make a run incomplete; it is retained, not resolved"
-    text = sworld.research.read_text(encoding="utf-8")
-    assert dissent in text and question in text
-    assert "status: complete" in status_line(text)
-    sworld.rewind()
-    sworld.complete(judge={"stdout": judge_ok().replace("**Disagreement:**\n\n", "", 1)})
-    assert sworld.run() == 1
-    assert "topic 1 lacks 'Disagreement:'" in capsys.readouterr().err
+    # Criterion 19. Planted fault: topic work consumes the judge reserve, or unlaunched slots lack outcomes.
+    offset = [0.0]
+    real_history = stage2_research_run.build_research_history
 
+    def late(*args, **kwargs):
+        offset[0] += 140 * 60.0  # 10 minutes remain, less than the 15-minute judge reserve
+        return real_history(*args, **kwargs)
 
-def test_local_citations_bind_to_the_frozen_input_state(sworld: SwarmWorld, capsys: pytest.CaptureFixture[str]) -> None:
-    # Criterion 16. Planted fault: a nonexistent source, a changed input or a lost report passes validation.
+    monkeypatch.setattr(stage2_research_run, "CLOCK", lambda: __import__("time").monotonic() + offset[0])
+    monkeypatch.setattr(stage2_research_run, "build_research_history", late)
+    sworld.selection = selection_for(free=FREE)
     sworld.complete()
-    assert sworld.run() == 0, "`src/app.py::value` is tracked at the frozen state"
-    sworld.rewind()
-    sworld.complete(judge={"stdout": judge_ok().replace("`src/app.py::value`", "`src/ghost.py::x`", 1)})
     assert sworld.run() == 1
-    assert "src/ghost.py::x" in capsys.readouterr().err
-    sworld.rewind()
-    flash = [{"stdout": f"FLASH-{n}"} for n in range(11)]
-    flash[6] = {"stdout": "FLASH-6", "plant": {"src/app.py": "value = 2\n"}}
-    sworld.complete(flash=flash)
+    assert kinds(sworld) == ["finder"] * 3 + ["merge", "sentence"], "no topic and no judge launches"
+    text = sworld.research.read_text(encoding="utf-8")
+    assert text.count("not-started-deadline") >= 33, "every unlaunched slot has an outcome"
+
+
+def test_required_slots_are_dispatched_before_any_free_slot(sworld: SwarmWorld) -> None:
+    # Criterion 19. Planted fault: a free slot is gated ahead of queued required slots.
+    sworld.selection = selection_for(free=FREE)
+    sworld.complete()
+    assert sworld.run() == 0
+    text = sworld.research.read_text(encoding="utf-8")
+    audit = [line for line in text.splitlines() if line.startswith("- Stage-2 call") and " · topic " in line]
+    free_at = [n for n, line in enumerate(audit) if any(f"model {m} " in line for m in FREE)]
+    required_at = [n for n, line in enumerate(audit) if not any(f"model {m} " in line for m in FREE)]
+    assert free_at and max(required_at) < min(free_at)
+
+
+def test_frozen_digest_detects_tracked_and_change_input_edits(sworld: SwarmWorld) -> None:
+    # Criterion 16. Planted fault: a mid-run edit of a tracked file still publishes complete.
+    sworld.complete(
+        **{"finder:None:deepseek-v4.1-flash": [{"stdout": locator_report(), "append": {"src/app.py": "value = 2\n"}}]}
+    )
     assert sworld.run() == 1
     text = sworld.research.read_text(encoding="utf-8")
-    assert "the frozen input state changed: src/app.py" in text
-    assert "### Reconciliation" in text, "the run still publishes what it collected, as incomplete"
+    assert "the frozen input state changed" in text and "src/app.py" in text
+    subprocess.run(["git", "checkout", "--", "src/app.py"], cwd=sworld.root, check=True, capture_output=True)
+    sworld.rewind()
+    sworld.complete(
+        **{
+            "finder:None:deepseek-v4.1-flash": [
+                {"stdout": locator_report(), "plant": {"plans/changes/demo/decisions.md": "# Q-1 answer\n"}}
+            ]
+        }
+    )
+    assert sworld.run() == 1, "a new untracked change input also breaks the frozen state"
+    assert "decisions.md" in sworld.research.read_text(encoding="utf-8")
+
+
+# ---------------------------------------------------------------------------
+# Durable results and resume (Q-13; spec criteria 46, 52-58)
+# ---------------------------------------------------------------------------
+
+
+def store_dir(_world: SwarmWorld) -> Path:
+    return stage2_research_store.research_dir("demo")
+
+
+def manifest_of(world: SwarmWorld) -> dict:
+    text = world.research.read_text(encoding="utf-8")
+    blocks = re.findall(r"```research-swarm/v2 manifest\n(.*?)\n```", text, re.S)
+    return json.loads(blocks[-1])
+
+
+def test_store_paths_and_peer_results_never_reach_a_model(sworld: SwarmWorld) -> None:
+    # Criterion 52. Planted fault: a store canary or a stored result reaches a prompt, argv, env or cwd.
+    sworld.complete()
+    assert sworld.run() == 0
+    state = str(Path(store_dir(sworld)).parent.parent.parent)
+    for call in sworld.calls():
+        blob = json.dumps({k: call[k] for k in ("prompt", "argv", "env", "cwd")})
+        assert state not in blob and "research.json" not in blob
+
+
+def test_a_complete_run_clears_the_store_and_a_second_lock_refuses(sworld: SwarmWorld) -> None:
+    # Criteria 53, 57. Planted fault: a complete run's results stay reusable; a held lock is ignored.
+    sworld.complete()
+    assert sworld.run() == 0
+    leftovers = [p for p in store_dir(sworld).iterdir() if p.name != ".lock"]
+    assert leftovers == [], "a complete publication clears the store"
+    sworld.rewind()
+    holder = stage2_research_store.Store(store_dir(sworld))
+    holder.acquire_lock()
+    try:
+        assert sworld.run() == 2
+        assert sworld.calls() == []
+    finally:
+        holder.release_lock()
+
+
+def test_a_resumed_run_is_a_new_run_within_its_slot_budget(sworld: SwarmWorld) -> None:
+    # Criteria 53, 54, 55. Planted fault: a failed or invalid result is reused, a discarded result is
+    # unnamed, a resumed run exceeds its budget or loses the source run and times of a reused slot.
+    sworld.complete(**{"repository:4:mimo-v2.6-flash": [{"exit": 2}]})
+    assert sworld.run() == 1
+    first = manifest_of(sworld)
+    assert len(sworld.calls()) == 38
+    sworld.complete()
+    log = sworld.bin / "calls.jsonl"
+    log.unlink()
+    assert sworld.run() == 0
+    second = manifest_of(sworld)
+    assert second["run_id"] != first["run_id"], "a resumed run is a new run"
+    launched = list(sworld.calls())
+    assert [(c["kind"], c["topic"], c["model"]) for c in launched[:-1]] == [("repository", 4, "mimo-v2.6-flash")]
+    assert launched[-1]["kind"] == "judge"
+    assert len(launched) + sum(1 for s in second["slots"] if s["reused_from"]) == 39, "within the budget"
+    reused = [s for s in second["slots"] if s["reused_from"]]
+    assert len(reused) == 37 and all(s["reused_from"] == first["run_id"] for s in reused)
+    assert {"topics-4-2"} == {s["slot_id"] for s in second["slots"] if not s["reused_from"] and s["stage"] == "topics"}
+    assert ["topics-4-2", "outcome"] in second["resume"]["not_reused"], "the failed slot is named with its reason"
+    assert second["resume"]["source_run"] == first["run_id"] and second["resume"]["usable"] is True
+
+
+def test_only_finished_valid_results_are_reused_and_others_are_named(sworld: SwarmWorld) -> None:
+    # Criterion 53. Planted fault: an invalid, timed-out or cancelled result is reused or left unnamed.
+    sworld.complete(
+        **{
+            "repository:2:mimo-v2.6-flash": [{"stdout": "not json at all"}],  # an invalid report
+            "repository:3:deepseek-v4.1-flash": [{"exit": 5, "stdout": "half"}],  # a failed slot
+        }
+    )
+    assert sworld.run() == 1
+    sworld.complete()
+    (sworld.bin / "calls.jsonl").unlink()
+    assert sworld.run() == 0
+    relaunched = sorted((c["topic"], c["model"]) for c in sworld.calls("repository"))
+    assert relaunched == [(2, "mimo-v2.6-flash"), (3, "deepseek-v4.1-flash")], "only the unfinished slots run again"
+    named = {tuple(item) for item in manifest_of(sworld)["resume"]["not_reused"]}
+    assert ("topics-2-2", "outcome") in named and ("topics-3-1", "outcome") in named
+
+
+def test_reused_and_interrupted_slots_are_marked_in_the_manifest(sworld: SwarmWorld) -> None:
+    # Criterion 55. Planted fault: a reused result looks launched by this run, loses its source run or times,
+    # or an interrupted source slot is missing.
+    sworld.complete(judge=[{"exit": 1}])
+    assert sworld.run() == 1
+    first = manifest_of(sworld)
+    run_dir = store_dir(sworld) / first["run_id"]
+    victim = run_dir / "topics-6-1.result.json"
+    assert victim.exists()
+    victim.unlink()  # a launch record with no result: the slot was interrupted
+    sworld.complete()
+    (sworld.bin / "calls.jsonl").unlink()
+    assert sworld.run() == 0
+    second = manifest_of(sworld)
+    assert "topics-6-1" in second["resume"]["interrupted"]
+    by_id = {s["slot_id"]: s for s in second["slots"]}
+    assert by_id["topics-6-1"]["reused_from"] is None and by_id["topics-6-1"]["launched"] is True
+    assert by_id["finders-0-1"]["reused_from"] == first["run_id"] and by_id["finders-0-1"]["launched"] is False
+    assert by_id["finders-0-1"]["ended_at"], "the original time is kept"
+
+
+def test_a_foreign_edit_breaks_the_binding_and_reuses_nothing(sworld: SwarmWorld) -> None:
+    # Criterion 53. Planted fault: results are reused although a tracked file changed in between.
+    sworld.complete(judge=[{"exit": 1}])
+    assert sworld.run() == 1
+    (sworld.root / "src" / "app.py").write_text("value = 2\n", encoding="utf-8")
+    sworld.complete()
+    (sworld.bin / "calls.jsonl").unlink()
+    assert sworld.run() == 0
+    assert len(sworld.calls()) == 39, "nothing was reused"
+    reasons = manifest_of(sworld)["resume"]
+    assert reasons["usable"] is False and any("src/app.py" in r for r in reasons["reasons"])
+
+
+def test_a_refused_run_is_named_and_never_reused(sworld: SwarmWorld) -> None:
+    # Criterion 56. Planted fault: results of a run with a refused slot are reused.
+    sworld.research.write_text(SEED + f"\nAn accident: {LEAK}.\n", encoding="utf-8")
+    sworld.complete()
+    assert sworld.run() == 2
+    sworld.research.write_text(SEED, encoding="utf-8")
+    (sworld.bin / "calls.jsonl").unlink(missing_ok=True)
+    assert sworld.run() == 0
+    reasons = manifest_of(sworld)["resume"]
+    assert reasons["usable"] is False and any("refused" in r for r in reasons["reasons"])
+
+
+def test_finder_trio_locates_four_categories_without_judging(sworld: SwarmWorld) -> None:
+    # Criterion 24. Planted fault: a fifth locator field passes, or an empty category lacks its unread marker.
+    good = json.loads(locator_report())
+    bad_fifth = dict(good, code=[{**good["code"][0], "judgement": "this is the right design"}])
+    bad_empty = dict(good, tests=[])
+    bad_category = {**good, "design": [{"not_read": "x"}]}
+    for bad in (bad_fifth, bad_empty, bad_category):
+        sworld.rewind()
+        sworld.complete(finder=[{"stdout": json.dumps(bad)}])
+        assert sworld.run() == 1
+        assert kinds(sworld) == ["finder"] * 3, "an invalid locator list stops before the merge"
+    finder = sworld.calls("finder")[0]["prompt"]
+    assert "do not judge" in finder.lower() or "you do not judge" in finder.lower()
+
+
+def test_each_topic_uses_its_agreed_questions_and_scope(sworld: SwarmWorld) -> None:
+    # Criterion 25. Planted fault: a packet differs from its topic prompt or names another topic's scope.
+    sworld.complete()
+    assert sworld.run() == 0
+    for topic in range(1, 12):
+        call = next(c for c in sworld.calls() if c["topic"] == topic and c["kind"] in ("repository", "online"))
+        assert stage2_research_run.TOPIC_NAMES[topic] in call["prompt"]
+        assert stage2_research_run.TOPIC_SCOPES[topic] in call["prompt"]
+        others = [t for t in range(1, 12) if t != topic]
+        assert not any(stage2_research_run.TOPIC_SCOPES[t] in call["prompt"] for t in others)
+
+
+def test_online_topics_use_the_three_online_seat_selections(sworld: SwarmWorld) -> None:
+    # Criterion 37. Planted fault: a free model, Claude Code or a model other than the seat's selection
+    # supplies one of the nine required online contributions.
+    sworld.selection = selection_for(
+        free=FREE, online=[*ONLINE_SEATS[:2], {"endpoint": "opencode-go", "model": "longcat-2.0"}]
+    )
+    sworld.complete()
+    assert sworld.run() == 0
+    for topic in (9, 10, 11):
+        assert set(models(sworld, "online", topic)) == {"deepseek-v4.1-flash", "mimo-v2.6-flash", "longcat-2.0", *FREE}
+    required = [c for c in sworld.calls("online") if c["model"] not in FREE]
+    assert len(required) == 9 and all(c["name"] == "pi" for c in required)
+
+
+def test_selection_is_frozen_for_the_run_and_recorded(sworld: SwarmWorld) -> None:
+    # Criterion 46. Planted fault: a failing selected model is replaced, retried or probed again; the manifest
+    # lacks the receipt id, the selection or a model's mark.
+    sworld.selection = selection_for()
+    sworld.selection["seats"]["online"][2] = {
+        "endpoint": "opencode-go",
+        "model": "longcat-2.0",
+        "mark": "substitute for online seat 3",
+    }
+    sworld.complete(**{"online:11:longcat-2.0": [{"exit": 1}]})
+    assert sworld.run() == 1
+    assert len(sworld.calls()) == 39 - 1, "the failing model is neither retried nor replaced; only the judge waits"
+    manifest = manifest_of(sworld)
+    assert manifest["receipt_id"] == "r" * 64
+    assert manifest["selection"]["online"][2]["mark"] == "substitute for online seat 3"
+    assert manifest["selection"]["repository"] == REPOSITORY_SEATS
+    assert [c["model"] for c in sworld.calls("online") if c["topic"] == 11].count("longcat-2.0") == 1
 
 
 @pytest.mark.parametrize(
-    ("citation", "problem"),
+    ("header", "problem"),
     [
-        ("`src/app.py::no_such_symbol`", "names no symbol of src/app.py"),
-        ("`src/app.py:1`", "gives line numbers only"),
-        ("`src/app.py`", "is a bare path"),
+        ("missing", "no neighbours key"),
+        ("null", "neighbours: null"),
+        ("scalar", "neighbours: plans/changes/other/spec.md"),
+        ("duplicate", "neighbours: [plans/changes/other/spec.md, plans/changes/other/spec.md]"),
+        ("escape", "neighbours: [../elsewhere/spec.md]"),
+        ("own-spec", "neighbours: [plans/changes/demo/spec.md]"),
+        ("template", "neighbours: [templates/spec.md]"),
+        ("not-frozen", "neighbours: [plans/changes/ghost/spec.md]"),
     ],
 )
-def test_local_citations_name_a_path_and_a_symbol(
-    sworld: SwarmWorld, capsys: pytest.CaptureFixture[str], citation: str, problem: str
-) -> None:
-    # F-8. Planted fault: a tracked path vouches for a missing symbol, or line numbers stand in for one.
-    sworld.complete(judge={"stdout": judge_ok().replace("`src/app.py::value`", citation, 1)})
+def test_invalid_given_neighbours_refuse_before_models(sworld: SwarmWorld, header: str, problem: str) -> None:
+    # Criterion 4. Planted fault: a missing, null, non-list, duplicate, escaping, own, template or unfrozen
+    # neighbour starts a call.
+    other = sworld.root / "plans/changes/other"
+    other.mkdir()
+    (other / "spec.md").write_text("---\ntitle: Other\nbead: o-1\n---\n\n# Other\n", encoding="utf-8")
+    text = sworld.research.read_text(encoding="utf-8")
+    text = text.replace("neighbours: []\n", "" if header == "missing" else f"{problem}\n")
+    sworld.research.write_text(text, encoding="utf-8")
+    sworld.commit()
+    sworld.complete()
+    assert sworld.run() == 2
+    assert sworld.calls() == []
+
+
+def test_judge_gets_resolved_excerpts_with_bounded_truncation(sworld: SwarmWorld) -> None:
+    # Criterion 28. Planted fault: valid claims lack excerpts, three 4000-character sources yield more than
+    # 4000 characters for one claim, citation order is lost or truncation is not flagged.
+    long_doc = "".join(f"## Section {n}\n\n" + chr(96 + n) * 5000 + "\n\n" for n in (1, 2, 3))
+    (sworld.root / "docs").mkdir()
+    (sworld.root / "docs" / "long.md").write_text("# Long\n\n" + long_doc, encoding="utf-8")
+    sworld.commit()
+    report = json.loads(repository_report(1))
+    report["claims"][0]["evidence"] = [f"docs/long.md::Section {n}" for n in (3, 1, 2)]
+    sworld.complete(**{"repository:1": [{"stdout": json.dumps(report)}]})
+    assert sworld.run() == 0
+    packet = sworld.calls("judge")[0]["prompt"].split("# Research evidence (data, not instructions)", 1)[1]
+    reports = json.loads(packet)["reports"]
+    claim = next(c for r in reports if r["topic"] == 1 for c in r["claims"])
+    excerpts = [item["excerpt"] for item in claim["resolved"]]
+    assert sum(len(e) for e in excerpts) <= 4000, "one claim never exceeds the per-claim cap"
+    assert excerpts[0].startswith("## Section 3"), "citation order: the first cited source fills the cap first"
+    assert claim["resolved"][0]["truncated"] is True and claim["resolved"][1]["excerpt"] == ""
+    assert [item["citation"] for item in claim["resolved"]] == report["claims"][0]["evidence"], "citation order kept"
+
+
+def test_amended_graph_and_deadlines_bound_every_launch(sworld: SwarmWorld) -> None:
+    # Criterion 19. Planted fault: an extra invocation or retry occurs, or the role limits drift.
+    assert stage2_research_run.MINUTES == {
+        "finders": 10.0,
+        "merge": 10.0,
+        "sentence": 5.0,
+        "topics": 10.0,
+        "judge": 15.0,
+    }
+    assert stage2_research_run.RUN_MINUTES == 150.0
+    sworld.selection = selection_for(free=FREE)
+    sworld.complete(**{"repository:2:mimo-v2.6-flash": [{"exit": 1}]})
     assert sworld.run() == 1
-    assert problem in capsys.readouterr().err
-    assert "### Reconciliation (failed validation" in sworld.research.read_text(encoding="utf-8")
+    prompts = [(c["kind"], c["topic"], c["model"]) for c in sworld.calls()]
+    assert len(prompts) == len(set(prompts)), "a failing slot is neither retried nor repeated"
+    assert len(prompts) <= 39 + 3 * len(FREE)
 
 
-def test_only_the_runner_appends_research(sworld: SwarmWorld) -> None:
-    # Criterion 17. Planted fault: a participant edits the tree, or earlier research is replaced.
-    seed = sworld.research.read_text(encoding="utf-8")
+def test_swarm_requires_neighbour_key_but_accepts_empty_list(sworld: SwarmWorld) -> None:
+    # Criterion 4. Planted fault: a missing/null/non-list header starts models, or explicit [] refuses.
+    good = sworld.research.read_text(encoding="utf-8")
+    sworld.research.write_text(good.replace("neighbours: []\n", ""), encoding="utf-8")
+    sworld.commit()
+    sworld.complete()
+    assert sworld.run() == 2 and sworld.calls() == []
+    sworld.research.write_text(good, encoding="utf-8")
+    sworld.commit()
+    assert sworld.run() == 0
+
+
+def test_neighbour_paths_use_only_active_archive_and_living_specs(sworld: SwarmWorld) -> None:
+    # Criterion 4. Planted fault: a template or a fourth path form starts a call; a valid form refuses.
+    for rel in (
+        "plans/changes/archive/2026-01-01-old/spec.md",
+        "plans/specs/living/spec.md",
+        "plans/changes/other/spec.md",
+    ):
+        folder = sworld.root / Path(rel).parent
+        folder.mkdir(parents=True, exist_ok=True)
+        (folder / "spec.md").write_text("---\ntitle: S\nbead: s-1\n---\n\n# S\n", encoding="utf-8")
+    text = sworld.research.read_text(encoding="utf-8")
+    forms = "[plans/changes/archive/2026-01-01-old/spec.md, plans/specs/living/spec.md, plans/changes/other/spec.md]"
+    sworld.research.write_text(text.replace("neighbours: []", f"neighbours: {forms}"), encoding="utf-8")
+    sworld.commit()
+    packet = [
+        "plans/changes/archive/2026-01-01-old/spec.md",
+        "plans/specs/living/spec.md",
+        "plans/changes/other/spec.md",
+    ]
+    sworld.complete(**{"repository:5": [{"stdout": repository_report(5, sorted(packet))}]})
+    assert sworld.run() == 0, "the three valid forms are accepted"
+
+
+def test_stages_dispatch_concurrently_within_provider_limits(sworld: SwarmWorld) -> None:
+    # Criterion 36. Planted fault: the finder trio runs one after the other.
+    sworld.complete(finder=[{"stdout": locator_report(), "sleep": 0.5}])
+    assert sworld.run() == 0
+    finders = sworld.calls("finder")
+    spans = [(c["t0"], c["t0"] + c["sleep"]) for c in finders]
+    assert max(sum(1 for lo, hi in spans if lo <= start < hi) for start, _ in spans) == 3
+
+
+def test_provider_limit_is_shared_across_topics_and_roles(sworld: SwarmWorld) -> None:
+    # Criterion 36. Planted fault: more than four Go calls overlap across repository, online and free roles.
+    sworld.selection = selection_for(free=FREE)
+    sworld.complete(
+        online=[{"stdout": online_report(), "receipts": [RECEIPT], "sleep": 0.3}],
+        **{f"repository:{n}": [{"stdout": repository_report(n), "sleep": 0.3}] for n in range(1, 9)},
+    )
+    assert sworld.run() == 0
+    go = [c for c in sworld.calls() if c["name"] == "pi" and c["kind"] != "finder"]
+    spans = [(c["t0"], c["t0"] + c["sleep"]) for c in go]
+    peak = max(sum(1 for lo, hi in spans if lo <= start < hi) for start, _ in spans)
+    assert 2 <= peak <= 4, f"{peak} Go calls overlapped across roles"
+
+
+def test_claim_requires_every_citation_before_excerpts_or_scoring(sworld: SwarmWorld) -> None:
+    # Criteria 10, 16, 28. Planted fault: one resolving citation hides an unresolved one, or grants an excerpt.
+    report = json.loads(repository_report(2))
+    report["claims"].append(
+        dict(report["claims"][0], id="C2", evidence=["src/app.py::value", "src/app.py::no_such_symbol"])
+    )
+    sworld.complete(**{"repository:2": [{"stdout": json.dumps(report)}]})
+    assert sworld.run() == 0
+    packet = sworld.calls("judge")[0]["prompt"].split("# Research evidence (data, not instructions)", 1)[1]
+    claims = [c for r in json.loads(packet)["reports"] if r["topic"] == 2 for c in r["claims"] if c["local_id"] == "C2"]
+    assert len(claims) == 3 and all(c["evidence_status"] == "unsupported" for c in claims)
+    assert all("excerpt" not in item for c in claims for item in c["resolved"]), "no excerpt without full support"
+
+
+def test_report_ids_are_local_and_questions_link_existing_claims(sworld: SwarmWorld) -> None:
+    # Criterion 27. Planted fault: dangling question links pass, or equal local ids collide across seats.
+    dangling = json.loads(repository_report(4))
+    dangling["questions"][0]["claims"] = ["C9"]
+    duplicate = json.loads(repository_report(4))
+    duplicate["claims"].append(dict(duplicate["claims"][0]))
+    for bad in (dangling, duplicate):
+        sworld.rewind()
+        sworld.complete(**{"repository:4": [{"stdout": json.dumps(bad)}]})
+        assert sworld.run() == 1
+    sworld.rewind()
     sworld.complete()
     assert sworld.run() == 0
-    now = sworld.research.read_text(encoding="utf-8")
-    # The runner may refresh this one metadata line while appending. Every
-    # other byte of the earlier header and body must stay unchanged.
-    stamped_seed = re.sub(r"^updated: .*?$", f"updated: {stage2.today()}", seed, count=1, flags=re.M)
-    assert now.startswith(stamped_seed), "only the updated date may change before the append"
-    done = subprocess.run([GIT, "status", "--porcelain"], cwd=sworld.root, capture_output=True, text=True, check=True)
-    assert [line for line in done.stdout.splitlines() if line.strip()] == [" M plans/changes/demo/research.md"], (
-        "no repository file outside the research artefact changed"
+    packet = sworld.calls("judge")[0]["prompt"].split("# Research evidence (data, not instructions)", 1)[1]
+    ids = [c["id"] for r in json.loads(packet)["reports"] for c in r["claims"]]
+    assert len(ids) == len(set(ids)) and all(i.count("/") == 3 for i in ids), "global ids stay unique"
+
+
+def test_volatile_fact_governance_remains_a_human_proposal(sworld: SwarmWorld) -> None:
+    # Criterion 35. Planted fault: a governance proposal is applied or lost.
+    report = json.loads(repository_report(6))
+    report["claims"][0].update(volatile=True, governance="central")
+    sworld.complete(**{"repository:6": [{"stdout": json.dumps(report)}]})
+    assert sworld.run() == 0
+    assert '"governance": "central"' in sworld.research.read_text(encoding="utf-8")
+    done = subprocess.run(["git", "status", "--porcelain"], cwd=sworld.root, capture_output=True, text=True, check=True)
+    assert [line.split()[-1] for line in done.stdout.splitlines()] == ["plans/changes/demo/research.md"]
+
+
+@pytest.mark.parametrize("variant", ["double", "unique-refuted", "missing", "unsupported-judged"])
+def test_dispositions_are_exclusive_and_unique_is_supported_subset(sworld: SwarmWorld, variant: str) -> None:
+    # Criterion 28. Planted fault: a valid claim has two dispositions or none, unique marks an unsupported
+    # disposition, or an unsupported claim is judged.
+    report = json.loads(repository_report(2))
+    report["claims"].append(dict(report["claims"][0], id="C2", evidence=["src/app.py::no_such_symbol"]))
+    sworld.complete(**{"repository:2": [{"stdout": json.dumps(report)}], "judge": [{"stdout": f"AUTO:{variant}"}]})
+    assert sworld.run() == 1
+    assert "failed validation" in sworld.research.read_text(encoding="utf-8")
+
+
+def test_model_scores_name_the_claims_they_count(sworld: SwarmWorld) -> None:
+    # Criterion 28. Planted fault: a score lacks claim ids, or a failed seat has no named outcome.
+    sworld.selection = selection_for(free=FREE)
+    sworld.complete(**{"online:10:beta-free": [{"exit": 1}]})
+    assert sworld.run() == 0
+    text = sworld.research.read_text(encoding="utf-8")
+    block = re.search(r"```research-swarm/v2 reconciliation\n(.*?)\n```", text, re.S)
+    assert block
+    scores = json.loads(block.group(1))["scores"]
+    assert len(scores) == 33 + 3 * len(FREE)
+    ok = next(item for item in scores if item["topic"] == 1)
+    assert ok["supported"]["count"] == len(ok["supported"]["claims"]) == 1 and ok["unsupported"]["claims"] == []
+    failed = [item for item in scores if item["outcome"] != "ok"]
+    assert [(item["topic"], item["outcome"]) for item in failed] == [(10, "failed")], "the failed seat is named"
+
+
+def test_given_and_suggested_neighbours_keep_their_provenance(sworld: SwarmWorld) -> None:
+    # Criteria 29, 24. Planted fault: a suggestion becomes authoritative, or a given path vanishes.
+    for name in ("other", "third"):
+        folder = sworld.root / "plans/changes" / name
+        folder.mkdir()
+        (folder / "spec.md").write_text(f"---\ntitle: {name}\nbead: x-1\n---\n\n# {name}\n", encoding="utf-8")
+    text = sworld.research.read_text(encoding="utf-8")
+    sworld.research.write_text(
+        text.replace("neighbours: []", "neighbours: [plans/changes/other/spec.md]"), encoding="utf-8"
     )
+    sworld.commit()
+    suggested = {
+        "code": [{"path": "src/app.py", "reference": "value", "reason": "x"}],
+        "rules": [{"not_read": "none"}],
+        "tests": [{"not_read": "none"}],
+        "neighbours": [
+            {"path": "plans/changes/other/spec.md", "reference": "other", "reason": "suggested too"},
+            {"path": "plans/changes/third/spec.md", "reference": "third", "reason": "only suggested"},
+        ],
+    }
+    packet = ["plans/changes/other/spec.md", "plans/changes/third/spec.md"]
+    sworld.complete(
+        finder=[{"stdout": json.dumps(suggested)}], **{"repository:5": [{"stdout": repository_report(5, packet)}]}
+    )
+    assert sworld.run() == 0
+    found = re.search(r"```research-swarm/v2 map\n(.*?)\n```", sworld.research.read_text(encoding="utf-8"), re.S)
+    neighbours = {item["path"]: item["status"] for item in json.loads(found.group(1))["neighbours"]}
+    assert neighbours == {"plans/changes/other/spec.md": "given", "plans/changes/third/spec.md": "suggested"}
+
+
+def test_neighbour_artifacts_normalize_to_change_specs_or_no_spec_gaps(sworld: SwarmWorld) -> None:
+    # Criteria 24, 27, 29. Planted fault: an eligible spec-backed entry is omitted or marked no-spec, an
+    # own-change entry gains neighbour status, or a no-spec entry gains a relation.
+    other = sworld.root / "plans/changes/other"
+    other.mkdir()
+    (other / "spec.md").write_text("---\ntitle: o\nbead: o-1\n---\n\n# Other\n", encoding="utf-8")
+    (other / "design.md").write_text(
+        "---\ntitle: d\nbead: o-1\n---\n\n# Design\n\n## Data model\n\ntext\n", encoding="utf-8"
+    )
+    (sworld.root / "docs").mkdir()
+    (sworld.root / "docs" / "notes.md").write_text("# Notes\n\ntext\n", encoding="utf-8")
+    sworld.commit()
+    entries = {
+        "code": [{"path": "src/app.py", "reference": "value", "reason": "x"}],
+        "rules": [{"not_read": "none"}],
+        "tests": [{"not_read": "none"}],
+        "neighbours": [
+            {"path": "plans/changes/other/design.md", "reference": "Data model", "reason": "a sibling design"},
+            {"path": "plans/changes/demo/plan.md", "reference": "Plan", "reason": "this change"},
+            {"path": "docs/notes.md", "reference": "Notes", "reason": "outside the forms"},
+        ],
+    }
+    sworld.complete(
+        finder=[{"stdout": json.dumps(entries)}],
+        **{"repository:5": [{"stdout": repository_report(5, ["plans/changes/other/spec.md"])}]},
+    )
+    assert sworld.run() == 0
+    found = re.search(r"```research-swarm/v2 map\n(.*?)\n```", sworld.research.read_text(encoding="utf-8"), re.S)
+    record = json.loads(found.group(1))
+    by_path = {e["path"]: e for e in record["entries"] if e["category"] == "neighbours"}
+    assert by_path["plans/changes/other/design.md"]["neighbour_spec"] == "plans/changes/other/spec.md"
+    assert by_path["plans/changes/demo/plan.md"]["neighbour_status"] == "self"
+    assert by_path["docs/notes.md"]["neighbour_status"] == "no-spec"
+    assert [item["path"] for item in record["neighbours"]] == ["plans/changes/other/spec.md"]
+    assert [g["key"][1] for g in record["gaps"]] == ["docs/notes.md"]
+
+
+def test_history_packet_binds_only_mapped_frozen_head_commits(sworld: SwarmWorld) -> None:
+    # Criteria 16, 26. Planted fault: history reaches another topic, or a hash outside the packet is evidence.
+    def head() -> str:
+        done = subprocess.run(["git", "rev-parse", "HEAD"], cwd=sworld.root, capture_output=True, text=True, check=True)
+        return done.stdout.strip()
+
+    (sworld.root / "src" / "unmapped.py").write_text("x = 1\n", encoding="utf-8")
+    sworld.commit()
+    unmapped = head()
+    (sworld.root / "src" / "app.py").write_text("value = 1\n# touched\n", encoding="utf-8")
+    sworld.commit()
+    mapped = head()
+    sworld.complete()
+    assert sworld.run() == 0
+    topic6 = [c for c in sworld.calls("repository") if c["topic"] == 6]
+    assert len({c["prompt"] for c in topic6}) == 1 and mapped in topic6[0]["prompt"]
+    assert unmapped not in topic6[0]["prompt"], "a commit touching no mapped path is not in the packet"
+    assert not any("frozen_head" in c["prompt"] for c in sworld.calls("repository") if c["topic"] != 6)
+    report = json.loads(repository_report(6))
+    report["claims"][0]["evidence"] = [mapped]
+    report["claims"].append(dict(report["claims"][0], id="C2", evidence=[unmapped]))
+    sworld.rewind()
+    sworld.complete(**{"repository:6": [{"stdout": json.dumps(report)}]})
+    assert sworld.run() == 0
+    packet = sworld.calls("judge")[0]["prompt"].split("# Research evidence (data, not instructions)", 1)[1]
+    claims = {
+        c["local_id"]: c["evidence_status"]
+        for r in json.loads(packet)["reports"]
+        if r["topic"] == 6
+        for c in r["claims"]
+    }
+    assert claims == {"C1": "valid", "C2": "unsupported"}
 
 
 # ---------------------------------------------------------------------------
@@ -1151,19 +1655,22 @@ def test_only_the_runner_appends_research(sworld: SwarmWorld) -> None:
 
 
 def test_phase_one_doctrine_and_declarations_agree() -> None:
-    # Criterion 22. Planted fault: universal single-explorer prose, an unresolvable roster or a changed ladder.
+    # Criterion 22. Planted fault: the Zen roster or fixed pair returns, the seats do not resolve or the ladder changes.
     data = yaml.safe_load((REPO_ROOT / "model-endpoints.yaml").read_text(encoding="utf-8"))
-    assert stage2_swarm.swarm_problems(data) == [], "the declared swarm block must resolve"
+    assert stage2_swarm.seat_problems(data) == [], "the declared seats and rule must resolve"
     go = next(entry for entry in data["endpunkte"] if entry["name"] == "opencode-go")
     # After the main sync (#157, ADR 0021) `modelle` is a set the runner orders by `anfragen_5h`, no longer a
     # three-id list: the original three stay in it, and the swarm block adds nothing to it.
     assert {"deepseek-v4.1-flash", "mimo-v2.6-flash", "mimo-v2.6-pro"} <= set(go["modelle"]), (
         "the review ladder lost a member; the swarm block changes it in no way"
     )
-    roster = set(data["research_swarm"]["free_roster"])
-    assert roster.isdisjoint(go["modelle"]), "no free id joined the Go ladder"
-    roles = data["research_swarm"]
-    assert roles["judge"] == roles["topic_author"] == "claude-opus-5-5"
+    block = data["research_swarm"]
+    for removed in ("free_endpoint", "free_roster", "free_focuses", "topic6_free", "flash_endpoint", "flash_pair"):
+        assert removed not in block, f"{removed} belongs to the removed Zen transport"
+    assert all(endpoint["name"] != "opencode-free" for endpoint in data["endpunkte"]), "the Zen endpoint is gone"
+    assert all(endpoint.get("abrechnung") != "free" for endpoint in data["endpunkte"]), "no free billing category"
+    stage2_swarm.validate_research_free_policy(block["online_free"])
+    assert block["judge"] == block["topic_author"] == "claude-opus-5-5"
     agents = (REPO_ROOT / "AGENTS.md").read_text(encoding="utf-8")
     assert "so does phase 1 now (ADR 0020)" in agents
     assert "the research swarm (ADR 0020" in agents
@@ -1171,7 +1678,7 @@ def test_phase_one_doctrine_and_declarations_agree() -> None:
     assert "| 1 Explore swarm |" in workflow and "| 1 Explore |" in workflow
     explore_prompt = (REPO_ROOT / "prompts/01-explore.md").read_text(encoding="utf-8")
     assert "Routing by class (ADR 0020)." in explore_prompt
-    for free_id in roster:
+    for free_id in ("longcat-2.5-preview-free", "space-bunny-free", "big-pickle"):
         assert free_id not in workflow and free_id not in agents, "a free id stays out of the review-ladder doctrine"
 
 

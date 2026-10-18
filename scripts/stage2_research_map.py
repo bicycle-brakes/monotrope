@@ -117,6 +117,11 @@ def _entries(report, *, merged=False):
     return result
 
 
+def validate_locator_report(report):
+    """A finder answer that is exactly the four locator lists; raises ResearchMapError otherwise."""
+    _entries(report)
+
+
 def _origin(entry):
     if (
         not isinstance(entry, dict)
