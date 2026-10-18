@@ -119,10 +119,15 @@ OHNE_AUFRUFER: dict[str, str] = {
         "consumes it. tests/test_stage2_research_map.py exercises exact union and frozen neighbour boundaries; "
         "actual scheduler integration remains pending."
     ),
+    "stage2_research_snapshot.py": (
+        "Transient frozen-input library, not a CLI gate; the amended research pipeline will own its "
+        "context-managed copies and drift checks. tests/test_stage2_research_snapshot.py exercises "
+        "working bytes, untracked inputs, cleanup and exact runner-owned appends. Scheduler integration is pending."
+    ),
     "stage2_research_history.py": (
-        "Local-only frozen-HEAD history library, not a CLI gate; the amended topic-6 packet builder "
-        "will consume it. tests/test_stage2_research_history.py exercises disposable Git repositories, "
-        "path/body bounds and no-fetch/deadline failures. Actual scheduler integration remains pending."
+        "Local frozen-HEAD history library, not a CLI gate; stage2_research_snapshot.py shares its "
+        "local-only Git boundary. tests/test_stage2_research_history.py exercises history bounds and failures; "
+        "the amended topic-6 dispatcher still needs to consume the packet."
     ),
     "stage2_swarm.py": (
         "Helper of scripts/stage2.py explore, never an entry point of its own — it runs the phase-1 "

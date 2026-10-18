@@ -39,6 +39,7 @@ not recreated. No file is deleted. Only the ADR is new under `docs/adr/`.
 | `scripts/stage2_research_map.py` (new) | Validate the exact finder/merge union, explicit unread provenance, frozen references and given/suggested/self/no-spec neighbour derivation; no model dispatch or file access. |
 | `scripts/stage2_research_refs.py` (new) | Pure frozen-byte structural Markdown/Python and canonical YAML/JSON reference resolution, shared per-claim excerpt cap; later map/report integration consumes it. |
 | `scripts/stage2_research_history.py` (new) | Local-only frozen-HEAD history packet with ten commits per mapped path, bounded Unicode bodies, explicit unread history and a shared caller deadline; no model dispatch. |
+| `scripts/stage2_research_snapshot.py` (new) | Transient copies outside the repository, full working-byte and untracked-change digests, exact runner-owned append exceptions, named drift and context-managed cleanup. |
 | `scripts/stage2_research_tools.mjs` | Retain public-only tools and receipts; verify cancellation and isolated concurrent receipt paths. |
 | `scripts/check_research_handoff.py` (new) | Check v2 decision coverage, answered human links, neighbours and criterion bases; exit 0/1/3. |
 | `model-endpoints.yaml` | Replace Zen endpoint/roles with explicit research roles and dynamic Go-only `online_free` policy/include/exclude; add Qwen research-only without changing the review ladder. |
@@ -62,6 +63,7 @@ not recreated. No file is deleted. Only the ADR is new under `docs/adr/`.
 | `tests/test_stage2_swarm.py` | Inject the pinned-wrapper stand-in explicitly, trap bare-Pi escapes, replace obsolete free/pair expectations and add finder/trio/same-brief/report/queue/failure mutations. |
 | `tests/test_stage2_research_map.py` (new) | Standalone finder union, missing/unread categories, provenance corruption, exact neighbour forms and frozen artifact-to-spec counterexamples. |
 | `tests/test_stage2_research_history.py` (new) | Disposable Git fixtures for frozen identity, path/body limits, shallow history, replacements, missing local objects and shared-deadline failures. |
+| `tests/test_stage2_research_snapshot.py` (new) | Disposable Git fixtures for current tracked bytes, non-ignored untracked change inputs, exact append ownership, changed path/HEAD detection, unsafe inputs and cleanup. |
 | `tests/test_stage2_research_refs.py` (new) and `tests/fixtures/research_refs/plan-prompt-d862bc2.md` (new) | Structural-reference counterexamples and the verbatim historical prompt used by ruling S-47; no Git history or live-file lookup in the resolver. |
 | `tests/test_stage2_research_catalog.py` (new) | Offline real-pinned-Pi catalog fixtures: forced refresh, provider filtering, shipped-cache contamination, malformed/empty/error outcomes, models.dev intersection/deprecation/failure, and both sources’ audit. |
 | `tests/test_stage2_research_tools.py` | Keep real tool-call shape, destination/receipt faults and concurrent scratch separation checks. |
@@ -510,6 +512,19 @@ the existing gates and let the runner own registry regeneration/full verify.
 
 ## Criterion ledger
 
+- 16: tests/test_stage2_research_snapshot.py::test_snapshot_keeps_uncommitted_tracked_and_nonignored_change_bytes — Standalone freezing omits current tracked/change inputs, includes ignored/unrelated untracked inputs or persists snapshots in its manifest; dispatcher integration remains pending.
+- 16: tests/test_stage2_research_snapshot.py::test_snapshot_copies_stay_frozen_and_are_deleted_on_exit — Local citation sources follow live edits or transient copies survive publication cleanup.
+- 16: tests/test_stage2_research_snapshot.py::test_snapshot_copies_are_deleted_on_consumer_abort — Transient copies survive a failed consumer context.
+- 16: tests/test_stage2_research_snapshot.py::test_snapshot_digest_binds_working_bytes_and_manifest_does_not_alias — Working bytes change without changing the full digest or a caller can mutate the internal digest record.
+- 16: tests/test_stage2_research_snapshot.py::test_snapshot_detects_untracked_change_input_set_and_byte_drift — Added, removed or changed untracked change inputs are invisible to the publication check.
+- 16: tests/test_stage2_research_snapshot.py::test_snapshot_detects_new_tracked_paths_and_changed_head — A changed HEAD or newly tracked file leaves the frozen state valid.
+- 16: tests/test_stage2_research_snapshot.py::test_snapshot_does_not_treat_any_research_append_as_runner_owned — Foreign appended bytes disappear under a prefix-only publication exception.
+- 16: tests/test_stage2_research_snapshot.py::test_snapshot_runner_restamp_may_not_rewrite_frozen_research_body — A caller-owned restamp/append rewrites the frozen research body.
+- 16: tests/test_stage2_research_snapshot.py::test_snapshot_missing_tracked_file_refuses_and_cleans_preparation — Missing tracked bytes silently vanish from a successful snapshot or partial copies survive failure.
+- 16: tests/test_stage2_research_snapshot.py::test_snapshot_never_follows_file_or_parent_symlink — A file or parent-directory symlink reads ambient input outside the frozen repository boundary.
+- 16: tests/test_stage2_research_snapshot.py::test_snapshot_refuses_copies_inside_repository — Whole-source copies can be persisted inside the repository.
+- 16: tests/test_stage2_research_snapshot.py::test_snapshot_mid_freeze_change_refuses_and_cleans_copies — Mid-preparation input changes leave a usable snapshot or partial copies behind.
+- 16: tests/test_stage2_research_snapshot.py::test_snapshot_interrupt_during_preparation_deletes_copies — An interrupted preparation leaves transient source copies behind.
 - 16: tests/test_stage2_research_history.py::test_history_uses_frozen_head_and_never_current_working_bytes — A standalone history packet includes commits after frozen HEAD or uncommitted bytes; topic integration remains pending.
 - 16: tests/test_stage2_research_history.py::test_history_ten_per_path_and_shared_commits_preserve_all_mapped_touches — More than ten commits per path are retained, shared records duplicate or mapped touches disappear.
 - 16: tests/test_stage2_research_history.py::test_history_author_date_is_utc_and_body_cap_counts_unicode — Author dates retain a non-UTC offset or the body exceeds 4000 Unicode characters without a truncation flag.
@@ -1328,3 +1343,48 @@ prototype passed 23 tests; this is not repository integration or full
 qualification. It must get red tests here before source adoption. Actual
 amended scheduling, prompts, reports/judge/handoff, attended F-1 capture
 and fresh phase-6 review remain unfinished; PR #158 stays draft.
+
+
+### Transient frozen inputs verified — 2026-10-18
+
+Measured phase-4 span: 09:48:20–10:07:29 UTC, 19 minutes 9 seconds,
+including adoption, focused/full verification waits and preparation of the
+next report-validator/prompt prototype outside the repository. Count this
+once after the retained earlier intervals and 19m08s history span; approved
+total stays 13h20m. Do not count report-prototype preparation again.
+
+Implemented standalone stage2_research_snapshot.py and disposable-Git
+contracts. Copies remain in an owner-only temporary directory outside the
+repository and are deleted after context exit or failed preparation. The
+snapshot retains current tracked bytes plus non-ignored untracked change
+inputs, full and per-path digests, and exact tracked/untracked inventory.
+Changed path sets, working bytes or HEAD invalidate publication. A research
+append/restamp is exempt only for the exact runner-owned expected bytes,
+preserving the frozen body; arbitrary matching-prefix foreign appends are
+not accepted. File and parent symlinks refuse rather than read ambient
+sources. Git inventory shares the history helper's local-only transport.
+The dispatcher must still own and consume this context; no complete amended
+run, publication or handoff is qualified by the standalone API.
+
+Red-first evidence: 23 missing-module failures in this repository before
+source adoption. Final focused snapshot/history contracts: 52 passed in
+4.57 seconds; six relevant CI registration checks pass. An intermediate
+focused combination had one missing non-CLI registration (128 passed,
+2 skipped), repaired by restoring a documented library reason. No gate
+was weakened. The parent-directory symlink fixture was strengthened before
+the complete run; existing tests were not changed. Complete make verify
+GREEN: 2528 passed, 16 skipped in 867.97 seconds, then every blocking gate
+including kit green. Ruff check/format, criterion ledger and generated CI
+passed. Source bytes remained fixed throughout full verification. Process-
+local commit.gpgsign=false and loopback test servers were enabled;
+documentation/Markdown findings remain report-only.
+
+Prepared next, not yet adopted here: structured report/evidence validation
+and a common report template. The separate temporary prototype passed
+41 tests after one escaped-JSON Unicode counterexample went red and was
+fixed. It keeps unsupported claims/questions, separates local/history/page
+evidence, applies the shared excerpt cap and topic-specific field contracts.
+Repository red tests and full qualification are still required. Actual
+amended scheduling/prompts/report integration, judge/handoff, attended F-1
+capture and fresh phase-6 review remain unfinished. No GLM/Claude/live
+provider call, credential-file read, customer access or merge occurred.

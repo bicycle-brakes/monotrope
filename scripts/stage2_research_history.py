@@ -1,7 +1,8 @@
-"""Bounded local Git evidence at an explicitly supplied frozen commit.
+"""Bounded local Git history and the shared local-only Git transport.
 
-No model operation, tracker read, working-file read, network fetch or retry.
-The caller supplies the run's monotonic deadline; all commands share it.
+History collection performs no model operation, tracker read, working-file
+read, network fetch or retry. The snapshot helper also uses the local Git
+transport for its inventory. All commands share the caller's run deadline.
 """
 
 from __future__ import annotations

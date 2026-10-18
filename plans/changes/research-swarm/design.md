@@ -528,6 +528,17 @@ collecting partial stdout/stderr/receipts and publication or abort, deleting
 the frozen copies too; scrub every used secret before any
 persistence/diagnostic. No cache, extra database or resumable runtime is added.
 
+The standalone frozen-state helper keeps copies in an owner-only temporary
+directory outside the repository and exposes only digests in its manifest.
+Its read path refuses symbolic links in files or parent directories and
+non-regular source reads. Publication compares the complete tracked and
+non-ignored untracked change-input sets, HEAD and current bytes. A research
+append/restamp is exempt only when the runner supplies the exact bytes it
+wrote, preserving the original body; an arbitrary matching prefix cannot
+hide foreign appends. Context exit or preparation failure removes copies.
+This foundation is separate from amended dispatcher integration, which is
+still pending; it does not qualify isolation or complete research handoff.
+
 ## ADR draft
 
 The sole new draft is [ADR 0020 — Phase 1 research
