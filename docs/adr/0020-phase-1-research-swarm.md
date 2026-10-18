@@ -19,9 +19,9 @@ tags: [adr, research, swarm, stage-2]
   routing of ADR 0007 and research purpose of ADR 0011; supersedes neither
   whole ADR and amends no numbered D/O decision.
 * Review: maintainer chose the amended direction in the research-swarm
-  interview on 2026-10-14–18, Q-1–Q-13; acceptance is the future merge, with
+  interview on 2026-10-14–18, Q-1–Q-14; acceptance is the future merge, with
   no agent-written approval. Decider: maintainer; prepared by Codex, with
-  the Q-12 and Q-13 amendments drafted by Claude Code (Opus 5.5).
+  the Q-12 to Q-14 amendments drafted by Claude Code (Opus 5.5).
 * Date: 2026-10-15 · takes effect on merge.
 
 ## Context
@@ -49,8 +49,10 @@ required ones. Q-12 (2026-10-18) replaces both fixed trios: on that day
 measured) while other Go models answered, so a fixed trio would end every
 run incomplete. Each required seat now has an ordered candidate list and a
 reachability check before each run, in the form of the review swarm's
-availability preparation. Q-13 (2026-10-18) asks that finished research
-survive a run stopped by a token or quota limit.
+availability preparation. Q-14 (2026-10-18) makes the substitutes live as
+well: a seat declares one preferred model, and a substitute comes from the
+admitted Go models of the fresh catalog, cheapest first. Q-13 (2026-10-18)
+asks that finished research survive a run stopped by a token or quota limit.
 
 ## Decision Drivers
 
@@ -59,8 +61,9 @@ survive a run stopped by a token or quota limit.
 * No private context in online research, regardless of subscription billing.
 * Human decisions and sourced disagreements survive research into the spec.
 * Finite concurrent work with auditable refusals and partial results.
-* One unavailable model must not fail every run, and changing a research
-  model is a one-line edit (Q-12).
+* One unavailable model must not fail every run, changing a research model
+  is a one-line edit (Q-12), and a newly admitted Go model serves as a
+  substitute without any further edit (Q-14).
 * Finished contributions are never paid for twice when a run is cut off
   (Q-13).
 
@@ -262,19 +265,26 @@ checkable.
     Changed inputs invalidate publication with named paths and exit 1; only
     runner research appends/restamping are ignored. Invalid given neighbours
     refuse preflight (exit 2); later unread evidence stays a named gap.
-11. The six required seats (three repository, three online) each hold an
-    ordered `{endpoint, model}` candidate list in `model-endpoints.yaml`,
-    beside an availability rule with the review swarm's field names
-    (`max_age_seconds`, dated `exclude_until`). A separate step,
-    `prepare-explore`, refreshes the catalog and admits candidates: declared,
-    no `-free` id, dated data terms without a skip mark for Go candidates,
-    fresh text-input chat in Pi, `framework` permission for repository seats
-    and Pi for online seats. It then probes lazily, one probe per distinct
-    candidate with the fixed text alone, no tools, no repository content,
-    60 seconds, leak-checked and audited; a Claude Code candidate is probed
-    through official Claude Code. Each seat takes the first admitted,
-    unexcluded, reachable candidate not already taken by an earlier seat of
-    its trio. The selection is printed for the main conversation and sealed
+11. The six required seats (three repository, three online) each declare
+    exactly one preferred `{endpoint, model}` in `model-endpoints.yaml`, with
+    no fallback list, beside an availability rule with the review swarm's
+    field names (`max_age_seconds`, dated `exclude_until`) and a
+    `measured_wire_apis` list. A separate step, `prepare-explore`, refreshes
+    the catalog and admits Go models. Each needs a `modelle_terms` record
+    passing the review swarm's terms check and a cost value, no `-free` id,
+    and fresh text-input chat in Pi on a measured wire API. Repository seats
+    need `framework` permission, and online seats need Pi. The terms record
+    is the only manual step; it stays deliberate because repository seats
+    receive private content. Substitutes form one pool for both trios: the
+    admitted Go models with models.dev tool support, ordered by
+    `anfragen_5h`, cheapest first, ties by id. Online admission is not
+    loosened. Preparation probes lazily, one probe per distinct model, with
+    the fixed text alone, no tools, no repository content, 60 seconds,
+    leak-checked and audited; a Claude Code preferred model is probed
+    through official Claude Code. Within each trio the reachable preferred
+    models are kept first. Each remaining seat takes the cheapest reachable,
+    unexcluded pool model that no seat of its trio holds, reported as
+    "substitute for <seat>". The selection is printed for the main conversation and sealed
     in a single-use receipt bound to worktree, change, configuration, class
     and neighbours; `explore --availability-reported <id>` consumes it within
     the maximum age, and the selection stays frozen for the run, with no swap,
@@ -310,7 +320,9 @@ checkable.
 * Each run gains a preparation step and a report the orchestrator relays
   before the run; the selected models are reported, not fixed in the spec.
   Probes cost a few small calls outside `39 + 3N`, a Claude Code seat's
-  probe included. A model change is a one-line pull request to a list.
+  probe included. Changing a preferred model is a one-line pull request; a
+  substitute needs only an admitted terms record, so the pool follows the
+  Go catalog by itself.
 * Finished research survives a stopped run, at the cost of a runner-owned
   store outside the repository, an input-binding check and a per-change
   lock. A repository seat that deliberately reads an absolute path outside
@@ -357,8 +369,10 @@ checkable.
   empty-topic-5 fixtures retain all 39 required slots. Type-specific resolver
   fixtures hold exact excerpts and refuse ambiguous or prose-only evidence.
   Judge-packet fixtures exercise the exact limit, one character over it and per-claim caps.
-* Selection fixtures cover lazy unique probes, double-fill, unadmitted and
-  excluded candidates, probe content canaries, receipt binding, age and
+* Selection fixtures cover lazy unique probes, preferred-first and
+  cost-ordered substitutes, determinism for a frozen catalog, a model added
+  by one terms record, double-fill, unadmitted, unmeasured and excluded
+  models, probe content canaries, receipt binding, age and
   single use, the seat-unavailable stop and the shared helpers. The review
   swarm's availability tests run unchanged where they are on the base.
 * Store fixtures kill the runner with SIGKILL after a terminal outcome and
