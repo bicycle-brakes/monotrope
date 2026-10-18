@@ -11,6 +11,8 @@ import threading
 import time
 from pathlib import Path
 
+import pytest
+
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "scripts"))
 
 
@@ -416,3 +418,98 @@ def test_results_are_immutable():
         assert type(exc).__name__ == "FrozenInstanceError"
     else:
         raise AssertionError("result must be frozen")
+
+
+def test_audit_failure_fails_closed_without_launch_and_drains_queue():
+    m = module()
+    h = Harness()
+
+    def audit(_slot, _verdict):
+        raise OSError("disk full")
+
+    slots = [make_slot("a", order=(1, "a")), make_slot("b", order=(1, "b"))]
+    result = m.dispatch(slots, gate=h.gate, launcher=h.launcher, audit=audit, per_provider_limit=1)
+    got = by_id(result)
+    assert h.launched == []
+    assert got["a"].outcome == "refused" and got["a"].started is False
+    assert "disk full" in str(got["a"].gate_record)
+    assert got["b"].outcome == "cancelled"
+    assert result.exit_code == 2
+
+
+def test_unexpected_supervise_error_reaps_child_and_worker_continues():
+    m = module()
+    h = Harness()
+
+    class Exploding:
+        """Popen wrapper whose first communicate() call raises unexpectedly."""
+
+        def __init__(self, proc):
+            self.proc = proc
+            self.calls = 0
+
+        def __getattr__(self, name):
+            return getattr(self.proc, name)
+
+        def communicate(self, timeout=None):
+            self.calls += 1
+            if self.calls == 1:
+                raise RuntimeError("boom")
+            return self.proc.communicate(timeout=timeout)
+
+    def launcher(slot, allowance):
+        proc = h.launcher(slot, allowance)
+        return Exploding(proc) if slot.slot_id == "a" else proc
+
+    slots = [
+        make_slot("a", order=(1, "a"), script="import time;print('part',flush=True);time.sleep(60)"),
+        make_slot("b", order=(1, "b")),
+    ]
+    result = m.dispatch(slots, gate=h.gate, launcher=launcher, per_provider_limit=1, grace=0.5)
+    got = by_id(result)
+    assert got["a"].outcome == "failed" and got["a"].started is True
+    assert h.procs["a"].poll() is not None
+    assert got["b"].outcome == "ok"
+
+
+@pytest.mark.filterwarnings("ignore::pytest.PytestUnhandledThreadExceptionWarning")
+def test_final_guard_gives_every_slot_a_terminal_outcome():
+    m = module()
+    h = Harness()
+
+    def audit(_slot, _verdict):
+        raise BaseException("worker-killing")  # noqa: TRY002
+
+    # A BaseException escapes the per-slot handlers and kills the worker thread.
+    slots = [make_slot("a", order=(1, "a")), make_slot("b", order=(1, "b"))]
+    result = m.dispatch(slots, gate=h.gate, launcher=h.launcher, audit=audit, per_provider_limit=1)
+    assert sorted(r.slot_id for r in result.results) == ["a", "b"]
+    assert all(r.outcome in m.OUTCOMES for r in result.results)
+    assert result.exit_code in (1, 2)
+
+
+def test_reap_does_not_hang_without_new_session_and_ignored_sigterm():
+    m = module()
+    script = (
+        "import signal,time\nsignal.signal(signal.SIGTERM, signal.SIG_IGN)\n"
+        "print('partial',flush=True)\ntime.sleep(60)\n"
+    )
+    procs = {}
+
+    def launcher(slot, _allowance):
+        proc = subprocess.Popen(
+            [sys.executable, "-c", slot.payload], stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True
+        )
+        procs[slot.slot_id] = proc
+        return proc
+
+    t0 = time.monotonic()
+    result = m.dispatch(
+        [make_slot("a", script=script, allowance=0.5)],
+        gate=Harness().gate,
+        launcher=launcher,
+        grace=0.5,
+    )
+    assert time.monotonic() - t0 < 10
+    assert by_id(result)["a"].outcome == "timed-out"
+    assert procs["a"].poll() is not None

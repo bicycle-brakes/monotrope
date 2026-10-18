@@ -68,22 +68,38 @@ class DispatchResult:
     stopped: bool = field(default=False)
 
 
-def _signal_group(proc, sig):
+def _own_group(proc):
+    """True only when the child leads its own process group (started with a new session)."""
+    try:
+        return os.getpgid(proc.pid) == proc.pid and proc.pid != os.getpgrp()
+    except (ProcessLookupError, PermissionError):
+        return False
+
+
+def _signal_child(proc, sig, group):
+    """Signal the child's group when it has one, otherwise the child process itself."""
     with contextlib.suppress(ProcessLookupError, PermissionError):
-        os.killpg(proc.pid, sig)
+        if group:
+            os.killpg(proc.pid, sig)
+        else:
+            proc.send_signal(sig)
 
 
 def _stop_and_reap(proc, grace):
-    """Terminate the whole process group, kill after the grace, wait until reaped."""
-    _signal_group(proc, signal.SIGTERM)
+    """Terminate the child (its whole group when it has one), kill after the grace, reap."""
+    group = _own_group(proc)
+    _signal_child(proc, signal.SIGTERM, group)
     try:
         proc.wait(timeout=grace)
     except subprocess.TimeoutExpired:
-        _signal_group(proc, signal.SIGKILL)
-        proc.wait()
+        _signal_child(proc, signal.SIGKILL, group)
+        try:
+            proc.wait(timeout=max(grace, 5.0))
+        except subprocess.TimeoutExpired:  # pragma: no cover - SIGKILL was sent to a live child
+            return "", ""
     try:
         return proc.communicate(timeout=max(grace, 1.0))
-    except subprocess.TimeoutExpired:  # pragma: no cover - group already killed
+    except subprocess.TimeoutExpired:
         return "", ""
 
 
@@ -152,7 +168,13 @@ def dispatch(
                 finish(slot, "refused", record=verdict.record)
                 return None
             if audit is not None:
-                audit(slot, verdict)
+                try:
+                    audit(slot, verdict)
+                except Exception as exc:  # an unauditable call must not start
+                    security.set()
+                    stop.set()
+                    finish(slot, "refused", record={"audit_error": f"{type(exc).__name__}: {exc}"})
+                    return None
             if stop.is_set():
                 finish(slot, "cancelled", record=verdict.record)
                 return None
@@ -208,7 +230,21 @@ def dispatch(
             if launched == "done":
                 return
             if launched is not None:
-                supervise(*launched)
+                try:
+                    supervise(*launched)
+                except Exception as exc:
+                    slot, proc, allowance, record = launched
+                    out, err = _stop_and_reap(proc, grace)
+                    finish(
+                        slot,
+                        "failed",
+                        started=True,
+                        rc=proc.returncode,
+                        out=_text(out),
+                        err=_text(err) + f"\nsupervision failed: {type(exc).__name__}: {exc}",
+                        record=record,
+                        allowance=allowance,
+                    )
 
     threads = []
     for queue in queues.values():
@@ -219,6 +255,15 @@ def dispatch(
     for thread in threads:
         thread.join()
 
+    # Final guard: a worker lost to an unexpected error never leaves a slot without an outcome.
+    for slot in ordered:
+        if slot.slot_id not in results:
+            finish(slot, "failed" if slot.slot_id in sequence else "cancelled", err="worker lost before an outcome")
+            if slot.slot_id in sequence:
+                security.set()
+    for slot in ordered:
+        if slot.slot_id not in sequence:
+            sequence.append(slot.slot_id)
     ordered_results = tuple(results[sid] for sid in sequence)
     records = tuple(
         {
