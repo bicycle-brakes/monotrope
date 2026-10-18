@@ -26,9 +26,9 @@ check first that each of the 2a rows arrived in it as `findings.md` says.
 
 **Verdict first.** Write your verdict — the table and, under it, the line
 `Phase 6 verdict: <reviewer> <session>, <date>` — before you read any loop
-row. The loop rows are the findings of the loop's rounds — at most three
-rounds, one rung of the ladder each, round 3 only when round 2 wrote a taken
-row — the reviewers of the
+row. The loop rows are the findings of the loop's rounds — it runs until a
+round is clean: a free-model swarm, a Flash swarm, then the paid ladder, one
+round at a time (ADR 0021) — the reviewers of the
 loop before this phase (`docs/WORKFLOW.md` §4); they are held outside the
 repository until your verdict stands, so that they cannot shape it. Only then
 do the loop rows come in. On the Claude path you run

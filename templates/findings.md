@@ -77,8 +77,9 @@ Reference — what the columns and markers mean. Not copied.
 **Origin**
 
 - `base` — the finding existed before the last repair.
-- `fix-r<N>` — repair round N produced it. Two consecutive rounds of `fix-r`
-  origin are an escalation, not a third round.
+- `fix-r<N>` — repair round N produced it. Two consecutive rounds whose only
+  accepted findings begin `fix-r` trip the review loop's repair brake: the
+  loop stops and the maintainer decides what continues (ADR 0021).
 
 **Markers that override everything**
 
