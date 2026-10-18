@@ -377,36 +377,6 @@ endpunkte:
       model, Zen id or interactive session on that acceptance (ADR 0021,
       decision 3).
 
-  - name: opencode-free
-    betreiber: "OpenCode (Operator Anomaly Innovations, Inc.)"
-    residenz: nicht-erklaert
-    abrechnung: free
-    darf_sehen: [public-web]
-    modelle:
-      - longcat-2.5-preview-free
-      - space-bunny-free
-      - big-pickle
-    bemerkung: >-
-      Public-only research endpoint of the swarm (ADR 0020 draft): the three
-      free ids (Q-1, as amended 2026-10-15: `space-bunny` and `hy4-preview`
-      are paid OpenCode Go models, so `space-bunny-free` and `big-pickle` take
-      their seats) receive nothing but the filtered
-      one-sentence public topic and fixed generic questions. The endpoint name
-      is this declaration's, not an asserted Pi provider id — before any call
-      the runner maps each id through the pinned Pi model inventory, and an
-      unmapped or unsupported id refuses instead of assuming
-      `opencode-go/<id>`. Data terms as the OpenCode Zen documentation states
-      them (read 2026-10-15): LongCat and Space Bunny Free keep nothing and do
-      not train; Big Pickle may use what it receives to improve the model. The
-      maintainer accepted training on 2026-10-15 because only the Opus-written
-      topic sentence and fixed questions reach these models, never repository
-      content. Free ids are offered for a limited time and change often. The
-      residency stays undeclared: `nicht-erklaert` records exactly that, and the default framework
-      check refuses this endpoint on the residency alone. `darf_sehen` grants
-      only `public-web`; no repository content, no `framework` permission, no
-      customer class. First contact happens only after the decision merge, on
-      the post-merge live qualification (ADR 0020, point 8).
-
 # ---------------------------------------------------------------------------
 # Der Recherche-Schwarm (ADR 0020 draft) — wer in welcher Rolle laeuft
 # ---------------------------------------------------------------------------
@@ -417,18 +387,6 @@ endpunkte:
 # NICHT die Reihenfolge von `opencode-go.modelle` — die bleibt die Leiter der
 # Review-Schleife (phase 4b).
 research_swarm:
-  free_endpoint: opencode-free
-  free_roster: [longcat-2.5-preview-free, space-bunny-free, big-pickle]
-  # Die anfaenglichen Schwerpunkte (Q-1): LongCat Code/Test-Praxis, Space Bunny
-  # Governance/Geschichte, Big Pickle Risiko/Integration (Nachtrag 2026-10-15). Alles generische oeffentliche
-  # Fragen; ein Bericht kann mehrere Themen stuetzen.
-  free_focuses:
-    longcat-2.5-preview-free: [1, 4]
-    space-bunny-free: [2, 3]
-    big-pickle: [5, 6]
-  topic6_free: big-pickle
-  flash_endpoint: opencode-go
-  flash_pair: [deepseek-v4.1-flash, mimo-v2.6-flash]
   paid_endpoint: claude-code-plan
   topic_author: claude-opus-5-5
   judge: claude-opus-5-5
