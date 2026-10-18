@@ -1584,3 +1584,23 @@ implementation; all 18 then passed with no test weakened or changed in meaning
 3.4 seconds; `tests/test_ci.py` 95 passed, 2 skipped with the new registration.
 Complete make verify GREEN: 2618 passed, 16 skipped in 709.20 seconds, every
 gate green, process exit 0. Documentation/Markdown findings remain report-only.
+
+
+### Dispatcher robustness repair — 2026-10-18
+
+Measured phase-4 span: 12:02:48–12:19:57 UTC, 17 minutes 9 seconds, counted
+once after the preceding intervals. Orchestrator review found two defects in
+the dispatcher foundation, repaired red-first. An audit-writer failure now
+refuses the call fail-closed (not launched, outcome refused, security stop,
+exit 2); an unexpected supervision error reaps the child, keeps partial output,
+ends the slot failed with started true, and the worker continues; a final guard
+gives any slot a terminal outcome so the dispatcher never raises KeyError.
+Reaping signals the child's own process group only when it leads one and falls
+back to signalling the child itself, with bounded waits after SIGKILL.
+
+Red evidence: of four new tests, three failed with KeyError on the lost slot
+(audit failure, supervision error, worker-killing exception) and the
+no-new-session test failed an assertion; all then passed. Focused: 22 dispatcher
+tests passed, 99 passed with the CI registration tests (2 skipped). Complete
+make verify GREEN: 2622 passed, 16 skipped in 811.40 seconds, every gate green,
+exit 0. No test was weakened.
