@@ -139,6 +139,11 @@ OHNE_AUFRUFER: dict[str, str] = {
         "judge pipeline will consume it. tests/test_stage2_research_judge.py exercises exact size limits, "
         "claim coverage and terminal-outcome precedence. Dispatch/reconciliation integration remains pending."
     ),
+    "stage2_research_dispatch.py": (
+        "Pure cancellable stage-dispatch library, not a CLI gate; the amended swarm runner will consume it. "
+        "tests/test_stage2_research_dispatch.py exercises provider queues, ordering, gate serialization, "
+        "deadlines and cancel/reap with real child processes; scheduler integration remains pending."
+    ),
     "stage2_swarm.py": (
         "Helper of scripts/stage2.py explore, never an entry point of its own — it runs the phase-1 "
         "research swarm only through the runner; tests/test_stage2_swarm.py runs it against stand-ins"
