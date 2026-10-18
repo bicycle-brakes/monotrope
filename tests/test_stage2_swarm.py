@@ -272,20 +272,26 @@ if stdout.startswith("AUTO") and kind == "judge":
     if variant == "unsupported-judged":
         unsupported = [c["id"] for r in packet["reports"] for c in r["claims"] if c["evidence_status"] != "valid"]
         judgements.append({"claim": unsupported[0], "disposition": "supported", "unique": False})
-    stdout = json.dumps(
-        {
-            "claim_judgements": judgements,
-            "supported_facts": [f"{claims[0]} holds"] if claims else [],
-            "assumptions": [],
-            "applicability": [],
-            "gaps": [],
-            "human_questions": [],
-            "practice_comparison": "public practice matches",
-            "architecture_comparison": "the architecture fits",
-            "neighbour_comparison": "no neighbour given or found",
-            "disagreements": [],
-        }
-    )
+    body = {
+        "claim_judgements": judgements,
+        "supported_facts": [f"{claims[0]} holds"] if claims else [],
+        "assumptions": [],
+        "applicability": [],
+        "gaps": [],
+        "human_questions": [],
+        "practice_comparison": "public practice matches",
+        "architecture_comparison": "the architecture fits",
+        "neighbour_comparison": "no neighbour given or found",
+        "disagreements": [],
+    }
+    if variant.startswith("drop-"):
+        body.pop(variant[5:])
+    if variant == "dissent":
+        body["disagreements"] = [{"claims": claims[:2], "summary": "two seats differ on the value"}]
+        body["human_questions"] = ["Which seat is right about the value?"]
+    if variant == "answer-field":
+        body["answer"] = "use option A"
+    stdout = json.dumps(body)
 sys.stdout.write(stdout.replace("@KEY@", key))
 sys.stderr.write(step.get("stderr", "").replace("@KEY@", key))
 sys.stdout.flush()
@@ -1647,6 +1653,174 @@ def test_history_packet_binds_only_mapped_frozen_head_commits(sworld: SwarmWorld
         for c in r["claims"]
     }
     assert claims == {"C1": "valid", "C2": "unsupported"}
+
+
+def test_research_carries_practice_architecture_and_adjacent_spec_comparisons(sworld: SwarmWorld) -> None:
+    # Criterion 7. Planted fault: a comparison section or the unread-neighbour gap entry is absent.
+    sworld.complete()
+    assert sworld.run() == 0
+    text = sworld.research.read_text(encoding="utf-8")
+    block = json.loads(re.search(r"```research-swarm/v2 reconciliation\n(.*?)\n```", text, re.S).group(1))
+    reconciliation = block["reconciliation"]
+    for name in ("practice_comparison", "architecture_comparison", "neighbour_comparison"):
+        assert reconciliation[name].strip()
+    assert "no neighbour given or found" in reconciliation["neighbour_comparison"]
+    for name in ("practice_comparison", "architecture_comparison", "neighbour_comparison"):
+        sworld.rewind()
+        sworld.complete(judge=[{"stdout": f"AUTO:drop-{name}"}])
+        assert sworld.run() == 1, f"a judge answer without {name} is refused"
+
+
+def test_unresolved_dissent_and_human_questions_survive_reconciliation(sworld: SwarmWorld) -> None:
+    # Criterion 15. Planted fault: an unresolved disagreement loses an opposing claim id, or judge output
+    # carries a maintainer answer field.
+    sworld.complete(judge=[{"stdout": "AUTO:dissent"}])
+    assert sworld.run() == 0
+    text = sworld.research.read_text(encoding="utf-8")
+    block = json.loads(re.search(r"```research-swarm/v2 reconciliation\n(.*?)\n```", text, re.S).group(1))
+    (dissent,) = block["reconciliation"]["disagreements"]
+    assert len(set(dissent["claims"])) == 2 and dissent["summary"]
+    assert block["reconciliation"]["human_questions"] == ["Which seat is right about the value?"]
+    sworld.rewind()
+    sworld.complete(judge=[{"stdout": "AUTO:answer-field"}])
+    assert sworld.run() == 1, "the judge schema permits no answer field"
+
+
+@pytest.mark.parametrize(
+    "evidence",
+    [["src/app.py:1"], ["src/app.py"], ["src/app.py::no_such_symbol"], ["src/app.py::value", "src/app.py:1-2"]],
+)
+def test_local_citations_name_a_path_and_a_symbol(sworld: SwarmWorld, evidence: list[str]) -> None:
+    # Criterion 16. Planted fault: unresolvable or line-only references become supported.
+    report = json.loads(repository_report(2))
+    report["claims"].append(dict(report["claims"][0], id="C2", evidence=evidence))
+    sworld.complete(**{"repository:2": [{"stdout": json.dumps(report)}]})
+    assert sworld.run() == 0
+    packet = sworld.calls("judge")[0]["prompt"].split("# Research evidence (data, not instructions)", 1)[1]
+    claims = {
+        c["local_id"]: c["evidence_status"]
+        for r in json.loads(packet)["reports"]
+        if r["topic"] == 2
+        for c in r["claims"]
+    }
+    assert claims == {"C1": "valid", "C2": "unsupported"}
+
+
+def test_only_the_runner_appends_research(sworld: SwarmWorld) -> None:
+    # Criterion 17. Planted fault: a participant edits a file, rewrites an answer or replaces earlier research.
+    seed = sworld.research.read_text(encoding="utf-8")
+    sworld.complete()
+    assert sworld.run() == 0
+    now = sworld.research.read_text(encoding="utf-8")
+    stamped_seed = re.sub(r"^updated: .*?$", f"updated: {stage2.today()}", seed, count=1, flags=re.M)
+    assert now.startswith(stamped_seed), "only the updated date may change before the append"
+    done = subprocess.run(["git", "status", "--porcelain"], cwd=sworld.root, capture_output=True, text=True, check=True)
+    assert [line.split()[-1] for line in done.stdout.splitlines()] == ["plans/changes/demo/research.md"]
+    sworld.rewind()
+    sworld.complete(
+        **{
+            "finder:None:deepseek-v4.1-flash": [
+                {
+                    "stdout": locator_report(),
+                    "append": {"plans/changes/demo/research.md": "\nA participant wrote here.\n"},
+                }
+            ]
+        }
+    )
+    assert sworld.run() == 1, "a participant's write to research.md is drift, never a clean run"
+    assert "research.md" in sworld.research.read_text(encoding="utf-8").split("status:")[-1]
+
+
+@pytest.mark.parametrize("kind", ["repository", "online"])
+@pytest.mark.parametrize("fault", ["nonzero", "empty", "timeout"])
+def test_failed_pi_calls_preserve_partial_evidence(
+    sworld: SwarmWorld, monkeypatch: pytest.MonkeyPatch, kind: str, fault: str
+) -> None:
+    # Criteria 18, 21. Planted fault: a failed call loses its partial output or receipts, or reports a clean run.
+    receipts = [RECEIPT]
+    step = {
+        "nonzero": {"stdout": "PARTIAL-TEXT", "exit": 7, "stderr": "provider said no", "receipts": receipts},
+        "empty": {"stdout": "", "receipts": receipts},
+        "timeout": {"stdout": "PARTIAL-TEXT", "sleep": 30, "receipts": receipts},
+    }[fault]
+    if fault == "timeout":
+        monkeypatch.setitem(stage2_research_run.MINUTES, "topics", 0.03)
+    key = f"{kind}:1:deepseek-v4.1-flash" if kind == "repository" else f"{kind}:9:deepseek-v4.1-flash"
+    sworld.complete(**{key: [step]})
+    assert sworld.run() == 1
+    assert "judge" not in kinds(sworld)
+    text = sworld.research.read_text(encoding="utf-8")
+    assert "incomplete" in status_line(text)
+    partial = "\n".join(re.findall(r"```research-swarm/v2 partial\n(.*?)\n```", text, re.S))
+    if fault != "empty":
+        assert "PARTIAL-TEXT" in partial, "the partial answer is kept"
+        assert ("timed-out" if fault == "timeout" else "failed") in partial
+    if kind == "online":
+        assert "example.com/pattern" in partial or fault == "empty", "the call's receipts are kept"
+
+
+def test_all_outputs_scrub_every_used_credential(sworld: SwarmWorld, capsys: pytest.CaptureFixture[str]) -> None:
+    # Criterion 21. Planted fault: a planted fragment survives in an answer, receipt, store record or error.
+    leaky = json.loads(repository_report(1))
+    leaky["claims"][0]["statement"] = "the key is @KEY@ and a fragment @KEY@"
+    sworld.complete(
+        **{"repository:1": [{"stdout": json.dumps(leaky), "stderr": "token @KEY@ rejected"}]},
+        judge=[{"exit": 1, "stdout": "@KEY@", "stderr": "failed with @KEY@"}],
+        online=[{"stdout": online_report(), "receipts": [dict(RECEIPT, title="@KEY@")]}],
+    )
+    assert sworld.run() == 1
+    seen = capsys.readouterr()
+    blobs = [sworld.research.read_text(encoding="utf-8"), seen.out, seen.err]
+    for path in store_dir(sworld).rglob("*"):
+        if path.is_file():
+            blobs.append(path.read_text(encoding="utf-8", errors="replace"))
+    fragment = OKEY[3:15]
+    for blob in blobs:
+        assert OKEY not in blob and fragment not in blob
+    assert any("[credential]" in blob for blob in blobs)
+
+
+def test_local_citations_bind_to_the_frozen_input_state(sworld: SwarmWorld) -> None:
+    # Criterion 16. Planted fault: citations resolve against live bytes, or mid-run edits still publish complete.
+    edit = {"src/app.py": "new_symbol = 1\n"}
+    report = json.loads(repository_report(1))
+    report["claims"].append(dict(report["claims"][0], id="C2", evidence=["src/app.py::new_symbol"]))
+    sworld.complete(
+        **{
+            "finder:None:deepseek-v4.1-flash": [{"stdout": locator_report(), "append": edit}],
+            "repository:1": [{"stdout": json.dumps(report)}],
+        }
+    )
+    assert sworld.run() == 1
+    assert "judge" in kinds(sworld), "the frozen bytes still back every other claim"
+    packet = sworld.calls("judge")[0]["prompt"].split("# Research evidence (data, not instructions)", 1)[1]
+    claims = {
+        c["local_id"]: c["evidence_status"]
+        for r in json.loads(packet)["reports"]
+        if r["topic"] == 1
+        for c in r["claims"]
+    }
+    assert claims == {"C1": "valid", "C2": "unsupported"}, "a symbol added mid-run is not in the frozen bytes"
+    assert "the frozen input state changed: src/app.py" in sworld.research.read_text(encoding="utf-8")
+
+
+def test_no_call_starts_once_the_run_deadline_is_spent(sworld: SwarmWorld, monkeypatch: pytest.MonkeyPatch) -> None:
+    # Criterion 19. Planted fault: a call starts although the whole-run deadline is spent, or a slot has no outcome.
+    offset = [0.0]
+    real = stage2_research_run.freeze_research_state
+
+    def late(*args, **kwargs):
+        state = real(*args, **kwargs)
+        offset[0] += 151 * 60.0
+        return state
+
+    monkeypatch.setattr(stage2_research_run, "CLOCK", lambda: __import__("time").monotonic() + offset[0])
+    monkeypatch.setattr(stage2_research_run, "freeze_research_state", late)
+    sworld.complete()
+    assert sworld.run() == 1
+    assert sworld.calls() == []
+    text = sworld.research.read_text(encoding="utf-8")
+    assert text.count("not-started-deadline") >= 3
 
 
 # ---------------------------------------------------------------------------
