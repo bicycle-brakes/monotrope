@@ -593,3 +593,25 @@ contribution when a token limit stops them, we decided to store each
 finished contribution durably at once and let a later run with the same
 frozen input reuse it, to achieve no repeated spend on finished work,
 accepting a runner-owned state store and an input-binding check on resume. — 2026-10-18
+
+## Q-14 · How substitutes for the research seats are chosen, and the phase-4 time budget
+
+asked: 2026-10-18
+answer: "die ersatzmodelle müssen auch dynamsisch angepasst werden  - Ersatzmodelle sind LongCat 2.0, MiMo Pro und GLM 5.3 Flash über Go. erhöhe das zeizbudget" — the substitute for an unavailable seat model is chosen at each preparation from the admitted paid Go models in the live catalog, not from a declared list; the last clause raises the phase-4 appetite to 17 hours 20 minutes in total (recorded in plan.md, Time used).
+answered_by: maintainer
+status: answered
+supersedes_in_part: Q-12 (the declared order of fallback candidates per seat)
+context: |
+  Topic: how the research swarm picks a substitute when a seat's model is unavailable, and how much phase-4 time the change may use.
+  Intention: the Q-12 redraft proposed hand-kept fallbacks per seat (LongCat 2.0, MiMo Pro, GLM 5.3 Flash through Go); OpenCode Go changes its offer often, so a fixed fallback list goes stale like the fixed trios did. The same redraft showed that the remaining appetite falls 3 to 4 hours short and recommended 17 hours 20 minutes in total.
+  Today: the redrafted spec (`4586c04`) gives each seat an ordered candidate list with fixed fallbacks in `model-endpoints.yaml`. The review swarm (pull request #157) admits a paid Go model only with a dated terms reading in `modelle_terms` and orders admitted models by the declared `anfragen_5h`, cheapest first, ties by id. The appetite is 13 hours 20 minutes, of which 4 hours 56 minutes were measured by 2026-10-18.
+  Repository change: each seat declares one preferred model; when it cannot be used, preparation takes the cheapest reachable admitted paid Go model of the live catalog that no other seat of the same topic holds, and reports it as "substitute for <seat>". Admission stays one deliberate YAML entry, a dated terms reading in `modelle_terms`, because repository seats receive private content; a newly admitted model then serves as a substitute without any other edit. Spec, design, plan and the ADR 0020 draft change; plan.md records the new appetite.
+  Architecture change: yes — seat selection draws substitutes from a live pool instead of a declared list. Admission, the public/private boundary, the `39 + 3N` budget, leak checks, the free-seat rules and the Opus roles stay unchanged.
+
+In the context of research seats whose hand-kept fallbacks go stale as
+OpenCode Go changes its offer, facing the choice between fixed fallback
+lists and substitutes chosen from the live catalog, we decided on live
+substitutes among the admitted paid Go models, cheapest first, to achieve
+that newly admitted models serve without a list edit, accepting that a dated
+terms reading stays a deliberate manual step and that the phase-4 appetite
+rises to 17 hours 20 minutes in total. — 2026-10-18
