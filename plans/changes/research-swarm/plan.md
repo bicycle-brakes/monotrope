@@ -1856,3 +1856,27 @@ no break), counted against the 17 h 20 min appetite. Plan step 11 only.
 - Not done in step 11: the ledger rows on the run itself (criteria 6, 11, 37,
   43 finders, 46 frozen-and-recorded) stay "not yet written"; they need the
   run wiring of steps 2-8. Docs/prompts (step 10) are untouched.
+
+## Main sync after #157 — 2026-10-18
+
+- Span (measured, `date -u`): 2026-10-18T20:19:29Z to 2026-10-18T20:50:46Z,
+  about 31 min, counted against the 17 h 20 min appetite. Merge commit
+  `f179d9c`.
+- Conflicts: `AGENTS.md` (Stage 2 paragraph: #157 loop text plus the ADR 0020
+  class sentence), `scripts/ci_gates.py` (one `stage2_availability.py` entry
+  naming both test files), `scripts/stage2.py` (module docstring; one shared
+  `--availability-reported` flag, allowed for `explore` and `review-loop`),
+  `tests/test_stage2.py` (both test blocks kept) and the add/add
+  `scripts/stage2_availability.py` (one module: #157's `settings`, `binding`,
+  `report`, `prepare`, `consume` beside the research entry points; research
+  helpers renamed `research_binding` and `research_report`).
+- Superseded [DETAIL] of step 11: `terms_problem`, `request_value` and
+  `ordered_models` live in `stage2.py` (as on main), not in the availability
+  module; research reaches them through the runner. The review loop now reuses
+  `excluded_reason`, `seal`, `verify`, `write_receipt` and `PROBE_TEXT`.
+- Two step-11 swarm tests adapted to the merged ladder: `modelle` is now a set,
+  and `glm-5.3-flash` is declared, so the planted off-endpoint id is
+  `undeclared-flash-9`. The GLM exclusion is unchanged.
+- Evidence: focused set 1077 passed, 2 skipped, 2 failed (the two above, fixed;
+  `test_stage2_swarm.py` then 70 passed); full `make verify` at `f179d9c`:
+  VERIFY GREEN.
