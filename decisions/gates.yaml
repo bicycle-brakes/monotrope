@@ -178,6 +178,15 @@ gates:
     placement: both
     reason: Deleting 29 of 30 criterion tests left make verify green (bead coding-harness-909), so every test a plan's criterion ledger names must still exist, while the change is live and after it is archived (ADR 0013).
 
+  - id: research-handoff
+    title: What a research run hands to the interview and the spec stays measured
+    command: python3 scripts/check_research_handoff.py
+    job: verify
+    enforcement: block
+    floor: false
+    placement: both
+    reason: A research decision that never reached the maintainer is the loss the swarm exists to prevent (bead coding-harness-icw), so every complete research-swarm/v2 run's obligations need linked maintainer answers, the spec's neighbours header must follow the runs' confirmed paths, and every criterion basis must name supported claims or answered records; a change without v2 evidence is a reported exemption.
+
   - id: gate-schema
     title: This gate file satisfies its own schema
     command: python3 scripts/ci_gates.py --check-schema

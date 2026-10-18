@@ -97,6 +97,11 @@ OHNE_AUFRUFER: dict[str, str] = {
         "Run before every foreign call by scripts/stage2.py and by hand as make leakcheck; it needs "
         "the denylist each machine keeps outside the repository, which no CI step holds"
     ),
+    "research_handoff.py": (
+        "Library - the one derivation of a research run's obligation inventory, imported by the research "
+        "runner and by scripts/check_research_handoff.py (the gate research-handoff); "
+        "tests/test_stage2_swarm.py and tests/test_research_handoff.py run it"
+    ),
     "stage2.py": (
         "Entry point, not a gate — starts the stage-2 reviewers on the maintainer's machine, with a "
         "subscription and a credential no CI step holds; tests/test_stage2.py runs it against stand-ins"

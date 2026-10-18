@@ -1961,3 +1961,20 @@ def test_pi_provisioning_only_in_repositories_with_pi(tmp_path: Path, monkeypatc
     steps = "\n".join(ci_gates._toolchain('"3.12"'))
     assert "actions/setup-node@v4" in steps
     assert "bash tools/pi/install.sh" in steps
+
+
+def test_research_handoff_blocks_local_and_hosted_verification() -> None:
+    """Criterion 32 of research-swarm: the handoff gate is one entry of the one list, blocking in both places.
+
+    Planted fault: the gate is absent from the list, only advisory, placed on one runner, or the derived
+    workflow does not run its command.
+    """
+    import ci_gates
+
+    (entry,) = [g for g in ci_gates.gates() if g["id"] == "research-handoff"]
+    assert entry["command"] == "python3 scripts/check_research_handoff.py"
+    assert entry["enforcement"] == "block" and entry["placement"] == "both" and entry["job"] == "verify"
+    assert entry["floor"] is False
+    ci = ci_gates.generate_ci()
+    assert "id: research-handoff" in ci and "python3 scripts/check_research_handoff.py" in ci
+    assert (REPO_ROOT / "scripts" / "check_research_handoff.py").is_file()

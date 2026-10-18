@@ -131,6 +131,10 @@ jobs:
         id: criterion-ledger
         if: ${{ !cancelled() }}
         run: python3 scripts/check_criterion_ledger.py
+      - name: What a research run hands to the interview and the spec stays measured
+        id: research-handoff
+        if: ${{ !cancelled() }}
+        run: python3 scripts/check_research_handoff.py
       - name: This gate file satisfies its own schema
         id: gate-schema
         if: ${{ !cancelled() }}
