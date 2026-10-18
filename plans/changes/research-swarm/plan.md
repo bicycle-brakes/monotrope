@@ -10,7 +10,7 @@ superseded_by: null
 bead: coding-harness-icw
 owner: framework-architect
 provenance: ai-drafted-reviewed
-produced_by: {kind: llm-session, name: codex, version: "2026-10-17"}
+produced_by: {kind: llm-session, name: claude-code, version: "2026-10-18"}
 review: {status: pending, approved_by: null, approved_at: null}
 tags: [plan, stage-2, research, swarm]
 ---
@@ -18,8 +18,8 @@ tags: [plan, stage-2, research, swarm]
 # Plan — research-swarm
 
 ```text
-For you:     Larger changes get mapped sources, three repository views per topic, Flash and live-selected Go free online views, and traceable questions and spec criteria.
-Done when:   Fresh Go-only selection, topic coverage, offline isolation capture and research-to-interview-to-spec checks hold, and make verify is green.
+For you:     Larger changes get mapped sources, three repository and three online views per topic from per-seat model lists checked before each run and shown to you first, live-selected Go free online views, traceable questions and spec criteria, and finished research kept when a run stops early.
+Done when:   Reported seat selection, fresh Go-only free selection, durable resumable slot results, topic coverage, offline isolation capture and research-to-interview-to-spec checks hold, and make verify is green.
 Appetite:    13 hours 20 minutes of phase 4 in total (maintainer, 2026-10-17), including earlier implementation and repairs; stop at the limit.
 Not now:     Zen or OpenCode CLI models, model-specific perspectives, the implementation-review swarm or sibling checkouts.
 Pre-mortem:  suppose it failed: most likely because an online context inherited private repository information.
@@ -33,8 +33,10 @@ not recreated. No file is deleted. Only the ADR is new under `docs/adr/`.
 
 | File | Change |
 |---|---|
-| `scripts/stage2.py` | Preserve early-class/fallback routing; expose checked, cancellable read-only launches for Pi and official Claude. |
-| `scripts/stage2_swarm.py` | Replace six pairs/Zen discovery with finder, fresh Go selection, provider queues, `33 + 3N` topic slots, typed reports, scores, handoff and frozen-state validation. |
+| `scripts/stage2.py` | Preserve early-class/fallback routing; expose checked, cancellable read-only launches for Pi and official Claude; add the `prepare-explore` verb and `explore --availability-reported`, both refused where no swarm runs. |
+| `scripts/stage2_availability.py` | One implementation for both swarms (spec criterion 50): shared rule validation, timed exclusion, tool-free probe and receipt seal/verify; research entry points for seat admission, lazy probes, the double-fill rule, the report and the bound single-use receipt. With #157 merged, an extraction that leaves review behaviour unchanged; otherwise created to #157's contract at `0c03ec0`. |
+| `scripts/stage2_research_store.py` (new) | Runner-owned state store outside the repository: atomic, flushed launch and result records, owner-only modes, per-change lock, resume binding without HEAD, exact-match reuse, refused-run and complete-run rules; no model call. |
+| `scripts/stage2_swarm.py` | Replace six pairs/Zen discovery with finder, fresh Go selection, provider queues, `33 + 3N` topic slots, typed reports, scores, handoff and frozen-state validation; catalog selection classifies seat candidates instead of failing on fixed ids, the slot plan comes from the consumed selection, and the run looks up, reuses and marks stored results. |
 | `scripts/stage2_research_catalog.mjs` (new) | Use pinned Pi to force a bounded Go-only refresh and return a dated fresh snapshot cross-checked against credential-free models.dev tool_call/status metadata, with explicit capability-unavailable fallback. |
 | `scripts/stage2_research_map.py` (new) | Validate the exact finder/merge union, explicit unread provenance, frozen references and given/suggested/self/no-spec neighbour derivation; no model dispatch or file access. |
 | `scripts/stage2_research_refs.py` (new) | Pure frozen-byte structural Markdown/Python and canonical YAML/JSON reference resolution, shared per-claim excerpt cap; later map/report integration consumes it. |
@@ -44,8 +46,8 @@ not recreated. No file is deleted. Only the ADR is new under `docs/adr/`.
 | `scripts/stage2_research_judge.py` (new) | Fixed documented-capacity packet bound, all-outcome preservation, security/required-failure precedence and independently derived exclusive claim-score counts; no dispatch. |
 | `scripts/stage2_research_tools.mjs` | Retain public-only tools and receipts; verify cancellation and isolated concurrent receipt paths. |
 | `scripts/check_research_handoff.py` (new) | Check v2 decision coverage, answered human links, neighbours and criterion bases; exit 0/1/3. |
-| `model-endpoints.yaml` | Replace Zen endpoint/roles with explicit research roles and dynamic Go-only `online_free` policy/include/exclude; add Qwen research-only without changing the review ladder. |
-| `prompts/01-explore.md` | State finder, topics, identical perspectives, evidence boundaries, class routing and the required research neighbours list (explicit [] allowed). |
+| `model-endpoints.yaml` | Replace Zen endpoint/roles with six seat candidate lists, the research `availability_preflight` rule and dynamic Go-only `online_free` policy/include/exclude; `research_modelle` only for a candidate missing from `modelle`, so the review ladder never changes. |
+| `prompts/01-explore.md` | State finder, topics, identical perspectives, evidence boundaries, class routing, the required research neighbours list (explicit [] allowed), prepare → report in the main conversation → explore with the id, and resume after an abort. |
 | `prompts/01a-interview.md` | Derive linked questions from decisions/disagreements, record stated neighbour keep/drop/add in research_neighbours beside item/claim links, and explain that minimums are no ceiling. |
 | `prompts/02-spec.md` | Require runner-derived neighbour parity and answered research_neighbours keep/drop/add fields, with claim/answer basis for criteria from v2 research. |
 | `prompts/research-swarm/finder.md` (new) | Four locator lists, same input for the trio, no design judgement. |
@@ -56,8 +58,8 @@ not recreated. No file is deleted. Only the ADR is new under `docs/adr/`.
 | `prompts/research-swarm/report.md` (new) | Common structured template: local claim/question ids and links, evidence floor with empty-neighbour topic-5 exception, topic-3 class assessment, exact topic-5 relations and topic-6 volatile/governance fields. |
 | `prompts/research-swarm/judge.md` | All topics, source checks, per-model scoring and complete interview inventory; runner alone derives neighbour status, and the judge cannot change it. |
 | `templates/spec.md` | Document optional given/confirmed `neighbours:` and v2 criterion-basis form. |
-| `AGENTS.md` | Replace obsolete free/six-pair routing and add the handoff rule within the existing size limit. |
-| `docs/WORKFLOW.md` | Align phase 1/1a/2, required research neighbours list (explicit [] allowed), provider concurrency, public boundary and handoff-gate scope; the existing kit manifest carries these phase-1 instructions. |
+| `AGENTS.md` | Replace obsolete free/six-pair and fixed-trio routing, name the preparation step and add the handoff rule within the existing size limit. |
+| `docs/WORKFLOW.md` | Align phase 1/1a/2, required research neighbours list (explicit [] allowed), seat preparation and its report, resume after an abort, provider concurrency, public boundary and handoff-gate scope; the existing kit manifest carries these phase-1 instructions. |
 | `decisions/gates.yaml` | Register `research-handoff`, blocking, both placements, no tracker/history dependency, floor false. |
 | `.github/workflows/ci.yml` | Regenerate from the one gate list; never edit its commands by hand. |
 | `scripts/kit/manifest.yaml` | Carry the new checker and its tests as mechanism; existing prompt-prefix coverage stays. |
@@ -68,17 +70,19 @@ not recreated. No file is deleted. Only the ADR is new under `docs/adr/`.
 | `tests/test_stage2_research_snapshot.py` (new) | Disposable Git fixtures for current tracked bytes, non-ignored untracked change inputs, exact append ownership, changed path/HEAD detection, unsafe inputs and cleanup. |
 | `tests/test_stage2_research_report.py` (new) | Structured report/evidence, malformed JSON/Unicode, no-fabricated-answer, namespace, topic-specific field and common-template contracts. |
 | `tests/test_stage2_research_judge.py` (new) | Exact J/J+1 Unicode packet boundaries, preserved evidence/outcomes, claim coverage and exclusive per-seat score regressions. |
-| `scripts/stage2_research_dispatch.py` (new) | Standalone cancellable dispatcher: provider-wide queues of four, required-first order, serialized gate/audit at dispatch, deadline reserve, security cancel and reap; no model knowledge or writes; not yet wired into `stage2_swarm.run`. |
-| `tests/test_stage2_research_dispatch.py` (new) | Real short-lived child processes prove the four-permit cap across roles, ordering, gate-once, stop/deadline recheck, cancel/reap with partial output, exit precedence and one outcome per slot. |
+| `scripts/stage2_research_dispatch.py` (new) | Standalone cancellable dispatcher: provider-wide queues of four, required-first order, serialized gate/audit at dispatch, deadline reserve, security cancel and reap; no model knowledge or writes; not yet wired into `stage2_swarm.run`. Q-13 adds one `on_terminal` callback before a worker's next launch; a raising callback stops the stage with exit 1. |
+| `tests/test_stage2_research_dispatch.py` (new) | Real short-lived child processes prove the four-permit cap across roles, ordering, gate-once, stop/deadline recheck, cancel/reap with partial output, exit precedence and one outcome per slot; plus callback order and the failed-write stop. |
+| `tests/test_stage2_research_availability.py` (new) | Seat admission, lazy unique probes, double-fill, probe content and limits, report, receipt binding/age/single use, seat-unavailable exit 1, declaration refusals and use of the shared helpers. |
+| `tests/test_stage2_research_store.py` (new) | SIGKILL durability, torn/temporary records, owner-only placement, binding and slot-key matching, refused and complete runs, lock release after a killed run and scrubbing. |
 | `docs/research/2026-10-18-research-judge-capacity.md` (new) | Dated primary capacity/CLI documentation, explicit reserve/conversion estimates and qualification limits. |
 | `tests/test_stage2_research_refs.py` (new) and `tests/fixtures/research_refs/plan-prompt-d862bc2.md` (new) | Structural-reference counterexamples and the verbatim historical prompt used by ruling S-47; no Git history or live-file lookup in the resolver. |
-| `tests/test_stage2_research_catalog.py` (new) | Offline real-pinned-Pi catalog fixtures: forced refresh, provider filtering, shipped-cache contamination, malformed/empty/error outcomes, models.dev intersection/deprecation/failure, and both sources’ audit. |
+| `tests/test_stage2_research_catalog.py` (new) | Offline real-pinned-Pi catalog fixtures: forced refresh, provider filtering, shipped-cache contamination, malformed/empty/error outcomes, models.dev intersection/deprecation/failure, and both sources’ audit; the two fixed-id hard-failure tests become per-candidate outcome tests. |
 | `tests/test_stage2_research_tools.py` | Keep real tool-call shape, destination/receipt faults and concurrent scratch separation checks. |
-| `tests/test_stage2.py` | Retain small-class, Haiku 5.5, other-verb and exact-check regression coverage. |
-| `tests/test_model_endpoints.py` | Resolve static research roles and dynamic public-only Go free permission; validate selection policy; remove Zen free-billing expectations. |
+| `tests/test_stage2.py` | Retain small-class, Haiku 5.5, other-verb and exact-check regression coverage; refuse a receipt id and `prepare-explore` where no swarm runs. |
+| `tests/test_model_endpoints.py` | Resolve seat candidate lists and dynamic public-only Go free permission; validate selection policy and the availability rule; remove Zen free-billing expectations. |
 | `tests/test_research_handoff.py` (new) | Fixture-based gate tests, including lost-decision mutation, archive, neighbour/basis and unmeasured cases. |
 | `tests/test_ci.py` | Verify new gate registration and generated-CI coverage without weakening existing ratchets. |
-| `scripts/ci_gates.py` | Document non-CLI research helper consumers while scheduler integration is pending; retain direct test-import coverage and the existing test-exemption floor. |
+| `scripts/ci_gates.py` | Document non-CLI research helper consumers (now including the state store) while scheduler integration is pending; retain direct test-import coverage and the existing test-exemption floor. |
 | `tests/test_kit.py` | Prove the checker and tests travel without corpus or missing imports. |
 | `plans/changes/research-swarm/spec.md` | Hold the amended contract and neighbour/basis references. |
 | `plans/changes/research-swarm/design.md` | Keep the shaped boundaries consistent with the implementation. |
@@ -86,7 +90,7 @@ not recreated. No file is deleted. Only the ADR is new under `docs/adr/`.
 | `plans/changes/research-swarm/research.md` | Preserve past reports; append redraft facts, capture evidence and later live qualification. |
 | `plans/changes/research-swarm/decisions.md` | Preserve all human answers; append only actual later answers or reasoned detail records. |
 | `plans/changes/research-swarm/findings.md` | Preserve existing reviews and the open offline-capture blocker; record later review dispositions. |
-| `docs/adr/0020-phase-1-research-swarm.md` (new) | Propose this complete amended subsystem in the decision PR. |
+| `docs/adr/0020-phase-1-research-swarm.md` (new) | Propose this complete amended subsystem in the decision PR, including Q-12 seats and Q-13 resume. |
 | `plans/INDEX.md` | Runner regenerates after artifact changes. |
 
 ## Build sequence
@@ -97,6 +101,10 @@ not recreated. No file is deleted. Only the ADR is new under `docs/adr/`.
    sum measured historical and later Time used spans, adding each new span.
    Do not re-ask that settled stop or reset earlier time. A new unbounded
    span raises the appetite stop. Drafting phases 2/3 do not count.
+   Next order (2026-10-18): steps 11 (Q-12) and 12 (Q-13) come before the
+   dispatcher and catalog are wired into the run in steps 2–5 and 7–8,
+   because that wiring consumes the frozen selection and the state store.
+   Steps 1–10 keep their numbers because spec and rulings cite them.
 1. Write red-first fixtures for the amended graph: `39 + 3N` slots, finder
    barrier, 24 repository and `9 + 3N` online calls, identical topic task hashes
    and exact model roles. Include `N=0`, a changed catalog on the next run and
@@ -111,10 +119,11 @@ not recreated. No file is deleted. Only the ADR is new under `docs/adr/`.
    the injected wrapper. Preserve the restricted PATH and synthetic secrets;
    do not execute the installed Pi in orchestration unit tests or disable its
    production version check to make these fixtures pass.
-2. Read role identities from the declaration. Use Go Pi for repository/finder
-   DeepSeek/MiMo, official read-only Claude Code for Haiku and Opus. Declare
-   Qwen research-only and validate purpose/data-class per invocation, not
-   endpoint capability alone; retain default framework residency checks.
+2. Read role identities from the run's frozen seat selection (step 11) and
+   the declaration: Go Pi for `opencode-go` candidates, official read-only
+   Claude Code for `claude-code-plan` candidates and Opus. Validate
+   purpose/data-class per invocation, not endpoint capability alone; retain
+   default framework residency checks.
    Remove Zen transport, its fixed roster/focuses and endpoint billing category.
    Declare `online_free: {provider: opencode-go, suffix: "-free", include: [],
    exclude: []}`: empty include means all eligible chat ids, nonempty narrows,
@@ -137,25 +146,26 @@ not recreated. No file is deleted. Only the ADR is new under `docs/adr/`.
    credential-free GET of https://models.dev/api.json and exact lookup under
    opencode-go.models: boolean tool_call true and status not deprecated.
    Intersect with fresh Pi text-chat -free ids, never union in models.dev-only
-   ids; never infer support from Pi compat flags. Require fixed Go
-   DeepSeek/MiMo/Qwen ids as text-input chat in the fresh overlay: absent,
-   baseline-only, non-chat or malformed typed entry exits 1 before any model
-   as fixed-model-unavailable, naming the id and any raw malformed value.
-   Do not consult models.dev for fixed models or Claude Haiku.
+   ids; never infer support from Pi compat flags. Classify every Go seat
+   candidate against the fresh overlay (Q-12): an absent, baseline-only,
+   non-chat or malformed typed entry is skipped with its reason and raw value
+   and never probed; step 11 stops a seat left without a candidate. Do not
+   consult models.dev for seat candidates or Claude Code ones.
    For models.dev, request failure/timeout, non-200, non-JSON/non-object root,
    absent/non-object opencode-go or models, and duplicate claimed model ids
    are document-level capability-unavailable: exclude all free candidates,
-   retaining 39 fixed slots with N=0 distinct from measured eligible-empty.
+   retaining 39 required slots with N=0 distinct from measured eligible-empty.
    Otherwise exclude only the affected candidate: missing entry is
    metadata-missing; non-object entry, present non-boolean tool_call,
    non-string status or id/key mismatch is metadata-malformed with raw value.
    Absent/false tool_call is no-tool-support; deprecated is deprecated.
    Keep not-chat/baseline-only reasons; ignore other providers' entries.
    An explicit include is still required and exits 1 if ineligible. Start both
-   reads together at catalog preflight; abort unfinished requests at its shared
+   reads together at catalog preflight, now part of preparation (step 11);
+   abort unfinished requests at its shared
    60-second deadline. Unfinished Pi exits 1 whatever models.dev did. Successful
    Pi with unfinished models.dev records capability-unavailable/timeout, N=0
-   and keeps fixed slots unless an explicit include is unmet. Neither read
+   and keeps required slots unless an explicit include is unmet. Neither read
    retries or extends the deadline; models.dev has no Go key or private data.
    Validate Go origin, provider and identities before selection. Record version,
    both sources’ retrieval time/digest/outcome, exact tool_call/status evidence,
@@ -167,22 +177,22 @@ not recreated. No file is deleted. Only the ADR is new under `docs/adr/`.
    refresh, Pi-rejected response, unparseable body or repeated overlay id
    (raw repeated key or one id under two entries) exits 1 before any model.
    Otherwise malformed typed input/type excludes just that -free entry as
-   pi-malformed, recording raw value; malformed fixed entries fail as
-   fixed-model-unavailable with id/value. Other entries are inspected only
+   pi-malformed, recording raw value; a malformed Go seat candidate is
+   skipped the same way. Other entries are inspected only
    for repeated ids. Do not merge duplicate catalog entries during selection.
    Fixture cat-jam-free with input: "text": exclude it as pi-malformed,
-   retain valid peers and all 39 fixed slots. Repeated longcat-2.5-preview-free
-   entries start no model and exit 1. Fixed qwen3.8-flash with string input
-   exits 1 as fixed-model-unavailable with its id/raw value. A Pi runtime
+   retain valid peers and all 39 required slots. Repeated longcat-2.5-preview-free
+   entries start no model and exit 1. A seat candidate qwen3.8-flash with a
+   string input is skipped as pi-malformed with its raw value. A Pi runtime
    rejection remains document-level even when triggered by one entry (S-50).
-   Valid empty selection records `N=0` and retains 39 fixed calls.
+   Valid empty selection records `N=0` and retains 39 required calls.
    Test with a local catalog server and actual pinned Pi refresh implementation;
    force a request despite a fresh cache and reject removed shipped free ids.
    Fixtures join Pi and models.dev by exact provider/id, covering true/false/
    absent tool_call, missing entry/provider, deprecated and non-deprecated
    status, models.dev-only ids, malformed/unreachable metadata and explicit
    includes during capability-unavailable fallback. Failure fixtures assert
-   the fixed-slot graph as well as the exact exit, not just selection output.
+   the required-slot graph as well as the exact exit, not just selection output.
    Add every document-level/per-candidate shape above, including string/null/
    numeric tool_call and a malformed unrelated provider. The object key is
    identity: exact Pi id lookup, required present/equal id field. Parse with
@@ -192,9 +202,9 @@ not recreated. No file is deleted. Only the ADR is new under `docs/adr/`.
    an absent-value marker, and must not exclude a valid peer. Fixture raw
    duplicate JSON before parsing, a-free/b-free both claiming a-free, and
    x-free without id alongside valid y-free. X with tool_call
-   "true" must be excluded while Y with true is selected. Missing fixed Qwen
-   and baseline-only Qwen must start no calls. A fake monotonic clock checks
-   Pi at 5 seconds/models.dev never answers (39 fixed slots after abort at
+   "true" must be excluded while Y with true is selected. A missing or
+   baseline-only Qwen candidate is never probed. A fake monotonic clock checks
+   Pi at 5 seconds/models.dev never answers (39 required slots after abort at
    60) versus Pi never answers/models.dev at 1 second (exit 1, no models).
    At N=1 with a deprecated excluded candidate, require models.dev URL/UTC/
    digest and that candidate's reason/status value; deleting any fails audit.
@@ -307,17 +317,17 @@ not recreated. No file is deleted. Only the ADR is new under `docs/adr/`.
    Security refusal stops/reaps active children, retains available output and
    receipts as cancelled, and exits 2 in preference to any exit 1.
    Budget: `39 + 3N` model invocations; 5-minute sentence, 10-minute finder/
-   researcher/map merge, 15-minute judge, 150-minute run including catalog
-   preflight. All Go Flash/free roles share four permits; no silent roster cap,
+   researcher/map merge, 15-minute judge, 150-minute run after preparation
+   (catalog and probes, step 11). All Go roles share four permits; no silent roster cap,
    retries, debate or delegation. Reserve the judge's 15 minutes. Order queued
    required slots before any free seat: repository topics 1–8 then online
-   Flash 9–11, topic then declared model order; free slots follow by topic then
+   seats 9–11, topic then declared seat order; free slots follow by topic then
    sorted id. Launch only with positive time before the reserve; use the
    lesser role/remainder allowance and recheck after leak scanning. Unlaunched
    slots are not-started-deadline: incomplete only if required. Large free
    rosters cannot spend the reserve or silently lose outcomes.
-5. Build identical task bodies for every seat of a topic (repository trio or
-   Flash trio plus all selected Go free models), with all three common
+5. Build identical task bodies for every seat of a topic (repository seats
+   or online seats plus all selected Go free models), with all three common
    perspectives: state/evidence, counter-evidence/gaps, boundary effects.
    Keep transport metadata separate. Buffer reports until the stage ends or
    aborts so peers cannot read answers from appended research. Online gets
@@ -349,8 +359,8 @@ not recreated. No file is deleted. Only the ADR is new under `docs/adr/`.
    no external request. Record version/source hashes, method, outbound model
    payloads/tool schemas, discovery and file/shell/private-address attempts,
    receipt behavior and canary outcomes in research. Use the repository pin
-   (currently Pi 1.2.0), include Qwen and dynamically selected Go free transport
-   envelopes, plus catalog metadata isolation. A stand-in's argv alone does not satisfy this step.
+   (currently Pi 1.2.0), include online-seat and dynamically selected Go free
+   transport envelopes, one reachability probe, plus catalog metadata isolation. A stand-in's argv alone does not satisfy this step.
 7. Validate topic reports before judge: C1–C7 and Q1… ids unique within
    each report, questions with classification and nonempty local claims list,
    confidence basis/counter-evidence/not-read/neighbour fields, topic-3
@@ -403,7 +413,7 @@ not recreated. No file is deleted. Only the ADR is new under `docs/adr/`.
    4,000-character claim excerpt in citation order, flagged truncated.
 8. Persist fenced research-swarm/v2 manifest, catalog, map, slot, report,
    reconciliation and inventory records append-only in research.md. Mark the
-   fixed 39 slots required and free slots best-effort, each with one terminal
+   39 required slots required and free slots best-effort, each with one terminal
    outcome. Compare HEAD and full frozen digest before publication, excluding
    only runner-owned research appends/updated restamp. Other drift names
    changed paths and exits incomplete 1, preserving reports/excerpts/digests
@@ -492,6 +502,111 @@ not recreated. No file is deleted. Only the ADR is new under `docs/adr/`.
     appetite. Keep F-1 open until actual capture passes. The runner owns the
     checkpoint commit/PR. After decision merge only, qualify real Go/Pi models
     and public retrieval; record failures honestly without a fallback model.
+11. Seat selection and its reported receipt (Q-12; spec criteria 6, 11,
+    17, 20, 37, 38, 40, 41, 43–50; design «Preparation → selection →
+    receipt»). First merge `origin/main` and check whether #157's
+    `scripts/stage2_availability.py` is on it; follow the spec's
+    «One implementation for both swarms» [DETAIL] either way.
+    Red first: write the ledger's not-yet-written tests in
+    `tests/test_stage2_research_availability.py`, `tests/test_model_endpoints.py`
+    and `tests/test_stage2.py`. Turn the two fixed-id hard-failure tests in
+    `tests/test_stage2_research_catalog.py` into the per-candidate tests the
+    ledger names. Run them and record the failures before touching source.
+    Fixtures:
+    - The pinned-wrapper stand-in, scripted per model like the review swarm's
+      `world.script(pi=[...])`, plus a Claude Code stand-in and a fake clock
+      for receipt age.
+    - Selection: a first candidate unreachable, so the second is selected and
+      the first is reported unreachable with a scrubbed error. One candidate
+      in two seats of a trio fills only the first. A candidate in both trios
+      is probed once.
+    - Admission: a candidate without dated terms, with `uebersprungen`,
+      undeclared, absent, baseline-only, non-chat, malformed or under a timed
+      exclusion is never probed and is reported with its reason.
+    - Stop: every candidate of one seat unreachable gives exit 1 with
+      `seat-unavailable`. The seat is named, no receipt is left (an earlier
+      one is deleted) and no research call starts.
+    - Probe content: a canary set (change name, an AGENTS.md line, a path,
+      map text, the public topic) never reaches a probe's payload, argv or
+      environment. Each probe has `--no-tools` or `--tools ""`, a scratch
+      working directory, a 60-second limit, and its own leak check and audit.
+    - Receipt: a wrong id, age 901 s, an edited `model-endpoints.yaml`, a
+      changed class or neighbours, another root, corrupt JSON or a second use
+      each refuse with exit 2 and zero model calls.
+    - Declaration faults of criterion 49 each give exit 2. A receipt id or
+      `prepare-explore` beside bounded, spike or `--stage2-off` gives exit 2.
+    - Never probed: Go free models and Opus. Probes add no run slots, and
+      preparation leaves the worktree bytes unchanged.
+    - A spy shows the research path calling the shared helpers.
+
+    Then implement: the per-candidate outcomes in `select_research_catalog`;
+    the shared helpers with `prepare_research` and `consume_research`; the
+    `prepare-explore` verb and `--availability-reported`; and
+    `research_slot_plan` built from the consumed selection. Enter the six
+    lists and the rule from design.md in `model-endpoints.yaml`. Where #157
+    is merged, run `tests/test_stage2_availability.py` unchanged. Estimate
+    (agent's, not measured): 2 h 15 min, including two full `make verify`
+    waits of about 15 minutes each.
+12. Durable slot results and resume (Q-13; spec criteria 17, 21, 51–58;
+    design «Slot results → state store → resume»). Red first: write the
+    ledger's not-yet-written tests in `tests/test_stage2_research_store.py`
+    and the two new ones in `tests/test_stage2_research_dispatch.py`. Run
+    them and record the failures before touching source. Fixtures: a
+    temporary `XDG_STATE_HOME`, the disposable Git repository of the
+    snapshot tests, and real short-lived children for the dispatcher.
+    - SIGKILL: a driver subprocess dispatches two slots with the store hook.
+      Its `on_terminal` writes the first record, then prints a marker. The
+      test reads the marker from the pipe with a timeout (no sleep loop),
+      kills the driver with SIGKILL, and asserts that the first record is
+      whole and the second slot has a launch record only, read as
+      interrupted.
+    - Torn and temporary record files are never read as results.
+    - Callback order: a blocking `on_terminal` holds back that worker's next
+      launch until it returns. A raising one stops the stage with exit 1 and
+      the reason named; with a security refusal the exit is 2.
+    - Placement: the store is outside the root, the git directory and the
+      model directories, with modes 0700 and 0600. A store-path canary never
+      reaches a payload, argv or environment.
+    - Binding: equal bytes, a foreign tracked edit, an untracked change-input
+      edit, a foreign `research.md` tail, the run's own tail with the
+      `updated:` restamp, and HEAD moved by a commit of the own tail.
+    - Each slot-key field changed once. Outcomes cancelled, failed,
+      timed-out, refused, not-started, interrupted and invalid-report are
+      never reused.
+    - Runs: a complete run clears the store; a refused run is named and
+      never reused.
+    - Lock: a second lock attempt refuses with exit 2; a holder killed with
+      SIGKILL releases its lock.
+    - Credential fragments are scrubbed from every store record.
+    - Swarm level: a resumed run launches only missing slots and stays
+      within `39 + 3N`. Reused slots carry their source run and original
+      times; interrupted slots are listed. Every resumed run has a new run
+      id, manifest and receipt.
+
+    Then implement `stage2_research_store.py`, the `on_terminal` callback in
+    `dispatch`, the comparison of the snapshot digests with stored ones, and
+    the runner's lookup, copy-forward, marking and clear-after-complete.
+    Register the store module in `scripts/ci_gates.py`. Estimate (agent's,
+    not measured): 2 h, including two full `make verify` waits.
+
+## Appetite fit — 2026-10-18
+
+Measured phase-4 time, summed as step 0 says (retained measured history plus
+every Time used span, the unmeasured 2026-10-15 span named but not counted):
+historical 1 h 18 min 2 s (16 min, 11 min 2 s and 51 min, the first and last
+"about"); since 2026-10-17 3 h 38 min 8 s (38:37, 24:56, 40:51, 19:08, 19:09,
+16:45, 24:57, 16:36, 17:09). Total 4 h 56 min 10 s; 8 h 23 min 50 s of the
+13 h 20 min appetite remain. Steps 11 and 12 add about 4 h 15 min. That
+leaves about 4 h 9 min for the work still open from before: wiring finder,
+topics, reports, judge and publication into the run (steps 2–5, 7, 8), the
+role prompts, the handoff gate (step 9), doctrine, kit and CI (step 10), the
+attended F-1 capture (step 6), and review repairs. By this plan's own
+estimate (agent's, not measured), that open work needs about 7 to 8 hours.
+**The appetite does not fit**: the expected shortfall is 3 to 4 hours. The
+Appetite line stays the maintainer's 13 h 20 min, and this plan does not
+widen it. Phase 4 raises the stop when the limit is reached
+(`prompts/04-implement.md`), with steps 11 and 12 already done, because they
+change the run's interfaces.
 
 ## Verification
 
@@ -501,6 +616,8 @@ needed), records actual time including repairs, then runs:
 ```sh
 source .venv/bin/activate
 python3 -m pytest tests/test_stage2_swarm.py tests/test_stage2_research_tools.py tests/test_stage2_research_catalog.py tests/test_pi_contract.py tests/test_stage2.py tests/test_model_endpoints.py tests/test_research_handoff.py tests/test_ci.py tests/test_kit.py -q
+python3 -m pytest tests/test_stage2_research_availability.py tests/test_stage2_research_store.py tests/test_stage2_research_dispatch.py tests/test_stage2_research_snapshot.py -q
+if [ -f tests/test_stage2_availability.py ]; then python3 -m pytest tests/test_stage2_availability.py -q; fi
 python3 scripts/check_interview_minimums.py --change research-swarm
 python3 scripts/check_criterion_ledger.py
 python3 scripts/check_research_handoff.py --change research-swarm
@@ -813,7 +930,9 @@ the existing gates and let the runner own registry regeneration/full verify.
 
 Accepted ADRs, numbered-decision continuity map, adoption records, human answer
 content, session runtime/policy, review-ladder membership/order, sibling
-checkouts, tracker and user configuration stay. No automatic global model
+checkouts, tracker and user configuration stay. `tests/test_stage2_availability.py`
+(the review swarm's, #157) is not edited; where it is on the base it runs
+unchanged as the regression proof for the shared availability helpers. No automatic global model
 policy or Zen/free CLI transport. Only interview/spec traceability changes beyond
 phase 1; other workflow phases and their model routes stay. Existing kit
 exception allowance is not increased to hide new failures.
@@ -826,6 +945,19 @@ fallback as dated evidence: Stage-1 `implement`, `claude-sonnet-5-5`, reason
 "two Flash post-run checks failed" (runner route, 2026-10-15). It is not the
 new exploration route. Future explicit exploration fallbacks carry route,
 model and reason into their plan.
+
+## Draft handoff — 2026-10-18, Q-12 and Q-13 redraft
+
+Baseline `4d11136`, branch `explore/research-swarm`, drafted by an Opus 5.5
+sub-agent with Stage 2 off for this redraft (no foreign model call). Q-13 was
+recorded first (`99e3ed2`). The spec gains criteria 43–58 and amends 6, 11,
+17, 20–22, 24 and 37–42. The design adds the preparation and state-store
+interfaces, the plan steps 11–12 and the appetite fit, and the ADR 0020 draft
+follows. Read for it: #157's availability module, its endpoint block and its
+tests at `0c03ec0` (read-only `git show`); this branch's catalog selection,
+dispatcher, snapshot and `record_dir`. Not read: live catalogs, any
+credential file, the tracker. No `[DECISION]` remains; the mechanism choices
+are spec `[DETAIL]`s.
 
 ## Draft handoff — 2026-10-17, fifth phase-2a incorporation
 
