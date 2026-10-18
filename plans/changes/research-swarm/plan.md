@@ -1978,3 +1978,22 @@ Step 12 (Q-13): durable slot results and resume, built and verified.
   `clear`, the manifest marks and the `39 + 3N` count. The probe-record and
   receipt part of criterion 21's row belongs to `stage2_availability.py`; the
   store test covers store records only.
+
+### New run verified — 2026-10-18
+
+Plan steps 3 (frozen packets, finder trio, map merge, sentence, topics, judge), the run-level fixtures of step 1, the store wiring of step 12 and the Zen removal of step 2. Not done: step 8's obligation inventory and neighbour-status items, step 9 (handoff gate), step 10 (docs and prompt prefixes beyond the run's own prompts), step 6 (real-Pi capture).
+
+- Span (measured, `date -u`): 2026-10-18T21:53:11Z to 2026-10-18T23:25:20Z, 1 h 32 min 09 s, counted against the 17 h 20 min appetite. It includes three full `make verify` runs (about 15 to 16 min each).
+- Commits: `bb9d556` (new run, prompts, tests), `e37b60f` (Zen removal), `c901f29` (ledger tests restored), `f80d262` (concurrency checks made load-proof). Full `make verify` at `f80d262`: 2901 passed, 16 skipped, VERIFY GREEN (markdownlint report-only, as before).
+- Red first, with a stated limit: the new run module was drafted before its tests, so the recorded red is the absent module. `tests/test_stage2_swarm.py` failed to collect with `ModuleNotFoundError: stage2_research_run`; afterwards the first verify was red on the criterion-ledger gate (eight ledger entries named tests of the deleted old run), and the second on one load-dependent concurrency test. Each was repaired in its own round (two repair rounds in all, the limit).
+- Counts: `tests/test_stage2_swarm.py` 138 tests (the old pair/Zen tests are replaced); 60 ledger rows converted from "not yet written" to their tests; 8 rows that named deleted tests now name rewritten ones; 61 "not yet written" rows remain (preparation catalog rows, step 8/9 handoff and inventory, step 10 doctrine, the refs/markdown rows covered by the pure-module tests).
+- Wiring (step 12 open items): `acquire_lock` before the freeze, `resume_source` after it, `plan_reuse` per stage, `adopt` for reused slots, `set_append` before the one research append, `finish_run` and `clear` after publication; `Store.assert_outside` checks the worktree and its git directory.
+- [DETAIL] The run id is the store's 128-bit run id; claims are namespaced by it, so a resumed run has new global claim ids and the judge packet (which holds the run id) is never reused.
+- [DETAIL] `research.md` is appended once, by the runner, at the end or abort of the run (audit lines, reports, partial output, manifest). A SIGKILL leaves the file untouched, which is what the store's exact-tail binding needs; the audit trail of a killed run lives in the store's launch records.
+- [DETAIL] The private brief holds the frozen `research.md` without earlier runner blocks (marked by `<!-- research-swarm/v2 run ... -->`) and without the `updated:` value, so a resumed run builds byte-identical prompts. The topic-6 history packet names the frozen HEAD, so a moved HEAD re-runs topic 6 only.
+- [DETAIL] The judge answers one closed JSON object: `claim_judgements`, `supported_facts`, `assumptions`, `applicability`, `gaps`, `human_questions`, three comparison strings and `disagreements` (two or more known global claim ids and a summary each). No answer field is allowed. Validation reuses `research_claim_scores`.
+- [DETAIL] Model JSON may arrive as the bare object or as one fenced block; the fence is stripped before validation.
+- [DETAIL] The public sentence uses the S-26 allow-list (letters, whitespace, separators, internal hyphens and apostrophes, spaced dashes, one final period or question mark) plus the whole-token name list of the change, the bead and tracked path components.
+- [DETAIL] Persistence is minimal: fenced `research-swarm/v2` blocks for manifest, map, history, each report, the reconciliation with scores and each failed slot's partial output. The runner-derived obligation inventory and H-items (step 8) are not written yet.
+- [DETAIL] `model-endpoints.yaml` keeps `paid_endpoint`, `topic_author` and `judge`; `finder_merge` falls back to the judge model. `test_model_endpoints.py::swarm_block_problems` now checks those roles, the `public-web` class and that the removed keys stay gone.
+- Open: step 8 inventory and neighbour statuses (ledger rows 29 to 31), step 9 and step 10, the real-Pi capture, and the preparation-level rows (`test_catalog_failure_stops_before_all_model_calls` and similar).
