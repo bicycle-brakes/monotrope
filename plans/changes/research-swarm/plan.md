@@ -1559,3 +1559,28 @@ already pushed. Actual amended runtime, role prompts, complete judge/handoff,
 attended F-1 capture and fresh independent phase-6 review remain unfinished;
 PR #158 stays draft. No model call, credential-file read, customer-instance
 access, stash, amend, force push or merge occurred.
+
+
+### Cancellable dispatcher foundation verified — 2026-10-18
+
+Measured phase-4 span: 11:44:49–12:01:25 UTC, 16 minutes 36 seconds. Count
+once after the preceding retained intervals under the unchanged 13h20m
+appetite. Includes the full verification wait.
+
+Implemented a standalone cancellable dispatcher (`scripts/stage2_research_dispatch.py`),
+not yet wired into `stage2_swarm.run`: provider-wide queues of four shared across
+roles and topics, required-first order, gate and audit serialized under one lock
+immediately before launch with stop/deadline checked before and after gating,
+the judge reserve with a child allowance of the lesser of role limit and
+remaining time, security refusal that cancels queued slots and terminates and
+reaps running process groups while keeping partial output as cancelled, exit
+precedence 2 over 1 over 0, one terminal outcome and one identity per slot,
+no retries. Criterion-ledger rows 12, 13, 19 and 36 stay pending: they name
+wired-runner tests in `tests/test_stage2_swarm.py`.
+
+Red evidence: 18 of 18 new tests failed on the missing module before the
+implementation; all 18 then passed with no test weakened or changed in meaning
+(afterwards only lint renames of unused arguments). Focused: 18 passed in about
+3.4 seconds; `tests/test_ci.py` 95 passed, 2 skipped with the new registration.
+Complete make verify GREEN: 2618 passed, 16 skipped in 709.20 seconds, every
+gate green, process exit 0. Documentation/Markdown findings remain report-only.
