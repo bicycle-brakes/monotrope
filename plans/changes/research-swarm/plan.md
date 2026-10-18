@@ -18,9 +18,9 @@ tags: [plan, stage-2, research, swarm]
 # Plan — research-swarm
 
 ```text
-For you:     Larger changes get mapped sources, three repository and three online views per topic from per-seat model lists checked before each run and shown to you first, live-selected Go free online views, traceable questions and spec criteria, and finished research kept when a run stops early.
+For you:     Larger changes get mapped sources, three repository and three online views per topic from per-seat preferred models with the cheapest admitted Go model as live substitute, checked before each run and shown to you first, live-selected Go free online views, traceable questions and spec criteria, and finished research kept when a run stops early.
 Done when:   Reported seat selection, fresh Go-only free selection, durable resumable slot results, topic coverage, offline isolation capture and research-to-interview-to-spec checks hold, and make verify is green.
-Appetite:    13 hours 20 minutes of phase 4 in total (maintainer, 2026-10-17), including earlier implementation and repairs; stop at the limit.
+Appetite:    17 hours 20 minutes of phase 4 in total (maintainer, 2026-10-18), including earlier implementation and repairs; stop at the limit.
 Not now:     Zen or OpenCode CLI models, model-specific perspectives, the implementation-review swarm or sibling checkouts.
 Pre-mortem:  suppose it failed: most likely because an online context inherited private repository information.
 Starts unless you say stop.
@@ -36,7 +36,7 @@ not recreated. No file is deleted. Only the ADR is new under `docs/adr/`.
 | `scripts/stage2.py` | Preserve early-class/fallback routing; expose checked, cancellable read-only launches for Pi and official Claude; add the `prepare-explore` verb and `explore --availability-reported`, both refused where no swarm runs. |
 | `scripts/stage2_availability.py` | One implementation for both swarms (spec criterion 50): shared rule validation, timed exclusion, tool-free probe and receipt seal/verify; research entry points for seat admission, lazy probes, the double-fill rule, the report and the bound single-use receipt. With #157 merged, an extraction that leaves review behaviour unchanged; otherwise created to #157's contract at `0c03ec0`. |
 | `scripts/stage2_research_store.py` (new) | Runner-owned state store outside the repository: atomic, flushed launch and result records, owner-only modes, per-change lock, resume binding without HEAD, exact-match reuse, refused-run and complete-run rules; no model call. |
-| `scripts/stage2_swarm.py` | Replace six pairs/Zen discovery with finder, fresh Go selection, provider queues, `33 + 3N` topic slots, typed reports, scores, handoff and frozen-state validation; catalog selection classifies seat candidates instead of failing on fixed ids, the slot plan comes from the consumed selection, and the run looks up, reuses and marks stored results. |
+| `scripts/stage2_swarm.py` | Replace six pairs/Zen discovery with finder, fresh Go selection, provider queues, `33 + 3N` topic slots, typed reports, scores, handoff and frozen-state validation; catalog selection classifies preferred and pool Go models instead of failing on fixed ids, the slot plan comes from the consumed selection, and the run looks up, reuses and marks stored results. |
 | `scripts/stage2_research_catalog.mjs` (new) | Use pinned Pi to force a bounded Go-only refresh and return a dated fresh snapshot cross-checked against credential-free models.dev tool_call/status metadata, with explicit capability-unavailable fallback. |
 | `scripts/stage2_research_map.py` (new) | Validate the exact finder/merge union, explicit unread provenance, frozen references and given/suggested/self/no-spec neighbour derivation; no model dispatch or file access. |
 | `scripts/stage2_research_refs.py` (new) | Pure frozen-byte structural Markdown/Python and canonical YAML/JSON reference resolution, shared per-claim excerpt cap; later map/report integration consumes it. |
@@ -46,7 +46,7 @@ not recreated. No file is deleted. Only the ADR is new under `docs/adr/`.
 | `scripts/stage2_research_judge.py` (new) | Fixed documented-capacity packet bound, all-outcome preservation, security/required-failure precedence and independently derived exclusive claim-score counts; no dispatch. |
 | `scripts/stage2_research_tools.mjs` | Retain public-only tools and receipts; verify cancellation and isolated concurrent receipt paths. |
 | `scripts/check_research_handoff.py` (new) | Check v2 decision coverage, answered human links, neighbours and criterion bases; exit 0/1/3. |
-| `model-endpoints.yaml` | Replace Zen endpoint/roles with six seat candidate lists, the research `availability_preflight` rule and dynamic Go-only `online_free` policy/include/exclude; `research_modelle` only for a candidate missing from `modelle`, so the review ladder never changes. |
+| `model-endpoints.yaml` | Replace Zen endpoint/roles with six preferred seat models (no fallback lists, Q-14), the research `availability_preflight` rule with `measured_wire_apis` and dynamic Go-only `online_free` policy/include/exclude. A `modelle_terms` record alone admits a research model, so the review ladder never changes. |
 | `prompts/01-explore.md` | State finder, topics, identical perspectives, evidence boundaries, class routing, the required research neighbours list (explicit [] allowed), prepare → report in the main conversation → explore with the id, and resume after an abort. |
 | `prompts/01a-interview.md` | Derive linked questions from decisions/disagreements, record stated neighbour keep/drop/add in research_neighbours beside item/claim links, and explain that minimums are no ceiling. |
 | `prompts/02-spec.md` | Require runner-derived neighbour parity and answered research_neighbours keep/drop/add fields, with claim/answer basis for criteria from v2 research. |
@@ -79,7 +79,7 @@ not recreated. No file is deleted. Only the ADR is new under `docs/adr/`.
 | `tests/test_stage2_research_catalog.py` (new) | Offline real-pinned-Pi catalog fixtures: forced refresh, provider filtering, shipped-cache contamination, malformed/empty/error outcomes, models.dev intersection/deprecation/failure, and both sources’ audit; the two fixed-id hard-failure tests become per-candidate outcome tests. |
 | `tests/test_stage2_research_tools.py` | Keep real tool-call shape, destination/receipt faults and concurrent scratch separation checks. |
 | `tests/test_stage2.py` | Retain small-class, Haiku 5.5, other-verb and exact-check regression coverage; refuse a receipt id and `prepare-explore` where no swarm runs. |
-| `tests/test_model_endpoints.py` | Resolve seat candidate lists and dynamic public-only Go free permission; validate selection policy and the availability rule; remove Zen free-billing expectations. |
+| `tests/test_model_endpoints.py` | Resolve preferred seat models and dynamic public-only Go free permission; validate selection policy and the availability rule; remove Zen free-billing expectations. |
 | `tests/test_research_handoff.py` (new) | Fixture-based gate tests, including lost-decision mutation, archive, neighbour/basis and unmeasured cases. |
 | `tests/test_ci.py` | Verify new gate registration and generated-CI coverage without weakening existing ratchets. |
 | `scripts/ci_gates.py` | Document non-CLI research helper consumers (now including the state store) while scheduler integration is pending; retain direct test-import coverage and the existing test-exemption floor. |
@@ -96,7 +96,8 @@ not recreated. No file is deleted. Only the ADR is new under `docs/adr/`.
 ## Build sequence
 
 0. Before phase-4 code or tests, read the maintainer's answered appetite
-   stop under Time used: continue with 13 hours 20 minutes in total.
+   stop under Time used: continue with 17 hours 20 minutes in total
+   (raised from 13 hours 20 minutes on 2026-10-18, Q-14).
    Preserve the named unmeasured historical span without counting it;
    sum measured historical and later Time used spans, adding each new span.
    Do not re-ask that settled stop or reset earlier time. A new unbounded
@@ -150,7 +151,8 @@ not recreated. No file is deleted. Only the ADR is new under `docs/adr/`.
    candidate against the fresh overlay (Q-12): an absent, baseline-only,
    non-chat or malformed typed entry is skipped with its reason and raw value
    and never probed; step 11 stops a seat left without a candidate. Do not
-   consult models.dev for seat candidates or Claude Code ones.
+   let models.dev decide a preferred model or a Claude Code one; pool models
+   need it (Q-14).
    For models.dev, request failure/timeout, non-200, non-JSON/non-object root,
    absent/non-object opencode-go or models, and duplicate claimed model ids
    are document-level capability-unavailable: exclude all free candidates,
@@ -177,12 +179,12 @@ not recreated. No file is deleted. Only the ADR is new under `docs/adr/`.
    refresh, Pi-rejected response, unparseable body or repeated overlay id
    (raw repeated key or one id under two entries) exits 1 before any model.
    Otherwise malformed typed input/type excludes just that -free entry as
-   pi-malformed, recording raw value; a malformed Go seat candidate is
+   pi-malformed, recording raw value; a malformed preferred or pool Go model is
    skipped the same way. Other entries are inspected only
    for repeated ids. Do not merge duplicate catalog entries during selection.
    Fixture cat-jam-free with input: "text": exclude it as pi-malformed,
    retain valid peers and all 39 required slots. Repeated longcat-2.5-preview-free
-   entries start no model and exit 1. A seat candidate qwen3.8-flash with a
+   entries start no model and exit 1. A preferred qwen3.8-flash with a
    string input is skipped as pi-malformed with its raw value. A Pi runtime
    rejection remains document-level even when triggered by one entry (S-50).
    Valid empty selection records `N=0` and retains 39 required calls.
@@ -502,9 +504,9 @@ not recreated. No file is deleted. Only the ADR is new under `docs/adr/`.
     appetite. Keep F-1 open until actual capture passes. The runner owns the
     checkpoint commit/PR. After decision merge only, qualify real Go/Pi models
     and public retrieval; record failures honestly without a fallback model.
-11. Seat selection and its reported receipt (Q-12; spec criteria 6, 11,
-    17, 20, 37, 38, 40, 41, 43–50; design «Preparation → selection →
-    receipt»). First merge `origin/main` and check whether #157's
+11. Seat selection and its reported receipt (Q-12, Q-14; spec criteria 6,
+    11, 17, 20, 37, 38, 40, 41, 43–50, 59–61; design «Preparation →
+    selection → receipt»). First merge `origin/main` and check whether #157's
     `scripts/stage2_availability.py` is on it; follow the spec's
     «One implementation for both swarms» [DETAIL] either way.
     Red first: write the ledger's not-yet-written tests in
@@ -516,16 +518,27 @@ not recreated. No file is deleted. Only the ADR is new under `docs/adr/`.
     - The pinned-wrapper stand-in, scripted per model like the review swarm's
       `world.script(pi=[...])`, plus a Claude Code stand-in and a fake clock
       for receipt age.
-    - Selection: a first candidate unreachable, so the second is selected and
-      the first is reported unreachable with a scrubbed error. One candidate
-      in two seats of a trio fills only the first. A candidate in both trios
-      is probed once.
-    - Admission: a candidate without dated terms, with `uebersprungen`,
-      undeclared, absent, baseline-only, non-chat, malformed or under a timed
-      exclusion is never probed and is reported with its reason.
-    - Stop: every candidate of one seat unreachable gives exit 1 with
-      `seat-unavailable`. The seat is named, no receipt is left (an earlier
-      one is deleted) and no research call starts.
+    - Fixture catalog: preferred models plus at least four admitted pool
+      models with distinct and tied `anfragen_5h` values, one model with a
+      terms record but no cost value, one overlay model without a terms
+      record, one with `uebersprungen`, one on `anthropic-messages` and one
+      that models.dev marks `tool_call: false` or deprecated.
+    - Selection: an unreachable preferred model gets the cheapest reachable
+      pool model, reported as "substitute for <seat>" and named unreachable
+      with a scrubbed error. A tie is broken by id. A substitute never takes
+      another seat's reachable preferred model, and one model never fills
+      two seats of a trio. A model in both trios is probed once. Running the
+      same fixture twice gives the same selection.
+    - Admission: every model of the fixture catalog's last four kinds, and
+      any undeclared, absent, baseline-only, non-chat, malformed or timed-out
+      one, is never probed and is reported with its reason. With models.dev
+      unavailable the pool is empty and the preferred models still serve.
+    - Dynamic pool: adding one `modelle_terms` record to the fixture puts that
+      model into the pool at its cost position, with no other edit and an
+      unchanged review ladder.
+    - Stop: an unreachable preferred model with an empty or unreachable pool
+      gives exit 1 with `seat-unavailable`. The seat is named, no receipt is
+      left (an earlier one is deleted) and no research call starts.
     - Probe content: a canary set (change name, an AGENTS.md line, a path,
       map text, the public topic) never reaches a probe's payload, argv or
       environment. Each probe has `--no-tools` or `--tools ""`, a scratch
@@ -533,20 +546,24 @@ not recreated. No file is deleted. Only the ADR is new under `docs/adr/`.
     - Receipt: a wrong id, age 901 s, an edited `model-endpoints.yaml`, a
       changed class or neighbours, another root, corrupt JSON or a second use
       each refuse with exit 2 and zero model calls.
-    - Declaration faults of criterion 49 each give exit 2. A receipt id or
+    - Declaration faults of criterion 49 each give exit 2, a second model or
+      fallback list in a seat included. A receipt id or
       `prepare-explore` beside bounded, spike or `--stage2-off` gives exit 2.
     - Never probed: Go free models and Opus. Probes add no run slots, and
       preparation leaves the worktree bytes unchanged.
     - A spy shows the research path calling the shared helpers.
 
-    Then implement: the per-candidate outcomes in `select_research_catalog`;
-    the shared helpers with `prepare_research` and `consume_research`; the
+    Then implement: the per-model outcomes in `select_research_catalog`,
+    including `api` against `measured_wire_apis`; the substitute pool built
+    from #157's `terms_problem`, `request_value` and `ordered_models`; the
+    shared helpers with `prepare_research` and `consume_research`; the
     `prepare-explore` verb and `--availability-reported`; and
     `research_slot_plan` built from the consumed selection. Enter the six
-    lists and the rule from design.md in `model-endpoints.yaml`. Where #157
-    is merged, run `tests/test_stage2_availability.py` unchanged. Estimate
-    (agent's, not measured): 2 h 15 min, including two full `make verify`
-    waits of about 15 minutes each.
+    preferred models and the rule from design.md in `model-endpoints.yaml`.
+    Where #157 is merged, run `tests/test_stage2_availability.py` unchanged.
+    Estimate (agent's, not measured): 2 h 45 min, including two full `make
+    verify` waits of about 15 minutes each; Q-14's pool adds about 30
+    minutes to the 2 h 15 min estimated for Q-12 alone.
 12. Durable slot results and resume (Q-13; spec criteria 17, 21, 51–58;
     design «Slot results → state store → resume»). Red first: write the
     ledger's not-yet-written tests in `tests/test_stage2_research_store.py`
@@ -607,6 +624,14 @@ Appetite line stays the maintainer's 13 h 20 min, and this plan does not
 widen it. Phase 4 raises the stop when the limit is reached
 (`prompts/04-implement.md`), with steps 11 and 12 already done, because they
 change the run's interfaces.
+
+2026-10-18, after this section was shown: the maintainer answered "erhöhe
+das zeizbudget" (Q-14) and set the total to 17 h 20 min, against the
+recommended 17 h 20 min. With the measured 4 h 56 min 10 s above, 12 h 23 min
+50 s remain. Q-14 raises step 11 to about 2 h 45 min, so steps 11 and 12
+need about 4 h 45 min. That leaves about 7 h 39 min for the older open work
+estimated at 7 to 8 hours: it fits at the low end of that estimate and runs
+about 20 minutes short at the high end. The stop rule stays as above.
 
 ## Verification
 
@@ -705,7 +730,7 @@ the existing gates and let the runner own registry regeneration/full verify.
 - 16: tests/test_stage2_research_refs.py::test_reference_augmented_assignment_counts_as_an_ambiguous_rebinding — A later augmented assignment silently leaves the original definition unambiguous.
 - 16: tests/test_stage2_research_refs.py::test_reference_python_type_alias_has_its_module_assignment_extent — A Python 3.12 type alias lacks its exact assignment extent or duplicate aliases become unambiguous.
 - 38: tests/test_stage2_research_catalog.py::test_preflight_free_definition_cannot_redirect_its_declared_go_origin — A free definition changes provider/origin instead of being excluded with raw evidence.
-- 38: not yet written tests/test_stage2_research_catalog.py::test_preflight_seat_candidate_definition_cannot_redirect_its_go_origin — A Go seat candidate whose definition redirects its declared origin is probed or selected instead of skipped as pi-malformed with its raw value.
+- 38: not yet written tests/test_stage2_research_catalog.py::test_preflight_seat_candidate_definition_cannot_redirect_its_go_origin — A preferred or pool Go model whose definition redirects its declared origin is probed or selected instead of skipped as pi-malformed with its raw value.
 
 
 - 16: tests/test_stage2_research_refs.py::test_reference_markdown_rejects_nonstructural_or_ambiguous_heading — Standalone resolution treats prose, frontmatter, fences, Setext or duplicate titles as an exact ATX heading.
@@ -730,7 +755,7 @@ the existing gates and let the runner own registry regeneration/full verify.
 - 39: tests/test_stage2_research_catalog.py::test_preflight_missing_metadata_field_is_local_and_explicit — Missing identity or tool support is silently accepted or loses its absence marker.
 - 39: tests/test_stage2_research_catalog.py::test_preflight_ignores_unrelated_provider_and_never_adds_metadata_only_ids — Metadata outside the fresh Go intersection selects a free identity.
 - 39: tests/test_stage2_research_catalog.py::test_preflight_include_is_checked_before_exclude_and_both_are_audited — Exclude hides an unmet explicit include or selection loses policy dispositions.
-- 38: not yet written tests/test_stage2_research_catalog.py::test_preflight_missing_or_non_chat_seat_candidate_is_skipped — A missing or non-chat Go seat candidate fails the whole preflight or is probed instead of being skipped with its reason.
+- 38: not yet written tests/test_stage2_research_catalog.py::test_preflight_missing_or_non_chat_seat_candidate_is_skipped — A missing or non-chat preferred or pool Go model fails the whole preflight or is probed instead of being skipped with its reason.
 - 41: tests/test_stage2_research_catalog.py::test_preflight_unsuccessful_pi_response_is_not_measured_empty_or_retried — An unsuccessful public Pi GET becomes an empty roster or performs a second network attempt.
 - 41: tests/test_stage2_research_catalog.py::test_preflight_rejects_raw_pi_duplicate_identity_before_selection — Raw repeated Pi keys or equal identities survive permissive runtime parsing.
 - 42: tests/test_stage2_research_catalog.py::test_preflight_shared_deadline_has_asymmetric_failure_rules — The local-source reads use independent deadlines or metadata timeout blocks fixed eligibility.
@@ -750,7 +775,7 @@ the existing gates and let the runner own registry regeneration/full verify.
 - 8: not yet written tests/test_stage2_swarm.py::test_online_requests_exclude_private_inputs_and_ambient_paths — A canary from rules, paths, identifiers, finder output, history or private reports appears in an outbound payload or query.
 - 9: tests/test_stage2_research_tools.py::test_public_tools_cannot_read_local_or_private_sources — A file or shell tool is available, ambient context is discovered, or fetching reaches local files or private network addresses.
 - 10: not yet written tests/test_stage2_swarm.py::test_online_claims_require_successful_page_receipts — Search-only, snippet or invented receipts support a claim, or a receiptless claim is not retained as unsupported; a report with no evidence-backed claim is accepted.
-- 11: not yet written tests/test_stage2_swarm.py::test_role_permissions_do_not_follow_endpoint_privileges — An online-seat candidate receives the framework packet, or a model outside its seat's frozen selection or role is launched.
+- 11: not yet written tests/test_stage2_swarm.py::test_role_permissions_do_not_follow_endpoint_privileges — An online seat's model receives the framework packet, or a model outside its seat's frozen selection or role is launched.
 - 12: not yet written tests/test_stage2_swarm.py::test_leak_block_cancels_queued_dispatch — One scan covers multiple prompts, a queued call starts after BLOCK, a running child is awaited instead of stopped, available partial output is lost instead of retained as cancelled, or exit 1 overrides exit 2.
 - 13: not yet written tests/test_stage2_swarm.py::test_concurrent_slots_keep_distinct_audits_and_outcomes — Concurrent output cannot be assigned to a slot, or a failed slot is audited as successful.
 - 14: not yet written tests/test_stage2_swarm.py::test_fresh_opus_reconciles_eleven_topics_and_map — Another model judges, a peer session resumes, a required topic disappears or Opus has any tool.
@@ -847,8 +872,8 @@ the existing gates and let the runner own registry regeneration/full verify.
 - 30: not yet written tests/test_research_handoff.py::test_cross_run_neighbour_conflicts_require_linked_human_answers — Latest-only parity passes; unanswered conflict passes with either header, keep passes without the path or drop passes with it.
 - 31: not yet written tests/test_research_handoff.py::test_cross_run_neighbour_conflicts_require_linked_human_answers — Either cross-run conflict lacks path, both source runs or source evidence.
 - 32: not yet written tests/test_research_handoff.py::test_cross_run_neighbour_conflicts_require_linked_human_answers — An unanswered cross-run item passes despite a spec, or a prior complete run loses authority.
-- 38: not yet written tests/test_stage2_research_catalog.py::test_go_seat_candidates_require_fresh_text_chat_entries — An absent, baseline-only or non-chat Go seat candidate is probed or selected, or models.dev is consulted for a seat candidate.
-- 45: not yet written tests/test_stage2_research_availability.py::test_a_seat_whose_candidates_all_miss_the_fresh_catalog_stops — A seat whose every Go candidate misses the fresh overlay is not named as seat-unavailable with exit 1 before any call.
+- 38: not yet written tests/test_stage2_research_catalog.py::test_go_seat_candidates_require_fresh_text_chat_entries — An absent, baseline-only or non-chat preferred or pool Go model is probed or selected, or models.dev decides a preferred model.
+- 45: not yet written tests/test_stage2_research_availability.py::test_a_seat_whose_candidates_all_miss_the_fresh_catalog_stops — A seat whose preferred model and whole pool miss the fresh overlay is not named as seat-unavailable with exit 1 before any call.
 - 42: not yet written tests/test_stage2_research_catalog.py::test_capability_document_faults_and_candidate_faults_are_distinct — A malformed candidate excludes a valid peer, a non-boolean tool_call selects a seat, or a document-level fault is treated as measured absence.
 - 39: not yet written tests/test_stage2_research_catalog.py::test_capability_document_faults_and_candidate_faults_are_distinct — Candidate eligibility ignores exact metadata shape or an unrelated provider's malformed entry disables selection.
 - 41: not yet written tests/test_stage2_research_catalog.py::test_catalog_shared_deadline_keeps_asymmetric_failure_rules — Pi unfinished at 60 seconds dispatches calls or successful Pi plus timed-out models.dev aborts fixed work.
@@ -881,7 +906,7 @@ the existing gates and let the runner own registry regeneration/full verify.
 - 10: not yet written tests/test_stage2_swarm.py::test_claim_requires_every_citation_before_excerpts_or_scoring — One successful page receipt hides another unreceipted URL in the same claim.
 - 16: not yet written tests/test_stage2_swarm.py::test_claim_requires_every_citation_before_excerpts_or_scoring — One resolving citation hides an unresolved citation, grants an excerpt or satisfies the report floor.
 - 28: not yet written tests/test_stage2_swarm.py::test_claim_requires_every_citation_before_excerpts_or_scoring — An unsupported mixed-citation claim gets an excerpt or disposition.
-- 38: not yet written tests/test_stage2_research_catalog.py::test_pi_overlay_duplicates_block_but_malformed_candidates_are_local — A malformed Go seat candidate entry is probed or selected instead of skipped as pi-malformed with its raw value.
+- 38: not yet written tests/test_stage2_research_catalog.py::test_pi_overlay_duplicates_block_but_malformed_candidates_are_local — A malformed preferred or pool Go model entry is probed or selected instead of skipped as pi-malformed with its raw value.
 - 41: not yet written tests/test_stage2_research_catalog.py::test_pi_overlay_duplicates_block_but_malformed_candidates_are_local — A repeated overlay id starts any model or is silently merged.
 - 42: not yet written tests/test_stage2_research_catalog.py::test_pi_overlay_duplicates_block_but_malformed_candidates_are_local — One bad Pi candidate blocks 39 required slots, excludes valid peers or loses pi-malformed/raw value.
 - 29: not yet written tests/test_stage2_swarm.py::test_neighbour_status_ignores_relations_without_valid_claims — Unsupported-only evidence confirms/rejects a path instead of split, or judge disposition changes runner validity.
@@ -891,25 +916,30 @@ the existing gates and let the runner own registry regeneration/full verify.
 - 4: not yet written tests/test_stage2.py::test_stage2_off_skips_class_and_neighbours_but_refuses_class_argument — Class checks leak into explicit fallback or an ineffective --class is accepted beside it.
 - 20: not yet written tests/test_stage2.py::test_stage2_off_skips_class_and_neighbours_but_refuses_class_argument — Bead-only or invalid class/neighbour headers block fallback, route/model/reason disappear, or --class permits any call.
 
-- 43: not yet written tests/test_stage2_research_availability.py::test_each_seat_takes_its_first_admitted_reachable_unused_candidate — A later candidate wins while an earlier one is admitted, unexcluded, reachable and unused, or one candidate fills two seats of a trio.
-- 43: not yet written tests/test_stage2_research_availability.py::test_unadmitted_or_excluded_candidates_are_never_probed_or_selected — A candidate without dated terms, with a skip mark, undeclared, absent from the fresh overlay or under a timed exclusion is probed or selected.
+- 43: not yet written tests/test_stage2_research_availability.py::test_preferred_models_come_first_and_substitutes_never_take_them — A substitute replaces an admitted, unexcluded, reachable preferred model or takes another seat's reachable preferred model, or one model fills two seats of a trio.
+- 43: not yet written tests/test_stage2_research_availability.py::test_unadmitted_or_excluded_models_are_never_probed_or_selected — A model with a skip mark, undeclared, absent from the fresh overlay, on an unmeasured wire API or under a timed exclusion is probed or selected.
 - 43: not yet written tests/test_stage2_swarm.py::test_finders_use_the_repository_seat_selection — A finder runs a model other than its repository seat's selection.
-- 44: not yet written tests/test_stage2_research_availability.py::test_report_names_every_seat_candidate_and_check_time — The printed report omits a seat, a candidate's reason, the free selection or the UTC check time.
+- 44: not yet written tests/test_stage2_research_availability.py::test_report_names_every_seat_candidate_and_check_time — The printed report omits a seat, a substitute's "substitute for <seat>" mark, a model's reason, the pool in cost order, the free selection or the UTC check time.
 - 44: not yet written tests/test_stage2_research_availability.py::test_receipt_is_bound_single_use_and_fresh — A research call starts without the id, after the maximum age, after a bound input changed, from another worktree or from a consumed or corrupt receipt, or the refusal exits other than 2.
 - 44: not yet written tests/test_stage2.py::test_receipt_id_is_refused_where_no_swarm_runs — Bounded, spike or --stage2-off exploration requires or accepts --availability-reported, or prepare-explore runs there.
 - 20: not yet written tests/test_stage2.py::test_receipt_id_is_refused_where_no_swarm_runs — An --availability-reported id beside --stage2-off is accepted.
-- 45: not yet written tests/test_stage2_research_availability.py::test_a_seat_without_candidate_stops_before_research_with_exit_one — A receipt stays usable, a research call starts, the empty seat is unnamed, the exit is not 1 or the seat is filled from outside its list.
-- 46: not yet written tests/test_stage2_swarm.py::test_selection_is_frozen_for_the_run_and_recorded — A failing selected model is replaced, retried or probed again, a later preparation changes a running run, or the manifest lacks the receipt id, a selection or a candidate reason.
+- 45: not yet written tests/test_stage2_research_availability.py::test_a_seat_without_candidate_stops_before_research_with_exit_one — A receipt stays usable, a research call starts, the empty seat is unnamed, the exit is not 1, or the seat is filled from outside its preferred model and the pool.
+- 46: not yet written tests/test_stage2_swarm.py::test_selection_is_frozen_for_the_run_and_recorded — A failing selected model is replaced, retried or probed again, a later preparation changes a running run, or the manifest lacks the receipt id, a selection with its preferred or substitute mark, or a model's reason.
 - 47: not yet written tests/test_stage2_research_availability.py::test_probes_send_only_the_fixed_text_without_tools — A private canary reaches a probe's payload, argv or environment, a tool is available, a bare pi or unofficial Claude client runs, or a probe lacks its leak check, audit record or 60-second limit.
-- 47: not yet written tests/test_stage2_research_availability.py::test_claude_code_candidate_is_probed_through_official_claude — A Claude Code candidate counts as reachable without a probe or is probed with a tool.
+- 47: not yet written tests/test_stage2_research_availability.py::test_claude_code_candidate_is_probed_through_official_claude — A Claude Code preferred model counts as reachable without a probe or is probed with a tool.
 - 47: not a test — step 6's real-Pi offline capture also records one probe's outbound payload; a private canary in it refutes the criterion.
-- 48: not yet written tests/test_stage2_research_availability.py::test_probes_are_lazy_unique_and_outside_the_run_budget — A candidate is probed twice or after its seats were filled, a free model or Opus role is probed, a worktree file changes, or probes reduce the run's slots.
+- 48: not yet written tests/test_stage2_research_availability.py::test_probes_are_lazy_unique_and_outside_the_run_budget — A model is probed twice, a pool model is probed while no seat needs it or a cheaper usable one is untried, a free model or Opus role is probed, a worktree file changes, or probes reduce the run's slots.
 - 17: not yet written tests/test_stage2_research_availability.py::test_probes_are_lazy_unique_and_outside_the_run_budget — Preparation changes a file in the worktree.
-- 49: not yet written tests/test_model_endpoints.py::test_seat_candidate_lists_and_availability_rule_are_validated — An empty, duplicated, undeclared, -free, off-Go online or no-framework repository candidate, or a malformed maximum age or exclusion, passes declaration validation.
-- 40: not yet written tests/test_model_endpoints.py::test_seat_candidate_lists_and_availability_rule_are_validated — A -free id in a seat's candidate list passes.
-- 49: not yet written tests/test_stage2_research_availability.py::test_malformed_seat_declaration_refuses_before_any_call — A malformed declaration lets a probe or research call start or exits other than 2.
+- 49: not yet written tests/test_model_endpoints.py::test_seat_candidate_lists_and_availability_rule_are_validated — A seat without a preferred model or with a second model or fallback list, an undeclared, -free, off-Go online or no-framework repository model, or a malformed maximum age, wire-API set or exclusion, passes declaration validation.
+- 40: not yet written tests/test_model_endpoints.py::test_seat_candidate_lists_and_availability_rule_are_validated — A -free id as a seat's preferred model passes.
+- 49: not yet written tests/test_stage2_research_availability.py::test_malformed_seat_declaration_refuses_before_any_call — A malformed declaration lets a probe or research call start, a declared fallback list is consulted, or the refusal exits other than 2.
 - 50: not yet written tests/test_stage2_research_availability.py::test_research_preparation_uses_the_shared_availability_helpers — The research path defines its own rule validation, timed-exclusion matching, probe or receipt sealing instead of the shared functions.
 - 50: not a test — phase-6 review and the verification run of tests/test_stage2_availability.py wherever the review swarm's preparation is on the base branch; a changed or failing review availability test refutes the criterion.
+- 59: not yet written tests/test_stage2_research_availability.py::test_substitute_is_the_cheapest_reachable_unused_pool_model — A costlier pool model wins while a cheaper one is unexcluded, reachable and unused, or a tie is not broken by id.
+- 59: not yet written tests/test_stage2_research_availability.py::test_frozen_inputs_give_the_same_selection_twice — Two preparations with the same catalog, terms, exclusions and probe outcomes select differently.
+- 59: not yet written tests/test_stage2_research_availability.py::test_pool_requires_tool_support_and_a_measured_wire_api — A pool model without models.dev tool_call true, deprecated, on an unmeasured wire API, or offered while models.dev is unavailable becomes a substitute.
+- 60: not yet written tests/test_stage2_research_availability.py::test_a_model_without_admitted_terms_or_cost_is_never_used — A Go model without a passing terms record or a positive anfragen_5h is probed, selected or substituted, or an unread overlay model is missing from the report.
+- 61: not yet written tests/test_stage2_research_availability.py::test_one_terms_record_admits_a_new_substitute_without_other_edits — A fixture that adds only a modelle_terms record does not see the model in the pool at its cost position, or the review ladder changes.
 - 51: not yet written tests/test_stage2_research_store.py::test_terminal_record_survives_sigkill_after_the_outcome — A runner killed with SIGKILL after a slot's terminal outcome loses or tears that slot's record.
 - 51: not yet written tests/test_stage2_research_store.py::test_temporary_or_torn_files_never_read_as_results — A temporary or truncated record is read as a finished result.
 - 51: not yet written tests/test_stage2_research_dispatch.py::test_terminal_callback_precedes_the_workers_next_launch — The same worker launches its next slot before the terminal callback returns, or a launch lacks a prior launch record.
@@ -957,7 +987,9 @@ follows. Read for it: #157's availability module, its endpoint block and its
 tests at `0c03ec0` (read-only `git show`); this branch's catalog selection,
 dispatcher, snapshot and `record_dir`. Not read: live catalogs, any
 credential file, the tracker. No `[DECISION]` remains; the mechanism choices
-are spec `[DETAIL]`s.
+are spec `[DETAIL]`s. Addendum, same day: Q-14 (`620c89e`) replaces the
+fixed fallbacks with a live substitute pool (criteria 59–61; 11, 38, 40,
+43–49 amended) and raises the appetite to 17 h 20 min.
 
 ## Draft handoff — 2026-10-17, fifth phase-2a incorporation
 
@@ -1771,3 +1803,13 @@ no-new-session test failed an assertion; all then passed. Focused: 22 dispatcher
 tests passed, 99 passed with the CI registration tests (2 skipped). Complete
 make verify GREEN: 2622 passed, 16 skipped in 811.40 seconds, every gate green,
 exit 0. No test was weakened.
+
+
+### Appetite raised — 2026-10-18
+
+Maintainer, 2026-10-18: "erhöhe das zeizbudget" (Q-14), after being shown
+the 3 to 4 hour shortfall under «Appetite fit — 2026-10-18» and the
+recommendation of 17 hours 20 minutes. New total appetite: **17 hours 20
+minutes** of phase 4. All measured spans above still count (4 h 56 min 10 s
+by this date). The unmeasured 2026-10-15 repair-attempt-3 span stays named
+and is not counted. This replaces the card's `Appetite:` line of 2026-10-17.
