@@ -268,3 +268,19 @@ def test_history_missing_objects_cannot_invoke_a_promisor_remote(repo):
     with pytest.raises(history.ResearchHistoryError):
         packet(repo, "a" * 40, ["a.py"])
     assert not marker.exists()
+
+
+@pytest.mark.parametrize("encoding", ["UTF-8", "ISO-8859-1"])
+def test_history_metadata_output_is_utf8_despite_local_display_encoding(repo, encoding):
+    (repo / "a.py").write_text("VALUE = 1\n")
+    head = commit(repo, "Unicode ü subject", "Unicode ü body")
+    git(repo, "config", "i18n.logOutputEncoding", encoding)
+    failure = None
+    result = None
+    try:
+        result = packet(repo, head, ["a.py"])
+    except module().ResearchHistoryError as error:
+        failure = str(error)
+    assert failure is None, "valid Unicode metadata must use deterministic UTF-8 output: " + str(failure)
+    assert result["commits"][head]["subject"] == "Unicode ü subject"
+    assert result["commits"][head]["body"].rstrip() == "Unicode ü body"

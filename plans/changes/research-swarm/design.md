@@ -401,8 +401,15 @@ judge instructions, map, reports, receipts and attached excerpts. In phase 4
 derive J from the context capacity documented or reported by pinned Claude
 Code for Opus 5.5, minus a fixed output reserve; record the numeric limit,
 capacity, reserve, conservative conversion, source and read-on date before
-enabling dispatch. This draft has not measured that capacity and invents no
-number. Measure the assembled packet before the judge: `size > J` makes no
+enabling dispatch. The 2026-10-18 implementation records documented
+1,000,000-token context, 128,000 output reserve, 72,000 transport reserve
+and a conservative estimate of four tokens per Unicode character, deriving
+J = 200,000. The conversion/reserve are agent estimates, not measured
+tokenizer or account-capacity guarantees; dated sources and limits are in
+[the capacity note](../../../docs/research/2026-10-18-research-judge-capacity.md).
+The standalone helper retains every report/outcome and derives score counts
+from exclusive valid-claim dispositions. Dispatch and full reconciliation
+integration remain pending. Measure the assembled packet before the judge: `size > J` makes no
 judge call, retains every report/excerpt and ends incomplete exit 1 as
 `judge-packet-over-limit`; `size == J` permits the normal single call.
 Never shorten beyond the per-claim cap to fit, lower N or add a judge call.

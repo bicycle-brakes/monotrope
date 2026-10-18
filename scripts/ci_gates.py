@@ -134,6 +134,11 @@ OHNE_AUFRUFER: dict[str, str] = {
         "dispatcher will consume it. tests/test_stage2_research_report.py exercises raw syntax, local/history/"
         "page evidence, namespaces and topic-specific fields; actual dispatcher integration remains pending."
     ),
+    "stage2_research_judge.py": (
+        "Pure whole-packet sizing and independent claim-score library, not a CLI gate; the amended "
+        "judge pipeline will consume it. tests/test_stage2_research_judge.py exercises exact size limits, "
+        "claim coverage and terminal-outcome precedence. Dispatch/reconciliation integration remains pending."
+    ),
     "stage2_swarm.py": (
         "Helper of scripts/stage2.py explore, never an entry point of its own — it runs the phase-1 "
         "research swarm only through the runner; tests/test_stage2_swarm.py runs it against stand-ins"

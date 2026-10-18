@@ -41,6 +41,7 @@ not recreated. No file is deleted. Only the ADR is new under `docs/adr/`.
 | `scripts/stage2_research_history.py` (new) | Local-only frozen-HEAD history packet with ten commits per mapped path, bounded Unicode bodies, explicit unread history and a shared caller deadline; no model dispatch. |
 | `scripts/stage2_research_snapshot.py` (new) | Transient copies outside the repository, full working-byte and untracked-change digests, exact runner-owned append exceptions, named drift and context-managed cleanup. |
 | `scripts/stage2_research_report.py` (new) | Pure closed report schema, endpoint/model-qualified namespaces, local/history/own-page evidence, all-or-nothing support and per-claim Unicode cap; no judge or dispatch. |
+| `scripts/stage2_research_judge.py` (new) | Fixed documented-capacity packet bound, all-outcome preservation, security/required-failure precedence and independently derived exclusive claim-score counts; no dispatch. |
 | `scripts/stage2_research_tools.mjs` | Retain public-only tools and receipts; verify cancellation and isolated concurrent receipt paths. |
 | `scripts/check_research_handoff.py` (new) | Check v2 decision coverage, answered human links, neighbours and criterion bases; exit 0/1/3. |
 | `model-endpoints.yaml` | Replace Zen endpoint/roles with explicit research roles and dynamic Go-only `online_free` policy/include/exclude; add Qwen research-only without changing the review ladder. |
@@ -66,6 +67,8 @@ not recreated. No file is deleted. Only the ADR is new under `docs/adr/`.
 | `tests/test_stage2_research_history.py` (new) | Disposable Git fixtures for frozen identity, path/body limits, shallow history, replacements, missing local objects and shared-deadline failures. |
 | `tests/test_stage2_research_snapshot.py` (new) | Disposable Git fixtures for current tracked bytes, non-ignored untracked change inputs, exact append ownership, changed path/HEAD detection, unsafe inputs and cleanup. |
 | `tests/test_stage2_research_report.py` (new) | Structured report/evidence, malformed JSON/Unicode, no-fabricated-answer, namespace, topic-specific field and common-template contracts. |
+| `tests/test_stage2_research_judge.py` (new) | Exact J/J+1 Unicode packet boundaries, preserved evidence/outcomes, claim coverage and exclusive per-seat score regressions. |
+| `docs/research/2026-10-18-research-judge-capacity.md` (new) | Dated primary capacity/CLI documentation, explicit reserve/conversion estimates and qualification limits. |
 | `tests/test_stage2_research_refs.py` (new) and `tests/fixtures/research_refs/plan-prompt-d862bc2.md` (new) | Structural-reference counterexamples and the verbatim historical prompt used by ruling S-47; no Git history or live-file lookup in the resolver. |
 | `tests/test_stage2_research_catalog.py` (new) | Offline real-pinned-Pi catalog fixtures: forced refresh, provider filtering, shipped-cache contamination, malformed/empty/error outcomes, models.dev intersection/deprecation/failure, and both sources’ audit. |
 | `tests/test_stage2_research_tools.py` | Keep real tool-call shape, destination/receipt faults and concurrent scratch separation checks. |
@@ -514,6 +517,16 @@ the existing gates and let the runner own registry regeneration/full verify.
 
 ## Criterion ledger
 
+- 18: tests/test_stage2_research_judge.py::test_judge_packet_one_fixed_unicode_limit_allows_J_and_refuses_J_plus_one — Whole-packet size is measured without instructions, counts bytes instead of Unicode characters or permits J+1; actual launch/barrier integration remains pending.
+- 28: tests/test_stage2_research_judge.py::test_judge_packet_retains_all_valid_reports_free_failures_and_full_instructions — A free failure, accepted report, map entry or instruction disappears from the bounded packet.
+- 18: tests/test_stage2_research_judge.py::test_judge_packet_required_failure_blocks_even_with_a_valid_partial_report — A required failure permits the prepared judge packet.
+- 18: tests/test_stage2_research_judge.py::test_judge_packet_ok_without_report_cannot_look_complete — A reported successful topic has no validated report yet passes preparation.
+- 18: tests/test_stage2_research_judge.py::test_judge_empty_or_free_only_outcomes_cannot_allow_a_judge_call — No required topic evidence can look like a permitted packet.
+- 12: tests/test_stage2_research_judge.py::test_judge_security_refusal_blocks_even_a_free_seat_and_takes_exit_two_precedence — A free-seat declaration/leak refusal permits the judge or loses security exit 2 to ordinary failure exit 1.
+- 28: tests/test_stage2_research_judge.py::test_judge_scores_are_derived_per_topic_and_seat_with_every_claim_once — Counts/ids omit seats or duplicate exclusive claim scores.
+- 28: tests/test_stage2_research_judge.py::test_judge_unsupported_claims_are_scored_without_judgement_and_raw_decisions_survive — An unsupported claim receives a judge disposition or its raw human question disappears.
+- 28: tests/test_stage2_research_judge.py::test_judge_cannot_lose_double_score_or_promote_a_claim — A valid claim is omitted or double-scored, an unsupported claim is promoted, or unique is not a supported subset.
+- 16: tests/test_stage2_research_history.py::test_history_metadata_output_is_utf8_despite_local_display_encoding — A local display-encoding setting breaks valid Unicode history metadata or changes its retained text.
 - 10: tests/test_stage2_research_report.py::test_report_online_claim_requires_all_own_successful_page_receipts — A search/error/unfetched source supplies a standalone report's evidence floor; dispatcher/receipt ownership integration remains pending.
 - 10: tests/test_stage2_research_report.py::test_report_retains_online_unsupported_claim_without_any_partial_page_excerpt — One failed page citation leaves another excerpt attached to the unsupported claim.
 - 16: tests/test_stage2_research_report.py::test_report_bad_citation_invalidates_whole_claim_without_dropping_it — A bad local citation retains a partial excerpt or drops its claim/question.
@@ -1475,3 +1488,72 @@ slice. The reproducer is /tmp/coding-harness-research-history-encoding-check.py.
 Amended scheduling/role prompts, full judge/handoff integration, attended
 F-1 capture and fresh phase-6 review remain unfinished. No live provider,
 GLM/Claude call, credential-file read, customer access or merge occurred.
+
+
+### Judge packet and score foundation order — 2026-10-18
+
+[DETAIL] The next phase-4 interval begins at 10:26:05 UTC, immediately after
+the preceding interval, and includes intermediate checkpoint publication
+and subsequent preparation without an uncounted gap. The pure judge helper
+counts its complete rendered instructions/data packet against one fixed
+documented-capacity-derived limit and preserves all supplied reports and
+outcomes even when refused. It does not prove complete graph membership;
+the amended dispatcher must independently check the expected 39 + 3N slots.
+Empty/free-only outcome sets and malformed identities cannot certify a
+permitted packet. A declared successful topic must have its validated report.
+
+Outcome refused means a declaration/leak barrier refusal and always carries
+security exit 2, including optional seats and alongside ordinary failure.
+A provider refusal is a failed contribution, not that security outcome.
+Required topic failure and oversize packets carry exit 1; free contribution
+failure alone does not block preparation. Independently derive per-topic/
+endpoint/model score counts and ids from exactly one disposition per valid
+claim; unsupported has no judgement and unique is a supported subset.
+No composite ranking, semantic verdict or completed reconciliation is added.
+
+Persist dated primary capacity evidence in docs/research before relying on
+the derived bound. Explicitly label four tokens per character and 72,000
+transport tokens as agent estimates, and account/actual capacity as not
+measured. Client/fallback/isolation qualification remains a later integration
+duty. Repair the red local display-encoding regression with a process-local
+UTF-8 Git output override, without changing user/repository Git config.
+
+
+### Judge packet and score foundation verified — 2026-10-18
+
+Measured phase-4 span: 10:26:05–10:51:02 UTC, 24 minutes 57 seconds.
+Count once after the preceding retained intervals under unchanged 13h20m
+appetite. Includes intermediate publication, preparation and full verification
+waits. The maintainer now requests stopping and handing over; no new slice
+starts. Subsequent source/handover publication is session closure.
+
+Implemented the pure complete-packet bound and exclusive per-seat score
+foundation, not judge dispatch or semantic reconciliation. Dated official
+capacity evidence and explicit agent estimates derive J = 200,000 Unicode
+characters; account/client capacity remains unmeasured. Security refusal has
+exit 2 precedence over ordinary incomplete outcomes. Empty/free-only sets
+cannot certify preparation; exact graph completeness remains the dispatcher's
+duty. The Git boundary now requests UTF-8 independently of local display
+encoding without changing repository/user configuration.
+
+Red evidence: 23 repository missing-module assertions before adoption, then
+the security-precedence assertion; three prior prototype regressions covered
+empty/malformed outcomes. Two added encoding cases exposed an ISO-8859-1
+failure before the UTF-8 repair. A JSON substring fixture assertion was
+corrected to decode JSON, not a production defect. Focused history/snapshot/
+judge set: 78 passed; six CI registration checks passed. Complete make verify
+GREEN: 2600 passed, 16 skipped in 923.35 seconds; every blocking gate,
+including kit, green and process exit 0. Source bytes stayed fixed during
+full verification; only this accounting record is appended afterward.
+Documentation/Markdown findings remain report-only. No prior test was
+removed or weakened. Later frontmatter/criterion/whitespace checks qualify
+this accounting update; no broad code rerun is needed.
+
+The later session notification reports coding-harness-e7 waiting in the main
+checkout. Stay in owned worktrees; no further shared tracker write is made.
+The bounded research-swarm task remains in progress (coding-harness-icw),
+with no new issue or closure. Earlier tracker checkpoint comments were
+already pushed. Actual amended runtime, role prompts, complete judge/handoff,
+attended F-1 capture and fresh independent phase-6 review remain unfinished;
+PR #158 stays draft. No model call, credential-file read, customer-instance
+access, stash, amend, force push or merge occurred.

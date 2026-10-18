@@ -49,6 +49,8 @@ def _git(root, deadline, *args):
                 "core.fsmonitor=false",
                 "-c",
                 "core.hooksPath=" + os.devnull,
+                "-c",
+                "i18n.logOutputEncoding=UTF-8",
                 *args,
             ],
             env=env,
