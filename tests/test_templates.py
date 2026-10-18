@@ -437,7 +437,7 @@ def test_findings_vocabulary_is_here() -> None:
     ):
         for term in terms:
             assert lists.get(label, {}).get(term, "").strip(), f"{label}: no definition of {term}"
-    assert "escalation" in lists["Origin"]["fix-r<N>"]
+    assert "repair brake" in lists["Origin"]["fix-r<N>"]
     assert "BLOCKER" in lists["Markers that override everything"]["[DIVERGENT]"]
     lines = prose("findings.md")
     assert "new evidence" in flat("\n".join(lines[lines.index("---") :]))
