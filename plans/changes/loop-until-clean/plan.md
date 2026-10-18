@@ -4,7 +4,7 @@ status: draft
 implementation_status: none
 date: 2026-10-14
 last_reviewed: 2026-10-16
-updated: 2026-10-17
+updated: 2026-10-18
 supersedes: null
 superseded_by: null
 bead: coding-harness-4fk
@@ -217,7 +217,7 @@ owns that check along with `make verify`.
 
 - 17: tests/test_stage2_availability.py::test_paid_review_can_start_without_a_free_candidate — an empty free stage suppresses reachable paid review
 - 17: tests/test_stage2_availability.py::test_deadline_expiry_permits_a_new_probe_instead_of_assuming_success — expiry admits a model without a new successful probe
-- 17: tests/test_stage2_availability.py::test_repository_declaration_requires_preflight_and_the_glm_outage — production drops preparation or the exact GLM cutoff
+- 17: tests/test_stage2_availability.py::test_repository_declaration_requires_preflight_and_keeps_go_glm_probed — production drops preparation, or excludes GLM through OpenCode Go (the outage covers Z.ai only, maintainer 2026-10-18)
 - 17: tests/test_stage2_availability.py::test_catalog_presence_does_not_admit_unread_or_unpriced_paid_models — catalog presence bypasses terms or cost admission
 - 17: tests/test_stage2_availability.py::test_invalid_freshness_rule_never_calls_a_model — malformed freshness falls back to unprepared review
 - 17: tests/test_stage2_availability.py::test_null_preflight_rule_never_silently_enables_legacy_review — a present null rule silently bypasses preparation
