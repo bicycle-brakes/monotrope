@@ -446,6 +446,23 @@ def test_a_seat_whose_candidates_all_miss_the_fresh_catalog_stops(fx: Fixture, c
     assert not availability.research_receipt_path("demo", stage2).exists()
 
 
+def test_a_catalog_failure_stops_before_any_probe_and_leaves_no_receipt(fx: Fixture, monkeypatch) -> None:
+    assert fx.prepare() == 0
+    receipt = availability.research_receipt_path("demo", stage2)
+    assert receipt.exists()
+    before = len(fx.w.calls())
+
+    def failing(_runner, _root):
+        bridge = fx.catalog.bridge()
+        bridge.update(exit_code=1, reason="pi-refresh-failed")
+        return bridge
+
+    monkeypatch.setattr(availability, "catalog_bridge", failing)
+    assert fx.prepare() == 1
+    assert len(fx.w.calls()) == before, "a probe started on an unmeasured catalog"
+    assert not receipt.exists(), "an earlier receipt stayed usable"
+
+
 def test_report_names_every_seat_candidate_and_check_time(fx: Fixture, capsys) -> None:
     fx.script(**{"deepseek-v4.1-flash": {"exit": 1, "stderr": "down"}})
     assert fx.prepare() == 0

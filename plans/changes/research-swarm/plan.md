@@ -960,6 +960,7 @@ the existing gates and let the runner own registry regeneration/full verify.
 - 47: tests/test_stage2_research_availability.py::test_a_leak_stops_preparation_before_any_probe — A leak-check BLOCK lets a probe start or leaves a receipt.
 - 49: tests/test_model_endpoints.py::test_the_repository_declaration_carries_six_seats_and_the_rule — The shipped declaration drops a preferred model, the rule or the dynamic free permission, or carries a shape or permission fault.
 - 59: tests/test_stage2_research_catalog.py::test_preflight_pool_candidates_need_models_dev_tool_support — A pool candidate is judged by a missing, failed or malformed models.dev answer as if it supported tools.
+- 41: tests/test_stage2_research_availability.py::test_a_catalog_failure_stops_before_any_probe_and_leaves_no_receipt — A Pi catalog failure starts a probe, keeps an earlier receipt usable or exits other than 1.
 
 ## Not touched
 

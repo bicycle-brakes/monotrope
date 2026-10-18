@@ -109,6 +109,11 @@ OHNE_AUFRUFER: dict[str, str] = {
         "Helper of scripts/stage2.py session, never an entry point of its own — it opens a macOS Terminal "
         "window for an interactive model session; tests/test_stage2_session.py runs it against stand-ins"
     ),
+    "stage2_availability.py": (
+        "Helper of scripts/stage2.py (prepare-explore, explore --availability-reported), never an entry point of "
+        "its own; it probes models through the runner's stand-in-testable launch path. "
+        "tests/test_stage2_research_availability.py runs it against stand-ins and a fixture catalog"
+    ),
     "stage2_research_refs.py": (
         "Pure frozen-reference library, not a CLI gate; the amended research map/report pipeline consumes it. "
         "Direct structural and claim-cap contracts live in tests/test_stage2_research_refs.py; "
