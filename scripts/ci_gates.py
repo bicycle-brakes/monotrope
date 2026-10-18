@@ -129,6 +129,11 @@ OHNE_AUFRUFER: dict[str, str] = {
         "local-only Git boundary. tests/test_stage2_research_history.py exercises history bounds and failures; "
         "the amended topic-6 dispatcher still needs to consume the packet."
     ),
+    "stage2_research_report.py": (
+        "Pure topic-report and runner-evidence validation library, not a CLI gate; the amended research "
+        "dispatcher will consume it. tests/test_stage2_research_report.py exercises raw syntax, local/history/"
+        "page evidence, namespaces and topic-specific fields; actual dispatcher integration remains pending."
+    ),
     "stage2_swarm.py": (
         "Helper of scripts/stage2.py explore, never an entry point of its own — it runs the phase-1 "
         "research swarm only through the runner; tests/test_stage2_swarm.py runs it against stand-ins"

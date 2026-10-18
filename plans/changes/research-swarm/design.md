@@ -373,8 +373,18 @@ substring/word-parts check. Template violations fail a slot. A bad reference
 marks the whole claim `unsupported`, retains it without an excerpt or
 disposition, and prevents any criterion Basis;
 only absence of all evidence-backed claims fails an otherwise valid report,
-except the specified empty-neighbour topic-5 report. Judge output separates
-supported facts,
+except the specified empty-neighbour topic-5 report.
+
+Reports use one closed JSON object with claims, counter_evidence, not_read,
+neighbour_relation and questions; topic 3/5 add their assessment/relations.
+Confidence and basis are nonempty text. Question classifications retain
+their literal bracketed markers; only the runner supplies global identities.
+Endpoint and model components are percent-encoded separately and joined
+by one colon to avoid slash/colon/percent collisions in the seat namespace.
+The common report prompt documents the same schema. These standalone
+contracts do not yet replace the legacy report parser or activate dispatch.
+
+Judge output separates supported facts,
 assumptions, applicability, gaps, disagreements and human decisions. Per-model
 scores contain counts and global claim-id lists for supported, refuted,
 off-brief and unresolved (one disposition per valid claim, off-brief takes

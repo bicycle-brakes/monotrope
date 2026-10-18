@@ -40,6 +40,7 @@ not recreated. No file is deleted. Only the ADR is new under `docs/adr/`.
 | `scripts/stage2_research_refs.py` (new) | Pure frozen-byte structural Markdown/Python and canonical YAML/JSON reference resolution, shared per-claim excerpt cap; later map/report integration consumes it. |
 | `scripts/stage2_research_history.py` (new) | Local-only frozen-HEAD history packet with ten commits per mapped path, bounded Unicode bodies, explicit unread history and a shared caller deadline; no model dispatch. |
 | `scripts/stage2_research_snapshot.py` (new) | Transient copies outside the repository, full working-byte and untracked-change digests, exact runner-owned append exceptions, named drift and context-managed cleanup. |
+| `scripts/stage2_research_report.py` (new) | Pure closed report schema, endpoint/model-qualified namespaces, local/history/own-page evidence, all-or-nothing support and per-claim Unicode cap; no judge or dispatch. |
 | `scripts/stage2_research_tools.mjs` | Retain public-only tools and receipts; verify cancellation and isolated concurrent receipt paths. |
 | `scripts/check_research_handoff.py` (new) | Check v2 decision coverage, answered human links, neighbours and criterion bases; exit 0/1/3. |
 | `model-endpoints.yaml` | Replace Zen endpoint/roles with explicit research roles and dynamic Go-only `online_free` policy/include/exclude; add Qwen research-only without changing the review ladder. |
@@ -64,6 +65,7 @@ not recreated. No file is deleted. Only the ADR is new under `docs/adr/`.
 | `tests/test_stage2_research_map.py` (new) | Standalone finder union, missing/unread categories, provenance corruption, exact neighbour forms and frozen artifact-to-spec counterexamples. |
 | `tests/test_stage2_research_history.py` (new) | Disposable Git fixtures for frozen identity, path/body limits, shallow history, replacements, missing local objects and shared-deadline failures. |
 | `tests/test_stage2_research_snapshot.py` (new) | Disposable Git fixtures for current tracked bytes, non-ignored untracked change inputs, exact append ownership, changed path/HEAD detection, unsafe inputs and cleanup. |
+| `tests/test_stage2_research_report.py` (new) | Structured report/evidence, malformed JSON/Unicode, no-fabricated-answer, namespace, topic-specific field and common-template contracts. |
 | `tests/test_stage2_research_refs.py` (new) and `tests/fixtures/research_refs/plan-prompt-d862bc2.md` (new) | Structural-reference counterexamples and the verbatim historical prompt used by ruling S-47; no Git history or live-file lookup in the resolver. |
 | `tests/test_stage2_research_catalog.py` (new) | Offline real-pinned-Pi catalog fixtures: forced refresh, provider filtering, shipped-cache contamination, malformed/empty/error outcomes, models.dev intersection/deprecation/failure, and both sources’ audit. |
 | `tests/test_stage2_research_tools.py` | Keep real tool-call shape, destination/receipt faults and concurrent scratch separation checks. |
@@ -512,6 +514,24 @@ the existing gates and let the runner own registry regeneration/full verify.
 
 ## Criterion ledger
 
+- 10: tests/test_stage2_research_report.py::test_report_online_claim_requires_all_own_successful_page_receipts — A search/error/unfetched source supplies a standalone report's evidence floor; dispatcher/receipt ownership integration remains pending.
+- 10: tests/test_stage2_research_report.py::test_report_retains_online_unsupported_claim_without_any_partial_page_excerpt — One failed page citation leaves another excerpt attached to the unsupported claim.
+- 16: tests/test_stage2_research_report.py::test_report_bad_citation_invalidates_whole_claim_without_dropping_it — A bad local citation retains a partial excerpt or drops its claim/question.
+- 16: tests/test_stage2_research_report.py::test_report_one_shared_unicode_excerpt_cap_in_citation_order — Sources receive separate 4000-character budgets or reordered excerpts.
+- 16: tests/test_stage2_research_report.py::test_report_absent_history_and_external_identifiers_are_unsupported — A hash absent from the packet, bare PR/bead id or line-only reference becomes evidence.
+- 16: tests/test_stage2_research_report.py::test_report_commit_evidence_is_only_the_topic_six_packet_record — A non-topic-6 hash or a missing packet record supplies evidence.
+- 18: tests/test_stage2_research_report.py::test_report_without_any_supported_claim_fails_except_empty_neighbours — A report without valid evidence passes outside the exact empty-neighbour exception.
+- 27: tests/test_stage2_research_report.py::test_report_topic_five_relations_cover_exact_neighbour_packet_and_local_claims — A missing/extra/duplicate neighbour relation or dangling claim link is accepted.
+- 31: tests/test_stage2_research_report.py::test_report_namespaces_claims_and_questions_without_changing_raw_report — Raw human questions disappear or claim/question ids are not bound to the trusted seat.
+- 31: tests/test_stage2_research_report.py::test_report_questions_have_unique_local_links_and_no_answers — A question has missing/duplicate local links, invalid identity/classification or fabricated answer fields.
+- 31: tests/test_stage2_research_report.py::test_report_same_local_ids_in_two_endpoint_seats_are_distinct — Different endpoint/model seats collide on local ids.
+- 31: tests/test_stage2_research_report.py::test_report_requires_one_endpoint_qualified_seat_identity — A missing or ambiguous endpoint/model identity can produce global claim ids.
+- 31: tests/test_stage2_research_report.py::test_report_seat_encoding_distinguishes_reserved_model_and_endpoint_characters — Reserved characters collide or escape the endpoint/model namespace.
+- 35: tests/test_stage2_research_report.py::test_report_topic_specific_class_and_volatile_fields_are_required — Topic 3 class assessment or topic 6 volatility fields are missing.
+- 35: tests/test_stage2_research_report.py::test_report_true_volatile_claim_requires_one_governance_proposal — A volatile claim lacks the required governance proposal.
+- 18: tests/test_stage2_research_report.py::test_report_raw_duplicate_and_nonfinite_json_is_not_a_valid_template — Ambiguous or non-finite raw JSON becomes an accepted report.
+- 18: tests/test_stage2_research_report.py::test_report_lone_surrogate_cannot_enter_a_utf8_artifact — Escaped JSON or object text persists an unrepresentable Unicode value.
+- 18: tests/test_stage2_research_report.py::test_report_documented_base_object_matches_the_validated_contract — The common prompt's example and the report validator disagree.
 - 16: tests/test_stage2_research_snapshot.py::test_snapshot_keeps_uncommitted_tracked_and_nonignored_change_bytes — Standalone freezing omits current tracked/change inputs, includes ignored/unrelated untracked inputs or persists snapshots in its manifest; dispatcher integration remains pending.
 - 16: tests/test_stage2_research_snapshot.py::test_snapshot_copies_stay_frozen_and_are_deleted_on_exit — Local citation sources follow live edits or transient copies survive publication cleanup.
 - 16: tests/test_stage2_research_snapshot.py::test_snapshot_copies_are_deleted_on_consumer_abort — Transient copies survive a failed consumer context.
@@ -1388,3 +1408,70 @@ Repository red tests and full qualification are still required. Actual
 amended scheduling/prompts/report integration, judge/handoff, attended F-1
 capture and fresh phase-6 review remain unfinished. No GLM/Claude/live
 provider call, credential-file read, customer access or merge occurred.
+
+
+### Structured report foundation order — 2026-10-18
+
+[DETAIL] Use one closed JSON object per topic report, documented in the new
+common report prompt. Claims hold local C1–C7 ids, statement, kind, evidence
+citation strings, confidence and basis text. Counter-evidence/unread entries
+are string lists; neighbour_relation is text, exactly not-assessable online.
+Questions keep literal bracketed classifications and nonempty unique local
+claim links, including unsupported claims. Topic 3/5/6 use the spec's exact
+assessment, relations and volatility/governance additions. Empty-neighbour
+topic 5 has the exact unread marker no packet neighbour and can waive only
+the evidence floor, not malformed syntax or links.
+
+Keep raw report text/data distinct from runner-resolved global claims and
+questions. Separately percent-encode endpoint and model components and join
+with one colon for a collision-free endpoint-qualified seat. The runner
+alone supplies the namespace and validity. Resolve every citation before
+attaching any excerpt; one invalid reference removes every excerpt from
+the claim. Public evidence uses only that seat's successful fetch receipts,
+whose actual extension field is retrieved, never search receipts or peer
+data. Frozen local references and topic-6 packet records remain separate.
+This pure validator does not call a model or a judge and does not activate
+the amended dispatcher; retain its integration rows as pending.
+
+
+### Structured reports verified — 2026-10-18
+
+Measured phase-4 span: 10:09:20–10:26:05 UTC, 16 minutes 45 seconds,
+including adoption, red counterexamples, full verification waits, official
+capacity-document reading and temporary judge-packet/score preparation.
+Count this once after retained earlier spans under unchanged 13h20m total.
+Do not count that prototype preparation again.
+
+Implemented pure report validation and the common report prompt. Exact
+closed JSON, local C/Q links, topic-specific fields, raw decision retention,
+endpoint-qualified encoded namespaces and runner-only evidence status are
+checked. Local frozen references, topic-6 packet hashes and a seat's own
+successful public fetch receipts are distinct evidence boundaries. One
+unresolved citation removes all excerpts from that claim without dropping
+its question; valid excerpts share one 4000-character budget. Required
+evidence floors retain the exact empty-neighbour exception. No existing
+test was changed and the legacy dispatcher/parser remains active.
+
+Red first: 41 repository failures before adopting source/template; four
+additional failures exposed unqualified/ambiguous endpoint/model identities
+and missing reserved-character encoding. A separate escaped-JSON Unicode
+case failed during prototype preparation before its fix was adopted. Final
+report/CI contracts: 123 passed, 2 skipped in 13.88 seconds. Complete make
+verify GREEN: 2574 passed, 16 skipped in 711.84 seconds, then every blocking
+gate including kit green. Source stayed fixed during full verification.
+Process-local signing override and loopback test servers were enabled;
+documentation/Markdown findings remain report-only.
+
+The separate next judge-packet/score prototype passed 23 tests after three
+empty/malformed-outcome regressions went red and were fixed. This is not
+repository adoption, complete reconciliation or runtime qualification.
+Record the newly read official capacity evidence under docs/research before
+enabling any derived limit. A local-only temporary reproducer also found
+that i18n.logOutputEncoding=ISO-8859-1 makes otherwise valid non-ASCII commit
+metadata fail the history API with UnicodeDecodeError. It fails closed;
+it is not silently accepted. Next write a regression and explicitly request
+UTF-8 output at the shared Git transport, then qualify it with the next
+slice. The reproducer is /tmp/coding-harness-research-history-encoding-check.py.
+Amended scheduling/role prompts, full judge/handoff integration, attended
+F-1 capture and fresh phase-6 review remain unfinished. No live provider,
+GLM/Claude call, credential-file read, customer access or merge occurred.
