@@ -1366,3 +1366,160 @@ and whitespace. Text-only handover changes skip full local make verify;
 hosted CI remains their gate. Task state stays in Beads. Actual amended
 scheduling, role prompts, report/judge/handoff integration, attended capture
 and final independent phase-6 review remain unfinished.
+
+
+## Addendum — 2026-10-18, maintainer-requested stop at a verified checkpoint
+
+### Where we are
+
+The maintainer explicitly requested ending the process at an appropriate
+checkpoint and writing the handover. No further implementation is queued by
+this session. The bounded research-swarm decision remains OPEN/DRAFT on
+PR #158 at e82ce1c650a274207a87e0cf2b5bacf71a6c7471; its new independent foundations are implemented and
+locally verified, but the amended runtime is not wired in. The existing
+implementation-review decision PR #157 remains OPEN/ready at 0c03ec0,
+hosted checks green, with its earlier independent Sol verdict "No finding."
+Nothing was merged.
+
+### Next step
+
+In .claude/worktrees/research-swarm, read the current plan and implementation
+boundaries at e82ce1c650a274207a87e0cf2b5bacf71a6c7471, then write the first red tests for the amended
+cancellable research dispatcher and provider queue. Recheck origin, PRs,
+allowance and session ownership before writing. The four full verification
+sessions from this continuation have finished; do not resume them.
+
+### Needed from the maintainer
+
+Nothing right now. Real pinned-Pi F-1 isolation capture still needs an
+attended session later; unit tests cannot waive it. Merging either decision
+PR remains a maintainer decision. Admission of non-training Zen free models
+is still a separate question/change only after PR #157 merges.
+
+### Decisions and preferences
+
+Stop now as requested; there is no scheduled restart or unattended process
+that will continue the implementation. Keep the approved 13h20m total and
+all earlier accounting spans. The fourth interval is 10:26:05–10:51:02 UTC
+(24m57s), counted once, including checkpoint publication and final
+verification waits. The preceding intervals from this continuation are
+09:27:02–09:46:10 (19m08s), 09:48:20–10:07:29 (19m09s), and
+10:09:20–10:26:05 (16m45s); their prototype preparation is already included.
+The latest allowance event used 80 percent at 2026-10-18 10:50:00 UTC;
+the requested five-percent reserve was not reached before this earlier
+explicit stop.
+
+GLM remains unavailable until 2026-10-21 20:34 Asia/Singapore
+(12:34 UTC; 14:34 Europe/Berlin). Use Sol 6.1 while Claude budget is
+exhausted. Foreign models remain callable only through the worktree's
+locked Python and scripts/stage2.py after its leak gate. No model call,
+credential-file read, customer-instance access or live provider
+qualification occurred in this continuation.
+
+### Completed work and evidence
+
+Four source checkpoints were independently subjected to complete local
+make verify during this continuation, with source bytes fixed during each
+run. All blocking gates, including kit, passed; documentation/Markdown
+findings remain report-only. Process-local Git signing overrides and local
+loopback test servers were enabled; no repository/user signing config was
+changed.
+
+- Bounded local history: ebfac2716d15281a2605c8bea3cc680eb6aba406;
+  2505 passed, 16 skipped, 895.87 seconds. Literal mapped paths, full frozen
+  hashes, bounded metadata and one finite local-only Git deadline.
+- Transient frozen inputs: f18e6e4b8a6425b23fa61d3020b034a9b30aa596;
+  2528 passed, 16 skipped, 867.97 seconds. Owner-only copies, exact input
+  identity/digests, change detection, symlink refusal and cleanup.
+- Structured reports: a4fcbb17f3fcbe1d30c248e88744f41d389a35e1;
+  2574 passed, 16 skipped, 711.84 seconds. Closed JSON, raw human questions,
+  global claim identities, topic contracts and runner-resolved evidence.
+- Judge packet/score foundation and UTF-8 Git repair: e82ce1c650a274207a87e0cf2b5bacf71a6c7471;
+  2600 passed, 16 skipped, 923.35 seconds; all blocking gates passed,
+  final process exit 0. Complete packet accounting preserves all supplied reports,
+  refuses oversize/required failures, gives security refusal exit 2
+  precedence and derives exclusive claim scores without semantic judgement.
+  Local display encoding can no longer corrupt valid Unicode Git metadata.
+
+The judge slice's focused history/snapshot/judge set passed 78 tests; six
+CI registration checks passed. Red evidence includes the two output-encoding
+regressions (ISO-8859-1 failed before the UTF-8 override), 23 repository
+missing-module assertions, the later security-precedence assertion, and
+three earlier empty/malformed-outcome prototype regressions. A JSON fixture
+substring assertion was corrected to decode JSON; this was not a production
+repair. No prior test was removed or weakened.
+
+The capacity research is now in
+docs/research/2026-10-18-research-judge-capacity.md. Official dated evidence
+supports a 1M-token Opus 5.5 context and 128K output ceiling. The 72K
+transport reserve and four tokens per Unicode character are explicitly
+agent estimates, deriving the fixed 200,000-character packet limit; they
+are not account entitlement, live reachability or a measured tokenizer
+bound. The local Claude symlink targets 2.1.302; the binary was not invoked.
+Actual client/config/fallback isolation still needs qualification.
+
+### Open work and blockers
+
+The bounded research-swarm task remains in progress (coding-harness-icw).
+Its legacy 16-call dispatcher is still active. New graph/catalog/map/
+reference/history/snapshot/report/judge helpers do not activate the amended
+39 + 3N pipeline. Next work includes cancellation/process cleanup, shared
+provider concurrency and deadlines, serialized leak/audit gates, exact
+role declarations and private/public input scopes, stage barriers, role
+prompts, complete judge reconciliation and handoff/interview/spec gates.
+Keep literal provider headers and research roles intact; the review
+availability decision does not silently alter research roles.
+
+Pinned-Pi attended F-1 capture, live qualification after merge and a fresh
+independent phase-6 review of the completed feature remain outstanding.
+Do not mark the decision PR ready or promote pending integration criteria
+from these helper tests. Read the capacity note before implementing Claude
+launch isolation: safe-mode retains some directory/Git context, and fixed
+roles require qualified fallback/config control and a generic scratch cwd.
+
+Earlier research and idea capture remain published: Leantime assessment
+PR #160; bounded night-plan preparation PR #162; native feedback research
+PR #163; research-currency assessment PR #164. Their task status stays in
+Beads; no Leantime installation, interface implementation, language rewrite,
+automatic runner/skill learning or research-currency system was delivered.
+
+### Working state and parallel-session boundary
+
+Research source: .claude/worktrees/research-swarm, branch
+explore/research-swarm, e82ce1c650a274207a87e0cf2b5bacf71a6c7471, pushed to PR #158; the worktree is clean.
+Handover: .claude/worktrees/resume-2026-10-17-models, branch
+docs/resume-2026-10-17-models, PR #161. This addendum is append-only;
+all prior records, including their historical pending-run statements,
+remain unchanged and are superseded here.
+
+Main remains 6029bbf; fetched origin/main is 6477d04. Main's pre-existing
+untracked .codex/agents/ was not modified. The three requested research
+subagents had finished read-only; no new agent was spawned. The later
+session notification reports coding-harness-e7 waiting in the main
+checkout. The parent notified the maintainer, stayed in its own worktrees
+and made no further shared-tracker writes. Earlier checkpoint comments
+were already pushed to the tracker before their Git pushes. No task is
+closed by this source checkpoint; all work still belongs to the existing
+bounded research-swarm task.
+
+### Validation
+
+Local full logs remain temporary conveniences, not durable artifacts:
+/tmp/coding-harness-research-history-full-verify.log,
+/tmp/coding-harness-research-snapshot-full-verify.log,
+/tmp/coding-harness-research-report-full-verify.log, and
+/tmp/coding-harness-research-judge-full-verify.log. Finished exec sessions:
+28276, 96564, 14636 and 72337. Reconstruct results from this dated record
+and committed tests if temporary files are gone.
+
+Hosted verification for a4fcbb1 completed green at 10:34:17 UTC on
+2026-10-18. New-source and handover hosted checks may still be running at
+publication; inspect the actual PR checks before any merge. Local handover
+validation uses feedback-channel, frontmatter-current and whitespace;
+text-only handover changes skip full local make verify. No stash, amend,
+force push or merge occurred. Final closure stops this session's work;
+resumption is manual.
+
+Final handover checks on 2026-10-18: feedback-channel 49 passed, 13 skipped
+in 0.07 seconds; frontmatter-current held 288 documents; whitespace passed.
+The start-hook preview resolves this last addendum's concrete Next step.
