@@ -1819,3 +1819,40 @@ recommendation of 17 hours 20 minutes. New total appetite: **17 hours 20
 minutes** of phase 4. All measured spans above still count (4 h 56 min 10 s
 by this date). The unmeasured 2026-10-15 repair-attempt-3 span stays named
 and is not counted. This replaces the card's `Appetite:` line of 2026-10-17.
+
+### Seat selection verified — 2026-10-18
+
+Span 2026-10-18 15:35:08Z–16:34:30Z, about 59 min (measured with `date -u`;
+no break), counted against the 17 h 20 min appetite. Plan step 11 only.
+
+- Red first: the new tests were written before any source. Result: 1
+  collection error (`tests/test_stage2_research_availability.py`,
+  `ModuleNotFoundError: stage2_availability`, so its 44 tests did not run) and
+  16 failures in `test_model_endpoints.py` (2), `test_stage2_research_catalog.py`
+  (12, unknown `models` outcome key and the old hard failure on a fixed id) and
+  `test_stage2.py` (3, `prepare-explore` unknown and `--class` beside
+  `--stage2-off` still accepted).
+- Green: availability file 44 passed; catalog 74 passed; model endpoints 60
+  passed; the two new `test_stage2.py` tests passed; `test_stage2_swarm.py`
+  247 passed together with the first three files. Baseline of the four large
+  files before the change: 769 passed.
+- Full `make verify` (process-local `commit.gpgsign=false`): first run red on
+  one blocking gate (kit probe: the two new `test_model_endpoints.py` tests
+  need the runner, which the kit does not carry; fixed with `importorskip`).
+  Second run at `e386d25`: 2679 passed, 16 skipped in 15 min 1 s; ruff clean;
+  `VERIFY GREEN`, exit 0.
+- [DETAIL] #157 is not on `origin/main`: `scripts/stage2_availability.py` is
+  written to its contract (`terms_problem`, `request_value`, `ordered_models`
+  live there, not in `stage2.py`). Whichever pull request merges second
+  resolves the add/add conflict to one copy.
+- [DETAIL] The old `research_swarm` keys stay beside the new seat keys,
+  because the unwired old `run()` still reads them; steps 2-8 remove them.
+  `explore` on a swarm class now requires a valid receipt; `sworld` stubs
+  `consume_research` until the run consumes its selection.
+- [DETAIL] No `modelle_terms` records were added to `model-endpoints.yaml`
+  (they are the maintainer's data readings, held by #157). Until #157 merges,
+  `prepare-explore` on the shipped declaration reports every Go seat model as
+  unadmitted and stops with `seat-unavailable`.
+- Not done in step 11: the ledger rows on the run itself (criteria 6, 11, 37,
+  43 finders, 46 frozen-and-recorded) stay "not yet written"; they need the
+  run wiring of steps 2-8. Docs/prompts (step 10) are untouched.
