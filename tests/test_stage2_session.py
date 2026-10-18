@@ -180,6 +180,19 @@ class World:
             "modelle": [GO_BARE],
         }
         entry.update(changes)
+        # A paid model needs a dated reading of its data terms to be admitted (ADR 0021, decision 5).
+        entry.setdefault(
+            "modelle_terms",
+            {
+                model: {
+                    "gelesen": "2026-10-07",
+                    "quelle": "privacy table of the Go page, https://opencode.ai/docs/go",
+                    "aufbewahrung": "0 days",
+                    "training": "Not used",
+                }
+                for model in entry["modelle"]
+            },
+        )
         path = self.tree / "model-endpoints.yaml"
         data = yaml.safe_load(path.read_text(encoding="utf-8"))
         data["endpunkte"] = [e for e in data["endpunkte"] if e.get("name") != "opencode-go"]

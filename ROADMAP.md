@@ -37,7 +37,9 @@ changes them.
    3 sessions. Beads: every criterion names its proof (coding-harness-909,
    ADR 0013 awaits the maintainer's merge), diagnostics of failed attempts
    (coding-harness-cit), an ADR names its owning change (coding-harness-afa),
-   review rounds until one finds nothing (coding-harness-dx0), live view of a
+   review rounds until one finds nothing — the until-clean swarm loop is in
+   flight (coding-harness-dx0, with the implementation-review swarm work item
+   coding-harness-4fk), live view of a
    round (coding-harness-uco).
 
 ## Next

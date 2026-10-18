@@ -109,6 +109,10 @@ OHNE_AUFRUFER: dict[str, str] = {
         "Helper of scripts/stage2.py session, never an entry point of its own — it opens a macOS Terminal "
         "window for an interactive model session; tests/test_stage2_session.py runs it against stand-ins"
     ),
+    "stage2_availability.py": (
+        "Helper imported by scripts/stage2.py prepare-loop and review-loop, not a standalone CI gate; "
+        "tests/test_stage2_availability.py exercises preparation and consumption against synthetic models"
+    ),
     "harness.py": (
         "Entry point, not a gate — a person, or an agent on the maintainer's word, records an ADR "
         "answer with it; tests/test_harness_decide_adr.py runs it"
