@@ -417,6 +417,77 @@ def native_base_urls(provider: str, api: str) -> set[str]:
     return {model.get("baseUrl") for model in section.values() if isinstance(model, dict)}
 
 
+@pytest.mark.usefixtures("installed_pi")
+@pytest.mark.parametrize("last_modified", [0, 946684800000])
+@pytest.mark.parametrize("model_id", ["synthetic-protocol-check-free", "deepseek-v4.1-flash"])
+def test_real_refreshed_definition_resolves_without_newer_server_date(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, last_modified: int, model_id: str
+) -> None:
+    """P6-14: production scratch config activates new and replaced APIs without forged cache dates."""
+    definition = {
+        "id": model_id,
+        "provider": "opencode-go",
+        "api": "anthropic-messages",
+        "baseUrl": "https://catalog.example.invalid/fresh-endpoint",
+        "contextWindow": 123456,
+        "maxTokens": 1234,
+        "reasoning": False,
+        "input": ["text"],
+    }
+    store = {"opencode-go": {"models": [definition], "lastModified": last_modified, "checkedAt": 1234567890}}
+    runtime = REPO_ROOT / "tools/pi/node_modules" / PKG / "dist/core/model-runtime.js"
+    script = """
+const { ModelRuntime } = await import(process.argv[1]);
+globalThis.fetch = async () => { throw new Error('network forbidden'); };
+const runtime = await ModelRuntime.create({
+  credentials: { async read() {}, async list() { return []; } },
+  modelsPath: process.argv[2], refreshOnCreate: false,
+});
+const result = await runtime.refresh({ providers: ['opencode-go'], allowNetwork: false });
+if (runtime.getError() || result.errors.size) throw new Error(runtime.getError() || 'refresh failed');
+console.log(JSON.stringify(runtime.getModel('opencode-go', process.argv[3]) ?? null));
+"""
+    observed = []
+
+    def resolve_launch(command, cwd, env, *_args, **_kwargs):
+        agent = Path(env["PI_CODING_AGENT_DIR"])
+        if "update" in command:
+            (agent / "models-store.json").write_text(json.dumps(store))
+            return subprocess.CompletedProcess(command, 0, "refreshed", "")
+        assert json.loads((agent / "models-store.json").read_text()) == store, "server evidence was rewritten"
+        done = subprocess.run(
+            ["node", "--input-type=module", "-e", script, runtime.as_uri(), str(agent / "models.json"), model_id],
+            cwd=cwd,
+            env={**contract_environment(), "PI_OFFLINE": "1", "HOME": env["HOME"]},
+            capture_output=True,
+            text=True,
+            timeout=120,
+            check=False,
+        )
+        assert done.returncode == 0, done.stderr
+        resolved = json.loads(done.stdout)
+        assert resolved is not None, "the fresh model was not activated"
+        for field in ("api", "baseUrl", "contextWindow", "maxTokens", "input", "reasoning"):
+            assert resolved[field] == definition[field], f"fresh {field} was not activated"
+        observed.append(resolved)
+        if "--list-models" in command:
+            return subprocess.CompletedProcess(command, 0, f"provider model\nopencode-go {model_id}\n", "")
+        return subprocess.CompletedProcess(command, 0, "No finding.", "")
+
+    monkeypatch.setattr(stage2, "launch", resolve_launch)
+    monkeypatch.setattr(stage2, "reviewer_key", lambda: SYNTHETIC_KEY)
+    monkeypatch.setattr(
+        stage2, "free_rule", lambda _root: {"provider": "opencode-go", "id_suffix": "", "include": [{"id": model_id}]}
+    )
+    discovery = stage2.discover_free(tmp_path)
+    assert discovery["selected"] == [model_id]
+    assert discovery["models_store"] == store
+    ctx = types.SimpleNamespace(change="demo", root=tmp_path, models_store=discovery["models_store"])
+    for free in (True, False):
+        stage2.run_reviewer(ctx, model_id, "Review demo.", SYNTHETIC_KEY, free=free)
+    assert len(observed) == 3
+
+
 def contract_environment() -> dict[str, str]:
     """Only runtime search and locale cross from the parent; credentials never do."""
     return {name: value for name, value in os.environ.items() if name in {"PATH", "LANG", "LC_ALL", "LC_CTYPE", "TZ"}}
@@ -483,6 +554,93 @@ def test_real_reviewer_tool_contract(project: Path, transport) -> None:
     assert call["argv"][call["argv"].index("--model") + 1] == "opencode-go/contract-rung"
     assert "NODE_OPTIONS" in call["env"] and "pi_network_guard" in call["env"]["NODE_OPTIONS"]
     assert call["env"]["OPENCODE_API_KEY"] == SYNTHETIC_KEY
+
+
+def _git(project: Path, *args: str) -> None:
+    run = subprocess.run(
+        [
+            shutil.which("git"),
+            "-C",
+            str(project),
+            "-c",
+            "user.name=t",
+            "-c",
+            "user.email=t@example.invalid",
+            "-c",
+            "commit.gpgsign=false",
+            *args,
+        ],
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+    assert run.returncode == 0, run.stderr
+
+
+@pytest.mark.usefixtures("installed_pi")
+def test_real_free_reviewer_has_only_the_implementation_diff(transport, tmp_path: Path) -> None:
+    """Criterion 3: the real free launch declares no tools and its only content is the bounded diff."""
+    root = tmp_path / "free-project"
+    for relative, text in {
+        "scripts/helpers.py": "value = 1\n",
+        "docs/note.md": "DOC-CANARY-free-contract\n",
+        "plans/changes/demo/plan.md": "PLAN-CANARY-free-contract\n",
+        "AGENTS.md": "CONTEXT-CANARY-free-contract\n",
+    }.items():
+        path = root / relative
+        path.parent.mkdir(parents=True, exist_ok=True)
+        path.write_text(text, encoding="utf-8")
+    _git(root, "init", "--quiet", "--initial-branch=main")
+    _git(root, "add", "-A")
+    _git(root, "commit", "--quiet", "-m", "base")
+    _git(root, "update-ref", "refs/remotes/origin/main", "HEAD")
+    # the working tree changes: one candidate source file, canaries it must not carry
+    (root / "scripts" / "helpers.py").write_text("value = 2\nDIFF-CANARY-free-contract = True\n", encoding="utf-8")
+    (root / "docs" / "note.md").write_text(
+        "DOC-CANARY-free-contract\nDOC-CANARY-CHANGED-free-contract\n", encoding="utf-8"
+    )
+    (root / "AGENTS.md").write_text(
+        "CONTEXT-CANARY-free-contract\nCONTEXT-CANARY-CHANGED-free-contract\n", encoding="utf-8"
+    )
+    (root / "tests").mkdir()
+    (root / "tests" / "test_new.py").write_text("UNTRACKED-CANARY-free-contract = True\n", encoding="utf-8")
+    # the prompt as the loop composes it: the free body, the round head, the answer format, the diff
+    prompt = "\n\n".join(
+        [
+            stage2.FREE_REVIEW_BODY,
+            "This is round 1; you are `acme-1-free`.",
+            stage2.ANSWER_FORMAT,
+            f"## The implementation diff\n\n{stage2.free_diff(root)}",
+        ]
+    )
+    standin = StandIn([{"content": "No finding."}])
+    transport.providers["opencode-go"] = {"baseUrl": standin.url}
+    try:
+        answer = stage2.run_reviewer(
+            types.SimpleNamespace(change="demo", root=root), "acme-1-free", prompt, SYNTHETIC_KEY, free=True
+        )
+        assert "No finding." in answer, "the scripted stop never reached the runner"
+    finally:
+        standin.close()
+    (call,) = transport.calls
+    argv = call["argv"]
+    assert "--no-tools" in argv and "--tools" not in argv, "the free launch declared tools"
+    assert not Path(call["cwd"]).is_relative_to(root), "the free member started in the worktree"
+    (exchange,) = standin.requests
+    assert tool_names(exchange) == set(), "the model was offered a tool schema"
+    one = message_text(exchange)
+    for canary in ("DIFF-CANARY-free-contract", "UNTRACKED-CANARY-free-contract"):
+        assert canary in one, f"the diff hunk holding {canary} did not travel"
+    for canary in (
+        "DOC-CANARY-free-contract",
+        "DOC-CANARY-CHANGED-free-contract",
+        "PLAN-CANARY-free-contract",
+        "CONTEXT-CANARY-free-contract",
+        stage2.READ_REQUEST,
+    ):
+        assert canary not in one, f"a free payload carries {canary}"
+    for message in exchange.body.get("messages", []):
+        assert message.get("role") != "tool" and not message.get("tool_calls"), "a tool result travelled"
 
 
 # ---------------------------------------------------------------------------
@@ -776,8 +934,10 @@ def test_real_opencode_provider_contracts(tmp_path: Path) -> None:
         "the installed opencode (Zen) catalog lost its native address"
     )
     catalog = {model["id"]: model for model in provider_data("opencode-go")["openai-completions"].values()}
+    # Every admitted rung must use the measured wire API, including ids carried
+    # under another API in Pi's shipped catalog. Missing ids fail closed too.
     for rung in stage2.ladder(REPO_ROOT):
-        assert rung in catalog, f"ladder model {rung} moved outside the checked wire API"
+        assert rung in catalog, f"{rung}: wire API not measured as openai-completions"
         assert catalog[rung]["baseUrl"] == GO_NATIVE
     scratch = scratch_of(tmp_path)
     for provider, model in (("opencode-go", "contract-go-model"), ("opencode", "contract-zen-model")):
@@ -958,3 +1118,38 @@ def test_contract_environment_excludes_parent_provider_keys(
         assert child["OPENCODE_API_KEY"] == SYNTHETIC_KEY
     finally:
         standin.close()
+
+
+@pytest.mark.usefixtures("installed_pi")
+def test_real_catalog_headers_remain_literal(tmp_path: Path) -> None:
+    """P6-15: pinned Pi's real composer preserves catalog strings without executing them."""
+    headers = {
+        "X-Command": "!printf catalog-command-ran",
+        "X-Env": "$CATALOG_SECRET/${CATALOG_SECRET}",
+        "X-Escapes": "$$ $! ! trailing$",
+        "X-Plain": "catalog-value",
+    }
+    store = {stage2.OPENCODE: {"models": [{"id": "synthetic-free", "headers": headers}], "lastModified": 0}}
+    evidence = json.dumps(store)
+    stage2.activate_overlay(tmp_path, store)
+    composer = REPO_ROOT / "tools/pi/node_modules" / PKG / "dist/core/provider-composer.js"
+    script = """
+import fs from 'node:fs';
+const { resolveConfiguredModelHeaders } = await import(process.argv[1]);
+const config = JSON.parse(fs.readFileSync(process.argv[2], 'utf8')).providers['opencode-go'];
+const model = { id: 'synthetic-free', provider: 'opencode-go', type: 'chat' };
+console.log(JSON.stringify(resolveConfiguredModelHeaders(model, config, undefined,
+  { CATALOG_SECRET: 'environment-must-not-be-read' })));
+"""
+    done = subprocess.run(
+        ["node", "--input-type=module", "-e", script, composer.as_uri(), str(tmp_path / "models.json")],
+        cwd=tmp_path,
+        env=contract_environment(),
+        capture_output=True,
+        text=True,
+        timeout=30,
+        check=False,
+    )
+    assert done.returncode == 0, done.stderr
+    assert json.loads(done.stdout) == headers, "Pi evaluated a catalog header instead of preserving its literal value"
+    assert json.dumps(store) == evidence
