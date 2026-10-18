@@ -3,11 +3,11 @@ title: "ADR 0020 — Phase 1 uses a research swarm with a checked handoff"
 category: adr
 status: accepted
 created: 2026-10-15
-last_reviewed: 2026-10-17
-updated: 2026-10-17
+last_reviewed: 2026-10-18
+updated: 2026-10-18
 owner: framework-architect
 provenance: human-decided
-produced_by: {kind: llm-session, name: codex, version: "2026-10-17"}
+produced_by: {kind: llm-session, name: claude-code, version: "2026-10-18"}
 review: {status: pending, approved_by: null, approved_at: null}
 tags: [adr, research, swarm, stage-2]
 ---
@@ -19,8 +19,9 @@ tags: [adr, research, swarm, stage-2]
   routing of ADR 0007 and research purpose of ADR 0011; supersedes neither
   whole ADR and amends no numbered D/O decision.
 * Review: maintainer chose the amended direction in the research-swarm
-  interview on 2026-10-14–17, Q-1–Q-11; acceptance is the future merge, with
-  no agent-written approval. Decider: maintainer; prepared by Codex.
+  interview on 2026-10-14–18, Q-1–Q-13; acceptance is the future merge, with
+  no agent-written approval. Decider: maintainer; prepared by Codex, with
+  the Q-12 and Q-13 amendments drafted by Claude Code (Opus 5.5).
 * Date: 2026-10-15 · takes effect on merge.
 
 ## Context
@@ -42,7 +43,14 @@ repository runtime pin is now Pi 1.2.0 (ADR 0019). Q-11 (2026-10-17)
 records that Pi's fresh catalog has no tool-support field and selects a second
 public source, models.dev, for tool_call and deprecated status. These dated
 observations are the maintainer's recorded evidence, not measurements by this
-drafting call; models.dev failure excludes free seats but retains fixed ones.
+drafting call; models.dev failure excludes free seats but retains the
+required ones. Q-12 (2026-10-18) replaces both fixed trios: on that day
+`qwen3.8-flash`, a fixed online member, could not be called (wire API not
+measured) while other Go models answered, so a fixed trio would end every
+run incomplete. Each required seat now has an ordered candidate list and a
+reachability check before each run, in the form of the review swarm's
+availability preparation. Q-13 (2026-10-18) asks that finished research
+survive a run stopped by a token or quota limit.
 
 ## Decision Drivers
 
@@ -51,6 +59,10 @@ drafting call; models.dev failure excludes free seats but retains fixed ones.
 * No private context in online research, regardless of subscription billing.
 * Human decisions and sourced disagreements survive research into the spec.
 * Finite concurrent work with auditable refusals and partial results.
+* One unavailable model must not fail every run, and changing a research
+  model is a one-line edit (Q-12).
+* Finished contributions are never paid for twice when a run is cut off
+  (Q-13).
 
 ## Considered Options
 
@@ -72,7 +84,7 @@ checkable.
    5.5 with its reason. Early research/spec/argument classes must agree.
    Swarm research headers require an explicit neighbours list; [] is valid,
    while a missing/null/non-list key refuses with exit 2 and a repair message.
-2. Finder step 0 uses independent DeepSeek Flash, MiMo Flash and Haiku 5.5
+2. Finder step 0 uses the three repository seats as independent
    locators; Opus 5.5 merges code, rules/ADRs, tests/gates and neighbour lists.
    The merged finder keys are their exact deduplicated category/reference
    union with all origins/reasons; extra or missing keys fail preparation.
@@ -89,8 +101,9 @@ checkable.
    Given paths outside those forms or the own spec refuse with exit 2;
    eligible given paths must exist in frozen bytes.
 3. Topics 1–8 cover code/reuse, callers/interfaces, rules/class, architecture,
-   neighbours, history/volatility, tests/gates and risks; each uses the same
-   repository trio on identical briefs, perspectives and report template.
+   neighbours, history/volatility, tests/gates and risks; each uses the
+   three repository seats on identical briefs, perspectives and report
+   template.
    After map merge the runner collects topic 6's local frozen-HEAD history:
    up to ten most recent commits per resolved mapped path, with full hash,
    UTC author date, subject, body capped at 4,000 characters with truncation
@@ -99,12 +112,12 @@ checkable.
    hash outside the packet or PR/bead id alone is unsupported. No network or
    tracker is read; collection failure prevents topics and exits 1 incomplete.
 4. Topics 9–11 cover best practice, existing tools/standards and public failure
-   reports. Each uses DeepSeek Flash, MiMo Flash and Qwen 3.8 Flash through Pi
-   with only the filtered Opus sentence, fixed questions and public sources.
+   reports. Each uses the three online seats through Pi with only the
+   filtered Opus sentence, fixed questions and public sources.
    In addition, every eligible Go chat model ending `-free`, selected from a
    live-fetched Pi Go overlay with declared include/exclude lists, works each
    online topic on the same brief. No Zen provider, OpenCode CLI, fixed free
-   roster or substitution for the mandatory Flash trio. Dynamic free
+   roster or substitution for the online seats. Dynamic free
    permission applies to public-only research, never private roles. Select only
    fresh-Pi text-input chat entries with exact matching models.dev
    opencode-go.models keys, with a present id field equal to the key,
@@ -112,11 +125,11 @@ checkable.
    Missing/negative support, missing metadata, deprecated, non-chat and
    baseline-only entries are excluded with reasons. Unavailable/unreadable
    models.dev excludes all free candidates as capability-unavailable N=0,
-   retaining fixed slots; this is distinct from a measured empty eligible set.
+   retaining required slots; this is distinct from a measured empty eligible set.
    Both sources are dated/digested. Pi refresh failure exits 1 before all
    models; Pi's absent capability field is expected, never a fallback trigger. These free
    seats are best-effort: failure is named, never hidden or substituted, and
-   does not alone invalidate the 39 required fixed contributions.
+   does not alone invalidate the 39 required contributions.
    Missing/non-object provider/models, non-object root, invalid JSON,
    non-200/request failure or duplicate claimed ids are document-level
    capability-unavailable. Duplicate ids mean repeated raw keys under that
@@ -127,9 +140,9 @@ checkable.
    non-string present status, missing id or id/key mismatch), retaining raw
    values including an absent-id marker; missing
    entries are metadata-missing, absent/false support is no-tool-support.
-   Other providers' entries are not inspected. Every fixed Go id must be
-   fresh-Pi text-input chat, else fixed-model-unavailable with its id exits 1
-   before any model; models.dev is not consulted for fixed roles.
+   Other providers' entries are not inspected. A Go seat candidate must be
+   fresh-Pi text-input chat to be probed; otherwise it is skipped with its
+   reason (point 11). models.dev is not consulted for seat candidates.
 5. Reports hold at most seven identified claims with evidence, kind,
    confidence/basis, counter-evidence, unread sources, neighbour relation
    and typed questions with report-local ids and claim links. The runner
@@ -217,19 +230,20 @@ checkable.
    available partial evidence as cancelled; exit 2 takes precedence. Freeze `N`
    selected Go free
    models before model calls; the budget is at most `39 + 3N` invocations. A
-   bounded Go-only Pi catalog refresh must succeed each run; failures exit 1
+   bounded Go-only Pi catalog refresh must succeed in each run's preparation; failures exit 1
    before models and never use cached/shipped rosters or Zen. Both catalog
    reads start together and share 60 seconds; abort unfinished requests at
    the deadline. Unfinished Pi exits 1; successful Pi plus unfinished
-   models.dev records capability-unavailable/timeout and keeps fixed slots
+   models.dev records capability-unavailable/timeout and keeps required slots
    unless an explicit include is unmet. No retries or extension; models.dev
    receives no credentials/private data.
    Valid zero availability and capability-unavailable models.dev fallback keep
-   the fixed 39 slots with distinct recorded reasons. Defaults select all eligible models; explicit include
+   the 39 required slots with distinct recorded reasons. Defaults select all eligible models; explicit include
    narrows and exclude wins. Record dated source, freshness, policy and roster;
    missing explicit includes exit 1 before models; no silent truncation of
    models/reports to fit the deadline or judge context.
-   Finite per-role and 150-minute total deadlines include catalog preflight;
+   Preparation (catalog 60 seconds, each probe 60 seconds) precedes the
+   finite per-role and 150-minute total deadlines;
    no retry, recursive delegation or debate. Required topic slots precede free
    slots, by topic and declared seat order (free ids sorted); reserve the
    judge's 15 minutes. Every unlaunched slot has a deadline outcome. Failed
@@ -248,6 +262,39 @@ checkable.
     Changed inputs invalidate publication with named paths and exit 1; only
     runner research appends/restamping are ignored. Invalid given neighbours
     refuse preflight (exit 2); later unread evidence stays a named gap.
+11. The six required seats (three repository, three online) each hold an
+    ordered `{endpoint, model}` candidate list in `model-endpoints.yaml`,
+    beside an availability rule with the review swarm's field names
+    (`max_age_seconds`, dated `exclude_until`). A separate step,
+    `prepare-explore`, refreshes the catalog and admits candidates: declared,
+    no `-free` id, dated data terms without a skip mark for Go candidates,
+    fresh text-input chat in Pi, `framework` permission for repository seats
+    and Pi for online seats. It then probes lazily, one probe per distinct
+    candidate with the fixed text alone, no tools, no repository content,
+    60 seconds, leak-checked and audited; a Claude Code candidate is probed
+    through official Claude Code. Each seat takes the first admitted,
+    unexcluded, reachable candidate not already taken by an earlier seat of
+    its trio. The selection is printed for the main conversation and sealed
+    in a single-use receipt bound to worktree, change, configuration, class
+    and neighbours; `explore --availability-reported <id>` consumes it within
+    the maximum age, and the selection stays frozen for the run, with no swap,
+    re-probe or retry. A seat without a candidate stops preparation with
+    exit 1 and names the seat; receipt, declaration and argument faults
+    refuse with exit 2. Go free models and Opus roles are not probed. Probes
+    are not research invocations. Rule validation, timed exclusion, the
+    probe and receipt sealing are one implementation shared with the review
+    swarm's availability preparation.
+12. Every slot's launch and terminal records go atomically to a runner-owned
+    state store outside the repository, owner-only, before its worker takes
+    another slot. A later run of the change, under its own lock, run id,
+    receipt and deadlines, reuses a stored `ok` result whose report
+    validates, from the latest stored run only. Reuse needs equal input
+    digests, ignoring that run's own research append and HEAD, and the same
+    stage, topic, seat, endpoint, model and prompt hash. The run launches
+    the rest within `39 + 3N` and marks reused and interrupted slots. A
+    stored run with a security refusal is never resumed; a complete
+    publication clears the store; a failed store write stops the run with
+    exit 1.
 
 ## Consequences
 
@@ -258,8 +305,17 @@ checkable.
   best-effort slots unfinished at the deadline; that alone does not invalidate
   completion. Missing required slots still do. No seat silently disappears.
 * Pi refresh failure exits 1 before any model call. models.dev failure instead
-  excludes free candidates and retains fixed slots with a recorded reason;
+  excludes free candidates and retains required slots with a recorded reason;
   explicit includes remain hard requirements and exit 1 if ineligible.
+* Each run gains a preparation step and a report the orchestrator relays
+  before the run; the selected models are reported, not fixed in the spec.
+  Probes cost a few small calls outside `39 + 3N`, a Claude Code seat's
+  probe included. A model change is a one-line pull request to a list.
+* Finished research survives a stopped run, at the cost of a runner-owned
+  store outside the repository, an input-binding check and a per-change
+  lock. A repository seat that deliberately reads an absolute path outside
+  its working directory could reach the store, which is the accepted paid-Pi
+  residual read risk, now also covering stored results.
 * Questions may exceed minimum counts; the gate cannot invent answers or
   establish that a recorded answer faithfully reflects a human conversation.
 * Same-brief scoring is evidence for later evaluation, not automatic model
@@ -294,13 +350,22 @@ checkable.
   models.dev fixtures prove exact-id intersection, support/deprecation checks,
   and capability-unavailable fallback without credentials or private data.
   They distinguish document/entry faults, shared-deadline outcomes, unavailable
-  fixed ids and exclusion provenance even when N is nonzero. Raw duplicate
+  seat candidates skipped from the fresh overlay and exclusion provenance even when N is nonzero. Raw duplicate
   keys/equal claimed ids exclude all candidates; missing id excludes only
   its candidate. Independent map-to-neighbour fixtures cover active/archive/
   living specs, self entries and spec-backed entries wrongly labelled gaps;
   empty-topic-5 fixtures retain all 39 required slots. Type-specific resolver
   fixtures hold exact excerpts and refuse ambiguous or prose-only evidence.
   Judge-packet fixtures exercise the exact limit, one character over it and per-claim caps.
+* Selection fixtures cover lazy unique probes, double-fill, unadmitted and
+  excluded candidates, probe content canaries, receipt binding, age and
+  single use, the seat-unavailable stop and the shared helpers. The review
+  swarm's availability tests run unchanged where they are on the base.
+* Store fixtures kill the runner with SIGKILL after a terminal outcome and
+  find the record whole. They cover torn files, input-binding and slot-key
+  mismatches, non-`ok` outcomes, refused and complete runs, and lock
+  release after a killed run.
 * After merge, public-only live qualification records the refreshed catalog,
-  actual Go Flash/free models and search/fetch outcomes. Until success no
-  complete live swarm is claimed.
+  the reported seat selection, actual seat/free models, search/fetch
+  outcomes and one resumed run. Until success no complete live swarm is
+  claimed.
