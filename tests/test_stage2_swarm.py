@@ -360,8 +360,17 @@ def test_large_classes_dispatch_the_swarm(sworld: SwarmWorld, klass: str) -> Non
     assert "## Runner exploration" not in text
 
 
-def test_all_swarm_pi_launches_use_pinned_wrapper(sworld: SwarmWorld) -> None:
-    """The bare-Pi trap refutes any catalog, public or repository escape."""
+def test_swarm_uses_only_the_injected_pi_wrapper(sworld: SwarmWorld) -> None:
+    """Criterion 1. The bare-Pi trap refutes any catalog, public or repository escape.
+
+    The fixture injects a separately named stand-in as `stage2.PI_WRAPPER`, leaves a failing bare `pi` first
+    on the restricted PATH and never runs the installed Pi. Planted fault: one launch resolves `pi` from PATH.
+    """
+    assert sworld.bin / "pin-pi" == stage2.PI_WRAPPER, "the fixture did not inject the stand-in"
+    assert stage2.PI_WRAPPER != stage2.PI_TOOLS_DIR / "pi", "the installed Pi would run in a unit test"
+    assert shutil.which("pi") == str(sworld.bin / "pi"), "the bare-Pi trap is not what PATH resolves"
+    trap = subprocess.run([str(sworld.bin / "pi"), "--version"], capture_output=True, text=True, check=False)
+    assert trap.returncode != 0 and "bare pi bypassed" in (trap.stderr + str(trap.stdout)), "the trap does not fire"
     sworld.complete()
     assert sworld.run() == 0
     pinned = str(sworld.bin / "pin-pi")
@@ -1164,3 +1173,147 @@ def test_phase_one_doctrine_and_declarations_agree() -> None:
     assert "Routing by class (ADR 0020)." in explore_prompt
     for free_id in roster:
         assert free_id not in workflow and free_id not in agents, "a free id stays out of the review-ladder doctrine"
+
+
+# ---------------------------------------------------------------------------
+# Role identities and per-invocation permissions (plan step 2; spec criteria 11, 37, 40)
+# ---------------------------------------------------------------------------
+
+
+def _declaration() -> dict:
+    return yaml.safe_load((REPO_ROOT / "model-endpoints.yaml").read_text(encoding="utf-8"))
+
+
+def _selection(substitute: bool = False) -> dict:
+    """A consumed seat selection as the receipt holds it; `substitute` swaps one Go seat model for a pool one."""
+    online = [
+        {"endpoint": "opencode-go", "model": "deepseek-v4.1-flash"},
+        {"endpoint": "opencode-go", "model": "mimo-v2.6-flash"},
+        {"endpoint": "opencode-go", "model": "longcat-2.0" if substitute else "qwen3.8-flash"},
+    ]
+    repository = [
+        {"endpoint": "opencode-go", "model": "deepseek-v4.1-flash"},
+        {"endpoint": "opencode-go", "model": "mimo-v2.6-flash"},
+        {"endpoint": "claude-code-plan", "model": "claude-haiku-5-5"},
+    ]
+    return {"seats": {"repository": repository, "online": online}}
+
+
+def test_role_launches_read_identities_from_the_frozen_selection_and_declaration() -> None:
+    # Criteria 6 and 37 (identity part only). Planted fault: a launch names a model other than its frozen seat.
+    data = _declaration()
+    state = _selection(substitute=True)
+    roles = stage2_availability.research_roles(state, data)
+    launches = stage2_swarm.role_launches(data, roles, ["alpha-free", "beta-free"])
+    by_role: dict[str, list[dict]] = {}
+    for launch in launches:
+        by_role.setdefault(launch["role"], []).append(launch)
+    assert [(item["endpoint"], item["model"]) for item in by_role["online"]] == [
+        (seat["endpoint"], seat["model"]) for seat in state["seats"]["online"]
+    ], "an online launch follows the frozen selection, substitute included"
+    assert [item["model"] for item in by_role["repository"]] == [seat["model"] for seat in state["seats"]["repository"]]
+    assert [item["model"] for item in by_role["online_free"]] == ["alpha-free", "beta-free"]
+    programs = {item["role"]: set() for item in launches}
+    for item in launches:
+        programs[item["role"]].add(item["program"])
+    assert programs["online"] == {"pi"} and programs["online_free"] == {"pi"}
+    assert programs["repository"] == {"pi", "claude-code"}, (
+        "Go seats ride Pi, the Claude Code seat the official program"
+    )
+    for role in ("finder_merge", "topic_author", "judge"):
+        assert programs[role] == {"claude-code"}
+        assert all(item["model"].startswith("claude-opus") for item in by_role[role])
+    assert {item["data_class"] for item in launches if item["role"].startswith("online")} == {"public-web"}
+    assert {item["data_class"] for item in launches if not item["role"].startswith("online")} == {"framework"}
+
+
+def test_role_permissions_do_not_follow_endpoint_privileges() -> None:
+    # Criterion 11. Planted fault: the endpoint's framework permission lets a role carry data it was not given.
+    data = _declaration()
+    go = next(entry for entry in data["endpunkte"] if entry["name"] == "opencode-go")
+    assert "framework" in go["darf_sehen"], "the premise: the Go endpoint itself may see framework content"
+    problem = stage2_swarm.invocation_problem
+    assert problem(data, "repository", "opencode-go", "deepseek-v4.1-flash") is None
+    assert problem(data, "online", "opencode-go", "deepseek-v4.1-flash") is None
+    # An online seat never carries the framework packet, however much its endpoint may see.
+    assert problem(data, "online", "opencode-go", "deepseek-v4.1-flash", data_class="framework")
+    assert problem(
+        data, "online_free", "opencode-go", "alpha-free", data_class="framework", selected_free=["alpha-free"]
+    )
+    # A private role never carries public-only data under a mislabelled class either.
+    assert problem(data, "repository", "opencode-go", "deepseek-v4.1-flash", data_class="public-web")
+    # A model outside its role's endpoint kind is refused: online seats ride Go, Opus rides Claude Code.
+    assert problem(data, "online", "claude-code-plan", "claude-haiku-5-5")
+    assert problem(data, "judge", "opencode-go", "deepseek-v4.1-flash")
+    assert problem(data, "judge", "claude-code-plan", "claude-haiku-5-5"), "only Opus fills an Opus role"
+    assert problem(data, "topic_author", "claude-code-plan", "claude-opus-5-5") is None
+    # No program is launched for an endpoint no launcher serves, nor for an unknown role or undeclared model.
+    assert problem(data, "repository", "glm-coding-plan", "glm-5.3-flash")
+    assert problem(data, "repository", "opencode-go", "ghost-model")
+    assert problem(data, "reviewer", "opencode-go", "deepseek-v4.1-flash")
+    # An endpoint without a stated residency never serves a private role.
+    nameless = _declaration()
+    next(e for e in nameless["endpunkte"] if e["name"] == "opencode-go")["residenz"] = "nicht-erklaert"
+    assert problem(nameless, "repository", "opencode-go", "deepseek-v4.1-flash")
+
+
+@pytest.mark.parametrize("role", ["finder", "repository", "finder_merge", "topic_author", "judge", "online"])
+def test_dynamic_free_permission_is_public_only(role: str) -> None:
+    # Criterion 40. Planted fault: a Go free model fills a private (or paid online) role through the endpoint.
+    data = _declaration()
+    endpoint = "claude-code-plan" if role in {"finder_merge", "topic_author", "judge"} else "opencode-go"
+    # Even when the declaration were to list the free id as an ordinary model, no seat or private role takes it.
+    next(e for e in data["endpunkte"] if e["name"] == "opencode-go")["modelle"].append("alpha-free")
+    assert stage2_swarm.invocation_problem(data, role, endpoint, "alpha-free", selected_free=["alpha-free"])
+    assert stage2_swarm.invocation_problem(data, role, "opencode-go", "alpha-free", selected_free=["alpha-free"])
+
+
+def test_selected_free_models_ride_only_the_public_role_under_the_policy() -> None:
+    # Criteria 39 and 40. Planted fault: an unselected, excluded, off-suffix or off-provider id is launched.
+    data = _declaration()
+    problem = stage2_swarm.invocation_problem
+    assert problem(data, "online_free", "opencode-go", "alpha-free", selected_free=["alpha-free"]) is None
+    assert problem(data, "online_free", "opencode-go", "alpha-free", selected_free=[]), "not in this run's selection"
+    assert problem(data, "online_free", "opencode-go", "alpha", selected_free=["alpha"]), "no -free suffix"
+    assert problem(data, "online_free", "opencode", "alpha-free", selected_free=["alpha-free"]), "another provider"
+    assert problem(data, "online_free", "claude-code-plan", "alpha-free", selected_free=["alpha-free"])
+    data["research_swarm"]["online_free"]["exclude"] = ["alpha-free"]
+    assert problem(data, "online_free", "opencode-go", "alpha-free", selected_free=["alpha-free"]), "exclude wins"
+    data["research_swarm"]["online_free"].update(exclude=[], include=["beta-free"])
+    assert problem(data, "online_free", "opencode-go", "alpha-free", selected_free=["alpha-free"]), "include narrows"
+    assert problem(data, "online_free", "opencode-go", "beta-free", selected_free=["beta-free"]) is None
+
+
+@pytest.mark.parametrize(
+    "policy",
+    [
+        None,
+        {},
+        {"provider": "opencode", "suffix": "-free", "include": [], "exclude": []},
+        {"provider": "opencode-go", "suffix": "", "include": [], "exclude": []},
+        {"provider": "opencode-go", "suffix": "-free", "include": ["paid-flash"], "exclude": []},
+        {"provider": "opencode-go", "suffix": "-free", "include": [], "exclude": "a-free"},
+        {"provider": "opencode-go", "suffix": "-free", "include": ["a-free", "a-free"], "exclude": []},
+        {"provider": "opencode-go", "suffix": "-free", "include": [], "exclude": [], "extra": 1},
+    ],
+)
+def test_malformed_online_free_policy_is_a_declaration_fault(policy: object) -> None:
+    # Criterion 39. Planted fault: a malformed or non-free policy reaches a launch instead of exit 2.
+    data = _declaration()
+    data["research_swarm"]["online_free"] = policy
+    roles = stage2_availability.research_roles(_selection(), data)
+    with pytest.raises(stage2_swarm.ResearchCatalogError) as caught:
+        stage2_swarm.role_launches(data, roles, [])
+    assert caught.value.exit_code == 2
+    assert stage2_swarm.invocation_problem(data, "online_free", "opencode-go", "a-free", selected_free=["a-free"])
+
+
+def test_a_role_launch_set_with_one_unpermitted_role_starts_none() -> None:
+    # Criterion 11. Planted fault: the set is partly returned, so earlier roles would launch before the refusal.
+    data = _declaration()
+    state = _selection()
+    state["seats"]["repository"][0] = {"endpoint": "glm-coding-plan", "model": "glm-5.3-flash"}
+    roles = stage2_availability.research_roles(state, data)
+    with pytest.raises(stage2_swarm.ResearchCatalogError) as caught:
+        stage2_swarm.role_launches(data, roles, [])
+    assert caught.value.exit_code == 2 and "glm-coding-plan" in str(caught.value)

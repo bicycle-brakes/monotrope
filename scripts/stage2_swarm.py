@@ -43,6 +43,7 @@ import sys
 import tempfile
 import time
 import uuid
+from collections.abc import Sequence
 from pathlib import Path
 from urllib.parse import urlsplit
 
@@ -344,6 +345,123 @@ def select_research_catalog(bridge, policy, fixed_ids, *, expected_version, meas
         "capability_status": "capability-unavailable" if capability_reason else "available",
         "capability_reason": capability_reason,
     }
+
+
+# ---------------------------------------------------------------------------
+# Role identities and per-invocation permissions (plan step 2; spec criteria 11, 37, 40)
+# ---------------------------------------------------------------------------
+
+GO_ENDPOINT = "opencode-go"
+CLAUDE_ENDPOINT = "claude-code-plan"
+PRIVATE_ROLES = ("finder", "repository", "finder_merge", "topic_author", "judge")
+PUBLIC_ROLES = ("online", "online_free")
+OPUS_ROLES = ("finder_merge", "topic_author", "judge")
+ROLE_CLASS = {**dict.fromkeys(PRIVATE_ROLES, "framework"), **dict.fromkeys(PUBLIC_ROLES, "public-web")}
+# The one program that serves an endpoint: pinned Pi for Go, the official read-only Claude Code for the plan.
+LAUNCHERS = {GO_ENDPOINT: "pi", CLAUDE_ENDPOINT: "claude-code"}
+
+
+def _declared_endpoint(data: dict, name: str) -> dict:
+    for candidate in data.get("endpunkte") or []:
+        if isinstance(candidate, dict) and candidate.get("name") == name:
+            return candidate
+    return {}
+
+
+def invocation_problem(
+    data: dict,
+    role: str,
+    endpoint: str,
+    model: str,
+    *,
+    data_class: str | None = None,
+    selected_free: Sequence[str] = (),
+) -> str | None:
+    """Why this role may not launch this model on this endpoint with this data class, or None.
+
+    The decision is per invocation: the role fixes the data class and the launcher, so an endpoint's own
+    permission (the Go endpoint may see framework content) never widens what an online seat carries, and a
+    `-free` model, permitted dynamically for the public role alone, never fills a private role (criteria 11, 40).
+    """
+    if role not in ROLE_CLASS:
+        return f"unknown research role {role}"
+    wanted = ROLE_CLASS[role]
+    if data_class is not None and data_class != wanted:
+        return f"the {role} role carries {wanted} data only, not {data_class}"
+    if endpoint not in LAUNCHERS:
+        return f"no launcher serves the endpoint {endpoint}"
+    free = isinstance(model, str) and model.endswith("-free")
+    if role == "online_free":
+        policy = (data.get("research_swarm") or {}).get("online_free")
+        try:
+            validate_research_free_policy(policy)  # type: ignore[arg-type]
+        except ResearchCatalogError as error:
+            return str(error)
+        if endpoint != policy["provider"]:
+            return f"free models run on {policy['provider']} only, not {endpoint}"
+        if not model.endswith(policy["suffix"]) or model == policy["suffix"]:
+            return f"{model} does not carry the {policy['suffix']} suffix"
+        if model in policy["exclude"]:
+            return f"{model} is excluded by the free selection policy"
+        if policy["include"] and model not in policy["include"]:
+            return f"{model} is not among the policy's explicit includes"
+        if model not in set(selected_free):
+            return f"{model} is not in this run's frozen free selection"
+        return None
+    if free:
+        return f"a -free model never fills the {role} role"
+    if role in OPUS_ROLES and (endpoint != CLAUDE_ENDPOINT or not model.startswith("claude-opus")):
+        return f"the {role} role is Opus on {CLAUDE_ENDPOINT}"
+    if role == "online" and endpoint != GO_ENDPOINT:
+        return f"online seats run on {GO_ENDPOINT}"
+    found = _declared_endpoint(data, endpoint)
+    if not found:
+        return f"model-endpoints.yaml declares no endpoint {endpoint}"
+    terms = found.get("modelle_terms")
+    if model not in (found.get("modelle") or []) and not (isinstance(terms, dict) and model in terms):
+        return f"the endpoint {endpoint} does not declare the model {model}"
+    if role in PRIVATE_ROLES:
+        allowed = found.get("darf_sehen")
+        if not isinstance(allowed, list) or "framework" not in allowed:
+            return f"the endpoint {endpoint} may not see framework content"
+        residency = found.get("residenz")
+        if not isinstance(residency, str) or not residency.strip() or residency == "nicht-erklaert":
+            return f"the endpoint {endpoint} states no data residency"
+    return None
+
+
+def role_launches(data: dict, roles: dict, selected_free: Sequence[str]) -> list[dict]:
+    """Every launch identity of one run, or ResearchCatalogError (exit 2) naming the first unpermitted role.
+
+    `roles` is the resolved set (`stage2_availability.research_roles`) built from the consumed seat selection
+    and the declaration; `selected_free` is the run's frozen free selection. Nothing is returned for a set with
+    a refused member, so no launch starts before the whole set is checked.
+    """
+    block = data.get("research_swarm")
+    validate_research_free_policy(block.get("online_free") if isinstance(block, dict) else None)  # type: ignore[arg-type]
+    plan = (
+        [("finder", seat) for seat in roles["finder_agents"]]
+        + [("finder_merge", roles["finder_merge"]), ("topic_author", roles["topic_author"])]
+        + [("repository", seat) for seat in roles["repository_agents"]]
+        + [("online", seat) for seat in roles["online_agents"]]
+        + [("online_free", {"endpoint": GO_ENDPOINT, "model": ident}) for ident in selected_free]
+        + [("judge", roles["judge"])]
+    )
+    launches = []
+    for role, seat in plan:
+        problem = invocation_problem(data, role, seat["endpoint"], seat["model"], selected_free=selected_free)
+        if problem:
+            raise ResearchCatalogError(f"{role} {seat['endpoint']}/{seat['model']}: {problem}", 2)
+        launches.append(
+            {
+                "role": role,
+                "endpoint": seat["endpoint"],
+                "model": seat["model"],
+                "program": LAUNCHERS[seat["endpoint"]],
+                "data_class": ROLE_CLASS[role],
+            }
+        )
+    return launches
 
 
 def research_slot_plan(roles, selected_free):

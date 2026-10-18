@@ -765,7 +765,7 @@ the existing gates and let the runner own registry regeneration/full verify.
 
 
 - 1: tests/test_stage2_swarm.py::test_large_classes_dispatch_the_swarm — Either class produces only the single GLM exploration report.
-- 1: not yet written tests/test_stage2_swarm.py::test_swarm_uses_only_the_injected_pi_wrapper — A version or model call bypasses the wrapper, executes the real install in a unit test or resolves bare Pi from PATH.
+- 1: tests/test_stage2_swarm.py::test_swarm_uses_only_the_injected_pi_wrapper — A version or model call bypasses the wrapper, executes the real install in a unit test or resolves bare Pi from PATH.
 - 2: tests/test_stage2_swarm.py::test_small_classes_keep_the_single_explorer — Either class starts a finder or swarm researcher.
 - 3: tests/test_stage2_swarm.py::test_explicit_class_explores_without_spec_or_plan — Valid early input is refused because a later artifact is absent.
 - 4: tests/test_stage2_swarm.py::test_missing_invalid_or_conflicting_class_refuses — Malformed, missing or disagreeing classes pass, or a duplicate, escaping, non-spec or missing frozen neighbour path starts a call.
@@ -775,7 +775,7 @@ the existing gates and let the runner own registry regeneration/full verify.
 - 8: not yet written tests/test_stage2_swarm.py::test_online_requests_exclude_private_inputs_and_ambient_paths — A canary from rules, paths, identifiers, finder output, history or private reports appears in an outbound payload or query.
 - 9: tests/test_stage2_research_tools.py::test_public_tools_cannot_read_local_or_private_sources — A file or shell tool is available, ambient context is discovered, or fetching reaches local files or private network addresses.
 - 10: not yet written tests/test_stage2_swarm.py::test_online_claims_require_successful_page_receipts — Search-only, snippet or invented receipts support a claim, or a receiptless claim is not retained as unsupported; a report with no evidence-backed claim is accepted.
-- 11: not yet written tests/test_stage2_swarm.py::test_role_permissions_do_not_follow_endpoint_privileges — An online seat's model receives the framework packet, or a model outside its seat's frozen selection or role is launched.
+- 11: tests/test_stage2_swarm.py::test_role_permissions_do_not_follow_endpoint_privileges — An online seat's model receives the framework packet, or a model outside its seat's frozen selection or role is launched.
 - 12: not yet written tests/test_stage2_swarm.py::test_leak_block_cancels_queued_dispatch — One scan covers multiple prompts, a queued call starts after BLOCK, a running child is awaited instead of stopped, available partial output is lost instead of retained as cancelled, or exit 1 overrides exit 2.
 - 13: not yet written tests/test_stage2_swarm.py::test_concurrent_slots_keep_distinct_audits_and_outcomes — Concurrent output cannot be assigned to a slot, or a failed slot is audited as successful.
 - 14: not yet written tests/test_stage2_swarm.py::test_fresh_opus_reconciles_eleven_topics_and_map — Another model judges, a peer session resumes, a required topic disappears or Opus has any tool.
@@ -806,7 +806,11 @@ the existing gates and let the runner own registry regeneration/full verify.
 - 38: not yet written tests/test_stage2_research_catalog.py::test_removed_shipped_free_ids_do_not_return — A cached/shipped list substitutes for refresh, a baseline-only free id is dispatched, another provider supplies a seat, or selection lacks dated provenance.
 - 39: not yet written tests/test_stage2_swarm.py::test_selected_free_models_cover_all_online_topics_on_identical_briefs — A selected seat is silently omitted or failed as successful, a non-selected or no-tool-support model runs, peer briefs differ, or a missing explicit include starts any model instead of preflight exit 1.
 - 39: not yet written tests/test_stage2_swarm.py::test_go_free_policy_filters_and_freezes_each_run — A selected seat is silently omitted or failed as successful, a non-selected or no-tool-support model runs, peer briefs differ, or a missing explicit include starts any model instead of preflight exit 1.
-- 40: not yet written tests/test_stage2_swarm.py::test_dynamic_free_permission_is_public_only — A Go free model fills a private role or receives private context through the endpoint's framework permission.
+- 39: tests/test_stage2_swarm.py::test_selected_free_models_ride_only_the_public_role_under_the_policy — An unselected, excluded, off-suffix, off-provider or non-included id is launched as a free online seat (per-invocation permission; the run-level policy row stays not yet written).
+- 39: tests/test_stage2_swarm.py::test_malformed_online_free_policy_is_a_declaration_fault — A malformed or non-free `online_free` policy reaches a launch instead of exit 2.
+- 6: tests/test_stage2_swarm.py::test_role_launches_read_identities_from_the_frozen_selection_and_declaration — A launch names a model other than its frozen seat, a Go seat does not ride Pi, an Opus role does not ride Claude Code (identity part only of criteria 6 and 37; the run-level rows stay not yet written).
+- 11: tests/test_stage2_swarm.py::test_a_role_launch_set_with_one_unpermitted_role_starts_none — A set with one unpermitted role is partly returned, so earlier roles could launch.
+- 40: tests/test_stage2_swarm.py::test_dynamic_free_permission_is_public_only — A Go free model fills a private role or receives private context through the endpoint's framework permission.
 - 41: not yet written tests/test_stage2_research_catalog.py::test_unmeasured_catalog_never_becomes_zero_availability — A Pi refresh timeout, stale-only, malformed or ambiguous result becomes N=0 or exits other than 1.
 - 41: not yet written tests/test_stage2_swarm.py::test_catalog_failure_stops_before_all_model_calls — Pi catalog failure starts a model or probe, uses a cached/Zen roster or exits 0/2/3 instead of 1.
 - 42: not yet written tests/test_stage2_swarm.py::test_measured_empty_catalog_keeps_all_required_slots — Valid zero selection is refused or drops one of the 39 required slots.
@@ -1865,6 +1869,39 @@ no break), counted against the 17 h 20 min appetite. Plan step 11 only.
 - Not done in step 11: the ledger rows on the run itself (criteria 6, 11, 37,
   43 finders, 46 frozen-and-recorded) stay "not yet written"; they need the
   run wiring of steps 2-8. Docs/prompts (step 10) are untouched.
+
+### Run wiring step 2 verified — 2026-10-18 (partial: sub-boundary)
+
+SPAN_PLACEHOLDER
+
+- Scope done: plan step 1 for the identity and permission graph, and the
+  per-invocation part of step 2. Not done (needs the new run of steps 3-8):
+  removing the Zen transport, the fixed roster/focuses and the `opencode-free`
+  endpoint, and the replacement of the old run's roster tests.
+- Red first: five new test groups failed before any source (18 failed, 7
+  passed in the selected set; `role_launches` and `invocation_problem` did not
+  exist). The wrapper test was already green, since the `sworld` fixture
+  already injects `stage2.PI_WRAPPER` (stand-in `pin-pi`) beside a failing bare
+  `pi` on the restricted PATH; it was renamed to the ledger name and given the
+  premise assertions (injected path is not the installed Pi, bare `pi` resolves
+  to the trap and fires).
+- Code: `stage2_swarm.invocation_problem` (role, endpoint, model, data class,
+  frozen free selection) and `stage2_swarm.role_launches` (the whole launch
+  set, nothing returned when one role is refused).
+- [DETAIL] The role fixes the data class (private roles `framework`, online and
+  online_free `public-web`) and the launcher (Go: pinned Pi, plan: Claude
+  Code); an endpoint's own `darf_sehen` never widens a role. A `-free` model is
+  permitted only for `online_free`, under the declared policy (provider, suffix,
+  exclude wins, nonempty include narrows) and the run's frozen selection.
+- [DETAIL] Opus roles (merge, author, judge) must be `claude-opus*` on
+  `claude-code-plan`; a repository seat on that endpoint may be any declared
+  model (the shipped seat is Haiku 5.5).
+- [DETAIL] `role_launches` always validates the declared `online_free` policy,
+  even at N=0, so a malformed policy is exit 2 before any model; the catalog
+  and receipt paths already did so at preparation.
+- [DETAIL] The step-11 catalog refresh (forced Go refresh, models.dev
+  intersection, per-candidate outcomes) and the wrapper routing of version and
+  model calls were already in place (steps 11 and earlier); nothing was redone.
 
 ## Main sync after #157 — 2026-10-18
 
