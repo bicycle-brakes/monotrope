@@ -1889,3 +1889,54 @@ no break), counted against the 17 h 20 min appetite. Plan step 11 only.
 - Evidence: focused set 1077 passed, 2 skipped, 2 failed (the two above, fixed;
   `test_stage2_swarm.py` then 70 passed); full `make verify` at `f179d9c`:
   VERIFY GREEN.
+
+## Resumable store verified — 2026-10-18
+
+Step 12 (Q-13): durable slot results and resume, built and verified.
+
+- Span (measured, `date -u`): 2026-10-18T20:56:41Z to 2026-10-18T21:29:45Z (about 35 min, including one full make verify of 13 min 58 s), counted against
+  the 17 h 20 min appetite. Commit `35cff56` (store, dispatcher hook, binding
+  functions, tests, ledger rows); this section is the closing note.
+- Red first: before any source existed, `tests/test_stage2_research_store.py`
+  and the five new dispatch tests failed (17 failed, 21 errors from the
+  fixture's missing module, 22 existing dispatch tests passed). Then green:
+  focused set 294 passed, 2 skipped; full make verify at : 2841 passed, 16 skipped, VERIFY GREEN (markdownlint report-only, as before).
+- Files: `scripts/stage2_research_store.py` (new; registered in
+  `scripts/ci_gates.py`), `scripts/stage2_research_dispatch.py`
+  (`on_terminal`, `DispatchResult.reason`/`detail`),
+  `scripts/stage2_research_snapshot.py` (`stored_binding`,
+  `changed_against_stored`).
+- [DETAIL] Dispatcher stays free of storage knowledge: an exception from
+  `on_terminal`, or from `audit` carrying a `stage_stop_reason` attribute, is
+  a stage stop without a security refusal (exit 1, reason from the attribute,
+  default `state-store-unwritable`). An `audit` exception without the attribute
+  stays a security refusal (exit 2) as before. After the first store failure
+  no further callback runs (the store is what failed); the failed slot's
+  launch is cancelled, queued slots cancel, running children are stopped and
+  reaped with partial output kept.
+- [DETAIL] The binding keeps a second research digest, of the frozen bytes
+  with the `updated:` line normalised (`research_normalised_sha256`), because
+  the frozen per-path digest is of the raw bytes and the restamp changes them.
+  The runner records the exact intended append (length and SHA-256) with
+  `Store.set_append` before writing it; if the crash falls between the two,
+  the comparison also accepts the unappended bytes.
+- [DETAIL] The latest run is chosen by `started` time inside `run.json`. A run
+  directory with an unreadable `run.json` fails closed (nothing is reused,
+  named); a directory with no `run.json` at all (crash before the first
+  write) is ignored. Older runs are never pruned by a resume (design: the
+  latest run only); a complete publication calls `Store.clear`.
+- [DETAIL] Slot ids become file names, so `Store` refuses ids outside
+  `[A-Za-z0-9][A-Za-z0-9._+-]{0,119}`. A torn launch record still counts as a
+  launch (the slot is listed as interrupted). The store takes an injected
+  `scrub` callable; the runner passes its credential scrub. The scrub test
+  skips where the runner is absent (kit probe).
+- [DETAIL] `Store.assert_outside(*dirs)` is the placement check the runner
+  calls with the worktree, its git directory and every model home/agent/working
+  directory; the module cannot know those directories itself.
+- Not done (later steps, ledger rows stay "not yet written"): the
+  swarm-level tests (criteria 52 store-canary through the run, 53/54/55 on the
+  run) need the run wiring of steps 2-8: calling `acquire_lock`, `resume_source`
+  and `plan_reuse` after the freeze, `adopt` for reused slots, `finish_run`,
+  `clear`, the manifest marks and the `39 + 3N` count. The probe-record and
+  receipt part of criterion 21's row belongs to `stage2_availability.py`; the
+  store test covers store records only.
