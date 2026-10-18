@@ -265,6 +265,8 @@ if stdout.startswith("AUTO") and kind == "judge":
     judgements = [{"claim": c, "disposition": "supported", "unique": False} for c in claims]
     if variant == "double":
         judgements.append(dict(judgements[0], disposition="refuted"))
+    if variant == "off-brief":
+        judgements = [dict(j, disposition="off-brief") for j in judgements]
     if variant == "unique-refuted":
         judgements[0] = {"claim": claims[0], "disposition": "refuted", "unique": True}
     if variant == "missing":
@@ -1998,3 +2000,227 @@ def test_a_role_launch_set_with_one_unpermitted_role_starts_none() -> None:
     with pytest.raises(stage2_swarm.ResearchCatalogError) as caught:
         stage2_swarm.role_launches(data, roles, [])
     assert caught.value.exit_code == 2 and "glm-coding-plan" in str(caught.value)
+
+
+# ---------------------------------------------------------------------------
+# Step 8: the runner-derived obligation inventory (criteria 29, 31)
+# ---------------------------------------------------------------------------
+
+RUN = "abc123"
+
+
+def derived_claim(seat: str, local: str, valid: bool = True, topic: int = 5) -> dict:
+    return {"id": f"{RUN}/{topic}/{seat}/{local}", "evidence_status": "valid" if valid else "unsupported"}
+
+
+def derived_report(topic: int, seat: str, *, claims=None, questions=(), assessment=None, relations=None) -> dict:
+    report = {
+        "topic": topic,
+        "seat": seat,
+        "claims": claims if claims is not None else [derived_claim(seat, "C1", topic=topic)],
+        "questions": [],
+    }
+    for number, (text, classification, links) in enumerate(questions, 1):
+        report["questions"].append(
+            {
+                "id": f"{RUN}/{topic}/{seat}/Q{number}",
+                "question": text,
+                "classification": classification,
+                "claims": [f"{RUN}/{topic}/{seat}/{link}" for link in links],
+            }
+        )
+    if assessment is not None:
+        report["class_assessment"] = {"class": assessment, "claims": [f"{RUN}/{topic}/{seat}/C1"]}
+    if relations is not None:
+        report["neighbour_relations"] = [
+            {"path": path, "relation": relation, "claims": [f"{RUN}/{topic}/{seat}/{c}" for c in links]}
+            for path, relation, links in relations
+        ]
+    return report
+
+
+NEIGHBOUR = "plans/changes/other/spec.md"
+SEATS = ("opencode-go:a", "opencode-go:b", "claude-code-plan:c")
+
+
+def topic_five(relations_by_seat: dict[str, list], *, invalid: frozenset = frozenset()) -> list[dict]:
+    reports = []
+    for seat in SEATS:
+        claims = [derived_claim(seat, "C1", valid=(seat not in invalid), topic=5), derived_claim(seat, "C2", topic=5)]
+        if seat in invalid:
+            claims = claims[:1]
+        reports.append(derived_report(5, seat, claims=claims, relations=relations_by_seat[seat]))
+    return reports
+
+
+def inventory_of(reports, packet, disagreements=(), declared="feature"):
+    import research_handoff
+
+    return research_handoff.derive_inventory(
+        run_id=RUN, declared_class=declared, packet=packet, reports=reports, disagreements=list(disagreements)
+    )
+
+
+def status_of(inventory: dict, path: str = NEIGHBOUR) -> str:
+    (entry,) = [n for n in inventory["neighbours"] if n["path"] == path]
+    return entry["status"]
+
+
+SUGGESTED = [{"path": NEIGHBOUR, "status": "suggested", "map_keys": []}]
+GIVEN = [{"path": NEIGHBOUR, "status": "given", "map_keys": []}]
+
+
+def relations(*kinds: str) -> dict[str, list]:
+    return {seat: [(NEIGHBOUR, kind, ["C1"])] for seat, kind in zip(SEATS, kinds, strict=True)}
+
+
+def test_neighbour_status_uses_three_relations_and_never_judge_verdict() -> None:
+    # Criterion 29, 31. Planted fault: any unrelated seat permits confirmation, three unrelated relations are not
+    # rejected, a split or contradicts entry loses its human item, or a judge disposition sets the status.
+    for kinds, status in [
+        (("related", "related", "related"), "confirmed"),
+        (("related", "contradicts", "related"), "confirmed"),
+        (("unrelated", "unrelated", "unrelated"), "rejected"),
+        (("related", "unrelated", "related"), "split"),
+        (("related", "unrelated", "unrelated"), "split"),
+    ]:
+        inventory = inventory_of(topic_five(relations(*kinds)), SUGGESTED)
+        assert status_of(inventory) == status, kinds
+        splits = [i for i in inventory["items"] if i.get("kind") == "split"]
+        assert bool(splits) == (status == "split"), kinds
+    mixed = inventory_of(topic_five(relations("related", "contradicts", "related")), SUGGESTED)
+    (contradiction,) = [i for i in mixed["items"] if i.get("kind") == "contradicts"]
+    assert contradiction["path"] == NEIGHBOUR and contradiction["reason"] == "neighbour"
+    # fewer than three seats is split, never confirmed
+    two = topic_five(relations("related", "related", "related"))[:2]
+    assert status_of(inventory_of(two, SUGGESTED)) == "split"
+    # the derivation takes no judge disposition at all
+    import inspect
+
+    import research_handoff
+
+    assert "scores" not in inspect.signature(research_handoff.derive_inventory).parameters
+    # a given neighbour stays given, whatever its relations say
+    assert status_of(inventory_of(topic_five(relations("unrelated", "unrelated", "unrelated")), GIVEN)) == "given"
+
+
+def test_neighbour_status_ignores_relations_without_valid_claims() -> None:
+    # Criteria 29, 31. Planted fault: unsupported-only evidence confirms or rejects a path, or an unsupported-only
+    # contradicts / unrelated-given relation loses its human item.
+    only_unsupported = frozenset({SEATS[2]})
+    related = topic_five(relations("related", "related", "related"), invalid=only_unsupported)
+    inventory = inventory_of(related, SUGGESTED)
+    assert status_of(inventory) == "split"
+    assert any(i.get("kind") == "split" for i in inventory["items"])
+    rows = {r["seat"]: r for r in inventory["neighbours"][0]["relations"]}
+    assert rows[SEATS[2]]["counting"] is False and rows[SEATS[0]]["counting"] is True
+    unrelated = topic_five(relations("unrelated", "unrelated", "unrelated"), invalid=only_unsupported)
+    assert status_of(inventory_of(unrelated, SUGGESTED)) == "split", "three unrelated, one without valid evidence"
+    # unsupported-only contradicts and unrelated-given still derive their item
+    contradicts = topic_five(relations("related", "related", "contradicts"), invalid=only_unsupported)
+    kinds = {i.get("kind") for i in inventory_of(contradicts, SUGGESTED)["items"]}
+    assert "contradicts" in kinds
+    given = topic_five(relations("related", "related", "unrelated"), invalid=only_unsupported)
+    kinds = {i.get("kind") for i in inventory_of(given, GIVEN)["items"]}
+    assert "unrelated-given" in kinds
+
+
+def test_neighbour_relations_derive_items_without_judge_or_question() -> None:
+    # Criterion 31. Planted fault: a contradicts or unrelated-given field loses its obligation when Opus omits it.
+    reports = topic_five(relations("related", "contradicts", "unrelated"))
+    inventory = inventory_of(reports, GIVEN, disagreements=[])
+    kinds = {i.get("kind") for i in inventory["items"] if i["reason"] == "neighbour"}
+    assert kinds == {"contradicts", "unrelated-given"}
+    for item in inventory["items"]:
+        assert item["path"] == NEIGHBOUR and item["claims"], "an item keeps its path and source claims"
+    ids = [i["id"] for i in inventory["items"]]
+    assert ids == sorted(set(ids), key=ids.index) and all(re.fullmatch(r"H-[1-9][0-9]*", i) for i in ids)
+    # a suggested path that is rejected cleanly derives nothing
+    clean = inventory_of(topic_five(relations("unrelated", "unrelated", "unrelated")), SUGGESTED)
+    assert clean["items"] == []
+
+
+def test_decisions_and_dissent_enter_the_interview_inventory() -> None:
+    # Criterion 31. Planted fault: a report decision, a differing class or a judge disagreement is omitted, or
+    # grouping duplicates loses a source question or claim id.
+    a, b = SEATS[0], SEATS[1]
+    reports = [
+        derived_report(1, a, questions=[("Which store?", "[DECISION]", ["C1"]), ("Who reads it?", "[GAP]", ["C1"])]),
+        derived_report(1, b, questions=[("which   store?", "[DECISION]", ["C1"]), ("Name it", "[DETAIL]", ["C1"])]),
+        derived_report(2, a, claims=[derived_claim(a, "C1", False, 2)], questions=[("Keep v1?", "[DECISION]", ["C1"])]),
+        derived_report(3, a, assessment="spike"),
+        derived_report(3, b, assessment="feature"),
+    ]
+    inventory = inventory_of(
+        reports, [], disagreements=[{"claims": [f"{RUN}/1/{a}/C1", f"{RUN}/1/{b}/C1"], "summary": "seats differ"}]
+    )
+    by_reason: dict[str, list[dict]] = {}
+    for item in inventory["items"]:
+        by_reason.setdefault(item["reason"], []).append(item)
+    decisions = {tuple(i["questions"]): i for i in by_reason["decision"]}
+    grouped = decisions[(f"{RUN}/1/{a}/Q1", f"{RUN}/1/{b}/Q1")]
+    assert grouped["claims"] == [f"{RUN}/1/{a}/C1", f"{RUN}/1/{b}/C1"], "duplicates keep every source id"
+    assert (f"{RUN}/2/{a}/Q1",) in decisions, "a decision whose claim is unsupported still has an item"
+    assert len(by_reason["decision"]) == 2, "gap and detail questions are not obligations"
+    (klass,) = by_reason["class"]
+    assert "spike" in klass["summary"] and klass["claims"] == [f"{RUN}/3/{a}/C1"]
+    (dissent,) = by_reason["disagreement"]
+    assert dissent["claims"] == [f"{RUN}/1/{a}/C1", f"{RUN}/1/{b}/C1"]
+    assert inventory["declared_class"] == "feature"
+
+
+def published_blocks(world: SwarmWorld, name: str) -> list[dict]:
+    text = world.research.read_text(encoding="utf-8")
+    return [json.loads(m) for m in re.findall(rf"```research-swarm/v2 {name}\n(.*?)\n```", text, re.S)]
+
+
+def decision_report(topic: int, neighbours: list[str] | None = None, *, assessed: str = "feature") -> str:
+    report = json.loads(repository_report(topic, neighbours))
+    report["questions"] = [
+        {"id": "Q1", "question": "Should the store move?", "classification": "[DECISION]", "claims": ["C1"]}
+    ]
+    if topic == 3:
+        report["class_assessment"]["class"] = assessed
+    return json.dumps(report)
+
+
+def test_raw_off_brief_decisions_and_class_mismatches_cannot_disappear(sworld: SwarmWorld) -> None:
+    # Criterion 31. Planted fault: judge filtering hides an accepted report decision, or a class mismatch lacks
+    # its derived item. The judge here marks every claim off-brief and omits all disagreements.
+    sworld.complete(
+        judge=[{"stdout": "AUTO:off-brief"}],
+        **{
+            "repository:2": [{"stdout": decision_report(2)}],
+            "repository:3": [{"stdout": decision_report(3, assessed="spike")}],
+        },
+    )
+    assert sworld.run() == 0
+    (inventory,) = published_blocks(sworld, "inventory")
+    manifest = published_blocks(sworld, "manifest")[0]
+    assert inventory["run_id"] == manifest["run_id"] and inventory["declared_class"] == "feature"
+    reasons = [item["reason"] for item in inventory["items"]]
+    assert reasons.count("class") == 1
+    decision_questions = {q for item in inventory["items"] if item["reason"] == "decision" for q in item["questions"]}
+    assert len(decision_questions) == 6, "three seats each of topics 2 and 3 keep their decision question"
+    assert all(q.startswith(manifest["run_id"] + "/") for q in decision_questions)
+
+
+def test_the_inventory_is_persisted_in_the_fenced_run_block(sworld: SwarmWorld) -> None:
+    # Criteria 29, 31. Planted fault: the runner derives the inventory but never persists it, or persists it
+    # outside the one fenced run block.
+    rel = given_neighbour(sworld)
+    reports = {
+        f"repository:5:{model}": [{"stdout": json.dumps(dict(json.loads(repository_report(5, [rel])),
+            neighbour_relations=[{"path": rel, "relation": relation, "claims": ["C1"]}]))}]
+        for model, relation in (
+            ("deepseek-v4.1-flash", "unrelated"), ("mimo-v2.6-flash", "contradicts"), ("claude-haiku-5-5", "related"),
+        )
+    }  # fmt: skip
+    sworld.complete(**reports)
+    assert sworld.run() == 0
+    (inventory,) = published_blocks(sworld, "inventory")
+    assert {i.get("kind") for i in inventory["items"]} == {"contradicts", "unrelated-given"}
+    assert [n["status"] for n in inventory["neighbours"]] == ["given"]
+    text = sworld.research.read_text(encoding="utf-8")
+    start, end = text.index("<!-- research-swarm/v2 run"), text.index("<!-- /research-swarm/v2 -->")
+    assert start < text.index("research-swarm/v2 inventory") < end

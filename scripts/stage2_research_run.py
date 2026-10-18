@@ -32,6 +32,7 @@ import unicodedata
 from datetime import UTC, datetime
 from pathlib import Path, PurePosixPath
 
+import research_handoff
 import stage2_availability
 import stage2_research_map
 import stage2_swarm
@@ -963,6 +964,18 @@ class Run:
             "slots": slots,
         }
 
+    def inventory(self) -> dict:
+        """The runner-derived obligation inventory: raw reports and the judge's structured disagreements only."""
+        assert self.map is not None
+        disagreements = self.judge["reconciliation"]["disagreements"] if self.judge is not None else []
+        return research_handoff.derive_inventory(
+            run_id=self.run_id,
+            declared_class=self.klass,
+            packet=self.map["neighbours"],
+            reports=self.reports,
+            disagreements=disagreements,
+        )
+
     def publish(self, status: str) -> str:
         """Append the buffered record once, with the status, and return the status line."""
         assert self.store is not None and self.run_id is not None
@@ -1009,7 +1022,14 @@ class Run:
                     json.dumps(self.judge, ensure_ascii=False, sort_keys=True, indent=2),
                 )
             )
-        elif self.judge_text:
+        if self.map is not None and self.reports:
+            parts.append(
+                fence(
+                    "research-swarm/v2 inventory",
+                    json.dumps(self.inventory(), ensure_ascii=False, sort_keys=True, indent=2),
+                )
+            )
+        if self.judge is None and self.judge_text:
             parts.append("### Judge answer (failed validation — partial evidence)\n\n" + self.judge_text.strip())
         if self.lines:
             parts.append("### Audit\n\n" + "\n".join(f"- {line}" for line in self.lines))
