@@ -188,3 +188,93 @@ The night-gate item, parts a and b together: switch `make staleness` to the
 strict call, then work the 16 changes whose beads are closed — for each one
 decide living spec, ADR, or plain archive. That is the only item that is both
 mechanical and removes twenty nights of red.
+
+---
+
+## Addendum 2026-10-19, same session — the Ist-Soll comparison and the principles
+
+Written by the same session, against `origin/main` at `59630b7`. It adds what
+the first part did not carry: a current-versus-target comparison for every
+dimension this session measured, and the form in which the findings would
+travel as principles. **Where this addendum and the sections above differ,
+this addendum wins.**
+
+### What was added after the first part
+
+The maintainer asked how the findings can be implemented *as principles*, in
+TOGAF terms. Checked: the repository has **no principle artefact and no TOGAF
+reference** (grep over `docs/`, `decisions/`, `templates/`, 2026-10-19). Its
+vehicles are the ADR (MADR 4.0.0 form in `templates/adr.md`), the gate list,
+the phase prompts and WORKFLOW.md. What travels is decided by the kit
+manifest's role, not by the text:
+
+| Vehicle | Travels with the kit? |
+|---|---|
+| `docs/adr/` (the ADR corpus) | **No** — `bestand` |
+| `docs/WORKFLOW.md` | **Yes** — mechanism |
+| `prompts/` (including `07-commit.md`) | **Yes** |
+| `decisions/gates.yaml` | **Yes** |
+| `scripts/check_*.py`, `ci_gates.py`, `plans_registry.py` | **Yes** |
+| `scripts/verify_all.sh` | **No** — the `scripts/` catch-all is `bestand` |
+
+**The consequence that decides everything below:** a principle that exists
+only as an ADR is a local statement; it reaches an instance only through the
+version pin (bead coding-harness-3ar). A principle whose *enforcement* sits in
+WORKFLOW.md, a gate or a prompt step travels. So the enforcement point, not
+the wording, is the design decision.
+
+TOGAF's principle form maps onto the house form almost one to one: Name to
+title, Statement to Decision Outcome, Rationale to Context, **Implications has
+no counterpart** — "Consequences" is the nearest. That missing field is the
+only structural gap.
+
+### The Ist-Soll comparison
+
+Every "Ist" carries its cut-off date 2026-10-19. "Soll" is a proposal until the
+maintainer merges it; nothing in this table is implemented.
+
+| # | Dimension | Ist (2026-10-19) | Soll | Vehicle |
+|---|---|---|---|---|
+| 1 | Local verify runtime | about 24 min; pytest 20:38 for 2285 tests | about 8 min | PR #168 merged 13:49; re-measure on a repaired machine |
+| 2 | Hosted CI per pull request | 10–16 min before, 5m01s at PR #169 | under 6 min, stable | achieved by the same merge; keep |
+| 3 | Night gate | red 20 consecutive nights (2026-09-30 to 10-19), 91 findings | green — or repaired or retired within a week, never carried | principle P1 + `gates.yaml` + `prompts/07-commit.md` |
+| 4 | Change lifecycle | 21 live changes, 16 with a closed bead, 3.8 MB / 26,836 lines | a bead that closes archives its change in the same act; backlog cleared | principle P2 + a phase-7 step |
+| 5 | Measurement environment | `.venv/bin/` without an interpreter since 2026-10-07; `node_modules` missing; 10 Pi errors; `test_the_environment_matches_the_lock` red | `make venv` is a precondition of any measurement; a fallback fails loudly | principle P3; the guard itself does **not** travel |
+| 6 | Kit probe | 163 s, runs its own pytest without `-n` | uses `-n` like the main gate | gate file / generator |
+| 7 | `test_stage2.py` remainder | about 100 tests at 4–8 s each (git subprocesses) | fewer subprocesses per test | work, not parallelism |
+| 8 | Two manifests | kit (roles) and export (travel), held apart by a test | one classification, two projections | structural work |
+| 9 | German residue | 156 of 12,554 lines in `scripts/`, 207 of 27,668 in `tests/`, 2 gate `reason` fields | English (bead coding-harness-yim) | text |
+| 10 | Worktrees | 37 under `.claude/worktrees/`, 3.3 GB, 8 with merged branches | removed after the merge | cleanup |
+| 11 | Principle form | ADR without `Implications`; the ADR corpus does not travel | TOGAF form as a required section; enforcement in the mechanism | `templates/adr.md` + WORKFLOW.md |
+| 12 | Handover cadence | 38 files, 7,071 lines, driven by the night run | **open** — no measurement yet justifies a target | open, needs a measurement first |
+
+Row 12 stays open on purpose: a target without a measurement is a guess, and
+this session measured no cost of the handover cadence itself.
+
+### The three principles, short form
+
+1. **P1 — A gate nobody reads is not a gate.** Every gate has a named reader
+   and a due date; a gate red in N consecutive runs is repaired or retired in
+   the same week. *Enforcement:* `gates.yaml` + a phase-7 step. *Travels: yes.*
+2. **P2 — The tracker and the artefact may not contradict.** A bead that
+   closes archives its change in the same act. *Enforcement:* a step in
+   `prompts/07-commit.md`. *Travels: yes.*
+3. **P3 — A measurement names its environment.** A before/after number is
+   valid only if the run names interpreter, lock and installs. *Enforcement:*
+   `scripts/verify_all.sh`, which does **not** travel — so an instance would
+   inherit the principle through WORKFLOW.md without the guard. Either promote
+   that script into the manifest, or word the principle so it stands alone.
+
+### What is next, in order
+
+1. **P2 as a prompt step** in `prompts/07-commit.md`, plus the line in
+   WORKFLOW.md that names it a principle. Smallest change that kills the cause
+   of twenty red nights.
+2. **Clean the 16 changes** whose beads are closed (living spec, ADR, or
+   archive — a decision per change).
+3. **Then** switch `make staleness` to the strict call; flipping it before the
+   backlog is clean would redden every pull request.
+4. **P3**: decide whether `scripts/verify_all.sh` becomes mechanism.
+5. **`Implications` as a required section** in `templates/adr.md`.
+
+This addendum opens, changes and closes no bead.
