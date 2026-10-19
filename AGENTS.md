@@ -84,7 +84,8 @@ Full doctrine: `docs/WORKFLOW.md`, in English since 2026-09-29.
    `docs/journal/handover/`. A number without its commit or date reads as a
    historical one — every count carries its cut-off.
 6. **The customer instance is out of bounds.** What is needed from
-   `oracle-source-inventory` travels as a *requirement*, never as an
+   the customer instance (a separate, private repository that is never named
+   here) travels as a *requirement*, never as an
    expression — no filename, field name, entity or layer name from there
    appears in a framework artifact.
 7. **Texts carry their own meaning.** A reader without this session must
@@ -197,4 +198,4 @@ tools/bd dolt push          # push tracker data to origin (refs/dolt/data)
 |---|---|
 | `portfolio-agentic-engineering` | framework governance (rule set, gates, ADRs, lessons), OSI→lakeswitch transfer logistics, domain content — the origin this repo migrates from |
 | `lakeswitch-ai` | product repo running a clean-room instance of the workflow |
-| `oracle-source-inventory` | customer instance — read-only boundary for framework sessions |
+| the customer instance (private, not named) | read-only boundary for framework sessions |
