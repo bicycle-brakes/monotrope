@@ -2641,3 +2641,16 @@ Stage-2 call, 2026-10-19: review · endpoint openai-codex · model gpt-6.1-sol �
 
 Phase 6 verdict: codex 01a154b3-c0dd-7ed3-aa10-32f5f7fda4c1, 2026-10-19
 Reviewer session: codex 01a154b3-c0dd-7ed3-aa10-32f5f7fda4c1 — a fresh session reviewed: an earlier ## Phase 6 block makes this a re-check
+
+Stage-2 call, 2026-10-19: review · endpoint openai-codex · model gpt-6.1-sol · leak check clean over 536 files, 1554 commits, 12 rules.
+
+## Phase 6 — Codex, 2026-10-19
+
+| ID | Severity | Dimension | Origin | Where | Finding | Reviewer | Status | Broke a test |
+|---|---|---|---|---|---|---|---|---|
+| F-31 | MAJOR | SPEC | fix-r4 | `scripts/stage2_research_store.py:303–359`; `scripts/stage2_research_run.py:1085–1102` | A process killed after `stage_clear()` but before the research append leaves every stored run under `.discarded-*`. Resume searches only top-level run directories and performs no recovery. An in-memory filesystem reproduction returns “no stored run” although the unpublished records remain present, forcing completed calls to repeat. This interruption case survives the F-28 exception-handling repair. [criterion 53] | Codex | open | — |
+| F-32 | MAJOR | SPEC | base | `scripts/stage2_research_run.py:900–909,1169–1175` | A judge response containing a disagreement with `claims: ["known-id", {}]` raises an unhandled `TypeError` when converted to a set. Reproduced through `validate_judge()`. The exception bypasses report rejection and incomplete publication, so a malformed required contribution ends with a traceback instead of the required retained evidence and incomplete record. [criterion 18] | Codex | open | — |
+| F-33 | BLOCKER | SPEC | base | `scripts/check_research_handoff.py:156–184,637–654` | The handoff gate checks question claim links for string type but never checks that their targets exist. Reproduced through `check_change()`: a complete report contains only C1, its decision question links nonexistent C2, and an answered Q-record closes the derived item; the gate returns no findings. Dangling evidence links must produce not-measured exit 3. [criterion 33] | Codex | open | — |
+
+Phase 6 verdict: codex 01a154d2-600a-7b41-a7e6-94ba6fbe4b42, 2026-10-19
+Reviewer session: codex 01a154d2-600a-7b41-a7e6-94ba6fbe4b42 — a fresh session reviewed: an earlier ## Phase 6 block makes this a re-check
