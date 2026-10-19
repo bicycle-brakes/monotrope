@@ -35,6 +35,7 @@ RUN_ID = re.compile(r"[0-9a-f]{32}")
 SLOT_ID = re.compile(r"[A-Za-z0-9][A-Za-z0-9._+-]{0,119}")
 LOCK_NAME = ".lock"
 TEMP_PREFIX = ".tmp-"
+DISCARD_PREFIX = ".discarded-"
 STATES = ("running", "incomplete", "complete")
 # The identity a stored result must share with the planned slot, in the order mismatches are named.
 SLOT_KEY_FIELDS = ("stage", "topic", "seat", "endpoint", "model", "prompt_sha256")
@@ -298,6 +299,54 @@ class Store:
             return
         except OSError as error:
             raise StoreWriteError(f"cannot clear the state store: {error}") from error
+
+    def stage_clear(self):
+        """Move every stored run aside; ``commit_clear`` deletes them, ``restore_clear`` brings them back.
+
+        The staging step is the part of clearing that can fail for a reason the run must report, and it
+        runs before the record is published (F-28, F-30): a failure here leaves every run in place and
+        raises ``StoreWriteError``, and a failed publication restores the runs, so the results stay
+        reusable. Returns the staging directory, or None when there is nothing to clear.
+        """
+        try:
+            entries = [e for e in self.directory.iterdir() if e.name != LOCK_NAME and not e.is_symlink()]
+        except FileNotFoundError:
+            return None
+        except OSError as error:
+            raise StoreWriteError(f"cannot clear the state store: {error}") from error
+        if not entries:
+            return None
+        staging = self.directory / f"{DISCARD_PREFIX}{secrets.token_hex(8)}"
+        moved = []
+        try:
+            staging.mkdir(mode=0o700)
+            for entry in entries:
+                entry.rename(staging / entry.name)
+                moved.append(entry.name)
+        except OSError as error:
+            for name in moved:
+                with contextlib.suppress(OSError):
+                    (staging / name).rename(self.directory / name)
+            with contextlib.suppress(OSError):
+                staging.rmdir()
+            raise StoreWriteError(f"cannot clear the state store: {error}") from error
+        return staging
+
+    def restore_clear(self, staging):
+        """Undo ``stage_clear``; best effort, a failure leaves the runs unreachable but never wrongly reused."""
+        if staging is None:
+            return
+        with contextlib.suppress(OSError):
+            for entry in staging.iterdir():
+                entry.rename(self.directory / entry.name)
+            staging.rmdir()
+
+    def commit_clear(self, staging):
+        """Delete what ``stage_clear`` moved aside, and any staging left by an earlier crash; best effort."""
+        with contextlib.suppress(OSError):
+            for entry in self.directory.iterdir():
+                if entry.name.startswith(DISCARD_PREFIX) and not entry.is_symlink() and entry.is_dir():
+                    shutil.rmtree(entry, ignore_errors=True)
 
     # -- reading ----------------------------------------------------------------------------
 

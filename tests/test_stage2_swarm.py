@@ -2510,6 +2510,67 @@ def test_a_finder_output_survives_a_failed_terminal_write(sworld: SwarmWorld, mo
     assert "CANARY-FINDER-OUTPUT" in text, "the finder's available output is part of the incomplete record"
 
 
+def test_a_failed_publication_keeps_the_results_reusable(sworld: SwarmWorld, monkeypatch: pytest.MonkeyPatch) -> None:
+    # Criteria 53, 57 (phase-6 F-28). Planted fault: the run is stored as complete before its record is
+    # published, so a failed publication makes the next run reject every finished result as published.
+    real = stage2.append
+
+    def failing(*_args, **_kwargs):
+        raise OSError("disk full")
+
+    monkeypatch.setattr(stage2, "append", failing)
+    sworld.complete()
+    try:
+        sworld.run()
+    except OSError:
+        pass
+    assert "research-swarm/v2" not in sworld.research.read_text(encoding="utf-8"), "nothing was published"
+    monkeypatch.setattr(stage2, "append", real)
+    (sworld.bin / "calls.jsonl").unlink()
+    assert sworld.run() == 0
+    resume = manifest_of(sworld)["resume"]
+    assert resume["usable"] is True, resume
+    assert len(sworld.calls()) <= 1, "the finished results are reused, not repeated"
+
+
+def test_a_receipt_without_output_survives_a_complete_run(sworld: SwarmWorld, monkeypatch: pytest.MonkeyPatch) -> None:
+    # Criteria 18 (phase-6 F-29, design Data model - Slot). Planted fault: a free researcher that retrieved a
+    # page and then timed out with empty output loses its receipt when the run still completes.
+    sworld.selection = selection_for(free=FREE)
+    monkeypatch.setitem(stage2_research_run.MINUTES, "topics", 0.03)
+    sworld.complete(**{"online:9:alpha-free": [{"stdout": "", "sleep": 30, "receipts": [RECEIPT]}]})
+    assert sworld.run() == 0
+    text = sworld.research.read_text(encoding="utf-8")
+    assert "best-effort free seats did not finish" in status_line(text)
+    partial = "\n".join(re.findall(r"```research-swarm/v2 partial\n(.*?)\n```", text, re.S))
+    assert "example.com/pattern" in partial, "the receipt of the timed-out free seat is kept"
+
+
+def test_a_failed_store_clear_never_leaves_a_complete_publication(
+    sworld: SwarmWorld, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    # Criterion 57 (phase-6 F-30). Planted fault: clearing the store fails after the run was published complete,
+    # so the command exits 1 over a record that reads complete and names no state-store-unwritable reason.
+    real = stage2_research_store.Store.set_append
+    locked: list[Path] = []
+
+    def lock_after_binding(self, run_id, binding):
+        real(self, run_id, binding)
+        self.directory.chmod(0o500)  # entries of the store can no longer be removed or renamed
+        locked.append(self.directory)
+
+    monkeypatch.setattr(stage2_research_store.Store, "set_append", lock_after_binding)
+    sworld.complete()
+    try:
+        assert sworld.run() == 1
+    finally:
+        for directory in locked:
+            directory.chmod(0o700)
+    text = sworld.research.read_text(encoding="utf-8")
+    assert manifest_of(sworld)["status"].startswith("incomplete"), "the record must not read complete"
+    assert "state-store-unwritable" in text
+
+
 def test_an_aborted_run_names_every_expected_slot_with_its_outcome(sworld: SwarmWorld) -> None:
     # Criterion 18 (phase-6 F-17). Planted fault: after a finder fails the manifest lists only the three finder
     # slots; merge, topic author, topic slots and judge carry neither identity nor outcome.

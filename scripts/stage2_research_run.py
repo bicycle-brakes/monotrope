@@ -1054,27 +1054,41 @@ class Run:
             disagreements=disagreements,
         )
 
-    def publish(self, status: str) -> str:
+    def publish(self, status: str, *, clear: bool = False) -> str:
         """Append the buffered record once, with the status, and return the status line.
 
         A failed binding write (F-20, criterion 57) does not lose the record: it is appended once, with the
         status rewritten to incomplete and the reason ``state-store-unwritable``; ``self.store_failure``
         carries the status the run must end with.
+
+        With ``clear`` the stored runs are moved aside after the binding write and before the append (F-30): a
+        failure to do so ends the run incomplete with the same reason, in the record itself. They are deleted
+        once the append succeeded, and restored when it raised (F-28), so a failed publication keeps every
+        result reusable.
         """
         assert self.store is not None and self.run_id is not None
         text = self.compose(status)
         existing = self.ctx.research.read_bytes()
         tail = (b"\n" if existing and not existing.endswith(b"\n") else b"") + b"\n" + text.rstrip().encode() + b"\n"
+        staging = None
         try:
             self.store.set_append(
                 self.run_id, stored_binding(self.manifest, self.research_rel, self.research_bytes, append=tail)
             )
+            if clear:
+                staging = self.store.stage_clear()
         except (ResearchSnapshotError, StoreWriteError) as error:
             failure = f"the research state store failed ({STOP_REASON}: {error})"
             status = f"{status}; {failure}" if status.startswith("incomplete") else f"incomplete - {failure}"
             self.store_failure = status
             text = self.compose(status)  # the record still lands, and now says why it is incomplete
-        self.runner.append(self.ctx.research, text)
+        try:
+            self.runner.append(self.ctx.research, text)
+        except BaseException:
+            self.store.restore_clear(staging)
+            raise
+        if staging is not None:
+            self.store.commit_clear(staging)
         return f"run {self.run_id} status: {status}."
 
     def compose(self, status: str) -> str:
@@ -1110,7 +1124,7 @@ class Run:
         for slot_id in sorted(self.records):
             record = self.records[slot_id]
             kept = record["outcome"] != "ok" or slot_id in self.unstored  # an ok output with no stored record too
-            if kept and (record.get("stdout") or record.get("stderr")):
+            if kept and (record.get("stdout") or record.get("stderr") or record.get("receipts")):
                 partial = {k: record.get(k) for k in ("slot_id", "outcome", "error", "stdout", "stderr", "receipts")}
                 parts.append(
                     fence("research-swarm/v2 partial", json.dumps(partial, ensure_ascii=False, sort_keys=True))
@@ -1190,8 +1204,15 @@ def run(root: Path, change: str, runner, klass: str, selection: dict) -> None:
                 failure = f"the research state store failed ({STOP_REASON}: {error})"
                 status = f"{status}; {failure}" if status.startswith("incomplete") else f"incomplete - {failure}"
                 current.store_failure = status
-        line = current.publish(status)
-        if current.store_failure:  # a binding write failed (F-20) or finishing failed (F-26): incomplete
+        try:
+            line = current.publish(status, clear=finish_failure is None and status.startswith("complete"))
+        except OSError:
+            # nothing was published (F-28): the stored runs stay reusable, so the run is not left marked complete
+            if finish_failure is None:
+                with contextlib.suppress(StoreWriteError):
+                    current.store.finish_run(current.run_id, "incomplete", refusal=refusal)
+            raise
+        if current.store_failure:  # a binding write or the clearing failed (F-20, F-30) or finishing failed (F-26)
             status = current.store_failure
         complete = status.startswith("complete")
         if current.store_failure and finish_failure is None:
@@ -1199,12 +1220,6 @@ def run(root: Path, change: str, runner, klass: str, selection: dict) -> None:
             # already ends incomplete with exit 1, so a second failure adds nothing
             with contextlib.suppress(StoreWriteError):
                 current.store.finish_run(current.run_id, "incomplete", refusal=refusal)
-        if finish_failure is None and complete:
-            try:
-                current.store.clear()
-            except StoreWriteError as error:
-                if stop is None or stop.code != 2:
-                    raise runner.CallFailed(f"the research state store could not be cleared ({error})") from error
         if stop is not None and stop.code == 2:
             raise runner.Refused(line)
         if not complete:
