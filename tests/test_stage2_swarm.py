@@ -2479,6 +2479,21 @@ def test_a_security_refusal_keeps_exit_two_when_finishing_the_store_also_fails(
     assert sworld.run() == 2
 
 
+def test_a_finder_output_survives_a_failed_terminal_write(sworld: SwarmWorld, monkeypatch: pytest.MonkeyPatch) -> None:
+    # Criteria 18, 57 (phase-6 F-22). Planted fault: a finder that exited successfully but whose terminal
+    # record could not be stored keeps its output only in memory, and the incomplete publication drops it
+    # because the outcome reads ok.
+    def broken(*_args, **_kwargs):
+        raise stage2_research_store.StoreWriteError("disk full")
+
+    monkeypatch.setattr(stage2_research_store.Store, "write_result", broken)
+    sworld.complete(finder=[{"stdout": locator_report("CANARY-FINDER-OUTPUT")}])
+    assert sworld.run() == 1
+    text = sworld.research.read_text(encoding="utf-8")
+    assert manifest_of(sworld)["status"].startswith("incomplete")
+    assert "CANARY-FINDER-OUTPUT" in text, "the finder's available output is part of the incomplete record"
+
+
 def test_an_aborted_run_names_every_expected_slot_with_its_outcome(sworld: SwarmWorld) -> None:
     # Criterion 18 (phase-6 F-17). Planted fault: after a finder fails the manifest lists only the three finder
     # slots; merge, topic author, topic slots and judge carry neither identity nor outcome.

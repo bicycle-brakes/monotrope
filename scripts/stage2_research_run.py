@@ -224,6 +224,7 @@ class Run:
         self.store: Store | None = None
         self.locked = False
         self.store_failure: str | None = None
+        self.unstored: set[str] = set()
         self.run_id: str | None = None
         self.source = None
         self.not_reused: list[tuple[str, str]] = []
@@ -479,10 +480,12 @@ class Run:
                 f"model {entry['model']} · {result.outcome}."
             )
         self.records[slot.slot_id] = record
+        self.unstored.add(slot.slot_id)  # until its terminal record is written (F-22)
         if not persist:
             return
         assert self.store is not None and self.run_id is not None
         self.store.write_result(self.run_id, slot.slot_id, record)
+        self.unstored.discard(slot.slot_id)
 
     # -- launching -------------------------------------------------------------------------------
 
@@ -1098,7 +1101,8 @@ class Run:
             )
         for slot_id in sorted(self.records):
             record = self.records[slot_id]
-            if record["outcome"] != "ok" and (record.get("stdout") or record.get("stderr")):
+            kept = record["outcome"] != "ok" or slot_id in self.unstored  # an ok output with no stored record too
+            if kept and (record.get("stdout") or record.get("stderr")):
                 partial = {k: record.get(k) for k in ("slot_id", "outcome", "error", "stdout", "stderr", "receipts")}
                 parts.append(
                     fence("research-swarm/v2 partial", json.dumps(partial, ensure_ascii=False, sort_keys=True))
