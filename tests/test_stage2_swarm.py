@@ -2462,6 +2462,23 @@ def test_a_failed_append_binding_write_ends_incomplete_with_exit_one(
     assert "state-store-unwritable" in text
 
 
+def test_a_security_refusal_keeps_exit_two_when_finishing_the_store_also_fails(
+    sworld: SwarmWorld, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    # Criteria 12, 57 (phase-6 F-21). Planted fault: a storage failure while finishing the run is raised
+    # before the security refusal, so exit 2 degrades to exit 1.
+    def refuse(_self) -> None:
+        raise stage2_research_run.Stop("finders-1: leak check blocked.", 2)
+
+    def broken(*_args, **_kwargs):
+        raise stage2_research_store.StoreWriteError("disk full")
+
+    monkeypatch.setattr(stage2_research_run.Run, "stages", refuse)
+    monkeypatch.setattr(stage2_research_store.Store, "finish_run", broken)
+    sworld.complete()
+    assert sworld.run() == 2
+
+
 def test_an_aborted_run_names_every_expected_slot_with_its_outcome(sworld: SwarmWorld) -> None:
     # Criterion 18 (phase-6 F-17). Planted fault: after a finder fails the manifest lists only the three finder
     # slots; merge, topic author, topic slots and judge carry neither identity nor outcome.

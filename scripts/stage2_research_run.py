@@ -1174,7 +1174,8 @@ def run(root: Path, change: str, runner, klass: str, selection: dict) -> None:
             if complete:
                 current.store.clear()
         except StoreWriteError as error:
-            raise runner.CallFailed(f"the research state store could not be finished ({error})") from error
+            if stop is None or stop.code != 2:  # a security refusal keeps exit 2 over a storage failure (F-21)
+                raise runner.CallFailed(f"the research state store could not be finished ({error})") from error
         if stop is not None and stop.code == 2:
             raise runner.Refused(line)
         if not complete:
