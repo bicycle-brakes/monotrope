@@ -62,9 +62,11 @@ Task state stays in Beads.
 | 2 | Triage round 4 and repair taken rows | Orchestrator triages; one Sonnet sub-agent repairs by hand, red test first | Rows `fixed — tests/…`; full `make verify` green; pushed. A row that needs a maintainer decision stays open with a prepared question |
 | 3 | Round 5 only if round 4 took a BLOCKER or MAJOR | Fresh read-only Codex session | Rounds stop at round 5; whatever remains goes to the morning page |
 | 4 | Prepare #158: refresh the PR body (span, commits, findings); amend the spec line on the repository seat's absolute-path reads per Q-16 | Orchestrator | Body and spec current, pushed; the PR stays a draft until the maintainer has read the morning page |
-| 5 | Reserve, only if 1–4 end early: `make venv` picks the first `python3` on PATH (the system's 3.9 here, which cannot install the lock); make it fail clearly or pick the pinned version | Sonnet sub-agent, own worktree | Test red first, then green; `make verify` green; pull request open |
-| 6 | Reserve: kit probe runs its pytest single-process (163 s, measured by #169's session); measure it with `-n auto` (coding-harness-7so) | Haiku sub-agent | A dated measurement in the bead; a change only as a pull request |
-| 7 | Morning handover | Orchestrator | A dated file under `docs/journal/handover/` as a pull request by 08:00 Europe/Berlin |
+| 5 | Archive proposal for the finished changes behind the red nightly drift gate (#169: 91 findings, 16 changes whose bead is closed) | Haiku or Sonnet sub-agent, read-only on the changes | One table in a pull request: per change its bead, bead status, artefact status and a proposal (living spec, ADR or plain archive) with a one-line reason; nothing moved |
+| 6 | Remove worktrees whose branch is merged into origin/main (AGENTS.md: removed after the merge) | Orchestrator | Only a worktree with a clean status, no unpushed commit and a merged branch is removed; every other one is listed with its reason in the morning page |
+| 7 | Reserve, only if 1–6 end early: `make venv` picks the first `python3` on PATH (the system's 3.9 here, which cannot install the lock); make it fail clearly or pick the pinned version | Sonnet sub-agent, own worktree | Test red first, then green; `make verify` green; pull request open |
+| 8 | Reserve: kit probe runs its pytest single-process (163 s, measured by #169's session); measure it with `-n auto` (coding-harness-7so) | Haiku sub-agent | A dated measurement in the bead; a change only as a pull request |
+| 9 | Morning handover | Orchestrator | A dated file under `docs/journal/handover/` as a pull request by 08:00 Europe/Berlin |
 
 Items run strictly one after another. **No two `make verify` runs at the same
 time** and at most one sub-agent at a time, because of the memory limit.
@@ -72,9 +74,10 @@ time** and at most one sub-agent at a time, because of the memory limit.
 ## Not tonight
 
 - No merge of any pull request, including #158 and #169.
-- The drift-gate clean-up from #169 (archiving 16 finished changes, a
-  phase-7 archive step). It needs per-change decisions (living spec or ADR)
-  and a prompt change; both are the maintainer's.
+- Acting on the drift-gate clean-up from #169: moving any change, making
+  `make staleness` strict, or adding an archive step to the phase-7 prompt.
+  Each needs the maintainer's decision; item 5 only prepares the per-change
+  ones.
 - No live research-swarm run; offline tests and local doubles only.
 - No new beads for wishes already recorded (Leantime, splitting `stage2.py`,
   learning from review feedback, current research, a VS Code surface,
@@ -98,5 +101,6 @@ time** and at most one sub-agent at a time, because of the memory limit.
 ## Morning page (08:00 Europe/Berlin)
 
 One page: the phase-6 verdict for #158 and whether it is ready to merge,
-pull requests awaiting the maintainer, where work stopped and why, measured
-spans against the appetite, and the time the morning review took.
+the archive table to decide, pull requests awaiting the maintainer, the
+worktrees removed or kept, where work stopped and why, measured spans against
+the appetite, and the time the morning review took.
