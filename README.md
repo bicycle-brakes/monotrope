@@ -1,3 +1,9 @@
+<p align="center">
+  <img src="docs/assets/monotrope-banner.png"
+       alt="monotrope: an infinity ribbon, a path winding through mountains and lakes, and a bicycle disc brake"
+       width="100%">
+</p>
+
 # coding-harness
 
 **Let AI agents do the work. Keep the decisions and the evidence.**
