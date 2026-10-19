@@ -803,17 +803,17 @@ the existing gates and let the runner own registry regeneration/full verify.
 - 35: tests/test_stage2_swarm.py::test_volatile_fact_governance_remains_a_human_proposal — A volatile claim without governance passes validation or a proposal is implemented without a human answer; phase 6 also checks whether changing facts were correctly marked volatile.
 - 36: tests/test_stage2_swarm.py::test_provider_limit_is_shared_across_topics_and_roles — A fifth Go call starts across roles, queued work survives a leak/declaration refusal, available cancelled output is discarded, or exit 1 overrides security exit 2.
 - 37: tests/test_stage2_swarm.py::test_online_topics_use_the_three_online_seat_selections — A free model, Claude Code or a model other than the seat's selection supplies one of the nine required online contributions.
-- 38: not yet written tests/test_stage2_research_catalog.py::test_each_run_forces_a_fresh_go_catalog — A cached/shipped list substitutes for refresh, a baseline-only free id is dispatched, another provider supplies a seat, or selection lacks dated provenance.
-- 38: not yet written tests/test_stage2_research_catalog.py::test_removed_shipped_free_ids_do_not_return — A cached/shipped list substitutes for refresh, a baseline-only free id is dispatched, another provider supplies a seat, or selection lacks dated provenance.
+- 38: tests/test_stage2_research_catalog.py::test_each_run_forces_a_fresh_go_catalog — A cached/shipped list substitutes for refresh, a baseline-only free id is dispatched, another provider supplies a seat, or selection lacks dated provenance.
+- 38: tests/test_stage2_research_catalog.py::test_removed_shipped_free_ids_do_not_return — A cached/shipped list substitutes for refresh, a baseline-only free id is dispatched, another provider supplies a seat, or selection lacks dated provenance.
 - 39: tests/test_stage2_swarm.py::test_selected_free_models_cover_all_online_topics_on_identical_briefs — A selected seat is silently omitted or failed as successful, a non-selected or no-tool-support model runs, peer briefs differ, or a missing explicit include starts any model instead of preflight exit 1.
-- 39: not yet written tests/test_stage2_swarm.py::test_go_free_policy_filters_and_freezes_each_run — A selected seat is silently omitted or failed as successful, a non-selected or no-tool-support model runs, peer briefs differ, or a missing explicit include starts any model instead of preflight exit 1.
-- 39: tests/test_stage2_swarm.py::test_selected_free_models_ride_only_the_public_role_under_the_policy — An unselected, excluded, off-suffix, off-provider or non-included id is launched as a free online seat (per-invocation permission; the run-level policy row stays not yet written).
+- 39: tests/test_stage2_swarm.py::test_go_free_policy_filters_and_freezes_each_run — A selected seat is silently omitted or failed as successful, a non-selected or no-tool-support model runs, peer briefs differ, or a missing explicit include starts any model instead of preflight exit 1.
+- 39: tests/test_stage2_swarm.py::test_selected_free_models_ride_only_the_public_role_under_the_policy — An unselected, excluded, off-suffix, off-provider or non-included id is launched as a free online seat (per-invocation permission).
 - 39: tests/test_stage2_swarm.py::test_malformed_online_free_policy_is_a_declaration_fault — A malformed or non-free `online_free` policy reaches a launch instead of exit 2.
 - 6: tests/test_stage2_swarm.py::test_role_launches_read_identities_from_the_frozen_selection_and_declaration — A launch names a model other than its frozen seat, a Go seat does not ride Pi, an Opus role does not ride Claude Code (identity part only of criteria 6 and 37; the run-level rows stay not yet written).
 - 11: tests/test_stage2_swarm.py::test_a_role_launch_set_with_one_unpermitted_role_starts_none — A set with one unpermitted role is partly returned, so earlier roles could launch.
 - 40: tests/test_stage2_swarm.py::test_dynamic_free_permission_is_public_only — A Go free model fills a private role or receives private context through the endpoint's framework permission.
-- 41: not yet written tests/test_stage2_research_catalog.py::test_unmeasured_catalog_never_becomes_zero_availability — A Pi refresh timeout, stale-only, malformed or ambiguous result becomes N=0 or exits other than 1.
-- 41: not yet written tests/test_stage2_swarm.py::test_catalog_failure_stops_before_all_model_calls — Pi catalog failure starts a model or probe, uses a cached/Zen roster or exits 0/2/3 instead of 1.
+- 41: tests/test_stage2_research_catalog.py::test_unmeasured_catalog_never_becomes_zero_availability — A Pi refresh timeout, stale-only, malformed or ambiguous result becomes N=0 or exits other than 1.
+- 41: tests/test_stage2_swarm.py::test_catalog_failure_stops_before_all_model_calls — Pi catalog failure starts a model or probe, uses a cached/Zen roster or exits 0/2/3 instead of 1.
 - 42: tests/test_stage2_swarm.py::test_measured_empty_catalog_keeps_all_required_slots — Valid zero selection is refused or drops one of the 39 required slots.
 - 4: tests/test_stage2_swarm.py::test_an_unreadable_header_or_empty_class_refuses — Malformed, missing or disagreeing classes pass, or a duplicate, escaping, non-spec or missing frozen neighbour path starts a call.
 - 8: not a test — step 6 real-Pi offline capture; a private canary in an outbound request refutes isolation.
@@ -842,8 +842,8 @@ the existing gates and let the runner own registry regeneration/full verify.
 - 28: tests/test_stage2_swarm.py::test_dispositions_are_exclusive_and_unique_is_supported_subset — Unresolved evidence is forced supported/refuted, or unique marks unsupported claims.
 - 35: tests/test_stage2_swarm.py::test_topic_specific_class_and_volatile_fields_are_required — Topic 3 omits its class or a volatile topic-6 claim omits governance.
 - 29: tests/test_research_handoff.py::test_given_neighbour_drop_requires_linked_human_answer — A judge rejection removes a given neighbour without an answered item.
-- 39: not yet written tests/test_stage2_research_catalog.py::test_free_eligibility_requires_text_chat_and_explicit_tools — Non-chat, baseline-only, missing/false models.dev tool_call or deprecated entries yield a selected seat.
-- 39: not yet written tests/test_stage2_swarm.py::test_missing_explicit_include_stops_before_models — Missing included id starts fixed slots instead of preflight exit 1.
+- 39: tests/test_stage2_research_catalog.py::test_free_eligibility_requires_text_chat_and_explicit_tools — Non-chat, baseline-only, missing/false models.dev tool_call or deprecated entries yield a selected seat.
+- 39: tests/test_stage2_swarm.py::test_missing_explicit_include_stops_before_models — Missing included id starts fixed slots instead of preflight exit 1.
 - 7: not a test — phase-6 review checks comparison meaning; code summaries presented as comparisons refute it.
 - 15: not a test — phase-6 review checks faithful dissent; a majority erasing a sourced objection refutes it.
 - 24: not a test — phase-6 review checks finder prose; choosing a design exceeds the locator role.
@@ -862,9 +862,9 @@ the existing gates and let the runner own registry regeneration/full verify.
 - 14: tests/test_stage2_swarm.py::test_all_opus_roles_have_empty_tools_and_packet_only_context — Judge has file, shell, web or MCP access.
 - 23: tests/test_stage2_swarm.py::test_all_opus_roles_have_empty_tools_and_packet_only_context — Public-topic author reads beyond its private packet.
 - 28: tests/test_stage2_swarm.py::test_judge_gets_resolved_excerpts_with_bounded_truncation — Valid claims lack evidence excerpts, excerpt source mismatches or cap/truncation flags fail.
-- 39: not yet written tests/test_stage2_research_catalog.py::test_models_dev_capabilities_intersect_only_fresh_pi_ids — Missing/false tool_call, deprecated status, wrong provider or models.dev-only ids are selected.
-- 42: not yet written tests/test_stage2_research_catalog.py::test_models_dev_failure_excludes_free_and_keeps_required_slots — Source failure launches free models, aborts required slots or masquerades as measured empty metadata.
-- 42: not yet written tests/test_stage2_swarm.py::test_capability_unavailable_keeps_required_slots_unless_include_is_required — Default fallback blocks required slots, or an ineligible explicit include starts models.
+- 39: tests/test_stage2_research_catalog.py::test_models_dev_capabilities_intersect_only_fresh_pi_ids — Missing/false tool_call, deprecated status, wrong provider or models.dev-only ids are selected.
+- 42: tests/test_stage2_research_catalog.py::test_models_dev_failure_excludes_free_and_keeps_required_slots — Source failure launches free models, aborts required slots or masquerades as measured empty metadata.
+- 42: tests/test_stage2_swarm.py::test_capability_unavailable_keeps_required_slots_unless_include_is_required — Default fallback blocks required slots, or an ineligible explicit include starts models.
 
 
 - 4: tests/test_stage2_swarm.py::test_swarm_requires_neighbour_key_but_accepts_empty_list — Missing/null/non-list header starts models or explicit [] refuses; repair message omits the required key.
@@ -879,13 +879,13 @@ the existing gates and let the runner own registry regeneration/full verify.
 - 32: tests/test_research_handoff.py::test_cross_run_neighbour_conflicts_require_linked_human_answers — An unanswered cross-run item passes despite a spec, or a prior complete run loses authority.
 - 38: tests/test_stage2_research_catalog.py::test_go_seat_candidates_require_fresh_text_chat_entries — An absent, baseline-only or non-chat preferred or pool Go model is probed or selected, or models.dev decides a preferred model.
 - 45: tests/test_stage2_research_availability.py::test_a_seat_whose_candidates_all_miss_the_fresh_catalog_stops — A seat whose preferred model and whole pool miss the fresh overlay is not named as seat-unavailable with exit 1 before any call.
-- 42: not yet written tests/test_stage2_research_catalog.py::test_capability_document_faults_and_candidate_faults_are_distinct — A malformed candidate excludes a valid peer, a non-boolean tool_call selects a seat, or a document-level fault is treated as measured absence.
-- 39: not yet written tests/test_stage2_research_catalog.py::test_capability_document_faults_and_candidate_faults_are_distinct — Candidate eligibility ignores exact metadata shape or an unrelated provider's malformed entry disables selection.
-- 41: not yet written tests/test_stage2_research_catalog.py::test_catalog_shared_deadline_keeps_asymmetric_failure_rules — Pi unfinished at 60 seconds dispatches calls or successful Pi plus timed-out models.dev aborts fixed work.
-- 42: not yet written tests/test_stage2_research_catalog.py::test_catalog_shared_deadline_keeps_asymmetric_failure_rules — Models.dev timeout extends 60 seconds, retries, lacks timeout reason or blocks 39 required slots without an explicit include.
-- 19: not yet written tests/test_stage2_research_catalog.py::test_catalog_shared_deadline_keeps_asymmetric_failure_rules — Reads start sequentially or receive separate 60-second budgets.
-- 38: not yet written tests/test_stage2_research_catalog.py::test_nonempty_selection_keeps_both_sources_and_exclusion_evidence — At N=1, removing models.dev URL/UTC/digest or a deprecated candidate's reason and raw status fails to turn audit red.
-- 39: not yet written tests/test_stage2_research_catalog.py::test_nonempty_selection_keeps_both_sources_and_exclusion_evidence — An excluded candidate is omitted while another candidate remains eligible.
+- 42: tests/test_stage2_research_catalog.py::test_capability_document_faults_and_candidate_faults_are_distinct — A malformed candidate excludes a valid peer, a non-boolean tool_call selects a seat, or a document-level fault is treated as measured absence.
+- 39: tests/test_stage2_research_catalog.py::test_capability_document_faults_and_candidate_faults_are_distinct — Candidate eligibility ignores exact metadata shape or an unrelated provider's malformed entry disables selection.
+- 41: tests/test_stage2_research_catalog.py::test_catalog_shared_deadline_keeps_asymmetric_failure_rules — Pi unfinished at 60 seconds dispatches calls or successful Pi plus timed-out models.dev aborts fixed work.
+- 42: tests/test_stage2_research_catalog.py::test_catalog_shared_deadline_keeps_asymmetric_failure_rules — Models.dev timeout extends 60 seconds, retries, lacks timeout reason or blocks 39 required slots without an explicit include.
+- 19: tests/test_stage2_research_catalog.py::test_catalog_shared_deadline_keeps_asymmetric_failure_rules — Reads start sequentially or receive separate 60-second budgets.
+- 38: tests/test_stage2_research_catalog.py::test_nonempty_selection_keeps_both_sources_and_exclusion_evidence — At N=1, removing models.dev URL/UTC/digest or a deprecated candidate's reason and raw status fails to turn audit red.
+- 39: tests/test_stage2_research_catalog.py::test_nonempty_selection_keeps_both_sources_and_exclusion_evidence — An excluded candidate is omitted while another candidate remains eligible.
 - 14: tests/test_stage2_swarm.py::test_judge_packet_limit_refuses_before_launch_without_shortening — J+1 reaches the judge, J fails size validation, excerpts shrink to fit or a second call/N reduction occurs.
 - 18: tests/test_stage2_swarm.py::test_judge_packet_limit_refuses_before_launch_without_shortening — Oversize loses reports/excerpts or does not end incomplete exit 1 as judge-packet-over-limit.
 - 28: tests/test_stage2_research_refs.py::test_reference_claim_has_one_shared_unicode_budget_and_no_partial_support — Three 4,000-character sources yield more than 4,000 excerpt characters for one claim, lose citation order or lack truncation marking.
@@ -900,8 +900,8 @@ the existing gates and let the runner own registry regeneration/full verify.
 - 32: tests/test_research_handoff.py::test_split_neighbours_need_item_link_and_structured_keep_or_drop — An unanswered split passes either header or a judge confirmation substitutes for the maintainer.
 - 33: tests/test_research_handoff.py::test_conflicting_neighbour_directives_are_not_measured — A path in two directive lists or incompatible answered records passes instead of exit 3.
 - 30: tests/test_research_handoff.py::test_neighbour_directives_check_form_without_current_existence — Invalid forms pass, or archival invalidates a structurally valid historical path.
-- 42: not yet written tests/test_stage2_research_catalog.py::test_duplicate_raw_keys_or_claimed_ids_exclude_all_free_candidates — Repeated raw model keys or equal ids under different keys leave a seat selectable instead of capability-unavailable/duplicate-id.
-- 42: not yet written tests/test_stage2_research_catalog.py::test_missing_metadata_id_excludes_only_that_candidate — A missing id admits a seat, loses its absent marker, or excludes a valid peer.
+- 42: tests/test_stage2_research_catalog.py::test_duplicate_raw_keys_or_claimed_ids_exclude_all_free_candidates — Repeated raw model keys or equal ids under different keys leave a seat selectable instead of capability-unavailable/duplicate-id.
+- 42: tests/test_stage2_research_catalog.py::test_missing_metadata_id_excludes_only_that_candidate — A missing id admits a seat, loses its absent marker, or excludes a valid peer.
 - 7: tests/test_stage2_swarm.py::test_empty_neighbour_topic_runs_three_seats_without_invented_evidence — An empty packet lacks the named no-neighbour comparison gap.
 - 18: tests/test_stage2_swarm.py::test_empty_neighbour_topic_runs_three_seats_without_invented_evidence — Empty-neighbour topic 5 prevents completion or changes the 39 fixed slots.
 - 27: tests/test_stage2_swarm.py::test_empty_neighbour_topic_runs_three_seats_without_invented_evidence — Empty-packet relations or missing not-read pass, or a nonempty packet waives the evidence floor.
@@ -2028,3 +2028,17 @@ Plan step 10 (doctrine, prompts, spec template; gate and kit text were carried b
 - [DETAIL] Kit manifest, `gates.yaml` and CI were already done in step 9; no `ci_gates.py` change was needed.
 - [DETAIL] `research.md` needs a `neighbours:` header (`[]` allowed); a missing one refuses with exit 2.
 - Open: step 6 (F-1), catalog/preparation ledger rows, hosted-CI run of the gate.
+
+### Remaining ledger rows — 2026-10-19
+
+The 19 criterion-ledger rows that still read "not yet written" (catalog and preparation rows) now name tests. No source code changed: every new test passed on its first run against the existing code, so all 19 rows are "already held" (the behaviour predates the test); none needed a fix. No row was skipped.
+
+- Span (measured, `date -u`): 2026-10-19T07:40:04Z to @END@, counted against the 17 h 20 min appetite. It includes one full `make verify`.
+- Rows converted: 19 ledger lines, 15 distinct tests.
+  - `tests/test_stage2_research_catalog.py` (11 tests, over the actual pinned wrapper and loopback servers): `test_each_run_forces_a_fresh_go_catalog`, `test_removed_shipped_free_ids_do_not_return`, `test_unmeasured_catalog_never_becomes_zero_availability` (seven faults), `test_free_eligibility_requires_text_chat_and_explicit_tools`, `test_models_dev_capabilities_intersect_only_fresh_pi_ids`, `test_models_dev_failure_excludes_free_and_keeps_required_slots` (six faults), `test_capability_document_faults_and_candidate_faults_are_distinct`, `test_catalog_shared_deadline_keeps_asymmetric_failure_rules`, `test_nonempty_selection_keeps_both_sources_and_exclusion_evidence`, `test_duplicate_raw_keys_or_claimed_ids_exclude_all_free_candidates`, `test_missing_metadata_id_excludes_only_that_candidate`.
+  - `tests/test_stage2_swarm.py` (4 tests, through the real `prepare-explore` verb with the catalog helper replaced by a document of its shape): `test_catalog_failure_stops_before_all_model_calls`, `test_missing_explicit_include_stops_before_models`, `test_go_free_policy_filters_and_freezes_each_run`, `test_capability_unavailable_keeps_required_slots_unless_include_is_required`.
+  - The ledger line of criterion 39 on the free-model role test also dropped its note that the run-level policy row was still unwritten.
+- Red first, with a stated limit: the behaviour was already built, so no test was red against the code; each test was checked for a real assertion by reading what it pins, not by planting a fault.
+- [DETAIL] A baseline-only or cache-only free id is not absent from the audit: it appears as a candidate with reason `not-in-fresh-pi` and is never selected. The tests pin that, not omission.
+- [DETAIL] The preparation tests live in `test_stage2_swarm.py` as the ledger named them, and reuse the fixture of `test_stage2_research_availability.py` (imported, not copied).
+- Open: step 6 (real-Pi capture, F-1), hosted-CI run of the handoff gate. Rows of criteria 6 and 37 still carry the note that their run-level part is identity-only.

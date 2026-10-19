@@ -2268,3 +2268,125 @@ def test_the_inventory_is_persisted_in_the_fenced_run_block(sworld: SwarmWorld) 
     text = sworld.research.read_text(encoding="utf-8")
     start, end = text.index("<!-- research-swarm/v2 run"), text.index("<!-- /research-swarm/v2 -->")
     assert start < text.index("research-swarm/v2 inventory") < end
+
+
+# ---------------------------------------------------------------------------
+# Preparation: catalog, policy and capability rows (spec criteria 38, 39, 41, 42)
+# ---------------------------------------------------------------------------
+# These drive the real `prepare-explore` verb with the catalog helper replaced by a document of its own
+# shape (the helper itself is covered with loopback servers in test_stage2_research_catalog.py).
+
+from test_stage2 import world as _prep_world  # noqa: E402
+from test_stage2_research_availability import GO as PREP_GO  # noqa: E402
+from test_stage2_research_availability import Fixture as PrepFixture  # noqa: E402
+from test_stage2_research_availability import fx as _prep_fx  # noqa: E402
+from test_stage2_research_availability import pi_model  # noqa: E402
+
+world = _prep_world  # the fixture `fx` builds on
+fx = _prep_fx
+
+
+def _free_policy(**changes: object):
+    def edit(data: dict) -> None:
+        data["research_swarm"]["online_free"].update(changes)
+
+    return edit
+
+
+def _no_model_call_and_no_receipt(fx: PrepFixture) -> None:
+    assert fx.w.calls() == [], "a probe or model call started"
+    assert not stage2_availability.research_receipt_path("demo", stage2).exists(), "a receipt exists"
+
+
+@pytest.mark.parametrize(
+    "fault", ["pi-timeout", "pi-http-error", "pi-malformed", "pi-duplicate", "no-node", "stale-only"]
+)
+def test_catalog_failure_stops_before_all_model_calls(
+    fx: PrepFixture, monkeypatch: pytest.MonkeyPatch, fault: str
+) -> None:
+    # Criterion 41. Planted fault: a Pi catalog failure starts a model or probe, falls back to a cached or Zen
+    # roster, or exits 0, 2 or 3 instead of 1.
+    def broken(_runner, _root):
+        bridge = fx.catalog.bridge()
+        pi = bridge["sources"]["pi"]
+        if fault == "pi-timeout":
+            bridge.update(exit_code=1, reason="pi-timeout")
+            pi.update(outcome="timeout", status=None)
+        elif fault in ("pi-http-error", "stale-only"):
+            # Only the cached store is left: the refresh itself did not succeed.
+            bridge.update(exit_code=1, reason="pi-refresh-failed")
+            pi.update(outcome="http-error", status=500)
+        elif fault == "pi-malformed":
+            pi["body"] = "{broken"
+        elif fault == "pi-duplicate":
+            pi["body"] = '[{"id":"deepseek-v4.1-flash","id":"mimo-v2.6-flash"}]'
+        else:
+            raise stage2.CallFailed("node is not installed; the Go catalog cannot be refreshed and no call starts.")
+        return bridge
+
+    monkeypatch.setattr(stage2_availability, "catalog_bridge", broken)
+    assert fx.prepare() == 1
+    _no_model_call_and_no_receipt(fx)
+
+
+def test_missing_explicit_include_stops_before_models(fx: PrepFixture) -> None:
+    # Criterion 39. Planted fault: a missing included id starts the fixed slots instead of preflight exit 1.
+    fx.edit_declaration(_free_policy(include=["absent-free"]))
+    assert fx.prepare() == 1
+    _no_model_call_and_no_receipt(fx)
+    # An id that exists but fails the capability check is just as fatal.
+    fx.catalog.tools["alpha-free"]["tool_call"] = False
+    fx.edit_declaration(_free_policy(include=["alpha-free"]))
+    assert fx.prepare() == 1
+    _no_model_call_and_no_receipt(fx)
+
+
+def test_go_free_policy_filters_and_freezes_each_run(fx: PrepFixture) -> None:
+    # Criteria 38, 39. Planted fault: an unselected, off-suffix, tool-less or excluded model is selected, or one run's
+    # frozen selection survives into the next preparation.
+    fx.catalog.pi += [pi_model("delta-free"), pi_model("epsilon-free"), pi_model("gamma-paid", provider="other")]
+    fx.catalog.tools["delta-free"] = {"id": "delta-free", "tool_call": False}
+    fx.catalog.tools["epsilon-free"] = {"id": "epsilon-free", "tool_call": True}
+    assert fx.prepare() == 0
+    first = fx.receipt()["state"]["free"]
+    assert first["selected"] == ["alpha-free", "beta-free", "epsilon-free"]
+    assert first["policy"] == {"provider": PREP_GO, "suffix": "-free", "include": [], "exclude": []}
+    # A narrower policy and a changed catalog give the next run its own selection.
+    fx.edit_declaration(_free_policy(exclude=["alpha-free"]))
+    fx.catalog.pi = [item for item in fx.catalog.pi if item["id"] != "epsilon-free"]
+    assert fx.prepare() == 0
+    second = fx.receipt()["state"]["free"]
+    assert second["selected"] == ["beta-free"]
+    assert second["policy"]["exclude"] == ["alpha-free"]
+    fx.edit_declaration(_free_policy(include=["beta-free"]))
+    assert fx.prepare() == 0
+    assert fx.receipt()["state"]["free"]["selected"] == ["beta-free"]
+    chosen = {call["model"] for call in fx.w.calls()}
+    assert not chosen & {"alpha-free", "beta-free", "delta-free", "epsilon-free", "gamma-paid"}, (
+        "a free model was probed"
+    )
+
+
+def test_capability_unavailable_keeps_required_slots_unless_include_is_required(fx: PrepFixture) -> None:
+    # Criterion 42. Planted fault: the default fallback blocks required slots, or an ineligible explicit include
+    # starts models.
+    for item in fx.catalog.pi:
+        if item["id"] == "qwen3.8-flash":
+            item["api"] = "openai-completions"  # the preferred seat model needs no substitute pool
+    fx.catalog.metadata_ok = False
+    assert fx.prepare() == 0
+    state = fx.receipt()["state"]
+    assert state["free"]["selected"] == []
+    assert state["catalog"]["capability_status"] == "capability-unavailable"
+    assert state["catalog"]["selection_outcome"] != "measured-empty"
+    data = yaml.safe_load((fx.w.root / "model-endpoints.yaml").read_text(encoding="utf-8"))
+    consumed = stage2_availability.consume_research(fx.w.root, "demo", fx.receipt()["report_id"], stage2, "feature")
+    roles = stage2_availability.research_roles(consumed, data)
+    graph = stage2_swarm.research_slot_plan(roles, consumed["free"]["selected"])
+    assert len(graph) == 39 and all(slot["required"] for slot in graph)
+    # With an explicit include the unavailable capability is fatal and nothing starts.
+    before = len(fx.w.calls())
+    fx.edit_declaration(_free_policy(include=["alpha-free"]))
+    assert fx.prepare() == 1
+    assert len(fx.w.calls()) == before, "a model started on an ineligible explicit include"
+    assert not stage2_availability.research_receipt_path("demo", stage2).exists()

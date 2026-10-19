@@ -567,3 +567,243 @@ def test_preflight_seat_candidate_definition_cannot_redirect_its_go_origin(tmp_p
     for field, value in change.items():
         assert skipped["evidence"]["pi"][field] == {"present": True, "value": value}
     assert outcome(result, FIXED[1])["reason"] is None
+
+
+# ---------------------------------------------------------------------------
+# Catalog ledger rows (criteria 19, 38, 39, 41, 42): named contracts over the actual wrapper
+# ---------------------------------------------------------------------------
+
+
+def pi_requests(sources: Sources) -> list[str]:
+    return [path for path, _ in sources.requests if path.startswith("/api/models/providers/")]
+
+
+def candidate(result: dict, ident: str) -> dict:
+    return next(item for item in result["candidates"] if item["id"] == ident)
+
+
+def test_each_run_forces_a_fresh_go_catalog(tmp_path, sources):
+    # Criterion 38. Planted fault: a cached or shipped list stands in for the refresh, or the selection lacks provenance.
+    seed = {GO: {"models": [model("alpha-free")], "checkedAt": int(time.time() * 1000), "lastModified": 4102444800000}}
+    first = select(collect(tmp_path, sources, seedStore=seed))
+    assert first["selected"] == ["alpha-free", "beta-free"]
+    assert len(pi_requests(sources)) == 1, "a fresh store replaced the refresh"
+    # The source changes between two runs: the second run sees the change, never the first run's roster.
+    sources.pi_models = [item for item in sources.pi_models if item["id"] != "alpha-free"]
+    second = select(collect(tmp_path, sources, seedStore=seed))
+    assert second["selected"] == ["beta-free"]
+    assert len(pi_requests(sources)) == 2, "each run makes exactly one Pi request of its own"
+    for result in (first, second):
+        for name in ("pi", "models_dev"):
+            evidence = result["sources"][name]
+            assert evidence["url"].startswith("http") and evidence["retrieved_at"].endswith("Z")
+            assert len(evidence["sha256"]) == 64
+    # Another provider cannot supply a seat: its entry in the overlay is a faulty candidate, never a selection.
+    sources.pi_models.append(model("gamma-free", provider="other"))
+    sources.metadata[GO]["models"]["gamma-free"] = capability("gamma-free")
+    third = select(collect(tmp_path, sources))
+    assert "gamma-free" not in third["selected"]
+
+
+def test_removed_shipped_free_ids_do_not_return(tmp_path, sources):
+    # Criterion 38. Planted fault: a free id that only the shipped list or a cache still names is dispatched.
+    sources.metadata[GO]["models"]["removed-free"] = capability("removed-free")
+    seed = {GO: {"models": [model("removed-free")], "checkedAt": 0, "lastModified": 0}}
+    bridge = collect(tmp_path, sources, seedStore=seed)
+    bridge["baseline"] = [*bridge["baseline"], "removed-free"]
+    result = select(bridge)
+    assert result["selected"] == ["alpha-free", "beta-free"]
+    assert candidate(result, "removed-free")["reason"] == "not-in-fresh-pi", "audited, never eligible"
+    assert "removed-free" not in {entry["id"] for entry in result["models_store"][GO]["models"]}
+    # A removed id named by an include is a missing explicit include, a preflight failure, not a silent revival.
+    with pytest.raises(swarm.ResearchCatalogError) as failure:
+        select(bridge, {**POLICY, "include": ["removed-free"]})
+    assert failure.value.exit_code == 1
+
+
+@pytest.mark.parametrize(
+    "fault",
+    ["pi-timeout", "pi-status-304", "pi-status-500", "pi-malformed", "pi-duplicate", "pi-not-a-list", "stale-only"],
+)
+def test_unmeasured_catalog_never_becomes_zero_availability(tmp_path, sources, fault):
+    # Criterion 41. Planted fault: an unmeasured Pi result becomes N=0 (measured empty) or exits other than 1.
+    options = {}
+    if fault == "pi-timeout":
+        sources.pi_delay = 2.5
+        options["deadlineMs"] = 800
+    elif fault.startswith("pi-status"):
+        sources.pi_status = int(fault.rsplit("-", 1)[1])
+    elif fault == "pi-malformed":
+        sources.pi_body = "{broken"
+    elif fault == "pi-duplicate":
+        sources.pi_body = '[{"id":"alpha-free","id":"beta-free"}]'
+    elif fault == "pi-not-a-list":
+        sources.pi_body = "5"
+    else:
+        # Only a stale cache exists: the refresh failed, so the cached roster must not stand in.
+        sources.pi_status = 500
+        options["seedStore"] = {
+            GO: {"models": [model("alpha-free")], "checkedAt": int(time.time() * 1000), "lastModified": 4102444800000}
+        }
+    bridge = collect(tmp_path, sources, **options)
+    with pytest.raises(swarm.ResearchCatalogError) as failure:
+        select(bridge)
+    assert failure.value.exit_code == 1
+
+
+def test_free_eligibility_requires_text_chat_and_explicit_tools(tmp_path, sources):
+    # Criterion 39. Planted fault: a non-chat, baseline-only, tool-less or deprecated entry yields a selected seat.
+    for ident in ("image-free", "tool-less-free", "no-flag-free", "old-free", "baseline-free"):
+        sources.metadata[GO]["models"][ident] = capability(ident)
+    sources.pi_models += [
+        model("image-free", type="image"),
+        model("tool-less-free"),
+        model("no-flag-free"),
+        model("old-free"),
+    ]
+    sources.metadata[GO]["models"]["tool-less-free"]["tool_call"] = False
+    del sources.metadata[GO]["models"]["no-flag-free"]["tool_call"]
+    sources.metadata[GO]["models"]["old-free"]["status"] = "deprecated"
+    bridge = collect(tmp_path, sources)
+    bridge["baseline"] = [*bridge["baseline"], "baseline-free"]
+    result = select(bridge)
+    assert result["selected"] == ["alpha-free", "beta-free"]
+    assert candidate(result, "image-free")["reason"] == "not-chat"
+    assert candidate(result, "tool-less-free")["reason"] == "no-tool-support"
+    assert candidate(result, "no-flag-free")["reason"] == "no-tool-support"
+    assert candidate(result, "old-free")["reason"] == "deprecated"
+    assert candidate(result, "baseline-free")["reason"] == "not-in-fresh-pi"
+
+
+def test_models_dev_capabilities_intersect_only_fresh_pi_ids(tmp_path, sources):
+    # Criteria 39. Planted fault: a models.dev-only id, a wrong-provider entry or a missing flag is selected.
+    sources.metadata[GO]["models"]["metadata-only-free"] = capability("metadata-only-free")
+    sources.metadata["other"] = {"models": {"alpha-free": capability("alpha-free", tool_call=True)}}
+    del sources.metadata[GO]["models"]["alpha-free"]
+    sources.metadata[GO]["models"]["beta-free"]["tool_call"] = False
+    result = select(collect(tmp_path, sources))
+    assert result["selected"] == []
+    assert result["capability_status"] == "available"
+    assert result["selection_outcome"] == "measured-empty"
+    assert candidate(result, "alpha-free")["reason"] == "metadata-missing", "another provider's entry granted a seat"
+    assert candidate(result, "beta-free")["reason"] == "no-tool-support"
+    assert "metadata-only-free" not in {item["id"] for item in result["candidates"]}
+
+
+@pytest.mark.parametrize("fault", ["http-500", "http-404", "unparsable", "timeout", "not-an-object", "no-provider"])
+def test_models_dev_failure_excludes_free_and_keeps_required_slots(tmp_path, sources, fault):
+    # Criterion 42. Planted fault: a failed source launches free models, aborts required slots or reads as measured empty.
+    options = {}
+    if fault.startswith("http"):
+        sources.metadata_status = int(fault.split("-")[1])
+    elif fault == "unparsable":
+        sources.metadata_body = "{broken"
+    elif fault == "timeout":
+        sources.metadata_delay = 2.5
+        options["deadlineMs"] = 800
+    elif fault == "not-an-object":
+        sources.metadata_body = "[]"
+    else:
+        sources.metadata_body = "{}"
+    result = select(collect(tmp_path, sources, **options))
+    assert result["selected"] == [] and result["N"] == 0
+    assert result["capability_status"] == "capability-unavailable"
+    assert result["selection_outcome"] != "measured-empty", "an unread source masqueraded as measured empty metadata"
+    assert result["capability_reason"], "the reason of the failure is not kept"
+    assert result["fixed"] == FIXED
+    graph = swarm.research_slot_plan(roles(), result["selected"])
+    assert len(graph) == 39 and all(slot["required"] for slot in graph)
+
+
+def test_capability_document_faults_and_candidate_faults_are_distinct(tmp_path, sources):
+    # Criteria 39, 42. Planted fault: one malformed candidate excludes a valid peer, a non-boolean flag selects a seat,
+    # or a document-level fault reads as measured absence.
+    sources.metadata[GO]["models"]["alpha-free"]["tool_call"] = "yes"
+    candidate_fault = select(collect(tmp_path, sources))
+    assert candidate_fault["capability_status"] == "available"
+    assert candidate_fault["selected"] == ["beta-free"]
+    assert candidate(candidate_fault, "alpha-free")["reason"] == "metadata-malformed"
+    # An unrelated provider's malformed entry never disables Go selection.
+    sources.metadata[GO]["models"]["alpha-free"]["tool_call"] = True
+    sources.metadata_body = json.dumps({**sources.metadata, "unrelated": {"models": 5}})
+    assert select(collect(tmp_path, sources))["selected"] == ["alpha-free", "beta-free"]
+    # A document-level fault is unavailability, with a reason, never a measured empty selection.
+    sources.metadata_body = '{"opencode-go":{"models":[]}}'
+    document_fault = select(collect(tmp_path, sources))
+    assert document_fault["capability_status"] == "capability-unavailable"
+    assert document_fault["selection_outcome"] != "measured-empty"
+    assert document_fault["capability_reason"] == "malformed"
+
+
+def test_catalog_shared_deadline_keeps_asymmetric_failure_rules(tmp_path, sources):
+    # Criteria 19, 41, 42. Planted fault: the reads start one after the other or get separate budgets; a Pi timeout
+    # dispatches; a models.dev timeout retries, extends the deadline or aborts fixed work.
+    sources.pi_delay = sources.metadata_delay = 1.5
+    started = time.monotonic()
+    bridge = collect(tmp_path, sources, deadlineMs=2000)
+    assert time.monotonic() - started < 3.6, "the reads ran one after the other"
+    assert len(sources.requests) == 2, "both reads were not requested"
+    assert bridge["exit_code"] == 0 and bridge["elapsed_ms"] < 2400
+    assert len(pi_requests(sources)) == 1 and len([p for p, _ in sources.requests if p == "/metadata"]) == 1
+    # Both slow past one shared deadline: Pi decides (exit 1), the models.dev timeout is a reason, never a retry.
+    sources.pi_delay = sources.metadata_delay = 3.0
+    sources.requests.clear()
+    started = time.monotonic()
+    bridge = collect(tmp_path, sources, deadlineMs=1000)
+    assert time.monotonic() - started < 2.6, "the two reads received separate budgets"
+    assert bridge["sources"]["models_dev"]["outcome"] == "timeout"
+    with pytest.raises(swarm.ResearchCatalogError) as failure:
+        select(bridge)
+    assert failure.value.exit_code == 1
+    assert len(sources.requests) == 2, "a timed-out read was retried"
+    # Pi on time, models.dev timed out: a reasoned, required-slot-preserving selection; an explicit include is fatal.
+    sources.pi_delay, sources.metadata_delay = 0.0, 3.0
+    bridge = collect(tmp_path, sources, deadlineMs=1000)
+    result = select(bridge)
+    assert result["capability_reason"] == "timeout" and result["fixed"] == FIXED and result["selected"] == []
+    with pytest.raises(swarm.ResearchCatalogError) as failure:
+        select(bridge, {**POLICY, "include": ["alpha-free"]})
+    assert failure.value.exit_code == 1
+
+
+def test_nonempty_selection_keeps_both_sources_and_exclusion_evidence(tmp_path, sources):
+    # Criteria 38, 39. Planted fault: at N=1 a source record or an excluded candidate's reason and raw value is dropped.
+    sources.metadata[GO]["models"]["alpha-free"]["status"] = "deprecated"
+    result = select(collect(tmp_path, sources))
+    assert result["N"] == 1 and result["selected"] == ["beta-free"]
+    for name in ("pi", "models_dev"):
+        evidence = result["sources"][name]
+        assert evidence["url"] and evidence["retrieved_at"].endswith("Z") and len(evidence["sha256"]) == 64
+    excluded = candidate(result, "alpha-free")
+    assert excluded["reason"] == "deprecated"
+    assert excluded["evidence"]["status"] == {"present": True, "value": "deprecated"}
+    assert candidate(result, "beta-free")["reason"] is None
+
+
+@pytest.mark.parametrize(
+    "body",
+    [
+        '{"opencode-go":{"models":{"alpha-free":{"id":"alpha-free","tool_call":true},"alpha-free":{"id":"alpha-free","tool_call":true},"beta-free":{"id":"beta-free","tool_call":true}}}}',
+        '{"opencode-go":{"models":{"alpha-free":{"id":"alpha-free","tool_call":true},"beta-free":{"id":"alpha-free","tool_call":true}}}}',
+        '{"opencode-go":{"models":{"alpha-free":{"id":"alpha-free","id":"alpha-free","tool_call":true},"beta-free":{"id":"beta-free","tool_call":true}}}}',
+    ],
+)
+def test_duplicate_raw_keys_or_claimed_ids_exclude_all_free_candidates(tmp_path, sources, body):
+    # Criterion 42. Planted fault: repeated raw keys or equal ids under different keys leave a seat selectable.
+    sources.metadata_body = body
+    result = select(collect(tmp_path, sources))
+    assert result["selected"] == []
+    assert result["capability_status"] == "capability-unavailable"
+    assert result["capability_reason"] == "duplicate-id"
+    assert result["fixed"] == FIXED
+
+
+def test_missing_metadata_id_excludes_only_that_candidate(tmp_path, sources):
+    # Criterion 42. Planted fault: a missing id admits the seat, loses its absent marker or excludes a valid peer.
+    del sources.metadata[GO]["models"]["alpha-free"]["id"]
+    result = select(collect(tmp_path, sources))
+    assert result["selected"] == ["beta-free"]
+    excluded = candidate(result, "alpha-free")
+    assert excluded["reason"] == "metadata-malformed"
+    assert excluded["evidence"]["id"] == {"present": False}
+    assert result["capability_status"] == "available"
