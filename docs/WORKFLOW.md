@@ -4,7 +4,7 @@ category: governance
 status: current
 created: 2026-09-05
 last_reviewed: 2026-09-29
-updated: 2026-10-17
+updated: 2026-10-19
 owner: Data Architect
 provenance: ai-drafted-reviewed
 produced_by:
@@ -77,9 +77,9 @@ handover to the next phase — not the chat history.**
 
 | # | Phase | Artefact | Gate | Prompt |
 |---|---|---|---|---|
-| 1 | Explore *(by class, ADR 0020)* | `plans/changes/<name>/research.md` — six reconciled topics for a `feature` or `architectural` change, one report otherwise | — | [`prompts/01-explore.md`](../prompts/01-explore.md) |
-| 1a | Interview | `plans/changes/<name>/decisions.md` | the `interview-minimums` check — the class minimums met, or a skip record with a reason | [`01a-interview.md`](../prompts/01a-interview.md) |
-| 2 | Spec | `plans/changes/<name>/spec.md` | validator green, no open `[DECISION]` | [`02-spec.md`](../prompts/02-spec.md) |
+| 1 | Explore *(by class, ADR 0020)* | `plans/changes/<name>/research.md` — eleven topics from a finder map for a `feature` or `architectural` change, one report otherwise | the `research-handoff` check for a complete swarm run, otherwise — | [`prompts/01-explore.md`](../prompts/01-explore.md) |
+| 1a | Interview | `plans/changes/<name>/decisions.md` | the `interview-minimums` check — the class minimums met, or a skip record with a reason; after a research swarm every obligation item answered and linked (`research_items`, `research_neighbours`; minimums are no ceiling) | [`01a-interview.md`](../prompts/01a-interview.md) |
+| 2 | Spec | `plans/changes/<name>/spec.md` | validator green, no open `[DECISION]`; after a research swarm `neighbours:` and every criterion's `*Basis:*` match the research (`research-handoff`) | [`02-spec.md`](../prompts/02-spec.md) |
 | 2a | Spec review | rows for `findings.md`, dimension `SPEC`; then the revised `spec.md` | every row worked into the spec or rejected with a reason; no open `[AMBIGUITY]` | [`02a-spec-review.md`](../prompts/02a-spec-review.md) |
 | 2b | Design *(by class)* | `plans/changes/<name>/design.md` | validator green; for an `architectural` change, an ADR draft in it | [`02b-design.md`](../prompts/02b-design.md) |
 | 3 | Plan | `plans/changes/<name>/plan.md` | validator green | [`03-plan.md`](../prompts/03-plan.md) |
@@ -736,7 +736,7 @@ admission and cost values live in `model-endpoints.yaml`.
 | Phase | Model | Why |
 |---|---|---|
 | 1 Explore | **GLM 5.3 Flash** | much input, little output, no deep reasoning; through Claude Code against Z.ai and the runner, for a `bounded` change or a `spike` (ADR 0020) |
-| 1 Explore swarm | **the research swarm** | for a `feature` or `architectural` change (ADR 0020): the declared free roster researches public practice from one filtered topic sentence, the declared Flash pair compares the repository on six topics, and one fresh Opus 5.5 context reconciles them; the runner dispatches every call through the declared endpoints, leak-checks each prompt, and an incomplete run exits 1 |
+| 1 Explore swarm | **the research swarm** | for a `feature` or `architectural` change (ADR 0020): a finder trio maps the sources, six seats (three repository, three online, each with one preferred model and a reported substitute) research eleven topics on the same brief, selected Go free models add public topics best-effort, and one fresh Opus 5.5 context reconciles; the runner dispatches every call through the declared endpoints, leak-checks each prompt, and an incomplete run exits 1 |
 | 2 Spec | **gpt-6.1-sol** | effort [`CODEX_EFFORTS["draft"]`](../scripts/stage2.py), one call for 2, 2b and 3 through the Codex CLI and `draft`, writing in the CLI's workspace-write sandbox; `glm-5.3` drafts through Claude Code against Z.ai after two failed Codex attempts (ADR 0016) |
 | 2b Design | **gpt-6.1-sol** | effort [`CODEX_EFFORTS["draft"]`](../scripts/stage2.py), drafted in the same call as 2 and 3 |
 | 3 Plan | **gpt-6.1-sol** | effort [`CODEX_EFFORTS["draft"]`](../scripts/stage2.py), drafted in the same call as 2 and 2b |
@@ -770,29 +770,69 @@ attempt's diagnostics and in the checkpoint commit's message, and a ruff that
 cannot run or leaves findings leaves the verdict to `make verify`.
 
 **The swarm row is live through the runner too, and fails closed.** A swarm run
-is sixteen sequential invocations: the public-topic call on Opus 5.5, the three
-declared free researchers in isolated Pi contexts that expose only public
-search and page retrieval (an offline capture on the pinned Pi with synthetic
-private canaries qualifies that boundary before the first live free call),
-eleven separate Flash calls on OpenCode Go, and one fresh Opus 5.5
-reconciliation. Deadlines are monotonic — 5 minutes for the topic call, 10 per
-researcher, 15 for the judge, 150 for the whole run — with no retry and no
-debate. A failed participant preserves its partial evidence and the run exits
-1; a declaration or leak refusal records the blocked slot and exits 2 with no
-further call. Only the runner writes `research.md`; no participant edits the
-repository, and a frozen input digest is re-checked before publication.
+is at most `39 + 3N` sequential-by-queue invocations for `N` selected free
+models: three finders, one Opus map merge, one Opus public sentence, `33 + 3N`
+topic slots (24 on the repository seats for topics 1-8, 9 on the online seats
+for topics 9-11, 3 per free model for the online topics) and one fresh Opus
+5.5 judge. The Go models ride the pinned Pi, at most four per provider at a
+time, required slots before free ones; the Opus calls ride official Claude
+Code without tools. Online contexts expose only public search and page
+retrieval, and the topic sentence is mechanically filtered; no repository
+content reaches them (the offline capture on the real pinned Pi with synthetic
+private canaries, finding F-1, is still open and qualifies that boundary before
+the first live free call). Deadlines are monotonic — the judge keeps a reserved
+15 minutes inside a 150-minute run — with no retry and no debate. A failed
+participant preserves its partial evidence; an incomplete run exits 1, a
+declaration or leak refusal records the blocked slot, exits 2 and makes no
+further call. Only the runner writes `research.md`: one buffered append at the
+end of the run (reports, scores, obligation inventory, partial output); no
+participant edits the repository, and a frozen input digest is re-checked
+before publication.
+
+**Preparation before a run (Q-12).** `prepare-explore <change> [--class CLASS]`
+forces a fresh Go catalog from the pinned Pi, cross-checks it against
+models.dev tool-call and deprecation data, probes each seat's preferred model
+with a tool-free call and, for an unreachable one, takes the cheapest reachable
+admitted Go model as a named substitute. It prints a selection report and a
+single-use receipt id; the report is shown to the maintainer in the main
+conversation, then `explore <change> --availability-reported <id>` consumes
+the receipt before the first model call. A Pi refresh failure or a seat with no
+reachable model exits 1; a missing, stale, consumed or mismatched receipt
+exits 2. Neither verb runs for a `bounded` change, a `spike` or beside
+`--stage2-off`.
+
+**Resume after an abort (Q-13).** The runner keeps every finished contribution
+in a store outside the repository (`stage2_research_store.py`). A later run of
+the same change resumes: a slot is reused only when its resume binding (the
+digests of the frozen inputs), stage, topic, seat, endpoint, model and exact
+prompt hash match and its result was ok and validates; nothing else is reused,
+and the run gets its own run id, deadlines and receipt.
+
+**The handoff is checked (gate `research-handoff`).** The runner derives an
+obligation inventory from the reports (accepted `[DECISION]` questions, class
+disagreements, judge disagreements, neighbour items). The check
+`scripts/check_research_handoff.py` re-derives it independently and holds the
+maintainer's answers to it: every item closed by a maintainer-answered record
+that links it (`research_items`), `neighbours:` of the spec equal to the given
+or confirmed paths, and every criterion's `*Basis:*` naming supported claims or
+answered records. It reads no tracker, history or network and runs at both
+placements.
 
 ### The runner is the only way
 
 A foreign model is started only through `python3 scripts/stage2.py <verb>
 <change>`, never by typing `codex`, `pi`, or `claude` against another endpoint,
-into a shell. Eleven verbs exist:
+into a shell. Twelve verbs exist:
 
 - `explore` — GLM 5.3 Flash for a `bounded` change or a `spike`, the research
   swarm for a `feature` or `architectural` change (ADR 0020), phase 1; the
   class is read wherever stated in `--class` and the headers of `research.md`
-  and `spec.md`; missing, invalid or disagreeing declarations refuse before any model call;
-  `--stage2-off [REASON]` uses Haiku 5.5 and skips the class.
+  and `spec.md`; missing, invalid or disagreeing declarations refuse before any
+  model call; a swarm run needs `--availability-reported <id>` from
+  `prepare-explore`; `--stage2-off [REASON]` uses Haiku 5.5 and skips the class.
+- `prepare-explore` — the swarm's preparation (Q-12): fresh Go catalog, tool-free
+  reachability probes, the six seats and their substitutes, a printed report
+  and a single-use receipt; refuses for `bounded`, `spike` and `--stage2-off`.
 - `draft` — Codex, phases 2, 2b and 3 in one call; GLM 5.3 (`glm-5.3`) after
   two failed Codex attempts ("The draft" below).
 - `spec-review` — Opus 5.5, phase 2a, a headless call with read-only tools and

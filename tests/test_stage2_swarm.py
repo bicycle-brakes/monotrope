@@ -1830,8 +1830,9 @@ def test_no_call_starts_once_the_run_deadline_is_spent(sworld: SwarmWorld, monke
 # ---------------------------------------------------------------------------
 
 
-def test_phase_one_doctrine_and_declarations_agree() -> None:
-    # Criterion 22. Planted fault: the Zen roster or fixed pair returns, the seats do not resolve or the ladder changes.
+def test_amended_doctrine_and_research_roles_agree() -> None:
+    # Criterion 22. Planted fault: the Zen roster, the six-topic pairs or a fixed trio return, the preparation or resume
+    # step is missing from phase-1 doctrine, the seats do not resolve or the ladder changes.
     data = yaml.safe_load((REPO_ROOT / "model-endpoints.yaml").read_text(encoding="utf-8"))
     assert stage2_swarm.seat_problems(data) == [], "the declared seats and rule must resolve"
     go = next(entry for entry in data["endpunkte"] if entry["name"] == "opencode-go")
@@ -1856,6 +1857,49 @@ def test_phase_one_doctrine_and_declarations_agree() -> None:
     assert "Routing by class (ADR 0020)." in explore_prompt
     for free_id in ("longcat-2.5-preview-free", "space-bunny-free", "big-pickle"):
         assert free_id not in workflow and free_id not in agents, "a free id stays out of the review-ladder doctrine"
+    docs = {
+        "AGENTS.md": agents,
+        "docs/WORKFLOW.md": workflow,
+        "prompts/01-explore.md": explore_prompt,
+    }
+    for name, text in docs.items():
+        flat_text = " ".join(text.split()).lower()
+        for stale in ("six topics", "six pairs", "six reconciled topics", "flash pair", "free roster", "sixteen"):
+            assert stale not in flat_text, f"{name} still carries the replaced design: {stale}"
+    explore_flat = " ".join(explore_prompt.split())
+    for needle in (
+        "prepare-explore",
+        "--availability-reported",
+        "finder",
+        "eleven topics",
+        "neighbours:",
+        "[]",
+        "resume",
+        "research-handoff",
+    ):
+        assert needle in explore_flat, f"prompts/01-explore.md lacks '{needle}'"
+    workflow_flat = " ".join(workflow.split())
+    for needle in (
+        "`prepare-explore`",
+        "--availability-reported",
+        "research-handoff",
+        "33 + 3N",
+        "resumes",
+        "F-1",
+        "Twelve verbs exist",
+    ):
+        assert needle in workflow_flat, f"docs/WORKFLOW.md lacks '{needle}'"
+    agents_flat = " ".join(agents.split())
+    for needle in ("prepare-explore", "research-handoff", "finder"):
+        assert needle in agents_flat, f"AGENTS.md lacks '{needle}'"
+    for name, needles in {
+        "prompts/01a-interview.md": ("research_items", "research_neighbours", "keep", "no ceiling"),
+        "prompts/02-spec.md": ("neighbours:", "Basis", "research_neighbours", "research-handoff"),
+        "templates/spec.md": ("neighbours:", "decisions.md#Q-", "Basis"),
+    }.items():
+        text = " ".join((REPO_ROOT / name).read_text(encoding="utf-8").split())
+        for needle in needles:
+            assert needle in text, f"{name} lacks '{needle}'"
 
 
 # ---------------------------------------------------------------------------
