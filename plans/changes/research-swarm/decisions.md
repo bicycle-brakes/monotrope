@@ -650,3 +650,22 @@ context: |
   Architecture change: no new component beyond the extension; public seats, probes and the merge, author and judge calls are unchanged. The lock works on every platform Pi runs on.
 
 In the context of repository seats whose file tools accept paths anywhere on the machine, facing the choice between an operating-system sandbox (macOS only) and a lock inside Pi, we decided to confine the four file tools to the worktree with a Pi extension, to achieve that the state store, the home directory and the git directory outside the worktree never reach a model on any platform, accepting that the lock judges the path a tool is called with and not what a directory walk then visits. — 2026-10-19
+
+## Q-17 · Whether review preparation shares the research swarm's rule validation and probe now
+
+asked: 2026-10-19
+answer: "lege zusdammen" (verbatim; "merge them") — option 1: unify now; review preparation uses the shared rule validation and the shared Go probe within this change.
+answered_by: maintainer
+status: answered
+context: |
+  Topic: one implementation of rule validation and model probing for both swarms' preparation.
+  Intention: the phase-6 review, round 3 (finding F-27), found that review preparation kept its own rule validation and probed through `runner.run_reviewer()` instead of the shared `probe_go()` the research preparation uses, although spec criterion 50 requires one implementation.
+  Today: the research preparation validates with `rule_problem` and probes with `probe_go`; the review preparation has a private validator and probe.
+  Repository change: review preparation calls `rule_problem(flash_size=True)` and `probe_go` (which gains `admission` and `verb` keywords); the private validation leaves that path; the review rule now refuses an unknown key, as the research rule does; tests show both calls and a refusal.
+  Architecture change: no — the review loop's behaviour, records and rounds stay as they are; only its preparation shares the research swarm's helpers.
+
+In the context of two swarm preparations with separate rule validation and
+probing, facing the choice between unifying now and a follow-up change, we
+decided to unify them within this change, to achieve the single implementation
+criterion 50 requires, accepting that the review rule now refuses unknown keys.
+— 2026-10-19
