@@ -19,7 +19,6 @@ own packet. The run never probes, refreshes the catalog, retries or swaps a seat
 
 from __future__ import annotations
 
-import contextlib
 import dataclasses
 import hashlib
 import json
