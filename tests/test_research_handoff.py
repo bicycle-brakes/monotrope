@@ -590,6 +590,32 @@ def test_every_direct_basis_claim_must_be_supported(world: World, capsys: pytest
     assert world.check(capsys)[0] == 0
 
 
+def test_a_supported_list_contradicting_the_claim_evidence_status_is_not_measured(
+    world: World, capsys: pytest.CaptureFixture[str]
+) -> None:
+    # Criteria 33, 34 (phase-6 F-23). Planted fault: the stored supported list is trusted without the claim's
+    # own evidence status, so a claim its report marks unsupported passes as a criterion basis.
+    claim = gid(RUN1, 1, SEATS[0], "C1")
+    run = run_text(RUN1)
+    contradicted = run.replace(
+        f'"evidence_status": "valid",\n      "id": "{claim}"',
+        f'"evidence_status": "unsupported",\n      "id": "{claim}"',
+        1,
+    )
+    assert contradicted != run, "the planted contradiction must change the record"
+    world.write(
+        [contradicted],
+        records=[q_record(1, items=(item_of(RUN1, 1),))],
+        spec=spec_text(neighbours=[], basis=(f"`{claim}`",)),
+    )
+    code, out = world.check(capsys)
+    assert code == 3 and claim in out, out
+    world.write(
+        [run], records=[q_record(1, items=(item_of(RUN1, 1),))], spec=spec_text(neighbours=[], basis=(f"`{claim}`",))
+    )
+    assert world.check(capsys)[0] == 0, "the untouched record stays green"
+
+
 def test_duplicate_keys_in_records_are_not_measured(world: World, capsys: pytest.CaptureFixture[str]) -> None:
     # Criterion 33 (phase-6 F-16). Planted fault: the last of two equal JSON or YAML keys wins silently.
     good = run_text(RUN1)

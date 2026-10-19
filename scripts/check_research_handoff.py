@@ -307,6 +307,15 @@ def _complete_shape(parsed: ParsedRun, where: str) -> None:
         )
     ):
         raise CannotMeasure(f"{where}: a complete run lacks a well-formed reconciliation")
+    # The judge's supported list must agree with each claim's own evidence status (F-23): a claim its report
+    # marks unsupported, or one no report holds, cannot be supported - the records contradict each other.
+    valid = {c["id"] for report in parsed.reports for c in report["claims"] if c["evidence_status"] == "valid"}
+    contradicted = sorted(parsed.supported() - valid)
+    if contradicted:
+        raise CannotMeasure(
+            f"{where}: the reconciliation lists {contradicted[0]} as supported, "
+            "which its report does not hold with valid evidence"
+        )
     parsed.derived = research_handoff.derive_inventory(
         run_id=parsed.run_id,
         declared_class=parsed.manifest["class"],
