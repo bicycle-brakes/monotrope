@@ -217,6 +217,7 @@ class Run:
         self.entries: dict[str, dict] = {}
         self.stage_order: list[str] = []
         self.scratch: dict[str, tempfile.TemporaryDirectory] = {}
+        self.started_at: dict[str, str] = {}
         self.key: str | None = None
         self.state = None
         self.store: Store | None = None
@@ -424,7 +425,9 @@ class Run:
             f"{record['files']} files, {record['commits']} commits, {record['rules']} rules."
         )
         assert self.store is not None and self.run_id is not None
-        self.store.write_launch(self.run_id, slot.slot_id, {**self.key_fields(entry), "launched_at": utc()})
+        started = utc()
+        self.started_at[slot.slot_id] = started
+        self.store.write_launch(self.run_id, slot.slot_id, {**self.key_fields(entry), "launched_at": started})
 
     def key_fields(self, entry: dict) -> dict:
         return {
@@ -438,7 +441,7 @@ class Run:
             "required": entry["required"],
         }
 
-    def on_terminal(self, slot: Slot, result) -> None:
+    def on_terminal(self, slot: Slot, result, *, persist: bool = True) -> None:
         entry = self.entries[slot.slot_id]
         receipts = ""
         tmp = self.scratch.pop(slot.slot_id, None)
@@ -453,6 +456,7 @@ class Run:
             "outcome": result.outcome,
             "started": result.started,
             "returncode": result.returncode,
+            "started_at": self.started_at.get(slot.slot_id),
             "ended_at": utc(),
             "stdout": self.scrub(result.stdout or ""),
             "stderr": self.scrub("\n".join((result.stderr or "").splitlines()[-40:])),
@@ -471,6 +475,8 @@ class Run:
                 f"model {entry['model']} · {result.outcome}."
             )
         self.records[slot.slot_id] = record
+        if not persist:
+            return
         assert self.store is not None and self.run_id is not None
         self.store.write_result(self.run_id, slot.slot_id, record)
 
@@ -538,6 +544,9 @@ class Run:
         agent = scratch / "agent"
         agent.mkdir()
         (agent / "settings.json").write_text(json.dumps({"retry": {"enabled": False}}), encoding="utf-8")
+        stage2_availability.install_measured_models(
+            self.runner, agent, (self.selection.get("catalog") or {}).get("models_store")
+        )
         home = scratch / "home"
         home.mkdir()
         common = [
@@ -672,6 +681,10 @@ class Run:
                 reserve=reserve,
                 clock=lambda: CLOCK(),
             )
+            by_id = {slot.slot_id: slot for slot in slots}
+            for item in result.results:
+                if item.slot_id not in self.records:  # the failed store stopped the callbacks: keep the outcome
+                    self.on_terminal(by_id[item.slot_id], item, persist=False)
             for item in result.results:
                 if item.outcome == "refused":
                     self.security = self.security or f"{item.slot_id}: {self.records[item.slot_id].get('refused')}"
@@ -922,6 +935,35 @@ class Run:
 
     # -- publication -----------------------------------------------------------------------------
 
+    def expected_slots(self) -> list[dict]:
+        """Every slot identity the run plans (39 + 3N), fixed by the consumed selection before any call."""
+
+        def plain(stage, seat, spec, topic=None, required=True):
+            slot_id = stage if topic is None and seat is None else f"{stage}-{topic if topic else 0}-{seat}"
+            return {
+                "slot_id": slot_id,
+                "stage": stage,
+                "topic": topic,
+                "seat": seat,
+                "endpoint": spec["endpoint"],
+                "model": spec["model"],
+                "required": required,
+            }
+
+        plan = [plain("finders", n, seat) for n, seat in enumerate(self.roles["finder_agents"], 1)]
+        plan.append(plain("merge", None, self.roles["finder_merge"]))
+        plan.append(plain("sentence", None, self.roles["topic_author"]))
+        for topic in range(1, 12):
+            seats = self.roles["repository_agents"] if topic <= 8 else self.roles["online_agents"]
+            plan += [plain("topics", n, seat, topic) for n, seat in enumerate(seats, 1)]
+        for topic in range(9, 12):
+            for ident in sorted(self.free):
+                spec = {"endpoint": GO, "model": ident}
+                free_id = f"topics-{topic}-free-{ident}"
+                plan.append({**plain("topics", "free", spec, topic, False), "slot_id": free_id})
+        plan.append(plain("judge", None, self.roles["judge"]))
+        return plan
+
     def manifest_record(self, status: str) -> dict:
         slots = []
         for _slot_id, record in sorted(self.records.items()):
@@ -934,10 +976,28 @@ class Run:
                     "outcome": record["outcome"],
                     "launched": bool(record.get("started")) and "reused_from" not in record,
                     "reused_from": record.get("reused_from"),
+                    "started_at": record.get("started_at"),
                     "ended_at": record.get("ended_at"),
+                    "leak_check": record.get("leak_check"),
                     "error": record.get("error"),
                 }
             )
+        for planned in self.expected_slots():  # an aborted run still names every slot it never started
+            if planned["slot_id"] not in self.records:
+                slots.append(
+                    {
+                        **planned,
+                        "prompt_sha256": None,
+                        "outcome": "not-started",
+                        "launched": False,
+                        "reused_from": None,
+                        "started_at": None,
+                        "ended_at": None,
+                        "leak_check": None,
+                        "error": f"never started: {status}",
+                    }
+                )
+        slots.sort(key=lambda slot: slot["slot_id"])
         return {
             "schema": "research-swarm/v2",
             "run_id": self.run_id,
@@ -952,7 +1012,10 @@ class Run:
             "free_count": len(self.free),
             "budget": 39 + 3 * len(self.free),
             "selection": self.selection.get("seats"),
-            "catalog": self.selection.get("catalog"),
+            "catalog": {k: v for k, v in (self.selection.get("catalog") or {}).items() if k != "models_store"},
+            "preparation": {
+                key: self.selection.get(key) for key in ("checked_at", "pool", "models", "unread", "audit", "unfilled")
+            },
             "resume": {
                 "source_run": self.source.run_id if self.source else None,
                 "usable": bool(self.source and self.source.usable),
@@ -1038,7 +1101,7 @@ class Run:
         text = "\n\n".join(parts)
         existing = self.ctx.research.read_bytes()
         tail = (b"\n" if existing and not existing.endswith(b"\n") else b"") + b"\n" + text.rstrip().encode() + b"\n"
-        with contextlib.suppress(ResearchSnapshotError):
+        with contextlib.suppress(ResearchSnapshotError, StoreWriteError):  # the record still lands
             self.store.set_append(
                 self.run_id, stored_binding(self.manifest, self.research_rel, self.research_bytes, append=tail)
             )
@@ -1072,7 +1135,7 @@ def run(root: Path, change: str, runner, klass: str, selection: dict) -> None:
             status = f"incomplete - {stop}"
         else:
             try:
-                drift = current.state.changed_paths()
+                drift = current.state.changed_paths(deadline=time.monotonic() + PREPARATION_SECONDS)
             except ResearchSnapshotError as error:
                 drift = [f"(drift check failed: {error})"]
             if drift:

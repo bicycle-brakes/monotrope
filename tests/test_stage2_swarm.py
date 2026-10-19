@@ -2390,3 +2390,156 @@ def test_capability_unavailable_keeps_required_slots_unless_include_is_required(
     assert fx.prepare() == 1
     assert len(fx.w.calls()) == before, "a model started on an ineligible explicit include"
     assert not stage2_availability.research_receipt_path("demo", stage2).exists()
+
+
+def test_a_run_longer_than_the_preparation_deadline_still_publishes_complete(
+    sworld: SwarmWorld, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    # Criteria 16, 18 (phase-6 F-11). Planted fault: the publication drift check reuses the expired freezing
+    # deadline, so an unchanged tree of a run lasting over 60 seconds ends incomplete.
+    import time as real_time
+
+    import stage2_research_snapshot
+
+    offset = [0.0]
+
+    class SkewedTime:
+        def __getattr__(self, name: str) -> object:
+            return getattr(real_time, name)
+
+        @staticmethod
+        def monotonic() -> float:
+            return real_time.monotonic() + offset[0]
+
+    real_history = stage2_research_run.build_research_history
+
+    def late(*args, **kwargs):
+        offset[0] += 90.0  # past the 60-second preparation deadline, well inside the run budget
+        return real_history(*args, **kwargs)
+
+    monkeypatch.setattr(stage2_research_snapshot, "time", SkewedTime())
+    monkeypatch.setattr(stage2_research_run, "time", SkewedTime())
+    monkeypatch.setattr(stage2_research_run, "build_research_history", late)
+    sworld.complete()
+    assert sworld.run() == 0
+    text = sworld.research.read_text(encoding="utf-8")
+    assert "drift check failed" not in text and manifest_of(sworld)["status"] == "complete"
+
+
+def test_a_failed_store_write_keeps_every_outcome_and_still_publishes_incomplete(
+    sworld: SwarmWorld, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    # Criteria 18, 57 (phase-6 F-15). Planted fault: after the first failed terminal write the siblings'
+    # outcomes are dropped from the record, or a failed binding write loses the incomplete publication.
+    def broken(*_args, **_kwargs):
+        raise stage2_research_store.StoreWriteError("disk full")
+
+    monkeypatch.setattr(stage2_research_store.Store, "write_result", broken)
+    monkeypatch.setattr(stage2_research_store.Store, "set_append", broken)
+    sworld.complete()
+    assert sworld.run() == 1
+    text = sworld.research.read_text(encoding="utf-8")
+    slots = {s["slot_id"]: s for s in manifest_of(sworld)["slots"]}
+    assert manifest_of(sworld)["status"].startswith("incomplete") and "state-store-unwritable" in text
+    finders = [s for sid, s in slots.items() if sid.startswith("finders-")]
+    assert len(finders) == 3 and all(s["outcome"] for s in finders), "every finder keeps its terminal outcome"
+
+
+def test_an_aborted_run_names_every_expected_slot_with_its_outcome(sworld: SwarmWorld) -> None:
+    # Criterion 18 (phase-6 F-17). Planted fault: after a finder fails the manifest lists only the three finder
+    # slots; merge, topic author, topic slots and judge carry neither identity nor outcome.
+    sworld.selection = selection_for(free=FREE)
+    sworld.complete(**{"finder:None:deepseek-v4.1-flash": [{"stdout": "not a locator list"}]})
+    assert sworld.run() == 1
+    manifest = manifest_of(sworld)
+    slots = manifest["slots"]
+    ids = [slot["slot_id"] for slot in slots]
+    assert len(ids) == len(set(ids)) == manifest["budget"], "39 + 3N identities, each once"
+    unstarted = [slot for slot in slots if slot["outcome"] == "not-started"]
+    assert {"merge", "sentence", "judge"} <= {slot["slot_id"] for slot in unstarted}
+    assert sum(slot["stage"] == "topics" for slot in unstarted) == 33 + 3 * len(FREE)
+    assert all(slot["endpoint"] and slot["model"] and slot["launched"] is False for slot in unstarted)
+
+
+def test_a_reused_result_keeps_its_original_start_and_leak_check_in_the_published_manifest(
+    sworld: SwarmWorld,
+) -> None:
+    # Criterion 55 (phase-6 F-18). Planted fault: a completed resumed run loses the original start time or the
+    # original leak-check record of a reused slot (the store holding them is cleared on completion).
+    sworld.complete(judge=[{"exit": 1}])
+    assert sworld.run() == 1
+    first = {s["slot_id"]: s for s in manifest_of(sworld)["slots"]}
+    assert first["finders-0-1"]["started_at"] and first["finders-0-1"]["leak_check"]["clean"] is True
+    sworld.complete()
+    (sworld.bin / "calls.jsonl").unlink()
+    assert sworld.run() == 0
+    assert not [p for p in store_dir(sworld).iterdir() if p.name != ".lock"], "the store is cleared"
+    second = {s["slot_id"]: s for s in manifest_of(sworld)["slots"]}
+    reused = second["finders-0-1"]
+    assert reused["reused_from"] and reused["started_at"] == first["finders-0-1"]["started_at"]
+    assert reused["ended_at"] == first["finders-0-1"]["ended_at"]
+    assert reused["leak_check"] == first["finders-0-1"]["leak_check"]
+
+
+def test_the_receipt_keeps_each_candidates_evidence_and_exclusion(fx: PrepFixture) -> None:
+    # Criteria 38, 44 (phase-6 F-14). Planted fault: the receipt drops a free candidate's id, source value and
+    # exclusion reason.
+    fx.catalog.pi += [pi_model("delta-free")]
+    fx.catalog.tools["delta-free"] = {"id": "delta-free", "tool_call": False}
+    assert fx.prepare() == 0
+    state = fx.receipt()["state"]
+    candidates = {c["id"]: c for c in state["catalog"]["candidates"]}
+    assert candidates["delta-free"]["reason"] == "no-tool-support"
+    assert candidates["delta-free"]["evidence"]["tool_call"] == {"present": True, "value": False}
+    assert any(model["id"] == "qwen3.8-flash" for model in state["catalog"]["models"])
+
+
+def test_the_manifest_publishes_preparation_time_pool_candidates_and_probe_audit(sworld: SwarmWorld) -> None:
+    # Criteria 38, 46 (phase-6 F-14). Planted fault: the manifest omits preparation time, pool, candidate outcomes
+    # or the probe audit lines of the consumed selection.
+    sworld.selection = {
+        **selection_for(free=[]),
+        "checked_at": "2026-10-19T08:00:00+00:00",
+        "pool": [{"model": "pool-a"}],
+        "models": {"m": {"state": "ok", "reason": None}},
+        "audit": ["probe line"],
+    }
+    sworld.selection["catalog"] = {
+        "pi_version": "test",
+        "candidates": [{"id": "delta-free", "reason": "no-tool-support", "evidence": {}}],
+    }
+    sworld.complete()
+    assert sworld.run() == 0
+    manifest = manifest_of(sworld)
+    assert manifest["preparation"]["checked_at"] == "2026-10-19T08:00:00+00:00"
+    assert manifest["preparation"]["pool"] == [{"model": "pool-a"}]
+    assert manifest["preparation"]["audit"] == ["probe line"]
+    assert {c["id"]: c["reason"] for c in manifest["catalog"]["candidates"]}["delta-free"] == "no-tool-support"
+
+
+def test_the_measured_catalog_reaches_pis_agent_directory_for_probes_and_launches(
+    fx: PrepFixture,
+) -> None:
+    # Criteria 38, 43, 61 (phase-6 F-13). Planted fault: probes and research launches start Pi with an agent
+    # directory that holds no measured model definitions, so Pi resolves shipped metadata instead.
+    assert fx.prepare() == 0
+    probes = [call for call in fx.w.calls("pi") if "--no-tools" in call.get("argv", [])]
+    assert probes, "a Go probe ran"
+    for call in probes:
+        assert {"models.json", "models-store.json"} <= set(call["agent_listing"]), call["agent_listing"]
+    store = fx.receipt()["state"]["catalog"]["models_store"]
+    assert store, "the receipt carries the measured model store for the launches"
+
+
+def test_research_launches_install_the_consumed_catalog_store(sworld: SwarmWorld) -> None:
+    # Criteria 43, 61 (phase-6 F-13). Planted fault: a research launch gets an agent directory without the
+    # measured definitions.
+    sworld.selection["catalog"] = {
+        "pi_version": "test",
+        "models_store": {"opencode-go": {"models": [{"id": "qwen3.8-flash", "api": "openai-completions"}]}},
+    }
+    sworld.complete()
+    assert sworld.run() == 0
+    go = [call for call in sworld.calls() if call["name"] == "pi"]
+    assert go and all({"models.json", "models-store.json"} <= set(call["agent_listing"]) for call in go)
+    assert "models_store" not in manifest_of(sworld)["catalog"], "raw definitions stay out of research.md"

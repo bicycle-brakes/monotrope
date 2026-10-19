@@ -112,12 +112,16 @@ class FrozenResearchState:
     def manifest(self):
         return json.loads(json.dumps(self._manifest))
 
-    def changed_paths(self, *, owned_research_bytes=None):
-        """Only the exact caller-owned research append/restamp may be exempt."""
+    def changed_paths(self, *, owned_research_bytes=None, deadline=None):
+        """Only the exact caller-owned research append/restamp may be exempt.
+
+        A check made long after the freeze passes its own `deadline`: the freezing deadline has expired by then.
+        """
+        deadline = self.deadline if deadline is None else deadline
         try:
-            tracked, untracked = _inventory(self.root, self.change, self.deadline)
+            tracked, untracked = _inventory(self.root, self.change, deadline)
             changed = self._tracked ^ tracked | self._untracked ^ untracked
-            if _git(self.root, self.deadline, "rev-parse", "--verify", "HEAD").strip() != self._manifest["head"]:
+            if _git(self.root, deadline, "rev-parse", "--verify", "HEAD").strip() != self._manifest["head"]:
                 changed.add("HEAD")
             research = self.change + "/research.md"
             if owned_research_bytes is not None:
@@ -129,7 +133,7 @@ class FrozenResearchState:
                     raise ResearchSnapshotError("runner-owned research must preserve its frozen prefix")
             for path, copy in self._files.items():
                 try:
-                    now = _read(self.root, path, self.deadline)
+                    now = _read(self.root, path, deadline)
                 except ResearchSnapshotError:
                     changed.add(path)
                     continue

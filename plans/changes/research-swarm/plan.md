@@ -905,14 +905,21 @@ the existing gates and let the runner own registry regeneration/full verify.
 - 42: tests/test_stage2_research_catalog.py::test_missing_metadata_id_excludes_only_that_candidate — A missing id admits a seat, loses its absent marker, or excludes a valid peer.
 - 7: tests/test_stage2_swarm.py::test_empty_neighbour_topic_runs_three_seats_without_invented_evidence — An empty packet lacks the named no-neighbour comparison gap.
 - 18: tests/test_stage2_swarm.py::test_empty_neighbour_topic_runs_three_seats_without_invented_evidence — Empty-neighbour topic 5 prevents completion or changes the 39 fixed slots.
+- 18: tests/test_stage2_swarm.py::test_a_run_longer_than_the_preparation_deadline_still_publishes_complete — A successful run over 60 seconds is reported incomplete although no input changed.
+- 18: tests/test_stage2_swarm.py::test_a_failed_store_write_keeps_every_outcome_and_still_publishes_incomplete — After a failed terminal store write the cancelled siblings' outcomes are dropped and a failed binding write loses the incomplete publication.
+- 18: tests/test_stage2_swarm.py::test_an_aborted_run_names_every_expected_slot_with_its_outcome — An aborted run's manifest lacks the identities and not-started outcomes of the slots of later stages.
 - 27: tests/test_stage2_swarm.py::test_empty_neighbour_topic_runs_three_seats_without_invented_evidence — Empty-packet relations or missing not-read pass, or a nonempty packet waives the evidence floor.
 
 - 16: tests/test_stage2_research_refs.py::test_reference_markdown_extent_ignores_frontmatter_fences_and_lower_headings — A quoted heading becomes structure, changes uniqueness/extent or supplies a criterion; the five S-47 cases resolve wrongly.
 - 16: tests/test_stage2_research_refs.py::test_reference_mapping_has_exact_canonical_json — Dotted keys/list indices or duplicate/non-JSON values resolve, dates lose ISO text, or canonical bytes differ.
 - 10: tests/test_stage2_swarm.py::test_claim_requires_every_citation_before_excerpts_or_scoring — One successful page receipt hides another unreceipted URL in the same claim.
 - 16: tests/test_stage2_swarm.py::test_claim_requires_every_citation_before_excerpts_or_scoring — One resolving citation hides an unresolved citation, grants an excerpt or satisfies the report floor.
+- 16: tests/test_stage2_swarm.py::test_a_run_longer_than_the_preparation_deadline_still_publishes_complete — A successful run over 60 seconds ends incomplete because the publication drift check reuses the expired freezing deadline.
 - 28: tests/test_stage2_swarm.py::test_claim_requires_every_citation_before_excerpts_or_scoring — An unsupported mixed-citation claim gets an excerpt or disposition.
 - 38: tests/test_stage2_research_catalog.py::test_pi_overlay_duplicates_block_but_malformed_candidates_are_local — A malformed preferred or pool Go model entry is probed or selected instead of skipped as pi-malformed with its raw value.
+- 38: tests/test_stage2_swarm.py::test_the_receipt_keeps_each_candidates_evidence_and_exclusion — The receipt drops a free candidate's id, source field value and exclusion reason.
+- 38: tests/test_stage2_swarm.py::test_the_manifest_publishes_preparation_time_pool_candidates_and_probe_audit — The published manifest omits preparation time, pool, candidate outcomes or probe audit lines.
+- 38: tests/test_stage2_swarm.py::test_the_measured_catalog_reaches_pis_agent_directory_for_probes_and_launches — Probes start Pi with an agent directory holding no measured model definitions.
 - 41: tests/test_stage2_research_catalog.py::test_pi_overlay_duplicates_block_but_malformed_candidates_are_local — A repeated overlay id starts any model or is silently merged.
 - 42: tests/test_stage2_research_catalog.py::test_pi_overlay_duplicates_block_but_malformed_candidates_are_local — One bad Pi candidate blocks 39 required slots, excludes valid peers or loses pi-malformed/raw value.
 - 29: tests/test_stage2_swarm.py::test_neighbour_status_ignores_relations_without_valid_claims — Unsupported-only evidence confirms/rejects a path instead of split, or judge disposition changes runner validity.
@@ -925,12 +932,14 @@ the existing gates and let the runner own registry regeneration/full verify.
 - 43: tests/test_stage2_research_availability.py::test_preferred_models_come_first_and_substitutes_never_take_them — A substitute replaces an admitted, unexcluded, reachable preferred model or takes another seat's reachable preferred model, or one model fills two seats of a trio.
 - 43: tests/test_stage2_research_availability.py::test_unadmitted_or_excluded_models_are_never_probed_or_selected — A model with a skip mark, undeclared, absent from the fresh overlay, on an unmeasured wire API or under a timed exclusion is probed or selected.
 - 43: tests/test_stage2_swarm.py::test_finders_use_the_repository_seat_selection — A finder runs a model other than its repository seat's selection.
+- 43: tests/test_stage2_swarm.py::test_the_measured_catalog_reaches_pis_agent_directory_for_probes_and_launches — A seat is probed or selected under an unmeasured transport because Pi resolves shipped metadata.
 - 44: tests/test_stage2_research_availability.py::test_report_names_every_seat_candidate_and_check_time — The printed report omits a seat, a substitute's "substitute for <seat>" mark, a model's reason, the pool in cost order, the free selection or the UTC check time.
 - 44: tests/test_stage2_research_availability.py::test_receipt_is_bound_single_use_and_fresh — A research call starts without the id, after the maximum age, after a bound input changed, from another worktree or from a consumed or corrupt receipt, or the refusal exits other than 2.
 - 44: tests/test_stage2.py::test_receipt_id_is_refused_where_no_swarm_runs — Bounded, spike or --stage2-off exploration requires or accepts --availability-reported, or prepare-explore runs there.
 - 20: tests/test_stage2.py::test_receipt_id_is_refused_where_no_swarm_runs — An --availability-reported id beside --stage2-off is accepted.
 - 45: tests/test_stage2_research_availability.py::test_a_seat_without_candidate_stops_before_research_with_exit_one — A receipt stays usable, a research call starts, the empty seat is unnamed, the exit is not 1, or the seat is filled from outside its preferred model and the pool.
 - 46: tests/test_stage2_swarm.py::test_selection_is_frozen_for_the_run_and_recorded — A failing selected model is replaced, retried or probed again, a later preparation changes a running run, or the manifest lacks the receipt id, a selection with its preferred or substitute mark, or a model's reason.
+- 46: tests/test_stage2_swarm.py::test_the_manifest_publishes_preparation_time_pool_candidates_and_probe_audit — The manifest lacks the check time, pool or any candidate's outcome of the consumed receipt.
 - 47: tests/test_stage2_research_availability.py::test_probes_send_only_the_fixed_text_without_tools — A private canary reaches a probe's payload, argv or environment, a tool is available, a bare pi or unofficial Claude client runs, or a probe lacks its leak check, audit record or 60-second limit.
 - 47: tests/test_stage2_research_availability.py::test_claude_code_candidate_is_probed_through_official_claude — A Claude Code preferred model counts as reachable without a probe or is probed with a tool.
 - 47: not a test — step 6's real-Pi offline capture also records one probe's outbound payload; a private canary in it refutes the criterion.
@@ -946,6 +955,7 @@ the existing gates and let the runner own registry regeneration/full verify.
 - 59: tests/test_stage2_research_availability.py::test_pool_requires_tool_support_and_a_measured_wire_api — A pool model without models.dev tool_call true, deprecated, on an unmeasured wire API, or offered while models.dev is unavailable becomes a substitute.
 - 60: tests/test_stage2_research_availability.py::test_a_model_without_admitted_terms_or_cost_is_never_used — A Go model without a passing terms record or a positive anfragen_5h is probed, selected or substituted, or an unread overlay model is missing from the report.
 - 61: tests/test_stage2_research_availability.py::test_one_terms_record_admits_a_new_substitute_without_other_edits — A fixture that adds only a modelle_terms record does not see the model in the pool at its cost position, or the review ladder changes.
+- 61: tests/test_stage2_swarm.py::test_research_launches_install_the_consumed_catalog_store — A research launch resolves its model from shipped metadata instead of the measured catalog.
 - 51: tests/test_stage2_research_store.py::test_terminal_record_survives_sigkill_after_the_outcome — A runner killed with SIGKILL after a slot's terminal outcome loses or tears that slot's record.
 - 51: tests/test_stage2_research_store.py::test_temporary_or_torn_files_never_read_as_results — A temporary or truncated record is read as a finished result.
 - 51: tests/test_stage2_research_dispatch.py::test_terminal_callback_precedes_the_workers_next_launch — The same worker launches its next slot before the terminal callback returns, or a launch lacks a prior launch record.
@@ -969,8 +979,11 @@ the existing gates and let the runner own registry regeneration/full verify.
 - 53: tests/test_stage2_research_store.py::test_a_complete_run_clears_the_store_and_a_cleared_store_has_no_source — The results of a run published complete are reused.
 - 54: tests/test_stage2_research_store.py::test_a_matching_valid_result_is_never_also_a_launch — A reused slot also launches.
 - 55: tests/test_stage2_research_store.py::test_adopted_results_carry_their_source_run_and_original_times — A copied-forward result loses its source run, original times or leak-check record.
+- 55: tests/test_stage2_swarm.py::test_a_reused_result_keeps_its_original_start_and_leak_check_in_the_published_manifest — A completed resumed run loses the original start time or the original leak-check record of a reused slot.
 - 57: tests/test_stage2_research_dispatch.py::test_a_failed_launch_record_write_stops_without_launching_that_slot — A slot launches after its launch record failed to write.
+- 57: tests/test_stage2_swarm.py::test_a_failed_store_write_keeps_every_outcome_and_still_publishes_incomplete — A persistent store-write failure loses the incomplete record or the partial evidence of siblings.
 - 44: tests/test_stage2_research_availability.py::test_fresh_receipt_is_consumed_once_and_returns_the_frozen_selection — A receipt at the maximum age is refused, survives its first use, or consumption returns something other than the prepared selection.
+- 44: tests/test_stage2_swarm.py::test_the_receipt_keeps_each_candidates_evidence_and_exclusion — The sealed receipt omits the candidate evidence behind the selection report.
 - 48: tests/test_stage2_research_availability.py::test_slot_plan_is_built_from_the_consumed_selection_and_probes_add_no_slots — The slot plan ignores a substitute or probes change the `39 + 3N` slot count.
 - 47: tests/test_stage2_research_availability.py::test_a_leak_stops_preparation_before_any_probe — A leak-check BLOCK lets a probe start or leaves a receipt.
 - 49: tests/test_model_endpoints.py::test_the_repository_declaration_carries_six_seats_and_the_rule — The shipped declaration drops a preferred model, the rule or the dynamic free permission, or carries a shape or permission fault.

@@ -63,6 +63,9 @@ record = {
     "cwd": os.getcwd(),
     "model": model,
     "prompt_file": Path(prompt_file).read_text() if prompt_file and Path(prompt_file).is_file() else None,
+    "agent_listing": sorted(os.listdir(os.environ["PI_CODING_AGENT_DIR"]))
+    if os.path.isdir(os.environ.get("PI_CODING_AGENT_DIR", ""))
+    else None,
 }
 with (here / "calls.jsonl").open("a") as handle:
     handle.write(json.dumps(record) + "\\n")

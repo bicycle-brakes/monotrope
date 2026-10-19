@@ -593,9 +593,7 @@ def test_every_direct_basis_claim_must_be_supported(world: World, capsys: pytest
 def test_duplicate_keys_in_records_are_not_measured(world: World, capsys: pytest.CaptureFixture[str]) -> None:
     # Criterion 33 (phase-6 F-16). Planted fault: the last of two equal JSON or YAML keys wins silently.
     good = run_text(RUN1)
-    neighbours = (
-        "\nresearch_neighbours:\n  keep: [plans/changes/a/spec.md]\n  keep: [plans/changes/b/spec.md]"
-    )
+    neighbours = "\nresearch_neighbours:\n  keep: [plans/changes/a/spec.md]\n  keep: [plans/changes/b/spec.md]"
     record = q_record(1, items=(f"{RUN1}/H-1",)) + neighbours
     world.write([good], records=[record], spec=spec_text(neighbours=["plans/changes/b/spec.md"]))
     assert world.check(capsys)[0] == 3, "a nested YAML key twice: A would be discarded silently"

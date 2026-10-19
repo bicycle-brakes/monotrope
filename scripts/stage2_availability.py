@@ -194,7 +194,16 @@ def _failed(runner, program: str, done, reason: str, key: str | None) -> object:
     return runner.CallFailed(f"{program} call failed: {reason}{detail}")
 
 
-def probe_go(runner, root: Path, change: str, model: str, key: str, audit: list[str]) -> None:
+def install_measured_models(runner, agent: Path, store: dict | None) -> None:
+    """Give Pi's fresh agent directory the measured catalog: the retrieval evidence and its model definitions."""
+    if store:
+        (agent / "models-store.json").write_text(json.dumps(store), encoding="utf-8")
+        runner.activate_overlay(agent, store)
+
+
+def probe_go(
+    runner, root: Path, change: str, model: str, key: str, audit: list[str], store: dict | None = None
+) -> None:
     """One tool-free Go probe: pinned Pi wrapper, no tools, scratch directories, 60 seconds, fixed text."""
     _checked_probe(runner, root, change, GO, model, audit)
     with tempfile.TemporaryDirectory(prefix="stage2-probe-") as tmp:
@@ -202,6 +211,7 @@ def probe_go(runner, root: Path, change: str, model: str, key: str, audit: list[
         agent = scratch / "agent"
         agent.mkdir()
         (agent / "settings.json").write_text(json.dumps({"retry": {"enabled": False}}), encoding="utf-8")
+        install_measured_models(runner, agent, store)
         home = scratch / "home"
         home.mkdir()
         prompt_file = scratch / "probe-prompt.md"
@@ -373,6 +383,7 @@ class _Selection:
         self.root, self.change, self.runner, self.rule = root, change, runner, rule
         self.go = _endpoint(data, GO) or {}
         self.catalog = {item["id"]: item for item in catalog["models"]}
+        self.models_store = catalog.get("models_store")
         self.audit: list[str] = []
         self.probed: dict[str, str | None] = {}
         self.key: str | None = None
@@ -452,7 +463,7 @@ class _Selection:
                 if endpoint == GO:
                     if self.key is None:
                         self.key = self.runner.reviewer_key()
-                    probe_go(self.runner, self.root, self.change, model, self.key, self.audit)
+                    probe_go(self.runner, self.root, self.change, model, self.key, self.audit, self.models_store)
                 else:
                     probe_claude(self.runner, self.root, self.change, model, self.audit)
             except self.runner.CallFailed as error:
@@ -572,6 +583,9 @@ def prepare_research(root: Path, change: str, runner, klass: str | None = None) 
                 "capability_reason",
                 "measured_wire_apis",
                 "sources",
+                "candidates",
+                "models",
+                "models_store",
             )
         },
         "free": {"selected": list(catalog["selected"]), "policy": catalog["policy"]},
