@@ -91,10 +91,17 @@ def _stop_and_reap(proc, grace):
     """Terminate the child (its whole group when it has one), kill after the grace, reap."""
     group = _own_group(proc)
     _signal_child(proc, signal.SIGTERM, group)
+    leader_exited = True
     try:
         proc.wait(timeout=grace)
     except subprocess.TimeoutExpired:
+        leader_exited = False
+    # After the grace the whole launched group is killed, also when the leader already exited on
+    # SIGTERM: a descendant that ignores SIGTERM must not outlive a cancellation (F-34). A group
+    # with no member left makes the call a no-op.
+    if group or not leader_exited:
         _signal_child(proc, signal.SIGKILL, group)
+    if not leader_exited:
         try:
             proc.wait(timeout=max(grace, 5.0))
         except subprocess.TimeoutExpired:  # pragma: no cover - SIGKILL was sent to a live child

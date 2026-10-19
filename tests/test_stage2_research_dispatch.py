@@ -5,6 +5,8 @@ Real short-lived child processes; no model, network or file writes by the librar
 
 from __future__ import annotations
 
+import os
+import signal
 import subprocess
 import sys
 import threading
@@ -513,6 +515,40 @@ def test_reap_does_not_hang_without_new_session_and_ignored_sigterm():
     assert time.monotonic() - t0 < 10
     assert by_id(result)["a"].outcome == "timed-out"
     assert procs["a"].poll() is not None
+
+
+def test_cancellation_kills_a_descendant_that_ignores_sigterm_after_the_leader_exited(tmp_path):
+    """F-34: the group leader dies on SIGTERM, a grandchild ignores it; the whole group must be gone."""
+    m = module()
+    pid_file = tmp_path / "grandchild.pid"
+    child_code = (
+        "import signal,time\nsignal.signal(signal.SIGTERM, signal.SIG_IGN)\n"
+        f"open({str(pid_file)!r}, 'w').write(str(__import__('os').getpid()))\ntime.sleep(60)\n"
+    )
+    script = (
+        "import subprocess,sys,time\n"
+        f"subprocess.Popen([sys.executable, '-c', {child_code!r}])\n"
+        f"while not __import__('os').path.exists({str(pid_file)!r}) or not open({str(pid_file)!r}).read():\n"
+        "    time.sleep(0.02)\n"
+        "print('ready',flush=True)\ntime.sleep(60)\n"
+    )
+    h = Harness()
+    result = m.dispatch(
+        [make_slot("a", script=script, allowance=3.0)], gate=h.gate, launcher=h.launcher, grace=0.5
+    )
+    assert by_id(result)["a"].outcome == "timed-out"
+    grandchild = int(pid_file.read_text())
+    alive = True
+    for _ in range(100):
+        try:
+            os.kill(grandchild, 0)
+        except ProcessLookupError:
+            alive = False
+            break
+        time.sleep(0.05)
+    if alive:
+        os.kill(grandchild, signal.SIGKILL)
+    assert not alive, "a descendant that ignores SIGTERM survived the cancellation"
 
 
 # --- Q-13: the on_terminal callback and a failed state-store write ---------------------------------
