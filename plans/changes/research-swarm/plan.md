@@ -2016,3 +2016,15 @@ Plan step 8 (obligation inventory and neighbour statuses persisted) and step 9 (
 - [DETAIL] A Q-record closes an item only when it is answered by the maintainer with a nonblank answer and a nonblank context; a criterion Basis naming a Q-record needs the answer and maintainer only. A link to an item or claim that no run holds, a repeated Q id carrying research links, a field twice and conflicting directives are exit 3.
 - [DETAIL] Not done by design: steps 4, 5 and 7 needed no new run behaviour beyond step 3 (their open ledger rows were repointed, see above).
 - Open: step 10, step 6 real-Pi capture, catalog and preparation ledger rows, a hosted-CI run of the new gate.
+
+### Step 10 verified — 2026-10-19
+
+Plan step 10 (doctrine, prompts, spec template; gate and kit text were carried by step 9). No review was requested; step 6 (real-Pi capture, finding F-1) stays open and the doctrine says so.
+
+- Span (measured, `date -u`): 2026-10-18T23:59:07Z to about 2026-10-19T00:25Z including one full `make verify` (started 00:04:16Z, VERIFY GREEN, log in the scratchpad `step10-verify.log`), counted against the 17 h 20 min appetite. Commit `6750869`.
+- Red first: the extended `test_amended_doctrine_and_research_roles_agree` and the verb-count check failed before any doc change.
+- Ledger: row 22 converted; 19 "not yet written" lines remain (catalog and preparation rows, blocked on the catalog/preparation tests, not on step 10).
+- [DETAIL] `prepare-explore` is a twelfth verb; the verb-count test now expects "Twelve verbs exist".
+- [DETAIL] Kit manifest, `gates.yaml` and CI were already done in step 9; no `ci_gates.py` change was needed.
+- [DETAIL] `research.md` needs a `neighbours:` header (`[]` allowed); a missing one refuses with exit 2.
+- Open: step 6 (F-1), catalog/preparation ledger rows, hosted-CI run of the gate.
