@@ -638,3 +638,29 @@ def test_one_run_per_change_and_a_killed_runs_lock_is_released(state_home):
         m.Store(directory).acquire_lock()
     third.release_lock()
     m.Store(directory).acquire_lock()
+
+
+def test_the_home_guard_resolves_dotdot_and_parent_links_before_comparing(tmp_path: Path) -> None:
+    # Criterion 52 (phase-6 F-19, Q-15). Planted fault: a lexical comparison lets a store under HOME pass
+    # when its path spells ``..`` or reaches HOME through a parent symlink.
+    store_module = module()
+    home = tmp_path / "home"
+    (home / ".local" / "state").mkdir(parents=True)
+    link = tmp_path / "link-to-home"
+    link.symlink_to(home)
+    spelled = {
+        "dotdot": tmp_path / "other" / ".." / "home" / ".local" / "state" / "s",
+        "parent link": link / ".local" / "state" / "s",
+    }
+    for label, directory in spelled.items():
+        with pytest.raises(store_module.StoreWriteError, match="XDG_STATE_HOME"):
+            store_module.Store(directory).assert_outside(home=home)
+        assert label
+    # A forbidden directory reached through a link is refused too, and a store truly outside passes.
+    forbidden = tmp_path / "worktree"
+    forbidden.mkdir()
+    alias = tmp_path / "alias"
+    alias.symlink_to(forbidden)
+    with pytest.raises(store_module.StoreWriteError):
+        store_module.Store(alias / "s").assert_outside(forbidden)
+    store_module.Store(tmp_path / "elsewhere" / "s").assert_outside(forbidden, home=home)

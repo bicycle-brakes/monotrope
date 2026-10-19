@@ -147,16 +147,17 @@ class Store:
         ``home`` is the real home directory Claude research processes inherit; a store beneath it is refused
         with the way out (Q-15): ``XDG_STATE_HOME`` must point outside it.
         """
-        mine = self.directory.absolute()
+        # Resolve ``..`` and parent links before comparing (F-19): a lexical spelling must not slip past.
+        mine = Path(os.path.realpath(self.directory))
         if home is not None:
-            base = Path(home).absolute()
+            base = Path(os.path.realpath(home))
             if mine == base or mine.is_relative_to(base) or base.is_relative_to(mine):
                 raise StoreWriteError(
                     f"the state store would lie inside the home directory {base}, which Claude research "
                     "processes inherit; set XDG_STATE_HOME to a directory outside it"
                 )
         for other in forbidden:
-            other = Path(other).absolute()
+            other = Path(os.path.realpath(other))
             if mine == other or mine.is_relative_to(other) or other.is_relative_to(mine):
                 raise StoreWriteError(f"the state store must stay outside {other}")
 

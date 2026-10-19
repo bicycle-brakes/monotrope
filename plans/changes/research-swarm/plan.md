@@ -963,6 +963,7 @@ the existing gates and let the runner own registry regeneration/full verify.
 - 17: tests/test_stage2_research_store.py::test_store_is_owner_only_outside_every_model_directory — The state store writes inside the worktree.
 - 52: tests/test_stage2_swarm.py::test_store_paths_and_peer_results_never_reach_a_model — A store canary or a peer's stored report reaches a model's prompt, argv, environment or working directory before the barrier.
 - 52: tests/test_stage2_swarm.py::test_a_store_inside_the_real_home_is_refused_and_one_outside_it_is_accepted — The default store beneath the home directory Claude research processes inherit passes the placement guard.
+- 52: tests/test_stage2_research_store.py::test_the_home_guard_resolves_dotdot_and_parent_links_before_comparing — A store under the home directory passes the guard when its path spells .. or reaches home through a parent link.
 - 53: tests/test_stage2_research_store.py::test_reuse_requires_the_exact_binding_seat_model_and_prompt — A result with another binding, stage, topic, seat, endpoint, model or prompt hash is reused, or a matching valid result is launched again.
 - 53: tests/test_stage2_research_store.py::test_binding_ignores_only_the_own_research_append_and_head — A foreign byte change permits reuse, or a commit recording only the runner's own append discards matching results.
 - 53: tests/test_stage2_swarm.py::test_only_finished_valid_results_are_reused_and_others_are_named — A cancelled, failed, timed-out, refused, not-started, interrupted or invalid result is reused, a discarded result is unnamed, or a complete run's results are reused.
@@ -2080,3 +2081,10 @@ Maintainer ruling Q-15 recorded in `decisions.md`; the placement guard now also 
 
 - Test: `tests/test_stage2_swarm.py::test_a_store_inside_the_real_home_is_refused_and_one_outside_it_is_accepted` (red against the unrepaired code: the run exited 0 instead of 1). Row F-12 booked `fixed`; ledger line under criterion 52.
 - Span (measured, `date -u`): 2026-10-19T09:06:45Z to 2026-10-19T09:26:50Z (upper bound), about 20 min, counted against the 17 h 20 min appetite. It includes one full `make verify` (started 09:08:08Z): VERIFY GREEN (markdownlint report-only), log `f12-verify.log` in the scratchpad.
+
+### Phase-6 re-check repairs — 2026-10-19
+
+Hand repair of the five phase-6 re-check BLOCKER rows F-19 to F-23 (`stage2.py repair` refuses while F-1 stays open). Row F-1 was not touched.
+
+- Start (measured, `date -u`): 2026-10-19T09:53:55Z.
+- F-19: the placement guard resolves `..` and parent links (`os.path.realpath`) for the store, the home and the forbidden directories before comparing. Test `tests/test_stage2_research_store.py::test_the_home_guard_resolves_dotdot_and_parent_links_before_comparing`, red first (DID NOT RAISE StoreWriteError). Row booked `fixed`; ledger line under criterion 52.
