@@ -2056,3 +2056,19 @@ The 19 criterion-ledger rows that still read "not yet written" (catalog and prep
 - [DETAIL] A baseline-only or cache-only free id is not absent from the audit: it appears as a candidate with reason `not-in-fresh-pi` and is never selected. The tests pin that, not omission.
 - [DETAIL] The preparation tests live in `test_stage2_swarm.py` as the ledger named them, and reuse the fixture of `test_stage2_research_availability.py` (imported, not copied).
 - Open: step 6 (real-Pi capture, F-1), hosted-CI run of the handoff gate. Rows of criteria 6 and 37 still carry the note that their run-level part is identity-only.
+
+### Phase-6 repairs — 2026-10-19
+
+Hand repair of the phase-6 BLOCKER rows F-11 to F-18 (`stage2.py repair` refuses while F-1, the attended real-Pi capture, stays open). Row F-1 was not touched.
+
+- Span (measured, `date -u`): 2026-10-19T08:22:32Z to 2026-10-19T09:02:41Z (upper bound), about 40 min, counted against the 17 h 20 min appetite. It includes one full `make verify` (started 08:43:05Z). Commits `47764cf` (F-16) and `bc4e776` (F-11, F-13, F-14, F-15, F-17, F-18); full `make verify` at `bc4e776`: VERIFY GREEN (markdownlint report-only, as before), log `p6-handrepair-verify.log` in the scratchpad.
+- Fixed, each with a test shown red against the unrepaired code first:
+  - F-16: handoff gate reads JSON and nested YAML with duplicate-key detection, so a repeated key is not measured (exit 3).
+  - F-11: the publication drift check gets its own checking deadline (`changed_paths(deadline=...)`).
+  - F-15: outcomes the dispatcher could not deliver after a failed store write are kept in memory and published; a failed binding write no longer escapes `publish()`.
+  - F-17: the manifest lists all `39 + 3N` expected slot identities; unstarted ones read `not-started`.
+  - F-18: result records carry `started_at`; the published manifest keeps `started_at`, `ended_at` and `leak_check` per slot, so a reused slot keeps its original provenance after the store is cleared.
+  - F-14: the receipt keeps the catalog's per-candidate evidence and the seat models; the manifest adds a `preparation` block (check time, pool, model states, unread ids, probe audit).
+  - F-13: probes and research launches write the measured model store and its model definitions into Pi's fresh agent directory (`install_measured_models`); the receipt carries the store, the manifest does not.
+- Stopped, left `taken`: F-12 (store placement against the model's home directory). The spec requires the store outside every model's home, while the design fixes the default at `~/.local/state`, and Claude seats inherit the real home. A decision on where the default store lives is needed before a fix.
+- [DETAIL] The fake Pi of `test_stage2_research_availability.py` now also records its agent directory listing.
