@@ -97,6 +97,12 @@ OHNE_AUFRUFER: dict[str, str] = {
         "Run before every foreign call by scripts/stage2.py and by hand as make leakcheck; it needs "
         "the denylist each machine keeps outside the repository, which no CI step holds"
     ),
+    "research_capture.py": (
+        "Entry point, not a gate - the maintainer-attended F-1 offline capture of the research swarm's free-context "
+        "isolation (real pinned Pi against a loopback mock, synthetic canaries, no external request); it needs the "
+        "installed Pi and a present maintainer, which no CI step has; tests/test_research_capture.py runs it "
+        "against a stand-in. Framework-only, not part of the kit"
+    ),
     "research_handoff.py": (
         "Library - the one derivation of a research run's obligation inventory, imported by the research "
         "runner and by scripts/check_research_handoff.py (the gate research-handoff); "

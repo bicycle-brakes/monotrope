@@ -1381,6 +1381,26 @@ ADR claim or file list changed. The 46 red swarm tests remain the known
 cannot touch tests. The runner owns `make verify` and the checkpoint commit.
 Evidence: research.md, "Incorporation-round attempt 3 evidence — 2026-10-16".
 
+## How to run the F-1 capture
+
+Tool: `scripts/research_capture.py` (built 2026-10-19, bead coding-harness-icw; tests `tests/test_research_capture.py`). It is the attended offline capture of step 6 and finding F-1. The real pinned Pi has not been started by it yet; only the stand-in dry run (`--dry-run-stand-in`) has run.
+
+Command, from this change's worktree, with the maintainer present (the tool refuses without `--attended`):
+
+```bash
+.venv/bin/python scripts/research_capture.py --attended \
+  --scratch "$TMPDIR/f1-capture-$(date -u +%Y%m%dT%H%M%SZ)" \
+  --out "$TMPDIR/f1-capture-report"
+```
+
+Optional: add `--os-sandbox` on macOS to wrap every command in `sandbox-exec` (outbound network denied except localhost; not self-tested).
+
+- Duration: not measured with the real Pi. Expect a few minutes: one catalog helper run, five seat processes (online, two dynamically selected Go free seats, repository) and one probe, each limited to 300 seconds (`--timeout`).
+- What the tool does: builds a scratch repository, HOME and `XDG_STATE_HOME` with synthetic canaries; starts a loopback mock server; runs the real catalog helper and `select_research_catalog` against it; starts the seats through the swarm's own `Run.pi_command` and the probe through `probe_go`, all via `stage2.PI_WRAPPER`; writes `<out>.json` and `<out>.md`.
+- What the maintainer watches: the terminal for an unexpected process; the printed verdict lines (criteria 8, 9, 47, repository seat, state-store guard; exit 0 = all PASS, 1 = a FAIL, 2 = refused or unusable); and, before pasting anything, the Markdown report's "Not enforced" list. Name resolution, native subprocesses and other processes are not blocked; the Node network guard denies non-loopback connections of Pi itself.
+- Afterwards: the orchestrator copies the Markdown report into `research.md` (version and source hashes, method, outbound payloads, tool schemas, attempts, receipts, canary outcomes) with the tested commit and the exact command, then asks for the fresh phase-6 re-check. F-1 is closed by the maintainer's ruling, not by the tool.
+- A FAIL is a finding, not a tool fault: do not edit the verdict logic to turn it green. A `repository-seat` OBSERVED line (an absolute-path read outside the worktree succeeded) is reported, not judged: criteria 8, 9 and 47 concern free contexts and the probe.
+
 ## Earlier implementation time
 
 Historical phase-4 entries remain below. The maintainer answered the
@@ -2100,3 +2120,11 @@ Hand repair of the five phase-6 re-check BLOCKER rows F-19 to F-23 (`stage2.py r
 - F-22: the run tracks slots whose terminal record is not stored (`unstored`); `publish()` writes the stdout/stderr of those as partial evidence although the outcome reads ok. Test `tests/test_stage2_swarm.py::test_a_finder_output_survives_a_failed_terminal_write`, red first (the canary was missing from the incomplete record). Row booked `fixed`; ledger lines under criteria 18 and 57.
 - No decision was needed; the spec and design answered every row. Order worked: F-19, F-20, F-21, F-23, F-22. Row F-1 untouched.
 - End (measured, `date -u`): about 2026-10-19T10:30Z for the agent's work; one lint fix (`8c1b44b`, unused import) needed two further verify runs. The third full `make verify` on `8c1b44b` ended VERIFY GREEN at 11:09:03Z (2975 passed, 16 skipped; markdownlint report-only), log `p6b-repair-verify.log` in the scratchpad. Span about 36 min of agent work plus about 39 min of verify reruns, counted against the 17 h 20 min appetite (recorded by the orchestrator).
+
+### Capture tool built — 2026-10-19
+
+Built `scripts/research_capture.py` and `tests/test_research_capture.py` (the attended F-1 offline capture tool; usage in "How to run the F-1 capture"). The real pinned Pi was not started; only the stand-in dry run ran. F-1 stays open.
+
+- Span (measured, `date -u`): 2026-10-19T09:54:18Z to 2026-10-19T10:27:30Z (upper bound), about 33 min, counted against the 17 h 20 min appetite. It includes one full `make verify` (10:04:29Z to 10:26:51Z): VERIFY GREEN (markdownlint report-only), log `capture-tool-verify.log` in the scratchpad.
+- Tests: 19 in `tests/test_research_capture.py`, written red first (collection error: no module `research_capture`), green after the tool.
+- [DETAIL] Not in the kit: declared in `scripts/ci_gates.py` under `OHNE_AUFRUFER` as a framework-only entry point.
