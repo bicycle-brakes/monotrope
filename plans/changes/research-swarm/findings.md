@@ -3013,3 +3013,17 @@ Stage-2 call, 2026-10-20: repair · attempt 3 · route stage-1 · endpoint claud
 > ````
 
 Orchestrator, 2026-10-20: the repair run above failed only on the `ruleset` gate in attempts 1 and 2 — GitHub refused to read branch rulesets (HTTP 403) after the repository moved to an organisation on the free plan; attempt 3 added two failing tests of its own. After the plan upgrade the rulesets read again, and the tree left by attempt 3 passed a full `make verify` (3045 passed, 16 skipped, 22:48 UTC). Red first was checked by hand: both tests, copied onto the code at `fbab88b`, fail there (F-38: 1 failed; F-39: 9 of 13 cases failed). Booked as a hand repair.
+
+Stage-2 call, 2026-10-20: review · endpoint openai-codex · model gpt-6.1-sol · leak check clean over 536 files, 1594 commits, 12 rules.
+
+## Phase 6 — Codex, 2026-10-20
+
+| ID | Severity | Dimension | Origin | Where | Finding | Reviewer | Status | Broke a test |
+|---|---|---|---|---|---|---|---|---|
+| F-40 | MAJOR | SPEC | base | `scripts/stage2.py:3685` | A research header containing both `class: architectural` and `class: bounded` silently selects bounded. Locally reproduced through `declared_class()`: YAML parsing discards the first declaration, allowing exploration to bypass the swarm and its selection receipt. Conflicting declarations must refuse before model calls with exit 2. [criterion 4] | Codex | open | — |
+| F-41 | BLOCKER | SPEC | base | `scripts/check_research_handoff.py:590–593` | Repeating a criterion number overwrites its earlier Basis before checking. Locally reproduced through `check_change()`: the first criterion cites nonexistent C7; a second criterion numbered 1 cites an answered Q-record; the gate returns no findings. Duplicate numbering must not erase an unchecked criterion. [criteria 33–34] | Codex | open | — |
+| F-42 | MAJOR | SPEC | fix-r7 | `scripts/check_research_handoff.py:654–656` | An incomplete run containing reconciliation with `disagreements: null` raises an uncaught TypeError. Locally reproduced alongside an otherwise valid complete run. Complete-run shape validation is skipped, but the new link checker still iterates this field; malformed evidence therefore crashes instead of reporting not measured with exit 3. [criterion 33] | Codex | open | — |
+| F-43 | MINOR | SPEC | base | `scripts/stage2_research_run.py:932,1021–1048` | The runner measures judge packet size but never publishes it or the capacity policy in the run manifest. Successful publication consequently omits the required character limit, capacity, reserves, conversion and dated sources. These fields must accompany the run so its applied judge limit remains auditable. [criterion 14; design, Data model — Run manifest] | Codex | open | — |
+
+Phase 6 verdict: codex 01a1565a-a33f-70e1-a957-f3c689094c50, 2026-10-20
+Reviewer session: codex 01a1565a-a33f-70e1-a957-f3c689094c50 — a fresh session reviewed: an earlier ## Phase 6 block makes this a re-check
