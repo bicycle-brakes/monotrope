@@ -600,8 +600,16 @@ class Run:
             return command, scratch, env
         prompt_file = scratch / "research-prompt.md"
         prompt_file.write_text(prompt, encoding="utf-8")
+        # The path lock (decisions.md Q-16): the one explicit extension of a repository seat, copied to a
+        # generic scratch path; it blocks every read, grep, find and ls call that resolves outside the worktree.
+        lock = scratch / "repository-pathlock.mjs"
+        source = Path(__file__).resolve().parent / "stage2_repository_pathlock.mjs"
+        lock.write_text(source.read_text(encoding="utf-8"), encoding="utf-8")
         command = [
-            *common,
+            *common[:5],
+            "-e",
+            str(lock),
+            *common[5:],
             "--tools",
             self.runner.PI_TOOLS,
             "--model",

@@ -177,6 +177,33 @@ def test_a_refused_undeclared_tool_call_passes_9():
     assert verdicts(records)["9"] == "PASS"
 
 
+def test_the_two_destination_check_refusals_of_the_real_capture_count_as_refused():
+    """The 2026-10-19 real-Pi capture: public_fetch of a loopback address was refused with these two texts."""
+    records = clean_records()
+    for number, (url, text) in enumerate(
+        (
+            ("http://127.0.0.1:63448/sink/private-http", "only https:// destinations are fetched \u2014 no http, no file"),
+            ("https://127.0.0.1:63448/sink/private-https", "only port 443 is fetched"),
+        )
+    ):
+        call = {"id": f"c{number}", "function": {"name": "public_fetch", "arguments": json.dumps({"url": url})}}
+        records[0]["body"]["messages"] += [
+            {"role": "assistant", "tool_calls": [call]},
+            {"role": "tool", "tool_call_id": f"c{number}", "content": text},
+        ]
+    assert verdicts(records)["9"] == "PASS"
+
+
+def test_a_private_address_fetch_that_returned_page_content_still_fails_9():
+    records = clean_records()
+    call = {"id": "c1", "function": {"name": "public_fetch", "arguments": json.dumps({"url": "https://10.0.0.5/x"})}}
+    records[0]["body"]["messages"] += [
+        {"role": "assistant", "tool_calls": [call]},
+        {"role": "tool", "tool_call_id": "c1", "content": "<html>a private page</html>"},
+    ]
+    assert verdicts(records)["9"] == "FAIL"
+
+
 def test_canary_hits_report_where_each_canary_appears():
     records = clean_records()
     records[1]["body"]["messages"][0]["content"] += " CANARY-ENV-0001"

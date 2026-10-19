@@ -61,7 +61,10 @@ ONLINE_MODEL, REPOSITORY_MODEL, PROBE_MODEL = FIXED_MODELS[0], FIXED_MODELS[2], 
 FIXTURE_CHANGE = "capture-fixture"
 ERROR_TEXT = re.compile(
     r"(error|not found|unknown tool|denied|refus|blocked|not allowed|invalid|forbidden|unavailable|failed|cannot"
-    r"|no such|unsupported|not available)",
+    r"|no such|unsupported|not available"
+    # The destination check's own refusals read as statements, not as errors (the 2026-10-19 real-Pi capture):
+    # "only https:// destinations are fetched - no http, no file" and "only port 443 is fetched".
+    r"|only https|only port|no http, no file)",
     re.I,
 )
 SENSITIVE_HEADERS = ("authorization", "x-api-key", "api-key", "proxy-authorization")
