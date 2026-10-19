@@ -141,9 +141,20 @@ class Store:
 
     # -- placement --------------------------------------------------------------------------
 
-    def assert_outside(self, *forbidden):
-        """Refuse a store inside (or equal to) any directory a model, the worktree or git may see."""
+    def assert_outside(self, *forbidden, home=None):
+        """Refuse a store inside (or equal to) any directory a model, the worktree or git may see.
+
+        ``home`` is the real home directory Claude research processes inherit; a store beneath it is refused
+        with the way out (Q-15): ``XDG_STATE_HOME`` must point outside it.
+        """
         mine = self.directory.absolute()
+        if home is not None:
+            base = Path(home).absolute()
+            if mine == base or mine.is_relative_to(base) or base.is_relative_to(mine):
+                raise StoreWriteError(
+                    f"the state store would lie inside the home directory {base}, which Claude research "
+                    "processes inherit; set XDG_STATE_HOME to a directory outside it"
+                )
         for other in forbidden:
             other = Path(other).absolute()
             if mine == other or mine.is_relative_to(other) or other.is_relative_to(mine):

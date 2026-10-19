@@ -4,7 +4,7 @@ status: draft
 implementation_status: partial
 date: 2026-10-14
 last_reviewed: 2026-10-18
-updated: 2026-10-18
+updated: 2026-10-19
 supersedes: null
 superseded_by: null
 bead: coding-harness-icw
@@ -435,7 +435,10 @@ recursive delegation, unbounded subprocess or zero-timeout launch.
 **Slot results → state store → resume (Q-13).** A new pure-ish module
 `scripts/stage2_research_store.py` owns `record_dir(change)/research/`, the
 runner-owned state directory beside the review loop record
-(`${XDG_STATE_HOME:-~/.local/state}/coding-harness/stage2/<change>/`).
+(`${XDG_STATE_HOME:-~/.local/state}/coding-harness/stage2/<change>/`). The
+runner refuses a store inside the real home directory that Claude research
+processes inherit (Q-15, criterion 52): without `XDG_STATE_HOME` pointing
+outside that home, a research run stops with exit 1 and a message naming it.
 
 - *Layout.* One directory per run, named by its random 128-bit run id;
   directories 0700, files 0600. Per run: `run.json` (run id, change, start

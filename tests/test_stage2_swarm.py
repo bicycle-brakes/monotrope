@@ -13,6 +13,7 @@ the end reads the repository's own declaration and documents.
 from __future__ import annotations
 
 import json
+import os
 import re
 import shutil
 import subprocess
@@ -2543,3 +2544,19 @@ def test_research_launches_install_the_consumed_catalog_store(sworld: SwarmWorld
     go = [call for call in sworld.calls() if call["name"] == "pi"]
     assert go and all({"models.json", "models-store.json"} <= set(call["agent_listing"]) for call in go)
     assert "models_store" not in manifest_of(sworld)["catalog"], "raw definitions stay out of research.md"
+
+
+def test_a_store_inside_the_real_home_is_refused_and_one_outside_it_is_accepted(
+    sworld: SwarmWorld, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+) -> None:
+    # Criterion 52 (phase-6 F-12, Q-15). Planted fault: the default store beneath the home Claude research
+    # processes inherit passes the placement guard.
+    home = Path(os.environ["HOME"])
+    monkeypatch.delenv("XDG_STATE_HOME")  # the default beneath HOME
+    sworld.complete()
+    assert sworld.run() == 1
+    assert sworld.calls() == [], "no model starts"
+    message = capsys.readouterr().err
+    assert "XDG_STATE_HOME" in message and str(home) in message
+    monkeypatch.setenv("XDG_STATE_HOME", str(home.parent / "state-outside-home"))
+    assert sworld.run() == 0

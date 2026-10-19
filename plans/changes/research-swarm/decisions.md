@@ -4,7 +4,7 @@ status: draft
 implementation_status: none
 date: 2026-10-14
 last_reviewed: 2026-10-14
-updated: 2026-10-18
+updated: 2026-10-19
 supersedes: null
 superseded_by: null
 bead: coding-harness-icw
@@ -615,3 +615,24 @@ substitutes among the admitted paid Go models, cheapest first, to achieve
 that newly admitted models serve without a list edit, accepting that a dated
 terms reading stays a deliberate manual step and that the phase-4 appetite
 rises to 17 hours 20 minutes in total. — 2026-10-18
+
+## Q-15 · Where the research state store may live relative to a model's home directory
+
+asked: 2026-10-19
+answer: "Ja zu Option 1" — the runner guards the real home directory that Claude research processes inherit: a state store beneath it is refused with a clear message, and the store is used only when `XDG_STATE_HOME` points outside that home.
+answered_by: maintainer
+status: answered
+context: |
+  Topic: the default place of the resumable research state store.
+  Intention: the phase-6 review (finding F-12) found that without `XDG_STATE_HOME` the store defaults beneath the user's home, which Claude research processes inherit, although the spec keeps stored peer results out of every model's home directory (criterion 52).
+  Today: the design names `${XDG_STATE_HOME:-~/.local/state}` as the default; the placement guard checks only the worktree and its git directory.
+  Repository change: the placement guard also refuses a store inside the real home directory, naming `XDG_STATE_HOME` in the message; the design line for the default path is amended; a test shows both the refusal and an accepted store outside the home.
+  Architecture change: no — the store layout, locking, resume and the review loop record stay as they are; only the default location no longer works unless it lies outside the home.
+
+In the context of a state store whose default lies in the home directory that
+Claude research processes inherit, facing the choice between refusing, a scratch
+home for Claude seats and a new default path, we decided to refuse a store inside
+the real home with a clear message, to achieve that stored peer results never lie
+within a model's home, accepting that `XDG_STATE_HOME` must be set outside the
+home before a research run. — 2026-10-19
+

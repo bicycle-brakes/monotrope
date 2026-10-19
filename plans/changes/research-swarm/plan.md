@@ -962,6 +962,7 @@ the existing gates and let the runner own registry regeneration/full verify.
 - 52: tests/test_stage2_research_store.py::test_store_is_owner_only_outside_every_model_directory — The store lies inside the worktree, its git directory or a model directory, or grants group or other access.
 - 17: tests/test_stage2_research_store.py::test_store_is_owner_only_outside_every_model_directory — The state store writes inside the worktree.
 - 52: tests/test_stage2_swarm.py::test_store_paths_and_peer_results_never_reach_a_model — A store canary or a peer's stored report reaches a model's prompt, argv, environment or working directory before the barrier.
+- 52: tests/test_stage2_swarm.py::test_a_store_inside_the_real_home_is_refused_and_one_outside_it_is_accepted — The default store beneath the home directory Claude research processes inherit passes the placement guard.
 - 53: tests/test_stage2_research_store.py::test_reuse_requires_the_exact_binding_seat_model_and_prompt — A result with another binding, stage, topic, seat, endpoint, model or prompt hash is reused, or a matching valid result is launched again.
 - 53: tests/test_stage2_research_store.py::test_binding_ignores_only_the_own_research_append_and_head — A foreign byte change permits reuse, or a commit recording only the runner's own append discards matching results.
 - 53: tests/test_stage2_swarm.py::test_only_finished_valid_results_are_reused_and_others_are_named — A cancelled, failed, timed-out, refused, not-started, interrupted or invalid result is reused, a discarded result is unnamed, or a complete run's results are reused.
@@ -2070,5 +2071,12 @@ Hand repair of the phase-6 BLOCKER rows F-11 to F-18 (`stage2.py repair` refuses
   - F-18: result records carry `started_at`; the published manifest keeps `started_at`, `ended_at` and `leak_check` per slot, so a reused slot keeps its original provenance after the store is cleared.
   - F-14: the receipt keeps the catalog's per-candidate evidence and the seat models; the manifest adds a `preparation` block (check time, pool, model states, unread ids, probe audit).
   - F-13: probes and research launches write the measured model store and its model definitions into Pi's fresh agent directory (`install_measured_models`); the receipt carries the store, the manifest does not.
-- Stopped, left `taken`: F-12 (store placement against the model's home directory). The spec requires the store outside every model's home, while the design fixes the default at `~/.local/state`, and Claude seats inherit the real home. A decision on where the default store lives is needed before a fix.
+- F-12 (store placement against the model's home directory) was first stopped for a decision; the maintainer answered "Ja zu Option 1" on 2026-10-19 (`decisions.md` Q-15), and it is fixed below.
 - [DETAIL] The fake Pi of `test_stage2_research_availability.py` now also records its agent directory listing.
+
+### F-12 repair — 2026-10-19
+
+Maintainer ruling Q-15 recorded in `decisions.md`; the placement guard now also refuses a store inside the real home directory that Claude research processes inherit, with a message naming `XDG_STATE_HOME`; the design line for the default store path is amended.
+
+- Test: `tests/test_stage2_swarm.py::test_a_store_inside_the_real_home_is_refused_and_one_outside_it_is_accepted` (red against the unrepaired code: the run exited 0 instead of 1). Row F-12 booked `fixed`; ledger line under criterion 52.
+- Span (measured, `date -u`): 2026-10-19T09:06:45Z to 2026-10-19T09:26:50Z (upper bound), about 20 min, counted against the 17 h 20 min appetite. It includes one full `make verify` (started 09:08:08Z): VERIFY GREEN (markdownlint report-only), log `f12-verify.log` in the scratchpad.

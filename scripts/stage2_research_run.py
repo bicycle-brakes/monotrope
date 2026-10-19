@@ -23,6 +23,7 @@ import contextlib
 import dataclasses
 import hashlib
 import json
+import os
 import re
 import subprocess
 import tempfile
@@ -284,7 +285,9 @@ class Run:
         self.store = Store(research_dir(self.change), scrub=self.scrub)
         git_dir = stage2_swarm._git(self.root, "rev-parse", "--absolute-git-dir").strip()
         try:
-            self.store.assert_outside(self.root, *([git_dir] if git_dir else []))
+            self.store.assert_outside(
+                self.root, *([git_dir] if git_dir else []), home=Path(os.environ.get("HOME") or Path.home())
+            )
             self.store.acquire_lock()
         except StoreLocked as error:
             raise runner.Refused(str(error)) from error
