@@ -16,6 +16,7 @@ from __future__ import annotations
 
 import ast
 import copy
+import functools
 import json
 import re
 import shutil
@@ -1581,6 +1582,12 @@ def _zeichenketten(baum: ast.Module) -> set[str]:
     }
 
 
+@functools.cache
+def _zeichenketten_von(text: str) -> frozenset[str]:
+    """The string literals of one source text, parsed once (the check below asks per script)."""
+    return frozenset(_zeichenketten(ast.parse(text)))
+
+
 def _belegt(script: Path) -> list[str]:
     """Which test files execute this script?
 
@@ -1598,7 +1605,7 @@ def _belegt(script: Path) -> list[str]:
         if muster.search(text):
             treffer.append(datei.name)
             continue
-        if erwartet & _zeichenketten(ast.parse(text)):
+        if erwartet & _zeichenketten_von(text):
             treffer.append(datei.name)
     return treffer
 
