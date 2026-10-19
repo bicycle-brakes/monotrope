@@ -19,6 +19,7 @@ own packet. The run never probes, refreshes the catalog, retries or swaps a seat
 
 from __future__ import annotations
 
+import contextlib
 import dataclasses
 import hashlib
 import json
@@ -1175,18 +1176,35 @@ def run(root: Path, change: str, runner, klass: str, selection: dict) -> None:
         ]
         if status == "complete" and failed_free:
             status = "complete - best-effort free seats did not finish: " + ", ".join(sorted(failed_free))
+        refusal = {"slot": current.security.split(":")[0], "reason": current.security} if current.security else None
+        # The store is finished before the record is published (F-26): a failed finish must be named in the
+        # published status, and the appended record cannot be rewritten afterwards.
+        finish_failure: StoreWriteError | None = None
+        try:
+            current.store.finish_run(
+                current.run_id, "complete" if status.startswith("complete") else "incomplete", refusal=refusal
+            )
+        except StoreWriteError as error:
+            finish_failure = error
+            if stop is None or stop.code != 2:  # a security refusal keeps exit 2 over a storage failure (F-21)
+                failure = f"the research state store failed ({STOP_REASON}: {error})"
+                status = f"{status}; {failure}" if status.startswith("incomplete") else f"incomplete - {failure}"
+                current.store_failure = status
         line = current.publish(status)
-        if current.store_failure:  # a binding write failed (F-20): the record already says incomplete
+        if current.store_failure:  # a binding write failed (F-20) or finishing failed (F-26): incomplete
             status = current.store_failure
         complete = status.startswith("complete")
-        refusal = {"slot": current.security.split(":")[0], "reason": current.security} if current.security else None
-        try:
-            current.store.finish_run(current.run_id, "complete" if complete else "incomplete", refusal=refusal)
-            if complete:
+        if current.store_failure and finish_failure is None:
+            # the publish itself turned the run incomplete after the store was marked complete; the run
+            # already ends incomplete with exit 1, so a second failure adds nothing
+            with contextlib.suppress(StoreWriteError):
+                current.store.finish_run(current.run_id, "incomplete", refusal=refusal)
+        if finish_failure is None and complete:
+            try:
                 current.store.clear()
-        except StoreWriteError as error:
-            if stop is None or stop.code != 2:  # a security refusal keeps exit 2 over a storage failure (F-21)
-                raise runner.CallFailed(f"the research state store could not be finished ({error})") from error
+            except StoreWriteError as error:
+                if stop is None or stop.code != 2:
+                    raise runner.CallFailed(f"the research state store could not be cleared ({error})") from error
         if stop is not None and stop.code == 2:
             raise runner.Refused(line)
         if not complete:

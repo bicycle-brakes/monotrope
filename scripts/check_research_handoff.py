@@ -575,7 +575,8 @@ def _basis_lines(spec_text: str) -> dict[int, list[str]]:
             continue
         heading = re.match(r"^(#{1,6})\s+(.*)$", line)
         if heading:
-            inside = heading.group(2).strip().lower().startswith("acceptance criteria")
+            if len(heading.group(1)) <= 2:  # a level-three heading is a subsection, not the end (F-25)
+                inside = heading.group(2).strip().lower().startswith("acceptance criteria")
             current, collecting = None, False
             continue
         if not inside:

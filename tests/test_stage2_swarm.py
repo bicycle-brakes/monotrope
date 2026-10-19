@@ -2462,6 +2462,22 @@ def test_a_failed_append_binding_write_ends_incomplete_with_exit_one(
     assert "state-store-unwritable" in text
 
 
+def test_a_failed_store_finish_never_leaves_a_complete_publication(
+    sworld: SwarmWorld, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    # Criterion 57 (phase-6 F-26). Planted fault: the run is published complete before the store is finished,
+    # so a storage failure while finishing leaves a complete record without the reason state-store-unwritable.
+    def broken(*_args, **_kwargs):
+        raise stage2_research_store.StoreWriteError("disk full")
+
+    monkeypatch.setattr(stage2_research_store.Store, "finish_run", broken)
+    sworld.complete()
+    assert sworld.run() == 1
+    text = sworld.research.read_text(encoding="utf-8")
+    assert manifest_of(sworld)["status"].startswith("incomplete"), "the record must not read complete"
+    assert "state-store-unwritable" in text
+
+
 def test_a_security_refusal_keeps_exit_two_when_finishing_the_store_also_fails(
     sworld: SwarmWorld, monkeypatch: pytest.MonkeyPatch
 ) -> None:

@@ -858,6 +858,7 @@ the existing gates and let the runner own registry regeneration/full verify.
 - 31: tests/test_stage2_swarm.py::test_neighbour_relations_derive_items_without_judge_or_question — A contradicts or unrelated-given field loses its obligation when Opus omits it.
 - 34: tests/test_research_handoff.py::test_every_direct_basis_claim_must_be_supported — Any non-supported disposition passes, including alongside a supported claim; answered Q-record mediation fails.
 - 34: tests/test_research_handoff.py::test_a_supported_list_contradicting_the_claim_evidence_status_is_not_measured — The gate trusts the stored supported list, so a claim its report marks unsupported passes as a criterion basis.
+- 34: tests/test_research_handoff.py::test_a_subsection_heading_does_not_end_basis_checking — A level-three heading under the acceptance criteria ends Basis checking, so a criterion below it without an origin passes.
 - 30: tests/test_research_handoff.py::test_neighbour_parity_allows_only_linked_additions_and_given_drops — Arbitrary extra paths pass, or linked maintainer additions fail.
 - 5: tests/test_stage2_swarm.py::test_all_opus_roles_have_empty_tools_and_packet_only_context — Merge has file, shell, web or MCP access.
 - 14: tests/test_stage2_swarm.py::test_all_opus_roles_have_empty_tools_and_packet_only_context — Judge has file, shell, web or MCP access.
@@ -991,6 +992,7 @@ the existing gates and let the runner own registry regeneration/full verify.
 - 57: tests/test_stage2_swarm.py::test_a_failed_append_binding_write_ends_incomplete_with_exit_one — A failure writing only the research-append binding is suppressed and the run publishes complete with exit 0.
 - 57: tests/test_stage2_swarm.py::test_a_security_refusal_keeps_exit_two_when_finishing_the_store_also_fails — A storage failure while finishing the run is raised ahead of a security refusal, so exit 2 degrades to exit 1.
 - 57: tests/test_stage2_swarm.py::test_a_finder_output_survives_a_failed_terminal_write — A finder that exited ok but whose terminal write failed loses its output from the incomplete publication.
+- 57: tests/test_stage2_swarm.py::test_a_failed_store_finish_never_leaves_a_complete_publication — The run is published complete before the store is finished, so a failed finish leaves a complete record without state-store-unwritable.
 - 44: tests/test_stage2_research_availability.py::test_fresh_receipt_is_consumed_once_and_returns_the_frozen_selection — A receipt at the maximum age is refused, survives its first use, or consumption returns something other than the prepared selection.
 - 44: tests/test_stage2_swarm.py::test_the_receipt_keeps_each_candidates_evidence_and_exclusion — The sealed receipt omits the candidate evidence behind the selection report.
 - 48: tests/test_stage2_research_availability.py::test_slot_plan_is_built_from_the_consumed_selection_and_probes_add_no_slots — The slot plan ignores a substitute or probes change the `39 + 3N` slot count.

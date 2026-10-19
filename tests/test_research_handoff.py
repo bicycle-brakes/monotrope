@@ -627,3 +627,23 @@ def test_duplicate_keys_in_records_are_not_measured(world: World, capsys: pytest
     assert twice != good
     world.write([twice])
     assert world.check(capsys)[0] == 3, "a manifest with two contradictory class keys"
+
+
+def test_a_subsection_heading_does_not_end_basis_checking(world: World, capsys: pytest.CaptureFixture[str]) -> None:
+    # Criterion 34 (phase-6 F-25). Planted fault: a level-three heading under "## Acceptance criteria" ends
+    # Basis checking, so a criterion below it without an origin passes with no findings.
+    run = run_text(RUN1)
+    plain = spec_text(neighbours=[], basis=("`decisions.md#Q-1`",))
+    world.write([run], spec=plain)
+    assert world.check(capsys)[0] == 0
+    sectioned = plain.replace("1. When x, y.", "### Functional\n\n1. When x, y.")
+    without_origin = sectioned.replace("   *Basis:* `decisions.md#Q-1`.\n", "")
+    assert without_origin != sectioned
+    world.write([run], spec=without_origin)
+    code, out = world.check(capsys)
+    assert code == 1, "a criterion inside a subsection without a Basis line is a finding"
+    world.write([run], spec=sectioned)
+    assert world.check(capsys)[0] == 0, "a criterion inside a subsection with an origin passes"
+    other = sectioned.replace("### Functional", "## Notes")
+    world.write([run], spec=other.replace("   *Basis:* `decisions.md#Q-1`.\n", ""))
+    assert world.check(capsys)[0] == 0, "a level-two heading still ends the section"
