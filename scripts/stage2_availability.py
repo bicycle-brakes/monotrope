@@ -667,7 +667,12 @@ def consume_research(root: Path, change: str, token: str | None, runner, klass: 
         valid = False
     if not valid:
         raise runner.Refused(problem)
-    path.unlink(missing_ok=True)
+    try:
+        # Unlink is the atomic single-use claim: only one validated reader may win.
+        # A concurrent consumer that already removed the receipt must cause refusal.
+        path.unlink()
+    except OSError as error:
+        raise runner.Refused(problem) from error
     return {**state, "report_id": token}
 
 

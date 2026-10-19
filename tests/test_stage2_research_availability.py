@@ -702,3 +702,35 @@ def test_research_preparation_uses_the_shared_availability_helpers(
     assert fx.prepare() == 0
     assert availability.consume_research(fx.w.root, "demo", fx.receipt()["report_id"], stage2, "feature")
     assert {"rule_problem", "excluded_reason", "probe_go", "probe_claude", "seal", "verify"} <= set(seen)
+
+
+def test_concurrent_consumers_cannot_share_a_single_use_receipt(fx: Fixture, monkeypatch) -> None:
+    from concurrent.futures import ThreadPoolExecutor
+    from threading import Barrier
+
+    assert fx.prepare() == 0
+    prepared = fx.receipt()
+    path = availability.research_receipt_path("demo", stage2)
+    read_text = Path.read_text
+    readers = Barrier(2)
+
+    def synchronized_read(self, *args, **kwargs):
+        text = read_text(self, *args, **kwargs)
+        if self == path:
+            readers.wait(timeout=10)
+        return text
+
+    monkeypatch.setattr(Path, "read_text", synchronized_read)
+
+    def consume():
+        try:
+            return availability.consume_research(fx.w.root, "demo", prepared["report_id"], stage2, "feature")
+        except stage2.Refused:
+            return None
+
+    with ThreadPoolExecutor(max_workers=2) as pool:
+        results = list(pool.map(lambda _: consume(), range(2)))
+    accepted = [result for result in results if result is not None]
+    assert len(accepted) == 1
+    assert accepted[0]["seats"] == prepared["state"]["seats"]
+    assert not path.exists()

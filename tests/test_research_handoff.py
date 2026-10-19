@@ -673,3 +673,39 @@ def test_a_subsection_heading_does_not_end_basis_checking(world: World, capsys: 
     other = sectioned.replace("### Functional", "## Notes")
     world.write([run], spec=other.replace("   *Basis:* `decisions.md#Q-1`.\n", ""))
     assert world.check(capsys)[0] == 0, "a level-two heading still ends the section"
+
+
+@pytest.mark.parametrize("link_kind", ["question", "class", "neighbour", "disagreement"])
+@pytest.mark.parametrize("target", ["other-report", "other-run", "missing"])
+def test_evidence_links_stay_in_their_report_or_judge_run(world: World, capsys, link_kind, target) -> None:
+    own = gid(RUN1, 1, SEATS[0], "C1")
+    peer = gid(RUN1, 1, SEATS[1], "C1")
+    foreign = gid(RUN2, 1, SEATS[0], "C1")
+    link = {"other-report": peer, "other-run": foreign, "missing": "missing-claim"}[target]
+    records = [q_record(1, items=(f"{RUN1}/H-1",))]
+    if link_kind == "disagreement":
+        run = run_text(RUN1, decision=None, disagreements=({"claims": [own, link], "summary": "Dissent"},))
+    else:
+        run = run_text(RUN1, given=(P,) if link_kind == "neighbour" else ())
+        if link_kind == "question":
+            run = run_text(RUN1, question_link=link)
+        else:
+            source = gid(RUN1, 3 if link_kind == "class" else 5, SEATS[0], "C1")
+            # Replace just the link, keeping the claim itself and the stored inventory consistent.
+            blocks = gate.parse_text(run, "fixture")[0]
+            reports = blocks.reports
+            report = next(r for r in reports if r["topic"] == (3 if link_kind == "class" else 5))
+            changed = json.loads(json.dumps(report))
+            field = changed["class_assessment"] if link_kind == "class" else changed["neighbour_relations"][0]
+            assert field["claims"] == [source]
+            field["claims"] = [link]
+            run = run.replace(fenced("report", report), fenced("report", changed))
+    runs = [run]
+    if target == "other-run":
+        runs.append(run_text(RUN2, decision=None))
+    world.write(runs, records=records, spec=spec_text(neighbours=[P] if link_kind == "neighbour" else []))
+    code, output = world.check(capsys)
+    if link_kind == "disagreement" and target == "other-report":
+        assert code == 0, output  # Judges may compare claims across seats of their own run.
+    else:
+        assert code == 3, output

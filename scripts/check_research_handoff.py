@@ -641,13 +641,22 @@ def check_change(folder: Path, label: str) -> Outcome:
                 seen_questions.add(identifier)
     for run in runs:
         for report in run.reports:
+            report_claims = {claim["id"] for claim in report["claims"]}
             links = [link for q in report["questions"] for link in q["claims"]]
             links += (report.get("class_assessment") or {}).get("claims", [])
             links += [link for rel in report.get("neighbour_relations", []) for link in rel["claims"]]
             for link in links:
-                if link not in seen_claims:
+                if link not in report_claims:
                     raise CannotMeasure(
-                        f"{label}: a claim link of run {run.run_id} names {link}, which no report holds"
+                        f"{label}: a claim link of run {run.run_id} names {link}, which its own report does not hold"
+                    )
+        run_claims = {claim["id"] for report in run.reports for claim in report["claims"]}
+        judge = (run.reconciliation or {}).get("reconciliation", {})
+        for disagreement in judge.get("disagreements", []):
+            for link in disagreement["claims"]:
+                if link not in run_claims:
+                    raise CannotMeasure(
+                        f"{label}: a disagreement of run {run.run_id} names {link}, which no report of that run holds"
                     )
     complete = [run for run in runs if run.complete]
     out.notes.append(f"{label}: {len(runs)} v2 run(s), {len(complete)} complete")

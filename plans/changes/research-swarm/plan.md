@@ -4,7 +4,7 @@ status: draft
 implementation_status: partial
 date: 2026-10-14
 last_reviewed: 2026-10-18
-updated: 2026-10-19
+updated: 2026-10-20
 supersedes: null
 superseded_by: null
 bead: coding-harness-icw
@@ -995,6 +995,9 @@ the existing gates and let the runner own registry regeneration/full verify.
 - 57: tests/test_stage2_swarm.py::test_a_security_refusal_keeps_exit_two_when_finishing_the_store_also_fails — A storage failure while finishing the run is raised ahead of a security refusal, so exit 2 degrades to exit 1.
 - 57: tests/test_stage2_swarm.py::test_a_finder_output_survives_a_failed_terminal_write — A finder that exited ok but whose terminal write failed loses its output from the incomplete publication.
 - 57: tests/test_stage2_swarm.py::test_a_failed_store_finish_never_leaves_a_complete_publication — The run is published complete before the store is finished, so a failed finish leaves a complete record without state-store-unwritable.
+- 44: tests/test_stage2_research_availability.py::test_concurrent_consumers_cannot_share_a_single_use_receipt — Two synchronized consumers both validate the receipt and both start a run (phase-6 F-38).
+- 27: tests/test_research_handoff.py::test_evidence_links_stay_in_their_report_or_judge_run — A question, class or neighbour link names another seat's claim, or a disagreement names a missing claim, and the gate passes (phase-6 F-39).
+- 33: tests/test_research_handoff.py::test_evidence_links_stay_in_their_report_or_judge_run — A malformed evidence link exits other than 3.
 - 44: tests/test_stage2_research_availability.py::test_fresh_receipt_is_consumed_once_and_returns_the_frozen_selection — A receipt at the maximum age is refused, survives its first use, or consumption returns something other than the prepared selection.
 - 44: tests/test_stage2_swarm.py::test_the_receipt_keeps_each_candidates_evidence_and_exclusion — The sealed receipt omits the candidate evidence behind the selection report.
 - 48: tests/test_stage2_research_availability.py::test_slot_plan_is_built_from_the_consumed_selection_and_probes_add_no_slots — The slot plan ignores a substitute or probes change the `39 + 3N` slot count.
@@ -1426,6 +1429,10 @@ preserved verbatim. Any new unbounded implementation span raises a new stop.
 2026-10-15 09:40–10:31 CEST, about 51 minutes (Opus 5.5 sub-agent repair of phase-6 F-2 to F-10 outside `stage2.py repair`, maintainer-approved; four `make verify` runs of about 8–10 minutes each, the first red on formatting and a stale `updated:`; no break).
 
 The earlier plan cited `docs/journal/handover/2026-10-15-research-swarm-loop-one-repair.md`; that file is not present in this worktree and was not read by this redraft.
+
+## Runner route — 2026-10-20
+
+Stage-1 route: repair · model claude-sonnet-5-5 · reason: two Codex post-run checks failed.
 
 ## Time used
 
@@ -2189,6 +2196,14 @@ Hand repair of the phase-6 round-6 rows F-34, F-35, F-36 and F-37, plus two load
 - Flaky `tests/test_stage2_research_catalog.py::test_catalog_shared_deadline_keeps_asymmetric_failure_rules`: a 0.5 s margin between the planted 1.5 s delay and the 2 s deadline was smaller than Pi's start-up under parallel load. Now delays 3 s, deadline 5 s (two delays still exceed the deadline, so sequential reads could not pass).
 - Flaky `tests/test_stage2_research_store.py::test_terminal_record_survives_sigkill_after_the_outcome`: the second child finished by a timer (6 s, then 40 s), so a delayed kill under load still let it write a result; the first hardening failed again in the first full verify. The child now waits for a file the test writes after the kill.
 - Full `make verify` at the last test commit: VERIFY GREEN (3032 passed, 16 skipped, 310 s), log `r6-verify.log` in the scratchpad.
+
+### Phase-6 round-7 repairs — 2026-10-20
+
+Rows F-38 and F-39. Span not measured: this session had no command tool to read `date`, so no time is counted for it.
+
+- F-38: `consume_research` claims the receipt with `path.unlink()` (no `missing_ok`); the loser of a race gets `Refused`. Test `test_concurrent_consumers_cannot_share_a_single_use_receipt`.
+- F-39: `check_change` rejects, with exit 3, a question, class or neighbour link outside its own report and a disagreement link no report of its run holds. Test `test_evidence_links_stay_in_their_report_or_judge_run`.
+- The runner runs `make verify`; it was not run by this session.
 
 ### Orchestrator correction — round-5 and round-6 spans (2026-10-19)
 
