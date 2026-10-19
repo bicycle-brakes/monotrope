@@ -62,6 +62,7 @@ def run_text(
     inventory: str = "derive",
     supported: str = "all",
     extra_blocks: tuple[str, ...] = (),
+    question_link: str | None = None,
 ) -> str:
     """One run, written like the runner writes it; `inventory` is derive, none, drop or corrupt."""
     packet = [{"path": p, "status": "given", "map_keys": []} for p in given]
@@ -72,7 +73,7 @@ def run_text(
         if decision:
             report["questions"] = [
                 {"id": gid(run, 1, seat, "Q1"), "question": decision, "classification": "[DECISION]",
-                 "claims": [gid(run, 1, seat, "C1")]}
+                 "claims": [question_link or gid(run, 1, seat, "C1")]}
             ]  # fmt: skip
         reports.append(report)
         if seat == SEATS[0]:
@@ -314,6 +315,17 @@ def test_unread_or_ambiguous_handoff_is_not_measured(world: World, capsys: pytes
     assert world.check(capsys)[0] == 3, "a field twice in one record"
     world.write([good], records=[q_record(1, items=(f"{RUN1}/H-1",), extra="\nresearch_neighbours: [1]")])
     assert world.check(capsys)[0] == 3, "a neighbour field that is no mapping"
+
+
+def test_a_dangling_question_claim_link_is_not_measured(world: World, capsys: pytest.CaptureFixture[str]) -> None:
+    # Criterion 33 (phase-6 F-33). Planted fault: a report question linking a claim no report holds still
+    # lets an answered record close the derived item, and the gate finds nothing.
+    world.write([run_text(RUN1)], records=[q_record(1, items=(f"{RUN1}/H-1",))])
+    assert world.check(capsys)[0] == 0, "the same report with a real link is measured"
+    dangling = run_text(RUN1, question_link=gid(RUN1, 1, SEATS[0], "C2"))
+    world.write([dangling], records=[q_record(1, items=(f"{RUN1}/H-1",))])
+    code, out = world.check(capsys)
+    assert code == 3, out
 
 
 def item_of(run: str, number: int) -> str:
