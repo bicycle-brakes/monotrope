@@ -3178,3 +3178,16 @@ Stage-2 call, 2026-10-20: repair · attempt 3 · route stage-1 · endpoint claud
 > ```
 
 Orchestrator, 2026-10-20: the round-8 repair run above failed on form, not on the code: attempt 1 added no measured line under `## Time used`, attempt 2 lost one load-sensitive test (`tests/test_stage2_research_store.py`, "driver printed no marker in time"; 3057 passed), attempt 3 changed only `plan.md`. The code in the tree passed a full `make verify` (3058 passed, 16 skipped). Red first was checked by hand: the four tests, copied onto the code at `6c5e31a`, fail there (12 of 13 cases). Booked as a hand repair.
+
+Stage-2 call, 2026-10-20: review · endpoint openai-codex · model gpt-6.1-sol · leak check clean over 536 files, 1597 commits, 12 rules.
+
+## Phase 6 — Codex, 2026-10-20
+
+| ID | Severity | Dimension | Origin | Where | Finding | Reviewer | Status | Broke a test |
+|---|---|---|---|---|---|---|---|---|
+| F-44 | BLOCKER | SPEC | fix-r6 | `scripts/stage2_research_dispatch.py:73–103` | Cancellation still leaves descendants alive when the process-group leader exits before `_stop_and_reap()` begins. New evidence after the earlier cancellation repair: a local subprocess reproduction reaps the leader first, then calls the stop routine; its descendant survives. `_own_group()` returns false for the vanished leader, so neither signal reaches the surviving group. Security cancellation must stop that group. [criteria 12, 36] | Codex | open | — |
+| F-45 | BLOCKER | SPEC | base | `scripts/check_research_handoff.py:298–324` | The gate accepts contradictory claim dispositions. Reproduced through `check_change()`: the judge marks a claim refuted, the stored scores list it as both refuted and supported, and a criterion cites it; the gate returns no findings. It trusts the supported list without checking exclusive dispositions or agreement with the judge. Contradictory evidence must produce not-measured exit 3. [criteria 33–34] | Codex | open | — |
+| F-46 | MAJOR | SPEC | base | `scripts/stage2_research_run.py:429–440` | An invocation interrupted by SIGKILL before its terminal callback loses its individual leak-check evidence. Capturing `write_launch()` confirms that the durable launch record contains identity, prompt hash and time but no leak-check record; the audit line remains buffered in memory. Recovery can name the interrupted slot but cannot recover its check. The check must be durable before launch. [criteria 13, 51] | Codex | open | — |
+
+Phase 6 verdict: codex 01a1568b-9fc2-7d40-b892-ea021a1f8dae, 2026-10-20
+Reviewer session: codex 01a1568b-9fc2-7d40-b892-ea021a1f8dae — a fresh session reviewed: an earlier ## Phase 6 block makes this a re-check
