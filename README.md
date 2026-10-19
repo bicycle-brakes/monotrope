@@ -45,7 +45,7 @@ Monotrope turns all three into files and checks.
 A change runs through seven phases. Each phase leaves one file, and the next
 phase reads that file instead of a chat.
 
-Orange boxes are the only moments that need you; everything else is done by
+Terracotta boxes are the only moments that need you; everything else is done by
 agents and checked by machines.
 
 ```mermaid
@@ -67,8 +67,9 @@ flowchart TD
     C["<b>7 · Commit</b><br/>pull request, CI"] --> Y4
     Y4(["You: merge<br/>the merge is the decision"])
 
-    classDef you fill:#f4a259,stroke:#b5651d,color:#1a1a1a
-    classDef check fill:#dbe7f0,stroke:#5b7c99,color:#1a1a1a
+    classDef default fill:#F3EBDD,stroke:#788773,stroke-width:1.5px,color:#292F2D
+    classDef you fill:#F6D9C8,stroke:#CE663B,stroke-width:2.5px,color:#292F2D
+    classDef check fill:#DCE4E8,stroke:#34566A,stroke-width:2px,color:#292F2D
     class Y1,Y2,Y3,Y4 you
     class V,R check
 ```
@@ -144,7 +145,8 @@ only approval**:
       G --> F
       T --> F
 
-      classDef you fill:#f4a259,stroke:#b5651d,color:#1a1a1a
+      classDef default fill:#F3EBDD,stroke:#788773,stroke-width:1.5px,color:#292F2D
+      classDef you fill:#F6D9C8,stroke:#CE663B,stroke-width:2.5px,color:#292F2D
       class D you
   ```
 
