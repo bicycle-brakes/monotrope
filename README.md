@@ -45,17 +45,32 @@ Monotrope turns all three into files and checks.
 A change runs through seven phases. Each phase leaves one file, and the next
 phase reads that file instead of a chat.
 
+Orange boxes are the only moments that need you; everything else is done by
+agents and checked by machines.
+
 ```mermaid
-flowchart LR
-    E[Explore] --> I[Interview]
-    I -->|you answer| S[Spec]
-    S --> PL[Plan]
-    PL -->|you read the card| IM[Implement]
-    IM --> V[Verify]
-    V -->|red: back to implementing| IM
-    V -->|green| R[Review]
-    R --> C[Commit]
-    C -->|you merge| M[Merged]
+flowchart TD
+    Y1(["You: describe the goal"]) --> E
+    E["<b>1 · Explore</b><br/>an agent studies the code<br/><i>research.md</i>"] --> I
+    I["<b>1a · Interview</b><br/>it asks only what is yours to decide<br/><i>decisions.md</i>"] --> Y2
+    Y2(["You: answer the questions"]) --> S
+    S["<b>2 · Spec</b><br/>what exactly will change<br/><i>spec.md</i>"] --> P
+    P["<b>3 · Plan</b><br/>steps, time limit, when it is done<br/><i>plan.md</i>"] --> Y3
+    Y3(["You: read the plan card<br/>silence means go"]) --> IM
+    IM["<b>4 · Implement</b><br/>code and tests"] --> V
+    V{"<b>5 · Verify</b><br/>all gates green?"}
+    V -- "red" --> IM
+    V -- "green" --> R
+    R["<b>6 · Review</b><br/>a fresh reviewer from another vendor<br/><i>findings.md</i>"]
+    R -- "a finding a test or the spec backs" --> IM
+    R -- "nothing to fix" --> C
+    C["<b>7 · Commit</b><br/>pull request, CI"] --> Y4
+    Y4(["You: merge<br/>the merge is the decision"])
+
+    classDef you fill:#f4a259,stroke:#b5651d,color:#1a1a1a
+    classDef check fill:#dbe7f0,stroke:#5b7c99,color:#1a1a1a
+    class Y1,Y2,Y3,Y4 you
+    class V,R check
 ```
 
 | # | Phase | What it leaves | The question it answers |
@@ -100,6 +115,21 @@ only approval**:
   explored, not asked. `[DETAIL]` is decided by the agent, with its reason
   written into the artefact. Afterwards you can see who decided what, and
   where the work departed from the plan.
+
+  ```mermaid
+  flowchart LR
+      Q["An open point<br/>comes up"] --> K{"What kind<br/>of point?"}
+      K -- "intent, irreversible, risky" --> D(["<b>[DECISION]</b><br/>you decide"])
+      K -- "a missing fact" --> G["<b>[GAP]</b><br/>the agent looks it up,<br/>does not ask"]
+      K -- "a name, an order, a format" --> T["<b>[DETAIL]</b><br/>the agent decides<br/>and writes down why"]
+      D --> F["Recorded in the<br/>change's files"]
+      G --> F
+      T --> F
+
+      classDef you fill:#f4a259,stroke:#b5651d,color:#1a1a1a
+      class D you
+  ```
+
 - **A decision takes effect when its pull request is merged** — not when
   someone typed "yes" into a chat.
 - **Evidence over summaries.** At the merge you judge a change by its tests,
