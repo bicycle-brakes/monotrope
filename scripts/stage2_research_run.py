@@ -42,7 +42,7 @@ from stage2_research_history import ResearchHistoryError, build_research_history
 from stage2_research_judge import ResearchJudgeError, build_research_judge_packet, research_claim_scores
 from stage2_research_report import ResearchReportError, _keys, _load, research_seat_id, validate_research_report
 from stage2_research_snapshot import ResearchSnapshotError, _without_updated, freeze_research_state, stored_binding
-from stage2_research_store import Store, StoreLocked, StoreWriteError, plan_reuse, research_dir
+from stage2_research_store import STOP_REASON, Store, StoreLocked, StoreWriteError, plan_reuse, research_dir
 
 CLOCK = time.monotonic  # injectable; the dispatcher and all deadlines of the run read it
 
@@ -223,6 +223,7 @@ class Run:
         self.state = None
         self.store: Store | None = None
         self.locked = False
+        self.store_failure: str | None = None
         self.run_id: str | None = None
         self.source = None
         self.not_reused: list[tuple[str, str]] = []
@@ -1043,8 +1044,29 @@ class Run:
         )
 
     def publish(self, status: str) -> str:
-        """Append the buffered record once, with the status, and return the status line."""
+        """Append the buffered record once, with the status, and return the status line.
+
+        A failed binding write (F-20, criterion 57) does not lose the record: it is appended once, with the
+        status rewritten to incomplete and the reason ``state-store-unwritable``; ``self.store_failure``
+        carries the status the run must end with.
+        """
         assert self.store is not None and self.run_id is not None
+        text = self.compose(status)
+        existing = self.ctx.research.read_bytes()
+        tail = (b"\n" if existing and not existing.endswith(b"\n") else b"") + b"\n" + text.rstrip().encode() + b"\n"
+        try:
+            self.store.set_append(
+                self.run_id, stored_binding(self.manifest, self.research_rel, self.research_bytes, append=tail)
+            )
+        except (ResearchSnapshotError, StoreWriteError) as error:
+            failure = f"the research state store failed ({STOP_REASON}: {error})"
+            status = f"{status}; {failure}" if status.startswith("incomplete") else f"incomplete - {failure}"
+            self.store_failure = status
+            text = self.compose(status)  # the record still lands, and now says why it is incomplete
+        self.runner.append(self.ctx.research, text)
+        return f"run {self.run_id} status: {status}."
+
+    def compose(self, status: str) -> str:
         parts = [
             f"<!-- research-swarm/v2 run {self.run_id} -->",
             f"## Research swarm — {self.runner.today()}",
@@ -1101,15 +1123,7 @@ class Run:
             parts.append("### Audit\n\n" + "\n".join(f"- {line}" for line in self.lines))
         status_line = f"run {self.run_id} status: {status}."
         parts += [status_line, "<!-- /research-swarm/v2 -->"]
-        text = "\n\n".join(parts)
-        existing = self.ctx.research.read_bytes()
-        tail = (b"\n" if existing and not existing.endswith(b"\n") else b"") + b"\n" + text.rstrip().encode() + b"\n"
-        with contextlib.suppress(ResearchSnapshotError, StoreWriteError):  # the record still lands
-            self.store.set_append(
-                self.run_id, stored_binding(self.manifest, self.research_rel, self.research_bytes, append=tail)
-            )
-        self.runner.append(self.ctx.research, text)
-        return status_line
+        return "\n\n".join(parts)
 
     def close(self) -> None:
         for tmp in self.scratch.values():
@@ -1151,6 +1165,8 @@ def run(root: Path, change: str, runner, klass: str, selection: dict) -> None:
         if status == "complete" and failed_free:
             status = "complete - best-effort free seats did not finish: " + ", ".join(sorted(failed_free))
         line = current.publish(status)
+        if current.store_failure:  # a binding write failed (F-20): the record already says incomplete
+            status = current.store_failure
         complete = status.startswith("complete")
         refusal = {"slot": current.security.split(":")[0], "reason": current.security} if current.security else None
         try:

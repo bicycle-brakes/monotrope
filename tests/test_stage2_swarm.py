@@ -2446,6 +2446,22 @@ def test_a_failed_store_write_keeps_every_outcome_and_still_publishes_incomplete
     assert len(finders) == 3 and all(s["outcome"] for s in finders), "every finder keeps its terminal outcome"
 
 
+def test_a_failed_append_binding_write_ends_incomplete_with_exit_one(
+    sworld: SwarmWorld, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    # Criterion 57 (phase-6 F-20). Planted fault: a failure writing only the research-append binding is
+    # suppressed, so the run publishes complete and exits 0 with no storage failure on record.
+    def broken(*_args, **_kwargs):
+        raise stage2_research_store.StoreWriteError("disk full")
+
+    monkeypatch.setattr(stage2_research_store.Store, "set_append", broken)
+    sworld.complete()
+    assert sworld.run() == 1
+    text = sworld.research.read_text(encoding="utf-8")
+    assert manifest_of(sworld)["status"].startswith("incomplete"), "the record must not read complete"
+    assert "state-store-unwritable" in text
+
+
 def test_an_aborted_run_names_every_expected_slot_with_its_outcome(sworld: SwarmWorld) -> None:
     # Criterion 18 (phase-6 F-17). Planted fault: after a finder fails the manifest lists only the three finder
     # slots; merge, topic author, topic slots and judge carry neither identity nor outcome.
