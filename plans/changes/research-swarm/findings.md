@@ -2628,3 +2628,16 @@ Stage-2 call, 2026-10-19: review · endpoint openai-codex · model gpt-6.1-sol �
 
 Phase 6 verdict: codex 01a15451-9861-7fe0-8369-255c5c01d9b9, 2026-10-19
 Reviewer session: codex 01a15451-9861-7fe0-8369-255c5c01d9b9 — a fresh session reviewed: an earlier ## Phase 6 block makes this a re-check
+
+Stage-2 call, 2026-10-19: review · endpoint openai-codex · model gpt-6.1-sol · leak check clean over 536 files, 1549 commits, 12 rules.
+
+## Phase 6 — Codex, 2026-10-19
+
+| ID | Severity | Dimension | Origin | Where | Finding | Reviewer | Status | Broke a test |
+|---|---|---|---|---|---|---|---|---|
+| F-28 | MAJOR | SPEC | fix-r3 | `scripts/stage2_research_run.py:1184–1193`; `scripts/stage2_research_store.py:374–377` | The run is stored as complete before research is published. Reproduced with `publish()` raising `OSError`: nothing is published, but the next resume rejects the finished results as “was published complete,” forcing their calls to repeat despite unchanged inputs. A failed publication must preserve reuse eligibility. [criterion 53] | Codex | open | — |
+| F-29 | MAJOR | SPEC | base | `scripts/stage2_research_run.py:1113–1116,1202–1204` | A free researcher that retrieves a page and then times out with empty stdout/stderr loses its receipt. Reproduced through `compose()`: receipts alone produce no partial-evidence block. When required seats succeed, completion clears the store containing the only remaining receipt. Available retrieval evidence must survive that best-effort failure. [criterion 18; design, Data model — Slot] | Codex | open | — |
+| F-30 | MAJOR | SPEC | base | `scripts/stage2_research_run.py:1202–1207` | Reproduced with `Store.clear()` raising `StoreWriteError`: the command fails with exit 1 after publishing status `complete`, without recording `state-store-unwritable`. The handoff gate can consequently consume a run whose storage operation failed. This failure must leave an incomplete publication with the required reason. [criterion 57] | Codex | open | — |
+
+Phase 6 verdict: codex 01a154b3-c0dd-7ed3-aa10-32f5f7fda4c1, 2026-10-19
+Reviewer session: codex 01a154b3-c0dd-7ed3-aa10-32f5f7fda4c1 — a fresh session reviewed: an earlier ## Phase 6 block makes this a re-check
