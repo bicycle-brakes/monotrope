@@ -1168,6 +1168,13 @@ def build_report(data: dict) -> dict:
             ),
         )
     )
+    if data["real"]:
+        selection = data["selection"]
+        reasons = [f"selected free ids: {selection.get('selected')}", f"outcome: {selection.get('selection_outcome')}"]
+        broken = bool(selection.get("error") or selection.get("synthetic") or len(selection.get("selected") or []) < 2)
+        if selection.get("error"):
+            reasons.append(f"the catalog helper or selection failed: {selection['error']}")
+        checks.append(_check("catalog", "Dynamic Go free selection from the mock catalog", reasons, broken))
     hits = canary_hits(records, world.canaries)
     seats_out = []
     labels = [seat["label"] for seat in data["seats"]] + ["probe"]
