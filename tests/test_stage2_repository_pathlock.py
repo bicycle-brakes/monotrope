@@ -107,7 +107,14 @@ def test_a_home_shortcut_and_the_at_prefix_do_not_get_around_the_lock(world: Wor
 
 
 def test_a_path_inside_the_worktree_is_let_through(world: World) -> None:
-    for path in ("src/a.txt", str(world.root / "src" / "a.txt"), "src/../src/a.txt", "link-inside/a.txt", ".", "no/such/file"):
+    for path in (
+        "src/a.txt",
+        str(world.root / "src" / "a.txt"),
+        "src/../src/a.txt",
+        "link-inside/a.txt",
+        ".",
+        "no/such/file",
+    ):
         assert world.gate("read", path=path) is None, path
     assert world.gate("ls", path=".") is None
     assert world.gate("ls") is None  # no path: the working directory
@@ -155,7 +162,9 @@ def test_the_repository_seat_launch_loads_only_the_path_lock(tmp_path: Path) -> 
     run = Run.__new__(Run)
     run.root, run.change, run.key = tmp_path, "some-change", "k"
     run.selection = {}
-    run.runner = SimpleNamespace(PI_WRAPPER=Path("/pinned/pi"), PI_TOOLS=stage2.PI_TOOLS, foreign_env=stage2.foreign_env)
+    run.runner = SimpleNamespace(
+        PI_WRAPPER=Path("/pinned/pi"), PI_TOOLS=stage2.PI_TOOLS, foreign_env=stage2.foreign_env
+    )
     scratch = tmp_path / "seat"
     scratch.mkdir()
     command, cwd, _env = run.pi_command({"model": "qwen3.8-flash", "tools": "repository"}, "prompt", scratch)

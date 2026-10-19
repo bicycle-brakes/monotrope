@@ -757,8 +757,9 @@ def test_catalog_shared_deadline_keeps_asymmetric_failure_rules(tmp_path, source
     assert failure.value.exit_code == 1
     assert len(sources.requests) == 2, "a timed-out read was retried"
     # Pi on time, models.dev timed out: a reasoned, required-slot-preserving selection; an explicit include is fatal.
-    sources.pi_delay, sources.metadata_delay = 0.0, 3.0
-    bridge = collect(tmp_path, sources, deadlineMs=1000)
+    # The deadline leaves room for Pi's own start under load (a 1 s deadline timed Pi out on a busy machine).
+    sources.pi_delay, sources.metadata_delay = 0.0, 6.0
+    bridge = collect(tmp_path, sources, deadlineMs=3000)
     result = select(bridge)
     assert result["capability_reason"] == "timeout" and result["fixed"] == FIXED and result["selected"] == []
     with pytest.raises(swarm.ResearchCatalogError) as failure:

@@ -182,7 +182,10 @@ def test_the_two_destination_check_refusals_of_the_real_capture_count_as_refused
     records = clean_records()
     for number, (url, text) in enumerate(
         (
-            ("http://127.0.0.1:63448/sink/private-http", "only https:// destinations are fetched \u2014 no http, no file"),
+            (
+                "http://127.0.0.1:63448/sink/private-http",
+                "only https:// destinations are fetched \u2014 no http, no file",
+            ),
             ("https://127.0.0.1:63448/sink/private-https", "only port 443 is fetched"),
         )
     ):
