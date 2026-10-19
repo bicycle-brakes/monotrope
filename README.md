@@ -320,3 +320,8 @@ To start a change, create its bead first, then
 - **Decisions** take effect when the maintainer merges their pull request.
 - **One change, one worktree,** under `.claude/worktrees/`.
 - **Language.** Repository artefacts are in English.
+
+## License
+
+Apache-2.0 — see [`LICENSE`](LICENSE) (added with the public-readiness pull
+request).
