@@ -293,6 +293,12 @@ if stdout.startswith("AUTO") and kind == "judge":
     if variant == "dissent":
         body["disagreements"] = [{"claims": claims[:2], "summary": "two seats differ on the value"}]
         body["human_questions"] = ["Which seat is right about the value?"]
+    if variant.startswith("unhashable-"):
+        bad = {"claims": [claims[0], {}], "summary": "x"} if variant.endswith("claims") else None
+        if variant.endswith("verdict"):
+            body["claim_judgements"] = [{"claim": [], "disposition": "supported", "unique": False}]
+        else:
+            body["disagreements"] = [bad]
     if variant == "answer-field":
         body["answer"] = "use option A"
     stdout = json.dumps(body)
@@ -1690,6 +1696,19 @@ def test_unresolved_dissent_and_human_questions_survive_reconciliation(sworld: S
     assert sworld.run() == 1, "the judge schema permits no answer field"
 
 
+@pytest.mark.parametrize("variant", ["unhashable-claims", "unhashable-verdict"])
+def test_a_judge_answer_with_unhashable_members_is_a_malformed_contribution(
+    sworld: SwarmWorld, variant: str
+) -> None:
+    # Criterion 18 (phase-6 F-32). Planted fault: a disagreement naming ["known-id", {}] raises an unhandled
+    # TypeError instead of ending the run incomplete with the evidence retained.
+    sworld.complete(judge=[{"stdout": f"AUTO:{variant}"}])
+    assert sworld.run() == 1
+    text = sworld.research.read_text(encoding="utf-8")
+    assert manifest_of(sworld)["status"].startswith("incomplete")
+    assert "research-swarm/v2 reports" in text or "research-swarm/v2 partial" in text
+
+
 @pytest.mark.parametrize(
     "evidence",
     [["src/app.py:1"], ["src/app.py"], ["src/app.py::no_such_symbol"], ["src/app.py::value", "src/app.py:1-2"]],
@@ -2530,6 +2549,51 @@ def test_a_failed_publication_keeps_the_results_reusable(sworld: SwarmWorld, mon
     resume = manifest_of(sworld)["resume"]
     assert resume["usable"] is True, resume
     assert len(sworld.calls()) <= 1, "the finished results are reused, not repeated"
+
+
+def test_a_run_killed_after_staging_the_clear_is_recovered_on_resume(
+    sworld: SwarmWorld, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    # Criterion 53 (phase-6 F-31). Planted fault: a process killed after the store was staged for clearing but
+    # before the record was appended leaves every run under a staging name, and resume reports "no stored run".
+    real_append = stage2.append
+
+    def killed(*_args, **_kwargs):
+        raise OSError("killed")
+
+    monkeypatch.setattr(stage2, "append", killed)
+    real_restore = stage2_research_store.Store.restore_clear
+    monkeypatch.setattr(stage2_research_store.Store, "restore_clear", lambda self, staging: None)  # no cleanup ran
+    sworld.complete()
+    with contextlib.suppress(OSError):
+        sworld.run()
+    monkeypatch.setattr(stage2_research_store.Store, "restore_clear", real_restore)
+    assert "research-swarm/v2" not in sworld.research.read_text(encoding="utf-8")
+    monkeypatch.setattr(stage2, "append", real_append)
+    (sworld.bin / "calls.jsonl").unlink()
+    assert sworld.run() == 0
+    resume = manifest_of(sworld)["resume"]
+    assert resume["usable"] is True, resume
+    assert len(sworld.calls()) <= 1, "the finished results are reused, not repeated"
+
+
+def test_a_staged_run_whose_record_was_published_is_not_resurrected(
+    sworld: SwarmWorld, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    # Criterion 53 (phase-6 F-31). A run killed after the append but before the staged runs were deleted must
+    # not come back: its record is published, so resume finds nothing and the staging is removed.
+    real_commit = stage2_research_store.Store.commit_clear
+    monkeypatch.setattr(stage2_research_store.Store, "commit_clear", lambda self: None)  # killed before deletion
+    sworld.complete()
+    assert sworld.run() == 0
+    monkeypatch.setattr(stage2_research_store.Store, "commit_clear", real_commit)
+    store_dir = stage2_research_store.research_dir("demo")
+    assert list(store_dir.glob(".discarded-*")), "the planted kill left the staging behind"
+    sworld.complete()
+    (sworld.bin / "calls.jsonl").unlink()
+    assert sworld.run() == 0
+    assert not list(store_dir.glob(".discarded-*")), "published staging is deleted"
+    assert "no stored run" in json.dumps(manifest_of(sworld)["resume"])
 
 
 def test_a_receipt_without_output_survives_a_complete_run(sworld: SwarmWorld, monkeypatch: pytest.MonkeyPatch) -> None:

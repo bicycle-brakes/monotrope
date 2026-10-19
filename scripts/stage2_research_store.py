@@ -348,6 +348,37 @@ class Store:
                 if entry.name.startswith(DISCARD_PREFIX) and not entry.is_symlink() and entry.is_dir():
                     shutil.rmtree(entry, ignore_errors=True)
 
+    def recover_staged(self, research_text):
+        """Settle a staging an earlier process left behind (F-31); best effort, never raises.
+
+        A run that sits in a staging directory is either published or not: its record carries the marker
+        ``research-swarm/v2 run <id>`` in ``research.md`` once the append happened. A published run is
+        deleted (it was cleared); an unpublished one is moved back, so resume finds its results again.
+        """
+        try:
+            stagings = [
+                e
+                for e in self.directory.iterdir()
+                if e.name.startswith(DISCARD_PREFIX) and e.is_dir() and not e.is_symlink()
+            ]
+        except OSError:
+            return
+        for staging in stagings:
+            with contextlib.suppress(OSError):
+                for entry in staging.iterdir():
+                    published = f"research-swarm/v2 run {entry.name} -->" in research_text
+                    if published or not RUN_ID.fullmatch(entry.name) or (self.directory / entry.name).exists():
+                        shutil.rmtree(entry, ignore_errors=True) if entry.is_dir() else entry.unlink()
+                    else:
+                        entry.rename(self.directory / entry.name)
+                        # finish_run marks a run complete before its record is published (F-26); a run
+                        # restored here never was published, so it must not read as published complete
+                        run = _read_sealed(self.directory / entry.name / "run.json")
+                        if run is not None and run.get("state") == "complete":
+                            self._update_run(entry.name, state="incomplete")
+            with contextlib.suppress(OSError):
+                staging.rmdir()
+
     # -- reading ----------------------------------------------------------------------------
 
     def _run_directories(self):
@@ -391,6 +422,7 @@ class Store:
 
     def resume_source(self, manifest, research_path, research_bytes):
         """The latest stored run as a source for a new run with this frozen state; nothing older."""
+        self.recover_staged(research_bytes.decode("utf-8", errors="replace"))
         directories = self._run_directories()
         runs = self.runs()
         unreadable = [
