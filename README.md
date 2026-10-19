@@ -2,8 +2,9 @@
 
 **Let AI agents do the work. Keep the decisions and the evidence.**
 
-A file-based workflow for Claude Code that makes AI-assisted software changes
-easier to resume, inspect and hand over.
+A file-based workflow for AI coding agents. Claude Code, Codex and Cline all
+read the same instruction file, so a change survives the harness it was
+started in and stays resumable, inspectable and handover-ready.
 
 Agents research, plan, implement and review changes. You own the intent and
 the consequential decisions. Versioned files keep the working context, the
@@ -45,10 +46,13 @@ flowchart TD
 ```
 
 **Checks leave evidence.**
-Tests and CI run during the work, not only at the end: a red run stops it.
-Reviewers write their findings into a table, a finding is acted on only when
-a test or the spec backs it, and when two reviewers disagree, both views stay.
-At the merge you judge a change by its evidence, not by a summary.
+Tests and CI run during the work, not only at the end: a red *blocking* gate
+stops it. The nightly drift job reports and does not block — the tracker and
+the outside world move without a commit here, so a red night is a finding to
+work, not a stop. Reviewers write their findings into a table, a finding is
+acted on only when a test or the spec backs it, and when two reviewers
+disagree, both views stay. At the merge you judge a change by its evidence,
+not by a summary.
 
 **Model access has explicit boundaries.**
 Calls to models from other vendors go through one runner. It checks that the
@@ -66,19 +70,17 @@ ADHD, and it holds for every reader: nobody should get lost in the work.
 
 ## Follow one completed change
 
-The change "attempt diagnostics" (pull request
-[#127](https://github.com/MPAdesso/coding-harness/pull/127), merged
-2026-10-12) shows each step with real files:
+The change "frontmatter-current" (bead coding-harness-qd7, archived
+2026-09-29) shows each step with real files:
 
 | Question | Where to see it |
 |---|---|
-| What was the task? | A failed implement attempt left no trace of why it failed or what it wrote. [`research.md`](plans/changes/attempt-diagnostics/research.md) |
-| What did a person decide? | To record the diagnostics *and* a list of the files each attempt changed. [`decisions.md`](plans/changes/attempt-diagnostics/decisions.md) |
-| What did the agent decide itself? | Format details, each marked `[DETAIL]` with its reason, for example "files first, diagnostics second". [`spec.md`](plans/changes/attempt-diagnostics/spec.md) |
-| What was the contract? | The plan card: what changes for the maintainer, and when it counts as done. [`plan.md`](plans/changes/attempt-diagnostics/plan.md) |
-| Which check found a defect? | Review finding F-1 (MAJOR): a fallback attempt could store a fragment of a credential before the credential scan. It was reproduced. [`findings.md`](plans/changes/attempt-diagnostics/findings.md) |
-| How was it fixed? | Scan with the known key before the snapshot; the row reads `fixed`, with the test that now holds it. |
-| What evidence stood at the merge? | The findings table with every row decided, the tests named per criterion, and green CI. |
+| What was the task? | A document's header said when it was last *reviewed*, not when its content last changed — and nothing failed on a stale one. [`research.md`](plans/changes/archive/2026-09-29-frontmatter-current/research.md) |
+| What did a person decide? | In the maintainer's words: "The frontmatter headers in the files must always be maintained and current. This must be a basic mechanism." [`decisions.md`](plans/changes/archive/2026-09-29-frontmatter-current/decisions.md) |
+| What did the agent decide itself? | Mechanics, each marked `[DETAIL]` with its reason — for example which of the two key lists owns the held prefixes. [`spec.md`](plans/changes/archive/2026-09-29-frontmatter-current/spec.md) |
+| What was the contract? | The plan card: written for one option of a `[DECISION]`, with the one step the other option would change. [`plan.md`](plans/changes/archive/2026-09-29-frontmatter-current/plan.md) |
+| Which check found a defect? | Review finding F-1 (MAJOR): the ADR headers said `status: accepted` where the body recorded the ADR as superseded — a reader of the header alone would believe ADR 0001 is in force. The row reads `fixed in 0f4101f`. [`findings.md`](plans/changes/archive/2026-09-29-frontmatter-current/findings.md) |
+| What evidence stood at the merge? | The findings table with every row decided, and green CI — and the gate that came out of it, `frontmatter-current`, still runs on every pull request. |
 
 ## What a change asks of you
 
@@ -103,14 +105,15 @@ flowchart LR
 
 ## What works today and what is still coming
 
-Checked on 2026-10-16 against `origin/main` at `6029bbf`.
+Checked on 2026-10-19 against `origin/main` at `59630b7`.
 
 **Enforced by tooling**
 
 - `make verify` and CI run the gate list in `decisions/gates.yaml`: tests,
-  lint, document links, and process checks such as the interview minimums,
-  the context on every recorded answer and a named proof for every
-  acceptance criterion.
+  lint, and process checks such as the interview minimums, the context on
+  every recorded answer and a named proof for every acceptance criterion.
+  Every gate declares whether it blocks or only reports; the document-link
+  check still reports (35 known corpus findings), the others block.
 - The stage-2 runner (`scripts/stage2.py`) checks the endpoint and runs the
   leak check before every call to another vendor.
 
@@ -123,9 +126,11 @@ Checked on 2026-10-16 against `origin/main` at `6029bbf`.
 **Not built yet**
 
 - The artefact validator, the stop hook that blocks on a red tree, the slash
-  commands, the `make change` target and the gate catalogue that the doctrine
+  commands, the `make change` target (the script `scripts/new_change.py`
+  exists; the target does not) and the gate catalogue that the doctrine
   names. Where the doctrine describes them, it describes the target.
-- The review swarm and the research swarm: designed, in progress, not merged.
+- The research swarm: an open decision pull request (ADR 0020). The review
+  swarm is merged (ADR 0021) and its loop runs until a round is clean.
 - Keeping the work of a failed model call instead of deleting it: in
   progress.
 - Stage 3, orchestration of parallel agents: evaluative only.
@@ -153,6 +158,8 @@ To start a change, the bead must already exist:
   data classes, the swarms and the three stages.
 - [The doctrine](docs/WORKFLOW.md): every rule, gate and route in full.
 - [Architecture decisions](docs/adr/): why it is built this way.
+- [The session handovers](docs/journal/handover/): the file a session leaves
+  for the next one — objective, evidence, what is open, and where to resume.
 - [`model-endpoints.yaml`](model-endpoints.yaml): which model may see which data.
 - [`AGENTS.md`](AGENTS.md): the instructions every agent harness reads.
 
