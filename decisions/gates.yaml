@@ -50,7 +50,7 @@ tools:
 gates:
   - id: pytest
     title: The test suite passes
-    command: python3 -m pytest tests/ -q
+    command: python3 -m pytest tests/ -q -n auto
     job: verify
     enforcement: block
     floor: true
