@@ -96,6 +96,24 @@ What a change asks of you is short:
    limit, what is left out. The work starts unless you say stop.
 3. **Merge the pull request.**
 
+## Not every change is the same size
+
+Every change names its class in the head of its spec. The class sets how much
+process the change gets; the kind of an open point (below) sets who decides
+it.
+
+| | `spike` | `bounded` | `feature` | `architectural` |
+| --- | --- | --- | --- | --- |
+| What it is | answers a question; the output is a recommendation | changes an existing, readable flow without deciding anything new | a self-contained deliverable that changes what the system must do or how it is checked | a new subsystem or a broken interface |
+| Questions you must answer | three topics, or a reasoned skip | one, or a reasoned skip | at least three | five when it creates or changes an ADR |
+| Design phase (2b) | never | never | yes, or one sentence why not | always, with an ADR draft |
+| Review by another vendor | no | yes | yes | yes |
+
+A gate counts the answered questions against the class's minimum. Nothing yet
+checks that the class itself is right: a `feature` declared as a `spike` would
+skip the other-vendor reviews, and only the review before the merge catches
+it.
+
 ## How it differs
 
 Most ways of working with coding agents keep the state in the conversation:
@@ -136,6 +154,22 @@ only approval**:
   its findings table and green checks, not by an agent's account of itself.
 - **It says what is not enforced.** Every rule is labelled: enforced by a
   tool, a written rule agents follow, or not built yet.
+
+## Where decisions live
+
+Every decision is a file, and each kind has one place:
+
+| Decision | Where it is recorded |
+| --- | --- |
+| Your answers in a change's interview — the `[DECISION]` points | `plans/changes/<name>/decisions.md`, in your words where you gave them, with the date and the question asked |
+| The agent's own choices — the `[DETAIL]` points — and departures from the plan | marked lines with their reason in the same change's `spec.md`, `design.md` or `plan.md` |
+| Your answer to "does this change need an architecture decision record?" | `decisions/answers/<change>/adr.yaml`: the answer, the reason, the proposal you were shown, who answered and when; a gate checks it |
+| Architecture decisions | `docs/adr/`; a record takes effect when its pull request is merged |
+
+Which files only a person may change is declared in `provenance.yaml`; a pull
+request that touches one is a decision pull request. A finished change moves
+to `plans/changes/archive/` with its decisions. Session handovers repeat the
+decisions of a session, but they are a summary, not the record.
 
 ## What is special
 
