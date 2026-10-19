@@ -98,9 +98,38 @@ class ParsedRun:
         return {claim for entry in scores for claim in entry["supported"]["claims"]}
 
 
+def _no_duplicate_pairs(pairs: list[tuple[str, object]]) -> dict:
+    keys = [key for key, _ in pairs]
+    repeated = sorted({key for key in keys if keys.count(key) > 1})
+    if repeated:
+        raise ValueError(f"the key {repeated[0]!r} stands twice in one object")
+    return dict(pairs)
+
+
+class _UniqueKeyLoader(yaml.SafeLoader):
+    """A safe YAML loader that refuses a mapping naming one key twice (the last would win silently)."""
+
+
+def _construct_unique_mapping(loader: _UniqueKeyLoader, node: yaml.MappingNode, deep: bool = False) -> dict:
+    seen: set[object] = set()
+    for key_node, _ in node.value:
+        key = loader.construct_object(key_node, deep=True)
+        if key in seen:
+            raise yaml.YAMLError(f"the key {key!r} stands twice in one mapping")
+        seen.add(key)
+    return loader.construct_mapping(node, deep=deep)
+
+
+_UniqueKeyLoader.add_constructor(yaml.resolver.BaseResolver.DEFAULT_MAPPING_TAG, _construct_unique_mapping)
+
+
+def _yaml_load(text: str) -> object:
+    return yaml.load(text, Loader=_UniqueKeyLoader)  # noqa: S506 - SafeLoader subclass
+
+
 def _json(body: str, where: str) -> object:
     try:
-        return json.loads(body)
+        return json.loads(body, object_pairs_hook=_no_duplicate_pairs)
     except ValueError as error:
         raise CannotMeasure(f"{where}: a record is not valid JSON ({error})") from error
 
@@ -401,7 +430,7 @@ def parse_decisions(text: str, label: str) -> dict[str, QRecord]:
             if name not in found:
                 continue
             try:
-                loaded = yaml.safe_load(_snippet(body, found[name]))
+                loaded = _yaml_load(_snippet(body, found[name]))
             except yaml.YAMLError as error:
                 raise CannotMeasure(f"{label} {ident}: {name} is not readable ({error})") from error
             content = loaded.get(name) if isinstance(loaded, dict) else None
@@ -518,7 +547,7 @@ def _header(spec_text: str) -> dict:
     if not matched:
         return {}
     try:
-        loaded = yaml.safe_load(matched.group(1))
+        loaded = _yaml_load(matched.group(1))
     except yaml.YAMLError as error:
         raise CannotMeasure(f"spec.md: the header is not readable ({error})") from error
     return loaded if isinstance(loaded, dict) else {}

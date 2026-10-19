@@ -588,3 +588,18 @@ def test_every_direct_basis_claim_must_be_supported(world: World, capsys: pytest
     ok = f"`{gid(RUN1, 1, SEATS[1], 'C1')}`"
     world.write([run], records=[q_record(1, items=items)], spec=spec_text(neighbours=[], basis=(ok,)))
     assert world.check(capsys)[0] == 0
+
+
+def test_duplicate_keys_in_records_are_not_measured(world: World, capsys: pytest.CaptureFixture[str]) -> None:
+    # Criterion 33 (phase-6 F-16). Planted fault: the last of two equal JSON or YAML keys wins silently.
+    good = run_text(RUN1)
+    neighbours = (
+        "\nresearch_neighbours:\n  keep: [plans/changes/a/spec.md]\n  keep: [plans/changes/b/spec.md]"
+    )
+    record = q_record(1, items=(f"{RUN1}/H-1",)) + neighbours
+    world.write([good], records=[record], spec=spec_text(neighbours=["plans/changes/b/spec.md"]))
+    assert world.check(capsys)[0] == 3, "a nested YAML key twice: A would be discarded silently"
+    twice = good.replace('"class": "feature"', '"class": "feature",\n  "class": "spike"', 1)
+    assert twice != good
+    world.write([twice])
+    assert world.check(capsys)[0] == 3, "a manifest with two contradictory class keys"
