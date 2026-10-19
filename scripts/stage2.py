@@ -3682,6 +3682,16 @@ def declared_class(root: Path, change: str, klass: str | None) -> str:
         if not match:
             continue
         try:
+            node = yaml.compose(match.group(1), Loader=yaml.SafeLoader)
+            if isinstance(node, yaml.MappingNode):
+                class_keys = [
+                    key for key, _ in node.value if key.tag == "tag:yaml.org,2002:str" and key.value == "class"
+                ]
+                if len(class_keys) > 1:
+                    raise Refused(
+                        f"plans/changes/{change}/{name} states class more than once; "
+                        "repair the header to contain exactly one `class:` declaration."
+                    )
             header = yaml.safe_load(match.group(1))
         except yaml.YAMLError:
             header = None

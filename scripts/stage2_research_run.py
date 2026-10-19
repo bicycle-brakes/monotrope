@@ -235,6 +235,7 @@ class Run:
         self.outcomes: list[dict] = []
         self.judge: dict | None = None
         self.judge_text: str | None = None
+        self.judge_packet: dict | None = None
         self.scores: list | None = None
         self.security: str | None = None
         self.stop = threading.Event()
@@ -929,7 +930,7 @@ class Run:
             )
         except ResearchJudgeError as error:
             raise Stop(f"the judge packet cannot be built ({error}).", 1) from error
-        self.packet_size = packet["size_characters"]
+        self.judge_packet = {"size_characters": packet["size_characters"], "policy": packet["policy"]}
         if not packet["allowed"]:
             raise Stop(
                 f"{packet['reason']}: the packet holds {packet['size_characters']} characters.", packet["exit_code"]
@@ -1031,6 +1032,7 @@ class Run:
             "free_selected": self.free,
             "free_count": len(self.free),
             "budget": 39 + 3 * len(self.free),
+            "judge_packet": self.judge_packet,
             "selection": self.selection.get("seats"),
             "catalog": {k: v for k, v in (self.selection.get("catalog") or {}).items() if k != "models_store"},
             "preparation": {

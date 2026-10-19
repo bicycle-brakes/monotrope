@@ -1007,6 +1007,11 @@ the existing gates and let the runner own registry regeneration/full verify.
 - 41: tests/test_stage2_research_availability.py::test_a_catalog_failure_stops_before_any_probe_and_leaves_no_receipt — A Pi catalog failure starts a probe, keeps an earlier receipt usable or exits other than 1.
 - 29: tests/test_stage2_swarm.py::test_the_inventory_is_persisted_in_the_fenced_run_block — The runner derives neighbour statuses but never persists them, or persists them outside the one fenced run block.
 - 31: tests/test_stage2_swarm.py::test_the_inventory_is_persisted_in_the_fenced_run_block — The runner derives the obligation inventory but never persists it, or persists it outside the one fenced run block.
+- 4: tests/test_stage2_swarm.py::test_duplicate_header_classes_refuse_before_calls — A header stating `class:` twice silently selects the later class and bypasses the swarm (phase-6 F-40).
+- 33: tests/test_research_handoff.py::test_duplicate_criterion_numbers_are_not_measured — A repeated criterion number overwrites an earlier unchecked Basis (phase-6 F-41).
+- 34: tests/test_research_handoff.py::test_duplicate_criterion_numbers_are_not_measured — A later answered Basis hides an earlier criterion that cites a nonexistent claim.
+- 33: tests/test_research_handoff.py::test_malformed_incomplete_disagreements_are_not_measured — An incomplete run with a null or malformed disagreements field crashes instead of reporting not measured (phase-6 F-42).
+- 14: tests/test_stage2_swarm.py::test_manifest_publishes_judge_packet_size_and_capacity_policy — The manifest omits the applied judge limit, its capacity policy or the measured packet size (phase-6 F-43).
 
 ## Not touched
 
@@ -1429,6 +1434,10 @@ preserved verbatim. Any new unbounded implementation span raises a new stop.
 2026-10-15 09:40–10:31 CEST, about 51 minutes (Opus 5.5 sub-agent repair of phase-6 F-2 to F-10 outside `stage2.py repair`, maintainer-approved; four `make verify` runs of about 8–10 minutes each, the first red on formatting and a stale `updated:`; no break).
 
 The earlier plan cited `docs/journal/handover/2026-10-15-research-swarm-loop-one-repair.md`; that file is not present in this worktree and was not read by this redraft.
+
+## Runner route — 2026-10-20
+
+Stage-1 route: repair · model claude-sonnet-5-5 · reason: two Codex post-run checks failed.
 
 ## Runner route — 2026-10-20
 
@@ -2204,6 +2213,16 @@ Rows F-38 and F-39. Span not measured: this session had no command tool to read 
 - F-38: `consume_research` claims the receipt with `path.unlink()` (no `missing_ok`); the loser of a race gets `Refused`. Test `test_concurrent_consumers_cannot_share_a_single_use_receipt`.
 - F-39: `check_change` rejects, with exit 3, a question, class or neighbour link outside its own report and a disagreement link no report of its run holds. Test `test_evidence_links_stay_in_their_report_or_judge_run`.
 - The runner runs `make verify`; it was not run by this session.
+
+### Phase-6 round-8 repairs — 2026-10-20
+
+Rows F-40 to F-43. Span not measured: this session had no command tool to read `date`, so no time is counted for it. No test was run by this session either; the code and tests below were already in the working tree when it started, and it only checked them against the rows and booked the ledger.
+
+- F-40: `declared_class` (`scripts/stage2.py`) refuses a header with more than one `class:` key before any call (exit 2). Test `tests/test_stage2_swarm.py::test_duplicate_header_classes_refuse_before_calls`.
+- F-41: `_basis_lines` (`scripts/check_research_handoff.py`) raises `CannotMeasure` (exit 3) when a criterion number repeats. Test `tests/test_research_handoff.py::test_duplicate_criterion_numbers_are_not_measured`.
+- F-42: `check_change` shape-checks every run's reconciliation disagreements, complete or not, before traversing links; a malformed field is exit 3. Test `tests/test_research_handoff.py::test_malformed_incomplete_disagreements_are_not_measured`.
+- F-43: the run manifest carries `judge_packet` with the measured size and the capacity policy (limit, capacity, reserve, conversion, dated sources). Test `tests/test_stage2_swarm.py::test_manifest_publishes_judge_packet_size_and_capacity_policy`.
+- Red-first evidence for these tests is not recorded by this session. The runner runs `make verify`.
 
 ### Orchestrator correction — round-5 and round-6 spans (2026-10-19)
 

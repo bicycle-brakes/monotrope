@@ -590,6 +590,8 @@ def _basis_lines(spec_text: str) -> dict[int, list[str]]:
         numbered = re.match(r"^([1-9][0-9]*)\. ", line)
         if numbered:
             current = int(numbered.group(1))
+            if current in result:
+                raise CannotMeasure(f"spec.md: criterion {current} appears twice; its Basis is ambiguous")
             result[current] = []
             collecting = False
             continue
@@ -652,7 +654,15 @@ def check_change(folder: Path, label: str) -> Outcome:
                     )
         run_claims = {claim["id"] for report in run.reports for claim in report["claims"]}
         judge = (run.reconciliation or {}).get("reconciliation", {})
-        for disagreement in judge.get("disagreements", []):
+        disagreements = judge.get("disagreements", []) if isinstance(judge, dict) else None
+        if not isinstance(disagreements, list) or any(
+            not isinstance(item, dict)
+            or not _is_list_of(item.get("claims"), str)
+            or not isinstance(item.get("summary"), str)
+            for item in disagreements
+        ):
+            raise CannotMeasure(f"{label}: run {run.run_id} has malformed reconciliation disagreements")
+        for disagreement in disagreements:
             for link in disagreement["claims"]:
                 if link not in run_claims:
                     raise CannotMeasure(

@@ -709,3 +709,29 @@ def test_evidence_links_stay_in_their_report_or_judge_run(world: World, capsys, 
         assert code == 0, output  # Judges may compare claims across seats of their own run.
     else:
         assert code == 3, output
+
+
+def test_duplicate_criterion_numbers_are_not_measured(world: World, capsys: pytest.CaptureFixture[str]) -> None:
+    # Criteria 33-34: a later answered basis cannot overwrite the earlier missing claim.
+    bad = gid(RUN1, 1, SEATS[0], "C7")
+    good = spec_text(basis=(f"`{bad}`", "`decisions.md#Q-1`"))
+    world.write([run_text(RUN1)], spec=good)
+    assert world.check(capsys)[0] == 1
+    world.write([run_text(RUN1)], spec=good.replace("2. When", "1. When"))
+    code, out = world.check(capsys)
+    assert code == 3 and "criterion" in out.lower(), out
+
+
+@pytest.mark.parametrize("bad", [None, 1, {}, [None], [{"claims": None}], [{"claims": [None]}]])
+def test_malformed_incomplete_disagreements_are_not_measured(
+    world: World, capsys: pytest.CaptureFixture[str], bad: object
+) -> None:
+    # Criterion 33: incomplete evidence is still shape checked before traversing links.
+    incomplete = run_text(RUN2, status="incomplete", decision=None)
+    world.write([run_text(RUN1), incomplete])
+    assert world.check(capsys)[0] == 0
+    broken = incomplete.replace('"disagreements": []', '"disagreements": ' + json.dumps(bad))
+    assert broken != incomplete
+    world.write([run_text(RUN1), broken])
+    code, out = world.check(capsys)
+    assert code == 3 and "disagreement" in out.lower(), out

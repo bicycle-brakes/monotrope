@@ -2793,3 +2793,42 @@ def test_a_store_inside_the_real_home_is_refused_and_one_outside_it_is_accepted(
     assert "XDG_STATE_HOME" in message and str(home) in message
     monkeypatch.setenv("XDG_STATE_HOME", str(home.parent / "state-outside-home"))
     assert sworld.run() == 0
+
+
+@pytest.mark.parametrize("name", ["research.md", "spec.md"])
+@pytest.mark.parametrize("last", ["bounded", "architectural"])
+def test_duplicate_header_classes_refuse_before_calls(sworld: SwarmWorld, name: str, last: str) -> None:
+    # Criterion 4: duplicate keys must not erase an architectural declaration.
+    sworld.research_class(None)
+    path = sworld.root / "plans/changes/demo" / name
+    path.write_text(
+        f"---\ntitle: Research\nbead: demo-1\nclass: architectural\nclass: {last}\nneighbours: []\n---\n# Research\n",
+        encoding="utf-8",
+    )
+    with pytest.raises(stage2.Refused):
+        stage2.declared_class(sworld.root, "demo", None)
+    assert sworld.run() == 2
+    assert sworld.calls() == []
+
+
+@pytest.mark.parametrize("over_limit", [False, True])
+def test_manifest_publishes_judge_packet_size_and_capacity_policy(
+    sworld: SwarmWorld, monkeypatch: pytest.MonkeyPatch, over_limit: bool
+) -> None:
+    # Criterion 14: the applied limit and its dated derivation survive publication.
+    import stage2_research_judge
+
+    policy = stage2_research_judge.research_judge_capacity_policy()
+    if over_limit:
+        policy = dict(policy, limit_characters=10)
+    monkeypatch.setattr(stage2_research_judge, "research_judge_capacity_policy", lambda: policy)
+    sworld.complete()
+    assert sworld.run() == int(over_limit)
+    manifest = manifest_of(sworld)
+    assert manifest["judge_packet"]["policy"] == policy
+    if over_limit:
+        assert manifest["judge_packet"]["size_characters"] > policy["limit_characters"]
+        assert sworld.calls("judge") == []
+    else:
+        (call,) = sworld.calls("judge")
+        assert manifest["judge_packet"]["size_characters"] == len(call["prompt"])

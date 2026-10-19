@@ -3020,10 +3020,161 @@ Stage-2 call, 2026-10-20: review · endpoint openai-codex · model gpt-6.1-sol �
 
 | ID | Severity | Dimension | Origin | Where | Finding | Reviewer | Status | Broke a test |
 |---|---|---|---|---|---|---|---|---|
-| F-40 | MAJOR | SPEC | base | `scripts/stage2.py:3685` | A research header containing both `class: architectural` and `class: bounded` silently selects bounded. Locally reproduced through `declared_class()`: YAML parsing discards the first declaration, allowing exploration to bypass the swarm and its selection receipt. Conflicting declarations must refuse before model calls with exit 2. [criterion 4] | Codex | taken — criterion 4 | — |
-| F-41 | BLOCKER | SPEC | base | `scripts/check_research_handoff.py:590–593` | Repeating a criterion number overwrites its earlier Basis before checking. Locally reproduced through `check_change()`: the first criterion cites nonexistent C7; a second criterion numbered 1 cites an answered Q-record; the gate returns no findings. Duplicate numbering must not erase an unchecked criterion. [criteria 33–34] | Codex | taken — criteria 33–34 | — |
-| F-42 | MAJOR | SPEC | fix-r7 | `scripts/check_research_handoff.py:654–656` | An incomplete run containing reconciliation with `disagreements: null` raises an uncaught TypeError. Locally reproduced alongside an otherwise valid complete run. Complete-run shape validation is skipped, but the new link checker still iterates this field; malformed evidence therefore crashes instead of reporting not measured with exit 3. [criterion 33] | Codex | taken — criterion 33 | — |
-| F-43 | MINOR | SPEC | base | `scripts/stage2_research_run.py:932,1021–1048` | The runner measures judge packet size but never publishes it or the capacity policy in the run manifest. Successful publication consequently omits the required character limit, capacity, reserves, conversion and dated sources. These fields must accompany the run so its applied judge limit remains auditable. [criterion 14; design, Data model — Run manifest] | Codex | taken — criterion 14 | — |
+| F-40 | MAJOR | SPEC | base | `scripts/stage2.py:3685` | A research header containing both `class: architectural` and `class: bounded` silently selects bounded. Locally reproduced through `declared_class()`: YAML parsing discards the first declaration, allowing exploration to bypass the swarm and its selection receipt. Conflicting declarations must refuse before model calls with exit 2. [criterion 4] | Codex | fixed — tests/test_stage2_swarm.py::test_duplicate_header_classes_refuse_before_calls | — |
+| F-41 | BLOCKER | SPEC | base | `scripts/check_research_handoff.py:590–593` | Repeating a criterion number overwrites its earlier Basis before checking. Locally reproduced through `check_change()`: the first criterion cites nonexistent C7; a second criterion numbered 1 cites an answered Q-record; the gate returns no findings. Duplicate numbering must not erase an unchecked criterion. [criteria 33–34] | Codex | fixed — tests/test_research_handoff.py::test_duplicate_criterion_numbers_are_not_measured | — |
+| F-42 | MAJOR | SPEC | fix-r7 | `scripts/check_research_handoff.py:654–656` | An incomplete run containing reconciliation with `disagreements: null` raises an uncaught TypeError. Locally reproduced alongside an otherwise valid complete run. Complete-run shape validation is skipped, but the new link checker still iterates this field; malformed evidence therefore crashes instead of reporting not measured with exit 3. [criterion 33] | Codex | fixed — tests/test_research_handoff.py::test_malformed_incomplete_disagreements_are_not_measured | — |
+| F-43 | MINOR | SPEC | base | `scripts/stage2_research_run.py:932,1021–1048` | The runner measures judge packet size but never publishes it or the capacity policy in the run manifest. Successful publication consequently omits the required character limit, capacity, reserves, conversion and dated sources. These fields must accompany the run so its applied judge limit remains auditable. [criterion 14; design, Data model — Run manifest] | Codex | fixed — tests/test_stage2_swarm.py::test_manifest_publishes_judge_packet_size_and_capacity_policy | — |
 
 Phase 6 verdict: codex 01a1565a-a33f-70e1-a957-f3c689094c50, 2026-10-20
 Reviewer session: codex 01a1565a-a33f-70e1-a957-f3c689094c50 — a fresh session reviewed: an earlier ## Phase 6 block makes this a re-check
+
+Stage-2 call, 2026-10-20: repair · attempt 1 · route codex · endpoint openai-codex · model gpt-6.1-sol · leak check clean over 536 files, 1596 commits, 12 rules.
+
+> Attempt 1 (codex) failed its post-run checks.
+>
+> Files the attempt changed (lines added, removed):
+> - `plans/changes/research-swarm/plan.md` +37 -0
+> - `scripts/check_research_handoff.py` +11 -1
+> - `scripts/stage2.py` +10 -0
+> - `scripts/stage2_research_run.py` +3 -1
+> - `tests/test_research_handoff.py` +26 -0
+> - `tests/test_stage2_swarm.py` +39 -0
+>
+> Diagnostics:
+> ```text
+> - Runner format before `make verify`: ruff changed no file.
+> - `plan.md` did not add a measured line below `## Time used`
+> ```
+
+Stage-2 call, 2026-10-20: repair · attempt 2 · route codex-repair · endpoint openai-codex · model gpt-6.1-sol · reason first Codex post-run check failed · leak check clean over 536 files, 1596 commits, 12 rules.
+
+> Attempt 2 (codex-repair) failed its post-run checks.
+>
+> Files the attempt changed (lines added, removed):
+> - `plans/changes/research-swarm/plan.md` +22 -0
+>
+> Diagnostics:
+> ````text
+> - Runner format before `make verify`: ruff changed no file.
+> - `make verify` exited 2
+> The gates that blocked, each with its last lines:
+> ── [pytest] $ lauf_cmd
+> [… 25 lines of this gate left out …]
+> ........................................................................ [ 53%]
+> ........................................................................ [ 56%]
+> ........................................................................ [ 58%]
+> ........................................................................ [ 60%]
+> ........................................................................ [ 63%]
+> ........................................................................ [ 65%]
+> ........................................................................ [ 67%]
+> ........................................................................ [ 70%]
+> ........................................................................ [ 72%]
+> ........................................................................ [ 74%]
+> ........................................................................ [ 77%]
+> ........................................................................ [ 79%]
+> ........................................................................ [ 81%]
+> ........................................................................ [ 84%]
+> ..............................................................F......... [ 86%]
+> ........................................................................ [ 89%]
+> ........................................................................ [ 91%]
+> ........................................................................ [ 93%]
+> ........................................................................ [ 96%]
+> ........................................................................ [ 98%]
+> ..................................................                       [100%]
+> =================================== FAILURES ===================================
+> ___________ test_terminal_record_survives_sigkill_after_the_outcome ____________
+> [gw2] darwin -- Python 3.12.15 /Users/mikypiky/coding-harness/.claude/worktrees/research-swarm/.venv/bin/python3
+>
+> state_home = PosixPath('/private/var/folders/44/yc0m3m456b51nyzwyfjptgm40000gn/T/pytest-of-mikypiky/pytest-34/popen-gw2/test_terminal_record_survives_0/xdg-state')
+>
+>     def test_terminal_record_survives_sigkill_after_the_outcome(state_home):
+>         m = module()
+>         gate = state_home / "release-s2"
+>         script = DRIVER.format(scripts=str(SCRIPTS), binding=BINDING, gate=str(gate))
+>         proc = subprocess.Popen(
+>             [sys.executable, "-c", script],
+>             stdout=subprocess.PIPE,
+>             text=True,
+>             env={**os.environ, "XDG_STATE_HOME": str(state_home)},
+>         )
+>         try:
+>             assert pipe_line(proc) == "TERMINAL s1"
+> >           assert pipe_line(proc) == "LAUNCHED s2"
+>
+> tests/test_stage2_research_store.py:168: 
+> _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+>
+> proc = <Popen: returncode: None args: ['/Users/mikypiky/coding-harness/.claude/work...>
+> timeout = 60.0
+>
+>     def pipe_line(proc, timeout=60.0):
+>         ready, _, _ = select.select([proc.stdout], [], [], timeout)
+> >       assert ready, "driver printed no marker in time"
+> E       AssertionError: driver printed no marker in time
+> E       assert []
+>
+> tests/test_stage2_research_store.py:111: AssertionError
+> =========================== short test summary info ============================
+> FAILED tests/test_stage2_research_store.py::test_terminal_record_survives_sigkill_after_the_outcome
+> 1 failed, 3057 passed, 16 skipped in 313.19s (0:05:13)
+> ── [pytest] RED (block) — der Lauf ist rot.
+>
+> Standard error of the whole run, last lines:
+> [… 14709 earlier lines left out …]
+> templates/spec.md:73:81 error MD013/line-length Line length [Expected: 80; Actual: 127]
+> tests/fixtures/research_refs/plan-prompt-d862bc2.md:3:81 error MD013/line-length Line length [Expected: 80; Actual: 117]
+> tests/fixtures/research_refs/plan-prompt-d862bc2.md:85:81 error MD013/line-length Line length [Expected: 80; Actual: 96]
+> tests/fixtures/research_refs/plan-prompt-d862bc2.md:99 error MD040/fenced-code-language Fenced code blocks should have a language specified [Context: "```"]
+> tools/claude-code/README.md:17:81 error MD013/line-length Line length [Expected: 80; Actual: 105]
+> tools/claude-code/README.md:18:81 error MD013/line-length Line length [Expected: 80; Actual: 109]
+> tools/claude-code/README.md:19:81 error MD013/line-length Line length [Expected: 80; Actual: 134]
+> tools/claude-code/README.md:23:1 error MD060/table-column-style Table column style [Table pipe is missing space to the right for style "compact"]
+> tools/claude-code/README.md:23:5 error MD060/table-column-style Table column style [Table pipe is missing space to the left for style "compact"]
+> tools/claude-code/README.md:23:5 error MD060/table-column-style Table column style [Table pipe is missing space to the right for style "compact"]
+> tools/claude-code/README.md:23:9 error MD060/table-column-style Table column style [Table pipe is missing space to the left for style "compact"]
+> tools/claude-code/README.md:23:9 error MD060/table-column-style Table column style [Table pipe is missing space to the right for style "compact"]
+> tools/claude-code/README.md:23:13 error MD060/table-column-style Table column style [Table pipe is missing space to the left for style "compact"]
+> tools/claude-code/README.md:24:81 error MD013/line-length Line length [Expected: 80; Actual: 272]
+> tools/claude-code/README.md:25:81 error MD013/line-length Line length [Expected: 80; Actual: 180]
+> tools/claude-code/README.md:26:81 error MD013/line-length Line length [Expected: 80; Actual: 115]
+> tools/claude-code/README.md:28:81 error MD013/line-length Line length [Expected: 80; Actual: 124]
+> tools/claude-code/README.md:29:81 error MD013/line-length Line length [Expected: 80; Actual: 106]
+> tools/claude-code/README.md:38:1 error MD060/table-column-style Table column style [Table pipe is missing space to the right for style "compact"]
+> tools/claude-code/README.md:38:5 error MD060/table-column-style Table column style [Table pipe is missing space to the left for style "compact"]
+> tools/claude-code/README.md:38:5 error MD060/table-column-style Table column style [Table pipe is missing space to the right for style "compact"]
+> tools/claude-code/README.md:38:9 error MD060/table-column-style Table column style [Table pipe is missing space to the left for style "compact"]
+> tools/claude-code/README.md:38:9 error MD060/table-column-style Table column style [Table pipe is missing space to the right for style "compact"]
+> tools/claude-code/README.md:38:13 error MD060/table-column-style Table column style [Table pipe is missing space to the left for style "compact"]
+> tools/claude-code/README.md:40:81 error MD013/line-length Line length [Expected: 80; Actual: 442]
+> tools/claude-code/README.md:41:81 error MD013/line-length Line length [Expected: 80; Actual: 163]
+> tools/claude-code/README.md:42:81 error MD013/line-length Line length [Expected: 80; Actual: 126]
+> tools/claude-code/README.md:43:81 error MD013/line-length Line length [Expected: 80; Actual: 96]
+> tools/claude-code/README.md:44:81 error MD013/line-length Line length [Expected: 80; Actual: 167]
+> tools/claude-code/README.md:72:1 error MD060/table-column-style Table column style [Table pipe is missing space to the right for style "compact"]
+> tools/claude-code/README.md:72:5 error MD060/table-column-style Table column style [Table pipe is missing space to the left for style "compact"]
+> tools/claude-code/README.md:72:5 error MD060/table-column-style Table column style [Table pipe is missing space to the right for style "compact"]
+> tools/claude-code/README.md:72:9 error MD060/table-column-style Table column style [Table pipe is missing space to the left for style "compact"]
+> tools/claude-code/README.md:72:9 error MD060/table-column-style Table column style [Table pipe is missing space to the right for style "compact"]
+> tools/claude-code/README.md:72:13 error MD060/table-column-style Table column style [Table pipe is missing space to the left for style "compact"]
+> tools/claude-code/README.md:73:81 error MD013/line-length Line length [Expected: 80; Actual: 112]
+> tools/claude-code/README.md:74:81 error MD013/line-length Line length [Expected: 80; Actual: 89]
+> tools/claude-code/README.md:75:81 error MD013/line-length Line length [Expected: 80; Actual: 88]
+> tools/pi/README.md:65:81 error MD013/line-length Line length [Expected: 80; Actual: 97]
+> make: *** [verify] Error 1
+> - `plan.md` did not add a measured line below `## Time used`
+> ````
+
+Stage-2 call, 2026-10-20: repair · attempt 3 · route stage-1 · endpoint claude-code-plan · model claude-sonnet-5-5 · reason two Codex post-run checks failed · leak check clean over 536 files, 1596 commits, 12 rules.
+
+> Attempt 3 (stage-1) failed its post-run checks.
+>
+> Files the attempt changed (lines added, removed):
+> - `plans/changes/research-swarm/plan.md` +15 -0
+>
+> Diagnostics:
+> ```text
+> - Runner format before `make verify`: ruff changed no file.
+> - `plan.md` did not add a measured line below `## Time used`
+> ```
+
+Orchestrator, 2026-10-20: the round-8 repair run above failed on form, not on the code: attempt 1 added no measured line under `## Time used`, attempt 2 lost one load-sensitive test (`tests/test_stage2_research_store.py`, "driver printed no marker in time"; 3057 passed), attempt 3 changed only `plan.md`. The code in the tree passed a full `make verify` (3058 passed, 16 skipped). Red first was checked by hand: the four tests, copied onto the code at `6c5e31a`, fail there (12 of 13 cases). Booked as a hand repair.
