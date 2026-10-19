@@ -1135,8 +1135,8 @@ Its decision record is ADR 0012.
 **Fresh availability-enabled runs (Q-16, ADR 0021):** first run
 `python3 scripts/stage2.py prepare-loop <change>`. The runner refreshes Pi's
 catalog and probes admitted candidates with static input and no tools.
-Timed exclusions (including the declared GLM outage) are skipped without a
-call. Paid candidates require known cost, admitted terms and catalog presence.
+Timed exclusions are skipped without a call; GLM through OpenCode Go is not
+excluded (the 2026-10-21 GLM outage covers the Z.ai route only). Paid candidates require known cost, admitted terms and catalog presence.
 Report its timestamped reachable/failed/skipped list and selected stages in
 the main Claude Code or Codex conversation, then invoke `review-loop <change>
 --availability-reported <id>` with the printed report id. This acknowledges

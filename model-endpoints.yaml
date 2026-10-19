@@ -267,10 +267,10 @@ endpunkte:
     availability_preflight:
       flash_size: 3
       max_age_seconds: 900
-      exclude_until:
-        - model_prefix: glm
-          until: "2026-10-21T20:34:00+08:00"
-          reason: "Maintainer-declared GLM outage; do not probe before this deadline."
+      # GLM through OpenCode Go works (maintainer, 2026-10-18); the GLM outage
+      # until 2026-10-21T20:34+08:00 covers the Z.ai route only, which this
+      # preparation never probes.
+      exclude_until: []
     flash_swarm:
       - deepseek-v4.1-flash
       - mimo-v2.6-flash
