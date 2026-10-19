@@ -454,7 +454,7 @@ def test_the_makefile_runs_what_the_one_list_runs() -> None:
     }
     aus_ci = {g["command"] for g in gates() if g.get("command")}
     verdoppelt = {
-        "python3 -m pytest tests/ -q": "make test",
+        "python3 -m pytest tests/ -q -n auto": "make test",
         "python3 scripts/plans_registry.py --check": "make staleness",
     }
     fehlt = []

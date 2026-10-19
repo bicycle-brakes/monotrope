@@ -77,7 +77,7 @@ jobs:
       - name: The test suite passes
         id: pytest
         if: ${{ !cancelled() }}
-        run: python3 -m pytest tests/ -q
+        run: python3 -m pytest tests/ -q -n auto
       - name: The linter finds nothing
         id: ruff-check
         if: ${{ !cancelled() }}

@@ -19,7 +19,7 @@ verify:
 	bash scripts/verify_all.sh
 
 test:
-	python3 -m pytest tests/ -q
+	python3 -m pytest tests/ -q -n auto
 
 staleness:
 	python3 scripts/plans_registry.py --check

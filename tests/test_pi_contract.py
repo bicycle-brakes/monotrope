@@ -712,6 +712,13 @@ def test_real_reviewer_ignores_discovery_traps(project: Path, transport) -> None
             )
             assert "No finding." in answer
             assert len(standin.requests) == 1
+            if omit == "--no-mcp":
+                # Pi starts the MCP server in the background while it talks to the model; on a
+                # loaded machine (parallel tests) it can end before the server wrote its marker.
+                # Give the positive control a bounded moment to show the signal it is looking for.
+                deadline = time.monotonic() + 15
+                while not (project / "trap-mcp-ran").exists() and time.monotonic() < deadline:
+                    time.sleep(0.1)
             reads = (
                 (project / "resource-reads.jsonl").read_text() if (project / "resource-reads.jsonl").exists() else ""
             )
