@@ -27,6 +27,19 @@ the tools, and it develops itself with the same workflow.
 > not built yet. The repository and its tracker still carry the working name
 > `coding-harness` in places.
 
+## The problem it answers
+
+Three things go wrong when an agent does the work and nothing records it:
+
+- **The chat is the state.** A session ends and the context goes with it. The
+  next session starts from scratch, or from a summary nobody can check.
+- **The decisions are invisible.** The agent chose a format, a name, an
+  order — and nobody wrote down why, so nobody can review it afterwards.
+- **Nothing stops a red tree.** Tests run at the end, if at all, and a defect
+  ships behind a green summary.
+
+Monotrope turns all three into files and checks.
+
 ## What it does
 
 A change runs through seven phases. Each phase leaves one file, and the next
@@ -104,7 +117,9 @@ reviews, a third implements.
 **A second vendor reviews, under guard.** Calls to models from other vendors
 go through one runner. It checks that the endpoint is allowed to see the data
 (`model-endpoints.yaml`), and it runs a leak check before every call. A leak
-stops the call; there is no silent fallback to another model.
+stops the call; there is no silent fallback to another model. A single
+reviewer's blind spot is invisible to them; whether a second vendor finds
+more errors is being measured, not assumed.
 
 **Process rules are machine checks.** 22 gates live in one file
 (`decisions/gates.yaml`); 18 block, 3 report, 1 advises (as of 2026-10-20).
@@ -149,6 +164,32 @@ scarcest resource in the loop — for people and for models.
 - **Numbers carry their cut-off.** Every count in a handover names its commit
   or date, and what could not be read is written as "not read", never as
   "none".
+
+## Why it is built this way
+
+- **Files, because a change must outlive the session, the machine and the
+  harness.** A state kept inside a tool dies with the tool.
+- **One list, because two lists drift.** The gate file is read by the local
+  runner and by the CI generator, and a gate holds the generated workflow to
+  it byte for byte.
+- **A merge, because a decision that lives in a chat is not a decision.**
+- **Block, report or advisory, because a gate whose red means nothing is
+  noise.** Every gate says which of the three it is, so a red run always
+  means something specific.
+
+## Follow one completed change
+
+The change "frontmatter-current" (archived 2026-09-29) shows each step with
+real files:
+
+| Question | Where to see it |
+| --- | --- |
+| What was the task? | A document's header said when it was last *reviewed*, not when its content last changed — and nothing failed on a stale one. [`research.md`](plans/changes/archive/2026-09-29-frontmatter-current/research.md) |
+| What did a person decide? | In the maintainer's words: "The frontmatter headers in the files must always be maintained and current. This must be a basic mechanism." [`decisions.md`](plans/changes/archive/2026-09-29-frontmatter-current/decisions.md) |
+| What did the agent decide itself? | Mechanics, each marked `[DETAIL]` with its reason — for example which of the two key lists owns the held prefixes. [`spec.md`](plans/changes/archive/2026-09-29-frontmatter-current/spec.md) |
+| What was the contract? | The plan card: written for one option of a `[DECISION]`, with the one step the other option would change. [`plan.md`](plans/changes/archive/2026-09-29-frontmatter-current/plan.md) |
+| Which check found a defect? | Review finding F-1 (MAJOR): the ADR headers said `status: accepted` where the body recorded the ADR as superseded — a reader of the header alone would believe ADR 0001 is in force. The row reads `fixed in 0f4101f`. [`findings.md`](plans/changes/archive/2026-09-29-frontmatter-current/findings.md) |
+| What evidence stood at the merge? | The findings table with every row decided, and green CI — and the gate that came out of it, `frontmatter-current`, still runs on every pull request. |
 
 ## What works today
 
