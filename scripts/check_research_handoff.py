@@ -640,7 +640,9 @@ def check_change(folder: Path, label: str) -> Outcome:
             links += [link for rel in report.get("neighbour_relations", []) for link in rel["claims"]]
             for link in links:
                 if link not in seen_claims:
-                    raise CannotMeasure(f"{label}: a claim link of run {run.run_id} names {link}, which no report holds")
+                    raise CannotMeasure(
+                        f"{label}: a claim link of run {run.run_id} names {link}, which no report holds"
+                    )
     complete = [run for run in runs if run.complete]
     out.notes.append(f"{label}: {len(runs)} v2 run(s), {len(complete)} complete")
 

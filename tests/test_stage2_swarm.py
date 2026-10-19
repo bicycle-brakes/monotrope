@@ -1697,9 +1697,7 @@ def test_unresolved_dissent_and_human_questions_survive_reconciliation(sworld: S
 
 
 @pytest.mark.parametrize("variant", ["unhashable-claims", "unhashable-verdict"])
-def test_a_judge_answer_with_unhashable_members_is_a_malformed_contribution(
-    sworld: SwarmWorld, variant: str
-) -> None:
+def test_a_judge_answer_with_unhashable_members_is_a_malformed_contribution(sworld: SwarmWorld, variant: str) -> None:
     # Criterion 18 (phase-6 F-32). Planted fault: a disagreement naming ["known-id", {}] raises an unhandled
     # TypeError instead of ending the run incomplete with the evidence retained.
     sworld.complete(judge=[{"stdout": f"AUTO:{variant}"}])
@@ -2563,7 +2561,7 @@ def test_a_run_killed_after_staging_the_clear_is_recovered_on_resume(
 
     monkeypatch.setattr(stage2, "append", killed)
     real_restore = stage2_research_store.Store.restore_clear
-    monkeypatch.setattr(stage2_research_store.Store, "restore_clear", lambda self, staging: None)  # no cleanup ran
+    monkeypatch.setattr(stage2_research_store.Store, "restore_clear", lambda *_args: None)  # no cleanup ran
     sworld.complete()
     with contextlib.suppress(OSError):
         sworld.run()
@@ -2583,7 +2581,7 @@ def test_a_staged_run_whose_record_was_published_is_not_resurrected(
     # Criterion 53 (phase-6 F-31). A run killed after the append but before the staged runs were deleted must
     # not come back: its record is published, so resume finds nothing and the staging is removed.
     real_commit = stage2_research_store.Store.commit_clear
-    monkeypatch.setattr(stage2_research_store.Store, "commit_clear", lambda self: None)  # killed before deletion
+    monkeypatch.setattr(stage2_research_store.Store, "commit_clear", lambda *_args: None)  # killed before deletion
     sworld.complete()
     assert sworld.run() == 0
     monkeypatch.setattr(stage2_research_store.Store, "commit_clear", real_commit)
