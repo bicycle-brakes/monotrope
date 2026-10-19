@@ -64,9 +64,11 @@ Task state stays in Beads.
 | 4 | Prepare #158: refresh the PR body (span, commits, findings); amend the spec line on the repository seat's absolute-path reads per Q-16 | Orchestrator | Body and spec current, pushed; the PR stays a draft until the maintainer has read the morning page |
 | 5 | Archive proposal for the finished changes behind the red nightly drift gate (#169: 91 findings, 16 changes whose bead is closed) | Haiku or Sonnet sub-agent, read-only on the changes | One table in a pull request: per change its bead, bead status, artefact status and a proposal (living spec, ADR or plain archive) with a one-line reason; nothing moved |
 | 6 | Remove worktrees whose branch is merged into origin/main (AGENTS.md: removed after the merge) | Orchestrator | Only a worktree with a clean status, no unpushed commit and a merged branch is removed; every other one is listed with its reason in the morning page |
-| 7 | Reserve, only if 1–6 end early: `make venv` picks the first `python3` on PATH (the system's 3.9 here, which cannot install the lock); make it fail clearly or pick the pinned version | Sonnet sub-agent, own worktree | Test red first, then green; `make verify` green; pull request open |
+| 7 | Reserve, only if 1–6 end early: `make venv` picks the first `python3` on PATH (the system's 3.9 here, which cannot install the lock); make it fail clearly or pick the pinned version (coding-harness-y9q) | Sonnet sub-agent, own worktree | Test red first, then green; `make verify` green; pull request open |
 | 8 | Reserve: kit probe runs its pytest single-process (163 s, measured by #169's session); measure it with `-n auto` (coding-harness-7so) | Haiku sub-agent | A dated measurement in the bead; a change only as a pull request |
-| 9 | Morning handover | Orchestrator | A dated file under `docs/journal/handover/` as a pull request by 08:00 Europe/Berlin |
+| 9 | Reserve: failed-check diagnostics copy test secrets into `findings.md` (coding-harness-8hr, security). Spec and plan are drafted; no plan card was accepted | Orchestrator | Commit the two uncommitted call records on its branch; put the plan card on the morning page. No implementation before the maintainer has seen the card |
+| 10 | Reserve: `make verify` runs while new files are untracked, so the kit probe misses them (coding-harness-fdz) | Codex through `stage2.py draft`, after an explore | `research.md`, spec and plan drafted; questions and the plan card on the morning page; no implementation |
+| 11 | Morning handover | Orchestrator | A dated file under `docs/journal/handover/` as a pull request by 08:00 Europe/Berlin |
 
 Items run strictly one after another. **No two `make verify` runs at the same
 time** and at most one sub-agent at a time, because of the memory limit.
@@ -100,7 +102,8 @@ time** and at most one sub-agent at a time, because of the memory limit.
 
 ## Morning page (08:00 Europe/Berlin)
 
-One page: the phase-6 verdict for #158 and whether it is ready to merge,
-the archive table to decide, pull requests awaiting the maintainer, the
-worktrees removed or kept, where work stopped and why, measured spans against
-the appetite, and the time the morning review took.
+One page: the phase-6 verdict for #158 and whether it is ready to merge, the
+archive table to decide, the plan cards of items 9 and 10, pull requests
+awaiting the maintainer, the worktrees removed or kept, where work stopped and
+why, measured spans against the appetite, and the time the morning review
+took.
