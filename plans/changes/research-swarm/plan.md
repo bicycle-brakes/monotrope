@@ -953,6 +953,8 @@ the existing gates and let the runner own registry regeneration/full verify.
 - 40: tests/test_model_endpoints.py::test_seat_candidate_lists_and_availability_rule_are_validated — A -free id as a seat's preferred model passes.
 - 49: tests/test_stage2_research_availability.py::test_malformed_seat_declaration_refuses_before_any_call — A malformed declaration lets a probe or research call start, a declared fallback list is consulted, or the refusal exits other than 2.
 - 50: tests/test_stage2_research_availability.py::test_research_preparation_uses_the_shared_availability_helpers — The research path defines its own rule validation, timed-exclusion matching, probe or receipt sealing instead of the shared functions.
+- 50: tests/test_stage2_availability.py::test_review_preparation_uses_the_shared_rule_validation_and_probe — Review preparation keeps its own rule validation and probe call, so the branch carries two implementations.
+- 50: tests/test_stage2_availability.py::test_review_preparation_refuses_a_rule_the_shared_validator_rejects — Review preparation accepts a rule the shared validator rejects.
 - 50: not a test — phase-6 review and the verification run of tests/test_stage2_availability.py wherever the review swarm's preparation is on the base branch; a changed or failing review availability test refutes the criterion.
 - 59: tests/test_stage2_research_availability.py::test_substitute_is_the_cheapest_reachable_unused_pool_model — A costlier pool model wins while a cheaper one is unexcluded, reachable and unused, or a tie is not broken by id.
 - 59: tests/test_stage2_research_availability.py::test_frozen_inputs_give_the_same_selection_twice — Two preparations with the same catalog, terms, exclusions and probe outcomes select differently.

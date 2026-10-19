@@ -173,9 +173,22 @@ def research_declaration_problem(root: Path, endpoint: str, model: str) -> str |
     return None
 
 
-def _checked_probe(runner, root: Path, change: str, endpoint: str, model: str, audit: list[str]) -> None:
-    """The declaration, the exact-prompt leak check and the audit line - for this one probe, immediately before it."""
-    problem = research_declaration_problem(root, endpoint, model)
+def _checked_probe(
+    runner,
+    root: Path,
+    change: str,
+    endpoint: str,
+    model: str,
+    audit: list[str],
+    admission=None,
+    verb: str = "prepare-explore",
+) -> None:
+    """The declaration, the exact-prompt leak check and the audit line - for this one probe, immediately before it.
+
+    `admission` (root, model -> problem or None) replaces the research declaration check for the review
+    swarm's free class (ADR 0021, decision 3); the leak check stays mandatory either way.
+    """
+    problem = admission(root, model) if admission is not None else research_declaration_problem(root, endpoint, model)
     if problem:
         raise runner.Refused(problem)
     result = leakcheck.check(change, leakcheck.default_denylist(), root, [("prompt", PROBE_TEXT)])
@@ -183,7 +196,7 @@ def _checked_probe(runner, root: Path, change: str, endpoint: str, model: str, a
     if result.verdict.exit_code() != 0:
         raise runner.Refused("the leak check is not clean; the probe does not start.")
     audit.append(
-        f"prepare-explore · endpoint {endpoint} · model {model} · leak check clean over "
+        f"{verb} · endpoint {endpoint} · model {model} · leak check clean over "
         f"{result.files} files, {result.commits} commits, {result.rules} rules."
     )
 
@@ -202,10 +215,19 @@ def install_measured_models(runner, agent: Path, store: dict | None) -> None:
 
 
 def probe_go(
-    runner, root: Path, change: str, model: str, key: str, audit: list[str], store: dict | None = None
+    runner,
+    root: Path,
+    change: str,
+    model: str,
+    key: str,
+    audit: list[str],
+    store: dict | None = None,
+    *,
+    admission=None,
+    verb: str = "prepare-explore",
 ) -> None:
     """One tool-free Go probe: pinned Pi wrapper, no tools, scratch directories, 60 seconds, fixed text."""
-    _checked_probe(runner, root, change, GO, model, audit)
+    _checked_probe(runner, root, change, GO, model, audit, admission, verb)
     with tempfile.TemporaryDirectory(prefix="stage2-probe-") as tmp:
         scratch = Path(tmp)
         agent = scratch / "agent"
@@ -680,19 +702,9 @@ def settings(root: Path, runner) -> dict | None:
     if "availability_preflight" not in entry:
         return None
     value = entry["availability_preflight"]
-    if (
-        not isinstance(value, dict)
-        or type(value.get("flash_size")) is not int
-        or not 1 <= value["flash_size"] <= 3
-        or type(value.get("max_age_seconds")) is not int
-        or not 1 <= value["max_age_seconds"] <= 3600
-        or not isinstance(value.get("exclude_until", []), list)
-    ):
-        raise runner.Refused(
-            "availability_preflight needs flash_size (1..3), max_age_seconds (1..3600) and dated exclusions."
-        )
-    if any(_exclusion_problem(item) for item in value.get("exclude_until", [])):
-        raise runner.Refused("availability_preflight has an invalid timed exclusion.")
+    problems = rule_problem(value, flash_size=True)  # the one validator both swarms use (criterion 50)
+    if problems:
+        raise runner.Refused("; ".join(problems) + ".")
     return value
 
 
@@ -760,7 +772,6 @@ def prepare(root: Path, change: str, runner) -> None:
     reachable = []
     failed = {}
     key = runner.reviewer_key()
-    prompt = PROBE_TEXT
     for model in dict.fromkeys(candidates):
         excluded = excluded_reason(rule, model)
         if excluded is not None:
@@ -770,26 +781,30 @@ def prepare(root: Path, change: str, runner) -> None:
         admission = runner._free_admission(model in free["selected"], {"free": free})
         endpoint = (runner.OPENCODE, model, "max")
         ctx = runner.preflight(root, change, endpoint, admission_problem=admission)
-        ctx.models_store = free.get("models_store")
-        result = runner.checked_prompt(ctx, endpoint, prompt, admission)
-        if not findings.exists():
-            findings.write_text(runner.findings_header(ctx, runner.producer_for(endpoint)), encoding="utf-8")
-        runner.append(findings, runner.call_line("prepare-loop", endpoint, result))
+        audit: list[str] = []
+
         try:
-            # All probes, including paid ones, have no repository input or tools.
-            runner.run_reviewer(
-                ctx,
+            # All probes, including paid ones, have no repository input or tools: the shared probe.
+            probe_go(
+                runner,
+                root,
+                change,
                 model,
-                prompt,
                 key,
-                free=True,
-                timeout_seconds=PROBE_SECONDS,
-                task="Follow the appended availability instructions.",
+                audit,
+                free.get("models_store"),
+                admission=admission
+                or (lambda root_, model_: runner.declaration_problem(root_, runner.OPENCODE, model_)),
+                verb="prepare-loop",
             )
         except runner.CallFailed as error:
             failed[model] = runner.scrub(str(error), key)
         else:
             reachable.append(model)
+        if audit:  # a probe that passed its checks leaves its call line, whatever its outcome
+            if not findings.exists():
+                findings.write_text(runner.findings_header(ctx, runner.producer_for(endpoint)), encoding="utf-8")
+            runner.append(findings, f"Stage-2 call, {runner.today()}: {audit[0]}")
     state = {"free": free, "paid": {}, "consumed": []}
     state["free"]["selected"] = [model for model in free["selected"] if model in reachable]
     admitted = [model for model in paid if model in reachable]

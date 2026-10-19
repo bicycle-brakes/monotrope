@@ -260,3 +260,32 @@ def test_invalid_availability_rule_or_leak_stops_before_model_calls(world: World
     (world.root / "scripts" / "helper.py").write_text("LEAKMARK-123456\n")
     assert world.run("prepare-loop") == 2
     assert world.reviews() == []
+
+
+def test_review_preparation_uses_the_shared_rule_validation_and_probe(world: World, monkeypatch) -> None:
+    """Criterion 50 (phase-6 F-27): a second validation or probe for the review swarm is two implementations."""
+    enable(world)
+    seen: list[str] = []
+    for name in ("rule_problem", "excluded_reason", "probe_go", "seal"):
+        original = getattr(availability, name)
+
+        def spy(*args, _name=name, _original=original, **kwargs):
+            seen.append(_name)
+            return _original(*args, **kwargs)
+
+        monkeypatch.setattr(availability, name, spy)
+    assert world.run("prepare-loop") == 0
+    assert {"rule_problem", "probe_go", "seal"} <= set(seen)
+    assert seen.count("probe_go") == len(TEST_FREE) + len(TEST_LADDER)
+
+
+def test_review_preparation_refuses_a_rule_the_shared_validator_rejects(world: World) -> None:
+    """Criterion 50 (phase-6 F-27): an unknown rule key is refused by the one validator, with no model call."""
+    enable(world)
+    path = world.root / "model-endpoints.yaml"
+    data = yaml.safe_load(path.read_text())
+    entry = next(item for item in data["endpunkte"] if item["name"] == "opencode-go")
+    entry["availability_preflight"]["measured_wire_apis"] = ["x"]
+    path.write_text(yaml.safe_dump(data))
+    assert world.run("prepare-loop") == 2
+    assert world.reviews() == []
