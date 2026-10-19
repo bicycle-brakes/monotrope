@@ -204,6 +204,13 @@ class StandIn:
         if not self.script:
             raise ContractFailure("the stand-in ran out of script: Pi asked for more turns than the contract scripted")
         answer = self.script.pop(0)
+        if "wait_for" in answer:
+            # Hold the reply until a marker file exists (bounded): Pi starts background helpers
+            # (an MCP server) while it waits for the model, and ends them with the reply. On a loaded
+            # machine (parallel tests) the reply used to win that race.
+            deadline = time.monotonic() + 20
+            while not Path(answer["wait_for"]).exists() and time.monotonic() < deadline:
+                time.sleep(0.05)
         if "sleep" in answer:
             time.sleep(answer["sleep"])
             return
@@ -704,7 +711,10 @@ def test_real_reviewer_ignores_discovery_traps(project: Path, transport) -> None
         for marker in ("trap-extension-ran", "trap-mcp-ran", "resource-reads.jsonl"):
             (project / marker).unlink(missing_ok=True)
         transport.controls.update(trusted=trusted, omit=omit)
-        standin = StandIn([{"content": "No finding."}])
+        reply = {"content": "No finding."}
+        if omit == "--no-mcp":
+            reply["wait_for"] = str(project / "trap-mcp-ran")
+        standin = StandIn([reply])
         transport.providers["opencode-go"] = {"baseUrl": standin.url}
         try:
             answer = stage2.run_reviewer(
