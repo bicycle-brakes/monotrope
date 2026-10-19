@@ -6,6 +6,7 @@ snapshot tests, and real short-lived subprocesses for the SIGKILL and lock contr
 
 from __future__ import annotations
 
+import contextlib
 import hashlib
 import json
 import os
@@ -106,7 +107,7 @@ def begin(store, *, binding=None, receipt="receipt-1"):
     return store.start_run(CHANGE, receipt, binding if binding is not None else BINDING)
 
 
-def pipe_line(proc, timeout=20.0):
+def pipe_line(proc, timeout=60.0):
     ready, _, _ = select.select([proc.stdout], [], [], timeout)
     assert ready, "driver printed no marker in time"
     return proc.stdout.readline().strip()
@@ -124,7 +125,7 @@ DRIVER = textwrap.dedent(
 
     store = s.Store(s.research_dir("example"))
     run = store.start_run("plans/changes/example", "receipt-1", {binding!r})
-    child = "import time; time.sleep(6)"
+    child = "import os,time; open({pidfile!r}, 'w').write(str(os.getpid())); time.sleep(40)"
     def slot(i):
         return d.Slot(slot_id="s%d" % i, provider="go", required=True, order=(i,), role_allowance=30.0,
                       identity={{"stage": "topics", "topic": i, "seat": 0, "endpoint": "go", "model": "m"}},
@@ -154,7 +155,8 @@ DRIVER = textwrap.dedent(
 
 def test_terminal_record_survives_sigkill_after_the_outcome(state_home):
     m = module()
-    script = DRIVER.format(scripts=str(SCRIPTS), binding=BINDING)
+    pidfile = state_home / "s2-child.pid"
+    script = DRIVER.format(scripts=str(SCRIPTS), binding=BINDING, pidfile=str(pidfile))
     proc = subprocess.Popen(
         [sys.executable, "-c", script],
         stdout=subprocess.PIPE,
@@ -169,6 +171,8 @@ def test_terminal_record_survives_sigkill_after_the_outcome(state_home):
     finally:
         if proc.poll() is None:
             proc.kill()
+        with contextlib.suppress(OSError, ValueError):  # the orphaned s2 child outlives its killed driver
+            os.kill(int(pidfile.read_text()), signal.SIGKILL)
     store = m.Store(m.research_dir("example"))
     (run,) = store.runs()
     results, interrupted = store.slot_records(run["run_id"])

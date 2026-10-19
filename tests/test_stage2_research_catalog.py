@@ -738,19 +738,22 @@ def test_capability_document_faults_and_candidate_faults_are_distinct(tmp_path, 
 def test_catalog_shared_deadline_keeps_asymmetric_failure_rules(tmp_path, sources):
     # Criteria 19, 41, 42. Planted fault: the reads start one after the other or get separate budgets; a Pi timeout
     # dispatches; a models.dev timeout retries, extends the deadline or aborts fixed work.
-    sources.pi_delay = sources.metadata_delay = 1.5
+    # The margin between a read's planted delay and the shared deadline must cover the runtime's own start-up
+    # and Pi's initialisation under load (a 0.5 s margin failed on a loaded machine); two delays that together
+    # exceed the deadline still prove the reads overlap, because sequential reads could not finish inside it.
+    sources.pi_delay = sources.metadata_delay = 3.0
     started = time.monotonic()
-    bridge = collect(tmp_path, sources, deadlineMs=2000)
-    assert time.monotonic() - started < 3.6, "the reads ran one after the other"
+    bridge = collect(tmp_path, sources, deadlineMs=5000)
+    assert time.monotonic() - started < 7.5, "the reads ran one after the other"
     assert len(sources.requests) == 2, "both reads were not requested"
-    assert bridge["exit_code"] == 0 and bridge["elapsed_ms"] < 2400
+    assert bridge["exit_code"] == 0 and bridge["elapsed_ms"] < 5400
     assert len(pi_requests(sources)) == 1 and len([p for p, _ in sources.requests if p == "/metadata"]) == 1
     # Both slow past one shared deadline: Pi decides (exit 1), the models.dev timeout is a reason, never a retry.
     sources.pi_delay = sources.metadata_delay = 3.0
     sources.requests.clear()
     started = time.monotonic()
     bridge = collect(tmp_path, sources, deadlineMs=1000)
-    assert time.monotonic() - started < 2.6, "the two reads received separate budgets"
+    assert time.monotonic() - started < 2.9, "the two reads received separate budgets"
     assert bridge["sources"]["models_dev"]["outcome"] == "timeout"
     with pytest.raises(swarm.ResearchCatalogError) as failure:
         select(bridge)

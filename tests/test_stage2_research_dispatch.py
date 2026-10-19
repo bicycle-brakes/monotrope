@@ -533,9 +533,7 @@ def test_cancellation_kills_a_descendant_that_ignores_sigterm_after_the_leader_e
         "print('ready',flush=True)\ntime.sleep(60)\n"
     )
     h = Harness()
-    result = m.dispatch(
-        [make_slot("a", script=script, allowance=3.0)], gate=h.gate, launcher=h.launcher, grace=0.5
-    )
+    result = m.dispatch([make_slot("a", script=script, allowance=3.0)], gate=h.gate, launcher=h.launcher, grace=0.5)
     assert by_id(result)["a"].outcome == "timed-out"
     grandchild = int(pid_file.read_text())
     alive = True
