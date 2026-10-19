@@ -1088,7 +1088,7 @@ class Run:
             self.store.restore_clear(staging)
             raise
         if staging is not None:
-            self.store.commit_clear(staging)
+            self.store.commit_clear()
         return f"run {self.run_id} status: {status}."
 
     def compose(self, status: str) -> str:

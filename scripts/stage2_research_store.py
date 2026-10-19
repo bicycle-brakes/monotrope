@@ -341,7 +341,7 @@ class Store:
                 entry.rename(self.directory / entry.name)
             staging.rmdir()
 
-    def commit_clear(self, staging):
+    def commit_clear(self):
         """Delete what ``stage_clear`` moved aside, and any staging left by an earlier crash; best effort."""
         with contextlib.suppress(OSError):
             for entry in self.directory.iterdir():

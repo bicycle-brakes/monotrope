@@ -12,6 +12,7 @@ the end reads the repository's own declaration and documents.
 
 from __future__ import annotations
 
+import contextlib
 import json
 import os
 import re
@@ -2520,10 +2521,8 @@ def test_a_failed_publication_keeps_the_results_reusable(sworld: SwarmWorld, mon
 
     monkeypatch.setattr(stage2, "append", failing)
     sworld.complete()
-    try:
+    with contextlib.suppress(OSError):
         sworld.run()
-    except OSError:
-        pass
     assert "research-swarm/v2" not in sworld.research.read_text(encoding="utf-8"), "nothing was published"
     monkeypatch.setattr(stage2, "append", real)
     (sworld.bin / "calls.jsonl").unlink()
