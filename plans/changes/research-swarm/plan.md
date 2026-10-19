@@ -2189,3 +2189,14 @@ Hand repair of the phase-6 round-6 rows F-34, F-35, F-36 and F-37, plus two load
 - Flaky `tests/test_stage2_research_catalog.py::test_catalog_shared_deadline_keeps_asymmetric_failure_rules`: a 0.5 s margin between the planted 1.5 s delay and the 2 s deadline was smaller than Pi's start-up under parallel load. Now delays 3 s, deadline 5 s (two delays still exceed the deadline, so sequential reads could not pass).
 - Flaky `tests/test_stage2_research_store.py::test_terminal_record_survives_sigkill_after_the_outcome`: the second child finished by a timer (6 s, then 40 s), so a delayed kill under load still let it write a result; the first hardening failed again in the first full verify. The child now waits for a file the test writes after the kill.
 - Full `make verify` at the last test commit: VERIFY GREEN (3032 passed, 16 skipped, 310 s), log `r6-verify.log` in the scratchpad.
+
+### Orchestrator correction — round-5 and round-6 spans (2026-10-19)
+
+The two "start, approximate" times above are earlier than the launches the
+orchestrator recorded with `date -u`: the round-5 repair agent was launched at
+18:04:52Z (recorded above as 17:50Z), the round-6 repair agent at 18:43:00Z
+(recorded above as 18:20Z). Measured spans, orchestrator clock: round 4
+15:07Z to 15:40:30Z (review and repair, about 33 min); round 5 review 15:41Z
+to 15:44:06Z and repair 18:04:52Z to 18:32:04Z (about 30 min); round 6
+18:32:04Z to 19:08:33Z (verify rerun, review and repair, about 36 min). Sum for
+rounds 4 to 6: about 1 h 39 min, counted against the 17 h 20 min appetite.

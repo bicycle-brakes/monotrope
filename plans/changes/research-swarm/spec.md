@@ -919,8 +919,12 @@ maintainer answer is supplied here.
   it when the process dies, so a killed run never blocks the next one, and a
   second concurrent run refuses with exit 2.
 - [DETAIL] Residual read risk: stored results lie outside every directory a
-  model is given and are never named to a model. A repository seat that
-  deliberately reads an absolute path outside its working directory could
-  still reach them. That is the paid-Pi residual read risk design.md
-  already records (tool restriction is not OS confinement), now covering the
-  store too. Probes and online seats have no file tools.
+  model is given and are never named to a model. A repository seat runs with
+  the path lock `scripts/stage2_repository_pathlock.mjs` (decision Q-16): its
+  read, grep, find and ls calls are refused when the path, with `..`
+  collapsed and symbolic links followed, lies outside the worktree, so an
+  absolute path to the store, the home directory or the git directory does
+  not reach a model on any platform Pi runs on. The lock judges the path a
+  tool is called with, not what a directory walk then visits; that remainder
+  is the residual read risk design.md records. Probes and online seats have
+  no file tools.
