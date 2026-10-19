@@ -156,8 +156,8 @@ tools/bd dolt push          # push tracker data to origin (refs/dolt/data)
   from there, and concurrent writers lose nothing
   (`docs/research/2026-09-23-worktree-tracker-writes.md`); who may write is
   still house rule 4, and a worker claims with `--actor <session>`. Each new
-  checkout or worktree runs `make venv` once before `make verify`; the suite
-  fails under an interpreter that does not match `requirements-ci.txt`
+  checkout or worktree runs `make venv` once before `make verify` (`PYTHON=` picks a 3.12+
+  interpreter); the suite fails under one that does not match the lock
   (bead coding-harness-ei0).
 - **A text-only change (Markdown outside `scripts/`, `tests/`, `prompts/`,
   `decisions/`) skips the local `make verify`;** CI is its gate.
