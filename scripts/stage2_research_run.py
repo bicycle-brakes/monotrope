@@ -901,6 +901,7 @@ class Run:
             _keys(item, {"claims", "summary"})
             if (
                 not isinstance(item["claims"], list)
+                or any(not isinstance(claim, str) for claim in item["claims"])
                 or len(set(item["claims"])) < 2
                 or not set(item["claims"]) <= known
                 or not isinstance(item["summary"], str)
