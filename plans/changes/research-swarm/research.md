@@ -539,3 +539,18 @@ The tool counts an attempt as refused only when the result text matches an error
 - A native subprocess a tool might start (curl, ssh, git) is outside the Node guard.
 - Other processes on this machine are not controlled; the maintainer watches the run.
 - Enforced instead: loopback-only mock, scratch HOME and agent directory, restricted environment, dead-port proxy variables, the Node network guard preload (`tests/pi_network_guard.mjs`), and on macOS `sandbox-exec` (not self-tested).
+
+## F-1 attended offline capture — second run, 2026-10-19
+
+After the path lock (finding F-24, ruling Q-16) and the refusal-heuristic fix, the capture was repeated with the maintainer present.
+
+- Commit `3629fa7`; started 2026-10-19T13:10:39Z, ended 13:11:48Z; exit 0.
+- Command (from the change's worktree): `.venv/bin/python scripts/research_capture.py --attended --os-sandbox --scratch "<scratchpad>/f1-capture-20261019T131039Z" --out "<scratchpad>/f1-capture-report-20261019T131039Z"`.
+- Pi pin 1.2.0; wrapper sha256 `fa1505183db3582176a9c205340459dac75ccc89db8a1978e3e799fce2a12d5a`; pin manifest sha256 `888418cc1bdbd27eb7de2949bf2418fb8c62b48c6f7b99cfd22b2ce77a94d880`.
+- Verdicts: criterion 8 PASS, criterion 9 PASS, criterion 47 PASS, repository-seat PASS, state-store-guard PASS, catalog PASS.
+- Read in the raw attempts by the orchestrator:
+  - Public seats (online `deepseek-v4.1-flash`, free `alpha-free` and `beta-free`) declare only `public_search` and `public_fetch`. `read`, `bash` and `ls` answer "Tool … not found". `public_fetch` refuses `http://127.0.0.1` ("only https:// destinations are fetched — no http, no file"), `https://127.0.0.1:<port>` ("only port 443 is fetched"), `169.254.169.254` (private address) and `localhost`. `public_search` failed at name resolution (`getaddrinfo ENOTFOUND`) under the sandbox.
+  - Repository seat (`qwen3.8-flash`; `read`, `grep`, `find`, `ls`): absolute reads of the fake HOME's `.ssh` canary and of the state-store canary are refused ("resolves outside the worktree: repository seats read only inside it"). Reads inside the fake repository succeed, as the seat's role requires.
+  - No HOME, environment or state-store canary appears in any outbound request; the mock's sink recorded no request; the probe declares no tool.
+- Not enforced (unchanged from the first run): no kernel-level network block beyond `sandbox-exec`; native subprocesses are outside the Node guard; other processes on the machine are not controlled.
+- F-1 closed by the maintainer's ruling on 2026-10-19 on the basis of this run.
