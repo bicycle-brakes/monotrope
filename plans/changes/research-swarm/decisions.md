@@ -636,3 +636,17 @@ the real home with a clear message, to achieve that stored peer results never li
 within a model's home, accepting that `XDG_STATE_HOME` must be set outside the
 home before a research run. — 2026-10-19
 
+## Q-16 · How a repository seat is kept inside the worktree
+
+asked: 2026-10-19
+answer: "ja, mach das mit der Pfadsperre in Pi" — a path lock in Pi itself (an extension on the repository seats), cross-platform, instead of an operating-system sandbox.
+answered_by: maintainer
+status: answered
+context: |
+  Topic: how the swarm's repository seats are kept from reading files outside the worktree.
+  Intention: the attended offline capture with the real pinned Pi (finding F-24) showed a repository seat reading absolute paths outside the worktree: the fake home directory's `.ssh` canary and the state-store peer-result canary reached the model, which spec criterion 52 forbids. The maintainer was told that `sandbox-exec` is macOS-only and Windows is unsupported.
+  Today: a repository seat runs Pi with `--tools read,grep,find,ls`, the worktree as working directory and no extension; those tools accept absolute paths, `..` and symbolic links. The design recorded this as the accepted paid-Pi residual read risk.
+  Repository change: a Pi extension (`scripts/stage2_repository_pathlock.mjs`), loaded on repository-seat launches as the one explicit `-e` beside `--no-extensions`, blocks a read, grep, find or ls call whose path, resolved with `..` collapsed and symbolic links followed, lies outside the worktree; tests drive it with an absolute path, a `..` escape and a symlink escape. The design line on the residual read risk is amended.
+  Architecture change: no new component beyond the extension; public seats, probes and the merge, author and judge calls are unchanged. The lock works on every platform Pi runs on.
+
+In the context of repository seats whose file tools accept paths anywhere on the machine, facing the choice between an operating-system sandbox (macOS only) and a lock inside Pi, we decided to confine the four file tools to the worktree with a Pi extension, to achieve that the state store, the home directory and the git directory outside the worktree never reach a model on any platform, accepting that the lock judges the path a tool is called with and not what a directory walk then visits. — 2026-10-19

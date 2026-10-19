@@ -2607,3 +2607,11 @@ Stage-2 call, 2026-10-19: review · endpoint openai-codex · model gpt-6.1-sol �
 
 Phase 6 verdict: codex 01a1538f-5cf9-7c42-ad63-105eec047c79, 2026-10-19
 Reviewer session: codex 01a1538f-5cf9-7c42-ad63-105eec047c79 — a fresh session reviewed: an earlier ## Phase 6 block makes this a re-check
+
+## Phase 6 — F-1 capture, 2026-10-19
+
+| ID | Severity | Dimension | Origin | Where | Finding | Reviewer | Status | Broke a test |
+|---|---|---|---|---|---|---|---|---|
+| F-24 | BLOCKER | SPEC | capture | `scripts/stage2_swarm.py` repository seat launch (built in `scripts/stage2_research_run.py`, `pi_command`) / Pi `read` tool | The repository seat reads absolute paths outside the worktree: in the attended capture with the real pinned Pi 1.2.0 (commit `2028c13`), `read` returned the fake home's `.ssh` canary and the state-store peer-result canary, and both reached the model. [criterion 52] | attended capture | fixed — tests/test_stage2_repository_pathlock.py::test_an_absolute_path_outside_the_worktree_is_refused | — |
+
+Source: the attended F-1 offline capture, 2026-10-19T11:12:34Z, recorded in research.md ("F-1 attended offline capture — 2026-10-19"). The maintainer ruled the repair in Q-16 (decisions.md). Booked first as `taken — spec criterion 52`, then repaired by the path lock (`scripts/stage2_repository_pathlock.mjs`, loaded as the repository seat's one `-e`) and booked `fixed`; also covered: `..` escape, symlink escape, `~`, a glob outside, and the launch argv test `test_the_repository_seat_launch_loads_only_the_path_lock`.

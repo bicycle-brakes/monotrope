@@ -352,8 +352,11 @@ mark the identical packet "no packet neighbour". Each valid report must have
 the one-evidence-backed-claim floor. Any claims still receive validation and
 scoring. With a neighbour, the normal floor applies. The neighbour comparison
 records "no neighbour given or found" as a gap.
-The accepted paid-Pi residual read risk remains documented: tool
-restriction and prompt scope do not equal OS read confinement.
+Repository seats load a path lock (Q-16, F-24): tool restriction and prompt
+scope alone do not confine reads, so `scripts/stage2_repository_pathlock.mjs`
+blocks any read, grep, find or ls call whose path (`..` collapsed, symbolic
+links followed) lies outside the worktree. It is not OS read confinement: it
+judges the path a tool is called with, not what a directory walk then visits.
 
 **Topic author → online contexts.** One fresh Opus 5.5 call (`high`) receives
 the private brief and produces the public sentence, filtered before online
@@ -486,10 +489,14 @@ outside that home, a research run stops with exit 1 and a message naming it.
   launched ones.
 - *Isolation.* No store path, run id or stored result enters a model's
   prompt, argv, environment or working directory before its barrier.
-  Repository seats keep the worktree as working directory, and probes and
-  online seats have no file tools. A seat that deliberately reads an
-  absolute path elsewhere is the residual paid-Pi read risk recorded below,
-  now covering the store too.
+  Repository seats keep the worktree as working directory and load one
+  explicit extension, the path lock `stage2_repository_pathlock.mjs`
+  (beside `--no-extensions`; Q-16, F-24): it blocks read, grep, find and ls
+  calls that resolve outside the worktree, so the store, the home directory
+  and the git directory are unreachable for them. Probes and online seats
+  have no file tools. The lock is plain JavaScript inside Pi, so it holds on
+  every platform Pi runs on; it judges the path a tool is called with, not
+  what a directory walk then visits.
 - *Snapshot.* `stage2_research_snapshot.py` already yields per-path
   digests and the exact runner-owned append exemption. The binding reuses
   them, adding one function that compares against stored digests instead
