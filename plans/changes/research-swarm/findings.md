@@ -2654,3 +2654,17 @@ Stage-2 call, 2026-10-19: review · endpoint openai-codex · model gpt-6.1-sol �
 
 Phase 6 verdict: codex 01a154d2-600a-7b41-a7e6-94ba6fbe4b42, 2026-10-19
 Reviewer session: codex 01a154d2-600a-7b41-a7e6-94ba6fbe4b42 — a fresh session reviewed: an earlier ## Phase 6 block makes this a re-check
+
+Stage-2 call, 2026-10-19: review · endpoint openai-codex · model gpt-6.1-sol · leak check clean over 536 files, 1560 commits, 12 rules.
+
+## Phase 6 — Codex, 2026-10-19
+
+| ID | Severity | Dimension | Origin | Where | Finding | Reviewer | Status | Broke a test |
+|---|---|---|---|---|---|---|---|---|
+| F-34 | BLOCKER | SPEC | base | `scripts/stage2_research_dispatch.py:90–105` | Cancellation leaves descendants running when the process-group leader exits on SIGTERM but a descendant ignores it. A local subprocess reproduction confirms that `_stop_and_reap()` returns while the descendant remains alive; SIGKILL is sent only when waiting for the leader times out. Security cancellation must stop the entire launched group. [criteria 12, 36] | Codex | open | — |
+| F-35 | MAJOR | SPEC | fix-r3 | `scripts/stage2_research_run.py:1199–1209`; `scripts/stage2_research_store.py:455–458` | New interruption evidence after the staged-clear recovery: SIGKILL immediately after `finish_run()` and before `publish()` leaves an unpublished run marked complete outside any staging directory. An in-memory reproduction makes resume reject its successful results as “was published complete,” forcing matching calls to repeat. Unpublished results must remain reusable. [criterion 53] | Codex | open | — |
+| F-36 | BLOCKER | SPEC | base | `scripts/check_research_handoff.py:277–325,750–755` | A complete run whose manifest gives `plans/changes/other/spec.md` but whose map omits that path passes `check_change()` with an empty spec neighbours list and no maintainer drop answer. Locally reproduced with zero findings. Required neighbours come exclusively from the map, so contradictory records silently erase a human-given dependency. [criteria 30, 33] | Codex | open | — |
+| F-37 | MINOR | SPEC | base | `scripts/stage2_research_run.py:312–317,1035–1040` | When the latest stored run recorded a security refusal, the next run starts model calls without reporting that source run, refused slot or reason. Resume reasons are retained only for the later published manifest; the opening and dispatch paths never print them. The required diagnostic must appear before any model call. [criterion 56] | Codex | open | — |
+
+Phase 6 verdict: codex 01a15575-8e14-7731-860f-e4a68ea2a910, 2026-10-19
+Reviewer session: codex 01a15575-8e14-7731-860f-e4a68ea2a910 — a fresh session reviewed: an earlier ## Phase 6 block makes this a re-check
