@@ -83,10 +83,9 @@ Full doctrine: `docs/WORKFLOW.md`, in English since 2026-09-29.
 5. **The handover is the file, not the chat.** Session end → a file under
    `docs/journal/handover/`. A number without its commit or date reads as a
    historical one — every count carries its cut-off.
-6. **The customer instance is out of bounds.** What is needed from
-   the customer instance (a separate, private repository that is never named
-   here) travels as a *requirement*, never as an
-   expression — no filename, field name, entity or layer name from there
+6. **The customer instance is out of bounds.** What is needed from the
+   customer instance (private, never named) travels as a *requirement*, never
+   as an expression — no filename, field name, entity or layer name from there
    appears in a framework artifact.
 7. **Texts carry their own meaning.** A reader without this session must
    understand every sentence; bead ids and file names go in parentheses as a
