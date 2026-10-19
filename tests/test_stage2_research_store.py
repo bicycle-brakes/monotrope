@@ -6,7 +6,6 @@ snapshot tests, and real short-lived subprocesses for the SIGKILL and lock contr
 
 from __future__ import annotations
 
-import contextlib
 import hashlib
 import json
 import os
@@ -125,9 +124,10 @@ DRIVER = textwrap.dedent(
 
     store = s.Store(s.research_dir("example"))
     run = store.start_run("plans/changes/example", "receipt-1", {binding!r})
-    child = "import os,time; open({pidfile!r}, 'w').write(str(os.getpid())); time.sleep(40)"
+    # s2 ends only when the test releases it after the kill, so no load-dependent delay can finish it first
+    child = "import os,time\\nt=time.time()\\nwhile not os.path.exists({gate!r}) and time.time()-t<300: time.sleep(0.05)"
     def slot(i):
-        return d.Slot(slot_id="s%d" % i, provider="go", required=True, order=(i,), role_allowance=30.0,
+        return d.Slot(slot_id="s%d" % i, provider="go", required=True, order=(i,), role_allowance=600.0,
                       identity={{"stage": "topics", "topic": i, "seat": 0, "endpoint": "go", "model": "m"}},
                       prompt="p%d" % i, payload="print('x')" if i == 1 else child)
     def key(slot):
@@ -155,8 +155,8 @@ DRIVER = textwrap.dedent(
 
 def test_terminal_record_survives_sigkill_after_the_outcome(state_home):
     m = module()
-    pidfile = state_home / "s2-child.pid"
-    script = DRIVER.format(scripts=str(SCRIPTS), binding=BINDING, pidfile=str(pidfile))
+    gate = state_home / "release-s2"
+    script = DRIVER.format(scripts=str(SCRIPTS), binding=BINDING, gate=str(gate))
     proc = subprocess.Popen(
         [sys.executable, "-c", script],
         stdout=subprocess.PIPE,
@@ -171,8 +171,7 @@ def test_terminal_record_survives_sigkill_after_the_outcome(state_home):
     finally:
         if proc.poll() is None:
             proc.kill()
-        with contextlib.suppress(OSError, ValueError):  # the orphaned s2 child outlives its killed driver
-            os.kill(int(pidfile.read_text()), signal.SIGKILL)
+        gate.write_text("release")  # the orphaned s2 child outlives its killed driver and now ends
     store = m.Store(m.research_dir("example"))
     (run,) = store.runs()
     results, interrupted = store.slot_records(run["run_id"])
