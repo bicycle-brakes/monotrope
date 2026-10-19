@@ -562,8 +562,15 @@ def test_a_complete_run_clears_the_store_and_a_cleared_store_has_no_source(store
     # a stored run published complete is not a source even if clearing was interrupted
     run = make_source(store, repo, results=[(k, terminal(k))])
     store.finish_run(run, "complete")
+    # unpublished (no record in research.md): the completion flag alone does not reject it (F-35)
+    source, plan = resume(store, repo, [k])
+    assert source.usable and set(plan.reused) == {"s1"}
+    # published: its record carries the marker
+    with (repo / RESEARCH).open("ab") as handle:
+        handle.write(f"\n<!-- research-swarm/v2 run {run} -->\n".encode())
     source, plan = resume(store, repo, [k])
     assert not source.usable and plan.reused == {}
+    assert any("published complete" in reason for reason in source.reasons)
 
 
 def test_an_unreadable_newest_run_fails_closed(store, repo):

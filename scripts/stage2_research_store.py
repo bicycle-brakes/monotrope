@@ -371,11 +371,6 @@ class Store:
                         shutil.rmtree(entry, ignore_errors=True) if entry.is_dir() else entry.unlink()
                     else:
                         entry.rename(self.directory / entry.name)
-                        # finish_run marks a run complete before its record is published (F-26); a run
-                        # restored here never was published, so it must not read as published complete
-                        run = _read_sealed(self.directory / entry.name / "run.json")
-                        if run is not None and run.get("state") == "complete":
-                            self._update_run(entry.name, state="incomplete")
             with contextlib.suppress(OSError):
                 staging.rmdir()
 
@@ -452,7 +447,10 @@ class Store:
             reasons.append(
                 f"run {run_id} recorded a refused slot (security refusal) at {slot}" + (f": {reason}" if reason else "")
             )
-        if latest.get("state") == "complete":
+        # finish_run marks a run complete before its record is published (F-26), so the flag alone does not
+        # tell published from unpublished (F-28, F-31, F-35): the record's marker in research.md does.
+        published = f"research-swarm/v2 run {run_id} -->" in research_bytes.decode("utf-8", errors="replace")
+        if latest.get("state") == "complete" and published:
             reasons.append(f"run {run_id} was published complete")
         if reasons:
             return Source(False, reasons=reasons, **base)

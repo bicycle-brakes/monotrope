@@ -313,6 +313,10 @@ class Run:
             self.run_id = self.store.start_run(self.change, self.selection.get("report_id"), self.binding)
         except StoreWriteError as error:
             raise runner.CallFailed(f"the research state store is unusable ({error})") from error
+        # A stored security refusal is named before any model call (F-37, criterion 56): run, slot, reason.
+        for reason in self.source.reasons if self.source else ():
+            if "security refusal" in reason:
+                print(f"swarm: not reusing the earlier run - {reason}")
         self.brief = self.build_brief()
         self.agents = self.sources.get("AGENTS.md", b"").decode("utf-8", errors="replace")
 

@@ -289,6 +289,12 @@ def _complete_shape(parsed: ParsedRun, where: str) -> None:
         )
     ):
         raise CannotMeasure(f"{where}: a complete run lacks its reports or neighbour packet")
+    # A path the maintainer gave is recorded twice: in the manifest and as a "given" map entry. Records that
+    # disagree cannot say which dependency the human gave, so nothing is measured (F-36, criteria 30, 33).
+    map_given = {item["path"] for item in packet if item["status"] == "given"}
+    if set(parsed.given) != map_given:
+        differing = sorted(set(parsed.given) ^ map_given)[0]
+        raise CannotMeasure(f"{where}: the manifest and the map disagree on the given neighbour {differing}")
     reconciliation = parsed.reconciliation or {}
     judge, scores = reconciliation.get("reconciliation"), reconciliation.get("scores")
     if not (

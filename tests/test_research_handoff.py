@@ -63,6 +63,7 @@ def run_text(
     supported: str = "all",
     extra_blocks: tuple[str, ...] = (),
     question_link: str | None = None,
+    manifest_given: tuple[str, ...] | None = None,
 ) -> str:
     """One run, written like the runner writes it; `inventory` is derive, none, drop or corrupt."""
     packet = [{"path": p, "status": "given", "map_keys": []} for p in given]
@@ -95,7 +96,7 @@ def run_text(
         "run_id": run,
         "class": klass,
         "status": status,
-        "given_neighbours": list(given),
+        "given_neighbours": list(given if manifest_given is None else manifest_given),
     }
     judge = {"disagreements": list(disagreements)}
     scores = []
@@ -326,6 +327,19 @@ def test_a_dangling_question_claim_link_is_not_measured(world: World, capsys: py
     world.write([dangling], records=[q_record(1, items=(f"{RUN1}/H-1",))])
     code, out = world.check(capsys)
     assert code == 3, out
+
+
+def test_a_manifest_given_path_the_map_omits_is_not_measured(world: World, capsys: pytest.CaptureFixture[str]) -> None:
+    # Criteria 30, 33 (phase-6 F-36). Planted fault: the manifest gives a spec path, the map omits it, and the
+    # contradictory records silently erase the human-given dependency from the required neighbours.
+    agree = run_text(RUN1, given=(P,))
+    world.write([agree], records=[q_record(1, items=(item_of(RUN1, 1),))], spec=spec_text(neighbours=[P]))
+    assert world.check(capsys)[0] == 0, "consistent records are measured"
+    contradictory = run_text(RUN1, given=(), manifest_given=(P,))
+    world.write([contradictory], records=[q_record(1, items=(item_of(RUN1, 1),))], spec=spec_text(neighbours=[]))
+    code, out = world.check(capsys)
+    assert code == 3, out
+    assert P in out
 
 
 def item_of(run: str, number: int) -> str:

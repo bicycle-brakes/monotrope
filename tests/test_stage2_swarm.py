@@ -1309,6 +1309,28 @@ def test_a_refused_run_is_named_and_never_reused(sworld: SwarmWorld) -> None:
     assert reasons["usable"] is False and any("refused" in r for r in reasons["reasons"])
 
 
+def test_a_refused_run_is_printed_before_any_model_call(sworld: SwarmWorld, monkeypatch: pytest.MonkeyPatch) -> None:
+    # Criterion 56 (phase-6 F-37). Planted fault: the next run starts its model calls without telling the
+    # maintainer which stored run was refused, at which slot and why; only the manifest said so afterwards.
+    sworld.research.write_text(SEED + f"\nAn accident: {LEAK}.\n", encoding="utf-8")
+    sworld.complete()
+    assert sworld.run() == 2
+    refused_run = manifest_of(sworld)["run_id"]
+    sworld.research.write_text(SEED, encoding="utf-8")
+    (sworld.bin / "calls.jsonl").unlink(missing_ok=True)
+    printed: list[tuple[str, int]] = []
+
+    def spy(*args, **kwargs):
+        printed.append((" ".join(str(a) for a in args), len(sworld.calls())))
+        print(*args, **kwargs)
+
+    monkeypatch.setattr(stage2_research_run, "print", spy, raising=False)
+    assert sworld.run() == 0
+    named = [(text, calls) for text, calls in printed if refused_run in text and "refused" in text]
+    assert named, printed
+    assert named[0][1] == 0, "the refused run is printed before the first model call"
+
+
 def test_finder_trio_locates_four_categories_without_judging(sworld: SwarmWorld) -> None:
     # Criterion 24. Planted fault: a fifth locator field passes, or an empty category lacks its unread marker.
     good = json.loads(locator_report())
@@ -2542,6 +2564,31 @@ def test_a_failed_publication_keeps_the_results_reusable(sworld: SwarmWorld, mon
         sworld.run()
     assert "research-swarm/v2" not in sworld.research.read_text(encoding="utf-8"), "nothing was published"
     monkeypatch.setattr(stage2, "append", real)
+    (sworld.bin / "calls.jsonl").unlink()
+    assert sworld.run() == 0
+    resume = manifest_of(sworld)["resume"]
+    assert resume["usable"] is True, resume
+    assert len(sworld.calls()) <= 1, "the finished results are reused, not repeated"
+
+
+def test_a_run_killed_between_finishing_the_store_and_publishing_stays_reusable(
+    sworld: SwarmWorld, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    # Criterion 53 (phase-6 F-35). Planted fault: a kill right after the store marked the run complete and
+    # before the publication started leaves an unpublished run marked complete outside any staging directory;
+    # resume must tell it from a published one by the record in research.md, not by the completion flag.
+    class Killed(BaseException):
+        pass
+
+    def killed(*_args, **_kwargs):
+        raise Killed
+
+    with monkeypatch.context() as patch:
+        patch.setattr(stage2_research_run.Run, "publish", killed)
+        sworld.complete()
+        with contextlib.suppress(Killed):
+            sworld.run()
+    assert "research-swarm/v2" not in sworld.research.read_text(encoding="utf-8"), "nothing was published"
     (sworld.bin / "calls.jsonl").unlink()
     assert sworld.run() == 0
     resume = manifest_of(sworld)["resume"]
