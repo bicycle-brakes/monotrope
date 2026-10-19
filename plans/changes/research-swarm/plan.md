@@ -2234,3 +2234,19 @@ orchestrator recorded with `date -u`: the round-5 repair agent was launched at
 to 15:44:06Z and repair 18:04:52Z to 18:32:04Z (about 30 min); round 6
 18:32:04Z to 19:08:33Z (verify rerun, review and repair, about 36 min). Sum for
 rounds 4 to 6: about 1 h 39 min, counted against the 17 h 20 min appetite.
+
+### Orchestrator — rounds 7 to 9, 2026-10-19/20
+
+Measured with `date -u` (orchestrator clock). Round 7: review 21:44:43Z to
+21:47:13Z; repair run 22:03:56Z to 22:32:22Z (failed only on the `ruleset`
+gate, HTTP 403 on the free organisation plan); full `make verify` 22:40:19Z
+to 22:48:14Z after the plan upgrade; booked by hand. Round 8: review
+22:48:57Z to 22:53:48Z; repair run 22:54:05Z to 23:28:58Z (failed on form);
+full `make verify` to about 23:41Z; booked by hand. Round 9: review 23:42Z to
+23:45Z. Span counted: 21:44:43Z to 23:45Z with one gap (21:47Z to 22:03Z, no
+work on this change), about 1 h 44 min, counted against the 17 h 20 min
+appetite. Estimated total so far, from the spans recorded in this plan and in
+the 2026-10-19 handovers: about 15 h 30 min to 15 h 45 min; about 1 h 35 min
+remain. When the appetite is spent, the work stops and the maintainer
+decides.
+
