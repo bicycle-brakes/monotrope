@@ -102,7 +102,7 @@ def test_prepared_selection_is_bound_to_inputs_and_freshness(world: World, monke
         later = availability.now() + dt.timedelta(seconds=901)
         monkeypatch.setattr(availability, "now", lambda: later)
     else:
-        path = availability.receipt_path("demo", stage2)
+        path = availability.receipt_path(world.root, "demo", stage2)
         if fault == "corrupt":
             path.write_text("not JSON")
         else:
@@ -119,7 +119,7 @@ def test_all_failed_preparation_never_creates_a_clean_round_or_reuses_receipt(wo
     assert world.run("prepare-loop") == 0
     world.script(pi=[{"exit": 1, "stderr": "unavailable"}] * 5)
     assert world.run("prepare-loop") == 2
-    assert not availability.receipt_path("demo", stage2).exists()
+    assert not availability.receipt_path(world.root, "demo", stage2).exists()
     assert not world.record().exists()
 
 
