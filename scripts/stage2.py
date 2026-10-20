@@ -108,7 +108,7 @@ Codex call runs in `workspace-write`, and the runner puts back what lands
 outside the change folder.
 
 **The loop record** lives outside the worktree
-(`${XDG_STATE_HOME:-~/.local/state}/coding-harness/stage2/<change>/loop.md`):
+(`${XDG_STATE_HOME:-~/.local/state}/coding-harness/stage2/<change>@<digest>/loop.md`):
 the rounds' rows, the run's stage snapshot (`Loop state:`, the runner's own
 line), and the orchestrator's decision on each row, until the phase-6
 verdict is written and `release-loop` carries them into `findings.md`. The

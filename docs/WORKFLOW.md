@@ -1105,7 +1105,7 @@ attempt whose every member failed completes no round and consumes no stage.
 When every stage of a run is consumed and the last round was not clean, the
 loop stops and reports to the maintainer — no model is substituted. The rows
 go into a **loop record** outside the worktree and outside the git directory
-(`${XDG_STATE_HOME:-~/.local/state}/coding-harness/stage2/<change>/loop.md`),
+(`${XDG_STATE_HOME:-~/.local/state}/coding-harness/stage2/<change>@<digest>/loop.md`),
 not into the repository: the phase-6 reviewer writes its verdict before it
 reads any loop row. The record carries the run's snapshot — the discovery
 check, the stage membership and what is consumed — and neither a release nor
