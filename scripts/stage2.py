@@ -3958,8 +3958,9 @@ def check_repair_answer(
     before: tuple[list[list[str]], list[list[str]]],
     audit_line: str | None = None,
     findings_before: str | None = None,
-) -> tuple[dict[str, str], list[str]]:
-    """Read an answer's fixed lines: the Status each taken row takes, or the problems that fail the attempt.
+) -> tuple[dict[str, str], dict[str, str], list[str]]:
+    """Read an answer's fixed lines: the Status each taken row takes, the `Broke a test` marks its own
+    evidence proves, and the problems that fail the attempt.
 
     Each problem names its ID. Lines without a colon, and colon lines whose left side names neither an
     active row exactly nor a finding-shaped id, are ignored unless their right side claims a fixed
@@ -4016,7 +4017,7 @@ def check_repair_answer(
     for ident in parsed:
         problems.append(f"{ident}: no taken row carries this id")
     if problems:
-        return {}, [scrub(problem, key) for problem in problems]
+        return {}, {}, [scrub(problem, key) for problem in problems]
     findings_now = ctx.findings.read_text(encoding="utf-8") if ctx.findings.exists() else ""
     released_now, phase6_now = findings_rows(findings_now)
     if audit_line and audit_line not in findings_now.splitlines():
@@ -4054,17 +4055,24 @@ def check_repair_answer(
         for row in (counts_now - counts_before).elements():
             problems.append(f"{row[0]}: findings.md holds a {place} row that stood nowhere before the repair")
     if problems:
-        return {}, [scrub(problem, key) for problem in problems]
+        return {}, {}, [scrub(problem, key) for problem in problems]
+    marks: dict[str, str] = {}
     for _place, row in taken:
         fix = fixes[row[0]]
-        if not fix.startswith("fixed — tests/"):
-            continue
-        outcome = red_first(ctx.root, baseline, fix[len("fixed — ") :], key)
-        if outcome is not None:
-            problems.append(f"{row[0]}: {outcome}")
+        if fix.startswith("fixed — tests/"):
+            anchor = fix[len("fixed — ") :]
+            outcome = red_first(ctx.root, baseline, anchor, key)
+            if outcome is not None:
+                problems.append(f"{row[0]}: {outcome}")
+                continue
+            # The proof ran and passed: the mark states exactly what was shown (R-24, the maintainer's
+            # answer C in the night interview of 2026-10-20). A row without a proof gets no mark.
+            marks[row[0]] = f"yes — {anchor}"
+        elif fix.startswith("fixed — not a test"):
+            marks[row[0]] = "no — not a test"
     if problems:
-        return {}, [scrub(problem, key) for problem in problems]
-    return {ident: scrub(status, key) for ident, status in fixes.items()}, []
+        return {}, {}, [scrub(problem, key) for problem in problems]
+    return {ident: scrub(status, key) for ident, status in fixes.items()}, marks, []
 
 
 def defines_test(body: str, function: str) -> bool:
@@ -4112,7 +4120,13 @@ def mark_repaired_findings(ctx: Context, taken: list[tuple[str, list[str]]], fix
     stamp_updated(ctx.findings)
 
 
-def mark_repaired_record(change: str, taken: list[tuple[str, list[str]]], fixes: dict[str, str], root: Path) -> None:
+def mark_repaired_record(
+    change: str,
+    taken: list[tuple[str, list[str]]],
+    fixes: dict[str, str],
+    root: Path,
+    marks: dict[str, str] | None = None,
+) -> None:
     """Mark the record's own row lines the same way, after the checkpoint commit.
 
     The record lies outside what the file tools reach, so only the runner can write it; a failure
@@ -4135,7 +4149,8 @@ def mark_repaired_record(change: str, taken: list[tuple[str, list[str]]], fixes:
                 and cells[0] in by_key
                 and [*cells[:7], " \\| ".join(cells[7:-1]), cells[-1]] == by_key[cells[0]]
             ):
-                line = "| " + " | ".join([*cells[:7], fixes[cells[0]], cells[-1]]) + " |"
+                mark = (marks or {}).get(cells[0], cells[-1])
+                line = "| " + " | ".join([*cells[:7], fixes[cells[0]], mark]) + " |"
         lines.append(line)
     try:
         (record_dir(change, root) / "loop.md").write_text("\n".join(lines) + ending, encoding="utf-8")
@@ -4818,6 +4833,7 @@ def repair(root: Path, change: str, stage2_off: str | None = None) -> None:
     else:
         routes = [(SONNET, None, "stage-1", stage2_off)]
     fixes: dict[str, str] = {}
+    marks: dict[str, str] = {}
     rows_before = findings_rows(ctx.findings.read_text(encoding="utf-8") if ctx.findings.exists() else "")
     standing: dict[str, str] = {}
 
@@ -4829,12 +4845,14 @@ def repair(root: Path, change: str, stage2_off: str | None = None) -> None:
     def check(answer: str) -> list[str]:
         # The last audit line of the snapshot is this attempt's own: it was appended just before it.
         audits = [line for line in standing.get("text", "").splitlines() if line.startswith("Stage-2 call,")]
-        found, problems = check_repair_answer(
+        found, proven, problems = check_repair_answer(
             ctx, answer, taken, baseline, key, rows_before, audits[-1] if audits else None, standing["text"]
         )
         if not problems:
             fixes.clear()
             fixes.update(found)
+            marks.clear()
+            marks.update(proven)
         return problems
 
     run_attempts(
@@ -4852,7 +4870,7 @@ def repair(root: Path, change: str, stage2_off: str | None = None) -> None:
         ),
         answer_check=check,
         before_commit=lambda: mark_repaired_findings(ctx, taken, fixes),
-        after_commit=lambda: mark_repaired_record(change, taken, fixes, root),
+        after_commit=lambda: mark_repaired_record(change, taken, fixes, root, marks),
         snapshot_findings=snapshot,
         restore_findings=lambda text: ctx.findings.write_text(text, encoding="utf-8"),
     )

@@ -7434,7 +7434,7 @@ def test_a_text_row_taken_as_not_a_test_is_repaired_and_its_status_written(world
     assert world.run("repair") == 0
     record = {row[0]: row for row in stage2.record_rows(world.record().read_text(encoding="utf-8"))}
     assert record["L1-1"][7] == "fixed — not a test — the record row is written"
-    assert record["L1-1"][8] == "no", "the runner wrote Broke a test"
+    assert record["L1-1"][8] == "no — not a test", "the repair did not state what its own evidence shows"
     _, phase6 = stage2.findings_rows(world.text())
     assert {row[0]: row for row in phase6}["F-1"][7] == "fixed — not a test — a pipe \\| in the reason"
     committed = git(world.root, "show", "HEAD:plans/changes/demo/findings.md")
@@ -8238,7 +8238,7 @@ def test_a_passing_repair_writes_fixed_into_each_rows_place_and_nothing_else(wor
     assert world.run("repair") == 0
     record = {row[0]: row for row in stage2.record_rows(world.record().read_text(encoding="utf-8"))}
     assert record["L1-1"][7] == "fixed — tests/test_fix.py::test_fix"
-    assert record["L1-1"][8] == "no", "the runner wrote Broke a test"
+    assert record["L1-1"][8] == "yes — tests/test_fix.py::test_fix", "the repair did not mark the proof it ran"
     assert record["L1-1"][:7] == [
         "L1-1",
         "MAJOR",
@@ -8509,7 +8509,7 @@ def test_the_record_is_marked_only_after_the_checkpoint_commit(world: World, mon
         seen.append(("findings", git(world.root, "rev-list", "--count", f"{baseline}..HEAD")))
         real(ctx, taken, fixes)
 
-    def spy_record(_change: str, _taken: list, _fixes: dict, _root: Path) -> None:
+    def spy_record(_change: str, _taken: list, _fixes: dict, _root: Path, _marks: dict | None = None) -> None:
         seen.append(("record", git(world.root, "rev-list", "--count", f"{baseline}..HEAD")))
 
     monkeypatch.setattr(stage2, "mark_repaired_findings", spy_findings)
