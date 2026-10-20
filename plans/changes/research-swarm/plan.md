@@ -2263,3 +2263,20 @@ Rows F-44, F-45 and F-46. Span not measured: this session had no command tool to
 - F-46: the launch record written before each launch carries the individual leak check. Test `tests/test_stage2_swarm.py::test_launch_record_keeps_individual_leak_check_before_launch`.
 - Red-first evidence for these tests is not recorded by this session. The runner runs `make verify`.
 
+### Orchestrator — round 9 repair and round 10, 2026-10-20
+
+Measured with `date -u`. Round-9 repair run 23:45:54Z to 00:20:18Z (failed on
+form); red-first check and two full `make verify` runs to 00:35:36Z (the
+first lost one load-sensitive test, bead coding-harness-jik; the second was
+green); booked by hand in `e16e58b`. Round-10 review 00:35:57Z to 00:38:55Z:
+three MAJOR rows (F-47, F-48, F-49), no BLOCKER for the first time. Span
+counted: 23:45:54Z to 00:38:55Z, about 53 min. Estimated total: about
+16 h 25 min to 16 h 40 min of 17 h 20 min. A round-10 repair with its
+verification takes about 50 min, more than remains, so the work stops here
+and the round-10 rows stay open for the maintainer's decision: raise the
+appetite for one more repair and review, or decide the merge with the open
+rows named.
+
+Findings per phase-6 round, 1 to 10: 8, 5, 3, 3, 3, 4, 2, 4, 3, 3; BLOCKER
+rows per round from round 7: 2, 1, 2, 0.
+
