@@ -155,6 +155,12 @@ typed: a hand-kept list of files ages exactly as fast as files are added.
 | [`changes/interview-context/plan.md`](changes/interview-context/plan.md) | draft | partial | 2026-10-14 | coding-harness-zs7 |
 | [`changes/interview-context/research.md`](changes/interview-context/research.md) | draft | partial | 2026-10-14 | coding-harness-zs7 |
 | [`changes/interview-context/spec.md`](changes/interview-context/spec.md) | draft | partial | 2026-10-14 | coding-harness-zs7 |
+| [`changes/loop-until-clean/decisions.md`](changes/loop-until-clean/decisions.md) | draft | none | 2026-10-14 | coding-harness-4fk |
+| [`changes/loop-until-clean/design.md`](changes/loop-until-clean/design.md) | draft | none | 2026-10-16 | coding-harness-4fk |
+| [`changes/loop-until-clean/findings.md`](changes/loop-until-clean/findings.md) | draft | none | 2026-10-14 | coding-harness-4fk |
+| [`changes/loop-until-clean/plan.md`](changes/loop-until-clean/plan.md) | draft | none | 2026-10-16 | coding-harness-4fk |
+| [`changes/loop-until-clean/research.md`](changes/loop-until-clean/research.md) | draft | none | 2026-10-14 | coding-harness-4fk |
+| [`changes/loop-until-clean/spec.md`](changes/loop-until-clean/spec.md) | draft | none | 2026-10-16 | coding-harness-4fk |
 | [`changes/pi-pin/decisions.md`](changes/pi-pin/decisions.md) | draft | none | 2026-10-15 | coding-harness-agx |
 | [`changes/pi-pin/design.md`](changes/pi-pin/design.md) | draft | none | 2026-10-15 | coding-harness-agx |
 | [`changes/pi-pin/findings.md`](changes/pi-pin/findings.md) | draft | none | 2026-10-15 | coding-harness-agx |
@@ -166,6 +172,11 @@ typed: a hand-kept list of files ages exactly as fast as files are added.
 | [`changes/provenance-location/plan.md`](changes/provenance-location/plan.md) | draft | partial | 2026-10-12 | coding-harness-3ar.1 |
 | [`changes/provenance-location/research.md`](changes/provenance-location/research.md) | draft | partial | 2026-10-12 | coding-harness-3ar.1 |
 | [`changes/provenance-location/spec.md`](changes/provenance-location/spec.md) | draft | partial | 2026-10-12 | coding-harness-3ar.1 |
+| [`changes/red-first-install/decisions.md`](changes/red-first-install/decisions.md) | draft | none | 2026-10-16 | coding-harness-omp |
+| [`changes/red-first-install/findings.md`](changes/red-first-install/findings.md) | draft | partial | 2026-10-16 | coding-harness-omp |
+| [`changes/red-first-install/plan.md`](changes/red-first-install/plan.md) | draft | partial | 2026-10-16 | coding-harness-omp |
+| [`changes/red-first-install/research.md`](changes/red-first-install/research.md) | draft | none | 2026-10-16 | coding-harness-omp |
+| [`changes/red-first-install/spec.md`](changes/red-first-install/spec.md) | draft | partial | 2026-10-16 | coding-harness-omp |
 | [`changes/repair-fixed-lines/decisions.md`](changes/repair-fixed-lines/decisions.md) | draft | partial | 2026-10-15 | coding-harness-ugi |
 | [`changes/repair-fixed-lines/findings.md`](changes/repair-fixed-lines/findings.md) | draft | partial | 2026-10-15 | coding-harness-ugi |
 | [`changes/repair-fixed-lines/plan.md`](changes/repair-fixed-lines/plan.md) | draft | partial | 2026-10-15 | coding-harness-ugi |

@@ -19,7 +19,7 @@ verify:
 	bash scripts/verify_all.sh
 
 test:
-	python3 -m pytest tests/ -q
+	python3 -m pytest tests/ -q -n auto
 
 staleness:
 	python3 scripts/plans_registry.py --check
@@ -32,8 +32,23 @@ gates:
 leakcheck:
 	python3 scripts/leakcheck.py --name "$(NAME)"
 
+# The interpreter must meet `requires-python` in pyproject.toml (the one place
+# the minimum is declared). Default: the first of python3.12, python3 on PATH;
+# `make venv PYTHON=/opt/homebrew/bin/python3.12` names one. A wrong version
+# is refused before `.venv` exists, so no half-built environment is left
+# behind (bead coding-harness-y9q).
+PYTHON ?= $(shell command -v python3.12 || command -v python3)
+
 venv:
-	python3 -m venv .venv
+	@need=$$(sed -n 's/^requires-python *= *">=\([0-9.]*\)".*/\1/p' pyproject.toml); \
+	have=$$('$(PYTHON)' -c 'import sys; print("%d.%d" % sys.version_info[:2])' 2>/dev/null); \
+	if [ -z "$$need" ]; then echo "make venv: no requires-python in pyproject.toml" >&2; exit 1; fi; \
+	if [ -z "$$have" ] || [ "$$(printf '%s\n%s\n' "$$need" "$$have" | sort -t. -k1,1n -k2,2n | head -n 1)" != "$$need" ]; then \
+		echo "make venv: '$(PYTHON)' is Python $${have:-unknown}, but the lock needs $$need or newer." >&2; \
+		echo "Provide one, e.g.: make venv PYTHON=/opt/homebrew/bin/python3.12" >&2; \
+		exit 1; \
+	fi
+	'$(PYTHON)' -m venv .venv
 	.venv/bin/python3 -m pip install --require-hashes -r requirements-ci.txt
 
 lock:

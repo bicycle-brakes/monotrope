@@ -14,8 +14,8 @@ path (a spike), start it with a fixed id, `claude --model claude-opus-5-5
 kept: phase 6 is Codex's (`gpt-6.1-sol`), in a fresh session. The runner adds
 the reviewer and the Status to each row it writes, and no session line. The
 review loop
-between the two phases runs at most three rounds on the ladder — round 3 only
-when round 2 wrote a taken row (`docs/WORKFLOW.md` §4).
+between the two phases runs until a round is clean — a free-model swarm, a
+Flash swarm, then the paid ladder (`docs/WORKFLOW.md` §4, ADR 0021).
 
 Through the runner you answer in table rows of six cells — `| ID | Severity |
 Dimension | Origin | Where | Finding |` — and the runner adds the reviewer and

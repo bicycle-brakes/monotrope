@@ -22,6 +22,8 @@ from __future__ import annotations
 import functools
 import importlib.metadata
 import re
+import shutil
+import subprocess
 import sys
 import tomllib
 from pathlib import Path
@@ -244,10 +246,35 @@ def test_make_venv_installs_the_lock_in_hash_checking_mode() -> None:
     found = re.search(r"^venv:\n((?:\t.*\n)+)", makefile, re.M)
     assert found, "the Makefile has no target `venv`"
     recipe = [line.strip() for line in found.group(1).splitlines()]
-    assert recipe == [
-        "python3 -m venv .venv",
+    # The version guard before them is held by the refusal test below.
+    assert recipe[-2:] == [
+        "'$(PYTHON)' -m venv .venv",
         ".venv/bin/python3 -m pip install --require-hashes -r requirements-ci.txt",
     ], recipe
+
+
+def test_make_venv_refuses_an_interpreter_below_the_declared_minimum(tmp_path: Path) -> None:
+    """Bead coding-harness-y9q: `make venv` on a python3 3.9 left a half-built `.venv`.
+
+    The recipe must stop before `python -m venv`, name the required version
+    (read from `requires-python` in pyproject.toml, the one source) and say
+    how to provide one. A fake interpreter that reports 3.9 stands in; the
+    test installs nothing and needs no network.
+    """
+    work = tmp_path / "checkout"
+    work.mkdir()
+    for name in ("Makefile", "pyproject.toml"):
+        shutil.copy(REPO_ROOT / name, work / name)
+    fake = tmp_path / "fakebin" / "python3"
+    fake.parent.mkdir()
+    fake.write_text(
+        '#!/bin/sh\n[ "$1" = "-c" ] && { echo 3.9; exit 0; }\necho "fake python must not build" >&2\nexit 99\n'
+    )
+    fake.chmod(0o755)
+    done = subprocess.run(["make", "venv", f"PYTHON={fake}"], cwd=work, capture_output=True, text=True, check=False)
+    assert done.returncode != 0, done.stdout + done.stderr
+    assert "3.12" in done.stderr and "PYTHON=" in done.stderr, done.stderr
+    assert not (work / ".venv").exists(), "the refusal came after .venv was created"
 
 
 def _export_verdicts(path: str) -> list[tuple[str, str]]:
