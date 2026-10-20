@@ -940,6 +940,34 @@ def test_every_member_of_a_round_shares_one_deadline(world: World, monkeypatch) 
     assert len(set(seen)) == 1, "each member got a deadline of its own"
 
 
+def test_a_failed_stage_is_retired_by_an_explicit_command(world: World) -> None:
+    """R-1 of the review-swarm review / bead coding-harness-tex: a wedged stage has a way out."""
+    world.write_record([("L1-1", "taken — test_a", "yes")], state=loop_state(("free",)))
+    assert (
+        world.run("release-loop", "demo", "--stage-failed", TEST_FLASH[0], "--reason", "the model timed out twice") == 0
+    )
+    record = world.record().read_text(encoding="utf-8")
+    assert "## Stage failed — flash" in record and "the model timed out twice" in record
+    assert "L1-1" in record, "retiring a stage dropped a round row"
+    state = stage2.read_state(record, "")
+    assert "flash" in state["consumed"]
+    # The loop continues with the next stage instead of wedging.
+    world.script(pi=[{"model": model, "stdout": "No finding."} for model in TEST_RUNGS])
+    assert world.run("review-loop") == 0
+    assert "## Round 2" in world.record().read_text(encoding="utf-8")
+
+
+def test_a_failed_stage_needs_a_reason_and_a_known_model(world: World, capsys) -> None:
+    """The command names why, and only a stage of this run can be retired."""
+    world.write_record([("L1-1", "taken — test_a", "yes")], state=loop_state(("free",)))
+    before = world.record().read_text(encoding="utf-8")
+    assert world.run("release-loop", "demo", "--stage-failed", TEST_FLASH[0], "--reason", "  ") == 2
+    assert "non-empty --reason" in capsys.readouterr().err
+    assert world.run("release-loop", "demo", "--stage-failed", "not-a-member", "--reason", "why not") == 2
+    assert "no stage of this run names not-a-member" in capsys.readouterr().err
+    assert world.record().read_text(encoding="utf-8") == before, "a refused retirement edited the record"
+
+
 def test_a_second_review_loop_is_refused_while_the_record_is_held(world: World, capsys) -> None:
     """R-14 of the review-swarm review: one runner per record, and the refusal names the record."""
     path = stage2.lock_path("demo", world.root)
