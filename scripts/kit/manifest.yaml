@@ -358,6 +358,9 @@ rules:
   - prefix: README.md
     rolle: bestand
     reason: "beschreibt dieses Repository"
+  - prefix: LICENSE
+    rolle: bestand
+    reason: "the licence of this repository (Apache-2.0); an instance chooses its own"
   - prefix: CHANGELOG.md
     rolle: bestand
     reason: "Verlauf dieses Repos"
