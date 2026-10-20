@@ -318,14 +318,36 @@ def dispatch(
                     )
                     report_terminal()
 
-    threads = []
-    for queue in queues.values():
-        for _ in range(max(1, min(per_provider_limit, len(queue)))):
-            thread = threading.Thread(target=worker, args=(queue,), daemon=True)
-            thread.start()
-            threads.append(thread)
-    for thread in threads:
-        thread.join()
+    # Workers report completion through a semaphore, not Thread.join: CPython 3.12 marks a thread stopped
+    # when an interrupt lands inside join(), so a later join() would return while the worker still runs (F-57).
+    finished = threading.Semaphore(0)
+
+    def run_worker(queue: deque) -> None:
+        try:
+            worker(queue)
+        finally:
+            finished.release()
+
+    started = 0
+    waited = 0
+    try:
+        for queue in queues.values():
+            for _ in range(max(1, min(per_provider_limit, len(queue)))):
+                threading.Thread(target=run_worker, args=(queue,), daemon=True).start()
+                started += 1
+        while waited < started:
+            finished.acquire()
+            waited += 1
+    except BaseException:
+        # An interrupt (Ctrl-C) must not leave model children running (F-57): stop the stage so each
+        # worker reaps its child, wait for them with a bound, then let the interrupt continue.
+        stop.set()
+        patience = time.monotonic() + 2 * max(grace, 5.0) + 10.0
+        while waited < started:
+            if not finished.acquire(timeout=max(0.0, patience - time.monotonic())):
+                break
+            waited += 1
+        raise
 
     # Final guard: a worker lost to an unexpected error never leaves a slot without an outcome.
     for slot in ordered:

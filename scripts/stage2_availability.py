@@ -362,8 +362,16 @@ def given_neighbours(root: Path, change: str, runner) -> list[str]:
         text = path.read_text(encoding="utf-8")
         match = re.match(r"---\n(.*?)\n---", text, re.S)
         header = yaml.safe_load(match.group(1)) if match else None
+        node = yaml.compose(match.group(1), Loader=yaml.SafeLoader) if match else None
     except (OSError, UnicodeDecodeError, yaml.YAMLError) as error:
         raise runner.Refused(f"plans/changes/{change}/research.md cannot be read as a header.") from error
+    if isinstance(node, yaml.MappingNode):
+        keys = [key for key, _ in node.value if key.tag == "tag:yaml.org,2002:str" and key.value == "neighbours"]
+        if len(keys) > 1:  # a later key would silently discard the earlier dependency (F-56)
+            raise runner.Refused(
+                f"plans/changes/{change}/research.md states neighbours more than once; "
+                "repair the header to contain exactly one `neighbours:` declaration."
+            )
     frozen = dict.fromkeys(stage2_swarm.tracked_paths(root), b"")
     try:
         return stage2_research_map.validate_given_neighbours(header, frozen, f"plans/changes/{change}/spec.md")

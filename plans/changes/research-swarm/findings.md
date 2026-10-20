@@ -4114,8 +4114,8 @@ Stage-2 call, 2026-10-20: review · endpoint openai-codex · model gpt-6.1-sol �
 
 | ID | Severity | Dimension | Origin | Where | Finding | Reviewer | Status | Broke a test |
 |---|---|---|---|---|---|---|---|---|
-| F-56 | MAJOR | SPEC | base | `scripts/stage2_availability.py:362–369` | A research header containing `neighbours: [plans/changes/other/spec.md]` followed by `neighbours: []` silently discards the given dependency. Reproduced through `given_neighbours()`, which returns an empty list. Conflicting neighbour declarations must refuse before model calls with exit 2. [criterion 4] | Codex | taken — criterion 4 | — |
-| F-57 | MAJOR | MAINT | base | `scripts/stage2_research_dispatch.py:321–328`; `scripts/stage2_research_run.py:1174–1181` | Interrupting an active run with Ctrl-C leaves its model subprocesses running. Reproduced by sending SIGINT during dispatch: the dispatcher exits while its child remains alive. The join has no cancellation cleanup, and the run releases its store lock without stopping active children, allowing a replacement run to overlap surviving calls. | Codex | taken — an interrupt stops and reaps active children before the store lock is released (no spec criterion; MAINT) | — |
+| F-56 | MAJOR | SPEC | base | `scripts/stage2_availability.py:362–369` | A research header containing `neighbours: [plans/changes/other/spec.md]` followed by `neighbours: []` silently discards the given dependency. Reproduced through `given_neighbours()`, which returns an empty list. Conflicting neighbour declarations must refuse before model calls with exit 2. [criterion 4] | Codex | fixed — tests/test_stage2_swarm.py::test_conflicting_neighbour_declarations_refuse_before_calls | — |
+| F-57 | MAJOR | MAINT | base | `scripts/stage2_research_dispatch.py:321–328`; `scripts/stage2_research_run.py:1174–1181` | Interrupting an active run with Ctrl-C leaves its model subprocesses running. Reproduced by sending SIGINT during dispatch: the dispatcher exits while its child remains alive. The join has no cancellation cleanup, and the run releases its store lock without stopping active children, allowing a replacement run to overlap surviving calls. | Codex | fixed — tests/test_stage2_research_dispatch.py::test_an_interrupt_stops_and_reaps_active_children_before_it_propagates | — |
 
 Phase 6 verdict: codex 01a15b26-dd6a-7a43-9950-2da19acd0cc8, 2026-10-20
 Reviewer session: codex 01a15b26-dd6a-7a43-9950-2da19acd0cc8 — a fresh session reviewed: an earlier ## Phase 6 block makes this a re-check
@@ -4123,3 +4123,20 @@ Reviewer session: codex 01a15b26-dd6a-7a43-9950-2da19acd0cc8 — a fresh session
 Stage-2 session, 2026-10-20: attempt 1d3811605ee9 · model opencode-go/deepseek-v4.1-flash · endpoint opencode-go · handover .stage2-sessions/brief-r13.md · leak check clean over 548 files, 1670 commits, 12 rules · dispatch accepted.
 
 Stage-2 session, 2026-10-20: attempt 304e5f9c2d9e · model opencode-go/deepseek-v4.1-flash · endpoint opencode-go · handover .stage2-sessions/brief-r13.md · leak check clean over 548 files, 1670 commits, 12 rules · dispatch accepted.
+
+Stage-2 call, 2026-10-20: repair · attempt 1 · route stage-1 · endpoint claude-code-plan · model claude-sonnet-5-5 · reason DeepSeek session did not start (bead coding-harness-bas); maintainer 2026-10-20 switched to Sonnet · leak check clean over 548 files, 1671 commits, 12 rules.
+
+> Attempt 1 (stage-1) failed its post-run checks.
+>
+> Files the attempt changed (lines added, removed):
+> - `plans/changes/research-swarm/plan.md` +8 -0
+> - `scripts/stage2_availability.py` +8 -0
+> - `scripts/stage2_research_dispatch.py` +12 -2
+> - `tests/test_stage2_research_dispatch.py` +29 -0
+> - `tests/test_stage2_swarm.py` +15 -0
+>
+> Diagnostics:
+> ```text
+> - Runner format before `make verify`: ruff changed no file.
+> - `plan.md` did not add a measured line below `## Time used`
+> ```

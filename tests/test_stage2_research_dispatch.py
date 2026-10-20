@@ -676,6 +676,36 @@ def test_a_raising_terminal_callback_with_a_security_refusal_exits_two():
     assert result.exit_code == 2
 
 
+def test_an_interrupt_stops_and_reaps_active_children_before_it_propagates():
+    """F-57: Ctrl-C in the dispatching thread must not leave a model child running.
+
+    A real SIGINT, not `_thread.interrupt_main()`: only a delivered signal interrupts the blocking join.
+    """
+    h = Harness()
+    slot = make_slot("g0", script="import time\nprint('up', flush=True)\ntime.sleep(60)\n")
+
+    def interrupt_once_started():
+        for _ in range(500):
+            if "g0" in h.procs:
+                time.sleep(0.3)
+                break
+            time.sleep(0.02)
+        os.kill(os.getpid(), signal.SIGINT)
+
+    timer = threading.Thread(target=interrupt_once_started, daemon=True)
+    timer.start()
+    try:
+        with pytest.raises(KeyboardInterrupt):
+            run([slot], h, grace=0.2)
+        proc = h.procs["g0"]
+        assert proc.poll() is not None, "the child outlived the interrupted dispatch"
+    finally:
+        timer.join(timeout=5)
+        for proc in h.procs.values():
+            with contextlib.suppress(ProcessLookupError):
+                os.killpg(proc.pid, signal.SIGKILL)
+
+
 def test_cancellation_kills_group_after_leader_was_already_reaped():
     """F-44: cancellation still owns a surviving group after its leader was reaped."""
     m = module()

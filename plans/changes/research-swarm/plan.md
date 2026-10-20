@@ -1012,6 +1012,7 @@ the existing gates and let the runner own registry regeneration/full verify.
 - 29: tests/test_stage2_swarm.py::test_the_inventory_is_persisted_in_the_fenced_run_block — The runner derives neighbour statuses but never persists them, or persists them outside the one fenced run block.
 - 31: tests/test_stage2_swarm.py::test_the_inventory_is_persisted_in_the_fenced_run_block — The runner derives the obligation inventory but never persists it, or persists it outside the one fenced run block.
 - 4: tests/test_stage2_swarm.py::test_duplicate_header_classes_refuse_before_calls — A header stating `class:` twice silently selects the later class and bypasses the swarm (phase-6 F-40).
+- 4: tests/test_stage2_swarm.py::test_conflicting_neighbour_declarations_refuse_before_calls — A header stating `neighbours:` twice silently keeps the later value and discards a given dependency (phase-6 F-56).
 - 33: tests/test_research_handoff.py::test_duplicate_criterion_numbers_are_not_measured — A repeated criterion number overwrites an earlier unchecked Basis (phase-6 F-41).
 - 34: tests/test_research_handoff.py::test_duplicate_criterion_numbers_are_not_measured — A later answered Basis hides an earlier criterion that cites a nonexistent claim.
 - 33: tests/test_research_handoff.py::test_malformed_incomplete_disagreements_are_not_measured — An incomplete run with a null or malformed disagreements field crashes instead of reporting not measured (phase-6 F-42).
@@ -1469,6 +1470,10 @@ Stage-1 route: repair · model claude-sonnet-5-5 · reason: two Codex post-run c
 ## Runner route — 2026-10-20
 
 Stage-1 route: repair · model claude-sonnet-5-5 · reason: Codex limit nearly used (maintainer 2026-10-20).
+
+## Runner route — 2026-10-20
+
+Stage-1 route: repair · model claude-sonnet-5-5 · reason: DeepSeek session did not start (bead coding-harness-bas); maintainer 2026-10-20 switched to Sonnet.
 
 ## Time used
 
@@ -2425,3 +2430,20 @@ total about 21 h 21 min to 21 h 36 min of 23 h 35 min. Round 13 follows.
 
 - F-54: `dispatch` (`scripts/stage2_research_dispatch.py`) lets a free slot wait while any provider queue still holds a required slot at its head. Test `tests/test_stage2_research_dispatch.py::test_free_slot_of_one_provider_waits_for_required_slots_of_another`.
 - F-55: `_complete_shape` (`scripts/check_research_handoff.py`) shape-checks the stored inventory; a malformed one is not measured (exit 3). Test `tests/test_research_handoff.py::test_malformed_inventory_items_are_not_measured`.
+
+### Phase-6 round-13 repairs — 2026-10-20
+
+Rows F-56 and F-57. Two DeepSeek v4.1 Flash session launches (21:16Z, 21:19Z) never started Pi
+(bead coding-harness-bas); the maintainer switched to Sonnet 5.5. The runner's Sonnet repair
+(21:22:29Z to 21:32:00Z) failed its post-run checks on the missing time line only. Checked by
+hand against `a711d08`: the F-56 test fails there with an assertion (`DID NOT RAISE`); the F-57
+test passed there, because `_thread.interrupt_main()` does not interrupt a blocking join, so the
+orchestrator changed it to a real SIGINT; it then fails there (the child outlives the dispatch)
+but also failed with the repair: CPython 3.12 marks a thread stopped when an interrupt lands in
+`Thread.join`, so the second join returned at once. A second Sonnet 5.5 attempt (sub-agent, with
+that diagnosis) replaced the join with a completion semaphore. Full `make verify` 21:39:00Z to
+21:49:09Z green (3110 passed, 16 skipped). Rows F-56 and F-57 are booked fixed. Span counted
+21:12Z to 21:52Z, about 40 min; estimated total about 22 h 01 min to 22 h 16 min of 23 h 35 min.
+
+- F-56: `given_neighbours` (`scripts/stage2_availability.py`) refuses a research header that states `neighbours:` more than once (exit 2, before any call). Test `tests/test_stage2_swarm.py::test_conflicting_neighbour_declarations_refuse_before_calls`.
+- F-57: `dispatch` (`scripts/stage2_research_dispatch.py`) catches an interrupt while joining its workers, sets the stop event so each worker stops and reaps its child, waits for the workers (bounded), then re-raises; `run()` releases the store lock only afterwards, in its `finally`. Test `tests/test_stage2_research_dispatch.py::test_an_interrupt_stops_and_reaps_active_children_before_it_propagates`.

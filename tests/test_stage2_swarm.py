@@ -2811,6 +2811,21 @@ def test_duplicate_header_classes_refuse_before_calls(sworld: SwarmWorld, name: 
     assert sworld.calls() == []
 
 
+def test_conflicting_neighbour_declarations_refuse_before_calls(sworld: SwarmWorld) -> None:
+    # Criterion 4 (F-56): a later `neighbours: []` must not silently discard a given dependency.
+    sworld.research_class(None)
+    path = sworld.root / "plans/changes/demo/research.md"
+    path.write_text(
+        "---\ntitle: Research\nbead: demo-1\nclass: architectural\n"
+        "neighbours: [plans/changes/other/spec.md]\nneighbours: []\n---\n# Research\n",
+        encoding="utf-8",
+    )
+    with pytest.raises(stage2.Refused, match="more than once"):
+        stage2_availability.given_neighbours(sworld.root, "demo", stage2)
+    assert sworld.run() == 2
+    assert sworld.calls() == []
+
+
 @pytest.mark.parametrize("over_limit", [False, True])
 def test_manifest_publishes_judge_packet_size_and_capacity_policy(
     sworld: SwarmWorld, monkeypatch: pytest.MonkeyPatch, over_limit: bool
