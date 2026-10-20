@@ -146,6 +146,17 @@ def test_required_slots_launch_before_any_free_seat_then_declared_order():
     assert h.launched == ["req-1a", "req-1b", "req-2", "free-a", "free-b"]
 
 
+def test_free_slot_of_one_provider_waits_for_required_slots_of_another():
+    # Criterion 19 (F-54): required-first holds across providers, not only inside one queue.
+    h = Harness()
+    slots = [make_slot(f"c{i}", provider="claude", order=(1, f"c{i}"), script=sleeper(0.3)) for i in range(8)]
+    slots += [make_slot("g-req", order=(1, "a"), script=sleeper(0.01))]
+    slots += [make_slot("g-free", required=False, order=(1, "z"), script=sleeper(0.01))]
+    result = run(slots, h)
+    assert result.exit_code == 0
+    assert h.launched.index("g-free") > max(h.launched.index(f"c{i}") for i in range(8)), h.launched
+
+
 def test_gate_called_once_per_prompt_and_never_concurrently():
     h = Harness()
     slots = [make_slot(f"s{i}", script=sleeper(0.05)) for i in range(10)]

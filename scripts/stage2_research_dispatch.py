@@ -208,6 +208,10 @@ def dispatch(
         with gate_lock:
             if not queue:
                 return "done"
+            # Required-first holds across providers (F-54): a free slot waits until every
+            # required slot of every provider has been taken from its queue.
+            if not queue[0].required and any(q and q[0].required for q in queues.values()):
+                return "wait"
             slot = queue.popleft()
             sequence.append(slot.slot_id)
             if stop.is_set():
@@ -292,6 +296,9 @@ def dispatch(
             report_terminal()
             if launched == "done":
                 return
+            if launched == "wait":
+                time.sleep(0.01)
+                continue
             if launched is not None:
                 try:
                     supervise(*launched)

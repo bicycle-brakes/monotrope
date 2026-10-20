@@ -326,6 +326,14 @@ def _complete_shape(parsed: ParsedRun, where: str) -> None:
             "which its report does not hold with valid evidence"
         )
     _check_claim_scores(parsed, judge, scores, where)
+    # A persisted inventory is compared with the derivation below; a malformed one is unmeasured, not a crash (F-55).
+    stored = parsed.inventory
+    if stored is not None:
+        items = stored.get("items", [])
+        if not (isinstance(items, list) and all(isinstance(i, dict) for i in items)):
+            raise CannotMeasure(f"{where}: the inventory record has malformed items")
+        if "neighbours" in stored and not isinstance(stored["neighbours"], list | dict):
+            raise CannotMeasure(f"{where}: the inventory record has malformed neighbours")
     parsed.derived = research_handoff.derive_inventory(
         run_id=parsed.run_id,
         declared_class=parsed.manifest["class"],

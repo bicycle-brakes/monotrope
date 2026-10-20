@@ -753,6 +753,20 @@ def test_malformed_incomplete_disagreements_are_not_measured(
     assert code == 3 and "disagreement" in out.lower(), out
 
 
+@pytest.mark.parametrize("bad", [42, "x", {}, [1], [None], [["a"]]])
+def test_malformed_inventory_items_are_not_measured(world: World, capsys, bad: object) -> None:
+    # Criterion 33 (F-55): an inventory field of the wrong shape is unmeasured (exit 3), not a traceback.
+    run = run_text(RUN1)
+    inventory = gate.parse_text(run, "fixture")[0].inventory
+    broken = json.loads(json.dumps(inventory))
+    broken["items"] = bad
+    changed = run.replace(fenced("inventory", inventory), fenced("inventory", broken))
+    assert changed != run
+    world.write([changed])
+    code, out = world.check(capsys)
+    assert code == 3, out
+
+
 @pytest.mark.parametrize("fault", ["double", "judge", "duplicate", "unique", "missing", "count", "wrong-seat"])
 def test_contradictory_claim_dispositions_are_not_measured(world: World, capsys, fault) -> None:
     """F-45: persisted scores must be exclusive and agree with the judge."""

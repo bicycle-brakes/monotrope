@@ -3951,8 +3951,159 @@ Stage-2 call, 2026-10-20: review · endpoint openai-codex · model gpt-6.1-sol �
 
 | ID | Severity | Dimension | Origin | Where | Finding | Reviewer | Status | Broke a test |
 |---|---|---|---|---|---|---|---|---|
-| F-54 | MAJOR | SPEC | base | `scripts/stage2_research_dispatch.py:156–159,196–204` | Required-first ordering is enforced only within each provider queue. Reproduced with the default four permits, eight required Claude slots and 25 required Go slots: the free Go slot launches before required Claude slots 5–8, and dispatch returns exit 0. Free slots must wait until all required slots have been dispatched. The ordering test covers only one provider. [criterion 19] | Codex | taken — criterion 19 | — |
-| F-55 | MAJOR | SPEC | base | `scripts/check_research_handoff.py:781–788` | A complete run whose inventory contains `"items": 42` crashes the handoff gate with `TypeError: argument of type 'int' is not iterable`. Reproduced through `check_change()` using otherwise valid research, answers and spec. Inventory fields lack shape validation before membership checking; malformed evidence must produce not-measured exit 3 instead of a traceback. [criterion 33] | Codex | taken — criterion 33 | — |
+| F-54 | MAJOR | SPEC | base | `scripts/stage2_research_dispatch.py:156–159,196–204` | Required-first ordering is enforced only within each provider queue. Reproduced with the default four permits, eight required Claude slots and 25 required Go slots: the free Go slot launches before required Claude slots 5–8, and dispatch returns exit 0. Free slots must wait until all required slots have been dispatched. The ordering test covers only one provider. [criterion 19] | Codex | fixed — tests/test_stage2_research_dispatch.py::test_free_slot_of_one_provider_waits_for_required_slots_of_another | — |
+| F-55 | MAJOR | SPEC | base | `scripts/check_research_handoff.py:781–788` | A complete run whose inventory contains `"items": 42` crashes the handoff gate with `TypeError: argument of type 'int' is not iterable`. Reproduced through `check_change()` using otherwise valid research, answers and spec. Inventory fields lack shape validation before membership checking; malformed evidence must produce not-measured exit 3 instead of a traceback. [criterion 33] | Codex | fixed — tests/test_research_handoff.py::test_malformed_inventory_items_are_not_measured | — |
 
 Phase 6 verdict: codex 01a1595e-a66f-79b3-b27e-783f31bcef83, 2026-10-20
 Reviewer session: codex 01a1595e-a66f-79b3-b27e-783f31bcef83 — a fresh session reviewed: an earlier ## Phase 6 block makes this a re-check
+
+Stage-2 call, 2026-10-20: repair · attempt 1 · route stage-1 · endpoint claude-code-plan · model claude-sonnet-5-5 · reason Codex limit nearly used (maintainer 2026-10-20) · leak check clean over 548 files, 1648 commits, 12 rules.
+
+> Attempt 1 (stage-1) failed its post-run checks.
+>
+> Files the attempt changed (lines added, removed):
+> - `plans/changes/research-swarm/plan.md` +10 -0
+> - `scripts/check_research_handoff.py` +8 -0
+> - `scripts/stage2_research_dispatch.py` +8 -0
+> - `tests/test_research_handoff.py` +14 -0
+> - `tests/test_stage2_research_dispatch.py` +11 -0
+>
+> Diagnostics:
+> ````text
+> - Runner format before `make verify`: ruff changed no file; ruff check left findings without a safe fix or a file that does not parse.
+> - `make verify` exited 2
+> The gates that blocked, each with its last lines:
+> ── [pytest] $ lauf_cmd
+> [… 42 lines of this gate left out …]
+> ........................................................................ [ 92%]
+> ........................................................................ [ 94%]
+> ........................................................................ [ 96%]
+> ........................................................................ [ 99%]
+> ............................                                             [100%]
+> =================================== FAILURES ===================================
+> ______ test_free_slot_of_one_provider_waits_for_required_slots_of_another ______
+> [gw4] darwin -- Python 3.12.15 /Users/mikypiky/coding-harness/.claude/worktrees/research-swarm/.venv/bin/python3
+>
+>     def test_free_slot_of_one_provider_waits_for_required_slots_of_another():
+>         # Criterion 19 (F-54): required-first holds across providers, not only inside one queue.
+>         h = Harness()
+>         slots = [make_slot(f"c{i}", provider="claude", order=(1, i), script=sleeper(0.3)) for i in range(8)]
+>         slots += [make_slot("g-req", order=(1, "a"), script=sleeper(0.01))]
+>         slots += [make_slot("g-free", required=False, order=(1, "z"), script=sleeper(0.01))]
+> >       result = run(slots, h)
+>
+> tests/test_stage2_research_dispatch.py:155: 
+> _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+> tests/test_stage2_research_dispatch.py:99: in run
+>     return m.dispatch(slots, gate=kwargs.pop("gate", harness.gate), launcher=harness.launcher, **kwargs)
+> _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+>
+> slots = [Slot(slot_id='c0', provider='claude', required=True, order=(1, 0), role_allowance=30.0, identity={'run_id': 'run-1', ..."import sys,time\nprint('start',time.time(),flush=True)\ntime.sleep(0.3)\nprint('end',time.time(),flush=True)\n"), ...]
+>
+>     def dispatch(
+>         slots,
+>         *,
+>         gate: Callable[[Slot], GateVerdict],
+>         launcher: Callable[[Slot, float], Any],
+>         audit: Callable[[Slot, GateVerdict], None] | None = None,
+>         on_terminal: Callable[[Slot, SlotResult], None] | None = None,
+>         stop: threading.Event | None = None,
+>         deadline: float | None = None,
+>         reserve: float = 0.0,
+>         clock: Callable[[], float] = time.monotonic,
+>         per_provider_limit: int = PER_PROVIDER_LIMIT,
+>         grace: float = 2.0,
+>     ) -> DispatchResult:
+>         """Run one stage. Each slot ends with exactly one terminal outcome.
+>     
+>         ``on_terminal(slot, result)`` is called once per slot, in the thread that set the outcome and
+>         before that thread takes its next slot (launched, cancelled, refused and not-started slots
+>         alike). An exception from it, or from ``audit`` carrying a ``stage_stop_reason`` attribute,
+>         is a stage stop without a security refusal: queued slots are cancelled, running children
+>         are stopped and reaped with their output kept, no further callback runs (the store it
+>         writes to is the thing that failed) and the exit code is 1 unless a security refusal makes
+>         it 2. The dispatcher knows nothing about what the callbacks write.
+>         """
+>         stop = stop if stop is not None else threading.Event()
+> >       ordered = sorted(slots, key=lambda s: (not s.required, s.order))
+> E       TypeError: '<' not supported between instances of 'str' and 'int'
+>
+> scripts/stage2_research_dispatch.py:156: TypeError
+> =========================== short test summary info ============================
+> FAILED tests/test_stage2_research_dispatch.py::test_free_slot_of_one_provider_waits_for_required_slots_of_another
+> 1 failed, 3107 passed, 16 skipped in 567.57s (0:09:27)
+> ── [pytest] RED (block) — der Lauf ist rot.
+> ── [ruff-check] $ lauf_cmd
+> scripts/check_research_handoff.py:335:43: UP038 Use `X | Y` in `isinstance` call instead of `(X, Y)`
+>     |
+> 333 |         if not (isinstance(items, list) and all(isinstance(i, dict) for i in items)):
+> 334 |             raise CannotMeasure(f"{where}: the inventory record has malformed items")
+> 335 |         if "neighbours" in stored and not isinstance(stored["neighbours"], (list, dict)):
+>     |                                           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ UP038
+> 336 |             raise CannotMeasure(f"{where}: the inventory record has malformed neighbours")
+> 337 |     parsed.derived = research_handoff.derive_inventory(
+>     |
+>     = help: Convert to `X | Y`
+>
+> scripts/stage2_research_dispatch.py:211:13: SIM102 Use a single `if` statement instead of nested `if` statements
+>     |
+> 209 |               if not queue:
+> 210 |                   return "done"
+> 211 | /             if not queue[0].required:
+> 212 | |                 # Required-first holds across providers (F-54): a free slot waits until every
+> 213 | |                 # required slot of every provider has been taken from its queue.
+> 214 | |                 if any(q and q[0].required for q in queues.values()):
+>     | |_____________________________________________________________________^ SIM102
+> 215 |                       return "wait"
+> 216 |               slot = queue.popleft()
+>     |
+>     = help: Combine `if` statements using `and`
+>
+> Found 2 errors.
+> No fixes available (1 hidden fix can be enabled with the `--unsafe-fixes` option).
+> ── [ruff-check] RED (block) — der Lauf ist rot.
+>
+> Standard error of the whole run, last lines:
+> [… 15311 earlier lines left out …]
+> templates/spec.md:73:81 error MD013/line-length Line length [Expected: 80; Actual: 127]
+> tests/fixtures/research_refs/plan-prompt-d862bc2.md:3:81 error MD013/line-length Line length [Expected: 80; Actual: 117]
+> tests/fixtures/research_refs/plan-prompt-d862bc2.md:85:81 error MD013/line-length Line length [Expected: 80; Actual: 96]
+> tests/fixtures/research_refs/plan-prompt-d862bc2.md:99 error MD040/fenced-code-language Fenced code blocks should have a language specified [Context: "```"]
+> tools/claude-code/README.md:17:81 error MD013/line-length Line length [Expected: 80; Actual: 105]
+> tools/claude-code/README.md:18:81 error MD013/line-length Line length [Expected: 80; Actual: 109]
+> tools/claude-code/README.md:19:81 error MD013/line-length Line length [Expected: 80; Actual: 134]
+> tools/claude-code/README.md:23:1 error MD060/table-column-style Table column style [Table pipe is missing space to the right for style "compact"]
+> tools/claude-code/README.md:23:5 error MD060/table-column-style Table column style [Table pipe is missing space to the left for style "compact"]
+> tools/claude-code/README.md:23:5 error MD060/table-column-style Table column style [Table pipe is missing space to the right for style "compact"]
+> tools/claude-code/README.md:23:9 error MD060/table-column-style Table column style [Table pipe is missing space to the left for style "compact"]
+> tools/claude-code/README.md:23:9 error MD060/table-column-style Table column style [Table pipe is missing space to the right for style "compact"]
+> tools/claude-code/README.md:23:13 error MD060/table-column-style Table column style [Table pipe is missing space to the left for style "compact"]
+> tools/claude-code/README.md:24:81 error MD013/line-length Line length [Expected: 80; Actual: 272]
+> tools/claude-code/README.md:25:81 error MD013/line-length Line length [Expected: 80; Actual: 180]
+> tools/claude-code/README.md:26:81 error MD013/line-length Line length [Expected: 80; Actual: 115]
+> tools/claude-code/README.md:28:81 error MD013/line-length Line length [Expected: 80; Actual: 124]
+> tools/claude-code/README.md:29:81 error MD013/line-length Line length [Expected: 80; Actual: 106]
+> tools/claude-code/README.md:38:1 error MD060/table-column-style Table column style [Table pipe is missing space to the right for style "compact"]
+> tools/claude-code/README.md:38:5 error MD060/table-column-style Table column style [Table pipe is missing space to the left for style "compact"]
+> tools/claude-code/README.md:38:5 error MD060/table-column-style Table column style [Table pipe is missing space to the right for style "compact"]
+> tools/claude-code/README.md:38:9 error MD060/table-column-style Table column style [Table pipe is missing space to the left for style "compact"]
+> tools/claude-code/README.md:38:9 error MD060/table-column-style Table column style [Table pipe is missing space to the right for style "compact"]
+> tools/claude-code/README.md:38:13 error MD060/table-column-style Table column style [Table pipe is missing space to the left for style "compact"]
+> tools/claude-code/README.md:40:81 error MD013/line-length Line length [Expected: 80; Actual: 442]
+> tools/claude-code/README.md:41:81 error MD013/line-length Line length [Expected: 80; Actual: 163]
+> tools/claude-code/README.md:42:81 error MD013/line-length Line length [Expected: 80; Actual: 126]
+> tools/claude-code/README.md:43:81 error MD013/line-length Line length [Expected: 80; Actual: 96]
+> tools/claude-code/README.md:44:81 error MD013/line-length Line length [Expected: 80; Actual: 167]
+> tools/claude-code/README.md:72:1 error MD060/table-column-style Table column style [Table pipe is missing space to the right for style "compact"]
+> tools/claude-code/README.md:72:5 error MD060/table-column-style Table column style [Table pipe is missing space to the left for style "compact"]
+> tools/claude-code/README.md:72:5 error MD060/table-column-style Table column style [Table pipe is missing space to the right for style "compact"]
+> tools/claude-code/README.md:72:9 error MD060/table-column-style Table column style [Table pipe is missing space to the left for style "compact"]
+> tools/claude-code/README.md:72:9 error MD060/table-column-style Table column style [Table pipe is missing space to the right for style "compact"]
+> tools/claude-code/README.md:72:13 error MD060/table-column-style Table column style [Table pipe is missing space to the left for style "compact"]
+> tools/claude-code/README.md:73:81 error MD013/line-length Line length [Expected: 80; Actual: 112]
+> tools/claude-code/README.md:74:81 error MD013/line-length Line length [Expected: 80; Actual: 89]
+> tools/claude-code/README.md:75:81 error MD013/line-length Line length [Expected: 80; Actual: 88]
+> tools/pi/README.md:65:81 error MD013/line-length Line length [Expected: 80; Actual: 97]
+> make: *** [verify] Error 1
+> - `plan.md` did not add a measured line below `## Time used`
+> ````

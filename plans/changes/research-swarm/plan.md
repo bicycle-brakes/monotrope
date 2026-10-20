@@ -1017,6 +1017,9 @@ the existing gates and let the runner own registry regeneration/full verify.
 - 33: tests/test_research_handoff.py::test_malformed_incomplete_disagreements_are_not_measured — An incomplete run with a null or malformed disagreements field crashes instead of reporting not measured (phase-6 F-42).
 - 14: tests/test_stage2_swarm.py::test_manifest_publishes_judge_packet_size_and_capacity_policy — The manifest omits the applied judge limit, its capacity policy or the measured packet size (phase-6 F-43).
 
+- 19: tests/test_stage2_research_dispatch.py::test_free_slot_of_one_provider_waits_for_required_slots_of_another — A free slot of one provider launches before required slots of another provider (phase-6 F-54).
+- 33: tests/test_research_handoff.py::test_malformed_inventory_items_are_not_measured — A stored inventory whose items have the wrong shape crashes the gate instead of exit 3 (phase-6 F-55).
+
 ## Not touched
 
 Accepted ADRs, numbered-decision continuity map, adoption records, human answer
@@ -1462,6 +1465,10 @@ Stage-1 route: repair · model claude-sonnet-5-5 · reason: two Codex post-run c
 ## Runner route — 2026-10-20
 
 Stage-1 route: repair · model claude-sonnet-5-5 · reason: two Codex post-run checks failed.
+
+## Runner route — 2026-10-20
+
+Stage-1 route: repair · model claude-sonnet-5-5 · reason: Codex limit nearly used (maintainer 2026-10-20).
 
 ## Time used
 
@@ -2403,3 +2410,18 @@ F-54, F-55 and D-2 named as known limits. Findings per phase-6 round, 1 to
 12: 8, 5, 3, 3, 3, 4, 2, 4, 3, 3, 3, 2 (plus the independent DeepSeek
 reviewer's 2 rows on `e9cb7f5`). Estimated total about 20 h 35 min to
 20 h 50 min of 23 h 35 min.
+
+### Phase-6 round-12 repairs — 2026-10-20
+
+Rows F-54 and F-55. The Sonnet 5.5 repair (13:02Z to 13:19Z) failed its post-run checks on one
+wrong test of its own (mixed `int` and `str` sort keys in `order`) and the missing time line;
+the orchestrator corrected the test by hand (`order=(1, f"c{i}")`). Red first by hand against
+`b149992`: both new tests fail there with an assertion (F-54: the free slot launches second,
+before required Claude slots; F-55: exit 1, not 3). Full `make verify` 13:20Z to 13:36Z red
+only on `ruff-check` (UP038, SIM102); both fixed without a change in behaviour. Full
+`make verify` 21:00:14Z to 21:08:55Z green (3108 passed, 16 skipped). Rows F-54 and F-55 are
+booked fixed. Span counted 13:02Z to 13:36Z and 21:00Z to 21:12Z, about 46 min; estimated
+total about 21 h 21 min to 21 h 36 min of 23 h 35 min. Round 13 follows.
+
+- F-54: `dispatch` (`scripts/stage2_research_dispatch.py`) lets a free slot wait while any provider queue still holds a required slot at its head. Test `tests/test_stage2_research_dispatch.py::test_free_slot_of_one_provider_waits_for_required_slots_of_another`.
+- F-55: `_complete_shape` (`scripts/check_research_handoff.py`) shape-checks the stored inventory; a malformed one is not measured (exit 3). Test `tests/test_research_handoff.py::test_malformed_inventory_items_are_not_measured`.
