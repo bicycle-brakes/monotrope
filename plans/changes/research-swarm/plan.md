@@ -2353,3 +2353,15 @@ merge goes ahead with its MAJOR rows named as known limits. In parallel, at
 the maintainer's request, an independent read-only reviewer
 (`opencode-go/deepseek-v4.1-flash` through `stage2.py session`) reviews
 `e9cb7f5`. Round-11 repair starts 10:17:17Z.
+
+### Appetite raised a third time — 2026-10-20
+
+Maintainer, 2026-10-20: "setze das zeitbudget auf weiter 4 stunden" — the
+appetite is now **23 hours 35 minutes** of phase 4 in total and replaces the
+card's `Appetite:` line. Round-11 repair (Codex, three attempts, all rejected
+on form) ran about 10:20Z to 11:15:20Z; hand checks and one full
+`make verify` (red on two timing tests only) to 11:30:18Z. Span counted
+10:20Z to 11:30:18Z, about 1 h 10 min (start read from the commit time of
+`c6c61ab`). Estimated total about 19 h 00 min to 19 h 15 min. Rows D-1
+(independent DeepSeek reviewer) and F-53 (the timing tests) are taken; the
+next repair starts 11:31:00Z.
