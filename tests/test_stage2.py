@@ -697,6 +697,31 @@ def test_parse_marks_reads_agreement_and_disagreement() -> None:
     assert marks == {"L1-1": "agree", "L1-2": "disagree — no test \\| shows it", "L1-3": "disagree"}
 
 
+def test_parse_rows_drops_a_decorative_blank_row() -> None:
+    """R-26 of the review-swarm review: a table line of empty cells is decoration, not a finding."""
+    found, rest = stage2.parse_rows("| | | | | | |\n" + rows(1))
+    assert [row[0] for row in found] == ["X1"] and rest == ""
+
+
+def test_parse_rows_names_a_widened_row_when_the_caller_asks() -> None:
+    """R-25: the fold stays as it was; a caller that asks learns that the columns may have moved."""
+    notes: list[str] = []
+    found, _ = stage2.parse_rows("| X1 | MAJOR | SPEC | a | b.py:1 | one | two |", notes=notes)
+    assert found[0][5] == "one \\| two" and notes == ["X1"]
+    notes = []
+    stage2.parse_rows(rows(2), notes=notes)
+    assert notes == [], "a six-cell row is not widened"
+
+
+def test_defines_test_takes_a_method_and_an_async_def() -> None:
+    """R-23: a test inside a class is a test; so is an `async def`."""
+    method = "class TestX:\n\n    def test_runs(self):\n        assert True\n"
+    assert stage2.defines_test(method, "test_runs")
+    assert stage2.defines_test("async def test_runs(a):\n    pass\n", "test_runs")
+    assert stage2.defines_test("def test_runs(a):\n    pass\n", "test_runs")
+    assert not stage2.defines_test("def test_runs_other(a):\n    pass\n", "test_runs")
+
+
 def test_parse_rows_folds_a_pipe_inside_the_finding_into_it() -> None:
     """Repair round 1, F-2: six cells are known; a seventh after a valid severity is part of the last one."""
     found, rest = stage2.parse_rows(
@@ -3982,6 +4007,24 @@ def test_a_pi_off_the_pin_is_refused(
     assert "leak check" not in capsys.readouterr().out.lower(), "the leak check ran before the pin"
 
 
+def test_probe_runs_when_the_free_rule_selects_nothing(world: World, capsys: pytest.CaptureFixture[str]) -> None:
+    """R-27: the compatibility probe for the paid ids does not depend on a free candidate."""
+    path = world.root / "model-endpoints.yaml"
+    data = yaml.safe_load(path.read_text(encoding="utf-8"))
+    entry = next(e for e in data["endpunkte"] if e["name"] == "opencode-go")
+    entry["free_stage"]["exclude"] = [
+        {"id": model, "date": "2026-10-20", "reason": "synthetic exclusion"} for model in TEST_FREE
+    ]
+    path.write_text(yaml.safe_dump(data))
+    world.script(pi=[{"stdout": f"probe {model}"} for model in TEST_LADDER])
+    assert world.run("probe") == 0
+    probes = world.reviews("pi")
+    assert [call["argv"][call["argv"].index("--model") + 1] for call in probes] == [
+        f"opencode-go/{model}" for model in TEST_LADDER
+    ], "the paid ids were not probed beside an empty free selection"
+    assert "free stage skipped" in capsys.readouterr().out
+
+
 def test_loop_and_probe_use_repository_pi(world: World) -> None:
     """Criterion 5: the preflight and every loop/probe launch go through the repository wrapper; the PATH pi stays unused."""
     world.script(
@@ -5247,6 +5290,16 @@ def test_a_pipe_inside_a_reviewers_finding_reaches_findings(world: World) -> Non
     (row,) = released_rows(text)
     assert row[0] == "L1-1" and "cat x" in row[5] and "sort` drops the last row" in row[5]
     assert row[6:9] == ["acme-v1-free", "taken — test_a", "no"]
+
+
+def test_the_round_record_names_a_member_that_wrote_a_widened_row(world: World) -> None:
+    """R-25, the call site: the round says which member wrote a row of more than six cells, and why it matters."""
+    said = "| X1 | MAJOR | SPEC | a | src/app.py:1 | the filter `cat x | sort` drops the last row |"
+    world.script(pi=[{"model": "acme-v1-free", "stdout": said}])
+    assert world.run("review-loop") == 0
+    record = world.record().read_text(encoding="utf-8")
+    assert "acme-v1-free wrote 1 row(s) with more than six cells" in record
+    assert "an unescaped `|` before it moves the columns" in record
 
 
 def test_a_line_that_is_not_a_loop_row_is_carried_to_findings(world: World) -> None:
@@ -6830,6 +6883,36 @@ def test_a_text_row_taken_as_not_a_test_is_repaired_and_its_status_written(world
     assert "fixed — not a test — a pipe \\| in the reason" in committed
     assert "taken — not a test — the doctrine pins it" not in committed
     assert git(world.root, "log", "-1", "--pretty=%s") == "fix(demo): repair taken findings L1-1, F-1"
+
+
+@pytest.mark.parametrize(
+    "source",
+    [
+        "class TestFix:\n\n    def test_fix(self):\n        assert True\n",
+        "async def test_fix():\n    assert True\n",
+    ],
+    ids=["method-in-a-class", "async-def"],
+)
+def test_a_fixed_line_naming_a_method_or_an_async_test_is_accepted(
+    world: World, monkeypatch: pytest.MonkeyPatch, source: str
+) -> None:
+    """R-23, the call site: the repair answer check finds a test defined as a method or as `async def`.
+
+    The red-first run is stubbed: pytest cannot select a class method by `file::function`, so this test
+    isolates the definition lookup that `check_repair_answer` makes before that run.
+    """
+    seed_tests(world)
+    world.write_record([("L1-1", "taken — test_a", "no")])
+    monkeypatch.setattr(stage2, "red_first", lambda *_args, **_kwargs: None)
+    script_repair(
+        world,
+        [repair_step(plant={"src/app.py": "value = 2\n", "tests/test_fix.py": source})],
+        make=[{"stdout": "green\n"}],
+    )
+    assert world.run("repair") == 0
+    record = {row[0]: row[7] for row in stage2.record_rows(world.record().read_text(encoding="utf-8"))}
+    assert record["L1-1"] == "fixed — tests/test_fix.py::test_fix"
+    assert len(world.calls("codex")) == 1, "the definition check refused the first attempt"
 
 
 def test_a_fixed_line_naming_an_undefined_test_fails_the_attempt(world: World) -> None:
