@@ -46,3 +46,6 @@ Reading for this change (orchestrator, 2026-10-20): since the loop rewrite
 so the answer applies to malformed answers: a member answer with row-shaped
 lines but no readable row refuses the round and names the member and its
 lines. The maintainer confirms this reading when reading the plan card.
+
+Confirmed by the maintainer on 2026-10-20 after reading the plan card: "ja"
+to this reading.
