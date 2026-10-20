@@ -146,6 +146,7 @@ import sys
 import tarfile
 import tempfile
 import threading
+import time
 from collections import Counter
 from collections.abc import Callable, Iterator
 from dataclasses import dataclass
@@ -222,6 +223,8 @@ PI_VERSION = _pi_pin()
 PI_TOOLS = "read,grep,find,ls"
 # A reviewer call that has not ended after this many minutes is stopped (spec, criterion 15).
 REVIEWER_MINUTES = 30
+# The exit code of a loop that finished, told apart from the refusal's 2 (R-11 of the review-swarm review).
+CLEAN_CODE = 3
 # `pi --version` that has not ended after this many seconds is a Pi off the pin (spec, criterion 27).
 PI_VERSION_SECONDS = 30
 
@@ -234,6 +237,8 @@ READ_REQUEST = "Read nothing outside this worktree and the repository's git dire
 ANSWER_FORMAT = (
     "Answer with table rows only: one row per finding, exactly six cells, no header and no other text -\n"
     "`| ID | Severity | Dimension | Origin | Where | Finding |`. Write a `|` inside a cell as `\\|`.\n"
+    "The severity cell is free text (BLOCKER, MAJOR or MINOR is the convention); the orchestrator\n"
+    "decides what is taken, so a word of your own is not a fault.\n"
     "The runner adds the reviewer, the status and the test mark. When there is no finding, answer exactly: No finding."
 )
 MARK_FORMAT = "For each loop row answer one line and nothing else: `<ID>: agree` or `<ID>: disagree — <reason>`."
@@ -330,7 +335,7 @@ FREE_DIFF_MAX_TOTAL = 2000
 # pinned install: `docs/compaction.md`, "Auto-compaction triggers when contextTokens > contextWindow -
 # reserveTokens"; `dist/core/agent-session.js:418`), so a `No finding.` could rest on a summary the
 # member never saw in full (R-15 of the review-swarm review).
-PAID_DIFF_MAX_LINES = 2000
+REVIEW_DIFF_MAX_LINES = 2000
 
 SEVERITIES = {"BLOCKER", "MAJOR", "MINOR"}
 
@@ -457,6 +462,14 @@ RECORD_INTRO = (
 )
 
 _PIPE = re.compile(r"(?<!\\)\|")
+
+
+class CleanStop(Exception):
+    """The loop has finished: the last round was clean. Not a refusal, and told apart by its exit code.
+
+    Automation that reads only the exit status could not tell a finished loop from a refused one while
+    both were 2 (R-11 of the review-swarm review). `main` returns `CLEAN_CODE` for this.
+    """
 
 
 class Refused(Exception):
@@ -1537,17 +1550,19 @@ def _bound_hunks(rel: str, piece: str) -> str:
     return f"{kept}\n## (the diff of {rel} was cut at {FREE_DIFF_MAX_LINES} lines)"
 
 
-def bounded_paid_diff(diff: str) -> tuple[str, str | None]:
-    """The paid prompt's diff, cut at `PAID_DIFF_MAX_LINES`, and what the cut left out.
+def bounded_review_diff(diff: str) -> tuple[str, str | None]:
+    """The prompt's diff, cut at `REVIEW_DIFF_MAX_LINES`, and what the cut left out.
 
     The caller writes the second half into the round record: a clean answer over a cut diff is not a
-    clean answer about the change, and the record must say which of the two it was.
+    clean answer about the change, and the record must say which of the two it was. The free round is
+    bounded too (R-12 of the review-swarm review): it carries the same diff, and an uncapped prompt
+    would read as a limit that is none.
     """
     lines = diff.splitlines()
-    if len(lines) <= PAID_DIFF_MAX_LINES:
+    if len(lines) <= REVIEW_DIFF_MAX_LINES:
         return diff, None
-    note = f"the change diff was cut at {PAID_DIFF_MAX_LINES} of {len(lines)} lines"
-    return "\n".join([*lines[:PAID_DIFF_MAX_LINES], f"## ({note}; the rest is not carried)"]), note
+    note = f"the change diff was cut at {REVIEW_DIFF_MAX_LINES} of {len(lines)} lines"
+    return "\n".join([*lines[:REVIEW_DIFF_MAX_LINES], f"## ({note}; the rest is not carried)"]), note
 
 
 def free_diff(root: Path) -> str:
@@ -1714,6 +1729,17 @@ def require_pi() -> None:
         raise Refused(f"pi {said or 'printed nothing'} is not the pinned {PI_VERSION}; no call starts.")
 
 
+def remaining(deadline: float | None) -> float:
+    """The seconds this call may still take: the round's deadline, else `REVIEWER_MINUTES` (R-8).
+
+    A call that starts after the deadline would get no time at all; one second keeps it a real,
+    failing attempt that the record names, instead of a division by nothing.
+    """
+    if deadline is None:
+        return REVIEWER_MINUTES * 60
+    return max(1.0, deadline - time.monotonic())
+
+
 def run_reviewer(
     ctx: Context,
     model: str,
@@ -1723,6 +1749,7 @@ def run_reviewer(
     free: bool = False,
     timeout_seconds: int | None = None,
     task: str | None = None,
+    deadline: float | None = None,
 ) -> str:
     """One reviewer call through Pi with this run's refreshed OpenCode Go definitions.
 
@@ -1779,8 +1806,12 @@ def run_reviewer(
             scratch if free else ctx.root,
             env,
             key,
-            timeout=timeout_seconds or REVIEWER_MINUTES * 60,
-            limit=f"the availability probe limit of {timeout_seconds} seconds" if timeout_seconds else None,
+            timeout=timeout_seconds or remaining(deadline),
+            limit=(
+                f"the availability probe limit of {timeout_seconds} seconds"
+                if timeout_seconds
+                else f"the reviewer time limit of {REVIEWER_MINUTES:g} minutes"
+            ),
         )
         if done.returncode != 0:
             raise fail("pi", done, f"exit {done.returncode}", key, model)
@@ -1792,7 +1823,13 @@ def run_reviewer(
 
 
 def run_swarm(
-    ctx: Context, members: list[str], prompts: dict[str, str], key: str, *, free: bool
+    ctx: Context,
+    members: list[str],
+    prompts: dict[str, str],
+    key: str,
+    *,
+    free: bool,
+    deadline: float | None = None,
 ) -> dict[str, str | Exception]:
     """Every member called concurrently, each in its own scratch directories; only the parent writes.
 
@@ -1800,12 +1837,16 @@ def run_swarm(
     that failed the member (a nonzero exit, a timeout, an empty answer). A
     member's failure never discards another member's answer (criterion 4).
     Without parsed findings, only the explicit no-finding response succeeds.
+
+    `deadline` is the round's one deadline (`time.monotonic()` seconds): members and every
+    replacement share it, so a round cannot outlast `REVIEWER_MINUTES` by summing its members'
+    limits (R-8 of the review-swarm review).
     """
     answers: dict[str, str | Exception] = {}
 
     def one(member: str) -> None:
         try:
-            answer = run_reviewer(ctx, member, prompts[member], key, free=free)
+            answer = run_reviewer(ctx, member, prompts[member], key, free=free, deadline=deadline)
             rows, _rest = parse_rows(answer)
             # No arbitrary prose (including a refusal or context-limit error)
             # can certify a clean round. Commentary beside findings is kept.
@@ -2203,7 +2244,7 @@ def undecided(rows: list[list[str]]) -> list[str]:
     waiting = []
     for row in rows:
         status, broke = row[7].lower(), row[8].lower()
-        decided = status.startswith("rejected") or (status.startswith(("taken", "fixed")) and broke in {"yes", "no"})
+        decided = status.startswith("rejected") or (status.startswith(("taken", "fixed")) and marks_a_test(broke))
         if not decided:
             waiting.append(row[0])
     return waiting
@@ -2225,11 +2266,16 @@ def undecided_refusal(rows: list[list[str]], consequence: str) -> str | None:
     unmarked = [ident for ident in waiting if ident in fixed]
     parts: list[str] = []
     if plain:
-        parts.append(f"the loop record has undecided rows ({', '.join(plain)}); {consequence}")
+        # The values a row may carry are named with the refusal (bead coding-harness-ll5).
+        parts.append(
+            f"the loop record has undecided rows ({', '.join(plain)}); {consequence} "
+            "(`taken — <reason>`, `fixed — <anchor>` or `rejected — <reason>`, and `Broke a test` "
+            "`yes`, `no`, `yes — <reason>` or `no — <reason>`)"
+        )
     if unmarked:
         parts.append(
             f"the loop record has fixed rows without their `Broke a test` mark ({', '.join(unmarked)}); "
-            "write `yes` or `no` from the repair run's evidence first"
+            "write `yes`, `no`, `yes — <reason>` or `no — <reason>` from the repair run's evidence first"
         )
     return "; ".join(parts) + "."
 
@@ -4766,7 +4812,7 @@ def review_loop(root: Path, change: str, availability_reported: str | None = Non
         if refusal:
             raise Refused(refusal)
         if clean_round(history.get(last, []), last) and not round_was_cut(record, last):
-            raise Refused(f"round {last} was clean: every row was decided and none accepted; the loop stops.")
+            raise CleanStop(f"round {last} was clean: every row was decided and none accepted; the loop stops.")
         if (
             last in history
             and last - 1 in history
@@ -4815,9 +4861,9 @@ def review_loop(root: Path, change: str, availability_reported: str | None = Non
     free = stage["kind"] == "free"
     cut_note: str | None = None
     if free:
-        diff = free_input
+        diff, cut_note = bounded_review_diff(free_input)
     else:
-        diff, cut_note = bounded_paid_diff(change_diff(root))
+        diff, cut_note = bounded_review_diff(change_diff(root))
     body = "" if free else (root / "prompts" / "04b-review-loop.md").read_text(encoding="utf-8")
     prompts: dict[str, str] = {}
     endpoints: dict[str, tuple[str, str, str]] = {}
@@ -4867,7 +4913,10 @@ def review_loop(root: Path, change: str, availability_reported: str | None = Non
             notes.append(f"Notice: no anfragen_5h declared, ordered last: {', '.join(missing)}.")
         for note in notes:
             print(f"review-loop: {note}", file=sys.stderr)
-    answers = run_swarm(ctx, members, prompts, key, free=free)
+    # One deadline for the round: a replacement must live inside it, or a round could take a member
+    # limit per call (R-8 of the review-swarm review).
+    deadline = time.monotonic() + REVIEWER_MINUTES * 60
+    answers = run_swarm(ctx, members, prompts, key, free=free, deadline=deadline)
     replaced: list[str] = []
     if stage["kind"] == "paid-swarm":
         # A failed Flash member is replaced by the cheapest admitted ladder model
@@ -4893,7 +4942,7 @@ def review_loop(root: Path, change: str, availability_reported: str | None = Non
                 prompts[nxt] = prompt_for(nxt)
                 checked[nxt] = checked_prompt(ctx, endpoints[nxt], prompts[nxt], None)
                 append(ctx.findings, call_line("review-loop", endpoints[nxt], checked[nxt]))
-                answers.update(run_swarm(ctx, [nxt], prompts, key, free=False))
+                answers.update(run_swarm(ctx, [nxt], prompts, key, free=False, deadline=deadline))
                 replaced.append(nxt)
                 current = nxt
         members = [*members, *replaced]
@@ -5158,6 +5207,10 @@ def main(argv: list[str] | None = None) -> int:
                 VERBS[args.verb](Path(args.root), args.change)
         else:
             VERBS[args.verb](Path(args.root), args.change)
+    except CleanStop as error:
+        # A finished loop is not a refusal: its own exit code, and no `refused:` on stderr.
+        print(f"the loop is finished: {error}", file=sys.stderr)
+        return CLEAN_CODE
     except Refused as error:
         print(f"refused: {error}", file=sys.stderr)
         return 2
