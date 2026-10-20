@@ -686,6 +686,43 @@ def test_an_oversized_diff_reaches_the_paid_prompt_cut_and_the_record_says_so(wo
         monkey.undo()
 
 
+def test_a_cut_round_stays_cut_after_the_release(world: World) -> None:
+    """O191-2: the continued run after `release-loop` still knows round 2 saw a cut diff."""
+    limit = 5
+    monkey = pytest.MonkeyPatch()
+    monkey.setattr(stage2, "PAID_DIFF_MAX_LINES", limit)
+    try:
+        big = world.root / "src" / "big.py"
+        big.parent.mkdir(parents=True, exist_ok=True)
+        big.write_text("\n".join(f"VALUE_{n} = {n}" for n in range(limit * 3)) + "\n", encoding="utf-8")
+        world.write_findings(VERDICT)
+        world.script(
+            pi=[
+                *({"model": model, "stdout": rows(1)} for model in TEST_FREE),
+                *({"model": model, "stdout": "No finding."} for model in TEST_FLASH),
+            ]
+        )
+        assert world.run("review-loop") == 0  # round 1: the free stage, with a finding
+        decide_record(world)
+        assert world.run("review-loop") == 0  # round 2: Flash over the cut diff, no finding
+        assert world.run("release-loop") == 0
+        assert not world.record().exists(), "the release kept the record"
+        world.script(pi=[{"model": model, "stdout": "No finding."} for model in TEST_RUNGS])
+        assert world.run("review-loop") == 0, "the continued run took a cut round for a clean one"
+    finally:
+        monkey.undo()
+
+
+def test_the_paid_diff_is_split_on_newlines_only() -> None:
+    """O191-4: the count is git's count, and a carriage return survives the cut."""
+    text = "".join(f"line {n}\r\n" for n in range(stage2.PAID_DIFF_MAX_LINES + 3))
+    kept, note = stage2.bounded_paid_diff(text)
+    assert note == f"the change diff was cut at {stage2.PAID_DIFF_MAX_LINES} of {text.count(chr(10))} lines"
+    assert kept.startswith("line 0\r\nline 1\r\n"), "the cut rewrote the line ends"
+    assert "\r" in kept.split("\n")[1], "the carriage return was lost"
+    assert "\x0c" in stage2.bounded_paid_diff("a\x0cb\n" * (stage2.PAID_DIFF_MAX_LINES + 1))[0]
+
+
 def test_a_second_review_loop_is_refused_while_the_record_is_held(world: World, capsys) -> None:
     """R-14 of the review-swarm review: one runner per record, and the refusal names the record."""
     path = stage2.lock_path("demo", world.root)

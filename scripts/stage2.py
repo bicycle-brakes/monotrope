@@ -343,6 +343,7 @@ VERDICT_LINE = re.compile(
 VERDICT_START = re.compile(r"^phase 6 verdict\b[^\n]*$", re.M | re.I)
 SESSION_LINE = re.compile(r"^Reviewer session: codex (\S+)", re.M)
 ROUNDS_LINE = re.compile(r"^Rounds run: (\d+)\s*$", re.M)
+CUT_ROUNDS_LINE = re.compile(r"^Cut rounds: (\d+(?:, \d+)*)\s*$", re.M)
 ROUND_HEADING = re.compile(r"^## Round \d+ — \S+,", re.M)
 RELEASE_HEADING = "## Phase 4b — loop rows, released"
 # The runner's own sentence, matched as a whole line: a reviewer's table cell may quote it, and a
@@ -1543,7 +1544,11 @@ def bounded_paid_diff(diff: str) -> tuple[str, str | None]:
     The caller writes the second half into the round record: a clean answer over a cut diff is not a
     clean answer about the change, and the record must say which of the two it was.
     """
-    lines = diff.splitlines()
+    # Split on "\n" only, as git counts: `splitlines()` also splits on CR and form feed, which inflates the
+    # count and rewrites the kept part's line ends (O191-4).
+    lines = diff.split("\n")
+    if lines and lines[-1] == "":
+        lines.pop()
     if len(lines) <= PAID_DIFF_MAX_LINES:
         return diff, None
     note = f"the change diff was cut at {PAID_DIFF_MAX_LINES} of {len(lines)} lines"
@@ -2233,16 +2238,41 @@ def accepted_row(row: list[str]) -> bool:
 CUT_LINE = "The diff was cut:"
 
 
-def round_was_cut(record: str | None, round_number: int) -> bool:
+def cut_rounds(record: str | None) -> list[int]:
+    """The numbers of the record's rounds whose diff was cut."""
+    if not record:
+        return []
+    heads = list(re.finditer(r"^## Round (\d+) —", record, re.M))
+    ends = [head.start() for head in heads[1:]] + [len(record)]
+    return [
+        int(head.group(1))
+        for head, end in zip(heads, ends, strict=True)
+        if any(line.startswith(CUT_LINE) for line in record[head.start() : end].splitlines())
+    ]
+
+
+def released_cut_rounds(findings_text: str) -> set[int]:
+    """The rounds that every released block of findings.md carries as cut."""
+    found: set[int] = set()
+    own = False
+    for line in findings_text.splitlines():
+        if line.startswith("## "):
+            own = line.startswith(RELEASE_HEADING)
+        elif KEPT_FROM.match(line):
+            own = False
+        elif own and (match := CUT_ROUNDS_LINE.fullmatch(line)):
+            found.update(int(number) for number in match.group(1).split(", "))
+    return found
+
+
+def round_was_cut(record: str | None, round_number: int, findings_text: str = "") -> bool:
     """Whether that round's diff was cut. Such a round cannot end the loop, however clean it reads.
 
     A member's `No finding.` over a cut diff is a statement about the part it saw; letting it stop the
-    loop would certify the change on a diff nobody reviewed in full (P2 of the #191 review).
+    loop would certify the change on a diff nobody reviewed in full (P2 of the #191 review). The record
+    is deleted by a release, which carries the cut rounds as its own `Cut rounds:` line (O191-2).
     """
-    if not record:
-        return False
-    start = record.rfind(f"## Round {round_number} —")
-    return start >= 0 and CUT_LINE in record[start:]
+    return round_number in cut_rounds(record) or round_number in released_cut_rounds(findings_text)
 
 
 def clean_round(rows: list[list[str]], round_number: int) -> bool:
@@ -2496,6 +2526,9 @@ def release(root: Path, change: str) -> list[list[str]]:
     if not rows:
         block.append("No loop row was reported.")
     block.append(f"Rounds run: {len(ROUND_HEADING.findall(record))}")
+    cut = cut_rounds(record)
+    if cut:
+        block.append(f"Cut rounds: {', '.join(str(number) for number in cut)}")
     if state is not None:
         # The snapshot travels as the block's own line, before the kept words:
         # a continued run reads its stages from here, never from the reviewers'
@@ -4608,7 +4641,7 @@ def review_loop(root: Path, change: str, availability_reported: str | None = Non
         refusal = undecided_refusal(history.get(last, []), "decide them first")
         if refusal:
             raise Refused(refusal)
-        if clean_round(history.get(last, []), last) and not round_was_cut(record, last):
+        if clean_round(history.get(last, []), last) and not round_was_cut(record, last, findings_text):
             raise Refused(f"round {last} was clean: every row was decided and none accepted; the loop stops.")
         if (
             last in history
