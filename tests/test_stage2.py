@@ -1179,7 +1179,7 @@ def test_preparation_stamps_only_changed_held_documents(world: World) -> None:
     no_header.write_text("# No header\n")
     before_duplicate = duplicate.read_bytes()
     world.script(make=[{"stdout": "green"}])
-    stage2.verify_attempt(world.root, world.plan, "")
+    stage2.verify_attempt(world.root, world.plan)
     assert held.read_text() == before.replace("updated: 2026-09-29", f"updated: {dt.date.today()}")
     assert world.research.read_bytes() == clean
     assert unheld.read_text() == old_header()
@@ -1212,7 +1212,7 @@ def test_renderer_failure_is_bounded_scrubbed_and_prevents_verify(world: World) 
     # counts this file's existing refusal tests as registry mutation coverage.
     script = world.root / "scripts" / Path(plans_registry.__file__).name
     script.write_text("import sys\nprint(('" + KEY + "\\n') * 100)\nsys.exit(7)\n")
-    problems = stage2.verify_attempt(world.root, world.plan, "", KEY)
+    problems = stage2.verify_attempt(world.root, world.plan, KEY)
     assert len(problems) == 1 and "index renderer exited 7" in problems[0]
     assert KEY not in problems[0] and "[credential]" in problems[0]
     assert len(problems[0].splitlines()) <= stage2.TAIL_LINES + 1
@@ -1253,7 +1253,7 @@ def test_invalid_utf8_preparation_cannot_reach_verify(world: World) -> None:
     bad = world.root / "plans/changes/demo/bad.md"
     bad.write_bytes(b"---\nupdated: yesterday\n---\n\xff")
     before = bad.read_bytes()
-    problems = stage2.verify_attempt(world.root, world.plan, "")
+    problems = stage2.verify_attempt(world.root, world.plan)
     assert "not valid UTF-8" in problems[0]
     assert bad.read_bytes() == before and world.calls("make") == []
 
@@ -1265,7 +1265,7 @@ def test_preparation_collects_all_document_refusals_in_one_bounded_diagnostic(wo
     (directory / "a-link.md").symlink_to(outside)
     (directory / "b-utf8.md").write_bytes(b"---\nupdated: old\n---\n\xff")
     (directory / "c-cycle.md").symlink_to(directory / "c-cycle.md")
-    problems = stage2.verify_attempt(world.root, world.plan, "")
+    problems = stage2.verify_attempt(world.root, world.plan)
     assert len(problems) == 1
     for name in ("a-link.md", "b-utf8.md", "c-cycle.md"):
         assert name in problems[0]
@@ -1277,7 +1277,7 @@ def test_preparation_refuses_a_document_outside_the_worktree(world: World) -> No
     outside = world.root.parent / "outside.md"
     outside.write_text(old_header())
     (world.root / "plans/changes/demo/link.md").symlink_to(outside)
-    problems = stage2.verify_attempt(world.root, world.plan, "")
+    problems = stage2.verify_attempt(world.root, world.plan)
     assert "outside the worktree" in problems[0]
     assert outside.read_text() == old_header() and world.calls("make") == []
 
@@ -1293,7 +1293,7 @@ def test_preparation_keeps_clean_targets_of_internal_document_and_index_links_un
     git(world.root, "add", "-A")
     git(world.root, "commit", "-m", "clean link target")
     (world.root / relative).symlink_to(target)
-    problems = stage2.verify_attempt(world.root, world.plan, "")
+    problems = stage2.verify_attempt(world.root, world.plan)
     assert any("aliased" in problem for problem in problems)
     assert target.read_text() == old_header()
     assert world.calls("make") == []
@@ -1313,7 +1313,7 @@ def test_preparation_refuses_hardlinked_document_and_index(world: World, relativ
     if relative != "plans/INDEX.md":
         linked.write_text(old_header() + "\nAttempt edit\n")
     before = target.read_bytes()
-    problems = stage2.verify_attempt(world.root, world.plan, "")
+    problems = stage2.verify_attempt(world.root, world.plan)
     assert any("hard-linked" in problem for problem in problems)
     assert target.read_bytes() == before and world.calls("make") == []
 
@@ -1322,7 +1322,7 @@ def test_preparation_refuses_hardlinked_document_and_index(world: World, relativ
 def test_malformed_provenance_returns_preparation_diagnostics(world: World, content: str) -> None:
     (world.root / "provenance.yaml").write_text(content)
     (world.root / "plans/changes/demo/new.md").write_text(old_header())
-    problems = stage2.verify_attempt(world.root, world.plan, "")
+    problems = stage2.verify_attempt(world.root, world.plan)
     assert len(problems) == 1 and "Derived-file preparation failed" in problems[0]
     assert "provenance" in problems[0] and world.calls("make") == []
 
@@ -1373,7 +1373,7 @@ def test_git_failure_in_preparation_is_a_bounded_scrubbed_diagnostic(
         raise stage2.Refused((KEY + " git failure\n") * 100)
 
     monkeypatch.setattr(stage2, "changed_paths", broken_git)
-    problems = stage2.verify_attempt(world.root, world.plan, "", KEY)
+    problems = stage2.verify_attempt(world.root, world.plan, KEY)
     assert len(problems) == 1 and "git failure" in problems[0]
     assert KEY not in problems[0] and "[credential]" in problems[0]
     assert len(problems[0].splitlines()) <= stage2.TAIL_LINES
@@ -1505,12 +1505,9 @@ def test_a_postcheck_failure_gets_one_flash_repair_with_its_diagnostic(world: Wo
     world.script(
         claude=[
             {"stdout": "first", "plant": {"src/app.py": "value = 2\n"}},
-            {
-                "stdout": "repaired",
-                "append": {"plans/changes/demo/plan.md": "2026-10-07 10:00–10:06, 6 min\n"},
-            },
+            {"stdout": "repaired"},
         ],
-        make=[{"stdout": "green\n"}, {"stdout": "green\n"}],
+        make=[{"stdout": "red\n", "exit": 1}, {"stdout": "green\n"}],
     )
     assert world.run("implement") == 0
     calls = world.calls("claude")
@@ -1519,7 +1516,7 @@ def test_a_postcheck_failure_gets_one_flash_repair_with_its_diagnostic(world: Wo
         "glm-5.3-flash",
         "glm-5.3-flash",
     ]
-    assert "plan.md` did not add a measured line" in calls[1]["prompt_file"]
+    assert "`make verify` exited 1" in calls[1]["prompt_file"]
     assert "attempt 2 · route flash-repair" in world.text()
 
 
@@ -1528,13 +1525,10 @@ def test_two_failed_postchecks_route_once_to_sonnet(world: World) -> None:
         claude=[
             {"stdout": "first", "plant": {"src/app.py": "value = 2\n"}},
             {"stdout": "second"},
-            {
-                "stdout": "fallback fixed it",
-                "append": {"plans/changes/demo/plan.md": "2026-10-07 10:00–10:08, 8 min\n"},
-            },
+            {"stdout": "fallback fixed it"},
             {"stdout": "must not run"},
         ],
-        make=[{"stdout": "green\n"}, {"stdout": "green\n"}, {"stdout": "green\n"}],
+        make=[{"stdout": "red\n", "exit": 1}, {"stdout": "red\n", "exit": 1}, {"stdout": "green\n"}],
     )
     assert world.run("implement") == 0
     calls = world.calls("claude")
@@ -3523,7 +3517,7 @@ def test_the_format_step_leaves_out_links_and_hard_linked_files(world: World) ->
     os.link(world.root / "tests/hard_twin.py", world.root / "tests/hard.py")
     world.script(ruff=[{}, {}], make=[{"stdout": "green\n"}])
     formatted: list[str] = []
-    stage2.verify_attempt(world.root, world.plan, "", formatted=formatted)
+    stage2.verify_attempt(world.root, world.plan, formatted=formatted)
     assert [call["argv"] for call in world.calls("ruff")] == [
         ["check", "--fix", "--no-unsafe-fixes", "--force-exclude", "--no-cache", "scripts/real.py"],
         ["format", "--force-exclude", "--no-cache", "scripts/real.py"],
@@ -3718,7 +3712,7 @@ def test_an_unreadable_target_is_named_by_its_repository_path(world: World) -> N
     unreadable.chmod(0o000)
     world.script(ruff=[{}, {}], make=[{"stdout": "green\n"}])
     formatted: list[str] = []
-    stage2.verify_attempt(world.root, world.plan, "", formatted=formatted)
+    stage2.verify_attempt(world.root, world.plan, formatted=formatted)
     assert world.calls("ruff") == []
     assert formatted == ["not run — cannot read `scripts/a.py`."]
     assert str(world.root) not in formatted[0]
@@ -5759,7 +5753,11 @@ def test_codex_repair_uses_workspace_write_without_bypass(world: World) -> None:
 def test_repair_retry_uses_fresh_codex_with_diagnostics(world: World) -> None:
     """Criterion 4. Planted fault: the retry resumes the first thread, loses its diagnostics or leaves Codex."""
     repair_world(world)
-    script_repair(world, [{"stdout": "still looking"}, repair_step()], make=[{"stdout": "green\n"}] * 2)
+    script_repair(
+        world,
+        [{"stdout": "still looking"}, repair_step()],
+        make=[{"stdout": "red\n", "exit": 1}, {"stdout": "green\n"}],
+    )
     assert world.run("repair") == 0
     first, second = world.calls("codex")
     for call in (first, second):  # both attempts keep the repair entry (bead coding-harness-yzk)
@@ -5767,7 +5765,7 @@ def test_repair_retry_uses_fresh_codex_with_diagnostics(world: World) -> None:
     assert "resume" not in first["argv"] and "resume" not in second["argv"]
     assert world.calls("claude") == []
     prompt = prompt_of(second)
-    assert "Attempt 1 (codex):" in prompt and "did not add a measured line" in prompt
+    assert "Attempt 1 (codex):" in prompt and "`make verify` exited 1" in prompt
     text = world.text()
     assert "attempt 2 · route codex-repair" in text and "reason first Codex post-run check failed" in text
 
@@ -5858,7 +5856,7 @@ def test_repair_retry_starts_after_a_completed_attempt_deletes_plan(
     if "plans/changes/demo/plan.md" in deleted_inputs:
         assert "plan.md cannot be read." in retry_prompt
     else:
-        assert "did not add a measured line" in retry_prompt
+        assert "`make verify` exited 1" in retry_prompt
     for name in ("spec.md", "plan.md"):
         content = inputs[f"plans/changes/demo/{name}"].decode("utf-8")
         assert f"## Accepted {name.removesuffix('.md')}\n\n{content}" in retry_prompt
@@ -5907,10 +5905,17 @@ def test_repair_retry_restores_non_utf8_prompt_inputs(
     baseline = repair_world(world)
     original = {relative: (world.root / relative).read_bytes() for relative in corrupted_inputs}
     failed_attempts = max(corrupted_attempts)
+    plans_corrupted = any(relative.startswith("plans/") for relative in original)
+    # A failed attempt is red at `make verify`, unless its preparation already failed on a corrupted plans/ file.
+    reds = [
+        {"stdout": f"post-run-check-{attempt}\n", "exit": 1}
+        for attempt in range(1, failed_attempts + 1)
+        if not (attempt in corrupted_attempts and plans_corrupted)
+    ]
     script_repair(
         world,
-        [repair_step(append={}) for _ in range(failed_attempts)] + [repair_step()],
-        make=[{"stdout": "green\n"}] * 3,
+        [repair_step() for _ in range(failed_attempts)] + [repair_step()],
+        make=[*reds, {"stdout": "green\n"}],
     )
     real_codex, real_begin = stage2.run_codex, stage2.begin_work_call
     real_input, real_checkpoint = stage2.prompt_input, stage2.checkpoint
@@ -5952,10 +5957,10 @@ def test_repair_retry_restores_non_utf8_prompt_inputs(
         route = "codex" if attempt == 1 else "codex-repair"
         assert f"Attempt {attempt} ({route}):" in final_prompt
         diagnostics = "\n".join(prompt_entry(final_prompt, attempt, route))
-        if attempt in corrupted_attempts and any(relative.startswith("plans/") for relative in original):
+        if attempt in corrupted_attempts and plans_corrupted:
             assert "Derived-file preparation failed" in diagnostics
         else:
-            assert "did not add a measured line" in diagnostics
+            assert "`make verify` exited 1" in diagnostics
     for relative, content in original.items():
         if relative not in ("plans/changes/demo/decisions.md", "plans/changes/demo/design.md"):
             assert content.decode("utf-8").rstrip() in final_prompt
@@ -6064,7 +6069,7 @@ def test_two_failed_codex_repairs_fall_back_to_sonnet(world: World) -> None:
     script_repair(
         world,
         [{"stdout": "still looking"}, {"stdout": "still stuck"}, repair_step(), {"stdout": "must not run"}],
-        make=[{"stdout": "green\n"}] * 4,
+        make=[{"stdout": "red\n", "exit": 1}, {"stdout": "red\n", "exit": 1}, {"stdout": "green\n"}],
     )
     assert world.run("repair") == 0
     assert len(world.calls("codex")) == 2 and len(world.calls("claude")) == 1
@@ -6076,7 +6081,7 @@ def test_two_failed_codex_repairs_fall_back_to_sonnet(world: World) -> None:
     prompt = prompt_of(sonnet)
     assert "you cannot run commands" in prompt
     assert "Attempt 1 (codex):" in prompt and "Attempt 2 (codex-repair):" in prompt
-    assert "did not add a measured line" in prompt
+    assert "`make verify` exited 1" in prompt
     text = world.text()
     for line in (
         "attempt 1 · route codex",
@@ -6390,14 +6395,14 @@ def test_a_repair_cannot_change_a_finding_outside_its_batch(
 def test_each_repair_retry_must_add_its_own_time_entry(
     world: World, monkeypatch: pytest.MonkeyPatch, attempt: int, removed_heading: bool
 ) -> None:
-    """F-7/F-12: a retry still needs its own measurement after the failed plan edit is restored."""
+    """F-7/F-12: the runner measures every retry itself; the model writes no entry, and a rejected attempt's entry stays."""
     baseline = repair_world(world)
     steps = [repair_step()] * 3
     steps[attempt - 1] = repair_step(append={})
     script_repair(
         world,
         steps,
-        make=[{"stdout": "red\n", "exit": 1}] * (attempt - 1) + [{"stdout": "green\n"}] * (4 - attempt),
+        make=[{"stdout": "red\n", "exit": 1}] * (attempt - 1) + [{"stdout": "green\n"}],
     )
     real_codex, real_claude, real_checkpoint = stage2.run_codex, stage2.run_work_model, stage2.checkpoint
     checkpoints: list[int] = []
@@ -6434,11 +6439,188 @@ def test_each_repair_retry_must_add_its_own_time_entry(
     monkeypatch.setattr(stage2, "run_codex", codex)
     monkeypatch.setattr(stage2, "run_work_model", claude)
     monkeypatch.setattr(stage2, "checkpoint", checkpoint)
-    assert world.run("repair") == (0 if attempt == 2 else 1)
-    assert checkpoints == ([3] if attempt == 2 else [])
-    assert len(repair_calls(world)) == 3
-    assert "did not add a measured line below `## Time used`" in world.text()
-    assert git(world.root, "rev-list", "--count", f"{baseline}..HEAD") == ("1" if attempt == 2 else "0")
+    assert world.run("repair") == 0
+    assert checkpoints == [attempt]
+    assert len(repair_calls(world)) == attempt
+    plan = world.plan.read_text(encoding="utf-8")
+    entries = [line for line in plan.splitlines() if line.endswith("measured by the runner")]
+    assert len(entries) == attempt
+    assert [line.count("rejected") for line in entries] == [1] * (attempt - 1) + [0]
+    assert entries[-1].endswith("accepted · measured by the runner")
+    assert git(world.root, "rev-list", "--count", f"{baseline}..HEAD") == "1"
+
+
+def runner_entries(plan: Path) -> list[str]:
+    """The lines the runner wrote under `## Time used`."""
+    return [line for line in plan.read_text(encoding="utf-8").splitlines() if line.endswith("measured by the runner")]
+
+
+class FakeClock:
+    """Wall and monotonic readings that move only when a test moves them; no sleep, no machine speed."""
+
+    def __init__(self, monkeypatch: pytest.MonkeyPatch, start: dt.datetime, wall_drift: float = 0.0) -> None:
+        self.start, self.now, self.wall_drift = start, 0.0, wall_drift
+        monkeypatch.setattr(stage2, "utc_now", self.wall)
+        monkeypatch.setattr(stage2, "monotonic_now", self.mono)
+
+    def wall(self) -> dt.datetime:
+        # The drift appears once time has passed: a wall clock stepped by the system, which a span must ignore.
+        drift = self.wall_drift if self.now else 0.0
+        return self.start + dt.timedelta(seconds=self.now + drift)
+
+    def mono(self) -> float:
+        return 1000.0 + self.now
+
+    def after(self, seconds: float, real):
+        """`real` wrapped so that calling it moves the clock by `seconds`."""
+
+        def wrapped(*args, **kwargs):
+            self.now += seconds
+            return real(*args, **kwargs)
+
+        return wrapped
+
+
+UTC_START = dt.datetime(2026, 10, 20, 10, 0, 0, tzinfo=dt.UTC)
+
+
+def test_runner_accepts_attempt_without_model_time_entry(world: World, monkeypatch: pytest.MonkeyPatch) -> None:
+    """Criterion 1. Planted fault: the old check for a model-added line rejects this otherwise green attempt."""
+    FakeClock(monkeypatch, UTC_START)
+    baseline = git(world.root, "rev-parse", "HEAD")
+    world.script(
+        claude=[{"stdout": "implemented", "plant": {"src/app.py": "value = 2\n"}}],
+        make=[{"stdout": "green\n"}],
+    )
+    assert world.run("implement") == 0
+    assert len(world.calls("claude")) == 1
+    assert git(world.root, "rev-list", "--count", f"{baseline}..HEAD") == "1"
+    (entry,) = runner_entries(world.plan)
+    assert "accepted" in entry
+
+
+def test_runner_logs_each_completed_attempt_once(world: World, monkeypatch: pytest.MonkeyPatch) -> None:
+    """Criterion 2. Planted fault: no entry, or two, for an accepted or a rejected attempt."""
+    FakeClock(monkeypatch, UTC_START)
+    world.script(
+        claude=[{"stdout": "first", "plant": {"src/app.py": "value = 2\n"}}, {"stdout": "second"}],
+        make=[{"stdout": "red\n", "exit": 1}, {"stdout": "green\n"}],
+    )
+    assert world.run("implement") == 0
+    first, second = runner_entries(world.plan)
+    assert "attempt 1 · route flash" in first and "rejected" in first
+    assert "attempt 2 · route flash-repair" in second and "accepted" in second
+    plan = world.plan.read_text(encoding="utf-8")
+    assert plan.index("## Time used") < plan.index(first) < plan.index(second)
+
+
+def test_runner_logs_every_attempt_of_an_exhausted_run(world: World, monkeypatch: pytest.MonkeyPatch) -> None:
+    FakeClock(monkeypatch, UTC_START)
+    baseline = git(world.root, "rev-parse", "HEAD")
+    world.script(
+        claude=[{"stdout": "one"}, {"stdout": "two"}, {"stdout": "three"}],
+        make=[{"stdout": "red\n", "exit": 1}] * 3,
+    )
+    assert world.run("implement") == 1
+    entries = runner_entries(world.plan)
+    assert [("rejected" in line, f"attempt {n} ·" in line) for n, line in enumerate(entries, 1)] == [(True, True)] * 3
+    assert git(world.root, "rev-list", "--count", f"{baseline}..HEAD") == "0"
+
+
+def test_runner_span_includes_model_and_postchecks(world: World, monkeypatch: pytest.MonkeyPatch) -> None:
+    """Criterion 3. Planted fault: the end read before the post-run checks, or after the checkpoint."""
+    clock = FakeClock(monkeypatch, UTC_START)
+    monkeypatch.setattr(stage2, "run_work_model", clock.after(30, stage2.run_work_model))
+    monkeypatch.setattr(stage2, "verify_attempt", clock.after(12, stage2.verify_attempt))
+    monkeypatch.setattr(stage2, "checkpoint", clock.after(1000, stage2.checkpoint))
+    world.script(claude=[{"stdout": "done", "plant": {"src/app.py": "value = 2\n"}}], make=[{"stdout": "green\n"}])
+    assert world.run("implement") == 0
+    (entry,) = runner_entries(world.plan)
+    assert ", 42 s — " in entry
+    assert entry.startswith("2026-10-20 10:00:00–10:00:42 UTC")
+
+
+def test_runner_time_entry_identifies_attempt_and_midnight_span(world: World, monkeypatch: pytest.MonkeyPatch) -> None:
+    """Criterion 4. Planted fault: a missing field, or the span taken from the wall clock instead of the monotonic one."""
+    start = dt.datetime(2026, 10, 20, 23, 59, 30, tzinfo=dt.UTC)
+    clock = FakeClock(monkeypatch, start, wall_drift=1.0)
+    monkeypatch.setattr(stage2, "run_work_model", clock.after(45, stage2.run_work_model))
+    world.script(claude=[{"stdout": "done", "plant": {"src/app.py": "value = 2\n"}}], make=[{"stdout": "green\n"}])
+    assert world.run("implement") == 0
+    (entry,) = runner_entries(world.plan)
+    # The elapsed span is the monotonic difference (45 s), whatever the wall clock did meanwhile (46 s).
+    assert entry == (
+        f"2026-10-20 23:59:30–2026-10-21 00:00:16 UTC, 45 s — implement · attempt 1 · route flash · "
+        f"model {stage2.GLM_FLASH[1]} · accepted · measured by the runner"
+    )
+    same_day = stage2.time_entry("repair", 2, "codex-repair", "m", False, UTC_START, UTC_START, 0)
+    assert same_day == (
+        "2026-10-20 10:00:00–10:00:00 UTC, 0 s — repair · attempt 2 · route codex-repair · "
+        "model m · rejected · measured by the runner"
+    )
+
+
+def test_runner_keeps_rejected_time_across_input_restore(world: World, monkeypatch: pytest.MonkeyPatch) -> None:
+    """Criterion 5. Planted fault: the restore puts the pre-call plan back without the rejected attempt's entry."""
+    FakeClock(monkeypatch, UTC_START)
+    older = "2026-10-06 09:00–09:05, 5 min\n"
+    world.plan.write_text(world.plan.read_text(encoding="utf-8") + older, encoding="utf-8")
+    git(world.root, "add", "-A")
+    git(world.root, "commit", "--quiet", "-m", "an older time record")
+    world.script(
+        claude=[
+            {"stdout": "first", "plant": {"src/app.py": "value = 2\n", "plans/changes/demo/plan.md": "# rewritten\n"}},
+            {"stdout": "second"},
+        ],
+        make=[{"stdout": "green\n"}, {"stdout": "green\n"}],
+    )
+    assert world.run("implement") == 0
+    plan = world.plan.read_text(encoding="utf-8")
+    first, second = runner_entries(world.plan)
+    assert "rejected" in first and "attempt 1 ·" in first and "accepted" in second
+    assert older.strip() in plan and "# rewritten" not in plan
+    assert plan.index(older.strip()) < plan.index(first) < plan.index(second)
+
+
+def test_runner_time_insert_preserves_section_boundaries() -> None:
+    """Criterion 6. Planted fault: the entry appended at the end of the file, or an older record overwritten."""
+    entry = "ENTRY measured by the runner"
+    text = "# Plan\n\n## Time used\n\nOLDER\n\n## Next\n\nafter\n"
+    assert stage2.with_time_entry(text, entry) == (
+        "# Plan\n\n## Time used\n\nOLDER\nENTRY measured by the runner\n\n## Next\n\nafter\n"
+    )
+    assert stage2.with_time_entry("# Plan\n\n## Time used\n", entry) == (
+        "# Plan\n\n## Time used\n\nENTRY measured by the runner\n"
+    )
+    with pytest.raises(stage2.Refused):
+        stage2.with_time_entry("# Plan\n", entry)
+
+
+def test_runner_time_doctrine_preserves_interactive_measurement() -> None:
+    """Criterion 7. Planted fault: a model-owned runner instruction, or the interactive clock rule removed."""
+    prompt = flat((REPO_ROOT / "prompts" / "04-implement.md").read_text(encoding="utf-8"))
+    workflow = flat((REPO_ROOT / "docs" / "WORKFLOW.md").read_text(encoding="utf-8"))
+    assert "write no entry under `## Time used`" in prompt and "measured by the runner" in prompt
+    assert "update the time log before returning" not in prompt
+    assert "Read `date` when a session starts" in prompt and "logs its own spans" in prompt
+    assert "measures each completed attempt itself" in workflow
+    assert "checks for a measured line" not in workflow
+    for text in (stage2.REPAIR_FORMAT, stage2.REPAIR_FORMAT_FILE_TOOLS):
+        assert "write no entry under `## Time used`" in flat(text).lower().replace("time used", "Time used")
+        assert "write a measured entry" not in text
+
+
+def test_runner_time_logging_does_not_retry_red_verification(world: World, monkeypatch: pytest.MonkeyPatch) -> None:
+    """Criterion 8. Planted fault: a red `make verify` run again to log, or checkpointed after logging."""
+    FakeClock(monkeypatch, UTC_START)
+    baseline = git(world.root, "rev-parse", "HEAD")
+    world.script(
+        claude=[{"stdout": "one"}, {"stdout": "two"}, {"stdout": "three"}],
+        make=[{"stdout": "red\n", "exit": 1}] * 3,
+    )
+    assert world.run("implement") == 1
+    assert len(world.calls("make")) == len(world.calls("claude")) == 3
+    assert git(world.root, "rev-list", "--count", f"{baseline}..HEAD") == "0"
 
 
 def test_record_rows_reach_the_model_only_in_the_prompt(world: World) -> None:
@@ -6470,7 +6652,7 @@ def test_a_red_verify_or_a_missing_time_line_fails_a_repair_attempt(world: World
     assert world.run("repair") == 0
     prompt = prompt_of(world.calls("codex")[1])
     assert "Attempt 1 (codex):" in prompt
-    assert "`make verify` exited 1" in prompt and "did not add a measured line" in prompt
+    assert "`make verify` exited 1" in prompt
     assert "attempt 2 · route codex-repair" in world.text()
     assert git(world.root, "rev-list", "--count", f"{baseline}..HEAD") == "1"
     assert len(quote_blocks(world.text())) == 1, "the failed attempt left no block"

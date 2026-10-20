@@ -86,16 +86,16 @@ No `design.md` or ADR is due for the bounded class.
 
 ## Criterion ledger
 
-- 1: not yet written tests/test_stage2.py::test_runner_accepts_attempt_without_model_time_entry — restoring the old added-line check rejects the otherwise green attempt
-- 2: not yet written tests/test_stage2.py::test_runner_logs_each_completed_attempt_once — suppressing or duplicating a runner entry breaks the count for accepted and rejected attempts
-- 3: not yet written tests/test_stage2.py::test_runner_span_includes_model_and_postchecks — ending before preparation or verification changes the controlled elapsed span
-- 4: not yet written tests/test_stage2.py::test_runner_time_entry_identifies_attempt_and_midnight_span — omitting a field or using wall-clock subtraction instead of the controlled monotonic span fails
-- 5: not yet written tests/test_stage2.py::test_runner_keeps_rejected_time_across_input_restore — restoring the old plan loses a rejected entry, including before a passing retry
-- 6: not yet written tests/test_stage2.py::test_runner_time_insert_preserves_section_boundaries — appending at EOF or overwriting an older record breaks the expected section contents
-- 7: not yet written tests/test_stage2.py::test_runner_time_doctrine_preserves_interactive_measurement — planting a model-owned runner instruction or removing the interactive clock rule fails
+- 1: tests/test_stage2.py::test_runner_accepts_attempt_without_model_time_entry — restoring the old added-line check rejects the otherwise green attempt
+- 2: tests/test_stage2.py::test_runner_logs_each_completed_attempt_once — suppressing or duplicating a runner entry breaks the count for accepted and rejected attempts
+- 3: tests/test_stage2.py::test_runner_span_includes_model_and_postchecks — ending before preparation or verification changes the controlled elapsed span
+- 4: tests/test_stage2.py::test_runner_time_entry_identifies_attempt_and_midnight_span — omitting a field or using wall-clock subtraction instead of the controlled monotonic span fails
+- 5: tests/test_stage2.py::test_runner_keeps_rejected_time_across_input_restore — restoring the old plan loses a rejected entry, including before a passing retry
+- 6: tests/test_stage2.py::test_runner_time_insert_preserves_section_boundaries — appending at EOF or overwriting an older record breaks the expected section contents
+- 7: tests/test_stage2.py::test_runner_time_doctrine_preserves_interactive_measurement — planting a model-owned runner instruction or removing the interactive clock rule fails
 - 8: tests/test_stage2.py::test_implement_requires_spec_plan_time_heading_and_no_preexisting_work — a missing heading reaches a model
 - 8: tests/test_stage2.py::test_repair_requires_a_clean_tree_a_spec_and_a_plan_with_its_time_heading — repair bypasses its initial heading guard
-- 8: not yet written tests/test_stage2.py::test_runner_time_logging_does_not_retry_red_verification — rechecking red without another model call or checkpointing it fails
+- 8: tests/test_stage2.py::test_runner_time_logging_does_not_retry_red_verification — rechecking red without another model call or checkpointing it fails
 
 ## Verification
 
@@ -120,4 +120,10 @@ invent a fallback measurement or route. Through 2026-10-21 12:34 UTC, the
 maintainer's override uses the active Sol 6.1 session for implementation
 because Z.ai GLM is unavailable and the Claude budget is exhausted.
 
+## Runner route — 2026-10-20
+
+Stage-1 route: implement · model claude-sonnet-5-5 · reason: GLM model name refused by Claude Code (bead coding-harness-6th); Codex paused by the maintainer.
+
 ## Time used
+
+2026-10-20 span not measured by this session (Sonnet 5.5, Stage-1 route, file tools only): it has no command tool, so `date` could not be read at start or end and no span is estimated; the runner's own entry for this attempt follows, and the orchestrator supplies any further measurement before the appetite is compared.

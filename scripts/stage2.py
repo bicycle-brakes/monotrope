@@ -141,6 +141,7 @@ import subprocess
 import sys
 import tempfile
 import threading
+import time
 from collections import Counter
 from collections.abc import Callable
 from dataclasses import dataclass
@@ -248,13 +249,14 @@ REPAIR_ANSWER = (
 )
 # The Codex attempts (ADR 0017): Codex has command tools in its configured sandbox, so it is told what it may run.
 REPAIR_FORMAT = (
-    "Repair only the taken rows below. You may run tests and `make verify`; write a measured entry under\n"
-    "`## Time used` in `plan.md`. Do not commit and run no git command that changes the repository: the\n"
-    "runner runs `make verify` and makes the one commit. " + REPAIR_ANSWER
+    "Repair only the taken rows below. You may run tests and `make verify`; write no entry under\n"
+    "`## Time used` in `plan.md`, the runner measures the attempt and writes it. Do not commit and run no\n"
+    "git command that changes the repository: the runner runs `make verify` and makes the one commit. " + REPAIR_ANSWER
 )
 # The Sonnet attempt keeps the file-tools sentence it always had.
 REPAIR_FORMAT_FILE_TOOLS = (
-    "Repair only the taken rows below, with the available file tools; you cannot run commands. " + REPAIR_ANSWER
+    "Repair only the taken rows below, with the available file tools; you cannot run commands. Write no\n"
+    "entry under `## Time used` in `plan.md`, the runner measures the attempt and writes it. " + REPAIR_ANSWER
 )
 # What a draft may write and what the runner takes back; `<change>` is filled in (spec, criterion 3).
 DRAFT_RULES = (
@@ -2583,6 +2585,51 @@ def time_log(path: Path) -> str:
     return text[match.end() : end]
 
 
+def utc_now() -> dt.datetime:
+    """The wall clock of a measured span, in UTC (a seam for tests)."""
+    return dt.datetime.now(dt.UTC)
+
+
+def monotonic_now() -> float:
+    """The monotonic clock whose difference is a measured span (a seam for tests)."""
+    return time.monotonic()
+
+
+def time_entry(
+    verb: str,
+    attempt: int,
+    route: str,
+    model: str,
+    accepted: bool,
+    started: dt.datetime,
+    ended: dt.datetime,
+    seconds: int,
+) -> str:
+    """The line the runner writes under `## Time used` for one completed attempt.
+
+    The elapsed span is the monotonic difference; the UTC endpoints only name it, and the end carries
+    its date when that differs from the start's, so a span across midnight reads unambiguously.
+    """
+    end_date = f"{ended:%Y-%m-%d} " if ended.date() != started.date() else ""
+    result = "accepted" if accepted else "rejected"
+    return (
+        f"{started:%Y-%m-%d} {started:%H:%M:%S}–{end_date}{ended:%H:%M:%S} UTC, {seconds} s — "
+        f"{verb} · attempt {attempt} · route {route} · model {model} · {result} · measured by the runner"
+    )
+
+
+def with_time_entry(text: str, entry: str) -> str:
+    """`text` with `entry` as the last line of the time section, before the next level-two heading."""
+    match = TIME_HEADING.search(text)
+    if match is None:
+        raise Refused("the plan has no `## Time used` heading.")
+    following = re.search(r"^## [^#]", text[match.end() :], re.M)
+    end = match.end() + following.start() if following else len(text)
+    body = text[match.end() : end].rstrip() or "\n"
+    tail = text[end:]
+    return text[: match.end()] + body + "\n" + entry + "\n" + (f"\n{tail}" if tail else "")
+
+
 def insert_before_time(path: Path, block: str) -> None:
     """Put runner routing evidence before the time section, so it cannot satisfy the time check."""
     text = path.read_text(encoding="utf-8")
@@ -3035,7 +3082,6 @@ def format_step(root: Path, env: dict[str, str], key: str | None = None) -> str 
 def verify_attempt(
     root: Path,
     plan: Path,
-    baseline_time: str,
     key: str | None = None,
     formatted: list[str] | None = None,
 ) -> list[str]:
@@ -3045,8 +3091,8 @@ def verify_attempt(
     runner applies ruff's safe fixes and its formatter to the changed Python files under `scripts/`
     and `tests/`; when `formatted` is given, the step's line lands there. Return bounded
     diagnostics for failed preparation or postconditions, naming the gates that blocked.
-    `baseline_time` holds the pre-call plan: restoring a heading or moving an old entry into the
-    time section cannot count as this attempt's new measured line.
+    The time section must still be readable; the entry itself is the runner's (`run_attempts`), so the
+    model adds none and nothing is compared with the pre-call plan.
     """
     env = foreign_env(
         {
@@ -3066,13 +3112,9 @@ def verify_attempt(
     if done.returncode != 0:
         problems.append(f"`make verify` exited {done.returncode}\n{verify_evidence(done, key)}".rstrip())
     try:
-        current_time = time_log(plan)
+        time_log(plan)
     except Refused as error:
         problems.append(str(error))
-    else:
-        added_time = Counter(current_time.splitlines()) - Counter(baseline_time.splitlines())
-        if not any(line.strip() for line in added_time):
-            problems.append("`plan.md` did not add a measured line below `## Time used`")
     return problems
 
 
@@ -3643,8 +3685,8 @@ def implementation_prompt(
     plan = prompt_input(ctx.plan, inputs)
     extra = [
         "Implement only the accepted plan with the available file tools. You cannot run commands. "
-        "Update the measured span below `## Time used` in plan.md before returning; the runner runs "
-        "`make verify`, stages the result and creates the checkpoint commit.",
+        "Write no entry under `## Time used` in plan.md: the runner measures this attempt and writes "
+        "its span itself. The runner runs `make verify`, stages the result and creates the checkpoint commit.",
         f"Implementation baseline: {baseline}",
         f"## Accepted spec\n\n{spec}",
         f"## Accepted plan\n\n{plan}",
@@ -3712,11 +3754,10 @@ def run_attempts(
                 ctx.plan,
                 f"## Runner route — {today()}\n\nStage-1 route: {verb} · model {endpoint[1]} · reason: {reason}.",
             )
-        # Each attempt must add its own line. Keep all existing plan lines even if an earlier
-        # attempt removed the time heading, so restoring it cannot reuse an earlier measurement.
+        # The pre-call plan, route block and time records included, is what a rejected attempt's plan is
+        # restored to (plus the runner's entry), while the accepted plan in every prompt stays the
+        # original snapshot.
         baseline_time = ctx.plan.read_text(encoding="utf-8")
-        # Restore a changed plan with this attempt's pre-call time evidence and runner route, while the
-        # accepted plan in every prompt stays the original snapshot. No older line satisfies a retry.
         inputs_before = {**inputs, ctx.plan: baseline_time.encode("utf-8")}
         kept = snapshot_findings() if snapshot_findings is not None else None
         unmeasured: str | None = None
@@ -3726,6 +3767,8 @@ def run_attempts(
             before, unmeasured = "", str(error)
         call_error: CallFailed | None = None
         answer = ""
+        # The runner's own span of this attempt starts right before the model and ends at the verdict.
+        started_wall, started_mono = utc_now(), monotonic_now()
         try:
             if endpoint == CODEX:
                 # A fresh writing Codex call, never resumed; its thread is not kept (ADR 0017).
@@ -3801,7 +3844,7 @@ def run_attempts(
         cannot_start: CallFailed | None = None
         formatted: list[str] = []
         try:
-            problems = verify_attempt(root, ctx.plan, baseline_time, key, formatted)
+            problems = verify_attempt(root, ctx.plan, key, formatted)
         except CallFailed as error:
             # `make verify` could not be started: no model can repair that, so this attempt's block
             # says why and the run stops after the scan below, with no further attempt (spec, criterion 6).
@@ -3810,6 +3853,41 @@ def run_attempts(
             problems = ["`make verify` could not be run\n" + "\n".join(_shrink(lines, TAIL_LINES))]
         if not problems and answer_check is not None:
             problems = answer_check(answer)
+        # The verdict is in: the runner writes the attempt's span, accepted or rejected. A rejected
+        # attempt that will be retried gets its plan back at the pre-call bytes plus this entry, so the
+        # restore below keeps the entry and drops the model's other plan edits.
+        ended_wall, ended_mono = utc_now(), monotonic_now()
+        entry = time_entry(
+            verb,
+            attempt,
+            route,
+            endpoint[1],
+            not problems,
+            started_wall,
+            ended_wall,
+            max(0, round(ended_mono - started_mono)),
+        )
+        retry_follows = bool(problems) and attempt < len(routes) and cannot_start is None
+        try:
+            if retry_follows:
+                # Written by the restore loop below, which never writes through whatever stands there.
+                inputs_before[ctx.plan] = with_time_entry(baseline_time, entry).encode("utf-8")
+            else:
+                try:
+                    ctx.plan.write_text(with_time_entry(ctx.plan.read_text(encoding="utf-8"), entry), encoding="utf-8")
+                except (Refused, OSError, UnicodeDecodeError):
+                    if not problems:
+                        raise
+                    # A final rejected attempt left the plan missing, unreadable or without its
+                    # heading: the pre-call plan takes the entry, and the rejection stays as it was.
+                    if ctx.plan.is_symlink() or ctx.plan.is_file():
+                        ctx.plan.unlink()
+                    elif ctx.plan.is_dir():
+                        shutil.rmtree(ctx.plan)
+                    ctx.plan.write_text(with_time_entry(baseline_time, entry), encoding="utf-8")
+                stamp_updated(ctx.plan)
+        except (Refused, OSError, UnicodeDecodeError) as error:
+            raise CallFailed(f"the runner could not write the attempt's time entry to {ctx.plan}: {error}") from error
         if problems:
             # The format line stands first: the step ran before `make verify`, and the next model
             # learns that the runner formats and whether ruff left findings it could not fix.
@@ -3852,7 +3930,7 @@ def run_attempts(
         if attempt < len(routes):
             # Failed edits stay in the attempt's evidence. Restore every differing snapshotted input
             # before the next attempt, comparing bytes so undecodable files are restored too.
-            # The plan keeps its pre-call time evidence; the retry must add its own measured line.
+            # The plan comes back at its pre-call bytes plus this attempt's runner entry.
             # Restoration never writes through a worktree path: whatever stands there (a symlink, a
             # directory or a file) is removed without being followed, then the bytes are written anew.
             for path, content in inputs_before.items():
@@ -3863,6 +3941,7 @@ def run_attempts(
                         shutil.rmtree(path)
                     path.parent.mkdir(parents=True, exist_ok=True)
                     path.write_bytes(content)
+            stamp_updated(ctx.plan)
     raise CallFailed(closing)
 
 
