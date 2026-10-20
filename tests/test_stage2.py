@@ -18,7 +18,6 @@ from __future__ import annotations
 import ast
 import copy
 import datetime as dt
-import fcntl
 import json
 import os
 import re
@@ -643,21 +642,6 @@ def test_the_suite_never_reaches_the_real_denylist_or_secrets(monkeypatch: pytes
 # ---------------------------------------------------------------------------
 # The entries that stay declared (the remark corrections of criterion 3)
 # ---------------------------------------------------------------------------
-
-
-def test_a_second_review_loop_is_refused_while_the_record_is_held(world: World, capsys) -> None:
-    """R-14 of the review-swarm review: one runner per record, and the refusal names the record."""
-    path = stage2.lock_path("demo", world.root)
-    path.parent.mkdir(parents=True, exist_ok=True)
-    with path.open("a+") as handle:
-        fcntl.flock(handle.fileno(), fcntl.LOCK_EX | fcntl.LOCK_NB)
-        assert world.run("review-loop") == 2
-        assert world.run("prepare-loop") == 2
-        assert world.run("release-loop") == 2
-    error = capsys.readouterr().err
-    assert stage2.record_key("demo", world.root) in error, "the refusal did not name the record"
-    assert world.reviews() == [], "a refused run still called a reviewer"
-    assert world.run("review-loop") in (0, 1), "the freed lock did not let the verb past the lock"
 
 
 def test_the_record_is_keyed_by_the_worktree_too(tmp_path: Path) -> None:

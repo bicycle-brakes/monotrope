@@ -3800,8 +3800,21 @@ def mark_repaired_record(change: str, taken: list[tuple[str, list[str]]], fixes:
     as it was read.
     """
     by_key = {row[0]: row for place, row in taken if place == "record"}
+    if not by_key:
+        return
+    # The record is read and rewritten whole: a round appended in between, or a release that removes
+    # the record, would be lost, so the rewrite holds the lock the loop verbs hold (O190-4).
+    try:
+        with holding_record(change, root):
+            _mark_record_rows(change, by_key, fixes, root)
+    except Refused as error:
+        waiting = ", ".join(sorted(by_key))
+        raise CallFailed(f"the loop record could not be marked ({error}); mark {waiting} by hand.") from error
+
+
+def _mark_record_rows(change: str, by_key: dict[str, list[str]], fixes: dict[str, str], root: Path) -> None:
     record = read_record(change, root)
-    if not by_key or record is None:
+    if record is None:
         return
     ending = "\n" if record.endswith("\n") else ""
     lines: list[str] = []
@@ -4582,6 +4595,7 @@ def review_loop(root: Path, change: str, availability_reported: str | None = Non
                 "the repair brake stops the loop; the maintainer decides what continues."
             )
     state = read_state(record, findings_text)
+    receipt_taken = False
     if record is None and state is None:
         # A fresh run has neither a record nor a released snapshot. read_state
         # refuses a pre-swarm record without its Loop state line.
@@ -4592,6 +4606,7 @@ def review_loop(root: Path, change: str, availability_reported: str | None = Non
 
         if stage2_availability.settings(root, sys.modules[__name__]) is not None:
             state = stage2_availability.consume(root, change, availability_reported, sys.modules[__name__])
+            receipt_taken = True
             require_pi()
         else:
             require_pi()
@@ -4746,6 +4761,10 @@ def review_loop(root: Path, change: str, availability_reported: str | None = Non
         # puts the run's snapshot line into it before the rounds.
         write_state(change, state, root)
     append(path, "\n\n".join(parts))
+    if receipt_taken:
+        import stage2_availability
+
+        stage2_availability.spend(root, change, sys.modules[__name__])
     for model in replaced:
         # A replacement is consumed: it is no later rung.
         mark_consumed(change, state, f"rung:{model}", root)

@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import datetime as dt
+import fcntl
 import json
 import sys
 from pathlib import Path
@@ -62,17 +63,67 @@ def test_preparation_filters_failures_and_requires_main_chat_report(world: World
     assert recorded["availability"] == state["availability"]
 
 
-def test_an_accepted_receipt_cannot_start_a_second_round(world: World) -> None:
-    """R-14: the round that accepted the receipt spends it."""
+@pytest.mark.parametrize("verb", ["prepare-loop", "release-loop", "review-loop"])
+def test_each_record_verb_is_refused_by_its_own_lock(world: World, capsys, verb: str) -> None:
+    """R-14 (O190-1): each locked call site is driven alone, in a world where the verb gets past its own checks."""
+    if verb == "prepare-loop":
+        enable(world)
+    elif verb == "release-loop":
+        world.write_findings(VERDICT)
+    else:
+        world.script(pi=[{"stdout": "No finding."}] * 2)
+    path = stage2.lock_path("demo", world.root)
+    path.parent.mkdir(parents=True, exist_ok=True)
+    capsys.readouterr()
+    with path.open("a+") as handle:
+        fcntl.flock(handle.fileno(), fcntl.LOCK_EX | fcntl.LOCK_NB)
+        assert world.run(verb) == 2
+    error = capsys.readouterr().err
+    assert f"another run holds the loop record `{stage2.record_key('demo', world.root)}`" in error, error
+    assert world.reviews() == [], "a refused run still called a reviewer"
+    assert world.run(verb) == 0, f"{verb} did not get past its own checks once the lock was free"
+    assert "another run holds" not in capsys.readouterr().err
+
+
+def test_marking_a_repair_waits_for_no_one_and_loses_no_round(world: World) -> None:
+    """R-14 (O190-4): `repair` rewrites the record whole, so it takes the record's lock like the other verbs."""
+    world.write_record([("L1-1", "taken — test_a", "no")])
+    line = next(row for row in world.record().read_text(encoding="utf-8").splitlines() if row.startswith("| L1-1"))
+    cells = stage2.split_row(line)
+    taken = [("record", [*cells[:7], " \\| ".join(cells[7:-1]), cells[-1]])]
+    fixes = {"L1-1": "fixed — not a test — the doctrine names it"}
+    before = world.record().read_text(encoding="utf-8")
+    path = stage2.lock_path("demo", world.root)
+    path.parent.mkdir(parents=True, exist_ok=True)
+    with path.open("a+") as handle:
+        fcntl.flock(handle.fileno(), fcntl.LOCK_EX | fcntl.LOCK_NB)
+        with pytest.raises(stage2.CallFailed, match="L1-1"):
+            stage2.mark_repaired_record("demo", taken, fixes, world.root)
+    assert world.record().read_text(encoding="utf-8") == before, "a held record was rewritten"
+    stage2.mark_repaired_record("demo", taken, fixes, world.root)
+    assert "fixed — not a test — the doctrine names it" in world.record().read_text(encoding="utf-8")
+
+
+def test_an_accepted_receipt_is_spent_by_the_round_that_is_written(world: World, monkeypatch) -> None:
+    """R-14 (O190-3): a failed first attempt leaves the receipt; a written round 1 spends it."""
     enable(world)
     assert world.run("prepare-loop") == 0
     prepared = receipt(world)
+    path = availability.receipt_path(world.root, "demo", stage2)
+    real = stage2.require_pi
+
+    def missing() -> None:
+        raise stage2.Refused("the pinned Pi is not installed")
+
+    monkeypatch.setattr(stage2, "require_pi", missing)
+    assert world.run("review-loop", "demo", "--availability-reported", prepared["report_id"]) == 2
+    assert not world.record().exists(), "a failed attempt left a round behind"
+    assert path.exists(), "a failed attempt spent the receipt"
+    monkeypatch.setattr(stage2, "require_pi", real)
     world.script(pi=[{"stdout": "No finding."}] * 2)
     assert world.run("review-loop", "demo", "--availability-reported", prepared["report_id"]) == 0
-    assert not availability.receipt_path(world.root, "demo", stage2).exists(), "the receipt survived its round"
-    rounds = len(world.reviews())
-    assert world.run("review-loop", "demo", "--availability-reported", prepared["report_id"]) == 2
-    assert len(world.reviews()) == rounds, "a spent receipt started a second round"
+    assert world.record().exists()
+    assert not path.exists(), "the written round did not spend the receipt"
 
 
 def test_preparation_calls_only_static_toolless_probes(world: World, monkeypatch) -> None:
