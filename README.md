@@ -29,6 +29,10 @@ the tools, and it develops itself with the same workflow.
 > not built yet. The repository and its tracker still carry the working name
 > `coding-harness` in places.
 
+> **License:** source-available under the PolyForm Noncommercial License 1.0.0.
+> Noncommercial use is free; commercial use needs a separate written license.
+> See [License](#license).
+
 ## The problem it answers
 
 Three things go wrong when an agent does the work and nothing records it:
@@ -312,8 +316,16 @@ To start a change, create its bead (the tracker item) first, then
 - **One change, one branch, one worktree, one session.**
 - **Before a pull request.** `make venv` once, then `make verify`; a text-only
   change is gated by CI.
+- **Contributions.** By opening a pull request you agree that your
+  contribution may be distributed under the project's license and, if needed,
+  under a commercial license. See [`COMMERCIAL.md`](COMMERCIAL.md).
 - **Language.** Repository artefacts are in English.
 
 ## License
 
-Apache-2.0 — see [`LICENSE`](LICENSE).
+Monotrope is **source-available** under the **PolyForm Noncommercial License
+1.0.0**. Noncommercial use is free; commercial use needs a separate written
+license. See [`LICENSE`](LICENSE) and [`COMMERCIAL.md`](COMMERCIAL.md).
+
+Releases published before 2026-10-20 were under Apache 2.0. That grant remains
+for those releases.
