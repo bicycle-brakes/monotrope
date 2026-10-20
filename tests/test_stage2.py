@@ -10735,6 +10735,29 @@ def test_refreshed_model_definitions_reach_each_launch(
         assert expected in store.get(stage2.OPENCODE, {}).get("models", []), "fresh protocol definition was lost"
 
 
+def test_an_excluded_model_is_denied_by_both_classes(world: World) -> None:
+    """R-4 of the review-swarm review: `ausgeschlossen` binds the free class and the paid declaration."""
+    path = world.root / "model-endpoints.yaml"
+    data = yaml.safe_load(path.read_text())
+    data["ausgeschlossen"] = [
+        {"was": "a provider the maintainer dropped", "klasse": "framework", "modelle": ["kimi", "moonshot"]}
+    ]
+    path.write_text(yaml.safe_dump(data))
+    assert stage2.excluded_problem(world.root, "kimi-for-coding") is not None
+    assert stage2.excluded_problem(world.root, "moonshot/k3") is not None
+    assert stage2.excluded_problem(world.root, "acme-v1-free") is None
+    # Both classes answer the same way, and a documented entry with no ids binds nothing.
+    assert "excluded by model-endpoints.yaml" in (
+        stage2.free_admission_problem(world.root, "kimi-for-coding", ["kimi-for-coding"]) or ""
+    )
+    assert "excluded by model-endpoints.yaml" in (
+        stage2.declaration_problem(world.root, stage2.OPENCODE, "kimi-for-coding") or ""
+    )
+    data["ausgeschlossen"] = [{"was": "prose only", "klasse": "framework", "grund": "no ids"}]
+    path.write_text(yaml.safe_dump(data))
+    assert stage2.excluded_problem(world.root, "kimi-for-coding") is None
+
+
 def test_free_admission_requires_the_launch_provider(world: World) -> None:
     """Criteria 5/7: discovery under another provider never authorizes a Go call."""
     path = world.root / "model-endpoints.yaml"
