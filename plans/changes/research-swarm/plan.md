@@ -2325,3 +2325,14 @@ BLOCKER (F-50, fix-r7) and two MAJOR rows (F-51, F-52, base). Span counted
 to 18 h 03 min of 18 h 20 min. A repair with its verification does not fit;
 the work stops and the rows stay open for the maintainer's decision.
 Findings per phase-6 round, 1 to 11: 8, 5, 3, 3, 3, 4, 2, 4, 3, 3, 3.
+
+### Appetite raised again — 2026-10-20
+
+Maintainer, 2026-10-20 (answer "A"): about 1 h 15 min more for the repair of
+F-50 to F-52 and one review round; the appetite is now **19 hours 35
+minutes** of phase 4 in total and replaces the card's `Appetite:` line.
+Stop rule stated with the question: when that round finds no BLOCKER, the
+merge goes ahead with its MAJOR rows named as known limits. In parallel, at
+the maintainer's request, an independent read-only reviewer
+(`opencode-go/deepseek-v4.1-flash` through `stage2.py session`) reviews
+`e9cb7f5`. Round-11 repair starts 10:17:17Z.
