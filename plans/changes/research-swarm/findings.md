@@ -3343,3 +3343,16 @@ Stage-2 call, 2026-10-20: repair · attempt 3 · route stage-1 · endpoint claud
 > ````
 
 Orchestrator, 2026-10-20: the round-9 repair run above failed on form again: attempts 1 and 2 added no measured line under `## Time used`; attempt 3 lost one load-sensitive test. The code in the tree: a first full `make verify` lost `tests/test_stage2_research_store.py::test_terminal_record_survives_sigkill_after_the_outcome` ("driver printed no marker in time"; 3071 passed), which passed 5 of 5 times alone and with the whole file under `-n 8` (bead coding-harness-jik); the second full `make verify` was green (3072 passed, 16 skipped, 00:28:45Z to 00:35:36Z). Red first was checked by hand: the three proving tests, copied onto the code at `d8348ec`, fail there; `test_consistent_judge_and_score_dispositions_remain_measured` is a guard and passes on both sides. Booked as a hand repair.
+
+Stage-2 call, 2026-10-20: review · endpoint openai-codex · model gpt-6.1-sol · leak check clean over 536 files, 1600 commits, 12 rules.
+
+## Phase 6 — Codex, 2026-10-20
+
+| ID | Severity | Dimension | Origin | Where | Finding | Reviewer | Status | Broke a test |
+|---|---|---|---|---|---|---|---|---|
+| F-47 | MAJOR | SPEC | base | `scripts/stage2_research_map.py:120–122`; `scripts/stage2_research_run.py:763–771` | A finder answer whose four categories contain `{"not_read": 42}` passes validation and remains `ok`, although map construction rejects it because its reasons are not text. Reproduced: `plan_reuse()` reuses that malformed result. Subsequent unchanged runs therefore repeat the merge call while retaining the invalid finder answer. Reject malformed reasons before advancing and exclude these results from reuse. [criteria 18, 53] | Codex | open | — |
+| F-48 | MAJOR | SPEC | base | `scripts/stage2.py:3676–3680` | An existing unreadable spec is treated as absent during class selection. New evidence beyond F-9’s malformed-YAML case: with research declaring `bounded` and reading the spec raising `UnicodeDecodeError`, `declared_class()` returns `bounded`. An architectural declaration in that spec can consequently be ignored, bypassing the swarm. Existing files that cannot be read must cause refusal with exit 2. [criterion 4] | Codex | open | — |
+| F-49 | MAJOR | SPEC | base | `scripts/check_research_handoff.py:113–120` | A spec header containing a YAML sequence key, such as `? [bad,key]`, raises an uncaught `TypeError` when the uniqueness checker tests set membership. Reproduced through `check_change()` with otherwise valid complete research. The gate crashes instead of reporting unreadable evidence as not measured with exit 3. [criterion 33] | Codex | open | — |
+
+Phase 6 verdict: codex 01a156bc-9878-7e10-9061-cd602862dba2, 2026-10-20
+Reviewer session: codex 01a156bc-9878-7e10-9061-cd602862dba2 — a fresh session reviewed: an earlier ## Phase 6 block makes this a re-check
