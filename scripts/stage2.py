@@ -325,6 +325,12 @@ PI_DISCOVERY_SECONDS = 120
 # so no whole source file travels (criterion 3).
 FREE_DIFF_MAX_LINES = 400
 FREE_DIFF_MAX_TOTAL = 2000
+# A paid member reads the whole change, but not without end: over this bound the prompt carries a cut
+# marker and the round says so. Pi 1.2.0 compacts an oversized context instead of failing (read in the
+# pinned install: `docs/compaction.md`, "Auto-compaction triggers when contextTokens > contextWindow -
+# reserveTokens"; `dist/core/agent-session.js:418`), so a `No finding.` could rest on a summary the
+# member never saw in full (R-15 of the review-swarm review).
+PAID_DIFF_MAX_LINES = 2000
 
 SEVERITIES = {"BLOCKER", "MAJOR", "MINOR"}
 
@@ -1529,6 +1535,19 @@ def _bound_hunks(rel: str, piece: str) -> str:
         return "\n".join(lines)
     kept = "\n".join(lines[:FREE_DIFF_MAX_LINES])
     return f"{kept}\n## (the diff of {rel} was cut at {FREE_DIFF_MAX_LINES} lines)"
+
+
+def bounded_paid_diff(diff: str) -> tuple[str, str | None]:
+    """The paid prompt's diff, cut at `PAID_DIFF_MAX_LINES`, and what the cut left out.
+
+    The caller writes the second half into the round record: a clean answer over a cut diff is not a
+    clean answer about the change, and the record must say which of the two it was.
+    """
+    lines = diff.splitlines()
+    if len(lines) <= PAID_DIFF_MAX_LINES:
+        return diff, None
+    note = f"the change diff was cut at {PAID_DIFF_MAX_LINES} of {len(lines)} lines"
+    return "\n".join([*lines[:PAID_DIFF_MAX_LINES], f"## ({note}; the rest is not carried)"]), note
 
 
 def free_diff(root: Path) -> str:
@@ -4617,7 +4636,11 @@ def review_loop(root: Path, change: str, availability_reported: str | None = Non
     round_number = rounds_run(record, findings_text) + 1
     members: list[str] = stage["members"]
     free = stage["kind"] == "free"
-    diff = free_input if free else change_diff(root)
+    cut_note: str | None = None
+    if free:
+        diff = free_input
+    else:
+        diff, cut_note = bounded_paid_diff(change_diff(root))
     body = "" if free else (root / "prompts" / "04b-review-loop.md").read_text(encoding="utf-8")
     prompts: dict[str, str] = {}
     endpoints: dict[str, tuple[str, str, str]] = {}
@@ -4737,6 +4760,8 @@ def review_loop(root: Path, change: str, availability_reported: str | None = Non
         kept = rest if rows else outcome
         if kept.strip():
             reviewer_blocks.append(kept.strip())
+    if cut_note:
+        statements.append(f"The diff was cut: {cut_note}.")
     parts = [f"## Round {round_number} — {', '.join(members)}, {today()}", *notes, *statements]
     for block in reviewer_blocks:
         parts.append(f"{NOT_ROWS_NOTE}\n\n{quote_reviewer(block)}")
