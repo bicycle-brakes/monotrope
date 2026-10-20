@@ -360,7 +360,10 @@ rules:
     reason: "beschreibt dieses Repository"
   - prefix: LICENSE
     rolle: bestand
-    reason: "the licence of this repository (Apache-2.0); an instance chooses its own"
+    reason: "the licence of this repository (PolyForm Noncommercial 1.0.0); an instance chooses its own"
+  - prefix: COMMERCIAL.md
+    rolle: bestand
+    reason: "the commercial licence route of this repository; an instance chooses its own"
   - prefix: CHANGELOG.md
     rolle: bestand
     reason: "Verlauf dieses Repos"
