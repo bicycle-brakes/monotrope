@@ -654,6 +654,20 @@ def test_the_record_is_keyed_by_the_worktree_too(tmp_path: Path) -> None:
     assert stage2.record_dir("demo", one).name.startswith("demo@")
 
 
+def test_release_in_one_worktree_leaves_the_other_worktrees_record(world: World) -> None:
+    """R-2 through the call site: `release-loop` in root A neither reads nor deletes root B's record."""
+    other = World(shutil.copytree(world.root, world.root.parent / "repo-b", symlinks=True), world.bin, world.state)
+    world.write_record([("L1-1", "taken — test_a", "no")])
+    other.write_record([("L1-9", "taken — test_b", "no")])
+    other_before = other.record().read_text(encoding="utf-8")
+    world.write_findings("## Phase 6 — deepseek-v4.1-flash, 2026-09-30", VERDICT)
+    assert world.run("release-loop") == 0
+    assert not world.record().exists()
+    assert other.record().exists(), "release-loop in one root deleted the other root's record"
+    assert other.record().read_text(encoding="utf-8") == other_before
+    assert "L1-9" not in world.text(), "the other root's rows were released into this root's findings"
+
+
 def test_a_quoted_sentence_in_a_cell_does_not_cut_the_released_block() -> None:
     """R-3: the cut is the runner's own line, not a reviewer's cell that quotes the sentence."""
     released = "\n".join(
@@ -686,6 +700,34 @@ def test_a_quoted_sentence_in_a_cell_does_not_cut_the_released_block() -> None:
     )
     assert [row[0] for row in stage2.released_rows(released)] == ["L1-1", "L1-2"], "the block was cut inside the table"
     assert (stage2.read_state(None, released) or {}).get("consumed") == ["free"]
+
+
+def test_the_state_line_below_a_quoting_cell_is_still_read() -> None:
+    """R-3, `read_state` half: a cell quoting the sentence before the state line must not hide the state line."""
+    quoting = [
+        "L1-1",
+        "MAJOR",
+        "SPEC",
+        "base",
+        "a.py:1",
+        "quotes Kept from the loop record: in a cell",
+        "x",
+        "taken — test_a",
+        "no",
+        "—",
+    ]
+    released = "\n".join(
+        [
+            f"{stage2.RELEASE_HEADING} 2026-10-20",
+            stage2.render_table(stage2.RELEASED_COLUMNS, [quoting]),
+            "Rounds run: 1",
+            stage2.STATE_KEY + json.dumps({"consumed": ["free"], "free": {}, "paid": {}}),
+            "Kept from the loop record:",
+            "",
+            "> the reviewers' words, as they came",
+        ]
+    )
+    assert (stage2.read_state(None, released) or {}).get("consumed") == ["free"], "the quoted cell cut the block"
 
 
 def test_openai_codex_is_declared_as_decided() -> None:
