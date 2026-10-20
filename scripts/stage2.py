@@ -2914,28 +2914,37 @@ def trusted_registry(root: Path, env: dict[str, str]) -> Path:
     renders stays the attempt's. The caller removes the mirror.
     """
     mirror = Path(tempfile.mkdtemp(prefix="harness-registry-"))
-    for entry in root.iterdir():
-        if entry.name != "scripts":
-            (mirror / entry.name).symlink_to(entry.resolve())
-    archive = subprocess.run(
-        ["git", "-C", str(root), "archive", "--format=tar", "HEAD", "scripts/"],
-        capture_output=True,
-        check=False,
-        env=env,
-        timeout=GIT_SECONDS,
-    )
-    if archive.returncode:
-        raise Refused(f"the committed scripts could not be read: git archive exited {archive.returncode}")
-    with tarfile.open(fileobj=io.BytesIO(archive.stdout)) as tar:
-        for member in tar.getmembers():
-            if not member.isfile() or not member.name.startswith("scripts/"):
-                continue
-            relative = Path(member.name).relative_to("scripts")
-            if ".." in relative.parts:
-                continue
-            target = mirror / "scripts" / relative
-            target.parent.mkdir(parents=True, exist_ok=True)
-            target.write_bytes(tar.extractfile(member).read())
+    try:
+        for entry in root.iterdir():
+            if entry.name != "scripts":
+                (mirror / entry.name).symlink_to(entry.resolve())
+        try:
+            archive = subprocess.run(
+                ["git", "-C", str(root), "archive", "--format=tar", "HEAD", "scripts/"],
+                capture_output=True,
+                check=False,
+                env=env,
+                timeout=GIT_SECONDS,
+            )
+        except subprocess.TimeoutExpired as error:
+            # The runner's own bound, turned into a diagnostic: an escaping TimeoutExpired would end the
+            # run as a traceback and leave the mirror behind (P2 of the #188 review).
+            raise Refused(f"the committed scripts could not be read within {GIT_SECONDS // 60} minutes") from error
+        if archive.returncode:
+            raise Refused(f"the committed scripts could not be read: git archive exited {archive.returncode}")
+        with tarfile.open(fileobj=io.BytesIO(archive.stdout)) as tar:
+            for member in tar.getmembers():
+                if not member.isfile() or not member.name.startswith("scripts/"):
+                    continue
+                relative = Path(member.name).relative_to("scripts")
+                if ".." in relative.parts:
+                    continue
+                target = mirror / "scripts" / relative
+                target.parent.mkdir(parents=True, exist_ok=True)
+                target.write_bytes(tar.extractfile(member).read())
+    except BaseException:
+        shutil.rmtree(mirror, ignore_errors=True)
+        raise
     return mirror
 
 
@@ -2976,9 +2985,11 @@ def prepare_derived(root: Path, env: dict[str, str], key: str | None = None) -> 
         if index.exists() and index.stat().st_nlink > 1:
             raise OSError("refusing a hard-linked index path: plans/INDEX.md")
         mirror = trusted_registry(root, env)
-        scratch = mirror / "scratch"
+        # Outside the mirror, and outside anything the worktree mirrors: the mirror links every top-level
+        # entry, so a repository path named `scratch` would be written to instead (P2 of the #188 review).
+        scratch = Path(tempfile.mkdtemp(prefix="harness-scratch-"))
         for name in ("home", "tmp"):
-            (scratch / name).mkdir(parents=True, exist_ok=True)
+            (scratch / name).mkdir()
         try:
             done = launch(
                 [sys.executable, str(mirror / "scripts" / "plans_registry.py"), "--index"],
@@ -2990,6 +3001,7 @@ def prepare_derived(root: Path, env: dict[str, str], key: str | None = None) -> 
             )
         finally:
             shutil.rmtree(mirror, ignore_errors=True)
+            shutil.rmtree(scratch, ignore_errors=True)
     except (
         check_frontmatter_current.CannotMeasure,
         check_frontmatter_current.CannotStamp,
@@ -3847,6 +3859,10 @@ def run_attempts(
             prompt_input(path, inputs)
     diagnostics: list[str] = []
     record: list[str] = []
+    # The tools the runner itself starts, as they were before the first model ran. One digest for the
+    # whole run: an attempt that overwrote a tool is refused, and the refused bytes must not become the
+    # next attempt's reference by taking the digest again (P1 of the #188 review).
+    tools = tool_state(root)
     for attempt, (endpoint, credential, route, reason) in enumerate(routes, 1):
         prompt = prompts[endpoint]
         if diagnostics:
@@ -3866,8 +3882,6 @@ def run_attempts(
         # Each attempt must add its own line. Keep all existing plan lines even if an earlier
         # attempt removed the time heading, so restoring it cannot reuse an earlier measurement.
         baseline_time = ctx.plan.read_text(encoding="utf-8")
-        # The tools the runner itself starts, as they were before the model ran (R-21).
-        tools = tool_state(root)
         # Restore a changed plan with this attempt's pre-call time evidence and runner route, while the
         # accepted plan in every prompt stays the original snapshot. No older line satisfies a retry.
         inputs_before = {**inputs, ctx.plan: baseline_time.encode("utf-8")}

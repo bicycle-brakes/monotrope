@@ -4058,6 +4058,69 @@ def test_an_overwritten_ruff_is_not_run(tmp_path: Path) -> None:
     assert problem is not None and "`.venv/bin/ruff`" in problem, "an overwritten tool was not named"
 
 
+def test_a_refused_tool_stays_refused_for_the_next_attempt(world: World) -> None:
+    """P1 of the #188 review: the refused bytes must not become the next attempt's reference."""
+    (world.root / ".gitignore").write_text(".venv/\n", encoding="utf-8")
+    git(world.root, "add", "-A")
+    git(world.root, "commit", "--quiet", "-m", "ignore .venv")
+    ruff = world.root / ".venv" / "bin" / "ruff"
+    ruff.parent.mkdir(parents=True)
+    ruff.write_text("#!/bin/sh\nexit 0\n", encoding="utf-8")
+    baseline = git(world.root, "rev-parse", "HEAD")
+    world.script(
+        claude=[
+            {
+                "stdout": "implemented",
+                "plant": {".venv/bin/ruff": "#!/bin/sh\nexit 7\n"},
+                "append": {"plans/changes/demo/plan.md": "2026-10-07 10:00–10:05, 5 min\n"},
+            },
+            *(
+                {
+                    "stdout": f"implemented again {n}",
+                    "append": {"plans/changes/demo/plan.md": f"2026-10-07 10:0{n}–10:0{n + 4}, 4 min\n"},
+                }
+                for n in (6, 7)
+            ),
+        ],
+        make=[{"stdout": "green\n"}],
+    )
+    assert world.run("implement") == 1
+    calls = world.calls("claude")
+    assert len(calls) == 3, "the attempt chain did not run out"
+    assert all(".venv/bin/ruff" in call["prompt_file"] for call in calls[1:]), (
+        "a later attempt was not told about the refused tool"
+    )
+    assert git(world.root, "rev-list", "--count", f"{baseline}..HEAD") == "0", "a refused tool was checkpointed"
+    assert ruff.read_text(encoding="utf-8") == "#!/bin/sh\nexit 7\n", (
+        "the ignored tool is not restored, so the digest is what catches it"
+    )
+
+
+def test_a_scratch_entry_in_the_repository_is_never_written(world: World) -> None:
+    """P2 of the #188 review: the mirror links every entry, so scratch data must live elsewhere."""
+    (world.root / "scratch").write_text("a repository file named like the runner's scratch\n", encoding="utf-8")
+    assert stage2.prepare_derived(world.root, stage2.foreign_env({})) == []
+    assert (world.root / "scratch").is_file(), "the runner wrote into a mirrored repository entry"
+    assert (world.root / "scratch").read_text(encoding="utf-8").startswith("a repository file")
+
+
+def test_a_git_archive_timeout_is_a_diagnostic_and_leaves_no_mirror(
+    world: World, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """P2 of the #188 review: the runner's own bound becomes a problem line, not a traceback."""
+    original = stage2.subprocess.run
+
+    def timeout_on_archive(command, *args, **kwargs):
+        if "archive" in command:
+            raise subprocess.TimeoutExpired(command, 1)
+        return original(command, *args, **kwargs)
+
+    monkeypatch.setattr(stage2.subprocess, "run", timeout_on_archive)
+    problems = stage2.verify_attempt(world.root, world.plan, "")
+    assert len(problems) == 1 and "could not be read within" in problems[0]
+    assert world.calls("make") == []
+
+
 def test_an_attempt_that_overwrites_ruff_fails_before_verify(world: World) -> None:
     """R-21, acceptance criterion: the attempt fails, and the path it wrote is named."""
     ruff = world.root / ".venv" / "bin" / "ruff"
