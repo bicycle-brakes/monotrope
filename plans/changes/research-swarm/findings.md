@@ -3944,3 +3944,15 @@ Stage-2 call, 2026-10-20: repair · attempt 3 · route stage-1 · endpoint claud
 > - Runner format before `make verify`: ruff changed no file.
 > - `plan.md` did not add a measured line below `## Time used`
 > ```
+
+Stage-2 call, 2026-10-20: review · endpoint openai-codex · model gpt-6.1-sol · leak check clean over 536 files, 1643 commits, 12 rules.
+
+## Phase 6 — Codex, 2026-10-20
+
+| ID | Severity | Dimension | Origin | Where | Finding | Reviewer | Status | Broke a test |
+|---|---|---|---|---|---|---|---|---|
+| F-54 | MAJOR | SPEC | base | `scripts/stage2_research_dispatch.py:156–159,196–204` | Required-first ordering is enforced only within each provider queue. Reproduced with the default four permits, eight required Claude slots and 25 required Go slots: the free Go slot launches before required Claude slots 5–8, and dispatch returns exit 0. Free slots must wait until all required slots have been dispatched. The ordering test covers only one provider. [criterion 19] | Codex | open | — |
+| F-55 | MAJOR | SPEC | base | `scripts/check_research_handoff.py:781–788` | A complete run whose inventory contains `"items": 42` crashes the handoff gate with `TypeError: argument of type 'int' is not iterable`. Reproduced through `check_change()` using otherwise valid research, answers and spec. Inventory fields lack shape validation before membership checking; malformed evidence must produce not-measured exit 3 instead of a traceback. [criterion 33] | Codex | open | — |
+
+Phase 6 verdict: codex 01a1595e-a66f-79b3-b27e-783f31bcef83, 2026-10-20
+Reviewer session: codex 01a1595e-a66f-79b3-b27e-783f31bcef83 — a fresh session reviewed: an earlier ## Phase 6 block makes this a re-check

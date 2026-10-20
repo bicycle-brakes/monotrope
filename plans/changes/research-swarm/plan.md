@@ -2395,3 +2395,11 @@ fixed. F-53 also covers
 `tests/test_stage2_research_store.py::test_terminal_markers_already_in_one_pipe_write_are_read_in_order`.
 Span counted 11:33Z to 12:51:44Z, about 1 h 19 min; estimated total about
 20 h 20 min to 20 h 35 min of 23 h 35 min. Round 12 follows.
+
+Round-12 review (fresh read-only Codex session) 12:52:11Z to 12:56:07Z: no
+BLOCKER; two MAJOR rows (F-54, F-55, base). By the stop rule stated with the
+maintainer's answer "A", the merge decision goes to the maintainer with
+F-54, F-55 and D-2 named as known limits. Findings per phase-6 round, 1 to
+12: 8, 5, 3, 3, 3, 4, 2, 4, 3, 3, 3, 2 (plus the independent DeepSeek
+reviewer's 2 rows on `e9cb7f5`). Estimated total about 20 h 35 min to
+20 h 50 min of 23 h 35 min.
