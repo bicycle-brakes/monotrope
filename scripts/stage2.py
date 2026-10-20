@@ -533,6 +533,66 @@ def scrub(text: str, secret: str | None) -> str:
     return replace_credential(text, secret) if secret else text
 
 
+def protect_diagnostics(text: str, key: str | None = None) -> str:
+    """`text` as failed-check diagnostics may be published: secret-rule matches redacted, the key scrubbed.
+
+    Every secret rule of the active denylist is read now, on every route - a keyless Codex or Stage-1 route
+    included. A match is replaced in place by `[<rule name>]` (the name already starts `secret:`); the spans
+    are found in the original text, overlapping ones merge into one marker run, and the replacement keeps the
+    line breaks it covered, so a traceback keeps its shape. A non-secret rule that matches the original text
+    refuses first - redaction must not hide a blocking rule - and so does a denylist that cannot be read, or
+    text that still matches a secret rule after the replacement. A refusal names a rule or a reason and a
+    line, never a value.
+    """
+    if not text:
+        return text
+    rules, problem = leakcheck.read_denylist(leakcheck.default_denylist())
+    if problem:
+        raise Refused(f"the failed-check diagnostics cannot be checked: {problem}")
+    for rule in rules:
+        if rule.secret:
+            continue
+        for number, line in enumerate(text.split("\n"), 1):
+            if rule.pattern.search(line):
+                raise Refused(
+                    f"the failed-check diagnostics match rule '{rule.name}' at line {number}; the call does not start."
+                )
+    spans: list[list] = []
+    for rule in rules:
+        if not rule.secret:
+            continue
+        for match in rule.pattern.finditer(text):
+            if match.end() > match.start():
+                spans.append([match.start(), match.end(), [rule.name]])
+    spans.sort(key=lambda span: (span[0], span[1]))
+    merged: list[list] = []
+    for start, end, names in spans:
+        if merged and start < merged[-1][1]:
+            merged[-1][1] = max(end, merged[-1][1])
+            merged[-1][2] += [name for name in names if name not in merged[-1][2]]
+        else:
+            merged.append([start, end, list(names)])
+    order = {rule.name: index for index, rule in enumerate(rules)}
+    out, last = [], 0
+    for start, end, names in merged:
+        marks = "".join(f"[{name}]" for name in sorted(names, key=order.__getitem__))
+        out += [text[last:start], marks, "\n" * text.count("\n", start, end)]
+        last = end
+    out.append(text[last:])
+    safe = scrub("".join(out), key)
+    for rule in rules:
+        if rule.secret and rule.pattern.search(safe):
+            raise Refused(f"the failed-check diagnostics still match rule '{rule.name}' after redaction.")
+    return safe
+
+
+def protect_files(files: list[str] | str, key: str | None = None) -> list[str] | str:
+    """The entries of `attempt_files`, or the reason it could not measure, through `protect_diagnostics`."""
+    if isinstance(files, str):
+        return protect_diagnostics(files, key)
+    return [protect_diagnostics(entry, key) for entry in files]
+
+
 def foreign_env(own: dict[str, str]) -> dict[str, str]:
     """The allow-list from the caller's environment, then the call's own variables."""
     env = {name: os.environ[name] for name in ENV_ALLOW if name in os.environ}
@@ -2879,8 +2939,8 @@ def prepare_derived(root: Path, env: dict[str, str], key: str | None = None) -> 
             except (check_frontmatter_current.CannotStamp, OSError, RuntimeError) as error:
                 errors.append(f"{relative}: {error}")
         if errors:
-            evidence = "\n".join(_shrink("\n".join(errors).splitlines(), TAIL_LINES))
-            return [f"Derived-file preparation failed: {scrub(evidence, key)}"]
+            evidence = "\n".join(_shrink(protect_diagnostics("\n".join(errors), key).splitlines(), TAIL_LINES))
+            return [f"Derived-file preparation failed: {evidence}"]
         index = root / "plans" / "INDEX.md"
         if not index.resolve().is_relative_to(root.resolve()):
             raise OSError("refusing an index outside the worktree: plans/INDEX.md")
@@ -2898,23 +2958,27 @@ def prepare_derived(root: Path, env: dict[str, str], key: str | None = None) -> 
         RuntimeError,
         UnicodeError,
     ) as error:
-        evidence = "\n".join(str(error).splitlines()[-TAIL_LINES:])
-        return [f"Derived-file preparation failed: {scrub(evidence, key)}"]
+        evidence = "\n".join(protect_diagnostics(str(error), key).splitlines()[-TAIL_LINES:])
+        return [f"Derived-file preparation failed: {evidence}"]
     if done.returncode:
-        evidence = "\n".join(((done.stdout or "") + (done.stderr or "")).splitlines()[-TAIL_LINES:])
-        return [f"Derived-file preparation failed: index renderer exited {done.returncode}\n{scrub(evidence, key)}"]
+        text = protect_diagnostics((done.stdout or "") + (done.stderr or ""), key)
+        evidence = "\n".join(text.splitlines()[-TAIL_LINES:])
+        return [f"Derived-file preparation failed: index renderer exited {done.returncode}\n{evidence}"]
     return []
 
 
 def verify_evidence(done: subprocess.CompletedProcess, key: str | None) -> str:
     """The bounded evidence of a red `make verify`: the framed gates that blocked, else the run's tail."""
-    output = (done.stdout or "") + (done.stderr or "")
+    # Protected whole, before any reduction: a cut must not split a multiline match and leave a part of it.
+    stdout = protect_diagnostics(done.stdout or "", key)
+    stderr = protect_diagnostics(done.stderr or "", key)
+    output = stdout + stderr
     # verify_all.sh frames gates on standard output; a gate's standard error arrives unframed after them.
-    red = red_sections(done.stdout or "")
+    red = red_sections(stdout)
     if red is None:
         return scrub("\n".join(output.splitlines()[-TAIL_LINES:]), key)
     evidence = "The gates that blocked, each with its last lines:\n" + red
-    errors = (done.stderr or "").splitlines()
+    errors = stderr.splitlines()
     if errors:
         # Unframed: the last lines of the whole run's standard error, not of the blocking gate alone.
         cut = len(errors) - STDERR_LINES
@@ -3678,6 +3742,11 @@ def run_attempts(
     call whenever an attempt fails: the audit line above the snapshot stays, the model's own edits to
     the file - a Status it wrote itself included - go, so no failed run leaves them behind (phase 6,
     F-2).
+
+    The failed-check listing and the changed-file entries pass through `protect_diagnostics` once, on
+    every route, the keyless ones included; the block in findings.md and the retry prompt both take that
+    one safe text, so a fixture secret a check printed blocks neither the next attempt's leak check nor
+    its prompt (bead coding-harness-8hr).
     """
     root = ctx.root
     allowed = {ctx.findings.relative_to(root)}
@@ -3806,7 +3875,7 @@ def run_attempts(
             # `make verify` could not be started: no model can repair that, so this attempt's block
             # says why and the run stops after the scan below, with no further attempt (spec, criterion 6).
             cannot_start = error
-            lines = scrub(str(error), key).splitlines() or ["make could not be started"]
+            lines = protect_diagnostics(str(error), key).splitlines() or ["make could not be started"]
             problems = ["`make verify` could not be run\n" + "\n".join(_shrink(lines, TAIL_LINES))]
         if not problems and answer_check is not None:
             problems = answer_check(answer)
@@ -3820,7 +3889,9 @@ def run_attempts(
                 restore_findings(kept)
             # The block lands below this attempt's audit line, before the next attempt starts or the
             # run exits 1; the post-run scan after it covers the block too (spec, criteria 1 and 9).
-            listing = "\n".join(f"- {p}" for p in problems)
+            # One safe listing and one safe file list feed both destinations (the block and the retry prompt).
+            listing = protect_diagnostics("\n".join(f"- {p}" for p in problems), key)
+            files = protect_files(files, key)
             diagnostics.append(f"Attempt {attempt} ({route}):\n{listing}")
             append(ctx.findings, quote_block(attempt_block(attempt, route, listing, files), key))
         record += [f"- Attempt {attempt} ({route}): {line}" for line in formatted]
@@ -4163,7 +4234,8 @@ def draft(root: Path, change: str) -> None:
         if problems:
             # The next attempt starts on the tree this one left; the block quotes its files and
             # diagnostics below its audit line (spec, criterion 21).
-            listing = "\n".join(f"- {problem}" for problem in problems)
+            listing = protect_diagnostics("\n".join(f"- {problem}" for problem in problems), key)
+            files = protect_files(files, key)
             diagnostics.append(f"Attempt {attempt} ({route}):\n{listing}")
             append(ctx.findings, quote_block(attempt_block(attempt, route, listing, files), key))
         if key is not None:

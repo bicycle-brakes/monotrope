@@ -1987,6 +1987,196 @@ def test_a_key_in_the_gate_output_never_reaches_the_next_attempt(world: World) -
     assert KEY not in prompt and "token [credential] leaked" in prompt
 
 
+# ---------------------------------------------------------------------------
+# Failed-check diagnostics carry synthetic secrets (bead coding-harness-8hr)
+# ---------------------------------------------------------------------------
+
+# Built from parts: this file holds no run of the fixture's own shape.
+FIXTURE_SECRET = "FIXKEY-" + "123" + "456"
+FIXTURE_RULE = "secret:fixture = FIXKEY-[0-9]{6}\n"
+FIXTURE_MARKER = "[secret:fixture]"
+FIXTURE_TRACEBACK = (
+    "Traceback (most recent call last):\n"
+    '  File "tests/test_x.py", line 7, in test_a\n'
+    f"    token = '{FIXTURE_SECRET}'\n"
+    "AssertionError: boom\n"
+)
+
+
+def set_denylist(text: str) -> Path:
+    path = Path(os.environ["LEAKCHECK_DENYLIST"])
+    path.write_text(text, encoding="utf-8")
+    return path
+
+
+def failing_run(world: World, verb: str) -> tuple[int, str | None]:
+    """Run `verb` so its first attempt fails a check printing the fixture traceback.
+
+    Returns the exit code and the prompt of the second model call, or None when none was made.
+    """
+    set_denylist(DENYLIST + FIXTURE_RULE)
+    bad = {"stdout": FIXTURE_TRACEBACK, "exit": 1}
+    green = {"stdout": "green\n"}
+    if verb == "draft":
+        draft_world(world)
+        plant = {
+            "plans/changes/demo/spec.md": "---\ntitle: Spec\nupdated: 2026-09-30\nbead: demo-1\n---\n\n# Spec\n",
+            "plans/changes/demo/plan.md": PLAN_CARD,
+        }
+        world.script(codex=[codex_ok("T1", "drafted", plant=plant), codex_ok("T2", "again")], make=[bad, green])
+        code, name = world.run("draft"), "codex"
+    elif verb == "repair":
+        repair_world(world)
+        script_repair(world, [repair_step(), repair_step()], make=[bad, green])
+        code, name = world.run("repair"), "codex"
+    else:
+        first = {
+            "stdout": "first",
+            "plant": {"src/app.py": "value = 2\n"},
+            "append": {"plans/changes/demo/plan.md": "2026-10-08 10:00–10:02, 2 min\n"},
+        }
+        second = {"stdout": "fixed", "append": {"plans/changes/demo/plan.md": "2026-10-08 10:02–10:03, 1 min\n"}}
+        if verb == "implement":
+            world.script(claude=[first, second], make=[bad, green])
+            code = world.run("implement")
+        else:
+            world.script(claude=[first], make=[bad])
+            code = world.run("implement", "demo", "--stage2-off", "GLM unavailable")
+        name = "claude"
+    calls = world.calls(name)
+    return code, (prompt_of(calls[1]) if len(calls) > 1 else None)
+
+
+@pytest.mark.parametrize("verb", ["draft", "implement", "implement-off", "repair"])
+def test_failed_check_diagnostics_redact_secret_rules_on_every_work_route(world: World, verb: str) -> None:
+    """Criterion 1. Planted fault: one verb, a keyless route or one destination keeps the value."""
+    code, prompt = failing_run(world, verb)
+    texts = [("findings", world.text())] + ([("retry prompt", prompt)] if prompt is not None else [])
+    assert (prompt is not None) == (verb != "implement-off")
+    assert code == (1 if verb == "implement-off" else 0)
+    for where, text in texts:
+        assert FIXTURE_SECRET not in text, where
+        assert f"token = '{FIXTURE_MARKER}'" in text, where
+        assert "AssertionError: boom" in text and 'File "tests/test_x.py", line 7' in text, where
+
+
+def test_preparation_and_postcondition_diagnostics_redact_secret_rules(
+    world: World, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Criterion 1. Planted fault: only the output of `make verify` is protected."""
+    set_denylist(DENYLIST + FIXTURE_RULE)
+    failed = subprocess.CompletedProcess(
+        ["x"], 3, stdout=f"stdout {FIXTURE_SECRET}\n", stderr=f"stderr {FIXTURE_SECRET}\n"
+    )
+    monkeypatch.setattr(stage2, "launch", lambda *_args, **_kwargs: failed)
+    (problem,) = stage2.prepare_derived(world.root, stage2.foreign_env({}))
+    assert FIXTURE_SECRET not in problem and f"stdout {FIXTURE_MARKER}" in problem
+    # A postcondition message and the files an attempt changed pass through the same protection.
+    assert stage2.protect_files([f"a/{FIXTURE_SECRET}.txt (+1, -0)"]) == [f"a/{FIXTURE_MARKER}.txt (+1, -0)"]
+    assert stage2.protect_files(f"not measured: {FIXTURE_SECRET}") == f"not measured: {FIXTURE_MARKER}"
+    cut = subprocess.CompletedProcess(["make"], 1, stdout="", stderr=f"E: {FIXTURE_SECRET}\n")
+    assert FIXTURE_SECRET not in stage2.verify_evidence(cut, None)
+
+
+@pytest.mark.usefixtures("world")
+def test_diagnostic_redaction_keeps_rule_names_and_traceback_context() -> None:
+    """Criterion 2. Planted fault: the marker loses its rule name, or an unmatched line goes."""
+    set_denylist(DENYLIST + FIXTURE_RULE + "secret:other = OTHER-[0-9]{3}\n")
+    text = f"{FIXTURE_TRACEBACK}other = OTHER-999\n"
+    safe = stage2.protect_diagnostics(text)
+    assert safe == FIXTURE_TRACEBACK.replace(FIXTURE_SECRET, FIXTURE_MARKER) + "other = [secret:other]\n"
+    assert stage2.protect_diagnostics("") == ""
+    assert stage2.protect_diagnostics("nothing to hide\n") == "nothing to hide\n"
+
+
+@pytest.mark.usefixtures("world")
+def test_diagnostic_redaction_handles_overlaps_and_multiline_matches() -> None:
+    """Criterion 2. Planted fault: an overlap or a cut leaves a part of a matched span."""
+    set_denylist(DENYLIST + "secret:a = AB[0-9]{3}\nsecret:b = [0-9]{3}CD\nsecret:span = BEGIN-[A-Z]+\\nEND-[0-9]+\n")
+    assert stage2.protect_diagnostics("xAB123CDy\n") == "x[secret:a][secret:b]y\n"
+    block = "BEGIN-ABC\nEND-777\n"
+    assert stage2.protect_diagnostics(f"s{block}") == "s[secret:span]\n\n"
+    # The cut of `verify_evidence` falls inside the match: the tail must hold no part of it.
+    lines = [f"line {n}" for n in range(300)]
+    lines[219:221] = ["BEGIN-ABC", "END-777"]
+    done = subprocess.CompletedProcess(["make"], 1, stdout="\n".join(lines) + "\n", stderr="")
+    evidence = stage2.verify_evidence(done, None)
+    assert "BEGIN-" not in evidence and "END-777" not in evidence and "line 299" in evidence
+
+
+def test_a_fixture_secret_in_a_failed_draft_check_allows_a_clean_retry(world: World) -> None:
+    """Criterion 3. Planted fault: either copy keeps the value, so the real pre-call check refuses call two."""
+    code, prompt = failing_run(world, "draft")
+    assert code == 0 and prompt is not None
+    assert len(world.calls("codex")) == 2
+    assert git(world.root, "log", "-1", "--pretty=%s").startswith("docs(demo): draft spec and plan")
+    assert world.text().count("leak check clean") == 2
+
+
+def test_diagnostic_redaction_refuses_an_unusable_denylist(world: World, capsys: pytest.CaptureFixture[str]) -> None:
+    """Criterion 4. Planted fault: raw evidence is written or another attempt starts after a failed rule read."""
+    path = set_denylist(DENYLIST + FIXTURE_RULE)
+    for broken in ("", "# only a comment\n", "bad = (\n"):
+        path.write_text(broken, encoding="utf-8")
+        with pytest.raises(stage2.Refused) as error:
+            stage2.protect_diagnostics(f"x {FIXTURE_SECRET}")
+        assert FIXTURE_SECRET not in str(error.value)
+    path.unlink()
+    with pytest.raises(stage2.Refused):
+        stage2.protect_diagnostics("x")
+    # The rules vanish between the clean first call and the first failed check.
+    draft_world(world)
+    path = set_denylist(DENYLIST + FIXTURE_RULE)
+    plant = {"plans/changes/demo/plan.md": PLAN_CARD}
+    world.script(
+        codex=[codex_ok("T1", "drafted", plant=plant), codex_ok("T2", "again")],
+        make=[{"stdout": FIXTURE_TRACEBACK, "exit": 1, "delete": [str(path)]}, {"stdout": "green\n"}],
+    )
+    assert world.run("draft") == 2
+    assert len(world.calls("codex")) == 1
+    assert FIXTURE_SECRET not in world.text() and FIXTURE_SECRET not in capsys.readouterr().err
+
+
+def test_nonsecret_diagnostic_matches_still_refuse(world: World, capsys: pytest.CaptureFixture[str]) -> None:
+    """Criterion 5. Planted fault: a secret replacement over the same span hides a non-secret violation."""
+    set_denylist(DENYLIST + "secret:wide = LEAKMARK-[0-9]{6}\n")
+    planted = "LEAKMARK-" + "654321"
+    with pytest.raises(stage2.Refused) as error:
+        stage2.protect_diagnostics(f"a\nvalue {planted}\n")
+    assert "'planted'" in str(error.value) and "line 2" in str(error.value) and planted not in str(error.value)
+    draft_world(world)
+    plant = {"plans/changes/demo/plan.md": PLAN_CARD}
+    world.script(
+        codex=[codex_ok("T1", "drafted", plant=plant), codex_ok("T2", "again")],
+        claude=[{"stdout": "glm"}],
+        make=[{"stdout": f"E {planted}\n", "exit": 1}, {"stdout": "green\n"}],
+    )
+    assert world.run("draft") == 2
+    assert len(world.calls("codex")) == 1 and world.calls("claude") == []
+    assert planted not in world.text() and planted not in capsys.readouterr().err
+
+
+def test_secret_rules_outside_diagnostics_still_block_retry(world: World) -> None:
+    """Criterion 6. Planted fault: the runner cleans the tree or skips the pre-call scan to pass the retry."""
+    set_denylist(DENYLIST + FIXTURE_RULE)
+    draft_world(world)
+    plant = {"plans/changes/demo/plan.md": PLAN_CARD}
+    world.script(
+        codex=[codex_ok("T1", "drafted", plant=plant), codex_ok("T2", "must not run")],
+        make=[
+            {
+                "stdout": FIXTURE_TRACEBACK,
+                "exit": 1,
+                "plant": {"src/leak.py": f"token = '{FIXTURE_SECRET}'\n"},
+            },
+            {"stdout": "green\n"},
+        ],
+    )
+    assert world.run("draft") == 2
+    assert len(world.calls("codex")) == 1
+    assert FIXTURE_SECRET in (world.root / "src" / "leak.py").read_text(encoding="utf-8")
+
+
 def test_findings_only_dirt_is_allowed_and_committed(world: World) -> None:
     world.findings.write_text("# Findings\n\nEarlier failed attempt.\n", encoding="utf-8")
     successful_implementation(world)

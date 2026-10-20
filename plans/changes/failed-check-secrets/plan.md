@@ -4,7 +4,7 @@ status: draft
 implementation_status: none
 date: 2026-10-16
 last_reviewed: 2026-10-16
-updated: 2026-10-16
+updated: 2026-10-20
 supersedes: null
 superseded_by: null
 bead: coding-harness-8hr
@@ -89,14 +89,14 @@ add a validator in this change; the runner owns the full verification gate.
 
 ## Criterion ledger
 
-- 1: not yet written tests/test_stage2.py::test_failed_check_diagnostics_redact_secret_rules_on_every_work_route — one verb, keyless route or destination retains the value
-- 1: not yet written tests/test_stage2.py::test_preparation_and_postcondition_diagnostics_redact_secret_rules — protection exists only for make output
-- 2: not yet written tests/test_stage2.py::test_diagnostic_redaction_keeps_rule_names_and_traceback_context — replacement erases unmatched context or loses rule names
-- 2: not yet written tests/test_stage2.py::test_diagnostic_redaction_handles_overlaps_and_multiline_matches — replacement or truncation leaves part of a matched span
-- 3: not yet written tests/test_stage2.py::test_a_fixture_secret_in_a_failed_draft_check_allows_a_clean_retry — the real pre-call check refuses the second call
-- 4: not yet written tests/test_stage2.py::test_diagnostic_redaction_refuses_an_unusable_denylist — raw diagnostics are emitted or retry/fallback starts after a failed rule read
-- 5: not yet written tests/test_stage2.py::test_nonsecret_diagnostic_matches_still_refuse — an overlapping secret replacement hides a non-secret violation
-- 6: not yet written tests/test_stage2.py::test_secret_rules_outside_diagnostics_still_block_retry — a secret in a non-test file or history is cleaned or bypasses the next scan
+- 1: tests/test_stage2.py::test_failed_check_diagnostics_redact_secret_rules_on_every_work_route — one verb, keyless route or destination retains the value
+- 1: tests/test_stage2.py::test_preparation_and_postcondition_diagnostics_redact_secret_rules — protection exists only for make output
+- 2: tests/test_stage2.py::test_diagnostic_redaction_keeps_rule_names_and_traceback_context — replacement erases unmatched context or loses rule names
+- 2: tests/test_stage2.py::test_diagnostic_redaction_handles_overlaps_and_multiline_matches — replacement or truncation leaves part of a matched span
+- 3: tests/test_stage2.py::test_a_fixture_secret_in_a_failed_draft_check_allows_a_clean_retry — the real pre-call check refuses the second call
+- 4: tests/test_stage2.py::test_diagnostic_redaction_refuses_an_unusable_denylist — raw diagnostics are emitted or retry/fallback starts after a failed rule read
+- 5: tests/test_stage2.py::test_nonsecret_diagnostic_matches_still_refuse — an overlapping secret replacement hides a non-secret violation
+- 6: tests/test_stage2.py::test_secret_rules_outside_diagnostics_still_block_retry — a secret in a non-test file or history is cleaned or bypasses the next scan
 - 6: tests/test_stage2.py::test_each_call_runs_its_own_leak_check — a later call skips its scan
 - 6: tests/test_stage2.py::test_a_leak_between_work_attempts_stops_before_fallback — a refusal falls through to another model
 - 7: tests/test_stage2.py::test_a_key_in_the_gate_output_never_reaches_the_next_attempt — credential scrubbing regresses
@@ -110,4 +110,24 @@ add a validator in this change; the runner owns the full verification gate.
 are: this repair changes diagnostics inside the existing runner boundary.
 No earlier diagnostic record, source value or history is rewritten.
 
+## Runner route — 2026-10-20
+
+Stage-1 route: implement · model claude-sonnet-5-5 · reason: GLM unavailable until 2026-10-21T20:34+08:00.
+
 ## Time used
+
+2026-10-20 span not measured: this session had file tools only, no command tool to read `date`; the runner's own clock bounds it.
+
+### Orchestrator — phase 4, 2026-10-20
+
+Measured with `date -u`. Merge of `origin/main` (162 commits) and venv
+rebuild from 00:38Z; implement run with Sonnet 5.5 (`--stage2-off`, GLM via
+Z.ai unavailable until 2026-10-21) 00:39:35Z to 00:44:27Z, rejected for four
+ruff findings (unused arguments in the new tests) and a red pytest gate in
+its own post-run check; the orchestrator fixed the four lint findings by
+hand; `tests/test_stage2.py` green (674 passed); red first checked by hand
+against `ec6f322`: seven of the eight new tests fail there,
+`test_secret_rules_outside_diagnostics_still_block_retry` is a guard and
+passes on both sides; full `make verify` green 00:47:13Z to 00:51:24Z (2299
+passed, 16 skipped). Span about 14 min of the 2 h appetite.
+
