@@ -3676,8 +3676,12 @@ def declared_class(root: Path, change: str, klass: str | None) -> str:
     for name in ("research.md", "spec.md"):
         try:
             text = (folder / name).read_text(encoding="utf-8")
-        except (OSError, UnicodeDecodeError):
+        except FileNotFoundError:
             continue  # not written yet is the normal state before the spec
+        except (OSError, UnicodeDecodeError) as error:
+            raise Refused(
+                f"plans/changes/{change}/{name} cannot be read; repair the file and its class header ({error})."
+            ) from error
         match = re.match(r"---\n(.*?)\n---", text, re.S)
         if not match:
             continue

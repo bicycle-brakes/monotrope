@@ -3350,9 +3350,159 @@ Stage-2 call, 2026-10-20: review · endpoint openai-codex · model gpt-6.1-sol �
 
 | ID | Severity | Dimension | Origin | Where | Finding | Reviewer | Status | Broke a test |
 |---|---|---|---|---|---|---|---|---|
-| F-47 | MAJOR | SPEC | base | `scripts/stage2_research_map.py:120–122`; `scripts/stage2_research_run.py:763–771` | A finder answer whose four categories contain `{"not_read": 42}` passes validation and remains `ok`, although map construction rejects it because its reasons are not text. Reproduced: `plan_reuse()` reuses that malformed result. Subsequent unchanged runs therefore repeat the merge call while retaining the invalid finder answer. Reject malformed reasons before advancing and exclude these results from reuse. [criteria 18, 53] | Codex | taken — criteria 18, 53 | — |
-| F-48 | MAJOR | SPEC | base | `scripts/stage2.py:3676–3680` | An existing unreadable spec is treated as absent during class selection. New evidence beyond F-9’s malformed-YAML case: with research declaring `bounded` and reading the spec raising `UnicodeDecodeError`, `declared_class()` returns `bounded`. An architectural declaration in that spec can consequently be ignored, bypassing the swarm. Existing files that cannot be read must cause refusal with exit 2. [criterion 4] | Codex | taken — criterion 4 | — |
-| F-49 | MAJOR | SPEC | base | `scripts/check_research_handoff.py:113–120` | A spec header containing a YAML sequence key, such as `? [bad,key]`, raises an uncaught `TypeError` when the uniqueness checker tests set membership. Reproduced through `check_change()` with otherwise valid complete research. The gate crashes instead of reporting unreadable evidence as not measured with exit 3. [criterion 33] | Codex | taken — criterion 33 | — |
+| F-47 | MAJOR | SPEC | base | `scripts/stage2_research_map.py:120–122`; `scripts/stage2_research_run.py:763–771` | A finder answer whose four categories contain `{"not_read": 42}` passes validation and remains `ok`, although map construction rejects it because its reasons are not text. Reproduced: `plan_reuse()` reuses that malformed result. Subsequent unchanged runs therefore repeat the merge call while retaining the invalid finder answer. Reject malformed reasons before advancing and exclude these results from reuse. [criteria 18, 53] | Codex | fixed — tests/test_stage2_swarm.py::test_malformed_finder_reasons_block_progress_and_reuse | — |
+| F-48 | MAJOR | SPEC | base | `scripts/stage2.py:3676–3680` | An existing unreadable spec is treated as absent during class selection. New evidence beyond F-9’s malformed-YAML case: with research declaring `bounded` and reading the spec raising `UnicodeDecodeError`, `declared_class()` returns `bounded`. An architectural declaration in that spec can consequently be ignored, bypassing the swarm. Existing files that cannot be read must cause refusal with exit 2. [criterion 4] | Codex | fixed — tests/test_stage2_swarm.py::test_existing_unreadable_spec_refuses_class_selection | — |
+| F-49 | MAJOR | SPEC | base | `scripts/check_research_handoff.py:113–120` | A spec header containing a YAML sequence key, such as `? [bad,key]`, raises an uncaught `TypeError` when the uniqueness checker tests set membership. Reproduced through `check_change()` with otherwise valid complete research. The gate crashes instead of reporting unreadable evidence as not measured with exit 3. [criterion 33] | Codex | fixed — tests/test_research_handoff.py::test_unhashable_spec_header_keys_are_not_measured | — |
 
 Phase 6 verdict: codex 01a156bc-9878-7e10-9061-cd602862dba2, 2026-10-20
 Reviewer session: codex 01a156bc-9878-7e10-9061-cd602862dba2 — a fresh session reviewed: an earlier ## Phase 6 block makes this a re-check
+
+Stage-2 call, 2026-10-20: repair · attempt 1 · route codex · endpoint openai-codex · model gpt-6.1-sol · leak check clean over 536 files, 1617 commits, 12 rules.
+
+> Attempt 1 (codex) failed its post-run checks.
+>
+> Files the attempt changed (lines added, removed):
+> - `plans/changes/research-swarm/plan.md` +36 -0
+> - `scripts/check_research_handoff.py` +6 -3
+> - `scripts/stage2.py` +5 -1
+> - `scripts/stage2_research_map.py` +4 -0
+> - `tests/test_research_handoff.py` +11 -0
+> - `tests/test_stage2_research_map.py` +11 -0
+> - `tests/test_stage2_swarm.py` +49 -0
+>
+> Diagnostics:
+> ```text
+> - Runner format before `make verify`: ruff changed no file.
+> - `plan.md` did not add a measured line below `## Time used`
+> ```
+
+Stage-2 call, 2026-10-20: repair · attempt 2 · route codex-repair · endpoint openai-codex · model gpt-6.1-sol · reason first Codex post-run check failed · leak check clean over 536 files, 1621 commits, 12 rules.
+
+> Attempt 2 (codex-repair) failed its post-run checks.
+>
+> Files the attempt changed (lines added, removed):
+> - `plans/changes/research-swarm/plan.md` +33 -0
+>
+> Diagnostics:
+> ```text
+> - Runner format before `make verify`: ruff changed no file.
+> - `plan.md` did not add a measured line below `## Time used`
+> ```
+
+Stage-2 call, 2026-10-20: repair · attempt 3 · route stage-1 · endpoint claude-code-plan · model claude-sonnet-5-5 · reason two Codex post-run checks failed · leak check clean over 536 files, 1623 commits, 12 rules.
+
+> Attempt 3 (stage-1) failed its post-run checks.
+>
+> Files the attempt changed (lines added, removed):
+> - `plans/changes/research-swarm/plan.md` +9 -0
+>
+> Diagnostics:
+> ````text
+> - Runner format before `make verify`: ruff changed no file.
+> - `make verify` exited 2
+> The gates that blocked, each with its last lines:
+> ── [pytest] $ lauf_cmd
+> [… 26 lines of this gate left out …]
+> ........................................................................ [ 55%]
+> ........................................................................ [ 58%]
+> ........................................................................ [ 60%]
+> ........................................................................ [ 62%]
+> ........................................................................ [ 65%]
+> ........................................................................ [ 67%]
+> ........................................................................ [ 69%]
+> ........................................................................ [ 72%]
+> ........................................................................ [ 74%]
+> ........................................................................ [ 76%]
+> ........................................................................ [ 78%]
+> ........................................................................ [ 81%]
+> ........................................................................ [ 83%]
+> ........................................................................ [ 85%]
+> ........................................................................ [ 88%]
+> ..............................F......................................... [ 90%]
+> ........................................................................ [ 92%]
+> ........................................................................ [ 95%]
+> ........................................................................ [ 97%]
+> ........................................................................ [ 99%]
+> ....                                                                     [100%]
+> =================================== FAILURES ===================================
+> ___________ test_terminal_record_survives_sigkill_after_the_outcome ____________
+> [gw2] darwin -- Python 3.12.15 /Users/mikypiky/coding-harness/.claude/worktrees/research-swarm/.venv/bin/python3
+>
+> state_home = PosixPath('/private/var/folders/44/yc0m3m456b51nyzwyfjptgm40000gn/T/pytest-of-mikypiky/pytest-154/popen-gw2/test_terminal_record_survives_0/xdg-state')
+>
+>     def test_terminal_record_survives_sigkill_after_the_outcome(state_home):
+>         m = module()
+>         gate = state_home / "release-s2"
+>         script = DRIVER.format(scripts=str(SCRIPTS), binding=BINDING, gate=str(gate))
+>         proc = subprocess.Popen(
+>             [sys.executable, "-c", script],
+>             stdout=subprocess.PIPE,
+>             text=True,
+>             env={**os.environ, "XDG_STATE_HOME": str(state_home)},
+>         )
+>         try:
+>             assert pipe_line(proc) == "TERMINAL s1"
+> >           assert pipe_line(proc) == "LAUNCHED s2"
+>
+> tests/test_stage2_research_store.py:168: 
+> _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+>
+> proc = <Popen: returncode: None args: ['/Users/mikypiky/coding-harness/.claude/work...>
+> timeout = 60.0
+>
+>     def pipe_line(proc, timeout=60.0):
+>         ready, _, _ = select.select([proc.stdout], [], [], timeout)
+> >       assert ready, "driver printed no marker in time"
+> E       AssertionError: driver printed no marker in time
+> E       assert []
+>
+> tests/test_stage2_research_store.py:111: AssertionError
+> =========================== short test summary info ============================
+> FAILED tests/test_stage2_research_store.py::test_terminal_record_survives_sigkill_after_the_outcome
+> 1 failed, 3083 passed, 16 skipped in 444.03s (0:07:24)
+> ── [pytest] RED (block) — der Lauf ist rot.
+>
+> Standard error of the whole run, last lines:
+> [… 14898 earlier lines left out …]
+> templates/spec.md:73:81 error MD013/line-length Line length [Expected: 80; Actual: 127]
+> tests/fixtures/research_refs/plan-prompt-d862bc2.md:3:81 error MD013/line-length Line length [Expected: 80; Actual: 117]
+> tests/fixtures/research_refs/plan-prompt-d862bc2.md:85:81 error MD013/line-length Line length [Expected: 80; Actual: 96]
+> tests/fixtures/research_refs/plan-prompt-d862bc2.md:99 error MD040/fenced-code-language Fenced code blocks should have a language specified [Context: "```"]
+> tools/claude-code/README.md:17:81 error MD013/line-length Line length [Expected: 80; Actual: 105]
+> tools/claude-code/README.md:18:81 error MD013/line-length Line length [Expected: 80; Actual: 109]
+> tools/claude-code/README.md:19:81 error MD013/line-length Line length [Expected: 80; Actual: 134]
+> tools/claude-code/README.md:23:1 error MD060/table-column-style Table column style [Table pipe is missing space to the right for style "compact"]
+> tools/claude-code/README.md:23:5 error MD060/table-column-style Table column style [Table pipe is missing space to the left for style "compact"]
+> tools/claude-code/README.md:23:5 error MD060/table-column-style Table column style [Table pipe is missing space to the right for style "compact"]
+> tools/claude-code/README.md:23:9 error MD060/table-column-style Table column style [Table pipe is missing space to the left for style "compact"]
+> tools/claude-code/README.md:23:9 error MD060/table-column-style Table column style [Table pipe is missing space to the right for style "compact"]
+> tools/claude-code/README.md:23:13 error MD060/table-column-style Table column style [Table pipe is missing space to the left for style "compact"]
+> tools/claude-code/README.md:24:81 error MD013/line-length Line length [Expected: 80; Actual: 272]
+> tools/claude-code/README.md:25:81 error MD013/line-length Line length [Expected: 80; Actual: 180]
+> tools/claude-code/README.md:26:81 error MD013/line-length Line length [Expected: 80; Actual: 115]
+> tools/claude-code/README.md:28:81 error MD013/line-length Line length [Expected: 80; Actual: 124]
+> tools/claude-code/README.md:29:81 error MD013/line-length Line length [Expected: 80; Actual: 106]
+> tools/claude-code/README.md:38:1 error MD060/table-column-style Table column style [Table pipe is missing space to the right for style "compact"]
+> tools/claude-code/README.md:38:5 error MD060/table-column-style Table column style [Table pipe is missing space to the left for style "compact"]
+> tools/claude-code/README.md:38:5 error MD060/table-column-style Table column style [Table pipe is missing space to the right for style "compact"]
+> tools/claude-code/README.md:38:9 error MD060/table-column-style Table column style [Table pipe is missing space to the left for style "compact"]
+> tools/claude-code/README.md:38:9 error MD060/table-column-style Table column style [Table pipe is missing space to the right for style "compact"]
+> tools/claude-code/README.md:38:13 error MD060/table-column-style Table column style [Table pipe is missing space to the left for style "compact"]
+> tools/claude-code/README.md:40:81 error MD013/line-length Line length [Expected: 80; Actual: 442]
+> tools/claude-code/README.md:41:81 error MD013/line-length Line length [Expected: 80; Actual: 163]
+> tools/claude-code/README.md:42:81 error MD013/line-length Line length [Expected: 80; Actual: 126]
+> tools/claude-code/README.md:43:81 error MD013/line-length Line length [Expected: 80; Actual: 96]
+> tools/claude-code/README.md:44:81 error MD013/line-length Line length [Expected: 80; Actual: 167]
+> tools/claude-code/README.md:72:1 error MD060/table-column-style Table column style [Table pipe is missing space to the right for style "compact"]
+> tools/claude-code/README.md:72:5 error MD060/table-column-style Table column style [Table pipe is missing space to the left for style "compact"]
+> tools/claude-code/README.md:72:5 error MD060/table-column-style Table column style [Table pipe is missing space to the right for style "compact"]
+> tools/claude-code/README.md:72:9 error MD060/table-column-style Table column style [Table pipe is missing space to the left for style "compact"]
+> tools/claude-code/README.md:72:9 error MD060/table-column-style Table column style [Table pipe is missing space to the right for style "compact"]
+> tools/claude-code/README.md:72:13 error MD060/table-column-style Table column style [Table pipe is missing space to the left for style "compact"]
+> tools/claude-code/README.md:73:81 error MD013/line-length Line length [Expected: 80; Actual: 112]
+> tools/claude-code/README.md:74:81 error MD013/line-length Line length [Expected: 80; Actual: 89]
+> tools/claude-code/README.md:75:81 error MD013/line-length Line length [Expected: 80; Actual: 88]
+> tools/pi/README.md:65:81 error MD013/line-length Line length [Expected: 80; Actual: 97]
+> make: *** [verify] Error 1
+> - `plan.md` did not add a measured line below `## Time used`
+> ````

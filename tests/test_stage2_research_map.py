@@ -291,3 +291,14 @@ def test_map_unread_categories_preserve_each_finder_reason():
     unread = next(row for row in result["not_read"] if row["category"] == "rules")
     assert {origin["finder"] for origin in unread["origins"]} == set(reports)
     assert all(origin["reason"] == "no locator found" for origin in unread["origins"])
+
+
+@pytest.mark.parametrize("reason", [42, None, [], {}, "", "   "])
+def test_finder_validation_refuses_malformed_reasons(reason):
+    report = {category: [{"not_read": reason}] for category in ("code", "rules", "tests", "neighbours")}
+    with pytest.raises(module().ResearchMapError):
+        module().validate_locator_report(report)
+    report = empty()
+    report["code"] = [finder("src/app.py", "run", reason)]
+    with pytest.raises(module().ResearchMapError):
+        module().validate_locator_report(report)

@@ -103,6 +103,8 @@ def _entries(report, *, merged=False):
             raise ResearchMapError("locator category needs entries or an explicit not_read marker")
         for entry in values:
             if isinstance(entry, dict) and set(entry) == {"not_read"}:
+                if not merged and (not isinstance(entry["not_read"], str) or not entry["not_read"].strip()):
+                    raise ResearchMapError("finder unread marker needs a text reason")
                 normalized = {"origins" if merged else "reason": entry["not_read"]}
                 result.append(((category, None, None), normalized))
                 continue
@@ -113,6 +115,8 @@ def _entries(report, *, merged=False):
                 or any(not isinstance(entry.get(key), str) or not entry[key] for key in ("path", "reference"))
             ):
                 raise ResearchMapError("locator needs a path and exact symbol/section")
+            if not merged and (not isinstance(entry["reason"], str) or not entry["reason"].strip()):
+                raise ResearchMapError("finder locator needs a text reason")
             result.append(((category, entry["path"], entry["reference"]), entry))
     return result
 

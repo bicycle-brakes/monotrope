@@ -818,3 +818,14 @@ def test_consistent_judge_and_score_dispositions_remain_measured(world: World, c
     world.write([run])  # an answered maintainer record supplies the criterion basis
     code, out = world.check(capsys)
     assert code == 0, out
+
+
+@pytest.mark.parametrize("key", ["? [bad,key]\n: value", "? {bad: key}\n: value"])
+def test_unhashable_spec_header_keys_are_not_measured(world: World, capsys, key: str) -> None:
+    # Criterion 33: malformed YAML key identities report unreadable evidence rather than crashing.
+    good = spec_text()
+    world.write([run_text(RUN1)], spec=good)
+    assert world.check(capsys)[0] == 0
+    world.write([run_text(RUN1)], spec=good.replace("title: Spec", f"title: Spec\n{key}"))
+    code, out = world.check(capsys)
+    assert code == 3 and "not readable" in out, out

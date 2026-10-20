@@ -1447,6 +1447,10 @@ Stage-1 route: repair · model claude-sonnet-5-5 · reason: two Codex post-run c
 
 Stage-1 route: repair · model claude-sonnet-5-5 · reason: two Codex post-run checks failed.
 
+## Runner route — 2026-10-20
+
+Stage-1 route: repair · model claude-sonnet-5-5 · reason: two Codex post-run checks failed.
+
 ## Time used
 
 2026-10-17, appetite stop answered: the span of the three implement attempts of 2026-10-15 (ended 04:53:50, `cf848ee`) has no start record, so time used was not measurable (78 minutes measured). Maintainer, 2026-10-17: "Ja, halt die zeitgrenze fest" — **continue** with a new appetite of 13 hours 20 minutes in total (the measured 78 minutes plus 12 hours); the unmeasured span stays named, not counted. This replaces the card's `Appetite:` line.
@@ -2288,3 +2292,29 @@ hour for the round-10 repair and one more review round: "ja". The appetite is
 now **18 hours 20 minutes** of phase 4 in total; this replaces the card's
 `Appetite:` line. Rows F-47, F-48 and F-49 are taken. Round-10 repair starts
 08:47:11Z (measured with `date -u`).
+
+### Phase-6 round-10 repairs — 2026-10-20
+
+Rows F-47, F-48 and F-49. Span not measured: this session had no command tool to read `date`, so no time is counted for it. No test was run by this session; the code and tests were already in the working tree, and it checked them against the rows.
+
+- F-47: `validate_locator_report` (`scripts/stage2_research_map.py`) rejects a non-text unread reason; `stage_finders` (`scripts/stage2_research_run.py`) uses it as the validity check, so such a finder answer is neither accepted nor reused. Test `tests/test_stage2_swarm.py::test_malformed_finder_reasons_block_progress_and_reuse`.
+- F-48: `declared_class` (`scripts/stage2.py`) refuses an existing spec or research file that cannot be read (exit 2). Test `tests/test_stage2_swarm.py::test_existing_unreadable_spec_refuses_class_selection`.
+- F-49: the handoff gate's duplicate-key loader turns an unhashable YAML key into a `YAMLError`, reported as not measured (exit 3). Test `tests/test_research_handoff.py::test_unhashable_spec_header_keys_are_not_measured`.
+- The runner runs `make verify`.
+
+### Orchestrator — round-10 repair booked by hand, 2026-10-20
+
+Measured with `date -u`. Repair run 08:47:11Z to 09:30:35Z (three attempts:
+two Codex, one Sonnet 5.5; all failed on form — the missing measured line
+under `## Time used`, and in attempt 3 one load-sensitive test, bead
+coding-harness-jik). Red-first by hand: the new tests copied onto `50d2153`
+fail there (14 cases across the three rows). Full `make verify`: 09:31:44Z
+red (1 failed, the wall-clock catalog test
+`test_catalog_shared_deadline_keeps_asymmetric_failure_rules`, load average
+about 15), 09:45:40Z red (1 failed, the store test of bead
+coding-harness-jik), 09:56:05Z to 10:04:42Z green (3084 passed). Neither
+failing test touches a file of this repair; each passes alone. Span counted:
+08:47:11Z to 10:04:42Z, about 1 h 18 min. Estimated total: about
+17 h 43 min to 17 h 58 min of 18 h 20 min. The maintainer allowed one more
+review round (2026-10-20, "ich erlaube dir eine weiter prüfung"); round 11
+follows.

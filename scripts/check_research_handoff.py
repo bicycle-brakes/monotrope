@@ -114,9 +114,12 @@ def _construct_unique_mapping(loader: _UniqueKeyLoader, node: yaml.MappingNode, 
     seen: set[object] = set()
     for key_node, _ in node.value:
         key = loader.construct_object(key_node, deep=True)
-        if key in seen:
-            raise yaml.YAMLError(f"the key {key!r} stands twice in one mapping")
-        seen.add(key)
+        try:
+            if key in seen:
+                raise yaml.YAMLError(f"the key {key!r} stands twice in one mapping")
+            seen.add(key)
+        except TypeError as error:
+            raise yaml.YAMLError("a mapping key is not hashable") from error
     return loader.construct_mapping(node, deep=deep)
 
 

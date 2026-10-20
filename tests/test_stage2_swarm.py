@@ -2856,3 +2856,52 @@ def test_launch_record_keeps_individual_leak_check_before_launch(sworld: SwarmWo
     assert sworld.run() == 0
     assert len(launches) == 39
     assert all(r["prompt_sha256"] and r["launched_at"] and r["leak_check"] for r in launches)
+
+
+@pytest.mark.parametrize("stored", [False, True])
+def test_malformed_finder_reasons_block_progress_and_reuse(sworld: SwarmWorld, stored: bool) -> None:
+    # Criteria 18, 53: malformed unread reasons fail before merge, including legacy stored successes.
+    malformed = json.dumps({category: [{"not_read": 42}] for category in ("code", "rules", "tests", "neighbours")})
+    if stored:
+        sworld.complete(judge=[{"exit": 1}])
+        assert sworld.run() == 1
+        first = manifest_of(sworld)
+        path = store_dir(sworld) / first["run_id"] / "finders-0-1.result.json"
+        record = json.loads(path.read_text(encoding="utf-8"))
+        record["stdout"] = malformed
+        assert record["outcome"] == "ok"
+        record.pop("sha256")
+        path.write_text(json.dumps(stage2_research_store._seal(record)), encoding="utf-8")
+        (sworld.bin / "calls.jsonl").unlink()
+        sworld.complete()
+        assert sworld.run() == 0
+        assert len(sworld.calls("finder")) == 1
+        assert ["finders-0-1", "validation"] in manifest_of(sworld)["resume"]["not_reused"]
+    else:
+        sworld.complete(**{"finder:None:deepseek-v4.1-flash": [{"stdout": malformed}]})
+        assert sworld.run() == 1
+        assert kinds(sworld) == ["finder"] * 3
+        slot = next(s for s in manifest_of(sworld)["slots"] if s["slot_id"] == "finders-0-1")
+        assert slot["outcome"] != "ok"
+
+
+@pytest.mark.parametrize("fault", ["unicode", "os-error"])
+def test_existing_unreadable_spec_refuses_class_selection(sworld: SwarmWorld, monkeypatch, fault: str) -> None:
+    # Criterion 4: an unread spec must not hide an architectural class behind bounded research.
+    sworld.research_class("bounded")
+    path = sworld.root / "plans/changes/demo/spec.md"
+    path.write_text("---\nclass: architectural\n---\n", encoding="utf-8")
+    original = Path.read_text
+
+    def unread(self, *args, **kwargs):
+        if self == path:
+            if fault == "unicode":
+                raise UnicodeDecodeError("utf-8", b"\xff", 0, 1, "invalid start byte")
+            raise PermissionError("spec is unreadable")
+        return original(self, *args, **kwargs)
+
+    monkeypatch.setattr(Path, "read_text", unread)
+    with pytest.raises(stage2.Refused, match="spec.md"):
+        stage2.declared_class(sworld.root, "demo", None)
+    assert sworld.run() == 2
+    assert sworld.calls() == []
