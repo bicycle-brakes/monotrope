@@ -107,3 +107,37 @@ used.
   (bead coding-harness-jik). Both are proposals for the maintainer, not part
   of the decided direction.
 
+## Draft-time repository checks — 2026-10-20
+
+Read at draft baseline `52e440d`; these checks resolve repository gaps without
+changing the maintainer's answer above.
+
+- Correction to "Where the change sits": `run_attempts` calls
+  `verify_attempt` for implement and repair. Draft uses `verify_draft`, a
+  separate function: it requires the time heading but deliberately no measured
+  implementation line. Both verification functions use `verify_evidence`.
+  Therefore only implement and repair gain the pre-check; draft gains richer
+  failure evidence without changing its checks (`scripts/stage2.py`).
+- The ledger gate already exposes `ledger_sections`, `parse_entry` and
+  `Entry.kind`; only kind `test` is runnable. Its section reader ignores
+  fenced headings. Reuse those readers rather than searching the whole plan
+  for test-looking text (`scripts/check_criterion_ledger.py`).
+- `format_step` currently reports ruff problems without failing the attempt;
+  existing tests explicitly require that behavior. A separate strict check
+  after safe fixes can make the new pre-check decisive without inferring a
+  verdict from its human-readable formatting note. Related expectations in
+  `tests/test_stage2.py` need to reflect the new early-abort contract.
+- The worktree pytest configuration adds no xdist workers by default
+  (`pyproject.toml`). A serial targeted run is the reversible initial choice;
+  no serial-versus-parallel timing comparison has been measured here. Use the
+  worktree interpreter as `red_first_python` already does, and the existing
+  credential-free verification environment (`scripts/stage2.py`).
+- Neither `templates/plan.md` nor
+  `scripts/validate_change_artefacts.py` exists at this baseline. The plan
+  follows `prompts/03-plan.md` and the existing bounded plan form; the absent
+  validator cannot be reported green. No new template or validator is in scope.
+- `findings.md` contains the draft-call audit line only, with no phase-2a
+  finding rows to resolve. Local branch `feat/runner-precheck` and its
+  remote-tracking ref both point to `52e440d`; hosted pull-request state and
+  current parallel-session ownership were not read. No tracker write is needed.
+
