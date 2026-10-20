@@ -838,3 +838,14 @@ def test_unreadable_spec_is_not_measured(tmp_path: Path) -> None:
     lines = []
     assert gate.run(tmp_path, "demo", out=lines.append) == 3
     assert any("not measured" in line and "spec.md" in line for line in lines)
+
+
+@pytest.mark.parametrize("linked_repeat", [False, True])
+def test_duplicate_question_identity_is_not_measured(world: World, capsys, linked_repeat: bool) -> None:
+    first = q_record(1, items=(f"{RUN1}/H-1",), answer="keep the neighbour")
+    repeat = q_record(1, answer="drop the neighbour", claims=(gid(RUN1, 1, SEATS[0], "C1"),) if linked_repeat else ())
+    world.write([run_text(RUN1)], records=[first])
+    assert world.check(capsys)[0] == 0
+    world.write([run_text(RUN1)], records=[first, repeat])
+    code, out = world.check(capsys)
+    assert code == 3, out

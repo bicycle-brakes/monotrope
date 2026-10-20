@@ -461,7 +461,7 @@ def _string_list(value: object, where: str) -> list[str]:
 
 
 def parse_decisions(text: str, label: str) -> dict[str, QRecord]:
-    """The first record of each Q id, with its structured research links; later repeats are ignored."""
+    """Read unique Q identities and their structured research links; repeats are ambiguous."""
     lines = text.splitlines()
     fenced = _fenced_flags(lines)
     heads = [
@@ -478,9 +478,7 @@ def parse_decisions(text: str, label: str) -> dict[str, QRecord]:
         stop = next((n for n in ends if n > start), len(lines))
         body = lines[start + 1 : stop]
         if ident in records:
-            if any(line.startswith("research_") for line in body):
-                raise CannotMeasure(f"{label} {ident}: the record stands twice and carries research links")
-            continue
+            raise CannotMeasure(f"{label} {ident}: the record stands twice")
         found: dict[str, int] = {}
         flags = _fenced_flags(body)
         for number, line in enumerate(body):

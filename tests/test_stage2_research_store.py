@@ -106,10 +106,32 @@ def begin(store, *, binding=None, receipt="receipt-1"):
     return store.start_run(CHANGE, receipt, binding if binding is not None else BINDING)
 
 
-def pipe_line(proc, timeout=60.0):
-    ready, _, _ = select.select([proc.stdout], [], [], timeout)
-    assert ready, "driver printed no marker in time"
-    return proc.stdout.readline().strip()
+def pipe_line(proc, timeout=120.0):
+    # Read the descriptor directly: TextIOWrapper may buffer the next marker,
+    # making select report no data although that marker is already in memory.
+    deadline = time.monotonic() + timeout
+    line = bytearray()
+    while not line.endswith(b"\n"):
+        ready, _, _ = select.select([proc.stdout], [], [], max(0, deadline - time.monotonic()))
+        assert ready, "driver printed no marker in time"
+        chunk = os.read(proc.stdout.fileno(), 1)
+        assert chunk, "driver exited before its marker"
+        line.extend(chunk)
+    return line.decode().strip()
+
+
+def test_terminal_markers_already_in_one_pipe_write_are_read_in_order():
+    from types import SimpleNamespace
+
+    reader, writer = os.pipe()
+    try:
+        with os.fdopen(reader, "r") as stream:
+            proc = SimpleNamespace(stdout=stream)
+            os.write(writer, b"TERMINAL s1\nLAUNCHED s2\n")
+            assert pipe_line(proc, timeout=1) == "TERMINAL s1"
+            assert pipe_line(proc, timeout=1) == "LAUNCHED s2"
+    finally:
+        os.close(writer)
 
 
 # --- criterion 51: durable, atomic, never torn -------------------------------------------------

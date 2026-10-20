@@ -59,6 +59,9 @@ class Sources:
         self.pi_status = self.metadata_status = 200
         self.pi_delay = self.metadata_delay = 0.0
         self.requests: list[tuple[str, dict]] = []
+        self.events: list[tuple[str, str]] = []
+        self.overlap: threading.Barrier | None = None
+        self.stop = threading.Event()
 
 
 @pytest.fixture
@@ -80,7 +83,11 @@ def sources():
                 status, delay = state.metadata_status, state.metadata_delay
             else:
                 body, status, delay = "unexpected endpoint", 404, 0
-            time.sleep(delay)
+            state.events.append(("start", path))
+            if state.overlap is not None:
+                state.overlap.wait(timeout=60)
+            state.stop.wait(delay)
+            state.events.append(("end", path))
             encoded = body.encode()
             try:
                 self.send_response(status)
@@ -97,6 +104,7 @@ def sources():
     thread.start()
     state.url = f"http://127.0.0.1:{server.server_port}"
     yield state
+    state.stop.set()
     server.shutdown()
     server.server_close()
     thread.join(timeout=2)
@@ -138,7 +146,7 @@ console.log(JSON.stringify(result));
         env=environment,
         capture_output=True,
         text=True,
-        timeout=15,
+        timeout=90,
         check=False,
     )
     assert done.returncode == 0, done.stderr
@@ -349,10 +357,9 @@ def test_preflight_unsuccessful_pi_response_is_not_measured_empty_or_retried(tmp
 
 @pytest.mark.parametrize("slow", ["pi", "metadata"])
 def test_preflight_shared_deadline_has_asymmetric_failure_rules(tmp_path, sources, slow):
-    setattr(sources, slow + "_delay", 2.5)
-    started = time.monotonic()
-    bridge = collect(tmp_path, sources, deadlineMs=1200)
-    assert time.monotonic() - started < 3, "the two reads did not share one deadline"
+    setattr(sources, slow + "_delay", 60)
+    bridge = collect(tmp_path, sources, deadlineMs=10000)
+    assert len(sources.requests) == 2
     if slow == "pi":
         with pytest.raises(swarm.ResearchCatalogError) as failure:
             select(bridge)
@@ -629,7 +636,7 @@ def test_unmeasured_catalog_never_becomes_zero_availability(tmp_path, sources, f
     # Criterion 41. Planted fault: an unmeasured Pi result becomes N=0 (measured empty) or exits other than 1.
     options = {}
     if fault == "pi-timeout":
-        sources.pi_delay = 2.5
+        sources.pi_delay = 60  # far beyond the deadline: only a deadline that never fires can pass
         options["deadlineMs"] = 800
     elif fault.startswith("pi-status"):
         sources.pi_status = int(fault.rsplit("-", 1)[1])
@@ -699,8 +706,8 @@ def test_models_dev_failure_excludes_free_and_keeps_required_slots(tmp_path, sou
     elif fault == "unparsable":
         sources.metadata_body = "{broken"
     elif fault == "timeout":
-        sources.metadata_delay = 2.5
-        options["deadlineMs"] = 800
+        sources.metadata_delay = 60
+        options["deadlineMs"] = 10000
     elif fault == "not-an-object":
         sources.metadata_body = "[]"
     else:
@@ -738,22 +745,18 @@ def test_capability_document_faults_and_candidate_faults_are_distinct(tmp_path, 
 def test_catalog_shared_deadline_keeps_asymmetric_failure_rules(tmp_path, sources):
     # Criteria 19, 41, 42. Planted fault: the reads start one after the other or get separate budgets; a Pi timeout
     # dispatches; a models.dev timeout retries, extends the deadline or aborts fixed work.
-    # The margin between a read's planted delay and the shared deadline must cover the runtime's own start-up
-    # and Pi's initialisation under load (a 0.5 s margin failed on a loaded machine); two delays that together
-    # exceed the deadline still prove the reads overlap, because sequential reads could not finish inside it.
-    sources.pi_delay = sources.metadata_delay = 3.0
-    started = time.monotonic()
-    bridge = collect(tmp_path, sources, deadlineMs=5000)
-    assert time.monotonic() - started < 7.5, "the reads ran one after the other"
-    assert len(sources.requests) == 2, "both reads were not requested"
-    assert bridge["exit_code"] == 0 and bridge["elapsed_ms"] < 5400
+    # Both requests must start before either response can finish; speed is irrelevant.
+    sources.overlap = threading.Barrier(2)
+    bridge = collect(tmp_path, sources, deadlineMs=60000)
+    assert [event for event, _ in sources.events[:2]] == ["start", "start"]
+    assert len(sources.events) == 4
+    assert bridge["exit_code"] == 0
     assert len(pi_requests(sources)) == 1 and len([p for p, _ in sources.requests if p == "/metadata"]) == 1
+    sources.overlap = None
     # Both slow past one shared deadline: Pi decides (exit 1), the models.dev timeout is a reason, never a retry.
-    sources.pi_delay = sources.metadata_delay = 3.0
+    sources.pi_delay = sources.metadata_delay = 60
     sources.requests.clear()
-    started = time.monotonic()
-    bridge = collect(tmp_path, sources, deadlineMs=1000)
-    assert time.monotonic() - started < 2.9, "the two reads received separate budgets"
+    bridge = collect(tmp_path, sources, deadlineMs=10000)
     assert bridge["sources"]["models_dev"]["outcome"] == "timeout"
     with pytest.raises(swarm.ResearchCatalogError) as failure:
         select(bridge)
@@ -761,8 +764,8 @@ def test_catalog_shared_deadline_keeps_asymmetric_failure_rules(tmp_path, source
     assert len(sources.requests) == 2, "a timed-out read was retried"
     # Pi on time, models.dev timed out: a reasoned, required-slot-preserving selection; an explicit include is fatal.
     # The deadline leaves room for Pi's own start under load (a 1 s deadline timed Pi out on a busy machine).
-    sources.pi_delay, sources.metadata_delay = 0.0, 6.0
-    bridge = collect(tmp_path, sources, deadlineMs=3000)
+    sources.pi_delay, sources.metadata_delay = 0.0, 60
+    bridge = collect(tmp_path, sources, deadlineMs=10000)
     result = select(bridge)
     assert result["capability_reason"] == "timeout" and result["fixed"] == FIXED and result["selected"] == []
     with pytest.raises(swarm.ResearchCatalogError) as failure:

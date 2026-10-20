@@ -3513,9 +3513,9 @@ Stage-2 call, 2026-10-20: review · endpoint openai-codex · model gpt-6.1-sol �
 
 | ID | Severity | Dimension | Origin | Where | Finding | Reviewer | Status | Broke a test |
 |---|---|---|---|---|---|---|---|---|
-| F-50 | BLOCKER | SPEC | fix-r7 | `scripts/stage2_availability.py:655–675` | New evidence after the F-38 repair: two synchronized consumers validate receipt A; the first deletes A, preparation publishes receipt B, and the second deletes B while also accepting A. An in-memory reproduction accepts A twice and removes B. Consumption must reject an already consumed receipt even when its path has been replaced. [criterion 44] | Codex | taken — criterion 44 | — |
-| F-51 | MAJOR | SPEC | base | `scripts/stage2_research_run.py:642–643`; `scripts/stage2_research_store.py:110–112,281–285` | An eligible catalog model named `vendor/alpha-free` is selected, but its generated slot id contains `/` and fails the store’s filename guard. Reproduced through selection and dispatch: the best-effort slot causes `state-store-unwritable`, cancels dispatch and returns exit 1. Supported model identities must yield safe storage keys without making a free contribution abort required work. [criteria 18, 39] | Codex | taken — criteria 18, 39 | — |
-| F-52 | MAJOR | SPEC | base | `scripts/check_research_handoff.py:822,926–930` | With valid complete research and a spec containing invalid UTF-8, the handoff gate raises an uncaught `UnicodeDecodeError`. Reproduced through `run()` with the spec read failing. This read bypasses the unreadable-evidence handling, producing a traceback instead of reporting not measured with exit 3. [criterion 33] | Codex | taken — criterion 33 | — |
+| F-50 | BLOCKER | SPEC | fix-r7 | `scripts/stage2_availability.py:655–675` | New evidence after the F-38 repair: two synchronized consumers validate receipt A; the first deletes A, preparation publishes receipt B, and the second deletes B while also accepting A. An in-memory reproduction accepts A twice and removes B. Consumption must reject an already consumed receipt even when its path has been replaced. [criterion 44] | Codex | fixed — tests/test_stage2_research_availability.py::test_consumed_receipt_cannot_delete_a_new_preparation | — |
+| F-51 | MAJOR | SPEC | base | `scripts/stage2_research_run.py:642–643`; `scripts/stage2_research_store.py:110–112,281–285` | An eligible catalog model named `vendor/alpha-free` is selected, but its generated slot id contains `/` and fails the store’s filename guard. Reproduced through selection and dispatch: the best-effort slot causes `state-store-unwritable`, cancels dispatch and returns exit 1. Supported model identities must yield safe storage keys without making a free contribution abort required work. [criteria 18, 39] | Codex | fixed — tests/test_stage2_swarm.py::test_free_model_storage_keys_preserve_best_effort_completion | — |
+| F-52 | MAJOR | SPEC | base | `scripts/check_research_handoff.py:822,926–930` | With valid complete research and a spec containing invalid UTF-8, the handoff gate raises an uncaught `UnicodeDecodeError`. Reproduced through `run()` with the spec read failing. This read bypasses the unreadable-evidence handling, producing a traceback instead of reporting not measured with exit 3. [criterion 33] | Codex | fixed — tests/test_research_handoff.py::test_unreadable_spec_is_not_measured | — |
 
 Phase 6 verdict: codex 01a158c5-b05d-7902-b003-5ef1128c3cd2, 2026-10-20
 Reviewer session: codex 01a158c5-b05d-7902-b003-5ef1128c3cd2 — a fresh session reviewed: an earlier ## Phase 6 block makes this a re-check
@@ -3889,11 +3889,58 @@ Requested by the maintainer; launched through `stage2.py session` (attempt d0fd2
 
 | ID | Severity | Dimension | Origin | Where | Finding | Reviewer | Status | Broke a test |
 |---|---|---|---|---|---|---|---|---|
-| D-1 | BLOCKER | SPEC | base | `scripts/check_research_handoff.py:480–483` | A repeated `## Q-<id> · …` record is skipped without any check whenever its body carries no `research_` line, so two contradictory maintainer answers to one question are measured instead of reported not measured. Reproduced through `check_change()`: one complete v2 run, whose only DECISION item is `<run>/H-1`, is closed by `## Q-1` with `status: answered`, `answered_by: maintainer`, `answer: "keep the neighbour"`, `research_items: [<run>/H-1]` and `research_neighbours: {keep: [plans/changes/other/spec.md], drop: [], add: []}`; a second `## Q-1` follows with `status: answered`, `answered_by: maintainer`, `answer: "drop the neighbour"` and no `research_` field. `parse_decisions()` sees `ident in records` and `any(line.startswith("research_"))` is false, so line 483 drops the later record: the gate keeps the first answer, requires the path in `neighbours:` and closes `H-1`, returning 0 for a spec that keeps the path and 1 ("the neighbours header lacks the required path") for a spec that follows the later drop answer — never the not-measured exit 3. The sibling case with a `research_` line in the repeat already raises `CannotMeasure` ("the record stands twice and carries research links", pinned by `test_unread_or_ambiguous_handoff_is_not_measured`, "one question id answered twice is ambiguous"), so the ambiguity does not depend on the research fields. Same class as F-16 and F-41: a duplicated identity whose later content silently decides the measurement. [criterion 33; criterion 32] | deepseek-v4.1-flash | taken — criterion 33 | — |
+| D-1 | BLOCKER | SPEC | base | `scripts/check_research_handoff.py:480–483` | A repeated `## Q-<id> · …` record is skipped without any check whenever its body carries no `research_` line, so two contradictory maintainer answers to one question are measured instead of reported not measured. Reproduced through `check_change()`: one complete v2 run, whose only DECISION item is `<run>/H-1`, is closed by `## Q-1` with `status: answered`, `answered_by: maintainer`, `answer: "keep the neighbour"`, `research_items: [<run>/H-1]` and `research_neighbours: {keep: [plans/changes/other/spec.md], drop: [], add: []}`; a second `## Q-1` follows with `status: answered`, `answered_by: maintainer`, `answer: "drop the neighbour"` and no `research_` field. `parse_decisions()` sees `ident in records` and `any(line.startswith("research_"))` is false, so line 483 drops the later record: the gate keeps the first answer, requires the path in `neighbours:` and closes `H-1`, returning 0 for a spec that keeps the path and 1 ("the neighbours header lacks the required path") for a spec that follows the later drop answer — never the not-measured exit 3. The sibling case with a `research_` line in the repeat already raises `CannotMeasure` ("the record stands twice and carries research links", pinned by `test_unread_or_ambiguous_handoff_is_not_measured`, "one question id answered twice is ambiguous"), so the ambiguity does not depend on the research fields. Same class as F-16 and F-41: a duplicated identity whose later content silently decides the measurement. [criterion 33; criterion 32] | deepseek-v4.1-flash | fixed — tests/test_research_handoff.py::test_duplicate_question_identity_is_not_measured | — |
 | D-2 | MINOR | SPEC | base | `scripts/stage2_research_run.py:671–678,1040–1050`; `scripts/stage2_research_store.py:466–494` | Stored results of stages the new run never reaches are never named, although the criterion requires every stored result it does not reuse to be named with its reason. `run_stage()` narrows the resume source to the stage's own slot prefix (`k == stage or k.startswith(stage + "-")`) before `plan_reuse()`, and `self.not_reused` is only filled from stages that are actually started, so `manifest["resume"]["not_reused"]` cannot name results of a later stage. Reproduced: run R1 stores 33 ok topic results and one failed judge result (incomplete at the judge, exit 1); a second run R2 with the same binding reuses the finders, merge and sentence from R1, then `stage_history()` raises `ResearchHistoryError` — the 60-second preparation deadline expiring over the mapped paths, or a `_git log`/`cat-file` failure — and `run()` stops with Stop(exit 1) before `run_stage("topics", …)` is reached. R2 publishes a manifest whose `resume.not_reused` is `[]` while its store directory holds the 33 unused topic results plus the failed judge result, so neither the reason ("not planned in this run") nor the slot ids appear anywhere; a maintainer cannot see that finished contributions were left unused. [criterion 53] | deepseek-v4.1-flash | rejected — MINOR; nothing is lost, only the manifest's not_reused list is incomplete after an early stop; named as a known limit in the pull request | — |
 
 ## Phase 6 — orchestrator, 2026-10-20
 
 | ID | Severity | Dimension | Origin | Where | Finding | Reviewer | Status | Broke a test |
 |---|---|---|---|---|---|---|---|---|
-| F-53 | MINOR | SPEC | base | `tests/test_stage2_research_catalog.py` (`test_models_dev_failure_excludes_free_and_keeps_required_slots[timeout]`, `test_catalog_shared_deadline_keeps_asymmetric_failure_rules`, `test_preflight_shared_deadline_has_asymmetric_failure_rules`); `tests/test_stage2_research_store.py::test_terminal_record_survives_sigkill_after_the_outcome` | These tests bound real elapsed time (for example an 800 ms deadline, a 7.5 s overlap bound, a marker wait) and fail under a loaded machine although the code is correct: measured 2026-10-20, load average 13 to 22, six runner repair attempts and three full `make verify` runs lost one to three of them; each passes alone. Rebuild them to assert order rather than speed: prove overlap by both reads starting before either finishes (recorded start/end markers), give planted delays a wide margin over the deadline (for example 60 s against a short deadline, so only a deadline that never fires can fail), and wait for markers with a generous bound. The behaviour each test refutes must stay refuted. [criteria 19, 41, 42, 53] | orchestrator | taken — criteria 19, 41, 42, 53 | — |
+| F-53 | MINOR | SPEC | base | `tests/test_stage2_research_catalog.py` (`test_models_dev_failure_excludes_free_and_keeps_required_slots[timeout]`, `test_catalog_shared_deadline_keeps_asymmetric_failure_rules`, `test_preflight_shared_deadline_has_asymmetric_failure_rules`); `tests/test_stage2_research_store.py::test_terminal_record_survives_sigkill_after_the_outcome` | These tests bound real elapsed time (for example an 800 ms deadline, a 7.5 s overlap bound, a marker wait) and fail under a loaded machine although the code is correct: measured 2026-10-20, load average 13 to 22, six runner repair attempts and three full `make verify` runs lost one to three of them; each passes alone. Rebuild them to assert order rather than speed: prove overlap by both reads starting before either finishes (recorded start/end markers), give planted delays a wide margin over the deadline (for example 60 s against a short deadline, so only a deadline that never fires can fail), and wait for markers with a generous bound. The behaviour each test refutes must stay refuted. [criteria 19, 41, 42, 53] | orchestrator | fixed — tests/test_stage2_research_catalog.py::test_catalog_shared_deadline_keeps_asymmetric_failure_rules | — |
+
+Stage-2 call, 2026-10-20: repair · attempt 1 · route codex · endpoint openai-codex · model gpt-6.1-sol · leak check clean over 536 files, 1636 commits, 12 rules.
+
+> Attempt 1 (codex) failed its post-run checks.
+>
+> Files the attempt changed (lines added, removed):
+> - `plans/changes/research-swarm/plan.md` +32 -0
+> - `scripts/check_research_handoff.py` +2 -4
+> - `tests/test_research_handoff.py` +11 -0
+> - `tests/test_stage2_research_catalog.py` +26 -23
+> - `tests/test_stage2_research_store.py` +26 -4
+>
+> Diagnostics:
+> ```text
+> - Runner format before `make verify`: ruff changed no file.
+> - `plan.md` did not add a measured line below `## Time used`
+> ```
+
+Stage-2 call, 2026-10-20: repair · attempt 2 · route codex-repair · endpoint openai-codex · model gpt-6.1-sol · reason first Codex post-run check failed · leak check clean over 536 files, 1637 commits, 12 rules.
+
+> Attempt 2 (codex-repair) failed its post-run checks.
+>
+> Files the attempt changed (lines added, removed):
+> - `plans/changes/research-swarm/plan.md` +14 -0
+>
+> Diagnostics:
+> ```text
+> - Runner format before `make verify`: ruff changed no file.
+> - F-50: tests/test_stage2_research_availability.py::test_consumed_receipt_cannot_delete_a_new_preparation: pytest ended 0 on the baseline's code; red first needs exit 1 with an assertion failure
+> - F-51: tests/test_stage2_swarm.py::test_free_model_storage_keys_preserve_best_effort_completion: pytest ended 0 on the baseline's code; red first needs exit 1 with an assertion failure
+> - F-52: tests/test_research_handoff.py::test_unreadable_spec_is_not_measured: pytest ended 0 on the baseline's code; red first needs exit 1 with an assertion failure
+> - F-53: tests/test_stage2_research_store.py::test_terminal_markers_already_in_one_pipe_write_are_read_in_order: pytest ended 0 on the baseline's code; red first needs exit 1 with an assertion failure
+> ```
+
+Stage-2 call, 2026-10-20: repair · attempt 3 · route stage-1 · endpoint claude-code-plan · model claude-sonnet-5-5 · reason two Codex post-run checks failed · leak check clean over 536 files, 1638 commits, 12 rules.
+
+> Attempt 3 (stage-1) failed its post-run checks.
+>
+> Files the attempt changed (lines added, removed):
+> - `plans/changes/research-swarm/plan.md` +7 -0
+> - `tests/test_stage2_research_catalog.py` +1 -1
+>
+> Diagnostics:
+> ```text
+> - Runner format before `make verify`: ruff changed no file.
+> - `plan.md` did not add a measured line below `## Time used`
+> ```

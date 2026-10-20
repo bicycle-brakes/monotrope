@@ -1459,6 +1459,10 @@ Stage-1 route: repair · model claude-sonnet-5-5 · reason: two Codex post-run c
 
 Stage-1 route: repair · model claude-sonnet-5-5 · reason: two Codex post-run checks failed.
 
+## Runner route — 2026-10-20
+
+Stage-1 route: repair · model claude-sonnet-5-5 · reason: two Codex post-run checks failed.
+
 ## Time used
 
 2026-10-17, appetite stop answered: the span of the three implement attempts of 2026-10-15 (ended 04:53:50, `cf848ee`) has no start record, so time used was not measurable (78 minutes measured). Maintainer, 2026-10-17: "Ja, halt die zeitgrenze fest" — **continue** with a new appetite of 13 hours 20 minutes in total (the measured 78 minutes plus 12 hours); the unmeasured span stays named, not counted. This replaces the card's `Appetite:` line.
@@ -2365,3 +2369,29 @@ on form) ran about 10:20Z to 11:15:20Z; hand checks and one full
 `c6c61ab`). Estimated total about 19 h 00 min to 19 h 15 min. Rows D-1
 (independent DeepSeek reviewer) and F-53 (the timing tests) are taken; the
 next repair starts 11:31:00Z.
+
+### Phase-6 round-12 repairs — 2026-10-20
+
+Rows D-1 and F-53. Span not measured: this session had no command tool to read `date`, so no time is counted for it. No test was run by this session; the code and tests were already in the working tree, and it checked them against the rows.
+
+- D-1: `parse_decisions` (`scripts/check_research_handoff.py`) raises `CannotMeasure` for any repeated `## Q-<id>` record, with or without `research_` fields (exit 3). Test `tests/test_research_handoff.py::test_duplicate_question_identity_is_not_measured`.
+- F-53: the timing tests assert order, not speed: planted delays of 60 s against short deadlines, and the store test waits on a release file and a generous marker bound. The runner runs `make verify`.
+
+### Orchestrator — round-11 and D-1/F-53 repairs booked by hand, 2026-10-20
+
+Measured with `date -u`. Repair of D-1 and F-53 (Codex twice, Sonnet 5.5
+once) started about 11:33Z and ended before 12:22Z; attempt 1 passed
+`make verify` and failed only for the missing time line, attempt 2 failed
+red-first for F-50 to F-52 (their code was already committed in `fee253d`),
+attempt 3 for the time line. The orchestrator session restarted in between.
+Red-first by hand for D-1 against `0388912`: the unlinked-repeat case fails
+there. F-53 rewrites tests, so red-first does not apply; the reworked catalog
+and store tests passed twice in a row (133 passed each) under load averages
+up to about 48. Full `make verify` 12:26:02Z to 12:51:44Z green (3096
+passed, 22 min under load). Rows F-50, F-51, F-52, F-53 and D-1 are booked
+fixed. F-53 also covers
+`test_models_dev_failure_excludes_free_and_keeps_required_slots[timeout]`,
+`test_preflight_shared_deadline_has_asymmetric_failure_rules` and
+`tests/test_stage2_research_store.py::test_terminal_markers_already_in_one_pipe_write_are_read_in_order`.
+Span counted 11:33Z to 12:51:44Z, about 1 h 19 min; estimated total about
+20 h 20 min to 20 h 35 min of 23 h 35 min. Round 12 follows.
