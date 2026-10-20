@@ -4145,6 +4145,163 @@ def test_a_hanging_runner_step_aborts_with_its_limit_named(tmp_path: Path) -> No
         )
 
 
+def test_an_attempt_that_plants_the_registry_renderer_never_runs_it(world: World, tmp_path: Path) -> None:
+    """O188-1, R-19 at the call site: the attempt's renderer writes a marker, and the marker stays absent."""
+    marker = tmp_path / "renderer-ran"
+    script = Path("scripts") / Path(plans_registry.__file__).name
+    world.script(
+        claude=[
+            {
+                "stdout": "implemented",
+                "plant": {str(script): f"from pathlib import Path\nPath({str(marker)!r}).write_text('ran')\n"},
+                "append": {"plans/changes/demo/plan.md": "2026-10-07 10:00–10:05, 5 min\n"},
+            }
+        ],
+        make=[{"stdout": "green\n"}],
+    )
+    checking_derived_make(world)
+    code = world.run("implement")
+    assert not marker.exists(), "the attempt's own renderer ran"
+    assert code == 0, "the committed renderer should have made the attempt green"
+    assert "changes/demo/findings.md" in (world.root / "plans/INDEX.md").read_text()
+
+
+def test_the_runner_steps_carry_their_limits_at_the_call_sites(world: World, monkeypatch: pytest.MonkeyPatch) -> None:
+    """O188-1, R-20 at the call sites: renderer and ruff get the tool limit, `make verify` the step limit."""
+    ruff = world.root / ".venv" / "bin" / "ruff"
+    ruff.parent.mkdir(parents=True)
+    ruff.write_text("#!/bin/sh\nexit 0\n", encoding="utf-8")
+    ruff.chmod(0o755)
+    (world.root / "scripts" / "extra.py").write_text("value = 1\n", encoding="utf-8")
+    world.script(make=[{"stdout": "green\n"}])
+    with world.plan.open("a", encoding="utf-8") as handle:
+        handle.write("2026-10-07 10:00–10:05, 5 min\n")
+    seen: list[tuple[str, float | None]] = []
+    original = stage2.launch
+
+    def record(command, root, env, secret=None, timeout=None, limit=None):
+        name = "renderer" if "plans_registry.py" in command[-2] else Path(command[0]).name
+        seen.append((name, timeout))
+        return original(command, root, env, secret, timeout=timeout, limit=limit)
+
+    monkeypatch.setattr(stage2, "launch", record)
+    assert stage2.verify_attempt(world.root, world.plan, "", None, None, stage2.tool_state(world.root)) == []
+    assert ("renderer", stage2.TOOL_SECONDS) in seen
+    assert ("ruff", stage2.TOOL_SECONDS) in seen
+    assert ("make", stage2.VERIFY_SECONDS) in seen
+    assert all(timeout is not None for _, timeout in seen), seen
+
+
+def test_a_make_verify_that_hangs_is_a_repairable_diagnostic(world: World, monkeypatch: pytest.MonkeyPatch) -> None:
+    """O188-4: a hang the attempt caused reaches the next attempt as a problem, not as `cannot_start`."""
+    original = stage2.launch
+
+    def hang(command, root, env, secret=None, timeout=None, limit=None):
+        if command == ["make", "verify"]:
+            raise stage2.StepTimedOut("make was stopped by the runner's step limit after 30 minutes")
+        return original(command, root, env, secret, timeout=timeout, limit=limit)
+
+    monkeypatch.setattr(stage2, "launch", hang)
+    problems = stage2.verify_attempt(world.root, world.plan, "")
+    assert len(problems) == 1 and "did not finish" in problems[0] and "30 minutes" in problems[0]
+
+
+def test_a_timeout_kills_the_whole_process_group(tmp_path: Path) -> None:
+    """O188-4: a grandchild of the stopped step does not survive."""
+    pidfile = tmp_path / "grandchild.pid"
+    started = time.monotonic()
+    with pytest.raises(stage2.CallFailed, match="stopped by"):
+        stage2.launch(
+            ["bash", "-c", f"sleep 60 >/dev/null 2>&1 & echo $! > {pidfile}; wait"],
+            tmp_path,
+            {**os.environ},
+            timeout=1,
+            limit="the test limit",
+        )
+    assert time.monotonic() - started < 20, "the step was not stopped at its limit"
+    pid = int(pidfile.read_text())
+    for _ in range(100):  # the kill is delivered at once, the exit is reaped a moment later
+        try:
+            os.kill(pid, 0)
+        except ProcessLookupError:
+            return
+        time.sleep(0.02)
+    os.kill(pid, 9)
+    pytest.fail("the grandchild of the timed-out step is still running")
+
+
+def test_a_changed_venv_file_is_named_and_refused(world: World) -> None:
+    """O188-2: the digest covers the whole `.venv/` tree, not only ruff."""
+    package = world.root / ".venv" / "lib" / "python3.x" / "site-packages" / "yaml"
+    package.mkdir(parents=True)
+    (package / "__init__.py").write_text("ok = 1\n", encoding="utf-8")
+    link = world.root / ".venv" / "lib" / "link"
+    link.symlink_to("python3.x")
+    before = stage2.tool_state(world.root)
+    assert stage2.tool_problem(world.root, before) is None
+    (package / "__init__.py").write_text("import os\n", encoding="utf-8")
+    assert ".venv/lib/python3.x/site-packages/yaml/__init__.py" in stage2.tool_problem(world.root, before)
+    (package / "__init__.py").write_text("ok = 1\n", encoding="utf-8")
+    (package.parent / "evil.pth").write_text("import os\n", encoding="utf-8")
+    assert "evil.pth" in stage2.tool_problem(world.root, before), "an added file went unnoticed"
+    (package.parent / "evil.pth").unlink()
+    link.unlink()
+    link.symlink_to("elsewhere")
+    assert ".venv/lib/link" in stage2.tool_problem(world.root, before), "a changed symlink target went unnoticed"
+    link.unlink()
+    assert ".venv/lib/link" in stage2.tool_problem(world.root, before), "a removed symlink went unnoticed"
+
+
+def test_an_attempt_that_plants_a_venv_package_fails_before_any_step(world: World) -> None:
+    """O188-2 at the call site: the attempt fails with the path named, and no step ran."""
+    package = world.root / ".venv" / "lib" / "site-packages"
+    package.mkdir(parents=True)
+    before = stage2.tool_state(world.root)
+    (package / "sitecustomize.py").write_text("import os\n", encoding="utf-8")
+    problems = stage2.verify_attempt(world.root, world.plan, "", None, None, before)
+    assert len(problems) == 1 and ".venv/lib/site-packages/sitecustomize.py" in problems[0]
+    assert world.calls("make") == []
+
+
+def test_red_first_refuses_a_changed_venv(world: World) -> None:
+    """O188-2: the red-first interpreter comes from `.venv/`, so a changed tree is not run."""
+    (world.root / ".venv" / "bin").mkdir(parents=True)
+    python = world.root / ".venv" / "bin" / "python3"
+    python.write_text("#!/bin/sh\nexit 0\n", encoding="utf-8")
+    before = stage2.tool_state(world.root)
+    python.write_text("#!/bin/sh\nexit 1\n", encoding="utf-8")
+    outcome = stage2.red_first(world.root, "HEAD", "tests/test_x.py::test_y", None, before)
+    assert outcome is not None and ".venv/bin/python3" in outcome
+
+
+def test_the_runner_environment_drops_repository_path_entries(tmp_path: Path) -> None:
+    """O188-2: a directory inside the repository on `PATH` is attempt-writable and is not searched."""
+    root = tmp_path / "repo"
+    (root / ".venv" / "bin").mkdir(parents=True)
+    outside = tmp_path / "bin"
+    outside.mkdir()
+    env = stage2.runner_env({"PATH": os.pathsep.join([str(root / ".venv" / "bin"), "relative", str(outside)])}, root)
+    assert env["PATH"] == str(outside)
+
+
+def test_a_make_planted_on_a_repository_path_entry_does_not_run(
+    world: World, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """O188-2 at the call site: the runner's `make verify` skips a `PATH` entry inside the worktree."""
+    marker = tmp_path / "planted-make-ran"
+    planted = world.root / ".venv" / "bin"
+    planted.mkdir(parents=True)
+    (planted / "make").write_text(f"#!/bin/sh\necho ran > {marker}\nexit 0\n", encoding="utf-8")
+    (planted / "make").chmod(0o755)
+    monkeypatch.setenv("PATH", f"{planted}{os.pathsep}{os.environ['PATH']}")
+    world.script(make=[{"stdout": "green\n"}])
+    with world.plan.open("a", encoding="utf-8") as handle:
+        handle.write("2026-10-07 10:00–10:05, 5 min\n")
+    assert stage2.verify_attempt(world.root, world.plan, "") == []
+    assert not marker.exists(), "a make planted inside the worktree ran"
+    assert len(world.calls("make")) == 1
+
+
 def test_loop_and_probe_use_repository_pi(world: World) -> None:
     """Criterion 5: the preflight and every loop/probe launch go through the repository wrapper; the PATH pi stays unused."""
     world.script(
@@ -7517,12 +7674,11 @@ def test_red_first_refuses_a_timed_out_run(world: World, monkeypatch: pytest.Mon
     repair_world(world)
     (world.root / "tests" / "test_red.py").write_text(RED_ASSERT_TEST, encoding="utf-8")
     baseline = git(world.root, "rev-parse", "HEAD")
-    original_run = stage2.subprocess.run
+    original_launch = stage2.launch
 
-    def stopping(command, *args, **kwargs):
+    def stopping(command, root, env, secret=None, timeout=None, limit=None):
         """The pytest process dies at the limit after writing the phases it reached."""
         if "-m" in command and "pytest" in command:
-            env = kwargs["env"]
             record = {
                 "schema": 1,
                 "token": env["STAGE2_RED_TOKEN"],
@@ -7549,11 +7705,11 @@ def test_red_first_refuses_a_timed_out_run(world: World, monkeypatch: pytest.Mon
                 ],
                 "session": None,
             }
-            Path(kwargs["env"]["STAGE2_RED_REPORT"]).write_text(json.dumps(record), encoding="utf-8")
-            raise subprocess.TimeoutExpired(command, stage2.RED_FIRST_MINUTES * 60)
-        return original_run(command, *args, **kwargs)
+            Path(env["STAGE2_RED_REPORT"]).write_text(json.dumps(record), encoding="utf-8")
+            raise stage2.StepTimedOut(f"{command[0]} was stopped by {limit}")
+        return original_launch(command, root, env, secret, timeout=timeout, limit=limit)
 
-    monkeypatch.setattr(stage2.subprocess, "run", stopping)
+    monkeypatch.setattr(stage2, "launch", stopping)
     outcome = stage2.red_first(world.root, baseline, RED_SELECTOR, None)
     assert outcome is not None and "stopped by the red-first time limit" in outcome, outcome
 

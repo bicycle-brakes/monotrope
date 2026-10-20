@@ -140,6 +140,7 @@ import json
 import os
 import re
 import shutil
+import signal
 import subprocess
 import sys
 import tarfile
@@ -457,6 +458,10 @@ class CallFailed(Exception):
     """A call ended without a usable answer: exit 1."""
 
 
+class StepTimedOut(CallFailed):
+    """A started program ran into its time limit and its whole process group was killed (R-20)."""
+
+
 def today() -> str:
     return dt.date.today().isoformat()
 
@@ -565,22 +570,46 @@ def launch(
     timeout: float | None = None,
     limit: str | None = None,
 ) -> subprocess.CompletedProcess:
-    """Start a foreign program: empty standard input, the worktree as its directory."""
+    """Start a foreign program: empty standard input, the worktree as its directory.
+
+    With a `timeout` the program leads a process group of its own, and a timeout kills the whole
+    group: a hung `make verify` leaves no shell, pytest or worker behind to write into the worktree
+    after the run stopped (O188-4 of the #188 review).
+    """
     try:
-        return subprocess.run(
+        if timeout is None:
+            return subprocess.run(
+                command,
+                cwd=root,
+                env=env,
+                stdin=subprocess.DEVNULL,
+                capture_output=True,
+                text=True,
+                errors="replace",
+                check=False,
+            )
+        with subprocess.Popen(
             command,
             cwd=root,
             env=env,
             stdin=subprocess.DEVNULL,
-            capture_output=True,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.PIPE,
             text=True,
             errors="replace",
-            check=False,
-            timeout=timeout,
-        )
+            start_new_session=True,
+        ) as process:
+            try:
+                stdout, stderr = process.communicate(timeout=timeout)
+            except subprocess.TimeoutExpired:
+                with contextlib.suppress(OSError):
+                    os.killpg(process.pid, signal.SIGKILL)
+                process.communicate()
+                raise
+            return subprocess.CompletedProcess(command, process.returncode, stdout, stderr)
     except subprocess.TimeoutExpired as error:
         what = limit or f"the reviewer time limit after {REVIEWER_MINUTES:g} minutes"
-        raise CallFailed(f"{command[0]} was stopped by {what}") from error
+        raise StepTimedOut(f"{command[0]} was stopped by {what}") from error
     except OSError as error:
         raise CallFailed(f"{command[0]} could not be started: {scrub(str(error), secret)}") from error
 
@@ -2494,22 +2523,56 @@ GIT_SECONDS = 2 * 60
 
 
 def tool_state(root: Path) -> dict[str, str]:
-    """The digest of each program the runner starts from the worktree, taken before the model runs.
+    """The digest of the worktree's `.venv/` tree, taken before the model runs (R-21).
 
-    `.venv/` is ignored by git: a program there is invisible to `changed_paths` and survives
-    `restore_baseline`, so the digest is the only thing that shows an overwritten tool (R-21).
+    `.venv/` is ignored by git: a file there is invisible to `changed_paths` and survives
+    `restore_baseline`, so this digest is the only thing that shows an overwritten tool, a planted
+    `*.pth` file or a replaced package. Every file maps to the SHA-256 of its bytes and every symlink
+    to its target; the runner's steps run with the interpreter, ruff and packages of this tree.
     """
-    try:
-        return {"ruff": hashlib.sha256((root / RUFF).read_bytes()).hexdigest()}
-    except OSError:
-        return {"ruff": ""}
+    state: dict[str, str] = {}
+    venv = root / ".venv"
+    for directory, names, files in os.walk(venv):
+        for name in sorted([*names, *files]):
+            path = Path(directory) / name
+            relative = path.relative_to(root).as_posix()
+            try:
+                if path.is_symlink():
+                    state[relative] = "link:" + str(path.readlink())
+                elif path.is_file():
+                    state[relative] = hashlib.sha256(path.read_bytes()).hexdigest()
+            except OSError:
+                state[relative] = "unreadable"
+    return state
 
 
 def tool_problem(root: Path, before: dict[str, str] | None) -> str | None:
-    """The tool that is not the one the runner saw before the call, named; `None` when none is."""
-    if not before or tool_state(root) == before:
+    """The first path of `.venv/` that is not what the runner saw before the call, named; `None` when none is."""
+    if before is None:
         return None
-    return f"`{RUFF}` is not the program the runner saw before the call, and a tool the attempt wrote is not run"
+    now = tool_state(root)
+    if now == before:
+        return None
+    changed = sorted(path for path in before.keys() | now.keys() if before.get(path) != now.get(path))
+    return f"`{changed[0]}` is not what the runner saw before the call, and a tool the attempt wrote is not run"
+
+
+def runner_env(env: dict[str, str], *roots: Path) -> dict[str, str]:
+    """The environment of the runner's own steps: no `PATH` entry inside the repository, no bytecode written.
+
+    A directory inside the worktree is attempt-writable, so a `git` or `make` planted there would
+    run before the real one; a relative entry resolves against the worktree and is dropped too.
+    """
+    resolved = [root.resolve() for root in roots]
+
+    def inside(entry: str) -> bool:
+        if not entry or not Path(entry).is_absolute():
+            return True
+        place = Path(entry).resolve()
+        return any(place == root or root in place.parents for root in resolved)
+
+    kept = [entry for entry in env.get("PATH", "").split(os.pathsep) if not inside(entry)] or ["/usr/bin", "/bin"]
+    return {**env, "PATH": os.pathsep.join(kept), "PYTHONDONTWRITEBYTECODE": "1"}
 
 
 def changed_paths(root: Path, env: dict[str, str] | None = None, against: str = "HEAD") -> set[Path]:
@@ -2912,6 +2975,13 @@ def trusted_registry(root: Path, env: dict[str, str]) -> Path:
     simply run somewhere else. Every other entry of the worktree is linked into the mirror and its
     `scripts/` comes from `HEAD`, so the renderer's code is the committed one while the data it
     renders stays the attempt's. The caller removes the mirror.
+
+    This removes one execution path, not all of them (R-19). `make verify` still runs next, from the
+    attempt's own tree: its Makefile, `scripts/verify_all.sh`, `conftest.py` and tests are all
+    attempt-editable, and they run outside any sandbox with the caller's real `HOME`, `PATH` and
+    `TMPDIR`. A payload moved from the renderer into a test therefore still runs. The scratch `HOME`
+    and `TMPDIR` below bound the renderer only; they are not a boundary around the attempt's code.
+    The residual risk is accepted, not removed: the attempt is a model the runner started itself.
     """
     mirror = Path(tempfile.mkdtemp(prefix="harness-registry-"))
     try:
@@ -3174,12 +3244,15 @@ def verify_attempt(
     `baseline_time` holds the pre-call plan: restoring a heading or moving an old entry into the
     time section cannot count as this attempt's new measured line.
     """
-    env = foreign_env(
-        {
-            "GIT_CONFIG_COUNT": "1",
-            "GIT_CONFIG_KEY_0": "commit.gpgsign",
-            "GIT_CONFIG_VALUE_0": "false",
-        }
+    env = runner_env(
+        foreign_env(
+            {
+                "GIT_CONFIG_COUNT": "1",
+                "GIT_CONFIG_KEY_0": "commit.gpgsign",
+                "GIT_CONFIG_VALUE_0": "false",
+            }
+        ),
+        root,
     )
     tampered = tool_problem(root, tools)
     if tampered:
@@ -3192,13 +3265,18 @@ def verify_attempt(
     line = format_step(root, env, key, tools)
     if formatted is not None and line is not None:
         formatted.append(line)
-    done = launch(
-        ["make", "verify"],
-        root,
-        env,
-        timeout=VERIFY_SECONDS,
-        limit=f"the runner's step limit after {VERIFY_SECONDS // 60} minutes",
-    )
+    try:
+        done = launch(
+            ["make", "verify"],
+            root,
+            env,
+            timeout=VERIFY_SECONDS,
+            limit=f"the runner's step limit after {VERIFY_SECONDS // 60} minutes",
+        )
+    except StepTimedOut as error:
+        # A hang the attempt caused is a repairable diagnostic for the next attempt, not a make that
+        # could not be started (O188-4 of the #188 review).
+        return [f"`make verify` did not finish: {error}"]
     problems = []
     if done.returncode != 0:
         problems.append(f"`make verify` exited {done.returncode}\n{verify_evidence(done, key)}".rstrip())
@@ -3394,7 +3472,7 @@ def _red_record_fault(record: bytes | None, token: str, selector: str) -> str | 
     return None
 
 
-def red_first(root: Path, baseline: str, test: str, key: str | None) -> str | None:
+def red_first(root: Path, baseline: str, test: str, key: str | None, tools: dict[str, str] | None = None) -> str | None:
     """Run one named test against the baseline's code in a temporary git worktree; None when it was red.
 
     The worktree's `tests/` is the attempt's, without `__pycache__` and `.pytest_cache`: a test of the
@@ -3414,6 +3492,10 @@ def red_first(root: Path, baseline: str, test: str, key: str | None) -> str | No
     temporary directory before it prunes, so a failed `git worktree remove` leaves no dead entry
     behind, and a failed removal is named in the returned problem.
     """
+    tampered = tool_problem(root, tools)
+    if tampered:
+        # The red-first interpreter and pytest come from `.venv/`: a changed tree is not run (R-21).
+        return f"{test}: {tampered}"
     file, _, function = test.partition("::")
     selector = f"{file}::{function}"
     token = os.urandom(16).hex()
@@ -3461,7 +3543,7 @@ def red_first(root: Path, baseline: str, test: str, key: str | None) -> str | No
                 started = launch(
                     [red_first_python(root), "-c", "import pytest"],
                     tree,
-                    foreign_env({"PYTHONDONTWRITEBYTECODE": "1"}),
+                    runner_env(foreign_env({}), root, tree),
                     key,
                     timeout=RED_FIRST_MINUTES * 60,
                     limit="the red-first time limit",
@@ -3489,13 +3571,16 @@ def red_first(root: Path, baseline: str, test: str, key: str | None) -> str | No
                         selector,
                     ],
                     tree,
-                    foreign_env(
-                        {
-                            "PYTHONDONTWRITEBYTECODE": "1",
-                            "STAGE2_RED_REPORT": str(report),
-                            "STAGE2_RED_TOKEN": token,
-                            "STAGE2_RED_SELECTOR": selector,
-                        }
+                    runner_env(
+                        foreign_env(
+                            {
+                                "STAGE2_RED_REPORT": str(report),
+                                "STAGE2_RED_TOKEN": token,
+                                "STAGE2_RED_SELECTOR": selector,
+                            }
+                        ),
+                        root,
+                        tree,
                     ),
                     key,
                     timeout=RED_FIRST_MINUTES * 60,
@@ -3591,6 +3676,7 @@ def check_repair_answer(
     before: tuple[list[list[str]], list[list[str]]],
     audit_line: str | None = None,
     findings_before: str | None = None,
+    tools: dict[str, str] | None = None,
 ) -> tuple[dict[str, str], list[str]]:
     """Read an answer's fixed lines: the Status each taken row takes, or the problems that fail the attempt.
 
@@ -3692,7 +3778,7 @@ def check_repair_answer(
         fix = fixes[row[0]]
         if not fix.startswith("fixed — tests/"):
             continue
-        outcome = red_first(ctx.root, baseline, fix[len("fixed — ") :], key)
+        outcome = red_first(ctx.root, baseline, fix[len("fixed — ") :], key, tools)
         if outcome is not None:
             problems.append(f"{row[0]}: {outcome}")
     if problems:
@@ -3832,6 +3918,7 @@ def run_attempts(
     after_commit=None,  # a write after the checkpoint commit
     snapshot_findings=None,  # () -> the findings text as it stands right before the model call
     restore_findings=None,  # (text) -> None, put findings.md back after a failed attempt
+    tools: dict[str, str] | None = None,  # the `.venv/` digest the verb took before this call, else taken here
 ) -> None:
     """The attempt loop the work verbs share: call, measure, check, commit - or leave the diagnostics.
 
@@ -3862,7 +3949,7 @@ def run_attempts(
     # The tools the runner itself starts, as they were before the first model ran. One digest for the
     # whole run: an attempt that overwrote a tool is refused, and the refused bytes must not become the
     # next attempt's reference by taking the digest again (P1 of the #188 review).
-    tools = tool_state(root)
+    tools = tool_state(root) if tools is None else tools
     for attempt, (endpoint, credential, route, reason) in enumerate(routes, 1):
         prompt = prompts[endpoint]
         if diagnostics:
@@ -4186,7 +4273,9 @@ def card_problem(text: str) -> str | None:
     return None
 
 
-def verify_draft(root: Path, ctx: Context, key: str | None, new_adrs: list[str]) -> tuple[list[str], bool]:
+def verify_draft(
+    root: Path, ctx: Context, key: str | None, new_adrs: list[str], tools: dict[str, str] | None = None
+) -> tuple[list[str], bool]:
     """A draft attempt's post-run checks: the problems, and whether the answer is owed.
 
     The order is the spec's (criteria 10 to 16): the ADR count, the derived files, `make verify` -
@@ -4198,16 +4287,22 @@ def verify_draft(root: Path, ctx: Context, key: str | None, new_adrs: list[str])
     if len(new_adrs) > 1:
         problems = ["the attempt left more than one new ADR file: " + ", ".join(f"`{path}`" for path in new_adrs)]
         return problems, owed
-    env = foreign_env(
-        {
-            "GIT_CONFIG_COUNT": "1",
-            "GIT_CONFIG_KEY_0": "commit.gpgsign",
-            "GIT_CONFIG_VALUE_0": "false",
-            # The one tolerance of a draft is the gate's own, set by this runner alone: with this
-            # variable `adr-answers` reports this change's missing answer and passes, so the
-            # exit code of `make verify` decides and no output is read (spec, criterion 13; F-9, F-10).
-            check_adr_answers.TOLERATE_ENV: ctx.change,
-        }
+    tampered = tool_problem(root, tools)
+    if tampered:
+        return [tampered], owed
+    env = runner_env(
+        foreign_env(
+            {
+                "GIT_CONFIG_COUNT": "1",
+                "GIT_CONFIG_KEY_0": "commit.gpgsign",
+                "GIT_CONFIG_VALUE_0": "false",
+                # The one tolerance of a draft is the gate's own, set by this runner alone: with this
+                # variable `adr-answers` reports this change's missing answer and passes, so the
+                # exit code of `make verify` decides and no output is read (spec, criterion 13; F-9, F-10).
+                check_adr_answers.TOLERATE_ENV: ctx.change,
+            }
+        ),
+        root,
     )
     preparation = prepare_derived(root, env, key)
     if preparation:
@@ -4260,6 +4355,7 @@ def draft(root: Path, change: str) -> None:
         raise Refused(f"the worktree has pre-existing changes outside this change's findings.md: {listing}")
     baseline = _git_output(root, "rev-parse", "HEAD").strip()
     ignored_before = ignored_snapshot(root)
+    tools = tool_state(root)  # before any model runs (R-21)
     routes = [
         (CODEX, "codex", None),
         (CODEX, "codex-repair", "the first draft attempt failed"),
@@ -4339,7 +4435,7 @@ def draft(root: Path, change: str) -> None:
                     put_back_lines(put),
                 ),
             )
-        problems, owed = verify_draft(root, ctx, key, new_adrs)
+        problems, owed = verify_draft(root, ctx, key, new_adrs, tools)
         if problems:
             # The next attempt starts on the tree this one left; the block quotes its files and
             # diagnostics below its audit line (spec, criterion 21).
@@ -4452,6 +4548,7 @@ def repair(root: Path, change: str, stage2_off: str | None = None) -> None:
     fixes: dict[str, str] = {}
     rows_before = findings_rows(ctx.findings.read_text(encoding="utf-8") if ctx.findings.exists() else "")
     standing: dict[str, str] = {}
+    tools = tool_state(root)  # before any model runs; the answer check and the attempts share it (R-21)
 
     def snapshot() -> str:
         text = ctx.findings.read_text(encoding="utf-8") if ctx.findings.exists() else ""
@@ -4462,7 +4559,7 @@ def repair(root: Path, change: str, stage2_off: str | None = None) -> None:
         # The last audit line of the snapshot is this attempt's own: it was appended just before it.
         audits = [line for line in standing.get("text", "").splitlines() if line.startswith("Stage-2 call,")]
         found, problems = check_repair_answer(
-            ctx, answer, taken, baseline, key, rows_before, audits[-1] if audits else None, standing["text"]
+            ctx, answer, taken, baseline, key, rows_before, audits[-1] if audits else None, standing["text"], tools
         )
         if not problems:
             fixes.clear()
@@ -4487,6 +4584,7 @@ def repair(root: Path, change: str, stage2_off: str | None = None) -> None:
         after_commit=lambda: mark_repaired_record(change, taken, fixes),
         snapshot_findings=snapshot,
         restore_findings=lambda text: ctx.findings.write_text(text, encoding="utf-8"),
+        tools=tools,
     )
 
 
