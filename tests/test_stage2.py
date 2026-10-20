@@ -2189,6 +2189,114 @@ def test_secret_rules_outside_diagnostics_still_block_retry(world: World) -> Non
     assert FIXTURE_SECRET in (world.root / "src" / "leak.py").read_text(encoding="utf-8")
 
 
+@pytest.mark.parametrize("anchor", ["^", "$"])
+@pytest.mark.parametrize("framed", [False, True], ids=["unframed", "framed"])
+def test_secret_line_anchors_are_redacted_in_failed_gate_output(world: World, anchor: str, framed: bool) -> None:
+    """An anchored secret on a later line must not survive either diagnostics destination."""
+    pattern = r"FIXKEY-[0-9]{6}"
+    set_denylist(DENYLIST + f"secret:fixture = {anchor + pattern if anchor == '^' else pattern + anchor}\n")
+    body = ["Traceback:", FIXTURE_SECRET, "AssertionError: boom"]
+    output = "\n".join(_gate("pytest", body, "red") if framed else body) + "\n"
+    world.script(
+        claude=[
+            {"stdout": "first", "plant": {"src/app.py": "value = 2\n"}},
+            {"stdout": "fixed", "append": {"plans/changes/demo/plan.md": "measured retry\n"}},
+        ],
+        make=[{"stdout": output, "exit": 1}, {"stdout": "green\n"}],
+    )
+    assert world.run("implement") == 0
+    for text in (world.text(), prompt_of(world.calls("claude")[1])):
+        assert FIXTURE_SECRET not in text and FIXTURE_MARKER in text
+        assert "AssertionError: boom" in text
+        if framed:
+            assert "The gates that blocked" in text and "── [pytest] RED" in text
+
+
+@pytest.mark.parametrize("verb", ["implement", "draft"])
+def test_nonsecret_preparation_errors_stop_before_retry(
+    world: World, monkeypatch: pytest.MonkeyPatch, verb: str
+) -> None:
+    """A preparation refusal must propagate rather than become a retryable problem."""
+    set_denylist(DENYLIST + FIXTURE_RULE)
+    if verb == "draft":
+        draft_world(world)
+    plant = {
+        "plans/changes/demo/plan.md": PLAN_CARD,
+        "plans/changes/demo/bad.md": old_header(),
+    }
+    steps = [{"stdout": "first", "plant": plant}, {"stdout": "must not run"}]
+    world.script(
+        **({"codex": [codex_step(s, n) for n, s in enumerate(steps)]} if verb == "draft" else {"claude": steps}),
+        make=[{"stdout": "must not run"}],
+    )
+    real_stamp = stage2.check_frontmatter_current.stamp
+
+    def fail_stamp(path, *args, **kwargs):
+        if path.name == "bad.md":
+            raise check_frontmatter_current.CannotStamp(LEAK)
+        return real_stamp(path, *args, **kwargs)
+
+    monkeypatch.setattr(stage2.check_frontmatter_current, "stamp", fail_stamp)
+    assert world.run(verb) == 2
+    assert len(world.calls("codex" if verb == "draft" else "claude")) == 1
+    assert world.calls("make") == [] and LEAK not in world.text()
+
+
+@pytest.mark.parametrize("secret_rule", [False, True], ids=["nonsecret-rule", "secret-rule"])
+@pytest.mark.usefixtures("world")
+def test_credentials_are_scrubbed_before_diagnostic_rules(secret_rule: bool) -> None:
+    """Known credentials and their protected fragments retain the credential marker."""
+    set_denylist(f"{'secret:' if secret_rule else ''}routing = sk-[A-Za-z0-9]+|zq7Hk2mV\n")
+    try:
+        protected = stage2.protect_diagnostics(f"token {KEY}\nfragment {KEY[3:11]}\n", KEY)
+    except stage2.Refused as error:
+        raise AssertionError("a known credential must be scrubbed before denylist rules run") from error
+    assert protected == "token [credential]\nfragment [credential]\n"
+
+
+def test_a_diagnostic_refusal_restores_repair_findings(world: World) -> None:
+    """A failed verification that refuses diagnostics cannot keep the model's row edits."""
+    repair_world(world)
+    vandal = "# Findings\n\nmodel overwrote the accepted statuses\n"
+    script_repair(
+        world,
+        [repair_step(plant={"plans/changes/demo/findings.md": vandal}), repair_step()],
+        make=[{"stdout": LEAK, "exit": 1}],
+    )
+    assert world.run("repair") == 2
+    (call,) = repair_calls(world)
+    assert world.text() == call["findings"]
+
+
+@pytest.mark.parametrize("unmeasured", [False, True], ids=["changed-path", "measurement-error"])
+def test_moved_head_diagnostics_protect_file_evidence(
+    world: World, monkeypatch: pytest.MonkeyPatch, unmeasured: bool
+) -> None:
+    """A moved HEAD stops without publishing a secret in file entries or their measurement error."""
+    repair_world(world)
+    set_denylist(DENYLIST + FIXTURE_RULE)
+    script_repair(world, [repair_step(plant={f"src/{FIXTURE_SECRET}.txt": "safe\n"})])
+    real_launch = stage2.launch
+
+    def committing(command, cwd, env, *args, **kwargs):
+        done = real_launch(command, cwd, env, *args, **kwargs)
+        if command[0] == "codex":
+            git(Path(cwd), "add", "-A")
+            git(Path(cwd), "commit", "--quiet", "-m", "model moved HEAD")
+        return done
+
+    def cannot_measure(*_args, **_kwargs):
+        raise stage2.Refused(f"not measured: {FIXTURE_SECRET}")
+
+    monkeypatch.setattr(stage2, "launch", committing)
+    if unmeasured:
+        monkeypatch.setattr(stage2, "worktree_tree", cannot_measure)
+    assert world.run("repair") == 1
+    assert len(repair_calls(world)) == 1 and world.calls("make") == []
+    assert FIXTURE_SECRET not in world.text() and FIXTURE_MARKER in world.text()
+    assert "moved HEAD" in world.text()
+
+
 def test_findings_only_dirt_is_allowed_and_committed(world: World) -> None:
     world.findings.write_text("# Findings\n\nEarlier failed attempt.\n", encoding="utf-8")
     successful_implementation(world)

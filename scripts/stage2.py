@@ -538,15 +538,17 @@ def protect_diagnostics(text: str, key: str | None = None) -> str:
 
     Every secret rule of the active denylist is read now, on every route - a keyless Codex or Stage-1 route
     included. A match is replaced in place by `[<rule name>]` (the name already starts `secret:`); the spans
-    are found in the original text, overlapping ones merge into one marker run, and the replacement keeps the
-    line breaks it covered, so a traceback keeps its shape. Non-secret rules check both the full original text
-    and each line before redaction, preserving multiline and line-anchored blocking matches. They refuse first
+    are found in the credential-safe original text, overlapping ones merge into one marker run, and the
+    replacement keeps the line breaks it covered, so a traceback keeps its shape. Known credentials are
+    scrubbed first, retaining their credential marker. All rules check both the full credential-safe text
+    and individual lines, preserving multiline and line-anchored matches. Non-secret rules refuse first
     - redaction must not hide a blocking rule - and so does a denylist that cannot be read, or
     text that still matches a secret rule after the replacement. A refusal names a rule or a reason and a
     line, never a value.
     """
     if not text:
         return text
+    text = scrub(text, key)
     rules, problem = leakcheck.read_denylist(leakcheck.default_denylist())
     if problem:
         raise Refused(f"the failed-check diagnostics cannot be checked: {problem}")
@@ -569,9 +571,17 @@ def protect_diagnostics(text: str, key: str | None = None) -> str:
     for rule in rules:
         if not rule.secret:
             continue
-        for match in rule.pattern.finditer(text):
-            if match.end() > match.start():
-                spans.append([match.start(), match.end(), [rule.name]])
+        # Whole-text matches retain multiline rules; per-line matches mirror the leak check,
+        # including ^ and $ without an inline multiline flag. Offsets stay in the same text.
+        segments = [(0, text)]
+        offset = 0
+        for line in text.split("\n"):
+            segments.append((offset, line))
+            offset += len(line) + 1
+        for offset, segment in segments:
+            for match in rule.pattern.finditer(segment):
+                if match.end() > match.start():
+                    spans.append([offset + match.start(), offset + match.end(), [rule.name]])
     spans.sort(key=lambda span: (span[0], span[1]))
     merged: list[list] = []
     for start, end, names in spans:
@@ -589,7 +599,7 @@ def protect_diagnostics(text: str, key: str | None = None) -> str:
     out.append(text[last:])
     safe = scrub("".join(out), key)
     for rule in rules:
-        if rule.secret and rule.pattern.search(safe):
+        if rule.secret and (rule.pattern.search(safe) or any(rule.pattern.search(line) for line in safe.split("\n"))):
             raise Refused(f"the failed-check diagnostics still match rule '{rule.name}' after redaction.")
     return safe
 
@@ -2946,17 +2956,15 @@ def prepare_derived(root: Path, env: dict[str, str], key: str | None = None) -> 
                     check_frontmatter_current.stamp(path, dt.date.today())
             except (check_frontmatter_current.CannotStamp, OSError, RuntimeError) as error:
                 errors.append(f"{relative}: {error}")
-        if errors:
-            evidence = "\n".join(_shrink(protect_diagnostics("\n".join(errors), key).splitlines(), TAIL_LINES))
-            return [f"Derived-file preparation failed: {evidence}"]
-        index = root / "plans" / "INDEX.md"
-        if not index.resolve().is_relative_to(root.resolve()):
-            raise OSError("refusing an index outside the worktree: plans/INDEX.md")
-        if index.resolve() != root.resolve() / "plans" / "INDEX.md":
-            raise OSError("refusing an aliased index path: plans/INDEX.md")
-        if index.exists() and index.stat().st_nlink > 1:
-            raise OSError("refusing a hard-linked index path: plans/INDEX.md")
-        done = launch([sys.executable, "scripts/plans_registry.py", "--index"], root, env, key)
+        if not errors:
+            index = root / "plans" / "INDEX.md"
+            if not index.resolve().is_relative_to(root.resolve()):
+                raise OSError("refusing an index outside the worktree: plans/INDEX.md")
+            if index.resolve() != root.resolve() / "plans" / "INDEX.md":
+                raise OSError("refusing an aliased index path: plans/INDEX.md")
+            if index.exists() and index.stat().st_nlink > 1:
+                raise OSError("refusing a hard-linked index path: plans/INDEX.md")
+            done = launch([sys.executable, "scripts/plans_registry.py", "--index"], root, env, key)
     except (
         check_frontmatter_current.CannotMeasure,
         check_frontmatter_current.CannotStamp,
@@ -2967,6 +2975,9 @@ def prepare_derived(root: Path, env: dict[str, str], key: str | None = None) -> 
         UnicodeError,
     ) as error:
         evidence = "\n".join(protect_diagnostics(str(error), key).splitlines()[-TAIL_LINES:])
+        return [f"Derived-file preparation failed: {evidence}"]
+    if errors:
+        evidence = "\n".join(_shrink(protect_diagnostics("\n".join(errors), key).splitlines(), TAIL_LINES))
         return [f"Derived-file preparation failed: {evidence}"]
     if done.returncode:
         text = protect_diagnostics((done.stdout or "") + (done.stderr or ""), key)
@@ -3840,7 +3851,16 @@ def run_attempts(
                     listing += f"\n- {call_error}"
                 append(
                     ctx.findings,
-                    quote_block(attempt_block(attempt, route, listing, moved_files, moved_head=True), key),
+                    quote_block(
+                        attempt_block(
+                            attempt,
+                            route,
+                            protect_diagnostics(listing, key),
+                            protect_files(moved_files, key),
+                            moved_head=True,
+                        ),
+                        key,
+                    ),
                 )
                 raise CallFailed(problem) from call_error
         if call_error is not None:
@@ -3879,6 +3899,10 @@ def run_attempts(
         formatted: list[str] = []
         try:
             problems = verify_attempt(root, ctx.plan, baseline_time, key, formatted)
+        except Refused:
+            if kept is not None:
+                restore_findings(kept)
+            raise
         except CallFailed as error:
             # `make verify` could not be started: no model can repair that, so this attempt's block
             # says why and the run stops after the scan below, with no further attempt (spec, criterion 6).

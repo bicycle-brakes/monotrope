@@ -91,16 +91,20 @@ add a validator in this change; the runner owns the full verification gate.
 
 - 1: tests/test_stage2.py::test_failed_check_diagnostics_redact_secret_rules_on_every_work_route — one verb, keyless route or destination retains the value
 - 1: tests/test_stage2.py::test_preparation_and_postcondition_diagnostics_redact_secret_rules — protection exists only for make output
+- 1: tests/test_stage2.py::test_secret_line_anchors_are_redacted_in_failed_gate_output — an anchored secret survives a later line in framed or unframed output
+- 1: tests/test_stage2.py::test_moved_head_diagnostics_protect_file_evidence — a changed path or measurement error publishes a secret after HEAD moves
 - 2: tests/test_stage2.py::test_diagnostic_redaction_keeps_rule_names_and_traceback_context — replacement erases unmatched context or loses rule names
 - 2: tests/test_stage2.py::test_diagnostic_redaction_handles_overlaps_and_multiline_matches — replacement or truncation leaves part of a matched span
 - 3: tests/test_stage2.py::test_a_fixture_secret_in_a_failed_draft_check_allows_a_clean_retry — the real pre-call check refuses the second call
 - 4: tests/test_stage2.py::test_diagnostic_redaction_refuses_an_unusable_denylist — raw diagnostics are emitted or retry/fallback starts after a failed rule read
 - 5: tests/test_stage2.py::test_nonsecret_diagnostic_matches_still_refuse — an overlapping secret replacement hides a non-secret violation
+- 5: tests/test_stage2.py::test_nonsecret_preparation_errors_stop_before_retry — preparation converts a diagnostic refusal into a retryable error
 - 6: tests/test_stage2.py::test_secret_rules_outside_diagnostics_still_block_retry — a secret in a non-test file or history is cleaned or bypasses the next scan
 - 6: tests/test_stage2.py::test_each_call_runs_its_own_leak_check — a later call skips its scan
 - 6: tests/test_stage2.py::test_a_leak_between_work_attempts_stops_before_fallback — a refusal falls through to another model
 - 7: tests/test_stage2.py::test_a_key_in_the_gate_output_never_reaches_the_next_attempt — credential scrubbing regresses
 - 7: tests/test_stage2.py::test_a_failed_stage2_off_attempt_leaves_its_block_without_reading_the_key — diagnostic handling reads an unneeded routing key
+- 7: tests/test_stage2.py::test_credentials_are_scrubbed_before_diagnostic_rules — a denylist rule refuses a known credential or changes its credential marker
 
 ## Not touched
 
@@ -147,3 +151,24 @@ The corrected function passes both cases. Verification:
 passed (739 tests); Ruff check and format check passed; the criterion-ledger
 check passed. No commit was made; the runner owns `make verify` and the
 checkpoint commit.
+
+### Repair — taken loop-round-2 findings, 2026-10-20
+
+2026-10-20 02:06:49–02:14:46 UTC, 7 min 57 s (measured with `date -u`).
+The existing uncommitted repairs cover line-anchored secret matches,
+preparation refusals, credential marker precedence, repair findings
+restoration, framed red-gate evidence and moved-HEAD file evidence. The
+credential regression now explicitly raises an assertion if diagnostics
+refuse a known credential, so the baseline failure meets the runner's
+red-first assertion contract.
+
+Red-first evidence: loading `protect_diagnostics`, `prepare_derived` and
+`run_attempts` from baseline `9c5c9c6` into the test module's runner made
+all 11 selected parameterized regression cases fail by assertion. The
+repaired code passed all 11. The combined command
+`.venv/bin/python3 -m pytest -q tests/test_stage2.py tests/test_leakcheck.py`
+passed all 750 tests in 409.13 seconds. Ruff check and format check,
+interview minimums, criterion ledger and `git diff --check` passed.
+Regenerating `plans/INDEX.md` produced no content change. No edit was made
+to `findings.md`; no commit or repository-changing git command was run in
+this checkout. The runner owns `make verify` and the checkpoint commit.

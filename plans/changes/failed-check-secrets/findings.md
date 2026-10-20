@@ -159,3 +159,26 @@ Stage-2 call, 2026-10-20: repair · attempt 1 · route codex · endpoint openai-
 > ```
 
 Stage-2 call, 2026-10-20: repair · attempt 2 · route codex-repair · endpoint openai-codex · model gpt-6.1-sol · reason first Codex post-run check failed · leak check clean over 497 files, 1604 commits, 12 rules.
+
+Stage-2 call, 2026-10-20: review-loop · endpoint opencode-go · model deepseek-v4.1-flash · leak check clean over 497 files, 1605 commits, 12 rules.
+
+Stage-2 call, 2026-10-20: review-loop · endpoint opencode-go · model mimo-v2.6-flash · leak check clean over 497 files, 1605 commits, 12 rules.
+
+Stage-2 call, 2026-10-20: review-loop · endpoint opencode-go · model longcat-2.0 · leak check clean over 497 files, 1605 commits, 12 rules.
+
+Stage-2 call, 2026-10-20: repair · attempt 1 · route codex · endpoint openai-codex · model gpt-6.1-sol · leak check clean over 497 files, 1605 commits, 12 rules.
+
+> Attempt 1 (codex) failed its post-run checks.
+>
+> Files the attempt changed (lines added, removed):
+> - `plans/changes/failed-check-secrets/plan.md` +34 -0
+> - `scripts/stage2.py` +43 -19
+> - `tests/test_stage2.py` +106 -0
+>
+> Diagnostics:
+> ```text
+> - Runner format before `make verify`: ruff changed no file.
+> - L2-3: tests/test_stage2.py::test_credentials_are_scrubbed_before_diagnostic_rules: the call of `tests/test_stage2.py::test_credentials_are_scrubbed_before_diagnostic_rules[nonsecret-rule]` failed with Refused, not an AssertionError
+> ```
+
+Stage-2 call, 2026-10-20: repair · attempt 2 · route codex-repair · endpoint openai-codex · model gpt-6.1-sol · reason first Codex post-run check failed · leak check clean over 497 files, 1605 commits, 12 rules.
