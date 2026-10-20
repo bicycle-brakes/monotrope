@@ -65,6 +65,10 @@ deployment permission. Task state stays in Beads.
   Codex session reviewing #187 to #192 draws on the same quota. GLM through Z.ai stays off until 2026-10-21 14:34
   Europe/Berlin; GLM through OpenCode Go works. Claude budget for the night:
   not read.
+- **DeepSeek route:** `implement` and `repair` cannot name DeepSeek today
+  (`implement` is GLM Flash, `repair` Codex then Sonnet); `session` can,
+  as an interactive Pi window with the leak check before launch and no
+  post-run checks. Whether such a window works unattended is not measured.
 - **Machine:** 8 GB RAM, swap 7.1 of 8 GB in use at 20:26Z. Memory is the
   limit: one heavy job at a time.
 
@@ -74,7 +78,7 @@ deployment permission. Task state stays in Beads.
 |---|---|---|---|
 | 1 | Research swarm: fix the two ruff findings, full `make verify`, book F-54 and F-55 `fixed — tests/…` with the hand red-first evidence, add the measured line under `## Time used`, commit, push; refresh PR #158's body (F-54, F-55 no longer known limits) | Orchestrator (Opus 5.5) | `make verify` green; pushed. Tell the other session the worktree is free again |
 | 2 | Phase-6 re-check, round 13, of the research swarm: `stage2.py review research-swarm` | Fresh read-only Codex session; Opus 5.5 (effort high) if Codex reports its quota spent | Findings committed unchanged in `findings.md`. No BLOCKER and no MAJOR: the morning page recommends the merge decision |
-| 3 | Repair round-13 MAJOR or BLOCKER rows, if any | `stage2.py repair research-swarm` (Codex, Sonnet 5.5 after two failed checks); a rejection on form only is booked by hand after red first and a green `make verify` | Rows fixed, `make verify` green, pushed. No round 14 tonight; whatever remains goes to the morning page |
+| 3 | Repair round-13 MAJOR or BLOCKER rows, if any | DeepSeek v4.1 Flash on OpenCode Go through `stage2.py session research-swarm --model opencode-go/deepseek-v4.1-flash` (maintainer, 2026-10-20); the orchestrator then checks red first against the pre-repair commit, runs `make verify` and books the rows by hand, because `session` runs no post-run checks. Sonnet 5.5 if the session writes nothing within 60 minutes | Rows fixed, `make verify` green, pushed. No round 14 tonight; whatever remains goes to the morning page |
 | 4 | Phase 1 for bead coding-harness-py5 (every reviewer runs two more rounds inside its own context): `plans/changes/reviewer-inner-rounds/research.md` | Sonnet 5.5 sub-agent, own worktree (not `stage2.py explore`: GLM Flash via Z.ai is off, and `--stage2-off` routes to Haiku, which wrote no research — bead coding-harness-e7m) | `research.md` pushed as a draft pull request with the interview questions (ADR change: at least 5) on the morning page. No spec, no code. Inputs: the 19-pass yield of PR #184 (6 of 17 later passes found nothing) and how Pi and OpenCode Go keep one context across turns |
 | 5 | Reserve: measure test quality with mutation testing (bead coding-harness-bvy) on `scripts/check_research_handoff.py` | Sonnet 5.5 sub-agent, own worktree; the tool in a scratch environment, not in the lock | A dated note under `docs/research/` with tool and version, commit, score, surviving mutants by kind and run time, as a pull request. Appetite 2 hours; stops when the run would not finish by 06:00 Europe/Berlin |
 | 6 | Reserve: close bead coding-harness-y9q (`make venv` picks an unusable `python3`) if PR #174, merged, meets its acceptance | Orchestrator | Acceptance checked against `main`; bead closed with the evidence, or a note on what is missing |
@@ -82,7 +86,7 @@ deployment permission. Task state stays in Beads.
 | 8 | Reserve: evaluate Orca, `stablyai/orca` (bead coding-harness-dzp) | Sonnet 5.5 sub-agent, read only | A dated note under `docs/research/` as a pull request: version read, license, fit with the house rules, a recommendation as a maintainer question. Nothing installed or connected |
 | 9 | Reserve: reconcile the repository with `docs/WORKFLOW.md` (bead coding-harness-i0l) | Sonnet 5.5 sub-agent, read only | A dated table under `docs/research/` (described, built, enforced) as a pull request; it includes the stop hook the doctrine describes and the README lists as not built |
 | 10 | Reserve: measure the kit probe's pytest with `-n auto` (bead coding-harness-7so) | Orchestrator | A dated measurement (before, after, commit) as a comment on the bead; a change only as a pull request |
-| 11 | Reserve: the CI job summary lists the beads a pull request changed (bead coding-harness-1jg.4) | Sub-agent, own worktree; red test first | `make verify` green, pull request open; not touching `scripts/stage2.py` |
+| 11 | Reserve: the CI job summary lists the beads a pull request changed (bead coding-harness-1jg.4) | DeepSeek v4.1 Flash through `stage2.py session` in the change's own worktree, red test first; the orchestrator checks red first and `make verify` by hand; Sonnet 5.5 if the session writes nothing within 60 minutes | `make verify` green, pull request open; not touching `scripts/stage2.py` |
 | 12 | Reserve: translate the German left in `docs/governance/` (bead coding-harness-yim) | Sonnet 5.5 sub-agent, own worktree | One pull request for `docs/governance/` alone; `scripts/` and `tests/` stay untouched tonight because #187 to #192 change them |
 | 13 | Morning handover | Orchestrator | A dated file under `docs/journal/handover/` as a pull request by 08:00 Europe/Berlin |
 
