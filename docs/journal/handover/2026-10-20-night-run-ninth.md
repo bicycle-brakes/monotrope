@@ -165,3 +165,28 @@ Task status lives in Beads; pointers only.
   read (about 03:05Z). The Mermaid diagrams were not rendered locally (no
   browser on the machine; an upload to a rendering service was refused);
   nobody in this session has seen them rendered.
+
+## Addendum — 2026-10-20, runner pre-check drafted
+
+After the handover above, the runner pre-check (bead coding-harness-csm,
+claimed by this session) went to its plan card: research by the
+orchestrator (the explore route answers with no research, bead
+coding-harness-e7m), the maintainer's direction of 2026-10-16 recorded as
+Q-1, spec and plan drafted by Codex in one attempt (03:03Z to 03:11Z,
+`aa1f887`, branch `feat/runner-precheck`, worktree
+`.claude/worktrees/runner-precheck`). Its plan card, unchanged from
+`plans/changes/runner-precheck/plan.md`:
+
+```text
+For you:     Failed implement and repair attempts stop before full verification when their cheap checks are red, and retries see the first failing assertions.
+Done when:   The nine criteria have passing regression proofs and make verify is green; a passing pre-check alone never permits a commit.
+Appetite:    2 hours of phase 4 including repairs; stop at the limit.
+Not now:     Automatic time entries, test retries, provider routing, model permissions or replacement of full verification.
+Pre-mortem:  suppose it failed: most likely because the new assertion evidence is truncated again on its way into the retry prompt.
+Starts unless you say stop.
+```
+
+Needed from the maintainer: read this card with question 3's card; both
+start unless stopped. Two proposals stay outside it and are yours to decide
+later: the runner writing the measured time line itself, and one retry of a
+single failed test (bead coding-harness-jik).
