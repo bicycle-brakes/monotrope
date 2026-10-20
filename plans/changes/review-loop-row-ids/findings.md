@@ -281,3 +281,5 @@ Stage-2 call, 2026-10-20: draft · attempt 3 · route glm · endpoint glm-coding
 > - `plans/changes/review-loop-row-ids/plan.md`
 > - `plans/changes/review-loop-row-ids/research.md`
 > - `plans/changes/review-loop-row-ids/spec.md`
+
+Stage-2 call, 2026-10-20: draft · attempt 1 · route codex · endpoint openai-codex · model gpt-6.1-sol · leak check clean over 495 files, 1610 commits, 12 rules.

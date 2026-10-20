@@ -113,3 +113,30 @@ is rejected it is clean, and the quoted non-row lines stay undecided text.
   cheapest model today, like a failed one; whether a malformed answer should
   also be replaced or refuse at once is for the spec to settle from ADR 0021.
 
+## Draft gap checks — 2026-10-20, at `82488fc`
+
+- Persistence: `review_loop` writes the round at lines 4507–4516 and only
+  then calls `mark_consumed`. Refusing before that block completes no round
+  and consumes no stage. A fresh snapshot is also written only there; an
+  existing record or released snapshot can remain unchanged. Call audit
+  lines are appended earlier and must remain as evidence of attempted calls.
+- Replacement: ADR 0021 decision 4 explicitly lists nonzero exit, timeout
+  and empty answer as replacement causes. Decision 6 allows partial swarms
+  with failed calls; neither requires replacing malformed findings. Keeping
+  ordinary failures separate and refusing malformed table output before
+  replacement implements the recorded refusal without changing stage order
+  or clean-round semantics. A replacement that itself answers malformed
+  must likewise refuse before another replacement starts.
+- Scope: `parse_rows` (lines 635–657) returns readable rows and retained
+  text, removing table furniture. Testing `split_row` on that retained text
+  distinguishes unreadable table lines from generic prose without changing
+  the parser. A response with readable rows stays on the existing path.
+- Existing tests at lines 10090 and 4647 allow malformed members beside
+  readable peers; the table-specific expectation needs correction, while
+  the generic-prose and ordinary-call cases remain. The mixed clean-peer
+  case is not covered. Paid replacement fixtures are at lines 9675–9710.
+- No `templates/plan.md` or `scripts/validate_change_artefacts.py` exists in
+  this tree. The phase-3 prompt supplies the plan form; interview and
+  criterion-ledger checks are present. No phase-2a finding rows are present
+  in this change's `findings.md`; its prior attempt diagnostics are retained.
+
