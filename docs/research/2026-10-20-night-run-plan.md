@@ -29,9 +29,9 @@ deployment permission. Task state stays in Beads.
    phase-6 re-check on Opus 5.5, so the maintainer can decide the merge of
    [PR #158](https://github.com/bicycle-brakes/monotrope/pull/158) in the
    morning.
-2. Make the six runner-fix pull requests (#187 to #192, findings R-14 to R-27
-   of the review-swarm runner review) mergeable one after another, without
-   merging any.
+2. Stay out of the six runner-fix pull requests (#187 to #192, findings
+   R-14 to R-27 of the review-swarm runner review): a DeepSeek session repairs
+   them and a Codex session reviews them tonight (maintainer, 2026-10-20).
 3. Leave pushed checkpoints and one morning handover by 08:00
    Europe/Berlin.
 
@@ -55,11 +55,14 @@ deployment permission. Task state stays in Beads.
   green in CI on its first push; #188 to #191 have new CI runs in progress
   since 20:23Z. All six change `scripts/stage2.py`; each is mergeable alone
   (GitHub, #192 not yet computed), their combination is not measured.
+  Tonight a DeepSeek session repairs them and a Codex session reviews them
+  (maintainer, 2026-10-20); this session does not touch their branches.
 - **Bead coding-harness-9wp** (the runner writes the time line itself) is
   claimed by the other session, branch `fix/runner-time-line`; no pull
   request yet. That session is idle; it writes no beads.
-- **Models:** Codex is **not** used (maintainer, 2026-10-20: its limit is
-  nearly used up). GLM through Z.ai stays off until 2026-10-21 14:34
+- **Models:** this session uses **no** Codex (maintainer, 2026-10-20: its
+  limit is nearly used up; the Codex review of #187 to #192 is the
+  maintainer's own session). GLM through Z.ai stays off until 2026-10-21 14:34
   Europe/Berlin; GLM through OpenCode Go works. Claude budget for the night:
   not read.
 - **Machine:** 8 GB RAM, swap 7.1 of 8 GB in use at 20:26Z. Memory is the
@@ -72,10 +75,9 @@ deployment permission. Task state stays in Beads.
 | 1 | Research swarm: fix the two ruff findings, full `make verify`, book F-54 and F-55 `fixed — tests/…` with the hand red-first evidence, add the measured line under `## Time used`, commit, push; refresh PR #158's body (F-54, F-55 no longer known limits) | Orchestrator (Opus 5.5) | `make verify` green; pushed. Tell the other session the worktree is free again |
 | 2 | Phase-6 re-check, round 13, of the research swarm | Fresh read-only Opus 5.5 sub-agent, effort high (Codex excluded) | Findings committed unchanged in `findings.md`. No BLOCKER and no MAJOR: the morning page recommends the merge decision |
 | 3 | Repair round-13 MAJOR or BLOCKER rows, if any | One Sonnet 5.5 sub-agent by hand, red test first, or `stage2.py repair research-swarm --stage2-off "Codex limit nearly used (maintainer 2026-10-20)"` | Rows fixed, `make verify` green, pushed. No round 14 tonight; whatever remains goes to the morning page |
-| 4 | Runner-fix stack: wait for CI on #188 to #191 (one background check, no polling loop); merge all six branches into a throwaway local branch from `origin/main` in the order #187, #192, #188, #189, #190, #191, resolve nothing by hand, run full `make verify` | Orchestrator | The morning page names the merge order that merges cleanly and is green, or the first pair that conflicts or turns red, with the file and test. **No merge, no push of the throwaway branch, no force push** |
-| 5 | Phase 1 for bead coding-harness-py5 (every reviewer runs two more rounds inside its own context): `plans/changes/reviewer-inner-rounds/research.md` | Sonnet 5.5 sub-agent, own worktree (not `stage2.py explore`: GLM Flash via Z.ai is off, and `--stage2-off` routes to Haiku, which wrote no research — bead coding-harness-e7m) | `research.md` pushed as a draft pull request with the interview questions (ADR change: at least 5) on the morning page. No spec, no code. Inputs: the 19-pass yield of PR #184 (6 of 17 later passes found nothing) and how Pi and OpenCode Go keep one context across turns |
-| 6 | Reserve: measure test quality with mutation testing (bead coding-harness-bvy) on `scripts/check_research_handoff.py` | Sonnet 5.5 sub-agent, own worktree; the tool in a scratch environment, not in the lock | A dated note under `docs/research/` with tool and version, commit, score, surviving mutants by kind and run time, as a pull request. Appetite 2 hours; stops when the run would not finish by 06:00 Europe/Berlin |
-| 7 | Morning handover | Orchestrator | A dated file under `docs/journal/handover/` as a pull request by 08:00 Europe/Berlin |
+| 4 | Phase 1 for bead coding-harness-py5 (every reviewer runs two more rounds inside its own context): `plans/changes/reviewer-inner-rounds/research.md` | Sonnet 5.5 sub-agent, own worktree (not `stage2.py explore`: GLM Flash via Z.ai is off, and `--stage2-off` routes to Haiku, which wrote no research — bead coding-harness-e7m) | `research.md` pushed as a draft pull request with the interview questions (ADR change: at least 5) on the morning page. No spec, no code. Inputs: the 19-pass yield of PR #184 (6 of 17 later passes found nothing) and how Pi and OpenCode Go keep one context across turns |
+| 5 | Reserve: measure test quality with mutation testing (bead coding-harness-bvy) on `scripts/check_research_handoff.py` | Sonnet 5.5 sub-agent, own worktree; the tool in a scratch environment, not in the lock | A dated note under `docs/research/` with tool and version, commit, score, surviving mutants by kind and run time, as a pull request. Appetite 2 hours; stops when the run would not finish by 06:00 Europe/Berlin |
+| 6 | Morning handover | Orchestrator | A dated file under `docs/journal/handover/` as a pull request by 08:00 Europe/Berlin |
 
 Items run strictly one after another. **No two `make verify` runs at the same
 time** and at most one sub-agent at a time, because of the memory limit.
@@ -83,13 +85,14 @@ time** and at most one sub-agent at a time, because of the memory limit.
 ## Not tonight
 
 - No merge of any pull request, including #158 and #184 to #192.
-- No Codex call of any kind, and no GLM call through Z.ai.
+- No Codex call from this session, and no GLM call through Z.ai.
 - No implementation of coding-harness-py5; no live research-swarm run.
 - The maintainer decisions R-22 (provenance class of
   `decisions/gates.yaml`) and R-24 (may the runner set the `Broke a test`
   mark it proved) are not taken; the morning page asks them, one at a time.
 - No work in the other session's worktree `runner-time-line`
-  (coding-harness-9wp).
+  (coding-harness-9wp), and none on the branches of #187 to #192 (the
+  DeepSeek and Codex sessions own them tonight).
 
 ## Stop rules
 
@@ -110,7 +113,7 @@ time** and at most one sub-agent at a time, because of the memory limit.
 ## Morning page (08:00 Europe/Berlin)
 
 One page: the round-13 verdict for #158 and whether it is ready to merge; the
-merge order of #187 to #192 and its `make verify` result; the interview
+state of #187 to #192 as read from GitHub (CI and review, read only); the interview
 questions of coding-harness-py5; the mutation score if item 6 ran; the
 decisions R-22 and R-24; pull requests awaiting the maintainer; where work
 stopped and why; measured spans.
