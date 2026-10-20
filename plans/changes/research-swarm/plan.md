@@ -2318,3 +2318,10 @@ failing test touches a file of this repair; each passes alone. Span counted:
 17 h 43 min to 17 h 58 min of 18 h 20 min. The maintainer allowed one more
 review round (2026-10-20, "ich erlaube dir eine weiter prüfung"); round 11
 follows.
+
+Round-11 review (fresh read-only Codex session) 10:05:07Z to 10:10:24Z: one
+BLOCKER (F-50, fix-r7) and two MAJOR rows (F-51, F-52, base). Span counted
+08:47:11Z to 10:10:24Z, about 1 h 23 min; estimated total about 17 h 48 min
+to 18 h 03 min of 18 h 20 min. A repair with its verification does not fit;
+the work stops and the rows stay open for the maintainer's decision.
+Findings per phase-6 round, 1 to 11: 8, 5, 3, 3, 3, 4, 2, 4, 3, 3, 3.

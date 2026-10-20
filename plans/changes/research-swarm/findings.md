@@ -3506,3 +3506,16 @@ Stage-2 call, 2026-10-20: repair · attempt 3 · route stage-1 · endpoint claud
 > make: *** [verify] Error 1
 > - `plan.md` did not add a measured line below `## Time used`
 > ````
+
+Stage-2 call, 2026-10-20: review · endpoint openai-codex · model gpt-6.1-sol · leak check clean over 536 files, 1627 commits, 12 rules.
+
+## Phase 6 — Codex, 2026-10-20
+
+| ID | Severity | Dimension | Origin | Where | Finding | Reviewer | Status | Broke a test |
+|---|---|---|---|---|---|---|---|---|
+| F-50 | BLOCKER | SPEC | fix-r7 | `scripts/stage2_availability.py:655–675` | New evidence after the F-38 repair: two synchronized consumers validate receipt A; the first deletes A, preparation publishes receipt B, and the second deletes B while also accepting A. An in-memory reproduction accepts A twice and removes B. Consumption must reject an already consumed receipt even when its path has been replaced. [criterion 44] | Codex | open | — |
+| F-51 | MAJOR | SPEC | base | `scripts/stage2_research_run.py:642–643`; `scripts/stage2_research_store.py:110–112,281–285` | An eligible catalog model named `vendor/alpha-free` is selected, but its generated slot id contains `/` and fails the store’s filename guard. Reproduced through selection and dispatch: the best-effort slot causes `state-store-unwritable`, cancels dispatch and returns exit 1. Supported model identities must yield safe storage keys without making a free contribution abort required work. [criteria 18, 39] | Codex | open | — |
+| F-52 | MAJOR | SPEC | base | `scripts/check_research_handoff.py:822,926–930` | With valid complete research and a spec containing invalid UTF-8, the handoff gate raises an uncaught `UnicodeDecodeError`. Reproduced through `run()` with the spec read failing. This read bypasses the unreadable-evidence handling, producing a traceback instead of reporting not measured with exit 3. [criterion 33] | Codex | open | — |
+
+Phase 6 verdict: codex 01a158c5-b05d-7902-b003-5ef1128c3cd2, 2026-10-20
+Reviewer session: codex 01a158c5-b05d-7902-b003-5ef1128c3cd2 — a fresh session reviewed: an earlier ## Phase 6 block makes this a re-check
