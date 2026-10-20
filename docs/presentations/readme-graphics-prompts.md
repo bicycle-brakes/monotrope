@@ -12,11 +12,18 @@ tags: [readme, graphics, brand, prompts]
 
 # Prompts for the README graphics
 
-Prompts for an AI design tool that draws the three README diagrams as
-illustrations in the bicycle-brakes style. The Mermaid diagrams in
-`README.md` stay the source: they are searchable, versioned and change with
-the workflow. An illustration is the first impression next to them, never a
-replacement.
+Prompts for the AI design tool that drew the workflow graphic in `README.md`.
+The README uses the image; the phase table below it stays as the accessible
+text version. These prompts are kept so the graphic can be regenerated. The
+other two prompts are not used in the README today; they are kept for future
+graphics.
+
+## Current image
+
+`docs/assets/readme-how-a-change-runs.png` — the workflow graphic used in
+`README.md`. It follows the revised three-lane layout: the solid path runs
+`4 → 4b → 5 → 6 → 7`; the dashed returns go back to `4`. The phase table in
+the README carries the same content as text.
 
 ## Brand in short
 
@@ -103,6 +110,17 @@ Bottom right, a small file-stack icon:
 "session end → docs/journal/handover/<date>.md".
 ```
 
+### Revision notes for the workflow graphic
+
+The image in the README follows these corrections to the prompt above:
+
+- The solid path is `4 → 4b → 5 → 6 → 7`; there is no direct `4 → 7` arrow.
+- The returns `4b → 4`, `5 → 4` and `6 → 4` are dashed and use separate
+  channels.
+- The shields sit on `2a`, `4b` and `6`; the legend explains them once.
+- CI is a chip beside `7`, not a phase.
+- `2a` and `2b` are larger and read as an optional side branch.
+
 ## 2. Who decides what
 
 Landscape, 1600 × 1000.
@@ -181,5 +199,6 @@ Landscape band along the bottom only.
    "Which change gets what", change classes).
 3. Leave model names out: they change faster than the workflow, and a role
    ("another vendor") stays true.
-4. Store the image under `docs/assets/` and embed it beside, not instead of,
-   the Mermaid diagram.
+4. Store the image under `docs/assets/` and embed it where the workflow is
+   explained. Keep the phase table: it is the accessible text version and the
+   fallback when the image does not load.
