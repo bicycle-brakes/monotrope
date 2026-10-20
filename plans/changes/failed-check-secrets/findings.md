@@ -124,3 +124,38 @@ Stage-2 call, 2026-10-20: implement · attempt 1 · route stage-1 · endpoint cl
 > tools/pi/README.md:65:81 error MD013/line-length Line length [Expected: 80; Actual: 97]
 > make: *** [verify] Error 1
 > ````
+
+Stage-2 call, 2026-10-20: prepare-loop · endpoint opencode-go · model cat-jam-free · leak check clean over 497 files, 1604 commits, 12 rules.
+
+Stage-2 call, 2026-10-20: prepare-loop · endpoint opencode-go · model longcat-2.5-preview-free · leak check clean over 497 files, 1604 commits, 12 rules.
+
+Stage-2 call, 2026-10-20: prepare-loop · endpoint opencode-go · model deepseek-v4.1-flash · leak check clean over 497 files, 1604 commits, 12 rules.
+
+Stage-2 call, 2026-10-20: prepare-loop · endpoint opencode-go · model mimo-v2.6-flash · leak check clean over 497 files, 1604 commits, 12 rules.
+
+Stage-2 call, 2026-10-20: prepare-loop · endpoint opencode-go · model longcat-2.0 · leak check clean over 497 files, 1604 commits, 12 rules.
+
+Stage-2 call, 2026-10-20: prepare-loop · endpoint opencode-go · model glm-5.3-flash · leak check clean over 497 files, 1604 commits, 12 rules.
+
+Stage-2 call, 2026-10-20: prepare-loop · endpoint opencode-go · model mimo-v2.6-pro · leak check clean over 497 files, 1604 commits, 12 rules.
+
+Stage-2 call, 2026-10-20: review-loop · endpoint opencode-go · model cat-jam-free · leak check clean over 497 files, 1604 commits, 12 rules.
+
+Stage-2 call, 2026-10-20: review-loop · endpoint opencode-go · model longcat-2.5-preview-free · leak check clean over 497 files, 1604 commits, 12 rules.
+
+Stage-2 call, 2026-10-20: repair · attempt 1 · route codex · endpoint openai-codex · model gpt-6.1-sol · leak check clean over 497 files, 1604 commits, 12 rules.
+
+> Attempt 1 (codex) failed its post-run checks.
+>
+> Files the attempt changed (lines added, removed):
+> - `plans/changes/failed-check-secrets/plan.md` +19 -1
+> - `scripts/stage2.py` +7 -0
+> - `tests/test_stage2.py` +11 -3
+>
+> Diagnostics:
+> ```text
+> - Runner format before `make verify`: ruff changed no file.
+> - L1-1: tests/test_stage2.py::test_nonsecret_diagnostic_matches_still_refuse: the call of `tests/test_stage2.py::test_nonsecret_diagnostic_matches_still_refuse[multiline]` failed with Failed, not an AssertionError
+> ```
+
+Stage-2 call, 2026-10-20: repair · attempt 2 · route codex-repair · endpoint openai-codex · model gpt-6.1-sol · reason first Codex post-run check failed · leak check clean over 497 files, 1604 commits, 12 rules.

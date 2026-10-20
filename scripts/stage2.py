@@ -539,8 +539,9 @@ def protect_diagnostics(text: str, key: str | None = None) -> str:
     Every secret rule of the active denylist is read now, on every route - a keyless Codex or Stage-1 route
     included. A match is replaced in place by `[<rule name>]` (the name already starts `secret:`); the spans
     are found in the original text, overlapping ones merge into one marker run, and the replacement keeps the
-    line breaks it covered, so a traceback keeps its shape. A non-secret rule that matches the original text
-    refuses first - redaction must not hide a blocking rule - and so does a denylist that cannot be read, or
+    line breaks it covered, so a traceback keeps its shape. Non-secret rules check both the full original text
+    and each line before redaction, preserving multiline and line-anchored blocking matches. They refuse first
+    - redaction must not hide a blocking rule - and so does a denylist that cannot be read, or
     text that still matches a secret rule after the replacement. A refusal names a rule or a reason and a
     line, never a value.
     """
@@ -552,6 +553,13 @@ def protect_diagnostics(text: str, key: str | None = None) -> str:
     for rule in rules:
         if rule.secret:
             continue
+        match = rule.pattern.search(text)
+        if match:
+            number = text.count("\n", 0, match.start()) + 1
+            raise Refused(
+                f"the failed-check diagnostics match rule '{rule.name}' at line {number}; the call does not start."
+            )
+        # Preserve line-anchored rules as well as matches spanning the full original text.
         for number, line in enumerate(text.split("\n"), 1):
             if rule.pattern.search(line):
                 raise Refused(

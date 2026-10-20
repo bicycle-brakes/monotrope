@@ -131,3 +131,19 @@ against `ec6f322`: seven of the eight new tests fail there,
 passes on both sides; full `make verify` green 00:47:13Z to 00:51:24Z (2299
 passed, 16 skipped). Span about 14 min of the 2 h appetite.
 
+### Repair — multiline non-secret diagnostics, 2026-10-20
+
+2026-10-20 01:24:55–01:32:04 UTC, 7 min 9 s (measured with `date -u`).
+The full-original-text check precedes secret replacement; the existing
+per-line check retains line-anchored rule behavior. The criterion-5 test
+covers single-line and multiline overlapping non-secret/secret patterns,
+with an explicit assertion when refusal is missing.
+
+Red-first evidence: the current test with `protect_diagnostics` loaded from
+repair baseline `3ec9fe6` produced 1 failed, 1 passed; the multiline case
+failed with `AssertionError` because the non-secret match did not refuse.
+The corrected function passes both cases. Verification:
+`.venv/bin/python3 -m pytest -q tests/test_stage2.py tests/test_leakcheck.py`
+passed (739 tests); Ruff check and format check passed; the criterion-ledger
+check passed. No commit was made; the runner owns `make verify` and the
+checkpoint commit.

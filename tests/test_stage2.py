@@ -2137,13 +2137,25 @@ def test_diagnostic_redaction_refuses_an_unusable_denylist(world: World, capsys:
     assert FIXTURE_SECRET not in world.text() and FIXTURE_SECRET not in capsys.readouterr().err
 
 
-def test_nonsecret_diagnostic_matches_still_refuse(world: World, capsys: pytest.CaptureFixture[str]) -> None:
+@pytest.mark.parametrize("multiline", [False, True], ids=["single-line", "multiline"])
+def test_nonsecret_diagnostic_matches_still_refuse(
+    world: World, capsys: pytest.CaptureFixture[str], multiline: bool
+) -> None:
     """Criterion 5. Planted fault: a secret replacement over the same span hides a non-secret violation."""
-    set_denylist(DENYLIST + "secret:wide = LEAKMARK-[0-9]{6}\n")
     planted = "LEAKMARK-" + "654321"
-    with pytest.raises(stage2.Refused) as error:
+    pattern = r"LEAKMARK-[0-9]{6}"
+    if multiline:
+        planted += "\nEND-" + "654321"
+        pattern += r"\nEND-[0-9]{6}"
+    set_denylist(f"blocked = {pattern}\nsecret:wide = {pattern}\n")
+    refusal = None
+    try:
         stage2.protect_diagnostics(f"a\nvalue {planted}\n")
-    assert "'planted'" in str(error.value) and "line 2" in str(error.value) and planted not in str(error.value)
+    except stage2.Refused as error:
+        refusal = str(error)
+    assert refusal is not None, "a non-secret match must refuse before secret redaction"
+    assert "'blocked'" in refusal and "line 2" in refusal
+    assert all(line not in refusal for line in planted.splitlines())
     draft_world(world)
     plant = {"plans/changes/demo/plan.md": PLAN_CARD}
     world.script(
