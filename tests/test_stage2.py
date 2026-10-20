@@ -5412,6 +5412,16 @@ def test_a_pipe_inside_a_reviewers_finding_reaches_findings(world: World) -> Non
     assert row[6:9] == ["acme-v1-free", "taken — test_a", "no"]
 
 
+def test_the_round_record_names_a_member_that_wrote_a_widened_row(world: World) -> None:
+    """R-25, the call site: the round says which member wrote a row of more than six cells, and why it matters."""
+    said = "| X1 | MAJOR | SPEC | a | src/app.py:1 | the filter `cat x | sort` drops the last row |"
+    world.script(pi=[{"model": "acme-v1-free", "stdout": said}])
+    assert world.run("review-loop") == 0
+    record = world.record().read_text(encoding="utf-8")
+    assert "acme-v1-free wrote 1 row(s) with more than six cells" in record
+    assert "an unescaped `|` before it moves the columns" in record
+
+
 def test_a_line_that_is_not_a_loop_row_is_carried_to_findings(world: World) -> None:
     """Repair round 1, F-2 (a): what the release cannot read as a row arrives as it stands, and the record goes last."""
     answer = rows(1) + "\n| half | a row |\nA remark.\n"
@@ -6993,6 +7003,36 @@ def test_a_text_row_taken_as_not_a_test_is_repaired_and_its_status_written(world
     assert "fixed — not a test — a pipe \\| in the reason" in committed
     assert "taken — not a test — the doctrine pins it" not in committed
     assert git(world.root, "log", "-1", "--pretty=%s") == "fix(demo): repair taken findings L1-1, F-1"
+
+
+@pytest.mark.parametrize(
+    "source",
+    [
+        "class TestFix:\n\n    def test_fix(self):\n        assert True\n",
+        "async def test_fix():\n    assert True\n",
+    ],
+    ids=["method-in-a-class", "async-def"],
+)
+def test_a_fixed_line_naming_a_method_or_an_async_test_is_accepted(
+    world: World, monkeypatch: pytest.MonkeyPatch, source: str
+) -> None:
+    """R-23, the call site: the repair answer check finds a test defined as a method or as `async def`.
+
+    The red-first run is stubbed: pytest cannot select a class method by `file::function`, so this test
+    isolates the definition lookup that `check_repair_answer` makes before that run.
+    """
+    seed_tests(world)
+    world.write_record([("L1-1", "taken — test_a", "no")])
+    monkeypatch.setattr(stage2, "red_first", lambda *_args, **_kwargs: None)
+    script_repair(
+        world,
+        [repair_step(plant={"src/app.py": "value = 2\n", "tests/test_fix.py": source})],
+        make=[{"stdout": "green\n"}],
+    )
+    assert world.run("repair") == 0
+    record = {row[0]: row[7] for row in stage2.record_rows(world.record().read_text(encoding="utf-8"))}
+    assert record["L1-1"] == "fixed — tests/test_fix.py::test_fix"
+    assert len(world.calls("codex")) == 1, "the definition check refused the first attempt"
 
 
 def test_a_fixed_line_naming_an_undefined_test_fails_the_attempt(world: World) -> None:
