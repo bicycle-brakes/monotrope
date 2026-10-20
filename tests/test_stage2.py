@@ -866,6 +866,38 @@ def test_an_oversized_diff_reaches_the_paid_prompt_cut_and_the_record_says_so(wo
         monkey.undo()
 
 
+def test_the_round_and_its_consumed_stage_land_in_one_write(world: World, monkeypatch) -> None:
+    """R-6 of the review-swarm review: no window between the round and the consumption."""
+    world.write_findings(VERDICT)
+    world.script(pi=[{"model": model, "stdout": rows(1)} for model in TEST_FREE])
+    writes: list[str] = []
+    original = Path.write_text
+
+    def counting(self, data, *args, **kwargs):
+        writes.append(self.name)
+        return original(self, data, *args, **kwargs)
+
+    monkeypatch.setattr(Path, "write_text", counting)
+    assert world.run("review-loop") == 0
+    record = world.record().read_text(encoding="utf-8")
+    monkeypatch.undo()
+    # Two writes reach loop.md: the snapshot line of a fresh run, then the round that carries its own
+    # consumption. A crash between round and consumption would need a third.
+    assert writes.count("loop.md") == 2, writes
+    assert '"consumed": ["free"]' in record.replace(" ", " "), record[-400:]
+
+
+def test_a_shifted_broke_a_test_cell_is_refused_by_its_row() -> None:
+    """R-10 of the review-swarm review: the mark out of its column is a refusal, not a status text."""
+    shifted = (
+        "| L1-1 | MAJOR | SPEC | criterion 1 | spec.md:1 | FB1-unique-body | a, b | taken | yes | "
+        "a note in the wrong column |"
+    )
+    with pytest.raises(stage2.Refused) as error:
+        stage2.record_rows(f"## Round 1 — a, 2026-10-20\n\n{shifted}\n")
+    assert "L1-1" in str(error.value) and "moved out of its column" in str(error.value)
+
+
 def test_a_second_review_loop_is_refused_while_the_record_is_held(world: World, capsys) -> None:
     """R-14 of the review-swarm review: one runner per record, and the refusal names the record."""
     path = stage2.lock_path("demo", world.root)
