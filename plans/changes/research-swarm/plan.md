@@ -2280,3 +2280,11 @@ rows named.
 Findings per phase-6 round, 1 to 10: 8, 5, 3, 3, 3, 4, 2, 4, 3, 3; BLOCKER
 rows per round from round 7: 2, 1, 2, 0.
 
+
+### Appetite raised — 2026-10-20
+
+Maintainer, 2026-10-20 (answered shortly before 08:47 UTC), asked whether to raise the appetite by one
+hour for the round-10 repair and one more review round: "ja". The appetite is
+now **18 hours 20 minutes** of phase 4 in total; this replaces the card's
+`Appetite:` line. Rows F-47, F-48 and F-49 are taken. Round-10 repair starts
+08:47:11Z (measured with `date -u`).
