@@ -5,7 +5,7 @@ status: superseded
 superseded_by: 2026-09-17-omnigent-first-target.md
 created: 2026-09-16
 last_reviewed: 2026-09-18
-updated: 2026-09-29
+updated: 2026-10-20
 owner: framework-architect
 provenance: ai-drafted-reviewed
 produced_by:
@@ -92,7 +92,7 @@ violation cannot repair.
 | # | Constraint | Consequence |
 |---|---|---|
 | C1 | **One maintainer today.** All three repositories have one human; roles are named but held by one person. | Human gates are one-word vetoes on open decisions, not approval steps; approver ≠ author (RB-M2) stays a valve until a second person exists. |
-| C2 | **Customer estate in scope.** portfolio and lakeswitch carry abstracted knowledge from a productive customer project; `oracle-source-inventory` is a read-only boundary. | Endpoint residency (RB-A6) and the leak-check barrier are preconditions for any foreign model, not options. |
+| C2 | **Customer estate in scope.** portfolio and lakeswitch carry abstracted knowledge from a customer project; the customer instance, a private repository not named here, is a read-only boundary. | Endpoint residency (RB-A6) and the leak-check barrier are preconditions for any foreign model, not options. |
 | C3 | **Harness volatility.** Claude Code, Codex, Cline, Omnigent change monthly; Omnigent is alpha with a critical CVE in its history (research, `unverified`). | Nothing of value lives only in a harness adapter; adapters are thin and disposable (WORKFLOW §1). |
 | C4 | **Tracker fragility, measured.** The Beads export broke three times in four days (WORKFLOW §3); in portfolio `bd create` produces a wrong id prefix because the repository's prefix exceeds the eight characters `bd rename-prefix` allows (wp-p0.1, open since 2026-09-02, reproduced 2026-09-16 in a worktree and in the main checkout). | One writer per tracker, one bead per change, export written by one script at one moment; a prefix chosen at `bd init` within the tool's limits. |
 | C5 | **Budget.** Frontier models per phase, not per token; cross-vendor only where residency allows. | Routing table per phase; escalation rules; spend caps once a runner exists. |
@@ -113,7 +113,7 @@ violation cannot repair.
      kit · routing · endpoints · handover             instance of the workflow
               ▲
               │ research corpus (dated sources, never normative)
-   oracle-source-inventory: customer instance — read-only boundary for all three
+   customer instance (private, not named) — read-only boundary for all three
 ```
 
 **Flows.** The kit travels *outward* by copy, and the Leerprobe measures how

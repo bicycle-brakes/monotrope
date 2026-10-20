@@ -1817,8 +1817,8 @@ def test_the_drift_job_holds_only_steps_that_can_run() -> None:
     drift_gates = [g for g in gates() if g["job"] == "drift" and not g["id"].startswith("drift-setup")]
     assert drift_gates, "the drift job has not a single check step"
     for g in drift_gates:
-        assert "oracle-source-inventory" not in g["command"], (
-            f"{g['id']} needs the project instance, which is not checked out here"
+        assert "../" not in g["command"] and "~/" not in g["command"], (
+            f"{g['id']} reads a sibling checkout (a project instance), which is not checked out here"
         )
         assert "--project-path" not in g["command"], f"{g['id']} needs an instance path"
 

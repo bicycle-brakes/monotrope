@@ -83,9 +83,9 @@ Full doctrine: `docs/WORKFLOW.md`, in English since 2026-09-29.
 5. **The handover is the file, not the chat.** Session end → a file under
    `docs/journal/handover/`. A number without its commit or date reads as a
    historical one — every count carries its cut-off.
-6. **The customer instance is out of bounds.** What is needed from
-   `oracle-source-inventory` travels as a *requirement*, never as an
-   expression — no filename, field name, entity or layer name from there
+6. **The customer instance is out of bounds.** What is needed from the
+   customer instance (private, never named) travels as a *requirement*, never
+   as an expression — no filename, field name, entity or layer name from there
    appears in a framework artifact.
 7. **Texts carry their own meaning.** A reader without this session must
    understand every sentence; bead ids and file names go in parentheses as a
@@ -156,8 +156,8 @@ tools/bd dolt push          # push tracker data to origin (refs/dolt/data)
   from there, and concurrent writers lose nothing
   (`docs/research/2026-09-23-worktree-tracker-writes.md`); who may write is
   still house rule 4, and a worker claims with `--actor <session>`. Each new
-  checkout or worktree runs `make venv` once before `make verify`; the suite
-  fails under an interpreter that does not match `requirements-ci.txt`
+  checkout or worktree runs `make venv` once before `make verify` (`PYTHON=` picks a 3.12+
+  interpreter); the suite fails under one that does not match the lock
   (bead coding-harness-ei0).
 - **A text-only change (Markdown outside `scripts/`, `tests/`, `prompts/`,
   `decisions/`) skips the local `make verify`;** CI is its gate.
@@ -197,4 +197,4 @@ tools/bd dolt push          # push tracker data to origin (refs/dolt/data)
 |---|---|
 | `portfolio-agentic-engineering` | framework governance (rule set, gates, ADRs, lessons), OSI→lakeswitch transfer logistics, domain content — the origin this repo migrates from |
 | `lakeswitch-ai` | product repo running a clean-room instance of the workflow |
-| `oracle-source-inventory` | customer instance — read-only boundary for framework sessions |
+| the customer instance (private, not named) | read-only boundary for framework sessions |
