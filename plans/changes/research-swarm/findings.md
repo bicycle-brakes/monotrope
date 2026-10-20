@@ -4107,3 +4107,15 @@ Stage-2 call, 2026-10-20: repair · attempt 1 · route stage-1 · endpoint claud
 > make: *** [verify] Error 1
 > - `plan.md` did not add a measured line below `## Time used`
 > ````
+
+Stage-2 call, 2026-10-20: review · endpoint openai-codex · model gpt-6.1-sol · leak check clean over 548 files, 1668 commits, 12 rules.
+
+## Phase 6 — Codex, 2026-10-20
+
+| ID | Severity | Dimension | Origin | Where | Finding | Reviewer | Status | Broke a test |
+|---|---|---|---|---|---|---|---|---|
+| F-56 | MAJOR | SPEC | base | `scripts/stage2_availability.py:362–369` | A research header containing `neighbours: [plans/changes/other/spec.md]` followed by `neighbours: []` silently discards the given dependency. Reproduced through `given_neighbours()`, which returns an empty list. Conflicting neighbour declarations must refuse before model calls with exit 2. [criterion 4] | Codex | open | — |
+| F-57 | MAJOR | MAINT | base | `scripts/stage2_research_dispatch.py:321–328`; `scripts/stage2_research_run.py:1174–1181` | Interrupting an active run with Ctrl-C leaves its model subprocesses running. Reproduced by sending SIGINT during dispatch: the dispatcher exits while its child remains alive. The join has no cancellation cleanup, and the run releases its store lock without stopping active children, allowing a replacement run to overlap surviving calls. | Codex | open | — |
+
+Phase 6 verdict: codex 01a15b26-dd6a-7a43-9950-2da19acd0cc8, 2026-10-20
+Reviewer session: codex 01a15b26-dd6a-7a43-9950-2da19acd0cc8 — a fresh session reviewed: an earlier ## Phase 6 block makes this a re-check
