@@ -14,10 +14,12 @@ for and what must not happen. Everything in between — the research, your
 answers, the agent's own choices, the contract, the review findings and where
 the next session resumes — is written to versioned files in the repository.
 
-Nothing to install, no server and no database of its own: Markdown and YAML in
-git, a handful of Python scripts, and one instruction file that Claude Code,
-Codex and Cline all read. A change started in one agent harness can be
-finished in another, tomorrow, by a different model.
+No server of its own: Markdown and YAML in git, a small Python toolchain, and
+a tracker that travels in the repository's git refs. One instruction file
+(`AGENTS.md`) is the only instruction entry; Claude Code and Codex read it
+today. The files are designed to outlive the harness (the agent program), so
+a change can be finished in another session by a different model; the full
+orchestration path is Claude Code for now.
 
 This repository holds the workflow rules, the phase prompts, the templates and
 the tools, and it develops itself with the same workflow.
@@ -42,11 +44,11 @@ Monotrope turns all three into files and checks.
 
 ## What it does
 
-A change runs through seven phases. Each phase leaves one file, and the next
-phase reads that file instead of a chat.
+A change runs through seven phases. Each phase leaves its result in the
+repository, and the next phase reads that instead of a chat.
 
-Terracotta boxes are the only moments that need you; everything else is done by
-agents and checked by machines.
+The highlighted moments are yours; everything else is done by agents and
+checked by machines.
 
 ```mermaid
 flowchart TD
@@ -117,17 +119,18 @@ it.
 
 ## How it differs
 
-Most ways of working with coding agents keep the state in the conversation:
+Many ways of working with coding agents keep the state in the conversation:
 the plan, the reasons and the open ends live in a chat window and are gone
 when it closes. Agent frameworks and orchestrators add more agents and more
-automation, but rarely a record a person can audit afterwards.
-Spec-first tools write the spec down, then stop recording once the code runs.
+automation, but often without a record a person can audit afterwards.
+Spec-first tools write the spec down, then often stop recording once the code
+runs.
 
-Monotrope treats **the repository as the only memory** and the **merge as the
-only approval**:
+Monotrope treats **the repository as the memory** and the **merge as the
+approval for decisions**:
 
-- **The chat is never the state.** Every phase, every decision and every
-  handover is a file. Close the window, switch the harness, change the model —
+- **The chat is not the state.** Every phase, every decision and every
+  handover is a file. Close the window, start a new session, change the model —
   the next session reads where things stand.
 - **Decisions have authors.** Open points come in three kinds. `[DECISION]`
   goes to a person: intent, anything irreversible or risky. `[GAP]` is
@@ -150,12 +153,12 @@ only approval**:
       class D you
   ```
 
-- **A decision takes effect when its pull request is merged** — not when
-  someone typed "yes" into a chat.
+- **A rule, or a file reserved for a person, changes only when its pull
+  request is merged** — not when someone typed "yes" into a chat.
 - **Evidence over summaries.** At the merge you judge a change by its tests,
   its findings table and green checks, not by an agent's account of itself.
-- **It says what is not enforced.** Every rule is labelled: enforced by a
-  tool, a written rule agents follow, or not built yet.
+- **It says what is not enforced.** The status section separates what a tool
+  enforces, what is a written rule agents follow, and what is not built yet.
 
 ## Where decisions live
 
@@ -169,21 +172,22 @@ Every decision is a file, and each kind has one place:
 | Architecture decisions | `docs/adr/`; a record takes effect when its pull request is merged |
 
 Which files only a person may change is declared in `provenance.yaml`; a pull
-request that touches one is a decision pull request. A finished change moves
-to `plans/changes/archive/` with its decisions. Session handovers repeat the
+request that touches one is a decision pull request. A finished change leaves
+its lasting parts in `plans/specs/` or `docs/adr/`; the rest is archived under
+`plans/changes/archive/` with its decisions. Session handovers repeat the
 decisions of a session, but they are a summary, not the record.
 
 ## What is special
 
-**Model-agnostic by construction.** One instruction file (`AGENTS.md`) serves
-every harness, and a test fails if a harness-specific file would silently
-replace it. Models are assigned per phase and per job: one drafts, another
-reviews, a third implements.
+**One instruction file.** `AGENTS.md` is the only instruction entry, and a
+test fails if a harness-specific file would silently replace it. Models are
+assigned per phase and per job: one drafts, another reviews, a third
+implements.
 
-**A second vendor reviews, under guard.** Calls to models from other vendors
-go through one runner. It checks that the endpoint is allowed to see the data
-(`model-endpoints.yaml`), and it runs a leak check before every call. A leak
-stops the call; there is no silent fallback to another model. A single
+**A second vendor reviews, under guard.** Work handed to a model from another
+vendor goes through one runner. It checks that the endpoint is allowed to see
+the data (`model-endpoints.yaml`), and it runs a leak check before every call.
+A leak stops the call; there is no silent fallback to another model. A single
 reviewer's blind spot is invisible to them; whether a second vendor finds
 more errors is being measured, not assumed.
 
@@ -194,9 +198,9 @@ its minimum number of interview questions, that every recorded question
 carries its context, that every acceptance criterion names the test that
 proves it, and that document headers say when their content last changed.
 
-**It travels.** The mechanism moves to another repository as a kit, and a
-probe installs it into a throwaway repository and runs it there, to prove it
-still works outside its home.
+**It travels.** The mechanism moves to another repository as a kit; a probe
+copies it into a throwaway tree and runs its tests there, to prove it still
+works outside its home.
 
 **Built for focus.** Every question comes with its context: the topic, why it
 comes up now, how things stand today, and what would change. Every session
@@ -218,7 +222,9 @@ scarcest resource in the loop — for people and for models.
   views stay in the table, and the disagreement blocks like a defect.
 - **Review until clean, cheapest first.** The review loop starts with a swarm
   of free models, then a swarm of fast paid ones, then one stronger model per
-  round, ordered by cost — and stops at the first round with nothing to fix.
+  round, ordered by cost — and stops at the first round with nothing to fix,
+  or at a named stop: the paid ladder is exhausted, or two consecutive rounds
+  only found defects introduced by earlier repairs.
 - **A brake on repair loops.** If two rounds in a row find only defects that
   earlier repairs introduced, the loop stops and a person decides how to go
   on.
@@ -259,16 +265,16 @@ real files:
 
 ## What works today
 
-Checked on 2026-10-20 against `main` at `59630b7`.
+Checked on 2026-10-20 against `main` at `94ae6cc`.
 
 ### Enforced by tooling
 
 - `make verify` and CI run the gate list: tests, lint and the process checks
-  above. Every gate declares whether it blocks or only reports.
+  above. Every gate declares whether it blocks, reports or advises.
 - The stage-2 runner (`scripts/stage2.py`) checks the endpoint and runs the
-  leak check before every call to another vendor. Drafting, implementing,
-  repairing and reviewing by other models all go through it.
-- The review loop runs until a round is clean (ADR 0021).
+  leak check before every call to another vendor. Exploring, drafting,
+  implementing, repairing and reviewing by other models all go through it.
+- The review loop runs until a round is clean or a named stop (ADR 0021).
 
 ### Written rules agents follow, not enforced by a tool
 
@@ -279,13 +285,20 @@ Checked on 2026-10-20 against `main` at `59630b7`.
 ### Not built yet
 
 - The artefact validator, the stop hook that blocks a session end on a red
-  tree, the slash commands and the gate catalogue that the doctrine names.
-  Where the doctrine describes them, it describes the target.
+  tree, the slash commands, the `make change` target (the script
+  `scripts/new_change.py` exists; the target does not) and the gate catalogue
+  that the doctrine names. Where the doctrine describes them, it describes
+  the target.
 - The research swarm for larger changes: an open decision (ADR 0020, draft).
-- Keeping the work of a failed model call instead of discarding it.
+- Keeping the work of a failed model call: partly built. `scripts/stage2.py`
+  saves failed implement and draft attempts; the rest is in progress.
 - Orchestration of many agents in parallel: evaluated, not built.
 
 ## Try it
+
+You need Python 3.12 or newer, Node 26 with npm, git and curl on macOS or
+Linux. `make venv` picks `python3.12` or `python3`; name another interpreter
+with `make venv PYTHON=/path/to/python3.12`.
 
 ```bash
 git clone https://github.com/bicycle-brakes/monotrope.git
@@ -297,7 +310,11 @@ make verify                # all gates
 tools/bd ready             # open, unblocked work
 ```
 
-To start a change, create its bead first, then
+These commands run this repository itself. A step-by-step onboarding page for
+other repositories is still being built; until then,
+[`docs/WORKFLOW.md`](docs/WORKFLOW.md) is the reference.
+
+To start a change, create its bead (the tracker item) first, then
 `python3 scripts/new_change.py <name> --bead <id>`, and read
 [`docs/WORKFLOW.md`](docs/WORKFLOW.md) from phase 1.
 
@@ -311,17 +328,18 @@ To start a change, create its bead first, then
   next one.
 - [`model-endpoints.yaml`](model-endpoints.yaml): which model may see which
   data.
-- [`AGENTS.md`](AGENTS.md): the instructions every agent harness reads.
+- [`AGENTS.md`](AGENTS.md): the instruction file the agents read.
 
 ## Contributing
 
 - **Tracker.** Work is tracked in Beads, read and written only through
   `tools/bd`. A pull request names every bead it opens, changes or closes.
-- **Decisions** take effect when the maintainer merges their pull request.
-- **One change, one worktree,** under `.claude/worktrees/`.
+- **Decision pull requests** take effect when the maintainer merges them.
+- **One change, one branch, one worktree, one session.**
+- **Before a pull request.** `make venv` once, then `make verify`; a text-only
+  change is gated by CI.
 - **Language.** Repository artefacts are in English.
 
 ## License
 
-Apache-2.0 — see [`LICENSE`](LICENSE) (added with the public-readiness pull
-request).
+Apache-2.0 — see [`LICENSE`](LICENSE).
