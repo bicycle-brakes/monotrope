@@ -2230,6 +2230,21 @@ def accepted_row(row: list[str]) -> bool:
     return row[7].lower().startswith(("taken", "fixed"))
 
 
+CUT_LINE = "The diff was cut:"
+
+
+def round_was_cut(record: str | None, round_number: int) -> bool:
+    """Whether that round's diff was cut. Such a round cannot end the loop, however clean it reads.
+
+    A member's `No finding.` over a cut diff is a statement about the part it saw; letting it stop the
+    loop would certify the change on a diff nobody reviewed in full (P2 of the #191 review).
+    """
+    if not record:
+        return False
+    start = record.rfind(f"## Round {round_number} —")
+    return start >= 0 and CUT_LINE in record[start:]
+
+
 def clean_round(rows: list[list[str]], round_number: int) -> bool:
     """A completed round is clean when every row is decided and none is accepted (ADR 0021, decision 1).
 
@@ -4593,9 +4608,14 @@ def review_loop(root: Path, change: str, availability_reported: str | None = Non
         refusal = undecided_refusal(history.get(last, []), "decide them first")
         if refusal:
             raise Refused(refusal)
-        if clean_round(history.get(last, []), last):
+        if clean_round(history.get(last, []), last) and not round_was_cut(record, last):
             raise Refused(f"round {last} was clean: every row was decided and none accepted; the loop stops.")
-        if last - 1 in history and fix_r_only(history[last], last) and fix_r_only(history[last - 1], last - 1):
+        if (
+            last in history
+            and last - 1 in history
+            and fix_r_only(history[last], last)
+            and fix_r_only(history[last - 1], last - 1)
+        ):
             raise Refused(
                 f"rounds {last - 1} and {last} accepted only findings whose Origin begins `fix-r`; "
                 "the repair brake stops the loop; the maintainer decides what continues."
@@ -4761,7 +4781,10 @@ def review_loop(root: Path, change: str, availability_reported: str | None = Non
         if kept.strip():
             reviewer_blocks.append(kept.strip())
     if cut_note:
-        statements.append(f"The diff was cut: {cut_note}.")
+        statements.append(
+            f"{CUT_LINE} {cut_note}. A clean answer over a cut diff does not end the loop; the rest of "
+            "the change needs a round of its own."
+        )
     parts = [f"## Round {round_number} — {', '.join(members)}, {today()}", *notes, *statements]
     for block in reviewer_blocks:
         parts.append(f"{NOT_ROWS_NOTE}\n\n{quote_reviewer(block)}")

@@ -678,6 +678,10 @@ def test_an_oversized_diff_reaches_the_paid_prompt_cut_and_the_record_says_so(wo
             "the paid prompt carried no cut marker"
         )
         assert f"The diff was cut: the change diff was cut at {limit} of" in record, "the round hid the cut"
+        # A clean answer over a cut diff does not end the loop: the next call goes on to the ladder
+        # instead of refusing with "round 2 was clean" (P2 of the #191 review).
+        world.script(pi=[{"model": model, "stdout": "No finding."} for model in TEST_RUNGS])
+        assert world.run("review-loop") == 0
     finally:
         monkey.undo()
 
