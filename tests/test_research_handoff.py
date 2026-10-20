@@ -103,9 +103,25 @@ def run_text(
     for report in reports:
         ids = [c["id"] for c in report["claims"] if c["evidence_status"] == "valid"]
         ids = ids if supported == "all" else [i for i in ids if i not in supported.split(",")]
-        scores.append(
-            {"topic": report["topic"], "seat": report["seat"], "supported": {"count": len(ids), "claims": ids}}
-        )
+        buckets = {
+            name: {"count": 0, "claims": []}
+            for name in ("supported", "refuted", "off-brief", "unresolved", "unsupported", "unique")
+        }
+        for claim in report["claims"]:
+            disposition = (
+                "unsupported"
+                if claim["evidence_status"] == "unsupported"
+                else "supported"
+                if claim["id"] in ids
+                else "unresolved"
+            )
+            buckets[disposition]["claims"].append(claim["id"])
+            buckets[disposition]["count"] += 1
+            if disposition != "unsupported":
+                judge.setdefault("claim_judgements", []).append(
+                    {"claim": claim["id"], "disposition": disposition, "unique": False}
+                )
+        scores.append({"topic": report["topic"], "seat": report["seat"], **buckets})
     parts = [
         f"<!-- research-swarm/v2 run {run} -->",
         f"## Research swarm - 2026-10-19\n\nrun {run}",
@@ -735,3 +751,70 @@ def test_malformed_incomplete_disagreements_are_not_measured(
     world.write([run_text(RUN1), broken])
     code, out = world.check(capsys)
     assert code == 3 and "disagreement" in out.lower(), out
+
+
+@pytest.mark.parametrize("fault", ["double", "judge", "duplicate", "unique", "missing", "count", "wrong-seat"])
+def test_contradictory_claim_dispositions_are_not_measured(world: World, capsys, fault) -> None:
+    """F-45: persisted scores must be exclusive and agree with the judge."""
+    run = run_text(RUN1)
+    parsed = gate.parse_text(run, "fixture")[0]
+    reconciliation = parsed.reconciliation
+    claim = gid(RUN1, 1, SEATS[0], "C1")
+    score = next(s for s in reconciliation["scores"] if claim in s["supported"]["claims"])
+    if fault == "double":
+        score["refuted"] = {"count": 1, "claims": [claim]}
+        next(j for j in reconciliation["reconciliation"]["claim_judgements"] if j["claim"] == claim)["disposition"] = (
+            "refuted"
+        )
+    elif fault == "judge":
+        next(j for j in reconciliation["reconciliation"]["claim_judgements"] if j["claim"] == claim)["disposition"] = (
+            "refuted"
+        )
+    elif fault == "duplicate":
+        score["supported"] = {"count": 2, "claims": [claim, claim]}
+    elif fault == "unique":
+        score["unique"] = {"count": 1, "claims": [claim]}
+    elif fault == "missing":
+        score["supported"] = {"count": 0, "claims": []}
+    elif fault == "count":
+        score["supported"]["count"] = 9
+    else:
+        score["seat"] = "opencode-go:foreign"
+    bad = run.replace(
+        fenced("reconciliation", gate.parse_text(run, "fixture")[0].reconciliation),
+        fenced("reconciliation", reconciliation),
+    )
+    assert bad != run
+    world.write([bad], spec=spec_text(neighbours=[], basis=(f"`{claim}`",)))
+    code, out = world.check(capsys)
+    assert code == 3, out
+    world.write([run], spec=spec_text(neighbours=[], basis=(f"`{claim}`",)))
+    assert world.check(capsys)[0] == 0
+
+
+@pytest.mark.parametrize(
+    "disposition,unique",
+    [
+        ("supported", False),
+        ("supported", True),
+        ("refuted", False),
+        ("unresolved", False),
+        ("off-brief", False),
+    ],
+)
+def test_consistent_judge_and_score_dispositions_remain_measured(world: World, capsys, disposition, unique) -> None:
+    run = run_text(RUN1)
+    original = gate.parse_text(run, "fixture")[0].reconciliation
+    changed = json.loads(json.dumps(original))
+    claim = gid(RUN1, 1, SEATS[0], "C1")
+    score = next(s for s in changed["scores"] if claim in s["supported"]["claims"])
+    score["supported"] = {"count": 0, "claims": []}
+    score[disposition] = {"count": 1, "claims": [claim]}
+    if unique:
+        score["unique"] = {"count": 1, "claims": [claim]}
+    verdict = next(j for j in changed["reconciliation"]["claim_judgements"] if j["claim"] == claim)
+    verdict.update(disposition=disposition, unique=unique)
+    run = run.replace(fenced("reconciliation", original), fenced("reconciliation", changed))
+    world.write([run])  # an answered maintainer record supplies the criterion basis
+    code, out = world.check(capsys)
+    assert code == 0, out

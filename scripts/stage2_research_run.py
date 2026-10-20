@@ -437,7 +437,11 @@ class Run:
         assert self.store is not None and self.run_id is not None
         started = utc()
         self.started_at[slot.slot_id] = started
-        self.store.write_launch(self.run_id, slot.slot_id, {**self.key_fields(entry), "launched_at": started})
+        self.store.write_launch(
+            self.run_id,
+            slot.slot_id,
+            {**self.key_fields(entry), "launched_at": started, "leak_check": record},
+        )
 
     def key_fields(self, entry: dict) -> dict:
         return {

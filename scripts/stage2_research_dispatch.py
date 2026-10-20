@@ -71,10 +71,20 @@ class DispatchResult:
 
 
 def _own_group(proc):
-    """True only when the child leads its own process group (started with a new session)."""
+    """Find the child's own process group, including descendants of an already reaped leader."""
     try:
         return os.getpgid(proc.pid) == proc.pid and proc.pid != os.getpgrp()
-    except (ProcessLookupError, PermissionError):
+    except ProcessLookupError:
+        # The leader may already have been reaped while descendants retain its PGID.
+        # A live group with this id cannot be reassigned to a different leader.
+        if proc.pid != os.getpgrp():
+            try:
+                os.killpg(proc.pid, 0)
+                return True
+            except (ProcessLookupError, PermissionError):
+                pass
+        return False
+    except PermissionError:
         return False
 
 

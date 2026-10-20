@@ -322,6 +322,7 @@ def _complete_shape(parsed: ParsedRun, where: str) -> None:
             f"{where}: the reconciliation lists {contradicted[0]} as supported, "
             "which its report does not hold with valid evidence"
         )
+    _check_claim_scores(parsed, judge, scores, where)
     parsed.derived = research_handoff.derive_inventory(
         run_id=parsed.run_id,
         declared_class=parsed.manifest["class"],
@@ -329,6 +330,70 @@ def _complete_shape(parsed: ParsedRun, where: str) -> None:
         reports=parsed.reports,
         disagreements=judge["disagreements"],
     )
+
+
+def _check_claim_scores(parsed: ParsedRun, judge: dict, scores: list, where: str) -> None:
+    """Cross-check exclusive score buckets against report evidence and the judge's verdicts."""
+    dispositions = ("supported", "refuted", "off-brief", "unresolved", "unsupported")
+    claims = {c["id"]: ((r["topic"], r["seat"]), c["evidence_status"]) for r in parsed.reports for c in r["claims"]}
+
+    def fail(detail: str) -> None:
+        raise CannotMeasure(f"{where}: contradictory claim dispositions: {detail}")
+
+    judgements = judge.get("claim_judgements")
+    if not isinstance(judgements, list):
+        fail("the judge lacks its claim judgements")
+    expected = {}
+    for item in judgements:
+        if not isinstance(item, dict):
+            fail("a judge disposition is malformed")
+        ident, disposition, unique = item.get("claim"), item.get("disposition"), item.get("unique")
+        if not isinstance(ident, str) or ident not in claims or ident in expected:
+            fail("an unknown or repeated judge claim")
+        if (
+            claims[ident][1] != "valid"
+            or not isinstance(disposition, str)
+            or disposition not in dispositions[:-1]
+            or type(unique) is not bool
+            or (unique and disposition != "supported")
+        ):
+            fail(f"{ident} has an invalid judge disposition")
+        expected[ident] = (disposition, unique)
+    if set(expected) != {ident for ident, (_, status) in claims.items() if status == "valid"}:
+        fail("the judge does not cover every valid claim exactly once")
+    seen_seats, scored, unique_ids = set(), {}, set()
+    for score in scores:
+        topic, seat = score.get("topic"), score.get("seat")
+        if type(topic) is not int or not isinstance(seat, str) or (topic, seat) in seen_seats:
+            fail("a score has an ambiguous topic or seat")
+        key = (topic, seat)
+        seen_seats.add(key)
+        for name in (*dispositions, "unique"):
+            bucket = score.get(name)
+            if not isinstance(bucket, dict) or not _is_list_of(bucket.get("claims"), str):
+                fail(f"{key} lacks the {name} score")
+            ids = bucket["claims"]
+            if type(bucket.get("count")) is not int or bucket["count"] != len(ids) or len(set(ids)) != len(ids):
+                fail(f"{key} has an ambiguous {name} count or claim list")
+            for ident in ids:
+                if ident not in claims or claims[ident][0] != key:
+                    fail(f"{ident} is not a claim of score seat {key}")
+                if name == "unique":
+                    unique_ids.add(ident)
+                elif ident in scored:
+                    fail(f"{ident} has more than one disposition")
+                else:
+                    scored[ident] = name
+    if set(scored) != set(claims):
+        fail("the scores do not cover every report claim exactly once")
+    for ident, (_, status) in claims.items():
+        disposition, unique = expected.get(ident, ("unsupported", False))
+        if (
+            scored[ident] != disposition
+            or (ident in unique_ids) != unique
+            or (status == "unsupported" and scored[ident] != "unsupported")
+        ):
+            fail(f"{ident} disagrees with its evidence or judge disposition")
 
 
 # ---------------------------------------------------------------------------

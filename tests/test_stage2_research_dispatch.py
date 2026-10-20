@@ -5,6 +5,7 @@ Real short-lived child processes; no model, network or file writes by the librar
 
 from __future__ import annotations
 
+import contextlib
 import os
 import signal
 import subprocess
@@ -662,3 +663,41 @@ def test_a_raising_terminal_callback_with_a_security_refusal_exits_two():
     slots = [make_slot("bad", provider="claude", order=(0,)), make_slot("s0", order=(0,), script=sleeper(0.3))]
     result = m.dispatch(slots, gate=gate, launcher=h.launcher, on_terminal=on_terminal)
     assert result.exit_code == 2
+
+
+def test_cancellation_kills_group_after_leader_was_already_reaped():
+    """F-44: cancellation still owns a surviving group after its leader was reaped."""
+    m = module()
+    script = (
+        "import os,signal,time\n"
+        "if os.fork() == 0:\n"
+        "    signal.signal(signal.SIGTERM, signal.SIG_IGN)\n"
+        "    print(os.getpid(), flush=True)\n"
+        "    time.sleep(60)\n"
+        "else:\n"
+        "    os._exit(0)\n"
+    )
+    proc = subprocess.Popen(
+        [sys.executable, "-c", script],
+        start_new_session=True,
+        stdout=subprocess.PIPE,
+        stderr=subprocess.PIPE,
+        text=True,
+    )
+    descendant = int(proc.stdout.readline())
+    proc.wait(timeout=5)  # the process group leader is gone before cancellation starts
+    try:
+        out, err = m._stop_and_reap(proc, 0.1)
+        assert (out, err) == ("", "")
+        alive = True
+        for _ in range(100):
+            try:
+                os.kill(descendant, 0)
+            except ProcessLookupError:
+                alive = False
+                break
+            time.sleep(0.05)
+        assert not alive, "the reaped leader's descendant survived cancellation"
+    finally:
+        with contextlib.suppress(ProcessLookupError):
+            os.kill(descendant, signal.SIGKILL)

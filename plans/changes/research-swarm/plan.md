@@ -1443,6 +1443,10 @@ Stage-1 route: repair · model claude-sonnet-5-5 · reason: two Codex post-run c
 
 Stage-1 route: repair · model claude-sonnet-5-5 · reason: two Codex post-run checks failed.
 
+## Runner route — 2026-10-20
+
+Stage-1 route: repair · model claude-sonnet-5-5 · reason: two Codex post-run checks failed.
+
 ## Time used
 
 2026-10-17, appetite stop answered: the span of the three implement attempts of 2026-10-15 (ended 04:53:50, `cf848ee`) has no start record, so time used was not measurable (78 minutes measured). Maintainer, 2026-10-17: "Ja, halt die zeitgrenze fest" — **continue** with a new appetite of 13 hours 20 minutes in total (the measured 78 minutes plus 12 hours); the unmeasured span stays named, not counted. This replaces the card's `Appetite:` line.
@@ -2249,4 +2253,13 @@ appetite. Estimated total so far, from the spans recorded in this plan and in
 the 2026-10-19 handovers: about 15 h 30 min to 15 h 45 min; about 1 h 35 min
 remain. When the appetite is spent, the work stops and the maintainer
 decides.
+
+### Phase-6 round-9 repairs — 2026-10-20
+
+Rows F-44, F-45 and F-46. Span not measured: this session had no command tool to read `date`, so no time is counted for it. No test was run by this session; the code and tests below were already in the working tree when it started, and it only checked them against the rows.
+
+- F-44: `_own_group` (`scripts/stage2_research_dispatch.py`) recognises a live process group whose leader was already reaped, so `_stop_and_reap` still signals it. Test `tests/test_stage2_research_dispatch.py::test_cancellation_kills_group_after_leader_was_already_reaped`.
+- F-45: `_check_claim_scores` (`scripts/check_research_handoff.py`) requires exclusive, judge-consistent claim dispositions; a contradiction is not measured (exit 3). Test `tests/test_research_handoff.py::test_contradictory_claim_dispositions_are_not_measured`.
+- F-46: the launch record written before each launch carries the individual leak check. Test `tests/test_stage2_swarm.py::test_launch_record_keeps_individual_leak_check_before_launch`.
+- Red-first evidence for these tests is not recorded by this session. The runner runs `make verify`.
 

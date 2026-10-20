@@ -2832,3 +2832,27 @@ def test_manifest_publishes_judge_packet_size_and_capacity_policy(
     else:
         (call,) = sworld.calls("judge")
         assert manifest["judge_packet"]["size_characters"] == len(call["prompt"])
+
+
+def test_launch_record_keeps_individual_leak_check_before_launch(sworld: SwarmWorld, monkeypatch) -> None:
+    """F-46: killing a launch before its terminal callback cannot lose its exact check."""
+    sworld.complete()
+    original_write = stage2_research_store.Store.write_launch
+    launches = []
+
+    def write_launch(store, run_id, slot_id, record):
+        # This assertion runs before launch and before any terminal callback.
+        assert record["leak_check"]["clean"] is True
+        assert set(record["leak_check"]) == {"clean", "files", "commits", "rules"}
+        original_write(store, run_id, slot_id, record)
+        path = store._run_directory(run_id) / f"{slot_id}.launch.json"
+        durable = stage2_research_store._read_sealed(path)
+        assert durable["leak_check"] == record["leak_check"]
+        results, interrupted = store.slot_records(run_id)
+        assert slot_id in interrupted and slot_id not in results
+        launches.append(record.copy())
+
+    monkeypatch.setattr(stage2_research_store.Store, "write_launch", write_launch)
+    assert sworld.run() == 0
+    assert len(launches) == 39
+    assert all(r["prompt_sha256"] and r["launched_at"] and r["leak_check"] for r in launches)

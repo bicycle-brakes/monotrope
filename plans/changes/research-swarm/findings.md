@@ -3185,9 +3185,161 @@ Stage-2 call, 2026-10-20: review · endpoint openai-codex · model gpt-6.1-sol �
 
 | ID | Severity | Dimension | Origin | Where | Finding | Reviewer | Status | Broke a test |
 |---|---|---|---|---|---|---|---|---|
-| F-44 | BLOCKER | SPEC | fix-r6 | `scripts/stage2_research_dispatch.py:73–103` | Cancellation still leaves descendants alive when the process-group leader exits before `_stop_and_reap()` begins. New evidence after the earlier cancellation repair: a local subprocess reproduction reaps the leader first, then calls the stop routine; its descendant survives. `_own_group()` returns false for the vanished leader, so neither signal reaches the surviving group. Security cancellation must stop that group. [criteria 12, 36] | Codex | taken — criteria 12, 36 | — |
-| F-45 | BLOCKER | SPEC | base | `scripts/check_research_handoff.py:298–324` | The gate accepts contradictory claim dispositions. Reproduced through `check_change()`: the judge marks a claim refuted, the stored scores list it as both refuted and supported, and a criterion cites it; the gate returns no findings. It trusts the supported list without checking exclusive dispositions or agreement with the judge. Contradictory evidence must produce not-measured exit 3. [criteria 33–34] | Codex | taken — criteria 33–34 | — |
-| F-46 | MAJOR | SPEC | base | `scripts/stage2_research_run.py:429–440` | An invocation interrupted by SIGKILL before its terminal callback loses its individual leak-check evidence. Capturing `write_launch()` confirms that the durable launch record contains identity, prompt hash and time but no leak-check record; the audit line remains buffered in memory. Recovery can name the interrupted slot but cannot recover its check. The check must be durable before launch. [criteria 13, 51] | Codex | taken — criteria 13, 51 | — |
+| F-44 | BLOCKER | SPEC | fix-r6 | `scripts/stage2_research_dispatch.py:73–103` | Cancellation still leaves descendants alive when the process-group leader exits before `_stop_and_reap()` begins. New evidence after the earlier cancellation repair: a local subprocess reproduction reaps the leader first, then calls the stop routine; its descendant survives. `_own_group()` returns false for the vanished leader, so neither signal reaches the surviving group. Security cancellation must stop that group. [criteria 12, 36] | Codex | fixed — tests/test_stage2_research_dispatch.py::test_cancellation_kills_group_after_leader_was_already_reaped | — |
+| F-45 | BLOCKER | SPEC | base | `scripts/check_research_handoff.py:298–324` | The gate accepts contradictory claim dispositions. Reproduced through `check_change()`: the judge marks a claim refuted, the stored scores list it as both refuted and supported, and a criterion cites it; the gate returns no findings. It trusts the supported list without checking exclusive dispositions or agreement with the judge. Contradictory evidence must produce not-measured exit 3. [criteria 33–34] | Codex | fixed — tests/test_research_handoff.py::test_contradictory_claim_dispositions_are_not_measured | — |
+| F-46 | MAJOR | SPEC | base | `scripts/stage2_research_run.py:429–440` | An invocation interrupted by SIGKILL before its terminal callback loses its individual leak-check evidence. Capturing `write_launch()` confirms that the durable launch record contains identity, prompt hash and time but no leak-check record; the audit line remains buffered in memory. Recovery can name the interrupted slot but cannot recover its check. The check must be durable before launch. [criteria 13, 51] | Codex | fixed — tests/test_stage2_swarm.py::test_launch_record_keeps_individual_leak_check_before_launch | — |
 
 Phase 6 verdict: codex 01a1568b-9fc2-7d40-b892-ea021a1f8dae, 2026-10-20
 Reviewer session: codex 01a1568b-9fc2-7d40-b892-ea021a1f8dae — a fresh session reviewed: an earlier ## Phase 6 block makes this a re-check
+
+Stage-2 call, 2026-10-20: repair · attempt 1 · route codex · endpoint openai-codex · model gpt-6.1-sol · leak check clean over 536 files, 1599 commits, 12 rules.
+
+> Attempt 1 (codex) failed its post-run checks.
+>
+> Files the attempt changed (lines added, removed):
+> - `plans/changes/research-swarm/plan.md` +35 -0
+> - `scripts/check_research_handoff.py` +65 -0
+> - `scripts/stage2_research_dispatch.py` +12 -2
+> - `scripts/stage2_research_run.py` +5 -1
+> - `tests/test_research_handoff.py` +86 -3
+> - `tests/test_stage2_research_dispatch.py` +39 -0
+> - `tests/test_stage2_swarm.py` +24 -0
+>
+> Diagnostics:
+> ```text
+> - Runner format before `make verify`: ruff changed no file.
+> - `plan.md` did not add a measured line below `## Time used`
+> ```
+
+Stage-2 call, 2026-10-20: repair · attempt 2 · route codex-repair · endpoint openai-codex · model gpt-6.1-sol · reason first Codex post-run check failed · leak check clean over 536 files, 1599 commits, 12 rules.
+
+> Attempt 2 (codex-repair) failed its post-run checks.
+>
+> Files the attempt changed (lines added, removed):
+> - `plans/changes/research-swarm/plan.md` +30 -0
+>
+> Diagnostics:
+> ```text
+> - Runner format before `make verify`: ruff changed no file.
+> - `plan.md` did not add a measured line below `## Time used`
+> ```
+
+Stage-2 call, 2026-10-20: repair · attempt 3 · route stage-1 · endpoint claude-code-plan · model claude-sonnet-5-5 · reason two Codex post-run checks failed · leak check clean over 536 files, 1599 commits, 12 rules.
+
+> Attempt 3 (stage-1) failed its post-run checks.
+>
+> Files the attempt changed (lines added, removed):
+> - `plans/changes/research-swarm/plan.md` +9 -0
+>
+> Diagnostics:
+> ````text
+> - Runner format before `make verify`: ruff changed no file.
+> - `make verify` exited 2
+> The gates that blocked, each with its last lines:
+> ── [pytest] $ lauf_cmd
+> [… 51 lines of this gate left out …]
+> sources = <test_stage2_research_catalog.Sources object at 0x10bdbbef0>
+> slow = 'metadata'
+>
+>     @pytest.mark.parametrize("slow", ["pi", "metadata"])
+>     def test_preflight_shared_deadline_has_asymmetric_failure_rules(tmp_path, sources, slow):
+>         setattr(sources, slow + "_delay", 2.5)
+>         started = time.monotonic()
+>         bridge = collect(tmp_path, sources, deadlineMs=1200)
+>         assert time.monotonic() - started < 3, "the two reads did not share one deadline"
+>         if slow == "pi":
+>             with pytest.raises(swarm.ResearchCatalogError) as failure:
+>                 select(bridge)
+>             assert failure.value.exit_code == 1
+>         else:
+> >           result = select(bridge)
+>
+> tests/test_stage2_research_catalog.py:361: 
+> _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+> tests/test_stage2_research_catalog.py:152: in select
+>     return swarm.select_research_catalog(
+> _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+>
+> bridge = {'baseline': ['claude-haiku-5-5', 'minimax-m3', 'qwen3.7-plus', 'qwen3.8-flash', 'qwen3.8-max', 'deepseek-v4-flash', ...], 'elapsed_ms': 1405, 'exit_code': 1, 'models_store': {}, ...}
+> policy = {'exclude': [], 'include': [], 'provider': 'opencode-go', 'suffix': '-free'}
+> fixed_ids = ['deepseek-v4.1-flash', 'mimo-v2.6-flash', 'qwen3.8-flash']
+>
+>     def select_research_catalog(bridge, policy, fixed_ids, *, expected_version, measured_wire_apis=("openai-completions",)):
+>         """Intersect a fresh pinned Pi response with capability evidence, never a cache union.
+>     
+>         The bridge transports raw source bodies. Python retains duplicate identity and
+>         malformed-field evidence that the runtime's permissive parser would discard.
+>         This selects a roster and classifies every seat candidate (`fixed_ids`, the
+>         preferred models) and every paid model of the fresh overlay; it does not
+>         authorize or dispatch any model. A candidate that is absent, baseline-only,
+>         non-chat, malformed or on an unmeasured wire API is skipped with its raw
+>         evidence, never a failure of the whole preflight (Q-12, Q-14).
+>         """
+>         validate_research_free_policy(policy)
+>         provider = policy["provider"]
+>         sources = bridge.get("sources", {})
+>         pi = sources.get("pi", {})
+>         runtime = bridge.get("pi_runtime", {})
+>         if (
+>             bridge.get("exit_code") != 0
+>             or bridge.get("pi_version") != expected_version
+>             or pi.get("status") != 200
+>             or runtime.get("aborted")
+>             or runtime.get("errors")
+>             or provider not in bridge.get("models_store", {})
+>         ):
+> >           raise ResearchCatalogError(bridge.get("reason") or "pi-refresh-failed")
+> E           stage2_swarm.ResearchCatalogError: pi-timeout
+>
+> scripts/stage2_swarm.py:103: ResearchCatalogError
+> =========================== short test summary info ============================
+> FAILED tests/test_stage2_research_catalog.py::test_preflight_shared_deadline_has_asymmetric_failure_rules[metadata]
+> 1 failed, 3071 passed, 16 skipped in 307.53s (0:05:07)
+> ── [pytest] RED (block) — der Lauf ist rot.
+>
+> Standard error of the whole run, last lines:
+> [… 14808 earlier lines left out …]
+> templates/spec.md:73:81 error MD013/line-length Line length [Expected: 80; Actual: 127]
+> tests/fixtures/research_refs/plan-prompt-d862bc2.md:3:81 error MD013/line-length Line length [Expected: 80; Actual: 117]
+> tests/fixtures/research_refs/plan-prompt-d862bc2.md:85:81 error MD013/line-length Line length [Expected: 80; Actual: 96]
+> tests/fixtures/research_refs/plan-prompt-d862bc2.md:99 error MD040/fenced-code-language Fenced code blocks should have a language specified [Context: "```"]
+> tools/claude-code/README.md:17:81 error MD013/line-length Line length [Expected: 80; Actual: 105]
+> tools/claude-code/README.md:18:81 error MD013/line-length Line length [Expected: 80; Actual: 109]
+> tools/claude-code/README.md:19:81 error MD013/line-length Line length [Expected: 80; Actual: 134]
+> tools/claude-code/README.md:23:1 error MD060/table-column-style Table column style [Table pipe is missing space to the right for style "compact"]
+> tools/claude-code/README.md:23:5 error MD060/table-column-style Table column style [Table pipe is missing space to the left for style "compact"]
+> tools/claude-code/README.md:23:5 error MD060/table-column-style Table column style [Table pipe is missing space to the right for style "compact"]
+> tools/claude-code/README.md:23:9 error MD060/table-column-style Table column style [Table pipe is missing space to the left for style "compact"]
+> tools/claude-code/README.md:23:9 error MD060/table-column-style Table column style [Table pipe is missing space to the right for style "compact"]
+> tools/claude-code/README.md:23:13 error MD060/table-column-style Table column style [Table pipe is missing space to the left for style "compact"]
+> tools/claude-code/README.md:24:81 error MD013/line-length Line length [Expected: 80; Actual: 272]
+> tools/claude-code/README.md:25:81 error MD013/line-length Line length [Expected: 80; Actual: 180]
+> tools/claude-code/README.md:26:81 error MD013/line-length Line length [Expected: 80; Actual: 115]
+> tools/claude-code/README.md:28:81 error MD013/line-length Line length [Expected: 80; Actual: 124]
+> tools/claude-code/README.md:29:81 error MD013/line-length Line length [Expected: 80; Actual: 106]
+> tools/claude-code/README.md:38:1 error MD060/table-column-style Table column style [Table pipe is missing space to the right for style "compact"]
+> tools/claude-code/README.md:38:5 error MD060/table-column-style Table column style [Table pipe is missing space to the left for style "compact"]
+> tools/claude-code/README.md:38:5 error MD060/table-column-style Table column style [Table pipe is missing space to the right for style "compact"]
+> tools/claude-code/README.md:38:9 error MD060/table-column-style Table column style [Table pipe is missing space to the left for style "compact"]
+> tools/claude-code/README.md:38:9 error MD060/table-column-style Table column style [Table pipe is missing space to the right for style "compact"]
+> tools/claude-code/README.md:38:13 error MD060/table-column-style Table column style [Table pipe is missing space to the left for style "compact"]
+> tools/claude-code/README.md:40:81 error MD013/line-length Line length [Expected: 80; Actual: 442]
+> tools/claude-code/README.md:41:81 error MD013/line-length Line length [Expected: 80; Actual: 163]
+> tools/claude-code/README.md:42:81 error MD013/line-length Line length [Expected: 80; Actual: 126]
+> tools/claude-code/README.md:43:81 error MD013/line-length Line length [Expected: 80; Actual: 96]
+> tools/claude-code/README.md:44:81 error MD013/line-length Line length [Expected: 80; Actual: 167]
+> tools/claude-code/README.md:72:1 error MD060/table-column-style Table column style [Table pipe is missing space to the right for style "compact"]
+> tools/claude-code/README.md:72:5 error MD060/table-column-style Table column style [Table pipe is missing space to the left for style "compact"]
+> tools/claude-code/README.md:72:5 error MD060/table-column-style Table column style [Table pipe is missing space to the right for style "compact"]
+> tools/claude-code/README.md:72:9 error MD060/table-column-style Table column style [Table pipe is missing space to the left for style "compact"]
+> tools/claude-code/README.md:72:9 error MD060/table-column-style Table column style [Table pipe is missing space to the right for style "compact"]
+> tools/claude-code/README.md:72:13 error MD060/table-column-style Table column style [Table pipe is missing space to the left for style "compact"]
+> tools/claude-code/README.md:73:81 error MD013/line-length Line length [Expected: 80; Actual: 112]
+> tools/claude-code/README.md:74:81 error MD013/line-length Line length [Expected: 80; Actual: 89]
+> tools/claude-code/README.md:75:81 error MD013/line-length Line length [Expected: 80; Actual: 88]
+> tools/pi/README.md:65:81 error MD013/line-length Line length [Expected: 80; Actual: 97]
+> make: *** [verify] Error 1
+> - `plan.md` did not add a measured line below `## Time used`
+> ````
+
+Orchestrator, 2026-10-20: the round-9 repair run above failed on form again: attempts 1 and 2 added no measured line under `## Time used`; attempt 3 lost one load-sensitive test. The code in the tree: a first full `make verify` lost `tests/test_stage2_research_store.py::test_terminal_record_survives_sigkill_after_the_outcome` ("driver printed no marker in time"; 3071 passed), which passed 5 of 5 times alone and with the whole file under `-n 8` (bead coding-harness-jik); the second full `make verify` was green (3072 passed, 16 skipped, 00:28:45Z to 00:35:36Z). Red first was checked by hand: the three proving tests, copied onto the code at `d8348ec`, fail there; `test_consistent_judge_and_score_dispositions_remain_measured` is a guard and passes on both sides. Booked as a hand repair.
