@@ -2635,7 +2635,54 @@ def release(root: Path, change: str) -> list[list[str]]:
     return rows
 
 
-def release_loop(root: Path, change: str) -> None:
+def retire_stage(root: Path, change: str, model: str, reason: str) -> None:
+    """Retire the stage `model` belongs to, and let the loop continue (R-1 of the review-swarm review).
+
+    A stage whose model keeps failing had no way out: the snapshot pins the stages, `prepare-loop`
+    refuses while a record exists, `release-loop` needs the phase-6 verdict, and no verb skipped a
+    stage. The only escape was deleting `loop.md` by hand. The maintainer's decision (bead
+    coding-harness-tex, 2026-10-20): an explicit command retires it - the stage is consumed, the
+    reason lands in the record, and every round row stays as it is.
+    """
+    reason = reason.strip()
+    if not reason:
+        raise Refused("--stage-failed needs a non-empty --reason: what the maintainer decided must be readable.")
+    record = read_record(change, root)
+    if record is None:
+        raise Refused(f"there is no loop record for {change}; nothing can be retired.")
+    findings_path = folder_of(root, change) / "findings.md"
+    findings_text = findings_path.read_text(encoding="utf-8") if findings_path.exists() else ""
+    state = read_state(record, findings_text)
+    if state is None:
+        raise Refused("the loop record carries no stage snapshot; nothing can be retired.")
+    stage = next((item for item in stages_of(state) if model in item["members"]), None)
+    if stage is None:
+        raise Refused(
+            f"no stage of this run names {model}; the stages are "
+            f"{', '.join(item['key'] for item in stages_of(state)) or 'none'}."
+        )
+    if stage["key"] in state["consumed"]:
+        raise Refused(f"the stage {stage['key']} is consumed already; nothing is retired.")
+    block = "\n\n".join(
+        [
+            f"## Stage failed — {stage['key']} ({model})",
+            reason,
+            "The stage is retired by the maintainer: no round of it counts, and the loop continues with "
+            "the next stage.",
+        ]
+    )
+    # The round and the consumption in one write, as for a finished round (R-6).
+    state["consumed"] = [*state["consumed"], stage["key"]]
+    write_round(change, block, state, root)
+    print(f"release-loop: stage {stage['key']} retired ({model}); the reason is in the loop record.")
+
+
+def release_loop(root: Path, change: str, stage_failed: str | None = None, reason: str | None = None) -> None:
+    if stage_failed is not None:
+        retire_stage(root, change, stage_failed, reason or "")
+        return
+    if reason is not None:
+        raise Refused("--reason belongs to --stage-failed; nothing is released.")
     release(root, change)
 
 
@@ -5201,6 +5248,18 @@ def main(argv: list[str] | None = None) -> int:
         default=None,
         help="session only: a handover file inside the worktree (default: the change's handover.md)",
     )
+    parser.add_argument(
+        "--stage-failed",
+        default=None,
+        metavar="MODEL",
+        help="release-loop only: retire the stage this model belongs to, so the loop can go on",
+    )
+    parser.add_argument(
+        "--reason",
+        default=None,
+        metavar="TEXT",
+        help="release-loop only: why the stage is retired; lands in the loop record",
+    )
     parser.add_argument("--root", default=str(REPO_ROOT), help=argparse.SUPPRESS)
     parser.add_argument(
         "--availability-reported",
@@ -5223,6 +5282,8 @@ def main(argv: list[str] | None = None) -> int:
         if args.availability_reported is not None and args.verb != "review-loop":
             raise Refused("--availability-reported belongs to review-loop alone.")
         refuse_repository_git(Path(args.root))
+        if (args.stage_failed is not None or args.reason is not None) and args.verb != "release-loop":
+            raise Refused("--stage-failed and --reason belong to release-loop alone.")
         if args.verb == "session":
             if not args.model:
                 raise Refused("session needs --model <id>: name the model exactly as model-endpoints.yaml lists it.")
@@ -5236,7 +5297,10 @@ def main(argv: list[str] | None = None) -> int:
             # The three verbs that write the loop record hold it for their whole run (R-14).
             with holding_record(args.change, Path(args.root)):
                 review_loop(Path(args.root), args.change, args.availability_reported)
-        elif args.verb in {"prepare-loop", "release-loop"}:
+        elif args.verb == "release-loop":
+            with holding_record(args.change, Path(args.root)):
+                release_loop(Path(args.root), args.change, args.stage_failed, args.reason)
+        elif args.verb == "prepare-loop":
             with holding_record(args.change, Path(args.root)):
                 VERBS[args.verb](Path(args.root), args.change)
         else:
