@@ -1237,6 +1237,8 @@ def test_renderer_failure_is_bounded_scrubbed_and_prevents_verify(world: World) 
     # counts this file's existing refusal tests as registry mutation coverage.
     script = world.root / "scripts" / Path(plans_registry.__file__).name
     script.write_text("import sys\nprint(('" + KEY + "\\n') * 100)\nsys.exit(7)\n")
+    # The runner renders with the committed script (R-19), so the break has to be in the commit.
+    git(world.root, "commit", "-q", "-am", "broken renderer")
     problems = stage2.verify_attempt(world.root, world.plan, "", KEY)
     assert len(problems) == 1 and "index renderer exited 7" in problems[0]
     assert KEY not in problems[0] and "[credential]" in problems[0]
@@ -1244,34 +1246,32 @@ def test_renderer_failure_is_bounded_scrubbed_and_prevents_verify(world: World) 
     assert world.calls("make") == []
 
 
-@pytest.mark.parametrize("repair_on", [1, 2, None], ids=["flash-repair", "sonnet-fallback", "exhausted"])
-def test_broken_renderer_uses_existing_repair_limits_and_checkpoints_only_after_green(
-    world: World, repair_on: int | None
-) -> None:
+def test_a_committed_broken_renderer_bounds_the_attempts_and_checkpoints_never(world: World) -> None:
+    """R-19: the runner renders with the committed script, so a renderer broken in the baseline is fatal.
+
+    A renderer the model writes during the call is not the one that runs - that half is
+    `test_the_registry_runs_the_committed_script_not_the_attempts`. A renderer that is broken in the
+    commit the run starts from is beyond a model's reach, so the existing attempt limits decide, and
+    nothing is checkpointed.
+    """
     script = Path("scripts") / Path(plans_registry.__file__).name
-    original = (world.root / script).read_text()
+    (world.root / script).write_text("print('renderer broken')\nraise SystemExit(7)\n")
+    git(world.root, "commit", "-q", "-am", "broken renderer")
     baseline = git(world.root, "rev-parse", "HEAD")
-    steps = []
-    for attempt in range(3):
-        step = {
-            "stdout": "implemented",
-            "append": {"plans/changes/demo/plan.md": f"measured attempt {attempt + 1}\n"},
-        }
-        if attempt == 0:
-            step["plant"] = {str(script): "print('renderer broken')\nraise SystemExit(7)\n"}
-        elif attempt == repair_on:
-            step["plant"] = {str(script): original}
-        steps.append(step)
+    steps = [
+        {"stdout": "implemented", "append": {"plans/changes/demo/plan.md": f"measured attempt {n}\n"}}
+        for n in range(1, 4)
+    ]
     world.script(claude=[*steps, {"stdout": "must not run"}], make=[{"stdout": "green"}])
     checking_derived_make(world)
-    assert world.run("implement") == (1 if repair_on is None else 0)
+    assert world.run("implement") == 1
     calls = world.calls("claude")
-    assert len(calls) == (3 if repair_on is None else repair_on + 1)
+    assert len(calls) == 3
     assert "index renderer exited 7" in calls[1]["prompt_file"]
     models = [call["argv"][call["argv"].index("--model") + 1] for call in calls]
-    assert models == ["glm-5.3-flash", "glm-5.3-flash", "claude-sonnet-5-5"][: len(calls)]
-    assert len(world.calls("make")) == (0 if repair_on is None else 1)
-    assert git(world.root, "rev-list", "--count", f"{baseline}..HEAD") == ("0" if repair_on is None else "1")
+    assert models == ["glm-5.3-flash", "glm-5.3-flash", "claude-sonnet-5-5"]
+    assert world.calls("make") == []
+    assert git(world.root, "rev-list", "--count", f"{baseline}..HEAD") == "0"
 
 
 def test_invalid_utf8_preparation_cannot_reach_verify(world: World) -> None:
@@ -1363,7 +1363,7 @@ def test_preparation_git_commands_receive_no_caller_credentials(world: World, mo
 
     monkeypatch.setattr(stage2.subprocess, "run", record)
     assert stage2.prepare_derived(world.root, stage2.foreign_env({})) == []
-    assert len(commands) == 2
+    assert len(commands) == 3
     for command, env in commands:
         assert env is not None, command
         for name in ("OPENAI_API_KEY", "GH_TOKEN", "X_SECRET", "ANTHROPIC_AUTH_TOKEN"):
@@ -1376,9 +1376,9 @@ def test_preparation_commands_receive_no_model_or_caller_credentials(
     original_launch = stage2.launch
     commands = []
 
-    def record(command, root, env, secret=None):
+    def record(command, root, env, secret=None, **kwargs):
         commands.append((command, dict(env)))
-        return original_launch(command, root, env, secret)
+        return original_launch(command, root, env, secret, **kwargs)
 
     monkeypatch.setattr(stage2, "launch", record)
     successful_implementation(world)
@@ -4023,6 +4023,63 @@ def test_probe_runs_when_the_free_rule_selects_nothing(world: World, capsys: pyt
         f"opencode-go/{model}" for model in TEST_LADDER
     ], "the paid ids were not probed beside an empty free selection"
     assert "free stage skipped" in capsys.readouterr().out
+
+
+def test_the_registry_runs_the_committed_script_not_the_attempts(tmp_path: Path) -> None:
+    """R-19: the renderer's code comes from `HEAD`, while the data it renders stays the attempt's."""
+    repo = tmp_path / "repo"
+    (repo / "scripts").mkdir(parents=True)
+    (repo / "plans").mkdir()
+    script = Path("scripts") / Path(plans_registry.__file__).name
+    (repo / script).write_text("print('committed')\n", encoding="utf-8")
+    git(repo, "init", "-q")
+    git(repo, "add", "-A")
+    git(repo, "commit", "-q", "-m", "base")
+    (repo / script).write_text("print('written by the attempt')\n", encoding="utf-8")
+    mirror = stage2.trusted_registry(repo, stage2.foreign_env({}))
+    try:
+        assert (mirror / script).read_text(encoding="utf-8") == "print('committed')\n", (
+            "the attempt's own renderer was the one that would run"
+        )
+        assert (mirror / "plans").resolve() == (repo / "plans").resolve(), "the data must stay the attempt's"
+    finally:
+        shutil.rmtree(mirror, ignore_errors=True)
+
+
+def test_an_overwritten_ruff_is_not_run(tmp_path: Path) -> None:
+    """R-21: `.venv/` is ignored, so the digest taken before the call is what names an overwritten tool."""
+    (tmp_path / ".venv" / "bin").mkdir(parents=True)
+    ruff = tmp_path / ".venv" / "bin" / "ruff"
+    ruff.write_text("#!/bin/sh\nexit 0\n", encoding="utf-8")
+    before = stage2.tool_state(tmp_path)
+    assert stage2.tool_problem(tmp_path, before) is None
+    ruff.write_text("#!/bin/sh\nexit 1\n", encoding="utf-8")
+    problem = stage2.tool_problem(tmp_path, before)
+    assert problem is not None and "`.venv/bin/ruff`" in problem, "an overwritten tool was not named"
+
+
+def test_an_attempt_that_overwrites_ruff_fails_before_verify(world: World) -> None:
+    """R-21, acceptance criterion: the attempt fails, and the path it wrote is named."""
+    ruff = world.root / ".venv" / "bin" / "ruff"
+    ruff.parent.mkdir(parents=True)
+    ruff.write_text("#!/bin/sh\nexit 0\n", encoding="utf-8")
+    before = stage2.tool_state(world.root)
+    ruff.write_text("#!/bin/sh\nexit 7\n", encoding="utf-8")
+    problems = stage2.verify_attempt(world.root, world.plan, "", None, None, before)
+    assert len(problems) == 1 and "`.venv/bin/ruff`" in problems[0]
+    assert world.calls("make") == [], "a tampered tool must stop the attempt before `make verify`"
+
+
+def test_a_hanging_runner_step_aborts_with_its_limit_named(tmp_path: Path) -> None:
+    """R-20: the runner's own steps are bounded, and the abort names the limit."""
+    with pytest.raises(stage2.CallFailed, match="after 30 minutes"):
+        stage2.launch(
+            [sys.executable, "-c", "import time; time.sleep(30)"],
+            tmp_path,
+            {**os.environ},
+            timeout=0.2,
+            limit="the runner's step limit after 30 minutes",
+        )
 
 
 def test_loop_and_probe_use_repository_pi(world: World) -> None:

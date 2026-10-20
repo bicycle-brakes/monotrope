@@ -131,14 +131,18 @@ Exit: 0 done, 1 a call or implementation post-check failed, 2 refused.
 from __future__ import annotations
 
 import argparse
+import contextlib
 import datetime as dt
 import functools
+import hashlib
+import io
 import json
 import os
 import re
 import shutil
 import subprocess
 import sys
+import tarfile
 import tempfile
 import threading
 from collections import Counter
@@ -1479,7 +1483,15 @@ def _free_candidate(root: Path, rel: str, base: str | None = None) -> bool:
         tree = _git_output(root, "ls-tree", base, "--", rel)
         if not tree or tree.split()[0] not in {"100644", "100755"}:
             return False
-        blob = subprocess.run(["git", "-C", str(root), "show", f"{base}:{rel}"], capture_output=True, check=False)
+        try:
+            blob = subprocess.run(
+                ["git", "-C", str(root), "show", f"{base}:{rel}"],
+                capture_output=True,
+                check=False,
+                timeout=GIT_SECONDS,
+            )
+        except subprocess.TimeoutExpired as error:
+            raise Refused(f"git show did not finish within {GIT_SECONDS // 60} minutes") from error
         if blob.returncode or b"\0" in blob.stdout:
             return False
         executable = tree.split()[0] == "100755"
@@ -2422,9 +2434,18 @@ def release_loop(root: Path, change: str) -> None:
 
 
 def _git_output(root: Path, *args: str, allow: tuple[int, ...] = (0,), env: dict[str, str] | None = None) -> str:
-    done = subprocess.run(
-        ["git", "-C", str(root), *args], capture_output=True, text=True, errors="replace", check=False, env=env
-    )
+    try:
+        done = subprocess.run(
+            ["git", "-C", str(root), *args],
+            capture_output=True,
+            text=True,
+            errors="replace",
+            check=False,
+            env=env,
+            timeout=GIT_SECONDS,
+        )
+    except subprocess.TimeoutExpired as error:
+        raise Refused(f"git {args[0]} did not finish within {GIT_SECONDS // 60} minutes") from error
     if done.returncode not in allow:
         raise Refused(f"git {args[0]} failed: {done.stderr.strip()[:200]}")
     return done.stdout
@@ -2462,6 +2483,33 @@ RUFF_COMMANDS = (
 )
 FORMAT_LABEL = "Runner format before `make verify`"
 FORMAT_COMMIT_HEADING = "Runner format before `make verify` (ruff check --fix with safe fixes only, then ruff format):"
+
+# The runner's own steps are bounded, and every program it starts from the worktree is the one it saw
+# before the model ran: a step that hangs, and a tool the attempt overwrote, both abort the attempt
+# with the limit or the path named - never a silent cut, never a wait without end (R-19, R-20 and
+# R-21 of the review-swarm review).
+TOOL_SECONDS = 5 * 60
+VERIFY_SECONDS = 30 * 60
+GIT_SECONDS = 2 * 60
+
+
+def tool_state(root: Path) -> dict[str, str]:
+    """The digest of each program the runner starts from the worktree, taken before the model runs.
+
+    `.venv/` is ignored by git: a program there is invisible to `changed_paths` and survives
+    `restore_baseline`, so the digest is the only thing that shows an overwritten tool (R-21).
+    """
+    try:
+        return {"ruff": hashlib.sha256((root / RUFF).read_bytes()).hexdigest()}
+    except OSError:
+        return {"ruff": ""}
+
+
+def tool_problem(root: Path, before: dict[str, str] | None) -> str | None:
+    """The tool that is not the one the runner saw before the call, named; `None` when none is."""
+    if not before or tool_state(root) == before:
+        return None
+    return f"`{RUFF}` is not the program the runner saw before the call, and a tool the attempt wrote is not run"
 
 
 def changed_paths(root: Path, env: dict[str, str] | None = None, against: str = "HEAD") -> set[Path]:
@@ -2857,6 +2905,40 @@ def red_sections(output: str) -> str | None:
     return "\n".join(kept)
 
 
+def trusted_registry(root: Path, env: dict[str, str]) -> Path:
+    """A scratch mirror of the worktree whose `scripts/` is the committed one (R-19).
+
+    `plans_registry.py` reads its repository root from its own path, so the committed code cannot
+    simply run somewhere else. Every other entry of the worktree is linked into the mirror and its
+    `scripts/` comes from `HEAD`, so the renderer's code is the committed one while the data it
+    renders stays the attempt's. The caller removes the mirror.
+    """
+    mirror = Path(tempfile.mkdtemp(prefix="harness-registry-"))
+    for entry in root.iterdir():
+        if entry.name != "scripts":
+            (mirror / entry.name).symlink_to(entry.resolve())
+    archive = subprocess.run(
+        ["git", "-C", str(root), "archive", "--format=tar", "HEAD", "scripts/"],
+        capture_output=True,
+        check=False,
+        env=env,
+        timeout=GIT_SECONDS,
+    )
+    if archive.returncode:
+        raise Refused(f"the committed scripts could not be read: git archive exited {archive.returncode}")
+    with tarfile.open(fileobj=io.BytesIO(archive.stdout)) as tar:
+        for member in tar.getmembers():
+            if not member.isfile() or not member.name.startswith("scripts/"):
+                continue
+            relative = Path(member.name).relative_to("scripts")
+            if ".." in relative.parts:
+                continue
+            target = mirror / "scripts" / relative
+            target.parent.mkdir(parents=True, exist_ok=True)
+            target.write_bytes(tar.extractfile(member).read())
+    return mirror
+
+
 def prepare_derived(root: Path, env: dict[str, str], key: str | None = None) -> list[str]:
     """Stamp only changed, held documents, then render the index before verification.
 
@@ -2893,7 +2975,21 @@ def prepare_derived(root: Path, env: dict[str, str], key: str | None = None) -> 
             raise OSError("refusing an aliased index path: plans/INDEX.md")
         if index.exists() and index.stat().st_nlink > 1:
             raise OSError("refusing a hard-linked index path: plans/INDEX.md")
-        done = launch([sys.executable, "scripts/plans_registry.py", "--index"], root, env, key)
+        mirror = trusted_registry(root, env)
+        scratch = mirror / "scratch"
+        for name in ("home", "tmp"):
+            (scratch / name).mkdir(parents=True, exist_ok=True)
+        try:
+            done = launch(
+                [sys.executable, str(mirror / "scripts" / "plans_registry.py"), "--index"],
+                root,
+                {**env, "HOME": str(scratch / "home"), "TMPDIR": str(scratch / "tmp")},
+                key,
+                timeout=TOOL_SECONDS,
+                limit=f"the runner's tool limit after {TOOL_SECONDS // 60} minutes",
+            )
+        finally:
+            shutil.rmtree(mirror, ignore_errors=True)
     except (
         check_frontmatter_current.CannotMeasure,
         check_frontmatter_current.CannotStamp,
@@ -2981,7 +3077,9 @@ def _one_line(path: str) -> str:
     return "".join(_LINE_BREAK_ESCAPES.get(character, character) for character in path)
 
 
-def format_step(root: Path, env: dict[str, str], key: str | None = None) -> str | None:
+def format_step(
+    root: Path, env: dict[str, str], key: str | None = None, tools: dict[str, str] | None = None
+) -> str | None:
     """Ruff's safe fixes, then its formatter, over the targets - and what that changed, in one line.
 
     `None` without targets: no ruff process starts. A ruff that cannot start, a command that ends
@@ -3002,6 +3100,9 @@ def format_step(root: Path, env: dict[str, str], key: str | None = None) -> str 
         return None
     if not (root / RUFF).is_file():
         return scrub(f"not run — no ruff at `{RUFF}`; `make venv` builds it.", key)
+    problem = tool_problem(root, tools)
+    if problem:
+        return scrub(f"not run — {problem}.", key)
     before: dict[str, bytes] = {}
     for target in targets:
         try:
@@ -3013,7 +3114,14 @@ def format_step(root: Path, env: dict[str, str], key: str | None = None) -> str 
     notes: list[str] = []
     for command in RUFF_COMMANDS:
         try:
-            done = launch([RUFF, *command, *targets], root, env, key)
+            done = launch(
+                [RUFF, *command, *targets],
+                root,
+                env,
+                key,
+                timeout=TOOL_SECONDS,
+                limit=f"the runner's tool limit after {TOOL_SECONDS // 60} minutes",
+            )
         except CallFailed as error:
             return _not_run(str(error), key)
         if done.returncode == 1 and command[0] == "check":
@@ -3043,6 +3151,7 @@ def verify_attempt(
     baseline_time: str,
     key: str | None = None,
     formatted: list[str] | None = None,
+    tools: dict[str, str] | None = None,
 ) -> list[str]:
     """Stamp changed held documents, render the index, format the targets, then run `make verify`.
 
@@ -3060,13 +3169,24 @@ def verify_attempt(
             "GIT_CONFIG_VALUE_0": "false",
         }
     )
+    tampered = tool_problem(root, tools)
+    if tampered:
+        # The attempt overwrote a program the runner starts: it fails here, before the renderer or
+        # ruff runs, and the diagnostic names the path (R-21, acceptance criterion).
+        return [tampered]
     preparation = prepare_derived(root, env, key)
     if preparation:
         return preparation
-    line = format_step(root, env, key)
+    line = format_step(root, env, key, tools)
     if formatted is not None and line is not None:
         formatted.append(line)
-    done = launch(["make", "verify"], root, env)
+    done = launch(
+        ["make", "verify"],
+        root,
+        env,
+        timeout=VERIFY_SECONDS,
+        limit=f"the runner's step limit after {VERIFY_SECONDS // 60} minutes",
+    )
     problems = []
     if done.returncode != 0:
         problems.append(f"`make verify` exited {done.returncode}\n{verify_evidence(done, key)}".rstrip())
@@ -3111,11 +3231,15 @@ def checkpoint(
         count = _git_output(root, "rev-list", "--count", f"{baseline}..HEAD").strip()
     except Refused as error:
         raise CallFailed(f"the runner checkpoint failed: {error}") from error
-    ancestor = subprocess.run(
-        ["git", "-C", str(root), "merge-base", "--is-ancestor", baseline, "HEAD"],
-        capture_output=True,
-        check=False,
-    )
+    try:
+        ancestor = subprocess.run(
+            ["git", "-C", str(root), "merge-base", "--is-ancestor", baseline, "HEAD"],
+            capture_output=True,
+            check=False,
+            timeout=GIT_SECONDS,
+        )
+    except subprocess.TimeoutExpired as error:
+        raise CallFailed(f"the runner checkpoint could not be measured within {GIT_SECONDS // 60} minutes") from error
     if ancestor.returncode != 0 or count != "1":
         raise CallFailed("the runner checkpoint is not exactly one descendant commit")
     try:
@@ -3379,16 +3503,29 @@ def red_first(root: Path, baseline: str, test: str, key: str | None) -> str | No
                         outcome = f"{test}: {scrub(fault, key)}"
     finally:
         if tree is not None:
-            done = subprocess.run(
-                ["git", "-C", str(root), "worktree", "remove", "--force", str(tree)], capture_output=True, check=False
-            )
-            if added and done.returncode != 0:
+            try:
+                done = subprocess.run(
+                    ["git", "-C", str(root), "worktree", "remove", "--force", str(tree)],
+                    capture_output=True,
+                    check=False,
+                    timeout=GIT_SECONDS,
+                )
+            except subprocess.TimeoutExpired:
+                done = None
+            if added and done is not None and done.returncode != 0:
                 removal = f"`git worktree remove` ended {done.returncode} on the red-first checkout"
         if tmp is not None:
             shutil.rmtree(tmp, ignore_errors=True)
         if tree is not None:
             # Only after the directory is gone: a prune over a present directory keeps a failed removal's entry.
-            subprocess.run(["git", "-C", str(root), "worktree", "prune"], capture_output=True, check=False)
+            with contextlib.suppress(subprocess.TimeoutExpired):
+                # A prune that hangs leaves an entry behind; the removal above already failed then.
+                subprocess.run(
+                    ["git", "-C", str(root), "worktree", "prune"],
+                    capture_output=True,
+                    check=False,
+                    timeout=GIT_SECONDS,
+                )
         if refs_before is not None:
             # Nothing is deleted or reset here: another session may create a branch meanwhile, and only
             # the comparison tells a change of the run from one of a neighbour. Any difference in a
@@ -3729,6 +3866,8 @@ def run_attempts(
         # Each attempt must add its own line. Keep all existing plan lines even if an earlier
         # attempt removed the time heading, so restoring it cannot reuse an earlier measurement.
         baseline_time = ctx.plan.read_text(encoding="utf-8")
+        # The tools the runner itself starts, as they were before the model ran (R-21).
+        tools = tool_state(root)
         # Restore a changed plan with this attempt's pre-call time evidence and runner route, while the
         # accepted plan in every prompt stays the original snapshot. No older line satisfies a retry.
         inputs_before = {**inputs, ctx.plan: baseline_time.encode("utf-8")}
@@ -3815,7 +3954,7 @@ def run_attempts(
         cannot_start: CallFailed | None = None
         formatted: list[str] = []
         try:
-            problems = verify_attempt(root, ctx.plan, baseline_time, key, formatted)
+            problems = verify_attempt(root, ctx.plan, baseline_time, key, formatted, tools)
         except CallFailed as error:
             # `make verify` could not be started: no model can repair that, so this attempt's block
             # says why and the run stops after the scan below, with no further attempt (spec, criterion 6).
@@ -3977,10 +4116,17 @@ def draft_keep(root: Path, ctx: Context, baseline: str) -> tuple[set[Path], list
         posix = path.as_posix()
         if not NEW_ADR.fullmatch(posix):
             continue
-        held = subprocess.run(
-            ["git", "-C", str(root), "cat-file", "-e", f"{base}:{posix}"], capture_output=True, check=False
-        )
-        if held.returncode != 0:
+        try:
+            held = subprocess.run(
+                ["git", "-C", str(root), "cat-file", "-e", f"{base}:{posix}"],
+                capture_output=True,
+                check=False,
+                timeout=GIT_SECONDS,
+            )
+            present = held.returncode == 0
+        except subprocess.TimeoutExpired:
+            present = True  # unmeasured reads as present: the path stays a keep
+        if not present:
             # Deleting the draft's own unmerged ADR is allowed, so the path stays a keep; only a
             # file that exists now counts, or a rename would read as two new ADRs (F-11).
             keep.add(path)
@@ -4053,7 +4199,13 @@ def verify_draft(root: Path, ctx: Context, key: str | None, new_adrs: list[str])
     if preparation:
         return preparation, owed
     try:
-        done = launch(["make", "verify"], root, env)
+        done = launch(
+            ["make", "verify"],
+            root,
+            env,
+            timeout=VERIFY_SECONDS,
+            limit=f"the runner's step limit after {VERIFY_SECONDS // 60} minutes",
+        )
     except CallFailed as error:
         # A make that cannot start is as failed a post-run check as a red one: its diagnostics
         # reach the attempt's block, and the chain moves on to the next attempt (2a's F-7).
