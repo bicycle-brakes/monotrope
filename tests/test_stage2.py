@@ -697,6 +697,31 @@ def test_parse_marks_reads_agreement_and_disagreement() -> None:
     assert marks == {"L1-1": "agree", "L1-2": "disagree — no test \\| shows it", "L1-3": "disagree"}
 
 
+def test_parse_rows_drops_a_decorative_blank_row() -> None:
+    """R-26 of the review-swarm review: a table line of empty cells is decoration, not a finding."""
+    found, rest = stage2.parse_rows("| | | | | | |\n" + rows(1))
+    assert [row[0] for row in found] == ["X1"] and rest == ""
+
+
+def test_parse_rows_names_a_widened_row_when_the_caller_asks() -> None:
+    """R-25: the fold stays as it was; a caller that asks learns that the columns may have moved."""
+    notes: list[str] = []
+    found, _ = stage2.parse_rows("| X1 | MAJOR | SPEC | a | b.py:1 | one | two |", notes=notes)
+    assert found[0][5] == "one \\| two" and notes == ["X1"]
+    notes = []
+    stage2.parse_rows(rows(2), notes=notes)
+    assert notes == [], "a six-cell row is not widened"
+
+
+def test_defines_test_takes_a_method_and_an_async_def() -> None:
+    """R-23: a test inside a class is a test; so is an `async def`."""
+    method = "class TestX:\n\n    def test_runs(self):\n        assert True\n"
+    assert stage2.defines_test(method, "test_runs")
+    assert stage2.defines_test("async def test_runs(a):\n    pass\n", "test_runs")
+    assert stage2.defines_test("def test_runs(a):\n    pass\n", "test_runs")
+    assert not stage2.defines_test("def test_runs_other(a):\n    pass\n", "test_runs")
+
+
 def test_parse_rows_folds_a_pipe_inside_the_finding_into_it() -> None:
     """Repair round 1, F-2: six cells are known; a seventh after a valid severity is part of the last one."""
     found, rest = stage2.parse_rows(
@@ -3980,6 +4005,24 @@ def test_a_pi_off_the_pin_is_refused(
     assert not world.record().exists()
     assert not world.findings.exists() or "Stage-2 call" not in world.text(), "a call line was written"
     assert "leak check" not in capsys.readouterr().out.lower(), "the leak check ran before the pin"
+
+
+def test_probe_runs_when_the_free_rule_selects_nothing(world: World, capsys: pytest.CaptureFixture[str]) -> None:
+    """R-27: the compatibility probe for the paid ids does not depend on a free candidate."""
+    path = world.root / "model-endpoints.yaml"
+    data = yaml.safe_load(path.read_text(encoding="utf-8"))
+    entry = next(e for e in data["endpunkte"] if e["name"] == "opencode-go")
+    entry["free_stage"]["exclude"] = [
+        {"id": model, "date": "2026-10-20", "reason": "synthetic exclusion"} for model in TEST_FREE
+    ]
+    path.write_text(yaml.safe_dump(data))
+    world.script(pi=[{"stdout": f"probe {model}"} for model in TEST_LADDER])
+    assert world.run("probe") == 0
+    probes = world.reviews("pi")
+    assert [call["argv"][call["argv"].index("--model") + 1] for call in probes] == [
+        f"opencode-go/{model}" for model in TEST_LADDER
+    ], "the paid ids were not probed beside an empty free selection"
+    assert "free stage skipped" in capsys.readouterr().out
 
 
 def test_loop_and_probe_use_repository_pi(world: World) -> None:

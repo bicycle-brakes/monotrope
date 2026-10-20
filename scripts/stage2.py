@@ -632,12 +632,15 @@ def _furniture(cells: list[str]) -> bool:
     return cells[0].lower() == "id" or all(re.fullmatch(r":?-+:?", cell) for cell in cells)
 
 
-def parse_rows(answer: str) -> tuple[list[list[str]], str]:
+def parse_rows(answer: str, *, notes: list[str] | None = None) -> tuple[list[list[str]], str]:
     """The six-cell rows of an answer and the text that is not a row.
 
     Six cells are known. A line of more cells that starts like a row (its second cell is a severity) holds a
     `|` inside its last cell - a shell pipe, a regular expression - and that cell takes the rest, each
-    pipe escaped. Anything else that is a table line but no row stays in the text, as it came.
+    pipe escaped; when a caller passes `notes`, that widening is named once per row, because an unescaped
+    `|` before the finding moves the columns instead (R-25 of the review-swarm review). A decorative line of
+    empty cells is no row and no text: it is dropped. Anything else that is a table line but no row stays
+    in the text, as it came.
     """
     rows: list[list[str]] = []
     rest: list[str] = []
@@ -646,12 +649,14 @@ def parse_rows(answer: str) -> tuple[list[list[str]], str]:
         if cells is None:
             if line.strip():
                 rest.append(line)
-        elif _furniture(cells):
+        elif _furniture(cells) or not any(cell.strip() for cell in cells):
             continue
         elif len(cells) == 6:
             rows.append(cells)
         elif len(cells) > 6 and cells[1].upper() in SEVERITIES:
             rows.append([*cells[:5], " \\| ".join(cells[5:])])
+            if notes is not None:
+                notes.append(cells[0])
         else:
             rest.append(line)
     return rows, "\n".join(rest)
@@ -3519,7 +3524,7 @@ def check_repair_answer(
             test = fix[len("fixed — ") :]
             function = test.partition("::")[2]
             body = _read_quietly(ctx.root / test.partition("::")[0])
-            if not any(line.startswith(f"def {function}(") for line in body.splitlines()):
+            if not defines_test(body, function):
                 problems.append(f"{ident}: {test} defines no function `def {function}(`")
     for place, rows_before, rows_now in (
         ("released", before[0], released_now),
@@ -3544,6 +3549,15 @@ def check_repair_answer(
     if problems:
         return {}, [scrub(problem, key) for problem in problems]
     return {ident: scrub(status, key) for ident, status in fixes.items()}, []
+
+
+def defines_test(body: str, function: str) -> bool:
+    """Whether the test body defines exactly this test function, at any indentation and possibly `async`.
+
+    A test method inside a class (`    def test_x(self):`) is a test like any other; requiring `def` at
+    column 0 refused it as "defines no function" (R-23 of the review-swarm review).
+    """
+    return re.search(rf"^\s*(?:async\s+)?def\s+{re.escape(function)}\s*\(", body, re.M) is not None
 
 
 def _read_quietly(path: Path) -> str:
@@ -4483,7 +4497,8 @@ def review_loop(root: Path, change: str, availability_reported: str | None = Non
             if stage["kind"] != "paid-swarm":
                 statements.append(f"{member} failed: {outcome}")
             continue
-        rows, rest = parse_rows(outcome)
+        widened: list[str] = []
+        rows, rest = parse_rows(outcome, notes=widened)
         member_rows = []
         for row in rows:
             ident = f"L{round_number}-{len(numbered) + 1}"
@@ -4491,6 +4506,14 @@ def review_loop(root: Path, change: str, availability_reported: str | None = Non
             member_rows.append(numbered[-1])
         if rows:
             statements.append(render_table(ROW_COLUMNS, member_rows))
+            if widened:
+                # A row that needed the widening may have been widened by an unescaped `|` before the
+                # finding: the row is kept as it came, and the round says that its columns may have moved
+                # (R-25 of the review-swarm review).
+                statements.append(
+                    f"{member} wrote {len(widened)} row(s) with more than six cells; the cells after the "
+                    "fifth were joined into the finding, so an unescaped `|` before it moves the columns."
+                )
         elif any(split_row(line) is not None for line in rest.splitlines()):
             statements.append(
                 f"{member} answered in table lines that are not six-cell rows; they are kept as they came."
@@ -4549,9 +4572,13 @@ def probe(root: Path, change: str) -> None:
     if problem:
         raise Refused(problem)
     require_pi()
-    free = discover_free(root)
+    free = discover_free(root, allow_empty=True)
     discovery = free
     diff = free_diff(root)
+    if not free["selected"]:
+        # The probe measures the ids the declaration admits; a free rule that selects nothing is a
+        # finding about the catalog, not a reason to skip the paid ids (R-27 of the review-swarm review).
+        print("probe: free stage skipped: the live catalog holds no model for the free rule")
     answered: list[str] = []
     failed: list[str] = []
 
