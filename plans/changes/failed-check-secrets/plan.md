@@ -172,3 +172,22 @@ interview minimums, criterion ledger and `git diff --check` passed.
 Regenerating `plans/INDEX.md` produced no content change. No edit was made
 to `findings.md`; no commit or repository-changing git command was run in
 this checkout. The runner owns `make verify` and the checkpoint commit.
+
+### Orchestrator — review loop, 2026-10-20
+
+Measured with `date -u`. Availability reported in the conversation at
+00:52:31Z (free swarm cat-jam-free, longcat-2.5-preview-free; Flash swarm
+deepseek-v4.1-flash, mimo-v2.6-flash, longcat-2.0; paid ladder
+glm-5.3-flash, mimo-v2.6-pro). Round 1 (free swarm) 00:52:37Z to 01:12:13Z:
+2 rows, L1-1 taken (criterion 5: non-secret rules were checked line by line
+only), L1-2 rejected as its duplicate; repaired by Codex 01:12:40Z to
+01:36:30Z (`9c5c9c6`). Round 2 (Flash swarm) 01:36:41Z to 01:53:48Z: 10 rows,
+six taken (L2-1 BLOCKER anchored secret rules redacted on the first line
+only; L2-2, L2-3, L2-4, L2-5, L2-8), four rejected (L2-6 and L2-7 as
+duplicates, L2-9 because criterion 4 wants the refusal, L2-10 as style);
+repaired by Codex 01:54:18Z to 02:19:42Z (`e7b8f94`). Round 3 (glm-5.3-flash)
+02:19:53Z to 02:24:59Z: the call failed ("Request timed out"); the loop
+stops there and substitutes no model. Next: the maintainer decides whether
+the loop resumes (release or a fresh run) before phase 6. Span about 1 h 32
+min; phase 4 and the loop together about 1 h 46 min of the 2 h appetite.
+
