@@ -83,12 +83,11 @@ deployment permission. Task state stays in Beads.
 | 5 | Reserve: measure test quality with mutation testing (bead coding-harness-bvy) on `scripts/check_research_handoff.py` | Sonnet 5.5 sub-agent, own worktree; the tool in a scratch environment, not in the lock | A dated note under `docs/research/` with tool and version, commit, score, surviving mutants by kind and run time, as a pull request. Appetite 2 hours; stops when the run would not finish by 06:00 Europe/Berlin |
 | 6 | Reserve: close bead coding-harness-y9q (`make venv` picks an unusable `python3`) if PR #174, merged, meets its acceptance | Orchestrator | Acceptance checked against `main`; bead closed with the evidence, or a note on what is missing |
 | 7 | Reserve: check whether the F-53 rework (timing tests assert order, not speed) already fixed bead coding-harness-jik (a store test times out under full `make verify` load) | Orchestrator, read only | Bead closed with the evidence, or a note naming what still fails |
-| 8 | Reserve: evaluate Orca, `stablyai/orca` (bead coding-harness-dzp) | Sonnet 5.5 sub-agent, read only | A dated note under `docs/research/` as a pull request: version read, license, fit with the house rules, a recommendation as a maintainer question. Nothing installed or connected |
-| 9 | Reserve: reconcile the repository with `docs/WORKFLOW.md` (bead coding-harness-i0l) | Sonnet 5.5 sub-agent, read only | A dated table under `docs/research/` (described, built, enforced) as a pull request; it includes the stop hook the doctrine describes and the README lists as not built |
-| 10 | Reserve: measure the kit probe's pytest with `-n auto` (bead coding-harness-7so) | Orchestrator | A dated measurement (before, after, commit) as a comment on the bead; a change only as a pull request |
-| 11 | Reserve: the CI job summary lists the beads a pull request changed (bead coding-harness-1jg.4) | DeepSeek v4.1 Flash through `stage2.py session` in the change's own worktree, red test first; the orchestrator checks red first and `make verify` by hand; Sonnet 5.5 if the session writes nothing within 60 minutes | `make verify` green, pull request open; not touching `scripts/stage2.py` |
-| 12 | Reserve: translate the German left in `docs/governance/` (bead coding-harness-yim) | Sonnet 5.5 sub-agent, own worktree | One pull request for `docs/governance/` alone; `scripts/` and `tests/` stay untouched tonight because #187 to #192 change them |
-| 13 | Morning handover | Orchestrator | A dated file under `docs/journal/handover/` as a pull request by 08:00 Europe/Berlin |
+| 8 | Reserve: reconcile the repository with `docs/WORKFLOW.md` (bead coding-harness-i0l) | Sonnet 5.5 sub-agent, read only | A dated table under `docs/research/` (described, built, enforced) as a pull request; it includes the stop hook the doctrine describes and the README lists as not built |
+| 9 | Reserve: measure the kit probe's pytest with `-n auto` (bead coding-harness-7so) | Orchestrator | A dated measurement (before, after, commit) as a comment on the bead; a change only as a pull request |
+| 10 | Reserve: the CI job summary lists the beads a pull request changed (bead coding-harness-1jg.4) | DeepSeek v4.1 Flash through `stage2.py session` in the change's own worktree, red test first; the orchestrator checks red first and `make verify` by hand; Sonnet 5.5 if the session writes nothing within 60 minutes | `make verify` green, pull request open; not touching `scripts/stage2.py` |
+| 11 | Reserve: translate the German left in `docs/governance/` (bead coding-harness-yim) | Sonnet 5.5 sub-agent, own worktree | One pull request for `docs/governance/` alone; `scripts/` and `tests/` stay untouched tonight because #187 to #192 change them |
+| 12 | Morning handover | Orchestrator | A dated file under `docs/journal/handover/` as a pull request by 08:00 Europe/Berlin |
 
 Items run strictly one after another. **No two `make verify` runs at the same
 time** and at most one sub-agent at a time, because of the memory limit.
@@ -96,6 +95,8 @@ time** and at most one sub-agent at a time, because of the memory limit.
 ## Not tonight
 
 - No merge of any pull request, including #158 and #184 to #192.
+- No Orca evaluation (bead coding-harness-dzp) tonight: the maintainer
+  holds it back for a research-swarm run after #158 (2026-10-20).
 - No GLM call through Z.ai.
 - No implementation of coding-harness-py5; no live research-swarm run.
 - The maintainer decisions R-22 (provenance class of
