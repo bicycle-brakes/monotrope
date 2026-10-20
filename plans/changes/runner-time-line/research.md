@@ -75,3 +75,21 @@ runner itself knows each attempt's start (before the call) and end (after
 - `[DETAIL]` Whether a failed attempt also gets a line: yes — time spent on a
   rejected attempt counts against the appetite as well; it lands in the same
   section, marked "rejected".
+
+## Draft gap checks — 2026-10-20, input commit `8e7f2cf`
+
+- `run_attempts` restores `inputs_before` after failed post-run checks; its
+  plan snapshot predates that attempt. Logging before restoration alone would
+  lose the rejected entry. The implementation must carry the trusted entry
+  into the restored plan; the model's rejected edits still go away.
+- Failed model processes take a separate `save_attempt` / `restore_baseline`
+  path and exit without post-run verification. The bounded correction covers
+  completed attempts, including rejected checks; process-failure rollback
+  remains intact to preserve the clean rerun contract.
+- `time_log` already ends at the next level-two heading. Runner entries must
+  use that boundary rather than append at the end of the file.
+- There is no `templates/plan.md` or
+  `scripts/validate_change_artefacts.py` in this worktree. The plan follows
+  `prompts/03-plan.md`; the existing interview, ledger and registry gates are
+  the available checks. No design document is due for the recorded bounded
+  class, and the current findings file has no phase-2a rows to integrate.
