@@ -829,7 +829,7 @@ def test_an_oversized_diff_reaches_the_paid_prompt_cut_and_the_record_says_so(wo
     """R-15 of the review-swarm review: the paid diff is bounded, and a cut is recorded, not hidden."""
     limit = 5
     monkey = pytest.MonkeyPatch()
-    monkey.setattr(stage2, "PAID_DIFF_MAX_LINES", limit)
+    monkey.setattr(stage2, "REVIEW_DIFF_MAX_LINES", limit)
     try:
         big = world.root / "src" / "big.py"
         big.parent.mkdir(parents=True, exist_ok=True)
@@ -858,6 +858,9 @@ def test_an_oversized_diff_reaches_the_paid_prompt_cut_and_the_record_says_so(wo
             "the paid prompt carried no cut marker"
         )
         assert f"The diff was cut: the change diff was cut at {limit} of" in record, "the round hid the cut"
+        # R-12: the free round carries the same bound, and its round says so.
+        first_round = record.split("## Round 2")[0]
+        assert "The diff was cut:" in first_round, "the free round was uncapped and its cut unrecorded"
         # A clean answer over a cut diff does not end the loop: the next call goes on to the ladder
         # instead of refusing with "round 2 was clean" (P2 of the #191 review).
         world.script(pi=[{"model": model, "stdout": "No finding."} for model in TEST_RUNGS])
@@ -896,6 +899,45 @@ def test_a_shifted_broke_a_test_cell_is_refused_by_its_row() -> None:
     with pytest.raises(stage2.Refused) as error:
         stage2.record_rows(f"## Round 1 — a, 2026-10-20\n\n{shifted}\n")
     assert "L1-1" in str(error.value) and "moved out of its column" in str(error.value)
+
+
+def test_the_broke_a_test_cell_accepts_a_reason() -> None:
+    """Bead coding-harness-ll5: `yes — <reason>` is a mark; only the leading word is evaluated."""
+
+    def row(mark: str) -> list[str]:
+        return ["L1-1", "MAJOR", "SPEC", "criterion 1", "spec.md:1", "body", "a, b", "taken — test_a", mark]
+
+    assert stage2.undecided([row("yes — test_a_breaks")]) == []
+    assert stage2.undecided([row("no — the test was already red")]) == []
+    assert stage2.undecided([row("perhaps")]) == ["L1-1"]
+    refusal = stage2.undecided_refusal([row("taken — test_a"), row("perhaps")], "decide them first")
+    assert refusal is not None and "yes — <reason>" in refusal
+
+
+def test_the_answer_format_names_the_severity_as_free_text() -> None:
+    """R-9 of the review-swarm review: the column is free text, and the prompt says so."""
+    assert "severity cell is free text" in stage2.ANSWER_FORMAT
+
+
+def test_the_remaining_time_never_outlives_the_round_deadline() -> None:
+    """R-8 of the review-swarm review: the round's limit is one deadline, not one per call."""
+    assert stage2.remaining(None) == stage2.REVIEWER_MINUTES * 60
+    assert 0 < stage2.remaining(time.monotonic() + 30) <= 30
+    assert stage2.remaining(time.monotonic() - 10) == 1.0
+
+
+def test_every_member_of_a_round_shares_one_deadline(world: World, monkeypatch) -> None:
+    """R-8: a round's members and its replacements live inside the same deadline."""
+    seen: list[float | None] = []
+
+    def fake(_ctx, _member, _prompt, _key, **kwargs):
+        seen.append(kwargs.get("deadline"))
+        return "No finding."
+
+    monkeypatch.setattr(stage2, "run_reviewer", fake)
+    assert world.run("review-loop") == 0
+    assert len(seen) == len(TEST_FREE) and None not in seen
+    assert len(set(seen)) == 1, "each member got a deadline of its own"
 
 
 def test_a_second_review_loop_is_refused_while_the_record_is_held(world: World, capsys) -> None:
@@ -4928,8 +4970,9 @@ def test_a_round_without_a_finding_still_counts(world: World, capsys: pytest.Cap
     assert "## Round 1 — acme-v1-free, beacon-2-free, " in record
     assert "acme-v1-free reported no finding." in record and "beacon-2-free reported no finding." in record
     capsys.readouterr()
-    assert world.run("review-loop") == 2
-    assert "round 1 was clean" in capsys.readouterr().err
+    assert world.run("review-loop") == stage2.CLEAN_CODE
+    err = capsys.readouterr().err
+    assert "round 1 was clean" in err and "refused:" not in err, "a finished loop read as a refusal"
     assert len(world.reviews("pi")) == 2
 
 
@@ -5048,7 +5091,7 @@ def test_a_clean_round_ends_the_loop(world: World, capsys: pytest.CaptureFixture
     assert world.run("review-loop") == 0
     decide_record(world, status="rejected — out of scope")
     capsys.readouterr()
-    assert world.run("review-loop") == 2
+    assert world.run("review-loop") == stage2.CLEAN_CODE
     assert "round 1 was clean" in capsys.readouterr().err
     assert len(world.reviews("pi")) == 2, "a clean round called again"
     # the stop survives the release: the released block still says round 1 was clean
@@ -5056,7 +5099,7 @@ def test_a_clean_round_ends_the_loop(world: World, capsys: pytest.CaptureFixture
     assert world.run("release-loop") == 0
     assert not world.record().exists()
     capsys.readouterr()
-    assert world.run("review-loop") == 2
+    assert world.run("review-loop") == stage2.CLEAN_CODE
     assert "round 1 was clean" in capsys.readouterr().err
     assert len(world.reviews("pi")) == 2
 
@@ -5457,7 +5500,7 @@ def test_round_history_survives_split_releases_and_config_edits(
     )
     decide_record(world, status="rejected — scope")
     capsys.readouterr()
-    assert world.run("review-loop") == 2, "a clean round after the release admitted another call"
+    assert world.run("review-loop") == stage2.CLEAN_CODE, "a clean round after the release admitted another call"
     assert "round 2 was clean" in capsys.readouterr().err
     # a multi-digit count and a spent snapshot survive a release of their own
     spent = loop_state(("free", "flash", f"rung:{TEST_RUNGS[0]}"))
@@ -10555,7 +10598,8 @@ def test_released_reviewer_words_cannot_supply_a_snapshot(world: World) -> None:
     assert [r[0] for r in stage2.findings_rows(text)[0]] == ["L1-1"]
     assert stage2.rounds_run(None, text) == 1
     assert f"> {stage2.RELEASE_HEADING} 2026-10-17" in text
-    assert world.run("review-loop") == 2
+    # The released row is rejected, so the loop is clean: finished (3), not refused (2) - R-11.
+    assert world.run("review-loop") == stage2.CLEAN_CODE
 
 
 @pytest.mark.parametrize("retention", [None, "", "   ", True, 30])

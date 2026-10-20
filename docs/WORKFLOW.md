@@ -4,7 +4,7 @@ category: governance
 status: current
 created: 2026-09-05
 last_reviewed: 2026-09-29
-updated: 2026-10-18
+updated: 2026-10-21
 owner: Data Architect
 provenance: ai-drafted-reviewed
 produced_by:
@@ -785,8 +785,12 @@ into a shell. Eleven verbs exist:
   request, times out after 60 seconds and preserves per-call leak/admission
   checks. No repository content is supplied and no review round is counted.
 - `review-loop` — one round of phase 4b, started through Pi; round 1 the
-  free swarm the `free_stage` rule selects live, round 2 the `flash_swarm`,
-  then one eligible ladder rung each, until a round is clean (ADR 0021).
+  free swarm the `free_stage` rule selects live, round 2 the three cheapest
+  reachable admitted models for an availability-enabled run (a legacy
+  declaration uses `flash_swarm`), then one eligible ladder rung each, until a
+  round is clean (ADR 0021). Exit 0 means a round was written, exit 2 a
+  refusal and exit 3 a loop that finished with a clean round (R-11 of the
+  review-swarm review).
 - `release-loop` — the loop rows into `findings.md`, after the phase-6 verdict.
 - `review` — Codex, phase 6. A re-check after an earlier `## Phase 6` block
   in `findings.md` starts a fresh read-only Codex session. The first phase-6
@@ -1096,9 +1100,14 @@ no tools, from a scratch directory, and their only input is the
 implementation diff: bounded hunks of source and test code against the merge
 base with `origin/main`, uncommitted and untracked code included. The catalog
 is a live intermediary (`pi.dev`): the check proves which catalog was read,
-not what OpenCode Go bills. Round 2 is the **Flash swarm**: the entry's
-eligible `flash_swarm` members in parallel, with the paid rounds' read-only
-tools and the full diff. Every later round calls one eligible rung of the
+not what OpenCode Go bills. The prompt carries the implementation diff up to
+the bound of `REVIEW_DIFF_MAX_LINES` (2000 lines); a cut is recorded in the
+round, and a round over a cut diff never counts as clean (R-12, R-15). Round 2
+is the **Flash swarm**: the three cheapest reachable admitted models in
+parallel — the entry's eligible `flash_swarm` members only for a legacy
+declaration — with the paid rounds' read-only tools and the same bounded diff.
+One deadline of `REVIEWER_MINUTES` covers the round's members and every
+replacement (R-8). Every later round calls one eligible rung of the
 `modelle` ladder by `anfragen_5h` descending (ties by id, missing values last).
 A member that fails is named beside its round's rows; a round completes when at least one member answered, and an
 attempt whose every member failed completes no round and consumes no stage.

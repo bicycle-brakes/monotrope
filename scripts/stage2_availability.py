@@ -12,6 +12,10 @@ import hashlib
 import json
 from pathlib import Path
 
+# A probe's first limit, and the one longer retry a timed-out probe gets (R-7 of the review-swarm review).
+PROBE_SECONDS = 60
+PROBE_RETRY_SECONDS = 180
+
 
 def now() -> dt.datetime:
     return dt.datetime.now(dt.UTC)
@@ -118,6 +122,7 @@ def prepare(root: Path, change: str, runner) -> None:
             candidates.append(model)
     reachable = []
     failed = {}
+    slow: dict[str, int] = {}
     key = runner.reviewer_key()
     prompt = "Availability probe only. Reply with OK. Do not review code or request tools."
     for model in dict.fromkeys(candidates):
@@ -137,21 +142,31 @@ def prepare(root: Path, change: str, runner) -> None:
         if not findings.exists():
             findings.write_text(runner.findings_header(ctx, runner.producer_for(endpoint)), encoding="utf-8")
         runner.append(findings, runner.call_line("prepare-loop", endpoint, result))
-        try:
-            # All probes, including paid ones, have no repository input or tools.
-            runner.run_reviewer(
-                ctx,
-                model,
-                prompt,
-                key,
-                free=True,
-                timeout_seconds=60,
-                task="Follow the appended availability instructions.",
-            )
-        except runner.CallFailed as error:
-            failed[model] = runner.scrub(str(error), key)
-        else:
-            reachable.append(model)
+        # A probe that only ran out of time is tried once more with a longer limit: a slow but
+        # reachable model must not disappear from the run silently (R-7 of the review-swarm review).
+        for limit in (PROBE_SECONDS, PROBE_RETRY_SECONDS):
+            try:
+                # All probes, including paid ones, have no repository input or tools.
+                runner.run_reviewer(
+                    ctx,
+                    model,
+                    prompt,
+                    key,
+                    free=True,
+                    timeout_seconds=limit,
+                    task="Follow the appended availability instructions.",
+                )
+            except runner.CallFailed as error:
+                failed[model] = runner.scrub(str(error), key)
+                # Only a stopped call is worth a longer try; a refused one stays refused.
+                if "stopped by" not in str(error):
+                    break
+            else:
+                reachable.append(model)
+                failed.pop(model, None)
+                if limit != PROBE_SECONDS:
+                    slow[model] = limit
+                break
     state = {"free": free, "paid": {}, "consumed": []}
     state["free"]["selected"] = [model for model in free["selected"] if model in reachable]
     admitted = [model for model in paid if model in reachable]
@@ -161,6 +176,7 @@ def prepare(root: Path, change: str, runner) -> None:
         "checked_at": now().isoformat(timespec="seconds"),
         "reachable": reachable,
         "failed": failed,
+        "slow": slow,
         "skipped": skipped,
         "terms_skipped": runner.skipped_models(root),
     }

@@ -71,7 +71,8 @@ def test_an_accepted_receipt_cannot_start_a_second_round(world: World) -> None:
     assert world.run("review-loop", "demo", "--availability-reported", prepared["report_id"]) == 0
     assert not availability.receipt_path(world.root, "demo", stage2).exists(), "the receipt survived its round"
     rounds = len(world.reviews())
-    assert world.run("review-loop", "demo", "--availability-reported", prepared["report_id"]) == 2
+    # A consumed receipt and a clean round: the loop is finished (3), not refused (2).
+    assert world.run("review-loop", "demo", "--availability-reported", prepared["report_id"]) == stage2.CLEAN_CODE
     assert len(world.reviews()) == rounds, "a spent receipt started a second round"
 
 
@@ -273,3 +274,50 @@ def test_invalid_availability_rule_or_leak_stops_before_model_calls(world: World
     (world.root / "scripts" / "helper.py").write_text("LEAKMARK-123456\n")
     assert world.run("prepare-loop") == 2
     assert world.reviews() == []
+
+
+def test_a_probe_that_only_ran_out_of_time_gets_one_longer_try(world: World, monkeypatch) -> None:
+    """R-7 of the review-swarm review: a slow but reachable model must not vanish from the run."""
+    from test_stage2 import TEST_FREE
+
+    enable(world)
+    slow = TEST_FREE[0]
+    limits: list[int] = []
+
+    def fake(_ctx, model, _prompt, _key, **kwargs):
+        if model != slow:
+            return "OK"
+        limits.append(kwargs["timeout_seconds"])
+        if len(limits) == 1:
+            raise stage2.CallFailed(
+                f"pi was stopped by the availability probe limit of {kwargs['timeout_seconds']} seconds"
+            )
+        return "OK"
+
+    monkeypatch.setattr(stage2, "run_reviewer", fake)
+    assert world.run("prepare-loop") == 0
+    assert limits == [availability.PROBE_SECONDS, availability.PROBE_RETRY_SECONDS], "no longer try was made"
+    data = receipt(world)["state"]
+    assert slow in data["free"]["selected"], "the slow model was dropped after one timeout"
+    assert data["availability"]["slow"] == {slow: availability.PROBE_RETRY_SECONDS}
+    assert slow not in data["availability"]["failed"]
+
+
+def test_a_probe_that_is_refused_is_not_tried_again(world: World, monkeypatch) -> None:
+    """A refusal is final: only a stopped call earns the second, longer probe."""
+    from test_stage2 import TEST_FREE
+
+    enable(world)
+    refused = TEST_FREE[0]
+    calls: list[int] = []
+
+    def fake(_ctx, model, _prompt, _key, **kwargs):
+        if model != refused:
+            return "OK"
+        calls.append(kwargs["timeout_seconds"])
+        raise stage2.CallFailed("pi exited 1: model_coming_soon")
+
+    monkeypatch.setattr(stage2, "run_reviewer", fake)
+    assert world.run("prepare-loop") == 0
+    assert calls == [availability.PROBE_SECONDS], "a refused probe was repeated"
+    assert refused in receipt(world)["state"]["availability"]["failed"]
