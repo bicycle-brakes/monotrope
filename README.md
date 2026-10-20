@@ -50,31 +50,14 @@ repository, and the next phase reads that instead of a chat.
 The highlighted moments are yours; everything else is done by agents and
 checked by machines.
 
-```mermaid
-flowchart TD
-    Y1(["You: describe the goal"]) --> E
-    E["<b>1 · Explore</b><br/>an agent studies the code<br/><i>research.md</i>"] --> I
-    I["<b>1a · Interview</b><br/>it asks only what is yours to decide<br/><i>decisions.md</i>"] --> Y2
-    Y2(["You: answer the questions"]) --> S
-    S["<b>2 · Spec</b><br/>what exactly will change<br/><i>spec.md</i>"] --> P
-    P["<b>3 · Plan</b><br/>steps, time limit, when it is done<br/><i>plan.md</i>"] --> Y3
-    Y3(["You: read the plan card<br/>silence means go"]) --> IM
-    IM["<b>4 · Implement</b><br/>code and tests"] --> V
-    V{"<b>5 · Verify</b><br/>all gates green?"}
-    V -- "red" --> IM
-    V -- "green" --> R
-    R["<b>6 · Review</b><br/>a fresh reviewer from another vendor<br/><i>findings.md</i>"]
-    R -- "a finding a test or the spec backs" --> IM
-    R -- "nothing to fix" --> C
-    C["<b>7 · Commit</b><br/>pull request, CI"] --> Y4
-    Y4(["You: merge<br/>the merge is the decision"])
+<p align="center">
+  <img src="docs/assets/readme-how-a-change-runs.png"
+       alt="Three lanes — you, agents, machine checks — with the seven phases from explore to commit. Your four moments are state the goal, answer the interview questions, read the plan card, and merge. The review loop and the review send findings back to implement; a shield marks the leak check before every external model call."
+       width="100%">
+</p>
 
-    classDef default fill:#F3EBDD,stroke:#788773,stroke-width:1.5px,color:#292F2D
-    classDef you fill:#F6D9C8,stroke:#CE663B,stroke-width:2.5px,color:#292F2D
-    classDef check fill:#DCE4E8,stroke:#34566A,stroke-width:2px,color:#292F2D
-    class Y1,Y2,Y3,Y4 you
-    class V,R check
-```
+The diagram shows who acts in each lane; the table below lists every phase
+and what it leaves behind.
 
 | # | Phase | What it leaves | The question it answers |
 | --- | --- | --- | --- |
@@ -94,10 +77,11 @@ action to resume with.
 
 What a change asks of you is short:
 
-1. **Answer a few questions** — only the ones that are yours to answer.
-2. **Read the plan card** — what changes for you, when it is done, the time
+1. **State the goal** — what the change is for, and what must not happen.
+2. **Answer a few questions** — only the ones that are yours to answer.
+3. **Read the plan card** — what changes for you, when it is done, the time
    limit, what is left out. The work starts unless you say stop.
-3. **Merge the pull request.**
+4. **Merge the pull request.**
 
 ## Not every change is the same size
 
@@ -132,26 +116,16 @@ approval for decisions**:
 - **The chat is not the state.** Every phase, every decision and every
   handover is a file. Close the window, start a new session, change the model —
   the next session reads where things stand.
-- **Decisions have authors.** Open points come in three kinds. `[DECISION]`
-  goes to a person: intent, anything irreversible or risky. `[GAP]` is
-  explored, not asked. `[DETAIL]` is decided by the agent, with its reason
-  written into the artefact. Afterwards you can see who decided what, and
-  where the work departed from the plan.
+- **Decisions have authors.** Open points come in three kinds:
 
-  ```mermaid
-  flowchart LR
-      Q["An open point<br/>comes up"] --> K{"What kind<br/>of point?"}
-      K -- "intent, irreversible, risky" --> D(["<b>[DECISION]</b><br/>you decide"])
-      K -- "a missing fact" --> G["<b>[GAP]</b><br/>the agent looks it up,<br/>does not ask"]
-      K -- "a name, an order, a format" --> T["<b>[DETAIL]</b><br/>the agent decides<br/>and writes down why"]
-      D --> F["Recorded in the<br/>change's files"]
-      G --> F
-      T --> F
+  | Kind | Who decides | What happens |
+  | --- | --- | --- |
+  | `[DECISION]` | you | intent, anything irreversible or risky; your answer goes into `decisions.md` |
+  | `[GAP]` | the agent | a missing fact; the agent looks it up and does not ask |
+  | `[DETAIL]` | the agent | a name, an order, a format; the agent decides and writes down why |
 
-      classDef default fill:#F3EBDD,stroke:#788773,stroke-width:1.5px,color:#292F2D
-      classDef you fill:#F6D9C8,stroke:#CE663B,stroke-width:2.5px,color:#292F2D
-      class D you
-  ```
+  Afterwards you can see who decided what, and where the work departed from
+  the plan.
 
 - **A rule, or a file reserved for a person, changes only when its pull
   request is merged** — not when someone typed "yes" into a chat.
@@ -265,7 +239,7 @@ real files:
 
 ## What works today
 
-Checked on 2026-10-20 against `main` at `94ae6cc`.
+Checked on 2026-10-20 against `main` at `d35df66`.
 
 ### Enforced by tooling
 
