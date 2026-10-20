@@ -112,7 +112,7 @@ time** and at most one sub-agent at a time, because of the memory limit.
 
 - At 10 % of a five-hour window left, start no new large step; at about 5 %
   checkpoint and wait for the reset.
-- Two failed repairs, an exhausted appetite, a missing maintainer decision or
+- Two failed repairs (five for a repair item; maintainer, 2026-10-20 about 21:40 UTC), an exhausted appetite, a missing maintainer decision or
   an unresolved ambiguity stop that item; record the reason and go on with
   the next independent item. No question is asked overnight and no answer is
   invented.
