@@ -2905,3 +2905,21 @@ def test_existing_unreadable_spec_refuses_class_selection(sworld: SwarmWorld, mo
         stage2.declared_class(sworld.root, "demo", None)
     assert sworld.run() == 2
     assert sworld.calls() == []
+
+
+@pytest.mark.parametrize("model", ["vendor/alpha-free", "vendor/" + "a" * 130 + "-free", "alpha-free"])
+@pytest.mark.parametrize("failed", [False, True])
+def test_free_model_storage_keys_preserve_best_effort_completion(sworld: SwarmWorld, model: str, failed: bool) -> None:
+    sworld.selection = selection_for(free=[model])
+    # The stand-in scenario lookup strips provider/name prefixes from --model.
+    sworld.complete(**({f"online:10:{model.rsplit('/', 1)[-1]}": [{"exit": 1}]} if failed else {}))
+    assert sworld.run() == 0
+    manifest = manifest_of(sworld)
+    slots = [slot for slot in manifest["slots"] if slot["model"] == model]
+    assert len(slots) == 3
+    assert len({slot["slot_id"] for slot in slots}) == 3
+    assert all(re.fullmatch(r"[A-Za-z0-9][A-Za-z0-9._+-]{0,119}", slot["slot_id"]) for slot in slots)
+    assert {slot["topic"] for slot in slots} == {9, 10, 11}
+    assert all(slot["launched"] and not slot["required"] for slot in slots)
+    assert {slot["topic"]: slot["outcome"] for slot in slots} == {9: "ok", 10: "failed" if failed else "ok", 11: "ok"}
+    assert "judge" in kinds(sworld)

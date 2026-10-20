@@ -21,7 +21,9 @@ The receipt is external state, never an artifact a model can edit.
 
 from __future__ import annotations
 
+import contextlib
 import datetime as dt
+import fcntl
 import hashlib
 import json
 import os
@@ -30,6 +32,7 @@ import shutil
 import subprocess
 import tempfile
 from pathlib import Path
+from uuid import uuid4
 
 import leakcheck
 import stage2_research_map
@@ -131,16 +134,29 @@ def verify(receipt: dict, token: str | None) -> bool:
     return receipt.get("report_id") == seal(receipt) == token
 
 
+@contextlib.contextmanager
+def receipt_lock(path: Path):
+    """Serialize receipt publication and the final identity check/removal across processes."""
+    path.parent.mkdir(parents=True, exist_ok=True, mode=0o700)
+    descriptor = os.open(path.with_suffix(".lock"), os.O_RDWR | os.O_CREAT, 0o600)
+    with os.fdopen(descriptor, "a") as handle:
+        fcntl.flock(handle, fcntl.LOCK_EX)
+        try:
+            yield
+        finally:
+            fcntl.flock(handle, fcntl.LOCK_UN)
+
+
 def write_receipt(path: Path, receipt: dict) -> None:
     """Atomic, owner-only: a crash leaves the whole receipt or none."""
-    path.parent.mkdir(parents=True, exist_ok=True, mode=0o700)
-    temporary = path.with_suffix(".tmp")
-    descriptor = os.open(temporary, os.O_WRONLY | os.O_CREAT | os.O_TRUNC, 0o600)
-    with os.fdopen(descriptor, "w", encoding="utf-8") as handle:
-        handle.write(json.dumps(receipt, sort_keys=True))
-        handle.flush()
-        os.fsync(handle.fileno())
-    temporary.replace(path)
+    with receipt_lock(path):
+        temporary = path.with_suffix(".tmp")
+        descriptor = os.open(temporary, os.O_WRONLY | os.O_CREAT | os.O_TRUNC, 0o600)
+        with os.fdopen(descriptor, "w", encoding="utf-8") as handle:
+            handle.write(json.dumps(receipt, sort_keys=True))
+            handle.flush()
+            os.fsync(handle.fileno())
+        temporary.replace(path)
 
 
 # ---------------------------------------------------------------------------
@@ -561,7 +577,8 @@ def prepare_research(root: Path, change: str, runner, klass: str | None = None) 
     """
     path = research_receipt_path(change, runner)
     # A failed preparation must never leave an earlier receipt usable.
-    path.unlink(missing_ok=True)
+    with receipt_lock(path):
+        path.unlink(missing_ok=True)
     runner.folder_of(root, change)
     klass = runner.declared_class(root, change, klass)
     if klass not in runner.SWARM_CLASSES:
@@ -634,6 +651,7 @@ def prepare_research(root: Path, change: str, runner, klass: str | None = None) 
         )
     receipt = {
         "version": 1,
+        "nonce": uuid4().hex,
         "binding": research_binding(root, change, klass, neighbours),
         "state": state,
     }
@@ -668,10 +686,14 @@ def consume_research(root: Path, change: str, token: str | None, runner, klass: 
     if not valid:
         raise runner.Refused(problem)
     try:
-        # Unlink is the atomic single-use claim: only one validated reader may win.
-        # A concurrent consumer that already removed the receipt must cause refusal.
-        path.unlink()
-    except OSError as error:
+        with receipt_lock(path):
+            # A validated reader may be stale: never consume a newer preparation.
+            with path.open(encoding="utf-8") as handle:
+                current = json.load(handle)
+            if current != receipt:
+                raise runner.Refused(problem)
+            path.unlink()
+    except (OSError, ValueError) as error:
         raise runner.Refused(problem) from error
     return {**state, "report_id": token}
 

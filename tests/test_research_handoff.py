@@ -829,3 +829,12 @@ def test_unhashable_spec_header_keys_are_not_measured(world: World, capsys, key:
     world.write([run_text(RUN1)], spec=good.replace("title: Spec", f"title: Spec\n{key}"))
     code, out = world.check(capsys)
     assert code == 3 and "not readable" in out, out
+
+
+def test_unreadable_spec_is_not_measured(tmp_path: Path) -> None:
+    world = World(tmp_path).write([run_text(RUN1)])
+    assert gate.run(tmp_path, "demo", out=lambda _: None) == 0
+    (world.folder / "spec.md").write_bytes(b"\xff")
+    lines = []
+    assert gate.run(tmp_path, "demo", out=lines.append) == 3
+    assert any("not measured" in line and "spec.md" in line for line in lines)

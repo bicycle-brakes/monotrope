@@ -734,3 +734,57 @@ def test_concurrent_consumers_cannot_share_a_single_use_receipt(fx: Fixture, mon
     assert len(accepted) == 1
     assert accepted[0]["seats"] == prepared["state"]["seats"]
     assert not path.exists()
+
+
+def test_consumed_receipt_cannot_delete_a_new_preparation(fx: Fixture, monkeypatch) -> None:
+    from concurrent.futures import ThreadPoolExecutor
+    from threading import Barrier, Event, current_thread
+
+    assert fx.prepare() == 0
+    prepared = fx.receipt()
+    path = availability.research_receipt_path("demo", stage2)
+    original_verify = availability.verify
+    readers = Barrier(2)
+    replacement_ready = Event()
+    replacement = {
+        **prepared,
+        "state": {**prepared["state"], "checked_at": (NOW + dt.timedelta(seconds=1)).isoformat()},
+    }
+    replacement["report_id"] = availability.seal(replacement)
+
+    def synchronized_verify(receipt, token):
+        valid = original_verify(receipt, token)
+        readers.wait(timeout=10)
+        if current_thread().name.endswith("_1"):
+            assert replacement_ready.wait(timeout=10)
+        return valid
+
+    monkeypatch.setattr(availability, "verify", synchronized_verify)
+
+    def consume():
+        try:
+            result = availability.consume_research(fx.w.root, "demo", prepared["report_id"], stage2, "feature")
+        except stage2.Refused:
+            return None
+        if current_thread().name.endswith("_0"):
+            availability.write_receipt(path, replacement)
+            replacement_ready.set()
+        return result
+
+    with ThreadPoolExecutor(max_workers=2) as pool:
+        results = list(pool.map(lambda _: consume(), range(2)))
+    assert sum(result is not None for result in results) == 1
+    assert json.loads(path.read_text(encoding="utf-8")) == replacement
+
+
+def test_same_second_preparations_have_distinct_single_use_ids(fx: Fixture) -> None:
+    assert fx.prepare() == 0
+    first = fx.receipt()
+    availability.consume_research(fx.w.root, "demo", first["report_id"], stage2, "feature")
+    assert fx.prepare() == 0  # The fixture clock and every bound input remain unchanged.
+    second = fx.receipt()
+    assert first["report_id"] != second["report_id"]
+    with pytest.raises(stage2.Refused):
+        availability.consume_research(fx.w.root, "demo", first["report_id"], stage2, "feature")
+    assert fx.receipt() == second
+    assert availability.consume_research(fx.w.root, "demo", second["report_id"], stage2, "feature")

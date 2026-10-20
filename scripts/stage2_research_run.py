@@ -46,6 +46,15 @@ from stage2_research_store import STOP_REASON, Store, StoreLocked, StoreWriteErr
 
 CLOCK = time.monotonic  # injectable; the dispatcher and all deadlines of the run read it
 
+
+def free_slot_id(stage: str, topic: int, model: str) -> str:
+    """Keep ordinary ids stable; hash unrestricted catalog identities into bounded storage keys."""
+    candidate = f"{stage}-{topic}-free-{model}"
+    if not model.startswith("sha256-") and re.fullmatch(r"[A-Za-z0-9][A-Za-z0-9._+-]{0,119}", candidate):
+        return candidate
+    return f"{stage}-{topic}-free-sha256-{hashlib.sha256(model.encode('utf-8')).hexdigest()}"
+
+
 GO, CLAUDE = stage2_swarm.GO_ENDPOINT, stage2_swarm.CLAUDE_ENDPOINT
 MINUTES = {"finders": 10.0, "merge": 10.0, "sentence": 5.0, "topics": 10.0, "judge": 15.0}
 RUN_MINUTES = 150.0
@@ -640,7 +649,7 @@ class Run:
         free = role == "online_free"
         slot_id = stage if topic is None and seat is None else f"{stage}-{topic if topic else 0}-{seat}"
         if free:
-            slot_id = f"{stage}-{topic}-free-{spec['model']}"
+            slot_id = free_slot_id(stage, topic, spec["model"])
         entry = {
             "slot_id": slot_id,
             "stage": stage,
@@ -984,7 +993,7 @@ class Run:
         for topic in range(9, 12):
             for ident in sorted(self.free):
                 spec = {"endpoint": GO, "model": ident}
-                free_id = f"topics-{topic}-free-{ident}"
+                free_id = free_slot_id("topics", topic, ident)
                 plan.append({**plain("topics", "free", spec, topic, False), "slot_id": free_id})
         plan.append(plain("judge", None, self.roles["judge"]))
         return plan

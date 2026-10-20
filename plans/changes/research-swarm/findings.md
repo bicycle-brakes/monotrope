@@ -3521,3 +3521,364 @@ Phase 6 verdict: codex 01a158c5-b05d-7902-b003-5ef1128c3cd2, 2026-10-20
 Reviewer session: codex 01a158c5-b05d-7902-b003-5ef1128c3cd2 — a fresh session reviewed: an earlier ## Phase 6 block makes this a re-check
 
 Stage-2 session, 2026-10-20: attempt d0fd2830a244 · model opencode-go/deepseek-v4.1-flash · endpoint opencode-go · handover .stage2-sessions/deepseek-review-handover.md · leak check clean over 536 files, 1628 commits, 12 rules · dispatch accepted.
+
+Stage-2 call, 2026-10-20: repair · attempt 1 · route codex · endpoint openai-codex · model gpt-6.1-sol · leak check clean over 536 files, 1629 commits, 12 rules.
+
+> Attempt 1 (codex) failed its post-run checks.
+>
+> Files the attempt changed (lines added, removed):
+> - `plans/changes/research-swarm/findings.md` +6 -0
+> - `plans/changes/research-swarm/plan.md` +21 -0
+> - `scripts/check_research_handoff.py` +4 -1
+> - `scripts/stage2_availability.py` +35 -13
+> - `scripts/stage2_research_run.py` +11 -2
+> - `tests/test_research_handoff.py` +9 -0
+> - `tests/test_stage2_research_availability.py` +54 -0
+> - `tests/test_stage2_swarm.py` +18 -0
+>
+> Diagnostics:
+> ````text
+> - Runner format before `make verify`: ruff changed no file.
+> - `make verify` exited 2
+> The gates that blocked, each with its last lines:
+> ── [pytest] $ lauf_cmd
+> [… 56 lines of this gate left out …]
+>     def test_models_dev_failure_excludes_free_and_keeps_required_slots(tmp_path, sources, fault):
+>         # Criterion 42. Planted fault: a failed source launches free models, aborts required slots or reads as measured empty.
+>         options = {}
+>         if fault.startswith("http"):
+>             sources.metadata_status = int(fault.split("-")[1])
+>         elif fault == "unparsable":
+>             sources.metadata_body = "{broken"
+>         elif fault == "timeout":
+>             sources.metadata_delay = 2.5
+>             options["deadlineMs"] = 800
+>         elif fault == "not-an-object":
+>             sources.metadata_body = "[]"
+>         else:
+>             sources.metadata_body = "{}"
+> >       result = select(collect(tmp_path, sources, **options))
+>
+> tests/test_stage2_research_catalog.py:708: 
+> _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+> tests/test_stage2_research_catalog.py:152: in select
+>     return swarm.select_research_catalog(
+> _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+>
+> bridge = {'baseline': ['claude-haiku-5-5', 'minimax-m3', 'qwen3.7-plus', 'qwen3.8-flash', 'qwen3.8-max', 'deepseek-v4-flash', ...], 'elapsed_ms': 923, 'exit_code': 1, 'models_store': {}, ...}
+> policy = {'exclude': [], 'include': [], 'provider': 'opencode-go', 'suffix': '-free'}
+> fixed_ids = ['deepseek-v4.1-flash', 'mimo-v2.6-flash', 'qwen3.8-flash']
+>
+>     def select_research_catalog(bridge, policy, fixed_ids, *, expected_version, measured_wire_apis=("openai-completions",)):
+>         """Intersect a fresh pinned Pi response with capability evidence, never a cache union.
+>     
+>         The bridge transports raw source bodies. Python retains duplicate identity and
+>         malformed-field evidence that the runtime's permissive parser would discard.
+>         This selects a roster and classifies every seat candidate (`fixed_ids`, the
+>         preferred models) and every paid model of the fresh overlay; it does not
+>         authorize or dispatch any model. A candidate that is absent, baseline-only,
+>         non-chat, malformed or on an unmeasured wire API is skipped with its raw
+>         evidence, never a failure of the whole preflight (Q-12, Q-14).
+>         """
+>         validate_research_free_policy(policy)
+>         provider = policy["provider"]
+>         sources = bridge.get("sources", {})
+>         pi = sources.get("pi", {})
+>         runtime = bridge.get("pi_runtime", {})
+>         if (
+>             bridge.get("exit_code") != 0
+>             or bridge.get("pi_version") != expected_version
+>             or pi.get("status") != 200
+>             or runtime.get("aborted")
+>             or runtime.get("errors")
+>             or provider not in bridge.get("models_store", {})
+>         ):
+> >           raise ResearchCatalogError(bridge.get("reason") or "pi-refresh-failed")
+> E           stage2_swarm.ResearchCatalogError: pi-timeout
+>
+> scripts/stage2_swarm.py:103: ResearchCatalogError
+> =========================== short test summary info ============================
+> FAILED tests/test_stage2_research_catalog.py::test_models_dev_failure_excludes_free_and_keeps_required_slots[timeout]
+> 1 failed, 3092 passed, 16 skipped in 543.80s (0:09:03)
+> ── [pytest] RED (block) — der Lauf ist rot.
+>
+> Standard error of the whole run, last lines:
+> [… 14992 earlier lines left out …]
+> templates/spec.md:73:81 error MD013/line-length Line length [Expected: 80; Actual: 127]
+> tests/fixtures/research_refs/plan-prompt-d862bc2.md:3:81 error MD013/line-length Line length [Expected: 80; Actual: 117]
+> tests/fixtures/research_refs/plan-prompt-d862bc2.md:85:81 error MD013/line-length Line length [Expected: 80; Actual: 96]
+> tests/fixtures/research_refs/plan-prompt-d862bc2.md:99 error MD040/fenced-code-language Fenced code blocks should have a language specified [Context: "```"]
+> tools/claude-code/README.md:17:81 error MD013/line-length Line length [Expected: 80; Actual: 105]
+> tools/claude-code/README.md:18:81 error MD013/line-length Line length [Expected: 80; Actual: 109]
+> tools/claude-code/README.md:19:81 error MD013/line-length Line length [Expected: 80; Actual: 134]
+> tools/claude-code/README.md:23:1 error MD060/table-column-style Table column style [Table pipe is missing space to the right for style "compact"]
+> tools/claude-code/README.md:23:5 error MD060/table-column-style Table column style [Table pipe is missing space to the left for style "compact"]
+> tools/claude-code/README.md:23:5 error MD060/table-column-style Table column style [Table pipe is missing space to the right for style "compact"]
+> tools/claude-code/README.md:23:9 error MD060/table-column-style Table column style [Table pipe is missing space to the left for style "compact"]
+> tools/claude-code/README.md:23:9 error MD060/table-column-style Table column style [Table pipe is missing space to the right for style "compact"]
+> tools/claude-code/README.md:23:13 error MD060/table-column-style Table column style [Table pipe is missing space to the left for style "compact"]
+> tools/claude-code/README.md:24:81 error MD013/line-length Line length [Expected: 80; Actual: 272]
+> tools/claude-code/README.md:25:81 error MD013/line-length Line length [Expected: 80; Actual: 180]
+> tools/claude-code/README.md:26:81 error MD013/line-length Line length [Expected: 80; Actual: 115]
+> tools/claude-code/README.md:28:81 error MD013/line-length Line length [Expected: 80; Actual: 124]
+> tools/claude-code/README.md:29:81 error MD013/line-length Line length [Expected: 80; Actual: 106]
+> tools/claude-code/README.md:38:1 error MD060/table-column-style Table column style [Table pipe is missing space to the right for style "compact"]
+> tools/claude-code/README.md:38:5 error MD060/table-column-style Table column style [Table pipe is missing space to the left for style "compact"]
+> tools/claude-code/README.md:38:5 error MD060/table-column-style Table column style [Table pipe is missing space to the right for style "compact"]
+> tools/claude-code/README.md:38:9 error MD060/table-column-style Table column style [Table pipe is missing space to the left for style "compact"]
+> tools/claude-code/README.md:38:9 error MD060/table-column-style Table column style [Table pipe is missing space to the right for style "compact"]
+> tools/claude-code/README.md:38:13 error MD060/table-column-style Table column style [Table pipe is missing space to the left for style "compact"]
+> tools/claude-code/README.md:40:81 error MD013/line-length Line length [Expected: 80; Actual: 442]
+> tools/claude-code/README.md:41:81 error MD013/line-length Line length [Expected: 80; Actual: 163]
+> tools/claude-code/README.md:42:81 error MD013/line-length Line length [Expected: 80; Actual: 126]
+> tools/claude-code/README.md:43:81 error MD013/line-length Line length [Expected: 80; Actual: 96]
+> tools/claude-code/README.md:44:81 error MD013/line-length Line length [Expected: 80; Actual: 167]
+> tools/claude-code/README.md:72:1 error MD060/table-column-style Table column style [Table pipe is missing space to the right for style "compact"]
+> tools/claude-code/README.md:72:5 error MD060/table-column-style Table column style [Table pipe is missing space to the left for style "compact"]
+> tools/claude-code/README.md:72:5 error MD060/table-column-style Table column style [Table pipe is missing space to the right for style "compact"]
+> tools/claude-code/README.md:72:9 error MD060/table-column-style Table column style [Table pipe is missing space to the left for style "compact"]
+> tools/claude-code/README.md:72:9 error MD060/table-column-style Table column style [Table pipe is missing space to the right for style "compact"]
+> tools/claude-code/README.md:72:13 error MD060/table-column-style Table column style [Table pipe is missing space to the left for style "compact"]
+> tools/claude-code/README.md:73:81 error MD013/line-length Line length [Expected: 80; Actual: 112]
+> tools/claude-code/README.md:74:81 error MD013/line-length Line length [Expected: 80; Actual: 89]
+> tools/claude-code/README.md:75:81 error MD013/line-length Line length [Expected: 80; Actual: 88]
+> tools/pi/README.md:65:81 error MD013/line-length Line length [Expected: 80; Actual: 97]
+> make: *** [verify] Error 1
+> - `plan.md` did not add a measured line below `## Time used`
+> ````
+
+Stage-2 call, 2026-10-20: repair · attempt 2 · route codex-repair · endpoint openai-codex · model gpt-6.1-sol · reason first Codex post-run check failed · leak check clean over 536 files, 1629 commits, 12 rules.
+
+> Attempt 2 (codex-repair) failed its post-run checks.
+>
+> Files the attempt changed (lines added, removed):
+> - `plans/changes/research-swarm/plan.md` +41 -0
+>
+> Diagnostics:
+> ````text
+> - Runner format before `make verify`: ruff changed no file.
+> - `make verify` exited 2
+> The gates that blocked, each with its last lines:
+> ── [pytest] $ lauf_cmd
+> [… 96 lines of this gate left out …]
+>         pi = sources.get("pi", {})
+>         runtime = bridge.get("pi_runtime", {})
+>         if (
+>             bridge.get("exit_code") != 0
+>             or bridge.get("pi_version") != expected_version
+>             or pi.get("status") != 200
+>             or runtime.get("aborted")
+>             or runtime.get("errors")
+>             or provider not in bridge.get("models_store", {})
+>         ):
+> >           raise ResearchCatalogError(bridge.get("reason") or "pi-refresh-failed")
+> E           stage2_swarm.ResearchCatalogError: pi-timeout
+>
+> scripts/stage2_swarm.py:103: ResearchCatalogError
+> _______ test_preflight_shared_deadline_has_asymmetric_failure_rules[pi] ________
+> [gw2] darwin -- Python 3.12.15 /Users/mikypiky/coding-harness/.claude/worktrees/research-swarm/.venv/bin/python3
+>
+> tmp_path = PosixPath('/private/var/folders/44/yc0m3m456b51nyzwyfjptgm40000gn/T/pytest-of-mikypiky/pytest-192/popen-gw2/test_preflight_shared_deadline0')
+> sources = <test_stage2_research_catalog.Sources object at 0x10bbe58e0>
+> slow = 'pi'
+>
+>     @pytest.mark.parametrize("slow", ["pi", "metadata"])
+>     def test_preflight_shared_deadline_has_asymmetric_failure_rules(tmp_path, sources, slow):
+>         setattr(sources, slow + "_delay", 2.5)
+>         started = time.monotonic()
+>         bridge = collect(tmp_path, sources, deadlineMs=1200)
+> >       assert time.monotonic() - started < 3, "the two reads did not share one deadline"
+> E       AssertionError: the two reads did not share one deadline
+> E       assert (50839.06830525 - 50834.080300666) < 3
+> E        +  where 50839.06830525 = <built-in function monotonic>()
+> E        +    where <built-in function monotonic> = time.monotonic
+>
+> tests/test_stage2_research_catalog.py:355: AssertionError
+> ____ test_preflight_shared_deadline_has_asymmetric_failure_rules[metadata] _____
+> [gw2] darwin -- Python 3.12.15 /Users/mikypiky/coding-harness/.claude/worktrees/research-swarm/.venv/bin/python3
+>
+> tmp_path = PosixPath('/private/var/folders/44/yc0m3m456b51nyzwyfjptgm40000gn/T/pytest-of-mikypiky/pytest-192/popen-gw2/test_preflight_shared_deadline1')
+> sources = <test_stage2_research_catalog.Sources object at 0x10bc29ee0>
+> slow = 'metadata'
+>
+>     @pytest.mark.parametrize("slow", ["pi", "metadata"])
+>     def test_preflight_shared_deadline_has_asymmetric_failure_rules(tmp_path, sources, slow):
+>         setattr(sources, slow + "_delay", 2.5)
+>         started = time.monotonic()
+>         bridge = collect(tmp_path, sources, deadlineMs=1200)
+> >       assert time.monotonic() - started < 3, "the two reads did not share one deadline"
+> E       AssertionError: the two reads did not share one deadline
+> E       assert (50844.374599166 - 50839.226643041) < 3
+> E        +  where 50844.374599166 = <built-in function monotonic>()
+> E        +    where <built-in function monotonic> = time.monotonic
+>
+> tests/test_stage2_research_catalog.py:355: AssertionError
+> =========================== short test summary info ============================
+> FAILED tests/test_stage2_research_catalog.py::test_models_dev_failure_excludes_free_and_keeps_required_slots[timeout]
+> FAILED tests/test_stage2_research_catalog.py::test_preflight_shared_deadline_has_asymmetric_failure_rules[pi]
+> FAILED tests/test_stage2_research_catalog.py::test_preflight_shared_deadline_has_asymmetric_failure_rules[metadata]
+> 3 failed, 3090 passed, 16 skipped in 581.45s (0:09:41)
+> ── [pytest] RED (block) — der Lauf ist rot.
+>
+> Standard error of the whole run, last lines:
+> [… 15054 earlier lines left out …]
+> templates/spec.md:73:81 error MD013/line-length Line length [Expected: 80; Actual: 127]
+> tests/fixtures/research_refs/plan-prompt-d862bc2.md:3:81 error MD013/line-length Line length [Expected: 80; Actual: 117]
+> tests/fixtures/research_refs/plan-prompt-d862bc2.md:85:81 error MD013/line-length Line length [Expected: 80; Actual: 96]
+> tests/fixtures/research_refs/plan-prompt-d862bc2.md:99 error MD040/fenced-code-language Fenced code blocks should have a language specified [Context: "```"]
+> tools/claude-code/README.md:17:81 error MD013/line-length Line length [Expected: 80; Actual: 105]
+> tools/claude-code/README.md:18:81 error MD013/line-length Line length [Expected: 80; Actual: 109]
+> tools/claude-code/README.md:19:81 error MD013/line-length Line length [Expected: 80; Actual: 134]
+> tools/claude-code/README.md:23:1 error MD060/table-column-style Table column style [Table pipe is missing space to the right for style "compact"]
+> tools/claude-code/README.md:23:5 error MD060/table-column-style Table column style [Table pipe is missing space to the left for style "compact"]
+> tools/claude-code/README.md:23:5 error MD060/table-column-style Table column style [Table pipe is missing space to the right for style "compact"]
+> tools/claude-code/README.md:23:9 error MD060/table-column-style Table column style [Table pipe is missing space to the left for style "compact"]
+> tools/claude-code/README.md:23:9 error MD060/table-column-style Table column style [Table pipe is missing space to the right for style "compact"]
+> tools/claude-code/README.md:23:13 error MD060/table-column-style Table column style [Table pipe is missing space to the left for style "compact"]
+> tools/claude-code/README.md:24:81 error MD013/line-length Line length [Expected: 80; Actual: 272]
+> tools/claude-code/README.md:25:81 error MD013/line-length Line length [Expected: 80; Actual: 180]
+> tools/claude-code/README.md:26:81 error MD013/line-length Line length [Expected: 80; Actual: 115]
+> tools/claude-code/README.md:28:81 error MD013/line-length Line length [Expected: 80; Actual: 124]
+> tools/claude-code/README.md:29:81 error MD013/line-length Line length [Expected: 80; Actual: 106]
+> tools/claude-code/README.md:38:1 error MD060/table-column-style Table column style [Table pipe is missing space to the right for style "compact"]
+> tools/claude-code/README.md:38:5 error MD060/table-column-style Table column style [Table pipe is missing space to the left for style "compact"]
+> tools/claude-code/README.md:38:5 error MD060/table-column-style Table column style [Table pipe is missing space to the right for style "compact"]
+> tools/claude-code/README.md:38:9 error MD060/table-column-style Table column style [Table pipe is missing space to the left for style "compact"]
+> tools/claude-code/README.md:38:9 error MD060/table-column-style Table column style [Table pipe is missing space to the right for style "compact"]
+> tools/claude-code/README.md:38:13 error MD060/table-column-style Table column style [Table pipe is missing space to the left for style "compact"]
+> tools/claude-code/README.md:40:81 error MD013/line-length Line length [Expected: 80; Actual: 442]
+> tools/claude-code/README.md:41:81 error MD013/line-length Line length [Expected: 80; Actual: 163]
+> tools/claude-code/README.md:42:81 error MD013/line-length Line length [Expected: 80; Actual: 126]
+> tools/claude-code/README.md:43:81 error MD013/line-length Line length [Expected: 80; Actual: 96]
+> tools/claude-code/README.md:44:81 error MD013/line-length Line length [Expected: 80; Actual: 167]
+> tools/claude-code/README.md:72:1 error MD060/table-column-style Table column style [Table pipe is missing space to the right for style "compact"]
+> tools/claude-code/README.md:72:5 error MD060/table-column-style Table column style [Table pipe is missing space to the left for style "compact"]
+> tools/claude-code/README.md:72:5 error MD060/table-column-style Table column style [Table pipe is missing space to the right for style "compact"]
+> tools/claude-code/README.md:72:9 error MD060/table-column-style Table column style [Table pipe is missing space to the left for style "compact"]
+> tools/claude-code/README.md:72:9 error MD060/table-column-style Table column style [Table pipe is missing space to the right for style "compact"]
+> tools/claude-code/README.md:72:13 error MD060/table-column-style Table column style [Table pipe is missing space to the left for style "compact"]
+> tools/claude-code/README.md:73:81 error MD013/line-length Line length [Expected: 80; Actual: 112]
+> tools/claude-code/README.md:74:81 error MD013/line-length Line length [Expected: 80; Actual: 89]
+> tools/claude-code/README.md:75:81 error MD013/line-length Line length [Expected: 80; Actual: 88]
+> tools/pi/README.md:65:81 error MD013/line-length Line length [Expected: 80; Actual: 97]
+> make: *** [verify] Error 1
+> - `plan.md` did not add a measured line below `## Time used`
+> ````
+
+Stage-2 call, 2026-10-20: repair · attempt 3 · route stage-1 · endpoint claude-code-plan · model claude-sonnet-5-5 · reason two Codex post-run checks failed · leak check clean over 536 files, 1630 commits, 12 rules.
+
+> Attempt 3 (stage-1) failed its post-run checks.
+>
+> Files the attempt changed (lines added, removed):
+> - `plans/changes/research-swarm/plan.md` +13 -0
+>
+> Diagnostics:
+> ````text
+> - Runner format before `make verify`: ruff changed no file.
+> - `make verify` exited 2
+> The gates that blocked, each with its last lines:
+> ── [pytest] $ lauf_cmd
+> [… 93 lines of this gate left out …]
+>         validate_research_free_policy(policy)
+>         provider = policy["provider"]
+>         sources = bridge.get("sources", {})
+>         pi = sources.get("pi", {})
+>         runtime = bridge.get("pi_runtime", {})
+>         if (
+>             bridge.get("exit_code") != 0
+>             or bridge.get("pi_version") != expected_version
+>             or pi.get("status") != 200
+>             or runtime.get("aborted")
+>             or runtime.get("errors")
+>             or provider not in bridge.get("models_store", {})
+>         ):
+> >           raise ResearchCatalogError(bridge.get("reason") or "pi-refresh-failed")
+> E           stage2_swarm.ResearchCatalogError: pi-timeout
+>
+> scripts/stage2_swarm.py:103: ResearchCatalogError
+> _________ test_catalog_shared_deadline_keeps_asymmetric_failure_rules __________
+> [gw7] darwin -- Python 3.12.15 /Users/mikypiky/coding-harness/.claude/worktrees/research-swarm/.venv/bin/python3
+>
+> tmp_path = PosixPath('/private/var/folders/44/yc0m3m456b51nyzwyfjptgm40000gn/T/pytest-of-mikypiky/pytest-195/popen-gw7/test_catalog_shared_deadline_k0')
+> sources = <test_stage2_research_catalog.Sources object at 0x1080fb980>
+>
+>     def test_catalog_shared_deadline_keeps_asymmetric_failure_rules(tmp_path, sources):
+>         # Criteria 19, 41, 42. Planted fault: the reads start one after the other or get separate budgets; a Pi timeout
+>         # dispatches; a models.dev timeout retries, extends the deadline or aborts fixed work.
+>         # The margin between a read's planted delay and the shared deadline must cover the runtime's own start-up
+>         # and Pi's initialisation under load (a 0.5 s margin failed on a loaded machine); two delays that together
+>         # exceed the deadline still prove the reads overlap, because sequential reads could not finish inside it.
+>         sources.pi_delay = sources.metadata_delay = 3.0
+>         started = time.monotonic()
+>         bridge = collect(tmp_path, sources, deadlineMs=5000)
+>         assert time.monotonic() - started < 7.5, "the reads ran one after the other"
+>         assert len(sources.requests) == 2, "both reads were not requested"
+>         assert bridge["exit_code"] == 0 and bridge["elapsed_ms"] < 5400
+>         assert len(pi_requests(sources)) == 1 and len([p for p, _ in sources.requests if p == "/metadata"]) == 1
+>         # Both slow past one shared deadline: Pi decides (exit 1), the models.dev timeout is a reason, never a retry.
+>         sources.pi_delay = sources.metadata_delay = 3.0
+>         sources.requests.clear()
+>         started = time.monotonic()
+>         bridge = collect(tmp_path, sources, deadlineMs=1000)
+>         assert time.monotonic() - started < 2.9, "the two reads received separate budgets"
+>         assert bridge["sources"]["models_dev"]["outcome"] == "timeout"
+>         with pytest.raises(swarm.ResearchCatalogError) as failure:
+>             select(bridge)
+>         assert failure.value.exit_code == 1
+> >       assert len(sources.requests) == 2, "a timed-out read was retried"
+> E       AssertionError: a timed-out read was retried
+> E       assert 1 == 2
+> E        +  where 1 = len([('/metadata', {'accept': 'application/json', 'accept-encoding': 'gzip, deflate', 'accept-language': '*', 'connection': 'keep-alive', ...})])
+> E        +    where [('/metadata', {'accept': 'application/json', 'accept-encoding': 'gzip, deflate', 'accept-language': '*', 'connection': 'keep-alive', ...})] = <test_stage2_research_catalog.Sources object at 0x1080fb980>.requests
+>
+> tests/test_stage2_research_catalog.py:761: AssertionError
+> =========================== short test summary info ============================
+> FAILED tests/test_stage2_research_catalog.py::test_models_dev_failure_excludes_free_and_keeps_required_slots[timeout]
+> FAILED tests/test_stage2_research_catalog.py::test_catalog_shared_deadline_keeps_asymmetric_failure_rules
+> 2 failed, 3091 passed, 16 skipped in 579.86s (0:09:39)
+> ── [pytest] RED (block) — der Lauf ist rot.
+>
+> Standard error of the whole run, last lines:
+> [… 15103 earlier lines left out …]
+> templates/spec.md:73:81 error MD013/line-length Line length [Expected: 80; Actual: 127]
+> tests/fixtures/research_refs/plan-prompt-d862bc2.md:3:81 error MD013/line-length Line length [Expected: 80; Actual: 117]
+> tests/fixtures/research_refs/plan-prompt-d862bc2.md:85:81 error MD013/line-length Line length [Expected: 80; Actual: 96]
+> tests/fixtures/research_refs/plan-prompt-d862bc2.md:99 error MD040/fenced-code-language Fenced code blocks should have a language specified [Context: "```"]
+> tools/claude-code/README.md:17:81 error MD013/line-length Line length [Expected: 80; Actual: 105]
+> tools/claude-code/README.md:18:81 error MD013/line-length Line length [Expected: 80; Actual: 109]
+> tools/claude-code/README.md:19:81 error MD013/line-length Line length [Expected: 80; Actual: 134]
+> tools/claude-code/README.md:23:1 error MD060/table-column-style Table column style [Table pipe is missing space to the right for style "compact"]
+> tools/claude-code/README.md:23:5 error MD060/table-column-style Table column style [Table pipe is missing space to the left for style "compact"]
+> tools/claude-code/README.md:23:5 error MD060/table-column-style Table column style [Table pipe is missing space to the right for style "compact"]
+> tools/claude-code/README.md:23:9 error MD060/table-column-style Table column style [Table pipe is missing space to the left for style "compact"]
+> tools/claude-code/README.md:23:9 error MD060/table-column-style Table column style [Table pipe is missing space to the right for style "compact"]
+> tools/claude-code/README.md:23:13 error MD060/table-column-style Table column style [Table pipe is missing space to the left for style "compact"]
+> tools/claude-code/README.md:24:81 error MD013/line-length Line length [Expected: 80; Actual: 272]
+> tools/claude-code/README.md:25:81 error MD013/line-length Line length [Expected: 80; Actual: 180]
+> tools/claude-code/README.md:26:81 error MD013/line-length Line length [Expected: 80; Actual: 115]
+> tools/claude-code/README.md:28:81 error MD013/line-length Line length [Expected: 80; Actual: 124]
+> tools/claude-code/README.md:29:81 error MD013/line-length Line length [Expected: 80; Actual: 106]
+> tools/claude-code/README.md:38:1 error MD060/table-column-style Table column style [Table pipe is missing space to the right for style "compact"]
+> tools/claude-code/README.md:38:5 error MD060/table-column-style Table column style [Table pipe is missing space to the left for style "compact"]
+> tools/claude-code/README.md:38:5 error MD060/table-column-style Table column style [Table pipe is missing space to the right for style "compact"]
+> tools/claude-code/README.md:38:9 error MD060/table-column-style Table column style [Table pipe is missing space to the left for style "compact"]
+> tools/claude-code/README.md:38:9 error MD060/table-column-style Table column style [Table pipe is missing space to the right for style "compact"]
+> tools/claude-code/README.md:38:13 error MD060/table-column-style Table column style [Table pipe is missing space to the left for style "compact"]
+> tools/claude-code/README.md:40:81 error MD013/line-length Line length [Expected: 80; Actual: 442]
+> tools/claude-code/README.md:41:81 error MD013/line-length Line length [Expected: 80; Actual: 163]
+> tools/claude-code/README.md:42:81 error MD013/line-length Line length [Expected: 80; Actual: 126]
+> tools/claude-code/README.md:43:81 error MD013/line-length Line length [Expected: 80; Actual: 96]
+> tools/claude-code/README.md:44:81 error MD013/line-length Line length [Expected: 80; Actual: 167]
+> tools/claude-code/README.md:72:1 error MD060/table-column-style Table column style [Table pipe is missing space to the right for style "compact"]
+> tools/claude-code/README.md:72:5 error MD060/table-column-style Table column style [Table pipe is missing space to the left for style "compact"]
+> tools/claude-code/README.md:72:5 error MD060/table-column-style Table column style [Table pipe is missing space to the right for style "compact"]
+> tools/claude-code/README.md:72:9 error MD060/table-column-style Table column style [Table pipe is missing space to the left for style "compact"]
+> tools/claude-code/README.md:72:9 error MD060/table-column-style Table column style [Table pipe is missing space to the right for style "compact"]
+> tools/claude-code/README.md:72:13 error MD060/table-column-style Table column style [Table pipe is missing space to the left for style "compact"]
+> tools/claude-code/README.md:73:81 error MD013/line-length Line length [Expected: 80; Actual: 112]
+> tools/claude-code/README.md:74:81 error MD013/line-length Line length [Expected: 80; Actual: 89]
+> tools/claude-code/README.md:75:81 error MD013/line-length Line length [Expected: 80; Actual: 88]
+> tools/pi/README.md:65:81 error MD013/line-length Line length [Expected: 80; Actual: 97]
+> make: *** [verify] Error 1
+> - `plan.md` did not add a measured line below `## Time used`
+> ````

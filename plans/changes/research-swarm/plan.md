@@ -996,6 +996,10 @@ the existing gates and let the runner own registry regeneration/full verify.
 - 57: tests/test_stage2_swarm.py::test_a_finder_output_survives_a_failed_terminal_write — A finder that exited ok but whose terminal write failed loses its output from the incomplete publication.
 - 57: tests/test_stage2_swarm.py::test_a_failed_store_finish_never_leaves_a_complete_publication — The run is published complete before the store is finished, so a failed finish leaves a complete record without state-store-unwritable.
 - 44: tests/test_stage2_research_availability.py::test_concurrent_consumers_cannot_share_a_single_use_receipt — Two synchronized consumers both validate the receipt and both start a run (phase-6 F-38).
+- 44: tests/test_stage2_research_availability.py::test_consumed_receipt_cannot_delete_a_new_preparation — A consumer that validated receipt A deletes or accepts a replacement receipt B, or A is accepted twice (phase-6 F-50).
+- 18: tests/test_stage2_swarm.py::test_free_model_storage_keys_preserve_best_effort_completion — A free model id with a slash or over-long name makes an unsafe storage key, so the best-effort slot aborts required work (phase-6 F-51).
+- 39: tests/test_stage2_swarm.py::test_free_model_storage_keys_preserve_best_effort_completion — A selected free model whose id is not a safe filename is dropped or collides instead of running with a distinct slot id (phase-6 F-51).
+- 33: tests/test_research_handoff.py::test_unreadable_spec_is_not_measured — A spec that is not valid UTF-8 raises a traceback instead of reporting not measured with exit 3 (phase-6 F-52).
 - 27: tests/test_research_handoff.py::test_evidence_links_stay_in_their_report_or_judge_run — A question, class or neighbour link names another seat's claim, or a disagreement names a missing claim, and the gate passes (phase-6 F-39).
 - 33: tests/test_research_handoff.py::test_evidence_links_stay_in_their_report_or_judge_run — A malformed evidence link exits other than 3.
 - 44: tests/test_stage2_research_availability.py::test_fresh_receipt_is_consumed_once_and_returns_the_frozen_selection — A receipt at the maximum age is refused, survives its first use, or consumption returns something other than the prepared selection.
@@ -1434,6 +1438,10 @@ preserved verbatim. Any new unbounded implementation span raises a new stop.
 2026-10-15 09:40–10:31 CEST, about 51 minutes (Opus 5.5 sub-agent repair of phase-6 F-2 to F-10 outside `stage2.py repair`, maintainer-approved; four `make verify` runs of about 8–10 minutes each, the first red on formatting and a stale `updated:`; no break).
 
 The earlier plan cited `docs/journal/handover/2026-10-15-research-swarm-loop-one-repair.md`; that file is not present in this worktree and was not read by this redraft.
+
+## Runner route — 2026-10-20
+
+Stage-1 route: repair · model claude-sonnet-5-5 · reason: two Codex post-run checks failed.
 
 ## Runner route — 2026-10-20
 
@@ -2325,6 +2333,15 @@ BLOCKER (F-50, fix-r7) and two MAJOR rows (F-51, F-52, base). Span counted
 to 18 h 03 min of 18 h 20 min. A repair with its verification does not fit;
 the work stops and the rows stay open for the maintainer's decision.
 Findings per phase-6 round, 1 to 11: 8, 5, 3, 3, 3, 4, 2, 4, 3, 3, 3.
+
+### Phase-6 round-11 repairs — 2026-10-20
+
+Rows F-50, F-51 and F-52. Span not measured: this session had no command tool to read `date`, so no time is counted for it. No test was run by this session; the code and tests were already in the working tree, and it checked them against the rows and booked the ledger.
+
+- F-50: `consume_research` (`scripts/stage2_availability.py`) re-reads the receipt under the receipt lock and refuses unless it equals the validated one, so a replaced receipt is neither accepted nor deleted. Test `tests/test_stage2_research_availability.py::test_consumed_receipt_cannot_delete_a_new_preparation`.
+- F-51: `free_slot_id` (`scripts/stage2_research_run.py`) hashes model ids that are not safe filenames. Test `tests/test_stage2_swarm.py::test_free_model_storage_keys_preserve_best_effort_completion`.
+- F-52: the handoff gate reads `spec.md` with `UnicodeDecodeError` handled, reported as not measured (exit 3). Test `tests/test_research_handoff.py::test_unreadable_spec_is_not_measured`.
+- The runner runs `make verify`.
 
 ### Appetite raised again — 2026-10-20
 

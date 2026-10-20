@@ -819,7 +819,10 @@ def check_change(folder: Path, label: str) -> Outcome:
     if not complete:
         out.findings.append(f"{label}: the spec exists but no complete v2 run exists")
         return out
-    spec_text = spec.read_text(encoding="utf-8")
+    try:
+        spec_text = spec.read_text(encoding="utf-8")
+    except (OSError, UnicodeDecodeError) as error:
+        raise CannotMeasure(f"{label}: spec.md cannot be read ({error})") from error
     _parity(out, label, spec_text, complete, directive_records)
     _bases(out, label, spec_text, complete, records)
     return out
