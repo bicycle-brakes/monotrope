@@ -208,4 +208,7 @@ def consume(root: Path, change: str, token: str | None, runner) -> dict:
         raise runner.Refused(
             "run prepare-loop and report its fresh selection in the main conversation; pass its --availability-reported id."
         )
+    # An accepted receipt is spent here: a second review-loop finds none and is refused instead of
+    # paying the same selection twice (R-14 of the review-swarm review).
+    path.unlink(missing_ok=True)
     return state

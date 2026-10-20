@@ -62,6 +62,19 @@ def test_preparation_filters_failures_and_requires_main_chat_report(world: World
     assert recorded["availability"] == state["availability"]
 
 
+def test_an_accepted_receipt_cannot_start_a_second_round(world: World) -> None:
+    """R-14: the round that accepted the receipt spends it."""
+    enable(world)
+    assert world.run("prepare-loop") == 0
+    prepared = receipt(world)
+    world.script(pi=[{"stdout": "No finding."}] * 2)
+    assert world.run("review-loop", "demo", "--availability-reported", prepared["report_id"]) == 0
+    assert not availability.receipt_path(world.root, "demo", stage2).exists(), "the receipt survived its round"
+    rounds = len(world.reviews())
+    assert world.run("review-loop", "demo", "--availability-reported", prepared["report_id"]) == 2
+    assert len(world.reviews()) == rounds, "a spent receipt started a second round"
+
+
 def test_preparation_calls_only_static_toolless_probes(world: World, monkeypatch) -> None:
     """Criterion 17: any source, tools, bare Pi or unchecked call fails this boundary."""
     enable(world)
