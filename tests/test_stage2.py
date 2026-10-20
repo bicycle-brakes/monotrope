@@ -645,6 +645,41 @@ def test_the_suite_never_reaches_the_real_denylist_or_secrets(monkeypatch: pytes
 # ---------------------------------------------------------------------------
 
 
+def test_git_is_called_through_the_one_resolved_path(world: World, monkeypatch: pytest.MonkeyPatch) -> None:
+    """R-17 of the review-swarm review: `git` is resolved once, and every call names that path."""
+    wrapper = world.bin / "git-recorder"
+    log = world.bin / "git-calls.txt"
+    wrapper.write_text(f'#!/bin/sh\necho "$@" >> {log}\nexec /usr/bin/git "$@"\n')
+    wrapper.chmod(0o755)
+    monkeypatch.setattr(stage2, "GIT", str(wrapper))
+    log.unlink(missing_ok=True)
+    assert stage2._git_output(world.root, "rev-parse", "HEAD").strip() == git(world.root, "rev-parse", "HEAD")
+    assert log.is_file() and "-C" in log.read_text(encoding="utf-8"), "the call did not go through the resolved path"
+
+
+def test_an_attempt_that_writes_a_runner_held_path_is_refused_and_restored(world: World) -> None:
+    """R-16: a green attempt that edits a human-decided or runner-held path is refused, and undone."""
+    held = world.root / "prompts" / "04b-review-loop.md"
+    before = held.read_text(encoding="utf-8")
+    baseline = git(world.root, "rev-parse", "HEAD")
+    world.script(
+        claude=[
+            {
+                "stdout": "implemented",
+                "plant": {"src/app.py": "value = 2\n"},
+                "append": {
+                    "plans/changes/demo/plan.md": "2026-10-07 10:00–10:05, 5 min\n",
+                    "prompts/04b-review-loop.md": "\nthe model rewrote the reviewer prompt\n",
+                },
+            }
+        ],
+        make=[{"stdout": "green\n"}],
+    )
+    assert world.run("implement") == 1
+    assert held.read_text(encoding="utf-8") == before, "the held path was not restored"
+    assert git(world.root, "rev-list", "--count", f"{baseline}..HEAD") == "0", "a refused attempt committed"
+
+
 def test_an_oversized_diff_reaches_the_paid_prompt_cut_and_the_record_says_so(world: World) -> None:
     """R-15 of the review-swarm review: the paid diff is bounded, and a cut is recorded, not hidden."""
     limit = 5
@@ -1458,7 +1493,7 @@ def test_preparation_git_commands_receive_no_caller_credentials(world: World, mo
     commands = []
 
     def record(command, *args, **kwargs):
-        if command[0] == "git":
+        if command[0] == stage2.GIT:
             commands.append((command, kwargs.get("env")))
         return original_run(command, *args, **kwargs)
 
@@ -3928,8 +3963,8 @@ def test_a_failed_stage2_off_attempt_leaves_its_block_without_reading_the_key(
 
 @pytest.mark.parametrize("fault", ["command", "non-descendant", "dirty", "status-fails"])
 def test_checkpoint_failures_are_call_failures(monkeypatch: pytest.MonkeyPatch, tmp_path: Path, fault: str) -> None:
-    def fake_git(root: Path, *args: str, allow: tuple[int, ...] = (0,)) -> str:
-        del root, allow
+    def fake_git(root: Path, *args: str, allow: tuple[int, ...] = (0,), env: dict | None = None) -> str:
+        del root, allow, env
         if fault == "command" and args[0] == "add":
             raise stage2.Refused("git add failed")
         if args[0] == "rev-list":
