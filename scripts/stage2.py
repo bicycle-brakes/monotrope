@@ -3318,13 +3318,15 @@ RUNNER_HELD = (
 )
 
 
-def uncommittable(root: Path, change: str) -> list[str]:
+def uncommittable(root: Path, change: str, keep: set[Path] | None = None) -> list[str]:
     """The changed paths a stage-2 attempt must not commit, named (R-16 of the review-swarm review).
 
     The classes come from the committed `provenance.yaml`, never from the tree the attempt wrote:
     a `human-decided` prefix or one of `RUNNER_HELD` is out of a model's reach, the change's own
-    folder is not.
+    folder is not. `keep` holds what the verb may keep changed - a draft's own new ADR under the
+    `docs/adr/` prefix is exactly that (P1 of the #192 review).
     """
+    spared = {path.as_posix() for path in keep or ()}
     try:
         data = yaml.safe_load(_git_output(root, "show", "HEAD:provenance.yaml"))
         # A commit without a provenance map declares no class; `RUNNER_HELD` still holds.
@@ -3341,7 +3343,8 @@ def uncommittable(root: Path, change: str) -> list[str]:
     return sorted(
         relative.as_posix()
         for relative in changed_paths(root)
-        if not relative.as_posix().startswith(folder)
+        if relative.as_posix() not in spared
+        and not relative.as_posix().startswith(folder)
         and any(relative.as_posix() == path or relative.as_posix().startswith(path) for path in held)
     )
 
@@ -3353,17 +3356,19 @@ def checkpoint(
     key: str | None = None,
     ignored_before: dict[Path, tuple[int, int]] | None = None,
     message: str | None = None,
+    keep: set[Path] | None = None,
 ) -> None:
     """Commit a passing work phase and prove the one clean descendant commit."""
     if key is not None:
         exposed = remove_changed_credential(root, key, ignored_before)
         if exposed:
             raise Refused(credential_message(exposed))
-    blocked = uncommittable(root, change)
+    blocked = uncommittable(root, change, keep)
     if blocked:
-        # Nothing of such an attempt is kept: the tree goes back to the baseline before the run stops,
-        # so the refused edit cannot reach the next attempt or a hand (R-16 of the review-swarm review).
-        restored = restore_baseline(root, baseline, set(), ignored_before)
+        # The tree goes back to the baseline, but `keep` stands: what the verb itself may keep changed -
+        # its change folder, a draft's own new ADR, the findings a human may have touched - is not the
+        # refused attempt's to lose (P1 and P2 of the #192 review).
+        restored = restore_baseline(root, baseline, set(keep or ()), ignored_before)
         raise CallFailed(
             "the attempt changed paths a stage-2 run does not commit: "
             + ", ".join(f"`{path}`" for path in blocked)
@@ -4154,7 +4159,7 @@ def run_attempts(
                 # The subject stays the subject; the format line of every attempt that ran the step
                 # stands below the heading, in the commit that holds the formatted bytes.
                 message = commit_message + "\n\n" + FORMAT_COMMIT_HEADING + "\n" + "\n".join(record)
-            checkpoint(root, ctx.change, baseline, key, ignored_before, message=message)
+            checkpoint(root, ctx.change, baseline, key, ignored_before, message=message, keep=allowed)
             if after_commit is not None:
                 after_commit()
             print(f"{verb}: verified and committed · route {route} · attempt {attempt}")
@@ -4509,6 +4514,7 @@ def draft(root: Path, change: str) -> None:
                 key,
                 ignored_before,
                 message=f"docs({change}): draft spec and plan — route {route}",
+                keep=keep,
             )
             print(f"draft: verified and committed · route {route} · attempt {attempt}")
             return

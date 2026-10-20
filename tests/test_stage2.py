@@ -4194,6 +4194,46 @@ def test_an_overwritten_ruff_is_not_run(tmp_path: Path) -> None:
     assert problem is not None and "`.venv/bin/ruff`" in problem, "an overwritten tool was not named"
 
 
+def test_a_draft_may_commit_its_own_new_adr(world: World) -> None:
+    """P1 of the #192 review: `docs/adr/` is human-decided, and the new ADR is the draft's own output."""
+    draft_world(world)
+    data = yaml.safe_load((world.root / "provenance.yaml").read_text(encoding="utf-8"))
+    data["paths"].append({"prefix": "docs/adr/", "allowed": ["human-decided"]})
+    (world.root / "provenance.yaml").write_text(yaml.safe_dump(data), encoding="utf-8")
+    git(world.root, "commit", "--quiet", "-am", "the real class of docs/adr/")
+    plants = {
+        "plans/changes/demo/spec.md": "---\ntitle: Spec\nupdated: 2026-09-30\nbead: demo-1\n---\n\n# Spec\n",
+        "plans/changes/demo/plan.md": PLAN_CARD,
+        "docs/adr/0016-first-record.md": "# First\n",
+    }
+    world.script(codex=[codex_ok("T1", "drafted", plant=plants)], make=[{"stdout": "green\n"}])
+    assert world.run("draft") == 0
+    committed = git(world.root, "show", "--name-only", "--pretty=format:", "HEAD").splitlines()
+    assert "docs/adr/0016-first-record.md" in committed, "the draft's own new ADR was blocked or reverted"
+
+
+def test_a_refused_attempt_keeps_the_findings_a_human_touched(world: World) -> None:
+    """P2 of the #192 review: the restore keeps the verb's own allowed set, not only the baseline."""
+    findings = world.root / "plans" / "changes" / "demo" / "findings.md"
+    findings.parent.mkdir(parents=True, exist_ok=True)
+    findings.write_text("a human note\n", encoding="utf-8")
+    world.script(
+        claude=[
+            {
+                "stdout": "implemented",
+                "plant": {"src/app.py": "value = 2\n"},
+                "append": {
+                    "plans/changes/demo/plan.md": "2026-10-07 10:00–10:05, 5 min\n",
+                    "prompts/04b-review-loop.md": "\nthe model rewrote the reviewer prompt\n",
+                },
+            }
+        ],
+        make=[{"stdout": "green\n"}],
+    )
+    assert world.run("implement") == 1
+    assert "a human note" in findings.read_text(encoding="utf-8"), "the refusal wiped the human's findings entry"
+
+
 def test_a_refused_tool_stays_refused_for_the_next_attempt(world: World) -> None:
     """P1 of the #188 review: the refused bytes must not become the next attempt's reference."""
     (world.root / ".gitignore").write_text(".venv/\n", encoding="utf-8")
