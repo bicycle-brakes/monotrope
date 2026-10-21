@@ -81,6 +81,7 @@ NOW = dt.datetime(2026, 10, 18, 12, 0, tzinfo=dt.UTC)
 # id -> (anfragen_5h or None, extra terms fields); every id is declared with a dated reading
 TERMS = {
     "deepseek-v4.1-flash": 34670,
+    "mimo-v2.6-flash": 30100,
     "longcat-2.0": 11400,
     "glm-5.3-flash": 6320,
     "zz-tie-model": 6320,
@@ -228,12 +229,12 @@ class Fixture:
         block = data["research_swarm"]
         block["repository_seats"] = [
             {"endpoint": GO, "model": "deepseek-v4.1-flash"},
-            {"endpoint": GO, "model": "mimo-v2.6-pro"},
+            {"endpoint": GO, "model": "mimo-v2.6-flash"},
             {"endpoint": CLAUDE, "model": HAIKU},
         ]
         block["online_seats"] = [
             {"endpoint": GO, "model": "deepseek-v4.1-flash"},
-            {"endpoint": GO, "model": "mimo-v2.6-pro"},
+            {"endpoint": GO, "model": "mimo-v2.6-flash"},
             {"endpoint": GO, "model": "qwen3.8-flash"},
         ]
         block["availability_preflight"] = {
@@ -274,13 +275,13 @@ def test_all_preferred_models_reachable_fill_their_seats_and_substitute_only_the
     state = fx.receipt()["state"]
     assert seats(state, "repository") == [
         (GO, "deepseek-v4.1-flash", "preferred"),
-        (GO, "mimo-v2.6-pro", "preferred"),
+        (GO, "mimo-v2.6-flash", "preferred"),
         (CLAUDE, HAIKU, "preferred"),
     ]
     # qwen3.8-flash is on another wire API here, so online seat 3 takes the cheapest unused pool model.
     assert seats(state, "online") == [
         (GO, "deepseek-v4.1-flash", "preferred"),
-        (GO, "mimo-v2.6-pro", "preferred"),
+        (GO, "mimo-v2.6-flash", "preferred"),
         (GO, "longcat-2.0", "substitute for 3"),
     ]
 
@@ -290,8 +291,8 @@ def test_preferred_models_come_first_and_substitutes_never_take_them(fx: Fixture
     assert fx.prepare() == 0
     state = fx.receipt()["state"]
     assert seats(state, "repository")[0] == (GO, "longcat-2.0", "substitute for 1")
-    assert seats(state, "repository")[1] == (GO, "mimo-v2.6-pro", "preferred")
-    assert [m for _, m, _ in seats(state, "online")[:2]].count("mimo-v2.6-pro") == 1
+    assert seats(state, "repository")[1] == (GO, "mimo-v2.6-flash", "preferred")
+    assert [m for _, m, _ in seats(state, "online")[:2]].count("mimo-v2.6-flash") == 1
     for trio in ("repository", "online"):
         models = [(e, m) for e, m, _ in seats(state, trio)]
         assert len(set(models)) == 3, "one model filled two seats of a trio"
@@ -314,7 +315,7 @@ def test_substitute_is_the_cheapest_reachable_unused_pool_model(fx: Fixture) -> 
     assert seats(state, "repository")[0] == (GO, "glm-5.3-flash", "substitute for 1")
     assert [item["model"] for item in state["pool"]][:5] == [
         "deepseek-v4.1-flash",
-        "mimo-v2.6-pro",
+        "mimo-v2.6-flash",
         "longcat-2.0",
         "glm-5.3-flash",
         "zz-tie-model",
@@ -326,7 +327,7 @@ def test_substitute_is_the_cheapest_reachable_unused_pool_model(fx: Fixture) -> 
 
 
 def test_frozen_inputs_give_the_same_selection_twice(fx: Fixture) -> None:
-    fx.script(**{"mimo-v2.6-pro": {"exit": 1, "stderr": "down"}})
+    fx.script(**{"mimo-v2.6-flash": {"exit": 1, "stderr": "down"}})
     assert fx.prepare() == 0
     first = fx.receipt()["state"]
     assert fx.prepare() == 0
@@ -425,7 +426,7 @@ def test_a_seat_without_candidate_stops_before_research_with_exit_one(fx: Fixtur
     old = availability.research_receipt_path("demo", stage2, fx.w.root)
     assert old.exists()
     fx.catalog.metadata_ok = False
-    fx.script(**{"mimo-v2.6-pro": {"exit": 1, "stderr": "down"}})
+    fx.script(**{"mimo-v2.6-flash": {"exit": 1, "stderr": "down"}})
     capsys.readouterr()
     assert fx.prepare() == 1
     captured = capsys.readouterr()
@@ -627,7 +628,7 @@ def test_probes_are_lazy_unique_and_outside_the_run_budget(fx: Fixture) -> None:
     probed = fx.probed()
     assert sorted(probed) == sorted(set(probed)), "a model was probed twice"
     # Pool models beyond the one substitute that was needed are never probed.
-    assert set(probed) == {"deepseek-v4.1-flash", "mimo-v2.6-pro", HAIKU, "longcat-2.0"}
+    assert set(probed) == {"deepseek-v4.1-flash", "mimo-v2.6-flash", HAIKU, "longcat-2.0"}
     assert not {"alpha-free", "beta-free", "claude-opus-5-5"} & set(probed), "a free model or Opus role was probed"
     assert tree_digest(fx.w.root) == before, "preparation changed the worktree"
     assert run_git(fx.w.root, "status", "--porcelain") == ""
