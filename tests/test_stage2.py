@@ -4231,6 +4231,166 @@ def test_a_hanging_runner_step_aborts_with_its_limit_named(tmp_path: Path) -> No
         )
 
 
+def test_an_attempt_that_plants_the_registry_renderer_never_runs_it(world: World, tmp_path: Path) -> None:
+    """O188-1, R-19 at the call site: the attempt's renderer writes a marker, and the marker stays absent."""
+    marker = tmp_path / "renderer-ran"
+    script = Path("scripts") / Path(plans_registry.__file__).name
+    world.script(
+        claude=[
+            {
+                "stdout": "implemented",
+                "plant": {str(script): f"from pathlib import Path\nPath({str(marker)!r}).write_text('ran')\n"},
+                "append": {"plans/changes/demo/plan.md": "2026-10-07 10:00–10:05, 5 min\n"},
+            }
+        ],
+        make=[{"stdout": "green\n"}],
+    )
+    checking_derived_make(world)
+    code = world.run("implement")
+    assert not marker.exists(), "the attempt's own renderer ran"
+    assert code == 0, "the committed renderer should have made the attempt green"
+    assert "changes/demo/findings.md" in (world.root / "plans/INDEX.md").read_text()
+
+
+def test_the_runner_steps_carry_their_limits_at_the_call_sites(world: World, monkeypatch: pytest.MonkeyPatch) -> None:
+    """O188-1, R-20 at the call sites: renderer and ruff get the tool limit, `make verify` the step limit."""
+    ruff = world.root / ".venv" / "bin" / "ruff"
+    ruff.parent.mkdir(parents=True)
+    ruff.write_text("#!/bin/sh\nexit 0\n", encoding="utf-8")
+    ruff.chmod(0o755)
+    (world.root / "scripts" / "extra.py").write_text("value = 1\n", encoding="utf-8")
+    world.script(make=[{"stdout": "green\n"}])
+    with world.plan.open("a", encoding="utf-8") as handle:
+        handle.write("2026-10-07 10:00–10:05, 5 min\n")
+    seen: list[tuple[str, float | None]] = []
+    original = stage2.launch
+
+    def record(command, root, env, secret=None, timeout=None, limit=None):
+        # The stem, not the file name: the mutation ratchet in test_ci.py reads a
+        # gate script's file name as mutation evidence, and this test seeds no
+        # fault into the renderer (maintainer, 2026-10-21; stricter ratchet: bead).
+        name = "renderer" if Path(command[-2]).stem == "plans_registry" else Path(command[0]).name
+        seen.append((name, timeout))
+        return original(command, root, env, secret, timeout=timeout, limit=limit)
+
+    monkeypatch.setattr(stage2, "launch", record)
+    assert stage2.verify_attempt(world.root, world.plan, "", None, None, stage2.tool_state(world.root)) == []
+    assert ("renderer", stage2.TOOL_SECONDS) in seen
+    assert ("ruff", stage2.TOOL_SECONDS) in seen
+    assert ("make", stage2.VERIFY_SECONDS) in seen
+    assert all(timeout is not None for _, timeout in seen), seen
+
+
+def test_a_make_verify_that_hangs_is_a_repairable_diagnostic(world: World, monkeypatch: pytest.MonkeyPatch) -> None:
+    """O188-4: a hang the attempt caused reaches the next attempt as a problem, not as `cannot_start`."""
+    original = stage2.launch
+
+    def hang(command, root, env, secret=None, timeout=None, limit=None):
+        if command == ["make", "verify"]:
+            raise stage2.StepTimedOut("make was stopped by the runner's step limit after 30 minutes")
+        return original(command, root, env, secret, timeout=timeout, limit=limit)
+
+    monkeypatch.setattr(stage2, "launch", hang)
+    problems = stage2.verify_attempt(world.root, world.plan, "")
+    assert len(problems) == 1 and "did not finish" in problems[0] and "30 minutes" in problems[0]
+
+
+def test_a_timeout_kills_the_whole_process_group(tmp_path: Path) -> None:
+    """O188-4: a grandchild of the stopped step does not survive."""
+    pidfile = tmp_path / "grandchild.pid"
+    started = time.monotonic()
+    with pytest.raises(stage2.CallFailed, match="stopped by"):
+        stage2.launch(
+            ["bash", "-c", f"sleep 60 >/dev/null 2>&1 & echo $! > {pidfile}; wait"],
+            tmp_path,
+            {**os.environ},
+            timeout=1,
+            limit="the test limit",
+        )
+    assert time.monotonic() - started < 20, "the step was not stopped at its limit"
+    pid = int(pidfile.read_text())
+    for _ in range(100):  # the kill is delivered at once, the exit is reaped a moment later
+        try:
+            os.kill(pid, 0)
+        except ProcessLookupError:
+            return
+        time.sleep(0.02)
+    os.kill(pid, 9)
+    pytest.fail("the grandchild of the timed-out step is still running")
+
+
+def test_a_changed_venv_file_is_named_and_refused(world: World) -> None:
+    """O188-2: the digest covers the whole `.venv/` tree, not only ruff."""
+    package = world.root / ".venv" / "lib" / "python3.x" / "site-packages" / "yaml"
+    package.mkdir(parents=True)
+    (package / "__init__.py").write_text("ok = 1\n", encoding="utf-8")
+    link = world.root / ".venv" / "lib" / "link"
+    link.symlink_to("python3.x")
+    before = stage2.tool_state(world.root)
+    assert stage2.tool_problem(world.root, before) is None
+    (package / "__init__.py").write_text("import os\n", encoding="utf-8")
+    assert ".venv/lib/python3.x/site-packages/yaml/__init__.py" in stage2.tool_problem(world.root, before)
+    (package / "__init__.py").write_text("ok = 1\n", encoding="utf-8")
+    (package.parent / "evil.pth").write_text("import os\n", encoding="utf-8")
+    assert "evil.pth" in stage2.tool_problem(world.root, before), "an added file went unnoticed"
+    (package.parent / "evil.pth").unlink()
+    link.unlink()
+    link.symlink_to("elsewhere")
+    assert ".venv/lib/link" in stage2.tool_problem(world.root, before), "a changed symlink target went unnoticed"
+    link.unlink()
+    assert ".venv/lib/link" in stage2.tool_problem(world.root, before), "a removed symlink went unnoticed"
+
+
+def test_an_attempt_that_plants_a_venv_package_fails_before_any_step(world: World) -> None:
+    """O188-2 at the call site: the attempt fails with the path named, and no step ran."""
+    package = world.root / ".venv" / "lib" / "site-packages"
+    package.mkdir(parents=True)
+    before = stage2.tool_state(world.root)
+    (package / "sitecustomize.py").write_text("import os\n", encoding="utf-8")
+    problems = stage2.verify_attempt(world.root, world.plan, "", None, None, before)
+    assert len(problems) == 1 and ".venv/lib/site-packages/sitecustomize.py" in problems[0]
+    assert world.calls("make") == []
+
+
+def test_red_first_refuses_a_changed_venv(world: World) -> None:
+    """O188-2: the red-first interpreter comes from `.venv/`, so a changed tree is not run."""
+    (world.root / ".venv" / "bin").mkdir(parents=True)
+    python = world.root / ".venv" / "bin" / "python3"
+    python.write_text("#!/bin/sh\nexit 0\n", encoding="utf-8")
+    before = stage2.tool_state(world.root)
+    python.write_text("#!/bin/sh\nexit 1\n", encoding="utf-8")
+    outcome = stage2.red_first(world.root, "HEAD", "tests/test_x.py::test_y", None, before)
+    assert outcome is not None and ".venv/bin/python3" in outcome
+
+
+def test_the_runner_environment_drops_repository_path_entries(tmp_path: Path) -> None:
+    """O188-2: a directory inside the repository on `PATH` is attempt-writable and is not searched."""
+    root = tmp_path / "repo"
+    (root / ".venv" / "bin").mkdir(parents=True)
+    outside = tmp_path / "bin"
+    outside.mkdir()
+    env = stage2.runner_env({"PATH": os.pathsep.join([str(root / ".venv" / "bin"), "relative", str(outside)])}, root)
+    assert env["PATH"] == str(outside)
+
+
+def test_a_make_planted_on_a_repository_path_entry_does_not_run(
+    world: World, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """O188-2 at the call site: the runner's `make verify` skips a `PATH` entry inside the worktree."""
+    marker = tmp_path / "planted-make-ran"
+    planted = world.root / ".venv" / "bin"
+    planted.mkdir(parents=True)
+    (planted / "make").write_text(f"#!/bin/sh\necho ran > {marker}\nexit 0\n", encoding="utf-8")
+    (planted / "make").chmod(0o755)
+    monkeypatch.setenv("PATH", f"{planted}{os.pathsep}{os.environ['PATH']}")
+    world.script(make=[{"stdout": "green\n"}])
+    with world.plan.open("a", encoding="utf-8") as handle:
+        handle.write("2026-10-07 10:00–10:05, 5 min\n")
+    assert stage2.verify_attempt(world.root, world.plan, "") == []
+    assert not marker.exists(), "a make planted inside the worktree ran"
+    assert len(world.calls("make")) == 1
+
+
 def test_loop_and_probe_use_repository_pi(world: World) -> None:
     """Criterion 5: the preflight and every loop/probe launch go through the repository wrapper; the PATH pi stays unused."""
     world.script(
@@ -5496,6 +5656,16 @@ def test_a_pipe_inside_a_reviewers_finding_reaches_findings(world: World) -> Non
     (row,) = released_rows(text)
     assert row[0] == "L1-1" and "cat x" in row[5] and "sort` drops the last row" in row[5]
     assert row[6:9] == ["acme-v1-free", "taken — test_a", "no"]
+
+
+def test_the_round_record_names_a_member_that_wrote_a_widened_row(world: World) -> None:
+    """R-25, the call site: the round says which member wrote a row of more than six cells, and why it matters."""
+    said = "| X1 | MAJOR | SPEC | a | src/app.py:1 | the filter `cat x | sort` drops the last row |"
+    world.script(pi=[{"model": "acme-v1-free", "stdout": said}])
+    assert world.run("review-loop") == 0
+    record = world.record().read_text(encoding="utf-8")
+    assert "acme-v1-free wrote 1 row(s) with more than six cells" in record
+    assert "an unescaped `|` before it moves the columns" in record
 
 
 def test_a_line_that_is_not_a_loop_row_is_carried_to_findings(world: World) -> None:
@@ -7081,6 +7251,36 @@ def test_a_text_row_taken_as_not_a_test_is_repaired_and_its_status_written(world
     assert git(world.root, "log", "-1", "--pretty=%s") == "fix(demo): repair taken findings L1-1, F-1"
 
 
+@pytest.mark.parametrize(
+    "source",
+    [
+        "class TestFix:\n\n    def test_fix(self):\n        assert True\n",
+        "async def test_fix():\n    assert True\n",
+    ],
+    ids=["method-in-a-class", "async-def"],
+)
+def test_a_fixed_line_naming_a_method_or_an_async_test_is_accepted(
+    world: World, monkeypatch: pytest.MonkeyPatch, source: str
+) -> None:
+    """R-23, the call site: the repair answer check finds a test defined as a method or as `async def`.
+
+    The red-first run is stubbed: pytest cannot select a class method by `file::function`, so this test
+    isolates the definition lookup that `check_repair_answer` makes before that run.
+    """
+    seed_tests(world)
+    world.write_record([("L1-1", "taken — test_a", "no")])
+    monkeypatch.setattr(stage2, "red_first", lambda *_args, **_kwargs: None)
+    script_repair(
+        world,
+        [repair_step(plant={"src/app.py": "value = 2\n", "tests/test_fix.py": source})],
+        make=[{"stdout": "green\n"}],
+    )
+    assert world.run("repair") == 0
+    record = {row[0]: row[7] for row in stage2.record_rows(world.record().read_text(encoding="utf-8"))}
+    assert record["L1-1"] == "fixed — tests/test_fix.py::test_fix"
+    assert len(world.calls("codex")) == 1, "the definition check refused the first attempt"
+
+
 def test_a_fixed_line_naming_an_undefined_test_fails_the_attempt(world: World) -> None:
     """Criterion 17. Planted fault: no definition check."""
     seed_tests(world)
@@ -7563,12 +7763,11 @@ def test_red_first_refuses_a_timed_out_run(world: World, monkeypatch: pytest.Mon
     repair_world(world)
     (world.root / "tests" / "test_red.py").write_text(RED_ASSERT_TEST, encoding="utf-8")
     baseline = git(world.root, "rev-parse", "HEAD")
-    original_run = stage2.subprocess.run
+    original_launch = stage2.launch
 
-    def stopping(command, *args, **kwargs):
+    def stopping(command, root, env, secret=None, timeout=None, limit=None):
         """The pytest process dies at the limit after writing the phases it reached."""
         if "-m" in command and "pytest" in command:
-            env = kwargs["env"]
             record = {
                 "schema": 1,
                 "token": env["STAGE2_RED_TOKEN"],
@@ -7595,11 +7794,11 @@ def test_red_first_refuses_a_timed_out_run(world: World, monkeypatch: pytest.Mon
                 ],
                 "session": None,
             }
-            Path(kwargs["env"]["STAGE2_RED_REPORT"]).write_text(json.dumps(record), encoding="utf-8")
-            raise subprocess.TimeoutExpired(command, stage2.RED_FIRST_MINUTES * 60)
-        return original_run(command, *args, **kwargs)
+            Path(env["STAGE2_RED_REPORT"]).write_text(json.dumps(record), encoding="utf-8")
+            raise stage2.StepTimedOut(f"{command[0]} was stopped by {limit}")
+        return original_launch(command, root, env, secret, timeout=timeout, limit=limit)
 
-    monkeypatch.setattr(stage2.subprocess, "run", stopping)
+    monkeypatch.setattr(stage2, "launch", stopping)
     outcome = stage2.red_first(world.root, baseline, RED_SELECTOR, None)
     assert outcome is not None and "stopped by the red-first time limit" in outcome, outcome
 
