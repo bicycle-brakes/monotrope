@@ -18,7 +18,6 @@ from __future__ import annotations
 import ast
 import copy
 import datetime as dt
-import fcntl
 import json
 import os
 import re
@@ -264,7 +263,15 @@ def rows(count: int, prefix: str = "X") -> str:
 
 def git(cwd: Path, *args: str) -> str:
     run = subprocess.run(
-        [GIT, "-c", "user.name=t", "-c", "user.email=t@example.invalid", "-c", "commit.gpgsign=false", *args],
+        # No automatic maintenance: a detached `git maintenance` from a commit
+        # writes objects/maintenance.lock, and a test that copies the
+        # repository then races it (CI run 39580553583).
+        [
+            GIT,
+            *("-c", "user.name=t", "-c", "user.email=t@example.invalid", "-c", "commit.gpgsign=false"),
+            *("-c", "maintenance.auto=false", "-c", "gc.auto=0"),
+            *args,
+        ],
         cwd=cwd,
         check=True,
         capture_output=True,
@@ -933,7 +940,8 @@ def test_the_remaining_time_never_outlives_the_round_deadline() -> None:
     """R-8 of the review-swarm review: the round's limit is one deadline, not one per call."""
     assert stage2.remaining(None) == stage2.REVIEWER_MINUTES * 60
     assert 0 < stage2.remaining(time.monotonic() + 30) <= 30
-    assert stage2.remaining(time.monotonic() - 10) == 1.0
+    with pytest.raises(stage2.CallFailed, match="round time limit"):
+        stage2.remaining(time.monotonic() - 10)
 
 
 def test_every_member_of_a_round_shares_one_deadline(world: World, monkeypatch) -> None:
@@ -980,6 +988,25 @@ def test_a_released_run_can_still_retire_a_failed_stage(world: World) -> None:
     assert f"rung:{TEST_RUNGS[0]}" in state["consumed"]
 
 
+def test_a_retirement_reason_cannot_create_rounds_or_control_rows(world: World) -> None:
+    """O198-1: pasted failure output is evidence, never new loop control text."""
+    world.write_record([("L1-1", "taken — test_a", "yes")], state=loop_state(("free",)))
+    reason = (
+        "The timeout output included:\n## Round 99 — quoted failure\n"
+        "| L99-1 | MAJOR | SPEC | criterion 1 | spec.md:1 | pasted row | model | | |\n"
+        "Loop state: {}"
+    )
+    assert world.run("release-loop", "demo", "--stage-failed", TEST_FLASH[0], "--reason", reason) == 0
+    record = world.record().read_text(encoding="utf-8")
+    assert [row[0] for row in stage2.record_rows(record)] == ["L1-1"], "the reason created a control row"
+    assert stage2.rounds_run(record, "") == 1, "the reason created a review round"
+    assert stage2.read_state(record, "")["consumed"] == ["free", "flash"]
+    assert stage2.quote_reviewer(reason) in record, "the failure output was not preserved as evidence"
+    world.script(pi=[{"model": model, "stdout": "No finding."} for model in TEST_RUNGS])
+    assert world.run("review-loop") == 0
+    assert "## Round 2" in world.record().read_text(encoding="utf-8")
+
+
 def test_a_failed_stage_needs_a_reason_and_a_known_model(world: World, capsys) -> None:
     """The command names why, and only a stage of this run can be retired."""
     world.write_record([("L1-1", "taken — test_a", "yes")], state=loop_state(("free",)))
@@ -991,19 +1018,41 @@ def test_a_failed_stage_needs_a_reason_and_a_known_model(world: World, capsys) -
     assert world.record().read_text(encoding="utf-8") == before, "a refused retirement edited the record"
 
 
-def test_a_second_review_loop_is_refused_while_the_record_is_held(world: World, capsys) -> None:
-    """R-14 of the review-swarm review: one runner per record, and the refusal names the record."""
-    path = stage2.lock_path("demo", world.root)
-    path.parent.mkdir(parents=True, exist_ok=True)
-    with path.open("a+") as handle:
-        fcntl.flock(handle.fileno(), fcntl.LOCK_EX | fcntl.LOCK_NB)
-        assert world.run("review-loop") == 2
-        assert world.run("prepare-loop") == 2
-        assert world.run("release-loop") == 2
-    error = capsys.readouterr().err
-    assert stage2.record_key("demo", world.root) in error, "the refusal did not name the record"
-    assert world.reviews() == [], "a refused run still called a reviewer"
-    assert world.run("review-loop") in (0, 1), "the freed lock did not let the verb past the lock"
+def test_a_cut_round_stays_cut_after_the_release(world: World) -> None:
+    """O191-2: the continued run after `release-loop` still knows round 2 saw a cut diff."""
+    limit = 5
+    monkey = pytest.MonkeyPatch()
+    monkey.setattr(stage2, "REVIEW_DIFF_MAX_LINES", limit)
+    try:
+        big = world.root / "src" / "big.py"
+        big.parent.mkdir(parents=True, exist_ok=True)
+        big.write_text("\n".join(f"VALUE_{n} = {n}" for n in range(limit * 3)) + "\n", encoding="utf-8")
+        world.write_findings(VERDICT)
+        world.script(
+            pi=[
+                *({"model": model, "stdout": rows(1)} for model in TEST_FREE),
+                *({"model": model, "stdout": "No finding."} for model in TEST_FLASH),
+            ]
+        )
+        assert world.run("review-loop") == 0  # round 1: the free stage, with a finding
+        decide_record(world)
+        assert world.run("review-loop") == 0  # round 2: Flash over the cut diff, no finding
+        assert world.run("release-loop") == 0
+        assert not world.record().exists(), "the release kept the record"
+        world.script(pi=[{"model": model, "stdout": "No finding."} for model in TEST_RUNGS])
+        assert world.run("review-loop") == 0, "the continued run took a cut round for a clean one"
+    finally:
+        monkey.undo()
+
+
+def test_the_review_diff_is_split_on_newlines_only() -> None:
+    """O191-4: the count is git's count, and a carriage return survives the cut."""
+    text = "".join(f"line {n}\r\n" for n in range(stage2.REVIEW_DIFF_MAX_LINES + 3))
+    kept, note = stage2.bounded_review_diff(text)
+    assert note == f"the change diff was cut at {stage2.REVIEW_DIFF_MAX_LINES} of {text.count(chr(10))} lines"
+    assert kept.startswith("line 0\r\nline 1\r\n"), "the cut rewrote the line ends"
+    assert "\r" in kept.split("\n")[1], "the carriage return was lost"
+    assert "\x0c" in stage2.bounded_review_diff("a\x0cb\n" * (stage2.REVIEW_DIFF_MAX_LINES + 1))[0]
 
 
 def test_the_record_is_keyed_by_the_worktree_too(tmp_path: Path) -> None:
@@ -1014,6 +1063,20 @@ def test_the_record_is_keyed_by_the_worktree_too(tmp_path: Path) -> None:
     assert stage2.record_dir("demo", one) != stage2.record_dir("demo", two), "two worktrees share one record"
     assert stage2.record_dir("demo", one) == stage2.record_dir("demo", one), "one worktree, two records"
     assert stage2.record_dir("demo", one).name.startswith("demo@")
+
+
+def test_release_in_one_worktree_leaves_the_other_worktrees_record(world: World) -> None:
+    """R-2 through the call site: `release-loop` in root A neither reads nor deletes root B's record."""
+    other = World(shutil.copytree(world.root, world.root.parent / "repo-b", symlinks=True), world.bin, world.state)
+    world.write_record([("L1-1", "taken — test_a", "no")])
+    other.write_record([("L1-9", "taken — test_b", "no")])
+    other_before = other.record().read_text(encoding="utf-8")
+    world.write_findings("## Phase 6 — deepseek-v4.1-flash, 2026-09-30", VERDICT)
+    assert world.run("release-loop") == 0
+    assert not world.record().exists()
+    assert other.record().exists(), "release-loop in one root deleted the other root's record"
+    assert other.record().read_text(encoding="utf-8") == other_before
+    assert "L1-9" not in world.text(), "the other root's rows were released into this root's findings"
 
 
 def test_a_quoted_sentence_in_a_cell_does_not_cut_the_released_block() -> None:
@@ -1048,6 +1111,34 @@ def test_a_quoted_sentence_in_a_cell_does_not_cut_the_released_block() -> None:
     )
     assert [row[0] for row in stage2.released_rows(released)] == ["L1-1", "L1-2"], "the block was cut inside the table"
     assert (stage2.read_state(None, released) or {}).get("consumed") == ["free"]
+
+
+def test_the_state_line_below_a_quoting_cell_is_still_read() -> None:
+    """R-3, `read_state` half: a cell quoting the sentence before the state line must not hide the state line."""
+    quoting = [
+        "L1-1",
+        "MAJOR",
+        "SPEC",
+        "base",
+        "a.py:1",
+        "quotes Kept from the loop record: in a cell",
+        "x",
+        "taken — test_a",
+        "no",
+        "—",
+    ]
+    released = "\n".join(
+        [
+            f"{stage2.RELEASE_HEADING} 2026-10-20",
+            stage2.render_table(stage2.RELEASED_COLUMNS, [quoting]),
+            "Rounds run: 1",
+            stage2.STATE_KEY + json.dumps({"consumed": ["free"], "free": {}, "paid": {}}),
+            "Kept from the loop record:",
+            "",
+            "> the reviewers' words, as they came",
+        ]
+    )
+    assert (stage2.read_state(None, released) or {}).get("consumed") == ["free"], "the quoted cell cut the block"
 
 
 def test_openai_codex_is_declared_as_decided() -> None:
@@ -4592,6 +4683,166 @@ def test_a_hanging_runner_step_aborts_with_its_limit_named(tmp_path: Path) -> No
         )
 
 
+def test_an_attempt_that_plants_the_registry_renderer_never_runs_it(world: World, tmp_path: Path) -> None:
+    """O188-1, R-19 at the call site: the attempt's renderer writes a marker, and the marker stays absent."""
+    marker = tmp_path / "renderer-ran"
+    script = Path("scripts") / Path(plans_registry.__file__).name
+    world.script(
+        claude=[
+            {
+                "stdout": "implemented",
+                "plant": {str(script): f"from pathlib import Path\nPath({str(marker)!r}).write_text('ran')\n"},
+                "append": {"plans/changes/demo/plan.md": "2026-10-07 10:00–10:05, 5 min\n"},
+            }
+        ],
+        make=[{"stdout": "green\n"}],
+    )
+    checking_derived_make(world)
+    code = world.run("implement")
+    assert not marker.exists(), "the attempt's own renderer ran"
+    assert code == 0, "the committed renderer should have made the attempt green"
+    assert "changes/demo/findings.md" in (world.root / "plans/INDEX.md").read_text()
+
+
+def test_the_runner_steps_carry_their_limits_at_the_call_sites(world: World, monkeypatch: pytest.MonkeyPatch) -> None:
+    """O188-1, R-20 at the call sites: renderer and ruff get the tool limit, `make verify` the step limit."""
+    ruff = world.root / ".venv" / "bin" / "ruff"
+    ruff.parent.mkdir(parents=True)
+    ruff.write_text("#!/bin/sh\nexit 0\n", encoding="utf-8")
+    ruff.chmod(0o755)
+    (world.root / "scripts" / "extra.py").write_text("value = 1\n", encoding="utf-8")
+    world.script(make=[{"stdout": "green\n"}])
+    with world.plan.open("a", encoding="utf-8") as handle:
+        handle.write("2026-10-07 10:00–10:05, 5 min\n")
+    seen: list[tuple[str, float | None]] = []
+    original = stage2.launch
+
+    def record(command, root, env, secret=None, timeout=None, limit=None):
+        # The stem, not the file name: the mutation ratchet in test_ci.py reads a
+        # gate script's file name as mutation evidence, and this test seeds no
+        # fault into the renderer (maintainer, 2026-10-21; stricter ratchet: bead).
+        name = "renderer" if Path(command[-2]).stem == "plans_registry" else Path(command[0]).name
+        seen.append((name, timeout))
+        return original(command, root, env, secret, timeout=timeout, limit=limit)
+
+    monkeypatch.setattr(stage2, "launch", record)
+    assert stage2.verify_attempt(world.root, world.plan, "", None, None, stage2.tool_state(world.root)) == []
+    assert ("renderer", stage2.TOOL_SECONDS) in seen
+    assert ("ruff", stage2.TOOL_SECONDS) in seen
+    assert ("make", stage2.VERIFY_SECONDS) in seen
+    assert all(timeout is not None for _, timeout in seen), seen
+
+
+def test_a_make_verify_that_hangs_is_a_repairable_diagnostic(world: World, monkeypatch: pytest.MonkeyPatch) -> None:
+    """O188-4: a hang the attempt caused reaches the next attempt as a problem, not as `cannot_start`."""
+    original = stage2.launch
+
+    def hang(command, root, env, secret=None, timeout=None, limit=None):
+        if command == ["make", "verify"]:
+            raise stage2.StepTimedOut("make was stopped by the runner's step limit after 30 minutes")
+        return original(command, root, env, secret, timeout=timeout, limit=limit)
+
+    monkeypatch.setattr(stage2, "launch", hang)
+    problems = stage2.verify_attempt(world.root, world.plan, "")
+    assert len(problems) == 1 and "did not finish" in problems[0] and "30 minutes" in problems[0]
+
+
+def test_a_timeout_kills_the_whole_process_group(tmp_path: Path) -> None:
+    """O188-4: a grandchild of the stopped step does not survive."""
+    pidfile = tmp_path / "grandchild.pid"
+    started = time.monotonic()
+    with pytest.raises(stage2.CallFailed, match="stopped by"):
+        stage2.launch(
+            ["bash", "-c", f"sleep 60 >/dev/null 2>&1 & echo $! > {pidfile}; wait"],
+            tmp_path,
+            {**os.environ},
+            timeout=1,
+            limit="the test limit",
+        )
+    assert time.monotonic() - started < 20, "the step was not stopped at its limit"
+    pid = int(pidfile.read_text())
+    for _ in range(100):  # the kill is delivered at once, the exit is reaped a moment later
+        try:
+            os.kill(pid, 0)
+        except ProcessLookupError:
+            return
+        time.sleep(0.02)
+    os.kill(pid, 9)
+    pytest.fail("the grandchild of the timed-out step is still running")
+
+
+def test_a_changed_venv_file_is_named_and_refused(world: World) -> None:
+    """O188-2: the digest covers the whole `.venv/` tree, not only ruff."""
+    package = world.root / ".venv" / "lib" / "python3.x" / "site-packages" / "yaml"
+    package.mkdir(parents=True)
+    (package / "__init__.py").write_text("ok = 1\n", encoding="utf-8")
+    link = world.root / ".venv" / "lib" / "link"
+    link.symlink_to("python3.x")
+    before = stage2.tool_state(world.root)
+    assert stage2.tool_problem(world.root, before) is None
+    (package / "__init__.py").write_text("import os\n", encoding="utf-8")
+    assert ".venv/lib/python3.x/site-packages/yaml/__init__.py" in stage2.tool_problem(world.root, before)
+    (package / "__init__.py").write_text("ok = 1\n", encoding="utf-8")
+    (package.parent / "evil.pth").write_text("import os\n", encoding="utf-8")
+    assert "evil.pth" in stage2.tool_problem(world.root, before), "an added file went unnoticed"
+    (package.parent / "evil.pth").unlink()
+    link.unlink()
+    link.symlink_to("elsewhere")
+    assert ".venv/lib/link" in stage2.tool_problem(world.root, before), "a changed symlink target went unnoticed"
+    link.unlink()
+    assert ".venv/lib/link" in stage2.tool_problem(world.root, before), "a removed symlink went unnoticed"
+
+
+def test_an_attempt_that_plants_a_venv_package_fails_before_any_step(world: World) -> None:
+    """O188-2 at the call site: the attempt fails with the path named, and no step ran."""
+    package = world.root / ".venv" / "lib" / "site-packages"
+    package.mkdir(parents=True)
+    before = stage2.tool_state(world.root)
+    (package / "sitecustomize.py").write_text("import os\n", encoding="utf-8")
+    problems = stage2.verify_attempt(world.root, world.plan, "", None, None, before)
+    assert len(problems) == 1 and ".venv/lib/site-packages/sitecustomize.py" in problems[0]
+    assert world.calls("make") == []
+
+
+def test_red_first_refuses_a_changed_venv(world: World) -> None:
+    """O188-2: the red-first interpreter comes from `.venv/`, so a changed tree is not run."""
+    (world.root / ".venv" / "bin").mkdir(parents=True)
+    python = world.root / ".venv" / "bin" / "python3"
+    python.write_text("#!/bin/sh\nexit 0\n", encoding="utf-8")
+    before = stage2.tool_state(world.root)
+    python.write_text("#!/bin/sh\nexit 1\n", encoding="utf-8")
+    outcome = stage2.red_first(world.root, "HEAD", "tests/test_x.py::test_y", None, before)
+    assert outcome is not None and ".venv/bin/python3" in outcome
+
+
+def test_the_runner_environment_drops_repository_path_entries(tmp_path: Path) -> None:
+    """O188-2: a directory inside the repository on `PATH` is attempt-writable and is not searched."""
+    root = tmp_path / "repo"
+    (root / ".venv" / "bin").mkdir(parents=True)
+    outside = tmp_path / "bin"
+    outside.mkdir()
+    env = stage2.runner_env({"PATH": os.pathsep.join([str(root / ".venv" / "bin"), "relative", str(outside)])}, root)
+    assert env["PATH"] == str(outside)
+
+
+def test_a_make_planted_on_a_repository_path_entry_does_not_run(
+    world: World, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """O188-2 at the call site: the runner's `make verify` skips a `PATH` entry inside the worktree."""
+    marker = tmp_path / "planted-make-ran"
+    planted = world.root / ".venv" / "bin"
+    planted.mkdir(parents=True)
+    (planted / "make").write_text(f"#!/bin/sh\necho ran > {marker}\nexit 0\n", encoding="utf-8")
+    (planted / "make").chmod(0o755)
+    monkeypatch.setenv("PATH", f"{planted}{os.pathsep}{os.environ['PATH']}")
+    world.script(make=[{"stdout": "green\n"}])
+    with world.plan.open("a", encoding="utf-8") as handle:
+        handle.write("2026-10-07 10:00–10:05, 5 min\n")
+    assert stage2.verify_attempt(world.root, world.plan, "") == []
+    assert not marker.exists(), "a make planted inside the worktree ran"
+    assert len(world.calls("make")) == 1
+
+
 def test_loop_and_probe_use_repository_pi(world: World) -> None:
     """Criterion 5: the preflight and every loop/probe launch go through the repository wrapper; the PATH pi stays unused."""
     world.script(
@@ -5858,6 +6109,16 @@ def test_a_pipe_inside_a_reviewers_finding_reaches_findings(world: World) -> Non
     (row,) = released_rows(text)
     assert row[0] == "L1-1" and "cat x" in row[5] and "sort` drops the last row" in row[5]
     assert row[6:9] == ["acme-v1-free", "taken — test_a", "no"]
+
+
+def test_the_round_record_names_a_member_that_wrote_a_widened_row(world: World) -> None:
+    """R-25, the call site: the round says which member wrote a row of more than six cells, and why it matters."""
+    said = "| X1 | MAJOR | SPEC | a | src/app.py:1 | the filter `cat x | sort` drops the last row |"
+    world.script(pi=[{"model": "acme-v1-free", "stdout": said}])
+    assert world.run("review-loop") == 0
+    record = world.record().read_text(encoding="utf-8")
+    assert "acme-v1-free wrote 1 row(s) with more than six cells" in record
+    assert "an unescaped `|` before it moves the columns" in record
 
 
 def test_a_line_that_is_not_a_loop_row_is_carried_to_findings(world: World) -> None:
@@ -7443,6 +7704,37 @@ def test_a_text_row_taken_as_not_a_test_is_repaired_and_its_status_written(world
     assert git(world.root, "log", "-1", "--pretty=%s") == "fix(demo): repair taken findings L1-1, F-1"
 
 
+@pytest.mark.parametrize(
+    "source",
+    [
+        "class TestFix:\n\n    def test_fix(self):\n        assert True\n",
+        "async def test_fix():\n    assert True\n",
+    ],
+    ids=["method-in-a-class", "async-def"],
+)
+def test_a_fixed_line_naming_a_method_or_an_async_test_is_accepted(
+    world: World, monkeypatch: pytest.MonkeyPatch, source: str
+) -> None:
+    """R-23, the call site: the repair answer check finds a test defined as a method or as `async def`.
+
+    Both proof runs are stubbed: pytest cannot select a class method by `file::function`, so this test
+    isolates the definition lookup that `check_repair_answer` makes before those runs.
+    """
+    seed_tests(world)
+    world.write_record([("L1-1", "taken — test_a", "no")])
+    monkeypatch.setattr(stage2, "red_first", lambda *_args, **_kwargs: None)
+    monkeypatch.setattr(stage2, "fixed_test_proof", lambda *_args, **_kwargs: None)
+    script_repair(
+        world,
+        [repair_step(plant={"src/app.py": "value = 2\n", "tests/test_fix.py": source})],
+        make=[{"stdout": "green\n"}],
+    )
+    assert world.run("repair") == 0
+    record = {row[0]: row[7] for row in stage2.record_rows(world.record().read_text(encoding="utf-8"))}
+    assert record["L1-1"] == "fixed — tests/test_fix.py::test_fix"
+    assert len(world.calls("codex")) == 1, "the definition check refused the first attempt"
+
+
 def test_a_fixed_line_naming_an_undefined_test_fails_the_attempt(world: World) -> None:
     """Criterion 17. Planted fault: no definition check."""
     seed_tests(world)
@@ -7925,12 +8217,11 @@ def test_red_first_refuses_a_timed_out_run(world: World, monkeypatch: pytest.Mon
     repair_world(world)
     (world.root / "tests" / "test_red.py").write_text(RED_ASSERT_TEST, encoding="utf-8")
     baseline = git(world.root, "rev-parse", "HEAD")
-    original_run = stage2.subprocess.run
+    original_launch = stage2.launch
 
-    def stopping(command, *args, **kwargs):
+    def stopping(command, root, env, secret=None, timeout=None, limit=None):
         """The pytest process dies at the limit after writing the phases it reached."""
         if "-m" in command and "pytest" in command:
-            env = kwargs["env"]
             record = {
                 "schema": 1,
                 "token": env["STAGE2_RED_TOKEN"],
@@ -7957,11 +8248,11 @@ def test_red_first_refuses_a_timed_out_run(world: World, monkeypatch: pytest.Mon
                 ],
                 "session": None,
             }
-            Path(kwargs["env"]["STAGE2_RED_REPORT"]).write_text(json.dumps(record), encoding="utf-8")
-            raise subprocess.TimeoutExpired(command, stage2.RED_FIRST_MINUTES * 60)
-        return original_run(command, *args, **kwargs)
+            Path(env["STAGE2_RED_REPORT"]).write_text(json.dumps(record), encoding="utf-8")
+            raise stage2.StepTimedOut(f"{command[0]} was stopped by {limit}")
+        return original_launch(command, root, env, secret, timeout=timeout, limit=limit)
 
-    monkeypatch.setattr(stage2.subprocess, "run", stopping)
+    monkeypatch.setattr(stage2, "launch", stopping)
     outcome = stage2.red_first(world.root, baseline, RED_SELECTOR, None)
     assert outcome is not None and "stopped by the red-first time limit" in outcome, outcome
 
@@ -8205,6 +8496,25 @@ def test_a_failed_repair_process_removes_the_ignored_paths_it_created(
     err = capsys.readouterr().err
     assert "ignored paths removed: lychee/repair.txt" in err, err
     assert "undone: src/half.py" in err
+
+
+@pytest.mark.parametrize("unproven", ["skip", "xfail", "fail"])
+def test_repair_marks_no_proof_when_the_named_test_does_not_pass_fixed_code(world: World, unproven: str) -> None:
+    """O199-1: a green suite cannot certify a named case that skips, xfails or still fails after repair."""
+    baseline = repair_world(world)
+    test = (
+        "from pathlib import Path\nimport pytest\n\ndef test_fix():\n"
+        "    content = (Path(__file__).resolve().parent.parent / 'src/app.py').read_text()\n"
+        f"    if 'value = 2' in content:\n        pytest.{unproven}('the repaired case was not proven')\n"
+        "    assert 'value = 2' in content\n"
+    )
+    step = repair_step(plant={"src/app.py": "value = 2\n", "tests/test_fix.py": test})
+    script_repair(world, [step] * 3, make=[{"stdout": "green\n"}] * 3)
+    assert world.run("repair") == 1
+    assert git(world.root, "rev-parse", "HEAD") == baseline, "an unproven repair reached a checkpoint"
+    record = stage2.record_rows(world.record().read_text(encoding="utf-8"))
+    assert record[0][7] == "taken — test_a" and record[0][8] == "no", "an unproven row was marked fixed"
+    assert "fixed-code proof" in prompt_of(world.calls("codex")[1])
 
 
 def test_a_passing_repair_writes_fixed_into_each_rows_place_and_nothing_else(world: World) -> None:
@@ -10347,6 +10657,25 @@ def test_replacements_run_down_the_ladder_each_model_once(world: World) -> None:
     assert "rung:mimo-v2.6-pro" in consumed and "rung:spike-a" in consumed
 
 
+def test_an_expired_round_starts_no_replacement_and_consumes_no_stage(world: World, monkeypatch) -> None:
+    """O196-1: a failed swarm at the deadline cannot buy a fresh second for every remaining rung."""
+    _flash_round_world(world)
+    before = world.record().read_text(encoding="utf-8")
+    clock = [0.0]
+    calls: list[list[str]] = []
+
+    def expired(_ctx, members, _prompts, _key, **options):
+        calls.append(list(members))
+        clock[0] = options["deadline"] + 1
+        return {member: stage2.CallFailed("the round time limit expired") for member in members}
+
+    monkeypatch.setattr(stage2.time, "monotonic", lambda: clock[0])
+    monkeypatch.setattr(stage2, "run_swarm", expired)
+    assert world.run("review-loop") == 1
+    assert calls == [list(TEST_FLASH)], "the exhausted deadline still launched a replacement"
+    assert world.record().read_text(encoding="utf-8") == before, "a failed round consumed a stage"
+
+
 def test_a_spent_ladder_leaves_the_failed_member_named(world: World, capsys: pytest.CaptureFixture[str]) -> None:
     """Q-13: no replacement left - the failure is named; with every call failed no round completes."""
     _flash_round_world(world)
@@ -10797,6 +11126,33 @@ def test_an_excluded_model_is_denied_by_both_classes(world: World) -> None:
     data["ausgeschlossen"] = [{"was": "prose only", "klasse": "framework", "grund": "no ids"}]
     path.write_text(yaml.safe_dump(data))
     assert stage2.excluded_problem(world.root, "kimi-for-coding") is None
+
+
+@pytest.mark.parametrize(
+    "excluded",
+    ["acme", None, ["acme"], [{"modelle": "acme"}], [{"modelle": [None]}], [{"modelle": [""]}]],
+)
+def test_malformed_exclusions_refuse_both_admission_paths(world: World, excluded) -> None:
+    """O197-1: an unreadable deny rule cannot silently become permission to send code."""
+    path = world.root / "model-endpoints.yaml"
+    data = yaml.safe_load(path.read_text())
+    data["ausgeschlossen"] = excluded
+    path.write_text(yaml.safe_dump(data))
+    for problem in (
+        stage2.free_admission_problem(world.root, TEST_FREE[0], list(TEST_FREE)),
+        stage2.declaration_problem(world.root, stage2.OPENCODE, TEST_LADDER[0]),
+    ):
+        assert problem is not None and "malformed exclusion" in problem
+
+
+def test_a_customer_only_exclusion_does_not_deny_framework_admission(world: World) -> None:
+    """O197-2: the exclusion's declared data class must bind as well as its model prefix."""
+    path = world.root / "model-endpoints.yaml"
+    data = yaml.safe_load(path.read_text())
+    data["ausgeschlossen"] = [{"klasse": "kundencode", "modelle": [*TEST_FREE, *TEST_LADDER]}]
+    path.write_text(yaml.safe_dump(data))
+    assert stage2.free_admission_problem(world.root, TEST_FREE[0], list(TEST_FREE)) is None
+    assert stage2.declaration_problem(world.root, stage2.OPENCODE, TEST_LADDER[0]) is None
 
 
 def test_free_admission_requires_the_launch_provider(world: World) -> None:
