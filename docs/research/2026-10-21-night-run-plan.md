@@ -109,3 +109,47 @@ One page: the phase-6 verdict for #158 and its decision block, the D-6
 repair (bead coding-harness-dxso), pull requests awaiting the maintainer, where work
 stopped and why, the CI slow-test measurement, and the time the morning
 review took.
+
+
+## Addendum — 2026-10-21, maintainer-approved follow-on queue
+
+The maintainer asked Codex to append the recommended beads and continue while
+budget remains. Finish the research-swarm queue first; its review limit stays
+round 16. One change per worktree, one heavy job or foreign call at a time,
+each green checkpoint committed and pushed. No merge and no new model or
+architecture permission. Publish the handover before an observable budget
+stop. Remaining budget that cannot be measured is recorded as not read.
+
+Order recommended from the tracker and main `86bc7ea`, read on 2026-10-21:
+
+| Order | Work and bead | Why next / completion boundary |
+|---|---|---|
+| 8 | Reconcile the merged repair stack with Beads: own tooling (`coding-harness-011`), commit guard (`coding-harness-wqw`), record location (`coding-harness-5j4`), diff bounds (`coding-harness-4p1`), locking (`coding-harness-1wo`), record robustness (`coding-harness-3ql`), parser/evidence (`coding-harness-0an`), exclusions (`coding-harness-16z`), failed-stage retirement (`coding-harness-tex`) | Still listed open or in progress; check acceptance against the merged PR before closing or writing duplicate code. Research seats (`coding-harness-4295`) close only after #158 merges. |
+| 9 | Restore must not follow a parent symlink outside the worktree (`coding-harness-10w`) | Protect outside files; a disposable reproduction must prove they remain intact. |
+| 10 | Reviewer prose must not become trusted loop state (`coding-harness-i70`) | A forged state line cannot bypass discovery or choose a model. |
+| 11 | Refuse index-only changes (`coding-harness-0c8`) | Preserve staged work; a dirty index refuses before the call or commit. |
+| 12 | Reject invalid phase-6 verdicts (`coding-harness-5mx`), then malformed loop rows next to valid ones (`coding-harness-vque`, separate change) | No false completed review; invalid output keeps the loop record and exits nonzero. |
+| 13 | Lock phase-6 release of the loop record (`coding-harness-751`) | A held record lock refuses release without changing the record. |
+| 14 | Runner measures time; timing tests assert order (`coding-harness-9wp`, related `coding-harness-jik`) | Inspect the existing worktree first. Remove accounting-only repair failures; no test retries to green. |
+| 15 | Fast pre-check and useful failure evidence (`coding-harness-csm`) | Inspect the existing worktree. A red named test skips full verify and reports scrubbed assertions; green pre-check still requires full verify. |
+| 16 | Reliable interactive launch (`coding-harness-rm8`, overlapping report `coding-harness-bas`) | Compare reports before duplicate fixes. Use a short private launcher and distinguish dispatch acceptance from actual startup. Real launch qualification stays attended unless separately authorized. |
+| 17 | Enforce paid reviewers' read boundary (`coding-harness-21dl`) | Prepare research and the required design/interview; an unresolved architecture decision goes to the morning page. |
+| 18 | Measure CI cost (`coding-harness-7so`) | One dated durations measurement, as item 6 permits. CI/verify separation and dev/test/prod need an interview before implementation. |
+
+Before each implementation, reproduce on current main, read existing artifacts
+and run the workflow required by its class. An already merged fix is checked
+and reconciled, not rebuilt. Open decisions stop that item, not independent
+work later in the queue. Task status remains in Beads.
+
+### Interview queue after the bounded repairs
+
+1. Alternative phase-6 reviewer through Pi (`coding-harness-duue`), then the
+   repair fallback (`coding-harness-vcci`): settle model choice and routing;
+   consolidate overlapping implementer work (`coding-harness-4ji`).
+2. Every change has a bead and an explicit workflow class
+   (`coding-harness-680l`): decide storage and agreement with change artifacts.
+3. Writing-attempt isolation (`coding-harness-s9r`) and preserving failed
+   work (`coding-harness-znc`): settle threat model and evidence retention.
+
+Provider expansion, TokenEconomizer, dashboards and kit export remain behind
+this reliability work. The dashboard waiting period remains in force.
