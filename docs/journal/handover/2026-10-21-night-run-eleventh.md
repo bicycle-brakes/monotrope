@@ -218,3 +218,14 @@ Measured 2026-10-21 about 08:10 UTC.
   fake Pi returned truncated JSON (`JSONDecodeError: Unterminated string`).
   The change is text only, and `main` is green on the same code, so this reads
   as an intermittent test. It is not investigated here.
+
+## Addendum — 2026-10-21, #188 merged
+
+- On the maintainer's word ("ja"), #188 was merged at about 08:20 UTC: merge
+  commit `2f92e5b` on `main`, head `0248a16`. A comment on bead
+  coding-harness-011 records it; the bead stays open because the session
+  `pi-review-swarm` claimed it.
+- #189 now targets `main`. **Next step, replacing the ones above:** in worktree
+  `.claude/worktrees/record-dir-key`, merge `origin/main` into
+  `fix/record-dir-key` with a merge commit. Then run `make verify`, push, wait
+  for CI, and ask the maintainer to merge. Do the same for #190.
