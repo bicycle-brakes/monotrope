@@ -153,3 +153,46 @@ work later in the queue. Task status remains in Beads.
 
 Provider expansion, TokenEconomizer, dashboards and kit export remain behind
 this reliability work. The dashboard waiting period remains in force.
+
+## Addendum — 2026-10-21, evening: reordered queue and beads added without interview
+
+The maintainer approved this order in the conversation of 2026-10-21. It
+replaces the order of items 9–18 above; their completion boundaries stay as
+written. The research swarm (#158: repair F-61 and F-62 from the saved
+candidate, prove red first, full `make verify`, round 16) still comes first.
+
+Why the new order: almost every item changes `scripts/stage2.py`, the tool
+that runs the repairs. The beads that keep a failed attempt cheap and
+retryable go first, so later items lose fewer attempts.
+
+| Order | Work and bead | Completion boundary, and where it may stall |
+|---|---|---|
+| 9 | Diagnostics must not carry test secrets into `findings.md` (`coding-harness-8hr`) | A failed attempt whose traceback holds a fixture key can be retried without a leak-check BLOCK. |
+| 10 | Runner measures time; timing tests assert order (`coding-harness-9wp`, with the load-sensitive test `coding-harness-jik`) | Built by hand, not through `stage2.py`: the fix lives mostly in tests, and the repair runner's red-first check has failed on test-only fixes before (`coding-harness-0ho`, which needs an interview). |
+| 11 | Fast pre-check and full failure messages (`coding-harness-csm`) | As item 15 above. |
+| 12 | Stage new files before `make verify` (`coding-harness-fdz`) | The kit probe sees an attempt's new files. Must agree with item 15 (index-only changes) — same code path; build them one after the other. |
+| 13 | Restore must not follow a parent symlink (`coding-harness-10w`) | As item 9 above. |
+| 14 | Reviewer prose must not become loop state (`coding-harness-i70`) | As item 10 above. |
+| 15 | Refuse index-only changes (`coding-harness-0c8`) | As item 11 above. |
+| 16 | One change for the loop-row parser: invalid phase-6 verdicts (`coding-harness-5mx`), malformed rows next to valid ones (`coding-harness-vque`), row ids that are not `L<n>-<m>` (`coding-harness-6jg`) | One branch, one pull request, because all three touch the same parser; separate tests per bead. |
+| 17 | Lock phase-6 release of the loop record (`coding-harness-751`) | As item 13 above. |
+| 18 | Reliable interactive launch (`coding-harness-rm8`, `coding-harness-bas`) | As item 16 above; real launch stays attended. |
+| 19 | Paid reviewers' read boundary (`coding-harness-21dl`) | Research and interview preparation only, as item 17 above. |
+| 20 | CI durations measurement (`coding-harness-7so`) | As item 18 above. |
+| Filler | Reconcile `WORKFLOW.md` with the tree (`coding-harness-i0l`) | Read-only; taken whenever an item above is blocked. Output: a dated report and one bead per missing piece. |
+
+Moved to the interview queue: the Sonnet fallback that loses Flash's edits
+(`coding-harness-6ie`) overlaps with writing-attempt isolation
+(`coding-harness-s9r`) and preserved failed work (`coding-harness-znc`), so it
+joins item 3 of the interview queue.
+
+Known stall points for the whole night:
+
+- The runner repairs itself; the round-15 repair call exited 1 with an
+  unexplained cause. If it recurs, the item is built by hand or stops.
+- No merge overnight: changes to the same file become stacked pull requests,
+  and the morning merge needs rebases from the bottom.
+- One full `make verify` takes about ten minutes (measured 2026-10-16) plus a
+  review loop per change; items 9–20 are more than one night. Unfinished
+  items go to the morning page.
+- Budget remaining is not read; the stop rules above apply.
