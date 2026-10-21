@@ -63,8 +63,8 @@ def binding(root: Path, runner) -> dict:
     }
 
 
-def receipt_path(change: str, runner) -> Path:
-    return runner.record_dir(change) / "availability.json"
+def receipt_path(root: Path, change: str, runner) -> Path:
+    return runner.record_dir(change, root) / "availability.json"
 
 
 def report(state: dict) -> str:
@@ -88,12 +88,12 @@ def prepare(root: Path, change: str, runner) -> None:
     rule = settings(root, runner)
     if rule is None:
         raise runner.Refused("this endpoint declares no availability_preflight rule.")
-    path = receipt_path(change, runner)
+    path = receipt_path(root, change, runner)
     # A failed refresh/probe attempt must never leave an earlier receipt usable.
     path.unlink(missing_ok=True)
     findings = folder / "findings.md"
     text = findings.read_text(encoding="utf-8") if findings.exists() else ""
-    record = runner.read_record(change)
+    record = runner.read_record(change, root)
     if runner.read_state(record, text) is not None or runner.rounds_run(record, text):
         raise runner.Refused("this review run already has history; preparation cannot reset its snapshot or stops.")
     problem = runner.entry_problem(root, runner.OPENCODE)
@@ -184,7 +184,7 @@ def prepare(root: Path, change: str, runner) -> None:
 def consume(root: Path, change: str, token: str | None, runner) -> dict:
     """Validate acknowledgment, freshness and input identity before any review call."""
     rule = settings(root, runner)
-    path = receipt_path(change, runner)
+    path = receipt_path(root, change, runner)
     try:
         receipt = json.loads(path.read_text(encoding="utf-8"))
         state = receipt["state"]

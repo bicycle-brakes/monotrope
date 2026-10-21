@@ -263,7 +263,15 @@ def rows(count: int, prefix: str = "X") -> str:
 
 def git(cwd: Path, *args: str) -> str:
     run = subprocess.run(
-        [GIT, "-c", "user.name=t", "-c", "user.email=t@example.invalid", "-c", "commit.gpgsign=false", *args],
+        # No automatic maintenance: a detached `git maintenance` from a commit
+        # writes objects/maintenance.lock, and a test that copies the
+        # repository then races it (CI run 39580553583).
+        [
+            GIT,
+            *("-c", "user.name=t", "-c", "user.email=t@example.invalid", "-c", "commit.gpgsign=false"),
+            *("-c", "maintenance.auto=false", "-c", "gc.auto=0"),
+            *args,
+        ],
         cwd=cwd,
         check=True,
         capture_output=True,
@@ -317,7 +325,7 @@ class World:
         return self.findings.read_text(encoding="utf-8")
 
     def record(self) -> Path:
-        return self.state / "coding-harness" / "stage2" / "demo" / "loop.md"
+        return stage2.record_dir("demo", self.root) / "loop.md"
 
     def write_record(
         self,
@@ -631,17 +639,103 @@ def test_the_suite_never_reaches_the_real_denylist_or_secrets(monkeypatch: pytes
     tmp = home.parent
     assert leakcheck.default_denylist().is_relative_to(tmp)
     assert stage2.secrets_path().is_relative_to(tmp)
-    assert stage2.record_dir("demo").is_relative_to(tmp)
+    assert stage2.record_dir("demo", tmp).is_relative_to(tmp)
     for name in ("LEAKCHECK_DENYLIST", "CC_SECRETS", "XDG_STATE_HOME"):
         monkeypatch.delenv(name)
     assert leakcheck.default_denylist().is_relative_to(home)
     assert stage2.secrets_path().is_relative_to(home)
-    assert stage2.record_dir("demo").is_relative_to(home)
+    assert stage2.record_dir("demo", tmp).is_relative_to(home)
 
 
 # ---------------------------------------------------------------------------
 # The entries that stay declared (the remark corrections of criterion 3)
 # ---------------------------------------------------------------------------
+
+
+def test_the_record_is_keyed_by_the_worktree_too(tmp_path: Path) -> None:
+    """R-2 of the review-swarm review: two worktrees with one change folder get one record each."""
+    one, two = tmp_path / "one", tmp_path / "two"
+    one.mkdir()
+    two.mkdir()
+    assert stage2.record_dir("demo", one) != stage2.record_dir("demo", two), "two worktrees share one record"
+    assert stage2.record_dir("demo", one) == stage2.record_dir("demo", one), "one worktree, two records"
+    assert stage2.record_dir("demo", one).name.startswith("demo@")
+
+
+def test_release_in_one_worktree_leaves_the_other_worktrees_record(world: World) -> None:
+    """R-2 through the call site: `release-loop` in root A neither reads nor deletes root B's record."""
+    other = World(shutil.copytree(world.root, world.root.parent / "repo-b", symlinks=True), world.bin, world.state)
+    world.write_record([("L1-1", "taken — test_a", "no")])
+    other.write_record([("L1-9", "taken — test_b", "no")])
+    other_before = other.record().read_text(encoding="utf-8")
+    world.write_findings("## Phase 6 — deepseek-v4.1-flash, 2026-09-30", VERDICT)
+    assert world.run("release-loop") == 0
+    assert not world.record().exists()
+    assert other.record().exists(), "release-loop in one root deleted the other root's record"
+    assert other.record().read_text(encoding="utf-8") == other_before
+    assert "L1-9" not in world.text(), "the other root's rows were released into this root's findings"
+
+
+def test_a_quoted_sentence_in_a_cell_does_not_cut_the_released_block() -> None:
+    """R-3: the cut is the runner's own line, not a reviewer's cell that quotes the sentence."""
+    released = "\n".join(
+        [
+            f"{stage2.RELEASE_HEADING} 2026-10-20",
+            stage2.STATE_KEY + json.dumps({"consumed": ["free"], "free": {}, "paid": {}}),
+            "Rounds run: 1",
+            stage2.render_table(
+                stage2.RELEASED_COLUMNS,
+                [
+                    [
+                        "L1-1",
+                        "MAJOR",
+                        "SPEC",
+                        "base",
+                        "a.py:1",
+                        "quotes Kept from the loop record: in a cell",
+                        "x",
+                        "taken — test_a",
+                        "no",
+                        "—",
+                    ],
+                    ["L1-2", "MINOR", "SPEC", "base", "a.py:2", "the row after it", "x", "taken — test_a", "no", "—"],
+                ],
+            ),
+            "Kept from the loop record:",
+            "",
+            "> the reviewers' words, as they came",
+        ]
+    )
+    assert [row[0] for row in stage2.released_rows(released)] == ["L1-1", "L1-2"], "the block was cut inside the table"
+    assert (stage2.read_state(None, released) or {}).get("consumed") == ["free"]
+
+
+def test_the_state_line_below_a_quoting_cell_is_still_read() -> None:
+    """R-3, `read_state` half: a cell quoting the sentence before the state line must not hide the state line."""
+    quoting = [
+        "L1-1",
+        "MAJOR",
+        "SPEC",
+        "base",
+        "a.py:1",
+        "quotes Kept from the loop record: in a cell",
+        "x",
+        "taken — test_a",
+        "no",
+        "—",
+    ]
+    released = "\n".join(
+        [
+            f"{stage2.RELEASE_HEADING} 2026-10-20",
+            stage2.render_table(stage2.RELEASED_COLUMNS, [quoting]),
+            "Rounds run: 1",
+            stage2.STATE_KEY + json.dumps({"consumed": ["free"], "free": {}, "paid": {}}),
+            "Kept from the loop record:",
+            "",
+            "> the reviewers' words, as they came",
+        ]
+    )
+    assert (stage2.read_state(None, released) or {}).get("consumed") == ["free"], "the quoted cell cut the block"
 
 
 def test_openai_codex_is_declared_as_decided() -> None:
@@ -4699,7 +4793,7 @@ def test_a_round_is_written_as_its_rung(world: World) -> None:
         ]
     )
     assert world.run("review-loop") == 0
-    expected = Path(os.environ["XDG_STATE_HOME"]) / "coding-harness" / "stage2" / "demo" / "loop.md"
+    expected = stage2.record_dir("demo", world.root) / "loop.md"
     text = expected.read_text(encoding="utf-8")
     assert "## Round 2 — deepseek-v4.1-flash, mimo-v2.6-flash, " in text
     assert text.count("## Round 2") == 1, "the swarm round got more than one heading"
@@ -8260,7 +8354,7 @@ def test_the_record_is_marked_only_after_the_checkpoint_commit(world: World, mon
         seen.append(("findings", git(world.root, "rev-list", "--count", f"{baseline}..HEAD")))
         real(ctx, taken, fixes)
 
-    def spy_record(_change: str, _taken: list, _fixes: dict) -> None:
+    def spy_record(_change: str, _taken: list, _fixes: dict, _root: Path) -> None:
         seen.append(("record", git(world.root, "rev-list", "--count", f"{baseline}..HEAD")))
 
     monkeypatch.setattr(stage2, "mark_repaired_findings", spy_findings)

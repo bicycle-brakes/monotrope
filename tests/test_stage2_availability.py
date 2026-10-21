@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import datetime as dt
 import json
+import shutil
 import sys
 from pathlib import Path
 
@@ -102,7 +103,7 @@ def test_prepared_selection_is_bound_to_inputs_and_freshness(world: World, monke
         later = availability.now() + dt.timedelta(seconds=901)
         monkeypatch.setattr(availability, "now", lambda: later)
     else:
-        path = availability.receipt_path("demo", stage2)
+        path = availability.receipt_path(world.root, "demo", stage2)
         if fault == "corrupt":
             path.write_text("not JSON")
         else:
@@ -119,7 +120,7 @@ def test_all_failed_preparation_never_creates_a_clean_round_or_reuses_receipt(wo
     assert world.run("prepare-loop") == 0
     world.script(pi=[{"exit": 1, "stderr": "unavailable"}] * 5)
     assert world.run("prepare-loop") == 2
-    assert not availability.receipt_path("demo", stage2).exists()
+    assert not availability.receipt_path(world.root, "demo", stage2).exists()
     assert not world.record().exists()
 
 
@@ -260,3 +261,22 @@ def test_invalid_availability_rule_or_leak_stops_before_model_calls(world: World
     (world.root / "scripts" / "helper.py").write_text("LEAKMARK-123456\n")
     assert world.run("prepare-loop") == 2
     assert world.reviews() == []
+
+
+def test_receipts_of_two_worktrees_do_not_meet(world: World) -> None:
+    """R-2 through the call sites: each worktree consumes its own receipt, whatever the other prepared later."""
+    other = World(shutil.copytree(world.root, world.root.parent / "repo-b", symlinks=True), world.bin, world.state)
+    enable(world)
+    enable(other)
+    assert world.run("prepare-loop") == 0
+    mine = receipt(world)
+    world.script(pi=[{"stdout": "OK"}] * 5)
+    assert other.run("prepare-loop") == 0
+    assert receipt(world) == mine, "preparing in one root overwrote the other root's receipt"
+    assert world.record().parent != other.record().parent
+    world.script(pi=[{"stdout": "No finding."}] * 2)
+    assert world.run("review-loop", "demo", "--availability-reported", mine["report_id"]) == 0
+    assert other.record().with_name("availability.json").exists(), "a review in one root consumed the other's receipt"
+    assert not other.record().exists()
+    world.script(pi=[{"stdout": "No finding."}] * 2)
+    assert other.run("review-loop", "demo", "--availability-reported", receipt(other)["report_id"]) == 0

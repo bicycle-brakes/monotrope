@@ -108,7 +108,7 @@ Codex call runs in `workspace-write`, and the runner puts back what lands
 outside the change folder.
 
 **The loop record** lives outside the worktree
-(`${XDG_STATE_HOME:-~/.local/state}/coding-harness/stage2/<change>/loop.md`):
+(`${XDG_STATE_HOME:-~/.local/state}/coding-harness/stage2/<change>@<digest>/loop.md`):
 the rounds' rows, the run's stage snapshot (`Loop state:`, the runner's own
 line), and the orchestrator's decision on each row, until the phase-6
 verdict is written and `release-loop` carries them into `findings.md`. The
@@ -339,6 +339,9 @@ SESSION_LINE = re.compile(r"^Reviewer session: codex (\S+)", re.M)
 ROUNDS_LINE = re.compile(r"^Rounds run: (\d+)\s*$", re.M)
 ROUND_HEADING = re.compile(r"^## Round \d+ — \S+,", re.M)
 RELEASE_HEADING = "## Phase 4b — loop rows, released"
+# The runner's own sentence, matched as a whole line: a reviewer's table cell may quote it, and a
+# substring search cut the block there and left the loop unreadable (R-3 of the review-swarm review).
+KEPT_FROM = re.compile(r"^Kept from the loop record:[ \t]*$", re.M)
 NO_LOOP_LINE = "Loop rows: none — the loop did not run for this change."
 # Readers of findings.md match these at the start of a line only: a failed attempt's block quotes its
 # lines with `>`, so quoted gate output can hold them without being taken for the runner's own (criterion 11).
@@ -1857,9 +1860,11 @@ def released_rows(findings_text: str) -> list[list[str]]:
     if start < 0:
         return []
     block = findings_text[start:]
-    kept = block.find("Kept from the loop record:")
-    if kept >= 0:
-        block = block[:kept]  # what follows is the reviewers' words, carried as they came, not rows of the record
+    cut = KEPT_FROM.search(block)
+    if cut:
+        block = block[
+            : cut.start()
+        ]  # what follows is the reviewers' words, carried as they came, not rows of the record
     rows = []
     for line in block.splitlines():
         cells = split_row(line)
@@ -1888,7 +1893,7 @@ def findings_rows(text: str) -> tuple[list[list[str]], list[list[str]]]:
             elif line.startswith("## Phase 6"):
                 kind = "phase-6"
             continue
-        if kind == "released" and line.startswith("Kept from the loop record:"):
+        if kind == "released" and KEPT_FROM.match(line):
             kind = ""  # what follows is the reviewers' words, carried as they came, not rows
             continue
         if not kind:
@@ -1991,7 +1996,7 @@ def review(root: Path, change: str) -> None:
     Codex phase-2a session, otherwise starts fresh; loop marks resume the verdict thread.
     """
     ctx = preflight(root, change, CODEX)
-    record = read_record(change)
+    record = read_record(change, root)
     if record is not None:
         refusal = undecided_refusal(record_rows(record), "decide them first")
         if refusal:
@@ -2073,15 +2078,21 @@ def fill_marks(findings: Path, ids: list[str], marks: dict[str, str]) -> None:
 # ---------------------------------------------------------------------------
 
 
-def record_dir(change: str) -> Path:
-    """Outside the worktree and outside the git directory. Read at call time."""
+def record_dir(change: str, root: Path) -> Path:
+    """Outside the worktree and outside the git directory. Read at call time.
+
+    The resolved repository root is part of the key: two worktrees may hold the same change folder,
+    and one `release-loop` must not delete the other's record or hand it another's state (R-2 of the
+    review-swarm review). A record written before this key existed stays where it is; nothing moves it.
+    """
     state = os.environ.get("XDG_STATE_HOME")
     base = Path(state) if state else Path.home() / ".local" / "state"
-    return base / "coding-harness" / "stage2" / change
+    digest = hashlib.sha256(str(root.resolve()).encode("utf-8")).hexdigest()[:8]
+    return base / "coding-harness" / "stage2" / f"{change}@{digest}"
 
 
-def read_record(change: str) -> str | None:
-    path = record_dir(change) / "loop.md"
+def read_record(change: str, root: Path) -> str | None:
+    path = record_dir(change, root) / "loop.md"
     try:
         return path.read_text(encoding="utf-8") if path.exists() else None
     except (OSError, UnicodeDecodeError) as error:
@@ -2278,13 +2289,13 @@ def next_stage(state: dict) -> dict | None:
     return None
 
 
-def mark_consumed(change: str, state: dict, key: str) -> None:
+def mark_consumed(change: str, state: dict, key: str, root: Path) -> None:
     """Pin that the stage has completed a round: a failed attempt consumes nothing (criterion 13)."""
     state["consumed"] = [*state["consumed"], key]
-    write_state(change, state)
+    write_state(change, state, root)
 
 
-def write_state(change: str, state: dict) -> None:
+def write_state(change: str, state: dict, root: Path) -> None:
     """The run's stage snapshot into the record, as the record's own line.
 
     The line sits before the first round heading; the runner owns it, never the
@@ -2293,7 +2304,7 @@ def write_state(change: str, state: dict) -> None:
     13).
     """
     line = f"{STATE_KEY}{json.dumps(state, sort_keys=True)}"
-    directory = record_dir(change)
+    directory = record_dir(change, root)
     directory.mkdir(parents=True, exist_ok=True)
     path = directory / "loop.md"
     if path.exists():
@@ -2334,9 +2345,9 @@ def read_state(record: str | None, findings_text: str) -> dict | None:
         start = _last_release(findings_text)
         if start >= 0:
             block = findings_text[start:]
-            kept = block.find("Kept from the loop record:")
-            if kept >= 0:
-                block = block[:kept]
+            cut = KEPT_FROM.search(block)
+            if cut:
+                block = block[: cut.start()]
             match = STATE_LINE.search(block)
             if match:
                 line = match.group(1)
@@ -2369,7 +2380,7 @@ def rounds_run(record: str | None, findings_text: str) -> int:
     for line in findings_text.splitlines():
         if line.startswith("## "):
             own = line.startswith(RELEASE_HEADING)
-        elif line.startswith("Kept from the loop record:"):
+        elif KEPT_FROM.match(line):
             own = False
         elif own and (match := ROUNDS_LINE.fullmatch(line)):
             released += int(match.group(1))
@@ -2429,7 +2440,7 @@ def release(root: Path, change: str) -> list[list[str]]:
                 f"`{near.group(0).strip()}`; nothing is released."
             )
         raise Refused("findings.md has no phase-6 verdict line; nothing is released.")
-    record = read_record(change)
+    record = read_record(change, root)
     if record is None:
         # The runner's own lines stand at a line start; a block's quote of either line is not one (criterion 12).
         if not (NO_LOOP.search(text) or RELEASE_LINE.search(text)):
@@ -2453,7 +2464,7 @@ def release(root: Path, change: str) -> list[list[str]]:
     if kept:
         block.append(f"Kept from the loop record:\n\n{quote_reviewer(kept)}")
     append(findings, "\n\n".join(block))
-    shutil.rmtree(record_dir(change))
+    shutil.rmtree(record_dir(change, root))
     print(f"release-loop: {len(rows)} loop rows appended to {findings.relative_to(root)}")
     return rows
 
@@ -3691,7 +3702,7 @@ def check_repair_answer(
     """
     active = {row[0] for _, row in taken}
     # Include rejected and fixed findings: they establish the same vocabulary as active rows.
-    rows = [*(row for _, row in taken), *before[0], *before[1], *record_rows(read_record(ctx.change) or "")]
+    rows = [*(row for _, row in taken), *before[0], *before[1], *record_rows(read_record(ctx.change, ctx.root) or "")]
     prefixes = {match[1] for row in rows if (match := FINDING_ID.fullmatch(row[0])) and match[1] != "L"}
     if any(LOOP_ID.fullmatch(row[0]) for row in rows):
         prefixes.add("L")
@@ -3819,7 +3830,7 @@ def mark_repaired_findings(ctx: Context, taken: list[tuple[str, list[str]]], fix
                 kind = "released"
             elif line.startswith("## Phase 6"):
                 kind = "phase-6"
-        elif kind == "released" and line.startswith("Kept from the loop record:"):
+        elif kind == "released" and KEPT_FROM.match(line):
             kind = ""
         else:
             cells = split_row(line) if kind else None
@@ -3831,7 +3842,7 @@ def mark_repaired_findings(ctx: Context, taken: list[tuple[str, list[str]]], fix
     stamp_updated(ctx.findings)
 
 
-def mark_repaired_record(change: str, taken: list[tuple[str, list[str]]], fixes: dict[str, str]) -> None:
+def mark_repaired_record(change: str, taken: list[tuple[str, list[str]]], fixes: dict[str, str], root: Path) -> None:
     """Mark the record's own row lines the same way, after the checkpoint commit.
 
     The record lies outside what the file tools reach, so only the runner can write it; a failure
@@ -3839,7 +3850,7 @@ def mark_repaired_record(change: str, taken: list[tuple[str, list[str]]], fixes:
     as it was read.
     """
     by_key = {row[0]: row for place, row in taken if place == "record"}
-    record = read_record(change)
+    record = read_record(change, root)
     if not by_key or record is None:
         return
     ending = "\n" if record.endswith("\n") else ""
@@ -3857,7 +3868,7 @@ def mark_repaired_record(change: str, taken: list[tuple[str, list[str]]], fixes:
                 line = "| " + " | ".join([*cells[:7], fixes[cells[0]], cells[-1]]) + " |"
         lines.append(line)
     try:
-        (record_dir(change) / "loop.md").write_text("\n".join(lines) + ending, encoding="utf-8")
+        (record_dir(change, root) / "loop.md").write_text("\n".join(lines) + ending, encoding="utf-8")
     except OSError as error:
         waiting = ", ".join(sorted(by_key))
         raise CallFailed(f"the loop record could not be marked ({error}); mark {waiting} by hand.") from error
@@ -4512,7 +4523,7 @@ def repair(root: Path, change: str, stage2_off: str | None = None) -> None:
     if outside:
         listing = ", ".join(sorted(path.as_posix() for path in outside))
         raise Refused(f"the worktree has pre-existing changes outside this change's findings.md: {listing}")
-    taken, waiting = repair_targets(ctx, read_record(change))
+    taken, waiting = repair_targets(ctx, read_record(change, root))
     if waiting:
         raise Refused(f"rows are waiting for a decision ({', '.join(waiting)}); decide them first.")
     if not taken:
@@ -4581,7 +4592,7 @@ def repair(root: Path, change: str, stage2_off: str | None = None) -> None:
         ),
         answer_check=check,
         before_commit=lambda: mark_repaired_findings(ctx, taken, fixes),
-        after_commit=lambda: mark_repaired_record(change, taken, fixes),
+        after_commit=lambda: mark_repaired_record(change, taken, fixes, root),
         snapshot_findings=snapshot,
         restore_findings=lambda text: ctx.findings.write_text(text, encoding="utf-8"),
         tools=tools,
@@ -4609,7 +4620,7 @@ def review_loop(root: Path, change: str, availability_reported: str | None = Non
     heading and one id series; an attempt whose every member failed completes
     no round and consumes no stage.
     """
-    record = read_record(change)
+    record = read_record(change, root)
     if record is not None:
         refusal = undecided_refusal(record_rows(record), "decide them first")
         if refusal:
@@ -4791,16 +4802,16 @@ def review_loop(root: Path, change: str, availability_reported: str | None = Non
     parts = [f"## Round {round_number} — {', '.join(members)}, {today()}", *notes, *statements]
     for block in reviewer_blocks:
         parts.append(f"{NOT_ROWS_NOTE}\n\n{quote_reviewer(block)}")
-    path = record_dir(change) / "loop.md"
+    path = record_dir(change, root) / "loop.md"
     if record is None:
         # A continued run after a release starts a fresh record; write_state
         # puts the run's snapshot line into it before the rounds.
-        write_state(change, state)
+        write_state(change, state, root)
     append(path, "\n\n".join(parts))
     for model in replaced:
         # A replacement is consumed: it is no later rung.
-        mark_consumed(change, state, f"rung:{model}")
-    mark_consumed(change, state, stage["key"])
+        mark_consumed(change, state, f"rung:{model}", root)
+    mark_consumed(change, state, stage["key"], root)
     print(
         f"review-loop: round {round_number} written to {path}: {len(numbered)} rows "
         f"from {len(succeeded)} of {len(members)} members"
