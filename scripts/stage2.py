@@ -2180,6 +2180,15 @@ def _record_lines(record: str) -> list[tuple[str, bool]]:
     return lines
 
 
+def marks_a_test(cell: str) -> bool:
+    """Whether a `Broke a test` cell says yes or no, a reason after it allowed (bead coding-harness-ll5).
+
+    `yes — <reason>` and `no — <reason>` stand as well as the bare words; only the leading word is
+    evaluated, the reason stays in the record for the reader.
+    """
+    return bool(re.match(r"(yes|no)\b", cell.strip(), re.I))
+
+
 def record_rows(record: str) -> list[list[str]]:
     """The loop rows of the record: every table line of its own whose first cell is a loop id.
 
@@ -2200,6 +2209,20 @@ def record_rows(record: str) -> list[list[str]]:
             raise Refused(
                 f"the loop record has a line for {cells[0]} that is not a loop row "
                 f"({len(cells)} cells; {len(ROW_COLUMNS)} are needed); mend it, nothing has been deleted."
+            )
+        if (
+            len(cells) > len(ROW_COLUMNS)
+            and cells[7].strip().lower().startswith(("taken", "fixed"))
+            and not marks_a_test(cells[-1])
+        ):
+            # A cell was inserted before the mark: the joined Status still begins `taken`/`fixed`, and
+            # the last cell is no longer `Broke a test`. A Status that carries an escaped-or-typed `|`
+            # with a valid mark in the last cell is a legitimate row and stays one (the review of
+            # PR #194); only a row whose last cell is no mark has moved the mark out of its column.
+            raise Refused(
+                f"the loop record has a line for {cells[0]} with {len(cells)} cells whose Status cell "
+                f"starts `{cells[7].strip()}` and whose last cell `{cells[-1].strip()}` is no "
+                "`Broke a test` mark: the mark has moved out of its column; mend it, nothing has been deleted."
             )
         rows.append([*cells[:7], " \\| ".join(cells[7:-1]), cells[-1]])
     return rows
@@ -2387,6 +2410,28 @@ def next_stage(state: dict) -> dict | None:
         if stage["key"] not in consumed:
             return stage
     return None
+
+
+def write_round(change: str, block: str, state: dict, root: Path) -> None:
+    """Append the round and pin its stages as consumed in one write (R-6 of the review-swarm review).
+
+    Two writes would leave a window: a crash between them keeps a round whose stage the snapshot does
+    not know, and the next call repeats the stage as a new round with new ids - extra paid calls and
+    two rounds for one stage. One `write_text` closes it.
+    """
+    directory = record_dir(change, root)
+    directory.mkdir(parents=True, exist_ok=True)
+    path = directory / "loop.md"
+    text = path.read_text(encoding="utf-8") if path.exists() else ""
+    body = block.strip("\n")
+    text = f"{text.rstrip(chr(10))}\n\n{body}\n" if text.strip() else f"{body}\n"
+    line = f"{STATE_KEY}{json.dumps(state, sort_keys=True)}"
+    if STATE_LINE.search(text):
+        text = STATE_LINE.sub(lambda _match: line, text, count=1)
+    else:
+        match = ROUND_HEADING.search(text)
+        text = text[: match.start()] + line + "\n\n" + text[match.start() :] if match else text + line + "\n"
+    path.write_text(text, encoding="utf-8")
 
 
 def mark_consumed(change: str, state: dict, key: str, root: Path) -> None:
@@ -5051,15 +5096,13 @@ def review_loop(root: Path, change: str, availability_reported: str | None = Non
         # A continued run after a release starts a fresh record; write_state
         # puts the run's snapshot line into it before the rounds.
         write_state(change, state, root)
-    append(path, "\n\n".join(parts))
+    # A replacement is consumed too: it is no later rung. Both land in the same write as the round.
+    state["consumed"] = [*state["consumed"], *(f"rung:{model}" for model in replaced), stage["key"]]
+    write_round(change, "\n\n".join(parts), state, root)
     if receipt_taken:
         import stage2_availability
 
         stage2_availability.spend(root, change, sys.modules[__name__])
-    for model in replaced:
-        # A replacement is consumed: it is no later rung.
-        mark_consumed(change, state, f"rung:{model}", root)
-    mark_consumed(change, state, stage["key"], root)
     print(
         f"review-loop: round {round_number} written to {path}: {len(numbered)} rows "
         f"from {len(succeeded)} of {len(members)} members"

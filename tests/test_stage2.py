@@ -873,6 +873,48 @@ def test_an_oversized_diff_reaches_the_paid_prompt_cut_and_the_record_says_so(wo
         monkey.undo()
 
 
+def test_the_round_and_its_consumed_stage_land_in_one_write(world: World, monkeypatch) -> None:
+    """R-6 of the review-swarm review: no window between the round and the consumption."""
+    world.write_findings(VERDICT)
+    world.script(pi=[{"model": model, "stdout": rows(1)} for model in TEST_FREE])
+    writes: list[str] = []
+    original = Path.write_text
+
+    def counting(self, data, *args, **kwargs):
+        writes.append(self.name)
+        return original(self, data, *args, **kwargs)
+
+    monkeypatch.setattr(Path, "write_text", counting)
+    assert world.run("review-loop") == 0
+    record = world.record().read_text(encoding="utf-8")
+    monkeypatch.undo()
+    # Two writes reach loop.md: the snapshot line of a fresh run, then the round that carries its own
+    # consumption. A crash between round and consumption would need a third.
+    assert writes.count("loop.md") == 2, writes
+    assert '"consumed": ["free"]' in record.replace(" ", " "), record[-400:]
+
+
+def test_a_shifted_broke_a_test_cell_is_refused_by_its_row() -> None:
+    """R-10 of the review-swarm review: the mark out of its column is a refusal, not a status text."""
+    shifted = (
+        "| L1-1 | MAJOR | SPEC | criterion 1 | spec.md:1 | FB1-unique-body | a, b | taken | yes | "
+        "a note in the wrong column |"
+    )
+    with pytest.raises(stage2.Refused) as error:
+        stage2.record_rows(f"## Round 1 — a, 2026-10-20\n\n{shifted}\n")
+    assert "L1-1" in str(error.value) and "moved out of its column" in str(error.value)
+
+
+def test_a_status_reason_with_a_pipe_and_a_valid_mark_stays_a_row() -> None:
+    """The review of PR #194: a widened Status is legitimate as long as the mark sits in the last cell."""
+    row = (
+        "| L1-1 | MAJOR | SPEC | criterion 1 | spec.md:1 | FB1-unique-body | a, b | "
+        "taken — a \\| b | yes — tests/test_x.py::test_x |"
+    )
+    rows = stage2.record_rows(f"## Round 1 — a, 2026-10-20\n\n{row}\n")
+    assert rows[0][7] == "taken — a \\| b" and rows[0][8] == "yes — tests/test_x.py::test_x"
+
+
 def test_a_cut_round_stays_cut_after_the_release(world: World) -> None:
     """O191-2: the continued run after `release-loop` still knows round 2 saw a cut diff."""
     limit = 5
