@@ -191,3 +191,30 @@ Measured 2026-10-21 about 07:50 UTC.
 - Measured spans (`date -u`): item 4 from 22:22 UTC to 00:37 UTC, about
   2 h 15 min; item 5 from about 00:40 UTC to 07:47 UTC, 7 h 10 min by the
   sub-agent's own duration, most of it while it was blocked.
+
+## Addendum — 2026-10-21, the maintainer's morning answer on #188
+
+Measured 2026-10-21 about 08:10 UTC.
+
+- **Question 1 is answered.** The maintainer chose option A and a bead for
+  option B ("Mache A, und einen Bead zu B"). The call-site test in #188 now
+  identifies the renderer by its stem, not its file name (`0248a16`). The
+  stricter ratchet is bead coding-harness-a05 (a bare mention of a gate's
+  script is no mutation evidence), opened from bead coding-harness-011 as
+  `discovered-from`; the tracker was pushed before the commit.
+- **#188 is merge-ready.** Full `make verify` green at `0248a16` (2311 passed,
+  16 skipped; 07:54:30Z to 08:00:25Z), and hosted CI green on the same commit.
+  Its body names the new bead and carries this validation line. The merge
+  itself still waits for the maintainer's word.
+- The tracker writes were made after no other session showed up in the session
+  scan or the process list (about 07:50 UTC).
+- **Next step, replacing the one above:** on the maintainer's word, merge #188
+  (`gh pr merge 188 --merge --match-head-commit <full sha>`). Then retarget #189
+  to `main` and merge `origin/main` into its branch. After that,
+  `make verify`, CI and the merge, and the same for #190. Questions 2 to 5
+  above are still open.
+- This handover's own first CI run (`27009d4`) failed on
+  `tests/test_stage2.py::test_ineligible_paid_models_are_skipped_and_named`. A
+  fake Pi returned truncated JSON (`JSONDecodeError: Unterminated string`).
+  The change is text only, and `main` is green on the same code, so this reads
+  as an intermittent test. It is not investigated here.
