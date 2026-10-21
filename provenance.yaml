@@ -146,6 +146,12 @@ paths:
   - prefix: "decisions/adoption.yaml"
     allowed: [human-decided]
     frontmatter: none
+  # The gate definitions beside the rulebook: what a gate measures decides what
+  # gets through, so a model does not edit them (maintainer, 2026-10-20; the
+  # night interview's Q-1, the commit guard's R-22).
+  - prefix: "decisions/gates.yaml"
+    allowed: [human-decided]
+    frontmatter: none
 
   # --- Phase 2: kartiert, Klassifizierung folgt als eigene Arbeit ---------
   - prefix: "docs/adr/"
