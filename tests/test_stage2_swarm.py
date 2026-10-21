@@ -2938,3 +2938,20 @@ def test_free_model_storage_keys_preserve_best_effort_completion(sworld: SwarmWo
     assert all(slot["launched"] and not slot["required"] for slot in slots)
     assert {slot["topic"]: slot["outcome"] for slot in slots} == {9: "ok", 10: "failed" if failed else "ok", 11: "ok"}
     assert "judge" in kinds(sworld)
+
+
+@pytest.mark.parametrize("name", ["research.md", "spec.md"])
+@pytest.mark.parametrize("tail", ["", "---not-a-delimiter\n"])
+def test_unterminated_class_header_refuses_before_calls(sworld: SwarmWorld, name: str, tail: str) -> None:
+    sworld.research_class("bounded")
+    (sworld.root / "plans/changes/demo" / name).write_text("---\nclass: architectural\n" + tail, encoding="utf-8")
+    refusal = None
+    selected = None
+    try:
+        selected = stage2.declared_class(sworld.root, "demo", None)
+    except stage2.Refused as error:
+        refusal = str(error)
+    assert refusal is not None, f"the unterminated header selected the class {selected!r}"
+    assert re.search("repair.*header", refusal)
+    assert sworld.run() == 2
+    assert sworld.calls() == []

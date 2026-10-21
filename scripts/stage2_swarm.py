@@ -311,13 +311,11 @@ def _declared_endpoint(data: dict, name: str) -> dict:
     return {}
 
 
-def exclusion_problem(data: object, model: str) -> str | None:
-    """Why `ausgeschlossen` denies this model for framework content, or a malformed list's fault, or None.
+def exclusion_problem(data: object, model: str, data_class: str = "framework") -> str | None:
+    """Why a class-scoped exclusion denies this model, or a malformed rule's fault, or None.
 
-    An entry binds by naming ids or id prefixes in `modelle`, matched case-insensitively against the full id
-    and its last `/` segment; an entry without `modelle` documents a decision but names nothing to match.
-    A missing `klasse` means `framework`. The research swarm applies it to every role, the public ones
-    included, and never probes an excluded model (PR #208). An empty `model` reports a malformed list alone.
+    Missing `klasse` means framework. Validate every entry, including other classes, before matching
+    ids or prefixes in the requested class. An empty model checks only the declaration's shape.
     """
     if not isinstance(data, dict):
         return "model-endpoints.yaml has malformed exclusions: the declaration must be a mapping"
@@ -326,26 +324,30 @@ def exclusion_problem(data: object, model: str) -> str | None:
         return "model-endpoints.yaml has malformed exclusions: ausgeschlossen must be a list"
     full = model.lower()
     names = model.rsplit("/", 1)[-1].lower()
+    denied = None
     for number, entry in enumerate(entries, 1):
         malformed = f"model-endpoints.yaml has a malformed exclusion at entry {number}"
         if not isinstance(entry, dict):
             return malformed + ": a mapping is required"
-        data_class = entry.get("klasse", "framework")
-        if not isinstance(data_class, str) or not data_class.strip():
+        excluded_class = entry.get("klasse", "framework")
+        if not isinstance(excluded_class, str) or not excluded_class.strip():
             return malformed + ": klasse must name a data class"
-        if data_class != "framework":
-            continue
+        classes = data.get("datenklassen", {})
+        if not isinstance(classes, dict) or excluded_class not in classes:
+            return malformed + ": klasse names no declared data class"
         if "modelle" not in entry:
             continue  # A legacy prose-only decision has no machine-readable model ids.
         listed = entry.get("modelle")
         if not isinstance(listed, list) or any(not isinstance(item, str) or not item.strip() for item in listed):
             return malformed + ": modelle must be a list of nonempty model ids or prefixes"
+        if excluded_class != data_class:
+            continue
         for item in listed:
             prefix = item.strip().lower()
             if model and any(value == prefix or value.startswith(prefix) for value in (full, names)):
                 reason = str(entry.get("was") or "excluded by the maintainer").strip()
-                return f"the model {model} is excluded by model-endpoints.yaml: {reason}"
-    return None
+                denied = f"the model {model} is excluded by model-endpoints.yaml: {reason}"
+    return denied
 
 
 def invocation_problem(
@@ -370,7 +372,7 @@ def invocation_problem(
         return f"the {role} role carries {wanted} data only, not {data_class}"
     if endpoint not in LAUNCHERS:
         return f"no launcher serves the endpoint {endpoint}"
-    excluded = exclusion_problem(data, model if isinstance(model, str) else "")
+    excluded = exclusion_problem(data, model if isinstance(model, str) else "", wanted)
     if excluded:
         return excluded
     free = isinstance(model, str) and model.endswith("-free")

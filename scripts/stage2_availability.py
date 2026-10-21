@@ -103,27 +103,40 @@ def read_intelligence(models: list[str], slugs: dict[str, str]) -> dict:
         entries = document["data"] if isinstance(document, dict) else None
         if not isinstance(entries, list):
             raise ValueError("the response has no data list")
-    except (OSError, ValueError, KeyError) as error:
-        reading["status"] = "not read: " + str(error).replace(key, "[key]")[:200]
-        return reading
-    reading["read_at"] = now().isoformat(timespec="seconds")
-    reading["status"] = "read"
-    for model in models:
-        wanted = slugs.get(model)
-        best = None
         for entry in entries:
-            if not isinstance(entry, dict):
-                continue
-            score = (entry.get("evaluations") or {}).get("artificial_analysis_intelligence_index")
-            if not isinstance(score, int | float) or isinstance(score, bool):
-                continue
-            if wanted is not None:
-                hit = entry.get("slug") == wanted
-            else:
-                hit = _normal(model) in {_normal(str(entry.get("slug", ""))), _normal(str(entry.get("name", "")))}
-            if hit and (best is None or score > best):
-                best = score
-        reading["scores"][model] = best
+            if not isinstance(entry, dict) or not isinstance(entry.get("evaluations"), dict):
+                raise ValueError("an intelligence entry has malformed evaluations")
+        reading["read_at"] = now().isoformat(timespec="seconds")
+        reasons = {}
+        for model in models:
+            wanted = slugs.get(model)
+            best = None
+            for entry in entries:
+                score = entry["evaluations"].get("artificial_analysis_intelligence_index")
+                if not isinstance(score, int | float) or isinstance(score, bool):
+                    continue
+                if wanted is not None:
+                    hit = entry.get("slug") == wanted
+                else:
+                    hit = _normal(model) in {_normal(str(entry.get("slug", ""))), _normal(str(entry.get("name", "")))}
+                if hit and (best is None or score > best):
+                    best = score
+            reading["scores"][model] = best
+            if best is None:
+                reasons[model] = "no matching index entry with a numeric score" + (
+                    f" for configured slug {wanted}" if wanted is not None else ""
+                )
+        reading["reasons"] = reasons
+        reading["status"] = (
+            "read"
+            if any(value is not None for value in reading["scores"].values())
+            else ("not read: no matching index entry with a numeric score")
+        )
+    except Exception as error:  # Optional intelligence must never prevent a selection receipt.
+        from stage2 import scrub
+
+        reading["scores"] = dict.fromkeys(models)
+        reading["status"] = "not read: " + scrub(str(error).replace(key, "[key]"), key)[:200]
     return reading
 
 
@@ -240,18 +253,19 @@ def _model_listed(entry: dict, model: str) -> bool:
     return model in (entry.get("modelle") or []) or (isinstance(terms, dict) and model in terms)
 
 
-def research_declaration_problem(root: Path, endpoint: str, model: str) -> str | None:
+def research_declaration_problem(root: Path, endpoint: str, model: str, data_class: str = "framework") -> str | None:
     """Why the declaration does not clear this model for a research call, or None.
 
     A model is listed in `modelle` or - for research only - by a `modelle_terms` record, so a record alone
-    admits it without touching the review ladder. The endpoint must name a residency.
+    admits it without touching the review ladder. Exclusions bind the requested data class; the endpoint
+    must name a residency.
     """
     data = read_declaration(root)
     if isinstance(data, str):
         return data
-    excluded = stage2_swarm.exclusion_problem(data, model)
+    excluded = stage2_swarm.exclusion_problem(data, model, data_class)
     if excluded:
-        return excluded  # an excluded model is never probed, not even with the fixed text (PR #208)
+        return excluded  # No probe starts for a model excluded from the requested data class.
     found = _endpoint(data, endpoint)
     if found is None:
         return f"model-endpoints.yaml declares no endpoint {endpoint}"
@@ -554,9 +568,10 @@ class _Selection:
         ]
 
     def _go_outcome(self, model: str) -> dict:
-        excluded = stage2_swarm.exclusion_problem(self.data, model)
+        problems = [stage2_swarm.exclusion_problem(self.data, model, klass) for klass in ("framework", "public-web")]
+        excluded = next((problem for problem in problems if problem), None) if all(problems) else None
         if excluded:
-            return {"state": "excluded", "reason": excluded}  # not admitted: never probed, pooled or seated
+            return {"state": "excluded", "reason": excluded}  # Denied in both research classes: never probed or seated.
         problem = self.runner.terms_problem(self.go, model)
         if problem:
             return {"state": "skipped", "reason": problem}
@@ -590,11 +605,16 @@ class _Selection:
             outcome.update(state="excluded", reason=excluded)
         return outcome
 
-    def usable(self, endpoint: str, model: str) -> bool:
+    def usable(self, endpoint: str, model: str, data_class: str) -> bool:
         item = self.models.get(f"{endpoint}/{model}")
-        return bool(item) and item.get("admitted") is True and item["state"] != "excluded"
+        return (
+            bool(item)
+            and item.get("admitted") is True
+            and item["state"] != "excluded"
+            and stage2_swarm.exclusion_problem(self.data, model, data_class) is None
+        )
 
-    def reachable(self, endpoint: str, model: str) -> bool:
+    def reachable(self, endpoint: str, model: str, data_class: str) -> bool:
         """Probe at most once per preparation; the result is shared across seats and trios."""
         key = f"{endpoint}/{model}"
         item = self.models[key]
@@ -603,7 +623,16 @@ class _Selection:
                 if endpoint == GO:
                     if self.key is None:
                         self.key = self.runner.reviewer_key()
-                    probe_go(self.runner, self.root, self.change, model, self.key, self.audit, self.models_store)
+                    probe_go(
+                        self.runner,
+                        self.root,
+                        self.change,
+                        model,
+                        self.key,
+                        self.audit,
+                        self.models_store,
+                        admission=lambda root, ident: research_declaration_problem(root, GO, ident, data_class),
+                    )
                 else:
                     probe_claude(self.runner, self.root, self.change, model, self.audit)
             except self.runner.CallFailed as error:
@@ -615,13 +644,14 @@ class _Selection:
         return self.probed[key] is None
 
     def fill(self, label: str, seats: list[dict]) -> list[dict | None]:
+        data_class = "framework" if label == "repository" else "public-web"
         chosen: list[dict | None] = [None] * len(seats)
         taken: set[str] = set()
         for number, seat in enumerate(seats):
             if "model" not in seat:
                 continue
             endpoint, model = seat["endpoint"], seat["model"]
-            if self.usable(endpoint, model) and self.reachable(endpoint, model):
+            if self.usable(endpoint, model, data_class) and self.reachable(endpoint, model, data_class):
                 mark = "maintainer's choice" if seat.get("chosen") else "preferred"
                 chosen[number] = {"seat": number + 1, "endpoint": endpoint, "model": model, "mark": mark}
                 taken.add(f"{endpoint}/{model}")
@@ -633,11 +663,11 @@ class _Selection:
             for entry in self.pool:
                 model = entry["model"]
                 key = f"{GO}/{model}"
-                if key in taken or not self.usable(GO, model):
+                if key in taken or not self.usable(GO, model, data_class):
                     continue
                 if key in self.probed and self.probed[key] is not None:
                     continue
-                if self.reachable(GO, model):
+                if self.reachable(GO, model, data_class):
                     chosen[number] = {
                         "seat": number + 1,
                         "endpoint": GO,
@@ -693,15 +723,27 @@ def intelligence_lines(state: dict) -> list[str]:
     reachable = [key for key, item in state["models"].items() if item["state"] == "selected"]
     lines.append("Candidates (reachable; requests per 5 hours, more is cheaper; intelligence index):")
     cost = {item["model"]: item["anfragen_5h"] for item in state["pool"]}
+    cost.update(state.get("request_costs", {}))
     for key in reachable:
         model = key.split("/", 1)[1]
         price = f"{cost[model]:g}" if model in cost else "subscription"
-        lines.append(f"  {key}: requests {price}, intelligence {_score_text(scores.get(model))}")
+        score_text = _score_text(scores.get(model))
+        if scores.get(model) is None:
+            reason = reading.get("reasons", {}).get(model) or reading["status"].removeprefix("not read: ")
+            score_text = f"not read: {reason}"
+        lines.append(f"  {key}: requests {price}, intelligence {score_text}")
     lines.append(
         "Recommendation: the seats above - per trio the cheapest reachable admitted models"
         + ("" if reading["status"] == "read" else "; intelligence was not read, so cost alone decides")
         + "."
     )
+    missing = [key.split("/", 1)[1] for key in reachable if scores.get(key.split("/", 1)[1]) is None]
+    if missing:
+        lines.append(
+            "Recommendation caveat: intelligence was not weighed for "
+            + ", ".join(missing)
+            + "; cost alone decides for these candidates."
+        )
     stronger = sorted(
         (
             (scores[item["model"]], item["model"])
@@ -806,8 +848,8 @@ def prepare_research(
             )
         },
         "free": {
-            "selected": [m for m in catalog["selected"] if not stage2_swarm.exclusion_problem(data, m)],
-            "excluded": [m for m in catalog["selected"] if stage2_swarm.exclusion_problem(data, m)],
+            "selected": [m for m in catalog["selected"] if not stage2_swarm.exclusion_problem(data, m, "public-web")],
+            "excluded": [m for m in catalog["selected"] if stage2_swarm.exclusion_problem(data, m, "public-web")],
             "policy": catalog["policy"],
         },
         "seats": chosen,
@@ -815,6 +857,11 @@ def prepare_research(
             label: [number + 1 for number, item in enumerate(items) if item is None] for label, items in chosen.items()
         },
         "pool": selection.pool,
+        "request_costs": {
+            model: runner.request_value(selection.go, model)
+            for model in terms
+            if runner.request_value(selection.go, model) is not None
+        },
         "models": {
             key: {name: value for name, value in item.items() if name in {"state", "reason"}}
             for key, item in selection.models.items()

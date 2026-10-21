@@ -4,7 +4,7 @@ status: draft
 implementation_status: partial
 date: 2026-10-14
 last_reviewed: 2026-10-18
-updated: 2026-10-20
+updated: 2026-10-21
 supersedes: null
 superseded_by: null
 bead: coding-harness-icw
@@ -1475,6 +1475,10 @@ Stage-1 route: repair · model claude-sonnet-5-5 · reason: Codex limit nearly u
 
 Stage-1 route: repair · model claude-sonnet-5-5 · reason: DeepSeek session did not start (bead coding-harness-bas); maintainer 2026-10-20 switched to Sonnet.
 
+## Runner route — 2026-10-21
+
+Stage-1 route: repair · model claude-sonnet-5-5 · reason: two Codex post-run checks failed.
+
 ## Time used
 
 2026-10-17, appetite stop answered: the span of the three implement attempts of 2026-10-15 (ended 04:53:50, `cf848ee`) has no start record, so time used was not measurable (78 minutes measured). Maintainer, 2026-10-17: "Ja, halt die zeitgrenze fest" — **continue** with a new appetite of 13 hours 20 minutes in total (the measured 78 minutes plus 12 hours); the unmeasured span stays named, not counted. This replaces the card's `Appetite:` line.
@@ -2447,3 +2451,32 @@ that diagnosis) replaced the join with a completion semaphore. Full `make verify
 
 - F-56: `given_neighbours` (`scripts/stage2_availability.py`) refuses a research header that states `neighbours:` more than once (exit 2, before any call). Test `tests/test_stage2_swarm.py::test_conflicting_neighbour_declarations_refuse_before_calls`.
 - F-57: `dispatch` (`scripts/stage2_research_dispatch.py`) catches an interrupt while joining its workers, sets the stop event so each worker stops and reaps its child, waits for the workers (bounded), then re-raises; `run()` releases the store lock only afterwards, in its `finally`. Test `tests/test_stage2_research_dispatch.py::test_an_interrupt_stops_and_reaps_active_children_before_it_propagates`.
+
+### Phase-6 round-14 repairs — 2026-10-21
+
+Rows F-58, F-59, F-60, D-3, D-4, D-5, D-6 and D-7. Span not measured: this session had no command tool to read `date`, so no time is counted for it. No test was run by this session; the code was already in the working tree. Attempt 2 failed its red-first proof for F-58, F-60, D-3 and D-5 because those tests failed on the baseline with `Failed` or `AttributeError`, not an `AssertionError`; the three tests now catch the baseline outcome and assert on it.
+
+- F-58: `declared_class` refuses an unterminated front matter block. Test `tests/test_stage2_swarm.py::test_unterminated_class_header_refuses_before_calls`.
+- F-59: `read_intelligence` scrubs every credential fragment of eight or more characters. Test `tests/test_stage2_research_availability.py::test_intelligence_errors_redact_credential_fragments`.
+- F-60 and D-3: any malformed intelligence entry gives "not read" with its reason. Test `tests/test_stage2_research_availability.py::test_malformed_intelligence_never_blocks_a_receipt`.
+- D-4: a model the index does not match is "not read" with its reason. Test `tests/test_stage2_research_availability.py::test_unmatched_intelligence_has_per_model_reason_and_cost_only_caveat`.
+- D-5: a refused `--seats` answer invalidates the earlier receipt. Test `tests/test_stage2_research_availability.py::test_refused_seat_answer_invalidates_the_previous_receipt`.
+- D-6: exclusions remain class-scoped; unknown classes refuse, public-web exclusions bind online seats and free researchers, and customer-only exclusions leave framework admission intact. Tests `tests/test_stage2_research_availability.py::test_exclusion_only_binds_its_declared_research_class`, `test_unknown_exclusion_class_refuses_before_probes` and `test_public_exclusion_removes_free_researcher_but_customer_exclusion_does_not`; original O197-2 test restored.
+- D-7: every reachable Go candidate is reported with its declared `anfragen_5h`. Test `tests/test_stage2_research_availability.py::test_reachable_chosen_go_model_outside_pool_keeps_declared_cost`.
+- The runner runs `make verify`.
+
+
+### Night-run round-14 hand-repair checkpoint — 2026-10-21
+
+Measured span (UTC): 2026-10-21T16:26:34Z to 2026-10-21T16:42:11Z,
+15 min 37 s. This includes the full verification and the maintainer's requests
+to extend the night queue; count once, preserving earlier measured and
+unmeasured spans. The maintainer authorized continuation while budget remains
+in this conversation on 2026-10-21; no remaining budget percentage was read.
+
+Adopted the inherited round-14 repair, corrected SIM105 and the D-6 class
+scope, and booked eight rows fixed after manual red-first proof against
+`febe2aa`. Full make verify GREEN: 3243 passed, 16 skipped. Source remained
+fixed during that run. The new scope regressions also cover customer-only
+exclusions, public-only exclusions and malformed classes after a matching
+rule. Existing framework admission regression was restored unchanged.

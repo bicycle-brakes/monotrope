@@ -13,6 +13,7 @@ import datetime as dt
 import hashlib
 import json
 import sys
+from contextlib import suppress
 from pathlib import Path
 
 import pytest
@@ -933,9 +934,10 @@ def exclude(*prefixes: str, shape: object = None):
         if shape is not None:
             data["ausgeschlossen"] = shape
             return
-        data.setdefault("ausgeschlossen", []).append(
-            {"was": "test exclusion", "klasse": "framework", "modelle": list(prefixes)}
-        )
+        for klass in ("framework", "public-web"):
+            data.setdefault("ausgeschlossen", []).append(
+                {"was": "test exclusion", "klasse": klass, "modelle": list(prefixes)}
+            )
 
     return change
 
@@ -1020,5 +1022,131 @@ def test_every_research_invocation_refuses_an_excluded_model(role: str, endpoint
     exclude(model.split("-")[0] + "-")(data)
     problem = swarm.invocation_problem(data, role, endpoint, model)
     assert problem and "excluded by model-endpoints.yaml" in problem, (role, problem)
-    data["ausgeschlossen"].pop()
+    data["ausgeschlossen"] = []
     assert "excluded" not in (swarm.invocation_problem(data, role, endpoint, model) or "")
+
+
+@pytest.mark.parametrize("offset,length", [(0, 12), (5, 8), (9, 15)])
+def test_intelligence_errors_redact_credential_fragments(monkeypatch, offset, length):
+    key = "synthetic-credential-0123456789-abcdef"
+    fragment = key[offset : offset + length]
+    monkeypatch.setenv(availability.INTELLIGENCE_KEY_ENV, key)
+
+    def broken(_key):
+        raise OSError(f"request failed: {fragment}")
+
+    monkeypatch.setattr(availability, "INTELLIGENCE_FETCH", broken)
+    reading = availability.read_intelligence(["model"], {})
+    assert "not read" in reading["status"]
+    assert fragment not in json.dumps(reading)
+
+
+@pytest.mark.parametrize(
+    "entry", [{"evaluations": "unavailable"}, {"evaluations": [45]}, None, {"evaluations": {"nested": {"score": 45}}}]
+)
+def test_malformed_intelligence_never_blocks_a_receipt(fx, monkeypatch, capsys, entry):
+    monkeypatch.setenv(availability.INTELLIGENCE_KEY_ENV, "synthetic-key")
+    monkeypatch.setattr(availability, "INTELLIGENCE_FETCH", lambda _key: {"data": [entry]})
+    failure = None
+    code = None
+    try:
+        code = fx.prepare()
+    except Exception as error:  # a malformed optional reading must end in a receipt, not a traceback
+        failure = repr(error)
+    assert failure is None, failure
+    assert code == 0
+    state = fx.receipt()["state"]
+    assert state["intelligence"]["status"].startswith("not read:")
+    assert "intelligence was not read" in capsys.readouterr().out
+
+
+def test_unmatched_intelligence_has_per_model_reason_and_cost_only_caveat(monkeypatch):
+    monkeypatch.setenv(availability.INTELLIGENCE_KEY_ENV, "synthetic-key")
+    monkeypatch.setattr(availability, "INTELLIGENCE_FETCH", lambda _key: intelligence_document())
+    reading = availability.read_intelligence(["longcat-2.0", "deepseek-v4.1-flash"], {})
+    state = {
+        "intelligence": reading,
+        "pool": [],
+        "models": {f"{GO}/longcat-2.0": {"state": "selected"}, f"{GO}/deepseek-v4.1-flash": {"state": "selected"}},
+    }
+    report = "\n".join(availability.intelligence_lines(state))
+    assert "intelligence 19" in report
+    assert "not read: no matching index entry" in report
+    assert "intelligence was not weighed for deepseek-v4.1-flash" in report
+
+
+@pytest.mark.parametrize(
+    "args",
+    [("repository",), ("elsewhere=a,b",), ("repository=a",), ("repository=a,a",), ("online=a,b,c", "online=d,e,f")],
+)
+def test_refused_seat_answer_invalidates_the_previous_receipt(fx, args):
+    assert fx.prepare() == 0
+    receipt = fx.receipt()
+    before = len(fx.w.calls())
+    options = [part for arg in args for part in ("--seats", arg)]
+    assert fx.prepare(*options) == 2
+    assert len(fx.w.calls()) == before
+    consumed = None
+    with suppress(stage2.Refused):
+        consumed = availability.consume_research(fx.w.root, "demo", receipt["report_id"], stage2, "feature")
+    assert consumed is None, "the receipt of the declined recommendation is still usable"
+
+
+@pytest.mark.parametrize("klass", ["Framwork", "", 42])
+def test_unknown_exclusion_class_refuses_before_probes(fx, klass):
+    fx.edit_declaration(lambda data: data.update(ausgeschlossen=[{"klasse": klass, "modelle": ["deepseek-"]}]))
+    assert fx.prepare() == 2
+    assert fx.probed() == []
+    data = yaml.safe_load((fx.w.root / "model-endpoints.yaml").read_text())
+    for role in swarm.ROLE_CLASS:
+        problem = swarm.invocation_problem(data, role, GO, "deepseek-v4.1-flash")
+        assert problem and "malformed exclusion" in problem
+
+
+@pytest.mark.parametrize("klass", ["framework", "public-web", "kundencode"])
+def test_exclusion_only_binds_its_declared_research_class(fx, klass):
+    fx.edit_declaration(lambda data: data.update(ausgeschlossen=[{"klasse": klass, "modelle": ["deepseek-"]}]))
+    assert fx.prepare() == 0
+    state = fx.receipt()["state"]
+    for label, data_class in (("repository", "framework"), ("online", "public-web")):
+        models = {model for _, model, _ in seats(state, label)}
+        assert ("deepseek-v4.1-flash" not in models) == (klass == data_class)
+    data = yaml.safe_load((fx.w.root / "model-endpoints.yaml").read_text())
+    for role in ("finder", "repository", "online"):
+        problem = swarm.invocation_problem(data, role, GO, "deepseek-v4.1-flash")
+        assert bool(problem and "excluded by model-endpoints.yaml" in problem) == (klass == swarm.ROLE_CLASS[role])
+
+
+def test_public_exclusion_removes_free_researcher_but_customer_exclusion_does_not(fx):
+    fx.edit_declaration(lambda data: data.update(ausgeschlossen=[{"klasse": "public-web", "modelle": ["alpha-"]}]))
+    assert fx.prepare() == 0
+    free = fx.receipt()["state"]["free"]
+    assert free["selected"] == ["beta-free"] and free["excluded"] == ["alpha-free"]
+    data = yaml.safe_load((fx.w.root / "model-endpoints.yaml").read_text())
+    problem = swarm.invocation_problem(data, "online_free", GO, "alpha-free", selected_free=["alpha-free"])
+    assert problem and "excluded by model-endpoints.yaml" in problem
+    fx.edit_declaration(lambda data: data["ausgeschlossen"][0].update(klasse="kundencode"))
+    assert fx.prepare() == 0
+    assert set(fx.receipt()["state"]["free"]["selected"]) == {"alpha-free", "beta-free"}
+
+
+def test_reachable_chosen_go_model_outside_pool_keeps_declared_cost(fx, capsys):
+    fx.catalog.tools["mimo-v2.6-pro"] = {"id": "mimo-v2.6-pro", "tool_call": False}
+    assert fx.prepare("--seats", "online=mimo-v2.6-pro,longcat-2.0,glm-5.3-flash") == 0
+    out = capsys.readouterr().out
+    assert "opencode-go/mimo-v2.6-pro: requests 3250," in out
+
+
+def test_a_matching_deny_does_not_hide_a_later_malformed_class(fx):
+    fx.edit_declaration(
+        lambda data: data.update(
+            ausgeschlossen=[
+                {"klasse": "framework", "modelle": ["deepseek-"]},
+                {"klasse": "Framwork", "modelle": ["other-"]},
+            ]
+        )
+    )
+    problem = availability.research_declaration_problem(fx.w.root, GO, "deepseek-v4.1-flash")
+    assert problem and "malformed exclusion" in problem
+    assert fx.prepare() == 2
+    assert fx.probed() == []

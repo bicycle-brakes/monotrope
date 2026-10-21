@@ -4151,9 +4151,9 @@ Stage-2 session, 2026-10-21: attempt 191fa0246237 · model opencode-go/deepseek-
 
 | ID | Severity | Dimension | Origin | Where | Finding | Reviewer | Status | Broke a test |
 |---|---|---|---|---|---|---|---|---|
-| F-58 | MAJOR | SPEC | base | `scripts/stage2.py:4412–4414` | An unterminated front matter block is silently ignored during class selection. Reproduced with research declaring `bounded` and a spec containing `---` followed by `class: architectural` without a closing delimiter: `declared_class()` returns `bounded`, bypassing the swarm and its receipt. A present malformed header must refuse before model calls. [criterion 4] | Codex | taken — criterion 4: an unterminated front matter block refuses before any model call | — |
-| F-59 | MAJOR | SPEC | base | `scripts/stage2_availability.py:107` | Intelligence-request errors redact only the complete API key. Reproduced with an exception containing a twelve-character prefix of a synthetic key: that prefix survives in the returned status, which preparation prints and persists in its receipt. Every credential fragment of eight or more characters must also be redacted. [criterion 21] | Codex | taken — criterion 21: every credential fragment of eight or more characters is redacted | — |
-| F-60 | MAJOR | MAINT | base | `scripts/stage2_availability.py:111–117` | A malformed intelligence entry aborts preparation instead of producing “not read.” Reproduced with `{"data":[{"evaluations":"unavailable"}]}`: `read_intelligence()` raises an uncaught `AttributeError`, even when the entry concerns no requested model. Since this runs after seat probes and before receipt publication, an optional benchmark response prevents otherwise successful preparation from producing a usable receipt. [spec amendment, 2026-10-21: any intelligence-reading failure gives “not read”] | Codex | taken — criterion 63: any malformed intelligence entry gives "not read" with its reason; same fix as D-3 | — |
+| F-58 | MAJOR | SPEC | base | `scripts/stage2.py:4412–4414` | An unterminated front matter block is silently ignored during class selection. Reproduced with research declaring `bounded` and a spec containing `---` followed by `class: architectural` without a closing delimiter: `declared_class()` returns `bounded`, bypassing the swarm and its receipt. A present malformed header must refuse before model calls. [criterion 4] | Codex | fixed — tests/test_stage2_swarm.py::test_unterminated_class_header_refuses_before_calls | yes |
+| F-59 | MAJOR | SPEC | base | `scripts/stage2_availability.py:107` | Intelligence-request errors redact only the complete API key. Reproduced with an exception containing a twelve-character prefix of a synthetic key: that prefix survives in the returned status, which preparation prints and persists in its receipt. Every credential fragment of eight or more characters must also be redacted. [criterion 21] | Codex | fixed — tests/test_stage2_research_availability.py::test_intelligence_errors_redact_credential_fragments | yes |
+| F-60 | MAJOR | MAINT | base | `scripts/stage2_availability.py:111–117` | A malformed intelligence entry aborts preparation instead of producing “not read.” Reproduced with `{"data":[{"evaluations":"unavailable"}]}`: `read_intelligence()` raises an uncaught `AttributeError`, even when the entry concerns no requested model. Since this runs after seat probes and before receipt publication, an optional benchmark response prevents otherwise successful preparation from producing a usable receipt. [spec amendment, 2026-10-21: any intelligence-reading failure gives “not read”] | Codex | fixed — tests/test_stage2_research_availability.py::test_malformed_intelligence_never_blocks_a_receipt | yes |
 
 Phase 6 verdict: codex 01a15ef4-710e-71f1-9f13-267b5402447f, 2026-10-21
 Reviewer session: codex 01a15ef4-710e-71f1-9f13-267b5402447f — a fresh session reviewed: an earlier ## Phase 6 block makes this a re-check
@@ -4164,8 +4164,245 @@ Requested by the maintainer; launched through `stage2.py session` (attempt 191fa
 
 | ID | Severity | Dimension | Origin | Where | Finding | Reviewer | Status | Broke a test |
 |---|---|---|---|---|---|---|---|---|
-| D-3 | MINOR | SPEC | base | `scripts/stage2_availability.py:110-127` | A success response whose entry shape differs from the assumed one stops the whole preparation with a traceback, and its status is reported as unreadable only for the shapes the code anticipated. `read_intelligence` reads the index with `(entry.get("evaluations") or {}).get("artificial_analysis_intelligence_index")` (line 117); when `evaluations` is a list or a string (a truthy non-mapping) — or when the live document nests the score deeper — Python raises `AttributeError`, which is not in the caught `except (OSError, ValueError, KeyError)` (line 106). Reproduction: set `ARTIFICIAL_ANALYSIS_API_KEY`, replace `INTELLIGENCE_FETCH` with a function returning `{"data": [{"slug": "x", "evaluations": [45]}]}`, run `prepare-explore <change>`: every seat has already been probed, then `AttributeError: 'list' object has no attribute 'get'` escapes from line 117, so no report, no receipt and no exit code of the intended scheme is produced (the command dies in the traceback) instead of the reading being marked "not read" with its reason. That refutes the docstring's "it never stops a preparation" and criterion 63's "a missing key or failed request stops the preparation" as a refutation condition. [criterion 63] | deepseek-v4.1-flash | taken — criterion 63: same fix as F-60 | — |
-| D-4 | MINOR | SPEC | base | `scripts/stage2_availability.py:110`; `scripts/stage2_availability.py:683-704` | A reading that matched no candidate is reported as successfully read, and the unmatched candidates carry no reason, so the cost-alone caveat disappears exactly when it is true. `read_intelligence` sets `reading["status"] = "read"` (line 110) as soon as the response holds a `data` list, without checking that any model matched; an unmatched model keeps `None` in `scores`, and `intelligence_lines` prints `_score_text(scores.get(model))` = "not read" with no cause (line 699) while the recommendation suppresses "; intelligence was not read, so cost alone decides" because the status equals "read" (lines 702-704). Reproduction: with the shipped declaration (`research_swarm.intelligence_slugs: {}`) and a live index whose entries are named like "DeepSeek V4.1 Flash 1017 (max)", `_normal("deepseek-v4.1-flash")` = `deepseekv41flash` matches neither `deepseekv41flash1017` (slug) nor the same normalised name, so `scores["deepseek-v4.1-flash"]` stays `None` although the entry exists; the report prints "Intelligence: Artificial Analysis Intelligence Index, https://artificialanalysis.ai/ - read, <time>", then "opencode-go/deepseek-v4.1-flash: requests 34670, intelligence not read" without the reason, and "Recommendation: the seats above - per trio the cheapest reachable admitted models." — the maintainer is told intelligence was read while nothing was weighed, and a typo in an `intelligence_slugs` entry is indistinguishable from a model the index does not list, both refuting "or 'not read' with the reason". [criterion 63] | deepseek-v4.1-flash | taken — criterion 63: a model the index does not match is "not read" with its reason, and the recommendation says intelligence was not weighed for it | — |
-| D-5 | MINOR | SPEC | base | `scripts/stage2.py:4465-4488`; `scripts/stage2_availability.py:757-760` | A refused `--seats` answer leaves the previously prepared receipt usable, so the recommendation the maintainer just declined can still start a run. `prepare_explore` builds the argument as `stage2_availability.prepare_research(..., seat_choice(seats))` (line 4488), so `seat_choice` refuses before `prepare_research` runs, and `prepare_research` is the function that deletes an earlier receipt under its own comment "A failed preparation must never leave an earlier receipt usable" (line 759). Reproduction: `prepare-explore demo` prints receipt `R`; the maintainer answers "use glm-5.3-flash and longcat-2.0"; the orchestrator runs `prepare-explore demo --seats repository=glm-5.3-flash` (one model for the repository trio's two Go seats) → `Refused` → exit 2 as criterion 65 asks, but `R` is untouched, its binding is unchanged (`research_binding` covers worktree, configuration digest, class and neighbours, not the choice) and its age is below `max_age_seconds`, so `explore demo --availability-reported R` consumes `R` and starts the run on the recommendation instead of the maintainer's answer, with no further refusal — the maintainer's answer is silently dropped through the exit-2 path. [criteria 44, 45, 65] | deepseek-v4.1-flash | taken — criteria 44, 45, 65: a refused --seats answer invalidates the earlier receipt | — |
-| D-6 | MAJOR | SPEC | base | `scripts/stage2_swarm.py:333-336`; callers `scripts/stage2_swarm.py:373`, `scripts/stage2_availability.py:557`, `scripts/stage2_availability.py:584`, `scripts/stage2_availability.py:809-811` | An exclusion whose `klasse` names no declared data class is silently ignored, so an unreadable deny rule becomes permission — and for the research swarm's public roles no exclusion of their own class can ever bind. `exclusion_problem` reads `data_class = entry.get("klasse", "framework")` and `continue`s on anything but the literal `framework` (lines 333-336); neither that function nor `research_settings`' malformed check (which calls it with `model = ""` and therefore only validates shape) compares `klasse` against the declared `datenklassen`. Reproduction: `ausgeschlossen: [{was: "dropped", klasse: "Framwork", modelle: ["deepseek-"]}]` → `exclusion_problem(data, "deepseek-v4.1-flash")` returns `None`, `research_settings` reports no problem, so `_go_outcome` admits it (`admitted: True`), it enters the pool, fills an open repository seat as "cheapest", is probed by `probe_go` (its admission check also passes) and is invoked with the private finder brief — a one-letter typo in the class name disables the denial for private content with no warning and no exit 2, which is the failure the shared predicate (O197-1, "an unreadable deny rule cannot silently become permission to send code") exists to prevent. The same branch means an entry written for the research swarm's public class, `klasse: public-web` — a class the declaration itself defines and the only class the online seats and the free researchers carry — never binds in `invocation_problem`, in `_go_outcome` or in the free-selection filter, although the fix states an excluded model is blocked in every role. [criteria 43, 48] | deepseek-v4.1-flash | taken — criteria 43, 48: an exclusion whose klasse names no declared data class is malformed (exit 2), and an exclusion binds whatever its declared class — the maintainer ruled on 2026-10-21 that an excluded model is blocked everywhere | — |
-| D-7 | MINOR | SPEC | base | `scripts/stage2_availability.py:695-699` | A reachable Go candidate outside the substitute pool is reported with "subscription" instead of its declared request cost. `intelligence_lines` builds `cost` only from `state["pool"]` (line 696), and `_admitted_pool` (lines 551-557 of `_Selection`) keeps only models whose catalog record has `tool_support is None`, while `fill`'s preferred pass seats any admitted model. Reproduction: `prepare-explore demo --seats online=<mimo-v2.6-pro>,longcat-2.0,glm-5.3-flash` where `mimo-v2.6-pro` is admitted and reachable but models.dev records no tool support for it (`_go_outcome` gives `admitted: True`, reason "no-tool-support: not in the substitute pool"): the chosen seat is probed and selected, `read_intelligence` scores it, and the report prints "opencode-go/mimo-v2.6-pro: requests subscription, intelligence 46" although `modelle_terms.mimo-v2.6-pro.anfragen_5h: 3250` is declared and is the figure the maintainer needs for the cost-against-intelligence answer — the report lacks a reachable candidate's request cost. [criterion 63] | deepseek-v4.1-flash | taken — criterion 63: every reachable Go candidate is reported with its declared anfragen_5h | — |
+| D-3 | MINOR | SPEC | base | `scripts/stage2_availability.py:110-127` | A success response whose entry shape differs from the assumed one stops the whole preparation with a traceback, and its status is reported as unreadable only for the shapes the code anticipated. `read_intelligence` reads the index with `(entry.get("evaluations") or {}).get("artificial_analysis_intelligence_index")` (line 117); when `evaluations` is a list or a string (a truthy non-mapping) — or when the live document nests the score deeper — Python raises `AttributeError`, which is not in the caught `except (OSError, ValueError, KeyError)` (line 106). Reproduction: set `ARTIFICIAL_ANALYSIS_API_KEY`, replace `INTELLIGENCE_FETCH` with a function returning `{"data": [{"slug": "x", "evaluations": [45]}]}`, run `prepare-explore <change>`: every seat has already been probed, then `AttributeError: 'list' object has no attribute 'get'` escapes from line 117, so no report, no receipt and no exit code of the intended scheme is produced (the command dies in the traceback) instead of the reading being marked "not read" with its reason. That refutes the docstring's "it never stops a preparation" and criterion 63's "a missing key or failed request stops the preparation" as a refutation condition. [criterion 63] | deepseek-v4.1-flash | fixed — tests/test_stage2_research_availability.py::test_malformed_intelligence_never_blocks_a_receipt | yes |
+| D-4 | MINOR | SPEC | base | `scripts/stage2_availability.py:110`; `scripts/stage2_availability.py:683-704` | A reading that matched no candidate is reported as successfully read, and the unmatched candidates carry no reason, so the cost-alone caveat disappears exactly when it is true. `read_intelligence` sets `reading["status"] = "read"` (line 110) as soon as the response holds a `data` list, without checking that any model matched; an unmatched model keeps `None` in `scores`, and `intelligence_lines` prints `_score_text(scores.get(model))` = "not read" with no cause (line 699) while the recommendation suppresses "; intelligence was not read, so cost alone decides" because the status equals "read" (lines 702-704). Reproduction: with the shipped declaration (`research_swarm.intelligence_slugs: {}`) and a live index whose entries are named like "DeepSeek V4.1 Flash 1017 (max)", `_normal("deepseek-v4.1-flash")` = `deepseekv41flash` matches neither `deepseekv41flash1017` (slug) nor the same normalised name, so `scores["deepseek-v4.1-flash"]` stays `None` although the entry exists; the report prints "Intelligence: Artificial Analysis Intelligence Index, https://artificialanalysis.ai/ - read, <time>", then "opencode-go/deepseek-v4.1-flash: requests 34670, intelligence not read" without the reason, and "Recommendation: the seats above - per trio the cheapest reachable admitted models." — the maintainer is told intelligence was read while nothing was weighed, and a typo in an `intelligence_slugs` entry is indistinguishable from a model the index does not list, both refuting "or 'not read' with the reason". [criterion 63] | deepseek-v4.1-flash | fixed — tests/test_stage2_research_availability.py::test_unmatched_intelligence_has_per_model_reason_and_cost_only_caveat | yes |
+| D-5 | MINOR | SPEC | base | `scripts/stage2.py:4465-4488`; `scripts/stage2_availability.py:757-760` | A refused `--seats` answer leaves the previously prepared receipt usable, so the recommendation the maintainer just declined can still start a run. `prepare_explore` builds the argument as `stage2_availability.prepare_research(..., seat_choice(seats))` (line 4488), so `seat_choice` refuses before `prepare_research` runs, and `prepare_research` is the function that deletes an earlier receipt under its own comment "A failed preparation must never leave an earlier receipt usable" (line 759). Reproduction: `prepare-explore demo` prints receipt `R`; the maintainer answers "use glm-5.3-flash and longcat-2.0"; the orchestrator runs `prepare-explore demo --seats repository=glm-5.3-flash` (one model for the repository trio's two Go seats) → `Refused` → exit 2 as criterion 65 asks, but `R` is untouched, its binding is unchanged (`research_binding` covers worktree, configuration digest, class and neighbours, not the choice) and its age is below `max_age_seconds`, so `explore demo --availability-reported R` consumes `R` and starts the run on the recommendation instead of the maintainer's answer, with no further refusal — the maintainer's answer is silently dropped through the exit-2 path. [criteria 44, 45, 65] | deepseek-v4.1-flash | fixed — tests/test_stage2_research_availability.py::test_refused_seat_answer_invalidates_the_previous_receipt | yes |
+| D-6 | MAJOR | SPEC | base | `scripts/stage2_swarm.py:333-336`; callers `scripts/stage2_swarm.py:373`, `scripts/stage2_availability.py:557`, `scripts/stage2_availability.py:584`, `scripts/stage2_availability.py:809-811` | An exclusion whose `klasse` names no declared data class is silently ignored, so an unreadable deny rule becomes permission — and for the research swarm's public roles no exclusion of their own class can ever bind. `exclusion_problem` reads `data_class = entry.get("klasse", "framework")` and `continue`s on anything but the literal `framework` (lines 333-336); neither that function nor `research_settings`' malformed check (which calls it with `model = ""` and therefore only validates shape) compares `klasse` against the declared `datenklassen`. Reproduction: `ausgeschlossen: [{was: "dropped", klasse: "Framwork", modelle: ["deepseek-"]}]` → `exclusion_problem(data, "deepseek-v4.1-flash")` returns `None`, `research_settings` reports no problem, so `_go_outcome` admits it (`admitted: True`), it enters the pool, fills an open repository seat as "cheapest", is probed by `probe_go` (its admission check also passes) and is invoked with the private finder brief — a one-letter typo in the class name disables the denial for private content with no warning and no exit 2, which is the failure the shared predicate (O197-1, "an unreadable deny rule cannot silently become permission to send code") exists to prevent. The same branch means an entry written for the research swarm's public class, `klasse: public-web` — a class the declaration itself defines and the only class the online seats and the free researchers carry — never binds in `invocation_problem`, in `_go_outcome` or in the free-selection filter, although the fix states an excluded model is blocked in every role. [criteria 43, 48] | deepseek-v4.1-flash | fixed — tests/test_stage2_research_availability.py::test_exclusion_only_binds_its_declared_research_class | yes |
+| D-7 | MINOR | SPEC | base | `scripts/stage2_availability.py:695-699` | A reachable Go candidate outside the substitute pool is reported with "subscription" instead of its declared request cost. `intelligence_lines` builds `cost` only from `state["pool"]` (line 696), and `_admitted_pool` (lines 551-557 of `_Selection`) keeps only models whose catalog record has `tool_support is None`, while `fill`'s preferred pass seats any admitted model. Reproduction: `prepare-explore demo --seats online=<mimo-v2.6-pro>,longcat-2.0,glm-5.3-flash` where `mimo-v2.6-pro` is admitted and reachable but models.dev records no tool support for it (`_go_outcome` gives `admitted: True`, reason "no-tool-support: not in the substitute pool"): the chosen seat is probed and selected, `read_intelligence` scores it, and the report prints "opencode-go/mimo-v2.6-pro: requests subscription, intelligence 46" although `modelle_terms.mimo-v2.6-pro.anfragen_5h: 3250` is declared and is the figure the maintainer needs for the cost-against-intelligence answer — the report lacks a reachable candidate's request cost. [criterion 63] | deepseek-v4.1-flash | fixed — tests/test_stage2_research_availability.py::test_reachable_chosen_go_model_outside_pool_keeps_declared_cost | yes |
+
+Stage-2 call, 2026-10-21: repair · attempt 1 · route codex · endpoint openai-codex · model gpt-6.1-sol · leak check clean over 554 files, 1770 commits, 12 rules.
+
+> Attempt 1 (codex) failed its post-run checks.
+>
+> Files the attempt changed (lines added, removed):
+> - `plans/changes/research-swarm/plan.md` +39 -1
+> - `scripts/stage2.py` +6 -1
+> - `scripts/stage2_availability.py` +51 -21
+> - `scripts/stage2_swarm.py` +4 -3
+> - `tests/test_stage2_research_availability.py` +78 -0
+> - `tests/test_stage2_swarm.py` +11 -0
+>
+> Diagnostics:
+> ````text
+> - Runner format before `make verify`: ruff changed no file.
+> - `make verify` exited 2
+> The gates that blocked, each with its last lines:
+> ── [pytest] $ lauf_cmd
+> [… 15 lines of this gate left out …]
+> ........................................................................ [ 28%]
+> ........................................................................ [ 30%]
+> ........................................................................ [ 33%]
+> ........................................................................ [ 35%]
+> ........................................................................ [ 37%]
+> ........................................................................ [ 39%]
+> ........................................................................ [ 42%]
+> ........................................................................ [ 44%]
+> ........................................................................ [ 46%]
+> ..........................F............................................. [ 48%]
+> ........................................................................ [ 50%]
+> ........................................................................ [ 53%]
+> ........................................................................ [ 55%]
+> ........................................................................ [ 57%]
+> ........................................................................ [ 59%]
+> ........................................................................ [ 61%]
+> ........................................................................ [ 64%]
+> ........................................................................ [ 66%]
+> ........................................................................ [ 68%]
+> ........................................................................ [ 70%]
+> ........................................................................ [ 73%]
+> ........................................................................ [ 75%]
+> ........................................................................ [ 77%]
+> ........................................................................ [ 79%]
+> ........................................................................ [ 81%]
+> ........................................................................ [ 84%]
+> ........................................................................ [ 86%]
+> ........................................................................ [ 88%]
+> ........................................................................ [ 90%]
+> ........................................................................ [ 92%]
+> ........................................................................ [ 95%]
+> ........................................................................ [ 97%]
+> ........................................................................ [ 99%]
+> .............                                                            [100%]
+> =================================== FAILURES ===================================
+> _______ test_a_customer_only_exclusion_does_not_deny_framework_admission _______
+> [gw4] darwin -- Python 3.12.15 /Users/mikypiky/coding-harness/.claude/worktrees/research-swarm/.venv/bin/python3
+>
+> world = World(root=PosixPath('/private/var/folders/44/yc0m3m456b51nyzwyfjptgm40000gn/T/pytest-of-mikypiky/pytest-748/popen-gw4...rs/44/yc0m3m456b51nyzwyfjptgm40000gn/T/pytest-of-mikypiky/pytest-748/popen-gw4/test_a_customer_only_exclusion0/state'))
+>
+>     def test_a_customer_only_exclusion_does_not_deny_framework_admission(world: World) -> None:
+>         """O197-2: the exclusion's declared data class must bind as well as its model prefix."""
+>         path = world.root / "model-endpoints.yaml"
+>         data = yaml.safe_load(path.read_text())
+>         data["ausgeschlossen"] = [{"klasse": "kundencode", "modelle": [*TEST_FREE, *TEST_LADDER]}]
+>         path.write_text(yaml.safe_dump(data))
+> >       assert stage2.free_admission_problem(world.root, TEST_FREE[0], list(TEST_FREE)) is None
+> E       AssertionError: assert 'the model acme-v1-free is excluded by model-endpoints.yaml: excluded by the maintainer' is None
+> E        +  where 'the model acme-v1-free is excluded by model-endpoints.yaml: excluded by the maintainer' = <function free_admission_problem at 0x10afaaf20>(PosixPath('/private/var/folders/44/yc0m3m456b51nyzwyfjptgm40000gn/T/pytest-of-mikypiky/pytest-748/popen-gw4/test_a_customer_only_exclusion0/repo'), 'acme-v1-free', ['acme-v1-free', 'beacon-2-free'])
+> E        +    where <function free_admission_problem at 0x10afaaf20> = stage2.free_admission_problem
+> E        +    and   PosixPath('/private/var/folders/44/yc0m3m456b51nyzwyfjptgm40000gn/T/pytest-of-mikypiky/pytest-748/popen-gw4/test_a_customer_only_exclusion0/repo') = World(root=PosixPath('/private/var/folders/44/yc0m3m456b51nyzwyfjptgm40000gn/T/pytest-of-mikypiky/pytest-748/popen-gw4...rs/44/yc0m3m456b51nyzwyfjptgm40000gn/T/pytest-of-mikypiky/pytest-748/popen-gw4/test_a_customer_only_exclusion0/state')).root
+> E        +    and   ['acme-v1-free', 'beacon-2-free'] = list(('acme-v1-free', 'beacon-2-free'))
+>
+> tests/test_stage2.py:11194: AssertionError
+> =========================== short test summary info ============================
+> FAILED tests/test_stage2.py::test_a_customer_only_exclusion_does_not_deny_framework_admission
+> 1 failed, 3236 passed, 16 skipped in 488.72s (0:08:08)
+> ── [pytest] RED (block) — der Lauf ist rot.
+>
+> Standard error of the whole run, last lines:
+> [… 15564 earlier lines left out …]
+> templates/spec.md:73:81 error MD013/line-length Line length [Expected: 80; Actual: 127]
+> tests/fixtures/research_refs/plan-prompt-d862bc2.md:3:81 error MD013/line-length Line length [Expected: 80; Actual: 117]
+> tests/fixtures/research_refs/plan-prompt-d862bc2.md:85:81 error MD013/line-length Line length [Expected: 80; Actual: 96]
+> tests/fixtures/research_refs/plan-prompt-d862bc2.md:99 error MD040/fenced-code-language Fenced code blocks should have a language specified [Context: "```"]
+> tools/claude-code/README.md:17:81 error MD013/line-length Line length [Expected: 80; Actual: 105]
+> tools/claude-code/README.md:18:81 error MD013/line-length Line length [Expected: 80; Actual: 109]
+> tools/claude-code/README.md:19:81 error MD013/line-length Line length [Expected: 80; Actual: 134]
+> tools/claude-code/README.md:23:1 error MD060/table-column-style Table column style [Table pipe is missing space to the right for style "compact"]
+> tools/claude-code/README.md:23:5 error MD060/table-column-style Table column style [Table pipe is missing space to the left for style "compact"]
+> tools/claude-code/README.md:23:5 error MD060/table-column-style Table column style [Table pipe is missing space to the right for style "compact"]
+> tools/claude-code/README.md:23:9 error MD060/table-column-style Table column style [Table pipe is missing space to the left for style "compact"]
+> tools/claude-code/README.md:23:9 error MD060/table-column-style Table column style [Table pipe is missing space to the right for style "compact"]
+> tools/claude-code/README.md:23:13 error MD060/table-column-style Table column style [Table pipe is missing space to the left for style "compact"]
+> tools/claude-code/README.md:24:81 error MD013/line-length Line length [Expected: 80; Actual: 272]
+> tools/claude-code/README.md:25:81 error MD013/line-length Line length [Expected: 80; Actual: 180]
+> tools/claude-code/README.md:26:81 error MD013/line-length Line length [Expected: 80; Actual: 115]
+> tools/claude-code/README.md:28:81 error MD013/line-length Line length [Expected: 80; Actual: 124]
+> tools/claude-code/README.md:29:81 error MD013/line-length Line length [Expected: 80; Actual: 106]
+> tools/claude-code/README.md:38:1 error MD060/table-column-style Table column style [Table pipe is missing space to the right for style "compact"]
+> tools/claude-code/README.md:38:5 error MD060/table-column-style Table column style [Table pipe is missing space to the left for style "compact"]
+> tools/claude-code/README.md:38:5 error MD060/table-column-style Table column style [Table pipe is missing space to the right for style "compact"]
+> tools/claude-code/README.md:38:9 error MD060/table-column-style Table column style [Table pipe is missing space to the left for style "compact"]
+> tools/claude-code/README.md:38:9 error MD060/table-column-style Table column style [Table pipe is missing space to the right for style "compact"]
+> tools/claude-code/README.md:38:13 error MD060/table-column-style Table column style [Table pipe is missing space to the left for style "compact"]
+> tools/claude-code/README.md:40:81 error MD013/line-length Line length [Expected: 80; Actual: 442]
+> tools/claude-code/README.md:41:81 error MD013/line-length Line length [Expected: 80; Actual: 163]
+> tools/claude-code/README.md:42:81 error MD013/line-length Line length [Expected: 80; Actual: 126]
+> tools/claude-code/README.md:43:81 error MD013/line-length Line length [Expected: 80; Actual: 96]
+> tools/claude-code/README.md:44:81 error MD013/line-length Line length [Expected: 80; Actual: 167]
+> tools/claude-code/README.md:72:1 error MD060/table-column-style Table column style [Table pipe is missing space to the right for style "compact"]
+> tools/claude-code/README.md:72:5 error MD060/table-column-style Table column style [Table pipe is missing space to the left for style "compact"]
+> tools/claude-code/README.md:72:5 error MD060/table-column-style Table column style [Table pipe is missing space to the right for style "compact"]
+> tools/claude-code/README.md:72:9 error MD060/table-column-style Table column style [Table pipe is missing space to the left for style "compact"]
+> tools/claude-code/README.md:72:9 error MD060/table-column-style Table column style [Table pipe is missing space to the right for style "compact"]
+> tools/claude-code/README.md:72:13 error MD060/table-column-style Table column style [Table pipe is missing space to the left for style "compact"]
+> tools/claude-code/README.md:73:81 error MD013/line-length Line length [Expected: 80; Actual: 112]
+> tools/claude-code/README.md:74:81 error MD013/line-length Line length [Expected: 80; Actual: 89]
+> tools/claude-code/README.md:75:81 error MD013/line-length Line length [Expected: 80; Actual: 88]
+> tools/pi/README.md:65:81 error MD013/line-length Line length [Expected: 80; Actual: 97]
+> make: *** [verify] Error 1
+> - `plan.md` did not add a measured line below `## Time used`
+> ````
+
+Stage-2 call, 2026-10-21: repair · attempt 2 · route codex-repair · endpoint openai-codex · model gpt-6.1-sol · reason first Codex post-run check failed · leak check clean over 554 files, 1770 commits, 12 rules.
+
+> Attempt 2 (codex-repair) failed its post-run checks.
+>
+> Files the attempt changed (lines added, removed):
+> - `plans/changes/research-swarm/plan.md` +24 -1
+> - `tests/test_stage2.py` +7 -4
+>
+> Diagnostics:
+> ```text
+> - Runner format before `make verify`: ruff changed no file.
+> - F-58: tests/test_stage2_swarm.py::test_unterminated_class_header_refuses_before_calls: the call of `tests/test_stage2_swarm.py::test_unterminated_class_header_refuses_before_calls[-spec.md]` failed with Failed, not an AssertionError
+> - F-60: tests/test_stage2_research_availability.py::test_malformed_intelligence_never_blocks_a_receipt: the call of `tests/test_stage2_research_availability.py::test_malformed_intelligence_never_blocks_a_receipt[entry0]` failed with AttributeError, not an AssertionError
+> - D-3: tests/test_stage2_research_availability.py::test_malformed_intelligence_never_blocks_a_receipt: the call of `tests/test_stage2_research_availability.py::test_malformed_intelligence_never_blocks_a_receipt[entry0]` failed with AttributeError, not an AssertionError
+> - D-5: tests/test_stage2_research_availability.py::test_refused_seat_answer_invalidates_the_previous_receipt: the call of `tests/test_stage2_research_availability.py::test_refused_seat_answer_invalidates_the_previous_receipt[args0]` failed with Failed, not an AssertionError
+> ```
+
+Stage-2 call, 2026-10-21: repair · attempt 3 · route stage-1 · endpoint claude-code-plan · model claude-sonnet-5-5 · reason two Codex post-run checks failed · leak check clean over 554 files, 1770 commits, 12 rules.
+
+> Attempt 3 (stage-1) failed its post-run checks.
+>
+> Files the attempt changed (lines added, removed):
+> - `plans/changes/research-swarm/plan.md` +13 -0
+> - `tests/test_stage2_research_availability.py` +14 -3
+> - `tests/test_stage2_swarm.py` +8 -2
+>
+> Diagnostics:
+> ````text
+> - Runner format before `make verify`: ruff changed no file; ruff check left findings without a safe fix or a file that does not parse.
+> - `make verify` exited 2
+> The gates that blocked, each with its last lines:
+> ── [ruff-check] $ lauf_cmd
+> tests/test_stage2_research_availability.py:1088:5: SIM105 Use `contextlib.suppress(stage2.Refused)` instead of `try`-`except`-`pass`
+>      |
+> 1086 |       assert len(fx.w.calls()) == before
+> 1087 |       consumed = None
+> 1088 | /     try:
+> 1089 | |         consumed = availability.consume_research(fx.w.root, "demo", receipt["report_id"], stage2, "feature")
+> 1090 | |     except stage2.Refused:
+> 1091 | |         pass
+>      | |____________^ SIM105
+> 1092 |       assert consumed is None, "the receipt of the declined recommendation is still usable"
+>      |
+>      = help: Replace with `contextlib.suppress(stage2.Refused)`
+>
+> Found 1 error.
+> No fixes available (1 hidden fix can be enabled with the `--unsafe-fixes` option).
+> ── [ruff-check] RED (block) — der Lauf ist rot.
+>
+> Standard error of the whole run, last lines:
+> [… 15621 earlier lines left out …]
+> templates/spec.md:73:81 error MD013/line-length Line length [Expected: 80; Actual: 127]
+> tests/fixtures/research_refs/plan-prompt-d862bc2.md:3:81 error MD013/line-length Line length [Expected: 80; Actual: 117]
+> tests/fixtures/research_refs/plan-prompt-d862bc2.md:85:81 error MD013/line-length Line length [Expected: 80; Actual: 96]
+> tests/fixtures/research_refs/plan-prompt-d862bc2.md:99 error MD040/fenced-code-language Fenced code blocks should have a language specified [Context: "```"]
+> tools/claude-code/README.md:17:81 error MD013/line-length Line length [Expected: 80; Actual: 105]
+> tools/claude-code/README.md:18:81 error MD013/line-length Line length [Expected: 80; Actual: 109]
+> tools/claude-code/README.md:19:81 error MD013/line-length Line length [Expected: 80; Actual: 134]
+> tools/claude-code/README.md:23:1 error MD060/table-column-style Table column style [Table pipe is missing space to the right for style "compact"]
+> tools/claude-code/README.md:23:5 error MD060/table-column-style Table column style [Table pipe is missing space to the left for style "compact"]
+> tools/claude-code/README.md:23:5 error MD060/table-column-style Table column style [Table pipe is missing space to the right for style "compact"]
+> tools/claude-code/README.md:23:9 error MD060/table-column-style Table column style [Table pipe is missing space to the left for style "compact"]
+> tools/claude-code/README.md:23:9 error MD060/table-column-style Table column style [Table pipe is missing space to the right for style "compact"]
+> tools/claude-code/README.md:23:13 error MD060/table-column-style Table column style [Table pipe is missing space to the left for style "compact"]
+> tools/claude-code/README.md:24:81 error MD013/line-length Line length [Expected: 80; Actual: 272]
+> tools/claude-code/README.md:25:81 error MD013/line-length Line length [Expected: 80; Actual: 180]
+> tools/claude-code/README.md:26:81 error MD013/line-length Line length [Expected: 80; Actual: 115]
+> tools/claude-code/README.md:28:81 error MD013/line-length Line length [Expected: 80; Actual: 124]
+> tools/claude-code/README.md:29:81 error MD013/line-length Line length [Expected: 80; Actual: 106]
+> tools/claude-code/README.md:38:1 error MD060/table-column-style Table column style [Table pipe is missing space to the right for style "compact"]
+> tools/claude-code/README.md:38:5 error MD060/table-column-style Table column style [Table pipe is missing space to the left for style "compact"]
+> tools/claude-code/README.md:38:5 error MD060/table-column-style Table column style [Table pipe is missing space to the right for style "compact"]
+> tools/claude-code/README.md:38:9 error MD060/table-column-style Table column style [Table pipe is missing space to the left for style "compact"]
+> tools/claude-code/README.md:38:9 error MD060/table-column-style Table column style [Table pipe is missing space to the right for style "compact"]
+> tools/claude-code/README.md:38:13 error MD060/table-column-style Table column style [Table pipe is missing space to the left for style "compact"]
+> tools/claude-code/README.md:40:81 error MD013/line-length Line length [Expected: 80; Actual: 442]
+> tools/claude-code/README.md:41:81 error MD013/line-length Line length [Expected: 80; Actual: 163]
+> tools/claude-code/README.md:42:81 error MD013/line-length Line length [Expected: 80; Actual: 126]
+> tools/claude-code/README.md:43:81 error MD013/line-length Line length [Expected: 80; Actual: 96]
+> tools/claude-code/README.md:44:81 error MD013/line-length Line length [Expected: 80; Actual: 167]
+> tools/claude-code/README.md:72:1 error MD060/table-column-style Table column style [Table pipe is missing space to the right for style "compact"]
+> tools/claude-code/README.md:72:5 error MD060/table-column-style Table column style [Table pipe is missing space to the left for style "compact"]
+> tools/claude-code/README.md:72:5 error MD060/table-column-style Table column style [Table pipe is missing space to the right for style "compact"]
+> tools/claude-code/README.md:72:9 error MD060/table-column-style Table column style [Table pipe is missing space to the left for style "compact"]
+> tools/claude-code/README.md:72:9 error MD060/table-column-style Table column style [Table pipe is missing space to the right for style "compact"]
+> tools/claude-code/README.md:72:13 error MD060/table-column-style Table column style [Table pipe is missing space to the left for style "compact"]
+> tools/claude-code/README.md:73:81 error MD013/line-length Line length [Expected: 80; Actual: 112]
+> tools/claude-code/README.md:74:81 error MD013/line-length Line length [Expected: 80; Actual: 89]
+> tools/claude-code/README.md:75:81 error MD013/line-length Line length [Expected: 80; Actual: 88]
+> tools/pi/README.md:65:81 error MD013/line-length Line length [Expected: 80; Actual: 97]
+> make: *** [verify] Error 1
+> - `plan.md` did not add a measured line below `## Time used`
+> ````
+
+Orchestrator, 2026-10-21: the night run adopted the uncommitted round-14 repair
+from the three failed runner attempts and booked it as a hand repair. Fixed the
+SIM105 lint finding and restored the original customer-only exclusion test.
+The maintainer's D-6 correction is class-scoped: malformed classes refuse in
+all admission paths, public-web exclusions bind online seats and free
+researchers, and customer-only exclusions do not deny framework admission.
+Selection, tool-free probe admission and invocation all retain that class.
+Global-exclusion fixtures now explicitly declare both research classes.
+
+Red first: on pre-repair commit `febe2aa`, current proving tests gave 19 failed,
+6 passed (2026-10-21), with an assertion failure proving each of F-58–F-60 and
+D-3–D-7. Before the class-scoping repair, five additional regression cases
+failed against the inherited working tree. The focused repaired set passed
+53 cases. Final full `make verify`: GREEN, 3243 passed, 16 skipped; all local
+blocking gates passed, including the kit probe. Evidence logs are temporary
+local files, not committed: `/private/tmp/research-swarm-round14-baseline-red.log`
+and `/private/tmp/research-swarm-round14-verify.log`. No live benchmark or
+research invocation was made. Reviewer findings remain unchanged; only their
+Status and empirical test-proof cells are booked above.

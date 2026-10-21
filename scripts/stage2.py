@@ -843,7 +843,7 @@ def excluded_problem(root: Path, model: str) -> str | None:
 
     The list was prose the runner never read: a denied provider's new free id would have reviewed diffs
     without a decision. One predicate (`stage2_swarm.exclusion_problem`), read by the free class, the paid
-    declaration and every research path, so all of them answer the same way (PR #208).
+    declaration and every research path, with each research role checking its own data class (PR #208).
     """
     import stage2_swarm
 
@@ -4409,8 +4409,10 @@ def declared_class(root: Path, change: str, klass: str | None) -> str:
             raise Refused(
                 f"plans/changes/{change}/{name} cannot be read; repair the file and its class header ({error})."
             ) from error
-        match = re.match(r"---\n(.*?)\n---", text, re.S)
+        match = re.match(r"---\n(.*?)\n---(?:\n|$)", text, re.S)
         if not match:
+            if text.splitlines()[:1] == ["---"]:
+                raise Refused(f"plans/changes/{change}/{name}: repair the unterminated front matter header.")
             continue
         try:
             node = yaml.compose(match.group(1), Loader=yaml.SafeLoader)
@@ -4485,6 +4487,9 @@ def prepare_explore(root: Path, change: str, klass: str | None = None, seats: li
     """
     import stage2_availability
 
+    path = stage2_availability.research_receipt_path(change, sys.modules[__name__], root)
+    with stage2_availability.receipt_lock(path):
+        path.unlink(missing_ok=True)
     stage2_availability.prepare_research(root, change, sys.modules[__name__], klass, seat_choice(seats))
 
 
