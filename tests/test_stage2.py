@@ -7695,7 +7695,7 @@ def test_a_text_row_taken_as_not_a_test_is_repaired_and_its_status_written(world
     assert world.run("repair") == 0
     record = {row[0]: row for row in stage2.record_rows(world.record().read_text(encoding="utf-8"))}
     assert record["L1-1"][7] == "fixed — not a test — the record row is written"
-    assert record["L1-1"][8] == "no", "the runner wrote Broke a test"
+    assert record["L1-1"][8] == "no — not a test", "the repair did not state what its own evidence shows"
     _, phase6 = stage2.findings_rows(world.text())
     assert {row[0]: row for row in phase6}["F-1"][7] == "fixed — not a test — a pipe \\| in the reason"
     committed = git(world.root, "show", "HEAD:plans/changes/demo/findings.md")
@@ -7717,12 +7717,13 @@ def test_a_fixed_line_naming_a_method_or_an_async_test_is_accepted(
 ) -> None:
     """R-23, the call site: the repair answer check finds a test defined as a method or as `async def`.
 
-    The red-first run is stubbed: pytest cannot select a class method by `file::function`, so this test
-    isolates the definition lookup that `check_repair_answer` makes before that run.
+    Both proof runs are stubbed: pytest cannot select a class method by `file::function`, so this test
+    isolates the definition lookup that `check_repair_answer` makes before those runs.
     """
     seed_tests(world)
     world.write_record([("L1-1", "taken — test_a", "no")])
     monkeypatch.setattr(stage2, "red_first", lambda *_args, **_kwargs: None)
+    monkeypatch.setattr(stage2, "fixed_test_proof", lambda *_args, **_kwargs: None)
     script_repair(
         world,
         [repair_step(plant={"src/app.py": "value = 2\n", "tests/test_fix.py": source})],
@@ -8497,6 +8498,25 @@ def test_a_failed_repair_process_removes_the_ignored_paths_it_created(
     assert "undone: src/half.py" in err
 
 
+@pytest.mark.parametrize("unproven", ["skip", "xfail", "fail"])
+def test_repair_marks_no_proof_when_the_named_test_does_not_pass_fixed_code(world: World, unproven: str) -> None:
+    """O199-1: a green suite cannot certify a named case that skips, xfails or still fails after repair."""
+    baseline = repair_world(world)
+    test = (
+        "from pathlib import Path\nimport pytest\n\ndef test_fix():\n"
+        "    content = (Path(__file__).resolve().parent.parent / 'src/app.py').read_text()\n"
+        f"    if 'value = 2' in content:\n        pytest.{unproven}('the repaired case was not proven')\n"
+        "    assert 'value = 2' in content\n"
+    )
+    step = repair_step(plant={"src/app.py": "value = 2\n", "tests/test_fix.py": test})
+    script_repair(world, [step] * 3, make=[{"stdout": "green\n"}] * 3)
+    assert world.run("repair") == 1
+    assert git(world.root, "rev-parse", "HEAD") == baseline, "an unproven repair reached a checkpoint"
+    record = stage2.record_rows(world.record().read_text(encoding="utf-8"))
+    assert record[0][7] == "taken — test_a" and record[0][8] == "no", "an unproven row was marked fixed"
+    assert "fixed-code proof" in prompt_of(world.calls("codex")[1])
+
+
 def test_a_passing_repair_writes_fixed_into_each_rows_place_and_nothing_else(world: World) -> None:
     """Criterion 21. Planted fault: `Broke a test` written, or a rejected row changed."""
     repair_world(
@@ -8528,7 +8548,7 @@ def test_a_passing_repair_writes_fixed_into_each_rows_place_and_nothing_else(wor
     assert world.run("repair") == 0
     record = {row[0]: row for row in stage2.record_rows(world.record().read_text(encoding="utf-8"))}
     assert record["L1-1"][7] == "fixed — tests/test_fix.py::test_fix"
-    assert record["L1-1"][8] == "no", "the runner wrote Broke a test"
+    assert record["L1-1"][8] == "yes — tests/test_fix.py::test_fix", "the repair did not mark the proof it ran"
     assert record["L1-1"][:7] == [
         "L1-1",
         "MAJOR",
@@ -8799,7 +8819,7 @@ def test_the_record_is_marked_only_after_the_checkpoint_commit(world: World, mon
         seen.append(("findings", git(world.root, "rev-list", "--count", f"{baseline}..HEAD")))
         real(ctx, taken, fixes)
 
-    def spy_record(_change: str, _taken: list, _fixes: dict, _root: Path) -> None:
+    def spy_record(_change: str, _taken: list, _fixes: dict, _root: Path, _marks: dict | None = None) -> None:
         seen.append(("record", git(world.root, "rev-list", "--count", f"{baseline}..HEAD")))
 
     monkeypatch.setattr(stage2, "mark_repaired_findings", spy_findings)
