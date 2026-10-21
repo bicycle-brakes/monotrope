@@ -8,7 +8,8 @@ before `pi --list-models`) finds under the `opencode-go` provider that the
 `free_stage` rule in `model-endpoints.yaml` selects, called in parallel; round
 2 is the **Flash swarm** — up to three cheapest reachable admitted paid
 members for fresh availability-enabled runs; legacy declarations use the
-entry's eligible `flash_swarm` members, in parallel; every later round calls one eligible rung of the `modelle` ladder,
+entry's eligible `flash_swarm` members, in parallel; one deadline of
+`REVIEWER_MINUTES` covers that round's members and every replacement; every later round calls one eligible rung of the `modelle` ladder,
 cheapest first: the runner orders the set by the declared cost value
 `anfragen_5h`, never by list position. A Flash member that fails is replaced
 in its round by the cheapest eligible rung not yet used, each model at most
