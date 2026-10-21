@@ -680,6 +680,151 @@ def test_an_attempt_that_writes_a_runner_held_path_is_refused_and_restored(world
     assert git(world.root, "rev-list", "--count", f"{baseline}..HEAD") == "0", "a refused attempt committed"
 
 
+def _attempt_writing(world: World, plants: dict[str, str]) -> int:
+    """One green `implement` attempt that also writes `plants`; the exit code of the verb."""
+    baseline_plan = {"plans/changes/demo/plan.md": "2026-10-07 10:00–10:05, 5 min\n"}
+    world.script(
+        claude=[{"stdout": "implemented", "plant": {"src/app.py": "value = 2\n", **plants}, "append": baseline_plan}],
+        make=[{"stdout": "green\n"}],
+    )
+    return world.run("implement")
+
+
+def test_an_attempt_that_renames_a_held_file_to_an_allowed_path_is_refused(
+    world: World, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """O192-1: a staged rename shows only its new name unless renames are off; both names are checked."""
+    held = world.root / "prompts" / "04b-review-loop.md"
+    before = held.read_text(encoding="utf-8")
+    baseline = git(world.root, "rev-parse", "HEAD")
+    original = stage2.launch
+
+    def launch_then_rename(command, root, *args, **kwargs):
+        done = original(command, root, *args, **kwargs)
+        if Path(command[0]).name == "claude":
+            git(root, "mv", "prompts/04b-review-loop.md", "src/moved.md")
+        return done
+
+    monkeypatch.setattr(stage2, "launch", launch_then_rename)
+    assert _attempt_writing(world, {}) == 1
+    assert held.read_text(encoding="utf-8") == before, "the renamed held file was not restored"
+    assert not (world.root / "src" / "moved.md").exists()
+    assert git(world.root, "rev-list", "--count", f"{baseline}..HEAD") == "0", "a refused rename was committed"
+
+
+@pytest.mark.parametrize(
+    "path",
+    [".Claude/Rules/r.md", "CLAUDE.md", "claude.MD", ".mcp.json", ".codex/config.toml", ".agents/skills/x/SKILL.md"],
+)
+def test_an_attempt_that_writes_an_agent_entry_point_is_refused(world: World, path: str) -> None:
+    """O192-2: the agent entry points are held, and a case variant of a held prefix is the same path."""
+    baseline = git(world.root, "rev-parse", "HEAD")
+    assert _attempt_writing(world, {path: "x\n"}) == 1
+    assert not (world.root / path).exists(), "the entry point was not removed"
+    assert git(world.root, "rev-list", "--count", f"{baseline}..HEAD") == "0", "a refused attempt committed"
+
+
+def test_a_git_inside_the_repository_is_refused_where_a_run_starts(
+    world: World, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+) -> None:
+    """O192-3: a `git` the attempt could have written is never the one the runner starts."""
+    planted = world.root / "tools" / "bin" / "git"
+    planted.parent.mkdir(parents=True)
+    planted.write_text("#!/bin/sh\nexit 0\n", encoding="utf-8")
+    planted.chmod(0o755)
+    monkeypatch.setenv("PATH", f"{planted.parent}{os.pathsep}{os.environ['PATH']}")
+    assert stage2.resolve_git() == str(planted), "the planted git was not what PATH resolves to"
+    monkeypatch.setattr(stage2, "GIT", str(planted))
+    assert world.run("implement") == 2
+    assert str(planted) in capsys.readouterr().err
+    assert world.calls("claude") == []
+
+
+def _bare_git_seam(monkeypatch: pytest.MonkeyPatch, world: World) -> list[list[str]]:
+    """Make the resolved git a path of its own and fail any launch that names a bare `git`."""
+    resolved = world.bin / "pinned" / "git"
+    resolved.parent.mkdir()
+    resolved.write_text(f'#!/bin/sh\nexec {GIT} "$@"\n', encoding="utf-8")
+    resolved.chmod(0o755)
+    monkeypatch.setattr(stage2, "GIT", str(resolved))
+    seen: list[list[str]] = []
+    real = subprocess
+
+    def watch(command, *args, **kwargs):
+        if isinstance(command, list) and command and command[0] == "git":
+            raise AssertionError(f"a git call names a bare `git`: {command}")
+        if isinstance(command, list) and command and command[0] == str(resolved):
+            seen.append(command)
+        return real.run(command, *args, **kwargs)
+
+    class Seam:
+        """The runner's own view of `subprocess`; the leak check keeps the real module."""
+
+        run = staticmethod(watch)
+
+        def __getattr__(self, name: str) -> object:
+            return getattr(real, name)
+
+    monkeypatch.setattr(stage2, "subprocess", Seam())
+    return seen
+
+
+def test_every_git_call_names_the_resolved_path(world: World, monkeypatch: pytest.MonkeyPatch) -> None:
+    """O192-4: behavioural over the verbs that reach archive, is-ancestor, cat-file and merge-base."""
+    seen = _bare_git_seam(monkeypatch, world)
+    successful_implementation(world)
+    assert world.run("implement") == 0
+    clear_derived_leftovers(world)
+    draft_world(world)
+    assert stage2._merge_base(world.root)
+    plants = {
+        "plans/changes/demo/spec.md": "---\ntitle: Spec\nupdated: 2026-09-30\nbead: demo-1\n---\n\n# Spec\n",
+        "plans/changes/demo/plan.md": PLAN_CARD,
+        "docs/adr/0016-first-record.md": "# First\n",
+    }
+    world.script(codex=[codex_ok("T1", "drafted", plant=plants)], make=[{"stdout": "green\n"}])
+    assert world.run("draft") == 0
+    verbs = {command[3] for command in seen if command[1] == "-C"}
+    assert {"archive", "merge-base", "cat-file"} <= verbs, f"the seam did not reach these sites: {sorted(verbs)}"
+
+
+def test_no_git_launch_in_the_runner_names_a_bare_git() -> None:
+    """O192-4: source check for the sites no verb in this suite reaches (`show`, `worktree remove` and `prune`)."""
+    tree = ast.parse((REPO_ROOT / "scripts" / "stage2.py").read_text(encoding="utf-8"))
+    bare = [
+        node.lineno
+        for node in ast.walk(tree)
+        if isinstance(node, ast.List)
+        and node.elts
+        and isinstance(node.elts[0], ast.Constant)
+        and node.elts[0].value == "git"
+    ]
+    assert bare == [], f"a command list starts with a bare `git` at line(s) {bare}"
+    named = [
+        node.lineno
+        for node in ast.walk(tree)
+        if isinstance(node, ast.List)
+        and len(node.elts) > 1
+        and isinstance(node.elts[0], ast.Name)
+        and node.elts[0].id == "GIT"
+    ]
+    assert len(named) >= 8, "fewer git launches name GIT than the eight this check was written against"
+
+
+@pytest.mark.parametrize(
+    "provenance",
+    ["paths: [unclosed\n", "paths:\n  - just a string\n", "paths:\n  - {prefix: 'x/', allowed: 5}\n"],
+)
+def test_an_unreadable_provenance_fails_the_checkpoint_and_restores_the_edits(world: World, provenance: str) -> None:
+    """O192-5: a provenance that cannot be read is a repairable failure after the restore, never a crash."""
+    (world.root / "provenance.yaml").write_text(provenance, encoding="utf-8")
+    git(world.root, "commit", "--quiet", "-am", "a provenance the runner cannot read")
+    baseline = git(world.root, "rev-parse", "HEAD")
+    assert _attempt_writing(world, {}) == 1
+    assert (world.root / "src" / "app.py").read_text(encoding="utf-8") == "value = 1\n", "the edits stayed in the tree"
+    assert git(world.root, "rev-list", "--count", f"{baseline}..HEAD") == "0"
+
+
 def test_an_oversized_diff_reaches_the_paid_prompt_cut_and_the_record_says_so(world: World) -> None:
     """R-15 of the review-swarm review: the paid diff is bounded, and a cut is recorded, not hidden."""
     limit = 5
@@ -1493,7 +1638,7 @@ def test_preparation_git_commands_receive_no_caller_credentials(world: World, mo
     commands = []
 
     def record(command, *args, **kwargs):
-        if command[0] == stage2.GIT:
+        if Path(command[0]).name == "git":  # a bare or foreign git is recorded too, so the assert below fails on it
             commands.append((command, kwargs.get("env")))
         return original_run(command, *args, **kwargs)
 
@@ -1501,6 +1646,7 @@ def test_preparation_git_commands_receive_no_caller_credentials(world: World, mo
     assert stage2.prepare_derived(world.root, stage2.foreign_env({})) == []
     assert len(commands) == 3
     for command, env in commands:
+        assert command[0] == stage2.GIT, f"a git call does not name the resolved path: {command}"
         assert env is not None, command
         for name in ("OPENAI_API_KEY", "GH_TOKEN", "X_SECRET", "ANTHROPIC_AUTH_TOKEN"):
             assert name not in env

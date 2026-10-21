@@ -2565,13 +2565,42 @@ RUFF_COMMANDS = (
 FORMAT_LABEL = "Runner format before `make verify`"
 FORMAT_COMMIT_HEADING = "Runner format before `make verify` (ruff check --fix with safe fixes only, then ruff format):"
 
+
 # The runner's own steps are bounded, and every program it starts from the worktree is the one it saw
 # before the model ran: a step that hangs, and a tool the attempt overwrote, both abort the attempt
 # with the limit or the path named - never a silent cut, never a wait without end (R-19, R-20 and
 # R-21 of the review-swarm review).
 # The one executable the runner resolves through `PATH`, and only once: every call names this path
 # (R-17 of the review-swarm review). A poisoned `PATH` after start cannot swap it.
-GIT = shutil.which("git") or "git"
+def resolve_git() -> str:
+    """The `git` that `PATH` names now, or the bare name when there is none."""
+    return shutil.which("git") or "git"
+
+
+GIT = resolve_git()
+
+
+def refuse_repository_git(root: Path) -> None:
+    """Refuse a run whose resolved `git` lies inside the repository: an attempt could have written it (O192-3).
+
+    Checked where a run starts. A bare name (no `git` on `PATH`) is not a path under the root and
+    fails at the first call instead. Follow-up: once `runner_env` (PR #188) filters `PATH`, resolve
+    through that filtered `PATH`.
+    """
+    program = Path(GIT)
+    if not program.is_absolute():
+        return
+    try:
+        resolved = program.resolve()
+        inside = resolved.is_relative_to(root.resolve())
+    except (OSError, RuntimeError):
+        inside = True  # an unmeasurable path is not trusted
+    if inside:
+        raise Refused(
+            f"`git` resolves to {GIT}, inside the repository; the runner starts no program the checkout holds. "
+            "Take that directory off PATH and start the run again."
+        )
+
 
 TOOL_SECONDS = 5 * 60
 VERIFY_SECONDS = 30 * 60
@@ -2599,7 +2628,8 @@ def tool_problem(root: Path, before: dict[str, str] | None) -> str | None:
 
 def changed_paths(root: Path, env: dict[str, str] | None = None, against: str = "HEAD") -> set[Path]:
     """Tracked changes against `against` and untracked files, as repository-relative paths."""
-    tracked = _git_output(root, "diff", "--name-only", "-z", against, env=env).split("\0")
+    # `--no-renames`: a rename must list both names, or the deleted one is invisible (O192-1).
+    tracked = _git_output(root, "diff", "--no-renames", "--name-only", "-z", against, env=env).split("\0")
     untracked = _git_output(root, "ls-files", "-z", "--others", "--exclude-standard", env=env).split("\0")
     return {Path(name) for name in [*tracked, *untracked] if name}
 
@@ -3306,13 +3336,20 @@ RUNNER_HELD = (
     "provenance.yaml",
     "decisions/gates.yaml",
     "model-endpoints.yaml",
-    ".claude/settings.json",
+    # Everything a harness loads as instructions, hooks, agents, skills or tools. `.claude/` is held
+    # whole (settings, hooks, agents, commands, rules); `CLAUDE.md` would silently replace `AGENTS.md`
+    # for Claude Code (docs/WORKFLOW.md §3 lists it and `.mcp.json` as "not created"); `.codex/` holds
+    # the hook list, `.agents/` the skills, `.pi/` the reviewer session's own files.
+    ".claude/",
+    ".codex/",
+    ".agents/",
+    ".pi/",
+    ".mcp.json",
+    "CLAUDE.md",
     "prompts/",
     "templates/",
     ".github/",
     ".beads/",
-    ".claude/commands/",
-    ".claude/rules/",
     "AGENTS.md",
     "README.md",
 )
@@ -3336,16 +3373,17 @@ def uncommittable(root: Path, change: str, keep: set[Path] | None = None) -> lis
             for entry in entries
             if entry.get("allowed") and set(entry["allowed"]) == {"human-decided"}
         ]
-    except (Refused, KeyError, TypeError, yaml.YAMLError) as error:
+    except (Refused, KeyError, TypeError, AttributeError, yaml.YAMLError) as error:
         raise Refused(f"the committed provenance map cannot be read; no attempt is committed ({error})") from error
     folder = f"plans/changes/{change}/"
-    held = [*decided, *RUNNER_HELD]
+    # Case-folded on both sides: on a case-insensitive checkout `.Claude/Rules/` is `.claude/rules/` (O192-2).
+    held = [path.casefold() for path in [*decided, *RUNNER_HELD]]
     return sorted(
         relative.as_posix()
         for relative in changed_paths(root)
         if relative.as_posix() not in spared
         and not relative.as_posix().startswith(folder)
-        and any(relative.as_posix() == path or relative.as_posix().startswith(path) for path in held)
+        and any(relative.as_posix().casefold().startswith(path) for path in held)
     )
 
 
@@ -3363,7 +3401,13 @@ def checkpoint(
         exposed = remove_changed_credential(root, key, ignored_before)
         if exposed:
             raise Refused(credential_message(exposed))
-    blocked = uncommittable(root, change, keep)
+    try:
+        blocked = uncommittable(root, change, keep)
+    except Refused as error:
+        # An unreadable map is a failure of this attempt, repairable by the next one - and the edits go
+        # first, so nothing the runner could not classify stays in the tree (O192-5).
+        restored = restore_baseline(root, baseline, set(keep or ()), ignored_before)
+        raise CallFailed(f"{error}; {restored}") from error
     if blocked:
         # The tree goes back to the baseline, but `keep` stands: what the verb itself may keep changed -
         # its change folder, a draft's own new ADR, the findings a human may have touched - is not the
@@ -5052,6 +5096,7 @@ def main(argv: list[str] | None = None) -> int:
             raise Refused("--stage2-off applies only to explore, implement and repair.")
         if args.availability_reported is not None and args.verb != "review-loop":
             raise Refused("--availability-reported belongs to review-loop alone.")
+        refuse_repository_git(Path(args.root))
         if args.verb == "session":
             if not args.model:
                 raise Refused("session needs --model <id>: name the model exactly as model-endpoints.yaml lists it.")
