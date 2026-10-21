@@ -508,7 +508,6 @@ def opencode_remark_problems(remark: str) -> list[str]:
         "deepseek-v4.1-flash` USD 0.15",
         "0.30 / 1.20",
         "limit USD 60",
-        "mimo-v2.6-flash` 0.14 / 0.28, limit USD 60",
         "mimo-v2.6-pro` 0.435 / 0.87, limit USD 15",
         "0 days",
         '"Not used"',

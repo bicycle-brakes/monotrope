@@ -173,7 +173,6 @@ endpunkte:
     # column, requests per 5 hours; more is cheaper), descending, ties by id.
     modelle:
       - deepseek-v4.1-flash
-      - mimo-v2.6-flash
       - longcat-2.0
       - glm-5.3-flash
       - qwen3.8-flash
@@ -188,14 +187,6 @@ endpunkte:
         aufbewahrung: "0 days"
         training: "Not used"
         anfragen_5h: 34670
-        anfragen_gelesen: "2026-10-17"
-        anfragen_quelle: "estimated requests table of the Go page, https://opencode.ai/docs/go"
-      mimo-v2.6-flash:
-        gelesen: "2026-10-07"
-        quelle: "privacy table of the Go page, https://opencode.ai/docs/go"
-        aufbewahrung: "0 days"
-        training: "Not used"
-        anfragen_5h: 30100
         anfragen_gelesen: "2026-10-17"
         anfragen_quelle: "estimated requests table of the Go page, https://opencode.ai/docs/go"
       mimo-v2.6-pro:
@@ -271,10 +262,14 @@ endpunkte:
       # until 2026-10-21T20:34+08:00 covers the Z.ai route only, which this
       # preparation never probes.
       exclude_until: []
+    # `mimo-v2.6-flash` left the ladder on 2026-10-20: OpenCode Go answers it with
+    # `[model_coming_soon] This model is coming soon.` on every call (bead
+    # coding-harness-mkg, measured 2026-10-16 and still on 2026-10-19), so every
+    # review loop stopped after round 1. `mimo-v2.6-pro` takes the third place.
     flash_swarm:
       - deepseek-v4.1-flash
-      - mimo-v2.6-flash
       - longcat-2.0
+      - mimo-v2.6-pro
     free_stage:
       provider: opencode-go
       id_suffix: "-free"
@@ -343,9 +338,9 @@ endpunkte:
       Subscription: the Go plan at USD 10 a month. Prices per million
       tokens and monthly limit on the Go plan: `deepseek-v4.1-flash` USD 0.15
       input / 0.60 output off-peak and 0.30 / 1.20 in peak hours, limit USD
-      60; `mimo-v2.6-flash` 0.14 / 0.28, limit USD 60; `mimo-v2.6-pro` 0.435
-      / 0.87, limit USD 15. Privacy table of the Go page (read 2026-10-07):
-      data retention `0 days` and model training "Not used" for all three;
+      60; `mimo-v2.6-pro` 0.435 / 0.87, limit USD 15. Privacy table of the Go
+      page (read 2026-10-07): data retention `0 days` and model training
+      "Not used" for both;
       the DeepSeek rows carry the footnote that the ZDR agreement is renewed
       monthly and the current one is valid through 2026-10-31. The Go page
       states no region; `anbieter-erklaert` rests on the Zen page's sentence

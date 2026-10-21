@@ -134,7 +134,10 @@ def measure(findings: str, research: str = "") -> Counts:
         if (
             "Broke a test" in header
             and len(cells) == len(header)
-            and cells[header.index("Broke a test")].lower() == "yes"
+            # The runner writes `yes — <anchor>` since a repair states the proof it ran (#199 of the
+            # review); a bare `yes` and a `yes — …` both count, and only the leading word decides.
+            and stage2.marks_a_test(cells[header.index("Broke a test")])
+            and cells[header.index("Broke a test")].strip().lower().startswith("yes")
         ):
             counts.broke += 1
         if stage2._furniture(cells):
