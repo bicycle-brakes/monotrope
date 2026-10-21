@@ -10,7 +10,7 @@ produced_by:
   name: pi
   version: "Sonnet-class session through Pi, 2026-10-21"
 tags: [handover, session, review-loop, stage-2, runner, stack]
-target_ref: 38ebe0f
+target_ref: 7241e94
 status: pending
 review:
   status: pending
@@ -40,24 +40,26 @@ the review findings.
 
 | PR | Bead | Findings | Base | Head commit |
 |---|---|---|---|---|
-| #188 | `coding-harness-011` | R-19, R-20, R-21 — the runner's own tooling, hashed and bounded | `main` | `5fe67e0` |
-| #189 | `coding-harness-5j4` | R-2, R-3 — record keyed by worktree, anchored release cut | `fix/runner-own-tooling` | `ca278cc` |
-| #190 | `coding-harness-1wo` | R-14 — one runner per loop record | `fix/record-dir-key` | `d4539ae` |
-| #191 | `coding-harness-4p1` | R-15 — the paid diff is bounded, and a cut round cannot end the loop | `fix/review-loop-lock` | `4e8fcbf` |
-| #192 | `coding-harness-wqw` | R-16, R-17, R-22-runner-half — the commit guard, git resolved once | `fix/review-prompt-bounds` | `7550921` |
-| #194 | `coding-harness-3ql` (part 1) | R-6, R-10 — round and consumption in one write; shifted mark refused | `fix/commit-guard` | `8e5eddc` |
-| #196 | `coding-harness-3ql` (part 2) | R-7, R-8, R-9, R-11, R-13, R-12, `ll5` | `fix/loop-record-order` | `29090f8` |
-| #197 | `coding-harness-16z` | R-4 — the `ausgeschlossen` list binds both admission paths | `fix/loop-limits-deadline` | `8ca9300` |
-| #198 | `coding-harness-tex` | R-1 — `release-loop --stage-failed` retires a wedged stage | `fix/excluded-binds` | `3c79311` |
-| #199 | `coding-harness-0an` | R-24 — the repair writes the mark its own proof shows | `fix/retire-failed-stage` | `ba9da6c` |
-| #200 | `coding-harness-wqw` | R-22 — `decisions/gates.yaml` is `human-decided` (decision PR) | `fix/repair-mark` | `59754db` |
-| #201 | `coding-harness-mkg` | the dead ladder rung is replaced (decision PR) | `decide/gates-provenance` | `38ebe0f` |
-| #202 | `coding-harness-8df` | R-5 — the read boundary written down, enforcement named as its own work | `decide/ladder-rung` | `38a0c7d` |
+| #188 | `coding-harness-011` | R-19, R-20, R-21 — the runner's own tooling, hashed and bounded | `main` | `639b9d4` |
+| #189 | `coding-harness-5j4` | R-2, R-3 — record keyed by worktree, anchored release cut | `fix/runner-own-tooling` | `8329f3c` |
+| #190 | `coding-harness-1wo` | R-14 — one runner per loop record | `fix/record-dir-key` | `c6f3292` |
+| #191 | `coding-harness-4p1` | R-15 — the paid diff is bounded, and a cut round cannot end the loop | `fix/review-loop-lock` | `0380ed9` |
+| #192 | `coding-harness-wqw` | R-16, R-17, R-22-runner-half — the commit guard, git resolved once | `fix/review-prompt-bounds` | `0678b6d` |
+| #194 | `coding-harness-3ql` (part 1) | R-6, R-10 — round and consumption in one write; shifted mark refused | `fix/commit-guard` | `726ceb2` |
+| #196 | `coding-harness-3ql` (part 2) | R-7, R-8, R-9, R-11, R-13, R-12, `ll5` | `fix/loop-record-order` | `c2ba73c` |
+| #197 | `coding-harness-16z` | R-4 — the `ausgeschlossen` list binds both admission paths | `fix/loop-limits-deadline` | `4c5861f` |
+| #198 | `coding-harness-tex` | R-1 — `release-loop --stage-failed` retires a wedged stage | `fix/excluded-binds` | `412349b` |
+| #199 | `coding-harness-0an` | R-24 — the repair writes the mark its own proof shows | `fix/retire-failed-stage` | `f7ab041` |
+| #200 | `coding-harness-wqw` | R-22 — `decisions/gates.yaml` is `human-decided` (decision PR) | `fix/repair-mark` | `9446abe` |
+| #205 | `coding-harness-mkg` | the dead ladder rung is replaced (decision PR; #201 was closed by a force-push and re-opened with this number) | `decide/gates-provenance` | `1e92f57` |
+| #202 | `coding-harness-8df` | R-5 — the read boundary written down, enforcement named as its own work | `decide/ladder-rung` | `7241e94` |
 
 Every PR names its findings and its tests in the body; every one was verified
 locally with `PYTHON=.venv/bin/python3 make verify` in the worktree that holds
-it (2319 to 2325 tests, 16 skipped). CI was green on #194 and #196 when this was
-written; #197 to #202 were pushed late and their CI had not been read yet.
+it (about 2300 tests, 16 skipped), and **every PR of this stack was green in CI
+when this handover was written** (2026-10-21, 09:30 UTC). The stack was rebased
+onto the new #192 head (`0678b6d`, the other session's commit-guard work) after
+the maintainer asked for it.
 
 ## The maintainer's answers, night interview of 2026-10-20
 
@@ -90,6 +92,22 @@ without it:
 - **#192, P1** the draft may commit its own new ADR under `docs/adr/` again
   (`human-decided` blocked it and wiped the draft); **P2** a refusal no longer
   discards pre-existing `findings.md` entries (`7550921`).
+
+A second review round then read the whole stack and found four more, all
+repaired the same way — a test per finding, red first:
+
+- **#194, P2** the shifted-mark refusal was too broad: a Status cell carrying a
+  `|` with a valid mark in the last cell is a legitimate row and stays one
+  (`726ceb2`).
+- **#196, P2** the second probe was neither checked nor audited: admission,
+  `checked_prompt` and the audit line now sit inside the probe loop
+  (`c2ba73c`).
+- **#198, P2** after `release-loop` the snapshot lives in `findings.md`, so a
+  run whose next stage lost every member could not be retired; `read_state(None,
+  findings_text)` now supplies it (`412349b`).
+- **#199, P2** `scripts/stage2_runs.py::measure` counted only a bare `yes`, so a
+  proven repair's mark vanished from the metrics; it reads the leading word
+  now (`f7ab041`).
 
 ## Value that is still open
 
