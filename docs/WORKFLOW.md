@@ -782,8 +782,9 @@ into a shell. Eleven verbs exist:
   fresh run, a timestamped report and an external input-bound receipt; report
   the selection in the main Claude Code or Codex conversation before using its
   id with `review-loop --availability-reported <id>`. Each probe consumes a
-  request, times out after 60 seconds and preserves per-call leak/admission
-  checks. No repository content is supplied and no review round is counted.
+  request, times out after 60 seconds and retries a timed-out probe once with
+  a 180-second limit, preserving per-call leak/admission checks. A refusal
+  gets no retry. No repository content is supplied and no review round is counted.
 - `review-loop` — one round of phase 4b, started through Pi; round 1 the
   free swarm the `free_stage` rule selects live, round 2 the three cheapest
   reachable admitted models for an availability-enabled run (a legacy
@@ -1129,7 +1130,7 @@ attempt whose every member failed completes no round and consumes no stage.
 When every stage of a run is consumed and the last round was not clean, the
 loop stops and reports to the maintainer — no model is substituted. The rows
 go into a **loop record** outside the worktree and outside the git directory
-(`${XDG_STATE_HOME:-~/.local/state}/coding-harness/stage2/<change>/loop.md`),
+(`${XDG_STATE_HOME:-~/.local/state}/coding-harness/stage2/<change>@<digest>/loop.md`),
 not into the repository: the phase-6 reviewer writes its verdict before it
 reads any loop row. The record carries the run's snapshot — the discovery
 check, the stage membership and what is consumed — and neither a release nor
