@@ -12,6 +12,10 @@ import hashlib
 import json
 from pathlib import Path
 
+# A probe's first limit, and the one longer retry a timed-out probe gets (R-7 of the review-swarm review).
+PROBE_SECONDS = 60
+PROBE_RETRY_SECONDS = 180
+
 
 def now() -> dt.datetime:
     return dt.datetime.now(dt.UTC)
@@ -63,8 +67,8 @@ def binding(root: Path, runner) -> dict:
     }
 
 
-def receipt_path(change: str, runner) -> Path:
-    return runner.record_dir(change) / "availability.json"
+def receipt_path(root: Path, change: str, runner) -> Path:
+    return runner.record_dir(change, root) / "availability.json"
 
 
 def report(state: dict) -> str:
@@ -88,12 +92,12 @@ def prepare(root: Path, change: str, runner) -> None:
     rule = settings(root, runner)
     if rule is None:
         raise runner.Refused("this endpoint declares no availability_preflight rule.")
-    path = receipt_path(change, runner)
+    path = receipt_path(root, change, runner)
     # A failed refresh/probe attempt must never leave an earlier receipt usable.
     path.unlink(missing_ok=True)
     findings = folder / "findings.md"
     text = findings.read_text(encoding="utf-8") if findings.exists() else ""
-    record = runner.read_record(change)
+    record = runner.read_record(change, root)
     if runner.read_state(record, text) is not None or runner.rounds_run(record, text):
         raise runner.Refused("this review run already has history; preparation cannot reset its snapshot or stops.")
     problem = runner.entry_problem(root, runner.OPENCODE)
@@ -118,6 +122,7 @@ def prepare(root: Path, change: str, runner) -> None:
             candidates.append(model)
     reachable = []
     failed = {}
+    slow: dict[str, int] = {}
     key = runner.reviewer_key()
     prompt = "Availability probe only. Reply with OK. Do not review code or request tools."
     for model in dict.fromkeys(candidates):
@@ -129,29 +134,42 @@ def prepare(root: Path, change: str, runner) -> None:
                 break
         if model in skipped:
             continue
-        admission = runner._free_admission(model in free["selected"], {"free": free})
-        endpoint = (runner.OPENCODE, model, "max")
-        ctx = runner.preflight(root, change, endpoint, admission_problem=admission)
-        ctx.models_store = free.get("models_store")
-        result = runner.checked_prompt(ctx, endpoint, prompt, admission)
-        if not findings.exists():
-            findings.write_text(runner.findings_header(ctx, runner.producer_for(endpoint)), encoding="utf-8")
-        runner.append(findings, runner.call_line("prepare-loop", endpoint, result))
-        try:
-            # All probes, including paid ones, have no repository input or tools.
-            runner.run_reviewer(
-                ctx,
-                model,
-                prompt,
-                key,
-                free=True,
-                timeout_seconds=60,
-                task="Follow the appended availability instructions.",
-            )
-        except runner.CallFailed as error:
-            failed[model] = runner.scrub(str(error), key)
-        else:
-            reachable.append(model)
+        # A probe that only ran out of time is tried once more with a longer limit: a slow but
+        # reachable model must not disappear from the run silently (R-7 of the review-swarm review).
+        for attempt, limit in enumerate((PROBE_SECONDS, PROBE_RETRY_SECONDS), 1):
+            # Every foreign call is checked and audited on its own, the second one too: an admission
+            # withdrawn between the two probes must stop it, and the leak check runs before each call
+            # (the review of PR #196).
+            admission = runner._free_admission(model in free["selected"], {"free": free})
+            endpoint = (runner.OPENCODE, model, "max")
+            ctx = runner.preflight(root, change, endpoint, admission_problem=admission)
+            ctx.models_store = free.get("models_store")
+            result = runner.checked_prompt(ctx, endpoint, prompt, admission)
+            if not findings.exists():
+                findings.write_text(runner.findings_header(ctx, runner.producer_for(endpoint)), encoding="utf-8")
+            runner.append(findings, runner.call_line("prepare-loop", endpoint, result))
+            try:
+                # All probes, including paid ones, have no repository input or tools.
+                runner.run_reviewer(
+                    ctx,
+                    model,
+                    prompt,
+                    key,
+                    free=True,
+                    timeout_seconds=limit,
+                    task="Follow the appended availability instructions.",
+                )
+            except runner.CallFailed as error:
+                failed[model] = runner.scrub(str(error), key)
+                # Only a stopped call is worth a longer try; a refused one stays refused.
+                if "stopped by" not in str(error):
+                    break
+            else:
+                reachable.append(model)
+                failed.pop(model, None)
+                if attempt > 1:
+                    slow[model] = limit
+                break
     state = {"free": free, "paid": {}, "consumed": []}
     state["free"]["selected"] = [model for model in free["selected"] if model in reachable]
     admitted = [model for model in paid if model in reachable]
@@ -161,6 +179,7 @@ def prepare(root: Path, change: str, runner) -> None:
         "checked_at": now().isoformat(timespec="seconds"),
         "reachable": reachable,
         "failed": failed,
+        "slow": slow,
         "skipped": skipped,
         "terms_skipped": runner.skipped_models(root),
     }
@@ -184,7 +203,7 @@ def prepare(root: Path, change: str, runner) -> None:
 def consume(root: Path, change: str, token: str | None, runner) -> dict:
     """Validate acknowledgment, freshness and input identity before any review call."""
     rule = settings(root, runner)
-    path = receipt_path(change, runner)
+    path = receipt_path(root, change, runner)
     try:
         receipt = json.loads(path.read_text(encoding="utf-8"))
         state = receipt["state"]
@@ -209,3 +228,12 @@ def consume(root: Path, change: str, token: str | None, runner) -> dict:
             "run prepare-loop and report its fresh selection in the main conversation; pass its --availability-reported id."
         )
     return state
+
+
+def spend(root: Path, change: str, runner) -> None:
+    """Spend the receipt once the first round is written, never earlier (ADR 0021, decision 6).
+
+    A failed attempt consumes no stage and leaves no record, so it leaves the receipt too; the
+    operator does not re-probe for a Pi that was missing (O190-3).
+    """
+    receipt_path(root, change, runner).unlink(missing_ok=True)
