@@ -4503,3 +4503,14 @@ Phase 6 verdict: codex 01a16083-fd73-7db1-ba5e-3a505f9c7e87, 2026-10-22
 Reviewer session: codex 01a16083-fd73-7db1-ba5e-3a505f9c7e87 — a fresh session reviewed: an earlier ## Phase 6 block makes this a re-check
 
 Stage-2 call, 2026-10-22: repair · attempt 1 · route codex · endpoint openai-codex · model gpt-6.1-sol · leak check clean over 556 files, 1802 commits, 12 rules.
+
+Stage-2 call, 2026-10-22: review · endpoint openai-codex · model gpt-6.1-sol · leak check clean over 556 files, 1803 commits, 12 rules.
+
+## Phase 6 — Codex, 2026-10-22
+
+| ID | Severity | Dimension | Origin | Where | Finding | Reviewer | Status | Broke a test |
+|---|---|---|---|---|---|---|---|---|
+| F-65 | MAJOR | SPEC | fix-r17 | `scripts/check_research_handoff.py:116–127,503–514` | New evidence after the duplicate-answer-key repair (F-64): an answer containing `<<: {source: maintainer}` followed by duplicate `choice: keep` and `choice: drop` keys still closes research obligations and supplies a criterion Basis. Reproduced through `check_change()` with no findings. Constructing the merge key raises a generic YAML error before duplicate detection; the historical-prose fallback suppresses it. Duplicate answer keys must report not measured with exit 3. [criterion 33] | Codex | open | — |
+
+Phase 6 verdict: codex 01a160ad-c28c-7591-b2e9-9fe376556d65, 2026-10-22
+Reviewer session: codex 01a160ad-c28c-7591-b2e9-9fe376556d65 — a fresh session reviewed: an earlier ## Phase 6 block makes this a re-check
