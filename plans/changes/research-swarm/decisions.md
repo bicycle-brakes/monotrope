@@ -4,7 +4,7 @@ status: draft
 implementation_status: none
 date: 2026-10-14
 last_reviewed: 2026-10-14
-updated: 2026-10-19
+updated: 2026-10-21
 supersedes: null
 superseded_by: null
 bead: coding-harness-icw

@@ -4,7 +4,7 @@ status: draft
 implementation_status: partial
 date: 2026-10-14
 last_reviewed: 2026-10-18
-updated: 2026-10-19
+updated: 2026-10-21
 supersedes: null
 superseded_by: null
 bead: coding-harness-icw
@@ -928,3 +928,19 @@ maintainer answer is supplied here.
   tool is called with, not what a directory walk then visits; that remainder
   is the residual read risk design.md records. Probes and online seats have
   no file tools.
+
+## Amendment — 2026-10-21, the maintainer chooses the seat models (Q-18)
+
+This amendment supersedes, where they conflict, the "preferred model" wording
+of the seat definition, the selection paragraph and criterion 49 above. A seat
+is either pinned (`{endpoint, model}`) or open (`{endpoint: opencode-go}`
+alone); the declared Go seats are open, the Haiku repository seat stays pinned.
+
+62. When a seat is open, preparation fills it with the first pool model in cost order that is unexcluded, reachable and not selected for another seat of its trio, and marks it "cheapest".
+   *Refuted by:* An open seat stays empty while such a model exists, takes a costlier model first, or one model fills two seats of a trio.
+63. When preparation ends, its report lists every reachable candidate with its request cost and its Artificial Analysis Intelligence Index (or "not read" with the reason), the index source and reading time, and a recommendation; the API key appears in no output.
+   *Refuted by:* A reachable candidate lacks cost or index, the source is missing, the key is printed, or a missing key or failed request stops the preparation.
+64. When the maintainer's answer differs from the recommendation, `prepare-explore --seats TRIO=models` fills that trio's Go seats in order with exactly those models, marked "maintainer's choice"; a chosen model that is not admitted or not reachable stops preparation with exit 1 and is never replaced.
+   *Refuted by:* A chosen model is swapped for another, ignored, or an unreachable choice yields a receipt.
+65. If `--seats` names an unknown trio, a trio twice, a model twice, or not exactly as many models as the trio has Go seats, or an open seat names an endpoint other than `opencode-go`, preparation refuses with exit 2 before any probe.
+   *Refuted by:* Such an input starts a probe or exits other than 2.

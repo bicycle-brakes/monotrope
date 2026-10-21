@@ -736,7 +736,7 @@ admission and cost values live in `model-endpoints.yaml`.
 | Phase | Model | Why |
 |---|---|---|
 | 1 Explore | **GLM 5.3 Flash** | much input, little output, no deep reasoning; through Claude Code against Z.ai and the runner, for a `bounded` change or a `spike` (ADR 0020) |
-| 1 Explore swarm | **the research swarm** | for a `feature` or `architectural` change (ADR 0020): a finder trio maps the sources, six seats (three repository, three online, each with one preferred model and a reported substitute) research eleven topics on the same brief, selected Go free models add public topics best-effort, and one fresh Opus 5.5 context reconciles; the runner dispatches every call through the declared endpoints, leak-checks each prompt, and an incomplete run exits 1 |
+| 1 Explore swarm | **the research swarm** | for a `feature` or `architectural` change (ADR 0020): a finder trio maps the sources, six seats (three repository, three online; the Go seats are open and filled per run with the maintainer's choice on a cost-against-intelligence recommendation, Q-18) research eleven topics on the same brief, selected Go free models add public topics best-effort, and one fresh Opus 5.5 context reconciles; the runner dispatches every call through the declared endpoints, leak-checks each prompt, and an incomplete run exits 1 |
 | 2 Spec | **gpt-6.1-sol** | effort [`CODEX_EFFORTS["draft"]`](../scripts/stage2.py), one call for 2, 2b and 3 through the Codex CLI and `draft`, writing in the CLI's workspace-write sandbox; `glm-5.3` drafts through Claude Code against Z.ai after two failed Codex attempts (ADR 0016) |
 | 2b Design | **gpt-6.1-sol** | effort [`CODEX_EFFORTS["draft"]`](../scripts/stage2.py), drafted in the same call as 2 and 3 |
 | 3 Plan | **gpt-6.1-sol** | effort [`CODEX_EFFORTS["draft"]`](../scripts/stage2.py), drafted in the same call as 2 and 2b |
@@ -791,12 +791,19 @@ before publication.
 
 **Preparation before a run (Q-12).** `prepare-explore <change> [--class CLASS]`
 forces a fresh Go catalog from the pinned Pi, cross-checks it against
-models.dev tool-call and deprecation data, probes each seat's preferred model
-with a tool-free call and, for an unreachable one, takes the cheapest reachable
-admitted Go model as a named substitute. It prints a selection report and a
-single-use receipt id; the report is shown to the maintainer in the main
-conversation, then `explore <change> --availability-reported <id>` consumes
-the receipt before the first model call. A Pi refresh failure or a seat with no
+models.dev tool-call and deprecation data, probes the admitted models
+with a tool-free call and fills each open Go seat with the cheapest reachable
+admitted Go model of its trio (a pinned seat's unreachable model gets a named
+substitute). It reads the Artificial Analysis Intelligence Index live
+(`ARTIFICIAL_ANALYSIS_API_KEY`; without it the index is "not read" and cost
+alone decides) and prints every reachable candidate with its request cost and
+index, a recommendation and a single-use receipt id. **Before every research
+run the orchestrator asks the maintainer which models to use**, with the
+recommendation and its reason (Q-18); a different answer goes back as
+`prepare-explore <change> --seats repository=<models> --seats online=<models>`,
+and a chosen model that is not reachable stops the preparation instead of being
+replaced. Then `explore <change> --availability-reported <id>` consumes the
+receipt before the first model call. A Pi refresh failure or a seat with no
 reachable model exits 1; a missing, stale, consumed or mismatched receipt
 exits 2. Neither verb runs for a `bounded` change, a `spike` or beside
 `--stage2-off`.

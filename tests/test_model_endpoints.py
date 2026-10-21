@@ -782,16 +782,13 @@ def test_the_repository_declaration_carries_six_seats_and_the_rule() -> None:
     if not geladen.get("research_swarm"):
         pytest.skip("no research_swarm block in this declaration (the kit's stub is empty)")
     block = geladen["research_swarm"]
-    assert [seat["model"] for seat in block["repository_seats"]] == [
-        "deepseek-v4.1-flash",
-        "mimo-v2.6-flash",
-        "claude-haiku-5-5",
+    # Q-18: the Go seats are open and filled per run on the maintainer's choice; only the Haiku seat is pinned.
+    assert block["repository_seats"] == [
+        {"endpoint": "opencode-go"},
+        {"endpoint": "opencode-go"},
+        {"endpoint": "claude-code-plan", "model": "claude-haiku-5-5"},
     ]
-    assert [seat["model"] for seat in block["online_seats"]] == [
-        "deepseek-v4.1-flash",
-        "mimo-v2.6-flash",
-        "qwen3.8-flash",
-    ]
+    assert block["online_seats"] == [{"endpoint": "opencode-go"}] * 3
     rule = block["availability_preflight"]
     assert rule["max_age_seconds"] == 900 and rule["measured_wire_apis"] == ["openai-completions"]
     assert block["online_free"] == {"provider": "opencode-go", "suffix": "-free", "include": [], "exclude": []}

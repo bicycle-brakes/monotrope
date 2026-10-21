@@ -4,7 +4,7 @@ status: draft
 implementation_status: partial
 date: 2026-10-14
 last_reviewed: 2026-10-18
-updated: 2026-10-19
+updated: 2026-10-21
 supersedes: null
 superseded_by: null
 bead: coding-harness-icw
@@ -814,3 +814,20 @@ topics.
   assignments and the fixed repository and online trios with their
   `fixed-model-unavailable` stop; the existing small-change route stays
   available.
+
+## Amendment — 2026-10-21, open seats and the maintainer's choice (Q-18)
+
+The seat table above is history: since PR #205 removed `mimo-v2.6-flash`, the
+Go seats in `model-endpoints.yaml` are open (`{endpoint: opencode-go}`) and only
+the Haiku repository seat is pinned. `_Selection.fill` skips the preferred pass
+for an open seat and fills it from the pool, marked "cheapest".
+`read_intelligence` makes one GET to
+`https://artificialanalysis.ai/api/v2/data/llms/models` with the key from
+`ARTIFICIAL_ANALYSIS_API_KEY` (20 seconds), matches a model by its declared
+`intelligence_slugs` entry or by its normalised id against the entry's slug or
+name, and keeps the highest index among an entry's effort variants; any failure
+gives "not read" with the key scrubbed. The reading is stored in the receipt
+state. `prepare-explore --seats TRIO=models` (parsed by `stage2.seat_choice`,
+applied by `chosen_seats`) pins the named Go models for that preparation, and
+the fill never substitutes for them. The receipt flow, probes and budget are
+unchanged.

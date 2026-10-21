@@ -4,7 +4,7 @@ category: adr
 status: accepted
 created: 2026-10-15
 last_reviewed: 2026-10-18
-updated: 2026-10-18
+updated: 2026-10-21
 owner: framework-architect
 provenance: human-decided
 produced_by: {kind: llm-session, name: claude-code, version: "2026-10-18"}
@@ -53,6 +53,11 @@ availability preparation. Q-14 (2026-10-18) makes the substitutes live as
 well: a seat declares one preferred model, and a substitute comes from the
 admitted Go models of the fresh catalog, cheapest first. Q-13 (2026-10-18)
 asks that finished research survive a run stopped by a token or quota limit.
+Q-18 (2026-10-21) follows PR #205, which removed `mimo-v2.6-flash`, a
+preferred model of both trios, from the Go model list: the Go seats no longer
+name models, and the maintainer chooses the seat models before every run on a
+recommendation that weighs the Artificial Analysis Intelligence Index, read
+live, against the declared request cost.
 
 ## Decision Drivers
 
@@ -265,9 +270,10 @@ checkable.
     Changed inputs invalidate publication with named paths and exit 1; only
     runner research appends/restamping are ignored. Invalid given neighbours
     refuse preflight (exit 2); later unread evidence stays a named gap.
-11. The six required seats (three repository, three online) each declare
-    exactly one preferred `{endpoint, model}` in `model-endpoints.yaml`, with
-    no fallback list, beside an availability rule with the review swarm's
+11. The six required seats (three repository, three online) are each either
+    pinned to one `{endpoint, model}` in `model-endpoints.yaml`, with no
+    fallback list, or open (`{endpoint: opencode-go}` alone, Q-18); an open
+    seat takes the cheapest reachable admitted pool model of its trio, beside an availability rule with the review swarm's
     field names (`max_age_seconds`, dated `exclude_until`) and a
     `measured_wire_apis` list. A separate step, `prepare-explore`, refreshes
     the catalog and admits Go models. Each needs a `modelle_terms` record
@@ -284,7 +290,13 @@ checkable.
     through official Claude Code. Within each trio the reachable preferred
     models are kept first. Each remaining seat takes the cheapest reachable,
     unexcluded pool model that no seat of its trio holds, reported as
-    "substitute for <seat>". The selection is printed for the main conversation and sealed
+    "substitute for <seat>". Preparation reads the Artificial Analysis
+    Intelligence Index live (a missing key or failed request marks it not
+    read and never stops preparation) and prints every reachable candidate
+    with request cost and index plus a recommendation; the orchestrator asks
+    the maintainer which models to use before the run, and a different answer
+    (`--seats`) fills the trio's Go seats and is never silently replaced. The
+    selection is printed for the main conversation and sealed
     in a single-use receipt bound to worktree, change, configuration, class
     and neighbours; `explore --availability-reported <id>` consumes it within
     the maximum age, and the selection stays frozen for the run, with no swap,
@@ -320,9 +332,12 @@ checkable.
 * Each run gains a preparation step and a report the orchestrator relays
   before the run; the selected models are reported, not fixed in the spec.
   Probes cost a few small calls outside `39 + 3N`, a Claude Code seat's
-  probe included. Changing a preferred model is a one-line pull request; a
-  substitute needs only an admitted terms record, so the pool follows the
-  Go catalog by itself.
+  probe included. No Go seat names a model, so a vanished
+  Flash model blocks nothing; a new model needs only an admitted terms
+  record, so the pool follows the Go catalog by itself. Every research run
+  costs one more question to the maintainer, and preparation makes one live
+  call to the Artificial Analysis API, which receives no repository content
+  and requires attribution.
 * Finished research survives a stopped run, at the cost of a runner-owned
   store outside the repository, an input-binding check and a per-change
   lock. A repository seat that deliberately reads an absolute path outside
