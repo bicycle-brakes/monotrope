@@ -50,8 +50,10 @@ state stays in Beads.
   reviewed rule O197-2 (a customer-only exclusion does not deny framework
   admission), and attempt 2 rewrote that test. The orchestrator proposed to
   restore it and keep D-6 to: an unknown class is malformed (exit 2), an
-  exclusion of the public class binds the online seats. The maintainer's
-  answer is pending.
+  exclusion of the public class binds the online seats. **The maintainer
+  answered on 2026-10-21 (about 18:30): exclusions stay class-scoped as
+  before** ("sperrung für kundenkonto wie vorgesehen"); the work is bead
+  coding-harness-dxso.
 - Budget: Claude and Codex not read. GLM through Z.ai is available again
   since 2026-10-21 14:34 Europe/Berlin; GLM through OpenCode Go works.
 - The Artificial Analysis key (`ARTIFICIAL_ANALYSIS_API_KEY`) is not yet
@@ -61,7 +63,7 @@ state stays in Beads.
 
 | # | Item | Worker | Done when, or stop |
 |---|---|---|---|
-| 1 | Read the round-14 repair result (attempt 3, Sonnet 5.5). Apply the D-6 correction **only as the maintainer answered it before the night**; without an answer, leave D-6 open with the prepared question and repair nothing in the exclusion semantics | Orchestrator | Every round-14 row `fixed — tests/…` or left open with its reason; full `make verify` green; committed and pushed |
+| 1 | Read the round-14 repair result (attempt 3, Sonnet 5.5). Then bead coding-harness-dxso: restore the O197-2 test (a customer-only exclusion does not deny framework admission); an exclusion naming no declared data class is malformed (exit 2); an exclusion of the public class binds the online seats and free researchers; correct D-6's Status | Orchestrator; one Sonnet sub-agent for the repair, red test first | Every round-14 row `fixed — tests/…` or left open with its reason; coding-harness-dxso closed; full `make verify` green; committed and pushed |
 | 2 | Phase-6 round 15: `stage2.py review research-swarm` | Fresh read-only Codex session | Findings committed unchanged in `findings.md` |
 | 3 | Triage round 15 and repair taken rows through `stage2.py repair research-swarm` | Orchestrator triages; Codex repairs, Sonnet after two failed checks (ADR 0017) | Rows fixed, `make verify` green, pushed. A row that needs a maintainer decision stays open with a prepared question |
 | 4 | Round 16 only if round 15 took a BLOCKER or MAJOR | Fresh read-only Codex session | Rounds stop at round 16; the rest goes to the morning page |
@@ -93,8 +95,7 @@ time** and at most one foreign call or sub-agent at a time.
   checkpoint and wait for the reset.
 - Two failed repairs, a missing maintainer decision or an unresolved ambiguity
   stop that item; record the reason and go on with the next independent item.
-  No question is asked overnight and no answer is invented — in particular
-  the D-6 exclusion semantics.
+  No question is asked overnight and no answer is invented.
 - A leak-check BLOCK ends foreign calls without fallback.
 - Tracker first, git second. The orchestrator is the only tracker writer; it
   writes a checkpoint comment on coding-harness-icw after each green step and
@@ -105,6 +106,6 @@ time** and at most one foreign call or sub-agent at a time.
 ## Morning page (08:00 Europe/Berlin)
 
 One page: the phase-6 verdict for #158 and its decision block, the D-6
-question if still open, pull requests awaiting the maintainer, where work
+repair (bead coding-harness-dxso), pull requests awaiting the maintainer, where work
 stopped and why, the CI slow-test measurement, and the time the morning
 review took.
