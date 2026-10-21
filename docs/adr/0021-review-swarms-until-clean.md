@@ -252,7 +252,9 @@ the restart, its date and the reason as a runner line into `findings.md`;
 every earlier round, row, snapshot and release stays there unchanged. The
 next `review-loop` after it is a fresh run: availability preparation where
 the endpoint enables it, the free swarm, the Flash swarm, then the ladder.
-Its rounds are counted from 1 again under a heading that marks the new run.
+Its round numbers continue after the previous run's last round, so no loop
+row id repeats; the clean stop, the repair brake and the consumed stages are
+read from the rounds after the restart only.
 
 An agent never issues the restart on its own judgment; it runs it only when
 the maintainer asked for it in the conversation, and names that request in
