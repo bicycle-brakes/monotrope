@@ -891,9 +891,41 @@ def test_empty_yaml_containers_cannot_close_item_or_supply_basis(world: World, c
 
 
 @pytest.mark.parametrize(
-    "answer", ['"null"', '"# actual answer"', "yes # stated", "|\n  Keep this.", ">-\n  Keep this."]
+    "answer",
+    [
+        '"null"',
+        '"# actual answer"',
+        '"Keep this." (maintainer stated)',
+        "yes # stated",
+        "|\n  Keep this.",
+        ">-\n  Keep this.",
+    ],
 )
 def test_real_inline_and_block_answers_still_close_handoff(world: World, capsys, answer: str) -> None:
     record = q_record(1, items=(f"{RUN1}/H-1",)).replace('answer: "yes"', f"answer: {answer}")
     world.write([run_text(RUN1)], records=[record])
     assert world.check(capsys)[0] == 0
+
+
+@pytest.mark.parametrize(
+    "answer",
+    [
+        "\n  choice: keep\n  choice: drop",
+        "{choice: keep, choice: drop}",
+        "\n  choices:\n    - {choice: keep, choice: drop}",
+    ],
+)
+@pytest.mark.parametrize("use", ["obligation", "basis", "before-spec"])
+def test_duplicate_yaml_answer_keys_are_not_measured(world: World, capsys, answer: str, use: str) -> None:
+    record = q_record(1, items=(f"{RUN1}/H-1",))
+    # The valid answer closes the item and supplies its criterion Basis first.
+    world.write([run_text(RUN1)], records=[record])
+    assert world.check(capsys)[0] == 0
+    record = record.replace('answer: "yes"', f"answer: {answer}")
+    run = run_text(RUN1, decision=None) if use == "basis" else run_text(RUN1)
+    if use == "basis":
+        record = record.replace(f"research_items: [{RUN1}/H-1]", "research_items: []")
+    world.write([run], records=[record], spec=None if use == "before-spec" else "default")
+    code, output = world.check(capsys)
+    assert code == 3, output
+    assert "not measured" in output and "answer" in output and "choice" in output

@@ -106,6 +106,10 @@ def _no_duplicate_pairs(pairs: list[tuple[str, object]]) -> dict:
     return dict(pairs)
 
 
+class _DuplicateKeyError(yaml.YAMLError):
+    """Ambiguous YAML must never fall back to historical answer prose."""
+
+
 class _UniqueKeyLoader(yaml.SafeLoader):
     """A safe YAML loader that refuses a mapping naming one key twice (the last would win silently)."""
 
@@ -116,7 +120,7 @@ def _construct_unique_mapping(loader: _UniqueKeyLoader, node: yaml.MappingNode, 
         key = loader.construct_object(key_node, deep=True)
         try:
             if key in seen:
-                raise yaml.YAMLError(f"the key {key!r} stands twice in one mapping")
+                raise _DuplicateKeyError(f"the key {key!r} stands twice in one mapping")
             seen.add(key)
         except TypeError as error:
             raise yaml.YAMLError("a mapping key is not hashable") from error
@@ -497,12 +501,14 @@ def parse_decisions(text: str, label: str) -> dict[str, QRecord]:
                     raise CannotMeasure(f"{label} {ident}: the field {name} stands twice")
                 found.setdefault(name, number)
 
-        def value(name: str, body: list[str] = body, found: dict[str, int] = found) -> str:
+        def value(name: str, body: list[str] = body, found: dict[str, int] = found, ident: str = ident) -> str:
             if name not in found:
                 return ""
             if name == "answer":
                 try:
                     loaded = _yaml_load(_snippet(body, found[name]))
+                except _DuplicateKeyError as error:
+                    raise CannotMeasure(f"{label} {ident}: answer is ambiguous ({error})") from error
                 except yaml.YAMLError:
                     # Historical inline answers also contain prose after quoted text.
                     # Retain that supported spelling rather than requiring YAML throughout.

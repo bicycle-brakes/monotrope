@@ -1031,6 +1031,8 @@ the existing gates and let the runner own registry regeneration/full verify.
 - 21: tests/test_stage2_research_availability.py::test_persisted_probe_audit_scrubs_credentials_before_write — A credential or eight-character fragment survives an independent probe audit.
 - 47: tests/test_stage2_research_availability.py::test_unwritable_probe_audit_refuses_before_launch — An audit persistence failure lets a probe launch.
 
+- 33: tests/test_research_handoff.py::test_duplicate_yaml_answer_keys_are_not_measured — Duplicate answer keys fall back to prose and close an obligation or supply a criterion Basis instead of not measured (phase-6 F-64).
+
 ## Not touched
 
 Accepted ADRs, numbered-decision continuity map, adoption records, human answer
@@ -1494,6 +1496,14 @@ Stage-1 route: repair · model claude-sonnet-5-5 · reason: two Codex post-run c
 Stage-1 route: repair · model claude-sonnet-5-5 · reason: two Codex post-run checks failed.
 
 ## Time used
+
+2026-10-21 22:23:33–22:48:01 UTC, 0:24:28, break counted — F-64 repair.
+Duplicate YAML answer keys now raise CannotMeasure instead of using the historical
+prose fallback. Red first at baseline 83d7eb5: all nine new regression cases
+failed with exit 0 instead of 3. After repair: 88 handoff tests passed; ruff
+check/format, criterion-ledger and git diff --check passed. Historical prose
+after quoted text remains accepted. No findings edit, commit or git mutation
+was made by this repair; the runner owns full make verify and the checkpoint.
 
 2026-10-17, appetite stop answered: the span of the three implement attempts of 2026-10-15 (ended 04:53:50, `cf848ee`) has no start record, so time used was not measurable (78 minutes measured). Maintainer, 2026-10-17: "Ja, halt die zeitgrenze fest" — **continue** with a new appetite of 13 hours 20 minutes in total (the measured 78 minutes plus 12 hours); the unmeasured span stays named, not counted. This replaces the card's `Appetite:` line.
 
