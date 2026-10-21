@@ -62,12 +62,12 @@ SEED = (
 
 REPOSITORY_SEATS = [
     {"endpoint": "opencode-go", "model": "deepseek-v4.1-flash"},
-    {"endpoint": "opencode-go", "model": "mimo-v2.6-flash"},
+    {"endpoint": "opencode-go", "model": "mimo-v2.6-pro"},
     {"endpoint": "claude-code-plan", "model": "claude-haiku-5-5"},
 ]
 ONLINE_SEATS = [
     {"endpoint": "opencode-go", "model": "deepseek-v4.1-flash"},
-    {"endpoint": "opencode-go", "model": "mimo-v2.6-flash"},
+    {"endpoint": "opencode-go", "model": "mimo-v2.6-pro"},
     {"endpoint": "opencode-go", "model": "qwen3.8-flash"},
 ]
 
@@ -347,7 +347,7 @@ class SwarmWorld:
         if log.exists():
             log.unlink()
         self.research.write_text(SEED, encoding="utf-8")
-        shutil.rmtree(stage2_research_store.research_dir("demo"), ignore_errors=True)
+        shutil.rmtree(stage2_research_store.research_dir("demo", self.root), ignore_errors=True)
 
     def commit(self) -> None:
         """Make the working tree the new HEAD, so the next run freezes an unchanged tree."""
@@ -625,7 +625,7 @@ def test_merge_is_exact_finder_union_with_all_origins(sworld: SwarmWorld) -> Non
 def test_preparatory_failure_prevents_dependent_stages(sworld: SwarmWorld, fault: str) -> None:
     # Criterion 18. Planted fault: a failed finder, merge or sentence still dispatches a later stage.
     steps = {
-        "finder-exit": {"finder:None:mimo-v2.6-flash": [{"exit": 3, "stderr": "boom"}]},
+        "finder-exit": {"finder:None:mimo-v2.6-pro": [{"exit": 3, "stderr": "boom"}]},
         "finder-bad-json": {"finder:None:claude-haiku-5-5": [{"stdout": "not a locator list"}]},
         "merge-exit": {"merge": [{"exit": 1}]},
         "sentence-exit": {"sentence": [{"exit": 1}]},
@@ -940,7 +940,7 @@ def test_report_template_refuses_missing_fields_and_eighth_claim(sworld: SwarmWo
     many = dict(base, claims=[dict(base["claims"][0], id=f"C{n}") for n in range(1, 9)])
     for bad in (missing, many):
         sworld.rewind()
-        sworld.complete(**{"repository:4:mimo-v2.6-flash": [{"stdout": json.dumps(bad)}]})
+        sworld.complete(**{"repository:4:mimo-v2.6-pro": [{"stdout": json.dumps(bad)}]})
         assert sworld.run() == 1
         assert "judge" not in kinds(sworld)
         assert "invalid-report" in sworld.research.read_text(encoding="utf-8")
@@ -1017,7 +1017,7 @@ def test_empty_neighbour_topic_runs_three_seats_without_invented_evidence(sworld
 
 def test_every_failed_slot_keeps_partial_output_before_cleanup(sworld: SwarmWorld) -> None:
     # Criteria 14, 18. Planted fault: missing required reports still reach the judge.
-    sworld.complete(**{"repository:4:mimo-v2.6-flash": [{"exit": 2, "stderr": "provider down", "stdout": "half"}]})
+    sworld.complete(**{"repository:4:mimo-v2.6-pro": [{"exit": 2, "stderr": "provider down", "stdout": "half"}]})
     assert sworld.run() == 1
     assert "judge" not in kinds(sworld)
     assert len(sworld.calls()) == 39 - 1, "siblings finish; only the judge is withheld"
@@ -1186,7 +1186,7 @@ def test_frozen_digest_detects_tracked_and_change_input_edits(sworld: SwarmWorld
 
 
 def store_dir(_world: SwarmWorld) -> Path:
-    return stage2_research_store.research_dir("demo")
+    return stage2_research_store.research_dir("demo", _world.root)
 
 
 def manifest_of(world: SwarmWorld) -> dict:
@@ -1224,7 +1224,7 @@ def test_a_complete_run_clears_the_store_and_a_second_lock_refuses(sworld: Swarm
 def test_a_resumed_run_is_a_new_run_within_its_slot_budget(sworld: SwarmWorld) -> None:
     # Criteria 53, 54, 55. Planted fault: a failed or invalid result is reused, a discarded result is
     # unnamed, a resumed run exceeds its budget or loses the source run and times of a reused slot.
-    sworld.complete(**{"repository:4:mimo-v2.6-flash": [{"exit": 2}]})
+    sworld.complete(**{"repository:4:mimo-v2.6-pro": [{"exit": 2}]})
     assert sworld.run() == 1
     first = manifest_of(sworld)
     assert len(sworld.calls()) == 38
@@ -1235,7 +1235,7 @@ def test_a_resumed_run_is_a_new_run_within_its_slot_budget(sworld: SwarmWorld) -
     second = manifest_of(sworld)
     assert second["run_id"] != first["run_id"], "a resumed run is a new run"
     launched = list(sworld.calls())
-    assert [(c["kind"], c["topic"], c["model"]) for c in launched[:-1]] == [("repository", 4, "mimo-v2.6-flash")]
+    assert [(c["kind"], c["topic"], c["model"]) for c in launched[:-1]] == [("repository", 4, "mimo-v2.6-pro")]
     assert launched[-1]["kind"] == "judge"
     assert len(launched) + sum(1 for s in second["slots"] if s["reused_from"]) == 39, "within the budget"
     reused = [s for s in second["slots"] if s["reused_from"]]
@@ -1249,7 +1249,7 @@ def test_only_finished_valid_results_are_reused_and_others_are_named(sworld: Swa
     # Criterion 53. Planted fault: an invalid, timed-out or cancelled result is reused or left unnamed.
     sworld.complete(
         **{
-            "repository:2:mimo-v2.6-flash": [{"stdout": "not json at all"}],  # an invalid report
+            "repository:2:mimo-v2.6-pro": [{"stdout": "not json at all"}],  # an invalid report
             "repository:3:deepseek-v4.1-flash": [{"exit": 5, "stdout": "half"}],  # a failed slot
         }
     )
@@ -1258,7 +1258,7 @@ def test_only_finished_valid_results_are_reused_and_others_are_named(sworld: Swa
     (sworld.bin / "calls.jsonl").unlink()
     assert sworld.run() == 0
     relaunched = sorted((c["topic"], c["model"]) for c in sworld.calls("repository"))
-    assert relaunched == [(2, "mimo-v2.6-flash"), (3, "deepseek-v4.1-flash")], "only the unfinished slots run again"
+    assert relaunched == [(2, "mimo-v2.6-pro"), (3, "deepseek-v4.1-flash")], "only the unfinished slots run again"
     named = {tuple(item) for item in manifest_of(sworld)["resume"]["not_reused"]}
     assert ("topics-2-2", "outcome") in named and ("topics-3-1", "outcome") in named
 
@@ -1367,7 +1367,7 @@ def test_online_topics_use_the_three_online_seat_selections(sworld: SwarmWorld) 
     sworld.complete()
     assert sworld.run() == 0
     for topic in (9, 10, 11):
-        assert set(models(sworld, "online", topic)) == {"deepseek-v4.1-flash", "mimo-v2.6-flash", "longcat-2.0", *FREE}
+        assert set(models(sworld, "online", topic)) == {"deepseek-v4.1-flash", "mimo-v2.6-pro", "longcat-2.0", *FREE}
     required = [c for c in sworld.calls("online") if c["model"] not in FREE]
     assert len(required) == 9 and all(c["name"] == "pi" for c in required)
 
@@ -1451,7 +1451,7 @@ def test_amended_graph_and_deadlines_bound_every_launch(sworld: SwarmWorld) -> N
     }
     assert stage2_research_run.RUN_MINUTES == 150.0
     sworld.selection = selection_for(free=FREE)
-    sworld.complete(**{"repository:2:mimo-v2.6-flash": [{"exit": 1}]})
+    sworld.complete(**{"repository:2:mimo-v2.6-pro": [{"exit": 1}]})
     assert sworld.run() == 1
     prompts = [(c["kind"], c["topic"], c["model"]) for c in sworld.calls()]
     assert len(prompts) == len(set(prompts)), "a failing slot is neither retried nor repeated"
@@ -1879,7 +1879,7 @@ def test_amended_doctrine_and_research_roles_agree() -> None:
     go = next(entry for entry in data["endpunkte"] if entry["name"] == "opencode-go")
     # After the main sync (#157, ADR 0021) `modelle` is a set the runner orders by `anfragen_5h`, no longer a
     # three-id list: the original three stay in it, and the swarm block adds nothing to it.
-    assert {"deepseek-v4.1-flash", "mimo-v2.6-flash", "mimo-v2.6-pro"} <= set(go["modelle"]), (
+    assert {"deepseek-v4.1-flash", "longcat-2.0", "mimo-v2.6-pro"} <= set(go["modelle"]), (
         "the review ladder lost a member; the swarm block changes it in no way"
     )
     block = data["research_swarm"]
@@ -1956,12 +1956,12 @@ def _selection(substitute: bool = False) -> dict:
     """A consumed seat selection as the receipt holds it; `substitute` swaps one Go seat model for a pool one."""
     online = [
         {"endpoint": "opencode-go", "model": "deepseek-v4.1-flash"},
-        {"endpoint": "opencode-go", "model": "mimo-v2.6-flash"},
+        {"endpoint": "opencode-go", "model": "mimo-v2.6-pro"},
         {"endpoint": "opencode-go", "model": "longcat-2.0" if substitute else "qwen3.8-flash"},
     ]
     repository = [
         {"endpoint": "opencode-go", "model": "deepseek-v4.1-flash"},
-        {"endpoint": "opencode-go", "model": "mimo-v2.6-flash"},
+        {"endpoint": "opencode-go", "model": "mimo-v2.6-pro"},
         {"endpoint": "claude-code-plan", "model": "claude-haiku-5-5"},
     ]
     return {"seats": {"repository": repository, "online": online}}
@@ -2298,7 +2298,7 @@ def test_the_inventory_is_persisted_in_the_fenced_run_block(sworld: SwarmWorld) 
         f"repository:5:{model}": [{"stdout": json.dumps(dict(json.loads(repository_report(5, [rel])),
             neighbour_relations=[{"path": rel, "relation": relation, "claims": ["C1"]}]))}]
         for model, relation in (
-            ("deepseek-v4.1-flash", "unrelated"), ("mimo-v2.6-flash", "contradicts"), ("claude-haiku-5-5", "related"),
+            ("deepseek-v4.1-flash", "unrelated"), ("mimo-v2.6-pro", "contradicts"), ("claude-haiku-5-5", "related"),
         )
     }  # fmt: skip
     sworld.complete(**reports)
@@ -2360,7 +2360,7 @@ def test_catalog_failure_stops_before_all_model_calls(
         elif fault == "pi-malformed":
             pi["body"] = "{broken"
         elif fault == "pi-duplicate":
-            pi["body"] = '[{"id":"deepseek-v4.1-flash","id":"mimo-v2.6-flash"}]'
+            pi["body"] = '[{"id":"deepseek-v4.1-flash","id":"mimo-v2.6-pro"}]'
         else:
             raise stage2.CallFailed("node is not installed; the Go catalog cannot be refreshed and no call starts.")
         return bridge
@@ -2632,7 +2632,7 @@ def test_a_staged_run_whose_record_was_published_is_not_resurrected(
     sworld.complete()
     assert sworld.run() == 0
     monkeypatch.setattr(stage2_research_store.Store, "commit_clear", real_commit)
-    store_dir = stage2_research_store.research_dir("demo")
+    store_dir = stage2_research_store.research_dir("demo", sworld.root)
     assert list(store_dir.glob(".discarded-*")), "the planted kill left the staging behind"
     sworld.complete()
     (sworld.bin / "calls.jsonl").unlink()

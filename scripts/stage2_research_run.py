@@ -294,7 +294,7 @@ class Run:
         if any(seat["endpoint"] == GO for seat in self.all_seats()):
             runner.require_pi()
             self.key = runner.reviewer_key()
-        self.store = Store(research_dir(self.change), scrub=self.scrub)
+        self.store = Store(research_dir(self.change, self.root), scrub=self.scrub)
         git_dir = stage2_swarm._git(self.root, "rev-parse", "--absolute-git-dir").strip()
         try:
             self.store.assert_outside(

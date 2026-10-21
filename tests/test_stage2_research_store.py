@@ -21,6 +21,7 @@ from pathlib import Path
 import pytest
 
 SCRIPTS = Path(__file__).resolve().parents[1] / "scripts"
+REPO_ROOT = SCRIPTS.parent
 sys.path.insert(0, str(SCRIPTS))
 
 from test_stage2_research_history import commit, git  # noqa: E402
@@ -51,7 +52,7 @@ def state_home(tmp_path, monkeypatch):
 @pytest.fixture
 def store(state_home):  # noqa: ARG001 - sets XDG_STATE_HOME
     m = module()
-    return m.Store(m.research_dir("example"))
+    return m.Store(m.research_dir("example", REPO_ROOT))
 
 
 @pytest.fixture
@@ -144,7 +145,7 @@ DRIVER = textwrap.dedent(
     import stage2_research_dispatch as d
     import stage2_research_store as s
 
-    store = s.Store(s.research_dir("example"))
+    store = s.Store(s.research_dir("example", {root!r}))
     run = store.start_run("plans/changes/example", "receipt-1", {binding!r})
     # s2 ends only when the test releases it after the kill, so no load-dependent delay can finish it first
     child = "import os,time\\nt=time.time()\\nwhile not os.path.exists({gate!r}) and time.time()-t<300: time.sleep(0.05)"
@@ -178,7 +179,7 @@ DRIVER = textwrap.dedent(
 def test_terminal_record_survives_sigkill_after_the_outcome(state_home):
     m = module()
     gate = state_home / "release-s2"
-    script = DRIVER.format(scripts=str(SCRIPTS), binding=BINDING, gate=str(gate))
+    script = DRIVER.format(scripts=str(SCRIPTS), binding=BINDING, gate=str(gate), root=str(REPO_ROOT))
     proc = subprocess.Popen(
         [sys.executable, "-c", script],
         stdout=subprocess.PIPE,
@@ -194,7 +195,7 @@ def test_terminal_record_survives_sigkill_after_the_outcome(state_home):
         if proc.poll() is None:
             proc.kill()
         gate.write_text("release")  # the orphaned s2 child outlives its killed driver and now ends
-    store = m.Store(m.research_dir("example"))
+    store = m.Store(m.research_dir("example", REPO_ROOT))
     (run,) = store.runs()
     results, interrupted = store.slot_records(run["run_id"])
     assert results["s1"]["outcome"] == "ok"
@@ -330,7 +331,7 @@ def test_store_receipt_and_probe_records_are_scrubbed():
     stage2 = pytest.importorskip("stage2", reason="the runner is not part of this repository")
     m = module()
     secret = "sk-test-0123456789abcdefghij"
-    store = m.Store(m.research_dir("example"), scrub=lambda text: stage2.scrub(text, secret))
+    store = m.Store(m.research_dir("example", REPO_ROOT), scrub=lambda text: stage2.scrub(text, secret))
     run = begin(store, receipt="rcpt-" + secret)
     fragment = secret[5:17]
     store.write_launch(run, "s1", {**key("s1"), "note": "launch " + fragment})
@@ -350,7 +351,7 @@ def test_a_scrub_that_raises_stops_the_write():
     def broken(_text):
         raise RuntimeError("scrubber lost")
 
-    store = m.Store(m.research_dir("example"), scrub=broken)
+    store = m.Store(m.research_dir("example", REPO_ROOT), scrub=broken)
     with pytest.raises(m.StoreWriteError):
         begin(store)
 
@@ -640,13 +641,13 @@ def test_a_failed_write_raises_a_named_error_and_leaves_no_partial_record(store,
 
 def test_one_run_per_change_and_a_killed_runs_lock_is_released(state_home):
     m = module()
-    directory = m.research_dir("example")
+    directory = m.research_dir("example", REPO_ROOT)
     holder = subprocess.Popen(
         [
             sys.executable,
             "-c",
             f"import sys; sys.path.insert(0, {str(SCRIPTS)!r}); import stage2_research_store as s; "
-            "st = s.Store(s.research_dir('example')); st.acquire_lock(); print('LOCKED', flush=True); "
+            f"st = s.Store(s.research_dir('example', {str(REPO_ROOT)!r})); st.acquire_lock(); print('LOCKED', flush=True); "
             "import time; time.sleep(30)",
         ],
         stdout=subprocess.PIPE,

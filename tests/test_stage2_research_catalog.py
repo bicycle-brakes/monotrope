@@ -24,7 +24,7 @@ sys.path.insert(0, str(ROOT / "scripts"))
 import stage2_swarm as swarm  # noqa: E402
 
 GO = "opencode-go"
-FIXED = ["deepseek-v4.1-flash", "mimo-v2.6-flash", "qwen3.8-flash"]
+FIXED = ["deepseek-v4.1-flash", "mimo-v2.6-pro", "qwen3.8-flash"]
 PIN = json.loads((ROOT / "tools/pi/package.json").read_text())["dependencies"]["@earendil-works/pi-coding-agent"]
 POLICY = {"provider": GO, "suffix": "-free", "include": [], "exclude": []}
 BRIDGE = ROOT / "scripts/stage2_research_catalog.mjs"

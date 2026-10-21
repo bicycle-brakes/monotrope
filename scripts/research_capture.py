@@ -55,7 +55,7 @@ GUARD = REPO_ROOT / "tests" / "pi_network_guard.mjs"
 SCHEMA_VERSION = 1
 GO = "opencode-go"
 PUBLIC_TOOLS = frozenset({"public_search", "public_fetch"})
-FIXED_MODELS = ("deepseek-v4.1-flash", "mimo-v2.6-flash", "qwen3.8-flash")
+FIXED_MODELS = ("deepseek-v4.1-flash", "mimo-v2.6-pro", "qwen3.8-flash")
 FREE_MODELS = ("alpha-free", "beta-free")
 ONLINE_MODEL, REPOSITORY_MODEL, PROBE_MODEL = FIXED_MODELS[0], FIXED_MODELS[2], FIXED_MODELS[1]
 FIXTURE_CHANGE = "capture-fixture"
@@ -927,7 +927,7 @@ def state_store_guard(world: World) -> dict:
         saved = os.environ.get("XDG_STATE_HOME")
         os.environ["XDG_STATE_HOME"] = str(state)
         try:
-            Store(research_dir(FIXTURE_CHANGE)).assert_outside(world.repo, git_dir, home=world.home)
+            Store(research_dir(FIXTURE_CHANGE, REPO_ROOT)).assert_outside(world.repo, git_dir, home=world.home)
             outcomes[label] = "accepted"
         except StoreWriteError as error:
             outcomes[label] = f"refused: {error}"

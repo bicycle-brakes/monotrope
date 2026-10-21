@@ -56,11 +56,16 @@ class StoreLocked(RuntimeError):
     exit_code = 2
 
 
-def research_dir(change):
-    """``record_dir(change)/research`` without importing the runner (same XDG rule, read at call time)."""
+def research_dir(change, root):
+    """``record_dir(change, root)/research`` without importing the runner (same XDG rule, read at call time).
+
+    The key is the runner's own record key - the change and a digest of the resolved repository root -
+    so two worktrees of the same change keep two research directories (R-2 of the review-swarm review).
+    """
     state = os.environ.get("XDG_STATE_HOME")
     base = Path(state) if state else Path.home() / ".local" / "state"
-    return base / "coding-harness" / "stage2" / change / "research"
+    key = f"{change}@{hashlib.sha256(str(Path(root).resolve()).encode('utf-8')).hexdigest()[:8]}"
+    return base / "coding-harness" / "stage2" / key / "research"
 
 
 def _now():

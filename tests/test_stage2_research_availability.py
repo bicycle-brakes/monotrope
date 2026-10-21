@@ -81,7 +81,6 @@ NOW = dt.datetime(2026, 10, 18, 12, 0, tzinfo=dt.UTC)
 # id -> (anfragen_5h or None, extra terms fields); every id is declared with a dated reading
 TERMS = {
     "deepseek-v4.1-flash": 34670,
-    "mimo-v2.6-flash": 30100,
     "longcat-2.0": 11400,
     "glm-5.3-flash": 6320,
     "zz-tie-model": 6320,
@@ -229,12 +228,12 @@ class Fixture:
         block = data["research_swarm"]
         block["repository_seats"] = [
             {"endpoint": GO, "model": "deepseek-v4.1-flash"},
-            {"endpoint": GO, "model": "mimo-v2.6-flash"},
+            {"endpoint": GO, "model": "mimo-v2.6-pro"},
             {"endpoint": CLAUDE, "model": HAIKU},
         ]
         block["online_seats"] = [
             {"endpoint": GO, "model": "deepseek-v4.1-flash"},
-            {"endpoint": GO, "model": "mimo-v2.6-flash"},
+            {"endpoint": GO, "model": "mimo-v2.6-pro"},
             {"endpoint": GO, "model": "qwen3.8-flash"},
         ]
         block["availability_preflight"] = {
@@ -253,7 +252,7 @@ class Fixture:
         return [call["model"] for call in self.w.calls() if call["name"] in {"pi", "claude"}]
 
     def receipt(self) -> dict:
-        return json.loads(availability.research_receipt_path("demo", stage2).read_text(encoding="utf-8"))
+        return json.loads(availability.research_receipt_path("demo", stage2, self.w.root).read_text(encoding="utf-8"))
 
 
 @pytest.fixture
@@ -275,13 +274,13 @@ def test_all_preferred_models_reachable_fill_their_seats_and_substitute_only_the
     state = fx.receipt()["state"]
     assert seats(state, "repository") == [
         (GO, "deepseek-v4.1-flash", "preferred"),
-        (GO, "mimo-v2.6-flash", "preferred"),
+        (GO, "mimo-v2.6-pro", "preferred"),
         (CLAUDE, HAIKU, "preferred"),
     ]
     # qwen3.8-flash is on another wire API here, so online seat 3 takes the cheapest unused pool model.
     assert seats(state, "online") == [
         (GO, "deepseek-v4.1-flash", "preferred"),
-        (GO, "mimo-v2.6-flash", "preferred"),
+        (GO, "mimo-v2.6-pro", "preferred"),
         (GO, "longcat-2.0", "substitute for 3"),
     ]
 
@@ -291,8 +290,8 @@ def test_preferred_models_come_first_and_substitutes_never_take_them(fx: Fixture
     assert fx.prepare() == 0
     state = fx.receipt()["state"]
     assert seats(state, "repository")[0] == (GO, "longcat-2.0", "substitute for 1")
-    assert seats(state, "repository")[1] == (GO, "mimo-v2.6-flash", "preferred")
-    assert [m for _, m, _ in seats(state, "online")[:2]].count("mimo-v2.6-flash") == 1
+    assert seats(state, "repository")[1] == (GO, "mimo-v2.6-pro", "preferred")
+    assert [m for _, m, _ in seats(state, "online")[:2]].count("mimo-v2.6-pro") == 1
     for trio in ("repository", "online"):
         models = [(e, m) for e, m, _ in seats(state, trio)]
         assert len(set(models)) == 3, "one model filled two seats of a trio"
@@ -315,7 +314,7 @@ def test_substitute_is_the_cheapest_reachable_unused_pool_model(fx: Fixture) -> 
     assert seats(state, "repository")[0] == (GO, "glm-5.3-flash", "substitute for 1")
     assert [item["model"] for item in state["pool"]][:5] == [
         "deepseek-v4.1-flash",
-        "mimo-v2.6-flash",
+        "mimo-v2.6-pro",
         "longcat-2.0",
         "glm-5.3-flash",
         "zz-tie-model",
@@ -327,7 +326,7 @@ def test_substitute_is_the_cheapest_reachable_unused_pool_model(fx: Fixture) -> 
 
 
 def test_frozen_inputs_give_the_same_selection_twice(fx: Fixture) -> None:
-    fx.script(**{"mimo-v2.6-flash": {"exit": 1, "stderr": "down"}})
+    fx.script(**{"mimo-v2.6-pro": {"exit": 1, "stderr": "down"}})
     assert fx.prepare() == 0
     first = fx.receipt()["state"]
     assert fx.prepare() == 0
@@ -423,10 +422,10 @@ def test_one_terms_record_admits_a_new_substitute_without_other_edits(fx: Fixtur
 
 def test_a_seat_without_candidate_stops_before_research_with_exit_one(fx: Fixture, capsys) -> None:
     assert fx.prepare() == 0
-    old = availability.research_receipt_path("demo", stage2)
+    old = availability.research_receipt_path("demo", stage2, fx.w.root)
     assert old.exists()
     fx.catalog.metadata_ok = False
-    fx.script(**{"mimo-v2.6-flash": {"exit": 1, "stderr": "down"}})
+    fx.script(**{"mimo-v2.6-pro": {"exit": 1, "stderr": "down"}})
     capsys.readouterr()
     assert fx.prepare() == 1
     captured = capsys.readouterr()
@@ -446,12 +445,12 @@ def test_a_seat_whose_candidates_all_miss_the_fresh_catalog_stops(fx: Fixture, c
     out = capsys.readouterr()
     assert "seat-unavailable" in out.out + out.err
     assert [name for name in fx.probed() if name != HAIKU] == [], "a Go model absent from the fresh overlay was probed"
-    assert not availability.research_receipt_path("demo", stage2).exists()
+    assert not availability.research_receipt_path("demo", stage2, fx.w.root).exists()
 
 
 def test_a_catalog_failure_stops_before_any_probe_and_leaves_no_receipt(fx: Fixture, monkeypatch) -> None:
     assert fx.prepare() == 0
-    receipt = availability.research_receipt_path("demo", stage2)
+    receipt = availability.research_receipt_path("demo", stage2, fx.w.root)
     assert receipt.exists()
     before = len(fx.w.calls())
 
@@ -489,7 +488,7 @@ def test_report_names_every_seat_candidate_and_check_time(fx: Fixture, capsys) -
 def test_receipt_is_bound_single_use_and_fresh(fx: Fixture, fault: str) -> None:
     assert fx.prepare() == 0
     prepared = fx.receipt()
-    path = availability.research_receipt_path("demo", stage2)
+    path = availability.research_receipt_path("demo", stage2, fx.w.root)
     token = prepared["report_id"]
     if fault == "wrong-id":
         token = "f" * 64
@@ -530,7 +529,7 @@ def test_fresh_receipt_is_consumed_once_and_returns_the_frozen_selection(fx: Fix
     state = availability.consume_research(fx.w.root, "demo", prepared["report_id"], stage2, "feature")
     assert state["seats"] == prepared["state"]["seats"]
     assert state["report_id"] == prepared["report_id"]
-    assert not availability.research_receipt_path("demo", stage2).exists()
+    assert not availability.research_receipt_path("demo", stage2, fx.w.root).exists()
     with pytest.raises(stage2.Refused):
         availability.consume_research(fx.w.root, "demo", prepared["report_id"], stage2, "feature")
 
@@ -610,7 +609,7 @@ def test_a_leak_stops_preparation_before_any_probe(fx: Fixture) -> None:
     run_git(fx.w.root, "commit", "--quiet", "-m", "leak")
     assert fx.prepare() == 2
     assert fx.probed() == []
-    assert not availability.research_receipt_path("demo", stage2).exists()
+    assert not availability.research_receipt_path("demo", stage2, fx.w.root).exists()
 
 
 def tree_digest(root: Path) -> str:
@@ -628,7 +627,7 @@ def test_probes_are_lazy_unique_and_outside_the_run_budget(fx: Fixture) -> None:
     probed = fx.probed()
     assert sorted(probed) == sorted(set(probed)), "a model was probed twice"
     # Pool models beyond the one substitute that was needed are never probed.
-    assert set(probed) == {"deepseek-v4.1-flash", "mimo-v2.6-flash", HAIKU, "longcat-2.0"}
+    assert set(probed) == {"deepseek-v4.1-flash", "mimo-v2.6-pro", HAIKU, "longcat-2.0"}
     assert not {"alpha-free", "beta-free", "claude-opus-5-5"} & set(probed), "a free model or Opus role was probed"
     assert tree_digest(fx.w.root) == before, "preparation changed the worktree"
     assert run_git(fx.w.root, "status", "--porcelain") == ""
@@ -677,7 +676,7 @@ def test_malformed_seat_declaration_refuses_before_any_call(fx: Fixture, fault: 
     fx.edit_declaration(lambda data: FAULTS[fault](data["research_swarm"]))
     assert fx.prepare() == 2
     assert fx.w.calls() == [] and fx.calls_to_catalog == 0
-    assert not availability.research_receipt_path("demo", stage2).exists()
+    assert not availability.research_receipt_path("demo", stage2, fx.w.root).exists()
 
 
 def test_no_framework_repository_model_is_refused(fx: Fixture) -> None:
@@ -710,7 +709,7 @@ def test_concurrent_consumers_cannot_share_a_single_use_receipt(fx: Fixture, mon
 
     assert fx.prepare() == 0
     prepared = fx.receipt()
-    path = availability.research_receipt_path("demo", stage2)
+    path = availability.research_receipt_path("demo", stage2, fx.w.root)
     read_text = Path.read_text
     readers = Barrier(2)
 
@@ -742,7 +741,7 @@ def test_consumed_receipt_cannot_delete_a_new_preparation(fx: Fixture, monkeypat
 
     assert fx.prepare() == 0
     prepared = fx.receipt()
-    path = availability.research_receipt_path("demo", stage2)
+    path = availability.research_receipt_path("demo", stage2, fx.w.root)
     original_verify = availability.verify
     readers = Barrier(2)
     replacement_ready = Event()

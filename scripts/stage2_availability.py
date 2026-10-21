@@ -403,8 +403,8 @@ def research_binding(root: Path, change: str, klass: str, neighbours: list[str])
     }
 
 
-def research_receipt_path(change: str, runner) -> Path:
-    return runner.record_dir(change) / "research-availability.json"
+def research_receipt_path(change: str, runner, root: Path) -> Path:
+    return runner.record_dir(change, root) / "research-availability.json"
 
 
 def catalog_bridge(runner, _root: Path) -> dict:
@@ -597,7 +597,7 @@ def prepare_research(root: Path, change: str, runner, klass: str | None = None) 
 
     Writes nothing in the worktree: the receipt and its audit lines live in the runner's state directory.
     """
-    path = research_receipt_path(change, runner)
+    path = research_receipt_path(change, runner, root)
     # A failed preparation must never leave an earlier receipt usable.
     with receipt_lock(path):
         path.unlink(missing_ok=True)
@@ -690,7 +690,7 @@ def consume_research(root: Path, change: str, token: str | None, runner, klass: 
     problem = "run prepare-explore and report its fresh selection in the main conversation; pass its id."
     _, rule = research_settings(root, runner)
     neighbours = given_neighbours(root, change, runner)
-    path = research_receipt_path(change, runner)
+    path = research_receipt_path(change, runner, root)
     try:
         receipt = json.loads(path.read_text(encoding="utf-8"))
         state = receipt["state"]
