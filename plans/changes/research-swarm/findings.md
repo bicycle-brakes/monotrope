@@ -4490,3 +4490,14 @@ Stage-2 call, 2026-10-21: repair · attempt 3 · route stage-1 · endpoint claud
 > - Runner format before `make verify`: ruff changed no file.
 > - `plan.md` did not add a measured line below `## Time used`
 > ```
+
+Stage-2 call, 2026-10-22: review · endpoint openai-codex · model gpt-6.1-sol · leak check clean over 556 files, 1798 commits, 12 rules.
+
+## Phase 6 — Codex, 2026-10-22
+
+| ID | Severity | Dimension | Origin | Where | Finding | Reviewer | Status | Broke a test |
+|---|---|---|---|---|---|---|---|---|
+| F-64 | MAJOR | SPEC | fix-r15 | `scripts/check_research_handoff.py:503–511` | A maintainer answer containing duplicate YAML keys silently closes research obligations. Reproduced in memory with `answer:` containing two indented `choice:` keys, first `keep`, then `drop`, plus answered status, maintainer attribution and context: `check_change()` returns no findings, closes the linked item and accepts the record as a criterion Basis. The duplicate-key loader raises an error, but the historical-prose fallback suppresses it and treats the ambiguous answer as nonempty text. Duplicate answer keys must produce not-measured exit 3. [criterion 33] | Codex | taken — criterion 33: an answer whose YAML names a key twice is ambiguous and must yield not-measured (exit 3), never close an obligation or supply a Basis; the historical-prose fallback stays for prose that is not YAML | — |
+
+Phase 6 verdict: codex 01a16083-fd73-7db1-ba5e-3a505f9c7e87, 2026-10-22
+Reviewer session: codex 01a16083-fd73-7db1-ba5e-3a505f9c7e87 — a fresh session reviewed: an earlier ## Phase 6 block makes this a re-check
