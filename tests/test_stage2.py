@@ -461,6 +461,21 @@ def pin_the_ladder(target: Path) -> None:
     target.write_text(yaml.safe_dump(data, allow_unicode=True), encoding="utf-8")
 
 
+RUNNER_TIME_LINE = re.compile(r"^.* · measured by the runner\n", re.M)
+UPDATED_LINE = re.compile(r"^updated: .*\n", re.M)
+
+
+def minus_runner_accounting(data: bytes | str) -> str:
+    """An input as the model saw it: without the runner's own time lines and the date stamp they bring.
+
+    A rejected attempt's runner entry stays in the plan across the retry (runner-time-line, criterion 5),
+    so a restored plan equals the original plus those lines - nothing else may differ.
+    """
+    text = data.decode("utf-8", "surrogateescape") if isinstance(data, bytes) else data
+    text = UPDATED_LINE.sub("", RUNNER_TIME_LINE.sub("", text))
+    return text.rstrip("\n") + "\n"
+
+
 def loop_state(consumed: tuple[str, ...] = ("free", "flash")) -> dict:
     """The run snapshot a seeded record carries, as `discover_free` and `new_state` shape it."""
     return {
@@ -1652,7 +1667,8 @@ def test_implement_flash_has_file_tools_and_the_complete_contract(world: World) 
     for forbidden in ("WebFetch", "bypassPermissions", "--dangerously-skip-permissions", "--allowedTools"):
         assert forbidden not in argv
     assert "# Agent rules" in prompt and "# Spec" in prompt and "# Plan" in prompt
-    assert "Implementation baseline:" in prompt and "the runner runs `make verify`" in prompt
+    assert "Implementation baseline:" in prompt and "The runner runs `make verify`" in prompt
+    assert "Write no entry under `## Time used`" in prompt, "the prompt still asks the model to measure time"
     assert [call["argv"] for call in world.calls("make")] == [["verify"]]
     assert git(world.root, "log", "-1", "--pretty=%s") == "feat(demo): implement accepted plan"
     assert git(world.root, "status", "--porcelain") == ""
@@ -2333,7 +2349,7 @@ def test_a_leak_between_work_attempts_stops_before_fallback(world: World) -> Non
             {"stdout": "first", "plant": {"src/leak.txt": LEAK}},
             {"stdout": "must not run"},
         ],
-        make=[{"stdout": "green\n"}],
+        make=[{"stdout": "red", "exit": 1}],
     )
     assert world.run("implement") == 2
     assert len(world.calls("claude")) == 1
@@ -3537,7 +3553,7 @@ def test_a_failed_attempt_quotes_its_diagnostics_below_its_audit_line(world: Wor
             {"stdout": "repair"},
             {"stdout": "fixed", "append": {"plans/changes/demo/plan.md": "2026-10-08 10:00–10:03, 3 min\n"}},
         ],
-        make=[{"stdout": red, "exit": 1}, {"stdout": "green"}, {"stdout": "green"}],
+        make=[{"stdout": red, "exit": 1}, {"stdout": red, "exit": 1}, {"stdout": "green"}],
     )
     assert world.run("implement") == 0
     calls = world.calls("claude")
@@ -3628,7 +3644,7 @@ def test_a_failed_attempt_that_changed_nothing_says_so(world: World) -> None:
             {"stdout": "nothing"},
             {"stdout": "fixed", "append": {"plans/changes/demo/plan.md": "2026-10-08 10:00–10:02, 2 min\n"}},
         ],
-        make=[{"stdout": "green"}, {"stdout": "green"}],
+        make=[{"stdout": "red", "exit": 1}, {"stdout": "green"}],
     )
     assert world.run("implement") == 0
     (block,) = quote_blocks(world.text())
@@ -3649,7 +3665,7 @@ def test_an_unmeasured_file_list_says_why_and_changes_nothing_else(
             {"stdout": "first", "plant": {"src/app.py": "value = 2\n"}},
             {"stdout": "fixed", "append": {"plans/changes/demo/plan.md": "2026-10-08 10:00–10:02, 2 min\n"}},
         ],
-        make=[{"stdout": "green"}, {"stdout": "green"}],
+        make=[{"stdout": "red", "exit": 1}, {"stdout": "green"}],
     )
     assert world.run("implement") == 0
     assert git(world.root, "rev-list", "--count", f"{baseline}..HEAD") == "1"
@@ -3678,7 +3694,7 @@ def test_a_failure_after_the_first_snapshot_says_why_and_changes_nothing_else(
             {"stdout": "first", "plant": {"src/app.py": "value = 2\n"}},
             {"stdout": "fixed", "append": {"plans/changes/demo/plan.md": "2026-10-08 10:00–10:02, 2 min\n"}},
         ],
-        make=[{"stdout": "green"}, {"stdout": "green"}],
+        make=[{"stdout": "red", "exit": 1}, {"stdout": "green"}],
     )
     assert world.run("implement") == 0
     assert len(calls) >= 2
@@ -3699,7 +3715,7 @@ def test_an_unmeasured_reason_stays_one_line_with_one_full_stop(world: World, mo
             {"stdout": "first", "plant": {"src/app.py": "value = 2\n"}},
             {"stdout": "fixed", "append": {"plans/changes/demo/plan.md": "2026-10-08 10:00–10:02, 2 min\n"}},
         ],
-        make=[{"stdout": "green"}, {"stdout": "green"}],
+        make=[{"stdout": "red", "exit": 1}, {"stdout": "green"}],
     )
     assert world.run("implement") == 0
     (block,) = quote_blocks(world.text())
@@ -3725,7 +3741,7 @@ def test_a_malformed_numstat_record_says_not_measured_and_the_run_goes_on(
             {"stdout": "first", "plant": {"src/app.py": "value = 2\n"}},
             {"stdout": "fixed", "append": {"plans/changes/demo/plan.md": "2026-10-08 10:00–10:02, 2 min\n"}},
         ],
-        make=[{"stdout": "green"}, {"stdout": "green"}],
+        make=[{"stdout": "red", "exit": 1}, {"stdout": "green"}],
     )
     assert world.run("implement") == 0
     assert git(world.root, "rev-list", "--count", f"{baseline}..HEAD") == "1"
@@ -3746,7 +3762,7 @@ def test_a_passing_attempt_leaves_only_its_audit_line(world: World, passing: str
     else:
         world.script(
             claude=[{"stdout": "first", "plant": {"src/app.py": "value = 2\n"}}, fixed],
-            make=[{"stdout": "green"}, {"stdout": "green"}],
+            make=[{"stdout": "red", "exit": 1}, {"stdout": "green"}],
         )
     assert world.run("implement") == 0
     lines = world.text().splitlines()
@@ -3761,7 +3777,7 @@ def test_when_every_attempt_fails_each_keeps_its_block_and_the_exit_names_findin
     # Criterion 6. Planted fault: the loop raises before the last block.
     world.script(
         claude=[{"stdout": "one"}, {"stdout": "two"}, {"stdout": "three"}],
-        make=[{"stdout": "green"}] * 3,
+        make=[{"stdout": "red", "exit": 1}] * 3,
     )
     assert world.run("implement") == 1
     blocks_ = quote_blocks(world.text())
@@ -3804,7 +3820,7 @@ def test_a_restore_after_a_dead_model_keeps_the_earlier_blocks(world: World) -> 
             {"stdout": "dead", "stderr": "boom", "exit": 1, "plant": {"src/half.py": "x = 1\n"}},
             {"stdout": "must not run"},
         ],
-        make=[{"stdout": "green"}],
+        make=[{"stdout": "red", "exit": 1}],
     )
     assert world.run("implement") == 1
     assert not (world.root / "src/half.py").exists()
@@ -4102,7 +4118,7 @@ def test_the_format_steps_writes_stay_out_of_the_models_file_list(world: World) 
             {},
             {"plant": {"scripts/a.py": "a = 1\n"}},
         ],
-        make=[{"stdout": "green\n"}] * 3,
+        make=[{"stdout": "red", "exit": 1}, {"stdout": "red", "exit": 1}, {"stdout": "green\n"}],
     )
     assert world.run("implement") == 0
     blocks_ = quote_blocks(world.text())
@@ -4145,7 +4161,7 @@ def test_a_passing_run_lists_each_format_line_in_its_commit_message(world: World
             formatted_attempt(),
         ],
         ruff=[{}, {"plant": {"scripts/b.py": "b = 1\n"}}, {}, {"plant": {"scripts/a.py": "a = 1\n"}}],
-        make=[{"stdout": "green\n"}] * 2,
+        make=[{"stdout": "red", "exit": 1}, {"stdout": "green\n"}],
     )
     assert world.run("implement") == 0
     assert git(world.root, "log", "-1", "--format=%B") == (
@@ -4295,7 +4311,7 @@ def test_a_long_file_list_is_cut_with_a_count(world: World) -> None:
             {"stdout": "first", "plant": {f"src/bulk-{n:02d}.py": f"value = {n}\n" for n in range(60)}},
             {"stdout": "fixed", "append": {"plans/changes/demo/plan.md": "2026-10-08 10:00–10:02, 2 min\n"}},
         ],
-        make=[{"stdout": "green"}, {"stdout": "green"}],
+        make=[{"stdout": "red", "exit": 1}, {"stdout": "green"}],
     )
     assert world.run("implement") == 0
     (block,) = quote_blocks(world.text())
@@ -4309,7 +4325,7 @@ def test_a_failed_stage2_off_attempt_leaves_its_block_without_reading_the_key(
 ) -> None:
     # Criterion 15. Planted fault: the block reads the key to scrub it.
     monkeypatch.setattr(stage2, "read_secret", lambda name: pytest.fail(f"read secret on Stage 1: {name}"))
-    world.script(claude=[{"stdout": "nothing"}], make=[{"stdout": "green"}])
+    world.script(claude=[{"stdout": "nothing"}], make=[{"stdout": "red", "exit": 1}])
     assert world.run("implement", "demo", "--stage2-off", "Z.ai unavailable") == 1
     (block,) = quote_blocks(world.text())
     assert block[0] == "Attempt 1 (stage-1) failed its post-run checks."
@@ -6702,7 +6718,7 @@ def test_repair_retry_starts_after_a_completed_attempt_deletes_plan(
         # Check on disk before either transport starts, including inputs not inlined in its prompt.
         for relative, content in inputs.items():
             assert (world.root / relative).is_file(), f"{relative} was not restored before the next attempt"
-            assert (world.root / relative).read_bytes() == content
+            assert minus_runner_accounting((world.root / relative).read_bytes()) == minus_runner_accounting(content)
         ready_attempts.append(len(repair_calls(world)) + 1)
         real_begin_work_call(*args, **kwargs)
 
@@ -6735,7 +6751,12 @@ def test_repair_retry_starts_after_a_completed_attempt_deletes_plan(
     assert inputs["prompts/04-implement.md"].decode("utf-8").rstrip() in retry_prompt
     assert inputs["AGENTS.md"].decode("utf-8").rstrip() in retry_prompt
     for relative in deleted_inputs:
-        assert f"> - `{relative}` +0 -{len(inputs[relative].splitlines())}" in world.text()
+        lines = len(inputs[relative].splitlines())
+        if relative == "plans/changes/demo/plan.md" and deleted_attempt > 1:
+            # The earlier rejected attempts' runner entries stand in the plan it deleted: a blank line
+            # before the first, then one line each (criterion 5).
+            lines += deleted_attempt
+        assert f"> - `{relative}` +0 -{lines}" in world.text()
     for relative, content in inputs.items():
         if relative != "plans/changes/demo/plan.md":
             assert (world.root / relative).read_bytes() == content
@@ -6821,7 +6842,9 @@ def test_repair_retry_restores_non_utf8_prompt_inputs(
     assert world.run("repair") == 0
     calls = repair_calls(world)
     assert [call["name"] for call in calls] == ["codex", "codex", "claude"][: failed_attempts + 1]
-    assert observed_inputs == [original] * (failed_attempts + 1)
+    assert [{k: minus_runner_accounting(v) for k, v in seen.items()} for seen in observed_inputs] == [
+        {k: minus_runner_accounting(v) for k, v in original.items()}
+    ] * (failed_attempts + 1)
     assert checkpoints == [failed_attempts + 1], "a failed attempt reached the checkpoint"
     assert all("resume" not in call["argv"] for call in world.calls("codex"))
     final_prompt = prompt_of(calls[-1])
@@ -6881,7 +6904,9 @@ def test_repair_retry_restores_aliased_and_directory_inputs_without_following(
     assert world.run("repair") == 0
     assert outside.read_bytes() == b"outside content\n", "restoration wrote through the symlink"
     assert [call["name"] for call in repair_calls(world)] == ["codex", "codex", "claude"]
-    assert observed == [(spec_bytes, plan_bytes, False, True)] * 3
+    assert [(s, minus_runner_accounting(p), link, file) for s, p, link, file in observed] == [
+        (spec_bytes, minus_runner_accounting(plan_bytes), False, True)
+    ] * 3
     assert git(world.root, "rev-list", "--count", f"{baseline}..HEAD") == "1"
 
 
@@ -6914,7 +6939,9 @@ def test_repair_prompts_keep_the_initial_input_snapshot(
     real_begin = stage2.begin_work_call
 
     def begin_work_call(*args, **kwargs):
-        assert (world.root / edited_input).read_text(encoding="utf-8") == original
+        assert minus_runner_accounting((world.root / edited_input).read_text(encoding="utf-8")) == (
+            minus_runner_accounting(original)
+        )
         real_begin(*args, **kwargs)
 
     monkeypatch.setattr(stage2, "begin_work_call", begin_work_call)
