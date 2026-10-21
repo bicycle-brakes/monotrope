@@ -133,6 +133,7 @@ from __future__ import annotations
 import argparse
 import contextlib
 import datetime as dt
+import fcntl
 import functools
 import hashlib
 import io
@@ -147,7 +148,7 @@ import tarfile
 import tempfile
 import threading
 from collections import Counter
-from collections.abc import Callable
+from collections.abc import Callable, Iterator
 from dataclasses import dataclass
 from pathlib import Path
 
@@ -2078,17 +2079,52 @@ def fill_marks(findings: Path, ids: list[str], marks: dict[str, str]) -> None:
 # ---------------------------------------------------------------------------
 
 
-def record_dir(change: str, root: Path) -> Path:
-    """Outside the worktree and outside the git directory. Read at call time.
-
-    The resolved repository root is part of the key: two worktrees may hold the same change folder,
-    and one `release-loop` must not delete the other's record or hand it another's state (R-2 of the
-    review-swarm review). A record written before this key existed stays where it is; nothing moves it.
-    """
+def record_base() -> Path:
+    """The directory the loop records live under, read at call time."""
     state = os.environ.get("XDG_STATE_HOME")
-    base = Path(state) if state else Path.home() / ".local" / "state"
-    digest = hashlib.sha256(str(root.resolve()).encode("utf-8")).hexdigest()[:8]
-    return base / "coding-harness" / "stage2" / f"{change}@{digest}"
+    return (Path(state) if state else Path.home() / ".local" / "state") / "coding-harness" / "stage2"
+
+
+def record_key(change: str, root: Path) -> str:
+    """The record's name: the change and a digest of the resolved repository root.
+
+    Two worktrees may hold the same change folder, and one `release-loop` must not delete the
+    other's record or hand it another's state (R-2 of the review-swarm review).
+    """
+    return f"{change}@{hashlib.sha256(str(root.resolve()).encode('utf-8')).hexdigest()[:8]}"
+
+
+def record_dir(change: str, root: Path) -> Path:
+    """Outside the worktree and outside the git directory. A record under the old key stays where it is."""
+    return record_base() / record_key(change, root)
+
+
+def lock_path(change: str, root: Path) -> Path:
+    """The lock beside the record, not inside it: `release-loop` removes the record's directory."""
+    return record_base() / f"{record_key(change, root)}.lock"
+
+
+@contextlib.contextmanager
+def holding_record(change: str, root: Path) -> Iterator[None]:
+    """One runner per loop record at a time (R-14 of the review-swarm review).
+
+    Two runners that both read `consumed: []` pay the same members and number the same round twice,
+    and the doubled ids then block `repair`. The lock is advisory, held by the open descriptor, and
+    a descriptor dies with its process - so a crashed run leaves no lock behind to break the next.
+    """
+    path = lock_path(change, root)
+    path.parent.mkdir(parents=True, exist_ok=True)
+    with path.open("a+") as handle:
+        try:
+            fcntl.flock(handle.fileno(), fcntl.LOCK_EX | fcntl.LOCK_NB)
+        except BlockingIOError as error:
+            raise Refused(
+                f"another run holds the loop record `{record_key(change, root)}`; one runner at a time"
+            ) from error
+        try:
+            yield
+        finally:
+            fcntl.flock(handle.fileno(), fcntl.LOCK_UN)
 
 
 def read_record(change: str, root: Path) -> str | None:
@@ -3850,8 +3886,21 @@ def mark_repaired_record(change: str, taken: list[tuple[str, list[str]]], fixes:
     as it was read.
     """
     by_key = {row[0]: row for place, row in taken if place == "record"}
+    if not by_key:
+        return
+    # The record is read and rewritten whole: a round appended in between, or a release that removes
+    # the record, would be lost, so the rewrite holds the lock the loop verbs hold (O190-4).
+    try:
+        with holding_record(change, root):
+            _mark_record_rows(change, by_key, fixes, root)
+    except Refused as error:
+        waiting = ", ".join(sorted(by_key))
+        raise CallFailed(f"the loop record could not be marked ({error}); mark {waiting} by hand.") from error
+
+
+def _mark_record_rows(change: str, by_key: dict[str, list[str]], fixes: dict[str, str], root: Path) -> None:
     record = read_record(change, root)
-    if not by_key or record is None:
+    if record is None:
         return
     ending = "\n" if record.endswith("\n") else ""
     lines: list[str] = []
@@ -4644,6 +4693,7 @@ def review_loop(root: Path, change: str, availability_reported: str | None = Non
                 "the repair brake stops the loop; the maintainer decides what continues."
             )
     state = read_state(record, findings_text)
+    receipt_taken = False
     if record is None and state is None:
         # A fresh run has neither a record nor a released snapshot. read_state
         # refuses a pre-swarm record without its Loop state line.
@@ -4654,6 +4704,7 @@ def review_loop(root: Path, change: str, availability_reported: str | None = Non
 
         if stage2_availability.settings(root, sys.modules[__name__]) is not None:
             state = stage2_availability.consume(root, change, availability_reported, sys.modules[__name__])
+            receipt_taken = True
             require_pi()
         else:
             require_pi()
@@ -4808,6 +4859,10 @@ def review_loop(root: Path, change: str, availability_reported: str | None = Non
         # puts the run's snapshot line into it before the rounds.
         write_state(change, state, root)
     append(path, "\n\n".join(parts))
+    if receipt_taken:
+        import stage2_availability
+
+        stage2_availability.spend(root, change, sys.modules[__name__])
     for model in replaced:
         # A replacement is consumed: it is no later rung.
         mark_consumed(change, state, f"rung:{model}", root)
@@ -5008,7 +5063,12 @@ def main(argv: list[str] | None = None) -> int:
         elif args.verb == "session":
             session(Path(args.root), args.change, args.model, args.handover)
         elif args.verb == "review-loop":
-            review_loop(Path(args.root), args.change, args.availability_reported)
+            # The three verbs that write the loop record hold it for their whole run (R-14).
+            with holding_record(args.change, Path(args.root)):
+                review_loop(Path(args.root), args.change, args.availability_reported)
+        elif args.verb in {"prepare-loop", "release-loop"}:
+            with holding_record(args.change, Path(args.root)):
+                VERBS[args.verb](Path(args.root), args.change)
         else:
             VERBS[args.verb](Path(args.root), args.change)
     except Refused as error:

@@ -209,3 +209,12 @@ def consume(root: Path, change: str, token: str | None, runner) -> dict:
             "run prepare-loop and report its fresh selection in the main conversation; pass its --availability-reported id."
         )
     return state
+
+
+def spend(root: Path, change: str, runner) -> None:
+    """Spend the receipt once the first round is written, never earlier (ADR 0021, decision 6).
+
+    A failed attempt consumes no stage and leaves no record, so it leaves the receipt too; the
+    operator does not re-probe for a Pi that was missing (O190-3).
+    """
+    receipt_path(root, change, runner).unlink(missing_ok=True)
