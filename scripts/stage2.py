@@ -3461,34 +3461,32 @@ def prepare_derived(root: Path, env: dict[str, str], key: str | None = None) -> 
                     check_frontmatter_current.stamp(path, dt.date.today())
             except (check_frontmatter_current.CannotStamp, OSError, RuntimeError) as error:
                 errors.append(f"{relative}: {error}")
-        if errors:
-            evidence = "\n".join(_shrink(protect_diagnostics("\n".join(errors), key).splitlines(), TAIL_LINES))
-            return [f"Derived-file preparation failed: {evidence}"]
-        index = root / "plans" / "INDEX.md"
-        if not index.resolve().is_relative_to(root.resolve()):
-            raise OSError("refusing an index outside the worktree: plans/INDEX.md")
-        if index.resolve() != root.resolve() / "plans" / "INDEX.md":
-            raise OSError("refusing an aliased index path: plans/INDEX.md")
-        if index.exists() and index.stat().st_nlink > 1:
-            raise OSError("refusing a hard-linked index path: plans/INDEX.md")
-        mirror = trusted_registry(root, env)
-        # Outside the mirror, and outside anything the worktree mirrors: the mirror links every top-level
-        # entry, so a repository path named `scratch` would be written to instead (P2 of the #188 review).
-        scratch = Path(tempfile.mkdtemp(prefix="harness-scratch-"))
-        for name in ("home", "tmp"):
-            (scratch / name).mkdir()
-        try:
-            done = launch(
-                [sys.executable, str(mirror / "scripts" / "plans_registry.py"), "--index"],
-                root,
-                {**env, "HOME": str(scratch / "home"), "TMPDIR": str(scratch / "tmp")},
-                key,
-                timeout=TOOL_SECONDS,
-                limit=f"the runner's tool limit after {TOOL_SECONDS // 60} minutes",
-            )
-        finally:
-            shutil.rmtree(mirror, ignore_errors=True)
-            shutil.rmtree(scratch, ignore_errors=True)
+        if not errors:
+            index = root / "plans" / "INDEX.md"
+            if not index.resolve().is_relative_to(root.resolve()):
+                raise OSError("refusing an index outside the worktree: plans/INDEX.md")
+            if index.resolve() != root.resolve() / "plans" / "INDEX.md":
+                raise OSError("refusing an aliased index path: plans/INDEX.md")
+            if index.exists() and index.stat().st_nlink > 1:
+                raise OSError("refusing a hard-linked index path: plans/INDEX.md")
+            mirror = trusted_registry(root, env)
+            # Outside the mirror, and outside anything the worktree mirrors: the mirror links every top-level
+            # entry, so a repository path named `scratch` would be written to instead (P2 of the #188 review).
+            scratch = Path(tempfile.mkdtemp(prefix="harness-scratch-"))
+            for name in ("home", "tmp"):
+                (scratch / name).mkdir()
+            try:
+                done = launch(
+                    [sys.executable, str(mirror / "scripts" / "plans_registry.py"), "--index"],
+                    root,
+                    {**env, "HOME": str(scratch / "home"), "TMPDIR": str(scratch / "tmp")},
+                    key,
+                    timeout=TOOL_SECONDS,
+                    limit=f"the runner's tool limit after {TOOL_SECONDS // 60} minutes",
+                )
+            finally:
+                shutil.rmtree(mirror, ignore_errors=True)
+                shutil.rmtree(scratch, ignore_errors=True)
     except (
         check_frontmatter_current.CannotMeasure,
         check_frontmatter_current.CannotStamp,
@@ -3499,6 +3497,9 @@ def prepare_derived(root: Path, env: dict[str, str], key: str | None = None) -> 
         UnicodeError,
     ) as error:
         evidence = "\n".join(protect_diagnostics(str(error), key).splitlines()[-TAIL_LINES:])
+        return [f"Derived-file preparation failed: {evidence}"]
+    if errors:
+        evidence = "\n".join(_shrink(protect_diagnostics("\n".join(errors), key).splitlines(), TAIL_LINES))
         return [f"Derived-file preparation failed: {evidence}"]
     if done.returncode:
         text = protect_diagnostics((done.stdout or "") + (done.stderr or ""), key)
