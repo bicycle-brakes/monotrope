@@ -819,6 +819,47 @@ def entry_problem(root: Path, endpoint: str) -> str | None:
     return None
 
 
+def excluded_problem(root: Path, model: str) -> str | None:
+    """Why `ausgeschlossen` in `model-endpoints.yaml` denies this model, or None (R-4 of the review-swarm review).
+
+    The list was prose the runner never read: a denied provider's new free id would have reviewed diffs
+    without a decision. An entry binds by naming the ids or id prefixes it excludes in `modelle`; an
+    entry without that field documents a decision but names nothing the code can match. One predicate,
+    read by the free class and by the paid declaration, so both paths answer the same way.
+    """
+    try:
+        data = yaml.safe_load((root / "model-endpoints.yaml").read_text(encoding="utf-8")) or {}
+    except (OSError, UnicodeDecodeError, yaml.YAMLError):
+        return "model-endpoints.yaml cannot be read"
+    if not isinstance(data, dict):
+        return "model-endpoints.yaml has malformed exclusions: the declaration must be a mapping"
+    entries = data.get("ausgeschlossen", [])
+    if not isinstance(entries, list):
+        return "model-endpoints.yaml has malformed exclusions: ausgeschlossen must be a list"
+    full = model.lower()
+    names = model.rsplit("/", 1)[-1].lower()
+    for number, entry in enumerate(entries, 1):
+        malformed = f"model-endpoints.yaml has a malformed exclusion at entry {number}"
+        if not isinstance(entry, dict):
+            return malformed + ": a mapping is required"
+        data_class = entry.get("klasse", "framework")
+        if not isinstance(data_class, str) or not data_class.strip():
+            return malformed + ": klasse must name a data class"
+        if data_class != "framework":
+            continue
+        if "modelle" not in entry:
+            continue  # A legacy prose-only decision has no machine-readable model ids.
+        listed = entry.get("modelle")
+        if not isinstance(listed, list) or any(not isinstance(item, str) or not item.strip() for item in listed):
+            return malformed + ": modelle must be a list of nonempty model ids or prefixes"
+        for item in listed:
+            prefix = item.strip().lower()
+            if prefix and any(value == prefix or value.startswith(prefix) for value in (full, names)):
+                reason = str(entry.get("was") or "excluded by the maintainer").strip()
+                return f"the model {model} is excluded by model-endpoints.yaml: {reason}"
+    return None
+
+
 def declaration_problem(root: Path, endpoint: str, model: str) -> str | None:
     """Why the declaration does not clear this endpoint and model for framework content, or None.
 
@@ -833,6 +874,9 @@ def declaration_problem(root: Path, endpoint: str, model: str) -> str | None:
     found = next((e for e in data.get("endpunkte") or [] if isinstance(e, dict) and e.get("name") == endpoint), None)
     if found is None:
         return f"model-endpoints.yaml declares no endpoint {endpoint}"
+    excluded = excluded_problem(root, model)
+    if excluded:
+        return excluded
     if model not in (found.get("modelle") or []):
         return f"the endpoint {endpoint} does not list the model {model}"
     if endpoint == OPENCODE:
@@ -1307,6 +1351,9 @@ def free_admission_problem(root: Path, model: str, selected: list[str]) -> str |
     residency = entry.get("residenz")
     if not isinstance(residency, str) or not residency.strip() or residency == "nicht-erklaert":
         return f"the endpoint {OPENCODE} states no data residency"
+    excluded = excluded_problem(root, model)
+    if excluded:
+        return excluded
     if model in [str(item) for item in entry.get("modelle") or []]:
         return f"the model {model} is a paid model; the free class does not admit it"
     if model not in selected:
