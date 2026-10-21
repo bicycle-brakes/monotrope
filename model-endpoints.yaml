@@ -385,22 +385,30 @@ research_swarm:
   paid_endpoint: claude-code-plan
   topic_author: claude-opus-5-5
   judge: claude-opus-5-5
-  # Six seats (Q-12, Q-14): each has ONE preferred model and no fallback list. At
-  # preparation (`stage2.py prepare-explore`) an unreachable preferred model is
-  # replaced by the cheapest reachable admitted Go model from the substitute pool
-  # (`anfragen_5h` descending, ties by id) and the substitution is reported before
-  # any research call. A `modelle_terms` record alone admits a Go model for
-  # research; `opencode-go.modelle` stays the review ladder. Until the review
-  # swarm's records (#157) are on main, no Go model here has a terms record, so
-  # preparation reports every Go seat model as unadmitted rather than guessing.
+  # Six seats (Q-12, Q-14, Q-18). A seat is either pinned to one `{endpoint,
+  # model}` or open (`{endpoint: opencode-go}` alone). At preparation
+  # (`stage2.py prepare-explore`) the runner probes the admitted Go models and
+  # fills each open seat with the cheapest reachable one (`anfragen_5h`
+  # descending, ties by id) that no other seat of its trio holds; an unreachable
+  # pinned model is replaced the same way and reported as "substitute for <seat>".
+  # It prints every reachable candidate with its request cost and its Artificial
+  # Analysis Intelligence Index, read live at each preparation, and a
+  # recommendation. The orchestrator asks the maintainer which models to use
+  # before the run; a different answer goes back as `prepare-explore --seats`
+  # and is never silently replaced. A `modelle_terms` record alone admits a Go
+  # model for research; `opencode-go.modelle` stays the review ladder. Go seats
+  # name no model since 2026-10-21: the Flash models change too often (Q-18).
   repository_seats:
-    - {endpoint: opencode-go, model: deepseek-v4.1-flash}
-    - {endpoint: opencode-go, model: mimo-v2.6-flash}
+    - {endpoint: opencode-go}
+    - {endpoint: opencode-go}
     - {endpoint: claude-code-plan, model: claude-haiku-5-5}
   online_seats:
-    - {endpoint: opencode-go, model: deepseek-v4.1-flash}
-    - {endpoint: opencode-go, model: mimo-v2.6-flash}
-    - {endpoint: opencode-go, model: qwen3.8-flash}
+    - {endpoint: opencode-go}
+    - {endpoint: opencode-go}
+    - {endpoint: opencode-go}
+  # Go id -> Artificial Analysis slug, only where the id does not match the
+  # slug or name by itself; an unmatched model shows its intelligence as not read.
+  intelligence_slugs: {}
   availability_preflight:
     max_age_seconds: 900
     exclude_until: []

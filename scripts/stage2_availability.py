@@ -60,6 +60,73 @@ def now() -> dt.datetime:
     return dt.datetime.now(dt.UTC)
 
 
+# ---------------------------------------------------------------------------
+# Intelligence: the Artificial Analysis Intelligence Index, read live at every research preparation (Q-18)
+# ---------------------------------------------------------------------------
+
+INTELLIGENCE_URL = "https://artificialanalysis.ai/api/v2/data/llms/models"
+INTELLIGENCE_SOURCE = "Artificial Analysis Intelligence Index, https://artificialanalysis.ai/"
+INTELLIGENCE_KEY_ENV = "ARTIFICIAL_ANALYSIS_API_KEY"
+INTELLIGENCE_SECONDS = 20
+
+
+def _fetch_intelligence(key: str) -> object:
+    """One GET of the public model list; nothing from the repository is sent. Raises OSError or ValueError."""
+    import urllib.request
+
+    request = urllib.request.Request(INTELLIGENCE_URL, headers={"x-api-key": key, "accept": "application/json"})
+    with urllib.request.urlopen(request, timeout=INTELLIGENCE_SECONDS) as response:  # noqa: S310 - fixed https URL
+        return json.loads(response.read().decode("utf-8"))
+
+
+INTELLIGENCE_FETCH = _fetch_intelligence  # tests replace it; the runner never reads a cached copy
+
+
+def _normal(text: str) -> str:
+    return re.sub(r"[^a-z0-9]", "", text.split("(")[0].lower())
+
+
+def read_intelligence(models: list[str], slugs: dict[str, str]) -> dict:
+    """The index per model id, or a reading marked not read with its reason; it never stops a preparation.
+
+    A model matches an entry by its declared slug in `intelligence_slugs`, else by its id against the
+    entry's slug or name with case, punctuation and a parenthesised effort label ignored. Several matching
+    entries (one per reasoning effort) give the highest index.
+    """
+    reading: dict = {"source": INTELLIGENCE_SOURCE, "read_at": None, "status": "", "scores": dict.fromkeys(models)}
+    key = os.environ.get(INTELLIGENCE_KEY_ENV, "").strip()
+    if not key:
+        reading["status"] = f"not read: {INTELLIGENCE_KEY_ENV} is not set"
+        return reading
+    try:
+        document = INTELLIGENCE_FETCH(key)
+        entries = document["data"] if isinstance(document, dict) else None
+        if not isinstance(entries, list):
+            raise ValueError("the response has no data list")
+    except (OSError, ValueError, KeyError) as error:
+        reading["status"] = "not read: " + str(error).replace(key, "[key]")[:200]
+        return reading
+    reading["read_at"] = now().isoformat(timespec="seconds")
+    reading["status"] = "read"
+    for model in models:
+        wanted = slugs.get(model)
+        best = None
+        for entry in entries:
+            if not isinstance(entry, dict):
+                continue
+            score = (entry.get("evaluations") or {}).get("artificial_analysis_intelligence_index")
+            if not isinstance(score, int | float) or isinstance(score, bool):
+                continue
+            if wanted is not None:
+                hit = entry.get("slug") == wanted
+            else:
+                hit = _normal(model) in {_normal(str(entry.get("slug", ""))), _normal(str(entry.get("name", "")))}
+            if hit and (best is None or score > best):
+                best = score
+        reading["scores"][model] = best
+    return reading
+
+
 def digest(value: str) -> str:
     return hashlib.sha256(value.encode("utf-8")).hexdigest()
 
@@ -456,7 +523,7 @@ class _Selection:
                 seat["model"]
                 for name in ("repository_seats", "online_seats")
                 for seat in data["research_swarm"][name]
-                if seat["endpoint"] == GO
+                if seat["endpoint"] == GO and "model" in seat
             ),
         }
         for model in sorted(ids):
@@ -538,13 +605,16 @@ class _Selection:
         chosen: list[dict | None] = [None] * len(seats)
         taken: set[str] = set()
         for number, seat in enumerate(seats):
+            if "model" not in seat:
+                continue
             endpoint, model = seat["endpoint"], seat["model"]
             if self.usable(endpoint, model) and self.reachable(endpoint, model):
-                chosen[number] = {"seat": number + 1, "endpoint": endpoint, "model": model, "mark": "preferred"}
+                mark = "maintainer's choice" if seat.get("chosen") else "preferred"
+                chosen[number] = {"seat": number + 1, "endpoint": endpoint, "model": model, "mark": mark}
                 taken.add(f"{endpoint}/{model}")
         for number in range(len(seats)):
-            if chosen[number] is not None:
-                continue
+            if chosen[number] is not None or seats[number].get("chosen"):
+                continue  # a model the maintainer chose is never silently replaced
             if label == "repository" and not self.go_framework:
                 continue
             for entry in self.pool:
@@ -559,7 +629,7 @@ class _Selection:
                         "seat": number + 1,
                         "endpoint": GO,
                         "model": model,
-                        "mark": f"substitute for {number + 1}",
+                        "mark": "cheapest" if "model" not in seats[number] else f"substitute for {number + 1}",
                     }
                     taken.add(key)
                     break
@@ -581,6 +651,7 @@ def research_report(state: dict) -> str:
         lines.extend(f"seat-unavailable: {label} seat {number}" for number in items)
     pool = ", ".join(f"{item['model']} ({item['anfragen_5h']:g})" for item in state["pool"]) or "empty"
     lines.append(f"Pool, cheapest first: {pool}")
+    lines.extend(intelligence_lines(state))
     lines.append(f"Free selection: {_free_text(state['free']['selected'])}")
     lines.append("Models:")
     for key, item in state["models"].items():
@@ -592,9 +663,81 @@ def research_report(state: dict) -> str:
     return "\n".join(lines)
 
 
-def prepare_research(root: Path, change: str, runner, klass: str | None = None) -> None:
+def _score_text(value: object) -> str:
+    return "not read" if value is None else f"{value:g}"
+
+
+def intelligence_lines(state: dict) -> list[str]:
+    """Cost against intelligence for every reachable candidate, and the recommendation with its reason (Q-18)."""
+    reading = state.get("intelligence")
+    if not reading:
+        return []
+    scores = reading["scores"]
+    lines = [
+        f"Intelligence: {reading['source']} - {reading['status']}"
+        + (f", {reading['read_at']}" if reading["read_at"] else "")
+    ]
+    reachable = [key for key, item in state["models"].items() if item["state"] == "selected"]
+    lines.append("Candidates (reachable; requests per 5 hours, more is cheaper; intelligence index):")
+    cost = {item["model"]: item["anfragen_5h"] for item in state["pool"]}
+    for key in reachable:
+        model = key.split("/", 1)[1]
+        price = f"{cost[model]:g}" if model in cost else "subscription"
+        lines.append(f"  {key}: requests {price}, intelligence {_score_text(scores.get(model))}")
+    lines.append(
+        "Recommendation: the seats above - per trio the cheapest reachable admitted models"
+        + ("" if reading["status"] == "read" else "; intelligence was not read, so cost alone decides")
+        + "."
+    )
+    stronger = sorted(
+        (
+            (scores[item["model"]], item["model"])
+            for item in state["pool"]
+            if f"{GO}/{item['model']}" in reachable and scores.get(item["model"]) is not None
+        ),
+        reverse=True,
+    )
+    if stronger:
+        score, model = stronger[0]
+        lines.append(
+            f"Strongest reachable pool model: {model} (index {score:g}); worth its cost for an architectural or "
+            "unclear change."
+        )
+    return lines
+
+
+def chosen_seats(seats: dict[str, list[dict]], choice: dict[str, list[str]] | None, runner) -> dict[str, list[dict]]:
+    """The declared seats with the maintainer's Go models in place of the open or pinned Go seats, in order."""
+    if not choice:
+        return seats
+    result = {}
+    for label, trio in seats.items():
+        models = choice.get(label)
+        if models is None:
+            result[label] = trio
+            continue
+        go_seats = [number for number, seat in enumerate(trio) if seat["endpoint"] == GO]
+        if len(models) != len(go_seats) or len(set(models)) != len(models):
+            raise runner.Refused(
+                f"--seats {label} names {len(models)} models; the trio has {len(go_seats)} distinct Go seats."
+            )
+        updated = [dict(seat) for seat in trio]
+        for number, model in zip(go_seats, models, strict=True):
+            updated[number] = {"endpoint": GO, "model": model, "chosen": True}
+        result[label] = updated
+    unknown = set(choice) - set(seats)
+    if unknown:
+        raise runner.Refused(f"--seats knows the trios repository and online, not {', '.join(sorted(unknown))}.")
+    return result
+
+
+def prepare_research(
+    root: Path, change: str, runner, klass: str | None = None, choice: dict[str, list[str]] | None = None
+) -> None:
     """Admit, probe and select the six seats, report them, and seal a receipt - or stop with exit 1 or 2.
 
+    `choice` is the maintainer's answer to the recommendation (`--seats`): those Go models fill the trio's
+    Go seats, and one that is not admitted or not reachable stops the preparation instead of being replaced.
     Writes nothing in the worktree: the receipt and its audit lines live in the runner's state directory.
     """
     path = research_receipt_path(change, runner, root)
@@ -609,12 +752,12 @@ def prepare_research(root: Path, change: str, runner, klass: str | None = None) 
     neighbours = given_neighbours(root, change, runner)
     runner.require_pi()
     block = data["research_swarm"]
-    seats = {"repository": block["repository_seats"], "online": block["online_seats"]}
+    seats = chosen_seats({"repository": block["repository_seats"], "online": block["online_seats"]}, choice, runner)
     go_entry = _endpoint(data, GO) or {}
     declared = go_entry.get("modelle_terms")
     # Every declared Go model is classified against the fresh overlay, so each skip carries its own reason.
     preferred = sorted(
-        {seat["model"] for trio in seats.values() for seat in trio if seat["endpoint"] == GO}
+        {seat["model"] for trio in seats.values() for seat in trio if seat["endpoint"] == GO and "model" in seat}
         | {model for model in (declared if isinstance(declared, dict) else {}) if not str(model).endswith("-free")}
     )
     try:
@@ -664,6 +807,10 @@ def prepare_research(root: Path, change: str, runner, klass: str | None = None) 
         ),
         "audit": selection.audit,
     }
+    state["intelligence"] = read_intelligence(
+        sorted({key.split("/", 1)[1] for key, item in selection.models.items() if item["state"] == "selected"}),
+        block.get("intelligence_slugs") or {},
+    )
     print(research_report(state))
     missing = [(label, number) for label, numbers in state["unfilled"].items() for number in numbers]
     if missing:
@@ -680,8 +827,10 @@ def prepare_research(root: Path, change: str, runner, klass: str | None = None) 
     receipt["report_id"] = seal(receipt)
     write_receipt(path, receipt)
     print(
-        "Report this selection in the main conversation, then run "
-        f"explore {change} --availability-reported {receipt['report_id']}"
+        "Ask the maintainer in the main conversation which models to use, with this recommendation and its reason "
+        "(intelligence against cost). To use a different choice, run "
+        f"prepare-explore {change} --seats repository=<go models> --seats online=<go models>; "
+        f"to use this one, run explore {change} --availability-reported {receipt['report_id']}"
     )
 
 

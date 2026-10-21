@@ -461,8 +461,9 @@ SEAT_KEYS = {"endpoint", "model"}
 def seat_problems(data: dict) -> list[str]:
     """What the six research seats and the availability rule require, as the problems found (Q-12, Q-14).
 
-    Each trio is exactly three seats with one preferred `{endpoint, model}` each and no fallback list.
-    A model is declared by its endpoint's `modelle` or, for research only, by a `modelle_terms` record,
+    Each trio is exactly three seats, each either pinned to one `{endpoint, model}` with no fallback list
+    or an open `{endpoint: opencode-go}` seat that preparation fills from the admitted pool, cheapest first,
+    for the maintainer to confirm or replace before the run (Q-18). A model is declared by its endpoint's `modelle` or, for research only, by a `modelle_terms` record,
     so a record alone admits it and the review ladder never changes. A `-free` id never fills a seat,
     online seats run on `opencode-go`, and repository seats need an endpoint cleared for `framework`
     with a stated residency. One model fills at most one seat of a trio.
@@ -488,8 +489,16 @@ def seat_problems(data: dict) -> list[str]:
         seen: set[tuple[str, str]] = set()
         for number, seat in enumerate(seats, 1):
             where = f"{label} seat {number}"
+            if isinstance(seat, dict) and set(seat) == {"endpoint"}:
+                if seat["endpoint"] != "opencode-go":
+                    problems.append(f"{where}: only an opencode-go seat may be open")
+                elif label == "repository" and not {"framework"} <= set(
+                    endpoint("opencode-go").get("darf_sehen") or []
+                ):
+                    problems.append(f"{where}: endpoint opencode-go may not see framework content")
+                continue
             if not isinstance(seat, dict) or set(seat) != SEAT_KEYS:
-                problems.append(f"{where} needs exactly endpoint and model: one preferred model, no fallback list")
+                problems.append(f"{where} needs endpoint and model, or endpoint opencode-go alone: no fallback list")
                 continue
             name, model = seat["endpoint"], seat["model"]
             if not all(isinstance(value, str) and value for value in (name, model)):
@@ -515,6 +524,11 @@ def seat_problems(data: dict) -> list[str]:
             if (name, model) in seen:
                 problems.append(f"{where}: {name}/{model} already fills another seat of the trio")
             seen.add((name, model))
+    slugs = block.get("intelligence_slugs", {})
+    if not isinstance(slugs, dict) or not all(
+        isinstance(k, str) and isinstance(v, str) and v for k, v in slugs.items()
+    ):
+        problems.append("intelligence_slugs maps a model id to one Artificial Analysis slug")
     problems.extend(rule_problem(block.get("availability_preflight"), wire_apis=True))
     return problems
 

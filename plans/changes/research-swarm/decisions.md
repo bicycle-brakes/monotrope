@@ -669,3 +669,27 @@ probing, facing the choice between unifying now and a follow-up change, we
 decided to unify them within this change, to achieve the single implementation
 criterion 50 requires, accepting that the review rule now refuses unknown keys.
 — 2026-10-19
+
+## Q-18 · Who chooses the research seat models before a run, and on what evidence
+
+asked: 2026-10-21
+answer: "die flash modelle werden immer ändern, ich möchte, dass in stufe 2 oder der stufe in der die flash modelle alle verfügbaren aber maximal 3 modelle genutzt werden. am besten die günstigsten, und in der leiter gehen wir die preisreihe dann schrittweise nach oben." — then "ich möchte das man vor jeden lauf gefragt wird, welche modelle genutzt werden sollen, mit empfehlungen und warum, sowas wie intelligenz vs kosten" — then "A, artificial analysis als benchmark, nur für research" — then "der benchmark muss aktualisiert werden, regalmäßig" — then, asked whether live per run, a dated reading with a maximum age, or a dated reading with a weekly refresh job: "1" (live per run). Before every research run the maintainer is asked which models fill the seats, with a recommendation and its reason weighing intelligence against cost; the Go seats name no fixed models; the recommendation starts from the cheapest reachable admitted models, at most three per trio, and moves up the price order only with a reason; intelligence is the Artificial Analysis Intelligence Index, recorded with its reading date and source, for the research swarm only, read live from the Artificial Analysis API at every preparation.
+answered_by: maintainer
+status: answered
+supersedes_in_part: Q-12 and Q-14 (one fixed preferred model per seat; the preparation alone choosing substitutes)
+context: |
+  Topic: how the six research seats get their models now that the Go Flash models change often.
+  Intention: PR #205 (2026-10-21) removed `mimo-v2.6-flash` from the Go model list because OpenCode Go no longer answers it correctly, yet it was the preferred model of the second seat in both trios, so the declared seats no longer resolved.
+  Today: each seat declares one preferred model; preparation keeps a reachable preferred model and fills the rest with the cheapest reachable admitted pool model, then prints the selection for the main conversation. No intelligence value is declared anywhere in `model-endpoints.yaml`.
+  Repository change: the research block declares an intelligence reading per candidate model (Artificial Analysis Intelligence Index, dated, with its source); preparation prints every reachable admitted candidate with cost and intelligence plus a recommended selection, and the orchestrator asks the maintainer before the receipt is used; the maintainer's choice can replace the recommendation. Spec, design, ADR 0020 and the tests follow.
+  Architecture change: the seat choice moves from a declared preferred model to a per-run maintainer choice on a recommendation. Admission through a dated terms record, the probe, the receipt, the public/private boundary and the `39 + 3N` budget stay unchanged. The review loop keeps its measured order (cheapest admitted first, Flash round of at most three, then upward) and gets no intelligence value.
+
+In the context of research seats whose named Flash models go stale as OpenCode
+Go changes its offer, facing the choice between fixed preferred models with
+automatic substitutes and a per-run choice, we decided that the maintainer
+chooses the seat models before each run on a recommendation that weighs the
+Artificial Analysis Intelligence Index against the declared request cost, to
+achieve that no stale model name blocks a run and that a harder change can buy
+a stronger model deliberately, accepting one more question before every research
+run and a live call to the Artificial Analysis API, with its key, at every
+preparation. — 2026-10-21

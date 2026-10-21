@@ -191,6 +191,7 @@ class Fixture:
         self.calls_to_catalog = 0
         self.clock = NOW
         monkeypatch.setattr(availability, "now", lambda: self.clock)
+        monkeypatch.delenv(availability.INTELLIGENCE_KEY_ENV, raising=False)
 
         def bridge(_runner, _root):
             self.calls_to_catalog += 1
@@ -479,7 +480,8 @@ def test_report_names_every_seat_candidate_and_check_time(fx: Fixture, capsys) -
     for needle in ("deepseek-v4.1-flash: unreachable", "skipped-model: skipped", "mimo-v2.6-pro: not probed"):
         assert needle in out, needle
     assert "noterms-model" in out and "Unread" in out
-    assert "Report this selection in the main conversation, then run explore demo --availability-reported" in out
+    assert "Ask the maintainer in the main conversation which models to use" in out
+    assert "run explore demo --availability-reported" in out
 
 
 @pytest.mark.parametrize(
@@ -788,3 +790,134 @@ def test_same_second_preparations_have_distinct_single_use_ids(fx: Fixture) -> N
         availability.consume_research(fx.w.root, "demo", first["report_id"], stage2, "feature")
     assert fx.receipt() == second
     assert availability.consume_research(fx.w.root, "demo", second["report_id"], stage2, "feature")
+
+
+# ---------------------------------------------------------------------------
+# The maintainer's choice: open seats, intelligence against cost, --seats (Q-18)
+# ---------------------------------------------------------------------------
+
+
+def open_go_seats(data: dict) -> None:
+    block = data["research_swarm"]
+    block["repository_seats"] = [{"endpoint": GO}, {"endpoint": GO}, {"endpoint": CLAUDE, "model": HAIKU}]
+    block["online_seats"] = [{"endpoint": GO}, {"endpoint": GO}, {"endpoint": GO}]
+
+
+def intelligence_document() -> dict:
+    def entry(slug: str, name: str, score) -> dict:
+        return {"slug": slug, "name": name, "evaluations": {"artificial_analysis_intelligence_index": score}}
+
+    return {
+        "data": [
+            entry("deepseek-v4-1-flash-1017", "DeepSeek V4.1 Flash 1017 (max)", 45),
+            entry("longcat-2-0", "LongCat 2.0", 19),
+            entry("glm-5-3-flash", "GLM-5.3-Flash", 42),
+            entry("mimo-v2-6-pro", "MiMo-V2.6-Pro", 46),
+            entry("claude-haiku-5-5", "Claude Haiku 5.5 (max)", 43),
+            entry("claude-haiku-5-5-low", "Claude Haiku 5.5 (low)", 29),
+        ]
+    }
+
+
+def test_open_seats_take_the_cheapest_reachable_models_of_their_trio(fx: Fixture) -> None:
+    # Planted fault: an open seat stays empty, takes an expensive model first, or one model fills two seats.
+    fx.edit_declaration(open_go_seats)
+    assert fx.prepare() == 0
+    state = fx.receipt()["state"]
+    assert seats(state, "repository") == [
+        (GO, "deepseek-v4.1-flash", "cheapest"),
+        (GO, "mimo-v2.6-flash", "cheapest"),
+        (CLAUDE, HAIKU, "preferred"),
+    ]
+    assert seats(state, "online") == [
+        (GO, "deepseek-v4.1-flash", "cheapest"),
+        (GO, "mimo-v2.6-flash", "cheapest"),
+        (GO, "longcat-2.0", "cheapest"),
+    ]
+
+
+def test_the_report_weighs_intelligence_against_cost_and_names_the_source(
+    fx: Fixture, monkeypatch: pytest.MonkeyPatch, capsys
+) -> None:
+    # Planted fault: no intelligence column, the key leaks into the output, or no strongest-model hint.
+    fx.edit_declaration(
+        lambda data: data["research_swarm"].update(
+            intelligence_slugs={"deepseek-v4.1-flash": "deepseek-v4-1-flash-1017"}
+        )
+    )
+    monkeypatch.setenv(availability.INTELLIGENCE_KEY_ENV, "secret-aa-key")
+    seen: list[str] = []
+
+    def fetch(key: str) -> dict:
+        seen.append(key)
+        return intelligence_document()
+
+    monkeypatch.setattr(availability, "INTELLIGENCE_FETCH", fetch)
+    capsys.readouterr()
+    assert fx.prepare() == 0
+    out = capsys.readouterr().out
+    assert seen == ["secret-aa-key"] and "secret-aa-key" not in out
+    assert "Artificial Analysis Intelligence Index, https://artificialanalysis.ai/ - read" in out
+    assert "opencode-go/deepseek-v4.1-flash: requests 34670, intelligence 45" in out
+    assert f"claude-code-plan/{HAIKU}: requests subscription, intelligence 43" in out, "the highest effort counts"
+    assert "Recommendation: the seats above" in out
+    scores = fx.receipt()["state"]["intelligence"]["scores"]
+    assert scores["deepseek-v4.1-flash"] == 45 and scores["longcat-2.0"] == 19
+
+
+def test_intelligence_not_read_never_stops_the_preparation(
+    fx: Fixture, monkeypatch: pytest.MonkeyPatch, capsys
+) -> None:
+    # Planted fault: a missing key or a failed request stops the run or hides that cost alone decided.
+    capsys.readouterr()
+    assert fx.prepare() == 0
+    out = capsys.readouterr().out
+    assert f"not read: {availability.INTELLIGENCE_KEY_ENV} is not set" in out
+    assert "intelligence was not read, so cost alone decides" in out
+    monkeypatch.setenv(availability.INTELLIGENCE_KEY_ENV, "k-123")
+
+    def broken(key: str) -> dict:
+        raise OSError(f"HTTP 401 for {key}")
+
+    monkeypatch.setattr(availability, "INTELLIGENCE_FETCH", broken)
+    assert fx.prepare() == 0
+    out = capsys.readouterr().out
+    assert "not read: HTTP 401 for [key]" in out and "k-123" not in out
+
+
+def test_the_maintainers_choice_fills_the_go_seats_and_is_never_replaced(fx: Fixture, capsys) -> None:
+    # Planted fault: --seats is ignored, or an unreachable chosen model is silently swapped for another.
+    fx.edit_declaration(open_go_seats)
+    assert fx.prepare("--seats", "repository=glm-5.3-flash,longcat-2.0") == 0
+    state = fx.receipt()["state"]
+    assert seats(state, "repository")[:2] == [
+        (GO, "glm-5.3-flash", "maintainer's choice"),
+        (GO, "longcat-2.0", "maintainer's choice"),
+    ]
+    assert seats(state, "online")[0] == (GO, "deepseek-v4.1-flash", "cheapest")
+    fx.script(**{"glm-5.3-flash": {"exit": 1, "stderr": "down"}})
+    capsys.readouterr()
+    assert fx.prepare("--seats", "repository=glm-5.3-flash,longcat-2.0") == 1
+    assert "seat-unavailable: repository seat 1" in capsys.readouterr().err
+
+
+@pytest.mark.parametrize(
+    "options",
+    [
+        ("--seats", "repository=a"),  # two Go seats, one model
+        ("--seats", "repository=a,a"),  # one model twice
+        ("--seats", "elsewhere=a,b"),  # no such trio
+        ("--seats", "repository"),  # no models
+        ("--seats", "online=a,b,c", "--seats", "online=d,e,f"),  # one trio twice
+    ],
+)
+def test_a_malformed_choice_is_refused_before_any_probe(fx: Fixture, options: tuple[str, ...]) -> None:
+    fx.edit_declaration(open_go_seats)
+    assert fx.prepare(*options) == 2
+    assert fx.probed() == []
+
+
+def test_only_an_opencode_go_seat_may_be_open() -> None:
+    data = yaml.safe_load((Path(__file__).resolve().parent.parent / "model-endpoints.yaml").read_text(encoding="utf-8"))
+    data["research_swarm"]["repository_seats"][2] = {"endpoint": CLAUDE}
+    assert "repository seat 3: only an opencode-go seat may be open" in swarm.seat_problems(data)

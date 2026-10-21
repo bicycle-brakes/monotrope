@@ -4487,15 +4487,30 @@ def declared_class(root: Path, change: str, klass: str | None) -> str:
     )
 
 
-def prepare_explore(root: Path, change: str, klass: str | None = None) -> None:
+def seat_choice(values: list[str] | None) -> dict[str, list[str]] | None:
+    """`--seats repository=a,b` and `--seats online=x,y,z` as {trio: models}, or a refusal naming the fault."""
+    if not values:
+        return None
+    choice: dict[str, list[str]] = {}
+    for value in values:
+        label, sep, models = value.partition("=")
+        names = [name.strip() for name in models.split(",") if name.strip()]
+        if not sep or not names or label in choice:
+            raise Refused(f"--seats takes TRIO=model,model once per trio (repository, online), not `{value}`.")
+        choice[label] = names
+    return choice
+
+
+def prepare_explore(root: Path, change: str, klass: str | None = None, seats: list[str] | None = None) -> None:
     """Phase 1, step one for a swarm class: select and probe the six seats and print the report.
 
     Writes a single-use receipt outside the worktree; `explore <change> --availability-reported <id>`
-    consumes it once the selection has been reported in the main conversation.
+    consumes it once the maintainer has answered which models to use (Q-18). `seats` carries that answer
+    when it differs from the recommendation.
     """
     import stage2_availability
 
-    stage2_availability.prepare_research(root, change, sys.modules[__name__], klass)
+    stage2_availability.prepare_research(root, change, sys.modules[__name__], klass, seat_choice(seats))
 
 
 def explore(
@@ -5672,6 +5687,13 @@ def main(argv: list[str] | None = None) -> int:
         ),
     )
     parser.add_argument(
+        "--seats",
+        action="append",
+        default=None,
+        metavar="TRIO=MODELS",
+        help="prepare-explore only: the maintainer's Go models for a trio, e.g. repository=a,b",
+    )
+    parser.add_argument(
         "--handover",
         default=None,
         help="session only: a handover file inside the worktree (default: the change's handover.md)",
@@ -5704,6 +5726,8 @@ def main(argv: list[str] | None = None) -> int:
             raise Refused("--stage2-off applies only to explore, implement and repair.")
         if args.klass is not None and args.verb not in {"explore", "prepare-explore"}:
             raise Refused("--class belongs to the explore and prepare-explore verbs alone.")
+        if args.seats is not None and args.verb != "prepare-explore":
+            raise Refused("--seats belongs to prepare-explore alone.")
         if args.availability_reported is not None and args.verb not in {"explore", "review-loop"}:
             raise Refused("--availability-reported belongs to the explore and review-loop verbs alone.")
         refuse_repository_git(Path(args.root))
@@ -5715,7 +5739,7 @@ def main(argv: list[str] | None = None) -> int:
         elif args.model is not None or args.handover is not None:
             raise Refused("--model and --handover belong to the session verb alone.")
         if args.verb == "prepare-explore":
-            prepare_explore(Path(args.root), args.change, args.klass)
+            prepare_explore(Path(args.root), args.change, args.klass, args.seats)
         elif args.verb == "explore":
             explore(Path(args.root), args.change, args.stage2_off, args.klass, args.availability_reported)
         elif args.verb in {"implement", "repair"}:
