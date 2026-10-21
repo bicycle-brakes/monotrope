@@ -2336,7 +2336,7 @@ def _free_policy(**changes: object):
 
 def _no_model_call_and_no_receipt(fx: PrepFixture) -> None:
     assert fx.w.calls() == [], "a probe or model call started"
-    assert not stage2_availability.research_receipt_path("demo", stage2).exists(), "a receipt exists"
+    assert not stage2_availability.research_receipt_path("demo", stage2, fx.w.root).exists(), "a receipt exists"
 
 
 @pytest.mark.parametrize(
@@ -2430,7 +2430,7 @@ def test_capability_unavailable_keeps_required_slots_unless_include_is_required(
     fx.edit_declaration(_free_policy(include=["alpha-free"]))
     assert fx.prepare() == 1
     assert len(fx.w.calls()) == before, "a model started on an ineligible explicit include"
-    assert not stage2_availability.research_receipt_path("demo", stage2).exists()
+    assert not stage2_availability.research_receipt_path("demo", stage2, fx.w.root).exists()
 
 
 def test_a_run_longer_than_the_preparation_deadline_still_publishes_complete(
