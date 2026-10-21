@@ -2504,7 +2504,10 @@ attempt by hand. Red first: the new test's four cases fail on `bbfaa38`'s
 `scripts/check_research_handoff.py` and pass with the fix (78 passed in
 `tests/test_research_handoff.py`). Measured span (UTC): 2026-10-21T21:27:19Z
 (repair start) to 2026-10-21T21:58:20Z, about 31 min, before the full
-`make verify`.
+`make verify`. Full `make verify` 21:58:33Z to 22:09:23Z:
+3262 passed, 16 skipped, every gate green except `frontmatter-current`,
+which went red only because the run crossed midnight (Europe/Berlin); the two
+files were stamped and the gate rechecked green.
 
 - F-63: `value()` in `scripts/check_research_handoff.py` returns an empty answer for a parsed empty YAML container (`[]`, `{}`), so it neither closes an obligation nor supplies a criterion Basis; real inline and block answers still close. Test `tests/test_research_handoff.py::test_empty_yaml_containers_cannot_close_item_or_supply_basis`.
 - The runner runs `make verify`.
