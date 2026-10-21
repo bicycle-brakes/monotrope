@@ -1525,7 +1525,7 @@ def _free_candidate(root: Path, rel: str, base: str | None = None) -> bool:
             return False
         try:
             blob = subprocess.run(
-                ["git", "-C", str(root), "show", f"{base}:{rel}"],
+                [GIT, "-C", str(root), "show", f"{base}:{rel}"],
                 capture_output=True,
                 check=False,
                 timeout=GIT_SECONDS,
@@ -1550,7 +1550,7 @@ def _free_candidate(root: Path, rel: str, base: str | None = None) -> bool:
 def _merge_base(root: Path) -> str:
     """The merge base with origin/main, refused when there is none."""
     done = subprocess.run(
-        ["git", "-C", str(root), "merge-base", "HEAD", "origin/main"], capture_output=True, text=True, check=False
+        [GIT, "-C", str(root), "merge-base", "HEAD", "origin/main"], capture_output=True, text=True, check=False
     )
     base = done.stdout.strip()
     if done.returncode != 0 or not base:
@@ -2579,7 +2579,7 @@ def release_loop(root: Path, change: str) -> None:
 def _git_output(root: Path, *args: str, allow: tuple[int, ...] = (0,), env: dict[str, str] | None = None) -> str:
     try:
         done = subprocess.run(
-            ["git", "-C", str(root), *args],
+            [GIT, "-C", str(root), *args],
             capture_output=True,
             text=True,
             errors="replace",
@@ -2627,10 +2627,43 @@ RUFF_COMMANDS = (
 FORMAT_LABEL = "Runner format before `make verify`"
 FORMAT_COMMIT_HEADING = "Runner format before `make verify` (ruff check --fix with safe fixes only, then ruff format):"
 
+
 # The runner's own steps are bounded, and every program it starts from the worktree is the one it saw
 # before the model ran: a step that hangs, and a tool the attempt overwrote, both abort the attempt
 # with the limit or the path named - never a silent cut, never a wait without end (R-19, R-20 and
 # R-21 of the review-swarm review).
+# The one executable the runner resolves through `PATH`, and only once: every call names this path
+# (R-17 of the review-swarm review). A poisoned `PATH` after start cannot swap it.
+def resolve_git() -> str:
+    """The `git` that `PATH` names now, or the bare name when there is none."""
+    return shutil.which("git") or "git"
+
+
+GIT = resolve_git()
+
+
+def refuse_repository_git(root: Path) -> None:
+    """Refuse a run whose resolved `git` lies inside the repository: an attempt could have written it (O192-3).
+
+    Checked where a run starts. A bare name (no `git` on `PATH`) is not a path under the root and
+    fails at the first call instead. Follow-up: once `runner_env` (PR #188) filters `PATH`, resolve
+    through that filtered `PATH`.
+    """
+    program = Path(GIT)
+    if not program.is_absolute():
+        return
+    try:
+        resolved = program.resolve()
+        inside = resolved.is_relative_to(root.resolve())
+    except (OSError, RuntimeError):
+        inside = True  # an unmeasurable path is not trusted
+    if inside:
+        raise Refused(
+            f"`git` resolves to {GIT}, inside the repository; the runner starts no program the checkout holds. "
+            "Take that directory off PATH and start the run again."
+        )
+
+
 TOOL_SECONDS = 5 * 60
 VERIFY_SECONDS = 30 * 60
 GIT_SECONDS = 2 * 60
@@ -2691,7 +2724,8 @@ def runner_env(env: dict[str, str], *roots: Path) -> dict[str, str]:
 
 def changed_paths(root: Path, env: dict[str, str] | None = None, against: str = "HEAD") -> set[Path]:
     """Tracked changes against `against` and untracked files, as repository-relative paths."""
-    tracked = _git_output(root, "diff", "--name-only", "-z", against, env=env).split("\0")
+    # `--no-renames`: a rename must list both names, or the deleted one is invisible (O192-1).
+    tracked = _git_output(root, "diff", "--no-renames", "--name-only", "-z", against, env=env).split("\0")
     untracked = _git_output(root, "ls-files", "-z", "--others", "--exclude-standard", env=env).split("\0")
     return {Path(name) for name in [*tracked, *untracked] if name}
 
@@ -3104,7 +3138,7 @@ def trusted_registry(root: Path, env: dict[str, str]) -> Path:
                 (mirror / entry.name).symlink_to(entry.resolve())
         try:
             archive = subprocess.run(
-                ["git", "-C", str(root), "archive", "--format=tar", "HEAD", "scripts/"],
+                [GIT, "-C", str(root), "archive", "--format=tar", "HEAD", "scripts/"],
                 capture_output=True,
                 check=False,
                 env=env,
@@ -3405,6 +3439,65 @@ def verify_attempt(
     return problems
 
 
+# Paths a stage-2 attempt never writes, whatever `provenance.yaml` says: the runner's own rules, the
+# prompts, the workflow's decision area and the tracker. `decisions/gates.yaml` is here because it has
+# no provenance class of its own - the class is the maintainer's decision (R-22 of the review-swarm
+# review), and until it is made the runner refuses the file rather than let a weakened gate through.
+RUNNER_HELD = (
+    "provenance.yaml",
+    "decisions/gates.yaml",
+    "model-endpoints.yaml",
+    # Everything a harness loads as instructions, hooks, agents, skills or tools. `.claude/` is held
+    # whole (settings, hooks, agents, commands, rules); `CLAUDE.md` would silently replace `AGENTS.md`
+    # for Claude Code (docs/WORKFLOW.md §3 lists it and `.mcp.json` as "not created"); `.codex/` holds
+    # the hook list, `.agents/` the skills, `.pi/` the reviewer session's own files.
+    ".claude/",
+    ".codex/",
+    ".agents/",
+    ".pi/",
+    ".mcp.json",
+    "CLAUDE.md",
+    "prompts/",
+    "templates/",
+    ".github/",
+    ".beads/",
+    "AGENTS.md",
+    "README.md",
+)
+
+
+def uncommittable(root: Path, change: str, keep: set[Path] | None = None) -> list[str]:
+    """The changed paths a stage-2 attempt must not commit, named (R-16 of the review-swarm review).
+
+    The classes come from the committed `provenance.yaml`, never from the tree the attempt wrote:
+    a `human-decided` prefix or one of `RUNNER_HELD` is out of a model's reach, the change's own
+    folder is not. `keep` holds what the verb may keep changed - a draft's own new ADR under the
+    `docs/adr/` prefix is exactly that (P1 of the #192 review).
+    """
+    spared = {path.as_posix() for path in keep or ()}
+    try:
+        data = yaml.safe_load(_git_output(root, "show", "HEAD:provenance.yaml"))
+        # A commit without a provenance map declares no class; `RUNNER_HELD` still holds.
+        entries = data.get("paths") or [] if isinstance(data, dict) else []
+        decided = [
+            str(entry["prefix"])
+            for entry in entries
+            if entry.get("allowed") and set(entry["allowed"]) == {"human-decided"}
+        ]
+    except (Refused, KeyError, TypeError, AttributeError, yaml.YAMLError) as error:
+        raise Refused(f"the committed provenance map cannot be read; no attempt is committed ({error})") from error
+    folder = f"plans/changes/{change}/"
+    # Case-folded on both sides: on a case-insensitive checkout `.Claude/Rules/` is `.claude/rules/` (O192-2).
+    held = [path.casefold() for path in [*decided, *RUNNER_HELD]]
+    return sorted(
+        relative.as_posix()
+        for relative in changed_paths(root)
+        if relative.as_posix() not in spared
+        and not relative.as_posix().startswith(folder)
+        and any(relative.as_posix().casefold().startswith(path) for path in held)
+    )
+
+
 def checkpoint(
     root: Path,
     change: str,
@@ -3412,12 +3505,30 @@ def checkpoint(
     key: str | None = None,
     ignored_before: dict[Path, tuple[int, int]] | None = None,
     message: str | None = None,
+    keep: set[Path] | None = None,
 ) -> None:
     """Commit a passing work phase and prove the one clean descendant commit."""
     if key is not None:
         exposed = remove_changed_credential(root, key, ignored_before)
         if exposed:
             raise Refused(credential_message(exposed))
+    try:
+        blocked = uncommittable(root, change, keep)
+    except Refused as error:
+        # An unreadable map is a failure of this attempt, repairable by the next one - and the edits go
+        # first, so nothing the runner could not classify stays in the tree (O192-5).
+        restored = restore_baseline(root, baseline, set(keep or ()), ignored_before)
+        raise CallFailed(f"{error}; {restored}") from error
+    if blocked:
+        # The tree goes back to the baseline, but `keep` stands: what the verb itself may keep changed -
+        # its change folder, a draft's own new ADR, the findings a human may have touched - is not the
+        # refused attempt's to lose (P1 and P2 of the #192 review).
+        restored = restore_baseline(root, baseline, set(keep or ()), ignored_before)
+        raise CallFailed(
+            "the attempt changed paths a stage-2 run does not commit: "
+            + ", ".join(f"`{path}`" for path in blocked)
+            + f"; {restored}"
+        )
     try:
         _git_output(root, "add", "-A")
         _git_output(
@@ -3437,7 +3548,7 @@ def checkpoint(
         raise CallFailed(f"the runner checkpoint failed: {error}") from error
     try:
         ancestor = subprocess.run(
-            ["git", "-C", str(root), "merge-base", "--is-ancestor", baseline, "HEAD"],
+            [GIT, "-C", str(root), "merge-base", "--is-ancestor", baseline, "HEAD"],
             capture_output=True,
             check=False,
             timeout=GIT_SECONDS,
@@ -3716,7 +3827,7 @@ def red_first(root: Path, baseline: str, test: str, key: str | None, tools: dict
         if tree is not None:
             try:
                 done = subprocess.run(
-                    ["git", "-C", str(root), "worktree", "remove", "--force", str(tree)],
+                    [GIT, "-C", str(root), "worktree", "remove", "--force", str(tree)],
                     capture_output=True,
                     check=False,
                     timeout=GIT_SECONDS,
@@ -3732,7 +3843,7 @@ def red_first(root: Path, baseline: str, test: str, key: str | None, tools: dict
             with contextlib.suppress(subprocess.TimeoutExpired):
                 # A prune that hangs leaves an entry behind; the removal above already failed then.
                 subprocess.run(
-                    ["git", "-C", str(root), "worktree", "prune"],
+                    [GIT, "-C", str(root), "worktree", "prune"],
                     capture_output=True,
                     check=False,
                     timeout=GIT_SECONDS,
@@ -4225,7 +4336,7 @@ def run_attempts(
                 # The subject stays the subject; the format line of every attempt that ran the step
                 # stands below the heading, in the commit that holds the formatted bytes.
                 message = commit_message + "\n\n" + FORMAT_COMMIT_HEADING + "\n" + "\n".join(record)
-            checkpoint(root, ctx.change, baseline, key, ignored_before, message=message)
+            checkpoint(root, ctx.change, baseline, key, ignored_before, message=message, keep=allowed)
             if after_commit is not None:
                 after_commit()
             print(f"{verb}: verified and committed · route {route} · attempt {attempt}")
@@ -4346,7 +4457,7 @@ def draft_keep(root: Path, ctx: Context, baseline: str) -> tuple[set[Path], list
             continue
         try:
             held = subprocess.run(
-                ["git", "-C", str(root), "cat-file", "-e", f"{base}:{posix}"],
+                [GIT, "-C", str(root), "cat-file", "-e", f"{base}:{posix}"],
                 capture_output=True,
                 check=False,
                 timeout=GIT_SECONDS,
@@ -4589,6 +4700,7 @@ def draft(root: Path, change: str) -> None:
                 key,
                 ignored_before,
                 message=f"docs({change}): draft spec and plan — route {route}",
+                keep=keep,
             )
             print(f"draft: verified and committed · route {route} · attempt {attempt}")
             return
@@ -5134,6 +5246,7 @@ def main(argv: list[str] | None = None) -> int:
             raise Refused("--stage2-off applies only to explore, implement and repair.")
         if args.availability_reported is not None and args.verb != "review-loop":
             raise Refused("--availability-reported belongs to review-loop alone.")
+        refuse_repository_git(Path(args.root))
         if args.verb == "session":
             if not args.model:
                 raise Refused("session needs --model <id>: name the model exactly as model-endpoints.yaml lists it.")

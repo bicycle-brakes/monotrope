@@ -652,6 +652,186 @@ def test_the_suite_never_reaches_the_real_denylist_or_secrets(monkeypatch: pytes
 # ---------------------------------------------------------------------------
 
 
+def test_git_is_called_through_the_one_resolved_path(world: World, monkeypatch: pytest.MonkeyPatch) -> None:
+    """R-17 of the review-swarm review: `git` is resolved once, and every call names that path."""
+    wrapper = world.bin / "git-recorder"
+    log = world.bin / "git-calls.txt"
+    wrapper.write_text(f'#!/bin/sh\necho "$@" >> {log}\nexec /usr/bin/git "$@"\n')
+    wrapper.chmod(0o755)
+    monkeypatch.setattr(stage2, "GIT", str(wrapper))
+    log.unlink(missing_ok=True)
+    assert stage2._git_output(world.root, "rev-parse", "HEAD").strip() == git(world.root, "rev-parse", "HEAD")
+    assert log.is_file() and "-C" in log.read_text(encoding="utf-8"), "the call did not go through the resolved path"
+
+
+def test_an_attempt_that_writes_a_runner_held_path_is_refused_and_restored(world: World) -> None:
+    """R-16: a green attempt that edits a human-decided or runner-held path is refused, and undone."""
+    held = world.root / "prompts" / "04b-review-loop.md"
+    before = held.read_text(encoding="utf-8")
+    baseline = git(world.root, "rev-parse", "HEAD")
+    world.script(
+        claude=[
+            {
+                "stdout": "implemented",
+                "plant": {"src/app.py": "value = 2\n"},
+                "append": {
+                    "plans/changes/demo/plan.md": "2026-10-07 10:00–10:05, 5 min\n",
+                    "prompts/04b-review-loop.md": "\nthe model rewrote the reviewer prompt\n",
+                },
+            }
+        ],
+        make=[{"stdout": "green\n"}],
+    )
+    assert world.run("implement") == 1
+    assert held.read_text(encoding="utf-8") == before, "the held path was not restored"
+    assert git(world.root, "rev-list", "--count", f"{baseline}..HEAD") == "0", "a refused attempt committed"
+
+
+def _attempt_writing(world: World, plants: dict[str, str]) -> int:
+    """One green `implement` attempt that also writes `plants`; the exit code of the verb."""
+    baseline_plan = {"plans/changes/demo/plan.md": "2026-10-07 10:00–10:05, 5 min\n"}
+    world.script(
+        claude=[{"stdout": "implemented", "plant": {"src/app.py": "value = 2\n", **plants}, "append": baseline_plan}],
+        make=[{"stdout": "green\n"}],
+    )
+    return world.run("implement")
+
+
+def test_an_attempt_that_renames_a_held_file_to_an_allowed_path_is_refused(
+    world: World, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """O192-1: a staged rename shows only its new name unless renames are off; both names are checked."""
+    held = world.root / "prompts" / "04b-review-loop.md"
+    before = held.read_text(encoding="utf-8")
+    baseline = git(world.root, "rev-parse", "HEAD")
+    original = stage2.launch
+
+    def launch_then_rename(command, root, *args, **kwargs):
+        done = original(command, root, *args, **kwargs)
+        if Path(command[0]).name == "claude":
+            git(root, "mv", "prompts/04b-review-loop.md", "src/moved.md")
+        return done
+
+    monkeypatch.setattr(stage2, "launch", launch_then_rename)
+    assert _attempt_writing(world, {}) == 1
+    assert held.read_text(encoding="utf-8") == before, "the renamed held file was not restored"
+    assert not (world.root / "src" / "moved.md").exists()
+    assert git(world.root, "rev-list", "--count", f"{baseline}..HEAD") == "0", "a refused rename was committed"
+
+
+@pytest.mark.parametrize(
+    "path",
+    [".Claude/Rules/r.md", "CLAUDE.md", "claude.MD", ".mcp.json", ".codex/config.toml", ".agents/skills/x/SKILL.md"],
+)
+def test_an_attempt_that_writes_an_agent_entry_point_is_refused(world: World, path: str) -> None:
+    """O192-2: the agent entry points are held, and a case variant of a held prefix is the same path."""
+    baseline = git(world.root, "rev-parse", "HEAD")
+    assert _attempt_writing(world, {path: "x\n"}) == 1
+    assert not (world.root / path).exists(), "the entry point was not removed"
+    assert git(world.root, "rev-list", "--count", f"{baseline}..HEAD") == "0", "a refused attempt committed"
+
+
+def test_a_git_inside_the_repository_is_refused_where_a_run_starts(
+    world: World, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+) -> None:
+    """O192-3: a `git` the attempt could have written is never the one the runner starts."""
+    planted = world.root / "tools" / "bin" / "git"
+    planted.parent.mkdir(parents=True)
+    planted.write_text("#!/bin/sh\nexit 0\n", encoding="utf-8")
+    planted.chmod(0o755)
+    monkeypatch.setenv("PATH", f"{planted.parent}{os.pathsep}{os.environ['PATH']}")
+    assert stage2.resolve_git() == str(planted), "the planted git was not what PATH resolves to"
+    monkeypatch.setattr(stage2, "GIT", str(planted))
+    assert world.run("implement") == 2
+    assert str(planted) in capsys.readouterr().err
+    assert world.calls("claude") == []
+
+
+def _bare_git_seam(monkeypatch: pytest.MonkeyPatch, world: World) -> list[list[str]]:
+    """Make the resolved git a path of its own and fail any launch that names a bare `git`."""
+    resolved = world.bin / "pinned" / "git"
+    resolved.parent.mkdir()
+    resolved.write_text(f'#!/bin/sh\nexec {GIT} "$@"\n', encoding="utf-8")
+    resolved.chmod(0o755)
+    monkeypatch.setattr(stage2, "GIT", str(resolved))
+    seen: list[list[str]] = []
+    real = subprocess
+
+    def watch(command, *args, **kwargs):
+        if isinstance(command, list) and command and command[0] == "git":
+            raise AssertionError(f"a git call names a bare `git`: {command}")
+        if isinstance(command, list) and command and command[0] == str(resolved):
+            seen.append(command)
+        return real.run(command, *args, **kwargs)
+
+    class Seam:
+        """The runner's own view of `subprocess`; the leak check keeps the real module."""
+
+        run = staticmethod(watch)
+
+        def __getattr__(self, name: str) -> object:
+            return getattr(real, name)
+
+    monkeypatch.setattr(stage2, "subprocess", Seam())
+    return seen
+
+
+def test_every_git_call_names_the_resolved_path(world: World, monkeypatch: pytest.MonkeyPatch) -> None:
+    """O192-4: behavioural over the verbs that reach archive, is-ancestor, cat-file and merge-base."""
+    seen = _bare_git_seam(monkeypatch, world)
+    successful_implementation(world)
+    assert world.run("implement") == 0
+    clear_derived_leftovers(world)
+    draft_world(world)
+    assert stage2._merge_base(world.root)
+    plants = {
+        "plans/changes/demo/spec.md": "---\ntitle: Spec\nupdated: 2026-09-30\nbead: demo-1\n---\n\n# Spec\n",
+        "plans/changes/demo/plan.md": PLAN_CARD,
+        "docs/adr/0016-first-record.md": "# First\n",
+    }
+    world.script(codex=[codex_ok("T1", "drafted", plant=plants)], make=[{"stdout": "green\n"}])
+    assert world.run("draft") == 0
+    verbs = {command[3] for command in seen if command[1] == "-C"}
+    assert {"archive", "merge-base", "cat-file"} <= verbs, f"the seam did not reach these sites: {sorted(verbs)}"
+
+
+def test_no_git_launch_in_the_runner_names_a_bare_git() -> None:
+    """O192-4: source check for the sites no verb in this suite reaches (`show`, `worktree remove` and `prune`)."""
+    tree = ast.parse((REPO_ROOT / "scripts" / "stage2.py").read_text(encoding="utf-8"))
+    bare = [
+        node.lineno
+        for node in ast.walk(tree)
+        if isinstance(node, ast.List)
+        and node.elts
+        and isinstance(node.elts[0], ast.Constant)
+        and node.elts[0].value == "git"
+    ]
+    assert bare == [], f"a command list starts with a bare `git` at line(s) {bare}"
+    named = [
+        node.lineno
+        for node in ast.walk(tree)
+        if isinstance(node, ast.List)
+        and len(node.elts) > 1
+        and isinstance(node.elts[0], ast.Name)
+        and node.elts[0].id == "GIT"
+    ]
+    assert len(named) >= 8, "fewer git launches name GIT than the eight this check was written against"
+
+
+@pytest.mark.parametrize(
+    "provenance",
+    ["paths: [unclosed\n", "paths:\n  - just a string\n", "paths:\n  - {prefix: 'x/', allowed: 5}\n"],
+)
+def test_an_unreadable_provenance_fails_the_checkpoint_and_restores_the_edits(world: World, provenance: str) -> None:
+    """O192-5: a provenance that cannot be read is a repairable failure after the restore, never a crash."""
+    (world.root / "provenance.yaml").write_text(provenance, encoding="utf-8")
+    git(world.root, "commit", "--quiet", "-am", "a provenance the runner cannot read")
+    baseline = git(world.root, "rev-parse", "HEAD")
+    assert _attempt_writing(world, {}) == 1
+    assert (world.root / "src" / "app.py").read_text(encoding="utf-8") == "value = 1\n", "the edits stayed in the tree"
+    assert git(world.root, "rev-list", "--count", f"{baseline}..HEAD") == "0"
+
+
 def test_an_oversized_diff_reaches_the_paid_prompt_cut_and_the_record_says_so(world: World) -> None:
     """R-15 of the review-swarm review: the paid diff is bounded, and a cut is recorded, not hidden."""
     limit = 5
@@ -1529,7 +1709,7 @@ def test_preparation_git_commands_receive_no_caller_credentials(world: World, mo
     commands = []
 
     def record(command, *args, **kwargs):
-        if command[0] == "git":
+        if Path(command[0]).name == "git":  # a bare or foreign git is recorded too, so the assert below fails on it
             commands.append((command, kwargs.get("env")))
         return original_run(command, *args, **kwargs)
 
@@ -1537,6 +1717,7 @@ def test_preparation_git_commands_receive_no_caller_credentials(world: World, mo
     assert stage2.prepare_derived(world.root, stage2.foreign_env({})) == []
     assert len(commands) == 3
     for command, env in commands:
+        assert command[0] == stage2.GIT, f"a git call does not name the resolved path: {command}"
         assert env is not None, command
         for name in ("OPENAI_API_KEY", "GH_TOKEN", "X_SECRET", "ANTHROPIC_AUTH_TOKEN"):
             assert name not in env
@@ -3999,8 +4180,8 @@ def test_a_failed_stage2_off_attempt_leaves_its_block_without_reading_the_key(
 
 @pytest.mark.parametrize("fault", ["command", "non-descendant", "dirty", "status-fails"])
 def test_checkpoint_failures_are_call_failures(monkeypatch: pytest.MonkeyPatch, tmp_path: Path, fault: str) -> None:
-    def fake_git(root: Path, *args: str, allow: tuple[int, ...] = (0,)) -> str:
-        del root, allow
+    def fake_git(root: Path, *args: str, allow: tuple[int, ...] = (0,), env: dict | None = None) -> str:
+        del root, allow, env
         if fault == "command" and args[0] == "add":
             raise stage2.Refused("git add failed")
         if args[0] == "rev-list":
@@ -4228,6 +4409,46 @@ def test_an_overwritten_ruff_is_not_run(tmp_path: Path) -> None:
     ruff.write_text("#!/bin/sh\nexit 1\n", encoding="utf-8")
     problem = stage2.tool_problem(tmp_path, before)
     assert problem is not None and "`.venv/bin/ruff`" in problem, "an overwritten tool was not named"
+
+
+def test_a_draft_may_commit_its_own_new_adr(world: World) -> None:
+    """P1 of the #192 review: `docs/adr/` is human-decided, and the new ADR is the draft's own output."""
+    draft_world(world)
+    data = yaml.safe_load((world.root / "provenance.yaml").read_text(encoding="utf-8"))
+    data["paths"].append({"prefix": "docs/adr/", "allowed": ["human-decided"]})
+    (world.root / "provenance.yaml").write_text(yaml.safe_dump(data), encoding="utf-8")
+    git(world.root, "commit", "--quiet", "-am", "the real class of docs/adr/")
+    plants = {
+        "plans/changes/demo/spec.md": "---\ntitle: Spec\nupdated: 2026-09-30\nbead: demo-1\n---\n\n# Spec\n",
+        "plans/changes/demo/plan.md": PLAN_CARD,
+        "docs/adr/0016-first-record.md": "# First\n",
+    }
+    world.script(codex=[codex_ok("T1", "drafted", plant=plants)], make=[{"stdout": "green\n"}])
+    assert world.run("draft") == 0
+    committed = git(world.root, "show", "--name-only", "--pretty=format:", "HEAD").splitlines()
+    assert "docs/adr/0016-first-record.md" in committed, "the draft's own new ADR was blocked or reverted"
+
+
+def test_a_refused_attempt_keeps_the_findings_a_human_touched(world: World) -> None:
+    """P2 of the #192 review: the restore keeps the verb's own allowed set, not only the baseline."""
+    findings = world.root / "plans" / "changes" / "demo" / "findings.md"
+    findings.parent.mkdir(parents=True, exist_ok=True)
+    findings.write_text("a human note\n", encoding="utf-8")
+    world.script(
+        claude=[
+            {
+                "stdout": "implemented",
+                "plant": {"src/app.py": "value = 2\n"},
+                "append": {
+                    "plans/changes/demo/plan.md": "2026-10-07 10:00–10:05, 5 min\n",
+                    "prompts/04b-review-loop.md": "\nthe model rewrote the reviewer prompt\n",
+                },
+            }
+        ],
+        make=[{"stdout": "green\n"}],
+    )
+    assert world.run("implement") == 1
+    assert "a human note" in findings.read_text(encoding="utf-8"), "the refusal wiped the human's findings entry"
 
 
 def test_a_refused_tool_stays_refused_for_the_next_attempt(world: World) -> None:
