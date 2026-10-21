@@ -797,6 +797,11 @@ into a shell. Eleven verbs exist:
   belongs to instead: the stage is consumed, the reason and a `## Stage failed`
   block land in the loop record, every round row stays, and the next
   `review-loop` continues with the next stage (R-1 of the review-swarm review).
+  With `--restart --reason <text>`, and only on the maintainer's request, it
+  restarts a completed loop (ADR 0021, restart amendment): one `Loop restarted:`
+  line lands in `findings.md`, every earlier round stays, and the next
+  `review-loop` is a fresh run — availability preparation, free swarm, Flash
+  swarm, ladder — whose round numbers continue (bead coding-harness-0xjr).
 - `review` — Codex, phase 6. A re-check after an earlier `## Phase 6` block
   in `findings.md` starts a fresh read-only Codex session. The first phase-6
   review resumes a recorded Codex phase-2a session with `codex exec resume`;

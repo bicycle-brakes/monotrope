@@ -218,6 +218,22 @@ def test_preparation_cannot_reset_a_started_or_released_run(world: World, releas
     assert world.reviews() == []
 
 
+def test_a_maintainer_restart_lets_a_released_run_be_prepared_again(world: World) -> None:
+    """ADR 0021 restart amendment (bead coding-harness-0xjr): the restart is the one way back to preparation."""
+    enable(world)
+    world.write_record([("L1-1", "rejected — no evidence", "")])
+    world.write_findings(VERDICT)
+    assert world.run("release-loop") == 0
+    assert world.run("prepare-loop") == 2
+    assert world.run("release-loop", "demo", "--restart", "--reason", "maintainer asked") == 0
+    world.script(pi=[{"stdout": "OK"}] * (len(TEST_FREE) + len(TEST_LADDER)))
+    assert world.run("prepare-loop") == 0
+    prepared = receipt(world)
+    world.script(pi=[{"stdout": "No finding."}] * 2)
+    assert world.run("review-loop", "demo", "--availability-reported", prepared["report_id"]) == 0
+    assert "## Round 2 — " in world.record().read_text(), "the restarted run did not continue the numbering"
+
+
 def test_paid_review_can_start_without_a_free_candidate(world: World) -> None:
     """Criterion 17: an empty free selection must not suppress reachable paid coverage."""
     enable(world)
