@@ -1111,7 +1111,18 @@ is the **Flash swarm**: the three cheapest reachable admitted models in
 parallel — the entry's eligible `flash_swarm` members only for a legacy
 declaration — with the paid rounds' read-only tools and the same bounded diff.
 One deadline of `REVIEWER_MINUTES` covers the round's members and every
-replacement (R-8). Every later round calls one eligible rung of the
+replacement (R-8).
+
+**The read boundary is a request today, not a mechanism (R-5, accepted in
+writing 2026-10-20).** A paid member gets the read tools and a prompt sentence;
+the pinned Pi 1.2.0 has no sandbox, and `read` resolves absolute paths without
+containment, so nothing keeps a member out of a sibling checkout — house rule 6
+(the customer instance out of bounds) has no mechanism on this path. The
+maintainer's answer to Q-3 of the night interview: document it here, and enforce
+it as its own work. Enforcing means a member runs inside a copy that holds only
+what it may see, with the filesystem — not the prompt — as the boundary; the
+`red_first` worktree shows the pattern, and `tmux`, `herdr` and `orca` are to be
+read as possible carriers of that isolation (bead `coding-harness-8df`). Every later round calls one eligible rung of the
 `modelle` ladder by `anfragen_5h` descending (ties by id, missing values last).
 A member that fails is named beside its round's rows; a round completes when at least one member answered, and an
 attempt whose every member failed completes no round and consumes no stage.
