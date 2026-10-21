@@ -29,6 +29,10 @@ the tools, and it develops itself with the same workflow.
 > not built yet. The repository and its tracker still carry the working name
 > `coding-harness` in places.
 
+> **License:** source-available under the PolyForm Noncommercial License 1.0.0.
+> Noncommercial use is free; commercial use needs a separate written license.
+> See [License](#license).
+
 ## The problem it answers
 
 Three things go wrong when an agent does the work and nothing records it:
@@ -223,6 +227,33 @@ scarcest resource in the loop — for people and for models.
   noise.** Every gate says which of the three it is, so a red run always
   means something specific.
 
+## How testing works, and what it does not prove
+
+**One command, the same checks as CI.** `make verify` runs
+`scripts/verify_all.sh`, which holds no commands of its own: it reads the
+gate list in `decisions/gates.yaml`, the same list the CI workflow is
+generated from. The pytest suite is one of those gates and runs in parallel
+(`pytest -n auto`). The others check documents and process rules, not code.
+
+**A locked environment.** Each checkout builds its own `.venv` with
+`make venv` from `requirements-ci.txt`, where every package is pinned with
+its hash. Results then depend on the lock, not on what happens to be
+installed on a machine, and a local green means what a CI green means.
+
+**Red first.** A repair counts only when its test fails on the code before
+the repair; the runner checks this itself (see "The clever parts"). A test
+that would have passed anyway proves nothing, and models readily write such
+tests.
+
+**What the numbers say, and what they do not.** On 2026-10-20 at `5c7db34`,
+`tests/` held 2306 tests in 40 files: about 29,800 lines of test code
+against about 13,900 lines in `scripts/`. That count measures how much is
+checked, not how well. On the same day, reviewers in the review loop kept
+finding new defects round after round in a change whose suite was green.
+How many injected faults the tests catch has not been measured yet; a
+mutation-testing run on one or two scripts is planned (bead
+coding-harness-bvy).
+
 ## Follow one completed change
 
 The change "frontmatter-current" (archived 2026-09-29) shows each step with
@@ -312,8 +343,16 @@ To start a change, create its bead (the tracker item) first, then
 - **One change, one branch, one worktree, one session.**
 - **Before a pull request.** `make venv` once, then `make verify`; a text-only
   change is gated by CI.
+- **Contributions.** By opening a pull request you agree that your
+  contribution may be distributed under the project's license and, if needed,
+  under a commercial license. See [`COMMERCIAL.md`](COMMERCIAL.md).
 - **Language.** Repository artefacts are in English.
 
 ## License
 
-Apache-2.0 — see [`LICENSE`](LICENSE).
+Monotrope is **source-available** under the **PolyForm Noncommercial License
+1.0.0**. Noncommercial use is free; commercial use needs a separate written
+license. See [`LICENSE`](LICENSE) and [`COMMERCIAL.md`](COMMERCIAL.md).
+
+Releases published before 2026-10-20 were under Apache 2.0. That grant remains
+for those releases.
