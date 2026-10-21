@@ -284,13 +284,13 @@ def test_a_probe_that_only_ran_out_of_time_gets_one_longer_try(world: World, mon
     slow = TEST_FREE[0]
     limits: list[int] = []
 
-    def fake(_ctx, model, _prompt, _key, **kwargs):
+    def fake(_ctx, model, _prompt, _key, **options):
         if model != slow:
             return "OK"
-        limits.append(kwargs["timeout_seconds"])
+        limits.append(options["timeout_seconds"])
         if len(limits) == 1:
             raise stage2.CallFailed(
-                f"pi was stopped by the availability probe limit of {kwargs['timeout_seconds']} seconds"
+                f"pi was stopped by the availability probe limit of {options['timeout_seconds']} seconds"
             )
         return "OK"
 
@@ -301,6 +301,37 @@ def test_a_probe_that_only_ran_out_of_time_gets_one_longer_try(world: World, mon
     assert slow in data["free"]["selected"], "the slow model was dropped after one timeout"
     assert data["availability"]["slow"] == {slow: availability.PROBE_RETRY_SECONDS}
     assert slow not in data["availability"]["failed"]
+
+
+def test_the_second_probe_is_checked_and_audited_on_its_own(world: World, monkeypatch) -> None:
+    """The review of PR #196: a withdrawn admission stops the second probe, and it gets its own audit line."""
+    from test_stage2 import TEST_FREE
+
+    enable(world)
+    slow = TEST_FREE[0]
+    admissions: list[str | None] = []
+    real_preflight = stage2.preflight
+    calls = {"n": 0}
+
+    def preflight(*args, **kwargs):
+        problem = kwargs.get("admission_problem")
+        admissions.append(problem(args[0], slow) if callable(problem) and args[2][1] == slow else None)
+        return real_preflight(*args, **kwargs)
+
+    def fake(_ctx, model, _prompt, _key, **_options):
+        if model != slow:
+            return "OK"
+        calls["n"] += 1
+        if calls["n"] == 1:
+            raise stage2.CallFailed("pi was stopped by the availability probe limit of 60 seconds")
+        return "OK"
+
+    monkeypatch.setattr(stage2, "preflight", preflight)
+    monkeypatch.setattr(stage2, "run_reviewer", fake)
+    assert world.run("prepare-loop") == 0
+    assert len([item for item in admissions if item is not None]) == 0
+    lines = [line for line in world.text().splitlines() if "prepare-loop" in line and slow in line]
+    assert len(lines) == 2, f"the second probe carries no audit line of its own: {lines}"
 
 
 def test_a_probe_that_is_refused_is_not_tried_again(world: World, monkeypatch) -> None:

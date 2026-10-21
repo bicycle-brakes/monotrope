@@ -134,17 +134,20 @@ def prepare(root: Path, change: str, runner) -> None:
                 break
         if model in skipped:
             continue
-        admission = runner._free_admission(model in free["selected"], {"free": free})
-        endpoint = (runner.OPENCODE, model, "max")
-        ctx = runner.preflight(root, change, endpoint, admission_problem=admission)
-        ctx.models_store = free.get("models_store")
-        result = runner.checked_prompt(ctx, endpoint, prompt, admission)
-        if not findings.exists():
-            findings.write_text(runner.findings_header(ctx, runner.producer_for(endpoint)), encoding="utf-8")
-        runner.append(findings, runner.call_line("prepare-loop", endpoint, result))
         # A probe that only ran out of time is tried once more with a longer limit: a slow but
         # reachable model must not disappear from the run silently (R-7 of the review-swarm review).
-        for limit in (PROBE_SECONDS, PROBE_RETRY_SECONDS):
+        for attempt, limit in enumerate((PROBE_SECONDS, PROBE_RETRY_SECONDS), 1):
+            # Every foreign call is checked and audited on its own, the second one too: an admission
+            # withdrawn between the two probes must stop it, and the leak check runs before each call
+            # (the review of PR #196).
+            admission = runner._free_admission(model in free["selected"], {"free": free})
+            endpoint = (runner.OPENCODE, model, "max")
+            ctx = runner.preflight(root, change, endpoint, admission_problem=admission)
+            ctx.models_store = free.get("models_store")
+            result = runner.checked_prompt(ctx, endpoint, prompt, admission)
+            if not findings.exists():
+                findings.write_text(runner.findings_header(ctx, runner.producer_for(endpoint)), encoding="utf-8")
+            runner.append(findings, runner.call_line("prepare-loop", endpoint, result))
             try:
                 # All probes, including paid ones, have no repository input or tools.
                 runner.run_reviewer(
@@ -164,7 +167,7 @@ def prepare(root: Path, change: str, runner) -> None:
             else:
                 reachable.append(model)
                 failed.pop(model, None)
-                if limit != PROBE_SECONDS:
+                if attempt > 1:
                     slow[model] = limit
                 break
     state = {"free": free, "paid": {}, "consumed": []}
