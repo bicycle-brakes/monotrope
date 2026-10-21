@@ -831,16 +831,29 @@ def excluded_problem(root: Path, model: str) -> str | None:
         data = yaml.safe_load((root / "model-endpoints.yaml").read_text(encoding="utf-8")) or {}
     except (OSError, UnicodeDecodeError, yaml.YAMLError):
         return "model-endpoints.yaml cannot be read"
+    if not isinstance(data, dict):
+        return "model-endpoints.yaml has malformed exclusions: the declaration must be a mapping"
+    entries = data.get("ausgeschlossen", [])
+    if not isinstance(entries, list):
+        return "model-endpoints.yaml has malformed exclusions: ausgeschlossen must be a list"
     full = model.lower()
     names = model.rsplit("/", 1)[-1].lower()
-    for entry in data.get("ausgeschlossen") or []:
+    for number, entry in enumerate(entries, 1):
+        malformed = f"model-endpoints.yaml has a malformed exclusion at entry {number}"
         if not isinstance(entry, dict):
+            return malformed + ": a mapping is required"
+        data_class = entry.get("klasse", "framework")
+        if not isinstance(data_class, str) or not data_class.strip():
+            return malformed + ": klasse must name a data class"
+        if data_class != "framework":
             continue
+        if "modelle" not in entry:
+            continue  # A legacy prose-only decision has no machine-readable model ids.
         listed = entry.get("modelle")
-        if not isinstance(listed, list):
-            continue
+        if not isinstance(listed, list) or any(not isinstance(item, str) or not item.strip() for item in listed):
+            return malformed + ": modelle must be a list of nonempty model ids or prefixes"
         for item in listed:
-            prefix = str(item).lower()
+            prefix = item.strip().lower()
             if prefix and any(value == prefix or value.startswith(prefix) for value in (full, names)):
                 reason = str(entry.get("was") or "excluded by the maintainer").strip()
                 return f"the model {model} is excluded by model-endpoints.yaml: {reason}"

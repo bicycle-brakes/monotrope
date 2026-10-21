@@ -11048,6 +11048,33 @@ def test_an_excluded_model_is_denied_by_both_classes(world: World) -> None:
     assert stage2.excluded_problem(world.root, "kimi-for-coding") is None
 
 
+@pytest.mark.parametrize(
+    "excluded",
+    ["acme", None, ["acme"], [{"modelle": "acme"}], [{"modelle": [None]}], [{"modelle": [""]}]],
+)
+def test_malformed_exclusions_refuse_both_admission_paths(world: World, excluded) -> None:
+    """O197-1: an unreadable deny rule cannot silently become permission to send code."""
+    path = world.root / "model-endpoints.yaml"
+    data = yaml.safe_load(path.read_text())
+    data["ausgeschlossen"] = excluded
+    path.write_text(yaml.safe_dump(data))
+    for problem in (
+        stage2.free_admission_problem(world.root, TEST_FREE[0], list(TEST_FREE)),
+        stage2.declaration_problem(world.root, stage2.OPENCODE, TEST_LADDER[0]),
+    ):
+        assert problem is not None and "malformed exclusion" in problem
+
+
+def test_a_customer_only_exclusion_does_not_deny_framework_admission(world: World) -> None:
+    """O197-2: the exclusion's declared data class must bind as well as its model prefix."""
+    path = world.root / "model-endpoints.yaml"
+    data = yaml.safe_load(path.read_text())
+    data["ausgeschlossen"] = [{"klasse": "kundencode", "modelle": [*TEST_FREE, *TEST_LADDER]}]
+    path.write_text(yaml.safe_dump(data))
+    assert stage2.free_admission_problem(world.root, TEST_FREE[0], list(TEST_FREE)) is None
+    assert stage2.declaration_problem(world.root, stage2.OPENCODE, TEST_LADDER[0]) is None
+
+
 def test_free_admission_requires_the_launch_provider(world: World) -> None:
     """Criteria 5/7: discovery under another provider never authorizes a Go call."""
     path = world.root / "model-endpoints.yaml"
