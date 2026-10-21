@@ -967,6 +967,19 @@ def test_a_failed_stage_is_retired_by_an_explicit_command(world: World) -> None:
     assert "## Round 2" in world.record().read_text(encoding="utf-8")
 
 
+def test_a_released_run_can_still_retire_a_failed_stage(world: World) -> None:
+    """The review of PR #198: after `release-loop` the snapshot lives in findings.md, not in loop.md."""
+    world.write_record([("L1-1", "taken — test_a", "yes")], state=loop_state(("free", "flash")))
+    world.write_findings(VERDICT)
+    assert world.run("release-loop") == 0
+    assert not world.record().exists(), "the release left the record behind"
+    assert world.run("release-loop", "demo", "--stage-failed", TEST_RUNGS[0], "--reason", "no answer twice") == 0
+    record = world.record().read_text(encoding="utf-8")
+    assert f"## Stage failed — rung:{TEST_RUNGS[0]}" in record
+    state = stage2.read_state(record, world.text())
+    assert f"rung:{TEST_RUNGS[0]}" in state["consumed"]
+
+
 def test_a_failed_stage_needs_a_reason_and_a_known_model(world: World, capsys) -> None:
     """The command names why, and only a stage of this run can be retired."""
     world.write_record([("L1-1", "taken — test_a", "yes")], state=loop_state(("free",)))

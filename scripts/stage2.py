@@ -2647,11 +2647,14 @@ def retire_stage(root: Path, change: str, model: str, reason: str) -> None:
     reason = reason.strip()
     if not reason:
         raise Refused("--stage-failed needs a non-empty --reason: what the maintainer decided must be readable.")
-    record = read_record(change, root)
-    if record is None:
-        raise Refused(f"there is no loop record for {change}; nothing can be retired.")
     findings_path = folder_of(root, change) / "findings.md"
     findings_text = findings_path.read_text(encoding="utf-8") if findings_path.exists() else ""
+    record = read_record(change, root)
+    if record is None and not findings_text:
+        raise Refused(f"there is no loop record for {change} and no released block; nothing can be retired.")
+    # After `release-loop` the snapshot lives in findings.md while loop.md is gone: a continued run
+    # whose next stage fails every member writes no new record, and this is exactly the run the
+    # command must unblock (the review of PR #198).
     state = read_state(record, findings_text)
     if state is None:
         raise Refused("the loop record carries no stage snapshot; nothing can be retired.")
