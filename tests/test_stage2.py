@@ -836,7 +836,7 @@ def test_an_oversized_diff_reaches_the_paid_prompt_cut_and_the_record_says_so(wo
     """R-15 of the review-swarm review: the paid diff is bounded, and a cut is recorded, not hidden."""
     limit = 5
     monkey = pytest.MonkeyPatch()
-    monkey.setattr(stage2, "PAID_DIFF_MAX_LINES", limit)
+    monkey.setattr(stage2, "REVIEW_DIFF_MAX_LINES", limit)
     try:
         big = world.root / "src" / "big.py"
         big.parent.mkdir(parents=True, exist_ok=True)
@@ -865,6 +865,9 @@ def test_an_oversized_diff_reaches_the_paid_prompt_cut_and_the_record_says_so(wo
             "the paid prompt carried no cut marker"
         )
         assert f"The diff was cut: the change diff was cut at {limit} of" in record, "the round hid the cut"
+        # R-12: the free round carries the same bound, and its round says so.
+        first_round = record.split("## Round 2")[0]
+        assert "The diff was cut:" in first_round, "the free round was uncapped and its cut unrecorded"
         # A clean answer over a cut diff does not end the loop: the next call goes on to the ladder
         # instead of refusing with "round 2 was clean" (P2 of the #191 review).
         world.script(pi=[{"model": model, "stdout": "No finding."} for model in TEST_RUNGS])
@@ -915,11 +918,51 @@ def test_a_status_reason_with_a_pipe_and_a_valid_mark_stays_a_row() -> None:
     assert rows[0][7] == "taken — a \\| b" and rows[0][8] == "yes — tests/test_x.py::test_x"
 
 
+def test_the_broke_a_test_cell_accepts_a_reason() -> None:
+    """Bead coding-harness-ll5: `yes — <reason>` is a mark; only the leading word is evaluated."""
+
+    def row(mark: str) -> list[str]:
+        return ["L1-1", "MAJOR", "SPEC", "criterion 1", "spec.md:1", "body", "a, b", "taken — test_a", mark]
+
+    assert stage2.undecided([row("yes — test_a_breaks")]) == []
+    assert stage2.undecided([row("no — the test was already red")]) == []
+    assert stage2.undecided([row("perhaps")]) == ["L1-1"]
+    refusal = stage2.undecided_refusal([row("taken — test_a"), row("perhaps")], "decide them first")
+    assert refusal is not None and "yes — <reason>" in refusal
+
+
+def test_the_answer_format_names_the_severity_as_free_text() -> None:
+    """R-9 of the review-swarm review: the column is free text, and the prompt says so."""
+    assert "severity cell is free text" in stage2.ANSWER_FORMAT
+
+
+def test_the_remaining_time_never_outlives_the_round_deadline() -> None:
+    """R-8 of the review-swarm review: the round's limit is one deadline, not one per call."""
+    assert stage2.remaining(None) == stage2.REVIEWER_MINUTES * 60
+    assert 0 < stage2.remaining(time.monotonic() + 30) <= 30
+    with pytest.raises(stage2.CallFailed, match="round time limit"):
+        stage2.remaining(time.monotonic() - 10)
+
+
+def test_every_member_of_a_round_shares_one_deadline(world: World, monkeypatch) -> None:
+    """R-8: a round's members and its replacements live inside the same deadline."""
+    seen: list[float | None] = []
+
+    def fake(_ctx, _member, _prompt, _key, **kwargs):
+        seen.append(kwargs.get("deadline"))
+        return "No finding."
+
+    monkeypatch.setattr(stage2, "run_reviewer", fake)
+    assert world.run("review-loop") == 0
+    assert len(seen) == len(TEST_FREE) and None not in seen
+    assert len(set(seen)) == 1, "each member got a deadline of its own"
+
+
 def test_a_cut_round_stays_cut_after_the_release(world: World) -> None:
     """O191-2: the continued run after `release-loop` still knows round 2 saw a cut diff."""
     limit = 5
     monkey = pytest.MonkeyPatch()
-    monkey.setattr(stage2, "PAID_DIFF_MAX_LINES", limit)
+    monkey.setattr(stage2, "REVIEW_DIFF_MAX_LINES", limit)
     try:
         big = world.root / "src" / "big.py"
         big.parent.mkdir(parents=True, exist_ok=True)
@@ -942,14 +985,14 @@ def test_a_cut_round_stays_cut_after_the_release(world: World) -> None:
         monkey.undo()
 
 
-def test_the_paid_diff_is_split_on_newlines_only() -> None:
+def test_the_review_diff_is_split_on_newlines_only() -> None:
     """O191-4: the count is git's count, and a carriage return survives the cut."""
-    text = "".join(f"line {n}\r\n" for n in range(stage2.PAID_DIFF_MAX_LINES + 3))
-    kept, note = stage2.bounded_paid_diff(text)
-    assert note == f"the change diff was cut at {stage2.PAID_DIFF_MAX_LINES} of {text.count(chr(10))} lines"
+    text = "".join(f"line {n}\r\n" for n in range(stage2.REVIEW_DIFF_MAX_LINES + 3))
+    kept, note = stage2.bounded_review_diff(text)
+    assert note == f"the change diff was cut at {stage2.REVIEW_DIFF_MAX_LINES} of {text.count(chr(10))} lines"
     assert kept.startswith("line 0\r\nline 1\r\n"), "the cut rewrote the line ends"
     assert "\r" in kept.split("\n")[1], "the carriage return was lost"
-    assert "\x0c" in stage2.bounded_paid_diff("a\x0cb\n" * (stage2.PAID_DIFF_MAX_LINES + 1))[0]
+    assert "\x0c" in stage2.bounded_review_diff("a\x0cb\n" * (stage2.REVIEW_DIFF_MAX_LINES + 1))[0]
 
 
 def test_the_record_is_keyed_by_the_worktree_too(tmp_path: Path) -> None:
@@ -5169,8 +5212,9 @@ def test_a_round_without_a_finding_still_counts(world: World, capsys: pytest.Cap
     assert "## Round 1 — acme-v1-free, beacon-2-free, " in record
     assert "acme-v1-free reported no finding." in record and "beacon-2-free reported no finding." in record
     capsys.readouterr()
-    assert world.run("review-loop") == 2
-    assert "round 1 was clean" in capsys.readouterr().err
+    assert world.run("review-loop") == stage2.CLEAN_CODE
+    err = capsys.readouterr().err
+    assert "round 1 was clean" in err and "refused:" not in err, "a finished loop read as a refusal"
     assert len(world.reviews("pi")) == 2
 
 
@@ -5289,7 +5333,7 @@ def test_a_clean_round_ends_the_loop(world: World, capsys: pytest.CaptureFixture
     assert world.run("review-loop") == 0
     decide_record(world, status="rejected — out of scope")
     capsys.readouterr()
-    assert world.run("review-loop") == 2
+    assert world.run("review-loop") == stage2.CLEAN_CODE
     assert "round 1 was clean" in capsys.readouterr().err
     assert len(world.reviews("pi")) == 2, "a clean round called again"
     # the stop survives the release: the released block still says round 1 was clean
@@ -5297,7 +5341,7 @@ def test_a_clean_round_ends_the_loop(world: World, capsys: pytest.CaptureFixture
     assert world.run("release-loop") == 0
     assert not world.record().exists()
     capsys.readouterr()
-    assert world.run("review-loop") == 2
+    assert world.run("review-loop") == stage2.CLEAN_CODE
     assert "round 1 was clean" in capsys.readouterr().err
     assert len(world.reviews("pi")) == 2
 
@@ -5698,7 +5742,7 @@ def test_round_history_survives_split_releases_and_config_edits(
     )
     decide_record(world, status="rejected — scope")
     capsys.readouterr()
-    assert world.run("review-loop") == 2, "a clean round after the release admitted another call"
+    assert world.run("review-loop") == stage2.CLEAN_CODE, "a clean round after the release admitted another call"
     assert "round 2 was clean" in capsys.readouterr().err
     # a multi-digit count and a spent snapshot survive a release of their own
     spent = loop_state(("free", "flash", f"rung:{TEST_RUNGS[0]}"))
@@ -10533,6 +10577,25 @@ def test_replacements_run_down_the_ladder_each_model_once(world: World) -> None:
     assert "rung:mimo-v2.6-pro" in consumed and "rung:spike-a" in consumed
 
 
+def test_an_expired_round_starts_no_replacement_and_consumes_no_stage(world: World, monkeypatch) -> None:
+    """O196-1: a failed swarm at the deadline cannot buy a fresh second for every remaining rung."""
+    _flash_round_world(world)
+    before = world.record().read_text(encoding="utf-8")
+    clock = [0.0]
+    calls: list[list[str]] = []
+
+    def expired(_ctx, members, _prompts, _key, **options):
+        calls.append(list(members))
+        clock[0] = options["deadline"] + 1
+        return {member: stage2.CallFailed("the round time limit expired") for member in members}
+
+    monkeypatch.setattr(stage2.time, "monotonic", lambda: clock[0])
+    monkeypatch.setattr(stage2, "run_swarm", expired)
+    assert world.run("review-loop") == 1
+    assert calls == [list(TEST_FLASH)], "the exhausted deadline still launched a replacement"
+    assert world.record().read_text(encoding="utf-8") == before, "a failed round consumed a stage"
+
+
 def test_a_spent_ladder_leaves_the_failed_member_named(world: World, capsys: pytest.CaptureFixture[str]) -> None:
     """Q-13: no replacement left - the failure is named; with every call failed no round completes."""
     _flash_round_world(world)
@@ -10835,7 +10898,8 @@ def test_released_reviewer_words_cannot_supply_a_snapshot(world: World) -> None:
     assert [r[0] for r in stage2.findings_rows(text)[0]] == ["L1-1"]
     assert stage2.rounds_run(None, text) == 1
     assert f"> {stage2.RELEASE_HEADING} 2026-10-17" in text
-    assert world.run("review-loop") == 2
+    # The released row is rejected, so the loop is clean: finished (3), not refused (2) - R-11.
+    assert world.run("review-loop") == stage2.CLEAN_CODE
 
 
 @pytest.mark.parametrize("retention", [None, "", "   ", True, 30])
