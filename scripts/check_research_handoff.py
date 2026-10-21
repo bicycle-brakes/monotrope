@@ -509,6 +509,8 @@ def parse_decisions(text: str, label: str) -> dict[str, QRecord]:
                     pass
                 else:
                     content = loaded.get(name) if isinstance(loaded, dict) else None
+                    if isinstance(content, list | dict) and not content:
+                        return ""
                     return "" if content is None else str(content).strip()
             first = _FIELD.match(body[found[name]])
             assert first is not None

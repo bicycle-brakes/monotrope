@@ -6,7 +6,7 @@ implementation_status: none
 date: 2026-10-14
 created: 2026-10-14
 last_reviewed: 2026-10-17
-updated: 2026-10-21
+updated: 2026-10-22
 supersedes: null
 superseded_by: null
 bead: coding-harness-icw
@@ -4445,7 +4445,48 @@ Stage-2 call, 2026-10-21: review · endpoint openai-codex · model gpt-6.1-sol �
 
 | ID | Severity | Dimension | Origin | Where | Finding | Reviewer | Status | Broke a test |
 |---|---|---|---|---|---|---|---|---|
-| F-63 | MAJOR | SPEC | fix-r15 | `scripts/check_research_handoff.py:510–526` | Empty YAML containers still count as maintainer answers after the answer-validation repair. In-memory reproduction with complete research, linked obligations, `status: answered`, `answered_by: maintainer` and either `answer: []` or `answer: {}` returns exit 0, closing the obligation and accepting the record as a criterion Basis. `str(content)` converts these empty values into nonempty punctuation. Empty answer containers must leave obligations open and cannot supply a Basis. [criteria 32, 34] | Codex | taken — criteria 32, 34: an empty YAML container (`[]`, `{}`), like a null or comment-only answer, has no maintainer content and cannot close an obligation or supply a criterion Basis; preserve real inline and block answers | — |
+| F-63 | MAJOR | SPEC | fix-r15 | `scripts/check_research_handoff.py:510–526` | Empty YAML containers still count as maintainer answers after the answer-validation repair. In-memory reproduction with complete research, linked obligations, `status: answered`, `answered_by: maintainer` and either `answer: []` or `answer: {}` returns exit 0, closing the obligation and accepting the record as a criterion Basis. `str(content)` converts these empty values into nonempty punctuation. Empty answer containers must leave obligations open and cannot supply a Basis. [criteria 32, 34] | Codex | fixed — tests/test_research_handoff.py::test_empty_yaml_containers_cannot_close_item_or_supply_basis | yes |
 
 Phase 6 verdict: codex 01a16053-cfb6-7fb1-8e27-b5edf2aa5348, 2026-10-21
 Reviewer session: codex 01a16053-cfb6-7fb1-8e27-b5edf2aa5348 — a fresh session reviewed: an earlier ## Phase 6 block makes this a re-check
+
+Stage-2 call, 2026-10-21: repair · attempt 1 · route codex · endpoint openai-codex · model gpt-6.1-sol · leak check clean over 556 files, 1792 commits, 12 rules.
+
+> Attempt 1 (codex) failed its post-run checks.
+>
+> Files the attempt changed (lines added, removed):
+> - `plans/changes/research-swarm/plan.md` +18 -0
+> - `scripts/check_research_handoff.py` +2 -0
+> - `tests/test_research_handoff.py` +13 -0
+>
+> Diagnostics:
+> ```text
+> - Runner format before `make verify`: ruff changed no file.
+> - `plan.md` did not add a measured line below `## Time used`
+> ```
+
+Stage-2 call, 2026-10-21: repair · attempt 2 · route codex-repair · endpoint openai-codex · model gpt-6.1-sol · reason first Codex post-run check failed · leak check clean over 556 files, 1793 commits, 12 rules.
+
+> Attempt 2 (codex-repair) failed its post-run checks.
+>
+> Files the attempt changed (lines added, removed):
+> - `plans/changes/research-swarm/plan.md` +18 -0
+>
+> Diagnostics:
+> ```text
+> - Runner format before `make verify`: ruff changed no file.
+> - `plan.md` did not add a measured line below `## Time used`
+> ```
+
+Stage-2 call, 2026-10-21: repair · attempt 3 · route stage-1 · endpoint claude-code-plan · model claude-sonnet-5-5 · reason two Codex post-run checks failed · leak check clean over 556 files, 1793 commits, 12 rules.
+
+> Attempt 3 (stage-1) failed its post-run checks.
+>
+> Files the attempt changed (lines added, removed):
+> - `plans/changes/research-swarm/plan.md` +9 -0
+>
+> Diagnostics:
+> ```text
+> - Runner format before `make verify`: ruff changed no file.
+> - `plan.md` did not add a measured line below `## Time used`
+> ```

@@ -4,7 +4,7 @@ status: draft
 implementation_status: partial
 date: 2026-10-14
 last_reviewed: 2026-10-18
-updated: 2026-10-21
+updated: 2026-10-22
 supersedes: null
 superseded_by: null
 bead: coding-harness-icw
@@ -1024,6 +1024,8 @@ the existing gates and let the runner own registry regeneration/full verify.
 - 32: tests/test_research_handoff.py::test_empty_yaml_answer_cannot_close_item_or_supply_basis — A comment-only or null answer closes an obligation (phase-6 F-61).
 - 34: tests/test_research_handoff.py::test_empty_yaml_answer_cannot_close_item_or_supply_basis — An empty YAML answer supplies a criterion Basis (phase-6 F-61).
 - 32: tests/test_research_handoff.py::test_real_inline_and_block_answers_still_close_handoff — Real inline and block answers stop satisfying the handoff after empty-answer validation.
+- 32: tests/test_research_handoff.py::test_empty_yaml_containers_cannot_close_item_or_supply_basis — An empty YAML container (`[]`, `{}`) closes an obligation (phase-6 F-63).
+- 34: tests/test_research_handoff.py::test_empty_yaml_containers_cannot_close_item_or_supply_basis — An empty YAML container supplies a criterion Basis (phase-6 F-63).
 - 47: tests/test_stage2_research_availability.py::test_probe_audits_survive_unsuccessful_preparation — A probe starts before its scrubbed audit is durable, or failed/refused preparation loses earlier audits (phase-6 F-62).
 - 48: tests/test_stage2_research_availability.py::test_probe_audits_survive_unsuccessful_preparation — Failed preparation leaves no independent audit outside the worktree (phase-6 F-62).
 - 21: tests/test_stage2_research_availability.py::test_persisted_probe_audit_scrubs_credentials_before_write — A credential or eight-character fragment survives an independent probe audit.
@@ -1482,6 +1484,10 @@ Stage-1 route: repair · model claude-sonnet-5-5 · reason: Codex limit nearly u
 ## Runner route — 2026-10-20
 
 Stage-1 route: repair · model claude-sonnet-5-5 · reason: DeepSeek session did not start (bead coding-harness-bas); maintainer 2026-10-20 switched to Sonnet.
+
+## Runner route — 2026-10-21
+
+Stage-1 route: repair · model claude-sonnet-5-5 · reason: two Codex post-run checks failed.
 
 ## Runner route — 2026-10-21
 
@@ -2488,3 +2494,17 @@ scope, and booked eight rows fixed after manual red-first proof against
 fixed during that run. The new scope regressions also cover customer-only
 exclusions, public-only exclusions and malformed classes after a matching
 rule. Existing framework admission regression was restored unchanged.
+
+### Phase-6 round-16 repair — 2026-10-21
+
+Row F-63. The runner's three attempts (Codex, Codex repair, Sonnet 5.5)
+produced the code and tests in attempt 1 and then failed only the post-run
+check for a measured line below `## Time used`; the orchestrator adopted the
+attempt by hand. Red first: the new test's four cases fail on `bbfaa38`'s
+`scripts/check_research_handoff.py` and pass with the fix (78 passed in
+`tests/test_research_handoff.py`). Measured span (UTC): 2026-10-21T21:27:19Z
+(repair start) to 2026-10-21T21:58:20Z, about 31 min, before the full
+`make verify`.
+
+- F-63: `value()` in `scripts/check_research_handoff.py` returns an empty answer for a parsed empty YAML container (`[]`, `{}`), so it neither closes an obligation nor supplies a criterion Basis; real inline and block answers still close. Test `tests/test_research_handoff.py::test_empty_yaml_containers_cannot_close_item_or_supply_basis`.
+- The runner runs `make verify`.
