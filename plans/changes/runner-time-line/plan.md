@@ -4,7 +4,7 @@ status: draft
 implementation_status: none
 date: 2026-10-20
 last_reviewed: 2026-10-20
-updated: 2026-10-20
+updated: 2026-10-22
 supersedes: null
 superseded_by: null
 bead: coding-harness-9wp
@@ -127,3 +127,16 @@ Stage-1 route: implement · model claude-sonnet-5-5 · reason: GLM model name re
 ## Time used
 
 2026-10-20 span not measured by this session (Sonnet 5.5, Stage-1 route, file tools only): it has no command tool, so `date` could not be read at start or end and no span is estimated; the runner's own entry for this attempt follows, and the orchestrator supplies any further measurement before the appetite is compared.
+
+### Orchestrator — night run, 2026-10-22
+
+Measured with `date -u`. Merged `origin/main` (127 commits; three conflicts
+in `docs/WORKFLOW.md`, `scripts/stage2.py` and `tests/test_stage2.py`) and
+finished the inherited Sonnet attempt by hand: 21 tests that used a missing
+time line as their planted failure now plant a red `make verify`, and the
+input-restore tests compare the plan without the runner's own time lines
+(criterion 5). Red first: the nine runner-time tests fail against
+`origin/main`'s runner, prompt and doctrine. Full `make verify` GREEN
+2026-10-21T23:17:34Z to 23:22:16Z: 2383 passed, 16 skipped. Span counted:
+2026-10-21T23:06:00Z (merge) to 23:23:00Z, about 17 min; the inherited
+attempt's span stays not measured, as recorded above.
