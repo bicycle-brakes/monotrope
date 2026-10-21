@@ -4,7 +4,7 @@ status: draft
 implementation_status: none
 date: 2026-10-16
 last_reviewed: 2026-10-16
-updated: 2026-10-20
+updated: 2026-10-22
 supersedes: null
 superseded_by: null
 bead: coding-harness-8hr
@@ -190,4 +190,26 @@ repaired by Codex 01:54:18Z to 02:19:42Z (`e7b8f94`). Round 3 (glm-5.3-flash)
 stops there and substitutes no model. Next: the maintainer decides whether
 the loop resumes (release or a fresh run) before phase 6. Span about 1 h 32
 min; phase 4 and the loop together about 1 h 46 min of the 2 h appetite.
+
+### Repair — taken loop-round-3 findings, 2026-10-21
+
+2026-10-21 23:24:36–23:33:36 UTC, 9 min (measured with `date -u`).
+Restore the retained findings before protecting a make-start `CallFailed`
+diagnostic, so a diagnostic refusal cannot leave the model's row edits.
+The `prepare_derived` and `verify_evidence` docstrings now state that the
+active denylist is read at diagnostic emission time and that protection
+raises `Refused` fail-closed on every route, including keyless routes.
+
+Red-first evidence against repair baseline `41c6d29`: both cases of
+`tests/test_stage2.py::test_a_make_start_diagnostic_refusal_restores_repair_findings`
+failed with an assertion that the accepted findings were not restored.
+The cases cover a non-secret diagnostic match and a denylist emptied after
+the clean pre-call scan. Both pass with the repair, as do the existing
+diagnostic-refusal and make-start regressions (4 selected cases total).
+The combined Stage-2 and leakcheck test command passed all 820 tests in
+490.47 seconds. Ruff check and format check, criterion ledger, interview
+minimums and `git diff --check` passed. Regenerating `plans/INDEX.md`
+produced no content change. No edit was made to `findings.md`; no commit
+or repository-changing git command was run. The runner owns `make verify`
+and the checkpoint commit.
 

@@ -2791,6 +2791,35 @@ def test_a_diagnostic_refusal_restores_repair_findings(world: World) -> None:
     assert world.text() == call["findings"]
 
 
+@pytest.mark.parametrize("unusable_denylist", [False, True], ids=["nonsecret-match", "unusable-denylist"])
+def test_a_make_start_diagnostic_refusal_restores_repair_findings(
+    world: World, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str], unusable_denylist: bool
+) -> None:
+    """A make-start failure whose protection refuses must discard the model's row edits."""
+    repair_world(world)
+    vandal = "# Findings\n\nmodel overwrote the accepted statuses\n"
+    script_repair(
+        world,
+        [repair_step(plant={"plans/changes/demo/findings.md": vandal}), repair_step()],
+        make=[{"stdout": "must not run"}],
+    )
+    original_launch = stage2.launch
+
+    def no_make(command, root, env, secret=None, **kwargs):
+        if command[:2] == ["make", "verify"]:
+            if unusable_denylist:
+                set_denylist("")
+            raise stage2.CallFailed(f"make could not be started: {LEAK}")
+        return original_launch(command, root, env, secret, **kwargs)
+
+    monkeypatch.setattr(stage2, "launch", no_make)
+    assert world.run("repair") == 2
+    (call,) = repair_calls(world)
+    assert world.text() == call["findings"], "diagnostic refusal must restore the accepted findings"
+    assert world.calls("make") == []
+    assert LEAK not in world.text() and LEAK not in capsys.readouterr().err
+
+
 @pytest.mark.parametrize("unmeasured", [False, True], ids=["changed-path", "measurement-error"])
 def test_moved_head_diagnostics_protect_file_evidence(
     world: World, monkeypatch: pytest.MonkeyPatch, unmeasured: bool

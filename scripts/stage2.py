@@ -3440,6 +3440,8 @@ def prepare_derived(root: Path, env: dict[str, str], key: str | None = None) -> 
 
     Clean documents are not an implementation's repair surface. The existing stamp leaves
     duplicate or absent headers alone, so the verifier still reports those structural errors.
+    Before emitting diagnostics, read the active denylist and raise Refused fail-closed if
+    protection refuses, on every route including keyless routes (key=None).
     """
     try:
         paths, excluded = check_frontmatter_current.load_map(root)
@@ -3509,7 +3511,11 @@ def prepare_derived(root: Path, env: dict[str, str], key: str | None = None) -> 
 
 
 def verify_evidence(done: subprocess.CompletedProcess, key: str | None) -> str:
-    """The bounded evidence of a red `make verify`: the framed gates that blocked, else the run's tail."""
+    """The bounded evidence of a red `make verify`: the framed gates that blocked, else the run's tail.
+
+    Read the active denylist at diagnostic emission time and raise Refused fail-closed if
+    protection refuses, on every route including keyless routes (key=None).
+    """
     # Protected whole, before any reduction: a cut must not split a multiline match and leave a part of it.
     stdout = protect_diagnostics(done.stdout or "", key)
     stderr = protect_diagnostics(done.stderr or "", key)
@@ -4663,6 +4669,8 @@ def run_attempts(
         except CallFailed as error:
             # `make verify` could not be started: no model can repair that, so this attempt's block
             # says why and the run stops after the scan below, with no further attempt (spec, criterion 6).
+            if kept is not None:
+                restore_findings(kept)
             cannot_start = error
             lines = protect_diagnostics(str(error), key).splitlines() or ["make could not be started"]
             problems = ["`make verify` could not be run\n" + "\n".join(_shrink(lines, TAIL_LINES))]
