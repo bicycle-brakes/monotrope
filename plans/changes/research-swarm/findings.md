@@ -4438,3 +4438,14 @@ unresolved statuses. Verify the new regression tests against baseline and
 fixed code before booking either row fixed. The last qualified source stays
 `ad2ff14` (3243 passed, 16 skipped). The maintainer requested a handover at
 this safe checkpoint; PR #211 carries the resumption instructions.
+
+Stage-2 call, 2026-10-21: review · endpoint openai-codex · model gpt-6.1-sol · leak check clean over 556 files, 1790 commits, 12 rules.
+
+## Phase 6 — Codex, 2026-10-21
+
+| ID | Severity | Dimension | Origin | Where | Finding | Reviewer | Status | Broke a test |
+|---|---|---|---|---|---|---|---|---|
+| F-63 | MAJOR | SPEC | fix-r15 | `scripts/check_research_handoff.py:510–526` | Empty YAML containers still count as maintainer answers after the answer-validation repair. In-memory reproduction with complete research, linked obligations, `status: answered`, `answered_by: maintainer` and either `answer: []` or `answer: {}` returns exit 0, closing the obligation and accepting the record as a criterion Basis. `str(content)` converts these empty values into nonempty punctuation. Empty answer containers must leave obligations open and cannot supply a Basis. [criteria 32, 34] | Codex | taken — criteria 32, 34: an empty YAML container (`[]`, `{}`), like a null or comment-only answer, has no maintainer content and cannot close an obligation or supply a criterion Basis; preserve real inline and block answers | — |
+
+Phase 6 verdict: codex 01a16053-cfb6-7fb1-8e27-b5edf2aa5348, 2026-10-21
+Reviewer session: codex 01a16053-cfb6-7fb1-8e27-b5edf2aa5348 — a fresh session reviewed: an earlier ## Phase 6 block makes this a re-check
