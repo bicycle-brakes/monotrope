@@ -166,6 +166,20 @@ def test_a_yes_in_any_table_counts_as_a_broken_test() -> None:
     assert stage2_runs.measure(text).broke == 3
 
 
+def test_a_mark_with_its_reason_counts_as_a_broken_test() -> None:
+    """#199 of the review: a repair writes `yes — <anchor>`; the count must not drop it."""
+    text = (
+        HEADER
+        + f"\n\n{stage2.RELEASE_HEADING} 2026-10-08\n\n"
+        + loop_rows(
+            ("L1-1", "fixed — tests/test_x.py::test_x", "yes — tests/test_x.py::test_x", "agree"),
+            ("L1-2", "taken — t", "no — the test was red already", "agree"),
+        )
+        + "\n"
+    )
+    assert stage2_runs.measure(text).broke == 1
+
+
 def test_phase_6_rounds_are_verdict_lines_and_rows_count_by_their_section() -> None:
     """Fault: rounds read from `Rounds run:`, or a phase-2a row counted as phase 6 (criterion 5)."""
     text = (
