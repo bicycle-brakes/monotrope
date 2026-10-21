@@ -1150,3 +1150,54 @@ def test_a_matching_deny_does_not_hide_a_later_malformed_class(fx):
     assert problem and "malformed exclusion" in problem
     assert fx.prepare() == 2
     assert fx.probed() == []
+
+
+@pytest.mark.parametrize("refused", [False, True])
+def test_probe_audits_survive_unsuccessful_preparation(fx: Fixture, monkeypatch, refused: bool) -> None:
+    fx.catalog.metadata_ok = False
+    fx.script(**{"mimo-v2.6-flash": {"exit": 1, "stderr": "down @KEY@"}})
+    original = stage2.launch
+    launches = []
+
+    def launch(*args, **kwargs):
+        if "--version" in args[0]:
+            return original(*args, **kwargs)
+        records = list(stage2.record_dir("demo", fx.w.root).glob("research-probe-*.json"))
+        durable = [json.loads(path.read_text()) for path in records]
+        assert len(durable) == len(launches) + 1, "probe launched before its durable audit"
+        launches.append(args)
+        if refused and len(launches) == 2:
+            raise stage2.Refused("planted refusal after earlier probes")
+        return original(*args, **kwargs)
+
+    monkeypatch.setattr(stage2, "launch", launch)
+    assert fx.prepare() == (2 if refused else 1)
+    records = list(stage2.record_dir("demo", fx.w.root).glob("research-probe-*.json"))
+    assert records and len(records) == len(launches)
+    for path in records:
+        record = json.loads(path.read_text())
+        assert "leak check clean" in record["audit"]
+        assert "checked_at" in record
+        assert not path.is_relative_to(fx.w.root)
+        assert path.stat().st_mode & 0o077 == 0
+        assert OKEY not in path.read_text()
+    assert not availability.research_receipt_path("demo", stage2, fx.w.root).exists()
+
+
+def test_persisted_probe_audit_scrubs_credentials_before_write(fx: Fixture) -> None:
+    directory = stage2.record_dir("demo", fx.w.root)
+    audit = availability._ProbeAudit(directory, stage2, lambda: OKEY)
+    audit.append(f"leak check clean: {OKEY} fragment {OKEY[3:13]}")
+    record = next(directory.glob("research-probe-*.json")).read_text()
+    assert OKEY not in record and OKEY[3:13] not in record
+    assert json.loads(record)["audit"] == audit[0]
+
+
+def test_unwritable_probe_audit_refuses_before_launch(fx: Fixture, monkeypatch) -> None:
+    def fail(*_args, **_kwargs):
+        raise OSError("planted audit failure")
+
+    monkeypatch.setattr(availability, "write_receipt", fail)
+    assert fx.prepare() == 2
+    assert not fx.probed()
+    assert not availability.research_receipt_path("demo", stage2, fx.w.root).exists()

@@ -500,6 +500,16 @@ def parse_decisions(text: str, label: str) -> dict[str, QRecord]:
         def value(name: str, body: list[str] = body, found: dict[str, int] = found) -> str:
             if name not in found:
                 return ""
+            if name == "answer":
+                try:
+                    loaded = _yaml_load(_snippet(body, found[name]))
+                except yaml.YAMLError:
+                    # Historical inline answers also contain prose after quoted text.
+                    # Retain that supported spelling rather than requiring YAML throughout.
+                    pass
+                else:
+                    content = loaded.get(name) if isinstance(loaded, dict) else None
+                    return "" if content is None else str(content).strip()
             first = _FIELD.match(body[found[name]])
             assert first is not None
             rest = first.group(2).strip().strip("\"'").strip()
