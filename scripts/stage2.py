@@ -326,6 +326,12 @@ PI_DISCOVERY_SECONDS = 120
 # so no whole source file travels (criterion 3).
 FREE_DIFF_MAX_LINES = 400
 FREE_DIFF_MAX_TOTAL = 2000
+# A paid member reads the whole change, but not without end: over this bound the prompt carries a cut
+# marker and the round says so. Pi 1.2.0 compacts an oversized context instead of failing (read in the
+# pinned install: `docs/compaction.md`, "Auto-compaction triggers when contextTokens > contextWindow -
+# reserveTokens"; `dist/core/agent-session.js:418`), so a `No finding.` could rest on a summary the
+# member never saw in full (R-15 of the review-swarm review).
+PAID_DIFF_MAX_LINES = 2000
 
 SEVERITIES = {"BLOCKER", "MAJOR", "MINOR"}
 
@@ -338,6 +344,7 @@ VERDICT_LINE = re.compile(
 VERDICT_START = re.compile(r"^phase 6 verdict\b[^\n]*$", re.M | re.I)
 SESSION_LINE = re.compile(r"^Reviewer session: codex (\S+)", re.M)
 ROUNDS_LINE = re.compile(r"^Rounds run: (\d+)\s*$", re.M)
+CUT_ROUNDS_LINE = re.compile(r"^Cut rounds: (\d+(?:, \d+)*)\s*$", re.M)
 ROUND_HEADING = re.compile(r"^## Round \d+ — \S+,", re.M)
 RELEASE_HEADING = "## Phase 4b — loop rows, released"
 # The runner's own sentence, matched as a whole line: a reviewer's table cell may quote it, and a
@@ -1560,6 +1567,23 @@ def _bound_hunks(rel: str, piece: str) -> str:
     return f"{kept}\n## (the diff of {rel} was cut at {FREE_DIFF_MAX_LINES} lines)"
 
 
+def bounded_paid_diff(diff: str) -> tuple[str, str | None]:
+    """The paid prompt's diff, cut at `PAID_DIFF_MAX_LINES`, and what the cut left out.
+
+    The caller writes the second half into the round record: a clean answer over a cut diff is not a
+    clean answer about the change, and the record must say which of the two it was.
+    """
+    # Split on "\n" only, as git counts: `splitlines()` also splits on CR and form feed, which inflates the
+    # count and rewrites the kept part's line ends (O191-4).
+    lines = diff.split("\n")
+    if lines and lines[-1] == "":
+        lines.pop()
+    if len(lines) <= PAID_DIFF_MAX_LINES:
+        return diff, None
+    note = f"the change diff was cut at {PAID_DIFF_MAX_LINES} of {len(lines)} lines"
+    return "\n".join([*lines[:PAID_DIFF_MAX_LINES], f"## ({note}; the rest is not carried)"]), note
+
+
 def free_diff(root: Path) -> str:
     """The implementation diff the free swarm reviews: bounded hunks of source and test code only.
 
@@ -2240,6 +2264,46 @@ def accepted_row(row: list[str]) -> bool:
     return row[7].lower().startswith(("taken", "fixed"))
 
 
+CUT_LINE = "The diff was cut:"
+
+
+def cut_rounds(record: str | None) -> list[int]:
+    """The numbers of the record's rounds whose diff was cut."""
+    if not record:
+        return []
+    heads = list(re.finditer(r"^## Round (\d+) —", record, re.M))
+    ends = [head.start() for head in heads[1:]] + [len(record)]
+    return [
+        int(head.group(1))
+        for head, end in zip(heads, ends, strict=True)
+        if any(line.startswith(CUT_LINE) for line in record[head.start() : end].splitlines())
+    ]
+
+
+def released_cut_rounds(findings_text: str) -> set[int]:
+    """The rounds that every released block of findings.md carries as cut."""
+    found: set[int] = set()
+    own = False
+    for line in findings_text.splitlines():
+        if line.startswith("## "):
+            own = line.startswith(RELEASE_HEADING)
+        elif KEPT_FROM.match(line):
+            own = False
+        elif own and (match := CUT_ROUNDS_LINE.fullmatch(line)):
+            found.update(int(number) for number in match.group(1).split(", "))
+    return found
+
+
+def round_was_cut(record: str | None, round_number: int, findings_text: str = "") -> bool:
+    """Whether that round's diff was cut. Such a round cannot end the loop, however clean it reads.
+
+    A member's `No finding.` over a cut diff is a statement about the part it saw; letting it stop the
+    loop would certify the change on a diff nobody reviewed in full (P2 of the #191 review). The record
+    is deleted by a release, which carries the cut rounds as its own `Cut rounds:` line (O191-2).
+    """
+    return round_number in cut_rounds(record) or round_number in released_cut_rounds(findings_text)
+
+
 def clean_round(rows: list[list[str]], round_number: int) -> bool:
     """A completed round is clean when every row is decided and none is accepted (ADR 0021, decision 1).
 
@@ -2491,6 +2555,9 @@ def release(root: Path, change: str) -> list[list[str]]:
     if not rows:
         block.append("No loop row was reported.")
     block.append(f"Rounds run: {len(ROUND_HEADING.findall(record))}")
+    cut = cut_rounds(record)
+    if cut:
+        block.append(f"Cut rounds: {', '.join(str(number) for number in cut)}")
     if state is not None:
         # The snapshot travels as the block's own line, before the kept words:
         # a continued run reads its stages from here, never from the reviewers'
@@ -4685,9 +4752,14 @@ def review_loop(root: Path, change: str, availability_reported: str | None = Non
         refusal = undecided_refusal(history.get(last, []), "decide them first")
         if refusal:
             raise Refused(refusal)
-        if clean_round(history.get(last, []), last):
+        if clean_round(history.get(last, []), last) and not round_was_cut(record, last, findings_text):
             raise Refused(f"round {last} was clean: every row was decided and none accepted; the loop stops.")
-        if last - 1 in history and fix_r_only(history[last], last) and fix_r_only(history[last - 1], last - 1):
+        if (
+            last in history
+            and last - 1 in history
+            and fix_r_only(history[last], last)
+            and fix_r_only(history[last - 1], last - 1)
+        ):
             raise Refused(
                 f"rounds {last - 1} and {last} accepted only findings whose Origin begins `fix-r`; "
                 "the repair brake stops the loop; the maintainer decides what continues."
@@ -4730,7 +4802,11 @@ def review_loop(root: Path, change: str, availability_reported: str | None = Non
     round_number = rounds_run(record, findings_text) + 1
     members: list[str] = stage["members"]
     free = stage["kind"] == "free"
-    diff = free_input if free else change_diff(root)
+    cut_note: str | None = None
+    if free:
+        diff = free_input
+    else:
+        diff, cut_note = bounded_paid_diff(change_diff(root))
     body = "" if free else (root / "prompts" / "04b-review-loop.md").read_text(encoding="utf-8")
     prompts: dict[str, str] = {}
     endpoints: dict[str, tuple[str, str, str]] = {}
@@ -4850,6 +4926,11 @@ def review_loop(root: Path, change: str, availability_reported: str | None = Non
         kept = rest if rows else outcome
         if kept.strip():
             reviewer_blocks.append(kept.strip())
+    if cut_note:
+        statements.append(
+            f"{CUT_LINE} {cut_note}. A clean answer over a cut diff does not end the loop; the rest of "
+            "the change needs a round of its own."
+        )
     parts = [f"## Round {round_number} — {', '.join(members)}, {today()}", *notes, *statements]
     for block in reviewer_blocks:
         parts.append(f"{NOT_ROWS_NOTE}\n\n{quote_reviewer(block)}")

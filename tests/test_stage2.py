@@ -652,6 +652,84 @@ def test_the_suite_never_reaches_the_real_denylist_or_secrets(monkeypatch: pytes
 # ---------------------------------------------------------------------------
 
 
+def test_an_oversized_diff_reaches_the_paid_prompt_cut_and_the_record_says_so(world: World) -> None:
+    """R-15 of the review-swarm review: the paid diff is bounded, and a cut is recorded, not hidden."""
+    limit = 5
+    monkey = pytest.MonkeyPatch()
+    monkey.setattr(stage2, "PAID_DIFF_MAX_LINES", limit)
+    try:
+        big = world.root / "src" / "big.py"
+        big.parent.mkdir(parents=True, exist_ok=True)
+        big.write_text("\n".join(f"VALUE_{n} = {n}" for n in range(limit * 3)) + "\n", encoding="utf-8")
+        world.write_findings(VERDICT)
+        world.script(
+            pi=[
+                *({"model": model, "stdout": rows(1)} for model in TEST_FREE),
+                *({"model": model, "stdout": "No finding."} for model in TEST_FLASH),
+            ]
+        )
+        assert world.run("review-loop") == 0  # round 1: the free stage, with a finding
+        decide_record(world)
+        assert world.run("review-loop") == 0  # round 2: the Flash stage, over the cut diff
+        record = world.record().read_text(encoding="utf-8") if world.record().exists() else ""
+        prompts = []
+        for call in world.calls("pi"):
+            value = str(call.get("prompt_file") or "")
+            try:
+                prompts.append(Path(value).read_text(encoding="utf-8") if Path(value).is_file() else value)
+            except OSError:
+                prompts.append(value)
+        paid = [text for text in prompts if "This is round 2" in text]
+        assert paid, "the run reached no paid round"
+        assert any(f"## (the change diff was cut at {limit} of" in text for text in paid), (
+            "the paid prompt carried no cut marker"
+        )
+        assert f"The diff was cut: the change diff was cut at {limit} of" in record, "the round hid the cut"
+        # A clean answer over a cut diff does not end the loop: the next call goes on to the ladder
+        # instead of refusing with "round 2 was clean" (P2 of the #191 review).
+        world.script(pi=[{"model": model, "stdout": "No finding."} for model in TEST_RUNGS])
+        assert world.run("review-loop") == 0
+    finally:
+        monkey.undo()
+
+
+def test_a_cut_round_stays_cut_after_the_release(world: World) -> None:
+    """O191-2: the continued run after `release-loop` still knows round 2 saw a cut diff."""
+    limit = 5
+    monkey = pytest.MonkeyPatch()
+    monkey.setattr(stage2, "PAID_DIFF_MAX_LINES", limit)
+    try:
+        big = world.root / "src" / "big.py"
+        big.parent.mkdir(parents=True, exist_ok=True)
+        big.write_text("\n".join(f"VALUE_{n} = {n}" for n in range(limit * 3)) + "\n", encoding="utf-8")
+        world.write_findings(VERDICT)
+        world.script(
+            pi=[
+                *({"model": model, "stdout": rows(1)} for model in TEST_FREE),
+                *({"model": model, "stdout": "No finding."} for model in TEST_FLASH),
+            ]
+        )
+        assert world.run("review-loop") == 0  # round 1: the free stage, with a finding
+        decide_record(world)
+        assert world.run("review-loop") == 0  # round 2: Flash over the cut diff, no finding
+        assert world.run("release-loop") == 0
+        assert not world.record().exists(), "the release kept the record"
+        world.script(pi=[{"model": model, "stdout": "No finding."} for model in TEST_RUNGS])
+        assert world.run("review-loop") == 0, "the continued run took a cut round for a clean one"
+    finally:
+        monkey.undo()
+
+
+def test_the_paid_diff_is_split_on_newlines_only() -> None:
+    """O191-4: the count is git's count, and a carriage return survives the cut."""
+    text = "".join(f"line {n}\r\n" for n in range(stage2.PAID_DIFF_MAX_LINES + 3))
+    kept, note = stage2.bounded_paid_diff(text)
+    assert note == f"the change diff was cut at {stage2.PAID_DIFF_MAX_LINES} of {text.count(chr(10))} lines"
+    assert kept.startswith("line 0\r\nline 1\r\n"), "the cut rewrote the line ends"
+    assert "\r" in kept.split("\n")[1], "the carriage return was lost"
+    assert "\x0c" in stage2.bounded_paid_diff("a\x0cb\n" * (stage2.PAID_DIFF_MAX_LINES + 1))[0]
+
+
 def test_the_record_is_keyed_by_the_worktree_too(tmp_path: Path) -> None:
     """R-2 of the review-swarm review: two worktrees with one change folder get one record each."""
     one, two = tmp_path / "one", tmp_path / "two"
