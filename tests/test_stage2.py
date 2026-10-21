@@ -898,6 +898,16 @@ def test_a_shifted_broke_a_test_cell_is_refused_by_its_row() -> None:
     assert "L1-1" in str(error.value) and "moved out of its column" in str(error.value)
 
 
+def test_a_status_reason_with_a_pipe_and_a_valid_mark_stays_a_row() -> None:
+    """The review of PR #194: a widened Status is legitimate as long as the mark sits in the last cell."""
+    row = (
+        "| L1-1 | MAJOR | SPEC | criterion 1 | spec.md:1 | FB1-unique-body | a, b | "
+        "taken — a \\| b | yes — tests/test_x.py::test_x |"
+    )
+    rows = stage2.record_rows(f"## Round 1 — a, 2026-10-20\n\n{row}\n")
+    assert rows[0][7] == "taken — a \\| b" and rows[0][8] == "yes — tests/test_x.py::test_x"
+
+
 def test_a_second_review_loop_is_refused_while_the_record_is_held(world: World, capsys) -> None:
     """R-14 of the review-swarm review: one runner per record, and the refusal names the record."""
     path = stage2.lock_path("demo", world.root)

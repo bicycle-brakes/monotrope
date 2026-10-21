@@ -2146,6 +2146,15 @@ def _record_lines(record: str) -> list[tuple[str, bool]]:
     return lines
 
 
+def marks_a_test(cell: str) -> bool:
+    """Whether a `Broke a test` cell says yes or no, a reason after it allowed (bead coding-harness-ll5).
+
+    `yes — <reason>` and `no — <reason>` stand as well as the bare words; only the leading word is
+    evaluated, the reason stays in the record for the reader.
+    """
+    return bool(re.match(r"(yes|no)\b", cell.strip(), re.I))
+
+
 def record_rows(record: str) -> list[list[str]]:
     """The loop rows of the record: every table line of its own whose first cell is a loop id.
 
@@ -2167,14 +2176,19 @@ def record_rows(record: str) -> list[list[str]]:
                 f"the loop record has a line for {cells[0]} that is not a loop row "
                 f"({len(cells)} cells; {len(ROW_COLUMNS)} are needed); mend it, nothing has been deleted."
             )
-        if len(cells) > len(ROW_COLUMNS) and cells[7].strip().lower().startswith(("taken", "fixed")):
+        if (
+            len(cells) > len(ROW_COLUMNS)
+            and cells[7].strip().lower().startswith(("taken", "fixed"))
+            and not marks_a_test(cells[-1])
+        ):
             # A cell was inserted before the mark: the joined Status still begins `taken`/`fixed`, and
-            # the last cell is no longer `Broke a test`. Silently reading that as a decided row would
-            # let a shifted table through (R-10 of the review-swarm review).
+            # the last cell is no longer `Broke a test`. A Status that carries an escaped-or-typed `|`
+            # with a valid mark in the last cell is a legitimate row and stays one (the review of
+            # PR #194); only a row whose last cell is no mark has moved the mark out of its column.
             raise Refused(
                 f"the loop record has a line for {cells[0]} with {len(cells)} cells whose Status cell "
-                f"starts `{cells[7].strip()}`: the `Broke a test` mark has moved out of its column; "
-                "mend it, nothing has been deleted."
+                f"starts `{cells[7].strip()}` and whose last cell `{cells[-1].strip()}` is no "
+                "`Broke a test` mark: the mark has moved out of its column; mend it, nothing has been deleted."
             )
         rows.append([*cells[:7], " \\| ".join(cells[7:-1]), cells[-1]])
     return rows
