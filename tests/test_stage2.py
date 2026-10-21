@@ -263,7 +263,15 @@ def rows(count: int, prefix: str = "X") -> str:
 
 def git(cwd: Path, *args: str) -> str:
     run = subprocess.run(
-        [GIT, "-c", "user.name=t", "-c", "user.email=t@example.invalid", "-c", "commit.gpgsign=false", *args],
+        # No automatic maintenance: a detached `git maintenance` from a commit
+        # writes objects/maintenance.lock, and a test that copies the
+        # repository then races it (CI run 39580553583).
+        [
+            GIT,
+            *("-c", "user.name=t", "-c", "user.email=t@example.invalid", "-c", "commit.gpgsign=false"),
+            *("-c", "maintenance.auto=false", "-c", "gc.auto=0"),
+            *args,
+        ],
         cwd=cwd,
         check=True,
         capture_output=True,
