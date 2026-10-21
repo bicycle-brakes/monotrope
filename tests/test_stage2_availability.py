@@ -360,6 +360,8 @@ def test_review_preparation_refuses_a_rule_the_shared_validator_rejects(world: W
     path.write_text(yaml.safe_dump(data))
     assert world.run("prepare-loop") == 2
     assert world.reviews() == []
+
+
 def test_a_probe_that_only_ran_out_of_time_gets_one_longer_try(world: World, monkeypatch) -> None:
     """R-7 of the review-swarm review: a slow but reachable model must not vanish from the run."""
     from test_stage2 import TEST_FREE
@@ -369,14 +371,12 @@ def test_a_probe_that_only_ran_out_of_time_gets_one_longer_try(world: World, mon
     limits: list[int] = []
 
     def fake(_runner, _root, _change, model, _key, _audit, _store, **options):
-        if model != slow:
-            return None
-        limits.append(options["timeout_seconds"])
-        if len(limits) == 1:
-            raise stage2.CallFailed(
-                f"pi was stopped by the availability probe limit of {options['timeout_seconds']} seconds"
-            )
-        return None
+        if model == slow:
+            limits.append(options["timeout_seconds"])
+            if len(limits) == 1:
+                raise stage2.CallFailed(
+                    f"pi was stopped by the availability probe limit of {options['timeout_seconds']} seconds"
+                )
 
     monkeypatch.setattr(availability, "probe_go", fake)
     assert world.run("prepare-loop") == 0
@@ -403,16 +403,14 @@ def test_the_second_probe_is_checked_and_audited_on_its_own(world: World, monkey
         return real_preflight(*args, **kwargs)
 
     def fake(_runner, _root, _change, model, _key, audit, _store, **_options):
-        if model != slow:
-            return None
-        audit.append(
-            f"prepare-loop · endpoint opencode-go · model {model} · "
-            "leak check clean over 1 files, 1 commits, 1 rules."
-        )
-        calls["n"] += 1
-        if calls["n"] == 1:
-            raise stage2.CallFailed("pi was stopped by the availability probe limit of 60 seconds")
-        return None
+        if model == slow:
+            audit.append(
+                f"prepare-loop · endpoint opencode-go · model {model} · "
+                "leak check clean over 1 files, 1 commits, 1 rules."
+            )
+            calls["n"] += 1
+            if calls["n"] == 1:
+                raise stage2.CallFailed("pi was stopped by the availability probe limit of 60 seconds")
 
     monkeypatch.setattr(stage2, "preflight", preflight)
     monkeypatch.setattr(availability, "probe_go", fake)
@@ -431,10 +429,9 @@ def test_a_probe_that_is_refused_is_not_tried_again(world: World, monkeypatch) -
     calls: list[int] = []
 
     def fake(_runner, _root, _change, model, _key, _audit, _store, **options):
-        if model != refused:
-            return None
-        calls.append(options["timeout_seconds"])
-        raise stage2.CallFailed("pi exited 1: model_coming_soon")
+        if model == refused:
+            calls.append(options["timeout_seconds"])
+            raise stage2.CallFailed("pi exited 1: model_coming_soon")
 
     monkeypatch.setattr(availability, "probe_go", fake)
     assert world.run("prepare-loop") == 0
