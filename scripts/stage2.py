@@ -842,41 +842,16 @@ def excluded_problem(root: Path, model: str) -> str | None:
     """Why `ausgeschlossen` in `model-endpoints.yaml` denies this model, or None (R-4 of the review-swarm review).
 
     The list was prose the runner never read: a denied provider's new free id would have reviewed diffs
-    without a decision. An entry binds by naming the ids or id prefixes it excludes in `modelle`; an
-    entry without that field documents a decision but names nothing the code can match. One predicate,
-    read by the free class and by the paid declaration, so both paths answer the same way.
+    without a decision. One predicate (`stage2_swarm.exclusion_problem`), read by the free class, the paid
+    declaration and every research path, so all of them answer the same way (PR #208).
     """
+    import stage2_swarm
+
     try:
         data = yaml.safe_load((root / "model-endpoints.yaml").read_text(encoding="utf-8")) or {}
     except (OSError, UnicodeDecodeError, yaml.YAMLError):
         return "model-endpoints.yaml cannot be read"
-    if not isinstance(data, dict):
-        return "model-endpoints.yaml has malformed exclusions: the declaration must be a mapping"
-    entries = data.get("ausgeschlossen", [])
-    if not isinstance(entries, list):
-        return "model-endpoints.yaml has malformed exclusions: ausgeschlossen must be a list"
-    full = model.lower()
-    names = model.rsplit("/", 1)[-1].lower()
-    for number, entry in enumerate(entries, 1):
-        malformed = f"model-endpoints.yaml has a malformed exclusion at entry {number}"
-        if not isinstance(entry, dict):
-            return malformed + ": a mapping is required"
-        data_class = entry.get("klasse", "framework")
-        if not isinstance(data_class, str) or not data_class.strip():
-            return malformed + ": klasse must name a data class"
-        if data_class != "framework":
-            continue
-        if "modelle" not in entry:
-            continue  # A legacy prose-only decision has no machine-readable model ids.
-        listed = entry.get("modelle")
-        if not isinstance(listed, list) or any(not isinstance(item, str) or not item.strip() for item in listed):
-            return malformed + ": modelle must be a list of nonempty model ids or prefixes"
-        for item in listed:
-            prefix = item.strip().lower()
-            if prefix and any(value == prefix or value.startswith(prefix) for value in (full, names)):
-                reason = str(entry.get("was") or "excluded by the maintainer").strip()
-                return f"the model {model} is excluded by model-endpoints.yaml: {reason}"
-    return None
+    return stage2_swarm.exclusion_problem(data, model)
 
 
 def declaration_problem(root: Path, endpoint: str, model: str) -> str | None:

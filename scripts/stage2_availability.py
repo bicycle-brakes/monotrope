@@ -249,6 +249,9 @@ def research_declaration_problem(root: Path, endpoint: str, model: str) -> str |
     data = read_declaration(root)
     if isinstance(data, str):
         return data
+    excluded = stage2_swarm.exclusion_problem(data, model)
+    if excluded:
+        return excluded  # an excluded model is never probed, not even with the fixed text (PR #208)
     found = _endpoint(data, endpoint)
     if found is None:
         return f"model-endpoints.yaml declares no endpoint {endpoint}"
@@ -425,6 +428,9 @@ def research_settings(root: Path, runner) -> tuple[dict, dict]:
     if isinstance(data, str):
         raise runner.Refused(data)
     problems = stage2_swarm.seat_problems(data)
+    malformed = stage2_swarm.exclusion_problem(data, "")
+    if malformed:
+        problems.append(malformed)
     block = data.get("research_swarm")
     policy = block.get("online_free") if isinstance(block, dict) else None
     try:
@@ -508,6 +514,7 @@ class _Selection:
 
     def __init__(self, root, change, runner, data, rule, catalog) -> None:
         self.root, self.change, self.runner, self.rule = root, change, runner, rule
+        self.data = data
         self.go = _endpoint(data, GO) or {}
         self.catalog = {item["id"]: item for item in catalog["models"]}
         self.models_store = catalog.get("models_store")
@@ -547,6 +554,9 @@ class _Selection:
         ]
 
     def _go_outcome(self, model: str) -> dict:
+        excluded = stage2_swarm.exclusion_problem(self.data, model)
+        if excluded:
+            return {"state": "excluded", "reason": excluded}  # not admitted: never probed, pooled or seated
         problem = self.runner.terms_problem(self.go, model)
         if problem:
             return {"state": "skipped", "reason": problem}
@@ -571,6 +581,9 @@ class _Selection:
         return outcome
 
     def _claude_outcome(self, seat: dict) -> dict:
+        excluded = stage2_swarm.exclusion_problem(self.data, seat["model"])
+        if excluded:
+            return {"state": "excluded", "reason": excluded}
         outcome = {"state": "not-probed", "reason": "", "admitted": True, "tool_support": "not-pool"}
         excluded = excluded_reason(self.rule, seat["model"])
         if excluded:
@@ -792,7 +805,11 @@ def prepare_research(
                 "models_store",
             )
         },
-        "free": {"selected": list(catalog["selected"]), "policy": catalog["policy"]},
+        "free": {
+            "selected": [m for m in catalog["selected"] if not stage2_swarm.exclusion_problem(data, m)],
+            "excluded": [m for m in catalog["selected"] if stage2_swarm.exclusion_problem(data, m)],
+            "policy": catalog["policy"],
+        },
         "seats": chosen,
         "unfilled": {
             label: [number + 1 for number, item in enumerate(items) if item is None] for label, items in chosen.items()

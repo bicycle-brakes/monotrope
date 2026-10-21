@@ -921,3 +921,104 @@ def test_only_an_opencode_go_seat_may_be_open() -> None:
     data = yaml.safe_load((Path(__file__).resolve().parent.parent / "model-endpoints.yaml").read_text(encoding="utf-8"))
     data["research_swarm"]["repository_seats"][2] = {"endpoint": CLAUDE}
     assert "repository seat 3: only an opencode-go seat may be open" in swarm.seat_problems(data)
+
+
+# ---------------------------------------------------------------------------
+# The global exclusion list binds every research path (PR #208)
+# ---------------------------------------------------------------------------
+
+
+def exclude(*prefixes: str, shape: object = None):
+    def change(data: dict) -> None:
+        if shape is not None:
+            data["ausgeschlossen"] = shape
+            return
+        data.setdefault("ausgeschlossen", []).append(
+            {"was": "test exclusion", "klasse": "framework", "modelle": list(prefixes)}
+        )
+
+    return change
+
+
+def test_an_excluded_pinned_model_is_never_probed_and_its_seat_takes_a_substitute(fx: Fixture) -> None:
+    # Planted fault: selection admits a model that ausgeschlossen denies (finding of PR #208).
+    fx.edit_declaration(exclude("deepseek-v4.1-flash"))
+    assert fx.prepare() == 0
+    state = fx.receipt()["state"]
+    assert "deepseek-v4.1-flash" not in fx.probed()
+    assert all(
+        model != "deepseek-v4.1-flash" for trio in ("repository", "online") for _, model, _ in seats(state, trio)
+    )
+    assert state["models"][f"{GO}/deepseek-v4.1-flash"]["state"] == "excluded"
+
+
+def test_an_excluded_prefix_keeps_a_model_out_of_open_seats_whatever_its_case(fx: Fixture) -> None:
+    def both(data: dict) -> None:
+        open_go_seats(data)
+        exclude("DEEPSEEK-")(data)
+
+    fx.edit_declaration(both)
+    assert fx.prepare() == 0
+    state = fx.receipt()["state"]
+    assert "deepseek-v4.1-flash" not in fx.probed()
+    assert seats(state, "repository")[0] == (GO, "mimo-v2.6-flash", "cheapest")
+
+
+def test_an_excluded_claude_seat_is_never_probed_and_takes_a_go_substitute(fx: Fixture) -> None:
+    fx.edit_declaration(exclude("claude-haiku-"))
+    assert fx.prepare() == 0
+    state = fx.receipt()["state"]
+    assert HAIKU not in fx.probed()
+    endpoint, _, mark = seats(state, "repository")[2]
+    assert (endpoint, mark) == (GO, "substitute for 3")
+
+
+def test_a_malformed_exclusion_list_refuses_before_any_probe(fx: Fixture) -> None:
+    fx.edit_declaration(exclude(shape={"kimi": "k3"}))
+    assert fx.prepare() == 2
+    assert fx.probed() == []
+
+
+def test_the_maintainer_cannot_choose_an_excluded_model(fx: Fixture, capsys) -> None:
+    fx.edit_declaration(lambda data: (open_go_seats(data), exclude("glm-5.3-flash")(data)))
+    capsys.readouterr()
+    assert fx.prepare("--seats", "repository=glm-5.3-flash,longcat-2.0") == 1
+    assert "glm-5.3-flash" not in fx.probed()
+
+
+def test_an_excluded_free_model_leaves_the_free_selection(fx: Fixture) -> None:
+    fx.edit_declaration(exclude("alpha-"))
+    assert fx.prepare() == 0
+    free = fx.receipt()["state"]["free"]
+    assert free["selected"] == ["beta-free"] and free["excluded"] == ["alpha-free"]
+    assert "alpha-free" not in fx.probed()
+
+
+def test_the_probe_admission_refuses_an_excluded_model(fx: Fixture) -> None:
+    fx.edit_declaration(exclude("longcat-"))
+    problem = availability.research_declaration_problem(fx.w.root, GO, "longcat-2.0")
+    assert problem and "excluded by model-endpoints.yaml" in problem
+
+
+@pytest.mark.parametrize(
+    ("role", "endpoint", "model"),
+    [
+        ("finder", GO, "deepseek-v4.1-flash"),
+        ("repository", GO, "deepseek-v4.1-flash"),
+        ("online", GO, "deepseek-v4.1-flash"),
+        ("repository", CLAUDE, HAIKU),
+        ("judge", CLAUDE, "claude-opus-5-5"),
+        ("finder_merge", CLAUDE, "claude-opus-5-5"),
+        ("topic_author", CLAUDE, "claude-opus-5-5"),
+    ],
+)
+def test_every_research_invocation_refuses_an_excluded_model(role: str, endpoint: str, model: str) -> None:
+    # The per-call gate and the role-set check both read invocation_problem; an exclusion added after
+    # selection is therefore refused at the next launch, public roles included.
+    data = yaml.safe_load((Path(__file__).resolve().parent.parent / "model-endpoints.yaml").read_text(encoding="utf-8"))
+    data["research_swarm"]["online_seats"] = [{"endpoint": GO, "model": "deepseek-v4.1-flash"}] * 3
+    exclude(model.split("-")[0] + "-")(data)
+    problem = swarm.invocation_problem(data, role, endpoint, model)
+    assert problem and "excluded by model-endpoints.yaml" in problem, (role, problem)
+    data["ausgeschlossen"].pop()
+    assert "excluded" not in (swarm.invocation_problem(data, role, endpoint, model) or "")
