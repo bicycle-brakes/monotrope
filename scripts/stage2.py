@@ -3786,7 +3786,7 @@ def _red_own_selector(nodeid: str, selector: str) -> bool:
     return nodeid == selector or nodeid.startswith(selector + "[")
 
 
-def _red_record_fault(record: bytes | None, token: str, selector: str) -> str | None:
+def _red_record_fault(record: bytes | None, token: str, selector: str, *, passing: bool = False) -> str | None:
     """Why the outcome record cannot prove this invocation red first, or None when it can.
 
     The record must be this selector's and this invocation's (a fresh token binds it to one run),
@@ -3813,8 +3813,10 @@ def _red_record_fault(record: bytes | None, token: str, selector: str) -> str | 
     session = parsed.get("session")
     if not isinstance(session, dict) or session.get("finished") is not True:
         return "the outcome record shows no finished session; the run's outcome cannot be proven"
-    if session.get("exitstatus") != 1:
-        return f"the session ended {session.get('exitstatus')!r}, not as a failing run"
+    expected_exit = 0 if passing else 1
+    if session.get("exitstatus") != expected_exit:
+        expected_run = "passing" if passing else "failing"
+        return f"the session ended {session.get('exitstatus')!r}, not as a {expected_run} run"
     errors, selected, phases = (parsed.get("collection_errors"), parsed.get("selected"), parsed.get("phases"))
     if not isinstance(errors, list) or not isinstance(selected, list) or not isinstance(phases, list):
         return "the outcome record does not hold the collection errors, the selection and the phases"
@@ -3874,6 +3876,10 @@ def _red_record_fault(record: bytes | None, token: str, selector: str) -> str | 
             return f"the call of `{_one_line(nodeid)}` is marked expected-failing or unexpectedly passed"
         if call["outcome"] == "skipped":
             return f"the call of `{_one_line(nodeid)}` was skipped"
+        if passing and call["outcome"] != "passed":
+            return (
+                f"the call of `{_one_line(nodeid)}` ended {call['outcome']}; fixed-code proof needs every case to pass"
+            )
         if call["outcome"] == "failed":
             if not call["assertion"]:
                 return (
@@ -3883,9 +3889,58 @@ def _red_record_fault(record: bytes | None, token: str, selector: str) -> str | 
             red = True
         elif call["outcome"] != "passed":
             return f"the call of `{_one_line(nodeid)}` ended {call['outcome']!r}"
-    if not red:
+    if not passing and not red:
         return "no selected call failed by assertion; the run is green for the requested test"
     return None
+
+
+def fixed_test_proof(root: Path, test: str, key: str | None, tools: dict[str, str] | None = None) -> str | None:
+    """Prove the named test actually passes on fixed code before writing its evidence mark (O199-1).
+
+    A green suite can include a skipped or expected-failing named test. The same runner-owned probe
+    used for red first must show passing setup, call and teardown for every selected case here.
+    Load the probe by its private absolute path, outside the attempt's tree. A proof that changes
+    the tree or any ref is refused, and no changed ref is deleted or reset.
+    """
+    tampered = tool_problem(root, tools)
+    if tampered:
+        return f"{test}: fixed-code proof: {tampered}"
+    bootstrap = (
+        "import importlib.util, sys, pytest; "
+        "spec = importlib.util.spec_from_file_location('stage2_fixed_probe', sys.argv[1]); "
+        "probe = importlib.util.module_from_spec(spec); spec.loader.exec_module(probe); "
+        "raise SystemExit(pytest.main(['-q', '-p', 'no:cacheprovider', sys.argv[2]], plugins=[probe]))"
+    )
+    token = os.urandom(16).hex()
+    try:
+        with tempfile.TemporaryDirectory(prefix="stage2-fixed-") as tmp:
+            probe = Path(tmp) / "probe.py"
+            report = Path(tmp) / "outcome.json"
+            probe.write_text(RED_PROBE_SOURCE, encoding="utf-8")
+            refs_before, tree_before = _ref_targets(root), worktree_tree(root)
+            done = launch(
+                [red_first_python(root), "-c", bootstrap, str(probe), test],
+                root,
+                runner_env(
+                    foreign_env(
+                        {"STAGE2_RED_REPORT": str(report), "STAGE2_RED_TOKEN": token, "STAGE2_RED_SELECTOR": test}
+                    ),
+                    root,
+                ),
+                key,
+                timeout=RED_FIRST_MINUTES * 60,
+                limit="the fixed-code proof time limit",
+            )
+            fault = _red_record_fault(_red_report_bytes(report), token, test, passing=True)
+            if done.returncode != 0:
+                fault = f"pytest ended {done.returncode} on the fixed code" + (f"; {fault}" if fault else "")
+            if _ref_targets(root) != refs_before:
+                fault = "refs changed while the fixed-code proof ran"
+            elif worktree_tree(root) != tree_before:
+                fault = "the worktree changed while the fixed-code proof ran"
+    except (CallFailed, Refused, OSError) as error:
+        fault = str(error)
+    return scrub(f"{test}: fixed-code proof: {fault}", key) if fault else None
 
 
 def red_first(root: Path, baseline: str, test: str, key: str | None, tools: dict[str, str] | None = None) -> str | None:
@@ -4093,8 +4148,9 @@ def check_repair_answer(
     audit_line: str | None = None,
     findings_before: str | None = None,
     tools: dict[str, str] | None = None,
-) -> tuple[dict[str, str], list[str]]:
-    """Read an answer's fixed lines: the Status each taken row takes, or the problems that fail the attempt.
+) -> tuple[dict[str, str], dict[str, str], list[str]]:
+    """Read an answer's fixed lines: the Status each taken row takes, the `Broke a test` marks its own
+    evidence proves, and the problems that fail the attempt.
 
     Each problem names its ID. Lines without a colon, and colon lines whose left side names neither an
     active row exactly nor a finding-shaped id, are ignored unless their right side claims a fixed
@@ -4151,7 +4207,7 @@ def check_repair_answer(
     for ident in parsed:
         problems.append(f"{ident}: no taken row carries this id")
     if problems:
-        return {}, [scrub(problem, key) for problem in problems]
+        return {}, {}, [scrub(problem, key) for problem in problems]
     findings_now = ctx.findings.read_text(encoding="utf-8") if ctx.findings.exists() else ""
     released_now, phase6_now = findings_rows(findings_now)
     if audit_line and audit_line not in findings_now.splitlines():
@@ -4189,17 +4245,26 @@ def check_repair_answer(
         for row in (counts_now - counts_before).elements():
             problems.append(f"{row[0]}: findings.md holds a {place} row that stood nowhere before the repair")
     if problems:
-        return {}, [scrub(problem, key) for problem in problems]
+        return {}, {}, [scrub(problem, key) for problem in problems]
+    marks: dict[str, str] = {}
     for _place, row in taken:
         fix = fixes[row[0]]
-        if not fix.startswith("fixed — tests/"):
-            continue
-        outcome = red_first(ctx.root, baseline, fix[len("fixed — ") :], key, tools)
-        if outcome is not None:
-            problems.append(f"{row[0]}: {outcome}")
+        if fix.startswith("fixed — tests/"):
+            anchor = fix[len("fixed — ") :]
+            outcome = red_first(ctx.root, baseline, anchor, key, tools)
+            if outcome is None:
+                outcome = fixed_test_proof(ctx.root, anchor, key, tools)
+            if outcome is not None:
+                problems.append(f"{row[0]}: {outcome}")
+                continue
+            # The proof ran and passed: the mark states exactly what was shown (R-24, the maintainer's
+            # answer C in the night interview of 2026-10-20). A row without a proof gets no mark.
+            marks[row[0]] = f"yes — {anchor}"
+        elif fix.startswith("fixed — not a test"):
+            marks[row[0]] = "no — not a test"
     if problems:
-        return {}, [scrub(problem, key) for problem in problems]
-    return {ident: scrub(status, key) for ident, status in fixes.items()}, []
+        return {}, {}, [scrub(problem, key) for problem in problems]
+    return {ident: scrub(status, key) for ident, status in fixes.items()}, marks, []
 
 
 def defines_test(body: str, function: str) -> bool:
@@ -4247,7 +4312,13 @@ def mark_repaired_findings(ctx: Context, taken: list[tuple[str, list[str]]], fix
     stamp_updated(ctx.findings)
 
 
-def mark_repaired_record(change: str, taken: list[tuple[str, list[str]]], fixes: dict[str, str], root: Path) -> None:
+def mark_repaired_record(
+    change: str,
+    taken: list[tuple[str, list[str]]],
+    fixes: dict[str, str],
+    root: Path,
+    marks: dict[str, str] | None = None,
+) -> None:
     """Mark the record's own row lines the same way, after the checkpoint commit.
 
     The record lies outside what the file tools reach, so only the runner can write it; a failure
@@ -4261,13 +4332,15 @@ def mark_repaired_record(change: str, taken: list[tuple[str, list[str]]], fixes:
     # the record, would be lost, so the rewrite holds the lock the loop verbs hold (O190-4).
     try:
         with holding_record(change, root):
-            _mark_record_rows(change, by_key, fixes, root)
+            _mark_record_rows(change, by_key, fixes, root, marks)
     except Refused as error:
         waiting = ", ".join(sorted(by_key))
         raise CallFailed(f"the loop record could not be marked ({error}); mark {waiting} by hand.") from error
 
 
-def _mark_record_rows(change: str, by_key: dict[str, list[str]], fixes: dict[str, str], root: Path) -> None:
+def _mark_record_rows(
+    change: str, by_key: dict[str, list[str]], fixes: dict[str, str], root: Path, marks: dict[str, str] | None = None
+) -> None:
     record = read_record(change, root)
     if record is None:
         return
@@ -4283,7 +4356,8 @@ def _mark_record_rows(change: str, by_key: dict[str, list[str]], fixes: dict[str
                 and cells[0] in by_key
                 and [*cells[:7], " \\| ".join(cells[7:-1]), cells[-1]] == by_key[cells[0]]
             ):
-                line = "| " + " | ".join([*cells[:7], fixes[cells[0]], cells[-1]]) + " |"
+                mark = (marks or {}).get(cells[0], cells[-1])
+                line = "| " + " | ".join([*cells[:7], fixes[cells[0]], mark]) + " |"
         lines.append(line)
     try:
         (record_dir(change, root) / "loop.md").write_text("\n".join(lines) + ending, encoding="utf-8")
@@ -4976,6 +5050,7 @@ def repair(root: Path, change: str, stage2_off: str | None = None) -> None:
     else:
         routes = [(SONNET, None, "stage-1", stage2_off)]
     fixes: dict[str, str] = {}
+    marks: dict[str, str] = {}
     rows_before = findings_rows(ctx.findings.read_text(encoding="utf-8") if ctx.findings.exists() else "")
     standing: dict[str, str] = {}
     tools = tool_state(root)  # before any model runs; the answer check and the attempts share it (R-21)
@@ -4988,12 +5063,14 @@ def repair(root: Path, change: str, stage2_off: str | None = None) -> None:
     def check(answer: str) -> list[str]:
         # The last audit line of the snapshot is this attempt's own: it was appended just before it.
         audits = [line for line in standing.get("text", "").splitlines() if line.startswith("Stage-2 call,")]
-        found, problems = check_repair_answer(
+        found, proven, problems = check_repair_answer(
             ctx, answer, taken, baseline, key, rows_before, audits[-1] if audits else None, standing["text"], tools
         )
         if not problems:
             fixes.clear()
             fixes.update(found)
+            marks.clear()
+            marks.update(proven)
         return problems
 
     run_attempts(
@@ -5011,7 +5088,7 @@ def repair(root: Path, change: str, stage2_off: str | None = None) -> None:
         ),
         answer_check=check,
         before_commit=lambda: mark_repaired_findings(ctx, taken, fixes),
-        after_commit=lambda: mark_repaired_record(change, taken, fixes, root),
+        after_commit=lambda: mark_repaired_record(change, taken, fixes, root, marks),
         snapshot_findings=snapshot,
         restore_findings=lambda text: ctx.findings.write_text(text, encoding="utf-8"),
         tools=tools,
