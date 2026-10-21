@@ -7717,12 +7717,13 @@ def test_a_fixed_line_naming_a_method_or_an_async_test_is_accepted(
 ) -> None:
     """R-23, the call site: the repair answer check finds a test defined as a method or as `async def`.
 
-    The red-first run is stubbed: pytest cannot select a class method by `file::function`, so this test
-    isolates the definition lookup that `check_repair_answer` makes before that run.
+    Both proof runs are stubbed: pytest cannot select a class method by `file::function`, so this test
+    isolates the definition lookup that `check_repair_answer` makes before those runs.
     """
     seed_tests(world)
     world.write_record([("L1-1", "taken — test_a", "no")])
     monkeypatch.setattr(stage2, "red_first", lambda *_args, **_kwargs: None)
+    monkeypatch.setattr(stage2, "fixed_test_proof", lambda *_args, **_kwargs: None)
     script_repair(
         world,
         [repair_step(plant={"src/app.py": "value = 2\n", "tests/test_fix.py": source})],
