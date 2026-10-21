@@ -4180,7 +4180,10 @@ def test_the_runner_steps_carry_their_limits_at_the_call_sites(world: World, mon
     original = stage2.launch
 
     def record(command, root, env, secret=None, timeout=None, limit=None):
-        name = "renderer" if "plans_registry.py" in command[-2] else Path(command[0]).name
+        # The stem, not the file name: the mutation ratchet in test_ci.py reads a
+        # gate script's file name as mutation evidence, and this test seeds no
+        # fault into the renderer (maintainer, 2026-10-21; stricter ratchet: bead).
+        name = "renderer" if Path(command[-2]).stem == "plans_registry" else Path(command[0]).name
         seen.append((name, timeout))
         return original(command, root, env, secret, timeout=timeout, limit=limit)
 
