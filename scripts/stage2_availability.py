@@ -227,7 +227,13 @@ def consume(root: Path, change: str, token: str | None, runner) -> dict:
         raise runner.Refused(
             "run prepare-loop and report its fresh selection in the main conversation; pass its --availability-reported id."
         )
-    # An accepted receipt is spent here: a second review-loop finds none and is refused instead of
-    # paying the same selection twice (R-14 of the review-swarm review).
-    path.unlink(missing_ok=True)
     return state
+
+
+def spend(root: Path, change: str, runner) -> None:
+    """Spend the receipt once the first round is written, never earlier (ADR 0021, decision 6).
+
+    A failed attempt consumes no stage and leaves no record, so it leaves the receipt too; the
+    operator does not re-probe for a Pi that was missing (O190-3).
+    """
+    receipt_path(root, change, runner).unlink(missing_ok=True)
