@@ -863,3 +863,24 @@ def test_duplicate_question_identity_is_not_measured(world: World, capsys, linke
     world.write([run_text(RUN1)], records=[first, repeat])
     code, out = world.check(capsys)
     assert code == 3, out
+
+
+@pytest.mark.parametrize("answer", ["# answer pending", "null", "~", "", "   # pending"])
+def test_empty_yaml_answer_cannot_close_item_or_supply_basis(world: World, capsys, answer: str) -> None:
+    record = q_record(1, items=(f"{RUN1}/H-1",)).replace('answer: "yes"', f"answer: {answer}")
+    world.write([run_text(RUN1)], records=[record])
+    code, output = world.check(capsys)
+    assert code == 1 and f"{RUN1}/H-1" in output
+    world.write(
+        [run_text(RUN1, decision=None)], records=[record.replace(f"research_items: [{RUN1}/H-1]", "research_items: []")]
+    )
+    assert world.check(capsys)[0] == 1, "an empty answer supplied a criterion Basis"
+
+
+@pytest.mark.parametrize(
+    "answer", ['"null"', '"# actual answer"', "yes # stated", "|\n  Keep this.", ">-\n  Keep this."]
+)
+def test_real_inline_and_block_answers_still_close_handoff(world: World, capsys, answer: str) -> None:
+    record = q_record(1, items=(f"{RUN1}/H-1",)).replace('answer: "yes"', f"answer: {answer}")
+    world.write([run_text(RUN1)], records=[record])
+    assert world.check(capsys)[0] == 0

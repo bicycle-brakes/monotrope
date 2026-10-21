@@ -523,6 +523,25 @@ def catalog_bridge(runner, _root: Path) -> dict:
 # ---------------------------------------------------------------------------
 
 
+class _ProbeAudit(list[str]):
+    """Persist each scrubbed launch audit independently of selection receipt publication."""
+
+    def __init__(self, directory: Path, runner, key) -> None:
+        super().__init__()
+        self.directory, self.runner, self.key = directory, runner, key
+
+    def append(self, line: str) -> None:
+        line = self.runner.scrub(line, self.key())
+        try:
+            write_receipt(
+                self.directory / f"research-probe-{uuid4().hex}.json",
+                {"checked_at": now().isoformat(timespec="seconds"), "audit": line},
+            )
+        except OSError as error:
+            raise self.runner.Refused("the probe audit cannot be persisted; no further probe starts.") from error
+        super().append(line)
+
+
 class _Selection:
     """One preparation: model outcomes, the substitute pool and the lazy, unique probes."""
 
@@ -532,9 +551,9 @@ class _Selection:
         self.go = _endpoint(data, GO) or {}
         self.catalog = {item["id"]: item for item in catalog["models"]}
         self.models_store = catalog.get("models_store")
-        self.audit: list[str] = []
-        self.probed: dict[str, str | None] = {}
         self.key: str | None = None
+        self.audit: list[str] = _ProbeAudit(runner.record_dir(change, root), runner, lambda: self.key)
+        self.probed: dict[str, str | None] = {}
         self.models: dict[str, dict] = {}
         self.go_framework = "framework" in (self.go.get("darf_sehen") or [])
         ids = {

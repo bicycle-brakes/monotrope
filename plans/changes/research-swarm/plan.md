@@ -1021,6 +1021,14 @@ the existing gates and let the runner own registry regeneration/full verify.
 - 19: tests/test_stage2_research_dispatch.py::test_free_slot_of_one_provider_waits_for_required_slots_of_another — A free slot of one provider launches before required slots of another provider (phase-6 F-54).
 - 33: tests/test_research_handoff.py::test_malformed_inventory_items_are_not_measured — A stored inventory whose items have the wrong shape crashes the gate instead of exit 3 (phase-6 F-55).
 
+- 32: tests/test_research_handoff.py::test_empty_yaml_answer_cannot_close_item_or_supply_basis — A comment-only or null answer closes an obligation (phase-6 F-61).
+- 34: tests/test_research_handoff.py::test_empty_yaml_answer_cannot_close_item_or_supply_basis — An empty YAML answer supplies a criterion Basis (phase-6 F-61).
+- 32: tests/test_research_handoff.py::test_real_inline_and_block_answers_still_close_handoff — Real inline and block answers stop satisfying the handoff after empty-answer validation.
+- 47: tests/test_stage2_research_availability.py::test_probe_audits_survive_unsuccessful_preparation — A probe starts before its scrubbed audit is durable, or failed/refused preparation loses earlier audits (phase-6 F-62).
+- 48: tests/test_stage2_research_availability.py::test_probe_audits_survive_unsuccessful_preparation — Failed preparation leaves no independent audit outside the worktree (phase-6 F-62).
+- 21: tests/test_stage2_research_availability.py::test_persisted_probe_audit_scrubs_credentials_before_write — A credential or eight-character fragment survives an independent probe audit.
+- 47: tests/test_stage2_research_availability.py::test_unwritable_probe_audit_refuses_before_launch — An audit persistence failure lets a probe launch.
+
 ## Not touched
 
 Accepted ADRs, numbered-decision continuity map, adoption records, human answer
