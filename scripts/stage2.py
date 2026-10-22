@@ -1725,6 +1725,25 @@ FREE_REVIEW_BODY = (
 )
 
 
+def free_round_prompt(head: str, diff: str) -> str:
+    """The free round's prompt; the review and the availability probe of a free model build it alike."""
+    return "\n\n".join([FREE_REVIEW_BODY, head, ANSWER_FORMAT, f"## The implementation diff\n\n{diff}"])
+
+
+FREE_PROBE_HEAD = "Availability probe only. Reply with OK. Do not review the diff and do not request tools."
+
+
+def free_probe_prompt(root: Path) -> str | None:
+    """A free model's availability probe: the real free-round prompt over the bounded free diff, asking for OK.
+
+    None without a free diff: the free stage is skipped then, so there is nothing to probe at real size.
+    """
+    diff = free_diff(root)
+    if not diff.strip():
+        return None
+    return free_round_prompt(FREE_PROBE_HEAD, bounded_review_diff(diff)[0])
+
+
 def reviewer_key() -> str:
     """The OpenCode Go key, read from the secrets file at call time. Never an argument."""
     key = read_secret("OPENCODE_GO_KEY")
@@ -5403,7 +5422,7 @@ def review_loop(root: Path, change: str, availability_reported: str | None = Non
     def prompt_for(member: str) -> str:
         head = f"This is round {round_number}; you are `{member}`."
         if free:
-            return "\n\n".join([FREE_REVIEW_BODY, head, ANSWER_FORMAT, f"## The implementation diff\n\n{diff}"])
+            return free_round_prompt(head, diff)
         # The request comes before the diff and again after it: a long diff would bury it.
         return "\n\n".join([body.rstrip(), head, ANSWER_FORMAT, READ_REQUEST, f"## The diff\n\n{diff}", READ_REQUEST])
 

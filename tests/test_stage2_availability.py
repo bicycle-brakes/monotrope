@@ -153,9 +153,11 @@ def test_preparation_calls_only_static_toolless_probes(world: World, monkeypatch
         assert "--no-tools" in call["argv"] and "--tools" not in call["argv"]
         assert call["cwd"] != str(world.root)
         assert "Availability probe only" in call["prompt_file"]
-        assert "VALUE = 2" not in call["prompt_file"]
+        # Only the free probe carries the diff; the paid probe stays the small static text.
+        if not any(f"{model}" in " ".join(call["argv"]) for model in TEST_FREE):
+            assert "VALUE = 2" not in call["prompt_file"]
         assert call["argv"][-1] == "Follow the appended availability instructions."
-    assert limits == [60] * len(calls)
+    assert limits == [availability.FREE_PROBE_SECONDS] * len(TEST_FREE) + [60] * len(TEST_LADDER)
     assert world.text().count("prepare-loop · endpoint") == len(calls)
 
 
@@ -396,10 +398,10 @@ def test_a_probe_that_only_ran_out_of_time_gets_one_longer_try(world: World, mon
 
     monkeypatch.setattr(availability, "probe_go", fake)
     assert world.run("prepare-loop") == 0
-    assert limits == [availability.PROBE_SECONDS, availability.PROBE_RETRY_SECONDS], "no longer try was made"
+    assert limits == [availability.FREE_PROBE_SECONDS, availability.FREE_PROBE_RETRY_SECONDS], "no longer try was made"
     data = receipt(world)["state"]
     assert slow in data["free"]["selected"], "the slow model was dropped after one timeout"
-    assert data["availability"]["slow"] == {slow: availability.PROBE_RETRY_SECONDS}
+    assert data["availability"]["slow"] == {slow: availability.FREE_PROBE_RETRY_SECONDS}
     assert slow not in data["availability"]["failed"]
 
 
@@ -451,7 +453,7 @@ def test_a_probe_that_is_refused_is_not_tried_again(world: World, monkeypatch) -
 
     monkeypatch.setattr(availability, "probe_go", fake)
     assert world.run("prepare-loop") == 0
-    assert calls == [availability.PROBE_SECONDS], "a refused probe was repeated"
+    assert calls == [availability.FREE_PROBE_SECONDS], "a refused probe was repeated"
     assert refused in receipt(world)["state"]["availability"]["failed"]
 
 
@@ -472,3 +474,46 @@ def test_receipts_of_two_worktrees_do_not_meet(world: World) -> None:
     assert not other.record().exists()
     world.script(pi=[{"stdout": "No finding."}] * 2)
     assert other.run("review-loop", "demo", "--availability-reported", receipt(other)["report_id"]) == 0
+
+
+def test_a_free_model_is_probed_with_the_real_size_request_and_a_paid_one_is_not(world: World, monkeypatch) -> None:
+    """Bead k9rw: a free model passed the tiny probe and failed every real request; it is probed at real size."""
+    enable(world)
+    checked: list[str] = []
+    real_check = availability.leakcheck.check
+
+    def spy(change, denylist, root, items, *args, **kwargs):
+        checked.extend(text for _label, text in items)
+        return real_check(change, denylist, root, items, *args, **kwargs)
+
+    monkeypatch.setattr(availability.leakcheck, "check", spy)
+    assert world.run("prepare-loop") == 0
+    calls = world.reviews()
+    free_calls = [c for c in calls if any(model in " ".join(c["argv"]) for model in TEST_FREE)]
+    paid_calls = [c for c in calls if c not in free_calls]
+    assert len(free_calls) == len(TEST_FREE) and len(paid_calls) == len(TEST_LADDER)
+    for call in free_calls:
+        prompt = call["prompt_file"]
+        assert stage2.FREE_REVIEW_BODY in prompt and stage2.ANSWER_FORMAT in prompt
+        assert "VALUE = 2" in prompt, "the bounded free diff is missing"
+        assert "Availability probe only" in prompt
+        assert prompt in checked, "the leak check did not see the exact prompt that was sent"
+    for call in paid_calls:
+        assert call["prompt_file"] == availability.PROBE_TEXT
+        assert call["prompt_file"] in checked
+
+
+def test_a_free_model_that_fails_the_real_size_probe_is_not_selected(world: World, monkeypatch) -> None:
+    """Bead k9rw: 'Endpoint is unavailable' on the real-size request makes the free model unavailable."""
+    enable(world)
+    world.script(
+        pi=[
+            {"model": model, **({"exit": 1, "stderr": "429 Endpoint is unavailable"} if model == TEST_FREE[0] else {"stdout": "OK"})}
+            for model in [*TEST_FREE, *TEST_LADDER]
+        ]
+    )
+    assert world.run("prepare-loop") == 0
+    state = receipt(world)["state"]
+    assert TEST_FREE[0] not in state["free"]["selected"]
+    assert TEST_FREE[1] in state["free"]["selected"]
+    assert "Endpoint is unavailable" in state["availability"]["failed"][TEST_FREE[0]]

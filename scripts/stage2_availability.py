@@ -54,6 +54,9 @@ STATE_LABELS = {
 # A probe's first limit, and the one longer retry a timed-out probe gets (R-7 of the review-swarm review).
 PROBE_SECONDS = 60
 PROBE_RETRY_SECONDS = 180
+# A free model's probe carries a real-size prompt (bead k9rw), so it gets twice the small probe's limits.
+FREE_PROBE_SECONDS = 120
+FREE_PROBE_RETRY_SECONDS = 360
 
 
 def now() -> dt.datetime:
@@ -286,6 +289,7 @@ def _checked_probe(
     audit: list[str],
     admission=None,
     verb: str = "prepare-explore",
+    text: str = PROBE_TEXT,
 ) -> None:
     """The declaration, the exact-prompt leak check and the audit line - for this one probe, immediately before it.
 
@@ -295,7 +299,7 @@ def _checked_probe(
     problem = admission(root, model) if admission is not None else research_declaration_problem(root, endpoint, model)
     if problem:
         raise runner.Refused(problem)
-    result = leakcheck.check(change, leakcheck.default_denylist(), root, [("prompt", PROBE_TEXT)])
+    result = leakcheck.check(change, leakcheck.default_denylist(), root, [("prompt", text)])
     print(result.verdict.render())
     if result.verdict.exit_code() != 0:
         raise runner.Refused("the leak check is not clean; the probe does not start.")
@@ -330,13 +334,16 @@ def probe_go(
     admission=None,
     verb: str = "prepare-explore",
     timeout_seconds: int = PROBE_SECONDS,
+    text: str = PROBE_TEXT,
 ) -> None:
-    """One tool-free Go probe: pinned Pi wrapper, no tools, scratch directories, fixed text, one limit.
+    """One tool-free Go probe: pinned Pi wrapper, no tools, scratch directories, one text, one limit.
+
+    `text` is the small static probe, or a free model's real-size one; the leak check sees the same text.
 
     The limit is a parameter, not a constant: a probe that only ran out of time is tried once more
     with a longer one (R-7 of the review-swarm review), and the longer try must use the same probe.
     """
-    _checked_probe(runner, root, change, GO, model, audit, admission, verb)
+    _checked_probe(runner, root, change, GO, model, audit, admission, verb, text)
     with tempfile.TemporaryDirectory(prefix="stage2-probe-") as tmp:
         scratch = Path(tmp)
         agent = scratch / "agent"
@@ -346,7 +353,7 @@ def probe_go(
         home = scratch / "home"
         home.mkdir()
         prompt_file = scratch / "probe-prompt.md"
-        prompt_file.write_text(PROBE_TEXT, encoding="utf-8")
+        prompt_file.write_text(text, encoding="utf-8")
         command = [
             str(runner.PI_WRAPPER),
             "--print",
@@ -1057,15 +1064,20 @@ def prepare(root: Path, change: str, runner) -> None:
     failed = {}
     slow: dict[str, int] = {}
     key = runner.reviewer_key()
+    # A free model is probed with the free round's own prompt: the tiny probe passed a model whose real
+    # requests all failed (bead k9rw). Without a free diff no free model is a candidate (above).
+    free_text = runner.free_probe_prompt(root) if free["selected"] else None
     for model in dict.fromkeys(candidates):
         excluded = excluded_reason(rule, model)
         if excluded is not None:
             skipped[model] = excluded
         if model in skipped:
             continue
+        is_free = model in free["selected"] and free_text is not None
+        limits = (FREE_PROBE_SECONDS, FREE_PROBE_RETRY_SECONDS) if is_free else (PROBE_SECONDS, PROBE_RETRY_SECONDS)
         # A probe that only ran out of time is tried once more with a longer limit: a slow but
         # reachable model must not disappear from the run silently (R-7 of the review-swarm review).
-        for attempt, limit in enumerate((PROBE_SECONDS, PROBE_RETRY_SECONDS), 1):
+        for attempt, limit in enumerate(limits, 1):
             # Every foreign call is checked and audited on its own, the second one too: an admission
             # withdrawn between the two probes must stop it, and the leak check runs before each call
             # (the review of PR #196).
@@ -1087,6 +1099,7 @@ def prepare(root: Path, change: str, runner) -> None:
                     or (lambda root_, model_: runner.declaration_problem(root_, runner.OPENCODE, model_)),
                     verb="prepare-loop",
                     timeout_seconds=limit,
+                    text=free_text if is_free else PROBE_TEXT,
                 )
             except runner.CallFailed as error:
                 failure = runner.scrub(str(error), key)
