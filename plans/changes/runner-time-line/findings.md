@@ -201,3 +201,15 @@ Kept from the loop record:
 Stage-2 call, 2026-10-22: review (loop marks) · endpoint openai-codex · model gpt-6.1-sol · leak check clean over 512 files, 1815 commits, 12 rules.
 
 Stage-2 call, 2026-10-22: repair · attempt 1 · route codex · endpoint openai-codex · model gpt-6.1-sol · leak check clean over 512 files, 1816 commits, 12 rules.
+
+Stage-2 call, 2026-10-22: review · endpoint openai-codex · model gpt-6.1-sol · leak check clean over 512 files, 1817 commits, 12 rules.
+
+## Phase 6 — Codex, 2026-10-22
+
+| ID | Severity | Dimension | Origin | Where | Finding | Reviewer | Status | Broke a test |
+|---|---|---|---|---|---|---|---|---|
+| F-3 | MAJOR | SPEC | implementation | scripts/stage2.py:4633–4642 | When green verification writes a credential into a changed file, the subsequent credential scan rejects the completed attempt, but its time entry already says accepted and excludes that scan’s duration. An in-memory execution with controlled clocks recorded 5 seconds and accepted although the checks ended after 14 seconds with rejection. Finalize the measurement and result after this check. [Acceptance criteria 3 and 4] | Codex | taken — criteria 3, 4: finalize the entry's end time and accepted/rejected result after the post-gate credential scan | — |
+| F-4 | MAJOR | MAINT | implementation | scripts/stage2.py:4646–4648,4716–4725 | The parent-alias guard covers only the final logging path. If an earlier attempt replaces the change directory with a symlink to an external directory containing byte-identical inputs, rejection schedules a retry. Adding the runner entry forces plan restoration to unlink and rewrite the external plan through that parent symlink. In-memory execution reproduced both operations. Validate parent paths before retry restoration too. | Codex | taken — restore contract: validate the plan's parent path before retry restoration as on the final path; a rejected alias is replaced without being followed (overlaps coding-harness-10w) | — |
+
+Phase 6 verdict: codex 01a16111-0646-72d1-8a42-925de7cf500e, 2026-10-22
+Reviewer session: codex 01a16111-0646-72d1-8a42-925de7cf500e — a fresh session reviewed: an earlier ## Phase 6 block makes this a re-check
