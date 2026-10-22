@@ -271,3 +271,15 @@ Phase 6 verdict: codex 01a160f5-89d5-7fd1-970e-db36fbbddf7c, 2026-10-22
 Reviewer session: codex 01a160f5-89d5-7fd1-970e-db36fbbddf7c — a fresh session reviewed: an earlier ## Phase 6 block makes this a re-check
 
 Stage-2 call, 2026-10-22: repair · attempt 1 · route codex · endpoint openai-codex · model gpt-6.1-sol · leak check clean over 512 files, 1813 commits, 12 rules.
+
+Stage-2 call, 2026-10-22: review · endpoint openai-codex · model gpt-6.1-sol · leak check clean over 512 files, 1814 commits, 12 rules.
+
+## Phase 6 — Codex, 2026-10-22
+
+| ID | Severity | Dimension | Origin | Where | Finding | Reviewer | Status | Broke a test |
+|---|---|---|---|---|---|---|---|---|
+| F-4 | MAJOR | SPEC | implementation | scripts/stage2.py:3685,4720–4724 | Format diagnostics are credential-scrubbed before secret spans are collected. Reproduced with known key `ROUTEKEY-987654321`, rule `secret:pair = ROUTEKEY-[0-9]+:FIXKEY-[0-9]+`, and a reformatted path `tests/ROUTEKEY-987654321:FIXKEY-123456.py`: `format_step` returns `tests/[credential]:FIXKEY-123456.py`, and subsequent listing protection preserves the exposed suffix in findings and the retry prompt. Protect the original format diagnostic before credential replacement. [Acceptance criteria 1, 2] | Codex | open | — |
+| F-5 | MAJOR | SPEC | implementation | scripts/stage2.py:592–607 | Non-secret checks can miss matches extending beyond a routing credential. Reproduced with known key `ROUTEKEY-987654321`, diagnostic `ROUTEKEY-987654321:FIXKEY-123456`, and identical secret and non-secret patterns `ROUTEKEY-[0-9]+:FIXKEY-[0-9]+`: protection returns `[credential][secret:pair]` without refusing. Credential scrubbing destroys the blocking match before inspection; secret replacement then hides it from the next leak check. Non-secret matches extending outside the credential must still block another call. [Acceptance criterion 5] | Codex | open | — |
+
+Phase 6 verdict: codex 01a160fd-10b8-7c73-8c57-5db2d871447b, 2026-10-22
+Reviewer session: codex 01a160fd-10b8-7c73-8c57-5db2d871447b — a fresh session reviewed: an earlier ## Phase 6 block makes this a re-check
