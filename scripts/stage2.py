@@ -571,6 +571,113 @@ def scrub(text: str, secret: str | None) -> str:
     return replace_credential(text, secret) if secret else text
 
 
+def protect_diagnostics(text: str, key: str | None = None) -> str:
+    """`text` as failed-check diagnostics may be published: secret-rule matches redacted, the key scrubbed.
+
+    Every secret rule of the active denylist is read now, on every route - a keyless Codex or Stage-1 route
+    included. A match is replaced in place by `[<rule name>]` (the name already starts `secret:`); the spans
+    are found in the original text, overlapping ones merge with credential spans into one marker run, and the
+    replacement keeps the line breaks it covered, so a traceback keeps its shape. Known credentials are
+    protected with their credential marker. Non-secret rules check credential-safe text; secret rules
+    check original text, both in full and line by line to preserve multiline and anchored matches.
+    Non-secret rules refuse first
+    - redaction must not hide a blocking rule - and so does a denylist that cannot be read, or
+    text that still matches a secret rule after the replacement. A refusal names a rule or a reason and a
+    line, never a value.
+    """
+    return _protect_diagnostics(text, key)[0]
+
+
+def _protect_diagnostics(text: str, key: str | None, split_at: int | None = None) -> tuple[str, int | None]:
+    """Protect a complete diagnostic while mapping an optional stream boundary."""
+    if not text:
+        return text, split_at
+    original = text
+    credentials = credential_spans(original, key) if key else []
+    text = scrub(original, key)
+    rules, problem = leakcheck.read_denylist(leakcheck.default_denylist())
+    if problem:
+        raise Refused(f"the failed-check diagnostics cannot be checked: {problem}")
+    for rule in rules:
+        if rule.secret:
+            continue
+        match = rule.pattern.search(text)
+        if match:
+            number = text.count("\n", 0, match.start()) + 1
+            raise Refused(
+                f"the failed-check diagnostics match rule '{rule.name}' at line {number}; the call does not start."
+            )
+        # Preserve line-anchored rules as well as matches spanning the full original text.
+        for number, line in enumerate(text.split("\n"), 1):
+            if rule.pattern.search(line):
+                raise Refused(
+                    f"the failed-check diagnostics match rule '{rule.name}' at line {number}; the call does not start."
+                )
+    # Non-secret checks retain credential precedence; secret spans use the untouched input.
+    text = original
+    spans: list[list] = [[start, end, ["credential"]] for start, end in credentials]
+    for rule in rules:
+        if not rule.secret:
+            continue
+        # Whole-text matches retain multiline rules; per-line matches mirror the leak check,
+        # including ^ and $ without an inline multiline flag. Offsets stay in the same text.
+        segments = [(0, text)]
+        offset = 0
+        for line in text.split("\n"):
+            segments.append((offset, line))
+            offset += len(line) + 1
+        for offset, segment in segments:
+            position = 0
+            while position <= len(segment):
+                match = rule.pattern.search(segment, position)
+                if match is None:
+                    break
+                if match.end() > match.start():
+                    start, end = offset + match.start(), offset + match.end()
+                    # A rule wholly inside the known credential keeps its existing marker.
+                    if not any(left <= start and end <= right for left, right in credentials):
+                        spans.append([start, end, [rule.name]])
+                # Advancing from the start retains overlapping alternatives of this same rule.
+                position = match.start() + 1
+    spans.sort(key=lambda span: (span[0], span[1]))
+    merged: list[list] = []
+    for start, end, names in spans:
+        if merged and start < merged[-1][1]:
+            merged[-1][1] = max(end, merged[-1][1])
+            merged[-1][2] += [name for name in names if name not in merged[-1][2]]
+        else:
+            merged.append([start, end, list(names)])
+    order = {rule.name: index for index, rule in enumerate(rules)}
+    order["credential"] = -1
+    out, last = [], 0
+    safe_boundary = None
+    for start, end, names in merged:
+        marks = "".join(f"[{name}]" for name in sorted(names, key=order.__getitem__))
+        if split_at is not None and safe_boundary is None and split_at < end:
+            prefix_length = sum(map(len, out))
+            if split_at <= start:
+                safe_boundary = prefix_length + split_at - last
+            else:
+                safe_boundary = prefix_length + start - last + len(marks) + text.count("\n", start, split_at)
+        out += [text[last:start], marks, "\n" * text.count("\n", start, end)]
+        last = end
+    if split_at is not None and safe_boundary is None:
+        safe_boundary = sum(map(len, out)) + split_at - last
+    out.append(text[last:])
+    safe = scrub("".join(out), key)
+    for rule in rules:
+        if rule.secret and (rule.pattern.search(safe) or any(rule.pattern.search(line) for line in safe.split("\n"))):
+            raise Refused(f"the failed-check diagnostics still match rule '{rule.name}' after redaction.")
+    return safe, safe_boundary
+
+
+def protect_files(files: list[str] | str, key: str | None = None) -> list[str] | str:
+    """The entries of `attempt_files`, or the reason it could not measure, through `protect_diagnostics`."""
+    if isinstance(files, str):
+        return protect_diagnostics(files, key)
+    return [protect_diagnostics(entry, key) for entry in files]
+
+
 def foreign_env(own: dict[str, str]) -> dict[str, str]:
     """The allow-list from the caller's environment, then the call's own variables."""
     env = {name: os.environ[name] for name in ENV_ALLOW if name in os.environ}
@@ -3470,6 +3577,8 @@ def prepare_derived(root: Path, env: dict[str, str], key: str | None = None) -> 
 
     Clean documents are not an implementation's repair surface. The existing stamp leaves
     duplicate or absent headers alone, so the verifier still reports those structural errors.
+    Before emitting diagnostics, read the active denylist and raise Refused fail-closed if
+    protection refuses, on every route including keyless routes (key=None).
     """
     try:
         paths, excluded = check_frontmatter_current.load_map(root)
@@ -3491,34 +3600,32 @@ def prepare_derived(root: Path, env: dict[str, str], key: str | None = None) -> 
                     check_frontmatter_current.stamp(path, dt.date.today())
             except (check_frontmatter_current.CannotStamp, OSError, RuntimeError) as error:
                 errors.append(f"{relative}: {error}")
-        if errors:
-            evidence = "\n".join(_shrink("\n".join(errors).splitlines(), TAIL_LINES))
-            return [f"Derived-file preparation failed: {scrub(evidence, key)}"]
-        index = root / "plans" / "INDEX.md"
-        if not index.resolve().is_relative_to(root.resolve()):
-            raise OSError("refusing an index outside the worktree: plans/INDEX.md")
-        if index.resolve() != root.resolve() / "plans" / "INDEX.md":
-            raise OSError("refusing an aliased index path: plans/INDEX.md")
-        if index.exists() and index.stat().st_nlink > 1:
-            raise OSError("refusing a hard-linked index path: plans/INDEX.md")
-        mirror = trusted_registry(root, env)
-        # Outside the mirror, and outside anything the worktree mirrors: the mirror links every top-level
-        # entry, so a repository path named `scratch` would be written to instead (P2 of the #188 review).
-        scratch = Path(tempfile.mkdtemp(prefix="harness-scratch-"))
-        for name in ("home", "tmp"):
-            (scratch / name).mkdir()
-        try:
-            done = launch(
-                [sys.executable, str(mirror / "scripts" / "plans_registry.py"), "--index"],
-                root,
-                {**env, "HOME": str(scratch / "home"), "TMPDIR": str(scratch / "tmp")},
-                key,
-                timeout=TOOL_SECONDS,
-                limit=f"the runner's tool limit after {TOOL_SECONDS // 60} minutes",
-            )
-        finally:
-            shutil.rmtree(mirror, ignore_errors=True)
-            shutil.rmtree(scratch, ignore_errors=True)
+        if not errors:
+            index = root / "plans" / "INDEX.md"
+            if not index.resolve().is_relative_to(root.resolve()):
+                raise OSError("refusing an index outside the worktree: plans/INDEX.md")
+            if index.resolve() != root.resolve() / "plans" / "INDEX.md":
+                raise OSError("refusing an aliased index path: plans/INDEX.md")
+            if index.exists() and index.stat().st_nlink > 1:
+                raise OSError("refusing a hard-linked index path: plans/INDEX.md")
+            mirror = trusted_registry(root, env)
+            # Outside the mirror, and outside anything the worktree mirrors: the mirror links every top-level
+            # entry, so a repository path named `scratch` would be written to instead (P2 of the #188 review).
+            scratch = Path(tempfile.mkdtemp(prefix="harness-scratch-"))
+            for name in ("home", "tmp"):
+                (scratch / name).mkdir()
+            try:
+                done = launch(
+                    [sys.executable, str(mirror / "scripts" / "plans_registry.py"), "--index"],
+                    root,
+                    {**env, "HOME": str(scratch / "home"), "TMPDIR": str(scratch / "tmp")},
+                    key,
+                    timeout=TOOL_SECONDS,
+                    limit=f"the runner's tool limit after {TOOL_SECONDS // 60} minutes",
+                )
+            finally:
+                shutil.rmtree(mirror, ignore_errors=True)
+                shutil.rmtree(scratch, ignore_errors=True)
     except (
         check_frontmatter_current.CannotMeasure,
         check_frontmatter_current.CannotStamp,
@@ -3528,23 +3635,35 @@ def prepare_derived(root: Path, env: dict[str, str], key: str | None = None) -> 
         RuntimeError,
         UnicodeError,
     ) as error:
-        evidence = "\n".join(str(error).splitlines()[-TAIL_LINES:])
-        return [f"Derived-file preparation failed: {scrub(evidence, key)}"]
+        evidence = "\n".join(protect_diagnostics(str(error), key).splitlines()[-TAIL_LINES:])
+        return [f"Derived-file preparation failed: {evidence}"]
+    if errors:
+        evidence = "\n".join(_shrink(protect_diagnostics("\n".join(errors), key).splitlines(), TAIL_LINES))
+        return [f"Derived-file preparation failed: {evidence}"]
     if done.returncode:
-        evidence = "\n".join(((done.stdout or "") + (done.stderr or "")).splitlines()[-TAIL_LINES:])
-        return [f"Derived-file preparation failed: index renderer exited {done.returncode}\n{scrub(evidence, key)}"]
+        text = protect_diagnostics((done.stdout or "") + (done.stderr or ""), key)
+        evidence = "\n".join(text.splitlines()[-TAIL_LINES:])
+        return [f"Derived-file preparation failed: index renderer exited {done.returncode}\n{evidence}"]
     return []
 
 
 def verify_evidence(done: subprocess.CompletedProcess, key: str | None) -> str:
-    """The bounded evidence of a red `make verify`: the framed gates that blocked, else the run's tail."""
-    output = (done.stdout or "") + (done.stderr or "")
+    """The bounded evidence of a red `make verify`: the framed gates that blocked, else the run's tail.
+
+    Read the active denylist at diagnostic emission time and raise Refused fail-closed if
+    protection refuses, on every route including keyless routes (key=None). The complete
+    concatenated streams are checked before reduction; their mapped boundary retains framing.
+    """
+    # Protected whole, before any reduction: a cut must not split a multiline match and leave a part of it.
+    raw_stdout = done.stdout or ""
+    output, boundary = _protect_diagnostics(raw_stdout + (done.stderr or ""), key, len(raw_stdout))
+    stdout, stderr = output[:boundary], output[boundary:]
     # verify_all.sh frames gates on standard output; a gate's standard error arrives unframed after them.
-    red = red_sections(done.stdout or "")
+    red = red_sections(stdout)
     if red is None:
         return scrub("\n".join(output.splitlines()[-TAIL_LINES:]), key)
     evidence = "The gates that blocked, each with its last lines:\n" + red
-    errors = (done.stderr or "").splitlines()
+    errors = stderr.splitlines()
     if errors:
         # Unframed: the last lines of the whole run's standard error, not of the blocking gate alone.
         cut = len(errors) - STDERR_LINES
@@ -4550,6 +4669,11 @@ def run_attempts(
     call whenever an attempt fails: the audit line above the snapshot stays, the model's own edits to
     the file - a Status it wrote itself included - go, so no failed run leaves them behind (phase 6,
     F-2).
+
+    The failed-check listing and the changed-file entries pass through `protect_diagnostics` once, on
+    every route, the keyless ones included; the block in findings.md and the retry prompt both take that
+    one safe text, so a fixture secret a check printed blocks neither the next attempt's leak check nor
+    its prompt (bead coding-harness-8hr).
     """
     root = ctx.root
     allowed = {ctx.findings.relative_to(root)}
@@ -4641,7 +4765,16 @@ def run_attempts(
                     listing += f"\n- {call_error}"
                 append(
                     ctx.findings,
-                    quote_block(attempt_block(attempt, route, listing, moved_files, moved_head=True), key),
+                    quote_block(
+                        attempt_block(
+                            attempt,
+                            route,
+                            protect_diagnostics(listing, key),
+                            protect_files(moved_files, key),
+                            moved_head=True,
+                        ),
+                        key,
+                    ),
                 )
                 raise CallFailed(problem) from call_error
         if call_error is not None:
@@ -4680,11 +4813,17 @@ def run_attempts(
         formatted: list[str] = []
         try:
             problems = verify_attempt(root, ctx.plan, key, formatted, tools)
+        except Refused:
+            if kept is not None:
+                restore_findings(kept)
+            raise
         except CallFailed as error:
             # `make verify` could not be started: no model can repair that, so this attempt's block
             # says why and the run stops after the scan below, with no further attempt (spec, criterion 6).
+            if kept is not None:
+                restore_findings(kept)
             cannot_start = error
-            lines = scrub(str(error), key).splitlines() or ["make could not be started"]
+            lines = protect_diagnostics(str(error), key).splitlines() or ["make could not be started"]
             problems = ["`make verify` could not be run\n" + "\n".join(_shrink(lines, TAIL_LINES))]
         # An unchanged hard-linked plan can escape changed-document preparation. Validate the
         # logging destination independently before deciding the result, even in that case.
@@ -4716,10 +4855,12 @@ def run_attempts(
                 restore_findings(kept)
             # The block lands below this attempt's audit line, before the next attempt starts or the
             # run exits 1; the post-run scan after it covers the block too (spec, criteria 1 and 9).
-            listing = "\n".join(f"- {p}" for p in problems)
+            # One safe listing and one safe file list feed both destinations (the block and the retry prompt).
+            listing = protect_diagnostics("\n".join(f"- {p}" for p in problems), key)
+            files = protect_files(files, key)
             diagnostics.append(f"Attempt {attempt} ({route}):\n{listing}")
             append(ctx.findings, quote_block(attempt_block(attempt, route, listing, files), key))
-        record += [f"- Attempt {attempt} ({route}): {line}" for line in formatted]
+        record += [protect_diagnostics(f"- Attempt {attempt} ({route}): {line}", key) for line in formatted]
         exposed = []
         if key is not None:
             # The gate runs repository code the model just edited: scan again after it and the
@@ -5109,20 +5250,22 @@ def draft(root: Path, change: str) -> None:
         keep, new_adrs = draft_keep(root, ctx, baseline)
         put = put_back(root, baseline, keep)
         if put:
-            listing = "\n".join(put_back_lines(put))
+            restored = protect_files(put_back_lines(put), key)
+            listing = "\n".join(restored)
             append(
                 ctx.findings,
                 quote_block(
                     f"Attempt {attempt} ({route}): the runner put back what a draft may not change:\n{listing}",
                     key,
-                    put_back_lines(put),
+                    restored,
                 ),
             )
         problems, owed = verify_draft(root, ctx, key, new_adrs, tools)
         if problems:
             # The next attempt starts on the tree this one left; the block quotes its files and
             # diagnostics below its audit line (spec, criterion 21).
-            listing = "\n".join(f"- {problem}" for problem in problems)
+            listing = protect_diagnostics("\n".join(f"- {problem}" for problem in problems), key)
+            files = protect_files(files, key)
             diagnostics.append(f"Attempt {attempt} ({route}):\n{listing}")
             append(ctx.findings, quote_block(attempt_block(attempt, route, listing, files), key))
         if key is not None:
