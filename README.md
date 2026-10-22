@@ -64,9 +64,9 @@ Monotrope turns each of them into files, roles and checks.
 | --- | --- | --- |
 | The chat is the state | Every phase leaves its result as a file; a session ends with a dated handover, and the next session reads the files instead of a summary | `plans/changes/<name>/`, `docs/journal/handover/` |
 | Context dies with the harness | Files outlive the tool; one instruction entry; models are assigned per phase and per job | `AGENTS.md`, `plans/`, `docs/adr/` |
-| Decisions are invisible | Open points are classified; every answer records who decided and when; a decision takes effect when its pull request is merged | `decisions.md`, `spec.md`, `provenance.yaml`, `docs/adr/` |
+| Decisions are invisible | Open points are classified; every answer records who decided and when; a decision takes effect when its pull request is merged | `plans/changes/<name>/decisions.md`, `plans/changes/<name>/spec.md`, `decisions/answers/<change>/adr.yaml`, `provenance.yaml`, `docs/adr/` |
 | A red tree ships | One gate list drives the local run and CI; every gate is block, report or advisory; a repair's test must fail before the repair | `decisions/gates.yaml`, `scripts/verify_all.sh`, `scripts/stage2.py` |
-| One reviewer has one blind spot | A review loop of swarms from several vendors, cheapest first; a finding needs a test or the spec; the reviewer session never repairs | `findings.md`, `scripts/stage2.py`, [ADR 0021](docs/adr/0021-review-swarms-until-clean.md) |
+| One reviewer has one blind spot | A review loop of several models from different vendors, served through one operator, cheapest first; a finding needs a test or the spec; the reviewer session never repairs | `plans/changes/<name>/findings.md`, `scripts/stage2.py`, [ADR 0021](docs/adr/0021-review-swarms-until-clean.md) |
 | Parallel work overwrites itself | One worktree per change, one tracker writer, a claim for every other session, a warning when sessions share a checkout | `AGENTS.md`, `tools/bd`, `tools/claude-code/` |
 | A foreign model can see too much | An endpoint allowlist by data class and a leak check before every call; a leak stops without a fallback | `model-endpoints.yaml`, `scripts/stage2.py` |
 
@@ -130,9 +130,12 @@ judges the fix.
 A **swarm** is several models reviewing the same change at the same time, each
 in a fresh session of its own. It exists because a reviewer's blind spot is
 invisible to that reviewer, and because models from one vendor can share a way
-of being wrong. The review loop adds vendors and strength only while no clean
-round has been reached: cheap rounds run first, expensive ones only when a
-round is not clean.
+of being wrong. The review loop adds models from other vendors and higher-cost
+models only while no clean round has been reached: cheap rounds run first, the
+expensive ones only when a round is not clean.
+
+All loop calls go through one operator, OpenCode Go. The models come from
+several vendors, but the data recipient is the same.
 
 ### The review loop (phase 4b)
 
@@ -142,7 +145,7 @@ reached.
 
 | Stage | Who reviews | How | What it sees |
 | --- | --- | --- | --- |
-| 1 — free swarm | every reachable model the `free_stage` rule selects from a forced live refresh of the OpenCode Go catalog | in parallel | source and test hunks only, no tools |
+| 1 — free swarm | every reachable model the `free_stage` rule selects from a forced live refresh of the OpenCode Go catalog | in parallel | source and test hunks only, no tool access |
 | 2 — Flash swarm | up to three of the cheapest reachable paid models whose terms admit the work | in parallel | the full change diff, read-only tools |
 | 3 and later — the ladder | one eligible paid model per round, cheapest first by its declared request allowance (more requests per five hours means cheaper) | one at a time | the full change diff, read-only tools |
 
@@ -167,7 +170,9 @@ test code against the merge base with `origin/main`. The paid rounds see the
 whole change diff, documentation included. Both include uncommitted changes,
 and the runner adds untracked files. A prompt carries at most 2,000 diff
 lines; a cut at that total is recorded, and such a round does not count as
-clean. A change without source or test hunks skips the free stage.
+clean. The free round also bounds each file at 400 lines; that per-file cut is
+not recorded as a cut round. A change without source or test hunks skips the
+free stage.
 
 **Before a fresh availability-enabled run**, `prepare-loop` probes the admitted
 candidates with static input and no tools and reports which are reachable,
@@ -229,9 +234,10 @@ silently. The workflow makes the boundaries explicit:
    (`tools/bd update <id> --claim --actor <session>`) and its handover comment
    on that bead. The default limit is two writing sessions per repository.
 3. **A clash warning before the first edit.** In this repository's Claude Code
-   setup, a hook scans the live sessions at start and on each prompt and names
-   any that share the checkout. The person then decides whether to continue
-   or open a worktree. It is a warning, not a lock.
+   setup, a hook scans the live sessions at start, and again on a prompt when
+   the set of clashing sessions changed, and names any that share the
+   checkout. The person then decides whether to continue or open a worktree.
+   It is a warning, not a lock.
 4. **A handover, not a shared chat.** A session that ends leaves a dated
    handover file; the next session starts from it. Sessions working in
    parallel read each other's committed state, not a live conversation.
@@ -260,10 +266,11 @@ it.
 | Design phase (2b) | never | never | yes, or one sentence why not | always, with an ADR draft |
 | Review by another vendor | no | yes | yes | yes |
 
-A gate counts the answered questions against the class's minimum. Nothing yet
-checks that the class itself is right: a `feature` declared as a `spike` would
-skip the other-vendor reviews, and only the review before the merge catches
-it.
+A gate counts the answered questions against the class's minimum. In every
+class, a change that claims an ADR file in its spec header and changes it owes
+five answers. Nothing yet checks that the class itself is right: a `feature`
+declared as a `spike` would skip the other-vendor reviews, and only the review
+before the merge catches it.
 
 ## Where decisions live
 
