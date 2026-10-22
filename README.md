@@ -177,7 +177,8 @@ free stage.
 **Before a fresh availability-enabled run**, `prepare-loop` probes the admitted
 candidates with static input and no tools and reports which are reachable,
 failed or skipped. This probe is the one exception to "cheap first": it calls
-every admitted candidate once, including the expensive end, and it is not a
+every admitted candidate at least once, including the expensive end; a probe
+that only ran out of time is retried once with a longer limit. It is not a
 review round. Its receipt is bound to the worktree, the configuration and the
 diff and expires after 900 seconds.
 
