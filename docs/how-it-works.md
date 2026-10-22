@@ -4,7 +4,7 @@ category: architecture
 status: proposed
 created: 2026-10-16
 last_reviewed: 2026-10-16
-updated: 2026-10-17
+updated: 2026-10-22
 owner: framework-architect
 provenance: ai-drafted-reviewed
 produced_by: {kind: llm-session, name: claude-code, version: "2026-10-16"}
@@ -80,7 +80,7 @@ finding:
 
 1. a swarm selected by the YAML `free_stage` rule from a forced live Pi
    catalog refresh, in parallel, on source and test diff hunks with no tools;
-2. three Flash models, in parallel;
+2. up to three of the cheapest reachable paid models, in parallel;
 3. then one eligible paid model per round, cheapest first by `anfragen_5h`
    descending in `model-endpoints.yaml` (ties by id, missing values last).
 
@@ -95,9 +95,29 @@ flowchart LR
 ADR 0021 defines this loop. The refreshed catalog comes from Pi’s intermediary
 `pi.dev`; membership does not measure actual free billing. Paid models require
 a dated retention reading and terms excluding training; ineligible members
-are skipped and named. A change without source hunks skips the free stage.
-The loop stops when clean, when the paid ladder is exhausted, or after two
-consecutive rounds accepting only findings caused by the preceding repairs.
+are skipped and named. A change without source or test hunks skips the free
+stage. The loop stops when clean, when the paid ladder is exhausted, or after
+two consecutive rounds accepting only findings caused by the preceding
+repairs.
+
+### Runner details
+
+- All review calls go through one operator, OpenCode Go. The models come from
+  several vendors; the data recipient is the same.
+- A prompt carries at most 2,000 diff lines; a cut at that total is recorded
+  and the round is not clean. The free round also bounds each file at 400
+  lines; that per-file cut is not recorded as a cut round.
+- `prepare-loop` probes each admitted candidate at least once; a probe that
+  only ran out of time is retried once with a longer limit. Its receipt is
+  bound to the worktree, the configuration and the diff and expires after 900
+  seconds.
+- A legacy declaration without `availability_preflight` uses its hand-kept
+  `flash_swarm` list. A failed Flash member is replaced by the cheapest unused
+  rung; a failed single rung is retired with
+  `release-loop --stage-failed <model> --reason <text>`.
+- Free models are admitted for the diff-only review under retention and
+  training terms that have not been read. A paid model needs a dated terms
+  reading.
 
 ### Research swarm — bead `coding-harness-icw`
 
@@ -151,8 +171,8 @@ spec header.
 - **Stage 2 — a second vendor as an extra check.** Models from other vendors
   draft, review and repair this repository's own content. The calls go only
   through `scripts/stage2.py`, and the scope is framework content (ADR 0007,
-  amended since). Whether the second check finds more errors is being measured,
-  not assumed.
+  amended since). Whether the second check finds more errors than one has not
+  been measured.
 - **Stage 3 — orchestration.** Agents as YAML files, parallel worktrees and
   automatic routing. This stage is evaluative and not in production.
 
@@ -167,4 +187,67 @@ flowchart LR
     L -->|yes| CALL[Call the model]
     CALL --> O[Result recorded in the change's files]
 ```
+
+## Design rules
+
+- **Files, because a change must outlive the session, the machine and the
+  harness.** A state kept inside a tool dies with the tool.
+- **One list, because two lists drift.** 22 gates live in one file
+  (`decisions/gates.yaml`); 18 block, 3 report, 1 advisory (as of 2026-10-22).
+  The file drives the local runner and the CI generator, and a gate holds the
+  generated workflow to it byte for byte. `AGENTS.md` is the same kind of single
+  entry for the agents; a test fails if a harness-specific file would replace
+  it.
+- **A merge, because a decision that lives in a chat is not a decision.** A
+  rule or a person-reserved file changes when its pull request is merged, not
+  when someone typed "yes".
+- **Appetite, not estimates.** A plan card names a time limit as a stop, and a
+  pre-mortem: "suppose it failed — most likely because …".
+- **Evidence over summaries.** You judge a change by its tests, its findings
+  table and green checks, not by an agent's account of itself. A repair of code
+  counts only when its test fails on the code before the repair; a finding the
+  spec supports but no test can show is marked and re-checked. Every count
+  names its commit or date, and what could not be read is "not read", never
+  "none".
+- **Block, report or advisory, because a gate whose red means nothing is
+  noise.** Every gate says which of the three it is.
+- **Built for focus.** Every question carries its context; every session opens
+  with where things stand, the next step and what is needed from you; messages
+  lead with the result and ask one question at a time.
+
+## How testing works, and what it does not prove
+
+`make verify` runs `scripts/verify_all.sh`, which holds no commands of its own:
+it reads the gate list in `decisions/gates.yaml`, the same list the CI workflow
+is generated from. The pytest suite is one of those gates and runs in parallel
+(`pytest -n auto`). The others check lint, the kit's classified tree, documents
+and process rules.
+
+Each checkout builds its own `.venv` with `make venv` from
+`requirements-ci.txt`, where every package is pinned with its hash. Results
+depend on the lock, not on what happens to be installed on a machine, so a
+local green means what a CI green means.
+
+A repair of code counts only when its test fails on the code before the
+repair; the runner checks that itself. A test that would have passed anyway
+proves nothing, and models readily write such tests.
+
+On 2026-10-20 at `5c7db34`, `tests/` held 2306 tests in 40 files: about 29,800
+lines of test code against about 13,900 lines in `scripts/`. That measures how
+much is checked, not how well; mutation testing on one or two scripts is
+planned (bead coding-harness-bvy).
+
+## Follow one completed change
+
+The change "frontmatter-current" (archived 2026-09-29) shows each step with
+real files:
+
+| Question | Where to see it |
+| --- | --- |
+| What was the task? | A document's header said when it was last *reviewed*, not when its content last changed — and nothing failed on a stale one. [`research.md`](../plans/changes/archive/2026-09-29-frontmatter-current/research.md) |
+| What did a person decide? | In the maintainer's words: "The frontmatter headers in the files must always be maintained and current. This must be a basic mechanism." [`decisions.md`](../plans/changes/archive/2026-09-29-frontmatter-current/decisions.md) |
+| What did the agent decide itself? | Mechanics, each marked `[DETAIL]` with its reason — for example which of the two key lists owns the held prefixes. [`spec.md`](../plans/changes/archive/2026-09-29-frontmatter-current/spec.md) |
+| What was the contract? | The plan card: written for one option of a `[DECISION]`, with the one step the other option would change. [`plan.md`](../plans/changes/archive/2026-09-29-frontmatter-current/plan.md) |
+| Which check found a defect? | Review finding F-1 (MAJOR): the ADR headers said `status: accepted` where the body recorded the ADR as superseded. The row reads `fixed in 0f4101f`. [`findings.md`](../plans/changes/archive/2026-09-29-frontmatter-current/findings.md) |
+| What evidence stood at the merge? | The findings table with every row decided, and green CI — and the gate that came out of it, `frontmatter-current`, still runs on every pull request. |
 

@@ -9,29 +9,27 @@
 **Let AI agents do the work. Keep the decisions and the evidence.**
 
 **What this is.** Monotrope is a file-based workflow for AI coding agents, and
-this repository is its home: the rules, the phase prompts, the templates, the
-gates and the reference implementation. It defines how a change is researched,
-specified, planned, implemented and reviewed; Claude Code and Codex do the
-work, and you decide what the change is for and what must not happen. It
-develops itself with the same workflow.
+this repository is its home: the rules, phase prompts, templates, gates and
+reference implementation. It defines how a change is researched, specified,
+planned, implemented and reviewed; Claude Code and Codex do the work, and you
+decide what it is for and what must not happen. It develops itself with the
+same workflow. It is for people who need an audit trail they can resume from.
 
 **What this is not.** Not an agent program, not a server, not a model gateway,
-and not a general runner for arbitrary harnesses. The one runner here,
-`scripts/stage2.py`, starts foreign models for specific phases; it does not
-orchestrate the workflow.
+not a general runner for arbitrary harnesses, and not a ready-to-install
+product for every repository. The one runner here, `scripts/stage2.py`, starts
+foreign models for specific phases; it does not orchestrate the workflow.
 
-Everything in between — the research, your answers, the agent's own choices,
-the contract, the review findings and where the next session resumes — is
-written to versioned files in the repository. Most agent workflows keep that
-state in the conversation; Monotrope keeps it in the repository, so the next
-session, model or person can pick it up.
+Almost everything in between — research, answers, choices, contract, findings
+and the next session's starting point — is written to versioned files. The
+review loop's working rows are the exception: they stay outside until phase 6.
+Most agent workflows keep that state in the conversation; Monotrope keeps it in
+the repository.
 
-Markdown and YAML in git, a small Python toolchain, and a tracker that travels
-in the repository's git refs. One instruction file (`AGENTS.md`) is the only
-instruction entry; Claude Code and Codex read it today. The files are designed
-to outlive the harness (the agent program), so a change can be finished in
-another session by a different model; the full orchestration path is Claude
-Code for now.
+Markdown and YAML in git, a small Python toolchain, a tracker in the
+repository's git refs, and one instruction entry (`AGENTS.md`) that Claude Code
+and Codex read. The files outlive the harness, so another session or model can
+finish a change; Claude Code is the full orchestration path for now.
 
 > **Status:** early and moving fast. [What works today](#what-works-today)
 > separates what a tool enforces from what is a written rule and from what is
@@ -42,33 +40,15 @@ Code for now.
 > Noncommercial use is free; commercial use needs a separate written license.
 > See [License](#license).
 
-## The problem it answers
+## The problems, and what Monotrope does
 
-What goes wrong when agents do the work:
-
-- **The chat is the state.** A session ends and the context goes with it. The
-  next session starts from scratch, or from a summary nobody can check.
-- **Context dies with the harness.** A state kept inside one agent program
-  dies with it; another harness cannot pick it up.
-- **The decisions are invisible.** The agent chose a format, a name, an
-  order — and nobody wrote down why, so nobody can review it afterwards.
-- **Nothing stops a red tree.** Tests run at the end, if at all, and a defect
-  ships behind a green summary.
-- **One reviewer has one blind spot.** A model reviewing its own work, or the
-  only model in the loop, cannot see what it is systematically missing. Models
-  from one vendor can share a way of being wrong.
-- **Parallel work overwrites itself.** Two sessions in one checkout, or two
-  writers in one tracker, can lose each other's work without either noticing.
-- **A foreign model can see too much.** Sending work to another vendor risks
-  exposing data that vendor must not see.
-
-Monotrope turns each of them into files, roles and checks.
-
-## What Monotrope does about it
+Seven failures show up when agents do the work without a process around them.
+The table maps each to the mechanism that answers it, and to where that
+mechanism lives.
 
 | Failure | The mechanism | Where to see it |
 | --- | --- | --- |
-| The chat is the state | Every phase leaves its result as a file; a session ends with a dated handover, and the next session reads the files instead of a summary | `plans/changes/<name>/`, `docs/journal/handover/` |
+| The chat is the state | Steps leave their results as files; a session ends with a dated handover, and the next session reads the files instead of a summary | `plans/changes/<name>/`, `docs/journal/handover/` |
 | Context dies with the harness | Files outlive the tool; one instruction entry; models are assigned per phase and per job | `AGENTS.md`, `plans/`, `docs/adr/` |
 | Decisions are invisible | Open points are classified; every answer records who decided and when; a decision takes effect when its pull request is merged | `plans/changes/<name>/decisions.md`, `plans/changes/<name>/spec.md`, `decisions/answers/<change>/adr.yaml`, `provenance.yaml`, `docs/adr/` |
 | A red tree ships | One gate list drives the local run and CI; every gate is block, report or advisory; a repair's test must fail before the repair | `decisions/gates.yaml`, `scripts/verify_all.sh`, `scripts/stage2.py` |
@@ -84,13 +64,12 @@ in parallel. Both follow the process overview below.
 
 ## How a change runs
 
-A change runs through seven phases, with optional steps. Each phase leaves its
-result in the repository, and the next phase reads that instead of a chat. The
-review loop is the exception: its working rows stay outside the repository
-until the phase-6 verdict.
+A change runs through seven core phases, plus the optional steps the table
+lists. Almost every step leaves its result in the repository, and the next step
+reads that instead of a chat.
 
-The highlighted moments are yours; everything else is done by agents and
-checked by machines.
+Your moments are highlighted; the rest is done by agents and checked by
+machines.
 
 <p align="center">
   <img src="docs/assets/readme-how-a-change-runs.png"
@@ -98,14 +77,15 @@ checked by machines.
        width="100%">
 </p>
 
-The diagram shows who acts in each lane; the table below lists every phase
-and what it leaves behind.
+The table lists every step and what it leaves behind.
 
 | # | Phase | What it leaves | The question it answers |
 | --- | --- | --- | --- |
 | 1 | Explore | `research.md` | What is the situation? |
 | 1a | Interview | `decisions.md` | What must a person decide? |
 | 2 | Spec | `spec.md` | What exactly should change? |
+| 2a | Spec review (optional) | rows in `findings.md` | Does the spec hold up? |
+| 2b | Design (by class) | `design.md` | How is it built? |
 | 3 | Plan | `plan.md` | In which steps, and when is it done? |
 | 4 | Implement | code and tests | Does it work? |
 | 4b | Review loop (when it runs) | a loop record outside the repository; rows enter `findings.md` after the phase-6 verdict | Does the change survive the swarms? |
@@ -113,11 +93,9 @@ and what it leaves behind.
 | 6 | Review | `findings.md` | Does it match the spec? |
 | 7 | Commit | a pull request | Does CI agree? |
 
-A spec review (2a), a design (2b) and the review loop between implementing and
-verifying (4b) join when a change needs them. The review loop is the subject
-of [the next section](#the-swarms). A session that ends leaves a dated
-handover file: the objective, the evidence, what is open, and the one action
-to resume with.
+The interview (1a), spec review (2a), design (2b) and review loop (4b) join
+when a change needs them. A session that ends leaves a dated handover file:
+the objective, the evidence, what is open, and the one action to resume with.
 
 What a change asks of you is short:
 
@@ -127,18 +105,23 @@ What a change asks of you is short:
    limit, what is left out. The work starts unless you say stop.
 4. **Merge the pull request.**
 
-Models are assigned per phase and per job: one drafts, another reviews, a
-third implements. The session that fixes a finding is never the one that
-judges the fix.
+One finding looks like this, shortened from the
+[archived example](plans/changes/archive/2026-09-29-frontmatter-current/findings.md):
+
+| ID | Severity | Dimension | Where | Finding |
+| --- | --- | --- | --- | --- |
+| F-1 | MAJOR | MAINT | `docs/adr/0001-early-parallelism.md` | The header says `status: accepted`; the body records the ADR as superseded. |
+
+Models are assigned per phase: one drafts, another reviews, a third
+implements.
 
 ## The swarms
 
-A **swarm** is several models reviewing the same change at the same time, each
-in a fresh session of its own. It exists because a reviewer's blind spot is
-invisible to that reviewer, and because models from one vendor can share a way
-of being wrong. The review loop adds models from other vendors and higher-cost
-models only while no clean round has been reached: cheap rounds run first, the
-expensive ones only when a round is not clean.
+A **swarm** is several models reviewing the same change at once, each in a
+fresh session. It exists because a reviewer cannot see its own blind spot, and
+because models from one vendor can share a failure mode. The loop adds models
+from other vendors and higher-cost models only while no clean round has been
+reached: cheap rounds first, expensive ones only when a round is not clean.
 
 All loop calls go through one operator, OpenCode Go. The models come from
 several vendors, but the data recipient is the same.
@@ -149,80 +132,55 @@ The loop runs after implementation and before the final review. One call runs
 one round; the orchestrator calls it again until a round is clean or a stop is
 reached.
 
-| Stage | Who reviews | How | What it sees |
+| Review stage | Who reviews | How | What it sees |
 | --- | --- | --- | --- |
-| 1 — free swarm | every reachable model the `free_stage` rule selects from a forced live refresh of the OpenCode Go catalog | in parallel | source and test hunks only, no tool access |
-| 2 — Flash swarm | up to three of the cheapest reachable paid models whose terms admit the work | in parallel | the full change diff, read-only tools |
-| 3 and later — the ladder | one eligible paid model per round, cheapest first by its declared request allowance (more requests per five hours means cheaper) | one at a time | the full change diff, read-only tools |
+| 1 — free swarm | every reachable free model the `free_stage` rule selects from a live catalog refresh | in parallel | source and test hunks only, no tool access |
+| 2 — Flash swarm | up to three of the cheapest reachable paid models whose data terms allow the work | in parallel | the full change diff, read-only tools |
+| 3 and later — the ladder | one eligible paid model per round, cheapest first by its declared request allowance | one at a time | the full change diff, read-only tools |
 
-A stage that is skipped — the free stage on a change without source or test
-hunks — does not use a round number; the next stage becomes round 1. A legacy
-declaration without the availability rule uses its hand-kept `flash_swarm`
-list instead.
+A skipped review stage — the free stage on a change without source or test
+hunks — does not use a round number. Pi, the pinned agent program, carries the
+calls; the ladder is ordered by declared cost, and a failed Flash member is
+replaced by the cheapest unused rung. A round is **clean** when every row is
+decided and none is accepted.
 
-Pi, the pinned agent program, carries the calls. The ladder is read from the
-`modelle` set of the `opencode-go` entry in `model-endpoints.yaml`; a failed
-Flash member is replaced by the cheapest unused one. A round is **clean** when
-every row is decided and none is accepted.
+The loop stops at a clean round, when the ladder is exhausted, or after two
+consecutive rounds accepted only findings that earlier repairs introduced. The
+last is a brake: a person decides. A spent ladder is not refilled.
 
-The loop stops at a clean round, when the paid ladder is exhausted, or after
-two consecutive rounds accepted only findings that earlier repairs introduced.
-The last case is a brake: a person decides how to go on. A run that has
-consumed every stage without a clean round stops and reports; a spent ladder
-is not refilled with another model.
+**What a round sees.** The free round sees bounded source and test hunks
+against the merge base with `origin/main`; the paid rounds see the whole change
+diff. Both include uncommitted changes, and the runner adds untracked files. A
+cut diff is recorded and cannot count as clean; the exact bounds are in
+[how it works](docs/how-it-works.md#runner-details).
 
-**What a round sees.** The free round sees only bounded hunks of source and
-test code against the merge base with `origin/main`. The paid rounds see the
-whole change diff, documentation included. Both include uncommitted changes,
-and the runner adds untracked files. A prompt carries at most 2,000 diff
-lines; a cut at that total is recorded, and such a round does not count as
-clean. The free round also bounds each file at 400 lines; that per-file cut is
-not recorded as a cut round. A change without source or test hunks skips the
-free stage.
-
-**Before a fresh availability-enabled run**, `prepare-loop` probes the admitted
-candidates with static input and no tools and reports which are reachable,
-failed or skipped. This probe is the one exception to "cheap first": it calls
-every admitted candidate at least once, including the expensive end; a probe
-that only ran out of time is retried once with a longer limit. It is not a
-review round. Its receipt is bound to the worktree, the configuration and the
-diff and expires after 900 seconds.
+`prepare-loop` probes the admitted candidates at least once, with static input
+and no tools, and issues a short-lived receipt. A probe is a call per
+candidate, including the expensive end, not a review round; the details are in
+[how it works](docs/how-it-works.md#runner-details).
 
 **The guardrails.**
 
-- All calls to another vendor go through one runner. It checks the endpoint
-  against `model-endpoints.yaml` and runs a leak check before every call; a
-  leak stops the call, with no silent fallback to another model.
-- Free models are admitted for the diff-only review under retention and
-  training terms that have not been read; they see only the bounded diff and
-  have no tools. A paid model needs a dated terms reading before it is
-  admitted.
-- A finding is acted on only when a test demonstrates it or the spec supports
-  it. When two reviewers disagree, both views stay in the table, and the
-  disagreement blocks like a defect.
-- Each round is a fresh, read-only session. The session that repairs a finding
-  never reviews the repair; a fresh session shares no history with it. The
-  final review is a read-only Codex session — the first verdict may resume the
-  recorded spec-review thread, and a re-check after an earlier phase-6 verdict
-  starts fresh. It writes its verdict before it reads any loop row.
-- The paid rounds get read-only tools. That read boundary is a prompt today,
-  not a sandbox — an accepted limit, not a guarantee.
+- All calls go through one runner: endpoint allowlist, a leak check before
+  every call, no fallback. Free models run under unread terms, diff-only and
+  without tools; a paid model needs a dated terms reading.
+- A finding needs a test or the spec; a disagreement blocks like a defect.
+- Reviewer and repairer are separate sessions. The final review may resume the
+  recorded 2a thread, a re-check starts fresh, and its verdict comes before any
+  loop row.
+- Paid rounds get read-only tools; that boundary is a prompt, not a sandbox.
 
 ### The research swarm
 
-Phase 1 would run three independent researchers — one on the existing system,
-one on outside practice, one on how the change fits the rest — then one round
-of critique and a fresh judge. The result becomes `research.md`. The proposal
-is a draft in
-[`docs/research/2026-10-08-explore-swarm-proposal.md`](docs/research/2026-10-08-explore-swarm-proposal.md),
-not built.
+Phase 1 would run three independent researchers — the existing system, outside
+practice, and integration — then one critique round and a fresh judge. The
+result becomes `research.md`; the proposal is a draft, not built.
 
 ### What the swarms do not prove
 
-The loop is a mechanism, not a measured claim. A reviewer cannot see its own
-blind spot, but whether a second vendor finds more errors than one has not
-been measured yet. The loop's value is the structure — fresh sessions, several
-error profiles, evidence for every row — not a demonstrated error rate.
+The loop is a mechanism, not a measured claim: whether a second vendor finds
+more errors than one has not been measured. Its value is the structure — fresh
+sessions, several error profiles, evidence for every row.
 
 ## Working in parallel
 
@@ -234,12 +192,11 @@ silently. The workflow makes the boundaries explicit:
    fetched `origin/main`, lives under `.claude/worktrees/<name>`, and is
    removed after the merge. Nobody switches the branch of the main checkout
    while another session is running.
-2. **One tracker writer.** While more than one session writes in a repository,
-   the first-started writing session owns the tracker: it hands out beads,
-   reprioritises, links and closes. Every other writing session writes exactly
-   two things — the claim of the one bead it works on
+2. **One tracker writer.** While more than one session writes, the first-started
+   writing session owns the tracker: it hands out, reprioritises, links and
+   closes beads. Every other writing session writes only its claim
    (`tools/bd update <id> --claim --actor <session>`) and its handover comment
-   on that bead. The default limit is two writing sessions per repository.
+   on that bead. At most two writing sessions run by default.
 3. **A clash warning before the first edit.** In this repository's Claude Code
    setup, a hook scans the live sessions at start, and again on a prompt when
    the set of clashing sessions changed, and names any that share the
@@ -249,16 +206,16 @@ silently. The workflow makes the boundaries explicit:
    handover file; the next session starts from it. Sessions working in
    parallel read each other's committed state, not a live conversation.
 5. **The tracker travels safely.** The tracker is a Dolt database under
-   `.beads/`, transported via `refs/dolt/data`. `tools/bd` finds the main
-   checkout's tracker from any worktree, and concurrent claims have exactly
-   one winner (measured 2026-09-23 with bd 1.3.0). The push order is tracker
-   first, git second: CI renders the gate from the tracker, so a git push that
-   outruns it goes red on exactly that gap.
+   `.beads/`, transported via `refs/dolt/data`. `tools/bd` finds it from any
+   worktree; concurrent claims have one winner (measured 2026-09-23 with bd
+   1.3.0). Push tracker first, git second: CI renders the gate from the
+   tracker, so a git push that outruns it goes red.
 
 What is not enforced: the one-writer rule is a working agreement until the
 write guard exists; worktrees share git's refs, hooks and configuration, so
 isolation separates files, not execution; and orchestrating many agents in
-parallel is evaluated, not built (stage 3).
+parallel is evaluated, not built (the third development stage:
+orchestration).
 
 ## Not every change is the same size
 
@@ -285,9 +242,9 @@ Every decision is a file, and each kind has one place:
 
 | Decision | Where it is recorded |
 | --- | --- |
-| Your answers in a change's interview — the `[DECISION]` points | `plans/changes/<name>/decisions.md`, in your words where you gave them, with the date and the question asked |
-| The agent's own choices — the `[DETAIL]` points — and departures from the plan | marked lines with their reason in the same change's `spec.md`, `design.md` or `plan.md` |
-| Your answer to "does this change need an architecture decision record?" | `decisions/answers/<change>/adr.yaml`: the answer, the reason, the proposal you were shown, who answered and when; a gate checks it |
+| Your answers in a change's interview — the `[DECISION]` points | `plans/changes/<name>/decisions.md`: your words where you gave them, with the date and the question |
+| The agent's own choices — the `[DETAIL]` points — and departures from the plan | marked lines with their reason in the change's `spec.md`, `design.md` or `plan.md` |
+| Your answer to "does this change need an architecture decision record?" | `decisions/answers/<change>/adr.yaml`: answer, reason, the proposal shown, who answered and when; a gate checks it |
 | Architecture decisions | `docs/adr/`; a record takes effect when its pull request is merged |
 
 Open points come in three kinds:
@@ -298,69 +255,25 @@ Open points come in three kinds:
 | `[GAP]` | the agent | a missing fact; the agent looks it up and does not ask |
 | `[DETAIL]` | the agent | a name, an order, a format; the agent decides and writes down why |
 
-Which files only a person may change is declared in `provenance.yaml`; a pull
-request that touches one is a decision pull request. A finished change leaves
-its lasting parts in `plans/specs/` or `docs/adr/`; the rest is archived under
-`plans/changes/archive/` with its decisions. Session handovers repeat the
-decisions of a session, but they are a summary, not the record.
+`provenance.yaml` declares which files only a person may change; touching one
+makes a decision pull request. A finished change leaves its lasting parts in
+`plans/specs/` or `docs/adr/`; the rest is archived with its decisions.
+Handovers summarize a session; they are not the record.
 
 ## Design rules
 
-- **Files, because a change must outlive the session, the machine and the
-  harness.** A state kept inside a tool dies with the tool.
-- **It travels.** The mechanism moves to another repository as a kit; a probe
-  copies it into a throwaway tree and runs its tests there, so the workflow is
-  proven outside its home.
-- **One list, because two lists drift.** 22 gates live in one file
-  (`decisions/gates.yaml`); 18 block, 3 report, 1 advises (as of 2026-10-22).
-  The gate file drives the local runner and the CI generator, and a gate holds
-  the generated workflow to it byte for byte. One instruction file
-  (`AGENTS.md`) plays the same role for the agents; a test fails if a
-  harness-specific file would silently replace it.
-- **A merge, because a decision that lives in a chat is not a decision.** A
-  rule or a person-reserved file changes when its pull request is merged, not
-  when someone typed "yes".
-- **Appetite, not estimates.** A plan card names a time limit as a stop, and a
-  pre-mortem: "suppose it failed — most likely because …".
-- **Evidence over summaries.** You judge a change by its tests, its findings
-  table and green checks, not by an agent's account of itself. A repair of
-  code counts only when its test fails on the code before the repair; a
-  finding that the spec supports but no test can show is marked as such and
-  re-checked.
-- **Numbers carry their cut-off.** Every count names its commit or date, and
-  what could not be read is written as "not read", never as "none".
-- **Block, report or advisory, because a gate whose red means nothing is
-  noise.** Every gate says which of the three it is, so a red run always means
-  something specific.
-- **Built for focus.** Every question comes with its context: the topic, why it
-  comes up now, how things stand today, and what would change. Every session
-  opens with where things stand, the next step and what is needed from you.
-  Messages lead with the result and ask one question at a time.
+Files, because a change must outlive the tool; one list, because two drift; a
+merge, because a decision in a chat is not a decision; evidence over
+summaries. The full set, with the gate count and the focus rules, is in
+[how it works](docs/how-it-works.md#design-rules).
 
-## How testing works, and what it does not prove
+## How it is checked
 
-**One command, the same checks as CI.** `make verify` runs
-`scripts/verify_all.sh`, which holds no commands of its own: it reads the gate
-list in `decisions/gates.yaml`, the same list the CI workflow is generated
-from. The pytest suite is one of those gates and runs in parallel
-(`pytest -n auto`). The others check lint, the kit's classified tree,
-documents and process rules.
-
-**A locked environment.** Each checkout builds its own `.venv` with
-`make venv` from `requirements-ci.txt`, where every package is pinned with its
-hash. Results then depend on the lock, not on what happens to be installed on
-a machine, and a local green means what a CI green means.
-
-**Red first.** A repair of code counts only when its test fails on the code
-before the repair; the runner checks this itself. A test that would have passed
-anyway proves nothing, and models readily write such tests.
-
-**What the numbers say, and what they do not.** On 2026-10-20 at `5c7db34`,
-`tests/` held 2306 tests in 40 files: about 29,800 lines of test code against
-about 13,900 lines in `scripts/`. That count measures how much is checked, not
-how well. How many injected faults the tests catch has not been measured yet;
-a mutation-testing run on one or two scripts is planned (bead
-coding-harness-bvy).
+`make verify` runs the same gate list as CI: tests, lint, the kit's classified
+tree, documents and process rules. The environment is locked, and a repair
+counts only when its test fails on the code before the repair. The exact
+mechanics and the test count, with what it does not prove, are in
+[how it works](docs/how-it-works.md#how-testing-works-and-what-it-does-not-prove).
 
 ## What works today
 
@@ -369,48 +282,36 @@ Checked on 2026-10-22 against `main` at `72935a6`.
 ### Enforced by tooling
 
 - `make verify` and CI run the gate list: tests, lint and the process checks
-  above. Every gate declares whether it blocks, reports or advises.
-- The stage-2 runner (`scripts/stage2.py`) checks the endpoint and runs the
-  leak check before every call to another vendor. Exploring, drafting,
+  above. Every gate declares whether it blocks, reports or is advisory.
+- The foreign-model runner (`scripts/stage2.py`) checks the endpoint and runs
+  the leak check before every call to another vendor. Exploring, drafting,
   implementing, repairing and reviewing by other models all go through it.
 - The review loop runs until a round is clean or a named stop (ADR 0021), with
   the availability probe and its receipt before a fresh run.
 
 ### Written rules agents follow, not enforced by a tool
 
-- The three kinds of open points, the plan card as a contract, the
-  communication form (a gate checks that the context is there, not its
-  wording), and one writer per tracker until the write guard exists.
+- The three kinds of open points.
+- The plan card as a contract.
+- The communication form: a gate checks that the context is there, not how it
+  is worded.
+- One writer per tracker, until the write guard exists.
 
 ### Not built yet
 
-- The artefact validator, the stop hook that blocks a session end on a red
-  tree, the slash commands, the `make change` target (the script
-  `scripts/new_change.py` exists; the target does not) and the gate catalogue
-  that the doctrine names. Where the doctrine describes them, it describes
-  the target.
-- The research swarm for larger changes: a draft proposal in
-  [`docs/research/2026-10-08-explore-swarm-proposal.md`](docs/research/2026-10-08-explore-swarm-proposal.md),
-  not built.
-- Keeping the work of a failed model call: partly built. `scripts/stage2.py`
-  saves failed implement and draft attempts; the rest is in progress.
-- A sandbox around paid reviewers: the read boundary is a prompt today, not a
-  mechanism (bead coding-harness-8df).
+- A validator for the change files, a stop hook that blocks a session end on a
+  red tree, slash commands, a `make change` shortcut (the script
+  `scripts/new_change.py` exists; the target does not), and a catalogue of
+  every gate: described in the doctrine, not built.
+- The research swarm for larger changes (a draft proposal), a sandbox around
+  paid reviewers, and keeping the work of a failed model call (partly built).
 - Orchestration of many agents in parallel: evaluated, not built.
 
-## Follow one completed change
+## See a completed change
 
-The change "frontmatter-current" (archived 2026-09-29) shows each step with
-real files:
-
-| Question | Where to see it |
-| --- | --- |
-| What was the task? | A document's header said when it was last *reviewed*, not when its content last changed — and nothing failed on a stale one. [`research.md`](plans/changes/archive/2026-09-29-frontmatter-current/research.md) |
-| What did a person decide? | In the maintainer's words: "The frontmatter headers in the files must always be maintained and current. This must be a basic mechanism." [`decisions.md`](plans/changes/archive/2026-09-29-frontmatter-current/decisions.md) |
-| What did the agent decide itself? | Mechanics, each marked `[DETAIL]` with its reason — for example which of the two key lists owns the held prefixes. [`spec.md`](plans/changes/archive/2026-09-29-frontmatter-current/spec.md) |
-| What was the contract? | The plan card: written for one option of a `[DECISION]`, with the one step the other option would change. [`plan.md`](plans/changes/archive/2026-09-29-frontmatter-current/plan.md) |
-| Which check found a defect? | Review finding F-1 (MAJOR): the ADR headers said `status: accepted` where the body recorded the ADR as superseded — a reader of the header alone would believe ADR 0001 is in force. The row reads `fixed in 0f4101f`. [`findings.md`](plans/changes/archive/2026-09-29-frontmatter-current/findings.md) |
-| What evidence stood at the merge? | The findings table with every row decided, and green CI — and the gate that came out of it, `frontmatter-current`, still runs on every pull request. |
+The archived "frontmatter-current" change shows every step with real files —
+research, decisions, spec, plan, a finding and its fix. The table is in
+[how it works](docs/how-it-works.md#follow-one-completed-change).
 
 ## Try it
 
@@ -428,9 +329,11 @@ make verify                # all gates
 tools/bd ready             # open, unblocked work
 ```
 
-These commands run this repository itself. A step-by-step onboarding page for
-other repositories is still being built; until then,
-[`docs/WORKFLOW.md`](docs/WORKFLOW.md) is the reference.
+These commands run this repository itself. There is no one-line install for
+another repository yet: the mechanism travels as a kit, and a probe copies it
+into a throwaway tree and runs its tests there, but the step-by-step onboarding
+page is still being built. Until then, [`docs/WORKFLOW.md`](docs/WORKFLOW.md)
+is the reference.
 
 To start a change, create its bead (the tracker item) first, then
 `python3 scripts/new_change.py <name> --bead <id>`, and read
@@ -442,6 +345,8 @@ To start a change, create its bead (the tracker item) first, then
   which job, the change and data classes, and the swarms.
 - [The doctrine](docs/WORKFLOW.md): every rule, gate and route in full.
 - [Architecture decisions](docs/adr/): why it is built this way.
+- [Research swarm proposal](docs/research/2026-10-08-explore-swarm-proposal.md):
+  the draft that is not built yet.
 - [Session handovers](docs/journal/handover/): what each session left for the
   next one.
 - [`model-endpoints.yaml`](model-endpoints.yaml): which model may see which
