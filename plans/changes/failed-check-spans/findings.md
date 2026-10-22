@@ -102,7 +102,23 @@ Stage-2 call, 2026-10-22: review · endpoint openai-codex · model gpt-6.1-sol �
 
 | ID | Severity | Dimension | Origin | Where | Finding | Reviewer | Status | Broke a test |
 |---|---|---|---|---|---|---|---|---|
-| F-2 | MAJOR | SPEC | implementation | scripts/stage2.py:612 | A zero-length blocking match immediately after the routing credential is incorrectly exempted as inside that credential. Reproduced with key `ROUTEKEY-987654321`, diagnostic `ROUTEKEY-987654321CLIENT-123`, and rules `blocked = (?=CLIENT-[0-9]+)` and `secret:value = CLIENT-[0-9]+`: protection returns `[credential][secret:value]`; before this change it refused. The inclusive containment check suppresses the match at the credential's end, allowing secret redaction to hide a blocking condition concerning the following text. This boundary case remains after the F-1 repair. [Acceptance criterion 4; failed-check-secrets criterion 5] | Codex | taken — a test that a zero-length blocking match right after the routing key still refuses | — |
+| F-2 | MAJOR | SPEC | implementation | scripts/stage2.py:612 | A zero-length blocking match immediately after the routing credential is incorrectly exempted as inside that credential. Reproduced with key `ROUTEKEY-987654321`, diagnostic `ROUTEKEY-987654321CLIENT-123`, and rules `blocked = (?=CLIENT-[0-9]+)` and `secret:value = CLIENT-[0-9]+`: protection returns `[credential][secret:value]`; before this change it refused. The inclusive containment check suppresses the match at the credential's end, allowing secret redaction to hide a blocking condition concerning the following text. This boundary case remains after the F-1 repair. [Acceptance criterion 4; failed-check-secrets criterion 5] | Codex | fixed — tests/test_stage2.py::test_a_zero_length_nonsecret_match_after_the_credential_still_refuses | — |
 
 Phase 6 verdict: codex 01a1656d-5b77-7f02-b6f5-d23f2188f7ba, 2026-10-22
 Reviewer session: codex 01a1656d-5b77-7f02-b6f5-d23f2188f7ba — a fresh session reviewed: an earlier ## Phase 6 block makes this a re-check
+
+Stage-2 call, 2026-10-22: repair · attempt 1 · route codex · endpoint openai-codex · model gpt-6.1-sol · leak check clean over 525 files, 1879 commits, 12 rules.
+
+> Attempt 1 (codex) failed its post-run checks.
+>
+> Files the attempt changed (lines added, removed):
+> - `scripts/stage2.py` +3 -1
+> - `tests/test_stage2.py` +11 -0
+>
+> Diagnostics:
+> ```text
+> - Runner format before `make verify`: ruff changed no file.
+> - F-2: tests/test_stage2.py::test_a_zero_length_nonsecret_match_after_the_credential_still_refuses: the call of `tests/test_stage2.py::test_a_zero_length_nonsecret_match_after_the_credential_still_refuses` failed with Failed, not an AssertionError
+> ```
+
+Stage-2 call, 2026-10-22: repair · attempt 2 · route codex-repair · endpoint openai-codex · model gpt-6.1-sol · reason first Codex post-run check failed · leak check clean over 525 files, 1879 commits, 12 rules.

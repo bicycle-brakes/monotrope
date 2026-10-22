@@ -611,7 +611,9 @@ def _rule_spans(
                 break
             if include_empty or match.end() > match.start():
                 start, end = offset + match.start(), offset + match.end()
-                if not any(left <= start and end <= right for left, right in credentials):
+                # Credential spans are half-open: an empty match at the end belongs to
+                # the following text, so it must still trigger a blocking rule.
+                if not any(left <= start < right and end <= right for left, right in credentials):
                     found.append((start, end))
             position = match.start() + 1
     return found

@@ -59,3 +59,5 @@ Phase 1 to the production commit, by the orchestrated night session itself
 start and end read from `date` (Europe/Berlin).
 2026-10-22 20:47:19–20:57:29 UTC, 610 s — repair · attempt 1 · route codex · model gpt-6.1-sol · rejected · measured by the runner
 2026-10-22 20:57:35–21:03:11 UTC, 336 s — repair · attempt 2 · route codex-repair · model gpt-6.1-sol · accepted · measured by the runner
+2026-10-22 21:05:28–21:19:41 UTC, 853 s — repair · attempt 1 · route codex · model gpt-6.1-sol · rejected · measured by the runner
+2026-10-22 21:19:47–21:30:30 UTC, 643 s — repair · attempt 2 · route codex-repair · model gpt-6.1-sol · accepted · measured by the runner
