@@ -158,7 +158,10 @@ tools/bd dolt push          # push tracker data to origin (refs/dolt/data)
   still house rule 4, and a worker claims with `--actor <session>`. Each new
   checkout or worktree runs `make venv` once before `make verify` (`PYTHON=` picks a 3.12+
   interpreter); the suite fails under one that does not match the lock
-  (bead coding-harness-ei0).
+  (bead coding-harness-ei0). It also runs `bash tools/pi/install.sh` once:
+  the Pi contract tests refuse without the pinned Pi, and the stage-2 swarms
+  use the Pi of the checkout they start from (2026-10-22; one setup command,
+  bead coding-harness-hs0o).
 - **A text-only change (Markdown outside `scripts/`, `tests/`, `prompts/`,
   `decisions/`) skips the local `make verify`;** CI is its gate.
 - **Omnigent starts inside the worktree** (`omnigent claude
