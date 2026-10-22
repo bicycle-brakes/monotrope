@@ -57,6 +57,13 @@ for this night only and grants nothing beyond it. Task state stays in Beads.
 | 6 | Restore follows a symlinked parent | coding-harness-10w | a restore path that resolves outside the worktree is refused: nothing written, path named, run ends without fallback | new worktree from `origin/main` |
 | 7 | Reviewer text read as loop state | coding-harness-i70 | the runner writes its state into a marked block of its own and reads state only there | new worktree from `origin/main` |
 
+Position 8, only if time and budget remain after item 7: review-loop rows
+without a closing pipe are rejected as malformed (coding-harness-2i9j, class
+bounded; decided direction in the bead: keep the scrubbed raw answer, name
+the first unrecognised line, accept six cells with a severity in cell 2
+without the closing pipe). The cap of seven stays: item 8 starts only after
+item 7 is finished or set aside.
+
 Not tonight: coding-harness-5mx, coding-harness-0c8, coding-harness-751,
 coding-harness-hs0o, and coding-harness-04xk (an ADR 0018 change that owes
 its own research and five interview answers).
