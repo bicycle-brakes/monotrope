@@ -7499,6 +7499,46 @@ def test_runner_retry_replaces_parent_alias_without_following(
     assert "rejected" in first and "accepted" in second
 
 
+@pytest.mark.parametrize("final_attempt", [False, True])
+@pytest.mark.parametrize("parent_levels", [0, 2])
+def test_runner_restores_deleted_change_directory_before_logging(
+    world: World, monkeypatch: pytest.MonkeyPatch, final_attempt: bool, parent_levels: int
+) -> None:
+    """F-5: a missing parent must recover before rejection diagnostics and measurement."""
+    FakeClock(monkeypatch, UTC_START)
+    original_spec = world.plan.with_name("spec.md").read_bytes()
+    real_model = stage2.run_work_model
+
+    def model(*args, **kwargs):
+        answer = real_model(*args, **kwargs)
+        if len(world.calls("claude")) == 1:
+            shutil.rmtree(world.plan.parent.parents[parent_levels - 1] if parent_levels else world.plan.parent)
+        else:
+            assert world.plan.with_name("spec.md").read_bytes() == original_spec
+            (entry,) = runner_entries(world.plan)
+            assert "attempt 1 ·" in entry and "rejected" in entry
+            assert "Attempt 1" in world.plan.with_name("findings.md").read_text()
+        return answer
+
+    monkeypatch.setattr(stage2, "run_work_model", model)
+    world.script(claude=[{"stdout": "one"}, {"stdout": "two"}], make=[{"stdout": "green\n"}] * 2)
+    try:
+        if final_attempt:
+            monkeypatch.setattr(stage2, "checkpoint", lambda *_a, **_kw: pytest.fail("rejected attempt checkpointed"))
+            assert world.run("implement", "demo", "--stage2-off", "offline test") == 1
+        else:
+            assert world.run("implement") == 0
+    except FileNotFoundError as error:
+        raise AssertionError("deleted change inputs were not restored before diagnostics and time logging") from error
+    entries = runner_entries(world.plan)
+    assert len(entries) == (1 if final_attempt else 2)
+    assert "attempt 1 ·" in entries[0] and "rejected" in entries[0]
+    if not final_attempt:
+        assert "attempt 2 ·" in entries[1] and "accepted" in entries[1]
+    assert world.plan.with_name("spec.md").read_bytes() == original_spec
+    assert "Attempt 1" in world.plan.with_name("findings.md").read_text()
+
+
 def test_runner_time_entry_identifies_attempt_and_midnight_span(world: World, monkeypatch: pytest.MonkeyPatch) -> None:
     """Criterion 4. Planted fault: a missing field, or the span taken from the wall clock instead of the monotonic one."""
     start = dt.datetime(2026, 10, 20, 23, 59, 30, tzinfo=dt.UTC)

@@ -142,3 +142,5 @@ input-restore tests compare the plan without the runner's own time lines
 attempt's span stays not measured, as recorded above.
 2026-10-22 00:30:30–00:44:07 UTC, 817 s — repair · attempt 1 · route codex · model gpt-6.1-sol · accepted · measured by the runner
 2026-10-22 00:47:12–00:55:42 UTC, 509 s — repair · attempt 1 · route codex · model gpt-6.1-sol · accepted · measured by the runner
+2026-10-22 08:00:10–08:15:12 UTC, 901 s — repair · attempt 1 · route codex · model gpt-6.1-sol · rejected · measured by the runner
+2026-10-22 08:15:17–08:37:35 UTC, 1337 s — repair · attempt 2 · route codex-repair · model gpt-6.1-sol · accepted · measured by the runner

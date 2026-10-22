@@ -4646,9 +4646,9 @@ def run_attempts(
             aliased_parent = ctx.plan.parent.resolve() != root.resolve() / ctx.plan.relative_to(root).parent
         except (OSError, RuntimeError):
             aliased_parent = True
-        if aliased_parent:
-            # Detach the alias itself, never a document in its target. Restore the snapshotted
-            # inputs and audit before any logging or retry can write through that parent.
+        if aliased_parent or not ctx.plan.parent.is_dir():
+            # Detach an alias itself, never a document in its target; recreate missing parents too.
+            # Restore the snapshotted inputs and audit before diagnostics, logging or retry writes.
             for path, content in {**inputs_before, ctx.findings: findings_before}.items():
                 restore_work_input(root, path, content)
         if not problems and answer_check is not None:
