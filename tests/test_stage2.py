@@ -2681,6 +2681,56 @@ def test_secret_rule_overlapping_a_credential_protects_the_original_span() -> No
         assert suffix not in stage2.protect_diagnostics(protected, key)
 
 
+def test_a_format_line_overlapping_the_credential_keeps_the_whole_secret_span(world: World) -> None:
+    """failed-check-spans criterion 1 (F-4 of #215). Planted fault: the format line is credential-scrubbed
+    before its secret spans are collected, so the suffix after the key survives every later protection."""
+    key = "ROUTEKEY-" + "987654321"
+    suffix = "FIXKEY-" + "123456"
+    set_denylist(DENYLIST + r"secret:pair = ROUTEKEY-[0-9]+:FIXKEY-[0-9]+" + "\n")
+    venv_ruff(world)
+    target = f"tests/{key}:{suffix}.py"
+    (world.root / "tests").mkdir(exist_ok=True)
+    (world.root / target).write_text("a=1\n", encoding="utf-8")
+    world.script(ruff=[{"plant": {target: "a = 1\n"}}, {}], make=[{"stdout": "green\n"}])
+    formatted: list[str] = []
+    stage2.verify_attempt(world.root, world.plan, key, formatted=formatted)
+    assert len(formatted) == 1
+    line = formatted[0]
+    # The same line, once more through the listing protection the runner applies before writing it.
+    for protected in (line, stage2.protect_diagnostics(f"- {line}", key)):
+        assert suffix not in protected and key not in protected
+    # The step's `not run` line names a target the same way.
+    direct = stage2._not_run(f"cannot read `{target}`", key)
+    assert suffix not in direct and key not in direct and "[secret:pair]" in direct
+
+
+@pytest.mark.usefixtures("world")
+def test_a_nonsecret_match_extending_beyond_the_credential_refuses() -> None:
+    """failed-check-spans criterion 2 (F-5 of #215). Planted fault: non-secret rules read credential-scrubbed
+    text, so a blocking match reaching past the key is redacted as `[credential][secret:pair]` instead."""
+    key = "ROUTEKEY-" + "987654321"
+    suffix = "FIXKEY-" + "123456"
+    pattern = r"ROUTEKEY-[0-9]+:FIXKEY-[0-9]+"
+    set_denylist(DENYLIST + f"secret:pair = {pattern}\nblocked = {pattern}\n")
+    with pytest.raises(stage2.Refused) as error:
+        stage2.protect_diagnostics(f"location.py:12\n{key}:{suffix}\n", key)
+    assert "'blocked'" in str(error.value) and "line 2" in str(error.value)
+    assert key not in str(error.value) and suffix not in str(error.value)
+    done = subprocess.CompletedProcess(["make"], 1, stdout=f"x\n{key}:{suffix}\n", stderr="")
+    with pytest.raises(stage2.Refused):
+        stage2.verify_evidence(done, key)
+
+
+@pytest.mark.usefixtures("world")
+def test_a_nonsecret_match_inside_the_credential_alone_does_not_refuse() -> None:
+    """failed-check-spans criterion 3. Planted fault: reading the original text, the credential itself
+    trips a non-secret rule and every diagnostic holding the key is refused."""
+    key = "ROUTEKEY-" + "987654321"
+    set_denylist(DENYLIST + "blocked = ROUTEKEY-[0-9]+\n")
+    protected = stage2.protect_diagnostics(f"location.py:12\nvalue {key}\n", key)
+    assert protected == "location.py:12\nvalue [credential]\n"
+
+
 def test_a_fixture_secret_in_a_failed_draft_check_allows_a_clean_retry(world: World) -> None:
     """Criterion 3. Planted fault: either copy keeps the value, so the real pre-call check refuses call two."""
     code, prompt = failing_run(world, "draft")
