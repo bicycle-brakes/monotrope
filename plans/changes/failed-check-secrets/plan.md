@@ -89,6 +89,9 @@ add a validator in this change; the runner owns the full verification gate.
 
 ## Criterion ledger
 
+- 1: tests/test_stage2.py::test_format_commit_message_redacts_secret_paths — a formatted exempt path leaks into the checkpoint message
+- 1: tests/test_stage2.py::test_draft_put_back_listing_redacts_secret_paths — a restored exempt path leaks into the draft findings
+
 - 1: tests/test_stage2.py::test_failed_check_diagnostics_redact_secret_rules_on_every_work_route — one verb, keyless route or destination retains the value
 - 1: tests/test_stage2.py::test_preparation_and_postcondition_diagnostics_redact_secret_rules — protection exists only for make output
 - 1: tests/test_stage2.py::test_secret_line_anchors_are_redacted_in_failed_gate_output — an anchored secret survives a later line in framed or unframed output
@@ -213,3 +216,22 @@ produced no content change. No edit was made to `findings.md`; no commit
 or repository-changing git command was run. The runner owns `make verify`
 and the checkpoint commit.
 
+
+### Repair — taken loop-round-4 findings, 2026-10-21
+
+2026-10-21 23:56:41–23:58:18 UTC, 1 min 37 s
+(measured with `date -u`). The format record is protected before it enters
+the checkpoint message. The draft put-back listing and its uncut entries
+share the same protected file evidence before quoting.
+
+Red-first evidence against repair baseline `7f47cb4`: both new regression
+tests failed by assertion because the exempt test path's synthetic secret
+survived in the checkpoint message or draft findings. Both pass after the
+repair. The focused selection in `tests/test_stage2.py` and
+`tests/test_leakcheck.py` (`-k 'diagnostic or format or put_back'`) passed
+58 tests (764 deselected); the seven directly related cases also passed.
+Ruff check and format check, interview minimums, criterion ledger and
+`git diff --check` passed. Regenerating `plans/INDEX.md` left it unchanged.
+No edit was made to `findings.md`, no commit was made and no git command
+that changes this repository was run. The runner owns full `make verify`
+and the checkpoint commit.

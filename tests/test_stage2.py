@@ -11564,3 +11564,44 @@ def test_unsuccessful_review_prose_cannot_certify_a_clean_round(world: World, pa
         world.script(pi=[{"stdout": "No finding."}] * 2)
         assert world.run("review-loop") == 0
         assert "## Round 1" in world.record().read_text()
+
+
+def test_format_commit_message_redacts_secret_paths(world: World) -> None:
+    """A formatted exempt test path must not poison checkpoint history."""
+    set_denylist(DENYLIST + FIXTURE_RULE)
+    venv_ruff(world)
+    path = f"tests/test_{FIXTURE_SECRET}.py"
+    attempt = formatted_attempt()
+    attempt["plant"] = {path: "value=1\n"}
+    world.script(
+        claude=[attempt],
+        ruff=[{}, {"plant": {path: "value = 1\n"}}],
+        make=[{"stdout": "green\n"}],
+    )
+    assert world.run("implement") == 0
+    message = git(world.root, "log", "-1", "--format=%B")
+    assert FIXTURE_SECRET not in message
+    assert f"tests/test_{FIXTURE_MARKER}.py" in message
+
+
+def test_draft_put_back_listing_redacts_secret_paths(world: World) -> None:
+    """Restored exempt test paths must be safe in the retained draft evidence."""
+    set_denylist(DENYLIST + FIXTURE_RULE)
+    draft_world(world)
+    world.script(
+        codex=[
+            codex_ok(
+                "T1",
+                "drafted",
+                plant={
+                    "plans/changes/demo/spec.md": "---\ntitle: Spec\nupdated: 2026-09-30\nbead: demo-1\n---\n\n# Spec\n",
+                    "plans/changes/demo/plan.md": PLAN_CARD,
+                    f"tests/test_{FIXTURE_SECRET}.py": "value = 1\n",
+                },
+            )
+        ],
+        make=[{"stdout": "green\n"}],
+    )
+    assert world.run("draft") == 0
+    assert FIXTURE_SECRET not in world.text()
+    assert f"tests/test_{FIXTURE_MARKER}.py" in world.text()

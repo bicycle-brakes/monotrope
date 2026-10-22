@@ -4691,7 +4691,7 @@ def run_attempts(
             files = protect_files(files, key)
             diagnostics.append(f"Attempt {attempt} ({route}):\n{listing}")
             append(ctx.findings, quote_block(attempt_block(attempt, route, listing, files), key))
-        record += [f"- Attempt {attempt} ({route}): {line}" for line in formatted]
+        record += [protect_diagnostics(f"- Attempt {attempt} ({route}): {line}", key) for line in formatted]
         if key is not None:
             # The gate runs repository code the model just edited: scan again after it.
             exposed = remove_changed_credential(root, key, ignored_before)
@@ -5040,13 +5040,14 @@ def draft(root: Path, change: str) -> None:
         keep, new_adrs = draft_keep(root, ctx, baseline)
         put = put_back(root, baseline, keep)
         if put:
-            listing = "\n".join(put_back_lines(put))
+            restored = protect_files(put_back_lines(put), key)
+            listing = "\n".join(restored)
             append(
                 ctx.findings,
                 quote_block(
                     f"Attempt {attempt} ({route}): the runner put back what a draft may not change:\n{listing}",
                     key,
-                    put_back_lines(put),
+                    restored,
                 ),
             )
         problems, owed = verify_draft(root, ctx, key, new_adrs, tools)
