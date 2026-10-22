@@ -246,3 +246,14 @@ Stage-2 call, 2026-10-22: repair · attempt 1 · route codex · endpoint openai-
 > ```
 
 Stage-2 call, 2026-10-22: repair · attempt 2 · route codex-repair · endpoint openai-codex · model gpt-6.1-sol · reason first Codex post-run check failed · leak check clean over 512 files, 1826 commits, 12 rules.
+
+Stage-2 call, 2026-10-22: review · endpoint openai-codex · model gpt-6.1-sol · leak check clean over 512 files, 1830 commits, 12 rules.
+
+## Phase 6 — Codex, 2026-10-22
+
+| ID | Severity | Dimension | Origin | Where | Finding | Reviewer | Status | Broke a test |
+|---|---|---|---|---|---|---|---|---|
+| F-6 | MAJOR | SPEC | implementation | scripts/stage2.py:4609–4616 | When a successful model call leaves the GLM credential in a changed file, the first post-call credential scan removes it and raises before time logging. This completed, rejected attempt receives no runner entry; an in-memory execution confirmed zero calls to `time_entry`. Record its rejected measurement while preserving the immediate stop without fallback. [Acceptance criterion 2] | Codex | open | — |
+
+Phase 6 verdict: codex 01a162c2-9974-7ab1-b89b-4ab92ca9bce9, 2026-10-22
+Reviewer session: codex 01a162c2-9974-7ab1-b89b-4ab92ca9bce9 — a fresh session reviewed: an earlier ## Phase 6 block makes this a re-check
