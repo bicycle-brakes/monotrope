@@ -170,6 +170,16 @@ endpunkte:
       - claude-haiku-5-5
       - minimax-m3
       - mimo-v2.6-pro
+      - deepseek-v4-pro
+      - glm-5.2
+      - glm-5.3
+      - hy3
+      - hy4-preview
+      - mimo-v2.5
+      - mimo-v2.5-pro
+      - mimo-v2.6-flash
+      - qwen3.7-plus
+      - qwen3.8-max
     modelle_terms:
       deepseek-v4.1-flash:
         gelesen: "2026-10-07"
@@ -243,6 +253,90 @@ endpunkte:
         anfragen_5h: 3200
         anfragen_gelesen: "2026-10-17"
         anfragen_quelle: "estimated requests table of the Go page, https://opencode.ai/docs/go"
+      deepseek-v4-pro:
+        gelesen: "2026-10-22"
+        quelle: "privacy table of the Go page, https://opencode.ai/docs/go"
+        aufbewahrung: "0 days (DeepSeek zero-data-retention agreement, valid through 2026-10-31)"
+        training: "Not used"
+        anfragen_5h: 1050
+        anfragen_gelesen: "2026-10-22"
+        anfragen_quelle: "estimated requests table of the Go page, https://opencode.ai/docs/go"
+      glm-5.2:
+        gelesen: "2026-10-22"
+        quelle: "privacy table of the Go page, https://opencode.ai/docs/go"
+        aufbewahrung: "0 days"
+        training: "Not used"
+        anfragen_5h: 880
+        anfragen_gelesen: "2026-10-22"
+        anfragen_quelle: "estimated requests table of the Go page, https://opencode.ai/docs/go"
+      glm-5.3:
+        gelesen: "2026-10-22"
+        quelle: "privacy table of the Go page, https://opencode.ai/docs/go"
+        aufbewahrung: "0 days"
+        training: "Not used"
+        anfragen_5h: 220
+        anfragen_gelesen: "2026-10-22"
+        anfragen_quelle: "estimated requests table of the Go page, https://opencode.ai/docs/go"
+      hy3:
+        gelesen: "2026-10-22"
+        quelle: "privacy table of the Go page, https://opencode.ai/docs/go"
+        aufbewahrung: "0 days"
+        training: "Not used"
+        anfragen_5h: 4300
+        anfragen_gelesen: "2026-10-22"
+        anfragen_quelle: "estimated requests table of the Go page, https://opencode.ai/docs/go"
+      hy4-preview:
+        gelesen: "2026-10-22"
+        quelle: "privacy table of the Go page, https://opencode.ai/docs/go"
+        aufbewahrung: "0 days"
+        training: "Not used"
+        anfragen_5h: 1350
+        anfragen_gelesen: "2026-10-22"
+        anfragen_quelle: "estimated requests table of the Go page, https://opencode.ai/docs/go"
+      mimo-v2.5:
+        gelesen: "2026-10-22"
+        quelle: "privacy table of the Go page, https://opencode.ai/docs/go"
+        aufbewahrung: "0 days"
+        training: "Not used"
+        anfragen_5h: 30100
+        anfragen_gelesen: "2026-10-22"
+        anfragen_quelle: "estimated requests table of the Go page, https://opencode.ai/docs/go"
+      mimo-v2.5-pro:
+        gelesen: "2026-10-22"
+        quelle: "privacy table of the Go page, https://opencode.ai/docs/go"
+        aufbewahrung: "0 days"
+        training: "Not used"
+        anfragen_5h: 3250
+        anfragen_gelesen: "2026-10-22"
+        anfragen_quelle: "estimated requests table of the Go page, https://opencode.ai/docs/go"
+      mimo-v2.6-flash:
+        gelesen: "2026-10-22"
+        quelle: "privacy table of the Go page, https://opencode.ai/docs/go"
+        aufbewahrung: "0 days"
+        training: "Not used"
+        anfragen_5h: 30100
+        anfragen_gelesen: "2026-10-22"
+        anfragen_quelle: "estimated requests table of the Go page, https://opencode.ai/docs/go"
+      qwen3.7-plus:
+        uebersprungen: "2026-10-22"
+        grund: "wire API not measured"
+        gelesen: "2026-10-22"
+        quelle: "privacy table of the Go page, https://opencode.ai/docs/go"
+        aufbewahrung: "0 days"
+        training: "Not used"
+        anfragen_5h: 4300
+        anfragen_gelesen: "2026-10-22"
+        anfragen_quelle: "estimated requests table of the Go page, https://opencode.ai/docs/go"
+      qwen3.8-max:
+        uebersprungen: "2026-10-22"
+        grund: "wire API not measured"
+        gelesen: "2026-10-22"
+        quelle: "privacy table of the Go page, https://opencode.ai/docs/go"
+        aufbewahrung: "0 days"
+        training: "Not used"
+        anfragen_5h: 160
+        anfragen_gelesen: "2026-10-22"
+        anfragen_quelle: "estimated requests table of the Go page, https://opencode.ai/docs/go"
     # Legacy membership for declarations without availability_preflight.
     # Fresh runs of this declaration select the cheapest reachable members.
     availability_preflight:
@@ -256,6 +350,8 @@ endpunkte:
     # `[model_coming_soon] This model is coming soon.` on every call (bead
     # coding-harness-mkg, measured 2026-10-16 and still on 2026-10-19), so every
     # review loop stopped after round 1. `mimo-v2.6-pro` takes the third place.
+    # The maintainer reports it answering again on 2026-10-22; it returns to the
+    # `modelle` set, and the availability preparation probes it before every run.
     flash_swarm:
       - deepseek-v4.1-flash
       - longcat-2.0
