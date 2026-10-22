@@ -4,7 +4,7 @@ category: adr
 status: accepted
 created: 2026-10-14
 last_reviewed: 2026-10-16
-updated: 2026-10-17
+updated: 2026-10-22
 owner: framework-architect
 provenance: human-decided
 produced_by: {kind: llm-session, name: codex, version: "2026-10-16"}
@@ -235,3 +235,32 @@ point-in-time reachability only; it does not prove review quality, free
 billing or later availability. Selection and failed/skipped probes are
 preserved in the run snapshot. This expansion requires renewed validation
 and independent review; the earlier phase-6 verdict covers the old scope.
+
+## Restart amendment — the maintainer restarts a completed loop, 2026-10-21
+
+The maintainer decided on 2026-10-21, in the conversation of the night run,
+that the review loop of the change `research-swarm` is to be restarted
+explicitly. That loop ended on 2026-10-15 with a clean round 2; sixteen
+phase-6 rounds have changed the code since, and its free stage refused at
+the time. Decision 9 left no way to run the swarm again on that change.
+
+Decision 9 holds for every reset an agent, a release or an edited
+configuration could cause. In addition, the maintainer — and only the
+maintainer — may restart a completed or stopped loop of a change with an
+explicit runner command that names a non-empty reason. The command writes
+the restart, its date and the reason as a runner line into `findings.md`;
+every earlier round, row, snapshot and release stays there unchanged. The
+next `review-loop` after it is a fresh run: availability preparation where
+the endpoint enables it, the free swarm, the Flash swarm, then the ladder.
+Its round numbers continue after the previous run's last round, so no loop
+row id repeats; the clean stop, the repair brake and the consumed stages are
+read from the rounds after the restart only.
+
+An agent never issues the restart on its own judgment; it runs it only when
+the maintainer asked for it in the conversation, and names that request in
+the reason. A restart does not remove the phase-6 order: the new run's rows
+are released after a new phase-6 verdict, as before.
+
+Cost consequence: a restart pays for a second full run, including the
+availability probes. The command and its tests are their own change (bead
+coding-harness-0xjr); until it exists, no loop is restarted by hand.
