@@ -55,7 +55,7 @@ Stage-2 call, 2026-10-22: review · endpoint openai-codex · model gpt-6.1-sol �
 
 | ID | Severity | Dimension | Origin | Where | Finding | Reviewer | Status | Broke a test |
 |---|---|---|---|---|---|---|---|---|
-| F-1 | MAJOR | SPEC | implementation | scripts/stage2.py:609–612 | The shared span finder discards zero-length non-secret matches, weakening the blocking check. Reproduced without a routing key: rules `blocked = (?=CLIENT-[0-9]+)` and `secret:value = CLIENT-[0-9]+`, with diagnostic `CLIENT-123`, previously refused; now protection returns `[secret:value]`. Secret replacement hides the blocking match from subsequent scans, allowing retry instead of refusal. Preserve zero-length matches for non-secret blocking checks. [Acceptance criteria 2, 4; failed-check-secrets criterion 5] | Codex | taken — a test that a zero-length non-secret blocking match still refuses | — |
+| F-1 | MAJOR | SPEC | implementation | scripts/stage2.py:609–612 | The shared span finder discards zero-length non-secret matches, weakening the blocking check. Reproduced without a routing key: rules `blocked = (?=CLIENT-[0-9]+)` and `secret:value = CLIENT-[0-9]+`, with diagnostic `CLIENT-123`, previously refused; now protection returns `[secret:value]`. Secret replacement hides the blocking match from subsequent scans, allowing retry instead of refusal. Preserve zero-length matches for non-secret blocking checks. [Acceptance criteria 2, 4; failed-check-secrets criterion 5] | Codex | fixed — tests/test_stage2.py::test_a_zero_length_nonsecret_match_still_refuses | — |
 
 Phase 6 verdict: codex 01a1655c-69d9-76f2-a511-0a79de7e781d, 2026-10-22
 Reviewer session: codex 01a1655c-69d9-76f2-a511-0a79de7e781d — a fresh session reviewed: no phase-2a session was recorded
@@ -79,3 +79,19 @@ Kept from the loop record:
 > The answer was not only six-cell rows; what is not one is kept below as it came.
 > 
 > No finding.
+
+Stage-2 call, 2026-10-22: repair · attempt 1 · route codex · endpoint openai-codex · model gpt-6.1-sol · leak check clean over 525 files, 1877 commits, 12 rules.
+
+> Attempt 1 (codex) failed its post-run checks.
+>
+> Files the attempt changed (lines added, removed):
+> - `scripts/stage2.py` +7 -4
+> - `tests/test_stage2.py` +11 -0
+>
+> Diagnostics:
+> ```text
+> - Runner format before `make verify`: ruff changed no file.
+> - F-1: tests/test_stage2.py::test_a_zero_length_nonsecret_match_still_refuses: the call of `tests/test_stage2.py::test_a_zero_length_nonsecret_match_still_refuses[(?=CLIENT-[0-9]+)]` failed with Failed, not an AssertionError
+> ```
+
+Stage-2 call, 2026-10-22: repair · attempt 2 · route codex-repair · endpoint openai-codex · model gpt-6.1-sol · reason first Codex post-run check failed · leak check clean over 525 files, 1877 commits, 12 rules.

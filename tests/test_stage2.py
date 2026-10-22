@@ -2722,6 +2722,21 @@ def test_a_nonsecret_match_extending_beyond_the_credential_refuses() -> None:
 
 
 @pytest.mark.usefixtures("world")
+@pytest.mark.parametrize("pattern", [r"(?=CLIENT-[0-9]+)", r"^(?=CLIENT-[0-9]+)"])
+def test_a_zero_length_nonsecret_match_still_refuses(pattern: str) -> None:
+    """F-1: discarding an empty blocking span lets secret redaction hide the violation."""
+    set_denylist(f"blocked = {pattern}\nsecret:value = CLIENT-[0-9]+\n")
+    refusal = None
+    try:
+        stage2.protect_diagnostics("location.py:12\nCLIENT-123\n")
+    except stage2.Refused as error:
+        refusal = str(error)
+    assert refusal is not None, "the zero-length blocking match must refuse before secret redaction"
+    assert "'blocked'" in refusal and "line 2" in refusal
+    assert "CLIENT-123" not in refusal
+
+
+@pytest.mark.usefixtures("world")
 def test_a_nonsecret_match_inside_the_credential_alone_does_not_refuse() -> None:
     """failed-check-spans criterion 3. Planted fault: reading the original text, the credential itself
     trips a non-secret rule and every diagnostic holding the key is refused."""

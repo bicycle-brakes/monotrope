@@ -134,6 +134,7 @@ typed: a hand-kept list of files ages exactly as fast as files are added.
 | [`changes/failed-check-secrets/research.md`](changes/failed-check-secrets/research.md) | draft | none | 2026-10-16 | coding-harness-8hr |
 | [`changes/failed-check-secrets/spec.md`](changes/failed-check-secrets/spec.md) | draft | none | 2026-10-16 | coding-harness-8hr |
 | [`changes/failed-check-spans/decisions.md`](changes/failed-check-spans/decisions.md) | draft | none | 2026-10-22 | coding-harness-8hr |
+| [`changes/failed-check-spans/findings.md`](changes/failed-check-spans/findings.md) | draft | none | 2026-10-22 | coding-harness-8hr |
 | [`changes/failed-check-spans/plan.md`](changes/failed-check-spans/plan.md) | draft | none | 2026-10-22 | coding-harness-8hr |
 | [`changes/failed-check-spans/research.md`](changes/failed-check-spans/research.md) | draft | none | 2026-10-22 | coding-harness-8hr |
 | [`changes/failed-check-spans/spec.md`](changes/failed-check-spans/spec.md) | draft | none | 2026-10-22 | coding-harness-8hr |

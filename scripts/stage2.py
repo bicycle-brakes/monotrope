@@ -588,11 +588,14 @@ def protect_diagnostics(text: str, key: str | None = None) -> str:
     return _protect_diagnostics(text, key)[0]
 
 
-def _rule_spans(pattern: re.Pattern, text: str, credentials: list[tuple[int, int]]) -> list[tuple[int, int]]:
-    """Every non-empty match of `pattern` in `text`, as offsets of `text`, except those wholly inside a credential.
+def _rule_spans(
+    pattern: re.Pattern, text: str, credentials: list[tuple[int, int]], *, include_empty: bool = False
+) -> list[tuple[int, int]]:
+    """Matches of `pattern` as offsets of `text`, except those wholly inside a credential.
 
     Whole-text matches retain multiline rules; per-line matches mirror the leak check, including ^ and $
     without an inline multiline flag. Advancing from each match's start retains overlapping alternatives.
+    Empty matches are retained for blocking checks only; they have no secret text to replace.
     """
     segments = [(0, text)]
     offset = 0
@@ -606,7 +609,7 @@ def _rule_spans(pattern: re.Pattern, text: str, credentials: list[tuple[int, int
             match = pattern.search(segment, position)
             if match is None:
                 break
-            if match.end() > match.start():
+            if include_empty or match.end() > match.start():
                 start, end = offset + match.start(), offset + match.end()
                 if not any(left <= start and end <= right for left, right in credentials):
                     found.append((start, end))
@@ -628,7 +631,7 @@ def _protect_diagnostics(text: str, key: str | None, split_at: int | None = None
     for rule in rules:
         if rule.secret:
             continue
-        for start, _end in _rule_spans(rule.pattern, text, credentials):
+        for start, _end in _rule_spans(rule.pattern, text, credentials, include_empty=True):
             number = text.count("\n", 0, start) + 1
             raise Refused(
                 f"the failed-check diagnostics match rule '{rule.name}' at line {number}; the call does not start."

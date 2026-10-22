@@ -57,3 +57,5 @@ Run the three new tests before the production edit (red) and after it
 Phase 1 to the production commit, by the orchestrated night session itself
 (the stage-2 runner calls were refused by the session permission classifier);
 start and end read from `date` (Europe/Berlin).
+2026-10-22 20:47:19–20:57:29 UTC, 610 s — repair · attempt 1 · route codex · model gpt-6.1-sol · rejected · measured by the runner
+2026-10-22 20:57:35–21:03:11 UTC, 336 s — repair · attempt 2 · route codex-repair · model gpt-6.1-sol · accepted · measured by the runner
