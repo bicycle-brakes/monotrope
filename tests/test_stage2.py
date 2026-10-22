@@ -2627,6 +2627,34 @@ def test_diagnostic_redaction_handles_overlaps_and_multiline_matches() -> None:
     assert "BEGIN-" not in evidence and "END-777" not in evidence and "line 299" in evidence
 
 
+@pytest.mark.usefixtures("world")
+@pytest.mark.parametrize("blocking", [False, True])
+@pytest.mark.parametrize("framed", [False, True])
+def test_combined_verification_streams_are_protected_before_reduction(blocking: bool, framed: bool) -> None:
+    """Criteria 2, 5: a stream boundary and tail cut must not hide a match."""
+    pattern = r"BEGIN-[A-Z]+\nEND-[0-9]+"
+    set_denylist(DENYLIST + f"secret:span = {pattern}\n" + (f"blocked = {pattern}\n" if blocking else ""))
+    prefix = "\n".join(_gate("pytest", ["AssertionError: context"], "red")) + "\n" if framed else ""
+    done = subprocess.CompletedProcess(
+        ["make"], 1, stdout=prefix + "BEGIN-ABC\n", stderr="END-777\n" + "context\n" * 79
+    )
+    try:
+        evidence = stage2.verify_evidence(done, None)
+    except stage2.Refused:
+        assert blocking
+    else:
+        assert not blocking, "the original combined non-secret match must refuse"
+        assert "END-777" not in evidence
+        assert "context" in evidence
+
+
+@pytest.mark.usefixtures("world")
+def test_diagnostic_redaction_merges_overlapping_matches_of_one_rule() -> None:
+    """Criterion 2: finditer must not leave the overlapping alternative's suffix."""
+    set_denylist(DENYLIST + r"secret:combo = AB[0-9]{3}|[0-9]{3}CD" + "\n")
+    assert stage2.protect_diagnostics("xAB123CDy") == "x[secret:combo]y"
+
+
 def test_a_fixture_secret_in_a_failed_draft_check_allows_a_clean_retry(world: World) -> None:
     """Criterion 3. Planted fault: either copy keeps the value, so the real pre-call check refuses call two."""
     code, prompt = failing_run(world, "draft")

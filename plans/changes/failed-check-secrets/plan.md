@@ -98,6 +98,9 @@ add a validator in this change; the runner owns the full verification gate.
 - 1: tests/test_stage2.py::test_moved_head_diagnostics_protect_file_evidence — a changed path or measurement error publishes a secret after HEAD moves
 - 2: tests/test_stage2.py::test_diagnostic_redaction_keeps_rule_names_and_traceback_context — replacement erases unmatched context or loses rule names
 - 2: tests/test_stage2.py::test_diagnostic_redaction_handles_overlaps_and_multiline_matches — replacement or truncation leaves part of a matched span
+- 2: tests/test_stage2.py::test_combined_verification_streams_are_protected_before_reduction — a stream boundary hides a secret match before the tail cut
+- 5: tests/test_stage2.py::test_combined_verification_streams_are_protected_before_reduction — a stream boundary hides a blocking non-secret match
+- 2: tests/test_stage2.py::test_diagnostic_redaction_merges_overlapping_matches_of_one_rule — a same-rule overlap leaves a matched suffix
 - 3: tests/test_stage2.py::test_a_fixture_secret_in_a_failed_draft_check_allows_a_clean_retry — the real pre-call check refuses the second call
 - 4: tests/test_stage2.py::test_diagnostic_redaction_refuses_an_unusable_denylist — raw diagnostics are emitted or retry/fallback starts after a failed rule read
 - 5: tests/test_stage2.py::test_nonsecret_diagnostic_matches_still_refuse — an overlapping secret replacement hides a non-secret violation
@@ -235,3 +238,24 @@ Ruff check and format check, interview minimums, criterion ledger and
 No edit was made to `findings.md`, no commit was made and no git command
 that changes this repository was run. The runner owns full `make verify`
 and the checkpoint commit.
+
+
+### Repair — taken phase-6 diagnostic findings, 2026-10-22
+
+2026-10-22 00:06:39–00:09:26 UTC, 2 min 47 s
+(measured with `date -u` and the UTC clock). Protect the complete combined
+verification streams before reducing either stream, mapping the stream boundary
+through credential and secret replacement so framed evidence retains its layout.
+Collect same-rule matches by advancing from each match's start, preserving
+otherwise skipped overlaps before merging the original spans.
+
+Red-first evidence against repair baseline `6fccc98`: all three initial
+regression cases failed by assertion (cross-stream secret, overlapping blocking
+rule, same-rule overlap). They pass after the repair. The final new selection,
+including framed and unframed output, passed all five cases. The broader
+Stage-2/leakcheck diagnostic, verification-output and framing selection passed
+50 tests (775 deselected). Ruff check and format check, criterion ledger,
+interview minimums and `git diff --check` passed. Regenerating `plans/INDEX.md`
+produced no content change. No edit was made to `findings.md`, no commit was
+made and no repository-changing git command was run. The runner owns full
+`make verify` and its checkpoint commit.

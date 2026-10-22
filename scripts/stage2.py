@@ -579,8 +579,21 @@ def protect_diagnostics(text: str, key: str | None = None) -> str:
     text that still matches a secret rule after the replacement. A refusal names a rule or a reason and a
     line, never a value.
     """
+    return _protect_diagnostics(text, key)[0]
+
+
+def _protect_diagnostics(text: str, key: str | None, split_at: int | None = None) -> tuple[str, int | None]:
+    """Protect a complete diagnostic while mapping an optional stream boundary."""
+    if split_at is not None and key:
+        original_boundary = split_at
+        for start, end in credential_spans(text, key):
+            if original_boundary <= start:
+                break
+            split_at += len("[credential]") - (min(end, original_boundary) - start)
+            if original_boundary < end:
+                break
     if not text:
-        return text
+        return text, split_at
     text = scrub(text, key)
     rules, problem = leakcheck.read_denylist(leakcheck.default_denylist())
     if problem:
@@ -612,9 +625,15 @@ def protect_diagnostics(text: str, key: str | None = None) -> str:
             segments.append((offset, line))
             offset += len(line) + 1
         for offset, segment in segments:
-            for match in rule.pattern.finditer(segment):
+            position = 0
+            while position <= len(segment):
+                match = rule.pattern.search(segment, position)
+                if match is None:
+                    break
                 if match.end() > match.start():
                     spans.append([offset + match.start(), offset + match.end(), [rule.name]])
+                # Advancing from the start retains overlapping alternatives of this same rule.
+                position = match.start() + 1
     spans.sort(key=lambda span: (span[0], span[1]))
     merged: list[list] = []
     for start, end, names in spans:
@@ -625,16 +644,25 @@ def protect_diagnostics(text: str, key: str | None = None) -> str:
             merged.append([start, end, list(names)])
     order = {rule.name: index for index, rule in enumerate(rules)}
     out, last = [], 0
+    safe_boundary = None
     for start, end, names in merged:
         marks = "".join(f"[{name}]" for name in sorted(names, key=order.__getitem__))
+        if split_at is not None and safe_boundary is None and split_at < end:
+            prefix_length = sum(map(len, out))
+            if split_at <= start:
+                safe_boundary = prefix_length + split_at - last
+            else:
+                safe_boundary = prefix_length + start - last + len(marks) + text.count("\n", start, split_at)
         out += [text[last:start], marks, "\n" * text.count("\n", start, end)]
         last = end
+    if split_at is not None and safe_boundary is None:
+        safe_boundary = sum(map(len, out)) + split_at - last
     out.append(text[last:])
     safe = scrub("".join(out), key)
     for rule in rules:
         if rule.secret and (rule.pattern.search(safe) or any(rule.pattern.search(line) for line in safe.split("\n"))):
             raise Refused(f"the failed-check diagnostics still match rule '{rule.name}' after redaction.")
-    return safe
+    return safe, safe_boundary
 
 
 def protect_files(files: list[str] | str, key: str | None = None) -> list[str] | str:
@@ -3514,12 +3542,13 @@ def verify_evidence(done: subprocess.CompletedProcess, key: str | None) -> str:
     """The bounded evidence of a red `make verify`: the framed gates that blocked, else the run's tail.
 
     Read the active denylist at diagnostic emission time and raise Refused fail-closed if
-    protection refuses, on every route including keyless routes (key=None).
+    protection refuses, on every route including keyless routes (key=None). The complete
+    concatenated streams are checked before reduction; their mapped boundary retains framing.
     """
     # Protected whole, before any reduction: a cut must not split a multiline match and leave a part of it.
-    stdout = protect_diagnostics(done.stdout or "", key)
-    stderr = protect_diagnostics(done.stderr or "", key)
-    output = stdout + stderr
+    raw_stdout = done.stdout or ""
+    output, boundary = _protect_diagnostics(raw_stdout + (done.stderr or ""), key, len(raw_stdout))
+    stdout, stderr = output[:boundary], output[boundary:]
     # verify_all.sh frames gates on standard output; a gate's standard error arrives unframed after them.
     red = red_sections(stdout)
     if red is None:
