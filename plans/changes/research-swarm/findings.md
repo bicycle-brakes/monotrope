@@ -4516,3 +4516,15 @@ Phase 6 verdict: codex 01a160ad-c28c-7591-b2e9-9fe376556d65, 2026-10-22
 Reviewer session: codex 01a160ad-c28c-7591-b2e9-9fe376556d65 — a fresh session reviewed: an earlier ## Phase 6 block makes this a re-check
 
 Loop restarted: 2026-10-22 after round 2 — Maintainer, 2026-10-22: fresh swarm run on PR #158 after phase-6 rounds 3-18 changed the code since the clean loop of 2026-10-15 (Q-17).
+
+Stage-2 call, 2026-10-22: prepare-loop · endpoint opencode-go · model cat-jam-free · leak check clean over 557 files, 1832 commits, 12 rules.
+
+Stage-2 call, 2026-10-22: prepare-loop · endpoint opencode-go · model longcat-2.5-preview-free · leak check clean over 557 files, 1832 commits, 12 rules.
+
+Stage-2 call, 2026-10-22: prepare-loop · endpoint opencode-go · model deepseek-v4.1-flash · leak check clean over 557 files, 1832 commits, 12 rules.
+
+Stage-2 call, 2026-10-22: prepare-loop · endpoint opencode-go · model longcat-2.0 · leak check clean over 557 files, 1832 commits, 12 rules.
+
+Stage-2 call, 2026-10-22: prepare-loop · endpoint opencode-go · model glm-5.3-flash · leak check clean over 557 files, 1832 commits, 12 rules.
+
+Stage-2 call, 2026-10-22: prepare-loop · endpoint opencode-go · model mimo-v2.6-pro · leak check clean over 557 files, 1832 commits, 12 rules.
