@@ -219,3 +219,14 @@ Stage-2 call, 2026-10-22: repair · attempt 1 · route codex · endpoint openai-
 Stage-2 call, 2026-10-22: review · endpoint openai-codex · model gpt-6.1-sol · leak check clean over 512 files, 1819 commits, 12 rules.
 
 Stage-2 call, 2026-10-22: review · endpoint openai-codex · model gpt-6.1-sol · leak check clean over 512 files, 1819 commits, 12 rules.
+
+Stage-2 call, 2026-10-22: review · endpoint openai-codex · model gpt-6.1-sol · leak check clean over 512 files, 1821 commits, 12 rules.
+
+## Phase 6 — Codex, 2026-10-22
+
+| ID | Severity | Dimension | Origin | Where | Finding | Reviewer | Status | Broke a test |
+|---|---|---|---|---|---|---|---|---|
+| F-5 | MAJOR | SPEC | implementation | scripts/stage2.py:4645–4653 | If a successful model call deletes the change directory, resolving its missing parent still returns the expected path, so recovery is skipped. Writing the rejection diagnostics then raises FileNotFoundError before time logging or retry restoration. An in-memory execution reproduced zero runner entries for this completed attempt. Restore missing parent directories and snapshotted inputs before writing diagnostics and the rejected measurement. [Acceptance criterion 2] | Codex | open | — |
+
+Phase 6 verdict: codex 01a16288-8531-73f1-8abf-367ff6eb2e1e, 2026-10-22
+Reviewer session: codex 01a16288-8531-73f1-8abf-367ff6eb2e1e — a fresh session reviewed: an earlier ## Phase 6 block makes this a re-check
