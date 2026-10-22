@@ -132,6 +132,11 @@ Full doctrine: `docs/WORKFLOW.md`, in English since 2026-09-29.
   prior records with a dated addendum; task status stays in Beads.
 - Link the handover in the closing message; the next session resumes from it.
 
+- **A bead for a change names its class** (`spike`, `bounded`, `feature`,
+  `architectural`) in its description, with the reason when it is not
+  obvious (maintainer, 2026-10-22). The class sets the interview minimums
+  and whether research and a decision PR come first.
+
 ## Tracker quick reference
 
 ```bash
