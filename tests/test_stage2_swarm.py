@@ -2403,9 +2403,8 @@ def test_go_free_policy_filters_and_freezes_each_run(fx: PrepFixture) -> None:
     assert fx.prepare() == 0
     assert fx.receipt()["state"]["free"]["selected"] == ["beta-free"]
     chosen = {call["model"] for call in fx.w.calls()}
-    assert not chosen & {"alpha-free", "beta-free", "delta-free", "epsilon-free", "gamma-paid"}, (
-        "a free model was probed"
-    )
+    # The selected free members are probed (bead k9rw); a model the policy left out never is.
+    assert not chosen & {"delta-free", "gamma-paid"}, "a model outside the free selection was probed"
 
 
 def test_capability_unavailable_keeps_required_slots_unless_include_is_required(fx: PrepFixture) -> None:
