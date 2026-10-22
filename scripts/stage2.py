@@ -4456,6 +4456,22 @@ def implementation_prompt(
     return work_prompt(ctx.root, "04-implement.md", ctx.change, "\n\n".join(extra), inputs)
 
 
+def restore_work_input(root: Path, path: Path, content: bytes) -> None:
+    """Replace aliases from the worktree outward before inspecting or restoring an input."""
+    parent = root
+    for part in path.relative_to(root).parts[:-1]:
+        parent /= part
+        if parent.is_symlink() or (parent.exists() and not parent.is_dir()):
+            parent.unlink()
+        parent.mkdir(exist_ok=True)
+    if path.is_symlink() or not path.is_file() or path.read_bytes() != content:
+        if path.is_symlink() or path.is_file():
+            path.unlink()
+        elif path.is_dir():
+            shutil.rmtree(path)
+        path.write_bytes(content)
+
+
 def run_attempts(
     ctx: Context,
     verb: str,
@@ -4525,6 +4541,7 @@ def run_attempts(
         baseline_time = ctx.plan.read_text(encoding="utf-8")
         inputs_before = {**inputs, ctx.plan: baseline_time.encode("utf-8")}
         kept = snapshot_findings() if snapshot_findings is not None else None
+        findings_before = ctx.findings.read_bytes()
         unmeasured: str | None = None
         try:
             before = worktree_tree(root)
@@ -4625,8 +4642,40 @@ def run_attempts(
                 raise Refused("refusing an aliased or hard-linked plan destination")
         except (Refused, OSError, RuntimeError) as error:
             problems.append(f"The time entry destination is unsafe or unreadable: {error}")
+        try:
+            aliased_parent = ctx.plan.parent.resolve() != root.resolve() / ctx.plan.relative_to(root).parent
+        except (OSError, RuntimeError):
+            aliased_parent = True
+        if aliased_parent:
+            # Detach the alias itself, never a document in its target. Restore the snapshotted
+            # inputs and audit before any logging or retry can write through that parent.
+            for path, content in {**inputs_before, ctx.findings: findings_before}.items():
+                restore_work_input(root, path, content)
         if not problems and answer_check is not None:
             problems = answer_check(answer)
+        if problems:
+            # The format line stands first: the step ran before `make verify`, and the next model
+            # learns that the runner formats and whether ruff left findings it could not fix.
+            problems = [*(f"{FORMAT_LABEL}: {line}" for line in formatted), *problems]
+            if kept is not None:
+                # Before the block is appended, so the quoted diagnostics stand beside the rows as
+                # they were, not beside the model's edits of them.
+                restore_findings(kept)
+            # The block lands below this attempt's audit line, before the next attempt starts or the
+            # run exits 1; the post-run scan after it covers the block too (spec, criteria 1 and 9).
+            listing = "\n".join(f"- {p}" for p in problems)
+            diagnostics.append(f"Attempt {attempt} ({route}):\n{listing}")
+            append(ctx.findings, quote_block(attempt_block(attempt, route, listing, files), key))
+        record += [f"- Attempt {attempt} ({route}): {line}" for line in formatted]
+        exposed = []
+        if key is not None:
+            # The gate runs repository code the model just edited: scan again after it and the
+            # diagnostic block, before finalizing either the verdict or its measured endpoint.
+            exposed = remove_changed_credential(root, key, ignored_before)
+            if exposed:
+                if kept is not None and not problems:
+                    restore_findings(kept)
+                problems.append(credential_message(exposed))
         # The verdict is in: the runner writes the attempt's span, accepted or rejected. A rejected
         # attempt that will be retried gets its plan back at the pre-call bytes plus this entry, so the
         # restore below keeps the entry and drops the model's other plan edits.
@@ -4641,7 +4690,7 @@ def run_attempts(
             ended_wall,
             max(0, round(ended_mono - started_mono)),
         )
-        retry_follows = bool(problems) and attempt < len(routes) and cannot_start is None
+        retry_follows = bool(problems) and attempt < len(routes) and cannot_start is None and not exposed
         try:
             if retry_follows:
                 # Written by the restore loop below, which never writes through whatever stands there.
@@ -4669,27 +4718,8 @@ def run_attempts(
                 stamp_updated(ctx.plan)
         except (Refused, OSError, UnicodeDecodeError) as error:
             raise CallFailed(f"the runner could not write the attempt's time entry to {ctx.plan}: {error}") from error
-        if problems:
-            # The format line stands first: the step ran before `make verify`, and the next model
-            # learns that the runner formats and whether ruff left findings it could not fix.
-            problems = [*(f"{FORMAT_LABEL}: {line}" for line in formatted), *problems]
-            if kept is not None:
-                # Before the block is appended, so the quoted diagnostics stand beside the rows as
-                # they were, not beside the model's edits of them.
-                restore_findings(kept)
-            # The block lands below this attempt's audit line, before the next attempt starts or the
-            # run exits 1; the post-run scan after it covers the block too (spec, criteria 1 and 9).
-            listing = "\n".join(f"- {p}" for p in problems)
-            diagnostics.append(f"Attempt {attempt} ({route}):\n{listing}")
-            append(ctx.findings, quote_block(attempt_block(attempt, route, listing, files), key))
-        record += [f"- Attempt {attempt} ({route}): {line}" for line in formatted]
-        if key is not None:
-            # The gate runs repository code the model just edited: scan again after it.
-            exposed = remove_changed_credential(root, key, ignored_before)
-            if exposed:
-                if kept is not None and not problems:
-                    restore_findings(kept)
-                raise Refused(credential_message(exposed))
+        if exposed:
+            raise Refused(credential_message(exposed))
         if cannot_start is not None:
             raise CallFailed(
                 f"`make verify` could not be started; why, and the files this attempt changed: "
@@ -4715,13 +4745,7 @@ def run_attempts(
             # Restoration never writes through a worktree path: whatever stands there (a symlink, a
             # directory or a file) is removed without being followed, then the bytes are written anew.
             for path, content in inputs_before.items():
-                if path.is_symlink() or not path.is_file() or path.read_bytes() != content:
-                    if path.is_symlink() or path.is_file():
-                        path.unlink()
-                    elif path.is_dir():
-                        shutil.rmtree(path)
-                    path.parent.mkdir(parents=True, exist_ok=True)
-                    path.write_bytes(content)
+                restore_work_input(root, path, content)
             stamp_updated(ctx.plan)
     raise CallFailed(closing)
 

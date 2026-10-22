@@ -7439,6 +7439,66 @@ def test_runner_span_includes_model_and_postchecks(world: World, monkeypatch: py
     assert entry.startswith("2026-10-20 10:00:00–10:00:42 UTC")
 
 
+def test_runner_time_includes_postgate_credential_rejection(world: World, monkeypatch: pytest.MonkeyPatch) -> None:
+    """F-3: ending before the final scan mislabels a rejected attempt and loses scan time."""
+    clock = FakeClock(monkeypatch, UTC_START)
+    real_verify, real_scan = stage2.verify_attempt, stage2.remove_changed_credential
+    gate_finished = False
+
+    def verify(*args, **kwargs):
+        nonlocal gate_finished
+        problems = real_verify(*args, **kwargs)
+        clock.now += 5
+        (world.root / "src/app.py").write_text(f'value = "{KEY}"\n')
+        gate_finished = True
+        return problems
+
+    def scan(*args, **kwargs):
+        if gate_finished:
+            clock.now += 9
+        return real_scan(*args, **kwargs)
+
+    monkeypatch.setattr(stage2, "verify_attempt", verify)
+    monkeypatch.setattr(stage2, "remove_changed_credential", scan)
+    monkeypatch.setattr(stage2, "checkpoint", lambda *_a, **_kw: pytest.fail("credential rejection checkpointed"))
+    world.script(claude=[{"stdout": "done", "plant": {"src/app.py": "value = 2\n"}}], make=[{"stdout": "green\n"}])
+    assert world.run("implement") != 0
+    (entry,) = runner_entries(world.plan)
+    assert "10:00:00–10:00:14 UTC, 14 s" in entry
+    assert "rejected · measured by the runner" in entry
+    assert len(world.calls("claude")) == 1
+    assert KEY not in (world.root / "src/app.py").read_text()
+
+
+def test_runner_retry_replaces_parent_alias_without_following(
+    world: World, monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    """F-4: byte-identical inputs through a parent alias must not receive restoration writes."""
+    FakeClock(monkeypatch, UTC_START)
+    target = tmp_path / "external-change"
+    real_model = stage2.run_work_model
+    original: dict[str, bytes] = {}
+
+    def model(*args, **kwargs):
+        answer = real_model(*args, **kwargs)
+        if len(world.calls("claude")) == 1:
+            shutil.copytree(world.plan.parent, target)
+            original.update({p.name: p.read_bytes() for p in target.iterdir() if p.is_file()})
+            shutil.rmtree(world.plan.parent)
+            world.plan.parent.symlink_to(target, target_is_directory=True)
+        else:
+            assert not world.plan.parent.is_symlink()
+            assert "rejected" in runner_entries(world.plan)[0]
+        return answer
+
+    monkeypatch.setattr(stage2, "run_work_model", model)
+    world.script(claude=[{"stdout": "one"}, {"stdout": "two"}], make=[{"stdout": "green\n"}] * 2)
+    assert world.run("implement") == 0
+    assert {p.name: p.read_bytes() for p in target.iterdir() if p.is_file()} == original
+    first, second = runner_entries(world.plan)
+    assert "rejected" in first and "accepted" in second
+
+
 def test_runner_time_entry_identifies_attempt_and_midnight_span(world: World, monkeypatch: pytest.MonkeyPatch) -> None:
     """Criterion 4. Planted fault: a missing field, or the span taken from the wall clock instead of the monotonic one."""
     start = dt.datetime(2026, 10, 20, 23, 59, 30, tzinfo=dt.UTC)
