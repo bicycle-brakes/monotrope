@@ -34,7 +34,9 @@ queue and frame are fixed in PR #221.
 
 ## Next step
 
-Read the Flash-swarm round of the #158 review loop in
+At session end superseded (see the addendum below): run `python3 scripts/stage2.py repair research-swarm` in `.claude/worktrees/research-swarm` for the taken rows F-65, L4-1, L4-2, L4-3 of PR #158 (night item 3).
+
+As written at about 14:00: read the Flash-swarm round of the #158 review loop in
 `~/.local/state/coding-harness/stage2/research-swarm@2014bcfd/loop.md`
 (log: `/private/tmp/claude-501/-Users-mikypiky-coding-harness/42e6ff00-b474-435b-b9dd-676068362ad7/scratchpad/review-loop-158d.log`,
 process `stage2.py review-loop research-swarm`, pid 70182 at 14:00); show
