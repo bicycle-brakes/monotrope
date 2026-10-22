@@ -5414,6 +5414,77 @@ def test_a_clean_round_ends_the_loop(world: World, capsys: pytest.CaptureFixture
     assert len(world.reviews("pi")) == 2
 
 
+def _clean_released_loop(world: World) -> None:
+    """A loop whose round 1 was clean and is released - the state #158's loop was in on 2026-10-21."""
+    world.script(pi=[{"stdout": rows(1)}])
+    assert world.run("review-loop") == 0
+    decide_record(world, status="rejected — out of scope")
+    world.write_findings(VERDICT)
+    assert world.run("release-loop") == 0
+
+
+def test_the_maintainer_restarts_a_clean_loop_as_a_fresh_run(world: World, capsys: pytest.CaptureFixture[str]) -> None:
+    """ADR 0021 restart amendment (bead coding-harness-0xjr): an explicit restart reruns the swarms.
+
+    The earlier round stays as it stands; the new run starts at the free swarm again and its round numbers
+    continue, so no row id repeats.
+    """
+    _clean_released_loop(world)
+    before = world.text()
+    capsys.readouterr()
+    assert world.run("review-loop") == stage2.CLEAN_CODE, "the clean stop held before the restart"
+    assert world.run("release-loop", "demo", "--restart", "--reason", "maintainer asked, 2026-10-21") == 0
+    after = world.text()
+    assert after.startswith(before), "the restart changed an earlier line of findings.md"
+    assert re.search(r"^Loop restarted: \d{4}-\d{2}-\d{2} after round 1 — maintainer asked, 2026-10-21$", after, re.M)
+    world.script(pi=[{"stdout": "No finding."}, {"stdout": "No finding."}])
+    assert world.run("review-loop") == 0
+    record = world.record().read_text(encoding="utf-8")
+    assert "## Round 2 — acme-v1-free, beacon-2-free, " in record, "the restarted run did not begin at the free swarm"
+    assert "## Round 1" not in record
+    capsys.readouterr()
+    assert world.run("review-loop") == stage2.CLEAN_CODE
+    assert "round 2 was clean" in capsys.readouterr().err
+
+
+def test_a_restart_needs_a_reason_a_finished_run_and_no_record(
+    world: World, capsys: pytest.CaptureFixture[str]
+) -> None:
+    """Refusals write nothing: a blank reason, no completed round, a running record, a second restart."""
+    assert world.run("release-loop", "demo", "--restart", "--reason", "why") == 2
+    assert "no completed loop round" in capsys.readouterr().err
+    world.script(pi=[{"stdout": rows(1)}])
+    assert world.run("review-loop") == 0
+    assert world.run("release-loop", "demo", "--restart", "--reason", "why") == 2
+    assert "release the running loop first" in capsys.readouterr().err
+    decide_record(world, status="rejected — out of scope")
+    world.write_findings(VERDICT)
+    assert world.run("release-loop") == 0
+    before = world.text()
+    assert world.run("release-loop", "demo", "--restart", "--reason", "  ") == 2
+    assert "non-empty --reason" in capsys.readouterr().err
+    assert world.run("release-loop", "demo", "--restart", "--stage-failed", TEST_FLASH[0], "--reason", "x") == 2
+    assert world.run("review-loop", "demo", "--restart") == 2
+    assert "belong to release-loop alone" in capsys.readouterr().err
+    assert world.text() == before, "a refused restart wrote into findings.md"
+    assert world.run("release-loop", "demo", "--restart", "--reason", "first") == 0
+    restarted = world.text()
+    assert world.run("release-loop", "demo", "--restart", "--reason", "second") == 2
+    assert "already restarted" in capsys.readouterr().err
+    assert world.text() == restarted
+
+
+def test_a_restart_reason_cannot_create_rounds_or_state(world: World) -> None:
+    """O198-1 for the restart: pasted text stays on the one restart line."""
+    _clean_released_loop(world)
+    reason = "asked\n## Round 99 — pasted\n| L99-1 | MAJOR | SPEC | x | y | z | m | | |\nLoop state: {}"
+    assert world.run("release-loop", "demo", "--restart", "--reason", reason) == 0
+    text = world.text()
+    assert "\n## Round 99" not in text and "\nLoop state: {}" not in text
+    assert stage2.rounds_run(None, text) == 1 and stage2.restart_floor(text) == 1
+    assert stage2.restarted_fresh(None, text)
+
+
 def test_both_swarms_run_in_parallel_as_one_round(world: World) -> None:
     """Criterion 2: each swarm's members start together and merge into one round with one id series."""
     barrier = str(world.root / ".barrier")
