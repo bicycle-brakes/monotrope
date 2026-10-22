@@ -4514,3 +4514,5 @@ Stage-2 call, 2026-10-22: review · endpoint openai-codex · model gpt-6.1-sol �
 
 Phase 6 verdict: codex 01a160ad-c28c-7591-b2e9-9fe376556d65, 2026-10-22
 Reviewer session: codex 01a160ad-c28c-7591-b2e9-9fe376556d65 — a fresh session reviewed: an earlier ## Phase 6 block makes this a re-check
+
+Loop restarted: 2026-10-22 after round 2 — Maintainer, 2026-10-22: fresh swarm run on PR #158 after phase-6 rounds 3-18 changed the code since the clean loop of 2026-10-15 (Q-17).
