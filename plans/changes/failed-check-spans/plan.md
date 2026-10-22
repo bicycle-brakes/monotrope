@@ -51,3 +51,9 @@ Run the three new tests before the production edit (red) and after it
 - 4: tests/test_stage2.py::test_secret_rule_overlapping_a_credential_protects_the_original_span — the existing regression of #215 turns red.
 
 ## Time used
+
+2026-10-22 16:09–16:16, 7 min
+
+Phase 1 to the production commit, by the orchestrated night session itself
+(the stage-2 runner calls were refused by the session permission classifier);
+start and end read from `date` (Europe/Berlin).
