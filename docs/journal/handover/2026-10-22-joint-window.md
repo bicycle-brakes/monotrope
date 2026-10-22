@@ -128,3 +128,51 @@ coding-harness-04xk, coding-harness-3g53, coding-harness-hs0o.
 - Review loop on #158, round 3 (free): no finding over a diff cut at 2000 of
   2251 lines. Round 4 (Flash): not read at the time of writing.
 - PRs #220 and #221: text only, CI not read.
+
+## Addendum — 2026-10-22, session end (about 16:00 Europe/Berlin)
+
+This addendum supersedes "Next step" above; the earlier sections stay as
+they were written.
+
+**Next step now:** in the research-swarm worktree, run
+`python3 scripts/stage2.py repair research-swarm` (Codex Sol) for the four
+taken rows F-65, L4-1, L4-2 and L4-3; then a fresh phase-6-style check of
+the repair, `make verify`, and the next `review-loop research-swarm` call
+(paid ladder, one model per round). This is item 3 of the night queue
+(PR #221).
+
+What happened after the main handover:
+
+- Round 4 (Flash swarm) of the #158 loop ended: deepseek-v4.1-flash returned
+  four rows (L4-1 MAJOR spec contradicts the real-size free probe; L4-2
+  MAJOR research-handoff gate skips criteria after a second level-2 heading;
+  L4-3 MINOR `stage2.py --help` omits prepare-explore; L4-4 MINOR the phase-1
+  prompt said "Gate: none"). mimo-v2.5 and mimo-v2.6-flash stopped at the
+  shared 30-minute round limit; no replacement starts after it. The paid
+  diff was cut at 2000 of 31,513 lines. The maintainer took all four rows.
+- F-65 was taken as the maintainer decided in the morning.
+- The first repair attempt was refused and fully restored: L4-4 needed
+  `prompts/01-explore.md`, which is human-written (provenance.yaml). The
+  restore left F-65 marked "fixed" with a test that no longer existed; the
+  orchestrator reset it to taken (runner bug, coding-harness-rcyf).
+- The maintainer approved the L4-4 text; the orchestrator wrote it and marked
+  L4-4 fixed in the loop record (commit `9b3a13d`, pushed, head of #158).
+- The size of #158 (measured against origin/main: tests 10,657, plans/
+  10,185, scripts/ 8,837, other 999 changed lines; 226 commits since
+  2026-10-14) led to new beads: size limit per pull request
+  (coding-harness-usp8, architectural), plans/ excluded from the review diff
+  (comment on coding-harness-juic), and a tapering ladder of 4, 3, 2, 1, 1, 1
+  models per round as a draft (coding-harness-r3b6, architectural, depends on
+  juic, usp8 and 4fk).
+- The other session's question on PR #219 ("malformed finding output") is
+  answered by measurement: the rejected rows lack the closing pipe, so
+  `split_row` returns None and `parse_rows` 0 rows; the rows sit under Round
+  1 (deepseek-v4.1-flash, mimo-v2.5, mimo-v2.6-flash), so their attribution
+  to glm-5.3-flash is not supported by the record. Fix as bead
+  coding-harness-2i9j (bounded), night queue position 8.
+- New standing rule: a change bead names its class in its description
+  (maintainer, 2026-10-22); proposed in AGENTS.md through PR #220; added as
+  comments to nine beads of today.
+
+Still needed from the maintainer: merge #221 before the night starts, and
+#220 and #222; start the night run in a fresh session from this handover.
