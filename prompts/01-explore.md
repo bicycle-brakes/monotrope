@@ -7,7 +7,7 @@ through `python3 scripts/stage2.py explore <change>` and its leak check
 explores and the reason is recorded. A leak-check BLOCK stops; it never falls
 back.
 **Result:** `plans/changes/<name>/research.md`
-**Gate:** none.
+**Gate:** `research-handoff` (a complete swarm run is blocked until the research questions and neighbours are answered; see below).
 
 **Routing by class (ADR 0020).** A `feature` or `architectural` change
 explores through the research swarm; a `bounded` change or a `spike` through
