@@ -112,6 +112,8 @@ add a validator in this change; the runner owns the full verification gate.
 - 7: tests/test_stage2.py::test_a_failed_stage2_off_attempt_leaves_its_block_without_reading_the_key — diagnostic handling reads an unneeded routing key
 - 7: tests/test_stage2.py::test_credentials_are_scrubbed_before_diagnostic_rules — a denylist rule refuses a known credential or changes its credential marker
 
+- 2: tests/test_stage2.py::test_secret_rule_overlapping_a_credential_protects_the_original_span — credential replacement exposes an overlapping secret suffix
+
 ## Not touched
 
 `scripts/leakcheck.py`, `tests/test_leakcheck.py`, real denylist/secrets,
@@ -259,3 +261,28 @@ interview minimums and `git diff --check` passed. Regenerating `plans/INDEX.md`
 produced no content change. No edit was made to `findings.md`, no commit was
 made and no repository-changing git command was run. The runner owns full
 `make verify` and its checkpoint commit.
+
+
+### Repair — credential-overlapping secret diagnostics, 2026-10-22
+
+2026-10-22 00:16:50–00:17:46 UTC, 56 s (measured with `date -u`).
+Secret-rule spans are collected from the original diagnostic and merged with
+credential spans before replacement. Rules wholly contained in a credential
+retain the existing credential marker; extending matches protect the whole
+union and retain both markers. Non-secret checks retain credential precedence.
+
+Red-first evidence against repair baseline `9f81b1c`: the new regression
+`tests/test_stage2.py::test_secret_rule_overlapping_a_credential_protects_the_original_span`
+failed by assertion because the matched suffix survived. The repaired code
+passes it and the diagnostic overlap, multiline, combined-stream and credential
+precedence selection (11 passed). Ruff check, Ruff format check and criterion
+ledger passed. The plans index was regenerated. Full `make verify` and the
+checkpoint commit belong to the runner. No findings were edited and no commit
+or repository-changing git command was run.
+
+The recorded prior aggregate is approximate (about 1 h 59 min 24 s before
+this span); it now reaches the two-hour appetite. No further implementation
+is performed in this session. The repair is ready for runner verification;
+further repairs require the maintainer's new total appetite.
+
+Resume: run `make verify` through the repair runner.

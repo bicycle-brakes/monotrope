@@ -2655,6 +2655,22 @@ def test_diagnostic_redaction_merges_overlapping_matches_of_one_rule() -> None:
     assert stage2.protect_diagnostics("xAB123CDy") == "x[secret:combo]y"
 
 
+@pytest.mark.usefixtures("world")
+def test_secret_rule_overlapping_a_credential_protects_the_original_span() -> None:
+    """Criteria 1, 2, 7: scrubbing the key must not expose a matched suffix."""
+    key = "ROUTEKEY-" + "987654321"
+    suffix = "FIXKEY-" + "123456"
+    set_denylist(DENYLIST + r"secret:pair = ROUTEKEY-[0-9]+:FIXKEY-[0-9]+" + "\n")
+    diagnostic = f"location.py:12\n{key}:{suffix}\nAssertionError: context\n"
+    done = subprocess.CompletedProcess(["make"], 1, stdout=diagnostic, stderr="")
+    for protected in (stage2.protect_diagnostics(diagnostic, key), stage2.verify_evidence(done, key)):
+        assert suffix not in protected
+        assert key not in protected
+        assert "[credential]" in protected and "[secret:pair]" in protected
+        assert "location.py:12" in protected and "AssertionError: context" in protected
+        assert suffix not in stage2.protect_diagnostics(protected, key)
+
+
 def test_a_fixture_secret_in_a_failed_draft_check_allows_a_clean_retry(world: World) -> None:
     """Criterion 3. Planted fault: either copy keeps the value, so the real pre-call check refuses call two."""
     code, prompt = failing_run(world, "draft")

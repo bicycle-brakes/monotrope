@@ -571,10 +571,11 @@ def protect_diagnostics(text: str, key: str | None = None) -> str:
 
     Every secret rule of the active denylist is read now, on every route - a keyless Codex or Stage-1 route
     included. A match is replaced in place by `[<rule name>]` (the name already starts `secret:`); the spans
-    are found in the credential-safe original text, overlapping ones merge into one marker run, and the
+    are found in the original text, overlapping ones merge with credential spans into one marker run, and the
     replacement keeps the line breaks it covered, so a traceback keeps its shape. Known credentials are
-    scrubbed first, retaining their credential marker. All rules check both the full credential-safe text
-    and individual lines, preserving multiline and line-anchored matches. Non-secret rules refuse first
+    protected with their credential marker. Non-secret rules check credential-safe text; secret rules
+    check original text, both in full and line by line to preserve multiline and anchored matches.
+    Non-secret rules refuse first
     - redaction must not hide a blocking rule - and so does a denylist that cannot be read, or
     text that still matches a secret rule after the replacement. A refusal names a rule or a reason and a
     line, never a value.
@@ -584,17 +585,11 @@ def protect_diagnostics(text: str, key: str | None = None) -> str:
 
 def _protect_diagnostics(text: str, key: str | None, split_at: int | None = None) -> tuple[str, int | None]:
     """Protect a complete diagnostic while mapping an optional stream boundary."""
-    if split_at is not None and key:
-        original_boundary = split_at
-        for start, end in credential_spans(text, key):
-            if original_boundary <= start:
-                break
-            split_at += len("[credential]") - (min(end, original_boundary) - start)
-            if original_boundary < end:
-                break
     if not text:
         return text, split_at
-    text = scrub(text, key)
+    original = text
+    credentials = credential_spans(original, key) if key else []
+    text = scrub(original, key)
     rules, problem = leakcheck.read_denylist(leakcheck.default_denylist())
     if problem:
         raise Refused(f"the failed-check diagnostics cannot be checked: {problem}")
@@ -613,7 +608,9 @@ def _protect_diagnostics(text: str, key: str | None, split_at: int | None = None
                 raise Refused(
                     f"the failed-check diagnostics match rule '{rule.name}' at line {number}; the call does not start."
                 )
-    spans: list[list] = []
+    # Non-secret checks retain credential precedence; secret spans use the untouched input.
+    text = original
+    spans: list[list] = [[start, end, ["credential"]] for start, end in credentials]
     for rule in rules:
         if not rule.secret:
             continue
@@ -631,7 +628,10 @@ def _protect_diagnostics(text: str, key: str | None, split_at: int | None = None
                 if match is None:
                     break
                 if match.end() > match.start():
-                    spans.append([offset + match.start(), offset + match.end(), [rule.name]])
+                    start, end = offset + match.start(), offset + match.end()
+                    # A rule wholly inside the known credential keeps its existing marker.
+                    if not any(left <= start and end <= right for left, right in credentials):
+                        spans.append([start, end, [rule.name]])
                 # Advancing from the start retains overlapping alternatives of this same rule.
                 position = match.start() + 1
     spans.sort(key=lambda span: (span[0], span[1]))
@@ -643,6 +643,7 @@ def _protect_diagnostics(text: str, key: str | None, split_at: int | None = None
         else:
             merged.append([start, end, list(names)])
     order = {rule.name: index for index, rule in enumerate(rules)}
+    order["credential"] = -1
     out, last = [], 0
     safe_boundary = None
     for start, end, names in merged:
