@@ -98,7 +98,10 @@ def prepare(root: Path, change: str, runner) -> None:
     findings = folder / "findings.md"
     text = findings.read_text(encoding="utf-8") if findings.exists() else ""
     record = runner.read_record(change, root)
-    if runner.read_state(record, text) is not None or runner.rounds_run(record, text):
+    # A maintainer's restart (ADR 0021, restart amendment) is the one way a run with history is prepared again.
+    if not runner.restarted_fresh(record, text) and (
+        runner.read_state(record, text) is not None or runner.rounds_run(record, text)
+    ):
         raise runner.Refused("this review run already has history; preparation cannot reset its snapshot or stops.")
     problem = runner.entry_problem(root, runner.OPENCODE)
     if problem:

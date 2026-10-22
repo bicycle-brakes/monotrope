@@ -20,6 +20,7 @@ stands between the rule and the call.
     python3 scripts/stage2.py prepare-loop <change>   # availability report before a fresh phase-4b run
     python3 scripts/stage2.py review-loop  <change>   # one round of phase 4b, until a round is clean
     python3 scripts/stage2.py release-loop <change>   # loop rows into findings.md
+    python3 scripts/stage2.py release-loop <change> --restart --reason <text>   # maintainer only: a fresh run
     python3 scripts/stage2.py review       <change>   # Codex, phase 6; a re-check is a fresh read-only session
     python3 scripts/stage2.py probe        <change>   # one call per free and paid member, no record written
     python3 scripts/stage2.py session      <change>   # interactive Codex/Pi, a Terminal window
@@ -259,13 +260,14 @@ REPAIR_ANSWER = (
 )
 # The Codex attempts (ADR 0017): Codex has command tools in its configured sandbox, so it is told what it may run.
 REPAIR_FORMAT = (
-    "Repair only the taken rows below. You may run tests and `make verify`; write a measured entry under\n"
-    "`## Time used` in `plan.md`. Do not commit and run no git command that changes the repository: the\n"
-    "runner runs `make verify` and makes the one commit. " + REPAIR_ANSWER
+    "Repair only the taken rows below. You may run tests and `make verify`; write no entry under\n"
+    "`## Time used` in `plan.md`, the runner measures the attempt and writes it. Do not commit and run no\n"
+    "git command that changes the repository: the runner runs `make verify` and makes the one commit. " + REPAIR_ANSWER
 )
 # The Sonnet attempt keeps the file-tools sentence it always had.
 REPAIR_FORMAT_FILE_TOOLS = (
-    "Repair only the taken rows below, with the available file tools; you cannot run commands. " + REPAIR_ANSWER
+    "Repair only the taken rows below, with the available file tools; you cannot run commands. Write no\n"
+    "entry under `## Time used` in `plan.md`, the runner measures the attempt and writes it. " + REPAIR_ANSWER
 )
 # What a draft may write and what the runner takes back; `<change>` is filled in (spec, criterion 3).
 DRAFT_RULES = (
@@ -322,6 +324,9 @@ RELEASED_COLUMNS = [*ROW_COLUMNS, "Phase 6"]
 # it is never read from the reviewers' words.
 STATE_KEY = "Loop state: "
 STATE_LINE = re.compile(r"^Loop state: (\{.*\})[ \t]*$", re.M)
+# The maintainer's restart of a completed loop (ADR 0021, restart amendment): the runner's own line in
+# findings.md, at a line start - a quoted copy is a reviewer's or an attempt's words, not a restart.
+RESTART_LINE = re.compile(r"^Loop restarted: (\d{4}-\d{2}-\d{2}) after round (\d+) — (.+)$", re.M)
 # The Zen provider, which the free rule may never select.
 ZEN = "opencode"
 # `pi update --models` and `--list-models` share one fresh scratch directory and
@@ -2077,6 +2082,22 @@ def _last_release(text: str) -> int:
     return matches[-1].start() if matches else -1
 
 
+def restart_floor(findings_text: str) -> int:
+    """The round the last restart follows, 0 without one: the stops read only the rounds after it."""
+    matches = list(RESTART_LINE.finditer(findings_text))
+    return int(matches[-1].group(2)) if matches else 0
+
+
+def restarted_fresh(record: str | None, findings_text: str) -> bool:
+    """Whether the last restart stands after the last release with no record: the next run is fresh.
+
+    A restarted run that completed a round has a record, and after its own release a block that follows
+    the restart line and carries the new snapshot - from then on the run continues as any other.
+    """
+    matches = list(RESTART_LINE.finditer(findings_text))
+    return record is None and bool(matches) and matches[-1].start() > _last_release(findings_text)
+
+
 def released_rows(findings_text: str) -> list[list[str]]:
     """The loop rows of the last released block in findings.md, with the status they were decided by."""
     start = _last_release(findings_text)
@@ -2840,7 +2861,8 @@ def retire_stage(root: Path, change: str, model: str, reason: str) -> None:
     # After `release-loop` the snapshot lives in findings.md while loop.md is gone: a continued run
     # whose next stage fails every member writes no new record, and this is exactly the run the
     # command must unblock (the review of PR #198).
-    state = read_state(record, findings_text)
+    # A restarted loop has no snapshot of its own until its first round; the old run's stages are spent.
+    state = None if restarted_fresh(record, findings_text) else read_state(record, findings_text)
     if state is None:
         raise Refused("the loop record carries no stage snapshot; nothing can be retired.")
     stage = next((item for item in stages_of(state) if model in item["members"]), None)
@@ -2865,12 +2887,44 @@ def retire_stage(root: Path, change: str, model: str, reason: str) -> None:
     print(f"release-loop: stage {stage['key']} retired ({model}); the reason is in the loop record.")
 
 
-def release_loop(root: Path, change: str, stage_failed: str | None = None, reason: str | None = None) -> None:
+def restart_loop(root: Path, change: str, reason: str) -> None:
+    """Restart a completed loop on the maintainer's request (ADR 0021, restart amendment; bead coding-harness-0xjr).
+
+    Decision 9 still holds for everything an agent, a release or an edited configuration could reset. Only
+    this command restarts, and only with a reason: one line in findings.md, every earlier round, row,
+    snapshot and release left as it stands. The next `review-loop` is a fresh run whose round numbers
+    continue, so no row id repeats.
+    """
+    # One line: a pasted reason must not become a heading, a row or a state line (O198-1).
+    reason = " ".join(reason.split())
+    if not reason:
+        raise Refused("--restart needs a non-empty --reason: the maintainer's request must be readable.")
+    if read_record(change, root) is not None:
+        raise Refused("a loop record exists; release the running loop first, after its phase-6 verdict.")
+    findings_path = folder_of(root, change) / "findings.md"
+    text = findings_path.read_text(encoding="utf-8") if findings_path.exists() else ""
+    last = max(max(history_rounds(None, text), default=0), rounds_run(None, text))
+    if not last:
+        raise Refused(f"{change} has no completed loop round; a fresh review-loop needs no restart.")
+    if restarted_fresh(None, text):
+        raise Refused("the loop is already restarted and no round has run since; nothing is written.")
+    append(findings_path, f"Loop restarted: {today()} after round {last} — {reason}")
+    print(f"release-loop: the loop of {change} restarts after round {last}; the next review-loop is a fresh run.")
+
+
+def release_loop(
+    root: Path, change: str, stage_failed: str | None = None, reason: str | None = None, restart: bool = False
+) -> None:
+    if restart:
+        if stage_failed is not None:
+            raise Refused("--restart and --stage-failed exclude each other; nothing is written.")
+        restart_loop(root, change, reason or "")
+        return
     if stage_failed is not None:
         retire_stage(root, change, stage_failed, reason or "")
         return
     if reason is not None:
-        raise Refused("--reason belongs to --stage-failed; nothing is released.")
+        raise Refused("--reason belongs to --stage-failed or --restart; nothing is released.")
     release(root, change)
 
 
@@ -3143,6 +3197,60 @@ def time_log(path: Path) -> str:
     following = re.search(r"^## [^#]", text[match.end() :], re.M)
     end = match.end() + following.start() if following else len(text)
     return text[match.end() : end]
+
+
+def utc_now() -> dt.datetime:
+    """The wall clock of a measured span, in UTC (a seam for tests)."""
+    return dt.datetime.now(dt.UTC)
+
+
+def monotonic_now() -> float:
+    """The monotonic clock whose difference is a measured span (a seam for tests)."""
+    return time.monotonic()
+
+
+def time_entry(
+    verb: str,
+    attempt: int,
+    route: str,
+    model: str,
+    accepted: bool,
+    started: dt.datetime,
+    ended: dt.datetime,
+    seconds: int,
+) -> str:
+    """The line the runner writes under `## Time used` for one completed attempt.
+
+    The elapsed span is the monotonic difference; the UTC endpoints only name it, and the end carries
+    its date when that differs from the start's, so a span across midnight reads unambiguously.
+    """
+    end_date = f"{ended:%Y-%m-%d} " if ended.date() != started.date() else ""
+    result = "accepted" if accepted else "rejected"
+    return (
+        f"{started:%Y-%m-%d} {started:%H:%M:%S}–{end_date}{ended:%H:%M:%S} UTC, {seconds} s — "
+        f"{verb} · attempt {attempt} · route {route} · model {model} · {result} · measured by the runner"
+    )
+
+
+def with_time_entry(text: str, entry: str, *, prior: str | None = None) -> str:
+    """`text` with `entry` as the last line of the time section, before the next level-two heading."""
+    match = TIME_HEADING.search(text)
+    if match is None:
+        raise Refused("the plan has no `## Time used` heading.")
+    following = re.search(r"^## [^#]", text[match.end() :], re.M)
+    end = match.end() + following.start() if following else len(text)
+    body = text[match.end() : end]
+    if prior is not None:
+        # Time records are runner-owned: keep the pre-call section even when the model rewrites it.
+        previous = TIME_HEADING.search(prior)
+        if previous is None:
+            raise Refused("the pre-call plan has no `## Time used` heading.")
+        next_heading = re.search(r"^## [^#]", prior[previous.end() :], re.M)
+        previous_end = previous.end() + next_heading.start() if next_heading else len(prior)
+        body = prior[previous.end() : previous_end]
+    body = body.rstrip() or "\n"
+    tail = text[end:]
+    return text[: match.end()] + body + "\n" + entry + "\n" + (f"\n{tail}" if tail else "")
 
 
 def insert_before_time(path: Path, block: str) -> None:
@@ -3688,7 +3796,6 @@ def format_step(
 def verify_attempt(
     root: Path,
     plan: Path,
-    baseline_time: str,
     key: str | None = None,
     formatted: list[str] | None = None,
     tools: dict[str, str] | None = None,
@@ -3699,8 +3806,8 @@ def verify_attempt(
     runner applies ruff's safe fixes and its formatter to the changed Python files under `scripts/`
     and `tests/`; when `formatted` is given, the step's line lands there. Return bounded
     diagnostics for failed preparation or postconditions, naming the gates that blocked.
-    `baseline_time` holds the pre-call plan: restoring a heading or moving an old entry into the
-    time section cannot count as this attempt's new measured line.
+    The time section must still be readable; the entry itself is the runner's (`run_attempts`), so the
+    model adds none and nothing is compared with the pre-call plan.
     """
     env = runner_env(
         foreign_env(
@@ -3739,13 +3846,9 @@ def verify_attempt(
     if done.returncode != 0:
         problems.append(f"`make verify` exited {done.returncode}\n{verify_evidence(done, key)}".rstrip())
     try:
-        current_time = time_log(plan)
+        time_log(plan)
     except Refused as error:
         problems.append(str(error))
-    else:
-        added_time = Counter(current_time.splitlines()) - Counter(baseline_time.splitlines())
-        if not any(line.strip() for line in added_time):
-            problems.append("`plan.md` did not add a measured line below `## Time used`")
     return problems
 
 
@@ -4514,8 +4617,8 @@ def implementation_prompt(
     plan = prompt_input(ctx.plan, inputs)
     extra = [
         "Implement only the accepted plan with the available file tools. You cannot run commands. "
-        "Update the measured span below `## Time used` in plan.md before returning; the runner runs "
-        "`make verify`, stages the result and creates the checkpoint commit.",
+        "Write no entry under `## Time used` in plan.md: the runner measures this attempt and writes "
+        "its span itself. The runner runs `make verify`, stages the result and creates the checkpoint commit.",
         f"Implementation baseline: {baseline}",
         f"## Accepted spec\n\n{spec}",
         f"## Accepted plan\n\n{plan}",
@@ -4523,6 +4626,22 @@ def implementation_prompt(
     if diagnostics:
         extra.append("## Earlier post-run diagnostics\n\n" + "\n\n".join(diagnostics))
     return work_prompt(ctx.root, "04-implement.md", ctx.change, "\n\n".join(extra), inputs)
+
+
+def restore_work_input(root: Path, path: Path, content: bytes) -> None:
+    """Replace aliases from the worktree outward before inspecting or restoring an input."""
+    parent = root
+    for part in path.relative_to(root).parts[:-1]:
+        parent /= part
+        if parent.is_symlink() or (parent.exists() and not parent.is_dir()):
+            parent.unlink()
+        parent.mkdir(exist_ok=True)
+    if path.is_symlink() or not path.is_file() or path.read_bytes() != content:
+        if path.is_symlink() or path.is_file():
+            path.unlink()
+        elif path.is_dir():
+            shutil.rmtree(path)
+        path.write_bytes(content)
 
 
 def run_attempts(
@@ -4593,13 +4712,13 @@ def run_attempts(
                 ctx.plan,
                 f"## Runner route — {today()}\n\nStage-1 route: {verb} · model {endpoint[1]} · reason: {reason}.",
             )
-        # Each attempt must add its own line. Keep all existing plan lines even if an earlier
-        # attempt removed the time heading, so restoring it cannot reuse an earlier measurement.
+        # The pre-call plan, route block and time records included, is what a rejected attempt's plan is
+        # restored to (plus the runner's entry), while the accepted plan in every prompt stays the
+        # original snapshot.
         baseline_time = ctx.plan.read_text(encoding="utf-8")
-        # Restore a changed plan with this attempt's pre-call time evidence and runner route, while the
-        # accepted plan in every prompt stays the original snapshot. No older line satisfies a retry.
         inputs_before = {**inputs, ctx.plan: baseline_time.encode("utf-8")}
         kept = snapshot_findings() if snapshot_findings is not None else None
+        findings_before = ctx.findings.read_bytes()
         unmeasured: str | None = None
         try:
             before = worktree_tree(root)
@@ -4607,6 +4726,8 @@ def run_attempts(
             before, unmeasured = "", str(error)
         call_error: CallFailed | None = None
         answer = ""
+        # The runner's own span of this attempt starts right before the model and ends at the verdict.
+        started_wall, started_mono = utc_now(), monotonic_now()
         try:
             if endpoint == CODEX:
                 # A fresh writing Codex call, never resumed; its thread is not kept (ADR 0017).
@@ -4691,7 +4812,7 @@ def run_attempts(
         cannot_start: CallFailed | None = None
         formatted: list[str] = []
         try:
-            problems = verify_attempt(root, ctx.plan, baseline_time, key, formatted, tools)
+            problems = verify_attempt(root, ctx.plan, key, formatted, tools)
         except Refused:
             if kept is not None:
                 restore_findings(kept)
@@ -4704,6 +4825,24 @@ def run_attempts(
             cannot_start = error
             lines = protect_diagnostics(str(error), key).splitlines() or ["make could not be started"]
             problems = ["`make verify` could not be run\n" + "\n".join(_shrink(lines, TAIL_LINES))]
+        # An unchanged hard-linked plan can escape changed-document preparation. Validate the
+        # logging destination independently before deciding the result, even in that case.
+        try:
+            if ctx.plan.resolve() != root.resolve() / ctx.plan.relative_to(root):
+                raise Refused("refusing an aliased plan destination")
+            if ctx.plan.is_symlink() or ctx.plan.stat().st_nlink > 1:
+                raise Refused("refusing an aliased or hard-linked plan destination")
+        except (Refused, OSError, RuntimeError) as error:
+            problems.append(f"The time entry destination is unsafe or unreadable: {error}")
+        try:
+            aliased_parent = ctx.plan.parent.resolve() != root.resolve() / ctx.plan.relative_to(root).parent
+        except (OSError, RuntimeError):
+            aliased_parent = True
+        if aliased_parent or not ctx.plan.parent.is_dir():
+            # Detach an alias itself, never a document in its target; recreate missing parents too.
+            # Restore the snapshotted inputs and audit before diagnostics, logging or retry writes.
+            for path, content in {**inputs_before, ctx.findings: findings_before}.items():
+                restore_work_input(root, path, content)
         if not problems and answer_check is not None:
             problems = answer_check(answer)
         if problems:
@@ -4722,13 +4861,59 @@ def run_attempts(
             diagnostics.append(f"Attempt {attempt} ({route}):\n{listing}")
             append(ctx.findings, quote_block(attempt_block(attempt, route, listing, files), key))
         record += [protect_diagnostics(f"- Attempt {attempt} ({route}): {line}", key) for line in formatted]
+        exposed = []
         if key is not None:
-            # The gate runs repository code the model just edited: scan again after it.
+            # The gate runs repository code the model just edited: scan again after it and the
+            # diagnostic block, before finalizing either the verdict or its measured endpoint.
             exposed = remove_changed_credential(root, key, ignored_before)
             if exposed:
                 if kept is not None and not problems:
                     restore_findings(kept)
-                raise Refused(credential_message(exposed))
+                problems.append(credential_message(exposed))
+        # The verdict is in: the runner writes the attempt's span, accepted or rejected. A rejected
+        # attempt that will be retried gets its plan back at the pre-call bytes plus this entry, so the
+        # restore below keeps the entry and drops the model's other plan edits.
+        ended_wall, ended_mono = utc_now(), monotonic_now()
+        entry = time_entry(
+            verb,
+            attempt,
+            route,
+            endpoint[1],
+            not problems,
+            started_wall,
+            ended_wall,
+            max(0, round(ended_mono - started_mono)),
+        )
+        retry_follows = bool(problems) and attempt < len(routes) and cannot_start is None and not exposed
+        try:
+            if retry_follows:
+                # Written by the restore loop below, which never writes through whatever stands there.
+                inputs_before[ctx.plan] = with_time_entry(baseline_time, entry).encode("utf-8")
+            else:
+                # A parent alias cannot safely be repaired by unlinking the document: that would
+                # remove a path in the alias target. Refuse before reading or writing through it.
+                if ctx.plan.parent.resolve() != root.resolve() / ctx.plan.relative_to(root).parent:
+                    raise Refused("refusing an aliased plan parent")
+                try:
+                    if ctx.plan.is_symlink() or ctx.plan.stat().st_nlink > 1:
+                        raise Refused("refusing an aliased or hard-linked plan")
+                    text = with_time_entry(ctx.plan.read_text(encoding="utf-8"), entry, prior=baseline_time)
+                    ctx.plan.write_text(text, encoding="utf-8")
+                except (Refused, OSError, UnicodeDecodeError):
+                    if not problems:
+                        raise
+                    # A final rejected attempt left the plan missing, unreadable or without its
+                    # heading: the pre-call plan takes the entry, and the rejection stays as it was.
+                    if ctx.plan.is_symlink() or ctx.plan.is_file():
+                        ctx.plan.unlink()
+                    elif ctx.plan.is_dir():
+                        shutil.rmtree(ctx.plan)
+                    ctx.plan.write_text(with_time_entry(baseline_time, entry), encoding="utf-8")
+                stamp_updated(ctx.plan)
+        except (Refused, OSError, UnicodeDecodeError) as error:
+            raise CallFailed(f"the runner could not write the attempt's time entry to {ctx.plan}: {error}") from error
+        if exposed:
+            raise Refused(credential_message(exposed))
         if cannot_start is not None:
             raise CallFailed(
                 f"`make verify` could not be started; why, and the files this attempt changed: "
@@ -4750,17 +4935,12 @@ def run_attempts(
         if attempt < len(routes):
             # Failed edits stay in the attempt's evidence. Restore every differing snapshotted input
             # before the next attempt, comparing bytes so undecodable files are restored too.
-            # The plan keeps its pre-call time evidence; the retry must add its own measured line.
+            # The plan comes back at its pre-call bytes plus this attempt's runner entry.
             # Restoration never writes through a worktree path: whatever stands there (a symlink, a
             # directory or a file) is removed without being followed, then the bytes are written anew.
             for path, content in inputs_before.items():
-                if path.is_symlink() or not path.is_file() or path.read_bytes() != content:
-                    if path.is_symlink() or path.is_file():
-                        path.unlink()
-                    elif path.is_dir():
-                        shutil.rmtree(path)
-                    path.parent.mkdir(parents=True, exist_ok=True)
-                    path.write_bytes(content)
+                restore_work_input(root, path, content)
+            stamp_updated(ctx.plan)
     raise CallFailed(closing)
 
 
@@ -5268,10 +5448,12 @@ def review_loop(root: Path, change: str, availability_reported: str | None = Non
     findings_path = folder_of(root, change) / "findings.md"
     if findings_path.exists():
         findings_text = findings_path.read_text(encoding="utf-8")
-    history = history_rounds(record, findings_text)
+    # After a maintainer's restart the stops read only the rounds that followed it (restart amendment).
+    floor = restart_floor(findings_text)
+    history = {number: rows for number, rows in history_rounds(record, findings_text).items() if number > floor}
     # A round that found nothing has a heading but no row: it is counted by its heading.
     last = max(max(history, default=0), rounds_run(record, findings_text))
-    if last:
+    if last > floor:
         refusal = undecided_refusal(history.get(last, []), "decide them first")
         if refusal:
             raise Refused(refusal)
@@ -5287,7 +5469,7 @@ def review_loop(root: Path, change: str, availability_reported: str | None = Non
                 f"rounds {last - 1} and {last} accepted only findings whose Origin begins `fix-r`; "
                 "the repair brake stops the loop; the maintainer decides what continues."
             )
-    state = read_state(record, findings_text)
+    state = None if restarted_fresh(record, findings_text) else read_state(record, findings_text)
     receipt_taken = False
     if record is None and state is None:
         # A fresh run has neither a record nor a released snapshot. read_state
@@ -5653,7 +5835,12 @@ def main(argv: list[str] | None = None) -> int:
         "--reason",
         default=None,
         metavar="TEXT",
-        help="release-loop only: why the stage is retired; lands in the loop record",
+        help="release-loop only: why the stage is retired or the loop restarted; lands in the record",
+    )
+    parser.add_argument(
+        "--restart",
+        action="store_true",
+        help="release-loop only, on the maintainer's request: restart a completed loop as a fresh run",
     )
     parser.add_argument("--root", default=str(REPO_ROOT), help=argparse.SUPPRESS)
     parser.add_argument(
@@ -5677,8 +5864,8 @@ def main(argv: list[str] | None = None) -> int:
         if args.availability_reported is not None and args.verb != "review-loop":
             raise Refused("--availability-reported belongs to review-loop alone.")
         refuse_repository_git(Path(args.root))
-        if (args.stage_failed is not None or args.reason is not None) and args.verb != "release-loop":
-            raise Refused("--stage-failed and --reason belong to release-loop alone.")
+        if (args.stage_failed is not None or args.reason is not None or args.restart) and args.verb != "release-loop":
+            raise Refused("--stage-failed, --restart and --reason belong to release-loop alone.")
         if args.verb == "session":
             if not args.model:
                 raise Refused("session needs --model <id>: name the model exactly as model-endpoints.yaml lists it.")
@@ -5694,7 +5881,7 @@ def main(argv: list[str] | None = None) -> int:
                 review_loop(Path(args.root), args.change, args.availability_reported)
         elif args.verb == "release-loop":
             with holding_record(args.change, Path(args.root)):
-                release_loop(Path(args.root), args.change, args.stage_failed, args.reason)
+                release_loop(Path(args.root), args.change, args.stage_failed, args.reason, args.restart)
         elif args.verb == "prepare-loop":
             with holding_record(args.change, Path(args.root)):
                 VERBS[args.verb](Path(args.root), args.change)
