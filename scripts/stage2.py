@@ -20,6 +20,7 @@ stands between the rule and the call.
     python3 scripts/stage2.py prepare-loop <change>   # availability report before a fresh phase-4b run
     python3 scripts/stage2.py review-loop  <change>   # one round of phase 4b, until a round is clean
     python3 scripts/stage2.py release-loop <change>   # loop rows into findings.md
+    python3 scripts/stage2.py release-loop <change> --restart --reason <text>   # maintainer only: a fresh run
     python3 scripts/stage2.py review       <change>   # Codex, phase 6; a re-check is a fresh read-only session
     python3 scripts/stage2.py probe        <change>   # one call per free and paid member, no record written
     python3 scripts/stage2.py session      <change>   # interactive Codex/Pi, a Terminal window
@@ -323,6 +324,9 @@ RELEASED_COLUMNS = [*ROW_COLUMNS, "Phase 6"]
 # it is never read from the reviewers' words.
 STATE_KEY = "Loop state: "
 STATE_LINE = re.compile(r"^Loop state: (\{.*\})[ \t]*$", re.M)
+# The maintainer's restart of a completed loop (ADR 0021, restart amendment): the runner's own line in
+# findings.md, at a line start - a quoted copy is a reviewer's or an attempt's words, not a restart.
+RESTART_LINE = re.compile(r"^Loop restarted: (\d{4}-\d{2}-\d{2}) after round (\d+) — (.+)$", re.M)
 # The Zen provider, which the free rule may never select.
 ZEN = "opencode"
 # `pi update --models` and `--list-models` share one fresh scratch directory and
@@ -1971,6 +1975,22 @@ def _last_release(text: str) -> int:
     return matches[-1].start() if matches else -1
 
 
+def restart_floor(findings_text: str) -> int:
+    """The round the last restart follows, 0 without one: the stops read only the rounds after it."""
+    matches = list(RESTART_LINE.finditer(findings_text))
+    return int(matches[-1].group(2)) if matches else 0
+
+
+def restarted_fresh(record: str | None, findings_text: str) -> bool:
+    """Whether the last restart stands after the last release with no record: the next run is fresh.
+
+    A restarted run that completed a round has a record, and after its own release a block that follows
+    the restart line and carries the new snapshot - from then on the run continues as any other.
+    """
+    matches = list(RESTART_LINE.finditer(findings_text))
+    return record is None and bool(matches) and matches[-1].start() > _last_release(findings_text)
+
+
 def released_rows(findings_text: str) -> list[list[str]]:
     """The loop rows of the last released block in findings.md, with the status they were decided by."""
     start = _last_release(findings_text)
@@ -2734,7 +2754,8 @@ def retire_stage(root: Path, change: str, model: str, reason: str) -> None:
     # After `release-loop` the snapshot lives in findings.md while loop.md is gone: a continued run
     # whose next stage fails every member writes no new record, and this is exactly the run the
     # command must unblock (the review of PR #198).
-    state = read_state(record, findings_text)
+    # A restarted loop has no snapshot of its own until its first round; the old run's stages are spent.
+    state = None if restarted_fresh(record, findings_text) else read_state(record, findings_text)
     if state is None:
         raise Refused("the loop record carries no stage snapshot; nothing can be retired.")
     stage = next((item for item in stages_of(state) if model in item["members"]), None)
@@ -2759,12 +2780,44 @@ def retire_stage(root: Path, change: str, model: str, reason: str) -> None:
     print(f"release-loop: stage {stage['key']} retired ({model}); the reason is in the loop record.")
 
 
-def release_loop(root: Path, change: str, stage_failed: str | None = None, reason: str | None = None) -> None:
+def restart_loop(root: Path, change: str, reason: str) -> None:
+    """Restart a completed loop on the maintainer's request (ADR 0021, restart amendment; bead coding-harness-0xjr).
+
+    Decision 9 still holds for everything an agent, a release or an edited configuration could reset. Only
+    this command restarts, and only with a reason: one line in findings.md, every earlier round, row,
+    snapshot and release left as it stands. The next `review-loop` is a fresh run whose round numbers
+    continue, so no row id repeats.
+    """
+    # One line: a pasted reason must not become a heading, a row or a state line (O198-1).
+    reason = " ".join(reason.split())
+    if not reason:
+        raise Refused("--restart needs a non-empty --reason: the maintainer's request must be readable.")
+    if read_record(change, root) is not None:
+        raise Refused("a loop record exists; release the running loop first, after its phase-6 verdict.")
+    findings_path = folder_of(root, change) / "findings.md"
+    text = findings_path.read_text(encoding="utf-8") if findings_path.exists() else ""
+    last = max(max(history_rounds(None, text), default=0), rounds_run(None, text))
+    if not last:
+        raise Refused(f"{change} has no completed loop round; a fresh review-loop needs no restart.")
+    if restarted_fresh(None, text):
+        raise Refused("the loop is already restarted and no round has run since; nothing is written.")
+    append(findings_path, f"Loop restarted: {today()} after round {last} — {reason}")
+    print(f"release-loop: the loop of {change} restarts after round {last}; the next review-loop is a fresh run.")
+
+
+def release_loop(
+    root: Path, change: str, stage_failed: str | None = None, reason: str | None = None, restart: bool = False
+) -> None:
+    if restart:
+        if stage_failed is not None:
+            raise Refused("--restart and --stage-failed exclude each other; nothing is written.")
+        restart_loop(root, change, reason or "")
+        return
     if stage_failed is not None:
         retire_stage(root, change, stage_failed, reason or "")
         return
     if reason is not None:
-        raise Refused("--reason belongs to --stage-failed; nothing is released.")
+        raise Refused("--reason belongs to --stage-failed or --restart; nothing is released.")
     release(root, change)
 
 
@@ -5252,10 +5305,12 @@ def review_loop(root: Path, change: str, availability_reported: str | None = Non
     findings_path = folder_of(root, change) / "findings.md"
     if findings_path.exists():
         findings_text = findings_path.read_text(encoding="utf-8")
-    history = history_rounds(record, findings_text)
+    # After a maintainer's restart the stops read only the rounds that followed it (restart amendment).
+    floor = restart_floor(findings_text)
+    history = {number: rows for number, rows in history_rounds(record, findings_text).items() if number > floor}
     # A round that found nothing has a heading but no row: it is counted by its heading.
     last = max(max(history, default=0), rounds_run(record, findings_text))
-    if last:
+    if last > floor:
         refusal = undecided_refusal(history.get(last, []), "decide them first")
         if refusal:
             raise Refused(refusal)
@@ -5271,7 +5326,7 @@ def review_loop(root: Path, change: str, availability_reported: str | None = Non
                 f"rounds {last - 1} and {last} accepted only findings whose Origin begins `fix-r`; "
                 "the repair brake stops the loop; the maintainer decides what continues."
             )
-    state = read_state(record, findings_text)
+    state = None if restarted_fresh(record, findings_text) else read_state(record, findings_text)
     receipt_taken = False
     if record is None and state is None:
         # A fresh run has neither a record nor a released snapshot. read_state
@@ -5637,7 +5692,12 @@ def main(argv: list[str] | None = None) -> int:
         "--reason",
         default=None,
         metavar="TEXT",
-        help="release-loop only: why the stage is retired; lands in the loop record",
+        help="release-loop only: why the stage is retired or the loop restarted; lands in the record",
+    )
+    parser.add_argument(
+        "--restart",
+        action="store_true",
+        help="release-loop only, on the maintainer's request: restart a completed loop as a fresh run",
     )
     parser.add_argument("--root", default=str(REPO_ROOT), help=argparse.SUPPRESS)
     parser.add_argument(
@@ -5661,8 +5721,8 @@ def main(argv: list[str] | None = None) -> int:
         if args.availability_reported is not None and args.verb != "review-loop":
             raise Refused("--availability-reported belongs to review-loop alone.")
         refuse_repository_git(Path(args.root))
-        if (args.stage_failed is not None or args.reason is not None) and args.verb != "release-loop":
-            raise Refused("--stage-failed and --reason belong to release-loop alone.")
+        if (args.stage_failed is not None or args.reason is not None or args.restart) and args.verb != "release-loop":
+            raise Refused("--stage-failed, --restart and --reason belong to release-loop alone.")
         if args.verb == "session":
             if not args.model:
                 raise Refused("session needs --model <id>: name the model exactly as model-endpoints.yaml lists it.")
@@ -5678,7 +5738,7 @@ def main(argv: list[str] | None = None) -> int:
                 review_loop(Path(args.root), args.change, args.availability_reported)
         elif args.verb == "release-loop":
             with holding_record(args.change, Path(args.root)):
-                release_loop(Path(args.root), args.change, args.stage_failed, args.reason)
+                release_loop(Path(args.root), args.change, args.stage_failed, args.reason, args.restart)
         elif args.verb == "prepare-loop":
             with holding_record(args.change, Path(args.root)):
                 VERBS[args.verb](Path(args.root), args.change)
