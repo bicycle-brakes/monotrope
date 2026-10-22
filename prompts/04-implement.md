@@ -12,9 +12,12 @@ A leak-check BLOCK stops; it never falls back.
 You follow the plan. You read the spec to know what you are building against.
 Under the Stage-2 runner an implement attempt has
 file tools but no command tool (a Codex repair attempt may run tests and
-`make verify`, never commit): update the time log before returning; the runner
+`make verify`, never commit): write no entry under `## Time used`, because the
+runner measures each completed attempt itself and writes a line marked
+"measured by the runner" (a rejected attempt gets one too); the runner
 runs `make verify` and makes the local checkpoint commit. In an ordinary Stage-1 session, you still run the commands
-and commits this prompt assigns to you.
+and commits this prompt assigns to you, and the interactive session reads its own
+clock and logs its own spans, as the appetite rule below says.
 
 **The plan is the contract.** Where it no longer holds — a file does not exist,
 an assumption does not carry, a test cannot be written that way — you **stop**

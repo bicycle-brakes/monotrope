@@ -128,6 +128,11 @@ typed: a hand-kept list of files ages exactly as fast as files are added.
 | [`changes/criterion-test-ledger/plan.md`](changes/criterion-test-ledger/plan.md) | draft | partial | 2026-10-11 | coding-harness-909 |
 | [`changes/criterion-test-ledger/research.md`](changes/criterion-test-ledger/research.md) | draft | partial | 2026-10-11 | coding-harness-909 |
 | [`changes/criterion-test-ledger/spec.md`](changes/criterion-test-ledger/spec.md) | draft | partial | 2026-10-11 | coding-harness-909 |
+| [`changes/failed-check-secrets/decisions.md`](changes/failed-check-secrets/decisions.md) | draft | none | 2026-10-16 | coding-harness-8hr |
+| [`changes/failed-check-secrets/findings.md`](changes/failed-check-secrets/findings.md) | draft | none | 2026-10-16 | coding-harness-8hr |
+| [`changes/failed-check-secrets/plan.md`](changes/failed-check-secrets/plan.md) | draft | none | 2026-10-16 | coding-harness-8hr |
+| [`changes/failed-check-secrets/research.md`](changes/failed-check-secrets/research.md) | draft | none | 2026-10-16 | coding-harness-8hr |
+| [`changes/failed-check-secrets/spec.md`](changes/failed-check-secrets/spec.md) | draft | none | 2026-10-16 | coding-harness-8hr |
 | [`changes/haiku-5-5/decisions.md`](changes/haiku-5-5/decisions.md) | draft | none | 2026-10-14 | coding-harness-eao |
 | [`changes/haiku-5-5/findings.md`](changes/haiku-5-5/findings.md) | draft | none | 2026-10-14 | coding-harness-eao |
 | [`changes/haiku-5-5/plan.md`](changes/haiku-5-5/plan.md) | draft | none | 2026-10-14 | coding-harness-eao |
@@ -188,6 +193,11 @@ typed: a hand-kept list of files ages exactly as fast as files are added.
 | [`changes/research-swarm/plan.md`](changes/research-swarm/plan.md) | draft | partial | 2026-10-18 | coding-harness-icw |
 | [`changes/research-swarm/research.md`](changes/research-swarm/research.md) | draft | none | 2026-10-18 | coding-harness-icw |
 | [`changes/research-swarm/spec.md`](changes/research-swarm/spec.md) | draft | partial | 2026-10-18 | coding-harness-icw |
+| [`changes/runner-time-line/decisions.md`](changes/runner-time-line/decisions.md) | draft | none | 2026-10-20 | coding-harness-9wp |
+| [`changes/runner-time-line/findings.md`](changes/runner-time-line/findings.md) | draft | none | 2026-10-20 | coding-harness-9wp |
+| [`changes/runner-time-line/plan.md`](changes/runner-time-line/plan.md) | draft | none | 2026-10-20 | coding-harness-9wp |
+| [`changes/runner-time-line/research.md`](changes/runner-time-line/research.md) | draft | none | 2026-10-20 | coding-harness-9wp |
+| [`changes/runner-time-line/spec.md`](changes/runner-time-line/spec.md) | draft | none | 2026-10-20 | coding-harness-9wp |
 | [`changes/sol-effort/decisions.md`](changes/sol-effort/decisions.md) | draft | none | 2026-10-13 | coding-harness-yzk |
 | [`changes/sol-effort/findings.md`](changes/sol-effort/findings.md) | draft | none | 2026-10-14 | coding-harness-yzk |
 | [`changes/sol-effort/plan.md`](changes/sol-effort/plan.md) | draft | none | 2026-10-14 | coding-harness-yzk |
