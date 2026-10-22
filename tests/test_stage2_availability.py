@@ -503,12 +503,15 @@ def test_a_free_model_is_probed_with_the_real_size_request_and_a_paid_one_is_not
         assert call["prompt_file"] in checked
 
 
-def test_a_free_model_that_fails_the_real_size_probe_is_not_selected(world: World, monkeypatch) -> None:
+def test_a_free_model_that_fails_the_real_size_probe_is_not_selected(world: World) -> None:
     """Bead k9rw: 'Endpoint is unavailable' on the real-size request makes the free model unavailable."""
     enable(world)
     world.script(
         pi=[
-            {"model": model, **({"exit": 1, "stderr": "429 Endpoint is unavailable"} if model == TEST_FREE[0] else {"stdout": "OK"})}
+            {
+                "model": model,
+                **({"exit": 1, "stderr": "429 Endpoint is unavailable"} if model == TEST_FREE[0] else {"stdout": "OK"}),
+            }
             for model in [*TEST_FREE, *TEST_LADDER]
         ]
     )
