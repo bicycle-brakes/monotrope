@@ -258,3 +258,14 @@ Kept from the loop record:
 Stage-2 call, 2026-10-22: review (loop marks) · endpoint openai-codex · model gpt-6.1-sol · leak check clean over 512 files, 1809 commits, 12 rules.
 
 Stage-2 call, 2026-10-22: repair · attempt 1 · route codex · endpoint openai-codex · model gpt-6.1-sol · leak check clean over 512 files, 1811 commits, 12 rules.
+
+Stage-2 call, 2026-10-22: review · endpoint openai-codex · model gpt-6.1-sol · leak check clean over 512 files, 1812 commits, 12 rules.
+
+## Phase 6 — Codex, 2026-10-22
+
+| ID | Severity | Dimension | Origin | Where | Finding | Reviewer | Status | Broke a test |
+|---|---|---|---|---|---|---|---|---|
+| F-3 | MAJOR | SPEC | implementation | scripts/stage2.py:597–598 | Credential scrubbing destroys overlapping secret-rule matches before their spans are collected. Reproduced with known key `ROUTEKEY-987654321`, diagnostic `ROUTEKEY-987654321:FIXKEY-123456`, and rule `secret:pair = ROUTEKEY-[0-9]+:FIXKEY-[0-9]+`: both `verify_evidence` and subsequent listing protection return `[credential]:FIXKEY-123456`. The matched suffix therefore survives into findings and the retry prompt without redaction or refusal. Secret-span protection must cover the original match while preserving credential protection. [Acceptance criteria 1, 2] | Codex | taken — criteria 1, 2: collect secret-rule spans on the original text before credential scrubbing, then apply both protections, so no matched suffix survives | — |
+
+Phase 6 verdict: codex 01a160f5-89d5-7fd1-970e-db36fbbddf7c, 2026-10-22
+Reviewer session: codex 01a160f5-89d5-7fd1-970e-db36fbbddf7c — a fresh session reviewed: an earlier ## Phase 6 block makes this a re-check
