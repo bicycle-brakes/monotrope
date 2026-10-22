@@ -3072,14 +3072,23 @@ def time_entry(
     )
 
 
-def with_time_entry(text: str, entry: str) -> str:
+def with_time_entry(text: str, entry: str, *, prior: str | None = None) -> str:
     """`text` with `entry` as the last line of the time section, before the next level-two heading."""
     match = TIME_HEADING.search(text)
     if match is None:
         raise Refused("the plan has no `## Time used` heading.")
     following = re.search(r"^## [^#]", text[match.end() :], re.M)
     end = match.end() + following.start() if following else len(text)
-    body = text[match.end() : end].rstrip() or "\n"
+    body = text[match.end() : end]
+    if prior is not None:
+        # Time records are runner-owned: keep the pre-call section even when the model rewrites it.
+        previous = TIME_HEADING.search(prior)
+        if previous is None:
+            raise Refused("the pre-call plan has no `## Time used` heading.")
+        next_heading = re.search(r"^## [^#]", prior[previous.end() :], re.M)
+        previous_end = previous.end() + next_heading.start() if next_heading else len(prior)
+        body = prior[previous.end() : previous_end]
+    body = body.rstrip() or "\n"
     tail = text[end:]
     return text[: match.end()] + body + "\n" + entry + "\n" + (f"\n{tail}" if tail else "")
 
@@ -4607,6 +4616,15 @@ def run_attempts(
             cannot_start = error
             lines = scrub(str(error), key).splitlines() or ["make could not be started"]
             problems = ["`make verify` could not be run\n" + "\n".join(_shrink(lines, TAIL_LINES))]
+        # An unchanged hard-linked plan can escape changed-document preparation. Validate the
+        # logging destination independently before deciding the result, even in that case.
+        try:
+            if ctx.plan.resolve() != root.resolve() / ctx.plan.relative_to(root):
+                raise Refused("refusing an aliased plan destination")
+            if ctx.plan.is_symlink() or ctx.plan.stat().st_nlink > 1:
+                raise Refused("refusing an aliased or hard-linked plan destination")
+        except (Refused, OSError, RuntimeError) as error:
+            problems.append(f"The time entry destination is unsafe or unreadable: {error}")
         if not problems and answer_check is not None:
             problems = answer_check(answer)
         # The verdict is in: the runner writes the attempt's span, accepted or rejected. A rejected
@@ -4629,8 +4647,15 @@ def run_attempts(
                 # Written by the restore loop below, which never writes through whatever stands there.
                 inputs_before[ctx.plan] = with_time_entry(baseline_time, entry).encode("utf-8")
             else:
+                # A parent alias cannot safely be repaired by unlinking the document: that would
+                # remove a path in the alias target. Refuse before reading or writing through it.
+                if ctx.plan.parent.resolve() != root.resolve() / ctx.plan.relative_to(root).parent:
+                    raise Refused("refusing an aliased plan parent")
                 try:
-                    ctx.plan.write_text(with_time_entry(ctx.plan.read_text(encoding="utf-8"), entry), encoding="utf-8")
+                    if ctx.plan.is_symlink() or ctx.plan.stat().st_nlink > 1:
+                        raise Refused("refusing an aliased or hard-linked plan")
+                    text = with_time_entry(ctx.plan.read_text(encoding="utf-8"), entry, prior=baseline_time)
+                    ctx.plan.write_text(text, encoding="utf-8")
                 except (Refused, OSError, UnicodeDecodeError):
                     if not problems:
                         raise

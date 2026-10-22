@@ -140,3 +140,4 @@ input-restore tests compare the plan without the runner's own time lines
 2026-10-21T23:17:34Z to 23:22:16Z: 2383 passed, 16 skipped. Span counted:
 2026-10-21T23:06:00Z (merge) to 23:23:00Z, about 17 min; the inherited
 attempt's span stays not measured, as recorded above.
+2026-10-22 00:30:30–00:44:07 UTC, 817 s — repair · attempt 1 · route codex · model gpt-6.1-sol · accepted · measured by the runner

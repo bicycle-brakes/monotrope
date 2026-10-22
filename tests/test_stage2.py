@@ -6760,7 +6760,7 @@ def test_repair_retry_starts_after_a_completed_attempt_deletes_plan(
     for relative, content in inputs.items():
         if relative != "plans/changes/demo/plan.md":
             assert (world.root / relative).read_bytes() == content
-    assert "2026-10-12 10:00–10:05, 5 min" in world.plan.read_text(encoding="utf-8")
+    assert runner_entries(world.plan)[-1].endswith("accepted · measured by the runner")
     assert git(world.root, "rev-list", "--count", f"{baseline}..HEAD") == "1"
     assert git(world.root, "status", "--porcelain") == ""
 
@@ -6860,7 +6860,7 @@ def test_repair_retry_restores_non_utf8_prompt_inputs(
         if relative not in ("plans/changes/demo/decisions.md", "plans/changes/demo/design.md"):
             assert content.decode("utf-8").rstrip() in final_prompt
         assert f"> - `{relative}`" in world.text()
-    assert "2026-10-12 10:00–10:05, 5 min" in world.plan.read_text(encoding="utf-8")
+    assert runner_entries(world.plan)[-1].endswith("accepted · measured by the runner")
     assert git(world.root, "rev-list", "--count", f"{baseline}..HEAD") == "1"
     assert git(world.root, "status", "--porcelain") == ""
 
@@ -7479,6 +7479,75 @@ def test_runner_keeps_rejected_time_across_input_restore(world: World, monkeypat
     assert "rejected" in first and "attempt 1 ·" in first and "accepted" in second
     assert older.strip() in plan and "# rewritten" not in plan
     assert plan.index(older.strip()) < plan.index(first) < plan.index(second)
+
+
+@pytest.mark.parametrize("link_kind", ["symlink", "hardlink"])
+def test_runner_final_time_write_restores_alias_without_following(
+    world: World, monkeypatch: pytest.MonkeyPatch, tmp_path: Path, link_kind: str
+) -> None:
+    """F-1: a rejected final alias must never receive the runner's write."""
+    FakeClock(monkeypatch, UTC_START)
+    original = world.plan.read_bytes()
+    target = tmp_path / "readable-target.md"
+    target.write_bytes(original)
+    real_model = stage2.run_work_model
+
+    def model(*args, **kwargs):
+        answer = real_model(*args, **kwargs)
+        world.plan.unlink()
+        if link_kind == "symlink":
+            world.plan.symlink_to(target)
+        else:
+            os.link(target, world.plan)
+        return answer
+
+    monkeypatch.setattr(stage2, "run_work_model", model)
+    world.script(claude=[{"stdout": "done"}])
+    assert world.run("implement", "demo", "--stage2-off", "offline test") == 1
+    assert target.read_bytes() == original
+    assert not world.plan.is_symlink() and world.plan.stat().st_nlink == 1
+    (entry,) = runner_entries(world.plan)
+    assert "rejected" in entry
+    assert "destination is unsafe or unreadable" in world.text()
+
+
+@pytest.mark.parametrize("accepted", [True, False])
+def test_runner_preserves_precall_time_on_final_verdict(
+    world: World, monkeypatch: pytest.MonkeyPatch, accepted: bool
+) -> None:
+    """F-2: final accepted and exhausted retries retain trusted earlier records."""
+    FakeClock(monkeypatch, UTC_START)
+    older = "2026-10-06 09:00–09:05, 5 min"
+    world.plan.write_text(world.plan.read_text() + older + "\n\n## Following\nkeep following\n")
+    git(world.root, "add", "-A")
+    git(world.root, "commit", "--quiet", "-m", "older time and following section")
+    real_model = stage2.run_work_model
+
+    def model(*args, **kwargs):
+        answer = real_model(*args, **kwargs)
+        if len(world.calls("claude")) == 3:
+            text = world.plan.read_text()
+            before, rest = text.split("## Time used", 1)
+            _, after = rest.split("## Following", 1)
+            world.plan.write_text(before + "## Time used\n\nREWRITTEN\n\n## Following" + after + "model outside edit\n")
+        return answer
+
+    monkeypatch.setattr(stage2, "run_work_model", model)
+    world.script(
+        claude=[{"stdout": "one"}, {"stdout": "two"}, {"stdout": "three"}],
+        make=[{"stdout": "red\n", "exit": 1}] * 2
+        + [{"stdout": "green\n" if accepted else "red\n", "exit": 0 if accepted else 1}],
+    )
+    assert world.run("implement") == (0 if accepted else 1)
+    text = world.plan.read_text()
+    assert older in text and "REWRITTEN" not in text
+    entries = runner_entries(world.plan)
+    assert len(entries) == 3
+    assert all(f"attempt {n} ·" in line for n, line in enumerate(entries, 1))
+    assert all("rejected" in line for line in entries[:2])
+    assert ("accepted" in entries[-1]) == accepted
+    assert text.index(older) < text.index(entries[0]) < text.index(entries[-1]) < text.index("## Following")
+    assert "keep following\nmodel outside edit\n" in text
 
 
 def test_runner_time_insert_preserves_section_boundaries() -> None:
