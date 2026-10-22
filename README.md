@@ -8,24 +8,30 @@
 
 **Let AI agents do the work. Keep the decisions and the evidence.**
 
-Monotrope is a file-based workflow for AI coding agents. Agents research,
-specify, plan, implement and review a change; you decide what the change is
-for and what must not happen. Everything in between — the research, your
-answers, the agent's own choices, the contract, the review findings and where
-the next session resumes — is written to versioned files in the repository.
+**What this is.** Monotrope is a file-based workflow for AI coding agents, and
+this repository is its home: the rules, the phase prompts, the templates, the
+gates and the reference implementation. It defines how a change is researched,
+specified, planned, implemented and reviewed; Claude Code and Codex do the
+work, and you decide what the change is for and what must not happen. It
+develops itself with the same workflow.
 
-Most agent workflows keep that state in the conversation. Monotrope keeps it
-in the repository, so the next session, model or person can pick it up.
+**What this is not.** Not an agent program, not a server, not a model gateway,
+and not a general runner for arbitrary harnesses. The one runner here,
+`scripts/stage2.py`, starts foreign models for specific phases; it does not
+orchestrate the workflow.
 
-No server of its own: Markdown and YAML in git, a small Python toolchain, and
-a tracker that travels in the repository's git refs. One instruction file
-(`AGENTS.md`) is the only instruction entry; Claude Code and Codex read it
-today. The files are designed to outlive the harness (the agent program), so
-a change can be finished in another session by a different model; the full
-orchestration path is Claude Code for now.
+Everything in between — the research, your answers, the agent's own choices,
+the contract, the review findings and where the next session resumes — is
+written to versioned files in the repository. Most agent workflows keep that
+state in the conversation; Monotrope keeps it in the repository, so the next
+session, model or person can pick it up.
 
-This repository holds the workflow rules, the phase prompts, the templates and
-the tools, and it develops itself with the same workflow.
+Markdown and YAML in git, a small Python toolchain, and a tracker that travels
+in the repository's git refs. One instruction file (`AGENTS.md`) is the only
+instruction entry; Claude Code and Codex read it today. The files are designed
+to outlive the harness (the agent program), so a change can be finished in
+another session by a different model; the full orchestration path is Claude
+Code for now.
 
 > **Status:** early and moving fast. [What works today](#what-works-today)
 > separates what a tool enforces from what is a written rule and from what is
