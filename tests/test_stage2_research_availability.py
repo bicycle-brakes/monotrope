@@ -447,7 +447,8 @@ def test_a_seat_whose_candidates_all_miss_the_fresh_catalog_stops(fx: Fixture, c
     assert fx.prepare() == 1
     out = capsys.readouterr()
     assert "seat-unavailable" in out.out + out.err
-    assert [name for name in fx.probed() if name != HAIKU] == [], "a Go model absent from the fresh overlay was probed"
+    paid = [name for name in fx.probed() if name != HAIKU and not name.endswith("-free")]
+    assert paid == [], "a Go model absent from the fresh overlay was probed"
     assert not availability.research_receipt_path("demo", stage2, fx.w.root).exists()
 
 
@@ -575,18 +576,20 @@ def test_probes_send_only_the_fixed_text_without_tools(fx: Fixture, monkeypatch:
     monkeypatch.setattr(stage2, "launch", capture)
     assert fx.prepare() == 0
     calls = [call for call in fx.w.calls() if call["name"] in {"pi", "claude"}]
-    assert len(calls) == 4
-    assert limits == [60] * 4
+    assert len(calls) == 6
+    assert limits == [60] * 4 + [availability.FREE_PROBE_SECONDS] * 2
     for call in calls:
         assert CANARY not in json.dumps(call), "a private canary reached a probe"
         assert call["cwd"] != str(fx.w.root)
+        if call["model"].endswith("-free"):
+            continue  # a free model's probe has its own tests below
         assert "Availability probe only. Reply with OK. Do not review code or request tools." in json.dumps(call)
         if call["name"] == "pi":
             assert call["path"] == str(fx.w.bin / "pin-pi"), "a bare pi ran"
             assert "--no-tools" in call["argv"] and "--tools" not in call["argv"]
             assert "--no-context-files" in call["argv"] and "--no-extensions" in call["argv"]
     audit = fx.receipt()["state"]["audit"]
-    assert len(audit) == 4 and all("leak check clean" in line for line in audit)
+    assert len(audit) == 6 and all("leak check clean" in line for line in audit)
 
 
 def test_claude_code_candidate_is_probed_through_official_claude(fx: Fixture) -> None:
@@ -631,8 +634,8 @@ def test_probes_are_lazy_unique_and_outside_the_run_budget(fx: Fixture) -> None:
     probed = fx.probed()
     assert sorted(probed) == sorted(set(probed)), "a model was probed twice"
     # Pool models beyond the one substitute that was needed are never probed.
-    assert set(probed) == {"deepseek-v4.1-flash", "mimo-v2.6-flash", HAIKU, "longcat-2.0"}
-    assert not {"alpha-free", "beta-free", "claude-opus-5-5"} & set(probed), "a free model or Opus role was probed"
+    assert set(probed) == {"deepseek-v4.1-flash", "mimo-v2.6-flash", HAIKU, "longcat-2.0", "alpha-free", "beta-free"}
+    assert "claude-opus-5-5" not in probed, "an Opus role was probed"
     assert tree_digest(fx.w.root) == before, "preparation changed the worktree"
     assert run_git(fx.w.root, "status", "--porcelain") == ""
 
@@ -1201,3 +1204,55 @@ def test_unwritable_probe_audit_refuses_before_launch(fx: Fixture, monkeypatch) 
     assert fx.prepare() == 2
     assert not fx.probed()
     assert not availability.research_receipt_path("demo", stage2, fx.w.root).exists()
+
+
+# ---------------------------------------------------------------------------
+# Free members are probed with the real online_free request (bead k9rw)
+# ---------------------------------------------------------------------------
+
+
+def free_calls(fx: Fixture) -> list[dict]:
+    return [call for call in fx.w.calls() if call["name"] == "pi" and call["model"].endswith("-free")]
+
+
+def test_a_free_member_is_probed_with_the_real_online_free_request(fx: Fixture, monkeypatch) -> None:
+    import stage2_research_run as run
+
+    limits = []
+    launch = stage2.launch
+
+    def capture(command, *args, **kwargs):
+        if "--version" not in command and any("-free" in part for part in command):
+            limits.append(kwargs.get("timeout"))
+        return launch(command, *args, **kwargs)
+
+    monkeypatch.setattr(stage2, "launch", capture)
+    assert fx.prepare() == 0
+    calls = free_calls(fx)
+    assert sorted(call["model"] for call in calls) == ["alpha-free", "beta-free"]
+    assert limits == [availability.FREE_PROBE_SECONDS] * 2
+    # The first free topic's request, the shared builder's own text, with the instruction to reply OK.
+    real = run.online_topic_prompt(fx.w.root, 9, availability.PROBE_TOPIC_SENTENCE)
+    for call in calls:
+        assert real in call["prompt_file"]
+        assert "Reply with OK" in call["prompt_file"]
+        assert "--no-tools" in call["argv"]
+    audit = fx.receipt()["state"]["audit"]
+    assert sum("alpha-free" in line or "beta-free" in line for line in audit) == 2
+    assert set(fx.receipt()["state"]["free"]["selected"]) == {"alpha-free", "beta-free"}
+
+
+def test_a_free_member_that_fails_its_probe_is_unavailable_and_leaves_the_selection(fx: Fixture, capsys) -> None:
+    fx.script(**{"alpha-free": {"exit": 1, "stderr": "upstream said no"}})
+    assert fx.prepare() == 0
+    free = fx.receipt()["state"]["free"]
+    assert free["selected"] == ["beta-free"]
+    assert "upstream said no" in free["unavailable"]["alpha-free"]
+    out = capsys.readouterr().out
+    assert "Unavailable" in out and "alpha-free" in out and "upstream said no" in out
+
+
+def test_a_free_model_is_not_probed_when_it_is_excluded_for_the_public_web(fx: Fixture) -> None:
+    fx.edit_declaration(exclude("alpha-"))
+    assert fx.prepare() == 0
+    assert [call["model"] for call in free_calls(fx)] == ["beta-free"]

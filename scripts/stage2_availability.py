@@ -705,6 +705,61 @@ class _Selection:
         return chosen
 
 
+# A public topic is one sentence of at most 20 words, authored at run time; the probe stands one in.
+PROBE_TOPIC_SENTENCE = "Availability probe only, not a real research topic"
+FREE_RESEARCH_TOPIC = 9  # the first topic a free model researches; its request shape is the probe's
+
+
+def free_research_probe_text(root: Path) -> str:
+    """A free research member's probe: its real online_free request (first free topic), asking for OK only."""
+    import stage2_research_run  # imported here: that module imports this one
+
+    request = stage2_research_run.online_topic_prompt(root, FREE_RESEARCH_TOPIC, PROBE_TOPIC_SENTENCE)
+    instruction = "Availability probe only. Reply with OK. Do not research and do not request tools."
+    return "\n\n".join([instruction, request, instruction])
+
+
+def probe_free_research(selection: _Selection, selected: list[str]) -> tuple[list[str], dict[str, str]]:
+    """Probe each free member with the real-size request; return the reachable ones and each failure's reason."""
+    runner, root = selection.runner, selection.root
+    data = read_declaration(root)
+    text = free_research_probe_text(root)
+    if selection.key is None:
+        selection.key = runner.reviewer_key()
+    reachable: list[str] = []
+    failed: dict[str, str] = {}
+    for model in selected:
+        for limit in (FREE_PROBE_SECONDS, FREE_PROBE_RETRY_SECONDS):
+            try:
+                probe_go(
+                    runner,
+                    root,
+                    selection.change,
+                    model,
+                    selection.key,
+                    selection.audit,
+                    selection.models_store,
+                    admission=lambda _root, ident: (
+                        data
+                        if isinstance(data, str)
+                        else stage2_swarm.invocation_problem(data, "online_free", GO, ident, selected_free=selected)
+                    ),
+                    timeout_seconds=limit,
+                    text=text,
+                )
+            except runner.CallFailed as error:
+                failure = runner.scrub(str(error), selection.key)
+                failed[model] = failure
+                if "stopped by" in failure:
+                    continue  # only a stopped call is worth the longer try
+                break
+            else:
+                failed.pop(model, None)
+                reachable.append(model)
+                break
+    return reachable, failed
+
+
 def _free_text(values: list[str]) -> str:
     return ", ".join(values) or "none"
 
@@ -722,6 +777,7 @@ def research_report(state: dict) -> str:
     lines.append(f"Pool, cheapest first: {pool}")
     lines.extend(intelligence_lines(state))
     lines.append(f"Free selection: {_free_text(state['free']['selected'])}")
+    lines.extend(f"Unavailable (free): {model}: {reason}" for model, reason in state["free"]["unavailable"].items())
     lines.append("Models:")
     for key, item in state["models"].items():
         detail = f" - {item['reason']}" if item.get("reason") else ""
@@ -855,6 +911,9 @@ def prepare_research(
         raise runner.CallFailed(f"the Go catalog is unmeasured: {error}; no probe or research call starts.") from error
     selection = _Selection(root, change, runner, data, rule, catalog)
     chosen = {label: selection.fill(label, trio) for label, trio in seats.items()}
+    free_selected = [m for m in catalog["selected"] if not stage2_swarm.exclusion_problem(data, m, "public-web")]
+    # A free member stays optional: a failed probe only removes it, it never stops the preparation.
+    free_reachable, free_failed = probe_free_research(selection, free_selected)
     terms = selection.go.get("modelle_terms")
     terms = terms if isinstance(terms, dict) else {}
     state = {
@@ -874,7 +933,8 @@ def prepare_research(
             )
         },
         "free": {
-            "selected": [m for m in catalog["selected"] if not stage2_swarm.exclusion_problem(data, m, "public-web")],
+            "selected": free_reachable,
+            "unavailable": free_failed,
             "excluded": [m for m in catalog["selected"] if stage2_swarm.exclusion_problem(data, m, "public-web")],
             "policy": catalog["policy"],
         },

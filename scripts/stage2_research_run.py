@@ -211,6 +211,25 @@ def public_sentence_problems(answer: str, change: str, bead: str, tracked: set[s
     return []
 
 
+def prompt_text(root: Path, name: str) -> str:
+    return (root / "prompts" / "research-swarm" / name).read_text(encoding="utf-8")
+
+
+def topic_head_text(root: Path, topic: int, template: str) -> str:
+    return (
+        prompt_text(root, template)
+        .replace("{{TOPIC_ID}}", str(topic))
+        .replace("{{TOPIC_NAME}}", TOPIC_NAMES[topic])
+        .replace("{{TOPIC_SCOPE}}", TOPIC_SCOPES[topic])
+    )
+
+
+def online_topic_prompt(root: Path, topic: int, sentence: str) -> str:
+    """The request an online researcher gets for one topic; the run and a free model's availability probe share it."""
+    head = topic_head_text(root, topic, "public.md").replace("{{TOPIC}}", sentence)
+    return "\n\n".join([head, prompt_text(root, "report.md")])
+
+
 # ---------------------------------------------------------------------------
 # One run
 # ---------------------------------------------------------------------------
@@ -356,7 +375,7 @@ class Run:
     # -- prompts ---------------------------------------------------------------------------------
 
     def prompt_file(self, name: str) -> str:
-        return (self.root / "prompts" / "research-swarm" / name).read_text(encoding="utf-8")
+        return prompt_text(self.root, name)
 
     def private_brief(self) -> str:
         return "\n\n".join([self.brief, "# Repository rules (AGENTS.md)", self.agents.rstrip()])
@@ -374,12 +393,7 @@ class Run:
         return "\n\n".join([self.prompt_file("public-topic.md"), "---", self.brief])
 
     def topic_head(self, topic: int, template: str) -> str:
-        return (
-            self.prompt_file(template)
-            .replace("{{TOPIC_ID}}", str(topic))
-            .replace("{{TOPIC_NAME}}", TOPIC_NAMES[topic])
-            .replace("{{TOPIC_SCOPE}}", TOPIC_SCOPES[topic])
-        )
+        return topic_head_text(self.root, topic, template)
 
     def repository_prompt(self, topic: int) -> str:
         assert self.map is not None and self.history is not None
@@ -401,8 +415,7 @@ class Run:
 
     def online_prompt(self, topic: int) -> str:
         assert self.sentence is not None
-        head = self.topic_head(topic, "public.md").replace("{{TOPIC}}", self.sentence)
-        return "\n\n".join([head, self.prompt_file("report.md")])
+        return online_topic_prompt(self.root, topic, self.sentence)
 
     # -- the dispatcher glue ---------------------------------------------------------------------
 
