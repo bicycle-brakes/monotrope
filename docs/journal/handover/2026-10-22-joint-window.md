@@ -1,0 +1,130 @@
+---
+title: "Session handover — joint morning window, 2026-10-22"
+category: handover
+created: 2026-10-22
+direction: framework->framework
+provenance: ai-drafted-reviewed
+produced_by:
+  kind: llm-session
+  name: claude-code
+  version: "2026-10-22"
+tags: [handover, joint-window, review-swarm, research-swarm, night-run]
+target_ref: e0b914c
+status: pending
+review:
+  status: pending
+  approved_by: null
+  approved_at: null
+---
+
+# Resume here
+
+## Where we are
+
+The first joint window under the maintainer's new daily shape (decide and
+test together in a flexible window, then work alone at night) ran on
+2026-10-22 from about 09:00 to 14:00 Europe/Berlin. Eight more OpenCode Go
+models were admitted on their data terms (#218), the two runner fixes #216
+and #215 were merged with their remaining MAJOR findings moved to follow-ups,
+and free models are now probed with a request of the real size in both
+swarms (in PR #158). The live swarm test on PR #158 (research swarm) is
+running: the free round was clean over a cut diff, and the Flash-swarm round
+was still running when this was written (about 14:00 Europe/Berlin). Tonight's
+queue and frame are fixed in PR #221.
+
+## Next step
+
+Read the Flash-swarm round of the #158 review loop in
+`~/.local/state/coding-harness/stage2/research-swarm@2014bcfd/loop.md`
+(log: `/private/tmp/claude-501/-Users-mikypiky-coding-harness/42e6ff00-b474-435b-b9dd-676068362ad7/scratchpad/review-loop-158d.log`,
+process `stage2.py review-loop research-swarm`, pid 70182 at 14:00); show
+its rows to the maintainer, and decide each row with the maintainer before
+the next `review-loop research-swarm` call. If the process is gone and the
+record has no Flash round, run a fresh `prepare-loop research-swarm`, report
+the selection, then `review-loop research-swarm --availability-reported <id>`.
+
+## Needed from the maintainer
+
+- Decide the Flash-round rows of #158 together (above).
+- Merge or comment PR #220 (Pi install note, text only) and PR #221 (night
+  plan, text only); #221 should be merged before the night starts.
+- Say when the night session starts.
+
+## Decisions and preferences
+
+All from the conversation of 2026-10-22; do not ask again.
+
+- Workflow: a flexible joint window (today: the morning) prepares everything
+  so the agent works alone at night; a night-prep skill is wanted
+  (coding-harness-yuw.3).
+- Go model data terms must always be current and choosable per run; a very
+  fast reachability probe before each run (coding-harness-3g53). mimo-v2.6-flash
+  answers again (maintainer).
+- #218 merged: deepseek-v4-pro, glm-5.2, glm-5.3, hy3, hy4-preview, mimo-v2.5,
+  mimo-v2.5-pro, mimo-v2.6-flash admitted; qwen3.7-plus and qwen3.8-max
+  skipped (wire API not measured); Kimi stays excluded (2026-09-30).
+- #216 F-6: repair by writing the time line in one place every post-call
+  exit passes through, a test per exit (coding-harness-9wp).
+- #216 and #215 merged at the maintainer's request with MAJOR findings open
+  (F-6; F-4/F-5), no BLOCKER.
+- Free models are probed with a request of the real size in both swarms;
+  paid models keep the small probe (coding-harness-k9rw, built in #158).
+- Research comes before the interview; a gate shall enforce it
+  (coding-harness-99v7), and each question shall name its research basis
+  (coding-harness-04xk, ADR 0018 change). Until then every question carries a
+  "Grundlage" line.
+- Paid review rounds: full diff as a file, proof of reading from Pi's event
+  log, a Pi skill only if research supports it; starts with research, first
+  real run of the research swarm after #158 merges (coding-harness-juic).
+- Night frame for 2026-10-22/23 and the interview answers for
+  coding-harness-10w (refuse and stop) and coding-harness-i70 (state only in
+  the runner's own block): see `docs/research/2026-10-22-night-run-plan.md`
+  in PR #221.
+
+## Open work and blockers
+
+Status lives in Beads. Today's relevant beads: coding-harness-icw (research
+swarm, #158), coding-harness-k9rw (real-size free probe), coding-harness-9wp,
+coding-harness-8hr, coding-harness-99v7, coding-harness-yuw.2,
+coding-harness-10w, coding-harness-i70, coding-harness-juic,
+coding-harness-04xk, coding-harness-3g53, coding-harness-hs0o.
+
+- Measured 2026-10-22 09:52 and 11:33 UTC: `mimo-v2.5-pro` answers
+  "Unsupported model" although admitted by #218 — not yet in a bead.
+- `release-loop --stage-failed` refuses before the first stage snapshot, so
+  an all-failed first round cannot be retired (seen 09:52 UTC) — not yet in
+  a bead.
+- Beads coding-harness-0xjr (explicit loop restart, built on #158) and
+  coding-harness-4295 close when #158 merges.
+
+## Working state and parallel-session boundary
+
+- `main` at `e0b914c` (2026-10-22 about 14:00).
+- PR #158, branch `explore/research-swarm`, worktree
+  `.claude/worktrees/research-swarm`, pushed head `f187eb5` (main merged in,
+  `make verify` green, 3334 passed). The review loop writes into the state
+  directory outside the worktree and into
+  `plans/changes/research-swarm/findings.md` (leak-check lines, uncommitted
+  until the next commit).
+- PR #220 (`docs/night-run-routine`), PR #221 (`docs/night-plan-2026-10-22`),
+  this handover (`docs/handover-2026-10-22-joint-window`).
+- Worktree `.claude/worktrees/go-model-terms` is merged (#218) and can be
+  removed.
+- **Another session** runs in this repository: `stage2.py review-loop
+  readme-review-2` in worktree `.claude/worktrees/readme-problems-and-swarms`
+  (PR #219, opened 09:36 UTC). It owns that worktree and PR. This session
+  wrote the tracker today before noticing it; the next session checks before
+  any tracker write (house rule 4).
+
+## Validation
+
+- `make verify` green on #218 at `44323f2`, on the #215 merge (pytest 2431
+  passed; the frontmatter gate was red only while the merge was uncommitted,
+  green after), and on #158 at `f187eb5` (3334 passed, VERIFY GREEN).
+- CI green at the merged heads of #216 (`aed2999`) and #215 (`4239f8c`).
+- `prepare-loop research-swarm` at 11:33 UTC: free swarm cat-jam-free (passed
+  the real-size probe), Flash swarm deepseek-v4.1-flash, mimo-v2.5,
+  mimo-v2.6-flash, ladder of seven.
+- Review loop on #158, round 3 (free): no finding over a diff cut at 2000 of
+  2251 lines. Round 4 (Flash): not read at the time of writing.
+- PRs #220 and #221: text only, CI not read.
