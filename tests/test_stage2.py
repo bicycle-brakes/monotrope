@@ -8081,6 +8081,48 @@ def test_restore_work_input_refuses_external_parent_without_writes(world: World,
         assert not (target / "plan.md").exists()
 
 
+@pytest.mark.parametrize("linked_parent", [False, True])
+def test_restore_parent_symlink_inspection_error_is_refused(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, linked_parent: bool
+) -> None:
+    """A failed manual-chain inspection refuses recovery before touching the destination."""
+    root = tmp_path / "worktree"
+    root.mkdir()
+    target = root / "target"
+    target.mkdir()
+    parent = root / "parent"
+    if linked_parent:
+        parent.symlink_to("target", target_is_directory=True)
+    else:
+        parent.mkdir()
+    destination = parent / "input.md"
+    destination.write_bytes(b"unchanged\n")
+    real_is_symlink = Path.is_symlink
+    inspections = 0
+
+    def is_symlink(path: Path) -> bool:
+        nonlocal inspections
+        if path == (target if linked_parent else parent):
+            inspections += 1
+            # For an ordinary parent, let the initial ancestor check succeed;
+            # fail only when the manual chain inspects it again.
+            if linked_parent or inspections == 2:
+                raise OSError("ancestor inspection failed")
+        return real_is_symlink(path)
+
+    with monkeypatch.context() as patch:
+        patch.setattr(Path, "is_symlink", is_symlink)
+        with pytest.raises(Exception) as refused:
+            stage2.restore_work_input(root, destination, b"replacement\n")
+        assert isinstance(refused.value, stage2.RestorationRefused)
+        assert re.search("parent/input.md.*parent.*cannot be resolved", str(refused.value))
+
+    assert destination.read_bytes() == b"unchanged\n"
+    assert parent.is_symlink() == linked_parent
+    if linked_parent:
+        assert parent.readlink() == Path("target")
+
+
 def test_restore_parent_resolution_failure_stops_without_writes(
     world: World, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
 ) -> None:

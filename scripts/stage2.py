@@ -4696,7 +4696,13 @@ def restoration_parent_problem(root: Path, path: Path) -> str | None:
         # the escape, and a readlink that fails leaves containment as unestablishable as a loop.
         seen: set[Path] = set()
         probe = parent
-        while probe.is_symlink():
+        while True:
+            try:
+                link = probe.is_symlink()
+            except OSError:
+                return f"{parent.relative_to(root).as_posix()} cannot be resolved"
+            if not link:
+                break
             if probe in seen or len(seen) >= 32:
                 return f"{parent.relative_to(root).as_posix()} cannot be resolved"
             seen.add(probe)

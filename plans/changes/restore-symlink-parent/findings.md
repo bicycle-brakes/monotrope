@@ -390,3 +390,105 @@ Stage-2 call, 2026-10-23: implement · attempt 3 · route stage-1 · endpoint cl
 > tools/pi/README.md:65:81 error MD013/line-length Line length [Expected: 80; Actual: 97]
 > make: *** [verify] Error 1
 > ````
+
+Stage-2 call, 2026-10-23: prepare-loop · endpoint opencode-go · model cat-jam-free · leak check clean over 536 files, 1917 commits, 12 rules.
+
+Stage-2 call, 2026-10-23: prepare-loop · endpoint opencode-go · model longcat-2.5-preview-free · leak check clean over 536 files, 1917 commits, 12 rules.
+
+Stage-2 call, 2026-10-23: prepare-loop · endpoint opencode-go · model deepseek-v4.1-flash · leak check clean over 536 files, 1917 commits, 12 rules.
+
+Stage-2 call, 2026-10-23: prepare-loop · endpoint opencode-go · model mimo-v2.5 · leak check clean over 536 files, 1917 commits, 12 rules.
+
+Stage-2 call, 2026-10-23: prepare-loop · endpoint opencode-go · model mimo-v2.6-flash · leak check clean over 536 files, 1917 commits, 12 rules.
+
+Stage-2 call, 2026-10-23: prepare-loop · endpoint opencode-go · model longcat-2.0 · leak check clean over 536 files, 1917 commits, 12 rules.
+
+Stage-2 call, 2026-10-23: prepare-loop · endpoint opencode-go · model glm-5.3-flash · leak check clean over 536 files, 1917 commits, 12 rules.
+
+Stage-2 call, 2026-10-23: prepare-loop · endpoint opencode-go · model hy3 · leak check clean over 536 files, 1917 commits, 12 rules.
+
+Stage-2 call, 2026-10-23: prepare-loop · endpoint opencode-go · model mimo-v2.5-pro · leak check clean over 536 files, 1917 commits, 12 rules.
+
+Stage-2 call, 2026-10-23: prepare-loop · endpoint opencode-go · model mimo-v2.6-pro · leak check clean over 536 files, 1917 commits, 12 rules.
+
+Stage-2 call, 2026-10-23: prepare-loop · endpoint opencode-go · model hy4-preview · leak check clean over 536 files, 1917 commits, 12 rules.
+
+Stage-2 call, 2026-10-23: prepare-loop · endpoint opencode-go · model deepseek-v4-pro · leak check clean over 536 files, 1917 commits, 12 rules.
+
+Stage-2 call, 2026-10-23: prepare-loop · endpoint opencode-go · model glm-5.2 · leak check clean over 536 files, 1917 commits, 12 rules.
+
+Stage-2 call, 2026-10-23: prepare-loop · endpoint opencode-go · model glm-5.3 · leak check clean over 536 files, 1917 commits, 12 rules.
+
+Stage-2 call, 2026-10-23: prepare-loop · endpoint opencode-go · model cat-jam-free · leak check clean over 536 files, 1917 commits, 12 rules.
+
+Stage-2 call, 2026-10-23: prepare-loop · endpoint opencode-go · model longcat-2.5-preview-free · leak check clean over 536 files, 1917 commits, 12 rules.
+
+Stage-2 call, 2026-10-23: prepare-loop · endpoint opencode-go · model deepseek-v4.1-flash · leak check clean over 536 files, 1917 commits, 12 rules.
+
+Stage-2 call, 2026-10-23: prepare-loop · endpoint opencode-go · model mimo-v2.5 · leak check clean over 536 files, 1917 commits, 12 rules.
+
+Stage-2 call, 2026-10-23: prepare-loop · endpoint opencode-go · model mimo-v2.6-flash · leak check clean over 536 files, 1917 commits, 12 rules.
+
+Stage-2 call, 2026-10-23: prepare-loop · endpoint opencode-go · model longcat-2.0 · leak check clean over 536 files, 1917 commits, 12 rules.
+
+Stage-2 call, 2026-10-23: prepare-loop · endpoint opencode-go · model glm-5.3-flash · leak check clean over 536 files, 1917 commits, 12 rules.
+
+Stage-2 call, 2026-10-23: prepare-loop · endpoint opencode-go · model hy3 · leak check clean over 536 files, 1917 commits, 12 rules.
+
+Stage-2 call, 2026-10-23: prepare-loop · endpoint opencode-go · model mimo-v2.5-pro · leak check clean over 536 files, 1917 commits, 12 rules.
+
+Stage-2 call, 2026-10-23: prepare-loop · endpoint opencode-go · model mimo-v2.6-pro · leak check clean over 536 files, 1917 commits, 12 rules.
+
+Stage-2 call, 2026-10-23: prepare-loop · endpoint opencode-go · model hy4-preview · leak check clean over 536 files, 1917 commits, 12 rules.
+
+Stage-2 call, 2026-10-23: prepare-loop · endpoint opencode-go · model deepseek-v4-pro · leak check clean over 536 files, 1917 commits, 12 rules.
+
+Stage-2 call, 2026-10-23: prepare-loop · endpoint opencode-go · model glm-5.2 · leak check clean over 536 files, 1917 commits, 12 rules.
+
+Stage-2 call, 2026-10-23: prepare-loop · endpoint opencode-go · model glm-5.3 · leak check clean over 536 files, 1917 commits, 12 rules.
+
+Stage-2 call, 2026-10-23: prepare-loop · endpoint opencode-go · model cat-jam-free · leak check clean over 536 files, 1917 commits, 12 rules.
+
+Stage-2 call, 2026-10-23: prepare-loop · endpoint opencode-go · model longcat-2.5-preview-free · leak check clean over 536 files, 1917 commits, 12 rules.
+
+Stage-2 call, 2026-10-23: prepare-loop · endpoint opencode-go · model deepseek-v4.1-flash · leak check clean over 536 files, 1917 commits, 12 rules.
+
+Stage-2 call, 2026-10-23: prepare-loop · endpoint opencode-go · model mimo-v2.5 · leak check clean over 536 files, 1917 commits, 12 rules.
+
+Stage-2 call, 2026-10-23: prepare-loop · endpoint opencode-go · model mimo-v2.6-flash · leak check clean over 536 files, 1917 commits, 12 rules.
+
+Stage-2 call, 2026-10-23: prepare-loop · endpoint opencode-go · model longcat-2.0 · leak check clean over 536 files, 1917 commits, 12 rules.
+
+Stage-2 call, 2026-10-23: prepare-loop · endpoint opencode-go · model glm-5.3-flash · leak check clean over 536 files, 1917 commits, 12 rules.
+
+Stage-2 call, 2026-10-23: prepare-loop · endpoint opencode-go · model hy3 · leak check clean over 536 files, 1917 commits, 12 rules.
+
+Stage-2 call, 2026-10-23: prepare-loop · endpoint opencode-go · model mimo-v2.5-pro · leak check clean over 536 files, 1917 commits, 12 rules.
+
+Stage-2 call, 2026-10-23: prepare-loop · endpoint opencode-go · model mimo-v2.6-pro · leak check clean over 536 files, 1917 commits, 12 rules.
+
+Stage-2 call, 2026-10-23: prepare-loop · endpoint opencode-go · model hy4-preview · leak check clean over 536 files, 1917 commits, 12 rules.
+
+Stage-2 call, 2026-10-23: prepare-loop · endpoint opencode-go · model deepseek-v4-pro · leak check clean over 536 files, 1917 commits, 12 rules.
+
+Stage-2 call, 2026-10-23: prepare-loop · endpoint opencode-go · model glm-5.2 · leak check clean over 536 files, 1917 commits, 12 rules.
+
+Stage-2 call, 2026-10-23: prepare-loop · endpoint opencode-go · model glm-5.3 · leak check clean over 536 files, 1917 commits, 12 rules.
+
+Stage-2 call, 2026-10-23: review-loop · endpoint opencode-go · model cat-jam-free · leak check clean over 536 files, 1917 commits, 12 rules.
+
+Stage-2 call, 2026-10-23: repair · attempt 1 · route codex · endpoint openai-codex · model gpt-6.1-sol · leak check clean over 536 files, 1917 commits, 12 rules.
+
+> Attempt 1 (codex) failed its post-run checks.
+>
+> Files the attempt changed (lines added, removed):
+> - `scripts/stage2.py` +7 -1
+> - `tests/test_stage2.py` +40 -0
+>
+> Diagnostics:
+> ```text
+> - Runner format before `make verify`: ruff changed no file.
+> - L1-1: tests/test_stage2.py::test_restore_parent_symlink_inspection_error_is_refused: the call of `tests/test_stage2.py::test_restore_parent_symlink_inspection_error_is_refused[False]` failed with OSError, not an AssertionError
+> ```
+
+Stage-2 call, 2026-10-23: repair · attempt 2 · route codex-repair · endpoint openai-codex · model gpt-6.1-sol · reason first Codex post-run check failed · leak check clean over 536 files, 1917 commits, 12 rules.
