@@ -77,7 +77,7 @@ no item invents an answer).
 |---|---|---|---|---|
 | A1 | A restore through a symlinked parent is refused | coding-harness-10w | bounded | night plan, item 6 |
 | A2 | Reviewer text in the phase-6 verdict is not read back as loop state | coding-harness-i70 | bounded | night plan, item 7 |
-| A3 | The pytest bytecode cache in the venv is not a tool the attempt wrote | coding-harness-q94b | bounded | **needs an answer**: exclude `__pycache__` under the venv, or snapshot after a warm-up |
+| A3 | The pytest bytecode cache in the venv is not a tool the attempt wrote | coding-harness-q94b | bounded | maintainer, 2026-10-23: delete new or changed `__pycache__` files in the venv after the call; refuse every other venv change |
 | A4 | An empty, refused or malformed phase-6 answer is not a finished review | coding-harness-5mx | bounded | the bead's "Needed" line; interview skipped with a reason (bead notes, 2026-10-23) |
 | A5 | The review verb takes the record lock before it releases the loop record | coding-harness-751 | bounded | the bead's "Needed" line; interview skipped with a reason (bead notes, 2026-10-23) |
 | A6 | The dirty-tree check sees index-only changes; the commit keeps staged content | coding-harness-0c8 | bounded | the bead's "Needed" line; interview skipped with a reason (bead notes, 2026-10-23) |
@@ -98,7 +98,7 @@ no item invents an answer).
 |---|---|---|
 | Research swarm repair (F-65, L4-1 to L4-3) on #158 | coding-harness-icw, coding-harness-k9rw | decision PR; night item 3; can run on the maintainer's word |
 | Night-run routine research, then interview | coding-harness-yuw.2 | night item 5; the research can run alone, the interview cannot |
-| A clean free round ends the review loop, so no Flash or paid model reads the change | coding-harness-1gzo | observed on #223 and #225 (2026-10-22/23); is this ADR 0021's intent? |
+| A clean free round ends the review loop, so no Flash or paid model reads the change | coding-harness-1gzo | intended by ADR 0021 decision 1 (Q-10); the maintainer reopened Q-10 on 2026-10-23: research runs this weekend (clean free rounds against later phase-6 findings), the interview waits for the next joint window |
 | Explicit maintainer restart of a completed loop | coding-harness-0xjr | ADR 0021 amendment |
 | Isolate each writing attempt (closes znc, 6ie, b5w as one class) | coding-harness-s9r | feature; container choice open since 2026-10-15 |
 | Carry the permission rules with the kit | coding-harness-oatb | feature; research first |
