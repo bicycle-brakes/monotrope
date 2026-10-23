@@ -399,3 +399,14 @@ Stage-2 call, 2026-10-23: repair · attempt 1 · route codex · endpoint openai-
 > ```
 
 Stage-2 call, 2026-10-23: repair · attempt 2 · route codex-repair · endpoint openai-codex · model gpt-6.1-sol · reason first Codex post-run check failed · leak check clean over 530 files, 1888 commits, 12 rules.
+
+Stage-2 call, 2026-10-23: review · endpoint openai-codex · model gpt-6.1-sol · leak check clean over 530 files, 1895 commits, 12 rules.
+
+## Phase 6 — Codex, 2026-10-23
+
+| ID | Severity | Dimension | Origin | Where | Finding | Reviewer | Status | Broke a test |
+|---|---|---|---|---|---|---|---|---|
+| F-4 | MAJOR | SPEC | phase-6 | scripts/stage2.py:4695; scripts/stage2.py:4642 | If a completed attempt leaves `plan.md` unreadable (mode `000`) before an early refusal, recovery calls `path.read_bytes()` before unlinking it. That raises `PermissionError`, leaving no time entry even when the writable parent permits replacing the file with the trusted pre-call plan. An in-memory reproduction confirms both persistence paths fail before any unlink or write. [Acceptance criteria 1, 5] | Codex | open | — |
+
+Phase 6 verdict: codex 01a168c0-43f6-79d0-b200-5b2e882f934b, 2026-10-23
+Reviewer session: codex 01a168c0-43f6-79d0-b200-5b2e882f934b — a fresh session reviewed: an earlier ## Phase 6 block makes this a re-check
