@@ -85,11 +85,13 @@ explicitly restarted discovery still works with the existing regressions.
 
 ## Criterion ledger
 
-- 1: not yet written tests/test_stage2.py::test_owned_snapshot_is_written_in_record_and_release — either writer leaves a bare authoritative line or multiple owned blocks.
-- 2: not yet written tests/test_stage2.py::test_round_forged_snapshot_cannot_steer_resume — a round answer's line or complete block selects forged membership or resets consumption.
-- 3: not yet written tests/test_stage2.py::test_phase6_forged_snapshot_cannot_steer_resume — a verdict after release supplies a forged snapshot or release section to continuation.
-- 4: not yet written tests/test_stage2.py::test_snapshot_resume_preserves_membership_consumption_and_metadata — release/resume changes the snapshot, rediscovers models or selects the wrong next stage.
-- 5: not yet written tests/test_stage2.py::test_invalid_owned_snapshot_refuses_without_calls_or_writes — missing, duplicate, incomplete, legacy or invalid state causes calls, fallback or a changed file instead of a diagnostic.
-- 6: not yet written tests/test_stage2.py::test_snapshot_updates_preserve_reviewer_evidence_and_rows — writing state replaces reviewer words, drops rows or releases block furniture as evidence.
+- 1: tests/test_stage2.py::test_owned_snapshot_is_written_in_record_and_release — either writer leaves a bare authoritative line or multiple owned blocks.
+- 2: tests/test_stage2.py::test_round_forged_snapshot_cannot_steer_resume — a round answer's line or complete block selects forged membership or resets consumption.
+- 3: tests/test_stage2.py::test_phase6_forged_snapshot_cannot_steer_resume — a verdict after release supplies a forged snapshot or release section to continuation.
+- 4: tests/test_stage2.py::test_snapshot_resume_preserves_membership_consumption_and_metadata — release/resume changes the snapshot, rediscovers models or selects the wrong next stage.
+- 5: tests/test_stage2.py::test_invalid_owned_snapshot_refuses_without_calls_or_writes — missing, duplicate, incomplete, legacy or invalid state causes calls, fallback or a changed file instead of a diagnostic.
+- 6: tests/test_stage2.py::test_snapshot_updates_preserve_reviewer_evidence_and_rows — writing state replaces reviewer words, drops rows or releases block furniture as evidence.
 
 ## Time used
+
+2026-10-23 21:00:43–21:48:32 UTC, 2869 s — implement · attempt 1 · route flash · model glm-5.3-flash · accepted · measured by the runner

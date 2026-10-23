@@ -110,16 +110,16 @@ outside the change folder.
 
 **The loop record** lives outside the worktree
 (`${XDG_STATE_HOME:-~/.local/state}/coding-harness/stage2/<change>@<digest>/loop.md`):
-the rounds' rows, the run's stage snapshot (`Loop state:`, the runner's own
-line), and the orchestrator's decision on each row, until the phase-6
+the rounds' rows, the run's stage snapshot (in the owned state block, the
+runner's own), and the orchestrator's decision on each row, until the phase-6
 verdict is written and `release-loop` carries them into `findings.md`. The
 release is the only thing that deletes the record, and it deletes nothing that
 has not arrived: every loop row, and every other line of the record as it
 stands, is in `findings.md` first. Not carried are only the record's own
-furniture: its heading, its intro, the round headings, the tables' header and
-separator, and the blank lines outside the reviewer's words. The reviewer's
-words are carried exactly as they came - a heading, a code comment or a table
-line with a loop id included; only a line of the round tables the runner wrote
+furniture: its heading, its intro, the round headings, the owned state block,
+the tables' header and separator, and the blank lines outside the reviewer's
+words. The reviewer's words are carried exactly as they came - a heading, a
+code comment or a table line with a loop id included; only a line of the round tables the runner wrote
 that carries a loop id and cannot be read as a row refuses the release,
 because the orchestrator has to decide that row. A round counts as completed
 when at least one of its members succeeded and answered - with rows or with
@@ -319,11 +319,21 @@ ROW_COLUMNS = ["ID", "Severity", "Dimension", "Origin", "Where", "Finding", "Rev
 RELEASED_COLUMNS = [*ROW_COLUMNS, "Phase 6"]
 
 # The loop ends on a clean round, on the repair brake or on spent stages - never
-# on a round count (ADR 0021). The run's stage snapshot travels as the record's
-# own `Loop state:` line and, after a release, as the released block's own line;
-# it is never read from the reviewers' words.
+# on a round count (ADR 0021). The run's stage snapshot travels inside the owned
+# state block - in the record's head and, after a release, in the released
+# block's own lines; it is never read from the reviewers' words (bead
+# coding-harness-i70).
 STATE_KEY = "Loop state: "
 STATE_LINE = re.compile(r"^Loop state: (\{.*\})[ \t]*$", re.M)
+# The owned state block's markers, matched at a line start only: reviewer words
+# are written quoted, so a copied marker in them can neither open, close nor
+# replace the block. The findings.md readers search the last release's own lines
+# only - to the next level-two heading or to `Kept from the loop record:` - so
+# a verdict's words are never searched for state, whatever they copy.
+STATE_BLOCK_BEGIN = "=== stage2 loop state (runner-owned) ==="
+STATE_BLOCK_END = "=== stage2 loop state end ==="
+STATE_BLOCK_BEGIN_LINE = re.compile("^" + re.escape(STATE_BLOCK_BEGIN) + r"[ \t]*$", re.M)
+STATE_BLOCK_END_LINE = re.compile("^" + re.escape(STATE_BLOCK_END) + r"[ \t]*$", re.M)
 # The maintainer's restart of a completed loop (ADR 0021, restart amendment): the runner's own line in
 # findings.md, at a line start - a quoted copy is a reviewer's or an attempt's words, not a restart.
 RESTART_LINE = re.compile(r"^Loop restarted: (\d{4}-\d{2}-\d{2}) after round (\d+) — (.+)$", re.M)
@@ -858,11 +868,14 @@ def stamp_updated(path: Path) -> None:
     check_frontmatter_current.stamp(path, dt.date.today())
 
 
-def answer_parts(rows: list[list[str]], answer: str, reviewer: str, table: str) -> list[str]:
+def answer_parts(rows: list[list[str]], answer: str, reviewer: str, table: str, *, quote: bool = False) -> list[str]:
     """What follows a heading: the table, or a true statement about why there is none, then what is not a row.
 
     "No finding" is said only of an answer that has no table line at all. A table the parser cannot read as
-    six-cell rows is a finding somebody has to read, so it is passed through and said to be one.
+    six-cell rows is a finding somebody has to read, so it is passed through and said to be one. With
+    `quote`, the retained non-row lines are written quoted - the phase-6 verdict's words, which may copy
+    headings, state lines or block markers, never stand at a line start of their own in findings.md
+    (bead coding-harness-i70). The phase-2a block keeps its unquoted contract.
     """
     rest = parse_rows(answer)[1]
     if rows:
@@ -873,14 +886,15 @@ def answer_parts(rows: list[list[str]], answer: str, reviewer: str, table: str) 
         parts = [f"{reviewer} reported no finding."]
     kept = rest if rows else answer
     if kept.strip():
-        parts.append(f"{NOT_ROWS_NOTE}\n\n{kept.strip()}")
+        kept = quote_reviewer(kept.strip()) if quote else kept.strip()
+        parts.append(f"{NOT_ROWS_NOTE}\n\n{kept}")
     return parts
 
 
-def answer_block(rows: list[list[str]], answer: str, reviewer: str) -> str:
+def answer_block(rows: list[list[str]], answer: str, reviewer: str, *, quote: bool = False) -> str:
     """The block of a reviewer's answer: its rows with the reviewer, `open` and no test mark."""
     table = render_table(ROW_COLUMNS, [[*row, reviewer, "open", "—"] for row in rows])
-    return "\n\n".join(answer_parts(rows, answer, reviewer, table))
+    return "\n\n".join(answer_parts(rows, answer, reviewer, table, quote=quote))
 
 
 # ---------------------------------------------------------------------------
@@ -2262,7 +2276,10 @@ def review(root: Path, change: str) -> None:
     block = "\n\n".join(
         [
             f"## Phase 6 — Codex, {today()}",
-            answer_block(rows, answer, "Codex"),
+            # The verdict's non-row words are quoted: a heading, a state line or a block marker a
+            # reviewer copied never stands at a line start of its own in findings.md, so it cannot
+            # move a release or the owned state block (bead coding-harness-i70).
+            answer_block(rows, answer, "Codex", quote=True),
             f"Phase 6 verdict: codex {thread}, {today()}",
         ]
     )
@@ -2639,25 +2656,93 @@ def next_stage(state: dict) -> dict | None:
     return None
 
 
+def render_state_block(state: dict) -> str:
+    """The owned state block: the snapshot line between the runner's own markers."""
+    return "\n".join([STATE_BLOCK_BEGIN, f"{STATE_KEY}{json.dumps(state, sort_keys=True)}", STATE_BLOCK_END])
+
+
+def find_state_block(text: str, where: str) -> tuple[re.Match[str], re.Match[str]] | None:
+    """The one owned state block of `text`, as its begin and end match, or None without one.
+
+    The markers are matched at a line start, and the callers search bounded regions only, so a
+    copied marker in reviewer words can neither open, close nor replace a block. Two blocks, an end
+    without a begin and a begin without an end are refused with the place named: the runner cannot
+    tell an authoritative block, and it changes nothing on refusal.
+    """
+    begins = list(STATE_BLOCK_BEGIN_LINE.finditer(text))
+    if len(begins) > 1:
+        raise Refused(
+            f"{where} holds {len(begins)} owned state blocks; exactly one may exist and the runner "
+            "cannot tell the authoritative one - mend the file by hand, nothing has been changed."
+        )
+    if not begins:
+        if STATE_BLOCK_END_LINE.search(text):
+            raise Refused(
+                f"{where} holds an owned state block's end marker without its begin marker; mend the "
+                "block by hand, nothing has been changed."
+            )
+        return None
+    end = STATE_BLOCK_END_LINE.search(text, begins[0].end())
+    if end is None:
+        raise Refused(
+            f"{where} holds an owned state block that never closes; mend the block by hand, nothing has been changed."
+        )
+    return begins[0], end
+
+
+def state_block_json(text: str, where: str) -> str | None:
+    """The snapshot of the one owned state block in `text`, or None when there is none."""
+    found = find_state_block(text, where)
+    if found is None:
+        return None
+    inner = [line for line in text[found[0].end() : found[1].start()].splitlines() if line.strip()]
+    match = STATE_LINE.fullmatch(inner[0].strip()) if len(inner) == 1 else None
+    if match is None:
+        raise Refused(
+            f"{where} holds an owned state block whose content is not exactly one `Loop state:` line; "
+            "mend the block by hand, nothing has been changed."
+        )
+    return match.group(1)
+
+
+def replace_state_block(text: str, block: str, where: str) -> str:
+    """`text` with its single owned state block replaced by `block`.
+
+    Only the lines between the markers are replaced, never a matching line elsewhere: reviewer words
+    stand quoted, and a bare `Loop state:` line of an older record is refused, not overwritten
+    (criterion 6, bead coding-harness-i70).
+    """
+    found = find_state_block(text, where)
+    if found is None:
+        raise Refused(
+            f"{where} holds no owned state block; the runner replaces only that block and writes no "
+            "state anywhere else - mend the file by hand, nothing has been changed."
+        )
+    begin, end = found
+    return text[: begin.start()] + block + text[end.end() :]
+
+
 def write_round(change: str, block: str, state: dict, root: Path) -> None:
     """Append the round and pin its stages as consumed in one write (R-6 of the review-swarm review).
 
     Two writes would leave a window: a crash between them keeps a round whose stage the snapshot does
     not know, and the next call repeats the stage as a new round with new ids - extra paid calls and
-    two rounds for one stage. One `write_text` closes it.
+    two rounds for one stage. One `write_text` closes it. The snapshot goes into the owned state
+    block, which an existing record already holds; a record is never written without one.
     """
     directory = record_dir(change, root)
     directory.mkdir(parents=True, exist_ok=True)
     path = directory / "loop.md"
     text = path.read_text(encoding="utf-8") if path.exists() else ""
     body = block.strip("\n")
-    text = f"{text.rstrip(chr(10))}\n\n{body}\n" if text.strip() else f"{body}\n"
-    line = f"{STATE_KEY}{json.dumps(state, sort_keys=True)}"
-    if STATE_LINE.search(text):
-        text = STATE_LINE.sub(lambda _match: line, text, count=1)
+    snapshot = render_state_block(state)
+    if text.strip():
+        text = f"{text.rstrip(chr(10))}\n\n{body}\n"
+        text = replace_state_block(text, snapshot, f"the loop record of {change}")
     else:
-        match = ROUND_HEADING.search(text)
-        text = text[: match.start()] + line + "\n\n" + text[match.start() :] if match else text + line + "\n"
+        # A round of a run whose record is gone - a retired stage after a release - starts the
+        # record itself: heading, intro and the owned state block, then the round, in one write.
+        text = f"{RECORD_HEADING}{change}\n\n{RECORD_INTRO}\n\n{snapshot}\n\n{body}\n"
     path.write_text(text, encoding="utf-8")
 
 
@@ -2668,74 +2753,99 @@ def mark_consumed(change: str, state: dict, key: str, root: Path) -> None:
 
 
 def write_state(change: str, state: dict, root: Path) -> None:
-    """The run's stage snapshot into the record, as the record's own line.
+    """The run's stage snapshot into the record's owned state block.
 
-    The line sits before the first round heading; the runner owns it, never the
-    reviewer's words. `kept_lines` leaves it out - the release carries the line
-    itself, so a continued run reads its snapshot from findings.md (criterion
-    13).
+    A record is created with the block in its head, after the heading and the intro and before the
+    first round; an existing record has exactly that block replaced - never a matching line
+    elsewhere, so reviewer words cannot become or displace the snapshot (bead coding-harness-i70).
+    `kept_lines` leaves the block out - the release carries the block itself, so a continued run
+    reads its snapshot from findings.md (criterion 13).
     """
-    line = f"{STATE_KEY}{json.dumps(state, sort_keys=True)}"
+    block = render_state_block(state)
     directory = record_dir(change, root)
     directory.mkdir(parents=True, exist_ok=True)
     path = directory / "loop.md"
-    if path.exists():
-        text = path.read_text(encoding="utf-8")
-        if STATE_LINE.search(text):
-            path.write_text(STATE_LINE.sub(lambda _match: line, text, count=1), encoding="utf-8")
-            return
-        match = ROUND_HEADING.search(text)
-        if match:
-            text = text[: match.start()] + line + "\n\n" + text[match.start() :]
-        else:
-            text = text.rstrip("\n") + "\n\n" + line + "\n"
-        path.write_text(text, encoding="utf-8")
+    if not path.exists():
+        path.write_text(f"{RECORD_HEADING}{change}\n\n{RECORD_INTRO}\n\n{block}\n", encoding="utf-8")
         return
-    path.write_text(f"{RECORD_HEADING}{change}\n\n{RECORD_INTRO}\n{line}\n", encoding="utf-8")
+    text = path.read_text(encoding="utf-8")
+    path.write_text(replace_state_block(text, block, f"the loop record of {change}"), encoding="utf-8")
+
+
+def _release_section(text: str) -> str | None:
+    """The last release's own lines: from its heading to the next level-two heading or the kept words.
+
+    The owned state block stands inside these lines, before the kept evidence. A later block of
+    findings.md - a phase-6 verdict, quoted or not - bounds the section, so a verdict's words are
+    never searched for state, whatever they copy (bead coding-harness-i70).
+    """
+    start = _last_release(text)
+    if start < 0:
+        return None
+    lines = text[start:].split("\n")
+    end = len(lines)
+    for number, line in enumerate(lines[1:], 1):
+        if line.startswith("## ") or KEPT_FROM.match(line):
+            end = number
+            break
+    return "\n".join(lines[:end])
+
+
+def _missing_state_refusal(text: str, where: str, way_out: str) -> str:
+    """Why the run cannot continue from `where`, with the way out named (criterion 5)."""
+    if STATE_LINE.search(text):
+        return (
+            f"{where} keeps its snapshot as a bare `Loop state:` line, which predates the owned state "
+            f"block; the runner does not migrate old state by itself - {way_out}. Nothing has been changed."
+        )
+    return (
+        f"{where} holds no owned state block; the runner reads its snapshot only there and cannot "
+        f"continue the run without it - {way_out}. Nothing has been changed."
+    )
 
 
 def read_state(record: str | None, findings_text: str) -> dict | None:
-    """The run's stage snapshot: the record's own line first, else the last release's.
+    """The run's stage snapshot: the record's owned state block first, else the last release's.
 
-    Only the runner's own lines are read - the released block is cut at
-    `Kept from the loop record:`, so the reviewers' words are never a snapshot
-    (criterion 13). A record without its state line predates the swarms and is
-    refused instead of continued with invented stages.
+    Only the block the runner owns is read: the whole record - its reviewer words stand quoted, never
+    at a line start of their own - and in findings.md the last release's own lines (`_release_section`),
+    never an older release and never the words after it. A copied marker or a `Loop state:` line in
+    reviewer words is never a snapshot (criterion 13, bead coding-harness-i70). An existing run whose
+    owned block is missing, unclosed, duplicated or unreadable is refused with the place named, before
+    discovery or a reviewer call - never continued from a bare legacy line, an older release or
+    invented state (criterion 5). Without a record and without a release there is no snapshot: a
+    fresh run discovers its own.
     """
-    line: str | None = None
     if record is not None:
-        for text, reviewer in _record_lines(record):
-            if reviewer:
-                continue
-            match = STATE_LINE.match(text)
-            if match:
-                line = match.group(1)
-                break
+        where = "the loop record"
+        line = state_block_json(record, where)
         if line is None:
-            raise Refused("the loop record has no Loop state line; it predates the swarms and cannot be continued.")
+            raise Refused(
+                _missing_state_refusal(record, where, "mend the record by hand, or delete it to start the run fresh")
+            )
     else:
-        start = _last_release(findings_text)
-        if start >= 0:
-            block = findings_text[start:]
-            cut = KEPT_FROM.search(block)
-            if cut:
-                block = block[: cut.start()]
-            match = STATE_LINE.search(block)
-            if match:
-                line = match.group(1)
-    if line is None:
-        return None
+        section = _release_section(findings_text)
+        if section is None:
+            return None
+        where = "the released block in findings.md"
+        line = state_block_json(section, where)
+        if line is None:
+            raise Refused(
+                _missing_state_refusal(
+                    section, where, "mend findings.md by hand, or restart the loop with `release-loop --restart`"
+                )
+            )
     try:
         state = json.loads(line)
     except ValueError as error:
-        raise Refused(f"the run's Loop state line is not readable JSON: {error}") from None
+        raise Refused(f"the snapshot line of {where} is not readable JSON: {error}") from None
     if (
         not isinstance(state, dict)
         or not isinstance(state.get("free"), dict)
         or not isinstance(state.get("paid"), dict)
         or not isinstance(state.get("consumed"), list)
     ):
-        raise Refused("the run's Loop state line does not hold the expected stage snapshot.")
+        raise Refused(f"the snapshot line of {where} does not hold the expected stage snapshot.")
     return state
 
 
@@ -2762,8 +2872,8 @@ def rounds_run(record: str | None, findings_text: str) -> int:
 def kept_lines(record: str) -> str:
     """Everything the record holds that the release does not carry as a row, exactly as it stands.
 
-    Left out: the record's own furniture - its heading, its intro, the round headings, the `Loop state:` line
-    (the release carries the snapshot itself, before the kept marker), the tables' header and
+    Left out: the record's own furniture - its heading, its intro, the round headings, the owned state
+    block (the release carries the block itself, before the kept marker), the tables' header and
     separator - and the loop rows (`record_rows` has them). What is left goes to `findings.md`, because the
     record is deleted afterwards and is the only copy: the runner's own statements, and the reviewer's words
     line by line as they came, blank lines between them included (a heading or a comment that starts with `#`,
@@ -2772,8 +2882,16 @@ def kept_lines(record: str) -> str:
     intro = set(RECORD_INTRO.splitlines())
     furniture = set(render_table(ROW_COLUMNS, []).splitlines())
     segments: list[tuple[bool, list[str]]] = []
+    in_block = False
     for number, (line, glm) in enumerate(_record_lines(record)):
         if not glm:
+            if line.strip() == STATE_BLOCK_BEGIN:
+                in_block = True
+                continue
+            if in_block:
+                if line.strip() == STATE_BLOCK_END:
+                    in_block = False
+                continue
             cells = split_row(line)
             if (
                 not line.strip()
@@ -2823,18 +2941,19 @@ def release(root: Path, change: str) -> list[list[str]]:
     if refusal:
         raise Refused(refusal)
     state = read_state(record, text)
-    block = [f"{RELEASE_HEADING} {today()}", render_table(RELEASED_COLUMNS, [[*row, "—"] for row in rows])]
+    block = [f"{RELEASE_HEADING} {today()}"]
+    if state is not None:
+        # The snapshot travels in the owned state block, first in the release and before the kept
+        # words: a continued run reads its stages from here alone, never from the reviewers' text
+        # (criterion 13, bead coding-harness-i70).
+        block.append(render_state_block(state))
+    block.append(render_table(RELEASED_COLUMNS, [[*row, "—"] for row in rows]))
     if not rows:
         block.append("No loop row was reported.")
     block.append(f"Rounds run: {len(ROUND_HEADING.findall(record))}")
     cut = cut_rounds(record)
     if cut:
         block.append(f"Cut rounds: {', '.join(str(number) for number in cut)}")
-    if state is not None:
-        # The snapshot travels as the block's own line, before the kept words:
-        # a continued run reads its stages from here, never from the reviewers'
-        # text (criterion 13).
-        block.append(f"{STATE_KEY}{json.dumps(state, sort_keys=True)}")
     kept = kept_lines(record)
     if kept:
         block.append(f"Kept from the loop record:\n\n{quote_reviewer(kept)}")
@@ -5574,8 +5693,9 @@ def review_loop(root: Path, change: str, availability_reported: str | None = Non
     state = None if restarted_fresh(record, findings_text) else read_state(record, findings_text)
     receipt_taken = False
     if record is None and state is None:
-        # A fresh run has neither a record nor a released snapshot. read_state
-        # refuses a pre-swarm record without its Loop state line.
+        # A fresh run has neither a record nor a released snapshot: read_state
+        # refused an existing run whose owned state block is missing, malformed
+        # or duplicated (criterion 5), so only a genuine fresh run discovers.
         problem = entry_problem(root, OPENCODE)
         if problem:
             raise Refused(problem)
@@ -5753,7 +5873,7 @@ def review_loop(root: Path, change: str, availability_reported: str | None = Non
     path = record_dir(change, root) / "loop.md"
     if record is None:
         # A continued run after a release starts a fresh record; write_state
-        # puts the run's snapshot line into it before the rounds.
+        # puts the run's snapshot block into it before the rounds.
         write_state(change, state, root)
     # A replacement is consumed too: it is no later rung. Both land in the same write as the round.
     state["consumed"] = [*state["consumed"], *(f"rung:{model}" for model in replaced), stage["key"]]
