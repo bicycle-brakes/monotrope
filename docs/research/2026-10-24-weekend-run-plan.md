@@ -78,14 +78,15 @@ no item invents an answer).
 | A1 | A restore through a symlinked parent is refused | coding-harness-10w | bounded | night plan, item 6 |
 | A2 | Reviewer text in the phase-6 verdict is not read back as loop state | coding-harness-i70 | bounded | night plan, item 7 |
 | A3 | The pytest bytecode cache in the venv is not a tool the attempt wrote | coding-harness-q94b | bounded | **needs an answer**: exclude `__pycache__` under the venv, or snapshot after a warm-up |
-| A4 | An empty, refused or malformed phase-6 answer is not a finished review | coding-harness-5mx | bounded | proposed in the bead (runner audit 2026-10-21); **needs a confirmation** |
-| A5 | The review verb takes the record lock before it releases the loop record | coding-harness-751 | bounded | proposed in the bead: refuse and keep the record; **needs a confirmation** |
-| A6 | The dirty-tree check sees index-only changes; the commit keeps staged content | coding-harness-0c8 | bounded | **needs an answer** |
+| A4 | An empty, refused or malformed phase-6 answer is not a finished review | coding-harness-5mx | bounded | the bead's "Needed" line; interview skipped with a reason (bead notes, 2026-10-23) |
+| A5 | The review verb takes the record lock before it releases the loop record | coding-harness-751 | bounded | the bead's "Needed" line; interview skipped with a reason (bead notes, 2026-10-23) |
+| A6 | The dirty-tree check sees index-only changes; the commit keeps staged content | coding-harness-0c8 | bounded | the bead's "Needed" line; interview skipped with a reason (bead notes, 2026-10-23) |
 
 ### Block B — review loop and gates, Sunday
 
 | # | Item | Bead | Class | Direction |
 |---|---|---|---|---|
+| B0 | Row ids that are not L<n>-<m> are refused, not reported clean | coding-harness-6jg | bounded | interview 2026-10-16; spec and plan already on `fix/review-loop-row-ids` at `236195a`, next step implement |
 | B1 | Gate phase-order | coding-harness-99v7 | bounded | night plan, item 4 |
 | B2 | Rows without a closing pipe keep the raw answer | coding-harness-2i9j | bounded | night plan, position 8 |
 | B3 | A malformed row next to a valid one stays in the decision table | coding-harness-vque | bounded | proposed in the bead; **needs a confirmation** |
@@ -97,7 +98,7 @@ no item invents an answer).
 |---|---|---|
 | Research swarm repair (F-65, L4-1 to L4-3) on #158 | coding-harness-icw, coding-harness-k9rw | decision PR; night item 3; can run on the maintainer's word |
 | Night-run routine research, then interview | coding-harness-yuw.2 | night item 5; the research can run alone, the interview cannot |
-| A clean free round ends the review loop, so no Flash or paid model reads the change | no bead yet | observed on #223 and #225 (2026-10-22/23); is this ADR 0021's intent? |
+| A clean free round ends the review loop, so no Flash or paid model reads the change | coding-harness-1gzo | observed on #223 and #225 (2026-10-22/23); is this ADR 0021's intent? |
 | Explicit maintainer restart of a completed loop | coding-harness-0xjr | ADR 0021 amendment |
 | Isolate each writing attempt (closes znc, 6ie, b5w as one class) | coding-harness-s9r | feature; container choice open since 2026-10-15 |
 | Carry the permission rules with the kit | coding-harness-oatb | feature; research first |
@@ -106,11 +107,11 @@ no item invents an answer).
 ### Hygiene, between items
 
 - Local `make verify` is red on `leerprobe` (two tests in `tests/test_ci.py`)
-  while hosted CI is green: no bead yet; create one with the measurement.
+  while hosted CI is green (coding-harness-4x2c).
 - The flaky SIGKILL test under full load (coding-harness-jik).
-- Check whether coding-harness-6th, coding-harness-csm, coding-harness-6jg,
-  coding-harness-k9rw and coding-harness-icw are still worked; unclaim what
-  is not.
+- Checked 2026-10-23: coding-harness-6th, coding-harness-csm and
+  coding-harness-6jg were left claimed and are set back to open;
+  coding-harness-k9rw and coding-harness-icw stay in progress on #158.
 
 ## Not this weekend
 
