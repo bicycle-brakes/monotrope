@@ -120,7 +120,9 @@ window. Recorded in each bead's notes.
 - **Attempt isolation (coding-harness-s9r):** three levels from simple to
   heavy: a throwaway worktree per attempt, a container, k3s or OpenShift with
   a default-deny network policy; for each, what it withstands and what it
-  costs on macOS and in CI.
+  costs on macOS and in CI. Also whether tmux, Herdr, Omnigent or Orca
+  can serve the isolation, alone or with one of the levels
+  (coding-harness-326, coding-harness-671, coding-harness-dzp).
 - **Permission rules in the kit (coding-harness-oatb):** the smallest rule
   list a night run needs, derived from the measured refusals; a committed
   settings file against the install script writing it after a confirmation;
