@@ -8450,6 +8450,40 @@ def test_runner_early_refusal_recovers_time_destination_safely(
 
 
 @pytest.mark.parametrize("retry", [False, True])
+def test_runner_detaches_matching_hardlinked_plan_before_stamp(world: World, tmp_path: Path, retry: bool) -> None:
+    """F-5: matching recovery bytes must not leave a hard link attached for the date stamp."""
+    prior = "---\nupdated: 2000-01-01\n---\n\n# Plan\n\n## Time used\n\n"
+    old_entry = "previous trusted span · measured by the runner"
+    prior = stage2.with_time_entry(prior, old_entry)
+    entry = "completed rejected span · measured by the runner"
+    content = stage2.with_time_entry(prior, entry).encode("utf-8")
+    inputs = {world.plan: prior.encode("utf-8")}
+    target = tmp_path / "external-plan.md"
+    target.write_bytes(content)
+    world.plan.unlink()
+    os.link(target, world.plan)
+
+    stage2.persist_time_entry(
+        world.root,
+        world.plan,
+        entry,
+        prior,
+        inputs,
+        accepted=False,
+        retry=retry,
+        original=stage2.Refused("early refusal"),
+    )
+
+    assert target.read_bytes() == content
+    assert world.plan.stat().st_nlink == 1
+    assert not world.plan.samefile(target)
+    assert f"updated: {dt.date.today().isoformat()}" in world.plan.read_text(encoding="utf-8")
+    assert runner_entries(world.plan) == [old_entry, entry]
+    if retry:
+        assert inputs[world.plan] == content
+
+
+@pytest.mark.parametrize("retry", [False, True])
 def test_runner_recovers_unreadable_plan_time_entry(world: World, monkeypatch: pytest.MonkeyPatch, retry: bool) -> None:
     """F-4: both persistence paths must replace an unreadable plan from trusted bytes."""
     prior = world.plan.read_text(encoding="utf-8")

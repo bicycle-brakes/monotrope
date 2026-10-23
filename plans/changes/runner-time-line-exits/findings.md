@@ -433,7 +433,9 @@ Stage-2 call, 2026-10-23: review · endpoint openai-codex · model gpt-6.1-sol �
 
 | ID | Severity | Dimension | Origin | Where | Finding | Reviewer | Status | Broke a test |
 |---|---|---|---|---|---|---|---|---|
-| F-5 | MAJOR | SPEC | phase-6 | scripts/stage2.py:4642–4645,4703–4704 | If a rejected attempt leaves a hard-linked plan whose bytes already match the trusted pre-call plan plus the computed entry, recovery skips unlinking because the contents match. With an older `updated:` date, the subsequent stamp writes through that hard link and changes the external target. An in-memory reproduction confirms the link remains attached and receives the write. Recovery must detach hard links even when their bytes match. [Acceptance criterion 5] | Codex | taken — a test that a hard-linked plan whose bytes already match is still detached before the updated stamp, leaving the external target unchanged | — |
+| F-5 | MAJOR | SPEC | phase-6 | scripts/stage2.py:4642–4645,4703–4704 | If a rejected attempt leaves a hard-linked plan whose bytes already match the trusted pre-call plan plus the computed entry, recovery skips unlinking because the contents match. With an older `updated:` date, the subsequent stamp writes through that hard link and changes the external target. An in-memory reproduction confirms the link remains attached and receives the write. Recovery must detach hard links even when their bytes match. [Acceptance criterion 5] | Codex | fixed — tests/test_stage2.py::test_runner_detaches_matching_hardlinked_plan_before_stamp | — |
 
 Phase 6 verdict: codex 01a168df-f24f-7390-8277-bddf43e0d3ae, 2026-10-23
 Reviewer session: codex 01a168df-f24f-7390-8277-bddf43e0d3ae — a fresh session reviewed: an earlier ## Phase 6 block makes this a re-check
+
+Stage-2 call, 2026-10-23: repair · attempt 1 · route codex · endpoint openai-codex · model gpt-6.1-sol · leak check clean over 530 files, 1903 commits, 12 rules.

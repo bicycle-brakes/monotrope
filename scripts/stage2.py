@@ -4642,7 +4642,9 @@ def restore_work_input(root: Path, path: Path, content: bytes) -> None:
     replace = path.is_symlink() or not path.is_file()
     if not replace:
         try:
-            replace = path.read_bytes() != content
+            # Matching bytes do not make a hard link safe: a later date stamp would
+            # still write through it to the external target. Detach before reading.
+            replace = path.stat().st_nlink > 1 or path.read_bytes() != content
         except OSError:
             # A readable parent can replace an unreadable model-written input. Recovery
             # uses trusted bytes, so a failed comparison must not prevent that replacement.
