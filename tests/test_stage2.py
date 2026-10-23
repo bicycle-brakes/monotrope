@@ -8480,6 +8480,112 @@ def test_runner_time_write_failure_keeps_original_cause(
     assert len(world.calls("claude")) == 1
 
 
+def test_runner_retry_restore_failure_keeps_persisted_time(world: World, monkeypatch: pytest.MonkeyPatch) -> None:
+    """F-1: fail an input restore before the plan restore; the completed attempt must already be on disk."""
+    clock = FakeClock(monkeypatch, UTC_START)
+    world.script(claude=[{"stdout": "done"}])
+    real_restore = stage2.restore_work_input
+
+    def verify(*_args, **_kwargs):
+        clock.now += 7
+        return ["a repairable failure"]
+
+    def restore(root, path, content):
+        if path.name == "spec.md":
+            raise OSError("spec restore failed before restoring plan")
+        return real_restore(root, path, content)
+
+    monkeypatch.setattr(stage2, "verify_attempt", verify)
+    monkeypatch.setattr(stage2, "restore_work_input", restore)
+    _no_checkpoint(monkeypatch)
+    with pytest.raises(OSError, match="spec restore failed"):
+        stage2.implement(world.root, "demo")
+    entries = runner_entries(world.plan)
+    assert len(entries) == 1, "the rejected attempt must be persisted before restoring other inputs"
+    (entry,) = entries
+    assert "rejected" in entry and "attempt 1 · route flash" in entry and "7 s" in entry
+    assert len(world.calls("claude")) == 1
+
+
+@pytest.mark.parametrize("kind", ["unstartable-verify", "late-credential"])
+def test_runner_terminal_failure_survives_failed_log_write(
+    world: World, monkeypatch: pytest.MonkeyPatch, kind: str
+) -> None:
+    """F-2: failed persistence must chain the terminal failure, including the verifier's underlying cause."""
+    FakeClock(monkeypatch, UTC_START)
+    world.script(claude=[{"stdout": "done"}])
+    real_write = Path.write_text
+    ready = False
+    failure = stage2.CallFailed("make executable is unavailable")
+    scans = 0
+
+    def verify(*_args, **_kwargs):
+        nonlocal ready
+        ready = True
+        if kind == "unstartable-verify":
+            raise failure
+        return []
+
+    def scan(*_args, **_kwargs):
+        nonlocal scans
+        scans += 1
+        return [Path("src/app.py")] if scans == 2 and kind == "late-credential" else []
+
+    def write(path, *args, **kwargs):
+        if ready and path == world.plan:
+            raise OSError("plan write failed")
+        return real_write(path, *args, **kwargs)
+
+    def restore(*_args, **_kwargs):
+        raise OSError("plan recovery failed")
+
+    monkeypatch.setattr(stage2, "verify_attempt", verify)
+    monkeypatch.setattr(stage2, "remove_changed_credential", scan)
+    monkeypatch.setattr(Path, "write_text", write)
+    monkeypatch.setattr(stage2, "restore_work_input", restore)
+    _no_checkpoint(monkeypatch)
+    with pytest.raises(stage2.CallFailed, match="could not write the attempt's time entry") as caught:
+        stage2.implement(world.root, "demo")
+    chain = []
+    error = caught.value
+    while error is not None:
+        chain.append(error)
+        error = error.__cause__
+    if kind == "unstartable-verify":
+        assert failure in chain
+    else:
+        assert any(isinstance(error, stage2.Refused) and "credential occurred" in str(error) for error in chain)
+    assert len(world.calls("claude")) == 1
+
+
+def test_runner_early_refusal_recovers_self_linked_parent(world: World, monkeypatch: pytest.MonkeyPatch) -> None:
+    """F-3: Python 3.12 resolve raises RuntimeError on a loop; detach it and preserve the refusal."""
+    FakeClock(monkeypatch, UTC_START)
+    world.script(claude=[{"stdout": "done"}])
+    real_model = stage2.run_work_model
+    refusal = stage2.Refused("original post-call refusal")
+
+    def model(*args, **kwargs):
+        answer = real_model(*args, **kwargs)
+        shutil.rmtree(world.plan.parent)
+        world.plan.parent.symlink_to(world.plan.parent.name, target_is_directory=True)
+        return answer
+
+    def scan(*_args, **_kwargs):
+        raise refusal
+
+    monkeypatch.setattr(stage2, "run_work_model", model)
+    monkeypatch.setattr(stage2, "remove_changed_credential", scan)
+    _no_checkpoint(monkeypatch)
+    with pytest.raises((stage2.Refused, RuntimeError, stage2.CallFailed)) as caught:
+        stage2.implement(world.root, "demo")
+    assert caught.value is refusal
+    (entry,) = runner_entries(world.plan)
+    assert "rejected" in entry and "attempt 1 · route flash" in entry
+    assert not world.plan.parent.is_symlink()
+    assert len(world.calls("claude")) == 1
+
+
 @pytest.mark.parametrize("kind", ["failed-process", "empty-answer", "preflight"])
 def test_runner_does_not_log_uncompleted_calls(world: World, monkeypatch: pytest.MonkeyPatch, kind: str) -> None:
     """Criterion 6. Planted fault: an invocation that never completes acquires a completed-attempt entry."""

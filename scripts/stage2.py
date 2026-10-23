@@ -4660,8 +4660,8 @@ def persist_time_entry(
 ) -> None:
     """Persist one completed attempt's entry - the one writer for normal and exceptional departures.
 
-    `retry` parks the entry on the pre-call plan in `inputs_before`, which the restore loop of the
-    following attempt writes back; every other attempt writes the plan here. A rejected entry whose
+    `retry` persists the entry on the pre-call plan and updates `inputs_before`, so even a failed
+    input restore cannot lose it; every other attempt writes the plan here too. A rejected entry whose
     destination is missing, unreadable or aliased recovers the pre-call plan safely first: parents
     are rebuilt and aliases detach from the worktree outward, so a linked external target never
     receives the write, and model bytes are never restored for it. A failed write fails closed -
@@ -4671,8 +4671,12 @@ def persist_time_entry(
     """
     try:
         if retry:
-            # Written by the restore loop below, which never writes through whatever stands there.
-            inputs_before[plan] = with_time_entry(prior, entry).encode("utf-8")
+            # Persist before restoring any other input: that restoration can fail before reaching
+            # the plan. Keep the same trusted bytes in the retry snapshot for a successful restore.
+            content = with_time_entry(prior, entry).encode("utf-8")
+            restore_work_input(root, plan, content)
+            stamp_updated(plan)
+            inputs_before[plan] = content
             return
         try:
             # A parent alias cannot safely be repaired by unlinking the document: that would
@@ -4683,14 +4687,14 @@ def persist_time_entry(
                 raise Refused("refusing an aliased or hard-linked plan")
             text = with_time_entry(plan.read_text(encoding="utf-8"), entry, prior=prior)
             plan.write_text(text, encoding="utf-8")
-        except (Refused, OSError, UnicodeDecodeError):
+        except (Refused, OSError, UnicodeDecodeError, RuntimeError):
             if accepted:
                 raise
             # A rejected attempt left the plan missing, unreadable or aliased: the trusted pre-call
             # plan takes the entry, aliases detached, parents repaired, never through a link.
             restore_work_input(root, plan, with_time_entry(prior, entry).encode("utf-8"))
         stamp_updated(plan)
-    except (Refused, OSError, UnicodeDecodeError) as logging_error:
+    except (Refused, OSError, UnicodeDecodeError, RuntimeError) as logging_error:
         message = f"the runner could not write the attempt's time entry to {plan}: {logging_error}"
         if original is None:
             raise CallFailed(message) from logging_error
@@ -4949,6 +4953,15 @@ def run_attempts(
             # at the pre-call bytes plus this entry, so the restore below keeps the entry and
             # drops the model's other plan edits.
             ended_wall, ended_mono = utc_now(), monotonic_now()
+            terminal_failure: Refused | CallFailed | None = None
+            if exposed:
+                terminal_failure = Refused(credential_message(exposed))
+            elif cannot_start is not None:
+                terminal_failure = CallFailed(
+                    "`make verify` could not be started; why, and the files this attempt changed: "
+                    f"{ctx.findings.relative_to(root)}"
+                )
+                terminal_failure.__cause__ = cannot_start
             logged = True
             persist_time_entry(
                 root,
@@ -4967,14 +4980,10 @@ def run_attempts(
                 inputs_before,
                 accepted=not problems,
                 retry=bool(problems) and attempt < len(routes) and cannot_start is None and not exposed,
+                original=terminal_failure,
             )
-            if exposed:
-                raise Refused(credential_message(exposed))
-            if cannot_start is not None:
-                raise CallFailed(
-                    "`make verify` could not be started; why, and the files this attempt changed: "
-                    f"{ctx.findings.relative_to(root)}"
-                ) from cannot_start
+            if terminal_failure is not None:
+                raise terminal_failure
             if not problems:
                 if before_commit is not None:
                     before_commit()

@@ -356,9 +356,9 @@ Stage-2 call, 2026-10-23: review · endpoint openai-codex · model gpt-6.1-sol �
 
 | ID | Severity | Dimension | Origin | Where | Finding | Reviewer | Status | Broke a test |
 |---|---|---|---|---|---|---|---|---|
-| F-1 | MAJOR | SPEC | phase-6 | scripts/stage2.py:4673–4676,4997–5005 | A rejected attempt awaiting retry stores its entry only in memory while `logged` is already true. If restoring an earlier input such as an unreadable spec raises before restoring the plan, the exception handler skips logging and the completed attempt leaves zero persisted entries, even when the plan remains writable. [Acceptance criterion 1] | Codex | taken — a test that a failed input restore before the plan restore still persists the rejected attempt's entry | — |
-| F-2 | MAJOR | SPEC | phase-6 | scripts/stage2.py:4953–4977 | When verification cannot start, or the late credential scan rejects the attempt, the normal logging call omits `original`. If writing and recovering the plan then fail, the reported exception and its cause contain only the logging error; the original terminal failure is lost from that error chain. Pass the existing failure into logging before it can fail. [Acceptance criteria 2, 5] | Codex | taken — a test that a failed log write after an unstartable verify or late credential rejection keeps the original failure in the error chain | — |
-| F-3 | MAJOR | SPEC | phase-6 | scripts/stage2.py:4680–4693 | On Python 3.12, a self-referential symlink replacing the plan’s parent makes `resolve()` raise `RuntimeError`. Neither logging handler catches it, so an early rejection bypasses safe recovery, loses its time entry and replaces the original refusal with the symlink error. The existing restoration helper could detach that parent without following it. [Acceptance criteria 1, 5] | Codex | taken — a test that a self-referential symlinked plan parent still recovers the entry safely and keeps the original refusal | — |
+| F-1 | MAJOR | SPEC | phase-6 | scripts/stage2.py:4673–4676,4997–5005 | A rejected attempt awaiting retry stores its entry only in memory while `logged` is already true. If restoring an earlier input such as an unreadable spec raises before restoring the plan, the exception handler skips logging and the completed attempt leaves zero persisted entries, even when the plan remains writable. [Acceptance criterion 1] | Codex | fixed — tests/test_stage2.py::test_runner_retry_restore_failure_keeps_persisted_time | — |
+| F-2 | MAJOR | SPEC | phase-6 | scripts/stage2.py:4953–4977 | When verification cannot start, or the late credential scan rejects the attempt, the normal logging call omits `original`. If writing and recovering the plan then fail, the reported exception and its cause contain only the logging error; the original terminal failure is lost from that error chain. Pass the existing failure into logging before it can fail. [Acceptance criteria 2, 5] | Codex | fixed — tests/test_stage2.py::test_runner_terminal_failure_survives_failed_log_write | — |
+| F-3 | MAJOR | SPEC | phase-6 | scripts/stage2.py:4680–4693 | On Python 3.12, a self-referential symlink replacing the plan’s parent makes `resolve()` raise `RuntimeError`. Neither logging handler catches it, so an early rejection bypasses safe recovery, loses its time entry and replaces the original refusal with the symlink error. The existing restoration helper could detach that parent without following it. [Acceptance criteria 1, 5] | Codex | fixed — tests/test_stage2.py::test_runner_early_refusal_recovers_self_linked_parent | — |
 
 Phase 6 verdict: codex 01a16883-3b7e-7f53-8ea2-0847020286a5, 2026-10-23
 Reviewer session: codex 01a16883-3b7e-7f53-8ea2-0847020286a5 — a fresh session reviewed: no phase-2a session was recorded
@@ -382,3 +382,20 @@ Kept from the loop record:
 > The answer was not only six-cell rows; what is not one is kept below as it came.
 > 
 > No finding.
+
+Stage-2 call, 2026-10-23: repair · attempt 1 · route codex · endpoint openai-codex · model gpt-6.1-sol · leak check clean over 530 files, 1888 commits, 12 rules.
+
+> Attempt 1 (codex) failed its post-run checks.
+>
+> Files the attempt changed (lines added, removed):
+> - `scripts/stage2.py` +22 -13
+> - `tests/test_stage2.py` +104 -0
+>
+> Diagnostics:
+> ```text
+> - Runner format before `make verify`: ruff changed no file.
+> - F-1: tests/test_stage2.py::test_runner_retry_restore_failure_keeps_persisted_time: the call of `tests/test_stage2.py::test_runner_retry_restore_failure_keeps_persisted_time` failed with ValueError, not an AssertionError
+> - F-3: tests/test_stage2.py::test_runner_early_refusal_recovers_self_linked_parent: the call of `tests/test_stage2.py::test_runner_early_refusal_recovers_self_linked_parent` failed with RuntimeError, not an AssertionError
+> ```
+
+Stage-2 call, 2026-10-23: repair · attempt 2 · route codex-repair · endpoint openai-codex · model gpt-6.1-sol · reason first Codex post-run check failed · leak check clean over 530 files, 1888 commits, 12 rules.
