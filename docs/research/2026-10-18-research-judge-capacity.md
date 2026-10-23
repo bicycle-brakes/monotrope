@@ -4,7 +4,7 @@ category: research
 status: proposed
 created: 2026-10-18
 last_reviewed: 2026-10-18
-updated: 2026-10-18
+updated: 2026-10-23
 owner: framework-architect
 provenance: ai-drafted-reviewed
 produced_by: {kind: llm-session, name: codex, version: "2026-10-18"}
@@ -35,9 +35,17 @@ actual context acceptance and a live provider call were not measured.
 No credential file was read. This is documented model capacity, not a
 reachability or account entitlement result.
 
-## Agent derivation under the existing research-swarm contract
+## Recorded implementation derivation
 
-Use one fixed whole-packet Unicode-character limit, counting every rendered
+Authority remains the whole-packet sizing ruling (S-38 in
+[decisions.md](../../plans/changes/research-swarm/decisions.md)). That ruling
+requires a derived limit and records that the actual Opus context size was
+not read; it deliberately sets no numeric limit. This note supplies no new
+maintainer decision and does not amend that ruling.
+
+As inspected on 2026-10-23 at repair baseline `7aacf14`,
+`scripts/stage2_research_judge.py::research_judge_capacity_policy` records the
+following implementation policy. The packet measurement counts every rendered
 instruction and the canonical data packet:
 
 ```text
@@ -50,17 +58,21 @@ J = floor((1,000,000 - 128,000 - 72,000) / 4) = 200,000 characters
 
 The conversion and transport reserve are conservative agent estimates,
 not vendor guarantees or a measured tokenizer upper bound. The output
-reserve retains the documented maximum. This implements the existing
-spec's derivation duty; it changes no model admission or participant count.
-Persist the numeric terms, model, source links and read-on date with the
-measured packet size. Re-read the sources when the model or client contract
-changes; automatic currency maintenance is separate work.
+reserve uses the maximum reported in the dated evidence above. The code
+therefore applies J = 200,000; this is an agent-derived implementation value,
+not a numeric limit set by S-38 or a measurement of effective pinned-client
+capacity. The policy retains those source links and the 2026-10-18 read-on
+date, and the run manifest records it with the measured packet size. The
+sources were not re-read for this documentation repair. Re-reading them when
+the model or client contract changes remains necessary; automatic currency
+maintenance is separate work.
 
-At J, the normal independent launch preconditions still apply. Above J,
-do not call the judge, trim evidence again, reduce the free roster or add
-another judge call. Retain all reports, excerpts and terminal outcomes,
-and end incomplete with judge-packet-over-limit. The fixed four-thousand-
-character per-claim excerpt cap is applied before whole-packet measurement.
+At J, the code still requires the independent launch preconditions. Above
+J, it refuses judge dispatch and retains the reports, excerpts and terminal
+outcomes, ending incomplete with judge-packet-over-limit. S-38 forbids
+shortening evidence to fit, reducing N or adding a second judge call. The
+fixed 4,000-character per-claim excerpt cap is applied before whole-packet
+measurement.
 
 ## Qualification boundary
 
