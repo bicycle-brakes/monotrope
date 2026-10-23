@@ -43,9 +43,11 @@ Starts unless you say stop.
 3. In that same script, isolate phase-6 non-row text when `review` stores it:
    quote every retained line, including headings and copied delimiters, while
    preserving parsed finding rows and the runner's own verdict/session lines.
-   Use a scoped option on `answer_block`/`answer_parts` if needed; phase 2a's
-   unrelated output contract stays unchanged. A marker in reviewer evidence
-   must never create, close or replace an owned block.
+   Use a scoped option on `answer_block`/`answer_parts` if needed. Phase 2a
+   also quotes its retained non-row text, as accepted in finding L1-2, so
+   spec-review evidence cannot forge runner-owned structure; parsed finding
+   rows remain unchanged. A marker in reviewer evidence must never create,
+   close or replace an owned block.
 4. Keep snapshot fields and `read_state` precedence: active record first,
    otherwise the latest applicable release, never an older fallback. Refuse
    missing/invalid state for an existing run before `discover_free`, receipt
@@ -102,3 +104,4 @@ Stage-1 route: repair · model claude-sonnet-5-5 · reason: two Codex post-run c
 2026-10-23 22:27:37–22:46:38 UTC, 1142 s — repair · attempt 1 · route codex · model gpt-6.1-sol · rejected · measured by the runner
 2026-10-23 22:46:44–23:03:18 UTC, 994 s — repair · attempt 2 · route codex-repair · model gpt-6.1-sol · rejected · measured by the runner
 2026-10-23 23:03:24–23:09:54 UTC, 390 s — repair · attempt 3 · route stage-1 · model claude-sonnet-5-5 · accepted · measured by the runner
+2026-10-23 23:45:41–23:50:28 UTC, 287 s — repair · attempt 1 · route codex · model gpt-6.1-sol · accepted · measured by the runner

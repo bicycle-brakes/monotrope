@@ -156,3 +156,11 @@ Stage-2 call, 2026-10-24: repair · attempt 2 · route codex-repair · endpoint 
 > ````
 
 Stage-2 call, 2026-10-24: repair · attempt 3 · route stage-1 · endpoint claude-code-plan · model claude-sonnet-5-5 · reason two Codex post-run checks failed · leak check clean over 536 files, 1924 commits, 12 rules.
+
+Stage-2 call, 2026-10-24: review-loop · endpoint opencode-go · model longcat-2.0 · leak check clean over 536 files, 1925 commits, 12 rules.
+
+Stage-2 call, 2026-10-24: review-loop · endpoint opencode-go · model longcat-2.0 · leak check clean over 536 files, 1925 commits, 12 rules.
+
+Stage-2 call, 2026-10-24: review-loop · endpoint opencode-go · model longcat-2.0 · leak check clean over 536 files, 1925 commits, 12 rules.
+
+Stage-2 call, 2026-10-24: repair · attempt 1 · route codex · endpoint openai-codex · model gpt-6.1-sol · leak check clean over 536 files, 1925 commits, 12 rules.
