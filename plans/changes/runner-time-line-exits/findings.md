@@ -406,7 +406,7 @@ Stage-2 call, 2026-10-23: review · endpoint openai-codex · model gpt-6.1-sol �
 
 | ID | Severity | Dimension | Origin | Where | Finding | Reviewer | Status | Broke a test |
 |---|---|---|---|---|---|---|---|---|
-| F-4 | MAJOR | SPEC | phase-6 | scripts/stage2.py:4695; scripts/stage2.py:4642 | If a completed attempt leaves `plan.md` unreadable (mode `000`) before an early refusal, recovery calls `path.read_bytes()` before unlinking it. That raises `PermissionError`, leaving no time entry even when the writable parent permits replacing the file with the trusted pre-call plan. An in-memory reproduction confirms both persistence paths fail before any unlink or write. [Acceptance criteria 1, 5] | Codex | open | — |
+| F-4 | MAJOR | SPEC | phase-6 | scripts/stage2.py:4695; scripts/stage2.py:4642 | If a completed attempt leaves `plan.md` unreadable (mode `000`) before an early refusal, recovery calls `path.read_bytes()` before unlinking it. That raises `PermissionError`, leaving no time entry even when the writable parent permits replacing the file with the trusted pre-call plan. An in-memory reproduction confirms both persistence paths fail before any unlink or write. [Acceptance criteria 1, 5] | Codex | taken — a test that an unreadable plan.md before an early refusal is replaced with the trusted pre-call plan and keeps the time entry | — |
 
 Phase 6 verdict: codex 01a168c0-43f6-79d0-b200-5b2e882f934b, 2026-10-23
 Reviewer session: codex 01a168c0-43f6-79d0-b200-5b2e882f934b — a fresh session reviewed: an earlier ## Phase 6 block makes this a re-check
