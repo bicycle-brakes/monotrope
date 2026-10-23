@@ -197,6 +197,11 @@ typed: a hand-kept list of files ages exactly as fast as files are added.
 | [`changes/runner-time-line/plan.md`](changes/runner-time-line/plan.md) | draft | none | 2026-10-20 | coding-harness-9wp |
 | [`changes/runner-time-line/research.md`](changes/runner-time-line/research.md) | draft | none | 2026-10-20 | coding-harness-9wp |
 | [`changes/runner-time-line/spec.md`](changes/runner-time-line/spec.md) | draft | none | 2026-10-20 | coding-harness-9wp |
+| [`changes/runner-time-line-exits/decisions.md`](changes/runner-time-line-exits/decisions.md) | draft | none | 2026-10-23 | coding-harness-9wp |
+| [`changes/runner-time-line-exits/findings.md`](changes/runner-time-line-exits/findings.md) | draft | none | 2026-10-23 | coding-harness-9wp |
+| [`changes/runner-time-line-exits/plan.md`](changes/runner-time-line-exits/plan.md) | draft | none | 2026-10-23 | coding-harness-9wp |
+| [`changes/runner-time-line-exits/research.md`](changes/runner-time-line-exits/research.md) | draft | none | 2026-10-23 | coding-harness-9wp |
+| [`changes/runner-time-line-exits/spec.md`](changes/runner-time-line-exits/spec.md) | draft | none | 2026-10-23 | coding-harness-9wp |
 | [`changes/sol-effort/decisions.md`](changes/sol-effort/decisions.md) | draft | none | 2026-10-13 | coding-harness-yzk |
 | [`changes/sol-effort/findings.md`](changes/sol-effort/findings.md) | draft | none | 2026-10-14 | coding-harness-yzk |
 | [`changes/sol-effort/plan.md`](changes/sol-effort/plan.md) | draft | none | 2026-10-14 | coding-harness-yzk |

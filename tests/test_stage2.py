@@ -8225,6 +8225,518 @@ def test_runner_time_logging_does_not_retry_red_verification(world: World, monke
     assert git(world.root, "rev-list", "--count", f"{baseline}..HEAD") == "0"
 
 
+def _no_checkpoint(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Any checkpoint during the test fails it: a refused or logged attempt never commits."""
+    monkeypatch.setattr(stage2, "checkpoint", lambda *_a, **_kw: pytest.fail("a refused attempt checkpointed"))
+
+
+def _script_credential_plant(world: World) -> None:
+    """One model step whose only fault is the runner's key, planted into a changed tracked file."""
+    world.script(
+        claude=[{"stdout": "done", "plant": {"src/app.py": f'value = "{KEY}"\n'}}],
+        make=[{"stdout": "green\n"}],
+    )
+
+
+def test_runner_logs_first_postcall_credential_refusal(world: World, monkeypatch: pytest.MonkeyPatch) -> None:
+    """Criterion 1. Planted fault: the first scan refuses before the verdict, and the entry is lost."""
+    FakeClock(monkeypatch, UTC_START)
+    baseline = git(world.root, "rev-parse", "HEAD")
+    _script_credential_plant(world)
+    _no_checkpoint(monkeypatch)
+    assert world.run("implement") == 2
+    (entry,) = runner_entries(world.plan)
+    assert "rejected" in entry and "attempt 1 · route flash" in entry
+    assert len(world.calls("claude")) == 1
+    assert git(world.root, "rev-list", "--count", f"{baseline}..HEAD") == "0"
+    assert KEY not in (world.root / "src" / "app.py").read_text(encoding="utf-8")
+
+
+@pytest.mark.parametrize(("verb", "route"), [("implement", "flash"), ("repair", "codex")])
+def test_runner_logs_verify_refusal(world: World, monkeypatch: pytest.MonkeyPatch, verb: str, route: str) -> None:
+    """Criterion 1. Planted fault: a refusing verifier leaves the completed attempt without its entry."""
+    FakeClock(monkeypatch, UTC_START)
+    if verb == "repair":
+        seed_tests(world)
+        world.write_record([("L1-1", "taken — test_a", "no")])
+        script_repair(world, [repair_step()], make=[{"stdout": "green\n"}])
+    else:
+        world.script(
+            claude=[{"stdout": "done", "plant": {"src/app.py": "value = 2\n"}}],
+            make=[{"stdout": "green\n"}],
+        )
+    baseline = git(world.root, "rev-parse", "HEAD")
+
+    def refuse(*_args, **_kwargs):
+        raise stage2.Refused("the verifier refuses this attempt")
+
+    monkeypatch.setattr(stage2, "verify_attempt", refuse)
+    _no_checkpoint(monkeypatch)
+    assert world.run(verb) == 2
+    (entry,) = runner_entries(world.plan)
+    assert "rejected" in entry and "attempt 1 ·" in entry and f"route {route}" in entry
+    assert len(repair_calls(world)) == 1
+    assert git(world.root, "rev-list", "--count", f"{baseline}..HEAD") == "0"
+
+
+@pytest.mark.parametrize(("verb", "route"), [("implement", "flash"), ("repair", "codex")])
+def test_runner_logs_verification_interrupt_once(
+    world: World, monkeypatch: pytest.MonkeyPatch, verb: str, route: str
+) -> None:
+    """A completed call retains its rejected span before Ctrl-C propagates."""
+    clock = FakeClock(monkeypatch, UTC_START)
+    if verb == "repair":
+        seed_tests(world)
+        world.write_record([("L1-1", "taken — test_a", "no")])
+        script_repair(world, [repair_step()], make=[{"stdout": "green\n"}])
+    else:
+        world.script(claude=[{"stdout": "done"}], make=[{"stdout": "green\n"}])
+    interruption = KeyboardInterrupt("verification interrupted")
+    persisted = []
+    real_persist = stage2.persist_time_entry
+
+    def persist(*args, **kwargs):
+        persisted.append(kwargs["original"])
+        return real_persist(*args, **kwargs)
+
+    def interrupt(*_args, **_kwargs):
+        clock.now += 7
+        raise interruption
+
+    monkeypatch.setattr(stage2, "persist_time_entry", persist)
+    monkeypatch.setattr(stage2, "verify_attempt", interrupt)
+    _no_checkpoint(monkeypatch)
+    with pytest.raises(KeyboardInterrupt) as raised:
+        world.run(verb)
+    assert raised.value is interruption
+    assert persisted == [interruption]
+    (entry,) = runner_entries(world.plan)
+    assert "10:00:00–10:00:07 UTC, 7 s" in entry
+    assert f"{verb} · attempt 1 · route {route}" in entry
+    assert "rejected · measured by the runner" in entry
+    assert len(repair_calls(world)) == 1
+
+
+def test_runner_logs_unstartable_verify_once(
+    world: World, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+) -> None:
+    """Criterion 1. Planted fault: the stopped run loses the entry, or the boundary logs it twice."""
+    FakeClock(monkeypatch, UTC_START)
+    baseline = git(world.root, "rev-parse", "HEAD")
+    world.script(
+        claude=[{"stdout": "done", "plant": {"src/app.py": "value = 2\n"}}],
+        make=[{"stdout": "green\n"}],
+    )
+
+    def cannot_start(*_args, **_kwargs):
+        raise stage2.CallFailed("make could not be started: no make")
+
+    monkeypatch.setattr(stage2, "verify_attempt", cannot_start)
+    _no_checkpoint(monkeypatch)
+    assert world.run("implement") == 1
+    entries = runner_entries(world.plan)
+    assert len(entries) == 1 and "rejected" in entries[0]
+    assert len(world.calls("claude")) == 1, "an unstartable verifier stops with no further attempt"
+    assert "`make verify` could not be started" in capsys.readouterr().err
+    assert git(world.root, "rev-list", "--count", f"{baseline}..HEAD") == "0"
+
+
+@pytest.mark.parametrize("kind", ["unreadable", "moved"])
+def test_runner_logs_completed_call_head_failure(world: World, monkeypatch: pytest.MonkeyPatch, kind: str) -> None:
+    """Criterion 1. Planted fault: a completed Codex call whose HEAD check fails leaves without an entry."""
+    FakeClock(monkeypatch, UTC_START)
+    seed_tests(world)
+    world.write_record([("L1-1", "taken — test_a", "no")])
+    script_repair(world, [repair_step()], make=[{"stdout": "green\n"}])
+    baseline = git(world.root, "rev-parse", "HEAD")
+    real_codex, real_git_output = stage2.run_codex, stage2._git_output
+    called = False
+
+    def codex(*args, **kwargs):
+        nonlocal called
+        result = real_codex(*args, **kwargs)
+        called = True
+        if kind == "moved":
+            git(world.root, "add", "-A")
+            git(world.root, "commit", "--quiet", "-m", "the repair moved HEAD")
+        return result
+
+    def git_output(root, *args, **kwargs):
+        if kind == "unreadable" and called and args == ("rev-parse", "HEAD"):
+            raise stage2.Refused("git cannot be run")
+        return real_git_output(root, *args, **kwargs)
+
+    monkeypatch.setattr(stage2, "run_codex", codex)
+    monkeypatch.setattr(stage2, "_git_output", git_output)
+    _no_checkpoint(monkeypatch)
+    assert world.run("repair") == 1
+    (entry,) = runner_entries(world.plan)
+    assert "rejected" in entry and "attempt 1 · route codex" in entry
+    assert len(repair_calls(world)) == 1
+    if kind == "moved":
+        assert "stopped because the call moved HEAD" in world.text()
+        # The model's commit stands: the boundary measures, it never rewrites history.
+        assert git(world.root, "rev-list", "--count", f"{baseline}..HEAD") == "1"
+    else:
+        assert git(world.root, "rev-list", "--count", f"{baseline}..HEAD") == "0"
+
+
+def test_runner_logs_postcall_diagnostic_refusal(world: World, monkeypatch: pytest.MonkeyPatch) -> None:
+    """Criterion 1. Planted fault: diagnostic protection refuses outside the boundary, and the entry is lost."""
+    FakeClock(monkeypatch, UTC_START)
+    baseline = git(world.root, "rev-parse", "HEAD")
+    world.script(
+        claude=[{"stdout": "done", "plant": {"src/app.py": "value = 2\n"}}],
+        make=[{"stdout": "red\n", "exit": 1}],
+    )
+
+    def refuse(*_args, **_kwargs):
+        raise stage2.Refused("the failed-check diagnostics match rule 'planted' at line 3")
+
+    monkeypatch.setattr(stage2, "protect_diagnostics", refuse)
+    _no_checkpoint(monkeypatch)
+    assert world.run("implement") == 2
+    (entry,) = runner_entries(world.plan)
+    assert "rejected" in entry and "attempt 1 · route flash" in entry
+    assert len(world.calls("claude")) == 1
+    assert git(world.root, "rev-list", "--count", f"{baseline}..HEAD") == "0"
+
+
+def test_runner_logging_preserves_terminal_refusals(
+    world: World, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+) -> None:
+    """Criterion 2. Planted fault: logging masks the refusal, starts a fallback or leaves the key behind."""
+    FakeClock(monkeypatch, UTC_START)
+    baseline = git(world.root, "rev-parse", "HEAD")
+    _script_credential_plant(world)
+    _no_checkpoint(monkeypatch)
+    assert world.run("implement") == 2
+    err = capsys.readouterr().err
+    # The refusal stands as it was, named where the caller reads it, with no fallback route after it.
+    assert "refused:" in err and "credential occurred" in err
+    assert len(world.calls("claude")) == 1
+    (entry,) = runner_entries(world.plan)
+    assert "rejected" in entry
+    assert KEY not in (world.root / "src" / "app.py").read_text(encoding="utf-8")
+    assert git(world.root, "rev-list", "--count", f"{baseline}..HEAD") == "0"
+
+
+def test_runner_early_rejection_span_reaches_refusing_check(world: World, monkeypatch: pytest.MonkeyPatch) -> None:
+    """Criterion 3. Planted fault: the span ends before the refusing scan, or the entry mislabels it."""
+    clock = FakeClock(monkeypatch, UTC_START)
+    real_scan = stage2.remove_changed_credential
+
+    def scan(*args, **kwargs):
+        clock.now += 9
+        return real_scan(*args, **kwargs)
+
+    monkeypatch.setattr(stage2, "run_work_model", clock.after(30, stage2.run_work_model))
+    monkeypatch.setattr(stage2, "remove_changed_credential", scan)
+    _script_credential_plant(world)
+    _no_checkpoint(monkeypatch)
+    assert world.run("implement") == 2
+    (entry,) = runner_entries(world.plan)
+    assert entry == (
+        f"2026-10-20 10:00:00–10:00:39 UTC, 39 s — implement · attempt 1 · route flash · "
+        f"model {stage2.GLM_FLASH[1]} · rejected · measured by the runner"
+    )
+
+
+@pytest.mark.parametrize("kind", ["deleted", "unreadable", "alias", "parent-alias"])
+def test_runner_early_refusal_recovers_time_destination_safely(
+    world: World, monkeypatch: pytest.MonkeyPatch, tmp_path: Path, kind: str
+) -> None:
+    """Criterion 5. Planted fault: an early refusal loses the entry on a broken destination, or writes through it."""
+    FakeClock(monkeypatch, UTC_START)
+    outside = tmp_path / "outside-plan.md"
+    outside_dir = tmp_path / "outside-change"
+    external: dict[str, bytes] = {}
+    real_model = stage2.run_work_model
+    _script_credential_plant(world)
+
+    def model(*args, **kwargs):
+        answer = real_model(*args, **kwargs)
+        if len(world.calls("claude")) == 1:
+            if kind == "deleted":
+                world.plan.unlink()
+            elif kind == "unreadable":
+                world.plan.chmod(0o000)
+            elif kind == "alias":
+                outside.write_bytes(b"untouched\n")
+                world.plan.unlink()
+                world.plan.symlink_to(outside)
+            else:
+                shutil.copytree(world.plan.parent, outside_dir)
+                external.update({p.name: p.read_bytes() for p in outside_dir.iterdir()})
+                shutil.rmtree(world.plan.parent)
+                world.plan.parent.symlink_to(outside_dir, target_is_directory=True)
+        return answer
+
+    monkeypatch.setattr(stage2, "run_work_model", model)
+    _no_checkpoint(monkeypatch)
+    assert world.run("implement") == 2
+    (entry,) = runner_entries(world.plan)
+    assert "rejected" in entry and "attempt 1 · route flash" in entry
+    assert b"title: Plan" in world.plan.read_bytes()
+    assert not world.plan.is_symlink() and world.plan.parent.is_dir() and not world.plan.parent.is_symlink()
+    if kind == "alias":
+        assert outside.read_bytes() == b"untouched\n"
+    if kind == "parent-alias":
+        assert {p.name: p.read_bytes() for p in outside_dir.iterdir()} == external
+    assert KEY not in (world.root / "src" / "app.py").read_text(encoding="utf-8")
+    assert len(world.calls("claude")) == 1
+
+
+@pytest.mark.parametrize("retry", [False, True])
+def test_runner_detaches_matching_hardlinked_plan_before_stamp(world: World, tmp_path: Path, retry: bool) -> None:
+    """F-5: matching recovery bytes must not leave a hard link attached for the date stamp."""
+    prior = "---\nupdated: 2000-01-01\n---\n\n# Plan\n\n## Time used\n\n"
+    old_entry = "previous trusted span · measured by the runner"
+    prior = stage2.with_time_entry(prior, old_entry)
+    entry = "completed rejected span · measured by the runner"
+    content = stage2.with_time_entry(prior, entry).encode("utf-8")
+    inputs = {world.plan: prior.encode("utf-8")}
+    target = tmp_path / "external-plan.md"
+    target.write_bytes(content)
+    world.plan.unlink()
+    os.link(target, world.plan)
+
+    stage2.persist_time_entry(
+        world.root,
+        world.plan,
+        entry,
+        prior,
+        inputs,
+        accepted=False,
+        retry=retry,
+        original=stage2.Refused("early refusal"),
+    )
+
+    assert target.read_bytes() == content
+    assert world.plan.stat().st_nlink == 1
+    assert not world.plan.samefile(target)
+    assert f"updated: {dt.date.today().isoformat()}" in world.plan.read_text(encoding="utf-8")
+    assert runner_entries(world.plan) == [old_entry, entry]
+    if retry:
+        assert inputs[world.plan] == content
+
+
+@pytest.mark.parametrize("retry", [False, True])
+def test_runner_recovers_unreadable_plan_time_entry(world: World, monkeypatch: pytest.MonkeyPatch, retry: bool) -> None:
+    """F-4: both persistence paths must replace an unreadable plan from trusted bytes."""
+    prior = world.plan.read_text(encoding="utf-8")
+    old_entry = "previous trusted span · measured by the runner"
+    prior = stage2.with_time_entry(prior, old_entry)
+    inputs = {world.plan: prior.encode("utf-8")}
+    entry = "completed rejected span · measured by the runner"
+    world.plan.write_text("untrusted model replacement\n", encoding="utf-8")
+    world.plan.chmod(0o000)
+    real_read_bytes = Path.read_bytes
+    real_read_text = Path.read_text
+
+    # Keep the permission fault deterministic even when the test runs as root.
+    def read_bytes(path):
+        if path == world.plan and path.stat().st_mode & 0o444 == 0:
+            raise PermissionError("plan is unreadable")
+        return real_read_bytes(path)
+
+    def read_text(path, *args, **kwargs):
+        if path == world.plan and path.stat().st_mode & 0o444 == 0:
+            raise PermissionError("plan is unreadable")
+        return real_read_text(path, *args, **kwargs)
+
+    monkeypatch.setattr(Path, "read_bytes", read_bytes)
+    monkeypatch.setattr(Path, "read_text", read_text)
+    try:
+        logging_failure = None
+        try:
+            stage2.persist_time_entry(
+                world.root,
+                world.plan,
+                entry,
+                prior,
+                inputs,
+                accepted=False,
+                retry=retry,
+                original=stage2.Refused("early refusal"),
+            )
+        except stage2.CallFailed as error:
+            logging_failure = error
+        assert logging_failure is None, f"recoverable unreadable plan lost its time entry: {logging_failure}"
+        assert runner_entries(world.plan) == [old_entry, entry]
+        assert "untrusted model replacement" not in world.plan.read_text(encoding="utf-8")
+        assert b"title: Plan" in world.plan.read_bytes()
+        if retry:
+            assert inputs[world.plan] == stage2.with_time_entry(prior, entry).encode("utf-8")
+    finally:
+        world.plan.chmod(0o600)
+
+
+def test_runner_time_write_failure_keeps_original_cause(
+    world: World, monkeypatch: pytest.MonkeyPatch, tmp_path: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    """Criterion 5. Planted fault: a failed time write masks the refusal, or the run falls back anyway."""
+    FakeClock(monkeypatch, UTC_START)
+    outside = tmp_path / "outside-plan.md"
+    outside.write_bytes(b"untouched\n")
+    real_model = stage2.run_work_model
+    _script_credential_plant(world)
+
+    def model(*args, **kwargs):
+        answer = real_model(*args, **kwargs)
+        if len(world.calls("claude")) == 1:
+            world.plan.unlink()
+            world.plan.symlink_to(outside)
+        return answer
+
+    def broken_restore(_root, _path, _content):
+        raise OSError("the worktree is full")
+
+    monkeypatch.setattr(stage2, "run_work_model", model)
+    monkeypatch.setattr(stage2, "restore_work_input", broken_restore)
+    _no_checkpoint(monkeypatch)
+    assert world.run("implement") == 1
+    err = capsys.readouterr().err
+    assert "could not write the attempt's time entry" in err
+    assert "the attempt's own failure stands" in err
+    assert "credential occurred" in err
+    assert outside.read_bytes() == b"untouched\n"
+    assert runner_entries(world.plan) == []
+    assert len(world.calls("claude")) == 1
+
+
+def test_runner_retry_restore_failure_keeps_persisted_time(world: World, monkeypatch: pytest.MonkeyPatch) -> None:
+    """F-1: fail an input restore before the plan restore; the completed attempt must already be on disk."""
+    clock = FakeClock(monkeypatch, UTC_START)
+    world.script(claude=[{"stdout": "done"}])
+    real_restore = stage2.restore_work_input
+
+    def verify(*_args, **_kwargs):
+        clock.now += 7
+        return ["a repairable failure"]
+
+    def restore(root, path, content):
+        if path.name == "spec.md":
+            raise OSError("spec restore failed before restoring plan")
+        return real_restore(root, path, content)
+
+    monkeypatch.setattr(stage2, "verify_attempt", verify)
+    monkeypatch.setattr(stage2, "restore_work_input", restore)
+    _no_checkpoint(monkeypatch)
+    with pytest.raises(OSError, match="spec restore failed"):
+        stage2.implement(world.root, "demo")
+    entries = runner_entries(world.plan)
+    assert len(entries) == 1, "the rejected attempt must be persisted before restoring other inputs"
+    (entry,) = entries
+    assert "rejected" in entry and "attempt 1 · route flash" in entry and "7 s" in entry
+    assert len(world.calls("claude")) == 1
+
+
+@pytest.mark.parametrize("kind", ["unstartable-verify", "late-credential"])
+def test_runner_terminal_failure_survives_failed_log_write(
+    world: World, monkeypatch: pytest.MonkeyPatch, kind: str
+) -> None:
+    """F-2: failed persistence must chain the terminal failure, including the verifier's underlying cause."""
+    FakeClock(monkeypatch, UTC_START)
+    world.script(claude=[{"stdout": "done"}])
+    real_write = Path.write_text
+    ready = False
+    failure = stage2.CallFailed("make executable is unavailable")
+    scans = 0
+
+    def verify(*_args, **_kwargs):
+        nonlocal ready
+        ready = True
+        if kind == "unstartable-verify":
+            raise failure
+        return []
+
+    def scan(*_args, **_kwargs):
+        nonlocal scans
+        scans += 1
+        return [Path("src/app.py")] if scans == 2 and kind == "late-credential" else []
+
+    def write(path, *args, **kwargs):
+        if ready and path == world.plan:
+            raise OSError("plan write failed")
+        return real_write(path, *args, **kwargs)
+
+    def restore(*_args, **_kwargs):
+        raise OSError("plan recovery failed")
+
+    monkeypatch.setattr(stage2, "verify_attempt", verify)
+    monkeypatch.setattr(stage2, "remove_changed_credential", scan)
+    monkeypatch.setattr(Path, "write_text", write)
+    monkeypatch.setattr(stage2, "restore_work_input", restore)
+    _no_checkpoint(monkeypatch)
+    with pytest.raises(stage2.CallFailed, match="could not write the attempt's time entry") as caught:
+        stage2.implement(world.root, "demo")
+    chain = []
+    error = caught.value
+    while error is not None:
+        chain.append(error)
+        error = error.__cause__
+    if kind == "unstartable-verify":
+        assert failure in chain
+    else:
+        assert any(isinstance(error, stage2.Refused) and "credential occurred" in str(error) for error in chain)
+    assert len(world.calls("claude")) == 1
+
+
+def test_runner_early_refusal_recovers_self_linked_parent(world: World, monkeypatch: pytest.MonkeyPatch) -> None:
+    """F-3: Python 3.12 resolve raises RuntimeError on a loop; detach it and preserve the refusal."""
+    FakeClock(monkeypatch, UTC_START)
+    world.script(claude=[{"stdout": "done"}])
+    real_model = stage2.run_work_model
+    refusal = stage2.Refused("original post-call refusal")
+
+    def model(*args, **kwargs):
+        answer = real_model(*args, **kwargs)
+        shutil.rmtree(world.plan.parent)
+        world.plan.parent.symlink_to(world.plan.parent.name, target_is_directory=True)
+        return answer
+
+    def scan(*_args, **_kwargs):
+        raise refusal
+
+    monkeypatch.setattr(stage2, "run_work_model", model)
+    monkeypatch.setattr(stage2, "remove_changed_credential", scan)
+    _no_checkpoint(monkeypatch)
+    with pytest.raises((stage2.Refused, RuntimeError, stage2.CallFailed)) as caught:
+        stage2.implement(world.root, "demo")
+    assert caught.value is refusal
+    (entry,) = runner_entries(world.plan)
+    assert "rejected" in entry and "attempt 1 · route flash" in entry
+    assert not world.plan.parent.is_symlink()
+    assert len(world.calls("claude")) == 1
+
+
+@pytest.mark.parametrize("kind", ["failed-process", "empty-answer", "preflight"])
+def test_runner_does_not_log_uncompleted_calls(world: World, monkeypatch: pytest.MonkeyPatch, kind: str) -> None:
+    """Criterion 6. Planted fault: an invocation that never completes acquires a completed-attempt entry."""
+    FakeClock(monkeypatch, UTC_START)
+    if kind == "empty-answer":
+        seed_tests(world)
+        world.write_record([("L1-1", "taken — test_a", "no")])
+        world.script(codex=[codex_ok("TR1", "")], make=[{"stdout": "green\n"}])
+        verb = "repair"
+    elif kind == "preflight":
+        world.plan.unlink()
+        verb = "implement"
+    else:
+        world.script(claude=[{"stdout": "boom", "exit": 1}])
+        verb = "implement"
+    baseline = git(world.root, "rev-parse", "HEAD")
+    _no_checkpoint(monkeypatch)
+    assert world.run(verb) != 0
+    if kind == "preflight":
+        assert not world.plan.exists()
+    else:
+        assert runner_entries(world.plan) == []
+    assert len(repair_calls(world)) == (0 if kind == "preflight" else 1)
+    assert git(world.root, "rev-list", "--count", f"{baseline}..HEAD") == "0"
+
+
 def test_record_rows_reach_the_model_only_in_the_prompt(world: World) -> None:
     """Criterion 13. Planted fault: the rows written into a worktree file."""
     seed_tests(world)
