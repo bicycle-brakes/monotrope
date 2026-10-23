@@ -356,3 +356,19 @@ def test_the_probe_detects_tampering_with_the_workflow_role(monkeypatch: pytest.
     v = probe.pruefe(faelle={**GRUENE_FAELLE, "tests.test_ci::test_workflow_hat_phasen": True})
     assert "docs/WORKFLOW.md" not in probe.nach_rolle()["mechanismus"], "the role change has no effect"
     assert v is not None
+
+
+def test_research_handoff_checker_and_tests_travel() -> None:
+    """Criterion 32 of research-swarm: the gate travels with its script, its derivation and its fixture tests.
+
+    Planted fault: the gate file travels while its script, the shared derivation or the tests stay behind in
+    a catch-all rule.
+    """
+    for path in (
+        "scripts/check_research_handoff.py",
+        "scripts/research_handoff.py",
+        "tests/test_research_handoff.py",
+    ):
+        rule = probe.rolle(path)
+        assert rule is not None and rule[0] == "mechanismus", path
+        assert rule[1] == path, f"{path} is left to the catch-all {rule[1]}"

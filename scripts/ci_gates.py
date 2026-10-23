@@ -97,6 +97,17 @@ OHNE_AUFRUFER: dict[str, str] = {
         "Run before every foreign call by scripts/stage2.py and by hand as make leakcheck; it needs "
         "the denylist each machine keeps outside the repository, which no CI step holds"
     ),
+    "research_capture.py": (
+        "Entry point, not a gate - the maintainer-attended F-1 offline capture of the research swarm's free-context "
+        "isolation (real pinned Pi against a loopback mock, synthetic canaries, no external request); it needs the "
+        "installed Pi and a present maintainer, which no CI step has; tests/test_research_capture.py runs it "
+        "against a stand-in. Framework-only, not part of the kit"
+    ),
+    "research_handoff.py": (
+        "Library - the one derivation of a research run's obligation inventory, imported by the research "
+        "runner and by scripts/check_research_handoff.py (the gate research-handoff); "
+        "tests/test_stage2_swarm.py and tests/test_research_handoff.py run it"
+    ),
     "stage2.py": (
         "Entry point, not a gate — starts the stage-2 reviewers on the maintainer's machine, with a "
         "subscription and a credential no CI step holds; tests/test_stage2.py runs it against stand-ins"
@@ -110,8 +121,62 @@ OHNE_AUFRUFER: dict[str, str] = {
         "window for an interactive model session; tests/test_stage2_session.py runs it against stand-ins"
     ),
     "stage2_availability.py": (
-        "Helper imported by scripts/stage2.py prepare-loop and review-loop, not a standalone CI gate; "
-        "tests/test_stage2_availability.py exercises preparation and consumption against synthetic models"
+        "Helper of scripts/stage2.py (prepare-loop and review-loop; prepare-explore and explore "
+        "--availability-reported), never an entry point of its own; it probes models through the runner's "
+        "stand-in-testable launch path. tests/test_stage2_availability.py exercises the review loop's preparation "
+        "and consumption against synthetic models, tests/test_stage2_research_availability.py the research "
+        "swarm's against stand-ins and a fixture catalog"
+    ),
+    "stage2_research_refs.py": (
+        "Pure frozen-reference library, not a CLI gate; the amended research map/report pipeline consumes it. "
+        "Direct structural and claim-cap contracts live in tests/test_stage2_research_refs.py; "
+        "legacy dispatcher integration remains pending during the research-swarm implementation."
+    ),
+    "stage2_research_map.py": (
+        "Pure finder-union and neighbour preparation library, not a CLI gate; the amended explore pipeline "
+        "consumes it. tests/test_stage2_research_map.py exercises exact union and frozen neighbour boundaries; "
+        "actual scheduler integration remains pending."
+    ),
+    "stage2_research_snapshot.py": (
+        "Transient frozen-input library, not a CLI gate; the amended research pipeline will own its "
+        "context-managed copies and drift checks. tests/test_stage2_research_snapshot.py exercises "
+        "working bytes, untracked inputs, cleanup and exact runner-owned appends. Scheduler integration is pending."
+    ),
+    "stage2_research_history.py": (
+        "Local frozen-HEAD history library, not a CLI gate; stage2_research_snapshot.py shares its "
+        "local-only Git boundary. tests/test_stage2_research_history.py exercises history bounds and failures; "
+        "the amended topic-6 dispatcher still needs to consume the packet."
+    ),
+    "stage2_research_report.py": (
+        "Pure topic-report and runner-evidence validation library, not a CLI gate; the amended research "
+        "dispatcher will consume it. tests/test_stage2_research_report.py exercises raw syntax, local/history/"
+        "page evidence, namespaces and topic-specific fields; actual dispatcher integration remains pending."
+    ),
+    "stage2_research_judge.py": (
+        "Pure whole-packet sizing and independent claim-score library, not a CLI gate; the amended "
+        "judge pipeline will consume it. tests/test_stage2_research_judge.py exercises exact size limits, "
+        "claim coverage and terminal-outcome precedence. Dispatch/reconciliation integration remains pending."
+    ),
+    "stage2_research_dispatch.py": (
+        "Pure cancellable stage-dispatch library, not a CLI gate; the amended swarm runner will consume it. "
+        "tests/test_stage2_research_dispatch.py exercises provider queues, ordering, gate serialization, "
+        "deadlines and cancel/reap with real child processes; scheduler integration remains pending."
+    ),
+    "stage2_research_run.py": (
+        "Helper of scripts/stage2.py explore (through stage2_swarm.run), never an entry point of its own: the "
+        "phase-1 research run - frozen inputs, finder trio, map merge, public sentence, history, eleven topics "
+        "and the judge over the dispatcher and the resumable store. tests/test_stage2_swarm.py runs it against "
+        "stand-ins that contact nothing."
+    ),
+    "stage2_research_store.py": (
+        "Pure resumable-state library, not a CLI gate; the amended swarm runner will consume it (Q-13). "
+        "tests/test_stage2_research_store.py exercises durable atomic records, SIGKILL survival, owner-only "
+        "placement, exact-binding reuse, refused runs, scrubbing and the per-change lock with real files "
+        "and subprocesses; the run wiring (lookup, copy-forward, marking) remains pending."
+    ),
+    "stage2_swarm.py": (
+        "Helper of scripts/stage2.py explore, never an entry point of its own — it runs the phase-1 "
+        "research swarm only through the runner; tests/test_stage2_swarm.py runs it against stand-ins"
     ),
     "harness.py": (
         "Entry point, not a gate — a person, or an agent on the maintainer's word, records an ADR "

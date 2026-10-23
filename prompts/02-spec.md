@@ -32,6 +32,25 @@ Required sections:
   grows during implementation and nobody can say from when.
 - **Open decisions.** Classify first, then ask.
 
+## After a research swarm (ADR 0020)
+
+When `research.md` holds a complete `research-swarm/v2` run, the spec carries
+its handoff, and the gate `research-handoff`
+(`python3 scripts/check_research_handoff.py`) measures it:
+
+- **Neighbours.** Once the spec exists, its header `neighbours:` equals the
+  paths given or confirmed in any complete run, plus the `keep` and `add`
+  paths of the maintainer-answered records (`research_neighbours` in
+  `decisions.md`), minus their `drop` paths. Write `neighbours: []` when there
+  are none. A split path counts only after a structured `keep`.
+- **Basis.** Every acceptance criterion carries a `*Basis:*` line that names
+  what it rests on: supported claims of a complete run
+  (`<run>/<n>/<seat>/C<k>`) and/or answered records of this change
+  (`decisions.md#Q-<n>`). A basis that names a claim no run holds, or a
+  question nobody answered, fails the gate.
+- Every research item (`<run>/H-<n>`) needs a maintainer-answered record before
+  the spec is final; you do not close one yourself (`prompts/01a-interview.md`).
+
 ## Classify before you ask
 
 ```
