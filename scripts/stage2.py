@@ -493,8 +493,11 @@ class RestorationRefused(Refused):
     The maintainer's decided stop (bead coding-harness-10w): the recovery batch stays unwritten,
     no other attempt, fallback model or checkpoint follows, and time or findings are not persisted
     after it - the explicit exception to ordinary time persistence. `main` reports it on standard
-    error, exit 2, like every refusal.
+    error, exit 2, like every refusal. If finalization meets this refusal while a call
+    failure is propagating, the original failure remains visible and retains exit 1.
     """
+
+    exit_code = 2
 
 
 class StepTimedOut(CallFailed):
@@ -3377,6 +3380,9 @@ def remove_changed_credential(
     paths = changed_paths(root, against=against)
     if ignored_before is not None:
         paths |= {p for p, stat in ignored_snapshot(root).items() if ignored_before.get(p) != stat}
+    # Validate the entire scan before scrubbing even a safe preceding file. A changed
+    # tracked path can sit below a parent the attempt replaced with an external link.
+    preflight_recovery(root, (root / relative for relative in sorted(paths)))
     found = []
     for relative in sorted(paths, key=lambda path: path.as_posix()):
         path = root / relative
@@ -4710,7 +4716,12 @@ def restoration_parent_problem(root: Path, path: Path) -> str | None:
                 target = probe.readlink()
             except OSError:
                 return f"{parent.relative_to(root).as_posix()} cannot be resolved"
-            probe = Path(os.path.normpath(target if target.is_absolute() else probe.parent / target))
+            try:
+                # Resolve the containing directory before interpreting a relative target's `..`:
+                # its lexical depth can differ from its real depth through an ancestor link.
+                probe = target if target.is_absolute() else probe.parent.resolve() / target
+            except (OSError, RuntimeError):
+                return f"{parent.relative_to(root).as_posix()} cannot be resolved"
         try:
             resolved = probe.resolve()
         except (OSError, RuntimeError):
@@ -4762,6 +4773,13 @@ def restore_work_input(root: Path, path: Path, content: bytes) -> None:
         path.write_bytes(content)
 
 
+def preserve_attempt_failure(error: RestorationRefused, original: BaseException | None) -> None:
+    """Keep both causes visible without permitting recovery or hiding a call's failure exit."""
+    if original is not None:
+        error.args = (f"{error}; the attempt's own failure stands: {original}",)
+        error.exit_code = 1 if isinstance(original, CallFailed) else 2
+
+
 def persist_time_entry(
     root: Path,
     plan: Path,
@@ -4789,8 +4807,8 @@ def persist_time_entry(
     """
     # The parent check stands before the first time write of either path: persistence must not act
     # through a parent outside the worktree, and must not be written after such a refusal.
-    refuse_unsafe_recovery(root, plan)
     try:
+        refuse_unsafe_recovery(root, plan)
         if retry:
             # Persist before restoring any other input: that restoration can fail before reaching
             # the plan. Keep the same trusted bytes in the retry snapshot for a successful restore.
@@ -4817,7 +4835,8 @@ def persist_time_entry(
             # plan takes the entry, aliases detached, parents repaired, never through a link.
             restore_work_input(root, plan, with_time_entry(prior, entry).encode("utf-8"))
         stamp_updated(plan)
-    except RestorationRefused:
+    except RestorationRefused as error:
+        preserve_attempt_failure(error, original)
         raise
     except (Refused, OSError, UnicodeDecodeError, RuntimeError) as logging_error:
         message = f"the runner could not write the attempt's time entry to {plan}: {logging_error}"
@@ -4912,10 +4931,18 @@ def run_attempts(
         kept = snapshot_findings() if snapshot_findings is not None else None
         findings_before = ctx.findings.read_bytes()
 
-        def put_findings_back(kept=kept) -> None:
+        def put_findings_back(
+            original: BaseException | None = None, kept=kept, destinations=(*inputs_before, ctx.findings)
+        ) -> None:
             """Put findings.md back, refusing first when its parent would carry the write outside."""
+            # Even implement (without a findings snapshot) must validate the complete batch
+            # before its caller can append diagnostics or finalize time on an early exit.
+            try:
+                preflight_recovery(root, destinations)
+            except RestorationRefused as safety_error:
+                preserve_attempt_failure(safety_error, original)
+                raise
             if kept is not None:
-                refuse_unsafe_recovery(root, ctx.findings)
                 restore_findings(kept)
 
         unmeasured: str | None = None
@@ -4993,6 +5020,7 @@ def run_attempts(
                 # The whole failed-call recovery stands behind the parent check: the baseline
                 # rollback and cleanup destinations are validated before findings are restored or
                 # the attempt is saved, so a refusal leaves the branch without a single write.
+                preflight_recovery(root, {**inputs_before, ctx.findings: findings_before})
                 planned = plan_baseline_restore(root, allowed, ignored_before)
                 put_findings_back()
                 exposed = []
@@ -5026,13 +5054,13 @@ def run_attempts(
             formatted: list[str] = []
             try:
                 problems = verify_attempt(root, ctx.plan, key, formatted, tools)
-            except Refused:
-                put_findings_back()
+            except Refused as error:
+                put_findings_back(original=error)
                 raise
             except CallFailed as error:
                 # `make verify` could not be started: no model can repair that, so this attempt's block
                 # says why and the run stops after the scan below, with no further attempt (spec, criterion 6).
-                put_findings_back()
+                put_findings_back(original=error)
                 cannot_start = error
                 lines = protect_diagnostics(str(error), key).splitlines() or ["make could not be started"]
                 problems = ["`make verify` could not be run\n" + "\n".join(_shrink(lines, TAIL_LINES))]
@@ -5153,7 +5181,14 @@ def run_attempts(
             # attempt's own failure as the cause. A restoration safety refusal is the explicit
             # exception: persisting time or findings after it would write against the no-write
             # stop, so it propagates without an entry (spec, criterion 5).
+            if isinstance(error, RestorationRefused) and call_error is not None:
+                preserve_attempt_failure(error, call_error)
             if completed and not logged and not isinstance(error, RestorationRefused):
+                try:
+                    preflight_recovery(root, {**inputs_before, ctx.findings: findings_before})
+                except RestorationRefused as safety_error:
+                    preserve_attempt_failure(safety_error, error)
+                    raise
                 ended_wall, ended_mono = utc_now(), monotonic_now()
                 persist_time_entry(
                     root,
@@ -6125,6 +6160,9 @@ def main(argv: list[str] | None = None) -> int:
         # A finished loop is not a refusal: its own exit code, and no `refused:` on stderr.
         print(f"the loop is finished: {error}", file=sys.stderr)
         return CLEAN_CODE
+    except RestorationRefused as error:
+        print(f"refused: {error}", file=sys.stderr)
+        return error.exit_code
     except Refused as error:
         print(f"refused: {error}", file=sys.stderr)
         return 2

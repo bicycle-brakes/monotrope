@@ -492,3 +492,26 @@ Stage-2 call, 2026-10-23: repair · attempt 1 · route codex · endpoint openai-
 > ```
 
 Stage-2 call, 2026-10-23: repair · attempt 2 · route codex-repair · endpoint openai-codex · model gpt-6.1-sol · reason first Codex post-run check failed · leak check clean over 536 files, 1917 commits, 12 rules.
+
+Stage-2 call, 2026-10-23: review-loop · endpoint opencode-go · model deepseek-v4.1-flash · leak check clean over 536 files, 1918 commits, 12 rules.
+
+Stage-2 call, 2026-10-23: review-loop · endpoint opencode-go · model mimo-v2.5 · leak check clean over 536 files, 1918 commits, 12 rules.
+
+Stage-2 call, 2026-10-23: review-loop · endpoint opencode-go · model mimo-v2.6-flash · leak check clean over 536 files, 1918 commits, 12 rules.
+
+Stage-2 call, 2026-10-23: repair · attempt 1 · route codex · endpoint openai-codex · model gpt-6.1-sol · leak check clean over 536 files, 1918 commits, 12 rules.
+
+> Attempt 1 (codex) failed its post-run checks.
+>
+> Files the attempt changed (lines added, removed):
+> - `scripts/stage2.py` +45 -9
+> - `tests/test_stage2.py` +246 -2
+>
+> Diagnostics:
+> ```text
+> - Runner format before `make verify`: ruff changed no file.
+> - L2-3: tests/test_stage2.py::test_baseline_cleanup_preflights_created_ignored_destination: the call of `tests/test_stage2.py::test_baseline_cleanup_preflights_created_ignored_destination[contained-chain]` failed with RestorationRefused, not an AssertionError
+> - L2-6: tests/test_stage2.py::test_credential_scan_refuses_escaped_changed_parent: the call of `tests/test_stage2.py::test_credential_scan_refuses_escaped_changed_parent[scan]` failed with Failed, not an AssertionError
+> ```
+
+Stage-2 call, 2026-10-23: repair · attempt 2 · route codex-repair · endpoint openai-codex · model gpt-6.1-sol · reason first Codex post-run check failed · leak check clean over 536 files, 1918 commits, 12 rules.
