@@ -73,23 +73,23 @@ Starts unless you say stop.
 
 ## Criterion ledger
 
-- 1: not yet written tests/test_stage2.py::test_runner_logs_first_postcall_credential_refusal — the first scan raises before the entry
-- 1: not yet written tests/test_stage2.py::test_runner_logs_verify_refusal — verify_attempt raises Refused before the entry
+- 1: tests/test_stage2.py::test_runner_logs_first_postcall_credential_refusal — the first scan raises before the entry
+- 1: tests/test_stage2.py::test_runner_logs_verify_refusal — verify_attempt raises Refused before the entry
 - 1: tests/test_stage2.py::test_runner_time_includes_postgate_credential_rejection — the late scan omits or duplicates the rejected entry
-- 1: not yet written tests/test_stage2.py::test_runner_logs_unstartable_verify_once — cannot_start omits or duplicates the entry
-- 1: not yet written tests/test_stage2.py::test_runner_logs_completed_call_head_failure — unreadable or moved HEAD skips logging
-- 1: not yet written tests/test_stage2.py::test_runner_logs_postcall_diagnostic_refusal — diagnostic protection raises outside the boundary
+- 1: tests/test_stage2.py::test_runner_logs_unstartable_verify_once — cannot_start omits or duplicates the entry
+- 1: tests/test_stage2.py::test_runner_logs_completed_call_head_failure — unreadable or moved HEAD skips logging
+- 1: tests/test_stage2.py::test_runner_logs_postcall_diagnostic_refusal — diagnostic protection raises outside the boundary
 - 1: tests/test_stage2.py::test_runner_logs_each_completed_attempt_once — normal verdicts omit or duplicate an entry
-- 2: not yet written tests/test_stage2.py::test_runner_logging_preserves_terminal_refusals — logging masks refusal, starts fallback/checkpoint or leaves a leaked key
-- 3: not yet written tests/test_stage2.py::test_runner_early_rejection_span_reaches_refusing_check — endpoint precedes refusal or its identity/result is wrong
+- 2: tests/test_stage2.py::test_runner_logging_preserves_terminal_refusals — logging masks refusal, starts fallback/checkpoint or leaves a leaked key
+- 3: tests/test_stage2.py::test_runner_early_rejection_span_reaches_refusing_check — endpoint precedes refusal or its identity/result is wrong
 - 3: tests/test_stage2.py::test_runner_time_entry_identifies_attempt_and_midnight_span — fields or monotonic duration change
 - 3: tests/test_stage2.py::test_runner_span_includes_model_and_postchecks — checkpoint time enters the span
 - 4: tests/test_stage2.py::test_runner_keeps_rejected_time_across_input_restore — retry loses earlier time
 - 4: tests/test_stage2.py::test_runner_preserves_precall_time_on_final_verdict — model-rewritten time replaces trusted records
 - 4: tests/test_stage2.py::test_runner_time_insert_preserves_section_boundaries — entry lands outside its section
-- 5: not yet written tests/test_stage2.py::test_runner_early_refusal_recovers_time_destination_safely — early refusal loses recoverable time or writes through an alias
-- 5: not yet written tests/test_stage2.py::test_runner_time_write_failure_keeps_original_cause — write failure masks refusal or permits fallback/checkpoint
-- 6: not yet written tests/test_stage2.py::test_runner_does_not_log_uncompleted_calls — failed/empty call or preflight rejection acquires a completed entry
+- 5: tests/test_stage2.py::test_runner_early_refusal_recovers_time_destination_safely — early refusal loses recoverable time or writes through an alias
+- 5: tests/test_stage2.py::test_runner_time_write_failure_keeps_original_cause — write failure masks refusal or permits fallback/checkpoint
+- 6: tests/test_stage2.py::test_runner_does_not_log_uncompleted_calls — failed/empty call or preflight rejection acquires a completed entry
 
 ## Verification
 
@@ -112,4 +112,12 @@ Research was written by the orchestrating Claude Code Opus 5.5 session on
 2026-10-23 at `8acaa8b` from an already reproduced finding; no separate
 exploration call or Stage-1 fallback was recorded.
 
+## Runner route — 2026-10-23
+
+Stage-1 route: implement · model claude-sonnet-5-5 · reason: two Flash post-run checks failed.
+
 ## Time used
+
+2026-10-23 08:50:03–09:28:11 UTC, 2288 s — implement · attempt 1 · route flash · model glm-5.3-flash · rejected · measured by the runner
+2026-10-23 09:28:17–10:03:53 UTC, 2137 s — implement · attempt 2 · route flash-repair · model glm-5.3-flash · rejected · measured by the runner
+2026-10-23 10:03:59–10:10:09 UTC, 370 s — implement · attempt 3 · route stage-1 · model claude-sonnet-5-5 · accepted · measured by the runner
