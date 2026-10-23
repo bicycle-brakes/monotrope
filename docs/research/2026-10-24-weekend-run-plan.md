@@ -15,12 +15,12 @@ tags: [weekend-run, plan, stage-2, runner, review-loop]
 
 # Weekend-run plan — 2026-10-24/25
 
-**Operational plan, not an execution report, and not yet in force.** It was
+**Operational plan, not an execution report.** It was
 drafted by the orchestrating session on 2026-10-23 at the maintainer's
 request ("plan a weekend session, take the beads not yet done, look at all
 beads"). The frame below is a **proposal** that copies the frame of the
 night run of 2026-10-22/23 (`docs/research/2026-10-22-night-run-plan.md`);
-it holds only once the maintainer confirms it. Task state stays in Beads.
+the maintainer confirmed it in the conversation of 2026-10-23. Task state stays in Beads.
 
 ## Tracker state read for this plan
 
@@ -33,7 +33,7 @@ Read 2026-10-23 about 12:00 UTC with `tools/bd list` and `tools/bd ready`,
   coding-harness-csm, coding-harness-k9rw, coding-harness-icw. Whether the
   last five are still worked or only left claimed was not read.
 
-## Frame (proposed, needs the maintainer's confirmation)
+## Frame (confirmed by the maintainer, conversation 2026-10-23: "the night's frame holds for the weekend too")
 
 - **Models:** as the repository routes them: GLM 5.3 Flash implements,
   Sonnet 5.5 is the runner's fallback, Codex Sol (`gpt-6.1-sol`) drafts,
