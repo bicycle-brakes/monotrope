@@ -104,6 +104,28 @@ no item invents an answer).
 | Carry the permission rules with the kit | coding-harness-oatb | feature; research first |
 | One place for phase models and effort | coding-harness-ylu | ADR |
 
+### Research scope for block C (maintainer, conversation 2026-10-23)
+
+Asked before the research, so these fix what each research answers, not the
+decision; the decision interviews follow the research in the next joint
+window. Recorded in each bead's notes.
+
+- **Review swarm (coding-harness-1gzo):** the best approach for a review
+  swarm; above all whether free models are used at all, and if so together
+  with the Flash swarm in one round. The maintainer's leaning, to be tested:
+  a ladder of 4, 3, 2, 1 models per round with rounds 1 and 2 mandatory
+  (coding-harness-r3b6).
+- **Night-run routine (coding-harness-yuw.2):** all five parts of the bead's
+  scope with equal weight.
+- **Attempt isolation (coding-harness-s9r):** three levels from simple to
+  heavy: a throwaway worktree per attempt, a container, k3s or OpenShift with
+  a default-deny network policy; for each, what it withstands and what it
+  costs on macOS and in CI.
+- **Permission rules in the kit (coding-harness-oatb):** the smallest rule
+  list a night run needs, derived from the measured refusals; a committed
+  settings file against the install script writing it after a confirmation;
+  merges keep asking; Codex included.
+
 ### Hygiene, between items
 
 - Local `make verify` is red on `leerprobe` (two tests in `tests/test_ci.py`)
