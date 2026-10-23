@@ -8404,7 +8404,7 @@ def test_runner_early_rejection_span_reaches_refusing_check(world: World, monkey
     )
 
 
-@pytest.mark.parametrize("kind", ["deleted", "alias", "parent-alias"])
+@pytest.mark.parametrize("kind", ["deleted", "unreadable", "alias", "parent-alias"])
 def test_runner_early_refusal_recovers_time_destination_safely(
     world: World, monkeypatch: pytest.MonkeyPatch, tmp_path: Path, kind: str
 ) -> None:
@@ -8421,6 +8421,8 @@ def test_runner_early_refusal_recovers_time_destination_safely(
         if len(world.calls("claude")) == 1:
             if kind == "deleted":
                 world.plan.unlink()
+            elif kind == "unreadable":
+                world.plan.chmod(0o000)
             elif kind == "alias":
                 outside.write_bytes(b"untouched\n")
                 world.plan.unlink()
@@ -8445,6 +8447,57 @@ def test_runner_early_refusal_recovers_time_destination_safely(
         assert {p.name: p.read_bytes() for p in outside_dir.iterdir()} == external
     assert KEY not in (world.root / "src" / "app.py").read_text(encoding="utf-8")
     assert len(world.calls("claude")) == 1
+
+
+@pytest.mark.parametrize("retry", [False, True])
+def test_runner_recovers_unreadable_plan_time_entry(world: World, monkeypatch: pytest.MonkeyPatch, retry: bool) -> None:
+    """F-4: both persistence paths must replace an unreadable plan from trusted bytes."""
+    prior = world.plan.read_text(encoding="utf-8")
+    old_entry = "previous trusted span · measured by the runner"
+    prior = stage2.with_time_entry(prior, old_entry)
+    inputs = {world.plan: prior.encode("utf-8")}
+    entry = "completed rejected span · measured by the runner"
+    world.plan.write_text("untrusted model replacement\n", encoding="utf-8")
+    world.plan.chmod(0o000)
+    real_read_bytes = Path.read_bytes
+    real_read_text = Path.read_text
+
+    # Keep the permission fault deterministic even when the test runs as root.
+    def read_bytes(path):
+        if path == world.plan and path.stat().st_mode & 0o444 == 0:
+            raise PermissionError("plan is unreadable")
+        return real_read_bytes(path)
+
+    def read_text(path, *args, **kwargs):
+        if path == world.plan and path.stat().st_mode & 0o444 == 0:
+            raise PermissionError("plan is unreadable")
+        return real_read_text(path, *args, **kwargs)
+
+    monkeypatch.setattr(Path, "read_bytes", read_bytes)
+    monkeypatch.setattr(Path, "read_text", read_text)
+    try:
+        logging_failure = None
+        try:
+            stage2.persist_time_entry(
+                world.root,
+                world.plan,
+                entry,
+                prior,
+                inputs,
+                accepted=False,
+                retry=retry,
+                original=stage2.Refused("early refusal"),
+            )
+        except stage2.CallFailed as error:
+            logging_failure = error
+        assert logging_failure is None, f"recoverable unreadable plan lost its time entry: {logging_failure}"
+        assert runner_entries(world.plan) == [old_entry, entry]
+        assert "untrusted model replacement" not in world.plan.read_text(encoding="utf-8")
+        assert b"title: Plan" in world.plan.read_bytes()
+        if retry:
+            assert inputs[world.plan] == stage2.with_time_entry(prior, entry).encode("utf-8")
+    finally:
+        world.plan.chmod(0o600)
 
 
 def test_runner_time_write_failure_keeps_original_cause(

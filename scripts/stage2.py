@@ -4639,7 +4639,15 @@ def restore_work_input(root: Path, path: Path, content: bytes) -> None:
         if parent.is_symlink() or (parent.exists() and not parent.is_dir()):
             parent.unlink()
         parent.mkdir(exist_ok=True)
-    if path.is_symlink() or not path.is_file() or path.read_bytes() != content:
+    replace = path.is_symlink() or not path.is_file()
+    if not replace:
+        try:
+            replace = path.read_bytes() != content
+        except OSError:
+            # A readable parent can replace an unreadable model-written input. Recovery
+            # uses trusted bytes, so a failed comparison must not prevent that replacement.
+            replace = True
+    if replace:
         if path.is_symlink() or path.is_file():
             path.unlink()
         elif path.is_dir():
