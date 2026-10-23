@@ -59,6 +59,27 @@ Write the time line in one place that every post-call exit passes through,
 so no completed attempt leaves without its entry, and keep the immediate stop
 without fallback on a credential leak. One test per exit.
 
+## Draft follow-up — 2026-10-23
+
+Read at input commit `2b16cb4`: the Codex HEAD read and moved-HEAD check
+also run after the model returns and before the first credential scan.
+Their failures leave before the time entry. A successfully returned call
+owes a rejected entry on those paths too; a failed call remains outside the
+completed-attempt contract. Logging must not reset a moved HEAD or create a
+checkpoint on either failure.
+
+Other post-call refusals can propagate from diagnostic protection and file
+inspection. The shared completion boundary must cover these as well, rather
+than enumerating only the two reproduced missing-entry paths. Existing
+`tests/test_stage2.py` tests cover late credential refusal, accepted/rejected
+retries, trusted prior time records, missing directories and aliased logging
+destinations. Reuse `FakeClock` and those safety cases for the early exits.
+
+Neither `templates/plan.md` nor `scripts/validate_change_artefacts.py` exists
+at `2b16cb4`. The phase-3 prompt supplies the plan form; the existing interview
+and criterion-ledger gates can check the draft. The runner regenerates
+`plans/INDEX.md` before its full verification.
+
 ## Open questions
 
 None for the maintainer: the direction is decided (`decisions.md`, Q-1).
