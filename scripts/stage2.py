@@ -578,9 +578,9 @@ def protect_diagnostics(text: str, key: str | None = None) -> str:
     included. A match is replaced in place by `[<rule name>]` (the name already starts `secret:`); the spans
     are found in the original text, overlapping ones merge with credential spans into one marker run, and the
     replacement keeps the line breaks it covered, so a traceback keeps its shape. Known credentials are
-    protected with their credential marker. Non-secret rules check credential-safe text; secret rules
-    check original text, both in full and line by line to preserve multiline and anchored matches.
-    Non-secret rules refuse first
+    protected with their credential marker. Every rule reads the original text, before any replacement,
+    in full and line by line to preserve multiline and anchored matches; a match wholly inside the known
+    credential is left to the credential marker. Non-secret rules refuse first
     - redaction must not hide a blocking rule - and so does a denylist that cannot be read, or
     text that still matches a secret rule after the replacement. A refusal names a rule or a reason and a
     line, never a value.
@@ -588,57 +588,60 @@ def protect_diagnostics(text: str, key: str | None = None) -> str:
     return _protect_diagnostics(text, key)[0]
 
 
+def _rule_spans(
+    pattern: re.Pattern, text: str, credentials: list[tuple[int, int]], *, include_empty: bool = False
+) -> list[tuple[int, int]]:
+    """Matches of `pattern` as offsets of `text`, except those wholly inside a credential.
+
+    Whole-text matches retain multiline rules; per-line matches mirror the leak check, including ^ and $
+    without an inline multiline flag. Advancing from each match's start retains overlapping alternatives.
+    Empty matches are retained for blocking checks only; they have no secret text to replace.
+    """
+    segments = [(0, text)]
+    offset = 0
+    for line in text.split("\n"):
+        segments.append((offset, line))
+        offset += len(line) + 1
+    found: list[tuple[int, int]] = []
+    for offset, segment in segments:
+        position = 0
+        while position <= len(segment):
+            match = pattern.search(segment, position)
+            if match is None:
+                break
+            if include_empty or match.end() > match.start():
+                start, end = offset + match.start(), offset + match.end()
+                # Credential spans are half-open: an empty match at the end belongs to
+                # the following text, so it must still trigger a blocking rule.
+                if not any(left <= start < right and end <= right for left, right in credentials):
+                    found.append((start, end))
+            position = match.start() + 1
+    return found
+
+
 def _protect_diagnostics(text: str, key: str | None, split_at: int | None = None) -> tuple[str, int | None]:
     """Protect a complete diagnostic while mapping an optional stream boundary."""
     if not text:
         return text, split_at
-    original = text
-    credentials = credential_spans(original, key) if key else []
-    text = scrub(original, key)
+    credentials = credential_spans(text, key) if key else []
     rules, problem = leakcheck.read_denylist(leakcheck.default_denylist())
     if problem:
         raise Refused(f"the failed-check diagnostics cannot be checked: {problem}")
+    # Every rule reads the original text, before any replacement: a credential replaced first would cut a
+    # match that reaches past it (F-4 and F-5 of #215). A match wholly inside a known credential is the
+    # credential's, and keeps its marker; every other non-secret match refuses before anything is replaced.
     for rule in rules:
         if rule.secret:
             continue
-        match = rule.pattern.search(text)
-        if match:
-            number = text.count("\n", 0, match.start()) + 1
+        for start, _end in _rule_spans(rule.pattern, text, credentials, include_empty=True):
+            number = text.count("\n", 0, start) + 1
             raise Refused(
                 f"the failed-check diagnostics match rule '{rule.name}' at line {number}; the call does not start."
             )
-        # Preserve line-anchored rules as well as matches spanning the full original text.
-        for number, line in enumerate(text.split("\n"), 1):
-            if rule.pattern.search(line):
-                raise Refused(
-                    f"the failed-check diagnostics match rule '{rule.name}' at line {number}; the call does not start."
-                )
-    # Non-secret checks retain credential precedence; secret spans use the untouched input.
-    text = original
     spans: list[list] = [[start, end, ["credential"]] for start, end in credentials]
     for rule in rules:
-        if not rule.secret:
-            continue
-        # Whole-text matches retain multiline rules; per-line matches mirror the leak check,
-        # including ^ and $ without an inline multiline flag. Offsets stay in the same text.
-        segments = [(0, text)]
-        offset = 0
-        for line in text.split("\n"):
-            segments.append((offset, line))
-            offset += len(line) + 1
-        for offset, segment in segments:
-            position = 0
-            while position <= len(segment):
-                match = rule.pattern.search(segment, position)
-                if match is None:
-                    break
-                if match.end() > match.start():
-                    start, end = offset + match.start(), offset + match.end()
-                    # A rule wholly inside the known credential keeps its existing marker.
-                    if not any(left <= start and end <= right for left, right in credentials):
-                        spans.append([start, end, [rule.name]])
-                # Advancing from the start retains overlapping alternatives of this same rule.
-                position = match.start() + 1
+        if rule.secret:
+            spans += [[start, end, [rule.name]] for start, end in _rule_spans(rule.pattern, text, credentials)]
     spans.sort(key=lambda span: (span[0], span[1]))
     merged: list[list] = []
     for start, end, names in spans:
@@ -3700,7 +3703,7 @@ def format_targets(root: Path, env: dict[str, str]) -> list[str]:
 
 def _not_run(reason: str, key: str | None) -> str:
     """The format line of a step that did not run: the reason on one line, one full stop of its own."""
-    return scrub(f"not run — {' '.join(reason.split()).rstrip('.')}.", key)
+    return protect_diagnostics(f"not run — {' '.join(reason.split()).rstrip('.')}.", key)
 
 
 # Every character a path can hold and still break the line the format line lands in - the block's
@@ -3747,10 +3750,10 @@ def format_step(
     if not targets:
         return None
     if not (root / RUFF).is_file():
-        return scrub(f"not run — no ruff at `{RUFF}`; `make venv` builds it.", key)
+        return protect_diagnostics(f"not run — no ruff at `{RUFF}`; `make venv` builds it.", key)
     problem = tool_problem(root, tools)
     if problem:
-        return scrub(f"not run — {problem}.", key)
+        return protect_diagnostics(f"not run — {problem}.", key)
     before: dict[str, bytes] = {}
     for target in targets:
         try:
@@ -3790,7 +3793,7 @@ def format_step(
     line = f"ruff changed {named}" if changed else "ruff changed no file"
     if notes:
         line += "; " + "; ".join(notes)
-    return scrub(line + ".", key)
+    return protect_diagnostics(line + ".", key)
 
 
 def verify_attempt(
