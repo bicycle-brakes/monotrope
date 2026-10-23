@@ -64,3 +64,32 @@ to the next attempt or route. The change makes that case a stop.
 None for the maintainer: the direction is decided (`decisions.md`, Q-1).
 Whether `restore_baseline` needs the same check is for the spec to settle
 from the code.
+
+## Draft investigation — 2026-10-23
+
+Read at input commit `a20d786`; these are code-inspection findings, not a new
+executed reproduction:
+
+- `restore_baseline` computes tracked changes and newly created ignored
+  paths, then runs `git restore` and `git clean` before deleting the ignored
+  paths with `unlink` or `rmtree`. It has no parent-containment preflight.
+  Its ignored-path deletion and empty-parent removal therefore belong to
+  the same restoration boundary as input recovery.
+- `run_attempts` restores input batches before retrying and when recovering
+  the plan directory; it also restores repair findings on several error
+  paths. A per-file check alone could restore an earlier safe input before
+  discovering an unsafe later input.
+- `persist_time_entry` calls `restore_work_input` on retries and rejected
+  attempts. Its broad exception handler wraps `Refused` as `CallFailed`.
+  The completed-attempt exception handler in `run_attempts` can invoke it
+  after another refusal. Both boundaries need to preserve the terminal
+  restoration refusal without another write.
+- Existing tests explicitly expect recovery of an external parent alias:
+  `test_runner_retry_replaces_parent_alias_without_following` and the
+  `parent-alias` case of
+  `test_runner_early_refusal_recovers_time_destination_safely`. Those
+  expectations must change for the maintainer's decided stop; ordinary
+  missing-parent, leaf-alias and hard-link recovery remain separate cases.
+- `templates/plan.md` and `scripts/validate_change_artefacts.py` are absent
+  at this commit. The plan uses `prompts/03-plan.md` and the existing plan
+  form; interview, criterion-ledger and registry checks remain available.
