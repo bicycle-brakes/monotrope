@@ -5016,8 +5016,8 @@ def run_attempts(
                 for path, content in inputs_before.items():
                     restore_work_input(root, path, content)
                 stamp_updated(ctx.plan)
-        except Exception as error:
-            # An exceptional departure of a completed attempt: its entry goes down first,
+        except BaseException as error:
+            # Include interrupts: an exceptional departure of a completed attempt logs first,
             # rejected, unless the verdict's own write already ran - and the original refusal
             # or failure then stands as it was. Logging itself failing fails closed, with the
             # attempt's own failure as the cause.

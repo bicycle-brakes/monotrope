@@ -446,7 +446,9 @@ Stage-2 call, 2026-10-23: review · endpoint openai-codex · model gpt-6.1-sol �
 
 | ID | Severity | Dimension | Origin | Where | Finding | Reviewer | Status | Broke a test |
 |---|---|---|---|---|---|---|---|---|
-| F-6 | MAJOR | SPEC | phase-6 | scripts/stage2.py:5019–5024 | Pressing Ctrl-C during verification after a successful model return raises `KeyboardInterrupt`, which bypasses `except Exception` and leaves the completed attempt without a time entry. An in-memory reproduction confirms zero persistence calls, versus one for a verifier refusal. Completion logging must preserve the rejected entry before propagating the interruption. [Acceptance criterion 1] | Codex | taken — a test that a KeyboardInterrupt during verification after a completed call persists the rejected entry once and still propagates | — |
+| F-6 | MAJOR | SPEC | phase-6 | scripts/stage2.py:5019–5024 | Pressing Ctrl-C during verification after a successful model return raises `KeyboardInterrupt`, which bypasses `except Exception` and leaves the completed attempt without a time entry. An in-memory reproduction confirms zero persistence calls, versus one for a verifier refusal. Completion logging must preserve the rejected entry before propagating the interruption. [Acceptance criterion 1] | Codex | fixed — tests/test_stage2.py::test_runner_logs_verification_interrupt_once | — |
 
 Phase 6 verdict: codex 01a168fc-3931-7b02-b28a-02e500d240fc, 2026-10-23
 Reviewer session: codex 01a168fc-3931-7b02-b28a-02e500d240fc — a fresh session reviewed: an earlier ## Phase 6 block makes this a re-check
+
+Stage-2 call, 2026-10-23: repair · attempt 1 · route codex · endpoint openai-codex · model gpt-6.1-sol · leak check clean over 530 files, 1906 commits, 12 rules.

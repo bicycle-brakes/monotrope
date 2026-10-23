@@ -8279,6 +8279,44 @@ def test_runner_logs_verify_refusal(world: World, monkeypatch: pytest.MonkeyPatc
     assert git(world.root, "rev-list", "--count", f"{baseline}..HEAD") == "0"
 
 
+@pytest.mark.parametrize(("verb", "route"), [("implement", "flash"), ("repair", "codex")])
+def test_runner_logs_verification_interrupt_once(
+    world: World, monkeypatch: pytest.MonkeyPatch, verb: str, route: str
+) -> None:
+    """A completed call retains its rejected span before Ctrl-C propagates."""
+    clock = FakeClock(monkeypatch, UTC_START)
+    if verb == "repair":
+        seed_tests(world)
+        world.write_record([("L1-1", "taken — test_a", "no")])
+        script_repair(world, [repair_step()], make=[{"stdout": "green\n"}])
+    else:
+        world.script(claude=[{"stdout": "done"}], make=[{"stdout": "green\n"}])
+    interruption = KeyboardInterrupt("verification interrupted")
+    persisted = []
+    real_persist = stage2.persist_time_entry
+
+    def persist(*args, **kwargs):
+        persisted.append(kwargs["original"])
+        return real_persist(*args, **kwargs)
+
+    def interrupt(*_args, **_kwargs):
+        clock.now += 7
+        raise interruption
+
+    monkeypatch.setattr(stage2, "persist_time_entry", persist)
+    monkeypatch.setattr(stage2, "verify_attempt", interrupt)
+    _no_checkpoint(monkeypatch)
+    with pytest.raises(KeyboardInterrupt) as raised:
+        world.run(verb)
+    assert raised.value is interruption
+    assert persisted == [interruption]
+    (entry,) = runner_entries(world.plan)
+    assert "10:00:00–10:00:07 UTC, 7 s" in entry
+    assert f"{verb} · attempt 1 · route {route}" in entry
+    assert "rejected · measured by the runner" in entry
+    assert len(repair_calls(world)) == 1
+
+
 def test_runner_logs_unstartable_verify_once(
     world: World, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
 ) -> None:
