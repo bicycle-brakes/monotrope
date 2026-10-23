@@ -79,13 +79,13 @@ Starts unless you say stop.
 
 ## Criterion ledger
 
-- 1: not yet written tests/test_stage2.py::test_restore_work_input_refuses_external_parent_without_writes — recovery removes the parent alias or alters an external sentinel
-- 1: not yet written tests/test_stage2.py::test_runner_restore_preflights_all_destinations — a safe earlier input or plan is written before an unsafe later input is checked
-- 1: not yet written tests/test_stage2.py::test_restore_baseline_refuses_external_parents_before_mutation — Git rollback or ignored cleanup mutates before checking every target
-- 2: not yet written tests/test_stage2.py::test_runner_parent_escape_stops_without_fallback — another model, ordinary failure exit or checkpoint follows the unsafe recovery
-- 3: not yet written tests/test_stage2.py::test_runner_parent_escape_stops_without_fallback — stderr omits the destination or outside-parent refusal reason
-- 4: not yet written tests/test_stage2.py::test_restore_parent_resolution_failure_stops_without_writes — a loop or resolution error permits mutation, fallback or an unnamed traceback
-- 5: not yet written tests/test_stage2.py::test_runner_restore_refusal_bypasses_finalization — an enclosing handler logs time, restores findings or saves/cleans the attempt after refusal
+- 1: tests/test_stage2.py::test_restore_work_input_refuses_external_parent_without_writes — recovery removes the parent alias or alters an external sentinel
+- 1: tests/test_stage2.py::test_runner_restore_preflights_all_destinations — a safe earlier input or plan is written before an unsafe later input is checked
+- 1: tests/test_stage2.py::test_restore_baseline_refuses_external_parents_before_mutation — Git rollback or ignored cleanup mutates before checking every target
+- 2: tests/test_stage2.py::test_runner_parent_escape_stops_without_fallback — another model, ordinary failure exit or checkpoint follows the unsafe recovery
+- 3: tests/test_stage2.py::test_runner_parent_escape_stops_without_fallback — stderr omits the destination or outside-parent refusal reason
+- 4: tests/test_stage2.py::test_restore_parent_resolution_failure_stops_without_writes — a loop or resolution error permits mutation, fallback or an unnamed traceback
+- 5: tests/test_stage2.py::test_runner_restore_refusal_bypasses_finalization — an enclosing handler logs time, restores findings or saves/cleans the attempt after refusal
 - 6: tests/test_stage2.py::test_runner_restores_deleted_change_directory_before_logging — missing contained parents stop recovering trusted inputs and time
 - 6: tests/test_stage2.py::test_repair_retry_restores_non_utf8_prompt_inputs — safe retries retain corrupt input bytes
 - 6: tests/test_stage2.py::test_repair_retry_restores_aliased_and_directory_inputs_without_following — safe leaf detachment modifies its external target or loses a retry
@@ -116,4 +116,12 @@ Research was written by the orchestrating Claude Code Opus 5.5 session on
 call or Stage-1 fallback was recorded. The draft extends it with code inspection
 at `a20d786`.
 
+## Runner route — 2026-10-23
+
+Stage-1 route: implement · model claude-sonnet-5-5 · reason: two Flash post-run checks failed.
+
 ## Time used
+
+2026-10-23 16:52:40–17:37:39 UTC, 2699 s — implement · attempt 1 · route flash · model glm-5.3-flash · rejected · measured by the runner
+2026-10-23 17:37:45–18:03:45 UTC, 1561 s — implement · attempt 2 · route flash-repair · model glm-5.3-flash · rejected · measured by the runner
+2026-10-23 18:03:51–18:09:31 UTC, 340 s — implement · attempt 3 · route stage-1 · model claude-sonnet-5-5 · rejected · measured by the runner

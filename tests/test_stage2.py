@@ -8005,10 +8005,16 @@ def test_runner_time_includes_postgate_credential_rejection(world: World, monkey
 
 
 def test_runner_retry_replaces_parent_alias_without_following(
-    world: World, monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+    world: World, monkeypatch: pytest.MonkeyPatch, tmp_path: Path, capsys: pytest.CaptureFixture[str]
 ) -> None:
-    """F-4: byte-identical inputs through a parent alias must not receive restoration writes."""
+    """F-4, and the decided stop (bead coding-harness-10w): a parent alias is never replaced.
+
+    The retry recovery the old expectation wanted - unlink the alias, rebuild the directory, write
+    the trusted bytes - is refused: the run ends as a refusal, the alias and the external directory
+    stand as the model left them, and no entry or retry follows.
+    """
     FakeClock(monkeypatch, UTC_START)
+    head = git(world.root, "rev-parse", "HEAD")
     target = tmp_path / "external-change"
     real_model = stage2.run_work_model
     original: dict[str, bytes] = {}
@@ -8020,17 +8026,295 @@ def test_runner_retry_replaces_parent_alias_without_following(
             original.update({p.name: p.read_bytes() for p in target.iterdir() if p.is_file()})
             shutil.rmtree(world.plan.parent)
             world.plan.parent.symlink_to(target, target_is_directory=True)
-        else:
-            assert not world.plan.parent.is_symlink()
-            assert "rejected" in runner_entries(world.plan)[0]
         return answer
 
     monkeypatch.setattr(stage2, "run_work_model", model)
-    world.script(claude=[{"stdout": "one"}, {"stdout": "two"}], make=[{"stdout": "green\n"}] * 2)
-    assert world.run("implement") == 0
+    _no_checkpoint(monkeypatch)
+    # The second call and make stand in the script to prove neither ever runs: the retry is refused.
+    world.script(
+        claude=[{"stdout": "one"}, {"stdout": "two"}], make=[{"stdout": "red\n", "exit": 1}, {"stdout": "green\n"}]
+    )
+    assert world.run("implement") == 2
+    err = capsys.readouterr().err
+    assert "refused:" in err and "plans/changes/demo" in err and "escapes the worktree" in err
     assert {p.name: p.read_bytes() for p in target.iterdir() if p.is_file()} == original
-    first, second = runner_entries(world.plan)
-    assert "rejected" in first and "accepted" in second
+    assert world.plan.parent.is_symlink()
+    assert runner_entries(world.plan) == []
+    assert len(world.calls("claude")) == 1
+    assert git(world.root, "rev-list", "--count", f"{head}..HEAD") == "0"
+
+
+@pytest.mark.parametrize("kind", ["absolute", "relative", "missing", "sibling", "nested"])
+def test_restore_work_input_refuses_external_parent_without_writes(world: World, tmp_path: Path, kind: str) -> None:
+    """Criterion 1. Planted fault: recovery removes the parent alias or alters an external sentinel."""
+    outside = tmp_path / "outside-recovery"
+    outside.mkdir()
+    sentinel = outside / "sentinel.txt"
+    sentinel.write_bytes(b"sentinel\n")
+    if kind == "sibling":
+        # A target whose name shares the worktree's string prefix: containment by prefix would pass it.
+        target = tmp_path / f"{world.root.name}-ext"
+        target.mkdir()
+    elif kind == "missing":
+        target = tmp_path / "gone-outside"
+    else:
+        target = outside
+    demo = world.root / "plans" / "changes" / "demo"
+    aliased = demo if kind != "nested" else demo / "deep"
+    if kind != "nested":
+        shutil.rmtree(demo)
+    if kind == "relative":
+        aliased.symlink_to(os.path.relpath(target, aliased.parent), target_is_directory=True)
+    else:
+        aliased.symlink_to(target, target_is_directory=True)
+    destination = aliased / "plan.md"
+
+    with pytest.raises(stage2.RestorationRefused) as expected:
+        stage2.restore_work_input(world.root, destination, b"trusted bytes\n")
+    message = str(expected.value)
+    assert destination.relative_to(world.root).as_posix() in message
+    assert "escapes the worktree" in message
+    assert isinstance(expected.value, stage2.Refused)
+    assert aliased.is_symlink()
+    if kind != "missing":
+        assert sentinel.read_bytes() == b"sentinel\n"
+        assert not (target / "plan.md").exists()
+
+
+def test_restore_parent_resolution_failure_stops_without_writes(
+    world: World, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+) -> None:
+    """Criterion 4. Planted fault: a loop or resolution error permits mutation, fallback or an unnamed traceback."""
+    demo = world.root / "plans" / "changes" / "demo"
+    # A loop inside the change folder: resolving `demo/a` walks `a -> b -> a` and must refuse, named.
+    (demo / "a").symlink_to("b")
+    (demo / "b").symlink_to("a")
+    with pytest.raises(stage2.RestorationRefused) as expected:
+        stage2.restore_work_input(world.root, demo / "a" / "input.md", b"trusted bytes\n")
+    message = str(expected.value)
+    assert "plans/changes/demo/a/input.md" in message and "cannot be resolved" in message
+    assert isinstance(expected.value, stage2.Refused)
+    assert (demo / "a").is_symlink() and (demo / "b").is_symlink()
+    assert not (demo / "a").exists()
+    (demo / "a").unlink()
+    (demo / "b").unlink()
+
+    # The same stop at run level: a self-linked `plans` makes every input's parent chain
+    # unresolvable, and the run ends as the named refusal without a write or a checkpoint.
+    head = git(world.root, "rev-parse", "HEAD")
+    real_model = stage2.run_work_model
+
+    def model(*args, **kwargs):
+        answer = real_model(*args, **kwargs)
+        shutil.rmtree(world.root / "plans")
+        (world.root / "plans").symlink_to("plans", target_is_directory=True)
+        return answer
+
+    monkeypatch.setattr(stage2, "run_work_model", model)
+    _no_checkpoint(monkeypatch)
+    world.script(claude=[{"stdout": "done", "plant": {"src/app.py": "value = 2\n"}}], make=[{"stdout": "green\n"}])
+    assert world.run("implement") == 2
+    err = capsys.readouterr().err
+    assert "refused:" in err and "plans/changes/demo" in err and "cannot be resolved" in err
+    assert (world.root / "plans").is_symlink()
+    assert len(world.calls("claude")) == 1
+    assert git(world.root, "rev-list", "--count", f"{head}..HEAD") == "0"
+
+
+@pytest.mark.parametrize("level", ["unit", "run"])
+def test_restore_baseline_refuses_external_parents_before_mutation(
+    world: World, monkeypatch: pytest.MonkeyPatch, tmp_path: Path, capsys: pytest.CaptureFixture[str], level: str
+) -> None:
+    """Criterion 1. Planted fault: Git rollback or ignored cleanup mutates before checking every target."""
+    outside = tmp_path / "outside-baseline"
+    outside.mkdir()
+    (outside / "keep.txt").write_text("sentinel\n", encoding="utf-8")
+    deep = world.root / "src" / "deep"
+    deep.mkdir()
+    (deep / "keep.txt").write_text("kept\n", encoding="utf-8")
+    git(world.root, "add", "-A")
+    git(world.root, "commit", "--quiet", "-m", "a tracked file below a parent that later escapes")
+
+    def escape() -> None:
+        shutil.rmtree(deep)
+        deep.symlink_to(outside, target_is_directory=True)
+
+    if level == "unit":
+        escape()
+        commands: list[tuple[str, ...]] = []
+        real_git_output = stage2._git_output
+
+        def git_output(root, *args, **kwargs):
+            commands.append(args)
+            return real_git_output(root, *args, **kwargs)
+
+        monkeypatch.setattr(stage2, "_git_output", git_output)
+        with pytest.raises(stage2.RestorationRefused) as expected:
+            stage2.restore_baseline(world.root, git(world.root, "rev-parse", "HEAD"), set())
+        message = str(expected.value)
+        assert "src/deep/keep.txt" in message and "escapes the worktree" in message
+        assert not any(args and args[0] in ("restore", "clean") for args in commands)
+        assert deep.is_symlink() and (outside / "keep.txt").read_text(encoding="utf-8") == "sentinel\n"
+        return
+
+    head = git(world.root, "rev-parse", "HEAD")
+    real_model = stage2.run_work_model
+
+    def model(*args, **kwargs):
+        try:
+            # A failed call is exactly the case whose baseline recovery must stand guarded, so the
+            # escape is planted on the failure path too.
+            return real_model(*args, **kwargs)
+        finally:
+            escape()
+
+    monkeypatch.setattr(stage2, "run_work_model", model)
+    _no_checkpoint(monkeypatch)
+    world.script(claude=[{"stderr": "boom", "exit": 1, "plant": {"src/half.py": "x = 1\n"}}])
+    assert world.run("implement") == 2
+    err = capsys.readouterr().err
+    assert "refused:" in err and "src/deep/keep.txt" in err and "escapes the worktree" in err
+    assert deep.is_symlink() and (outside / "keep.txt").read_text(encoding="utf-8") == "sentinel\n"
+    assert (world.root / "src/half.py").exists(), "the failed-call recovery ran against the refusal"
+    assert git(world.root, "for-each-ref", "--format=%(refname)", "refs/stage2/attempts/demo/") == ""
+    assert len(world.calls("claude")) == 1
+    assert git(world.root, "rev-list", "--count", f"{head}..HEAD") == "0"
+
+
+def test_runner_restore_preflights_all_destinations(
+    world: World, monkeypatch: pytest.MonkeyPatch, tmp_path: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    """Criterion 1. Planted fault: a safe earlier input or plan is written before an unsafe later input is checked."""
+    head = git(world.root, "rev-parse", "HEAD")
+    outside = tmp_path / "outside-prompts"
+    outside.mkdir()
+    sentinel = outside / "sentinel.md"
+    sentinel.write_bytes(b"sentinel\n")
+    spec_before = (world.root / "plans/changes/demo/spec.md").read_bytes()
+    real_model, real_restore = stage2.run_work_model, stage2.restore_work_input
+    restored: list[Path] = []
+
+    def model(*args, **kwargs):
+        answer = real_model(*args, **kwargs)
+        if len(world.calls("claude")) == 1:
+            shutil.rmtree(world.root / "prompts")
+            (world.root / "prompts").symlink_to(outside, target_is_directory=True)
+        return answer
+
+    def restore(root, path, content):
+        restored.append(path)
+        return real_restore(root, path, content)
+
+    monkeypatch.setattr(stage2, "run_work_model", model)
+    monkeypatch.setattr(stage2, "restore_work_input", restore)
+    _no_checkpoint(monkeypatch)
+    world.script(
+        claude=[{"stdout": "one", "plant": {"src/app.py": "value = 2\n"}}, {"stdout": "two"}],
+        make=[{"stdout": "red\n", "exit": 1}, {"stdout": "green\n"}],
+    )
+    assert world.run("implement") == 2
+    err = capsys.readouterr().err
+    assert "refused:" in err and "prompts/04-implement.md" in err and "escapes the worktree" in err
+    assert restored == [], "a safe batch destination was restored before the unsafe one was checked"
+    assert (world.root / "plans/changes/demo/spec.md").read_bytes() == spec_before
+    assert runner_entries(world.plan) == []
+    assert "Attempt 1 (" not in world.text(), "the diagnostics were written against the refusal"
+    assert (world.root / "prompts").is_symlink() and sentinel.read_bytes() == b"sentinel\n"
+    assert len(world.calls("claude")) == 1
+    assert git(world.root, "rev-list", "--count", f"{head}..HEAD") == "0"
+
+
+def test_runner_parent_escape_stops_without_fallback(
+    world: World, monkeypatch: pytest.MonkeyPatch, tmp_path: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    """Criteria 2 and 3. Planted fault: another model, an ordinary failure exit or a checkpoint follows the
+    unsafe recovery, or stderr omits the destination or the outside-parent refusal reason."""
+    FakeClock(monkeypatch, UTC_START)
+    head = git(world.root, "rev-parse", "HEAD")
+    target = tmp_path / "outside-demo"
+    real_model = stage2.run_work_model
+    external: dict[str, bytes] = {}
+
+    def model(*args, **kwargs):
+        answer = real_model(*args, **kwargs)
+        if len(world.calls("claude")) == 1:
+            shutil.copytree(world.plan.parent, target)
+            external.update({p.name: p.read_bytes() for p in target.iterdir()})
+            shutil.rmtree(world.plan.parent)
+            world.plan.parent.symlink_to(target, target_is_directory=True)
+        return answer
+
+    monkeypatch.setattr(stage2, "run_work_model", model)
+    _no_checkpoint(monkeypatch)
+    world.script(
+        claude=[{"stdout": "one", "plant": {"src/app.py": "value = 2\n"}}, {"stdout": "two"}, {"stdout": "three"}],
+        make=[{"stdout": "red\n", "exit": 1}] * 3,
+    )
+    assert world.run("implement") == 2
+    err = capsys.readouterr().err
+    assert "refused:" in err and "plans/changes/demo" in err and "escapes the worktree" in err
+    assert {p.name: p.read_bytes() for p in target.iterdir()} == external
+    assert world.plan.parent.is_symlink()
+    assert runner_entries(world.plan) == []
+    assert len(world.calls("claude")) == 1
+    assert git(world.root, "rev-list", "--count", f"{head}..HEAD") == "0"
+
+
+@pytest.mark.parametrize("level", ["persist", "run"])
+@pytest.mark.parametrize("retry", [False, True], ids=["direct", "retry"])
+def test_runner_restore_refusal_bypasses_finalization(
+    world: World,
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+    capsys: pytest.CaptureFixture[str],
+    level: str,
+    retry: bool,
+) -> None:
+    """Criterion 5. Planted fault: an enclosing handler logs time, restores findings or saves the attempt after refusal."""
+    target = tmp_path / "outside-plan-dir"
+    shutil.copytree(world.plan.parent, target)
+    external = {p.name: p.read_bytes() for p in target.iterdir()}
+
+    def alias_demo() -> None:
+        shutil.rmtree(world.plan.parent)
+        world.plan.parent.symlink_to(target, target_is_directory=True)
+
+    if level == "persist":
+        alias_demo()
+        prior = world.plan.read_text(encoding="utf-8")
+        entry = "completed rejected span · measured by the runner"
+        with pytest.raises(stage2.RestorationRefused) as expected:
+            stage2.persist_time_entry(
+                world.root,
+                world.plan,
+                entry,
+                prior,
+                {world.plan: prior.encode("utf-8")},
+                accepted=False,
+                retry=retry,
+                original=stage2.Refused("early refusal"),
+            )
+        assert isinstance(expected.value, stage2.Refused)
+    else:
+        head = git(world.root, "rev-parse", "HEAD")
+        real_model = stage2.run_work_model
+
+        def model(*args, **kwargs):
+            answer = real_model(*args, **kwargs)
+            alias_demo()
+            return answer
+
+        monkeypatch.setattr(stage2, "run_work_model", model)
+        _no_checkpoint(monkeypatch)
+        world.script(claude=[{"stdout": "done", "plant": {"src/app.py": "value = 2\n"}}], make=[{"stdout": "green\n"}])
+        assert world.run("implement") == 2
+        err = capsys.readouterr().err
+        assert "refused:" in err and "plans/changes/demo" in err and "escapes the worktree" in err
+        assert len(world.calls("claude")) == 1
+        assert git(world.root, "rev-list", "--count", f"{head}..HEAD") == "0"
+    assert {p.name: p.read_bytes() for p in target.iterdir()} == external
+    assert world.plan.parent.is_symlink()
+    assert runner_entries(world.plan) == []
 
 
 @pytest.mark.parametrize("final_attempt", [False, True])
@@ -8444,9 +8728,13 @@ def test_runner_early_rejection_span_reaches_refusing_check(world: World, monkey
 
 @pytest.mark.parametrize("kind", ["deleted", "unreadable", "alias", "parent-alias"])
 def test_runner_early_refusal_recovers_time_destination_safely(
-    world: World, monkeypatch: pytest.MonkeyPatch, tmp_path: Path, kind: str
+    world: World, monkeypatch: pytest.MonkeyPatch, tmp_path: Path, capsys: pytest.CaptureFixture[str], kind: str
 ) -> None:
-    """Criterion 5. Planted fault: an early refusal loses the entry on a broken destination, or writes through it."""
+    """Criterion 5. Planted fault: an early refusal loses the entry on a broken destination, or writes through it.
+
+    The parent-alias case is the decided stop (bead coding-harness-10w): the recovery is refused
+    unwritten, the run ends as a refusal naming the destination, and no entry is written anywhere.
+    """
     FakeClock(monkeypatch, UTC_START)
     outside = tmp_path / "outside-plan.md"
     outside_dir = tmp_path / "outside-change"
@@ -8475,14 +8763,19 @@ def test_runner_early_refusal_recovers_time_destination_safely(
     monkeypatch.setattr(stage2, "run_work_model", model)
     _no_checkpoint(monkeypatch)
     assert world.run("implement") == 2
-    (entry,) = runner_entries(world.plan)
-    assert "rejected" in entry and "attempt 1 · route flash" in entry
-    assert b"title: Plan" in world.plan.read_bytes()
-    assert not world.plan.is_symlink() and world.plan.parent.is_dir() and not world.plan.parent.is_symlink()
+    err = capsys.readouterr().err
+    if kind == "parent-alias":
+        assert "refused:" in err and "plans/changes/demo" in err and "escapes the worktree" in err
+        assert world.plan.parent.is_symlink()
+        assert {p.name: p.read_bytes() for p in outside_dir.iterdir()} == external
+        assert runner_entries(world.plan) == []
+    else:
+        (entry,) = runner_entries(world.plan)
+        assert "rejected" in entry and "attempt 1 · route flash" in entry
+        assert b"title: Plan" in world.plan.read_bytes()
+        assert not world.plan.is_symlink() and world.plan.parent.is_dir() and not world.plan.parent.is_symlink()
     if kind == "alias":
         assert outside.read_bytes() == b"untouched\n"
-    if kind == "parent-alias":
-        assert {p.name: p.read_bytes() for p in outside_dir.iterdir()} == external
     assert KEY not in (world.root / "src" / "app.py").read_text(encoding="utf-8")
     assert len(world.calls("claude")) == 1
 
@@ -8683,8 +8976,11 @@ def test_runner_terminal_failure_survives_failed_log_write(
     assert len(world.calls("claude")) == 1
 
 
-def test_runner_early_refusal_recovers_self_linked_parent(world: World, monkeypatch: pytest.MonkeyPatch) -> None:
-    """F-3: Python 3.12 resolve raises RuntimeError on a loop; detach it and preserve the refusal."""
+def test_runner_early_refusal_stops_on_self_linked_parent(world: World, monkeypatch: pytest.MonkeyPatch) -> None:
+    """F-3, and the decided stop (bead coding-harness-10w): persisting the early refusal's entry
+    meets a self-linked plan parent, so the restoration refusal propagates unwritten - the link
+    stands, no attempt is saved and no entry is written, with the original refusal kept as cause.
+    """
     FakeClock(monkeypatch, UTC_START)
     world.script(claude=[{"stdout": "done"}])
     real_model = stage2.run_work_model
@@ -8702,12 +8998,13 @@ def test_runner_early_refusal_recovers_self_linked_parent(world: World, monkeypa
     monkeypatch.setattr(stage2, "run_work_model", model)
     monkeypatch.setattr(stage2, "remove_changed_credential", scan)
     _no_checkpoint(monkeypatch)
-    with pytest.raises((stage2.Refused, RuntimeError, stage2.CallFailed)) as caught:
+    with pytest.raises(stage2.RestorationRefused) as caught:
         stage2.implement(world.root, "demo")
-    assert caught.value is refusal
-    (entry,) = runner_entries(world.plan)
-    assert "rejected" in entry and "attempt 1 · route flash" in entry
-    assert not world.plan.parent.is_symlink()
+    assert "plans/changes/demo" in str(caught.value) and "cannot be resolved" in str(caught.value)
+    assert caught.value.__context__ is refusal, "the original refusal was dropped silently"
+    assert world.plan.parent.is_symlink()
+    assert world.plan.parent.readlink() == Path(world.plan.parent.name)
+    assert git(world.root, "for-each-ref", "--format=%(refname)", "refs/stage2/attempts/demo/") == ""
     assert len(world.calls("claude")) == 1
 
 

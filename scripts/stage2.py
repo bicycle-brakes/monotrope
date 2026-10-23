@@ -150,7 +150,7 @@ import tempfile
 import threading
 import time
 from collections import Counter
-from collections.abc import Callable, Iterator
+from collections.abc import Callable, Iterable, Iterator
 from dataclasses import dataclass
 from pathlib import Path
 
@@ -485,6 +485,16 @@ class Refused(Exception):
 
 class CallFailed(Exception):
     """A call ended without a usable answer: exit 1."""
+
+
+class RestorationRefused(Refused):
+    """A recovery would act through a parent outside the worktree, or one that cannot be resolved.
+
+    The maintainer's decided stop (bead coding-harness-10w): the recovery batch stays unwritten,
+    no other attempt, fallback model or checkpoint follows, and time or findings are not persisted
+    after it - the explicit exception to ordinary time persistence. `main` reports it on standard
+    error, exit 2, like every refusal.
+    """
 
 
 class StepTimedOut(CallFailed):
@@ -3142,8 +3152,32 @@ def save_attempt(root: Path, baseline: str, change: str, label: str) -> str:
     return f"the attempt is saved at {ref} ({commit[:12]}); `git diff {baseline[:12]} {ref}` shows it"
 
 
+def plan_baseline_restore(
+    root: Path, keep: set[Path], ignored_before: dict[Path, tuple[int, int]] | None = None
+) -> tuple[list[str], list[Path]]:
+    """The tracked and newly created ignored paths a failed attempt left, checked before any undo.
+
+    Raises the restoration refusal before the caller mutates anything when a rollback or cleanup
+    destination's parent chain would carry the restore outside the worktree. Callers that mutate
+    other things first (findings, the saved attempt) run this before them and pass the result to
+    `restore_baseline`, so the tree is read once and nothing is written against a refusal.
+    """
+    touched = sorted(path.as_posix() for path in changed_paths(root) - keep)
+    created = sorted(ignored_snapshot(root).keys() - ignored_before.keys()) if ignored_before is not None else []
+    if touched or created:
+        preflight_recovery(
+            root,
+            [*(root / relative for relative in touched), *(root / relative for relative in created)],
+        )
+    return touched, created
+
+
 def restore_baseline(
-    root: Path, baseline: str, keep: set[Path], ignored_before: dict[Path, tuple[int, int]] | None = None
+    root: Path,
+    baseline: str,
+    keep: set[Path],
+    ignored_before: dict[Path, tuple[int, int]] | None = None,
+    planned: tuple[list[str], list[Path]] | None = None,
 ) -> str:
     """After a failed model call, put every path but `keep` back at the baseline; say what was undone.
 
@@ -3151,10 +3185,13 @@ def restore_baseline(
     from the baseline outside it is the run's own - including a half-finished edit of a dead process.
     Gitignored paths the attempt created are removed too: `changed_paths` cannot see them and
     `git clean` without `-x` keeps them, so the run's earlier snapshot of the ignored files tells them
-    apart from the ones that stood before (phase 6, F-5).
+    apart from the ones that stood before (phase 6, F-5). Every rollback and cleanup destination is
+    checked for an unsafe parent before the first `git restore`, `git clean`, `unlink`, `rmtree` or
+    parent removal; a refusal leaves the batch unwritten and ends the run.
     """
-    touched = sorted(path.as_posix() for path in changed_paths(root) - keep)
-    created = sorted(ignored_snapshot(root).keys() - ignored_before.keys()) if ignored_before is not None else []
+    if planned is None:
+        planned = plan_baseline_restore(root, keep, ignored_before)
+    touched, created = planned
     if not touched and not created:
         return "the worktree needed no restore."
     spec = [f":(exclude){path.as_posix()}" for path in sorted(keep, key=lambda path: path.as_posix())]
@@ -4631,8 +4668,70 @@ def implementation_prompt(
     return work_prompt(ctx.root, "04-implement.md", ctx.change, "\n\n".join(extra), inputs)
 
 
+def restoration_parent_problem(root: Path, path: Path) -> str | None:
+    """Why a recovery must not touch `path`, or None when every existing ancestor stands inside.
+
+    Each existing ancestor between the worktree root and the destination is resolved and compared
+    with the canonical root by path containment, never string prefixes. One whose resolved location
+    falls outside the worktree - a relative, nested or dangling link counts - makes the destination
+    unsafe, and so does one whose chain cannot be resolved: a resolver that gives up (an error) or
+    one that walks in circles (a link loop, self-linked or paired) leaves containment
+    unestablishable, which is why the ancestor's link chain is walked by hand instead of trusting a
+    resolver's partial answer for a loop. A missing ordinary parent stays recoverable: restoration
+    recreates it from trusted bytes, following nothing. The leaf is not followed merely to decide
+    containment, so detaching a leaf alias or a hard link stays safe.
+    """
+    canonical = root.resolve()
+    parent = root
+    for part in path.relative_to(root).parts[:-1]:
+        parent = parent / part
+        try:
+            standing, link = parent.exists(), parent.is_symlink()
+        except OSError:
+            return f"{parent.relative_to(root).as_posix()} cannot be resolved"
+        if not link and not standing:
+            continue
+        # The ancestor's link chain is walked by hand with a revisit and hop bound: a resolver's
+        # answer for a loop is partial and can name a place inside the worktree, which would hide
+        # the escape, and a readlink that fails leaves containment as unestablishable as a loop.
+        seen: set[Path] = set()
+        probe = parent
+        while probe.is_symlink():
+            if probe in seen or len(seen) >= 32:
+                return f"{parent.relative_to(root).as_posix()} cannot be resolved"
+            seen.add(probe)
+            try:
+                target = probe.readlink()
+            except OSError:
+                return f"{parent.relative_to(root).as_posix()} cannot be resolved"
+            probe = Path(os.path.normpath(target if target.is_absolute() else probe.parent / target))
+        try:
+            resolved = probe.resolve()
+        except (OSError, RuntimeError):
+            return f"{parent.relative_to(root).as_posix()} cannot be resolved"
+        if not resolved.is_relative_to(canonical):
+            return f"{parent.relative_to(root).as_posix()} escapes the worktree"
+        if not standing and (resolved == parent or resolved in parent.parents):
+            return f"{parent.relative_to(root).as_posix()} cannot be resolved"
+    return None
+
+
+def refuse_unsafe_recovery(root: Path, path: Path) -> None:
+    """Raise the restoration refusal when `path`'s parents would carry a recovery outside the worktree."""
+    problem = restoration_parent_problem(root, path)
+    if problem is not None:
+        raise RestorationRefused(f"restoration of {path.relative_to(root).as_posix()} is refused: its parent {problem}")
+
+
+def preflight_recovery(root: Path, destinations: Iterable[Path]) -> None:
+    """Check a recovery batch's every destination before its first filesystem mutation."""
+    for path in destinations:
+        refuse_unsafe_recovery(root, path)
+
+
 def restore_work_input(root: Path, path: Path, content: bytes) -> None:
     """Replace aliases from the worktree outward before inspecting or restoring an input."""
+    refuse_unsafe_recovery(root, path)
     parent = root
     for part in path.relative_to(root).parts[:-1]:
         parent /= part
@@ -4678,7 +4777,13 @@ def persist_time_entry(
     beside the attempt's own failure when one stands - and never retries, checkpoints or turns a
     refusal into success. The span must already have ended at the last check that ran; this
     function only persists it.
+
+    A restoration safety refusal is the explicit exception to all of this: the parent check runs
+    before any write, retry or direct, and the refusal propagates unwritten instead of an entry.
     """
+    # The parent check stands before the first time write of either path: persistence must not act
+    # through a parent outside the worktree, and must not be written after such a refusal.
+    refuse_unsafe_recovery(root, plan)
     try:
         if retry:
             # Persist before restoring any other input: that restoration can fail before reaching
@@ -4697,6 +4802,8 @@ def persist_time_entry(
                 raise Refused("refusing an aliased or hard-linked plan")
             text = with_time_entry(plan.read_text(encoding="utf-8"), entry, prior=prior)
             plan.write_text(text, encoding="utf-8")
+        except RestorationRefused:
+            raise
         except (Refused, OSError, UnicodeDecodeError, RuntimeError):
             if accepted:
                 raise
@@ -4704,6 +4811,8 @@ def persist_time_entry(
             # plan takes the entry, aliases detached, parents repaired, never through a link.
             restore_work_input(root, plan, with_time_entry(prior, entry).encode("utf-8"))
         stamp_updated(plan)
+    except RestorationRefused:
+        raise
     except (Refused, OSError, UnicodeDecodeError, RuntimeError) as logging_error:
         message = f"the runner could not write the attempt's time entry to {plan}: {logging_error}"
         if original is None:
@@ -4747,7 +4856,10 @@ def run_attempts(
     protection - passes one finalization boundary that persists the attempt's one rejected entry
     through `persist_time_entry`, then lets the original refusal or failure stand (bead
     coding-harness-9wp). A call that never completed - a `CallFailed` result, an empty Codex answer
-    included - gets no entry, as preflight refusals get none.
+    included - gets no entry, as preflight refusals get none. The restoration safety refusal
+    (`RestorationRefused`) is the explicit exception: every recovery batch stands checked before its
+    first write, and the refusal propagates unwritten - no entry, no findings restore, no cleanup
+    after it (bead coding-harness-10w).
     """
     root = ctx.root
     allowed = {ctx.findings.relative_to(root)}
@@ -4793,6 +4905,13 @@ def run_attempts(
         inputs_before = {**inputs, ctx.plan: baseline_time.encode("utf-8")}
         kept = snapshot_findings() if snapshot_findings is not None else None
         findings_before = ctx.findings.read_bytes()
+
+        def put_findings_back(kept=kept) -> None:
+            """Put findings.md back, refusing first when its parent would carry the write outside."""
+            if kept is not None:
+                refuse_unsafe_recovery(root, ctx.findings)
+                restore_findings(kept)
+
         unmeasured: str | None = None
         try:
             before = worktree_tree(root)
@@ -4845,8 +4964,7 @@ def run_attempts(
                             moved_files = str(error)
                     else:
                         moved_files = unmeasured
-                    if kept is not None:
-                        restore_findings(kept)
+                    put_findings_back()
                     listing = f"- {problem}"
                     if call_error is not None:
                         listing += f"\n- {call_error}"
@@ -4866,8 +4984,11 @@ def run_attempts(
                     raise CallFailed(problem) from call_error
             if call_error is not None:
                 error = call_error
-                if kept is not None:
-                    restore_findings(kept)
+                # The whole failed-call recovery stands behind the parent check: the baseline
+                # rollback and cleanup destinations are validated before findings are restored or
+                # the attempt is saved, so a refusal leaves the branch without a single write.
+                planned = plan_baseline_restore(root, allowed, ignored_before)
+                put_findings_back()
                 exposed = []
                 if key is not None:
                     # Scrub before the snapshot writes the changed files into the object store.
@@ -4876,7 +4997,7 @@ def run_attempts(
                     saved = save_attempt(root, baseline, ctx.change, f"{verb}-attempt-{attempt}")
                 except OSError as save_error:
                     saved = f"saving the attempt failed ({save_error})"
-                restored = restore_baseline(root, baseline, allowed, ignored_before)
+                restored = restore_baseline(root, baseline, allowed, ignored_before, planned=planned)
                 leaked = f"; {credential_message(exposed)}" if exposed else ""
                 raise CallFailed(f"{error}; {saved}; {restored}{leaked}") from error
             if key is not None:
@@ -4884,8 +5005,7 @@ def run_attempts(
                 # the second snapshot can write the changed files into the object store (spec, criterion 9).
                 exposed = remove_changed_credential(root, key, ignored_before)
                 if exposed:
-                    if kept is not None:
-                        restore_findings(kept)
+                    put_findings_back()
                     raise Refused(credential_message(exposed))
             if unmeasured is None:
                 # Both snapshots stand around the model call alone: the runner's own writes - the audit
@@ -4901,14 +5021,12 @@ def run_attempts(
             try:
                 problems = verify_attempt(root, ctx.plan, key, formatted, tools)
             except Refused:
-                if kept is not None:
-                    restore_findings(kept)
+                put_findings_back()
                 raise
             except CallFailed as error:
                 # `make verify` could not be started: no model can repair that, so this attempt's block
                 # says why and the run stops after the scan below, with no further attempt (spec, criterion 6).
-                if kept is not None:
-                    restore_findings(kept)
+                put_findings_back()
                 cannot_start = error
                 lines = protect_diagnostics(str(error), key).splitlines() or ["make could not be started"]
                 problems = ["`make verify` could not be run\n" + "\n".join(_shrink(lines, TAIL_LINES))]
@@ -4925,10 +5043,15 @@ def run_attempts(
                 aliased_parent = ctx.plan.parent.resolve() != root.resolve() / ctx.plan.relative_to(root).parent
             except (OSError, RuntimeError):
                 aliased_parent = True
+            # The complete input/findings batch is checked before the first recovery, diagnostic or
+            # retry-time write of the boundary below: a safe plan must not be logged or restored
+            # before an unsafe later destination stops the batch (spec, criterion 1).
+            batch = {**inputs_before, ctx.findings: findings_before}
+            preflight_recovery(root, batch)
             if aliased_parent or not ctx.plan.parent.is_dir():
                 # Detach an alias itself, never a document in its target; recreate missing parents too.
                 # Restore the snapshotted inputs and audit before diagnostics, logging or retry writes.
-                for path, content in {**inputs_before, ctx.findings: findings_before}.items():
+                for path, content in batch.items():
                     restore_work_input(root, path, content)
             if not problems and answer_check is not None:
                 problems = answer_check(answer)
@@ -4936,10 +5059,9 @@ def run_attempts(
                 # The format line stands first: the step ran before `make verify`, and the next model
                 # learns that the runner formats and whether ruff left findings it could not fix.
                 problems = [*(f"{FORMAT_LABEL}: {line}" for line in formatted), *problems]
-                if kept is not None:
-                    # Before the block is appended, so the quoted diagnostics stand beside the rows as
-                    # they were, not beside the model's edits of them.
-                    restore_findings(kept)
+                # Before the block is appended, so the quoted diagnostics stand beside the rows as
+                # they were, not beside the model's edits of them.
+                put_findings_back()
                 # The block lands below this attempt's audit line, before the next attempt starts or the
                 # run exits 1; the post-run scan after it covers the block too (spec, criteria 1 and 9).
                 # One safe listing and one safe file list feed both destinations (the block and the retry prompt).
@@ -4954,8 +5076,8 @@ def run_attempts(
                 # diagnostic block, before finalizing either the verdict or its measured endpoint.
                 exposed = remove_changed_credential(root, key, ignored_before)
                 if exposed:
-                    if kept is not None and not problems:
-                        restore_findings(kept)
+                    if not problems:
+                        put_findings_back()
                     problems.append(credential_message(exposed))
             # The verdict is in: the runner writes the attempt's span, accepted or rejected,
             # through the one writer - so a later refusal cannot meet an inline writer and
@@ -5013,6 +5135,8 @@ def run_attempts(
                 # The plan comes back at its pre-call bytes plus this attempt's runner entry.
                 # Restoration never writes through a worktree path: whatever stands there (a symlink, a
                 # directory or a file) is removed without being followed, then the bytes are written anew.
+                # The batch stands rechecked at this recovery boundary; a refusal leaves it unwritten.
+                preflight_recovery(root, inputs_before)
                 for path, content in inputs_before.items():
                     restore_work_input(root, path, content)
                 stamp_updated(ctx.plan)
@@ -5020,8 +5144,10 @@ def run_attempts(
             # Include interrupts: an exceptional departure of a completed attempt logs first,
             # rejected, unless the verdict's own write already ran - and the original refusal
             # or failure then stands as it was. Logging itself failing fails closed, with the
-            # attempt's own failure as the cause.
-            if completed and not logged:
+            # attempt's own failure as the cause. A restoration safety refusal is the explicit
+            # exception: persisting time or findings after it would write against the no-write
+            # stop, so it propagates without an entry (spec, criterion 5).
+            if completed and not logged and not isinstance(error, RestorationRefused):
                 ended_wall, ended_mono = utc_now(), monotonic_now()
                 persist_time_entry(
                     root,
