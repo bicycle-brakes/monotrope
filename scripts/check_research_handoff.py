@@ -505,19 +505,25 @@ def parse_decisions(text: str, label: str) -> dict[str, QRecord]:
             if name not in found:
                 return ""
             if name == "answer":
+                snippet = _snippet(body, found[name])
+                # Historical prose has a complete quoted answer followed by an
+                # em-dash explanation or parenthesised attribution. Recognise
+                # that one-line spelling before parsing; YAML errors never
+                # authorise a fallback to prose (including merge-key errors).
+                prose = re.fullmatch(
+                    r"answer:\s*(\"(?:[^\"\\]|\\.)*\"|'(?:[^']|'')*')\s+(?:—\s+\S.*|\([^\n]+\).*)",
+                    snippet.strip(),
+                )
+                if prose:
+                    snippet = "answer: " + prose.group(1)
                 try:
-                    loaded = _yaml_load(_snippet(body, found[name]))
-                except _DuplicateKeyError as error:
-                    raise CannotMeasure(f"{label} {ident}: answer is ambiguous ({error})") from error
-                except yaml.YAMLError:
-                    # Historical inline answers also contain prose after quoted text.
-                    # Retain that supported spelling rather than requiring YAML throughout.
-                    pass
-                else:
-                    content = loaded.get(name) if isinstance(loaded, dict) else None
-                    if isinstance(content, list | dict) and not content:
-                        return ""
-                    return "" if content is None else str(content).strip()
+                    loaded = _yaml_load(snippet)
+                except yaml.YAMLError as error:
+                    raise CannotMeasure(f"{label} {ident}: answer is not readable ({error})") from error
+                content = loaded.get(name) if isinstance(loaded, dict) else None
+                if isinstance(content, list | dict) and not content:
+                    return ""
+                return "" if content is None else str(content).strip()
             first = _FIELD.match(body[found[name]])
             assert first is not None
             rest = first.group(2).strip().strip("\"'").strip()
@@ -673,8 +679,10 @@ def _basis_lines(spec_text: str) -> dict[int, list[str]]:
             continue
         heading = re.match(r"^(#{1,6})\s+(.*)$", line)
         if heading:
-            if len(heading.group(1)) <= 2:  # a level-three heading is a subsection, not the end (F-25)
-                inside = heading.group(2).strip().lower().startswith("acceptance criteria")
+            # Amendments may add criteria under later main headings. Once
+            # acceptance criteria begin, headings end an item, not the scan.
+            if heading.group(2).strip().lower().startswith("acceptance criteria"):
+                inside = True
             current, collecting = None, False
             continue
         if not inside:

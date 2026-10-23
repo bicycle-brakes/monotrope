@@ -10,11 +10,13 @@ and the plan (2, 2b and 3; GLM 5.3 after two failed Codex attempts) and
 reviews the change (6); Opus 5.5 reviews the spec (2a); GLM 5.3 Flash
 implements (phase 4) and explores (phase 1) a `bounded` change or a `spike`,
 while a `feature` or `architectural` change explores through the research
-swarm (ADR 0020 draft: free public researchers from one filtered topic
-sentence, a Flash pair on the repository, one fresh Opus 5.5
-reconciliation). A declaration in `model-endpoints.yaml` stops nothing; this runner
-stands between the rule and the call.
+swarm (ADR 0020 draft: a finder trio maps the sources; three repository
+seats cover topics 1–8, three online seats plus selected Go free models
+cover topics 9–11; fresh tool-free Opus 5.5 reconciles all eleven topics).
+A declaration in `model-endpoints.yaml` stops nothing; this runner stands
+between the rule and the call.
 
+    python3 scripts/stage2.py prepare-explore <change> # report seat and free-model availability before phase 1
     python3 scripts/stage2.py explore      <change>   # the swarm or GLM Flash by class, phase 1
     python3 scripts/stage2.py draft        <change>   # Codex, phases 2, 2b and 3; GLM 5.3 after two failed attempts
     python3 scripts/stage2.py spec-review  <change>   # Opus 5.5, phase 2a

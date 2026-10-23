@@ -4,7 +4,7 @@ status: draft
 implementation_status: partial
 date: 2026-10-14
 last_reviewed: 2026-10-18
-updated: 2026-10-22
+updated: 2026-10-23
 supersedes: null
 superseded_by: null
 bead: coding-harness-icw
@@ -550,7 +550,10 @@ not recreated. No file is deleted. Only the ADR is new under `docs/adr/`.
     - Declaration faults of criterion 49 each give exit 2, a second model or
       fallback list in a seat included. A receipt id or
       `prepare-explore` beside bounded, spike or `--stage2-off` gives exit 2.
-    - Never probed: Go free models and Opus. Probes add no run slots, and
+    - Never probed: Opus. Each policy-selected, unexcluded Go free model
+      gets a real-size online-topic probe (120 seconds, one 360-second retry
+      only after a timeout); failures are named and removed from frozen N
+      without blocking required seats (maintainer, 2026-10-22). Probes add no run slots, and
       preparation leaves the worktree bytes unchanged.
     - A spy shows the research path calling the shared helpers.
 
@@ -947,7 +950,9 @@ the existing gates and let the runner own registry regeneration/full verify.
 - 47: tests/test_stage2_research_availability.py::test_probes_send_only_the_fixed_text_without_tools — A private canary reaches a probe's payload, argv or environment, a tool is available, a bare pi or unofficial Claude client runs, or a probe lacks its leak check, audit record or 60-second limit.
 - 47: tests/test_stage2_research_availability.py::test_claude_code_candidate_is_probed_through_official_claude — A Claude Code preferred model counts as reachable without a probe or is probed with a tool.
 - 47: not a test — step 6's real-Pi offline capture also records one probe's outbound payload; a private canary in it refutes the criterion.
-- 48: tests/test_stage2_research_availability.py::test_probes_are_lazy_unique_and_outside_the_run_budget — A model is probed twice, a pool model is probed while no seat needs it or a cheaper usable one is untried, a free model or Opus role is probed, a worktree file changes, or probes reduce the run's slots.
+- 48: tests/test_stage2_research_availability.py::test_probes_are_lazy_unique_and_outside_the_run_budget — Required-seat probes are duplicated, a pool model is probed while no seat needs it or a cheaper usable one is untried, an Opus role is probed, a worktree file changes, or probes reduce the run's slots.
+- 48: tests/test_stage2_research_availability.py::test_a_free_member_is_probed_with_the_real_online_free_request — A selected free candidate is not probed with its real-size online request, fixed public sentence and no tools.
+- 48: tests/test_stage2_research_availability.py::test_a_free_member_that_fails_its_probe_is_unavailable_and_leaves_the_selection — A failed free probe remains in frozen N or blocks required seats.
 - 17: tests/test_stage2_research_availability.py::test_probes_are_lazy_unique_and_outside_the_run_budget — Preparation changes a file in the worktree.
 - 49: tests/test_model_endpoints.py::test_seat_candidate_lists_and_availability_rule_are_validated — A seat without a preferred model or with a second model or fallback list, an undeclared, -free, off-Go online or no-framework repository model, or a malformed maximum age, wire-API set or exclusion, passes declaration validation.
 - 40: tests/test_model_endpoints.py::test_seat_candidate_lists_and_availability_rule_are_validated — A -free id as a seat's preferred model passes.
@@ -1032,6 +1037,8 @@ the existing gates and let the runner own registry regeneration/full verify.
 - 47: tests/test_stage2_research_availability.py::test_unwritable_probe_audit_refuses_before_launch — An audit persistence failure lets a probe launch.
 
 - 33: tests/test_research_handoff.py::test_duplicate_yaml_answer_keys_are_not_measured — Duplicate answer keys fall back to prose and close an obligation or supply a criterion Basis instead of not measured (phase-6 F-64).
+- 33: tests/test_research_handoff.py::test_yaml_answer_errors_are_not_measured — A merge key or another YAML error in an answer closes an obligation or supplies a criterion Basis instead of exit 3 (phase-6 F-65).
+- 34: tests/test_research_handoff.py::test_amended_criteria_after_main_headings_require_basis — A later main heading hides an amended criterion from Basis checks (review-loop L4-2).
 
 ## Not touched
 
@@ -2029,6 +2036,7 @@ Span (measured, `date -u`): 2026-10-18T21:31:06Z to 2026-10-18T21:52:03Z, about 
 - [DETAIL] The step-11 catalog refresh (forced Go refresh, models.dev
   intersection, per-candidate outcomes) and the wrapper routing of version and
   model calls were already in place (steps 11 and earlier); nothing was redone.
+2026-10-23 13:11:00–13:23:46 UTC, 765 s — repair · attempt 1 · route codex · model gpt-6.1-sol · accepted · measured by the runner
 
 ## Main sync after #157 — 2026-10-18
 

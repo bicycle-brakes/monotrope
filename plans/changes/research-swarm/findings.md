@@ -6,7 +6,7 @@ implementation_status: none
 date: 2026-10-14
 created: 2026-10-14
 last_reviewed: 2026-10-17
-updated: 2026-10-22
+updated: 2026-10-23
 supersedes: null
 superseded_by: null
 bead: coding-harness-icw
@@ -4510,7 +4510,7 @@ Stage-2 call, 2026-10-22: review · endpoint openai-codex · model gpt-6.1-sol �
 
 | ID | Severity | Dimension | Origin | Where | Finding | Reviewer | Status | Broke a test |
 |---|---|---|---|---|---|---|---|---|
-| F-65 | MAJOR | SPEC | fix-r17 | `scripts/check_research_handoff.py:116–127,503–514` | New evidence after the duplicate-answer-key repair (F-64): an answer containing `<<: {source: maintainer}` followed by duplicate `choice: keep` and `choice: drop` keys still closes research obligations and supplies a criterion Basis. Reproduced through `check_change()` with no findings. Constructing the merge key raises a generic YAML error before duplicate detection; the historical-prose fallback suppresses it. Duplicate answer keys must report not measured with exit 3. [criterion 33] | Codex | taken — a test: any YAML error in an `answer:` field exits 3 "not measured"; the prose fallback applies only to text that is not YAML (maintainer, 2026-10-22) | |
+| F-65 | MAJOR | SPEC | fix-r17 | `scripts/check_research_handoff.py:116–127,503–514` | New evidence after the duplicate-answer-key repair (F-64): an answer containing `<<: {source: maintainer}` followed by duplicate `choice: keep` and `choice: drop` keys still closes research obligations and supplies a criterion Basis. Reproduced through `check_change()` with no findings. Constructing the merge key raises a generic YAML error before duplicate detection; the historical-prose fallback suppresses it. Duplicate answer keys must report not measured with exit 3. [criterion 33] | Codex | fixed — tests/test_research_handoff.py::test_yaml_answer_errors_are_not_measured |  |
 
 Phase 6 verdict: codex 01a160ad-c28c-7591-b2e9-9fe376556d65, 2026-10-22
 Reviewer session: codex 01a160ad-c28c-7591-b2e9-9fe376556d65 — a fresh session reviewed: an earlier ## Phase 6 block makes this a re-check
@@ -4626,3 +4626,5 @@ Stage-2 call, 2026-10-22: review-loop · endpoint opencode-go · model mimo-v2.5
 Stage-2 call, 2026-10-22: review-loop · endpoint opencode-go · model mimo-v2.6-flash · leak check clean over 567 files, 1852 commits, 12 rules.
 
 Stage-2 call, 2026-10-22: repair · attempt 1 · route codex · endpoint openai-codex · model gpt-6.1-sol · leak check clean over 567 files, 1857 commits, 12 rules.
+
+Stage-2 call, 2026-10-23: repair · attempt 1 · route codex · endpoint openai-codex · model gpt-6.1-sol · leak check clean over 567 files, 1901 commits, 12 rules.

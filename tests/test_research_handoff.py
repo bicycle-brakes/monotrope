@@ -688,7 +688,7 @@ def test_a_subsection_heading_does_not_end_basis_checking(world: World, capsys: 
     assert world.check(capsys)[0] == 0, "a criterion inside a subsection with an origin passes"
     other = sectioned.replace("### Functional", "## Notes")
     world.write([run], spec=other.replace("   *Basis:* `decisions.md#Q-1`.\n", ""))
-    assert world.check(capsys)[0] == 0, "a level-two heading still ends the section"
+    assert world.check(capsys)[0] == 1, "a later main section must not hide an acceptance criterion"
 
 
 @pytest.mark.parametrize("link_kind", ["question", "class", "neighbour", "disagreement"])
@@ -929,3 +929,47 @@ def test_duplicate_yaml_answer_keys_are_not_measured(world: World, capsys, answe
     code, output = world.check(capsys)
     assert code == 3, output
     assert "not measured" in output and "answer" in output and "choice" in output
+
+
+@pytest.mark.parametrize(
+    "heading", ["## Amendment — later criteria", "# Amendment", "## Acceptance criteria — amendment"]
+)
+def test_amended_criteria_after_main_headings_require_basis(world: World, capsys, heading: str) -> None:
+    plain = spec_text(neighbours=[])
+    amendment = f"\n## Notes\n\nExplanatory prose.\n\n{heading}\n\n62. When amended, check its origin.\n"
+    world.write([run_text(RUN1)], spec=plain + amendment + "   *Basis:* `decisions.md#Q-1`.\n")
+    assert world.check(capsys)[0] == 0
+    world.write([run_text(RUN1)], spec=plain + amendment)
+    code, output = world.check(capsys)
+    assert code == 1, output
+    assert "62" in output and "basis" in output
+    world.write([run_text(RUN1)], spec=plain + amendment + "   *Basis:* `missing-claim`.\n")
+    assert world.check(capsys)[0] == 1, "amendment bases must also be resolved"
+
+
+@pytest.mark.parametrize(
+    "answer",
+    [
+        "\n  <<: {source: maintainer}\n  choice: keep\n  choice: drop",
+        "{<<: {source: maintainer}, choice: keep, choice: drop}",
+        "{? [unhashable, key]: keep}",
+        "[keep",
+        "{choice: keep",
+        "!unknown keep",
+        '"unterminated',
+        "Keep this: because: approved",
+    ],
+)
+@pytest.mark.parametrize("use", ["obligation", "basis", "before-spec"])
+def test_yaml_answer_errors_are_not_measured(world: World, capsys, answer: str, use: str) -> None:
+    record = q_record(1, items=(f"{RUN1}/H-1",))
+    world.write([run_text(RUN1)], records=[record])
+    assert world.check(capsys)[0] == 0
+    record = record.replace('answer: "yes"', f"answer: {answer}")
+    run = run_text(RUN1, decision=None) if use == "basis" else run_text(RUN1)
+    if use == "basis":
+        record = record.replace(f"research_items: [{RUN1}/H-1]", "research_items: []")
+    world.write([run], records=[record], spec=None if use == "before-spec" else "default")
+    code, output = world.check(capsys)
+    assert code == 3, output
+    assert "not measured" in output and "answer" in output

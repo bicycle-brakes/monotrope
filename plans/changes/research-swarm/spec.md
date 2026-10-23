@@ -4,7 +4,7 @@ status: draft
 implementation_status: partial
 date: 2026-10-14
 last_reviewed: 2026-10-18
-updated: 2026-10-21
+updated: 2026-10-23
 supersedes: null
 superseded_by: null
 bead: coding-harness-icw
@@ -119,7 +119,13 @@ addenda record `6e80ded` on 2026-10-15 and `6146fde` on 2026-10-16.
   If models.dev is unavailable or unreadable, exclude all free candidates and
   record `N=0` with that reason; subject to explicit-include requirements,
   the 39 required slots remain. Pi refresh failure
-  cannot use this fallback. `N` is the frozen selected count, not qualification.
+  cannot use this fallback. Preparation probes every policy-selected, unexcluded
+  free candidate with the real-size online-topic request, using a fixed public
+  sentence and asking only for OK, without tools or private content. The first
+  attempt allows 120 seconds; only a timeout gets one retry of 360 seconds.
+  Failed candidates are named with their reasons and removed before freezing
+  the selection and `N`. `N` is the count that passed preparation, not a
+  guarantee that later topic calls succeed (maintainer, 2026-10-22).
 - **Required contribution:** one of the 39 required slots (3 finder, map
   merge, public topic, 24 repository-seat, 9 online-seat, judge). The
   additional `3N` free slots are best-effort; each still requires a recorded
@@ -450,12 +456,12 @@ does not reject the report.
 46. While a run executes, every required slot uses its seat's selection from the consumed receipt, and the run manifest records the receipt id, check time, each seat's selection and every candidate's outcome.
    *Refuted by:* A selected model that fails or times out is replaced by another model, retried or probed again; a later preparation changes a running run's models; the manifest lacks the receipt id, a seat's selection with its preferred or substitute mark, or a model's reason.
    *Basis:* `decisions.md#Q-12`; `decisions.md#Q-14`; existing no-retry contract.
-47. When a reachability probe runs, it sends only the fixed probe text, with no tools, no repository content and no change identity, from a fresh scratch working directory without instruction auto-loading, through the pinned Pi wrapper or official Claude Code, within 60 seconds and after its own exact-prompt leak check and audit record.
+47. When a required-seat reachability probe runs, it sends only the fixed probe text, with no tools, no repository content and no change identity, from a fresh scratch working directory without instruction auto-loading, through the pinned Pi wrapper or official Claude Code, within 60 seconds and after its own exact-prompt leak check and audit record.
    *Refuted by:* A canary from the change, AGENTS.md, a repository path, the map or the public topic reaches a probe's payload, argv or environment; any tool is available; a bare `pi` or an unofficial Claude client runs; a probe lacks its leak check or audit record or runs past 60 seconds; a Claude Code preferred model counts as reachable without a probe.
    *Basis:* `decisions.md#Q-12`.
-48. When preparation probes, it probes each distinct admitted, unexcluded model at most once. It probes a pool model only while a seat still needs a substitute and every cheaper usable pool model is known unreachable or already selected in that trio. It never probes a Go free model or an Opus role, keeps probe records outside the worktree, and counts no probe among the run's `39 + 3N` invocations.
-   *Refuted by:* A model is probed twice; a pool model is probed while no seat needs a substitute or while a cheaper usable pool model is untried; an excluded, unadmitted or free model or an Opus role is probed; preparation changes a worktree file; probes reduce or replace the run's slots.
-   *Basis:* `decisions.md#Q-12`; `decisions.md#Q-14`; `decisions.md#Q-10` and `decisions.md#Q-11` keep free-seat selection unchanged.
+48. When preparation probes, required-seat and pool probing stays lazy and shared across trios. A pool model is probed only while a seat needs a substitute and every cheaper usable pool model is known unreachable or already selected in that trio. Every policy-selected, unexcluded Go free candidate is also probed with the real-size online-topic request and a fixed public sentence, asking only for OK without tools or private content: 120 seconds, with one 360-second retry only after a timeout. A failed free probe names its reason and removes the candidate from the frozen selection and N without blocking required seats. Opus roles are never probed; records stay outside the worktree and probes count outside the run's `39 + 3N` invocations.
+   *Refuted by:* A pool model is probed while no seat needs it or a cheaper usable model is untried; a selected free candidate escapes probing, receives a short probe instead of the real-size request, exceeds those limits or retries a non-timeout failure; a failed free candidate remains in N or blocks required seats; an excluded or ineligible candidate or Opus role is probed; preparation changes a worktree file; probes consume run slots.
+   *Basis:* `decisions.md#Q-12`; `decisions.md#Q-14`; maintainer decision of 2026-10-22 to probe free models with the real-size request (bead coding-harness-k9rw).
 49. If a seat declares no preferred model, more than one model or any fallback or substitute list, or its preferred model is undeclared by its endpoint, a `-free` id, an online model outside `opencode-go` or a repository model on an endpoint without `framework`, or the maximum age, the measured wire-API set or a timed exclusion is malformed, preparation and explore refuse with exit 2 before any model call.
    *Refuted by:* Such a declaration lets a probe or research call start, a declared fallback or substitute list is accepted or consulted, or the refusal exits other than 2.
    *Basis:* `decisions.md#Q-12`; `decisions.md#Q-14`; existing declaration contract.
@@ -511,8 +517,8 @@ does not reject the report.
 - Implementation-review swarm, runner verbs other than the research
   preparation verb, persistent web cache, paid search API, cost benchmark or
   opening sibling checkouts.
-- Probing or reselecting Go free models (Q-10/Q-11 stay as they are), mid-run
-  model swaps, retries, automatic admission of a Go model without a dated
+- Mid-run probing or reselecting Go free models, model swaps, topic-call
+  retries, automatic admission of a Go model without a dated
   terms reading, a looser admission for online seats, or one shared
   selection for the review and research swarms: Q-12 shares the form and the
   implementation, not the seats or the selection.
@@ -651,7 +657,9 @@ maintainer answer is supplied here.
   unfinished reads without retry. Unfinished Pi exits 1 regardless of the
   other result; successful Pi plus unfinished models.dev records
   capability-unavailable/timeout and keeps required slots, unless an explicit
-  include is unmet. Each probe has 60 seconds. Other role deadlines: topic
+  include is unmet. Required-seat probes use the fixed 60-second request;
+  free probes use the real-size request with 120 seconds and one 360-second
+  retry only after a timeout, before the selection and N are frozen. Other role deadlines: topic
   author 5 minutes, finder/researcher/merge 10, judge 15, run 150 total,
   monotonically measured with no retries. Required slots precede free seats:
   repository topics 1–8 then online seats 9–11, by topic then declared seat
@@ -779,7 +787,8 @@ maintainer answer is supplied here.
 - [DETAIL] Q-12 preparation is its own verb, `stage2.py prepare-explore
   <change> [--class CLASS]`, mirroring the review swarm's `prepare-loop`.
   It validates class and neighbours, refreshes the catalog, selects the free
-  seats (Q-10/Q-11 unchanged) and the six seats, prints the report and seals
+  candidates by Q-10/Q-11, probes them under criterion 48, selects the six
+  seats, prints the report and seals
   the receipt. `explore <change> --availability-reported ID` consumes it:
   it checks version, id, binding, timezone-aware time and age, then deletes
   the receipt before the first model call. The run uses the receipt's
@@ -820,9 +829,13 @@ maintainer answer is supplied here.
   model. The cheapest reachable model is found without probing the rest, and
   every model is still reported: selected, substitute for a seat, skipped,
   excluded, unreachable or not probed. Preparation is bounded by 60 seconds
-  of catalog plus 60 seconds per distinct probed model. Go free models are
-  not probed: Q-12 keeps Q-10/Q-11, and a failing free seat stays a named
-  best-effort outcome (S-1).
+  of catalog plus the required-seat probe allowances and up to 480 seconds
+  per selected free candidate (120 seconds, then 360 only after a timeout).
+  The free request has the real online-topic size, a fixed public sentence
+  and an OK-only instruction, without tools or private content. Failed
+  candidates are named and removed before freezing N (maintainer,
+  2026-10-22; supersedes the no-free-probe detail). A later failing free
+  topic slot remains a named best-effort outcome.
 - [DETAIL] Admission mirrors the review swarm (Q-14). A Go model needs a
   `modelle_terms` record that passes the review swarm's `terms_problem`,
   the rule under which it admits paid ladder models, and a positive

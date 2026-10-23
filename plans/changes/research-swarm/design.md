@@ -4,7 +4,7 @@ status: draft
 implementation_status: partial
 date: 2026-10-14
 last_reviewed: 2026-10-18
-updated: 2026-10-21
+updated: 2026-10-23
 supersedes: null
 superseded_by: null
 bead: coding-harness-icw
@@ -253,7 +253,14 @@ the form of the review swarm's `prepare-loop` and `review-loop
    exact-prompt leak check and audit. A Claude Code probe sends the same
    text through `claude -p` with `--tools ""`, `--restricted`,
    `--safe-mode`, `--strict-mcp-config`, `--permission-prompts none` and no
-   session persistence. Go free models and Opus roles are not probed.
+   session persistence. Opus roles are not probed. After filling the six
+   seats, preparation probes every policy-selected, unexcluded free candidate
+   with the real-size first online-topic request, a fixed public sentence
+   and an OK-only instruction, without tools or private content. It allows
+   120 seconds and retries only a timeout once at 360 seconds. A failed
+   candidate is named with its reason and removed from the frozen free
+   selection and N; it never blocks the required seats (maintainer,
+   2026-10-22; bead coding-harness-k9rw).
 4. Any unfilled seat: print the report with `seat-unavailable` and every
    model's reason, write no receipt, exit 1. Otherwise print the report
    (UTC check time; per seat the selection, preferred or "substitute for
@@ -422,7 +429,8 @@ and a new `on_terminal` callback writes its terminal record (next section).
 The frozen budget is `39 + 3N`: finder 3 + merge 1 + sentence 1 + repository
 seats 24 + online seats 9 + free online `3N` + judge 1 (Q-7–Q-10,
 2026-10-16; Q-12 keeps it). Reused slots (Q-13) fill their places without a
-call. Preparation (catalog 60 seconds, each probe 60 seconds) comes before
+call. Preparation (catalog 60 seconds, required-seat probe allowances,
+free probes 120 seconds plus one 360-second retry only after a timeout) comes before
 the run and counts neither as invocations nor against its time. Deadlines:
 sentence 5 minutes, finder/researcher/map merge 10 each, judge 15, whole run
 150. Queue wait counts
