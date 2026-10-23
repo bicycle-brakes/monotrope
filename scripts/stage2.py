@@ -2220,7 +2220,7 @@ def spec_review(root: Path, change: str) -> None:
     begin_call(ctx, "spec-review", OPUS, prompt)
     answer = run_work_model(ctx, prompt, OPUS, writable=False)
     rows, _ = parse_rows(answer)
-    append(ctx.findings, f"## Phase 2a — Opus 5.5, {today()}\n\n{answer_block(rows, answer, 'Opus')}")
+    append(ctx.findings, f"## Phase 2a — Opus 5.5, {today()}\n\n{answer_block(rows, answer, 'Opus', quote=True)}")
     print(f"spec-review: {len(rows)} rows appended to {ctx.findings.relative_to(root)}")
 
 
@@ -2263,6 +2263,8 @@ def review(root: Path, change: str) -> None:
         if refusal:
             raise Refused(refusal)
     text = ctx.findings.read_text(encoding="utf-8") if ctx.findings.exists() else ""
+    if not restarted_fresh(record, text):
+        read_state(record, text, record_path=record_dir(change, root) / "loop.md")
     recorded = recorded_2a_session(text)
     recheck = any(line.startswith("## Phase 6") for line in text.splitlines())
     if recheck:
@@ -2682,7 +2684,13 @@ def find_state_block(text: str, where: str) -> tuple[re.Match[str], re.Match[str
                 "block by hand, nothing has been changed."
             )
         return None
-    end = STATE_BLOCK_END_LINE.search(text, begins[0].end())
+    ends = list(STATE_BLOCK_END_LINE.finditer(text))
+    if any(end.start() < begins[0].start() for end in ends) or len(ends) > 1:
+        raise Refused(
+            f"{where} holds a stray end marker without its begin marker; mend the block by hand, "
+            "nothing has been changed."
+        )
+    end = ends[0] if ends else None
     if end is None:
         raise Refused(
             f"{where} holds an owned state block that never closes; mend the block by hand, nothing has been changed."
@@ -2722,6 +2730,11 @@ def replace_state_block(text: str, block: str, where: str) -> str:
     return text[: begin.start()] + block + text[end.end() :]
 
 
+def render_record_head(change: str, state: dict) -> str:
+    """The shared fresh-record heading, intro and owned snapshot, before any round."""
+    return f"{RECORD_HEADING}{change}\n\n{RECORD_INTRO}\n\n{render_state_block(state)}\n"
+
+
 def write_round(change: str, block: str, state: dict, root: Path) -> None:
     """Append the round and pin its stages as consumed in one write (R-6 of the review-swarm review).
 
@@ -2742,7 +2755,7 @@ def write_round(change: str, block: str, state: dict, root: Path) -> None:
     else:
         # A round of a run whose record is gone - a retired stage after a release - starts the
         # record itself: heading, intro and the owned state block, then the round, in one write.
-        text = f"{RECORD_HEADING}{change}\n\n{RECORD_INTRO}\n\n{snapshot}\n\n{body}\n"
+        text = f"{render_record_head(change, state).rstrip(chr(10))}\n\n{body}\n"
     path.write_text(text, encoding="utf-8")
 
 
@@ -2766,7 +2779,7 @@ def write_state(change: str, state: dict, root: Path) -> None:
     directory.mkdir(parents=True, exist_ok=True)
     path = directory / "loop.md"
     if not path.exists():
-        path.write_text(f"{RECORD_HEADING}{change}\n\n{RECORD_INTRO}\n\n{block}\n", encoding="utf-8")
+        path.write_text(render_record_head(change, state), encoding="utf-8")
         return
     text = path.read_text(encoding="utf-8")
     path.write_text(replace_state_block(text, block, f"the loop record of {change}"), encoding="utf-8")
@@ -2804,7 +2817,7 @@ def _missing_state_refusal(text: str, where: str, way_out: str) -> str:
     )
 
 
-def read_state(record: str | None, findings_text: str) -> dict | None:
+def read_state(record: str | None, findings_text: str, *, record_path: Path | None = None) -> dict | None:
     """The run's stage snapshot: the record's owned state block first, else the last release's.
 
     Only the block the runner owns is read: the whole record - its reviewer words stand quoted, never
@@ -2817,12 +2830,13 @@ def read_state(record: str | None, findings_text: str) -> dict | None:
     fresh run discovers its own.
     """
     if record is not None:
-        where = "the loop record"
+        where = f"the loop record {record_path}" if record_path is not None else "the loop record"
         line = state_block_json(record, where)
         if line is None:
-            raise Refused(
-                _missing_state_refusal(record, where, "mend the record by hand, or delete it to start the run fresh")
-            )
+            way_out = "mend the record by hand, preserving its round rows and reviewer evidence"
+            if _last_release(findings_text) < 0:
+                way_out += ", or delete it to start the run fresh"
+            raise Refused(_missing_state_refusal(record, where, way_out))
     else:
         section = _release_section(findings_text)
         if section is None:
@@ -2885,11 +2899,11 @@ def kept_lines(record: str) -> str:
     in_block = False
     for number, (line, glm) in enumerate(_record_lines(record)):
         if not glm:
-            if line.strip() == STATE_BLOCK_BEGIN:
+            if STATE_BLOCK_BEGIN_LINE.fullmatch(line):
                 in_block = True
                 continue
             if in_block:
-                if line.strip() == STATE_BLOCK_END:
+                if STATE_BLOCK_END_LINE.fullmatch(line):
                     in_block = False
                 continue
             cells = split_row(line)
@@ -2940,7 +2954,7 @@ def release(root: Path, change: str) -> list[list[str]]:
     refusal = undecided_refusal(rows, "nothing is released")
     if refusal:
         raise Refused(refusal)
-    state = read_state(record, text)
+    state = read_state(record, text, record_path=record_dir(change, root) / "loop.md")
     block = [f"{RELEASE_HEADING} {today()}"]
     if state is not None:
         # The snapshot travels in the owned state block, first in the release and before the kept
@@ -2984,7 +2998,11 @@ def retire_stage(root: Path, change: str, model: str, reason: str) -> None:
     # whose next stage fails every member writes no new record, and this is exactly the run the
     # command must unblock (the review of PR #198).
     # A restarted loop has no snapshot of its own until its first round; the old run's stages are spent.
-    state = None if restarted_fresh(record, findings_text) else read_state(record, findings_text)
+    state = (
+        None
+        if restarted_fresh(record, findings_text)
+        else read_state(record, findings_text, record_path=record_dir(change, root) / "loop.md")
+    )
     if state is None:
         raise Refused("the loop record carries no stage snapshot; nothing can be retired.")
     stage = next((item for item in stages_of(state) if model in item["members"]), None)
@@ -5690,7 +5708,11 @@ def review_loop(root: Path, change: str, availability_reported: str | None = Non
                 f"rounds {last - 1} and {last} accepted only findings whose Origin begins `fix-r`; "
                 "the repair brake stops the loop; the maintainer decides what continues."
             )
-    state = None if restarted_fresh(record, findings_text) else read_state(record, findings_text)
+    state = (
+        None
+        if restarted_fresh(record, findings_text)
+        else read_state(record, findings_text, record_path=record_dir(change, root) / "loop.md")
+    )
     receipt_taken = False
     if record is None and state is None:
         # A fresh run has neither a record nor a released snapshot: read_state

@@ -4,7 +4,7 @@ status: draft
 implementation_status: none
 date: 2026-10-23
 last_reviewed: 2026-10-23
-updated: 2026-10-23
+updated: 2026-10-24
 supersedes: null
 superseded_by: null
 bead: coding-harness-i70
@@ -92,6 +92,13 @@ explicitly restarted discovery still works with the existing regressions.
 - 5: tests/test_stage2.py::test_invalid_owned_snapshot_refuses_without_calls_or_writes — missing, duplicate, incomplete, legacy or invalid state causes calls, fallback or a changed file instead of a diagnostic.
 - 6: tests/test_stage2.py::test_snapshot_updates_preserve_reviewer_evidence_and_rows — writing state replaces reviewer words, drops rows or releases block furniture as evidence.
 
+## Runner route — 2026-10-24
+
+Stage-1 route: repair · model claude-sonnet-5-5 · reason: two Codex post-run checks failed.
+
 ## Time used
 
 2026-10-23 21:00:43–21:48:32 UTC, 2869 s — implement · attempt 1 · route flash · model glm-5.3-flash · accepted · measured by the runner
+2026-10-23 22:27:37–22:46:38 UTC, 1142 s — repair · attempt 1 · route codex · model gpt-6.1-sol · rejected · measured by the runner
+2026-10-23 22:46:44–23:03:18 UTC, 994 s — repair · attempt 2 · route codex-repair · model gpt-6.1-sol · rejected · measured by the runner
+2026-10-23 23:03:24–23:09:54 UTC, 390 s — repair · attempt 3 · route stage-1 · model claude-sonnet-5-5 · accepted · measured by the runner
