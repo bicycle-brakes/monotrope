@@ -300,7 +300,7 @@ class Run:
             if not isinstance(free, list):
                 raise stage2_swarm.ResearchCatalogError("the consumed selection holds no free selection", 2)
             stage2_swarm.role_launches(self.data, self.roles, self.free)
-            self.plan_size = len(stage2_swarm.research_slot_plan(self.roles, self.free))
+            stage2_swarm.research_slot_plan(self.roles, self.free)
         except (KeyError, TypeError) as error:
             raise runner.Refused("the consumed selection does not hold the six seats") from error
         except stage2_swarm.ResearchCatalogError as error:

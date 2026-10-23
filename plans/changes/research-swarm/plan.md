@@ -665,6 +665,9 @@ the existing gates and let the runner own registry regeneration/full verify.
 
 ## Criterion ledger
 
+- 34: tests/test_research_handoff.py::test_research_swarm_seat_amendment_has_answered_bases — The actual seat amendment's criteria 62–65 lack answered Q-18 bases when checked with complete v2 research (review-loop L5-1).
+- 9: tests/test_stage2_research_tools.py::test_non_global_lookup_addresses_never_reach_the_transport — Documentation, benchmarking, multicast, reserved or mapped non-global addresses reach the transport directly, in mixed DNS answers or after redirects (review-loop L5-3).
+
 - 18: tests/test_stage2_research_judge.py::test_judge_packet_one_fixed_unicode_limit_allows_J_and_refuses_J_plus_one — Whole-packet size is measured without instructions, counts bytes instead of Unicode characters or permits J+1; actual launch/barrier integration remains pending.
 - 28: tests/test_stage2_research_judge.py::test_judge_packet_retains_all_valid_reports_free_failures_and_full_instructions — A free failure, accepted report, map entry or instruction disappears from the bounded packet.
 - 18: tests/test_stage2_research_judge.py::test_judge_packet_required_failure_blocks_even_with_a_valid_partial_report — A required failure permits the prepared judge packet.
@@ -2037,6 +2040,7 @@ Span (measured, `date -u`): 2026-10-18T21:31:06Z to 2026-10-18T21:52:03Z, about 
   intersection, per-candidate outcomes) and the wrapper routing of version and
   model calls were already in place (steps 11 and earlier); nothing was redone.
 2026-10-23 13:11:00–13:23:46 UTC, 765 s — repair · attempt 1 · route codex · model gpt-6.1-sol · accepted · measured by the runner
+2026-10-23 16:04:29–16:15:04 UTC, 635 s — repair · attempt 1 · route codex · model gpt-6.1-sol · accepted · measured by the runner
 
 ## Main sync after #157 — 2026-10-18
 

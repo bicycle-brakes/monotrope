@@ -947,6 +947,26 @@ def test_amended_criteria_after_main_headings_require_basis(world: World, capsys
     assert world.check(capsys)[0] == 1, "amendment bases must also be resolved"
 
 
+def test_research_swarm_seat_amendment_has_answered_bases(world: World, capsys) -> None:
+    source = Path(__file__).resolve().parents[1] / "plans/changes/research-swarm/spec.md"
+    if not source.exists():
+        pytest.skip("the framework research spec is not shipped in the kit")
+    amendment = (
+        "## Amendment — 2026-10-21" + source.read_text(encoding="utf-8").split("## Amendment — 2026-10-21", 1)[1]
+    )
+    records = [q_record(1, items=(f"{RUN1}/H-1",)), q_record(18)]
+    world.write([run_text(RUN1)], records=records, spec=spec_text() + amendment)
+    code, output = world.check(capsys)
+    assert code == 0, output
+    # Removing any one origin must make the real amendment fail the gate.
+    for number in range(62, 66):
+        before, criterion = amendment.split(f"{number}. ", 1)
+        broken = before + f"{number}. " + criterion.replace("   *Basis:* `decisions.md#Q-18`.\n", "", 1)
+        world.write([run_text(RUN1)], records=records, spec=spec_text() + broken)
+        code, output = world.check(capsys)
+        assert code == 1 and str(number) in output, output
+
+
 @pytest.mark.parametrize(
     "answer",
     [

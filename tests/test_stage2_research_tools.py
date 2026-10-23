@@ -32,7 +32,7 @@ pytestmark = pytest.mark.skipif(
 )
 
 PUBLIC_IP = "93.184.216.34"  # a public address for the scripted lookups
-NEXT_IP = "203.0.113.5"  # public (TEST-NET-3) for the redirect hop
+NEXT_IP = "8.8.4.4"  # a public address for the scripted redirect hop
 PRIVATE_IP = "10.9.9.9"
 
 OTHER_TOOLS = ("read", "write", "edit", "bash", "grep", "find", "ls", "webfetch", "mystery-tool")
@@ -142,6 +142,8 @@ def test_a_local_or_authenticated_destination_is_refused(world: World, url: str,
         ("fd00::1", True),
         ("::ffff:127.0.0.1", True),
         ("::ffff:8.8.8.8", False),
+        ("::ffff:808:808", False),
+        ("0:0:0:0:0:ffff:808:808", False),
         ("2001:4860:4860::8888", False),
     ],
 )
@@ -156,6 +158,44 @@ def test_a_lookup_that_returns_a_private_address_is_refused(world: World) -> Non
         transport={"lookups": [[PRIVATE_IP]], "responses": [{"status": 200, "body": "hi"}]},
     )
     thrown(answer, mentioning="private address")
+
+
+@pytest.mark.parametrize(
+    "ip",
+    [
+        "192.0.0.1",
+        "192.0.2.1",
+        "192.88.99.1",
+        "198.18.0.1",
+        "198.19.255.255",
+        "198.51.100.1",
+        "203.0.113.1",
+        "224.0.0.1",
+        "239.255.255.255",
+        "240.0.0.1",
+        "ff02::1",
+        "2001:db8::1",
+        "3fff::1",
+        "2002:c000:0201::1",
+        "100::1",
+        "::ffff:c000:201",
+        "::ffff:192.0.2.1",
+        "0:0:0:0:0:ffff:e000:1",
+    ],
+)
+def test_non_global_lookup_addresses_never_reach_the_transport(world: World, ip: str) -> None:
+    for lookups in ([[ip]], [[PUBLIC_IP, ip]], [[PUBLIC_IP], [ip]]):
+        answer = world.call(
+            mode="fetch",
+            url="https://example.com/x",
+            transport={
+                "lookups": lookups,
+                "responses": ([{"status": 302, "location": "https://next.example/x"}] if len(lookups) == 2 else [])
+                + [{"status": 200, "body": "must not be read"}],
+            },
+        )
+        thrown(answer, mentioning="private address")
+        assert len(answer["seen"]["gets"]) == len(lookups) - 1, answer
 
 
 @pytest.mark.parametrize(

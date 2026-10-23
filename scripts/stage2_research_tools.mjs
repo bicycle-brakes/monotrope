@@ -34,7 +34,8 @@ const PUBLIC_TOOLS = ["public_search", "public_fetch"];
 // --- destinations -------------------------------------------------------------------------------
 
 // Address ranges that are never public: unspecified, this host, private,
-// carrier-grade NAT, link-local, broadcast. Ordered [first address, bits].
+// carrier-grade NAT, link-local, protocol assignments, documentation,
+// benchmarking, multicast and reserved space. Ordered [first address, bits].
 const PRIVATE_V4 = [
   ["0.0.0.0", 8],
   ["10.0.0.0", 8],
@@ -42,8 +43,14 @@ const PRIVATE_V4 = [
   ["127.0.0.0", 8],
   ["169.254.0.0", 16],
   ["172.16.0.0", 12],
+  ["192.0.0.0", 24],
+  ["192.0.2.0", 24],
+  ["192.88.99.0", 24],
   ["192.168.0.0", 16],
-  ["255.255.255.255", 32],
+  ["198.18.0.0", 15],
+  ["198.51.100.0", 24],
+  ["203.0.113.0", 24],
+  ["224.0.0.0", 3],
 ];
 
 function v4ToInt(text) {
@@ -72,18 +79,29 @@ function isPrivateV4(ip) {
 
 export function isPrivateIp(ip) {
   const lower = String(ip ?? "").toLowerCase();
-  if (lower.startsWith("::ffff:")) return isPrivateV4(lower.slice(7)); // v4-mapped
-  if (lower === "::" || lower === "::1") return true; // unspecified, loopback
-  if (lower.startsWith("fc") || lower.startsWith("fd")) return true; // fc00::/7 unique local
-  if (lower.startsWith("fe8") || lower.startsWith("fe9") || lower.startsWith("fea") || lower.startsWith("feb")) {
-    return true; // fe80::/10 link-local
+  const family = isIP(lower);
+  if (family === 4) return isPrivateV4(lower);
+  if (family !== 6 || lower.includes("%")) return true;
+  // URL normalization expands embedded IPv4 into hex; numeric comparison
+  // makes compressed, expanded and mapped spellings obey the same policy.
+  const normalized = new URL(`https://[${lower}]/`).hostname.slice(1, -1);
+  const halves = normalized.split("::");
+  const left = halves[0] ? halves[0].split(":") : [];
+  const right = halves.length > 1 && halves[1] ? halves[1].split(":") : [];
+  const words = halves.length === 1 ? left : [...left, ...Array(8 - left.length - right.length).fill("0"), ...right];
+  const value = words.reduce((n, word) => (n << 16n) | BigInt(`0x${word}`), 0n);
+  if ((value >> 32n) === 0xffffn) {
+    const v4 = Number(value & 0xffffffffn);
+    return isPrivateV4([24, 16, 8, 0].map((shift) => (v4 >>> shift) & 255).join("."));
   }
-  if (lower.includes(":")) {
-    // Other IPv6: a well-formed hex-and-colon address past the private ranges
-    // above is public; anything unparsable is refused as private.
-    return !/^[0-9a-f:]+$/.test(lower);
-  }
-  return isPrivateV4(lower);
+  // Admit global unicast only (2000::/3), excluding special-purpose,
+  // documentation and transition allocations within it. Conservative
+  // exclusions also refuse globally reachable exceptions inside these blocks.
+  if ((value >> 125n) !== 1n) return true;
+  return (value >> 105n) === (0x2001n << 7n) // 2001::/23 protocol assignments
+    || (value >> 96n) === 0x20010db8n // 2001:db8::/32 documentation
+    || (value >> 112n) === 0x2002n // 2002::/16 transition addresses
+    || (value >> 108n) === 0x3fff0n; // 3fff::/20 documentation
 }
 
 // Validates one destination: HTTPS only, no embedded credentials, port 443,
