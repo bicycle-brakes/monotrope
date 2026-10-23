@@ -4,7 +4,7 @@ category: architecture
 status: proposed
 created: 2026-10-16
 last_reviewed: 2026-10-16
-updated: 2026-10-22
+updated: 2026-10-23
 owner: framework-architect
 provenance: ai-drafted-reviewed
 produced_by: {kind: llm-session, name: claude-code, version: "2026-10-16"}
@@ -167,8 +167,9 @@ flowchart LR
 
 ## Two kinds of class: change and data
 
-**Change classes** say how big a change is and what kind it is. Every spec
-declares one, and the class sets how much process it gets:
+**Change classes** say how big a change is and what kind it is. The bead's
+description names the class, and the spec repeats it; the class sets how much
+process it gets:
 
 | Class | What it is | Interview | Design phase | Second-vendor review |
 |---|---|---|---|---|
@@ -255,9 +256,10 @@ is generated from. The pytest suite is one of those gates and runs in parallel
 and process rules.
 
 Each checkout builds its own `.venv` with `make venv` from
-`requirements-ci.txt`, where every package is pinned with its hash. Results
-depend on the lock, not on what happens to be installed on a machine, so a
-local green means what a CI green means.
+`requirements-ci.txt`, where every package is pinned with its hash, and
+installs the pinned Pi with `bash tools/pi/install.sh`; the Pi tests and the
+review swarms need it. Results depend on the lock, not on what happens to be
+installed on a machine, so a local green means what a CI green means.
 
 A repair of code counts only when its test fails on the code before the
 repair; the runner checks that itself. A test that would have passed anyway

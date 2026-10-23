@@ -187,11 +187,12 @@ sessions, several error profiles, evidence for every row.
 Parallel work is allowed and expected; what it must not do is lose work
 silently. The workflow makes the boundaries explicit:
 
-1. **One change, one worktree.** One change, one bead (the tracker item), one
-   branch, one worktree, one session. The worktree is branched from a freshly
-   fetched `origin/main`, lives under `.claude/worktrees/<name>`, and is
-   removed after the merge. Nobody switches the branch of the main checkout
-   while another session is running.
+1. **One change, one worktree.** One change, one bead (the tracker item, with
+   the class in its description), one branch, one worktree, one session. The
+   worktree is branched from a freshly fetched `origin/main` and lives under
+   `.claude/worktrees/<name>`. Run `make venv` and `bash tools/pi/install.sh`
+   once in it before `make verify`; remove it after the merge. Nobody switches
+   the branch of the main checkout while another session is running.
 2. **One tracker writer.** While more than one session writes, the first-started
    writing session owns the tracker: it hands out, reprioritises, links and
    closes beads. Every other writing session writes only its claim
@@ -219,9 +220,9 @@ orchestration).
 
 ## Not every change is the same size
 
-Every change names its class in the head of its spec. The class sets how much
-process the change gets; the kind of an open point (below) sets who decides
-it.
+Every change names its class in the bead description and in the head of its
+spec. The class sets how much process the change gets; the kind of an open
+point (below) sets who decides it.
 
 | | `spike` | `bounded` | `feature` | `architectural` |
 | --- | --- | --- | --- | --- |
@@ -335,9 +336,9 @@ into a throwaway tree and runs its tests there, but the step-by-step onboarding
 page is still being built. Until then, [`docs/WORKFLOW.md`](docs/WORKFLOW.md)
 is the reference.
 
-To start a change, create its bead (the tracker item) first, then
-`python3 scripts/new_change.py <name> --bead <id>`, and read
-[`docs/WORKFLOW.md`](docs/WORKFLOW.md) from phase 1.
+To start a change, create its bead (the tracker item) first, with the class in
+its description, then `python3 scripts/new_change.py <name> --bead <id>`, and
+read [`docs/WORKFLOW.md`](docs/WORKFLOW.md) from phase 1.
 
 ## Go deeper
 
@@ -362,8 +363,9 @@ To start a change, create its bead (the tracker item) first, then
   there.
 - **Decision pull requests** take effect when the maintainer merges them.
 - **One change, one branch, one worktree, one session.**
-- **Before a pull request.** `make venv` once, then `make verify`; a text-only
-  change is gated by CI.
+- **Before a pull request.** Per checkout: `make venv` and
+  `bash tools/pi/install.sh` once, then `make verify`; a text-only change is
+  gated by CI.
 - **Contributions.** By opening a pull request you agree that your
   contribution may be distributed under the project's license and, if needed,
   under a commercial license. See [`COMMERCIAL.md`](COMMERCIAL.md).
