@@ -58,3 +58,31 @@ wins or the run refuses.
 ## Open questions
 
 None for the maintainer: the direction is decided (`decisions.md`, Q-1).
+
+## Draft-time trace — 2026-10-23
+
+Read at `9cb6e31` while drafting the spec:
+
+- `review` appends `answer_block` to `findings.md`; `answer_parts` keeps
+  non-row answer text unquoted. A later phase-6 answer can therefore stand
+  after an earlier release, even when no new loop record exists.
+- `_last_release` takes the last matching release heading. `read_state(None,
+  findings_text)` searches from there to the end of the file, stopping only
+  at `Kept from the loop record:`. A release with no kept words has no such
+  stop: a later verdict's state line can be read, and its forged release
+  heading can displace the real release altogether.
+- New loop-round free text is already quoted by `review_loop`, but
+  `write_round` and `write_state` still replace the first matching state
+  line anywhere in the record. `_record_lines` guards reads by reviewer
+  regions, not by a dedicated state block.
+- `release` copies the parsed snapshot into a bare state line, then deletes
+  the external record. `review_loop` uses that released snapshot before
+  deciding whether discovery is needed; `retire_stage` also reads it.
+- Existing regression tests cover quoted round text and a quoted release
+  heading, but do not pass a forged snapshot through phase-6 `review` and
+  then resume without an external record (`tests/test_stage2.py`).
+
+This closes the repository gap above: the repair needs bounded state reads
+and writes in both storage locations, plus isolation of phase-6 free text.
+No Stage-1 fallback route was used in Explore; it was the orchestrating
+session's direct investigation, as recorded in this file's opening.
