@@ -57,3 +57,24 @@ and expects review to refuse and keep the record.
 
 None for the maintainer: the bead's "Needed" line is the direction
 (`decisions.md`, skip record).
+
+## Draft-stage repository checks — 2026-10-24
+
+Read at `4e18b97d`: `main` dispatches `review` through the unlocked fallback,
+while `prepare-loop`, `review-loop` and `release-loop` hold `holding_record`.
+Wrapping the review dispatch therefore covers its first `read_record`,
+verdict call and append, `release`, and loop marks without nesting locks in
+`release`. The lock file is outside the directory that `release` removes.
+
+The local `World` fixture and Codex stand-ins in `tests/test_stage2.py`
+exercise `main` without real model calls. Existing regressions cover verdict
+and marks ordering, a failed marks call, and undecided-row refusal. The
+contention test in `tests/test_stage2_availability.py` covers the three other
+record verbs but not `review`; the new tests can reuse its real-lock pattern.
+
+`templates/spec.md` exists; no plan template exists under `templates/` at
+this commit, so the plan follows `prompts/03-plan.md` and the adjacent
+runner plans. `scripts/validate_change_artefacts.py` named in the prompts
+does not exist at this commit; interview and criterion-ledger checks exist.
+Session-registry files and live pull-request state were not read: they
+require access outside this runner's permitted worktree and git directory.
