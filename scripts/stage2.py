@@ -143,6 +143,7 @@ import os
 import re
 import shutil
 import signal
+import stat
 import subprocess
 import sys
 import tarfile
@@ -3024,6 +3025,9 @@ VERIFY_SECONDS = 30 * 60
 GIT_SECONDS = 2 * 60
 
 
+UNREADABLE = "unreadable"  # the digest entry tool_state writes for a file it cannot read
+
+
 def tool_state(root: Path) -> dict[str, str]:
     """The digest of the worktree's `.venv/` tree, taken before the model runs (R-21).
 
@@ -3044,18 +3048,89 @@ def tool_state(root: Path) -> dict[str, str]:
                 elif path.is_file():
                     state[relative] = hashlib.sha256(path.read_bytes()).hexdigest()
             except OSError:
-                state[relative] = "unreadable"
+                state[relative] = UNREADABLE
     return state
 
 
+def _is_cache_path(relative: str) -> bool:
+    """True for a worktree-relative path below an exact `__pycache__` component inside `.venv/`.
+
+    The component must lie strictly between `.venv/` and the file itself, so a file named
+    `__pycache__` is not its own cache directory. The suffix is irrelevant: the import machinery
+    names `.pyc` today, and pytest's assertion rewriting may not tomorrow.
+    """
+    parts = relative.split("/")
+    return len(parts) > 2 and parts[0] == ".venv" and "__pycache__" in parts[1:-1]
+
+
+def _unlink_cache(root: Path, relative: str) -> bool | None:
+    """Unlink one cache candidate, reached only through real directories; say what happened.
+
+    Every component from `.venv/` down is checked with `lstat`, so a linked root, parent, cache
+    directory or file is never a cleanup route and nothing outside the tree is reached (spec
+    criterion 6). Returns `True` when the file was unlinked, `False` when an eligible regular file
+    could not be deleted, and `None` when the path is not a deletable cache file - a symlink, a
+    directory, or already gone - which stays an ordinary difference for the refusal.
+    """
+    parts = relative.split("/")
+    path = root
+    try:
+        for index, part in enumerate(parts):
+            path = path / part
+            info = path.lstat()
+            if index == len(parts) - 1:
+                if not stat.S_ISREG(info.st_mode):
+                    return None
+            elif not stat.S_ISDIR(info.st_mode):
+                return None
+    except OSError:
+        return None  # a component that cannot be stat-ed is not a proven cache file
+    try:
+        path.unlink()
+    except OSError:
+        return False
+    return True
+
+
 def tool_problem(root: Path, before: dict[str, str] | None) -> str | None:
-    """The first path of `.venv/` that is not what the runner saw before the call, named; `None` when none is."""
+    """The first path of `.venv/` that is not what the runner saw before the call, named; `None` when none is.
+
+    A new or content-changed regular file below an exact `__pycache__` component inside `.venv/` is
+    deleted before any runner-owned step: pytest's assertion rewriting writes bytecode there during
+    an attempt, and a deleted cache is rebuilt, so that write is normalized instead of refused (bead
+    coding-harness-q94b). Every other difference keeps the refusal with the first path named. The
+    baseline bookkeeping stays narrow: after each successful unlink only that path's old entry
+    leaves the shared `before` dictionary, recording the runner's own deletion - nothing that
+    survives is rebaselined, so a later check refuses a surviving file's new bytes and deletes a
+    recreated cache again against the same baseline.
+    """
     if before is None:
         return None
+
+    def differences(now: dict[str, str]) -> list[str]:
+        return sorted(path for path in before.keys() | now.keys() if before.get(path) != now.get(path))
+
     now = tool_state(root)
     if now == before:
         return None
-    changed = sorted(path for path in before.keys() | now.keys() if before.get(path) != now.get(path))
+    cleaned = False
+    for path in differences(now):
+        if not _is_cache_path(path):
+            break  # not a cache file: the refusal below names it
+        if UNREADABLE in (before.get(path), now.get(path)):
+            return f"`{path}` cannot be inspected, and a tool the attempt wrote is not run"
+        deleted = _unlink_cache(root, path)
+        if deleted is None:
+            break  # a linked or non-regular cache-looking path stays a difference
+        if not deleted:
+            return f"`{path}` cannot be deleted, and a tool the attempt wrote is not run"
+        before.pop(path, None)  # the runner's own deletion, not acceptance of new bytes
+        cleaned = True
+    if cleaned:
+        now = tool_state(root)  # the tree changed through the runner's own deletions
+    if now == before:
+        return None
+    changed = differences(now)
     return f"`{changed[0]}` is not what the runner saw before the call, and a tool the attempt wrote is not run"
 
 

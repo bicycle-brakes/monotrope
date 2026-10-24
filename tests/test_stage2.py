@@ -5288,6 +5288,260 @@ def test_red_first_refuses_a_changed_venv(world: World) -> None:
     assert outcome is not None and ".venv/bin/python3" in outcome
 
 
+def test_tool_check_deletes_new_venv_cache(world: World) -> None:
+    """q94b-1: a cache file the attempt added is deleted, and the otherwise unchanged environment passes."""
+    package = world.root / ".venv" / "lib" / "python3.x" / "site-packages" / "yaml"
+    package.mkdir(parents=True)
+    source = package / "__init__.py"
+    source.write_text("ok = 1\n", encoding="utf-8")
+    cache = package / "__pycache__" / "parser.cpython-313.pyc"
+    cache.parent.mkdir()
+    nested = package / "__pycache__" / "nested" / "__pycache__" / "odd.nbc"
+    nested.parent.mkdir(parents=True)
+    before = stage2.tool_state(world.root)
+    cache.write_bytes(b"xdist assertion rewrite\n")
+    nested.write_bytes(b"any suffix\n")
+    assert stage2.tool_problem(world.root, before) is None
+    assert not cache.exists() and not nested.exists(), "a new cache file survived the check"
+    assert source.read_text(encoding="utf-8") == "ok = 1\n", "an unrelated file was touched"
+    assert source.relative_to(world.root).as_posix() in before, "an unrelated baseline entry was dropped"
+
+
+@pytest.mark.parametrize("mode", ["new", "changed"], ids=["a-new-cache", "changed-baseline-bytes"])
+def test_venv_cache_cleanup_precedes_runner_tools(world: World, monkeypatch: pytest.MonkeyPatch, mode: str) -> None:
+    """q94b-1 and q94b-2: the first runner-owned step starts only after the planted cache is gone."""
+    cache_dir = world.root / ".venv" / "lib" / "__pycache__"
+    cache_dir.mkdir(parents=True)
+    cache = cache_dir / "assertion.pyc"
+    if mode == "changed":
+        cache.write_bytes(b"baseline bytes\n")
+    before = stage2.tool_state(world.root)
+    cache.write_bytes(b"attempt bytes\n")
+    with world.plan.open("a", encoding="utf-8") as handle:
+        handle.write("2026-10-07 10:00–10:05, 5 min\n")
+    world.script(make=[{"stdout": "green\n"}])
+    seen: list[bool] = []
+    real_launch = stage2.launch
+
+    def launch(program, *rest, **kwargs):
+        seen.append(cache.exists())
+        return real_launch(program, *rest, **kwargs)
+
+    monkeypatch.setattr(stage2, "launch", launch)
+    assert stage2.verify_attempt(world.root, world.plan, None, None, before) == []
+    assert seen, "no runner-owned step ran, so the ordering is unproven"
+    assert not any(seen), "a runner-owned step started while the planted cache still existed"
+    assert not cache.exists()
+
+
+def test_tool_check_deletes_changed_venv_cache(world: World) -> None:
+    """q94b-2: cache bytes that differ from the baseline are deleted, and their absence passes."""
+    cache = world.root / ".venv" / "lib" / "__pycache__" / "assertion.pyc"
+    cache.parent.mkdir(parents=True)
+    cache.write_bytes(b"baseline bytes\n")
+    before = stage2.tool_state(world.root)
+    cache.write_bytes(b"attempt bytes\n")
+    assert stage2.tool_problem(world.root, before) is None
+    assert not cache.exists(), "changed cache bytes survived the check"
+    assert cache.relative_to(world.root).as_posix() not in before, "the runner's deletion was not recorded"
+
+
+def test_tool_check_preserves_unchanged_venv_cache(world: World) -> None:
+    """q94b-3: cache bytes that match the baseline stay; a changed sibling is deleted."""
+    cache_dir = world.root / ".venv" / "lib" / "__pycache__"
+    cache_dir.mkdir(parents=True)
+    kept = cache_dir / "kept.pyc"
+    kept.write_bytes(b"unchanged bytes\n")
+    changed = cache_dir / "changed.pyc"
+    changed.write_bytes(b"baseline bytes\n")
+    before = stage2.tool_state(world.root)
+    changed.write_bytes(b"attempt bytes\n")
+    assert stage2.tool_problem(world.root, before) is None
+    assert kept.read_bytes() == b"unchanged bytes\n", "unchanged cache bytes were removed or rewritten"
+    assert kept.relative_to(world.root).as_posix() in before, "an unchanged cache lost its baseline entry"
+    assert not changed.exists()
+
+
+def test_venv_cache_cleanup_survives_repeated_checks(world: World) -> None:
+    """q94b-4: three checks on one baseline - clean, clean again, then a regenerated cache cleaned again."""
+    cache = world.root / ".venv" / "lib" / "__pycache__" / "assertion.pyc"
+    cache.parent.mkdir(parents=True)
+    before = stage2.tool_state(world.root)
+    cache.write_bytes(b"first write\n")
+    assert stage2.tool_problem(world.root, before) is None
+    assert not cache.exists()
+    assert stage2.tool_problem(world.root, before) is None, "a later check refused the earlier cleanup"
+    cache.write_bytes(b"second write\n")
+    assert stage2.tool_problem(world.root, before) is None, "a recreated cache was accepted without deletion"
+    assert not cache.exists()
+
+
+@pytest.mark.parametrize(
+    ("mutation", "named"),
+    [
+        pytest.param("source", ".venv/lib/python3.x/site-packages/yaml/__init__.py", id="changed-source"),
+        pytest.param("pth", ".venv/lib/python3.x/site-packages/evil.pth", id="added-pth"),
+        pytest.param("stray", ".venv/lib/python3.x/site-packages/stray.pyc", id="bytecode-outside-cache"),
+        pytest.param("executable", ".venv/bin/ruff", id="replaced-executable"),
+        pytest.param("deleted", ".venv/lib/python3.x/site-packages/yaml/__init__.py", id="deleted-baseline-file"),
+        pytest.param("missing-cache", ".venv/lib/__pycache__/assertion.pyc", id="model-deleted-cache"),
+        pytest.param("mixed", ".venv/lib/python3.x/site-packages/yaml/__init__.py", id="mixed-source-and-cache"),
+    ],
+)
+def test_cache_cleanup_keeps_other_venv_mutations_refused(world: World, mutation: str, named: str) -> None:
+    """q94b-5: every non-cache difference is refused beside a removable cache, the first path named."""
+    package = world.root / ".venv" / "lib" / "python3.x" / "site-packages" / "yaml"
+    package.mkdir(parents=True)
+    source = package / "__init__.py"
+    source.write_text("ok = 1\n", encoding="utf-8")
+    (world.root / ".venv" / "bin").mkdir()
+    ruff = world.root / ".venv" / "bin" / "ruff"
+    ruff.write_text("#!/bin/sh\nexit 0\n", encoding="utf-8")
+    stray = package.parent / "stray.pyc"
+    stray.write_bytes(b"baseline bytecode\n")
+    cache = world.root / ".venv" / "lib" / "__pycache__" / "assertion.pyc"
+    cache.parent.mkdir(parents=True)
+    cache.write_bytes(b"baseline bytes\n")
+    before = stage2.tool_state(world.root)
+    if mutation == "missing-cache":
+        cache.unlink()  # the model's own deletion, never the runner's: it stays a difference
+    else:
+        cache.write_bytes(b"attempt bytes\n")  # a removable cache beside every mutation
+    if mutation in ("source", "mixed"):
+        source.write_text("import os\n", encoding="utf-8")
+    elif mutation == "pth":
+        (package.parent / "evil.pth").write_text("import os\n", encoding="utf-8")
+    elif mutation == "stray":
+        stray.write_bytes(b"attempt bytecode\n")
+    elif mutation == "executable":
+        ruff.write_text("#!/bin/sh\nexit 7\n", encoding="utf-8")
+    elif mutation == "deleted":
+        source.unlink()
+    problem = stage2.tool_problem(world.root, before)
+    assert problem is not None and named in problem, mutation
+    if mutation == "mixed":
+        assert "__pycache__" not in problem, "the cache was named where the source change is first"
+        assert not cache.exists(), "the removable cache beside the refused mutation was not deleted"
+        assert cache.relative_to(world.root).as_posix() not in before, "the cleanup was not recorded"
+
+
+@pytest.mark.parametrize(
+    "alias",
+    [
+        pytest.param("target", id="a-changed-target-behind-a-linked-cache-directory"),
+        pytest.param("planted", id="a-planted-linked-cache-directory"),
+        pytest.param("file", id="a-cache-file-replaced-by-a-symlink"),
+        pytest.param("venv", id="a-linked-venv-root"),
+    ],
+)
+def test_venv_cache_cleanup_never_follows_symlinks(world: World, tmp_path: Path, alias: str) -> None:
+    """q94b-6: cleanup never reaches through a link, and a changed link stays an ordinary refusal."""
+    outside = tmp_path / "outside"
+    outside.mkdir()
+    target = outside / "assertion.pyc"
+    target.write_bytes(b"outside bytes\n")
+    if alias == "target":
+        (world.root / ".venv" / "lib").mkdir(parents=True)
+        (world.root / ".venv" / "lib" / "__pycache__").symlink_to(outside, target_is_directory=True)
+        before = stage2.tool_state(world.root)
+        target.write_bytes(b"attempt bytes\n")
+        assert stage2.tool_problem(world.root, before) is None
+        assert target.read_bytes() == b"attempt bytes\n", "cleanup reached through the linked cache directory"
+        return
+    if alias == "planted":
+        (world.root / ".venv" / "lib").mkdir(parents=True)
+        before = stage2.tool_state(world.root)
+        (world.root / ".venv" / "lib" / "__pycache__").symlink_to(outside, target_is_directory=True)
+        problem = stage2.tool_problem(world.root, before)
+        assert problem is not None and ".venv/lib/__pycache__" in problem, alias
+        assert target.read_bytes() == b"outside bytes\n", "cleanup reached through the planted link"
+        return
+    if alias == "file":
+        cache_dir = world.root / ".venv" / "lib" / "__pycache__"
+        cache_dir.mkdir(parents=True)
+        planted = cache_dir / "assertion.pyc"
+        planted.write_bytes(b"baseline bytes\n")
+        before = stage2.tool_state(world.root)
+        planted.unlink()
+        planted.symlink_to(target)
+        problem = stage2.tool_problem(world.root, before)
+        assert problem is not None and ".venv/lib/__pycache__/assertion.pyc" in problem, alias
+        assert target.read_bytes() == b"outside bytes\n", "cleanup unlinked through the file symlink"
+        return
+    real = tmp_path / "elsewhere"
+    (real / "lib" / "__pycache__").mkdir(parents=True)
+    linked = real / "lib" / "__pycache__" / "assertion.pyc"
+    linked.write_bytes(b"elsewhere bytes\n")
+    (world.root / ".venv" / "lib" / "__pycache__").mkdir(parents=True)
+    planted = world.root / ".venv" / "lib" / "__pycache__" / "assertion.pyc"
+    planted.write_bytes(b"baseline bytes\n")
+    before = stage2.tool_state(world.root)
+    shutil.rmtree(world.root / ".venv")
+    (world.root / ".venv").symlink_to(real, target_is_directory=True)
+    problem = stage2.tool_problem(world.root, before)
+    assert problem is not None and ".venv/lib/__pycache__/assertion.pyc" in problem, alias
+    assert linked.read_bytes() == b"elsewhere bytes\n", "cleanup deleted through the linked .venv root"
+
+
+@pytest.mark.parametrize(
+    "failure",
+    ["unreadable", "baseline-unreadable", "undeletable", "second-deletion-fails"],
+)
+def test_venv_cache_cleanup_failure_stops_runner_tools(
+    world: World, monkeypatch: pytest.MonkeyPatch, failure: str
+) -> None:
+    """q94b-7: a cache the runner cannot inspect or delete refuses the check, and no step starts."""
+    cache_dir = world.root / ".venv" / "lib" / "__pycache__"
+    cache_dir.mkdir(parents=True)
+    cache = cache_dir / "a_first.pyc"
+    cache.write_bytes(b"baseline one\n")
+    second = cache_dir / "b_second.pyc"
+    if failure == "second-deletion-fails":
+        second.write_bytes(b"baseline two\n")
+    before = stage2.tool_state(world.root)
+    cache.write_bytes(b"attempt one\n")
+    if failure == "second-deletion-fails":
+        second.write_bytes(b"attempt two\n")
+    if failure == "baseline-unreadable":
+        before[cache.relative_to(world.root).as_posix()] = "unreadable"
+    real_read, real_unlink = Path.read_bytes, Path.unlink
+    if failure == "unreadable":
+
+        def unreadable(self):
+            if self == cache:
+                raise PermissionError(13, "Permission denied")
+            return real_read(self)
+
+        monkeypatch.setattr(Path, "read_bytes", unreadable)
+    if failure in ("undeletable", "second-deletion-fails"):
+        doomed = cache if failure == "undeletable" else second
+
+        def undeletable(self, *args, **kwargs):
+            if self == doomed:
+                raise PermissionError(13, "Permission denied")
+            return real_unlink(self, *args, **kwargs)
+
+        monkeypatch.setattr(Path, "unlink", undeletable)
+    refused = cache.relative_to(world.root).as_posix()
+    if failure == "second-deletion-fails":
+        refused = second.relative_to(world.root).as_posix()  # the sorted order deletes a first, then fails at b
+    problem = stage2.tool_problem(world.root, before)
+    assert problem is not None and refused in problem, failure
+    if failure == "undeletable":
+        assert cache.read_bytes() == b"attempt one\n", "the cache vanished although its unlink failed"
+    if failure == "second-deletion-fails":
+        assert not cache.exists(), "the first cache file was not deleted before the failing one"
+        assert cache.relative_to(world.root).as_posix() not in before, "the first deletion's bookkeeping was not kept"
+        assert second.exists(), "the cache whose deletion failed is gone"
+        assert second.relative_to(world.root).as_posix() in before, "the failed deletion was recorded as done"
+    world.script(make=[{"stdout": "green\n"}])
+    with world.plan.open("a", encoding="utf-8") as handle:
+        handle.write("2026-10-07 10:00–10:05, 5 min\n")
+    problems = stage2.verify_attempt(world.root, world.plan, None, None, before)
+    assert len(problems) == 1 and refused in problems[0], failure
+    assert world.calls("make") == [], "a runner-owned step started after the cleanup failure"
+
+
 def test_the_runner_environment_drops_repository_path_entries(tmp_path: Path) -> None:
     """O188-2: a directory inside the repository on `PATH` is attempt-writable and is not searched."""
     root = tmp_path / "repo"
