@@ -586,7 +586,7 @@ Stage-2 call, 2026-10-24: review · endpoint openai-codex · model gpt-6.1-sol �
 
 | ID | Severity | Dimension | Origin | Where | Finding | Reviewer | Status | Broke a test |
 |---|---|---|---|---|---|---|---|---|
-| F6-1 | MAJOR | SPEC | Phase 6 | scripts/stage2.py:3229–3246 | When the baseline tracks `cache -> ../outside`, an attempt can replace that link with a directory and create ignored `cache/victim.txt`. Preflight accepts the current directory, but `git restore` reinstates the external link before ignored-path cleanup calls `unlink()` on `cache/victim.txt`, deleting `outside/victim.txt`. The batch check must account for parent aliases reinstated by rollback before any mutation. [Acceptance criterion 1] | Codex | taken — test: a baseline-tracked `cache -> ../outside` link replaced by a directory holding an ignored `cache/victim.txt` leaves `outside/victim.txt` in place after rollback; the batch check accounts for parent aliases that `git restore` reinstates before any mutation | — |
+| F6-1 | MAJOR | SPEC | Phase 6 | scripts/stage2.py:3229–3246 | When the baseline tracks `cache -> ../outside`, an attempt can replace that link with a directory and create ignored `cache/victim.txt`. Preflight accepts the current directory, but `git restore` reinstates the external link before ignored-path cleanup calls `unlink()` on `cache/victim.txt`, deleting `outside/victim.txt`. The batch check must account for parent aliases reinstated by rollback before any mutation. [Acceptance criterion 1] | Codex | fixed — tests/test_stage2.py::test_baseline_cleanup_refuses_reinstated_external_parent | — |
 
 Phase 6 verdict: codex 01a16eda-22cd-7ec3-b70f-09345e657bec, 2026-10-24
 Reviewer session: codex 01a16eda-22cd-7ec3-b70f-09345e657bec — a fresh session reviewed: no phase-2a session was recorded
@@ -668,3 +668,19 @@ Kept from the loop record:
 > The diff was cut: the change diff was cut at 2000 of 2617 lines. A clean answer over a cut diff does not end the loop; the rest of the change needs a round of its own.
 
 Stage-2 call, 2026-10-24: review (loop marks) · endpoint openai-codex · model gpt-6.1-sol · leak check clean over 546 files, 1980 commits, 12 rules.
+
+Stage-2 call, 2026-10-24: repair · attempt 1 · route codex · endpoint openai-codex · model gpt-6.1-sol · leak check clean over 546 files, 1981 commits, 12 rules.
+
+> Attempt 1 (codex) failed its post-run checks.
+>
+> Files the attempt changed (lines added, removed):
+> - `scripts/stage2.py` +72 -3
+> - `tests/test_stage2.py` +101 -1
+>
+> Diagnostics:
+> ```text
+> - Runner format before `make verify`: ruff changed `scripts/stage2.py`, `tests/test_stage2.py`.
+> - F6-1: tests/test_stage2.py::test_baseline_cleanup_refuses_reinstated_external_parent: the call of `tests/test_stage2.py::test_baseline_cleanup_refuses_reinstated_external_parent[direct-unit]` failed with Failed, not an AssertionError
+> ```
+
+Stage-2 call, 2026-10-24: repair · attempt 2 · route codex-repair · endpoint openai-codex · model gpt-6.1-sol · reason first Codex post-run check failed · leak check clean over 546 files, 1981 commits, 12 rules.

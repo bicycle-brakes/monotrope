@@ -13535,13 +13535,122 @@ def test_baseline_cleanup_preflights_created_ignored_destination(
         assert refusal is None, f"contained cleanup was refused: {refusal}"
         assert not (parent / "new.txt").exists()
         assert (world.root / "a").is_symlink()
-        assert [args[0] for args in commands] == ["restore", "clean"]
+        assert [args[0] for args in commands] == ["ls-tree", "restore", "clean"]
     else:
         with pytest.raises(stage2.RestorationRefused, match="cache/new.txt.*escapes the worktree"):
             stage2.restore_baseline(world.root, "baseline", set(), ignored_before={})
         assert parent.is_symlink()
         assert commands == [], "rollback started before the cleanup preflight"
     assert sentinel.read_bytes() == b"attempt-created ignored file\n"
+
+
+@pytest.mark.parametrize("level", ["unit", "run"])
+@pytest.mark.parametrize("chain", [False, True], ids=["direct", "baseline-chain"])
+def test_baseline_cleanup_refuses_reinstated_external_parent(
+    world: World,
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+    capsys: pytest.CaptureFixture[str],
+    level: str,
+    chain: bool,
+) -> None:
+    """F6-1: rollback must not reinstate an escaping parent before ignored cleanup."""
+    clean_scan = leakcheck.check("demo", leakcheck.default_denylist(), world.root, [])
+    outside = tmp_path / "outside"
+    outside.mkdir()
+    sentinel = outside / "victim.txt"
+    sentinel.write_bytes(b"external sentinel\n")
+    cache = world.root / "cache"
+    cache.symlink_to("relay" if chain else "../outside", target_is_directory=True)
+    if chain:
+        (world.root / "relay").symlink_to("../outside", target_is_directory=True)
+    world.findings.write_text("# Findings\n", encoding="utf-8")
+    (world.root / ".gitignore").write_text("cache/\n", encoding="utf-8")
+    git(world.root, "add", "-f", "cache")
+    git(world.root, "add", "-A")
+    git(world.root, "commit", "--quiet", "-m", "track a baseline parent alias")
+    head = git(world.root, "rev-parse", "HEAD")
+    findings_before = world.findings.read_bytes()
+    plan_before = world.plan.read_bytes()
+
+    def plant() -> None:
+        nonlocal findings_before, plan_before
+        findings_before = world.findings.read_bytes()
+        plan_before = world.plan.read_bytes()
+        cache.unlink()
+        cache.mkdir()
+        (cache / "victim.txt").write_bytes(b"attempt ignored file\n")
+        if chain:
+            (world.root / "relay").unlink()
+            (world.root / "relay").mkdir()
+
+    commands = []
+    real_git = stage2._git_output
+
+    def git_output(root, *args, **kwargs):
+        commands.append(args)
+        return real_git(root, *args, **kwargs)
+
+    monkeypatch.setattr(stage2, "_git_output", git_output)
+    if level == "unit":
+        before = stage2.ignored_snapshot(world.root)
+        plant()
+        refusal = None
+        try:
+            stage2.restore_baseline(world.root, head, set(), before)
+        except stage2.RestorationRefused as error:
+            refusal = str(error)
+        assert refusal is not None, "rollback reinstated an external parent without refusing cleanup"
+        assert "cache/victim.txt" in refusal and "escapes the worktree" in refusal
+    else:
+        real_model = stage2.run_work_model
+        # Isolate failed-call recovery: ordinary admission rejects directory links, but rollback
+        # must remain safe even when a baseline containing one reaches this boundary.
+        monkeypatch.setattr(leakcheck, "check", lambda *_args, **_kwargs: clean_scan)
+
+        def model(*args, **kwargs):
+            try:
+                return real_model(*args, **kwargs)
+            finally:
+                plant()
+
+        monkeypatch.setattr(stage2, "run_work_model", model)
+        _no_checkpoint(monkeypatch)
+        world.script(claude=[{"stderr": "boom", "exit": 1}])
+        assert world.run("implement") == 1
+        error = capsys.readouterr().err
+        assert "cache/victim.txt" in error and "escapes the worktree" in error
+        assert len(world.calls("claude")) == 1
+        assert git(world.root, "for-each-ref", "--format=%(refname)", "refs/stage2/attempts/demo/") == ""
+    assert not any(args[0] in ("restore", "clean") for args in commands)
+    assert sentinel.read_bytes() == b"external sentinel\n"
+    assert cache.is_dir() and not cache.is_symlink()
+    assert (cache / "victim.txt").read_bytes() == b"attempt ignored file\n"
+    assert world.findings.read_bytes() == findings_before
+    assert world.plan.read_bytes() == plan_before
+    assert git(world.root, "rev-parse", "HEAD") == head
+
+
+@pytest.mark.parametrize("kept", [False, True], ids=["contained-chain", "kept-external-link"])
+def test_baseline_cleanup_projection_preserves_safe_parents(world: World, kept: bool) -> None:
+    """The extra rollback check admits contained chains and links Git will not restore."""
+    cache = world.root / "cache"
+    (world.root / "deep/data").mkdir(parents=True)
+    (world.root / "deep/sub").mkdir()
+    # `..` is evaluated at deep/sub's real depth, after following `relay`.
+    (world.root / "relay").symlink_to("deep/sub", target_is_directory=True)
+    cache.symlink_to("../outside" if kept else "relay/../data", target_is_directory=True)
+    git(world.root, "add", "-A")
+    git(world.root, "commit", "--quiet", "-m", "track a safe rollback projection")
+    baseline = git(world.root, "rev-parse", "HEAD")
+    cache.unlink()
+    cache.mkdir()
+    victim = cache / "victim.txt"
+    victim.write_bytes(b"attempt ignored file\n")
+    keep = {Path("cache")} if kept else set()
+    stage2.preflight_restored_cleanup(world.root, baseline, keep, [Path("cache/victim.txt")])
+    assert not cache.is_symlink()
+    assert victim.read_bytes() == b"attempt ignored file\n"
 
 
 def test_recovery_parent_chain_resolves_relative_target_at_real_depth(tmp_path: Path) -> None:

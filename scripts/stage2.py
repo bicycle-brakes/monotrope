@@ -3181,8 +3181,78 @@ def save_attempt(root: Path, baseline: str, change: str, label: str) -> str:
     return f"the attempt is saved at {ref} ({commit[:12]}); `git diff {baseline[:12]} {ref}` shows it"
 
 
+def preflight_restored_cleanup(root: Path, baseline: str, keep: set[Path], created: list[Path]) -> None:
+    """Check ignored cleanup against the parent links Git will reinstate, without writing them.
+
+    Current parents alone are insufficient: an attempt can replace a tracked external link with
+    a directory. Resolve cleanup parents in an overlay of the baseline links and the current tree,
+    including links reached through another restored link. Kept paths are not restored by Git.
+    """
+    if not created:
+        return
+    links: dict[Path, Path] = {}
+    try:
+        for entry in filter(None, _git_output(root, "ls-tree", "-rz", baseline).split("\0")):
+            metadata, name = entry.split("\t", 1)
+            mode, _, oid = metadata.split()
+            relative = Path(name)
+            if mode == "120000" and not any(relative.is_relative_to(path) for path in keep):
+                links[relative] = Path(_git_output(root, "cat-file", "blob", oid))
+    except (Refused, OSError, ValueError) as error:
+        raise RestorationRefused(
+            f"restoration of {created[0].as_posix()} is refused: its parent cannot be resolved "
+            f"in the rollback baseline ({error})"
+        ) from error
+    if not links:
+        return
+    canonical = root.resolve()
+    for relative in created:
+        pending = list(relative.parts[:-1])
+        parent = canonical
+        hops = 0
+        problem = None
+        while pending:
+            part = pending.pop(0)
+            if part == "..":
+                parent = parent.parent
+                if not parent.is_relative_to(canonical):
+                    problem = "escapes the worktree"
+                    break
+                continue
+            parent /= part
+            try:
+                target = links.get(parent.relative_to(canonical))
+                if target is None and parent.is_symlink():
+                    target = parent.readlink()
+                if target is None:
+                    continue
+                hops += 1
+                if hops > RESTORATION_PARENT_LINK_LIMIT:
+                    problem = "cannot be resolved (too many links in rollback parents)"
+                    break
+                if target.is_absolute():
+                    if not target.is_relative_to(canonical):
+                        problem = "escapes the worktree"
+                        break
+                    parent = canonical
+                    pending = [*target.relative_to(canonical).parts, *pending]
+                else:
+                    parent = parent.parent
+                    pending = [*target.parts, *pending]
+            except (OSError, RuntimeError, ValueError):
+                problem = "cannot be resolved"
+                break
+        if problem is not None:
+            raise RestorationRefused(
+                f"restoration of {relative.as_posix()} is refused: its parent {problem} after rollback"
+            )
+
+
 def plan_baseline_restore(
-    root: Path, keep: set[Path], ignored_before: dict[Path, tuple[int, int]] | None = None
+    root: Path,
+    keep: set[Path],
+    ignored_before: dict[Path, tuple[int, int]] | None = None,
+    baseline: str = "HEAD",
 ) -> tuple[list[str], list[Path]]:
     """The tracked and newly created ignored paths a failed attempt left, checked before any undo.
 
@@ -3198,6 +3268,7 @@ def plan_baseline_restore(
             root,
             [*(root / relative for relative in touched), *(root / relative for relative in created)],
         )
+        preflight_restored_cleanup(root, baseline, keep, created)
     return touched, created
 
 
@@ -3220,7 +3291,7 @@ def restore_baseline(
     leaves this recovery batch unwritten and ends the run.
     """
     if planned is None:
-        planned = plan_baseline_restore(root, keep, ignored_before)
+        planned = plan_baseline_restore(root, keep, ignored_before, baseline)
     touched, created = planned
     if not touched and not created:
         return "the worktree needed no restore."
@@ -5099,7 +5170,7 @@ def run_attempts(
                 # rollback and cleanup destinations are validated before findings are restored or
                 # the attempt is saved, so a refusal leaves the branch without a single write.
                 preflight_recovery(root, {**inputs_before, ctx.findings: findings_before})
-                planned = plan_baseline_restore(root, allowed, ignored_before)
+                planned = plan_baseline_restore(root, allowed, ignored_before, baseline)
                 put_findings_back()
                 exposed = []
                 if key is not None:
