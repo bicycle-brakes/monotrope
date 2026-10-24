@@ -160,11 +160,11 @@ typed: a hand-kept list of files ages exactly as fast as files are added.
 | [`changes/interview-context/plan.md`](changes/interview-context/plan.md) | draft | partial | 2026-10-14 | coding-harness-zs7 |
 | [`changes/interview-context/research.md`](changes/interview-context/research.md) | draft | partial | 2026-10-14 | coding-harness-zs7 |
 | [`changes/interview-context/spec.md`](changes/interview-context/spec.md) | draft | partial | 2026-10-14 | coding-harness-zs7 |
-| [`changes/loop-state-block/decisions.md`](changes/loop-state-block/decisions.md) | draft | none | 2026-10-23 | coding-harness-i70 |
-| [`changes/loop-state-block/findings.md`](changes/loop-state-block/findings.md) | draft | none | 2026-10-23 | coding-harness-i70 |
-| [`changes/loop-state-block/plan.md`](changes/loop-state-block/plan.md) | draft | none | 2026-10-23 | coding-harness-i70 |
-| [`changes/loop-state-block/research.md`](changes/loop-state-block/research.md) | draft | none | 2026-10-23 | coding-harness-i70 |
-| [`changes/loop-state-block/spec.md`](changes/loop-state-block/spec.md) | draft | none | 2026-10-23 | coding-harness-i70 |
+| [`changes/loop-state-block/decisions.md`](changes/loop-state-block/decisions.md) | draft | partial | 2026-10-23 | coding-harness-i70 |
+| [`changes/loop-state-block/findings.md`](changes/loop-state-block/findings.md) | draft | partial | 2026-10-23 | coding-harness-i70 |
+| [`changes/loop-state-block/plan.md`](changes/loop-state-block/plan.md) | draft | partial | 2026-10-23 | coding-harness-i70 |
+| [`changes/loop-state-block/research.md`](changes/loop-state-block/research.md) | draft | partial | 2026-10-23 | coding-harness-i70 |
+| [`changes/loop-state-block/spec.md`](changes/loop-state-block/spec.md) | draft | partial | 2026-10-23 | coding-harness-i70 |
 | [`changes/loop-until-clean/decisions.md`](changes/loop-until-clean/decisions.md) | draft | none | 2026-10-14 | coding-harness-4fk |
 | [`changes/loop-until-clean/design.md`](changes/loop-until-clean/design.md) | draft | none | 2026-10-16 | coding-harness-4fk |
 | [`changes/loop-until-clean/findings.md`](changes/loop-until-clean/findings.md) | draft | none | 2026-10-14 | coding-harness-4fk |

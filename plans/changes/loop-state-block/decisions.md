@@ -1,7 +1,7 @@
 ---
 title: "Decisions — loop-state-block"
 status: draft
-implementation_status: none
+implementation_status: partial
 date: 2026-10-23
 last_reviewed: 2026-10-23
 updated: 2026-10-23
