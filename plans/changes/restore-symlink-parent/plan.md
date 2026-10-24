@@ -4,7 +4,7 @@ status: draft
 implementation_status: none
 date: 2026-10-23
 last_reviewed: 2026-10-23
-updated: 2026-10-23
+updated: 2026-10-24
 supersedes: null
 superseded_by: null
 bead: coding-harness-10w
@@ -39,7 +39,8 @@ Starts unless you say stop.
 
 ## Implementation contract
 
-- Add a dedicated `Refused` subtype for restoration safety, preserving exit 2.
+- Add a dedicated `Refused` subtype for restoration safety: exit 2, except
+  that a propagating model-call failure keeps its own exit code.
   Its message names the worktree-relative destination and whether a parent
   escapes the worktree or cannot be resolved. Compare resolved parent chains
   against the canonical root using path containment, never string prefixes.
@@ -92,6 +93,10 @@ Starts unless you say stop.
 - 6: tests/test_stage2.py::test_runner_final_time_write_restores_alias_without_following — leaf symlink or hard-link recovery writes to the external target
 - 6: tests/test_stage2.py::test_runner_keeps_rejected_time_across_input_restore — a contained retry loses its measured time
 - 6: tests/test_stage2.py::test_a_failed_flash_process_restores_the_baseline_so_stage2_off_can_proceed — safe failed-call rollback no longer restores the baseline
+- 3: tests/test_stage2.py::test_credential_scan_refuses_escaped_changed_parent — a refused scan leaves a credential in a contained file or fails to report its removal
+- 3: tests/test_stage2.py::test_draft_credential_scan_names_escaped_path_without_claiming_restoration — a shared scan claims to restore a draft input
+- 5: tests/test_stage2.py::test_moved_head_and_escaped_parent_report_both_without_writes — a recovery refusal hides the moved HEAD or writes findings/time afterward
+- 5: tests/test_stage2.py::test_time_safety_refusal_reports_original_failure_and_exit — a propagating model-call failure loses its own exit code when recovery refuses
 
 ## Verification
 
@@ -129,3 +134,4 @@ Stage-1 route: implement · model claude-sonnet-5-5 · reason: two Flash post-ru
 2026-10-23 18:40:05–18:55:41 UTC, 936 s — repair · attempt 2 · route codex-repair · model gpt-6.1-sol · accepted · measured by the runner
 2026-10-23 19:48:33–20:03:25 UTC, 892 s — repair · attempt 1 · route codex · model gpt-6.1-sol · rejected · measured by the runner
 2026-10-23 20:03:31–20:18:04 UTC, 873 s — repair · attempt 2 · route codex-repair · model gpt-6.1-sol · accepted · measured by the runner
+2026-10-24 09:40:00–09:59:53 UTC, 1193 s — repair · attempt 1 · route codex · model gpt-6.1-sol · accepted · measured by the runner

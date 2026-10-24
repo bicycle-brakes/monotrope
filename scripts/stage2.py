@@ -493,8 +493,8 @@ class RestorationRefused(Refused):
     The maintainer's decided stop (bead coding-harness-10w): the recovery batch stays unwritten,
     no other attempt, fallback model or checkpoint follows, and time or findings are not persisted
     after it - the explicit exception to ordinary time persistence. `main` reports it on standard
-    error, exit 2, like every refusal. If finalization meets this refusal while a call
-    failure is propagating, the original failure remains visible and retains exit 1.
+    error, exit 2, except that a propagating model-call failure remains visible and keeps
+    its own exit code.
     """
 
     exit_code = 2
@@ -3406,12 +3406,16 @@ def remove_changed_credential(
     paths = changed_paths(root, against=against)
     if ignored_before is not None:
         paths |= {p for p, stat in ignored_snapshot(root).items() if ignored_before.get(p) != stat}
-    # Validate the entire scan before scrubbing even a safe preceding file. A changed
-    # tracked path can sit below a parent the attempt replaced with an external link.
-    preflight_recovery(root, (root / relative for relative in sorted(paths)))
+    # Scrub safe files even when another changed path cannot be scanned safely. The
+    # restoration no-write stop does not authorize leaving reachable credentials behind.
     found = []
+    unsafe = []
     for relative in sorted(paths, key=lambda path: path.as_posix()):
         path = root / relative
+        problem = restoration_parent_problem(root, path)
+        if problem is not None:
+            unsafe.append(f"credential scan of {relative.as_posix()} is refused: its parent {problem}")
+            continue
         if path.is_symlink() or not path.is_file():
             continue
         try:
@@ -3422,6 +3426,11 @@ def remove_changed_credential(
             continue
         path.write_bytes(replace_credential(content, key))
         found.append(relative)
+    if unsafe:
+        message = "; ".join(unsafe)
+        if found:
+            message += f"; {credential_message(found)}"
+        raise RestorationRefused(message)
     return found
 
 
@@ -4700,6 +4709,10 @@ def implementation_prompt(
     return work_prompt(ctx.root, "04-implement.md", ctx.change, "\n\n".join(extra), inputs)
 
 
+# The macOS kernel resolves at most 32 links; the revisit set detects loops separately.
+RESTORATION_PARENT_LINK_LIMIT = 32
+
+
 def restoration_parent_problem(root: Path, path: Path) -> str | None:
     """Why a recovery must not touch `path`, or None when every existing ancestor stands inside.
 
@@ -4735,8 +4748,13 @@ def restoration_parent_problem(root: Path, path: Path) -> str | None:
                 return f"{parent.relative_to(root).as_posix()} cannot be resolved"
             if not link:
                 break
-            if probe in seen or len(seen) >= 32:
+            if probe in seen:
                 return f"{parent.relative_to(root).as_posix()} cannot be resolved"
+            if len(seen) >= RESTORATION_PARENT_LINK_LIMIT:
+                return (
+                    f"{parent.relative_to(root).as_posix()} cannot be resolved "
+                    f"(more than {RESTORATION_PARENT_LINK_LIMIT} links)"
+                )
             seen.add(probe)
             try:
                 target = probe.readlink()
@@ -5023,7 +5041,13 @@ def run_attempts(
                             moved_files = str(error)
                     else:
                         moved_files = unmeasured
-                    put_findings_back()
+                    try:
+                        put_findings_back()
+                    except RestorationRefused as safety_error:
+                        # No audit may be written after this refusal, so carry the
+                        # unverified commit in stderr rather than lose the HEAD stop.
+                        safety_error.args = (f"{safety_error}; {problem}",)
+                        raise
                     listing = f"- {problem}"
                     if call_error is not None:
                         listing += f"\n- {call_error}"

@@ -8591,7 +8591,7 @@ def test_runner_restore_preflights_all_destinations(
     assert world.run("implement") == 2
     err = capsys.readouterr().err
     # The credential scan can discover another changed prompt before input recovery starts.
-    assert "refused:" in err and "restoration of prompts/" in err and "escapes the worktree" in err
+    assert "refused:" in err and "credential scan of prompts/" in err and "escapes the worktree" in err
     assert restored == [], "a safe batch destination was restored before the unsafe one was checked"
     assert (world.root / "plans/changes/demo/spec.md").read_bytes() == spec_before
     assert runner_entries(world.plan) == []
@@ -9154,8 +9154,8 @@ def test_runner_early_refusal_recovers_time_destination_safely(
     if kind == "alias":
         assert outside.read_bytes() == b"untouched\n"
     if kind == "parent-alias":
-        # The whole credential scan now refuses before even a safe preceding scrub.
-        assert KEY in (world.root / "src" / "app.py").read_text(encoding="utf-8")
+        assert "was removed (src/app.py)" in err
+        assert KEY not in (world.root / "src" / "app.py").read_text(encoding="utf-8")
     else:
         assert KEY not in (world.root / "src" / "app.py").read_text(encoding="utf-8")
     assert len(world.calls("claude")) == 1
@@ -13516,7 +13516,7 @@ def test_credential_scan_refuses_escaped_changed_parent(
     tmp_path: Path,
     boundary: str,
 ) -> None:
-    """L2-6: no credential rewrite, even in a safe preceding file, before full preflight."""
+    """L4-1: scrub safe files and report removal while refusing the escaped scan path."""
     deep = world.root / "src/deep"
     deep.mkdir()
     (deep / "keep.txt").write_bytes(b"tracked\n")
@@ -13564,8 +13564,9 @@ def test_credential_scan_refuses_escaped_changed_parent(
             refusal = error
         assert isinstance(refusal, stage2.RestorationRefused), f"unsafe scan was not refused: {refusal}"
         assert re.search("src/deep/keep.txt.*escapes the worktree", str(refusal))
+    assert "was removed (src/app.py)" in str(refusal)
     assert sentinel.read_bytes() == exposed
-    assert (world.root / "src/app.py").read_bytes() == exposed
+    assert (world.root / "src/app.py").read_bytes() == b"[credential]\n"
     assert deep.is_symlink()
 
 
@@ -13634,3 +13635,84 @@ def test_time_safety_refusal_reports_original_failure_and_exit(
         assert world.plan.read_text() == prior
     else:
         assert len(world.calls("claude")) == 1
+
+
+@pytest.mark.parametrize("call_failed", [False, True])
+def test_moved_head_and_escaped_parent_report_both_without_writes(
+    world: World,
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+    capsys: pytest.CaptureFixture[str],
+    call_failed: bool,
+) -> None:
+    """L4-2: a recovery refusal must not hide the model's unverified commit."""
+    repair_world(world)
+    world.script(codex=[{"stderr": "boom", "exit": 1}] if call_failed else [codex_ok("T9", "done")])
+    outside = tmp_path / "moved-outside"
+    real_launch = stage2.launch
+    snapshots = {}
+    moved = []
+
+    def unexpected_write(*_args, **_kwargs):
+        pytest.fail("findings/time recovery or persistence followed the unsafe-parent stop")
+
+    def committing(command, cwd, env, *args, **kwargs):
+        result = real_launch(command, cwd, env, *args, **kwargs)
+        if command[0] == "codex":
+            git(Path(cwd), "commit", "--quiet", "--allow-empty", "-m", "model commit")
+            moved.append(git(Path(cwd), "rev-parse", "HEAD"))
+            shutil.copytree(world.plan.parent, outside)
+            snapshots.update({p.name: p.read_bytes() for p in outside.iterdir() if p.is_file()})
+            shutil.rmtree(world.plan.parent)
+            world.plan.parent.symlink_to(outside, target_is_directory=True)
+            for name in ("append", "restore_work_input", "persist_time_entry", "stamp_updated", "save_attempt"):
+                monkeypatch.setattr(stage2, name, unexpected_write)
+        return result
+
+    monkeypatch.setattr(stage2, "launch", committing)
+    assert world.run("repair") == (1 if call_failed else 2)
+    err = capsys.readouterr().err
+    assert "moved HEAD from" in err and moved[0][:12] in err
+    assert "restoration of" in err and "escapes the worktree" in err
+    if call_failed:
+        assert "codex call failed" in err
+    assert {p.name: p.read_bytes() for p in outside.iterdir() if p.is_file()} == snapshots
+    assert world.plan.parent.is_symlink()
+    assert git(world.root, "rev-parse", "HEAD") == moved[0]
+    assert len(world.calls("codex")) == 1 and world.calls("make") == []
+
+
+def test_draft_credential_scan_names_escaped_path_without_claiming_restoration(
+    world: World,
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    """L4-4: a shared scan refuses in a draft without claiming to restore an input."""
+    draft_world(world)
+    deep = world.root / "src/deep"
+    deep.mkdir()
+    (deep / "keep.txt").write_bytes(b"tracked\n")
+    git(world.root, "add", "-A")
+    git(world.root, "commit", "--quiet", "-m", "tracked scan destination")
+    outside = tmp_path / "draft-outside"
+    outside.mkdir()
+    sentinel = outside / "keep.txt"
+    sentinel.write_bytes(KEY.encode())
+    red = red_verify(("pytest", ["FAILED tests/test_x.py::test_a - assert 2 == 1"]))
+    world.script(codex=[{"stdout": "drafted"}, {"stdout": "again"}], claude=[{"stdout": "done"}], make=[red, red])
+    real_model = stage2.run_work_model
+
+    def escaping(*args, **kwargs):
+        result = real_model(*args, **kwargs)
+        shutil.rmtree(deep)
+        deep.symlink_to(outside, target_is_directory=True)
+        return result
+
+    monkeypatch.setattr(stage2, "run_work_model", escaping)
+    assert world.run("draft") == 2
+    err = capsys.readouterr().err
+    assert "src/deep/keep.txt" in err and "escapes the worktree" in err
+    assert "credential scan" in err and "restoration" not in err
+    assert sentinel.read_bytes() == KEY.encode() and deep.is_symlink()
+    assert len(world.calls("claude")) == 1
