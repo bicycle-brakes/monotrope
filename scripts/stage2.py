@@ -4716,8 +4716,10 @@ def restoration_parent_problem(root: Path, path: Path) -> str | None:
 
     Each existing ancestor between the worktree root and the destination is resolved and compared
     with the canonical root by path containment, never string prefixes. One whose resolved location
-    falls outside the worktree - a relative, nested or dangling link counts - makes the destination
-    unsafe, and so does one whose chain cannot be resolved: a resolver that gives up (an error) or
+    falls outside the worktree makes the destination unsafe, including relative or nested links
+    and dangling links to missing external targets. A dangling link to a missing target inside the
+    worktree remains recoverable when its chain can be resolved. An ancestor whose chain cannot
+    be resolved is also unsafe: a resolver that gives up (an error) or
     one that walks in circles (a link loop, self-linked or paired) leaves containment
     unestablishable, which is why the ancestor's link chain is walked by hand instead of trusting a
     resolver's partial answer for a loop. A missing ordinary parent stays recoverable: restoration
