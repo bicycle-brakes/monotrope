@@ -182,7 +182,7 @@ Stage-2 call, 2026-10-24: review · endpoint openai-codex · model gpt-6.1-sol �
 
 | ID | Severity | Dimension | Origin | Where | Finding | Reviewer | Status | Broke a test |
 |---|---|---|---|---|---|---|---|---|
-| F-6 | MAJOR | SPEC | phase-6 | scripts/stage2.py:3068–3070 | When `.venv` is already a symlink before the run, both snapshots contain only its unchanged link target. An attempt can overwrite `.venv/bin/ruff` or package source, and `tool_problem` returns `None`, allowing modified tools to execute. A mocked comparison confirms that the previous implementation detects the overwritten executable while this version accepts it. The check must refuse modified tools even when the root link predates the baseline. [AC5] | Codex | open | — |
+| F-6 | MAJOR | SPEC | phase-6 | scripts/stage2.py:3068–3070 | When `.venv` is already a symlink before the run, both snapshots contain only its unchanged link target. An attempt can overwrite `.venv/bin/ruff` or package source, and `tool_problem` returns `None`, allowing modified tools to execute. A mocked comparison confirms that the previous implementation detects the overwritten executable while this version accepts it. The check must refuse modified tools even when the root link predates the baseline. [AC5] | Codex | taken — test: with .venv already a symlink at baseline, an overwritten .venv/bin/ruff or package source file is refused before tools run (regression of the F-4 repair) | — |
 
 Phase 6 verdict: codex 01a16d35-b03c-76f1-8158-156818be9d9e, 2026-10-24
 Reviewer session: codex 01a16d35-b03c-76f1-8158-156818be9d9e — a fresh session reviewed: an earlier ## Phase 6 block makes this a re-check
