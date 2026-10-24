@@ -192,6 +192,11 @@ typed: a hand-kept list of files ages exactly as fast as files are added.
 | [`changes/research-currency/plan.md`](changes/research-currency/plan.md) | draft | partial | 2026-10-05 | coding-harness-pu9 |
 | [`changes/research-currency/research.md`](changes/research-currency/research.md) | draft | partial | 2026-10-05 | coding-harness-pu9 |
 | [`changes/research-currency/spec.md`](changes/research-currency/spec.md) | draft | partial | 2026-10-05 | coding-harness-pu9 |
+| [`changes/review-verdict-validated/decisions.md`](changes/review-verdict-validated/decisions.md) | draft | none | 2026-10-24 | coding-harness-5mx |
+| [`changes/review-verdict-validated/findings.md`](changes/review-verdict-validated/findings.md) | draft | none | 2026-10-24 | coding-harness-5mx |
+| [`changes/review-verdict-validated/plan.md`](changes/review-verdict-validated/plan.md) | draft | none | 2026-10-24 | coding-harness-5mx |
+| [`changes/review-verdict-validated/research.md`](changes/review-verdict-validated/research.md) | draft | none | 2026-10-24 | coding-harness-5mx |
+| [`changes/review-verdict-validated/spec.md`](changes/review-verdict-validated/spec.md) | draft | none | 2026-10-24 | coding-harness-5mx |
 | [`changes/runner-time-line/decisions.md`](changes/runner-time-line/decisions.md) | draft | none | 2026-10-20 | coding-harness-9wp |
 | [`changes/runner-time-line/findings.md`](changes/runner-time-line/findings.md) | draft | none | 2026-10-20 | coding-harness-9wp |
 | [`changes/runner-time-line/plan.md`](changes/runner-time-line/plan.md) | draft | none | 2026-10-20 | coding-harness-9wp |
