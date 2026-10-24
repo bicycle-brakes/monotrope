@@ -3895,7 +3895,7 @@ def test_a_glm_draft_that_writes_the_key_is_refused_without_a_commit(
     draft_world(world)
     red = red_verify(("pytest", ["FAILED tests/test_x.py::test_a - assert 2 == 1"]))
     world.script(
-        codex=[codex_ok("T1", "drafted"), codex_ok("T1", "again")],
+        codex=[{"stdout": "drafted"}, {"stdout": "again"}],
         claude=[{"stdout": "glm drafted", "plant": {"plans/changes/demo/spec.md": "the key was @KEY@\n"}}],
         make=[red, red, {"stdout": "green\n"}],
     )
@@ -3916,7 +3916,7 @@ def test_a_failed_glm_draft_call_that_writes_the_key_is_refused(
     draft_world(world)
     red = red_verify(("pytest", ["FAILED tests/test_x.py::test_a - assert 2 == 1"]))
     world.script(
-        codex=[codex_ok("T1", "drafted"), codex_ok("T1", "again")],
+        codex=[{"stdout": "drafted"}, {"stdout": "again"}],
         claude=[{"stdout": "", "exit": 1, "append": {"plans/changes/demo/findings.md": "the key was @KEY@\n"}}],
         make=[red, red],
     )
@@ -13643,6 +13643,7 @@ def test_time_safety_refusal_reports_original_failure_and_exit(
         _no_checkpoint(monkeypatch)
     assert world.run("implement") == (1 if failed_call else 2)
     error = capsys.readouterr().err
+    assert error.startswith("failed: " if failed_call else "refused: ")
     assert str(original) in error
     assert "plans/changes/demo/" in error and "escapes the worktree" in error
     assert runner_entries(world.plan) == []

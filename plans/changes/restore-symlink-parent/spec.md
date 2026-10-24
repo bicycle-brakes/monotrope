@@ -124,7 +124,8 @@ None open; the maintainer's refusal direction is already answered.
 - [DETAIL] Preserve safe leaf-alias recovery because the answered question
   concerns replaced parent directories, and leaf detachment needs no write
   through the external target.
-- [DETAIL] Set a two-hour phase-4 appetite, repairs included, for this bounded
-  correction; reaching it stops implementation rather than widening the change.
-  The maintainer raised it to five hours on 2026-10-24 (conversation), after
-  the review loop ran until clean past the first two hours.
+- [DETAIL] The current phase-4 appetite is five hours, repairs included, for
+  this bounded correction; reaching it stops implementation rather than widening
+  the change. The original appetite was two hours; the maintainer raised it on
+  2026-10-24 (conversation), after the review loop ran until clean past those
+  first two hours.

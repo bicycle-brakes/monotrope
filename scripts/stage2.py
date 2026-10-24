@@ -3214,9 +3214,10 @@ def restore_baseline(
     from the baseline outside it is the run's own - including a half-finished edit of a dead process.
     Gitignored paths the attempt created are removed too: `changed_paths` cannot see them and
     `git clean` without `-x` keeps them, so the run's earlier snapshot of the ignored files tells them
-    apart from the ones that stood before (phase 6, F-5). Every rollback and cleanup destination is
-    checked for an unsafe parent before the first `git restore`, `git clean`, `unlink`, `rmtree` or
-    parent removal; a refusal leaves the batch unwritten and ends the run.
+    apart from the ones that stood before (phase 6, F-5). This implementation/repair rollback's
+    tracked destinations and newly created ignored cleanup paths are checked for an unsafe parent
+    before its first `git restore`, `git clean`, `unlink`, `rmtree` or parent removal; a refusal
+    leaves this recovery batch unwritten and ends the run.
     """
     if planned is None:
         planned = plan_baseline_restore(root, keep, ignored_before)
@@ -4788,7 +4789,11 @@ def preflight_recovery(root: Path, destinations: Iterable[Path]) -> None:
 
 
 def restore_work_input(root: Path, path: Path, content: bytes) -> None:
-    """Replace aliases from the worktree outward before inspecting or restoring an input."""
+    """Restore an input, detaching aliases from the worktree outward.
+
+    Raise RestorationRefused before any tree write if a parent escapes the worktree or cannot
+    be resolved; otherwise replace aliases before inspecting or restoring the input.
+    """
     refuse_unsafe_recovery(root, path)
     parent = root
     for part in path.relative_to(root).parts[:-1]:
@@ -5324,6 +5329,8 @@ def put_back(root: Path, baseline: str, keep: set[Path]) -> list[str]:
     The same restore and clean as `restore_baseline`, without its ignored-file bookkeeping: a draft's
     leftover is what git sees. A git that refuses is a failed call, not a refusal of this run.
     """
+    # Draft rollback is outside restore-symlink-parent's scope (spec non-goal); unlike the
+    # implementation/repair restore_baseline, it has no restoration-parent preflight.
     changed = sorted(changed_paths(root) - keep, key=lambda path: path.as_posix())
     if not changed:
         return []
@@ -6216,7 +6223,8 @@ def main(argv: list[str] | None = None) -> int:
         print(f"the loop is finished: {error}", file=sys.stderr)
         return CLEAN_CODE
     except RestorationRefused as error:
-        print(f"refused: {error}", file=sys.stderr)
+        prefix = "failed" if error.exit_code == 1 else "refused"
+        print(f"{prefix}: {error}", file=sys.stderr)
         return error.exit_code
     except Refused as error:
         print(f"refused: {error}", file=sys.stderr)
