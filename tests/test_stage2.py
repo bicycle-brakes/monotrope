@@ -7731,6 +7731,52 @@ def test_repair_retry_restores_non_utf8_prompt_inputs(
     assert git(world.root, "status", "--porcelain") == ""
 
 
+@pytest.mark.parametrize("alias", ["symlink", "hardlink"])
+def test_repair_failed_attempt_detaches_findings_leaf_before_restore_and_append(
+    world: World, monkeypatch: pytest.MonkeyPatch, tmp_path: Path, alias: str
+) -> None:
+    """L10-1: failed repair recovery never writes findings through a leaf alias."""
+    baseline = repair_world(world)
+    outside = tmp_path / "outside-findings.md"
+    sentinel = b"external findings sentinel\n"
+    outside.write_bytes(sentinel)
+    script_repair(world, [repair_step(append={})] * 3)
+    real_codex, real_work = stage2.run_codex, stage2.run_work_model
+    real_append = stage2.append
+    snapshots = []
+    restored = []
+
+    def plant_alias(call, *args, **kwargs):
+        snapshots.append(world.findings.read_bytes())
+        answer = call(*args, **kwargs)
+        world.findings.unlink()
+        if alias == "symlink":
+            world.findings.symlink_to(outside)
+        else:
+            world.findings.hardlink_to(outside)
+        return answer
+
+    def append(path, text):
+        if path == world.findings and "planted verification failure" in text:
+            # Inspect the boundary before diagnostic persistence, not only the final bytes.
+            assert outside.read_bytes() == sentinel
+            assert not path.is_symlink() and path.stat().st_nlink == 1
+            assert path.read_bytes() == snapshots[-1]
+            restored.append(path.read_bytes())
+        return real_append(path, text)
+
+    monkeypatch.setattr(stage2, "run_codex", lambda *a, **kw: plant_alias(real_codex, *a, **kw))
+    monkeypatch.setattr(stage2, "run_work_model", lambda *a, **kw: plant_alias(real_work, *a, **kw))
+    monkeypatch.setattr(stage2, "append", append)
+    monkeypatch.setattr(stage2, "verify_attempt", lambda *_args, **_kwargs: ["planted verification failure"])
+    assert world.run("repair") == 1
+    assert len(restored) == 3
+    assert outside.read_bytes() == sentinel
+    assert not world.findings.is_symlink() and world.findings.stat().st_nlink == 1
+    assert "planted verification failure" in world.text()
+    assert git(world.root, "rev-parse", "HEAD") == baseline
+
+
 def test_repair_retry_restores_aliased_and_directory_inputs_without_following(
     world: World, monkeypatch: pytest.MonkeyPatch, tmp_path: Path
 ) -> None:

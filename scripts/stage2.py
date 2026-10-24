@@ -5768,7 +5768,7 @@ def repair(root: Path, change: str, stage2_off: str | None = None) -> None:
         before_commit=lambda: mark_repaired_findings(ctx, taken, fixes),
         after_commit=lambda: mark_repaired_record(change, taken, fixes, root, marks),
         snapshot_findings=snapshot,
-        restore_findings=lambda text: ctx.findings.write_text(text, encoding="utf-8"),
+        restore_findings=lambda text: restore_work_input(root, ctx.findings, text.encode("utf-8")),
         tools=tools,
     )
 
