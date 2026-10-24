@@ -5583,6 +5583,47 @@ def test_venv_cache_cleanup_never_follows_symlinks(world: World, tmp_path: Path,
 
 
 @pytest.mark.parametrize("runner", ["verify", "draft"])
+@pytest.mark.parametrize("relative", ["bin/ruff", "lib/package.py"])
+def test_preexisting_venv_root_link_keeps_modified_tools_refused(
+    world: World, monkeypatch: pytest.MonkeyPatch, runner: str, relative: str
+) -> None:
+    """An unchanged root link must not hide overwritten executable or package bytes."""
+    target = world.root / "linked-env"
+    tool = target / relative
+    tool.parent.mkdir(parents=True)
+    tool.write_bytes(b"baseline tool\n")
+    cache = target / "lib/__pycache__/unchanged.pyc"
+    cache.parent.mkdir(parents=True)
+    cache.write_bytes(b"baseline cache\n")
+    venv = world.root / ".venv"
+    venv.symlink_to(target, target_is_directory=True)
+    before = stage2.tool_state(world.root)
+    original = before.copy()
+    assert stage2.tool_problem(world.root, before) is None
+    tool.write_bytes(b"overwritten tool\n")
+
+    problem = stage2.tool_problem(world.root, before)
+    assert problem is not None and f"`.venv/{relative}`" in problem
+    assert before[".venv"] == "link:" + str(target)
+    assert f".venv/{relative}" in before
+
+    def forbidden_launch(*_args, **_kwargs):
+        raise AssertionError("a runner-owned tool started before integrity refusal")
+
+    monkeypatch.setattr(stage2, "launch", forbidden_launch)
+    if runner == "draft":
+        ctx = stage2.Context(world.root, "demo", world.plan.parent, "demo-1")
+        problems, owed = stage2.verify_draft(world.root, ctx, None, [], before)
+        assert not owed
+    else:
+        problems = stage2.verify_attempt(world.root, world.plan, None, None, before)
+    assert len(problems) == 1 and f"`.venv/{relative}`" in problems[0]
+    assert before == original
+    assert cache.read_bytes() == b"baseline cache\n"
+    assert tool.read_bytes() == b"overwritten tool\n"
+
+
+@pytest.mark.parametrize("runner", ["verify", "draft"])
 @pytest.mark.parametrize("mutation", ["root-link", "unreadable-directory"])
 def test_venv_root_link_and_unreadable_directory_stop_tools(
     world: World, monkeypatch: pytest.MonkeyPatch, runner: str, mutation: str

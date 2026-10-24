@@ -3067,7 +3067,10 @@ def tool_state(root: Path) -> dict[str, str]:
     try:
         info = venv.lstat()
         if stat.S_ISLNK(info.st_mode):
-            return {".venv": "link:" + str(venv.readlink())}
+            # Record the root link AND digest its tools: an unchanged link must not hide
+            # overwritten target bytes. os.walk traverses its root even with followlinks=False;
+            # nested directory links remain opaque, and _unlink_cache still rejects this root.
+            state[".venv"] = "link:" + str(venv.readlink())
     except FileNotFoundError:
         return state
     except OSError:
