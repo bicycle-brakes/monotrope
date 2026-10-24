@@ -145,3 +145,15 @@ Kept from the loop record:
 Stage-2 call, 2026-10-24: review (loop marks) · endpoint openai-codex · model gpt-6.1-sol · leak check clean over 536 files, 1932 commits, 12 rules.
 
 Stage-2 call, 2026-10-24: repair · attempt 1 · route codex · endpoint openai-codex · model gpt-6.1-sol · leak check clean over 536 files, 1934 commits, 12 rules.
+
+Stage-2 call, 2026-10-24: review · endpoint openai-codex · model gpt-6.1-sol · leak check clean over 536 files, 1935 commits, 12 rules.
+
+## Phase 6 — Codex, 2026-10-24
+
+| ID | Severity | Dimension | Origin | Where | Finding | Reviewer | Status | Broke a test |
+|---|---|---|---|---|---|---|---|---|
+| F-4 | MAJOR | SPEC | phase-6 | scripts/stage2.py:3040–3051,3134–3135 | Replacing `.venv` with a symlink to a byte-identical copy is accepted: the snapshot follows the root link without recording it, so `tool_problem` returns `None`. The root-symlink regression uses different target bytes and therefore misses this case. The changed symlink must itself cause refusal before tools run. [AC5, AC6] | Codex | open | — |
+| F-5 | MAJOR | SPEC | phase-6 | scripts/stage2.py:3041–3051,3114–3120 | Adding a cache file inside a new `__pycache__` directory with permissions `000` passes without deleting it. `os.walk` silently skips the unreadable directory, leaving no entry for the unreadable-file guard to inspect; the snapshot matches the baseline and tools may run. Directory inspection failures must cause refusal with the affected path named. [AC7] | Codex | open | — |
+
+Phase 6 verdict: codex 01a16ba9-756b-74b0-9c07-a3665f7fbd56, 2026-10-24
+Reviewer session: codex 01a16ba9-756b-74b0-9c07-a3665f7fbd56 — a fresh session reviewed: an earlier ## Phase 6 block makes this a re-check
