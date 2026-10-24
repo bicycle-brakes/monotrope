@@ -59,3 +59,23 @@ not followed.
 ## Open questions
 
 None for the maintainer: the direction is decided (`decisions.md`, Q-1).
+
+## Draft-time repository checks — 2026-10-24
+
+Read at input commit `4dc80fa`:
+
+- `tool_problem` is the shared guard for `verify_attempt`, `format_step`,
+  `red_first`, `fixed_test_proof` and `verify_draft`. The checks compare both
+  additions and missing baseline entries, so deleting a changed baseline
+  cache needs explicit bookkeeping of the runner's own deletion.
+- `run_attempts` shares one `tools` dictionary across attempts rather than
+  taking a new baseline after rejection; its comment requires this to avoid
+  trusting a replaced tool. Cleanup must preserve that protection while
+  allowing repeated checks after its own deletions.
+- Existing tests in `tests/test_stage2.py` cover source/package, `.pth`,
+  executable and symlink tampering; they are regression constraints, not
+  candidates for replacement by cache tests.
+- `templates/spec.md` exists; no plan template or
+  `scripts/validate_change_artefacts.py` exists in this tree. The available
+  interview and criterion-ledger gates can check the draft; the runner owns
+  index generation and full verification.

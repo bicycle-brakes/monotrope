@@ -225,4 +225,9 @@ typed: a hand-kept list of files ages exactly as fast as files are added.
 | [`changes/stage2-session/plan.md`](changes/stage2-session/plan.md) | draft | partial | 2026-10-07 | coding-harness-amp |
 | [`changes/stage2-session/research.md`](changes/stage2-session/research.md) | draft | partial | 2026-10-07 | coding-harness-amp |
 | [`changes/stage2-session/spec.md`](changes/stage2-session/spec.md) | draft | partial | 2026-10-07 | coding-harness-amp |
+| [`changes/venv-pycache/decisions.md`](changes/venv-pycache/decisions.md) | draft | none | 2026-10-24 | coding-harness-q94b |
+| [`changes/venv-pycache/findings.md`](changes/venv-pycache/findings.md) | draft | none | 2026-10-24 | coding-harness-q94b |
+| [`changes/venv-pycache/plan.md`](changes/venv-pycache/plan.md) | draft | none | 2026-10-24 | coding-harness-q94b |
+| [`changes/venv-pycache/research.md`](changes/venv-pycache/research.md) | draft | none | 2026-10-24 | coding-harness-q94b |
+| [`changes/venv-pycache/spec.md`](changes/venv-pycache/spec.md) | draft | none | 2026-10-24 | coding-harness-q94b |
 | [`specs/implementation-verification/spec.md`](specs/implementation-verification/spec.md) | accepted | done | 2026-10-08 | coding-harness-mfv |
