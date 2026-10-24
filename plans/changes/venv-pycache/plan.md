@@ -1,7 +1,7 @@
 ---
 title: "Plan — venv-pycache"
 status: draft
-implementation_status: none
+implementation_status: partial
 date: 2026-10-24
 last_reviewed: 2026-10-24
 updated: 2026-10-24
@@ -110,6 +110,13 @@ Research was written by the orchestrating Claude Code Opus 5.5 session on
 2026-10-24 from the measured failure at `7586f1a`; no separate exploration
 call or Stage-1 fallback was recorded. Phase 2b is omitted by class.
 
+## Runner route — 2026-10-24
+
+Stage-1 route: repair · model claude-sonnet-5-5 · reason: two Codex post-run checks failed.
+
 ## Time used
 
 2026-10-24 00:20:10–00:45:12 UTC, 1502 s — implement · attempt 1 · route flash · model glm-5.3-flash · accepted · measured by the runner
+2026-10-24 00:59:39–01:15:13 UTC, 934 s — repair · attempt 1 · route codex · model gpt-6.1-sol · rejected · measured by the runner
+2026-10-24 01:15:19–01:27:27 UTC, 728 s — repair · attempt 2 · route codex-repair · model gpt-6.1-sol · rejected · measured by the runner
+2026-10-24 01:27:33–01:34:17 UTC, 404 s — repair · attempt 3 · route stage-1 · model claude-sonnet-5-5 · accepted · measured by the runner

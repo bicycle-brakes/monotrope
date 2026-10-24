@@ -3066,10 +3066,12 @@ def _is_cache_path(relative: str) -> bool:
 def _unlink_cache(root: Path, relative: str) -> bool | None:
     """Unlink one cache candidate, reached only through real directories; say what happened.
 
-    Every component from `.venv/` down is checked with `lstat`, so a linked root, parent, cache
-    directory or file is never a cleanup route and nothing outside the tree is reached (spec
-    criterion 6). Returns `True` when the file was unlinked, `False` when an eligible regular file
-    could not be deleted, and `None` when the path is not a deletable cache file - a symlink, a
+    Every component from `.venv/` down is checked with `lstat`, rejecting a linked root, parent,
+    cache directory or file in the inspected tree (spec criterion 6). This is a check-then-act
+    sequence: a concurrent directory replacement between inspection and `unlink` could redirect
+    deletion outside the tree. It assumes no concurrent filesystem writer; it does not provide
+    race-safe no-follow deletion. Returns `True` when the file was unlinked, `False` when an eligible
+    regular file could not be deleted, and `None` when the path is not a deletable cache file - a symlink, a
     directory, or already gone - which stays an ordinary difference for the refusal.
     """
     parts = relative.split("/")
@@ -3099,16 +3101,18 @@ def tool_problem(root: Path, before: dict[str, str] | None) -> str | None:
     deleted before any runner-owned step: pytest's assertion rewriting writes bytecode there during
     an attempt, and a deleted cache is rebuilt, so that write is normalized instead of refused (bead
     coding-harness-q94b). Every other difference keeps the refusal with the first path named. The
-    baseline bookkeeping stays narrow: after each successful unlink only that path's old entry
-    leaves the shared `before` dictionary, recording the runner's own deletion - nothing that
-    survives is rebaselined, so a later check refuses a surviving file's new bytes and deletes a
-    recreated cache again against the same baseline.
+    baseline bookkeeping stays narrow: only a successful check removes the deleted paths' old
+    entries from the shared `before` dictionary, recording the runner's own deletions. A refused
+    check leaves that dictionary unchanged, even if earlier cache deletions succeeded. Nothing
+    that survives is rebaselined; a successful check's recreated caches are deleted again.
     """
     if before is None:
         return None
 
+    baseline = before.copy()  # publish runner-owned deletions only after the whole check passes
+
     def differences(now: dict[str, str]) -> list[str]:
-        return sorted(path for path in before.keys() | now.keys() if before.get(path) != now.get(path))
+        return sorted(path for path in baseline.keys() | now.keys() if baseline.get(path) != now.get(path))
 
     now = tool_state(root)
     if now == before:
@@ -3116,19 +3120,21 @@ def tool_problem(root: Path, before: dict[str, str] | None) -> str | None:
     cleaned = False
     for path in differences(now):
         if not _is_cache_path(path):
-            break  # not a cache file: the refusal below names it
+            continue  # retain the difference, but still clean eligible caches that sort later
         if UNREADABLE in (before.get(path), now.get(path)):
             return f"`{path}` cannot be inspected, and a tool the attempt wrote is not run"
         deleted = _unlink_cache(root, path)
         if deleted is None:
-            break  # a linked or non-regular cache-looking path stays a difference
+            continue  # a linked or non-regular cache-looking path stays a difference
         if not deleted:
             return f"`{path}` cannot be deleted, and a tool the attempt wrote is not run"
-        before.pop(path, None)  # the runner's own deletion, not acceptance of new bytes
+        baseline.pop(path, None)  # the runner's own deletion, not acceptance of new bytes
         cleaned = True
     if cleaned:
         now = tool_state(root)  # the tree changed through the runner's own deletions
-    if now == before:
+    if now == baseline:
+        for path in before.keys() - baseline.keys():
+            before.pop(path)
         return None
     changed = differences(now)
     return f"`{changed[0]}` is not what the runner saw before the call, and a tool the attempt wrote is not run"
