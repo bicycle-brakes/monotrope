@@ -70,15 +70,15 @@ Starts unless you say stop.
 
 ## Criterion ledger
 
-- 1: not yet written tests/test_stage2.py::test_phase6_rejects_invalid_answers — empty, refused or malformed output exits zero
-- 2: not yet written tests/test_stage2.py::test_phase6_rejects_invalid_answers — rejection appends an authoritative block or prints successful completion
-- 3: not yet written tests/test_stage2.py::test_phase6_rejects_invalid_answers — rejection releases or mutates the record or calls the marks reviewer, including after an earlier verdict
-- 4: not yet written tests/test_stage2.py::test_phase6_rejected_evidence_is_inert — reviewer control text permits release, creates accepted rows or changes the next review's session choice
-- 4: not yet written tests/test_stage2.py::test_phase6_keeps_rejected_answer_evidence — nonempty output is lost or an empty answer has no explicit evidence record
-- 5: not yet written tests/test_stage2.py::test_phase6_valid_table_still_releases_and_marks — a valid table loses its findings, verdict ordering, release or resumed marks
+- 1: tests/test_stage2.py::test_phase6_rejects_invalid_answers — empty, refused or malformed output exits zero
+- 2: tests/test_stage2.py::test_phase6_rejects_invalid_answers — rejection appends an authoritative block or prints successful completion
+- 3: tests/test_stage2.py::test_phase6_rejects_invalid_answers — rejection releases or mutates the record or calls the marks reviewer, including after an earlier verdict
+- 4: tests/test_stage2.py::test_phase6_rejected_evidence_is_inert — reviewer control text permits release, creates accepted rows or changes the next review's session choice
+- 4: tests/test_stage2.py::test_phase6_keeps_rejected_answer_evidence — nonempty output is lost or an empty answer has no explicit evidence record
+- 5: tests/test_stage2.py::test_phase6_valid_table_still_releases_and_marks — a valid table loses its findings, verdict ordering, release or resumed marks
 - 5: tests/test_stage2.py::test_no_loop_row_reaches_the_verdict_call — loop evidence reaches the independent verdict call
 - 5: tests/test_stage2.py::test_codex_marks_each_loop_row_after_its_verdict — release or marks change the verdict
-- 6: not yet written tests/test_stage2.py::test_phase6_exact_no_finding_still_releases_and_marks — explicit no-finding output is rejected or fails to release
+- 6: tests/test_stage2.py::test_phase6_exact_no_finding_still_releases_and_marks — explicit no-finding output is rejected or fails to release
 
 ## Verification
 
@@ -94,3 +94,5 @@ to demonstrate the false success, then repair it and run the commands above.
 Change pending ledger entries to test entries when their functions exist.
 
 ## Time used
+
+2026-10-24 02:18:31–02:37:46 UTC, 1154 s — implement · attempt 1 · route flash · model glm-5.3-flash · accepted · measured by the runner
