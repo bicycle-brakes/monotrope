@@ -20,7 +20,7 @@ tags: [plan, stage-2, restore, symlink]
 ```text
 For you:     A restore through an external parent link stops the run and names the path, leaving the recovery unwritten.
 Done when:   Unsafe recovery leaves its batch untouched, no fallback or checkpoint follows, safe recovery still works, and make verify is green.
-Appetite:    2 hours of phase 4, repairs included; a stop, not an estimate.
+Appetite:    5 hours of phase 4, repairs included; a stop, not an estimate (maintainer raised it from 2, 2026-10-24).
 Not now:     Routing changes, OS-level isolation, concurrent filesystem races or other runner verbs.
 Pre-mortem:  suppose it failed: most likely because a time-finalization handler writes after the safety refusal.
 Starts unless you say stop.

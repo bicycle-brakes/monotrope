@@ -4,7 +4,7 @@ status: draft
 implementation_status: partial
 date: 2026-10-23
 last_reviewed: 2026-10-23
-updated: 2026-10-23
+updated: 2026-10-24
 supersedes: null
 superseded_by: null
 bead: coding-harness-10w
@@ -14,7 +14,7 @@ produced_by: {kind: llm-session, name: codex, version: "gpt-6.1-sol, 2026-10-23"
 review: {status: pending, approved_by: null, approved_at: null}
 tags: [spec, stage-2, restore, symlink]
 class: bounded
-appetite: 2
+appetite: 5
 adr_files: []
 ---
 
@@ -126,3 +126,5 @@ None open; the maintainer's refusal direction is already answered.
   through the external target.
 - [DETAIL] Set a two-hour phase-4 appetite, repairs included, for this bounded
   correction; reaching it stops implementation rather than widening the change.
+  The maintainer raised it to five hours on 2026-10-24 (conversation), after
+  the review loop ran until clean past the first two hours.
