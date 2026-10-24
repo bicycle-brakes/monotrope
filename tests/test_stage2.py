@@ -5564,8 +5564,63 @@ def test_venv_cache_cleanup_never_follows_symlinks(world: World, tmp_path: Path,
     shutil.rmtree(world.root / ".venv")
     (world.root / ".venv").symlink_to(real, target_is_directory=True)
     problem = stage2.tool_problem(world.root, before)
-    assert problem is not None and ".venv/lib/__pycache__/assertion.pyc" in problem, alias
+    assert problem is not None and "`.venv`" in problem, alias
     assert linked.read_bytes() == b"elsewhere bytes\n", "cleanup deleted through the linked .venv root"
+
+
+@pytest.mark.parametrize("runner", ["verify", "draft"])
+@pytest.mark.parametrize("mutation", ["root-link", "unreadable-directory"])
+def test_venv_root_link_and_unreadable_directory_stop_tools(
+    world: World, monkeypatch: pytest.MonkeyPatch, runner: str, mutation: str
+) -> None:
+    """An identical linked root or an uninspectable cache directory refuses before any tool."""
+    venv = world.root / ".venv"
+    source = venv / "lib/package.py"
+    source.parent.mkdir(parents=True)
+    source.write_bytes(b"unchanged package\n")
+    before = stage2.tool_state(world.root)
+    original = before.copy()
+    cache_dir = venv / "lib/__pycache__"
+    if mutation == "root-link":
+        target = world.root / "copied-venv"
+        shutil.copytree(venv, target, symlinks=True)
+        shutil.rmtree(venv)
+        venv.symlink_to(target, target_is_directory=True)
+        refused = ".venv`"
+    else:
+        cache_dir.mkdir()
+        (cache_dir / "new.pyc").write_bytes(b"uninspected bytes\n")
+        cache_dir.chmod(0o000)
+        real_scandir = os.scandir
+
+        def unreadable_scandir(path):
+            if not isinstance(path, int) and Path(path) == cache_dir:
+                raise PermissionError(13, "Permission denied", str(cache_dir))
+            return real_scandir(path)
+
+        # Deterministic even when the test process can bypass host permissions.
+        monkeypatch.setattr(stage2.os, "scandir", unreadable_scandir)
+        refused = ".venv/lib/__pycache__`"
+
+    def forbidden_launch(*_args, **_kwargs):
+        raise AssertionError("a runner-owned tool started before integrity refusal")
+
+    monkeypatch.setattr(stage2, "launch", forbidden_launch)
+    try:
+        if runner == "draft":
+            ctx = stage2.Context(world.root, "demo", world.plan.parent, "demo-1")
+            problems, owed = stage2.verify_draft(world.root, ctx, None, [], before)
+            assert not owed
+        else:
+            problems = stage2.verify_attempt(world.root, world.plan, None, None, before)
+        assert len(problems) == 1 and refused in problems[0]
+        assert before == original
+    finally:
+        if mutation == "unreadable-directory":
+            cache_dir.chmod(0o700)
+    assert source.read_bytes() == b"unchanged package\n"
+    if mutation == "unreadable-directory":
+        assert (cache_dir / "new.pyc").read_bytes() == b"uninspected bytes\n"
 
 
 @pytest.mark.parametrize("runner", ["verify", "draft"])

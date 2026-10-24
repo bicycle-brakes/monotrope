@@ -152,8 +152,26 @@ Stage-2 call, 2026-10-24: review · endpoint openai-codex · model gpt-6.1-sol �
 
 | ID | Severity | Dimension | Origin | Where | Finding | Reviewer | Status | Broke a test |
 |---|---|---|---|---|---|---|---|---|
-| F-4 | MAJOR | SPEC | phase-6 | scripts/stage2.py:3040–3051,3134–3135 | Replacing `.venv` with a symlink to a byte-identical copy is accepted: the snapshot follows the root link without recording it, so `tool_problem` returns `None`. The root-symlink regression uses different target bytes and therefore misses this case. The changed symlink must itself cause refusal before tools run. [AC5, AC6] | Codex | taken — test: .venv replaced by a symlink to a byte-identical copy is refused before tools run, naming the root link | — |
-| F-5 | MAJOR | SPEC | phase-6 | scripts/stage2.py:3041–3051,3114–3120 | Adding a cache file inside a new `__pycache__` directory with permissions `000` passes without deleting it. `os.walk` silently skips the unreadable directory, leaving no entry for the unreadable-file guard to inspect; the snapshot matches the baseline and tools may run. Directory inspection failures must cause refusal with the affected path named. [AC7] | Codex | taken — test: a new unreadable __pycache__ directory (mode 000) is refused with its path named, not silently skipped | — |
+| F-4 | MAJOR | SPEC | phase-6 | scripts/stage2.py:3040–3051,3134–3135 | Replacing `.venv` with a symlink to a byte-identical copy is accepted: the snapshot follows the root link without recording it, so `tool_problem` returns `None`. The root-symlink regression uses different target bytes and therefore misses this case. The changed symlink must itself cause refusal before tools run. [AC5, AC6] | Codex | fixed — tests/test_stage2.py::test_venv_root_link_and_unreadable_directory_stop_tools | — |
+| F-5 | MAJOR | SPEC | phase-6 | scripts/stage2.py:3041–3051,3114–3120 | Adding a cache file inside a new `__pycache__` directory with permissions `000` passes without deleting it. `os.walk` silently skips the unreadable directory, leaving no entry for the unreadable-file guard to inspect; the snapshot matches the baseline and tools may run. Directory inspection failures must cause refusal with the affected path named. [AC7] | Codex | fixed — tests/test_stage2.py::test_venv_root_link_and_unreadable_directory_stop_tools | — |
 
 Phase 6 verdict: codex 01a16ba9-756b-74b0-9c07-a3665f7fbd56, 2026-10-24
 Reviewer session: codex 01a16ba9-756b-74b0-9c07-a3665f7fbd56 — a fresh session reviewed: an earlier ## Phase 6 block makes this a re-check
+
+Stage-2 call, 2026-10-24: repair · attempt 1 · route codex · endpoint openai-codex · model gpt-6.1-sol · leak check clean over 536 files, 1952 commits, 12 rules.
+
+> Attempt 1 (codex) failed its post-run checks.
+>
+> Files the attempt changed (lines added, removed):
+> - `plans/changes/venv-pycache/plan.md` +2 -0
+> - `scripts/stage2.py` +18 -4
+> - `tests/test_stage2.py` +56 -1
+>
+> Diagnostics:
+> ```text
+> - Runner format before `make verify`: ruff changed no file.
+> - F-4: tests/test_stage2.py::test_venv_root_link_and_unreadable_directory_stop_tools: the call of `tests/test_stage2.py::test_venv_root_link_and_unreadable_directory_stop_tools[root-link-verify]` failed with Failed, not an AssertionError
+> - F-5: tests/test_stage2.py::test_venv_root_link_and_unreadable_directory_stop_tools: the call of `tests/test_stage2.py::test_venv_root_link_and_unreadable_directory_stop_tools[root-link-verify]` failed with Failed, not an AssertionError
+> ```
+
+Stage-2 call, 2026-10-24: repair · attempt 2 · route codex-repair · endpoint openai-codex · model gpt-6.1-sol · reason first Codex post-run check failed · leak check clean over 536 files, 1952 commits, 12 rules.

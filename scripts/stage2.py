@@ -3025,7 +3025,7 @@ VERIFY_SECONDS = 30 * 60
 GIT_SECONDS = 2 * 60
 
 
-UNREADABLE = "unreadable"  # the digest entry tool_state writes for a file it cannot read
+UNREADABLE = "unreadable"  # the digest entry for a file or directory tool_state cannot inspect
 
 
 def tool_state(root: Path) -> dict[str, str]:
@@ -3038,7 +3038,21 @@ def tool_state(root: Path) -> dict[str, str]:
     """
     state: dict[str, str] = {}
     venv = root / ".venv"
-    for directory, names, files in os.walk(venv):
+    try:
+        info = venv.lstat()
+        if stat.S_ISLNK(info.st_mode):
+            return {".venv": "link:" + str(venv.readlink())}
+    except FileNotFoundError:
+        return state
+    except OSError:
+        return {".venv": UNREADABLE}
+
+    def unreadable_directory(error: OSError) -> None:
+        # os.walk otherwise silently skips failed scandir calls, hiding newly planted caches.
+        path = Path(error.filename) if error.filename is not None else venv
+        state[path.relative_to(root).as_posix()] = UNREADABLE
+
+    for directory, names, files in os.walk(venv, onerror=unreadable_directory):
         for name in sorted([*names, *files]):
             path = Path(directory) / name
             relative = path.relative_to(root).as_posix()
@@ -3114,10 +3128,10 @@ def tool_problem(root: Path, before: dict[str, str] | None) -> str | None:
     now = tool_state(root)
     cleaned = False
     for path in sorted(before.keys() | now.keys()):
-        if not _is_cache_path(path):
-            continue  # retain the difference, but still clean eligible caches that sort later
         if UNREADABLE in (before.get(path), now.get(path)):
             return f"`{path}` cannot be inspected, and a tool the attempt wrote is not run"
+        if not _is_cache_path(path):
+            continue  # retain the difference, but still clean eligible caches that sort later
         if before.get(path) == now.get(path):
             continue
         if before.get(path, "").startswith("link:"):

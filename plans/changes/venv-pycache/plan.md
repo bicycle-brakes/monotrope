@@ -91,6 +91,8 @@ Starts unless you say stop.
 - 4: tests/test_stage2.py::test_cache_deletion_is_recorded_beside_refused_source — a refused source change loses successful deletion bookkeeping and poisons the next check
 - 6: tests/test_stage2.py::test_baseline_cache_symlink_replaced_by_regular_file_is_refused — cleanup accepts removal of a baseline symlink
 - 7: tests/test_stage2.py::test_cache_unreadable_in_both_snapshots_is_refused — matching read failures are accepted as unchanged bytes
+- 6: tests/test_stage2.py::test_venv_root_link_and_unreadable_directory_stop_tools — a byte-identical linked venv root reaches a runner tool or is refused without naming the root link
+- 7: tests/test_stage2.py::test_venv_root_link_and_unreadable_directory_stop_tools — an unreadable new cache directory reaches a runner tool or is refused without naming the directory
 
 ## Verification
 
@@ -125,3 +127,5 @@ Stage-1 route: repair · model claude-sonnet-5-5 · reason: two Codex post-run c
 2026-10-24 01:15:19–01:27:27 UTC, 728 s — repair · attempt 2 · route codex-repair · model gpt-6.1-sol · rejected · measured by the runner
 2026-10-24 01:27:33–01:34:17 UTC, 404 s — repair · attempt 3 · route stage-1 · model claude-sonnet-5-5 · accepted · measured by the runner
 2026-10-24 01:55:59–02:06:56 UTC, 657 s — repair · attempt 1 · route codex · model gpt-6.1-sol · accepted · measured by the runner
+2026-10-24 08:41:27–08:59:22 UTC, 1076 s — repair · attempt 1 · route codex · model gpt-6.1-sol · rejected · measured by the runner
+2026-10-24 08:59:26–09:14:27 UTC, 900 s — repair · attempt 2 · route codex-repair · model gpt-6.1-sol · accepted · measured by the runner
