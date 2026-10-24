@@ -2,7 +2,7 @@
 title: "Findings — restore-symlink-parent"
 category: findings
 status: draft
-implementation_status: none
+implementation_status: partial
 date: 2026-10-23
 created: 2026-10-23
 last_reviewed: 2026-10-23
@@ -531,3 +531,5 @@ Stage-2 call, 2026-10-24: review-loop · endpoint opencode-go · model hy3 · le
 Stage-2 call, 2026-10-24: review-loop · endpoint opencode-go · model hy3 · leak check clean over 546 files, 1964 commits, 12 rules.
 
 Stage-2 call, 2026-10-24: repair · attempt 1 · route codex · endpoint openai-codex · model gpt-6.1-sol · leak check clean over 546 files, 1965 commits, 12 rules.
+
+Stage-2 call, 2026-10-24: review-loop · endpoint opencode-go · model mimo-v2.6-pro · leak check clean over 546 files, 1966 commits, 12 rules.
