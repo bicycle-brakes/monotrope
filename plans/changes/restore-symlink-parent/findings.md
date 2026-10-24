@@ -557,3 +557,21 @@ Stage-2 call, 2026-10-24: repair · attempt 1 · route codex · endpoint openai-
 Stage-2 call, 2026-10-24: review-loop · endpoint opencode-go · model deepseek-v4-pro · leak check clean over 546 files, 1974 commits, 12 rules.
 
 Stage-2 call, 2026-10-24: repair · attempt 1 · route codex · endpoint openai-codex · model gpt-6.1-sol · leak check clean over 546 files, 1974 commits, 12 rules.
+
+Stage-2 call, 2026-10-24: review-loop · endpoint opencode-go · model glm-5.2 · leak check clean over 546 files, 1975 commits, 12 rules.
+
+Stage-2 call, 2026-10-24: repair · attempt 1 · route codex · endpoint openai-codex · model gpt-6.1-sol · leak check clean over 546 files, 1975 commits, 12 rules.
+
+> Attempt 1 (codex) failed its post-run checks.
+>
+> Files the attempt changed (lines added, removed):
+> - `scripts/stage2.py` +39 -10
+> - `tests/test_stage2.py` +119 -1
+>
+> Diagnostics:
+> ```text
+> - Runner format before `make verify`: ruff changed no file.
+> - L9-1: tests/test_stage2.py::test_work_verbs_skip_escaped_scan_parent: the call of `tests/test_stage2.py::test_work_verbs_skip_escaped_scan_parent[checkpoint-True]` failed with FileNotFoundError, not an AssertionError
+> ```
+
+Stage-2 call, 2026-10-24: repair · attempt 2 · route codex-repair · endpoint openai-codex · model gpt-6.1-sol · reason first Codex post-run check failed · leak check clean over 546 files, 1975 commits, 12 rules.

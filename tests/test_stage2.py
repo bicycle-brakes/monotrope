@@ -13577,7 +13577,7 @@ def test_credential_scan_skips_escaped_changed_parent(
             assert not isinstance(caught.value, stage2.RestorationRefused)
             diagnostic = str(caught.value)
     assert "was removed (src/app.py, src/second.py)" in diagnostic
-    assert "credential scan" not in diagnostic and "restoration" not in diagnostic
+    assert "restoration" not in diagnostic
     assert KEY not in diagnostic
     assert sentinel.read_bytes() == exposed
     assert (world.root / "src/app.py").read_bytes() == b"[credential]\n"
@@ -13769,6 +13769,14 @@ def test_work_verbs_skip_escaped_scan_parent(
         monkeypatch.setattr(stage2, "launch", launch)
         assert world.run(verb) == 0, capsys.readouterr().err + world.text()
         assert len(world.calls("claude" if verb in {"draft", "implement"} else "codex")) == 1
+    diagnostic = capsys.readouterr().err
+    if escaped and verb != "repair":
+        assert "credential scan skipped src/deep/keep.txt" in diagnostic
+        assert "escapes the worktree" in diagnostic
+        assert "credential scan skipped src/deep/keep.txt" in world.text()
+        assert "escapes the worktree" in world.text()
+    else:
+        assert "credential scan skipped" not in diagnostic
     assert git(world.root, "rev-list", "--count", f"{baseline}..HEAD") == "1"
     assert sentinel.read_bytes() == KEY.encode()
     # Draft retains its existing policy: put edits outside the change folder back.
@@ -13812,3 +13820,114 @@ def test_checkpoint_restore_refusal_preserves_original_failure(
     assert (outside / "keep.txt").read_text() == "tracked\n"
     assert deep.is_symlink()
     assert git(world.root, "rev-parse", "HEAD") == baseline
+
+
+@pytest.mark.parametrize("parent_kind", ["escape", "loop", "error"])
+def test_credential_scan_reports_skipped_parent(
+    world: World,
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+    capsys: pytest.CaptureFixture[str],
+    parent_kind: str,
+) -> None:
+    """L9-1: skipped paths are named without opening them, including resolution errors."""
+    deep = world.root / "src/deep"
+    outside = tmp_path / "scan-external"
+    outside.mkdir()
+    sentinel = outside / "keep.txt"
+    sentinel.write_bytes(KEY.encode())
+    if parent_kind == "escape":
+        deep.symlink_to(outside, target_is_directory=True)
+    elif parent_kind == "loop":
+        deep.symlink_to("deep", target_is_directory=True)
+    else:
+        deep.mkdir()
+        real_resolve = Path.resolve
+
+        def resolve(path, *args, **kwargs):
+            if path == deep:
+                raise OSError("planted resolution error")
+            return real_resolve(path, *args, **kwargs)
+
+        monkeypatch.setattr(Path, "resolve", resolve)
+    monkeypatch.setattr(stage2, "changed_paths", lambda *_args, **_kwargs: {Path("src/deep/keep.txt")})
+    real_read, real_write = Path.read_bytes, Path.write_bytes
+
+    def read(path):
+        assert path.parent != deep, "scan read the skipped path"
+        return real_read(path)
+
+    def write(path, content):
+        assert path.parent != deep, "scan wrote the skipped path"
+        return real_write(path, content)
+
+    monkeypatch.setattr(Path, "read_bytes", read)
+    monkeypatch.setattr(Path, "write_bytes", write)
+    assert stage2.remove_changed_credential(world.root, KEY, findings=world.findings) == []
+    assert "credential scan skipped src/deep/keep.txt" in world.text()
+    diagnostic = capsys.readouterr().err
+    assert "credential scan skipped src/deep/keep.txt" in diagnostic
+    assert ("escapes the worktree" if parent_kind == "escape" else "cannot be resolved") in diagnostic
+    assert sentinel.read_bytes() == KEY.encode()
+
+
+@pytest.mark.parametrize("verb", ["implement", "repair"])
+@pytest.mark.parametrize("boundary", ["batch", "findings"])
+def test_failed_verify_recovery_refusal_preserves_diagnostics(
+    world: World,
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+    capsys: pytest.CaptureFixture[str],
+    verb: str,
+    boundary: str,
+) -> None:
+    """L9-2: a safety stop keeps the failed verifier's evidence without recovery writes."""
+    if verb == "repair":
+        repair_world(world)
+        script_repair(world, [repair_step()])
+    else:
+        successful_implementation(world)
+    outside = tmp_path / "verify-outside"
+    baseline = git(world.root, "rev-parse", "HEAD")
+    snapshots = {}
+
+    def unexpected_write(*_args, **_kwargs):
+        pytest.fail("recovery wrote after its unsafe-parent refusal")
+
+    def escape():
+        shutil.copytree(world.plan.parent, outside)
+        snapshots.update({p.name: p.read_bytes() for p in outside.iterdir() if p.is_file()})
+        shutil.rmtree(world.plan.parent)
+        world.plan.parent.symlink_to(outside, target_is_directory=True)
+        for name in ("append", "restore_work_input", "persist_time_entry", "stamp_updated", "save_attempt"):
+            monkeypatch.setattr(stage2, name, unexpected_write)
+
+    def verify(*_args, **_kwargs):
+        if boundary == "batch":
+            escape()
+        return ["`make verify` failed: planted verifier evidence"]
+
+    if boundary == "findings":
+        real_preflight = stage2.preflight_recovery
+        checked = False
+
+        def preflight(root, destinations):
+            nonlocal checked
+            # The first post-verification batch is safe; the findings restore must recheck.
+            if not checked:
+                real_preflight(root, destinations)
+                checked = True
+                escape()
+            else:
+                real_preflight(root, destinations)
+
+        monkeypatch.setattr(stage2, "preflight_recovery", preflight)
+    monkeypatch.setattr(stage2, "verify_attempt", verify)
+    _no_checkpoint(monkeypatch)
+    assert world.run(verb) == 2
+    diagnostic = capsys.readouterr().err
+    assert "planted verifier evidence" in diagnostic
+    assert "restoration of plans/changes/demo/" in diagnostic and "escapes the worktree" in diagnostic
+    assert {p.name: p.read_bytes() for p in outside.iterdir() if p.is_file()} == snapshots
+    assert git(world.root, "rev-parse", "HEAD") == baseline
+    assert len(world.calls("codex" if verb == "repair" else "claude")) == 1

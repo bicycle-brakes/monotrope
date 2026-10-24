@@ -3395,6 +3395,7 @@ def remove_changed_credential(
     key: str,
     ignored_before: dict[Path, tuple[int, int]] | None = None,
     against: str = "HEAD",
+    findings: Path | None = None,
 ) -> list[Path]:
     """Remove an exact GLM credential from changed regular files and name those files.
 
@@ -3403,6 +3404,10 @@ def remove_changed_credential(
     comparison is `against`, not always HEAD: a draft passes its baseline, because files a model
     committed read as clean against its own new HEAD and must still be found (spec, criterion 25;
     2a's F-4).
+
+    Skip changed paths whose parents escape the worktree or cannot be resolved, without
+    reading or writing through them. Name each skip on stderr and, when supplied and safe,
+    in the findings call record. A skip does not establish whether the path holds a credential.
     """
     paths = changed_paths(root, against=against)
     if ignored_before is not None:
@@ -3414,6 +3419,12 @@ def remove_changed_credential(
         path = root / relative
         problem = restoration_parent_problem(root, path)
         if problem is not None:
+            diagnostic = protect_diagnostics(
+                f"credential scan skipped {relative.as_posix()}: its parent {problem}; contents were not inspected",
+                key,
+            )
+            print(diagnostic, file=sys.stderr)
+            record_credential_scan_skips(root, findings, [diagnostic], key)
             continue
         if path.is_symlink() or not path.is_file():
             continue
@@ -3426,6 +3437,15 @@ def remove_changed_credential(
         path.write_bytes(replace_credential(content, key))
         found.append(relative)
     return found
+
+
+def record_credential_scan_skips(root: Path, findings: Path | None, diagnostics: list[str], key: str | None) -> None:
+    """Record scan limits only in a contained regular call record, never through an alias."""
+    if not diagnostics or findings is None or restoration_parent_problem(root, findings) is not None:
+        return
+    if findings.is_symlink() or (findings.exists() and (not findings.is_file() or findings.stat().st_nlink > 1)):
+        return
+    append(findings, quote_block("\n".join(diagnostics), key))
 
 
 def credential_message(exposed: list[Path]) -> str:
@@ -3997,7 +4017,9 @@ def checkpoint(
 ) -> None:
     """Commit a passing work phase and prove the one clean descendant commit."""
     if key is not None:
-        exposed = remove_changed_credential(root, key, ignored_before)
+        exposed = remove_changed_credential(
+            root, key, ignored_before, findings=root / "plans/changes" / change / "findings.md"
+        )
         if exposed:
             raise Refused(credential_message(exposed))
     try:
@@ -4980,7 +5002,9 @@ def run_attempts(
         findings_before = ctx.findings.read_bytes()
 
         def put_findings_back(
-            original: BaseException | None = None, kept=kept, destinations=(*inputs_before, ctx.findings)
+            original: BaseException | None = None,
+            kept=kept,
+            destinations=(*inputs_before, ctx.findings),
         ) -> None:
             """Put findings.md back, refusing first when its parent would carry the write outside."""
             # Even implement (without a findings snapshot) must validate the complete batch
@@ -5080,7 +5104,7 @@ def run_attempts(
                 exposed = []
                 if key is not None:
                     # Scrub before the snapshot writes the changed files into the object store.
-                    exposed = remove_changed_credential(root, key, ignored_before)
+                    exposed = remove_changed_credential(root, key, ignored_before, findings=ctx.findings)
                 try:
                     saved = save_attempt(root, baseline, ctx.change, f"{verb}-attempt-{attempt}")
                 except OSError as save_error:
@@ -5091,7 +5115,7 @@ def run_attempts(
             if key is not None:
                 # Every route scans with the key read in this run - the Sonnet fallback included - before
                 # the second snapshot can write the changed files into the object store (spec, criterion 9).
-                exposed = remove_changed_credential(root, key, ignored_before)
+                exposed = remove_changed_credential(root, key, ignored_before, findings=ctx.findings)
                 if exposed:
                     error = Refused(credential_message(exposed))
                     put_findings_back(original=error)
@@ -5136,7 +5160,12 @@ def run_attempts(
             # retry-time write of the boundary below: a safe plan must not be logged or restored
             # before an unsafe later destination stops the batch (spec, criterion 1).
             batch = {**inputs_before, ctx.findings: findings_before}
-            preflight_recovery(root, batch)
+            try:
+                preflight_recovery(root, batch)
+            except RestorationRefused as safety_error:
+                if problems:
+                    preserve_attempt_failure(safety_error, Refused(protect_diagnostics("\n".join(problems), key)))
+                raise
             if aliased_parent or not ctx.plan.parent.is_dir():
                 # Detach an alias itself, never a document in its target; recreate missing parents too.
                 # Restore the snapshotted inputs and audit before diagnostics, logging or retry writes.
@@ -5150,11 +5179,11 @@ def run_attempts(
                 problems = [*(f"{FORMAT_LABEL}: {line}" for line in formatted), *problems]
                 # Before the block is appended, so the quoted diagnostics stand beside the rows as
                 # they were, not beside the model's edits of them.
-                put_findings_back()
+                listing = protect_diagnostics("\n".join(f"- {p}" for p in problems), key)
+                put_findings_back(original=Refused(listing))
                 # The block lands below this attempt's audit line, before the next attempt starts or the
                 # run exits 1; the post-run scan after it covers the block too (spec, criteria 1 and 9).
                 # One safe listing and one safe file list feed both destinations (the block and the retry prompt).
-                listing = protect_diagnostics("\n".join(f"- {p}" for p in problems), key)
                 files = protect_files(files, key)
                 diagnostics.append(f"Attempt {attempt} ({route}):\n{listing}")
                 append(ctx.findings, quote_block(attempt_block(attempt, route, listing, files), key))
@@ -5163,7 +5192,7 @@ def run_attempts(
             if key is not None:
                 # The gate runs repository code the model just edited: scan again after it and the
                 # diagnostic block, before finalizing either the verdict or its measured endpoint.
-                exposed = remove_changed_credential(root, key, ignored_before)
+                exposed = remove_changed_credential(root, key, ignored_before, findings=ctx.findings)
                 if exposed:
                     if not problems:
                         put_findings_back(original=Refused(credential_message(exposed)))
@@ -5541,7 +5570,7 @@ def draft(root: Path, change: str) -> None:
             # write the changed files into the object store, a dead call included. The comparison is
             # the baseline, not the model's new HEAD: a file the call committed reads as clean
             # against its own commit and must still be found (2a's F-4).
-            exposed = remove_changed_credential(root, key, ignored_before, against=baseline)
+            exposed = remove_changed_credential(root, key, ignored_before, against=baseline, findings=ctx.findings)
             if exposed:
                 raise Refused(credential_message(exposed))
         try:
@@ -5597,7 +5626,7 @@ def draft(root: Path, change: str) -> None:
         if key is not None:
             # The gate runs repository code the model just edited: scan again after it, against the
             # baseline as before (2a's F-4).
-            exposed = remove_changed_credential(root, key, ignored_before, against=baseline)
+            exposed = remove_changed_credential(root, key, ignored_before, against=baseline, findings=ctx.findings)
             if exposed:
                 raise Refused(credential_message(exposed))
         if not problems:
