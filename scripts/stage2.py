@@ -3427,9 +3427,10 @@ def remove_changed_credential(
         path.write_bytes(replace_credential(content, key))
         found.append(relative)
     if unsafe:
-        message = "; ".join(unsafe)
-        if found:
-            message += f"; {credential_message(found)}"
+        # Disclose protective writes before the refusal: they are credential
+        # removal, not recovery, and have already changed the contained files.
+        messages = [credential_message(found)] if found else []
+        message = "; ".join([*messages, *unsafe])
         raise RestorationRefused(message)
     return found
 

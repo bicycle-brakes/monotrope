@@ -13514,9 +13514,10 @@ def test_credential_scan_refuses_escaped_changed_parent(
     world: World,
     monkeypatch: pytest.MonkeyPatch,
     tmp_path: Path,
+    capsys: pytest.CaptureFixture[str],
     boundary: str,
 ) -> None:
-    """L4-1: scrub safe files and report removal while refusing the escaped scan path."""
+    """L4-1/L5-1: disclose every protective scrub before the unsafe-parent refusal."""
     deep = world.root / "src/deep"
     deep.mkdir()
     (deep / "keep.txt").write_bytes(b"tracked\n")
@@ -13532,6 +13533,7 @@ def test_credential_scan_refuses_escaped_changed_parent(
         shutil.rmtree(deep)
         deep.symlink_to(outside, target_is_directory=True)
         (world.root / "src/app.py").write_bytes(exposed)
+        (world.root / "src/second.py").write_bytes(exposed)
 
     if boundary == "completed-call":
         world.script(claude=[{"stdout": "done"}])
@@ -13544,13 +13546,9 @@ def test_credential_scan_refuses_escaped_changed_parent(
 
         monkeypatch.setattr(stage2, "run_work_model", model)
         _no_checkpoint(monkeypatch)
-        refusal = None
-        try:
-            stage2.implement(world.root, "demo")
-        except stage2.Refused as error:
-            refusal = error
-        assert isinstance(refusal, stage2.RestorationRefused), f"unsafe scan was not refused: {refusal}"
-        assert re.search("src/deep/keep.txt.*escapes the worktree", str(refusal))
+        assert world.run("implement") == 2
+        refusal = capsys.readouterr().err
+        assert re.search("src/deep/keep.txt.*escapes the worktree", refusal)
         assert len(world.calls("claude")) == 1
     else:
         escape()
@@ -13564,9 +13562,14 @@ def test_credential_scan_refuses_escaped_changed_parent(
             refusal = error
         assert isinstance(refusal, stage2.RestorationRefused), f"unsafe scan was not refused: {refusal}"
         assert re.search("src/deep/keep.txt.*escapes the worktree", str(refusal))
-    assert "was removed (src/app.py)" in str(refusal)
+    diagnostic = str(refusal)
+    removal = "was removed (src/app.py, src/second.py)"
+    assert removal in diagnostic
+    assert diagnostic.index(removal) < diagnostic.index("credential scan of src/deep/keep.txt is refused")
+    assert KEY not in diagnostic
     assert sentinel.read_bytes() == exposed
     assert (world.root / "src/app.py").read_bytes() == b"[credential]\n"
+    assert (world.root / "src/second.py").read_bytes() == b"[credential]\n"
     assert deep.is_symlink()
 
 
