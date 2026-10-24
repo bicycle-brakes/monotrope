@@ -88,6 +88,10 @@ Starts unless you say stop.
 - 6: tests/test_stage2.py::test_venv_cache_cleanup_never_follows_symlinks — an alias target changes or a changed link is exempted
 - 7: tests/test_stage2.py::test_venv_cache_cleanup_failure_stops_runner_tools — unreadable or undeletable cache is accepted or any step runs
 
+- 4: tests/test_stage2.py::test_cache_deletion_is_recorded_beside_refused_source — a refused source change loses successful deletion bookkeeping and poisons the next check
+- 6: tests/test_stage2.py::test_baseline_cache_symlink_replaced_by_regular_file_is_refused — cleanup accepts removal of a baseline symlink
+- 7: tests/test_stage2.py::test_cache_unreadable_in_both_snapshots_is_refused — matching read failures are accepted as unchanged bytes
+
 ## Verification
 
 ```sh
@@ -120,3 +124,4 @@ Stage-1 route: repair · model claude-sonnet-5-5 · reason: two Codex post-run c
 2026-10-24 00:59:39–01:15:13 UTC, 934 s — repair · attempt 1 · route codex · model gpt-6.1-sol · rejected · measured by the runner
 2026-10-24 01:15:19–01:27:27 UTC, 728 s — repair · attempt 2 · route codex-repair · model gpt-6.1-sol · rejected · measured by the runner
 2026-10-24 01:27:33–01:34:17 UTC, 404 s — repair · attempt 3 · route stage-1 · model claude-sonnet-5-5 · accepted · measured by the runner
+2026-10-24 01:55:59–02:06:56 UTC, 657 s — repair · attempt 1 · route codex · model gpt-6.1-sol · accepted · measured by the runner

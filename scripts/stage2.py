@@ -3101,40 +3101,37 @@ def tool_problem(root: Path, before: dict[str, str] | None) -> str | None:
     deleted before any runner-owned step: pytest's assertion rewriting writes bytecode there during
     an attempt, and a deleted cache is rebuilt, so that write is normalized instead of refused (bead
     coding-harness-q94b). Every other difference keeps the refusal with the first path named. The
-    baseline bookkeeping stays narrow: only a successful check removes the deleted paths' old
-    entries from the shared `before` dictionary, recording the runner's own deletions. A refused
-    check leaves that dictionary unchanged, even if earlier cache deletions succeeded. Nothing
-    that survives is rebaselined; a successful check's recreated caches are deleted again.
+    baseline bookkeeping stays narrow: each successful unlink immediately removes that path's old
+    entry from the shared `before` dictionary, even if a later check fails. This records only the
+    runner's own deletions. Nothing that survives is rebaselined; recreated caches are deleted again.
     """
     if before is None:
         return None
 
-    baseline = before.copy()  # publish runner-owned deletions only after the whole check passes
-
     def differences(now: dict[str, str]) -> list[str]:
-        return sorted(path for path in baseline.keys() | now.keys() if baseline.get(path) != now.get(path))
+        return sorted(path for path in before.keys() | now.keys() if before.get(path) != now.get(path))
 
     now = tool_state(root)
-    if now == before:
-        return None
     cleaned = False
-    for path in differences(now):
+    for path in sorted(before.keys() | now.keys()):
         if not _is_cache_path(path):
             continue  # retain the difference, but still clean eligible caches that sort later
         if UNREADABLE in (before.get(path), now.get(path)):
             return f"`{path}` cannot be inspected, and a tool the attempt wrote is not run"
+        if before.get(path) == now.get(path):
+            continue
+        if before.get(path, "").startswith("link:"):
+            continue  # removing a baseline symlink is never a cache-byte change
         deleted = _unlink_cache(root, path)
         if deleted is None:
             continue  # a linked or non-regular cache-looking path stays a difference
         if not deleted:
             return f"`{path}` cannot be deleted, and a tool the attempt wrote is not run"
-        baseline.pop(path, None)  # the runner's own deletion, not acceptance of new bytes
+        before.pop(path, None)  # record each runner-owned deletion even if a later check fails
         cleaned = True
     if cleaned:
         now = tool_state(root)  # the tree changed through the runner's own deletions
-    if now == baseline:
-        for path in before.keys() - baseline.keys():
-            before.pop(path)
+    if now == before:
         return None
     changed = differences(now)
     return f"`{changed[0]}` is not what the runner saw before the call, and a tool the attempt wrote is not run"

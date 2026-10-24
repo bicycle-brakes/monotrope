@@ -5354,6 +5354,67 @@ def test_tool_check_deletes_changed_venv_cache(world: World) -> None:
     assert cache.relative_to(world.root).as_posix() not in before, "the runner's deletion was not recorded"
 
 
+def test_cache_deletion_is_recorded_beside_refused_source(world: World) -> None:
+    """A refused source change cannot erase bookkeeping for a successful unlink."""
+    cache = world.root / ".venv/lib/__pycache__/changed.pyc"
+    cache.parent.mkdir(parents=True)
+    cache.write_bytes(b"baseline cache")
+    source = world.root / ".venv/lib/source.py"
+    source.write_bytes(b"baseline source")
+    before = stage2.tool_state(world.root)
+    original = before.copy()
+    cache.write_bytes(b"changed cache")
+    source.write_bytes(b"changed source")
+    problem = stage2.tool_problem(world.root, before)
+    assert problem is not None and ".venv/lib/source.py" in problem
+    assert not cache.exists()
+    del original[cache.relative_to(world.root).as_posix()]
+    assert before == original
+    source.write_bytes(b"baseline source")
+    assert stage2.tool_problem(world.root, before) is None
+
+
+def test_baseline_cache_symlink_replaced_by_regular_file_is_refused(world: World) -> None:
+    """Replacing a protected link is not a removable cache-byte change."""
+    cache = world.root / ".venv/lib/__pycache__/linked.pyc"
+    cache.parent.mkdir(parents=True)
+    target = world.root / ".venv/lib/target"
+    target.write_bytes(b"target bytes")
+    cache.symlink_to(target)
+    before = stage2.tool_state(world.root)
+    original = before.copy()
+    cache.unlink()
+    cache.write_bytes(b"replacement bytes")
+    problem = stage2.tool_problem(world.root, before)
+    assert problem is not None and cache.relative_to(world.root).as_posix() in problem
+    assert before == original
+    assert cache.read_bytes() == b"replacement bytes"
+    assert target.read_bytes() == b"target bytes"
+
+
+def test_cache_unreadable_in_both_snapshots_is_refused(world: World, monkeypatch: pytest.MonkeyPatch) -> None:
+    """Matching read failures are not evidence of unchanged cache bytes."""
+    cache = world.root / ".venv/lib/__pycache__/unreadable.pyc"
+    cache.parent.mkdir(parents=True)
+    cache.write_bytes(b"baseline bytes")
+    real_read = Path.read_bytes
+
+    def unreadable(path):
+        if path == cache:
+            raise PermissionError(13, "Permission denied")
+        return real_read(path)
+
+    monkeypatch.setattr(Path, "read_bytes", unreadable)
+    before = stage2.tool_state(world.root)
+    assert before[cache.relative_to(world.root).as_posix()] == stage2.UNREADABLE
+    cache.write_bytes(b"changed bytes")
+    assert stage2.tool_state(world.root) == before
+    problem = stage2.tool_problem(world.root, before)
+    assert problem is not None and cache.relative_to(world.root).as_posix() in problem
+    assert cache.exists()
+    assert real_read(cache) == b"changed bytes"
+
+
 def test_tool_check_preserves_unchanged_venv_cache(world: World) -> None:
     """q94b-3: cache bytes that match the baseline stay; a changed sibling is deleted."""
     cache_dir = world.root / ".venv" / "lib" / "__pycache__"
@@ -5428,11 +5489,13 @@ def test_cache_cleanup_keeps_other_venv_mutations_refused(world: World, mutation
     original = before.copy()
     problem = stage2.tool_problem(world.root, before)
     assert problem is not None and named in problem, mutation
-    assert before == original, "a refused check mutated the caller baseline"
+    if mutation != "missing-cache":
+        original.pop(cache.relative_to(world.root).as_posix())
+    assert before == original, "only successful runner deletions may change the baseline"
     if mutation != "missing-cache":
         assert "__pycache__" not in problem, "a removed cache was named instead of the refused mutation"
         assert not cache.exists(), "the removable cache beside the refused mutation was not deleted"
-        assert cache.relative_to(world.root).as_posix() in before, "a refused check removed a baseline entry"
+        assert cache.relative_to(world.root).as_posix() not in before, "the successful deletion was not recorded"
 
 
 @pytest.mark.parametrize(
@@ -5559,14 +5622,16 @@ def test_venv_cache_cleanup_failure_stops_runner_tools(
     original = before.copy()
     problem = stage2.tool_problem(world.root, before)
     assert problem is not None and refused in problem, failure
-    assert before == original, "a failed cleanup mutated the caller baseline"
+    if failure in ("second-deletion-fails", "refused-beside-cache"):
+        original.pop(cache.relative_to(world.root).as_posix())
+    assert before == original, "only successful runner deletions may change the baseline"
     if failure == "refused-beside-cache":
         assert not cache.exists(), "the cache beside the refused change was not deleted"
     if failure == "undeletable":
         assert cache.read_bytes() == b"attempt one\n", "the cache vanished although its unlink failed"
     if failure == "second-deletion-fails":
         assert not cache.exists(), "the first cache file was not deleted before the failing one"
-        assert cache.relative_to(world.root).as_posix() in before, "a refused cleanup removed a baseline entry"
+        assert cache.relative_to(world.root).as_posix() not in before, "the successful deletion was not recorded"
         assert second.exists(), "the cache whose deletion failed is gone"
         assert second.relative_to(world.root).as_posix() in before, "the failed deletion was recorded as done"
     world.script(make=[{"stdout": "green\n"}])
