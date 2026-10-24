@@ -5989,6 +5989,7 @@ def main(argv: list[str] | None = None) -> int:
             with holding_record(args.change, Path(args.root)):
                 VERBS[args.verb](Path(args.root), args.change)
         elif args.verb == "review":
+            folder_of(Path(args.root), args.change)
             # The verdict reads the record and its release removes it, so review owns the record's
             # lock from its first read through the release (R-14, bead coding-harness-751).
             with holding_record(args.change, Path(args.root)):

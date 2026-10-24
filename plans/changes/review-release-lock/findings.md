@@ -323,3 +323,5 @@ Stage-2 call, 2026-10-24: implement · attempt 3 · route stage-1 · endpoint cl
 > ````
 
 Orchestrator note, 2026-10-24: implement attempt 3 (stage-1, claude-sonnet-5-5) failed only the criterion-ledger gate — its tests existed while the ledger still said `not yet written`. The orchestrator removed that marker from the ledger lines by hand and committed the attempt otherwise unchanged (`fbf18e21`); local `make verify` on that commit: 2473 passed, 16 skipped, red only on the known `leerprobe` gate (coding-harness-4x2c). This note answers loop rows L1-2 and L1-9; the five artefacts' `implementation_status` was set to `partial` by the orchestrator for L1-12.
+
+Stage-2 call, 2026-10-24: repair · attempt 1 · route codex · endpoint openai-codex · model gpt-6.1-sol · leak check clean over 536 files, 1944 commits, 12 rules.

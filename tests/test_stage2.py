@@ -20,12 +20,12 @@ import copy
 import datetime as dt
 import fcntl
 import json
+import multiprocessing
 import os
 import re
 import shutil
 import subprocess
 import sys
-import threading
 import time
 from dataclasses import dataclass
 from pathlib import Path
@@ -381,9 +381,9 @@ def decide_record(w: World, status: str = "taken — test_a", broke: str = "no")
     w.record().write_text(text, encoding="utf-8")
 
 
-def holds_record_lock(w: World) -> bool:
+def holds_record_lock(w: World, change: str) -> bool:
     """Whether a separate nonblocking acquisition of the record lock fails, as it must while `holding_record` runs."""
-    path = stage2.lock_path("demo", w.root)
+    path = stage2.lock_path(change, w.root)
     with path.open("a+") as handle:
         try:
             fcntl.flock(handle.fileno(), fcntl.LOCK_EX | fcntl.LOCK_NB)
@@ -5628,6 +5628,20 @@ def test_review_is_refused_while_a_loop_row_is_undecided(world: World) -> None:
     assert world.calls() == []
 
 
+@pytest.mark.parametrize("change", ["demo/nested", "../escape", "..", ".", "missing"])
+def test_review_validates_change_before_creating_lock(
+    world: World, change: str, capsys: pytest.CaptureFixture[str]
+) -> None:
+    """Invalid or missing change folders must refuse without creating any lock path."""
+    state = Path(os.environ["XDG_STATE_HOME"])
+    assert not state.exists()
+    assert world.run("review", change) == 2
+    diagnostic = capsys.readouterr().err
+    assert "Name the change:" in diagnostic or "does not exist." in diagnostic
+    assert not state.exists(), "an invalid change created lock state before validation"
+    assert world.calls() == []
+
+
 @pytest.mark.parametrize("recorded", [True, False], ids=["record", "no-record"])
 @pytest.mark.parametrize("findings", [True, False], ids=["findings", "no-findings"])
 def test_review_refuses_a_held_record_lock(
@@ -5650,22 +5664,37 @@ def test_review_refuses_a_held_record_lock(
         }
 
     before = evidence()
-    outcome: dict[str, int] = {}
+    context = multiprocessing.get_context("fork")
+    receiver, sender = context.Pipe(duplex=False)
 
     def attempted() -> None:
-        outcome["code"] = world.run("review")
+        code = world.run("review")
+        sender.send((code, capsys.readouterr().err))
+        sender.close()
 
-    rival = threading.Thread(target=attempted, daemon=True)
+    rival = context.Process(target=attempted)
     with stage2.holding_record("demo", world.root):
-        rival.start()
-        # The bounded deadline: a review that waits for the lock instead of refusing is named here,
-        # not left to hang the suite (spec, criterion 1).
-        rival.join(timeout=30)
-        assert outcome.get("code") is not None, "review waited for the held lock instead of refusing"
-        assert outcome["code"] == 2
+        try:
+            rival.start()
+            sender.close()
+            # Kill and reap a waiting rival before releasing the lock, so a failed
+            # deadline cannot leak a model call or record rewrite into teardown.
+            rival.join(timeout=5)
+            assert not rival.is_alive(), "review waited for the held lock instead of refusing"
+            assert rival.exitcode == 0
+            assert receiver.poll(), "the rival exited without reporting its refusal"
+            code, diagnostic = receiver.recv()
+        finally:
+            if rival.is_alive():
+                rival.terminate()
+                rival.join()
+            receiver.close()
+            sender.close()
+            rival.close()
+        assert code == 2
         assert (
             f"refused: another run holds the loop record `{stage2.record_key('demo', world.root)}`; "
-            "one runner at a time" in capsys.readouterr().err
+            "one runner at a time" in diagnostic
         )
         assert world.calls() == [], "a model was called while the record lock was held"
         assert evidence() == before, "the refusal changed the record or findings"
@@ -5679,7 +5708,7 @@ def test_review_holds_record_lock_through_release(world: World, monkeypatch: pyt
     seen: list[str] = []
 
     def observe(where: str) -> None:
-        assert holds_record_lock(world), f"the record lock was free at {where}"
+        assert holds_record_lock(world, "demo"), f"the record lock was free at {where}"
         seen.append(where)
 
     def read_record(change, root):
@@ -5704,7 +5733,18 @@ def test_review_holds_record_lock_through_release(world: World, monkeypatch: pyt
         monkeypatch.setattr(stage2, name, spy)
 
     assert world.run("review") == 0
-    assert seen, "no boundary of the review was observed"
+    assert seen == [
+        "the first record read",
+        "an append",
+        "a reviewer call",
+        "an append",
+        "the release, before the record is removed",
+        "the first record read",
+        "an append",
+        "the release, after the record is removed",
+        "an append",
+        "a reviewer call",
+    ], "the review must observe every ownership boundary in order"
     assert not world.record().exists(), "the scenario lost its release"
 
 
@@ -5741,24 +5781,24 @@ def test_review_releases_record_lock_on_exit(world: World) -> None:
     world.script(codex=[codex_ok("T1", rows(1)), codex_ok("T1", "L1-1: agree")])
     assert world.run("review") == 0
     assert len(world.calls()) == 2 and not world.record().exists()
-    assert not holds_record_lock(world), "the lock stayed held after a successful review"
+    assert not holds_record_lock(world, "demo"), "the lock stayed held after a successful review"
 
     world.write_record([("L1-1", "", "")])
     (world.bin / "calls.jsonl").unlink()
     assert world.run("review") == 2 and world.calls() == []
-    assert not holds_record_lock(world), "the lock stayed held after the undecided-row refusal"
+    assert not holds_record_lock(world, "demo"), "the lock stayed held after the undecided-row refusal"
 
     world.write_record([("L1-1", "taken — test_a", "no")])
     # The call log is cleared before `script`, which counts the calls already logged.
     (world.bin / "calls.jsonl").unlink(missing_ok=True)
     world.script(codex=[{"stdout": "", "exit": 1}])
     assert world.run("review") == 1 and len(world.calls()) == 1
-    assert not holds_record_lock(world), "the lock stayed held after a failed verdict call"
+    assert not holds_record_lock(world, "demo"), "the lock stayed held after a failed verdict call"
 
     (world.bin / "calls.jsonl").unlink()
     world.script(codex=[codex_ok("T1", rows(1)), {"stdout": "", "exit": 1}])
     assert world.run("review") == 1 and len(world.calls()) == 2
-    assert not holds_record_lock(world), "the lock stayed held after a failed marks call"
+    assert not holds_record_lock(world, "demo"), "the lock stayed held after a failed marks call"
 
 
 # ---------------------------------------------------------------------------
