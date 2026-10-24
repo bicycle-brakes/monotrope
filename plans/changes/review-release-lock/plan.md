@@ -78,11 +78,19 @@ PYTHON=.venv/bin/python3 make verify
 
 ## Criterion ledger
 
-- 1: not yet written tests/test_stage2.py::test_review_refuses_a_held_record_lock — review waits, returns another exit or diagnostic, or invokes a model while the lock is held.
-- 2: not yet written tests/test_stage2.py::test_review_refuses_a_held_record_lock — contention changes record files or findings bytes or existence.
-- 3: not yet written tests/test_stage2.py::test_review_holds_record_lock_through_release — a separate acquisition succeeds at a read, verdict or release boundary.
-- 4: not yet written tests/test_stage2.py::test_review_lock_preserves_normal_flow — an uncontended review refuses, changes ordering, duplicates rows, retains its record or breaks the no-record path.
+- 1: tests/test_stage2.py::test_review_refuses_a_held_record_lock — review waits, returns another exit or diagnostic, or invokes a model while the lock is held.
+- 2: tests/test_stage2.py::test_review_refuses_a_held_record_lock — contention changes record files or findings bytes or existence.
+- 3: tests/test_stage2.py::test_review_holds_record_lock_through_release — a separate acquisition succeeds at a read, verdict or release boundary.
+- 4: tests/test_stage2.py::test_review_lock_preserves_normal_flow — an uncontended review refuses, changes ordering, duplicates rows, retains its record or breaks the no-record path.
 - 4: tests/test_stage2.py::test_codex_marks_each_loop_row_after_its_verdict — marking changes the verdict or loses expected marks.
-- 5: not yet written tests/test_stage2.py::test_review_releases_record_lock_on_exit — the lock stays held after a successful or exceptional return.
+- 5: tests/test_stage2.py::test_review_releases_record_lock_on_exit — the lock stays held after a successful or exceptional return.
+
+## Runner route — 2026-10-24
+
+Stage-1 route: implement · model claude-sonnet-5-5 · reason: two Flash post-run checks failed.
 
 ## Time used
+
+2026-10-24 02:50:54–03:06:03 UTC, 909 s — implement · attempt 1 · route flash · model glm-5.3-flash · rejected · measured by the runner
+2026-10-24 03:06:07–03:17:37 UTC, 690 s — implement · attempt 2 · route flash-repair · model glm-5.3-flash · rejected · measured by the runner
+2026-10-24 03:17:41–03:23:24 UTC, 342 s — implement · attempt 3 · route stage-1 · model claude-sonnet-5-5 · rejected · measured by the runner
