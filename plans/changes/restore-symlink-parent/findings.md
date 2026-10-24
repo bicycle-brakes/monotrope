@@ -691,8 +691,24 @@ Stage-2 call, 2026-10-24: review · endpoint openai-codex · model gpt-6.1-sol �
 
 | ID | Severity | Dimension | Origin | Where | Finding | Reviewer | Status | Broke a test |
 |---|---|---|---|---|---|---|---|---|
-| F6-2 | MAJOR | SPEC | Phase 6 | scripts/stage2.py:5233–5244 | Batch preflight does not account for parent links detached during recovery. With worktree `/w`, `plans -> deep/more/sub` and `prompts -> plans/../../..`, both parents initially resolve inside `/w`, so preflight passes. Restoring `plans/changes/demo/spec.md` replaces `plans` with a directory and writes trusted bytes; `prompts` now resolves outside `/w`, and its later restoration refuses after the batch has already mutated. A source-extracted in-memory reproduction confirms this sequence. The complete batch must be validated against its own parent replacements before its first mutation. [Acceptance criterion 1] | Codex | taken — test: with `plans -> deep/more/sub` and `prompts -> plans/../../..`, a recovery batch that would detach `plans` refuses before its first mutation, because the batch is validated against its own parent replacements | — |
-| F6-3 | MINOR | SPEC | Phase 6 | scripts/stage2.py:3216–3220 | Safe rollback is refused when a baseline link temporarily traverses outside the root but resolves back inside it. For worktree `/w`, baseline `cache -> ../w/data` resolves to contained `/w/data`. After an attempt replaces `cache` with a directory containing ignored `victim.txt`, rollback preflight nevertheless reports an escape immediately at `..`. A source-extracted in-memory reproduction confirms the refusal. Containment must use the resolved parent destination so this safe recovery retains its existing behavior. [Acceptance criterion 6] | Codex | taken — test: a baseline link `cache -> ../w/data` that leaves the root and resolves back inside it keeps the existing rollback; containment is judged on the resolved parent destination | — |
+| F6-2 | MAJOR | SPEC | Phase 6 | scripts/stage2.py:5233–5244 | Batch preflight does not account for parent links detached during recovery. With worktree `/w`, `plans -> deep/more/sub` and `prompts -> plans/../../..`, both parents initially resolve inside `/w`, so preflight passes. Restoring `plans/changes/demo/spec.md` replaces `plans` with a directory and writes trusted bytes; `prompts` now resolves outside `/w`, and its later restoration refuses after the batch has already mutated. A source-extracted in-memory reproduction confirms this sequence. The complete batch must be validated against its own parent replacements before its first mutation. [Acceptance criterion 1] | Codex | fixed — tests/test_stage2.py::test_recovery_batch_projects_detached_parent_links | — |
+| F6-3 | MINOR | SPEC | Phase 6 | scripts/stage2.py:3216–3220 | Safe rollback is refused when a baseline link temporarily traverses outside the root but resolves back inside it. For worktree `/w`, baseline `cache -> ../w/data` resolves to contained `/w/data`. After an attempt replaces `cache` with a directory containing ignored `victim.txt`, rollback preflight nevertheless reports an escape immediately at `..`. A source-extracted in-memory reproduction confirms the refusal. Containment must use the resolved parent destination so this safe recovery retains its existing behavior. [Acceptance criterion 6] | Codex | fixed — tests/test_stage2.py::test_baseline_cleanup_allows_parent_link_returning_inside | — |
 
 Phase 6 verdict: codex 01a16efb-33b3-7d40-b0f6-f3aa0c15fe3c, 2026-10-24
 Reviewer session: codex 01a16efb-33b3-7d40-b0f6-f3aa0c15fe3c — a fresh session reviewed: an earlier ## Phase 6 block makes this a re-check
+
+Stage-2 call, 2026-10-24: repair · attempt 1 · route codex · endpoint openai-codex · model gpt-6.1-sol · leak check clean over 546 files, 1984 commits, 12 rules.
+
+> Attempt 1 (codex) failed its post-run checks.
+>
+> Files the attempt changed (lines added, removed):
+> - `scripts/stage2.py` +78 -37
+> - `tests/test_stage2.py` +55 -0
+>
+> Diagnostics:
+> ```text
+> - Runner format before `make verify`: ruff changed no file.
+> - F6-3: tests/test_stage2.py::test_baseline_cleanup_allows_parent_link_returning_inside: the call of `tests/test_stage2.py::test_baseline_cleanup_allows_parent_link_returning_inside` failed with RestorationRefused, not an AssertionError
+> ```
+
+Stage-2 call, 2026-10-24: repair · attempt 2 · route codex-repair · endpoint openai-codex · model gpt-6.1-sol · reason first Codex post-run check failed · leak check clean over 546 files, 1984 commits, 12 rules.

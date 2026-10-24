@@ -3207,41 +3207,7 @@ def preflight_restored_cleanup(root: Path, baseline: str, keep: set[Path], creat
         return
     canonical = root.resolve()
     for relative in created:
-        pending = list(relative.parts[:-1])
-        parent = canonical
-        hops = 0
-        problem = None
-        while pending:
-            part = pending.pop(0)
-            if part == "..":
-                parent = parent.parent
-                if not parent.is_relative_to(canonical):
-                    problem = "escapes the worktree"
-                    break
-                continue
-            parent /= part
-            try:
-                target = links.get(parent.relative_to(canonical))
-                if target is None and parent.is_symlink():
-                    target = parent.readlink()
-                if target is None:
-                    continue
-                hops += 1
-                if hops > RESTORATION_PARENT_LINK_LIMIT:
-                    problem = "cannot be resolved (too many links in rollback parents)"
-                    break
-                if target.is_absolute():
-                    if not target.is_relative_to(canonical):
-                        problem = "escapes the worktree"
-                        break
-                    parent = canonical
-                    pending = [*target.relative_to(canonical).parts, *pending]
-                else:
-                    parent = parent.parent
-                    pending = [*target.parts, *pending]
-            except (OSError, RuntimeError, ValueError):
-                problem = "cannot be resolved"
-                break
+        problem = projected_parent_problem(canonical, relative, links, set())
         if problem is not None:
             raise RestorationRefused(
                 f"restoration of {relative.as_posix()} is refused: its parent {problem} after rollback"
@@ -3267,6 +3233,7 @@ def plan_baseline_restore(
         preflight_recovery(
             root,
             [*(root / relative for relative in touched), *(root / relative for relative in created)],
+            detach_parents=False,
         )
         preflight_restored_cleanup(root, baseline, keep, created)
     return touched, created
@@ -4877,10 +4844,84 @@ def refuse_unsafe_recovery(root: Path, path: Path) -> None:
         raise RestorationRefused(f"restoration of {path.relative_to(root).as_posix()} is refused: its parent {problem}")
 
 
-def preflight_recovery(root: Path, destinations: Iterable[Path]) -> None:
-    """Check a recovery batch's every destination before its first filesystem mutation."""
+def projected_parent_problem(
+    canonical: Path, relative: Path, links: dict[Path, Path], detached: set[Path]
+) -> str | None:
+    """Resolve a parent in a read-only overlay of restored links and detached directories.
+
+    Resolve complete link targets before judging containment: a relative target can leave the
+    root and return. Detached directories hide the old tree beneath an alias, including any
+    links that only existed through that alias. The leaf itself is never followed.
+    """
+    for depth in range(1, len(relative.parts)):
+        ancestor = Path(*relative.parts[:depth])
+        problem = projected_directory_problem(canonical, ancestor, links, detached)
+        if problem is not None:
+            return problem
+    return None
+
+
+def projected_directory_problem(
+    canonical: Path, relative: Path, links: dict[Path, Path], detached: set[Path]
+) -> str | None:
+    """Resolve one complete ancestor, following link targets through the overlay."""
+    pending = list(relative.parts)
+    parent = canonical
+    hops = 0
+    try:
+        while pending:
+            part = pending.pop(0)
+            if part == "..":
+                parent = parent.parent
+                continue
+            parent /= part
+            local = parent.relative_to(canonical) if parent.is_relative_to(canonical) else None
+            target = links.get(local)
+            hidden = local is not None and any(local.is_relative_to(path) for path in detached)
+            if target is None and not hidden and parent.is_symlink():
+                target = parent.readlink()
+            if target is None:
+                continue
+            hops += 1
+            if hops > RESTORATION_PARENT_LINK_LIMIT:
+                return "cannot be resolved (too many links in projected parents)"
+            if target.is_absolute():
+                parent = Path(target.anchor)
+                pending = [*target.parts[1:], *pending]
+            else:
+                parent = parent.parent
+                pending = [*target.parts, *pending]
+    except (OSError, RuntimeError, ValueError):
+        return "cannot be resolved"
+    return None if parent.is_relative_to(canonical) else "escapes the worktree"
+
+
+def preflight_recovery(root: Path, destinations: Iterable[Path], *, detach_parents: bool = True) -> None:
+    """Validate the whole batch, including parent replacements made by earlier restores."""
+    destinations = list(destinations)
     for path in destinations:
         refuse_unsafe_recovery(root, path)
+    if not detach_parents:
+        return
+    canonical = root.resolve()
+    detached: set[Path] = set()
+    for path in destinations:
+        relative = path.relative_to(root)
+        problem = projected_parent_problem(canonical, relative, {}, detached)
+        if problem is not None:
+            raise RestorationRefused(
+                f"restoration of {relative.as_posix()} is refused: its parent {problem} after parent replacement"
+            )
+        parent = Path()
+        for part in relative.parts[:-1]:
+            parent /= part
+            if any(parent.is_relative_to(previous) for previous in detached):
+                continue
+            standing = root / parent
+            if standing.is_symlink() or (standing.exists() and not standing.is_dir()):
+                detached.add(parent)
+        # A restored input is a regular file, so later parents cannot follow its former alias.
+        detached.add(relative)
 
 
 def restore_work_input(root: Path, path: Path, content: bytes) -> None:

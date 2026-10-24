@@ -14086,3 +14086,63 @@ def test_failed_verify_recovery_refusal_preserves_diagnostics(
     assert {p.name: p.read_bytes() for p in outside.iterdir() if p.is_file()} == snapshots
     assert git(world.root, "rev-parse", "HEAD") == baseline
     assert len(world.calls("codex" if verb == "repair" else "claude")) == 1
+
+
+@pytest.mark.parametrize("reverse", [False, True], ids=["unsafe-order", "safe-order"])
+def test_recovery_batch_projects_detached_parent_links(tmp_path: Path, reverse: bool) -> None:
+    """F6-2: a batch must remain contained after its parent aliases detach."""
+    root = tmp_path / "tree"
+    (root / "deep/more/sub/changes/demo").mkdir(parents=True)
+    (root / "plans").symlink_to("deep/more/sub", target_is_directory=True)
+    (root / "prompts").symlink_to("plans/../../..", target_is_directory=True)
+    spec = root / "plans/changes/demo/spec.md"
+    spec.write_bytes(b"attempt bytes\n")
+    prompt = root / "prompts/04-implement.md"
+    prompt.write_bytes(b"prompt bytes\n")
+    assert spec.parent.resolve().is_relative_to(root)
+    assert prompt.parent.resolve() == root
+    batch = [spec, prompt]
+    if reverse:
+        batch.reverse()
+        stage2.preflight_recovery(root, batch)
+        for path in batch:
+            stage2.restore_work_input(root, path, b"trusted bytes\n")
+        assert spec.read_bytes() == prompt.read_bytes() == b"trusted bytes\n"
+        assert not (root / "plans").is_symlink()
+        assert not (root / "prompts").is_symlink()
+        return
+    with pytest.raises(stage2.RestorationRefused, match="prompts/04-implement.md.*escapes the worktree"):
+        stage2.preflight_recovery(root, batch)
+        for path in batch:
+            stage2.restore_work_input(root, path, b"trusted bytes\n")
+    assert (root / "plans").is_symlink(), "a preceding restore mutated the batch"
+    assert (root / "prompts").is_symlink()
+    assert spec.read_bytes() == b"attempt bytes\n"
+    assert prompt.read_bytes() == b"prompt bytes\n"
+
+
+def test_baseline_cleanup_allows_parent_link_returning_inside(world: World) -> None:
+    """F6-3: containment uses the resolved destination, including an outside-and-back link."""
+    (world.root / "data").mkdir()
+    cache = world.root / "cache"
+    cache.symlink_to(f"../{world.root.name}/data", target_is_directory=True)
+    assert cache.resolve() == world.root / "data"
+    (world.root / ".gitignore").write_text("cache/\n", encoding="utf-8")
+    git(world.root, "add", "-f", "cache")
+    git(world.root, "add", "-A")
+    git(world.root, "commit", "--quiet", "-m", "track a contained returning link")
+    baseline = git(world.root, "rev-parse", "HEAD")
+    cache.unlink()
+    cache.mkdir()
+    victim = cache / "victim.txt"
+    victim.write_bytes(b"ignored attempt bytes\n")
+    refusal = None
+    try:
+        stage2.preflight_restored_cleanup(world.root, baseline, set(), [Path("cache/victim.txt")])
+    except stage2.RestorationRefused as error:
+        refusal = str(error)
+    assert refusal is None, f"contained returning parent was refused: {refusal}"
+    assert victim.read_bytes() == b"ignored attempt bytes\n"
+    stage2.restore_baseline(world.root, baseline, set(), ignored_before={})
+    assert cache.is_symlink()
+    assert cache.resolve() == world.root / "data"
