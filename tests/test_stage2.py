@@ -6623,7 +6623,7 @@ def test_a_call_over_the_time_limit_is_stopped(
     world: World, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
 ) -> None:
     """Criterion 4/15: a member that outlasts the limit is stopped; stopping every member fails the attempt."""
-    assert stage2.REVIEWER_MINUTES == 30
+    assert stage2.REVIEWER_MINUTES == 45
     monkeypatch.setattr(stage2, "REVIEWER_MINUTES", 0.03)
     world.script(pi=[{"stdout": "too late", "sleep": 30}, {"stdout": "too late", "sleep": 30}])
     started = time.monotonic()

@@ -224,8 +224,9 @@ def _pi_pin() -> str:
 
 PI_VERSION = _pi_pin()
 PI_TOOLS = "read,grep,find,ls"
-# A reviewer call that has not ended after this many minutes is stopped (spec, criterion 15).
-REVIEWER_MINUTES = 30
+# A reviewer call that has not ended after this many minutes is stopped (spec, criterion 15);
+# raised from 30 by the maintainer on 2026-10-24.
+REVIEWER_MINUTES = 45
 # The exit code of a loop that finished, told apart from the refusal's 2 (R-11 of the review-swarm review).
 CLEAN_CODE = 3
 # `pi --version` that has not ended after this many seconds is a Pi off the pin (spec, criterion 27).
