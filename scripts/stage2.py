@@ -2249,6 +2249,26 @@ def recorded_2a_session(text: str) -> str | None:
     return found.group(1) if found else None
 
 
+def rejected_review_block(answer: str, thread: str) -> str:
+    """The evidence of a phase-6 answer that is neither six-cell findings nor exactly `No finding.`.
+
+    The block stands beside the authoritative phase-6 records, never inside them: its heading does
+    not start `## Phase 6`, so the next review is no re-check because of it, and the runner writes
+    no verdict line and no no-finding claim of its own here. The answer stands quoted, so control
+    text it carries - a verdict line, a heading, table rows - stays the reviewer's words; an empty
+    answer is said so plainly. Nothing was released: the loop record stands for the next attempt.
+    """
+    kept = quote_reviewer(answer) if answer.strip() else "The answer was empty or whitespace only."
+    return "\n\n".join(
+        [
+            f"## Rejected phase-6 answer — Codex, {today()}",
+            "The review call's answer was neither six-cell findings nor exactly `No finding.`; no verdict "
+            f"was recorded and nothing was released (Codex thread: {thread}). The answer, as it came:",
+            kept,
+        ]
+    )
+
+
 def review(root: Path, change: str) -> None:
     """Phase 6: verdict first, then release and mark the loop rows.
 
@@ -2275,6 +2295,12 @@ def review(root: Path, change: str) -> None:
     begin_call(ctx, "review", CODEX, prompt)
     answer, thread = run_codex(ctx, prompt, resume=recorded, verb="review")
     rows, _ = parse_rows(answer)
+    # The verdict accepts only what a loop round's answer may say (the swarm's rule, at the verdict
+    # boundary): six-cell findings, or exactly `No finding.`. An empty, refused or malformed answer
+    # records no verdict, releases nothing, and stands as rejected evidence for the next attempt.
+    if not rows and answer.strip() != "No finding.":
+        append(ctx.findings, rejected_review_block(answer, thread))
+        raise CallFailed("malformed finding output: expected six-cell findings or exactly 'No finding.'")
     block = "\n\n".join(
         [
             f"## Phase 6 — Codex, {today()}",
@@ -6120,7 +6146,8 @@ def main(argv: list[str] | None = None) -> int:
         elif args.verb == "session":
             session(Path(args.root), args.change, args.model, args.handover)
         elif args.verb == "review-loop":
-            # The three verbs that write the loop record hold it for their whole run (R-14).
+            # The four verbs that own the loop record hold it for their whole run (R-14): review
+            # reads it and releases it too (bead coding-harness-751).
             with holding_record(args.change, Path(args.root)):
                 review_loop(Path(args.root), args.change, args.availability_reported)
         elif args.verb == "release-loop":
@@ -6129,6 +6156,12 @@ def main(argv: list[str] | None = None) -> int:
         elif args.verb == "prepare-loop":
             with holding_record(args.change, Path(args.root)):
                 VERBS[args.verb](Path(args.root), args.change)
+        elif args.verb == "review":
+            folder_of(Path(args.root), args.change)
+            # The verdict reads the record and its release removes it, so review owns the record's
+            # lock from its first read through the release (R-14, bead coding-harness-751).
+            with holding_record(args.change, Path(args.root)):
+                review(Path(args.root), args.change)
         else:
             VERBS[args.verb](Path(args.root), args.change)
     except CleanStop as error:
