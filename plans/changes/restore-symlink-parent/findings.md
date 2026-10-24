@@ -712,3 +712,14 @@ Stage-2 call, 2026-10-24: repair · attempt 1 · route codex · endpoint openai-
 > ```
 
 Stage-2 call, 2026-10-24: repair · attempt 2 · route codex-repair · endpoint openai-codex · model gpt-6.1-sol · reason first Codex post-run check failed · leak check clean over 546 files, 1984 commits, 12 rules.
+
+Stage-2 call, 2026-10-24: review · endpoint openai-codex · model gpt-6.1-sol · leak check clean over 546 files, 1985 commits, 12 rules.
+
+## Phase 6 — Codex, 2026-10-24
+
+| ID | Severity | Dimension | Origin | Where | Finding | Reviewer | Status | Broke a test |
+|---|---|---|---|---|---|---|---|---|
+| F6-4 | MAJOR | SPEC | Phase 6 | scripts/stage2.py:5119–5130, 5369 | Recovery preflight projects inputs before findings, but `put_findings_back` restores findings first. For worktree `/w`, let an attempt create `plans/changes/demo/findings.md -> /w/deep/a/b/c/d` and `prompts -> plans/changes/demo/findings.md/../../../../..`. Both parents initially resolve inside `/w`, and batch preflight passes. On a rejected repair attempt, restoring findings detaches its alias and writes trusted bytes; `prompts` then resolves outside `/w`. The retry preflight refuses after findings and time have already been written. Source-extracted in-memory execution confirms that preflight passes, findings is rewritten, and the next preflight refuses. Project the actual recovery order before its first mutation. [Acceptance criterion 1] | Codex | open | — |
+
+Phase 6 verdict: codex 01a16f11-9662-7fd3-9d7e-ae087c9e22bd, 2026-10-24
+Reviewer session: codex 01a16f11-9662-7fd3-9d7e-ae087c9e22bd — a fresh session reviewed: an earlier ## Phase 6 block makes this a re-check
