@@ -3895,7 +3895,7 @@ def test_a_glm_draft_that_writes_the_key_is_refused_without_a_commit(
     draft_world(world)
     red = red_verify(("pytest", ["FAILED tests/test_x.py::test_a - assert 2 == 1"]))
     world.script(
-        codex=[{"stdout": "drafted"}, {"stdout": "again"}],
+        codex=[codex_ok("T1", "drafted"), codex_ok("T1", "again")],
         claude=[{"stdout": "glm drafted", "plant": {"plans/changes/demo/spec.md": "the key was @KEY@\n"}}],
         make=[red, red, {"stdout": "green\n"}],
     )
@@ -3916,7 +3916,7 @@ def test_a_failed_glm_draft_call_that_writes_the_key_is_refused(
     draft_world(world)
     red = red_verify(("pytest", ["FAILED tests/test_x.py::test_a - assert 2 == 1"]))
     world.script(
-        codex=[{"stdout": "drafted"}, {"stdout": "again"}],
+        codex=[codex_ok("T1", "drafted"), codex_ok("T1", "again")],
         claude=[{"stdout": "", "exit": 1, "append": {"plans/changes/demo/findings.md": "the key was @KEY@\n"}}],
         make=[red, red],
     )
@@ -8590,8 +8590,8 @@ def test_runner_restore_preflights_all_destinations(
     )
     assert world.run("implement") == 2
     err = capsys.readouterr().err
-    # The credential scan can discover another changed prompt before input recovery starts.
-    assert "refused:" in err and "credential scan of prompts/" in err and "escapes the worktree" in err
+    # The scan skips unsafe paths; only the recovery that would write there refuses.
+    assert "refused:" in err and "restoration of prompts/04-implement.md" in err and "escapes the worktree" in err
     assert restored == [], "a safe batch destination was restored before the unsafe one was checked"
     assert (world.root / "plans/changes/demo/spec.md").read_bytes() == spec_before
     assert runner_entries(world.plan) == []
@@ -13510,14 +13510,14 @@ def test_recovery_parent_chain_resolves_relative_target_at_real_depth(tmp_path: 
 
 
 @pytest.mark.parametrize("boundary", ["scan", "checkpoint", "completed-call"])
-def test_credential_scan_refuses_escaped_changed_parent(
+def test_credential_scan_skips_escaped_changed_parent(
     world: World,
     monkeypatch: pytest.MonkeyPatch,
     tmp_path: Path,
     capsys: pytest.CaptureFixture[str],
     boundary: str,
 ) -> None:
-    """L4-1/L5-1: disclose every protective scrub before the unsafe-parent refusal."""
+    """Unsafe scan paths are skipped; contained credentials are still scrubbed and reported."""
     deep = world.root / "src/deep"
     deep.mkdir()
     (deep / "keep.txt").write_bytes(b"tracked\n")
@@ -13528,12 +13528,23 @@ def test_credential_scan_refuses_escaped_changed_parent(
     sentinel = outside / "keep.txt"
     exposed = KEY.encode() + b"\n"
     sentinel.write_bytes(exposed)
+    real_read, real_write = Path.read_bytes, Path.write_bytes
+
+    def read(path):
+        assert path.parent != deep, "credential scan read through the escaped parent"
+        return real_read(path)
+
+    def write(path, content):
+        assert path.parent != deep, "credential scan wrote through the escaped parent"
+        return real_write(path, content)
 
     def escape():
         shutil.rmtree(deep)
         deep.symlink_to(outside, target_is_directory=True)
         (world.root / "src/app.py").write_bytes(exposed)
         (world.root / "src/second.py").write_bytes(exposed)
+        monkeypatch.setattr(Path, "read_bytes", read)
+        monkeypatch.setattr(Path, "write_bytes", write)
 
     if boundary == "completed-call":
         world.script(claude=[{"stdout": "done"}])
@@ -13547,25 +13558,26 @@ def test_credential_scan_refuses_escaped_changed_parent(
         monkeypatch.setattr(stage2, "run_work_model", model)
         _no_checkpoint(monkeypatch)
         assert world.run("implement") == 2
-        refusal = capsys.readouterr().err
-        assert re.search("src/deep/keep.txt.*escapes the worktree", refusal)
+        diagnostic = capsys.readouterr().err
         assert len(world.calls("claude")) == 1
     else:
         escape()
-        refusal = None
-        try:
-            if boundary == "scan":
-                stage2.remove_changed_credential(world.root, KEY)
-            else:
+        if boundary == "scan":
+            try:
+                found = stage2.remove_changed_credential(world.root, KEY)
+            except stage2.RestorationRefused as error:
+                raise AssertionError(
+                    f"credential scanning must skip escaped parents, not refuse recovery: {error}"
+                ) from error
+            assert found == [Path("src/app.py"), Path("src/second.py")]
+            diagnostic = stage2.credential_message(found)
+        else:
+            with pytest.raises(stage2.Refused) as caught:
                 stage2.checkpoint(world.root, "demo", git(world.root, "rev-parse", "HEAD"), key=KEY)
-        except stage2.Refused as error:
-            refusal = error
-        assert isinstance(refusal, stage2.RestorationRefused), f"unsafe scan was not refused: {refusal}"
-        assert re.search("src/deep/keep.txt.*escapes the worktree", str(refusal))
-    diagnostic = str(refusal)
-    removal = "was removed (src/app.py, src/second.py)"
-    assert removal in diagnostic
-    assert diagnostic.index(removal) < diagnostic.index("credential scan of src/deep/keep.txt is refused")
+            assert not isinstance(caught.value, stage2.RestorationRefused)
+            diagnostic = str(caught.value)
+    assert "was removed (src/app.py, src/second.py)" in diagnostic
+    assert "credential scan" not in diagnostic and "restoration" not in diagnostic
     assert KEY not in diagnostic
     assert sentinel.read_bytes() == exposed
     assert (world.root / "src/app.py").read_bytes() == b"[credential]\n"
@@ -13685,37 +13697,117 @@ def test_moved_head_and_escaped_parent_report_both_without_writes(
     assert len(world.calls("codex")) == 1 and world.calls("make") == []
 
 
-def test_draft_credential_scan_names_escaped_path_without_claiming_restoration(
+@pytest.mark.parametrize("escaped", [False, True])
+@pytest.mark.parametrize("verb", ["draft", "implement", "repair", "checkpoint"])
+def test_work_verbs_skip_escaped_scan_parent(
     world: World,
     monkeypatch: pytest.MonkeyPatch,
     tmp_path: Path,
     capsys: pytest.CaptureFixture[str],
+    escaped: bool,
+    verb: str,
 ) -> None:
-    """L4-4: a shared scan refuses in a draft without claiming to restore an input."""
-    draft_world(world)
+    """A passing run checkpoints equally with a contained or escaped changed scan path."""
+    if verb == "draft":
+        draft_world(world)
+        red = red_verify(("pytest", ["FAILED tests/test_x.py::test_a - assert 2 == 1"]))
+        world.script(
+            codex=[codex_ok("T1", "drafted"), codex_ok("T1", "again")],
+            claude=[
+                {
+                    "stdout": "done",
+                    "plant": {
+                        "plans/changes/demo/spec.md": "---\ntitle: Spec\nupdated: 2026-09-30\nbead: demo-1\n---\n\n# Spec\n",
+                        "plans/changes/demo/plan.md": PLAN_CARD,
+                    },
+                }
+            ],
+            make=[red, red, {"stdout": "green\n"}],
+        )
+    elif verb == "repair":
+        repair_world(world)
+        script_repair(world, [repair_step()], make=[{"stdout": "green\n"}])
+    else:
+        successful_implementation(world)
     deep = world.root / "src/deep"
     deep.mkdir()
     (deep / "keep.txt").write_bytes(b"tracked\n")
     git(world.root, "add", "-A")
     git(world.root, "commit", "--quiet", "-m", "tracked scan destination")
-    outside = tmp_path / "draft-outside"
+    baseline = git(world.root, "rev-parse", "HEAD")
+    outside = tmp_path / "scan-outside"
     outside.mkdir()
     sentinel = outside / "keep.txt"
     sentinel.write_bytes(KEY.encode())
-    red = red_verify(("pytest", ["FAILED tests/test_x.py::test_a - assert 2 == 1"]))
-    world.script(codex=[{"stdout": "drafted"}, {"stdout": "again"}], claude=[{"stdout": "done"}], make=[red, red])
-    real_model = stage2.run_work_model
 
-    def escaping(*args, **kwargs):
-        result = real_model(*args, **kwargs)
+    def change():
         shutil.rmtree(deep)
-        deep.symlink_to(outside, target_is_directory=True)
-        return result
+        if escaped:
+            deep.symlink_to(outside, target_is_directory=True)
+        else:
+            deep.mkdir()
+            (deep / "keep.txt").write_bytes(b"changed\n")
 
-    monkeypatch.setattr(stage2, "run_work_model", escaping)
-    assert world.run("draft") == 2
-    err = capsys.readouterr().err
-    assert "src/deep/keep.txt" in err and "escapes the worktree" in err
-    assert "credential scan" in err and "restoration" not in err
-    assert sentinel.read_bytes() == KEY.encode() and deep.is_symlink()
-    assert len(world.calls("claude")) == 1
+    if verb == "checkpoint":
+        change()
+        try:
+            stage2.checkpoint(world.root, "demo", baseline, key=KEY)
+        except stage2.RestorationRefused as error:
+            raise AssertionError(
+                f"a checkpoint needing no restoration must skip escaped scan parents: {error}"
+            ) from error
+    else:
+        real_launch = stage2.launch
+
+        def launch(command, *args, **kwargs):
+            result = real_launch(command, *args, **kwargs)
+            if command[0] in ({"claude"} if verb == "draft" else {"claude", "codex"}):
+                change()
+            return result
+
+        monkeypatch.setattr(stage2, "launch", launch)
+        assert world.run(verb) == 0, capsys.readouterr().err + world.text()
+        assert len(world.calls("claude" if verb in {"draft", "implement"} else "codex")) == 1
+    assert git(world.root, "rev-list", "--count", f"{baseline}..HEAD") == "1"
+    assert sentinel.read_bytes() == KEY.encode()
+    # Draft retains its existing policy: put edits outside the change folder back.
+    assert deep.is_symlink() == (escaped and verb != "draft")
+
+
+@pytest.mark.parametrize("failure", ["blocked", "provenance"])
+def test_checkpoint_restore_refusal_preserves_original_failure(
+    world: World,
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+    capsys: pytest.CaptureFixture[str],
+    failure: str,
+) -> None:
+    """A checkpoint rollback refusal reports the original classification failure as well."""
+    deep = world.root / "src/deep"
+    deep.mkdir()
+    (deep / "keep.txt").write_text("tracked\n")
+    if failure == "provenance":
+        (world.root / "provenance.yaml").write_text("paths: [unclosed\n")
+    git(world.root, "add", "-A")
+    git(world.root, "commit", "--quiet", "-m", "checkpoint refusal baseline")
+    baseline = git(world.root, "rev-parse", "HEAD")
+    outside = tmp_path / "rollback-outside"
+    shutil.copytree(deep, outside)
+    shutil.rmtree(deep)
+    deep.symlink_to(outside, target_is_directory=True)
+    (world.root / "AGENTS.md").write_text("blocked edit\n")
+
+    def checkpoint(*_args, **_kwargs):
+        stage2.checkpoint(world.root, "demo", baseline)
+
+    monkeypatch.setitem(stage2.VERBS, "implement", checkpoint)
+    assert world.run("implement") == 2
+    diagnostic = capsys.readouterr().err
+    original = "AGENTS.md" if failure == "blocked" else "committed provenance map cannot be read"
+    assert original in diagnostic
+    assert "restoration of src/deep/keep.txt is refused" in diagnostic
+    assert "escapes the worktree" in diagnostic
+    assert (world.root / "AGENTS.md").read_text() == "blocked edit\n"
+    assert (outside / "keep.txt").read_text() == "tracked\n"
+    assert deep.is_symlink()
+    assert git(world.root, "rev-parse", "HEAD") == baseline

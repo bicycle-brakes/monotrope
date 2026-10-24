@@ -3406,15 +3406,13 @@ def remove_changed_credential(
     paths = changed_paths(root, against=against)
     if ignored_before is not None:
         paths |= {p for p, stat in ignored_snapshot(root).items() if ignored_before.get(p) != stat}
-    # Scrub safe files even when another changed path cannot be scanned safely. The
-    # restoration no-write stop does not authorize leaving reachable credentials behind.
+    # Scanning is not recovery: skip unsafe parents without reading or writing
+    # through them, while retaining credential removal in contained files.
     found = []
-    unsafe = []
     for relative in sorted(paths, key=lambda path: path.as_posix()):
         path = root / relative
         problem = restoration_parent_problem(root, path)
         if problem is not None:
-            unsafe.append(f"credential scan of {relative.as_posix()} is refused: its parent {problem}")
             continue
         if path.is_symlink() or not path.is_file():
             continue
@@ -3426,12 +3424,6 @@ def remove_changed_credential(
             continue
         path.write_bytes(replace_credential(content, key))
         found.append(relative)
-    if unsafe:
-        # Disclose protective writes before the refusal: they are credential
-        # removal, not recovery, and have already changed the contained files.
-        messages = [credential_message(found)] if found else []
-        message = "; ".join([*messages, *unsafe])
-        raise RestorationRefused(message)
     return found
 
 
@@ -4010,20 +4002,24 @@ def checkpoint(
     try:
         blocked = uncommittable(root, change, keep)
     except Refused as error:
-        # An unreadable map is a failure of this attempt, repairable by the next one - and the edits go
-        # first, so nothing the runner could not classify stays in the tree (O192-5).
-        restored = restore_baseline(root, baseline, set(keep or ()), ignored_before)
+        # Preserve classification failures if the rollback itself must refuse.
+        try:
+            restored = restore_baseline(root, baseline, set(keep or ()), ignored_before)
+        except RestorationRefused as safety_error:
+            preserve_attempt_failure(safety_error, error)
+            raise
         raise CallFailed(f"{error}; {restored}") from error
     if blocked:
-        # The tree goes back to the baseline, but `keep` stands: what the verb itself may keep changed -
-        # its change folder, a draft's own new ADR, the findings a human may have touched - is not the
-        # refused attempt's to lose (P1 and P2 of the #192 review).
-        restored = restore_baseline(root, baseline, set(keep or ()), ignored_before)
-        raise CallFailed(
-            "the attempt changed paths a stage-2 run does not commit: "
-            + ", ".join(f"`{path}`" for path in blocked)
-            + f"; {restored}"
+        # Keep the verb's own allowed changes while rolling back the refused attempt.
+        reason = "the attempt changed paths a stage-2 run does not commit: " + ", ".join(
+            f"`{path}`" for path in blocked
         )
+        try:
+            restored = restore_baseline(root, baseline, set(keep or ()), ignored_before)
+        except RestorationRefused as safety_error:
+            preserve_attempt_failure(safety_error, Refused(reason))
+            raise
+        raise CallFailed(f"{reason}; {restored}")
     try:
         _git_output(root, "add", "-A")
         _git_output(
@@ -5090,8 +5086,9 @@ def run_attempts(
                 # the second snapshot can write the changed files into the object store (spec, criterion 9).
                 exposed = remove_changed_credential(root, key, ignored_before)
                 if exposed:
-                    put_findings_back()
-                    raise Refused(credential_message(exposed))
+                    error = Refused(credential_message(exposed))
+                    put_findings_back(original=error)
+                    raise error
             if unmeasured is None:
                 # Both snapshots stand around the model call alone: the runner's own writes - the audit
                 # line, the route block, the preparation, the block below - fall outside both of them.
@@ -5162,7 +5159,7 @@ def run_attempts(
                 exposed = remove_changed_credential(root, key, ignored_before)
                 if exposed:
                     if not problems:
-                        put_findings_back()
+                        put_findings_back(original=Refused(credential_message(exposed)))
                     problems.append(credential_message(exposed))
             # The verdict is in: the runner writes the attempt's span, accepted or rejected,
             # through the one writer - so a later refusal cannot meet an inline writer and

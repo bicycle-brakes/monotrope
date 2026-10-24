@@ -533,3 +533,21 @@ Stage-2 call, 2026-10-24: review-loop · endpoint opencode-go · model hy3 · le
 Stage-2 call, 2026-10-24: repair · attempt 1 · route codex · endpoint openai-codex · model gpt-6.1-sol · leak check clean over 546 files, 1965 commits, 12 rules.
 
 Stage-2 call, 2026-10-24: review-loop · endpoint opencode-go · model mimo-v2.6-pro · leak check clean over 546 files, 1966 commits, 12 rules.
+
+Stage-2 call, 2026-10-24: repair · attempt 1 · route codex · endpoint openai-codex · model gpt-6.1-sol · leak check clean over 546 files, 1969 commits, 12 rules.
+
+> Attempt 1 (codex) failed its post-run checks.
+>
+> Files the attempt changed (lines added, removed):
+> - `plans/changes/restore-symlink-parent/plan.md` +2 -2
+> - `scripts/stage2.py` +21 -24
+> - `tests/test_stage2.py` +122 -40
+>
+> Diagnostics:
+> ```text
+> - Runner format before `make verify`: ruff changed no file.
+> - L6-1: tests/test_stage2.py::test_work_verbs_skip_escaped_scan_parent: the call of `tests/test_stage2.py::test_work_verbs_skip_escaped_scan_parent[checkpoint-True]` failed with RestorationRefused, not an AssertionError
+> - L6-2: tests/test_stage2.py::test_credential_scan_skips_escaped_changed_parent: the call of `tests/test_stage2.py::test_credential_scan_skips_escaped_changed_parent[scan]` failed with RestorationRefused, not an AssertionError
+> ```
+
+Stage-2 call, 2026-10-24: repair · attempt 2 · route codex-repair · endpoint openai-codex · model gpt-6.1-sol · reason first Codex post-run check failed · leak check clean over 546 files, 1970 commits, 12 rules.
