@@ -13554,6 +13554,77 @@ def test_make_verify_preserves_carriage_return_and_newline_in_new_file_names(
     assert not names.intersection(os.fsdecode(listed_after).split("\0"))
 
 
+@pytest.mark.parametrize("raw_name", [b"assets/new\xff.txt", b"assets/new\xc3\xbf.txt"])
+def test_make_verify_preserves_raw_byte_paths_and_drops_both_entries(
+    world: World, monkeypatch: pytest.MonkeyPatch, raw_name: bytes
+) -> None:
+    # F6-3: text-mode stdin replaces 0xff with '?', adding the question-mark
+    # path twice while the other path stays invisible to verification.
+    names = {raw_name, b"assets/new?.txt"}
+    (world.root / "assets").mkdir()
+    for name in names:
+        try:
+            with open(os.fsencode(world.root) + b"/" + name, "wb") as file:  # noqa: PTH123 — raw byte path
+                file.write(b"new\n")
+        except OSError:
+            if sys.platform == "darwin" and b"\xff" in name:
+                pytest.skip("This macOS filesystem refuses non-UTF-8 file names")
+            raise
+    original_launch = stage2.launch
+    original_run = subprocess.run
+    calls = []
+    seen = []
+
+    def record(command, *args, **kwargs):
+        if "--pathspec-from-file=-" in command:
+            calls.append((list(command), kwargs))
+        return original_run(command, *args, **kwargs)
+
+    def verify(command, root, env, secret=None, **kwargs):
+        if list(command) == ["make", "verify"]:
+            listed = original_run([GIT, "-C", str(root), "ls-files", "-z"], capture_output=True, check=True).stdout
+            seen.append(set(listed.split(b"\0")))
+            return subprocess.CompletedProcess(command, 0, "", "")
+        return original_launch(command, root, env, secret, **kwargs)
+
+    monkeypatch.setattr(stage2.subprocess, "run", record)
+    monkeypatch.setattr(stage2, "launch", verify)
+    assert stage2.verify_attempt(world.root, world.plan) == []
+    assert len(seen) == 1 and names <= seen[0], seen
+    listed_after = original_run([GIT, "-C", str(world.root), "ls-files", "-z"], capture_output=True, check=True).stdout
+    assert names.isdisjoint(listed_after.split(b"\0"))
+    writes = [(argv, kwargs) for argv, kwargs in calls if "--pathspec-from-file=-" in argv]
+    assert len(writes) == 2
+    for argv, kwargs in writes:
+        assert "--pathspec-file-nul" in argv
+        assert kwargs.get("text") is False
+        assert names | {b""} <= set(kwargs["input"].split(b"\0"))
+    assert writes[0][1]["input"] == writes[1][1]["input"]
+
+
+def test_intent_to_add_keeps_git_pathspecs_as_bytes(world: World, monkeypatch: pytest.MonkeyPatch) -> None:
+    # Exercise the binary protocol even on filesystems that refuse non-UTF-8 names.
+    names = [b"assets/new?.txt", b"assets/new\xff.txt"]
+    payload = b"\0".join(names) + b"\0"
+    calls = []
+
+    def git_bytes(command, **kwargs):
+        calls.append((list(command), kwargs))
+        return subprocess.CompletedProcess(command, 0, payload if "ls-files" in command else b"", b"")
+
+    monkeypatch.setattr(stage2.subprocess, "run", git_bytes)
+    intended = stage2.intend_new_files(world.root)
+    stage2.drop_intended(world.root, intended)
+    assert intended == names
+    assert len(calls) == 3
+    assert "-z" in calls[0][0]
+    for argv, kwargs in calls:
+        assert kwargs.get("text") is False
+        if "ls-files" not in argv:
+            assert "--pathspec-from-file=-" in argv and "--pathspec-file-nul" in argv
+            assert kwargs["input"] == payload
+
+
 def test_a_failed_run_leaves_no_intent_to_add_entry(world: World) -> None:
     # Runner review R-5 (2026-10-25). Planted fault: the intent-to-add entries stay in the operator's index
     # when every attempt fails at make verify, so `git stash -u` refuses and a deleted file leaves a stale entry.
@@ -13617,7 +13688,7 @@ def test_intend_new_files_passes_no_file_name_on_the_command_line(
     (world.root / "scripts").mkdir(exist_ok=True)
     (world.root / "scripts/new_a.py").write_text("A = 1\n")
     (world.root / "scripts/new_b.py").write_text("B = 1\n")
-    calls: list[tuple[list[str], str | None]] = []
+    calls: list[tuple[list[str], bytes | None]] = []
     original = subprocess.run
 
     def record(command, *args, **kwargs):
@@ -13628,13 +13699,13 @@ def test_intend_new_files_passes_no_file_name_on_the_command_line(
     names = stage2.intend_new_files(world.root)
     stage2.drop_intended(world.root, names)
     monkeypatch.undo()
-    assert sorted(names) == ["scripts/new_a.py", "scripts/new_b.py"]
+    assert sorted(names) == [b"scripts/new_a.py", b"scripts/new_b.py"]
     writes = [(argv, text) for argv, text in calls if "--intent-to-add" in argv or "--cached" in argv]
     assert len(writes) == 2
     for argv, text in writes:
-        assert not any(name in argv for name in names), argv
+        assert not any(os.fsdecode(name) in argv for name in names), argv
         assert "--pathspec-from-file=-" in argv and "--pathspec-file-nul" in argv
-        assert text is not None and set(text.split("\0")) == {*names, ""}
+        assert text is not None and set(text.split(b"\0")) == {*names, b""}
     assert "scripts/new_a.py" not in git(world.root, "ls-files").splitlines()
     assert "scripts/new_a.py" in git(world.root, "ls-files", "--others", "--exclude-standard").splitlines()
 
@@ -13670,7 +13741,7 @@ def test_intent_to_add_reads_names_as_paths_and_leaves_the_callers_index_alone(w
     git(world.root, "rm", "--cached", "-q", "--", "plans/changes/demo/spec.md")
     before = git(world.root, "diff", "--cached", "--name-status")
     names = stage2.intend_new_files(world.root)
-    assert sorted(names) == ["plans/changes/demo/[f]indings.md", "plans/changes/demo/spec.md"]
+    assert sorted(names) == [b"plans/changes/demo/[f]indings.md", b"plans/changes/demo/spec.md"]
     stage2.drop_intended(world.root, names)
     assert git(world.root, "diff", "--cached", "--name-status") == before
     assert "plans/changes/demo/[f]indings.md" in git(world.root, "ls-files", "--others").splitlines()
@@ -13681,7 +13752,7 @@ def test_a_new_file_named_like_pathspec_magic_is_added_and_dropped(world: World)
     # P242-2 (b). Planted fault: `:notes.md` is read as pathspec magic, so `git add -N` fails.
     (world.root / ":notes.md").write_text("n\n")
     names = stage2.intend_new_files(world.root)
-    assert names == [":notes.md"]
+    assert names == [b":notes.md"]
     assert ":notes.md" in git(world.root, "--literal-pathspecs", "ls-files").splitlines()
     stage2.drop_intended(world.root, names)
     assert ":notes.md" not in git(world.root, "ls-files").splitlines()

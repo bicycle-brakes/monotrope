@@ -3215,7 +3215,26 @@ def changed_paths(root: Path, env: dict[str, str] | None = None, against: str = 
     return {Path(name) for name in [*tracked, *untracked] if name}
 
 
-def intend_new_files(root: Path, env: dict[str, str] | None = None) -> list[str]:
+def _git_bytes(root: Path, *args: str, env: dict[str, str] | None = None, stdin: bytes | None = None) -> bytes:
+    """Run Git without decoding path output or translating pathspec stdin."""
+    try:
+        done = subprocess.run(
+            [GIT, "-C", str(root), *args],
+            input=stdin,
+            capture_output=True,
+            text=False,
+            check=False,
+            env=env,
+            timeout=GIT_SECONDS,
+        )
+    except subprocess.TimeoutExpired as error:
+        raise Refused(f"git {args[0]} did not finish within {GIT_SECONDS // 60} minutes") from error
+    if done.returncode != 0:
+        raise Refused(f"git {args[0]} failed: {os.fsdecode(done.stderr).strip()[:200]}")
+    return done.stdout
+
+
+def intend_new_files(root: Path, env: dict[str, str] | None = None) -> list[bytes]:
     """Add every untracked, non-ignored file intent-to-add, so `git ls-files` lists it; return the names.
 
     A gate that reads the index (the leerprobe gate builds its foreign repository from `git ls-files`)
@@ -3224,18 +3243,16 @@ def intend_new_files(root: Path, env: dict[str, str] | None = None) -> list[str]
     `verify_attempt` drops the entries right after `make verify`.
     The names go to git on stdin, NUL-separated, so thousands of files cannot overflow the argument
     list, and `--literal-pathspecs` makes them paths, not patterns: `[i].md` does not match `i.md`
-    and `:notes.md` is no pathspec magic.
+    and `:notes.md` is no pathspec magic. Paths remain filesystem bytes throughout listing,
+    adding and cleanup, including names that cannot be decoded as UTF-8.
     """
     names = [
         name
-        # NUL separates paths; CR and LF inside a name must not be translated by text mode.
-        for name in _git_output(
-            root, "ls-files", "-z", "--others", "--exclude-standard", env=env, preserve_newlines=True
-        ).split("\0")
+        for name in _git_bytes(root, "ls-files", "-z", "--others", "--exclude-standard", env=env).split(b"\0")
         if name
     ]
     if names:
-        _git_output(
+        _git_bytes(
             root,
             "--literal-pathspecs",
             "add",
@@ -3243,19 +3260,19 @@ def intend_new_files(root: Path, env: dict[str, str] | None = None) -> list[str]
             "--pathspec-from-file=-",
             "--pathspec-file-nul",
             env=env,
-            stdin="\0".join(names) + "\0",
+            stdin=b"\0".join(names) + b"\0",
         )
     return names
 
 
-def drop_intended(root: Path, names: list[str], env: dict[str, str] | None = None) -> None:
+def drop_intended(root: Path, names: list[bytes], env: dict[str, str] | None = None) -> None:
     """Remove the intent-to-add entries of `names` from the index; the files and the caller's entries stay.
 
     `rm --cached` on the literal paths touches only those entries: a reset to HEAD would also unstage
     a caller's change on a path that a pattern happens to match, or undo a caller's `git rm --cached`.
     """
     if names:
-        _git_output(
+        _git_bytes(
             root,
             "--literal-pathspecs",
             "rm",
@@ -3266,7 +3283,7 @@ def drop_intended(root: Path, names: list[str], env: dict[str, str] | None = Non
             "--pathspec-from-file=-",
             "--pathspec-file-nul",
             env=env,
-            stdin="\0".join(names) + "\0",
+            stdin=b"\0".join(names) + b"\0",
         )
 
 
