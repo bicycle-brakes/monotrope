@@ -120,17 +120,17 @@ Full doctrine: `docs/WORKFLOW.md`, in English since 2026-09-29.
   consequence; do not re-ask settled decisions or existing permission.
 - An orchestrating session shows a sub-agent's plan card to the maintainer
   unchanged; the veto stays the maintainer's (`prompts/03-plan.md`).
-- At session start or after a break, read the latest relevant handover and its
-  addenda; check the working tree and current PR state before acting. Begin
-  with a short orientation: **Where we are / Next step / Needed from you**.
-  Say "nothing right now" when no answer is needed; never make the user
-  rebuild the chat or read the whole backlog.
+- At session start or after a break, read the latest relevant handover and its addenda;
+  check the working tree and current PR state before acting. Begin with a short orientation:
+  **Where we are / Next step / Needed from you**. Say "nothing right now" when no answer is
+  needed; never make the user rebuild the chat or read the whole backlog.
 - Before ending or handing over a session, maintain a dated file under
   `docs/journal/handover/`. Record the objective, completed work and evidence,
   decisions and preferences, unfinished work/blockers, branch/commit/PR,
   parallel-session ownership, and one concrete resumption action. Preserve
   prior records with a dated addendum; task status stays in Beads.
 - Link the handover in the closing message; the next session resumes from it.
+- A bead for a change names its class (`spike` … `architectural`) in its description (2026-10-22).
 
 ## Tracker quick reference
 
@@ -156,9 +156,9 @@ tools/bd dolt push          # push tracker data to origin (refs/dolt/data)
   from there, and concurrent writers lose nothing
   (`docs/research/2026-09-23-worktree-tracker-writes.md`); who may write is
   still house rule 4, and a worker claims with `--actor <session>`. Each new
-  checkout or worktree runs `make venv` once before `make verify` (`PYTHON=` picks a 3.12+
-  interpreter); the suite fails under one that does not match the lock
-  (bead coding-harness-ei0).
+  checkout or worktree runs `make venv` and `bash tools/pi/install.sh` once before `make verify`
+  (`PYTHON=` picks a 3.12+ interpreter; one that does not match the lock fails the suite, bead
+  coding-harness-ei0; the Pi tests and the swarms need the pinned Pi, bead coding-harness-hs0o).
 - **A text-only change (Markdown outside `scripts/`, `tests/`, `prompts/`,
   `decisions/`) skips the local `make verify`;** CI is its gate.
 - **Omnigent starts inside the worktree** (`omnigent claude

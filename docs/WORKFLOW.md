@@ -4,7 +4,7 @@ category: governance
 status: current
 created: 2026-09-05
 last_reviewed: 2026-09-29
-updated: 2026-10-22
+updated: 2026-10-24
 owner: Data Architect
 provenance: ai-drafted-reviewed
 produced_by:
@@ -745,8 +745,9 @@ amendments; the table above carries the live setting.
 **The two Flash rows are live through the runner.** `explore` starts phase 1
 on GLM 5.3 Flash with read/search tools; `implement` starts phase 4 with file
 read/search/edit/write tools but no shell. The runner, not the implementation
-model, runs `make verify`, checks for a measured line below `## Time used` and
-makes the local checkpoint commit. An explicit `--stage2-off [REASON]` uses
+model, runs `make verify`, measures each completed attempt itself — a line
+below `## Time used`, marked "measured by the runner", written for a rejected
+attempt as well as an accepted one — and makes the local checkpoint commit. An explicit `--stage2-off [REASON]` uses
 §3's Haiku 5.5 or Sonnet 5.5 route and records why. A leak refusal always stops
 the call; it never selects the fallback.
 If the model process itself fails, the runner restores the worktree to the
@@ -894,7 +895,7 @@ implementation answer the runner runs exactly
 `make verify`; a failed post-check gets one fresh Flash repair, then one
 Sonnet 5.5 fallback, and every attempt repeats the leak check. A failed model
 process stops instead of silently changing route, and a review-loop call (through Pi) that has
-not ended 30 minutes after it started is stopped. For the other foreign CLIs,
+not ended `REVIEWER_MINUTES` (45 minutes since 2026-10-24) after it started is stopped. For the other foreign CLIs,
 isolation settings are configured on every call, not measured
 by these Pi contracts (the maintainer's decision of 2026-09-30, ADR 0007).
 The loop's Pi flags were first measured by hand on the pinned version;
@@ -1196,8 +1197,7 @@ reword its reason so it names no fix instead of marking it fixed.
 test alone against the baseline's code, in a
 temporary git worktree whose `tests/` is the attempt's, and accepts a test
 only when pytest exits 1 or 2 there. When every post-run check passes —
-`make verify` green, a measured line in the time log, every fixed line
-checked — the runner writes each row's Status `fixed` in its place, makes the
+`make verify` green, every fixed line checked — the runner writes each row's Status `fixed` in its place, makes the
 one checkpoint commit `fix(<change>): repair taken findings <IDs>` and marks
 the loop record after it. The attempts are Codex, one fresh Codex attempt
 with the first one's diagnostics, and Sonnet 5.5 at effort `medium`, the last

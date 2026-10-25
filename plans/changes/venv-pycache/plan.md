@@ -1,0 +1,133 @@
+---
+title: "Plan — venv-pycache"
+status: draft
+implementation_status: partial
+date: 2026-10-24
+last_reviewed: 2026-10-24
+updated: 2026-10-24
+supersedes: null
+superseded_by: null
+bead: coding-harness-q94b
+owner: framework-architect
+provenance: ai-drafted-reviewed
+produced_by: {kind: llm-session, name: codex, version: "gpt-6.1-sol, 2026-10-24"}
+review: {status: pending, approved_by: null, approved_at: null}
+tags: [plan, stage-2, tool-integrity]
+---
+
+# Plan — venv-pycache
+
+```text
+For you:     Test-written venv caches no longer refuse an attempt; other environment changes still do.
+Done when:   Regression tests prove cache deletion before tool use, repeated checks and continued integrity refusal, and make verify is green.
+Appetite:    2 hours of phase 4, repairs included; a stop, not an estimate.
+Not now:     Environment rebuilds, caches outside the venv, model routing or retry-policy changes.
+Pre-mortem:  suppose it failed: most likely because a later check mistakes the runner's own deletion for tampering.
+Starts unless you say stop.
+```
+
+## Files and steps
+
+1. Change `scripts/stage2.py`: normalize eligible cache writes at the shared
+   `tool_problem` boundary, with safe deletion and narrowly updated baseline
+   bookkeeping; retain `tool_state` coverage of every file and symlink.
+2. Change `tests/test_stage2.py`: add the regressions named below using
+   temporary environments and the existing `World`/local command stand-ins.
+3. Update `plans/changes/venv-pycache/plan.md`: convert pending ledger entries
+   as tests land; leave measured time to the runner. The runner updates
+   `plans/changes/venv-pycache/findings.md` and `plans/INDEX.md`.
+   No implementation file is created or deleted.
+
+## Implementation contract
+
+- Leave the `before is None` behavior unchanged. With a baseline, inspect
+  current digests before comparing, find new or content-changed regular files
+  below an exact `__pycache__` component inside `.venv/`, and unlink them.
+  Include arbitrary suffixes and nested directories; never delete unchanged
+  files, directories or symlinks. Retain the initial digest's full coverage.
+- Use no-follow directory handling from the `.venv/` root down: a linked
+  root, parent, cache directory or file is never a cleanup route. A changed
+  link or non-regular replacement remains a difference, not a cache exemption.
+  Do not classify the `unreadable` sentinel as cache bytes eligible for trust.
+- After each successful unlink, remove only that path's old cache entry from
+  the shared baseline dictionary. This records a runner-owned deletion, not
+  acceptance of new bytes. Re-read current state before comparing; do not
+  rebaseline surviving files. Missing files not deleted by this cleanup stay
+  differences. Repeated checks/attempts use this same dictionary, so a
+  recreated cache is new and deleted again. Document this narrow mutation.
+- On inspection/deletion failure, return a path-naming problem and run no
+  tools. Keep successful earlier deletion bookkeeping if a later deletion
+  fails. All non-cache differences, including mixed cache/package changes,
+  retain the existing refusal and first-differing-path behavior.
+- Keep the existing guard call sites in `verify_attempt`, `format_step`,
+  `red_first`, `fixed_test_proof` and `verify_draft`; the common boundary
+  performs cleanup before their runner-owned steps. Exercise verification
+  and draft paths with local launch seams that assert cache absence at the
+  first tool invocation; a simulated failed cleanup must invoke no step.
+- Preserve existing regression names. Parameterize cache additions/changes,
+  protected file mutations, aliases and filesystem failures. Assert actual
+  bytes/absence and unrelated baseline entries, not only a green return.
+  Add a mixed changed-cache/changed-source case and a three-check sequence:
+  clean, clean again, then regenerated cache cleaned against the same baseline.
+- Do not touch tracker, ADRs, decisions, prompts, workflow, kit, dependency
+  pins, other change artifacts or caches outside `.venv/`. No design is due
+  for this bounded change. Do not alter routing, retry or checkpoint policy.
+
+## Criterion ledger
+
+- 1: tests/test_stage2.py::test_tool_check_deletes_new_venv_cache — a new cache file survives or alone refuses the check
+- 1: tests/test_stage2.py::test_venv_cache_cleanup_precedes_runner_tools — the first verify or draft step sees the planted cache
+- 2: tests/test_stage2.py::test_tool_check_deletes_changed_venv_cache — changed baseline cache bytes survive or their deletion refuses the check
+- 2: tests/test_stage2.py::test_venv_cache_cleanup_precedes_runner_tools — tool execution precedes removal of changed cache bytes
+- 3: tests/test_stage2.py::test_tool_check_preserves_unchanged_venv_cache — unchanged cache bytes are removed or rewritten
+- 4: tests/test_stage2.py::test_venv_cache_cleanup_survives_repeated_checks — the shared baseline refuses its own deletion or trusts regenerated bytes
+- 5: tests/test_stage2.py::test_a_changed_venv_file_is_named_and_refused — source, pth or symlink mutations go unnoticed
+- 5: tests/test_stage2.py::test_preexisting_venv_root_link_keeps_modified_tools_refused — an unchanged baseline root link hides modified executable or package bytes from verification or draft checks
+- 5: tests/test_stage2.py::test_an_attempt_that_plants_a_venv_package_fails_before_any_step — a changed package reaches a runner step
+- 5: tests/test_stage2.py::test_red_first_refuses_a_changed_venv — the baseline proof runs a changed interpreter
+- 5: tests/test_stage2.py::test_cache_cleanup_keeps_other_venv_mutations_refused — outside-cache bytecode, deletion, executable or mixed source/cache tampering passes
+- 6: tests/test_stage2.py::test_venv_cache_cleanup_never_follows_symlinks — an alias target changes or a changed link is exempted
+- 7: tests/test_stage2.py::test_venv_cache_cleanup_failure_stops_runner_tools — unreadable or undeletable cache is accepted or any step runs
+
+- 4: tests/test_stage2.py::test_cache_deletion_is_recorded_beside_refused_source — a refused source change loses successful deletion bookkeeping and poisons the next check
+- 6: tests/test_stage2.py::test_baseline_cache_symlink_replaced_by_regular_file_is_refused — cleanup accepts removal of a baseline symlink
+- 7: tests/test_stage2.py::test_cache_unreadable_in_both_snapshots_is_refused — matching read failures are accepted as unchanged bytes
+- 6: tests/test_stage2.py::test_venv_root_link_and_unreadable_directory_stop_tools — a byte-identical linked venv root reaches a runner tool or is refused without naming the root link
+- 7: tests/test_stage2.py::test_venv_root_link_and_unreadable_directory_stop_tools — an unreadable new cache directory reaches a runner tool or is refused without naming the directory
+
+## Verification
+
+```sh
+PYTHONDONTWRITEBYTECODE=1 .venv/bin/python3 -m pytest tests/test_stage2.py -q
+PYTHONDONTWRITEBYTECODE=1 .venv/bin/python3 scripts/check_interview_minimums.py --change venv-pycache
+PYTHONDONTWRITEBYTECODE=1 .venv/bin/python3 scripts/check_criterion_ledger.py
+PYTHON=$PWD/.venv/bin/python3 make verify
+```
+
+Show the new/changed cache tests red on the input runner, then green after
+repair; inject filesystem failures deterministically rather than relying on
+host permissions. No live model call is needed. The runner regenerates the
+index, runs full verification and makes the one commit. The requested
+`scripts/validate_change_artefacts.py` and a plan template are absent at input
+commit `4dc80fa`; use the existing gates and the phase-3 prompt's form.
+
+## Explore route
+
+Research was written by the orchestrating Claude Code Opus 5.5 session on
+2026-10-24 from the measured failure at `7586f1a`; no separate exploration
+call or Stage-1 fallback was recorded. Phase 2b is omitted by class.
+
+## Runner route — 2026-10-24
+
+Stage-1 route: repair · model claude-sonnet-5-5 · reason: two Codex post-run checks failed.
+
+## Time used
+
+2026-10-24 00:20:10–00:45:12 UTC, 1502 s — implement · attempt 1 · route flash · model glm-5.3-flash · accepted · measured by the runner
+2026-10-24 00:59:39–01:15:13 UTC, 934 s — repair · attempt 1 · route codex · model gpt-6.1-sol · rejected · measured by the runner
+2026-10-24 01:15:19–01:27:27 UTC, 728 s — repair · attempt 2 · route codex-repair · model gpt-6.1-sol · rejected · measured by the runner
+2026-10-24 01:27:33–01:34:17 UTC, 404 s — repair · attempt 3 · route stage-1 · model claude-sonnet-5-5 · accepted · measured by the runner
+2026-10-24 01:55:59–02:06:56 UTC, 657 s — repair · attempt 1 · route codex · model gpt-6.1-sol · accepted · measured by the runner
+2026-10-24 08:41:27–08:59:22 UTC, 1076 s — repair · attempt 1 · route codex · model gpt-6.1-sol · rejected · measured by the runner
+2026-10-24 08:59:26–09:14:27 UTC, 900 s — repair · attempt 2 · route codex-repair · model gpt-6.1-sol · accepted · measured by the runner
+2026-10-24 09:21:49–09:37:51 UTC, 962 s — repair · attempt 1 · route codex · model gpt-6.1-sol · accepted · measured by the runner
