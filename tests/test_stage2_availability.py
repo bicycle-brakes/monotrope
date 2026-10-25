@@ -3,7 +3,9 @@
 from __future__ import annotations
 
 import datetime as dt
+import fcntl
 import json
+import shutil
 import sys
 from pathlib import Path
 
@@ -62,6 +64,75 @@ def test_preparation_filters_failures_and_requires_main_chat_report(world: World
     assert recorded["availability"] == state["availability"]
 
 
+@pytest.mark.parametrize("verb", ["prepare-loop", "release-loop", "review-loop"])
+def test_each_record_verb_is_refused_by_its_own_lock(world: World, capsys, verb: str) -> None:
+    """R-14 (O190-1): each locked call site is driven alone, in a world where the verb gets past its own checks."""
+    if verb == "prepare-loop":
+        enable(world)
+    elif verb == "release-loop":
+        world.write_findings(VERDICT)
+    else:
+        world.script(pi=[{"stdout": "No finding."}] * 2)
+    path = stage2.lock_path("demo", world.root)
+    path.parent.mkdir(parents=True, exist_ok=True)
+    capsys.readouterr()
+    with path.open("a+") as handle:
+        fcntl.flock(handle.fileno(), fcntl.LOCK_EX | fcntl.LOCK_NB)
+        assert world.run(verb) == 2
+    error = capsys.readouterr().err
+    assert f"another run holds the loop record `{stage2.record_key('demo', world.root)}`" in error, error
+    assert world.reviews() == [], "a refused run still called a reviewer"
+    assert world.run(verb) == 0, f"{verb} did not get past its own checks once the lock was free"
+    assert "another run holds" not in capsys.readouterr().err
+
+
+def test_marking_a_repair_waits_for_no_one_and_loses_no_round(world: World) -> None:
+    """R-14 (O190-4): `repair` rewrites the record whole, so it takes the record's lock like the other verbs."""
+    world.write_record([("L1-1", "taken — test_a", "no")])
+    line = next(row for row in world.record().read_text(encoding="utf-8").splitlines() if row.startswith("| L1-1"))
+    cells = stage2.split_row(line)
+    taken = [("record", [*cells[:7], " \\| ".join(cells[7:-1]), cells[-1]])]
+    fixes = {"L1-1": "fixed — not a test — the doctrine names it"}
+    before = world.record().read_text(encoding="utf-8")
+    path = stage2.lock_path("demo", world.root)
+    path.parent.mkdir(parents=True, exist_ok=True)
+    with path.open("a+") as handle:
+        fcntl.flock(handle.fileno(), fcntl.LOCK_EX | fcntl.LOCK_NB)
+        with pytest.raises(stage2.CallFailed, match="L1-1"):
+            stage2.mark_repaired_record("demo", taken, fixes, world.root)
+    assert world.record().read_text(encoding="utf-8") == before, "a held record was rewritten"
+    stage2.mark_repaired_record("demo", taken, fixes, world.root)
+    assert "fixed — not a test — the doctrine names it" in world.record().read_text(encoding="utf-8")
+
+
+def test_an_accepted_receipt_is_spent_by_the_round_that_is_written(world: World, monkeypatch) -> None:
+    """R-14 (O190-3): a failed first attempt leaves the receipt; a written round 1 spends it."""
+    enable(world)
+    assert world.run("prepare-loop") == 0
+    prepared = receipt(world)
+    path = availability.receipt_path(world.root, "demo", stage2)
+    real = stage2.require_pi
+
+    def missing() -> None:
+        raise stage2.Refused("the pinned Pi is not installed")
+
+    monkeypatch.setattr(stage2, "require_pi", missing)
+    assert world.run("review-loop", "demo", "--availability-reported", prepared["report_id"]) == 2
+    assert not world.record().exists(), "a failed attempt left a round behind"
+    assert path.exists(), "a failed attempt spent the receipt"
+    monkeypatch.setattr(stage2, "require_pi", real)
+    world.script(pi=[{"stdout": "No finding."}] * 2)
+    assert world.run("review-loop", "demo", "--availability-reported", prepared["report_id"]) == 0
+    assert not availability.receipt_path(world.root, "demo", stage2).exists(), "the receipt survived its round"
+    rounds = len(world.reviews())
+    # A consumed receipt and a clean round: the loop is finished (3), not refused (2).
+    assert world.run("review-loop", "demo", "--availability-reported", prepared["report_id"]) == stage2.CLEAN_CODE
+    assert len(world.reviews()) == rounds, "a spent receipt started a second round"
+
+    assert world.record().exists()
+    assert not path.exists(), "the written round did not spend the receipt"
+
+
 def test_preparation_calls_only_static_toolless_probes(world: World, monkeypatch) -> None:
     """Criterion 17: any source, tools, bare Pi or unchecked call fails this boundary."""
     enable(world)
@@ -102,7 +173,7 @@ def test_prepared_selection_is_bound_to_inputs_and_freshness(world: World, monke
         later = availability.now() + dt.timedelta(seconds=901)
         monkeypatch.setattr(availability, "now", lambda: later)
     else:
-        path = availability.receipt_path("demo", stage2)
+        path = availability.receipt_path(world.root, "demo", stage2)
         if fault == "corrupt":
             path.write_text("not JSON")
         else:
@@ -119,7 +190,7 @@ def test_all_failed_preparation_never_creates_a_clean_round_or_reuses_receipt(wo
     assert world.run("prepare-loop") == 0
     world.script(pi=[{"exit": 1, "stderr": "unavailable"}] * 5)
     assert world.run("prepare-loop") == 2
-    assert not availability.receipt_path("demo", stage2).exists()
+    assert not availability.receipt_path(world.root, "demo", stage2).exists()
     assert not world.record().exists()
 
 
@@ -145,6 +216,22 @@ def test_preparation_cannot_reset_a_started_or_released_run(world: World, releas
         assert world.run("release-loop") == 0
     assert world.run("prepare-loop") == 2
     assert world.reviews() == []
+
+
+def test_a_maintainer_restart_lets_a_released_run_be_prepared_again(world: World) -> None:
+    """ADR 0021 restart amendment (bead coding-harness-0xjr): the restart is the one way back to preparation."""
+    enable(world)
+    world.write_record([("L1-1", "rejected — no evidence", "")])
+    world.write_findings(VERDICT)
+    assert world.run("release-loop") == 0
+    assert world.run("prepare-loop") == 2
+    assert world.run("release-loop", "demo", "--restart", "--reason", "maintainer asked") == 0
+    world.script(pi=[{"stdout": "OK"}] * (len(TEST_FREE) + len(TEST_LADDER)))
+    assert world.run("prepare-loop") == 0
+    prepared = receipt(world)
+    world.script(pi=[{"stdout": "No finding."}] * 2)
+    assert world.run("review-loop", "demo", "--availability-reported", prepared["report_id"]) == 0
+    assert "## Round 2 — " in world.record().read_text(), "the restarted run did not continue the numbering"
 
 
 def test_paid_review_can_start_without_a_free_candidate(world: World) -> None:
@@ -260,3 +347,100 @@ def test_invalid_availability_rule_or_leak_stops_before_model_calls(world: World
     (world.root / "scripts" / "helper.py").write_text("LEAKMARK-123456\n")
     assert world.run("prepare-loop") == 2
     assert world.reviews() == []
+
+
+def test_a_probe_that_only_ran_out_of_time_gets_one_longer_try(world: World, monkeypatch) -> None:
+    """R-7 of the review-swarm review: a slow but reachable model must not vanish from the run."""
+    from test_stage2 import TEST_FREE
+
+    enable(world)
+    slow = TEST_FREE[0]
+    limits: list[int] = []
+
+    def fake(_ctx, model, _prompt, _key, **options):
+        if model != slow:
+            return "OK"
+        limits.append(options["timeout_seconds"])
+        if len(limits) == 1:
+            raise stage2.CallFailed(
+                f"pi was stopped by the availability probe limit of {options['timeout_seconds']} seconds"
+            )
+        return "OK"
+
+    monkeypatch.setattr(stage2, "run_reviewer", fake)
+    assert world.run("prepare-loop") == 0
+    assert limits == [availability.PROBE_SECONDS, availability.PROBE_RETRY_SECONDS], "no longer try was made"
+    data = receipt(world)["state"]
+    assert slow in data["free"]["selected"], "the slow model was dropped after one timeout"
+    assert data["availability"]["slow"] == {slow: availability.PROBE_RETRY_SECONDS}
+    assert slow not in data["availability"]["failed"]
+
+
+def test_the_second_probe_is_checked_and_audited_on_its_own(world: World, monkeypatch) -> None:
+    """The review of PR #196: a withdrawn admission stops the second probe, and it gets its own audit line."""
+    from test_stage2 import TEST_FREE
+
+    enable(world)
+    slow = TEST_FREE[0]
+    admissions: list[str | None] = []
+    real_preflight = stage2.preflight
+    calls = {"n": 0}
+
+    def preflight(*args, **kwargs):
+        problem = kwargs.get("admission_problem")
+        admissions.append(problem(args[0], slow) if callable(problem) and args[2][1] == slow else None)
+        return real_preflight(*args, **kwargs)
+
+    def fake(_ctx, model, _prompt, _key, **_options):
+        if model != slow:
+            return "OK"
+        calls["n"] += 1
+        if calls["n"] == 1:
+            raise stage2.CallFailed("pi was stopped by the availability probe limit of 60 seconds")
+        return "OK"
+
+    monkeypatch.setattr(stage2, "preflight", preflight)
+    monkeypatch.setattr(stage2, "run_reviewer", fake)
+    assert world.run("prepare-loop") == 0
+    assert len([item for item in admissions if item is not None]) == 0
+    lines = [line for line in world.text().splitlines() if "prepare-loop" in line and slow in line]
+    assert len(lines) == 2, f"the second probe carries no audit line of its own: {lines}"
+
+
+def test_a_probe_that_is_refused_is_not_tried_again(world: World, monkeypatch) -> None:
+    """A refusal is final: only a stopped call earns the second, longer probe."""
+    from test_stage2 import TEST_FREE
+
+    enable(world)
+    refused = TEST_FREE[0]
+    calls: list[int] = []
+
+    def fake(_ctx, model, _prompt, _key, **kwargs):
+        if model != refused:
+            return "OK"
+        calls.append(kwargs["timeout_seconds"])
+        raise stage2.CallFailed("pi exited 1: model_coming_soon")
+
+    monkeypatch.setattr(stage2, "run_reviewer", fake)
+    assert world.run("prepare-loop") == 0
+    assert calls == [availability.PROBE_SECONDS], "a refused probe was repeated"
+    assert refused in receipt(world)["state"]["availability"]["failed"]
+
+
+def test_receipts_of_two_worktrees_do_not_meet(world: World) -> None:
+    """R-2 through the call sites: each worktree consumes its own receipt, whatever the other prepared later."""
+    other = World(shutil.copytree(world.root, world.root.parent / "repo-b", symlinks=True), world.bin, world.state)
+    enable(world)
+    enable(other)
+    assert world.run("prepare-loop") == 0
+    mine = receipt(world)
+    world.script(pi=[{"stdout": "OK"}] * 5)
+    assert other.run("prepare-loop") == 0
+    assert receipt(world) == mine, "preparing in one root overwrote the other root's receipt"
+    assert world.record().parent != other.record().parent
+    world.script(pi=[{"stdout": "No finding."}] * 2)
+    assert world.run("review-loop", "demo", "--availability-reported", mine["report_id"]) == 0
+    assert other.record().with_name("availability.json").exists(), "a review in one root consumed the other's receipt"
+    assert not other.record().exists()
+    world.script(pi=[{"stdout": "No finding."}] * 2)
+    assert other.run("review-loop", "demo", "--availability-reported", receipt(other)["report_id"]) == 0

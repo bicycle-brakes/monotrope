@@ -4,7 +4,7 @@ status: draft
 implementation_status: none
 date: 2026-10-14
 last_reviewed: 2026-10-14
-updated: 2026-10-17
+updated: 2026-10-22
 supersedes: null
 superseded_by: null
 bead: coding-harness-4fk
@@ -447,3 +447,28 @@ point-in-time selection rather than a promise of continuing availability.
 - The runner refactor is independent work (coding-harness-vg9, split the
   runner into cohesive modules); this change introduces only its bounded
   availability helper. The old MiMo-only configuration question is deferred.
+
+## Q-17 · Restarting a loop that already ended clean
+
+asked: 2026-10-21
+answer: "ja, ausdrücklicher neustart der schleife" — restart the review loop of research-swarm (PR #158) by an explicit maintainer decision
+answered_by: maintainer
+status: answered
+context: |
+  Topic: testing the review swarm on PR #158 (change research-swarm).
+  Intention: see whether the swarm works and finds anything on today's code that sixteen phase-6 rounds missed.
+  Today: the loop of 2026-10-15 ended with a clean round 2; review-loop stops at once, and ADR 0021 decision 9 forbids any reset. The loop of bead coding-harness-8hr is still open.
+  Repository change: an ADR 0021 amendment and a runner command that restarts a completed loop, written into findings.md with a reason.
+  Architecture change: yes, decision 9 gains one exception that only the maintainer may use.
+  Recommendation: test the swarm on the open loop of coding-harness-8hr instead; the maintainer chose the explicit restart.
+  Question: Is the swarm run on coding-harness-8hr enough as a test, or should PR #158's loop be restarted by an explicit decision?
+stated_in: "Claude Code conversation, night run 2026-10-21; the maintainer answered immediately after this question"
+
+In the context of a review loop that ended clean before sixteen phase-6
+rounds changed its code, facing decision 9's rule that nothing resets a
+clean stop, we decided that the maintainer, and only the maintainer, may
+restart a completed loop by an explicit command with a recorded reason, to
+achieve a fresh swarm run on current code, accepting the cost of a second
+full run and one exception to decision 9 (ADR 0021, restart amendment;
+bead coding-harness-0xjr).
+— 2026-10-21

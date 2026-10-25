@@ -4,7 +4,7 @@ category: governance
 status: current
 created: 2026-09-05
 last_reviewed: 2026-09-29
-updated: 2026-10-18
+updated: 2026-10-24
 owner: Data Architect
 provenance: ai-drafted-reviewed
 produced_by:
@@ -745,8 +745,9 @@ amendments; the table above carries the live setting.
 **The two Flash rows are live through the runner.** `explore` starts phase 1
 on GLM 5.3 Flash with read/search tools; `implement` starts phase 4 with file
 read/search/edit/write tools but no shell. The runner, not the implementation
-model, runs `make verify`, checks for a measured line below `## Time used` and
-makes the local checkpoint commit. An explicit `--stage2-off [REASON]` uses
+model, runs `make verify`, measures each completed attempt itself — a line
+below `## Time used`, marked "measured by the runner", written for a rejected
+attempt as well as an accepted one — and makes the local checkpoint commit. An explicit `--stage2-off [REASON]` uses
 §3's Haiku 5.5 or Sonnet 5.5 route and records why. A leak refusal always stops
 the call; it never selects the fallback.
 If the model process itself fails, the runner restores the worktree to the
@@ -782,12 +783,26 @@ into a shell. Eleven verbs exist:
   fresh run, a timestamped report and an external input-bound receipt; report
   the selection in the main Claude Code or Codex conversation before using its
   id with `review-loop --availability-reported <id>`. Each probe consumes a
-  request, times out after 60 seconds and preserves per-call leak/admission
-  checks. No repository content is supplied and no review round is counted.
+  request, times out after 60 seconds and retries a timed-out probe once with
+  a 180-second limit, preserving per-call leak/admission checks. A refusal
+  gets no retry. No repository content is supplied and no review round is counted.
 - `review-loop` — one round of phase 4b, started through Pi; round 1 the
-  free swarm the `free_stage` rule selects live, round 2 the `flash_swarm`,
-  then one eligible ladder rung each, until a round is clean (ADR 0021).
+  free swarm the `free_stage` rule selects live, round 2 the three cheapest
+  reachable admitted models for an availability-enabled run (a legacy
+  declaration uses `flash_swarm`), then one eligible ladder rung each, until a
+  round is clean (ADR 0021). Exit 0 means a round was written, exit 2 a
+  refusal and exit 3 a loop that finished with a clean round (R-11 of the
+  review-swarm review).
 - `release-loop` — the loop rows into `findings.md`, after the phase-6 verdict.
+  With `--stage-failed <model> --reason <text>` it retires the stage that model
+  belongs to instead: the stage is consumed, the reason and a `## Stage failed`
+  block land in the loop record, every round row stays, and the next
+  `review-loop` continues with the next stage (R-1 of the review-swarm review).
+  With `--restart --reason <text>`, and only on the maintainer's request, it
+  restarts a completed loop (ADR 0021, restart amendment): one `Loop restarted:`
+  line lands in `findings.md`, every earlier round stays, and the next
+  `review-loop` is a fresh run — availability preparation, free swarm, Flash
+  swarm, ladder — whose round numbers continue (bead coding-harness-0xjr).
 - `review` — Codex, phase 6. A re-check after an earlier `## Phase 6` block
   in `findings.md` starts a fresh read-only Codex session. The first phase-6
   review resumes a recorded Codex phase-2a session with `codex exec resume`;
@@ -880,7 +895,7 @@ implementation answer the runner runs exactly
 `make verify`; a failed post-check gets one fresh Flash repair, then one
 Sonnet 5.5 fallback, and every attempt repeats the leak check. A failed model
 process stops instead of silently changing route, and a review-loop call (through Pi) that has
-not ended 30 minutes after it started is stopped. For the other foreign CLIs,
+not ended `REVIEWER_MINUTES` (45 minutes since 2026-10-24) after it started is stopped. For the other foreign CLIs,
 isolation settings are configured on every call, not measured
 by these Pi contracts (the maintainer's decision of 2026-09-30, ADR 0007).
 The loop's Pi flags were first measured by hand on the pinned version;
@@ -1096,16 +1111,32 @@ no tools, from a scratch directory, and their only input is the
 implementation diff: bounded hunks of source and test code against the merge
 base with `origin/main`, uncommitted and untracked code included. The catalog
 is a live intermediary (`pi.dev`): the check proves which catalog was read,
-not what OpenCode Go bills. Round 2 is the **Flash swarm**: the entry's
-eligible `flash_swarm` members in parallel, with the paid rounds' read-only
-tools and the full diff. Every later round calls one eligible rung of the
+not what OpenCode Go bills. The prompt carries the implementation diff up to
+the bound of `REVIEW_DIFF_MAX_LINES` (2000 lines); a cut is recorded in the
+round, and a round over a cut diff never counts as clean (R-12, R-15). Round 2
+is the **Flash swarm**: the three cheapest reachable admitted models in
+parallel — the entry's eligible `flash_swarm` members only for a legacy
+declaration — with the paid rounds' read-only tools and the same bounded diff.
+One deadline of `REVIEWER_MINUTES` covers the round's members and every
+replacement (R-8).
+
+**The read boundary is a request today, not a mechanism (R-5, accepted in
+writing 2026-10-20).** A paid member gets the read tools and a prompt sentence;
+the pinned Pi 1.2.0 has no sandbox, and `read` resolves absolute paths without
+containment, so nothing keeps a member out of a sibling checkout — house rule 6
+(the customer instance out of bounds) has no mechanism on this path. The
+maintainer's answer to Q-3 of the night interview: document it here, and enforce
+it as its own work. Enforcing means a member runs inside a copy that holds only
+what it may see, with the filesystem — not the prompt — as the boundary; the
+`red_first` worktree shows the pattern, and `tmux`, `herdr` and `orca` are to be
+read as possible carriers of that isolation (bead `coding-harness-8df`). Every later round calls one eligible rung of the
 `modelle` ladder by `anfragen_5h` descending (ties by id, missing values last).
 A member that fails is named beside its round's rows; a round completes when at least one member answered, and an
 attempt whose every member failed completes no round and consumes no stage.
 When every stage of a run is consumed and the last round was not clean, the
 loop stops and reports to the maintainer — no model is substituted. The rows
 go into a **loop record** outside the worktree and outside the git directory
-(`${XDG_STATE_HOME:-~/.local/state}/coding-harness/stage2/<change>/loop.md`),
+(`${XDG_STATE_HOME:-~/.local/state}/coding-harness/stage2/<change>@<digest>/loop.md`),
 not into the repository: the phase-6 reviewer writes its verdict before it
 reads any loop row. The record carries the run's snapshot — the discovery
 check, the stage membership and what is consumed — and neither a release nor
@@ -1166,8 +1197,7 @@ reword its reason so it names no fix instead of marking it fixed.
 test alone against the baseline's code, in a
 temporary git worktree whose `tests/` is the attempt's, and accepts a test
 only when pytest exits 1 or 2 there. When every post-run check passes —
-`make verify` green, a measured line in the time log, every fixed line
-checked — the runner writes each row's Status `fixed` in its place, makes the
+`make verify` green, every fixed line checked — the runner writes each row's Status `fixed` in its place, makes the
 one checkpoint commit `fix(<change>): repair taken findings <IDs>` and marks
 the loop record after it. The attempts are Codex, one fresh Codex attempt
 with the first one's diagnostics, and Sonnet 5.5 at effort `medium`, the last
