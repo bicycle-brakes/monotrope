@@ -3216,9 +3216,14 @@ def runner_env(env: dict[str, str], *roots: Path) -> dict[str, str]:
 
 
 def changed_paths(root: Path, env: dict[str, str] | None = None, against: str = "HEAD") -> set[Path]:
-    """Tracked changes against `against` and untracked files, as repository-relative paths."""
+    """Tracked changes against `against`, in the working tree or the index, and untracked files.
+
+    `git diff <commit>` reads only the working tree, so a path staged and then put back in the file
+    differs from the commit in the index alone; `--cached` lists it (bead coding-harness-0c8).
+    """
     # `--no-renames`: a rename must list both names, or the deleted one is invisible (O192-1).
     tracked = _git_output(root, "diff", "--no-renames", "--name-only", "-z", against, env=env).split("\0")
+    tracked += _git_output(root, "diff", "--cached", "--no-renames", "--name-only", "-z", against, env=env).split("\0")
     untracked = _git_output(root, "ls-files", "-z", "--others", "--exclude-standard", env=env).split("\0")
     return {Path(name) for name in [*tracked, *untracked] if name}
 
