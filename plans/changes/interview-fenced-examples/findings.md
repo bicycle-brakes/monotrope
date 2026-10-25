@@ -64,3 +64,11 @@ subagent at the orchestrator's direction, uncommitted.
   which strips characters, not a suffix. The closer is now a second
   parametrize value. Status: repaired.
   Test: `test_a_fenced_record_or_skip_is_not_counted`.
+
+## Review loop skipped, 2026-10-25
+
+The review loop (phase 4b) did not run on this change. The maintainer
+answered on 2026-10-25 (night-run plan, `docs/research/2026-10-25-night-run-plan.md`,
+answer 1) that the small cloud-session fixes get phase 6 only tonight,
+because each had the Opus 5.5 pre-review recorded above. Phase 6 follows in
+a fresh Codex session.
