@@ -685,3 +685,30 @@ def test_a_not_yet_written_file_behind_an_unsearchable_directory_is_a_finding(tm
     assert done.returncode == 1, (done.returncode, done.stdout, done.stderr)
     assert "Traceback" not in done.stderr, done.stderr
     assert "make the file readable UTF-8" in done.stdout, done.stdout
+
+
+# ---------------------------------------------------------------------------
+# The runner clears the marker of a test that exists (bead coding-harness-7g6h)
+# ---------------------------------------------------------------------------
+
+
+def test_clear_written_removes_the_marker_of_an_existing_test_only(tmp_path: Path) -> None:
+    (tmp_path / "tests").mkdir()
+    (tmp_path / "tests" / "test_done.py").write_text("def test_done():\n    pass\n", encoding="utf-8")
+    plan = tmp_path / "plan.md"
+    plan.write_text(
+        "# Plan\n\n```text\n- 9: not yet written tests/test_done.py::test_done — an example\n```\n\n"
+        "## Criterion ledger\n\n"
+        "- 1: not yet written tests/test_done.py::test_done — written already\n"
+        "- 2: not yet written tests/test_missing.py::test_missing — no file\n"
+        "- 3: not yet written tests/test_done.py::test_other — no such function\n\n"
+        "## Time used\n",
+        encoding="utf-8",
+    )
+    assert gate.clear_written(tmp_path, plan) == [1]
+    text = plan.read_text(encoding="utf-8")
+    assert "- 1: tests/test_done.py::test_done — written already\n" in text
+    assert "- 2: not yet written tests/test_missing.py::test_missing" in text
+    assert "- 3: not yet written tests/test_done.py::test_other" in text
+    assert "- 9: not yet written tests/test_done.py::test_done — an example" in text, "a fenced example changed"
+    assert gate.clear_written(tmp_path, plan) == [], "a second pass changed the plan again"

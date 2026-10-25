@@ -195,6 +195,34 @@ def ledger_sections(lines: list[str]) -> list[list[tuple[int, str]]]:
     return sections
 
 
+def clear_written(root: Path, plan: Path) -> list[int]:
+    """Remove `not yet written` from every ledger entry whose named test exists; return their numbers.
+
+    The marker is derivable from the tree, so the stage-2 runner clears it before its own `make
+    verify`, as it renders the index and stamps the dates (bead coding-harness-7g6h). An entry whose
+    file or function is missing keeps its marker, and lines in a fence are never touched. Every other
+    byte of the plan stays as it was.
+    """
+    text, _ = read(plan)
+    if text is None:
+        return []
+    raw = text.split("\n")
+    cleared: list[int] = []
+    for section in ledger_sections(_lines(text)):
+        for number, line in section:
+            entry = parse_entry(line, number)
+            if entry is None or entry.kind != "not yet written":
+                continue
+            found, _ = read(root / entry.path)
+            if found is None or not _defined(found, entry.function):
+                continue
+            raw[number - 1] = raw[number - 1].replace(": not yet written ", ": ", 1)
+            cleared.append(entry.number)
+    if cleared:
+        plan.write_text("\n".join(raw), encoding="utf-8")
+    return cleared
+
+
 def criterion_numbers(spec_text: str) -> set[int]:
     """Every criterion number of a ``## Acceptance criteria`` section, as ``<n>. `` at line start.
 

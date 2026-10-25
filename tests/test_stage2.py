@@ -13821,3 +13821,29 @@ def test_a_summary_table_beside_valid_rows_keeps_the_round(world: World) -> None
     world.script(pi=[{"model": "acme-v1-free", "stdout": answer}, {"model": "beacon-2-free", "stdout": "No finding."}])
     assert world.run("review-loop") == 0
     assert len(stage2.record_rows(world.record().read_text(encoding="utf-8"))) == 1
+
+
+def test_implement_clears_the_ledger_marker_of_a_test_the_attempt_wrote(world: World) -> None:
+    # Bead coding-harness-7g6h. Planted fault: the runner leaves `not yet written` on a test that exists.
+    world.plan.write_text(
+        "---\ntitle: Plan\nupdated: 2026-09-30\nbead: demo-1\n---\n\n# Plan\n\n## Criterion ledger\n\n"
+        "- 1: not yet written tests/test_new.py::test_new — the attempt writes it\n"
+        "- 2: not yet written tests/test_later.py::test_later — nobody writes it\n\n## Time used\n",
+        encoding="utf-8",
+    )
+    git(world.root, "add", "-A")
+    git(world.root, "commit", "--quiet", "-m", "ledger with markers")
+    world.script(
+        claude=[
+            {
+                "stdout": "implemented",
+                "plant": {"tests/test_new.py": "def test_new():\n    pass\n"},
+                "append": {"plans/changes/demo/plan.md": "2026-10-07 10:00–10:05, 5 min\n"},
+            }
+        ],
+        make=[{"stdout": "green\n"}],
+    )
+    assert world.run("implement") == 0
+    committed = git(world.root, "show", "HEAD:plans/changes/demo/plan.md")
+    assert "- 1: tests/test_new.py::test_new — the attempt writes it" in committed
+    assert "- 2: not yet written tests/test_later.py::test_later" in committed
