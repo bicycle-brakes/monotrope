@@ -81,3 +81,16 @@ answered on 2026-10-25 (night-run plan, `docs/research/2026-10-25-night-run-plan
 answer 1) that the small cloud-session fixes get phase 6 only tonight,
 because each had the Opus 5.5 pre-review recorded above. Phase 6 follows in
 a fresh Codex session.
+
+Stage-2 call, 2026-10-25: review · endpoint openai-codex · model gpt-6.1-sol · leak check clean over 552 files, 2098 commits, 12 rules.
+
+## Phase 6 — Codex, 2026-10-25
+
+| ID | Severity | Dimension | Origin | Where | Finding | Reviewer | Status | Broke a test |
+|---|---|---|---|---|---|---|---|---|
+| F-1 | MAJOR | SPEC | impl | scripts/stage2.py:5139 | A refused repair that creates an untracked nested Git repository can still leave its rows marked fixed after rollback removes their test and reverts the fix. `git clean -fd` skips the nested repository, so `changed_paths()` remains nonempty, `undone` becomes false, and the findings snapshot is never restored. An unrelated leftover must not preserve statuses for fixes already removed. [Acceptance criterion 1] | Codex | open | — |
+
+Phase 6 verdict: codex 01a174b8-3a0f-75a2-ab40-6e23fd6f76b8, 2026-10-25
+Reviewer session: codex 01a174b8-3a0f-75a2-ab40-6e23fd6f76b8 — a fresh session reviewed: no phase-2a session was recorded
+
+Loop rows: none — the loop did not run for this change.
