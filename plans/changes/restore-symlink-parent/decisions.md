@@ -4,7 +4,7 @@ status: draft
 implementation_status: partial
 date: 2026-10-23
 last_reviewed: 2026-10-23
-updated: 2026-10-24
+updated: 2026-10-25
 supersedes: null
 superseded_by: null
 bead: coding-harness-10w
@@ -65,7 +65,9 @@ created or changed in a destination's parent chain refuses the whole
 recovery before any mutation, with no simulation; (2) refine the simulation
 to the actual recovery order and keep reviewing; (3) check right before each
 single mutation, which may refuse after an earlier mutation and contradicts
-criterion 1. In the context of recovery after a failed attempt, facing link
+criterion 1.
+
+In the context of recovery after a failed attempt, facing link
 chains a simulation keeps missing, we decided that a changed alias ancestor
 alone refuses the batch before its first mutation, to achieve that the whole
 class closes instead of one chain per review, accepting that some harmless

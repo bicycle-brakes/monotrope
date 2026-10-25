@@ -6,7 +6,7 @@ implementation_status: partial
 date: 2026-10-23
 created: 2026-10-23
 last_reviewed: 2026-10-23
-updated: 2026-10-24
+updated: 2026-10-25
 supersedes: null
 superseded_by: null
 bead: coding-harness-10w
@@ -719,7 +719,21 @@ Stage-2 call, 2026-10-24: review · endpoint openai-codex · model gpt-6.1-sol �
 
 | ID | Severity | Dimension | Origin | Where | Finding | Reviewer | Status | Broke a test |
 |---|---|---|---|---|---|---|---|---|
-| F6-4 | MAJOR | SPEC | Phase 6 | scripts/stage2.py:5119–5130, 5369 | Recovery preflight projects inputs before findings, but `put_findings_back` restores findings first. For worktree `/w`, let an attempt create `plans/changes/demo/findings.md -> /w/deep/a/b/c/d` and `prompts -> plans/changes/demo/findings.md/../../../../..`. Both parents initially resolve inside `/w`, and batch preflight passes. On a rejected repair attempt, restoring findings detaches its alias and writes trusted bytes; `prompts` then resolves outside `/w`. The retry preflight refuses after findings and time have already been written. Source-extracted in-memory execution confirms that preflight passes, findings is rewritten, and the next preflight refuses. Project the actual recovery order before its first mutation. [Acceptance criterion 1] | Codex | taken — test: the F6-4 chain (`findings.md -> deep/...` and `prompts -> .../findings.md/../../../../..`) refuses before any mutation; per Q-2 (maintainer, 2026-10-24) any changed alias ancestor (spec, Terms) in a destination's parent chain refuses the whole recovery batch without simulating it, and the F6-1 and F6-2 chains refuse the same way | — |
+| F6-4 | MAJOR | SPEC | Phase 6 | scripts/stage2.py:5119–5130, 5369 | Recovery preflight projects inputs before findings, but `put_findings_back` restores findings first. For worktree `/w`, let an attempt create `plans/changes/demo/findings.md -> /w/deep/a/b/c/d` and `prompts -> plans/changes/demo/findings.md/../../../../..`. Both parents initially resolve inside `/w`, and batch preflight passes. On a rejected repair attempt, restoring findings detaches its alias and writes trusted bytes; `prompts` then resolves outside `/w`. The retry preflight refuses after findings and time have already been written. Source-extracted in-memory execution confirms that preflight passes, findings is rewritten, and the next preflight refuses. Project the actual recovery order before its first mutation. [Acceptance criterion 1] | Codex | fixed — tests/test_stage2.py::test_recovery_refuses_a_chain_through_a_restored_findings_link; per Q-2 any changed alias ancestor refuses the batch without simulation (`changed_alias_problem`, `alias_baseline`), and the F6-1 and F6-2 chains refuse the same way | — |
 
 Phase 6 verdict: codex 01a16f11-9662-7fd3-9d7e-ae087c9e22bd, 2026-10-24
+
+F6-4 repair, 2026-10-25: made by hand by the orchestrating Claude Code session
+(Opus 5.5, remote container), not by `stage2.py repair`: Codex is not reachable
+from that container. Under Q-2 the batch preflight no longer simulates
+recovery: `alias_baseline` records the links standing before the first call
+(tracked ones from the baseline commit, ignored ones by their stat), and
+`changed_alias_problem` refuses any destination whose parent chain, links
+followed on the way included, holds a link the attempt created or changed or a
+baseline link it replaced. `projected_parent_problem`,
+`projected_directory_problem` and `preflight_restored_cleanup` are removed.
+Consequence for F6-3 (fixed earlier): a replaced baseline link that resolved
+back inside now refuses too, as the Q-2 non-goal accepts; its test is now
+`test_baseline_cleanup_refuses_replaced_link_returning_inside`. Phase 6 must
+re-check this repair in a fresh Codex session.
 Reviewer session: codex 01a16f11-9662-7fd3-9d7e-ae087c9e22bd — a fresh session reviewed: an earlier ## Phase 6 block makes this a re-check

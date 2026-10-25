@@ -13527,20 +13527,16 @@ def test_baseline_cleanup_preflights_created_ignored_destination(
 
     monkeypatch.setattr(stage2, "_git_output", git_output)
     if contained:
-        refusal = None
-        try:
+        # Q-2: the attempt's own links in the parent chain refuse the batch, contained or not.
+        with pytest.raises(stage2.RestorationRefused, match="a/x/cache/new.txt.*a is a link the attempt created"):
             stage2.restore_baseline(world.root, "baseline", set(), ignored_before={})
-        except stage2.RestorationRefused as error:
-            refusal = error
-        assert refusal is None, f"contained cleanup was refused: {refusal}"
-        assert not (parent / "new.txt").exists()
+        assert (parent / "new.txt").exists()
         assert (world.root / "a").is_symlink()
-        assert [args[0] for args in commands] == ["ls-tree", "restore", "clean"]
     else:
         with pytest.raises(stage2.RestorationRefused, match="cache/new.txt.*escapes the worktree"):
             stage2.restore_baseline(world.root, "baseline", set(), ignored_before={})
         assert parent.is_symlink()
-        assert commands == [], "rollback started before the cleanup preflight"
+    assert not any(args[0] in ("restore", "clean") for args in commands), "rollback started before the preflight"
     assert sentinel.read_bytes() == b"attempt-created ignored file\n"
 
 
@@ -13601,7 +13597,7 @@ def test_baseline_cleanup_refuses_reinstated_external_parent(
         except stage2.RestorationRefused as error:
             refusal = str(error)
         assert refusal is not None, "rollback reinstated an external parent without refusing cleanup"
-        assert "cache/victim.txt" in refusal and "escapes the worktree" in refusal
+        assert "cache/victim.txt" in refusal and "cache is a link the attempt created or changed" in refusal
     else:
         real_model = stage2.run_work_model
         # Isolate failed-call recovery: ordinary admission rejects directory links, but rollback
@@ -13619,7 +13615,7 @@ def test_baseline_cleanup_refuses_reinstated_external_parent(
         world.script(claude=[{"stderr": "boom", "exit": 1}])
         assert world.run("implement") == 1
         error = capsys.readouterr().err
-        assert "cache/victim.txt" in error and "escapes the worktree" in error
+        assert "cache/victim.txt" in error and "cache is a link the attempt created or changed" in error
         assert len(world.calls("claude")) == 1
         assert git(world.root, "for-each-ref", "--format=%(refname)", "refs/stage2/attempts/demo/") == ""
     assert not any(args[0] in ("restore", "clean") for args in commands)
@@ -13632,25 +13628,47 @@ def test_baseline_cleanup_refuses_reinstated_external_parent(
 
 
 @pytest.mark.parametrize("kept", [False, True], ids=["contained-chain", "kept-external-link"])
-def test_baseline_cleanup_projection_preserves_safe_parents(world: World, kept: bool) -> None:
-    """The extra rollback check admits contained chains and links Git will not restore."""
+def test_replaced_baseline_parent_link_refuses_cleanup(world: World, kept: bool) -> None:
+    """Q-2: a baseline link the attempt replaced refuses cleanup, even when its chain stays inside."""
     cache = world.root / "cache"
     (world.root / "deep/data").mkdir(parents=True)
     (world.root / "deep/sub").mkdir()
-    # `..` is evaluated at deep/sub's real depth, after following `relay`.
     (world.root / "relay").symlink_to("deep/sub", target_is_directory=True)
     cache.symlink_to("../outside" if kept else "relay/../data", target_is_directory=True)
     git(world.root, "add", "-A")
-    git(world.root, "commit", "--quiet", "-m", "track a safe rollback projection")
+    git(world.root, "commit", "--quiet", "-m", "track a baseline parent link")
     baseline = git(world.root, "rev-parse", "HEAD")
+    before = stage2.ignored_snapshot(world.root)
     cache.unlink()
     cache.mkdir()
     victim = cache / "victim.txt"
     victim.write_bytes(b"attempt ignored file\n")
     keep = {Path("cache")} if kept else set()
-    stage2.preflight_restored_cleanup(world.root, baseline, keep, [Path("cache/victim.txt")])
+    with pytest.raises(stage2.RestorationRefused, match="cache/victim.txt.*cache is a link the attempt created"):
+        stage2.restore_baseline(world.root, baseline, keep, before)
     assert not cache.is_symlink()
     assert victim.read_bytes() == b"attempt ignored file\n"
+
+
+def test_unchanged_baseline_parent_links_stay_recoverable(world: World) -> None:
+    """Criterion 6: a tracked link the attempt left as it was, and an untouched ignored one, recover as before."""
+    (world.root / "deep/data").mkdir(parents=True)
+    (world.root / "deep/data/input.md").write_bytes(b"baseline bytes\n")
+    (world.root / "tracked").symlink_to("deep/data", target_is_directory=True)
+    git(world.root, "add", "-A")
+    git(world.root, "commit", "--quiet", "-m", "track a contained parent link")
+    (world.root / ".gitignore").write_text("local\n", encoding="utf-8")
+    git(world.root, "add", "-A")
+    git(world.root, "commit", "--quiet", "-m", "ignore a local link")
+    (world.root / "local").symlink_to("deep/data", target_is_directory=True)
+    baseline = git(world.root, "rev-parse", "HEAD")
+    aliases = stage2.alias_baseline(world.root, baseline, stage2.ignored_snapshot(world.root))
+    batch = [world.root / "tracked/input.md", world.root / "local/input.md"]
+    stage2.preflight_recovery(world.root, batch, aliases=aliases)
+    (world.root / "local").unlink()
+    (world.root / "local").symlink_to("deep", target_is_directory=True)
+    with pytest.raises(stage2.RestorationRefused, match="local is a link the attempt created or changed"):
+        stage2.preflight_recovery(world.root, [world.root / "local/data/input.md"], aliases=aliases)
 
 
 def test_recovery_parent_chain_resolves_relative_target_at_real_depth(tmp_path: Path) -> None:
@@ -14066,15 +14084,15 @@ def test_failed_verify_recovery_refusal_preserves_diagnostics(
         real_preflight = stage2.preflight_recovery
         checked = False
 
-        def preflight(root, destinations):
+        def preflight(root, destinations, **kwargs):
             nonlocal checked
             # The first post-verification batch is safe; the findings restore must recheck.
             if not checked:
-                real_preflight(root, destinations)
+                real_preflight(root, destinations, **kwargs)
                 checked = True
                 escape()
             else:
-                real_preflight(root, destinations)
+                real_preflight(root, destinations, **kwargs)
 
         monkeypatch.setattr(stage2, "preflight_recovery", preflight)
     monkeypatch.setattr(stage2, "verify_attempt", verify)
@@ -14089,8 +14107,8 @@ def test_failed_verify_recovery_refusal_preserves_diagnostics(
 
 
 @pytest.mark.parametrize("reverse", [False, True], ids=["unsafe-order", "safe-order"])
-def test_recovery_batch_projects_detached_parent_links(tmp_path: Path, reverse: bool) -> None:
-    """F6-2: a batch must remain contained after its parent aliases detach."""
+def test_recovery_batch_refuses_attempt_parent_links_in_any_order(tmp_path: Path, reverse: bool) -> None:
+    """F6-2 under Q-2: the attempt's parent links refuse the batch before a mutation, in either order."""
     root = tmp_path / "tree"
     (root / "deep/more/sub/changes/demo").mkdir(parents=True)
     (root / "plans").symlink_to("deep/more/sub", target_is_directory=True)
@@ -14099,30 +14117,52 @@ def test_recovery_batch_projects_detached_parent_links(tmp_path: Path, reverse: 
     spec.write_bytes(b"attempt bytes\n")
     prompt = root / "prompts/04-implement.md"
     prompt.write_bytes(b"prompt bytes\n")
-    assert spec.parent.resolve().is_relative_to(root)
-    assert prompt.parent.resolve() == root
-    batch = [spec, prompt]
-    if reverse:
-        batch.reverse()
-        stage2.preflight_recovery(root, batch)
-        for path in batch:
-            stage2.restore_work_input(root, path, b"trusted bytes\n")
-        assert spec.read_bytes() == prompt.read_bytes() == b"trusted bytes\n"
-        assert not (root / "plans").is_symlink()
-        assert not (root / "prompts").is_symlink()
-        return
-    with pytest.raises(stage2.RestorationRefused, match="prompts/04-implement.md.*escapes the worktree"):
-        stage2.preflight_recovery(root, batch)
-        for path in batch:
-            stage2.restore_work_input(root, path, b"trusted bytes\n")
-    assert (root / "plans").is_symlink(), "a preceding restore mutated the batch"
-    assert (root / "prompts").is_symlink()
+    batch = [prompt, spec] if reverse else [spec, prompt]
+    with pytest.raises(stage2.RestorationRefused, match="is a link the attempt created or changed"):
+        stage2.preflight_recovery(root, batch, aliases=({}, {}))
+    assert (root / "plans").is_symlink() and (root / "prompts").is_symlink()
     assert spec.read_bytes() == b"attempt bytes\n"
     assert prompt.read_bytes() == b"prompt bytes\n"
 
 
-def test_baseline_cleanup_allows_parent_link_returning_inside(world: World) -> None:
-    """F6-3: containment uses the resolved destination, including an outside-and-back link."""
+def test_recovery_refuses_a_chain_through_a_restored_findings_link(tmp_path: Path) -> None:
+    """F6-4 under Q-2: a link through the findings alias refuses before findings or inputs are written."""
+    root = tmp_path / "w"
+    (root / "deep/a/b/c/d").mkdir(parents=True)
+    folder = root / "plans/changes/demo"
+    folder.mkdir(parents=True)
+    findings = folder / "findings.md"
+    findings.symlink_to(root / "deep/a/b/c/d", target_is_directory=True)
+    (root / "prompts").symlink_to("plans/changes/demo/findings.md/../../../../..", target_is_directory=True)
+    prompt = root / "prompts/04-implement.md"
+    assert prompt.parent.resolve().is_relative_to(root)
+    with pytest.raises(
+        stage2.RestorationRefused, match="prompts/04-implement.md.*prompts is a link the attempt created"
+    ):
+        stage2.preflight_recovery(root, [findings, prompt], aliases=({}, {}))
+    assert findings.is_symlink() and (root / "prompts").is_symlink()
+
+
+def test_recovery_follows_an_outside_link_back_to_an_attempt_link(world: World, tmp_path: Path) -> None:
+    """Q-2: a baseline link that leaves the worktree and returns through the attempt's link refuses."""
+    outside = tmp_path / "relay-outside"
+    outside.mkdir()
+    (world.root / "deep").mkdir()
+    (world.root / "cache").symlink_to(outside / "back", target_is_directory=True)
+    git(world.root, "add", "-A")
+    git(world.root, "commit", "--quiet", "-m", "track a link that leaves the worktree")
+    baseline = git(world.root, "rev-parse", "HEAD")
+    aliases = stage2.alias_baseline(world.root, baseline, stage2.ignored_snapshot(world.root))
+    (outside / "back").symlink_to(world.root / "evil", target_is_directory=True)
+    (world.root / "evil").symlink_to("deep", target_is_directory=True)
+    destination = world.root / "cache/input.md"
+    assert destination.parent.resolve() == world.root / "deep"
+    with pytest.raises(stage2.RestorationRefused, match="evil is a link the attempt created or changed"):
+        stage2.preflight_recovery(world.root, [destination], aliases=aliases)
+
+
+def test_baseline_cleanup_refuses_replaced_link_returning_inside(world: World) -> None:
+    """F6-3 superseded by Q-2: a replaced baseline link refuses cleanup even when it resolved back inside."""
     (world.root / "data").mkdir()
     cache = world.root / "cache"
     cache.symlink_to(f"../{world.root.name}/data", target_is_directory=True)
@@ -14132,17 +14172,12 @@ def test_baseline_cleanup_allows_parent_link_returning_inside(world: World) -> N
     git(world.root, "add", "-A")
     git(world.root, "commit", "--quiet", "-m", "track a contained returning link")
     baseline = git(world.root, "rev-parse", "HEAD")
+    before = stage2.ignored_snapshot(world.root)
     cache.unlink()
     cache.mkdir()
     victim = cache / "victim.txt"
     victim.write_bytes(b"ignored attempt bytes\n")
-    refusal = None
-    try:
-        stage2.preflight_restored_cleanup(world.root, baseline, set(), [Path("cache/victim.txt")])
-    except stage2.RestorationRefused as error:
-        refusal = str(error)
-    assert refusal is None, f"contained returning parent was refused: {refusal}"
+    with pytest.raises(stage2.RestorationRefused, match="cache is a link the attempt created or changed"):
+        stage2.restore_baseline(world.root, baseline, set(), before)
     assert victim.read_bytes() == b"ignored attempt bytes\n"
-    stage2.restore_baseline(world.root, baseline, set(), ignored_before={})
-    assert cache.is_symlink()
-    assert cache.resolve() == world.root / "data"
+    assert not cache.is_symlink()

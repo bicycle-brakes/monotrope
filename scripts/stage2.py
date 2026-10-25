@@ -3181,37 +3181,28 @@ def save_attempt(root: Path, baseline: str, change: str, label: str) -> str:
     return f"the attempt is saved at {ref} ({commit[:12]}); `git diff {baseline[:12]} {ref}` shows it"
 
 
-def preflight_restored_cleanup(root: Path, baseline: str, keep: set[Path], created: list[Path]) -> None:
-    """Check ignored cleanup against the parent links Git will reinstate, without writing them.
+AliasBaseline = tuple[dict[Path, Path], dict[Path, tuple[int, int]]]
 
-    Current parents alone are insufficient: an attempt can replace a tracked external link with
-    a directory. Resolve cleanup parents in an overlay of the baseline links and the current tree,
-    including links reached through another restored link. Kept paths are not restored by Git.
+
+def alias_baseline(root: Path, baseline: str, ignored_before: dict[Path, tuple[int, int]] | None) -> AliasBaseline:
+    """The links that stood before the attempt: tracked ones from the baseline, ignored ones by their stat.
+
+    Recovery compares every link in a destination's parent chain with this record instead of
+    simulating what the recovery would do to it (decisions.md, Q-2): an attempt's own link, or a
+    baseline link it replaced or changed, refuses the batch before its first mutation.
     """
-    if not created:
-        return
     links: dict[Path, Path] = {}
     try:
         for entry in filter(None, _git_output(root, "ls-tree", "-rz", baseline).split("\0")):
             metadata, name = entry.split("\t", 1)
             mode, _, oid = metadata.split()
-            relative = Path(name)
-            if mode == "120000" and not any(relative.is_relative_to(path) for path in keep):
-                links[relative] = Path(_git_output(root, "cat-file", "blob", oid))
+            if mode == "120000":
+                links[Path(name)] = Path(_git_output(root, "cat-file", "blob", oid))
     except (Refused, OSError, ValueError) as error:
         raise RestorationRefused(
-            f"restoration of {created[0].as_posix()} is refused: its parent cannot be resolved "
-            f"in the rollback baseline ({error})"
+            f"restoration is refused: the links of the rollback baseline cannot be read ({error})"
         ) from error
-    if not links:
-        return
-    canonical = root.resolve()
-    for relative in created:
-        problem = projected_parent_problem(canonical, relative, links, set())
-        if problem is not None:
-            raise RestorationRefused(
-                f"restoration of {relative.as_posix()} is refused: its parent {problem} after rollback"
-            )
+    return links, dict(ignored_before or {})
 
 
 def plan_baseline_restore(
@@ -3233,9 +3224,8 @@ def plan_baseline_restore(
         preflight_recovery(
             root,
             [*(root / relative for relative in touched), *(root / relative for relative in created)],
-            detach_parents=False,
+            aliases=alias_baseline(root, baseline, ignored_before),
         )
-        preflight_restored_cleanup(root, baseline, keep, created)
     return touched, created
 
 
@@ -4844,84 +4834,76 @@ def refuse_unsafe_recovery(root: Path, path: Path) -> None:
         raise RestorationRefused(f"restoration of {path.relative_to(root).as_posix()} is refused: its parent {problem}")
 
 
-def projected_parent_problem(
-    canonical: Path, relative: Path, links: dict[Path, Path], detached: set[Path]
-) -> str | None:
-    """Resolve a parent in a read-only overlay of restored links and detached directories.
+def alias_changed(path: Path, local: Path, aliases: AliasBaseline) -> bool:
+    """Whether `path` (worktree-relative `local`) is a link the attempt created or changed, or a replaced baseline link."""
+    links, ignored = aliases
+    before = links.get(local)
+    if path.is_symlink():
+        if before is not None:
+            return path.readlink() != before
+        if local in ignored:
+            info = path.lstat()
+            return (info.st_mtime_ns, info.st_size) != ignored[local]
+        return True
+    # Git lists an ignored link as a file; a directory standing there now replaced it.
+    return before is not None or (local in ignored and path.is_dir())
 
-    Resolve complete link targets before judging containment: a relative target can leave the
-    root and return. Detached directories hide the old tree beneath an alias, including any
-    links that only existed through that alias. The leaf itself is never followed.
+
+def changed_alias_problem(root: Path, relative: Path, aliases: AliasBaseline) -> str | None:
+    """Name the first changed alias ancestor of `relative`, following every link a parent passes through.
+
+    Each ancestor is resolved component by component; every component inside the worktree, the
+    links met on the way included, is compared with the baseline record. Nothing is simulated:
+    a changed alias ancestor alone makes the destination unsafe (spec, Terms; decisions.md, Q-2).
+    The leaf itself is never followed.
     """
+    canonical = root.resolve()
     for depth in range(1, len(relative.parts)):
-        ancestor = Path(*relative.parts[:depth])
-        problem = projected_directory_problem(canonical, ancestor, links, detached)
-        if problem is not None:
-            return problem
+        pending = list(relative.parts[:depth])
+        parent = canonical
+        hops = 0
+        try:
+            while pending:
+                part = pending.pop(0)
+                if part in ("", "."):
+                    continue
+                if part == "..":
+                    parent = parent.parent
+                    continue
+                parent /= part
+                # Links outside the worktree are followed too, so a chain that leaves and comes
+                # back cannot hide an attempt's link inside; only inside components are compared.
+                if parent.is_relative_to(canonical):
+                    local = parent.relative_to(canonical)
+                    if alias_changed(parent, local, aliases):
+                        return f"{local.as_posix()} is a link the attempt created or changed"
+                if not parent.is_symlink():
+                    continue
+                hops += 1
+                if hops > RESTORATION_PARENT_LINK_LIMIT:
+                    return f"{Path(*relative.parts[:depth]).as_posix()} cannot be resolved (too many links)"
+                target = parent.readlink()
+                if target.is_absolute():
+                    parent = Path(target.anchor)
+                    pending = [*target.parts[1:], *pending]
+                else:
+                    parent = parent.parent
+                    pending = [*target.parts, *pending]
+        except (OSError, RuntimeError, ValueError):
+            return f"{Path(*relative.parts[:depth]).as_posix()} cannot be resolved"
     return None
 
 
-def projected_directory_problem(
-    canonical: Path, relative: Path, links: dict[Path, Path], detached: set[Path]
-) -> str | None:
-    """Resolve one complete ancestor, following link targets through the overlay."""
-    pending = list(relative.parts)
-    parent = canonical
-    hops = 0
-    try:
-        while pending:
-            part = pending.pop(0)
-            if part == "..":
-                parent = parent.parent
-                continue
-            parent /= part
-            local = parent.relative_to(canonical) if parent.is_relative_to(canonical) else None
-            target = links.get(local)
-            hidden = local is not None and any(local.is_relative_to(path) for path in detached)
-            if target is None and not hidden and parent.is_symlink():
-                target = parent.readlink()
-            if target is None:
-                continue
-            hops += 1
-            if hops > RESTORATION_PARENT_LINK_LIMIT:
-                return "cannot be resolved (too many links in projected parents)"
-            if target.is_absolute():
-                parent = Path(target.anchor)
-                pending = [*target.parts[1:], *pending]
-            else:
-                parent = parent.parent
-                pending = [*target.parts, *pending]
-    except (OSError, RuntimeError, ValueError):
-        return "cannot be resolved"
-    return None if parent.is_relative_to(canonical) else "escapes the worktree"
-
-
-def preflight_recovery(root: Path, destinations: Iterable[Path], *, detach_parents: bool = True) -> None:
-    """Validate the whole batch, including parent replacements made by earlier restores."""
+def preflight_recovery(root: Path, destinations: Iterable[Path], *, aliases: AliasBaseline) -> None:
+    """Validate the whole batch before its first mutation: no unsafe parent, no changed alias ancestor."""
     destinations = list(destinations)
     for path in destinations:
         refuse_unsafe_recovery(root, path)
-    if not detach_parents:
-        return
-    canonical = root.resolve()
-    detached: set[Path] = set()
     for path in destinations:
         relative = path.relative_to(root)
-        problem = projected_parent_problem(canonical, relative, {}, detached)
+        problem = changed_alias_problem(root, relative, aliases)
         if problem is not None:
-            raise RestorationRefused(
-                f"restoration of {relative.as_posix()} is refused: its parent {problem} after parent replacement"
-            )
-        parent = Path()
-        for part in relative.parts[:-1]:
-            parent /= part
-            if any(parent.is_relative_to(previous) for previous in detached):
-                continue
-            standing = root / parent
-            if standing.is_symlink() or (standing.exists() and not standing.is_dir()):
-                detached.add(parent)
-        # A restored input is a regular file, so later parents cannot follow its former alias.
-        detached.add(relative)
+            raise RestorationRefused(f"restoration of {relative.as_posix()} is refused: its parent {problem}")
 
 
 def restore_work_input(root: Path, path: Path, content: bytes) -> None:
@@ -5089,6 +5071,8 @@ def run_attempts(
     # whole run: an attempt that overwrote a tool is refused, and the refused bytes must not become the
     # next attempt's reference by taking the digest again (P1 of the #188 review).
     tools = tool_state(root) if tools is None else tools
+    # The links standing before the first call; recovery refuses any it finds created or changed (Q-2).
+    aliases = alias_baseline(root, baseline, ignored_before)
     for attempt, (endpoint, credential, route, reason) in enumerate(routes, 1):
         prompt = prompts[endpoint]
         if diagnostics:
@@ -5122,7 +5106,7 @@ def run_attempts(
             # Even implement (without a findings snapshot) must validate the complete batch
             # before its caller can append diagnostics or finalize time on an early exit.
             try:
-                preflight_recovery(root, destinations)
+                preflight_recovery(root, destinations, aliases=aliases)
             except RestorationRefused as safety_error:
                 preserve_attempt_failure(safety_error, original)
                 raise
@@ -5210,7 +5194,7 @@ def run_attempts(
                 # The whole failed-call recovery stands behind the parent check: the baseline
                 # rollback and cleanup destinations are validated before findings are restored or
                 # the attempt is saved, so a refusal leaves the branch without a single write.
-                preflight_recovery(root, {**inputs_before, ctx.findings: findings_before})
+                preflight_recovery(root, {**inputs_before, ctx.findings: findings_before}, aliases=aliases)
                 planned = plan_baseline_restore(root, allowed, ignored_before, baseline)
                 put_findings_back()
                 exposed = []
@@ -5273,7 +5257,7 @@ def run_attempts(
             # before an unsafe later destination stops the batch (spec, criterion 1).
             batch = {**inputs_before, ctx.findings: findings_before}
             try:
-                preflight_recovery(root, batch)
+                preflight_recovery(root, batch, aliases=aliases)
             except RestorationRefused as safety_error:
                 if problems:
                     preserve_attempt_failure(safety_error, Refused(protect_diagnostics("\n".join(problems), key)))
@@ -5366,7 +5350,7 @@ def run_attempts(
                 # Restoration never writes through a worktree path: whatever stands there (a symlink, a
                 # directory or a file) is removed without being followed, then the bytes are written anew.
                 # The batch stands rechecked at this recovery boundary; a refusal leaves it unwritten.
-                preflight_recovery(root, inputs_before)
+                preflight_recovery(root, inputs_before, aliases=aliases)
                 for path, content in inputs_before.items():
                     restore_work_input(root, path, content)
                 stamp_updated(ctx.plan)
@@ -5381,7 +5365,7 @@ def run_attempts(
                 preserve_attempt_failure(error, call_error)
             if completed and not logged and not isinstance(error, RestorationRefused):
                 try:
-                    preflight_recovery(root, {**inputs_before, ctx.findings: findings_before})
+                    preflight_recovery(root, {**inputs_before, ctx.findings: findings_before}, aliases=aliases)
                 except RestorationRefused as safety_error:
                     preserve_attempt_failure(safety_error, error)
                     raise
