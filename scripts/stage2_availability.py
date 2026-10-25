@@ -112,7 +112,7 @@ def prepare(root: Path, change: str, runner) -> None:
     paid = runner.ladder(root)
     skipped = {model: "not admitted; data terms have not been read" for model in runner.unread_catalog_ids(entry, free)}
     candidates = list(free["selected"])
-    if not runner.free_diff(root).strip():
+    if not runner.free_diff(root)[0].strip():
         free["skipped"] = "free stage skipped: no implementation source diff"
         skipped.update({model: free["skipped"] for model in candidates})
         candidates = []

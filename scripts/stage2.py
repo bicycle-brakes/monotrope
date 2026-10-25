@@ -367,6 +367,16 @@ NO_LOOP_LINE = "Loop rows: none — the loop did not run for this change."
 # lines with `>`, so quoted gate output can hold them without being taken for the runner's own (criterion 11).
 RELEASE_LINE = re.compile("^" + re.escape(RELEASE_HEADING), re.M)
 NO_LOOP = re.compile("^" + re.escape(NO_LOOP_LINE) + r"[ \t]*$", re.M)
+# The release block's own line: the digest of the record it released. A release-loop whose record has
+# the digest of the last released block appends nothing again (DL-A-3 of the deep review).
+DIGEST_KEY = "Record digest: "
+DIGEST_LINE = re.compile(r"^Record digest: (sha256:[0-9a-f]{64})[ \t]*$", re.M)
+# The runner's line before every review-loop member call, and its line after a review-loop call that
+# wrote such lines and then no round: with no record, an audit line after the last release, restart and
+# no-round line means the record is lost, not that the loop never ran (DL-A-6 of the deep review).
+LOOP_AUDIT_LINE = re.compile(r"^Stage-2 call, \d{4}-\d{2}-\d{2}: review-loop · ", re.M)
+NO_ROUND_KEY = "Loop attempt: "
+NO_ROUND_LINE = re.compile(r"^Loop attempt: \d{4}-\d{2}-\d{2} — no round was written\b", re.M)
 # Bounds of a failed attempt's block: a gate line and a file entry keep their first characters…
 QUOTE_LINE_CHARS = 500
 # …and the file list keeps its first entries (spec, criteria 13 and 14).
@@ -1763,12 +1773,14 @@ def bounded_review_diff(diff: str) -> tuple[str, str | None]:
     return "\n".join([*lines[:REVIEW_DIFF_MAX_LINES], f"## ({note}; the rest is not carried)"]), note
 
 
-def free_diff(root: Path) -> str:
-    """The implementation diff the free swarm reviews: bounded hunks of source and test code only.
+def free_diff(root: Path) -> tuple[str, str | None]:
+    """The implementation diff the free swarm reviews, and what its own bounds cut from it.
 
     The same merge base as `change_diff`, uncommitted and untracked files
     included (criterion 3). Every file passes `_free_candidate`; each file's
     hunks are bounded and the whole diff is, so no whole source file travels.
+    The second half names every cut, or is None: the round records it, because
+    a clean answer over a cut diff is no clean round (DL-A-1 of the deep review).
     """
     base = _merge_base(root)
     flags = ["--no-color", "--no-ext-diff", "--no-textconv"]
@@ -1785,8 +1797,9 @@ def free_diff(root: Path) -> str:
             if _free_candidate(root, rel, base):
                 names.append(rel)
     parts: list[str] = []
+    cuts: list[str] = []
     total = 0
-    for rel in names:
+    for index, rel in enumerate(names):
         if rel in untracked_set:
             piece = _git_output(root, "diff", *flags, "--no-index", "--", "/dev/null", rel, allow=(0, 1))
         else:
@@ -1794,14 +1807,17 @@ def free_diff(root: Path) -> str:
         bounded = _bound_hunks(rel, piece)
         if not bounded.strip():
             continue
+        if len(piece.splitlines()) > FREE_DIFF_MAX_LINES:
+            cuts.append(f"the free diff of {rel} was cut at {FREE_DIFF_MAX_LINES} lines")
         parts.append(bounded)
         total += bounded.count("\n")
-        if total >= FREE_DIFF_MAX_TOTAL:
+        if total >= FREE_DIFF_MAX_TOTAL and index < len(names) - 1:
             parts.append(
                 f"(the implementation diff was cut at {FREE_DIFF_MAX_TOTAL} lines; later files are not carried)"
             )
+            cuts.append(f"the free diff was cut at {FREE_DIFF_MAX_TOTAL} lines; later files are not carried")
             break
-    return "\n".join(parts)
+    return "\n".join(parts), "; ".join(cuts) or None
 
 
 # The free reviewer's static instructions: what it reviews and how it answers.
@@ -2065,18 +2081,6 @@ def run_swarm(
     return answers
 
 
-def taken_in_round(rows: list[list[str]], round_number: int) -> bool:
-    """Whether the round wrote at least one row whose Status begins `taken` or `fixed`.
-
-    A row the repair has marked `fixed` counts like the taken one it was, so
-    repairing a round's row neither cleans that round nor cancels the next one
-    (ADR 0017 decision 6, as amended by ADR 0021 decision 7; ADR 0015's
-    three-round reading is superseded).
-    """
-    prefix = f"L{round_number}-"
-    return any(row[0].startswith(prefix) and row[7].lower().startswith(("taken", "fixed")) for row in rows)
-
-
 def _last_release(text: str) -> int:
     """The start of the last line the release block begins on, -1 without one.
 
@@ -2085,6 +2089,43 @@ def _last_release(text: str) -> int:
     """
     matches = list(RELEASE_LINE.finditer(text))
     return matches[-1].start() if matches else -1
+
+
+def _last_restart(text: str) -> int:
+    """The start of the last restart line, -1 without one."""
+    matches = list(RESTART_LINE.finditer(text))
+    return matches[-1].start() if matches else -1
+
+
+def record_digest(record: str) -> str:
+    """The digest a release block carries of the record it released."""
+    return "sha256:" + hashlib.sha256(record.encode("utf-8")).hexdigest()
+
+
+def released_digest(text: str) -> str | None:
+    """The record digest the last released block carries, read from the runner's own lines only."""
+    start = _last_release(text)
+    if start < 0:
+        return None
+    block = text[start:]
+    cut = KEPT_FROM.search(block)
+    match = DIGEST_LINE.search(block[: cut.start()] if cut else block)
+    return match.group(1) if match else None
+
+
+def lost_record_refusal(change: str, root: Path, text: str) -> str | None:
+    """With no record: the refusal when a review-loop audit line stands after the last release, restart and
+    no-round line - the loop ran and its record is not where this run looks (DL-A-6 of the deep review).
+    """
+    matches = list(NO_ROUND_LINE.finditer(text))
+    since = max(_last_release(text), _last_restart(text), matches[-1].start() if matches else -1)
+    if not any(match.start() > since for match in LOOP_AUDIT_LINE.finditer(text)):
+        return None
+    return (
+        f"findings.md shows review-loop calls after the last release, but there is no loop record at "
+        f"{record_dir(change, root) / 'loop.md'}; the loop ran and its record is lost or under another "
+        "state directory (XDG_STATE_HOME). Nothing is released or run; the maintainer decides."
+    )
 
 
 def restart_floor(findings_text: str) -> int:
@@ -2101,25 +2142,6 @@ def restarted_fresh(record: str | None, findings_text: str) -> bool:
     """
     matches = list(RESTART_LINE.finditer(findings_text))
     return record is None and bool(matches) and matches[-1].start() > _last_release(findings_text)
-
-
-def released_rows(findings_text: str) -> list[list[str]]:
-    """The loop rows of the last released block in findings.md, with the status they were decided by."""
-    start = _last_release(findings_text)
-    if start < 0:
-        return []
-    block = findings_text[start:]
-    cut = KEPT_FROM.search(block)
-    if cut:
-        block = block[
-            : cut.start()
-        ]  # what follows is the reviewers' words, carried as they came, not rows of the record
-    rows = []
-    for line in block.splitlines():
-        cells = split_row(line)
-        if cells and len(cells) == len(RELEASED_COLUMNS) and LOOP_ID.fullmatch(cells[0]):
-            rows.append(cells)
-    return rows
 
 
 def findings_rows(text: str) -> tuple[list[list[str]], list[list[str]]]:
@@ -2538,7 +2560,12 @@ def round_rows(rows: list[list[str]], round_number: int) -> list[list[str]]:
 
 
 def accepted_row(row: list[str]) -> bool:
-    """`taken` or `fixed`: a repair preserves the fact that the review accepted the finding (criterion 11)."""
+    """`taken` or `fixed`: a repair preserves the fact that the review accepted the finding (criterion 11).
+
+    A row the repair has marked `fixed` counts like the taken one it was, so repairing a round's row
+    neither cleans that round nor cancels the next one (ADR 0017 decision 6, as amended by ADR 0021
+    decision 7; ADR 0015's three-round reading is superseded).
+    """
     return row[7].lower().startswith(("taken", "fixed"))
 
 
@@ -2667,59 +2694,50 @@ def next_stage(state: dict) -> dict | None:
     return None
 
 
+def replace_record(path: Path, text: str) -> None:
+    """Write the record whole or not at all: a temporary file in its directory, then an atomic rename
+    (`Path.replace`, which is `os.replace`).
+
+    `Path.write_text` truncates first and writes after; a write that fails between the two keeps a
+    record cut short, and the record is the only copy of its rounds (DL-A-4 of the deep review). The
+    temporary file never outlives a failed write.
+    """
+    path.parent.mkdir(parents=True, exist_ok=True)
+    handle, temporary = tempfile.mkstemp(prefix=f".{path.name}.", suffix=".tmp", dir=path.parent)
+    try:
+        with os.fdopen(handle, "w", encoding="utf-8") as stream:
+            stream.write(text)
+            stream.flush()
+            os.fsync(stream.fileno())
+        Path(temporary).replace(path)
+    except BaseException:
+        with contextlib.suppress(OSError):
+            Path(temporary).unlink()
+        raise
+
+
 def write_round(change: str, block: str, state: dict, root: Path) -> None:
     """Append the round and pin its stages as consumed in one write (R-6 of the review-swarm review).
 
     Two writes would leave a window: a crash between them keeps a round whose stage the snapshot does
     not know, and the next call repeats the stage as a new round with new ids - extra paid calls and
-    two rounds for one stage. One `write_text` closes it.
+    two rounds for one stage. One `replace_record` closes it, for a fresh record too: its heading, its
+    intro and the snapshot line before the rounds are part of the same write. The snapshot line is the
+    runner's own; `kept_lines` leaves it out, because the release carries it itself (criterion 13).
     """
-    directory = record_dir(change, root)
-    directory.mkdir(parents=True, exist_ok=True)
-    path = directory / "loop.md"
-    text = path.read_text(encoding="utf-8") if path.exists() else ""
+    path = record_dir(change, root) / "loop.md"
+    line = f"{STATE_KEY}{json.dumps(state, sort_keys=True)}"
+    text = (
+        path.read_text(encoding="utf-8") if path.exists() else f"{RECORD_HEADING}{change}\n\n{RECORD_INTRO}\n{line}\n"
+    )
     body = block.strip("\n")
     text = f"{text.rstrip(chr(10))}\n\n{body}\n" if text.strip() else f"{body}\n"
-    line = f"{STATE_KEY}{json.dumps(state, sort_keys=True)}"
     if STATE_LINE.search(text):
         text = STATE_LINE.sub(lambda _match: line, text, count=1)
     else:
         match = ROUND_HEADING.search(text)
         text = text[: match.start()] + line + "\n\n" + text[match.start() :] if match else text + line + "\n"
-    path.write_text(text, encoding="utf-8")
-
-
-def mark_consumed(change: str, state: dict, key: str, root: Path) -> None:
-    """Pin that the stage has completed a round: a failed attempt consumes nothing (criterion 13)."""
-    state["consumed"] = [*state["consumed"], key]
-    write_state(change, state, root)
-
-
-def write_state(change: str, state: dict, root: Path) -> None:
-    """The run's stage snapshot into the record, as the record's own line.
-
-    The line sits before the first round heading; the runner owns it, never the
-    reviewer's words. `kept_lines` leaves it out - the release carries the line
-    itself, so a continued run reads its snapshot from findings.md (criterion
-    13).
-    """
-    line = f"{STATE_KEY}{json.dumps(state, sort_keys=True)}"
-    directory = record_dir(change, root)
-    directory.mkdir(parents=True, exist_ok=True)
-    path = directory / "loop.md"
-    if path.exists():
-        text = path.read_text(encoding="utf-8")
-        if STATE_LINE.search(text):
-            path.write_text(STATE_LINE.sub(lambda _match: line, text, count=1), encoding="utf-8")
-            return
-        match = ROUND_HEADING.search(text)
-        if match:
-            text = text[: match.start()] + line + "\n\n" + text[match.start() :]
-        else:
-            text = text.rstrip("\n") + "\n\n" + line + "\n"
-        path.write_text(text, encoding="utf-8")
-        return
-    path.write_text(f"{RECORD_HEADING}{change}\n\n{RECORD_INTRO}\n{line}\n", encoding="utf-8")
+    replace_record(path, text)
 
 
 def read_state(record: str | None, findings_text: str) -> dict | None:
@@ -2749,8 +2767,14 @@ def read_state(record: str | None, findings_text: str) -> dict | None:
             if cut:
                 block = block[: cut.start()]
             match = STATE_LINE.search(block)
-            if match:
-                line = match.group(1)
+            if match is None:
+                # Every release of a record carries the snapshot; a block without it is not the runner's,
+                # and reading it as no run would let it end the loop (DL-A-2 of the deep review).
+                raise Refused(
+                    "the last released block in findings.md carries no Loop state line; the runner writes "
+                    "one with every release, so the block is not the runner's and the loop is not continued."
+                )
+            line = match.group(1)
     if line is None:
         return None
     try:
@@ -2831,8 +2855,31 @@ def release(root: Path, change: str) -> list[list[str]]:
     """The loop rows into findings.md, after the phase-6 verdict. Returns the rows released."""
     findings = folder_of(root, change) / "findings.md"
     text = findings.read_text(encoding="utf-8") if findings.exists() else ""
-    if not VERDICT_LINE.search(text):
-        near = VERDICT_START.search(text)
+    record = read_record(change, root)
+    if record is not None and released_digest(text) == record_digest(record):
+        # The block stands already: a run stopped between the append and the removal (DL-A-3 of the
+        # deep review). Appending it again would count its rounds twice and double its ids.
+        shutil.rmtree(record_dir(change, root))
+        rows = record_rows(record)
+        print(
+            f"release-loop: the record was released already ({record_digest(record)}); nothing is appended, "
+            "the record is removed"
+        )
+        return rows
+    if record is None:
+        refusal = lost_record_refusal(change, root, text)
+        if refusal:
+            raise Refused(refusal)
+    # A record's rows need a verdict of their own: one after the last release and the last restart
+    # (ADR 0021, restart amendment; DL-A-7 of the deep review).
+    floor = max(_last_release(text), _last_restart(text), 0) if record is not None else 0
+    if not VERDICT_LINE.search(text, floor):
+        near = VERDICT_START.search(text, floor)
+        if floor:
+            raise Refused(
+                "findings.md has no phase-6 verdict line after the last release or restart; the rows of "
+                "this run are released after a phase-6 verdict of their own; nothing is released."
+            )
         if near:
             raise Refused(
                 f"findings.md has a line that starts like the phase-6 verdict but does not have the form "
@@ -2840,7 +2887,6 @@ def release(root: Path, change: str) -> list[list[str]]:
                 f"`{near.group(0).strip()}`; nothing is released."
             )
         raise Refused("findings.md has no phase-6 verdict line; nothing is released.")
-    record = read_record(change, root)
     if record is None:
         # The runner's own lines stand at a line start; a block's quote of either line is not one (criterion 12).
         if not (NO_LOOP.search(text) or RELEASE_LINE.search(text)):
@@ -2855,6 +2901,7 @@ def release(root: Path, change: str) -> list[list[str]]:
     if not rows:
         block.append("No loop row was reported.")
     block.append(f"Rounds run: {len(ROUND_HEADING.findall(record))}")
+    block.append(f"{DIGEST_KEY}{record_digest(record)}")
     cut = cut_rounds(record)
     if cut:
         block.append(f"Cut rounds: {', '.join(str(number) for number in cut)}")
@@ -4485,6 +4532,19 @@ def fixed_status(ident: str, rest: str) -> str:
     return f"{ident}: `{body}` is neither a test `tests/<path>::<function>` nor `not a test — <reason>`"
 
 
+def findings_body_problem(before: str, now: str) -> str | None:
+    """The problem when findings.md's body changed during a work call; its frontmatter is excluded, because
+    the runner refreshes `updated:`.
+
+    Repair and implement share it: neither model may write a finding, a verdict, a release block or a
+    restart line - the loop reads its state from that file (DL-A-2 of the deep review).
+    """
+    header = r"\A---\n.*?\n---\n"
+    if re.sub(header, "", now, count=1, flags=re.S) == re.sub(header, "", before, count=1, flags=re.S):
+        return None
+    return "findings.md changed outside runner bookkeeping; every finding and earlier attempt's evidence must stand"
+
+
 def check_repair_answer(
     ctx: Context,
     answer: str,
@@ -4560,13 +4620,9 @@ def check_repair_answer(
     if audit_line and audit_line not in findings_now.splitlines():
         problems.append("findings.md no longer holds the audit line of this call; a passing repair keeps it")
     if findings_before is not None:
-        header = r"\A---\n.*?\n---\n"
-        body_before = re.sub(header, "", findings_before, count=1, flags=re.S)
-        body_now = re.sub(header, "", findings_now, count=1, flags=re.S)
-        if body_now != body_before:
-            problems.append(
-                "findings.md changed outside runner bookkeeping; every finding and earlier attempt's evidence must stand"
-            )
+        problem = findings_body_problem(findings_before, findings_now)
+        if problem:
+            problems.append(problem)
     for _place, row in taken:
         ident, fix = row[0], fixes[row[0]]
         if fix.startswith("fixed — not a test"):
@@ -4665,15 +4721,20 @@ def mark_repaired_record(
     fixes: dict[str, str],
     root: Path,
     marks: dict[str, str] | None = None,
+    *,
+    lock_held: bool = False,
 ) -> None:
     """Mark the record's own row lines the same way, after the checkpoint commit.
 
     The record lies outside what the file tools reach, so only the runner can write it; a failure
     leaves the statuses unwritten there and names the IDs to mark by hand. The record's ending stays
-    as it was read.
+    as it was read. `repair` holds the record lock for its whole run (`lock_held`); a lone call takes it.
     """
     by_key = {row[0]: row for place, row in taken if place == "record"}
     if not by_key:
+        return
+    if lock_held:
+        _mark_record_rows(change, by_key, fixes, root, marks)
         return
     # The record is read and rewritten whole: a round appended in between, or a release that removes
     # the record, would be lost, so the rewrite holds the lock the loop verbs hold (O190-4).
@@ -4690,7 +4751,11 @@ def _mark_record_rows(
 ) -> None:
     record = read_record(change, root)
     if record is None:
-        return
+        # A committed fix whose record is gone is booked nowhere; say which rows to book (DL-A-5).
+        waiting = ", ".join(sorted(by_key))
+        raise CallFailed(
+            f"the loop record is gone; the fixed status of {waiting} is not written there; mark them by hand."
+        )
     ending = "\n" if record.endswith("\n") else ""
     lines: list[str] = []
     for line, reviewer in _record_lines(record):
@@ -4707,7 +4772,7 @@ def _mark_record_rows(
                 line = "| " + " | ".join([*cells[:7], fixes[cells[0]], mark]) + " |"
         lines.append(line)
     try:
-        (record_dir(change, root) / "loop.md").write_text("\n".join(lines) + ending, encoding="utf-8")
+        replace_record(record_dir(change, root) / "loop.md", "\n".join(lines) + ending)
     except OSError as error:
         waiting = ", ".join(sorted(by_key))
         raise CallFailed(f"the loop record could not be marked ({error}); mark {waiting} by hand.") from error
@@ -5192,6 +5257,20 @@ def implement(root: Path, change: str, stage2_off: str | None = None) -> None:
     else:
         key = None
         routes = [(SONNET, None, "stage-1", stage2_off)]
+    standing: dict[str, str] = {}
+
+    def snapshot() -> str:
+        text = ctx.findings.read_text(encoding="utf-8") if ctx.findings.exists() else ""
+        standing["text"] = text
+        return text
+
+    def check(_answer: str) -> list[str]:
+        # The implementing model writes code, never loop state: findings.md's body stands as it stood
+        # right before the call, or the attempt fails and findings.md is put back (DL-A-2).
+        now = ctx.findings.read_text(encoding="utf-8") if ctx.findings.exists() else ""
+        problem = findings_body_problem(standing.get("text", ""), now)
+        return [problem] if problem else []
+
     run_attempts(
         ctx,
         "implement",
@@ -5205,6 +5284,9 @@ def implement(root: Path, change: str, stage2_off: str | None = None) -> None:
             "implementation post-run checks failed after the allowed attempts; why each attempt failed and "
             f"the files it changed: {ctx.findings.relative_to(root)}"
         ),
+        answer_check=check,
+        snapshot_findings=snapshot,
+        restore_findings=lambda text: ctx.findings.write_text(text, encoding="utf-8"),
     )
 
 
@@ -5635,7 +5717,7 @@ def repair(root: Path, change: str, stage2_off: str | None = None) -> None:
         ),
         answer_check=check,
         before_commit=lambda: mark_repaired_findings(ctx, taken, fixes),
-        after_commit=lambda: mark_repaired_record(change, taken, fixes, root, marks),
+        after_commit=lambda: mark_repaired_record(change, taken, fixes, root, marks, lock_held=True),
         snapshot_findings=snapshot,
         restore_findings=lambda text: ctx.findings.write_text(text, encoding="utf-8"),
         tools=tools,
@@ -5672,6 +5754,13 @@ def review_loop(root: Path, change: str, availability_reported: str | None = Non
     findings_path = folder_of(root, change) / "findings.md"
     if findings_path.exists():
         findings_text = findings_path.read_text(encoding="utf-8")
+    if record is None:
+        refusal = lost_record_refusal(change, root, findings_text)
+        if refusal:
+            raise Refused(refusal)
+    # The snapshot before the stops: a released block without the runner's snapshot is refused here,
+    # never read as a finished run (DL-A-2 of the deep review).
+    state = None if restarted_fresh(record, findings_text) else read_state(record, findings_text)
     # After a maintainer's restart the stops read only the rounds that followed it (restart amendment).
     floor = restart_floor(findings_text)
     history = {number: rows for number, rows in history_rounds(record, findings_text).items() if number > floor}
@@ -5693,7 +5782,6 @@ def review_loop(root: Path, change: str, availability_reported: str | None = Non
                 f"rounds {last - 1} and {last} accepted only findings whose Origin begins `fix-r`; "
                 "the repair brake stops the loop; the maintainer decides what continues."
             )
-    state = None if restarted_fresh(record, findings_text) else read_state(record, findings_text)
     receipt_taken = False
     if record is None and state is None:
         # A fresh run has neither a record nor a released snapshot. read_state
@@ -5717,8 +5805,9 @@ def review_loop(root: Path, change: str, availability_reported: str | None = Non
         # attempt consumes no stage and leaves no record (ADR 0021, decision 6).
     stage = next_stage(state)
     free_input = None
+    free_cut: str | None = None
     if stage is not None and stage["kind"] == "free":
-        free_input = free_diff(root)
+        free_input, free_cut = free_diff(root)
         if not free_input.strip():
             state["free"]["skipped"] = "free stage skipped: no implementation source diff"
             print(f"review-loop: {state['free']['skipped']}")
@@ -5728,12 +5817,23 @@ def review_loop(root: Path, change: str, availability_reported: str | None = Non
             "every stage of this run is consumed and the last round was not clean; the loop stops and "
             "reports to the maintainer. No model is substituted."
         )
+    # The orchestrator decides and repairs before another review (ADR 0021, decision 6): a taken row of
+    # this run that no repair has marked `fixed` holds the next round (DL-A-8 of the deep review). Spent
+    # stages stop first: there is no next round to hold.
+    unrepaired = [row[0] for number in sorted(history) for row in history[number] if row[7].lower().startswith("taken")]
+    if unrepaired:
+        raise Refused(
+            f"taken rows are not repaired yet ({', '.join(unrepaired)}); run `repair` and make `make verify` "
+            "green before the next round starts."
+        )
     round_number = rounds_run(record, findings_text) + 1
     members: list[str] = stage["members"]
     free = stage["kind"] == "free"
     cut_note: str | None = None
     if free:
         diff, cut_note = bounded_review_diff(free_input)
+        # The free diff's own bounds cut before the prompt's bound does; both cuts belong to the round.
+        cut_note = "; ".join(note for note in (free_cut, cut_note) if note) or None
     else:
         diff, cut_note = bounded_review_diff(change_diff(root))
     body = "" if free else (root / "prompts" / "04b-review-loop.md").read_text(encoding="utf-8")
@@ -5760,126 +5860,137 @@ def review_loop(root: Path, change: str, availability_reported: str | None = Non
     }
     if not ctx.findings.exists():
         ctx.findings.write_text(findings_header(ctx, producer_for(endpoints[members[0]])), encoding="utf-8")
-    for member in members:
-        append(ctx.findings, call_line("review-loop", endpoints[member], checked[member]))
-    key = reviewer_key()
-    notes: list[str] = []
-    if not state["consumed"]:
-        if state["free"].get("skipped"):
-            notes.append(f"Notice: {state['free']['skipped']}.")
-        skipped = skipped_models(root)
-        if skipped:
-            notes.append(f"Notice: paid models skipped: {'; '.join(skipped)}.")
-        gap = unread_catalog_ids(endpoint_entry(root), state["free"])
-        if gap:
-            notes.append(f"Notice: in the live catalog without a terms reading: {', '.join(gap)}.")
-            print(f"review-loop: {notes[-1]}", file=sys.stderr)
-    if not free and not any(key == "flash" or key.startswith("rung:") for key in state["consumed"]):
-        entry = endpoint_entry(root)
-        if stage["kind"] == "paid-swarm":
-            notice = cheapest_notice(entry, state["paid"]["ladder"], members)
-            if notice:
-                notes.append(f"Notice: {notice}.")
-        missing = unvalued_models(entry, state["paid"]["ladder"])
-        if missing:
-            notes.append(f"Notice: no anfragen_5h declared, ordered last: {', '.join(missing)}.")
-        for note in notes:
-            print(f"review-loop: {note}", file=sys.stderr)
-    # One deadline for the round: a replacement must live inside it, or a round could take a member
-    # limit per call (R-8 of the review-swarm review).
-    deadline = time.monotonic() + REVIEWER_MINUTES * 60
-    answers = run_swarm(ctx, members, prompts, key, free=free, deadline=deadline)
-    replaced: list[str] = []
-    if stage["kind"] == "paid-swarm":
-        # A failed Flash member is replaced by the cheapest admitted ladder model
-        # not in this round and not consumed, on the same paid prompt; each model
-        # at most once, until one answers or the ladder is spent (Q-13).
-        used = set(members)
-        spent = {key_[len("rung:") :] for key_ in state["consumed"] if key_.startswith("rung:")}
-        reasons: dict[str, str] = {}
-        for member in list(members):
-            current = member
-            while isinstance(answers[current], BaseException):
-                reasons[current] = str(answers[current])
-                if time.monotonic() >= deadline:
-                    notes.append(
-                        f"{current} failed: {reasons[current]}; the round time limit expired; no replacement starts"
-                    )
-                    print(f"review-loop: {notes[-1]}", file=sys.stderr)
-                    break
-                options = [m for m in state["paid"]["rungs"] if m not in used and m not in spent]
-                if not options:
-                    notes.append(f"{current} failed: {reasons[current]}; no replacement is left on the ladder")
-                    print(f"review-loop: {notes[-1]}", file=sys.stderr)
-                    break
-                nxt = options[0]
-                used.add(nxt)
-                notes.append(f"{current} failed: {reasons[current]}; replaced by {nxt}")
+    audited = False
+    try:
+        for member in members:
+            append(ctx.findings, call_line("review-loop", endpoints[member], checked[member]))
+            audited = True
+        key = reviewer_key()
+        notes: list[str] = []
+        if not state["consumed"]:
+            if state["free"].get("skipped"):
+                notes.append(f"Notice: {state['free']['skipped']}.")
+            skipped = skipped_models(root)
+            if skipped:
+                notes.append(f"Notice: paid models skipped: {'; '.join(skipped)}.")
+            gap = unread_catalog_ids(endpoint_entry(root), state["free"])
+            if gap:
+                notes.append(f"Notice: in the live catalog without a terms reading: {', '.join(gap)}.")
                 print(f"review-loop: {notes[-1]}", file=sys.stderr)
-                endpoints[nxt] = (OPENCODE, nxt, "max")
-                prompts[nxt] = prompt_for(nxt)
-                checked[nxt] = checked_prompt(ctx, endpoints[nxt], prompts[nxt], None)
-                append(ctx.findings, call_line("review-loop", endpoints[nxt], checked[nxt]))
-                answers.update(run_swarm(ctx, [nxt], prompts, key, free=False, deadline=deadline))
-                replaced.append(nxt)
-                current = nxt
-        members = [*members, *replaced]
-    succeeded = [member for member in members if not isinstance(answers[member], BaseException)]
-    if not succeeded:
-        raise CallFailed("; ".join(f"{member} failed: {answers[member]}" for member in members))
-    numbered: list[list[str]] = []
-    statements: list[str] = []
-    reviewer_blocks: list[str] = []
-    for member in members:
-        outcome = answers[member]
-        if isinstance(outcome, BaseException):
-            # A replaced member's failure is already stated with its replacement.
-            if stage["kind"] != "paid-swarm":
-                statements.append(f"{member} failed: {outcome}")
-            continue
-        widened: list[str] = []
-        rows, rest = parse_rows(outcome, notes=widened)
-        member_rows = []
-        for row in rows:
-            ident = f"L{round_number}-{len(numbered) + 1}"
-            numbered.append([ident, *row[1:], member, "", ""])
-            member_rows.append(numbered[-1])
-        if rows:
-            statements.append(render_table(ROW_COLUMNS, member_rows))
-            if widened:
-                # A row that needed the widening may have been widened by an unescaped `|` before the
-                # finding: the row is kept as it came, and the round says that its columns may have moved
-                # (R-25 of the review-swarm review).
+        if not free and not any(key == "flash" or key.startswith("rung:") for key in state["consumed"]):
+            entry = endpoint_entry(root)
+            if stage["kind"] == "paid-swarm":
+                notice = cheapest_notice(entry, state["paid"]["ladder"], members)
+                if notice:
+                    notes.append(f"Notice: {notice}.")
+            missing = unvalued_models(entry, state["paid"]["ladder"])
+            if missing:
+                notes.append(f"Notice: no anfragen_5h declared, ordered last: {', '.join(missing)}.")
+            for note in notes:
+                print(f"review-loop: {note}", file=sys.stderr)
+        # One deadline for the round: a replacement must live inside it, or a round could take a member
+        # limit per call (R-8 of the review-swarm review).
+        deadline = time.monotonic() + REVIEWER_MINUTES * 60
+        answers = run_swarm(ctx, members, prompts, key, free=free, deadline=deadline)
+        replaced: list[str] = []
+        if stage["kind"] == "paid-swarm":
+            # A failed Flash member is replaced by the cheapest admitted ladder model
+            # not in this round and not consumed, on the same paid prompt; each model
+            # at most once, until one answers or the ladder is spent (Q-13).
+            used = set(members)
+            spent = {key_[len("rung:") :] for key_ in state["consumed"] if key_.startswith("rung:")}
+            reasons: dict[str, str] = {}
+            for member in list(members):
+                current = member
+                while isinstance(answers[current], BaseException):
+                    reasons[current] = str(answers[current])
+                    if time.monotonic() >= deadline:
+                        notes.append(
+                            f"{current} failed: {reasons[current]}; the round time limit expired; no replacement starts"
+                        )
+                        print(f"review-loop: {notes[-1]}", file=sys.stderr)
+                        break
+                    options = [m for m in state["paid"]["rungs"] if m not in used and m not in spent]
+                    if not options:
+                        notes.append(f"{current} failed: {reasons[current]}; no replacement is left on the ladder")
+                        print(f"review-loop: {notes[-1]}", file=sys.stderr)
+                        break
+                    nxt = options[0]
+                    used.add(nxt)
+                    notes.append(f"{current} failed: {reasons[current]}; replaced by {nxt}")
+                    print(f"review-loop: {notes[-1]}", file=sys.stderr)
+                    endpoints[nxt] = (OPENCODE, nxt, "max")
+                    prompts[nxt] = prompt_for(nxt)
+                    checked[nxt] = checked_prompt(ctx, endpoints[nxt], prompts[nxt], None)
+                    append(ctx.findings, call_line("review-loop", endpoints[nxt], checked[nxt]))
+                    answers.update(run_swarm(ctx, [nxt], prompts, key, free=False, deadline=deadline))
+                    replaced.append(nxt)
+                    current = nxt
+            members = [*members, *replaced]
+        succeeded = [member for member in members if not isinstance(answers[member], BaseException)]
+        if not succeeded:
+            raise CallFailed("; ".join(f"{member} failed: {answers[member]}" for member in members))
+        numbered: list[list[str]] = []
+        statements: list[str] = []
+        reviewer_blocks: list[str] = []
+        for member in members:
+            outcome = answers[member]
+            if isinstance(outcome, BaseException):
+                # A replaced member's failure is already stated with its replacement.
+                if stage["kind"] != "paid-swarm":
+                    statements.append(f"{member} failed: {outcome}")
+                continue
+            widened: list[str] = []
+            rows, rest = parse_rows(outcome, notes=widened)
+            member_rows = []
+            for row in rows:
+                ident = f"L{round_number}-{len(numbered) + 1}"
+                numbered.append([ident, *row[1:], member, "", ""])
+                member_rows.append(numbered[-1])
+            if rows:
+                statements.append(render_table(ROW_COLUMNS, member_rows))
+                if widened:
+                    # A row that needed the widening may have been widened by an unescaped `|` before the
+                    # finding: the row is kept as it came, and the round says that its columns may have moved
+                    # (R-25 of the review-swarm review).
+                    statements.append(
+                        f"{member} wrote {len(widened)} row(s) with more than six cells; the cells after the "
+                        "fifth were joined into the finding, so an unescaped `|` before it moves the columns."
+                    )
+            elif any(split_row(line) is not None for line in rest.splitlines()):
                 statements.append(
-                    f"{member} wrote {len(widened)} row(s) with more than six cells; the cells after the "
-                    "fifth were joined into the finding, so an unescaped `|` before it moves the columns."
+                    f"{member} answered in table lines that are not six-cell rows; they are kept as they came."
                 )
-        elif any(split_row(line) is not None for line in rest.splitlines()):
+            else:
+                statements.append(f"{member} reported no finding.")
+            # An answer with no row is kept whole, blank lines included; beside rows, what is not a row.
+            kept = rest if rows else outcome
+            if kept.strip():
+                reviewer_blocks.append(kept.strip())
+        if cut_note:
             statements.append(
-                f"{member} answered in table lines that are not six-cell rows; they are kept as they came."
+                f"{CUT_LINE} {cut_note}. A clean answer over a cut diff does not end the loop; the rest of "
+                "the change needs a round of its own."
             )
-        else:
-            statements.append(f"{member} reported no finding.")
-        # An answer with no row is kept whole, blank lines included; beside rows, what is not a row.
-        kept = rest if rows else outcome
-        if kept.strip():
-            reviewer_blocks.append(kept.strip())
-    if cut_note:
-        statements.append(
-            f"{CUT_LINE} {cut_note}. A clean answer over a cut diff does not end the loop; the rest of "
-            "the change needs a round of its own."
-        )
-    parts = [f"## Round {round_number} — {', '.join(members)}, {today()}", *notes, *statements]
-    for block in reviewer_blocks:
-        parts.append(f"{NOT_ROWS_NOTE}\n\n{quote_reviewer(block)}")
-    path = record_dir(change, root) / "loop.md"
-    if record is None:
-        # A continued run after a release starts a fresh record; write_state
-        # puts the run's snapshot line into it before the rounds.
-        write_state(change, state, root)
-    # A replacement is consumed too: it is no later rung. Both land in the same write as the round.
-    state["consumed"] = [*state["consumed"], *(f"rung:{model}" for model in replaced), stage["key"]]
-    write_round(change, "\n\n".join(parts), state, root)
+        parts = [f"## Round {round_number} — {', '.join(members)}, {today()}", *notes, *statements]
+        for block in reviewer_blocks:
+            parts.append(f"{NOT_ROWS_NOTE}\n\n{quote_reviewer(block)}")
+        path = record_dir(change, root) / "loop.md"
+        # A continued run after a release starts a fresh record: `write_round` writes its heading and the
+        # run's snapshot line with the round, in one write.
+        # A replacement is consumed too: it is no later rung. Both land in the same write as the round.
+        state["consumed"] = [*state["consumed"], *(f"rung:{model}" for model in replaced), stage["key"]]
+        write_round(change, "\n\n".join(parts), state, root)
+    except BaseException:
+        if audited:
+            # The calls above wrote no round: say so in findings.md, so their audit lines read as an
+            # attempt that consumed nothing and not as a lost record (DL-A-6 of the deep review).
+            with contextlib.suppress(OSError):
+                append(
+                    ctx.findings,
+                    f"{NO_ROUND_KEY}{today()} — no round was written; the review-loop calls above consumed no stage.",
+                )
+        raise
     if receipt_taken:
         import stage2_availability
 
@@ -5921,7 +6032,7 @@ def probe(root: Path, change: str) -> None:
     require_pi()
     free = discover_free(root, allow_empty=True)
     discovery = free
-    diff = free_diff(root)
+    diff, _cut = free_diff(root)
     if not free["selected"]:
         # The probe measures the ids the declaration admits; a free rule that selects nothing is a
         # finding about the catalog, not a reason to skip the paid ids (R-27 of the review-swarm review).
@@ -6095,7 +6206,16 @@ def main(argv: list[str] | None = None) -> int:
                 raise Refused("session needs --model <id>: name the model exactly as model-endpoints.yaml lists it.")
         elif args.model is not None or args.handover is not None:
             raise Refused("--model and --handover belong to the session verb alone.")
-        if args.verb in {"explore", "implement", "repair"}:
+        if args.verb in {"review-loop", "release-loop", "prepare-loop", "review", "repair"}:
+            # The name is checked before the lock: the lock's path is built from it, and a name that
+            # escapes the state directory must create nothing there (DL-A-9 of the deep review).
+            folder_of(Path(args.root), args.change)
+        if args.verb == "repair":
+            # Repair reads the record's taken rows and marks them after its commit: it owns the record from
+            # the first read to the marking, so no release removes it in between (DL-A-5 of the deep review).
+            with holding_record(args.change, Path(args.root)):
+                repair(Path(args.root), args.change, args.stage2_off)
+        elif args.verb in {"explore", "implement"}:
             VERBS[args.verb](Path(args.root), args.change, args.stage2_off)
         elif args.verb == "session":
             session(Path(args.root), args.change, args.model, args.handover)
@@ -6111,7 +6231,6 @@ def main(argv: list[str] | None = None) -> int:
             with holding_record(args.change, Path(args.root)):
                 VERBS[args.verb](Path(args.root), args.change)
         elif args.verb == "review":
-            folder_of(Path(args.root), args.change)
             # The verdict reads the record and its release removes it, so review owns the record's
             # lock from its first read through the release (R-14, bead coding-harness-751).
             with holding_record(args.change, Path(args.root)):
