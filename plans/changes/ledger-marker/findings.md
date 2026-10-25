@@ -73,3 +73,11 @@ by the orchestrating session.
   with its ledger entries; the verification filter names every new test;
   the `verify_attempt` docstring names the ledger step. `repair` reaches the
   same code through `run_attempts`; only `implement` is tested end to end.
+
+## Review loop skipped, 2026-10-25
+
+The review loop (phase 4b) did not run on this change. The maintainer
+answered on 2026-10-25 (night-run plan, `docs/research/2026-10-25-night-run-plan.md`,
+answer 1) that the small cloud-session fixes get phase 6 only tonight,
+because each had the Opus 5.5 pre-review recorded above. Phase 6 follows in
+a fresh Codex session.
