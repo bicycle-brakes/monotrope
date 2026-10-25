@@ -1,0 +1,1 @@
+{"providers": {"opencode-go": {"models": [{"id": "minimax-m3", "input": ["text"], "type": "chat"}]}}}

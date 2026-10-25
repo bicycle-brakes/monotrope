@@ -1,0 +1,1 @@
+main: KeyboardInterrupt at 1.0 s; child pid 10536

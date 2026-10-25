@@ -1,0 +1,1 @@
+{"providers": {"opencode-go": {"models": [{"id": "fresh-new", "api": "openai-completions", "baseUrl": "https://opencode.ai/zen/go/v1", "input": ["text"]}, {"id": "x", "input": "text"}]}}}
