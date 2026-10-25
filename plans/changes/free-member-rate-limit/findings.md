@@ -88,3 +88,16 @@ answered on 2026-10-25 (night-run plan, `docs/research/2026-10-25-night-run-plan
 answer 1) that the small cloud-session fixes get phase 6 only tonight,
 because each had the Opus 5.5 pre-review recorded above. Phase 6 follows in
 a fresh Codex session.
+
+Stage-2 call, 2026-10-25: review · endpoint openai-codex · model gpt-6.1-sol · leak check clean over 563 files, 2151 commits, 12 rules.
+
+## Phase 6 — Codex, 2026-10-25
+
+| ID | Severity | Dimension | Origin | Where | Finding | Reviewer | Status | Broke a test |
+|---|---|---|---|---|---|---|---|---|
+| F6-1 | BLOCKER | SPEC | base | plans/changes/free-member-rate-limit/spec.md:37-57 | [DIVERGENT] When one free member returns 429 and another times out, the spec requires retrying both on the next call. However, docs/research/2026-10-25-night-run-plan.md:72 records the maintainer's answer “also solve the mixed case”, and decisions.md requires dropping the rate-limited member for the run. The implementation and test preserve the explicitly rejected behavior. Reconcile these opposing requirements and implement the recorded decision before approval. [Acceptance criterion 2; non-goals] | Codex | open | — |
+
+Phase 6 verdict: codex 01a17511-1b72-7852-98b8-7457087dc44e, 2026-10-25
+Reviewer session: codex 01a17511-1b72-7852-98b8-7457087dc44e — a fresh session reviewed: no phase-2a session was recorded
+
+Loop rows: none — the loop did not run for this change.
