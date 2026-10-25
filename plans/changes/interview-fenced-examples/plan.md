@@ -44,6 +44,9 @@ python3 scripts/check_interview_minimums.py
 
 - 1: tests/test_check_interview_minimums.py::test_a_fenced_record_or_skip_is_not_counted — a fenced block is counted.
 - 2: tests/test_check_interview_minimums.py::test_a_record_after_a_closed_fence_still_counts — a real record after a fence is lost.
+- 1: tests/test_check_interview_minimums.py::test_the_commonmark_fence_rules_decide_what_is_hidden — a fence rule (closer length, closer kind, closer info string, one-line fence, four-space indent) deviates from CommonMark.
+- 1: tests/test_check_interview_minimums.py::test_an_unclosed_fence_before_the_records_hides_them — an unclosed fence leaks the records after it into the count.
+- 2: tests/test_check_interview_minimums.py::test_a_crlf_file_with_a_closed_fence_still_counts_the_real_record — a CRLF closing fence never matches and blanks every real record after it.
 
 ## Route
 

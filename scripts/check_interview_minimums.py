@@ -214,15 +214,16 @@ def _unfenced(text: str) -> str:
     lines = text.split("\n")
     marker, length = "", 0
     for i, line in enumerate(lines):
+        bare = line.rstrip("\r")  # a CRLF file: the fence is matched without its \r
         if marker:
-            closed = _FENCE_CLOSE.match(line)
+            closed = _FENCE_CLOSE.match(bare)
             if closed and closed.group(1)[0] == marker and len(closed.group(1)) >= length:
                 marker, length = "", 0
             lines[i] = ""
             continue
-        opened = _FENCE.match(line)
+        opened = _FENCE.match(bare)
         # CommonMark: the info string of a backtick fence holds no backtick (tildes may).
-        if opened and not (opened.group(1)[0] == "`" and "`" in line[opened.end() :]):
+        if opened and not (opened.group(1)[0] == "`" and "`" in bare[opened.end() :]):
             marker, length = opened.group(1)[0], len(opened.group(1))
             lines[i] = ""
     return "\n".join(lines)
