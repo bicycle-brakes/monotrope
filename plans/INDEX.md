@@ -128,6 +128,11 @@ typed: a hand-kept list of files ages exactly as fast as files are added.
 | [`changes/criterion-test-ledger/plan.md`](changes/criterion-test-ledger/plan.md) | draft | partial | 2026-10-11 | coding-harness-909 |
 | [`changes/criterion-test-ledger/research.md`](changes/criterion-test-ledger/research.md) | draft | partial | 2026-10-11 | coding-harness-909 |
 | [`changes/criterion-test-ledger/spec.md`](changes/criterion-test-ledger/spec.md) | draft | partial | 2026-10-11 | coding-harness-909 |
+| [`changes/dirty-index/decisions.md`](changes/dirty-index/decisions.md) | draft | partial | 2026-10-25 | coding-harness-0c8 |
+| [`changes/dirty-index/findings.md`](changes/dirty-index/findings.md) | draft | partial | 2026-10-25 | coding-harness-0c8 |
+| [`changes/dirty-index/plan.md`](changes/dirty-index/plan.md) | draft | partial | 2026-10-25 | coding-harness-0c8 |
+| [`changes/dirty-index/research.md`](changes/dirty-index/research.md) | draft | partial | 2026-10-25 | coding-harness-0c8 |
+| [`changes/dirty-index/spec.md`](changes/dirty-index/spec.md) | draft | partial | 2026-10-25 | coding-harness-0c8 |
 | [`changes/failed-check-secrets/decisions.md`](changes/failed-check-secrets/decisions.md) | draft | none | 2026-10-16 | coding-harness-8hr |
 | [`changes/failed-check-secrets/findings.md`](changes/failed-check-secrets/findings.md) | draft | none | 2026-10-16 | coding-harness-8hr |
 | [`changes/failed-check-secrets/plan.md`](changes/failed-check-secrets/plan.md) | draft | none | 2026-10-16 | coding-harness-8hr |
@@ -245,4 +250,9 @@ typed: a hand-kept list of files ages exactly as fast as files are added.
 | [`changes/venv-pycache/plan.md`](changes/venv-pycache/plan.md) | draft | partial | 2026-10-24 | coding-harness-q94b |
 | [`changes/venv-pycache/research.md`](changes/venv-pycache/research.md) | draft | partial | 2026-10-24 | coding-harness-q94b |
 | [`changes/venv-pycache/spec.md`](changes/venv-pycache/spec.md) | draft | partial | 2026-10-24 | coding-harness-q94b |
+| [`changes/verify-absolute-python/decisions.md`](changes/verify-absolute-python/decisions.md) | draft | partial | 2026-10-25 | coding-harness-4x2c |
+| [`changes/verify-absolute-python/findings.md`](changes/verify-absolute-python/findings.md) | draft | partial | 2026-10-25 | coding-harness-4x2c |
+| [`changes/verify-absolute-python/plan.md`](changes/verify-absolute-python/plan.md) | draft | partial | 2026-10-25 | coding-harness-4x2c |
+| [`changes/verify-absolute-python/research.md`](changes/verify-absolute-python/research.md) | draft | partial | 2026-10-25 | coding-harness-4x2c |
+| [`changes/verify-absolute-python/spec.md`](changes/verify-absolute-python/spec.md) | draft | partial | 2026-10-25 | coding-harness-4x2c |
 | [`specs/implementation-verification/spec.md`](specs/implementation-verification/spec.md) | accepted | done | 2026-10-08 | coding-harness-mfv |
