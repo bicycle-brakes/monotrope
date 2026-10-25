@@ -160,6 +160,7 @@ import yaml
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 
 import check_adr_answers  # noqa: E402
+import check_criterion_ledger  # noqa: E402
 import check_frontmatter_current  # noqa: E402
 import leakcheck  # noqa: E402
 import merge_guard  # noqa: E402
@@ -3949,6 +3950,12 @@ def verify_attempt(
         # The attempt overwrote a program the runner starts: it fails here, before the renderer or
         # ruff runs, and the diagnostic names the path (R-21, acceptance criterion).
         return [tampered]
+    try:
+        # The marker of a test the attempt wrote is derivable, so it is not the attempt's to forget
+        # (bead coding-harness-7g6h); the stamp below then sees the plan as changed.
+        check_criterion_ledger.clear_written(root, plan)
+    except OSError as error:
+        return [f"the criterion ledger of {plan.name} could not be updated: {error.strerror or error}"]
     preparation = prepare_derived(root, env, key)
     if preparation:
         return preparation

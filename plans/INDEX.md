@@ -160,6 +160,11 @@ typed: a hand-kept list of files ages exactly as fast as files are added.
 | [`changes/interview-context/plan.md`](changes/interview-context/plan.md) | draft | partial | 2026-10-14 | coding-harness-zs7 |
 | [`changes/interview-context/research.md`](changes/interview-context/research.md) | draft | partial | 2026-10-14 | coding-harness-zs7 |
 | [`changes/interview-context/spec.md`](changes/interview-context/spec.md) | draft | partial | 2026-10-14 | coding-harness-zs7 |
+| [`changes/ledger-marker/decisions.md`](changes/ledger-marker/decisions.md) | draft | partial | 2026-10-25 | coding-harness-7g6h |
+| [`changes/ledger-marker/findings.md`](changes/ledger-marker/findings.md) | draft | partial | 2026-10-25 | coding-harness-7g6h |
+| [`changes/ledger-marker/plan.md`](changes/ledger-marker/plan.md) | draft | partial | 2026-10-25 | coding-harness-7g6h |
+| [`changes/ledger-marker/research.md`](changes/ledger-marker/research.md) | draft | partial | 2026-10-25 | coding-harness-7g6h |
+| [`changes/ledger-marker/spec.md`](changes/ledger-marker/spec.md) | draft | partial | 2026-10-25 | coding-harness-7g6h |
 | [`changes/loop-until-clean/decisions.md`](changes/loop-until-clean/decisions.md) | draft | none | 2026-10-14 | coding-harness-4fk |
 | [`changes/loop-until-clean/design.md`](changes/loop-until-clean/design.md) | draft | none | 2026-10-16 | coding-harness-4fk |
 | [`changes/loop-until-clean/findings.md`](changes/loop-until-clean/findings.md) | draft | none | 2026-10-14 | coding-harness-4fk |
