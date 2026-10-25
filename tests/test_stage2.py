@@ -3184,6 +3184,12 @@ def test_changed_paths_lists_an_index_only_change(world: World) -> None:
     assert Path("src/app.py") in stage2.changed_paths(world.root)
 
 
+def tracked_files(root: Path) -> list[Path]:
+    """The committed files of a test repository, sorted."""
+    listing = subprocess.run(["git", "ls-files", "-z"], cwd=root, capture_output=True, text=True, check=True).stdout
+    return sorted(Path(name) for name in listing.split("\0") if name)
+
+
 def test_changed_paths_lists_each_kind_once(world: World) -> None:
     # Criterion 4. Planted fault: an index entry and its working file listed twice, or a kind dropped.
     app = world.root / "src" / "app.py"
@@ -3191,9 +3197,12 @@ def test_changed_paths_lists_each_kind_once(world: World) -> None:
     git(world.root, "add", "src/app.py")
     app.write_text("edited again = True\n", encoding="utf-8")
     (world.root / "src" / "new.py").write_text("new = True\n", encoding="utf-8")
-    listing = sorted(stage2.changed_paths(world.root))
-    assert listing.count(Path("src/app.py")) == 1
-    assert Path("src/new.py") in listing
+    # A tracked file changed only in the working tree: the index query alone cannot list it.
+    worktree_only = next(path for path in tracked_files(world.root) if path != Path("src/app.py"))
+    with (world.root / worktree_only).open("a", encoding="utf-8") as handle:
+        handle.write("\nworking tree only\n")
+    # `changed_paths` returns a set, so "listed twice" cannot happen; the exact set pins every kind.
+    assert stage2.changed_paths(world.root) == {Path("src/app.py"), Path("src/new.py"), worktree_only}
 
 
 @pytest.mark.parametrize("verb", ["implement", "draft", "repair"])

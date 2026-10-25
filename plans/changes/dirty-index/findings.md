@@ -38,3 +38,17 @@ loop and the phase-6 Codex review are still owed.
   gains no false entry in the runner's own flow.
 - After the checkpoint's `git add -A`, index and working tree agree, so the
   post-commit cleanliness proof is unchanged.
+
+## Pre-review by an Opus 5.5 subagent, 2026-10-25
+
+At the maintainer's request, a read-only Opus 5.5 subagent reviewed this
+change before the phase-6 Codex review, which this container cannot reach.
+Phase 6 is still owed. It found no blocker and one minor row, reproduced
+and fixed by the orchestrating session.
+
+- **P234-1 (MINOR), fixed.** `tests/test_stage2.py::test_changed_paths_lists_each_kind_once`,
+  cited for criterion 4, could not fail: `changed_paths` returns a set, so
+  "listed twice" holds by construction, and its only tracked path was also
+  staged, so dropping the working-tree query left it green. It now changes a
+  second tracked file in the working tree only and asserts the exact set.
+  With the working-tree query replaced by an empty list, it fails.
