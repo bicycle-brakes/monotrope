@@ -4018,6 +4018,7 @@ def verify_attempt(
         intended = intend_new_files(root, env)
     except (Refused, OSError) as error:
         return [f"the attempt's new files could not be added intent-to-add before `make verify`: {error}"]
+    problems = []
     try:
         done = launch(
             ["make", "verify"],
@@ -4029,16 +4030,18 @@ def verify_attempt(
     except StepTimedOut as error:
         # A hang the attempt caused is a repairable diagnostic for the next attempt, not a make that
         # could not be started (O188-4 of the #188 review).
-        return [f"`make verify` did not finish: {error}"]
+        problems.append(f"`make verify` did not finish: {error}")
+    else:
+        if done.returncode != 0:
+            problems.append(f"`make verify` exited {done.returncode}\n{verify_evidence(done, key)}".rstrip())
     finally:
         # The entries were for the gates only: a failed run must not leave them in the operator's index,
         # and a passing one is staged whole by the checkpoint (runner review R-5).
-        # A failed reset leaves the entries visible to the next run's pre-existing-change check.
-        with contextlib.suppress(Refused, OSError):
+        # Cleanup is a postcondition even when verification passed or timed out.
+        try:
             drop_intended(root, intended, env)
-    problems = []
-    if done.returncode != 0:
-        problems.append(f"`make verify` exited {done.returncode}\n{verify_evidence(done, key)}".rstrip())
+        except (Refused, OSError) as error:
+            problems.append(f"the attempt's intent-to-add entries could not be removed after `make verify`: {error}")
     try:
         time_log(plan)
     except Refused as error:

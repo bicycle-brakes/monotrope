@@ -13542,6 +13542,46 @@ def test_a_failed_run_leaves_no_intent_to_add_entry(world: World) -> None:
     assert git(world.root, "diff", "--cached", "--name-only") == ""
 
 
+@pytest.mark.parametrize("verification", ["green", "red", "timeout"])
+@pytest.mark.parametrize("failure", ["index.lock", "oserror"])
+def test_failed_intent_cleanup_rejects_the_attempt_with_a_diagnostic(
+    world: World, monkeypatch: pytest.MonkeyPatch, verification: str, failure: str
+) -> None:
+    # F6-1: a cleanup failure must reject even a green verifier, and remain visible beside a
+    # failed or timed-out verifier. Plant a real Git lock after intent-to-add has succeeded.
+    (world.root / "scripts/new_tool.py").write_text("VALUE = 1\n")
+    lock = world.root / ".git/index.lock"
+    original_launch = stage2.launch
+
+    def verify(command, root, env, secret=None, **kwargs):
+        if list(command) == ["make", "verify"]:
+            if failure == "index.lock":
+                lock.write_text("interrupted Git operation\n")
+            if verification == "timeout":
+                raise stage2.StepTimedOut("test verifier timed out")
+            return subprocess.CompletedProcess(command, int(verification == "red"), "", "")
+        return original_launch(command, root, env, secret, **kwargs)
+
+    if failure == "oserror":
+
+        def fail_drop(*_args, **_kwargs):
+            raise OSError("test cleanup unavailable")
+
+        monkeypatch.setattr(stage2, "drop_intended", fail_drop)
+    monkeypatch.setattr(stage2, "launch", verify)
+    try:
+        problems = stage2.verify_attempt(world.root, world.plan)
+    finally:
+        lock.unlink(missing_ok=True)
+    cleanup = [problem for problem in problems if "intent-to-add" in problem]
+    assert cleanup, problems
+    assert ("index.lock" if failure == "index.lock" else "test cleanup unavailable") in cleanup[0]
+    if verification == "red":
+        assert any("`make verify` exited 1" in problem for problem in problems)
+    elif verification == "timeout":
+        assert any("`make verify` did not finish" in problem for problem in problems)
+
+
 def test_intend_new_files_passes_no_file_name_on_the_command_line(
     world: World, monkeypatch: pytest.MonkeyPatch
 ) -> None:
