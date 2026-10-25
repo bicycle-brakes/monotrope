@@ -52,3 +52,11 @@ and fixed by the orchestrating session.
   staged, so dropping the working-tree query left it green. It now changes a
   second tracked file in the working tree only and asserts the exact set.
   With the working-tree query replaced by an empty list, it fails.
+
+## Review loop skipped, 2026-10-25
+
+The review loop (phase 4b) did not run on this change. The maintainer
+answered on 2026-10-25 (night-run plan, `docs/research/2026-10-25-night-run-plan.md`,
+answer 1) that the small cloud-session fixes get phase 6 only tonight,
+because each had the Opus 5.5 pre-review recorded above. Phase 6 follows in
+a fresh Codex session.
