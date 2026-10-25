@@ -1408,7 +1408,7 @@ def test_a_missing_glm_key_refuses_the_flash_route(world: World, verb: str) -> N
 
 def test_the_foreign_environment_is_the_runners(world: World) -> None:
     # Two Claude calls run: the spec review first, then the explorer.
-    world.script(pi=[{"stdout": rows(1)}], claude=[{"stdout": rows(1)}, {"stdout": "a fact"}])
+    world.script(pi=[{"stdout": rows(1)}], claude=[{"stdout": rows(1)}, {"stdout": "a fact in src/app.py"}])
     assert world.run("spec-review") == 0
     assert world.run("review-loop") == 0
     assert world.run("explore") == 0
@@ -1434,7 +1434,7 @@ def test_the_foreign_environment_is_the_runners(world: World) -> None:
 
 def test_no_call_carries_another_endpoints_key(world: World) -> None:
     """Criterion 13: the OpenCode Go key and the GLM key never meet in one environment."""
-    world.script(pi=[{"stdout": rows(1)}], claude=[{"stdout": rows(1)}, {"stdout": "a fact"}])
+    world.script(pi=[{"stdout": rows(1)}], claude=[{"stdout": rows(1)}, {"stdout": "a fact in src/app.py"}])
     assert world.run("spec-review") == 0
     assert world.run("review-loop") == 0
     assert world.run("explore") == 0
@@ -1599,7 +1599,7 @@ def test_explore_uses_flash_read_only_and_appends_research(world: World) -> None
 def test_explore_needs_research_but_not_spec_or_plan(world: World) -> None:
     (world.root / "plans/changes/demo/spec.md").unlink()
     world.plan.unlink()
-    world.script(claude=[{"stdout": "A sourced fact."}])
+    world.script(claude=[{"stdout": "A sourced fact from `src/app.py`."}])
     assert world.run("explore") == 0
     world.research.write_text("# no header\n", encoding="utf-8")
     assert world.run("explore") == 2
@@ -1610,7 +1610,7 @@ def test_explore_stage2_off_uses_haiku_without_reading_the_glm_key(
     world: World, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     monkeypatch.setattr(stage2, "read_secret", lambda name: pytest.fail(f"read secret on Stage 1: {name}"))
-    world.script(claude=[{"stdout": "Fallback fact."}])
+    world.script(claude=[{"stdout": "Fallback fact from `src/app.py`."}])
     assert world.run("explore", "demo", "--stage2-off", "Z.ai unavailable") == 0
     call = world.calls("claude")[0]
     argv, env = call["argv"], call["env"]
@@ -1652,7 +1652,7 @@ def test_both_anthropic_endpoints_authorize_haiku_5_5_instead_of_4_5() -> None:
 
 
 def test_explore_scrubs_the_flash_credential_from_its_answer(world: World) -> None:
-    world.script(claude=[{"stdout": "the credential was @KEY@"}])
+    world.script(claude=[{"stdout": "the credential was @KEY@ in src/app.py"}])
     assert world.run("explore") == 0
     text = world.research.read_text(encoding="utf-8")
     assert "[credential]" in text
@@ -2459,7 +2459,7 @@ def test_a_key_fragment_never_survives_the_relayed_streams(world: World, capsys:
     world.script(
         claude=[
             {"stdout": "the model saw @KEY@\n" + KEY[:8] + " tail", "stderr": KEY[10:20], "exit": 1},
-            {"stdout": f"fact {KEY[:8]} and {KEY[16:]}"},
+            {"stdout": f"fact {KEY[:8]} and {KEY[16:]} in src/app.py"},
         ]
     )
     assert world.run("explore") == 1
@@ -13484,3 +13484,37 @@ def test_draft_put_back_listing_redacts_secret_paths(world: World) -> None:
     assert world.run("draft") == 0
     assert FIXTURE_SECRET not in world.text()
     assert f"tests/test_{FIXTURE_MARKER}.py" in world.text()
+
+
+# ---------------------------------------------------------------------------
+# explore-stage2-off-sonnet (bead coding-harness-e7m): the explorer knows its role; no research, no append
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.parametrize("off", [False, True])
+def test_the_explore_prompt_states_the_models_role_and_tools(world: World, off: bool) -> None:
+    # Planted fault: the model is not told it is the explorer the runner started, with read-only tools.
+    world.script(claude=[{"stdout": "Fact from `src/app.py`."}])
+    options = ("--stage2-off", "Z.ai unavailable") if off else ()
+    assert world.run("explore", "demo", *options) == 0
+    prompt = world.calls("claude")[0]["prompt_file"]
+    assert stage2.EXPLORER_ROLE in prompt
+
+
+def test_an_exploration_answer_without_a_repository_path_fails_and_appends_nothing(
+    world: World, capsys: pytest.CaptureFixture[str]
+) -> None:
+    # Planted fault: an answer that is no research (the 2026-10-20 Haiku refusal) is appended as research.
+    before = world.research.read_text(encoding="utf-8")
+    refusal = (
+        "I can't run phase 1: the Bash tool is disabled, and `stage2.py explore` has to be run through it. "
+        "Please rerun me with Bash."
+    )
+    world.script(claude=[{"stdout": refusal}])
+    capsys.readouterr()
+    assert world.run("explore", "demo", "--stage2-off", "GLM unavailable") == 1
+    text = world.research.read_text(encoding="utf-8")
+    assert "## Runner exploration" not in text and "Bash tool is disabled" not in text
+    assert "seed fact" in text and text.count("## ") == before.count("## "), "research.md lost what it held"
+    err = capsys.readouterr().err
+    assert "names no file of the repository" in err and "Bash tool is disabled" in err

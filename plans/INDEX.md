@@ -128,6 +128,11 @@ typed: a hand-kept list of files ages exactly as fast as files are added.
 | [`changes/criterion-test-ledger/plan.md`](changes/criterion-test-ledger/plan.md) | draft | partial | 2026-10-11 | coding-harness-909 |
 | [`changes/criterion-test-ledger/research.md`](changes/criterion-test-ledger/research.md) | draft | partial | 2026-10-11 | coding-harness-909 |
 | [`changes/criterion-test-ledger/spec.md`](changes/criterion-test-ledger/spec.md) | draft | partial | 2026-10-11 | coding-harness-909 |
+| [`changes/explore-role/decisions.md`](changes/explore-role/decisions.md) | draft | partial | 2026-10-25 | coding-harness-e7m |
+| [`changes/explore-role/findings.md`](changes/explore-role/findings.md) | draft | partial | 2026-10-25 | coding-harness-e7m |
+| [`changes/explore-role/plan.md`](changes/explore-role/plan.md) | draft | partial | 2026-10-25 | coding-harness-e7m |
+| [`changes/explore-role/research.md`](changes/explore-role/research.md) | draft | partial | 2026-10-25 | coding-harness-e7m |
+| [`changes/explore-role/spec.md`](changes/explore-role/spec.md) | draft | partial | 2026-10-25 | coding-harness-e7m |
 | [`changes/failed-check-secrets/decisions.md`](changes/failed-check-secrets/decisions.md) | draft | none | 2026-10-16 | coding-harness-8hr |
 | [`changes/failed-check-secrets/findings.md`](changes/failed-check-secrets/findings.md) | draft | none | 2026-10-16 | coding-harness-8hr |
 | [`changes/failed-check-secrets/plan.md`](changes/failed-check-secrets/plan.md) | draft | none | 2026-10-16 | coding-harness-8hr |
