@@ -250,3 +250,104 @@ stands in for nothing: phase 6 (Codex) is still owed on every pull request.**
     check.
   - #241: the file check is a heuristic.
 - Hosted CI was green on every head above at 16:37 UTC.
+
+# Addendum, 2026-10-25 about 19:10 UTC: every finding not yet worked
+
+At the maintainer's request, five read-only Opus 5.5 subagents reviewed the
+review loop (parts A and B) and the research swarm (parts 1 to 3) in depth.
+Three fix agents then worked the findings test-first. This addendum lists
+everything that is **not** fixed yet, with where it stands. Full reports with
+reproductions are in each change folder's `findings.md`.
+
+## What was fixed, for orientation
+
+- **#249** (`fix/review-loop-deep-a`, `a41e064`): DL-A-1 to DL-A-10, loop
+  control and state. Draft; no bead yet.
+- **#250** (`fix/review-loop-deep-b`, `6ade811`): DL-B-1 to DL-B-7, DL-B-10,
+  DL-B-11, DL-B-12, DL-B-14, plus RS-3-3 and RS-3-8 (catalog fields in
+  `activate_overlay`). Draft; no bead yet.
+- **#238** (`5b480ea`): the two known limits listed above (a finding
+  without its ID column; phases 6 and 2a without the check) are now fixed.
+- **#158** (`explore/research-swarm`): a fix agent is working every RS row
+  and coding-harness-jik; its first commit `fe864e5` addresses the two
+  BLOCKERs RS-3-2 and RS-1-2. Until its report, every RS row below counts
+  as open.
+
+## Needs a decision of the maintainer
+
+| Row | What is wrong | Recommendation |
+|---|---|---|
+| DL-B-13 (**due 2026-10-31**) | The DeepSeek retention reading says "valid through 2026-10-31", but the runner only checks that `aufbewahrung` is non-empty, so it admits the model for ever. | A machine-readable `gilt_bis: YYYY-MM-DD` in `modelle_terms`, checked by `terms_problem`; a past date skips and names the model. Decision pull request. |
+| DL-B-8 | Where every OpenCode Go call goes is taken from the pi.dev catalog's per-model `baseUrl`, never compared with a declared address. Test P6-14 even asserts it. | Declare `adresse: https://opencode.ai/zen/go/v1` on the `opencode-go` entry; drop, with a notice, any overlay definition whose `baseUrl` or `api` differs. Decision pull request. |
+| DL-B-9 | The repair brake (ADR 0021 decision 7) reads an Origin cell (`base` / `fix-r<N>`) that no prompt tells a reviewer how to fill. | The orchestrator sets Origin when it decides a row; the runner refuses a taken row whose Origin is neither. No prompt change. |
+| DL-A open 1 | With #249, a loop record lost for good blocks the change: `--restart` needs a completed round, so no verb continues. | A recovery verb; it touches ADR 0021 decision 9. |
+| #247 mixed case | The maintainer answered "also solve the mixed case": a free member with 429 must be remembered without a written round. | ADR 0021 amendment (decision pull request with interview), then a dropped-member entry in the loop record. Not started. |
+| coding-harness-4295, e7m, 70rw, 99v7 | As listed under "What is open and needs the maintainer" above. | Unchanged. |
+
+## Agent work still owed (no decision needed)
+
+- **WORKFLOW §4b** does not yet describe #249's `Record digest:` line, the
+  `Loop attempt:` no-round line or the lost-record refusal.
+- **Merge order #249 / #250 / #229 / #238:** all four change `review_loop`,
+  `reviewer_blocks`, `_record_lines` or the release; whoever merges later
+  needs a conflict resolution (agent).
+- **Stand-in race in the test suite:** parallel Pi stand-ins append to
+  `calls.jsonl` while others read it; one `JSONDecodeError` flake seen in
+  `test_ineligible_paid_models_are_skipped_and_named`.
+- **`stage2.cut_rounds`** raises `ValueError` (strict `zip`) on a loop record
+  with no round headings (seen by research review 2, on main).
+- **#229 L3-2 / L3-3:** the maintainer answered "search and repair
+  yourself": check every docstring #229 touches, fix stale ones, note in
+  `plans/changes/loop-state-block/findings.md` that the match with L3-2/L3-3
+  is uncertain. Not started.
+- **coding-harness-csm** (runner precheck): the maintainer answered "yes,
+  build it": merge main into `feat/runner-precheck`, check the plan against
+  today's runner, build test-first, ask on a material deviation. Not started.
+- **Known limits of #250:** a rung refused at replacement stays in the run
+  snapshot (`release-loop --stage-failed` retires it); in a narrow race a
+  call line is written for a replacement that then does not start (named,
+  not consumed); dropped catalog fields are named on stderr only, not in the
+  record.
+- **Beads:** #249 and #250 carry `bead: to be filed`; the tracker push is
+  refused from the container (403).
+
+## Research swarm rows (on #158, in work)
+
+| Row | Severity | In one line |
+|---|---|---|
+| RS-3-2 | BLOCKER | `file://` paths pass the path lock; Pi reads any file and sends it to a Go model (F-24 repair incomplete). First fix in `fe864e5`. |
+| RS-1-2 | BLOCKER | U+2028/2029/0085 in a web excerpt break the handoff gate; CI turns red repository-wide. First fix in `fe864e5`. |
+| RS-1-5 | MAJOR | Web text reaches the judge with system-prompt authority; `unresolved` claims need no disagreement. |
+| RS-1-9 | MAJOR | An unclosed fence earlier in research.md hides later runs; the gate says "exempt". |
+| RS-1-4 | MAJOR | The capture grades a home-canary leak OBSERVED and still passes; a regression of F-24 goes unseen. |
+| RS-1-6 | MAJOR | Judge packet limit 200,000 characters is exceeded by ordinary reports (about 290,000 at five claims each). |
+| RS-1-1 | MAJOR | A failed store clear re-binds the wrong text; the next run reuses nothing (39 calls again). |
+| RS-1-8, RS-2-6 | MAJOR | research.md is rewritten non-atomically and with universal newlines; a kill loses earlier research, CRLF is rewritten. |
+| RS-3-1 | MAJOR | One malformed catalog row makes Pi reject all of models.json; free models vanish, seats call an unchecked endpoint. |
+| RS-3-3 | MAJOR | `samplingParams` swaps the model in the request body (fixed on main by #250; the branch's own copy is in work). |
+| RS-3-4 | MAJOR | Research Pi commands lack `--offline`; Pi downloads unpinned `rg`/`fd` and runs them with the key. |
+| RS-1-3, RS-1-7, RS-1-10, RS-1-11, RS-1 dead branch | MINOR/NIT | Later numbered lists read as criteria; empty-packet gap not enforced; forged envelope trusted; NFC and confusables. |
+| RS-2-1 | MINOR | `release-loop` deletes the research store and its lock. |
+| RS-2-2, RS-2-3, RS-2-4, RS-2-5 | MINOR/NIT | Tracked symlinks and submodules stop the freeze; store guard misses the common git dir; older results never reused; reuse chain loses its origin. |
+| RS-3-5 to RS-3-8, RS-3 NIT | MINOR/NIT | Nested duplicate key kills the source; curly-quote symlink passes the lock; absent `baseUrl` admitted; a non-string header crashes; Pi's system prompt carries local paths unchecked. |
+| coding-harness-jik | — | Harden the four load-sensitive F-53 tests. Research review 2 measured that they hold up to load 29 but take 10 to 21 s each. |
+
+## Seen but not reviewed (no finding yet)
+
+- Review A did not cover: the availability probe and its timed exclusion
+  (`PROBE_RETRY_SECONDS` 180 s against the ADR's 60 s), real multi-process
+  lock races, whether draft or explore can also write findings.md, several
+  restarts in a row.
+- Review B did not cover: a live Pi run, Pi's real `--no-tools` behaviour,
+  the probe and stage2-session paths.
+- Research review 1 did not cover: whether `--restricted`/`dontAsk` confine
+  the Haiku repository seat to the worktree; `stage2_research_tools.mjs`;
+  `stage2_research_refs` (also splits with `splitlines`, possible false
+  heading).
+- Research review 2 noted, without a finding: macOS `fsync` is not
+  `F_FULLFSYNC`; a case-insensitive file system could collide two free slot
+  ids; orphan `.tmp-*` files stay until a complete publication;
+  `Store.clear` is test-only; the freeze reads the repository twice within
+  60 s.
+- Research review 3 did not cover: live pi.dev and models.dev behaviour,
+  Pi's `compat` and `thinkingLevelMap` fields.
