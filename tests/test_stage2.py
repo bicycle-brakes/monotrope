@@ -13527,6 +13527,33 @@ def test_make_verify_sees_the_attempts_new_files_in_git(
     assert "scripts/new_tool.py" in git(world.root, "show", "--name-only", "--format=", "HEAD").splitlines()
 
 
+def test_make_verify_preserves_carriage_return_and_newline_in_new_file_names(
+    world: World, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    # F6-2: text-mode Git output folds CR into LF, so the LF path is added twice
+    # and the distinct CR path stays untracked when verification starts.
+    names = {"scripts/new\rtool.py", "scripts/new\ntool.py"}
+    for name in names:
+        (world.root / name).write_text("VALUE = 1\n")
+    original_launch = stage2.launch
+    seen = []
+
+    def verify(command, root, env, secret=None, **kwargs):
+        if list(command) == ["make", "verify"]:
+            listed = subprocess.run([GIT, "-C", str(root), "ls-files", "-z"], capture_output=True, check=True).stdout
+            seen.append(set(os.fsdecode(listed).split("\0")))
+            return subprocess.CompletedProcess(command, 0, "", "")
+        return original_launch(command, root, env, secret, **kwargs)
+
+    monkeypatch.setattr(stage2, "launch", verify)
+    assert stage2.verify_attempt(world.root, world.plan) == []
+    assert len(seen) == 1 and names <= seen[0], seen
+    listed_after = subprocess.run(
+        [GIT, "-C", str(world.root), "ls-files", "-z"], capture_output=True, check=True
+    ).stdout
+    assert not names.intersection(os.fsdecode(listed_after).split("\0"))
+
+
 def test_a_failed_run_leaves_no_intent_to_add_entry(world: World) -> None:
     # Runner review R-5 (2026-10-25). Planted fault: the intent-to-add entries stay in the operator's index
     # when every attempt fails at make verify, so `git stash -u` refuses and a deleted file leaves a stale entry.

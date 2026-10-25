@@ -2965,14 +2965,15 @@ def _git_output(
     allow: tuple[int, ...] = (0,),
     env: dict[str, str] | None = None,
     stdin: str | None = None,
+    preserve_newlines: bool = False,
 ) -> str:
     try:
         done = subprocess.run(
             [GIT, "-C", str(root), *args],
-            input=stdin,
+            input=os.fsencode(stdin) if preserve_newlines and stdin is not None else stdin,
             capture_output=True,
-            text=True,
-            errors="replace",
+            text=not preserve_newlines,
+            errors=None if preserve_newlines else "replace",
             check=False,
             env=env,
             timeout=GIT_SECONDS,
@@ -2980,8 +2981,8 @@ def _git_output(
     except subprocess.TimeoutExpired as error:
         raise Refused(f"git {args[0]} did not finish within {GIT_SECONDS // 60} minutes") from error
     if done.returncode not in allow:
-        raise Refused(f"git {args[0]} failed: {done.stderr.strip()[:200]}")
-    return done.stdout
+        raise Refused(f"git {args[0]} failed: {os.fsdecode(done.stderr).strip()[:200]}")
+    return os.fsdecode(done.stdout)
 
 
 def change_diff(root: Path) -> str:
@@ -3227,7 +3228,10 @@ def intend_new_files(root: Path, env: dict[str, str] | None = None) -> list[str]
     """
     names = [
         name
-        for name in _git_output(root, "ls-files", "-z", "--others", "--exclude-standard", env=env).split("\0")
+        # NUL separates paths; CR and LF inside a name must not be translated by text mode.
+        for name in _git_output(
+            root, "ls-files", "-z", "--others", "--exclude-standard", env=env, preserve_newlines=True
+        ).split("\0")
         if name
     ]
     if names:
