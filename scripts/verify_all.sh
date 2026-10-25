@@ -14,6 +14,15 @@
 
 set -u
 
+# A relative `$PYTHON` is read where the caller stood and exported absolute:
+# gates start children in other directories (the leerprobe gate's foreign
+# repository), where a relative path names nothing (bead coding-harness-4x2c).
+# A bare name (`python3`) stays a PATH lookup.
+case "${PYTHON:-}" in
+    "" | /*) ;;
+    */*) PYTHON="$PWD/$PYTHON" ;;
+esac
+
 # Back to the repository root before anything is chosen, wherever the caller
 # stood: `.venv/bin/python3` below is this checkout's own (bead
 # coding-harness-ei0).
