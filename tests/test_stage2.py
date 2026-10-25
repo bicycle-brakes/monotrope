@@ -13524,3 +13524,16 @@ def test_a_hand_edit_beside_derived_writes_is_still_refused(world: World, capsys
     err = capsys.readouterr().err
     assert "plans/changes/demo/research.md" in err and "plans/INDEX.md" not in err
     assert world.calls("claude") == []
+
+
+def test_a_content_edit_behind_dash_lines_is_no_derived_leftover(world: World) -> None:
+    # Runner review R-3 (2026-10-25). Planted fault: diff lines starting `--`/`++` are skipped as file headers,
+    # so a removed `---` rule and an added `++` line pass as a stamp-only change.
+    doc = world.root / "plans" / "changes" / "demo" / "notes.md"
+    doc.write_text("---\ntitle: T\nupdated: 2026-01-01\n---\n\nIntro\n\n---\n\n-- keep this\n", encoding="utf-8")
+    git(world.root, "add", "-A")
+    git(world.root, "commit", "--quiet", "-m", "notes")
+    doc.write_text("---\ntitle: T\nupdated: 2026-10-25\n---\n\nIntro\n\n\n++ injected line\n", encoding="utf-8")
+    assert not stage2.derived_leftover(world.root, Path("plans/changes/demo/notes.md"))
+    doc.write_text("---\ntitle: T\nupdated: 2026-10-25\n---\n\nIntro\n\n---\n\n-- keep this\n", encoding="utf-8")
+    assert stage2.derived_leftover(world.root, Path("plans/changes/demo/notes.md")), "a stamp-only change was refused"

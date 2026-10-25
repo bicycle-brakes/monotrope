@@ -3218,19 +3218,28 @@ def derived_leftover(root: Path, relative: Path) -> bool:
         return True
     if "__pycache__" in relative.parts and relative.suffix == ".pyc":
         return True
+    # The two versions are compared with their first `updated:` line masked, never through a parsed diff:
+    # a diff line whose text starts `--` or `++` looks like a file header (runner review R-3).
+    path = root / relative
     try:
-        diff = _git_output(root, "diff", "--unified=0", "--no-color", "HEAD", "--", relative.as_posix())
-    except Refused:
+        if path.is_symlink() or not path.is_file():
+            return False
+        now = path.read_bytes().decode("utf-8")
+        then = _git_output(root, "show", f"HEAD:{relative.as_posix()}")
+    except (OSError, UnicodeDecodeError, Refused):
         return False
-    changed = [line for line in diff.splitlines() if line[:1] in "+-" and not line.startswith(("+++", "---"))]
-    removed = [line[1:] for line in changed if line.startswith("-")]
-    added = [line[1:] for line in changed if line.startswith("+")]
-    return (
-        len(removed) == 1
-        and len(added) == 1
-        and removed[0].startswith("updated: ")
-        and added[0].startswith("updated: ")
-    )
+    if "\ufffd" in then or now == then:
+        return False
+
+    def masked(text: str) -> str | None:
+        lines = text.split("\n")
+        for index, line in enumerate(lines):
+            if line.startswith("updated: "):
+                lines[index] = "updated: "
+                return "\n".join(lines)
+        return None
+
+    return masked(then) is not None and masked(then) == masked(now)
 
 
 def refuse_preexisting(root: Path, allowed: set[Path]) -> None:

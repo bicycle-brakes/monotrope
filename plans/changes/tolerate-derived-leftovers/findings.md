@@ -34,3 +34,17 @@ Read by the implementing session, so it is no independent review.
   commits it re-stamped and re-rendered.
 - `clear_derived_leftovers` in the tests is now redundant for the index;
   it is left as it is, outside this change.
+
+## Independent runner review, 2026-10-25
+
+An Opus sub-agent of the orchestrating session reviewed the runner with all
+open pull requests merged (read-only, in a separate context). Its row for
+this change:
+
+| ID | Severity | Finding | Status |
+|---|---|---|---|
+| R-3 | MINOR | `derived_leftover` dropped diff lines starting `---`/`+++` as file headers, so a removed Markdown rule (`---`) or an added line starting `++` hid a content edit beside an `updated:` change; criterion 2 was broken (reproduced). | fixed — tests/test_stage2.py::test_a_content_edit_behind_dash_lines_is_no_derived_leftover |
+
+The check now compares the `HEAD` version and the working file with their
+first `updated:` line masked; a symlink, a non-file, undecodable bytes or
+identical bytes are no stamp-only change.
