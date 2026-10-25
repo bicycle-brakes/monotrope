@@ -2284,7 +2284,7 @@ def review(root: Path, change: str) -> None:
             raise Refused(refusal)
     text = ctx.findings.read_text(encoding="utf-8") if ctx.findings.exists() else ""
     if not restarted_fresh(record, text):
-        read_state(record, text, record_path=record_dir(change, root) / "loop.md")
+        read_state(record, text, record_path=record_dir(change, root) / "loop.md", legacy_release_ok=True)
     recorded = recorded_2a_session(text)
     recheck = any(line.startswith("## Phase 6") for line in text.splitlines())
     if recheck:
@@ -2843,7 +2843,9 @@ def _missing_state_refusal(text: str, where: str, way_out: str) -> str:
     )
 
 
-def read_state(record: str | None, findings_text: str, *, record_path: Path | None = None) -> dict | None:
+def read_state(
+    record: str | None, findings_text: str, *, record_path: Path | None = None, legacy_release_ok: bool = False
+) -> dict | None:
     """The run's stage snapshot: the record's owned state block first, else the last release's.
 
     Only the block the runner owns is read: the whole record - its reviewer words stand quoted, never
@@ -2853,7 +2855,9 @@ def read_state(record: str | None, findings_text: str, *, record_path: Path | No
     owned block is missing, unclosed, duplicated or unreadable is refused with the place named, before
     discovery or a reviewer call - never continued from a bare legacy line, an older release or
     invented state (criterion 5). Without a record and without a release there is no snapshot: a
-    fresh run discovers its own.
+    fresh run discovers its own. `legacy_release_ok` is for a caller that only validates and never uses
+    the snapshot (phase 6): with no record, a release that keeps a bare legacy `Loop state:` line and no
+    owned block then yields None instead of a refusal; a broken owned block still refuses.
     """
     if record is not None:
         where = f"the loop record {record_path}" if record_path is not None else "the loop record"
@@ -2870,6 +2874,8 @@ def read_state(record: str | None, findings_text: str, *, record_path: Path | No
         where = "the released block in findings.md"
         line = state_block_json(section, where)
         if line is None:
+            if legacy_release_ok and STATE_LINE.search(section):
+                return None
             raise Refused(
                 _missing_state_refusal(
                     section, where, "mend findings.md by hand, or restart the loop with `release-loop --restart`"
@@ -2886,6 +2892,18 @@ def read_state(record: str | None, findings_text: str, *, record_path: Path | No
         or not isinstance(state.get("consumed"), list)
     ):
         raise Refused(f"the snapshot line of {where} does not hold the expected stage snapshot.")
+    for path, value in (
+        ("free.selected", state["free"].get("selected")),
+        ("paid.ladder", state["paid"].get("ladder")),
+        ("paid.flash", state["paid"].get("flash")),
+        ("paid.rungs", state["paid"].get("rungs")),
+        ("consumed", state["consumed"]),
+    ):
+        if not isinstance(value, list) or not all(isinstance(item, str) for item in value):
+            raise Refused(
+                f"the snapshot line of {where} holds no list of strings at `{path}`, which the runner reads; "
+                "mend the block by hand. Nothing has been changed."
+            )
     return state
 
 

@@ -166,3 +166,41 @@ Stage-2 call, 2026-10-24: review-loop · endpoint opencode-go · model longcat-2
 Stage-2 call, 2026-10-24: repair · attempt 1 · route codex · endpoint openai-codex · model gpt-6.1-sol · leak check clean over 536 files, 1925 commits, 12 rules.
 
 Stage-2 call, 2026-10-24: review-loop · endpoint opencode-go · model glm-5.3-flash · leak check clean over 536 files, 1926 commits, 12 rules.
+
+## Repair of loop rows L3-1 and L3-5 outside the runner, 2026-10-25
+
+On 2026-10-25 the maintainer took rows L3-1 and L3-5 of round 3 in the
+conversation with a Claude Code cloud session, and told it to repair them
+with a Sonnet 5.5 subagent instead of Codex. Codex is not reachable from
+that container, so `stage2.py repair` could not run. This deviates from
+ADR 0017, which has Codex repair through the runner. The rows themselves
+stand in the loop record on the maintainer's machine, not in this file.
+
+- **L3-1 (MAJOR), fixed.** `read_state` now refuses, naming the place and
+  the field, a snapshot whose `free.selected`, `paid.ladder`, `paid.flash`,
+  `paid.rungs` or `consumed` is not a list of strings. These are the inner
+  fields the runner reads without a default. Before, such a block crashed
+  with a `KeyError` or `TypeError` traceback. Tests:
+  `tests/test_stage2.py::test_a_snapshot_without_its_membership_fields_is_refused_not_a_traceback`
+  and `::test_a_state_free_dict_is_the_literal_reproduction_of_l3_1`; both
+  failed on `d3e48c3` and pass after the fix.
+- **L3-5 (MINOR), fixed.** `review` (phase 6) calls `read_state` with
+  `legacy_release_ok=True`. Without a loop record, a release that keeps a
+  bare legacy state line and no owned block then reads as no snapshot,
+  instead of refusing the phase-6 re-check of a change released before the
+  owned block existed. A present but broken owned block still refuses, and
+  `review-loop` and `release-loop` are unchanged. Tests:
+  `::test_review_proceeds_when_the_last_release_keeps_a_legacy_bare_state_line`
+  (failed on `d3e48c3`, passes after) and
+  `::test_review_with_a_record_still_refuses_a_missing_owned_block`. The
+  case `review` over a legacy release left the parametrisation of
+  `::test_invalid_owned_snapshot_refuses_without_calls_or_writes` and
+  `::test_review_invalid_owned_snapshot_refuses_before_call`, because it
+  asserted the behaviour L3-5 removes.
+- Two fixtures that used the degenerate snapshot
+  `{"consumed": ["free"], "free": {}, "paid": {}}` now use a complete one;
+  the stricter check rightly refuses the old one.
+- **L3-2 to L3-4 stay open**: the maintainer has not decided them.
+
+The loop record still lists L3-1 and L3-5 as open. Marking them taken and
+fixed there is the maintainer's step on their machine.

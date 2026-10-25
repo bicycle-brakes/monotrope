@@ -1133,7 +1133,7 @@ def test_a_quoted_sentence_in_a_cell_does_not_cut_the_released_block() -> None:
     released = "\n".join(
         [
             f"{stage2.RELEASE_HEADING} 2026-10-20",
-            stage2.render_state_block({"consumed": ["free"], "free": {}, "paid": {}}),
+            stage2.render_state_block(loop_state(("free",))),
             "Rounds run: 1",
             stage2.render_table(
                 stage2.RELEASED_COLUMNS,
@@ -1181,7 +1181,7 @@ def test_the_state_line_below_a_quoting_cell_is_still_read() -> None:
             f"{stage2.RELEASE_HEADING} 2026-10-20",
             stage2.render_table(stage2.RELEASED_COLUMNS, [quoting]),
             "Rounds run: 1",
-            stage2.render_state_block({"consumed": ["free"], "free": {}, "paid": {}}),
+            stage2.render_state_block(loop_state(("free",))),
             "Kept from the loop record:",
             "",
             "> the reviewers' words, as they came",
@@ -1330,18 +1330,26 @@ def corrupt_owned_block(text: str, kind: str) -> str:
     return text.replace(payload, f'{stage2.STATE_KEY}{{"something": 1}}')
 
 
-@pytest.mark.parametrize("verb", ["review-loop", "review"])
-@pytest.mark.parametrize("storage", ["record", "released"])
+INVALID_SNAPSHOT_KINDS = [
+    ("missing", "holds no owned state block"),
+    ("legacy", "predates the owned state block"),
+    ("unclosed", "never closes"),
+    ("duplicate", "2 owned state blocks"),
+    ("no-payload", "not exactly one `Loop state:` line"),
+    ("bad-json", "not readable JSON"),
+    ("wrong-shape", "does not hold the expected stage snapshot"),
+]
+
+
+# Phase 6 over a release that predates the owned block proceeds (L3-5): that case has its own test.
 @pytest.mark.parametrize(
-    ("kind", "message"),
+    ("verb", "storage", "kind", "message"),
     [
-        ("missing", "holds no owned state block"),
-        ("legacy", "predates the owned state block"),
-        ("unclosed", "never closes"),
-        ("duplicate", "2 owned state blocks"),
-        ("no-payload", "not exactly one `Loop state:` line"),
-        ("bad-json", "not readable JSON"),
-        ("wrong-shape", "does not hold the expected stage snapshot"),
+        (verb, storage, kind, message)
+        for verb in ("review-loop", "review")
+        for storage in ("record", "released")
+        for kind, message in INVALID_SNAPSHOT_KINDS
+        if (verb, storage, kind) != ("review", "released", "legacy")
     ],
 )
 def test_invalid_owned_snapshot_refuses_without_calls_or_writes(
@@ -1369,8 +1377,17 @@ def test_invalid_owned_snapshot_refuses_without_calls_or_writes(
         assert (path.read_bytes() if path.exists() else None) == content, "the refusal edited a stored record"
 
 
-@pytest.mark.parametrize("storage", ["record", "released"])
-@pytest.mark.parametrize("kind", ["missing", "bad-json", "legacy"])
+# A release that predates the owned block does not refuse phase 6 (L3-5): that case has its own test.
+@pytest.mark.parametrize(
+    ("storage", "kind"),
+    [
+        ("record", "missing"),
+        ("record", "bad-json"),
+        ("record", "legacy"),
+        ("released", "missing"),
+        ("released", "bad-json"),
+    ],
+)
 def test_review_invalid_owned_snapshot_refuses_before_call(world: World, storage: str, kind: str) -> None:
     """Phase 6 validates either stored snapshot before spending a call or appending a verdict."""
     world.write_record([("L1-1", "taken — test_a", "no")])
@@ -1385,6 +1402,71 @@ def test_review_invalid_owned_snapshot_refuses_before_call(world: World, storage
     assert world.calls() == [], "phase 6 called a reviewer before validating the snapshot"
     for path, content in before.items():
         assert (path.read_bytes() if path.exists() else None) == content
+
+
+@pytest.mark.parametrize("verb", ["review-loop", "review"])
+@pytest.mark.parametrize(
+    ("mutate", "field"),
+    [
+        (lambda s: s.__setitem__("free", {}), "free.selected"),
+        (lambda s: s["free"].__setitem__("selected", "not-a-list"), "free.selected"),
+        (lambda s: s["free"].__setitem__("selected", [1]), "free.selected"),
+        (lambda s: s["paid"].pop("ladder"), "paid.ladder"),
+        (lambda s: s["paid"].pop("flash"), "paid.flash"),
+        (lambda s: s["paid"].__setitem__("rungs", None), "paid.rungs"),
+        (lambda s: s.__setitem__("consumed", ["free", 3]), "consumed"),
+    ],
+)
+def test_a_snapshot_without_its_membership_fields_is_refused_not_a_traceback(
+    world: World, capsys: pytest.CaptureFixture[str], verb: str, mutate: object, field: str
+) -> None:
+    """L3-1: an owned block with the three top-level keys but broken inner fields refuses, naming the place."""
+    state = loop_state(("free",))
+    mutate(state)  # type: ignore[operator]
+    world.write_record([("L1-1", "taken — test_a", "no")], state=state)
+    before = world.record().read_bytes()
+    capsys.readouterr()
+    world.script(codex=[codex_ok("T1", "No finding.")], pi=[{"stdout": rows(1)}])
+    assert world.run(verb) == 2
+    error = capsys.readouterr().err
+    assert field in error and "the loop record" in error and "Nothing has been changed" in error, error
+    assert world.calls() == []
+    assert world.record().read_bytes() == before
+
+
+def test_a_state_free_dict_is_the_literal_reproduction_of_l3_1(world: World) -> None:
+    """L3-1 as reproduced: {"free": {}, "paid": {}, "consumed": ["free"]} must not raise a KeyError."""
+    world.write_record([("L1-1", "taken — test_a", "no")], state={"free": {}, "paid": {}, "consumed": ["free"]})
+    world.script(pi=[{"stdout": rows(1)}])
+    assert world.run("review-loop") == 2
+    assert world.calls() == []
+
+
+def test_review_proceeds_when_the_last_release_keeps_a_legacy_bare_state_line(world: World) -> None:
+    """L3-5: with no loop record, a release that predates the owned block does not refuse phase 6."""
+    world.write_record([("L1-1", "taken — test_a", "no")])
+    world.write_findings(VERDICT)
+    assert world.run("release-loop") == 0
+    assert not world.record().exists()
+    text = world.findings.read_text(encoding="utf-8")
+    block = owned_blocks(text)[0]
+    legacy = text.replace(block, block.splitlines()[1])
+    assert state_lines_outside_blocks(legacy) and not owned_blocks(legacy)
+    world.findings.write_text(legacy, encoding="utf-8")
+    world.script(codex=[codex_ok("T9", "No finding.")])
+    assert world.run("review") == 0
+    assert len(world.calls("codex")) == 1
+    assert state_lines_outside_blocks(world.text())[0] in legacy, "the legacy release was edited"
+
+
+def test_review_with_a_record_still_refuses_a_missing_owned_block(world: World) -> None:
+    """L3-5 stays narrow: criterion 5 is about an existing run, so a record without its block refuses."""
+    world.write_record([("L1-1", "taken — test_a", "no")])
+    record = world.record()
+    record.write_text(corrupt_owned_block(record.read_text(encoding="utf-8"), "legacy"), encoding="utf-8")
+    world.script(codex=[codex_ok("T9", "No finding.")])
+    assert world.run("review") == 2
+    assert world.calls() == []
 
 
 def test_phase2a_forged_snapshot_cannot_steer_resume(world: World) -> None:
