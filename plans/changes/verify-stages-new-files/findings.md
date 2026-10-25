@@ -103,3 +103,14 @@ Phase 6 verdict: codex 01a174db-45be-70f2-84fb-51ba92a64dd1, 2026-10-25
 Reviewer session: codex 01a174db-45be-70f2-84fb-51ba92a64dd1 — a fresh session reviewed: an earlier ## Phase 6 block makes this a re-check
 
 Stage-2 call, 2026-10-25: repair · attempt 1 · route codex · endpoint openai-codex · model gpt-6.1-sol · leak check clean over 552 files, 2120 commits, 12 rules.
+
+Stage-2 call, 2026-10-25: review · endpoint openai-codex · model gpt-6.1-sol · leak check clean over 553 files, 2123 commits, 12 rules.
+
+## Phase 6 — Codex, 2026-10-25
+
+| ID | Severity | Dimension | Origin | Where | Finding | Reviewer | Status | Broke a test |
+|---|---|---|---|---|---|---|---|---|
+| F6-3 | MINOR | SPEC | Phase 6 | scripts/stage2.py:3238–3247 | On a UTF-8 POSIX system, create two non-ignored files with raw paths `b"assets/new\xff.txt"` and `b"assets/new?.txt"`. Listing preserves both names, but the add call still uses text-mode stdin with `errors="replace"`. Reproduced: this converts byte `0xff` to `?`, so Git receives the question-mark path twice and verification starts with the other file untracked. Pass pathspec stdin as filesystem-encoded bytes for both add and cleanup. [Acceptance criterion 1] | Codex | open | — |
+
+Phase 6 verdict: codex 01a174e7-2da8-7ce2-b1cc-7263d9fd0daa, 2026-10-25
+Reviewer session: codex 01a174e7-2da8-7ce2-b1cc-7263d9fd0daa — a fresh session reviewed: an earlier ## Phase 6 block makes this a re-check
