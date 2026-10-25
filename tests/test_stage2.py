@@ -3305,6 +3305,35 @@ def test_paths_outside_the_change_folder_are_put_back_and_named(world: World) ->
         assert f"- {path}" in block, path
 
 
+def test_a_draft_does_not_blame_the_model_for_a_derived_leftover(world: World) -> None:
+    # P243-5. Planted fault: a leftover the run started with is put back and listed as what the model changed.
+    draft_world(world)
+    note = world.root / "docs" / "note.md"
+    note.write_text("---\ntitle: N\nupdated: 2026-01-01\n---\n\nNote\n", encoding="utf-8")
+    git(world.root, "add", "-A")
+    git(world.root, "commit", "--quiet", "-m", "note")
+    note.write_text(note.read_text(encoding="utf-8").replace("2026-01-01", "2026-10-25"), encoding="utf-8")
+    world.script(
+        codex=[
+            codex_ok(
+                "T1",
+                "drafted",
+                plant={
+                    "plans/changes/demo/spec.md": "---\ntitle: Spec\nupdated: 2026-09-30\nbead: demo-1\n---\n\n# Spec\n",
+                    "plans/changes/demo/plan.md": PLAN_CARD,
+                    "src/app.py": "value = 2\n",
+                },
+            )
+        ],
+        make=[{"stdout": "green\n"}],
+    )
+    assert world.run("draft") == 0
+    block = quote_blocks(world.text())[0]
+    assert "- `src/app.py`" in block, "the model's own stray edit is still listed"
+    assert "docs/note.md" not in "\n".join(block), "a leftover the run started with is blamed on the model"
+    assert "2026-01-01" in git(world.root, "show", "HEAD:docs/note.md")
+
+
 def test_the_put_back_names_every_path_beyond_the_bound(world: World) -> None:
     # 2a's F-8. Planted fault: the put-back listing stops at `ATTEMPT_FILES` and hides the last
     # path behind a remainder line, so the audit cannot name every restored path.
@@ -13680,6 +13709,207 @@ def test_a_refused_exploration_answer_shows_its_last_forty_lines(
     err = capsys.readouterr().err
     assert "line 60" in err and "line 21" in err
     assert "line 01" not in err and "line 20" not in err
+
+
+# tolerate-derived-leftovers (bead coding-harness-b5w): a failed run's derived writes do not block the next
+# ---------------------------------------------------------------------------
+
+
+def test_a_failed_runs_derived_writes_do_not_block_the_next_run(world: World) -> None:
+    # Planted fault: the rendered index and the date stamps a failed run left are refused as pre-existing.
+    red = red_verify(("pytest", ["FAILED tests/test_x.py::test_a - assert"]))
+    step = {
+        "stdout": "implemented",
+        "plant": {"src/app.py": "value = 2\n"},
+        "append": {"plans/changes/demo/plan.md": "2026-10-07 10:00–10:05, 5 min\n"},
+    }
+    world.script(claude=[step] * 3, make=[red] * 3)
+    assert world.run("implement") == 1
+    leftovers = stage2.changed_paths(world.root)
+    assert Path("plans/INDEX.md") in leftovers, "the failed run left no rendered index to tolerate"
+    # The work itself is put back by the operator; the runner's own writes stay, as a failed run leaves them.
+    git(world.root, "checkout", "--", "src/app.py")
+    git(world.root, "checkout", "--", "plans/changes/demo/plan.md")
+    stamp_only = world.research
+    stamp_only.write_text(
+        stamp_only.read_text(encoding="utf-8").replace("updated: 2026-09-30", "updated: 2026-10-25"), encoding="utf-8"
+    )
+    successful_implementation(world)
+    assert world.run("implement") == 0, "the runner refused its own derived writes"
+
+
+def test_a_hand_edit_beside_derived_writes_is_still_refused(world: World, capsys: pytest.CaptureFixture[str]) -> None:
+    # Guard: only a stamp-only diff, the rendered index and bytecode are tolerated; a content edit is not.
+    (world.root / "plans" / "INDEX.md").write_text("# rendered\n", encoding="utf-8")
+    world.research.write_text(world.research.read_text(encoding="utf-8") + "a hand-written line\n", encoding="utf-8")
+    successful_implementation(world)
+    capsys.readouterr()
+    assert world.run("implement") == 2
+    err = capsys.readouterr().err
+    assert "plans/changes/demo/research.md" in err and "plans/INDEX.md" not in err
+    assert world.calls("claude") == []
+
+
+def test_a_content_edit_behind_dash_lines_is_no_derived_leftover(world: World) -> None:
+    # Runner review R-3 (2026-10-25). Planted fault: diff lines starting `--`/`++` are skipped as file headers,
+    # so a removed `---` rule and an added `++` line pass as a stamp-only change.
+    doc = world.root / "plans" / "changes" / "demo" / "notes.md"
+    doc.write_text("---\ntitle: T\nupdated: 2026-01-01\n---\n\nIntro\n\n---\n\n-- keep this\n", encoding="utf-8")
+    git(world.root, "add", "-A")
+    git(world.root, "commit", "--quiet", "-m", "notes")
+    doc.write_text("---\ntitle: T\nupdated: 2026-10-25\n---\n\nIntro\n\n\n++ injected line\n", encoding="utf-8")
+    assert not stage2.derived_leftover(world.root, Path("plans/changes/demo/notes.md"))
+    doc.write_text("---\ntitle: T\nupdated: 2026-10-25\n---\n\nIntro\n\n---\n\n-- keep this\n", encoding="utf-8")
+    assert stage2.derived_leftover(world.root, Path("plans/changes/demo/notes.md")), "a stamp-only change was refused"
+
+
+_FM = "---\ntitle: T\nupdated: 2026-01-01\n---\n\nBody\n"
+_FM_NEW = _FM.replace("2026-01-01", "2026-10-25")
+
+
+@pytest.mark.parametrize("staged", [False, True])
+def test_derived_leftover_refuses_a_stamp_with_a_mode_change(world: World, staged: bool) -> None:
+    relative = Path("plans/changes/demo/notes.md")
+    doc = world.root / relative
+    git(world.root, "config", "core.filemode", "true")
+    doc.write_text(_FM, encoding="utf-8")
+    doc.chmod(0o644)
+    git(world.root, "add", str(relative))
+    git(world.root, "commit", "--quiet", "-m", "regular document fixture")
+    doc.write_text(_FM_NEW, encoding="utf-8")
+    assert stage2.derived_leftover(world.root, relative)
+    doc.chmod(0o755)
+    if staged:
+        git(world.root, "add", str(relative))
+    assert not stage2.derived_leftover(world.root, relative)
+    with pytest.raises(stage2.Refused, match=re.escape(relative.as_posix())):
+        stage2.refuse_preexisting(world.root, set())
+
+
+def test_derived_leftover_refuses_a_human_decided_document(world: World) -> None:
+    relative = Path("docs/adr/0001-example.md")
+    doc = world.root / relative
+    doc.parent.mkdir(parents=True, exist_ok=True)
+    doc.write_text(_FM, encoding="utf-8")
+    provenance = world.root / "provenance.yaml"
+    data = yaml.safe_load(provenance.read_text(encoding="utf-8"))
+    data["paths"].append({"prefix": "docs/adr/", "allowed": ["human-decided"]})
+    provenance.write_text(yaml.safe_dump(data), encoding="utf-8")
+    git(world.root, "add", "-A")
+    git(world.root, "commit", "--quiet", "-m", "protected document fixture")
+    doc.write_text(_FM_NEW + "Substantive edit\n", encoding="utf-8")
+    # Admission must agree with the checkpoint's committed provenance guard.
+    assert relative.as_posix() in stage2.uncommittable(world.root, "demo")
+    # Assert the classification first so the baseline proves the fault by AssertionError.
+    assert not stage2.derived_leftover(world.root, relative)
+    with pytest.raises(stage2.Refused, match=re.escape(relative.as_posix())):
+        stage2.refuse_preexisting(world.root, set())
+
+
+@pytest.mark.parametrize("fault", ["content", "mode"])
+def test_derived_leftover_refuses_a_substantive_staged_edit(world: World, fault: str) -> None:
+    # F-3: the working copy hides a human edit that remains in the index.
+    relative = Path("plans/changes/demo/notes.md")
+    doc = world.root / relative
+    git(world.root, "config", "core.filemode", "true")
+    doc.write_text(_FM, encoding="utf-8")
+    doc.chmod(0o644)
+    git(world.root, "add", str(relative))
+    git(world.root, "commit", "--quiet", "-m", "staged document fixture")
+    doc.write_text(_FM + ("Human edit\n" if fault == "content" else ""), encoding="utf-8")
+    if fault == "mode":
+        doc.chmod(0o755)
+    git(world.root, "add", str(relative))
+    doc.chmod(0o644)
+    doc.write_text(_FM_NEW, encoding="utf-8")
+    assert not stage2.derived_leftover(world.root, relative)
+    with pytest.raises(stage2.Refused, match=re.escape(relative.as_posix())):
+        stage2.refuse_preexisting(world.root, set())
+
+
+@pytest.mark.parametrize("verb", ["implement", "draft", "repair"])
+def test_a_protected_stamp_leftover_is_admitted_and_restored(world: World, verb: str) -> None:
+    # F-4: admission accepts a stamp, but the checkpoint must never commit the protected document.
+    if verb == "draft":
+        draft_world(world)
+        passing_draft(world)
+    elif verb == "repair":
+        repair_world(world)
+    else:
+        successful_implementation(world)
+    relative = Path("docs/adr/0001-example.md")
+    doc = world.root / relative
+    doc.parent.mkdir(parents=True, exist_ok=True)
+    doc.write_text(_FM, encoding="utf-8")
+    provenance = world.root / "provenance.yaml"
+    data = yaml.safe_load(provenance.read_text(encoding="utf-8"))
+    data["paths"].append({"prefix": "docs/adr/", "allowed": ["human-decided"]})
+    provenance.write_text(yaml.safe_dump(data), encoding="utf-8")
+    git(world.root, "add", "-A")
+    git(world.root, "commit", "--quiet", "-m", "protected stamp fixture")
+    baseline = git(world.root, "rev-parse", "HEAD")
+    doc.write_text(_FM_NEW, encoding="utf-8")
+    assert stage2.derived_leftover(world.root, relative)
+    stage2.refuse_preexisting(world.root, {world.findings.relative_to(world.root)})
+    assert world.run(verb) == 0
+    assert doc.read_text(encoding="utf-8") == _FM
+    assert git(world.root, "diff", baseline, "HEAD", "--", str(relative)) == ""
+    assert git(world.root, "status", "--porcelain") == ""
+
+
+_LEFTOVER_CASES = [
+    # (id, path, HEAD bytes, worktree bytes, tolerated)
+    ("lf-stamp", "n.md", _FM, _FM_NEW, True),
+    ("bom-file", "n.md", "\ufeff" + _FM, "\ufeff" + _FM_NEW, True),
+    ("quoted-to-unquoted", "n.md", _FM.replace("2026-01-01", '"2026-01-01"'), _FM_NEW, True),
+    ("no-space-stamp", "n.md", _FM.replace("updated: ", "updated:"), _FM_NEW, True),
+    ("crlf-stamp", "n.md", _FM.replace("\n", "\r\n"), _FM_NEW.replace("\n", "\r\n"), True),
+    ("crlf-to-lf-plus-stamp", "n.md", _FM.replace("\n", "\r\n"), _FM_NEW, False),
+    ("lf-to-crlf-plus-stamp", "n.md", _FM, _FM_NEW.replace("\n", "\r\n"), False),
+    ("lone-cr-to-lf-plus-stamp", "n.md", _FM.replace("\n", "\r"), _FM_NEW, False),
+    (
+        "updated-prefixed-key-kept",
+        "n.md",
+        _FM.replace("title: T", "title: T\nupdatedby: a"),
+        _FM_NEW.replace("title: T", "title: T\nupdatedby: a"),
+        True,
+    ),
+    (
+        "second-frontmatter-updated-line-changed",
+        "n.md",
+        _FM.replace("updated: 2026-01-01", "updated: 2026-01-01\nupdated: a"),
+        _FM_NEW.replace("updated: 2026-10-25", "updated: 2026-10-25\nupdated: b"),
+        False,
+    ),
+    ("other-key-changed", "n.md", _FM, _FM_NEW.replace("title: T", "title: U"), False),
+    ("body-updated-line-changed", "n.md", _FM + "updated: old\n", _FM_NEW + "updated: new text\n", False),
+    ("body-updated-no-frontmatter", "n.md", "Body\nupdated: old\n", "Body\nupdated: new text\n", False),
+    ("non-date-value", "n.md", _FM, _FM.replace("2026-01-01", "2026-10-25 ; anything"), False),
+    ("python-file", "t.py", "# x\nupdated: 2026-01-01\n", "# x\nupdated: 2026-10-25\n", False),
+    ("inserted-stamp-line", "n.md", "---\ntitle: T\n---\n\nBody\n", _FM_NEW, False),
+    ("undecodable-bytes", "n.md", _FM, _FM_NEW + "\udcff", False),
+]
+
+
+@pytest.mark.parametrize(
+    ("path", "head", "now", "tolerated"),
+    [pytest.param(*case[1:], id=case[0]) for case in _LEFTOVER_CASES],
+)
+def test_derived_leftover_is_a_frontmatter_stamp_and_nothing_else(
+    world: World, path: str, head: str, now: str, tolerated: bool
+) -> None:
+    # P243-1..6. Planted faults: HEAD read in text mode (CRLF/CR become LF), any `updated:` line masked, the
+    # mask `startswith("updated")`, any value accepted, the mask outside the frontmatter block.
+    def raw(text: str) -> bytes:
+        return text.encode("utf-8", errors="surrogateescape")
+
+    file = world.root / "plans" / "changes" / "demo" / path
+    file.write_bytes(raw(head))
+    git(world.root, "add", "-A")
+    git(world.root, "commit", "--quiet", "-m", "leftover fixture")
+    file.write_bytes(raw(now))
+    relative = Path("plans/changes/demo") / path
+    assert stage2.derived_leftover(world.root, relative) is tolerated
 
 
 @pytest.mark.parametrize("nested_repository", [False, True])

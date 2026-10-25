@@ -120,8 +120,8 @@ def _records(text: str) -> list[tuple[str, list[tuple[int, str]], list[bool]]]:
     a repeated id and an agent-attributed answer are records here even though
     they count towards no interview minimum.
 
-    This gate skips fenced content; the interview-minimums counting gate
-    splits on `## ` headings and reads fields without fence awareness.
+    Both gates skip fenced content (this one per line, the interview-minimums
+    counting gate by blanking fenced lines before it splits on `## ` headings).
     The shared heading form does not make their record sets identical.
     """
     lines = text.splitlines()

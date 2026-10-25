@@ -2982,6 +2982,22 @@ def _git_output(root: Path, *args: str, allow: tuple[int, ...] = (0,), env: dict
     return done.stdout
 
 
+def _git_bytes(root: Path, *args: str) -> bytes:
+    """The raw stdout of a git command that must succeed: no text mode, so no newline translation."""
+    try:
+        done = subprocess.run(
+            [GIT, "-C", str(root), *args],
+            capture_output=True,
+            check=False,
+            timeout=GIT_SECONDS,
+        )
+    except subprocess.TimeoutExpired as error:
+        raise Refused(f"git {args[0]} did not finish within {GIT_SECONDS // 60} minutes") from error
+    if done.returncode != 0:
+        raise Refused(f"git {args[0]} failed: {done.stderr.decode('utf-8', 'replace').strip()[:200]}")
+    return done.stdout
+
+
 def change_diff(root: Path) -> str:
     """The diff against the merge base with origin/main, uncommitted and untracked files included."""
     base = _merge_base(root)
@@ -3215,6 +3231,77 @@ def changed_paths(root: Path, env: dict[str, str] | None = None, against: str = 
     tracked += _git_output(root, "diff", "--cached", "--no-renames", "--name-only", "-z", against, env=env).split("\0")
     untracked = _git_output(root, "ls-files", "-z", "--others", "--exclude-standard", env=env).split("\0")
     return {Path(name) for name in [*tracked, *untracked] if name}
+
+
+def derived_leftover(root: Path, relative: Path) -> bool:
+    """A change the runner itself derives before every verify, so a failed run may leave it (bead coding-harness-b5w).
+
+    Three kinds, and only these: the rendered `plans/INDEX.md` (re-rendered from the tree before the next
+    verify), a file whose only difference from `HEAD` is its `updated:` line (the date stamp), and Python
+    bytecode under `__pycache__` that the runner's own renderer wrote. A content edit is never one.
+    """
+    # A stamp or rendered file never accounts for a tracked permission/type change.
+    for index in ((), ("--cached",)):
+        raw = _git_output(root, "diff", *index, "--raw", "--no-renames", "-z", "HEAD", "--", relative.as_posix())
+        for metadata in raw.split("\0")[::2]:
+            if metadata:
+                modes = metadata.split()[:2]
+                if modes[0] != ":000000" and modes[0][1:] != modes[1]:
+                    return False
+    if relative.as_posix() == "plans/INDEX.md":
+        return True
+    if "__pycache__" in relative.parts and relative.suffix == ".pyc":
+        return True
+    # The two versions are compared with the frontmatter `updated:` line masked, never through a parsed diff:
+    # a diff line whose text starts `--` or `++` looks like a file header (runner review R-3). Both are
+    # read as bytes and decoded without newline translation, so a CRLF to LF conversion is a change (P243-1).
+    path = root / relative
+    try:
+        if path.is_symlink() or not path.is_file():
+            return False
+        now = path.read_bytes().decode("utf-8")
+        then = _git_bytes(root, "show", f"HEAD:{relative.as_posix()}").decode("utf-8")
+        staged = _git_bytes(root, "show", f":{relative.as_posix()}").decode("utf-8")
+    except (OSError, UnicodeDecodeError, Refused):
+        return False
+    if now == staged == then:
+        return False
+    before = _mask_stamp(then, dated=False)
+    # Check both independent versions against HEAD: git add -A must not erase a substantive staged edit.
+    return before is not None and all(
+        version == then or _mask_stamp(version, dated=True) == before for version in (now, staged)
+    )
+
+
+_STAMP_DATE = re.compile(r"updated: \d{4}-\d{2}-\d{2}\r?")
+
+
+def _mask_stamp(text: str, *, dated: bool) -> str | None:
+    """`text` with the frontmatter's one `updated:` line replaced by a mask; None when there is no such line.
+
+    The line is found as `check_frontmatter_current.stamp` finds it, so the no-space form matches too. With
+    `dated` the line must be what `stamp` writes, `updated: YYYY-MM-DD`; an inserted or missing line is None.
+    """
+    block = check_frontmatter_current._BLOCK.match(text)
+    if block is None:
+        return None
+    lines = block.group(1).split("\n")
+    found = [i for i, line in enumerate(lines) if check_frontmatter_current._UPDATED_LINE.match(line)]
+    if len(found) != 1:
+        return None
+    line = lines[found[0]]
+    if dated and not _STAMP_DATE.fullmatch(line):
+        return None
+    lines[found[0]] = "updated: <stamp>" + ("\r" if line.endswith("\r") else "")
+    return text[: block.start(1)] + "\n".join(lines) + text[block.end(1) :]
+
+
+def refuse_preexisting(root: Path, allowed: set[Path]) -> None:
+    """Refuse pre-existing changes outside `allowed`, except the runner's own derived leftovers (bead coding-harness-b5w)."""
+    outside = {path for path in changed_paths(root) - allowed if not derived_leftover(root, path)}
+    if outside:
+        listing = ", ".join(sorted(path.as_posix() for path in outside))
+        raise Refused(f"the worktree has pre-existing changes outside this change's findings.md: {listing}")
 
 
 def ignored_snapshot(root: Path) -> dict[Path, tuple[int, int]]:
@@ -4031,15 +4118,8 @@ RUNNER_HELD = (
 )
 
 
-def uncommittable(root: Path, change: str, keep: set[Path] | None = None) -> list[str]:
-    """The changed paths a stage-2 attempt must not commit, named (R-16 of the review-swarm review).
-
-    The classes come from the committed `provenance.yaml`, never from the tree the attempt wrote:
-    a `human-decided` prefix or one of `RUNNER_HELD` is out of a model's reach, the change's own
-    folder is not. `keep` holds what the verb may keep changed - a draft's own new ADR under the
-    `docs/adr/` prefix is exactly that (P1 of the #192 review).
-    """
-    spared = {path.as_posix() for path in keep or ()}
+def _held_prefixes(root: Path) -> list[str]:
+    """Committed human-decided and runner-held prefixes for checkpoint protection."""
     try:
         data = yaml.safe_load(_git_output(root, "show", "HEAD:provenance.yaml"))
         # A commit without a provenance map declares no class; `RUNNER_HELD` still holds.
@@ -4051,9 +4131,21 @@ def uncommittable(root: Path, change: str, keep: set[Path] | None = None) -> lis
         ]
     except (Refused, KeyError, TypeError, AttributeError, yaml.YAMLError) as error:
         raise Refused(f"the committed provenance map cannot be read; no attempt is committed ({error})") from error
-    folder = f"plans/changes/{change}/"
     # Case-folded on both sides: on a case-insensitive checkout `.Claude/Rules/` is `.claude/rules/` (O192-2).
-    held = [path.casefold() for path in [*decided, *RUNNER_HELD]]
+    return [path.casefold() for path in [*decided, *RUNNER_HELD]]
+
+
+def uncommittable(root: Path, change: str, keep: set[Path] | None = None) -> list[str]:
+    """The changed paths a stage-2 attempt must not commit, named (R-16 of the review-swarm review).
+
+    The classes come from the committed `provenance.yaml`, never from the tree the attempt wrote:
+    a `human-decided` prefix or one of `RUNNER_HELD` is out of a model's reach, the change's own
+    folder is not. `keep` holds what the verb may keep changed - a draft's own new ADR under the
+    `docs/adr/` prefix is exactly that (P1 of the #192 review).
+    """
+    spared = {path.as_posix() for path in keep or ()}
+    folder = f"plans/changes/{change}/"
+    held = _held_prefixes(root)
     return sorted(
         relative.as_posix()
         for relative in changed_paths(root)
@@ -4078,6 +4170,12 @@ def checkpoint(
         if exposed:
             raise Refused(credential_message(exposed))
     try:
+        # A protected document's derived stamp may enter the run, but must not enter its commit.
+        # Reclassify both index and disk here: a substantive attempt edit still reaches the guard below.
+        held = _held_prefixes(root)
+        for path in sorted(changed_paths(root)):
+            if any(path.as_posix().casefold().startswith(prefix) for prefix in held) and derived_leftover(root, path):
+                _git_output(root, "restore", f"--source={baseline}", "--staged", "--worktree", "--", path.as_posix())
         blocked = uncommittable(root, change, keep)
     except Refused as error:
         # An unreadable map is a failure of this attempt, repairable by the next one - and the edits go
@@ -5270,10 +5368,7 @@ def implement(root: Path, change: str, stage2_off: str | None = None) -> None:
     first = SONNET if stage2_off is not None else GLM_FLASH
     ctx = preflight(root, change, first, required=("plan.md",))
     allowed = {ctx.findings.relative_to(root)}
-    outside = changed_paths(root) - allowed
-    if outside:
-        listing = ", ".join(sorted(path.as_posix() for path in outside))
-        raise Refused(f"the worktree has pre-existing changes outside this change's findings.md: {listing}")
+    refuse_preexisting(root, allowed)
     baseline = _git_output(root, "rev-parse", "HEAD").strip()
     time_log(ctx.plan)  # Require the initial time heading before a model call starts.
     ignored_before = ignored_snapshot(root)
@@ -5494,11 +5589,10 @@ def draft(root: Path, change: str) -> None:
     """
     ctx = preflight(root, change, CODEX, bead_file="research.md", required=("decisions.md",))
     allowed = {ctx.findings.relative_to(root)}
-    outside = changed_paths(root) - allowed
-    if outside:
-        listing = ", ".join(sorted(path.as_posix() for path in outside))
-        raise Refused(f"the worktree has pre-existing changes outside this change's findings.md: {listing}")
+    refuse_preexisting(root, allowed)
     baseline = _git_output(root, "rev-parse", "HEAD").strip()
+    # The derived leftovers the run started with: put back with the rest, but never blamed on the model.
+    started_with = {path for path in changed_paths(root) if derived_leftover(root, path)}
     ignored_before = ignored_snapshot(root)
     tools = tool_state(root)  # before any model runs (R-21)
     routes = [
@@ -5570,6 +5664,7 @@ def draft(root: Path, change: str) -> None:
             files = unmeasured
         keep, new_adrs = draft_keep(root, ctx, baseline)
         put = put_back(root, baseline, keep)
+        put = [path for path in put if Path(path) not in started_with]
         if put:
             restored = protect_files(put_back_lines(put), key)
             listing = "\n".join(restored)
@@ -5656,10 +5751,7 @@ def repair(root: Path, change: str, stage2_off: str | None = None) -> None:
     first = SONNET if stage2_off is not None else CODEX
     ctx = preflight(root, change, first, required=("plan.md",))
     allowed = {ctx.findings.relative_to(root)}
-    outside = changed_paths(root) - allowed
-    if outside:
-        listing = ", ".join(sorted(path.as_posix() for path in outside))
-        raise Refused(f"the worktree has pre-existing changes outside this change's findings.md: {listing}")
+    refuse_preexisting(root, allowed)
     taken, waiting = repair_targets(ctx, read_record(change, root))
     if waiting:
         raise Refused(f"rows are waiting for a decision ({', '.join(waiting)}); decide them first.")
