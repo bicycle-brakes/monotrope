@@ -871,3 +871,77 @@ All experiments ran in a scratch copy at `<scratch>/deep-research-3/` (`tree/`, 
 - Live pi.dev and models.dev behaviour (for example whether models.dev redirects): no network here.
 - The Artificial Analysis reading, the state store and resume, the judge packet, and `research_capture.py` beyond its bridge call.
 - Whether other Pi model fields (`compat`, `thinkingLevelMap`) can change the request in ways beyond RS-3-3.
+
+# Addendum, 2026-10-25 about 19:20 UTC: where every process ended
+
+A correction first: the two addenda above headed "about 19:10" and "about
+19:20" were written at about 18:45 UTC.
+
+No agent is working any more. The pushed state of every branch is the state
+below.
+
+## The three repairs
+
+| Pull request | Head | CI | What it holds |
+|---|---|---|---|
+| #249 `fix/review-loop-deep-a` | `a41e064` | green | DL-A-1 to DL-A-10, all fixed. |
+| #250 `fix/review-loop-deep-b` | `1f08910` | red at `6ade811`, fix pushed, result pending | DL-B-1 to B-7, B-10, B-11, B-12, B-14, RS-3-3, RS-3-8. The red was four P6-14 tests in `tests/test_pi_contract.py` (they run only with Node 26): discovery now reads the exclusions of `model-endpoints.yaml` and the test ran in an empty directory. `1f08910` gives the test the real declaration; its discovery step was replayed here without Node and selects the model again. |
+| #158 `explore/research-swarm` | `941daf3` | no CI runs on this branch | Every RS row of the three research reviews and bead coding-harness-jik. |
+
+## The research swarm repair in detail (#158, `941daf3`)
+
+Every new test is red on the reviewed tip `8480b1d` (46 red; 2 control tests
+pass there by design). The three new test files pass here (180 passed). Full
+suite: 3318 passed; the remaining failures are container-only (two chmod
+tests under root, `test_pi_contract.py` on Node 22, 81 catalog tests without
+an installed Pi). Rows are in `plans/changes/research-swarm/findings.md`,
+section "Phase 6 — deep reviews RS-1, RS-2 and RS-3, 2026-10-25".
+
+- **Fixed, BLOCKER:** RS-3-2 (`file://` and fallback names now judged where
+  Pi reads them; confirmed on the pinned Pi 1.2.0 that the secret no longer
+  reaches the model), RS-1-2.
+- **Fixed, MAJOR:** RS-1-1, RS-1-4, RS-1-5 (only the instruction file is a
+  system prompt; data reaches the judge as the user turn; every `unresolved`
+  claim must sit in a disagreement), RS-1-6, RS-1-8 with RS-2-6 (one atomic
+  byte-exact write), RS-1-9, RS-3-1 with RS-3-3 (each launch writes only its
+  own allow-listed, schema-checked row; fails closed), RS-3-4 (`--offline`).
+- **Fixed, MINOR:** RS-1-3, RS-1-7, RS-1-10, RS-1-11, RS-1 dead branch,
+  RS-2-1 to RS-2-5, RS-3-5 to RS-3-8. Two deviations in form, each reasoned
+  in its row: RS-2-5 adds `launched_in` instead of changing `reused_from`;
+  RS-3-5 renamed one existing test whose case contradicted ADR 0020 point 4.
+- **coding-harness-jik done** (`2936dcf`, `Closes-Bead`): the catalog
+  deadline tests fire the bridge's timer on an event; 10 to 21 s per test
+  fell to about 0.6 s, about 2 s under load.
+- **Open, NIT:** RS-3 — Pi's own system prompt carries local paths.
+  Recommendation: install the pinned Pi at a neutral path for research
+  launches and add a capture check that no home or worktree path reaches an
+  online model.
+
+**Open questions from this repair:**
+
+1. The judge rule "every unresolved claim sits in a disagreement" lives in
+   code (`JUDGE_RUNNER_RULES`) because `prompts/` is the maintainer's.
+   Recommendation: move that sentence into `prompts/research-swarm/judge.md`.
+2. The judge now reads its data from stdin; that `-p` text and stdin join
+   into one user message was read from the Claude Code 2.1.310 binary, not
+   measured live. Recommendation: one real judge call before the merge.
+3. Main's review-loop `activate_overlay` still writes every row into
+   `models.json` (#250 only allow-lists the fields). Recommendation: the
+   same one-row allow-list there.
+
+**Merge work owed:** merging main into `explore/research-swarm` must
+reconcile `stage2.release` (RS-2-1 here, DL-A-3 in #249) and `stage2.append`
+(RS-2-6 here).
+
+## Saved outside the pull requests
+
+- `backup/deep-review-evidence-2026-10-25` (`84f0807`): the reviewers'
+  notes, reproduction tests, scripts and task prompts.
+- `backup/integration-2026-10-25` (`ba9c337`): the local integration
+  branch.
+
+## Tracker writes to replay (in addition to the list above)
+
+- Close coding-harness-jik (its commit `2936dcf` carries `Closes-Bead`).
+- File beads for #249 and #250 and replace `bead: to be filed` in their
+  change folders.
