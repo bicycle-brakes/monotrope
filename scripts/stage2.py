@@ -160,6 +160,7 @@ import yaml
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 
 import check_adr_answers  # noqa: E402
+import check_criterion_ledger  # noqa: E402
 import check_frontmatter_current  # noqa: E402
 import leakcheck  # noqa: E402
 import merge_guard  # noqa: E402
@@ -487,6 +488,10 @@ class Refused(Exception):
 
 class CallFailed(Exception):
     """A call ended without a usable answer: exit 1."""
+
+
+class CheckpointRolledBack(CallFailed):
+    """The commit guard refused the attempt and ran its baseline restore."""
 
 
 class StepTimedOut(CallFailed):
@@ -3208,9 +3213,14 @@ def runner_env(env: dict[str, str], *roots: Path) -> dict[str, str]:
 
 
 def changed_paths(root: Path, env: dict[str, str] | None = None, against: str = "HEAD") -> set[Path]:
-    """Tracked changes against `against` and untracked files, as repository-relative paths."""
+    """Tracked changes against `against`, in the working tree or the index, and untracked files.
+
+    `git diff <commit>` reads only the working tree, so a path staged and then put back in the file
+    differs from the commit in the index alone; `--cached` lists it (bead coding-harness-0c8).
+    """
     # `--no-renames`: a rename must list both names, or the deleted one is invisible (O192-1).
     tracked = _git_output(root, "diff", "--no-renames", "--name-only", "-z", against, env=env).split("\0")
+    tracked += _git_output(root, "diff", "--cached", "--no-renames", "--name-only", "-z", against, env=env).split("\0")
     untracked = _git_output(root, "ls-files", "-z", "--others", "--exclude-standard", env=env).split("\0")
     return {Path(name) for name in [*tracked, *untracked] if name}
 
@@ -4005,7 +4015,7 @@ def verify_attempt(
     formatted: list[str] | None = None,
     tools: dict[str, str] | None = None,
 ) -> list[str]:
-    """Stamp changed held documents, render the index, format the targets, then run `make verify`.
+    """Format, clear derivable ledger markers, stamp changed documents, render the index, `make verify`.
 
     Preparation writes to the tree and executes its registry renderer. Before `make verify` the
     runner applies ruff's safe fixes and its formatter to the changed Python files under `scripts/`
@@ -4029,12 +4039,29 @@ def verify_attempt(
         # The attempt overwrote a program the runner starts: it fails here, before the renderer or
         # ruff runs, and the diagnostic names the path (R-21, acceptance criterion).
         return [tampered]
+    try:
+        # The marker of a test the attempt wrote is derivable, so it is not the attempt's to forget
+        # (bead coding-harness-7g6h); the stamp below then sees the plan as changed. The plan is an
+        # attempt-writable path: an alias (a symlink in it or its parents, a hard link) would carry the
+        # write outside the worktree, so it is refused first (runner review R-1, 2026-10-25).
+        relative = plan.relative_to(root)
+        if plan.is_symlink() or plan.resolve() != root.resolve() / relative:
+            return [f"refusing an aliased plan before clearing its ledger: {relative.as_posix()}"]
+        if plan.exists() and plan.stat().st_nlink > 1:
+            return [f"refusing a hard-linked plan before clearing its ledger: {relative.as_posix()}"]
+        # Ruff can normalize `def test_new ():` into the definition the ledger recognizes.
+        # Clear against those final bytes, before stamping the plan and verifying (F-1).
+        line = format_step(root, env, key, tools)
+        if formatted is not None and line is not None:
+            formatted.append(line)
+        check_criterion_ledger.clear_written(root, plan)
+    except (OSError, RuntimeError, ValueError) as error:
+        return [
+            f"the criterion ledger of {plan.name} could not be updated: {getattr(error, 'strerror', None) or error}"
+        ]
     preparation = prepare_derived(root, env, key)
     if preparation:
         return preparation
-    line = format_step(root, env, key, tools)
-    if formatted is not None and line is not None:
-        formatted.append(line)
     try:
         intended = intend_new_files(root, env)
     except (Refused, OSError) as error:
@@ -4149,13 +4176,13 @@ def checkpoint(
         # An unreadable map is a failure of this attempt, repairable by the next one - and the edits go
         # first, so nothing the runner could not classify stays in the tree (O192-5).
         restored = restore_baseline(root, baseline, set(keep or ()), ignored_before)
-        raise CallFailed(f"{error}; {restored}") from error
+        raise CheckpointRolledBack(f"{error}; {restored}") from error
     if blocked:
         # The tree goes back to the baseline, but `keep` stands: what the verb itself may keep changed -
         # its change folder, a draft's own new ADR, the findings a human may have touched - is not the
         # refused attempt's to lose (P1 and P2 of the #192 review).
         restored = restore_baseline(root, baseline, set(keep or ()), ignored_before)
-        raise CallFailed(
+        raise CheckpointRolledBack(
             "the attempt changed paths a stage-2 run does not commit: "
             + ", ".join(f"`{path}`" for path in blocked)
             + f"; {restored}"
@@ -5217,7 +5244,24 @@ def run_attempts(
                     # The subject stays the subject; the format line of every attempt that ran the step
                     # stands below the heading, in the commit that holds the formatted bytes.
                     message = commit_message + "\n\n" + FORMAT_COMMIT_HEADING + "\n" + "\n".join(record)
-                checkpoint(root, ctx.change, baseline, key, ignored_before, message=message, keep=allowed)
+                try:
+                    checkpoint(root, ctx.change, baseline, key, ignored_before, message=message, keep=allowed)
+                except CheckpointRolledBack:
+                    # `before_commit` may have written statuses (a repair's `fixed — <test>`) that the
+                    # refused commit's restore just undid the work for; findings.md is kept by that
+                    # restore, so it goes back here (bead coding-harness-rcyf). Only while no commit
+                    # exists: after one, HEAD holds those statuses. A `Refused` stop (a credential, a
+                    # recovery the maintainer decided writes nothing) is never followed by a write
+                    # (runner review R-4). The explicit rollback signal excludes a failed `git commit`
+                    # that left the fix in place (P240-1). Unrelated leftovers, such as nested Git
+                    # repositories skipped by git clean, do not preserve statuses for removed fixes.
+                    try:
+                        moved = _git_output(root, "rev-parse", "HEAD").strip() != baseline
+                    except Refused:
+                        moved = True
+                    if kept is not None and not moved:
+                        restore_findings(kept)
+                    raise
                 if after_commit is not None:
                     after_commit()
                 print(f"{verb}: verified and committed · route {route} · attempt {attempt}")
