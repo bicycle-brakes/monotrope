@@ -82,7 +82,7 @@ Stage-2 call, 2026-10-25: review · endpoint openai-codex · model gpt-6.1-sol �
 
 | ID | Severity | Dimension | Origin | Where | Finding | Reviewer | Status | Broke a test |
 |---|---|---|---|---|---|---|---|---|
-| F6-1 | MAJOR | SPEC | Phase 6 | scripts/stage2.py:4033–4038 | If index cleanup fails—for example because an interrupted Git operation leaves `index.lock`—the exception is silently suppressed. A failed final attempt leaves the new files intent-to-add; a green verifier returns no cleanup diagnostic. Report the failure and require successful cleanup before accepting the attempt. [Acceptance criterion 3] | Codex | open | — |
+| F6-1 | MAJOR | SPEC | Phase 6 | scripts/stage2.py:4033–4038 | If index cleanup fails—for example because an interrupted Git operation leaves `index.lock`—the exception is silently suppressed. A failed final attempt leaves the new files intent-to-add; a green verifier returns no cleanup diagnostic. Report the failure and require successful cleanup before accepting the attempt. [Acceptance criterion 3] | Codex | taken — test: when dropping the intent-to-add entries fails (an `index.lock` left by an interrupted Git operation), the attempt is not accepted and the failure is named in the diagnostics (orchestrator, 2026-10-25) | — |
 
 Phase 6 verdict: codex 01a174cf-5a9e-7441-a9e2-72695c87a35c, 2026-10-25
 Reviewer session: codex 01a174cf-5a9e-7441-a9e2-72695c87a35c — a fresh session reviewed: no phase-2a session was recorded
