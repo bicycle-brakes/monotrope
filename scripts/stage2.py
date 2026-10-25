@@ -3952,10 +3952,19 @@ def verify_attempt(
         return [tampered]
     try:
         # The marker of a test the attempt wrote is derivable, so it is not the attempt's to forget
-        # (bead coding-harness-7g6h); the stamp below then sees the plan as changed.
+        # (bead coding-harness-7g6h); the stamp below then sees the plan as changed. The plan is an
+        # attempt-writable path: an alias (a symlink in it or its parents, a hard link) would carry the
+        # write outside the worktree, so it is refused first (runner review R-1, 2026-10-25).
+        relative = plan.relative_to(root)
+        if plan.is_symlink() or plan.resolve() != root.resolve() / relative:
+            return [f"refusing an aliased plan before clearing its ledger: {relative.as_posix()}"]
+        if plan.exists() and plan.stat().st_nlink > 1:
+            return [f"refusing a hard-linked plan before clearing its ledger: {relative.as_posix()}"]
         check_criterion_ledger.clear_written(root, plan)
-    except OSError as error:
-        return [f"the criterion ledger of {plan.name} could not be updated: {error.strerror or error}"]
+    except (OSError, RuntimeError, ValueError) as error:
+        return [
+            f"the criterion ledger of {plan.name} could not be updated: {getattr(error, 'strerror', None) or error}"
+        ]
     preparation = prepare_derived(root, env, key)
     if preparation:
         return preparation

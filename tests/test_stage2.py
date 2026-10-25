@@ -13510,3 +13510,23 @@ def test_implement_clears_the_ledger_marker_of_a_test_the_attempt_wrote(world: W
     committed = git(world.root, "show", "HEAD:plans/changes/demo/plan.md")
     assert "- 1: tests/test_new.py::test_new — the attempt writes it" in committed
     assert "- 2: not yet written tests/test_later.py::test_later" in committed
+
+
+def test_clearing_the_ledger_never_writes_through_an_aliased_plan(world: World, tmp_path: Path) -> None:
+    # Runner review R-1 (2026-10-25). Planted fault: clear_written follows a plan.md symlink and rewrites a file
+    # outside the worktree before any alias check runs.
+    outside = tmp_path / "sibling-plan.md"
+    outside.write_text(
+        "# Other\n\n## Criterion ledger\n\n- 1: not yet written tests/test_x.py::test_y\n", encoding="utf-8"
+    )
+    before = outside.read_bytes()
+    (world.root / "tests").mkdir(exist_ok=True)
+    (world.root / "tests" / "test_x.py").write_text("def test_y():\n    assert True\n", encoding="utf-8")
+    world.plan.unlink()
+    world.plan.symlink_to(outside)
+    try:
+        problems = stage2.verify_attempt(world.root, world.plan, None, [], None)
+    except stage2.Refused as error:
+        problems = [str(error)]
+    assert outside.read_bytes() == before, "the runner wrote a file outside the worktree"
+    assert problems and "plan" in problems[0]

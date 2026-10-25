@@ -34,3 +34,16 @@ Read by the implementing session, so it is no independent review.
 - The runner imports its own copy of the module, like
   `check_frontmatter_current`, never the attempt's.
 - `repair` goes through `verify_attempt` too, so it clears markers as well.
+
+## Independent runner review, 2026-10-25
+
+An Opus sub-agent of the orchestrating session reviewed the runner with all
+open pull requests merged (read-only, in a separate context). Its row for
+this change:
+
+| ID | Severity | Finding | Status |
+|---|---|---|---|
+| R-1 | MAJOR | `verify_attempt` calls `clear_written` before any alias check, so an attempt that turns `plan.md` into a symlink to another worktree's plan, and writes the test that plan names, gets the runner to rewrite a file outside the worktree (reproduced). | fixed — tests/test_stage2.py::test_clearing_the_ledger_never_writes_through_an_aliased_plan |
+
+The fix refuses a symlinked, alias-resolving or hard-linked plan before
+`clear_written`, as `prepare_derived` refuses such documents.
